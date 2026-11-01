@@ -189,10 +189,7 @@ The dispatch prompt holds a `Verdict file: <absolute path>` line and one
 `Test: <file> › <fullName>` line per test to judge. Write your verdicts to that
 path with the Write tool as a JSON array, one element per judged test, and
 return a short summary (counts per verdict, and anything the caller must know).
-The file is the result; a summary alone is never read as one. The dispatchers
-are the shared worthiness step
-(`.claude/skills/gaia/references/worthiness-step.md`) and the tdd skill's arm
-of that page.
+The file is the result; a summary alone is never read as one.
 
 Each element is `{file, fullName, verdict, artifact?}`:
 

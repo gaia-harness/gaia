@@ -30,7 +30,7 @@
 # also sources: redirects, tee, sponge, sed -i and a cp/mv destination. It is
 # best-effort and biased toward allowing on ambiguity. Shapes it does not
 # recognise pass, for example perl -i, python -c writing the file, and
-# git-mediated restores. The hook inspects Monitor commands as well as Bash.
+# git-mediated restores.
 #
 # The decision is JSON on stdout and the hook exits 0 with it.
 set -euo pipefail

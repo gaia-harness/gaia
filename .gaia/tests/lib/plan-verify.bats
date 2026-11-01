@@ -506,13 +506,13 @@ mutate_orchestrator() {
   done
 }
 
-@test "red twin: a reworded line in each new block fails naming the line and the block" {
+@test "red twin: a reworded line in the worthiness-step, wiki-promotion, code-audit or post-clearance block fails naming the line and the block" {
   local entry name from to line
   for entry in \
     'worthiness-step|skip-safe|resumable' \
     'wiki-promotion|no re-consolidation|maybe re-consolidation' \
     'code-audit|the late pass from|the early pass from' \
-    'post-clearance|costs no commit|costs a commit'; do
+    'post-clearance|it is untracked|it is tracked'; do
     name="${entry%%|*}"
     entry="${entry#*|}"
     from="${entry%%|*}"

@@ -4,7 +4,7 @@
 # split out to keep that script small. Sourced by it, and it relies on the
 # caller's _error, _load_vetoes, _valid_dispositions, _round_lookup,
 # _divert_line, _TEMPORARY_FILES, _TRIAGE_MEMBERS, _GAIA_DISPOSITIONS_DIRECTORY,
-# RUN_FOLDER and FINDING_FILE. Runs nothing at source time. Never `cd`s.
+# RUN_FOLDER, VETOES and FINDING_FILE. Runs nothing at source time. Never `cd`s.
 
 # The text normalization every rendered reason goes through. A `-->` would end
 # the keyed comment the residue tally parses, and a line break would shift the
