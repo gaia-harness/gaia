@@ -65,7 +65,7 @@ prompt_names_tdd_as_one_dispatcher() {
   local prompt_file="$1"
   grep -qiF -- 'only dispatcher' "$prompt_file" && return 1
   grep -qF -- 'tdd skill' "$prompt_file" || return 1
-  grep -qF -- 'worthiness-step.md' "$prompt_file" || return 1
+  grep -qF -- 'shared worthiness step' "$prompt_file" || return 1
   return 0
 }
 
@@ -86,7 +86,7 @@ prompt_names_tdd_as_one_dispatcher() {
 
 @test "the dispatcher check rejects a prompt that calls the tdd skill the only dispatcher" {
   local old_prompt="$BATS_TEST_TMPDIR/old-prompt.md"
-  printf '%s\n' "The tdd skill is the only dispatcher of this audit; see worthiness-step.md." > "$old_prompt"
+  printf '%s\n' "The tdd skill is the only dispatcher of this audit, not the shared worthiness step." > "$old_prompt"
   run prompt_names_tdd_as_one_dispatcher "$old_prompt"
   [ "$status" -ne 0 ]
 }

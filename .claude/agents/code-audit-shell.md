@@ -146,6 +146,6 @@ The protocol's "Holistic class assignment" section owns the class list, each cla
 
 1. Run the scope resolver; refuse the pass on any `DIRTY=` line; self-skip on `FULL_CHANGED` filtered to your remit; review `REVIEW_DIFF` filtered to your remit.
 2. Read the `REVIEW_DIFF` hunks for every in-remit changed file, plus its callers and any `.bats` tests it needs for context.
-3. Apply the hook-contract lens to any file under `.claude/hooks/**/*.sh` the bats-suite lens to any `.bats` file, and the settings lens to `.claude/settings.json`.
+3. Apply the hook-contract lens to any file under `.claude/hooks/**/*.sh`, the bats-suite lens to any `.bats` file, and the settings lens to `.claude/settings.json`.
 4. Collect candidates from the correctness-core review and the lenses; run each through the Finding Proof Gate.
 5. Produce the report; write the findings sidecar; then decide the marker and write it (or withhold it, recording the refusal), as the protocol directs. Never post `GAIA-Audit` status yourself; the orchestrator does.

@@ -186,7 +186,7 @@ frontmatter_tools_are_allowlist() {
   assert_pinned 're-run `check` then `check-outcomes`, and go on only when both pass'
   assert_pinned 'A `refused-authored` outcome never passes, and no filing is retried.'
   assert_pinned 'audit-dispositions-check.sh record-residual --root <root> --run-folder <run> --finding <f>'
-  assert_pinned 'and count nothing in `filing_pending`'
+  assert_pinned 'Copy each retry file to your scratchpad before replaying it'
 }
 
 @test "the unit carries the member's grade and audience into the filed finding and never sets either itself" {

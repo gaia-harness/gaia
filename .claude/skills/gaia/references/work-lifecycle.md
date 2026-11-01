@@ -2,7 +2,7 @@
 
 The one statement of how committed work moves from its first edit to a cleaned-up checkout: claim, name, isolate, enter the worktree, commit and open the draft PR, audit, merge, clean up. A session working outside any GAIA skill follows it in full, and every skill that drives its own PR points here for the steps it shares.
 
-Contents: When this applies; Spec, plan or proceed; 1. Claim; 2. Name; 3. Isolate; 4. Enter the worktree; 5. Commit and open the draft PR; 6. Audit; 7. Merge (when asked); 8. Cleanup (worktree entered by name in this session, worktree entered by path or in an earlier session, feature branch, sub-agent context, leftover-file cleanup after an update merge); Releasing the claim on an unmerged ending; Releasing an empty worktree; The git worktree add backstop.
+Contents: When this applies; Spec, plan or proceed; 1. Claim; 2. Name; 3. Isolate; 4. Enter the worktree; 5. Commit and open the draft PR; 5b. Worthiness step; 6. Audit; 7. Merge (when asked); 8. Cleanup (worktree entered by name in this session, worktree entered by path or in an earlier session, feature branch, sub-agent context, leftover-file cleanup after an update merge); Releasing the claim on an unmerged ending; Releasing an empty worktree; The git worktree add backstop.
 
 ## When this applies
 
