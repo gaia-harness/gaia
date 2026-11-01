@@ -52,9 +52,9 @@ current_branch() {
 #                   variable or a substitution the scan cannot expand, it
 #                   points nowhere, or there is no resolver to ask
 #
-# Both readable answers carry <directory> tilde-expanded and, when relative,
-# prefixed with the acting directory, which is what a caller reads a branch
-# out of. A caller that read the raw word instead would
+# Both readable answers carry <directory> tilde-expanded and, when relative
+# and `acting_directory` prints one, prefixed with the acting directory, which
+# is what a caller reads a branch out of. A caller that read the raw word instead would
 # resolve a tilde path here and then read a branch out of the literal `~`
 # spelling, which answers nothing and allows.
 #
