@@ -86,11 +86,12 @@ source_pass_record_helper() {
   run_runner branch
   [ "$status" -eq 0 ]
   local label
-  for label in shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip 'bats whole-tree' 'bats selected'; do
+  for label in shell-lint line-limit 'release-scrub leak check' 01-files-present 02-marker-strip 'bats whole-tree' 'bats selected'; do
     has_line "^PASS  $label \\([0-9]+s\\)$"
   done
   has_line '^TOTAL [0-9]+s$'
   [ "$(vhf_log_entries shell-lint)" = "$VHF_ROOT" ]
+  [ "$(vhf_log_entries line-limit)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries build-staging)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries 01-files-present)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries 02-marker-strip)" = "$VHF_ROOT" ]
@@ -248,6 +249,22 @@ write_load_gated_suite() {
   local base_runs
   base_runs="$(grep -c '^bats-process|.*--filter-tags whole-tree.*suites/gated.bats' "$VERIFY_FIXTURE_LOG")"
   [ "$base_runs" -ge 2 ]
+}
+
+@test "a line-limit breach main already has is pre-existing, and one only the branch adds fails" {
+  fixture --no-branch
+  vhf_control line-limit ".gaia/scripts/old-breach.sh"
+  vhf_commit "main breaches the line limit"
+  vhf_branch
+  vhf_control line-limit "$(printf '.gaia/scripts/old-breach.sh\n.claude/hooks/new-breach.sh')"
+  vhf_commit "the branch adds a breach"
+  run_runner branch
+  [ "$status" -eq 1 ]
+  has_line '^PRE-EXISTING  line-limit: also fails on merge base [0-9a-f]+; main is red \([0-9]+s\)$'
+  [ "$(block_after 'PRE-EXISTING  line-limit' | sed -n 1p)" = "  .gaia/scripts/old-breach.sh" ]
+  has_line '^FAIL  line-limit \([0-9]+s\)$'
+  [ "$(block_after 'FAIL  line-limit' | sed -n 1p)" = "  .claude/hooks/new-breach.sh" ]
+  [ ! -f "$VHF_RECORD" ]
 }
 
 @test "a distribution failure only HEAD has is new, and its base re-run happens in a worktree" {
