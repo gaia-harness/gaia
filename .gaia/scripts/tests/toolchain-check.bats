@@ -206,6 +206,53 @@ floor_of() {
   grep -qF '`.gaia/VERSION` and manifest write' "$NOTE"
 }
 
+# later_bundle <mode>: a target bundle above 2.4.0, carrying the shipped notes
+# and the selector plus a 2.5.0 note in the given mode.
+later_bundle() {
+  LATER="$BATS_TEST_TMPDIR/later"
+  mkdir -p "$LATER/.gaia/scripts/lib" "$LATER/.gaia/migrations"
+  cp "$REPO_ROOT"/.gaia/migrations/*.md "$LATER/.gaia/migrations/"
+  cp "$REPO_ROOT/.gaia/scripts/select-migration-notes.sh" "$LATER/.gaia/scripts/"
+  cp "$REPO_ROOT/.gaia/scripts/lib/version-compare.awk" "$LATER/.gaia/scripts/lib/"
+  printf -- '---\nmode: %s\n---\n\nbody\n' "$1" >"$LATER/.gaia/migrations/2.5.0.md"
+}
+
+@test "a run above 2.4.0 reaches a later after-merge note only through the note's selection from 2.4.0" {
+  later_bundle after-merge
+  run --separate-stderr bash "$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh" select-notes --latest-dir "$LATER" --baseline 2.3.1 --latest 2.5.0
+  [ "$status" -eq 0 ]
+  [ "$output" = "BLOCKING 2.4.0 $LATER/.gaia/migrations/2.4.0.md" ]
+  run --separate-stderr bash "$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh" select-notes --latest-dir "$LATER" --baseline 2.4.0 --latest 2.5.0
+  [ "$status" -eq 0 ]
+  [ "$output" = "AFTER_MERGE 2.5.0 $LATER/.gaia/migrations/2.5.0.md" ]
+  grep -qF 'select-notes --latest-dir <bundle folder> --baseline 2.4.0 --latest <target>' "$NOTE"
+  grep -qF 'Persist the `AFTER_MERGE` lines' "$NOTE"
+}
+
+@test "a later blocking note surfaces in that selection, and the note stops before any merge on it" {
+  later_bundle blocking
+  run --separate-stderr bash "$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh" select-notes --latest-dir "$LATER" --baseline 2.4.0 --latest 2.5.0
+  [ "$status" -eq 0 ]
+  [ "$output" = "BLOCKING 2.5.0 $LATER/.gaia/migrations/2.5.0.md" ]
+  grep -qF 'A `BLOCKING` line from it: stop before any merge' "$NOTE"
+}
+
+@test "no shipped note above 2.4.0 is blocking: the 2.4.0 note's hop stops at one" {
+  local note version highest offenders=""
+  for note in "$REPO_ROOT"/.gaia/migrations/*.md; do
+    version="${note##*/}"
+    version="${version%.md}"
+    highest="$(printf '%s\n%s\n' 2.4.0 "$version" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)"
+    if [ "$version" != 2.4.0 ] && [ "$highest" = "$version" ] && [ "$(sed -n 2p "$note")" = "mode: blocking" ]; then
+      offenders="$offenders $version"
+    fi
+  done
+  if [ -n "$offenders" ]; then
+    printf 'Blocking note(s) above 2.4.0:%s. Extend the hop in .gaia/migrations/2.4.0.md to run them, in the same PR, then update this test.\n' "$offenders"
+    return 1
+  fi
+}
+
 @test "the setup and init commands hold no literal floor" {
   run grep -nE 'pnpm 1[0-9]|git 2\.[0-9]+|jq 1\.[0-9]' \
     "$REPO_ROOT/.claude/commands/setup-gaia.md" \
