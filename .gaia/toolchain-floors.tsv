@@ -1,16 +1,15 @@
 # The toolchain GAIA needs, one tool per row. /setup-gaia, /gaia-init and
 # /update-gaia read this file through .gaia/scripts/toolchain-check.sh, and
 # /update-gaia reads the target bundle's copy, so the incoming release sets the
-# floor. Columns, tab-separated:
+# floor. A tool below its floor stops setup and update alike. Columns,
+# tab-separated:
 #   tool      the command name
 #   floor     lowest passing version, or - when presence is the whole check
 #   platform  any, darwin or linux
 #   upgrade   user (GAIA cannot install it) or gaia (GAIA installs it itself)
-#   on-update block (the update would leave the harness broken) or warn (GAIA
-#             degrades safely)
 # Tab-separated rather than JSON because jq is one of the tools checked.
-git	2.40	any	user	warn
-jq	1.6	any	user	block
-pnpm	12	any	gaia	block
-lsof	-	darwin	user	warn
-ss	-	linux	user	warn
+git	2.40	any	user
+jq	1.6	any	user
+pnpm	12	any	gaia
+lsof	-	darwin	user
+ss	-	linux	user
