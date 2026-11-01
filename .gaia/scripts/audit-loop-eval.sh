@@ -21,7 +21,7 @@
 #   gaia_loop_context_config_effective <main-root> <state-json>
 # Run (the main thread), it is a read-only CLI: it never writes a file, never
 # takes the state lock, never calls gaia_loop_write_state.
-#   audit-loop-eval.sh findings|eval|brief|record-values|state-path|current-round
+#   audit-loop-eval.sh findings|evaluate-round|brief|record-values|state-path|current-round
 #                      |next-unit|unit-window|pinned-question|round-history
 #                      |veto-state|reopened-round --root <audited-root> [--round <r>]
 # round-history prints one {round, tree, members, keys, counted_keys, closing,
@@ -610,7 +610,7 @@ _gaia_loop_brief() {
 }
 
 _gaia_loop_usage() {
-  printf 'usage: audit-loop-eval.sh findings|eval|brief|record-values|state-path|current-round|next-unit|unit-window|pinned-question|round-history|veto-state|reopened-round --root <audited-root> [--round <r>]\n' >&2
+  printf 'usage: audit-loop-eval.sh findings|evaluate-round|brief|record-values|state-path|current-round|next-unit|unit-window|pinned-question|round-history|veto-state|reopened-round --root <audited-root> [--round <r>]\n' >&2
   return 2
 }
 
@@ -649,7 +649,7 @@ _gaia_loop_cli() {
     esac
   done
   case "$subcommand" in
-    findings | eval | brief | record-values | state-path | current-round | next-unit | unit-window | pinned-question | round-history | veto-state | reopened-round) ;;
+    findings | evaluate-round | brief | record-values | state-path | current-round | next-unit | unit-window | pinned-question | round-history | veto-state | reopened-round) ;;
     *) _gaia_loop_usage; return 2 ;;
   esac
   case "$root" in /*) ;; *) printf 'audit-loop-eval: --root must be an absolute path\n' >&2; return 2 ;; esac

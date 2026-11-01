@@ -419,7 +419,7 @@ sequence_case() {
   alf_sequence 4 3
   alf_store_snapshot 2
   state_copy="$(snapshot_file "$ALF_STATE")"
-  for subcommand in findings eval brief record-values state-path current-round round-history veto-state reopened-round; do
+  for subcommand in findings evaluate-round brief record-values state-path current-round round-history veto-state reopened-round; do
     run "$CLI/audit-loop-eval.sh" "$subcommand" --root "$ALF_ROOT"
     [ "$status" -eq 0 ] || { echo "$subcommand exited $status: $output"; return 1; }
     assert_files_identical "$state_copy" "$ALF_STATE" || { echo "$subcommand changed the state"; return 1; }
@@ -767,16 +767,16 @@ write_review_ledger() {
   cli_copy
   alf_sequence 2
   printf '{"schema":1,' >"$ALF_STATE"
-  run --separate-stderr "$CLI/audit-loop-eval.sh" eval --root "$ALF_ROOT"
+  run --separate-stderr "$CLI/audit-loop-eval.sh" evaluate-round --root "$ALF_ROOT"
   [ "$status" -eq 5 ]
   [ "$(printf '%s\n' "$stderr" | wc -l | tr -d ' ')" = 1 ]
   case "$stderr" in *corrupt*) ;; *) return 1 ;; esac
-  PATH="$(path_shim_without jq)" run --separate-stderr "$CLI/audit-loop-eval.sh" eval --root "$ALF_ROOT"
+  PATH="$(path_shim_without jq)" run --separate-stderr "$CLI/audit-loop-eval.sh" evaluate-round --root "$ALF_ROOT"
   [ "$status" -eq 6 ]
   [ "$(printf '%s\n' "$stderr" | wc -l | tr -d ' ')" = 1 ]
   case "$stderr" in *jq*) ;; *) return 1 ;; esac
   alf_git checkout -q --detach
-  run --separate-stderr "$CLI/audit-loop-eval.sh" eval --root "$ALF_ROOT"
+  run --separate-stderr "$CLI/audit-loop-eval.sh" evaluate-round --root "$ALF_ROOT"
   [ "$status" -eq 4 ]
   [ "$(printf '%s\n' "$stderr" | wc -l | tr -d ' ')" = 1 ]
   case "$stderr" in *detached*) ;; *) return 1 ;; esac
@@ -863,12 +863,12 @@ malformed_vetoes() {
   assert_failure_reason "$status" "*snapshot*round 2*"
 }
 
-@test "failure reason: eval and brief print the evaluator's reason and keep its exit code" {
+@test "failure reason: evaluate-round and brief print the evaluator's reason and keep its exit code" {
   cli_copy
   alf_sequence 2 2
   malformed_vetoes
   [ "$(jq -r '.history.rounds[1].snapshot' "$ALF_STATE")" = null ]
-  run --separate-stderr "$CLI/audit-loop-eval.sh" eval --root "$ALF_ROOT"
+  run --separate-stderr "$CLI/audit-loop-eval.sh" evaluate-round --root "$ALF_ROOT"
   assert_failure_reason 5 "*vetoes.json*"
   run --separate-stderr "$CLI/audit-loop-eval.sh" brief --root "$ALF_ROOT"
   assert_failure_reason 5 "*vetoes.json*"
@@ -1913,13 +1913,13 @@ skipped_member_case() {
 
 # --- the read-only CLI arms -----------------------------------------------------
 
-@test "cli eval: a qualifying round prints default_stop true (mutant dropping the root argument goes red)" {
+@test "cli evaluate-round: a qualifying round prints default_stop true (mutant dropping the root argument goes red)" {
   stop_base
-  run bash "$SCRIPTS/audit-loop-eval.sh" eval --root "$ALF_ROOT" --round 3
+  run bash "$SCRIPTS/audit-loop-eval.sh" evaluate-round --root "$ALF_ROOT" --round 3
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(read_json "$output" '.default_stop')" = true ] || return 1
   mutant_tree audit-loop-eval.sh -e 's/gaia_loop_evaluate_round "\$main" "\$state" "\$round" "\$root"/gaia_loop_evaluate_round "$main" "$state" "$round"/' || return 1
-  run bash "$MUTANT_SCRIPTS/audit-loop-eval.sh" eval --root "$ALF_ROOT" --round 3
+  run bash "$MUTANT_SCRIPTS/audit-loop-eval.sh" evaluate-round --root "$ALF_ROOT" --round 3
   [ "$(read_json "$output" '.default_stop')" = false ]
 }
 

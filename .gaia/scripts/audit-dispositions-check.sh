@@ -11,7 +11,7 @@
 # read from the members' findings sidecars by identity key (member,
 # finding_class, path, line), through `audit-loop-eval.sh findings`, and the
 # round's default stop, its human accept and its veto state from the
-# evaluator's `eval`, `round-history` and `veto-state`. Relabelling a Critical
+# evaluator's `evaluate-round`, `round-history` and `veto-state`. Relabelling a Critical
 # as Major, or claiming eligibility, inside the dispositions entry changes
 # nothing.
 #
@@ -319,7 +319,7 @@ _evaluator() {
 _live_stop_inputs() {
   local round="$1" stop="$_NO_STOP" answer
   if jq -e 'any(.entries[]; .disposition == "accept-residual")' "$2" >/dev/null 2>&1; then
-    answer="$(_evaluator eval --round "$round" | jq -c 'select(type == "object")
+    answer="$(_evaluator evaluate-round --round "$round" | jq -c 'select(type == "object")
       | {default_stop: (.default_stop == true), default_stop_keys: (.default_stop_keys // []), review_bases: (.review_bases // {})}')" || return 3
     [ -n "$answer" ] || return 3
     stop="$(jq -n -c --argjson stop "$stop" --argjson answer "$answer" '$stop + $answer')" || return 3

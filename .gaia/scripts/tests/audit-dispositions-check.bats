@@ -1228,7 +1228,7 @@ accept_all() {
 
 # evaluator_field <r> <jq>: a field of the evaluator's round r snapshot.
 evaluator_field() {
-  bash "$SCRIPTS/audit-loop-eval.sh" eval --root "$ALF_ROOT" --round "$1" | jq -r "$2"
+  bash "$SCRIPTS/audit-loop-eval.sh" evaluate-round --root "$ALF_ROOT" --round "$1" | jq -r "$2"
 }
 
 # mutant_check_tree <file> <sed args...>: a scratch tree mirroring .gaia/scripts

@@ -224,12 +224,45 @@ record_flags_accepted() {
 }
 
 @test "the default stop disposes the stop keys accept-residual with the failure mode, and a threshold fix ends it" {
-  assert_pinned 'run `bash <root>/.gaia/scripts/audit-loop-eval.sh eval --root <root> --round <r>`. When `default_stop` is true, dispose every key in `default_stop_keys` `accept-residual`'
+  assert_pinned 'run `bash <root>/.gaia/scripts/audit-loop-eval.sh evaluate-round --root <root> --round <r>`. When `default_stop` is true, dispose every key in `default_stop_keys` `accept-residual`'
   assert_pinned 'each entry'"'"'s reason carrying that finding'"'"'s `failure_mode` from `audit-loop-eval.sh findings --root <root> --round <r>`'
   assert_pinned 'With no `fix` entry, run no fixer and make no commit: follow the page'"'"'s zero-fix rule and stop as it says.'
   assert_pinned 'which ends the stop for the round: no key is then disposed `accept-residual`, every other in-scope finding defaults to `fix`'
   assert_pinned 'A threshold `waive-out-of-scope` may sit beside the residuals.'
   assert_pinned 'the check refuses `accept-residual` outside the stop or a recorded human accept (`accept-residual-not-eligible`). An architectural Minor on another round stops `needs-human`.'
+}
+
+# unit_command_lines <file>...: every inline code span naming a script (`.sh`)
+# and every fenced-block line, one per line: the command lines the unit runs.
+unit_command_lines() {
+  local file
+  for file in "$@"; do
+    grep -oE '`[^`]+`' -- "$file" | grep -F '.sh'
+    awk '/^[[:space:]]*```/ { inside = !inside; next } inside' "$file"
+  done
+}
+
+# has_bare_shell_eval <file>: rc 0 when a line carries `eval` as a whole word.
+# Claude Code's worktree isolation refuses any command line holding that word,
+# quoted or not, while a hyphenated name such as audit-loop-eval.sh passes, so
+# letters, digits, `_`, `.` and `-` count as word characters and quotes do not.
+has_bare_shell_eval() {
+  grep -qE '(^|[^[:alnum:]_.-])eval([^[:alnum:]_.-]|$)' -- "$1"
+}
+
+@test "no command line the unit runs carries the word worktree isolation refuses" {
+  local procedure="$ROOT/wiki/concepts/Audit Round Procedure.md"
+  local lines="$BATS_TEST_TMPDIR/unit-command-lines.txt"
+  unit_command_lines "$AGENT" "$procedure" >"$lines"
+  # The derivation reaches the default stop's evaluator call.
+  grep -qF 'audit-loop-eval.sh evaluate-round --root <root> --round <r>' -- "$lines" || return 1
+  has_bare_shell_eval "$lines" && { grep -nE '(^|[^[:alnum:]_.-])eval([^[:alnum:]_.-]|$)' -- "$lines" >&2; return 1; }
+  # Red twin: the old subcommand spelling trips the predicate.
+  local mutant="$BATS_TEST_TMPDIR/agent-bare-word.md"
+  sed 's/audit-loop-eval\.sh evaluate-round/audit-loop-eval.sh eval/' "$AGENT" >"$mutant"
+  cmp -s "$AGENT" "$mutant" && return 1
+  unit_command_lines "$mutant" >"$lines"
+  has_bare_shell_eval "$lines"
 }
 
 @test "the reopened round is a first action that fixes before it reviews, for a veto and for a gate failure" {
