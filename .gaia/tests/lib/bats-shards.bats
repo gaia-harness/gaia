@@ -245,10 +245,10 @@ write_trivial_bats() {
 }
 
 # bats test_tags=whole-tree
-@test "S5: hooks-1 is exactly the pinned singleton" {
+@test "S5: hooks-1 is exactly the pinned set" {
   run bash "$SCRIPT" files hooks-1
   [ "$status" -eq 0 ]
-  [ "$output" = ".gaia/tests/hooks/local-janitor.bats" ]
+  [ "$output" = "$(printf '%s\n' .gaia/tests/hooks/audit-loop-bound.bats .gaia/tests/hooks/local-janitor.bats)" ]
 }
 
 # bats test_tags=whole-tree
@@ -458,18 +458,18 @@ doctor_groupless_shard() {
 @test "S9: each weighted group's shards respect the greedy load bound" {
   local total largest pinned
   # The held-out set is asked for rather than spelled out. Written as a literal
-  # it would name today's single pinned file, and the sharder invites pinning a
-  # second: that file would then stay in the profile while leaving the shards
-  # under test, inflating `total` and `largest` and loosening the bound instead
-  # of failing.
+  # it would go stale the next time a file is pinned: that file would then stay
+  # in the profile while leaving the shards under test, inflating `total` and
+  # `largest` and loosening the bound instead of failing.
   pinned="$(bash "$SCRIPT" files hooks-1)"
   read -r total largest < <(discover_independent "$HOOKS_DIR_DEFAULT" | grep -vxF "$pinned" | weight_profile)
-  run within_load_bound "$SCRIPT" "$total" "$largest" hooks-2 hooks-3 hooks-4
+  # The ids are asked for too: HOOKS_GREEDY_IDS, SCRIPTS_IDS and LIBRARY_IDS
+  # are where a bucket is added, and a literal list here would leave the new
+  # bucket out of the bound.
+  # shellcheck disable=SC2046 # one id per word
+  run within_load_bound "$SCRIPT" "$total" "$largest" $(bash "$SCRIPT" group hooks-2)
   [ "$status" -eq 0 ]
 
-  # The scripts and lib ids are asked for too: SCRIPTS_IDS and LIBRARY_IDS are
-  # where a bucket is added, and a literal list here would leave the new bucket
-  # out of the bound.
   read -r total largest < <(discover_independent "$SCRIPTS_TESTS_DIRECTORY_DEFAULT" | weight_profile)
   # shellcheck disable=SC2046 # one id per word
   run within_load_bound "$SCRIPT" "$total" "$largest" $(bash "$SCRIPT" group scripts-1)

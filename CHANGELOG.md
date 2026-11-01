@@ -41,6 +41,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **Language-switch accessibility check covers a switched page:** the `after-switch` scan now switches to a language other than the page's current one and waits for the switch, so it no longer re-scans the unswitched page and needs no hand edit after adding a language (#3208)
 - **Main-branch guard judges the acting agent's checkout:** a `git commit`, `git push` or hard reset from a worktree agent, including one that uses a relative `cd` or `-C` path, is judged against the worktree, not the main checkout (#3215)
 - **Harness verification catches line-limit breaches:** `verify-harness.sh` now runs the fitness lint's harness line-limit rule in branch and round modes, so an audit round's fix that grows a harness file past 400 lines or past its grandfathered ceiling fails the round gate instead of turning CI red after the push (#3228)
+- **Audit CI Tests hooks legs no longer time out:** the slowest hooks suite now runs on the pinned leg, and the hooks tests spread over five weighted legs instead of three, so the required check stops timing out with every test green as hooks suites are added (#3232)
 
 ### Security
 
