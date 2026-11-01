@@ -46,12 +46,15 @@ const SERVER_POLL_INTERVAL_MILLISECONDS = 250;
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 
+// Bound on the wildcard address, not loopback: on macOS a loopback bind
+// succeeds beside a foreign wildcard listener, which would then answer the
+// readiness poll for a server that never reads this worker's database.
 const findFreePort = async (): Promise<number> =>
   new Promise((resolve, reject) => {
     const probe = net.createServer();
 
     probe.once('error', reject);
-    probe.listen({exclusive: true, host: '127.0.0.1', port: 0}, () => {
+    probe.listen({exclusive: true, host: '0.0.0.0', port: 0}, () => {
       const {port} = probe.address() as net.AddressInfo;
 
       probe.close(() => resolve(port));
@@ -145,8 +148,19 @@ export const test = base.extend<AxeFixtures, WorkerServerFixtures>({
         stdio: 'ignore',
       });
 
+      const serverStopped = new Promise<never>((_, reject) => {
+        server.once('error', reject);
+        server.once('exit', (code, signal) => {
+          reject(
+            new Error(
+              `The worker server exited before it answered (code ${code}, signal ${signal}).`
+            )
+          );
+        });
+      });
+
       try {
-        await waitForServer(baseURL);
+        await Promise.race([waitForServer(baseURL), serverStopped]);
         await provide({baseURL, databaseFile});
       } finally {
         if (server.pid !== undefined) {

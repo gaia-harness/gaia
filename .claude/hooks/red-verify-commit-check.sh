@@ -372,6 +372,11 @@ while IFS= read -r path; do
   # look new), but a genuinely new file is the common case on this path.
   head_source=$(git show "HEAD:$relative_path" 2>/dev/null || true)
   head_fullnames=""
+  head_marked_contract=0
+  head_first_line=$(printf '%s\n' "$head_source" | head -n 1)
+  if [[ "$head_first_line" =~ ^//\ gaia-uat-contract\ sha256:[0-9a-f]{64}$ ]]; then
+    head_marked_contract=1
+  fi
   if [ -n "$head_source" ]; then
     # From the acting tree, unlike head_source just above (a bare `git show`, which
     # resolves against the hook's own cwd rather than $tree_root): $signal_script
@@ -442,9 +447,19 @@ while IFS= read -r path; do
     # New-at-HEAD test? Present-at-HEAD fullNames are out of scope (edits,
     # renames, refactors of an existing test never demand a fresh RED), even
     # when their signal changed.
+    # Exception: a name HEAD holds only as a `.fails` placeholder in a marked
+    # contract file is not an existing test. Turning it plain is its first
+    # real test, so it falls through to the RED check below.
     if [ -n "$head_fullnames" ] \
        && grep -qxF -- "$full" <<<"$head_fullnames"; then
-      continue
+      if [ "$head_marked_contract" -eq 1 ] \
+         && grep -qF -e "test.fails('$full'" -e "test.fails(\"$full\"" \
+              -e "it.fails('$full'" -e "it.fails(\"$full\"" \
+              <<<"$head_source"; then
+        :
+      else
+        continue
+      fi
     fi
 
     if [ "$marked_contract" -eq 1 ] \

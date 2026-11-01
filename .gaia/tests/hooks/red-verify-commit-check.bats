@@ -964,6 +964,31 @@ $ROUTE_PLAIN_BODY"
   denied
 }
 
+@test "route test: a placeholder committed as .fails and turned plain under the same title with no RED is denied" {
+  commit_file_at_head "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+$ROUTE_FAILS_BODY"
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+import {expect, test} from \"vitest\";
+test(\"the owning phase replaces this body\", () => { expect(1 + 1).toBe(2); });
+"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+}
+
+@test "route test: a placeholder committed as .fails and turned plain under the same title with a recorded RED is allowed" {
+  commit_file_at_head "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+$ROUTE_FAILS_BODY"
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+import {expect, test} from \"vitest\";
+test(\"the owning phase replaces this body\", () => { expect(1 + 1).toBe(2); });
+"
+  seed_matching_red "$ROUTE_TEST_PATH" "the owning phase replaces this body"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
 @test "route test: the contract marker on line 2 grants nothing" {
   stage_file "$ROUTE_TEST_PATH" "// a header line
 $ROUTE_MARKER

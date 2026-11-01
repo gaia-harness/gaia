@@ -146,6 +146,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(
     heldServers.splice(0).map(async (server) => closeServer(server))
   );
@@ -175,7 +176,6 @@ describe('config', () => {
     expect(plugin.config({}, {command: 'serve'})).toEqual({
       server: {port: 5321, strictPort: true},
     });
-    vi.unstubAllEnvs();
   });
 
   test('a malformed port override is ignored', async () => {
@@ -186,7 +186,6 @@ describe('config', () => {
     expect(plugin.config({}, {command: 'serve'})).toEqual({
       server: {port: 5199, strictPort: true},
     });
-    vi.unstubAllEnvs();
   });
 
   test('build returns nothing port-related and never throws on a missing port file', async () => {
@@ -243,6 +242,30 @@ describe('configureServer refusals', () => {
       );
     }
   );
+
+  test('the override port is probed in place of the tree port', async () => {
+    const treePort = await findFreePort();
+    heldServers.push(await listenOn(treePort, '127.0.0.1'));
+    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', String(await findFreePort()));
+    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(treePort));
+    const plugin = await loadPlugin();
+
+    await expect(plugin.configureServer(makeServer())).resolves.toBeUndefined();
+  });
+
+  test('a taken override port rejects naming the override port', async () => {
+    const overridePort = await findFreePort();
+    heldServers.push(await listenOn(overridePort, '127.0.0.1'));
+    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', String(overridePort));
+    resolveDevPortsMock.mockReturnValue(
+      buildResolvedResolution(await findFreePort())
+    );
+    const plugin = await loadPlugin();
+
+    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
+      `port ${overridePort}`
+    );
+  });
 
   test('a free port resolves', async () => {
     resolveDevPortsMock.mockReturnValue(
