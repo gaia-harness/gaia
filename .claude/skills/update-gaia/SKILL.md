@@ -207,7 +207,7 @@ An existing project never reruns `/setup-gaia`, so the update stops on a tool be
 bash <LATEST_DIR>/.gaia/scripts/toolchain-check.sh
 ```
 
-Exit 0: say nothing and continue. Any other exit: stop. Show each `BELOW` or `MISSING` line as the tool, its installed version and its floor, with its `GUIDE` line verbatim. Nothing was branched, pruned or merged, and no worktree was created. The user re-runs `/update-gaia` once the tool is updated.
+Exit 0: say nothing and continue. Exit 1: read `.claude/skills/gaia/references/toolchain.md` and run its `## Below a floor` with this command; a pass there continues this step. A stop there, or any other exit, stops the update: nothing was branched, pruned or merged, and no worktree was created. The user re-runs `/update-gaia` once the tool is updated.
 
 ## Step 3d: Select migration notes
 

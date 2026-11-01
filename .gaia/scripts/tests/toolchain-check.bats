@@ -175,6 +175,89 @@ floor_of() {
   done
 }
 
+# route_line <tool>: the one ROUTE line for that tool in $output, or nothing.
+route_line() {
+  printf '%s\n' "$output" | grep "^ROUTE $1 " || true
+}
+
+@test "ROUTE run: on macOS with Homebrew, Claude can run the install itself" {
+  stub_current
+  stub brew 'Homebrew 4.6.0'
+  stub git 'git version 2.39.5'
+  rm "$STUBS/lsof"
+  check --platform darwin
+  [ "$status" -eq 1 ]
+  [ "$(route_line git)" = "ROUTE git run brew install git" ]
+  [ "$(route_line lsof)" = "ROUTE lsof run brew install lsof" ]
+}
+
+@test "ROUTE terminal: without Homebrew, installing it needs the user's own terminal" {
+  stub_current
+  stub git 'git version 2.39.5'
+  check --platform darwin
+  [[ "$(route_line git)" == "ROUTE git terminal "*"Homebrew/install"* ]]
+  check --platform linux --os-id debian
+  [[ "$(route_line git)" == "ROUTE git terminal "*"Homebrew/install"* ]]
+}
+
+@test "ROUTE terminal: winget on Windows, whose PATH change only a new shell sees" {
+  stub_current
+  stub git 'git version 2.39.5'
+  rm "$STUBS/jq"
+  check --platform windows
+  [ "$(route_line git)" = "ROUTE git terminal winget install --id Git.Git -e" ]
+  [ "$(route_line jq)" = "ROUTE jq terminal winget install --id jqlang.jq -e" ]
+}
+
+@test "ROUTE user: a sudo route is handed to the user, never run by Claude" {
+  stub_current
+  stub git 'git version 2.39.5'
+  check --platform linux --os-id ubuntu
+  [ "$(route_line git)" = "ROUTE git user sudo add-apt-repository -y ppa:git-core/ppa && sudo apt-get update && sudo apt-get install -y git" ]
+  check --platform linux --os-id fedora
+  [ "$(route_line git)" = "ROUTE git user sudo dnf upgrade --refresh -y git" ]
+  stub ss 'ss utility, iproute2-6.1.0'
+  rm "$STUBS/ss"
+  stub git 'git version 2.56.0'
+  check --platform linux --os-id debian
+  [ "$(route_line ss)" = "ROUTE ss user sudo apt-get install -y iproute2" ]
+}
+
+@test "ROUTE run on Linux with Homebrew, and pnpm through npm" {
+  stub_current
+  stub brew 'Homebrew 4.6.0'
+  rm "$STUBS/jq"
+  stub pnpm '11.2.0'
+  check --platform linux --os-id debian
+  [ "$(route_line jq)" = "ROUTE jq run brew install jq" ]
+  [[ "$(route_line pnpm)" == "ROUTE pnpm run "*"npm install -g pnpm@latest" ]]
+}
+
+@test "no ROUTE line without an exact command, and none for a passing tool" {
+  stub_current
+  rm "$STUBS/ss"
+  check --platform linux --os-id gentoo
+  [ "$status" -eq 1 ]
+  [ -z "$(route_line ss)" ]
+  [[ "$output" == *"GUIDE ss: "* ]]
+  [ -z "$(route_line git)" ]
+}
+
+@test "every ROUTE line names a short tool and a class of run, user or terminal" {
+  stub_current
+  stub git 'git version 2.39.5'
+  rm "$STUBS/jq"
+  local platform route_count
+  for platform in 'darwin' 'windows' 'linux ubuntu' 'linux debian' 'linux fedora' 'linux arch' 'linux alpine' 'linux rhel'; do
+    set -- $platform
+    if [ "$#" -eq 2 ]; then check --platform "$1" --os-id "$2"; else check --platform "$1"; fi
+    route_count="$(printf '%s\n' "$output" | grep -c '^ROUTE ' || true)"
+    [ "$route_count" -eq 2 ]
+    printf '%s\n' "$output" | grep '^ROUTE ' | grep -vE '^ROUTE (git|jq) (run|user|terminal) .+' && return 1
+  done
+  true
+}
+
 @test "no guidance pins a version: each route reaches latest, never the floor" {
   run grep -nE '(git|jq|pnpm)@?[ -]?[0-9]+\.[0-9]+' "$CHECK"
   [ "$status" -ne 0 ]

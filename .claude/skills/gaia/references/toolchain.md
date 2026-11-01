@@ -1,6 +1,18 @@
-# pnpm and Chromium
+# Toolchain
 
-The one statement of how a new project or clone gets pnpm and Chromium. `/gaia-init` Steps 0 and 1 and `/setup-gaia` Phase 0b each read the section they need, and the caller says what a stop means for it. `.gaia/toolchain-floors.tsv` holds the pnpm floor; `.gaia/scripts/toolchain-check.sh` reads it, so nothing here names a version. Run everything from the project root, so pnpm applies the `packageManager` pin.
+The one statement of how a new project or clone gets pnpm and Chromium, and of how a tool below GAIA's floor is brought up to it. `/gaia-init` Steps 0 and 1, `/setup-gaia` Phase 0 and 0b, and `/update-gaia` Step 3c2 each read the section they need, and the caller says what a stop means for it. `.gaia/toolchain-floors.tsv` holds the floors; `.gaia/scripts/toolchain-check.sh` reads it, so nothing here names a version. Run everything from the project root, so pnpm applies the `packageManager` pin.
+
+## Below a floor
+
+The caller's `toolchain-check.sh` call exited 1. Bring each short tool up to its latest release in this run, rather than stopping. For each `BELOW` or `MISSING` line, show the tool, its installed version and its floor with its `GUIDE` line verbatim, then act on that tool's `ROUTE` line by its class:
+
+- **pnpm:** run `## pnpm` below.
+- **`run`:** ask once with `AskUserQuestion`, naming the tool, the installed version, the floor and the exact command, with options `Install it (Recommended)` and `Stop`. On `Install it`, run the command. `/gaia-init`'s Automatic mode answers `Install it`, as its pnpm gate does.
+- **`user`:** the command needs `sudo`, whose password Claude cannot type. Give it to the user as `! <command>`, to type in the prompt so it runs in this session, and wait for them to say it ran.
+- **`terminal`:** the command is interactive, such as the Homebrew installer, or changes `PATH` that only a new shell sees, such as `winget`. Never run it. Tell the user to run it in a fresh terminal, then start Claude Code again from that terminal and re-run the command that stopped.
+- **No `ROUTE` line:** no exact command exists for this machine. The user updates the tool by its `GUIDE` line, then says so.
+
+Then run the caller's check again. A pass continues the same run. A tool that still falls short, or one the user declined, stops. When a `run` install succeeded and the check still prints `BELOW`, an older copy wins on `PATH`: show `command -v <tool>` and stop.
 
 ## pnpm
 

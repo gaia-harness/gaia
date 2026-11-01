@@ -8,11 +8,15 @@
 #                                         [--platform darwin|linux|windows]
 #                                         [--os-id <id>] [--floors <file>]
 #
-# One line per tool checked, then one GUIDE line per tool that fell short:
+# One line per tool checked, then a GUIDE line and, where an exact command
+# exists, a ROUTE line per tool that fell short:
 #   OK <tool> <installed> <floor>
 #   BELOW <tool> <installed|unknown> <floor>
 #   MISSING <tool> <floor>
 #   GUIDE <tool>: <what to do>
+#   ROUTE <tool> <run|user|terminal> <command>
+# .claude/skills/gaia/references/toolchain.md (`## Below a floor`) says what
+# each ROUTE class means to the caller.
 #
 # Exit 0 nothing fell short, 1 a tool fell short, 2 a usage error or an
 # unreadable floors file. Callers stay silent on 0, so a machine at or above
@@ -206,6 +210,69 @@ guide() {
   esac
 }
 
+# The official Homebrew installer. It is interactive and asks for a password,
+# so it is only ever handed to the user for their own terminal. The text stays
+# unexpanded: it is printed for the user's shell, never run here.
+# shellcheck disable=SC2016
+HOMEBREW_INSTALLER='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+
+# brew_route <package>: brew installs it when Homebrew is here; otherwise the
+# user installs Homebrew first, in a fresh terminal.
+brew_route() {
+  if command -v brew >/dev/null 2>&1; then
+    printf 'run brew install %s' "$1"
+  else
+    printf 'terminal %s' "$HOMEBREW_INSTALLER"
+  fi
+}
+
+# route_for <tool>: "<class> <command>" for the ROUTE line, or nothing when no
+# exact command exists. The class tells the caller who runs it: run (Claude,
+# after asking), user (the user, as `! <command>`: it needs sudo) or terminal
+# (the user, in a fresh terminal: it is interactive or changes PATH).
+route_for() {
+  local tool="$1"
+  case "$tool" in
+    pnpm)
+      printf 'run corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
+      return 0
+      ;;
+    lsof)
+      brew_route lsof
+      return 0
+      ;;
+    ss)
+      case "$(os_family)" in
+        ubuntu | debian) printf 'user sudo apt-get install -y iproute2' ;;
+        fedora | rhel) printf 'user sudo dnf install -y iproute' ;;
+        arch) printf 'user sudo pacman -S --noconfirm iproute2' ;;
+        alpine) printf 'user sudo apk add iproute2' ;;
+      esac
+      return 0
+      ;;
+  esac
+  case "$PLATFORM" in
+    darwin)
+      brew_route "$tool"
+      return 0
+      ;;
+    windows)
+      case "$tool" in
+        jq) printf 'terminal winget install --id jqlang.jq -e' ;;
+        *) printf 'terminal winget install --id Git.Git -e' ;;
+      esac
+      return 0
+      ;;
+  esac
+  case "$(os_family):$tool" in
+    ubuntu:git) printf 'user sudo add-apt-repository -y ppa:git-core/ppa && sudo apt-get update && sudo apt-get install -y git' ;;
+    fedora:*) printf 'user sudo dnf upgrade --refresh -y %s' "$tool" ;;
+    arch:*) printf 'user sudo pacman -Syu --noconfirm %s' "$tool" ;;
+    alpine:*) printf 'user sudo apk add --upgrade %s --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main' "$tool" ;;
+    *) brew_route "$tool" ;;
+  esac
+}
+
 # The first dotted number in a --version line, or nothing.
 installed_version() {
   local line
@@ -260,6 +327,8 @@ done <"$FLOORS_FILE"
 
 for tool in $short_tools; do
   guide "$tool"
+  route="$(route_for "$tool")"
+  [ -z "$route" ] || printf 'ROUTE %s %s\n' "$tool" "$route"
 done
 
 [ -z "$short_tools" ] || exit 1

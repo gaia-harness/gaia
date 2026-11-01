@@ -13,12 +13,14 @@ GAIA runs on tools it cannot always install itself. `.gaia/toolchain-floors.tsv`
 
 ## Who checks, and when
 
-- **`/setup-gaia`** checks at the start of Phase 0 on every run, and halts on any miss, with no fallback for an older tool. Clones run setup, and `/gaia-init` flows into it, so init holds no copy.
+- **`/setup-gaia`** checks at the start of Phase 0 on every run, and halts on any miss the walk-through below does not fix, with no fallback for an older tool. Clones run setup, and `/gaia-init` flows into it, so init holds no copy.
 - **`/gaia-init`** needs pnpm for its own install, so it runs the one pnpm section it shares with setup, in `.claude/skills/gaia/references/toolchain.md`.
-- **`/update-gaia`** checks before its Proceed question, because an existing project never reruns setup. It runs the verified target bundle's copy of the script, so the incoming release sets the floor, not the older skill doing the update. Any miss stops the update, as it halts setup.
-- **The first crossing** runs an older skill with none of this, so the release's blocking migration note carries the floors in its own text.
+- **`/update-gaia`** checks before its Proceed question, because an existing project never reruns setup. It runs the verified target bundle's copy of the script, so the incoming release sets the floor, not the older skill doing the update. A miss the walk-through does not fix stops the update, as it halts setup.
+- **The first crossing** runs an older skill with none of this, so the release's blocking migration note carries the floors and the walk-through in its own text.
 
 ## Guidance
+
+Whatever Claude can install, it installs after confirming with the user. What only the user can do, Claude hands over as a `! <command>` to type in the prompt, or says plainly when it needs a fresh terminal. That holds for any GAIA flow that needs a tool installed. For the floors, `toolchain-check.sh` prints a `ROUTE` line per short tool whose class says which of the three applies, and `.claude/skills/gaia/references/toolchain.md` (`## Below a floor`) walks the user through it and checks again in the same run.
 
 The floor is only the pass or fail line. Each message says why GAIA needs the tool, and every message tells the user to update to the latest release, and every route reaches one: where a package manager stays behind, as apt does on Debian stable, the route is another source. No message pins a version number.
 
