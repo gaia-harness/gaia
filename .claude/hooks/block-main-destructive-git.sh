@@ -322,9 +322,9 @@ while IFS= read -r segment; do
   esac
 
   # The checkout this segment acts on: its own `-C`, else the directory the most
-  # recent preceding `cd` moved into, else the acting directory (`current_branch`
-  # with no argument). A `cd` into a linked worktree is this repository but
-  # another checkout, with its own branch.
+  # recent preceding `cd` moved into, else empty: the branch reads then use the
+  # acting directory (`current_branch`), the reset rule this process's cwd. A
+  # `cd` into a linked worktree is this repository but another checkout.
   #
   # The `-C` word goes through the same resolution the `cd` arm above uses
   # rather than reaching the branch read raw. The scan that produced it models
@@ -332,7 +332,7 @@ while IFS= read -r segment; do
   # substitution is text naming no readable directory; read raw it makes the
   # branch read answer nothing, and every rule armed on the branch allows. An
   # UNREADABLE value therefore falls back to the tracked `cd`, else to the
-  # acting directory, and marks the segment ambiguous so the rules below
+  # empty default above, and marks the segment ambiguous so the rules below
   # test the other checkouts it could name too.
   #
   # A value naming a repository the scan CAN read does reach this line, in a
