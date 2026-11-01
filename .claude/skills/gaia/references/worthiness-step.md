@@ -6,7 +6,7 @@ This page owns the worthiness audit's dispatch and verdict routing. The work lif
 
 ## When it runs
 
-The caller is the main thread of a plan run, the work lifecycle or `/gaia-debt`. It runs once the draft PR is open, before the audit's pre-dispatch verification and before the first member dispatch, so a fix the step makes never rotates a clearance a member already earned.
+The caller's main thread runs the step once the draft PR is open, before the audit's pre-dispatch verification and before the first member dispatch, so a fix the step makes never rotates a clearance a member already earned.
 
 <!-- gaia:maintainer-only:start -->
 In this repo a fix commit lands first.
@@ -69,9 +69,8 @@ Read the stdout word; a non-zero exit does not stop the step. One arm per word:
 
 - `filed` or `matched`: `settle --as filed`.
 - `diverted`: `settle --as filed`, so the test never re-files and never writes a second local record.
-- `refused-authored`: `settle --as residual`, passing the element's `firstLine` and `artifact`, because the site proved branch-authored. A worthiness verdict on an authored test is never filed.
-- `failed`: list it in the caller's summary and leave it unsettled. It does not stop the step.
-- `absent` or `transient`: list it in the caller's summary and leave it unsettled.
+- `refused-authored`: `settle --as residual --first-line <firstLine> --reason <artifact>`, from the element, because the site proved branch-authored. A worthiness verdict on an authored test is never filed.
+- `failed`, `absent` or `transient`: list it in the caller's summary and leave it unsettled.
 
 ### 7. Report
 
@@ -92,7 +91,7 @@ A residual decided here reaches the PR body through the status post's rewrite (`
 
 ## The tdd arm
 
-The tdd skill follows this arm only. It dispatches and records, nothing else, because tdd runs once its tests pass, on work still in the working tree and possibly with no PR, and `route` selects from the saved `base...HEAD` range, so it would read an unsaved test as `[]`.
+The tdd skill follows this arm only. It dispatches and records, nothing else, because tdd runs once its tests pass, on work still in the working tree and possibly with no PR, and `route` selects from the saved `base...HEAD` range, so it would read such a test as `[]`.
 
 - The test list is the task's own changed emergent files, not a `route` result.
 - Dispatch the evaluator with a `Verdict file:` line in the scratchpad and classify the file as the Evaluate step does, with `--expect-count`.

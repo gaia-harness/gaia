@@ -619,8 +619,8 @@ check_record_arm() {
   [ -n "$section" ] || { printf 'no ## Consolidation section\n' >&2; return 1; }
   for needle in \
     'is written only by a pass attempting promotion' \
-    'The pre-audit pass always attempts' \
-    'A refresh attempts only when it reaches' \
+    'It always attempts promotion' \
+    'attempts promotion only when it reaches' \
     '`## Consolidation refresh`' \
     'A plan generated before this order' \
     'Pass: pre-audit'; do
@@ -634,7 +634,7 @@ check_record_arm() {
 
 @test "red twin: removing any record-arm sentence fails" {
   local needle copy="$BATS_TEST_TMPDIR/lifecycle.md"
-  for needle in 'is written only by a pass attempting promotion' 'The pre-audit pass always attempts' 'A refresh attempts only when it reaches' 'Consolidation refresh' 'A plan generated before this order'; do
+  for needle in 'is written only by a pass attempting promotion' 'It always attempts promotion' 'attempts promotion only when it reaches' 'Consolidation refresh' 'A plan generated before this order'; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$LIFECYCLE_MD" >"$copy"
     cmp -s "$LIFECYCLE_MD" "$copy" && { echo "'$needle' not found" >&2; return 1; }
     run check_record_arm "$copy"
