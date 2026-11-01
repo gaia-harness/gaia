@@ -217,7 +217,7 @@ later_bundle() {
   printf -- '---\nmode: %s\n---\n\nbody\n' "$1" >"$LATER/.gaia/migrations/2.5.0.md"
 }
 
-@test "a run above 2.4.0 reaches a later after-merge note only through the note's selection from 2.4.0" {
+@test "a run from below 2.4.0 to a later target reaches a later after-merge note only through the note's selection from 2.4.0" {
   later_bundle after-merge
   run --separate-stderr bash "$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh" select-notes --latest-dir "$LATER" --baseline 2.3.1 --latest 2.5.0
   [ "$status" -eq 0 ]
