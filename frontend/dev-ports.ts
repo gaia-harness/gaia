@@ -31,6 +31,13 @@ export type ListenerOwner =
   | {kind: 'own'; pid: number}
   | {kind: 'unknown'};
 
+/**
+ * Names a dev port for one start, in place of this tree's own. Only a start
+ * that sets it moves; every other start keeps the tree's port and refuses it
+ * when taken. Playwright's per-worker servers set it, each to a free port.
+ */
+export const DEV_PORT_OVERRIDE_ENV = 'GAIA_DEV_PORT_OVERRIDE';
+
 export const PORT_FILE_NAME = '.gaia-ports';
 
 export const ASK_FIRST_SENTENCE =
@@ -95,6 +102,17 @@ export const parsePortFile = (portFileText: string): DevPorts | undefined => {
     storybookPort: Number(storybookPort),
     treeRoot: undefined,
   };
+};
+
+/** The named port override in an environment, or undefined when unset or malformed. */
+export const resolveDevPortOverride = (
+  environment: NodeJS.ProcessEnv
+): number | undefined => {
+  const overrideText = environment[DEV_PORT_OVERRIDE_ENV];
+
+  return overrideText !== undefined && isPort(overrideText) ?
+      Number(overrideText)
+    : undefined;
 };
 
 const readGitdirTarget = (gitPath: string): string | undefined => {

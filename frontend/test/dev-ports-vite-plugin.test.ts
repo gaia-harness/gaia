@@ -167,6 +167,28 @@ describe('config', () => {
     });
   });
 
+  test('a named port override replaces the tree port and keeps strictPort', async () => {
+    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
+    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', '5321');
+    const plugin = await loadPlugin();
+
+    expect(plugin.config({}, {command: 'serve'})).toEqual({
+      server: {port: 5321, strictPort: true},
+    });
+    vi.unstubAllEnvs();
+  });
+
+  test('a malformed port override is ignored', async () => {
+    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
+    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', 'abc');
+    const plugin = await loadPlugin();
+
+    expect(plugin.config({}, {command: 'serve'})).toEqual({
+      server: {port: 5199, strictPort: true},
+    });
+    vi.unstubAllEnvs();
+  });
+
   test('build returns nothing port-related and never throws on a missing port file', async () => {
     resolveDevPortsMock.mockReturnValue({
       kind: 'missing-port-file',

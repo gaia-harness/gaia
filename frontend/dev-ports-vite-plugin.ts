@@ -6,6 +6,7 @@ import type {ListenerOwner} from './dev-ports.ts';
 import {
   buildPortInUseMessage,
   findListenerOwner,
+  resolveDevPortOverride,
   resolveDevPorts,
   resolveServerProcessScriptPath,
 } from './dev-ports.ts';
@@ -113,7 +114,8 @@ const recordLaunch = ({
 };
 
 /**
- * Pins the dev server to this tree's port without drifting, refuses a taken
+ * Pins the dev server to this tree's port (or the named override port)
+ * without drifting, refuses a taken
  * port with the ask-first message, and records a Claude-launched server so a
  * dead session's server can be cleaned up.
  */
@@ -123,12 +125,19 @@ export const devPortsPlugin = (packageDirectory: string): Plugin => ({
     const resolution = resolveDevPorts(packageDirectory);
     if (resolution.kind !== 'resolved') return;
 
-    return {server: {port: resolution.ports.devPort, strictPort: true}};
+    return {
+      server: {
+        port: resolveDevPortOverride(process.env) ?? resolution.ports.devPort,
+        strictPort: true,
+      },
+    };
   },
   configureServer: async (server) => {
     const resolution = resolveDevPorts(packageDirectory);
     if (resolution.kind !== 'resolved') throw new Error(resolution.message);
-    const {devPort, treeRoot} = resolution.ports;
+    const {treeRoot} = resolution.ports;
+    const devPort =
+      resolveDevPortOverride(process.env) ?? resolution.ports.devPort;
 
     if ((await isTaken(devPort)) && getRecordedPort() !== devPort) {
       const owner = findListenerOwner({port: devPort, treeRoot});
