@@ -6,7 +6,7 @@ This page owns the worthiness audit's dispatch and verdict routing. The work lif
 
 ## When it runs
 
-The caller's main thread runs it once the draft PR is open, before the audit's pre-dispatch verification and before the first member dispatch, so a fix the step makes never rotates a clearance a member already earned.
+The caller's main thread runs the step once the draft PR is open, before the audit's pre-dispatch verification and before the first member dispatch, so a fix the step makes never rotates a clearance a member already earned.
 
 <!-- gaia:maintainer-only:start -->
 In this repo a fix commit lands first.
