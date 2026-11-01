@@ -12,7 +12,7 @@
     ".claude/hooks/local-janitor.sh": 528,
     ".claude/hooks/post-audit-status.sh": 653,
     ".claude/hooks/provision-worktree.sh": 615,
-    ".claude/hooks/red-verify-commit-check.sh": 522,
+    ".claude/hooks/red-verify-commit-check.sh": 537,
     ".claude/hooks/workflow-doctrine-inject.sh": 586,
     ".gaia/cli/src/codify/compute-tally.ts": 427,
     ".gaia/cli/src/codify/tally.ts": 462,
