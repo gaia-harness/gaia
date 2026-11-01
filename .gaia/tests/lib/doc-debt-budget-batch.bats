@@ -509,7 +509,7 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
 }
 
 @test "two batch parts that touch one file merge into one part" {
-  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' 'merge this part into that earlier part'
+  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' 'merge this part and every earlier part whose list holds one of them into the earliest of those parts'
 }
 
 @test "the closes-carrier sentences stay in the resolve section" {
