@@ -506,7 +506,7 @@ mutate_orchestrator() {
   done
 }
 
-@test "red twin: a reworded line in each new block fails naming the line and the block" {
+@test "red twin: a reworded line in the worthiness-step, wiki-promotion, code-audit or post-clearance block fails naming the line and the block" {
   local entry name from to line
   for entry in \
     'worthiness-step|skip-safe|resumable' \

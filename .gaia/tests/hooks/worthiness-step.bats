@@ -195,7 +195,7 @@ state_checksum() {
   [ "$(field "$WIDGET" first .artifact)" = "an artifact" ]
 }
 
-@test "a fix on an untouched test in an edited file routes file, a delete on it routes delete" {
+@test "a fix on an untouched test in an edited file routes file, a delete on an edited test routes delete" {
   commit_widget_edits
   seed "$WIDGET" "second" fix
   seed "$WIDGET" "first" delete

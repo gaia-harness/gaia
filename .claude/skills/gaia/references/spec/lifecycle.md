@@ -115,7 +115,7 @@ Pages: none   Commit: none
 Reason: summary-verify.sh failed: <its first stderr line>
 ```
 
-Every record the promotion step writes starts with `Pass: pre-audit` or `Pass: refresh`. The `## Wiki promotion` block is written only by a pass attempting promotion. The pre-audit pass always attempts. A refresh attempts only when it reaches `wiki-promote.md`'s Step 2; any other refresh outcome, a verify failure included, appends a `## Consolidation refresh` block, a different heading, so it can never become the last promotion block. The last `## Wiki promotion` block is the run's outcome. A block recording `promoted` is never promoted again in the run.
+Every record a current plan's promotion step writes starts with `Pass: pre-audit` or `Pass: refresh`. The `## Wiki promotion` block is written only by a pass attempting promotion; a refresh that does not attempt it, a verify failure included, appends a `## Consolidation refresh` block, a different heading, so it can never become the last promotion block. The last `## Wiki promotion` block is the run's outcome. A block recording `promoted` is never promoted again in the run.
 
 ## Post-merge close
 
