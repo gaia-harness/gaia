@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 #
-# Sourced by uat-lib.sh, never executed. Two helpers that keep uat-lib.sh under
+# Sourced by uat-lib.sh, never executed. Helpers that keep uat-lib.sh under
 # its line limit: uat_lib_code_only, which reads a rendered test as code alone,
 # the route-row validation arm of uat_lib_validate_routing, and the frontend
 # package lookup behind the directory helpers.

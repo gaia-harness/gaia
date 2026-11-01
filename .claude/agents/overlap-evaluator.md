@@ -73,7 +73,7 @@ A seam is a test whose property is a security or integrity boundary: who may do
 what, what a user may see, what is refused, hidden, escaped or forged. Declare
 `seam: true` whenever you are unsure. The check also finds seams by itself, from
 a word list, status codes, refusal helpers and the test's path, and it uses the
-larger answer, so a wrong `false` is overridden, but a wrong `true` costs nothing.
+larger answer, so a wrong `false` is overridden, and a wrong `true` costs at most a refused proposal.
 
 The rule the check enforces: a `drop`, `merge` or `demote` of a seam needs the
 cited sibling on the same layer or a higher one (unit and story, then route,
