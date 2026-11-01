@@ -18,7 +18,7 @@ Not every source file can honestly carry a RED proof. Code that reads the clock,
 
 ## Decision
 
-The classifier emits one of two labels per file. **The bias is deliberate: err EMERGENT.** A missed RED is caught late by the advisory worthiness audit; an over-strict label forces RED theatre that is the worse failure. Ambiguous cases classify EMERGENT.
+The classifier emits one of two labels per file, plus `route` for a route-surface test (see [[#Route tests]]). **The bias is deliberate: err EMERGENT.** A missed RED is caught late by the advisory worthiness audit; an over-strict label forces RED theatre that is the worse failure. Ambiguous cases classify EMERGENT.
 
 A file classifies **STRICT only when ALL of conditions 1 through 4 hold.** Failing any of conditions 2 through 4 classifies it EMERGENT regardless of path.
 
@@ -60,17 +60,21 @@ The allowlist is a constant in the classifier with a version marker (`DOM_ALLOWL
 
 A path ending `.stories.tsx` or `.stories.ts` classifies EMERGENT before any path scoping or AST check, with the reason `story file: a *.stories.tsx is emergent regardless of path`. A story renders in a real browser and carries its own tests and play, so it is never a deterministic subject, and a story outside the package descriptor's globs still lands on the worthiness-gated surface. See [[Stories as Tests]].
 
+## Route tests
+
+A path matching `app/route-tests/<feature>/tests/<file>.test.ts` classifies `route`, a third verdict, before any path scoping or AST check. A route test calls a route module's `loader` or `action` in process, so it is deterministic enough to owe a RED and, unlike a strict test, is also in worthiness scope. The `route` verdict keeps it in both gates, where a strict or an emergent label would put it in only one. [[Test Layering]] places the route surface among the layers.
+
 ## File-granularity limitation
 
 The classifier is **file-granular**: it labels a whole file STRICT or EMERGENT and **cannot split a pure export from an impure module constant in the same file.** A file with even one module-reachable non-deterministic constant classifies EMERGENT in full; its otherwise-pure exports cannot be independently RED-gated without first refactoring that constant behind a function. This is an honest limitation of the mechanism, not a verdict that those exports are untestable.
 
 ## Infrastructure
 
-- `.gaia/scripts/classifier/classify-determinism.mjs`: Node ESM helper using the TypeScript compiler API. Takes a repo-relative source path (or `--stdin`, where the path argument names the file identity for path scoping and `.ts`-vs-`.tsx` script kind). Emits one JSON object: `{file, classification: "strict" | "emergent", reasons: [...]}`. Exits 0 on success; exits non-zero with a one-line stderr message on a missing argument, a missing `typescript`, an unreadable file, or a parse failure, so a bash caller can apply its own fail-open policy. The strict-candidate globs come from the package registry, read through `.claude/hooks/lib/gaia-packages.sh` ([[Package Descriptor]]); an unusable registry or descriptor exits 7 with `{"error": ...}` on stdout, the one failure a caller must not treat as fail-open. Mirrors `extract-test-signals.mjs` (see [[TDD RED Verification]]).
+- `.gaia/scripts/classifier/classify-determinism.mjs`: Node ESM helper using the TypeScript compiler API. Takes a repo-relative source path (or `--stdin`, where the path argument names the file identity for path scoping and `.ts`-vs-`.tsx` script kind). Emits one JSON object: `{file, classification: "strict" | "emergent" | "route", reasons: [...]}`. Exits 0 on success; exits non-zero with a one-line stderr message on a missing argument, a missing `typescript`, an unreadable file, or a parse failure, so a bash caller can apply its own fail-open policy. The strict-candidate globs come from the package registry, read through `.claude/hooks/lib/gaia-packages.sh` ([[Package Descriptor]]); an unusable registry or descriptor exits 7 with `{"error": ...}` on stdout, the one failure a caller must not treat as fail-open. Mirrors `extract-test-signals.mjs` (see [[TDD RED Verification]]).
 
 ## Consumers
 
-- The RED carve-out at commit time scopes the RED demand to STRICT files; EMERGENT files commit without a RED proof.
-- The worthiness audit and the merge presence gate scope to the EMERGENT surface, the test files a package's `emergentTests` globs name ([[Package Descriptor]]).
+- The RED carve-out at commit time scopes the RED demand to STRICT files and `route` files; EMERGENT files commit without a RED proof.
+- The worthiness audit and the merge presence gate scope to the EMERGENT surface, the test files a package's `emergentTests` globs name ([[Package Descriptor]]), and to `route` files.
 
 The `{file, classification, reasons}` output shape and the emergent-signal set are a stable contract these consumers depend on.

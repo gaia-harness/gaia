@@ -6,7 +6,7 @@ paths:
 
 # Playwright E2E Conventions
 
-Contents: File locations; Spec file naming; Selectors, prefer semantic over structural; Waiting, web-first assertions only; Hydration barrier; MSW + real dev server; Auth / session setup; Locale / language; Parallelism and CI; Accessibility scans.
+Contents: File locations; Spec file naming; Selectors, prefer semantic over structural; Waiting, web-first assertions only; Hydration barrier; MSW + real dev server; Worker isolation; Auth / session setup; Locale / language; Parallelism and CI; Accessibility scans.
 
 ## File locations
 
@@ -20,7 +20,7 @@ Contents: File locations; Spec file naming; Selectors, prefer semantic over stru
 Match the feature or route: `language-switch.spec.ts`, `things.spec.ts`.
 One spec file per UAT-backed flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`); one `test.describe` block per scenario group.
 
-A file whose first line is `// gaia-uat-contract sha256:...` was rendered from a SPEC UAT. Its Given/When/Then comment is the contract: make cosmetic edits only (selectors, labels, copy, layout) and report logical changes (`.claude/skills/gaia/references/spec/uat-divergence.md`). The owning phase removes the `test.fail();` call and replaces the placeholder `expect(false, ...)` with a real body that drives the app (`.claude/skills/gaia/references/spec/uat-write.md`).
+A file whose first line is `// gaia-uat-contract sha256:...` was rendered from a SPEC UAT. Its Given/When/Then comment is the contract: make cosmetic edits only (selectors, labels, copy, layout) and report logical changes (`.claude/skills/gaia/references/spec/uat-divergence.md`). The owning phase removes the `test.fail();` call and replaces the placeholder `expect(false, ...)` with a real body that drives the app. Rendered route tests: `.claude/skills/gaia/references/spec/uat-write.md` (`## The rendered file`).
 
 ## Selectors, prefer semantic over structural
 
@@ -71,24 +71,19 @@ the story scan (see Accessibility scans). With
 `wiki/dependencies/MSW.md`), so tests exercise the real route/loader/action stack
 with MSW intercepting API calls. No separate mock server is needed for e2e.
 
-For tests that mutate MSW in-memory data, call `resetTestData()` in
-`test.afterEach` to restore seed state:
+State in the MSW handlers of the dev server is out of reach of the Playwright process, so a stock project has no target for a Given builder; a project that needs seeded state adds a real database (see Worker isolation).
 
-```ts
-import {resetTestData} from 'test/mocks/database';
+## Worker isolation
 
-test.afterEach(() => {
-  resetTestData();
-});
-```
+Every worker reaches its own database through the server it talks to. A serial project is not an accepted way to share a database: it runs the suite on one core. The worker-scoped server fixture and the typed `GivenBuilder` pattern are in `.playwright/fixtures.ts`; read its comment before adding any project that holds state. The stock suite does not request the fixture, so `pnpm pw` starts no extra server.
+
+- Setup goes through Given builders, which write to the worker's own database; one spec per form stays on the UI path.
+- A request-fixture refusal check sets `maxRedirects: 0` and asserts the status and the `Location` header, and states the actor: the request fixture follows redirects by default, is a separate context from `page` and inherits `storageState`.
+- This rule governs new setup. An existing suite moves to it only by decision.
 
 ## Auth / session setup
 
-When a project has authentication, use a Playwright global setup file
-(`auth.setup.ts`) that logs in once and saves storage state; configure it as a
-`setup` project dependency so authenticated specs reuse the session without
-re-logging in per test. Clear cookies explicitly in tests that must start
-unauthenticated:
+When a project has authentication, each worker holds its own session, built in a worker-scoped fixture that logs in against that worker's server and hands the saved storage state to its tests. A single shared login does not work with a per-worker database. Clear cookies explicitly in tests that must start unauthenticated:
 
 ```ts
 await page.context().clearCookies();

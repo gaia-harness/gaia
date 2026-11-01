@@ -61,6 +61,8 @@ The UAT fidelity judge of a spec-derived plan (`.claude/skills/gaia/references/s
 
 The worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) halts as well, for the same reason: its caller wrote the code under judgment, and an absent verdict is not a keep. Its tdd arm reports the double no-op in the end-of-task summary instead of halting, because tdd never interrupts mid-implementation and the presence check backs up a missing line at merge. That page states both departures and their reason.
 
+The overlap pass (`.claude/skills/gaia/references/overlap-pass.md`) records `Outcome: did not run` and lets the run continue. Nothing depends on the overlap pass, so an absent proposal set loses an optimization and no correctness, and neither a halt nor an inline pass is worth its cost. That page states the departure and its reason.
+
 A surface named in none of these places takes the inline ending above.
 
 ### Ad-hoc dispatches: `--shape agent-report-file`

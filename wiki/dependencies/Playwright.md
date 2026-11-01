@@ -16,7 +16,7 @@ End-to-end testing. Tests live in `frontend/.playwright/e2e/*.spec.ts`. Config i
 
 E2E tests run against this tree's `pnpm dev` server, on the port `bash .gaia/scripts/ports.sh` prints (5173 in the main checkout). Playwright refuses to reuse a server on that port that is not this tree's own, and an unprovisioned linked worktree refuses to run (see [[Worktrees]]). With `MSW_ENABLED=true` the dev server mocks both browser and SSR requests, so tests exercise the full React Router loader/action stack with MSW intercepting API calls (see [[MSW]]); no separate mock server required.
 
-Tests that mutate MSW in-memory state call `resetTestData()` from `frontend/test/mocks/database.ts` in `test.afterEach` to restore seed data between tests.
+Per-worker database isolation, Given builders and the session rules are in `frontend/.claude/rules/playwright.md` (`## Worker isolation`), with the pattern in `frontend/.playwright/fixtures.ts`.
 
 ## Relationship to the story tests
 
@@ -126,7 +126,7 @@ Set locale and `Accept-Language` per `test.describe` block, not globally. See `f
 
 ## Auth / session setup
 
-When a project requires authentication, use a global setup file (`auth.setup.ts`) that logs in once and saves Playwright storage state. Configure it as a `setup` project dependency so authenticated specs reuse the session. Tests that must start unauthenticated call `await page.context().clearCookies()` explicitly.
+Session setup for a project with authentication is in `frontend/.claude/rules/playwright.md` (`## Auth / session setup`).
 
 ## Parallelism and CI
 

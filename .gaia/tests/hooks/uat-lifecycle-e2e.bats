@@ -202,3 +202,44 @@ TSCONFIG
   echo "$output" >&2
   [ "$status" -eq 0 ]
 }
+
+@test "a route-only plan renders into the route tests directory, and the gate passes it on a Vitest report with no e2e message" {
+  local rendered="frontend/app/route-tests/fixture-flow/tests/fixture-flow-confirms.test.ts"
+  local report="$BATS_TEST_TMPDIR/vitest.json"
+  sed 's#^| UAT-001 | e2e | 1 | fixture-flow | fixture-flow-confirms.spec.ts |#| UAT-001 | route | 1 | fixture-flow | fixture-flow-confirms.test.ts |#' "$ROUTING" >"$ROUTING.new"
+  mv "$ROUTING.new" "$ROUTING"
+  grep -qF -- '| UAT-001 | route |' "$ROUTING" || return 1
+  grep -qF -- ' e2e ' "$ROUTING" && return 1
+
+  # Render: one file under the route tests directory, none under e2e.
+  run in_tree bash "$SPEC_SCRIPTS/uat-write.sh" "$SPEC" --routing "$ROUTING"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.summary.written' <<<"$output")" = "1" ]
+  [ "$(jq -r '.details[0].path' <<<"$output")" = "$rendered" ]
+  [ -f "$TREE/$rendered" ]
+  [ "$(find "$TREE/frontend/.playwright/e2e" -type f | wc -l | tr -d ' ')" = "0" ]
+
+  # The rendered red test is refused by the gate.
+  run in_tree bash "$SPEC_SCRIPTS/uat-gate.sh" "$SPEC" --routing "$ROUTING" --phase 1 --vitest-report "$BATS_TEST_TMPDIR/absent.json"
+  [ "$status" -ne 0 ]
+
+  # An implementer turns it green: the annotation goes, the body calls a loader.
+  local green_file="$BATS_TEST_TMPDIR/green.test.ts"
+  sed -n '1,/^import /p' "$TREE/$rendered" >"$green_file"
+  {
+    printf '\n'
+    printf "test('the confirmation is returned', async () => {\n"
+    printf "  const response = await loader({request: new Request('http://localhost/confirm')});\n"
+    printf '  expect(response.status).toBe(200);\n'
+    printf '});\n'
+  } >>"$green_file"
+  cp "$green_file" "$TREE/$rendered"
+  jq -n --arg name "$TREE/$rendered" '{numTotalTests:1,numPassedTests:1,numFailedTests:0,success:true,testResults:[{name:$name,status:"passed",assertionResults:[{fullName:"the confirmation is returned",status:"passed",title:"the confirmation is returned",ancestorTitles:[],failureMessages:[]}]}]}' >"$report"
+
+  run in_tree bash "$SPEC_SCRIPTS/uat-gate.sh" "$SPEC" --routing "$ROUTING" --phase 1 --vitest-report "$report"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  [ "$output" != "no owned e2e specs" ] || return 1
+  [ "$output" != "no owned UAT tests" ] || return 1
+  run in_tree bash "$SPEC_SCRIPTS/uat-gate.sh" "$SPEC" --routing "$ROUTING" --all --vitest-report "$report"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}

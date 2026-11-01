@@ -18,7 +18,7 @@
 //                  file identity for path scoping and .ts-vs-.tsx script kind)
 //
 // Output (stdout): one JSON object,
-//   {"file":"...","classification":"strict"|"emergent","reasons":[...]}
+//   {"file":"...","classification":"strict"|"emergent"|"route","reasons":[...]}
 // Exit 0 on success. Exit non-zero with a one-line stderr message on a missing
 // argument, a missing `typescript`, an unreadable file, or a parse failure, so
 // the bash callers can apply their own fail-open policy.
@@ -213,6 +213,9 @@ const addReason = (reason) => {
 // --- Condition 1: path scoping + hook/non-hook discriminator ------------------
 
 const STORY_FILE_PATTERN = /\.stories\.tsx?$/;
+// A route-surface contract test lives under app/route-tests/<route>/tests/. It
+// is `route`: owed both the RED gate and the worthiness audit.
+const ROUTE_TEST_PATTERN = /(^|\/)app\/route-tests\/.+\/tests\/[^/]+\.test\.ts$/;
 
 const inCandidatePath = () =>
   strictCandidatePatterns.some((pattern) => pattern.test(filePath));
@@ -526,6 +529,14 @@ const checkAsyncIoExport = () => {
 // write happens once at the tail. Each arm's checks run for their addReason
 // side effects, so `reasons` is only complete once this returns.
 const classify = () => {
+  // A route test is both gated: it is neither strict nor emergent, so the RED
+  // gate (which relaxes only on emergent) and the worthiness selection (which
+  // takes emergent and route) each read it as theirs.
+  if (ROUTE_TEST_PATTERN.test(filePath)) {
+    addReason('route test: a test under app/route-tests/<route>/tests/ owes RED and worthiness');
+    return 'route';
+  }
+
   // A story file is a rendered, browser-bound test whatever its path: it is
   // emergent before path scoping and before any AST check, so a story under a
   // strict-candidate folder never reaches the RED gate.

@@ -81,7 +81,7 @@ Emergent membership is decided by the [[Determinism Classifier]]
 classifier. A changed test file that a package's `emergentTests` globs name ([[Package Descriptor]])
 and whose classifier verdict is `emergent` is in scope (a `*.stories.tsx` is in scope through its own globs entry, one ledger line per base story and per attached `.test()`, and per story with a play and no tests; an old-format story file denies, see [[Stories as Tests]]); a `.ts` component test
 that the classifier proves deterministic is RED-gated by the
-[[TDD RED Verification]] gate, not worthiness-gated, and is excluded.
+[[TDD RED Verification]] gate, not worthiness-gated, and is excluded. A test the classifier labels `route` is in scope as an emergent test is, although the RED gate covers it too; the classifier's `route` verdict is what selects it.
 
 When zero emergent test files changed, the gate is a no-op and allows the merge.
 

@@ -29,7 +29,7 @@ write_package_descriptor() {
   local root="$1" package_dir="$2"
   local unit="${3:-[\"app/**/*.test.ts\",\"app/**/*.test.tsx\"]}"
   local strict="${4:-[\"app/utils/**\",\"app/services/**\",\"app/hooks/**\",\"app/components/**/*.ts\"]}"
-  local emergent="${5:-[\"app/components/**/*.test.ts\",\"app/components/**/*.test.tsx\",\".playwright/**/*.spec.ts\",\".playwright/**/*.spec.tsx\",\".playwright/**/*.test.ts\",\".playwright/**/*.test.tsx\"]}"
+  local emergent="${5:-[\"app/components/**/*.test.ts\",\"app/components/**/*.test.tsx\",\".playwright/**/*.spec.ts\",\".playwright/**/*.spec.tsx\",\".playwright/**/*.test.ts\",\".playwright/**/*.test.tsx\",\"app/route-tests/**/*.test.ts\"]}"
   local target="$root/$package_dir/gaia.package.json"
   if [ "$package_dir" = . ]; then
     target="$root/gaia.package.json"

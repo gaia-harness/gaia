@@ -920,3 +920,107 @@ reason_of_output() {
   spawn_count=$(wc -c <"$spawn_log" | tr -d ' ')
   [ "$spawn_count" -eq 1 ]
 }
+
+# --- route tests: gated on purpose, with a carve-out for rendered .fails tests ---
+
+ROUTE_TEST_PATH="frontend/app/route-tests/orders/tests/refuses-anonymous.test.ts"
+ROUTE_MARKER="// gaia-uat-contract sha256:0000000000000000000000000000000000000000000000000000000000000000"
+ROUTE_PLAIN_BODY='import {expect, test} from "vitest";
+test("refuses an anonymous visitor", () => { expect(1 + 1).toBe(2); });
+'
+ROUTE_FAILS_BODY='import {expect, test} from "vitest";
+test.fails("the owning phase replaces this body", () => { expect(false).toBe(true); });
+'
+
+@test "route test: a new hand-written test with no RED is denied" {
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_PLAIN_BODY"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"refuses an anonymous visitor"* ]]
+}
+
+@test "route test: a new hand-written test with a recorded RED is allowed" {
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_PLAIN_BODY"
+  seed_matching_red "$ROUTE_TEST_PATH" "refuses an anonymous visitor"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "route test: a new .fails test in a file with the contract marker on line 1 is allowed" {
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+$ROUTE_FAILS_BODY"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "route test: a new plain test in a marked file with no RED is denied" {
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+$ROUTE_PLAIN_BODY"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+}
+
+@test "route test: a placeholder committed as .fails and turned plain under the same title with no RED is denied" {
+  commit_file_at_head "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+$ROUTE_FAILS_BODY"
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+import {expect, test} from \"vitest\";
+test(\"the owning phase replaces this body\", () => { expect(1 + 1).toBe(2); });
+"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+}
+
+@test "route test: a placeholder committed as .fails and turned plain under the same title with a recorded RED is allowed" {
+  commit_file_at_head "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+$ROUTE_FAILS_BODY"
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_MARKER
+import {expect, test} from \"vitest\";
+test(\"the owning phase replaces this body\", () => { expect(1 + 1).toBe(2); });
+"
+  seed_matching_red "$ROUTE_TEST_PATH" "the owning phase replaces this body"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "route test: the contract marker on line 2 grants nothing" {
+  stage_file "$ROUTE_TEST_PATH" "// a header line
+$ROUTE_MARKER
+$ROUTE_FAILS_BODY"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+}
+
+@test "route test: a .fails test without any marker is denied" {
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_FAILS_BODY"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+}
+
+@test "route test: a classifier without the route arm lets the unmarked test through" {
+  # Mutation proof on a scratch copy of the hook and classifier: with the arm
+  # gone the path classifies emergent and the gate relaxes, so the first case
+  # above would pass wrongly.
+  install_stub_classifier_home 0 ''
+  cp "$HOME_ROOT/.gaia/scripts/classifier/classify-determinism.mjs" "$FAKE_HOME/.gaia/scripts/classifier/classify-determinism.mjs"
+  sed -i.bak 's/ROUTE_TEST_PATTERN\.test(filePath)/false/' "$FAKE_HOME/.gaia/scripts/classifier/classify-determinism.mjs"
+  grep -q 'if (false)' "$FAKE_HOME/.gaia/scripts/classifier/classify-determinism.mjs"
+  export NODE_PATH="$HOME_ROOT/node_modules:$HOME_ROOT/.gaia/cli/node_modules"
+  stage_file "$ROUTE_TEST_PATH" "$ROUTE_PLAIN_BODY"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "descriptor pin: the route-tests glob stays in emergentTests" {
+  run jq -e '.globs.emergentTests | index("app/route-tests/**/*.test.ts")' "$HOME_ROOT/frontend/gaia.package.json"
+  [ "$status" -eq 0 ]
+}

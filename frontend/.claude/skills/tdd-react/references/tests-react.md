@@ -1,16 +1,19 @@
 # React Testing Reference (Storybook stories + Vitest projects + MSW)
 
-Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHook`; Service Tests via MSW; When to Mock; Testing Forms with Conform; Bad Tests; Worth Keeping: the Discriminator, Composition, and Platform Rules; Render-only stories and a11y; Red Flags.
+Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHook`; Service Tests via MSW; Route Tests; When to Mock; Testing Forms with Conform; Bad Tests; Worth Keeping: the Discriminator, Composition, and Platform Rules; Render-only stories and a11y; Red Flags.
 
 ## Testing Layers
 
-Four layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story `.test()`, not E2E; a route's redirect is E2E, a loader's parsing is a service test.
+Five layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story `.test()`, not E2E; a route's redirect is a route test, a loader's parsing is a service test. The principle and its rationale are in `wiki/decisions/Test Layering.md`.
+
+The story-versus-route boundary: rendered output on one component is a story. A status, a redirect, returned data, a validation error, an authorization outcome or a side effect is a route test.
 
 | Layer             | Tool                                  | Vitest project | File location                           | What to assert                                      |
 | ----------------- | ------------------------------------- | -------------- | --------------------------------------- | --------------------------------------------------- |
 | Component / page  | Storybook story with `.test()` behaviors | `storybook`    | `app/components/<name>/tests/*.stories.tsx` | rendered DOM, user interactions, props behavior, accessibility |
 | Hook              | `renderHook` from `vitest-browser-react` | `browser`   | `app/hooks/tests/`                      | hook return values, state transitions, callbacks    |
 | Pure / service    | MSW handlers + Zod                    | `node`         | `app/services/<name>/tests/`, `app/utils/tests/` | parsed response shape, request payload, error cases |
+| Route             | `loader` / `action` called with a `Request` | `node`      | `app/route-tests/<feature>/tests/*.test.ts` | status, redirect, returned data, validation errors, authorization outcome, side effect |
 | E2E               | Playwright + dev-server MSW              | Playwright     | `.playwright/e2e/*.spec.ts`             | full user flow across routes                        |
 
 One Vitest config (`vitest.config.ts`) holds three projects. `node` runs `*.test.ts` outside any `hooks/` folder; `browser` runs `*.test.tsx` and `hooks/**/*.test.ts` in headless Chromium; `storybook` runs every `*.stories.tsx` through `@storybook/addon-vitest`. There is no DOM emulation: component and hook code runs in a real browser, so install Chromium once with `pnpm install:browsers`. Run a subset with `pnpm test --run --project storybook <story-file>`.
@@ -132,7 +135,7 @@ Assert on `result.current`, the observable hook surface. A `*.test.tsx` file als
 
 ## Service Tests via MSW
 
-MSW handlers run inside the `node` Vitest project against the MSW node server, so a service test exercises the real `api()` wrapper, real schema validation, and real URL resolution. No `vi.mock('fetch')`. Route and page tests are page stories with MSW handlers installed in the meta's `beforeEach` (`beforeEach: ({msw}) => { msw.use(...) }`), never through a story parameter.
+MSW handlers run inside the `node` Vitest project against the MSW node server, so a service test exercises the real `api()` wrapper, real schema validation, and real URL resolution. No `vi.mock('fetch')`. A page's rendered states are page stories with MSW handlers installed in the meta's `beforeEach` (`beforeEach: ({msw}) => { msw.use(...) }`), never through a story parameter; a route module's status, redirect, data or side effect is a route test (see Route Tests).
 
 ```tsx
 // app/services/gaia/things/tests/requests.test.ts
@@ -165,6 +168,43 @@ describe('getThings', () => {
 ```
 
 The tracer bullet for services: the happy-path request returns a Zod-parsed result.
+
+## Route Tests
+
+A route test calls a route module's `loader` or `action` with a `Request` in the `node` project. HTTP boundaries are mocked through MSW; the app's own store is real, and each Vitest worker holds its own store. A case table lives in `test.each`. The principle and the limits of each layer are in `wiki/decisions/Test Layering.md`.
+
+Pass full route args (`context`, `params`, `pattern`, `request`, `url`) and run any context-providing middleware by hand, since stock loaders read what middleware populated. `frontend/test/root-toast.server.test.ts` is the shape:
+
+```ts
+import {RouterContextProvider} from 'react-router';
+import {expect, test} from 'vitest';
+import {i18nextMiddleware} from '~/middleware/i18next';
+import {loader} from '~/root';
+
+test('returns the loader data for an anonymous request', async () => {
+  const url = new URL('http://localhost/');
+  const request = new Request(url);
+  const context = new RouterContextProvider();
+  const args = {context, params: {}, pattern: '/', request, url};
+
+  let result: Awaited<ReturnType<typeof loader>> | undefined;
+
+  await i18nextMiddleware(args, async () => {
+    result = await loader(args);
+
+    return new Response();
+  });
+
+  expect(result?.data.toast).toBeUndefined();
+});
+```
+
+What a route test cannot prove:
+
+- A direct call skips middleware, so a middleware guard is proven by a real-server check.
+- A parent loader guards no action. A write action guards itself, and a direct anonymous call to it is the proof.
+- A parent-loader guard on a read is proven by a real-server `.data` request naming only the child route.
+- An authorization outcome owned by an upstream API cannot be proven by a route test, since an MSW handler answers as the test wrote it.
 
 ## When to Mock
 
@@ -302,6 +342,8 @@ Default.test('price renders with two decimals', async ({canvas}) => {
   await expect(canvas.getByText('$49.99')).toBeVisible(); // PriceTag's job, covered in PriceTag's stories
 });
 ```
+
+The composition rule compares a story's tests with its own children's stories and stays on that surface. Comparing a test with one at another layer (a story against a route test, a route test against an end-to-end test) is the overlap pass, which reads every layer (`wiki/decisions/Test Layering.md`).
 
 This is a judgment call, not a lint rule: applied bluntly it strips real integration regressions. An agent applies it **PROPOSE-only and NEVER auto-deletes a child-redundant test.** Any proposed delete must cite both the specific redundant sibling assertion AND the seam assertion that subsumes it, and the cited sibling assertion is machine-verified to contain a matching assertion before the proposal reaches a human. Security, escaping, and data-integrity seam tests (for example a Toast XSS-escaping test) carry a never-delete-without-a-verified-sibling carve-out: they stay even when a sibling looks redundant.
 

@@ -33,7 +33,7 @@ Spawn a `general-purpose` Agent with this prompt (interpolate `<DRAFT_PATH>` and
 >     {
 >       "id": "SR-NNN",
 >       "severity": "minor" | "major" | "critical",
->       "kind": "placeholder" | "ambiguity" | "inconsistency" | "drift" | "scope_change" | "missing_uat" | "other",
+>       "kind": "placeholder" | "ambiguity" | "inconsistency" | "drift" | "scope_change" | "missing_uat" | "case_enumeration" | "other",
 >       "location": "<section heading or UAT-NNN>",
 >       "excerpt": "<short verbatim excerpt, keep under 200 chars>",
 >       "issue": "<one sentence, what is wrong>",

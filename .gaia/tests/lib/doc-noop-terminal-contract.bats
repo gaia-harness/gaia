@@ -66,6 +66,9 @@ setup() {
   LIFECYCLE_RELATIVE_PATH='.claude/skills/gaia/references/spec/lifecycle.md'
   # The third: the caller wrote the code the evaluator judges.
   WORTHINESS_RELATIVE_PATH='.claude/skills/gaia/references/worthiness-step.md'
+  # The fourth: nothing depends on the overlap pass, so a double no-op records
+  # `did not run` and the run continues.
+  OVERLAP_RELATIVE_PATH='.claude/skills/gaia/references/overlap-pass.md'
 
   OWNER="$ROOT/$OWNER_RELATIVE_PATH"
   GATE="$ROOT/$GATE_RELATIVE_PATH"
@@ -76,6 +79,7 @@ setup() {
     '.claude/agents/code-audit-frontend.md'
     '.claude/hooks/lib/audit-frontend-refuter.md'
     '.claude/skills/gaia/references/fitness.md'
+    '.claude/skills/gaia/references/overlap-pass.md'
     '.claude/skills/gaia/references/plan/decomposition-audit.md'
     '.claude/skills/gaia/references/spec/audit.md'
     '.claude/skills/gaia/references/spec/lens-dispatch.md'
@@ -215,6 +219,7 @@ terminal_segments() {
     [ "$relative_path" = "$RUNBOOK_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$LIFECYCLE_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$WORTHINESS_RELATIVE_PATH" ] && continue
+    [ "$relative_path" = "$OVERLAP_RELATIVE_PATH" ] && continue
     lines="$(terminal_segments "$ROOT/$relative_path")"
     [ -n "$lines" ] || { echo "no terminal statement read in ${relative_path}" >&2; return 1; }
     # Per statement, not per file: a file whose ending drifted at one of
@@ -305,6 +310,25 @@ terminal_segments() {
   grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$WORTHINESS_RELATIVE_PATH"
   grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$WORTHINESS_RELATIVE_PATH"
   grep -qF -- 'same deliberate departure from the general inline ending' "$ROOT/$WORTHINESS_RELATIVE_PATH"
+}
+
+@test "the owner page admits the overlap pass's exception and states its reason" {
+  grep -qF -- "$OVERLAP_RELATIVE_PATH" "$OWNER"
+  grep -qF -- 'Nothing depends on the overlap pass' "$OWNER"
+}
+
+@test "the overlap pass's terminal statement records did not run and does not fall back inline" {
+  local lines
+  lines="$(terminal_segments "$ROOT/$OVERLAP_RELATIVE_PATH")"
+  [ -n "$lines" ] || { echo "no terminal statement read in $OVERLAP_RELATIVE_PATH" >&2; return 1; }
+  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
+  printf '%s\n' "$lines" | grep -qF -- 'did not run'
+}
+
+@test "the overlap pass declares its departure as deliberate and names the owner" {
+  grep -qF -- 'departs from the general inline ending' "$ROOT/$OVERLAP_RELATIVE_PATH"
+  grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$OVERLAP_RELATIVE_PATH"
+  grep -qF -- 'nothing depends on this pass' "$ROOT/$OVERLAP_RELATIVE_PATH"
 }
 
 @test "the owner page no longer asserts a uniform ending across every surface" {

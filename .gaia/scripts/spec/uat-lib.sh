@@ -27,6 +27,8 @@ fi
 UAT_LIB_SH=1
 
 _UAT_LIB_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.gaia/scripts/spec/uat-code-only.sh
+source "$_UAT_LIB_DIRECTORY/uat-code-only.sh"
 
 uat_lib_whitespace_text() {
   local text
@@ -253,7 +255,7 @@ uat_lib_parse_routing() {
 
 uat_lib_validate_routing() {
   local spec_path="${1:-}" routing_file="${2:-}" spec_rows routing_rows spec_ids
-  local problems=0 routed_ids='' e2e_paths='' row uat_id surface phase feature_folder file_name
+  local problems=0 routed_ids='' e2e_paths='' route_paths='' route_problems='' row uat_id surface phase feature_folder file_name
   local cell_count spec_id_entry kebab_segment='[a-z0-9]+(-[a-z0-9]+)*'
 
   spec_rows=$(uat_lib_parse_spec "$spec_path") || return 2
@@ -302,6 +304,11 @@ uat_lib_validate_routing() {
         fi
         e2e_paths="$e2e_paths$feature_folder/$file_name"$'\n'
         ;;
+      route)
+        route_problems=$(uat_lib_route_row_problems "$uat_id" "$feature_folder" "$file_name" "$route_paths") || true
+        problems=$((problems + ${route_problems:-0}))
+        route_paths="$route_paths$feature_folder/$file_name"$'\n'
+        ;;
       story | non-ui)
         if [ "$feature_folder" != "-" ] || [ "$file_name" != "-" ]; then
           printf "uat-routing: %s is %s; its feature_folder and file_name must both be '-'\n" "$uat_id" "$surface" >&2
@@ -309,7 +316,7 @@ uat_lib_validate_routing() {
         fi
         ;;
       *)
-        printf "uat-routing: %s has surface '%s'; expected e2e, story or non-ui\n" "$uat_id" "$surface" >&2
+        printf "uat-routing: %s has surface '%s'; expected e2e, route, story or non-ui\n" "$uat_id" "$surface" >&2
         problems=$((problems + 1))
         ;;
     esac
@@ -327,28 +334,15 @@ uat_lib_validate_routing() {
 }
 
 uat_lib_e2e_directory() {
-  local repo_root="${1:-}" packages_library packages_status=0 package_path
-  packages_library="$_UAT_LIB_DIRECTORY/../../../.claude/hooks/lib/gaia-packages.sh"
-  if [ ! -f "$packages_library" ]; then
-    printf 'package library missing: %s. Next step: restore it from the GAIA release.\n' "$packages_library" >&2
-    return 1
-  fi
-  # shellcheck disable=SC1090
-  source "$packages_library"
-  gaia_packages_load "$repo_root" || packages_status=$?
-  if [ "$packages_status" -ne 0 ]; then
-    printf '%s\n' "$GAIA_PACKAGES_ERROR" >&2
-    return 1
-  fi
-  if ! package_path=$(gaia_package_dir frontend); then
-    printf '%s\n' "gaia-packages: .gaia/packages.json registers no package named frontend. Next step: add a frontend entry, or delete the registry to use the built-in default." >&2
-    return 1
-  fi
-  if [ "$package_path" = "." ]; then
-    printf '%s\n' '.playwright/e2e'
-  else
-    printf '%s\n' "$package_path/.playwright/e2e"
-  fi
+  _uat_lib_frontend_subdirectory "${1:-}" '.playwright/e2e'
+}
+
+uat_lib_route_tests_directory() {
+  _uat_lib_frontend_subdirectory "${1:-}" 'app/route-tests'
+}
+
+uat_lib_route_test_path() {
+  printf '%s/tests/%s\n' "${1:-}" "${2:-}"
 }
 
 uat_lib_embedded_hash() {

@@ -93,6 +93,27 @@ run_uat_write() {
   grep -qF -- '"e2e_directory":"apps/site/.playwright/e2e"' <<<"$output"
 }
 
+@test "a route row renders under the frontend package's app/route-tests, built-in default and a non-default package path" {
+  sed -i.bak 's/| UAT-001 | e2e | 1 | sign-in | sign-in-page-opens.spec.ts |/| UAT-001 | route | 1 | sign-in | sign-in-page-opens.test.ts |/' "$ROUTING"
+  grep -qF -- '| UAT-001 | route |' "$ROUTING" || return 1
+
+  write_builtin_descriptor "$WORK"
+  run_uat_write
+  [ "$status" -eq 0 ] || return 1
+  [ -f "$WORK/frontend/app/route-tests/sign-in/tests/sign-in-page-opens.test.ts" ] || return 1
+  grep -qF -- '"route_tests_directory":"frontend/app/route-tests"' <<<"$output" || return 1
+
+  rm -rf "$WORK/frontend" "$BATS_TEST_TMPDIR/plan/uat-render.json"
+  mkdir -p "$WORK/apps/site"
+  printf '[{"name":"frontend","path":"apps/site"}]\n' > "$WORK/.gaia/packages.json"
+  write_literal_descriptor "$WORK/apps/site/gaia.package.json" frontend
+  run_uat_write
+  [ "$status" -eq 0 ] || return 1
+  [ -f "$WORK/apps/site/app/route-tests/sign-in/tests/sign-in-page-opens.test.ts" ] || return 1
+  [ ! -e "$WORK/frontend" ] || return 1
+  grep -qF -- '"route_tests_directory":"apps/site/app/route-tests"' <<<"$output"
+}
+
 @test "a malformed registry exits non-zero with the gaia-packages message and writes nothing" {
   printf 'not json' > "$WORK/.gaia/packages.json"
 

@@ -3,7 +3,7 @@ type: module
 path: frontend/test/, frontend/.playwright/
 status: active
 language: typescript
-purpose: Four-layer testing setup: unit, stories as component tests, E2E, visual regression
+purpose: Five-layer testing setup: unit, stories as component tests, route tests, E2E, visual regression
 depends_on:
   - '[[Vitest]]'
   - '[[Storybook]]'
@@ -17,14 +17,15 @@ tags: [module, testing]
 
 # Testing
 
-Testing has **four layers**, all sharing a common [[MSW Handlers|MSW]] mocking layer:
+Testing has **five layers**, all sharing a common [[MSW Handlers|MSW]] mocking layer:
 
 - Unit: [[Vitest]] in `frontend/app/utils/tests/` (pure and server code), and `vitest-browser-react` tests for hooks
 - Component and page: Storybook stories with `.test()` behaviors in `frontend/app/components/*/tests/`, `frontend/app/pages/*/tests/`, run by Vitest through `@storybook/addon-vitest`
+- Route: Vitest `node` tests in `frontend/app/route-tests/<feature>/tests/` that call a route module's `loader` or `action` with a `Request`
 - E2E: [[Playwright]] in `frontend/.playwright/e2e/*.spec.ts`
 - Visual regression: [[Chromatic]] (CI only), driven by the same stories
 
-A story is the component test and the visual-regression input, so both share one source of truth. A route's test is its page story, which mounts the route's exports through `stubs.reactRouter` and drives MSW handlers. See [[Stories as Tests]] and [[Component Testing]].
+A story is the component test and the visual-regression input, so both share one source of truth. A page's rendered states are page stories, which mount the route's exports through `stubs.reactRouter` and drive MSW handlers. A route module's status, redirect, returned data, validation error, authorization outcome or side effect is a route test. [[Test Layering]] owns which layer proves what. See [[Stories as Tests]] and [[Component Testing]].
 
 Server-side tests (the QueryClient accessor, `attempt`, base-URL resolution) run in the `node` Vitest project against the MSW node server.
 

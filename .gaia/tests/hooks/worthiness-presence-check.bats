@@ -1145,3 +1145,28 @@ refusal_free_of_debt_wording() {
     fi
   done
 }
+
+# --- route tests: worthiness-audited as well as RED-gated ---
+
+ROUTE_TEST_PATH="frontend/app/route-tests/orders/tests/refuses-anonymous.test.ts"
+ROUTE_TEST_SOURCE='import {expect, test} from "vitest";
+test("refuses an anonymous visitor", () => {
+  expect(1 + 1).toBe(2);
+});
+'
+
+@test "route test: denies a changed route test with no ledger entry" {
+  commit_file "$ROUTE_TEST_PATH" "$ROUTE_TEST_SOURCE"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"refuses an anonymous visitor"* ]]
+}
+
+@test "route test: allows a changed route test with a matching ledger line" {
+  commit_file "$ROUTE_TEST_PATH" "$ROUTE_TEST_SOURCE"
+  seed_matching "$ROUTE_TEST_PATH" "refuses an anonymous visitor"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}

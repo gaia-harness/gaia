@@ -40,7 +40,7 @@ RIGHT (vertical):
   ...
 ```
 
-Plan-rendered UAT specs (`test.fail()`) are the orchestrator's, not a horizontal slice; your phase removes `test.fail()` when its UAT passes.
+Plan-rendered UAT specs (`test.fail()`) are the orchestrator's, not a horizontal slice; your phase removes `test.fail()` when its UAT passes. A rendered route test uses `test.fails(`: your phase removes the `.fails`, so it becomes `test(`, and gives it a real body that calls the loader or action.
 
 ## Workflow
 
@@ -105,7 +105,7 @@ Run the determinism classifier over each touched source file:
 node .gaia/scripts/classifier/classify-determinism.mjs <repo-relative-source-path>
 ```
 
-It emits `{file, classification: "strict" | "emergent", reasons}`. A `strict` file is on the deterministic surface and owes a RED; an `emergent` file is clock-/entropy-/I-O-bound or tree-dependent and commits without one.
+It emits `{file, classification: "strict" | "emergent" | "route", reasons}`. A `strict` file is on the deterministic surface and owes a RED; an `emergent` file is clock-/entropy-/I-O-bound or tree-dependent and commits without one; a `route` test owes both the RED and the worthiness audit.
 
 **Emit one verdict line per touched file in the end-of-task summary, routine-looking ones included**: a silent misclassification (a pure-looking file the classifier marks emergent, or vice versa) stays auditable only if it appears as a named line.
 
@@ -119,7 +119,7 @@ Determinism roll-up:
 
 A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/Stories as Tests.md`); a story file is emergent, so a behavior added as a `.test()` goes through the audit below, not the RED gate.
 
-The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `frontend/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent`).
+The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `frontend/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent` or `route`).
 
 #### Dispatch and record
 

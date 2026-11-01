@@ -19,6 +19,7 @@ setup() {
   ROUTING="$WORK/plan/README.md"
   LEDGER="$WORK/plan/uat-render.json"
   E2E="$WORK/frontend/.playwright/e2e"
+  ROUTE="$WORK/frontend/app/route-tests"
   STDERR_FILE="$BATS_TEST_TMPDIR/stderr"
   # shellcheck source=.gaia/scripts/spec/uat-lib.sh
   source "$LIB"
@@ -584,4 +585,167 @@ EOF
   [ "$(uat_lib_parse_spec "$SPEC" | cut -f2)" = "a visitor with a tab and a folded continuation" ] || return 1
   canonical='"Saved" toast reads "Done"'
   [ "$(printf '%s' "$canonical" | uat_lib_whitespace_text)" = "$canonical" ]
+}
+
+# --- Route-routed UATs ---
+
+ROUTE_FILE_A_RELATIVE='frontend/app/route-tests/checkout/tests/guest-checkout-confirms-order.test.ts'
+ROUTE_FILE_B_RELATIVE='frontend/app/route-tests/orders/tests/order-history-lists-orders.server.test.ts'
+ROUTE_ROW_ONE='| UAT-001 | route | 1 | checkout | guest-checkout-confirms-order.test.ts |'
+ROUTE_ROW_TWO='| UAT-002 | route | 2 | orders | order-history-lists-orders.server.test.ts |'
+
+assert_route_nothing_written() {
+  [ ! -e "$ROUTE" ] || return 1
+  assert_nothing_written
+}
+
+@test "a route-routed UAT renders at its routed path with marker, hash, contract and test.fails; a .server.test.ts name renders too" {
+  write_two_uat_spec
+  write_routing "$ROUTE_ROW_ONE" "$ROUTE_ROW_TWO"
+  render
+  [ "$status" -eq 0 ]
+  file="$WORK/$ROUTE_FILE_A_RELATIVE"
+  [ -f "$file" ] || return 1
+  [ -f "$WORK/$ROUTE_FILE_B_RELATIVE" ] || return 1
+  head -n 1 "$file" | grep -qE '^// gaia-uat-contract sha256:[0-9a-f]{64}$' || return 1
+  [ "$(uat_lib_embedded_hash "$file")" = "$(uat_lib_body_hash "$file")" ] || return 1
+  [ "$(contract_line "$file" Given)" = "a visitor with items in the cart" ] || return 1
+  [ "$(contract_line "$file" When)" = "they check out as a guest" ] || return 1
+  [ "$(contract_line "$file" Then)" = "the confirmation page shows the order number" ] || return 1
+  grep -qF -- 'test.fails(' "$file" || return 1
+  grep -qF -- "from 'vitest'" "$file" || return 1
+  [ "$(jq -r '.route_tests_directory' <<<"$output")" = "frontend/app/route-tests" ] || return 1
+  [ "$(jq -r '.e2e_directory' <<<"$output")" = "frontend/.playwright/e2e" ] || return 1
+  [ "$(detail_field "$ROUTE_FILE_A_RELATIVE" action)" = "written" ]
+}
+
+@test "route validation: a .spec.ts file name is refused" {
+  assert_routing_refused "UAT-002 is route with file_name 'orders.spec.ts'" "$ROUTE_ROW_ONE" '| UAT-002 | route | 2 | orders | orders.spec.ts |' || return 1
+  [ ! -e "$ROUTE" ]
+}
+
+@test "route validation: a non-kebab feature folder is refused" {
+  assert_routing_refused "UAT-002 is route with feature_folder 'Order_History'" "$ROUTE_ROW_ONE" '| UAT-002 | route | 2 | Order_History | orders.test.ts |' || return 1
+  [ ! -e "$ROUTE" ]
+}
+
+@test "route validation: a hooks segment in the feature folder is refused" {
+  assert_routing_refused "a hooks segment would leave the Vitest node project" "$ROUTE_ROW_ONE" '| UAT-002 | route | 2 | orders/hooks | orders.test.ts |' || return 1
+  [ ! -e "$ROUTE" ]
+}
+
+@test "route validation: a working-document id in the path is refused" {
+  assert_routing_refused "carries a working-document id" "$ROUTE_ROW_ONE" '| UAT-002 | route | 2 | orders | uat-002-orders.test.ts |' || return 1
+  [ ! -e "$ROUTE" ]
+}
+
+@test "route validation: two route rows on one path are refused" {
+  assert_routing_refused "a path another route row already claims" "$ROUTE_ROW_ONE" '| UAT-002 | route | 2 | checkout | guest-checkout-confirms-order.test.ts |' || return 1
+  [ ! -e "$ROUTE" ]
+}
+
+@test "route validation: the unknown-surface message names all four surfaces" {
+  assert_routing_refused "expected e2e, route, story or non-ui" "$ROUTE_ROW_ONE" '| UAT-002 | browser | 2 | - | - |'
+}
+
+@test "a route-routed UAT carrying a working-document id is refused and nothing is written" {
+  write_two_uat_spec 'the behavior from SPEC-12 holds'
+  write_routing "$ROUTE_ROW_ONE" "$ROUTE_ROW_TWO"
+  render
+  [ "$status" -eq 2 ]
+  grep -qF -- 'UAT-002 then carries a working-document id' "$STDERR_FILE" || return 1
+  assert_route_nothing_written
+}
+
+@test "a second run preserves a hand-edited route test; a contract change rewrites an unedited one and exits 3 on an edited one" {
+  write_two_uat_spec
+  write_routing "$ROUTE_ROW_ONE" "$ROUTE_ROW_TWO"
+  render
+  [ "$status" -eq 0 ] || return 1
+  sed -i.bak 's/expect(false).toBe(true);/expect(false).toBe(false);/' "$WORK/$ROUTE_FILE_A_RELATIVE"
+  rm -f "$WORK/$ROUTE_FILE_A_RELATIVE.bak"
+
+  render
+  [ "$status" -eq 0 ] || return 1
+  [ "$(detail_field "$ROUTE_FILE_A_RELATIVE" action)" = "preserved" ] || return 1
+  [ "$(detail_field "$ROUTE_FILE_B_RELATIVE" action)" = "unchanged" ] || return 1
+
+  sed -i.bak -e 's/the confirmation page shows the order number/the confirmation page shows the order total/' -e 's/every past order is listed newest first/every past order is listed oldest first/' "$SPEC"
+  rm -f "$SPEC.bak"
+  render
+  [ "$status" -eq 3 ] || return 1
+  [ "$(detail_field "$ROUTE_FILE_A_RELATIVE" reason)" = "changed-and-edited" ] || return 1
+  [ "$(detail_field "$ROUTE_FILE_B_RELATIVE" action)" = "rewritten" ] || return 1
+  [ "$(contract_line "$WORK/$ROUTE_FILE_B_RELATIVE" Then)" = "every past order is listed oldest first" ]
+}
+
+@test "a removed route row deletes its marked file through the ledger and prunes the empty folders up to the route root" {
+  write_two_uat_spec
+  write_routing "$ROUTE_ROW_ONE" "$ROUTE_ROW_TWO"
+  render
+  [ "$status" -eq 0 ] || return 1
+  write_routing "$ROUTE_ROW_ONE" '| UAT-002 | non-ui | 2 | - | - |'
+  render
+  [ "$status" -eq 0 ] || return 1
+  [ ! -e "$WORK/$ROUTE_FILE_B_RELATIVE" ] || return 1
+  [ ! -e "$ROUTE/orders" ] || return 1
+  [ -d "$ROUTE" ] || return 1
+  [ -f "$WORK/$ROUTE_FILE_A_RELATIVE" ] || return 1
+  [ "$(detail_field "$ROUTE_FILE_B_RELATIVE" action)" = "deleted" ]
+}
+
+@test "a removed route row whose file was edited reports removed-or-rerouted-and-edited, stays in the ledger and exits 3" {
+  write_two_uat_spec
+  write_routing "$ROUTE_ROW_ONE" "$ROUTE_ROW_TWO"
+  render
+  [ "$status" -eq 0 ] || return 1
+  printf '// hand edit\n' >>"$WORK/$ROUTE_FILE_B_RELATIVE"
+  write_routing "$ROUTE_ROW_ONE" '| UAT-002 | non-ui | 2 | - | - |'
+  render
+  [ "$status" -eq 3 ] || return 1
+  [ -f "$WORK/$ROUTE_FILE_B_RELATIVE" ] || return 1
+  [ "$(detail_field "$ROUTE_FILE_B_RELATIVE" reason)" = "removed-or-rerouted-and-edited" ] || return 1
+  [ "$(jq -r --arg path "$ROUTE_FILE_B_RELATIVE" '.rendered[] | select(.path == $path) | .uat_id' "$LEDGER")" = "UAT-002" ]
+}
+
+@test "rerouting a UAT from route to e2e deletes the route test and renders the e2e spec" {
+  write_two_uat_spec
+  write_routing "$ROUTE_ROW_ONE" "$ROUTE_ROW_TWO"
+  render
+  [ "$status" -eq 0 ] || return 1
+  write_routing "$ROUTE_ROW_ONE" '| UAT-002 | e2e | 2 | orders | order-history-lists-orders.spec.ts |'
+  render
+  [ "$status" -eq 0 ] || return 1
+  [ ! -e "$WORK/$ROUTE_FILE_B_RELATIVE" ] || return 1
+  [ -f "$WORK/$FILE_B_RELATIVE" ] || return 1
+  [ "$(detail_field "$ROUTE_FILE_B_RELATIVE" action)" = "deleted" ]
+}
+
+@test "rerouting a UAT from e2e to route deletes the e2e spec and renders the route test" {
+  write_two_uat_spec
+  render
+  [ "$status" -eq 0 ] || return 1
+  [ -f "$WORK/$FILE_B_RELATIVE" ] || return 1
+  write_routing '| UAT-001 | e2e | 1 | checkout | guest-checkout-confirms-order.spec.ts |' "$ROUTE_ROW_TWO"
+  render
+  [ "$status" -eq 0 ] || return 1
+  [ ! -e "$WORK/$FILE_B_RELATIVE" ] || return 1
+  [ -f "$WORK/$ROUTE_FILE_B_RELATIVE" ] || return 1
+  [ "$(detail_field "$FILE_B_RELATIVE" action)" = "deleted" ]
+}
+
+@test "code-only blanks comments and string and template contents, keeps line count and code" {
+  file="$BATS_TEST_TMPDIR/probe.ts"
+  printf '%s\n' \
+    'const kept = 1; // test.skip( in a comment' \
+    '/* test.only(' \
+    '   still comment */' \
+    'const text = '"'"'test.fixme('"'"' + "it.skip(" + `${test.skip(}`;' \
+    'test.fails('"'"'x'"'"', () => {});' >"$file"
+  run uat_lib_code_only "$file"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 5 ] || return 1
+  grep -qE 'test\.(skip|only|fixme)|it\.skip' <<<"$output" && return 1
+  grep -qF -- 'const kept = 1;' <<<"$output" || return 1
+  grep -qF -- 'test.fails(' <<<"$output"
 }
