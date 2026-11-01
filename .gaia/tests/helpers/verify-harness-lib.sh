@@ -31,8 +31,8 @@
 
 # git's well-known empty tree, the base of a parentless HEAD's range.
 verify_empty_tree_object=4b825dc642cb6eb9a060e54bf8d69288fbee4904
-# The line-limit half of CI's fitness step (the `cli-tests` workflow), one rule
-# in under a second. Unlike CI, it reads the tree's own suppression file, not
+# CI's fitness step (the `cli-tests` workflow) narrowed to its harness
+# line-limit rule, which runs in under a second. Unlike CI, it reads the tree's own suppression file, not
 # the base branch's, so a pull request that suppresses its own breach passes
 # here and still fails CI.
 verify_line_limit_command='./.gaia/cli/gaia fitness check --json --scope all --fail-on error --only authoring.harness.max-lines --config .claude/gaia-fitness.json'
@@ -181,9 +181,6 @@ verify_execute_check() {
       (cd "$tree" && bash .gaia/tests/shell-lint.sh) >"$output_file" 2>&1 </dev/null
       ;;
     line-limit)
-      # The JSON report goes beside the output file; the output file gets
-      # stderr and one "<file>:<line> <rule>: <message>" line per finding,
-      # or the raw report when it is not JSON.
       # shellcheck disable=SC2086
       (cd "$tree" && $verify_line_limit_command) >"$output_file.json" 2>"$output_file" </dev/null
       line_limit_status=$?

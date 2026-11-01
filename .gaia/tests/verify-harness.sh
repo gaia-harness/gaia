@@ -321,7 +321,7 @@ else
   if [ "$node_missing" -eq 1 ]; then
     verify_skip line-limit "node not found"
   elif [ ! -x "$verified_root/.gaia/cli/gaia" ]; then
-    warn_missing_tool .gaia/cli/gaia 'pnpm -C .gaia/cli bundle' 'line-limit'
+    printf 'WARN  .gaia/cli/gaia not found or not executable: build with pnpm -C .gaia/cli bundle; CI remains the only check for line-limit\n'
     verify_skip line-limit ".gaia/cli/gaia not found or not executable"
   else
     verify_run_check line-limit "$verified_root" "$merge_base" "" ""

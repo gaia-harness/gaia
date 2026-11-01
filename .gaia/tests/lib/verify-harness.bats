@@ -363,7 +363,7 @@ EOF
   chmod -x .gaia/cli/gaia
   run_runner round
   [ "$status" -eq 0 ]
-  has 'WARN  .gaia/cli/gaia not found: install with pnpm -C .gaia/cli bundle; CI remains the only check for line-limit'
+  has 'WARN  .gaia/cli/gaia not found or not executable: build with pnpm -C .gaia/cli bundle; CI remains the only check for line-limit'
   every_label_is SKIP line-limit
   every_label_is PASS shell-lint 01-files-present
 }
