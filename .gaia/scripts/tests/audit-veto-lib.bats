@@ -1,0 +1,174 @@
+#!/usr/bin/env bats
+#
+# Suite for .gaia/scripts/audit-veto-lib.sh: when a veto key counts as
+# satisfied, and the in-memory stop override the bound hook applies to a
+# snapshot. Pure state and run-folder fixtures: no repository is needed,
+# because neither function reads git.
+#
+# Run: .gaia/scripts/bats5.sh .gaia/scripts/tests/audit-veto-lib.bats < /dev/null
+# Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
+
+bats_require_minimum_version 1.5.0
+
+setup() {
+  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/scripts/audit-loop-eval.sh"
+  MAIN="$BATS_TEST_TMPDIR/main"
+  BRANCH_NAME=feat/loop
+  RUN="$MAIN/.gaia/local/runs/$BRANCH_NAME"
+  mkdir -p "$RUN"
+  VETOED_IDENTITY='["code-audit-frontend","rule/x","f.txt",2]'
+  OTHER_IDENTITY='["code-audit-frontend","rule/x","f.txt",9]'
+  TREE_ONE="$(printf '1%.0s' $(seq 1 40))"
+  TREE_TWO="$(printf '2%.0s' $(seq 1 40))"
+}
+
+# state_with <rounds-json>: a state whose rounds are the given
+# [{tree, members, keys}] (keys null leaves the stored snapshot null).
+state_with() {
+  jq -n -c --argjson rounds "$1" '{schema: 1, branch: "feat/loop",
+    history: {rounds: [$rounds | to_entries[] | {round: (.key + 1), tree: .value.tree, commit: .value.tree, members: .value.members,
+      snapshot: (if .value.keys == null then null else {keys: .value.keys} end)}], checkpoints: []},
+    allowance: {answers: []}}'
+}
+
+# veto <effective_from_round>: vetoes.json holding the vetoed identity.
+veto() {
+  jq -n -c --argjson identity "$VETOED_IDENTITY" --argjson effective_from_round "$1" \
+    '{version: 1, keys: [{member: $identity[0], finding_class: $identity[1], path: $identity[2], line: $identity[3], effective_from_round: $effective_from_round}]}' >"$RUN/vetoes.json"
+}
+
+# fix_entry <round> <disposition> [identity]: dispositions-<round>.json disposing it.
+fix_entry() {
+  jq -n -c --argjson round "$1" --arg disposition "$2" --argjson identity "${3:-$VETOED_IDENTITY}" \
+    '{schema: 1, round: $round, entries: [{member: $identity[0], finding_class: $identity[1], path: $identity[2], line: $identity[3], disposition: $disposition, reason: "r"}]}' >"$RUN/dispositions-$1.json"
+}
+
+# fixer_result <round> <disposition>: fixer-<round>-audit.json with one result on the vetoed identity.
+fixer_result() {
+  jq -n -c --argjson identity "$VETOED_IDENTITY" --arg disposition "$2" \
+    '{attempt: 1, results: [{member: $identity[0], finding_class: $identity[1], path: $identity[2], line: $identity[3], disposition: $disposition, reason: "r", changed_paths: ["f.txt"]}]}' >"$RUN/fixer-$1-audit.json"
+}
+
+# satisfied_base: every condition holds for the vetoed identity at round 3.
+satisfied_base() {
+  veto 1
+  fix_entry 1 fix
+  fixer_result 1 fixed
+  STATE="$(state_with "[{\"tree\":\"$TREE_ONE\",\"members\":[\"code-audit-frontend\"],\"keys\":[$VETOED_IDENTITY]},
+    {\"tree\":\"$TREE_TWO\",\"members\":[\"code-audit-frontend\"],\"keys\":[$OTHER_IDENTITY]},
+    {\"tree\":\"$TREE_TWO\",\"members\":[\"code-audit-frontend\"],\"keys\":null}]")"
+  ROUND_KEYS="[$OTHER_IDENTITY]"
+}
+
+# veto_state: the library's answer for round 3 on STATE and ROUND_KEYS.
+veto_state() {
+  gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 3 "$ROUND_KEYS"
+}
+
+assert_unsatisfied() {
+  local answer
+  answer="$(veto_state)" || { echo "rc $?"; return 1; }
+  [ "$(jq -c . <<<"$answer")" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ] || { echo "$answer"; return 1; }
+}
+
+@test "veto-state: a key whose fix landed, was committed and the member did not re-report is satisfied" {
+  satisfied_base
+  [ "$(veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
+}
+
+@test "veto-state: no vetoes file means nothing is vetoed" {
+  satisfied_base
+  rm -f "$RUN/vetoes.json"
+  [ "$(veto_state | jq -c .)" = '{"satisfied":[],"unsatisfied":[]}' ]
+}
+
+@test "veto-state: a fix entry before effective_from_round does not count" {
+  satisfied_base
+  veto 2
+  assert_unsatisfied
+}
+
+@test "veto-state: a fixer result of disputed or cannot_fix is not a fix" {
+  local result
+  for result in disputed cannot_fix; do
+    satisfied_base
+    fixer_result 1 "$result"
+    assert_unsatisfied || { echo "fixer $result"; return 1; }
+  done
+}
+
+@test "veto-state: a fix that no later round committed is not a fix" {
+  satisfied_base
+  STATE="$(jq -c --arg tree "$TREE_ONE" '.history.rounds |= map(.tree = $tree | .commit = $tree)' <<<"$STATE")"
+  assert_unsatisfied
+}
+
+@test "veto-state: the member must be dispatched after the fix" {
+  satisfied_base
+  STATE="$(jq -c '.history.rounds[1].members = [] | .history.rounds[2].members = ["code-audit-shell"]' <<<"$STATE")"
+  assert_unsatisfied
+}
+
+@test "veto-state: the exact key re-reported in round r, or in an earlier dispatched round, is unsatisfied" {
+  satisfied_base
+  ROUND_KEYS="[$VETOED_IDENTITY]"
+  assert_unsatisfied || return 1
+  satisfied_base
+  STATE="$(jq -c --argjson identity "$VETOED_IDENTITY" '.history.rounds[1].snapshot.keys = [$identity]' <<<"$STATE")"
+  assert_unsatisfied
+}
+
+@test "veto-state: an earlier dispatched round with no stored keys proves nothing" {
+  satisfied_base
+  STATE="$(jq -c '.history.rounds[1].snapshot = null' <<<"$STATE")"
+  assert_unsatisfied
+}
+
+@test "veto-state: a malformed vetoes file fails" {
+  satisfied_base
+  printf '{"version":1,"keys":"no"}\n' >"$RUN/vetoes.json"
+  run gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 3 "$ROUND_KEYS"
+  [ "$status" -ne 0 ]
+}
+
+# stop_snapshot <default_stop>: a snapshot whose stop set is the vetoed identity.
+stop_snapshot() {
+  jq -n -c --argjson default_stop "$1" --argjson identity "$VETOED_IDENTITY" '{round: 3, verdict: "enriching", signals: {enriching: true},
+    default_stop: $default_stop, default_stop_keys: (if $default_stop then [$identity] else [] end)}'
+}
+
+# override_of <snapshot>: stop_override as the library adds it for round 3.
+override_of() {
+  gaia_loop_stop_override "$MAIN" "$BRANCH_NAME" 3 "$1" | jq -r '.stop_override'
+}
+
+@test "stop override: true for a default stop with no round-r dispositions, false when it is not a default stop" {
+  [ "$(override_of "$(stop_snapshot true)")" = true ]
+  [ "$(override_of "$(stop_snapshot false)")" = false ]
+}
+
+@test "stop override: a fix on a stop key withdraws it; a fix on any other key keeps it" {
+  fix_entry 3 fix
+  [ "$(override_of "$(stop_snapshot true)")" = false ] || return 1
+  fix_entry 3 fix "$OTHER_IDENTITY"
+  [ "$(override_of "$(stop_snapshot true)")" = true ] || return 1
+  fix_entry 3 accept-residual
+  [ "$(override_of "$(stop_snapshot true)")" = true ]
+}
+
+@test "stop override: a malformed round-r dispositions file reads false" {
+  printf 'not json\n' >"$RUN/dispositions-3.json"
+  [ "$(override_of "$(stop_snapshot true)")" = false ]
+}
+
+@test "stop override: default_stop itself is left as evaluated, a null snapshot stays null, and nothing is written" {
+  local before after
+  fix_entry 3 fix
+  before="$(find "$MAIN" -type f | sort | xargs cat | shasum)"
+  [ "$(gaia_loop_stop_override "$MAIN" "$BRANCH_NAME" 3 "$(stop_snapshot true)" | jq -c '[.default_stop, .default_stop_keys, .stop_override]')" = "[true,[$VETOED_IDENTITY],false]" ] || return 1
+  [ "$(gaia_loop_stop_override "$MAIN" "$BRANCH_NAME" 3 null)" = null ] || return 1
+  after="$(find "$MAIN" -type f | sort | xargs cat | shasum)"
+  [ "$before" = "$after" ]
+}

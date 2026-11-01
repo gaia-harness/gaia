@@ -538,7 +538,7 @@ tree_state() {
   count="$(find "$SNAPSHOT_DIRECTORY" -name 'dispositions-*.checked.json' | wc -l | tr -d ' ')"
   [ "$count" -eq 9 ] || { echo "snapshots: $count"; return 1; }
   mkdir -p "$shim"
-  cp "$SCRIPT" "$shim/audit-dispositions-check.sh"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d\n", time*1000')"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
@@ -553,7 +553,7 @@ tree_state() {
   local shim="$BATS_TEST_TMPDIR/shim"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
   mkdir -p "$shim"
-  cp "$SCRIPT" "$shim/audit-dispositions-check.sh"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
@@ -1112,4 +1112,16 @@ recorded_row() {
   run_sections
   green || return 1
   grep -qF -- 'f.txt:3' <<<"$output"
+}
+
+@test "the triage library is required: a copy without it exits 3 naming it and grades nothing" {
+  local copy="$BATS_TEST_TMPDIR/no-triage-library"
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
+  mkdir -p "$copy"
+  cp "$SCRIPTS/audit-dispositions-check.sh" "$SCRIPTS/filing-outcomes-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$copy/"
+  run bash "$copy/audit-dispositions-check.sh" check --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --round 1
+  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
+  grep -qF -- 'audit-triage-lib.sh' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- 'violation' <<<"$output" && return 1
+  true
 }

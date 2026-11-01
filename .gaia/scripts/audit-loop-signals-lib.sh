@@ -16,18 +16,28 @@
 
 _GAIA_LOOP_HARD_CAP=10
 
+# The review-base reasons that mean a member reviewed incrementally, shared by
+# the snapshot program and the stop's cheap pre-check so the set exists once.
+# An absent reason is never incremental.
+# shellcheck disable=SC2016
+_GAIA_LOOP_STOP_DEFS_JQ='def incremental_base: IN("member-clearance", "member-refusal", "team-signal");'
+
 # The signal block of the snapshot program. It runs inside
 # audit-loop-eval.sh's verdict program, after $counted, $authored_count, $previous_authored_count, $second_previous_authored_count, $verdict and
 # $round are bound, and reads $previous_snapshot and $second_previous_snapshot (the stored snapshots of rounds r-1 and
-# r-2), $is_maintainer_repo, $waivedkeys and $findings. A legacy stored snapshot is one without
+# r-2), $history_snapshots ([{round, members, counted_keys}] for rounds 1..r-1, counted_keys null when legacy),
+# $fixed_triples, $stop_inputs (null, or _gaia_loop_stop_inputs' object), $members, $is_maintainer_repo, $waivedkeys
+# and $findings. A legacy stored snapshot is one without
 # counted_keys: it predates the signals, so its keys, raw_count and
 # waived_count are unknown, never zero.
 # shellcheck disable=SC2016
 _GAIA_LOOP_SIGNALS_JQ='
 | def has_counted_keys: type == "object" and (.counted_keys | type) == "array";
 def identity_key: [.member, .finding_class, .path, .line];
-def triple_lines($triple; $keys): [$keys[] | select(.[0:3] == $triple) | .[3]];
-def disjoint($left_lines; $right_lines): all($left_lines[]; . as $line | any($right_lines[]; . == $line) | not);
+def triple_lines($triple; $keys): [$keys[] | select(.[0:3] == $triple) | .[3]] | unique;
+def counted_in($triple): .triples != null and any(.triples[]; . == $triple);
+def member_ran($triple): any(.members[]; . == $triple[0]);
+def honored_in($honored_keys): identity_key as $entry_key | any($honored_keys[]; . == $entry_key);
 ($counted | map({member, finding_class, path, line, severity, security})) as $counted_summaries
 | ($findings.entries | length) as $raw
 | ([$findings.entries[] | identity_key as $entry_key | select(any($waivedkeys[]; . == $entry_key))] | length) as $waived
@@ -38,17 +48,30 @@ def disjoint($left_lines; $right_lines): all($left_lines[]; . as $line | any($ri
 | (if $second_previous_snapshot | has_counted_keys then $second_previous_snapshot.counted_keys | map(identity_key) else [] end) as $second_previous_round_counted_keys
 | ($authored_count != null and $authored_count >= 1 and all($counted_summaries[]; .severity == "minor")) as $round_minor_only
 | ($previous_authored_count != null and $previous_authored_count >= 1 and ($previous_snapshot | has_counted_keys) and all($previous_snapshot.counted_keys[]; .severity == "minor")) as $previous_round_minor_only
-| (any($second_previous_round_counted_keys[]; . as $entry_key | (any($previous_round_counted_keys[]; . == $entry_key) | not) and any($round_counted_keys[]; . == $entry_key))) as $returned
-| (any(($round_counted_keys | map(.[0:3]) | unique)[]; . as $triple
+| ([$history_snapshots[] | select(.round == $round - 1) | .members // []] | add // []) as $previous_round_members
+| (any($second_previous_round_counted_keys[]; . as $entry_key | (any($previous_round_counted_keys[]; . == $entry_key) | not)
+     and any($previous_round_members[]; . == $entry_key[0]) and any($round_counted_keys[]; . == $entry_key))) as $returned
+| ($round_counted_keys | map(.[0:3]) | unique) as $round_triples
+| ($history_snapshots | map({round, members: (.members // []), triples: (if (.counted_keys | type) == "array" then .counted_keys | map(.[0:3]) else null end)})) as $history
+# A gap is a later round that ran the member of the triple and did not count
+# the triple: a round the member skipped, a reopened round included, is no gap.
+| (any($round_triples[]; . as $triple
+     | any($history[]; counted_in($triple) and (.round as $earlier
+         | any($history[]; .round > $earlier and member_ran($triple) and .triples != null and (counted_in($triple) | not)))))) as $returned_after_gap
+| (any($round_triples[]; . as $triple
      | triple_lines($triple; $round_counted_keys) as $round_lines | triple_lines($triple; $previous_round_counted_keys) as $previous_round_lines | triple_lines($triple; $second_previous_round_counted_keys) as $second_previous_round_lines
-     | ($previous_round_lines | length) > 0 and ($second_previous_round_lines | length) > 0 and disjoint($round_lines; $previous_round_lines) and disjoint($previous_round_lines; $second_previous_round_lines))) as $moved
+     # Each round gains a line the round before lacked: an overlapping move
+     # counts, a set that only shrinks (findings fixed) does not.
+     | ($previous_round_lines | length) > 0 and ($second_previous_round_lines | length) > 0
+       and (($round_lines - $previous_round_lines) | length) > 0 and (($previous_round_lines - $second_previous_round_lines) | length) > 0)) as $moved
+| (any($round_triples[]; . as $triple | any($fixed_triples[]; . == $triple))) as $refixed
 | {cap: ($round >= 10),
    quiet: ($verdict == "quiet"),
    enriching: ($verdict == "enriching"),
    stalled: ($verdict == "stalled"),
    nitpicky: (($previous_is_legacy | not) and $round >= 6 and $round_minor_only and $previous_round_minor_only),
    reintroduced: (($previous_is_legacy | not) and ($second_previous_is_legacy | not) and $round >= 3 and $authored_count != null and $previous_authored_count != null and $second_previous_authored_count != null
-                  and ($returned or $moved)),
+                  and ($returned or $returned_after_gap or $moved or $refixed)),
    "small-tail": (($previous_is_legacy | not) and $round >= 6 and $authored_count != null and $authored_count >= 1 and $authored_count <= 2
                   and all($counted_summaries[]; .severity != "critical") and $previous_authored_count != null and $authored_count >= $previous_authored_count),
    "waiver-drift": (($previous_is_legacy | not) and $is_maintainer_repo and $round >= 2 and $raw > 0 and $waived * 2 >= $raw
@@ -58,6 +81,27 @@ def disjoint($left_lines; $right_lines): all($left_lines[]; . as $line | any($ri
     | select($signals[.] == true)]) as $reasons
 | (($reasons | length) > 0 and $verdict != "unknown" and ($previous_is_legacy | not) and ($second_previous_is_legacy | not)
    and all($counted_summaries[]; .severity != "critical" and .security != true)) as $eligible
+| ($stop_inputs | if type == "object" then . else null end) as $stop_inputs
+| ($stop_inputs.honored_keys // []) as $honored_keys
+| ($findings.review_bases // {}) as $review_bases
+| ($counted | map(select((honored_in($honored_keys) | not) and .cross_remit != true) | identity_key)) as $stop_keys
+# One clause per line: the suite proves each can fail by deleting its line.
+| (true
+   and $stop_inputs != null
+   and $round >= 3
+   and $round <= 9
+   and ($stop_keys | length) > 0
+   and all($findings.entries[]; honored_in($honored_keys) or (.severity == "minor" and .security == false))
+   and all($history[]; .triples != null)
+   and ($signals.reintroduced | not)
+   and $verdict != "unknown"
+   and $authored_count != null
+   and $previous_authored_count != null
+   and $second_previous_authored_count != null
+   and all($members[]; . as $member | $review_bases[$member] | incremental_base)
+   and ($stop_inputs.marker_gaps | length) == 0
+   and ($stop_inputs.unsatisfied_vetoes | length) == 0
+  ) as $default_stop
 '
 
 # _gaia_loop_snapshot_eligible <snapshot-json>: `true` only when the snapshot says so.
@@ -65,6 +109,14 @@ _gaia_loop_snapshot_eligible() {
   local eligibility
   eligibility="$(printf '%s' "${1:-null}" | jq -r 'if type == "object" and .accept_eligible == true then "true" else "false" end' 2>/dev/null)" || eligibility=false
   [ "$eligibility" = true ] && printf 'true\n' || printf 'false\n'
+}
+
+# _gaia_loop_stop_override_set <snapshot-json>: `true` only when the bound
+# hook added stop_override true; a decision never reads default_stop.
+_gaia_loop_stop_override_set() {
+  local override
+  override="$(printf '%s' "${1:-null}" | jq -r 'if type == "object" and .stop_override == true then "true" else "false" end' 2>/dev/null)" || override=false
+  [ "$override" = true ] && printf 'true\n' || printf 'false\n'
 }
 
 # _gaia_loop_denying_signal <state-json> <snapshot-json> <used>: the first denying
@@ -76,7 +128,9 @@ _gaia_loop_denying_signal() {
     ($snapshot | if type == "object" then . else {} end) as $snapshot
     | (if ($snapshot.signals | type) == "object" then $snapshot.signals
        else {enriching: ($snapshot.verdict == "enriching"), stalled: ($snapshot.verdict == "stalled")} end) as $signals
-    | [("enriching", "stalled", "nitpicky", "reintroduced", "small-tail", "waiver-drift") | select($signals[.] == true)] as $denying
+    | (if $snapshot.stop_override == true then ["reintroduced", "waiver-drift"]
+       else ["enriching", "stalled", "nitpicky", "reintroduced", "small-tail", "waiver-drift"] end) as $names
+    | [$names[] | select($signals[.] == true)] as $denying
     | [.history.checkpoints[] | select(.at_round >= $used) | .index] as $indexes
     | if ($denying | length) > 0 and (any(.allowance.answers[]; .checkpoint as $checkpoint | any($indexes[]; . == $checkpoint)) | not)
       then $denying[0] else empty end' 2>/dev/null || return 5
@@ -105,7 +159,7 @@ _gaia_loop_used() {
 _gaia_loop_decide_unit_with_unit_rounds() {
   local state="$1" snapshot="${2:-null}" reading="$3" tokens="$4" percent="$5" unit_rounds="$6"
   local integer_pattern='^[0-9]{1,12}$' fresh='^fresh (0|[1-9][0-9]{0,11}) (0|[1-9][0-9]{0,11})$'
-  local used eligible denying_signal start_round answer spent line allowed reading_tokens reading_window
+  local used eligible denying_signal start_round answer spent line allowed reading_tokens reading_window stop_override
   [[ $tokens =~ $integer_pattern && $percent =~ $integer_pattern && $unit_rounds =~ $integer_pattern ]] && [ "$unit_rounds" -ge 1 ] || return 2
   used="$(_gaia_loop_used "$state")" || return 5
   eligible="$(_gaia_loop_snapshot_eligible "$snapshot")"
@@ -173,7 +227,10 @@ _gaia_loop_decide_unit_with_unit_rounds() {
   fi
   allowed="$(gaia_loop_allowed "$state")" || return 5
   gaia_loop_is_uint "$allowed" || return 5
-  if [ "$used" -ge "$allowed" ]; then
+  stop_override="$(_gaia_loop_stop_override_set "$snapshot")"
+  if [ "$stop_override" = true ]; then
+    printf 'allow fallback %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$_GAIA_LOOP_HARD_CAP")"
+  elif [ "$used" -ge "$allowed" ]; then
     printf 'deny fallback %s false\n' "$eligible"
   else
     printf 'allow fallback %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$_GAIA_LOOP_HARD_CAP" "$allowed")"

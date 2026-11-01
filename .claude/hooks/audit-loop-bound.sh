@@ -482,7 +482,7 @@ run_decision() {
   [ "$libs_failed" -eq 1 ] || . "$scripts/audit-loop-eval.sh" 2>/dev/null || libs_failed=1
   [ "$libs_failed" -eq 1 ] || [ -f "$scripts/audit-dispositions-check.sh" ] || libs_failed=1
   [ "$libs_failed" -eq 0 ] ||
-    finish_deny "BLOCKED: the audit loop checkpoint cannot load its libraries from $scripts. Fail-loud, not fail-open: restore audit-loop-state-lib.sh, context-checkpoint-lib.sh, audit-loop-eval.sh (with audit-loop-signals-lib.sh) and audit-dispositions-check.sh."
+    finish_deny "BLOCKED: the audit loop checkpoint cannot load its libraries from $scripts. Fail-loud, not fail-open: restore audit-loop-state-lib.sh, context-checkpoint-lib.sh, audit-loop-eval.sh (with audit-loop-signals-lib.sh, audit-triage-lib.sh and audit-veto-lib.sh) and audit-dispositions-check.sh."
   # shellcheck source=lib/cross-repo-refusal.sh
   . "$(dirname "${BASH_SOURCE[0]}")/lib/cross-repo-refusal.sh" 2>/dev/null || libs_failed=1
   if [ "$libs_failed" -ne 0 ] || ! type gaia_cross_repo_deny_reason >/dev/null 2>&1; then
@@ -691,13 +691,16 @@ run_decision() {
   else
     snapshot=$(jq -c --argjson i "$((used - 1))" '.history.rounds[$i].snapshot' <<<"$WORKING_STATE")
     if [ "$snapshot" = null ]; then
-      if ! snapshot=$(gaia_loop_evaluate_round "$main" "$WORKING_STATE" "$used" 2>"$work/evaluate-error"); then
+      if ! snapshot=$(gaia_loop_evaluate_round "$main" "$WORKING_STATE" "$used" "$root" 2>"$work/evaluate-error"); then
         evaluate_reason=$(tail -n 1 "$work/evaluate-error" 2>/dev/null)
         evaluate_reason=${evaluate_reason#audit-loop-eval: }
         finish_deny "BLOCKED: the audit loop checkpoint could not evaluate round $used on branch $BRANCH_KEY: ${evaluate_reason:-the evaluator gave no reason}. Fail-loud, not fail-open: fix that, then retry the dispatch; \`bash $scripts/audit-loop-eval.sh brief --root $root\` re-runs the evaluation."
       fi
       WORKING_STATE=$(jq -c --argjson round_index "$((used - 1))" --argjson snapshot "$snapshot" '.history.rounds[$round_index].snapshot = $snapshot' <<<"$WORKING_STATE")
     fi
+    # Derived on every dispatch and never written to the state, so the frozen default_stop stays as evaluated.
+    snapshot=$(gaia_loop_stop_override "$main" "$BRANCH_KEY" "$used" "$snapshot") ||
+      finish_deny "BLOCKED: the audit loop checkpoint could not apply the default stop to round $used on branch $BRANCH_KEY. Fail-loud, not fail-open: retry the dispatch."
   fi
 
   config=$(gaia_loop_context_config_effective "$main" "$WORKING_STATE") ||

@@ -149,14 +149,10 @@ esac
 . "$_GAIA_DISPOSITIONS_DIRECTORY/filing-outcomes-lib.sh"
 # shellcheck source=/dev/null
 . "$_GAIA_DISPOSITIONS_DIRECTORY/audit-pr-sections-lib.sh"
-
-# The members whose sidecar triage mark can be honored. Empty by default, so a
-# mark is ignored and the finding is disposed like any other.
-_TRIAGE_MEMBERS='[]'
-# gaia:maintainer-only:start
-# The maintainer members the harness triage threshold governs.
-_TRIAGE_MEMBERS='["code-audit-maintainer-shell","code-audit-maintainer-node"]'
-# gaia:maintainer-only:end
+# Fail loud: grading on with _TRIAGE_MEMBERS unbound would honor nothing.
+# shellcheck source=/dev/null
+. "$_GAIA_DISPOSITIONS_DIRECTORY/audit-triage-lib.sh" 2>/dev/null ||
+  { printf 'audit-dispositions-check: cannot load %s/audit-triage-lib.sh\n' "$_GAIA_DISPOSITIONS_DIRECTORY" >&2; exit 3; }
 
 _usage() {
   printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections|record-residual --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>] [--finding <file>]\n' >&2
@@ -174,12 +170,11 @@ _cleanup() {
 trap _cleanup EXIT
 
 # shellcheck disable=SC2016
-_GRADE_JQ='
+_GRADE_JQ="$_GAIA_TRIAGE_HONORED_JQ"'
 def key_array: [.member, .finding_class, .path, .line];
 def key_object: {member, finding_class, path, line};
 def trim: gsub("^\\s+|\\s+$"; "");
 def security_class: ((.severity | IN("major", "minor")) | not) or (.security | if type == "boolean" then . else true end);
-def triage_honored: .triage == true and .security == false and .severity != "critical" and (.member | IN($triage_members[]));
 ($vetoes | map(select(.effective_from_round <= $round) | [.member, .finding_class, .path, .line])) as $vetoed_keys
 | ($lookup | map({key: (key_array | tojson), value: .}) | from_entries) as $lookup_by_key
 | [.entries[] | key_array] as $disposed_keys
@@ -253,30 +248,6 @@ _load_vetoes() {
   [ -n "$VETOES" ] || { _error "unparseable $vetoes_file"; return 3; }
 }
 
-# _roster_owned_indexes <lookup>: the JSON array of lookup indexes whose
-# triage-marked allowlisted entry the roster gives to that same member. The
-# roster library lives with the hooks; it is sourced only when a candidate
-# exists, and an absent library or unreadable roster honors nothing.
-_roster_owned_indexes() {
-  local candidates index member path owned="[]" library="$_GAIA_DISPOSITIONS_DIRECTORY/../../.claude/hooks/lib/audit-scope.sh"
-  candidates="$(printf '%s' "$1" | jq -r --argjson triage_members "$_TRIAGE_MEMBERS" \
-    'to_entries[] | select(.value.triage == true and (.value.member | IN($triage_members[])) and (.value.path | type) == "string")
-     | "\(.key)\t\(.value.member)\t\(.value.path)"')" || return 3
-  if [ -n "$candidates" ] && [ -f "$library" ]; then
-    # shellcheck source=/dev/null
-    . "$library" 2>/dev/null
-    # No release context is armed: only the triage members write these marks, and a release-skip member never triages.
-    if type audit_owner_for_path >/dev/null 2>&1 && audit_scope_init "$ROOT" 2>/dev/null; then
-      while IFS=$'\t' read -r index member path; do
-        [ -n "$path" ] || continue
-        [ "$(audit_owner_for_path "$path")" = "$member" ] || continue
-        owned="$(jq -n -c --argjson owned "$owned" --argjson index "$index" '$owned + [$index]')" || return 3
-      done <<<"$candidates"
-    fi
-  fi
-  printf '%s\n' "$owned"
-}
-
 # _live_lookup <r>: the round's findings as the lookup array, the triage mark
 # already bounded by the roster. rc 3 on failure.
 _live_lookup() {
@@ -285,7 +256,7 @@ _live_lookup() {
   lookup="$(printf '%s' "$evaluator_output" | jq -c '.entries | map({member, finding_class, path, line, severity, security, cross_remit, authored,
     triage: (.triage == true), triage_reason: (if (.triage_reason | type) == "string" then .triage_reason else "" end)})' 2>/dev/null)" || return 3
   [ -n "$lookup" ] || return 3
-  owned="$(_roster_owned_indexes "$lookup")" || return 3
+  owned="$(_roster_owned_indexes "$ROOT" "$_GAIA_DISPOSITIONS_DIRECTORY" "$lookup")" || return 3
   printf '%s' "$lookup" | jq -c --argjson owned "$owned" 'to_entries | map(.value + {triage: (.value.triage and (.key | IN($owned[])))})' 2>/dev/null || return 3
 }
 

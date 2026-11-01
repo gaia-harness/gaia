@@ -65,6 +65,9 @@
 #   respect to the roster even though there is now exactly one caller (the
 #   orchestrator) rather than one call per member.
 #
+#   The SUCCESS arm also declines while .gaia/scripts/audit-gate-owed.sh status
+#   reports owed gate steps or cannot answer; the REFUSAL arm never reads it.
+#
 #   The REFUSAL arm skips the member-aware gate by design (see Purpose above),
 #   so none of the roster conditions above bound it. Re-arming that gate here
 #   would be a regression rather than a tightening: it would withhold the
@@ -567,6 +570,14 @@ if [ "$post_state" = "success" ] && [ -x "$resolver" ]; then
     emit_decline "members pending ${pending}"
     exit 0
   fi
+fi
+
+# SUCCESS also requires the owed gate steps (Playwright, dev smoke, build) to be
+# clear; any non-zero exit, a missing script's 127 included, reads as owed.
+if [ "$post_state" = "success" ] \
+   && ! bash "$_repository_root_directory/.gaia/scripts/audit-gate-owed.sh" status --root "$repo_root" >/dev/null 2>&1; then
+  emit_decline "gate steps owed (Playwright, dev smoke test, build); next step: run .gaia/scripts/audit-gate-owed.sh run --root <root> --run-folder <run folder>"
+  exit 0
 fi
 
 # Description: three positional fields "<version> <frontend-digest>
