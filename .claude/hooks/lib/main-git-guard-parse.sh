@@ -95,9 +95,10 @@ resolve_directory_kind() {
 # where the shell stands when no `cd` moved it, or when one moved it back.
 # The main checkout is where an unreadable word most often points FROM a
 # linked worktree, which is the ordinary session shape here: neither the
-# tracked directory nor the acting one is that checkout from inside a worktree, so without it every
-# `cd "$SOMEWHERE" && git commit` spelled there reads a branch that is not the
-# one the commit lands on, which is the whole failure this flag exists for.
+# tracked directory nor the acting one is that checkout from inside a
+# worktree, so without it every `cd "$SOMEWHERE" && git commit` spelled there
+# reads a branch that is not the one the commit lands on, which is the whole
+# failure this flag exists for.
 #
 # The segment's own directory is not retested here: the caller tests it, and
 # whenever this function is consulted it holds the same value the tracked `cd`
