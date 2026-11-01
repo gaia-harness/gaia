@@ -171,7 +171,7 @@ package_route() {
 socket_tool_route() {
   case "$1" in
     lsof)
-      printf 'run brew install lsof'
+      printf 'it ships with macOS at /usr/sbin/lsof, so add /usr/sbin to PATH (Homebrew has no lsof that reaches PATH)'
       return 0
       ;;
   esac
@@ -238,7 +238,8 @@ route_for() {
       return 0
       ;;
     lsof)
-      brew_route lsof
+      # macOS ships lsof at /usr/sbin/lsof and Homebrew's is keg-only, so no
+      # command can clear a missing one: print no ROUTE and let the GUIDE speak.
       return 0
       ;;
     ss)

@@ -188,7 +188,8 @@ route_line() {
   check --platform darwin
   [ "$status" -eq 1 ]
   [ "$(route_line git)" = "ROUTE git run brew install git" ]
-  [ "$(route_line lsof)" = "ROUTE lsof run brew install lsof" ]
+  [ -z "$(route_line lsof)" ]
+  [[ "$output" == *"GUIDE lsof: "*"/usr/sbin"* ]]
 }
 
 @test "ROUTE terminal: without Homebrew, installing it needs the user's own terminal" {
