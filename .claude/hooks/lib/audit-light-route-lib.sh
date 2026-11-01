@@ -246,7 +246,7 @@ light_route_read_delta() {
 # light_route_replay_failure_reason <root>: why the anchor's replay left no tree.
 # Git prints its usage for `-h` and exits 129, so the option list is the probe:
 # one with no merge-base option is a git below the floor, and anything else, a
-# real conflict included, stays the unreadable-path reason. The bare word is the
+# real conflict included, stays the unclassifiable-path reason. The bare word is the
 # match because git also spells the option `--[no-]merge-base`.
 light_route_replay_failure_reason() {
   local usage

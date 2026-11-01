@@ -41,7 +41,7 @@ To enable:
 gh api -X PATCH "repos/<owner>/<repo>" -F allow_auto_merge=true --jq .allow_auto_merge
 ```
 
-GitHub offers auto-merge on some plans only, and on the others it can leave the setting off. When that prints `true`, the setting is on. When it prints anything else or the call fails with a plan message, say `GitHub does not offer auto-merge for this repository, so GAIA waits for required checks before each merge.` and record `not-applicable`. Any other failure records nothing, so the next run retries.
+GitHub offers auto-merge on some plans only, and on the others it can leave the setting off. When that prints `true`, record `applied`. On **Skip**, record `declined`. When it prints anything else or the call fails with a plan message, say `GitHub does not offer auto-merge for this repository, so GAIA waits for required checks before each merge.` and record `not-applicable`. Any other failure records nothing, so the next run retries.
 
 ## Record
 

@@ -8,7 +8,7 @@ Initialize a new project from the GAIA harness. It already ships clean (no examp
 
 **Language meta-instruction:** Conduct this entire conversation in the language the user has been typing in. Detect it from prior context, no explicit detection step needed. Do not translate source files, rules, skills, or wiki entries, those stay English regardless. Only translate the prompts you show the user.
 
-Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pnpm is available; Step 1: Install dependencies; Step 2: Gather user input; Step 3: Run the init CLI; Step 4: Locale-specific scaffolding; Step 5: Create CODEOWNERS; Step 6: Check `.env`; Step 6: Verify the build; Step 7: Project settings; Step 8: Refresh the wiki; Step 9: Finalize; Step 10: Continue into /setup-gaia; On failure: resume.
+Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pnpm is available; Step 1: Install dependencies; Step 2: Gather user input; Step 3: Run the init CLI; Step 4: Locale-specific scaffolding; Step 5: Create CODEOWNERS; Step 6: Verify the build; Step 7: Project settings; Step 8: Refresh the wiki; Step 9: Finalize; Step 10: Continue into /setup-gaia; On failure: resume.
 
 ## Interactive gates: run mode and non-response policy
 
@@ -446,4 +446,4 @@ When it fails again, return to item 1 with its new error.
 
 Resume reads `.gaia/init-state.json`, skips already-complete steps, and replays remaining steps using the saved arguments. Use `--from-step <N>` to force restart from a specific step (1-indexed: 1=strip-branding, 2=configure-i18n, 3=configure-data-layer, 4=rename, 5=wire-statusline, 6=write-project-config, 7=finalize).
 
-After the resume, the run continues with the remaining steps through Step 10, which hands off to `/setup-gaia` as on a first run. This section covers Steps 0 to 11 up to the handoff; once Step 10 hands off, a halt follows `.claude/commands/setup-gaia.md` `## On failure: re-run`.
+After the resume, the run continues with the remaining steps through Step 10, which hands off to `/setup-gaia` as on a first run. This section covers Steps 0 to 10 up to the handoff; once Step 10 hands off, a halt follows `.claude/commands/setup-gaia.md` `## On failure: re-run`.
