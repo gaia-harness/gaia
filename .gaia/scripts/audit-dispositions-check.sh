@@ -84,8 +84,8 @@
 # Carry-forward. A key disposed file, divert or accept-residual in
 # dispositions-<k>.json, k < r, is not undisposed in round r: the filing
 # script's outcome (and its retry file, for a transient one) is what keeps a
-# filed key pending, and an accepted key needs no new entry, matching the A(r)
-# model's disposed set. A key disposed fix earlier carries nothing, and neither
+# filed key pending, and an accepted key needs no new entry while its re-report
+# is not security-class, matching the A(r) model's disposed set. A key disposed fix earlier carries nothing, and neither
 # does a key the filer refused as branch-authored. A vetoed key still needs
 # its entry: the undisposed rule adds the binding vetoes after the carry.
 #
@@ -252,9 +252,10 @@ def security_class: ((.severity | IN("major", "minor")) | not) or (.security | i
   )
 '
 
+_NO_CARRIED='{"filed":[],"accepted":[]}'
+
 # The stop inputs of a round graded before version 3, or whose live check had
 # no accept-residual entry and no binding veto to ask the evaluator about.
-_NO_CARRIED='{"filed":[],"accepted":[]}'
 _NO_STOP='{"default_stop":false,"default_stop_keys":[],"review_bases":{},"human_accept":false,"satisfied_vetoes":[]}'
 
 # _sha256 <file>: the hex digest.
