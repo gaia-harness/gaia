@@ -178,36 +178,82 @@ last_item_is_budget_batch() {
   check_pin debt/recommend.md "$OFFER_HEADING" 'The budget batch is the' "carries those members and the scorer's total against its budget, both read from the scorer's output"
 }
 
-@test "the option to fix the top issue alone stays on every offer with a budget batch" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'The budget batch is the' 'The option to fix the top issue alone stays on every offer that carries a budget batch'
+# singleton_headed_block <dir>: the singleton-headed bullet.
+singleton_headed_block() {
+  extract_section "$1/debt/recommend.md" "$OFFER_HEADING" |
+    awk '
+      index($0, "- **Top candidate is a singleton") == 1 { print; exit }
+    '
+}
+
+# shapes_hold_at_most_four_options <dir>: each offer shape lists at most four
+# options with the budget batch among them and the top issue alone present.
+# Both shapes are derived from the file and an empty derivation fails.
+shapes_hold_at_most_four_options() {
+  local block count single
+  block="$(cluster_headed_block "$1")"
+  [ -n "$block" ] || return 1
+  count="$(grep -cE '^[[:space:]]+[0-9]+\. ' <<<"$block")"
+  [ "$count" -ge 1 ] && [ "$count" -le 4 ] || return 1
+  grep -qF -- 'The budget batch' <<<"$block" || return 1
+  grep -qF -- '`#<A> only`' <<<"$block" || return 1
+  single="$(singleton_headed_block "$1")"
+  [ -n "$single" ] || return 1
+  grep -qF -- 'present the top three candidates' <<<"$single" || return 1
+  grep -qF -- 'top candidate first' <<<"$single" || return 1
+  grep -qF -- 'add the budget batch as the last option' <<<"$single" || return 1
+  return 0
+}
+
+@test "each offer shape lists at most four options with the budget batch and the top issue alone" {
+  shapes_hold_at_most_four_options "$REFS"
+}
+
+@test "the shapes check goes red when the top-issue-alone option is removed" {
+  copy="$(scratch_copy)"
+  grep -vF -- '`#<A> only`' "$copy/debt/recommend.md" >"$copy/debt/recommend.md.new"
+  mv "$copy/debt/recommend.md.new" "$copy/debt/recommend.md"
+  run shapes_hold_at_most_four_options "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the shapes check goes red when the cluster-headed list grows a fifth option" {
+  copy="$(scratch_copy)"
+  awk '
+    { print }
+    index($0, "  4. The budget batch") == 1 { print "  5. An extra option." }
+  ' "$copy/debt/recommend.md" >"$copy/debt/recommend.md.new"
+  mv "$copy/debt/recommend.md.new" "$copy/debt/recommend.md"
+  grep -qF -- '  5. An extra option.' "$copy/debt/recommend.md"
+  run shapes_hold_at_most_four_options "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the shapes check goes red when the singleton-headed shape drops the top three" {
+  copy="$(scratch_copy)"
+  remove_text "$copy/debt/recommend.md" 'Top candidate is a singleton' 'present the top three candidates'
+  run shapes_hold_at_most_four_options "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the budget option shows only when members is not empty" {
+  check_pin debt/recommend.md "$OFFER_HEADING" 'The budget batch is the' 'shown only when `members` is not empty'
 }
 
 @test "a top candidate heading no eligible cluster takes the singleton-headed shape" {
   check_pin debt/recommend.md "$OFFER_HEADING" 'Top candidate is a singleton' 'Any top candidate that heads no public-batch-eligible cluster takes this singleton-headed shape'
 }
 
-@test "four options fit both shapes so nothing is dropped" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'Cap the option set' 'Four options fit both shapes, so nothing is dropped to fit the budget batch'
-}
-
-@test "an empty members list shows no budget option" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'The budget batch is the' 'An empty `members` list shows no budget option'
-}
-
-@test "an empty members list leaves every candidate offered" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'The budget batch is the' 'with every candidate still offered'
-}
-
 @test "the printed backlog annotates each budget batch member" {
   check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'annotate each budget batch member'
 }
 
-@test "skip reasons are never printed" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'Skip reasons are never printed'
+@test "a reason an issue was left out is never printed, committed or put in the pull request body" {
+  check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'Never print, commit or put in the pull request body a reason an issue was left out'
 }
 
 @test "the annotation never enters a pull request body or a commit" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'the annotation never enters a pull request body or a commit'
+  check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'annotation never enters a pull request body or a commit'
 }
 
 # --- the budget batch rules region holds no weight or limit -----------------
@@ -332,12 +378,8 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
   check_pin debt.md '### Offer-time reads' 'The same read yields' 'withheld list'
 }
 
-@test "a confirmed-PRIVATE repo gives an empty list without classifying" {
-  check_pin debt.md '### Offer-time reads' 'The same read yields' 'gives an empty list without classifying anything'
-}
-
-@test "a classification that failed on a non-PRIVATE repo gives no list and no offer-mode call" {
-  check_pin debt.md '### Offer-time reads' 'The same read yields' 'gives no list, and offer mode is not called'
+@test "the offer-time security read points at the offer-mode call for the withheld list arms" {
+  check_pin debt.md '### Offer-time reads' 'The same read yields' '`debt/recommend.md` owns its arms'
 }
 
 @test "every budget batch member passes the fix-time security screen" {
@@ -442,12 +484,28 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
   check_pin debt.md "$RESOLVE_HEADING" 'Run the Quality Gate' 'A cluster is one batch part and one commit'
 }
 
-@test "implementation stages part by part and records each part's changed paths" {
-  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' "recording each part's changed paths"
+@test "implementation records each part's changed paths" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' 'Before staging each part, record what it changed since the last stage'
 }
 
-@test "two batch parts that touch one file merge into one commit that reverts together" {
-  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' 'merge into one commit that reverts together'
+@test "the recorded paths come from the working tree diff and the untracked files" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' '`git diff --name-only --no-renames` plus `git ls-files --others --exclude-standard`'
+}
+
+@test "a part is staged only after its paths are recorded" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' 'Then stage the paths (`git add -A -- <paths>`)'
+}
+
+@test "a file the gate changed goes with the part whose change caused it" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Run the Quality Gate' 'goes with the part whose change caused it'
+}
+
+@test "the working tree is clean after the last part" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Run the Quality Gate' 'after the last part `git status --porcelain` must be empty'
+}
+
+@test "two batch parts that touch one file merge into one part" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' 'merge this part into that earlier part'
 }
 
 @test "the closes-carrier sentences stay in the resolve section" {
@@ -493,7 +551,7 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
 }
 
 @test "every part dropped strips every claim and closes the draft pull request unmerged" {
-  check_pin debt.md "$DROP_HEADING" '**Every part dropped.**' 'apply the corrections below to every member, close an open draft pull request unmerged, report it'
+  check_pin debt.md "$DROP_HEADING" '**Every part dropped.**' 'strip every member'"'"'s claim (correction 1 below), close an open draft pull request unmerged, report it'
 }
 
 @test "every part dropped ends the run through the cost record" {
