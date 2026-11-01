@@ -189,6 +189,7 @@ route_line() {
   [ "$status" -eq 1 ]
   [ "$(route_line git)" = "ROUTE git run brew install git" ]
   [ -z "$(route_line lsof)" ]
+  grep -qF -- "GUIDE lsof: Install" <<<"$output" && return 1
   [[ "$output" == *"GUIDE lsof: "*"/usr/sbin"* ]]
 }
 

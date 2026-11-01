@@ -169,12 +169,6 @@ package_route() {
 # socket_tool_route <tool>: a route to the tool holding listener lookup. Any
 # release does the job, so the distribution's own package is fine here.
 socket_tool_route() {
-  case "$1" in
-    lsof)
-      printf 'it ships with macOS at /usr/sbin/lsof, so add /usr/sbin to PATH (Homebrew has no lsof that reaches PATH)'
-      return 0
-      ;;
-  esac
   case "$(os_family)" in
     ubuntu | debian) printf 'run sudo apt-get install -y iproute2' ;;
     fedora | rhel) printf 'run sudo dnf install -y iproute' ;;
@@ -203,6 +197,9 @@ guide() {
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
+      ;;
+    lsof)
+      printf 'GUIDE lsof: Put lsof on PATH: macOS ships it at /usr/sbin/lsof, so add /usr/sbin to PATH. Homebrew'"'"'s lsof is keg-only and never reaches PATH. %s\n' "$(tool_reason lsof)"
       ;;
     *)
       printf 'GUIDE %s: Install %s: %s. %s\n' "$tool" "$tool" "$(socket_tool_route "$tool")" "$(tool_reason "$tool")"
@@ -238,8 +235,8 @@ route_for() {
       return 0
       ;;
     lsof)
-      # macOS ships lsof at /usr/sbin/lsof and Homebrew's is keg-only, so no
-      # command can clear a missing one: print no ROUTE and let the GUIDE speak.
+      # macOS ships lsof at /usr/sbin/lsof and Homebrew's is keg-only: the fix
+      # is putting /usr/sbin on PATH, which has no one exact command, so no ROUTE.
       return 0
       ;;
     ss)
