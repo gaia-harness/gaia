@@ -512,7 +512,7 @@ mutate_orchestrator() {
     'worthiness-step|skip-safe|resumable' \
     'wiki-promotion|no re-consolidation|maybe re-consolidation' \
     'code-audit|the late pass from|the early pass from' \
-    'post-clearance|costs no commit|costs a commit'; do
+    'post-clearance|it is untracked|it is tracked'; do
     name="${entry%%|*}"
     entry="${entry#*|}"
     from="${entry%%|*}"

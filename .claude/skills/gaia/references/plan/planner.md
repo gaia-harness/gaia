@@ -319,7 +319,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       <!-- gaia:orchestrator-step post-clearance -->
       **Post-clearance.** Runs after every dispatched Code Audit Team member has cleared and the human has confirmed the PR is ready to merge, and before the merge.
 
-      1. Consolidate again into `SUMMARY.md` per `.claude/skills/gaia/references/spec/lifecycle.md` `## Consolidation`, uncommitted. It is not tracked, so this costs no commit.
+      1. Consolidate again into `SUMMARY.md` per `.claude/skills/gaia/references/spec/lifecycle.md` `## Consolidation`; it is untracked, so it stays uncommitted.
       2. Read each page in `promoted-pages.txt` against the audited code. A falsified page gets a wiki-only commit and push, which keeps every member's marker and restarts CI.
       3. When the last attempted pass recorded `skipped-verify-failed` and the verify now passes, retry promotion per `.claude/skills/gaia/references/spec/wiki-promote.md`.
       <!-- gaia:maintainer-only:start -->
