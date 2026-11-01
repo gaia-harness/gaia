@@ -1,0 +1,15 @@
+{
+  "load": 0,
+  "source": "registry",
+  "list": [["frontend", "frontend"]],
+  "globs": {
+    "preCommitSource": {
+      "match": [
+        "frontend/anything.md",
+        "frontend/a/b/c.txt",
+        "frontend/app/x.ts"
+      ],
+      "noMatch": ["frontendx/a.ts", "app/x.ts", "other/frontend/a.ts"]
+    }
+  }
+}

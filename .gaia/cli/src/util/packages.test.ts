@@ -30,11 +30,14 @@ import {writeBuiltinDescriptor} from './package-fixture.js';
 import {
   BUILTIN_REGISTRY,
   globToRegExp,
+  isRegistrablePath,
   joinGlob,
   loadPackages,
   repoRegExps,
+  wantsGeneratedSettings,
+  webMembers,
 } from './packages.js';
-import type {GlobKey} from './packages.js';
+import type {GlobKey, LoadedPackage} from './packages.js';
 import {resolveRepoRootFromImportMeta} from './repo-root-fixture.js';
 
 const REPO_ROOT = resolveRepoRootFromImportMeta(import.meta.url);
@@ -47,6 +50,12 @@ afterAll(() => {
 const READER: CorpusReader = {
   load: (root) => loadPackages(root),
   regExps: (packages, key) => repoRegExps(packages, key as GlobKey),
+  settingsMembers: (packages) =>
+    (packages as LoadedPackage[])
+      .filter(wantsGeneratedSettings)
+      .map((p) => p.name),
+  webMembers: (packages) =>
+    webMembers(packages as LoadedPackage[]).map((p) => p.name),
 };
 
 const rootFor = (caseName: string): string => {
@@ -173,6 +182,75 @@ describe('built-in default', () => {
       ok: true,
       source: 'registry',
     });
+  });
+});
+
+describe('the web stack', () => {
+  test('a two-member registry reports exactly the web member', () => {
+    const result = loadPackages(rootFor('non-web-all-empty'));
+
+    expect(result.ok).toBe(true);
+    const packages = result.ok ? result.packages : [];
+    expect(webMembers(packages).map((p) => p.name)).toEqual(['frontend']);
+    expect(packages.map(wantsGeneratedSettings)).toEqual([true, false]);
+  });
+
+  test('generatedSettings opts a non-web member in', () => {
+    const result = loadPackages(rootFor('generated-settings-non-web'));
+
+    expect(result.ok && webMembers(result.packages)).toEqual([]);
+    expect(result.ok && result.packages.map(wantsGeneratedSettings)).toEqual([
+      true,
+    ]);
+  });
+
+  test('the committed descriptor is reported web-stack', () => {
+    const result = loadPackages(REPO_ROOT);
+
+    expect(result.ok && webMembers(result.packages).map((p) => p.name)).toEqual(
+      ['frontend']
+    );
+  });
+
+  test('a stack other than web fails with DESCRIPTOR_INVALID naming the field', () => {
+    const result = loadPackages(rootFor('descriptor-stack-invalid'));
+
+    expect(result).toMatchObject({code: 'DESCRIPTOR_INVALID', ok: false});
+    expect(!result.ok && result.message).toContain('stack must be "web"');
+  });
+
+  test('a non-boolean generatedSettings fails with DESCRIPTOR_INVALID naming the field', () => {
+    const result = loadPackages(
+      rootFor('descriptor-generated-settings-invalid')
+    );
+
+    expect(result).toMatchObject({code: 'DESCRIPTOR_INVALID', ok: false});
+    expect(!result.ok && result.message).toContain(
+      'generatedSettings must be a boolean'
+    );
+  });
+});
+
+describe('empty glob lists', () => {
+  test('an all-empty member adds no pattern except its whole-member preCommitSource', () => {
+    const result = loadPackages(rootFor('non-web-all-empty'));
+    const packages = result.ok ? result.packages.slice(1) : [];
+
+    expect(repoRegExps(packages, 'tddUnitTests')).toEqual([]);
+    expect(repoRegExps(packages, 'dependencyManifests')).toEqual([]);
+    const [pattern] = repoRegExps(packages, 'preCommitSource');
+    expect(pattern?.test('packages/lib/deep/x.md')).toBe(true);
+    expect(pattern?.test('packages/libx/x.md')).toBe(false);
+  });
+});
+
+describe('registrable paths', () => {
+  test.each(['apps/web', '.'])('%s is registrable', (candidate) => {
+    expect(isRegistrablePath(candidate)).toBe(true);
+  });
+
+  test.each(['apps/Legacy', '.gaia/cli'])('%s is refused', (candidate) => {
+    expect(isRegistrablePath(candidate)).toBe(false);
   });
 });
 

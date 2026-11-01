@@ -8,7 +8,7 @@
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
     ".claude/hooks/lib/audit-branch-patch.sh": 564,
     ".claude/hooks/lib/audit-scope.sh": 528,
-    ".claude/hooks/lib/gaia-packages.sh": 405,
+    ".claude/hooks/lib/gaia-packages.sh": 469,
     ".claude/hooks/local-janitor.sh": 528,
     ".claude/hooks/post-audit-status.sh": 663,
     ".claude/hooks/provision-worktree.sh": 615,

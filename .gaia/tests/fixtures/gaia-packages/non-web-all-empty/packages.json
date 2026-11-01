@@ -1,0 +1,4 @@
+[
+  {"name": "frontend", "path": "frontend"},
+  {"name": "lib", "path": "packages/lib"}
+]

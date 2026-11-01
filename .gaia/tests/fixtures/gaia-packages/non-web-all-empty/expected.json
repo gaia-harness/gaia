@@ -1,0 +1,49 @@
+{
+  "load": 0,
+  "source": "registry",
+  "list": [
+    ["frontend", "frontend"],
+    ["lib", "packages/lib"]
+  ],
+  "globs": {
+    "tddUnitTests": {
+      "match": ["frontend/app/x.test.ts"],
+      "noMatch": ["packages/lib/src/a.test.ts", "app/x.test.ts"]
+    },
+    "tddStrictCandidates": {
+      "match": ["frontend/app/utils/x.ts"],
+      "noMatch": ["packages/lib/src/a.ts", "packages/lib/", "lib/a.ts"]
+    },
+    "emergentTests": {
+      "match": ["frontend/.playwright/x.spec.ts"],
+      "noMatch": ["packages/lib/a.spec.ts"]
+    },
+    "preCommitSource": {
+      "match": [
+        "frontend/app/x.ts",
+        "packages/lib/src/a.ts",
+        "packages/lib/deep/er/b.md"
+      ],
+      "noMatch": [
+        "packages/libx/a.ts",
+        "packages/other/a.ts",
+        "lib/a.ts",
+        "README.md"
+      ]
+    },
+    "doctorConfigs": {
+      "match": ["frontend/doctor.config.ts"],
+      "noMatch": ["packages/lib/doctor.config.ts"]
+    },
+    "dependencyManifests": {
+      "match": ["frontend/package.json"],
+      "noMatch": ["packages/lib/package.json"]
+    }
+  },
+  "forPath": {
+    "packages/lib/src/a.ts": "lib",
+    "frontend/app/x.ts": "frontend"
+  },
+  "webMembers": ["frontend"],
+  "settingsMembers": ["frontend"]
+}

@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "frontend",
+  "stack": "web",
   "globs": {
     "tddUnitTests": ["app/**/*.test.ts", "app/**/*.test.tsx"],
     "tddStrictCandidates": [

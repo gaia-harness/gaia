@@ -30863,6 +30863,16 @@ import path20 from "node:path";
 // src/util/packages.ts
 import { lstatSync, readFileSync as readFileSync12 } from "node:fs";
 import path17 from "node:path";
+
+// src/util/glob-regexp.ts
+var globToBody = (glob) => glob.replaceAll(/[\\.+^$()[\]|]/g, String.raw`\$&`).replaceAll("**/", "").replaceAll("**", "").replaceAll("*", "").replaceAll("?", "").replaceAll(
+  /\{([^{}]+)\}/g,
+  (_match, inner) => `${inner.replaceAll(",", "\x07")}`
+).replaceAll(/[{}]/g, String.raw`\$&`).replaceAll("", "(.*/)?").replaceAll("", ".*").replaceAll("", "[^/]*").replaceAll("", "[^/]").replaceAll("", "(").replaceAll("", ")").replaceAll("\x07", "|");
+var globToRegExp = (glob) => new RegExp(`^${globToBody(glob)}$`);
+var joinGlob = (packagePath, glob) => packagePath === "." ? glob : `${packagePath}/${glob}`;
+
+// src/util/packages.ts
 var REGISTRY_FILE = ".gaia/packages.json";
 var DESCRIPTOR_NAME = "gaia.package.json";
 var NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -30877,7 +30887,7 @@ var GLOB_KEYS = [
   "dependencyManifests"
 ];
 var cleanString = external_exports.string().min(1).refine((value) => !CONTROL_CHARACTER2.test(value));
-var globList = external_exports.array(cleanString).min(1);
+var globList = external_exports.array(cleanString);
 var wikiList = external_exports.array(external_exports.string().refine((v) => !CONTROL_CHARACTER2.test(v)));
 var registryEntrySchema = external_exports.object({
   name: external_exports.string().regex(NAME_PATTERN),
@@ -30885,6 +30895,7 @@ var registryEntrySchema = external_exports.object({
 });
 var registrySchema = external_exports.array(registryEntrySchema);
 var descriptorSchema = (expectedName) => external_exports.object({
+  generatedSettings: external_exports.boolean().optional(),
   globs: external_exports.object({
     dependencyManifests: globList,
     doctorConfigs: globList,
@@ -30895,6 +30906,7 @@ var descriptorSchema = (expectedName) => external_exports.object({
   }),
   name: external_exports.literal(expectedName),
   schemaVersion: external_exports.literal(1),
+  stack: external_exports.literal("web").optional(),
   wiki: external_exports.object({
     flowPaths: wikiList,
     inventoryPaths: wikiList,
@@ -30945,7 +30957,14 @@ var duplicateReason = (entries) => {
   }
   return null;
 };
-var SECTION_ORDER = ["schemaVersion", "name", "globs", "wiki"];
+var SECTION_ORDER = [
+  "schemaVersion",
+  "name",
+  "globs",
+  "wiki",
+  "stack",
+  "generatedSettings"
+];
 var WIKI_KEY_ORDER = ["sourcePaths", "inventoryPaths", "flowPaths"];
 var issueRank = (issue2) => {
   const [section, key] = issue2.path;
@@ -30966,7 +30985,13 @@ var descriptorIssueReason = (issue2, expectedName) => {
     return `name must be "${expectedName}"`;
   }
   if (section === "globs") {
-    return key === void 0 ? "globs must be an object" : `globs.${String(key)} must be a non-empty array of non-empty strings without control characters`;
+    return key === void 0 ? "globs must be an object" : `globs.${String(key)} must be an array of non-empty strings without control characters`;
+  }
+  if (section === "stack") {
+    return 'stack must be "web"';
+  }
+  if (section === "generatedSettings") {
+    return "generatedSettings must be a boolean";
   }
   return key === void 0 ? "wiki must be an object" : `wiki.${String(key)} must be an array of strings without control characters`;
 };
@@ -31048,16 +31073,12 @@ var loadPackages = (repoRoot) => {
   }
   return { ok: true, packages, source: registry2.source };
 };
-var globToBody = (glob) => glob.replaceAll(/[\\.+^$()[\]|]/g, String.raw`\$&`).replaceAll("**/", "").replaceAll("**", "").replaceAll("*", "").replaceAll("?", "").replaceAll(
-  /\{([^{}]+)\}/g,
-  (_match, inner) => `${inner.replaceAll(",", "\x07")}`
-).replaceAll(/[{}]/g, String.raw`\$&`).replaceAll("", "(.*/)?").replaceAll("", ".*").replaceAll("", "[^/]*").replaceAll("", "[^/]").replaceAll("", "(").replaceAll("", ")").replaceAll("\x07", "|");
-var globToRegExp = (glob) => new RegExp(`^${globToBody(glob)}$`);
-var joinGlob = (packagePath, glob) => packagePath === "." ? glob : `${packagePath}/${glob}`;
+var globsFor = (entry, key) => {
+  const globs = entry.descriptor.globs[key];
+  return globs.length === 0 && key === "preCommitSource" ? ["**"] : globs;
+};
 var repoRegExps = (packages, key) => packages.flatMap(
-  (entry) => entry.descriptor.globs[key].map(
-    (glob) => globToRegExp(joinGlob(entry.path, glob))
-  )
+  (entry) => globsFor(entry, key).map((glob) => globToRegExp(joinGlob(entry.path, glob)))
 );
 
 // src/wiki/util/markdown-corpus.ts
