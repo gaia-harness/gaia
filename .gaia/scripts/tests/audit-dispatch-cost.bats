@@ -102,6 +102,25 @@ set_meta() {
   printf '%s\n' "$2" >"$SUBAGENTS/agent-$1.meta.json"
 }
 
+# install_logging_sleep: puts a sleep first on PATH that appends each requested
+# interval to SLEEP_LOG and returns at once. The script bounds its finish wait
+# by poll count, so the summed intervals are the wait it asked for; timing a
+# real sleep instead measures the scheduler, which overshoots under parallel
+# bats load.
+install_logging_sleep() {
+  local shim_directory="$BATS_TEST_TMPDIR/logging-sleep"
+  SLEEP_LOG="$BATS_TEST_TMPDIR/sleep.log"
+  mkdir -p "$shim_directory"
+  : >"$SLEEP_LOG"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$1" >>"%s"\n' "$SLEEP_LOG" >"$shim_directory/sleep"
+  chmod +x "$shim_directory/sleep"
+  PATH="$shim_directory:$PATH"
+}
+
+requested_sleep_seconds() {
+  awk '{ total += $1 } END { printf "%g", total }' "$SLEEP_LOG"
+}
+
 @test "member event: keys equal member-result's, figures equal the library's" {
   local expected_own expected_children result_event
   record_member
@@ -171,14 +190,11 @@ set_meta() {
 }
 
 @test "finish wait: finished false waits the bound and records an incomplete timeout" {
-  local started finished
+  install_logging_sleep
   set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend","finished":false}'
-  started="$(date +%s)"
   record_member
-  finished="$(date +%s)"
   expect_one_event
-  [ "$((finished - started))" -ge 1 ]
-  [ "$((finished - started))" -lt 3 ]
+  [ "$(requested_sleep_seconds)" = 1 ]
   [ "$(field "$EVENT" '.state')" = ok ]
   [ "$(field "$EVENT" '.own.calls')" = 4 ]
   [ "$(field "$EVENT" '.incomplete')" = true ]
@@ -194,15 +210,12 @@ set_meta() {
 }
 
 @test "finish wait: the default bound is ten seconds" {
-  local started finished
+  install_logging_sleep
   unset GAIA_DISPATCH_COST_FINISH_WAIT_SECONDS
   set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend","finished":false}'
-  started="$(date +%s)"
   record_member
-  finished="$(date +%s)"
   expect_one_event
-  [ "$((finished - started))" -ge 10 ]
-  [ "$((finished - started))" -le 12 ]
+  [ "$(requested_sleep_seconds)" = 10 ]
   [ "$(field "$EVENT" '.finish')" = timeout ]
 }
 
