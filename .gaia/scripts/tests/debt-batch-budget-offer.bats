@@ -489,7 +489,7 @@ assert_refused() {
 @test "malformed withheld numbers are refused" {
   three_singletons
   local bad
-  for bad in abc 01 0 -1 "1,,2" "1," ",1" "," "1 2" "1.5"; do
+  for bad in abc 01 0 -1 "1,,2" "1," ",1" "," "1 2" "1.5" $'1\n2'; do
     run --separate-stderr bash "$SCRIPT" --offer --backlog "$BACKLOG" --report "$REPORT" --withheld "$bad"
     assert_refused
   done

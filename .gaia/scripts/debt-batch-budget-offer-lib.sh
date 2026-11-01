@@ -109,6 +109,7 @@ run_offer() {
   if [ -n "$withheld" ]; then
     case "$withheld" in
       , | ,* | *, | *,,*) die_usage "--withheld needs comma-separated issue numbers without empty elements" ;;
+      *[!0-9,]*) die_usage "--withheld takes only digits and commas" ;;
     esac
     local -a elements
     IFS=, read -r -a elements <<<"$withheld"
