@@ -17,8 +17,24 @@ deny() {
   exit 0
 }
 
+# acting_directory: print the acting agent's directory, the payload cwd when it
+# is an absolute path inside a git work tree, else nothing (callers then use
+# this process's cwd). Payload cwd is measured, not contracted (wiki Claude
+# Hooks, "Payload `cwd` is per-agent"), so the fallback stays. The branch reads,
+# the reset rule and directory-word resolution all ask here.
+acting_directory() {
+  if [[ "${GAIA_HOOK_CWD:-}" == /* ]] \
+     && git -C "$GAIA_HOOK_CWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    printf '%s' "$GAIA_HOOK_CWD"
+  fi
+  return 0
+}
+
+# current_branch <directory>: the branch checked out there. With no directory,
+# the acting agent's (see acting_directory).
 current_branch() {
   local cwd="$1"
+  [[ -n "$cwd" ]] || cwd=$(acting_directory)
   if [[ -n "$cwd" ]]; then
     git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null || echo ""
   else
@@ -36,8 +52,9 @@ current_branch() {
 #                   variable or a substitution the scan cannot expand, it
 #                   points nowhere, or there is no resolver to ask
 #
-# Both readable answers carry <directory> in its tilde-expanded form, which is what a
-# caller reads a branch out of. A caller that read the raw word instead would
+# Both readable answers carry <directory> tilde-expanded and, when relative
+# and `acting_directory` prints one, prefixed with the acting directory, which
+# is what a caller reads a branch out of. A caller that read the raw word instead would
 # resolve a tilde path here and then read a branch out of the literal `~`
 # spelling, which answers nothing and allows.
 #
@@ -55,7 +72,7 @@ current_branch() {
 # What each caller then does with a `foreign` word is what it did before the
 # ambiguity arm existed; the classification is the only thing restored here.
 resolve_directory_kind() {
-  local directory="$1" given_common_directory own_common_directory
+  local directory="$1" given_common_directory own_common_directory acting
   [ -n "$directory" ] || { printf 'unknown'; return 0; }
   # The tilde arrives as a literal character, never expanded, because it reached
   # this hook as text inside the tool call rather than through a shell. SC2088
@@ -67,9 +84,16 @@ resolve_directory_kind() {
     '~/'*) directory="$HOME/${directory:2}" ;;
   esac
   command -v gaia_resolve_common_directory >/dev/null 2>&1 || { printf 'unknown'; return 0; }
+  # A relative word resolves against the acting directory, not this process's
+  # cwd. A preceding tracked `cd` is not applied: `cd wt && git -C sub` reads
+  # `sub` under the acting directory.
+  acting=$(acting_directory)
+  if [ -n "$acting" ] && [[ "$directory" != /* ]]; then
+    directory="$acting/$directory"
+  fi
   given_common_directory=$(gaia_resolve_common_directory "$directory" 2>/dev/null) || { printf 'unknown'; return 0; }
   [ -n "$given_common_directory" ] || { printf 'unknown'; return 0; }
-  own_common_directory=$(gaia_resolve_common_directory 2>/dev/null) || { printf 'unknown'; return 0; }
+  own_common_directory=$(gaia_resolve_common_directory ${acting:+"$acting"} 2>/dev/null) || { printf 'unknown'; return 0; }
   if [ -n "$own_common_directory" ] && [ "$given_common_directory" = "$own_common_directory" ]; then
     printf 'same %s' "$directory"
   else
@@ -83,13 +107,14 @@ resolve_directory_kind() {
 # is on one of them; print nothing otherwise. Always succeeds, so a caller
 # assigning its output under errexit is never abandoned.
 #
-# Two candidates. This hook's own working directory is where the shell stands
-# when no `cd` moved it, or when one moved it back. The main checkout is where
-# an unreadable word most often points FROM a linked worktree, which is the
-# ordinary session shape here: neither the tracked directory nor this hook's
-# own is that checkout from inside a worktree, so without it every
-# `cd "$SOMEWHERE" && git commit` spelled there reads a branch that is not the
-# one the commit lands on, which is the whole failure this flag exists for.
+# Two candidates. The acting directory (`current_branch` with no argument) is
+# where the shell stands when no `cd` moved it, or when one moved it back.
+# The main checkout is where an unreadable word most often points FROM a
+# linked worktree, which is the ordinary session shape here: neither the
+# tracked directory nor the acting one is that checkout from inside a
+# worktree, so without it every `cd "$SOMEWHERE" && git commit` spelled there
+# reads a branch that is not the one the commit lands on, which is the whole
+# failure this flag exists for.
 #
 # The segment's own directory is not retested here: the caller tests it, and
 # whenever this function is consulted it holds the same value the tracked `cd`
@@ -114,8 +139,8 @@ ambiguous_main_branch() {
 # A `cd` inside a subshell moves nothing once the group closes, and the hook's segment
 # walk splits on those characters without recording which one it split at,
 # so a tracked `cd` cannot be scoped to the group it belongs to. Tracking stands
-# down for the whole command instead, leaving every segment read against this
-# hook's own working directory.
+# down for the whole command instead, leaving every segment read against the
+# acting directory.
 #
 # Quoting is modelled rather than pattern-matched because the distinction is
 # load-bearing: a parenthesis inside a quoted value is ordinary text, and a
@@ -124,8 +149,8 @@ ambiguous_main_branch() {
 #
 # What the stand-down reaches beyond a real subshell is an ordinary unquoted
 # command substitution, which carries the same characters: a `cd` into a linked
-# worktree followed by a push whose refspec comes from one is read against this
-# hook's own working directory rather than the worktree's, and denied. That is a
+# worktree followed by a push whose refspec comes from one is read against the
+# acting directory rather than the worktree's, and denied. That is a
 # false deny rather than a miss, and the escape is running the command with the
 # `!` prefix.
 #
@@ -333,6 +358,7 @@ push_refspec_names_main() {
 reset_hard_moves_head() {
   local directory="$1" ambiguous="$2" argument hard=0 target="" skip_next=0 target_commit head_commit
   local -a in_directory=()
+  [ -n "$directory" ] || directory=$(acting_directory)
   [ -n "$directory" ] && in_directory=(-C "$directory")
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
