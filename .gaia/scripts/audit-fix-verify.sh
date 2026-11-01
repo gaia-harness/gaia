@@ -171,7 +171,7 @@ PIN_FILES=(
 
 # Paths a fixer may never touch, declared or not.
 FORBIDDEN_PATHS=(
-  'CHANGELOG.md'                              # the main thread decides the entry at merge time
+  'CHANGELOG.md'                              # the main thread owns the entry; the unit never edits it
 )
 
 _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
