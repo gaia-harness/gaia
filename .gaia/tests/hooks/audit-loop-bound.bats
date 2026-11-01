@@ -1074,7 +1074,7 @@ scratch_copy() {
   rm -rf "$scratch_directory"
   mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
   for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
-    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-dispositions-check.sh; do
+    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-dispositions-check.sh audit-member-digest.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$scratch_directory/.gaia/scripts/$script_name"
   done
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
@@ -1316,9 +1316,9 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   cmp "$ALF_STATE" "$BATS_TEST_TMPDIR/before"
 }
 
-# veto_rounds: round 1 reports finding X (security false) and disposes it
-# accept-residual; round 2 is recorded by a member dispatch, which snapshots
-# round 1's dispositions.
+# veto_rounds: round 1 reports finding X (security false) and waives it on the
+# triage threshold, the waiver a later veto overrides; round 2 is recorded by
+# a member dispatch, which snapshots round 1's dispositions.
 FINDING_X='{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1}'
 veto_rounds() {
   alf_fill f.txt 12 feature
@@ -1327,7 +1327,7 @@ veto_rounds() {
   assert_allowed
   alf_stamp 1 10
   alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"security":false}]' 11
-  alf_dispositions 1 "[$(jq -c '. + {disposition: "accept-residual", reason: "minor"}' <<<"$FINDING_X")]"
+  alf_dispositions 1 "[$(jq -c '. + {disposition: "waive-out-of-scope", basis: "triage-threshold", reason: "minor"}' <<<"$FINDING_X")]"
   new_tree
   dispatch
   assert_allowed
@@ -1591,29 +1591,43 @@ veto_rounds() {
 # --- the default stop through the hook ----------------------------------------
 
 # stop_threshold_case <fix-on-a-stop-key:true|false>: three rounds of the same
-# two branch Minors plus one Minor outside the branch diff; round 3's stored
-# snapshot holds default_stop true over the two branch keys and enriching, and
-# dispositions-3.json disposes every finding, with `fix` either on a stop key
-# or only on the uncounted finding.
+# two branch Minors plus one Minor outside the branch diff, and at round 3 a
+# new Minor on a line that round's commit repaired, so round 3 is enriching.
+# Round 3's sidecar has an incremental review base and the member an earned
+# marker at round 3's tree, and its snapshot is left for the hook to evaluate
+# against the audited root, so default_stop holds over the three branch keys.
+# dispositions-3.json disposes every finding: with `fix` on a stop key the
+# rest are waived (an accept beside a threshold fix is refused), else the
+# branch keys are accepted and `fix` sits only on the uncounted finding.
 stop_threshold_case() {
-  local round stop_disposition=accept-residual other_disposition=fix entries
-  [ "$1" = true ] && { stop_disposition=fix; other_disposition=accept-residual; }
+  local round stop_disposition=accept-residual rest_disposition=accept-residual other_disposition=fix entries tree digest sidecar_file
+  [ "$1" = true ] && { stop_disposition=fix; rest_disposition=waive-out-of-scope; other_disposition=waive-out-of-scope; }
   entries='[{"path":"f.txt","line":1,"finding_class":"rule/x","severity":"minor","security":false},
     {"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false},
     {"path":"base.txt","line":3,"finding_class":"rule/q","severity":"minor","security":false}]'
+  printf 'auditors:\n  - name: code-audit-frontend\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' >"$ALF_ROOT/.gaia/audit-ci.yml"
   alf_fill f.txt 12 feature
   for round in 1 2 3; do
     alf_set_line other.txt "$round" "round $round"
+    if [ "$round" -eq 3 ]; then
+      alf_set_line f.txt 8 repaired
+      entries="$(jq -c '. + [{"path":"f.txt","line":8,"finding_class":"rule/y","severity":"minor","security":false}]' <<<"$entries")"
+    fi
     alf_commit "round $round"
     alf_round "$round" "$FRONTEND_MEMBER" "$entries"
   done
-  alf_store_snapshot 3
-  alf_state_edit '.history.rounds[2].snapshot |= . + {verdict: "enriching", signals: (.signals + {enriching: true}), default_stop: true,
-    default_stop_keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]]}' --arg member "$FRONTEND_MEMBER"
-  alf_dispositions 3 "$(jq -n -c --arg member "$FRONTEND_MEMBER" --arg stop "$stop_disposition" --arg other "$other_disposition" \
-    '[{member: $member, finding_class: "rule/x", path: "f.txt", line: 1, disposition: $stop, reason: "minor tail"},
-      {member: $member, finding_class: "rule/x", path: "f.txt", line: 2, disposition: "accept-residual", reason: "minor tail"},
-      {member: $member, finding_class: "rule/q", path: "base.txt", line: 3, disposition: $other, reason: "outside the diff"}]')"
+  for sidecar_file in "$ALF_ROOT"/.gaia/local/audit/*.findings.json; do
+    jq -c '.review_base = {sha: ("c" * 40), reason: "member-clearance"}' "$sidecar_file" >"$sidecar_file.edited"
+    touch -r "$sidecar_file" "$sidecar_file.edited" && mv "$sidecar_file.edited" "$sidecar_file"
+  done
+  tree="$(state_field '.history.rounds[2].tree')"
+  digest="$(bash "$REPO_ROOT/.gaia/scripts/audit-member-digest.sh" --root "$ALF_ROOT" --member "$FRONTEND_MEMBER" --ref "$tree")" || return 1
+  jq -n -c --arg digest "$digest" --arg member "$FRONTEND_MEMBER" '{digest: $digest, member: $member, provenance: "earned"}' \
+    >"$ALF_ROOT/.gaia/local/audit/$digest.ok"
+  alf_dispositions 3 "$(jq -n -c --arg member "$FRONTEND_MEMBER" --arg stop "$stop_disposition" --arg rest "$rest_disposition" --arg other "$other_disposition" \
+    'def entry($class; $path; $line; $disposition): {member: $member, finding_class: $class, path: $path, line: $line, disposition: $disposition, reason: "minor tail"}
+       + (if $disposition == "waive-out-of-scope" then {basis: "triage-threshold"} else {} end);
+     [entry("rule/x"; "f.txt"; 1; $stop), entry("rule/x"; "f.txt"; 2; $rest), entry("rule/y"; "f.txt"; 8; $rest), entry("rule/q"; "base.txt"; 3; $other)]')"
 }
 
 @test "default stop: a fix on a stop key keeps the checkpoint and leaves the stored default_stop true; a fix only off S keeps the override" {

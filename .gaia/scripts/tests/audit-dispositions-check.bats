@@ -271,6 +271,7 @@ vetoes() {
 }
 
 @test "undisposed: every branch-authored finding and vetoed key disposed fails with the out-of-branch Critical left out" {
+  accept_at 1
   vetoes 1 c/gone f.txt 9
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later),$(disposition_entry f.txt 9 c/gone fix)]" 'select(.path != "base.txt" or .line != 3)')"
   run_check 1
@@ -474,6 +475,7 @@ tree_state() {
 }
 
 @test "waiver-table: reads the frozen snapshot once the sidecar is gone" {
+  accept_at 1
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 1 c/crit fix),$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
@@ -507,12 +509,17 @@ tree_state() {
   grep -qF -- 'Out-of-scope machinery findings' <<<"$output"
 }
 
-@test "pr-sections: a veto effective from a later round leaves the earlier round's residual" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp accept-residual "closing round left it")]")"
-  vetoes 2 c/imp f.txt 3
+@test "pr-sections: a veto effective from a later round drops an earlier round's accepted residual and leaves its waiver" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp accept-residual "closing round left it"),$(disposition_entry f.txt 4 c/xr waive-out-of-scope "other remit" cross-remit)]")"
   run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
   green || return 1
-  grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output"
+  grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "$output"; return 1; }
+  jq -n -c '{version: 1, keys: [{member: "code-audit-frontend", finding_class: "c/imp", path: "f.txt", line: 3, effective_from_round: 2},
+    {member: "code-audit-frontend", finding_class: "c/xr", path: "f.txt", line: 4, effective_from_round: 2}]}' >"$RUN_FOLDER/vetoes.json"
+  run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
+  green || return 1
+  grep -qF -- 'Accepted residuals' <<<"$output" && { echo "$output"; return 1; }
+  grep -qF -- '`f.txt:4`' <<<"$output" || { echo "$output"; return 1; }
 }
 
 @test "pr-sections: nothing to record prints nothing" {
@@ -613,6 +620,7 @@ run_sections() {
 }
 
 @test "UAT-002: an out-of-branch finding with no entry and no triage mark fails undisposed; an entry clears it" {
+  accept_at 1
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "base.txt" or .line != 6)')"
   run_check 1
   red undisposed "$(key_json c/oosimp base.txt 6)" || return 1
@@ -893,12 +901,12 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   red undisposed "$(key_json c/oos base.txt 3)"
 }
 
-@test "snapshot projection: check-all honors an earlier round's triage mark from its version-2 snapshot after the sidecar loses it" {
+@test "snapshot projection: check-all honors an earlier round's triage mark from its snapshot after the sidecar loses it" {
   with_maintainer "[$TRIAGE_ENTRY]"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
-  jq -e '.version == 2 and any(.lookup[]; .finding_class == "c/tri" and .triage == true and .triage_reason == "below threshold")' \
+  jq -e '.version == 3 and any(.lookup[]; .finding_class == "c/tri" and .triage == true and .triage_reason == "below threshold")' \
     "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json" >/dev/null || { cat "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json"; return 1; }
   alf_sidecar "$SHELL_MEMBER" "[$(jq -c 'del(.triage, .triage_reason)' <<<"$TRIAGE_ENTRY")]" 12
   open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
@@ -981,12 +989,15 @@ recorded_row() {
   done
 }
 
-@test "a refused-authored entry re-disposed accept-residual passes and renders once under the accepted heading" {
+@test "a refused-authored entry re-disposed accept-residual fails on an ordinary round, passes with a human accept and renders once under the accepted heading" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
   outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
   run_outcomes 1
   red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp accept-residual "the branch wrote it")]")"
+  run_check 1
+  red accept-residual-not-eligible "$(key_json c/oosimp base.txt 6)" || return 1
+  accept_at 1
   run_check 1
   green || return 1
   run_outcomes 1
@@ -1027,7 +1038,8 @@ recorded_row() {
   run_sections
   green || return 1
   [ "$(grep -cF -- 'f.txt:3' <<<"$output")" -eq 1 ] || { echo "$output"; return 1; }
-  grep -qF -- 'closing round left it' <<<"$output" || { echo "$output"; return 1; }
+  # The round's row wins and carries the finding's own failure mode.
+  grep -qF -- '- `f.txt:3` f. <!--' <<<"$output" || { echo "$output"; return 1; }
 }
 
 @test "pr-sections: a recorded reason holding a secret-shaped token renders withheld, the text absent" {
@@ -1124,4 +1136,535 @@ recorded_row() {
   grep -qF -- 'audit-triage-lib.sh' <<<"$output" || { echo "$output"; return 1; }
   grep -qF -- 'violation' <<<"$output" && return 1
   true
+}
+
+# --- accept-residual eligibility, veto satisfaction, residual count ----------
+
+SHELL_MAINTAINER=code-audit-maintainer-shell
+
+# accept_at <r>: a checkpoint at round r answered accept, the human accept
+# round-history reports for rounds r and r+1.
+accept_at() {
+  local checkpoint_index
+  alf_add_checkpoint "$1" fallback || return 1
+  checkpoint_index="$(jq '.history.checkpoints | length' "$ALF_STATE")"
+  alf_add_answer "$checkpoint_index" accept
+}
+
+# minor_rows <path> <first> <last> [class]: non-security Minors on those lines.
+minor_rows() {
+  alf_entries "$1" "$2" "$3" "${4:-rule/x}" | jq -c 'map(. + {severity: "minor", security: false})'
+}
+
+# joined <array-json>...: the arrays concatenated.
+joined() {
+  printf '%s\n' "$@" | jq -n -c '[inputs] | add'
+}
+
+# review_base_all <reason>: every sidecar's review base reason, its mtime kept.
+review_base_all() {
+  local sidecar_file
+  for sidecar_file in "$ALF_ROOT"/.gaia/local/audit/*.findings.json; do
+    jq -c --arg reason "$1" '.review_base = {sha: ("c" * 40), reason: $reason}' "$sidecar_file" >"$sidecar_file.edited"
+    touch -r "$sidecar_file" "$sidecar_file.edited" && mv "$sidecar_file.edited" "$sidecar_file"
+  done
+}
+
+# earn_marker <member> <r>: an earned clearance for the member's digest at round r's tree.
+earn_marker() {
+  local tree digest marker_name
+  tree="$(jq -r --argjson round "$2" '.history.rounds[$round - 1].tree' "$ALF_STATE")"
+  digest="$(bash "$SCRIPTS/audit-member-digest.sh" --root "$ALF_ROOT" --member "$1" --ref "$tree")" || return 1
+  marker_name="$digest.$1.ok"
+  [ "$1" = code-audit-frontend ] && marker_name="$digest.ok"
+  jq -n -c --arg digest "$digest" --arg member "$1" '{digest: $digest, member: $member, provenance: "earned"}' >"$ALF_ROOT/.gaia/local/audit/$marker_name"
+}
+
+# stop_rounds <entries-json>...: a fresh branch with one round of MEMBER per
+# argument, each commit touching only other.txt, every sidecar reviewed
+# incrementally and the last round's marker earned, so the last round's
+# default stop holds when its entries meet the evaluator's other terms. Sets
+# LAST_ROUND, RUN_FOLDER and SNAPSHOT_DIRECTORY.
+stop_rounds() {
+  local round=1 entries
+  # The gh stub answers any call with GH_VISIBILITY, so the member digest's
+  # default-branch read would resolve to it; empty makes the stub fail.
+  export GH_VISIBILITY=
+  # shellcheck source=/dev/null
+  . "$SCRIPTS/audit-loop-eval.sh"
+  rm -rf "$BATS_TEST_TMPDIR/repo" "$BATS_TEST_TMPDIR/origin.git"
+  alf_init && alf_branch feat/stop || return 1
+  RUN_FOLDER="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  SNAPSHOT_DIRECTORY="${ALF_STATE%.json}.d"
+  mkdir -p "$RUN_FOLDER"
+  printf 'auditors:\n  - name: %s\n    globs:\n      - "lib/**"\n    audience: adopter\n  - name: code-audit-frontend\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' \
+    "$SHELL_MAINTAINER" >"$ALF_ROOT/.gaia/audit-ci.yml"
+  alf_fill f.txt 12 feature
+  alf_fill lib/s.sh 12 shell
+  for entries in "$@"; do
+    alf_set_line other.txt "$round" "round $round"
+    alf_commit "round $round" || return 1
+    alf_round "$round" "$MEMBER" "$entries" || return 1
+    round=$((round + 1))
+  done
+  LAST_ROUND=$((round - 1))
+  review_base_all member-clearance
+  earn_marker "$MEMBER" "$LAST_ROUND"
+}
+
+# stop_base [round-3-entries]: rounds of 3, 2, 2 stable Minors on f.txt, the
+# last one replaceable.
+stop_base() {
+  stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)" "${1:-$(minor_rows f.txt 1 2)}"
+}
+
+# accept_all <r> <entries-json> [extra-entries-json]: dispositions-<r>.json
+# with the extra entries and an accept-residual on every other entry's key.
+accept_all() {
+  write_dispositions "$1" "$(jq -n -c --argjson entries "$2" --argjson extra "${3:-[]}" --arg member "$MEMBER" \
+    '$extra + [$entries[] | select([.finding_class, .path, .line] as $key | any($extra[]; [.finding_class, .path, .line] == $key) | not)
+       | {member: $member, finding_class, path, line, disposition: "accept-residual", reason: "left for later"}]')"
+}
+
+# evaluator_field <r> <jq>: a field of the evaluator's round r snapshot.
+evaluator_field() {
+  bash "$SCRIPTS/audit-loop-eval.sh" eval --root "$ALF_ROOT" --round "$1" | jq -r "$2"
+}
+
+# mutant_check_tree <file> <sed args...>: a scratch tree mirroring .gaia/scripts
+# and .claude/hooks/lib (copies, never links) with <file> run through sed, so
+# the evaluator a mutant check calls still proves markers. SCRIPT points at it.
+mutant_check_tree() {
+  local tree="$BATS_TEST_TMPDIR/mutant-tree" target="$1"
+  shift
+  rm -rf "$tree"
+  mkdir -p "$tree/.gaia/scripts" "$tree/.claude/hooks/lib"
+  cp "$SCRIPTS"/*.sh "$tree/.gaia/scripts/"
+  cp -R "$REPO_ROOT"/.claude/hooks/lib/. "$tree/.claude/hooks/lib/"
+  sed "$@" "$SCRIPTS/$target" >"$tree/.gaia/scripts/$target"
+  cmp -s "$SCRIPTS/$target" "$tree/.gaia/scripts/$target" && { echo "mutant of $target changed nothing"; return 1; }
+  SCRIPT="$tree/.gaia/scripts/audit-dispositions-check.sh"
+}
+
+# minor_key <path> <line> [class]: the compact key json of MEMBER's finding.
+minor_key() {
+  printf '{"member":"%s","finding_class":"%s","path":"%s","line":%s}' "$MEMBER" "${3:-rule/x}" "$1" "$2"
+}
+
+run_residual_count() {
+  run bash "$SCRIPT" residual-count --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
+}
+
+@test "eligibility: accept-residual on a round whose default stop holds passes and freezes a version-3 snapshot of the stop's inputs" {
+  local snapshot_file
+  stop_base
+  accept_all 3 "$(minor_rows f.txt 1 2)"
+  run_check 3 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  snapshot_file="$SNAPSHOT_DIRECTORY/dispositions-3.checked.json"
+  [ "$(jq -c '[.version, .default_stop, (.default_stop_keys | length), .human_accept, .satisfied_vetoes, .review_bases]' "$snapshot_file")" = \
+    "[3,true,2,false,[],{\"$MEMBER\":\"member-clearance\"}]" ] || { cat "$snapshot_file"; return 1; }
+  # Re-grade from the snapshot after the sidecar is overwritten and HEAD moves.
+  alf_sidecar "$MEMBER" "$(minor_rows f.txt 7 7 rule/later)" 31
+  alf_set_line other.txt 9 "after the round"
+  alf_commit "after the round"
+  [ "$(evaluator_field 3 '.default_stop')" = false ] || return 1
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  run_check_all
+  green || return 1
+  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x accept-residual "a different reason")]"
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  red edited-after-check '{"round":3}'
+}
+
+@test "eligibility: a Minor-only round 2 fails accept-residual-not-eligible; a human accept passes the same entry (mutant dropping human_accept goes red)" {
+  stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)"
+  accept_all 2 "$(minor_rows f.txt 1 2)"
+  run_check 2
+  red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
+  red accept-residual-not-eligible "$(minor_key f.txt 2)" || return 1
+  accept_at 2
+  run_check 2
+  green || return 1
+  mutant_check_tree audit-dispositions-check.sh -e 's/(\$stop.human_accept or (\$stop.default_stop/(($stop.default_stop/' || return 1
+  run_check 2
+  red accept-residual-not-eligible "$(minor_key f.txt 1)"
+}
+
+# stop_false_case <name>: a branch whose last round fails the default stop
+# for that one reason, with dispositions accepting its Minors and fixing
+# anything else. Sets LAST_ROUND.
+stop_false_case() {
+  local extra
+  case "$1" in
+    major | critical | security-absent)
+      case "$1" in
+        major) extra='[{"path":"f.txt","line":5,"finding_class":"rule/m","severity":"major","security":false}]' ;;
+        critical) extra='[{"path":"f.txt","line":5,"finding_class":"rule/m","severity":"critical","security":false}]' ;;
+        *) extra='[{"path":"f.txt","line":5,"finding_class":"rule/m","severity":"minor"}]' ;;
+      esac
+      stop_base "$(joined "$(minor_rows f.txt 1 2)" "$extra")" || return 1
+      accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 5 rule/m fix)]"
+      return 0
+      ;;
+    unknown-verdict)
+      stop_base || return 1
+      alf_state_edit '.history.rounds[2].members += ["code-audit-shell"]'
+      ;;
+    null-previous-count)
+      stop_base || return 1
+      alf_state_edit '.history.rounds[1].snapshot.A = null'
+      ;;
+    legacy-snapshot)
+      stop_base || return 1
+      alf_state_edit 'del(.history.rounds[0].snapshot.counted_keys)'
+      ;;
+    no-marker)
+      stop_base || return 1
+      rm -f "$ALF_ROOT"/.gaia/local/audit/*.ok
+      ;;
+    whole-branch-member)
+      stop_base || return 1
+      review_base_all no-anchor
+      ;;
+    repeat-fixed-triple)
+      stop_base || return 1
+      alf_dispositions 1 "[$(disposition_entry f.txt 1 rule/x fix)]"
+      ;;
+    repeat-back-again)
+      stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)" "$(minor_rows f.txt 1 3)" || return 1
+      ;;
+    repeat-gap)
+      stop_rounds "$(joined "$(minor_rows f.txt 1 2)" "$(minor_rows f.txt 3 3 rule/z)")" "$(minor_rows f.txt 1 2)" \
+        "$(minor_rows f.txt 1 2)" "$(joined "$(minor_rows f.txt 1 2)" "$(minor_rows f.txt 5 5 rule/z)")" || return 1
+      ;;
+    repeat-moved)
+      stop_rounds "$(minor_rows f.txt 1 2)" "$(minor_rows f.txt 2 3)" "$(minor_rows f.txt 3 4)" || return 1
+      ;;
+  esac
+  accept_all "$LAST_ROUND" "$(jq -c '.findings | map({finding_class, path, line})' "$ALF_ROOT"/.gaia/local/audit/*."$ALF_SLUG.$MEMBER".findings.json)"
+}
+
+@test "eligibility: each stop-false shape fails accept-residual-not-eligible with no accept, and the same entry passes with a human accept" {
+  local shape key
+  for shape in major critical security-absent unknown-verdict null-previous-count legacy-snapshot no-marker whole-branch-member \
+    repeat-fixed-triple repeat-back-again repeat-gap repeat-moved; do
+    stop_false_case "$shape" || { echo "fixture $shape"; return 1; }
+    [ "$(evaluator_field "$LAST_ROUND" '.default_stop')" = false ] || { echo "$shape: the stop holds"; return 1; }
+    case "$shape" in
+      repeat-*) [ "$(evaluator_field "$LAST_ROUND" '.signals.reintroduced')" = true ] || { echo "$shape: not reintroduced"; return 1; } ;;
+    esac
+    key="$(jq -c '.entries | map(select(.disposition == "accept-residual")) | first | {member, finding_class, path, line}' "$RUN_FOLDER/dispositions-$LAST_ROUND.json")"
+    run_check "$LAST_ROUND"
+    red accept-residual-not-eligible "$key" || { echo "shape $shape"; return 1; }
+    accept_at "$LAST_ROUND"
+    run_check "$LAST_ROUND"
+    green || { echo "shape $shape twin"; return 1; }
+  done
+}
+
+@test "eligibility: round 10 fails accept-residual-not-eligible while the same entry at round 9 passes on the stop" {
+  local round=1
+  local -a rows=()
+  while [ "$round" -le 9 ]; do rows+=("$(minor_rows f.txt 1 2)"); round=$((round + 1)); done
+  stop_rounds "${rows[@]}"
+  accept_all 9 "$(minor_rows f.txt 1 2)"
+  run_check 9
+  green || return 1
+  # Round 10 overwrites the one sidecar, so round 9 is checked first.
+  alf_set_line other.txt 10 "round 10"
+  alf_commit "round 10"
+  alf_round 10 "$MEMBER" "$(minor_rows f.txt 1 2)"
+  review_base_all member-clearance
+  earn_marker "$MEMBER" 10
+  accept_all 10 "$(minor_rows f.txt 1 2)"
+  run_check 10
+  red accept-residual-not-eligible "$(minor_key f.txt 1)"
+}
+
+@test "eligibility: a severity or eligibility claim inside the dispositions entry changes nothing (mutant reading the entry goes red)" {
+  local claims='{"severity":"minor","security":false,"default_stop":true,"human_accept":true,"eligible":true}'
+  stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)"
+  accept_all 2 "$(minor_rows f.txt 1 2)"
+  jq -c --argjson claims "$claims" '.entries |= map(. + $claims)' "$RUN_FOLDER/dispositions-2.json" >"$RUN_FOLDER/claimed.json"
+  mv "$RUN_FOLDER/claimed.json" "$RUN_FOLDER/dispositions-2.json"
+  run_check 2
+  red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
+  mutant_check_tree audit-dispositions-check.sh \
+    -e 's/and (\$accept_allowed | not)/and ((.eligible == true or $accept_allowed) | not)/' || return 1
+  run_check 2
+  green
+}
+
+@test "eligibility: a threshold fix on a stop key fails the accept beside it; a threshold waiver beside it passes (mutant dropping the fix arm goes red)" {
+  stop_base
+  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x fix)]"
+  run_check 3
+  red accept-residual-not-eligible "$(minor_key f.txt 2)" || return 1
+  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x waive-out-of-scope "below the threshold" triage-threshold)]"
+  run_check 3
+  green || return 1
+  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x fix)]"
+  mutant_check_tree audit-dispositions-check.sh -e 's/ and (\$threshold_fix | not)//' || return 1
+  run_check 3
+  green
+}
+
+@test "eligibility: an honored triage mark on the stop round needs no entry beside the accepts" {
+  local mark='[{"path":"lib/s.sh","line":4,"finding_class":"rule/t","severity":"major","security":false,"triage":true,"triage_reason":"below the threshold"}]'
+  MEMBER="$SHELL_MAINTAINER"
+  stop_rounds "$(minor_rows lib/s.sh 1 3)" "$(minor_rows lib/s.sh 1 2)" "$(joined "$(minor_rows lib/s.sh 1 2)" "$mark")"
+  [ "$(evaluator_field 3 '.default_stop')" = true ] || return 1
+  accept_all 3 "$(minor_rows lib/s.sh 1 2)"
+  run_check 3
+  green
+}
+
+@test "forward-only: a version-2 snapshot with an accept-residual re-grades clean; live it fails (mutant grading version 2 as 3 goes red)" {
+  local lookup sha snapshot_file="$SNAPSHOT_DIRECTORY/dispositions-1.checked.json"
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
+  run_check 1
+  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)" || return 1
+  lookup="$(bash "$SCRIPTS/audit-loop-eval.sh" findings --root "$ALF_ROOT" --round 1 | jq -c '.entries | map({member, finding_class, path, line, severity, security, cross_remit, authored, triage: false, triage_reason: ""})')"
+  sha="$(shasum -a 256 <"$RUN_FOLDER/dispositions-1.json" | cut -d' ' -f1)"
+  mkdir -p "$SNAPSHOT_DIRECTORY"
+  jq -n -c --arg sha "$sha" --argjson lookup "$lookup" '{version: 2, round: 1, dispositions_sha256: $sha, lookup: $lookup}' >"$snapshot_file"
+  run_check_all
+  green || return 1
+  run_check 1
+  green || return 1
+  mutant_script audit-dispositions-check.sh -e 's/"accept-residual" and \$version >= 3/"accept-residual" and $version >= 2/' || return 1
+  run_check_all
+  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)"
+}
+
+@test "carry-forward: a re-reported accepted key on a non-stop round needs no entry; re-disposing it accept-residual fails (mutant not carrying accepts goes red)" {
+  accept_at 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  open_round 2 "$FINDINGS_JSON"
+  open_round 3 "$FINDINGS_JSON"
+  write_dispositions 3 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "f.txt" or .line != 6)')"
+  run_check 3
+  green || return 1
+  mutant_script audit-dispositions-check.sh -e 's/ or (\$version >= 3 and .disposition == "accept-residual")//' || return 1
+  run_check 3
+  red undisposed "$(key_json c/sug f.txt 6)" || return 1
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  write_dispositions 3 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
+  run_check 3
+  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)"
+}
+
+# veto_fixed_in <r> <fixer-disposition>: round r disposes c/imp f.txt:3 fix and
+# its fixer reports the given disposition on it.
+veto_fixed_in() {
+  write_dispositions "$1" "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
+  jq -n -c --arg disposition "$2" '{results: [{member: "code-audit-frontend", finding_class: "c/imp", path: "f.txt", line: 3, disposition: $disposition}]}' \
+    >"$RUN_FOLDER/fixer-$1-audit.json"
+}
+
+# without_veto_key: the round-1 findings minus c/imp f.txt:3.
+without_veto_key() {
+  jq -c '[.[] | select(.line != 3 or .path != "f.txt")]' <<<"$FINDINGS_JSON"
+}
+
+# next_tree_round <r> <findings-json>: commit a change, then record round r on it.
+next_tree_round() {
+  alf_set_line other.txt "$1" "round $1"
+  alf_commit "round $1"
+  open_round "$1" "$2"
+}
+
+# veto_unsatisfied_red <r> <findings-json>: on round r, an accept-residual on
+# the vetoed key fails vetoed-not-fix and no entry fails undisposed.
+veto_unsatisfied_red() {
+  write_dispositions "$1" "$(fill "$2" "[$(disposition_entry f.txt 3 c/imp accept-residual because)]")"
+  run_check "$1"
+  red vetoed-not-fix "$(key_json c/imp f.txt 3)" || return 1
+  write_dispositions "$1" "$(fill "$2" '[]' 'select(.path != "f.txt" or .line != 3)')"
+  run_check "$1"
+  red undisposed "$(key_json c/imp f.txt 3)"
+}
+
+@test "vetoes: an unsatisfied veto fails vetoed-not-fix on an accept and undisposed with no entry: never fixed, re-reported, or the fixer disputed or could not fix" {
+  local fixer_disposition
+  vetoes 1 c/imp f.txt 3
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
+  next_tree_round 2 "$(without_veto_key)"
+  veto_unsatisfied_red 2 "$(without_veto_key)" || { echo "never fixed"; return 1; }
+  veto_fixed_in 1 fixed
+  alf_sidecar "$MEMBER" "$FINDINGS_JSON" 21
+  veto_unsatisfied_red 2 "$FINDINGS_JSON" || { echo "re-reported"; return 1; }
+  alf_sidecar "$MEMBER" "$(without_veto_key)" 21
+  for fixer_disposition in disputed cannot_fix; do
+    veto_fixed_in 1 "$fixer_disposition"
+    veto_unsatisfied_red 2 "$(without_veto_key)" || { echo "fixer $fixer_disposition"; return 1; }
+  done
+}
+
+@test "vetoes: unsatisfied when the member was not dispatched after the fix, or the fix came before the veto's round, closing and later" {
+  vetoes 1 c/imp f.txt 3
+  veto_fixed_in 1 fixed
+  next_tree_round 2 "$(without_veto_key)"
+  alf_state_edit '.history.rounds[1].members = ["code-audit-shell"]'
+  write_dispositions 2 "[$(disposition_entry f.txt 3 c/imp accept-residual because)]"
+  run_check 2
+  red vetoed-not-fix "$(key_json c/imp f.txt 3)" || return 1
+  write_dispositions 2 '[]'
+  run_check 2
+  red undisposed "$(key_json c/imp f.txt 3)" || return 1
+  alf_state_edit '.history.rounds[1].members = ["code-audit-frontend"]'
+  vetoes 2 c/imp f.txt 3
+  veto_unsatisfied_red 2 "$(without_veto_key)" || { echo "fix before the veto, closing round"; return 1; }
+  next_tree_round 3 "$(without_veto_key)"
+  veto_unsatisfied_red 3 "$(without_veto_key)" || { echo "fix before the veto, later round"; return 1; }
+}
+
+@test "vetoes: a shifted-line re-report is a new key, undisposed on its own, while the satisfied veto needs nothing" {
+  local shifted
+  vetoes 1 c/imp f.txt 3
+  veto_fixed_in 1 fixed
+  shifted="$(jq -c '. + [{"path":"f.txt","line":8,"finding_class":"c/imp","severity":"major","security":false}]' <<<"$(without_veto_key)")"
+  next_tree_round 2 "$shifted"
+  write_dispositions 2 "$(fill "$shifted" '[]' 'select(.path != "f.txt" or .line != 8)')"
+  run_check 2
+  red undisposed "$(key_json c/imp f.txt 8)" || return 1
+  grep -qF -- "$(key_json c/imp f.txt 3)" <<<"$output" && { echo "$output"; return 1; }
+  true
+}
+
+@test "vetoes: a satisfied veto lets a closing round omit the key with no entry through check, both check-alls and a later round" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  vetoes 2 c/imp f.txt 3
+  next_tree_round 2 "$FINDINGS_JSON"
+  veto_fixed_in 2 fixed
+  run_check 2 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  next_tree_round 3 "$(without_veto_key)"
+  alf_state_edit '.history.rounds[2].closing = true'
+  write_dispositions 3 "$(fill "$(without_veto_key)" '[]')"
+  run_check 3 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  [ "$(jq -c '.satisfied_vetoes' "$SNAPSHOT_DIRECTORY/dispositions-3.checked.json")" = '[["code-audit-frontend","c/imp","f.txt",3]]' ] || return 1
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  run_check_all
+  green || return 1
+  # The bound hook stores round 3's snapshot before round 4, and veto
+  # satisfaction reads round 3's keys from it.
+  # shellcheck source=/dev/null
+  . "$SCRIPTS/audit-loop-eval.sh"
+  alf_store_snapshot 3
+  next_tree_round 4 "$(without_veto_key)"
+  write_dispositions 4 "$(fill "$(without_veto_key)" '[]')"
+  run_check 4
+  green
+}
+
+@test "lapse guard: a veto past every dispositions file fails the read-only check-all and passes the bound hook's call" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
+  vetoes 2 c/imp f.txt 3
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  run_check_all
+  red undisposed "$(key_json c/imp f.txt 3)"
+}
+
+@test "check-outcomes: refused-authored passes once the exact key is vetoed; a malformed vetoes.json exits 3 and an absent one runs clean" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
+  outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  run_outcomes 1
+  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
+  grep -qF -- unbound <<<"$output" && { echo "$output"; return 1; }
+  vetoes 2 c/oosimp base.txt 7
+  run_outcomes 1
+  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
+  vetoes 2 c/oosimp base.txt 6
+  run_outcomes 1
+  green || return 1
+  printf 'not json' >"$RUN_FOLDER/vetoes.json"
+  run_outcomes 1
+  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
+}
+
+@test "pr-sections: each residual renders its own failure mode and key; a fixed vetoed key leaves while the others stay, and residual-count matches the heading" {
+  local findings shown withheld
+  findings="$(jq -c 'map(if .line == 3 and .path == "f.txt" then . + {failure_mode: "the import cycle survives a reload"}
+    elif .line == 6 and .path == "f.txt" then . + {failure_mode: "the suggestion text is stale"} else . end)' <<<"$FINDINGS_JSON")"
+  alf_sidecar "$MEMBER" "$findings" 11
+  accept_at 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp accept-residual "generic"),$(disposition_entry f.txt 6 c/sug accept-residual "generic")]")"
+  recorded_row holistic/unclassified a.test.ts 4 "leaks $(secret_token) here"
+  run_sections
+  green || return 1
+  grep -qxF -- '- `f.txt:3` the import cycle survives a reload. <!-- gaia-debt-key: v1 class=c/imp path=f.txt line=3 -->' <<<"$output" || { echo "$output"; return 1; }
+  grep -qxF -- '- `f.txt:6` the suggestion text is stale. <!-- gaia-debt-key: v1 class=c/sug path=f.txt line=6 -->' <<<"$output" || { echo "$output"; return 1; }
+  run bash "$SCRIPT" waiver-table --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --rounds 1-1
+  grep -F -- 'f.txt:3 c/imp' <<<"$output" | grep -qF -- '| the import cycle survives a reload |' || { echo "$output"; return 1; }
+  vetoes 2 c/imp f.txt 3
+  run_sections
+  green || return 1
+  grep -qF -- 'f.txt:3' <<<"$output" && { echo "$output"; return 1; }
+  grep -qF -- '`f.txt:6` the suggestion text is stale.' <<<"$output" || { echo "$output"; return 1; }
+  shown="$(awk '/^## Accepted residuals/ { reading = 1; next } /^## / { reading = 0 } reading && /^- `/' <<<"$output" | wc -l | tr -d ' ')"
+  withheld="$(sed -n 's/^- \([0-9]*\) accepted residual(s) withheld.*/\1/p' <<<"$output")"
+  [ "$shown" -eq 1 ] && [ "${withheld:-0}" -eq 1 ] || { echo "$output"; return 1; }
+  run_residual_count
+  green || return 1
+  [ "$(jq -r '.total' <<<"$output")" -eq $((shown + withheld)) ] || { echo "$output vs $shown + $withheld"; return 1; }
+  find "$RUN_FOLDER" -name 'filing-outcomes-*' | grep -q . && return 1
+  grep -qF -- issue "$GH_CALLS" 2>/dev/null && { cat "$GH_CALLS"; return 1; }
+  true
+}
+
+@test "residual-count: ask counts a stop round's rows and a filing-replay row, never a worthiness row, a human-accepted round or a closing latest round (mutant counting every accept goes red)" {
+  local finding="$BATS_TEST_TMPDIR/finding.json"
+  stop_base
+  accept_all 3 "$(minor_rows f.txt 1 2)"
+  jq -n -c '{member: "code-audit-frontend", finding_class: "c/replay", path: "g.txt", line: 2, failure_mode: "the filer refused it"}' >"$finding"
+  bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$finding"
+  recorded_row holistic/unclassified a.test.ts 4 "a weak test"
+  # No snapshot: the live evaluator answers for round 3.
+  run_residual_count
+  green || return 1
+  [ "$output" = '{"total":4,"ask":3}' ] || { echo "$output"; return 1; }
+  run_check 3 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  # From the version-3 snapshot, a later sidecar and HEAD change nothing.
+  alf_sidecar "$MEMBER" "$(minor_rows f.txt 7 7 rule/later)" 31
+  alf_set_line other.txt 9 "after the round"
+  alf_commit "after the round"
+  run_residual_count
+  [ "$output" = '{"total":4,"ask":3}' ] || { echo "snapshot: $output"; return 1; }
+  # Live again on round 3's own evidence, now human-accepted.
+  rm -f "$SNAPSHOT_DIRECTORY/dispositions-3.checked.json"
+  alf_sidecar "$MEMBER" "$(minor_rows f.txt 1 2)" 31
+  review_base_all member-clearance
+  [ "$(evaluator_field 3 '.default_stop')" = true ] || return 1
+  accept_at 3
+  run_residual_count
+  [ "$output" = '{"total":4,"ask":1}' ] || { echo "human accepted: $output"; return 1; }
+  mutant_check_tree audit-pr-sections-lib.sh -e 's/or (\.round as \$round | \$asking | any(\. == \$round))/or .round > 0/' || return 1
+  run_residual_count
+  [ "$output" = '{"total":4,"ask":3}' ] || { echo "mutant: $output"; return 1; }
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  alf_add_round "[\"$MEMBER\"]" true
+  run_residual_count
+  [ "$output" = '{"total":4,"ask":0}' ] || { echo "closing: $output"; return 1; }
+}
+
+@test "record-residual: a replayed row on a non-stop round is outside the refusal and still counts in ask" {
+  local finding="$BATS_TEST_TMPDIR/finding.json"
+  jq -n -c '{member: "code-audit-frontend", finding_class: "c/replay", path: "g.txt", line: 2, failure_mode: "the filer refused it"}' >"$finding"
+  bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$finding"
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
+  run_check 1
+  green || return 1
+  run_residual_count
+  [ "$output" = '{"total":1,"ask":1}' ] || { echo "$output"; return 1; }
 }
