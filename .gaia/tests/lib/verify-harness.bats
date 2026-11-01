@@ -332,6 +332,78 @@ EOF
   has '  reproduce: bash .gaia/tests/shell-lint.sh'
 }
 
+@test "round mode fails an uncommitted line-limit breach, naming the file, the rule and the reproduce command" {
+  fixture
+  vhf_control line-limit ".claude/hooks/grown-hook.sh"
+  run_runner round
+  [ "$status" -eq 1 ]
+  has_line '^FAIL  line-limit \([0-9]+s\)$'
+  has '  .claude/hooks/grown-hook.sh:1 authoring.harness.max-lines: over the limit'
+  has '  reproduce: ./.gaia/cli/gaia fitness check --json --scope all --fail-on error --only authoring.harness.max-lines --config .claude/gaia-fitness.json'
+  [ "$(vhf_log_entries line-limit | sed -n 1p)" = "$VHF_ROOT" ]
+  [ "$(cat "$VERIFY_FIXTURE_LOG.line-limit-arguments")" \
+    = "fitness check --json --scope all --fail-on error --only authoring.harness.max-lines --config .claude/gaia-fitness.json" ]
+}
+
+@test "a missing node skips only the line-limit step and says so" {
+  fixture
+  harness_commit
+  farm="$(vhf_path_without node)"
+  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
+  [ "$status" -eq 0 ]
+  has 'WARN  node not found: install with brew install node; CI remains the only check for line-limit'
+  every_label_is SKIP line-limit
+  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip 'bats selected'
+  [ -z "$(vhf_log_entries line-limit)" ]
+}
+
+@test "a non-executable fitness CLI skips only the line-limit step and says so" {
+  fixture
+  harness_commit
+  chmod -x .gaia/cli/gaia
+  run_runner round
+  [ "$status" -eq 0 ]
+  has 'WARN  .gaia/cli/gaia not found: install with pnpm -C .gaia/cli bundle; CI remains the only check for line-limit'
+  every_label_is SKIP line-limit
+  every_label_is PASS shell-lint 01-files-present
+}
+
+# real_fitness_cli: swap the stub for the committed CLI and give the fixture
+# what the line-limit rule reads: the maintainer marker, a root CLAUDE.md, and
+# ceilings for the copied scripts already over 400 lines, at their own counts.
+real_fitness_cli() {
+  local script_path ceilings="{}"
+  cp "$REPO_ROOT/.gaia/cli/gaia" .gaia/cli/gaia
+  mkdir -p .claude/rules/maintainers .claude/maintainers
+  printf '# marker\n' >.claude/rules/maintainers/harness-triage-threshold.md
+  printf '# root\n' >CLAUDE.md
+  for script_path in .gaia/scripts/*.sh; do
+    [ "$(wc -l <"$script_path" | tr -d ' ')" -gt 400 ] || continue
+    ceilings="$(jq --arg path "$script_path" --argjson lines "$(wc -l <"$script_path" | tr -d ' ')" \
+      '.[$path] = $lines' <<<"$ceilings")"
+  done
+  jq -n --argjson ceilings "$ceilings" '{ceilings: $ceilings}' >.claude/maintainers/line-limit-ceilings.json
+}
+
+@test "the committed fitness CLI fails a script grown past its ceiling and passes once the ceiling is raised" {
+  fixture
+  real_fitness_cli
+  seq 1 405 >.gaia/scripts/grown.sh
+  jq '.ceilings[".gaia/scripts/grown.sh"] = 404' .claude/maintainers/line-limit-ceilings.json >ceilings.json
+  mv ceilings.json .claude/maintainers/line-limit-ceilings.json
+  vhf_commit "a script one line past its ceiling"
+  run_runner round
+  [ "$status" -eq 1 ]
+  has_line '^FAIL  line-limit \([0-9]+s\)$'
+  has '.gaia/scripts/grown.sh:1 authoring.harness.max-lines: The file is 405 lines, past its grandfathered ceiling of 404.'
+  jq '.ceilings[".gaia/scripts/grown.sh"] = 405' .claude/maintainers/line-limit-ceilings.json >ceilings.json
+  mv ceilings.json .claude/maintainers/line-limit-ceilings.json
+  vhf_commit "the ceiling raised to the file's length"
+  run_runner round
+  [ "$status" -eq 0 ]
+  every_label_is PASS line-limit
+}
+
 @test "branch mode refuses uncommitted tracked changes and runs nothing" {
   fixture
   printf 'dirty\n' >src/x-input.txt
