@@ -87,7 +87,7 @@ A clean catch-up merge that lands after dispatch rotates no member's digest, bec
 
 - **Land the pre-dispatch commits first.** The worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) and a spec-derived plan's wiki promotion (`.claude/skills/gaia/references/spec/wiki-promote.md`) can each commit: a fix to a judged test, a promoted page. Both run before the verification below and before the first member dispatch, because a commit that lands later rotates the digest of the member covering it and buys another round.
 <!-- gaia:maintainer-only:start -->
-- **Land the CHANGELOG entry with them.** Run the first moment of the [[#CHANGELOG gate (maintainer-only)]] here, so any entry lands before the verification and only a correction the merge check finds owed lands after clearance.
+- **Land the CHANGELOG entry with them.** Run the first moment of the [[#CHANGELOG gate (maintainer-only)]] here, so any entry lands before the verification; after clearance only a merge-time correction commits.
 <!-- gaia:maintainer-only:end -->
 - **Run the deterministic checks that cover the change.** The test suites for the paths touched, the linters for the languages involved, the [[Quality Gate]] when its skip logic says it applies, and any suite that consumes what changed. Green locally is the entry condition for dispatch, not a milestone passed once: re-run it after the **last** edit. Verifying, then editing prose or docs, then dispatching without re-running is the same defect as never running it, and it is the easier one to commit because the green output is still on screen.
 <!-- gaia:maintainer-only:start -->
@@ -280,7 +280,7 @@ GAIA maintainers: light routing appends one event per route and per light outcom
 
 Does this PR's change belong in `CHANGELOG.md` under `## [Unreleased]`? The gate runs at two moments, both on the main thread; the audit unit never edits `CHANGELOG.md`. GAIA's `CHANGELOG.md` is release-excluded, so this gate and every entry it produces are GAIA-team-only and reach no adopter clone.
 
-**Before the first audit dispatch: decide and land.** Judge worthiness by the lists below and, when worthy, write the entry and commit it before the verification, in the last pre-verify commit or on its own, beside the worthiness step and wiki promotion ([[#Before the first dispatch: verify your own work]]). The draft PR is already open, so its number is known for the `(#<PR>)` reference.
+**Before the first audit dispatch: decide and land.** Judge worthiness by the lists below and, when worthy, write the entry and commit it before the verification, beside the worthiness step and wiki promotion ([[#Before the first dispatch: verify your own work]]). The draft PR is already open, so its number is known for the `(#<PR>)` reference.
 
 **At merge: verify only.** Confirm the entry exists and is still true at the merge head. An entry promised in an earlier session may never have landed, and a fix that spanned sessions may have changed what's worth noting, so run this check on every merge, including a PR resumed days later. When any `rounds[]` element in the audit unit's report has `fix_count` above 0, re-read the entry against the final diff, since a fix may have changed what it describes. Commit a correction only when the entry is missing or false: that commit moves HEAD and costs one CI run, so post the `GAIA-Audit` status again on the new HEAD ([[#Posting the status last]]) before merging.
 
