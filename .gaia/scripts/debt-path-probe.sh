@@ -3,7 +3,7 @@
 # The /gaia-debt staleness probe: reports, for every issue in the ordered
 # backlog, whether its dedup-key path is still tracked. Called by the
 # staleness-probe section of .claude/skills/gaia/references/debt.md, which
-# annotates a gone path and never acts on it.
+# annotates a gone path and excludes it from the budget batch alone.
 #
 # DATA, NOT COMMAND TEXT: a dedup-key path comes from an editable issue body
 # and its extraction pattern admits `$(...)`, backticks, and quotes. So the
