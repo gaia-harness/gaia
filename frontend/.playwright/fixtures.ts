@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {DEV_PORT_OVERRIDE_ENV} from '../dev-ports';
+import {DEV_PORT_OVERRIDE_ENV, isPortTaken} from '../dev-ports';
 import {AXE_WCAG_TAGS} from '../test/axe-tags';
 
 /**
@@ -43,13 +43,11 @@ type WorkerServerFixtures = {
 
 const SERVER_READY_TIMEOUT_MILLISECONDS = 60_000;
 const SERVER_POLL_INTERVAL_MILLISECONDS = 250;
+const SERVER_STARTUP_MARGIN_MILLISECONDS = 10_000;
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 
-// Bound on the wildcard address, not loopback: on macOS a loopback bind
-// succeeds beside a foreign wildcard listener, which would then answer the
-// readiness poll for a server that never reads this worker's database.
-const findFreePort = async (): Promise<number> =>
+const askOperatingSystemForPort = async (): Promise<number> =>
   new Promise((resolve, reject) => {
     const probe = net.createServer();
 
@@ -60,6 +58,18 @@ const findFreePort = async (): Promise<number> =>
       probe.close(() => resolve(port));
     });
   });
+
+// Asks the OS for a port, then confirms no listener holds it on any address
+// the dev server's own start-up check probes: a loopback-only server (Vite's
+// default) coexists with a wildcard bind on macOS, so a wildcard bind alone
+// would accept a port another worker's server already answers on.
+const findFreePort = async (): Promise<number> => {
+  for (;;) {
+    const port = await askOperatingSystemForPort();
+
+    if (!(await isPortTaken(port))) return port;
+  }
+};
 
 const delay = async (milliseconds: number): Promise<void> =>
   new Promise((resolve) => {
@@ -173,7 +183,11 @@ export const test = base.extend<AxeFixtures, WorkerServerFixtures>({
         }
       }
     },
-    {scope: 'worker'},
+    {
+      scope: 'worker',
+      timeout:
+        SERVER_READY_TIMEOUT_MILLISECONDS + SERVER_STARTUP_MARGIN_MILLISECONDS,
+    },
   ],
 });
 

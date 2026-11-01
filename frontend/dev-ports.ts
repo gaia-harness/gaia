@@ -1,5 +1,6 @@
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 
 export const DEV_BASE_PORT = 5173;
@@ -339,4 +340,36 @@ export const findListenerOwner = ({
   } catch {
     return {kind: 'unknown'};
   }
+};
+
+// The wildcards are probed too: on macOS a loopback bind succeeds beside a
+// server bound to 0.0.0.0 or ::, so the loopback probes alone read it as free.
+// The probes run one at a time: on Linux a wildcard bind fails beside this
+// process's own still-open loopback probe, so concurrent probes read a free
+// port as taken.
+const PROBE_ADDRESSES = ['127.0.0.1', '::1', '0.0.0.0', '::'];
+
+const isTakenOn = async (port: number, host: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const probe = net.createServer();
+
+    probe.once('error', (error: NodeJS.ErrnoException) => {
+      // Only EADDRINUSE means taken; an absent address family (EADDRNOTAVAIL,
+      // EAFNOSUPPORT) just means that address does not exist here.
+      resolve(error.code === 'EADDRINUSE');
+    });
+    probe.once('listening', () => {
+      probe.close(() => resolve(false));
+    });
+    probe.listen({exclusive: true, host, port});
+  });
+
+/** True when any loopback or wildcard address already holds the port. */
+export const isPortTaken = async (port: number): Promise<boolean> => {
+  for (const host of PROBE_ADDRESSES) {
+    // eslint-disable-next-line no-await-in-loop -- concurrent probes collide on Linux
+    if (await isTakenOn(port, host)) return true;
+  }
+
+  return false;
 };
