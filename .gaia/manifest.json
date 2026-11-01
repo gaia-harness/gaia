@@ -285,6 +285,7 @@
     ".gaia/scripts/classifier/classify-determinism.mjs": "owned",
     ".gaia/scripts/context-checkpoint-lib.sh": "owned",
     ".gaia/scripts/debt-backlog.sh": "owned",
+    ".gaia/scripts/debt-batch-budget-offer-lib.sh": "owned",
     ".gaia/scripts/debt-batch-budget.sh": "owned",
     ".gaia/scripts/debt-count-refresh.sh": "owned",
     ".gaia/scripts/debt-dedup.sh": "owned",
@@ -832,7 +833,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-31T16:14:13.750Z",
+  "generated": "2026-11-01T06:50:25.458Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
