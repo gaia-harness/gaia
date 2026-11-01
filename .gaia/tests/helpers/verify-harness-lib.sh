@@ -31,6 +31,11 @@
 
 # git's well-known empty tree, the base of a parentless HEAD's range.
 verify_empty_tree_object=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+# CI's fitness step (the `cli-tests` workflow) narrowed to its harness
+# line-limit rule, which runs in under a second. Unlike CI, it reads the
+# tree's own suppression file, not the base branch's, so a pull request that
+# suppresses its own breach passes here and still fails CI.
+verify_line_limit_command='./.gaia/cli/gaia fitness check --json --scope all --fail-on error --only authoring.harness.max-lines --config .claude/gaia-fitness.json'
 # Raw failure output past this many lines is cut, with a pointer to the
 # reproduce command; a full shell-lint report can run to hundreds of lines.
 verify_detail_line_limit=200
@@ -149,6 +154,7 @@ verify_base_worktree() {
 verify_label_for() {
   case "$1" in
     shell-lint) printf 'shell-lint' ;;
+    line-limit) printf 'line-limit' ;;
     leak) printf 'release-scrub leak check' ;;
     files-present) printf '01-files-present' ;;
     marker-strip) printf '02-marker-strip' ;;
@@ -158,6 +164,7 @@ verify_label_for() {
 verify_reproduce_for() {
   case "$1" in
     shell-lint) printf 'bash .gaia/tests/shell-lint.sh' ;;
+    line-limit) printf '%s' "$verify_line_limit_command" ;;
     leak) printf 'bash .gaia/tests/distribution/lib/build-staging.sh "$(mktemp -d)"' ;;
     files-present) printf 'bash .gaia/tests/distribution/01-files-present.sh' ;;
     marker-strip) printf 'bash .gaia/tests/distribution/02-marker-strip.sh' ;;
@@ -168,10 +175,19 @@ verify_reproduce_for() {
 # the check with the tree as the working directory. 01, 03 and their lib.sh
 # resolve the repository root from the working directory, not their own path.
 verify_execute_check() {
-  local kind="$1" tree="$2" output_file="$3" staging_directory
+  local kind="$1" tree="$2" output_file="$3" staging_directory line_limit_status
   case "$kind" in
     shell-lint)
       (cd "$tree" && bash .gaia/tests/shell-lint.sh) >"$output_file" 2>&1 </dev/null
+      ;;
+    line-limit)
+      # shellcheck disable=SC2086
+      (cd "$tree" && $verify_line_limit_command) >"$output_file.json" 2>"$output_file" </dev/null
+      line_limit_status=$?
+      [ "$line_limit_status" -eq 0 ] && return 0
+      jq -r '.findings[]? | "\(.file):\(.line) \(.rule_id): \(.message)"' "$output_file.json" \
+        >>"$output_file" 2>/dev/null || cat "$output_file.json" >>"$output_file"
+      return "$line_limit_status"
       ;;
     leak)
       staging_directory="$(mktemp -d "$run_temporary_directory/staging.XXXXXX")" || return 1
@@ -199,6 +215,9 @@ verify_extract_items() {
         -e 's/^In (.+) line [0-9]+:.*$/\1/p' \
         -e 's/^([^ :]+): line [0-9]+:.*$/\1/p' \
         -e 's/^([^ :]+):[0-9]+(:.*)?$/\1/p' "$output_file" | LC_ALL=C sort -u
+      ;;
+    line-limit)
+      sed -n -E 's/^([^ :]+):[0-9]+ [^ ]+: .*$/\1/p' "$output_file" | LC_ALL=C sort -u
       ;;
     *)
       verify_normalize_distribution_output "$tree" "$output_file"

@@ -12,8 +12,9 @@
 #   bash .gaia/tests/verify-harness.sh push <sha>...   # the pre-push hook's entry: distribution checks only
 #
 # Checks, in order, each run with the tree under check as its working
-# directory: shell-lint (branch, round), the release-scrub leak check (a bare
-# build-staging into an empty directory), 01-files-present, 02-marker-strip,
+# directory: shell-lint (branch, round), line-limit (branch, round: the
+# fitness lint's harness line-limit rule alone), the release-scrub leak check
+# (a bare build-staging into an empty directory), 01-files-present, 02-marker-strip,
 # then the bats tests carrying the whole-tree mark (branch) and the suites the
 # change selector picks (branch, round). A mark is per file (every test in the
 # suite) or per test (the one test below it). Branch mode selects over
@@ -218,12 +219,17 @@ fi
 
 # Tool probes, before any check runs.
 shellcheck_missing=0
+node_missing=0
 jq_missing=0
 rsync_missing=0
 bats_missing=0
 if [ "$mode" != push ] && tool_missing shellcheck; then
   shellcheck_missing=1
   warn_missing_tool shellcheck 'brew install shellcheck' 'shell-lint'
+fi
+if [ "$mode" != push ] && tool_missing node; then
+  node_missing=1
+  warn_missing_tool node 'brew install node' 'line-limit'
 fi
 if tool_missing jq; then
   jq_missing=1
@@ -267,7 +273,7 @@ if [ -n "$release_bookkeeping" ]; then
     printf '  reproduce: node .gaia/cli/gaia-maintainer release manifest --check\n'
     new_failure_count=$((new_failure_count + 1))
   fi
-  for release_skipped_step in shell-lint 'distribution checks' 'bats whole-tree' 'bats selected'; do
+  for release_skipped_step in shell-lint line-limit 'distribution checks' 'bats whole-tree' 'bats selected'; do
     verify_skip "$release_skipped_step" "release bookkeeping only"
   done
 elif [ "$mode" = push ]; then
@@ -311,6 +317,14 @@ else
     verify_skip shell-lint "shellcheck not found"
   else
     verify_run_check shell-lint "$verified_root" "$merge_base" "" ""
+  fi
+  if [ "$node_missing" -eq 1 ]; then
+    verify_skip line-limit "node not found"
+  elif [ ! -x "$verified_root/.gaia/cli/gaia" ]; then
+    printf 'WARN  .gaia/cli/gaia not found or not executable: build with pnpm -C .gaia/cli bundle; CI remains the only check for line-limit\n'
+    verify_skip line-limit ".gaia/cli/gaia not found or not executable"
+  else
+    verify_run_check line-limit "$verified_root" "$merge_base" "" ""
   fi
   verify_run_distribution "$verified_root" "$merge_base" "" "" "$binary_missing"
 

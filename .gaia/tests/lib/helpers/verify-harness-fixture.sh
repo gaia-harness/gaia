@@ -7,7 +7,8 @@
 # feature branch checked out. It carries:
 #
 #   - stub checks at the real relative paths (shell-lint, build-staging, 01,
-#     03). Each resolves its root from the working directory, logs
+#     02; the fitness CLI stub, which reports in JSON, is vhf_write_fitness_stub).
+#     Each resolves its root from the working directory, logs
 #     "<name>|<toplevel>" to $VERIFY_FIXTURE_LOG, and fails, printing the
 #     file's content as its diagnostic, when the tracked control/<name> file is
 #     non-empty. A commit flips a result and the merge base keeps its own, and
@@ -56,6 +57,27 @@ fi
 printf '%s passed\n' "$control_name"
 EOF
   chmod +x "$stub_path"
+}
+
+# vhf_write_fitness_stub: a stub .gaia/cli/gaia that logs
+# "line-limit|<toplevel>", writes its arguments to
+# $VERIFY_FIXTURE_LOG.line-limit-arguments, and, while control/line-limit is
+# non-empty, reports each of its lines as an over-limit file in the CLI's JSON
+# shape and exits 1.
+vhf_write_fitness_stub() {
+  cat >"$VHF_ROOT/.gaia/cli/gaia" <<'EOF'
+#!/usr/bin/env bash
+toplevel="$(git rev-parse --show-toplevel)"
+printf 'line-limit|%s\n' "$toplevel" >>"${VERIFY_FIXTURE_LOG:?}"
+printf '%s\n' "$*" >"$VERIFY_FIXTURE_LOG.line-limit-arguments"
+if [ -s "$toplevel/control/line-limit" ]; then
+  jq -R '{rule_id: "authoring.harness.max-lines", severity: "error", file: ., line: 1, message: "over the limit"}' \
+    "$toplevel/control/line-limit" | jq -s '{findings: .}'
+  exit 1
+fi
+printf '{"findings":[]}\n'
+EOF
+  chmod +x "$VHF_ROOT/.gaia/cli/gaia"
 }
 
 # vhf_write_suite <relative path> <mark: yes|no|tests:<slug,slug>|tests+:<slug,slug>> <names...>:
@@ -141,7 +163,7 @@ vhf_init() {
   VHF_ROOT="$(cd "$repository" && pwd -P)" || return 1
   printf '.gaia/local/\n' >"$VHF_ROOT/.gitignore"
 
-  mkdir -p "$VHF_ROOT/.gaia/scripts" "$VHF_ROOT/.gaia/tests/helpers" "$VHF_ROOT/.gaia/cli" || return 1
+  mkdir -p "$VHF_ROOT/.gaia/scripts" "$VHF_ROOT/.gaia/tests/helpers" "$VHF_ROOT/.gaia/cli" "$VHF_ROOT/.claude" || return 1
   for script_name in bats-suites-for-change.sh bats5.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh \
     main-root-lib.sh audit-key-lib.sh; do
     cp "$source_root/.gaia/scripts/$script_name" "$VHF_ROOT/.gaia/scripts/$script_name" || return 1
@@ -157,6 +179,8 @@ vhf_init() {
   vhf_write_stub .gaia/tests/distribution/02-marker-strip.sh 02-marker-strip
   printf '#!/bin/sh\nexit 0\n' >"$VHF_ROOT/.gaia/cli/gaia-maintainer"
   chmod +x "$VHF_ROOT/.gaia/cli/gaia-maintainer"
+  vhf_write_fitness_stub
+  printf '{}\n' >"$VHF_ROOT/.claude/gaia-fitness.json"
 
   vhf_write_suite suites/whole.bats yes zero one
   # The whole-tree behavior: an outcome that depends on files no suite names.
@@ -175,7 +199,7 @@ vhf_init() {
   printf 's2\n' >"$VHF_ROOT/.claude/rules/s2-rule.md"
   printf 'page\n' >"$VHF_ROOT/frontend/app/page.txt"
   # Tracked and empty, so a test's uncommitted edit to one is a tracked change.
-  for script_name in shell-lint build-staging 01-files-present 02-marker-strip; do
+  for script_name in shell-lint line-limit build-staging 01-files-present 02-marker-strip; do
     : >"$VHF_ROOT/control/$script_name"
   done
 
