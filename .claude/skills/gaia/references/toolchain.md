@@ -6,7 +6,7 @@ The one statement of how a new project or clone gets pnpm and Chromium, and of h
 
 The caller's `toolchain-check.sh` call exited 1. Bring each short tool up to its latest release in this run, rather than stopping. For each `BELOW` or `MISSING` line, show the tool, its installed version and its floor with its `GUIDE` line verbatim, then act on that tool's `ROUTE` line by its class:
 
-- **pnpm:** run `## pnpm` below.
+- **pnpm**, whatever its class: run `## pnpm` below instead.
 - **`run`:** ask once with `AskUserQuestion`, naming the tool, the installed version, the floor and the exact command, with options `Install it (Recommended)` and `Stop`. On `Install it`, run the command. `/gaia-init`'s Automatic mode answers `Install it`, as its pnpm gate does.
 - **`user`:** the command needs `sudo`, whose password Claude cannot type. Give it to the user as `! <command>`, to type in the prompt so it runs in this session, and wait for them to say it ran.
 - **`terminal`:** the command is interactive, such as the Homebrew installer, or changes `PATH` that only a new shell sees, such as `winget`. Never run it. Tell the user to run it in a fresh terminal, then start Claude Code again from that terminal and re-run the command that stopped.
@@ -52,4 +52,4 @@ Stories and hook tests run in headless Chromium and `pnpm install` installs no b
 pnpm -C frontend exec playwright install chromium
 ```
 
-It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a browser launch can still fail with `Host system is missing dependencies`; then tell the user to run `pnpm -C frontend exec playwright install-deps chromium` themselves (it asks for their `sudo` password to install the system libraries).
+It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a browser launch can still fail with `Host system is missing dependencies`; then give the user `! pnpm -C frontend exec playwright install-deps chromium` to type in the prompt (it asks for their `sudo` password to install the system libraries).
