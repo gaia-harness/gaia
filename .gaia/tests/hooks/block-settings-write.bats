@@ -7,8 +7,8 @@
 # it through a redirect, tee, sponge, sed -i, or a cp/mv destination, and stays
 # silent for reads, other files and the edit tools (a permissions.ask rule
 # covers those). The decision is JSON on stdout carrying "ask" (mechanism 3 in
-# helpers/run-hook.sh); the hook always exits 0 except when a library is
-# missing.
+# helpers/run-hook.sh); the hook always exits 0 except when a library is missing,
+# or jq is missing and the command names settings.json.
 #
 # Run under bash 5: `bash .gaia/scripts/bats5.sh .gaia/tests/hooks/block-settings-write.bats`.
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.

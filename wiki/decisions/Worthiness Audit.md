@@ -124,8 +124,8 @@ ledger:
 
 - The shared worthiness step (`.claude/skills/gaia/references/worthiness-step.md`)
   owns dispatch and verdict routing for a plan run, the work lifecycle and
-  `/gaia-debt`; its `worthiness-step.sh record` is the one ledger writer's
-  invoker. The tdd skill dispatches the reviewer through that page's tdd arm,
+  `/gaia-debt`; its `worthiness-step.sh record` is the only caller of the
+  ledger writer. The tdd skill dispatches the reviewer through that page's tdd arm,
   which dispatches and records only (otherwise principle-6 always-on is
   violated). The tdd path's
   surviving no-orchestrator guarantees (static honesty lint, RED on the

@@ -185,7 +185,7 @@ run_hook_bash() {
   assert_denied_by_json
 }
 
-@test "an mv destination followed by a spaced separator or comment is denied" {
+@test "a cp or mv destination followed by a spaced separator or comment is denied" {
   run_hook_bash '( mv /tmp/x.json .gaia/manifest.json )'
   assert_denied_by_json
   run_hook_bash 'cp /tmp/x.json .gaia/manifest.json & wait'

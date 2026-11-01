@@ -374,8 +374,8 @@ spec093_enforcement_paths() {
   done < <(enforcement_paths)
 }
 
-# The libraries the disposition check, the audit loop and the filer moved logic
-# into stay under the fixer bound, or the actor the loop bounds could edit them.
+# The libraries the disposition check, the audit loop and the filer source
+# stay under the fixer bound, or the actor the loop bounds could edit them.
 moved_library_paths() {
   printf '%s\n' \
     '.gaia/scripts/branch-authorship-lib.sh' \
