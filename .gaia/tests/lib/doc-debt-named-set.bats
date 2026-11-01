@@ -296,12 +296,62 @@ budget_constant_owners() {
   grep -qiF -- 'without re-presenting the backlog' <<<"$section"
 }
 
-# --- 9. difficulty has exactly one consumer ---------------------------------
-
 @test "the guardrails forbid a named number draining a different issue" {
   section="$(extract_section '## Guardrails')"
   [ -n "$section" ]
   grep -qiF -- 'a named number never drains a different issue without the operator choosing it' <<<"$section"
+}
+
+# --- 9b. a named number never reaches offer mode ----------------------------
+
+# named_sections_call_no_offer_mode <named.md>: both named-number sections are
+# non-empty and neither invokes the scorer's offer mode.
+named_sections_call_no_offer_mode() {
+  local set_section direct_section
+  set_section="$(extract_section "$NAMED_SET_HEADING" "$1")"
+  direct_section="$(extract_section '## Fix a specific issue (direct-number path)' "$1")"
+  [ -n "$set_section" ] || return 1
+  [ -n "$direct_section" ] || return 1
+  grep -qF -- '--offer' <<<"$set_section" && return 1
+  grep -qF -- '--offer' <<<"$direct_section" && return 1
+  return 0
+}
+
+# recommend_names_only_entry <recommend.md>: the offer section says a named
+# set never reaches it and names option 3 of the direct-number offer as the
+# only entry from named.md.
+recommend_names_only_entry() {
+  local section
+  section="$(extract_section '## Recommend and present' "$1")"
+  [ -n "$section" ] || return 1
+  grep -qF -- 'a named set never reaches it' <<<"$section" || return 1
+  grep -qF -- 'picks option 3 of the direct-number cluster offer in `debt/named.md`' <<<"$section"
+}
+
+@test "the named-set and direct-number sections never invoke offer mode" {
+  named_sections_call_no_offer_mode "$NAMED_MD"
+}
+
+@test "the no-offer-mode check goes red on an offer-mode call in the named-set section" {
+  copy="$BATS_TEST_TMPDIR/named.md"
+  awk -v heading="$NAMED_SET_HEADING" '
+    { print }
+    index($0, heading) == 1 { print "bash .gaia/scripts/debt-batch-budget.sh --offer"; }
+  ' "$NAMED_MD" >"$copy"
+  grep -qF -- '--offer' "$copy"
+  run named_sections_call_no_offer_mode "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the recommend section says a named set never reaches it and names option 3 as the only entry" {
+  recommend_names_only_entry "$REPO_ROOT/.claude/skills/gaia/references/debt/recommend.md"
+}
+
+@test "the recommend-entry check goes red when the named-set sentence is removed" {
+  copy="$BATS_TEST_TMPDIR/recommend.md"
+  awk '{ gsub(/; a named set never reaches it/, ""); print }' "$REPO_ROOT/.claude/skills/gaia/references/debt/recommend.md" >"$copy"
+  run recommend_names_only_entry "$copy"
+  [ "$status" -ne 0 ]
 }
 
 # --- 10. the command surface ------------------------------------------------
