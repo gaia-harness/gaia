@@ -465,3 +465,36 @@ state_checksum() {
   [ "$(wc -l <"$RUN_FOLDER/recorded-residuals.jsonl" | tr -d ' ')" = 2 ]
   [ "$(jq -r '.fullName // .source' "$RUN_FOLDER/recorded-residuals.jsonl" | tr '\n' ' ')" = "second filing-replay " ]
 }
+
+ROUTE_TEST="frontend/app/route-tests/orders/tests/refuses-anonymous.test.ts"
+
+commit_route_test() {
+  mkdir -p "$REPO/$(dirname "$ROUTE_TEST")"
+  printf '%s\n' \
+    "import {expect, test} from 'vitest';" \
+    "" \
+    "test('refuses an anonymous visitor', () => {" \
+    "  expect(1 + 1).toBe(2);" \
+    "});" >"$REPO/$ROUTE_TEST"
+  commit_paths "$ROUTE_TEST"
+}
+
+@test "route: a changed route test is listed for evaluation" {
+  write_builtin_descriptor "$REPO" '' '' '["app/route-tests/**/*.test.ts"]'
+  commit_route_test
+  run_route
+  [ "$status" -eq 0 ]
+  [ "$(field "$ROUTE_TEST" 'refuses an anonymous visitor' .route)" = evaluate ]
+}
+
+@test "route: a selection that accepts only emergent drops the route test" {
+  # Mutation proof on a scratch copy of the selection library.
+  write_builtin_descriptor "$REPO" '' '' '["app/route-tests/**/*.test.ts"]'
+  rm -f "$REPO/.claude/hooks/lib/worthiness-selection.sh"
+  sed 's/ or (.classification \/\/ "") == "route"//' "$HOME_ROOT/.claude/hooks/lib/worthiness-selection.sh" >"$REPO/.claude/hooks/lib/worthiness-selection.sh"
+  if grep -q '== "route"' "$REPO/.claude/hooks/lib/worthiness-selection.sh"; then return 1; fi
+  commit_route_test
+  run_route
+  [ "$status" -eq 0 ]
+  [ "$output" = "[]" ]
+}

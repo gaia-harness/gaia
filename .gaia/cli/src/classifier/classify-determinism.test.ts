@@ -47,7 +47,7 @@ const HELPER_ENV = {
 };
 
 type Classification = {
-  classification: 'emergent' | 'strict';
+  classification: 'emergent' | 'route' | 'strict';
   file: string;
   reasons: string[];
 };
@@ -356,6 +356,31 @@ describe('classify-determinism', () => {
 
       expect(result.classification).toBe('emergent');
       expect(result.reasons.join(' ')).toMatch(/unknown DOM API|allowlist/i);
+    });
+  });
+
+  describe('route tests', () => {
+    const testSource =
+      "import {expect, test} from 'vitest';\ntest('x', () => { expect(1).toBe(1); });\n";
+
+    test('classifies a test in a route-tests tests folder as ROUTE with a reason', () => {
+      const result = classifySource(
+        'frontend/app/route-tests/orders/tests/refuses-anonymous.test.ts',
+        testSource
+      );
+
+      expect(result.classification).toBe('route');
+      expect(result.reasons.join(' ')).toMatch(/route test/);
+    });
+
+    test.each([
+      'frontend/app/route-tests/orders/refuses.test.ts',
+      'frontend/app/route-tests/orders/tests/refuses.spec.ts',
+      'frontend/app/other/orders/tests/refuses.test.ts',
+    ])('does not classify %s as ROUTE', (candidatePath) => {
+      const result = classifySource(candidatePath, testSource);
+
+      expect(result.classification).toBe('emergent');
     });
   });
 

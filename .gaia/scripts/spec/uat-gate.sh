@@ -1,36 +1,44 @@
 #!/usr/bin/env bash
 # The owning-phase UAT gate. The generated plan orchestrator runs it from the
 # resolved isolation root before an owning phase may commit, and once more over
-# every e2e row before the pre-merge audit; the procedure is
+# every e2e and route row before the pre-merge audit; the procedure is
 # .claude/skills/gaia/references/spec/lifecycle.md.
 #
-#   uat-gate.sh <spec-path> --routing <routing-file> (--phase <N> | --all) [--report <playwright-json>]
+#   uat-gate.sh <spec-path> --routing <routing-file> (--phase <N> | --all) [--report <playwright-json>] [--vitest-report <vitest-json>]
 #
-# For the selected e2e rows (the phase's own, or every e2e row), in order:
-#   1. static checks per spec file: it exists, line 1 is a contract marker, it
+# For the selected e2e and route rows (the phase's own, or every one), in order:
+#   1. static checks per test file: it exists, line 1 is a contract marker, it
+#      holds no annotation, and it clears a deterministic floor. An e2e file
 #      holds none of test.fail(, test.fixme(, test.skip(, .only(,
-#      test.describe.skip( or test.describe.fixme(, and it clears a
-#      deterministic floor (a page.<method>( call, and an expect( whose first
-#      argument is not a bare literal);
+#      test.describe.skip( or test.describe.fixme(, and has a page.<method>(
+#      call or a request-fixture call, plus an expect( whose first argument is
+#      not a bare literal. A route file's annotations and floor (a loader( or
+#      action( call) live in uat-gate-route.sh;
 #   2. uat-divergence-check.sh over the same selection;
-#   3. working-doc-id-scan.sh over the frontend's Playwright tree;
-#   4. Playwright over only the selected files with the JSON reporter, unless
-#      --report supplies that JSON: every test in a file must be expected to
-#      pass and have passed, and each file must hold at least one test.
-# A failure in steps 1 to 3 stops before Playwright boots.
+#   3. working-doc-id-scan.sh over the frontend's test trees;
+#   4. the route arm, when route rows are selected: Vitest (node project) over
+#      only the selected files, unless --vitest-report supplies the JSON. It
+#      boots no browser and no server, and a failure exits 1 before Playwright;
+#   5. the Playwright arm, when e2e rows are selected: Playwright over only the
+#      selected files with the JSON reporter, unless --report supplies that
+#      JSON: every test in a file must be expected to pass and have passed, and
+#      each file must hold at least one test. --report is Playwright-only.
+# A failure in steps 1 to 3 stops before either runner starts.
 #
 # Exit codes the caller branches on:
-#   0  pass; also when the selection has no e2e rows (prints `no owned e2e specs`)
+#   0  pass; also when the selection has no e2e or route rows (prints `no owned UAT tests`)
 #   1  gate failure; one stderr line per failing file: `uat-gate: <file>: <reason>`
 #      with reason one or more of missing, annotation, floor, divergence,
-#      working-doc-id, expected-failure, skipped, fixme, failed, no-tests
+#      working-doc-id, expected-failure, skipped, fixme, failed, no-tests,
+#      no-report-entry, collection-failed, todo
 #      (a line 1 that is not a contract marker reports missing), then one
 #      `uat-gate: next step for floor: ...` line when any file failed the floor
 #   2  invalid input (usage, malformed SPEC, invalid routing table, unreadable
-#      --report)
-#   4  Playwright could not run (jq, pnpm or a browser is missing, the dev or
-#      Storybook port is held, a server failed to boot); stderr names the
-#      prerequisite, and the other tree when a process of one holds a port
+#      --report or --vitest-report)
+#   4  a test runner could not run (jq, pnpm or a browser is missing, the dev or
+#      Storybook port is held, a server failed to boot, Vitest wrote no
+#      report); stderr names the runner and the prerequisite, and the other
+#      tree when a process of one holds a port
 #
 # Honest limit: the gate proves a spec turned green and still carries its
 # contract. Whether the test body truly exercises the UAT is judged by the
@@ -42,7 +50,7 @@ set -uo pipefail
 
 usage() {
   cat <<'USAGE' >&2
-usage: uat-gate.sh <spec-path> --routing <routing-file> (--phase <N> | --all) [--report <playwright-json>]
+usage: uat-gate.sh <spec-path> --routing <routing-file> (--phase <N> | --all) [--report <playwright-json>] [--vitest-report <vitest-json>]
 USAGE
 }
 
@@ -55,6 +63,10 @@ usage_failure() {
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=.gaia/scripts/spec/uat-lib.sh
 source "$script_directory/uat-lib.sh"
+# shellcheck source=.gaia/scripts/spec/uat-gate-route.sh
+source "$script_directory/uat-gate-route.sh"
+# shellcheck source=.gaia/scripts/spec/uat-gate-floor.sh
+source "$script_directory/uat-gate-floor.sh"
 repo_root="$PWD"
 
 spec_path=''
@@ -62,6 +74,7 @@ routing_path=''
 selected_phase=''
 select_all=0
 report_path=''
+vitest_report_path=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h | --help)
@@ -85,6 +98,11 @@ while [ "$#" -gt 0 ]; do
     --report)
       [ "$#" -ge 2 ] || usage_failure '--report needs a file'
       report_path="$2"
+      shift 2
+      ;;
+    --vitest-report)
+      [ "$#" -ge 2 ] || usage_failure '--vitest-report needs a file'
+      vitest_report_path="$2"
       shift 2
       ;;
     -*)
@@ -113,24 +131,39 @@ if [ -n "$report_path" ] && [ ! -f "$report_path" ]; then
   exit 2
 fi
 
+if [ -n "$vitest_report_path" ] && [ ! -f "$vitest_report_path" ]; then
+  printf 'uat-gate.sh: vitest report not found: %s\n' "$vitest_report_path" >&2
+  exit 2
+fi
+
 uat_lib_parse_spec "$spec_path" >/dev/null || exit 2
 uat_lib_validate_routing "$spec_path" "$routing_path" || exit 2
 routing_rows=$(uat_lib_parse_routing "$routing_path") || exit 2
 e2e_directory=$(uat_lib_e2e_directory "$repo_root") || exit 2
+route_directory=$(uat_lib_route_tests_directory "$repo_root") || exit 2
 
 selected_files=''
+route_files=''
 selected_count=0
 while IFS=$'\t' read -r uat_id surface phase feature_folder file_name; do
-  [ "$surface" = "e2e" ] || continue
+  case "$surface" in
+    e2e | route) ;;
+    *) continue ;;
+  esac
   if [ -n "$selected_phase" ] && [ "$phase" != "$selected_phase" ]; then
     continue
   fi
-  selected_files="$selected_files$e2e_directory/$feature_folder/$file_name"$'\n'
+  if [ "$surface" = "e2e" ]; then
+    selected_files="$selected_files$e2e_directory/$feature_folder/$file_name"$'\n'
+  else
+    route_files="$route_files$route_directory/$(uat_lib_route_test_path "$feature_folder" "$file_name")"$'\n'
+  fi
   selected_count=$((selected_count + 1))
 done <<<"$routing_rows"
+all_files="$selected_files$route_files"
 
 if [ "$selected_count" -eq 0 ]; then
-  printf 'no owned e2e specs\n'
+  printf 'no owned UAT tests\n'
   exit 0
 fi
 
@@ -140,58 +173,14 @@ add_failure() {
   failures="$failures$1"$'\t'"$2"$'\n'
 }
 
-# True when some expect( in the file has a first argument that is not a bare
-# literal (true, false, null, undefined, a number, or a string without
-# interpolation).
-has_non_literal_expect() {
-  awk '
-    { text = text $0 "\n" }
-    END {
-      position = 1
-      while ((offset = index(substr(text, position), "expect(")) > 0) {
-        start = position + offset - 1
-        before = start > 1 ? substr(text, start - 1, 1) : " "
-        position = start + 7
-        if (before ~ /[A-Za-z0-9_$.]/) continue
-        rest = substr(text, position)
-        sub(/^[ \t\r\n]+/, "", rest)
-        first = substr(rest, 1, 1)
-        if (first == "\047" || first == "\"" || first == "`") {
-          closing = 0
-          for (index_of = 2; index_of <= length(rest); index_of++) {
-            character = substr(rest, index_of, 1)
-            if (character == "\\") { index_of++; continue }
-            if (character == first) { closing = index_of; break }
-          }
-          literal = 0
-          if (closing > 0) {
-            body = substr(rest, 2, closing - 2)
-            after = substr(rest, closing + 1)
-            sub(/^[ \t\r\n]+/, "", after)
-            next_character = substr(after, 1, 1)
-            if ((next_character == "," || next_character == ")") && !(first == "`" && index(body, "${") > 0)) literal = 1
-          }
-          if (!literal) { found = 1; exit }
-          continue
-        }
-        token = ""
-        for (index_of = 1; index_of <= length(rest); index_of++) {
-          character = substr(rest, index_of, 1)
-          if (character == "," || character == ")") break
-          token = token character
-        }
-        gsub(/[ \t\r\n]+$/, "", token)
-        if (token ~ /^(true|false|null|undefined)$/ || token ~ /^-?[0-9][0-9._]*$/) continue
-        found = 1
-        exit
-      }
-      exit found ? 0 : 1
-    }
-  ' "$1"
-}
-
+floor_e2e=0
+floor_route=0
 while IFS= read -r relative_path; do
   [ -n "$relative_path" ] || continue
+  is_route=0
+  case "$relative_path" in
+    "$route_directory"/*) is_route=1 ;;
+  esac
   absolute_path="$repo_root/$relative_path"
   if [ ! -f "$absolute_path" ]; then
     add_failure "$relative_path" missing
@@ -201,13 +190,24 @@ while IFS= read -r relative_path; do
     add_failure "$relative_path" missing
     continue
   fi
+  if [ "$is_route" -eq 1 ]; then
+    if gate_route_annotated "$absolute_path"; then
+      add_failure "$relative_path" annotation
+    fi
+    if ! gate_route_clears_floor "$absolute_path"; then
+      add_failure "$relative_path" floor
+      floor_route=1
+    fi
+    continue
+  fi
   if grep -qE 'test\.fail\(|test\.fixme\(|test\.skip\(|\.only\(|test\.describe\.skip\(|test\.describe\.fixme\(' "$absolute_path"; then
     add_failure "$relative_path" annotation
   fi
-  if ! grep -qE 'page\.[A-Za-z_]+\(' "$absolute_path" || ! has_non_literal_expect "$absolute_path"; then
+  if ! has_e2e_call "$absolute_path" || ! has_non_literal_expect "$absolute_path"; then
     add_failure "$relative_path" floor
+    floor_e2e=1
   fi
-done <<<"$selected_files"
+done <<<"$all_files"
 
 # Divergence: the check's own output names `<path> <uat_id> <field>`.
 phase_arguments=(--all)
@@ -252,8 +252,11 @@ report_failures() {
   '
   # The judge and this floor read only the spec file, so an assert moved into
   # a shared helper reads as absent even when the behavior works.
-  if grep -q $'\tfloor$' <<<"$failures"; then
-    printf 'uat-gate: next step for floor: the spec file itself must call page.<method>( and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
+  if [ "$floor_e2e" -eq 1 ]; then
+    printf 'uat-gate: next step for floor: the spec file itself must call page.<method>( or a request-fixture call (request.get(, request.post( and the other verbs, or request.newContext( with a verb call) and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
+  fi
+  if [ "$floor_route" -eq 1 ]; then
+    printf 'uat-gate: next step for floor: the route test file itself must call the route'"'"'s loader( or action( and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
   fi
   return 0
 }
@@ -261,6 +264,17 @@ report_failures() {
 if report_failures; then
   exit 1
 fi
+
+# --- Route arm: Vitest ---
+route_package="${route_directory%/app/route-tests}"
+[ "$route_package" != "$route_directory" ] || route_package='.'
+if [ -n "$route_files" ]; then
+  gate_route_run "$route_files" "$route_package" "$vitest_report_path"
+  if report_failures; then
+    exit 1
+  fi
+fi
+[ -n "$selected_files" ] || exit 0
 
 # --- Playwright ---
 if ! command -v jq >/dev/null 2>&1; then
@@ -303,7 +317,7 @@ if [ -z "$report_path" ]; then
     printf 'uat-gate.sh: pnpm is not on PATH, so Playwright cannot run. Next step: install pnpm and the frontend dependencies, then retry.\n' >&2
     exit 4
   fi
-  gate_temporary=$(mktemp -d)
+  [ -n "${gate_temporary:-}" ] || gate_temporary=$(mktemp -d)
   trap 'rm -rf "$gate_temporary"' EXIT
   report_path="$gate_temporary/report.json"
   playwright_arguments=()

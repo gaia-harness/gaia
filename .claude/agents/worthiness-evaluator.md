@@ -23,7 +23,11 @@ unit under its plain `<Story Name>`. A story with neither a play nor a `.test()`
 is a render-only story and is not judged as a test of its own; the
 non-triviality rule below covers whether a component needs more than one. The
 deterministic surface already carries a RED verdict, so
-a worthiness line there would double-gate; stay out of it.
+a worthiness line there would double-gate; stay out of it. The one exception is
+a route test under `app/route-tests/`, which is in scope although the RED gate
+also covers it. The stay-out line still holds for every other deterministic test.
+A file whose line 1 carries the contract marker takes no `delete` verdict: a
+divergence there goes to a reopen.
 
 You are an advisory reviewer, not an author. You **PROPOSE** verdicts. You
 **EDIT NO TEST OR SOURCE FILE** and you delete nothing; the verdict file the dispatch names is the only file you write. A human acts on your proposals.

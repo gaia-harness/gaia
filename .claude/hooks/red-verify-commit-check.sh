@@ -409,6 +409,20 @@ while IFS= read -r path; do
     fi
   fi
 
+  # Contract-marker carve-out: a rendered route-surface contract test is born
+  # `test.fails`, which Vitest reports as passed, so it cannot record a failing
+  # run; its red is proven by the audit gate's annotation scan until the owning
+  # phase turns it plain. A new-at-HEAD `.fails` test in a staged file whose
+  # FIRST line is the contract marker therefore owes no RED. A plain `test(`
+  # there owes RED as usual, and so does a marker on any later line. Honest
+  # limit: a hand-written marker on a file with no routing row is caught by
+  # nothing automated, so a `.fails` test there dodges RED until it turns plain.
+  marked_contract=0
+  marker_first_line=$(git -C "$tree_root" show ":$relative_path" 2>/dev/null | head -n 1 || true)
+  if [[ "$marker_first_line" =~ ^//\ gaia-uat-contract\ sha256:[0-9a-f]{64}$ ]]; then
+    marked_contract=1
+  fi
+
   # For each CURRENT test, decide new-at-HEAD, then require a matching RED.
   while IFS= read -r line; do
     [ -n "$line" ] || continue
@@ -430,6 +444,13 @@ while IFS= read -r path; do
     # when their signal changed.
     if [ -n "$head_fullnames" ] \
        && grep -qxF -- "$full" <<<"$head_fullnames"; then
+      continue
+    fi
+
+    if [ "$marked_contract" -eq 1 ] \
+       && grep -qF -e "test.fails('$full'" -e "test.fails(\"$full\"" \
+            -e "it.fails('$full'" -e "it.fails(\"$full\"" \
+            "$tree_root/$relative_path" 2>/dev/null; then
       continue
     fi
 

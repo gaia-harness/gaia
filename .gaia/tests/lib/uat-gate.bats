@@ -28,6 +28,9 @@ setup() {
   FILE_PHASE_THREE_RELATIVE='frontend/.playwright/e2e/orders/order-history-lists-orders.spec.ts'
   FILE_PHASE_TWO="$WORK/$FILE_PHASE_TWO_RELATIVE"
   FILE_PHASE_THREE="$WORK/$FILE_PHASE_THREE_RELATIVE"
+  ROUTE_FILE_RELATIVE='frontend/app/route-tests/orders/tests/order-history-lists-orders.test.ts'
+  ROUTE_FILE="$WORK/$ROUTE_FILE_RELATIVE"
+  VITEST_REPORTS="$REPORTS/vitest"
 }
 
 # write_spec [<then-scalar>]: a SPEC with a non-UI UAT (phase 1) and two e2e
@@ -358,11 +361,11 @@ $GREEN_TEST_LINES
   [ "$status" -eq 0 ]
 }
 
-@test "gate on a phase that owns no e2e rows prints no owned e2e specs and exits 0" {
+@test "gate on a phase that owns no e2e or route rows prints no owned UAT tests and exits 0" {
   prepare_green
   gate --phase 1 --report "$REPORTS/failed.json"
   [ "$status" -eq 0 ]
-  [ "$output" = "no owned e2e specs" ]
+  [ "$output" = "no owned UAT tests" ]
 }
 
 @test "gate refuses missing or conflicting selection arguments as invalid input" {
@@ -492,6 +495,333 @@ exit 0"
   gate_with_stub
   [ "$status" -eq 1 ]
   [ ! -e "$BATS_TEST_TMPDIR/pnpm-ran" ]
+}
+
+# --- Gate: the e2e floor accepts Playwright's request fixture ---
+
+REQUEST_GET_LINES="  const response = await request.get('/api/orders');
+  expect(response.status()).toBe(200);"
+
+@test "gate accepts an e2e spec that uses the request fixture and no page call" {
+  prepare_green
+  green_body "$FILE_PHASE_TWO" "test('t', async ({request}) => {
+$REQUEST_GET_LINES
+});"
+  gate --phase 2 --report "$REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "gate refuses an e2e spec with a real assertion and no page or request call, naming both accepted forms" {
+  static_case floor "test('t', async () => {
+  const response = await fetchOrders();
+  expect(response.status).toBe(200);
+});"
+  assert_stderr_names "page.<method>(" "request.get("
+}
+
+@test "gate refuses an e2e spec that only mentions a request call in a comment or string" {
+  static_case floor "test('t', async () => {
+  // request.get('/api/orders')
+  const text = 'request.post(';
+  expect(text.length).toBe(13);
+});"
+}
+
+@test "gate accepts a spec that gets its API context from request.newContext" {
+  prepare_green
+  green_body "$FILE_PHASE_TWO" "test('t', async ({playwright}) => {
+  const api = await playwright.request.newContext();
+  const response = await api.get('/api/orders');
+  expect(response.status()).toBe(200);
+});"
+  gate --phase 2 --report "$REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "gate refuses a request.newContext spec that never calls a verb on it" {
+  static_case floor "test('t', async ({playwright}) => {
+  const api = await playwright.request.newContext();
+  expect(api).toBeDefined();
+});"
+}
+
+# --- Gate: the route arm ---
+
+ROUTE_GREEN_LINES="  const response = await loader({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);"
+
+# prepare_route [<phase>]: UAT-003 routes to a Vitest route test in the given
+# phase (default 3); the rendered red test is replaced by a green body.
+prepare_route() {
+  write_spec
+  sed -i.bak "s#^| UAT-003 | e2e | 3 | orders | order-history-lists-orders.spec.ts |#| UAT-003 | route | ${1:-3} | orders | order-history-lists-orders.test.ts |#" "$ROUTING"
+  rm -f "$ROUTING.bak"
+  grep -qF -- '| UAT-003 | route |' "$ROUTING" || return 1
+  render_specs
+  [ -f "$ROUTE_FILE" ] || return 1
+  green_body "$ROUTE_FILE" "test('every past order is listed', async () => {
+$ROUTE_GREEN_LINES
+});"
+}
+
+# route_case <reason> <body>: a passing Vitest report cannot rescue this body.
+route_case() {
+  prepare_route
+  green_body "$ROUTE_FILE" "$2"
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 1 ]
+  assert_stderr_names "$ROUTE_FILE_RELATIVE" "$1"
+}
+
+# stub_vitest <fixture>: a pnpm on PATH that logs its arguments and, for a
+# vitest run, writes the fixture to the requested output file.
+stub_vitest() {
+  stub_pnpm "echo \"\$*\" >>'$BATS_TEST_TMPDIR/pnpm-log'
+for argument in \"\$@\"; do
+  case \"\$argument\" in --outputFile=*) cp '$1' \"\${argument#--outputFile=}\" ;; esac
+done
+exit 1"
+}
+
+@test "the committed Vitest report fixtures are the full set the route cases drive" {
+  local expected="collection-failed failed no-entry no-tests passed skipped todo" found report
+  found=$(cd "$VITEST_REPORTS" && ls ./*.json | sed 's#^\./##; s#\.json$##' | LC_ALL=C sort | tr '\n' ' ')
+  [ "${found% }" = "$expected" ]
+  for report in "$VITEST_REPORTS"/*.json; do
+    jq -e 'has("testResults") and has("numTotalTests")' "$report" >/dev/null
+  done
+}
+
+@test "gate refuses the freshly rendered route test: it still carries test.fails" {
+  prepare_route
+  rm -f "$ROUTE_FILE"
+  render_specs
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 1 ]
+  assert_stderr_names "$ROUTE_FILE_RELATIVE" annotation
+}
+
+@test "gate passes a green route test from a supplied Vitest report without starting Vitest or Playwright" {
+  prepare_route
+  stub_vitest "$VITEST_REPORTS/passed.json"
+  run bash -c "cd '$WORK' && PATH='$BATS_TEST_TMPDIR/bin':\"\$PATH\" bash '$GATE' '$SPEC' --routing '$ROUTING' --phase 3 --vitest-report '$VITEST_REPORTS/passed.json' 2>'$STDERR_FILE'"
+  [ "$status" -eq 0 ]
+  [ ! -e "$BATS_TEST_TMPDIR/pnpm-log" ]
+}
+
+@test "gate runs Vitest, and never Playwright, for a route-only phase" {
+  prepare_route
+  stub_vitest "$VITEST_REPORTS/passed.json"
+  run bash -c "cd '$WORK' && PATH='$BATS_TEST_TMPDIR/bin':\"\$PATH\" bash '$GATE' '$SPEC' --routing '$ROUTING' --phase 3 2>'$STDERR_FILE'"
+  [ "$status" -eq 0 ]
+  [ "$output" != "no owned e2e specs" ]
+  grep -qF -- "-C frontend exec vitest run --project node --reporter=json --outputFile=" "$BATS_TEST_TMPDIR/pnpm-log"
+  grep -qF -- "app/route-tests/orders/tests/order-history-lists-orders.test.ts" "$BATS_TEST_TMPDIR/pnpm-log"
+  if grep -q playwright "$BATS_TEST_TMPDIR/pnpm-log"; then return 1; fi
+}
+
+@test "gate refuses an altered route contract comment with the divergence reason" {
+  prepare_route
+  sed -i.bak 's#^// Then: .*#// Then: something else entirely#' "$ROUTE_FILE"
+  rm -f "$ROUTE_FILE.bak"
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 1 ]
+  assert_stderr_names "$ROUTE_FILE_RELATIVE" divergence
+}
+
+@test "gate refuses a route test whose only expect is on a bare literal with the floor reason" {
+  route_case floor "test('t', async () => {
+  await loader({request: new Request('http://localhost/orders')});
+  expect(true).toBe(true);
+});"
+}
+
+@test "gate refuses a route test with a real assertion and no loader or action call, naming loader or action and never page" {
+  route_case floor "test('t', async () => {
+  const response = await fetchOrders();
+  expect(response.status).toBe(200);
+});"
+  assert_stderr_names "loader( or action("
+  if grep -qF 'page.<method>(' "$STDERR_FILE"; then return 1; fi
+}
+
+@test "gate refuses a route test whose only route call is new Request with the floor reason" {
+  route_case floor "test('t', async () => {
+  const request = new Request('http://localhost/orders');
+  expect(request.method).toBe('GET');
+});"
+}
+
+@test "gate accepts an action call through member access, and a loader word inside a longer identifier is no call" {
+  prepare_route
+  green_body "$ROUTE_FILE" "test('t', async () => {
+  const response = await route.action({request: new Request('http://localhost/orders', {method: 'POST'})});
+  expect(response.status).toBe(200);
+});"
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+  route_case floor "test('t', async () => {
+  await preloader(1);
+  expect(1 + 1).toBe(2);
+});"
+}
+
+@test "gate refuses test.todo in a route test with the annotation reason" {
+  route_case annotation "test.todo('later');
+test('t', async () => {
+$ROUTE_GREEN_LINES
+});"
+}
+
+@test "gate refuses it.fails( in a route test with the annotation reason" {
+  route_case annotation "it.fails('t', async () => {
+$ROUTE_GREEN_LINES
+});"
+}
+
+@test "gate refuses test.fails.each( in a route test with the annotation reason" {
+  route_case annotation "test.fails.each([1])('t', async () => {
+$ROUTE_GREEN_LINES
+});"
+}
+
+@test "gate refuses a skipped describe in a route test with the annotation reason" {
+  route_case annotation "describe.skip('group', () => {
+  test('t', async () => {
+$ROUTE_GREEN_LINES
+  });
+});"
+}
+
+@test "gate refuses test.concurrent.skip in a route test with the annotation reason" {
+  route_case annotation "test.concurrent.skip('t', async () => {
+$ROUTE_GREEN_LINES
+});"
+}
+
+@test "gate refuses the fails: true option in a route test with the annotation reason" {
+  route_case annotation "test('t', {fails: true}, async () => {
+$ROUTE_GREEN_LINES
+});"
+}
+
+@test "gate refuses test.skipIf( and test.runIf( in a route test with the annotation reason" {
+  route_case annotation "test.skipIf(process.env.CI)('t', async () => {
+$ROUTE_GREEN_LINES
+});"
+  route_case annotation "test.runIf(process.env.CI)('t', async () => {
+$ROUTE_GREEN_LINES
+});"
+}
+
+@test "gate refuses test.only in a route test with the annotation reason" {
+  route_case annotation "test.only('t', async () => {
+$ROUTE_GREEN_LINES
+});"
+}
+
+@test "gate ignores an annotation word inside a route test's comment or string" {
+  prepare_route
+  green_body "$ROUTE_FILE" "// test.skip( and test.fails( and fails: true are not allowed here
+test('test.todo it.fails( fails: true', async () => {
+  /* describe.skip( */
+$ROUTE_GREEN_LINES
+});"
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "gate exits 4 naming Vitest and its prerequisite when Vitest writes no report" {
+  prepare_route
+  stub_pnpm "echo 'no vitest config' >&2
+exit 1"
+  run bash -c "cd '$WORK' && PATH='$BATS_TEST_TMPDIR/bin':\"\$PATH\" bash '$GATE' '$SPEC' --routing '$ROUTING' --phase 3 2>'$STDERR_FILE'"
+  [ "$status" -eq 4 ]
+  assert_stderr_names Vitest Prerequisites "no vitest config"
+}
+
+@test "gate refuses a Vitest report that is not JSON, and one that does not exist, as invalid input" {
+  prepare_route
+  printf 'not json\n' >"$BATS_TEST_TMPDIR/bad.json"
+  gate --phase 3 --vitest-report "$BATS_TEST_TMPDIR/bad.json"
+  [ "$status" -eq 2 ]
+  gate --phase 3 --vitest-report "$BATS_TEST_TMPDIR/absent.json"
+  [ "$status" -eq 2 ]
+}
+
+# report_case <fixture> <reason>
+report_case() {
+  prepare_route
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/$1.json"
+  [ "$status" -eq 1 ]
+  assert_stderr_names "$ROUTE_FILE_RELATIVE" "$2"
+}
+
+@test "gate refuses a route report with a failed test with the failed reason" {
+  report_case failed failed
+}
+
+@test "gate refuses a route report with a skipped test with the skipped reason" {
+  report_case skipped skipped
+}
+
+@test "gate refuses a route report with no tests for the file with the no-tests reason" {
+  report_case no-tests no-tests
+}
+
+@test "gate refuses a route report whose file failed to collect with the collection-failed reason" {
+  report_case collection-failed collection-failed
+}
+
+@test "gate refuses a route report with no entry for the file with the no-report-entry reason" {
+  report_case no-entry no-report-entry
+}
+
+@test "gate refuses a route report with a todo test with the todo reason" {
+  report_case todo todo
+}
+
+@test "gate refuses a route report holding an unknown assertion status" {
+  prepare_route
+  jq '.testResults[0].assertionResults[0].status = "mystery"' "$VITEST_REPORTS/passed.json" >"$BATS_TEST_TMPDIR/unknown.json"
+  gate --phase 3 --vitest-report "$BATS_TEST_TMPDIR/unknown.json"
+  [ "$status" -eq 1 ]
+  assert_stderr_names "$ROUTE_FILE_RELATIVE" failed
+}
+
+@test "gate --all checks one e2e and one route row, each failing alone naming its own file" {
+  prepare_route
+  green_body "$FILE_PHASE_TWO"
+  gate --all --report "$REPORTS/passed.json" --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+  gate --all --report "$REPORTS/passed.json" --vitest-report "$VITEST_REPORTS/failed.json"
+  [ "$status" -eq 1 ]
+  assert_stderr_names "$ROUTE_FILE_RELATIVE"
+  if grep -qF "$FILE_PHASE_TWO_RELATIVE" "$STDERR_FILE"; then return 1; fi
+  gate --all --report "$REPORTS/failed.json" --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 1 ]
+  assert_stderr_names "$FILE_PHASE_TWO_RELATIVE"
+  if grep -qF "$ROUTE_FILE_RELATIVE" "$STDERR_FILE"; then return 1; fi
+}
+
+@test "gate stops a mixed phase at a Vitest failure and never starts Playwright" {
+  prepare_route 2
+  green_body "$FILE_PHASE_TWO"
+  stub_vitest "$VITEST_REPORTS/failed.json"
+  run bash -c "cd '$WORK' && PATH='$BATS_TEST_TMPDIR/bin':\"\$PATH\" bash '$GATE' '$SPEC' --routing '$ROUTING' --phase 2 2>'$STDERR_FILE'"
+  [ "$status" -eq 1 ]
+  assert_stderr_names "$ROUTE_FILE_RELATIVE" failed
+  grep -qF -- "exec vitest run" "$BATS_TEST_TMPDIR/pnpm-log"
+  if grep -q playwright "$BATS_TEST_TMPDIR/pnpm-log"; then return 1; fi
+}
+
+@test "gate runs the Playwright arm after a green route arm in a mixed phase" {
+  prepare_route 2
+  green_body "$FILE_PHASE_TWO"
+  stub_vitest "$VITEST_REPORTS/passed.json"
+  run bash -c "cd '$WORK' && PATH='$BATS_TEST_TMPDIR/bin':\"\$PATH\" bash '$GATE' '$SPEC' --routing '$ROUTING' --phase 2 --report '$REPORTS/passed.json' 2>'$STDERR_FILE'"
+  [ "$status" -eq 0 ]
+  grep -qF -- "exec vitest run" "$BATS_TEST_TMPDIR/pnpm-log"
 }
 
 # --- Divergence check ---
