@@ -18,8 +18,8 @@
 # Exit codes: 0 the route answered HTTP 200 and the server stopped; 1 the smoke
 # test failed (another status, the server exited or never answered in time, or
 # the server it started could not be stopped); 2 usage; 3 refused to start (no
-# resolvable port, the port is already held, or no process backend to tell who
-# holds it).
+# package with a react-router.config.* file, no resolvable port, the port is
+# already held, or no process backend to tell who holds it).
 #
 # Test seam (not adopter tuning): GAIA_DEV_SMOKE_SERVER_COMMAND replaces
 # `pnpm dev` with a bash command string, run from the port package directory

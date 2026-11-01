@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Renders a SPEC's e2e-routed UATs into red Playwright specs. The generated
+# Renders a SPEC's e2e-routed UATs into red Playwright specs and its route-routed
+# UATs into red Vitest route tests. The generated
 # plan orchestrator runs it at its UAT render step, from the resolved isolation
 # root, with the absolute SPEC path and the plan README that holds the UAT
 # routing table; the step's procedure is
@@ -13,7 +14,7 @@
 #      when it fails before the apply phase, otherwise some renders may already
 #      be on disk
 #   2  invalid input (usage, malformed SPEC, invalid routing table, a
-#      working-document id in an e2e-routed UAT); stderr only; nothing written
+#      working-document id in an e2e- or route-routed UAT); stderr only; nothing written
 #   3  conflict: every other action applied, the JSON summary printed, every
 #      conflict file left byte-identical. --overwrite names the conflict paths a
 #      human chose to replace on the next run.
@@ -48,6 +49,7 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=.gaia/scripts/spec/uat-lib.sh
 source "$script_directory/uat-lib.sh"
 template_path="$script_directory/../../templates/spec/uat-spec.ts.tmpl"
+route_template_path="$script_directory/../../templates/spec/uat-route-test.ts.tmpl"
 repo_root="$PWD"
 
 spec_path=''
@@ -98,25 +100,34 @@ refuse_working_document_id() {
   fi
 }
 while IFS=$'\t' read -r uat_id surface _ feature_folder file_name; do
-  [ "$surface" = "e2e" ] || continue
+  case "$surface" in
+    e2e) rendered_path="$feature_folder/$file_name" ;;
+    route) rendered_path=$(uat_lib_route_test_path "$feature_folder" "$file_name") ;;
+    *) continue ;;
+  esac
   spec_row=$(awk -F'\t' -v wanted="$uat_id" '$1 == wanted { print; exit }' <<<"$spec_rows")
   IFS=$'\t' read -r _ given_text when_text then_text <<<"$spec_row"
   refuse_working_document_id "$uat_id" given "$given_text"
   refuse_working_document_id "$uat_id" when "$when_text"
   refuse_working_document_id "$uat_id" 'then' "$then_text"
-  e2e_rows="$e2e_rows$uat_id"$'\t'"$feature_folder/$file_name"$'\t'"$given_text"$'\t'"$when_text"$'\t'"$then_text"$'\n'
+  e2e_rows="$e2e_rows$uat_id"$'\t'"$surface"$'\t'"$rendered_path"$'\t'"$given_text"$'\t'"$when_text"$'\t'"$then_text"$'\n'
 done <<<"$routing_rows"
 [ "$id_refusals" -eq 0 ] || exit 2
 
 if ! e2e_directory=$(uat_lib_e2e_directory "$repo_root" 2>&1); then
   fail_operation "$e2e_directory"
 fi
-if [ ! -f "$template_path" ]; then
-  fail_operation "template missing: $template_path. Next step: restore it from the GAIA release."
+if ! route_directory=$(uat_lib_route_tests_directory "$repo_root" 2>&1); then
+  fail_operation "$route_directory"
 fi
-if [ "$(head -n 1 "$template_path")" != "\${CONTRACT_MARKER}" ]; then
-  fail_operation "template's first line is not the contract marker placeholder: $template_path"
-fi
+for checked_template in "$template_path" "$route_template_path"; do
+  if [ ! -f "$checked_template" ]; then
+    fail_operation "template missing: $checked_template. Next step: restore it from the GAIA release."
+  fi
+  if [ "$(head -n 1 "$checked_template")" != "\${CONTRACT_MARKER}" ]; then
+    fail_operation "template's first line is not the contract marker placeholder: $checked_template"
+  fi
+done
 if ! command -v shasum >/dev/null 2>&1 && ! command -v sha256sum >/dev/null 2>&1; then
   fail_operation 'no sha256 tool available (need shasum or sha256sum)'
 fi
@@ -171,7 +182,7 @@ javascript_literal() {
 # Placeholders are spliced in one left-to-right pass, so text a value carries
 # (even a literal placeholder name) is never substituted a second time.
 render_spec_file() {
-  local output_file="$4" body_file="$4.body" digest
+  local output_file="$4" body_file="$4.body" digest chosen_template="${5:-$template_path}"
   UAT_GIVEN="$1" UAT_WHEN="$2" UAT_THEN="$3" UAT_THEN_JS="$(javascript_literal "$3")" \
     LC_ALL=C awk 'NR > 1 {
       line = $0
@@ -189,7 +200,7 @@ render_spec_file() {
         }
       }
       print result line
-    }' "$template_path" >"$body_file"
+    }' "$chosen_template" >"$body_file"
   if command -v shasum >/dev/null 2>&1; then
     digest=$(shasum -a 256 <"$body_file" | awk '{ print $1 }')
   else
@@ -221,15 +232,21 @@ add_detail() {
   details="$details$1"$'\t'"$2"$'\t'"$3"$'\t'"${4:-}"$'\n'
 }
 
-while IFS=$'\t' read -r uat_id relative_path given_text when_text then_text; do
+while IFS=$'\t' read -r uat_id surface relative_path given_text when_text then_text; do
   [ -n "$uat_id" ] || continue
-  relative_path="$e2e_directory/$relative_path"
+  if [ "$surface" = "route" ]; then
+    relative_path="$route_directory/$relative_path"
+    chosen_template="$route_template_path"
+  else
+    relative_path="$e2e_directory/$relative_path"
+    chosen_template="$template_path"
+  fi
   absolute_path="$repo_root/$relative_path"
   claimed_paths="$claimed_paths$relative_path"$'\n'
   ledger_next="$ledger_next$uat_id"$'\t'"$relative_path"$'\n'
   staged_count=$((staged_count + 1))
   staged_file="$staging_directory/$staged_count.spec.ts"
-  render_spec_file "$given_text" "$when_text" "$then_text" "$staged_file"
+  render_spec_file "$given_text" "$when_text" "$then_text" "$staged_file" "$chosen_template"
 
   if [ ! -e "$absolute_path" ] && [ ! -L "$absolute_path" ]; then
     action=written
@@ -270,7 +287,7 @@ done <<<"$e2e_rows"
 while IFS=$'\t' read -r uat_id relative_path; do
   [ -n "$relative_path" ] || continue
   case "$relative_path" in
-    "$e2e_directory"/*.spec.ts) ;;
+    "$e2e_directory"/*.spec.ts | "$route_directory"/*.test.ts) ;;
     *) continue ;;
   esac
   case "/$relative_path/" in
@@ -309,10 +326,16 @@ while IFS= read -r relative_path; do
   [ -n "$relative_path" ] || continue
   absolute_path="$repo_root/$relative_path"
   rm -f "$absolute_path" || fail_operation "cannot delete $relative_path"
+  # Walk up through tests/ and the feature folders, stopping at the surface root.
+  case "$relative_path" in
+    "$route_directory"/*) surface_root="$repo_root/$route_directory" ;;
+    *) surface_root="$repo_root/$e2e_directory" ;;
+  esac
   target_directory=$(dirname "$absolute_path")
-  if [ "$target_directory" != "$repo_root/$e2e_directory" ]; then
-    rmdir "$target_directory" 2>/dev/null || true
-  fi
+  while [ "$target_directory" != "$surface_root" ] && [ "${target_directory#"$surface_root"/}" != "$target_directory" ]; do
+    rmdir "$target_directory" 2>/dev/null || break
+    target_directory=$(dirname "$target_directory")
+  done
 done <<<"$deletions"
 
 ledger_json=$(printf '%s' "$ledger_next" | LC_ALL=C sort -t $'\t' -k2,2 | jq -R -s -c '
@@ -322,7 +345,7 @@ ledger_temporary=$(mktemp "$(dirname "$ledger_path")/.uat-render.XXXXXX") || fai
 printf '%s\n' "$ledger_json" >"$ledger_temporary"
 mv -f "$ledger_temporary" "$ledger_path" || fail_operation "cannot write the render ledger $ledger_path"
 
-summary_json=$(printf '%s' "$details" | LC_ALL=C sort -t $'\t' -k1,1 | jq -R -s -c --arg directory "$e2e_directory" '
+summary_json=$(printf '%s' "$details" | LC_ALL=C sort -t $'\t' -k1,1 | jq -R -s -c --arg directory "$e2e_directory" --arg route_directory "$route_directory" '
   split("\n")
   | map(select(length > 0) | split("\t")
       | {uat_id: .[1], path: .[0], action: .[2]}
@@ -332,6 +355,7 @@ summary_json=$(printf '%s' "$details" | LC_ALL=C sort -t $'\t' -k1,1 | jq -R -s 
   {
     ok: true,
     e2e_directory: $directory,
+    route_tests_directory: $route_directory,
     summary: {
       written: count("written"),
       rewritten: count("rewritten"),

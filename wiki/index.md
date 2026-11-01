@@ -88,6 +88,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[shadcn Component Layer]]: GAIA's component layer, the vendored-ui policy.
 - [[React Compiler]]: React Compiler runs by default in build, dev, Vitest and Storybook from one shared module; thresholds, adopter steps and rollback.
 - [[TypeScript Language Files]]
+- [[Test Layering]]: each check sits at the lowest layer that proves it; the route surface, the stack mapping and which layer fails for which authorization bug.
 - [[TypeScript 7 Readiness]]: tsconfig pre-adopts the TS7 strict baseline; the 7.1 upgrade is a dep swap gated on typescript-eslint's programmatic API.
 - [[Thin Routes]]
 - [[Co-located Tests Folder]]

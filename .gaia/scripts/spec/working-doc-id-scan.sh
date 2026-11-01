@@ -9,9 +9,10 @@
 #
 #   working-doc-id-scan.sh [<directory>]
 #
-# The default directory is the frontend package's .playwright folder, resolved
-# package-aware through uat_lib_e2e_directory. The output/ folder directly
-# under it (test run artifacts) is skipped.
+# The default is the frontend package's .playwright folder and its
+# app/route-tests folder, resolved package-aware; an absent route tests folder
+# is empty. The output/ folder directly under a scanned directory (test run
+# artifacts) is skipped.
 #
 # Exit codes the caller branches on:
 #   0  no id found
@@ -51,18 +52,25 @@ if [ "$#" -gt 1 ]; then
   exit 2
 fi
 
-scan_directory="${1:-}"
-if [ -z "$scan_directory" ]; then
+scan_directories=''
+if [ -n "${1:-}" ]; then
+  scan_directories="${1%/}"
+else
   e2e_directory=$(uat_lib_e2e_directory "$PWD") || exit 2
-  scan_directory=$(dirname "$e2e_directory")
+  route_directory=$(uat_lib_route_tests_directory "$PWD") || exit 2
+  scan_directories="$(dirname "$e2e_directory")"
+  # Stock has no route tests folder yet, so an absent one is empty.
+  if [ -d "$route_directory" ]; then
+    scan_directories="$scan_directories"$'\n'"$route_directory"
+  fi
 fi
-scan_directory="${scan_directory%/}"
+
+hits=0
+while IFS= read -r scan_directory; do
 if [ ! -d "$scan_directory" ]; then
   printf 'working-doc-id-scan.sh: not a directory: %s\n' "$scan_directory" >&2
   exit 2
 fi
-
-hits=0
 while IFS= read -r file; do
   [ -n "$file" ] || continue
   path_match=$(printf '%s\n' "${file#"$scan_directory"/}" | machine_local_ref_files 1 - | head -n 1)
@@ -78,6 +86,7 @@ while IFS= read -r file; do
     hits=$((hits + 1))
   done < <(machine_local_ref_files 1 "$file")
 done < <(find "$scan_directory" -path "$scan_directory/output" -prune -o -type f -print | LC_ALL=C sort)
+done <<<"$scan_directories"
 
 [ "$hits" -eq 0 ] || exit 1
 exit 0

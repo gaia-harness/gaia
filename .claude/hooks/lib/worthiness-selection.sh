@@ -36,7 +36,8 @@ _worthiness_selection_is_emergent=0
 _worthiness_selection_package_error=''
 
 # Sets _worthiness_selection_is_emergent to 1 only when the classifier
-# affirmatively answers emergent. Exit 7 is the one failure that is not a quiet
+# affirmatively answers emergent or route (a route test is worthiness-audited
+# and RED-gated both). Exit 7 is the one failure that is not a quiet
 # 0: the classifier could not read the package descriptor. Not a command
 # substitution at the call site, so both variables survive.
 _worthiness_selection_classify() {
@@ -55,7 +56,7 @@ _worthiness_selection_classify() {
   [ "$classifier_status" -eq 0 ] || return 0
   [ -n "$classifier_output" ] || return 0
   if [ -n "$(printf '%s' "$classifier_output" \
-    | jq -r 'select((.classification // "") == "emergent") | "emergent"' \
+    | jq -r 'select((.classification // "") == "emergent" or (.classification // "") == "route") | "emergent"' \
         2>/dev/null \
     | head -1)" ]; then
     _worthiness_selection_is_emergent=1

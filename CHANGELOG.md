@@ -21,6 +21,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **Auto-merge default:** `/setup-gaia` turns on `allow_auto_merge` for a repository it creates and offers it otherwise, and `/update-gaia` makes the same offer. An opted-out repository waits with `pr-wait-merge.sh --until-green`, then merges (#3206)
 - **Claude recommends `/gaia-spec` or `/gaia-plan` when the work calls for one:** asking for a new user-visible feature, or for internal work worth planning and auditing first such as a migration, without naming a command now gets a recommendation before any branch is cut, with `Just do it` as the alternative. Bug fixes and contained changes proceed without asking (#3209)
 - **Claude asks before editing `.claude/settings.json`:** the file registers every GAIA hook and permission rule, so an edit-tool write now asks in every permission mode, and common shell writes ask too, except under bypassPermissions, where Claude Code lets a shell write through. An unattended run is denied these writes. A pull request that changes the file is reviewed by the shell audit member, which lists any hook or permission rule the change removes or weakens (#3205)
+- **Acceptance checks run at the lowest test layer that proves them:** a SPEC's server-side checks render as Vitest route tests that call a route's loader or action, gated like Playwright specs, and a new overlap pass proposes dropping, merging or demoting tests that duplicate another layer, for a human to approve. The Quality Gate now passes its dev-server step only on a clean smoke run, and the Playwright rule gives each worker its own database. Existing suites move only by decision (#3217).
 
 ### Changed
 
@@ -33,6 +34,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **`/gaia-spec`'s final review prints as plain Markdown:** the brief you approve before the SPEC saves no longer prints inside a code fence; it uses bold labels, like the first review (#3217)
 - **A fixed veto no longer blocks the audit's closing round:** a vetoed finding that was fixed and then reviewed clean now counts as satisfied, so a human-accepted closing round completes without a hand-written entry. The checkpoint hook also stays silent on questions unrelated to an audit checkpoint (#3224)
 - **The audit's Minor-only stop runs in a worktree:** Claude Code's worktree isolation refused the evaluator call that decides the stop, because its subcommand was named after the shell builtin `eval`. The subcommand is now `audit-loop-eval.sh evaluate-round`, so a worktree-isolated audit round can end on Minor-only churn instead of paying for another fix round (#3230)
 - **`usage.sh` on jq 1.6:** cost lines no longer fail with "could not read the usage ledger" (#3206)
@@ -40,6 +42,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **Language-switch accessibility check covers a switched page:** the `after-switch` scan now switches to a language other than the page's current one and waits for the switch, so it no longer re-scans the unswitched page and needs no hand edit after adding a language (#3208)
 - **Main-branch guard judges the acting agent's checkout:** a `git commit`, `git push` or hard reset from a worktree agent, including one that uses a relative `cd` or `-C` path, is judged against the worktree, not the main checkout (#3215)
 - **Harness verification catches line-limit breaches:** `verify-harness.sh` now runs the fitness lint's harness line-limit rule in branch and round modes, so an audit round's fix that grows a harness file past 400 lines or past its grandfathered ceiling fails the round gate instead of turning CI red after the push (#3228)
+- **Audit CI Tests hooks legs no longer time out:** the slowest hooks suite now runs on the pinned leg, and the hooks tests spread over five weighted legs instead of three, so the required check stops timing out with every test green as hooks suites are added (#3232)
 
 ### Security
 

@@ -146,6 +146,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(
     heldServers.splice(0).map(async (server) => closeServer(server))
   );
@@ -160,6 +161,26 @@ afterEach(async () => {
 describe('config', () => {
   test('serve pins the resolved dev port with strictPort', async () => {
     resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
+    const plugin = await loadPlugin();
+
+    expect(plugin.config({}, {command: 'serve'})).toEqual({
+      server: {port: 5199, strictPort: true},
+    });
+  });
+
+  test('a named port override replaces the tree port and keeps strictPort', async () => {
+    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
+    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', '5321');
+    const plugin = await loadPlugin();
+
+    expect(plugin.config({}, {command: 'serve'})).toEqual({
+      server: {port: 5321, strictPort: true},
+    });
+  });
+
+  test('a malformed port override is ignored', async () => {
+    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
+    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', 'abc');
     const plugin = await loadPlugin();
 
     expect(plugin.config({}, {command: 'serve'})).toEqual({
@@ -221,6 +242,30 @@ describe('configureServer refusals', () => {
       );
     }
   );
+
+  test('the override port is probed in place of the tree port', async () => {
+    const treePort = await findFreePort();
+    heldServers.push(await listenOn(treePort, '127.0.0.1'));
+    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', String(await findFreePort()));
+    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(treePort));
+    const plugin = await loadPlugin();
+
+    await expect(plugin.configureServer(makeServer())).resolves.toBeUndefined();
+  });
+
+  test('a taken override port rejects naming the override port', async () => {
+    const overridePort = await findFreePort();
+    heldServers.push(await listenOn(overridePort, '127.0.0.1'));
+    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', String(overridePort));
+    resolveDevPortsMock.mockReturnValue(
+      buildResolvedResolution(await findFreePort())
+    );
+    const plugin = await loadPlugin();
+
+    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
+      `port ${overridePort}`
+    );
+  });
 
   test('a free port resolves', async () => {
     resolveDevPortsMock.mockReturnValue(

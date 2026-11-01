@@ -51,6 +51,7 @@ setup() {
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
   S_PRE='<!-- gaia:orchestrator-step uat-pre-audit -->'
   S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
+  S_OVERLAP='<!-- gaia:orchestrator-step overlap-pass -->'
   S_WIKI='<!-- gaia:orchestrator-step wiki-promotion -->'
   S_AUDIT='<!-- gaia:orchestrator-step code-audit -->'
   S_CLEAR='<!-- gaia:orchestrator-step post-clearance -->'
@@ -124,7 +125,7 @@ check_sentinels_once_in_fences() {
       return 1
     fi
   done < <(sentinel_set)
-  [ "$count" -eq 9 ] || { printf 'derived %s sentinels from plan-verify.sh, want 9\n' "$count" >&2; return 1; }
+  [ "$count" -eq 10 ] || { printf 'derived %s sentinels from plan-verify.sh, want 10\n' "$count" >&2; return 1; }
 }
 
 # check_block_has <file> <sentinel> <needle>...
@@ -145,6 +146,7 @@ check_block_contents() {
   check_block_has "$file" "$S_YIELD" 'gaia_context_yield_limit' 'Yield handoff:' '(YIELD k)' || return 1
   check_block_has "$file" "$S_PRE" '--all' || return 1
   check_block_has "$file" "$S_WORTH" 'worthiness-step.md' || return 1
+  check_block_has "$file" "$S_OVERLAP" 'overlap-pass.md' '## Overlap pass' || return 1
   check_block_has "$file" "$S_WIKI" 'wiki-promote.md' 'promoted-pages.txt' 'Pass: pre-audit' 'verify-harness.sh branch' || return 1
   check_block_has "$file" "$S_AUDIT" 'resolve-audit-members.sh' 'worthiness-step.md' || return 1
   check_block_has "$file" "$S_CLEAR" 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh' || return 1
@@ -269,7 +271,7 @@ EOF
 @test "red twin: a block missing its command fails the contents check" {
   copy="$BATS_TEST_TMPDIR/planner.md"
   local needle
-  for needle in 'uat-write.sh' '--phase' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' '--all' 'wiki-promote.md' 'runs only after' 'worthiness-step.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
+  for needle in 'uat-write.sh' '--phase' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' '--all' 'wiki-promote.md' 'runs only after' 'worthiness-step.md' 'overlap-pass.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
     awk -v needle="$needle" '{ gsub(needle, "removed") } { print }' "$PLANNER_MD" >"$copy"
     run check_block_contents "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail the check" >&2; return 1; }
@@ -331,7 +333,7 @@ check_entry_file_has_no_blocks() {
 
 @test "blocks copied as a planner copies them pass plan-verify.sh --spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   # The copy keeps the template's indentation, so the trim rule is exercised.
   grep -qE "^[[:space:]]+<!-- gaia:orchestrator-step uat-render -->$" "$FIXTURE_PLAN/ORCHESTRATOR.md"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
@@ -340,7 +342,7 @@ check_entry_file_has_no_blocks() {
 
 @test "blocks copied as a planner copies them pass plan-verify.sh without a spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_YIELD" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_YIELD" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
@@ -590,6 +592,7 @@ check_final_summary_names_worthiness() {
   local file="$1" summary audit_block summary_line audit_line
   summary="$(range_of "$file" '**Final summary.**' '**Post-clearance')"
   grep -qF '## Worthiness step' <<<"$summary" || { printf 'final summary does not name the ## Worthiness step blocks\n' >&2; return 1; }
+  grep -qF '## Overlap pass' <<<"$summary" || { printf 'final summary does not name the ## Overlap pass block\n' >&2; return 1; }
   audit_block="$(fence_with "$file" "$S_AUDIT")"
   grep -qF 'the late pass' <<<"$audit_block" || { printf 'code-audit block does not run the late pass\n' >&2; return 1; }
   summary_line="$(grep -nF -m1 '**Final summary.**' "$file" | cut -d: -f1)"
@@ -610,6 +613,97 @@ check_final_summary_names_worthiness() {
   sed 's/the late pass from/the other pass from/' "$PLANNER_MD" >"$copy"
   run check_final_summary_names_worthiness "$copy"
   [ "$status" -ne 0 ]
+  sed 's/## Overlap pass` block from/removed block from/' "$PLANNER_MD" >"$copy"
+  cmp -s "$PLANNER_MD" "$copy" && { echo "overlap mention not found" >&2; return 1; }
+  run check_final_summary_names_worthiness "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------- routing ladder and the e2e-or-route triggers ----------
+
+# check_ladder <planner>: the operational routing ladder, the link to the
+# principle's page, and no copy of that page's rationale.
+check_ladder() {
+  local file="$1" para needle
+  para="$(sed -n '/Route each UAT by the ladder/,/is the owning phase number/p' "$file")"
+  [ -n "$para" ] || { printf 'no routing ladder paragraph\n' >&2; return 1; }
+  for needle in \
+    'wiki/decisions/Test Layering.md' \
+    'only a real browser can show' \
+    'one journey per user flow' \
+    'API-only behavior goes here, or to no UAT when it is not a contract worth pinning' \
+    'a real-server row' \
+    'one HTTP check per route module where wiring is the risk' \
+    'a forged request against a live route' \
+    '`maxRedirects: 0`' \
+    'asserts the status and the `Location` header, and states its actor' \
+    'also carries one real-server check per guarded route module' \
+    'as an `e2e` row when a UAT names it and otherwise as a task its owning phase delivers' \
+    'names the file of the guard'; do
+    grep -qF -- "$needle" <<<"$para" || { printf 'ladder lacks: %s\n' "$needle" >&2; return 1; }
+  done
+  grep -qF -- 'the lowest layer that can prove it' "$file" && { printf 'planner.md copies the rationale phrase\n' >&2; return 1; }
+  grep -qF -- '| <uat_id> | route | <owning phase> | <kebab-case feature folder> | <behavior-named-kebab-case>.test.ts |' "$file" || { printf 'no route row in the routing table example\n' >&2; return 1; }
+  return 0
+}
+
+# check_route_triggers <planner>: each render, gate and implementer trigger
+# covers a route row as well as an e2e row.
+check_route_triggers() {
+  local file="$1" needle
+  for needle in \
+    'Skipped: no e2e-routed or route-routed UATs' \
+    'appears in an `e2e` or `route` row of' \
+    'a spec under `<frontend package>/.playwright/e2e/` or a route test under `<frontend package>/app/route-tests/`'; do
+    grep -qF -- "$needle" "$file" || { printf 'planner.md lacks: %s\n' "$needle" >&2; return 1; }
+  done
+  grep -qF -- 'Skipped: no e2e-routed UATs' "$file" && { printf 'the e2e-only skip line survives\n' >&2; return 1; }
+  grep -qF -- 'appears in an `e2e` row of' "$file" && { printf 'the e2e-only gate trigger survives\n' >&2; return 1; }
+  return 0
+}
+
+@test "planner.md holds the routing ladder, links the layering page and copies no rationale" {
+  check_ladder "$PLANNER_MD"
+}
+
+@test "red twin: dropping a ladder clause, the link or adding the rationale phrase fails" {
+  local copy="$BATS_TEST_TMPDIR/planner.md" needle
+  for needle in 'one journey per user flow' 'wiki/decisions/Test Layering.md' '`maxRedirects: 0`' 'also carries one real-server check per guarded route module' 'names the file of the guard' 'a forged request against a live route'; do
+    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$copy"
+    run check_ladder "$copy"
+    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
+  done
+  { cat "$PLANNER_MD"; printf '\nTests belong at the lowest layer that can prove it.\n'; } >"$copy"
+  run check_ladder "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the render, gate and implementer triggers cover a route row, and lifecycle.md and uat-write.md say so" {
+  check_route_triggers "$PLANNER_MD"
+  grep -qF 'appears in an `e2e` or `route` row' "$LIFECYCLE_MD"
+  grep -qF 'no owned UAT tests' "$LIFECYCLE_MD"
+  grep -qF 'no owned e2e specs' "$LIFECYCLE_MD" && return 1
+  grep -qF 'Skipped: no e2e-routed or route-routed UATs' "$REPO_ROOT/.claude/skills/gaia/references/spec/uat-write.md"
+}
+
+@test "red twin: reverting any trigger to e2e alone fails the trigger check" {
+  local copy="$BATS_TEST_TMPDIR/planner.md"
+  sed 's/Skipped: no e2e-routed or route-routed UATs/Skipped: no e2e-routed UATs/' "$PLANNER_MD" >"$copy"
+  run check_route_triggers "$copy"
+  [ "$status" -ne 0 ]
+  sed 's/appears in an `e2e` or `route` row of/appears in an `e2e` row of/' "$PLANNER_MD" >"$copy"
+  run check_route_triggers "$copy"
+  [ "$status" -ne 0 ]
+  sed 's/ or a route test under `<frontend package>\/app\/route-tests\/`//' "$PLANNER_MD" >"$copy"
+  run check_route_triggers "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "lifecycle.md sends the judge one Spec line per e2e or route row with a real path and an optional Guard line" {
+  grep -qF 'one `Spec:` line per `e2e` or `route` row' "$LIFECYCLE_MD"
+  grep -qF '<frontend package>/app/route-tests/' "$LIFECYCLE_MD"
+  grep -qF 'Guard: <uat_id>' "$LIFECYCLE_MD"
+  grep -qF 'neither Chromium nor free ports' "$LIFECYCLE_MD"
 }
 
 # check_record_arm <lifecycle>: which pass writes the promotion record.

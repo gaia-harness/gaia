@@ -14,7 +14,7 @@ An advisory, two-axis review of the tests on the **emergent surface**
 (the tests a package's `emergentTests` globs name, per [[Package Descriptor]]), the surface where the
 [[TDD RED Verification]] gate does not apply. The emergent surface has no stable
 failing-then-passing run to gate on, so its honesty and worthiness come from a
-fresh-context reviewer instead of a mechanical RED proof. The reviewer
+fresh-context reviewer instead of a mechanical RED proof. A route test under the route-test folder is also in scope, although the RED gate covers it too ([[Determinism Classifier]]); a file whose first line carries the contract marker takes no `delete` verdict, since a divergence there goes to a reopen. The reviewer
 **proposes** verdicts and **edits no files**; a human acts on every proposal.
 
 ## Problem
@@ -66,6 +66,10 @@ and is **always human-gated**.
 ### Stories are audited tests
 
 A story is a visual state and a behavior is a `.test()` attached to it ([[Stories as Tests]]). Each attached test, with its story's `base story` entry, is one test to the audit, wherever the file sits: stories classify emergent ([[Determinism Classifier]]), and `extract-test-signals.mjs` emits one identity per entry. A story with an effective play and no tests is one test; a render-only story is not counted. The a11y axe check is automatic for every story, so a story that only renders and passes axe is a complete a11y test for a component with no interactive behavior; the reviewer judges a `.test()` on its behavior assertions, and a test that asserts nothing a user could see break returns `fix`; an `expect` inside a play also returns `fix`. No separate static a11y check runs: addon-a11y covers the mechanical half.
+
+### Layers
+
+The composition rule compares a story's tests with its own children's stories. The audit stays on its own surface and does not compare a test with one at another layer; that comparison is the overlap pass, which reads every layer ([[Test Layering]]).
 
 ### Two-tier surfacing
 

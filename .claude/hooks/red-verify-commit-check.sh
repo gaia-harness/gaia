@@ -372,6 +372,11 @@ while IFS= read -r path; do
   # look new), but a genuinely new file is the common case on this path.
   head_source=$(git show "HEAD:$relative_path" 2>/dev/null || true)
   head_fullnames=""
+  head_marked_contract=0
+  head_first_line=$(printf '%s\n' "$head_source" | head -n 1)
+  if [[ "$head_first_line" =~ ^//\ gaia-uat-contract\ sha256:[0-9a-f]{64}$ ]]; then
+    head_marked_contract=1
+  fi
   if [ -n "$head_source" ]; then
     # From the acting tree, unlike head_source just above (a bare `git show`, which
     # resolves against the hook's own cwd rather than $tree_root): $signal_script
@@ -409,6 +414,20 @@ while IFS= read -r path; do
     fi
   fi
 
+  # Contract-marker carve-out: a rendered route-surface contract test is born
+  # `test.fails`, which Vitest reports as passed, so it cannot record a failing
+  # run; its red is proven by the audit gate's annotation scan until the owning
+  # phase turns it plain. A new-at-HEAD `.fails` test in a staged file whose
+  # FIRST line is the contract marker therefore owes no RED. A plain `test(`
+  # there owes RED as usual, and so does a marker on any later line. Honest
+  # limit: a hand-written marker on a file with no routing row is caught by
+  # nothing automated, so a `.fails` test there dodges RED until it turns plain.
+  marked_contract=0
+  marker_first_line=$(git -C "$tree_root" show ":$relative_path" 2>/dev/null | head -n 1 || true)
+  if [[ "$marker_first_line" =~ ^//\ gaia-uat-contract\ sha256:[0-9a-f]{64}$ ]]; then
+    marked_contract=1
+  fi
+
   # For each CURRENT test, decide new-at-HEAD, then require a matching RED.
   while IFS= read -r line; do
     [ -n "$line" ] || continue
@@ -428,8 +447,25 @@ while IFS= read -r path; do
     # New-at-HEAD test? Present-at-HEAD fullNames are out of scope (edits,
     # renames, refactors of an existing test never demand a fresh RED), even
     # when their signal changed.
+    # Exception: a name HEAD holds only as a `.fails` placeholder in a marked
+    # contract file is not an existing test. Turning it plain is its first
+    # real test, so it falls through to the RED check below.
     if [ -n "$head_fullnames" ] \
        && grep -qxF -- "$full" <<<"$head_fullnames"; then
+      if [ "$head_marked_contract" -eq 1 ] \
+         && grep -qF -e "test.fails('$full'" -e "test.fails(\"$full\"" \
+              -e "it.fails('$full'" -e "it.fails(\"$full\"" \
+              <<<"$head_source"; then
+        :
+      else
+        continue
+      fi
+    fi
+
+    if [ "$marked_contract" -eq 1 ] \
+       && grep -qF -e "test.fails('$full'" -e "test.fails(\"$full\"" \
+            -e "it.fails('$full'" -e "it.fails(\"$full\"" \
+            "$tree_root/$relative_path" 2>/dev/null; then
       continue
     fi
 
