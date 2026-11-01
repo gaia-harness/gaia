@@ -1160,6 +1160,52 @@ assert_branch_content_raises() {
   expect_route full unclassifiable-path
 }
 
+# stub_git_without_merge_base: a git that answers merge-tree the way one below
+# the floor does, refusing --merge-base and leaving it out of its usage.
+stub_git_without_merge_base() {
+  local stub_directory="$BATS_TEST_TMPDIR/old-git" real_git
+  real_git="$(command -v git)"
+  mkdir -p "$stub_directory"
+  cat >"$stub_directory/git" <<EOF
+#!/usr/bin/env bash
+case " \$* " in
+  *" merge-tree -h "*)
+    printf 'usage: git merge-tree [--write-tree] [<options>] <branch1> <branch2>\n' >&2
+    exit 129
+    ;;
+  *" merge-tree "*" --merge-base="*)
+    printf 'error: unknown option\n' >&2
+    exit 129
+    ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$stub_directory/git"
+  PATH="$stub_directory:$PATH"
+}
+
+@test "a git without merge-tree --merge-base routes full git-too-old, not unclassifiable-path" {
+  lsb_init
+  lsb_catchup_init
+  lsb_catchup_branch_commit frontend/app/seed.md "branch text"
+  lsb_full_clearance "$FRONTEND"
+  lsb_catchup_branch_commit frontend/app/notes.md "one line"
+  stub_git_without_merge_base
+  lsb_route "$FRONTEND"
+  expect_route full git-too-old
+}
+
+@test "twin: the same history on a git with --merge-base never routes git-too-old" {
+  lsb_init
+  lsb_catchup_init
+  lsb_catchup_branch_commit frontend/app/seed.md "branch text"
+  lsb_full_clearance "$FRONTEND"
+  lsb_catchup_branch_commit frontend/app/notes.md "one line"
+  lsb_route "$FRONTEND"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *git-too-old* ]] || return 1
+}
+
 @test "twin: the same history with the base editing another file replays cleanly and routes light" {
   lsb_init
   lsb_catchup_init

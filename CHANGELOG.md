@@ -16,18 +16,23 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Added
 
+- **Toolchain floors:** `/setup-gaia` now halts when git, jq or the platform's `lsof` or `ss` falls short, with install steps that reach the latest release, and `/update-gaia` checks the same tools plus pnpm before its Proceed question, against the incoming release's floors, and stops when jq or pnpm falls short. git 2.40 is the new floor; below it every audit ran a full review without saying why, and the router now reports `git-too-old` (#3206)
+- **Auto-merge default:** `/setup-gaia` turns on `allow_auto_merge` for a repository it creates and offers it otherwise, and `/update-gaia` makes the same offer. An opted-out repository waits with `pr-wait-merge.sh --until-green`, then merges (#3206)
 - **Claude recommends `/gaia-spec` or `/gaia-plan` when the work calls for one:** asking for a new user-visible feature, or for internal work worth planning and auditing first such as a migration, without naming a command now gets a recommendation before any branch is cut, with `Just do it` as the alternative. Bug fixes and contained changes proceed without asking (#3209)
 - **Claude asks before editing `.claude/settings.json`:** the file registers every GAIA hook and permission rule, so an edit-tool write now asks in every permission mode, and common shell writes ask too, except under bypassPermissions, where Claude Code lets a shell write through. An unattended run is denied these writes. A pull request that changes the file is reviewed by the shell audit member, which lists any hook or permission rule the change removes or weakens (#3205)
 - **Acceptance checks run at the lowest test layer that proves them:** a SPEC's server-side checks render as Vitest route tests that call a route's loader or action, gated like Playwright specs, and a new overlap pass proposes dropping, merging or demoting tests that duplicate another layer, for a human to approve. The Quality Gate now passes its dev-server step only on a clean smoke run, and the Playwright rule gives each worker its own database. Existing suites move only by decision (#3217).
 
 ### Changed
 
+- `/gaia-init` and `/setup-gaia` install pnpm with `npm install -g pnpm@latest` instead of corepack, which on Node 22.22 left a broken pnpm (#3206)
+- `/setup-gaia` now catches a stale pnpm on a clone, and `/update-gaia` refreshes the React Doctor skill after its merge (#3206)
 - **Worthiness and wiki promotion run before the audit:** generated plans and the merge workflow now finish the test-worthiness step and the wiki commit before the first code audit round, so neither restarts CI or owes another audit pass after clearance (#3210)
 - **No debt on your own branch's code:** `file-tech-debt.sh file` now refuses a non-security finding on a line the branch wrote, routing it to a fix on the branch or an accepted residual, so the debt backlog holds only security findings and findings on code the branch did not write (#3210)
 
 ### Fixed
 
 - **`/gaia-spec`'s final review prints as plain Markdown:** the brief you approve before the SPEC saves no longer prints inside a code fence; it uses bold labels, like the first review (#3217)
+- **`usage.sh` on jq 1.6:** cost lines no longer fail with "could not read the usage ledger" (#3206)
 - **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3207)
 - **Language-switch accessibility check covers a switched page:** the `after-switch` scan now switches to a language other than the page's current one and waits for the switch, so it no longer re-scans the unswitched page and needs no hand edit after adding a language (#3208)
 

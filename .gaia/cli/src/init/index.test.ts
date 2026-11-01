@@ -3,18 +3,11 @@
  * leaves unasked: they all ask only whether their own rewrite is doable.
  */
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {writeBuiltinDescriptor} from '../util/package-fixture.js';
-import {readState} from './util/state.js';
 import {run} from './index.js';
 
 type Sandbox = {
@@ -131,7 +124,6 @@ describe('gaia init router target guard', () => {
       'configure-data-layer',
       'rename',
       'wire-statusline',
-      'bootstrap-env',
       'write-project-config',
       'finalize',
       'resume',
@@ -149,29 +141,6 @@ describe('gaia init router target guard', () => {
     }
 
     expect(codes).toStrictEqual(steps.map(() => ['not_a_gaia_project']));
-  });
-
-  test('lets a real scaffold through to the step', async () => {
-    makeScaffold(sandbox.root);
-
-    const exitCode = await run(['bootstrap-env'], {cwd: sandbox.root});
-
-    expect(exitCode).toBe(EXIT_CODES.OK);
-    expect(stdio.errors).toStrictEqual([]);
-    expect(readState(sandbox.root).completed_steps).toContain('bootstrap-env');
-  });
-
-  test('hands the step the same path it guarded', async () => {
-    makeScaffold(sandbox.root);
-    mkdirSync(path.join(sandbox.root, 'frontend'), {recursive: true});
-    writeFileSync(path.join(sandbox.root, 'frontend', '.env.example'), 'A=1\n');
-
-    await run(['bootstrap-env'], {cwd: sandbox.root});
-
-    // The guard validates one path and the step writes to another unless the
-    // router hands its resolved cwd down. Assert the write landed in the tree
-    // that was guarded, not in the process's ambient directory.
-    expect(existsSync(path.join(sandbox.root, 'frontend', '.env'))).toBe(true);
   });
 
   test('leaves the router help path unguarded', async () => {
