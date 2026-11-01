@@ -27,4 +27,4 @@ A GAIA run finishes its test-worthiness audit and its wiki promotion before the 
 
 **Reading the refusal.** `audit-dispositions-check.sh check-outcomes` reports `refused-authored` as a named violation. The audit unit re-disposes the entry as a fix or an accepted residual, and the round stays open until the check clears. A replayed retry records the finding as a residual without editing a frozen dispositions file. Callers with no accepted residuals heading list the finding as unfiled in their summary, and `/gaia-residue` leaves the candidate for a later run from the default branch.
 
-**What stays outside this decision.** The maintainer-only CHANGELOG gate's commit can still land after the audit, so a change owing an entry restarts CI once. What the evaluator judges does not change, and neither does the presence check's decision.
+**What stays outside this decision.** The maintainer-only CHANGELOG gate lands its entry before the audit too, and commits after clearance only to correct an entry that is missing or false. What the evaluator judges does not change, and neither does the presence check's decision.
