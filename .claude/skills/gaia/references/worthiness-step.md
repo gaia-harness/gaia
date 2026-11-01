@@ -6,11 +6,11 @@ This page owns the worthiness audit's dispatch and verdict routing. The work lif
 
 ## When it runs
 
-The step runs once the draft PR is open, before the audit's pre-dispatch verification and before the first member dispatch, so a fix the step makes never rotates a clearance a member already earned.
+The caller's main thread runs it once the draft PR is open, before the audit's pre-dispatch verification and before the first member dispatch, so a fix the step makes never rotates a clearance a member already earned.
 
 <!-- gaia:maintainer-only:start -->
 In this repo a fix commit lands first.
-The verification (`bash .gaia/tests/verify-harness.sh branch`) runs next, then the first dispatch.
+The verification (`bash .gaia/tests/verify-harness.sh branch`) runs next, then the first dispatch. A commit after that verification passed needs a new pass.
 <!-- gaia:maintainer-only:end -->
 
 `<RESOLVED_ROOT>` is the working root. `<RUN_FOLDER>` is the run folder `.claude/doctrine/execution.md` names, at its main-checkout absolute path. Scratch files live in the session's scratchpad directory.
