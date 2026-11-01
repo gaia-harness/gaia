@@ -392,10 +392,10 @@ DIGEST_ONLY_CALLERS='.claude/hooks/post-audit-status.sh
 .gaia/scripts/audit-write-clearance-gates.sh
 .github/audit/resolve-audit-base-context.sh'
 # By design: verify-audit-roster-coverage.sh classifies the whole tree with no diff, and
-# audit-dispositions-check.sh asks ownership only for triage marks, which only
-# the maintainer members write.
+# audit-triage-lib.sh asks ownership only for triage marks, which only the
+# maintainer members write.
 EXEMPT_CONSUMERS='.gaia/scripts/verify-audit-roster-coverage.sh
-.gaia/scripts/audit-dispositions-check.sh'
+.gaia/scripts/audit-triage-lib.sh'
 
 # _non_comment_mentions <file> <extended-regex>: exit 0 when a non-comment line
 # names the pattern.
@@ -454,9 +454,9 @@ release_context_violations() {
   sed '/^audit_scope_release_context /d' "$REPO_ROOT/.gaia/scripts/resolve-audit-members.sh" > "$scratch/.gaia/scripts/resolve-audit-members.sh"
   run release_context_violations "$scratch"
   [ "$output" = "unarmed consumer: .gaia/scripts/resolve-audit-members.sh" ]
-  rm "$scratch/.gaia/scripts/audit-dispositions-check.sh"
+  rm "$scratch/.gaia/scripts/audit-triage-lib.sh"
   run release_context_violations "$scratch"
-  [[ "$output" == *"stale exemption: .gaia/scripts/audit-dispositions-check.sh"* ]] || return 1
+  [[ "$output" == *"stale exemption: .gaia/scripts/audit-triage-lib.sh"* ]] || return 1
 }
 
 # ---------- no process per path --------------------------------------------------

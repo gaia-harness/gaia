@@ -422,6 +422,7 @@ setup() {
   local section
   section="$(extract_section_or_fail "$RUNBOOK" '^#### The branch checkpoint' '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qF -- 'is accept-and-note under the heading `## Accepted residuals (recorded, not fixed)` in the PR body, then the same post-and-merge.' || return 1
+  printf '%s\n' "$section" | grep -qF -- 'only the default stop or a human accept produces' || return 1
 }
 
 @test "Group A: the branch-checkpoint section carries the accept-and-note heading, with its article, at its accept paragraph" {

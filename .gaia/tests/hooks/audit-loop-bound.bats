@@ -1074,7 +1074,7 @@ scratch_copy() {
   rm -rf "$scratch_directory"
   mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
   for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
-    audit-loop-eval.sh audit-loop-signals-lib.sh audit-dispositions-check.sh; do
+    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-dispositions-check.sh audit-member-digest.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$scratch_directory/.gaia/scripts/$script_name"
   done
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
@@ -1316,9 +1316,9 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   cmp "$ALF_STATE" "$BATS_TEST_TMPDIR/before"
 }
 
-# veto_rounds: round 1 reports finding X (security false) and disposes it
-# accept-residual; round 2 is recorded by a member dispatch, which snapshots
-# round 1's dispositions.
+# veto_rounds: round 1 reports finding X (security false) and waives it on the
+# triage threshold, the waiver a later veto overrides; round 2 is recorded by
+# a member dispatch, which snapshots round 1's dispositions.
 FINDING_X='{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1}'
 veto_rounds() {
   alf_fill f.txt 12 feature
@@ -1327,7 +1327,7 @@ veto_rounds() {
   assert_allowed
   alf_stamp 1 10
   alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"security":false}]' 11
-  alf_dispositions 1 "[$(jq -c '. + {disposition: "accept-residual", reason: "minor"}' <<<"$FINDING_X")]"
+  alf_dispositions 1 "[$(jq -c '. + {disposition: "waive-out-of-scope", basis: "triage-threshold", reason: "minor"}' <<<"$FINDING_X")]"
   new_tree
   dispatch
   assert_allowed
@@ -1586,4 +1586,363 @@ veto_rounds() {
   [ "$status" -eq 0 ]
   printf '# run: %s ms\n' $((end_milliseconds - start_milliseconds)) >&3
   [ $((end_milliseconds - start_milliseconds)) -lt 5000 ]
+}
+
+# --- the default stop through the hook ----------------------------------------
+
+# stop_threshold_case <fix-on-a-stop-key:true|false>: three rounds of the same
+# two branch Minors plus one Minor outside the branch diff, and at round 3 a
+# new Minor on a line that round's commit repaired, so round 3 is enriching.
+# Round 3's sidecar has an incremental review base and the member an earned
+# marker at round 3's tree, and its snapshot is left for the hook to evaluate
+# against the audited root, so default_stop holds over the three branch keys.
+# dispositions-3.json disposes every finding: with `fix` on a stop key the
+# rest are waived (an accept beside a threshold fix is refused), else the
+# branch keys are accepted and `fix` sits only on the uncounted finding.
+stop_threshold_case() {
+  local round stop_disposition=accept-residual rest_disposition=accept-residual other_disposition=fix entries tree digest sidecar_file
+  [ "$1" = true ] && { stop_disposition=fix; rest_disposition=waive-out-of-scope; other_disposition=waive-out-of-scope; }
+  entries='[{"path":"f.txt","line":1,"finding_class":"rule/x","severity":"minor","security":false},
+    {"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false},
+    {"path":"base.txt","line":3,"finding_class":"rule/q","severity":"minor","security":false}]'
+  printf 'auditors:\n  - name: code-audit-frontend\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' >"$ALF_ROOT/.gaia/audit-ci.yml"
+  alf_fill f.txt 12 feature
+  for round in 1 2 3; do
+    alf_set_line other.txt "$round" "round $round"
+    if [ "$round" -eq 3 ]; then
+      alf_set_line f.txt 8 repaired
+      entries="$(jq -c '. + [{"path":"f.txt","line":8,"finding_class":"rule/y","severity":"minor","security":false}]' <<<"$entries")"
+    fi
+    alf_commit "round $round"
+    alf_round "$round" "$FRONTEND_MEMBER" "$entries"
+  done
+  for sidecar_file in "$ALF_ROOT"/.gaia/local/audit/*.findings.json; do
+    jq -c '.review_base = {sha: ("c" * 40), reason: "member-clearance"}' "$sidecar_file" >"$sidecar_file.edited"
+    touch -r "$sidecar_file" "$sidecar_file.edited" && mv "$sidecar_file.edited" "$sidecar_file"
+  done
+  tree="$(state_field '.history.rounds[2].tree')"
+  digest="$(bash "$REPO_ROOT/.gaia/scripts/audit-member-digest.sh" --root "$ALF_ROOT" --member "$FRONTEND_MEMBER" --ref "$tree")" || return 1
+  jq -n -c --arg digest "$digest" --arg member "$FRONTEND_MEMBER" '{digest: $digest, member: $member, provenance: "earned"}' \
+    >"$ALF_ROOT/.gaia/local/audit/$digest.ok"
+  alf_dispositions 3 "$(jq -n -c --arg member "$FRONTEND_MEMBER" --arg stop "$stop_disposition" --arg rest "$rest_disposition" --arg other "$other_disposition" \
+    'def entry($class; $path; $line; $disposition): {member: $member, finding_class: $class, path: $path, line: $line, disposition: $disposition, reason: "minor tail"}
+       + (if $disposition == "waive-out-of-scope" then {basis: "triage-threshold"} else {} end);
+     [entry("rule/x"; "f.txt"; 1; $stop), entry("rule/x"; "f.txt"; 2; $rest), entry("rule/y"; "f.txt"; 8; $rest), entry("rule/q"; "base.txt"; 3; $other)]')"
+}
+
+@test "default stop: a fix on a stop key keeps the checkpoint and leaves the stored default_stop true; a fix only off S keeps the override" {
+  below
+  stop_threshold_case true
+  unit_dispatch
+  assert_pinned rubric:enriching || return 1
+  [ "$(state_field '.history.rounds[2].snapshot | [.default_stop, has("stop_override")] | tojson')" = '[true,false]' ] || return 1
+  rm -rf "$BATS_TEST_TMPDIR/repo" "$BATS_TEST_TMPDIR/origin.git"
+  alf_init && alf_branch feat/loop
+  below
+  stop_threshold_case false
+  unit_dispatch
+  assert_allowed || return 1
+  [ "$(state_field '.history.rounds[2].snapshot | [.default_stop, has("stop_override")] | tojson')" = '[true,false]' ]
+}
+
+@test "default stop: a mutant keying the decision on default_stop instead of the override goes red" {
+  scratch_copy
+  sed -i.bak 's/\.stop_override == true/.default_stop == true/g' "$SCRATCH_SCRIPTS/audit-loop-signals-lib.sh"
+  cmp -s "$SCRATCH_SCRIPTS/audit-loop-signals-lib.sh" "$SCRATCH_SCRIPTS/audit-loop-signals-lib.sh.bak" && return 1
+  below
+  stop_threshold_case true
+  unit_dispatch
+  assert_allowed
+}
+
+# --- the reopened round -----------------------------------------------------------
+
+# reopen_base: veto_rounds, then round 2 reports finding X again and waives it
+# on the triage threshold, so the latest round sits on HEAD's tree and every
+# dispositions file passes.
+reopen_base() {
+  veto_rounds
+  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"security":false}]' 21
+  alf_dispositions 2 "[$(jq -c '. + {disposition: "waive-out-of-scope", basis: "triage-threshold", reason: "minor"}' <<<"$FINDING_X")]"
+}
+
+# veto_at <round>: veto finding X effective from <round>.
+veto_at() {
+  mkdir -p "$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  jq -n -c --argjson finding "$FINDING_X" --argjson round "$1" \
+    '{version: 1, keys: [$finding + {vetoed_at: "2026-01-01T00:00:00Z", unit: 1, effective_from_round: $round}]}' \
+    >"$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json"
+}
+
+# gate_failure <after-round> [tree]: the owed-step failure record, on HEAD's tree by default.
+gate_failure() {
+  mkdir -p "$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  jq -n -c --argjson after_round "$1" --arg tree "${2:-$ALF_TREE}" \
+    '{version: 1, step: "playwright", log: "gate.log", tree: $tree, after_round: $after_round}' \
+    >"$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/gate-failure.json"
+}
+
+# round_shape <index>: round <index>'s reopened flag, members, closing flag,
+# snapshot and whether its tree is HEAD's.
+round_shape() {
+  jq -c --argjson index "$1" --arg tree "$ALF_TREE" \
+    '.history.rounds[$index] | [.reopened // false, .members, .closing, .snapshot, .tree == $tree]' "$ALF_STATE"
+}
+
+# assert_reopened <round>: the latest round is <round>, reopened on HEAD's tree
+# with no members and its stamp, the latest unit starts there, and the
+# evaluator's reopened-round prints it.
+assert_reopened() {
+  [ "$(nrounds)" -eq "$1" ] || { printf 'rounds: %s, want %s\n' "$(nrounds)" "$1" >&2; return 1; }
+  [ "$(round_shape $(($1 - 1)))" = '[true,[],false,null,true]' ] || { printf 'round %s: %s\n' "$1" "$(round_shape $(($1 - 1)))" >&2; return 1; }
+  [ "$(state_field '.history.rounds | last | .round')" -eq "$1" ] || return 1
+  [ -f "${ALF_STATE%.json}.d/round-$1.stamp" ] || return 1
+  [ "$(state_field '.history.units | last | .start_round')" -eq "$1" ] || return 1
+  [ "$(bash "$REPO_ROOT/.gaia/scripts/audit-loop-eval.sh" reopened-round --root "$ALF_ROOT")" -eq "$1" ]
+}
+
+# earn_markers <member>...: give each member's newest sidecar a member-clearance
+# review base and the member an earned marker at HEAD's tree.
+earn_markers() {
+  local sidecar_file member digest
+  for sidecar_file in "$ALF_ROOT"/.gaia/local/audit/*.findings.json; do
+    jq -c '.review_base = {sha: ("c" * 40), reason: "member-clearance"}' "$sidecar_file" >"$sidecar_file.edited"
+    touch -r "$sidecar_file" "$sidecar_file.edited" && mv "$sidecar_file.edited" "$sidecar_file"
+  done
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.claude/hooks/lib/audit-clearance.sh"
+  for member in "$@"; do
+    digest="$(bash "$REPO_ROOT/.gaia/scripts/audit-member-digest.sh" --root "$ALF_ROOT" --member "$member" --ref "$ALF_TREE")" || return 1
+    jq -n -c --arg digest "$digest" --arg member "$member" '{digest: $digest, member: $member, provenance: "earned"}' \
+      >"$(clearance_earned_path "$ALF_ROOT" "$digest" "$member")"
+  done
+}
+
+@test "reopen: a veto effective at the next round on the unmoved tree records a reopened round, and the check-all passes the pending veto" {
+  reopen_base
+  veto_at 3
+  below
+  unit_dispatch
+  assert_allowed
+  assert_reopened 3
+}
+
+@test "reopen: a gate failure after the latest round on HEAD's tree records a reopened round" {
+  reopen_base
+  gate_failure 2
+  below
+  unit_dispatch
+  assert_allowed
+  assert_reopened 3
+}
+
+@test "reopen: a gate failure on a tree no round recorded reopens on HEAD's tree after a quick clear, a light clear and a late-pass commit, each past the last reopen" {
+  local ending used
+  reopen_base
+  below
+  for ending in quick-clear light-clear late-pass; do
+    used="$(nrounds)"
+    alf_set_line other.txt 30 "$ending"
+    alf_commit "$ending"
+    gate_failure "$used"
+    unit_dispatch
+    assert_allowed || return 1
+    assert_reopened $((used + 1)) || return 1
+  done
+  [ "$(state_field '[.history.rounds[2,3] | .snapshot | [.verdict, .A]] | tojson')" = '[["quiet",0],["quiet",0]]' ]
+}
+
+@test "reopen: no cause, a later veto, a stale failure tree or round, a checkpoint deny and a veto on a moved tree each record no round" {
+  local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  reopen_base
+  below
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 2 ] || return 1
+  veto_at 4
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 2 ] || return 1
+  rm -f "$run_folder/vetoes.json"
+  gate_failure 2 "$(printf 'b%.0s' $(seq 1 40))"
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 2 ] || return 1
+  gate_failure 1
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 2 ] || return 1
+  rm -f "$run_folder/gate-failure.json"
+  veto_at 3
+  above
+  unit_dispatch
+  assert_pinned context || return 1
+  [ "$(nrounds)" -eq 2 ] || return 1
+  below
+  new_tree
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 2 ]
+}
+
+@test "reopen: an accept admission runs no fixer, so a pending veto on the unmoved tree records no round" {
+  reopen_base
+  veto_at 3
+  alf_add_checkpoint 2 stalled
+  alf_add_answer 1 accept
+  below
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.units | last | .admitted_on')" = accept ] || return 1
+  [ "$(nrounds)" -eq 2 ]
+}
+
+@test "reopen: a dead unit's successor does not reopen twice on the same tree, for a re-failed gate or a newer veto" {
+  reopen_base
+  gate_failure 2
+  below
+  unit_dispatch
+  assert_reopened 3 || return 1
+  gate_failure 3
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 3 ] || return 1
+  [ "$(state_field '.history.units | length')" -eq 2 ] || return 1
+  veto_at 4
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 3 ]
+}
+
+@test "reopen: after a default stop the reopened round is quiet with A = 0, and the next wave's round holds the stop over a twin of an accepted triple" {
+  below
+  stop_threshold_case false
+  gate_failure 3
+  unit_dispatch
+  assert_allowed
+  assert_reopened 4 || return 1
+  [ "$(state_field '.history.rounds[2].snapshot.default_stop')" = true ] || return 1
+  alf_set_line other.txt 4 "gate repair"
+  alf_commit "gate repair"
+  nested
+  assert_allowed
+  [ "$(nrounds)" -eq 5 ] || return 1
+  [ "$(state_field '.history.rounds[3].snapshot | [.verdict, .A, .counted_keys] | tojson')" = '["quiet",0,[]]' ] || return 1
+  [ "$(round_shape 4 | jq -c '[.[0], .[1], .[4]]')" = '[false,["code-audit-frontend"],true]' ] || return 1
+  alf_stamp 5 50
+  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"finding_class":"rule/x","severity":"minor","security":false},
+    {"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false},
+    {"path":"f.txt","line":6,"finding_class":"rule/x","severity":"minor","security":false}]' 51
+  earn_markers "$FRONTEND_MEMBER"
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.rounds[4].snapshot | [.default_stop, .default_stop_keys, .A, .signals.reintroduced] | tojson')" = \
+    '[true,[["code-audit-frontend","rule/x","f.txt",6]],1,false]' ]
+}
+
+@test "reopen: past the fallback allowance the default stop admits the reopening unit, and without it the fallback denies" {
+  local snapshot
+  new_tree
+  snapshot="$(sig_snap quiet false | jq -c '. + {default_stop: true, default_stop_keys: [["code-audit-frontend", "rule/x", "f.txt", 1]]}')"
+  seed_rounds 6 "$(jq -c '.default_stop = false | .default_stop_keys = []' <<<"$snapshot")"
+  gate_failure 6
+  run_payload "$(unit_payload "$SID")"
+  assert_pinned fallback || return 1
+  [ "$(nrounds)" -eq 6 ] || return 1
+  seed_rounds 6 "$snapshot"
+  run_payload "$(unit_payload "$SID")"
+  assert_allowed
+  [ "$(state_field '.history.units | last | .admitted_on')" = fallback ] || return 1
+  assert_reopened 7
+}
+
+@test "reopen: a unit dispatch that re-evaluates a three-member round under the default stop decides well inside the deadline" {
+  local round member members='["code-audit-frontend","code-audit-shell","code-audit-github-workflows"]' start_milliseconds end_milliseconds
+  printf 'auditors:\n  - name: code-audit-frontend\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n  - name: code-audit-shell\n    globs:\n      - "**/*.sh"\n    audience: adopter\n  - name: code-audit-github-workflows\n    globs:\n      - ".github/workflows/**"\n    audience: adopter\n' \
+    >"$ALF_ROOT/.gaia/audit-ci.yml"
+  alf_fill f.txt 12 feature
+  alf_fill run.sh 4 shell
+  alf_fill .github/workflows/ci.yml 4 workflow
+  for round in 1 2 3; do
+    alf_set_line other.txt "$round" "round $round"
+    alf_commit "round $round"
+    if [ "$round" -gt 1 ]; then alf_store_snapshot $((round - 1)) || return 1; fi
+    alf_add_round "$members"
+    alf_stamp "$round" $((10 * round))
+    alf_sidecar code-audit-frontend '[{"path":"f.txt","line":1,"finding_class":"rule/x","severity":"minor","security":false}]' $((10 * round + 1))
+    alf_sidecar code-audit-shell '[{"path":"run.sh","line":1,"finding_class":"rule/x","severity":"minor","security":false}]' $((10 * round + 1))
+    alf_sidecar code-audit-github-workflows '[{"path":".github/workflows/ci.yml","line":1,"finding_class":"rule/x","severity":"minor","security":false}]' $((10 * round + 1))
+  done
+  earn_markers code-audit-frontend code-audit-shell code-audit-github-workflows
+  gate_failure 3
+  below
+  start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d", time * 1000')"
+  unit_dispatch
+  end_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d", time * 1000')"
+  printf '# run: %s ms\n' $((end_milliseconds - start_milliseconds)) >&3
+  assert_allowed
+  assert_reopened 4 || return 1
+  [ "$(state_field '.history.rounds[2].snapshot.default_stop')" = true ] || return 1
+  [ $((end_milliseconds - start_milliseconds)) -lt 10000 ]
+}
+
+# reopen_mutant <sed-expression> <scripts-file|hook>: point HOOK at a scratch
+# copy with that file edited, and prove the edit applied.
+reopen_mutant() {
+  local target
+  scratch_copy
+  target="$SCRATCH_SCRIPTS/$2"
+  [ "$2" != hook ] || target="$HOOK"
+  sed -i.bak "$1" "$target"
+  cmp -s "$target" "$target.bak" && return 1
+  true
+}
+
+# fresh_branch: discard the fixture repository and start again on feat/loop.
+fresh_branch() {
+  rm -rf "$BATS_TEST_TMPDIR/repo" "$BATS_TEST_TMPDIR/origin.git"
+  alf_init && alf_branch feat/loop
+}
+
+@test "reopen: mutants dropping the veto's tree test, adding it to the gate failure, dropping the reopened test or the accept test each go red" {
+  reopen_base
+  below
+  reopen_mutant 's/== \$used + 1) and \$unmoved)/== $used + 1))/' audit-veto-lib.sh || return 1
+  veto_at 3
+  new_tree
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 3 ] || return 1
+
+  fresh_branch
+  reopen_base
+  below
+  reopen_mutant 's/\$failure.tree == \$tree)/$failure.tree == $tree and $unmoved)/' audit-veto-lib.sh || return 1
+  new_tree
+  gate_failure 2
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 2 ] || return 1
+
+  fresh_branch
+  reopen_base
+  below
+  reopen_mutant 's/(\$latest.reopened == true and \$unmoved) | not/true/' audit-veto-lib.sh || return 1
+  gate_failure 2
+  unit_dispatch
+  gate_failure 3
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 4 ] || return 1
+
+  fresh_branch
+  reopen_base
+  reopen_mutant 's/\[ "\$admitted_on" != accept \] && //' hook || return 1
+  veto_at 3
+  alf_add_checkpoint 2 stalled
+  alf_add_answer 1 accept
+  below
+  unit_dispatch
+  assert_allowed
+  [ "$(nrounds)" -eq 3 ]
 }

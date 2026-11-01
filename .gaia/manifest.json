@@ -256,6 +256,7 @@
     ".gaia/scripts/audit-dispositions-check.sh": "owned",
     ".gaia/scripts/audit-fix-verify.sh": "owned",
     ".gaia/scripts/audit-frontend-oracles.sh": "owned",
+    ".gaia/scripts/audit-gate-owed.sh": "owned",
     ".gaia/scripts/audit-key-lib.sh": "owned",
     ".gaia/scripts/audit-ledger/append-worthiness.mjs": "owned",
     ".gaia/scripts/audit-light-mark.sh": "owned",
@@ -269,6 +270,8 @@
     ".gaia/scripts/audit-pr-sections-lib.sh": "owned",
     ".gaia/scripts/audit-resolve-scope.sh": "owned",
     ".gaia/scripts/audit-scope-digest.sh": "owned",
+    ".gaia/scripts/audit-triage-lib.sh": "owned",
+    ".gaia/scripts/audit-veto-lib.sh": "owned",
     ".gaia/scripts/audit-write-clearance-accounting.sh": "owned",
     ".gaia/scripts/audit-write-clearance-args.sh": "owned",
     ".gaia/scripts/audit-write-clearance-gates.sh": "owned",
@@ -763,6 +766,7 @@
     "wiki/concepts/Wiki Sync.md": "wiki-owned",
     "wiki/concepts/Workflow Doctrine.md": "wiki-owned",
     "wiki/concepts/Worktrees.md": "wiki-owned",
+    "wiki/decisions/Audit Convergence On Minor-only Fix Churn.md": "wiki-owned",
     "wiki/decisions/Claude Integration Fitness.md": "wiki-owned",
     "wiki/decisions/Co-located Tests Folder.md": "wiki-owned",
     "wiki/decisions/Code Audit Team.md": "wiki-owned",
@@ -839,7 +843,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-01T07:38:36.601Z",
+  "generated": "2026-11-01T11:43:58.515Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

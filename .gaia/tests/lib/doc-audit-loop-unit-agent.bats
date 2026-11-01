@@ -181,12 +181,92 @@ frontmatter_tools_are_allowlist() {
   assert_pinned 'An `absent` or `transient` outcome never stops the unit and never blocks the merge.'
 }
 
-@test "the unit re-disposes a refused-authored entry accept-residual instead of stopping, and records a replayed refusal" {
-  assert_pinned 'A `refused-authored` violation does not stop the unit either: rewrite that entry in `dispositions-<r>.json` as `accept-residual` with a reason'
+@test "a refused-authored entry is re-disposed accept-residual only where the check allows it, else the unit stops needs-human" {
+  assert_pinned 'A `refused-authored` violation depends on the round. Where the check allows `accept-residual`'
   assert_pinned 're-run `check` then `check-outcomes`, and go on only when both pass'
-  assert_pinned 'A `refused-authored` outcome never passes, and no filing is retried.'
+  assert_pinned 'On any other round leave the entry and stop `needs-human` with the key in `stop_detail`, never `dispositions-check-failed`'
+  assert_pinned 'a veto on the exact key clears the violation, and `check-outcomes` then passes'
+  assert_pinned 'A non-zero exit other than a `refused-authored` violation stops the unit `dispositions-check-failed`'
+  assert_pinned 'a closing round carries a human accept, so a `refused-authored` violation is re-disposed `accept-residual`'
   assert_pinned 'audit-dispositions-check.sh record-residual --root <root> --run-folder <run> --finding <f>'
+  assert_pinned 'A recorded row is not a dispositions entry, so the eligibility refusal does not grade it, and it still reaches the human'"'"'s residual question.'
   assert_pinned 'Copy each retry file to your scratchpad before replaying it'
+}
+
+# record_flags_accepted <agent>: rc 0 when the agent names the record script in
+# at least one command span and every flag after the script name in a span is
+# one the script's argument loop accepts.
+record_flags_accepted() {
+  local accepted span flag spans=0
+  accepted="$(grep -E '^[[:space:]]+--pr\|' "$ROOT/.gaia/scripts/audit-loop-record.sh" | head -1 | tr -d ' )' | tr '|' '\n' | grep -E '^--')"
+  [ -n "$accepted" ] || { echo "no accepted flags read from the script" >&2; return 1; }
+  while IFS= read -r span; do
+    [ -n "$span" ] || continue
+    spans=$((spans + 1))
+    span="${span#*audit-loop-record.sh}"
+    for flag in $(printf '%s' "$span" | grep -oE -- '--[a-z-]+'); do
+      grep -qxF -- "$flag" <<<"$accepted" || { echo "not accepted: $flag" >&2; return 1; }
+    done
+  done < <(grep -oE '`[^`]*audit-loop-record\.sh[^`]*`' "$1")
+  [ "$spans" -ge 3 ]
+}
+
+@test "every command span naming the record script carries only flags it accepts, and states it takes no root flag" {
+  record_flags_accepted "$AGENT"
+  assert_pinned '`audit-loop-record.sh` takes no root flag; its header owns the flag set.'
+  assert_pinned '`audit-loop-eval.sh record-values --root <root> | audit-loop-record.sh --pr <N> --values-json -`'
+  # Red twin: a command span that adds a root flag to the record script is refused.
+  local mutant="$BATS_TEST_TMPDIR/agent-root-flag.md"
+  sed 's/audit-loop-record\.sh --pr <N>/audit-loop-record.sh --root <root> --pr <N>/' "$AGENT" >"$mutant"
+  cmp -s "$AGENT" "$mutant" && return 1
+  run record_flags_accepted "$mutant"
+  [ "$status" -ne 0 ]
+}
+
+@test "the default stop disposes the stop keys accept-residual with the failure mode, and a threshold fix ends it" {
+  assert_pinned 'run `bash <root>/.gaia/scripts/audit-loop-eval.sh eval --root <root> --round <r>`. When `default_stop` is true, dispose every key in `default_stop_keys` `accept-residual`'
+  assert_pinned 'each entry'"'"'s reason carrying that finding'"'"'s `failure_mode` from `audit-loop-eval.sh findings --root <root> --round <r>`'
+  assert_pinned 'With no `fix` entry, run no fixer and make no commit: follow the page'"'"'s zero-fix rule and stop as it says.'
+  assert_pinned 'which ends the stop for the round: no key is then disposed `accept-residual`, every other in-scope finding defaults to `fix`'
+  assert_pinned 'A threshold `waive-out-of-scope` may sit beside the residuals.'
+  assert_pinned 'the check refuses `accept-residual` outside the stop or a recorded human accept (`accept-residual-not-eligible`). An architectural Minor on another round stops `needs-human`.'
+}
+
+@test "the reopened round is a first action that fixes before it reviews, for a veto and for a gate failure" {
+  assert_pinned 'audit-loop-eval.sh reopened-round --root <root>'
+  assert_pinned '## Reopened round'
+  assert_pinned 'Commit the repair before the first member wave'
+  assert_pinned 'a synthetic `fix` entry per key in `Vetoes:`'
+  assert_pinned '`<run>/gate-failure.json` stands in for the fix entries. `dispositions-<r>.json` holds `entries: []`.'
+  assert_pinned '{"member":"gate-repair","finding_class":"gate/<step>","path":"frontend","line":0,"disposition":"fixed","reason":"...","changed_paths":[...]}'
+  assert_pinned 'so classify it with `--expect-count 1`'
+  assert_pinned 'a third failure stops `needs-human`, naming the step'
+  assert_pinned 'The commit subject is `fix(audit): repair the owed gate steps at round <r>`.'
+  assert_pinned '`audit-gate-owed.sh choose` prints `full` for them'
+  assert_pinned 'A member that owns a key under an unsatisfied veto skips this router and is dispatched full'
+  local reopened
+  reopened="$(awk '/^## Reopened round$/ {inside_section=1; next} /^## / {inside_section=0} inside_section' "$AGENT")"
+  [ -n "$reopened" ]
+  grep -qF -- 'gate-failure.json' <<<"$reopened"
+}
+
+@test "the gate choice runs before the gate, marks or records after the commit, and never runs the owed steps" {
+  assert_pinned 'audit-gate-owed.sh choose --root <root> --run-folder <run> --round <r>'
+  assert_pinned '`smaller` runs the page'"'"'s smaller gate, then `audit-gate-owed.sh mark --root <root> --run-folder <run> --round <r>` after the commit.'
+  assert_pinned '`full` runs the whole gate, then `audit-gate-owed.sh steps-passed --root <root> --run-folder <run>` after the commit, and only when Playwright, the dev smoke test and the build actually ran'
+  assert_pinned 'The unit never runs `audit-gate-owed.sh run`: the main thread does.'
+}
+
+@test "a closing round stops only on an unsatisfied vetoed key, and the veto bullet skips a satisfied one" {
+  assert_pinned 'a key in `Vetoes:` that `audit-loop-eval.sh veto-state --root <root> --round <r>` lists unsatisfied'
+  assert_pinned 'and that `audit-loop-eval.sh veto-state --root <root> --round <r>` lists unsatisfied is disposed `fix`'
+  assert_pinned 'A satisfied key needs no synthetic entry.'
+}
+
+@test "the unit file carries accepted_residual_count as a run-wide, informational, never-summed count" {
+  assert_pinned '`accepted_residual_count` (integer: `.total` of `bash <root>/.gaia/scripts/audit-dispositions-check.sh residual-count --root <root> --run-folder <run>` when the unit ends)'
+  assert_pinned 'a run-wide total, informational, and never summed across unit files: the main thread reads `residual-count` itself'
+  assert_pinned 'It is a count, so it carries no finding detail.'
 }
 
 @test "the unit carries the member's grade and audience into the filed finding and never sets either itself" {

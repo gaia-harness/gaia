@@ -12,9 +12,19 @@
 # fallback (audit-loop-grant.sh). Both write only the state's `allowance`
 # section, under the same lock.
 #
-# It records an answer only when ALL of these hold, checked in this order, and
-# each decline is its own visible `systemMessage` saying nothing was recorded
-# and naming the typed fallback (a silent decline reads as a recorded grant):
+# A question unrelated to the audit loop is none of this hook's business: it
+# exits silently, before any numbered check below. A question is checkpoint-
+# shaped when a `questions[]` header is exactly `Audit loop` or an option label
+# equals, with or without ` (Recommended)`, a label of the most recent
+# checkpoint's pinned question; substrings are not shaped.
+# Silence covers only unrelated questions and the exits with no audit context
+# (no checkout, no audit state directory) for a question the header does not
+# shape; a shaped question never exits silently.
+#
+# It records an answer only when ALL of these hold, checked in this order after
+# the shape test, and each decline is its own visible `systemMessage` saying
+# nothing was recorded and naming the typed fallback (a silent decline reads as
+# a recorded grant). Unreadable (corrupt) state declines whatever the shape:
 #
 #   1. The payload has no `agent_id`: the call came from the main thread, not a
 #      sub-agent.
@@ -54,8 +64,8 @@
 # who answered. That rests on the checks above (a main-thread, interactive,
 # allowlisted-mode session) and on block-audit-loop-write.sh, which denies any
 # Bash or Monitor command that executes this hook or audit-loop-grant.sh, so
-# Claude cannot feed it a payload. Headless runs have no AskUserQuestion tool.
-# A person typing a label's exact text into Other is a person answering.
+# Claude cannot feed it a payload. The interactive session check declines
+# headless runs. A person typing a label's exact text into Other is a person answering.
 #
 # Never exit 2 and never block: PostToolUse cannot undo the question, and every
 # decline exits 0 with a `systemMessage` (stdout JSON shows only on exit 0). A
@@ -91,6 +101,19 @@ _ag_say() {
   else
     printf '{"systemMessage":"%s"}\n' "$(_ag_escape_json "$1")"
   fi
+}
+
+# _ag_shaped <pinned-question-json|null>: true when a questions[] entry has the
+# header the pinned question carries (`Audit loop`, set in audit-loop-state-lib.sh)
+# or an option label equal to a pinned label, each compared without a trailing
+# ` (Recommended)`. Exact equality only.
+_ag_shaped() {
+  printf '%s' "$payload" | jq -r --argjson pin "${1:-null}" '
+    def base: if type == "string" then sub(" \\(Recommended\\)$"; "") else empty end;
+    ([.tool_input.questions // [] | if type == "array" then .[] else empty end | select(type == "object")]) as $asked
+    | ([$pin // {} | .questions // [] | .[]? | .options // [] | .[]? | .label? | base]) as $pinned
+    | any($asked[]; .header == "Audit loop")
+      or any($asked[]; any((.options // [])[]?; (.label | base) as $asked_label | any($pinned[]; . == $asked_label)))' 2>/dev/null || printf false
 }
 
 _AG_FALLBACK="Type audit-grant <n> or audit-accept as the whole prompt instead."
@@ -151,11 +174,14 @@ main=""
 if [ -n "$cwd" ]; then
   main="$(gaia_resolve_main_root "$cwd" 2>/dev/null)" || main=""
 fi
-# No checkout, or no audit state anywhere: an AskUserQuestion unrelated to the
-# audit loop, which is none of this hook's business.
-[ -n "$main" ] || exit 0
+# No checkout, or no audit state anywhere: silent for a question the header does
+# not shape, a visible decline for one it does.
+header_shaped="$(_ag_shaped null)"
 statedir="$main/.gaia/local/protected/audit-loop"
-[ -d "$statedir" ] || exit 0
+if [ -z "$main" ] || [ ! -d "$statedir" ]; then
+  [ "$header_shaped" = true ] || exit 0
+  _ag_decline "no audit state exists for this checkout, so no checkpoint is pending."
+fi
 
 branch=""
 branch="$(gaia_loop_key "$cwd" 2>/dev/null)" || branch=""
@@ -196,11 +222,19 @@ if [ -z "$target" ] && [ -n "$session_id" ]; then
   fi
 fi
 
-# No state for this branch and no pending checkpoint of this session anywhere:
-# nothing in the audit loop is waiting on this question.
-if [ "$have_state" -eq 0 ] && [ "$matches" -eq 0 ]; then
-  exit 0
+# Unreadable state declines whatever the shape; otherwise an unrelated question
+# stops here, before any numbered check.
+if [ "$have_state" -eq 1 ] && [ "$state_read_exit_status" -eq 5 ] && [ -z "$target" ]; then
+  _ag_decline "the audit state file $candidate_state_file is corrupt and was left untouched."
 fi
+shape_state="$state"
+[ -n "$target" ] && shape_state="$(gaia_loop_read_state "$target" 2>/dev/null)"
+shape_pin=null
+if [ -n "$shape_state" ]; then
+  shape_pin="$(printf '%s' "$shape_state" | jq -c '.history.checkpoints | last | .question // null' 2>/dev/null)" || shape_pin=null
+  [ -n "$shape_pin" ] || shape_pin=null
+fi
+[ "$(_ag_shaped "$shape_pin")" = true ] || exit 0
 
 # 1. Main thread only.
 if [ "$(printf '%s' "$payload" | jq -r 'has("agent_id")' 2>/dev/null)" != false ]; then
@@ -224,9 +258,6 @@ case "$_GAIA_ASK_MODES" in
 esac
 
 # 4. A single pending checkpoint carrying a question.
-if [ "$have_state" -eq 1 ] && [ "$state_read_exit_status" -eq 5 ] && [ -z "$target" ]; then
-  _ag_decline "the audit state file $candidate_state_file is corrupt and was left untouched."
-fi
 if [ -z "$target" ]; then
   _ag_decline "no audit checkpoint is pending on branch ${branch:-(none)} for this session, or it was already answered; answer in the session whose dispatch hit the checkpoint."
 fi

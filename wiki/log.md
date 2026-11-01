@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-01 PROMOTED: wiki/decisions/Audit Convergence On Minor-only Fix Churn.md (PR #3224)
 - 2026-11-01 PROMOTED: wiki/decisions/Worthiness And Wiki Before The Audit.md (PR #3210)
 
 ## [v2.3.1] 2026-10-29 | Released
