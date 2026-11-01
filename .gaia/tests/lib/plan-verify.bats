@@ -475,7 +475,7 @@ mutate_orchestrator() {
 @test "red twin: a planner.md without the fenced block fails naming planner.md" {
   local tree="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$tree/.gaia/scripts/spec" "$tree/.claude/skills/gaia/references/plan"
-  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$tree/.gaia/scripts/spec/"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$tree/.gaia/scripts/spec/"
   grep -vE '^[[:space:]]*```' "$PLANNER_MD" >"$tree/.claude/skills/gaia/references/plan/planner.md"
   spec_less_fixture
   run bash "$tree/.gaia/scripts/spec/plan-verify.sh" "$PLAN"
@@ -532,7 +532,7 @@ mutate_orchestrator() {
 marker_tree() {
   MARKER_TREE="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$MARKER_TREE/.gaia/scripts/spec" "$MARKER_TREE/.claude/skills/gaia/references/plan"
-  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$MARKER_TREE/.gaia/scripts/spec/"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$MARKER_TREE/.gaia/scripts/spec/"
   cp "$1" "$MARKER_TREE/.claude/skills/gaia/references/plan/planner.md"
 }
 

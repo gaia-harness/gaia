@@ -518,6 +518,23 @@ divergence() {
   [ "$output" = "$FILE_PHASE_TWO_RELATIVE UAT-002 then" ]
 }
 
+@test "divergence names the route test path, the UAT and then when a route test's Then line was altered" {
+  write_spec
+  sed -i.bak 's#^| UAT-003 | e2e | 3 | orders | order-history-lists-orders.spec.ts |#| UAT-003 | route | 3 | orders | order-history-lists-orders.test.ts |#' "$ROUTING"
+  rm -f "$ROUTING.bak"
+  grep -qF -- '| UAT-003 | route |' "$ROUTING" || return 1
+  render_specs
+  route_file="$WORK/frontend/app/route-tests/orders/tests/order-history-lists-orders.test.ts"
+  [ -f "$route_file" ] || return 1
+  divergence --all
+  [ "$status" -eq 0 ] || return 1
+  sed -i.bak 's#^// Then: .*#// Then: something else entirely#' "$route_file"
+  rm -f "$route_file.bak"
+  divergence --all
+  [ "$status" -eq 1 ]
+  [ "$output" = "frontend/app/route-tests/orders/tests/order-history-lists-orders.test.ts UAT-003 then" ]
+}
+
 @test "divergence ignores a body edit of selectors, labels and copy" {
   write_spec
   render_specs
@@ -677,6 +694,18 @@ scan() {
 @test "scan refuses a missing directory as invalid input" {
   run bash -c "cd '$BATS_TEST_TMPDIR' && bash '$SCAN' no-such-directory 2>'$STDERR_FILE'"
   [ "$status" -eq 2 ]
+}
+
+@test "default scan with no app/route-tests folder exits zero; an id planted in a route test exits 1 naming the file" {
+  mkdir -p "$WORK/frontend/.playwright/e2e"
+  run bash -c "cd '$WORK' && bash '$SCAN' 2>'$STDERR_FILE'"
+  [ "$status" -eq 0 ] || return 1
+  [ -z "$output" ] || return 1
+  mkdir -p "$WORK/frontend/app/route-tests/checkout/tests"
+  printf '// covers UAT-004\n' >"$WORK/frontend/app/route-tests/checkout/tests/total.test.ts"
+  run bash -c "cd '$WORK' && bash '$SCAN' 2>'$STDERR_FILE'"
+  [ "$status" -eq 1 ]
+  [ "$output" = "frontend/app/route-tests/checkout/tests/total.test.ts:1: UAT-004" ]
 }
 
 # bats test_tags=whole-tree

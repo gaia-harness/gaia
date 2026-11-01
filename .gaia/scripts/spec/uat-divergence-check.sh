@@ -7,7 +7,7 @@
 #
 #   uat-divergence-check.sh <spec-path> --routing <routing-file> [--phase <N> | --all]
 #
-# With neither --phase nor --all, every e2e row is checked.
+# With neither --phase nor --all, every e2e and route row is checked.
 #
 # Exit codes the caller branches on:
 #   0  every selected spec's contract matches the SPEC
@@ -86,14 +86,18 @@ spec_rows=$(uat_lib_parse_spec "$spec_path") || exit 2
 uat_lib_validate_routing "$spec_path" "$routing_path" || exit 2
 routing_rows=$(uat_lib_parse_routing "$routing_path") || exit 2
 e2e_directory=$(uat_lib_e2e_directory "$repo_root") || exit 2
+route_directory=$(uat_lib_route_tests_directory "$repo_root") || exit 2
 
 mismatches=0
 while IFS=$'\t' read -r uat_id surface phase feature_folder file_name; do
-  [ "$surface" = "e2e" ] || continue
+  case "$surface" in
+    e2e) relative_path="$e2e_directory/$feature_folder/$file_name" ;;
+    route) relative_path="$route_directory/$(uat_lib_route_test_path "$feature_folder" "$file_name")" ;;
+    *) continue ;;
+  esac
   if [ -n "$selected_phase" ] && [ "$phase" != "$selected_phase" ]; then
     continue
   fi
-  relative_path="$e2e_directory/$feature_folder/$file_name"
   absolute_path="$repo_root/$relative_path"
   if [ ! -f "$absolute_path" ]; then
     printf '%s %s file\n' "$relative_path" "$uat_id"
