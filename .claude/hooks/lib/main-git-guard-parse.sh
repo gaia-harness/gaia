@@ -17,8 +17,16 @@ deny() {
   exit 0
 }
 
+# current_branch <directory>: the branch checked out there. With no directory,
+# the acting agent's: the payload cwd when it is an absolute path inside a git
+# tree, else this process's. Payload cwd is measured, not contracted (wiki
+# Claude Hooks, "Payload `cwd` is per-agent"), so the fallback stays.
 current_branch() {
   local cwd="$1"
+  if [[ -z "$cwd" && "${GAIA_HOOK_CWD:-}" == /* ]] \
+     && git -C "$GAIA_HOOK_CWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    cwd=$GAIA_HOOK_CWD
+  fi
   if [[ -n "$cwd" ]]; then
     git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null || echo ""
   else
@@ -83,11 +91,11 @@ resolve_directory_kind() {
 # is on one of them; print nothing otherwise. Always succeeds, so a caller
 # assigning its output under errexit is never abandoned.
 #
-# Two candidates. This hook's own working directory is where the shell stands
-# when no `cd` moved it, or when one moved it back. The main checkout is where
-# an unreadable word most often points FROM a linked worktree, which is the
-# ordinary session shape here: neither the tracked directory nor this hook's
-# own is that checkout from inside a worktree, so without it every
+# Two candidates. The acting directory (`current_branch` with no argument) is
+# where the shell stands when no `cd` moved it, or when one moved it back.
+# The main checkout is where an unreadable word most often points FROM a
+# linked worktree, which is the ordinary session shape here: neither the
+# tracked directory nor the acting one is that checkout from inside a worktree, so without it every
 # `cd "$SOMEWHERE" && git commit` spelled there reads a branch that is not the
 # one the commit lands on, which is the whole failure this flag exists for.
 #
@@ -114,8 +122,8 @@ ambiguous_main_branch() {
 # A `cd` inside a subshell moves nothing once the group closes, and the hook's segment
 # walk splits on those characters without recording which one it split at,
 # so a tracked `cd` cannot be scoped to the group it belongs to. Tracking stands
-# down for the whole command instead, leaving every segment read against this
-# hook's own working directory.
+# down for the whole command instead, leaving every segment read against the
+# acting directory.
 #
 # Quoting is modelled rather than pattern-matched because the distinction is
 # load-bearing: a parenthesis inside a quoted value is ordinary text, and a
@@ -124,8 +132,8 @@ ambiguous_main_branch() {
 #
 # What the stand-down reaches beyond a real subshell is an ordinary unquoted
 # command substitution, which carries the same characters: a `cd` into a linked
-# worktree followed by a push whose refspec comes from one is read against this
-# hook's own working directory rather than the worktree's, and denied. That is a
+# worktree followed by a push whose refspec comes from one is read against the
+# acting directory rather than the worktree's, and denied. That is a
 # false deny rather than a miss, and the escape is running the command with the
 # `!` prefix.
 #

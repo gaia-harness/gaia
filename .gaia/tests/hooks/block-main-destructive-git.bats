@@ -7,7 +7,7 @@
 #
 # Each test drives the hook as the harness does: a PreToolUse JSON payload on
 # stdin, run with the repo as the working directory, which is where the hook
-# resolves the current branch. The hook always exits 0; allow vs deny is carried
+# resolves the current branch when the payload names no cwd. The hook always exits 0; allow vs deny is carried
 # in stdout.
 
 setup() {
@@ -398,6 +398,44 @@ git commit -m y"
   local worktree_directory="$BATS_TEST_TMPDIR/wt"
   git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
   run_hook_from "cd '$REPO' && git commit -m x" "$worktree_directory"
+  assert_denied_by_json
+}
+
+# The payload's cwd is the acting agent's directory, so a command with no `cd`
+# and no `-C` is judged on the branch there, not on the hook process's own.
+run_hook_split() {
+  local json
+  json=$(jq -n --arg command "$1" --arg directory "$3" '{tool_name: "Bash", cwd: $directory, tool_input: {command: $command}}')
+  invoke_hook_in "$2" "$json" "$HOOK_ABSOLUTE_PATH"
+}
+
+@test "process cwd in the main checkout on main, payload cwd a worktree on its own branch: plain commit and push are allowed" {
+  on_main
+  local worktree_directory="$BATS_TEST_TMPDIR/wt"
+  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
+  run_hook_split 'git push' "$REPO" "$worktree_directory"
+  assert_allowed_by_json
+  run_hook_split 'git push -u origin wt-branch' "$REPO" "$worktree_directory"
+  assert_allowed_by_json
+  run_hook_split 'git commit -m x' "$REPO" "$worktree_directory"
+  assert_allowed_by_json
+}
+
+@test "process cwd a worktree on its own branch, payload cwd the main checkout on main: plain commit and push are denied" {
+  on_main
+  local worktree_directory="$BATS_TEST_TMPDIR/wt"
+  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
+  run_hook_split 'git push' "$worktree_directory" "$REPO"
+  assert_denied_by_json
+  run_hook_split 'git commit -m x' "$worktree_directory" "$REPO"
+  assert_denied_by_json
+}
+
+@test "a payload cwd that is not an absolute path inside a git tree falls back to the process cwd" {
+  on_main
+  run_hook_split 'git push' "$REPO" "relative/dir"
+  assert_denied_by_json
+  run_hook_split 'git push' "$REPO" "$BATS_TEST_TMPDIR"
   assert_denied_by_json
 }
 

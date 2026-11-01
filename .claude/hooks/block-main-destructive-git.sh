@@ -255,8 +255,8 @@ while IFS= read -r segment; do
   # A target that reads as ANOTHER repository is not that case. The word
   # expanded, so nothing about where the shell is standing is unknown; it is
   # simply somewhere this repository's policy does not govern. Such a target
-  # drops the tracked directory and leaves the segments after it reading this
-  # hook's own, which is what they did before the ambiguity arm existed.
+  # drops the tracked directory and leaves the segments after it reading the
+  # acting directory, which is what they did before the ambiguity arm existed.
   if [ "$cd_tracking" -eq 1 ] && [[ "$segment_command" =~ ^cd([[:space:]]|$) ]]; then
     split_git_words "$segment_command"
     cd_kind=$(resolve_directory_kind "${words[1]:-}")
@@ -322,17 +322,17 @@ while IFS= read -r segment; do
   esac
 
   # The checkout this segment acts on: its own `-C`, else the directory the most
-  # recent preceding `cd` moved into, else this hook's working directory. A `cd`
-  # into a linked worktree is this repository but another checkout, with its
-  # own branch.
+  # recent preceding `cd` moved into, else the acting directory (`current_branch`
+  # with no argument). A `cd` into a linked worktree is this repository but
+  # another checkout, with its own branch.
   #
   # The `-C` word goes through the same resolution the `cd` arm above uses
   # rather than reaching the branch read raw. The scan that produced it models
   # quoting but never expands, so a value carrying a variable or a
   # substitution is text naming no readable directory; read raw it makes the
   # branch read answer nothing, and every rule armed on the branch allows. An
-  # UNREADABLE value therefore falls back to the tracked `cd`, else to this
-  # hook's own directory, and marks the segment ambiguous so the rules below
+  # UNREADABLE value therefore falls back to the tracked `cd`, else to the
+  # acting directory, and marks the segment ambiguous so the rules below
   # test the other checkouts it could name too.
   #
   # A value naming a repository the scan CAN read does reach this line, in a
