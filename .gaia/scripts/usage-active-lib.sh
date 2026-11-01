@@ -95,13 +95,13 @@ def _usage_active_turns($facts):
       | ($lengths | map(.end)) as $length_ends
       | [range(0; $openers | length) as $index
           | $openers[$index] as $start
-          | $turn_ends[$index] as $end
-          | select($end != null and $end > $start)
+          | $turn_ends[$index] as $turn_end
+          | select($turn_end != null and $turn_end > $start)
           | ($openers[$index + 1] // infinite) as $next
           | ([$lengths[_usage_active_count($length_ends; $start; false):_usage_active_count($length_ends; $next; false)][] | .seconds]
               | min) as $cap
-          | ($waits + [$open_wait_starts[] | select(. >= $start and . < $next) | [., $end]]) as $holes
-          | _usage_active_subtract([$start, $end]; $holes) as $pieces
+          | ($waits + [$open_wait_starts[] | select(. >= $start and . < $next) | [., $turn_end]]) as $holes
+          | _usage_active_subtract([$start, $turn_end]; $holes) as $pieces
           | (if $cap == null then $pieces else _usage_active_trim($pieces; $cap) end)[]]
     end;
 
@@ -110,9 +110,9 @@ def _usage_active_turns($facts):
 def _usage_active_split($window; $boundaries):
   {territory: _usage_active_count($boundaries; $window[0]; true), cursor: $window[0], parts: []}
   | until(.cursor >= $window[1];
-      ([$window[1], ($boundaries[.territory] // infinite)] | min) as $end
-      | (if $end > .cursor then .parts += [{territory, piece: [.cursor, $end]}] else . end)
-      | .cursor = ([.cursor, $end] | max) | .territory += 1)
+      ([$window[1], ($boundaries[.territory] // infinite)] | min) as $part_end
+      | (if $part_end > .cursor then .parts += [{territory, piece: [.cursor, $part_end]}] else . end)
+      | .cursor = ([.cursor, $part_end] | max) | .territory += 1)
   | .parts;
 
 # The pieces of each of the $ordered segments of one source (ascending by

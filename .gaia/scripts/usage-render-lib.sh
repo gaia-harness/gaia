@@ -102,26 +102,26 @@ gaia_usage_interval_view() {
       --argjson rates "${USAGE_RATES:-null}" --arg usage_store "" --arg links_store "" --argjson keys '{}' \
       "$GAIA_USAGE_JQ_DEFS$pricing$GAIA_USAGE_RESOLVE_JQ$GAIA_USAGE_MODEL_JQ$GAIA_USAGE_ACTIVE_JQ"'
       [inputs | (try fromjson catch null) | select(type == "object" and .schema_version == 1 and .session_id == $session_id)] as $rows
-      | ($interval_start | usage_epoch) as $start | ($interval_end | usage_epoch) as $end
+      | ($interval_start | usage_epoch) as $start | ($interval_end | usage_epoch) as $interval_stop
       | [$rows[] | select(.kind == "binding")] as $bindings
       | usage_intervals($bindings) as $intervals
-      | (([$intervals[] | select(.t0 == $start and .t1 == $end)] | last)
-          // {session_id: $session_id, t0: $start, t1: $end, key: "interval-view"}) as $interval
+      | (([$intervals[] | select(.t0 == $start and .t1 == $interval_stop)] | last)
+          // {session_id: $session_id, t0: $start, t1: $interval_stop, key: "interval-view"}) as $interval
       | (if any($intervals[]; . == $interval) then $intervals else $intervals + [$interval] end) as $all_intervals
       | usage_resolve_t([$rows[] | select(.kind == "segment")]; $bindings; $all_intervals) as $resolved
-      | (if $start == null or $end == null then []
+      | (if $start == null or $interval_stop == null then []
          else [$resolved[]
-           | select(.rkey == $interval.key and ._t != null and $start <= ._t and ._t < $end) | usage_priced] end) as $segments
+           | select(.rkey == $interval.key and ._t != null and $start <= ._t and ._t < $interval_stop) | usage_priced] end) as $segments
       | usage_sum($segments) as $sum
       # The index sees every segment of the session, so each territory is cut
       # against its real neighbors, not only those inside the interval.
       | usage_active_index($rows; $resolved) as $active_index
-      | usage_active_figure($active_index; $segments; $start; $end) as $active
+      | usage_active_figure($active_index; $segments; $start; $interval_stop) as $active
       | {tokens: $sum.total, dollars: $sum.usd,
-         elapsed_seconds: (if $start == null or $end == null then 0 else ([$end - $start, 0] | max | floor) end),
+         elapsed_seconds: (if $start == null or $interval_stop == null then 0 else ([$interval_stop - $start, 0] | max | floor) end),
          unpriced: (($sum.unpriced | length) > 0),
-         active_pieces: (if $start == null or $end == null then []
-           else [usage_active_pieces($active_index; $segments)[] | [([.[0], $start] | max), ([.[1], $end] | min)] | select(.[1] > .[0])] end),
+         active_pieces: (if $start == null or $interval_stop == null then []
+           else [usage_active_pieces($active_index; $segments)[] | [([.[0], $start] | max), ([.[1], $interval_stop] | min)] | select(.[1] > .[0])] end),
          active_covered: ($active.active_seconds != null),
          active_uncovered: ($active.active_lower_bound or ($active.active_seconds == null and ($segments | length) > 0))}'
 }
@@ -296,9 +296,9 @@ def usage_view_box_of($usage_records; $links; $reference; $keys):
   # A workflow row clips its active figure to its runs, the rest to their own
   # spend, and the total to the whole root, so a window two rows share counts
   # once in the total.
-  | def row($label; $group; $elapsed_seconds; $active):
+  | def row($row_label; $group; $elapsed_seconds; $active):
       usage_sum($group) as $sum
-      | {label: $label, tokens: $sum.total, dollars: $sum.usd, unpriced: (($sum.unpriced | length) > 0), elapsed_seconds: $elapsed_seconds}
+      | {label: $row_label, tokens: $sum.total, dollars: $sum.usd, unpriced: (($sum.unpriced | length) > 0), elapsed_seconds: $elapsed_seconds}
         + $active;
     ([$segments[] | select(._workflow != null)] | group_by(._workflow)
       | map(. as $group | $group[0]._workflow as $workflow
@@ -435,8 +435,8 @@ usage_render_pr() {
     # Every shown figure is the whole window or a part of it, so the window's
     # own flag says whether any of them is a minimum.
     [ "$active_lower_bound" = true ] && extra[${#extra[@]}]="$(usage_marker_active_minimum)"
-    _usage_box_print "$(jq -c 'def row($label; $figures):
-        {label: $label, tokens: $figures.sum.total, dollars: $figures.sum.usd, unpriced: (($figures.sum.unpriced | length) > 0),
+    _usage_box_print "$(jq -c 'def row($row_label; $figures):
+        {label: $row_label, tokens: $figures.sum.total, dollars: $figures.sum.usd, unpriced: (($figures.sum.unpriced | length) > 0),
          elapsed_seconds: $figures.elapsed_seconds, active_seconds: $figures.active_seconds, active_lower_bound: $figures.active_lower_bound};
       ((if .audit == null or .audit.rest.sum.total == 0 then [] else [row("Execute"; .audit.rest)] end)
         + (if .audit == null or .audit.sum.total == 0 then [] else [row("Audit"; .audit)] end)) as $rows
@@ -506,7 +506,7 @@ _usage_box_money() {
 usage_render_box() {
   local view_json="$1" display_reference="$4" as_json="$5" flush_incomplete="$6" flush_command=""
   if [ "$as_json" = 1 ]; then
-    jq -c '{rows: [.rows[] | {label, tokens, dollars, elapsed_seconds, active_seconds, active_lower_bound}],
+    jq -c '{rows: [.rows[] | {label: .label, tokens, dollars, elapsed_seconds, active_seconds, active_lower_bound}],
       total: (.total | {tokens, dollars, elapsed_seconds, active_seconds, active_lower_bound})}' <<<"$view_json"
     return 0
   fi

@@ -32,6 +32,8 @@ A note is `.gaia/migrations/<x.y.z>.md`. Each of x, y and z is `0` or a digit ru
 
 After-merge notes above a blocking note wait for the next run.
 
+A blocking note may instead hand its hop to the ordinary walk to the run's target. It then re-runs the note selection from its own version and persists the after-merge notes above it for that walk instead of leaving them for the next run, and it stops before any merge when that selection lists a blocking note. The 2.4.0 note takes this shape.
+
 ## Setup features added later
 
 A note does not carry a new setup feature to existing projects. A setup feature added after 2.0.0 ships standalone, and `/update-gaia` reaches it through its drift step; see [[Setup Features]].
