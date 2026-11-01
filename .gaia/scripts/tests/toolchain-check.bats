@@ -76,12 +76,12 @@ floor_of() {
   [[ "$output" == *"OK git 2.50.1"* ]]
 }
 
-@test "git below the floor warns on update, names installed and floor, and says latest" {
+@test "git below the floor blocks, names installed and floor, and says latest" {
   stub_current
   stub git 'git version 2.39.5'
   check --platform linux --os-id debian
-  [ "$status" -eq 3 ]
-  [[ "$output" == *"BELOW git 2.39.5 $(floor_of git) warn"* ]]
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF "BELOW git 2.39.5 $(floor_of git)"
   [[ "$output" == *"Update to the latest git"* ]]
   [[ "$output" == *"apt stays behind"* ]]
   [[ "$output" == *"brew install git"* ]]
@@ -93,8 +93,8 @@ floor_of() {
   rm "$STUBS/jq"
   check --platform darwin
   [ "$status" -eq 1 ]
-  [[ "$output" == *"BELOW pnpm 11.2.0 $(floor_of pnpm) block"* ]]
-  [[ "$output" == *"MISSING jq"* ]]
+  printf '%s\n' "$output" | grep -qxF "BELOW pnpm 11.2.0 $(floor_of pnpm)"
+  printf '%s\n' "$output" | grep -qxF "MISSING jq $(floor_of jq)"
   [[ "$output" == *"npm install -g pnpm@latest"* ]]
 }
 
@@ -109,8 +109,8 @@ floor_of() {
   [ "$status" -eq 0 ]
   rm "$STUBS/ss"
   check --platform linux --os-id debian
-  [ "$status" -eq 3 ]
-  [[ "$output" == *"MISSING ss"* ]]
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF "MISSING ss -"
   [[ "$output" == *"iproute2"* ]]
   [[ "$output" == *"dev-smoke"* ]]
 }
@@ -133,10 +133,19 @@ floor_of() {
 
 @test "the floor is read from the file, so a target bundle's newer floor governs" {
   stub_current
-  printf 'git\t3.0\tany\tuser\tblock\n' >"$STUBS/floors.tsv"
+  printf 'git\t3.0\tany\tuser\n' >"$STUBS/floors.tsv"
   check --platform darwin --floors "$STUBS/floors.tsv"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"BELOW git 2.56.0 3.0 block"* ]]
+  printf '%s\n' "$output" | grep -qxF "BELOW git 2.56.0 3.0"
+}
+
+@test "lsof missing on macOS blocks: no floor row only warns" {
+  stub_current
+  rm "$STUBS/lsof"
+  check --platform darwin
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF "MISSING lsof -"
+  [[ "$output" == *"dev-smoke"* ]]
 }
 
 @test "an unreadable version is flagged, never passed" {
@@ -172,8 +181,11 @@ floor_of() {
 }
 
 @test "the floors file has one row per tool, and the note states the same floors" {
-  run awk -F '\t' '!/^#/ && NF != 5 { print }' "$FLOORS"
+  run awk -F '\t' '!/^#/ && NF != 4 { print }' "$FLOORS"
   [ -z "$output" ]
+  run awk -F '\t' '!/^#/ && NF { n++ } END { print n + 0 }' "$FLOORS"
+  [ "$output" -gt 0 ]
+  grep -qiw 'warn' "$NOTE" && return 1
   grep -q "git $(floor_of git)" "$NOTE"
   grep -q "jq $(floor_of jq)" "$NOTE"
   grep -q "pnpm $(floor_of pnpm)" "$NOTE"

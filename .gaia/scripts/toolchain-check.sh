@@ -10,13 +10,13 @@
 #
 # One line per tool checked, then one GUIDE line per tool that fell short:
 #   OK <tool> <installed> <floor>
-#   BELOW <tool> <installed|unknown> <floor> <block|warn>
-#   MISSING <tool> <floor> <block|warn>
+#   BELOW <tool> <installed|unknown> <floor>
+#   MISSING <tool> <floor>
 #   GUIDE <tool>: <what to do>
 #
-# Exit 0 nothing fell short, 1 a block row fell short, 3 only warn rows fell
-# short, 2 a usage error or an unreadable floors file. Callers stay silent on 0,
-# so a machine at or above every floor sees no prompt.
+# Exit 0 nothing fell short, 1 a tool fell short, 2 a usage error or an
+# unreadable floors file. Callers stay silent on 0, so a machine at or above
+# every floor sees no prompt.
 #
 # The default floors file is the one beside this script's own folder, so running
 # a verified target bundle's copy of this script applies that release's floors.
@@ -180,13 +180,13 @@ socket_tool_route() {
   esac
 }
 
-# What a machine loses without the tool, so the reader can weigh the message.
-tool_effect() {
+# Why GAIA needs the tool: the stop message's explanation.
+tool_reason() {
   case "$1" in
-    git) printf 'Light audit review needs it and every review runs full without it.' ;;
+    git) printf 'GAIA'"'"'s light audit review replays the merge with git merge-tree --merge-base.' ;;
     jq) printf 'GAIA'"'"'s hooks and scripts read JSON with it.' ;;
     pnpm) printf 'GAIA installs, tests and builds with it.' ;;
-    lsof | ss) printf 'dev-smoke finds the running dev server with it and cannot run without it.' ;;
+    lsof | ss) printf 'dev-smoke finds the running dev server with it.' ;;
   esac
 }
 
@@ -195,13 +195,13 @@ guide() {
   case "$tool" in
     git | jq)
       lead="Update to the latest $tool"
-      printf 'GUIDE %s: %s: %s. %s\n' "$tool" "$lead" "$(package_route "$tool")" "$(tool_effect "$tool")"
+      printf 'GUIDE %s: %s: %s. %s\n' "$tool" "$lead" "$(package_route "$tool")" "$(tool_reason "$tool")"
       ;;
     pnpm)
-      printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_effect pnpm)"
+      printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
       ;;
     *)
-      printf 'GUIDE %s: Install %s: %s. %s\n' "$tool" "$tool" "$(socket_tool_route "$tool")" "$(tool_effect "$tool")"
+      printf 'GUIDE %s: Install %s: %s. %s\n' "$tool" "$tool" "$(socket_tool_route "$tool")" "$(tool_reason "$tool")"
       ;;
   esac
 }
@@ -228,25 +228,18 @@ version_at_least() {
   return 0
 }
 
-blocked=0
-warned=0
 short_tools=""
 
-record_short() {
-  short_tools="$short_tools $1"
-  if [ "$2" = block ]; then blocked=1; else warned=1; fi
-}
-
 tab="$(printf '\t')"
-while IFS="$tab" read -r tool floor platform upgrade on_update; do
+while IFS="$tab" read -r tool floor platform upgrade; do
   case "$tool" in '' | '#'*) continue ;; esac
   [ -z "$ONLY_TOOL" ] || [ "$tool" = "$ONLY_TOOL" ] || continue
   [ "$platform" = any ] || [ "$platform" = "$PLATFORM" ] || continue
   [ "$SCOPE" = all ] || [ "$upgrade" = user ] || continue
 
   if ! command -v "$tool" >/dev/null 2>&1; then
-    printf 'MISSING %s %s %s\n' "$tool" "$floor" "$on_update"
-    record_short "$tool" "$on_update"
+    printf 'MISSING %s %s\n' "$tool" "$floor"
+    short_tools="$short_tools $tool"
     continue
   fi
   if [ "$floor" = "-" ]; then
@@ -255,13 +248,13 @@ while IFS="$tab" read -r tool floor platform upgrade on_update; do
   fi
   version="$(installed_version "$tool")"
   if [ -z "$version" ]; then
-    printf 'BELOW %s unknown %s %s\n' "$tool" "$floor" "$on_update"
-    record_short "$tool" "$on_update"
+    printf 'BELOW %s unknown %s\n' "$tool" "$floor"
+    short_tools="$short_tools $tool"
   elif version_at_least "$version" "$floor"; then
     printf 'OK %s %s %s\n' "$tool" "$version" "$floor"
   else
-    printf 'BELOW %s %s %s %s\n' "$tool" "$version" "$floor" "$on_update"
-    record_short "$tool" "$on_update"
+    printf 'BELOW %s %s %s\n' "$tool" "$version" "$floor"
+    short_tools="$short_tools $tool"
   fi
 done <"$FLOORS_FILE"
 
@@ -269,6 +262,5 @@ for tool in $short_tools; do
   guide "$tool"
 done
 
-[ "$blocked" -eq 0 ] || exit 1
-[ "$warned" -eq 0 ] || exit 3
+[ -z "$short_tools" ] || exit 1
 exit 0
