@@ -105,6 +105,31 @@ teardown() {
   return 0
 }
 
+# Helper: run the hook from a scratch copy of its tree, so a stub owed-gate
+# script sits at the path the hook calls. The other cases here reach the real
+# script, which reads no record in this checkout and reports clear.
+use_hook_copy() {
+  local real_root
+  real_root=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
+  HOOK_TREE="$BATS_TEST_TMPDIR/hook-tree"
+  mkdir -p "$HOOK_TREE/.claude/hooks" "$HOOK_TREE/.gaia/scripts"
+  cp "$real_root/.claude/hooks/post-audit-status.sh" "$HOOK_TREE/.claude/hooks/"
+  cp -R "$real_root/.claude/hooks/lib" "$HOOK_TREE/.claude/hooks/lib"
+  cp "$real_root/.gaia/scripts/main-root-lib.sh" "$real_root/.gaia/scripts/audit-key-lib.sh" "$HOOK_TREE/.gaia/scripts/"
+  HOOK_ABSOLUTE_PATH="$HOOK_TREE/.claude/hooks/post-audit-status.sh"
+  set_gate_owed_status "${1:-0}"
+}
+
+# Helper: the stub owed-gate script exits with $1 on `status` and logs its call.
+set_gate_owed_status() {
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'printf "%%s\\n" "$*" >> "%s/gate-owed-calls"\n' "$BATS_TEST_TMPDIR"
+    printf 'exit %s\n' "$1"
+  } > "$HOOK_TREE/.gaia/scripts/audit-gate-owed.sh"
+  chmod +x "$HOOK_TREE/.gaia/scripts/audit-gate-owed.sh"
+}
+
 # Helper: link the local repo to the bare upstream and push HEAD.
 push_head_to_upstream() {
   git -C "$REPO" remote add origin "$REMOTE"
@@ -788,6 +813,7 @@ mutated_hook_mirror() {
   cp "$HOOK_ABSOLUTE_PATH" "$mirror/post-audit-status.sh"
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")"/lib/*.sh "$mirror/lib/"
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/audit-key-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-key-lib.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-gate-owed.sh"
   sed -i.bak "s|merge_base=\"\$(audit_branch_patch_merge_base \"\$repo_root\" \"\$base_tip\" HEAD 2>/dev/null)\"|merge_base=\"$substitute\"|" "$mirror/post-audit-status.sh"
   rm -f "$mirror/post-audit-status.sh.bak"
   grep -qF -- "merge_base=\"$substitute\"" "$mirror/post-audit-status.sh"
@@ -898,4 +924,51 @@ mutated_hook_mirror() {
   [ "$status" -eq 0 ]
   grep -qF -- "status: posted GAIA-Audit success" <<<"$output" || return 1
   grep -qF -- "state=success" "$API_CALLS" || return 1
+}
+
+# -----------------------------------------------------------------------------
+# Owed gate steps
+# -----------------------------------------------------------------------------
+
+@test "success declines and posts nothing while gate steps are owed" {
+  use_hook_copy 1
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_marker)
+  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"declined: gate steps owed"*"audit-gate-owed.sh run"* ]] || return 1
+  assert_no_post
+  grep -qF -- "status --root $(git -C "$REPO" rev-parse --show-toplevel)" "$BATS_TEST_TMPDIR/gate-owed-calls"
+}
+
+@test "success declines when the owed-gate script is absent" {
+  use_hook_copy
+  rm "$HOOK_TREE/.gaia/scripts/audit-gate-owed.sh"
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_marker)
+  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
+  [[ "$output" == *"declined: gate steps owed"* ]] || return 1
+  assert_no_post
+}
+
+@test "success posts when the owed gate reports clear" {
+  use_hook_copy 0
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_marker)
+  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
+  [[ "$output" == *"posted GAIA-Audit success"* ]] || return 1
+  [ -s "$API_CALLS" ]
+}
+
+@test "the refusal arm posts a failure even with gate steps owed" {
+  use_hook_copy 1
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_refusal)
+  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
+  [[ "$output" == *"posted GAIA-Audit failure"* ]] || return 1
+  [ -s "$API_CALLS" ]
 }

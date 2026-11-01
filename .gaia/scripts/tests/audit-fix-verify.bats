@@ -380,7 +380,10 @@ moved_library_paths() {
   printf '%s\n' \
     '.gaia/scripts/branch-authorship-lib.sh' \
     '.gaia/scripts/audit-pr-sections-lib.sh' \
-    '.gaia/scripts/filing-outcomes-lib.sh'
+    '.gaia/scripts/filing-outcomes-lib.sh' \
+    '.gaia/scripts/audit-veto-lib.sh' \
+    '.gaia/scripts/audit-triage-lib.sh' \
+    '.gaia/scripts/audit-gate-owed.sh'
 }
 
 # declared_edit_check <script> <path>: a fix entry names <path>, the fixer edits it
@@ -433,6 +436,41 @@ declared_edit_check() {
     echo "status=$status output=$output"
     return 1
   }
+}
+
+@test "twin: an edit to each veto, triage and owed-gate script passes once its line is off the enforcement list" {
+  local mutant_directory file_path
+  for file_path in .gaia/scripts/audit-veto-lib.sh .gaia/scripts/audit-triage-lib.sh .gaia/scripts/audit-gate-owed.sh; do
+    rm -rf "$REPO" "$BATS_TEST_TMPDIR/mutant"
+    make_repo "$REPO"
+    mkdir -p "$RUN_FOLDER"
+    mutant_directory="$BATS_TEST_TMPDIR/mutant"
+    mkdir -p "$mutant_directory"
+    cp "$REAL_SCRIPT" "$BATS_TEST_DIRNAME/../main-root-lib.sh" "$BATS_TEST_DIRNAME/../audit-key-lib.sh" "$mutant_directory/"
+    grep -vF -- "'$file_path'" "$REAL_SCRIPT" >"$mutant_directory/audit-fix-verify.sh"
+    cmp -s "$REAL_SCRIPT" "$mutant_directory/audit-fix-verify.sh" && return 1
+    declared_edit_check "$mutant_directory/audit-fix-verify.sh" "$file_path"
+    [ "$status" -eq 0 ] || {
+      echo "$file_path: status=$status output=$output"
+      return 1
+    }
+  done
+}
+
+@test "a gate-repair result with no fix entries passes check, and an undeclared changed path still fails" {
+  write_dispositions '[]'
+  take_baseline
+  take_digests
+  edit a.txt
+  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"gate-repair","finding_class":"gate/pw","path":"frontend","line":0,"disposition":"fixed","reason":"r","changed_paths":["a.txt"]}],"changed_paths":["a.txt"],"reverted_paths":[]}' >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 0 ] || {
+    echo "status=$status output=$output"
+    return 1
+  }
+  edit b.txt
+  do_check
+  [ "$status" -ne 0 ]
 }
 
 @test "UAT-032: an unlisted edit to each SPEC-093 enforcement path fails enforcement-path" {

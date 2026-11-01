@@ -176,7 +176,7 @@ clean_row_order_holds() {
   a=$(awk -v r="$row" 'BEGIN { print index(r, "check-all") }')
   b=$(awk -v r="$row" 'BEGIN { print index(r, "late worthiness pass") }')
   c=$(awk -v r="$row" 'BEGIN { print index(r, "`GAIA-Audit` status") }')
-  d=$(awk -v r="$row" 'BEGIN { print index(r, "and the merge") }')
+  d=$(awk -v r="$row" 'BEGIN { print index(r, "then the merge.") }')
   [ "$a" -gt 0 ] && [ "$b" -gt 0 ] && [ "$c" -gt 0 ] && [ "$d" -gt 0 ] || return 1
   [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && [ "$c" -lt "$d" ]
 }

@@ -61,7 +61,7 @@ cli_copy() {
   local script_file
   CLI="$BATS_TEST_TMPDIR/scripts"
   mkdir -p "$CLI"
-  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh; do
+  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh; do
     cp "$SCRIPTS/$script_file" "$CLI/$script_file"
   done
   cat >"$CLI/usage.sh" <<'EOF'
@@ -419,7 +419,7 @@ sequence_case() {
   alf_sequence 4 3
   alf_store_snapshot 2
   state_copy="$(snapshot_file "$ALF_STATE")"
-  for subcommand in findings eval brief record-values state-path current-round; do
+  for subcommand in findings eval brief record-values state-path current-round round-history veto-state reopened-round; do
     run "$CLI/audit-loop-eval.sh" "$subcommand" --root "$ALF_ROOT"
     [ "$status" -eq 0 ] || { echo "$subcommand exited $status: $output"; return 1; }
     assert_files_identical "$state_copy" "$ALF_STATE" || { echo "$subcommand changed the state"; return 1; }
@@ -1123,7 +1123,7 @@ drift_fixture() {
   [ "$(read_json "$findings" '[.entries[] | .security] | tojson')" = '[true,false,true,true]' ]
   [ "$(read_json "$findings" '[.entries[] | .cross_remit] | tojson')" = '[false,true,false,false]' ]
   [ "$(read_json "$findings" '[.entries[] | .authored] | tojson')" = '[true,true,true,false]' ]
-  [ "$(read_json "$findings" '.entries[0] | keys | join(",")')" = "authored,cross_remit,finding_class,line,member,path,security,severity" ]
+  [ "$(read_json "$findings" '.entries[0] | keys | join(",")')" = "authored,cross_remit,failure_mode,finding_class,line,member,path,security,severity" ]
 }
 
 @test "security normalization: a round whose only A(r) entry is a security:false Minor stays eligible" {
@@ -1476,4 +1476,495 @@ drift_fixture() {
       ({path:"f.txt",line:1} | authored(null; null)),
       ({path:"f.txt",line:5} | authored(["f.txt"]; [{p:"f.txt",s:1,e:2}])) ] | map(tostring) | join(",")'
   [ "$output" = "true,true,true,false" ]
+}
+
+# --- the default stop ---------------------------------------------------------
+
+SHELL_MAINTAINER=code-audit-maintainer-shell
+
+# minor_entries <path> <first> <last> [class]: non-security Minor entries.
+minor_entries() {
+  non_security_entries "$(alf_entries "$1" "$2" "$3" "${4:-rule/x}")" minor
+}
+
+# with_entries <entries-json> <extra-json>: the two lists joined.
+with_entries() {
+  jq -n -c --argjson entries "$1" --argjson extra "$2" '$entries + $extra'
+}
+
+# fresh_fixture: a new repository and branch, for a case that builds twice.
+fresh_fixture() {
+  rm -rf "$BATS_TEST_TMPDIR/repo" "$BATS_TEST_TMPDIR/origin.git"
+  alf_init && alf_branch feat/loop
+}
+
+# stop_roster: a roster giving lib/ to the shell maintainer and the rest to the
+# default member. It lives under the ignored .gaia/, so no digest moves.
+stop_roster() {
+  printf 'auditors:\n  - name: %s\n    globs:\n      - "lib/**"\n    audience: adopter\n  - name: code-audit-shell\n    globs:\n      - "scripts/**"\n    audience: adopter\n  - name: code-audit-frontend\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' \
+    "$SHELL_MAINTAINER" >"$ALF_ROOT/.gaia/audit-ci.yml"
+}
+
+# review_base_all <reason|absent>: every sidecar's review_base reason, its mtime kept.
+review_base_all() {
+  local sidecar_file
+  for sidecar_file in "$ALF_ROOT"/.gaia/local/audit/*.findings.json; do
+    if [ "$1" = absent ]; then
+      jq -c 'del(.review_base)' "$sidecar_file" >"$sidecar_file.edited"
+    else
+      jq -c --arg reason "$1" '.review_base = {sha: ("c" * 40), reason: $reason}' "$sidecar_file" >"$sidecar_file.edited"
+    fi
+    touch -r "$sidecar_file" "$sidecar_file.edited" && mv "$sidecar_file.edited" "$sidecar_file"
+  done
+}
+
+# earn_marker <member> <round>: an earned clearance for the member's digest at round r's tree.
+earn_marker() {
+  local tree digest marker_name
+  tree="$(jq -r --argjson round "$2" '.history.rounds[$round - 1].tree' "$ALF_STATE")"
+  digest="$(bash "$REPO_ROOT/.gaia/scripts/audit-member-digest.sh" --root "$ALF_ROOT" --member "$1" --ref "$tree")" || return 1
+  marker_name="$digest.$1.ok"
+  [ "$1" = code-audit-frontend ] && marker_name="$digest.ok"
+  jq -n -c --arg digest "$digest" --arg member "$1" '{digest: $digest, member: $member, provenance: "earned"}' >"$ALF_ROOT/.gaia/local/audit/$marker_name"
+}
+
+# stop_case <entries-json>...: rounds_sequence with every sidecar reviewed
+# incrementally and the last round's marker earned.
+stop_case() {
+  stop_roster
+  rounds_sequence "$@" || return 1
+  review_base_all member-clearance
+  earn_marker "$MEMBER" $#
+}
+
+# stop_base: the round-3 base meeting every term: A 3, 2, 2 of stable Minors.
+stop_base() {
+  stop_case "$(minor_entries f.txt 1 3)" "$(minor_entries f.txt 1 2)" "${1:-$(minor_entries f.txt 1 2)}"
+}
+
+# stop_of <r>: round r's snapshot with the audited root, as the hook evaluates it.
+stop_of() {
+  gaia_loop_evaluate_round "$ALF_ROOT" "$(cat "$ALF_STATE")" "$1" "$ALF_ROOT"
+}
+
+# stop_is <r> <true|false>: round r's default_stop.
+stop_is() {
+  local snapshot
+  snapshot="$(stop_of "$1")" || { echo "evaluation of round $1 failed"; return 1; }
+  [ "$(read_json "$snapshot" '.default_stop')" = "$2" ] ||
+    { echo "default_stop $(read_json "$snapshot" '.default_stop'), want $2: $(read_json "$snapshot" '{verdict, A, signals, review_bases}')"; return 1; }
+}
+
+# mutant_tree <file> <sed-args...>: a scratch tree mirroring .gaia/scripts and
+# .claude/hooks/lib (copies, never links), with <file> run through sed, then
+# sourced. Fails when sed changed nothing.
+mutant_tree() {
+  local tree="$BATS_TEST_TMPDIR/mutant" target="$1"
+  shift
+  rm -rf "$tree"
+  mkdir -p "$tree/.gaia/scripts" "$tree/.claude/hooks/lib"
+  cp "$REPO_ROOT"/.gaia/scripts/*.sh "$tree/.gaia/scripts/"
+  cp -R "$REPO_ROOT"/.claude/hooks/lib/. "$tree/.claude/hooks/lib/"
+  sed "$@" "$REPO_ROOT/.gaia/scripts/$target" >"$tree/.gaia/scripts/$target"
+  cmp -s "$REPO_ROOT/.gaia/scripts/$target" "$tree/.gaia/scripts/$target" && { echo "mutant of $target changed nothing"; return 1; }
+  MUTANT_SCRIPTS="$tree/.gaia/scripts"
+  # shellcheck source=/dev/null
+  . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
+}
+
+@test "default stop: a round-3 base meeting every term stops with S as its keys and records each member's review base" {
+  local snapshot
+  stop_base
+  snapshot="$(stop_of 3)"
+  [ "$(read_json "$snapshot" '.default_stop')" = true ] || { echo "$snapshot"; return 1; }
+  [ "$(read_json "$snapshot" '.default_stop_keys | tojson')" = "[[\"$MEMBER\",\"rule/x\",\"f.txt\",1],[\"$MEMBER\",\"rule/x\",\"f.txt\",2]]" ]
+  [ "$(read_json "$snapshot" '.review_bases | tojson')" = "{\"$MEMBER\":\"member-clearance\"}" ]
+}
+
+@test "default stop: still true on a stalled round and on an enriching round" {
+  local snapshot
+  stop_case "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 1 2)"
+  snapshot="$(stop_of 3)"
+  [ "$(read_json "$snapshot" '"\(.verdict) \(.default_stop)"')" = "stalled true" ] || return 1
+  fresh_fixture
+  stop_roster
+  alf_fill f.txt 12 feature2
+  alf_set_line other.txt 1 "enriching 1"
+  alf_commit "enriching 1"
+  alf_round 1 "$MEMBER" "$(minor_entries f.txt 1 3)"
+  alf_set_line other.txt 2 "enriching 2"
+  next_round 2 "$(minor_entries f.txt 1 2)"
+  alf_set_line f.txt 8 repaired
+  next_round 3 "$(with_entries "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 8 8 rule/y)")"
+  review_base_all member-clearance
+  earn_marker "$MEMBER" 3
+  snapshot="$(stop_of 3)"
+  [ "$(read_json "$snapshot" '"\(.verdict) \(.default_stop)"')" = "enriching true" ] || { echo "$snapshot"; return 1; }
+}
+
+@test "default stop: still true at round 6 with nitpicky and small-tail holding" {
+  local snapshot
+  stop_case "$(minor_entries f.txt 1 3)" "$(minor_entries f.txt 1 3)" "$(minor_entries f.txt 1 3)" "$(minor_entries f.txt 1 3)" \
+    "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 1 2)"
+  snapshot="$(stop_of 6)"
+  [ "$(read_json "$snapshot" '[.signals.nitpicky, .signals["small-tail"], .signals.reintroduced, .default_stop] | tojson')" = '[true,true,false,true]' ] ||
+    { echo "$snapshot"; return 1; }
+}
+
+@test "default stop: false at round 2 (mutant dropping the lower bound goes red)" {
+  stop_case "$(minor_entries f.txt 1 3)" "$(minor_entries f.txt 1 2)"
+  stop_is 2 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and \$round >= 3$/d' || return 1
+  sed -i.bak '/\[ "\$round" -ge 3 \] ||/d' "$MUTANT_SCRIPTS/audit-veto-lib.sh"
+  . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
+  stop_is 2 true
+}
+
+@test "default stop: false at round 10 and true at round 9 (mutant dropping the upper bound goes red)" {
+  local round=1
+  local -a rows=()
+  while [ "$round" -le 10 ]; do rows+=("$(minor_entries f.txt 1 2)"); round=$((round + 1)); done
+  stop_case "${rows[@]}"
+  earn_marker "$MEMBER" 9
+  stop_is 9 true || return 1
+  stop_is 10 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and \$round <= 9$/d' || return 1
+  sed -i.bak '/\[ "\$round" -le 9 \] ||/d' "$MUTANT_SCRIPTS/audit-veto-lib.sh"
+  . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
+  stop_is 10 true
+}
+
+@test "default stop: false on an unknown verdict, where A(r) is null too (mutant dropping both goes red)" {
+  local unreadable_sidecar
+  stop_base
+  # A second member whose sidecar has a review base and a marker but no
+  # readable findings: only the unknown verdict and A(r) fail.
+  alf_state_edit '.history.rounds[2].members += ["code-audit-shell"]'
+  unreadable_sidecar="$ALF_ROOT/.gaia/local/audit/$(printf 'a%.0s' $(seq 1 40)).$ALF_SLUG.code-audit-shell.findings.json"
+  printf '{"schema":1,"member":"code-audit-shell","findings":"unreadable","review_base":{"sha":"%s","reason":"member-clearance"}}\n' "$(printf 'c%.0s' $(seq 1 40))" >"$unreadable_sidecar"
+  touch -t "$(alf_time 31)" "$unreadable_sidecar"
+  earn_marker code-audit-shell 3
+  [ "$(read_json "$(stop_of 3)" '"\(.verdict) \(.A) \(.review_bases | tojson)"')" = "unknown null {\"$MEMBER\":\"member-clearance\",\"code-audit-shell\":\"member-clearance\"}" ] || return 1
+  stop_is 3 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and \$verdict != "unknown"$/d' -e '/^   and \$authored_count != null$/d' || return 1
+  sed -i.bak '/^    and (\$findings.missing_members | length) == 0$/d' "$MUTANT_SCRIPTS/audit-veto-lib.sh"
+  . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
+  stop_is 3 true
+}
+
+@test "default stop: false when A(r-2) or A(r-1) is null (each mutant goes red)" {
+  stop_base
+  alf_state_edit '.history.rounds[0].snapshot.A = null'
+  stop_is 3 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and \$second_previous_authored_count != null$/d' || return 1
+  stop_is 3 true || return 1
+  . "$SCRIPTS/audit-loop-eval.sh"
+  alf_state_edit '.history.rounds[0].snapshot.A = 3 | .history.rounds[1].snapshot.A = null'
+  stop_is 3 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and \$previous_authored_count != null$/d' || return 1
+  stop_is 3 true
+}
+
+@test "default stop: false over a legacy stored snapshot (mutant goes red)" {
+  stop_base
+  alf_state_edit 'del(.history.rounds[0].snapshot.counted_keys)'
+  stop_is 3 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and all(\$history\[\]; .triples != null)$/d' || return 1
+  stop_is 3 true
+}
+
+@test "default stop: false on a Major of non-branch authorship, an absent security flag or an unknown severity (mutant goes red)" {
+  local extra
+  for extra in '[{"path":"base.txt","line":3,"finding_class":"rule/q","severity":"major","security":false}]' \
+    '[{"path":"f.txt","line":5,"finding_class":"rule/s","severity":"minor"}]' \
+    '[{"path":"f.txt","line":5,"finding_class":"rule/s","severity":"note","security":false}]'; do
+    fresh_fixture
+    stop_base "$(with_entries "$(minor_entries f.txt 1 2)" "$extra")"
+    stop_is 3 false || { echo "extra $extra"; return 1; }
+  done
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and all(\$findings.entries\[\]; honored_in/d' || return 1
+  sed -i.bak '/^    and all(\$findings.entries\[\]; .triage == true or/d' "$MUTANT_SCRIPTS/audit-veto-lib.sh"
+  . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
+  stop_is 3 true
+}
+
+@test "default stop: false when S is empty because every counted finding is cross-remit (mutant goes red)" {
+  stop_base "$(jq -c 'map(. + {cross_remit: true})' <<<"$(minor_entries f.txt 1 2)")"
+  stop_is 3 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and (\$stop_keys | length) > 0$/d' || return 1
+  stop_is 3 true
+}
+
+# write_veto <line>: vetoes.json vetoing the member's rule/x key on f.txt:<line> from round 1.
+write_veto() {
+  mkdir -p "$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  jq -n -c --arg member "$MEMBER" --argjson line "$1" \
+    '{version: 1, keys: [{member: $member, finding_class: "rule/x", path: "f.txt", line: $line, effective_from_round: 1}]}' \
+    >"$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json"
+}
+
+@test "default stop: false under an unsatisfied veto no member reported, and its twin a member re-reported (mutant goes red)" {
+  stop_base
+  write_veto 11
+  stop_is 3 false || return 1
+  write_veto 1
+  stop_is 3 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and (\$stop_inputs.unsatisfied_vetoes | length) == 0$/d' || return 1
+  stop_is 3 true
+}
+
+@test "default stop: a member with no marker for its digest at round r's tree fails; earned, a later HEAD move leaves it true (mutant goes red)" {
+  stop_base
+  rm -f "$ALF_ROOT"/.gaia/local/audit/*.ok
+  stop_is 3 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and (\$stop_inputs.marker_gaps | length) == 0$/d' || return 1
+  stop_is 3 true || return 1
+  . "$SCRIPTS/audit-loop-eval.sh"
+  earn_marker "$MEMBER" 3
+  stop_is 3 true || return 1
+  alf_set_line other.txt 9 "after the round"
+  alf_commit "after the round"
+  stop_is 3 true
+}
+
+@test "default stop: without the audited root no marker is provable (mutant ignoring the missing inputs goes red)" {
+  local snapshot
+  stop_base
+  snapshot="$(evaluate_round 3)"
+  [ "$(read_json "$snapshot" '.default_stop')" = false ] || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and \$stop_inputs != null$/d' || return 1
+  snapshot="$(evaluate_round 3)"
+  [ "$(read_json "$snapshot" '.default_stop')" = true ]
+}
+
+@test "default stop: every incremental reason in the resolver's closed set stops, every other token and an absent base does not (mutant reading absent as incremental goes red)" {
+  local -a tokens=()
+  local token want
+  while IFS= read -r token; do tokens+=("$token"); done < <(awk '/Closed reason set:/ { reading = 1; next } /^# Exit code/ { reading = 0 }
+    reading && /^#     [a-z-]+  / { print $2 }' "$REPO_ROOT/.github/audit/resolve-audit-base.sh")
+  [ "${#tokens[@]}" -ge 4 ] || { echo "read ${#tokens[@]} tokens"; return 1; }
+  for want in member-clearance member-refusal team-signal; do
+    printf '%s\n' "${tokens[@]}" | grep -qxF -- "$want" || { echo "resolver lacks $want"; return 1; }
+  done
+  stop_base
+  for token in "${tokens[@]}"; do
+    review_base_all "$token"
+    case "$token" in
+      member-clearance | member-refusal | team-signal) want=true ;;
+      *) want=false ;;
+    esac
+    stop_is 3 "$want" || { echo "token $token"; return 1; }
+  done
+  review_base_all absent
+  stop_is 3 false || return 1
+  [ "$(read_json "$(stop_of 3)" '.review_bases | tojson')" = "{\"$MEMBER\":null}" ] || return 1
+  mutant_tree audit-loop-signals-lib.sh -e 's/def incremental_base: IN(/def incremental_base: . == null or IN(/' || return 1
+  stop_is 3 true
+}
+
+@test "default stop: a fresh Minor of a different class on the path a fixed class held keeps reintroduced false and stops" {
+  local snapshot
+  stop_roster
+  rounds_sequence "$(with_entries "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 3 3 rule/w)")" "$(minor_entries f.txt 1 2)" \
+    "$(with_entries "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 3 3 rule/y)")"
+  alf_dispositions 1 "[{\"member\":\"$MEMBER\",\"finding_class\":\"rule/w\",\"path\":\"f.txt\",\"line\":3,\"disposition\":\"fix\",\"reason\":\"r\"}]"
+  review_base_all member-clearance
+  earn_marker "$MEMBER" 3
+  snapshot="$(stop_of 3)"
+  [ "$(read_json "$snapshot" '[.signals.reintroduced, .default_stop] | tojson')" = '[false,true]' ] || { echo "$snapshot"; return 1; }
+}
+
+@test "default stop: reintroduced denies the stop (mutant dropping the term goes red)" {
+  stop_base
+  alf_dispositions 1 "[{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1,\"disposition\":\"fix\",\"reason\":\"r\"}]"
+  [ "$(read_json "$(stop_of 3)" '.signals.reintroduced')" = true ] || return 1
+  stop_is 3 false || return 1
+  mutant_tree audit-loop-signals-lib.sh -e '/^   and (\$signals.reintroduced | not)$/d' || return 1
+  stop_is 3 true
+}
+
+# honored_case <triage:true|false>: the shell maintainer reports stable Minors
+# on lib/s.sh and, at round 3, one Major there, triage-marked or not.
+honored_case() {
+  local mark='{}'
+  [ "$1" = true ] && mark='{"triage":true,"triage_reason":"below the threshold"}'
+  MEMBER="$SHELL_MAINTAINER"
+  alf_fill lib/s.sh 12 shell
+  stop_case "$(minor_entries lib/s.sh 1 3)" "$(minor_entries lib/s.sh 1 2)" \
+    "$(with_entries "$(minor_entries lib/s.sh 1 2)" "$(jq -n -c --argjson mark "$mark" '[{path: "lib/s.sh", line: 4, finding_class: "rule/t", severity: "major", security: false} + $mark]')")"
+}
+
+@test "default stop: a Major with an honored triage mark is exempt and outside S; unmarked it blocks (mutant removing the exemption goes red)" {
+  local snapshot
+  honored_case true
+  snapshot="$(stop_of 3)"
+  [ "$(read_json "$snapshot" '.default_stop')" = true ] || { echo "$snapshot"; return 1; }
+  [ "$(read_json "$snapshot" '.default_stop_keys | map(.[1]) | unique | tojson')" = '["rule/x"]' ] || return 1
+  mutant_tree audit-loop-signals-lib.sh -e 's/^   and all(\$findings.entries\[\]; honored_in(\$honored_keys) or (/   and all($findings.entries[]; (/' || return 1
+  stop_is 3 false || return 1
+  . "$SCRIPTS/audit-loop-eval.sh"
+  fresh_fixture
+  MEMBER=code-audit-frontend
+  honored_case false
+  stop_is 3 false
+}
+
+# --- the widened repeat signal ------------------------------------------------
+
+@test "reintroduced: a triple back at a shifted line after a two-round gap holds it" {
+  rounds_sequence "$(with_entries "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 3 3 rule/z)")" "$(minor_entries f.txt 1 2)" \
+    "$(minor_entries f.txt 1 2)" "$(with_entries "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 5 5 rule/z)")"
+  [ "$(read_json "$(evaluate_round 4)" '.signals.reintroduced')" = true ]
+}
+
+@test "reintroduced: a triple moving through overlapping line sets holds it" {
+  rounds_sequence "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 2 3)" "$(minor_entries f.txt 3 4)"
+  [ "$(read_json "$(evaluate_round 3)" '.signals.reintroduced')" = true ]
+}
+
+@test "reintroduced: a fixed triple re-reported at its line or at a shifted line holds it" {
+  rounds_sequence "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 1 2)"
+  [ "$(read_json "$(evaluate_round 3)" '.signals.reintroduced')" = false ] || return 1
+  alf_dispositions 1 "[{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1,\"disposition\":\"fix\",\"reason\":\"r\"}]"
+  [ "$(read_json "$(evaluate_round 3)" '.signals.reintroduced')" = true ] || return 1
+  fresh_fixture
+  rounds_sequence "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 2 3)"
+  [ "$(read_json "$(evaluate_round 3)" '.signals.reintroduced')" = false ] || return 1
+  alf_dispositions 1 "[{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1,\"disposition\":\"fix\",\"reason\":\"r\"}]"
+  [ "$(read_json "$(evaluate_round 3)" '.signals.reintroduced')" = true ]
+}
+
+# skipped_member_case <skip|reopen>: rule/z reported at round 1, then a round
+# the member did not run (another member ran, or a reopened round with no
+# members), then rule/z back at a shifted line.
+skipped_member_case() {
+  alf_fill f.txt 12 feature
+  alf_set_line other.txt 1 "round 1"
+  alf_commit "round 1"
+  alf_round 1 "$MEMBER" "$(with_entries "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 3 3 rule/z)")"
+  alf_store_snapshot 1
+  if [ "$1" = skip ]; then
+    alf_set_line other.txt 2 "round 2"
+    alf_commit "round 2"
+    alf_add_round '["code-audit-shell"]'
+    alf_stamp 2 20
+    alf_sidecar code-audit-shell "$(minor_entries g.txt 1 1)" 21
+  else
+    alf_add_round '[]'
+    alf_state_edit '.history.rounds[1].reopened = true'
+  fi
+  alf_set_line other.txt 3 "round 3"
+  next_round 3 "$(with_entries "$(minor_entries f.txt 1 2)" "$(minor_entries f.txt 5 5 rule/z)")"
+}
+
+@test "reintroduced: a round the member did not run, and a reopened round, are no gap (mutant counting them goes red)" {
+  local mode
+  for mode in skip reopen; do
+    fresh_fixture
+    skipped_member_case "$mode"
+    [ "$(read_json "$(evaluate_round 3)" '.signals.reintroduced')" = false ] || { echo "$mode: $(evaluate_round 3)"; return 1; }
+  done
+  mutant_tree audit-loop-signals-lib.sh -e 's/\.round > \$earlier and member_ran(\$triple) and/.round > $earlier and/' || return 1
+  for mode in skip reopen; do
+    fresh_fixture
+    skipped_member_case "$mode"
+    [ "$(read_json "$(evaluate_round 3)" '.signals.reintroduced')" = true ] || { echo "mutant stayed green on $mode"; return 1; }
+  done
+}
+
+# --- the stop override at the decision layer ----------------------------------
+
+@test "stop override: enriching and the round-6 fallback deny without it and allow with it, on every decision path" {
+  local plain overridden state unit_state through
+  plain='{"round":4,"verdict":"enriching","signals":{"enriching":true},"default_stop":true}'
+  overridden="$(jq -c '. + {stop_override: true}' <<<"$plain")"
+  state="$(make_state 4)"
+  through="$(_gaia_loop_minimum $((5 + $(UNIT_ROUNDS) - 1)) 10)"
+  [ "$(gaia_loop_decide_unit "$state" "$plain" "$LOW" 300000 50)" = "deny rubric:enriching false false" ] || return 1
+  [ "$(gaia_loop_decide_unit "$state" "$overridden" "$LOW" 300000 50)" = "allow context 5 $through" ] || return 1
+  [ "$(gaia_loop_decide_unit "$state" "$(jq -c '.stop_override = false' <<<"$overridden")" "$LOW" 300000 50)" = "deny rubric:enriching false false" ] || return 1
+  unit_state="$(make_state 4 ".history.units = [$(unit_entry 1 4 6 0)]")"
+  [ "$(gaia_loop_decide_member "$unit_state" "$plain" true "$LOW" 300000 50)" = "deny rubric:enriching false false" ] || return 1
+  [ "$(gaia_loop_decide_member "$unit_state" "$overridden" true "$LOW" 300000 50)" = allow ] || return 1
+  [ "$(gaia_loop_decide "$state" "$plain")" = "deny enriching" ] || return 1
+  [ "$(gaia_loop_decide "$state" "$overridden")" = allow ] || return 1
+  plain='{"round":6,"verdict":"continue","signals":{},"default_stop":true}'
+  overridden="$(jq -c '. + {stop_override: true}' <<<"$plain")"
+  state="$(make_state 6)"
+  through="$(_gaia_loop_minimum $((7 + $(UNIT_ROUNDS) - 1)) 10)"
+  [ "$(gaia_loop_decide_unit "$state" "$plain" unparseable 300000 50)" = "deny fallback false false" ] || return 1
+  [ "$(gaia_loop_decide_unit "$state" "$overridden" unparseable 300000 50)" = "allow fallback 7 $through" ] || return 1
+  [ "$(gaia_loop_decide "$state" "$plain")" = "deny allowance" ] || return 1
+  [ "$(gaia_loop_decide "$state" "$overridden")" = allow ]
+}
+
+@test "stop override: reintroduced still denies and the cap still fires at used 10" {
+  local overridden state
+  overridden='{"round":4,"verdict":"continue","signals":{"reintroduced":true,"enriching":true},"default_stop":true,"stop_override":true}'
+  state="$(make_state 4)"
+  [ "$(gaia_loop_decide_unit "$state" "$overridden" "$LOW" 300000 50)" = "deny rubric:reintroduced false false" ] || return 1
+  [ "$(gaia_loop_decide_member "$(make_state 4 ".history.units = [$(unit_entry 1 4 6 0)]")" "$overridden" true "$LOW" 300000 50)" = "deny rubric:reintroduced false false" ] || return 1
+  overridden='{"round":10,"verdict":"continue","signals":{"cap":true},"default_stop":true,"stop_override":true}'
+  state="$(make_state 10)"
+  [ "$(gaia_loop_decide_unit "$state" "$overridden" "$LOW" 300000 50)" = "deny cap false true" ] || return 1
+  [ "$(gaia_loop_decide_member "$state" "$overridden" true "$LOW" 300000 50)" = "deny cap false true" ] || return 1
+  [ "$(gaia_loop_decide "$state" "$overridden")" = "deny cap" ]
+}
+
+# --- the read-only CLI arms -----------------------------------------------------
+
+@test "cli eval: a qualifying round prints default_stop true (mutant dropping the root argument goes red)" {
+  stop_base
+  run bash "$SCRIPTS/audit-loop-eval.sh" eval --root "$ALF_ROOT" --round 3
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(read_json "$output" '.default_stop')" = true ] || return 1
+  mutant_tree audit-loop-eval.sh -e 's/gaia_loop_evaluate_round "\$main" "\$state" "\$round" "\$root"/gaia_loop_evaluate_round "$main" "$state" "$round"/' || return 1
+  run bash "$MUTANT_SCRIPTS/audit-loop-eval.sh" eval --root "$ALF_ROOT" --round 3
+  [ "$(read_json "$output" '.default_stop')" = false ]
+}
+
+@test "cli findings: entries carry failure_mode and the findings carry review_bases, neither in counted_keys" {
+  stop_base
+  run bash "$SCRIPTS/audit-loop-eval.sh" findings --root "$ALF_ROOT" --round 3
+  [ "$(read_json "$output" '[.entries[0].failure_mode, (.review_bases | tojson)] | join(" ")')" = "f {\"$MEMBER\":\"member-clearance\"}" ] || return 1
+  [ "$(read_json "$(stop_of 3)" '.counted_keys[0] | has("failure_mode")')" = false ]
+}
+
+# tree_snapshot: every file under the fixture's .gaia with its digest, so a write anywhere shows.
+tree_snapshot() {
+  find "$ALF_ROOT/.gaia" -type f | sort | while IFS= read -r file_path; do printf '%s %s\n' "$(shasum <"$file_path")" "$file_path"; done
+}
+
+@test "cli round-history and reopened-round: pinned output, and neither writes a file" {
+  local before expected head_tree
+  alf_sequence 2 1
+  alf_add_checkpoint 2 stalled
+  alf_add_answer 1 accept
+  alf_state_edit '.history.rounds[1].reopened = true'
+  before="$(tree_snapshot)"
+  expected="$(jq -c --arg member "$MEMBER" '[.history.rounds[0], .history.rounds[1]] as [$first, $second]
+    | [{round: 1, tree: $first.tree, members: [$member], keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]],
+        counted_keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]], closing: false, reopened: false, human_accept: false},
+       {round: 2, tree: $second.tree, members: [$member], keys: null, counted_keys: null, closing: false, reopened: true, human_accept: true}]' "$ALF_STATE")"
+  run bash "$SCRIPTS/audit-loop-eval.sh" round-history --root "$ALF_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$output" = "$expected" ] || { printf 'got  %s\nwant %s\n' "$output" "$expected"; return 1; }
+  run bash "$SCRIPTS/audit-loop-eval.sh" reopened-round --root "$ALF_ROOT"
+  [ "$output" = 2 ] || { echo "reopened-round at HEAD: $output"; return 1; }
+  [ "$before" = "$(tree_snapshot)" ] || { echo "a read wrote a file"; return 1; }
+  head_tree="$(alf_git rev-parse 'HEAD^{tree}')"
+  alf_state_edit '.history.rounds[1].tree = $tree' --arg tree "$(printf 'd%.0s' $(seq 1 40))"
+  run bash "$SCRIPTS/audit-loop-eval.sh" reopened-round --root "$ALF_ROOT"
+  [ "$output" = 0 ] || return 1
+  alf_state_edit '.history.rounds[1].tree = $tree | .history.rounds[1].reopened = false' --arg tree "$head_tree"
+  run bash "$SCRIPTS/audit-loop-eval.sh" reopened-round --root "$ALF_ROOT"
+  [ "$output" = 0 ]
+}
+
+@test "cli veto-state: a vetoed key no member reported is unsatisfied for the round" {
+  stop_base
+  write_veto 11
+  run bash "$SCRIPTS/audit-loop-eval.sh" veto-state --root "$ALF_ROOT" --round 3
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$output" = "{\"satisfied\":[],\"unsatisfied\":[[\"$MEMBER\",\"rule/x\",\"f.txt\",11]]}" ]
 }

@@ -11,7 +11,7 @@
 # their formulas are the ones below.
 #
 # Dual-mode. Sourced (audit-loop-bound.sh), it defines functions only:
-#   gaia_loop_evaluate_round <main-root> <state-json> <r>   the snapshot for round r
+#   gaia_loop_evaluate_round <main-root> <state-json> <r> [<audited-root>]   round r's snapshot
 #   gaia_loop_findings <main-root> <state-json> <r>     F(r)
 #   gaia_loop_allowed <state-json>                      the round-count allowance
 #   gaia_loop_decide <state-json> <r-snapshot-json>     `allow` or `deny <reason>`
@@ -22,8 +22,14 @@
 # Run (the main thread), it is a read-only CLI: it never writes a file, never
 # takes the state lock, never calls gaia_loop_write_state.
 #   audit-loop-eval.sh findings|eval|brief|record-values|state-path|current-round
-#                      |next-unit|unit-window|pinned-question
-#                      --root <audited-root> [--round <r>]
+#                      |next-unit|unit-window|pinned-question|round-history
+#                      |veto-state|reopened-round --root <audited-root> [--round <r>]
+# round-history prints one {round, tree, members, keys, counted_keys, closing,
+# reopened, human_accept} per recorded round (keys and counted_keys as identity
+# keys, null when not stored; human_accept: closing, or an accept answering a
+# checkpoint at round r-1 or r). veto-state prints audit-veto-lib.sh's
+# {satisfied, unsatisfied} for round r. reopened-round prints the latest
+# round's number when it is reopened on HEAD's tree, else 0.
 # unit-window prints `<unit> <start_round> <through_round> <closing>` for the
 # latest unit; closing is `true` when an accept admitted it, so its one round
 # is the closing round and audit-loop-unit runs no fixer in it.
@@ -74,7 +80,10 @@
 # DECISION. No decision function reads a file: the bound hook passes the
 # context reading (exactly what gaia_context_read printed) and the effective line
 # config. s = used + 1; k = K; <eligible> is the snapshot's accept_eligible (false
-# with no snapshot). The order of the steps is the security property.
+# with no snapshot). The order of the steps is the security property. The hook
+# adds stop_override in memory (see DEFAULT STOP); with it true, enriching,
+# stalled, nitpicky and small-tail deny nowhere, gaia_loop_decide skips its
+# allowance and verdict steps, and step 6 allows `fallback s min(s+k-1, 10)`.
 #   gaia_loop_decide (a new-tree dispatch outside the unit protocol): deny
 #   `cap` when used >= 10; deny `allowance` when used >= allowed; else deny
 #   `stalled` or `enriching` when that is round r = used's verdict and no
@@ -135,10 +144,14 @@
 #   stalled       the verdict is stalled.
 #   nitpicky      r >= 6, and A(r) and A(r-1) are both non-empty with every
 #                 entry of each severity minor.
-#   reintroduced  r >= 3, A(r), A(r-1), A(r-2) non-null, and either a key of
-#                 A(r-2) is absent from A(r-1) and back in A(r), or some
-#                 (member, finding_class, path) is in all three with its line
-#                 set disjoint between consecutive rounds (it moved each round).
+#   reintroduced  r >= 3, A(r), A(r-1), A(r-2) non-null, and any of: a key of
+#                 A(r-2) absent from A(r-1), which ran its member, and back in
+#                 A(r); a triple
+#                 (member, finding_class, path) of A(r) counted in an earlier
+#                 round i with a gap, a round j, i < j < r, that ran the member
+#                 and did not count it; a triple in all three whose line set
+#                 gains a line each round (it moved); a triple of A(r) disposed
+#                 fix in some dispositions-<k>.json, k < r, at any line.
 #   small-tail    r >= 6, 1 <= A(r) <= 2, no A(r) entry is severity critical,
 #                 A(r-1) non-null and A(r) >= A(r-1) (no progress last round).
 # gaia:maintainer-only:start
@@ -158,6 +171,17 @@
 # recomputed. A stored snapshot without counted_keys predates the signals:
 # nitpicky, reintroduced, small-tail and waiver-drift stay off where they need
 # it, and accept_eligible is false.
+#
+# DEFAULT STOP. S = A(r)'s keys minus honored triage marks (audit-triage-lib.sh)
+# and cross-remit entries. default_stop holds when all of: 3 <= r <= 9; S
+# non-empty; every F(r) entry but an honored mark is severity minor and
+# security false; every stored snapshot of rounds 1..r-1 has counted_keys;
+# reintroduced false; the verdict not unknown; A(r), A(r-1), A(r-2) non-null;
+# every member's review_bases reason is member-clearance, member-refusal or
+# team-signal; each member has an earned marker for its digest at round r's
+# tree; no veto is unsatisfied (audit-veto-lib.sh). default_stop_keys is S when
+# it holds, else []. stop_override, never stored, is default_stop with no fix
+# on an S key in round r's dispositions file.
 #
 # FINDING SET AND A(r). F(r): for each member of round r, the newest
 # `*.<raw_branch_slug>.<member>.findings.json` under <MAIN>/.gaia/local/audit/
@@ -194,6 +218,10 @@ _GAIA_LOOP_EVAL_DIRECTORY="${BASH_SOURCE[0]%/*}"
 . "$_GAIA_LOOP_EVAL_DIRECTORY/context-checkpoint-lib.sh" || return 6 2>/dev/null || exit 6
 # shellcheck source=/dev/null
 . "$_GAIA_LOOP_EVAL_DIRECTORY/audit-loop-signals-lib.sh" || return 6 2>/dev/null || exit 6
+# shellcheck source=/dev/null
+. "$_GAIA_LOOP_EVAL_DIRECTORY/audit-triage-lib.sh" || return 6 2>/dev/null || exit 6
+# shellcheck source=/dev/null
+. "$_GAIA_LOOP_EVAL_DIRECTORY/audit-veto-lib.sh" || return 6 2>/dev/null || exit 6
 
 _GAIA_LOOP_CHECKPOINT_DEFAULT=6
 _GAIA_LOOP_GRANT_DEFAULT=3
@@ -261,6 +289,10 @@ gaia_loop_decide() {
   allowed="$(gaia_loop_allowed "$state")" || return 5
   if [ "$used" -ge "$_GAIA_LOOP_HARD_CAP" ]; then
     printf 'deny cap\n'
+    return 0
+  fi
+  if [ "$(_gaia_loop_stop_override_set "$snapshot")" = true ]; then
+    printf 'allow\n'
     return 0
   fi
   if [ "$used" -ge "$allowed" ]; then
@@ -366,8 +398,8 @@ _gaia_loop_waived_keys() {
 
 # _gaia_loop_raw_findings <main-root> <state-json> <r>: F(r) before authorship.
 _gaia_loop_raw_findings() {
-  local main="$1" state="$2" round="$3" branch_key slug stamp baseline audit_directory member candidate_file sorted_candidates newest member_entries
-  local entries="[]" missing="[]"
+  local main="$1" state="$2" round="$3" branch_key slug stamp baseline audit_directory member candidate_file sorted_candidates newest member_entries reason
+  local entries="[]" missing="[]" review_bases="{}"
   local -a candidates members
   branch_key="$(printf '%s' "$state" | jq -r '.branch')"
   slug="$(printf '%s' "$state" | jq -r --argjson round "$round" '.history.rounds[$round - 1].raw_branch_slug // ""')"
@@ -397,22 +429,26 @@ _gaia_loop_raw_findings() {
       # security:false finding would read true.
       member_entries="$(jq -c --arg member "$member" '.findings | if type == "array" then map({member: $member, finding_class, path, line, severity,
         security: (if (.security | type) == "boolean" then .security else true end),
-        cross_remit: (.cross_remit == true)}
+        cross_remit: (.cross_remit == true), failure_mode: (if (.failure_mode | type) == "string" then .failure_mode else "" end)}
         + (if .triage == true then {triage: true, triage_reason: (if (.triage_reason | type) == "string" then .triage_reason else "" end)} else {} end))
         else error("no findings") end' <"$newest" 2>/dev/null)" || member_entries=""
     fi
+    reason=null
+    [ -n "$newest" ] && reason="$(jq -c '.review_base.reason? | if type == "string" then . else null end' <"$newest" 2>/dev/null)"
+    review_bases="$(jq -n -c --argjson review_bases "$review_bases" --arg member "$member" --argjson reason "${reason:-null}" '$review_bases + {($member): $reason}')"
     if [ -n "$member_entries" ]; then
       entries="$(jq -n -c --argjson existing "$entries" --argjson additional "$member_entries" '$existing + $additional')"
     else
       missing="$(jq -n -c --argjson existing "$missing" --arg member "$member" '$existing + [$member]')"
     fi
   done
-  jq -n -c --argjson round "$round" --argjson entries "$entries" --argjson missing_members "$missing" '{round: $round, entries: $entries, missing_members: $missing_members}'
+  jq -n -c --argjson round "$round" --argjson entries "$entries" --argjson missing_members "$missing" --argjson review_bases "$review_bases" \
+    '{round: $round, entries: $entries, missing_members: $missing_members, review_bases: $review_bases}'
 }
 
 # gaia_loop_findings <main-root> <state-json> <r>: F(r) as
-# {"round","entries":[...],"missing_members":[...]}, each entry
-# {member, finding_class, path, line, severity, security, cross_remit, authored},
+# {"round","entries":[...],"missing_members":[...],"review_bases":{member: reason|null}}, each entry
+# {member, finding_class, path, line, severity, security, cross_remit, failure_mode, authored},
 # plus triage and triage_reason on an entry whose sidecar marks it triage:true
 # (the dispositions check decides whether the mark is honored).
 gaia_loop_findings() {
@@ -442,16 +478,18 @@ def isnew: key as $entry_key | any(($previous_keys // [])[]; . == $entry_key) | 
    A: $authored_count, verdict: $verdict,
    counted_keys: $counted_summaries, raw_count: $raw, waived_count: $waived,
    signals: $signals, accept_eligible: $eligible, accept_reasons: $reasons,
+   default_stop: $default_stop, default_stop_keys: (if $default_stop then $stop_keys else [] end), review_bases: $review_bases,
    evidence: {members: $members, missing_members: $findings.missing_members, new_keys_on_repaired_lines: $new_keys_on_repaired_lines, A_series: $authored_series},
    evaluated_at: $now}
 '
 
-# gaia_loop_evaluate_round <main-root> <state-json> <r>: round r's snapshot.
-# rc 2 no such round, 5 a bad round record or an unreadable vetoes.json. Every
-# failure writes one `audit-loop-eval: <reason>` line to stderr, which the bound
-# hook relays in its deny.
+# gaia_loop_evaluate_round <main-root> <state-json> <r> [<audited-root>]: round
+# r's snapshot; without the audited root no marker is provable, so
+# default_stop is false. rc 2 no such round, 5 a bad round record or an
+# unreadable vetoes.json. Every failure writes one `audit-loop-eval: <reason>`
+# line to stderr, which the bound hook relays in its deny.
 gaia_loop_evaluate_round() {
-  local main="$1" state="$2" round="$3" branch_key round_context tree commit previous_tree authorship enriching_hunks="null" findings disposed vetoed waived is_maintainer_repo=false snapshot_status
+  local main="$1" state="$2" round="$3" audited_root="${4-}" branch_key round_context tree commit previous_tree authorship enriching_hunks="null" findings disposed vetoed waived is_maintainer_repo=false snapshot_status stop_inputs
   gaia_loop_is_uint "$round" && [ "$round" -ge 1 ] ||
     { printf 'audit-loop-eval: round %s is not a positive integer\n' "$round" >&2; return 2; }
   round_context="$(printf '%s' "$state" | jq -c --argjson round "$round" '
@@ -464,6 +502,8 @@ gaia_loop_evaluate_round() {
          previous_snapshot: (if $round >= 2 then $rounds[$round - 2].snapshot else null end),
          second_previous_snapshot: (if $round >= 3 then $rounds[$round - 3].snapshot else null end),
          series: [$rounds[0:$round - 1][] | .snapshot.A?],
+         history_snapshots: [range(0; $round - 1) as $index | $rounds[$index] | {round: ($index + 1), members: (.members // []),
+           counted_keys: (if (.snapshot.counted_keys? | type) == "array" then .snapshot.counted_keys | map([.member, .finding_class, .path, .line]) else null end)}],
          granted_round: (if $latest_grant == null then 0 else ([.history.checkpoints[] | select(.index == $latest_grant.checkpoint)] | .[0].at_round // 0) end)}
       end' 2>/dev/null)" ||
     { printf 'audit-loop-eval: round %s is not in the recorded history, or the state cannot be read for it\n' "$round" >&2; return 2; }
@@ -492,7 +532,10 @@ gaia_loop_evaluate_round() {
   # gaia:maintainer-only:start
   [ -f "$main/.claude/rules/maintainers/harness-triage-threshold.md" ] && is_maintainer_repo=true
   # gaia:maintainer-only:end
+  stop_inputs="$(_gaia_loop_stop_inputs "$main" "$audited_root" "$state" "$round" "$tree" "$(printf '%s' "$round_context" | jq -c '.members')" "$findings")" || stop_inputs=null
   jq -n -c --argjson findings "$findings" --argjson enriching_hunks "$enriching_hunks" --argjson disposed "$disposed" \
+    --argjson history_snapshots "$(printf '%s' "$round_context" | jq -c '.history_snapshots')" \
+    --argjson fixed_triples "$(_gaia_loop_fixed_triples "$main" "$branch_key" "$round")" --argjson stop_inputs "${stop_inputs:-null}" \
     --argjson previous_keys "$(printf '%s' "$round_context" | jq -c '.previous_keys')" \
     --argjson series "$(printf '%s' "$round_context" | jq -c '.series')" \
     --argjson members "$(printf '%s' "$round_context" | jq -c '.members')" \
@@ -500,7 +543,7 @@ gaia_loop_evaluate_round() {
     --argjson waivedkeys "$waived" --argjson is_maintainer_repo "$is_maintainer_repo" \
     --argjson granted_round "$(printf '%s' "$round_context" | jq -r '.granted_round')" --argjson round "$round" \
     --arg merge_base "$(printf '%s' "$authorship" | jq -r '.mb')" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    "$_GAIA_LOOP_AUTHORED_JQ $_GAIA_LOOP_VERDICT_JQ" ||
+    "$_GAIA_LOOP_AUTHORED_JQ $_GAIA_LOOP_STOP_DEFS_JQ $_GAIA_LOOP_VERDICT_JQ" ||
     { snapshot_status=$?; printf 'audit-loop-eval: could not compute the snapshot for round %s\n' "$round" >&2; return "$snapshot_status"; }
 }
 
@@ -537,7 +580,7 @@ _gaia_loop_brief() {
   allowed="$(gaia_loop_allowed "$state")"
   pending="$(gaia_loop_pending_checkpoint "$state")"
   snapshot="$(printf '%s' "$state" | jq -c '.history.rounds | last | .snapshot')"
-  [ "$snapshot" = null ] && { snapshot="$(gaia_loop_evaluate_round "$main" "$state" "$used")" || return $?; }
+  [ "$snapshot" = null ] && { snapshot="$(gaia_loop_evaluate_round "$main" "$state" "$used" "$root")" || return $?; }
   i=1
   while [ "$i" -le "$used" ]; do
     if [ "$i" -eq "$used" ]; then round_snapshot="$snapshot"; else round_snapshot="$(printf '%s' "$state" | jq -c --argjson i "$i" '.history.rounds[$i - 1].snapshot')"; fi
@@ -567,7 +610,7 @@ _gaia_loop_brief() {
 }
 
 _gaia_loop_usage() {
-  printf 'usage: audit-loop-eval.sh findings|eval|brief|record-values|state-path|current-round|next-unit|unit-window|pinned-question --root <audited-root> [--round <r>]\n' >&2
+  printf 'usage: audit-loop-eval.sh findings|eval|brief|record-values|state-path|current-round|next-unit|unit-window|pinned-question|round-history|veto-state|reopened-round --root <audited-root> [--round <r>]\n' >&2
   return 2
 }
 
@@ -606,7 +649,7 @@ _gaia_loop_cli() {
     esac
   done
   case "$subcommand" in
-    findings | eval | brief | record-values | state-path | current-round | next-unit | unit-window | pinned-question) ;;
+    findings | eval | brief | record-values | state-path | current-round | next-unit | unit-window | pinned-question | round-history | veto-state | reopened-round) ;;
     *) _gaia_loop_usage; return 2 ;;
   esac
   case "$root" in /*) ;; *) printf 'audit-loop-eval: --root must be an absolute path\n' >&2; return 2 ;; esac
@@ -629,7 +672,8 @@ _gaia_loop_cli() {
     0) ;;
     1)
       case "$subcommand" in
-        current-round) printf '0\n'; return 0 ;;
+        current-round | reopened-round) printf '0\n'; return 0 ;;
+        round-history) printf '[]\n'; return 0 ;;
         next-unit) printf '1 1\n'; return 0 ;;
         # A first-dispatch quick review needs no earlier full clearance, so the
         # ledger can hold a clear while no round exists. This branch is reached
@@ -672,6 +716,23 @@ _gaia_loop_cli() {
       return 0
       ;;
     brief) _gaia_loop_brief "$root" "$main" "$state"; return $? ;;
+    round-history)
+      printf '%s' "$state" | jq -c '. as $state
+        | [$state.allowance.answers[] | select(.kind == "accept") | .checkpoint as $index
+           | $state.history.checkpoints[] | select(.index == $index) | .at_round] as $accepted_at
+        | [$state.history.rounds | to_entries[] | (.key + 1) as $round | .value
+           | {round: $round, tree, members: (.members // []), keys: (.snapshot.keys? // null),
+              counted_keys: (if (.snapshot.counted_keys? | type) == "array" then .snapshot.counted_keys | map([.member, .finding_class, .path, .line]) else null end),
+              closing: (.closing == true), reopened: (.reopened == true),
+              human_accept: (.closing == true or any($accepted_at[]; . == $round - 1 or . == $round))}]'
+      return $?
+      ;;
+    reopened-round)
+      subcommand_output="$(_gaia_loop_git -C "$root" rev-parse 'HEAD^{tree}' 2>/dev/null)" || subcommand_output=""
+      printf '%s' "$state" | jq -r --arg head_tree "$subcommand_output" \
+        '.history.rounds | if (last | .reopened == true and $head_tree != "" and .tree == $head_tree) then length else 0 end'
+      return $?
+      ;;
   esac
   [ -n "$round" ] || round="$used"
   if ! gaia_loop_is_uint "$round" || [ "$round" -lt 1 ] || [ "$round" -gt "$used" ]; then
@@ -679,7 +740,15 @@ _gaia_loop_cli() {
     return 2
   fi
   if [ "$subcommand" = findings ]; then gaia_loop_findings "$main" "$state" "$round"; return $?; fi
-  gaia_loop_evaluate_round "$main" "$state" "$round"
+  if [ "$subcommand" = veto-state ]; then
+    # Round r's keys: the stored snapshot's, else F(r) read afresh.
+    subcommand_output="$(printf '%s' "$state" | jq -c --argjson round "$round" '.history.rounds[$round - 1].snapshot.keys? // empty')"
+    [ -n "$subcommand_output" ] || subcommand_output="$(_gaia_loop_raw_findings "$main" "$state" "$round" | jq -c '.entries | map([.member, .finding_class, .path, .line]) | unique')" || return 2
+    gaia_veto_keys_state "$main" "$branch_key" "$state" "$round" "$subcommand_output" ||
+      { printf 'audit-loop-eval: %s/vetoes.json is unreadable or malformed\n' "$(gaia_loop_run_directory "$main" "$branch_key")" >&2; return 5; }
+    return 0
+  fi
+  gaia_loop_evaluate_round "$main" "$state" "$round" "$root"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

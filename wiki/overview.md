@@ -59,7 +59,7 @@ Route files are flat, dot-delimited, and grouped by name prefix. See [[Routing]]
 
 ## Quality Gate
 
-Every change passes through [[Quality Gate]]: typecheck → lint → unit test → E2E → dev smoke → build. Pre-commit hooks enforce a subset on every commit; Claude runs the full pipeline before any source-touching commit. Zero tolerance for warnings.
+Every change passes through [[Quality Gate]]: typecheck → lint → unit test → E2E → dev smoke → build. Pre-commit hooks enforce a subset on every commit; Claude runs the full pipeline before any source-touching commit (an audit fix round may run the smaller gate, see [[Quality Gate#The smaller gate]]). Zero tolerance for warnings.
 
 ## Knowledge Hygiene
 

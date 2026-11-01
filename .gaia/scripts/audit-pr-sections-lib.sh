@@ -1,10 +1,11 @@
 # shellcheck shell=bash
 #
-# The PR-body renderer and the residual recorder of audit-dispositions-check.sh,
-# split out to keep that script small. Sourced by it, and it relies on the
-# caller's _error, _load_vetoes, _valid_dispositions, _round_lookup,
-# _divert_line, _TEMPORARY_FILES, _TRIAGE_MEMBERS, _GAIA_DISPOSITIONS_DIRECTORY,
-# RUN_FOLDER, VETOES and FINDING_FILE. Runs nothing at source time. Never `cd`s.
+# The PR-body renderer, the residual counter and the residual recorder of
+# audit-dispositions-check.sh, split out to keep that script small. Sourced by
+# it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions,
+# _round_lookup, _has_snapshot, _snapshot_path, _evaluator, _divert_line,
+# _RESIDUAL_REASON_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS,
+# _GAIA_DISPOSITIONS_DIRECTORY, RUN_FOLDER, VETOES and FINDING_FILE. Runs nothing at source time. Never `cd`s.
 
 # The text normalization every rendered reason goes through. A `-->` would end
 # the keyed comment the residue tally parses, and a line break would shift the
@@ -20,14 +21,20 @@ def line_of: if type == "number" and . >= 1 then . else 1 end;
 # _ROWS_JQ: one round's PR-body candidate rows. A waiver or triage row exists
 # only inside the render bound (the lookup says security false and severity
 # not critical); divert rows carry no reason, since only their count is rendered.
+# An accept row drops a key any veto names, whatever its round: the veto
+# repairs it, so it is no longer a residual. Waiver rows drop a key only for
+# the rounds its veto binds.
 # shellcheck disable=SC2016
-_ROWS_JQ="$_ROW_TEXT_JQ"'
+_ROWS_JQ="$_ROW_TEXT_JQ$_RESIDUAL_REASON_JQ"'
 def key_array: [.member, .finding_class, .path, .line];
 def in_bound: . != null and .security == false and .severity != "critical";
 ($vetoes | map(select(.effective_from_round <= $round) | [.member, .finding_class, .path, .line])) as $vetoed_keys
+| ($vetoes | map([.member, .finding_class, .path, .line])) as $ever_vetoed_keys
 | ($lookup | map({key: (key_array | tojson), value: .}) | from_entries) as $lookup_by_key
 | [.entries[] | key_array] as $disposed_keys
-| [ (.entries[] | select(.disposition != "fix") | select(key_array as $key | $vetoed_keys | any(. == $key) | not)
+| [ (.entries[] | select(.disposition != "fix")
+      | select(key_array as $key | ($vetoed_keys | any(. == $key))
+          or (.disposition == "accept-residual" and ($ever_vetoed_keys | any(. == $key))) | not)
       | $lookup_by_key[(key_array | tojson)] as $lookup_entry
       | (if .disposition == "accept-residual" then "accept"
          elif .disposition == "divert" then "divert"
@@ -38,7 +45,7 @@ def in_bound: . != null and .security == false and .severity != "critical";
          else "" end) as $section
       | select($section != "")
       | {round: $round, section: $section, member, path, line, finding_class,
-         reason: (if $section == "divert" then "" else text(.reason) end)}),
+         reason: (if $section == "divert" then "" elif $section == "accept" then text(residual_reason($lookup_entry)) else text(.reason) end)}),
     ($lookup[] | select(.triage == true and (.member | IN($triage_members[])) and in_bound)
       | select(key_array as $key | ($disposed_keys | any(. == $key)) or ($vetoed_keys | any(. == $key)) | not)
       | {round: $round, section: "triage", member, path, line, finding_class, reason: text(.triage_reason)}) ]
@@ -53,7 +60,8 @@ _RECORDED_JQ="$_ROW_TEXT_JQ"'
   | select(type == "object" and (.member | type) == "string" and (.finding_class | type) == "string"
       and (.path | type) == "string" and (.line | type) == "number")
   | select([.finding_class, .path, (.line | line_of)] as $key | $dropped | any(. == $key) | not)
-  | {round: 0, section: "accept", member, path, line: (.line | line_of), finding_class, reason: text(.reason)}]
+  | {round: 0, section: "accept", member, path, line: (.line | line_of), finding_class, reason: text(.reason),
+     source: (if (.source | type) == "string" then .source else "" end)}]
 '
 
 # shellcheck disable=SC2016
@@ -135,10 +143,11 @@ _recorded_rows() {
   jq -c -R -n --argjson dropped "$dropped" "$_RECORDED_JQ" <"$recorded_file" 2>/dev/null || return 3
 }
 
-_command_pr_sections() {
-  local dispositions_file base round chunks="" one lookup rows texts text_file clean absent pending divert_count divert_line=""
-  local fixed="[]" round_fixed recorded
-  _load_vetoes || return 3
+# _section_rows: every round's candidate rows and the recorded ones, one per
+# (section, key) with the latest round winning, sorted for rendering. The
+# caller has loaded VETOES. rc 3 on an unreadable input.
+_section_rows() {
+  local dispositions_file base round chunks="" one lookup fixed="[]" round_fixed recorded
   for dispositions_file in "$RUN_FOLDER"/dispositions-*.json; do
     [ -e "$dispositions_file" ] || continue
     base="${dispositions_file##*/}"
@@ -154,7 +163,13 @@ _command_pr_sections() {
   done
   recorded="$(_recorded_rows "$VETOES" "$fixed")" || { _error "unreadable $RUN_FOLDER/recorded-residuals.jsonl"; return 3; }
   chunks="$chunks$recorded"$'\n'
-  rows="$(printf '%s' "$chunks" | jq -c -s 'add // [] | sort_by(-.round) | unique_by([.section, .path, .line, .finding_class]) | sort_by(.path, .line, .finding_class)')" || return 3
+  printf '%s' "$chunks" | jq -c -s 'add // [] | sort_by(-.round) | unique_by([.section, .path, .line, .finding_class]) | sort_by(.path, .line, .finding_class)'
+}
+
+_command_pr_sections() {
+  local rows texts text_file clean absent pending divert_count divert_line=""
+  _load_vetoes || return 3
+  rows="$(_section_rows)" || return 3
   texts="$(printf '%s' "$rows" | jq -r '.[] | select(.section != "divert") | .reason')" || return 3
   text_file="$(mktemp "${TMPDIR:-/tmp}/audit-dispositions-reason.XXXXXX")" || { _error "cannot create a scratch file"; return 3; }
   _TEMPORARY_FILES+=("$text_file")
@@ -165,6 +180,37 @@ _command_pr_sections() {
   [ "$divert_count" -eq 0 ] || divert_line="$(_divert_line "$divert_count")"
   printf '%s' "$rows" | jq -r --argjson clean "$clean" --argjson absent "$absent" --argjson pending "$pending" \
     --arg divert_line "$divert_line" "$_SECTIONS_JQ" || return 3
+}
+
+# _command_residual_count: {"total","ask"} over the accepted residuals
+# pr-sections renders, withheld ones included. ask counts what the residual
+# question lists: rows of a round whose default stop held with no human
+# accept (from its version-3 snapshot, else the live evaluator) and
+# filing-replay rows. Worthiness rows are out: no member owns them, so a veto
+# on one could never be cleared. ask is 0 after a closing latest round, since
+# a spent accept admits no unit to fix anything chosen. rc 3 when an input or
+# the evaluator fails.
+_command_residual_count() {
+  local rows history round round_stop asking="[]"
+  _load_vetoes || return 3
+  rows="$(_section_rows)" || return 3
+  history="$(_evaluator round-history)" || { _error "the evaluator could not read the round history"; return 3; }
+  for round in $(printf '%s' "$rows" | jq -r '[.[] | select(.section == "accept" and .round > 0) | .round] | unique | .[]'); do
+    round_stop=""
+    if _has_snapshot "$round"; then
+      round_stop="$(jq -c 'select(.version == 3) | [.default_stop == true, .human_accept == true]' <"$(_snapshot_path "$round")" 2>/dev/null)" || round_stop=""
+    fi
+    if [ -z "$round_stop" ]; then
+      round_stop="$(_evaluator eval --round "$round" | jq -c --argjson history "$history" --argjson round "$round" \
+        '[.default_stop == true, any($history[]; .round == $round and .human_accept == true)]')" ||
+        { _error "the evaluator could not read round $round"; return 3; }
+    fi
+    [ "$round_stop" = "[true,false]" ] && asking="$(jq -n -c --argjson asking "$asking" --argjson round "$round" '$asking + [$round]')"
+  done
+  printf '%s' "$rows" | jq -c --argjson history "$history" --argjson asking "$asking" '[.[] | select(.section == "accept")] as $accepted
+    | {total: ($accepted | length),
+       ask: (if ($history | last | .closing) == true then 0
+             else [$accepted[] | select((.round == 0 and .source == "filing-replay") or (.round as $round | $asking | any(. == $round)))] | length end)}'
 }
 
 # _command_record_residual: append one filing-replay row for the finding in

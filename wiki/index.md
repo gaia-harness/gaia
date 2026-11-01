@@ -83,6 +83,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 
 ## Decisions (ADRs)
 
+- [[Audit Convergence On Minor-only Fix Churn|Audit convergence on Minor-only fix churn]]
 - [[per-call-bash-hook-cost-cut|Per-call Bash hook cost cut]]: what each registered hook costs every matched tool call
 - [[shadcn Component Layer]]: GAIA's component layer, the vendored-ui policy.
 - [[React Compiler]]: React Compiler runs by default in build, dev, Vitest and Storybook from one shared module; thresholds, adopter steps and rollback.

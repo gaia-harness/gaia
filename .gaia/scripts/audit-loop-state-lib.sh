@@ -11,9 +11,11 @@
 # write only `allowance`. All take gaia_loop_lock, re-read the file under it
 # (another writer may have landed while they waited), validate, and write
 # through gaia_loop_write_state. Nothing else writes the file, and
-# audit-loop-eval.sh's CLI never calls a write function. A typed `audit-accept`
-# is a deliberate human override of the accept-eligibility gate that the
-# AskUserQuestion accept option carries.
+# audit-loop-eval.sh's CLI never calls a write function. A round the bound
+# hook records when it admits a unit carries `reopened: true` and no members
+# (its header, THE REOPENED ROUND); a member dispatch records every other
+# round. A typed `audit-accept` is a deliberate human override of the
+# accept-eligibility gate that the AskUserQuestion accept option carries.
 #
 # Corrupt means not valid JSON, `schema != 1`, a missing required key, or a
 # recorded tree/commit/merge base that is not a hex object id. A corrupt file

@@ -108,6 +108,9 @@ send() {
   send_payload "$(mk_payload 0 "$1" "${2:-.}")"
 }
 
+# An AskUserQuestion with no connection to the audit loop.
+UNRELATED='.tool_input = {questions: [{question: "Which color?", header: "Color", multiSelect: false, options: [{label: "Red", description: "r"}, {label: "Blue", description: "b"}]}]}'
+
 snapshot() { cp "$ALF_STATE" "$BATS_TEST_TMPDIR/before.json"; }
 unchanged() { cmp -s "$BATS_TEST_TMPDIR/before.json" "$ALF_STATE"; }
 
@@ -369,11 +372,13 @@ CASES
   [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
 }
 
-@test "a different session id on the main checkout records nothing and stays silent about an unrelated question" {
+@test "a different session id on the main checkout records nothing and declines the checkpoint-shaped question visibly" {
   seed_pinned
   alf_git checkout -q main
   snapshot
   SID=other-session send "$(continue_label)"
+  declined "other session, shaped"
+  SID=other-session send "$(continue_label)" "$UNRELATED"
   [ "$status" -eq 0 ]
   unchanged
   [ -z "$output" ]
@@ -401,6 +406,9 @@ CASES
   rm -rf "$ALF_ROOT/.gaia/local/protected/audit-loop"
   send "$(continue_label)"
   [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -qF 'Nothing was recorded'
+  send "$(continue_label)" "$UNRELATED"
+  [ "$status" -eq 0 ]
   [ -z "$output" ]
   cmp -s "$BATS_TEST_TMPDIR/before.json" "$OLD_STATE_DIRECTORY/feat/ask.json"
   mkdir -p "$ALF_ROOT/.gaia/local/protected/audit-loop/feat"
@@ -412,7 +420,8 @@ CASES
 
 @test "a tool that is not AskUserQuestion, or no audit state at all, exits 0 silently" {
   seed_pinned
-  local valid
+  local valid PIN_USE
+  PIN_USE="$(state_pin)"
   valid="$(mk_payload 0 "$(continue_label)")"
   snapshot
   send_payload "$(mk_payload 0 "$(continue_label)" '.tool_name = "Bash"')"
@@ -420,9 +429,13 @@ CASES
   [ -z "$output" ]
   unchanged
   rm -rf "$ALF_ROOT/.gaia/local/protected/audit-loop"
-  send_payload "$valid"
+  send_payload "$(mk_payload 0 "$(continue_label)" "$UNRELATED")"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+  send_payload "$valid"
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -qF 'Nothing was recorded'
+  printf '%s' "$output" | grep -qF 'audit-grant'
 }
 
 @test "invocation with argv, or with empty stdin, exits 1 and records nothing" {
@@ -486,6 +499,80 @@ CASES
   printf '%s' "$output" | grep -qF 'locked'
 }
 
+# --- unrelated questions are silent, shaped ones decline -----------------------
+
+# silent <why>: exit 0, no output, state byte-identical.
+silent() {
+  [ "$status" -eq 0 ] || { printf 'status %s for %s\n' "$status" "$1" >&2; return 1; }
+  [ -z "$output" ] || { printf 'output for %s: %s\n' "$1" "$output" >&2; return 1; }
+  unchanged || { printf 'state changed for %s\n' "$1" >&2; return 1; }
+}
+
+@test "an unrelated question is silent with and without a checkpoint pending, from a sub-agent, a non-interactive session and an unlisted mode" {
+  seed_pinned
+  local PIN_USE
+  PIN_USE="$(state_pin)"
+  snapshot
+  send "$(continue_label)" "$UNRELATED"
+  silent "pending, plain"
+  send "$(continue_label)" "$UNRELATED | .agent_id = \"agent-1\""
+  silent "sub-agent"
+  CLAUDE_CODE_ENTRYPOINT=sdk-cli send "$(continue_label)" "$UNRELATED"
+  silent "non-interactive"
+  send "$(continue_label)" "$UNRELATED | .permission_mode = \"dontAsk\""
+  silent "unlisted mode"
+  alf_state_edit '.history.checkpoints = [] | .allowance.answers = []'
+  snapshot
+  send "$(continue_label)" "$UNRELATED | .agent_id = \"agent-1\""
+  silent "nothing pending, sub-agent"
+  send "$(continue_label)" "$UNRELATED | .permission_mode = \"dontAsk\""
+  silent "nothing pending, unlisted mode"
+}
+
+@test "a header that merely contains the pinned header, and a label that contains a pinned label, stay silent" {
+  seed_pinned
+  snapshot
+  send "$(continue_label)" "$UNRELATED | .tool_input.questions[0].header = \"Audit loop status\""
+  silent "header substring"
+  send "$(continue_label)" "$UNRELATED | .tool_input.questions[0].options[0].label = \"Continue audit in this session now\""
+  silent "label containing a pinned label"
+}
+
+@test "a changed header and question text still decline visibly when an option label is pinned" {
+  seed_pinned
+  snapshot
+  send "$(continue_label)" '.tool_input.questions[0].header = "Edited" | .tool_input.questions[0].question += " (edited)"'
+  declined "altered copy with a checkpoint pending"
+}
+
+@test "an exact replay with nothing pending declines visibly, from a checkout with state and from one with none" {
+  seed_pinned
+  local payload_json
+  payload_json="$(mk_payload 0 "$(continue_label)")"
+  send_payload "$payload_json"
+  [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
+  snapshot
+  send_payload "$payload_json"
+  declined "replay with state"
+  rm -rf "$ALF_ROOT/.gaia/local/protected/audit-loop"
+  send_payload "$payload_json"
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -qF 'Nothing was recorded'
+  printf '%s' "$output" | grep -qF 'audit-grant'
+}
+
+@test "corrupt state declines visibly whatever the shape" {
+  seed_pinned
+  local PIN_USE
+  PIN_USE="$(state_pin)"
+  printf '{ not json' >"$ALF_STATE"
+  snapshot
+  send "$(continue_label)" "$UNRELATED"
+  declined "corrupt, unrelated"
+  send "$(continue_label)"
+  declined "corrupt, shaped"
+}
+
 # --- the hook itself -----------------------------------------------------------
 
 @test "the hook parses under stock bash and never exits 2" {
@@ -495,6 +582,40 @@ CASES
 }
 
 # --- mutants: each guard can fail ----------------------------------------------
+
+# The header and the wiki sentence state the interactive check, the order and
+# the silence scope. HEADER_FILE and WIKI_FILE let a mutant point at scratch copies.
+doc_pin_holds() {
+  local header_file="${HEADER_FILE:-$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh}" wiki_file="${WIKI_FILE:-$REPO_ROOT/wiki/concepts/Claude Hooks.md}"
+  grep -qF 'Headless runs have no AskUserQuestion tool' "$header_file" && return 1
+  grep -qF 'The interactive session check declines' "$header_file" || return 1
+  grep -qF 'before any numbered check' "$header_file" || return 1
+  grep -qF 'Silence covers only unrelated questions' "$header_file" || return 1
+  grep -qF 'which declines headless runs' "$wiki_file" || return 1
+  grep -qF 'before any check below' "$wiki_file" || return 1
+  grep -qF 'silence covers only unrelated questions' "$wiki_file" || return 1
+  true
+}
+
+@test "doc pin: the hook header and the wiki sentence state the interactive check, the order and the silence scope" {
+  doc_pin_holds
+}
+
+@test "mutant: restoring the old headless sentence turns the doc pin red" {
+  local scratch_header="$BATS_TEST_TMPDIR/header.sh"
+  sed 's/The interactive session check declines/Headless runs have no AskUserQuestion tool. The interactive session check declines/' "$HOOK" >"$scratch_header"
+  cmp -s "$HOOK" "$scratch_header" && return 1
+  HEADER_FILE="$scratch_header" doc_pin_holds && return 1
+  true
+}
+
+@test "mutant: a wiki sentence without the order turns the doc pin red" {
+  local scratch_wiki="$BATS_TEST_TMPDIR/hooks.md"
+  sed 's/before any check below/later/' "$REPO_ROOT/wiki/concepts/Claude Hooks.md" >"$scratch_wiki"
+  cmp -s "$scratch_wiki" "$REPO_ROOT/wiki/concepts/Claude Hooks.md" && return 1
+  WIKI_FILE="$scratch_wiki" doc_pin_holds && return 1
+  true
+}
 
 # scratch_hook <sed-expression>: a scratch copy of the hook with its libraries
 # reached through a `.gaia` symlink beside it; sets HOOK and proves the edit
@@ -515,6 +636,22 @@ scratch_hook() {
   send "$(continue_label)" '.tool_input.questions[0].header = "Edited"'
   [ "$status" -eq 0 ]
   [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
+}
+
+@test "mutant: with the shape test removed, an unrelated question from a sub-agent is no longer silent" {
+  seed_pinned
+  scratch_hook 's/^\[ "\$(_ag_shaped "\$shape_pin")" = true \] || exit 0$/true/'
+  snapshot
+  send "$(continue_label)" "$UNRELATED | .agent_id = \"agent-1\""
+  [ -n "$output" ]
+}
+
+@test "mutant: with substring matching, a near-miss header is no longer silent" {
+  seed_pinned
+  scratch_hook 's/\.header == "Audit loop"/(.header | tostring | contains("Audit loop"))/'
+  snapshot
+  send "$(continue_label)" "$UNRELATED | .tool_input.questions[0].header = \"Audit loop status\""
+  [ -n "$output" ]
 }
 
 @test "mutant: with the agent_id check disabled, a sub-agent payload records" {
