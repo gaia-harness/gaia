@@ -20,8 +20,8 @@ deny() {
 # acting_directory: print the acting agent's directory, the payload cwd when it
 # is an absolute path inside a git work tree, else nothing (callers then use
 # this process's cwd). Payload cwd is measured, not contracted (wiki Claude
-# Hooks, "Payload `cwd` is per-agent"), so the fallback stays. Every rule that
-# judges a checkout asks here, so one segment is never read against two.
+# Hooks, "Payload `cwd` is per-agent"), so the fallback stays. The branch reads,
+# the reset rule and directory-word resolution all ask here.
 acting_directory() {
   if [[ "${GAIA_HOOK_CWD:-}" == /* ]] \
      && git -C "$GAIA_HOOK_CWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -52,8 +52,9 @@ current_branch() {
 #                   variable or a substitution the scan cannot expand, it
 #                   points nowhere, or there is no resolver to ask
 #
-# Both readable answers carry <directory> in its tilde-expanded form, which is what a
-# caller reads a branch out of. A caller that read the raw word instead would
+# Both readable answers carry <directory> tilde-expanded and, when relative,
+# prefixed with the acting directory, which is what a caller reads a branch
+# out of. A caller that read the raw word instead would
 # resolve a tilde path here and then read a branch out of the literal `~`
 # spelling, which answers nothing and allows.
 #
@@ -83,8 +84,9 @@ resolve_directory_kind() {
     '~/'*) directory="$HOME/${directory:2}" ;;
   esac
   command -v gaia_resolve_common_directory >/dev/null 2>&1 || { printf 'unknown'; return 0; }
-  # A relative word is relative to where the shell stands, which is the acting
-  # directory, not this process.
+  # A relative word resolves against the acting directory, not this process's
+  # cwd. A preceding tracked `cd` is not applied: `cd wt && git -C sub` reads
+  # `sub` under the acting directory.
   acting=$(acting_directory)
   if [ -n "$acting" ] && [[ "$directory" != /* ]]; then
     directory="$acting/$directory"
