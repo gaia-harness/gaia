@@ -86,7 +86,11 @@
 #      "stop_detail":"...","dispositions_files":["<path>"],
 #      "waiver_table":"<markdown, informational>","residual_path":"...",
 #      "diverted_count":<int>,"diverted_records":["<path>"],
-#      "filing_outcomes":["<path>"],"filing_pending":<int>}
+#      "filing_outcomes":["<path>"],"filing_pending":<int>,
+#      "accepted_residual_count":<int>}
+#     accepted_residual_count is `.total` of audit-dispositions-check.sh
+#     residual-count when the unit ends: a run-wide total, informational, never
+#     summed across unit files (the main thread reads residual-count itself).
 #     A unit that opened no round writes one element
 #     {"round":<start>,"opened":false,"reason":"<stop_reason>"}.
 #
@@ -153,6 +157,9 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/audit-pr-sections-lib.sh'    # renders the PR-body records and the recorded residuals
   '.gaia/scripts/filing-outcomes-lib.sh'      # reads which keys the filer refused as branch-authored
   '.gaia/scripts/audit-loop-signals-lib.sh'   # rubric signals and unit/member decisions
+  '.gaia/scripts/audit-veto-lib.sh'           # decides veto satisfaction and the reopened round
+  '.gaia/scripts/audit-triage-lib.sh'         # the triage mark the dispositions check honors
+  '.gaia/scripts/audit-gate-owed.sh'          # the owed-gate record the status refusal trusts
   '.claude/agents/audit-loop-unit.md'         # the unit orchestrator's definition
   '.gaia/statusline/gaia-statusline.sh'       # writes the context reading the gate trusts
   '.gaia/statusline/context-reading.sh'       # the context reading writer
