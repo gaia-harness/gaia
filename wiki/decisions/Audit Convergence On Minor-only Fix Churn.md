@@ -4,7 +4,7 @@ status: active
 created: 2026-11-01
 updated: 2026-11-01
 promoted_at: 2026-11-01T11:43:15Z
-promoted_hash: sha256:ab1f2c5ceeb8792f03b4434b57f51f9f858ff6c74fd4609530257fa0261c24fb
+promoted_hash: sha256:1cc302513f499a7e96c556eacbf89a7e88a128a60beaa7d3314fa0ff54119097
 pr_number: 3224
 tags: [decision, audit, quality]
 ---
@@ -17,7 +17,7 @@ The audit loop ends on its own from round 3 through round 9 when a round reviewe
 
 Late rounds review only the previous fix, so they mostly critique that fix: each one costs a member wave and a full gate run for findings such as translation-key tidying. The loop already had signals for fix-on-fix churn, but they stopped for a human, and an all-Minor round waited until round 6. The default stop ends the ordinary case without a human and keeps the human for the cases that need one.
 
-**The default stop.** `.gaia/scripts/audit-loop-eval.sh`'s header owns the formula and is its single owner; pages point at it. In outline: every dispatched member reviewed incrementally and holds an earned marker for its current digest, the round's history is readable, every counted finding is Minor and not security-class, nothing in the round of any authorship is Critical, Major or security-class, no key sits under an unsatisfied veto, and the repeat signal does not hold. A qualifying round overrides the fix-on-fix, nitpicky, small-tail and stalled signals for itself. A repeating Minor and the round-10 cap still stop at the branch checkpoint, and a checkpoint grant does not suspend the stop. The result and the review scope it read are frozen in the round's snapshot, so a re-grade reads the same answer.
+**The default stop.** `.gaia/scripts/audit-loop-eval.sh`'s header owns the formula and is its single owner; pages point at it. In outline: every dispatched member reviewed incrementally and holds an earned marker for its current digest, the round's history is readable, every counted finding is Minor and not security-class, nothing in the round of any authorship is Critical, Major or security-class, no key sits under an unsatisfied veto, and the repeat signal does not hold. A qualifying round overrides the enriching, nitpicky, small-tail and stalled signals for itself. A repeating Minor and the round-10 cap still stop at the branch checkpoint, and a checkpoint grant does not suspend the stop. The result and the review scope it read are frozen in the round's snapshot, so a re-grade reads the same answer.
 
 **Only the stop or a human accepts a residual.** `.gaia/scripts/audit-dispositions-check.sh` passes an `accept-residual` entry only when the frozen stop holds for that round or a human accept is recorded, and otherwise reports `accept-residual-not-eligible`. A unit can no longer choose accept-and-note on its own. On maintainer harness paths the triage threshold wins over the stop: honored marks count toward nothing, a threshold waive may sit in a qualifying round, and a Minor meeting a fix criterion is fixed, so the stop does not apply that round.
 

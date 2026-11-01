@@ -572,8 +572,7 @@ if [ "$post_state" = "success" ] && [ -x "$resolver" ]; then
   fi
 fi
 
-# SUCCESS also requires the owed gate steps (Playwright, dev smoke, build) to be
-# clear; any non-zero exit, a missing script's 127 included, reads as owed.
+# Any non-zero exit, a missing script's 127 included, reads as owed.
 if [ "$post_state" = "success" ] \
    && ! bash "$_repository_root_directory/.gaia/scripts/audit-gate-owed.sh" status --root "$repo_root" >/dev/null 2>&1; then
   emit_decline "gate steps owed (Playwright, dev smoke test, build); next step: run .gaia/scripts/audit-gate-owed.sh run --root <root> --run-folder <run folder>"

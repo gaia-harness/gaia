@@ -258,7 +258,6 @@ record_flags_accepted() {
 }
 
 @test "a closing round stops only on an unsatisfied vetoed key, and the veto bullet skips a satisfied one" {
-  assert_pinned 'A closing round stops only on an unsatisfied vetoed key; a satisfied one needs no synthetic entry.'
   assert_pinned 'a key in `Vetoes:` that `audit-loop-eval.sh veto-state --root <root> --round <r>` lists unsatisfied'
   assert_pinned 'and that `audit-loop-eval.sh veto-state --root <root> --round <r>` lists unsatisfied is disposed `fix`'
   assert_pinned 'A satisfied key needs no synthetic entry.'

@@ -125,7 +125,8 @@ selection() {
   [ -z "$paths" ] || printf '%s\n' "$paths" | sort -u
 }
 
-# True when every fix entry of the round is a Minor, non-security finding.
+# Prints smaller when the round has a fix entry and every one is a Minor,
+# non-security finding with a sidecar row, else full.
 choose() {
   local dispositions="$folder/dispositions-$round.json" findings
   [ -f "$dispositions" ] || return 3
