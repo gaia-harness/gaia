@@ -322,9 +322,9 @@ while IFS= read -r segment; do
   esac
 
   # The checkout this segment acts on: its own `-C`, else the directory the most
-  # recent preceding `cd` moved into, else empty: the branch reads then use the
-  # acting directory (`current_branch`), the reset rule this process's cwd. A
-  # `cd` into a linked worktree is this repository but another checkout.
+  # recent preceding `cd` moved into, else empty: the branch reads and the reset rule then
+  # use the acting directory (`acting_directory`). A `cd` into a linked
+  # worktree is this repository but another checkout.
   #
   # The `-C` word goes through the same resolution the `cd` arm above uses
   # rather than reaching the branch read raw. The scan that produced it models

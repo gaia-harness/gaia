@@ -17,16 +17,24 @@ deny() {
   exit 0
 }
 
+# acting_directory: print the acting agent's directory, the payload cwd when it
+# is an absolute path inside a git work tree, else nothing (callers then use
+# this process's cwd). Payload cwd is measured, not contracted (wiki Claude
+# Hooks, "Payload `cwd` is per-agent"), so the fallback stays. Every rule that
+# judges a checkout asks here, so one segment is never read against two.
+acting_directory() {
+  if [[ "${GAIA_HOOK_CWD:-}" == /* ]] \
+     && git -C "$GAIA_HOOK_CWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    printf '%s' "$GAIA_HOOK_CWD"
+  fi
+  return 0
+}
+
 # current_branch <directory>: the branch checked out there. With no directory,
-# the acting agent's: the payload cwd when it is an absolute path inside a git
-# tree, else this process's. Payload cwd is measured, not contracted (wiki
-# Claude Hooks, "Payload `cwd` is per-agent"), so the fallback stays.
+# the acting agent's (see acting_directory).
 current_branch() {
   local cwd="$1"
-  if [[ -z "$cwd" && "${GAIA_HOOK_CWD:-}" == /* ]] \
-     && git -C "$GAIA_HOOK_CWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    cwd=$GAIA_HOOK_CWD
-  fi
+  [[ -n "$cwd" ]] || cwd=$(acting_directory)
   if [[ -n "$cwd" ]]; then
     git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null || echo ""
   else
@@ -63,7 +71,7 @@ current_branch() {
 # What each caller then does with a `foreign` word is what it did before the
 # ambiguity arm existed; the classification is the only thing restored here.
 resolve_directory_kind() {
-  local directory="$1" given_common_directory own_common_directory
+  local directory="$1" given_common_directory own_common_directory acting
   [ -n "$directory" ] || { printf 'unknown'; return 0; }
   # The tilde arrives as a literal character, never expanded, because it reached
   # this hook as text inside the tool call rather than through a shell. SC2088
@@ -75,9 +83,15 @@ resolve_directory_kind() {
     '~/'*) directory="$HOME/${directory:2}" ;;
   esac
   command -v gaia_resolve_common_directory >/dev/null 2>&1 || { printf 'unknown'; return 0; }
+  # A relative word is relative to where the shell stands, which is the acting
+  # directory, not this process.
+  acting=$(acting_directory)
+  if [ -n "$acting" ] && [[ "$directory" != /* ]]; then
+    directory="$acting/$directory"
+  fi
   given_common_directory=$(gaia_resolve_common_directory "$directory" 2>/dev/null) || { printf 'unknown'; return 0; }
   [ -n "$given_common_directory" ] || { printf 'unknown'; return 0; }
-  own_common_directory=$(gaia_resolve_common_directory 2>/dev/null) || { printf 'unknown'; return 0; }
+  own_common_directory=$(gaia_resolve_common_directory ${acting:+"$acting"} 2>/dev/null) || { printf 'unknown'; return 0; }
   if [ -n "$own_common_directory" ] && [ "$given_common_directory" = "$own_common_directory" ]; then
     printf 'same %s' "$directory"
   else
@@ -342,6 +356,7 @@ push_refspec_names_main() {
 reset_hard_moves_head() {
   local directory="$1" ambiguous="$2" argument hard=0 target="" skip_next=0 target_commit head_commit
   local -a in_directory=()
+  [ -n "$directory" ] || directory=$(acting_directory)
   [ -n "$directory" ] && in_directory=(-C "$directory")
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi

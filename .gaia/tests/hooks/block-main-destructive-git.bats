@@ -431,6 +431,32 @@ run_hook_split() {
   assert_denied_by_json
 }
 
+@test "process cwd in the main checkout on main, payload cwd a worktree holding extra commits: a hard reset to main is denied" {
+  on_main
+  local worktree_directory="$BATS_TEST_TMPDIR/wt"
+  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
+  git -C "$worktree_directory" commit --quiet --allow-empty -m "worktree only"
+  run_hook_split 'git reset --hard main' "$REPO" "$worktree_directory"
+  assert_denied_by_json
+  run_hook_split 'git reset --hard HEAD' "$REPO" "$worktree_directory"
+  assert_allowed_by_json
+}
+
+@test "relative cd and -C words resolve against the payload cwd, not the process cwd" {
+  on_main
+  local worktree_directory="$BATS_TEST_TMPDIR/wt"
+  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
+  mkdir "$worktree_directory/sub" "$REPO/sub"
+  run_hook_split 'cd sub && git push' "$REPO" "$worktree_directory"
+  assert_allowed_by_json
+  run_hook_split 'git -C sub commit -m x' "$REPO" "$worktree_directory"
+  assert_allowed_by_json
+  run_hook_split 'cd sub && git commit -m x' "$worktree_directory" "$REPO"
+  assert_denied_by_json
+  run_hook_split 'git -C sub commit -m x' "$worktree_directory" "$REPO"
+  assert_denied_by_json
+}
+
 @test "a payload cwd that is not an absolute path inside a git tree falls back to the process cwd" {
   on_main
   run_hook_split 'git push' "$REPO" "relative/dir"
