@@ -399,12 +399,18 @@ digest_statement_passes() {
 }
 
 # reconcile_passes <page>: rc 0 when the reconcile text calls refused-authored
-# a named violation the unit re-disposes, and still stops on failed.
+# a named violation that the unit re-disposes only where the check allows
+# accept-residual, stops needs-human otherwise, and still stops on failed.
 reconcile_passes() {
   local reconcile
-  reconcile="$(section "$FIXROUND" "$1" | sentences | grep -F -- 'A `refused-authored` outcome is a named violation')" || return 1
-  grep -qF -- 'the unit re-disposes, not a stop' <<<"$reconcile" || return 1
-  section "$FIXROUND" "$1" | grep -qF -- 'or a `failed` outcome) stops the unit `dispositions-check-failed`'
+  reconcile="$(section "$FIXROUND" "$1" | sentences)" || return 1
+  grep -qF -- 'A `refused-authored` outcome is a named violation.' <<<"$reconcile" || return 1
+  grep -qF -- 'Where `check` allows `accept-residual`' <<<"$reconcile" || return 1
+  grep -qF -- 'the unit re-disposes: it rewrites that entry' <<<"$reconcile" || return 1
+  grep -qF -- 'Otherwise it stops `needs-human` naming the key, and a veto on that `file` row clears the stop' <<<"$reconcile" || return 1
+  grep -qF -- 'a recorded row is outside the eligibility refusal and still reaches the residual question' <<<"$reconcile" || return 1
+  grep -qF -- 'the unit re-disposes, not a stop' <<<"$reconcile" && return 1
+  grep -qF -- 'or a `failed` outcome) stops the unit `dispositions-check-failed`' <<<"$reconcile"
 }
 
 @test "the fixer template hands the fixer the promoted pages, with a red twin" {
@@ -420,9 +426,11 @@ reconcile_passes() {
   true
 }
 
-@test "the reconcile text names refused-authored a named violation the unit re-disposes, with a red twin" {
+@test "the reconcile text re-disposes a refused-authored key only where accept-residual is allowed, with red twins" {
   reconcile_passes "$PAGE" || return 1
-  reconcile_passes "$(page_with 's/is a named violation the unit re-disposes, not a stop/is a stop/')" && return 1
+  reconcile_passes "$(page_with 's/is a named violation\. Where/is a named violation the unit re-disposes, not a stop. Where/')" && return 1
+  reconcile_passes "$(page_with 's/Otherwise it stops `needs-human`/Otherwise it goes on/')" && return 1
+  reconcile_passes "$(page_with 's/a recorded row is outside the eligibility refusal and still reaches/a recorded row counts nothing and reaches/')" && return 1
   true
 }
 
@@ -441,4 +449,194 @@ reconcile_passes() {
   sed 's/refused-authored/refused/g' "$ROOT/.claude/skills/file-tech-debt/SKILL.md" >"$copy"
   grep -qF -- 'refused-authored' "$copy" && return 1
   true
+}
+
+# --- the default stop on the loop pages ------------------------------------
+
+# replace_in <source> <from> <to>: prints the path of a scratch copy of
+# <source> with the first literal <from> replaced by <to>. A <from> that
+# matches nothing fails loudly, so a reworded sentence never leaves a red
+# twin identical to the page.
+replace_in() {
+  local content scratch
+  content="$(cat "$1")"
+  [[ "$content" == *"$2"* ]] || {
+    echo "red twin anchor matched nothing: $2" >&2
+    return 1
+  }
+  scratch="$(mktemp "$BATS_TEST_TMPDIR/edited.XXXXXX")"
+  printf '%s\n' "${content/"$2"/"$3"}" >"$scratch"
+  printf '%s\n' "$scratch"
+}
+
+# in_order <text> <marker>...: rc 0 when every marker occurs in the text, each
+# after the one before it.
+in_order() {
+  local text="$1" marker
+  shift
+  for marker in "$@"; do
+    [[ "$text" == *"$marker"* ]] || return 1
+    text="${text#*"$marker"}"
+  done
+  true
+}
+
+# clean_row_passes <runbook>: rc 0 when the clean row runs its steps in order.
+clean_row_passes() {
+  local row
+  row="$(grep -F -- '| `clean` |' "$1")" || return 1
+  in_order "$row" 'as a last guard' 'then the late worthiness pass' 'then the residual count read' 'then the residual question' 'then the owed steps' 'then the diverted surfacing' 'then the `GAIA-Audit` status' 'then the merge report' 'then the merge. |'
+}
+
+@test "UAT-009: the clean row orders the last guard, late pass, count read, residual question, owed steps, diverted surfacing, status, merge report and merge, with red twins" {
+  local mutated
+  clean_row_passes "$RUNBOOK" || return 1
+  mutated="$(replace_in "$RUNBOOK" 'then the owed steps ([[#Posting the status last]]), ' '')" || return 1
+  mutated="$(replace_in "$mutated" 'then the merge report,' 'then the owed steps, then the merge report,')" || return 1
+  clean_row_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'then the merge report, ' '')" || return 1
+  clean_row_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'then the merge report, then the merge. |' 'then the merge, then the merge report. |')" || return 1
+  clean_row_passes "$mutated" && return 1
+  true
+}
+
+# count_read_passes <runbook>: rc 0 when the clean row reads the residual count
+# once, after the late pass, and never sums it.
+count_read_passes() {
+  local row
+  row="$(grep -F -- '| `clean` |' "$1")" || return 1
+  grep -qF -- 'bash .gaia/scripts/audit-dispositions-check.sh residual-count --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>' <<<"$row" || return 1
+  grep -qF -- 'run once, after the late pass so its rows are included' <<<"$row" || return 1
+  grep -qF -- 'the residual question and the merge report both use that one result, which is never summed: the value is run-wide' <<<"$row" || return 1
+  grep -qF -- "the unit file's \`accepted_residual_count\` is informational" <<<"$row"
+}
+
+@test "UAT-009: the count read runs once after the late pass and is never summed, with red twins" {
+  local mutated
+  count_read_passes "$RUNBOOK" || return 1
+  mutated="$(replace_in "$RUNBOOK" 'which is never summed' 'which is summed across units')" || return 1
+  count_read_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'run once, after the late pass so its rows are included' 'run per unit')" || return 1
+  count_read_passes "$mutated" && return 1
+  true
+}
+
+# residual_question_passes <runbook>: rc 0 when the residual question asks
+# under a header other than the checkpoint's and does not pause an unattended run.
+residual_question_passes() {
+  local paragraph header
+  paragraph="$(section "$DISPATCH_UNIT" "$1" | sentences)" || return 1
+  header="$(grep -F -- 'In an interactive run where the count read' <<<"$paragraph" | sed -n 's/.*with the header `\([^`]*\)`, never.*/\1/p')"
+  [ "$header" = Residuals ] || return 1
+  grep -qF -- 'never `Audit loop`' <<<"$paragraph" || return 1
+  grep -qF -- "\`.ask\` is non-zero" <<<"$paragraph" || return 1
+  grep -qF -- 'The options are `Merge (Recommended)` and `Fix chosen ones`.' <<<"$paragraph" || return 1
+  grep -qF -- 'An unattended run does not pause; the residue drain is the route after the merge.' <<<"$paragraph"
+}
+
+@test "UAT-018: the residual question uses the Residuals header, never the checkpoint's, with red twins" {
+  local mutated
+  residual_question_passes "$RUNBOOK" || return 1
+  grep -qF -- '.header == "Audit loop"' "$ROOT/.claude/hooks/audit-loop-ask-grant.sh" || return 1
+  mutated="$(replace_in "$RUNBOOK" 'with the header `Residuals`, never `Audit loop`' 'with the header `Audit loop`, never `Residuals`')" || return 1
+  residual_question_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'An unattended run does not pause;' 'An unattended run asks too;')" || return 1
+  residual_question_passes "$mutated" && return 1
+  true
+}
+
+# merge_report_passes <runbook>: rc 0 when the merge report is the main
+# thread's message before the merge, rendered with the count read's total.
+merge_report_passes() {
+  local sentence_text
+  sentence_text="$(section "$DISPATCH_UNIT" "$1" | sentences)" || return 1
+  grep -qF -- 'The main thread'"'"'s message when the audit loop clears before the merge, and the step directly before the merge in the `clean` row.' <<<"$sentence_text" || return 1
+  grep -qF -- 'It is rendered from the unit report, with `.total` from the count read: the count of accepted residuals and a link to the pull request'"'"'s `## Accepted residuals (recorded, not fixed)` section.' <<<"$sentence_text" || return 1
+  grep -qF -- 'It is not the `/update-gaia` artifact of the same name.' <<<"$sentence_text"
+}
+
+@test "UAT-009: the merge report is the main thread's message rendered from the count read's total, with red twins" {
+  local mutated
+  merge_report_passes "$RUNBOOK" || return 1
+  mutated="$(replace_in "$RUNBOOK" 'with `.total` from the count read' 'with the sum of the unit files')" || return 1
+  merge_report_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'It is not the `/update-gaia` artifact of the same name.' '')" || return 1
+  merge_report_passes "$mutated" && return 1
+  true
+}
+
+# owed_steps_passes <runbook>: rc 0 when the status-post section states the
+# owed-steps condition and its exits.
+owed_steps_passes() {
+  local owed
+  owed="$(section '^#### Posting the status last' "$1" | sentences)" || return 1
+  grep -qF -- 'run `bash .gaia/scripts/audit-gate-owed.sh status --root <RESOLVED_ROOT>` before the status posts.' <<<"$owed" || return 1
+  grep -qF -- 'On exit 1, start `bash .gaia/scripts/audit-gate-owed.sh run --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` in the background' <<<"$owed" || return 1
+  grep -qF -- 'wait with Monitor on `gate-owed exit`.' <<<"$owed" || return 1
+  grep -qF -- 'Exit 1 where a fixer can run dispatches the next unit from step 1, and the bound hook reopens the round' <<<"$owed" || return 1
+  grep -qF -- 'stops `needs-human` naming the step, and no status posts.' <<<"$owed" || return 1
+  grep -qF -- 'Exit 3 is a refusal, such as a held dev port: nothing reopens, the steps stay owed, and the main thread asks the human as step 7 of [[Quality Gate]] does' <<<"$owed" || return 1
+  grep -qF -- 'This covers every ending: clean, default stop, closing round, quick or light clear, and the late worthiness pass.' <<<"$owed" || return 1
+  grep -qF -- 'A post-clearance commit, a CHANGELOG commit, a catch-up merge or a wiki-only correction owes nothing' <<<"$owed"
+}
+
+@test "UAT-021: the status post runs the owed steps as a condition on every ending, with red twins" {
+  local mutated
+  owed_steps_passes "$RUNBOOK" || return 1
+  mutated="$(replace_in "$RUNBOOK" 'naming the step, and no status posts.' 'naming the step, and the status posts.')" || return 1
+  owed_steps_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'a CHANGELOG commit,' 'a CHANGELOG commit that touches source,')" || return 1
+  owed_steps_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'Exit 3 is a refusal' 'Exit 3 is a failure')" || return 1
+  owed_steps_passes "$mutated" && return 1
+  true
+}
+
+# unattended_veto_passes <runbook>: rc 0 when a refused-authored stop routes
+# to a veto the unattended run writes itself.
+unattended_veto_passes() {
+  local row
+  row="$(grep -F -- '| `dispositions-check-failed`, `needs-human`, `failure` |' "$1")" || return 1
+  grep -qF -- 'When `stop_detail` names a `refused-authored` key, the route is a veto on that key' <<<"$row" || return 1
+  grep -qF -- 'an interactive run offers it as the recommended answer' <<<"$row" || return 1
+  grep -qF -- 'an unattended run writes the veto itself, per the veto paragraph below, and starts the next unit' <<<"$row" || return 1
+  grep -qF -- 'a veto can only demand more fix, never less, so it needs no human consent' <<<"$row"
+}
+
+@test "UAT-012: an unattended run writes the refused-authored veto itself, and restoring the old re-dispose sentence goes red" {
+  local mutated
+  unattended_veto_passes "$RUNBOOK" || return 1
+  mutated="$(replace_in "$RUNBOOK" 'an unattended run writes the veto itself' 'an unattended run stops and reports')" || return 1
+  unattended_veto_passes "$mutated" && return 1
+  grep -qF -- 'the unit re-disposes, not a stop' "$PAGE" "$RUNBOOK" "$ROOT/wiki/concepts/Audit Disposition and Debt Fix.md" && return 1
+  mutated="$(replace_in "$PAGE" 'A `refused-authored` outcome is a named violation.' 'A `refused-authored` outcome is a named violation the unit re-disposes, not a stop.')" || return 1
+  reconcile_passes "$mutated" && return 1
+  true
+}
+
+@test "the veto paragraph disposes a vetoed key fix until satisfied, and the checkpoint never reaches a qualifying round" {
+  local section_text
+  section_text="$(section "$DISPATCH_UNIT" "$RUNBOOK")" || return 1
+  sentences <<<"$section_text" | grep -qF -- 'A vetoed key is disposed `fix` until its veto is satisfied' || return 1
+  sentences <<<"$section_text" | grep -qF -- 'A veto after a default stop reopens a round' || return 1
+  sentences <<<"$section_text" | grep -qF -- 'A veto can also name a `refused-authored` `file` row, which is how that stop clears.' || return 1
+  grep -qF -- 'A vetoed key is disposed `fix` from then on' <<<"$section_text" && return 1
+  section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
+  grep -qF -- 'A round the default stop qualifies never reaches the checkpoint, and a grant does not suspend the stop.' <<<"$section_text"
+}
+
+@test "the round procedure states the default stop, the owed-steps exception and the reopened round" {
+  local section_text
+  section_text="$(section "$STEP2")" || return 1
+  grep -qF -- "except on a round where the evaluator's \`default_stop\` holds" <<<"$section_text" || return 1
+  grep -qF -- 'to the human on any round the default stop does not cover' <<<"$section_text" || return 1
+  grep -qF -- 'fix every Minor' "$PAGE" && return 1
+  section_text="$(section "$FIXROUND")" || return 1
+  sentences <<<"$section_text" | grep -qF -- 'no gate runs here, and any owed steps run at the status post' || return 1
+  grep -qF -- '`bash .gaia/scripts/audit-gate-owed.sh choose --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --round <r>` picks the gate' <<<"$section_text" || return 1
+  grep -qF -- '**The reopened round.**' <<<"$section_text" || return 1
+  grep -qF -- '`gate-failure.json`' <<<"$section_text" || return 1
+  grep -qF -- '`gate-owed.json`' <<<"$section_text" || return 1
+  grep -qF -- '`gate-owed-<n>.log`' <<<"$section_text"
 }

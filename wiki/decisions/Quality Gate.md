@@ -10,7 +10,7 @@ tags: [decision, ci, quality]
 
 # Decision: Mandatory Quality Gate
 
-Every change must pass the Quality Gate. Pre-commit hooks enforce a subset; Claude runs the full pipeline below before any `git commit` that touches source; **unless the gate has nothing to check**.
+Every change must pass the Quality Gate. Pre-commit hooks enforce a subset; Claude runs the full pipeline below before any `git commit` that touches source, except that an audit fix round may run [the smaller gate](#the-smaller-gate); **unless the gate has nothing to check**.
 
 ## Steps
 
@@ -67,6 +67,14 @@ grep -vE '^\.gaia/(cli|tests|scripts)/'
 ```
 <!-- gaia:maintainer-only:end -->
 
+## The smaller gate
+
+Inside an audit fix round whose `bash .gaia/scripts/audit-gate-owed.sh choose` prints `smaller`, run every step of this page except steps 6, 7 and 8 (Playwright, the dev smoke test, the production build); the skip logic above still applies. Report each deferred step as owed in the result table, not as not run. Those three steps run once on the final tree before the audit status posts, and that run of step 7 passes and stops exactly as step 7 says. A Major, Critical or security fix, and a fix entry with no sidecar row, takes the full gate. `.gaia/scripts/audit-gate-owed.sh`'s header owns the owed record and the rule that picks the gate; [[PR Merge Workflow]] owns when the owed run happens.
+
+<!-- gaia:maintainer-only:start -->
+The maintainer `bash .gaia/tests/verify-harness.sh round` step is unchanged: the smaller gate does not shorten it.
+<!-- gaia:maintainer-only:end -->
+
 ## Behavior when the gate runs
 
 - **Fix issues as you encounter them** rather than just reporting them.
@@ -77,7 +85,7 @@ Localization: all user-facing strings must be localized; no hardcoded strings in
 
 ## Source of truth
 
-This page is the source of truth for quality gate steps. The always-loaded `.claude/rules/quality-gate.md` rule points commits at this page.
+This page is the source of truth for quality gate steps, the full gate and the smaller gate alike; no other page defines a gate the audit unit runs. The always-loaded `.claude/rules/quality-gate.md` rule points commits at this page.
 
 See [[Pre-commit Hooks]], [[Workflow Doctrine]] (the gate runs once per commit, on the main thread; a /gaia-debt budget batch runs it once over its combined staged diff before its per-part commits), [[PR Merge Workflow]], [[Task Orchestration]], [[Claude Hooks]] (the source-edit and Bash safeguards keep `.env`, lockfile, secrets, and destructive-git footguns out of the staged surface before the gate ever runs).
 
