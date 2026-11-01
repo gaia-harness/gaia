@@ -201,7 +201,7 @@ _command_residual_count() {
       round_stop="$(jq -c 'select(.version == 3) | [.default_stop == true, .human_accept == true]' <"$(_snapshot_path "$round")" 2>/dev/null)" || round_stop=""
     fi
     if [ -z "$round_stop" ]; then
-      round_stop="$(_evaluator eval --round "$round" | jq -c --argjson history "$history" --argjson round "$round" \
+      round_stop="$(_evaluator evaluate-round --round "$round" | jq -c --argjson history "$history" --argjson round "$round" \
         '[.default_stop == true, any($history[]; .round == $round and .human_accept == true)]')" ||
         { _error "the evaluator could not read round $round"; return 3; }
     fi
