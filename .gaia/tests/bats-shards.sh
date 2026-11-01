@@ -137,19 +137,18 @@ STATUSLINE_DIRECTORY="${STATUSLINE_DIRECTORY:-.gaia/tests/statusline}"
 # these are the hooks suites whose minutes their bytes most understate.
 # local-janitor.bats does a full git init plus a bare origin plus a push per
 # test; audit-loop-bound.bats builds a fixture repository per case and is the
-# heaviest suite in the group, over three minutes on CI. Pinned by name, they
-# share hooks-1 under the single-shard legs' larger step cap rather than
-# folding into the weighted split. Left to that split, audit-loop-bound.bats's
-# bucket took the byte walk's share on top of its own minutes and became the
-# slowest leg of the matrix; anchoring it there did not stop that, because an
-# anchor still weighs only its bytes.
+# heaviest hooks suite, over three minutes on CI. Pinned by name, they share
+# hooks-1 under the single-shard legs' larger step cap rather than folding into
+# the weighted split. Not an anchor: an anchor still weighs only its bytes, so
+# the byte walk loads its bucket as if it were light and that bucket becomes
+# the slowest leg of the matrix.
 #
-# hooks-1 is also part of the partition's floor: neither it nor the whole
-# AUDIT_TESTS_DIRECTORY shard splits further, so no arrangement of the weighted
-# groups takes the slowest shard below the larger of the two. Group sizes are
-# chosen against that floor rather than against each other;
-# `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements and why
-# the groups stop where they do.
+# hooks-1 is also part of the partition's floor: neither its heaviest pinned
+# file nor the whole AUDIT_TESTS_DIRECTORY shard splits further, so no
+# arrangement of the weighted groups takes the slowest shard below the larger
+# of the two. Group sizes are chosen against that floor rather than against
+# each other; `wiki/decisions/Sharded CI Test Matrix.md` carries the
+# measurements and why the groups stop where they do.
 PINNED_HOOKS=(local-janitor.bats audit-loop-bound.bats)
 
 # The scripts group's anchors: suites given a bucket of their own before the
@@ -203,7 +202,8 @@ HOOKS_COST_OUTLIERS=(pr-merge-audit-check.bats githooks-pre-push-e2e.bats)
 # run's per-file times over trees within 2% of each file's size, two buckets put
 # the slower leg past the cap's headroom in most draws, with or without
 # anchors, and three never did. No cost outliers, because no anchor list held up
-# across those draws. The hooks group takes five buckets on the same replay:
+# across those draws. The hooks group takes five buckets on the same kind of
+# replay over two CI runs' timings:
 # four put the slowest leg past 70% of its step cap in most draws, five in few.
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
 HOOKS_GREEDY_IDS=(hooks-2 hooks-3 hooks-4 hooks-5 hooks-6)

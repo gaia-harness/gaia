@@ -769,9 +769,9 @@ jobs:
       # write here. Every such suite the guard lists as unprovisioned elsewhere
       # lives in HOOKS_DIRECTORY and none is pinned, so bats-shards.sh assigns
       # them across HOOKS_GREEDY_IDS, and a reshuffle moves a file BETWEEN
-      # those legs and never out of them. A
-      # marked suite another workflow provisions (its backstop line names that
-      # workflow) needs no install here. audit-ci-shards.bats derives the list
+      # those legs and never out of them. A marked suite another workflow
+      # provisions (its backstop line names that workflow) needs no install
+      # here. audit-ci-shards.bats derives the list
       # from the guard's `--list-derived` minus `--list-backstopped`, rounded up
       # to whole exchange groups, and reds when this one disagrees.
       #
