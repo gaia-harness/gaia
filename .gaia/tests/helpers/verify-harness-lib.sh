@@ -32,9 +32,9 @@
 # git's well-known empty tree, the base of a parentless HEAD's range.
 verify_empty_tree_object=4b825dc642cb6eb9a060e54bf8d69288fbee4904
 # CI's fitness step (the `cli-tests` workflow) narrowed to its harness
-# line-limit rule, which runs in under a second. Unlike CI, it reads the tree's own suppression file, not
-# the base branch's, so a pull request that suppresses its own breach passes
-# here and still fails CI.
+# line-limit rule, which runs in under a second. Unlike CI, it reads the
+# tree's own suppression file, not the base branch's, so a pull request that
+# suppresses its own breach passes here and still fails CI.
 verify_line_limit_command='./.gaia/cli/gaia fitness check --json --scope all --fail-on error --only authoring.harness.max-lines --config .claude/gaia-fitness.json'
 # Raw failure output past this many lines is cut, with a pointer to the
 # reproduce command; a full shell-lint report can run to hundreds of lines.

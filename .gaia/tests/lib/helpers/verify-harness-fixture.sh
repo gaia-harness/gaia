@@ -7,7 +7,7 @@
 # feature branch checked out. It carries:
 #
 #   - stub checks at the real relative paths (shell-lint, build-staging, 01,
-#     03; the fitness CLI stub, which reports in JSON, is vhf_write_fitness_stub).
+#     02; the fitness CLI stub, which reports in JSON, is vhf_write_fitness_stub).
 #     Each resolves its root from the working directory, logs
 #     "<name>|<toplevel>" to $VERIFY_FIXTURE_LOG, and fails, printing the
 #     file's content as its diagnostic, when the tracked control/<name> file is
