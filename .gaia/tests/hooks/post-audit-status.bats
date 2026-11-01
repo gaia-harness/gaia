@@ -51,7 +51,7 @@
 #
 # Ownership. Two suites guard this one hook, each run by its own shard leg of
 # .github/workflows/audit-ci-tests.yml's matrix (this file lands in one of the
-# hooks-1..hooks-4 shards; .github/audit/tests/ runs whole as the `audit`
+# hooks shards; .github/audit/tests/ runs whole as the `audit`
 # shard), both armed by that job's shared `code` path filter. This suite owns
 # the usage and marker-shape preconditions, the
 # divergence guards as enumerated decline lines, and the head_sha fallback

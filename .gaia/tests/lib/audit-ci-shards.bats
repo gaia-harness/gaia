@@ -1996,10 +1996,10 @@ EOF
 # shard_package_needs propagates, so a directory holding fewer suites than its
 # group has buckets would fail every fixture here for a reason none of them is
 # about. Deriving the count from the sharder keeps that true as groups resize.
-# Why local-janitor.bats is seeded, and into both trees, is stated at its own
+# Why the pinned files are seeded, and into both trees, is stated at their own
 # write site below rather than restated here.
 seed_seam_tree() {
-  local root="$1" shard_count i
+  local root="$1" shard_count i pinned_path
   mkdir -p "$root/needs" "$root/clean"
   shard_count="$(bash "$BATS_SHARDS" shards | wc -l | tr -d ' ')"
   i=0
@@ -2008,13 +2008,18 @@ seed_seam_tree() {
     printf '#!/usr/bin/env bats\n' >"$root/clean/plain-$i.bats"
     i=$((i + 1))
   done
-  # local-janitor.bats goes in BOTH trees because hooks-1 pins it by name and
-  # the sharder exits 2 for a shard it cannot resolve: whichever tree HOOKS_DIRECTORY
-  # is pointed at has to carry it, and the other seams point at the clean
-  # one. Its body is plain in both, so hooks-1 never joins the
-  # reported set either way.
-  printf '#!/usr/bin/env bats\n' >"$root/needs/local-janitor.bats"
-  printf '#!/usr/bin/env bats\n' >"$root/clean/local-janitor.bats"
+  # hooks-1's pinned files go in BOTH trees because hooks-1 pins them by name
+  # and the sharder exits 2 for a shard it cannot resolve: whichever tree
+  # HOOKS_DIRECTORY is pointed at has to carry them, and the other seams point
+  # at the clean one. Their names come from the sharder's answer on the real
+  # tree, so pinning another file needs no edit here. Their bodies are plain in
+  # both, so hooks-1 never joins the reported set either way.
+  while IFS= read -r pinned_path; do
+    [ -n "$pinned_path" ] || continue
+    printf '#!/usr/bin/env bats\n' >"$root/needs/${pinned_path##*/}"
+    printf '#!/usr/bin/env bats\n' >"$root/clean/${pinned_path##*/}"
+  done < <(bash "$BATS_SHARDS" files hooks-1)
+  [ -f "$root/needs/local-janitor.bats" ]
 }
 
 # seam_tree_scan <helper> <root> [sharder]

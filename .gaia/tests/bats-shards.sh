@@ -134,19 +134,23 @@ FORENSICS_DIRECTORY="${FORENSICS_DIRECTORY:-.gaia/tests/forensics}"
 STATUSLINE_DIRECTORY="${STATUSLINE_DIRECTORY:-.gaia/tests/statusline}"
 
 # Cost floor, not correctness: a file-level sharder cannot split one file, and
-# local-janitor.bats is the heaviest file in the hooks suite (38 @test, each
-# doing a full git init plus a bare origin plus a push), so it anchors hooks-1
-# alone rather than folding into the weighted split with the rest of
-# HOOKS_DIRECTORY. An array so a future maintainer can pin a second file and add a
-# fifth hooks shard without archaeology.
+# these are the hooks suites whose minutes their bytes most understate.
+# local-janitor.bats does a full git init plus a bare origin plus a push per
+# test; audit-loop-bound.bats builds a fixture repository per case and is the
+# heaviest suite in the group, over three minutes on CI. Pinned by name, they
+# share hooks-1 under the single-shard legs' larger step cap rather than
+# folding into the weighted split. Left to that split, audit-loop-bound.bats's
+# bucket took the byte walk's share on top of its own minutes and became the
+# slowest leg of the matrix; anchoring it there did not stop that, because an
+# anchor still weighs only its bytes.
 #
-# It is also half of the partition's floor. This one file runs about 150
-# seconds and the whole AUDIT_TESTS_DIRECTORY shard runs about the same, and neither
-# splits further, so no arrangement of the weighted groups takes the slowest
-# shard below that. Group sizes are chosen against that floor rather than
-# against each other; `wiki/decisions/Sharded CI Test Matrix.md` carries the
-# measurements and why the groups stop where they do.
-PINNED_HOOKS=(local-janitor.bats)
+# hooks-1 is also part of the partition's floor: neither it nor the whole
+# AUDIT_TESTS_DIRECTORY shard splits further, so no arrangement of the weighted
+# groups takes the slowest shard below the larger of the two. Group sizes are
+# chosen against that floor rather than against each other;
+# `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements and why
+# the groups stop where they do.
+PINNED_HOOKS=(local-janitor.bats audit-loop-bound.bats)
 
 # The scripts group's anchors: suites given a bucket of their own before the
 # byte walk fills the rest, because where the walk would put them decides the
@@ -176,13 +180,12 @@ PINNED_HOOKS=(local-janitor.bats)
 SCRIPTS_COST_OUTLIERS=(audit-light-route.bats)
 
 # The hooks group's cost outliers, under the same membership rule: one runs the
-# merge-gate hook against a fixture repository per case, one builds a fixture
-# repository per case, one runs real git pushes, so a small file can hold more
-# minutes than a large one. Weighed by bytes alone they can all draw onto one
-# leg and make it the slowest of the matrix; anchored, each takes a bucket of
-# its own.
+# merge-gate hook against a fixture repository per case, one runs real git
+# pushes, so a small file can hold more minutes than a large one. Weighed by
+# bytes alone they can draw onto one leg; anchored, each takes a bucket of its
+# own.
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
-HOOKS_COST_OUTLIERS=(pr-merge-audit-check.bats audit-loop-bound.bats githooks-pre-push-e2e.bats)
+HOOKS_COST_OUTLIERS=(pr-merge-audit-check.bats githooks-pre-push-e2e.bats)
 
 # The weighted groups, each listed once and in matrix order. Adding a shard
 # to a group is a one-word edit here: SHARD_IDS is built from these rather than
@@ -200,9 +203,10 @@ HOOKS_COST_OUTLIERS=(pr-merge-audit-check.bats audit-loop-bound.bats githooks-pr
 # run's per-file times over trees within 2% of each file's size, two buckets put
 # the slower leg past the cap's headroom in most draws, with or without
 # anchors, and three never did. No cost outliers, because no anchor list held up
-# across those draws.
+# across those draws. The hooks group takes five buckets on the same replay:
+# four put the slowest leg past 70% of its step cap in most draws, five in few.
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
-HOOKS_GREEDY_IDS=(hooks-2 hooks-3 hooks-4)
+HOOKS_GREEDY_IDS=(hooks-2 hooks-3 hooks-4 hooks-5 hooks-6)
 SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4 scripts-5)
 LIBRARY_IDS=(lib-1 lib-2 lib-3)
 
