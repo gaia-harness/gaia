@@ -1,10 +1,10 @@
 ---
-description: 'Render step of the generated plan orchestrator: render the routed UATs into red Playwright e2e specs in the frontend package before Phase 1.'
+description: 'Render step of the generated plan orchestrator: render the e2e-routed UATs into red Playwright specs and the route-routed UATs into red Vitest route tests in the frontend package before Phase 1.'
 ---
 
 # UAT render step
 
-The orchestrator runs this step before Phase 1 on every start and every resume. It renders each e2e-routed UAT of the plan's SPEC into one red Playwright spec (`test.fail()`) under `frontend/.playwright/e2e/` (the e2e directory of the frontend package registered in `.gaia/packages.json`), so a failing harness exists before source is edited. The render is idempotent.
+The orchestrator runs this step before Phase 1 on every start and every resume. It renders each e2e-routed UAT of the plan's SPEC into one red Playwright spec (`test.fail()`) under `frontend/.playwright/e2e/` (the e2e directory of the frontend package registered in `.gaia/packages.json`), and each route-routed UAT into one red Vitest test (`test.fails(`) under `frontend/app/route-tests/` (the route-tests directory of the same package), so a failing harness exists before source is edited. The render is idempotent.
 
 ## Inputs
 
@@ -21,7 +21,7 @@ bash .gaia/scripts/spec/working-doc-id-scan.sh
 
 Capture the renderer's stdout JSON as is: `{"ok":true,"e2e_directory":"...","summary":{"written":0,"rewritten":0,"unchanged":0,"preserved":0,"deleted":0,"conflict":0},"details":[{"uat_id":"...","path":"...","action":"written"}]}`. A conflict detail also carries `reason`. The renderer validates the routing table and the SPEC before it writes anything, and keeps a render ledger (`uat-render.json`) beside the plan README so a later run finds the spec of a removed or re-routed UAT. The ledger lives in the plan folder and is never committed.
 
-The id scan checks every path and every text file under `frontend/.playwright/` (the frontend package's Playwright directory), except the `output/` run-artifacts folder, for a working-document id. Run it even when the renderer reported nothing changed.
+The id scan checks every path and every text file under `frontend/.playwright/` (the frontend package's Playwright directory), except the `output/` run-artifacts folder, and under `frontend/app/route-tests/`, for a working-document id. Run it even when the renderer reported nothing changed.
 
 ## Exit codes
 
@@ -31,7 +31,7 @@ Renderer:
 |---|---|---|
 | 0 | Success, no conflict | Run the id scan, then `## Record` |
 | 1 | Operational failure (stdout `{"ok":false,"error":"..."}`), nothing written | HALT |
-| 2 | Invalid input: usage, malformed SPEC, invalid routing table, or a working-document id in an e2e-routed UAT (stderr only), nothing written | HALT |
+| 2 | Invalid input: usage, malformed SPEC, invalid routing table, or a working-document id in an e2e-routed or route-routed UAT (stderr only), nothing written | HALT |
 | 3 | Conflict: every non-conflict action still applied, the summary printed with `"ok":true`, every conflict file left byte-identical | `## Conflicts` |
 
 The id scan exits 0 when clean, 1 printing `<path>:<line>: <match>` per hit, 2 on a usage error. A non-zero id scan HALTs, naming each file and line.
@@ -52,7 +52,7 @@ Keep exactly one of the three `Reason:` alternatives. When a UAT's own text carr
 
 After exit 0 (or exit 3 once `## Conflicts` is settled and the renderer re-run exits 0) and a clean id scan:
 
-- Stage only the paths the JSON summary names (every `path` whose action is `written`, `rewritten` or `deleted`) and commit them as their own commit, before the Phase 1 commit, with a Conventional Commits subject of type `test(e2e)`, for example `test(e2e): render red specs for the planned user acceptance tests`.
+- Stage only the paths the JSON summary names (every `path` whose action is `written`, `rewritten` or `deleted`) and commit them as their own commit, before the Phase 1 commit, with a Conventional Commits subject of type `test(e2e)`, or `test(route)` for a route-only plan, for example `test(e2e): render red specs for the planned user acceptance tests`.
 - Append this block to `PROGRESS.md` with the commit's short SHA:
 
 ```
@@ -62,14 +62,14 @@ Summary: written <n>, rewritten <n>, unchanged <n>, preserved <n>, deleted <n>, 
 ```
 
 - Nothing changed (no `written`, `rewritten` or `deleted`): no commit; the block carries `Commit: none (nothing changed)`.
-- Zero e2e rows in the routing table: the renderer writes nothing, so record `Skipped: no e2e-routed UATs` in place of the `Commit:` line.
+- Neither an `e2e` nor a `route` row in the routing table: the renderer writes nothing, so record `Skipped: no e2e-routed or route-routed UATs` in place of the `Commit:` line. A table with only `route` rows renders and commits, and never records `Skipped`.
 
 ## Conflicts
 
 Each `conflict` detail names a file the renderer left byte-identical, with a `reason`:
 
 - `changed-and-edited`: the UAT text changed and the rendered file was edited since it was rendered.
-- `unmarked-file-at-target`: a file with no contract marker already sits at the path an e2e row resolves to.
+- `unmarked-file-at-target`: a file with no contract marker already sits at the path an e2e or route row resolves to.
 - `removed-or-rerouted-and-edited`: no row claims the file any more and it was edited.
 
 For each conflict, ask the human once with `AskUserQuestion`:
@@ -81,8 +81,9 @@ With no human present (unattended or auto), or when the human keeps the edited f
 
 ## The rendered file
 
-Each spec starts with a contract marker (line 1, `// gaia-uat-contract sha256:<digest>`), then the UAT's canonical `Given`, `When` and `Then` lines, the divergence rule pointer, and a body: a `const outcome = {text: '<then-clause>'}` followed by `test(outcome.text, () => { test.fail(); expect(false, outcome.text).toBe(true); })`. No path, title or comment carries a working-document id.
+Each rendered test starts with a contract marker (line 1, `// gaia-uat-contract sha256:<digest>`), then the UAT's canonical `Given`, `When` and `Then` lines, the divergence rule pointer, and a body: a `const outcome = {text: '<then-clause>'}` followed by `test(outcome.text, () => { test.fail(); expect(false, outcome.text).toBe(true); })`. No path, title or comment carries a working-document id.
 
 - The digest covers everything after line 1. A file counts as edited when the digest differs from the file's current content.
 - The renderer rewrites or deletes only a file whose first line is a contract marker. A hand-written file in the same folders, with no marker, is never read for writing and never listed in the summary.
 - The owning phase removes the `test.fail();` call, so the test is a plain `test(`, and writes a real body that drives the app with Playwright in place of the placeholder `expect(false, ...)`. It keeps the contract lines as they are. Cosmetic edits are allowed and logical ones are not: `uat-divergence.md`.
+- A route test is shaped differently: after the contract lines it imports `expect` and `test` from `vitest` and holds one `test.fails('the owning phase replaces this body', ...)` with a placeholder `expect(false).toBe(true)`. The owning phase removes the `.fails`, so `test.fails(` becomes `test(`, and writes a real body that calls the route module's loader or action directly and asserts the Then-clause on the response. The gate refuses a route test that keeps `.fails`, `.todo`, `.skip` or `.only`.

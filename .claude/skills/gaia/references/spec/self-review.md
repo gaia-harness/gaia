@@ -45,7 +45,13 @@ Each UAT must be testable. Flag UATs that:
 - Lack a falsifiable `then`.
 - Reference an undefined system (e.g. "the orchestrator" without prior naming).
 
-### 5. Pending clarifications
+### 5. Case-enumerating UATs
+
+A UAT states a rule and one representative journey; case tables belong to the lowest layer, written by the implementer. Flag a UAT whose `then` enumerates input values or outcomes of one rule about user-visible behavior (a list of inputs each with its own result). Suggest stating the rule with one representative journey and leaving the cases to the lowest layer.
+
+Exempt a UAT on harness, script or doc behavior: its distinct outcomes are the contract, so enumerating them is correct.
+
+### 6. Pending clarifications
 
 For each item in `clarifications.pending[]`, list it in the summary's `pending_clarifications` as `{topic, question}`. The agent does not ask: the wrapper asks at `.claude/skills/gaia/references/spec/self-review-dispatch.md` 6c, offering `Answer now`, `Defer with rationale` (recorded in `clarifications.deferred[]`), or `Discuss this`.
 
@@ -63,6 +69,7 @@ self-review findings (gate 2 gate):
   scope_drift:  <N>: gate1.<field> vs current.<field>
   inconsistency: <N>: <description>
   ambiguous_uats: <N>: UAT-NNN: <phrasing>
+  case_enumerating_uats: <N>: UAT-NNN: <phrasing>
   pending: <N>: <item summary>, ... (listed as pending_clarifications for the wrapper to ask)
 ```
 

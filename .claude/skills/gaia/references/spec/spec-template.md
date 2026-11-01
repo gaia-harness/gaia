@@ -19,8 +19,10 @@ uats:
     given: <Initial state, preconditions a verifier can establish.>
     when: <Action, a single trigger, user-driven or system-driven.>
     then: <Observable outcome, concrete and falsifiable. No "should",
-      no hedging. The verifier can read this and write a Playwright
-      assertion against it.>
+      no hedging. The verifier can read this and write a test
+      assertion against it. A UAT states a rule with one representative
+      journey; case tables belong to the lowest layer, so do not list
+      every input value or outcome here.>
 scope_boundaries:
   always:
     - <Behavior that MUST hold for every invocation. Imperative voice.>

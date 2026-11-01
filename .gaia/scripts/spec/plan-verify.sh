@@ -11,7 +11,7 @@
 # needs, each on a line of its own (leading and trailing whitespace allowed,
 # nothing else), in the order the template places them. Without --spec the plan
 # is spec-less and the three UAT sentinels are not required. The
-# yield-handling, worthiness-step, wiki-promotion, code-audit and
+# yield-handling, worthiness-step, overlap-pass, wiki-promotion, code-audit and
 # post-clearance blocks are also checked verbatim: each one's non-blank lines
 # (trimmed) must equal the fenced block planner.md holds, with the
 # plan-directory and SPEC-path placeholders replaced by this plan's absolute
@@ -102,6 +102,7 @@ if [ -n "$spec_path" ]; then
 fi
 sentinels+=(
   '<!-- gaia:orchestrator-step worthiness-step -->'
+  '<!-- gaia:orchestrator-step overlap-pass -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
   '<!-- gaia:orchestrator-step code-audit -->'
   '<!-- gaia:orchestrator-step post-clearance -->'
@@ -110,6 +111,7 @@ sentinels+=(
 verbatim_sentinels=(
   '<!-- gaia:orchestrator-step yield-handling -->'
   '<!-- gaia:orchestrator-step worthiness-step -->'
+  '<!-- gaia:orchestrator-step overlap-pass -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
   '<!-- gaia:orchestrator-step code-audit -->'
   '<!-- gaia:orchestrator-step post-clearance -->'
@@ -293,7 +295,7 @@ if [ -n "$spec_path" ] && [ -f "$readme" ]; then
       case "$surface" in
         story | non-ui)
           if grep -qiE 'route|navigat|redirect|session|server[ -]?(side )?state|(^|[^a-z])urls?([^a-z]|$)' <<<"$then_clause"; then
-            printf 'WARN: %s is routed %s but its then-clause reads like a route, navigation, URL, redirect, session or server-state check; confirm it is not an e2e UAT\n' "$uat_id" "$surface" >&2
+            printf 'WARN: %s is routed %s but its then-clause reads like a route, navigation, URL, redirect, session or server-state check; confirm it is not a route or, when only a browser shows it, an e2e UAT\n' "$uat_id" "$surface" >&2
           fi
           ;;
       esac

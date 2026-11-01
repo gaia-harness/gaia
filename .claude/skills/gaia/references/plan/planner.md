@@ -51,12 +51,21 @@ Then write the following files directly to `{PLAN_DIR}/`:
     | uat_id | surface | phase | feature_folder | file_name |
     |---|---|---|---|---|
     | <uat_id> | e2e | <owning phase> | <kebab-case feature folder> | <behavior-named-kebab-case>.spec.ts |
+    | <uat_id> | route | <owning phase> | <kebab-case feature folder> | <behavior-named-kebab-case>.test.ts |
     | <uat_id> | story | <owning phase> | - | - |
     | <uat_id> | non-ui | <owning phase> | - | - |
     <!-- gaia:uat-routing:end -->
     ```
 
-    Route by the rule in the SPEC's clarifications: `e2e` when the then-clause needs a route, navigation, a loader or action, a session, locale negotiation or MSW-backed server state (`frontend/.claude/rules/playwright.md`); `story` when it is observable on one component given props or args (`wiki/concepts/Component Testing.md`); `non-ui` for harness, script or doc behavior. `phase` is the owning phase number. An `e2e` row names a kebab-case feature folder and a kebab-case file name ending `.spec.ts` that describes the behavior; neither carries a SPEC, UAT or plan id. Every other row carries `-` in both. Routing lives in the plan, never in the immutable SPEC. Each `story` row's UAT gets this line, verbatim, in its owning task doc's acceptance criteria: `- Story test criterion (<uat_id>): <the UAT's then-clause, verbatim>`.
+    Route each UAT by the ladder below, taking the lowest step whose layer can show its then-clause; `wiki/decisions/Test Layering.md` holds the principle and rationale. Four surfaces: `e2e`, `route`, `story`, `non-ui`.
+
+    1. `story` when the then-clause is observable on one component given props or args (`wiki/concepts/Component Testing.md`).
+    2. `route` when a request to a route shows it: a status, a redirect, returned data, validation errors, an authorization outcome or a side effect. API-only behavior goes here, or to no UAT when it is not a contract worth pinning.
+    3. `e2e` driven by Playwright's request fixture, a real-server row, for what needs the live stack with no browser: one HTTP check per route module where wiring is the risk, or a forged request against a live route. Such a refusal check sets `maxRedirects: 0`, asserts the status and the `Location` header, and states its actor.
+    4. `e2e` in a browser only when the then-clause needs something only a real browser can show (hydration, focus, client navigation, a multi-page journey), one journey per user flow (`frontend/.claude/rules/playwright.md`).
+    5. `non-ui` for harness, script or doc behavior.
+
+    A plan routing an authorization UAT to `route` also carries one real-server check per guarded route module, as an `e2e` row when a UAT names it and otherwise as a task its owning phase delivers, so each UAT routes to exactly one surface. A `route` row's owning task doc names the file of the guard the test exercises. `phase` is the owning phase number. An `e2e` row names a kebab-case feature folder and a kebab-case file name ending `.spec.ts`, and a `route` row the same with `.test.ts`, that describes the behavior; neither carries a SPEC, UAT or plan id. Every `story` or `non-ui` row carries `-` in both. Routing lives in the plan, never in the immutable SPEC. Each `story` row's UAT gets this line, verbatim, in its owning task doc's acceptance criteria: `- Story test criterion (<uat_id>): <the UAT's then-clause, verbatim>`.
 
 3.  **`{PLAN_DIR}/ORCHESTRATOR.md`**: instructions for running the plan. Must cover:
     - **Resume detection (cold-start, before the sentinel write).** Before writing this run's RUNNING sentinel, and before the pre-flight isolation below, check for a pre-existing `{PLAN_DIR}/RUNNING`.
@@ -82,7 +91,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
         - `Restart from Phase 1`: run every phase from Phase 1.
         - `Abandon`: stop cleanly without re-running, committing, merging, or deleting anything; the sentinel, `PROGRESS.md`, branch, and prior commits stay intact.
 
-        When `K` equals `M+1` (every phase a verified-complete ancestor), resume re-enters at the worthiness step with no phase re-run, then continues through the wiki promotion and the pre-merge Code Audit Team audit; each of those steps skips what its own `PROGRESS.md` record or its route already settled.
+        When `K` equals `M+1` (every phase a verified-complete ancestor), resume re-enters at the worthiness step with no phase re-run, then continues through the overlap pass, the wiki promotion and the pre-merge Code Audit Team audit; each of those steps skips what its own `PROGRESS.md` record or its route already settled.
       - **Resumed-run git flow.** A resumed run reuses the already-open PR, it does NOT re-issue `gh pr create`; it updates the existing PR with subsequent commits exactly like an uninterrupted run. The branch edge recorded at the first cut still keys the run's cost to the same feature after reconnect, so no second `usage.sh link` runs; the pre-merge marker handshake and the post-merge close behave unchanged.
 
     - **Pre-flight isolation.** The generated `ORCHESTRATOR.md` carries this pointer, verbatim, as its pre-flight step:
@@ -112,7 +121,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
     - **Link the branch to its feature.** Right after the RUNNING sentinel is written and before the first phase dispatch, record the execution branch's edge in the usage ledger: `bash .gaia/scripts/usage.sh link branch:<branch> <feature-ref>`, with `<branch>` the canonical branch name the sentinel's `branch:` line holds, and `<feature-ref>` `spec:SPEC-NNN` (the id from `README.md`'s `## Source SPEC`) for a spec-derived plan or `plan:PLAN-NNN` (the basename of `{PLAN_DIR}`) for a spec-less one. It runs once per branch, never on a resume.
 
-    - **Verbatim step blocks.** Nine blocks below carry a sentinel line (`<!-- gaia:orchestrator-step ... -->`) and are copied into the generated `ORCHESTRATOR.md` verbatim, sentinel line first, the way the isolation pointer above is, in this order: `uat-render`, `uat-gate`, `yield-handling`, `uat-pre-audit`, `worthiness-step`, `wiki-promotion`, `code-audit`, `post-clearance` and `post-merge-close`. Substitute only `{SPEC_PATH}` and `{PLAN_DIR}`, with the absolute input values; the `<...>` placeholders stay for the orchestrator to fill at run time. A spec-derived plan carries all nine; a spec-less plan omits `uat-render`, `uat-gate` and `uat-pre-audit`, and carries the other six, with the yield handling before the worthiness step. `/gaia-plan` step 4.5 checks each sentinel and their order with `plan-verify.sh`, which also compares the text of the yield-handling, worthiness-step, wiki-promotion, code-audit and post-clearance blocks, line by line with indentation and blank lines ignored, against this file's copy, with `{PLAN_DIR}` and `{SPEC_PATH}` substituted, so a paraphrase fails. A plan generated before this order keeps its own order and is not re-verified, because only step 4.5 runs the script. Never paraphrase a block, drop its sentinel line or reorder them.
+    - **Verbatim step blocks.** The blocks below carry a sentinel line (`<!-- gaia:orchestrator-step ... -->`) and are copied into the generated `ORCHESTRATOR.md` verbatim, sentinel line first, the way the isolation pointer above is, in this order: `uat-render`, `uat-gate`, `yield-handling`, `uat-pre-audit`, `worthiness-step`, `overlap-pass`, `wiki-promotion`, `code-audit`, `post-clearance` and `post-merge-close`. Substitute only `{SPEC_PATH}` and `{PLAN_DIR}`, with the absolute input values; the `<...>` placeholders stay for the orchestrator to fill at run time. A spec-derived plan carries all of them; a spec-less plan omits `uat-render`, `uat-gate` and `uat-pre-audit` and carries the rest, `overlap-pass` included, with the yield handling before the worthiness step. `/gaia-plan` step 4.5 checks each sentinel and their order with `plan-verify.sh`, which also compares the text of the yield-handling, worthiness-step, overlap-pass, wiki-promotion, code-audit and post-clearance blocks, line by line with indentation and blank lines ignored, against this file's copy, with `{PLAN_DIR}` and `{SPEC_PATH}` substituted, so a paraphrase fails. A plan generated before this order keeps its own order and is not re-verified, because only step 4.5 runs the script. Never paraphrase a block, drop its sentinel line or reorder them.
 
     - **UAT render (spec-derived plans only).** Place this block after the RUNNING sentinel step and before the phase loop:
 
@@ -131,20 +140,20 @@ Then write the following files directly to `{PLAN_DIR}/`:
           Detail: <the renderer's error message or stderr, one line; omit for a conflict>
           Next step: <conflict: answer the keep or replace question per uat-write.md "Conflicts", or reconcile the edited file, then resume with KICKOFF.md; exit 1 or 2 or an id hit: fix the named input (a SPEC reopen when the UAT text itself carries the id), then resume with KICKOFF.md>
 
-      Otherwise commit the rendered specs as their own commit (for example `test(e2e): render red UAT specs`) before the Phase 1 commit; a run that changed nothing commits nothing. Then append, choosing one value for the first line:
+      Otherwise commit the rendered specs as their own commit (for example `test(e2e): render red UAT specs`, or `test(route): render red UAT tests` for a route-only plan) before the Phase 1 commit; a run that changed nothing commits nothing. Then append, choosing one value for the first line:
 
           ## UAT render
-          Commit: <short-sha> | Commit: none (nothing changed) | Skipped: no e2e-routed UATs
+          Commit: <short-sha> | Commit: none (nothing changed) | Skipped: no e2e-routed or route-routed UATs
           Summary: written <n>, rewritten <n>, unchanged <n>, preserved <n>, deleted <n>, conflict <n>
 
-      `Skipped: no e2e-routed UATs` is the line when the routing table has no `e2e` row.
+      `Skipped: no e2e-routed or route-routed UATs` is the line only when the routing table has neither an `e2e` row nor a `route` row.
       ```
 
     - **Phase order** with per-phase quality gates (`pnpm typecheck && pnpm lint`). Name each phase's execution model in the outline (Sonnet by default; see the Sub-agent invocation bullet), so a cold orchestrator sees the model alongside the phase. For a spec-derived plan, the quality gate also carries this block:
 
       ```
       <!-- gaia:orchestrator-step uat-gate -->
-      **Owning-phase UAT gate.** After `pnpm typecheck && pnpm lint` pass for a phase whose number appears in an `e2e` row of `{PLAN_DIR}/README.md`'s UAT routing table, and before that phase commits, run from `RESOLVED_ROOT`:
+      **Owning-phase UAT gate.** After `pnpm typecheck && pnpm lint` pass for a phase whose number appears in an `e2e` or `route` row of `{PLAN_DIR}/README.md`'s UAT routing table, and before that phase commits, run from `RESOLVED_ROOT`:
 
           bash .gaia/scripts/spec/uat-gate.sh {SPEC_PATH} --routing {PLAN_DIR}/README.md --phase <N>
 
@@ -195,11 +204,18 @@ Then write the following files directly to `{PLAN_DIR}/`:
       **Worthiness step (every start and every resume, before the wiki promotion).** After the last phase commits and the pre-audit UAT checks pass, read `.claude/skills/gaia/references/worthiness-step.md` and run it from `RESOLVED_ROOT`. Its `route` makes it skip-safe, so a resume re-enters here and settles only what is still open. It records each outcome as a `## Worthiness step` block in `{PLAN_DIR}/PROGRESS.md`.
       ```
 
-    - **Consolidation and wiki promotion (before the first member dispatch).** The orchestrator runs this step warm, on its own session: consolidation is synthesis, not a task sub-agent's job. Place this block after the worthiness step block and before the audit bullet below, so the promotion commit lands before any member's marker exists and rotates none:
+    - **Overlap pass.** Place this block after the worthiness step block and before the wiki promotion block, in a spec-derived and a spec-less plan alike. The reference page owns the step's mechanics:
+
+      ```
+      <!-- gaia:orchestrator-step overlap-pass -->
+      **Overlap pass (every start and every resume, after the worthiness step and before the wiki promotion).** After the worthiness step settles, read `.claude/skills/gaia/references/overlap-pass.md` and run it from `RESOLVED_ROOT`. A `## Overlap pass` block already in `{PLAN_DIR}/PROGRESS.md` makes it skip-safe, so a resume settles only what is still open. It records its outcome as a `## Overlap pass` block in `{PLAN_DIR}/PROGRESS.md`.
+      ```
+
+    - **Consolidation and wiki promotion (before the first member dispatch).** The orchestrator runs this step warm, on its own session: consolidation is synthesis, not a task sub-agent's job. Place this block after the overlap pass block and before the audit bullet below, so the promotion commit lands before any member's marker exists and rotates none:
 
       ```
       <!-- gaia:orchestrator-step wiki-promotion -->
-      **Consolidation and wiki promotion.** Runs after the worthiness step and before the first member dispatch.
+      **Consolidation and wiki promotion.** Runs after the overlap pass and before the first member dispatch.
 
       1. On a resume, when `{PLAN_DIR}/PROGRESS.md` already holds a `## Wiki promotion` block with `Pass: pre-audit`, skip this whole step: no re-consolidation and no re-promotion.
       2. Consolidate per `.claude/skills/gaia/references/spec/lifecycle.md` `## Consolidation`. It writes `SUMMARY.md` and runs `summary-verify.sh`, and removes nothing. When its verify fails it records `skipped-verify-failed`; make no commit, remove nothing, skip step 3 and go on to the audit.
@@ -264,7 +280,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       **For a spec-derived plan, the prompt template MUST also carry this block verbatim**, because a rendered UAT spec is the SPEC's contract and an executor that rewrites its logic to make it pass silently changes what was agreed:
 
       ```
-      A rendered UAT spec under `<frontend package>/.playwright/e2e/` carries its contract in the comment at its top. Selectors, labels, copy and layout in the test are yours to edit. Keep every assertion of the Then-clause in the test body: a shared helper may drive steps, but an `expect(` moved into one is invisible to the UAT gate and the fidelity judge, which read only this file. A needed change to the UAT's flow, success criteria, error-handling branch, asserted side effect, precondition or post-state (`.claude/skills/gaia/references/spec/uat-divergence.md`) is never made in the test: report it inside `## Notes for orchestrator` under this heading, exactly, and leave the test's logic as rendered:
+      A rendered UAT test, a spec under `<frontend package>/.playwright/e2e/` or a route test under `<frontend package>/app/route-tests/`, carries its contract in the comment at its top. Selectors, labels, copy and layout in the test are yours to edit. Keep every assertion of the Then-clause in the test body: a shared helper may drive steps, but an `expect(` moved into one is invisible to the UAT gate and the fidelity judge, which read only this file. A needed change to the UAT's flow, success criteria, error-handling branch, asserted side effect, precondition or post-state (`.claude/skills/gaia/references/spec/uat-divergence.md`) is never made in the test: report it inside `## Notes for orchestrator` under this heading, exactly, and leave the test's logic as rendered:
 
       ### Logical UAT divergence
       UAT: <uat_id>
@@ -307,7 +323,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       Uncommitted edits: this phase's edits remain uncommitted in <RESOLVED_ROOT>; stash or discard them before resuming (resume refuses a dirty tree), and the phase re-runs from its start.
       Next step: reopen the SPEC (.claude/skills/gaia/references/spec/uat-divergence.md, "Reopen"), then resume with KICKOFF.md.
       ```
-    - **Final summary.** After all implementation phases pass and the final commit is pushed, before asking for merge confirmation with `AskUserQuestion` (`Merge it` (Recommended) or `Hold the merge`), **read `{PLAN_DIR}/PROGRESS.md`** and print a brief summary to the user: phases completed, sub-agents run, files touched (count), commits pushed (count + short SHAs), PR URL, quality-gate status, a yields line, the `## Worthiness step` blocks from `PROGRESS.md` plus any residual the late pass settled (residuals, refused deletes and filings, stated before the `AskUserQuestion`), and the highest-signal findings/deviations/follow-ups drawn from `PROGRESS.md` so nothing is lost to context compression. The yields line gives, per phase that yielded, the number of its `(YIELD k)` blocks in `PROGRESS.md` and the peak band among them (red below fire below skull), printed as `Yields: Phase <N> <count> (peak <band>)` with entries joined by `; `, and as `Yields: none` when no phase yielded. Keep it tight, a few lines plus the surfaced notes, not a recap of every change.
+    - **Final summary.** After all implementation phases pass and the final commit is pushed, before asking for merge confirmation with `AskUserQuestion` (`Merge it` (Recommended) or `Hold the merge`), **read `{PLAN_DIR}/PROGRESS.md`** and print a brief summary to the user: phases completed, sub-agents run, files touched (count), commits pushed (count + short SHAs), PR URL, quality-gate status, a yields line, the `## Worthiness step` blocks from `PROGRESS.md` plus any residual the late pass settled (residuals, refused deletes and filings, stated before the `AskUserQuestion`), the `## Overlap pass` block from `PROGRESS.md`, and the highest-signal findings/deviations/follow-ups drawn from `PROGRESS.md` so nothing is lost to context compression. The yields line gives, per phase that yielded, the number of its `(YIELD k)` blocks in `PROGRESS.md` and the peak band among them (red below fire below skull), printed as `Yields: Phase <N> <count> (peak <band>)` with entries joined by `; `, and as `Yields: none` when no phase yielded. Keep it tight, a few lines plus the surfaced notes, not a recap of every change.
 
       After every dispatched member's clean-pass marker is written and before the merge, the orchestrator prints the whole implementation's cost with `bash .gaia/scripts/usage.sh initiative <root> --box`, where `<root>` is `spec:SPEC-NNN` (from the `## Source SPEC` section of `README.md`) for a spec-derived plan or `plan:PLAN-NNN` for a spec-less one. The output lists the spec (when there is one), the plan and the execution, with a total, and is relayed verbatim inside a bare fenced block (an unfenced box is reflowed by the Markdown renderer and loses its alignment). Never compute or restate a figure; on a non-zero exit, relay the command's one stderr line in its place.
 

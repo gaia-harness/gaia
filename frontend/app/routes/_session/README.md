@@ -21,7 +21,7 @@ Hook point for authenticated pages. Empty by design; the template is not prescri
    export default SessionLayout;
    ```
 
-3. Add child routes as `app/routes/_session.<name>.tsx` (e.g. `_session.profile.tsx`, `_session.settings.tsx`); they inherit the guard. `gaia scaffold route <name> --group _session` writes those children for you.
+3. Add child routes as `app/routes/_session.<name>.tsx` (e.g. `_session.profile.tsx`, `_session.settings.tsx`). `gaia scaffold route <name> --group _session` writes those children for you. The parent loader is a navigation guard, not a data or write guard: it guards neither a child's action nor a child's loader on a single-fetch request, which can name only the child route. Each write action guards itself, and a protected read is guarded in its own loader or in middleware.
 
 ## Why this file is not a route
 

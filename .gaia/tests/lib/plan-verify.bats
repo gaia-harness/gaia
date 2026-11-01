@@ -21,12 +21,13 @@ setup() {
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
   S_PRE='<!-- gaia:orchestrator-step uat-pre-audit -->'
   S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
+  S_OVERLAP='<!-- gaia:orchestrator-step overlap-pass -->'
   S_WIKI='<!-- gaia:orchestrator-step wiki-promotion -->'
   S_AUDIT='<!-- gaia:orchestrator-step code-audit -->'
   S_CLEAR='<!-- gaia:orchestrator-step post-clearance -->'
   S_CLOSE='<!-- gaia:orchestrator-step post-merge-close -->'
-  SPEC_ORDER=("$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
-  SPEC_LESS_ORDER=("$S_YIELD" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
+  SPEC_ORDER=("$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
+  SPEC_LESS_ORDER=("$S_YIELD" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
 }
 
 # write_spec [<story then-clause>]: three UATs, one per surface.
@@ -97,7 +98,7 @@ yield_block() {
 # is_verbatim <sentinel>: the sentinels whose whole block is copied.
 is_verbatim() {
   case "$1" in
-    "$S_YIELD" | "$S_WORTH" | "$S_WIKI" | "$S_AUDIT" | "$S_CLEAR") return 0 ;;
+    "$S_YIELD" | "$S_WORTH" | "$S_OVERLAP" | "$S_WIKI" | "$S_AUDIT" | "$S_CLEAR") return 0 ;;
   esac
   return 1
 }
@@ -231,7 +232,7 @@ verify_spec_less() {
 
 @test "each spec-derived sentinel is required and a missing one is named alone" {
   local literal
-  [ "${#SPEC_ORDER[@]}" -eq 9 ]
+  [ "${#SPEC_ORDER[@]}" -eq 10 ]
   for literal in "${SPEC_ORDER[@]}"; do
     spec_fixture
     grep -vxF -- "$literal" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
@@ -243,12 +244,12 @@ verify_spec_less() {
   done
 }
 
-@test "a spec-less plan does not require the UAT sentinels but requires the other six" {
+@test "a spec-less plan does not require the UAT sentinels but requires the other seven" {
   local literal
   spec_less_fixture
   verify_spec_less
   [ "$status" -eq 0 ]
-  [ "${#SPEC_LESS_ORDER[@]}" -eq 6 ]
+  [ "${#SPEC_LESS_ORDER[@]}" -eq 7 ]
   for literal in "${SPEC_LESS_ORDER[@]}"; do
     spec_less_fixture
     grep -vxF -- "$literal" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
@@ -266,7 +267,7 @@ verify_spec_less() {
     printf '      %s\n\n' "$S_RENDER" "$S_GATE"
     yield_block 6
     printf '\n      %s\n\n' "$S_PRE"
-    for literal in "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
+    for literal in "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
       block_of "$literal" 6
       printf '\n'
     done
@@ -399,7 +400,7 @@ mutate_orchestrator() {
     printf '      %s\n\n' "$S_RENDER" "$S_GATE"
     yield_block 6
     printf '\n      %s\n\n' "$S_PRE"
-    for literal in "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
+    for literal in "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
       block_of "$literal" 6
       printf '\n'
     done
@@ -413,7 +414,7 @@ mutate_orchestrator() {
     printf '# Orchestrator\n\n'
     yield_block 6
     printf '\n'
-    for literal in "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
+    for literal in "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
       block_of "$literal" 6
       printf '\n'
     done
@@ -487,13 +488,13 @@ mutate_orchestrator() {
   echo "$output" | grep -F 'planner.md' | grep -qF 'no fenced yield-handling block'
 }
 
-# ---------- the other verbatim blocks and the order of the six late sentinels ----------
+# ---------- the other verbatim blocks and the order of the late sentinels ----------
 
 @test "red twin: each adjacent swap among the late sentinels is out of order and named" {
-  local order=("$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE") index swapped
-  [ "${#order[@]}" -eq 6 ]
+  local order=("$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE") index swapped
+  [ "${#order[@]}" -eq 7 ]
   index=0
-  while [ "$index" -lt 5 ]; do
+  while [ "$index" -lt 6 ]; do
     swapped=("${order[@]}")
     swapped[index]="${order[$((index + 1))]}"
     swapped[$((index + 1))]="${order[$index]}"
@@ -575,4 +576,65 @@ strip_marked() {
   run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
   [ "$status" -eq 1 ]
   echo "$output" | grep -E 'ORCHESTRATOR.md:[0-9]+:' | grep -qF 'block does not match planner.md'
+}
+
+# ---------- the overlap-pass sentinel ----------
+
+@test "overlap-pass: a plan with the block in order passes, spec-derived and spec-less, from the planner's own block" {
+  spec_fixture
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  grep -qF -- "$S_OVERLAP" "$PLAN/ORCHESTRATOR.md"
+  spec_less_fixture
+  verify_spec_less
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  grep -qF -- "$S_OVERLAP" "$PLAN/ORCHESTRATOR.md"
+}
+
+@test "red twin: overlap-pass missing, after wiki-promotion or before worthiness-step fails naming it, in both arms" {
+  local arm
+  for arm in spec spec_less; do
+    "${arm}_fixture"
+    grep -vxF -- "$S_OVERLAP" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
+    mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
+    if [ "$arm" = spec ]; then verify_spec; else verify_spec_less; fi
+    [ "$status" -eq 1 ] || return 1
+    echo "$output" | grep -F 'missing the sentinel line' | grep -qF -- "$S_OVERLAP" || return 1
+  done
+  spec_fixture
+  write_orchestrator "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_OVERLAP" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  verify_spec
+  [ "$status" -eq 1 ] || return 1
+  echo "$output" | grep -F 'out of order' | grep -qF -- "$S_OVERLAP" || return 1
+  spec_fixture
+  write_orchestrator "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_OVERLAP" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  verify_spec
+  [ "$status" -eq 1 ] || return 1
+  echo "$output" | grep -F 'out of order' | grep -qF -- "$S_WORTH" || return 1
+  spec_less_fixture
+  write_orchestrator "$S_YIELD" "$S_WORTH" "$S_WIKI" "$S_OVERLAP" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  verify_spec_less
+  [ "$status" -eq 1 ] || return 1
+  echo "$output" | grep -F 'out of order' | grep -qF -- "$S_OVERLAP" || return 1
+}
+
+@test "red twin: a paraphrased overlap-pass block fails naming the block, in both arms" {
+  local arm
+  for arm in spec spec_less; do
+    "${arm}_fixture"
+    sed 's/Its first action/X/; s/skip-safe/resumable/' "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
+    mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
+    if [ "$arm" = spec ]; then verify_spec; else verify_spec_less; fi
+    [ "$status" -eq 1 ] || return 1
+    echo "$output" | grep -qF 'the overlap-pass block does not match planner.md' || return 1
+  done
+}
+
+@test "the misrouting warning names a route before an e2e UAT" {
+  spec_fixture
+  write_spec 'the page navigates to /checkout'
+  write_task '- Story test criterion (UAT-002): the page navigates to /checkout'
+  verify_spec
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF 'confirm it is not a route or, when only a browser shows it, an e2e UAT'
 }

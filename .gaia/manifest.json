@@ -147,6 +147,7 @@
     ".claude/skills/gaia/references/forensics/redaction.md": "owned",
     ".claude/skills/gaia/references/forensics/taxonomy.md": "owned",
     ".claude/skills/gaia/references/isolation.md": "owned",
+    ".claude/skills/gaia/references/overlap-pass.md": "owned",
     ".claude/skills/gaia/references/plan.md": "owned",
     ".claude/skills/gaia/references/plan/decomposition-audit.md": "owned",
     ".claude/skills/gaia/references/plan/planner.md": "owned",
@@ -321,6 +322,7 @@
     ".gaia/scripts/notebook/research-reaper.sh": "owned",
     ".gaia/scripts/overlap-check.sh": "owned",
     ".gaia/scripts/overlap/check-proposals.mjs": "owned",
+    ".gaia/scripts/overlap/test-inspection.mjs": "owned",
     ".gaia/scripts/override-audit-advisory-ids.sh": "owned",
     ".gaia/scripts/plan-archive.sh": "owned",
     ".gaia/scripts/plan-resume-point.sh": "owned",
@@ -781,6 +783,7 @@
     "wiki/decisions/Shared Codify Declines.md": "wiki-owned",
     "wiki/decisions/Stories as Tests.md": "wiki-owned",
     "wiki/decisions/TDD RED Verification.md": "wiki-owned",
+    "wiki/decisions/Test Layering.md": "wiki-owned",
     "wiki/decisions/Thin Routes.md": "wiki-owned",
     "wiki/decisions/TypeScript 7 Readiness.md": "wiki-owned",
     "wiki/decisions/TypeScript Language Files.md": "wiki-owned",
@@ -839,7 +842,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-01T06:03:02.624Z",
+  "generated": "2026-11-01T06:51:01.744Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
