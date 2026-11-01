@@ -1449,13 +1449,33 @@ stop_false_case() {
   write_dispositions 3 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "f.txt" or .line != 6)')"
   run_check 3
   green || return 1
-  mutant_script audit-dispositions-check.sh -e 's/ or (\$version >= 3 and .disposition == "accept-residual")//' || return 1
+  mutant_script audit-dispositions-check.sh -e 's/select(\$version >= 3 and .disposition == "accept-residual")/select(false)/' || return 1
   run_check 3
   red undisposed "$(key_json c/sug f.txt 6)" || return 1
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
   write_dispositions 3 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
   run_check 3
   red accept-residual-not-eligible "$(key_json c/sug f.txt 6)"
+}
+
+@test "carry-forward: an accepted key re-reported as Critical or security-class is undisposed with no entry" {
+  local escalation escalated
+  accept_at 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  open_round 2 "$FINDINGS_JSON"
+  for escalation in '.severity = "critical"' '.severity = "major" | .security = true'; do
+    escalated="$(jq -c "map(if .path == \"f.txt\" and .line == 6 then $escalation else . end)" <<<"$FINDINGS_JSON")"
+    open_round 3 "$escalated"
+    write_dispositions 3 "$(fill "$escalated" '[]' 'select(.path != "f.txt" or .line != 6)')"
+    run_check 3
+    red undisposed "$(key_json c/sug f.txt 6)" || return 1
+  done
+  mutant_script audit-dispositions-check.sh -e 's/ and (security_class | not))/)/' || return 1
+  open_round 3 "$escalated"
+  run_check 3
+  green
 }
 
 # veto_fixed_in <r> <fixer-disposition>: round r disposes c/imp f.txt:3 fix and

@@ -46,9 +46,9 @@ page_section() {
 
 @test "the smaller gate section names the three deferred steps" {
   run page_section
-  [[ "$output" == *"steps 6, 7 and 8"* ]]
-  [[ "$output" == *"Playwright"* ]]
-  [[ "$output" == *"dev smoke test"* ]]
+  [[ "$output" == *"steps 6, 7 and 8"* ]] || return 1
+  [[ "$output" == *"Playwright"* ]] || return 1
+  [[ "$output" == *"dev smoke test"* ]] || return 1
   [[ "$output" == *"production build"* ]]
 }
 

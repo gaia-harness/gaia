@@ -937,7 +937,7 @@ mutated_hook_mirror() {
   marker=$(write_marker)
   run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"declined: gate steps owed"*"audit-gate-owed.sh run"* ]]
+  [[ "$output" == *"declined: gate steps owed"*"audit-gate-owed.sh run"* ]] || return 1
   assert_no_post
   grep -qF -- "status --root $(git -C "$REPO" rev-parse --show-toplevel)" "$BATS_TEST_TMPDIR/gate-owed-calls"
 }
@@ -949,7 +949,7 @@ mutated_hook_mirror() {
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   marker=$(write_marker)
   run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
-  [[ "$output" == *"declined: gate steps owed"* ]]
+  [[ "$output" == *"declined: gate steps owed"* ]] || return 1
   assert_no_post
 }
 
@@ -959,7 +959,7 @@ mutated_hook_mirror() {
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   marker=$(write_marker)
   run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
-  [[ "$output" == *"posted GAIA-Audit success"* ]]
+  [[ "$output" == *"posted GAIA-Audit success"* ]] || return 1
   [ -s "$API_CALLS" ]
 }
 
@@ -969,6 +969,6 @@ mutated_hook_mirror() {
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   marker=$(write_refusal)
   run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
-  [[ "$output" == *"posted GAIA-Audit failure"* ]]
+  [[ "$output" == *"posted GAIA-Audit failure"* ]] || return 1
   [ -s "$API_CALLS" ]
 }

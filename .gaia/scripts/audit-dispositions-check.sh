@@ -213,7 +213,7 @@ def security_class: ((.severity | IN("major", "minor")) | not) or (.security | i
 | ($stop.human_accept or ($stop.default_stop and ($threshold_fix | not))) as $accept_allowed
 | ($lookup | map({key: (key_array | tojson), value: .}) | from_entries) as $lookup_by_key
 | [.entries[] | key_array] as $disposed_keys
-| (if $version >= 2 then $carried else [] end) as $carried_keys
+| (if $version >= 2 then $carried else {filed: [], accepted: []} end) as $carried_keys
 | (
     (.entries[] | . as $entry | key_array as $key | $lookup_by_key[($key | tojson)] as $lookup_entry | ($vetoed_keys | any(. == $key)) as $is_vetoed | (key_object | tojson) as $key_json
       | (if $lookup_entry == null and ($is_vetoed | not) then ["unknown-key"]
@@ -242,7 +242,8 @@ def security_class: ((.severity | IN("major", "minor")) | not) or (.security | i
       | .[] | "violation: \(.) \($key_json)"),
     (([$lookup[]
         | select(if $version >= 2 then (triage_honored | not) else .authored != false end)
-        | select(key_array as $key | $carried_keys | any(. == $key) | not)]
+        | select(key_array as $key | ($carried_keys.filed | any(. == $key))
+            or (($carried_keys.accepted | any(. == $key)) and (security_class | not)) | not)]
       + $binding_vetoes)
       | map(key_object) | unique_by(key_array) | .[] | select(key_array as $key | $disposed_keys | any(. == $key) | not)
       | "violation: undisposed \(tojson)"),
@@ -253,6 +254,7 @@ def security_class: ((.severity | IN("major", "minor")) | not) or (.security | i
 
 # The stop inputs of a round graded before version 3, or whose live check had
 # no accept-residual entry and no binding veto to ask the evaluator about.
+_NO_CARRIED='{"filed":[],"accepted":[]}'
 _NO_STOP='{"default_stop":false,"default_stop_keys":[],"review_bases":{},"human_accept":false,"satisfied_vetoes":[]}'
 
 # _sha256 <file>: the hex digest.
@@ -344,9 +346,11 @@ _repo_visibility() {
   )
 }
 
-# _carried_keys <round> <version>: identity keys disposed file or divert (the
-# filer's refusals excepted) or, from version 3, accept-residual in any
-# earlier round's dispositions file, read in one jq pass. An unreadable file
+# _carried_keys <round> <version>: {filed, accepted}, the identity keys disposed
+# file or divert (the filer's refusals excepted) and, from version 3,
+# accept-residual in any earlier round's dispositions file, read in one jq
+# pass. An accepted key exempts a re-report only while it is not
+# security-class, so an escalation must be disposed again. An unreadable file
 # makes the pass carry nothing, so a lost file leaves more findings
 # undisposed, never fewer.
 _carried_keys() {
@@ -356,13 +360,13 @@ _carried_keys() {
     [ -f "$RUN_FOLDER/dispositions-$k.json" ] && earlier_files+=("$RUN_FOLDER/dispositions-$k.json")
     k=$((k + 1))
   done
-  [ "${#earlier_files[@]}" -gt 0 ] || { printf '[]\n'; return 0; }
+  [ "${#earlier_files[@]}" -gt 0 ] || { printf '%s\n' "$_NO_CARRIED"; return 0; }
   carried="$(jq -c -n --argjson refused "$(gaia_filing_refused_keys "$RUN_FOLDER")" --argjson version "$2" \
-    '[inputs | .entries[] | [.member, .finding_class, .path, .line] as $key
-      | select(((.disposition == "file" or .disposition == "divert") and ($refused | any(. == $key) | not))
-          or ($version >= 3 and .disposition == "accept-residual")) | $key]' \
+    '[inputs | .entries[] | {key: [.member, .finding_class, .path, .line], disposition}] as $entries
+      | {filed: [$entries[] | select(.disposition | IN("file", "divert")) | .key | select(. as $key | $refused | any(. == $key) | not)],
+         accepted: [$entries[] | select($version >= 3 and .disposition == "accept-residual") | .key]}' \
     ${earlier_files[@]+"${earlier_files[@]}"} 2>/dev/null)" || carried=""
-  printf '%s\n' "${carried:-[]}"
+  printf '%s\n' "${carried:-$_NO_CARRIED}"
 }
 
 # _grade_pass <round> <lookup> <version> <carried> <visibility> <stop>
@@ -376,7 +380,7 @@ _grade_pass() {
 # visibility probe runs only when a security-class file entry makes the answer
 # matter.
 _grade() {
-  local violations carried="[]" stop="${4:-$_NO_STOP}"
+  local violations carried="$_NO_CARRIED" stop="${4:-$_NO_STOP}"
   [ "$3" -ge 2 ] && carried="$(_carried_keys "$1" "$3")"
   violations="$(_grade_pass "$1" "$2" "$3" "$carried" unprobed "$stop")" || return 3
   case "$violations" in
