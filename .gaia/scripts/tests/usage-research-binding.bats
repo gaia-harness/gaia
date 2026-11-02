@@ -24,9 +24,9 @@ setup_file() {
 }
 
 # Entry names only, so a live session's flush growing usage.jsonl changes
-# nothing. The dot-prefixed `.tmp.` names are the writers' temp-then-rename
-# files, which a live session's flush or branch-memo save creates in the
-# shared main checkout mid-suite. A missing folder lists nothing.
+# nothing. The dot-prefixed `.tmp.` names are the writers' temp files, which a
+# live session's flush or branch-memo save creates in the shared main checkout
+# mid-suite.
 telemetry_names() {
   [ -d "$1" ] || return 0
   ls -A "$1" | { grep -vE '^\..*\.tmp\.' || true; } | LC_ALL=C sort
