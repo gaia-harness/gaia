@@ -1,6 +1,0 @@
-import {storiesOf} from '@storybook/react';
-import LegacyList from '..';
-
-storiesOf('Components/LegacyList', module).add('Default', () => (
-  <LegacyList names={['Ada', 'Grace']} />
-));
