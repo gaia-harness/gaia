@@ -34697,7 +34697,7 @@ var titleFlagError = (title) => /[\n\r]/u.test(title) ? "--title must not contai
 var HELP_TEXT13 = `Usage: gaia init rename --title <T> --kebab <K>
 
   Rename the project across package.json, CLAUDE.md, and seeded language
-  files (Step 3 of /gaia-init).
+  files (Step 3 of /gaia-init). --package <name> picks the web member.
 
   Required flags:
     --title <T>     Project title (Title Case, e.g. "Hello World").
@@ -43208,6 +43208,9 @@ var HELP_TEXT33 = `Usage: gaia scaffold <subcommand> [args]
   hook <use-foo|useFoo>    Scaffold a new custom hook.
   route <name>             Scaffold a new route + page.
   service <name>           Scaffold a new API service.
+
+  Every subcommand accepts --package <name> to pick the web member, required
+  only when several members declare the web stack.
 `;
 var HELP_TOKENS31 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var run39 = (argv) => {
@@ -47660,10 +47663,15 @@ var editWorkspacePackages = (text) => {
     appsAdded = true;
   });
   const anchor2 = items.findLast(({ index }) => !dropped.has(index)) ?? last;
-  if (!hasPackages) {
+  const appended = [
+    ...appsAdded ? [] : [APPS_GLOB],
+    ...hasPackages ? [] : [PACKAGES_GLOB]
+  ];
+  if (appended.length > 0) {
     const carriageReturn = (lines[anchor2.index] ?? "").endsWith("\r") ? "\r" : "";
+    const addedLines = appended.map((glob) => `${anchor2.item.head}${glob}${carriageReturn}`).join("\n");
     lines[anchor2.index] = `${lines[anchor2.index] ?? ""}
-${anchor2.item.head}${PACKAGES_GLOB}${carriageReturn}`;
+${addedLines}`;
   }
   const edited = lines.filter((_line, index) => !dropped.has(index)).join("\n");
   return { changed: edited !== text, ok: true, text: edited };
@@ -52722,7 +52730,7 @@ var HELP_TEXT76 = `Usage: gaia <subcommand> [args]
   packages sync-settings [--check]
   codify-ledger list|record|lapsed|snapshot
   codify-tally
-  update merge-package|merge-workspace|merge-audit-ci|lockfile-command|merge-region|regen-regions
+  update merge-package|merge-workspace|merge-audit-ci|lockfile-command|merge-region|regen-regions|crossing
   update-deps run|decline|global-tools|advisories|advisory-landed|dismiss-alert|write-security-cache|check-security-override
   init strip-branding|configure-i18n|configure-data-layer|rename|wire-statusline|write-project-config|finalize|resume
   setup status|mark-step|finalize|bootstrap-env|detect-remote|warn-existing-tools|check-admin|enable-delete-branch|write-isolation-policy|configure-dependabot-alerts|write-sandbox-recommendation|record|drift

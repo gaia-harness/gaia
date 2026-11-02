@@ -101,9 +101,9 @@ jobs:
           echo "tests: incremental base = ${base}" >&2
       # Allowlist of paths that affect the test suite (ERE, matched against
       # `git diff --name-only`). Every path under `apps/` and `packages/` is
-      # test-relevant by prefix: this job runs the tests, typecheck and lint
-      # over them, so a path outside the list reports the required check green
-      # without running. The root-level entries are the shared manifests and
+      # test-relevant by prefix: this job runs the tests and typecheck over
+      # every member (the Lint step lints `apps/web` only), so a path outside
+      # the list reports the required check green without running. The root-level entries are the shared manifests and
       # config: the one workspace lockfile and manifest, `.node-version`,
       # `.gaia/packages.json` (the package registry the harness reads), this
       # workflow, the apt

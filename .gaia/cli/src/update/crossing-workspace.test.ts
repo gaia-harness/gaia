@@ -51,6 +51,15 @@ describe('editWorkspacePackages', () => {
     expect(result).toEqual({changed: false, ok: true, text: before});
   });
 
+  test('appends both globs when no entry names the app folder', () => {
+    const before = `packages:\n  - '*'\n  - .gaia/cli\n${TAIL}`;
+    const result = editWorkspacePackages(before);
+
+    expect(textOf(result)).toBe(
+      `packages:\n  - '*'\n  - .gaia/cli\n  - apps/*\n  - packages/*\n${TAIL}`
+    );
+  });
+
   test('does not append the packages glob twice, or the apps glob twice', () => {
     const before = `packages:\n  - frontend\n  - apps/*\n  - packages/*\n${TAIL}`;
     const result = editWorkspacePackages(before);

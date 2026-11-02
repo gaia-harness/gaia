@@ -41,7 +41,7 @@ import {titleFlagError} from './util/title-flag.js';
 const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
 
   Rename the project across package.json, CLAUDE.md, and seeded language
-  files (Step 3 of /gaia-init).
+  files (Step 3 of /gaia-init). --package <name> picks the web member.
 
   Required flags:
     --title <T>     Project title (Title Case, e.g. "Hello World").

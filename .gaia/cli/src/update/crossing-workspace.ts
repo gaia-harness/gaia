@@ -100,13 +100,19 @@ export const editWorkspacePackages = (text: string): WorkspaceEdit => {
   });
 
   const anchor = items.findLast(({index}) => !dropped.has(index)) ?? last;
+  const appended = [
+    ...(appsAdded ? [] : [APPS_GLOB]),
+    ...(hasPackages ? [] : [PACKAGES_GLOB]),
+  ];
 
-  if (!hasPackages) {
+  if (appended.length > 0) {
     const carriageReturn =
       (lines[anchor.index] ?? '').endsWith('\r') ? '\r' : '';
+    const addedLines = appended
+      .map((glob) => `${anchor.item.head}${glob}${carriageReturn}`)
+      .join('\n');
 
-    lines[anchor.index] =
-      `${lines[anchor.index] ?? ''}\n${anchor.item.head}${PACKAGES_GLOB}${carriageReturn}`;
+    lines[anchor.index] = `${lines[anchor.index] ?? ''}\n${addedLines}`;
   }
 
   const edited = lines.filter((_line, index) => !dropped.has(index)).join('\n');
