@@ -97,12 +97,13 @@ The classifier is in `.gaia/cli/src/release/manifest.ts`, `ADOPTER_OWNED_SENTINE
 
 Separate repo, separate npm package (`create-gaia`). Zero runtime deps. When an adopter runs `npx create-gaia@latest my-app`:
 
-1. Resolves the target version (flag, or latest GitHub release).
-2. Downloads the release tarball from `github.com/gaia-harness/gaia/releases/download/vX.Y.Z/`: `gaia-bundle-vX.Y.Z.tar.gz` for 2.x and later, `gaia-vX.Y.Z.tar.gz` for a 1.x version.
-3. Extracts into `my-app/`.
-4. `git init` + initial commit (unless `--no-git`).
-5. `pnpm install` (after `corepack enable pnpm`), unless `--no-install`. The scaffolded project pins pnpm via `packageManager` in `package.json`; corepack provisions the matching version transparently.
-6. Prints welcome pointing at `/gaia-init`.
+1. Unless `--no-install`, installs pnpm when it is missing, before writing anything: `corepack disable pnpm` if corepack is present, then `npm install -g pnpm@latest`.
+2. Resolves the target version (flag, or latest GitHub release).
+3. Downloads the release tarball from `github.com/gaia-harness/gaia/releases/download/vX.Y.Z/`: `gaia-bundle-vX.Y.Z.tar.gz` for 2.x and later, `gaia-vX.Y.Z.tar.gz` for a 1.x version.
+4. Extracts into `my-app/`.
+5. `git init` + initial commit (unless `--no-git`).
+6. `pnpm install`, unless `--no-install`. pnpm switches itself to the version `packageManager` in `package.json` pins.
+7. Launches Claude Code on `/gaia-init`; with `--no-claude`, or when `claude` is not on `PATH`, prints a welcome pointing at `/gaia-init` instead.
 
 The CLI is deliberately thin; heavy lifting happens inside Claude Code, where `/setup-gaia` installs the plugins. It runs as the continuation of `/gaia-init`, which handles i18n and the branding strip. See the `create-gaia` repo for the implementation.
 

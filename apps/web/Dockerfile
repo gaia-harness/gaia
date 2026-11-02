@@ -3,8 +3,24 @@
 # BuildKit reads apps/web/Dockerfile.dockerignore beside this file, which keeps
 # every .env out of the context.
 
-FROM node:22.23-alpine AS build-env
-RUN corepack enable
+# The exact pnpm that package.json's packageManager pins, installed with npm at build time, so a
+# container start needs no registry. The pin's sha512 is the hash of pnpm's npm tarball, which is a
+# launcher: the check covers that tarball only, and the platform @pnpm/exe.* binary npm then fetches
+# is vouched for by registry integrity alone.
+FROM node:22.23-alpine AS pnpm-env
+WORKDIR /pin
+COPY package.json ./
+RUN pin="$(node -p "require('./package.json').packageManager")" \
+  && case "$pin" in pnpm@*+sha512.*) ;; *) echo "packageManager must read pnpm@<version>+sha512.<hash>, not $pin" >&2; exit 1 ;; esac \
+  && version="${pin#pnpm@}" && version="${version%%+*}" \
+  && npm pack --silent "pnpm@$version" \
+  && echo "${pin##*+sha512.}  pnpm-$version.tgz" | sha512sum -c - \
+  && npm install -g "./pnpm-$version.tgz" \
+  && rm "pnpm-$version.tgz" \
+  && pnpm --version \
+  && npm cache clean --force
+
+FROM pnpm-env AS build-env
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json ./apps/web/package.json
@@ -15,19 +31,10 @@ COPY apps/web ./apps/web
 RUN pnpm --filter web build
 RUN pnpm deploy --filter web --prod /app
 
-FROM node:22.23-alpine
-# Container hardening: the server runs as the unprivileged `node` user. pnpm's corepack
-# cache and its per-user state are populated at build time as that same user, so
-# `pnpm start` finds them offline.
-ENV COREPACK_HOME=/opt/corepack
-RUN corepack enable
-RUN mkdir /pin /opt/corepack /app && chown node:node /pin /opt/corepack /app
+FROM pnpm-env
+# Container hardening: the server runs as the unprivileged `node` user.
+RUN mkdir /app && chown node:node /app
 USER node
-# Resolve the pinned pnpm and its native binary now, so `pnpm start` needs no registry at run time.
-# The deployed package carries no packageManager field, so pin from the root manifest.
-WORKDIR /pin
-COPY --chown=node:node package.json ./
-RUN corepack prepare --activate && pnpm --version
 WORKDIR /app
 # Deployed at /app in the build stage so pnpm's recorded install state still matches this path;
 # otherwise `pnpm start` sees a stale install and reaches for the registry.
