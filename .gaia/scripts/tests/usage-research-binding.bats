@@ -20,7 +20,23 @@ bats_require_minimum_version 1.5.0
 setup_file() {
   REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
   export REAL
-  ls -la "$REAL/.gaia/local/telemetry" >"$BATS_FILE_TMPDIR/real-before" 2>&1 || true
+  telemetry_names "$REAL/.gaia/local/telemetry" >"$BATS_FILE_TMPDIR/real-before"
+}
+
+# Entry names only, so a live session's flush growing usage.jsonl changes
+# nothing. The dot-prefixed `.tmp.` names are the writers' temp-then-rename
+# files, which any live session's flush creates in the shared main checkout
+# mid-suite. A missing folder lists nothing.
+telemetry_names() {
+  [ -d "$1" ] || return 0
+  ls -A "$1" | { grep -vE '^\..*\.tmp\.' || true; } | LC_ALL=C sort
+}
+
+assert_telemetry_names_unchanged() {
+  local changes
+  changes="$(diff "$1" <(telemetry_names "$2"))" && return 0
+  printf 'telemetry names changed (< removed, > added):\n%s\n' "$changes"
+  return 1
 }
 
 setup() {
@@ -181,9 +197,32 @@ binding_refs() { jq -r 'select(.kind == "binding") | .ref' "$TEL/usage.jsonl"; }
   [ "$(binding_refs)" = research:topic-x-2026-10-01 ]
 }
 
+@test "the telemetry-untouched check passes over a writer's temp file and a grown ledger" {
+  local stand_in="$BATS_TEST_TMPDIR/stand-in-telemetry"
+  mkdir -p "$stand_in"
+  head -c 4000 /dev/zero >"$stand_in/usage.jsonl"
+  telemetry_names "$stand_in" >"$BATS_TEST_TMPDIR/stand-in-before"
+  : >"$stand_in/.usage-cursors.tmp.4242"
+  head -c 9000 /dev/zero >>"$stand_in/usage.jsonl"
+  assert_telemetry_names_unchanged "$BATS_TEST_TMPDIR/stand-in-before" "$stand_in"
+}
+
+@test "the telemetry-untouched check fails on a new or removed stable name and names it" {
+  local stand_in="$BATS_TEST_TMPDIR/stand-in-telemetry"
+  mkdir -p "$stand_in"
+  : >"$stand_in/usage.jsonl"
+  telemetry_names "$stand_in" >"$BATS_TEST_TMPDIR/stand-in-before"
+  : >"$stand_in/new-stable.json"
+  run assert_telemetry_names_unchanged "$BATS_TEST_TMPDIR/stand-in-before" "$stand_in"
+  [ "$status" -eq 1 ]
+  grep -qxF '> new-stable.json' <<<"$output"
+  rm "$stand_in/new-stable.json" "$stand_in/usage.jsonl"
+  run assert_telemetry_names_unchanged "$BATS_TEST_TMPDIR/stand-in-before" "$stand_in"
+  [ "$status" -eq 1 ]
+  grep -qxF '< usage.jsonl' <<<"$output"
+}
+
 @test "the real checkout's telemetry directory is untouched by this suite" {
-  ls -la "$REAL/.gaia/local/telemetry" >"$BATS_TEST_TMPDIR/real-after" 2>&1 || true
-  # Compare names only: this file is the suite's last case, but a sibling
-  # run may legitimately touch mtimes; new or removed entries are the failure.
-  [ "$(awk '{print $NF}' "$BATS_FILE_TMPDIR/real-before")" = "$(awk '{print $NF}' "$BATS_TEST_TMPDIR/real-after")" ]
+  # This file is the suite's last case.
+  assert_telemetry_names_unchanged "$BATS_FILE_TMPDIR/real-before" "$REAL/.gaia/local/telemetry"
 }
