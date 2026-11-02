@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs the react-doctor Claude Code skill into apps/web/.claude/skills/ and strips the extras
+# Installs the react-doctor Claude Code skill into a web-stack member's .claude/skills/ and strips the extras
 # its installer adds, so GAIA stays the sole controller of when react-doctor runs (the skill's
 # auto-run after edits and the code-audit-frontend agent).
 #

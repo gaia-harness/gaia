@@ -6,7 +6,7 @@
 # Usage: check-settings-drift.sh [repo_root]
 #
 # A member that is not web-stack and has not opted in carries a warning stub
-# instead. A missing or edited stub prints one warning naming the member and
+# instead of the generated file. A missing or edited stub prints one warning naming the member and
 # leaves the exit status alone; a current stub and a hand-written file are
 # silent.
 #

@@ -32,7 +32,7 @@ const isTracked = (repoRoot: string, repoRelativePath: string): boolean => {
   }
 };
 
-/** Staged renames and copies as destination to origin, rename detection on. */
+/** Staged renames as destination to origin, rename detection on. */
 const stagedRenameSources = (repoRoot: string): Map<string, string> => {
   const records = splitZStream(
     execGaiaGitRaw(

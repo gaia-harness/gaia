@@ -56,7 +56,7 @@
 #                     *.tsx whatever its stack (language files included).
 #                     translation runs on a language file
 #                     (<web member path>/app/languages/<locale>/<file>.ts) or on any
-#                     other path whose HEAD content has a translation signal:
+#                     other path under a web member whose HEAD content has a translation signal:
 #                     useTranslation, <Trans, i18n.t( or a bare t( call. A bare
 #                     t( is one not preceded by an identifier character, `$` or
 #                     `.`: `$` excludes i18next's `$t(` nesting and `.` excludes
@@ -72,7 +72,7 @@
 #                     TypeScript only while a .sh or .css path still gets a
 #                     line). A web path lists react-patterns, translation,
 #                     accessibility, project-specific-rules and security; every
-#                     other path lists security. LENSES lines print last.
+#                     other path lists security.
 #
 # Output (stdout), one KEY=value per line, in this order:
 #   AUDIT_ROOT FULL_BASE BASE_REF BASE_REASON KEY_REF ANCHOR_TREE BASE_SHA

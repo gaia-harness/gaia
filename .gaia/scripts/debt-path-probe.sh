@@ -20,7 +20,8 @@
 # its counterpart under the app's new home is tracked, so a key filed before
 # the move does not read as gone. Only the leading segment is mapped, and the
 # comparison stays jq string equality. The legacy root is held without a
-# slash and the prefixes are composed, so no literal path spelling is left.
+# slash and the prefixes are composed, so the retired-path gate finds no citation
+# of the retired root in this file.
 #
 # The repository is the one containing the working directory, read from its
 # top level, so a run from a subdirectory sees the whole index. The playbook

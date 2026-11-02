@@ -69,8 +69,8 @@ write_member_manifest() {
 write_descriptor() {
   local directory="$1" pre_commit_source="$2"
   mkdir -p "$directory"
-  # The hook runs a step only where the member defines it, so the member
-  # defines all three.
+  # The hook runs a step only where the member defines it, so the manifest
+  # defines all three (typecheck, test:lint-staged, lint-staged).
   write_member_manifest "$directory"
   cat > "$directory/gaia.package.json" <<JSON
 {
@@ -96,7 +96,7 @@ use_root_package() {
   write_descriptor "$REPO" '["app/**", "test/**", ".storybook/**", ".playwright/**"]'
 }
 
-# The 2.0.0 layout: the frontend package lives at apps/web/.
+# The workspace layout: the web package lives at apps/web/.
 use_frontend_package() {
   mkdir -p "$REPO/.gaia"
   printf '[{"name":"web","path":"apps/web"}]\n' > "$REPO/.gaia/packages.json"

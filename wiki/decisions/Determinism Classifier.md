@@ -24,7 +24,7 @@ A file classifies **STRICT only when ALL of conditions 1 through 4 hold.** Faili
 
 ### Condition 1: path + hook/non-hook discriminator
 
-The file path matches the owning package's `tddStrictCandidates` globs, which the package descriptor declares ([[Package Descriptor]]). Any other path, and any path no registered package owns, classifies EMERGENT. The shipped `frontend` package's list is in `apps/web/gaia.package.json`.
+The file path matches the owning package's `tddStrictCandidates` globs, which the package descriptor declares ([[Package Descriptor]]). Any other path, and any path no registered package owns, classifies EMERGENT. The shipped `web` package's list is in `apps/web/gaia.package.json`.
 
 A file that exports a `use*` symbol is a hook (even under a utilities folder the descriptor lists) and is judged by condition 3. Non-hook files skip condition 3.
 

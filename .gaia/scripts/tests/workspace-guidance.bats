@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# The workspace layout guidance: a two-line rule, one procedure on the
+# The workspace layout guidance: the coding-guidelines rule, one procedure on the
 # Package Descriptor page, and pointers from the pages that used to carry their
 # own copy. Every path and script named in them must resolve on the branch.
 
@@ -29,8 +29,8 @@ section_of() {
 # dead_paths <file>
 #
 # Prints every backticked repo path in the file that does not exist. A token
-# counts when it starts with a tracked top-level folder or names a root file;
-# placeholders (<, {, *), the example members the page invents, and the built
+# counts when it starts with `.claude/`, `.gaia/`, `wiki/` or `apps/web/`, or is
+# `pnpm-workspace.yaml`; placeholders (<, {, *, $), the example members the page invents, and the built
 # CLI bundle are skipped.
 dead_paths() {
   local token path

@@ -8,7 +8,7 @@ tags: [concept, monorepo, guards, claude]
 
 # Package Descriptor
 
-GAIA is a monorepo: the harness (`.claude/`, `.gaia/`, `.githooks/`, `.github/`, `wiki/`) lives at the repo root, apps live in `apps/<name>/` and shared libraries in `packages/<name>/`. Two JSON files tell the harness where a workspace member is and which of its paths each guard cares about, so no guard hardcodes `app/` or `apps/web/`. The layout is GAIA's convention, built on a plain pnpm workspace ([pnpm workspaces](https://pnpm.io/workspaces)) and the apps-and-packages shape that [Nx's pnpm workspace guide](https://nx.dev/docs/kb/pnpm-workspaces) describes; if either link dies, the convention still stands as this page states it.
+GAIA is a monorepo: the harness (`.claude/`, `.gaia/`, `.githooks/`, `.github/`, `wiki/`) lives at the repo root, apps live in `apps/<name>/` and shared libraries in `packages/<name>/`. Two JSON files tell the harness where a workspace member is and which of its paths each guard cares about, so no guard hardcodes `app/` or `apps/web/`. The layout is GAIA's convention, built on a plain pnpm workspace ([pnpm workspaces](https://pnpm.io/workspaces)) and the apps-and-packages shape that [Nx's pnpm workspace guide](https://nx.dev/docs/kb/pnpm-workspaces) describes.
 
 ## The two files
 

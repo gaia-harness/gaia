@@ -1,6 +1,6 @@
 ### Transitive refresh instructions
 
-Operate on the root workspace and its `frontend` package only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument. Frozen names: `{FROZEN_NAMES}`.
+Operate on the root workspace and its `web` package (`apps/web`) only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument. Frozen names: `{FROZEN_NAMES}`.
 
 1. **Snapshot** the files the refresh could touch, and the direct dependencies' resolved versions. Run each command below as its own call, in order. **If any of them exits non-zero or is refused, stop here:** do not run step 2 or anything after it, change nothing, and report `Not run (snapshot failed: <command>: <first error line>)`. A refresh with no baseline can only be undone by resetting to HEAD, which also throws away the run's uncommitted Wave A and Wave B edits.
 

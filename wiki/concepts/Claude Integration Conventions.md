@@ -96,7 +96,7 @@ Adding an app or a library to the pnpm workspace is one procedure, owned by [[Pa
 
 - **Its own `CLAUDE.md` and `.claude/`.** A member with stack-specific rules or skills puts them in `{PKG}/.claude/rules/` and `{PKG}/.claude/skills/`, with `paths:` globs relative to `{PKG}`, beside a `{PKG}/CLAUDE.md`. `apps/web/` is the worked example.
 - **A quality gate of its own**, as §8 describes: the shared gate's skip check matches JavaScript, TypeScript and CSS sources, so a member in another language gets no gate until its own names its checks.
-- **CI.** `.github/workflows/tests.yml` arms its incremental skip on the web app and root config, so a change under `{PKG}` alone runs no tests there. Add a workflow of its own named per [[Workflow Naming Convention]], copying `tests.yml`'s shape, and gate its steps inside the job rather than with a workflow `paths:` filter ([[Incremental CI Skipping]]).
+- **CI.** `.github/workflows/tests.yml` arms on any path under `apps/` or `packages/` and runs the root `typecheck` and `test:ci` across members, so a member there needs no workflow of its own; a member elsewhere (such as `infra`) runs no tests there. For that one, add a workflow of its own named per [[Workflow Naming Convention]], copying `tests.yml`'s shape, and gate its steps inside the job rather than with a workflow `paths:` filter ([[Incremental CI Skipping]]).
 - **An auditor**, when no existing member's lens fits: [[Registering a Code Audit Team Member]], then `bash .gaia/scripts/verify-audit-roster.sh`.
 - **Verify.** Run `pnpm -C {PKG} typecheck`, `./.gaia/cli/gaia packages sync-settings --check`, `bash .gaia/scripts/verify-audit-roster.sh` and `.gaia/cli/gaia fitness check --json` before reporting the member added.
 

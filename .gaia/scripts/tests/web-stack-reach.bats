@@ -146,8 +146,8 @@ assert_non_web_refused() {
   [ "$before" = "$after" ]
 }
 
-# assert_writes_under_web <dir> <web path>: with no flag, scaffold from apps/mobile (rename needs the project root),
-# scaffold and rename write under the web member.
+# assert_writes_under_web <dir> <web path>: with no flag, scaffold run from
+# apps/mobile and rename run from the project root both write under the web member.
 assert_writes_under_web() {
   local dir="$1" web_path="$2"
   gaia_in "$dir/apps/mobile" scaffold component Widget

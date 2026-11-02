@@ -2,7 +2,7 @@
 
 You are upgrading the `{GROUP}` dependency group from `{FROM}` to `{TO}`.
 
-**Scope.** Operate on the **root pnpm workspace and its `frontend` package only**.
+**Scope.** Operate on the **root pnpm workspace and its `web` package (`apps/web`) only**.
 
 - Run every `pnpm` command from the repository root, using `-C apps/web` for app dependencies.
 - For code edits and grep-style searches, scan only `apps/web/app/`, `apps/web/test/`, and the frontend config files (`apps/web/*.config.*`, `apps/web/tsconfig*.json`). Skip every other directory that has its own `package.json` or `pnpm-lock.yaml`: it is an independent pnpm project, out of scope.
