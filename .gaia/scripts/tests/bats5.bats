@@ -3,6 +3,8 @@
 # Assertions use bash-3.2-safe forms (POSIX [ ], explicit failure) per
 # .claude/rules/bats-assertions.md.
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../bats5.sh"
 }

@@ -56,6 +56,8 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
+bats_require_minimum_version 1.5.0
+
 # require_jq
 #
 # jq is a precondition on CI, not a maybe: audit-ci-tests.yml runs this suite
