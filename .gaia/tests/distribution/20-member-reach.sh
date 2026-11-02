@@ -17,8 +17,8 @@
 #      web lenses for web paths, none for the library or infra, and security for
 #      every path including the Terraform and shell files.
 #
-# Layer 0: no Docker; needs host pnpm and network access to install the
-# scaffold that supplies tsc and vitest.
+# Layer 0: needs host pnpm and network access to install the scaffold that
+# supplies tsc and vitest.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/lib.sh"

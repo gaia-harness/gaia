@@ -6,8 +6,8 @@
 # The root gate across members that are not the web app, run with the staged
 # bundle's own root scripts and gate tooling. Two members run Vitest, a third
 # runs a runner that exits 1 on any argument, so the root test:ci must forward
-# none. The staged scaffold's tsc and vitest run against the scratch files; the
-# scratch tree has no install.
+# none. The staged scaffold's tsc and vitest run against the fixture files; the
+# fixture tree has no install.
 #
 #   1. A green control: the root typecheck and test:ci exit 0, the third
 #      member's test:ci passes on its own, and its runner does refuse an argument.
@@ -21,9 +21,8 @@
 #      gate with only the web member's package.json staged and with only a
 #      library tsconfig staged.
 #
-# Layer 0: no Docker; needs host pnpm and network access to install the
-# scaffold that supplies tsc and vitest. Exclusive because Vitest uses every
-# core.
+# Layer 0: needs host pnpm and network access to install the scaffold that
+# supplies tsc and vitest. Exclusive because Vitest uses every core.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/lib.sh"
