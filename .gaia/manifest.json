@@ -336,6 +336,7 @@
     ".gaia/scripts/plan-resume-point.sh": "owned",
     ".gaia/scripts/ports.sh": "owned",
     ".gaia/scripts/post-findings-block.sh": "owned",
+    ".gaia/scripts/pr-wait-merge-green-lib.sh": "owned",
     ".gaia/scripts/pr-wait-merge.sh": "owned",
     ".gaia/scripts/precommit-packages.sh": "owned",
     ".gaia/scripts/provision-wait.sh": "owned",
@@ -856,7 +857,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-02T05:11:57.159Z",
+  "generated": "2026-11-02T13:29:58.424Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
