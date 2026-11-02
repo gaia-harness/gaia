@@ -53,7 +53,7 @@ make_main() {
   mkdir -p "$MAIN/.claude/hooks/lib" "$MAIN/.gaia/scripts" "$MAIN/.gaia/local" "$MAIN/apps/web"
   cp "$HOOK_ABSOLUTE_PATH" "$MAIN/.claude/hooks/provision-worktree.sh"
   cp "$REPO_ROOT_REAL/.claude/hooks/lib/gaia-packages.sh" "$MAIN/.claude/hooks/lib/"
-  # The built-in registry names `frontend`; typegen runs only for a package
+  # The built-in registry names `web`; typegen runs only for a package
   # that carries a react-router config.
   echo 'export default {};' > "$MAIN/apps/web/react-router.config.ts"
   write_builtin_descriptor "$MAIN"

@@ -44,7 +44,7 @@ One procedure for every new workspace member. Apps go in `apps/<name>`, librarie
 
 1. **Workspace entry.** `pnpm-workspace.yaml` already lists `apps/*` and `packages/*`, so a folder under either joins by having a `package.json`. A member elsewhere (an adopter's `infra`, say) needs its own line under `packages:`.
 2. **Registry entry.** Add `{name, path}` to `.gaia/packages.json`, keeping the `web` entry. The `name` equals the descriptor's `name`.
-3. **Descriptor.** Write `<member path>/gaia.package.json` with `schemaVersion`, `name`, every `globs` key (empty lists are fine) and, for a React app, `"stack": "web"`. Land the registry entry and descriptor in one commit: a registered member with no descriptor fails closed.
+3. **Descriptor.** Write `<member path>/gaia.package.json` with `schemaVersion`, `name`, every `globs` key and a `wiki` object with `sourcePaths`, `inventoryPaths` and `flowPaths` (empty lists are fine) and, for a React app, `"stack": "web"`. Land the registry entry and descriptor in one commit: a registered member with no descriptor fails closed.
 
 Then the member runs through the root gate: root `typecheck` and `lint` run each member's script of that name, and `test:ci` runs member suites one at a time. `bash .gaia/scripts/gate-member-warnings.sh` prints a warning for a member that has tests but no `test:ci`, or TypeScript but no `typecheck`.
 

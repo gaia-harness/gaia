@@ -1740,7 +1740,7 @@ describe('update-deps run: CLI workspace member', () => {
   });
 
   test('an adopter tree emits the app payload and runs pnpm outdated only in the app and the root', () => {
-    writeMemberList(['frontend']);
+    writeMemberList(['apps/web']);
     const calls: Call[] = [];
     const result = computeUpdates({
       cwd: root,
@@ -1775,7 +1775,7 @@ describe('update-deps run: CLI workspace member', () => {
   });
 
   test('a listed member whose manifest is absent runs no member pass and does not throw', () => {
-    writeMemberList(['frontend', '.gaia/cli']);
+    writeMemberList(['apps/web', '.gaia/cli']);
     const calls: Call[] = [];
 
     expect(() =>
@@ -1791,7 +1791,7 @@ describe('update-deps run: CLI workspace member', () => {
   });
 
   test('an outdated member devDependency is emitted with its workspace and discovered in the member directory', () => {
-    writeMemberList(['frontend', '.gaia/cli']);
+    writeMemberList(['apps/web', '.gaia/cli']);
     writeJson('.gaia/cli/package.json', {
       devDependencies: {vitest: '4.0.0'},
       name: '@gaia-harness/cli',
@@ -1832,7 +1832,7 @@ describe('update-deps run: CLI workspace member', () => {
   });
 
   test('a name outdated in the app and the member appears once per workspace, and only the member copy carries a workspace', () => {
-    writeMemberList(['frontend', '.gaia/cli']);
+    writeMemberList(['apps/web', '.gaia/cli']);
     writeJson('.gaia/cli/package.json', {
       devDependencies: {foo: '1.2.3'},
       name: '@gaia-harness/cli',
@@ -1863,7 +1863,7 @@ describe('update-deps run: CLI workspace member', () => {
   });
 
   test('a companion group never mixes the app and the member in one Wave B group', () => {
-    writeMemberList(['frontend', '.gaia/cli']);
+    writeMemberList(['apps/web', '.gaia/cli']);
     writeJson('apps/web/package.json', {
       dependencies: {vite: '^7.0.0'},
       name: 'web',

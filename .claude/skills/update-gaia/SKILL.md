@@ -168,7 +168,7 @@ Before Step 3b and any download, in every mode, read `references/claim-flow.md` 
 
 ## Step 3b: Refuse a 1.x baseline
 
-GAIA 2.0.0 moved the React app into the `frontend` folder, and the 2.x release manifest is keyed on those paths. A three-way merge from a 1.x baseline would read every baseline app path as an upstream deletion and offer to delete the adopter's app, so a 1.x project migrates through the 2.0.0 migration note bundled in the checksum-verified v2.0.0 release, never through this command. Run this before any download and before the Step 4 prompt:
+GAIA 2.0.0 moved the React app out of the repository root, and every 2.x release manifest is keyed on the moved paths. A three-way merge from a 1.x baseline would read every baseline app path as an upstream deletion and offer to delete the adopter's app, so a 1.x project migrates through the 2.0.0 migration note bundled in the checksum-verified v2.0.0 release, never through this command. Run this before any download and before the Step 4 prompt:
 
 ```bash
 bash .gaia/scripts/update-gaia-preflight.sh refuse-1x --baseline <BASELINE>
@@ -201,7 +201,7 @@ Each failure line names the tag and removes that tag's cache directory, so a re-
 
 ## Step 3c2: Check the toolchain
 
-An existing project never reruns `/setup-gaia`, so the update stops on a tool below what the incoming release needs. The target bundle's own check runs, never the project's copy, so the incoming release sets the floor:
+An existing project never reruns `/setup-gaia`, so the update checks the tools the incoming release needs before anything changes. The target bundle's own check runs, never the project's copy, so the incoming release sets the floor:
 
 ```bash
 bash <LATEST_DIR>/.gaia/scripts/toolchain-check.sh

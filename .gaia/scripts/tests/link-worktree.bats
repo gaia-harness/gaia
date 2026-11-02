@@ -300,7 +300,7 @@ FAKE
   [ ! -L "$LINKED/.env.local~" ]
 }
 
-# ---------- Package env files (the registry's packages, built-in default `frontend`) ----------
+# ---------- Package env files (the registry's packages, built-in default `web`) ----------
 
 # write_literal_descriptor <path> <name>: a minimal valid descriptor, written
 # literally so a fixture never copies the live file.

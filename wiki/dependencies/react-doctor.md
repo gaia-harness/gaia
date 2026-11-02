@@ -22,7 +22,7 @@ Deterministic scanner for React security, performance, correctness, and accessib
 
 ## Installer verification record
 
-Verified against react-doctor 0.9.18, running `install --yes --cwd frontend` in a two-package pnpm workspace. The installer writes the paths below. Each maps to one step of `.gaia/scripts/install-react-doctor.sh`, in the script's order:
+Verified against react-doctor 0.9.18, running `install --yes --cwd apps/web` in a two-package pnpm workspace. The installer writes the paths below. Each maps to one step of `.gaia/scripts/install-react-doctor.sh`, in the script's order:
 
 | Path the installer writes | Strip step |
 |---|---|

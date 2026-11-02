@@ -16,7 +16,8 @@
 # choose prints smaller or full. status exits 0 clear, 1 owed, 3 unreadable
 # (read as owed by every caller). run exits 0 pass, 1 failure, 3 refused; its
 # last output line is `gate-owed exit <status>`. A refusal is the dev smoke
-# test exiting 2 or 3 (a held port): it is not a defect, so it records nothing.
+# test exiting 2 (usage) or 3 (refused to start, such as a held port): it is
+# not a defect, so it records nothing.
 # gate-failure.json is the failure record the reopened-round hook and the unit
 # read. Exit 2 is usage, 3 an unreadable input.
 

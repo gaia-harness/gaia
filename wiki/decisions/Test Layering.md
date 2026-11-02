@@ -38,8 +38,6 @@ The layers are not React-specific. Each has an equivalent in other server stacks
 | Route surface    | Rails request specs, the Django test client, supertest on Express, Go `httptest`                                                                          |
 | Worker isolation | one Postgres schema per worker, Rails `parallelize`, pytest-xdist with a database per worker, one SQLite file and server per worker |
 
-Each isolation technique fits any stack whose database supports it.
-
 ## Worker isolation
 
 Parallel workers that share one database cannot hold independent state. Each worker reaches its own database through the server it talks to, keyed on its worker index. A serial project is not an accepted way to share one. The shipped pattern is in `apps/web/.playwright/fixtures.ts` and its rule is in `apps/web/.claude/rules/playwright.md`.

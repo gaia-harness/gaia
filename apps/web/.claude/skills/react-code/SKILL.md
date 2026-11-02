@@ -136,7 +136,7 @@ The directive takes effect only as the first statement of a function or module b
 ## Component Structure
 
 - **Inline props typing:** `type MyComponentProps = {...}; const MyComponent = ({...}: MyComponentProps) => ...`; a generic component is `const List = <T,>({items}: ListProps<T>) => ...`
-- **One component per file**: keeps co-location clean and makes code-splitting predictable
+- **One component per component file**: keeps co-location clean and makes code-splitting predictable; a story file may declare story-local render helpers
 - **Named React imports, values and types:** `import {useState} from 'react'`, `import type {ChangeEventHandler} from 'react'`; no `React.` namespace
 - **Event handler types:** Prefer `ChangeEventHandler<HTMLInputElement>` over inline event typing
 - **Event handler naming:** `handle{Action}{Element}`, the `{Element}` is required so the name says _what it does_, not just _when it fires_; e.g. `handleClickSave`, `handleChangeInput`, `handleCopyStack`. A bare event name (`handleClick`, `handleChange`, `handleSubmit`) breaks this convention (react-doctor's `no-generic-handler-names` is off by default, so review catches it).

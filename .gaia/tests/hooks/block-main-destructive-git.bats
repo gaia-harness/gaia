@@ -7,8 +7,8 @@
 #
 # Each test drives the hook as the harness does: a PreToolUse JSON payload on
 # stdin, run with the repo as the working directory, which is where the hook
-# resolves the current branch when the payload names no cwd. The hook always
-# exits 0; allow vs deny is carried in stdout.
+# resolves the current branch when the payload names no cwd. On every case
+# here the hook exits 0 and carries allow vs deny in stdout.
 
 setup() {
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"

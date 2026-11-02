@@ -56,7 +56,7 @@ These record no setup-state step.
 
 ### Toolchain floors
 
-Run this first: GAIA cannot install these tools for the user.
+Run this first.
 
 ```bash
 bash .gaia/scripts/toolchain-check.sh --scope user

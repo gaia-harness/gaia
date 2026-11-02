@@ -27,7 +27,7 @@ Component structure:
 - Type-only imports: `import type {ChangeEventHandler} from 'react'`
 - Event handler typing: prefer `ChangeEventHandler<HTMLInputElement>` over inline `(e: ChangeEvent<HTMLInputElement>)`
 - Event handler naming: `handle{Action}{Element}`, the `{Element}` is required; flag bare event names (`handleClick`, `handleChange`, `handleSubmit`); react-doctor's `no-generic-handler-names` is off by default, so review is what catches them
-- One component per file
+- One component per component file; a story file may declare story-local render helpers
 
 Component extraction:
 
