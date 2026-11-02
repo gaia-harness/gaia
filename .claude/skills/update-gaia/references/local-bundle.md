@@ -9,6 +9,8 @@ This file never replaces a step's merge logic. Every merge runs through `conflic
 
 **Values.** A local run carries `LOCAL_TAG` (`v<core>-dev.<sha>`), `LOCAL_CORE`, `LOCAL_BUILD` (`dev.<sha>`), `LOCAL_COMMIT` (the sha) and `LATEST_DIR` from the source step, and sets `LATEST_TAG` = `<LOCAL_TAG>` and `LATEST` = `<LOCAL_CORE>`, so every SKILL.md step that names `<LATEST_TAG>` or `<LATEST>` takes the local values. Every run that reads this file carries `BASELINE_TAG` from the baseline step; any other run's `BASELINE_TAG` is `v<BASELINE>`. A **dev tag** is a tag of the form `v<core>-dev.<sha>`.
 
+Contents: Trust label at invocation; The source step; The baseline; Step 3 on a local run; Step 3 on a release run after a local sync; Pull check on a local run; Claim on a local run; Step 3c with a local build; Step 3d on a local run; Step 4 on a local run; Step 4 on a release run after a local sync; Step 4 worktree check with a recorded build; Step 4b with a local build; Conflict flow with a local build; Step 9d on a local run; Step 9d on a release run after a local sync; Review point with a local build; Step 11 with a local build; Rollback; Run ends.
+
 ## Trust label at invocation
 
 On a local run, before any other command after Step 1, print:

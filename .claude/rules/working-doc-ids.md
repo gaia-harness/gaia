@@ -1,15 +1,16 @@
 ---
 paths:
-  - 'apps/web/app/**/*.{ts,tsx,js,jsx,css}'
-  - 'apps/web/test/**/*.{ts,tsx}'
-  - 'apps/web/.playwright/**/*.ts'
-  - 'apps/web/.storybook/**/*.{ts,tsx}'
+  - '**/*.{ts,tsx,js,jsx,mjs,cjs}'
+  - '**/*.{css,html}'
+  - '**/*.{sh,bats,jq,awk,sed}'
+  - '**/*.{yml,yaml}'
+  - '**/*.tmpl'
+  - '**/Dockerfile'
+  - '.githooks/*'
   - 'apps/web/.claude/**/*.md'
-  - '.gaia/**/*.{ts,sh}'
-  - '.claude/**/*.{md,sh}'
+  - '.claude/**/*.md'
   - '.github/**'
   - 'wiki/**/*.md'
-  - '**/*.bats'
 ---
 
 # Working-Document IDs

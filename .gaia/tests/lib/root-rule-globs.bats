@@ -74,6 +74,10 @@ copy_rules_to_scratch() {
   cp "$RULES_DIRECTORY"/*.md "$SCRATCH_RULES/"
 }
 
+write_retired_scratch_rule() {
+  printf -- '---\npaths:\n  - '"'"'app/**/*.{ts,tsx}'"'"'\n  - '"'"'.playwright/**/*.ts'"'"'\n---\n\n# Scratch\n' >"$SCRATCH_RULES/scratch-retired.md"
+}
+
 @test "no root rule glob begins with a retired root frontend path" {
   run retired_globs_in "$RULES_DIRECTORY"
   if [ "$status" -ne 0 ]; then
@@ -82,14 +86,13 @@ copy_rules_to_scratch() {
   fi
 }
 
-@test "checker flags code-comments.md with its globs reverted to the retired form" {
+@test "checker flags a rule glob reverted to a retired frontend folder" {
   copy_rules_to_scratch
-  sed -i.bak -E "s#'apps/web/(app|test|\.playwright|\.storybook)/#'\1/#" "$SCRATCH_RULES/code-comments.md"
-  rm -f "$SCRATCH_RULES/code-comments.md.bak"
+  write_retired_scratch_rule
   run retired_globs_in "$SCRATCH_RULES"
   [ "$status" -eq 1 ]
-  grep -q "^code-comments.md: app/" <<<"$output"
-  grep -q "^code-comments.md: \.playwright/" <<<"$output"
+  grep -q "^scratch-retired.md: app/" <<<"$output"
+  grep -q "^scratch-retired.md: \.playwright/" <<<"$output"
 }
 
 @test "checker flags a rule glob naming a moved config filename" {
@@ -112,6 +115,15 @@ copy_rules_to_scratch() {
   rule_matches_path "$RULES_DIRECTORY/code-comments.md" "apps/web/.playwright/e2e/hydration.spec.ts"
 }
 
+@test "code-comments.md matches workflow YAML, a Dockerfile, a git hook, harness scripts and code in a future package" {
+  local code_path
+  for code_path in .github/workflows/cli-tests.yml apps/web/Dockerfile .githooks/pre-commit \
+    .gaia/scripts/overlap/check-proposals.mjs .gaia/scripts/spec/uat-write.sh \
+    packages/example/src/index.ts apps/example/app/root.tsx; do
+    rule_matches_path "$RULES_DIRECTORY/code-comments.md" "$code_path" || { echo "code-comments.md missed $code_path" >&2; return 1; }
+  done
+}
+
 @test "wiki-style.md matches a wiki page and no code file" {
   local code_path
   rule_matches_path "$RULES_DIRECTORY/wiki-style.md" "wiki/concepts/Notebook.md"
@@ -128,12 +140,11 @@ copy_rules_to_scratch() {
   [ "$status" -eq 1 ]
 }
 
-@test "the match check refuses code-comments.md once its globs are reverted" {
+@test "the match check refuses a rule whose globs are reverted to retired frontend folders" {
   copy_rules_to_scratch
-  sed -i.bak -E "s#'apps/web/(app|test|\.playwright|\.storybook)/#'\1/#" "$SCRATCH_RULES/code-comments.md"
-  rm -f "$SCRATCH_RULES/code-comments.md.bak"
-  run rule_matches_path "$SCRATCH_RULES/code-comments.md" "apps/web/app/components/button/index.tsx"
+  write_retired_scratch_rule
+  run rule_matches_path "$SCRATCH_RULES/scratch-retired.md" "apps/web/app/components/button/index.tsx"
   [ "$status" -eq 1 ]
-  run rule_matches_path "$SCRATCH_RULES/code-comments.md" "apps/web/.playwright/e2e/hydration.spec.ts"
+  run rule_matches_path "$SCRATCH_RULES/scratch-retired.md" "apps/web/.playwright/e2e/hydration.spec.ts"
   [ "$status" -eq 1 ]
 }

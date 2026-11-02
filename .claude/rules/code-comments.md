@@ -1,14 +1,12 @@
 ---
 paths:
-  - 'apps/web/app/**/*.{ts,tsx,js,jsx,css}'
-  - 'apps/web/test/**/*.{ts,tsx}'
-  - 'apps/web/.playwright/**/*.ts'
-  - 'apps/web/.storybook/**/*.{ts,tsx}'
-  - '.gaia/**/*.ts'
-  - '.gaia/**/*.sh'
-  - '.claude/hooks/**/*.sh'
-  - '.github/**/*.sh'
-  - '**/*.bats'
+  - '**/*.{ts,tsx,js,jsx,mjs,cjs}'
+  - '**/*.{css,html}'
+  - '**/*.{sh,bats,jq,awk,sed}'
+  - '**/*.{yml,yaml}'
+  - '**/*.tmpl'
+  - '**/Dockerfile'
+  - '.githooks/*'
 ---
 
 # Code Comments
@@ -35,6 +33,7 @@ A test of subject, not length. A thirty-line comment about a platform quirk earn
 - A banner over a single item, and ASCII section rules (`// ─── Types ───`). A banner over a group is navigation and stays.
 - The ceremonial opener: a first line assembled from the filename's own tokens and saying nothing else.
 - Historical narration: "used to do X, now does Y", "added in PR #123", "as of <date>". Git carries this. Issue numbers and other working-document ids: `.claude/rules/working-doc-ids.md`.
+- A planned or unbuilt behavior described as current. Describe what the code does today.
 - A number used as justification that nothing in the repo can reproduce.
 
 ## Name less, explain more

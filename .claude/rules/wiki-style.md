@@ -9,9 +9,9 @@ paths:
   - '.claude/doctrine/**/*.md'
 ---
 
-# Wiki & Comment Prose Style
+# Wiki Prose Style
 
-Body prose, and the prose a code comment carries, describes **what is** in present tense. The historical record lives in git (`git log`, `git blame`), `wiki/log.md`, and `CHANGELOG.md`, body prose is not the place for it.
+Body prose describes **what is** in present tense. The historical record lives in git (`git log`, `git blame`), `wiki/log.md`, and `CHANGELOG.md`, body prose is not the place for it.
 
 ## Rules
 
@@ -47,9 +47,6 @@ Before merging changes that touch any in-scope path, and before running `/gaia-w
 ```bash
 # UAT / SPEC refs in wiki body prose (excluding log.md and meta/ audit reports)
 grep -rEn "UAT-[0-9]+|SPEC-[0-9]+" wiki/ --include="*.md" --exclude="log.md" --exclude-dir="meta"
-
-# UAT / SPEC refs in source comments
-grep -rEn "// .*(UAT|SPEC)-[0-9]+|/\*.*(UAT|SPEC)-[0-9]+|\*.*(UAT|SPEC)-[0-9]+" apps/web/app/
 
 # UAT-NNN narrative refs in instruction files, spec-lifecycle scripts, and spec templates
 # (functional fixture values are kept; the maintainer triages each match per
