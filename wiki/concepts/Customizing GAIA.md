@@ -3,7 +3,7 @@ type: concept
 title: Customizing GAIA
 status: active
 created: 2026-10-23
-updated: 2026-10-29
+updated: 2026-11-02
 tags: [concept, claude, configuration, customization]
 ---
 
@@ -34,7 +34,7 @@ jq -r --arg path '<repo-relative path>' '.files[$path] // "adopter-owned"' .gaia
 | Change a shipped rule, skill, agent or command | the shipped file | `owned` | layer a new file on it where possible (above) | `.gaia/cli/gaia fitness check --json` |
 | Add, disable or override a hook | `.claude/hooks/`, registered in `.claude/settings.json` | `shared` settings, `owned` bundled hooks | [[Claude Hooks#Adding hooks]], [[Claude Hooks#Disabling or overriding a hook]]; the shell audit member reviews hooks you add or edit and every `.claude/settings.json` change; an edit-tool write of `.claude/settings.json` asks first in every permission mode, so an unattended run cannot make it through that route | `./.gaia/cli/gaia packages sync-settings --check` |
 | Package-only settings (permissions, env) | `apps/web/.claude/settings.overlay.json` | `shared` | [[Package Descriptor]] | `./.gaia/cli/gaia packages sync-settings`, then `--check` |
-| Add a package beside `apps/web/` (a backend) | the package folder, `pnpm-workspace.yaml`, `.gaia/packages.json` | adopter-owned, `shared`, sentinel | [[Claude Integration Conventions#6. Monorepo retrofit playbook]] | that playbook's closing verify block |
+| Add an app or package (a backend, a shared library) | the member folder under `apps/` or `packages/`, `.gaia/packages.json`, its `gaia.package.json` | adopter-owned, sentinel | [[Package Descriptor#Adding an app or package]] | `./.gaia/cli/gaia packages sync-settings --check`, then `.gaia/cli/gaia fitness check --json` |
 | Add a Code Audit Team member | a new agent, its `.gaia/audit-ci.yml` roster entry, and any new finding classes in `.gaia/finding-classes.json` | adopter-owned (new agent), `shared` roster, sentinel classes file | [[Registering a Code Audit Team Member]] | `bash .gaia/scripts/verify-audit-roster.sh` ([[Registering a Code Audit Team Member#6. Verify the roster]]) |
 | Languages and translations | `apps/web/app/languages/` | per the manifest | [[i18n]] | the closing check that page names |
 | Swap the API layer or add an external service | new rules and agent extensions | adopter-owned (new files) | [[Claude Integration Conventions#9. API service layer swap]] | `.gaia/cli/gaia fitness check --json` |
@@ -48,6 +48,10 @@ jq -r --arg path '<repo-relative path>' '.files[$path] // "adopter-owned"' .gaia
 Files with no adopter extension point, where the only change is an edit to an `owned` file: `.githooks/pre-commit` (a package changes what it runs through its own `package.json` scripts, which [[Pre-commit Hooks]] names), `.gaia/conventional-commits.json` ([[Naming Conventions]]), and the generator templates under `.gaia/cli/templates/` ([[CLI Scaffolding]]).
 
 Replacing `statusLine` in any settings file with a command that does not run `.gaia/statusline/gaia-statusline.sh` stops the GAIA nudges and the context readings the audit loop's checkpoint relies on; `statusline-left.md` (`## The routing warning`) says how to keep both.
+
+## Structure tolerance
+
+No structure check fails a customized project. A workspace folder you add that is not in `.gaia/packages.json` only draws a fitness warning, and a project with extra top-level folders such as `infra` is left alone. A registered member is treated by its descriptor: a `"stack": "web"` member gets the frontend tooling and generated settings; any other member gets generated settings only when its descriptor sets `generatedSettings` to `true`, and otherwise carries a warning stub that restores no guard and is never written over a settings file you wrote by hand. The procedure for registering one is [[Package Descriptor#Adding an app or package]].
 
 ## Silencing a fitness finding
 

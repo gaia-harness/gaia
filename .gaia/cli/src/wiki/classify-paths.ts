@@ -50,7 +50,7 @@ export type ClassifyPaths = {
 };
 
 /**
- * The defaults, from the frontend package's descriptor `wiki` block joined with
+ * The defaults, from the web member's descriptor `wiki` block joined with
  * its registry path, so the vocabulary follows wherever the app lives. Throws
  * the `gaia-packages:` message when the registry or descriptor cannot be
  * loaded: classifying against a guessed layout is a silent miss.

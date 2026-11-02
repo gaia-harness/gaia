@@ -9,7 +9,7 @@
 # proven able to fail without reading git history (this PR is squash-merged).
 #
 # The maintainer-only "Frontend filter", piped after the Quick check, narrows
-# which gate-selecting commits run the frontend steps: CLI, test-harness, and
+# which gate-selecting commits run the web-only steps 6 to 8: CLI, test-harness, and
 # harness-script source belongs to no registered package. Its can-fail control
 # is the Quick check alone, which selects those same stages.
 
@@ -103,11 +103,16 @@ staged_selection() {
   [ -z "$output" ]
 }
 
-@test "steps 3 to 8 each name their pnpm -C apps/web equivalent, in order" {
-  local expected="typecheck lint test pw dev build" actual=""
-  local n
-  for n in 3 4 5 6 7 8; do
-    local line
+@test "steps 3 to 5 name their root scripts and steps 6 to 8 their pnpm -C apps/web equivalents, in order" {
+  local expected="typecheck lint test:ci pw dev build" actual=""
+  local n line
+  for n in 3 4 5; do
+    line="$(grep -E "^$n\. " "$PAGE")"
+    [ -n "$line" ]
+    [[ "$line" == "$n. \`pnpm "* ]]
+    actual="$actual $(printf '%s' "$line" | sed -E 's|^[0-9]+\. `pnpm ([a-z:]+).*|\1|')"
+  done
+  for n in 6 7 8; do
     line="$(grep -E "^$n\. " "$PAGE")"
     [ -n "$line" ]
     [[ "$line" == *'pnpm -C apps/web '* ]]

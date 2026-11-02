@@ -92,34 +92,17 @@ A new or re-scoped rule closes with `.gaia/cli/gaia fitness check --json`, which
 
 ## 6. Monorepo retrofit playbook
 
-GAIA ships its React app as the `apps/web/` package of a pnpm workspace whose root holds the shared harness. This playbook adds a further package beside it, such as a backend. The package's folder is a project decision; `{PKG}` stands for its path below. `apps/web/` is the worked example for every step: copy its shape, not its contents.
+Adding an app or a library to the pnpm workspace is one procedure, owned by [[Package Descriptor#Adding an app or package]]: it names the workspace entry, registry entry and descriptor, and the settings that follow from a member's stack. This section holds only what that page does not.
 
-1. **Join the workspace.** List `{PKG}` under `packages:` in `pnpm-workspace.yaml` and give it a `package.json`. The pre-commit hook drives each package through `pnpm -C {PKG}`, so the manifest is needed even for a stack outside Node.
-2. **Register it.** Add its entry to `.gaia/packages.json`, keeping the `frontend` entry, and write `{PKG}/gaia.package.json`, as [[Package Descriptor]] describes. Its globs are package-relative and decide which of the package's files each guard sees, the pre-commit gate included. A registered package with no descriptor fails closed, so land both files in one commit.
-3. **Give it its own `CLAUDE.md` and `.claude/`.** `{PKG}/CLAUDE.md` carries the stack, its commands and its test setup, the way `apps/web/CLAUDE.md` does. Stack-specific rules and skills go in `{PKG}/.claude/rules/` and `{PKG}/.claude/skills/`, with `paths:` globs relative to `{PKG}`. Add a section to the root `CLAUDE.md` telling a root session to Read `{PKG}/CLAUDE.md` before touching `{PKG}/`, mirroring its frontend section: in a root session that Read is what loads the package's rules and skills.
-4. **Generate its settings.** `{PKG}/.claude/settings.json` is generated from the root `.claude/settings.json`, never hand-edited: package-only settings go in `{PKG}/.claude/settings.overlay.json`, then run `./.gaia/cli/gaia packages sync-settings`. The pre-commit hook refuses a commit that leaves any generated settings file missing or stale.
-5. **Meet the pre-commit floor.** For each package with a staged path matching its pre-commit globs, the hook runs the package's typecheck, lint-staged and test scripts; `.githooks/pre-commit` names the scripts `{PKG}/package.json` must define. See [[Pre-commit Hooks]].
-6. **Add a stack-specific quality gate**, as §8 describes. The shared gate's executable steps check only `apps/web/`, and its skip check matches JavaScript, TypeScript and CSS sources, so a package in another language gets no gate until its own names its checks.
-7. **Give it CI.** `.github/workflows/tests.yml` runs only the frontend suite, and its incremental-skip pattern (the `pattern=` line of its `Detect test-relevant changes` step) arms only on `apps/web/` and root config, so a change under `{PKG}` alone runs no tests in CI. Add a workflow of its own, `{PKG}-tests.yml` or the stack's equivalent, named per [[Workflow Naming Convention]], copying the shape of `tests.yml`: default-deny `permissions: {}` with per-job grants, the same `concurrency` group, and the package's own typecheck, lint and test scripts. A job that becomes a required check gates its steps inside the job, as `tests.yml` does, rather than with a workflow `paths:` filter, because a check that never reports leaves the pull request waiting ([[Incremental CI Skipping]]). Add `{PKG}` to the `tests.yml` pattern only when the frontend suite depends on the package, such as a shared types package the app imports.
-8. **Give it an auditor.** The Code Audit Team assigns each changed file to the member whose globs in `.gaia/audit-ci.yml` match it. A file no member claims still owes `code-audit-frontend`, the default member, so the merge gate holds the branch to an audit, but by a React lens with no remit for the package's stack. Register a member for the package, as [[Registering a Code Audit Team Member]] describes, or grant its globs to an existing member whose lens fits. Run `bash .gaia/scripts/verify-audit-roster.sh` after the roster change: it reports every tracked path no member owns and no `unowned:` entry declares, and the pre-commit hook runs it on any commit that stages the roster. An `unowned:` entry only quiets that report and suppresses no review.
-9. **Leave the wiki hooks alone.** `wiki-session-start.sh` is git-level and names no package path.
-
-### Verify the package
-
-Claude runs these before reporting the package added, and fixes what any of them reports:
-
-```
-pnpm -C {PKG} typecheck
-./.gaia/cli/gaia packages sync-settings --check
-bash .gaia/scripts/verify-audit-roster.sh
-.gaia/cli/gaia fitness check --json
-```
-
-The first proves the package meets the pre-commit floor, the second that its generated settings are current, the third that the roster claims its files, and the fourth that the new rules and skills are well formed. Then the first push runs the new workflow; a green run on a change under `{PKG}` closes the job.
+- **Its own `CLAUDE.md` and `.claude/`.** A member with stack-specific rules or skills puts them in `{PKG}/.claude/rules/` and `{PKG}/.claude/skills/`, with `paths:` globs relative to `{PKG}`, beside a `{PKG}/CLAUDE.md`. `apps/web/` is the worked example.
+- **A quality gate of its own**, as §8 describes: the shared gate's skip check matches JavaScript, TypeScript and CSS sources, so a member in another language gets no gate until its own names its checks.
+- **CI.** `.github/workflows/tests.yml` arms its incremental skip on the web app and root config, so a change under `{PKG}` alone runs no tests there. Add a workflow of its own named per [[Workflow Naming Convention]], copying `tests.yml`'s shape, and gate its steps inside the job rather than with a workflow `paths:` filter ([[Incremental CI Skipping]]).
+- **An auditor**, when no existing member's lens fits: [[Registering a Code Audit Team Member]], then `bash .gaia/scripts/verify-audit-roster.sh`.
+- **Verify.** Run `pnpm -C {PKG} typecheck`, `./.gaia/cli/gaia packages sync-settings --check`, `bash .gaia/scripts/verify-audit-roster.sh` and `.gaia/cli/gaia fitness check --json` before reporting the member added.
 
 ### A backend and worktrees
 
-GAIA provisions per-worktree isolation for the `apps/web/` package only: the port slot, the port file, and the refusals that keep one tree's servers off another's ports ([[Worktrees#Ports per worktree]]). A backend added beside it gets none of that automatically: it has no port slot, and its database, migrations, seed data and queues are shared by every tree. It takes one of two shapes:
+GAIA provisions per-worktree isolation for the `apps/web/` app only: the port slot, the port file, and the refusals that keep one tree's servers off another's ports ([[Worktrees#Ports per worktree]]). A backend added beside it gets none of that automatically: it has no port slot, and its database, migrations, seed data and queues are shared by every tree. It takes one of two shapes:
 
 - **One shared backend** that every worktree points at. It is simple, but branches that change the schema or the data collide.
 - **A backend per worktree**, with its own port, database and seed. It isolates each branch, but every tree pays the setup and running cost.

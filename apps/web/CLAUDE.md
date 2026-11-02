@@ -16,6 +16,6 @@ Components and pages are tested by their Storybook stories (a `.test()` per beha
 
 ## Running the gate
 
-`pnpm <script>` from `apps/web/` equals `pnpm -C apps/web <script>` from the repo root, and the root `package.json` proxies every frontend script except `msw:init` (run it as `pnpm -C apps/web msw:init`), so `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm pw`, and `pnpm shadcn` work from either directory. The Quality Gate steps live in `wiki/decisions/Quality Gate.md`.
+`pnpm <script>` from `apps/web/` equals `pnpm -C apps/web <script>` from the repo root, and the root `package.json` proxies every web script except `msw:init` (run it as `pnpm -C apps/web msw:init`), so `pnpm test`, `pnpm pw`, and `pnpm shadcn` work from either directory. At the root, `pnpm typecheck`, `pnpm lint` and `pnpm test:ci` run across every workspace member, this package included. The Quality Gate steps live in `wiki/decisions/Quality Gate.md`.
 
 The harness CLI lives at the repo root: run `./.gaia/cli/gaia ...` from the root, or `../../.gaia/cli/gaia ...` from `apps/web/`. Scaffolders find the package through `.gaia/packages.json`, not the working directory.

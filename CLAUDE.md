@@ -37,4 +37,4 @@ Fetch wiki pages on demand, never preloaded: start at `wiki/index.md`, take only
 
 ## Frontend work
 
-The React app and its harness live in `apps/web/`. Before reading or editing anything under `apps/web/`, Read `apps/web/CLAUDE.md`: in a root session that Read is what loads the frontend rules and skills. Harness workflows (`/gaia-spec`, `/gaia-plan`, PR merge, release, `/gaia-debt`, `/update-gaia`) run from a root launch, not from `apps/web/`.
+The React app and its harness live in `apps/web/`. Before reading or editing anything under `apps/web/`, Read `apps/web/CLAUDE.md`: in a root session that Read is what loads the web app's rules and skills. Harness workflows (`/gaia-spec`, `/gaia-plan`, PR merge, release, `/gaia-debt`, `/update-gaia`) run from a root launch, not from `apps/web/`.

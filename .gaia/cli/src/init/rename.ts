@@ -52,7 +52,7 @@ const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
     1  user-correctable error (missing flags, invalid kebab, no package.json,
        no CLAUDE.md heading)
     2  unexpected (filesystem failure)
-    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+    30 the package registry (.gaia/packages.json) cannot resolve the web app
        package
 `;
 

@@ -13,7 +13,7 @@ import {seedEnvironmentFile} from '../util/seed-environment-file.js';
 
 const HELP_TEXT = `Usage: gaia setup bootstrap-env
 
-  Copy .env.example to .env in the frontend package root (apps/web/) when
+  Copy .env.example to .env in the web app package root (apps/web/) when
   .env does not yet exist. No-op when .env already exists or .env.example is
   absent. Records no progress; run \`gaia setup mark-step bootstrap-env\` after.
 
@@ -21,7 +21,7 @@ const HELP_TEXT = `Usage: gaia setup bootstrap-env
     0  success (no stdout)
     1  unknown flag
     2  unexpected filesystem failure
-    30 package registry could not resolve the frontend package root
+    30 package registry could not resolve the web app package root
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

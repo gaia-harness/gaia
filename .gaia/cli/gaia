@@ -34708,7 +34708,7 @@ var HELP_TEXT13 = `Usage: gaia init rename --title <T> --kebab <K>
     1  user-correctable error (missing flags, invalid kebab, no package.json,
        no CLAUDE.md heading)
     2  unexpected (filesystem failure)
-    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+    30 the package registry (.gaia/packages.json) cannot resolve the web app
        package
 `;
 var HELP_TOKENS12 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
@@ -43274,7 +43274,7 @@ var seedEnvironmentFile = (cwd, subcommand) => {
 // src/setup/bootstrap-env.ts
 var HELP_TEXT34 = `Usage: gaia setup bootstrap-env
 
-  Copy .env.example to .env in the frontend package root (apps/web/) when
+  Copy .env.example to .env in the web app package root (apps/web/) when
   .env does not yet exist. No-op when .env already exists or .env.example is
   absent. Records no progress; run \`gaia setup mark-step bootstrap-env\` after.
 
@@ -43282,7 +43282,7 @@ var HELP_TEXT34 = `Usage: gaia setup bootstrap-env
     0  success (no stdout)
     1  unknown flag
     2  unexpected filesystem failure
-    30 package registry could not resolve the frontend package root
+    30 package registry could not resolve the web app package root
 `;
 var HELP_TOKENS32 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var SUBCOMMAND4 = "setup bootstrap-env";

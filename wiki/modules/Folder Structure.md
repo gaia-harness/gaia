@@ -11,7 +11,7 @@ tags: [module, structure]
 
 # Folder Structure
 
-The repo is a monorepo. The harness (`.claude/`, `.gaia/`, `.githooks/`, `.github/`, `wiki/`) lives at the root and the React app lives in the `apps/web/` package, which holds its own `package.json`, build config, tests, Storybook, and `.claude/` skills and rules. [[Package Descriptor]] describes how the harness finds the package.
+The repo is a monorepo. The harness (`.claude/`, `.gaia/`, `.githooks/`, `.github/`, `wiki/`) lives at the root and the React app lives in the `apps/web/` package, which holds its own `package.json`, build config, tests, Storybook, and `.claude/` skills and rules. Further workspace members, such as a library under `packages/` or another app under `apps/`, sit beside it and are registered the same way; the root `typecheck`, `lint` and `test:ci` scripts run across every member. [[Package Descriptor]] describes how the harness finds the packages.
 
 `apps/web/app/` is organized by responsibility, not by feature. Each top-level folder owns one concern:
 
