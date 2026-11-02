@@ -11,11 +11,6 @@ describe('useTimeout', () => {
     vi.useRealTimers();
   });
 
-  test('complete is false immediately after mount', async () => {
-    const {result} = await renderHook(() => useTimeout(500));
-    expect(result.current).toBe(false);
-  });
-
   test('complete becomes true after advancing timers past delay', async () => {
     const {act, result} = await renderHook(() => useTimeout(500));
     expect(result.current).toBe(false);

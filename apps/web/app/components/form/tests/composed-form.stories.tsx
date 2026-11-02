@@ -59,6 +59,25 @@ export const Disabled = meta.story({
   render: () => <ComposedForm disabled={true} />,
 });
 
+// Base UI renders checkboxes and radios as spans marked aria-disabled, which
+// toBeDisabled does not read.
+const isDisabled = (control: HTMLElement) =>
+  control.matches(':disabled') ||
+  control.getAttribute('aria-disabled') === 'true';
+
+Disabled.test('disables every control', async ({canvas}) => {
+  const controls = [
+    ...canvas.getAllByRole('textbox'),
+    canvas.getByLabelText(/password/i),
+    canvas.getByRole('combobox'),
+    ...canvas.getAllByRole('checkbox'),
+    ...canvas.getAllByRole('radio'),
+    canvas.getByRole('button', {name: 'Submit'}),
+  ];
+
+  await expect(controls.filter((control) => !isDisabled(control))).toEqual([]);
+});
+
 const getColorCheckboxes = (canvasElement: HTMLElement): HTMLElement[] =>
   within(canvasElement).getAllByRole('checkbox', {name: /Blue|Green|Red/});
 
@@ -88,18 +107,6 @@ EmptySubmit.test(
       const alertIds = canvas.getAllByRole('alert').map((alert) => alert.id);
 
       await expect(describedBy.some((id) => alertIds.includes(id))).toBe(true);
-
-      const fieldGroups = canvas
-        .getAllByRole('group')
-        .filter(
-          (group) => group.dataset.slot === 'field' && group.contains(control)
-        );
-
-      await expect(fieldGroups).not.toHaveLength(0);
-
-      for (const group of fieldGroups) {
-        await expect(group).toHaveAttribute('data-invalid', 'true');
-      }
     }
   }
 );

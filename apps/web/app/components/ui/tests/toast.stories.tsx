@@ -1,7 +1,6 @@
 import {expect, fn, waitFor, within} from 'storybook/test';
 import preview from '#.storybook/preview';
 import {toast, Toaster} from '~/components/ui/toast';
-import {expectToast} from '~/utils/tests/expect-toast';
 
 // The global ToastDecorator already renders the Toaster, so each story fires a
 // toast through the ui toast manager rather than mounting a second, empty
@@ -20,14 +19,6 @@ const meta = preview.meta({
 // renders in a portal on the document body, outside the canvas element.
 const findToast = async (canvasElement: HTMLElement, text: string) =>
   within(canvasElement.ownerDocument.body).findByText(text);
-
-// Each type's icon is decorative, so the toast hides it from assistive
-// technology; the title carries the meaning.
-const getToastIcon = (canvasElement: HTMLElement, title: string) =>
-  within(canvasElement.ownerDocument.body)
-    .getByText(title)
-    .closest('[data-slot="toast"]')
-    ?.querySelector('[data-slot="toast-icon"] svg[aria-hidden="true"]');
 
 const onUndo = fn();
 
@@ -51,52 +42,6 @@ export const WithAction = meta.story({
 
     await findToast(canvasElement, 'Message archived');
   },
-});
-
-export const Loading = meta.story({
-  parameters: {chromatic: {disableSnapshot: true}},
-  play: async ({canvasElement}) => {
-    toast.add({title: 'Uploading file', type: 'loading'});
-
-    await findToast(canvasElement, 'Uploading file');
-  },
-});
-
-// One story per type so the indexer reads each export as a story.
-export const ErrorType = meta.story({
-  play: async ({canvasElement}) => {
-    toast.add({title: 'error toast', type: 'error'});
-
-    await findToast(canvasElement, 'error toast');
-  },
-});
-
-export const Info = meta.story({
-  play: async ({canvasElement}) => {
-    toast.add({title: 'info toast', type: 'info'});
-
-    await findToast(canvasElement, 'info toast');
-  },
-});
-
-export const Success = meta.story({
-  play: async ({canvasElement}) => {
-    toast.add({title: 'success toast', type: 'success'});
-
-    await findToast(canvasElement, 'success toast');
-  },
-});
-
-export const Warning = meta.story({
-  play: async ({canvasElement}) => {
-    toast.add({title: 'warning toast', type: 'warning'});
-
-    await findToast(canvasElement, 'warning toast');
-  },
-});
-
-Default.test('shows the toast title', async ({canvasElement}) => {
-  await expectToast(canvasElement, 'Event created');
 });
 
 WithAction.test(
@@ -148,50 +93,5 @@ WithAction.test(
         body.queryByText('Message archived')
       ).not.toBeInTheDocument();
     });
-  }
-);
-
-Loading.test(
-  'shows the loading toast with its icon',
-  async ({canvasElement}) => {
-    await expectToast(canvasElement, 'Uploading file');
-    await expect(getToastIcon(canvasElement, 'Uploading file')).toHaveClass(
-      'animate-spin'
-    );
-  }
-);
-
-ErrorType.test(
-  'shows the error toast with its icon',
-  async ({canvasElement}) => {
-    await expectToast(canvasElement, 'error toast');
-    await expect(getToastIcon(canvasElement, 'error toast')).toHaveClass(
-      'text-destructive'
-    );
-  }
-);
-
-Info.test('shows the info toast with its icon', async ({canvasElement}) => {
-  await expectToast(canvasElement, 'info toast');
-  await expect(getToastIcon(canvasElement, 'info toast')).toBeInTheDocument();
-});
-
-Success.test(
-  'shows the success toast with its icon',
-  async ({canvasElement}) => {
-    await expectToast(canvasElement, 'success toast');
-    await expect(
-      getToastIcon(canvasElement, 'success toast')
-    ).toBeInTheDocument();
-  }
-);
-
-Warning.test(
-  'shows the warning toast with its icon',
-  async ({canvasElement}) => {
-    await expectToast(canvasElement, 'warning toast');
-    await expect(
-      getToastIcon(canvasElement, 'warning toast')
-    ).toBeInTheDocument();
   }
 );

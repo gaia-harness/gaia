@@ -21,4 +21,14 @@ describe('Storybook default locale', () => {
 
     expect(i18n.language).toBe('cimode');
   });
+
+  test('the preview loader switches i18next to the story locale global', async () => {
+    const {default: preview} = await import('../.storybook/preview');
+    const {default: i18n} = await import('../.storybook/i18next');
+    const [loadLocale] = [preview.input.loaders].flat();
+
+    await loadLocale?.({globals: {locale: 'en'}} as never);
+    expect(i18n.language).toBe('en');
+    await i18n.changeLanguage('cimode');
+  });
 });

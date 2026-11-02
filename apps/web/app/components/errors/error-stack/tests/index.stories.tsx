@@ -1,5 +1,6 @@
 import {expect, mocked, spyOn} from 'storybook/test';
 import preview from '#.storybook/preview';
+import common from '~/languages/en/common';
 import ErrorStack from '..';
 
 const meta = preview.meta({
@@ -108,12 +109,8 @@ CopiesStack.test(
   }
 );
 
-CopiesStack.test('shows a copy icon on the button', async ({canvas}) => {
-  const button = canvas.getByRole('button');
-
-  // The icon is decorative: the component hides it from assistive technology,
-  // so the button's accessible name comes from its label alone.
-  await expect(
-    button.querySelector('svg[aria-hidden="true"]')
-  ).toBeInTheDocument();
+CopiesStack.test('names the button by its label alone', async ({canvas}) => {
+  await expect(canvas.getByRole('button')).toHaveAccessibleName(
+    common.copyToClipboard
+  );
 });

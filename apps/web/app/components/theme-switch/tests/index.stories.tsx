@@ -33,25 +33,18 @@ const meta = preview.type<{args: StoryArgs}>().meta({
   title: 'Components/ThemeSwitch',
 });
 
-const expectIconAndPost = async ({
+const expectNameAndPost = async ({
   args,
   canvas,
-  icon,
   name,
   next,
 }: {
   args: StoryArgs;
   canvas: ReturnType<typeof within>;
-  icon: string;
   name: string;
   next: string;
 }) => {
-  const button = await canvas.findByRole('button', {name});
-
-  // Icons are aria-hidden, so the lucide class is the only handle on them.
-  await expect(button.querySelector(`svg.lucide-${icon}`)).toBeInTheDocument();
-
-  await userEvent.click(button);
+  await userEvent.click(await canvas.findByRole('button', {name}));
 
   await waitFor(async () => {
     await expect(args.onSubmit).toHaveBeenCalledTimes(1);
@@ -62,12 +55,11 @@ const expectIconAndPost = async ({
 export const Default = meta.story({});
 
 Default.test(
-  'shows the monitor icon and posts light when clicked',
+  'offers light mode from the system default and posts light when clicked',
   async ({args, canvas}) =>
-    expectIconAndPost({
+    expectNameAndPost({
       args,
       canvas,
-      icon: 'monitor',
       name: 'Enable light mode',
       next: 'light',
     })
@@ -97,12 +89,11 @@ export const Light = meta.story({
 });
 
 Light.test(
-  'shows the sun icon and posts dark when clicked',
+  'offers dark mode from light and posts dark when clicked',
   async ({args, canvas}) =>
-    expectIconAndPost({
+    expectNameAndPost({
       args,
       canvas,
-      icon: 'sun',
       name: 'Enable dark mode',
       next: 'dark',
     })
@@ -113,31 +104,12 @@ export const Dark = meta.story({
 });
 
 Dark.test(
-  'shows the moon icon and posts system when clicked',
+  'offers the system theme from dark and posts system when clicked',
   async ({args, canvas}) =>
-    expectIconAndPost({
+    expectNameAndPost({
       args,
       canvas,
-      icon: 'moon',
       name: 'Use system theme',
       next: 'system',
     })
-);
-
-// i18next's built-in `cimode` locale renders each translation key, so the
-// test finds the key only once i18next has switched to the story's locale
-// global before render.
-export const LocaleGlobal = meta.story({
-  globals: {locale: 'cimode'},
-});
-
-LocaleGlobal.test(
-  'renders the translation key for the button name',
-  async ({canvas}) => {
-    await expect(
-      canvas.getByRole('button', {
-        name: 'theme.enableLightMode',
-      })
-    ).toBeInTheDocument();
-  }
 );

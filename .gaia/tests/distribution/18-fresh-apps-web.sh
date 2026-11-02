@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 18-fresh-apps-web.sh
 # distribution-runner: exclusive
-# distribution-runner: paths .gaia/cli/src/util/** .gaia/cli/src/setup/** pnpm-workspace.yaml pnpm-lock.yaml apps/web/package.json apps/web/vite.config.ts apps/web/vitest.config.ts .gaia/tests/distribution/lib/**
+# distribution-runner: paths .gaia/cli/src/util/** .gaia/cli/src/setup/** pnpm-workspace.yaml pnpm-lock.yaml apps/web/package.json apps/web/vite.config.ts apps/web/vitest.config.ts .gaia/release-exclude .gaia/tests/distribution/lib/**
 #
 # A fresh project from the staged bundle, as an adopter's first run sees it:
 # the maintainer-only CLI member stripped and packages/ holding only .gitkeep.
@@ -14,8 +14,8 @@
 #   3. The setup env seed writes apps/web/.env.
 #   4. typecheck, lint, test:ci, build, Playwright and a dev-server smoke each
 #      exit 0 from the root. The build writes apps/web/build. The test run
-#      reports at least as many test files as the source tree holds, derived
-#      here, because test:ci passes when it finds none.
+#      reports at least as many test files as the fresh project's tree holds,
+#      derived here, because test:ci passes when it finds none.
 #
 # Layer 0: needs host pnpm and network access for the install and Chromium.
 set -euo pipefail
@@ -68,16 +68,16 @@ cmp -s "$FRONTEND/.env" "$FRONTEND/.env.example" \
 run_pnpm_steps fresh- "fresh project" typecheck lint
 run_test_ci_with_report fresh- "fresh project" "$WORK/test-ci-report.json"
 
-SOURCE_TEST_FILES="$(find "$PROJECT_ROOT/apps/web/app" "$PROJECT_ROOT/apps/web/test" \
+SOURCE_TEST_FILES="$(find "$FRONTEND/app" "$FRONTEND/test" \
   -name node_modules -prune -o -type f \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | wc -l | tr -d ' ')"
 RAN_TEST_FILES="$(node -e '
   const report = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
   process.stdout.write(String(report.testResults.filter((result) => /\.test\.tsx?$/.test(result.name)).length));
 ' "$WORK/test-ci-report.json")"
 [ "$SOURCE_TEST_FILES" -gt 0 ] \
-  || { fail "the source tree holds no test files to compare against"; exit 1; }
+  || { fail "the fresh project's tree holds no test files to compare against"; exit 1; }
 [ "$RAN_TEST_FILES" -ge "$SOURCE_TEST_FILES" ] \
-  || { fail "test:ci ran $RAN_TEST_FILES test files, the source tree holds $SOURCE_TEST_FILES"; exit 1; }
+  || { fail "test:ci ran $RAN_TEST_FILES test files, the fresh project's tree holds $SOURCE_TEST_FILES"; exit 1; }
 
 run_pnpm_steps fresh- "fresh project" build
 [ -d "$FRONTEND/build" ] \

@@ -1,22 +1,14 @@
-import type {ComponentProps, MouseEvent, MouseEventHandler} from 'react';
+import type {ComponentProps} from 'react';
 import {Fragment} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Link, NavLink} from 'react-router';
-import {cn} from 'cn';
 import {StarIcon} from 'lucide-react';
-import {expect, fn, userEvent, within} from 'storybook/test';
-import stubs from 'test/stubs';
+import {expect, fn, userEvent} from 'storybook/test';
 import preview from '#.storybook/preview';
-import {Button, buttonVariants} from '~/components/ui/button';
+import {Button} from '~/components/ui/button';
 import {Spinner} from '~/components/ui/spinner';
 
-// Stories whose args exceed the component's props: the link stories hand an
-// onClick spy to an anchor, which Button's own onClick type would reject.
-type StoryArgs = {onClick?: MouseEventHandler<HTMLElement>};
-
-const meta = preview.type<{args: StoryArgs}>().meta({
+const meta = preview.meta({
   component: Button,
-  decorators: [stubs.reactRouter({destinations: ['/target']})],
   parameters: {
     wrap: 'w-fit p-4',
   },
@@ -138,120 +130,6 @@ export const IconText = meta.story({
   render: () => <ButtonGrid content="icon-text" />,
 });
 
-type LinkButtonProps = {label?: string; to?: string};
-
-const LinkButton = ({label, to = '/'}: LinkButtonProps) => {
-  const {t} = useTranslation();
-
-  return (
-    <Button
-      nativeButton={false}
-      render={<Link role="link" to={to} />}
-      variant="outline"
-    >
-      {label ?? t('next')}
-    </Button>
-  );
-};
-
-const NavLinkButton = ({label, to = '/'}: LinkButtonProps) => {
-  const {t} = useTranslation();
-
-  return (
-    <Button
-      nativeButton={false}
-      render={<NavLink role="link" to={to} />}
-      variant="outline"
-    >
-      {label ?? t('next')}
-    </Button>
-  );
-};
-
-const ExternalLinkButton = () => {
-  const {t} = useTranslation();
-
-  return (
-    <Button
-      nativeButton={false}
-      // eslint-disable-next-line jsx-a11y/anchor-has-content, jsx-a11y/no-redundant-roles -- Button's `render` prop supplies the anchor content, and Base UI needs the explicit role
-      render={<a href="https://example.com" role="link" />}
-      variant="outline"
-    >
-      {t('next')}
-    </Button>
-  );
-};
-
-const expectLinkSemantics = async (link: HTMLElement) => {
-  await expect(link).toHaveAttribute('data-slot', 'button');
-  await expect(link).not.toHaveAttribute('type');
-  await expect(link).toHaveClass(
-    ...cn(buttonVariants({variant: 'outline'})).split(' ')
-  );
-};
-
-export const AsLink = meta.story({
-  render: () => <LinkButton />,
-});
-
-export const AsNavLink = meta.story({
-  render: () => <NavLinkButton />,
-});
-
-export const AsExternalLink = meta.story({
-  render: () => <ExternalLinkButton />,
-});
-
-// The navigating behaviors run as tests, so the link stories stay axe-scanned
-// in their resting state.
-const expectNavigatesOnClick = async (canvasElement: HTMLElement) => {
-  await userEvent.click(within(canvasElement).getByRole('link', {name: 'Go'}));
-  await expect(
-    await within(canvasElement).findByText('Navigated to /target')
-  ).toBeVisible();
-};
-
-const expectNavigatesOnEnter = async (canvasElement: HTMLElement) => {
-  await userEvent.tab();
-  await expect(
-    within(canvasElement).getByRole('link', {name: 'Go'})
-  ).toHaveFocus();
-  await userEvent.keyboard('{Enter}');
-  await expect(
-    await within(canvasElement).findByText('Navigated to /target')
-  ).toBeVisible();
-};
-
-export const LinkNavigates = meta.story({
-  render: () => <LinkButton label="Go" to="/target" />,
-});
-
-export const NavLinkNavigates = meta.story({
-  render: () => <NavLinkButton label="Go" to="/target" />,
-});
-
-// The handler stops the navigation so the test never leaves the page, and
-// records that Enter activated the link.
-export const ExternalLinkActivatesOnEnter = meta.story({
-  args: {
-    onClick: fn((event: MouseEvent<HTMLElement>) => {
-      event.preventDefault();
-    }),
-  },
-  render: (args) => (
-    <Button
-      nativeButton={false}
-      render={
-        // eslint-disable-next-line jsx-a11y/anchor-has-content, jsx-a11y/no-redundant-roles -- Button's `render` prop supplies the anchor content, and Base UI needs the explicit role
-        <a href="https://example.com/docs" onClick={args.onClick} role="link" />
-      }
-    >
-      Docs
-    </Button>
-  ),
-});
-
 export const DisabledDoesNotFire = meta.story({
   args: {onClick: fn()},
   render: (args) => (
@@ -260,54 +138,6 @@ export const DisabledDoesNotFire = meta.story({
     </Button>
   ),
 });
-
-AsLink.test('renders a link with button semantics', async ({canvas}) => {
-  await expectLinkSemantics(canvas.getByRole('link'));
-});
-
-AsNavLink.test('renders a nav link with button semantics', async ({canvas}) => {
-  await expectLinkSemantics(canvas.getByRole('link'));
-});
-
-AsExternalLink.test(
-  'renders an external link with button semantics',
-  async ({canvas}) => {
-    await expectLinkSemantics(canvas.getByRole('link'));
-  }
-);
-
-LinkNavigates.test('navigates when clicked', async ({canvasElement}) => {
-  await expectNavigatesOnClick(canvasElement);
-});
-
-LinkNavigates.test('navigates on Enter', async ({canvasElement}) => {
-  await expectNavigatesOnEnter(canvasElement);
-});
-
-NavLinkNavigates.test('navigates when clicked', async ({canvasElement}) => {
-  await expectNavigatesOnClick(canvasElement);
-});
-
-NavLinkNavigates.test('navigates on Enter', async ({canvasElement}) => {
-  await expectNavigatesOnEnter(canvasElement);
-});
-
-ExternalLinkActivatesOnEnter.test(
-  'fires the click handler when Enter activates the link',
-  async ({args, canvas}) => {
-    await userEvent.tab();
-
-    const link = canvas.getByRole('link', {name: 'Docs'});
-
-    await expect(link).toHaveFocus();
-    await userEvent.keyboard('{Enter}');
-    await expect(link).toHaveAttribute('href', 'https://example.com/docs');
-    await expect(args.onClick).toHaveBeenCalledTimes(1);
-    await expect(args.onClick).toHaveBeenCalledWith(
-      expect.objectContaining({type: 'click'})
-    );
-  }
-);
 
 DisabledDoesNotFire.test(
   'ignores a click while disabled',

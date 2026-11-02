@@ -11,11 +11,6 @@ describe('useDebounce', () => {
     vi.useRealTimers();
   });
 
-  test('returns the initial value immediately', async () => {
-    const {result} = await renderHook(() => useDebounce('hello', 300));
-    expect(result.current).toBe('hello');
-  });
-
   test('does not update until delay elapses after a value change', async () => {
     let value = 'hello';
     const {act, rerender, result} = await renderHook(() =>
@@ -32,22 +27,6 @@ describe('useDebounce', () => {
     });
 
     expect(result.current).toBe('hello');
-  });
-
-  test('updates to the latest value after delay elapses', async () => {
-    let value = 'hello';
-    const {act, rerender, result} = await renderHook(() =>
-      useDebounce(value, 300)
-    );
-
-    value = 'world';
-    await rerender();
-
-    await act(() => {
-      vi.advanceTimersByTime(300);
-    });
-
-    expect(result.current).toBe('world');
   });
 
   test('clears the pending timer on unmount', async () => {

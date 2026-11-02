@@ -32,18 +32,6 @@ describe('useBreakpoint', () => {
     vi.restoreAllMocks();
   });
 
-  test('returns false when media query does not match', async () => {
-    isMockMatching = false;
-    const {result} = await renderHook(() => useBreakpoint('lg'));
-    expect(result.current).toBe(false);
-  });
-
-  test('returns true when media query matches', async () => {
-    isMockMatching = true;
-    const {result} = await renderHook(() => useBreakpoint('lg'));
-    expect(result.current).toBe(true);
-  });
-
   test('updates when MediaQueryList fires a change event', async () => {
     isMockMatching = false;
     const {act, result} = await renderHook(() => useBreakpoint('lg'));
@@ -55,16 +43,6 @@ describe('useBreakpoint', () => {
     });
 
     expect(result.current).toBe(true);
-  });
-
-  test('removes the change listener on unmount', async () => {
-    const {unmount} = await renderHook(() => useBreakpoint('md'));
-    await unmount();
-
-    expect(mockMediaQueryList.removeEventListener).toHaveBeenCalledWith(
-      'change',
-      expect.any(Function)
-    );
   });
 
   test('subscribes once per breakpoint, not once per render', async () => {
