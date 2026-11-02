@@ -606,6 +606,10 @@ case "$2" in
       [ "$1" = "--jq" ] && filter="$2"
       shift
     done
+    [ "$(jq 'length' "$STUB_DIRECTORY/checks.json")" = 0 ] && {
+      printf 'no required checks reported for the head\n' >&2
+      exit 1
+    }
     jq -r "$filter" "$STUB_DIRECTORY/checks.json"
     ;;
   *) exit 1 ;;
@@ -634,6 +638,20 @@ WITH_AUDIT_DECLARED='"GAIA-Audit"
   run bash "$WAIT" --pr 7 --until-green --interval 0
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "GREEN" ]
+}
+
+@test "--until-green reaches GREEN when only GAIA-Audit is declared and nothing has registered" {
+  stub_required "$(open_on_main)" '' '"GAIA-Audit"' '[]'
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ] || return 1
+  [ "${lines[0]}" = "GREEN" ]
+}
+
+@test "--until-green names the declared checks not yet registered when nothing has registered" {
+  stub_required "$(open_on_main)" '' "$WITH_AUDIT_DECLARED" '[]'
+  run bash "$WAIT" --pr 7 --until-green --attempts 2 --interval 0
+  [ "$status" -eq 5 ] || return 1
+  grep -qF -- 'not yet present and passed: Shellcheck and bats, Audit CI Tests' <<<"$output"
 }
 
 @test "--until-green holds on a present GAIA-Audit that is pending" {

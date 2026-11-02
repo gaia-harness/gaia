@@ -53,16 +53,20 @@ read_api() {
 # required check declared. Both endpoints answer
 # with read access, unlike the protection endpoint proper, which needs admin.
 resolve_declared_required() {
-  local base="$1" protection rulesets names name
+  local base="$1" protection rulesets names name bare
   if ! protection=$(read_api "repos/{owner}/{repo}/branches/$base" "$PROTECTION_JQ") ||
     ! rulesets=$(read_api "repos/{owner}/{repo}/rules/branches/$base" "$RULESETS_JQ"); then
     GREEN_BLOCKER="the required checks declared for $base (branch protection and rulesets) could not be read"
     return 1
   fi
   names=""
+  DECLARED_OTHER_THAN_AUDIT=""
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     names="${names:+$names,}$name"
+    [ "$name" = '"GAIA-Audit"' ] && continue
+    bare="${name#\"}"
+    DECLARED_OTHER_THAN_AUDIT="${DECLARED_OTHER_THAN_AUDIT:+$DECLARED_OTHER_THAN_AUDIT, }${bare%\"}"
   done <<EOF
 $protection
 $rulesets
@@ -78,20 +82,38 @@ EOF
 # reporting a green nothing established. The answer is read even when gh exits
 # non-zero, as it does while a check is pending.
 required_checks_green() {
-  local answer filter="$DECLARED_REQUIRED as \$declared | $GREEN_JQ"
+  local answer standard_error_file filter="$DECLARED_REQUIRED as \$declared | $GREEN_JQ"
+  standard_error_file=$(mktemp)
   if [ -n "$REPO" ]; then
     answer=$(gh pr checks "$PR" --repo "$REPO" --required --json name,bucket \
-      --jq "$filter" 2>/dev/null)
+      --jq "$filter" 2>"$standard_error_file")
   else
     answer=$(gh pr checks "$PR" --required --json name,bucket \
-      --jq "$filter" 2>/dev/null)
+      --jq "$filter" 2>"$standard_error_file")
   fi
+  if [ -z "$answer" ] && grep -qE 'no (required )?checks reported' "$standard_error_file"; then
+    answer=$(answer_for_no_registered_checks)
+  fi
+  rm -f "$standard_error_file"
   case "$answer" in
     green) return 0 ;;
     'waiting: '*) GREEN_BLOCKER="not yet present and passed: ${answer#waiting: }" ;;
     *) GREEN_BLOCKER="the required checks on the head could not be read" ;;
   esac
   return 1
+}
+
+# What the green filter answers over an empty registered list. gh exits 1 with
+# no stdout in that case, before its JSON exporter runs, so the filter never
+# sees the list and the answer is derived from the declared set instead.
+answer_for_no_registered_checks() {
+  if [ "$DECLARED_REQUIRED" = "[]" ]; then
+    printf 'waiting: no required check is declared'
+  elif [ -z "$DECLARED_OTHER_THAN_AUDIT" ]; then
+    printf 'green'
+  else
+    printf 'waiting: %s' "$DECLARED_OTHER_THAN_AUDIT"
+  fi
 }
 
 # Resolves the declared set on the first attempt that can, then holds it for
