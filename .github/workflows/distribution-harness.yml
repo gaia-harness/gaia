@@ -45,9 +45,8 @@ jobs:
   distribution-harness:
     name: Distribution harness (no-Docker) (advisory)
     runs-on: ubuntu-latest
-    # Sized for the push-to-main full run, every scenario including the
-    # CSF4 migration one: about 21 minutes measured, plus headroom. Re-measure
-    # for a new slow scenario.
+    # Sized for the push-to-main full run, plus headroom.
+    # Re-measure for a new slow scenario.
     timeout-minutes: 30
     # Checkout, paths-filter and setup-node's defaults. `pull-requests: read`
     # is paths-filter's: it resolves a pull request's changed files through the

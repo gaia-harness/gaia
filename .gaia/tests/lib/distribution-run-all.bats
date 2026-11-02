@@ -152,8 +152,6 @@ changed() {
   true
 }
 
-# The live scenarios: the slow ones declare paths and the fast ones do not, and
-# the CSF4 migration scenario runs on its own paths rather than a skip marker.
 # bats test_tags=whole-tree
 @test "only the slow scenarios declare paths, and none is skip-marked" {
   local file name declared=()
@@ -162,7 +160,7 @@ changed() {
     grep -qxF '# distribution-runner: skip' "$file" && { echo "$name is skip-marked" >&2; return 1; }
     grep -q '^# distribution-runner: paths ' "$file" && declared+=("$name")
   done
-  [ "${declared[*]}" = "09-data-layer-query-on.sh 10-data-layer-query-off.sh 16-csf4-migration.sh 17-csf4-scaffolds.sh 18-fresh-apps-web.sh 21-workspace-gate.sh" ] \
+  [ "${declared[*]}" = "09-data-layer-query-on.sh 10-data-layer-query-off.sh 17-csf4-scaffolds.sh 18-fresh-apps-web.sh 21-workspace-gate.sh" ] \
     || { echo "declared: ${declared[*]}" >&2; return 1; }
 }
 
@@ -195,13 +193,6 @@ duplicate_scenario_numbers() {
   scenario 3-fourth.sh 0
   scenario 03-fifth.sh 0
   [ "$(duplicate_scenario_numbers "$DISTRIBUTION")" = "$(printf '2\n3')" ]
-}
-
-@test "the CSF4 migration scenario declares the migrate-csf4 sources and nothing in the frontend" {
-  local scenario_file="$REPO_ROOT/.gaia/tests/distribution/16-csf4-migration.sh"
-  grep '^# distribution-runner: paths ' "$scenario_file" | grep -qF '.gaia/cli/src/migrate-csf4/**'
-  grep '^# distribution-runner: paths ' "$scenario_file" | grep -qF 'apps/web/' && return 1
-  true
 }
 
 # A pull request reaches run-all.sh only when the workflow's `code:` filter
