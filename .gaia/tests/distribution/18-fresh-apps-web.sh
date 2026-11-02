@@ -95,7 +95,17 @@ DEV_PORT="$(node -e '
 ')"
 (cd "$SCAFFOLD" && GAIA_DEV_PORT_OVERRIDE="$DEV_PORT" exec pnpm dev) >"$WORK/dev.log" 2>&1 &
 DEV_PID=$!
-trap 'kill "$DEV_PID" 2>/dev/null || true; rm -rf "$STAGING" "$SCAFFOLD" "$WORK"' EXIT
+# Killing pnpm alone orphans its dev-server children, which keep the port and
+# write into the fixture after its removal; every one carries the fixture's
+# unique path in its command line.
+stop_dev_server() {
+  kill "$DEV_PID" 2>/dev/null || true
+  # An empty pattern would match every process on the machine.
+  [ -n "${SCAFFOLD:-}" ] && [ -d "$SCAFFOLD" ] || return 0
+  pkill -f -- "$SCAFFOLD" 2>/dev/null || true
+  wait "$DEV_PID" 2>/dev/null || true
+}
+trap 'stop_dev_server; rm -rf "$STAGING" "$SCAFFOLD" "$WORK"' EXIT
 SMOKE_STATUS=000
 for _ in $(seq 1 60); do
   SMOKE_STATUS="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$DEV_PORT/" || true)"
