@@ -491,7 +491,7 @@ release_fixture() {
   fixture --no-branch || return 1
   cp "$REPO_ROOT/.gaia/scripts/release-bookkeeping-check.sh" .gaia/scripts/release-bookkeeping-check.sh || return 1
   printf '#!/usr/bin/env node\nprocess.exit(process.env.MANIFEST_CHECK_FAILS ? 1 : 0);\n' >.gaia/cli/gaia-maintainer
-  mkdir -p frontend wiki
+  mkdir -p apps/web wiki
   printf '1.0.0\n' >.gaia/VERSION
   printf '{"files": {}, "generated": "a", "version": "1.0.0"}\n' >"$manifest"
   printf '{"name": "gaia", "version": "1.0.0"}\n' >package.json

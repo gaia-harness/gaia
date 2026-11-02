@@ -245,7 +245,7 @@ test("adds two numbers", () => {
   reason=$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")
   recovery=$(grep -o 'pnpm -C <package dir> test --run <test-file>' <<<"$reason" | head -1)
   [ -n "$recovery" ]
-  recovery="${recovery//<package dir>/frontend}"
+  recovery="${recovery//<package dir>/apps/web}"
   recovery="${recovery//<test-file>/app/utils/x/index.test.ts}"
 
   json="$REPO/canned.json"

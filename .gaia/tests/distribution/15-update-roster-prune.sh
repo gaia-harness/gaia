@@ -87,7 +87,7 @@ ADOPTER_ROSTER_BEFORE="$WORK/adopter-before.yml"
 awk -v marker="$UNOWNED_MARKER" '
   $0 ~ marker { print "  - name: code-audit-mine\n    globs:\n      - \"infra/**\"\n    audience: adopter\n" }
   { print }
-  /^  - "frontend\/public\/\*\*"$/ { print "  - \"scripts/**\"" }
+  /^  - "\*\.md"$/ { print "  - \"scripts/**\"" }
 ' "$BASELINE_ROSTER" > "$ADOPTER_ROSTER_BEFORE"
 grep -qF '  - "scripts/**"' "$ADOPTER_ROSTER_BEFORE" \
   || { fail "could not add the scripts/** unowned entry to the adopter roster"; exit 1; }

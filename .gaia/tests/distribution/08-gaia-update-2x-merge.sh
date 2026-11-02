@@ -70,12 +70,12 @@ GAIA_CLI="$PROJECT_ROOT/.gaia/cli/gaia"
 [ -x "$GAIA_CLI" ] \
   || { fail "the built CLI is missing from the source tree: $GAIA_CLI"; exit 1; }
 
-# --- Scenario 1: the registry yields the root and frontend ------------------
+# --- Scenario 1: the registry yields the root and apps/web ------------------
 PKG_DIRS="$(cd "$ADOPTER" && bash -c "$DIRS_BLOCK; printf '%s\n' \"\$PKG_DIRS\"")" \
   || { fail "scenario 1: the PKG_DIRS program failed on the staged registry"; exit 1; }
-[ "$PKG_DIRS" = "$(printf '.\nfrontend')" ] \
-  || { fail "scenario 1: expected '.' and 'frontend', got: $PKG_DIRS"; exit 1; }
-log "scenario 1 (registry yields root and frontend): OK"
+[ "$PKG_DIRS" = "$(printf '.\napps/web')" ] \
+  || { fail "scenario 1: expected '.' and 'apps/web', got: $PKG_DIRS"; exit 1; }
+log "scenario 1 (registry yields root and apps/web): OK"
 
 # --- Scenario 2: upstream pin changes merge in both package.json files -------
 ROOT_KEY="$(jq -r '.devDependencies | keys_unsorted[0]' "$STAGING/package.json")"

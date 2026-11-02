@@ -121,7 +121,7 @@ trap cleanup EXIT
 git -C "$scaffold" checkout --quiet main
 git -C "$scaffold" checkout --quiet -b "$branch"
 git -C "$scaffold" apply "$patch_file"
-git -C "$scaffold" add -A -- frontend
+git -C "$scaffold" add -A -- apps/web
 git -C "$scaffold" -c user.name=measurement -c user.email=measurement@example.com -c commit.gpgsign=false \
   commit --quiet --no-verify -m "feat: replay change for the $replay measurement"
 git -C "$scaffold" push --quiet --no-verify -u origin "$branch"

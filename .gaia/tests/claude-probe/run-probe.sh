@@ -294,7 +294,7 @@ launch_root() {
 }
 launch_directory() {
   case "$1" in
-    frontend) printf '%s/frontend' "$TARGET" ;;
+    frontend) printf '%s/apps/web' "$TARGET" ;;
     worktree) printf '%s' "$WORKTREE_ROOT" ;;
     *) printf '%s' "$TARGET" ;;
   esac

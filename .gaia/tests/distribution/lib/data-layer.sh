@@ -3,7 +3,7 @@
 #
 # API:
 #   hash_frontend ROOT          - prints "<sha256>  <path>" for every file under
-#                                 ROOT/frontend (generated directories pruned)
+#                                 ROOT/apps/web (generated directories pruned)
 #                                 plus ROOT/pnpm-lock.yaml, sorted by path
 #   hash_file PATH              - prints PATH's sha256
 #   run_logged LABEL LOG CMD... - runs CMD with all output in LOG; on failure
@@ -47,7 +47,7 @@ hash_frontend() {
   local root="$1"
   (
     cd "$root" || exit 1
-    find frontend \
+    find apps/web \
       \( -name node_modules -o -name build -o -name .react-router \
          -o -name coverage -o -name .cache \) -prune \
       -o -type f -print0 \
