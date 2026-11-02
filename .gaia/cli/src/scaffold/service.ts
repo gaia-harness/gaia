@@ -38,7 +38,7 @@ import {
 } from './data-layer.js';
 import {ensureDir, writeAndRecord} from './fs.js';
 import {isSnakeCaseLayer, resolveLayer} from './layer.js';
-import {resolveScaffoldTarget} from './resolve-target.js';
+import {resolveScaffoldTarget, splitPackageFlag} from './resolve-target.js';
 import {renderTemplate, templatePath} from './template.js';
 import type {TemplateVars} from './template.js';
 import type {ScaffoldResult} from './types.js';
@@ -915,6 +915,22 @@ export type ServiceRunOptions = {
   cwd?: string;
 };
 
+const emitRequested = (
+  parsed: ParsedArgs,
+  context: EmitContext,
+  result: ScaffoldResult
+): string | undefined => {
+  if (parsed.queriesOnly) return emitQueriesOnly(context, result);
+  const databaseBarrel =
+    parsed.mocks ?
+      planDatabaseBarrel(context.repoRoot, context.derived)
+    : undefined;
+  emitServiceFiles(context, result);
+  if (parsed.mocks) emitMockFiles(context, databaseBarrel, result);
+
+  return undefined;
+};
+
 export const run = (
   argv: readonly string[],
   options: ServiceRunOptions = {}
@@ -925,7 +941,10 @@ export const run = (
     return EXIT_CODES.OK;
   }
 
-  const parsed = parseArgs(argv);
+  const split = splitPackageFlag(argv, 'scaffold service');
+
+  if (split === undefined) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  const parsed = parseArgs(split.argv);
 
   if ('error' in parsed) {
     return userError(parsed.error, 'scaffold service');
@@ -933,7 +952,8 @@ export const run = (
 
   const target = resolveScaffoldTarget(
     options.cwd ?? process.cwd(),
-    'scaffold service'
+    'scaffold service',
+    split.packageName
   );
 
   if (target === undefined) return EXIT_CODES.CONFIG_INVALID;
@@ -956,18 +976,9 @@ export const run = (
   };
 
   try {
-    if (parsed.queriesOnly) {
-      const refusal = emitQueriesOnly(context, result);
+    const refusal = emitRequested(parsed, context, result);
 
-      if (refusal !== undefined) return userError(refusal, 'scaffold service');
-    } else {
-      const databaseBarrel =
-        parsed.mocks ?
-          planDatabaseBarrel(repoRoot, context.derived)
-        : undefined;
-      emitServiceFiles(context, result);
-      if (parsed.mocks) emitMockFiles(context, databaseBarrel, result);
-    }
+    if (refusal !== undefined) return userError(refusal, 'scaffold service');
   } catch (error) {
     structuredError({
       code: 'scaffold_failed',

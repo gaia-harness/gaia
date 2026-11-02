@@ -251,6 +251,6 @@ grant_folder_to_shell_member() {
   # shellcheck source=/dev/null
   source "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh"
   audit_out_of_scope_allowlisted "$DECLINE_FOLDER/$DECLINE_FILE_NAME" || return 1
-  run audit_out_of_scope_allowlisted frontend/app/x.ts
+  run audit_out_of_scope_allowlisted apps/web/app/x.ts
   [ "$status" -eq 1 ] || return 1
 }

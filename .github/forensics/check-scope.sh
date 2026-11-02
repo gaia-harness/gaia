@@ -65,7 +65,7 @@ name|deny|pnpm-lock.yaml
 name|deny|.npmrc
 name|deny|.pnpmfile.cjs
 name|deny|.pnpmfile.mjs
-dir|deny|frontend/app/
+dir|deny|apps/web/app/
 dir|deny|wiki/
 dir|deny|studio/
 dir|deny|website/

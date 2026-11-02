@@ -291,7 +291,7 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
   derived="$(pin_site_files "$REPO_ROOT")"
   [ -n "$derived" ]
   # An independent source: every frontmatter pin must be in the derived set.
-  frontmatter_pins="$(git -C "$REPO_ROOT" grep -l -E '^model:' -- .claude frontend/.claude)"
+  frontmatter_pins="$(git -C "$REPO_ROOT" grep -l -E '^model:' -- .claude apps/web/.claude)"
   [ -n "$frontmatter_pins" ]
   while IFS= read -r file_path; do
     grep -qxF -- "$file_path" <<<"$derived" || return 1

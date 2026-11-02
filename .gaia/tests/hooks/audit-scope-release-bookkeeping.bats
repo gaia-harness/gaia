@@ -75,9 +75,9 @@ lines_of() {
 @test "a bookkeeping release: every changed path is ownerless and allowlisted, and the resolver dispatches nobody" {
   release_bookkeeping_install_predicate "$FIXTURE"
   release_bookkeeping_apply "$FIXTURE"
-  run classify package.json frontend/package.json CHANGELOG.md .gaia/VERSION .gaia/manifest.json
+  run classify package.json apps/web/package.json CHANGELOG.md .gaia/VERSION .gaia/manifest.json
   [ "$status" -eq 0 ]
-  [ "$output" = "$(lines_of $'package.json\t\tyes' $'frontend/package.json\t\tyes' $'CHANGELOG.md\t\tyes' \
+  [ "$output" = "$(lines_of $'package.json\t\tyes' $'apps/web/package.json\t\tyes' $'CHANGELOG.md\t\tyes' \
     $'.gaia/VERSION\t\tyes' $'.gaia/manifest.json\t\tyes')" ]
   # A path the release did not change keeps its owner on the same armed branch.
   [ "$(classify a.sh)" = $'a.sh\tfixture-default\tno' ]

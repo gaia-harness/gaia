@@ -521,19 +521,19 @@ JS
   gaia_link_worktree "$WORKTREE_A"
   gaia_link_worktree "$WORKTREE_B"
 
-  # A test under frontend/app/utils/** so the determinism classifier (scoped to
+  # A test under apps/web/app/utils/** so the determinism classifier (scoped to
   # app/utils, app/services, app/hooks, and .ts under app/components) returns
   # "strict" for it rather than "emergent" -- an emergent verdict would make
   # the check hook skip the file outright, and the deny in check 2 below would
   # never fire, for a reason that has nothing to do with tree isolation.
-  test_relative_path="frontend/app/utils/c407/index.test.ts"
+  test_relative_path="apps/web/app/utils/c407/index.test.ts"
   full_name="adds two numbers c407"
   test_body='import {expect, test} from "vitest";
 test("adds two numbers c407", () => {
   expect(1 + 1).toBe(2);
 });
 '
-  mkdir -p "$WORKTREE_A/frontend/app/utils/c407" "$WORKTREE_B/frontend/app/utils/c407"
+  mkdir -p "$WORKTREE_A/apps/web/app/utils/c407" "$WORKTREE_B/apps/web/app/utils/c407"
   # Both trees write the IDENTICAL body: same fullName, same content signal.
   # That identity is the whole point -- it is what makes tree A's observation
   # a candidate to satisfy tree B's gate for a test B never ran.
@@ -1001,16 +1001,16 @@ test("adds two numbers c407", () => {
   # the real typegen call.
   # Typegen runs per registered package (the built-in default is `frontend`)
   # that carries a react-router config, from that package's directory.
-  mkdir -p "$MAIN/frontend/node_modules/.bin"
-  echo 'export default {};' > "$MAIN/frontend/react-router.config.ts"
-  cat > "$MAIN/frontend/node_modules/.bin/react-router" <<'SH'
+  mkdir -p "$MAIN/apps/web/node_modules/.bin"
+  echo 'export default {};' > "$MAIN/apps/web/react-router.config.ts"
+  cat > "$MAIN/apps/web/node_modules/.bin/react-router" <<'SH'
 #!/bin/sh
 if [ "$1" = "typegen" ]; then
   mkdir -p .react-router/types
   echo generated > .react-router/types/.stamp
 fi
 SH
-  chmod +x "$MAIN/frontend/node_modules/.bin/react-router"
+  chmod +x "$MAIN/apps/web/node_modules/.bin/react-router"
   . "$BATS_TEST_DIRNAME/../hooks/helpers/package-fixture.sh"
   write_builtin_descriptor "$MAIN"
   gaia_commit_all "$MAIN" "add provisioning deps + stub CLI"
@@ -1039,7 +1039,7 @@ SH
   run_in "$worktree_path" -- gaia_deliver_hook "$entry_payload" "$worktree_path/.claude/hooks/provision-worktree.sh" >/dev/null 2>&1
 
   # Target: generated build types are present and current before first use.
-  [ -f "$worktree_path/frontend/.react-router/types/.stamp" ]
+  [ -f "$worktree_path/apps/web/.react-router/types/.stamp" ]
 }
 
 # ---------------------------------------------------------------------------

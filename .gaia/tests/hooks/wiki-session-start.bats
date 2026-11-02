@@ -22,7 +22,7 @@ setup() {
   REPO_ROOT="${HOOKS_SOURCE_DIRECTORY%/.claude/hooks}"
   HOOK_ABSOLUTE_PATH="$HOOKS_SOURCE_DIRECTORY/wiki-session-start.sh"
   SETTINGS_ABSOLUTE_PATH="${HOOKS_SOURCE_DIRECTORY%/hooks}/settings.json"
-  FRONTEND_SETTINGS_ABSOLUTE_PATH="$REPO_ROOT/frontend/.claude/settings.json"
+  FRONTEND_SETTINGS_ABSOLUTE_PATH="$REPO_ROOT/apps/web/.claude/settings.json"
   REPORT_LINE='[wiki base] fast-forward of main to origin/main refused (divergence); local base is behind. Resolve by hand; the next qualifying session retries.'
   # Selects a SessionStart group that re-runs the hook on clear or compact.
   RESET_MATCHER_REGISTRATION_FILTER='.hooks.SessionStart[] | select((.matcher // "") | test("clear|compact")) | select([.hooks[] | .command // empty] | any(contains("wiki-session-start.sh")))'

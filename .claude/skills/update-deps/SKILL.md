@@ -45,7 +45,7 @@ Decide the run mode in this order. The first matching mode wins.
 
 ## Package layout
 
-The repository is a pnpm workspace with one lockfile at the root. App dependencies (everything the React app imports or builds with) are declared in `frontend/package.json`; harness dependencies (lint-staged, prettier, `typescript` for the harness helpers) and the `gaia.updateDepsHold` map are in the root `package.json`. `overrides:` and `minimumReleaseAge` stay in the root `pnpm-workspace.yaml`. Add or bump an app dependency with `pnpm -C frontend add <pkg>@<spec>`, a harness dependency with `pnpm add -w <pkg>@<spec>` from the root. The quality gate runs the root `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm pw`, and `pnpm build`, which proxy to `frontend`.
+The repository is a pnpm workspace with one lockfile at the root. App dependencies (everything the React app imports or builds with) are declared in `apps/web/package.json`; harness dependencies (lint-staged, prettier, `typescript` for the harness helpers) and the `gaia.updateDepsHold` map are in the root `package.json`. `overrides:` and `minimumReleaseAge` stay in the root `pnpm-workspace.yaml`. Add or bump an app dependency with `pnpm -C apps/web add <pkg>@<spec>`, a harness dependency with `pnpm add -w <pkg>@<spec>` from the root. The quality gate runs the root `pnpm typecheck`, `pnpm lint` and `pnpm test:ci` across every workspace member, and `pnpm pw` and `pnpm build`, which proxy to `apps/web`.
 
 ## Flags and run modes
 
@@ -86,7 +86,7 @@ outdated` did not flag are pulled in with it. **When any member of a group is
 outdated, all members present in a manifest update together**, so a group
 moves as one unit (and snoozes as one unit).
 
-After any change to the installed `msw` version (Wave A or Wave B), run `pnpm -C frontend msw:init` (`pnpm -C frontend exec msw init` when the project has no such script) so the regenerated `frontend/public/mockServiceWorker.js` joins the change; msw 3 has no postinstall that keeps it current.
+After any change to the installed `msw` version (Wave A or Wave B), run `pnpm -C apps/web msw:init` (`pnpm -C apps/web exec msw init` when the project has no such script) so the regenerated `apps/web/public/mockServiceWorker.js` joins the change; msw 3 has no postinstall that keeps it current.
 
 Packages not matched form singleton groups. `typescript` is deliberately one of
 them: a compiler bump and an ambient type-definition bump (`@types/node`) carry
@@ -145,7 +145,7 @@ out of the discovery payload and the statusline count.
 
 ### Vendored skill sync (GAIA maintainer repository, before any exit below)
 
-`frontend/.claude/skills/playwright-cli/` is a verbatim copy of the upstream
+`apps/web/.claude/skills/playwright-cli/` is a verbatim copy of the upstream
 package's skill folder, pinned by `.gaia/vendor/playwright-cli.json`. This phase
 also runs on an otherwise up-to-date run. Compare that marker's `version` with
 the global-tools row's `latest`. When `latest` is unknown or equal, report
@@ -444,7 +444,7 @@ Run this as a **Haiku agent** (`model: "haiku"`). Its dispatch carries every Pha
 
 <!-- gaia:maintainer-only:start -->
 
-In this checkout `run --emit-updates` also lists `.gaia/cli` member entries carrying `"workspace": ".gaia/cli"`. Apply each with `pnpm -C .gaia/cli add <name>@<spec>`, never `pnpm -C frontend add`, then run `pnpm -C .gaia/cli typecheck`, `pnpm -C .gaia/cli lint`, `pnpm -C .gaia/cli exec vitest run` and `pnpm -C .gaia/cli bundle`. A decline or snooze is per package name and covers both workspaces (when the two disagree on `latest`, the higher one is recorded). Shared devDependencies may drift between the two importers; align them by hand when noticed.
+In this checkout `run --emit-updates` also lists `.gaia/cli` member entries carrying `"workspace": ".gaia/cli"`. Apply each with `pnpm -C .gaia/cli add <name>@<spec>`, never `pnpm -C apps/web add`, then run `pnpm -C .gaia/cli typecheck`, `pnpm -C .gaia/cli lint`, `pnpm -C .gaia/cli exec vitest run` and `pnpm -C .gaia/cli bundle`. A decline or snooze is per package name and covers both workspaces (when the two disagree on `latest`, the higher one is recorded). Shared devDependencies may drift between the two importers; align them by hand when noticed.
 
 <!-- gaia:maintainer-only:end -->
 

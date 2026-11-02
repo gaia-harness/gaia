@@ -29,4 +29,4 @@ Each rendered icon produces two `ForwardRef` records in a [[React Perf Diagnosti
 
 ## Version pin
 
-Exact-pinned in `frontend/package.json`; `/update-deps` moves it with the other component-layer packages as one group (see the `update-deps` skill).
+Exact-pinned in `apps/web/package.json`; `/update-deps` moves it with the other component-layer packages as one group (see the `update-deps` skill).

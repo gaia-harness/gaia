@@ -176,7 +176,7 @@ write_flaky_suite() {
   write_flaky_suite
   vhf_commit "a load-sensitive whole-tree suite"
   vhf_branch
-  printf 'page two\n' >frontend/app/page.txt
+  printf 'page two\n' >apps/web/app/page.txt
   vhf_commit "an unrelated branch change"
   run_runner branch
   [ "$status" -eq 0 ]
@@ -286,10 +286,10 @@ write_load_gated_suite() {
 
 @test "push mode shows a failure main already has as pre-existing and lets the push through" {
   fixture --no-branch
-  vhf_control 01-files-present "$(printf '  - Manifest claims paths missing from staging tree:\n  -   frontend/app/gone.ts\nFAIL  01-files-present.sh: 1 manifest path(s) missing from staging')"
+  vhf_control 01-files-present "$(printf '  - Manifest claims paths missing from staging tree:\n  -   apps/web/app/gone.ts\nFAIL  01-files-present.sh: 1 manifest path(s) missing from staging')"
   vhf_commit "main breaks 01"
   vhf_branch
-  printf 'page two\n' >frontend/app/page.txt
+  printf 'page two\n' >apps/web/app/page.txt
   vhf_commit "an unrelated branch change"
   run_runner push "$(vhf_git rev-parse HEAD)"
   [ "$status" -eq 0 ]
@@ -328,7 +328,7 @@ write_load_gated_suite() {
   fixture
   local first_sha second_sha
   first_sha="$(vhf_git rev-parse HEAD)"
-  printf 'page two\n' >frontend/app/page.txt
+  printf 'page two\n' >apps/web/app/page.txt
   vhf_commit "a second commit"
   second_sha="$(vhf_git rev-parse HEAD)"
   run_runner push "$first_sha" "$second_sha" "$second_sha"

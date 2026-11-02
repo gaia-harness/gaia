@@ -12,7 +12,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/kept.ts",
+      "path": "apps/web/app/kept.ts",
       "line": 30,
       "class_prefix": "holistic"
     },
@@ -21,7 +21,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/flaky.ts",
+      "path": "apps/web/app/flaky.ts",
       "line": 40,
       "class_prefix": "holistic"
     },
@@ -30,7 +30,7 @@
       "source": "planted",
       "member": "code-audit-frontend",
       "scorer": "refuter",
-      "path": "frontend/app/stable.ts",
+      "path": "apps/web/app/stable.ts",
       "line": 100,
       "planted_patch": "planted/holistic-false.patch"
     }

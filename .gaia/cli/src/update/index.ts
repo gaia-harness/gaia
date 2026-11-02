@@ -6,12 +6,14 @@
  * `merge-region` oracle for a declared generated region inside an owned file,
  * and the `regen-regions` runner it invokes once masking confirms a declared
  * region's divergence is confined to its markers, to make the adopter's
- * post-merge region correct again. The skill hand-walks the per-file decision
+ * post-merge region correct again. `crossing` hosts the deterministic steps of
+ * the blocking note that moves the app to its new home. The skill hand-walks the per-file decision
  * table itself, so the router carries no generic whole-file merge command.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {lookupOwn} from '../util/argv.js';
+import {run as runCrossing} from './crossing.js';
 import {run as runLockfileCommand} from './lockfile-command.js';
 import {run as runMergeAuditCi} from './merge-audit-ci.js';
 import {run as runMergePackage} from './merge-package.js';
@@ -31,6 +33,8 @@ const HELP_TEXT = `Usage: gaia update <subcommand> [args]
                                               Prints dedupe, install or none for the lockfile.
   merge-region    --baseline <file> --latest <file> --current <file> --start-marker <text> --end-marker <text> [--json]
                                               Region-aware generated-region verdict.
+  crossing        <preflight|move|rekey|roster> [args]
+                                              Deterministic steps of the blocking note that moves the app.
   regen-regions   --manifest <path> --root <dir> [--backup-dir <dir>] [--conflicted <path>]... [--absent-path <path>]... [--skip-region <id>]... [--json]
                                               Regenerates declared generated regions via their shipped command.
 `;
@@ -42,6 +46,7 @@ type SubcommandHandler = (args: readonly string[]) => number | Promise<number>;
 const SUBCOMMAND_HANDLERS: Readonly<
   Partial<Record<string, SubcommandHandler>>
 > = {
+  crossing: runCrossing,
   'lockfile-command': runLockfileCommand,
   'merge-audit-ci': runMergeAuditCi,
   'merge-package': runMergePackage,

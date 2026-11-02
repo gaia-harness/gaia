@@ -227,3 +227,33 @@ status_of() {
   [ -z "$output" ]
   [[ "$stderr" == "debt-path-probe: "*jq* ]]
 }
+
+# ========== moved package root ==========
+
+@test "a key under the legacy root matches its tracked counterpart under the app home" {
+  local legacy_root=frontend
+  mkdir -p "$REPO/apps/web"
+  printf 'x\n' >"$REPO/apps/web/x.ts"
+  git -C "$REPO" add -- apps/web/x.ts
+  write_backlog "$legacy_root/x.ts" "$legacy_root/missing.ts"
+  probe
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -c '[.[].status]')" = '["tracked","gone"]' ]
+  [ "$(printf '%s' "$output" | jq -r '.[0].path')" = "$legacy_root/x.ts" ]
+}
+
+@test "a legacy-root key does not match an untracked counterpart" {
+  local legacy_root=frontend
+  mkdir -p "$REPO/apps/web"
+  printf 'x\n' >"$REPO/apps/web/y.ts"
+  write_backlog "$legacy_root/y.ts"
+  probe
+  [ "$status" -eq 0 ]
+  [ "$(status_of 1)" = "gone" ]
+}
+
+@test "the probe script holds no legacy-root path spelling" {
+  local legacy_root=frontend
+  run grep -c "$legacy_root/" "$SCRIPT"
+  [ "$output" = "0" ]
+}

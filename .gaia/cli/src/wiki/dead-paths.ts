@@ -25,7 +25,7 @@ import {
 export const HELP_TEXT = `Usage: gaia wiki dead-paths [--json]
 
   Scan wiki/**/*.md for backticked repo-relative paths under .claude/, .gaia/,
-  wiki/ and the registered package paths (frontend/) that no longer exist on
+  wiki/ and the registered package paths (apps/web/) that no longer exist on
   disk, plus any reference to
   sibling-monorepo paths (studio/, website/) which reach outside the GAIA
   tarball and never resolve on a single-repo clone. Excludes wiki/log.md
@@ -117,12 +117,12 @@ export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
 /**
  * Machine-local, gitignored files written per machine and never committed,
  * whoever writes them: Claude Code writes the settings file, and the env
- * bootstrap copies `frontend/.env` from its tracked example. A fresh clone or
+ * bootstrap copies `apps/web/.env` from its tracked example. A fresh clone or
  * scaffold lacks them until that step runs, so a citation is not rot.
  */
 const MACHINE_LOCAL_PATHS: ReadonlySet<string> = new Set([
   '.claude/settings.local.json',
-  'frontend/.env',
+  'apps/web/.env',
 ]);
 
 /**

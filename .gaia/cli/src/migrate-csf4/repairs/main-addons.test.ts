@@ -50,7 +50,7 @@ describe('mainAddonSpecifiers', () => {
 
   test("reads GAIA's own main", () => {
     expect(
-      mainAddonSpecifiers(ts, readCheckoutFile('frontend/.storybook/main.ts'))
+      mainAddonSpecifiers(ts, readCheckoutFile('apps/web/.storybook/main.ts'))
     ).toEqual([
       '@storybook/addon-a11y',
       '@storybook/addon-links',

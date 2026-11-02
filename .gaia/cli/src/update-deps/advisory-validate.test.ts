@@ -51,9 +51,9 @@ describe('advisory validators', () => {
   });
 
   test('isManifestPath refuses traversal, absolute paths, and odd characters', () => {
-    expect(isManifestPath('frontend/package.json')).toBe(true);
+    expect(isManifestPath('apps/web/package.json')).toBe(true);
     expect(isManifestPath('../etc/package.json')).toBe(false);
-    expect(isManifestPath('frontend/../package.json')).toBe(false);
+    expect(isManifestPath('apps/web/../package.json')).toBe(false);
     expect(isManifestPath('/package.json')).toBe(false);
     expect(isManifestPath('package.json; rm')).toBe(false);
   });

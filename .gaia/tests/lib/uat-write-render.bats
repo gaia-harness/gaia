@@ -18,8 +18,8 @@ setup() {
   SPEC="$WORK/SPEC.md"
   ROUTING="$WORK/plan/README.md"
   LEDGER="$WORK/plan/uat-render.json"
-  E2E="$WORK/frontend/.playwright/e2e"
-  ROUTE="$WORK/frontend/app/route-tests"
+  E2E="$WORK/apps/web/.playwright/e2e"
+  ROUTE="$WORK/apps/web/app/route-tests"
   STDERR_FILE="$BATS_TEST_TMPDIR/stderr"
   # shellcheck source=.gaia/scripts/spec/uat-lib.sh
   source "$LIB"
@@ -79,8 +79,8 @@ EOF
     '| UAT-002 | e2e | 2 | orders | order-history-lists-orders.spec.ts |'
 }
 
-FILE_A_RELATIVE='frontend/.playwright/e2e/checkout/guest-checkout-confirms-order.spec.ts'
-FILE_B_RELATIVE='frontend/.playwright/e2e/orders/order-history-lists-orders.spec.ts'
+FILE_A_RELATIVE='apps/web/.playwright/e2e/checkout/guest-checkout-confirms-order.spec.ts'
+FILE_B_RELATIVE='apps/web/.playwright/e2e/orders/order-history-lists-orders.spec.ts'
 
 edit_body() {
   sed -i.bak 's/expect(false, outcome.text).toBe(true);/expect(false, `edited: ${outcome.text}`).toBe(true);/' "$1"
@@ -250,15 +250,15 @@ EOF
   render
   [ "$status" -eq 3 ]
   cmp -s "$hand_written" "$BATS_TEST_TMPDIR/hand.saved" || return 1
-  [ -z "$(detail_field 'frontend/.playwright/e2e/cart/cart-hand-written.spec.ts' action)" ] || return 1
+  [ -z "$(detail_field 'apps/web/.playwright/e2e/cart/cart-hand-written.spec.ts' action)" ] || return 1
   [ ! -e "$removed" ] || return 1
-  [ "$(detail_field 'frontend/.playwright/e2e/cart/cart-total-drops.spec.ts' action)" = "deleted" ] || return 1
+  [ "$(detail_field 'apps/web/.playwright/e2e/cart/cart-total-drops.spec.ts' action)" = "deleted" ] || return 1
   cmp -s "$rerouted" "$BATS_TEST_TMPDIR/rerouted.saved" || return 1
-  [ "$(detail_field 'frontend/.playwright/e2e/cart/coupon-discount-appears.spec.ts' action)" = "conflict" ] || return 1
-  [ "$(detail_field 'frontend/.playwright/e2e/cart/coupon-discount-appears.spec.ts' reason)" = "removed-or-rerouted-and-edited" ] || return 1
+  [ "$(detail_field 'apps/web/.playwright/e2e/cart/coupon-discount-appears.spec.ts' action)" = "conflict" ] || return 1
+  [ "$(detail_field 'apps/web/.playwright/e2e/cart/coupon-discount-appears.spec.ts' reason)" = "removed-or-rerouted-and-edited" ] || return 1
 
   ledger_paths=$(jq -r '.rendered[].path' "$LEDGER")
-  [ "$ledger_paths" = "frontend/.playwright/e2e/cart/coupon-discount-appears.spec.ts" ]
+  [ "$ledger_paths" = "apps/web/.playwright/e2e/cart/coupon-discount-appears.spec.ts" ]
 }
 
 @test "a marker-less file at a routed path is a conflict and stays byte-identical" {
@@ -521,7 +521,7 @@ EOF
   [ "$(uat_lib_contract "$file" | cut -f3)" = '"Saved" toast reads "Done"' ] || return 1
   render
   [ "$status" -eq 0 ]
-  [ "$(detail_field 'frontend/.playwright/e2e/drafts/saved-toast-reads-done.spec.ts' action)" = "unchanged" ] || return 1
+  [ "$(detail_field 'apps/web/.playwright/e2e/drafts/saved-toast-reads-done.spec.ts' action)" = "unchanged" ] || return 1
 
   # The reason readers use the whitespace pass only: a second full
   # canonicalization strips the clause's own outer quotes.
@@ -550,7 +550,7 @@ EOF
   [ "$(uat_lib_contract "$file" | cut -f3)" = "'Saved' toast reads 'Done'" ] || return 1
   render
   [ "$status" -eq 0 ]
-  [ "$(detail_field 'frontend/.playwright/e2e/drafts/saved-toast-reads-done.spec.ts' action)" = "unchanged" ]
+  [ "$(detail_field 'apps/web/.playwright/e2e/drafts/saved-toast-reads-done.spec.ts' action)" = "unchanged" ]
 }
 
 @test "no run writes a cache under .gaia/local/cache" {
@@ -589,8 +589,8 @@ EOF
 
 # --- Route-routed UATs ---
 
-ROUTE_FILE_A_RELATIVE='frontend/app/route-tests/checkout/tests/guest-checkout-confirms-order.test.ts'
-ROUTE_FILE_B_RELATIVE='frontend/app/route-tests/orders/tests/order-history-lists-orders.server.test.ts'
+ROUTE_FILE_A_RELATIVE='apps/web/app/route-tests/checkout/tests/guest-checkout-confirms-order.test.ts'
+ROUTE_FILE_B_RELATIVE='apps/web/app/route-tests/orders/tests/order-history-lists-orders.server.test.ts'
 ROUTE_ROW_ONE='| UAT-001 | route | 1 | checkout | guest-checkout-confirms-order.test.ts |'
 ROUTE_ROW_TWO='| UAT-002 | route | 2 | orders | order-history-lists-orders.server.test.ts |'
 
@@ -614,8 +614,8 @@ assert_route_nothing_written() {
   [ "$(contract_line "$file" Then)" = "the confirmation page shows the order number" ] || return 1
   grep -qF -- 'test.fails(' "$file" || return 1
   grep -qF -- "from 'vitest'" "$file" || return 1
-  [ "$(jq -r '.route_tests_directory' <<<"$output")" = "frontend/app/route-tests" ] || return 1
-  [ "$(jq -r '.e2e_directory' <<<"$output")" = "frontend/.playwright/e2e" ] || return 1
+  [ "$(jq -r '.route_tests_directory' <<<"$output")" = "apps/web/app/route-tests" ] || return 1
+  [ "$(jq -r '.e2e_directory' <<<"$output")" = "apps/web/.playwright/e2e" ] || return 1
   [ "$(detail_field "$ROUTE_FILE_A_RELATIVE" action)" = "written" ]
 }
 

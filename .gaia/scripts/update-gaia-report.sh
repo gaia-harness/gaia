@@ -149,9 +149,9 @@ cmd_expect_count() {
 registered_package_dirs() {
   local registry="$TREE/.gaia/packages.json" dirs=''
   if [ -f "$registry" ]; then
-    dirs="$(jq -r '.[].path' "$registry" 2>/dev/null)" || dirs='frontend'
+    dirs="$(jq -r '.[].path' "$registry" 2>/dev/null)" || dirs='apps/web'
   else
-    dirs='frontend'
+    dirs='apps/web'
   fi
   printf '%s\n' "$dirs" \
     | grep -E '^(\.|[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*)$' | grep -v '\.\.' | grep -v '^\.$'
@@ -181,7 +181,7 @@ $(registered_package_dirs)
 EOF
   excluded="${excluded}pnpm-workspace.yaml$NL.gaia/audit-ci.yml$NL"
   if design_system_established; then
-    excluded="${excluded}wiki/concepts/Design System.md${NL}frontend/.claude/rules/design-baseline.md$NL"
+    excluded="${excluded}wiki/concepts/Design System.md${NL}apps/web/.claude/rules/design-baseline.md$NL"
   fi
   while IFS="$TAB" read -r pair_path pair_tag; do
     [ -n "$pair_path" ] && deferred_paths="$deferred_paths$pair_path$NL"

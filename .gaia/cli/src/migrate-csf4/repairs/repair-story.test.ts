@@ -71,7 +71,7 @@ type LoadCsf = (
  */
 const loadStorybookIndexer = async (): Promise<LoadCsf | undefined> => {
   try {
-    const require = createRequire(path.join(repoRoot, 'frontend/package.json'));
+    const require = createRequire(path.join(repoRoot, 'apps/web/package.json'));
     const modulePath = require.resolve('storybook/internal/csf-tools');
     const csfTools = (await import(pathToFileURL(modulePath).href)) as {
       loadCsf: LoadCsf;

@@ -1511,7 +1511,7 @@ describe('update-deps run: frontend package root', () => {
   let root: string;
 
   beforeEach(() => {
-    // Registry-less workspace: the built-in default puts the app in frontend/.
+    // Registry-less workspace: the built-in default puts the app in apps/web/.
     root = mkdtempSync(path.join(tmpdir(), 'gaia-update-deps-workspace-'));
     writeBuiltinDescriptor(root);
     execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
@@ -1520,19 +1520,19 @@ describe('update-deps run: frontend package root', () => {
       JSON.stringify({gaia: {updateDepsHold: {vite: '8.0'}}, name: 'root'}),
       'utf8'
     );
-    mkdirSync(path.join(root, 'frontend', 'node_modules', 'vite'), {
+    mkdirSync(path.join(root, 'apps', 'web', 'node_modules', 'vite'), {
       recursive: true,
     });
     writeFileSync(
-      path.join(root, 'frontend', 'package.json'),
+      path.join(root, 'apps', 'web', 'package.json'),
       JSON.stringify({
         dependencies: {foo: '^1.2.3', vite: '8.0.16'},
-        name: 'frontend',
+        name: 'web',
       }),
       'utf8'
     );
     writeFileSync(
-      path.join(root, 'frontend', 'node_modules', 'vite', 'package.json'),
+      path.join(root, 'apps', 'web', 'node_modules', 'vite', 'package.json'),
       JSON.stringify({name: 'vite', version: '8.0.16'}),
       'utf8'
     );
@@ -1549,9 +1549,9 @@ describe('update-deps run: frontend package root', () => {
 
   test.each([
     ['the repo root', ''],
-    ['inside frontend/', 'frontend'],
+    ['inside apps/web/', 'apps/web'],
   ])(
-    'lists the frontend packages and honors the root hold, from %s',
+    'lists the web packages and honors the root hold, from %s',
     (_label, cwdRelative) => {
       const cwds: string[] = [];
       const runner = makePnpmRunner(
@@ -1576,7 +1576,7 @@ describe('update-deps run: frontend package root', () => {
         '8.0.17'
       );
       // `pnpm outdated` ran in the package and at the workspace root.
-      expect(cwds.some((cwd) => cwd.endsWith('/frontend'))).toBe(true);
+      expect(cwds.some((cwd) => cwd.endsWith('/apps/web'))).toBe(true);
       expect(cwds).toContain(realpathSync(root));
     }
   );
@@ -1616,25 +1616,26 @@ describe('update-deps run: frontend package root', () => {
     expect(result.total_count).toBe(2);
   });
 
-  test('sibling expansion reads the installed version from frontend/node_modules', () => {
+  test('sibling expansion reads the installed version from apps/web/node_modules', () => {
     writeFileSync(
-      path.join(root, 'frontend', 'package.json'),
+      path.join(root, 'apps', 'web', 'package.json'),
       JSON.stringify({
         devDependencies: {'@storybook/react': '^8.0.0', storybook: '^8.0.0'},
-        name: 'frontend',
+        name: 'web',
       }),
       'utf8'
     );
     // Installed at 9.0.0 although the spec floors at ^8.0.0; a read from any
     // other node_modules falls back to the spec floor and reports 8.0.0.
     mkdirSync(
-      path.join(root, 'frontend', 'node_modules', '@storybook', 'react'),
+      path.join(root, 'apps', 'web', 'node_modules', '@storybook', 'react'),
       {recursive: true}
     );
     writeFileSync(
       path.join(
         root,
-        'frontend',
+        'apps',
+        'web',
         'node_modules',
         '@storybook',
         'react',
@@ -1728,9 +1729,9 @@ describe('update-deps run: CLI workspace member', () => {
     writeBuiltinDescriptor(root);
     execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
     writeJson('package.json', {name: 'root'});
-    writeJson('frontend/package.json', {
+    writeJson('apps/web/package.json', {
       dependencies: {foo: '^1.2.3'},
-      name: 'frontend',
+      name: 'web',
     });
   });
 
@@ -1746,7 +1747,7 @@ describe('update-deps run: CLI workspace member', () => {
       now: RELEASE_AGE_NOW,
       pnpmRunner: recordingRunner(
         {
-          [path.join(root, 'frontend')]: {
+          [path.join(root, 'apps', 'web')]: {
             foo: {current: '1.2.3', latest: '1.3.0', wanted: '1.3.0'},
           },
         },
@@ -1768,7 +1769,7 @@ describe('update-deps run: CLI workspace member', () => {
     ]);
     expect(result.wave_b).toEqual([]);
     expect(calls).toEqual([
-      {args: ['outdated', '--json'], cwd: path.join(root, 'frontend')},
+      {args: ['outdated', '--json'], cwd: path.join(root, 'apps', 'web')},
       {args: ['outdated', '--json'], cwd: root},
     ]);
   });
@@ -1844,7 +1845,7 @@ describe('update-deps run: CLI workspace member', () => {
           [path.join(root, '.gaia/cli')]: {
             foo: {current: '1.2.3', latest: '1.4.0', wanted: '1.4.0'},
           },
-          [path.join(root, 'frontend')]: {
+          [path.join(root, 'apps', 'web')]: {
             foo: {current: '1.2.3', latest: '1.3.0', wanted: '1.3.0'},
           },
         },
@@ -1863,9 +1864,9 @@ describe('update-deps run: CLI workspace member', () => {
 
   test('a companion group never mixes the app and the member in one Wave B group', () => {
     writeMemberList(['frontend', '.gaia/cli']);
-    writeJson('frontend/package.json', {
+    writeJson('apps/web/package.json', {
       dependencies: {vite: '^7.0.0'},
-      name: 'frontend',
+      name: 'web',
     });
     writeJson('.gaia/cli/package.json', {
       devDependencies: {vite: '7.0.0'},
@@ -1879,7 +1880,7 @@ describe('update-deps run: CLI workspace member', () => {
           [path.join(root, '.gaia/cli')]: {
             vite: {current: '7.0.0', latest: '8.0.0', wanted: '7.0.0'},
           },
-          [path.join(root, 'frontend')]: {
+          [path.join(root, 'apps', 'web')]: {
             vite: {current: '7.0.0', latest: '8.0.0', wanted: '7.0.0'},
           },
         },

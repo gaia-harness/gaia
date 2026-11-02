@@ -29,14 +29,14 @@ const dirtyStates: [string, (root: string) => void][] = [
   [
     'a staged change',
     (root) => {
-      writeTree(root, {'frontend/notes.txt': 'x'});
-      git(root, 'add', 'frontend/notes.txt');
+      writeTree(root, {'apps/web/notes.txt': 'x'});
+      git(root, 'add', 'apps/web/notes.txt');
     },
   ],
   [
     'an unstaged change',
     (root) => {
-      writeTree(root, {'frontend/package.json': '{"name": "changed"}\n'});
+      writeTree(root, {'apps/web/package.json': '{"name": "changed"}\n'});
     },
   ],
   [
@@ -55,13 +55,13 @@ describe('standalone clean-tree preflight', () => {
 
     dirty(root);
     const before = status(root);
-    const storyBefore = read(root, 'frontend/app/a/a.stories.tsx');
+    const storyBefore = read(root, 'apps/web/app/a/a.stories.tsx');
     const {exit, harness, json} = execute(root);
 
     expect(exit).toBe(3);
     expect(json?.refused?.reason).toBe('dirty-tree');
     expect(status(root)).toBe(before);
-    expect(read(root, 'frontend/app/a/a.stories.tsx')).toBe(storyBefore);
+    expect(read(root, 'apps/web/app/a/a.stories.tsx')).toBe(storyBefore);
     expect(harness.calls).toEqual([]);
   });
 });
@@ -74,13 +74,13 @@ describe('refusals', () => {
     ].forEach((source) => {
       const root = repo({
         ...standardFiles,
-        'frontend/app/c/c.stories.tsx': source,
+        'apps/web/app/c/c.stories.tsx': source,
       });
       const {exit, harness, json} = execute(root);
 
       expect(exit).toBe(3);
       expect(json?.refused).toMatchObject({
-        paths: ['frontend/app/c/c.stories.tsx'],
+        paths: ['apps/web/app/c/c.stories.tsx'],
         reason: 'csf2',
       });
       expect(harness.err.join('')).toContain('csf-2-to-3');
@@ -91,13 +91,13 @@ describe('refusals', () => {
   test('an unknown-format file refuses', () => {
     const root = repo({
       ...standardFiles,
-      'frontend/app/u/u.stories.tsx': 'const x = 1;\n',
+      'apps/web/app/u/u.stories.tsx': 'const x = 1;\n',
     });
     const {exit, json} = execute(root);
 
     expect(exit).toBe(3);
     expect(json?.refused).toMatchObject({
-      paths: ['frontend/app/u/u.stories.tsx'],
+      paths: ['apps/web/app/u/u.stories.tsx'],
       reason: 'unknown-format',
     });
   });
@@ -149,7 +149,7 @@ describe('refusals', () => {
   test('the JSON object has exactly the contract keys, also on a refusal', () => {
     const root = repo({
       ...standardFiles,
-      'frontend/app/u/u.stories.tsx': 'const x = 1;\n',
+      'apps/web/app/u/u.stories.tsx': 'const x = 1;\n',
     });
     const {json} = execute(root);
 
@@ -180,25 +180,25 @@ describe('conversion', () => {
         left.localeCompare(right)
       )
     ).toEqual([
-      'frontend/.storybook/main.ts',
-      'frontend/.storybook/preview.ts',
-      'frontend/app/a/a.stories.tsx',
-      'frontend/app/b/b.stories.tsx',
-      'frontend/package.json',
+      'apps/web/.storybook/main.ts',
+      'apps/web/.storybook/preview.ts',
+      'apps/web/app/a/a.stories.tsx',
+      'apps/web/app/b/b.stories.tsx',
+      'apps/web/package.json',
     ]);
     expect(json?.restore).toBe(
       `git restore --source=HEAD --staged --worktree -- ${json?.converted.join(' ')}`
     );
     expect(json?.unknownAddons).toEqual(['some-addon']);
     expect(json?.files.every((file) => file.loaded && file.passed)).toBe(true);
-    expect(read(root, 'frontend/app/a/a.stories.tsx')).toContain('// repaired');
+    expect(read(root, 'apps/web/app/a/a.stories.tsx')).toContain('// repaired');
     const fix = harness.calls.find((call) => call.args.includes('--fix'));
 
     expect(
       fix?.args.slice(5).toSorted((left, right) => left.localeCompare(right))
     ).toEqual(
       json?.converted
-        .map((file) => file.replace('frontend/', ''))
+        .map((file) => file.replace('apps/web/', ''))
         .toSorted((left, right) => left.localeCompare(right))
     );
   });
@@ -247,15 +247,15 @@ describe('conversion', () => {
 
   test('config edits with no story to convert are written without the codemod or msw migrate', () => {
     const root = repo({
-      'frontend/.storybook/main.ts': PLAIN_MAIN,
-      'frontend/.storybook/preview.ts': CSF4_PREVIEW,
-      'frontend/app/a/a.stories.tsx': CSF4_STORY,
-      'frontend/package.json': '{"imports": {}}\n',
+      'apps/web/.storybook/main.ts': PLAIN_MAIN,
+      'apps/web/.storybook/preview.ts': CSF4_PREVIEW,
+      'apps/web/app/a/a.stories.tsx': CSF4_STORY,
+      'apps/web/package.json': '{"imports": {}}\n',
     });
     const {exit, harness} = execute(root);
 
     expect(exit).toBe(0);
-    expect(read(root, 'frontend/.storybook/main.ts')).toBe(FLAGGED_MAIN);
+    expect(read(root, 'apps/web/.storybook/main.ts')).toBe(FLAGGED_MAIN);
     expect(
       harness.calls.some(
         (call) => call.args[0] === 'dlx' || call.command === 'node'
@@ -268,15 +268,15 @@ describe('conversion', () => {
     const {exit} = execute(root);
 
     expect(exit).toBe(0);
-    expect(read(root, 'frontend/.storybook/main.ts')).toBe(FLAGGED_MAIN);
-    expect(read(root, 'frontend/.storybook/preview.ts')).toBe(
+    expect(read(root, 'apps/web/.storybook/main.ts')).toBe(FLAGGED_MAIN);
+    expect(read(root, 'apps/web/.storybook/preview.ts')).toBe(
       'export default definePreview({});\n'
     );
-    expect(read(root, 'frontend/package.json')).toContain(
+    expect(read(root, 'apps/web/package.json')).toContain(
       '"#.storybook/preview"'
     );
-    expect(read(root, 'frontend/package.json')).not.toContain('codemod');
-    expect(read(root, 'frontend/app/a/a.stories.tsx')).not.toContain(
+    expect(read(root, 'apps/web/package.json')).not.toContain('codemod');
+    expect(read(root, 'apps/web/app/a/a.stories.tsx')).not.toContain(
       'codemod main'
     );
   });
@@ -284,9 +284,9 @@ describe('conversion', () => {
   test('config the repairs leave unchanged stays byte-identical despite tool rewrites', () => {
     const root = repo({
       ...standardFiles,
-      'frontend/.storybook/main.ts': FLAGGED_MAIN,
-      'frontend/.storybook/preview.ts': CSF4_PREVIEW,
-      'frontend/package.json': '{"imports": {}}\n',
+      'apps/web/.storybook/main.ts': FLAGGED_MAIN,
+      'apps/web/.storybook/preview.ts': CSF4_PREVIEW,
+      'apps/web/package.json': '{"imports": {}}\n',
     });
     const {exit, json} = execute(root);
 
@@ -295,10 +295,10 @@ describe('conversion', () => {
       (json?.converted ?? []).toSorted((left, right) =>
         left.localeCompare(right)
       )
-    ).toEqual(['frontend/app/a/a.stories.tsx', 'frontend/app/b/b.stories.tsx']);
-    expect(read(root, 'frontend/.storybook/main.ts')).toBe(FLAGGED_MAIN);
-    expect(read(root, 'frontend/.storybook/preview.ts')).toBe(CSF4_PREVIEW);
-    expect(read(root, 'frontend/package.json')).toBe('{"imports": {}}\n');
+    ).toEqual(['apps/web/app/a/a.stories.tsx', 'apps/web/app/b/b.stories.tsx']);
+    expect(read(root, 'apps/web/.storybook/main.ts')).toBe(FLAGGED_MAIN);
+    expect(read(root, 'apps/web/.storybook/preview.ts')).toBe(CSF4_PREVIEW);
+    expect(read(root, 'apps/web/package.json')).toBe('{"imports": {}}\n');
   });
 
   test('spawn arguments: codemod and msw run in work/, with a pinned cli and exact globs', () => {
@@ -331,7 +331,7 @@ describe('conversion', () => {
   test('a single converted file uses its plain path as the glob', () => {
     const root = repo({
       ...standardFiles,
-      'frontend/app/b/b.stories.tsx': CSF4_STORY,
+      'apps/web/app/b/b.stories.tsx': CSF4_STORY,
     });
     const {harness} = execute(root);
 
@@ -342,10 +342,10 @@ describe('conversion', () => {
 
   test('nothing to convert: no codemod, no copies, no write, verification only', () => {
     const root = repo({
-      'frontend/.storybook/main.ts': FLAGGED_MAIN,
-      'frontend/.storybook/preview.ts': CSF4_PREVIEW,
-      'frontend/app/a/a.stories.tsx': CSF4_STORY,
-      'frontend/package.json': '{"imports": {}}\n',
+      'apps/web/.storybook/main.ts': FLAGGED_MAIN,
+      'apps/web/.storybook/preview.ts': CSF4_PREVIEW,
+      'apps/web/app/a/a.stories.tsx': CSF4_STORY,
+      'apps/web/package.json': '{"imports": {}}\n',
     });
     const {exit, harness, json} = execute(root);
 
@@ -369,18 +369,18 @@ describe('conversion', () => {
 
 const mergedTree = (): string => {
   const root = repo({
-    'frontend/.storybook/main.ts': PLAIN_MAIN,
-    'frontend/.storybook/preview.ts': CSF3_PREVIEW,
-    'frontend/app/adopter/x.stories.tsx': CSF3_STORY,
-    'frontend/app/adopter/y.stories.tsx': CSF3_STORY,
-    'frontend/app/gaia/g.stories.tsx': CSF3_STORY,
+    'apps/web/.storybook/main.ts': PLAIN_MAIN,
+    'apps/web/.storybook/preview.ts': CSF3_PREVIEW,
+    'apps/web/app/adopter/x.stories.tsx': CSF3_STORY,
+    'apps/web/app/adopter/y.stories.tsx': CSF3_STORY,
+    'apps/web/app/gaia/g.stories.tsx': CSF3_STORY,
   });
 
   writeTree(root, {
-    'frontend/.storybook/main.ts': FLAGGED_MAIN,
-    'frontend/.storybook/preview.ts': CSF4_PREVIEW,
-    'frontend/app/gaia/g.stories.tsx': CSF4_STORY,
-    'frontend/package.json': '{"imports": {}}\n',
+    'apps/web/.storybook/main.ts': FLAGGED_MAIN,
+    'apps/web/.storybook/preview.ts': CSF4_PREVIEW,
+    'apps/web/app/gaia/g.stories.tsx': CSF4_STORY,
+    'apps/web/package.json': '{"imports": {}}\n',
   });
 
   return root;
@@ -388,10 +388,10 @@ const mergedTree = (): string => {
 
 describe('update-merge', () => {
   const overlaid = [
-    'frontend/.storybook/main.ts',
-    'frontend/.storybook/preview.ts',
-    'frontend/app/gaia/g.stories.tsx',
-    'frontend/package.json',
+    'apps/web/.storybook/main.ts',
+    'apps/web/.storybook/preview.ts',
+    'apps/web/app/gaia/g.stories.tsx',
+    'apps/web/package.json',
   ];
 
   test('converts only the adopter stories and leaves the merged overlay byte-identical', () => {
@@ -405,12 +405,12 @@ describe('update-merge', () => {
         left.localeCompare(right)
       )
     ).toEqual([
-      'frontend/app/adopter/x.stories.tsx',
-      'frontend/app/adopter/y.stories.tsx',
+      'apps/web/app/adopter/x.stories.tsx',
+      'apps/web/app/adopter/y.stories.tsx',
     ]);
     expect(overlaid.map((file) => read(root, file))).toEqual(snapshot);
     expect(json?.restore).toBe(
-      'git restore --source=HEAD --staged --worktree -- frontend/app/adopter/x.stories.tsx frontend/app/adopter/y.stories.tsx'
+      'git restore --source=HEAD --staged --worktree -- apps/web/app/adopter/x.stories.tsx apps/web/app/adopter/y.stories.tsx'
     );
   });
 
@@ -418,20 +418,20 @@ describe('update-merge', () => {
     const root = mergedTree();
 
     writeTree(root, {
-      'frontend/app/adopter/x.stories.tsx': `${CSF3_STORY}// edited\n`,
+      'apps/web/app/adopter/x.stories.tsx': `${CSF3_STORY}// edited\n`,
     });
     const {exit, json} = execute(root, {updateMerge: true});
 
     expect(exit).toBe(3);
     expect(json?.refused).toMatchObject({
-      paths: ['frontend/app/adopter/x.stories.tsx'],
+      paths: ['apps/web/app/adopter/x.stories.tsx'],
       reason: 'dirty-write-set',
     });
   });
 
   test('an uncommitted file outside the write set that a tool changes is restored to its pre-run bytes', () => {
     const root = mergedTree();
-    const target = path.join(root, 'frontend/app/gaia/g.stories.tsx');
+    const target = path.join(root, 'apps/web/app/gaia/g.stories.tsx');
     const {exit, json} = execute(
       root,
       {updateMerge: true},
@@ -445,9 +445,9 @@ describe('update-merge', () => {
 
     expect(exit).toBe(1);
     expect(json?.unexpectedChanges).toEqual([
-      'frontend/app/gaia/g.stories.tsx',
+      'apps/web/app/gaia/g.stories.tsx',
     ]);
-    expect(read(root, 'frontend/app/gaia/g.stories.tsx')).toBe(CSF4_STORY);
+    expect(read(root, 'apps/web/app/gaia/g.stories.tsx')).toBe(CSF4_STORY);
     expect(json?.restore).not.toContain('gaia/g.stories');
   });
 });

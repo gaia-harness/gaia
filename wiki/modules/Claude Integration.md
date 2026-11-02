@@ -22,7 +22,7 @@ GAIA ships with [Claude Code](https://claude.ai/) support out of the box. Everyt
 - `agents/`: sub-agent definitions
 - `commands/`: slash commands
 - `hooks/`: bash hooks invoked by `settings.json`
-- `frontend/.claude/instructions/`: parameterized runbooks dispatched by commands like `/gaia-init` or by a plain request, kept for reuse
+- `apps/web/.claude/instructions/`: parameterized runbooks dispatched by commands like `/gaia-init` or by a plain request, kept for reuse
 - `rules/`: auto-attached guidance, file-path scoped
 - `skills/`: user-invokable workflows, scaffolders, context-triggered guidance
 
@@ -32,9 +32,9 @@ GAIA workflows are split between slash commands under `.claude/commands/` (`/gai
 
 ## Rules: auto-attached
 
-Rules activate automatically based on file paths; no need to invoke them. Each rule scopes itself to a glob in its frontmatter (root rules in `.claude/rules/`, frontend rules in `frontend/.claude/rules/`). The set covers code conventions ([[Coding Guidelines]], [[State]], [[Routing]], [[i18n]], [[Tailwind]], [[API Service Pattern]], [[Storybook Stories]], [[Playwright]]), workflow ([[Git Workflow]], [[Quality Gate]], [[PR Merge Workflow]], [[Task Orchestration]]), and harness discipline (`shell-cwd.md`).
+Rules activate automatically based on file paths; no need to invoke them. Each rule scopes itself to a glob in its frontmatter (root rules in `.claude/rules/`, frontend rules in `apps/web/.claude/rules/`). The set covers code conventions ([[Coding Guidelines]], [[State]], [[Routing]], [[i18n]], [[Tailwind]], [[API Service Pattern]], [[Storybook Stories]], [[Playwright]]), workflow ([[Git Workflow]], [[Quality Gate]], [[PR Merge Workflow]], [[Task Orchestration]]), and harness discipline (`shell-cwd.md`).
 
-For the current full rule list, list `.claude/rules/` and `frontend/.claude/rules/`.
+For the current full rule list, list `.claude/rules/` and `apps/web/.claude/rules/`.
 
 ## Hooks: wired through `settings.json`
 

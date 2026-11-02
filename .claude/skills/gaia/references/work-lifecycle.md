@@ -309,7 +309,7 @@ Show its output. When its Residue section lists paths, ask once with `AskUserQue
 Refresh the React Doctor skill, which has no version of its own to compare: its CLI always runs at latest, and the installed skill goes stale. The script is safe to rerun and leaves the tree unchanged. From the main checkout, since it reads its paths from the repository root, and a failure here is reported and never stops cleanup:
 
 ```bash
-[ ! -d frontend/.claude/skills/react-doctor ] || bash .gaia/scripts/install-react-doctor.sh
+bash .gaia/scripts/install-react-doctor.sh --refresh
 ```
 
 Then carry the machine-scope setup features `/update-gaia` Step 9c deferred, with the working directory at the main checkout so the call uses the pulled `.gaia/cli/gaia` and setup list:

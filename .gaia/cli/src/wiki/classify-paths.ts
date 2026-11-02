@@ -24,7 +24,8 @@ import {z} from 'zod';
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {summarizeZodError} from '../schemas/zod-error.js';
-import {loadPackages} from '../util/packages.js';
+import {loadPackages, webMembers} from '../util/packages.js';
+import type {LoadedPackage} from '../util/packages.js';
 
 export type ClassifyPaths = {
   /** Paths whose change alters a flow (routing, middleware, sessions, i18n). */
@@ -35,7 +36,7 @@ export type ClassifyPaths = {
    *
    * GAIA's own clone deliberately leaves this at the default while overriding
    * the other two: the default already names the template it ships under
-   * `frontend/app/`. The key exists because the branch is load-bearing for
+   * `apps/web/app/`. The key exists because the branch is load-bearing for
    * the React template it ships, not on the chance someone might want it.
    */
   inventoryPaths: readonly string[];
@@ -49,7 +50,7 @@ export type ClassifyPaths = {
 };
 
 /**
- * The defaults, from the frontend package's descriptor `wiki` block joined with
+ * The defaults, from the web member's descriptor `wiki` block joined with
  * its registry path, so the vocabulary follows wherever the app lives. Throws
  * the `gaia-packages:` message when the registry or descriptor cannot be
  * loaded: classifying against a guessed layout is a silent miss.
@@ -60,22 +61,26 @@ const defaultClassifyPaths = (repoRoot: string): ClassifyPaths => {
   if (!loaded.ok) {
     throw new Error(loaded.message);
   }
-  const frontend = loaded.packages.find((entry) => entry.name === 'frontend');
+  const members = webMembers(loaded.packages);
 
-  if (frontend === undefined) {
+  if (members.length === 0) {
     throw new Error(
-      'gaia-packages: no package named "frontend" is registered. Next step: add it to .gaia/packages.json.'
+      'gaia-packages: no registered package declares "stack": "web". Next step: add "stack": "web" to the app package\'s gaia.package.json, which .gaia/packages.json registers.'
     );
   }
-  const prefixed = (paths: readonly string[]): string[] =>
-    paths.map((entry) =>
-      frontend.path === '.' ? entry : `${frontend.path}/${entry}`
+  const joined = (
+    pick: (member: LoadedPackage) => readonly string[]
+  ): string[] =>
+    members.flatMap((member) =>
+      pick(member).map((entry) =>
+        member.path === '.' ? entry : `${member.path}/${entry}`
+      )
     );
 
   return {
-    flowPaths: prefixed(frontend.descriptor.wiki.flowPaths),
-    inventoryPaths: prefixed(frontend.descriptor.wiki.inventoryPaths),
-    sourcePaths: prefixed(frontend.descriptor.wiki.sourcePaths),
+    flowPaths: joined((member) => member.descriptor.wiki.flowPaths),
+    inventoryPaths: joined((member) => member.descriptor.wiki.inventoryPaths),
+    sourcePaths: joined((member) => member.descriptor.wiki.sourcePaths),
     testPaths: [],
   };
 };

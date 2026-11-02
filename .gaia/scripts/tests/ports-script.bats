@@ -16,10 +16,10 @@ setup() {
   STATE="$BATS_TEST_TMPDIR/state"
   export GAIA_PORTS_STATE_DIRECTORY="$STATE"
   unset GAIA_PORTS_DEV_BASE_PORT GAIA_PORTS_STORYBOOK_BASE_PORT SITE_URL
-  mkdir -p "$BATS_TEST_TMPDIR/main/frontend" "$BATS_TEST_TMPDIR/trees"
+  mkdir -p "$BATS_TEST_TMPDIR/main/apps/web" "$BATS_TEST_TMPDIR/trees"
   git init -q -b main "$BATS_TEST_TMPDIR/main"
   FIXTURE_MAIN="$(cd "$BATS_TEST_TMPDIR/main" && pwd -P)"
-  : >"$FIXTURE_MAIN/frontend/react-router.config.ts"
+  : >"$FIXTURE_MAIN/apps/web/react-router.config.ts"
   fixture_git add -A
   fixture_git commit -q -m base
 }
@@ -45,7 +45,7 @@ provisioned_worktree() {
   other="$(add_worktree other)"
   gaia_ports_assign_slot "$STATE" "$other" >/dev/null
   tree="$(add_worktree two)"
-  printf 'SITE_URL=http://app.test:5173\n' >"$tree/frontend/.env"
+  printf 'SITE_URL=http://app.test:5173\n' >"$tree/apps/web/.env"
   gaia_ports_write_file "$tree" 2
   run bash "$PORTS_SCRIPT" --tree "$tree"
   [ "$status" -eq 0 ]
@@ -72,7 +72,7 @@ provisioned_worktree() {
 }
 
 @test "main checkout with no file: slot 0, base ports, site url from the env file" {
-  printf 'SITE_URL=http://example.test/base\n' >"$FIXTURE_MAIN/frontend/.env"
+  printf 'SITE_URL=http://example.test/base\n' >"$FIXTURE_MAIN/apps/web/.env"
   run bash "$PORTS_SCRIPT" --tree "$FIXTURE_MAIN"
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf 'slot=0\ndev=5173\nstorybook=6006\nsite_url=http://example.test:5173/base')" ]
@@ -81,7 +81,7 @@ provisioned_worktree() {
 @test "non-linked clone with no file: slot 0 and the base ports" {
   clone="$BATS_TEST_TMPDIR/clone"
   git clone -q "$FIXTURE_MAIN" "$clone"
-  printf 'SITE_URL=https://clone.test:3000\n' >"$clone/frontend/.env"
+  printf 'SITE_URL=https://clone.test:3000\n' >"$clone/apps/web/.env"
   run bash "$PORTS_SCRIPT" --tree "$clone"
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf 'slot=0\ndev=5173\nstorybook=6006\nsite_url=https://clone.test:5173')" ]
@@ -94,7 +94,7 @@ provisioned_worktree() {
 
 @test "an exported SITE_URL wins on main and in a worktree with a port file" {
   export SITE_URL="https://exported.test:9999"
-  printf 'SITE_URL=http://example.test:5173\n' >"$FIXTURE_MAIN/frontend/.env"
+  printf 'SITE_URL=http://example.test:5173\n' >"$FIXTURE_MAIN/apps/web/.env"
   run bash "$PORTS_SCRIPT" --tree "$FIXTURE_MAIN" --field site-url
   [ "$output" = "https://exported.test:9999" ]
   tree="$(provisioned_worktree one 1)"
@@ -110,7 +110,7 @@ provisioned_worktree() {
   bash "$PORTS_SCRIPT" --tree "$tree" >"$BATS_TEST_TMPDIR/stdout" 2>"$BATS_TEST_TMPDIR/stderr" || code=$?
   [ "$code" -eq 3 ]
   [ ! -s "$BATS_TEST_TMPDIR/stdout" ]
-  expected="GAIA: $tree is a linked worktree with no port file at $tree/frontend/.gaia-ports, so it has no ports of its own and will not borrow the main checkout's. Run: bash .claude/hooks/provision-worktree.sh $tree Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports."
+  expected="GAIA: $tree is a linked worktree with no port file at $tree/apps/web/.gaia-ports, so it has no ports of its own and will not borrow the main checkout's. Run: bash .claude/hooks/provision-worktree.sh $tree Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports."
   [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = "$expected" ]
 }
 
@@ -125,12 +125,12 @@ provisioned_worktree() {
 
 @test "malformed port file: exit 4 naming the file and the provisioning command" {
   tree="$(provisioned_worktree one 1)"
-  printf 'GAIA_PORT_SLOT=1\nDEV_PORT=nope\n' >"$tree/frontend/.gaia-ports"
+  printf 'GAIA_PORT_SLOT=1\nDEV_PORT=nope\n' >"$tree/apps/web/.gaia-ports"
   code=0
   bash "$PORTS_SCRIPT" --tree "$tree" >"$BATS_TEST_TMPDIR/stdout" 2>"$BATS_TEST_TMPDIR/stderr" || code=$?
   [ "$code" -eq 4 ]
   [ ! -s "$BATS_TEST_TMPDIR/stdout" ]
-  grep -qF -- "$tree/frontend/.gaia-ports" "$BATS_TEST_TMPDIR/stderr"
+  grep -qF -- "$tree/apps/web/.gaia-ports" "$BATS_TEST_TMPDIR/stderr"
   grep -qF -- "bash .claude/hooks/provision-worktree.sh $tree" "$BATS_TEST_TMPDIR/stderr"
 }
 
@@ -147,7 +147,7 @@ provisioned_worktree() {
 
 @test "a tree with no router config exits 5 naming the missing config, with and without jq" {
   bare="$BATS_TEST_TMPDIR/bare-tree"
-  mkdir -p "$bare/frontend"
+  mkdir -p "$bare/apps/web"
   git init -q -b main "$bare"
   run bash "$PORTS_SCRIPT" --tree "$bare"
   [ "$status" -eq 5 ]

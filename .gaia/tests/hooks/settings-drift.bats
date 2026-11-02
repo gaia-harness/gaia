@@ -16,7 +16,7 @@
 setup() {
   REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   ROOT_SETTINGS="$REPO_ROOT/.claude/settings.json"
-  GENERATED="$REPO_ROOT/frontend/.claude/settings.json"
+  GENERATED="$REPO_ROOT/apps/web/.claude/settings.json"
   # shellcheck source=helpers/package-fixture.sh
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   TREE=""
@@ -39,15 +39,23 @@ build_tree() {
   git -C "$TREE" config user.name "Test"
   git -C "$TREE" config commit.gpgsign false
   mkdir -p "$TREE/.claude/hooks/lib" "$TREE/.gaia/scripts" "$TREE/.gaia/cli" \
-    "$TREE/frontend/.claude" "$TREE/stub-bin"
+    "$TREE/apps/web/.claude" "$TREE/stub-bin"
   cp "$ROOT_SETTINGS" "$TREE/.claude/settings.json"
   cp "$REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" "$TREE/.claude/hooks/lib/"
   cp "$REPO_ROOT/.gaia/scripts/check-settings-drift.sh" "$TREE/.gaia/scripts/"
   cp "$REPO_ROOT/.gaia/scripts/precommit-packages.sh" "$TREE/.gaia/scripts/"
-  cp "$REPO_ROOT/.gaia/cli/gaia" "$TREE/.gaia/cli/gaia"
-  cp "$REPO_ROOT/frontend/.claude/settings.json" "$TREE/frontend/.claude/"
-  cp "$REPO_ROOT/frontend/.claude/settings.overlay.json" "$TREE/frontend/.claude/"
+  # The CLI runs from source, so a change not yet rebuilt into the committed
+  # bundle is what the suite exercises.
+  # pnpm is named by absolute path because the hook cases put a stub pnpm first
+  # on PATH.
+  printf '#!/bin/sh\nexec "%s" -C "%s/.gaia/cli" exec tsx src/index.ts "$@"\n' "$(command -v pnpm)" "$REPO_ROOT" >"$TREE/.gaia/cli/gaia"
+  cp "$REPO_ROOT/apps/web/.claude/settings.json" "$TREE/apps/web/.claude/"
+  cp "$REPO_ROOT/apps/web/.claude/settings.overlay.json" "$TREE/apps/web/.claude/"
   write_packages_moved "$TREE"
+  # The shared fixture descriptor carries no stack, and full generated settings
+  # apply to a web-stack member.
+  jq '.stack = "web"' "$TREE/apps/web/gaia.package.json" >"$TREE/apps/web/gaia.package.json.next"
+  mv "$TREE/apps/web/gaia.package.json.next" "$TREE/apps/web/gaia.package.json"
   printf '#!/bin/sh\nexit 0\n' >"$TREE/stub-bin/pnpm"
   chmod +x "$TREE/stub-bin/pnpm" "$TREE/.gaia/cli/gaia"
   git -C "$TREE" add -A
@@ -69,53 +77,54 @@ regenerate() {
 
 # --- the committed shape ---
 
-@test "root settings carry frontend/ forms of the app-path Edit allows" {
-  jq -e '.permissions.allow | index("Edit(frontend/app/**)") != null' "$ROOT_SETTINGS"
+@test "root settings carry apps/web/ forms of the app-path Edit allows" {
+  jq -e '.permissions.allow | index("Edit(apps/web/app/**)") != null' "$ROOT_SETTINGS"
   local retired
   for retired in 'Edit(app/**)' 'Edit(test/**)' 'Edit(public/**)' 'Edit(.playwright/**)' 'Edit(.storybook/**)'; do
     jq -e --arg r "$retired" '.permissions.allow | index($r) == null' "$ROOT_SETTINGS"
   done
   local unit
   for unit in agents instructions rules skills; do
-    jq -e --arg r "Edit(frontend/.claude/$unit/**)" '.permissions.allow | index($r) != null' "$ROOT_SETTINGS"
+    jq -e --arg r "Edit(apps/web/.claude/$unit/**)" '.permissions.allow | index($r) != null' "$ROOT_SETTINGS"
   done
 }
 
-@test "root settings deny editing the frontend env file and the generated settings, with no .env.* glob" {
+@test "root settings deny editing every env file and the generated settings, with no .env.* glob" {
   local rule
-  for rule in 'Edit(frontend/.env)' 'Edit(frontend/.claude/settings.json)'; do
+  for rule in 'Edit(**/.env)' 'Edit(.env)' 'Edit(apps/web/.claude/settings.json)'; do
     jq -e --arg r "$rule" '.permissions.deny | index($r) != null' "$ROOT_SETTINGS"
   done
   # A .env.* deny also blocks the tracked, editable .env.example; block-secrets-write.sh covers it.
-  jq -e '.permissions.deny | index("Edit(frontend/.env.*)") == null' "$ROOT_SETTINGS"
+  jq -e '.permissions.deny | index("Edit(**/.env.*)") == null' "$ROOT_SETTINGS"
 }
 
 @test "root settings allow the explicit pnpm -C forms and never the blanket ones" {
   local rule
-  for rule in 'Bash(pnpm -C frontend typecheck:*)' 'Bash(pnpm -C frontend lint)' \
-    'Bash(pnpm -C frontend exec playwright test:*)' 'Bash(pnpm -C .gaia/cli bundle)'; do
+  for rule in 'Bash(pnpm -C apps/web typecheck:*)' 'Bash(pnpm -C apps/web lint)' \
+    'Bash(pnpm -C apps/web exec playwright test:*)' 'Bash(pnpm -C .gaia/cli bundle)'; do
     jq -e --arg r "$rule" '.permissions.allow | index($r) != null' "$ROOT_SETTINGS"
   done
-  for rule in 'Bash(pnpm -C frontend:*)' 'Bash(pnpm -C frontend exec:*)' 'Bash(pnpm -C .gaia/cli:*)'; do
+  for rule in 'Bash(pnpm -C apps/web:*)' 'Bash(pnpm -C apps/web exec:*)' 'Bash(pnpm -C .gaia/cli:*)'; do
     jq -e --arg r "$rule" '.permissions.allow | index($r) == null' "$ROOT_SETTINGS"
   done
 }
 
-@test "the generated file re-anchors the root denies to the frontend launch dir" {
+@test "the generated file re-anchors the root denies to the web launch dir" {
   local pair root_form anchored
-  for pair in 'Edit(.env)|Edit(../.env)' \
-    'Edit(frontend/.env)|Edit(../frontend/.env)' \
-    'Edit(.gaia/local/audit/*.ok)|Edit(../.gaia/local/audit/*.ok)' \
-    'Edit(pnpm-lock.yaml)|Edit(../pnpm-lock.yaml)'; do
+  for pair in 'Edit(.env)|Edit(../../.env)' \
+    'Edit(apps/web/.claude/settings.json)|Edit(../../apps/web/.claude/settings.json)' \
+    'Edit(.gaia/local/audit/*.ok)|Edit(../../.gaia/local/audit/*.ok)' \
+    'Edit(pnpm-lock.yaml)|Edit(../../pnpm-lock.yaml)'; do
     root_form="${pair%%|*}"
     anchored="${pair#*|}"
     jq -e --arg r "$root_form" '.permissions.deny | index($r) != null' "$ROOT_SETTINGS"
     jq -e --arg r "$anchored" '.permissions.deny | index($r) != null' "$GENERATED"
     jq -e --arg r "$root_form" '.permissions.deny | index($r) == null' "$GENERATED"
   done
-  jq -e '.sandbox.filesystem.denyRead | index("../.env") != null' "$GENERATED"
+  jq -e '.permissions.deny | index("Edit(**/.env)") != null' "$GENERATED"
+  jq -e '.sandbox.filesystem.denyRead | index("../../.env") != null' "$GENERATED"
   jq -e '.sandbox.filesystem.denyRead | index("**/.env") != null' "$GENERATED"
-  jq -e '.permissions.additionalDirectories == [".."]' "$GENERATED"
+  jq -e '.permissions.additionalDirectories == ["../.."]' "$GENERATED"
 }
 
 @test "the generated file copies hooks and statusLine byte for byte" {
@@ -138,13 +147,13 @@ regenerate() {
   mv "$TREE/changed.json" "$TREE/.claude/settings.json"
   run_drift
   [ "$status" -eq 1 ]
-  grep -qF -- "frontend/.claude/settings.json" <<<"$output"
+  grep -qF -- "apps/web/.claude/settings.json" <<<"$output"
   git -C "$TREE" add .claude/settings.json
   run_hook
   [ "$status" -ne 0 ]
   grep -qF -- "packages sync-settings" <<<"$output"
   regenerate
-  git -C "$TREE" add frontend/.claude/settings.json
+  git -C "$TREE" add apps/web/.claude/settings.json
   run_drift
   [ "$status" -eq 0 ]
   run_hook
@@ -153,17 +162,17 @@ regenerate() {
 
 @test "mutating only the overlay is drift" {
   build_tree
-  printf '{"permissions":{"allow":["Edit(extra/**)"]}}\n' >"$TREE/frontend/.claude/settings.overlay.json"
+  printf '{"permissions":{"allow":["Edit(extra/**)"]}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
   run_drift
   [ "$status" -eq 1 ]
-  grep -qF -- "frontend/.claude/settings.json" <<<"$output"
-  git -C "$TREE" add frontend/.claude/settings.overlay.json
+  grep -qF -- "apps/web/.claude/settings.json" <<<"$output"
+  git -C "$TREE" add apps/web/.claude/settings.overlay.json
   run_hook
   [ "$status" -ne 0 ]
   regenerate
   run_drift
   [ "$status" -eq 0 ]
-  jq -e '.permissions.allow | index("Edit(extra/**)") != null' "$TREE/frontend/.claude/settings.json"
+  jq -e '.permissions.allow | index("Edit(extra/**)") != null' "$TREE/apps/web/.claude/settings.json"
 }
 
 @test "the presence assertion fails on a dropped deny even when the generator reports clean" {
@@ -171,23 +180,23 @@ regenerate() {
   # A generator that always agrees with itself: only the independent jq
   # assertion is left to notice the missing entry.
   printf '#!/bin/sh\nexit 0\n' >"$TREE/.gaia/cli/gaia"
-  jq '.permissions.deny |= map(select(. != "Edit(../.env)"))' "$TREE/frontend/.claude/settings.json" >"$TREE/changed.json"
-  mv "$TREE/changed.json" "$TREE/frontend/.claude/settings.json"
+  jq '.permissions.deny |= map(select(. != "Edit(../../.env)"))' "$TREE/apps/web/.claude/settings.json" >"$TREE/changed.json"
+  mv "$TREE/changed.json" "$TREE/apps/web/.claude/settings.json"
   run_drift
   [ "$status" -eq 1 ]
-  grep -qF -- "frontend/.claude/settings.json is missing" <<<"$output"
-  grep -qF -- "Edit(../.env)" <<<"$output"
+  grep -qF -- "apps/web/.claude/settings.json is missing" <<<"$output"
+  grep -qF -- "Edit(../../.env)" <<<"$output"
 }
 
 @test "the presence assertion fails on a dropped hook command and a dropped additionalDirectories" {
   build_tree
   printf '#!/bin/sh\nexit 0\n' >"$TREE/.gaia/cli/gaia"
-  jq 'del(.hooks.PreToolUse[0].hooks[0]) | del(.permissions.additionalDirectories)' "$TREE/frontend/.claude/settings.json" >"$TREE/changed.json"
-  mv "$TREE/changed.json" "$TREE/frontend/.claude/settings.json"
+  jq 'del(.hooks.PreToolUse[0].hooks[0]) | del(.permissions.additionalDirectories)' "$TREE/apps/web/.claude/settings.json" >"$TREE/changed.json"
+  mv "$TREE/changed.json" "$TREE/apps/web/.claude/settings.json"
   run_drift
   [ "$status" -eq 1 ]
   grep -qF -- "PreToolUse hook command" <<<"$output"
-  grep -qF -- 'additionalDirectories entry ".."' <<<"$output"
+  grep -qF -- 'additionalDirectories entry "../.."' <<<"$output"
 }
 
 # set_handler_if <settings file> <hook index> <if rule>: set one PreToolUse handler's if.
@@ -202,7 +211,7 @@ set_handler_if() {
   set_handler_if "$TREE/.claude/settings.json" 0 'Bash(git *)'
   run_drift
   [ "$status" -eq 1 ]
-  grep -qF -- "frontend/.claude/settings.json is missing" <<<"$output"
+  grep -qF -- "apps/web/.claude/settings.json is missing" <<<"$output"
   grep -qF -- "$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")" <<<"$output"
   grep -qF -- '"Bash(git *)"' <<<"$output"
 }
@@ -211,10 +220,10 @@ set_handler_if() {
   build_tree
   printf '#!/bin/sh\nexit 0\n' >"$TREE/.gaia/cli/gaia"
   set_handler_if "$TREE/.claude/settings.json" 0 'Bash(git *)'
-  set_handler_if "$TREE/frontend/.claude/settings.json" 0 'Bash(gh *)'
+  set_handler_if "$TREE/apps/web/.claude/settings.json" 0 'Bash(gh *)'
   run_drift
   [ "$status" -eq 1 ]
-  grep -qF -- "frontend/.claude/settings.json is missing" <<<"$output"
+  grep -qF -- "apps/web/.claude/settings.json is missing" <<<"$output"
   grep -qF -- "$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")" <<<"$output"
   grep -qF -- '"Bash(git *)"' <<<"$output"
 }
@@ -225,13 +234,13 @@ set_handler_if() {
   # The generated file carries the handler with the first rule only; the root
   # also carries a copy of it with a second rule.
   set_handler_if "$TREE/.claude/settings.json" 0 'Bash(git *)'
-  set_handler_if "$TREE/frontend/.claude/settings.json" 0 'Bash(git *)'
+  set_handler_if "$TREE/apps/web/.claude/settings.json" 0 'Bash(git *)'
   jq '.hooks.PreToolUse[0].hooks += [.hooks.PreToolUse[0].hooks[0] | .["if"] = "Bash(gh pr merge *)"]' \
     "$TREE/.claude/settings.json" >"$TREE/changed.json"
   mv "$TREE/changed.json" "$TREE/.claude/settings.json"
   run_drift
   [ "$status" -eq 1 ]
-  grep -qF -- "frontend/.claude/settings.json is missing" <<<"$output"
+  grep -qF -- "apps/web/.claude/settings.json is missing" <<<"$output"
   grep -qF -- "$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")" <<<"$output"
   grep -qF -- '"Bash(gh pr merge *)"' <<<"$output"
   grep -qF -- '"Bash(git *)"' <<<"$output" && return 1
@@ -242,7 +251,7 @@ set_handler_if() {
   build_tree
   printf '#!/bin/sh\nexit 0\n' >"$TREE/.gaia/cli/gaia"
   set_handler_if "$TREE/.claude/settings.json" 0 'Bash(git *)'
-  set_handler_if "$TREE/frontend/.claude/settings.json" 0 'Bash(git *)'
+  set_handler_if "$TREE/apps/web/.claude/settings.json" 0 'Bash(git *)'
   run_drift
   [ "$status" -eq 0 ]
   grep -qF -- "check-settings-drift: clean" <<<"$output"
@@ -276,10 +285,10 @@ deny_guards_with_if() {
 
 @test "a missing generated file fails the drift check" {
   build_tree
-  rm "$TREE/frontend/.claude/settings.json"
+  rm "$TREE/apps/web/.claude/settings.json"
   run_drift
   [ "$status" -eq 1 ]
-  grep -qF -- "frontend/.claude/settings.json" <<<"$output"
+  grep -qF -- "apps/web/.claude/settings.json" <<<"$output"
 }
 
 @test "the drift check refuses to run without the CLI bundle" {
@@ -302,38 +311,38 @@ deny_guards_with_if() {
 
 assert_generation_refused() {
   local before after
-  before=$(cksum <"$TREE/frontend/.claude/settings.json")
+  before=$(cksum <"$TREE/apps/web/.claude/settings.json")
   run "$TREE/.gaia/cli/gaia" packages sync-settings --repo-root "$TREE"
   [ "$status" -eq 2 ]
   grep -qF -- "settings_generation_failed" <<<"$output"
-  after=$(cksum <"$TREE/frontend/.claude/settings.json")
+  after=$(cksum <"$TREE/apps/web/.claude/settings.json")
   [ "$before" = "$after" ]
 }
 
 @test "an overlay with a hooks key fails generation and writes nothing" {
   build_tree
-  printf '{"hooks":{}}\n' >"$TREE/frontend/.claude/settings.overlay.json"
+  printf '{"hooks":{}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
   assert_generation_refused
   grep -qF -- 'overlay key \"hooks\"' <<<"$output"
 }
 
 @test "an overlay with a sandbox key fails generation and writes nothing" {
   build_tree
-  printf '{"sandbox":{}}\n' >"$TREE/frontend/.claude/settings.overlay.json"
+  printf '{"sandbox":{}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
   assert_generation_refused
   grep -qF -- 'overlay key \"sandbox\"' <<<"$output"
 }
 
 @test "an overlay allow entry equal to a root deny entry is a removal attempt" {
   build_tree
-  printf '{"permissions":{"allow":["Edit(pnpm-lock.yaml)"]}}\n' >"$TREE/frontend/.claude/settings.overlay.json"
+  printf '{"permissions":{"allow":["Edit(pnpm-lock.yaml)"]}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
   assert_generation_refused
   grep -qF -- "re-open what the root denies" <<<"$output"
 }
 
 @test "an overlay rule path with a command substitution fails the charset check" {
   build_tree
-  printf '{"permissions":{"allow":["Edit(a$(x))"]}}\n' >"$TREE/frontend/.claude/settings.overlay.json"
+  printf '{"permissions":{"allow":["Edit(a$(x))"]}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
   assert_generation_refused
   grep -qF -- "characters outside" <<<"$output"
 }
@@ -341,7 +350,7 @@ assert_generation_refused() {
 @test "a hostile registry package path fails generation" {
   build_tree
   local hostile
-  for hostile in 'front end' 'frontend/../x'; do
+  for hostile in 'front end' 'apps/web/../x'; do
     printf '[{"name":"frontend","path":"%s"}]\n' "$hostile" >"$TREE/.gaia/packages.json"
     run "$TREE/.gaia/cli/gaia" packages sync-settings --repo-root "$TREE"
     [ "$status" -eq 2 ]
@@ -360,16 +369,16 @@ assert_generation_refused() {
     git -C "$TREE" add "$directory/new.ts"
     run_hook
     [ "$status" -ne 0 ]
-    grep -qF -- "$directory/new.ts -> frontend/$directory/new.ts" <<<"$output"
+    grep -qF -- "$directory/new.ts -> apps/web/$directory/new.ts" <<<"$output"
     git -C "$TREE" rm --cached --quiet "$directory/new.ts"
   done
 }
 
-@test "a new frontend/app file is not refused by the retired-path block" {
+@test "a new apps/web/app file is not refused by the retired-path block" {
   build_tree
-  mkdir -p "$TREE/frontend/app"
-  printf 'x\n' >"$TREE/frontend/app/x.tsx"
-  git -C "$TREE" add frontend/app/x.tsx
+  mkdir -p "$TREE/apps/web/app"
+  printf 'x\n' >"$TREE/apps/web/app/x.tsx"
+  git -C "$TREE" add apps/web/app/x.tsx
   run_hook
   [ "$status" -eq 0 ]
   grep -qF -- "running lint-staged" <<<"$output"
@@ -378,7 +387,7 @@ assert_generation_refused() {
 @test "the retired-path block stands down while a package is registered at the root" {
   build_tree
   write_packages_today "$TREE"
-  rm -rf "$TREE/frontend/gaia.package.json"
+  rm -rf "$TREE/apps/web/gaia.package.json"
   mkdir -p "$TREE/app"
   printf 'x\n' >"$TREE/app/x.tsx"
   git -C "$TREE" add app/x.tsx
@@ -388,12 +397,12 @@ assert_generation_refused() {
 
 @test "a C13-exempt rename staged alone is not refused" {
   build_tree
-  mkdir -p "$TREE/frontend/app"
+  mkdir -p "$TREE/apps/web/app"
   mkdir -p "$TREE/app"
   printf 'content that is long enough to keep rename detection exact\n' >"$TREE/app/y.ts"
   git -C "$TREE" add app/y.ts
   git -C "$TREE" commit --quiet -m "legacy file"
-  git -C "$TREE" mv app/y.ts frontend/app/y.ts
+  git -C "$TREE" mv app/y.ts apps/web/app/y.ts
   run_hook
   [ "$status" -eq 0 ]
   grep -qF -- "migration renames staged" <<<"$output"

@@ -17,19 +17,19 @@
 bats_require_minimum_version 1.5.0
 
 EMERGENT_GLOBS='["app/components/**/*.test.tsx",".playwright/**/*.spec.ts","app/**/*.stories.tsx"]'
-SIBLING='frontend/.playwright/e2e/sibling.spec.ts'
-SUBJECTS='frontend/.playwright/e2e/subjects.spec.ts'
-DROPPABLE='frontend/.playwright/e2e/droppable.spec.ts'
-RENDERED='frontend/.playwright/e2e/rendered.spec.ts'
-LEGACY='frontend/.playwright/e2e/legacy.spec.ts'
-LEGACY_EDITED='frontend/.playwright/e2e/legacy-edited.spec.ts'
-ROUTE_SIBLING='frontend/app/route-tests/records.test.ts'
-UNIT_SIBLING='frontend/app/utils/format.test.ts'
-SERVER_SIBLING='frontend/test/x.server.test.ts'
-PLAIN_UNIT_SIBLING='frontend/test/x.test.ts'
-OFF_LAYER='frontend/lib/other.test.ts'
-REFUSE_UNIT='frontend/app/utils/refuse.test.ts'
-SESSION_UNIT='frontend/app/sessions.server/plain.test.ts'
+SIBLING='apps/web/.playwright/e2e/sibling.spec.ts'
+SUBJECTS='apps/web/.playwright/e2e/subjects.spec.ts'
+DROPPABLE='apps/web/.playwright/e2e/droppable.spec.ts'
+RENDERED='apps/web/.playwright/e2e/rendered.spec.ts'
+LEGACY='apps/web/.playwright/e2e/legacy.spec.ts'
+LEGACY_EDITED='apps/web/.playwright/e2e/legacy-edited.spec.ts'
+ROUTE_SIBLING='apps/web/app/route-tests/records.test.ts'
+UNIT_SIBLING='apps/web/app/utils/format.test.ts'
+SERVER_SIBLING='apps/web/test/x.server.test.ts'
+PLAIN_UNIT_SIBLING='apps/web/test/x.test.ts'
+OFF_LAYER='apps/web/lib/other.test.ts'
+REFUSE_UNIT='apps/web/app/utils/refuse.test.ts'
+SESSION_UNIT='apps/web/app/sessions.server/plain.test.ts'
 
 setup() {
   HOME_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -46,7 +46,7 @@ setup() {
   git -C "$REPO" init -q -b main
   write_builtin_descriptor "$REPO" '' '' "$EMERGENT_GLOBS"
   install_harness
-  mkdir -p "$REPO/frontend/.playwright/e2e"
+  mkdir -p "$REPO/apps/web/.playwright/e2e"
   printf '# readme\n' >"$REPO/README.md"
   legacy_source 'legacy stays put' >"$REPO/$LEGACY"
   legacy_source 'blocks legacy access' >"$REPO/$LEGACY_EDITED"
@@ -414,17 +414,17 @@ branch_with() {
 }
 
 @test "route runs for a changed spec alone and for a spec plus a unit test" {
-  branch_with frontend/.playwright/e2e/only.spec.ts
+  branch_with apps/web/.playwright/e2e/only.spec.ts
   run bash "$CHECK" route --root "$REPO"
   [ "$status" -eq 0 ]
   [ "$output" = run ]
-  branch_with frontend/.playwright/e2e/only.spec.ts frontend/app/utils/only.test.ts
+  branch_with apps/web/.playwright/e2e/only.spec.ts apps/web/app/utils/only.test.ts
   run bash "$CHECK" route --root "$REPO"
   [ "$output" = run ]
 }
 
 @test "route skips when only unit tests changed" {
-  branch_with frontend/app/utils/only.test.ts
+  branch_with apps/web/app/utils/only.test.ts
   run bash "$CHECK" route --root "$REPO"
   [ "$status" -eq 0 ]
   [ "$output" = skip-no-playwright-change ]
@@ -446,18 +446,18 @@ branch_with() {
   jq -e --arg f "$UNIT_SIBLING" 'any(.[]; .file == $f and .layer == "unit")' <<<"$output" >/dev/null
   jq -e --arg f "$PLAIN_UNIT_SIBLING" 'any(.[]; .file == $f and .layer == "unit")' <<<"$output" >/dev/null
   jq -e --arg f "$OFF_LAYER" 'any(.[]; .file == $f) | not' <<<"$output" >/dev/null
-  jq -e 'any(.[]; .file == "frontend/gaia.package.json") | not' <<<"$output" >/dev/null
+  jq -e 'any(.[]; .file == "apps/web/gaia.package.json") | not' <<<"$output" >/dev/null
 }
 
 @test "a changed test at a non-ASCII path is listed by changed and makes route run" {
-  branch_with 'frontend/.playwright/e2e/café.spec.ts' 'frontend/app/utils/naïve.test.ts'
+  branch_with 'apps/web/.playwright/e2e/café.spec.ts' 'apps/web/app/utils/naïve.test.ts'
   run bash "$CHECK" route --root "$REPO"
   [ "$status" -eq 0 ]
   [ "$output" = run ]
   run bash "$CHECK" changed --root "$REPO"
   [ "$status" -eq 0 ]
-  jq -e 'any(.[]; .file == "frontend/.playwright/e2e/café.spec.ts" and .layer == "e2e")' <<<"$output" >/dev/null
-  jq -e 'any(.[]; .file == "frontend/app/utils/naïve.test.ts" and .layer == "unit")' <<<"$output" >/dev/null
+  jq -e 'any(.[]; .file == "apps/web/.playwright/e2e/café.spec.ts" and .layer == "e2e")' <<<"$output" >/dev/null
+  jq -e 'any(.[]; .file == "apps/web/app/utils/naïve.test.ts" and .layer == "unit")' <<<"$output" >/dev/null
 }
 
 @test "changed prints an empty array and route skips when nothing changed since the base" {
@@ -468,6 +468,53 @@ branch_with() {
   run bash "$CHECK" route --root "$REPO"
   [ "$status" -eq 0 ]
   [ "$output" = skip-no-playwright-change ]
+}
+
+# register_members <name:path>...: replaces the registry with these members,
+# each with the web-stack descriptor renamed to the member.
+register_members() {
+  local entry name path entries=''
+  for entry in "$@"; do
+    name="${entry%%:*}"
+    path="${entry#*:}"
+    entries="${entries:+$entries,}{\"name\":\"$name\",\"path\":\"$path\"}"
+    write_package_descriptor "$REPO" "$path"
+    jq --arg name "$name" '.name = $name' "$REPO/$path/gaia.package.json" >"$REPO/$path/gaia.package.json.tmp"
+    mv "$REPO/$path/gaia.package.json.tmp" "$REPO/$path/gaia.package.json"
+  done
+  write_package_registry "$REPO" "[$entries]"
+}
+
+@test "a web member named storefront still maps spec and unit paths to their layers" {
+  branch_with apps/storefront/.playwright/e2e/only.spec.ts apps/storefront/app/utils/only.test.ts
+  register_members storefront:apps/storefront
+  run bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = run ]
+  run bash "$CHECK" changed --root "$REPO"
+  [ "$status" -eq 0 ]
+  jq -e 'any(.[]; .file == "apps/storefront/.playwright/e2e/only.spec.ts" and .layer == "e2e")' <<<"$output" >/dev/null || return 1
+  jq -e 'any(.[]; .file == "apps/storefront/app/utils/only.test.ts" and .layer == "unit")' <<<"$output" >/dev/null
+}
+
+@test "several web members exit 3 naming both" {
+  branch_with apps/storefront/.playwright/e2e/only.spec.ts
+  register_members storefront:apps/storefront admin:apps/admin
+  run --separate-stderr bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 3 ]
+  [[ "$stderr" == *storefront* ]] || return 1
+  [[ "$stderr" == *admin* ]]
+}
+
+@test "no web member leaves every path without a layer and says so on stderr" {
+  branch_with apps/storefront/.playwright/e2e/only.spec.ts
+  register_members storefront:apps/storefront
+  jq 'del(.stack)' "$REPO/apps/storefront/gaia.package.json" >"$REPO/descriptor.tmp"
+  mv "$REPO/descriptor.tmp" "$REPO/apps/storefront/gaia.package.json"
+  run --separate-stderr bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = skip-no-playwright-change ] || return 1
+  [[ "$stderr" == *stack* ]]
 }
 
 # --- exits -------------------------------------------------------------------

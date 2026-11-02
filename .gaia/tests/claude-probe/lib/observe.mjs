@@ -13,8 +13,8 @@ export class EvidenceError extends Error {}
 export const TAG_FILES = {
   'root-settings': '.claude/settings.json',
   'root-local': '.claude/settings.local.json',
-  'frontend-settings': 'frontend/.claude/settings.json',
-  'frontend-local': 'frontend/.claude/settings.local.json',
+  'frontend-settings': 'apps/web/.claude/settings.json',
+  'frontend-local': 'apps/web/.claude/settings.local.json',
 };
 
 export const scenarioSlug = (trigger) => trigger.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -103,8 +103,8 @@ export const loadedInstructionPaths = (data) => new Set(data.probe
 // A Read of an instruction file, proven by its PostToolUse probe line. Claude
 // Code emits no InstructionsLoaded for a CLAUDE.md whose content entered the
 // context through a direct Read (the spike run showed a Read of
-// frontend/CLAUDE.md log nothing for that file, while a Read of any other file
-// under frontend/ logged it as nested_traversal), so for a claude_md row the
+// apps/web/CLAUDE.md log nothing for that file, while a Read of any other file
+// under apps/web/ logged it as nested_traversal), so for a claude_md row the
 // verified Read is the other way the file reaches the session.
 export const readInstructionPaths = (data) => new Set(data.probe
   .filter((line) => line.event === 'PostToolUse' && line.tool_name === 'Read')
@@ -122,7 +122,7 @@ const listingInit = (data) => (data.scenario.trigger.startsWith('after_read:') ?
 // Claude Code emits commands_changed with the full command list whenever the
 // set changes, including when a Read discovers a nested .claude/skills
 // directory mid-session, which the init snapshot cannot show (the spike run:
-// 87 init skills on both turns, while the Read of frontend/CLAUDE.md drew a
+// 87 init skills on both turns, while the Read of apps/web/CLAUDE.md drew a
 // commands_changed adding exactly the 12 frontend skills).
 export const sessionCommandNames = (stream) => {
   const listed = [...listedNames(initEvent(stream), 'skill')];

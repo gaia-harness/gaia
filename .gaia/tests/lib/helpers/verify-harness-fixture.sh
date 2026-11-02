@@ -193,11 +193,11 @@ vhf_init() {
   printf '# reads src/x-input.txt\n' >>"$VHF_ROOT/suites/x.bats"
   printf '# reads src/s1-input.txt\n' >>"$VHF_ROOT/suites/s1.bats"
   printf '# reads .claude/rules/s2-rule.md\n' >>"$VHF_ROOT/suites/s2.bats"
-  mkdir -p "$VHF_ROOT/src" "$VHF_ROOT/.claude/rules" "$VHF_ROOT/frontend/app" "$VHF_ROOT/control"
+  mkdir -p "$VHF_ROOT/src" "$VHF_ROOT/.claude/rules" "$VHF_ROOT/apps/web/app" "$VHF_ROOT/control"
   printf 'x\n' >"$VHF_ROOT/src/x-input.txt"
   printf 's1\n' >"$VHF_ROOT/src/s1-input.txt"
   printf 's2\n' >"$VHF_ROOT/.claude/rules/s2-rule.md"
-  printf 'page\n' >"$VHF_ROOT/frontend/app/page.txt"
+  printf 'page\n' >"$VHF_ROOT/apps/web/app/page.txt"
   # Tracked and empty, so a test's uncommitted edit to one is a tracked change.
   for script_name in shell-lint line-limit build-staging 01-files-present 02-marker-strip; do
     : >"$VHF_ROOT/control/$script_name"

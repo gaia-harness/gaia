@@ -59,7 +59,7 @@ beforeEach(() => {
   runGit('init', '--quiet');
   writeTree('pnpm-workspace.yaml', BASELINE_WORKSPACE);
   writeTree('package.json', packageJson());
-  writeTree('frontend/package.json', packageJson());
+  writeTree('apps/web/package.json', packageJson());
   commit();
   vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
     outputs.push(String(chunk));
@@ -117,7 +117,7 @@ describe('update lockfile-command', () => {
 
   test('a dependency version change alone prints install', () => {
     writeTree(
-      'frontend/package.json',
+      'apps/web/package.json',
       packageJson({dependencies: {react: '^19.1.0'}})
     );
 

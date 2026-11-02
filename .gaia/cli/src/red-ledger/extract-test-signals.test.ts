@@ -24,7 +24,7 @@ const SIGNAL_HELPER = path.join(
 const CLI_NODE_MODULES = path.join(REPO_ROOT, '.gaia/cli/node_modules');
 const HELPER_ENV = {...process.env, NODE_PATH: CLI_NODE_MODULES};
 
-const TEST_FILE_REL = 'frontend/app/generated/tests/index.test.ts';
+const TEST_FILE_REL = 'apps/web/app/generated/tests/index.test.ts';
 
 /**
  * Pins the `.each` carve-out (gaia-react/gaia#2224): vitest expands an
@@ -249,7 +249,7 @@ describe('extract-test-signals .for title handling', () => {
  * (exit 8) with the migration command: a silent empty result would let the
  * worthiness gate pass the file unjudged.
  */
-const STORY_FILE_REL = 'frontend/app/generated/tests/index.stories.tsx';
+const STORY_FILE_REL = 'apps/web/app/generated/tests/index.stories.tsx';
 
 const runStory = (source: string) => {
   const result = spawnSync('node', [SIGNAL_HELPER, STORY_FILE_REL, '--stdin'], {

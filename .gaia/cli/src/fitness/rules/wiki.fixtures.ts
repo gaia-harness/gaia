@@ -2,7 +2,7 @@ import {committedFrontendDescriptor} from '../../util/package-fixture.js';
 import type {FixtureMap, FixtureProject} from '../types.js';
 
 export const registryFiles = (): Record<string, string> => ({
-  '.gaia/packages.json': JSON.stringify([{name: 'frontend', path: 'pkg'}]),
+  '.gaia/packages.json': JSON.stringify([{name: 'web', path: 'pkg'}]),
   'pkg/gaia.package.json': JSON.stringify(committedFrontendDescriptor()),
 });
 

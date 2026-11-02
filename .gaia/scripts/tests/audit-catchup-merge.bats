@@ -9,7 +9,7 @@
 # stub's call log and the files the writer and resolver key.
 #
 # The roster is the shipped one. Paths below are owned by exactly one member:
-#   frontend/app/**   code-audit-frontend (the default member)
+#   apps/web/app/**   code-audit-frontend (the default member)
 #   .githooks/**      code-audit-maintainer-shell
 # and `.claude/rules/**` is gate machinery every member's digest selects. The
 # remaining roster members cover none of these and are the non-covering
@@ -177,14 +177,14 @@ assert_success_posted_on() {
 # seed_shared_file: a numbered file the base carries before the branch edits it
 # far from where the base later does.
 seed_shared_file() {
-  lsb_catchup_base_commit frontend/app/shared.md "$(catchup_lines 40 line)"
+  lsb_catchup_base_commit apps/web/app/shared.md "$(catchup_lines 40 line)"
   lsb_catch_up
 }
 
 # branch_work: the branch's own change, spanning two members: line 30 of the
 # shared frontend file and a git hook.
 branch_work() {
-  lsb_catchup_branch_commit frontend/app/shared.md "$(catchup_lines 40 line 30=branch-edit)"
+  lsb_catchup_branch_commit apps/web/app/shared.md "$(catchup_lines 40 line 30=branch-edit)"
   lsb_catchup_branch_commit .githooks/pre-commit "branch hook"
 }
 
@@ -193,8 +193,8 @@ branch_work() {
 # branch did not touch, and adds a gate-machinery file that is neither the
 # roster, the classifier nor the digest engine.
 base_moves() {
-  lsb_catchup_base_commit frontend/app/shared.md "$(catchup_lines 40 line 2=base-edit)"
-  lsb_catchup_base_commit frontend/app/base-only.md "from the base"
+  lsb_catchup_base_commit apps/web/app/shared.md "$(catchup_lines 40 line 2=base-edit)"
+  lsb_catchup_base_commit apps/web/app/base-only.md "from the base"
   lsb_catchup_base_commit .githooks/base-only "from the base"
   lsb_catchup_base_commit .claude/rules/base-only.md "from the base"
 }
@@ -385,7 +385,7 @@ refuse_with_open_finding() {
   key_base="$(lsb_git merge-base "$(resolver_lines "$FRONTEND" | sed -n '3p')" HEAD)"
   captured="$(scope_value "$FRONTEND" D_SCOPE)"
   [ -n "$key_base" ] && [ -n "$captured" ] || return 1
-  printf '[%s]' "$(lsb_finding frontend/app/shared.md 30 critical false)" |
+  printf '[%s]' "$(lsb_finding apps/web/app/shared.md 30 critical false)" |
     bash "$LSB_ROOT/.gaia/scripts/audit-write-findings.sh" --root "$LSB_ROOT" --member "$FRONTEND" \
       --base "$key_base" --findings - >/dev/null || return 1
   bash "$LSB_ROOT/.gaia/scripts/audit-write-clearance.sh" --root "$LSB_ROOT" --member "$FRONTEND" \
@@ -415,7 +415,7 @@ assert_open_finding_survives() {
   seed_shared_file
   branch_work
   refuse_with_open_finding
-  lsb_catchup_branch_commit frontend/app/after-refusal.md "after the refusal"
+  lsb_catchup_branch_commit apps/web/app/after-refusal.md "after the refusal"
   assert_open_finding_survives member-refusal
 }
 
@@ -430,7 +430,7 @@ assert_open_finding_survives() {
   seed_shared_file
   branch_work
   refuse_with_open_finding
-  lsb_catchup_branch_commit frontend/app/after-refusal.md "after the refusal"
+  lsb_catchup_branch_commit apps/web/app/after-refusal.md "after the refusal"
   before="$(arm_record | sed -n '/^key=/p')"
 
   base_moves
@@ -506,7 +506,7 @@ outcomes() {
 # members-empty bypass and prove nothing about the base.
 forge() {
   local branch_start
-  branch_start="$(lsb_git log -1 --format=%H --grep='change frontend/app/branch-start.md')"
+  branch_start="$(lsb_git log -1 --format=%H --grep='change apps/web/app/branch-start.md')"
   [ -n "$branch_start" ] || return 1
   case "$1" in
     stale) lsb_git update-ref refs/remotes/origin/main "$OLD_BASE_TIP" ;;

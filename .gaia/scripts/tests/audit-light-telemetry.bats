@@ -64,8 +64,8 @@ write_route_record() {
     {schema: 1, member: $member, digest: $digest, tree: $tree, head_sha: "abc",
      route: $route, reason: $reason, anchor_sha: "feedface", anchor_tree: "cafe",
      cap: 50, lines: 12,
-     files: [{path: "frontend/app/x.tsx", added: 3, deleted: 2, post_ranges: $post_ranges},
-             {path: "frontend/app/y.tsx", added: 1, deleted: 1, post_ranges: [[1, 2]]}],
+     files: [{path: "apps/web/app/x.tsx", added: 3, deleted: 2, post_ranges: $post_ranges},
+             {path: "apps/web/app/y.tsx", added: 1, deleted: 1, post_ranges: [[1, 2]]}],
      hard_full_rule: null, routed_at: "2026-01-01T00:00:00Z"}' > "$path"
 }
 
@@ -119,7 +119,7 @@ tally_value() {
   [ "$(jq -r '.hard_full_rule' <<<"$event")" = "null" ]
   [ "$(jq -r '.cap' <<<"$event")" = "50" ]
   [ "$(jq -r '.anchor_sha' <<<"$event")" = "feedface" ]
-  [ "$(jq -c '.ranges' <<<"$event")" = '[{"path":"frontend/app/x.tsx","post_ranges":[[10,14]]},{"path":"frontend/app/y.tsx","post_ranges":[[1,2]]}]' ]
+  [ "$(jq -c '.ranges' <<<"$event")" = '[{"path":"apps/web/app/x.tsx","post_ranges":[[10,14]]},{"path":"apps/web/app/y.tsx","post_ranges":[[1,2]]}]' ]
   [ -n "$(jq -r '.at' <<<"$event")" ]
 }
 
@@ -265,7 +265,7 @@ route_event_anchor_kind() {
   run_route
   run_outcome --verdict escalate
   bash "$WRITER" --root "$ROOT" --member "$MEMBER" --provenance refused >/dev/null
-  write_sidecar '[{"path":"frontend/app/x.tsx","line":12,"title":"a"},{"path":"frontend/app/y.tsx","line":1,"title":"b"}]'
+  write_sidecar '[{"path":"apps/web/app/x.tsx","line":12,"title":"a"},{"path":"apps/web/app/y.tsx","line":1,"title":"b"}]'
   # A newer light sidecar must never be the one read.
   sleep 1
   printf '{"schema":1,"member":"%s","review":"light","findings":[1,2,3,4,5]}\n' "$MEMBER" \
@@ -276,7 +276,7 @@ route_event_anchor_kind() {
   result_event="$(jq -c 'select(.event == "member_result")' "$LOG")"
   [ "$(jq -r '.result' <<<"$result_event")" = "refused" ]
   [ "$(jq -r '.findings' <<<"$result_event")" = "2" ]
-  [ "$(jq -c '.locations' <<<"$result_event")" = '[{"path":"frontend/app/x.tsx","line":12},{"path":"frontend/app/y.tsx","line":1}]' ]
+  [ "$(jq -c '.locations' <<<"$result_event")" = '[{"path":"apps/web/app/x.tsx","line":12},{"path":"apps/web/app/y.tsx","line":1}]' ]
   [ "$(jq -r '.digest' <<<"$result_event")" = "$DIGEST" ]
   followup_event="$(jq -c 'select(.event == "escalation_followup")' "$LOG")"
   [ "$(jq -r '.result' <<<"$followup_event")" = "refused" ]
@@ -439,7 +439,7 @@ write_route_events() {
 }
 
 # prepare_light_miss <finding-path> <finding-line>: a clear light review whose
-# route covered frontend/app/x.tsx lines 10-14, then a full member result with
+# route covered apps/web/app/x.tsx lines 10-14, then a full member result with
 # one finding at the given location.
 prepare_light_miss() {
   enable_maintainer_repo
@@ -451,17 +451,17 @@ prepare_light_miss() {
 }
 
 @test "a full-member finding inside a range an earlier light clear covered is a light miss" {
-  prepare_light_miss frontend/app/x.tsx 12
+  prepare_light_miss apps/web/app/x.tsx 12
   [ "$(tally_value light_misses)" = "1" ]
 }
 
 @test "a finding outside the covered ranges is not a light miss" {
-  prepare_light_miss frontend/app/x.tsx 40
+  prepare_light_miss apps/web/app/x.tsx 40
   [ "$(tally_value light_misses)" = "0" ]
 }
 
 @test "a finding on a path the light review did not cover is not a light miss" {
-  prepare_light_miss frontend/app/other.tsx 12
+  prepare_light_miss apps/web/app/other.tsx 12
   [ "$(tally_value light_misses)" = "0" ]
 }
 
@@ -469,7 +469,7 @@ prepare_light_miss() {
   enable_maintainer_repo
   write_light_route_record '[[10,14]]'
   run_route
-  write_sidecar '[{"path":"frontend/app/x.tsx","line":12,"title":"t"}]'
+  write_sidecar '[{"path":"apps/web/app/x.tsx","line":12,"title":"t"}]'
   run_member_result
   run_outcome --verdict clear
   [ "$(tally_value light_misses)" = "0" ]
@@ -627,9 +627,9 @@ log_json() {
 # anchor_kind key, some null, full or refusal; light_outcome tokens; and a
 # member_result a clear covers (one light miss).
 write_reaudit_log() {
-  log_json '{"event":"route","branch":"b1","member":"code-audit-frontend","digest":"d1","tree":"t","route":"light","reason":"light-eligible","ranges":[{"path":"frontend/app/x.tsx","post_ranges":[[10,14]]}]}'
+  log_json '{"event":"route","branch":"b1","member":"code-audit-frontend","digest":"d1","tree":"t","route":"light","reason":"light-eligible","ranges":[{"path":"apps/web/app/x.tsx","post_ranges":[[10,14]]}]}'
   log_json '{"event":"light_outcome","branch":"b1","member":"code-audit-frontend","digest":"d1","verdict":"clear","tokens":1000,"anchor_kind":null}'
-  log_json '{"event":"member_result","branch":"b1","member":"code-audit-frontend","result":"refused","locations":[{"path":"frontend/app/x.tsx","line":12}]}'
+  log_json '{"event":"member_result","branch":"b1","member":"code-audit-frontend","result":"refused","locations":[{"path":"apps/web/app/x.tsx","line":12}]}'
   log_json '{"event":"route","branch":"b2","member":"code-audit-frontend","digest":"d2","tree":"t","route":"full","reason":"no-full-clearance","anchor_kind":null}'
   log_json '{"event":"route","branch":"b2","member":"code-audit-maintainer-shell","digest":"d3","tree":"t","route":"light","reason":"refusal-anchored","anchor_kind":"refusal"}'
   log_json '{"event":"light_outcome","branch":"b2","member":"code-audit-maintainer-shell","digest":"d3","verdict":"clear","tokens":3000,"anchor_kind":"refusal"}'
@@ -645,13 +645,13 @@ write_reaudit_log() {
 # outcomes (two clear with tokens, one escalate), and a member_result whose
 # location only the merge-base clear covers.
 write_quick_events() {
-  log_json '{"event":"route","branch":"b1","member":"code-audit-frontend","digest":"q1","tree":"t","route":"light","reason":"quick-eligible","anchor_kind":"merge-base","ranges":[{"path":"frontend/app/y.tsx","post_ranges":[[1,5]]}]}'
+  log_json '{"event":"route","branch":"b1","member":"code-audit-frontend","digest":"q1","tree":"t","route":"light","reason":"quick-eligible","anchor_kind":"merge-base","ranges":[{"path":"apps/web/app/y.tsx","post_ranges":[[1,5]]}]}'
   log_json '{"event":"route","branch":"b2","member":"code-audit-frontend","digest":"q2","tree":"t","route":"full","reason":"hard-full","anchor_kind":"merge-base"}'
   log_json '{"event":"route","branch":"b3","member":"code-audit-frontend","digest":"q3","tree":"t","route":"full","reason":"machinery","anchor_kind":"merge-base"}'
   log_json '{"event":"light_outcome","branch":"b1","member":"code-audit-frontend","digest":"q1","verdict":"clear","tokens":500,"anchor_kind":"merge-base"}'
   log_json '{"event":"light_outcome","branch":"b2","member":"code-audit-frontend","digest":"q2","verdict":"clear","tokens":700,"anchor_kind":"merge-base"}'
   log_json '{"event":"light_outcome","branch":"b3","member":"code-audit-frontend","digest":"q3","verdict":"escalate","tokens":100,"anchor_kind":"merge-base"}'
-  log_json '{"event":"member_result","branch":"b1","member":"code-audit-frontend","result":"refused","locations":[{"path":"frontend/app/y.tsx","line":3}]}'
+  log_json '{"event":"member_result","branch":"b1","member":"code-audit-frontend","result":"refused","locations":[{"path":"apps/web/app/y.tsx","line":3}]}'
 }
 
 # preexisting_lines [script]: every tally line that is not a quick_ line.
@@ -773,7 +773,7 @@ followup_without_time() {
       '{event: "dispatch_cost", schema: 1, branch: $branch, member: $member, kind: "member", digest: $digest, tree: $tree, state: "ok"}')"
   fi
   bash "$WRITER" --root "$ROOT" --member "$MEMBER" --provenance refused >/dev/null
-  write_sidecar '[{"path":"frontend/app/x.tsx","line":12,"title":"a"}]'
+  write_sidecar '[{"path":"apps/web/app/x.tsx","line":12,"title":"a"}]'
   run_member_result
   jq -c 'select(.event == "escalation_followup") | del(.at)' "$LOG"
 }

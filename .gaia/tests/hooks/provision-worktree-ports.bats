@@ -68,10 +68,10 @@ make_main() {
   git -C "$MAIN" config user.name Test
   git -C "$MAIN" config commit.gpgsign false
 
-  mkdir -p "$MAIN/.claude/hooks/lib" "$MAIN/.gaia/scripts" "$MAIN/.gaia/local" "$MAIN/frontend"
+  mkdir -p "$MAIN/.claude/hooks/lib" "$MAIN/.gaia/scripts" "$MAIN/.gaia/local" "$MAIN/apps/web"
   cp "$HOOK_ABSOLUTE_PATH" "$MAIN/.claude/hooks/provision-worktree.sh"
   cp "$REPO_ROOT_REAL/.claude/hooks/lib/gaia-packages.sh" "$MAIN/.claude/hooks/lib/"
-  echo 'export default {};' >"$MAIN/frontend/react-router.config.ts"
+  echo 'export default {};' >"$MAIN/apps/web/react-router.config.ts"
   cp "$REPO_ROOT_REAL/.gaia/scripts/main-root-lib.sh" "$MAIN/.gaia/scripts/"
   cp "$REPO_ROOT_REAL/.gaia/scripts/state-registry-lib.sh" "$MAIN/.gaia/scripts/"
   cp "$REPO_ROOT_REAL/.gaia/scripts/link-worktree.sh" "$MAIN/.gaia/scripts/"
@@ -116,7 +116,7 @@ provision_with_payload() {
 }
 
 port_file() {
-  printf '%s/frontend/.gaia-ports' "$1"
+  printf '%s/apps/web/.gaia-ports' "$1"
 }
 
 # port_value <tree> <KEY>: the value of one key in the tree's port file.
@@ -190,7 +190,7 @@ start_host_process() {
   make_main
   provision "$MAIN"
   [ "$PROVISION_STATUS" -eq 0 ]
-  [ ! -e "$MAIN/frontend/.gaia-ports" ]
+  [ ! -e "$MAIN/apps/web/.gaia-ports" ]
   [ ! -e "$MAIN/.gaia/local/ports" ]
   [ ! -s "$PROVISION_STDOUT" ]
 }
@@ -268,11 +268,11 @@ start_host_process() {
   make_main
   local tree
   tree="$(add_worktree a)"
-  provision_with_payload "$tree" "{\"hook_event_name\":\"SessionStart\",\"cwd\":\"$tree/frontend\"}"
+  provision_with_payload "$tree" "{\"hook_event_name\":\"SessionStart\",\"cwd\":\"$tree/apps/web\"}"
   [ "$PROVISION_STATUS" -eq 0 ]
   [ "$(ledger_slot_for "$tree")" = "1" ]
   [ "$(port_value "$tree" GAIA_PORT_SLOT)" = "1" ]
-  [ ! -e "$tree/frontend/frontend/.gaia-ports" ]
+  [ ! -e "$tree/apps/web/apps/web/.gaia-ports" ]
 }
 
 @test "a reclaimed slot is reused by the next new worktree, with one ledger line for it" {

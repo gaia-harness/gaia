@@ -31,10 +31,10 @@ export const cleanupRepos = (): void => {
 };
 
 export const standardFiles = {
-  'frontend/.storybook/main.ts': PLAIN_MAIN,
-  'frontend/.storybook/preview.ts': CSF3_PREVIEW,
-  'frontend/app/a/a.stories.tsx': CSF3_STORY,
-  'frontend/app/b/b.stories.tsx': CSF3_STORY,
+  'apps/web/.storybook/main.ts': PLAIN_MAIN,
+  'apps/web/.storybook/preview.ts': CSF3_PREVIEW,
+  'apps/web/app/a/a.stories.tsx': CSF3_STORY,
+  'apps/web/app/b/b.stories.tsx': CSF3_STORY,
 };
 
 export const execute = (

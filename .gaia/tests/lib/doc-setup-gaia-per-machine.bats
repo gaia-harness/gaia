@@ -2,7 +2,7 @@
 # Phase 2 per-machine setup, driven by the per-machine reference under
 # `.claude/skills/gaia/references/setup/`:
 #
-#   - The React Doctor probe names the `frontend/` skill location, and neither
+#   - The React Doctor probe names the `apps/web/` skill location, and neither
 #     the setup surface nor `.claude/commands/gaia-init.md` carries the
 #     root-level probe.
 #   - install-tools runs a tool's install only when its own probe fails, and a
@@ -97,10 +97,10 @@ real_surface() {
 }
 
 # ---------------------------------------------------------------------------
-# The React Doctor skill lives under frontend/
+# The React Doctor skill lives under apps/web/
 # ---------------------------------------------------------------------------
 
-REACT_DOCTOR_PROBE='[ -d frontend/.claude/skills/react-doctor ]'
+REACT_DOCTOR_PROBE='[ -d apps/web/.claude/skills/react-doctor ]'
 OLD_REACT_DOCTOR_PROBE='[ -d .claude/skills/react-doctor ]'
 
 # check_react_doctor_location <per-machine> <surface-file> <init>: the probe
@@ -108,7 +108,7 @@ OLD_REACT_DOCTOR_PROBE='[ -d .claude/skills/react-doctor ]'
 check_react_doctor_location() {
   local per_machine="$1" surface="$2" init="$3" file
   grep -qF -- "$REACT_DOCTOR_PROBE" "$per_machine" || {
-    echo "the per-machine probe does not name frontend/.claude/skills/react-doctor" >&2
+    echo "the per-machine probe does not name apps/web/.claude/skills/react-doctor" >&2
     return 1
   }
   for file in "$surface" "$init"; do
@@ -145,7 +145,7 @@ check_react_doctor_location() {
 @test "the React Doctor location check fails when the per-machine probe loses the frontend path" {
   local copy
   copy="$(scratch_copy "$PER_MACHINE_REFERENCE" "react-doctor-no-frontend.md")"
-  sed 's#\[ -d frontend/\.claude/skills/react-doctor \]#[ -d .claude/skills/react-doctor ]#' "$PER_MACHINE_REFERENCE" >"$copy"
+  sed 's#\[ -d apps/web/\.claude/skills/react-doctor \]#[ -d .claude/skills/react-doctor ]#' "$PER_MACHINE_REFERENCE" >"$copy"
   cmp -s "$PER_MACHINE_REFERENCE" "$copy" && return 1
   run check_react_doctor_location "$copy" "$(real_surface)" "$INIT_PAGE"
   [ "$status" -ne 0 ]
@@ -173,7 +173,7 @@ mutate_file() {
 # ---------------------------------------------------------------------------
 
 PER_TOOL_SENTENCE="Run each tool's install only when its own probe fails, so a React Doctor skill already on disk is recorded without being installed again."
-STANDALONE_GAP_SENTENCE='A session that read a file under `frontend/` before this install lists the skill only from its next session; the closing message adds no restart line for it.'
+STANDALONE_GAP_SENTENCE='A session that read a file under `apps/web/` before this install lists the skill only from its next session; the closing message adds no restart line for it.'
 
 # check_install_tools_per_tool <per-machine>: the install-tools step carries
 # the per-tool install sentence and the standalone-gap sentence.

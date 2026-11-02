@@ -11,6 +11,7 @@
     "lint": "eslint --max-warnings=0 --cache --cache-strategy content --cache-location ./node_modules/.cache/eslint src",
     "lint:fix": "eslint --fix --max-warnings=0 --cache --cache-strategy content --cache-location ./node_modules/.cache/eslint src",
     "test": "vitest --passWithNoTests",
+    "test:ci": "vitest --run --passWithNoTests",
     "gaia": "tsx ./src/index.ts",
     "gaia-maintainer": "tsx ./src/index.maintainer.ts"
   },

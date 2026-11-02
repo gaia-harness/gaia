@@ -22,7 +22,7 @@ export const MAINTAINER_MARKER_PATH =
  */
 export const CEILINGS_PATH = '.claude/maintainers/line-limit-ceilings.json';
 
-const HARNESS_ROOTS = ['.claude/', '.gaia/', '.github/', 'frontend/.claude/'];
+const HARNESS_ROOTS = ['.claude/', '.gaia/', '.github/', 'apps/web/.claude/'];
 
 const CODE_FILE = /\.(?:bash|cjs|js|mjs|sh|ts)$/;
 

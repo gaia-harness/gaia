@@ -18,10 +18,10 @@ describe('verification', () => {
 
     expect(exit).toBe(1);
     expect(
-      json?.files.find((file) => file.path === 'frontend/app/b/b.stories.tsx')
+      json?.files.find((file) => file.path === 'apps/web/app/b/b.stories.tsx')
     ).toMatchObject({loaded: false, passed: false});
     expect(
-      json?.files.find((file) => file.path === 'frontend/app/a/a.stories.tsx')
+      json?.files.find((file) => file.path === 'apps/web/app/a/a.stories.tsx')
     ).toMatchObject({loaded: true, passed: true});
   });
 
@@ -35,7 +35,7 @@ describe('verification', () => {
 
     expect(exit).toBe(1);
     expect(
-      json?.files.find((file) => file.path === 'frontend/app/a/a.stories.tsx')
+      json?.files.find((file) => file.path === 'apps/web/app/a/a.stories.tsx')
         ?.failures
     ).toEqual(['Primary   checks it']);
   });
@@ -53,14 +53,14 @@ describe('verification', () => {
 
     expect(exit).toBe(1);
     expect(json?.typecheck).toEqual({
-      files: ['frontend/app/a/a.stories.tsx'],
+      files: ['apps/web/app/a/a.stories.tsx'],
       result: 'fail',
     });
   });
 
   test('a lint error names its file', () => {
     const root = repo(standardFiles);
-    const filePath = path.join(root, 'frontend/app/b/b.stories.tsx');
+    const filePath = path.join(root, 'apps/web/app/b/b.stories.tsx');
     const {exit, json} = execute(
       root,
       {},
@@ -74,7 +74,7 @@ describe('verification', () => {
 
     expect(exit).toBe(1);
     expect(json?.lint).toEqual({
-      files: ['frontend/app/b/b.stories.tsx'],
+      files: ['apps/web/app/b/b.stories.tsx'],
       result: 'fail',
     });
   });
@@ -87,17 +87,17 @@ ErrorType.test('shows the error', async () => {});
 `;
     const root = repo({
       ...standardFiles,
-      'frontend/app/t/toast.stories.tsx': inlined,
+      'apps/web/app/t/toast.stories.tsx': inlined,
     });
     const {exit, json} = execute(root);
 
     expect(exit).toBe(0);
     expect(
       json?.files.find(
-        (file) => file.path === 'frontend/app/t/toast.stories.tsx'
+        (file) => file.path === 'apps/web/app/t/toast.stories.tsx'
       )
     ).toMatchObject({loaded: true, passed: true});
-    expect(json?.converted).not.toContain('frontend/app/t/toast.stories.tsx');
+    expect(json?.converted).not.toContain('apps/web/app/t/toast.stories.tsx');
   });
 
   test('human output ends with the restore command', () => {

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {loadPackages} from './packages.js';
+import {loadPackages, webMembers} from './packages.js';
 import {resolveRepoRoot} from './repo-root.js';
 
 export type PackageTarget =
@@ -8,7 +8,7 @@ export type PackageTarget =
 
 /**
  * The tree a CLI command acts on: the calling working tree's root, so a
- * command run from `frontend/` and from the repo root name the same tree.
+ * command run from `apps/web/` and from the repo root name the same tree.
  * Falls back to `cwd` when git cannot answer, because scaffolding must not
  * require a repository (an adopter may scaffold before `git init`).
  */
@@ -21,14 +21,18 @@ const resolveTreeRoot = (cwd: string): string => {
 };
 
 /**
- * Resolve a registered package's directory from the working tree root and the
- * registry, never from `cwd` itself. A registry or descriptor failure comes
- * back as its `gaia-packages:` message so the caller can refuse before it
- * writes anything.
+ * Resolve the web-stack member a command acts on from the working tree root
+ * and the registry, never from `cwd` itself. With no `packageName` the single
+ * web member is the target; a name must be a web member. A registry or
+ * descriptor failure comes back as its `gaia-packages:` message so the caller
+ * can refuse before it writes anything. `acceptsPackageFlag` is true only for
+ * callers whose command takes `--package`; the several-members refusal names
+ * that flag as the next step only there.
  */
-export const resolvePackageTarget = (
+export const resolveWebTarget = (
   cwd: string,
-  name = 'frontend'
+  packageName?: string,
+  acceptsPackageFlag = false
 ): PackageTarget => {
   const repoRoot = resolveTreeRoot(cwd);
   const loaded = loadPackages(repoRoot);
@@ -36,11 +40,34 @@ export const resolvePackageTarget = (
   if (!loaded.ok) {
     return {message: loaded.message, ok: false};
   }
-  const found = loaded.packages.find((entry) => entry.name === name);
+  const candidates = webMembers(loaded.packages);
+  const listed = candidates.map((entry) => `"${entry.name}"`).join(', ');
+
+  if (candidates.length === 0) {
+    return {
+      message:
+        'gaia-packages: no registered package declares "stack": "web". Next step: add "stack": "web" to the app package\'s gaia.package.json, which .gaia/packages.json registers.',
+      ok: false,
+    };
+  }
+
+  if (packageName === undefined && candidates.length > 1) {
+    return {
+      message:
+        acceptsPackageFlag ?
+          `gaia-packages: several packages declare the web stack (${listed}). Next step: pass --package <name> to choose one.`
+        : `gaia-packages: several packages declare the web stack (${listed}), and this command supports one web package. Next step: leave exactly one package declaring "stack": "web" in its gaia.package.json.`,
+      ok: false,
+    };
+  }
+  const found =
+    packageName === undefined ?
+      candidates[0]
+    : candidates.find((entry) => entry.name === packageName);
 
   if (found === undefined) {
     return {
-      message: `gaia-packages: no package named "${name}" is registered. Next step: add it to .gaia/packages.json.`,
+      message: `gaia-packages: "${packageName}" is not a web-stack package. Next step: pass --package with a web package (${listed}).`,
       ok: false,
     };
   }
@@ -55,7 +82,7 @@ export const resolvePackageTarget = (
 
 /**
  * Normalize a user-supplied path to package-relative: a repo-relative value
- * that begins with the package path (`frontend/app/components/form`) loses
+ * that begins with the package path (`apps/web/app/components/form`) loses
  * that prefix, a package-relative one passes through.
  */
 export const toPackageRelative = (

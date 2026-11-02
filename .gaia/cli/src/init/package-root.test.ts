@@ -53,16 +53,16 @@ describe('gaia init commands resolve the frontend package root', () => {
     rmSync(root, {force: true, recursive: true});
   });
 
-  test('configure-i18n edits frontend/app and touches no root app/', () => {
+  test('configure-i18n edits apps/web/app and touches no root app/', () => {
     writeBuiltinDescriptor(root);
     write(
       root,
-      'frontend/app/i18n.ts',
+      'apps/web/app/i18n.ts',
       "const i18n = {\n  fallbackLng: 'en',\n};\n"
     );
     write(
       root,
-      'frontend/app/languages/index.ts',
+      'apps/web/app/languages/index.ts',
       "export const LANGUAGES = ['de', 'en'];\n"
     );
 
@@ -70,8 +70,8 @@ describe('gaia init commands resolve the frontend package root', () => {
       runConfigureI18n(['--locales', 'fr,en', '--strip', 'false'], {cwd: root})
     ).toBe(EXIT_CODES.OK);
 
-    expect(read(root, 'frontend/app/i18n.ts')).toContain("fallbackLng: 'fr'");
-    expect(read(root, 'frontend/app/languages/index.ts')).toContain(
+    expect(read(root, 'apps/web/app/i18n.ts')).toContain("fallbackLng: 'fr'");
+    expect(read(root, 'apps/web/app/languages/index.ts')).toContain(
       "LANGUAGES = ['en']"
     );
     expect(existsSync(path.join(root, 'app'))).toBe(false);
@@ -83,7 +83,7 @@ describe('gaia init commands resolve the frontend package root', () => {
     write(root, 'CLAUDE.md', '# GAIA React\n\nBody\n');
     write(
       root,
-      'frontend/app/languages/en/common.ts',
+      'apps/web/app/languages/en/common.ts',
       "export default {\n  meta: {\n    siteName: 'GAIA',\n  },\n};\n"
     );
 
@@ -93,22 +93,22 @@ describe('gaia init commands resolve the frontend package root', () => {
       })
     ).toBe(EXIT_CODES.OK);
 
-    expect(read(root, 'frontend/app/languages/en/common.ts')).toContain(
+    expect(read(root, 'apps/web/app/languages/en/common.ts')).toContain(
       "siteName: 'Hello World'"
     );
     expect(existsSync(path.join(root, 'app'))).toBe(false);
   });
 
-  test('strip-branding de-brands frontend/.storybook and touches no root .storybook', () => {
+  test('strip-branding de-brands apps/web/.storybook and touches no root .storybook', () => {
     writeBuiltinDescriptor(root);
-    write(root, 'frontend/.storybook/preview.ts', PREVIEW);
+    write(root, 'apps/web/.storybook/preview.ts', PREVIEW);
     write(root, '.gaia/templates/README.md', '# {{PROJECT_TITLE}}\n');
 
     expect(runStripBranding(['--title', 'Hello World'], {cwd: root})).toBe(
       EXIT_CODES.OK
     );
 
-    expect(read(root, 'frontend/.storybook/preview.ts')).toContain(
+    expect(read(root, 'apps/web/.storybook/preview.ts')).toContain(
       'Hello World'
     );
     expect(existsSync(path.join(root, '.storybook'))).toBe(false);
@@ -124,7 +124,7 @@ describe('gaia init commands resolve the frontend package root', () => {
     );
 
     expect(read(root, '.storybook/preview.ts')).toContain('Hello World');
-    expect(existsSync(path.join(root, 'frontend'))).toBe(false);
+    expect(existsSync(path.join(root, 'apps', 'web'))).toBe(false);
   });
 
   test.each([

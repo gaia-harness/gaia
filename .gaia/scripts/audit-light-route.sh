@@ -127,8 +127,8 @@ QUICK_LINE_CAP=40
 # light_hard_full glob is never in this list, so it still fires.
 QUICK_STORY_EXEMPT_GLOBS='**/tests/**
 **/*.stories.*
-frontend/app/**/tests/**
-frontend/app/**/*.stories.tsx'
+apps/web/app/**/tests/**
+apps/web/app/**/*.stories.tsx'
 
 _light_route_usage() {
   printf 'usage: audit-light-route.sh --root <abs-checkout-root> --member <name> [--check]\n' >&2
@@ -348,9 +348,8 @@ _light_route_resolve_anchor() {
   done <<<"$scan"
 }
 
-# _light_route_story_carve_out <path>: 0 when <path> is a component's own
-# story and that component is in the selected set, asking the classifier
-# library for both the pairing and the class so the router holds no list.
+# _light_route_story_carve_out <path>: 0 when <path> is a component's own story in the selected
+# set; the classifier library answers the pairing and the class, so the router holds no list.
 _light_route_story_carve_out() {
   local component candidate
   component="$(quick_story_component "$1" 2>/dev/null)" || return 1
@@ -573,6 +572,7 @@ light_route_main() {
   done
   delta_computed="true"
   [ "$special" = "false" ] || _light_route_finish full special-file
+  quick_load_registry "$root" || _light_route_finish full unclassifiable-path
 
   # A machinery or ownerless hit outranks hard-full, so once one is seen the
   # per-glob matching (one awk run per glob) is skipped.

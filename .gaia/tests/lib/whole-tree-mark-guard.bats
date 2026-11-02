@@ -201,7 +201,7 @@ SEEDS="dirname filename second-assignment"
     printf '%s\n' '  ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"'
     printf '%s\n' '}'
     printf '%s\n' '@test "named" {'
-    printf '%s\n' '  done < <(git -C "$ROOT" ls-files -z -- frontend/.dockerignore frontend/Dockerfile)'
+    printf '%s\n' '  done < <(git -C "$ROOT" ls-files -z -- apps/web/.dockerignore apps/web/Dockerfile)'
     printf '%s\n' '  run git -C "$ROOT" ls-files -s -z .githooks/pre-commit'
     printf '%s\n' '  git -C "$ROOT" ls-files --error-unmatch -- "$path" >/dev/null 2>&1'
     printf '%s\n' '}'
@@ -216,7 +216,7 @@ SEEDS="dirname filename second-assignment"
   printf 'agent\n' >"$repository/.claude/agents/a.md"
   git -C "$repository" init -q
   git -C "$repository" add -A
-  for operand in '-- .claude/agents' '-z -- .dockerignore Dockerfile' "-z '*.sh'" '-- "$directory"' '-z -- ":(glob)frontend/x"'; do
+  for operand in '-- .claude/agents' '-z -- .dockerignore Dockerfile' "-z '*.sh'" '-- "$directory"' '-z -- ":(glob)apps/web/x"'; do
     suite="$repository/listing.bats"
     {
       printf '%s\n' '#!/usr/bin/env bats'

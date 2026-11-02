@@ -108,8 +108,8 @@ describe('claudemd.budget', () => {
 
   test('a nested CLAUDE.md is held to the nested budget, not the root one', () => {
     const files = {
+      'apps/web/CLAUDE.md': wordsOf(NESTED_CLAUDE_MD_WORD_BUDGET),
       'CLAUDE.md': 'Project rules.\n',
-      'frontend/CLAUDE.md': wordsOf(NESTED_CLAUDE_MD_WORD_BUDGET),
     };
 
     expect(findingsOf({files, git: true}, 'claudemd.budget')).toEqual([]);
@@ -118,14 +118,14 @@ describe('claudemd.budget', () => {
       {
         files: {
           ...files,
-          'frontend/CLAUDE.md': wordsOf(NESTED_CLAUDE_MD_WORD_BUDGET + 50),
+          'apps/web/CLAUDE.md': wordsOf(NESTED_CLAUDE_MD_WORD_BUDGET + 50),
         },
         git: true,
       },
       'claudemd.budget'
     );
 
-    expect(over.map((finding) => finding.file)).toEqual(['frontend/CLAUDE.md']);
+    expect(over.map((finding) => finding.file)).toEqual(['apps/web/CLAUDE.md']);
   });
 
   test('a CLAUDE.md four path segments deep is not discovered, so it is not measured', () => {
@@ -158,8 +158,8 @@ describe('claudemd.budget', () => {
     const project: FixtureProject = {
       files: {
         '.claude/rules/example.md': linesOf(3),
+        'apps/web/CLAUDE.md': wordsOf(20),
         'CLAUDE.md': wordsOf(20),
-        'frontend/CLAUDE.md': wordsOf(20),
       },
       git: true,
     };
@@ -176,7 +176,7 @@ describe('claudemd.budget', () => {
       findingsOf(project, 'claudemd.budget', tightened).map(
         (finding) => finding.file
       )
-    ).toEqual(['.claude/rules/example.md', 'CLAUDE.md', 'frontend/CLAUDE.md']);
+    ).toEqual(['.claude/rules/example.md', 'CLAUDE.md', 'apps/web/CLAUDE.md']);
   });
 });
 
@@ -209,7 +209,7 @@ describe('claudemd.missing-root', () => {
   test('a nested CLAUDE.md does not stand in for the root one', () => {
     expect(
       findingsOf(
-        {files: {'frontend/CLAUDE.md': 'Nested rules.\n'}, git: true},
+        {files: {'apps/web/CLAUDE.md': 'Nested rules.\n'}, git: true},
         'claudemd.missing-root'
       )
     ).toHaveLength(1);
@@ -261,10 +261,10 @@ describe('claudemd.imports-resolve and claudemd.dead-path', () => {
       findingsOf(
         {
           files: {
+            'apps/web/CLAUDE.md': '@guide.md\n@docs/root-guide.md\n',
+            'apps/web/guide.md': '# Guide\n',
             'CLAUDE.md': 'Root rules.\n',
             'docs/root-guide.md': '# Guide\n',
-            'frontend/CLAUDE.md': '@guide.md\n@docs/root-guide.md\n',
-            'frontend/guide.md': '# Guide\n',
           },
           git: true,
         },
@@ -324,9 +324,9 @@ describe('claudemd.imports-resolve and claudemd.dead-path', () => {
       findingsOf(
         {
           files: {
+            'apps/web/CLAUDE.md': 'See [the guide](guide.md).\n',
+            'apps/web/guide.md': '# Guide\n',
             'CLAUDE.md': 'Root rules.\n',
-            'frontend/CLAUDE.md': 'See [the guide](guide.md).\n',
-            'frontend/guide.md': '# Guide\n',
           },
           git: true,
         },

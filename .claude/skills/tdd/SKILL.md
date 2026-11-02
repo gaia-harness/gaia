@@ -11,7 +11,7 @@ Contents: Selecting a Stack Reference; Philosophy; Anti-Pattern: Horizontal Slic
 
 Before writing the first red test, consult the reference for your stack:
 
-- **React / Vitest / MSW / Storybook** → the `tdd-react` skill (`frontend/.claude/skills/tdd-react/SKILL.md`)
+- **React / Vitest / MSW / Storybook** → the `tdd-react` skill (`apps/web/.claude/skills/tdd-react/SKILL.md`)
 - **Shell / bats** → `.claude/skills/tdd/references/tests-shell.md`
 
 Add a new stack reference (a skill or a `references/tests-{stack}.md`) when adopting a new stack. The stack reference covers concrete patterns, test layers, mocking rules, and good/bad examples specific to that environment.
@@ -111,15 +111,15 @@ It emits `{file, classification: "strict" | "emergent" | "route", reasons}`. A `
 
 ```
 Determinism roll-up:
-  • frontend/app/utils/money.ts            strict
-  • frontend/app/components/cart/tests/index.stories.tsx  emergent (story file: a *.stories.tsx is emergent regardless of path)
+  • apps/web/app/utils/money.ts            strict
+  • apps/web/app/components/cart/tests/index.stories.tsx  emergent (story file: a *.stories.tsx is emergent regardless of path)
 ```
 
 ### 6. Worthiness Audit (emergent surface)
 
 A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/Stories as Tests.md`); a story file is emergent, so a behavior added as a `.test()` goes through the audit below, not the RED gate.
 
-The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `frontend/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent` or `route`).
+The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `apps/web/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent` or `route`).
 
 #### Dispatch and record
 

@@ -12,7 +12,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/kept.ts",
+      "path": "apps/web/app/kept.ts",
       "line": 30,
       "class_prefix": "holistic"
     },
@@ -21,7 +21,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/absent.ts",
+      "path": "apps/web/app/absent.ts",
       "line": 110,
       "class_prefix": "holistic"
     }

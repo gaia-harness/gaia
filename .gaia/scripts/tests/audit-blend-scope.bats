@@ -10,7 +10,7 @@
 # branch's own patch.
 #
 # The roster is the shipped one. Paths below are owned by exactly one member:
-#   frontend/app/**   code-audit-frontend (the default member)
+#   apps/web/app/**   code-audit-frontend (the default member)
 #   .githooks/**      code-audit-maintainer-shell
 # so a change to one is "covered" by that member alone, and the members that
 # cover neither path are the ones every digest assertion proves unmoved.
@@ -196,24 +196,24 @@ supports_remerge() {
 
 @test "a conflict resolved by changing the branch's lines rotates only the covering member and reviews as a diff" {
   supports_remerge
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
 
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 20='base twenty' 35='base thirty-five')"
-  catchup_base_commit frontend/app/incoming.ts "incoming from the base"
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 20='base twenty' 35='base thirty-five')"
+  catchup_base_commit apps/web/app/incoming.ts "incoming from the base"
   catchup_merge_base --no-commit
   [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
   lines_file p-resolved 40 20='resolved twenty' 35='base thirty-five' >/dev/null
-  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/frontend/app/p.ts"
+  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/apps/web/app/p.ts"
   catchup_commit_merge
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
 
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/p.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
   diff_has 'resolved twenty'
   diff_has 'branch twenty'
   # The base's non-conflicting hunk, its incoming file, and the far lines of P
@@ -226,18 +226,18 @@ supports_remerge() {
 }
 
 @test "a clean catch-up of the base rotates no digest, lists no incoming path and writes an empty review diff" {
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
 
-  catchup_base_commit frontend/app/incoming.ts "incoming from the base"
+  catchup_base_commit apps/web/app/incoming.ts "incoming from the base"
   catchup_base_commit .githooks/hook.sh "$(lines_file hook-base 10 4='base four')"
   catchup_merge_base
 
   [ -z "$(members_that_changed "$before" "$(digests)")" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
   [ -z "$CHANGED_PATHS" ]
   [ ! -s "$REVIEW_DIFF_FILE" ]
 }
@@ -247,16 +247,16 @@ supports_remerge() {
 # ---------------------------------------------------------------------------
 
 @test "an evil merge rotates only the member covering the extra edit, and the edit reaches that member's review diff" {
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
   catchup_branch_commit .githooks/hook.sh "$(lines_file hook-branch 10 2='branch two')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
   path_only="$(mutate path-only '/# frame: modes$/d; /# frame: hunks$/d; /# frame: blobs$/d')"
   before_path_only="$(digests "$path_only")"
 
-  catchup_base_commit frontend/app/incoming.ts "incoming from the base"
+  catchup_base_commit apps/web/app/incoming.ts "incoming from the base"
   catchup_merge_base --no-commit
   [ -z "$(catchup_git diff --name-only --diff-filter=U)" ]
   # A path the branch already changed, edited again inside the merge: the base
@@ -269,7 +269,7 @@ supports_remerge() {
   [ "$CHANGED_PATHS" = ".githooks/hook.sh" ]
   diff_has '+evil edit'
   # The member covering the branch's own file sees nothing of it.
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
   [ -z "$CHANGED_PATHS" ]
   [ ! -s "$REVIEW_DIFF_FILE" ]
 
@@ -278,24 +278,24 @@ supports_remerge() {
 }
 
 @test "a resolution that rewrites lines the branch added rotates only the covering member and shows the rewrite" {
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20+='guard alpha' 20+='guard beta')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20+='guard alpha' 20+='guard beta')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
   path_only="$(mutate path-only '/# frame: modes$/d; /# frame: hunks$/d; /# frame: blobs$/d')"
   before_path_only="$(digests "$path_only")"
 
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 21='base twenty-one')"
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 21='base twenty-one')"
   catchup_merge_base --no-commit
   [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
   lines_file p-resolved 40 20+='guard alpha rewritten' 21='base twenty-one' >/dev/null
-  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/frontend/app/p.ts"
+  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/apps/web/app/p.ts"
   catchup_commit_merge
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/p.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
   diff_has '+guard alpha rewritten'
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
   [ -z "$CHANGED_PATHS" ]
@@ -305,25 +305,25 @@ supports_remerge() {
 
 @test "a conflict where both sides appended keeps both lines, rotates the covering member and shows the resolution" {
   supports_remerge
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 40+='branch tail')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 40+='branch tail')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
   no_context="$(mutate no-context 's/-U3/-U0/')"
   before_no_context="$(digests "$no_context")"
 
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 40+='base tail')"
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 40+='base tail')"
   catchup_merge_base --no-commit
   [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
   lines_file p-resolved 40 40+='base tail' >/dev/null
   printf 'branch tail\n' >>"$BATS_TEST_TMPDIR/p-resolved"
-  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/frontend/app/p.ts"
+  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/apps/web/app/p.ts"
   catchup_commit_merge
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/p.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
   diff_has '+branch tail'
   diff_has ' base tail'
 
@@ -337,20 +337,20 @@ supports_remerge() {
 # ---------------------------------------------------------------------------
 
 @test "merging another branch cut from an older base is the branch's own work, and the base's newer lines stay out" {
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
   catchup_branch_commit .githooks/hook.sh "$(lines_file hook-branch 10 2='branch two')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
 
-  catchup_side_ref side/other frontend/app/p.ts "$(lines_file p-side 40 10='side ten')"
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 30='base thirty')"
+  catchup_side_ref side/other apps/web/app/p.ts "$(lines_file p-side 40 10='side ten')"
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 30='base thirty')"
   catchup_merge_ref side/other
   catchup_merge_base
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/p.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
   diff_has '+side ten'
   diff_has 'base thirty' && return 1
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
@@ -358,20 +358,20 @@ supports_remerge() {
 }
 
 @test "the same content arriving through the base rotates nothing" {
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
   catchup_branch_commit .githooks/hook.sh "$(lines_file hook-branch 10 2='branch two')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
 
-  catchup_side_ref side/other frontend/app/p.ts "$(lines_file p-side 40 10='side ten')"
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 30='base thirty')"
+  catchup_side_ref side/other apps/web/app/p.ts "$(lines_file p-side 40 10='side ten')"
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 30='base thirty')"
   catchup_merge_into_base side/other
   catchup_merge_base
-  catchup_git show HEAD:frontend/app/p.ts | grep -qx 'side ten'
+  catchup_git show HEAD:apps/web/app/p.ts | grep -qx 'side ten'
 
   [ -z "$(members_that_changed "$before" "$(digests)")" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
   [ -z "$CHANGED_PATHS" ]
   [ ! -s "$REVIEW_DIFF_FILE" ]
 }
@@ -395,26 +395,26 @@ call_precedes_guard() {
 
 @test "a merge resolution that moves a branch-added guard below its call rotates the covering member and shows the move" {
   supports_remerge
-  seed_base frontend/app/p.ts 40
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-seed 40 20='call();')"
+  seed_base apps/web/app/p.ts 40
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-seed 40 20='call();')"
   catchup_merge_base
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='call();' 19+='guard();')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='call();' 19+='guard();')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
   no_context="$(mutate no-context 's/-U3/-U0/')"
   before_no_context="$(digests "$no_context")"
 
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 19='base nineteen' 20='call();')"
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 19='base nineteen' 20='call();')"
   catchup_merge_base --no-commit
   [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
   lines_file p-resolved 40 19='base nineteen' 20='call();' 20+='guard();' >/dev/null
-  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/frontend/app/p.ts"
+  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/apps/web/app/p.ts"
   catchup_commit_merge
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/p.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
   call_precedes_guard
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
   [ -z "$CHANGED_PATHS" ]
@@ -424,21 +424,21 @@ call_precedes_guard() {
 }
 
 @test "an ordinary branch commit that moves a guard below its call rotates the covering member and shows the move" {
-  seed_base frontend/app/p.ts 40
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-seed 40 20='call();')"
+  seed_base apps/web/app/p.ts 40
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-seed 40 20='call();')"
   catchup_merge_base
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='call();' 19+='guard();')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='call();' 19+='guard();')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
   no_context="$(mutate no-context 's/-U3/-U0/')"
   before_no_context="$(digests "$no_context")"
 
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-moved 40 20='call();' 20+='guard();')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-moved 40 20='call();' 20+='guard();')"
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/p.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
   call_precedes_guard
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
   [ -z "$CHANGED_PATHS" ]
@@ -451,22 +451,22 @@ call_precedes_guard() {
 # ---------------------------------------------------------------------------
 
 @test "after a clean catch-up and one branch commit, CHANGED holds only the paths that commit changed" {
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
   anchor="$CATCHUP_HEAD"
 
-  catchup_base_commit frontend/app/incoming.ts "incoming from the base"
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 35='base thirty-five')"
+  catchup_base_commit apps/web/app/incoming.ts "incoming from the base"
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 35='base thirty-five')"
   catchup_base_commit .githooks/hook.sh "$(lines_file hook-base 10 4='base four')"
   catchup_merge_base
-  catchup_branch_commit frontend/app/q.ts "new branch work"
+  catchup_branch_commit apps/web/app/q.ts "new branch work"
 
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/q.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/q.ts" ]
   diff_has '+new branch work'
   scope_for "$FRONTEND" "$anchor"
-  [ "$CHANGED_PATHS" = "frontend/app/q.ts" ]
+  [ "$CHANGED_PATHS" = "apps/web/app/q.ts" ]
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
   [ -z "$CHANGED_PATHS" ]
   [ ! -s "$REVIEW_DIFF_FILE" ]
@@ -474,22 +474,22 @@ call_precedes_guard() {
   # Disabled: a helper that ignores the anchor lists the branch's earlier work
   # again, which is the whole-branch re-review this scoping exists to end.
   mutate_scope_script 's/list_anchor="\$anchor_commit"/list_anchor="$BASE_TIP"/'
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" != "frontend/app/q.ts" ]
-  printf '%s\n' "$CHANGED_PATHS" | grep -qxF 'frontend/app/p.ts'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" != "apps/web/app/q.ts" ]
+  printf '%s\n' "$CHANGED_PATHS" | grep -qxF 'apps/web/app/p.ts'
 }
 
 @test "with no anchor CHANGED is every branch-own path and none the base brought in" {
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
-  catchup_base_commit frontend/app/incoming.ts "incoming from the base"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
+  catchup_base_commit apps/web/app/incoming.ts "incoming from the base"
   catchup_merge_base
-  catchup_branch_commit frontend/app/q.ts "new branch work"
+  catchup_branch_commit apps/web/app/q.ts "new branch work"
 
   scope_for "$FRONTEND" ""
   [ "$(value_of "$SCOPE_OUTPUT" BASE_REF)" = "refs/remotes/origin/main" ]
-  [ "$(printf '%s\n' "$CHANGED_PATHS" | tr '\n' ' ')" = "frontend/app/p.ts frontend/app/q.ts " ]
+  [ "$(printf '%s\n' "$CHANGED_PATHS" | tr '\n' ' ')" = "apps/web/app/p.ts apps/web/app/q.ts " ]
   diff_has '+branch twenty'
   diff_has '+new branch work'
   # A path the branch adds appears whole; a path it edits appears as hunks.
@@ -499,10 +499,10 @@ call_precedes_guard() {
 }
 
 @test "an empty CHANGED writes an empty review diff and never the whole branch diff" {
-  seed_base frontend/app/p.ts 40
+  seed_base apps/web/app/p.ts 40
   seed_base .githooks/hook.sh 10
   anchor="$CATCHUP_HEAD"
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
 
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
   [ -z "$CHANGED_PATHS" ]
@@ -520,27 +520,27 @@ call_precedes_guard() {
   cp "$mutated" "$CATCHUP_ROOT/.gaia/scripts/audit-resolve-scope.sh"
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
   [ -s "$REVIEW_DIFF_FILE" ]
-  diff_has 'frontend/app/p.ts'
+  diff_has 'apps/web/app/p.ts'
 }
 
 @test "without remerge-diff support a blended path's review diff is its full branch-own patch, still a diff" {
   supports_remerge
-  seed_base frontend/app/p.ts 40
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
+  seed_base apps/web/app/p.ts 40
+  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='branch twenty')"
   anchor="$CATCHUP_HEAD"
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 20='base twenty')"
+  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 20='base twenty')"
   catchup_merge_base --no-commit
   [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
   lines_file p-resolved 40 20='resolved twenty' >/dev/null
-  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/frontend/app/p.ts"
+  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/apps/web/app/p.ts"
   catchup_commit_merge
 
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
   diff_has '<<<<<<<'
 
   fallback="$(mutate no-remerge 's/^\(audit_branch_patch_supports_remerge_diff() {\)$/\1 return 1;/')"
   cp "$fallback" "$CATCHUP_ROOT/.claude/hooks/lib/audit-branch-patch.sh"
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
   diff_has '<<<<<<<' && return 1
   [ "$(grep -c '^diff --git' "$REVIEW_DIFF_FILE")" -eq 1 ]
   diff_has '@@'
@@ -548,53 +548,53 @@ call_precedes_guard() {
 }
 
 @test "a rename on the base carries the branch's edit to the new path and only the covering member rotates" {
-  seed_base frontend/app/f.ts 40
+  seed_base apps/web/app/f.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
 
-  catchup_rename_on_base frontend/app/f.ts frontend/app/g.ts
+  catchup_rename_on_base apps/web/app/f.ts apps/web/app/g.ts
   catchup_merge_base
-  catchup_git show HEAD:frontend/app/g.ts | grep -qx 'branch twenty'
+  catchup_git show HEAD:apps/web/app/g.ts | grep -qx 'branch twenty'
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  printf '%s\n' "$CHANGED_PATHS" | grep -qxF 'frontend/app/g.ts'
-  diff_has 'b/frontend/app/g.ts'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  printf '%s\n' "$CHANGED_PATHS" | grep -qxF 'apps/web/app/g.ts'
+  diff_has 'b/apps/web/app/g.ts'
   diff_has '+branch twenty'
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
   [ -z "$CHANGED_PATHS" ]
 }
 
 @test "a rename the branch itself makes lists the old and the new path" {
-  seed_base frontend/app/f.ts 40
+  seed_base apps/web/app/f.ts 40
   seed_base .githooks/hook.sh 10
   catchup_branch_commit .githooks/hook.sh "$(lines_file hook-branch 10 2='branch two')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
-  catchup_git mv -- frontend/app/f.ts frontend/app/h.ts
+  catchup_git mv -- apps/web/app/f.ts apps/web/app/h.ts
   catchup_git commit -q -m "branch: rename f to h"
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$(printf '%s\n' "$CHANGED_PATHS" | sort | tr '\n' ' ')" = "frontend/app/f.ts frontend/app/h.ts " ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$(printf '%s\n' "$CHANGED_PATHS" | sort | tr '\n' ' ')" = "apps/web/app/f.ts apps/web/app/h.ts " ]
   diff_has 'deleted file mode'
   diff_has 'new file mode'
 }
 
 @test "a rename made inside a merge commit reaches the reviewer as a deletion and an addition, never as a bare rename record" {
   supports_remerge
-  seed_base frontend/app/f.ts 40
+  seed_base apps/web/app/f.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
   anchor="$CATCHUP_HEAD"
-  catchup_base_commit frontend/app/incoming.ts "incoming from the base"
+  catchup_base_commit apps/web/app/incoming.ts "incoming from the base"
   catchup_merge_base --no-commit
-  catchup_git mv -- frontend/app/f.ts frontend/app/h.ts
+  catchup_git mv -- apps/web/app/f.ts apps/web/app/h.ts
   catchup_commit_merge
 
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
   diff_has 'rename from' && return 1
   diff_has 'rename to' && return 1
   grep -qxF -- '+branch twenty' "$REVIEW_DIFF_FILE"
@@ -603,54 +603,54 @@ call_precedes_guard() {
   # the move in the merge commit as one content-free rename record.
   renames="$(mutate renames 's/ --no-renames//g')"
   cp "$renames" "$CATCHUP_ROOT/.claude/hooks/lib/audit-branch-patch.sh"
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
   diff_has 'rename from'
 }
 
 @test "a base deletion under the branch's edit, resolved by keeping the file, shows the file as content the branch adds" {
-  seed_base frontend/app/f.ts 40
+  seed_base apps/web/app/f.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
 
-  catchup_delete_on_base frontend/app/f.ts
+  catchup_delete_on_base apps/web/app/f.ts
   catchup_merge_base --no-commit
   [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
   catchup_commit_merge
-  catchup_git show HEAD:frontend/app/f.ts | grep -qx 'branch twenty'
+  catchup_git show HEAD:apps/web/app/f.ts | grep -qx 'branch twenty'
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/f.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/f.ts" ]
   diff_has 'new file mode'
   grep -qxF -- '+line 1' "$REVIEW_DIFF_FILE"
   grep -qxF -- '+branch twenty' "$REVIEW_DIFF_FILE"
 }
 
 @test "a base deletion under the branch's edit, resolved by accepting the deletion, still rotates the file's owner" {
-  seed_base frontend/app/f.ts 40
+  seed_base apps/web/app/f.ts 40
   seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
+  catchup_branch_commit apps/web/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
   anchor="$CATCHUP_HEAD"
   before="$(digests)"
 
-  catchup_delete_on_base frontend/app/f.ts
+  catchup_delete_on_base apps/web/app/f.ts
   catchup_merge_base --no-commit
   [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
-  catchup_git rm -q -- frontend/app/f.ts
+  catchup_git rm -q -- apps/web/app/f.ts
   catchup_commit_merge
-  [ ! -e "$CATCHUP_ROOT/frontend/app/f.ts" ]
+  [ ! -e "$CATCHUP_ROOT/apps/web/app/f.ts" ]
 
   [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
-  [ "$CHANGED_PATHS" = "frontend/app/f.ts" ]
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+  [ "$CHANGED_PATHS" = "apps/web/app/f.ts" ]
   scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
   [ -z "$CHANGED_PATHS" ]
 
   # Disabled: a path only the anchor's patch held falls out of a narrowed list
   # when the pathspec is applied to the target's side alone.
   mutate_scope_script 's/for side_commit in HEAD \${anchor_commit:+"\$anchor_commit"}; do/for side_commit in HEAD; do/'
-  scope_for "$FRONTEND" "$anchor" 'frontend/app/*'
+  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
   [ -z "$CHANGED_PATHS" ]
 }

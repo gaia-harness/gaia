@@ -40,10 +40,10 @@ release_bookkeeping_seed_base() {
   _release_bookkeeping_write "$root" .gaia/VERSION $'1.0.0\n'
   _release_bookkeeping_write "$root" .gaia/manifest.json "$(_release_bookkeeping_manifest 2026-10-01T00:00:00.000Z 1.0.0)"
   _release_bookkeeping_write "$root" package.json "$(_release_bookkeeping_package gaia 1.0.0)"
-  _release_bookkeeping_write "$root" frontend/package.json "$(_release_bookkeeping_package frontend 1.0.0)"
+  _release_bookkeeping_write "$root" apps/web/package.json "$(_release_bookkeeping_package frontend 1.0.0)"
   _release_bookkeeping_write "$root" CHANGELOG.md "$(_release_bookkeeping_changelog 1.0.0)"
   _release_bookkeeping_write "$root" a.sh $'echo hi\n'
-  git -C "$root" add .gaia/VERSION .gaia/manifest.json package.json frontend/package.json CHANGELOG.md a.sh
+  git -C "$root" add .gaia/VERSION .gaia/manifest.json package.json apps/web/package.json CHANGELOG.md a.sh
   git -C "$root" commit -q -m "release-bookkeeping base"
 }
 
@@ -54,10 +54,10 @@ release_bookkeeping_apply() {
   _release_bookkeeping_write "$root" .gaia/VERSION $'1.1.0\n'
   _release_bookkeeping_write "$root" .gaia/manifest.json "$(_release_bookkeeping_manifest 2026-10-29T00:00:00.000Z 1.1.0)"
   _release_bookkeeping_write "$root" package.json "$(_release_bookkeeping_package gaia 1.1.0)"
-  _release_bookkeeping_write "$root" frontend/package.json "$(_release_bookkeeping_package frontend 1.1.0)"
+  _release_bookkeeping_write "$root" apps/web/package.json "$(_release_bookkeeping_package frontend 1.1.0)"
   _release_bookkeeping_write "$root" CHANGELOG.md "$(_release_bookkeeping_changelog 1.1.0 1.1.0)"
   [ "$variant" != extra ] || _release_bookkeeping_write "$root" a.sh $'echo changed\n'
-  git -C "$root" add -A .gaia/VERSION .gaia/manifest.json package.json frontend/package.json CHANGELOG.md a.sh
+  git -C "$root" add -A .gaia/VERSION .gaia/manifest.json package.json apps/web/package.json CHANGELOG.md a.sh
   git -C "$root" commit -q -m "chore(release): v1.1.0"
 }
 

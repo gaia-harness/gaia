@@ -1,5 +1,5 @@
 // An old-format (CSF2) story file: the story extractor refuses it with exit 8
-// and names the migration command. It sits outside frontend/app/, so
+// and names the migration command. It sits outside apps/web/app/, so
 // Storybook never loads it.
 const Marker = ({text}: {text: string}) => <p>{text}</p>;
 

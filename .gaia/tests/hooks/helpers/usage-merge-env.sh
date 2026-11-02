@@ -61,7 +61,7 @@ auditors:
   - name: code-audit-frontend
     default: true
     globs:
-      - "frontend/app/**"
+      - "apps/web/app/**"
   - name: code-audit-maintainer-shell
     globs:
       - ".gaia/scripts/**"

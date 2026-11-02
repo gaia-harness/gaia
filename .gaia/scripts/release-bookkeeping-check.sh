@@ -21,7 +21,7 @@
 #   exit 1 no, one reason on stderr; exit 2 usage error or an unreadable input.
 #   A change is bookkeeping only when every condition holds:
 #     - the changed paths are .gaia/VERSION, .gaia/manifest.json, package.json,
-#       frontend/package.json and CHANGELOG.md, each modified, plus at most
+#       apps/web/package.json and CHANGELOG.md, each modified, plus at most
 #       wiki/.state.json and wiki/log.md: a release that had no wiki drift
 #       leaves those two alone, every other file must move;
 #     - .gaia/VERSION holds one X.Y.Z line on each side, and the two differ;
@@ -62,7 +62,7 @@
 # Bash 3.2 compatible; BSD and GNU tools. Never `cd`.
 set -uo pipefail
 
-readonly REQUIRED_PATHS='.gaia/VERSION .gaia/manifest.json package.json frontend/package.json CHANGELOG.md'
+readonly REQUIRED_PATHS='.gaia/VERSION .gaia/manifest.json package.json apps/web/package.json CHANGELOG.md'
 readonly OPTIONAL_PATHS='wiki/.state.json wiki/log.md'
 
 script_directory="${BASH_SOURCE[0]%/*}"
@@ -238,7 +238,7 @@ EOF
   [ "$(git -C "$root" cat-file -s "$head_tree:.gaia/VERSION")" -eq $((${#new_version} + 1)) ] \
     || { not_bookkeeping '.gaia/VERSION carries more than its version line'; return 1; }
 
-  for path in package.json frontend/package.json .gaia/manifest.json; do
+  for path in package.json apps/web/package.json .gaia/manifest.json; do
     if ! base_side="$(normalized_json "$base_tree" "$path" 'del(.version, .generated)')" \
       || ! head_side="$(normalized_json "$head_tree" "$path" 'del(.version, .generated)')"; then
       not_bookkeeping "$path does not parse"
@@ -248,7 +248,7 @@ EOF
     [ "$(json_version "$base_tree" "$path")" = "$old_version" ] && [ "$(json_version "$head_tree" "$path")" = "$new_version" ] \
       || { not_bookkeeping "$path does not move $old_version to $new_version"; return 1; }
   done
-  for path in package.json frontend/package.json; do
+  for path in package.json apps/web/package.json; do
     [ "$(normalized_json "$base_tree" "$path" 'has("generated")')" = false ] \
       && [ "$(normalized_json "$head_tree" "$path" 'has("generated")')" = false ] \
       || { not_bookkeeping "$path carries a generated key"; return 1; }

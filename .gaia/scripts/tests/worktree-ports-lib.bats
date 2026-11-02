@@ -17,10 +17,10 @@ setup() {
   STATE="$BATS_TEST_TMPDIR/state"
   export GAIA_PORTS_STATE_DIRECTORY="$STATE"
   unset GAIA_PORTS_DEV_BASE_PORT GAIA_PORTS_STORYBOOK_BASE_PORT SITE_URL
-  mkdir -p "$BATS_TEST_TMPDIR/main/frontend" "$BATS_TEST_TMPDIR/trees"
+  mkdir -p "$BATS_TEST_TMPDIR/main/apps/web" "$BATS_TEST_TMPDIR/trees"
   git init -q -b main "$BATS_TEST_TMPDIR/main"
   FIXTURE_MAIN="$(cd "$BATS_TEST_TMPDIR/main" && pwd -P)"
-  : >"$FIXTURE_MAIN/frontend/react-router.config.ts"
+  : >"$FIXTURE_MAIN/apps/web/react-router.config.ts"
   fixture_git add -A
   fixture_git commit -q -m base
 }
@@ -364,7 +364,7 @@ add_other_project_tree() {
 @test "port file: written in the exact format and read back" {
   run gaia_ports_write_file "$FIXTURE_MAIN" 3
   [ "$status" -eq 0 ]
-  file="$FIXTURE_MAIN/frontend/.gaia-ports"
+  file="$FIXTURE_MAIN/apps/web/.gaia-ports"
   expected="$(printf '%s\n' \
     '# GAIA per-worktree ports, written by worktree provisioning on every entry. Edits are overwritten.' \
     'GAIA_PORT_SLOT=3' \
@@ -418,15 +418,15 @@ add_other_project_tree() {
 
 @test "port file: an unwritable package directory is rc 1 and leaves no file behind" {
   [ "$(id -u)" -ne 0 ] || skip "root ignores directory permissions"
-  chmod a-w "$FIXTURE_MAIN/frontend"
+  chmod a-w "$FIXTURE_MAIN/apps/web"
   run gaia_ports_write_file "$FIXTURE_MAIN" 1
-  chmod u+w "$FIXTURE_MAIN/frontend"
+  chmod u+w "$FIXTURE_MAIN/apps/web"
   [ "$status" -eq 1 ]
-  [ -z "$(find "$FIXTURE_MAIN/frontend" -maxdepth 1 -name '.gaia-ports*')" ]
+  [ -z "$(find "$FIXTURE_MAIN/apps/web" -maxdepth 1 -name '.gaia-ports*')" ]
 }
 
 @test "site url: the port is replaced for every URL shape" {
-  env_file="$FIXTURE_MAIN/frontend/.env"
+  env_file="$FIXTURE_MAIN/apps/web/.env"
   check_site_url() {
     printf '%s\n' "$1" >"$env_file"
     run gaia_ports_site_url "$FIXTURE_MAIN" 5175
@@ -447,7 +447,7 @@ add_other_project_tree() {
 }
 
 @test "site url: the env file is read with sed and never sourced" {
-  printf '%s\n' 'SECRET=$(touch "'"$BATS_TEST_TMPDIR"'/sourced")' 'SITE_URL=http://localhost:5173' >"$FIXTURE_MAIN/frontend/.env"
+  printf '%s\n' 'SECRET=$(touch "'"$BATS_TEST_TMPDIR"'/sourced")' 'SITE_URL=http://localhost:5173' >"$FIXTURE_MAIN/apps/web/.env"
   run gaia_ports_site_url "$FIXTURE_MAIN" 5175
   [ "$output" = "http://localhost:5175" ]
   [ -e "$BATS_TEST_TMPDIR/sourced" ] && return 1
@@ -465,10 +465,10 @@ add_other_project_tree() {
   [ "$load_status" = "4" ]
 
   result="$(PATH="$stub"; gaia_ports_package_directory "$FIXTURE_MAIN")"
-  [ "$result" = "$FIXTURE_MAIN/frontend" ]
+  [ "$result" = "$FIXTURE_MAIN/apps/web" ]
 
   bare="$BATS_TEST_TMPDIR/bare-tree"
-  mkdir -p "$bare/frontend"
+  mkdir -p "$bare/apps/web"
   git init -q -b main "$bare"
   bare="$(cd "$bare" && pwd -P)"
   code=0
@@ -479,29 +479,29 @@ add_other_project_tree() {
 
 @test "linker: running it from a worktree leaves the port file a regular file" {
   tree_one="$(add_worktree one)"
-  mkdir -p "$FIXTURE_MAIN/frontend"
-  printf 'GAIA_PORT_SLOT=0\n' >"$FIXTURE_MAIN/frontend/.gaia-ports"
+  mkdir -p "$FIXTURE_MAIN/apps/web"
+  printf 'GAIA_PORT_SLOT=0\n' >"$FIXTURE_MAIN/apps/web/.gaia-ports"
   gaia_ports_write_file "$tree_one" 1
 
   is_regular_file() { [ -f "$1" ] && [ ! -L "$1" ]; }
 
   # Control: the assertion goes red when the file is a symlink to main's.
   control="$BATS_TEST_TMPDIR/control-link"
-  ln -s "$FIXTURE_MAIN/frontend/.gaia-ports" "$control"
+  ln -s "$FIXTURE_MAIN/apps/web/.gaia-ports" "$control"
   run is_regular_file "$control"
   [ "$status" -ne 0 ]
 
-  is_regular_file "$tree_one/frontend/.gaia-ports"
+  is_regular_file "$tree_one/apps/web/.gaia-ports"
   ( cd "$tree_one" && bash "$REPO_ROOT/.gaia/scripts/link-worktree.sh" ) >/dev/null 2>&1
-  is_regular_file "$tree_one/frontend/.gaia-ports"
-  [ "$(grep -c '^GAIA_PORT_SLOT=1$' "$tree_one/frontend/.gaia-ports")" -eq 1 ]
+  is_regular_file "$tree_one/apps/web/.gaia-ports"
+  [ "$(grep -c '^GAIA_PORT_SLOT=1$' "$tree_one/apps/web/.gaia-ports")" -eq 1 ]
 }
 
 @test "context line and missing-file message carry the ask-first sentence and ports hint" {
   run gaia_ports_context_line 2 http://localhost:5175 6008
   grep -qF -- "Never stop a process on a port another live tree owns without asking the user first." <<<"$output"
   grep -qF -- "Run bash .gaia/scripts/ports.sh to see this tree's ports." <<<"$output"
-  run gaia_ports_missing_file_message /t /t/frontend/.gaia-ports
+  run gaia_ports_missing_file_message /t /t/apps/web/.gaia-ports
   grep -qF -- "Never stop a process on a port another live tree owns without asking the user first." <<<"$output"
   grep -qF -- "Run bash .gaia/scripts/ports.sh to see this tree's ports." <<<"$output"
   grep -qF -- "Run: bash .claude/hooks/provision-worktree.sh /t" <<<"$output"

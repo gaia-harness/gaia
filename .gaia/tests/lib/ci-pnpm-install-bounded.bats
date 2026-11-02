@@ -49,7 +49,7 @@ install_lines() {
   printf '%s\n' 'jobs:' '  build:' '    steps:' \
     '      # pnpm install --frozen-lockfile in a comment is not a step' \
     '      - run: bash .github/actions/gaia-setup-node/bounded-install.sh --attempt-seconds 180 -- pnpm install --frozen-lockfile' \
-    '      - run: pnpm -C frontend exec playwright install chromium' \
+    '      - run: pnpm -C apps/web exec playwright install chromium' \
     >"$root/.github/workflows/clean.yml"
   printf '%s\n' 'pnpm install --frozen-lockfile' >"$root/.github/forensics/tests/stubbed.sh"
   run install_lines "$root"

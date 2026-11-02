@@ -25,7 +25,7 @@ import {readState} from './util/state.js';
 
 const FRONTEND = path.join(
   resolveRepoRootFromImportMeta(import.meta.url),
-  'frontend'
+  'apps/web'
 );
 
 const COPIED_FILES = [

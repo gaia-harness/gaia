@@ -49,7 +49,7 @@ const populate = (home: string, project: string): void => {
   write(path.join(project, 'wiki/index.md'), 'index\n');
   write(path.join(project, 'wiki/concepts/Page.md'), 'page\n');
   write(path.join(project, 'CLAUDE.md'), 'root\n');
-  write(path.join(project, 'frontend/CLAUDE.md'), 'nested\n');
+  write(path.join(project, 'apps/web/CLAUDE.md'), 'nested\n');
 };
 
 const inventoryOf = async (
@@ -202,7 +202,7 @@ describe('gaia fitness inventory', () => {
     );
     expect(report.stores.claude_md.files.map((file) => file.path)).toEqual([
       'CLAUDE.md',
-      'frontend/CLAUDE.md',
+      'apps/web/CLAUDE.md',
     ]);
     expect(listed).not.toContain('deep/er/er/CLAUDE.md');
 

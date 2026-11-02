@@ -179,4 +179,4 @@ Run these in this order, each by rule, never as a question.
 
 A failed or refused regeneration never fails the update; the summary names its command as a follow-up.
 
-**Settings.** When an answer resolved `.claude/settings.json`, or the report's `settings.state` is not `regenerated`, run `./.gaia/cli/gaia packages sync-settings` and then `bash .gaia/scripts/check-settings-drift.sh` in the acting tree. Never hand-edit the regenerated `frontend/.claude/settings.json`.
+**Settings.** When an answer resolved `.claude/settings.json`, or the report's `settings.state` is not `regenerated`, run `./.gaia/cli/gaia packages sync-settings` and then `bash .gaia/scripts/check-settings-drift.sh` in the acting tree. Never hand-edit the regenerated `apps/web/.claude/settings.json`.

@@ -1,0 +1,7 @@
+{
+  "load": 0,
+  "source": "registry",
+  "list": [["frontend", "frontend"]],
+  "webMembers": [],
+  "settingsMembers": ["frontend"]
+}

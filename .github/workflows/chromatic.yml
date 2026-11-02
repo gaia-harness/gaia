@@ -100,7 +100,7 @@ jobs:
       # and the changed-path set is the pushed range on the default branch
       # (what a squash-merge lands), or the whole branch against the default
       # branch otherwise (what that branch's own PR would merge, so a manifest-only
-      # follow-up commit cannot hide an earlier frontend/app/ change on the same
+      # follow-up commit cannot hide an earlier apps/web/app/ change on the same
       # branch). Predicate lives in .gaia/scripts/chore-deps-skip.sh.
       - name: Check chore-deps commit
         id: chore-deps
@@ -143,7 +143,7 @@ jobs:
       # fork as its own and pay for a build. Handing the filter the merge base
       # makes it list only the branch's own changes. Fails closed: when the
       # merge base cannot be computed, the base falls back to the repository's
-      # root commit, so the diff spans the whole history, lists frontend/app,
+      # root commit, so the diff spans the whole history, lists apps/web/app,
       # and the filter reports code=true and runs the build.
       - name: Resolve merge base
         id: merge-base
@@ -173,18 +173,19 @@ jobs:
           base: ${{ steps.merge-base.outputs.sha }}
           filters: |
             code:
-              - 'frontend/app/**'
-              - 'frontend/.storybook/**'
-              - 'frontend/public/**'
+              - 'apps/web/app/**'
+              - 'apps/web/.storybook/**'
+              - 'apps/web/public/**'
+              - 'packages/**'
               - 'package.json'
-              - 'frontend/package.json'
+              - 'apps/web/package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - 'frontend/tsconfig*.json'
-              - 'frontend/vite.config.*'
-              - 'frontend/react-compiler.config.*'
+              - 'apps/web/tsconfig*.json'
+              - 'apps/web/vite.config.*'
+              - 'apps/web/react-compiler.config.*'
               - '.gaia/packages.json'
-              - 'frontend/gaia.package.json'
+              - 'apps/web/gaia.package.json'
               - '.github/workflows/chromatic.yml'
               # The composite action the Node setup step below `uses:`. It
               # matches nothing else here, so without this line a pull request
@@ -201,10 +202,10 @@ jobs:
         name: Setup Node and install
         uses: ./.github/actions/gaia-setup-node
       # The preview must publish no environment values, and until now nothing on
-      # the build path said so. `frontend/test/preview-env.test.ts` pins that the Vitest node
+      # the build path said so. `apps/web/test/preview-env.test.ts` pins that the Vitest node
       # project keeps its real environment, emulates no DOM and loads no preview;
       # the Storybook build is a separate Vite pipeline no Vitest suite guards,
-      # so a substitution re-added to `frontend/.storybook/main.ts`, `frontend/.storybook/vite.config.ts`,
+      # so a substitution re-added to `apps/web/.storybook/main.ts`, `apps/web/.storybook/vite.config.ts`,
       # a third config or a plugin would bake values into a public artifact with
       # nothing failing. Build with sentinel values in the environment and fail if
       # one survives into the output.
@@ -216,7 +217,7 @@ jobs:
       # correct: a substitution that publishes nothing is not the failure. Both
       # cases are executed rather than reasoned about.
       #
-      # The sentinels are every key `schema` in `frontend/app/env.server.ts` declares
+      # The sentinels are every key `schema` in `apps/web/app/env.server.ts` declares
       # except `NODE_ENV`, which is excluded because the build needs its real
       # value. Declares, not requires: `COMMIT_SHA` and `MSW_ENABLED` are
       # `.optional()` and carry sentinels anyway, since what decides coverage is
@@ -233,7 +234,7 @@ jobs:
       # `pnpm run` sets `npm_package_version` from `package.json` and overwrites
       # that sentinel, which would drop one of the four keys from the guard's
       # reach while still reporting green. Flag parity with the script is not
-      # load-bearing; producing `frontend/storybook-static/` from the real config is.
+      # load-bearing; producing `apps/web/storybook-static/` from the real config is.
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Build the preview and assert it inlines no environment values
         env:
@@ -245,19 +246,19 @@ jobs:
           SITE_URL: gaia-preview-env-sentinel-site-url
         run: |
           set -euo pipefail
-          pnpm -C frontend exec storybook build --test --stats-json
+          pnpm -C apps/web exec storybook build --test --stats-json
           # `grep -r` exits 2 on a missing directory, and an `if` condition
           # absorbs that as "no match" rather than as an error, so a build that
           # produced no output would report this guard green having read nothing.
-          if [ ! -d frontend/storybook-static ]; then
-            echo "::error::The Storybook build produced no frontend/storybook-static/, so this guard inspected nothing."
+          if [ ! -d apps/web/storybook-static ]; then
+            echo "::error::The Storybook build produced no apps/web/storybook-static/, so this guard inspected nothing."
             exit 1
           fi
-          if grep -rl 'gaia-preview-env-sentinel-' frontend/storybook-static; then
+          if grep -rl 'gaia-preview-env-sentinel-' apps/web/storybook-static; then
             echo "::error::The Storybook build inlined environment values into the preview (files listed above). Remove the substitution and pass a story the values it needs as args."
             exit 1
           fi
-          # frontend/storybook-static/ is left in place: it is the artifact `Run Chromatic`
+          # apps/web/storybook-static/ is left in place: it is the artifact `Run Chromatic`
           # publishes below. Publishing it is safe only because every check above
           # already ran against this exact tree and this step aborts before the
           # publish step on either a missing build or a leaked sentinel, so an
@@ -276,7 +277,7 @@ jobs:
       # not retrieve dependency changes from lockfiles", falls back to diffing
       # `package.json`, and runs a full build on any edit to it, a script change
       # included. 18.10.0 parses the multi-document lockfile and resolves
-      # `frontend/package.json` against its own importer in the root lockfile,
+      # `apps/web/package.json` against its own importer in the root lockfile,
       # so a dependency bump re-tests only the stories that import a changed
       # package.
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
@@ -295,15 +296,15 @@ jobs:
           exitOnceUploaded: true
           autoAcceptChanges: 'main'
           onlyChanged: true
-          externals: 'frontend/app/styles/tailwind.css'
+          externals: 'apps/web/app/styles/tailwind.css'
           # `.gaia/` is the GAIA harness and holds no story code. TurboSnap
           # pairs every changed `package.json` with a lockfile, and one the
           # root lockfile has no importer for fails the whole lockfile trace,
           # falling back to "any package.json changed" and a full build.
           # Untracing `.gaia/` keeps any manifest there out of the pairing,
-          # so `frontend/package.json` still traces against `pnpm-lock.yaml`.
+          # so `apps/web/package.json` still traces against `pnpm-lock.yaml`.
           untraced: '.gaia/**'
-          storybookBuildDir: 'frontend/storybook-static'
+          storybookBuildDir: 'apps/web/storybook-static'
           # TurboSnap traces stories from the stats file relative to the
           # Storybook project root, which is the package, not the repo root.
-          storybookBaseDir: 'frontend'
+          storybookBaseDir: 'apps/web'

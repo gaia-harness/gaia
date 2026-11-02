@@ -1,6 +1,6 @@
 ---
 type: module
-path: frontend/app/state/
+path: apps/web/app/state/
 status: active
 language: typescript
 purpose: Global React Context+Provider state
@@ -11,20 +11,20 @@ tags: [module, state]
 
 # State
 
-The app uses plain React Context+Provider for global state; no Redux, Zustand, etc. `frontend/app/state/index.tsx` defines a single `<State>` component that `root.tsx` renders around `<App />`. It is the designated composition point: consumers nest their own providers inside `<State>` as they add slices.
+The app uses plain React Context+Provider for global state; no Redux, Zustand, etc. `apps/web/app/state/index.tsx` defines a single `<State>` component that `root.tsx` renders around `<App />`. It is the designated composition point: consumers nest their own providers inside `<State>` as they add slices.
 
 ## Template ships with no slices
 
 The template ships with **no global state slices**; `<State>` is a passthrough. It exists as the established hook point so consumers can register their own providers (auth, feature flags, etc.) without touching `root.tsx`.
 
-When TanStack Query is on (`gaia init configure-data-layer --query true`), `<State>` wraps its children in `QueryProvider` (`query-provider.tsx` in `frontend/app/state/`, written by that command), which obtains the QueryClient once per render tree. That provider is server data, not a state slice; see [[Data Loading]].
+When TanStack Query is on (`gaia init configure-data-layer --query true`), `<State>` wraps its children in `QueryProvider` (`query-provider.tsx` in `apps/web/app/state/`, written by that command), which obtains the QueryClient once per render tree. That provider is server data, not a state slice; see [[Data Loading]].
 
 > [!key-insight] Theme is loader-derived, not state
 > Theme is **not** a state slice. It's derived in the loader on every render from the `__theme` cookie, falling back to the OS preference on the client, so no React state is required. See [[Theme Flow]] and [[Dark Mode Modernization]].
 
 ## Canonical pattern
 
-Every state slice in `frontend/app/state/` follows one of two variants; full implementations are in the `state-pattern` rule (`frontend/.claude/rules/state-pattern.md`).
+Every state slice in `apps/web/app/state/` follows one of two variants; full implementations are in the `state-pattern` rule (`apps/web/.claude/rules/state-pattern.md`).
 
 **Read-only** (value from SSR loader, components only read):
 Context holds `Maybe<T>`; hook asserts non-null and returns `T`. Optional `useMaybeX()` variant returns `Maybe<T>` without throwing.
@@ -56,9 +56,9 @@ XProvider.displayName = 'XProvider';
 
 ## Initial state from the loader
 
-Providers receive SSR-safe initial state from `root.tsx` loader data, preventing hydration mismatches. Read the live `AppWithState` implementation in `frontend/app/root.tsx`.
+Providers receive SSR-safe initial state from `root.tsx` loader data, preventing hydration mismatches. Read the live `AppWithState` implementation in `apps/web/app/root.tsx`.
 
 ## See also
 
-- `state-pattern` rule (`frontend/.claude/rules/state-pattern.md`): prescriptive rule (naming, typing, colocation)
+- `state-pattern` rule (`apps/web/.claude/rules/state-pattern.md`): prescriptive rule (naming, typing, colocation)
 - [[Theme Flow]]: full SSR→client theme lifecycle

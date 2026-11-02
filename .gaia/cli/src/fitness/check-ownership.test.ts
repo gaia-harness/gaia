@@ -197,7 +197,7 @@ const MISSING_HOOK = {
 };
 
 const SHIPPED_SETTINGS = '.claude/settings.json';
-const ADOPTER_SETTINGS = 'frontend/.claude/settings.json';
+const ADOPTER_SETTINGS = 'apps/web/.claude/settings.json';
 
 /** A project with one adopter file per fixable category plus every file class that must stay out of the heal. */
 const fixableProject = (secret: string): FixtureProject => ({
@@ -205,7 +205,7 @@ const fixableProject = (secret: string): FixtureProject => ({
     '.claude/gaia-fitness.json': `${JSON.stringify({
       ignore: [
         {
-          path: 'frontend/CLAUDE.md',
+          path: 'apps/web/CLAUDE.md',
           reason: 'A documented exception.',
           rule_id: 'claudemd.dead-path',
         },
@@ -236,10 +236,10 @@ const fixableProject = (secret: string): FixtureProject => ({
       env: {ANTHROPIC_API_KEY: secret},
       permissions: {allow: ['Read', 'Read']},
     })}\n`,
+    'apps/web/CLAUDE.md':
+      '# Frontend\n\nSee `docs/missing-frontend-path.md`.\n',
     'CLAUDE.md': '# Project\n\nSee `docs/missing-claude-path.md`.\n',
     'docs/index.md': '# Docs\n',
-    'frontend/CLAUDE.md':
-      '# Frontend\n\nSee `docs/missing-frontend-path.md`.\n',
   },
   git: true,
   manifest: {files: {[SHIPPED_SETTINGS]: 'owned'}},
@@ -307,7 +307,7 @@ const ADOPTER_CASES: readonly FixableCase[] = [
   },
   {
     bucket: 'suppressed',
-    file: 'frontend/CLAUDE.md',
+    file: 'apps/web/CLAUDE.md',
     fixable: false,
     name: 'a suppressed claudemd warning',
     ruleId: 'claudemd.dead-path',

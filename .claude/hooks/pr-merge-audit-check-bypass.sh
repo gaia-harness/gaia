@@ -23,7 +23,7 @@
 # Strict allowlist, evaluated fail-closed: the diff base must resolve, the diff
 # must be non-empty OR its emptiness must be decisive under
 # gate_empty_is_decisive above, and EVERY path must be out of scope. Any
-# unresolved base, diff error, or in-scope path (frontend/app/, frontend/test/, configs,
+# unresolved base, diff error, or in-scope path (apps/web/app/, apps/web/test/, configs,
 # .github/workflows/) falls through to the normal deny. A PR that touches
 # auditable source therefore can never reach this bypass, it cannot mask an
 # audit that withheld its marker over unresolved findings, since that PR's diff

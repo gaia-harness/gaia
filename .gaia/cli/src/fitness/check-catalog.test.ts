@@ -76,6 +76,8 @@ const EXPECTED_RULE_IDS = [
   'settings.local-gitignored',
   'settings.redundant-permissions',
   'settings.valid-json',
+  'settings.workspace-member-unregistered',
+  'settings.workspace-member-unregistrable',
   'wiki.dead-paths',
   'wiki.orphans',
 ];
@@ -224,7 +226,7 @@ const ownedHarnessPaths = (): string[] => {
     .filter(
       ([relative, ownership]) =>
         ownership === 'owned' &&
-        ['.claude/', 'frontend/.claude/', 'wiki/'].some((prefix) =>
+        ['.claude/', 'apps/web/.claude/', 'wiki/'].some((prefix) =>
           relative.startsWith(prefix)
         )
     )

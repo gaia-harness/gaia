@@ -60,7 +60,7 @@ setup() {
   ln -s "$HOME_ROOT/.gaia/scripts/main-root-lib.sh" "$REPO/.gaia/scripts/main-root-lib.sh"
   # The check hook's determinism carve-out classifies the test file via this
   # helper; symlink it so the carve-out resolves it as in production. The
-  # fixtures live on the strict surface (frontend/app/utils/**), so the carve-out leaves
+  # fixtures live on the strict surface (apps/web/app/utils/**), so the carve-out leaves
   # the RED demand in place and the RED->GREEN handshake is exercised genuinely.
   ln -s "$HOME_ROOT/.gaia/scripts/classifier" "$REPO/.gaia/scripts/classifier"
 
@@ -147,16 +147,16 @@ test("adds two numbers", () => {
 # hooks compute the same signal for the same source.
 # ---------------------------------------------------------------------------
 @test "RED captured then GREEN: commit is allowed" {
-  write_file "frontend/app/utils/x/index.test.ts" "$RED_TEST"
+  write_file "apps/web/app/utils/x/index.test.ts" "$RED_TEST"
 
   json="$REPO/canned.json"
-  canned_fail_json "$json" "frontend/app/utils/x/index.test.ts" "adds two numbers"
-  run_capture "frontend/app/utils/x/index.test.ts" "$json"
+  canned_fail_json "$json" "apps/web/app/utils/x/index.test.ts" "adds two numbers"
+  run_capture "apps/web/app/utils/x/index.test.ts" "$json"
   [ "$status" -eq 0 ]
   [ "$(ledger_lines)" -eq 1 ]
 
   # Stage the (unchanged) test; its current signal equals the captured one.
-  stage "frontend/app/utils/x/index.test.ts"
+  stage "apps/web/app/utils/x/index.test.ts"
   run_check
   [ "$status" -eq 0 ]
   ! denied
@@ -166,8 +166,8 @@ test("adds two numbers", () => {
 # Never-failed denied: a new passing test with no capture step has no RED.
 # ---------------------------------------------------------------------------
 @test "never captured: commit is denied" {
-  write_file "frontend/app/utils/x/index.test.ts" "$RED_TEST"
-  stage "frontend/app/utils/x/index.test.ts"
+  write_file "apps/web/app/utils/x/index.test.ts" "$RED_TEST"
+  stage "apps/web/app/utils/x/index.test.ts"
   [ "$(ledger_lines)" -eq 0 ]
   run_check
   [ "$status" -eq 0 ]
@@ -194,8 +194,8 @@ test.each([
 '
 
 @test "a new test.each test with a \$prop title commits with no RED demand" {
-  write_file "frontend/app/utils/x/index.test.ts" "$TEST_EACH_TEST"
-  stage "frontend/app/utils/x/index.test.ts"
+  write_file "apps/web/app/utils/x/index.test.ts" "$TEST_EACH_TEST"
+  stage "apps/web/app/utils/x/index.test.ts"
   [ "$(ledger_lines)" -eq 0 ]
   run_check
   [ "$status" -eq 0 ]
@@ -208,21 +208,21 @@ test.each([
 # content binding invalidates a stale RED.
 # ---------------------------------------------------------------------------
 @test "edited after RED: commit is denied on signal mismatch" {
-  write_file "frontend/app/utils/x/index.test.ts" "$RED_TEST"
+  write_file "apps/web/app/utils/x/index.test.ts" "$RED_TEST"
 
   json="$REPO/canned.json"
-  canned_fail_json "$json" "frontend/app/utils/x/index.test.ts" "adds two numbers"
-  run_capture "frontend/app/utils/x/index.test.ts" "$json"
+  canned_fail_json "$json" "apps/web/app/utils/x/index.test.ts" "adds two numbers"
+  run_capture "apps/web/app/utils/x/index.test.ts" "$json"
   [ "$status" -eq 0 ]
   [ "$(ledger_lines)" -eq 1 ]
 
   # Edit the test body (same fullName, different assertion) AFTER its RED.
-  write_file "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  write_file "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("adds two numbers", () => {
   expect(2 + 2).toBe(4);
 });
 '
-  stage "frontend/app/utils/x/index.test.ts"
+  stage "apps/web/app/utils/x/index.test.ts"
   run_check
   [ "$status" -eq 0 ]
   denied
@@ -236,8 +236,8 @@ test("adds two numbers", () => {
 # named a command the capture hook does not recognize would fail here.
 # ---------------------------------------------------------------------------
 @test "the recovery command named in the deny reason records a RED and the retried commit is allowed" {
-  write_file "frontend/app/utils/x/index.test.ts" "$RED_TEST"
-  stage "frontend/app/utils/x/index.test.ts"
+  write_file "apps/web/app/utils/x/index.test.ts" "$RED_TEST"
+  stage "apps/web/app/utils/x/index.test.ts"
   run_check
   denied
 
@@ -245,17 +245,17 @@ test("adds two numbers", () => {
   reason=$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")
   recovery=$(grep -o 'pnpm -C <package dir> test --run <test-file>' <<<"$reason" | head -1)
   [ -n "$recovery" ]
-  recovery="${recovery//<package dir>/frontend}"
+  recovery="${recovery//<package dir>/apps/web}"
   recovery="${recovery//<test-file>/app/utils/x/index.test.ts}"
 
   json="$REPO/canned.json"
-  canned_fail_json "$json" "frontend/app/utils/x/index.test.ts" "adds two numbers"
+  canned_fail_json "$json" "apps/web/app/utils/x/index.test.ts" "adds two numbers"
   payload=$(jq -nc --arg c "$recovery" \
     '{tool_name:"Bash", tool_input:{command:$c}, tool_response:{stdout:"", stderr:"", interrupted:false}}')
   RED_CAPTURE_JSON_OVERRIDE="$json" invoke_hook_in "$REPO" "$payload" "$CAPTURE_HOOK"
   [ "$status" -eq 0 ]
   [ "$(ledger_lines)" -eq 1 ]
-  [ "$(jq -r '.file' "$REPO/$LEDGER_RELATIVE_PATH")" = "frontend/app/utils/x/index.test.ts" ]
+  [ "$(jq -r '.file' "$REPO/$LEDGER_RELATIVE_PATH")" = "apps/web/app/utils/x/index.test.ts" ]
 
   run_check
   [ "$status" -eq 0 ]

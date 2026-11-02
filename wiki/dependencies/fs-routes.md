@@ -10,4 +10,4 @@ tags: [dependency, routing]
 
 # fs-routes
 
-React Router's first-party file-route convention, released in lockstep with [[React Router]]. `frontend/app/routes.ts` calls `flatRoutes()` from `@react-router/fs-routes` to build the route config. See [[Routing]] for the route file naming.
+React Router's first-party file-route convention, released in lockstep with [[React Router]]. `apps/web/app/routes.ts` calls `flatRoutes()` from `@react-router/fs-routes` to build the route config. See [[Routing]] for the route file naming.

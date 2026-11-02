@@ -24,7 +24,7 @@ This page owns the doctrine. Every other page that teaches stories states it in 
 
 ## The CSF4 shape
 
-Stories are CSF Next (CSF4) only, with `features.experimentalTestSyntax` on in `frontend/.storybook/main.ts`. Story files import the preview through the `#.storybook/preview` subpath and build everything from it.
+Stories are CSF Next (CSF4) only, with `features.experimentalTestSyntax` on in `apps/web/.storybook/main.ts`. Story files import the preview through the `#.storybook/preview` subpath and build everything from it.
 
 ```tsx
 import preview from '#.storybook/preview';
@@ -41,7 +41,7 @@ Default.test('calls onClick when pressed', async ({canvas, args, userEvent}) => 
 });
 ```
 
-Each export is a direct `meta.story({...})` or `.extend({...})` call; a story built by a factory function is not supported, because Storybook's indexer cannot attach `.test()` to it. A `play` may click, type or open, to reach a state; it never calls `expect`. msw handlers install in the story's `beforeEach`, never `parameters.msw`. `frontend/.claude/rules/storybook.md` owns the authoring rules.
+Each export is a direct `meta.story({...})` or `.extend({...})` call; a story built by a factory function is not supported, because Storybook's indexer cannot attach `.test()` to it. A `play` may click, type or open, to reach a state; it never calls `expect`. msw handlers install in the story's `beforeEach`, never `parameters.msw`. `apps/web/.claude/rules/storybook.md` owns the authoring rules.
 
 ## How `.test()` runs
 
@@ -69,7 +69,7 @@ Each export is a direct `meta.story({...})` or `.extend({...})` call; a story bu
 
 ## The three Vitest projects
 
-`frontend/vitest.config.ts` defines three projects; read it for the exact membership instead of a copy here.
+`apps/web/vitest.config.ts` defines three projects; read it for the exact membership instead of a copy here.
 
 - `node`: pure and server code (`*.test.ts` outside hook folders), no DOM, with the MSW node server and the test-data reset in `test/setup.ts`.
 - `browser`: hooks (`vitest-browser-react`) and any `*.test.tsx`, in Chromium, with `test/setup.browser.ts`. GAIA supplies no React Testing Library setup, so a test file that imports it brings its own render wrapper and dependencies; converting it to a story is the supported path.
@@ -81,7 +81,7 @@ All browser projects need Chromium. See [[Testing]] for the `pnpm install:browse
 
 - **shadcn `ui` components** get render-only stories. A `.test()` belongs there only for behavior GAIA adds on top of the vendored component ([[shadcn Component Layer]]).
 - **Story-scoped configuration** goes through props, not module state. `LanguageSelect` takes an optional `languages` prop (default: the app's full list), so a story passes the locales it needs without touching the app-wide list.
-- **Router stub.** `stubs.reactRouter` (`frontend/test/stubs/react-router-stub.tsx`) accepts `actions` (a per-path action overriding the no-op entry for that path) and `destinations` (paths that render `Navigated to <path>` inside a main landmark so a test asserts arrival by text). The options may be a function of the story context, which lets a decorator read `fn()` spy args.
+- **Router stub.** `stubs.reactRouter` (`apps/web/test/stubs/react-router-stub.tsx`) accepts `actions` (a per-path action overriding the no-op entry for that path) and `destinations` (paths that render `Navigated to <path>` inside a main landmark so a test asserts arrival by text). The options may be a function of the story context, which lets a decorator read `fn()` spy args.
   - Router stubs do not nest: one `stubs.reactRouter` per story file, at meta level. Per-story variation goes through the function form.
   - An `actions` key must differ from the stub's `path`, because the main route matches first. A form posting to its own route is observed through the `action` option instead.
 - **Callback spies.** A story that spies on a prop spreads `{...args}` last, so an `fn()` arg reaches the component. See [[Component Testing]].

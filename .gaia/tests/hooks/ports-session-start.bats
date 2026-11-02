@@ -38,10 +38,10 @@ setup() {
     { [ -e /proc/self ] && command -v ss >/dev/null 2>&1; } || skip "no process backend (lsof, or /proc with ss) on this host"
   fi
 
-  mkdir -p "$SCRATCH/main/frontend" "$SCRATCH/trees"
+  mkdir -p "$SCRATCH/main/apps/web" "$SCRATCH/trees"
   git init -q -b main "$SCRATCH/main"
   MAIN="$(cd "$SCRATCH/main" && pwd -P)"
-  : >"$MAIN/frontend/react-router.config.ts"
+  : >"$MAIN/apps/web/react-router.config.ts"
   fixture_git add -A
   fixture_git commit -q -m base
   STATE="$MAIN/.gaia/local/ports"
@@ -496,7 +496,7 @@ expected_context_line() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 
-  rm -f "$TREE/frontend/.gaia-ports"
+  rm -f "$TREE/apps/web/.gaia-ports"
   run_hook compact session-two "$TREE"
   [ "$status" -eq 0 ]
   [ -z "$output" ]

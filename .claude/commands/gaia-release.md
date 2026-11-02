@@ -63,9 +63,9 @@ If the proposal disagrees with `<BUMP>`, surface the disagreement once (e.g. "CL
 
 Apply by path:
 
-- **`<BUMP>` equals the proposal and is not major:** `.gaia/cli/gaia-maintainer release bump --auto` writes the proposal's version to `package.json`, `frontend/package.json`, and `.gaia/VERSION`.
-- **`<BUMP>` differs from a non-major proposal** (e.g. `patch` override of a `minor` proposal, or `minor` over a `patch` one): `--auto` would write the proposal's version, not `<BUMP>`'s. Compute NEW_VERSION = current with the requested bump applied, then write `package.json`, `frontend/package.json`, and `.gaia/VERSION` directly (the two `package.json` versions must stay equal: a bats case fails the release PR on drift). Preserve `package.json` formatting (2-space indent, trailing newline), use `node -e "const fs=require('fs');const p=require('./package.json');p.version='<NEW>';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');"` `node -e` the same line against `frontend/package.json`, and `printf '<NEW>\n' > .gaia/VERSION`.
-- **A major proposal:** `--auto` refuses (exit 1) whatever `<BUMP>` is. Compute NEW_VERSION from `<BUMP>` (`v<CURRENT_MAJOR+1>.0.0` for `major`) and write `package.json`, `frontend/package.json`, and `.gaia/VERSION` directly per the form above.
+- **`<BUMP>` equals the proposal and is not major:** `.gaia/cli/gaia-maintainer release bump --auto` writes the proposal's version to `package.json`, `apps/web/package.json`, and `.gaia/VERSION`.
+- **`<BUMP>` differs from a non-major proposal** (e.g. `patch` override of a `minor` proposal, or `minor` over a `patch` one): `--auto` would write the proposal's version, not `<BUMP>`'s. Compute NEW_VERSION = current with the requested bump applied, then write `package.json`, `apps/web/package.json`, and `.gaia/VERSION` directly (the two `package.json` versions must stay equal: a bats case fails the release PR on drift). Preserve `package.json` formatting (2-space indent, trailing newline), use `node -e "const fs=require('fs');const p=require('./package.json');p.version='<NEW>';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');"` `node -e` the same line against `apps/web/package.json`, and `printf '<NEW>\n' > .gaia/VERSION`.
+- **A major proposal:** `--auto` refuses (exit 1) whatever `<BUMP>` is. Compute NEW_VERSION from `<BUMP>` (`v<CURRENT_MAJOR+1>.0.0` for `major`) and write `package.json`, `apps/web/package.json`, and `.gaia/VERSION` directly per the form above.
 
 ### 3. Quality gate
 
@@ -138,7 +138,7 @@ Rebuilds both `.gaia/cli/gaia` (adopter binary) and `.gaia/cli/gaia-maintainer` 
 .gaia/cli/gaia-maintainer release commit-and-tag --commit
 ```
 
-Stages `package.json`, `frontend/package.json`, `.gaia/VERSION`, `.gaia/manifest.json`, `CHANGELOG.md`, `wiki/log.md` (and `wiki/.state.json` after the amend). The maintainer adds `.gaia/cli/gaia` and `.gaia/cli/gaia-maintainer` manually if Step 7b rebuilt them. Commits as `chore(release): vX.Y.Z`, captures the new SHA, records it in `wiki/.state.json`, then amends the commit so the tree contains the state file (the recorded SHA is the pre-amend commit's: a commit cannot contain its own hash).
+Stages `package.json`, `apps/web/package.json`, `.gaia/VERSION`, `.gaia/manifest.json`, `CHANGELOG.md`, `wiki/log.md` (and `wiki/.state.json` after the amend). The maintainer adds `.gaia/cli/gaia` and `.gaia/cli/gaia-maintainer` manually if Step 7b rebuilt them. Commits as `chore(release): vX.Y.Z`, captures the new SHA, records it in `wiki/.state.json`, then amends the commit so the tree contains the state file (the recorded SHA is the pre-amend commit's: a commit cannot contain its own hash).
 
 If the pre-commit hook fails, STOP and report, fix the issue and create a **new** commit; do not `--amend`.
 

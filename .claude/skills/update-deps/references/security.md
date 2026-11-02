@@ -21,7 +21,7 @@ Carry into the later phases the security plan: per advisory, its candidate order
 
 ### Security resolutions
 
-This recipe resolves the security advisories the run's Phase 1 plan still owes, after the waves and Phase 5b. The orchestrating session runs it itself, because acceptance asks the human with `AskUserQuestion`; the resolution steps may be delegated to an agent only while no question is pending. Operate on the root workspace and its `frontend` package only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C frontend` is the one allowed path argument.
+This recipe resolves the security advisories the run's Phase 1 plan still owes, after the waves and Phase 5b. The orchestrating session runs it itself, because acceptance asks the human with `AskUserQuestion`; the resolution steps may be delegated to an agent only while no question is pending. Operate on the root workspace and its `web` package (`apps/web`) only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument.
 
 Inputs from Phase 1: the opening advisories payload (`.gaia/local/cache/shared/update-deps-advisories.json`), the security plan (per advisory: the candidate order after the apply-set step, and each ask-first answer), the opening `dismissedGhsas`, whether alerts were read this run, and the run mode. Shell variables do not survive between Bash tool calls, and a worktree session refuses a shell variable inside a path, so every path below is a fixed literal: the batch snapshot is `.gaia/local/cache/shared/update-deps-security-batch`, the resolution snapshot is `.gaia/local/cache/shared/update-deps-security-resolution`, and a command takes the literal wherever this page writes `<snapshot>`. The untrusted-text rule in `### Security preview` binds this phase too.
 
@@ -56,7 +56,7 @@ A snapshot is a git commit object holding the tracked files (its **baseline**), 
 ```bash
 rm -rf <snapshot>
 mkdir -p <snapshot>
-pnpm -C frontend ls --depth 0 --json | jq -e '.[0] | (.dependencies // {}) + (.devDependencies // {}) | map_values(.version)' > <snapshot>/direct.json
+pnpm -C apps/web ls --depth 0 --json | jq -e '.[0] | (.dependencies // {}) + (.devDependencies // {}) | map_values(.version)' > <snapshot>/direct.json
 git stash create
 ```
 
@@ -67,9 +67,9 @@ Run each line as its own call, with `<snapshot>` the batch snapshot literal for 
 **Revert** restores one baseline whole, never part of it, leaving the index as it was. Run each line as its own call:
 
 ```bash
-git restore --source=<baseline> --worktree -- package.json pnpm-lock.yaml pnpm-workspace.yaml frontend/package.json
+git restore --source=<baseline> --worktree -- package.json pnpm-lock.yaml pnpm-workspace.yaml apps/web/package.json
 pnpm install --frozen-lockfile
-git diff --quiet <baseline> -- package.json pnpm-lock.yaml pnpm-workspace.yaml frontend/package.json
+git diff --quiet <baseline> -- package.json pnpm-lock.yaml pnpm-workspace.yaml apps/web/package.json
 ```
 
 The last line exits 0 when all four files match the baseline again. `<baseline>` is the batch baseline for a failed batch and the resolution baseline for one resolution, so reverting one resolution never restores another's state. Remove both snapshot directories (`rm -rf` on each literal path) when this phase ends.
@@ -82,13 +82,13 @@ Take each advisory's candidates in its plan order, starting with the first one n
 
 ```bash
 pnpm cache delete <package>
-pnpm -C frontend update --no-save <package>
+pnpm -C apps/web update --no-save <package>
 ```
 
 Name the package only, never `name@version`. `--no-save` leaves every declared range as it is, and pnpm 12 re-resolves to unlimited depth by default (it rejects `--depth Infinity`), so the command moves only the named package to the newest version its parents' ranges admit, or nothing when it is already newest. The `cache delete` line is required, for the reason Phase 5b's refresh step gives (`transitive-refresh.md`): without it a patch a `minimumReleaseAgeExclude` entry admits can be invisible, and `update` exits 0 having moved nothing. It clears only that package's metadata, from pnpm's machine-wide cache, so any project's next resolve of it refetches it from the registry; packages and lockfiles are untouched. Then run the guards Phase 5b runs, against this resolution's snapshot:
 
-- `package.json`, `frontend/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the resolution baseline: `git diff --quiet <resolution baseline> -- package.json frontend/package.json pnpm-workspace.yaml` exits 0. Exit 1 means pnpm rewrote a range or recorded a release-age exemption: revert and report `quality gate failed`, naming the rewritten file.
-- Re-run the snapshot's `pnpm -C frontend ls` line into `.gaia/local/cache/shared/update-deps-security-resolution/direct-after.json` and compare each held package's version with `direct.json`. The held packages are the payload's `skipped[]` entries with `reason: "held"`; a snoozed group never blocks a security resolution. A held package whose version moved reverts the resolution and reports `held by config (<pkg> ceiling <ceiling>)`.
+- `package.json`, `apps/web/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the resolution baseline: `git diff --quiet <resolution baseline> -- package.json apps/web/package.json pnpm-workspace.yaml` exits 0. Exit 1 means pnpm rewrote a range or recorded a release-age exemption: revert and report `quality gate failed`, naming the rewritten file.
+- Re-run the snapshot's `pnpm -C apps/web ls` line into `.gaia/local/cache/shared/update-deps-security-resolution/direct-after.json` and compare each held package's version with `direct.json`. The held packages are the payload's `skipped[]` entries with `reason: "held"`; a snoozed group never blocks a security resolution. A held package whose version moved reverts the resolution and reports `held by config (<pkg> ceiling <ceiling>)`.
 
 A non-zero exit reverts and moves on to the next candidate.
 

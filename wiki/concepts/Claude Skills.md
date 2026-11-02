@@ -8,13 +8,13 @@ tags: [concept, claude, skills]
 
 # Claude Skills
 
-`.claude/skills/` holds project-local skills. Each has a `SKILL.md` with YAML frontmatter (`name`, `description`, optional `allowed-tools`) defining when it activates. Skills apply by context/intent (description match); rules apply by file path. Skills that serve only the React app live in `frontend/.claude/skills/` and surface when work touches files under `frontend/`; the harness and stack-neutral skills stay in `.claude/skills/`.
+`.claude/skills/` holds project-local skills. Each has a `SKILL.md` with YAML frontmatter (`name`, `description`, optional `allowed-tools`) defining when it activates. Skills apply by context/intent (description match); rules apply by file path. Skills that serve only the React app live in `apps/web/.claude/skills/` and surface when work touches files under `apps/web/`; the harness and stack-neutral skills stay in `.claude/skills/`.
 
 See [[Claude Integration|the modules page]] for the full skills inventory inside `.claude/`.
 
 ## Project-local skills
 
-GAIA's skills split into two groups: shared `gaia/references/` playbooks consumed by user-invoked workflows, and the skills under `.claude/skills/` and `frontend/.claude/skills/`, which [[Claude Integration|the modules page]] inventories.
+GAIA's skills split into two groups: shared `gaia/references/` playbooks consumed by user-invoked workflows, and the skills under `.claude/skills/` and `apps/web/.claude/skills/`, which [[Claude Integration|the modules page]] inventories.
 
 ### `gaia/references/` workflow playbooks
 
@@ -52,13 +52,13 @@ GAIA's `.claude/` surface places each kind of guidance in the layer that loads i
 | Hook (`.claude/hooks/`)               | Tool call matches a registered event                   | Mechanical enforcement (block / advise) on a specific tool shape, no judgment      |
 | Rule (`.claude/rules/`)               | Matching `paths:` glob in scope (or always when empty) | File-path-bound conventions: project-wide style, route layout, accessibility, i18n |
 | Skill (`.claude/skills/`)             | `description:` matches user intent / context           | Cross-file reasoning patterns: refactor playbooks, error-fix recipes, TDD loop     |
-| Instruction (`frontend/.claude/instructions/`) | Dispatched by a command/skill at runtime               | Parameterized runbooks (add a locale, strip i18n, etc.); kept for reuse          |
+| Instruction (`apps/web/.claude/instructions/`) | Dispatched by a command/skill at runtime               | Parameterized runbooks (add a locale, strip i18n, etc.); kept for reuse          |
 
 Heuristic when migrating:
 
 - **Rule → hook** when the guidance can be phrased as a deterministic block on a specific tool call (e.g. "no writes to `.env`" → `block-secrets-write.sh`).
 - **Rule → skill** when the guidance is a body of patterns triggered by intent rather than file path (e.g. ESLint fix recipes only matter when fixing lint, not on every edit) and benefits from references that load on demand.
-- **Keep as rule** when it must auto-apply whenever a file in scope is touched, regardless of user intent (e.g. `i18n.md` for `frontend/app/pages/**`, `accessibility.md`, `coding-guidelines.md`, `quality-gate.md`).
+- **Keep as rule** when it must auto-apply whenever a file in scope is touched, regardless of user intent (e.g. `i18n.md` for `apps/web/app/pages/**`, `accessibility.md`, `coding-guidelines.md`, `quality-gate.md`).
 
 ## Skill listing
 
@@ -80,7 +80,7 @@ Vendored and installer-managed skills keep their upstream frontmatter.
 
 Stack-specific or deep-dive content lives in `references/{topic}.md` inside the skill directory, loaded on demand. `SKILL.md` hints at available references via markdown links. Adding support for a new stack means adding a new reference file; `SKILL.md` itself is never touched. Vendored third-party skills are the exception: they ship as the upstream wrote them, and [[Vendored Third-Party Skills]] owns that rule.
 
-**Example:** `frontend/.claude/skills/tdd-react/SKILL.md` links to `frontend/.claude/skills/tdd-react/references/tests-react.md`, while the stack-neutral `.claude/skills/tdd/` stays at the root. A Svelte package would carry its own `tdd-svelte` skill beside it.
+**Example:** `apps/web/.claude/skills/tdd-react/SKILL.md` links to `apps/web/.claude/skills/tdd-react/references/tests-react.md`, while the stack-neutral `.claude/skills/tdd/` stays at the root. A Svelte package would carry its own `tdd-svelte` skill beside it.
 
 See [[Claude Integration Conventions]] for the broader convention covering extension points, monorepo retrofit, and service swaps.
 

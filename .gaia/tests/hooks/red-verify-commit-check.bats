@@ -200,7 +200,7 @@ test("adds two numbers", () => {
 # --- new test with no matching RED -> deny ---
 
 @test "denies a new test with no ledger entry (never run)" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
@@ -212,8 +212,8 @@ test("adds two numbers", () => {
   # repository-root-relative path, so from any subdirectory the load failed,
   # the capability probe took the fail-open written for a MISSING library, and
   # an ungated commit looked exactly like a clean pass. One `cd` bought that.
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
-  run_commit_hook_from "frontend/app/utils"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
+  run_commit_hook_from "apps/web/app/utils"
   [ "$status" -eq 0 ]
   denied
 }
@@ -221,17 +221,17 @@ test("adds two numbers", () => {
 @test "still allows a matching RED when the working directory is a subdirectory" {
   # The other half: the rooting must not make the gate deny everything from a
   # subdirectory either, which would be a different silent break.
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
-  seed_matching_red "frontend/app/utils/x/index.test.ts" "adds two numbers"
-  run_commit_hook_from "frontend/app/utils"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
+  seed_matching_red "apps/web/app/utils/x/index.test.ts" "adds two numbers"
+  run_commit_hook_from "apps/web/app/utils"
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "denies a new first-run-pass test (ledger has no matching RED)" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   # An unrelated RED in the ledger must not satisfy this test.
-  seed_ledger "frontend/app/utils/other/index.test.ts" "something else" "sha256:deadbeef"
+  seed_ledger "apps/web/app/utils/other/index.test.ts" "something else" "sha256:deadbeef"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
@@ -240,8 +240,8 @@ test("adds two numbers", () => {
 # --- observed-fail then pass -> allow ---
 
 @test "allows a new test that has a matching valid RED" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
-  seed_matching_red "frontend/app/utils/x/index.test.ts" "adds two numbers"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
+  seed_matching_red "apps/web/app/utils/x/index.test.ts" "adds two numbers"
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -250,7 +250,7 @@ test("adds two numbers", () => {
 # --- prose-only claim does not satisfy the gate ---
 
 @test "denies even when the commit message prose claims a failing test first" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook 'git commit -m "wrote a failing test first, RED observed"'
   [ "$status" -eq 0 ]
   denied
@@ -259,9 +259,9 @@ test("adds two numbers", () => {
 # --- Edit-to-pass hole closed: RED at a stale signal does not count ---
 
 @test "denies when the test body changed after its RED (signal mismatch)" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   # Seed a RED for the SAME fullName but a different (stale) body signal.
-  seed_ledger "frontend/app/utils/x/index.test.ts" "adds two numbers" "sha256:staleoldsignal"
+  seed_ledger "apps/web/app/utils/x/index.test.ts" "adds two numbers" "sha256:staleoldsignal"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
@@ -272,13 +272,13 @@ test("adds two numbers", () => {
 
 @test "allows editing a test already present at HEAD even with no RED" {
   # The test exists at HEAD with the same fullName.
-  commit_file_at_head "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  commit_file_at_head "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("adds two numbers", () => {
   expect(1 + 1).toBe(2);
 });
 '
   # Stage an edit to that same test (same fullName, changed body) with no RED.
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("adds two numbers", () => {
   expect(2 + 1).toBe(3);
 });
@@ -296,29 +296,29 @@ test("adds two numbers", () => {
   # gate: an ordinary edit to a long-standing test gets denied for want of a RED
   # it never owed. The two new-test subdirectory cases above cannot see it,
   # because for a genuinely new test an empty HEAD set is the correct answer.
-  commit_file_at_head "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  commit_file_at_head "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("adds two numbers", () => {
   expect(1 + 1).toBe(2);
 });
 '
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("adds two numbers", () => {
   expect(2 + 1).toBe(3);
 });
 '
-  run_commit_hook_from "frontend/app/utils"
+  run_commit_hook_from "apps/web/app/utils"
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "denies a brand-new test added to a file that already exists at HEAD" {
-  commit_file_at_head "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  commit_file_at_head "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("existing test", () => {
   expect(1).toBe(1);
 });
 '
   # Stage: keep the existing test, add a NEW one with no RED.
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("existing test", () => {
   expect(1).toBe(1);
 });
@@ -357,15 +357,15 @@ main line
 }
 
 @test "allows a catch-up merge commit carrying a test the merged parent added" {
-  start_catch_up_merge "frontend/app/utils/x/index.test.ts"
+  start_catch_up_merge "apps/web/app/utils/x/index.test.ts"
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "a catch-up merge still denies a test its resolution adds beyond both parents" {
-  start_catch_up_merge "frontend/app/utils/x/index.test.ts"
-  stage_file "frontend/app/utils/x/index.test.ts" "${PASSING_TEST}test(\"resolution-only test\", () => {
+  start_catch_up_merge "apps/web/app/utils/x/index.test.ts"
+  stage_file "apps/web/app/utils/x/index.test.ts" "${PASSING_TEST}test(\"resolution-only test\", () => {
   expect(3).toBe(3);
 });
 "
@@ -377,26 +377,26 @@ main line
 }
 
 @test "a catch-up merge still denies a new test file neither parent holds" {
-  start_catch_up_merge "frontend/app/utils/x/index.test.ts"
-  stage_file "frontend/app/utils/y/index.test.ts" "$PASSING_TEST"
+  start_catch_up_merge "apps/web/app/utils/x/index.test.ts"
+  stage_file "apps/web/app/utils/y/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
-  [[ "$output" == *"frontend/app/utils/y/index.test.ts"* ]]
-  [[ "$output" != *"frontend/app/utils/x/index.test.ts"* ]]
+  [[ "$output" == *"apps/web/app/utils/y/index.test.ts"* ]]
+  [[ "$output" != *"apps/web/app/utils/x/index.test.ts"* ]]
 }
 
 # --- Non-test / no-new-test commits never fire ---
 
 @test "allows a commit staging only non-test source" {
-  stage_file "frontend/app/x/index.ts" 'export const x = 1;'
+  stage_file "apps/web/app/x/index.ts" 'export const x = 1;'
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "allows when 'git commit' appears only inside a quoted message string" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   # No real git commit invocation: the words are inside an echo string.
   run_commit_hook 'echo "remember to git commit later"'
   [ "$status" -eq 0 ]
@@ -404,7 +404,7 @@ main line
 }
 
 @test "ignores commands that are not git commit" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook "git status"
   [ "$status" -eq 0 ]
   refute_denied
@@ -420,7 +420,7 @@ main line
   git -C "$OTHER" config commit.gpgsign false
   echo x > "$OTHER/f"; git -C "$OTHER" add f; git -C "$OTHER" commit --quiet -m i
 
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook "git -C '$OTHER' commit -m change"
   [ "$status" -eq 0 ]
   denied && return 1
@@ -434,7 +434,7 @@ main line
   git -C "$OTHER" init --quiet --initial-branch=main
   git -C "$REPO" remote add origin https://github.com/acme/widget.git
 
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook "gh pr merge 5 -R other/x && git commit -m change"
   [ "$status" -eq 0 ]
   denied
@@ -450,7 +450,7 @@ main line
 # --- Unparseable staged test -> fail-open (not denied on that file) ---
 
 @test "does not deny an unparseable staged test file" {
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("never closes", () => {
   expect(1).toBe(1)
 // missing closing brace and paren
@@ -468,7 +468,7 @@ test("never closes", () => {
   # matching the SPEC's fail-open posture for uncomputable identity. A new
   # dynamic-title test passing first must not trigger a deny.
   # shellcheck disable=SC2016 # the staged file must carry the literal template
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 const n = 7;
 test(`dynamic ${n}`, () => {
   expect(n).toBe(7);
@@ -498,21 +498,21 @@ test("rejects a bad arg", () => {
 @test "allows a new type-only test (expectTypeOf, no runtime assertion)" {
   # No RED on record, yet the commit is allowed: a type-only test has no
   # runtime failure mode for this gate to demand. tsc enforces it instead.
-  stage_file "frontend/app/utils/x/index.test.ts" "$TYPE_ONLY_EXPECTTYPEOF"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$TYPE_ONLY_EXPECTTYPEOF"
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "allows a new type-only test (@ts-expect-error proof, no runtime assertion)" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$TYPE_ONLY_TS_EXPECT_ERROR"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$TYPE_ONLY_TS_EXPECT_ERROR"
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "exempts the type-only sibling but still denies the runtime sibling" {
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expectTypeOf, expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expectTypeOf, expect, test} from "vitest";
 test("type-only sibling", () => {
   expectTypeOf<number>().toEqualTypeOf<number>();
 });
@@ -530,7 +530,7 @@ test("runtime sibling", () => {
 @test "denies a mixed runtime+type test (runtime assertion present) with no RED" {
   # A type-level proof does NOT exempt a test that also carries a runtime
   # assertion: the runtime red-green still must be observed.
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expectTypeOf, expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expectTypeOf, expect, test} from "vitest";
 test("mixed assertions", () => {
   expect(1 + 1).toBe(2);
   expectTypeOf<number>().toEqualTypeOf<number>();
@@ -544,15 +544,15 @@ test("mixed assertions", () => {
 
 
 @test "ignores a ledger line with an unrecognized schema version" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   # Compute the real current signal but record it under schema 2 (unknown).
   local ndjson signal ledger
-  ndjson=$(signals_for "frontend/app/utils/x/index.test.ts")
+  ndjson=$(signals_for "apps/web/app/utils/x/index.test.ts")
   signal=$(printf '%s\n' "$ndjson" | jq -r 'select(.fullName=="adds two numbers") | .signal' | head -1)
   ledger="$( . "$REPO/.claude/hooks/lib/red-ledger.sh" && red_ledger_path "$REPO" )"
   mkdir -p "$(dirname "$ledger")"
   jq -nc --arg s "$signal" \
-    '{schema:2, file:"frontend/app/utils/x/index.test.ts", fullName:"adds two numbers", signal:$s, failureKind:"assertion", observedAt:"2026-06-04T00:00:00Z"}' \
+    '{schema:2, file:"apps/web/app/utils/x/index.test.ts", fullName:"adds two numbers", signal:$s, failureKind:"assertion", observedAt:"2026-06-04T00:00:00Z"}' \
     >> "$ledger"
   run_commit_hook
   [ "$status" -eq 0 ]
@@ -562,7 +562,7 @@ test("mixed assertions", () => {
 # --- Multiple offenders are all named ---
 
 @test "names every offending new test in the deny reason" {
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("first new", () => { expect(1).toBe(1); });
 test("second new", () => { expect(2).toBe(2); });
 '
@@ -576,11 +576,11 @@ test("second new", () => { expect(2).toBe(2); });
 # --- Mixed: one test with a RED, one without -> deny names only the offender ---
 
 @test "allows the RED-backed test but denies its un-RED'd sibling" {
-  stage_file "frontend/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/utils/x/index.test.ts" 'import {expect, test} from "vitest";
 test("has red", () => { expect(1).toBe(1); });
 test("no red", () => { expect(2).toBe(2); });
 '
-  seed_matching_red "frontend/app/utils/x/index.test.ts" "has red"
+  seed_matching_red "apps/web/app/utils/x/index.test.ts" "has red"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
@@ -600,7 +600,7 @@ test("no red", () => { expect(2).toBe(2); });
   # A .tsx test falls outside the classifier's strict candidate path -> emergent.
   # No RED on record, yet the commit is allowed: forcing a RED on emergent
   # component interaction would be theater.
-  stage_file "frontend/app/components/Widget/tests/index.test.tsx" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/components/Widget/tests/index.test.tsx" 'import {expect, test} from "vitest";
 test("renders something", () => { expect(true).toBe(true); });
 '
   run_commit_hook
@@ -612,7 +612,7 @@ test("renders something", () => { expect(true).toBe(true); });
   # A story is a rendered, browser-bound test. The classifier tags a
   # *.stories.tsx emergent whatever its path, even on the otherwise
   # deterministic utils surface -> exempt from the RED; the worthiness gate owns it.
-  stage_file "frontend/app/utils/tests/notify.stories.tsx" 'import type {Meta, StoryObj} from "@storybook/react-vite";
+  stage_file "apps/web/app/utils/tests/notify.stories.tsx" 'import type {Meta, StoryObj} from "@storybook/react-vite";
 const meta = {title: "utils/notify"} satisfies Meta;
 export default meta;
 export const Default: StoryObj<typeof meta> = {
@@ -627,7 +627,7 @@ export const Default: StoryObj<typeof meta> = {
 @test "carve-out: a new test whose own body reads the clock commits without a RED" {
   # The classifier labels any no-arg new Date() emergent wherever it appears,
   # including inside the test body -> the file is exempt from the RED.
-  stage_file "frontend/app/utils/clock/index.test.ts" 'import {expect, test} from "vitest";
+  stage_file "apps/web/app/utils/clock/index.test.ts" 'import {expect, test} from "vitest";
 test("uses wall-clock time", () => {
   const now = new Date();
   expect(now).toBeInstanceOf(Date);
@@ -643,7 +643,7 @@ test("uses wall-clock time", () => {
   # gate falls back to its pre-carve behavior and still demands the RED, so the
   # deterministic path is never broken and the relax-only posture holds.
   rm -f "$REPO/.gaia/scripts/classifier"
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
@@ -651,7 +651,7 @@ test("uses wall-clock time", () => {
 }
 
 @test "deny reason includes the TDD RED-verification header and the unblock steps" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   grep -qF -- "TDD RED-verification" <<<"$output"
@@ -660,7 +660,7 @@ test("uses wall-clock time", () => {
 }
 
 @test "deny reason names a scoped test run as the RED recovery" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   grep -qF -- 'pnpm -C <package dir> test --run <test-file>' <<<"$output"
@@ -682,24 +682,24 @@ place_release_file() {
 }
 
 @test "allows a new test byte-equal to its copy in an /update-gaia release tree" {
-  place_release_file update-gaia v2.1.0 "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  place_release_file update-gaia v2.1.0 "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "allows a new test byte-equal to its copy in a migration release tree" {
-  place_release_file migrate-2 v2.0.0 "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
-  run_commit_hook_from "frontend/app/utils"
+  place_release_file migrate-2 v2.0.0 "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
+  run_commit_hook_from "apps/web/app/utils"
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "denies a release test the adopter edited before committing" {
-  place_release_file update-gaia v2.1.0 "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST
+  place_release_file update-gaia v2.1.0 "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST
 test(\"adopter addition\", () => {
   expect(2 + 2).toBe(4);
 });
@@ -710,15 +710,15 @@ test(\"adopter addition\", () => {
 }
 
 @test "denies a new test whose content a release tree holds only at another path" {
-  place_release_file update-gaia v2.1.0 "frontend/app/utils/y/index.test.ts" "$PASSING_TEST"
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  place_release_file update-gaia v2.1.0 "apps/web/app/utils/y/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
 }
 
 @test "deny reason names the release-bundle recovery for an update commit" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   grep -qF -- 'verified release bundle' <<<"$output"
@@ -728,10 +728,10 @@ test(\"adopter addition\", () => {
 # --- comment-only edit vs. an assertion absorbed into a comment (UAT-006, UAT-014, UAT-008) ---
 
 @test "denies when a live assertion is absorbed into a comment (strict, new-at-HEAD, runtime; UAT-006)" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$ABSORB_STRICT_PRE"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$ABSORB_STRICT_PRE"
   # Seed the RED at the PRE-absorb signal (staged, working-tree content).
-  seed_matching_red "frontend/app/utils/x/index.test.ts" "adds two numbers"
-  stage_file "frontend/app/utils/x/index.test.ts" "$ABSORB_STRICT_POST"
+  seed_matching_red "apps/web/app/utils/x/index.test.ts" "adds two numbers"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$ABSORB_STRICT_POST"
   run_commit_hook
   [ "$status" -eq 0 ]
   grep -qF -- "adds two numbers" <<<"$output"
@@ -739,9 +739,9 @@ test(\"adopter addition\", () => {
 }
 
 @test "allows a comment-only reword after a matching RED (strict, new-at-HEAD, runtime; UAT-014 RED half)" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$COMMENT_STRICT_PRE"
-  seed_matching_red "frontend/app/utils/x/index.test.ts" "adds two numbers"
-  stage_file "frontend/app/utils/x/index.test.ts" "$COMMENT_STRICT_POST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$COMMENT_STRICT_PRE"
+  seed_matching_red "apps/web/app/utils/x/index.test.ts" "adds two numbers"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$COMMENT_STRICT_POST"
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -750,9 +750,9 @@ test(\"adopter addition\", () => {
 }
 
 @test "denies the same comment-reword fixture when the seeded RED signal doesn't match (UAT-014 RED half, negative control)" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$COMMENT_STRICT_PRE"
-  seed_ledger "frontend/app/utils/x/index.test.ts" "adds two numbers" "sha256:staleoldsignal"
-  stage_file "frontend/app/utils/x/index.test.ts" "$COMMENT_STRICT_POST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$COMMENT_STRICT_PRE"
+  seed_ledger "apps/web/app/utils/x/index.test.ts" "adds two numbers" "sha256:staleoldsignal"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$COMMENT_STRICT_POST"
   run_commit_hook
   [ "$status" -eq 0 ]
   grep -qF -- "adds two numbers" <<<"$output"
@@ -787,16 +787,16 @@ reason_of_output() {
   jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output"
 }
 
-@test "UAT-004: a staged frontend unit test with no RED is denied, the classifier ran strict, and the reason names the frontend/app path" {
-  stage_file "frontend/app/utils/x.test.ts" "$PASSING_TEST"
+@test "UAT-004: a staged frontend unit test with no RED is denied, the classifier ran strict, and the reason names the apps/web/app path" {
+  stage_file "apps/web/app/utils/x.test.ts" "$PASSING_TEST"
   local verdict
-  verdict=$( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/classifier/classify-determinism.mjs" frontend/app/utils/x.test.ts )
+  verdict=$( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/classifier/classify-determinism.mjs" apps/web/app/utils/x.test.ts )
   [ "$(jq -r '.classification' <<<"$verdict")" = strict ]
   jq -e '.reasons | type == "array"' <<<"$verdict" >/dev/null
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
-  reason_of_output | grep -qF -- 'frontend/app/utils/x.test.ts'
+  reason_of_output | grep -qF -- 'apps/web/app/utils/x.test.ts'
 }
 
 @test "a root app/ test is no unit test in the 2.0.0 layout: the classifier says emergent and the hook allows" {
@@ -804,7 +804,7 @@ reason_of_output() {
   local verdict
   verdict=$( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/classifier/classify-determinism.mjs" app/utils/x.test.ts )
   [ "$(jq -r '.classification' <<<"$verdict")" = emergent ]
-  jq -r '.reasons[]' <<<"$verdict" | grep -qF -- 'path not in frontend/app/utils/**'
+  jq -r '.reasons[]' <<<"$verdict" | grep -qF -- 'path not in apps/web/app/utils/**'
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -813,7 +813,7 @@ reason_of_output() {
 
 @test "descriptor globs that match nothing let the same commit through (the guard can fail)" {
   write_packages_moved "$REPO"
-  stage_file "frontend/app/utils/x.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x.test.ts" "$PASSING_TEST"
   run_commit_hook
   denied
   # Unit-test globs that match nothing: the staged file is no unit test.
@@ -824,7 +824,7 @@ reason_of_output() {
   # Strict globs that match nothing: the real classifier labels the file
   # emergent, and the carve-out relaxes the RED demand.
   write_packages_moved "$REPO" '["app/**/*.test.ts"]' '["nomatch/**"]'
-  [ "$( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/classifier/classify-determinism.mjs" frontend/app/utils/x.test.ts | jq -r '.classification')" = emergent ]
+  [ "$( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/classifier/classify-determinism.mjs" apps/web/app/utils/x.test.ts | jq -r '.classification')" = emergent ]
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -832,7 +832,7 @@ reason_of_output() {
 
 @test "an unparseable registry denies with the gaia-packages reason, never an allow" {
   write_package_registry "$REPO" '{'
-  stage_file "frontend/app/utils/x.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
@@ -840,18 +840,18 @@ reason_of_output() {
 }
 
 @test "a registered package with no descriptor denies with the gaia-packages reason, never an allow" {
-  rm "$REPO/frontend/gaia.package.json"
-  write_package_registry "$REPO" '[{"name":"frontend","path":"frontend"}]'
-  stage_file "frontend/app/utils/x.test.ts" "$PASSING_TEST"
+  rm "$REPO/apps/web/gaia.package.json"
+  write_package_registry "$REPO" '[{"name":"web","path":"apps/web"}]'
+  stage_file "apps/web/app/utils/x.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
-  reason_of_output | grep -qF -- 'gaia-packages: frontend/gaia.package.json is missing'
+  reason_of_output | grep -qF -- 'gaia-packages: apps/web/gaia.package.json is missing'
 }
 
 # bats test_tags=whole-tree
 @test "a classifier that exits 7 denies with its error; exit 3 falls back to the RED demand; an emergent verdict allows" {
-  stage_file "frontend/app/utils/x.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x.test.ts" "$PASSING_TEST"
   install_stub_classifier_home 7 '{"error":"gaia-packages: stub descriptor failure. Next step: fix it."}'
   run_commit_hook
   denied
@@ -868,7 +868,7 @@ reason_of_output() {
   refute_denied
 }
 
-@test "today's layout, a literal path-dot registry: a root app/ unit test is gated and a frontend/ one is not" {
+@test "today's layout, a literal path-dot registry: a root app/ unit test is gated and a apps/web/ one is not" {
   write_packages_today "$REPO"
   stage_file "app/utils/x.test.ts" "$PASSING_TEST"
   run_commit_hook
@@ -876,7 +876,7 @@ reason_of_output() {
   reason_of_output | grep -qF -- 'app/utils/x.test.ts'
   git -C "$REPO" reset --quiet
   rm "$REPO/app/utils/x.test.ts"
-  stage_file "frontend/app/utils/x.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -886,7 +886,7 @@ reason_of_output() {
 
 # bats test_tags=whole-tree
 @test "lib/hook-payload.sh absent: a commit the intact hook denies is allowed silently" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
   denied
@@ -923,7 +923,7 @@ reason_of_output() {
 
 # --- route tests: gated on purpose, with a carve-out for rendered .fails tests ---
 
-ROUTE_TEST_PATH="frontend/app/route-tests/orders/tests/refuses-anonymous.test.ts"
+ROUTE_TEST_PATH="apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts"
 ROUTE_MARKER="// gaia-uat-contract sha256:0000000000000000000000000000000000000000000000000000000000000000"
 ROUTE_PLAIN_BODY='import {expect, test} from "vitest";
 test("refuses an anonymous visitor", () => { expect(1 + 1).toBe(2); });
@@ -1021,6 +1021,6 @@ $ROUTE_FAILS_BODY"
 }
 
 @test "descriptor pin: the route-tests glob stays in emergentTests" {
-  run jq -e '.globs.emergentTests | index("app/route-tests/**/*.test.ts")' "$HOME_ROOT/frontend/gaia.package.json"
+  run jq -e '.globs.emergentTests | index("app/route-tests/**/*.test.ts")' "$HOME_ROOT/apps/web/gaia.package.json"
   [ "$status" -eq 0 ]
 }

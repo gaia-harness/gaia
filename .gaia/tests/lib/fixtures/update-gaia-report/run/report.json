@@ -546,7 +546,7 @@
       ]
     },
     {
-      "path": "frontend/package.json",
+      "path": "apps/web/package.json",
       "class": "shared",
       "baselineTag": "v2.0.4",
       "status": "field-aware",
@@ -558,7 +558,7 @@
       },
       "items": [
         {
-          "id": "frontend/package.json#dependencies.react",
+          "id": "apps/web/package.json#dependencies.react",
           "kind": "version-pin",
           "key": "dependencies.react",
           "adopterChange": "adopter value",
@@ -622,7 +622,7 @@
       "note": "design-system"
     },
     {
-      "path": "frontend/.claude/rules/design-baseline.md",
+      "path": "apps/web/.claude/rules/design-baseline.md",
       "class": "owned",
       "baselineTag": "v2.0.4",
       "status": "skip",

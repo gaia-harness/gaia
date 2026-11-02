@@ -24,9 +24,9 @@
 # function answers as if nothing were loaded, so a guard that ignores the
 # status sees an empty ERE rather than a stale one.
 #
-# FAIL-CLOSED. An absent registry is the built-in default (frontend at
-# `frontend`), never "nothing in scope", and its descriptor is still read from
-# `frontend/gaia.package.json`: a missing one is status 3, never a fallback. A
+# FAIL-CLOSED. An absent registry is the built-in default (web at
+# `apps/web`), never "nothing in scope", and its descriptor is still read from
+# `apps/web/gaia.package.json`: a missing one is status 3, never a fallback. A
 # present registry that fails any check returns an error and never a partial
 # answer. A missing jq returns 4 rather
 # than guessing: this library parses JSON with nothing else, so it cannot
@@ -54,6 +54,7 @@ GAIA_PACKAGES_SH=1
 GAIA_PACKAGES_ERROR=''
 _GAIA_PKG_GLOBS=''
 _GAIA_PKG_LIST=''
+_GAIA_PKG_STACK=''
 _GAIA_PKG_ERE_tddUnitTests=''
 _GAIA_PKG_ERE_tddStrictCandidates=''
 _GAIA_PKG_ERE_emergentTests=''
@@ -66,7 +67,7 @@ _GAIA_PKG_ERE_dependencyManifests=''
 # committed `gaia.package.json` is the one copy of the default globs.
 _gaia_packages_builtin_registry() {
   cat <<'JSON'
-[{"name":"frontend","path":"frontend"}]
+[{"name":"web","path":"apps/web"}]
 JSON
 }
 
@@ -99,7 +100,9 @@ _GAIA_PKG_REGISTRY_PROGRAM='
 
 # The jq program that reduces a parsed descriptor to the reason it is invalid,
 # or the empty string. `$n` is the registry name the descriptor must carry.
-# Mirrors `descriptorIssueReason` in the TypeScript reader.
+# Every globs key is required and each list may be empty. `stack` and
+# `generatedSettings` are optional and checked last. Mirrors
+# `descriptorIssueReason` in the TypeScript reader.
 # shellcheck disable=SC2016 # a jq program: the dollar signs are jq variables, not shell expansions
 _GAIA_PKG_DESCRIPTOR_PROGRAM='
   def clean: type == "string" and . != "" and ((test("[\\x00-\\x1f\\x7f]")) | not);
@@ -111,13 +114,16 @@ _GAIA_PKG_DESCRIPTOR_PROGRAM='
     elif ($d.globs | type) != "object" then "globs must be an object"
     else
       ([("tddUnitTests","tddStrictCandidates","emergentTests","preCommitSource","doctorConfigs","dependencyManifests") as $k
-        | select(($d.globs[$k] | cleanlist and length > 0) | not) | $k] | first) as $badglob
-      | if $badglob != null then "globs.\($badglob) must be a non-empty array of non-empty strings without control characters"
+        | select(($d.globs[$k] | cleanlist) | not) | $k] | first) as $badglob
+      | if $badglob != null then "globs.\($badglob) must be an array of non-empty strings without control characters"
         elif ($d.wiki | type) != "object" then "wiki must be an object"
         else
           ([("sourcePaths","inventoryPaths","flowPaths") as $k
             | select(($d.wiki[$k] | cleanlist) | not) | $k] | first) as $badwiki
           | if $badwiki != null then "wiki.\($badwiki) must be an array of strings without control characters"
+            elif ($d | has("stack")) and $d.stack != "web" then "stack must be \"web\""
+            elif ($d | has("generatedSettings")) and (($d.generatedSettings | type) != "boolean")
+              then "generatedSettings must be a boolean"
             else "" end
         end
     end
@@ -127,7 +133,9 @@ _GAIA_PKG_DESCRIPTOR_PROGRAM='
 # one per globs key, each glob joined to the package path `$p` first, then one
 # `=key<TAB>joined-glob` line per glob for `gaia_package_globs`. A body has no
 # anchors; the caller anchors the union. Same substitution sequence as
-# `globToBody` in the TypeScript reader.
+# `globToBody` in the TypeScript reader. An empty list yields an empty body,
+# which the caller skips, except `preCommitSource`, which compiles as the whole
+# member (`**` joined to the package path).
 # shellcheck disable=SC2016 # a jq program: the dollar signs are jq variables, not shell expansions
 _GAIA_PKG_COMPILE_PROGRAM='
   def body:
@@ -148,7 +156,8 @@ _GAIA_PKG_COMPILE_PROGRAM='
   def joined($p): if $p == "." then . else $p + "/" + . end;
   . as $d
   | ("tddUnitTests","tddStrictCandidates","emergentTests","preCommitSource","doctorConfigs","dependencyManifests") as $k
-  | ($d.globs[$k] | map(joined($p))) as $globs
+  | (if ($d.globs[$k] | length) == 0 and $k == "preCommitSource" then ["**"] else $d.globs[$k] end
+     | map(joined($p))) as $globs
   | ($k + "\t" + ($globs | map(body) | join("|"))), ($globs[] | "=" + $k + "\t" + .)
 '
 
@@ -156,10 +165,11 @@ _gaia_packages_reset() {
   GAIA_PACKAGES_ERROR=''
   _GAIA_PKG_GLOBS=''
   _GAIA_PKG_LIST=''
+  _GAIA_PKG_STACK=''
   _GAIA_PKG_ERE_tddUnitTests=''
   _GAIA_PKG_ERE_tddStrictCandidates=''
   _GAIA_PKG_ERE_emergentTests=''
-    _GAIA_PKG_ERE_preCommitSource=''
+  _GAIA_PKG_ERE_preCommitSource=''
   _GAIA_PKG_ERE_doctorConfigs=''
   _GAIA_PKG_ERE_dependencyManifests=''
 }
@@ -202,8 +212,14 @@ _gaia_packages_descriptor_error() {
 }
 
 # _gaia_packages_append_ere <key> <body-alternation>
+# An empty body adds nothing, so no ERE carries a dangling `|`.
 _gaia_packages_append_ere() {
   local key="$1" body="$2" current
+  if [ -z "$body" ]; then
+    case "$key" in
+      tddUnitTests | tddStrictCandidates | emergentTests | preCommitSource | doctorConfigs | dependencyManifests) return 0 ;;
+    esac
+  fi
   case "$key" in
     tddUnitTests) current="$_GAIA_PKG_ERE_tddUnitTests" ;;
     tddStrictCandidates) current="$_GAIA_PKG_ERE_tddStrictCandidates" ;;
@@ -251,7 +267,7 @@ _gaia_packages_compile_descriptor() {
 # gaia_packages_load <repo_root>
 gaia_packages_load() {
   local root="${1:-}" registry_file registry_source entries name pkg_path descriptor_file
-  local reason
+  local reason stack_line
 
   _gaia_packages_reset
 
@@ -316,6 +332,13 @@ gaia_packages_load() {
       return 3
     fi
     _GAIA_PKG_LIST="${_GAIA_PKG_LIST}${name}"$'\t'"${pkg_path}"$'\n'
+    if ! stack_line=$(jq -r '(.stack == "web") as $web
+      | "\($web)\t\(if $web then true else (.generatedSettings // false) end)"' "$root/$descriptor_file" 2>/dev/null); then
+      _gaia_packages_reset
+      _gaia_packages_descriptor_error "$descriptor_file" malformed
+      return 3
+    fi
+    _GAIA_PKG_STACK="${_GAIA_PKG_STACK}${name}"$'\t'"${stack_line}"$'\n'
     if ! _gaia_packages_compile_descriptor "$pkg_path" <"$root/$descriptor_file"; then
       _gaia_packages_reset
       _gaia_packages_descriptor_error "$descriptor_file" malformed
@@ -402,4 +425,45 @@ gaia_package_dir() {
   done <<<"$_GAIA_PKG_LIST"
 
   return 1
+}
+
+# gaia_packages_web_members -> `name<TAB>path` per web-stack member, registry order
+gaia_packages_web_members() {
+  local name pkg_path
+  while IFS=$'\t' read -r name pkg_path; do
+    [ -n "$name" ] || continue
+    if gaia_package_is_web "$name"; then
+      printf '%s\t%s\n' "$name" "$pkg_path"
+    fi
+  done <<<"$_GAIA_PKG_LIST"
+}
+
+# _gaia_packages_stack_field <name> <1|2> -> the member's recorded `true` or
+# `false` (1 is web-stack, 2 is generated settings); status 1 when unknown
+_gaia_packages_stack_field() {
+  local wanted="${1:-}" name web settings
+  while IFS=$'\t' read -r name web settings; do
+    [ -n "$name" ] || continue
+    if [ "$name" = "$wanted" ]; then
+      if [ "$2" = 1 ]; then
+        printf '%s\n' "$web"
+      else
+        printf '%s\n' "$settings"
+      fi
+      return 0
+    fi
+  done <<<"$_GAIA_PKG_STACK"
+
+  return 1
+}
+
+# gaia_package_is_web <name> -> status 0 when the member declares stack "web"
+gaia_package_is_web() {
+  [ "$(_gaia_packages_stack_field "${1:-}" 1 2>/dev/null)" = true ]
+}
+
+# gaia_package_wants_settings <name> -> status 0 when generated settings apply:
+# a web-stack member always, any other member only when it says so
+gaia_package_wants_settings() {
+  [ "$(_gaia_packages_stack_field "${1:-}" 2 2>/dev/null)" = true ]
 }

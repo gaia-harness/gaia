@@ -27,7 +27,7 @@ const TEMPLATE_README =
 const PREVIEW_BEFORE = readFileSync(
   path.join(
     resolveRepoRootFromImportMeta(import.meta.url),
-    'frontend',
+    'apps/web',
     '.storybook',
     'preview.ts'
   ),

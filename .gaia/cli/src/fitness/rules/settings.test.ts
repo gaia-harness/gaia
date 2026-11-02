@@ -65,7 +65,7 @@ describe('settings.valid-json', () => {
 
   test('reports a nested settings file', () => {
     expect(
-      idsFor({files: {'frontend/.claude/settings.json': '{,}'}, git: true})
+      idsFor({files: {'apps/web/.claude/settings.json': '{,}'}, git: true})
     ).toEqual(['settings.valid-json']);
   });
 

@@ -9,6 +9,7 @@ import {PROMPT_FIXTURES} from './prompt.fixtures.js';
 import {RULES_FIXTURES} from './rules.fixtures.js';
 import {SETTINGS_FIXTURES} from './settings.fixtures.js';
 import {WIKI_FIXTURES} from './wiki.fixtures.js';
+import {WORKSPACE_FIXTURES} from './workspace.fixtures.js';
 
 const merge = (maps: readonly FixtureMap[]): FixtureMap => {
   const merged: Record<string, FixturePair> = {};
@@ -38,4 +39,5 @@ export const ALL_FIXTURES: FixtureMap = merge([
   PROMPT_FIXTURES,
   WIKI_FIXTURES,
   FITNESS_CONFIG_FIXTURES,
+  WORKSPACE_FIXTURES,
 ]);

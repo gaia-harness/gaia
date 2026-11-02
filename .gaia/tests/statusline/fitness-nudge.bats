@@ -173,11 +173,11 @@ add_harness_commits() {
   done
 }
 
-# add_app_commits <n> [iso-date]: n commits touching only frontend/app/.
+# add_app_commits <n> [iso-date]: n commits touching only apps/web/app/.
 add_app_commits() {
   local index when="${2:-$COMMIT_WHEN}"
   for ((index = 1; index <= $1; index++)); do
-    commit_touching "$when" "feat: app change $COMMIT_SEQUENCE" "frontend/app/x$COMMIT_SEQUENCE.ts"
+    commit_touching "$when" "feat: app change $COMMIT_SEQUENCE" "apps/web/app/x$COMMIT_SEQUENCE.ts"
   done
 }
 
@@ -853,14 +853,14 @@ SPY
 }
 
 @test "harness commits count and application commits do not" {
-  write_report A "[]" "[]" '[{"path":"frontend/CLAUDE.md","kinds":["claudemd"],"ownership":"adopter"}]'
+  write_report A "[]" "[]" '[{"path":"apps/web/CLAUDE.md","kinds":["claudemd"],"ownership":"adopter"}]'
   add_harness_commits 14
   add_app_commits 5
   refresh
   render_wide
   assert_no_fitness_nudge
 
-  commit_touching "$COMMIT_WHEN" "docs: frontend instructions" frontend/CLAUDE.md
+  commit_touching "$COMMIT_WHEN" "docs: frontend instructions" apps/web/CLAUDE.md
   refresh
   render_wide
   assert_fitness_nudge "(15 harness commits)"

@@ -174,7 +174,7 @@ const makeSandbox = (): Sandbox => {
   );
 
   execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
-  writeFrontendRegistry(root, 'frontend');
+  writeFrontendRegistry(root, 'apps/web');
   writeFileSync(
     path.join(root, 'pnpm-lock.yaml'),
     twoDocumentLockfile({
@@ -364,7 +364,7 @@ describe('advisories: alerts source', () => {
       gh: ghStub({
         open: ghOk([
           alert({number: 1}),
-          alert({manifest: 'frontend/package.json', number: 2}),
+          alert({manifest: 'apps/web/package.json', number: 2}),
           alert({ghsa: GHSA_B, number: 3}),
         ]),
       }),
@@ -414,7 +414,7 @@ describe('advisories: alerts source', () => {
     registerCliMember(true);
     writeFileSync(
       path.join(sandbox.root, '.gaia', 'packages.json'),
-      JSON.stringify([{name: 'frontend', path: '.'}])
+      JSON.stringify([{name: 'web', path: '.'}])
     );
     writeFileSync(
       path.join(sandbox.root, 'gaia.package.json'),
@@ -915,7 +915,7 @@ describe('advisories: enrichment and classification', () => {
   });
 
   test('an unreadable package registry exits INVALID_ARGUMENTS with the gaia-packages message and no payload, never an unowned package manifest', async () => {
-    rmSync(path.join(sandbox.root, 'frontend', 'gaia.package.json'));
+    rmSync(path.join(sandbox.root, 'apps', 'web', 'gaia.package.json'));
     const stderrWrites: string[] = [];
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
       stderrWrites.push(String(chunk));
@@ -925,13 +925,13 @@ describe('advisories: enrichment and classification', () => {
 
     const exit = await invoke({
       gh: ghStub({
-        open: ghOk([alert({manifest: 'frontend/package.json', number: 1})]),
+        open: ghOk([alert({manifest: 'apps/web/package.json', number: 1})]),
       }),
     });
 
     expect(exit).toBe(EXIT_CODES.INVALID_ARGUMENTS);
     expect(stderrWrites.join('')).toContain(
-      'gaia-packages: frontend/gaia.package.json is missing'
+      'gaia-packages: apps/web/gaia.package.json is missing'
     );
     expect(existsSync(sandbox.emit)).toBe(false);
   });

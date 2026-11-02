@@ -64,8 +64,8 @@ const project = (extra: Record<string, string> = {}): FixtureProject => ({
     '.claude/agents/example.md': '---\nname: example\n---\nBody\n',
     '.claude/commands/example.md': '---\ndescription: example\n---\nBody\n',
     '.claude/skills/example/SKILL.md': '---\nname: example\n---\nBody\n',
+    'apps/web/.claude/skills/other/SKILL.md': '---\nname: other\n---\nBody\n',
     'CLAUDE.md': '# Project\n',
-    'frontend/.claude/skills/other/SKILL.md': '---\nname: other\n---\nBody\n',
     ...extra,
   },
   git: true,
@@ -160,7 +160,7 @@ describe('gaia fitness builtins with claude present', () => {
       '.claude/agents',
       '.claude/commands',
       '.claude/skills',
-      'frontend/.claude/skills',
+      'apps/web/.claude/skills',
     ]);
     expect(validate.results?.map((result) => result.status)).toEqual([
       'ran',

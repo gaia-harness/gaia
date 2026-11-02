@@ -82,29 +82,29 @@ describe('classifyPath', () => {
   });
 
   test('a registered package settings file is generated and has no class', () => {
-    expect(classifyPath('frontend/.claude/settings.json')).toBeNull();
+    expect(classifyPath('apps/web/.claude/settings.json')).toBeNull();
     // The root settings file has no package prefix and stays shared.
     expect(classifyPath('.claude/settings.json')).toBe('shared');
     // The overlay is the hand-edited input, so it is shared, not generated.
-    expect(classifyPath('frontend/.claude/settings.overlay.json')).toBe(
+    expect(classifyPath('apps/web/.claude/settings.overlay.json')).toBe(
       'shared'
     );
   });
 
   test('frontend package descriptor, manifest, and CLAUDE.md are shared', () => {
-    expect(classifyPath('frontend/package.json')).toBe('shared');
-    expect(classifyPath('frontend/gaia.package.json')).toBe('shared');
-    expect(classifyPath('frontend/CLAUDE.md')).toBe('shared');
-    expect(classifyPath('frontend/app/root.tsx')).toBe('owned');
+    expect(classifyPath('apps/web/package.json')).toBe('shared');
+    expect(classifyPath('apps/web/gaia.package.json')).toBe('shared');
+    expect(classifyPath('apps/web/CLAUDE.md')).toBe('shared');
+    expect(classifyPath('apps/web/app/root.tsx')).toBe('owned');
   });
 
   test('frontend token values and shadcn config are shared; vendored ui stays owned', () => {
-    expect(classifyPath('frontend/app/styles/theme.css')).toBe('shared');
-    expect(classifyPath('frontend/components.json')).toBe('shared');
-    expect(classifyPath('frontend/app/styles/tailwind.css')).toBe('owned');
-    expect(classifyPath('frontend/app/components/ui/button.tsx')).toBe('owned');
+    expect(classifyPath('apps/web/app/styles/theme.css')).toBe('shared');
+    expect(classifyPath('apps/web/components.json')).toBe('shared');
+    expect(classifyPath('apps/web/app/styles/tailwind.css')).toBe('owned');
+    expect(classifyPath('apps/web/app/components/ui/button.tsx')).toBe('owned');
     expect(
-      classifyPath('frontend/app/components/ui/tests/button.test.tsx')
+      classifyPath('apps/web/app/components/ui/tests/button.test.tsx')
     ).toBe('owned');
   });
 

@@ -34,10 +34,10 @@ setup() {
     { [ -e /proc/self ] && command -v ss >/dev/null 2>&1; } || skip "no process backend (lsof, or /proc with ss) on this host"
   fi
 
-  mkdir -p "$SCRATCH/tree/frontend" "$SCRATCH/elsewhere"
+  mkdir -p "$SCRATCH/tree/apps/web" "$SCRATCH/elsewhere"
   git init -q -b main "$SCRATCH/tree"
   TREE="$(cd "$SCRATCH/tree" && pwd -P)"
-  : >"$TREE/frontend/react-router.config.ts"
+  : >"$TREE/apps/web/react-router.config.ts"
 }
 
 teardown() {
@@ -137,7 +137,7 @@ assert_server_stopped() {
 }
 
 @test "own-tree holder it did not start: refused, and the holder survives" {
-  start_listener "$TREE/frontend"
+  start_listener "$TREE/apps/web"
   export GAIA_DEV_SMOKE_SERVER_COMMAND="echo started >$SCRATCH/started; exec sleep 300"
   run bash "$SCRIPT" --tree "$TREE" --timeout 5
   [ "$status" -eq 3 ]

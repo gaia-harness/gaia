@@ -271,7 +271,7 @@ has_bare_shell_eval() {
   assert_pinned 'Commit the repair before the first member wave'
   assert_pinned 'a synthetic `fix` entry per key in `Vetoes:`'
   assert_pinned '`<run>/gate-failure.json` stands in for the fix entries. `dispositions-<r>.json` holds `entries: []`.'
-  assert_pinned '{"member":"gate-repair","finding_class":"gate/<step>","path":"frontend","line":0,"disposition":"fixed","reason":"...","changed_paths":[...]}'
+  assert_pinned '{"member":"gate-repair","finding_class":"gate/<step>","path":"apps/web","line":0,"disposition":"fixed","reason":"...","changed_paths":[...]}'
   assert_pinned 'so classify it with `--expect-count 1`'
   assert_pinned 'a third failure stops `needs-human`, naming the step'
   assert_pinned 'The commit subject is `fix(audit): repair the owed gate steps at round <r>`.'

@@ -206,7 +206,7 @@ HELPER
 @test "a sourced helper that runs pnpm makes the suite a user" {
   write_helper .gaia/tests/lib/helpers/runner.sh <<'HELPER'
 run_workspace_tests() {
-  pnpm -C frontend test --run
+  pnpm -C apps/web test --run
 }
 HELPER
   write_suite via-runner <<'SUITE'

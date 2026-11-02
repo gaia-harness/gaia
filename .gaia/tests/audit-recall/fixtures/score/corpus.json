@@ -12,7 +12,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/lost.ts",
+      "path": "apps/web/app/lost.ts",
       "line": 20,
       "class_prefix": "holistic"
     },
@@ -21,7 +21,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/kept.ts",
+      "path": "apps/web/app/kept.ts",
       "line": 30,
       "class_prefix": "holistic"
     },
@@ -30,7 +30,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/flaky.ts",
+      "path": "apps/web/app/flaky.ts",
       "line": 40,
       "class_prefix": "holistic"
     },
@@ -39,7 +39,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/window.ts",
+      "path": "apps/web/app/window.ts",
       "line": 50,
       "class_prefix": "holistic"
     },
@@ -48,7 +48,7 @@
       "source": "real",
       "member": "code-audit-frontend",
       "scorer": "member",
-      "path": "frontend/app/class.ts",
+      "path": "apps/web/app/class.ts",
       "line": 60,
       "class_prefix": "holistic"
     },
@@ -58,7 +58,7 @@
       "member": "code-audit-frontend",
       "scorer": "specialist",
       "role": "typescript",
-      "path": "frontend/app/merged.ts",
+      "path": "apps/web/app/merged.ts",
       "line": 70,
       "planted_patch": "planted/rule-violations.patch"
     },
@@ -67,7 +67,7 @@
       "source": "planted",
       "member": "code-audit-frontend",
       "scorer": "refuter",
-      "path": "frontend/app/flip.ts",
+      "path": "apps/web/app/flip.ts",
       "line": 80,
       "planted_patch": "planted/holistic-true.patch"
     },
@@ -77,7 +77,7 @@
       "member": "code-audit-frontend",
       "scorer": "specialist",
       "role": "translation",
-      "path": "frontend/app/greeting.tsx",
+      "path": "apps/web/app/greeting.tsx",
       "line": 90,
       "planted_patch": "planted/rule-violations.patch"
     },
@@ -86,7 +86,7 @@
       "source": "planted",
       "member": "code-audit-frontend",
       "scorer": "refuter",
-      "path": "frontend/app/stable.ts",
+      "path": "apps/web/app/stable.ts",
       "line": 100,
       "planted_patch": "planted/holistic-false.patch"
     }

@@ -64,6 +64,17 @@ Layers 0+1 prove the release tree stages and bootstraps cleanly, but do NOT prov
 
 `05-gaia-init-cli-sequence.sh` runs the full deterministic sequence behind `/gaia-init` Step 3; `strip-branding` → `configure-i18n --strip false` → `rename` → `wire-statusline` → `finalize`; and asserts each step's post-conditions on the staged tree. Catches release-exclude drift on every CLI surface the slash command dispatches to: the `existsSync` guards in `configure-i18n`/`rename`/`finalize` mean a missing target file silently no-ops rather than erroring, so this scenario is the gate that turns a no-op into a failure. The `configure-i18n --strip true` path (full i18n removal via the prose `remove-i18n.md` instruction) is out of scope here; that path is orchestrated by the slash command, not the CLI alone.
 
+### Workspace layout (`18-`+)
+
+The app lives at `apps/web` in a workspace of `apps/*` and `packages/*`. These scenarios prove that layout from the staged bundle.
+
+- `18-fresh-apps-web.sh` is a fresh project: no path named for the retired app root, `packages/` holding only `.gitkeep`, a frozen install that tolerates the unmatched glob, the setup env seed writing `apps/web/.env`, then typecheck, lint, test:ci, build, Playwright and a dev-server smoke from the root. The test run must report at least as many test files as the source tree holds, derived rather than pinned, because `test:ci` passes when it finds none. Exclusive.
+- `19-crossing-edits.sh` runs the committed copies of each older release's note selector against the staged bundle, then the real crossing verbs on a monorepo fixture and a stock tree: the workspace list, the registry, the opt-in settings and the by-name report of an unlisted folder.
+- `20-member-reach.sh` builds the crossed fixture with `lib/crossed-fixture.sh` and runs the staged pre-commit hook, dispatch resolver and the scope command quoted in the frontend agent file against a library with empty globs and an infrastructure member.
+- `21-workspace-gate.sh` runs the staged root gate scripts across members on different runners with the `tsc` and `vitest` of an installed staged scaffold (no install in the fixture tree), the member warning script and the Quick check. Exclusive.
+
+`lib/workspace-proof.sh` holds the helpers 20 and 21 share.
+
 #### CI
 
 CI entry points:

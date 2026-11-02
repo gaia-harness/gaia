@@ -23,7 +23,7 @@ bats_require_minimum_version 1.5.0
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SETTINGS="${GAIA_REGISTRATION_SETTINGS:-$REPO_ROOT/.claude/settings.json}"
-  FRONTEND_SETTINGS="${GAIA_REGISTRATION_FRONTEND_SETTINGS:-$REPO_ROOT/frontend/.claude/settings.json}"
+  FRONTEND_SETTINGS="${GAIA_REGISTRATION_FRONTEND_SETTINGS:-$REPO_ROOT/apps/web/.claude/settings.json}"
   REGISTRY="${GAIA_REGISTRATION_REGISTRY:-$REPO_ROOT/.gaia/state-registry.json}"
   EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
   HOOK_PATH='.claude/hooks/context-checkpoint-subagent.sh'

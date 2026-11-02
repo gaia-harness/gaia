@@ -345,7 +345,7 @@ for patch in "${planted_patches[@]+"${planted_patches[@]}"}"; do
   git -C "$scaffold" checkout --quiet main
   git -C "$scaffold" checkout --quiet -b "$scaffold_branch"
   git -C "$scaffold" apply "$SCRIPT_DIRECTORY/$patch"
-  git -C "$scaffold" add -A -- frontend
+  git -C "$scaffold" add -A -- apps/web
   git -C "$scaffold" -c user.name=measurement -c user.email=measurement@example.com -c commit.gpgsign=false \
     commit --quiet --no-verify -m "feat: planted recall change $patch_name"
   patch_directory="$output_directory/.planted-$patch_name"

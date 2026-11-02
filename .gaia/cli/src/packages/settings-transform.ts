@@ -295,6 +295,43 @@ export const generateSettings = (
   return output;
 };
 
+/** The trailing shell comment that tells a generated stub from a hand-written file. */
+export const STUB_MARKER = '# gaia-member-guards-stub';
+
+const STUB_WARNING =
+  'GAIA guards are off in this session. Launch from the repo root.';
+
+/**
+ * The settings of a member that does not get the full generated file: one
+ * self-contained SessionStart handler warning that the root guards do not
+ * apply when a session starts here.
+ */
+export const generateStubSettings = (): JsonObject => {
+  const payload = JSON.stringify({
+    hookSpecificOutput: {
+      additionalContext: STUB_WARNING,
+      hookEventName: 'SessionStart',
+    },
+    systemMessage: STUB_WARNING,
+  });
+
+  return {
+    hooks: {
+      SessionStart: [
+        {
+          hooks: [
+            {
+              command: String.raw`printf '%s\n' '${payload}' ${STUB_MARKER}`,
+              type: 'command',
+            },
+          ],
+          matcher: 'startup|resume',
+        },
+      ],
+    },
+  };
+};
+
 /** The stable on-disk form: two-space JSON, trailing newline. */
 export const serializeSettings = (settings: JsonObject): string =>
   `${JSON.stringify(settings, null, 2)}\n`;

@@ -16,7 +16,7 @@ Form validation library used by [[Form Components]]. Pairs with [[Zod]] for the 
 - `@conform-to/zod`: `parseWithZod` for client + server validation
 
 > [!warning] Use the `/v4` subpath
-> Import from `@conform-to/zod/v4` (Zod v4 compatibility), not the root. Enforced by `frontend/.claude/skills/react-code/` (auto-loaded) and the Conform extension (`frontend/.claude/agents/code-audit-frontend/conform.md`) whose path [[Code Review Audit Agent]] hands to its React Patterns and TypeScript specialists, which read it themselves.
+> Import from `@conform-to/zod/v4` (Zod v4 compatibility), not the root. Enforced by `apps/web/.claude/skills/react-code/` (auto-loaded) and the Conform extension (`apps/web/.claude/agents/code-audit-frontend/conform.md`) whose path [[Code Review Audit Agent]] hands to its React Patterns and TypeScript specialists, which read it themselves.
 
 ## Alternatives
 

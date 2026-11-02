@@ -30,7 +30,7 @@
           "actualWorkers": 1
         },
         "name": "",
-        "outputDir": "/work/frontend/test-results",
+        "outputDir": "/work/apps/web/test-results",
         "repeatEach": 1,
         "retries": 0,
         "testDir": "/work/e2e",
@@ -95,7 +95,7 @@
                     {
                       "contentType": "text/markdown",
                       "name": "error-context",
-                      "path": "/work/frontend/test-results/checkout-guest-checkout-co-d7cd2-page-shows-the-order-number/error-context.md"
+                      "path": "/work/apps/web/test-results/checkout-guest-checkout-co-d7cd2-page-shows-the-order-number/error-context.md"
                     }
                   ],
                   "duration": 3,

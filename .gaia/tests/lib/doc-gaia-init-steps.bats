@@ -4,7 +4,7 @@
 # command writes the project settings through `gaia init write-project-config`,
 # and its resume step list names the same steps, in the same order, as the CLI's
 # STEP_ORDER. It also pins the single-session shape: the React Doctor install
-# sits once in Step 1, before any line names a `frontend/` path; the command
+# sits once in Step 1, before any line names a `apps/web/` path; the command
 # reads no setup reference and runs or records no per-machine step; it asks for
 # no exit, restart or reload; Step 9 finalizes and Step 10 hands off to
 # /setup-gaia, ending on the read of the setup command with RECONFIGURE false
@@ -142,12 +142,12 @@ remove_text() {
 
 # check_react_doctor_early_install <init>: the installer is named on exactly one
 # line, inside Step 1, after the dependency install and the Chromium install,
-# and no earlier line names a `frontend/` path. Claude Code lists a folder's
+# and no earlier line names a `apps/web/` path. Claude Code lists a folder's
 # skills the first time the session reads a file in it, so the install must
-# precede every step that reads under `frontend/`. The check pins any
-# `frontend/` path rather than a file-tool verb near one: a path in the text is
+# precede every step that reads under `apps/web/`. The check pins any
+# `apps/web/` path rather than a file-tool verb near one: a path in the text is
 # the only text-level proxy for an instruction that reads, edits or writes
-# there, and Step 1's Bash lines name the package as `pnpm -C frontend`, with no
+# there, and Step 1's Bash lines name the package as `pnpm -C apps/web`, with no
 # slash.
 check_react_doctor_early_install() {
   local file="$1" count install_line pnpm_line chromium_line frontend_line
@@ -171,9 +171,9 @@ check_react_doctor_early_install() {
     echo "the React Doctor install precedes the Chromium install" >&2
     return 1
   }
-  frontend_line="$(head -n $((install_line - 1)) "$file" | grep -nF -- 'frontend/' | head -n 1 | cut -d: -f1)"
+  frontend_line="$(head -n $((install_line - 1)) "$file" | grep -nF -- 'apps/web/' | head -n 1 | cut -d: -f1)"
   [ -z "$frontend_line" ] || {
-    echo "a frontend/ path is named before the React Doctor install: line ${frontend_line}" >&2
+    echo "a apps/web/ path is named before the React Doctor install: line ${frontend_line}" >&2
     return 1
   }
 }
@@ -183,7 +183,7 @@ install_line_text() {
   grep -F -- 'install-react-doctor.sh' "$INIT_MD"
 }
 
-@test "gaia-init.md installs React Doctor once, in Step 1, before any frontend/ path" {
+@test "gaia-init.md installs React Doctor once, in Step 1, before any apps/web/ path" {
   check_react_doctor_early_install "$INIT_MD"
 }
 
@@ -255,15 +255,15 @@ install_line_text() {
   grep -qF 'precedes the Chromium install' <<<"$output"
 }
 
-@test "the early-install check fails when a frontend/ path is named above the installer line" {
+@test "the early-install check fails when a apps/web/ path is named above the installer line" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md" line
   line="$(install_line_text)"
   [ -n "$line" ]
-  insert_before "$INIT_MD" "$scratch" 'Read `frontend/CLAUDE.md` now.' "$line"
+  insert_before "$INIT_MD" "$scratch" 'Read `apps/web/CLAUDE.md` now.' "$line"
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_react_doctor_early_install "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'a frontend/ path is named before the React Doctor install' <<<"$output"
+  grep -qF 'a apps/web/ path is named before the React Doctor install' <<<"$output"
 }
 
 # ---------------------------------------------------------------------------
@@ -859,7 +859,7 @@ check_no_dependency_update() {
 
 @test "the no-update check fails when Step 6 installs Chromium again" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  sed 's/^pnpm typecheck && /pnpm -C frontend exec playwright install chromium \&\& pnpm typecheck \&\& /' "$INIT_MD" >"$scratch"
+  sed 's/^pnpm typecheck && /pnpm -C apps\/web exec playwright install chromium \&\& pnpm typecheck \&\& /' "$INIT_MD" >"$scratch"
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_no_dependency_update "$scratch"
   [ "$status" -ne 0 ]

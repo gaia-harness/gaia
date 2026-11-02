@@ -131,8 +131,8 @@ fi
 
 # --- Assertion 4b: the zero-match invariant can fail ---------------------
 MISSPELLED_ROSTER="$STAGING/.gaia/audit-ci-misspelled.yml"
-sed 's|^      - "frontend/app/\*\*"$|&\
-      - "frontend/apps/**"|' "$ROSTER" > "$MISSPELLED_ROSTER"
+sed 's|^      - "apps/web/app/\*\*"$|&\
+      - "apps/web/apps/**"|' "$ROSTER" > "$MISSPELLED_ROSTER"
 if cmp -s "$ROSTER" "$MISSPELLED_ROSTER"; then
   fail "could not plant a misspelled glob in the roster copy"
   exit 1
@@ -141,10 +141,10 @@ MISSPELLED_EXIT_STATUS=0
 MISSPELLED_OUTPUT="$(bash "$CHECK" --root "$STAGING" --config "$MISSPELLED_ROSTER" 2>&1)" || MISSPELLED_EXIT_STATUS=$?
 rm -f "$MISSPELLED_ROSTER"
 if [ "$MISSPELLED_EXIT_STATUS" -eq 0 ]; then
-  fail "guard-can-fail: the roster check accepted a glob (frontend/apps/**) that matches no file"
+  fail "guard-can-fail: the roster check accepted a glob (apps/web/apps/**) that matches no file"
   exit 1
 fi
-if ! grep -qF "frontend/apps/**" <<<"$MISSPELLED_OUTPUT"; then
+if ! grep -qF "apps/web/apps/**" <<<"$MISSPELLED_OUTPUT"; then
   printf '%s\n' "$MISSPELLED_OUTPUT" >&2
   fail "guard-can-fail: the roster check failed without naming the misspelled glob"
   exit 1

@@ -9,7 +9,7 @@ setup() {
   SCRIPT="$REPO_ROOT/.gaia/scripts/verify-vendored-skills.sh"
   WORKFLOW="$REPO_ROOT/.github/workflows/cli-tests.yml"
   FIXTURE="$BATS_TEST_TMPDIR/fixture"
-  TARGET_RELATIVE="frontend/.claude/skills/demo"
+  TARGET_RELATIVE="apps/web/.claude/skills/demo"
 }
 
 sha256_of() {
@@ -117,7 +117,7 @@ cli_tests_job() {
   local job path
   job="$(cli_tests_job)"
   [ -n "$job" ]
-  for path in 'frontend/.claude/skills/playwright-cli/**' '.gaia/vendor/**' '.gaia/scripts/verify-vendored-skills.sh'; do
+  for path in 'apps/web/.claude/skills/playwright-cli/**' '.gaia/vendor/**' '.gaia/scripts/verify-vendored-skills.sh'; do
     grep -qxF -- "              - '$path'" <<<"$job" || { echo "missing filter entry: $path" >&2; return 1; }
   done
 }

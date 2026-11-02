@@ -51,17 +51,28 @@
 #                     unchanged. The set is computed over the final CHANGED
 #                     list, keeping only paths present at HEAD and reading
 #                     content from HEAD, never the working tree. react-patterns
-#                     runs on any *.tsx. typescript runs on any *.ts or *.tsx
-#                     (language files included). translation runs on a language
-#                     file (frontend/app/languages/<locale>/<file>.ts) or on any
-#                     other path whose HEAD content has a translation signal:
+#                     runs on any *.tsx under a web-stack member (a path no
+#                     member owns is not web). typescript runs on any *.ts or
+#                     *.tsx whatever its stack (language files included).
+#                     translation runs on a language file
+#                     (<web member path>/app/languages/<locale>/<file>.ts) or on any
+#                     other path under a web member whose HEAD content has a translation signal:
 #                     useTranslation, <Trans, i18n.t( or a bare t( call. A bare
 #                     t( is one not preceded by an identifier character, `$` or
 #                     `.`: `$` excludes i18next's `$t(` nesting and `.` excludes
 #                     member calls such as `x.split(` or `a.t(`. A HEAD blob
 #                     that cannot be read fails toward running: the path counts
 #                     for every specialist its extension qualifies for, and
-#                     for translation, with a stderr line naming it.
+#                     for translation, with a stderr line naming it. A package
+#                     registry that cannot be read fails toward every lens on
+#                     for every path, with a stderr line. Also prints one
+#                     LENSES=<path><TAB><lens,lens> line per path of the
+#                     incremental diff, deleted paths included, taken before the
+#                     --review-path and ownership filters (so CHANGED can stay
+#                     TypeScript only while a .sh or .css path still gets a
+#                     line). A web path lists react-patterns, translation,
+#                     accessibility, project-specific-rules and security; every
+#                     other path lists security.
 #
 # Output (stdout), one KEY=value per line, in this order:
 #   AUDIT_ROOT FULL_BASE BASE_REF BASE_REASON KEY_REF ANCHOR_TREE BASE_SHA
@@ -76,7 +87,7 @@
 #   SPECIALIST=<name> <trigger>:<path>[ <trigger>:<path>]... line per
 #   specialist that runs, in the order react-patterns, typescript,
 #   translation, with the tokens in CHANGED order; SPECIALIST lines print last,
-#   after DIRTY, and a specialist with no qualifying path prints no line.
+#   after DIRTY and the LENSES lines, and a specialist with no qualifying path prints no line.
 #   <trigger> is tsx, ts, language-file or i18n-signal. REVIEW_DIFF names the member's review input, a diff file under
 #   <root>/.gaia/local/audit/ holding the branch's changed hunks on the CHANGED
 #   paths since the anchor plus the remerge-diff of any merge commit that
@@ -385,6 +396,7 @@ _ars_helper_status_message() {
 }
 
 changed=()
+lens_paths=()
 anchor_commit=""
 local_base_reference=""
 BASE_TIP=""
@@ -414,6 +426,14 @@ if [ -n "$BASE_SHA" ]; then
   helper_status=0
   audit_branch_patch_changed_paths "$root" "$BASE_TIP" "$list_anchor" HEAD > "$ars_temporary_directory/own" 2>"$ars_temporary_directory/own.err" || helper_status=$?
   [ "$helper_status" -eq 0 ] || _ars_review_failure "$BASE_SHA...HEAD" "$(_ars_helper_status_message "$helper_status")"
+
+  # The lens list is the whole incremental diff, deleted paths included, taken
+  # before the --review-path narrowing and the ownership filter: the member
+  # narrows CHANGED to .ts and .tsx, and a lens line is owed to .sh, .tf, .css
+  # and config paths too.
+  while IFS= read -r -d '' path; do
+    lens_paths+=("$path")
+  done < "$ars_temporary_directory/own"
 
   if [ "${#review_paths[@]}" -gt 0 ]; then
     # Git applies the pathspecs, never a hand-rolled glob. A changed path can
@@ -552,26 +572,81 @@ if [ "$specialists" -eq 1 ]; then
   react_patterns_tokens=""
   typescript_tokens=""
   translation_tokens=""
-  language_file_pattern='^frontend/app/languages/[^/]+/.+\.ts$'
+
+  # A path is web when the member that owns it declares the web stack; a path no
+  # member owns is not web. A registry that cannot be read fails toward every
+  # lens on, with a stderr line, so a broken registry never drops a review lens.
+  every_path_web=0
+  packages_library="$self_root/.claude/hooks/lib/gaia-packages.sh"
+  packages_status=0
+  if [ -f "$packages_library" ]; then
+    # shellcheck source=/dev/null
+    . "$packages_library"
+    gaia_packages_load "$root" || packages_status=$?
+  else
+    packages_status=1
+    GAIA_PACKAGES_ERROR="package registry reader missing at $packages_library"
+  fi
+  if [ "$packages_status" -ne 0 ]; then
+    printf 'could not read the package registry (%s); every lens stays on for every path\n' "${GAIA_PACKAGES_ERROR:-unknown error}" >&2
+    every_path_web=1
+  fi
+
+  # _ars_is_language_file <path>: 0 for a locale file of its owning web member,
+  # or any app/languages/<locale>/*.ts path when the registry is unreadable. The
+  # owner's directory is stripped first (none at `.`), so no prefix enters a regex.
+  _ars_is_language_file() {
+    local owner owner_dir remainder="$1"
+    if [ "$every_path_web" -eq 1 ]; then
+      [[ "$1" =~ ^(.*/)?app/languages/[^/]+/.+\.ts$ ]]
+      return
+    fi
+    owner="$(gaia_package_for_path "$1")"
+    [ -n "$owner" ] || return 1
+    gaia_package_is_web "$owner" || return 1
+    owner_dir="$(gaia_package_dir "$owner")" || return 1
+    [ "$owner_dir" = . ] || remainder="${1#"$owner_dir"/}"
+    [[ "$remainder" =~ ^app/languages/[^/]+/.+\.ts$ ]]
+  }
+
+  # _ars_path_is_web <path>: status 0 when the path takes the web lenses.
+  _ars_path_is_web() {
+    local owner
+    [ "$every_path_web" -eq 0 ] || return 0
+    owner="$(gaia_package_for_path "$1")"
+    [ -n "$owner" ] || return 1
+    gaia_package_is_web "$owner"
+  }
+
   # `$` and `.` are excluded before a bare t( so `$t(` nesting and member calls
   # such as `x.split(` never read as a translation call.
   translation_signal_pattern='useTranslation|<Trans([[:space:]/>]|$)|i18n\.t\(|(^|[^[:alnum:]_$.])t\('
   for path in ${changed[@]+"${changed[@]}"}; do
     git -C "$root" cat-file -e "HEAD:$path" 2>/dev/null || continue
+    path_is_web=0
+    if _ars_path_is_web "$path"; then path_is_web=1; fi
     case "$path" in
       *.tsx)
-        react_patterns_tokens="$react_patterns_tokens tsx:$path"
+        [ "$path_is_web" -eq 0 ] || react_patterns_tokens="$react_patterns_tokens tsx:$path"
         typescript_tokens="$typescript_tokens tsx:$path" ;;
       *.ts)
         typescript_tokens="$typescript_tokens ts:$path" ;;
     esac
-    if [[ "$path" =~ $language_file_pattern ]]; then
+    [ "$path_is_web" -eq 1 ] || continue
+    if _ars_is_language_file "$path"; then
       translation_tokens="$translation_tokens language-file:$path"
     elif ! git -C "$root" show "HEAD:$path" > "$ars_temporary_directory/blob" 2>/dev/null; then
       printf 'could not read HEAD:%s; running every specialist it qualifies for\n' "$path" >&2
       translation_tokens="$translation_tokens i18n-signal:$path"
     elif grep -E -q "$translation_signal_pattern" "$ars_temporary_directory/blob"; then
       translation_tokens="$translation_tokens i18n-signal:$path"
+    fi
+  done
+  for path in ${lens_paths[@]+"${lens_paths[@]}"}; do
+    if _ars_path_is_web "$path"; then
+      printf 'LENSES=%s\treact-patterns,translation,accessibility,project-specific-rules,security\n' "$path"
+    else
+      printf 'LENSES=%s\tsecurity\n' "$path"
     fi
   done
   [ -z "$react_patterns_tokens" ] || printf 'SPECIALIST=react-patterns%s\n' "$react_patterns_tokens"

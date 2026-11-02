@@ -8,13 +8,13 @@ tags: [concept, services, api]
 
 # API Service Pattern
 
-Canonical reference for adding a domain service. Mirrored by the `api-service` rule (`frontend/.claude/rules/api-service.md`) and scaffolded by `/new-service`.
+Canonical reference for adding a domain service. Mirrored by the `api-service` rule (`apps/web/.claude/rules/api-service.md`) and scaffolded by `/new-service`.
 
 Related: [[Services]], [[MSW Handlers]]
 
 ## Folder structure
 
-Each domain lives under `frontend/app/services/gaia/{domain}/`:
+Each domain lives under `apps/web/app/services/gaia/{domain}/`:
 
 | File                 | Role                                                                                                               |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -66,14 +66,14 @@ An SDK-backed domain (Supabase, Firebase) has no `create()` instance: its reques
 
 ## `state.tsx`: read-only context (optional)
 
-Add `state.tsx` when a route loader fetches data that deeply nested client components need. Read-only context only; no setters; mutations go through actions. See the `state-pattern` rule (`frontend/.claude/rules/state-pattern.md`) and [[State]].
+Add `state.tsx` when a route loader fetches data that deeply nested client components need. Read-only context only; no setters; mutations go through actions. See the `state-pattern` rule (`apps/web/.claude/rules/state-pattern.md`) and [[State]].
 
 ## Mocking with MSW
 
-Every service has a matching mock layer in `frontend/test/mocks/{domain}/`. The folder structure mirrors the service: `get.ts`, `post.ts`, `put.ts`, `delete.ts` (one file per HTTP method), `data.ts` (server-shape Zod schema + `@msw/data` `Collection` + a `reset` that takes optional seed records), and `index.ts` (barrel combining all handlers).
+Every service has a matching mock layer in `apps/web/test/mocks/{domain}/`. The folder structure mirrors the service: `get.ts`, `post.ts`, `put.ts`, `delete.ts` (one file per HTTP method), `data.ts` (server-shape Zod schema + `@msw/data` `Collection` + a `reset` that takes optional seed records), and `index.ts` (barrel combining all handlers).
 
 Note: MSW mock data uses the wire's field names: camelCase by default, snake_case when the layer sets `isSnakeCaseEnabled: true` (`scaffold service` reads the layer's `api.ts` to pick). On a snake_case layer the Ky wrapper converts to camelCase before the Zod schemas see it, so the server schema in `data.ts` reflects the raw server shape, and the `Collection` consumes that schema directly via Standard Schema. Mutation handlers read the JSON body with `request.json()` and answer `{data}`.
 
-Register handlers in `frontend/test/mocks/index.ts` and re-export the new collection (plus its reset) from `frontend/test/mocks/database.ts`. See [[MSW Handlers]] for full setup details.
+Register handlers in `apps/web/test/mocks/index.ts` and re-export the new collection (plus its reset) from `apps/web/test/mocks/database.ts`. See [[MSW Handlers]] for full setup details.
 
-`/new-service` scaffolds the service folder; with `--mocks` it also scaffolds the `test/mocks/{domain}/` folder and registers the collection in `database.ts`. Adding the new handlers to `frontend/test/mocks/index.ts` is a manual step.
+`/new-service` scaffolds the service folder; with `--mocks` it also scaffolds the `test/mocks/{domain}/` folder and registers the collection in `database.ts`. Adding the new handlers to `apps/web/test/mocks/index.ts` is a manual step.

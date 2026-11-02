@@ -8,7 +8,7 @@ setup() {
   SCRIPT="$REPO_ROOT/.gaia/scripts/revendor-playwright-cli.sh"
   VERIFY="$REPO_ROOT/.gaia/scripts/verify-vendored-skills.sh"
   SCRATCH_ROOT="$BATS_TEST_TMPDIR/root"
-  TARGET="$SCRATCH_ROOT/frontend/.claude/skills/playwright-cli"
+  TARGET="$SCRATCH_ROOT/apps/web/.claude/skills/playwright-cli"
   MARKER="$SCRATCH_ROOT/.gaia/vendor/playwright-cli.json"
   mkdir -p "$SCRATCH_ROOT"
   make_tarball

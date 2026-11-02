@@ -65,7 +65,12 @@ make_repo() {
     "$REPO_ROOT/.claude/hooks/lib/audit-digest.sh" \
     "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" \
     "$REPO_ROOT/.claude/hooks/lib/gaia-version.sh" \
+    "$REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" \
     "$repository_directory/.claude/hooks/lib/"
+  mkdir -p "$repository_directory/apps/web"
+  printf '%s\n' '{"schemaVersion":1,"name":"root","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$repository_directory/gaia.package.json"
+  printf '%s\n' '[{"name":"root","path":"."},{"name":"web","path":"apps/web"}]' >"$repository_directory/.gaia/packages.json"
+  printf '%s\n' '{"schemaVersion":1,"name":"web","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$repository_directory/apps/web/gaia.package.json"
   printf '2.0.0\n' > "$repository_directory/.gaia/VERSION"
   git -C "$repository_directory" init -q --initial-branch="$branch"
   git -C "$repository_directory" config user.email t@example.com
@@ -784,7 +789,7 @@ resolve_with_specialists() {
   shift
   FLAGLESS_OUTPUT="$("$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-frontend --root "$repo" "$@" 2>/dev/null)" || return 1
   FLAGGED_OUTPUT="$("$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-frontend --root "$repo" "$@" --specialists 2>/dev/null)" || return 1
-  [ "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep -v '^SPECIALIST=')" = "$FLAGLESS_OUTPUT" ]
+  [ "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep -v -e '^SPECIALIST=' -e '^LENSES=')" = "$FLAGLESS_OUTPUT" ]
 }
 
 # specialist_line <name>: the SPECIALIST line for <name> in FLAGGED_OUTPUT.
@@ -849,11 +854,11 @@ TS_REVIEW_PATHS=(--review-path '*.ts' --review-path '*.tsx')
   local repo
   repo="$(make_repo specialists-language)"
   start_branch "$repo" feat
-  commit_file "$repo" frontend/app/languages/en/common.ts
-  commit_file "$repo" frontend/app/languages/en/errors.ts
+  commit_file "$repo" apps/web/app/languages/en/common.ts
+  commit_file "$repo" apps/web/app/languages/en/errors.ts
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
-  [ "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep '^SPECIALIST=')" = "SPECIALIST=typescript ts:frontend/app/languages/en/common.ts ts:frontend/app/languages/en/errors.ts
-SPECIALIST=translation language-file:frontend/app/languages/en/common.ts language-file:frontend/app/languages/en/errors.ts" ]
+  [ "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep '^SPECIALIST=')" = "SPECIALIST=typescript ts:apps/web/app/languages/en/common.ts ts:apps/web/app/languages/en/errors.ts
+SPECIALIST=translation language-file:apps/web/app/languages/en/common.ts language-file:apps/web/app/languages/en/errors.ts" ]
   [ -z "$(specialist_line react-patterns)" ]
 }
 
@@ -861,16 +866,16 @@ SPECIALIST=translation language-file:frontend/app/languages/en/common.ts languag
   local repo
   repo="$(make_repo specialists-negative)"
   start_branch "$repo" feat
-  commit_content "$repo" frontend/app/utils/split.ts "const label = x.split(',');
+  commit_content "$repo" apps/web/app/utils/split.ts "const label = x.split(',');
 const nested = 'a \$t(key) b';"
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
   [ -n "$(specialist_line typescript)" ]
   [ -z "$(specialist_line translation)" ]
-  commit_content "$repo" frontend/app/utils/split.ts "const label = x.split(',');
+  commit_content "$repo" apps/web/app/utils/split.ts "const label = x.split(',');
 const nested = 'a \$t(key) b';
 const text = t('key');"
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
-  [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:frontend/app/utils/split.ts" ]
+  [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:apps/web/app/utils/split.ts" ]
 }
 
 @test "each translation signal alternative triggers i18n-signal on its own file" {
@@ -884,34 +889,34 @@ const text = t('key');"
       trans-eol) content="const node = <Trans" ;;
       i18n-call) content="const text = i18n.t('k');" ;;
     esac
-    commit_content "$repo" "frontend/app/signals/$name.ts" "$content"
+    commit_content "$repo" "apps/web/app/signals/$name.ts" "$content"
   done
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
-  [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:frontend/app/signals/i18n-call.ts i18n-signal:frontend/app/signals/trans-eol.ts i18n-signal:frontend/app/signals/trans-open.ts i18n-signal:frontend/app/signals/use-translation.ts" ]
+  [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:apps/web/app/signals/i18n-call.ts i18n-signal:apps/web/app/signals/trans-eol.ts i18n-signal:apps/web/app/signals/trans-open.ts i18n-signal:apps/web/app/signals/use-translation.ts" ]
 }
 
 @test "the translation signal reads HEAD, not the working tree" {
   local repo
   repo="$(make_repo specialists-head)"
   start_branch "$repo" feat
-  commit_content "$repo" frontend/app/utils/plain.ts "export const plain = 1;"
-  commit_content "$repo" frontend/app/utils/signal.ts "const text = t('k');"
-  printf 'useTranslation();\n' >> "$repo/frontend/app/utils/plain.ts"
-  printf 'nothing\n' > "$repo/frontend/app/utils/signal.ts"
+  commit_content "$repo" apps/web/app/utils/plain.ts "export const plain = 1;"
+  commit_content "$repo" apps/web/app/utils/signal.ts "const text = t('k');"
+  printf 'useTranslation();\n' >> "$repo/apps/web/app/utils/plain.ts"
+  printf 'nothing\n' > "$repo/apps/web/app/utils/signal.ts"
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
-  [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:frontend/app/utils/signal.ts" ]
+  [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:apps/web/app/utils/signal.ts" ]
 }
 
 @test "a path deleted at HEAD prints no specialist line" {
   local repo
   repo="$(make_repo specialists-deleted)"
-  commit_content "$repo" frontend/app/gone.tsx "useTranslation();"
+  commit_content "$repo" apps/web/app/gone.tsx "useTranslation();"
   publish_main "$repo"
   start_branch "$repo" feat
-  git -C "$repo" rm -q frontend/app/gone.tsx
+  git -C "$repo" rm -q apps/web/app/gone.tsx
   git -C "$repo" commit -q -m "delete gone"
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
-  printf '%s\n' "$FLAGGED_OUTPUT" | grep -qxF 'CHANGED=frontend/app/gone.tsx'
+  printf '%s\n' "$FLAGGED_OUTPUT" | grep -qxF 'CHANGED=apps/web/app/gone.tsx'
   [ -z "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep '^SPECIALIST=')" ]
 }
 
@@ -919,21 +924,21 @@ const text = t('key');"
   local repo
   repo="$(make_repo specialists-tsx)"
   start_branch "$repo" feat
-  commit_content "$repo" frontend/app/pages/home.tsx "export const Home = () => { useTranslation(); return null; };"
-  commit_file "$repo" frontend/app/languages/en/home.ts
+  commit_content "$repo" apps/web/app/pages/home.tsx "export const Home = () => { useTranslation(); return null; };"
+  commit_file "$repo" apps/web/app/languages/en/home.ts
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
-  [ "$(specialist_line react-patterns)" = "SPECIALIST=react-patterns tsx:frontend/app/pages/home.tsx" ]
-  [ "$(specialist_line typescript)" = "SPECIALIST=typescript ts:frontend/app/languages/en/home.ts tsx:frontend/app/pages/home.tsx" ]
-  [ "$(specialist_line translation)" = "SPECIALIST=translation language-file:frontend/app/languages/en/home.ts i18n-signal:frontend/app/pages/home.tsx" ]
+  [ "$(specialist_line react-patterns)" = "SPECIALIST=react-patterns tsx:apps/web/app/pages/home.tsx" ]
+  [ "$(specialist_line typescript)" = "SPECIALIST=typescript ts:apps/web/app/languages/en/home.ts tsx:apps/web/app/pages/home.tsx" ]
+  [ "$(specialist_line translation)" = "SPECIALIST=translation language-file:apps/web/app/languages/en/home.ts i18n-signal:apps/web/app/pages/home.tsx" ]
 }
 
 @test "a path holding a space prints its token whole" {
   local repo
   repo="$(make_repo specialists-space)"
   start_branch "$repo" feat
-  commit_file "$repo" "frontend/app/a b.tsx"
+  commit_file "$repo" "apps/web/app/a b.tsx"
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
-  [ "$(specialist_line react-patterns)" = "SPECIALIST=react-patterns tsx:frontend/app/a b.tsx" ]
+  [ "$(specialist_line react-patterns)" = "SPECIALIST=react-patterns tsx:apps/web/app/a b.tsx" ]
 }
 
 @test "--specialists is in the usage text and the header, and a usage error still exits 2" {

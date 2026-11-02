@@ -145,15 +145,15 @@ gaia_ports_package_directory() {
   fi
 
   # Without jq (or with an unreadable registry) the registry cannot be read;
-  # the first top-level directory in byte order that holds a router config is
-  # the same answer the stock layout gives.
+  # the first directory in byte order, up to two levels down (a member sits at
+  # `apps/<name>`), holding a router config is the stock layout's answer.
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
     if _gaia_ports_has_router_config "$entry"; then
       printf '%s\n' "$entry"
       return 0
     fi
-  done <<<"$(find "$tree_root" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | LC_ALL=C sort)"
+  done <<<"$(find "$tree_root" -mindepth 1 -maxdepth 2 -type d \( -name node_modules -o -name .git \) -prune -o -type d -print 2>/dev/null | LC_ALL=C sort)"
   return 3
 }
 

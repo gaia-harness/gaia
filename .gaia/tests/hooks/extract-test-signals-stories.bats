@@ -15,8 +15,8 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$HOME_ROOT"
   EXTRACTOR="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
-  SHAPES_PATH="frontend/app/utils/tests/csf-shapes.stories.tsx"
-  META_PLAY_PATH="frontend/app/utils/tests/csf-meta-play.stories.tsx"
+  SHAPES_PATH="apps/web/app/utils/tests/csf-shapes.stories.tsx"
+  META_PLAY_PATH="apps/web/app/utils/tests/csf-meta-play.stories.tsx"
   CSF3_PATH=".gaia/tests/hooks/fixtures/red-ledger/csf3-old-format.stories.tsx"
   CSF2_PATH=".gaia/tests/hooks/fixtures/red-ledger/csf2-old-format.stories.tsx"
   MIGRATE_LINE_SUFFIX="is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4"
@@ -189,10 +189,10 @@ SIBLING_NAMES=(
     "import {sharedPlay} from './shared-play';" \
     "const meta = preview.meta({title: 'Internal/Imported'});" \
     "export const UsesImportedPlay = meta.story({play: sharedPlay});" > "$source"
-  run_extractor_on_source "frontend/app/utils/tests/imported.stories.tsx" "$source"
+  run_extractor_on_source "apps/web/app/utils/tests/imported.stories.tsx" "$source"
   [ "$status" -eq 7 ]
   [ -z "$output" ]
-  grep -qF -- "unsupported story shape in frontend/app/utils/tests/imported.stories.tsx: UsesImportedPlay" "$BATS_TEST_TMPDIR/stderr.txt"
+  grep -qF -- "unsupported story shape in apps/web/app/utils/tests/imported.stories.tsx: UsesImportedPlay" "$BATS_TEST_TMPDIR/stderr.txt"
 }
 
 @test "a CSF4 file importing the preview by a relative .storybook/preview path is parsed, not refused" {
@@ -201,7 +201,7 @@ SIBLING_NAMES=(
     "import preview from '../../.storybook/preview';" \
     "const meta = preview.meta({title: 'Internal/Relative'});" \
     "export const Relative = meta.story({play: async () => {}});" > "$source"
-  run_extractor_on_source "frontend/app/utils/tests/relative.stories.tsx" "$source"
+  run_extractor_on_source "apps/web/app/utils/tests/relative.stories.tsx" "$source"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.fullName' <<<"$output")" = "Relative" ]
 }
@@ -212,8 +212,8 @@ SIBLING_NAMES=(
     "import preview from '#.storybook/preview';" \
     "const meta = preview.meta({title: 'Internal/Unknown'});" \
     "export const Leftover = {args: {text: 'left over'}};" > "$source"
-  run_extractor_on_source "frontend/app/utils/tests/unknown.stories.tsx" "$source"
+  run_extractor_on_source "apps/web/app/utils/tests/unknown.stories.tsx" "$source"
   [ "$status" -eq 7 ]
   [ -z "$output" ]
-  grep -qF -- "unsupported story shape in frontend/app/utils/tests/unknown.stories.tsx: default: the file is not a CSF4 story file" "$BATS_TEST_TMPDIR/stderr.txt"
+  grep -qF -- "unsupported story shape in apps/web/app/utils/tests/unknown.stories.tsx: default: the file is not a CSF4 story file" "$BATS_TEST_TMPDIR/stderr.txt"
 }

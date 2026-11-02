@@ -1,0 +1,20 @@
+# App build and test output. Package-relative on purpose: ESLint reads this file
+# from the apps/web/ working directory, and git applies it to this subtree.
+
+# react-router
+/build
+.react-router/
+
+# Testing
+.playwright/.cache/
+.playwright/output/
+coverage
+
+# Per-tree ports, written by worktree provisioning
+/.gaia-ports
+
+# Storybook
+/storybook-static/
+
+# Vitest browser mode failure attachments
+/.vitest/

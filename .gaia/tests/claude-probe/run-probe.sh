@@ -158,7 +158,7 @@ harness_common="$(cd "$SCRIPT_DIRECTORY" && cd "$(git rev-parse --git-common-dir
 if [ "$target_common" = "$table_common" ] || [ "$target_common" = "$harness_common" ]; then
   refuse "--target shares a git directory with the table repo or this harness's checkout; probe a build-fixture-tree.sh output or a scratch clone instead"
 fi
-[ -d "$TARGET/frontend" ] || refuse "--target has no frontend/ directory; it is not a target-layout tree"
+[ -d "$TARGET/apps/web" ] || refuse "--target has no apps/web/ directory; it is not a target-layout tree"
 
 # The floor (SPEC-092 Phase 0 step 3) and the root deny set must be covered
 # before a token is spent; a table missing a floor row cannot pass UAT-001.
@@ -294,7 +294,7 @@ launch_root() {
 }
 launch_directory() {
   case "$1" in
-    frontend) printf '%s/frontend' "$TARGET" ;;
+    frontend) printf '%s/apps/web' "$TARGET" ;;
     worktree) printf '%s' "$WORKTREE_ROOT" ;;
     *) printf '%s' "$TARGET" ;;
   esac
@@ -310,7 +310,7 @@ snapshot_launch() {
   mkdir -p "$snapshot/files"
   git -C "$root" ls-files -z --cached --others --exclude-standard | tr '\0' '\n' >"$snapshot/tree.txt"
   {
-    printf '%s\n' .claude/settings.json .claude/settings.local.json frontend/.claude/settings.json frontend/.claude/settings.local.json .mcp.json
+    printf '%s\n' .claude/settings.json .claude/settings.local.json apps/web/.claude/settings.json apps/web/.claude/settings.local.json .mcp.json
     grep -E '(^|/)\.claude/(rules/.+|commands/.+|skills/[^/]+/SKILL)\.md$' "$snapshot/tree.txt" || true
   } | while IFS= read -r relative_path; do
     [ -f "$root/$relative_path" ] || continue
@@ -380,9 +380,9 @@ run_claude() {
 }
 
 ONE_WORD="Reply with the single word OK. Do not use any tools."
-COMPONENT_PATH="frontend/app/components/probe-x/index.tsx"
-COMMIT_A_PATHS="frontend/app/components/probe-commit/index.tsx"
-COMMIT_B_PATHS="frontend/app/utils/probeSum.ts frontend/app/utils/probeSum.test.ts"
+COMPONENT_PATH="apps/web/app/components/probe-x/index.tsx"
+COMMIT_A_PATHS="apps/web/app/components/probe-commit/index.tsx"
+COMMIT_B_PATHS="apps/web/app/utils/probeSum.ts apps/web/app/utils/probeSum.test.ts"
 
 table_subjects() {
   jq -r --arg launch "$1" --arg trigger "$2" --arg kind "$3" \
@@ -393,7 +393,7 @@ table_subjects() {
 # in place: a frontend launch reads its own deny from it, so holding it aside
 # would remove the rule under test. Its Edit uses a real old_string instead of
 # the create-a-file form, and the file is copied aside and put back after.
-LIVE_PERMISSION_TARGET="frontend/.claude/settings.json"
+LIVE_PERMISSION_TARGET="apps/web/.claude/settings.json"
 
 numbered_calls() {
   local root="$1" launch="$2" trigger="$3" index=0 tool relative_path
@@ -517,9 +517,9 @@ $calls"
         mkdir -p "$(dirname "$root/$relative_path")"
         printf '%s\n' "$relative_path" >>"$CREATED_FILES_LIST"
       done
-      printf 'export const ProbeCommit = () => <div>probe</div>;\n' >"$root/frontend/app/components/probe-commit/index.tsx"
-      printf 'export const probeSum = (left: number, right: number) => left + right;\n' >"$root/frontend/app/utils/probeSum.ts"
-      printf "import {expect, test} from 'vitest';\nimport {probeSum} from './probeSum';\n\ntest('probeSum adds', () => {\n  expect(probeSum(1, 2)).toBe(3);\n});\n" >"$root/frontend/app/utils/probeSum.test.ts"
+      printf 'export const ProbeCommit = () => <div>probe</div>;\n' >"$root/apps/web/app/components/probe-commit/index.tsx"
+      printf 'export const probeSum = (left: number, right: number) => left + right;\n' >"$root/apps/web/app/utils/probeSum.ts"
+      printf "import {expect, test} from 'vitest';\nimport {probeSum} from './probeSum';\n\ntest('probeSum adds', () => {\n  expect(probeSum(1, 2)).toBe(3);\n});\n" >"$root/apps/web/app/utils/probeSum.test.ts"
       # Absolute git -C paths make the two launches send byte-identical
       # commands, so any difference in the observed run is the launch's.
       # Each add is its own call ahead of its commit: the RED gate runs at the
@@ -539,7 +539,7 @@ $calls"
       git -C "$root" reset --quiet -- $COMMIT_A_PATHS $COMMIT_B_PATHS 2>/dev/null || true
       # shellcheck disable=SC2086
       for relative_path in $COMMIT_A_PATHS $COMMIT_B_PATHS; do rm -f "$root/$relative_path"; done
-      rmdir "$root/frontend/app/components/probe-commit" 2>/dev/null || true
+      rmdir "$root/apps/web/app/components/probe-commit" 2>/dev/null || true
       rm -f "$WORK_DIRECTORY/commit-in-flight"
       ;;
     after_task:hook-if)

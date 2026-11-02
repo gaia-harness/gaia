@@ -718,7 +718,7 @@ assert_check_red() { # expected reason, then function name and arguments
   [ "$(fence_body "$PATH_ARM" 1)" = "git -C <main checkout path> worktree list --porcelain" ] || return 1
   [ "$(fence_body "$PATH_ARM" 2)" = "bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>" ] || return 1
   [ "$(fence_body "$LEFTOVERS_ARM" 1)" = "bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep" ] || return 1
-  [ "$(fence_body "$LEFTOVERS_ARM" 2)" = "[ ! -d frontend/.claude/skills/react-doctor ] || bash .gaia/scripts/install-react-doctor.sh" ] || return 1
+  [ "$(fence_body "$LEFTOVERS_ARM" 2)" = "bash .gaia/scripts/install-react-doctor.sh --refresh" ] || return 1
   [ "$(fence_body "$LEFTOVERS_ARM" 3)" = "bash <main checkout path>/.gaia/scripts/update-gaia-drift.sh --features <main checkout path>/.gaia/setup-features.json --scope machine" ] || return 1
   fence_body "$PATH_ARM" 3 | head -n 1 | grep -Fq 'git -C <main checkout path> worktree remove --force <worktree path>' || return 1
 }

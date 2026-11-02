@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "name": "lib",
+  "globs": {
+    "tddUnitTests": [],
+    "tddStrictCandidates": [],
+    "emergentTests": [],
+    "preCommitSource": [],
+    "doctorConfigs": [],
+    "dependencyManifests": []
+  },
+  "wiki": {
+    "sourcePaths": [],
+    "inventoryPaths": [],
+    "flowPaths": []
+  }
+}

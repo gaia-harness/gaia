@@ -601,10 +601,10 @@ if ! run_guard check-settings-drift; then
 fi
 
 # Fold in the retired-path gate: a harness citation of a root path that moved
-# under frontend/ resolves to nothing, so a guard keyed on it silently stops
+# under apps/web/ resolves to nothing, so a guard keyed on it silently stops
 # guarding. Not named lint-*, for the same reason as the drift check above; it
 # rides the same override seam under its own slug.
-echo "--> check-retired-paths (a harness citation of a root path that moved under frontend/)"
+echo "--> check-retired-paths (a harness citation of a root path that moved under apps/web/)"
 if ! run_guard check-retired-paths; then
   status=1
 fi

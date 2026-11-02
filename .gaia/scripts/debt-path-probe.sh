@@ -16,6 +16,13 @@
 # artifact is not a live source file), and so is a directory, a glob, or a
 # pathspec-magic spelling, since a dedup key names one file.
 #
+# MOVED ROOT: a key under the legacy package root also counts as tracked when
+# its counterpart under the app's new home is tracked, so a key filed before
+# the move does not read as gone. Only the leading segment is mapped, and the
+# comparison stays jq string equality. The legacy root is held without a
+# slash and the prefixes are composed, so the retired-path gate finds no citation
+# of the retired root in this file.
+#
 # The repository is the one containing the working directory, read from its
 # top level, so a run from a subdirectory sees the whole index. The playbook
 # runs it from the repository root.
@@ -67,6 +74,9 @@ printf '%s' "$backlog" | jq -e 'type == "array"' >/dev/null 2>&1 \
 printf '%s' "$backlog" | jq -e 'all(.[]; (.number | type) == "number")' >/dev/null 2>&1 \
   || die_usage "every backlog issue needs a numeric number"
 
+legacy_root=frontend
+new_root=apps/web
+
 top_level="$(git rev-parse --show-toplevel 2>/dev/null)" && [ -n "$top_level" ] \
   || die_input "the working directory is not inside a git repository"
 
@@ -75,13 +85,16 @@ trap 'rm -f "$index_listing"' EXIT
 git -C "$top_level" ls-files -z >"$index_listing" 2>/dev/null \
   || die_input "cannot list the git index"
 
-printf '%s' "$backlog" | jq -c --rawfile index "$index_listing" '
+printf '%s' "$backlog" | jq -c --rawfile index "$index_listing" --arg legacy_prefix "$legacy_root/" --arg new_prefix "$new_root/" '
   (reduce ($index | split("\u0000")[] | select(length > 0)) as $entry ({}; .[$entry] = true)) as $tracked
   | map(
       if (.key | type) == "object" and (.key.path | type) == "string" and (.key.path | length) > 0
       then .key.path as $path
         | {number, path: $path,
-           status: (if ($tracked | has($path)) then "tracked" else "gone" end)}
+           status: (if ($tracked | has($path))
+                    or (($path | startswith($legacy_prefix))
+                        and ($tracked | has($new_prefix + ($path | .[($legacy_prefix | length):]))))
+                    then "tracked" else "gone" end)}
       else {number, path: null, status: "keyless"}
       end
     )

@@ -124,7 +124,7 @@
 .gaia/scripts/lint-jq-as-binding.sh
 # The PreToolUse registration read and blocking oracle the two hook-layer gates share. Both consumers are withheld above, so an adopter clone would carry a library nothing sources.
 .gaia/scripts/hook-registration-lib.sh
-# The retired-path gate fails on a harness citation of a root path that moved under frontend/, and its allowlist names the surviving ones. Both describe GAIA's own harness layout and its runner (shell-lint.sh) and sibling suite (.gaia/scripts/tests/check-retired-paths.bats) are release-excluded, so an adopter clone would carry a check nothing invokes.
+# The retired-path gate fails on a harness citation of a root path that moved under apps/web, or of the retired frontend package root, and its allowlist names the surviving ones. Both describe GAIA's own harness layout, and its runner (shell-lint.sh) and sibling suites (.gaia/scripts/tests/check-retired-paths.bats, .gaia/scripts/tests/retired-frontend-root.bats) are release-excluded, so an adopter clone would carry a check nothing invokes.
 .gaia/scripts/check-retired-paths.sh
 .gaia/retired-paths-allowlist.tsv
 # Derives the bats suites a change must re-run before an audit dispatch and in each audit round. Every caller sits inside a maintainer-only block the bundle-time scrub removes, and the suites it selects are release-excluded, so an adopter clone would carry a helper nothing invokes.
@@ -194,8 +194,8 @@ wiki/concepts/Maintainer-only Debt Source Record.md
 # memo + timing, and that the StrictMode bypass fires. It guards GAIA's own
 # instrumentation against a bippy/React upgrade, not adopter app behavior, and
 # is coupled to a GAIA component an adopter may rename or remove. The capture
-# helper it exercises (frontend/.playwright/react-perf/) DOES ship; this canary does not.
-frontend/.playwright/e2e/react-perf-smoke.spec.ts
+# helper it exercises (apps/web/.playwright/react-perf/) DOES ship; this canary does not.
+apps/web/.playwright/e2e/react-perf-smoke.spec.ts
 # The audit-residual dismissal store records this repository's own triage
 # decisions: assertions about this repository's code that are false about
 # an adopter's. The machinery ships and the data does not. Without this

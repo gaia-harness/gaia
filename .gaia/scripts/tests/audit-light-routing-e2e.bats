@@ -29,7 +29,7 @@ setup_file() {
       mkdir -p "$BATS_TEST_TMPDIR"
       if [ "$flavor" = maintainer ]; then lsb_init --maintainer; else lsb_init; fi
       lsb_full_clearance code-audit-frontend
-      lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+      lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
       cp "$LSB_TEMPLATE_ROOT/$flavor/slug" "$BATS_TEST_TMPDIR/slug"
     ) || return 1
   done
@@ -132,7 +132,7 @@ escalate_through_light() {
 
 @test "on a first dispatch whose route is full no reviewer input is written, and a member that has no quick route gets none either" {
   lsb_init
-  lsb_commit frontend/app/notes.md "one line"
+  lsb_commit apps/web/app/notes.md "one line"
   lsb_route "$FRONTEND"
   expect_full quick-path
   local merge_base record
@@ -150,8 +150,8 @@ escalate_through_light() {
 
 # --- the first-dispatch quick route, end to end ------------------------------------
 
-QUICK_ENGLISH="frontend/app/languages/en/common.ts"
-QUICK_JAPANESE="frontend/app/languages/ja/common.ts"
+QUICK_ENGLISH="apps/web/app/languages/en/common.ts"
+QUICK_JAPANESE="apps/web/app/languages/ja/common.ts"
 
 # quick_locale_text <title>: a one-key language file.
 quick_locale_text() {
@@ -208,7 +208,7 @@ record_for_frontend() {
   lsb_init
   lsb_full_clearance "$FRONTEND"
   [ "$(jq -r .review "$(marker_path)")" = "full" ]
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   assert_gate_denies
   lsb_route "$FRONTEND"
   expect_light_eligible
@@ -225,10 +225,10 @@ record_for_frontend() {
 
 @test "a refused branch repaired by a small delta clears light against the refusal's findings, and the merge gate allows it" {
   lsb_init
-  lsb_commit_lines frontend/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 major false)]"
+  lsb_commit_lines apps/web/app/notes.md 5 line
+  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding apps/web/app/notes.md 2 major false)]"
   assert_gate_denies
-  lsb_commit_lines frontend/app/notes.md 5 fixed
+  lsb_commit_lines apps/web/app/notes.md 5 fixed
   assert_gate_denies
   lsb_route "$FRONTEND"
   expect_line "$(printf 'light\trefusal-anchored')"
@@ -253,14 +253,14 @@ record_for_frontend() {
   lsb_init
   lsb_full_clearance "$FRONTEND"
   local anchor_commit="$LSB_HEAD" anchor_tree="$LSB_TREE"
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   local light_commit="$LSB_HEAD"
   lsb_route "$FRONTEND"
   expect_light_eligible
   clear_through_light
   expect_line "light-cleared"
   [ "$(jq -r .tree "$(marker_path)")" != "$anchor_tree" ]
-  lsb_commit frontend/app/feature.test.ts "export const covered = true;"
+  lsb_commit apps/web/app/feature.test.ts "export const covered = true;"
   lsb_route "$FRONTEND"
   expect_full hard-full
   run bash -c 'cd "$1" && bash .github/audit/resolve-audit-base.sh --member "$2" 2>/dev/null' _ "$LSB_ROOT" "$FRONTEND"
@@ -287,12 +287,12 @@ record_for_frontend() {
   total_before="$(jq -r .total <<<"$output")"
   [ "$total_before" = "1" ]
 
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   lsb_route "$FRONTEND"
   expect_light_eligible
   clear_through_light
   expect_line "light-cleared"
-  lsb_commit frontend/app/more.md "more"
+  lsb_commit apps/web/app/more.md "more"
   lsb_route "$FRONTEND"
   expect_light_eligible
   escalate_through_light
@@ -341,7 +341,7 @@ record_for_frontend() {
   bash -n "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
 
   lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   lsb_route "$FRONTEND"
   expect_light_eligible
   clear_through_light
@@ -356,7 +356,7 @@ record_for_frontend() {
   mkdir -p "$(dirname "$(telemetry_log)")"
   chmod 0555 "$(dirname "$(telemetry_log)")"
   [ ! -w "$(dirname "$(telemetry_log)")" ] || skip "the directory stays writable for this user"
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   lsb_route "$FRONTEND"
   expect_light_eligible
   clear_through_light
@@ -394,7 +394,7 @@ recorded_rounds() {
   lsb_seed_loop_state "$FRONTEND"
   [ "$(recorded_rounds)" = "1" ]
   # The seeded round sits at the full clearance's tree; the light delta is a new one.
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   lsb_route "$FRONTEND"
   expect_light_eligible
   hook_dispatch audit-light-reviewer
@@ -414,14 +414,14 @@ recorded_rounds() {
   lsb_init
   lsb_catchup_init
   lsb_full_clearance "$FRONTEND"
-  lsb_catchup_base_commit frontend/public/sw.js "self.x = 1"
+  lsb_catchup_base_commit tools/sw.js "self.x = 1"
   lsb_catch_up
   assert_gate_allows
-  lsb_catchup_branch_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  lsb_catchup_branch_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   assert_gate_denies
   lsb_route "$FRONTEND"
   expect_light_eligible
-  grep -qF 'frontend/public/sw.js' "$(route_input_path)" && return 1
+  grep -qF 'tools/sw.js' "$(route_input_path)" && return 1
   clear_through_light
   expect_line "light-cleared"
   assert_gate_allows

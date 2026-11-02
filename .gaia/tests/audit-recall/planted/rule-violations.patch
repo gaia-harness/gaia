@@ -1,7 +1,7 @@
-diff --git a/frontend/app/components/archive-banner/index.tsx b/frontend/app/components/archive-banner/index.tsx
+diff --git a/apps/web/app/components/archive-banner/index.tsx b/apps/web/app/components/archive-banner/index.tsx
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/components/archive-banner/index.tsx
++++ b/apps/web/app/components/archive-banner/index.tsx
 @@ -0,0 +1,11 @@
 +import type {FC} from 'react';
 +
@@ -14,10 +14,10 @@ new file mode 100644
 +    You have {count} archived items
 +  </p>
 +);
-diff --git a/frontend/app/components/welcome-panel/index.tsx b/frontend/app/components/welcome-panel/index.tsx
+diff --git a/apps/web/app/components/welcome-panel/index.tsx b/apps/web/app/components/welcome-panel/index.tsx
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/components/welcome-panel/index.tsx
++++ b/apps/web/app/components/welcome-panel/index.tsx
 @@ -0,0 +1,17 @@
 +import type {FC} from 'react';
 +import {useTranslation} from 'react-i18next';
@@ -36,37 +36,37 @@ new file mode 100644
 +    </section>
 +  );
 +};
-diff --git a/frontend/app/types/status-record.ts b/frontend/app/types/status-record.ts
+diff --git a/apps/web/app/types/status-record.ts b/apps/web/app/types/status-record.ts
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/types/status-record.ts
++++ b/apps/web/app/types/status-record.ts
 @@ -0,0 +1,4 @@
 +export interface StatusRecord {
 +  id: string;
 +  label: string;
 +}
-diff --git a/frontend/app/utils/describe-status.ts b/frontend/app/utils/describe-status.ts
+diff --git a/apps/web/app/utils/describe-status.ts b/apps/web/app/utils/describe-status.ts
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/utils/describe-status.ts
++++ b/apps/web/app/utils/describe-status.ts
 @@ -0,0 +1,4 @@
 +import type {StatusRecord} from '~/types/status-record';
 +
 +export const describeStatus = (record: StatusRecord) =>
 +  `${record.id}: ${record.label}`;
-diff --git a/frontend/app/utils/status-kind.ts b/frontend/app/utils/status-kind.ts
+diff --git a/apps/web/app/utils/status-kind.ts b/apps/web/app/utils/status-kind.ts
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/utils/status-kind.ts
++++ b/apps/web/app/utils/status-kind.ts
 @@ -0,0 +1,4 @@
 +export enum StatusKind {
 +  Active = 'active',
 +  Archived = 'archived',
 +}
-diff --git a/frontend/app/utils/status-schema.ts b/frontend/app/utils/status-schema.ts
+diff --git a/apps/web/app/utils/status-schema.ts b/apps/web/app/utils/status-schema.ts
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/utils/status-schema.ts
++++ b/apps/web/app/utils/status-schema.ts
 @@ -0,0 +1,3 @@
 +import {z} from 'zod';
 +

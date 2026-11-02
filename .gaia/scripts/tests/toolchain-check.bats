@@ -300,9 +300,9 @@ route_line() {
   [ "${output#*2.4.0.md}" = "$output" ]
 }
 
-@test "the note owns its hop: on a pass it runs the ordinary walk through the version and manifest write" {
-  grep -qF 'the walk the running skill runs when no `BLOCKING` line prints' "$NOTE"
-  grep -qF '`.gaia/VERSION` and manifest write' "$NOTE"
+@test "the note owns its hop: on a pass it runs the ordinary walk inline through the version and manifest write" {
+  grep -qF 'Run the ordinary three-way walk to `<target>`, through `.gaia/VERSION` and the manifest write at `<target>`' "$NOTE"
+  grep -qF 'Run the walk inline in this session' "$NOTE"
 }
 
 # later_bundle <mode>: a target bundle above 2.4.0, carrying the shipped notes

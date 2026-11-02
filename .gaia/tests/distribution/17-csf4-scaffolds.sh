@@ -2,7 +2,7 @@
 # 17-csf4-scaffolds.sh
 # distribution-runner: exclusive
 # distribution-runner: paths .gaia/cli/src/init/** .gaia/cli/src/scaffold/** .gaia/cli/templates/** pnpm-lock.yaml
-# distribution-runner: paths frontend/package.json frontend/.storybook/** frontend/eslint.config.mjs frontend/tsconfig.json frontend/vite.config.ts frontend/vitest.config.ts frontend/react-router.config.ts frontend/app/root.tsx frontend/app/state/** frontend/app/services/** frontend/test/**
+# distribution-runner: paths apps/web/package.json apps/web/.storybook/** apps/web/eslint.config.mjs apps/web/tsconfig.json apps/web/vite.config.ts apps/web/vitest.config.ts apps/web/react-router.config.ts apps/web/app/root.tsx apps/web/app/state/** apps/web/app/services/** apps/web/test/**
 #
 # Adopter-flow regression for the scaffolds and the init commands that edit
 # the CSF Next preview, in four staged release trees:
@@ -118,7 +118,7 @@ run_tree() {
   rsync -a "$STAGING"/ "$SCAFFOLD"/
   git -C "$SCAFFOLD" init -q
   GAIA="$SCAFFOLD/.gaia/cli/gaia"
-  FRONTEND="$SCAFFOLD/frontend"
+  FRONTEND="$SCAFFOLD/apps/web"
 
   if [ "$data_layer" = "on" ]; then
     tree_gaia "configure-data-layer" init configure-data-layer --casing snake --query true

@@ -10,10 +10,10 @@
 # over roster order; the default's globs are evaluated only after every
 # claimant has failed to match. Exactly one entry carries `default: true`.
 #
-# 2.0.0 shape: the React app lives under `frontend/`, so `code-audit-frontend`
-# (the default member) declares `frontend/`-prefixed globs for the app, its
-# test and tooling trees, its config files, `frontend/gaia.package.json` and
-# `frontend/.claude/**` plus `frontend/CLAUDE.md`. The root halves of split
+# Layout: the React app lives under `apps/web/`, so `code-audit-frontend`
+# (the default member) declares `apps/web/`-prefixed globs for the app, its
+# test and tooling trees, its config files, `apps/web/gaia.package.json` and
+# `apps/web/.claude/**` plus `apps/web/CLAUDE.md`. The root halves of split
 # files (`package.json`, lockfile, workspace file, `.npmrc`, version pins) keep
 # their root globs. A retired root path such as `app/**` resolves to no member.
 # Entries with `audience: maintainer` are wrapped in the marker comments
@@ -31,23 +31,29 @@
 auditors:
   - name: code-audit-frontend
     globs:
-      - "frontend/app/**"
-      - "frontend/test/**"
-      - "frontend/.storybook/**"
+      # Every member under apps/ or packages/: one added there is reviewed
+      # without a roster edit, and a specialist's claim on part of it still
+      # wins. A member outside those two folders, such as infra, needs its own
+      # claim.
+      - "apps/**"
+      - "packages/**"
+      - "apps/web/app/**"
+      - "apps/web/test/**"
+      - "apps/web/.storybook/**"
       - ".github/workflows/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
-      - "frontend/package.json"
-      - "frontend/tsconfig*.json"
-      - "frontend/*.config.ts"
-      - "frontend/*.config.mts"
-      - "frontend/*.config.mjs"
-      - "frontend/*.config.cjs"
-      - "frontend/*.config.js"
+      - "apps/web/package.json"
+      - "apps/web/tsconfig*.json"
+      - "apps/web/*.config.ts"
+      - "apps/web/*.config.mts"
+      - "apps/web/*.config.mjs"
+      - "apps/web/*.config.cjs"
+      - "apps/web/*.config.js"
       # The port modules the Vite and Playwright configs import: config code
       # that lives beside the configs without the `.config.` infix.
-      - "frontend/dev-ports*.ts"
+      - "apps/web/dev-ports*.ts"
       # Root halves of the split config files (prettier.config.mjs at the root).
       - "*.config.ts"
       - "*.config.mts"
@@ -56,7 +62,7 @@ auditors:
       - "*.config.js"
       # The Playwright suite is executed test code and the sibling of test/**,
       # which this member already owns. It dispatched nobody until now.
-      - "frontend/.playwright/**"
+      - "apps/web/.playwright/**"
       # Root tooling that decides what runs: the registry and install policy,
       # what the pre-commit gate formats and lints, what the image builds and
       # the build context it sees, the environment contract, and the Node
@@ -73,23 +79,23 @@ auditors:
       - ".prettierignore"
       - ".nvmrc"
       - ".node-version"
-      - "frontend/.lintstagedrc.json"
-      - "frontend/.prettierignore"
-      - "frontend/Dockerfile"
-      - "frontend/Dockerfile.dockerignore"
-      - "frontend/.env.example"
+      - "apps/web/.lintstagedrc.json"
+      - "apps/web/.prettierignore"
+      - "apps/web/Dockerfile"
+      - "apps/web/Dockerfile.dockerignore"
+      - "apps/web/.env.example"
       # The shadcn CLI config: it names the stylesheet @shadcn/lint reads its
       # token set from, so it decides what the token rules accept.
-      - "frontend/components.json"
+      - "apps/web/components.json"
       # The package descriptor: it names the globs every gate reads (unit
       # tests, strict candidates), so a change to it
       # changes what the gates check.
-      - "frontend/gaia.package.json"
+      - "apps/web/gaia.package.json"
       # The package's own harness: its rules, skills and generated settings
       # decide what the app's sessions do, and `audit-scope.sh` keeps them in
       # scope, so a member must read them.
-      - "frontend/.claude/**"
-      - "frontend/CLAUDE.md"
+      - "apps/web/.claude/**"
+      - "apps/web/CLAUDE.md"
     light_review: true
     light_line_cap: 50
     # Every owned glob that is not ordinary app source routes to a full review
@@ -98,48 +104,48 @@ auditors:
     light_hard_full:
       # The package's own harness: its rules and skills steer the app's
       # sessions, so even a one-line edit changes behavior.
-      - "frontend/.claude/**"
-      - "frontend/CLAUDE.md"
+      - "apps/web/.claude/**"
+      - "apps/web/CLAUDE.md"
       # Install policy, version pins and the editor-independent tooling files
       # that decide what the gates and the image build run.
       - ".npmrc"
       - ".prettierignore"
       - ".nvmrc"
       - ".node-version"
-      - "frontend/Dockerfile"
-      - "frontend/Dockerfile.dockerignore"
-      - "frontend/.env.example"
-      - "frontend/.lintstagedrc.json"
-      - "frontend/.prettierignore"
-      - "frontend/components.json"
+      - "apps/web/Dockerfile"
+      - "apps/web/Dockerfile.dockerignore"
+      - "apps/web/.env.example"
+      - "apps/web/.lintstagedrc.json"
+      - "apps/web/.prettierignore"
+      - "apps/web/components.json"
       # Manifests and lockfiles: dependency and script changes are never small.
-      - "frontend/gaia.package.json"
-      - "frontend/package.json"
+      - "apps/web/gaia.package.json"
+      - "apps/web/package.json"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       # Build, lint and compiler configuration, at the package and the root.
-      - "frontend/tsconfig*.json"
-      - "frontend/*.config.ts"
-      - "frontend/*.config.mts"
-      - "frontend/*.config.mjs"
-      - "frontend/*.config.cjs"
-      - "frontend/*.config.js"
+      - "apps/web/tsconfig*.json"
+      - "apps/web/*.config.ts"
+      - "apps/web/*.config.mts"
+      - "apps/web/*.config.mjs"
+      - "apps/web/*.config.cjs"
+      - "apps/web/*.config.js"
       - "*.config.ts"
       - "*.config.mts"
       - "*.config.mjs"
       - "*.config.cjs"
       - "*.config.js"
-      - "frontend/dev-ports*.ts"
+      - "apps/web/dev-ports*.ts"
       # CI workflows execute with repository secrets and permissions.
       - ".github/workflows/**"
       # Test and tooling trees: executed test code a weakened assertion can
       # hollow out without changing a line of app source.
-      - "frontend/test/**"
-      - "frontend/.storybook/**"
-      - "frontend/.playwright/**"
-      - "frontend/app/**/tests/**"
-      - "frontend/app/**/*.stories.tsx"
+      - "apps/web/test/**"
+      - "apps/web/.storybook/**"
+      - "apps/web/.playwright/**"
+      - "apps/web/app/**/tests/**"
+      - "apps/web/app/**/*.stories.tsx"
     audience: adopter
     default: true
   - name: code-audit-github-workflows
@@ -405,9 +411,10 @@ unowned:
   #
   # Do not read this list as a claim that nothing under it executes, and do not
   # carry an entry across into the merge gate's out-of-scope allowlist on that
-  # reading. `frontend/public/**` is the counter-example: it carries a service
-  # worker, which is exactly what the default member has a lens for, so it is
-  # declared unowned here and deliberately stays IN scope there. Unowned is advisory and
+  # reading. `apps/web/public/**` is the counter-example, so it is not listed:
+  # it carries a service worker, which is exactly what the default member has
+  # a lens for, so the default member claims it through `apps/**` and it
+  # deliberately stays IN scope there. Unowned is advisory and
   # suppresses no review; the allowlist clears a merge with no member having
   # read the diff, so each of its entries is judged against what the path can
   # actually contain. See `audit_out_of_scope_allowlisted` in
@@ -416,10 +423,8 @@ unowned:
   - "LICENSE"
   - ".editorconfig"
   - ".gitignore"
-  - "frontend/.gitignore"
   - "wiki/**"
   - "docs/**"
-  - "frontend/public/**"
   # gaia:maintainer-only:start
   # GAIA's own funding file and issue and pull request templates, which the
   # release withholds. An adopter who adds their own declares them here.

@@ -15,7 +15,7 @@ Savings were probed on Claude Code 2.1.304. A client at 2.1.287 or later still r
 | `prepare-scratch-clone.sh` | The one way a run gets a maintainer tree. |
 | `probe-first-call.sh` | One fresh `claude -p` session per agent type, then `measure-dispatch.mjs` over each; optional callability probes. |
 | `run-replay.sh` | One round-1 audit replay in a throwaway adopter checkout. |
-| `replays/*.patch` | The two replay changes, authored against the tracked `frontend/app` files a scaffold ships as-is. |
+| `replays/*.patch` | The two replay changes, authored against the tracked `apps/web/app` files a scaffold ships as-is. |
 | `fixtures/` | A trimmed real session (`rc3-trimmed/`, with the rates file it is priced from and `expected.json`) and small synthetic sessions for the cases the real slice lacks. |
 
 ## Cost method

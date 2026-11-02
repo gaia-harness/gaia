@@ -412,7 +412,7 @@ Summary: written 0, rewritten 0, unchanged 1, preserved 0, deleted 0, conflict 0
 
 ## UAT render (HALTED)
 Reason: UAT render conflict
-Spec files: frontend/.playwright/e2e/checkout/a.spec.ts changed-and-edited
+Spec files: apps/web/.playwright/e2e/checkout/a.spec.ts changed-and-edited
 
 ## Wiki promotion
 Default: ask   Choice: skipped-unattended
@@ -437,7 +437,7 @@ Reason: summary-verify.sh failed: no body
 
 ## Phase 3, Three (HALTED)
 Reason: UAT gate failed
-Spec files: frontend/.playwright/e2e/checkout/a.spec.ts failed
+Spec files: apps/web/.playwright/e2e/checkout/a.spec.ts failed
 EOF
   [ "$(resume_point)" = "$baseline" ]
 }

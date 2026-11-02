@@ -149,7 +149,7 @@ What the step guarantees, and what it does not:
 
 ## Step 7e: Regenerate package settings
 
-**Runs after Step 7d and before Step 8**, so the root `.claude/settings.json` the walk just merged is the input and an interrupted run stays resumable. A registered package's `<path>/.claude/settings.json` (`frontend/.claude/settings.json` in a stock tree) is **generated** from the root settings plus the package's `settings.overlay.json`, never merged: it is not in the release manifest, so a root hook, deny rule, or permission this release changed reaches the package only through this step. A session launched inside `frontend/` reads that file and never the root one, so skipping the step leaves a guard silently absent there.
+**Runs after Step 7d and before Step 8**, so the root `.claude/settings.json` the walk just merged is the input and an interrupted run stays resumable. A registered package's `<path>/.claude/settings.json` (`apps/web/.claude/settings.json` in a stock tree) is **generated** from the root settings plus the package's `settings.overlay.json`, never merged: it is not in the release manifest, so a root hook, deny rule, or permission this release changed reaches the package only through this step. A session launched inside `apps/web/` reads that file and never the root one, so skipping the step leaves a guard silently absent there.
 
 ```bash
 ./.gaia/cli/gaia packages sync-settings \

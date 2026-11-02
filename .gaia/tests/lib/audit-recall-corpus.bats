@@ -372,7 +372,7 @@ EOF
   [ "$checked" -eq "$count" ]
   local export_directory="$BATS_TEST_TMPDIR/export"
   mkdir -p "$export_directory"
-  git -C "$REPO_ROOT" archive HEAD frontend | tar -x -C "$export_directory"
+  git -C "$REPO_ROOT" archive HEAD apps/web | tar -x -C "$export_directory"
   for patch in "$RECALL"/planted/*.patch; do
     git -C "$export_directory" apply --check "$patch" || { echo "$patch does not apply"; return 1; }
   done

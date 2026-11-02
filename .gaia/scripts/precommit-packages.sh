@@ -14,15 +14,16 @@
 #   doctor<TAB><dir>        <dir> holds more than one react-doctor config
 #   doctor-file<TAB><path>  one such config, repo-relative
 #   package<TAB><dir>       a registered package with a staged path that
-#                           matches its preCommitSource globs; <dir> is the
-#                           registry path (`.` or `frontend`)
+#                           matches its preCommitSource globs, or sits anywhere
+#                           in a package whose list is empty; <dir> is the
+#                           registry path
 #   settings-drift          a staged path feeds the generated package settings
 #                           (root `.claude/settings.json`, `.gaia/packages.json`,
 #                           or any `*/.claude/settings.{json,overlay.json}`); the
 #                           hook runs `check-settings-drift.sh`
 #   retired-add<TAB>p<TAB>q p is an added (or renamed-to) file under a retired
 #                           root frontend path while no registered package sits
-#                           at `.`; q is its `frontend/` equivalent
+#                           at `.`; q is its `apps/web/` equivalent
 #
 # Exit 0 with a plan (possibly empty: nothing to do). Exit 1 with
 # GAIA_PACKAGES_ERROR on stderr when the registry or a descriptor cannot be
@@ -31,9 +32,9 @@
 #
 # Exemption: an entry is exempt only when it is an exact rename (R100) whose
 # source is a retired root frontend path and whose destination is that source's
-# migration counterpart (`<src>` -> `frontend/<src>`), or the single pair `.dockerignore`
-# -> `frontend/Dockerfile.dockerignore`. Everything else counts, including an
-# R100 rename inside `frontend/`, because a rename can break importers that
+# migration counterpart (`<src>` -> `apps/web/<src>`), or the single pair `.dockerignore`
+# -> `apps/web/Dockerfile.dockerignore`. Everything else counts, including an
+# R100 rename inside `apps/web/`, because a rename can break importers that
 # typecheck would catch.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
@@ -80,11 +81,11 @@ is_retired_source() {
 is_exempt_entry() {
   [ "$1" = R100 ] || return 1
   if [ "$2" = .dockerignore ]; then
-    [ "$3" = frontend/Dockerfile.dockerignore ]
+    [ "$3" = apps/web/Dockerfile.dockerignore ]
     return
   fi
   is_retired_source "$2" || return 1
-  [ "$3" = "frontend/$2" ]
+  [ "$3" = "apps/web/$2" ]
 }
 
 # Read the staged set. `-z` keeps a non-ASCII or spaced path intact; a rename
@@ -170,7 +171,7 @@ while IFS= read -r counted; do
 done <<<"$counted_paths"
 
 # Retired-path guard: once no package sits at the repo root, a new file under a retired
-# root frontend path is a stale adopter muscle-memory write, and `frontend/` is
+# root frontend path is a stale adopter muscle-memory write, and `apps/web/` is
 # where it belongs. Only added paths count; an edit of an existing root file is
 # left to the other gates.
 root_package_count=$(gaia_packages_list | awk -F'\t' '$2 == "." {count++} END {print count + 0}')
@@ -178,7 +179,7 @@ if [ "$root_package_count" -eq 0 ]; then
   while IFS= read -r added; do
     case "$added" in
       app/* | test/* | public/* | .playwright/* | .storybook/*)
-        printf 'retired-add\t%s\tfrontend/%s\n' "$added" "$added"
+        printf 'retired-add\t%s\tapps/web/%s\n' "$added" "$added"
         ;;
     esac
   done <<<"$added_paths"

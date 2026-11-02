@@ -1,14 +1,14 @@
 #!/usr/bin/env bats
 #
-# Path globs in frontend/.claude/rules/*.md.
+# Path globs in apps/web/.claude/rules/*.md.
 #
-# A rule under frontend/.claude/rules anchors its `paths:` globs at frontend/,
+# A rule under apps/web/.claude/rules anchors its `paths:` globs at apps/web/,
 # the directory that holds its .claude/, from a root launch and from a
 # frontend launch alike. So a glob there is written package-relative
-# ("app/**/*"); the repo-root form ("frontend/app/**/*") never matches in that
+# ("app/**/*"); the repo-root form ("apps/web/app/**/*") never matches in that
 # directory and the rule silently never loads. The suite parses the
 # frontmatter of every rule, rejects the repo-root form, and requires each glob
-# to match at least one tracked file under frontend/ (a glob that matches
+# to match at least one tracked file under apps/web/ (a glob that matches
 # nothing is a rule that never fires), except the renderer-filled folder that
 # renderer_filled_glob names.
 #
@@ -16,7 +16,7 @@
 
 setup() {
   REPO_ROOT_REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  RULES_DIR="$REPO_ROOT_REAL/frontend/.claude/rules"
+  RULES_DIR="$REPO_ROOT_REAL/apps/web/.claude/rules"
 }
 
 # Print each `paths:` glob of one rule file, one per line, quotes stripped.
@@ -39,18 +39,18 @@ rule_globs() {
 # not absolute, not climbing out. Prints the reason on failure.
 glob_form_problem() {
   case "$1" in
-    frontend/* | '**/frontend/'*) echo "repo-root form, never matches under frontend/.claude/rules" ;;
+    apps/web/* | '**/apps/web/'*) echo "repo-root form, never matches under apps/web/.claude/rules" ;;
     /* | ../*) echo "absolute or parent-relative" ;;
     '') echo "empty" ;;
     *) return 1 ;;
   esac
 }
 
-# Does the package-relative glob match at least one tracked file under frontend/?
+# Does the package-relative glob match at least one tracked file under apps/web/?
 glob_matches_tracked_file() {
   local first
   # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this listing carries the per-test mark
-  first="$(git -C "$REPO_ROOT_REAL" ls-files -z -- ":(glob)frontend/$1" | head -c 1 | wc -c | tr -d ' ')"
+  first="$(git -C "$REPO_ROOT_REAL" ls-files -z -- ":(glob)apps/web/$1" | head -c 1 | wc -c | tr -d ' ')"
   [ "$first" -gt 0 ]
 }
 
@@ -73,7 +73,7 @@ check_rules_dir() {
         echo "$(basename "$rule"): '$glob': $problem"
         found=1
       elif ! renderer_filled_glob "$glob" && ! glob_matches_tracked_file "$glob"; then
-        echo "$(basename "$rule"): '$glob': matches no tracked file under frontend/"
+        echo "$(basename "$rule"): '$glob': matches no tracked file under apps/web/"
         found=1
       fi
     done < <(rule_globs "$rule")
@@ -101,13 +101,13 @@ check_rules_dir() {
 }
 
 # bats test_tags=whole-tree
-@test "every glob in frontend/.claude/rules is package-relative and matches a tracked file" {
+@test "every glob in apps/web/.claude/rules is package-relative and matches a tracked file" {
   run check_rules_dir "$RULES_DIR"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
 @test "react-buckets.md, when it carries paths, uses the same form" {
-  local file="$REPO_ROOT_REAL/frontend/.claude/agents/code-audit-frontend/react-buckets.md" glob
+  local file="$REPO_ROOT_REAL/apps/web/.claude/agents/code-audit-frontend/react-buckets.md" glob
   [ -f "$file" ] || return 1
   while IFS= read -r glob; do
     glob_form_problem "$glob" && return 1
@@ -123,11 +123,11 @@ check_rules_dir() {
   # Baseline: the untouched copy passes, so the failure below is the revert's.
   run check_rules_dir "$copy"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-  sed "s#'app/components/\*\*/\*'#'frontend/app/components/**/*'#" "$RULES_DIR/accessibility.md" >"$copy/accessibility.md"
+  sed "s#'app/components/\*\*/\*'#'apps/web/app/components/**/*'#" "$RULES_DIR/accessibility.md" >"$copy/accessibility.md"
   cmp -s "$RULES_DIR/accessibility.md" "$copy/accessibility.md" && return 1
   run check_rules_dir "$copy"
   [ "$status" -ne 0 ] || return 1
-  grep -qF -- "accessibility.md: 'frontend/app/components/**/*': repo-root form" <<<"$output"
+  grep -qF -- "accessibility.md: 'apps/web/app/components/**/*': repo-root form" <<<"$output"
 }
 
 # bats test_tags=whole-tree

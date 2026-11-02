@@ -1,0 +1,10 @@
+{
+  "load": 0,
+  "source": "registry",
+  "list": [["frontend", "."]],
+  "globs": {
+    "preCommitSource": {
+      "match": ["README.md", "a/b/c.txt", ".github/x.yml"]
+    }
+  }
+}

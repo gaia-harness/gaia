@@ -67,7 +67,7 @@ if [ -z "$members" ]; then
   # absent/unusable: fall through to the legacy single-signal gate verbatim.
   # NOT an unconditional allow, the member roster's auditable-base set is strictly narrower
   # than check_out_of_scope_pr's denylist, so an ownerless-but-in-scope file
-  # (root Makefile, frontend/public/**, ...) still denies here without a marker.
+  # (root Makefile, apps/web/public/**, ...) still denies here without a marker.
   #
   # The out-of-scope classification runs FIRST, ahead of every clearance
   # signal, because the bypass stamp depends on it whichever signal allows: a
@@ -123,7 +123,7 @@ None of the accepted signals is present:
   - Local marker:    ${marker} $(marker_state "$marker")
   - GitHub status:   absent or version/digest mismatch
   - chore(deps) PR:  PR title does not match \`chore(deps):\`/\`chore(deps-dev):\`, or the PR changes a path other than a dependency manifest
-  - Out-of-scope:    PR changes at least one in-scope path (frontend/app/, frontend/test/, configs,
+  - Out-of-scope:    PR changes at least one in-scope path (apps/web/app/, apps/web/test/, configs,
                      .github/workflows/), not a wiki/docs/.gaia-config-only diff
   - Diff base:       ${gate_trust:-unresolvable} provenance (anchor ${gate_anchor:-default-branch}, base ${base_display}); an empty
                      base-to-HEAD range clears this gate only on remote or supplied

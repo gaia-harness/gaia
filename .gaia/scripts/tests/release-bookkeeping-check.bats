@@ -68,7 +68,7 @@ build_base() {
   write_file .gaia/VERSION $'1.0.0\n'
   write_file .gaia/manifest.json "$(manifest_json 2026-10-01T00:00:00.000Z 1.0.0)"
   write_file package.json "$(package_json gaia 1.0.0)"
-  write_file frontend/package.json "$(package_json frontend 1.0.0)"
+  write_file apps/web/package.json "$(package_json frontend 1.0.0)"
   write_file CHANGELOG.md "$(changelog 1.0.0)"
   write_file wiki/.state.json "$(state_json 1111 2026-10-28T00:00:00Z)"
   write_file wiki/log.md $'---\ntype: meta\n---\n\n# Log\n\n## [Unreleased]\n\n- 2026-10-28 abc WORTHY - a change\n'
@@ -85,7 +85,7 @@ apply_release() {
   write_file .gaia/VERSION $'1.1.0\n'
   write_file .gaia/manifest.json "$(manifest_json 2026-10-29T00:00:00.000Z 1.1.0)"
   write_file package.json "$(package_json gaia 1.1.0)"
-  write_file frontend/package.json "$(package_json frontend 1.1.0)"
+  write_file apps/web/package.json "$(package_json frontend 1.1.0)"
   write_file CHANGELOG.md "$(changelog 1.1.0 1.1.0)"
   write_file wiki/.state.json "$(state_json 2222 2026-10-29T00:00:00Z)"
   write_file wiki/log.md "$(scrubbed_log 1.1.0 2026-10-29)"
@@ -148,20 +148,20 @@ run_diff() {
 
 @test "diff: a package.json that sneaks in a generated key is not bookkeeping" {
   apply_release
-  write_file frontend/package.json $'{\n  "name": "frontend",\n  "version": "1.1.0",\n  "private": true,\n  "generated": "x"\n}\n'
+  write_file apps/web/package.json $'{\n  "name": "frontend",\n  "version": "1.1.0",\n  "private": true,\n  "generated": "x"\n}\n'
   commit_release
   run_diff
   [ "$status" -eq 1 ]
-  assert_contains 'frontend/package.json'
+  assert_contains 'apps/web/package.json'
 }
 
 @test "diff: a frontend version that disagrees with .gaia/VERSION is not bookkeeping" {
   apply_release
-  write_file frontend/package.json "$(package_json frontend 1.2.0)"
+  write_file apps/web/package.json "$(package_json frontend 1.2.0)"
   commit_release
   run_diff
   [ "$status" -eq 1 ]
-  assert_contains 'frontend/package.json does not move 1.0.0 to 1.1.0'
+  assert_contains 'apps/web/package.json does not move 1.0.0 to 1.1.0'
 }
 
 @test "diff: a manifest that reclassifies a file is not bookkeeping" {

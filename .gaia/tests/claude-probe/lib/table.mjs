@@ -133,9 +133,9 @@ export const schemaProblems = (table) => {
 // at least one floor row with exactly these fields.
 const item = (id, description, fields) => ({ id, description, fields });
 const PERMISSION_FLOOR_TARGETS = [
-  'Edit .env', 'Edit frontend/.env', 'Edit frontend/.claude/settings.json', 'Edit pnpm-lock.yaml',
+  'Edit .env', 'Edit apps/web/.env', 'Edit apps/web/.claude/settings.json', 'Edit pnpm-lock.yaml',
   'Edit .gaia/local/audit/x.ok', 'Edit .gaia/local/audit/x.refused',
-  'Read .env', 'Read frontend/.env',
+  'Read .env', 'Read apps/web/.env',
 ];
 const UAT017_TARGETS = ['Edit .gaia/local/audit/x.ok', 'Edit pnpm-lock.yaml'];
 const permissionTrigger = (subject) => (subject.startsWith('Read ') ? 'after_task:permissions-read' : 'after_task:permissions-edit');
@@ -146,20 +146,20 @@ export const FLOOR_ITEMS = [
   item('frontend-root-hooks', 'frontend launch: every root hook is registered', { launch: 'frontend', kind: 'hook', expand: 'hooks:.claude/settings.json', trigger: 'session_start', expect: 'registered' }),
   item('frontend-root-skills', 'frontend launch: root skills are available', { launch: 'frontend', kind: 'skill', expand: '.claude/skills/*/SKILL.md', trigger: 'session_start', expect: 'available' }),
   item('frontend-root-agents', 'frontend launch: root agents are available', { launch: 'frontend', kind: 'agent', expand: '.claude/agents/*.md', trigger: 'session_start', expect: 'available' }),
-  item('frontend-frontend-skills', 'frontend launch: frontend-only skills are invocable', { launch: 'frontend', kind: 'skill', expand: 'frontend/.claude/skills/*/SKILL.md', trigger: 'session_start', expect: 'available' }),
+  item('frontend-frontend-skills', 'frontend launch: frontend-only skills are invocable', { launch: 'frontend', kind: 'skill', expand: 'apps/web/.claude/skills/*/SKILL.md', trigger: 'session_start', expect: 'available' }),
   ...PERMISSION_FLOOR_TARGETS.map((subject) => item(
     `frontend-deny-${subject.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')}`,
     `frontend launch: root deny holds for ${subject}`,
     { launch: 'frontend', kind: 'permission', subject, trigger: permissionTrigger(subject), expect: 'deny' })),
-  item('root-frontend-claude-md-before-read', 'root launch: frontend/CLAUDE.md not loaded before any Read inside frontend/', { launch: 'root', kind: 'claude_md', subject: 'frontend/CLAUDE.md', trigger: 'session_start', expect: 'not_loaded' }),
-  item('root-frontend-rules-before-read', 'root launch: frontend/.claude/rules not loaded before any Read inside frontend/', { launch: 'root', kind: 'rule', expand: 'frontend/.claude/rules/**/*.md', trigger: 'session_start', expect: 'not_loaded' }),
-  item('root-frontend-claude-md-after-read', 'root launch: frontend/CLAUDE.md loads after a Read of frontend/CLAUDE.md', { launch: 'root', kind: 'claude_md', subject: 'frontend/CLAUDE.md', trigger: 'after_read:frontend/CLAUDE.md', expect: 'loaded' }),
-  item('root-frontend-rules-after-read', 'root launch: frontend rules load after a Read of frontend/CLAUDE.md', { launch: 'root', kind: 'rule', expand: 'frontend/.claude/rules/**/*.md#unscoped', trigger: 'after_read:frontend/CLAUDE.md', expect: 'loaded' }),
-  item('root-frontend-skills-after-read', 'root launch: frontend skills load after a Read of frontend/CLAUDE.md', { launch: 'root', kind: 'skill', expand: 'frontend/.claude/skills/*/SKILL.md', trigger: 'after_read:frontend/CLAUDE.md', expect: 'available' }),
+  item('root-frontend-claude-md-before-read', 'root launch: apps/web/CLAUDE.md not loaded before any Read inside apps/web/', { launch: 'root', kind: 'claude_md', subject: 'apps/web/CLAUDE.md', trigger: 'session_start', expect: 'not_loaded' }),
+  item('root-frontend-rules-before-read', 'root launch: apps/web/.claude/rules not loaded before any Read inside apps/web/', { launch: 'root', kind: 'rule', expand: 'apps/web/.claude/rules/**/*.md', trigger: 'session_start', expect: 'not_loaded' }),
+  item('root-frontend-claude-md-after-read', 'root launch: apps/web/CLAUDE.md loads after a Read of apps/web/CLAUDE.md', { launch: 'root', kind: 'claude_md', subject: 'apps/web/CLAUDE.md', trigger: 'after_read:apps/web/CLAUDE.md', expect: 'loaded' }),
+  item('root-frontend-rules-after-read', 'root launch: frontend rules load after a Read of apps/web/CLAUDE.md', { launch: 'root', kind: 'rule', expand: 'apps/web/.claude/rules/**/*.md#unscoped', trigger: 'after_read:apps/web/CLAUDE.md', expect: 'loaded' }),
+  item('root-frontend-skills-after-read', 'root launch: frontend skills load after a Read of apps/web/CLAUDE.md', { launch: 'root', kind: 'skill', expand: 'apps/web/.claude/skills/*/SKILL.md', trigger: 'after_read:apps/web/CLAUDE.md', expect: 'available' }),
   item('root-code-audit-frontend', 'root launch: code-audit-frontend is spawnable', { launch: 'root', kind: 'agent', subject: '.claude/agents/code-audit-frontend.md', trigger: 'session_start', expect: 'available' }),
   item('worktree-code-audit-frontend', 'worktree launch: code-audit-frontend is spawnable', { launch: 'worktree', kind: 'agent', subject: '.claude/agents/code-audit-frontend.md', trigger: 'session_start', expect: 'available' }),
-  item('root-task-component-write', 'root launch: scripted component Write task', { launch: 'root', kind: 'task', subject: 'frontend/app/components/probe-x/index.tsx', trigger: 'after_task:component-write', expect: 'allow' }),
-  item('frontend-task-component-write', 'frontend launch: scripted component Write task', { launch: 'frontend', kind: 'task', subject: 'frontend/app/components/probe-x/index.tsx', trigger: 'after_task:component-write', expect: 'allow' }),
+  item('root-task-component-write', 'root launch: scripted component Write task', { launch: 'root', kind: 'task', subject: 'apps/web/app/components/probe-x/index.tsx', trigger: 'after_task:component-write', expect: 'allow' }),
+  item('frontend-task-component-write', 'frontend launch: scripted component Write task', { launch: 'frontend', kind: 'task', subject: 'apps/web/app/components/probe-x/index.tsx', trigger: 'after_task:component-write', expect: 'allow' }),
   ...UAT017_TARGETS.map((subject) => item(
     `uat017-root-${subject.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')}`,
     `UAT-017 root launch: ${subject} denied`,

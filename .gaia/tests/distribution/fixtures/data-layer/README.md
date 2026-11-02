@@ -1,8 +1,8 @@
 # Data-layer fixtures
 
-Maintainer test infrastructure for the API data layer, never shipped. `09-data-layer-query-on.sh` copies the SSR, query-client, service, flow, and story-isolation fixtures into a staged tree's `frontend/` after the Query runtime is installed there (the `@tanstack/react-query` dependency, `app/query-client.ts`, `app/state/query-provider.tsx` wrapped around `{children}` in `app/state/index.tsx`, and the Storybook `QueryClientDecorator`) and the `items` service (`--schema "id:string,displayName:string" --mocks`) and its Query list and detail routes are scaffolded, then runs them. `10-data-layer-query-off.sh` copies the lint probes, one at a time, into a tree without Query. Every fixture except the lint probes is lint- and typecheck-clean in its tree as written; the probes exist to fail lint.
+Maintainer test infrastructure for the API data layer, never shipped. `09-data-layer-query-on.sh` copies the SSR, query-client, service, flow, and story-isolation fixtures into a staged tree's `apps/web/` after the Query runtime is installed there (the `@tanstack/react-query` dependency, `app/query-client.ts`, `app/state/query-provider.tsx` wrapped around `{children}` in `app/state/index.tsx`, and the Storybook `QueryClientDecorator`) and the `items` service (`--schema "id:string,displayName:string" --mocks`) and its Query list and detail routes are scaffolded, then runs them. `10-data-layer-query-off.sh` copies the lint probes, one at a time, into a tree without Query. Every fixture except the lint probes is lint- and typecheck-clean in its tree as written; the probes exist to fail lint.
 
-| Fixture | Destination under `frontend/` | Asserts |
+| Fixture | Destination under `apps/web/` | Asserts |
 | --- | --- | --- |
 | `ssr/routes/_public.ssr-seed.tsx` | `app/routes/_public.ssr-seed.tsx` (URL `/ssr-seed`) | Thin route rendering the seed page. |
 | `ssr/pages/ssr-seed/page.tsx` | `app/pages/ssr-seed/page.tsx` | During render, writes `isolation-seed-value` into the provider's client under `['ssr-isolation-probe']` and renders it. |

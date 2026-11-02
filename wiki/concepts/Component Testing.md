@@ -10,7 +10,7 @@ tags: [concept, testing]
 
 ## A behavior is a `.test()` on a story
 
-A story is a visual state and a behavior is a `.test()` attached to it; a play only drives the UI into the state and asserts nothing ([[Stories as Tests]] owns the doctrine and the harness rules). Vitest runs each test in headless Chromium through `@storybook/addon-vitest`, so the story's decorators, stubs, mocked context and i18n are the test's setup and nothing re-derives them in a second file. There is no `.test.tsx` beside a component's stories and no standalone `render()`. Assertions use `expect` and `fn` from `storybook/test`, and the test receives `canvas`, `args` and `userEvent` from its context. One test covers one behavior, named for it. `frontend/.claude/rules/storybook.md` owns authoring.
+A story is a visual state and a behavior is a `.test()` attached to it; a play only drives the UI into the state and asserts nothing ([[Stories as Tests]] owns the doctrine and the harness rules). Vitest runs each test in headless Chromium through `@storybook/addon-vitest`, so the story's decorators, stubs, mocked context and i18n are the test's setup and nothing re-derives them in a second file. There is no `.test.tsx` beside a component's stories and no standalone `render()`. Assertions use `expect` and `fn` from `storybook/test`, and the test receives `canvas`, `args` and `userEvent` from its context. One test covers one behavior, named for it. `apps/web/.claude/rules/storybook.md` owns authoring.
 
 ```tsx
 Default.test('shows the required error', async ({canvas}) => {
@@ -21,9 +21,9 @@ Default.test('shows the required error', async ({canvas}) => {
 ## Stubs, never framework mocks
 
 > [!warning] Never manually mock framework deps
-> Don't mock `react-router`, `react-i18next`, or other framework deps. Use the stubs in `frontend/test/stubs/` instead; they wire real providers with sensible defaults.
+> Don't mock `react-router`, `react-i18next`, or other framework deps. Use the stubs in `apps/web/test/stubs/` instead; they wire real providers with sensible defaults.
 
-`frontend/test/stubs/` exposes `stubs.reactRouter()`, `stubs.state()`, etc. Apply as decorators in the component's story file under `tests/`; the same decorators serve Storybook, Chromatic and the Vitest run. Only mock **external services** or **utilities** the component imports directly.
+`apps/web/test/stubs/` exposes `stubs.reactRouter()`, `stubs.state()`, etc. Apply as decorators in the component's story file under `tests/`; the same decorators serve Storybook, Chromatic and the Vitest run. Only mock **external services** or **utilities** the component imports directly.
 
 ## Spying on a callback
 
@@ -49,7 +49,7 @@ Stateful custom form components MUST use `useInputControl` to stay in sync with 
 
 ## Reference example
 
-`frontend/app/components/form/tests/composed-form.tsx`: a Conform form composed from ui `Field` parts, with its stories, whose attached tests are the integration tests.
+`apps/web/app/components/form/tests/composed-form.tsx`: a Conform form composed from ui `Field` parts, with its stories, whose attached tests are the integration tests.
 
 For the current file pattern (where stories and hook tests go), the scaffolders (`/new-component`, `/new-route`) handle it; read an existing component's folder rather than maintaining the layout here.
 

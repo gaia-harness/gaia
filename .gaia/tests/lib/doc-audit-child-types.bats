@@ -167,7 +167,7 @@ tools: Bash, Read'
   grep -qF -- '.claude/agents/code-audit-frontend/*.md' "$FRONTEND"
   for directory in \
     "$ROOT/.claude/agents/code-audit-frontend/" \
-    "$ROOT/frontend/.claude/agents/code-audit-frontend/"; do
+    "$ROOT/apps/web/.claude/agents/code-audit-frontend/"; do
     case "$REFERENCE" in "$directory"*) return 1 ;; esac
   done
   true

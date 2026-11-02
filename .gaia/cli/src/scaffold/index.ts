@@ -25,6 +25,9 @@ const HELP_TEXT = `Usage: gaia scaffold <subcommand> [args]
   hook <use-foo|useFoo>    Scaffold a new custom hook.
   route <name>             Scaffold a new route + page.
   service <name>           Scaffold a new API service.
+
+  Every subcommand accepts --package <name> to pick the web member, required
+  only when several members declare the web stack.
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

@@ -1,6 +1,6 @@
 ---
 type: module
-path: frontend/app/utils/
+path: apps/web/app/utils/
 status: active
 language: typescript
 purpose: Shared helpers used throughout the app: pure functions plus a few React-context utilities
@@ -11,10 +11,10 @@ tags: [module, utils]
 
 # Utils
 
-`frontend/app/utils/` holds shared helpers. Most are pure functions: array, date, dom, function, http (split `http.ts` / `http.server.ts`), object, string. Two are React-context utilities: `nonce` (`NonceProvider`, `useNonce`) and `request-info` (`useOptionalRequestInfo`). `theme.server` (`getTheme`, `setTheme`) reads and writes the theme cookie. `notify` drives the ui `toast` manager for the app: `notify.error|info|success|warning`, each returning the toast id. Each should be well-named, self-explanatory, and unit-tested.
+`apps/web/app/utils/` holds shared helpers. Most are pure functions: array, date, dom, function, http (split `http.ts` / `http.server.ts`), object, string. Two are React-context utilities: `nonce` (`NonceProvider`, `useNonce`) and `request-info` (`useOptionalRequestInfo`). `theme.server` (`getTheme`, `setTheme`) reads and writes the theme cookie. `notify` drives the ui `toast` manager for the app: `notify.error|info|success|warning`, each returning the toast id. Each should be well-named, self-explanatory, and unit-tested.
 
 ## Convention
 
 `.server.ts` suffix excludes a helper from the client bundle when it touches Node-only APIs; the server-only helpers are `http.server.ts` and `theme.server.ts` (the latter reads `cookie` and `~/env.server`). Trivial wrappers around native APIs may not warrant a test; use judgment.
 
-For the current helper inventory and signatures, list `frontend/app/utils/`.
+For the current helper inventory and signatures, list `apps/web/app/utils/`.

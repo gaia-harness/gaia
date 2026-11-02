@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# Drift check for the generated per-package Claude settings. A session launched in `frontend/`
-# reads `frontend/.claude/settings.json` and never the root file, so a hook or deny the root gains and the generated
+# Drift check for the generated per-package Claude settings. A session launched in a member directory
+# reads that member's `.claude/settings.json` and never the root file, so a hook or deny the root gains and the generated
 # file lacks is a guard that silently does not run there.
 #
 # Usage: check-settings-drift.sh [repo_root]
 #
-# Two checks per registered package whose path is not `.`:
+# A member that is not web-stack and has not opted in carries a warning stub
+# instead of the generated file. A missing or edited stub prints one warning naming the member and
+# leaves the exit status alone; a current stub and a hand-written file are
+# silent.
+#
+# Two checks per registered web-stack or opted-in package whose path is not `.`:
 #   1. `gaia packages sync-settings --check`: the generated file equals what the
 #      generator would write now (catches an overlay or root edit not synced).
 #   2. A presence assertion with jq, independent of the generator: every root
@@ -48,7 +53,20 @@ fi
 status=0
 
 generator_status=0
-generator_output="$("$cli" packages sync-settings --check --repo-root "$root" 2>&1 >/dev/null)" || generator_status=$?
+generator_errors_file="$(mktemp "${TMPDIR:-/tmp}/settings-drift.XXXXXX")" || fail_unrunnable 'cannot create a temporary file.'
+trap 'rm -f "$generator_errors_file"' EXIT
+generator_stdout="$("$cli" packages sync-settings --check --repo-root "$root" 2>"$generator_errors_file")" || generator_status=$?
+generator_output="$(cat "$generator_errors_file")"
+
+# A member without full generated settings carries a warning stub. A missing or
+# edited one is a warning only: the exit status stays as the full files decide.
+while IFS="$(printf '\t')" read -r stub_kind stub_member stub_file; do
+  [ "$stub_kind" = stub-stale ] || continue
+  printf 'check-settings-drift: warning: member %s has no current guards stub at %s, so a session launched there runs without GAIA guards. Next step: run ./.gaia/cli/gaia packages sync-settings.\n' "$stub_member" "$stub_file" >&2
+done <<STUB_LINES
+$generator_stdout
+STUB_LINES
+
 if [ "$generator_status" -eq 2 ]; then
   printf '%s\n' "$generator_output" >&2
   fail_unrunnable 'settings generation failed. Next step: fix the error above, then run ./.gaia/cli/gaia packages sync-settings.'
@@ -81,6 +99,8 @@ report_missing() {
 while IFS="$(printf '\t')" read -r package_name package_path; do
   [ -n "$package_name" ] || continue
   [ "$package_path" = . ] && continue
+  # Only a member with full generated settings owes the file and its entries.
+  gaia_package_wants_settings "$package_name" || continue
   generated_relative="$package_path/.claude/settings.json"
   generated="$root/$generated_relative"
   if [ ! -f "$generated" ]; then

@@ -1,6 +1,6 @@
 ---
 type: module
-path: frontend/app/pages/
+path: apps/web/app/pages/
 status: active
 language: typescript
 purpose: Page-specific UI components, organized by route path
@@ -11,13 +11,13 @@ tags: [module, pages]
 
 # Pages
 
-`frontend/app/pages/` holds page-specific components, the UI that the thin route file in `frontend/app/routes/` renders.
+`apps/web/app/pages/` holds page-specific components, the UI that the thin route file in `apps/web/app/routes/` renders.
 
-This is **different** from `frontend/app/components/`, which holds shared UI used across pages. The split is the load-bearing convention for [[Thin Routes]]: routes stay tiny (`loader`, `clientLoader`, `action`, `clientAction`, `HydrateFallback`, `meta`, and a one-line render), pages own all UI and every hook and are independently testable.
+This is **different** from `apps/web/app/components/`, which holds shared UI used across pages. The split is the load-bearing convention for [[Thin Routes]]: routes stay tiny (`loader`, `clientLoader`, `action`, `clientAction`, `HydrateFallback`, `meta`, and a one-line render), pages own all UI and every hook and are independently testable.
 
 ## Folder convention
 
-Each page lives in a folder derived from its route path, with the page component in `page.tsx` (for example `frontend/app/pages/index/page.tsx`). Route files stay thin and render the page component. `/new-route` handles the wiring. The derivation rule and the full layout are owned by `frontend/.claude/rules/coding-guidelines-react.md`.
+Each page lives in a folder derived from its route path, with the page component in `page.tsx` (for example `apps/web/app/pages/index/page.tsx`). Route files stay thin and render the page component. `/new-route` handles the wiring. The derivation rule and the full layout are owned by `apps/web/.claude/rules/coding-guidelines-react.md`.
 
 Within a page folder: `page.tsx`, plus `tests/page.stories.tsx`, whose `.test()` behaviors are the page's tests ([[Stories as Tests]]). The stories file is co-located by convention but not present on every page: only `pages/index` ships a `tests/` folder. Sub-components live in their own kebab-case folders, lifted only as high as needed (same lift rule as [[Components]]).
 
@@ -29,4 +29,4 @@ A page that reads route data calls its hook itself (`useLoaderData<LoaderData>()
 
 A page may also accept loader-derived data as props and own its document head: it takes a `{title, description}` props type and renders `<title>` and `<meta name="description">` itself; the thin route resolves those strings in its loader and passes them down.
 
-For the current page inventory, list `frontend/app/pages/`.
+For the current page inventory, list `apps/web/app/pages/`.

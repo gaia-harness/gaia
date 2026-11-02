@@ -10,7 +10,7 @@ tags: [dependency, validation]
 
 # Zod
 
-Schema validation. Used for form validation ([[Conform]]), API response parsing (`parsers.ts`), env var validation (`frontend/app/env.server.ts`), and TypeScript type inference. See [[API Service Pattern]] and [[Form Components]].
+Schema validation. Used for form validation ([[Conform]]), API response parsing (`parsers.ts`), env var validation (`apps/web/app/env.server.ts`), and TypeScript type inference. See [[API Service Pattern]] and [[Form Components]].
 
 ## v4 conventions
 

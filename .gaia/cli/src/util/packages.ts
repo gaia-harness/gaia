@@ -7,8 +7,8 @@ import {z} from 'zod';
  * message text included, so a reason string changed here changes in the other.
  *
  * Fail-closed: an absent `.gaia/packages.json` is the built-in default registry
- * (frontend at `frontend`), never "nothing in scope", and its descriptor is
- * still read from `frontend/gaia.package.json`; a present registry that is
+ * (web at `apps/web`), never "nothing in scope", and its descriptor is
+ * still read from `apps/web/gaia.package.json`; a present registry that is
  * malformed, or a descriptor that is missing or invalid, returns an error
  * result and never a partial answer.
  *
@@ -22,6 +22,7 @@ import {z} from 'zod';
  */
 import {lstatSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+import {globToRegExp, joinGlob} from './glob-regexp.js';
 
 const REGISTRY_FILE = '.gaia/packages.json';
 const DESCRIPTOR_NAME = 'gaia.package.json';
@@ -46,7 +47,7 @@ const cleanString = z
   .string()
   .min(1)
   .refine((value) => !CONTROL_CHARACTER.test(value));
-const globList = z.array(cleanString).min(1);
+const globList = z.array(cleanString);
 const wikiList = z.array(z.string().refine((v) => !CONTROL_CHARACTER.test(v)));
 
 export const registryEntrySchema = z.object({
@@ -54,10 +55,15 @@ export const registryEntrySchema = z.object({
   path: z.string().regex(PATH_PATTERN),
 });
 
+/** Whether a path may be registered as a package directory. */
+export const isRegistrablePath = (candidate: string): boolean =>
+  registryEntrySchema.shape.path.safeParse(candidate).success;
+
 export const registrySchema = z.array(registryEntrySchema);
 
 export const descriptorSchema = (expectedName: string) =>
   z.object({
+    generatedSettings: z.boolean().optional(),
     globs: z.object({
       dependencyManifests: globList,
       doctorConfigs: globList,
@@ -68,6 +74,7 @@ export const descriptorSchema = (expectedName: string) =>
     }),
     name: z.literal(expectedName),
     schemaVersion: z.literal(1),
+    stack: z.literal('web').optional(),
     wiki: z.object({
       flowPaths: wikiList,
       inventoryPaths: wikiList,
@@ -91,8 +98,14 @@ export type RegistryEntry = z.infer<typeof registryEntrySchema>;
 
 type RegistrySource = 'builtin' | 'registry';
 
+export {globToBody} from './glob-regexp.js';
+
+export {globToRegExp} from './glob-regexp.js';
+
+export {joinGlob} from './glob-regexp.js';
+
 export const BUILTIN_REGISTRY: readonly RegistryEntry[] = [
-  {name: 'frontend', path: 'frontend'},
+  {name: 'web', path: 'apps/web'},
 ];
 
 const registryError = (reason: string): LoadResult => {
@@ -163,7 +176,14 @@ const duplicateReason = (entries: RegistryEntry[]): null | string => {
   return null;
 };
 
-const SECTION_ORDER = ['schemaVersion', 'name', 'globs', 'wiki'];
+const SECTION_ORDER = [
+  'schemaVersion',
+  'name',
+  'globs',
+  'wiki',
+  'stack',
+  'generatedSettings',
+];
 const WIKI_KEY_ORDER = ['sourcePaths', 'inventoryPaths', 'flowPaths'];
 
 /**
@@ -202,7 +222,15 @@ const descriptorIssueReason = (
   if (section === 'globs') {
     return key === undefined ?
         'globs must be an object'
-      : `globs.${String(key)} must be a non-empty array of non-empty strings without control characters`;
+      : `globs.${String(key)} must be an array of non-empty strings without control characters`;
+  }
+
+  if (section === 'stack') {
+    return 'stack must be "web"';
+  }
+
+  if (section === 'generatedSettings') {
+    return 'generatedSettings must be a boolean';
   }
 
   return key === undefined ?
@@ -327,44 +355,28 @@ export const loadPackages = (repoRoot: string): LoadResult => {
   return {ok: true, packages, source: registry.source};
 };
 
-/**
- * The ERE-grammar body of a glob, without anchors. Sentinels: \u0001 for the
- * zero-or-more-directories form, \u0002 for `**`, \u0003 for `*`, \u0004 for
- * `?`, \u0005 and \u0006 for a brace group's parentheses, \u0007 for its bar.
- */
-export const globToBody = (glob: string): string =>
-  glob
-    .replaceAll(/[\\.+^$()[\]|]/g, String.raw`\$&`)
-    .replaceAll('**/', '\u0001')
-    .replaceAll('**', '\u0002')
-    .replaceAll('*', '\u0003')
-    .replaceAll('?', '\u0004')
-    .replaceAll(
-      /\{([^{}]+)\}/g,
-      (_match, inner: string) =>
-        `\u0005${inner.replaceAll(',', '\u0007')}\u0006`
-    )
-    .replaceAll(/[{}]/g, String.raw`\$&`)
-    .replaceAll('\u0001', '(.*/)?')
-    .replaceAll('\u0002', '.*')
-    .replaceAll('\u0003', '[^/]*')
-    .replaceAll('\u0004', '[^/]')
-    .replaceAll('\u0005', '(')
-    .replaceAll('\u0006', ')')
-    .replaceAll('\u0007', '|');
+/** The members that declare the web stack, registry order. */
+export const webMembers = (
+  packages: readonly LoadedPackage[]
+): LoadedPackage[] =>
+  packages.filter((entry) => entry.descriptor.stack === 'web');
 
-export const globToRegExp = (glob: string): RegExp =>
-  new RegExp(`^${globToBody(glob)}$`);
+/** Whether a member's generated settings apply: always for web, else its own field. */
+export const wantsGeneratedSettings = (entry: LoadedPackage): boolean =>
+  entry.descriptor.stack === 'web' ||
+  entry.descriptor.generatedSettings === true;
 
-export const joinGlob = (packagePath: string, glob: string): string =>
-  packagePath === '.' ? glob : `${packagePath}/${glob}`;
+/** An empty list adds nothing, except an empty `preCommitSource`, which is the whole member. */
+const globsFor = (entry: LoadedPackage, key: GlobKey): readonly string[] => {
+  const globs = entry.descriptor.globs[key];
+
+  return globs.length === 0 && key === 'preCommitSource' ? ['**'] : globs;
+};
 
 export const repoRegExps = (
   packages: readonly LoadedPackage[],
   key: GlobKey
 ): RegExp[] =>
   packages.flatMap((entry) =>
-    entry.descriptor.globs[key].map((glob) =>
-      globToRegExp(joinGlob(entry.path, glob))
-    )
+    globsFor(entry, key).map((glob) => globToRegExp(joinGlob(entry.path, glob)))
   );

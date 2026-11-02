@@ -20,7 +20,7 @@ Any non-empty `CI`, including `CI=false` or `CI=0`, skips hook setup. A shell th
 
 ## What it runs
 
-The hook decides which package a staged path belongs to from the registry and descriptors in [[Package Descriptor]], and refuses to commit when that registry cannot be read. For each affected package it runs typecheck, lint-staged, and `test:lint-staged`. It also guards generated settings drift, retired root frontend paths, and duplicate react-doctor configs. The hook file is the source of truth for the arms.
+The hook decides which package a staged path belongs to from the registry and descriptors in [[Package Descriptor]], and refuses to commit when that registry cannot be read. A package is affected when a staged path matches its `preCommitSource` globs, or sits anywhere in it when that list is empty. For each affected package it runs typecheck, lint-staged, and `test:lint-staged`, each only if the package defines it, so a library with just `typecheck` does not fail on a missing script. It also guards generated settings drift, retired root frontend paths, and duplicate react-doctor configs. The hook file is the source of truth for the arms.
 
 ## Machine-local references
 

@@ -217,7 +217,7 @@ echo done'
     pnpm-workspace.yaml
     .npmrc
     .node-version
-    frontend/package.json
+    apps/web/package.json
     .gaia/cli/package.json
   )
   local install_input
@@ -237,7 +237,7 @@ echo done'
 @test "--list-install-inputs prints exactly the install inputs, one per line" {
   run bash "$CLASSIFIER" --list-install-inputs
   [ "$status" -eq 0 ]
-  expect_output_lines package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc .node-version frontend/package.json .gaia/cli/package.json
+  expect_output_lines package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc .node-version apps/web/package.json .gaia/cli/package.json
 }
 
 @test "change-scoped categories classify as nothing" {

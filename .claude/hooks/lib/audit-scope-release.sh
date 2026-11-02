@@ -176,7 +176,7 @@ _audit_scope_release_bookkeeping_arm() {
   # Only the fixed bookkeeping set is allowlisted, so any other changed path
   # stays in scope even if the predicate answered yes.
   paths="$(git -C "$root" -c core.quotepath=false diff --name-only --no-renames -z "$merge_base" "$head" 2>/dev/null | tr '\0' '\n' | awk '
-    $0 == ".gaia/VERSION" || $0 == ".gaia/manifest.json" || $0 == "package.json" || $0 == "frontend/package.json" || $0 == "CHANGELOG.md" || $0 == "wiki/.state.json" || $0 == "wiki/log.md"')" || return 0
+    $0 == ".gaia/VERSION" || $0 == ".gaia/manifest.json" || $0 == "package.json" || $0 == "apps/web/package.json" || $0 == "CHANGELOG.md" || $0 == "wiki/.state.json" || $0 == "wiki/log.md"')" || return 0
   [ -n "$paths" ] || return 0
   _AUDIT_SCOPE_BOOKKEEPING_PATHS=$'\n'"${paths}"$'\n'
   return 0

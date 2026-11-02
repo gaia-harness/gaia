@@ -625,7 +625,7 @@ describe('language template invariant', () => {
     // The shipped files live in the frontend package wherever it is registered.
     const loaded = loadPackages(repoRoot);
     const frontendEntry = (loaded.ok ? loaded.packages : []).find(
-      (entry) => entry.name === 'frontend'
+      (entry) => entry.name === 'web'
     );
     expect(frontendEntry).toBeDefined();
     const shippedPackage = path.resolve(repoRoot, frontendEntry?.path ?? '');

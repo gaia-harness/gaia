@@ -21,7 +21,7 @@ set -euo pipefail
 package_name="@playwright/cli"
 marker_relative=".gaia/vendor/playwright-cli.json"
 source_relative="skills/playwright-cli"
-target_relative="frontend/.claude/skills/playwright-cli"
+target_relative="apps/web/.claude/skills/playwright-cli"
 
 version=""
 tarball=""

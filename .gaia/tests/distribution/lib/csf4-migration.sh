@@ -8,7 +8,7 @@
 #   csf4_reset_tree              - back to the pristine staged tree, clean
 #   csf4_commit MESSAGE          - commits everything in the scaffold
 #   csf4_drop_stories            - removes every story file the release ships
-#   csf4_install_fixture DIR     - copies a fixture directory into frontend/,
+#   csf4_install_fixture DIR     - copies a fixture directory into apps/web/,
 #                                  dropping the .csf2/.csf3 suffix
 #   csf4_use_config PREVIEW      - swaps in a CSF3 preview and main, and removes
 #                                  the package.json imports entry
@@ -36,7 +36,7 @@ csf4_stage_tree() {
     trap 'rm -rf "$WORK"' EXIT
     capture_cli_stderr "$WORK/cli-stderr.txt"
     GAIA="$SCAFFOLD/.gaia/cli/gaia"
-    FRONTEND="$SCAFFOLD/frontend"
+    FRONTEND="$SCAFFOLD/apps/web"
     export GAIA_TELEMETRY_PING_DISABLE=1
     BASE_COMMIT="$(csf4_git rev-list --max-parents=0 HEAD)"
     GAIA="${GAIA_CSF4_BINARY:-$GAIA}"
@@ -154,7 +154,7 @@ csf4_hash_list() {
 }
 
 csf4_story_files() {
-  (cd "$SCAFFOLD" && git ls-files -z --cached --others --exclude-standard -- 'frontend/app/**/*.stories.tsx' | tr '\0' '\n' | sort)
+  (cd "$SCAFFOLD" && git ls-files -z --cached --others --exclude-standard -- 'apps/web/app/**/*.stories.tsx' | tr '\0' '\n' | sort)
 }
 
 csf4_vitest_report() {

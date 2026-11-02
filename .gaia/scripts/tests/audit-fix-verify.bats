@@ -462,7 +462,7 @@ declared_edit_check() {
   take_baseline
   take_digests
   edit a.txt
-  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"gate-repair","finding_class":"gate/pw","path":"frontend","line":0,"disposition":"fixed","reason":"r","changed_paths":["a.txt"]}],"changed_paths":["a.txt"],"reverted_paths":[]}' >"$RESULT_FILE"
+  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"gate-repair","finding_class":"gate/pw","path":"apps/web","line":0,"disposition":"fixed","reason":"r","changed_paths":["a.txt"]}],"changed_paths":["a.txt"],"reverted_paths":[]}' >"$RESULT_FILE"
   do_check
   [ "$status" -eq 0 ] || {
     echo "status=$status output=$output"

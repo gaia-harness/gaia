@@ -334,11 +334,11 @@ uat_lib_validate_routing() {
 }
 
 uat_lib_e2e_directory() {
-  _uat_lib_frontend_subdirectory "${1:-}" '.playwright/e2e'
+  _uat_lib_web_subdirectory "${1:-}" '.playwright/e2e'
 }
 
 uat_lib_route_tests_directory() {
-  _uat_lib_frontend_subdirectory "${1:-}" 'app/route-tests'
+  _uat_lib_web_subdirectory "${1:-}" 'app/route-tests'
 }
 
 uat_lib_route_test_path() {

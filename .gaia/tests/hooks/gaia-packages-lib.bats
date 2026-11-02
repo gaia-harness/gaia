@@ -35,6 +35,37 @@ materialize() {
   fi
 }
 
+# check_members <expected.json>: the web and settings answers, when the oracle states them.
+check_members() {
+  local expected="$1" want got name failures=0
+  if [ "$(jq 'has("webMembers")' "$expected")" = true ]; then
+    want=$(jq -r '.webMembers[]?' "$expected")
+    got=$(gaia_packages_web_members | cut -f1)
+    if [ "$got" != "$want" ]; then
+      echo "webMembers: want [$want], got [$got]"
+      failures=1
+    fi
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      gaia_package_is_web "$name" || {
+        echo "is_web [$name]: want 0"
+        failures=1
+      }
+    done <<<"$want"
+  fi
+  if [ "$(jq 'has("settingsMembers")' "$expected")" = true ]; then
+    want=$(jq -r '.settingsMembers[]?' "$expected")
+    got=$(gaia_packages_list | cut -f1 | while IFS= read -r name; do
+      if gaia_package_wants_settings "$name"; then printf '%s\n' "$name"; fi
+    done)
+    if [ "$got" != "$want" ]; then
+      echo "settingsMembers: want [$want], got [$got]"
+      failures=1
+    fi
+  fi
+  return "$failures"
+}
+
 # check_case <expected.json> <repo-root>: print one line per disagreement with
 # the oracle and return 1 when there is any. Runs the library in this shell.
 check_case() {
@@ -123,6 +154,8 @@ check_case() {
       }
     fi
   done < <(jq -r '.dir // {} | to_entries[] | .key + "\u001f" + (.value // "-null-")' "$expected")
+
+  check_members "$expected" || failures=1
 
   [ "$failures" = 0 ]
 }
@@ -240,15 +273,15 @@ check_case() {
   [ -z "${lines[1]:-}" ]
 }
 
-@test "registry absent: the committed descriptor drives the built-in default, frontend/app matches and root app does not" {
+@test "registry absent: the committed descriptor drives the built-in default, apps/web/app matches and root app does not" {
   # shellcheck source=/dev/null
   . "$LIBRARY"
-  mkdir -p "$BATS_TEST_TMPDIR/absent/frontend"
-  cp "$REPO_ROOT/frontend/gaia.package.json" "$BATS_TEST_TMPDIR/absent/frontend/"
+  mkdir -p "$BATS_TEST_TMPDIR/absent/apps/web"
+  cp "$REPO_ROOT/apps/web/gaia.package.json" "$BATS_TEST_TMPDIR/absent/apps/web/"
   gaia_packages_load "$BATS_TEST_TMPDIR/absent"
   local ere
   ere="$(gaia_package_globs_ere tddUnitTests)"
-  [[ "frontend/app/utils/x.test.ts" =~ $ere ]]
+  [[ "apps/web/app/utils/x.test.ts" =~ $ere ]]
   [[ "app/utils/x.test.ts" =~ $ere ]] && return 1
   true
 }
@@ -314,4 +347,63 @@ check_case() {
     [ "$status" -eq 0 ]; gaia_package_for_path frontend/app/x.ts; gaia_package_dir nope || true' _ "$LIBRARY" "$BATS_TEST_TMPDIR/r"
   [ "$status" -eq 0 ]
   [ "$output" = frontend ]
+}
+
+@test "an all-empty member leaves no empty alternative in any ERE" {
+  # shellcheck source=/dev/null
+  . "$LIBRARY"
+  local key ere
+  materialize "$CORPUS/non-web-all-empty" "$BATS_TEST_TMPDIR/r"
+  gaia_packages_load "$BATS_TEST_TMPDIR/r"
+  for key in tddUnitTests tddStrictCandidates emergentTests preCommitSource doctorConfigs dependencyManifests; do
+    ere="$(gaia_package_globs_ere "$key")"
+    [ -n "$ere" ]
+    [[ $ere == *"||"* ]] && return 1
+    [[ $ere == *"(|"* ]] && return 1
+    [[ $ere == *"|)"* ]] && return 1
+  done
+  ere="$(gaia_package_globs_ere tddUnitTests)"
+  [[ "packages/lib/src/a.test.ts" =~ $ere ]] && return 1
+  true
+}
+
+@test "an all-empty single member leaves every ERE empty except preCommitSource" {
+  # shellcheck source=/dev/null
+  . "$LIBRARY"
+  materialize "$CORPUS/non-web-all-empty" "$BATS_TEST_TMPDIR/r"
+  rm -rf "$BATS_TEST_TMPDIR/r/frontend"
+  jq 'del(.[0])' "$BATS_TEST_TMPDIR/r/.gaia/packages.json" >"$BATS_TEST_TMPDIR/next.json"
+  mv "$BATS_TEST_TMPDIR/next.json" "$BATS_TEST_TMPDIR/r/.gaia/packages.json"
+  gaia_packages_load "$BATS_TEST_TMPDIR/r"
+  [ -z "$(gaia_package_globs_ere tddUnitTests)" ]
+  [ "$(gaia_package_globs_ere preCommitSource)" = '^(packages/lib/.*)$' ]
+  [ -z "$(gaia_packages_web_members)" ]
+  run gaia_package_is_web lib
+  [ "$status" -eq 1 ]
+  run gaia_package_is_web nope
+  [ "$status" -eq 1 ]
+}
+
+@test "web members: exactly the web member of a mixed registry, tab-separated, registry order" {
+  # shellcheck source=/dev/null
+  . "$LIBRARY"
+  materialize "$CORPUS/non-web-all-empty" "$BATS_TEST_TMPDIR/r"
+  gaia_packages_load "$BATS_TEST_TMPDIR/r"
+  [ "$(gaia_packages_web_members)" = "$(printf 'frontend\tfrontend')" ]
+  gaia_package_wants_settings frontend
+  run gaia_package_wants_settings lib
+  [ "$status" -eq 1 ]
+}
+
+@test "a failed load clears the web answers" {
+  # shellcheck source=/dev/null
+  . "$LIBRARY"
+  local status=0
+  materialize "$CORPUS/stack-web" "$BATS_TEST_TMPDIR/good"
+  materialize "$CORPUS/descriptor-stack-invalid" "$BATS_TEST_TMPDIR/bad"
+  gaia_packages_load "$BATS_TEST_TMPDIR/good"
+  [ -n "$(gaia_packages_web_members)" ]
+  gaia_packages_load "$BATS_TEST_TMPDIR/bad" || status=$?
+  [ "$status" -eq 3 ]
+  [ -z "$(gaia_packages_web_members)" ]
 }

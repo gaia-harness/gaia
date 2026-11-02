@@ -1,4 +1,13 @@
 {
-  "load": 3,
-  "error": "gaia-packages: frontend/gaia.package.json is invalid: globs.doctorConfigs must be a non-empty array of non-empty strings without control characters. Next step: restore frontend/gaia.package.json from the GAIA release, or correct the field it names."
+  "load": 0,
+  "source": "registry",
+  "list": [["frontend", "frontend"]],
+  "globs": {
+    "doctorConfigs": {"empty": true},
+    "tddUnitTests": {
+      "match": ["frontend/app/x.test.ts"],
+      "noMatch": ["app/x.test.ts"]
+    }
+  },
+  "webMembers": []
 }

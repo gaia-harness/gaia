@@ -457,7 +457,7 @@ assert_registered() {
 # bats test_tags=whole-tree
 @test "both settings files register the hook in the SessionStart startup|resume group" {
   assert_registered "$REPO_ROOT/.claude/settings.json"
-  assert_registered "$REPO_ROOT/frontend/.claude/settings.json"
+  assert_registered "$REPO_ROOT/apps/web/.claude/settings.json"
 }
 
 # bats test_tags=whole-tree

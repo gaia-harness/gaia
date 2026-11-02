@@ -33,7 +33,7 @@
       "endTime": 1793504498271.0095,
       "status": "passed",
       "message": "",
-      "name": "/work/frontend/app/route-tests/orders/tests/order-history-lists-orders.test.ts"
+      "name": "/work/apps/web/app/route-tests/orders/tests/order-history-lists-orders.test.ts"
     }
   ]
 }

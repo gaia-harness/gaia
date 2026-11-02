@@ -64,8 +64,8 @@ git show <sha>
 
 Read the diff. Decide what wiki page(s) need updating:
 
-- New service in `frontend/app/services/`: edit `wiki/modules/Services.md`
-- New hook in `frontend/app/hooks/`: edit `wiki/modules/Hooks.md`
+- New service in `apps/web/app/services/`: edit `wiki/modules/Services.md`
+- New hook in `apps/web/app/hooks/`: edit `wiki/modules/Hooks.md`
 - New route group: edit `wiki/decisions/Thin Routes.md` and/or `wiki/modules/Pages.md`
 - Dependency change: edit `wiki/dependencies/<name>.md` (create if needed)
 - Architectural pattern: edit relevant `wiki/concepts/<topic>.md`

@@ -12,10 +12,10 @@
 #      (shadcn/no-restyle, shadcn/no-raw-colors, i18next/no-literal-string), and
 #      passes the untouched language-select component.
 #   3. The no-cd spelling it replaces, eslint from the repository root with
-#      `--config frontend/eslint.config.mjs`, passes the same probe and
+#      `--config apps/web/eslint.config.mjs`, passes the same probe and
 #      false-fails language-select on canonical/filename-match-exported. ESLint
 #      resolves a flat config's `files` globs against the cwd, not the config's
-#      directory, so the preset's `app/**` blocks never match `frontend/app/...`
+#      directory, so the preset's `app/**` blocks never match `apps/web/app/...`
 #      from the root. When this step starts failing, ESLint resolves globs from
 #      the config's directory and the planner's stated reason is false.
 #
@@ -56,7 +56,7 @@ CLEAN_RELATIVE="app/components/language-select/index.tsx"
 # Runs the planner's command with its placeholders filled; prints eslint's
 # output and returns its exit code.
 planner_lint() {
-  local command_line="${LINT_TEMPLATE//<package dir>/$SCAFFOLD/frontend}"
+  local command_line="${LINT_TEMPLATE//<package dir>/$SCAFFOLD/apps/web}"
   command_line="${command_line//<its own files>/$1}"
   local -a words
   read -ra words <<< "$command_line"
@@ -65,7 +65,7 @@ planner_lint() {
 }
 
 root_lint() {
-  (cd "$SCAFFOLD" && frontend/node_modules/.bin/eslint --config frontend/eslint.config.mjs "frontend/$1") 2>&1
+  (cd "$SCAFFOLD" && apps/web/node_modules/.bin/eslint --config apps/web/eslint.config.mjs "apps/web/$1") 2>&1
 }
 
 # Exit 1 is lint findings; 2 is ESLint failing to run, which proves nothing.

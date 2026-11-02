@@ -30,7 +30,9 @@ export type CorpusExpected = {
   >;
   list?: [string, string][];
   load: number;
+  settingsMembers?: string[];
   source?: string;
+  webMembers?: string[];
 };
 
 /** The slice of a reader the driver needs, so both vitest suites adapt to it. */
@@ -41,6 +43,10 @@ export type CorpusReader = {
     | {code: string; message: string; ok: false}
     | {ok: true; packages: ReaderPackage[]; source: string};
   regExps: (packages: never[], key: string) => RegExp[];
+  /** Names of the members that want generated settings, registry order. */
+  settingsMembers: (packages: never[]) => string[];
+  /** Names of the web-stack members, registry order. */
+  webMembers: (packages: never[]) => string[];
 };
 
 type ReaderPackage = {name: string; path: string};
@@ -151,6 +157,32 @@ const directoryDisagreements = (
   return directories;
 };
 
+const listDisagreement = (
+  label: string,
+  want: string[] | undefined,
+  got: string[]
+): string[] =>
+  want === undefined || JSON.stringify(want) === JSON.stringify(got) ?
+    []
+  : [`${label}: want ${JSON.stringify(want)}, got ${JSON.stringify(got)}`];
+
+const memberDisagreements = (
+  expected: CorpusExpected,
+  loaded: Loaded,
+  reader: CorpusReader
+): string[] => [
+  ...listDisagreement(
+    'webMembers',
+    expected.webMembers,
+    reader.webMembers(loaded.packages as never[])
+  ),
+  ...listDisagreement(
+    'settingsMembers',
+    expected.settingsMembers,
+    reader.settingsMembers(loaded.packages as never[])
+  ),
+];
+
 /** One line per way the reader disagrees with the oracle; empty when it agrees. */
 export const corpusDisagreements = (
   expected: CorpusExpected,
@@ -180,5 +212,6 @@ export const corpusDisagreements = (
     ...(list === JSON.stringify(expected.list) ? [] : [`list: got ${list}`]),
     ...globDisagreements(expected, result, reader),
     ...directoryDisagreements(expected, result),
+    ...memberDisagreements(expected, result, reader),
   ];
 };

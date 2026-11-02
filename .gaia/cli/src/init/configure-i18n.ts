@@ -29,7 +29,7 @@ import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {takeValue} from '../util/argv.js';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
-import {resolvePackageTarget} from '../util/package-target.js';
+import {resolveWebTarget} from '../util/package-target.js';
 import {markStepCompleted} from './util/state.js';
 
 const HELP_TEXT = `Usage: gaia init configure-i18n --locales <list> --strip <bool>
@@ -283,7 +283,7 @@ export const run = (
   // (referenced by the slash command). Here we only record the decision
   // so resume can detect it; the orchestrator dispatches the prose path.
   if (!parsed.flags.strip) {
-    const target = resolvePackageTarget(cwd);
+    const target = resolveWebTarget(cwd);
 
     if (!target.ok) {
       structuredError({

@@ -26,7 +26,7 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Owned by the Quality Gate page's Quick check and, in the maintainer repo, its
 # frontend filter: keep both equal to the page.
-GATE_QUICK_CHECK_PATTERN='\.(ts|tsx|js|jsx|mjs|cjs|css)$|^([^/]+/)?(package\.json|pnpm-lock\.yaml|tsconfig.*\.json|vite\.config\.|vitest\.config\.|playwright\.config\.|eslint\.config\.)|^(\.gaia/packages\.json|frontend/gaia\.package\.json)$'
+GATE_QUICK_CHECK_PATTERN='\.(ts|tsx|js|jsx|mjs|cjs|css)$|^([^/]+/)*(package\.json|pnpm-lock\.yaml|tsconfig.*\.json|vite\.config\.|vitest\.config\.|playwright\.config\.|eslint\.config\.)|^(\.gaia/packages\.json|([^/]+/)*gaia\.package\.json)$'
 # gaia:maintainer-only:start
 GATE_FRONTEND_FILTER_PATTERN='^\.gaia/(cli|tests|scripts)/'
 # gaia:maintainer-only:end

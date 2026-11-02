@@ -49,11 +49,19 @@
 .gaia/cli/src/scaffold/route.ts	app/routes/	Help text naming package-relative paths resolved against the package directory from the registry.
 .gaia/scripts/spec/uat-lib.sh	.playwright/e2e	Package-relative e2e directory name joined to the package path from the registry, not a root path.
 .gaia/scripts/spec/uat-lib.sh	'app/route-tests'	Package-relative route-test directory name joined to the package path from the registry, not a root path.
-.claude/hooks/red-verify-commit-check.sh	pnpm -C frontend test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
-.claude/skills/gaia/references/plan/planner.md	pnpm -C frontend test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
+.claude/hooks/red-verify-commit-check.sh	pnpm -C apps/web test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
+.claude/skills/gaia/references/plan/planner.md	pnpm -C apps/web test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
 .gaia/cli/src/migrate-csf4/inventory.ts	'app/**/*.stories.{ts,tsx}'	Fallback story glob, resolved against the adopter package directory.
 .gaia/cli/src/migrate-csf4/inventory.ts	no .storybook/main file	Refusal text naming the package-relative main file.
 .gaia/cli/src/migrate-csf4/run-fixture.ts	'.storybook/main.ts'	Test-double codemod writing into the package-relative work copy.
 .gaia/cli/src/migrate-csf4/run-fixture.ts	'.storybook/preview.ts'	Test-double codemod writing into the package-relative work copy.
 .claude/agents/worthiness-evaluator.md	a route test under `app/route-tests/`	Names the frontend package-relative home of route tests, not a root path.
 .gaia/scripts/classifier/classify-determinism.mjs	a test under app/route-tests/<route>/tests/	Reason string naming the frontend package-relative home of route tests, not a root path.
+.claude/hooks/lib/audit-quick-classify-lines-lib.sh	"${prefix}"app/languages/}	The path is composed onto the owning web member prefix from the registry, so app/languages is member-relative here, not a root path.
+.claude/hooks/lib/audit-quick-classify-lines-lib.sh	"${prefix}app/languages/	The path is composed onto the owning web member prefix from the registry, so app/languages is member-relative here, not a root path.
+.gaia/scripts/audit-resolve-scope.sh	[[ "$1" =~ ^(.*/)?app/languages/	Fail-open pattern for an unreadable registry: matches app/languages under any path prefix, not a root path.
+.gaia/scripts/audit-resolve-scope.sh	[[ "$remainder" =~ ^app/languages/	The member directory is stripped first, so app/languages is member-relative here, not a root path.
+.gaia/cli/src/util/gaia-packages-corpus-fixture.ts	'frontend/gaia.package.json'	Corpus cases keep their descriptor in a case-local directory named frontend; it is a fixture directory, not the app root.
+.gaia/scripts/fitness-nudge-lib.sh	'chore: point references at frontend/'	Literal commit subject the 2.0.0 migration wrote into adopter history, matched as a prefix.
+.gaia/migrations/2.0.0.md	frontend/	Frozen migration note: describes the 2.0.0 move into the old package root.
+.gaia/migrations/2.4.0.md	frontend/	Migration note that owns the hop from the old package root to apps/web, so it names the old root.

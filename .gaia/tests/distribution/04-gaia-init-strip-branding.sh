@@ -84,7 +84,7 @@ grep -q "$TITLE" "$SCAFFOLD/README.md" \
 cmp -s "$PROJECT_ROOT/.gaia/LICENSE" "$SCAFFOLD/.gaia/LICENSE" \
   || { fail "strip-branding removed or rewrote .gaia/LICENSE"; exit 1; }
 
-PREVIEW="$SCAFFOLD/frontend/.storybook/preview.ts"
+PREVIEW="$SCAFFOLD/apps/web/.storybook/preview.ts"
 grep -q '^export default definePreview(' "$PREVIEW" \
   || { fail "strip-branding left a .storybook/preview.ts that is not export default definePreview("; exit 1; }
 grep -q "brandTitle: '$TITLE'" "$PREVIEW" \

@@ -49,7 +49,7 @@ setup() {
     ".claude/skills/update-gaia/SKILL.md"
     ".claude/skills/release-notes/SKILL.md"
     "$REFERENCES/forensics.md"
-    "frontend/.claude/skills/gaia-react-perf/SKILL.md"
+    "apps/web/.claude/skills/gaia-react-perf/SKILL.md"
     "wiki/concepts/PR Merge Workflow.md"
     # A residue resume (after /clear, or an owed run) bypasses the slash
     # command and never starts fresh work, so its reference stays ungated.

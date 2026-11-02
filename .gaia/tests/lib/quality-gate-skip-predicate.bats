@@ -1,15 +1,15 @@
 #!/usr/bin/env bats
 #
 # The Quality Gate page's "Quick check" command decides whether a commit skips
-# the gate. After the frontend/ move a commit touching only frontend/package.json
-# or frontend/tsconfig.json must still select the gate. The test extracts the
+# the gate. After the apps/web/ move a commit touching only apps/web/package.json
+# or apps/web/tsconfig.json must still select the gate. The test extracts the
 # command from the page itself and runs it against staged files in a temp repo.
 #
 # The "old" control is an inline copy of the pre-move command, so the guard is
 # proven able to fail without reading git history (this PR is squash-merged).
 #
 # The maintainer-only "Frontend filter", piped after the Quick check, narrows
-# which gate-selecting commits run the frontend steps: CLI, test-harness, and
+# which gate-selecting commits run the web-only steps 6 to 8: CLI, test-harness, and
 # harness-script source belongs to no registered package. Its can-fail control
 # is the Quick check alone, which selects those same stages.
 
@@ -68,18 +68,18 @@ staged_selection() {
   [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
-@test "staging only frontend/package.json selects the gate" {
-  run staged_selection "$(page_quick_check)" frontend/package.json
+@test "staging only apps/web/package.json selects the gate" {
+  run staged_selection "$(page_quick_check)" apps/web/package.json
   [ -n "$output" ]
 }
 
-@test "staging only frontend/tsconfig.json selects the gate" {
-  run staged_selection "$(page_quick_check)" frontend/tsconfig.json
+@test "staging only apps/web/tsconfig.json selects the gate" {
+  run staged_selection "$(page_quick_check)" apps/web/tsconfig.json
   [ -n "$output" ]
 }
 
 @test "staging only the package registry files selects the gate" {
-  run staged_selection "$(page_quick_check)" .gaia/packages.json frontend/gaia.package.json
+  run staged_selection "$(page_quick_check)" .gaia/packages.json apps/web/gaia.package.json
   [ -n "$output" ]
 }
 
@@ -93,25 +93,30 @@ staged_selection() {
   [ -z "$output" ]
 }
 
-@test "guard can fail: the pre-move command skips a frontend/tsconfig.json-only stage" {
-  run staged_selection "$OLD_COMMAND" frontend/tsconfig.json
+@test "guard can fail: the pre-move command skips a apps/web/tsconfig.json-only stage" {
+  run staged_selection "$OLD_COMMAND" apps/web/tsconfig.json
   [ -z "$output" ]
 }
 
-@test "guard can fail: the pre-move command skips a frontend/package.json-only stage" {
-  run staged_selection "$OLD_COMMAND" frontend/package.json
+@test "guard can fail: the pre-move command skips a apps/web/package.json-only stage" {
+  run staged_selection "$OLD_COMMAND" apps/web/package.json
   [ -z "$output" ]
 }
 
-@test "steps 3 to 8 each name their pnpm -C frontend equivalent, in order" {
-  local expected="typecheck lint test pw dev build" actual=""
-  local n
-  for n in 3 4 5 6 7 8; do
-    local line
+@test "steps 3 to 5 name their root scripts and steps 6 to 8 their pnpm -C apps/web equivalents, in order" {
+  local expected="typecheck lint test:ci pw dev build" actual=""
+  local n line
+  for n in 3 4 5; do
     line="$(grep -E "^$n\. " "$PAGE")"
     [ -n "$line" ]
-    [[ "$line" == *'pnpm -C frontend '* ]]
-    actual="$actual $(printf '%s' "$line" | sed -E 's/.*pnpm -C frontend ([a-z]+).*/\1/')"
+    [[ "$line" == "$n. \`pnpm "* ]]
+    actual="$actual $(printf '%s' "$line" | sed -E 's|^[0-9]+\. `pnpm ([a-z:]+).*|\1|')"
+  done
+  for n in 6 7 8; do
+    line="$(grep -E "^$n\. " "$PAGE")"
+    [ -n "$line" ]
+    [[ "$line" == *'pnpm -C apps/web '* ]]
+    actual="$actual $(printf '%s' "$line" | sed -E 's|.*pnpm -C apps/web ([a-z]+).*|\1|')"
   done
   [ "${actual# }" = "$expected" ]
 }
@@ -129,12 +134,12 @@ staged_selection() {
 }
 
 @test "frontend source staged beside CLI source selects the frontend steps" {
-  run staged_selection "$(page_frontend_check)" .gaia/cli/src/a.ts frontend/app/a.tsx
-  [ "$output" = "frontend/app/a.tsx" ]
+  run staged_selection "$(page_frontend_check)" .gaia/cli/src/a.ts apps/web/app/a.tsx
+  [ "$output" = "apps/web/app/a.tsx" ]
 }
 
 @test "root config and the package registry still select the frontend steps" {
-  run staged_selection "$(page_frontend_check)" package.json .gaia/packages.json frontend/tsconfig.json
+  run staged_selection "$(page_frontend_check)" package.json .gaia/packages.json apps/web/tsconfig.json
   [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 3 ]
 }
 

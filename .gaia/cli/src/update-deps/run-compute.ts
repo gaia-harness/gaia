@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {resolvePackageTarget} from '../util/package-target.js';
+import {resolveWebTarget} from '../util/package-target.js';
 import {
   collectSnoozedGroups,
   computeActionableCount,
@@ -167,7 +167,7 @@ export const computeUpdates = (options: ComputeOptions): UpdatesPayload => {
   // App dependencies, their installed versions, and `pnpm outdated` live in
   // the frontend package; the committed hold map and the release-age setting
   // stay at the repo root, so the two directories are resolved separately.
-  const target = resolvePackageTarget(options.cwd);
+  const target = resolveWebTarget(options.cwd);
 
   if (!target.ok) {
     throw new Error(target.message);

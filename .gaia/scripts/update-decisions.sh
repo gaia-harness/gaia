@@ -22,7 +22,9 @@
 # baseline bundle. An entry still open in the report is left alone.
 #
 # Entries stay sorted by (path, key) so a repeated run writes a byte-identical
-# file; writes go to a temp file beside the target and `mv` over it.
+# file; writes go to a temp file beside the target and `mv` over it. The one
+# other writer is `gaia update crossing rekey`, which rewrites the leading app
+# root in each path once and re-sorts by the same order.
 
 NEXT_STEP_SUFFIX='or restore it with git checkout -- FILE, then re-run /update-gaia.'
 

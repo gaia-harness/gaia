@@ -24,11 +24,11 @@ setup() {
   SPEC="$WORK/SPEC.md"
   ROUTING="$WORK/plan/README.md"
   STDERR_FILE="$BATS_TEST_TMPDIR/stderr"
-  FILE_PHASE_TWO_RELATIVE='frontend/.playwright/e2e/checkout/guest-checkout-confirms-order.spec.ts'
-  FILE_PHASE_THREE_RELATIVE='frontend/.playwright/e2e/orders/order-history-lists-orders.spec.ts'
+  FILE_PHASE_TWO_RELATIVE='apps/web/.playwright/e2e/checkout/guest-checkout-confirms-order.spec.ts'
+  FILE_PHASE_THREE_RELATIVE='apps/web/.playwright/e2e/orders/order-history-lists-orders.spec.ts'
   FILE_PHASE_TWO="$WORK/$FILE_PHASE_TWO_RELATIVE"
   FILE_PHASE_THREE="$WORK/$FILE_PHASE_THREE_RELATIVE"
-  ROUTE_FILE_RELATIVE='frontend/app/route-tests/orders/tests/order-history-lists-orders.test.ts'
+  ROUTE_FILE_RELATIVE='apps/web/app/route-tests/orders/tests/order-history-lists-orders.test.ts'
   ROUTE_FILE="$WORK/$ROUTE_FILE_RELATIVE"
   VITEST_REPORTS="$REPORTS/vitest"
 }
@@ -325,10 +325,10 @@ $GREEN_TEST_LINES
 
 @test "gate refuses a working-document id anywhere under the Playwright tree with the working-doc-id reason" {
   prepare_green
-  printf '// see UAT-123 for context\n' >"$WORK/frontend/.playwright/helper.ts"
+  printf '// see UAT-123 for context\n' >"$WORK/apps/web/.playwright/helper.ts"
   gate --phase 2 --report "$REPORTS/passed.json"
   [ "$status" -eq 1 ]
-  assert_stderr_names "frontend/.playwright/helper.ts" working-doc-id
+  assert_stderr_names "apps/web/.playwright/helper.ts" working-doc-id
 }
 
 # --- Gate: selection ---
@@ -421,8 +421,8 @@ exit 1"
   command -v node >/dev/null 2>&1 || skip "node is needed for the listener fixture"
   prepare_green
   git init -q -b main "$WORK"
-  mkdir -p "$WORK/frontend"
-  : >"$WORK/frontend/react-router.config.ts"
+  mkdir -p "$WORK/apps/web"
+  : >"$WORK/apps/web/react-router.config.ts"
   other_tree="$BATS_TEST_TMPDIR/other-tree"
   git init -q -b main "$other_tree"
   other_tree="$(cd "$other_tree" && pwd -P)"
@@ -485,7 +485,7 @@ cp '$REPORTS/passed.json' \"\$PLAYWRIGHT_JSON_OUTPUT_NAME\"
 exit 0"
   gate_with_stub
   [ "$status" -eq 0 ]
-  [ "$(tr '\n' ' ' <"$BATS_TEST_TMPDIR/pnpm-args")" = "-C frontend exec playwright test .playwright/e2e/checkout/guest-checkout-confirms-order.spec.ts --reporter=json " ]
+  [ "$(tr '\n' ' ' <"$BATS_TEST_TMPDIR/pnpm-args")" = "-C apps/web exec playwright test .playwright/e2e/checkout/guest-checkout-confirms-order.spec.ts --reporter=json " ]
 }
 
 @test "gate does not start Playwright when a static check already failed" {
@@ -615,7 +615,7 @@ exit 1"
   run bash -c "cd '$WORK' && PATH='$BATS_TEST_TMPDIR/bin':\"\$PATH\" bash '$GATE' '$SPEC' --routing '$ROUTING' --phase 3 2>'$STDERR_FILE'"
   [ "$status" -eq 0 ]
   [ "$output" != "no owned e2e specs" ]
-  grep -qF -- "-C frontend exec vitest run --project node --reporter=json --outputFile=" "$BATS_TEST_TMPDIR/pnpm-log"
+  grep -qF -- "-C apps/web exec vitest run --project node --reporter=json --outputFile=" "$BATS_TEST_TMPDIR/pnpm-log"
   grep -qF -- "app/route-tests/orders/tests/order-history-lists-orders.test.ts" "$BATS_TEST_TMPDIR/pnpm-log"
   if grep -q playwright "$BATS_TEST_TMPDIR/pnpm-log"; then return 1; fi
 }
@@ -854,7 +854,7 @@ divergence() {
   rm -f "$ROUTING.bak"
   grep -qF -- '| UAT-003 | route |' "$ROUTING" || return 1
   render_specs
-  route_file="$WORK/frontend/app/route-tests/orders/tests/order-history-lists-orders.test.ts"
+  route_file="$WORK/apps/web/app/route-tests/orders/tests/order-history-lists-orders.test.ts"
   [ -f "$route_file" ] || return 1
   divergence --all
   [ "$status" -eq 0 ] || return 1
@@ -862,7 +862,7 @@ divergence() {
   rm -f "$route_file.bak"
   divergence --all
   [ "$status" -eq 1 ]
-  [ "$output" = "frontend/app/route-tests/orders/tests/order-history-lists-orders.test.ts UAT-003 then" ]
+  [ "$output" = "apps/web/app/route-tests/orders/tests/order-history-lists-orders.test.ts UAT-003 then" ]
 }
 
 @test "divergence ignores a body edit of selectors, labels and copy" {
@@ -1027,15 +1027,15 @@ scan() {
 }
 
 @test "default scan with no app/route-tests folder exits zero; an id planted in a route test exits 1 naming the file" {
-  mkdir -p "$WORK/frontend/.playwright/e2e"
+  mkdir -p "$WORK/apps/web/.playwright/e2e"
   run bash -c "cd '$WORK' && bash '$SCAN' 2>'$STDERR_FILE'"
   [ "$status" -eq 0 ] || return 1
   [ -z "$output" ] || return 1
-  mkdir -p "$WORK/frontend/app/route-tests/checkout/tests"
-  printf '// covers UAT-004\n' >"$WORK/frontend/app/route-tests/checkout/tests/total.test.ts"
+  mkdir -p "$WORK/apps/web/app/route-tests/checkout/tests"
+  printf '// covers UAT-004\n' >"$WORK/apps/web/app/route-tests/checkout/tests/total.test.ts"
   run bash -c "cd '$WORK' && bash '$SCAN' 2>'$STDERR_FILE'"
   [ "$status" -eq 1 ]
-  [ "$output" = "frontend/app/route-tests/checkout/tests/total.test.ts:1: UAT-004" ]
+  [ "$output" = "apps/web/app/route-tests/checkout/tests/total.test.ts:1: UAT-004" ]
 }
 
 # bats test_tags=whole-tree

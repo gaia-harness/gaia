@@ -16,16 +16,19 @@
 # This header owns the lists below. Wiki pages and the reviewer definition point
 # here and never copy them.
 #
-# Path classes (quick_path_class; path shape only):
-#   component  frontend/app/components/<dirs>/index.tsx and
-#              frontend/app/components/ui/<name>.tsx
-#   page       frontend/app/pages/<dirs>/page.tsx and
-#              frontend/app/pages/<dirs>/index.tsx
-#   language   frontend/app/languages/<locale>/<path>.ts, except any index.ts
+# Path classes (quick_path_class; path shape only). `apps/web/` below stands for
+# the path of whichever web-stack member owns the path, read from the package
+# registry; a path owned by no member, or by a member that is not web-stack, is
+# class none, so it is never a language file, component or page:
+#   component  apps/web/app/components/<dirs>/index.tsx and
+#              apps/web/app/components/ui/<name>.tsx
+#   page       apps/web/app/pages/<dirs>/page.tsx and
+#              apps/web/app/pages/<dirs>/index.tsx
+#   language   apps/web/app/languages/<locale>/<path>.ts, except any index.ts
 #   none       everything else, including every story. Component and page
 #              exclude any path with a `hooks` or `tests` segment and anything
-#              under frontend/app/components/document/ or
-#              frontend/app/components/errors/.
+#              under apps/web/app/components/document/ or
+#              apps/web/app/components/errors/.
 # A story <dir>/tests/<base>.stories.tsx is admitted only by pairing: its
 # component <dir>/<base>.tsx (quick_story_component) is in the selected set and
 # is of class component.
@@ -165,12 +168,50 @@ QUICK_PALETTE_COLORS='slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime
 # shellcheck disable=SC2034
 QUICK_CONTENT_MARKERS='(^|[^A-Za-z0-9_$])(nonce|request)([^A-Za-z0-9_$]|$)|process\.env|import\.meta\.env'
 
-# quick_path_class <path>: the path's class from the allowlist above.
+_QUICK_LIBRARY_DIRECTORY="${BASH_SOURCE[0]%/*}"
+[ "$_QUICK_LIBRARY_DIRECTORY" != "${BASH_SOURCE[0]}" ] || _QUICK_LIBRARY_DIRECTORY=.
+
+# quick_load_registry <root>: loads the package registry the allowlist's member
+# path comes from. Returns 2 when it cannot be read, which the stage entry
+# points pass on as an internal failure (the deep direction).
+quick_load_registry() {
+  declare -F gaia_packages_load >/dev/null 2>&1 || {
+    # shellcheck source=/dev/null
+    . "$_QUICK_LIBRARY_DIRECTORY/gaia-packages.sh" 2>/dev/null || return 2
+  }
+  gaia_packages_load "$1" >/dev/null 2>&1 || return 2
+  return 0
+}
+
+# quick_web_member_prefix <path>: prints the owning web-stack member's path with
+# a trailing slash (empty for a member at the root) and returns 0; returns 1
+# when the path is owned by no member or by a member that is not web-stack, so
+# a non-web path is never a language file, component or page.
+quick_web_member_prefix() {
+  local owner member_path
+  owner="$(gaia_package_for_path "$1" 2>/dev/null)"
+  [ -n "$owner" ] || return 1
+  gaia_package_is_web "$owner" || return 1
+  member_path="$(gaia_package_dir "$owner")" || return 1
+  if [ "$member_path" = . ]; then
+    printf '\n'
+  else
+    printf '%s/\n' "$member_path"
+  fi
+}
+
+# quick_path_class <path>: the path's class from the allowlist above, read as
+# if the owning web member sat at the allowlist's `apps/web/` spelling.
 quick_path_class() {
-  local path="$1" rest base
+  local original="$1" path rest base prefix
+  prefix="$(quick_web_member_prefix "$original")" || {
+    printf 'none\n'
+    return 0
+  }
+  path="apps/web/${original#"$prefix"}"
   case "$path" in
-    frontend/app/languages/*/*.ts)
-      rest="${path#frontend/app/languages/}"
+    apps/web/app/languages/*/*.ts)
+      rest="${path#apps/web/app/languages/}"
       base="${path##*/}"
       if [ -n "${rest%%/*}" ] && [ "$base" != "index.ts" ]; then
         printf 'language\n'
@@ -187,11 +228,11 @@ quick_path_class() {
       ;;
   esac
   case "$path" in
-    frontend/app/components/document/* | frontend/app/components/errors/*)
+    apps/web/app/components/document/* | apps/web/app/components/errors/*)
       printf 'none\n'
       ;;
-    frontend/app/components/ui/*.tsx)
-      rest="${path#frontend/app/components/ui/}"
+    apps/web/app/components/ui/*.tsx)
+      rest="${path#apps/web/app/components/ui/}"
       case "$rest" in
         */*) case "$path" in
                */index.tsx) printf 'component\n' ;;
@@ -200,10 +241,10 @@ quick_path_class() {
         *) printf 'component\n' ;;
       esac
       ;;
-    frontend/app/components/*/index.tsx)
+    apps/web/app/components/*/index.tsx)
       printf 'component\n'
       ;;
-    frontend/app/pages/*/page.tsx | frontend/app/pages/*/index.tsx)
+    apps/web/app/pages/*/page.tsx | apps/web/app/pages/*/index.tsx)
       printf 'page\n'
       ;;
     *)
@@ -255,6 +296,6 @@ _quick_load_siblings() {
 
 if ! _quick_load_siblings; then
   printf 'audit-quick-classify-lib.sh: a sibling library beside %s is missing or incomplete; the quick classifier is unusable\n' "${BASH_SOURCE[0]}" >&2
-  unset -f quick_classify_paths quick_classify_lines quick_story_component quick_path_class
+  unset -f quick_classify_paths quick_classify_lines quick_story_component quick_path_class quick_load_registry quick_web_member_prefix
   return 1
 fi

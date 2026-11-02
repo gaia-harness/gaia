@@ -1,5 +1,5 @@
 // A CSF4 story file with two tests on one story: the extractor emits the base
-// story plus each test. It sits outside frontend/app/, so Storybook never
+// story plus each test. It sits outside apps/web/app/, so Storybook never
 // loads it.
 import preview from '#.storybook/preview';
 import {expect} from 'storybook/test';

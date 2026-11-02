@@ -359,7 +359,7 @@ mutate_commit() {
 
 @test "CLI: prints the member's branch-own digest line the lib computes, exit 0" {
   v2_seed "$BATS_TEST_TMPDIR/cli" || return 1
-  catchup_branch_commit frontend/app/x.ts "$(catchup_lines 40 x 5=edited)" || return 1
+  catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=edited)" || return 1
   run bash "$CLI" --root "$CATCHUP_ROOT" --member "$FRONTEND_MEMBER"
   [ "$status" -eq 0 ]
   [ "${#output}" -eq 64 ]
@@ -443,10 +443,10 @@ v2_seed() {
   catchup_init "$directory" || return 1
   v2_copy_libraries "$CATCHUP_ROOT" || return 1
   seed_audit_roster "$CATCHUP_ROOT" || return 1
-  mkdir -p "$CATCHUP_ROOT/frontend/app" "$CATCHUP_ROOT/.gaia/scripts" "$CATCHUP_ROOT/.gaia/cli/src" \
+  mkdir -p "$CATCHUP_ROOT/apps/web/app" "$CATCHUP_ROOT/.gaia/scripts" "$CATCHUP_ROOT/.gaia/cli/src" \
     "$CATCHUP_ROOT/.github/workflows" "$CATCHUP_ROOT/docs" "$CATCHUP_ROOT/.claude/rules" || return 1
-  catchup_lines 40 x >"$CATCHUP_ROOT/frontend/app/x.ts"
-  catchup_lines 10 unrelated >"$CATCHUP_ROOT/frontend/app/unrelated.ts"
+  catchup_lines 40 x >"$CATCHUP_ROOT/apps/web/app/x.ts"
+  catchup_lines 10 unrelated >"$CATCHUP_ROOT/apps/web/app/unrelated.ts"
   catchup_lines 10 shell >"$CATCHUP_ROOT/.gaia/scripts/foo.sh"
   catchup_lines 10 clearance >"$CATCHUP_ROOT/.gaia/scripts/audit-write-clearance.sh"
   catchup_lines 10 index >"$CATCHUP_ROOT/.gaia/cli/src/index.ts"
@@ -522,7 +522,7 @@ v2_expect_rotated_all_but() {
 
 # The branch's own edits to files of every class but the base never touches.
 v2_branch_work() {
-  catchup_branch_commit frontend/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
+  catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
   catchup_branch_commit .gaia/scripts/foo.sh "$(catchup_lines 10 shell 3=branch-edit)" || return 1
   catchup_branch_commit .gaia/cli/src/index.ts "$(catchup_lines 10 index 2=branch-edit)" || return 1
   catchup_branch_commit .github/workflows/ci.yml "$(catchup_lines 10 workflow 2=branch-edit)" || return 1
@@ -562,7 +562,7 @@ v2_branch_work() {
   merge_base_before="$(catchup_git merge-base refs/remotes/origin/main HEAD)"
   before="$(v2_all "$merge_base_before")"
   [ -n "$before" ] || return 1
-  catchup_base_commit frontend/app/x.ts "$(catchup_lines 40 x 40=base-edit)" || return 1
+  catchup_base_commit apps/web/app/x.ts "$(catchup_lines 40 x 40=base-edit)" || return 1
   catchup_base_commit .gaia/cli/src/other.ts "$(catchup_lines 10 other 6=base-edit)" || return 1
   catchup_base_commit .gaia/scripts/audit-write-clearance.sh "$(catchup_lines 10 clearance 6=base-edit)" || return 1
   catchup_merge_base || return 1
@@ -588,9 +588,9 @@ v2_inside_merge_run() {
   local directory="$1" kind="$2" mode="$3"
   v2_seed "$directory" || return 1
   case "$kind" in
-    whitespace | mode) catchup_branch_commit frontend/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1 ;;
-    symlink) catchup_symlink branch frontend/app/link.ts target-a || return 1 ;;
-    binary) catchup_binary branch frontend/app/blob.bin one || return 1 ;;
+    whitespace | mode) catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1 ;;
+    symlink) catchup_symlink branch apps/web/app/link.ts target-a || return 1 ;;
+    binary) catchup_binary branch apps/web/app/blob.bin one || return 1 ;;
   esac
   V2_BEFORE="$(v2_local)" || return 1
   catchup_base_commit docs/base-note.md "base note" || return 1
@@ -598,12 +598,12 @@ v2_inside_merge_run() {
   if [ "$mode" = edit ]; then
     case "$kind" in
       whitespace)
-        catchup_lines 40 x 5=branch-edit '30=x 30 ' >"$CATCHUP_ROOT/frontend/app/x.ts" || return 1
-        catchup_git add -- frontend/app/x.ts || return 1
+        catchup_lines 40 x 5=branch-edit '30=x 30 ' >"$CATCHUP_ROOT/apps/web/app/x.ts" || return 1
+        catchup_git add -- apps/web/app/x.ts || return 1
         ;;
-      mode) catchup_mode worktree frontend/app/x.ts +x || return 1 ;;
-      symlink) catchup_symlink worktree frontend/app/link.ts target-b || return 1 ;;
-      binary) catchup_binary worktree frontend/app/blob.bin two || return 1 ;;
+      mode) catchup_mode worktree apps/web/app/x.ts +x || return 1 ;;
+      symlink) catchup_symlink worktree apps/web/app/link.ts target-b || return 1 ;;
+      binary) catchup_binary worktree apps/web/app/blob.bin two || return 1 ;;
     esac
   fi
   catchup_commit_merge || return 1
@@ -653,13 +653,13 @@ v2_twin_run() {
   local directory="$1" patch="$2"
   v2_seed "$directory" || return 1
   if [ "$patch" = with-changes ]; then
-    catchup_branch_commit frontend/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
+    catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
   fi
   V2_BEFORE="$(v2_local)" || return 1
   catchup_git checkout -q -b feat/twin refs/remotes/origin/main || return 1
   catchup_git config branch.feat/twin.gaia-audit-base main || return 1
   if [ "$patch" = with-changes ]; then
-    catchup_branch_commit frontend/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
+    catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
   fi
   V2_AFTER="$(v2_local)"
 }
@@ -688,7 +688,7 @@ v2_twin_run() {
 
 @test "a branch commit editing gate machinery rotates every member" {
   v2_seed "$BATS_TEST_TMPDIR/machinery" || return 1
-  catchup_branch_commit frontend/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
+  catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
   before="$(v2_local)"
   catchup_branch_commit .gaia/scripts/audit-write-clearance.sh "$(catchup_lines 10 clearance 3=branch-edit)" || return 1
   after="$(v2_local)"
@@ -697,7 +697,7 @@ v2_twin_run() {
 
 @test "a branch commit editing a global-rules path rotates every member" {
   v2_seed "$BATS_TEST_TMPDIR/rules" || return 1
-  catchup_branch_commit frontend/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
+  catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
   before="$(v2_local)"
   catchup_branch_commit .claude/rules/quality-gate.md "$(catchup_lines 10 gate 3=branch-edit)" || return 1
   after="$(v2_local)"
@@ -715,7 +715,7 @@ v2_twin_run() {
 v2_base_edit_run() {
   local directory="$1" edit="$2" edited="$BATS_TEST_TMPDIR/base-edited-file" line in_member=0 inserted=0
   v2_seed "$directory" || return 1
-  catchup_branch_commit frontend/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
+  catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
   catchup_branch_commit docs/branch-note.md "branch note" || return 1
   V2_BEFORE="$(v2_local)" || return 1
   case "$edit" in
@@ -753,22 +753,22 @@ v2_base_edit_run() {
 }
 
 @test "a base roster change moving a branch path to another member rotates exactly the two members" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/roster-move" "roster:frontend/app/x.ts" || return 1
+  v2_base_edit_run "$BATS_TEST_TMPDIR/roster-move" "roster:apps/web/app/x.ts" || return 1
   v2_expect_rotated "$V2_BEFORE" "$V2_AFTER" "$FRONTEND_MEMBER" "$NODE_MEMBER"
 }
 
 @test "the same base roster change on a path outside the branch's patch rotates nothing" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/roster-move-outside" "roster:frontend/app/unrelated.ts" || return 1
+  v2_base_edit_run "$BATS_TEST_TMPDIR/roster-move-outside" "roster:apps/web/app/unrelated.ts" || return 1
   v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
 }
 
 @test "a base change adding a branch path to the machinery list rotates the members that did not already select it" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/machinery-add" "machinery:frontend/app/x.ts" || return 1
+  v2_base_edit_run "$BATS_TEST_TMPDIR/machinery-add" "machinery:apps/web/app/x.ts" || return 1
   v2_expect_rotated_all_but "$V2_BEFORE" "$V2_AFTER" "$FRONTEND_MEMBER"
 }
 
 @test "the same machinery-list change on a path outside the branch's patch rotates nothing" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/machinery-add-outside" "machinery:frontend/app/unrelated.ts" || return 1
+  v2_base_edit_run "$BATS_TEST_TMPDIR/machinery-add-outside" "machinery:apps/web/app/unrelated.ts" || return 1
   v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
 }
 
@@ -882,8 +882,8 @@ v2_base_edit_run() {
   [ -n "$tree" ] || return 1
   [ "$(v2_all "$merge_base" "$tree")" = "$(v2_all "$merge_base")" ] || return 1
   [ "$(v2_local "$tree")" = "$(v2_local)" ] || return 1
-  catchup_lines 40 x 5=branch-edit 9=staged-edit >"$CATCHUP_ROOT/frontend/app/x.ts"
-  catchup_git add -- frontend/app/x.ts || return 1
+  catchup_lines 40 x 5=branch-edit 9=staged-edit >"$CATCHUP_ROOT/apps/web/app/x.ts"
+  catchup_git add -- apps/web/app/x.ts || return 1
   edited_tree="$(catchup_git write-tree)"
   [ "$(v2_all "$merge_base" "$edited_tree")" != "$(v2_all "$merge_base")" ] || return 1
   true

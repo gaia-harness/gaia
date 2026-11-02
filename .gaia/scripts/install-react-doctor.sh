@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Installs the react-doctor Claude Code skill into frontend/.claude/skills/ and strips the extras
+# Installs the react-doctor Claude Code skill into a web-stack member's .claude/skills/ and strips the extras
 # its installer adds, so GAIA stays the sole controller of when react-doctor runs (the skill's
 # auto-run after edits and the code-audit-frontend agent).
 #
-# Usage: bash .gaia/scripts/install-react-doctor.sh   (from the repository root, no arguments)
+# Usage: bash .gaia/scripts/install-react-doctor.sh [--refresh]   (from the repository root)
+#
+# --refresh reinstalls only where a web-stack member already holds the skill, and exits 0 with one
+# line when none does, so a cleanup step never adds the skill to a project that never had it.
 #
 # Exit codes:
 #   0  done, including two tolerated failures that each print one warning line: `pnpm remove`
@@ -13,15 +16,15 @@
 #   1  the installer failed without leaving the skill, another step failed, or verification failed
 #   2  usage error
 #
-# The package directory is the constant `frontend`: it is GAIA's React package, and `--cwd` there
-# makes the skill land where its "before committing React code" trigger only lists for React work.
-# The installer has no skill-only flag, so everything else it writes is removed below.
+# The package directory is the web-stack member of `.gaia/packages.json`, whatever its name or
+# path: the one already holding the skill, else the first. `--cwd` there makes the skill land where
+# its "before committing React code" trigger only lists for React work. With no web-stack member
+# the script prints one line and exits 0. The installer has no skill-only flag, so everything else
+# it writes is removed below.
 
 set -euo pipefail
 
-package_directory="frontend"
-skill_directory="$package_directory/.claude/skills/react-doctor"
-usage="Usage: bash .gaia/scripts/install-react-doctor.sh (run from the repository root, no arguments)"
+usage="Usage: bash .gaia/scripts/install-react-doctor.sh [--refresh] (run from the repository root)"
 
 lockfile_snapshot=""
 
@@ -42,14 +45,48 @@ restore_lockfile() {
   fi
 }
 
+refresh_only=0
 if [ "$#" -gt 0 ]; then
   if [ "$1" = "--help" ] && [ "$#" -eq 1 ]; then
     printf '%s\n' "$usage"
     exit 0
   fi
-  printf '%s\n' "$usage" >&2
-  exit 2
+  if [ "$1" = "--refresh" ] && [ "$#" -eq 1 ]; then
+    refresh_only=1
+  else
+    printf '%s\n' "$usage" >&2
+    exit 2
+  fi
 fi
+
+packages_library=".claude/hooks/lib/gaia-packages.sh"
+[ -f "$packages_library" ] || fail "$packages_library not found; run from the repository root"
+# shellcheck source=../../.claude/hooks/lib/gaia-packages.sh
+. "$packages_library"
+load_status=0
+gaia_packages_load . || load_status=$?
+[ "$load_status" -eq 0 ] || fail "$GAIA_PACKAGES_ERROR"
+
+package_directory=""
+first_web_directory=""
+while IFS=$'\t' read -r member_name member_path; do
+  [ -n "$member_name" ] || continue
+  [ -n "$first_web_directory" ] || first_web_directory="$member_path"
+  if [ -d "$member_path/.claude/skills/react-doctor" ]; then
+    package_directory="$member_path"
+    break
+  fi
+done < <(gaia_packages_web_members)
+if [ -z "$package_directory" ] && [ "$refresh_only" -eq 1 ]; then
+  printf 'install-react-doctor: no web-stack member holds the react-doctor skill; nothing to refresh\n' >&2
+  exit 0
+fi
+[ -n "$package_directory" ] || package_directory="$first_web_directory"
+if [ -z "$package_directory" ]; then
+  printf 'install-react-doctor: no package in .gaia/packages.json declares "stack": "web"; nothing to install\n' >&2
+  exit 0
+fi
+skill_directory="$package_directory/.claude/skills/react-doctor"
 
 # The installer's dependency resolution fills optional peer slots of other packages in
 # pnpm-lock.yaml, which `pnpm remove` leaves behind. The snapshot is restored byte for byte on

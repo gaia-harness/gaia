@@ -1,6 +1,6 @@
 ---
 type: module
-path: frontend/test/mocks/, frontend/test/worker.ts, frontend/test/test.server.ts, frontend/vite.config.ts, frontend/app/entry.client.tsx, frontend/app/entry.server.tsx
+path: apps/web/test/mocks/, apps/web/test/worker.ts, apps/web/test/test.server.ts, apps/web/vite.config.ts, apps/web/app/entry.client.tsx, apps/web/app/entry.server.tsx
 status: active
 language: typescript
 purpose: API mocking layer shared across Vitest, Storybook, and dev
@@ -29,7 +29,7 @@ This means tests exercise the full request path: route loader → service functi
 
 **MSW handler URLs must exactly match the URLs the service layer constructs at runtime.**
 
-A request URL is built by joining `API_URL` (env, e.g. `http://localhost:3001/api/`) with a path token from the domain's `{NAME}_URLS` constant (e.g. `'resources/:id'`). `ky` does the join in the service layer. The handler must use the same logic; the `url()` helper in `frontend/test/mocks/url.ts` mirrors ky's prefix-join (strips trailing slash from prefix, leading slash from path, joins with exactly one `/`).
+A request URL is built by joining `API_URL` (env, e.g. `http://localhost:3001/api/`) with a path token from the domain's `{NAME}_URLS` constant (e.g. `'resources/:id'`). `ky` does the join in the service layer. The handler must use the same logic; the `url()` helper in `apps/web/test/mocks/url.ts` mirrors ky's prefix-join (strips trailing slash from prefix, leading slash from path, joins with exactly one `/`).
 
 ```ts
 import {http} from 'msw/http';
@@ -42,12 +42,12 @@ http.get(url(RESOURCES_URLS.resources), () => { ... });
 > [!warning] URL drift = escaped requests
 > If a handler URL doesn't match the ky-constructed URL, MSW passes the request through (`onUnhandledFrame: 'bypass'`). The request goes to the real network, fails silently in tests, and appears as a flaky fetch error rather than a mock miss.
 
-The fix: both the service request functions and the handlers import the same per-domain `{NAME}_URLS` from `frontend/app/services/gaia/{domain}/urls.ts`. **Never hardcode paths in handler files.** When a URL constant changes, both sides update together.
+The fix: both the service request functions and the handlers import the same per-domain `{NAME}_URLS` from `apps/web/app/services/gaia/{domain}/urls.ts`. **Never hardcode paths in handler files.** When a URL constant changes, both sides update together.
 
 ## Three runtime modes
 
 - **Dev**: with `MSW_ENABLED=true` in `.env`, browser and SSR requests both go through the msw/vite plugin's network; wiring in [[MSW]].
-- **Vitest**: Node `setupServer` via `frontend/test/test.server.ts`, registered in `frontend/test/setup.ts`. `beforeAll → listen`, `afterEach → resetHandlers`, `afterAll → close`.
+- **Vitest**: Node `setupServer` via `apps/web/test/test.server.ts`, registered in `apps/web/test/setup.ts`. `beforeAll → listen`, `afterEach → resetHandlers`, `afterAll → close`.
 - **Playwright**: the Playwright web server is `pnpm dev`, so with `MSW_ENABLED=true` its requests are mocked on both the browser and SSR sides (see [[MSW]]).
 
 ## Writing a new mock
@@ -60,11 +60,11 @@ If you're editing an existing mock by hand instead of scaffolding, the invariant
 - Mock data keeps the server's wire shape: camelCase by default, snake_case when the layer's `create()` sets `isSnakeCaseEnabled: true` (the service layer then converts to camelCase)
 - New collections register their `reset*()` in `resetTestData()`
 
-See the `api-service` rule (`frontend/.claude/rules/api-service.md`) for the full contract and [[API Service Pattern]] for the service side.
+See the `api-service` rule (`apps/web/.claude/rules/api-service.md`) for the full contract and [[API Service Pattern]] for the service side.
 
 ## Database collection pattern
 
-Each resource owns its `@msw/data` `Collection` in `frontend/test/mocks/{resource}/data.ts`. `frontend/test/mocks/database.ts` re-exports those collections and aggregates each domain's `reset*()` into one `resetTestData()`.
+Each resource owns its `@msw/data` `Collection` in `apps/web/test/mocks/{resource}/data.ts`. `apps/web/test/mocks/database.ts` re-exports those collections and aggregates each domain's `reset*()` into one `resetTestData()`.
 
 Reads and removals on a `Collection` are sync (`findFirst`, `findMany`, `delete`, `deleteMany`, `clear`); only `create`, `createMany`, `update`, and `updateMany` are async, and awaiting a sync call fails the `await-thenable` lint rule. The query API is predicate-based:
 
@@ -80,19 +80,19 @@ await things.update((q) => q.where({id: 'abc'}), {
 
 ### When `resetTestData()` runs
 
-`resetTestData()` is async and runs automatically in an `afterEach` hook in `frontend/test/setup.ts`, the setup file of the `node` Vitest project. Every test in that project starts from a freshly wiped and re-seeded database; no manual reset is needed.
+`resetTestData()` is async and runs automatically in an `afterEach` hook in `apps/web/test/setup.ts`, the setup file of the `node` Vitest project. Every test in that project starts from a freshly wiped and re-seeded database; no manual reset is needed.
 
 ```ts
-// frontend/test/setup.ts
+// apps/web/test/setup.ts
 afterEach(resetTestData);
 ```
 
 Stories and browser-project tests run neither the MSW node server nor this reset. Stories mock the API through the wired `msw-storybook-addon`: a story installs handlers in its `beforeEach` through the addon's CSF Next API, and a handler that serves a mutation reads the typed JSON body with `request.json()` (never `formData`) and answers `{data}`. Stories read seed data from the `@msw/data` collections directly, so they treat those collections as read-only.
 
 > [!warning] `resetHandlers` ≠ `resetTestData`
-> `frontend/test/test.server.ts` calls `server.resetHandlers()` in its own `afterEach`; this resets runtime handler overrides but **not** the database. The database reset is the separate `resetTestData()` wired into `frontend/test/setup.ts`.
+> `apps/web/test/test.server.ts` calls `server.resetHandlers()` in its own `afterEach`; this resets runtime handler overrides but **not** the database. The database reset is the separate `resetTestData()` wired into `apps/web/test/setup.ts`.
 
-`frontend/test/mocks/faker.ts` exports a seeded `faker` instance (seed `7`) so generated values are deterministic across runs.
+`apps/web/test/mocks/faker.ts` exports a seeded `faker` instance (seed `7`) so generated values are deterministic across runs.
 
 ## Common pitfalls
 
@@ -100,8 +100,8 @@ Stories and browser-project tests run neither the MSW node server nor this reset
 - **Test sees stale data after mutation** → the test runs outside the `node` project (a story or browser test), where the automatic `afterEach` `resetTestData()` never runs; keep stories and browser tests from mutating the collections.
 - **MSW not active in dev** → `MSW_ENABLED` missing or false in `.env`.
 - **Server-side requests bypass mock in dev** → `MSW_ENABLED` is not truthy in the server's environment, or the request URL matches no handler (`onUnhandledFrame: 'bypass'` lets it through).
-- **Handler added but never triggered** → not registered in `frontend/test/mocks/index.ts`.
+- **Handler added but never triggered** → not registered in `apps/web/test/mocks/index.ts`.
 - **Runtime override persists across tests** → `server.use()` was called outside a test body. Don't.
 - **Playwright ignores mocks** → `MSW_ENABLED` is not `true` in the environment that launches the `pnpm dev` web server.
 
-For the current folder structure and file inventory, list `frontend/test/mocks/`.
+For the current folder structure and file inventory, list `apps/web/test/mocks/`.

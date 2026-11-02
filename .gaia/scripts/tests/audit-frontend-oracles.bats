@@ -173,7 +173,7 @@ invoked() {
 }
 
 @test "a nested package.json and a pnpm-workspace.yaml each run knip" {
-  branch_with frontend/package.json
+  branch_with apps/web/package.json
   run_oracles "$BASE_SHA"
   [ "$(invoked pnpm)" -eq 1 ]
   git -C "$SANDBOX" checkout -q main

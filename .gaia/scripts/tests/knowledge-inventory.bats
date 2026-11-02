@@ -25,11 +25,11 @@ setup() {
   MEMORY="$HOME/.claude/projects/$(printf %s "$PROJECT" | sed 's/[^A-Za-z0-9-]/-/g')/memory"
   USER_AGENT_MEMORY="$HOME/.claude/agent-memory"
   mkdir -p "$PROJECT/.gaia/vendor" "$PROJECT/.claude/rules" "$PROJECT/wiki/concepts" \
-    "$PROJECT/.claude/agent-memory/reviewer" "$PROJECT/frontend" "$MEMORY" "$USER_AGENT_MEMORY/helper"
+    "$PROJECT/.claude/agent-memory/reviewer" "$PROJECT/apps/web" "$MEMORY" "$USER_AGENT_MEMORY/helper"
   git -C "$PROJECT" init -q
   jq -n '{version: "2.0.0", files: {".claude/rules/quality-gate.md": "owned", "CLAUDE.md": "shared", "wiki/concepts/Page.md": "wiki-owned"}}' \
     >"$PROJECT/.gaia/manifest.json"
-  jq -n '{package: "pkg", version: "1.0.0", target: "frontend/.claude/skills/playwright-cli", files: {}}' \
+  jq -n '{package: "pkg", version: "1.0.0", target: "apps/web/.claude/skills/playwright-cli", files: {}}' \
     >"$PROJECT/.gaia/vendor/playwright-cli.json"
   printf '**/.claude/agent-memory/\n**/.claude/skills/react-doctor/\n' >"$PROJECT/.gitignore"
 
@@ -43,7 +43,7 @@ setup() {
   printf 'index\n' >"$PROJECT/wiki/index.md"
   printf 'page\n' >"$PROJECT/wiki/concepts/Page.md"
   printf 'root\n' >"$PROJECT/CLAUDE.md"
-  printf 'nested\n' >"$PROJECT/frontend/CLAUDE.md"
+  printf 'nested\n' >"$PROJECT/apps/web/CLAUDE.md"
 }
 
 EXPECTED_COUNTS="memory=2 user_agent_memory=1 project_agent_memory=1 rules=2 wiki=2 claude_md=2"
@@ -130,12 +130,12 @@ class_of() {
 
 @test "classify: in-repo paths take the ownership classifier's classes" {
   inventory classify "$PROJECT/.claude/rules/quality-gate.md" "$PROJECT/.claude/rules/house.md" \
-    "$PROJECT/frontend/.claude/skills/playwright-cli/SKILL.md" "$PROJECT/.claude/skills/react-doctor/SKILL.md" \
+    "$PROJECT/apps/web/.claude/skills/playwright-cli/SKILL.md" "$PROJECT/.claude/skills/react-doctor/SKILL.md" \
     "$PROJECT/wiki/concepts/Page.md"
   [ "$status" -eq 0 ]
   [ "$(class_of .claude/rules/quality-gate.md)" = "gaia-shipped" ]
   [ "$(class_of .claude/rules/house.md)" = "adopter" ]
-  [ "$(class_of frontend/.claude/skills/playwright-cli/SKILL.md)" = "third-party" ]
+  [ "$(class_of apps/web/.claude/skills/playwright-cli/SKILL.md)" = "third-party" ]
   [ "$(class_of .claude/skills/react-doctor/SKILL.md)" = "ignored" ]
   [ "$(class_of wiki/concepts/Page.md)" = "adopter" ]
 }

@@ -734,16 +734,16 @@ EOF
 }
 
 # SPEC-092 C5 exempt row: audit-scope.sh reads no package descriptor, because the
-# `*/*` arm already puts every nested path in scope. A frontend/ path therefore
+# `*/*` arm already puts every nested path in scope. A apps/web/ path therefore
 # classifies exactly as its retired root form does, and no registry state can
-# move it (the second test pins that nothing here reads one). frontend/.claude/**
-# and frontend/CLAUDE.md stay in scope on purpose (C14: code-audit-frontend
+# move it (the second test pins that nothing here reads one). apps/web/.claude/**
+# and apps/web/CLAUDE.md stay in scope on purpose (C14: code-audit-frontend
 # claims them), so a package harness diff is never allowlisted past review.
-@test "package paths: frontend/ classifies in scope like the root form" {
-  run bash -c '. "$1"; for p in frontend/app/routes/x.tsx app/routes/x.tsx frontend/.claude/rules/x.md frontend/CLAUDE.md frontend/public/logo.svg; do audit_out_of_scope_allowlisted "$p" && echo "allowlisted:$p" || echo "in-scope:$p"; done' _ "$SCOPE_LIBRARY"
+@test "package paths: apps/web/ classifies in scope like the root form" {
+  run bash -c '. "$1"; for p in apps/web/app/routes/x.tsx app/routes/x.tsx apps/web/.claude/rules/x.md apps/web/CLAUDE.md apps/web/public/logo.svg; do audit_out_of_scope_allowlisted "$p" && echo "allowlisted:$p" || echo "in-scope:$p"; done' _ "$SCOPE_LIBRARY"
   [ "$status" -eq 0 ]
   local path
-  for path in frontend/app/routes/x.tsx app/routes/x.tsx frontend/.claude/rules/x.md frontend/CLAUDE.md frontend/public/logo.svg; do
+  for path in apps/web/app/routes/x.tsx app/routes/x.tsx apps/web/.claude/rules/x.md apps/web/CLAUDE.md apps/web/public/logo.svg; do
     grep -qxF "in-scope:$path" <<<"$output" || { echo "$path not in scope"; return 1; }
   done
 }
@@ -903,20 +903,20 @@ GLOB_MATCH_TABLE=$'**/x\tx\tmatch
 **/x\ta/b/x\tmatch
 **/x\ta/b/xy\tnomatch
 *.config.ts\tvite.config.ts\tmatch
-*.config.ts\tfrontend/vite.config.ts\tnomatch
+*.config.ts\tapps/web/vite.config.ts\tnomatch
 *.config.ts\tviteXconfigXts\tnomatch
-frontend/*.config.ts\tfrontend/vite.config.ts\tmatch
-frontend/*.config.ts\tfrontend/sub/vite.config.ts\tnomatch
-frontend/app/**/tests/**\tfrontend/app/a/tests/b.ts\tmatch
-frontend/app/**/tests/**\tfrontend/app/a/b.ts\tnomatch
-frontend/.claude/**\tfrontend/.claude/rules/a.md\tmatch
-frontend/.claude/**\tfrontend/CLAUDE.md\tnomatch
+apps/web/*.config.ts\tapps/web/vite.config.ts\tmatch
+apps/web/*.config.ts\tapps/web/sub/vite.config.ts\tnomatch
+apps/web/app/**/tests/**\tapps/web/app/a/tests/b.ts\tmatch
+apps/web/app/**/tests/**\tapps/web/app/a/b.ts\tnomatch
+apps/web/.claude/**\tapps/web/.claude/rules/a.md\tmatch
+apps/web/.claude/**\tapps/web/CLAUDE.md\tnomatch
 .github/workflows/**\t.github/workflows/ci.yml\tmatch
 tsconfig*.json\ttsconfig.app.json\tmatch
-tsconfig*.json\tfrontend/tsconfig.json\tnomatch
-package.json\tfrontend/package.json\tnomatch
+tsconfig*.json\tapps/web/tsconfig.json\tnomatch
+package.json\tapps/web/package.json\tnomatch
 .npmrc\tXnpmrc\tnomatch
-frontend/**\tfrontend/a/b/c.ts\tmatch'
+apps/web/**\tapps/web/a/b/c.ts\tmatch'
 
 # Prints one line per pair on which the matcher in <library> disagrees with the
 # table or with the ownership classifier in the same library. Empty means they

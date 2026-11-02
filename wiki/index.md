@@ -70,7 +70,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[shadcn]]
 - [[gaia-lint]]
 - [[knip]]
-- [[react-doctor]]: React security/perf/a11y scanner (`npx`); advisory, single canonical `frontend/doctor.config.ts`, duplicate-config guard.
+- [[react-doctor]]: React security/perf/a11y scanner (`npx`); advisory, single canonical `apps/web/doctor.config.ts`, duplicate-config guard.
 - [[pnpm-audit]]: dependency-CVE advisory oracle (`pnpm audit --json`); read-only, advisory, baseline-scoped.
 - [[pnpm-overrides]]: applying `overrides`/security-floor changes needs `pnpm dedupe`; `pnpm install` short-circuits "Already up to date".
 - [[Vitest]]
@@ -119,6 +119,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Claude Integration Fitness]]: why `/gaia-fitness` is a deterministic linter, what it grades, and its ownership-checked heal protocol.
 - [[TDD RED Verification]]: mechanical enforcement that a new test was observed failing before commit; RED-observation ledger + two hooks.
 - [[Determinism Classifier]]: per-file AST signal labelling a source file strict (RED-gated) or emergent (advisory audit); versioned DOM-API allowlist, file-granular.
+- [[Workspace Standard For Apps And Packages]]
 - [[Worthiness And Wiki Before The Audit]]: the worthiness step and wiki promotion run before the first audit round; `file-tech-debt.sh file` refuses a non-security finding on branch-authored code.
 - [[Worthiness Audit]]: advisory two-axis (honesty + worthiness) review of emergent-surface tests; fresh-context reviewer proposes keep/fix/delete, deletes human-gated, audit ledger sibling to the RED ledger; stories audited as emergent tests; two-tier end-of-task surfacing.
 - [[Worthiness Presence Gate]]: merge-time `gh pr merge` hook requiring each changed emergent test to carry a worthiness-ledger line matching its current content; presence + signal match only (never the verdict), scoped to the PR's changed emergent tests, fail-open.
@@ -160,7 +161,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Project Config]]: `.gaia/project.json`, the committed team-shared settings file (sandbox recommendation, isolation policy, setup decisions), its writers and readers, and why `/update-gaia`'s merge never overwrites it while its setup drift step records decisions into it.
 - [[Migration Notes]]: the authoring guide for `.gaia/migrations/`: the note format, how `/update-gaia` selects notes from the verified bundle, and what the blocking and after-merge modes oblige an author to do.
 - [[Setup Features]]: the shipped setup feature list `.gaia/setup-features.json`, the project and machine decision records, and how `/gaia-init`, `/setup-gaia`, `/update-gaia` and the statusline use them.
-- [[Package Descriptor]]: the package registry `.gaia/packages.json` and per-package `gaia.package.json`; who reads them, the fail-closed rule, and the frontend launch scope.
+- [[Package Descriptor]]: the package registry `.gaia/packages.json` and per-package `gaia.package.json`; who reads them, the fail-closed rule, launch scope, and the one procedure for adding an app or package.
 - [[Customizing GAIA]]: where each adopter customization lives, which files are safe to edit, and the check to run after; start here to customize, extend, turn off or change GAIA.
 - [[Claude Integration Conventions]]: Conventions for Claude's config surface: extension points, monorepo retrofit, service swaps, domain isolation.
 - [[Local Working State]]: the gitignored `.gaia/local/` working-state folder and its pointer to the state registry; the SessionStart janitor's wiki-landing catch-up.

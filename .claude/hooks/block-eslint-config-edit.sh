@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse Edit|Write|MultiEdit hook: guard eslint.config.{js,cjs,mjs,ts}
 # at any path. The path gate matches on the filename, so it works wherever the
-# config lives (frontend/eslint.config.mjs in GAIA).
+# config lives (apps/web/eslint.config.mjs in GAIA).
 #
 # The guard is a filename match, and what a match buys is a QUESTION rather than
 # a verdict: every edit to the file prompts the operator, whatever the edit does.

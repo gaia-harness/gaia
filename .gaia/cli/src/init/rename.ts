@@ -26,10 +26,13 @@
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
+import {
+  resolveScaffoldTarget,
+  splitPackageFlag,
+} from '../scaffold/resolve-target.js';
 import {structuredError} from '../stderr.js';
 import {takeValue} from '../util/argv.js';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
-import {resolvePackageTarget} from '../util/package-target.js';
 import {escapeJsLiteralValue} from './util/js-literal.js';
 import type {JsLiteralQuote} from './util/js-literal.js';
 import {markStepCompleted} from './util/state.js';
@@ -38,7 +41,7 @@ import {titleFlagError} from './util/title-flag.js';
 const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
 
   Rename the project across package.json, CLAUDE.md, and seeded language
-  files (Step 3 of /gaia-init).
+  files (Step 3 of /gaia-init). --package <name> picks the web member.
 
   Required flags:
     --title <T>     Project title (Title Case, e.g. "Hello World").
@@ -49,7 +52,7 @@ const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
     1  user-correctable error (missing flags, invalid kebab, no package.json,
        no CLAUDE.md heading)
     2  unexpected (filesystem failure)
-    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+    30 the package registry (.gaia/packages.json) cannot resolve the web app
        package
 `;
 
@@ -353,7 +356,10 @@ export const run = (
     return EXIT_CODES.OK;
   }
 
-  const parsed = parseFlags(argv);
+  const split = splitPackageFlag(argv, 'init rename');
+
+  if (split === undefined) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  const parsed = parseFlags(split.argv);
 
   if (!parsed.ok) {
     structuredError({
@@ -366,17 +372,9 @@ export const run = (
   }
 
   const cwd = options.cwd ?? process.cwd();
-  const target = resolvePackageTarget(cwd);
+  const target = resolveScaffoldTarget(cwd, 'init rename', split.packageName);
 
-  if (!target.ok) {
-    structuredError({
-      code: 'gaia_packages',
-      message: target.message,
-      subcommand: 'init rename',
-    });
-
-    return EXIT_CODES.CONFIG_INVALID;
-  }
+  if (target === undefined) return EXIT_CODES.CONFIG_INVALID;
 
   try {
     // Ahead of every write: a knowable precondition should not fail the run

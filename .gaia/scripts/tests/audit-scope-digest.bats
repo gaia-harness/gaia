@@ -166,14 +166,14 @@ start_feature() {
 
 @test "--capture after a clean catch-up of the base returns the digest it returned before" {
   start_feature
-  mkdir -p "$ROOT/frontend/app"
-  printf 'export const own = 1;\n' >"$ROOT/frontend/app/own.ts"
-  git -C "$ROOT" add frontend/app/own.ts
+  mkdir -p "$ROOT/apps/web/app"
+  printf 'export const own = 1;\n' >"$ROOT/apps/web/app/own.ts"
+  git -C "$ROOT" add apps/web/app/own.ts
   git -C "$ROOT" commit --quiet -m "branch work"
   before="$("$SCRIPT" --capture --recapture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
   [ "${#before}" -eq 64 ]
 
-  catchup_base_commit frontend/app/incoming.ts "export const incoming = 1;"
+  catchup_base_commit apps/web/app/incoming.ts "export const incoming = 1;"
   catchup_merge_base
   after="$("$SCRIPT" --capture --recapture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
   [ "$after" = "$before" ]

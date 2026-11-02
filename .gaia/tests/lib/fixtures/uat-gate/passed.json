@@ -30,7 +30,7 @@
           "actualWorkers": 1
         },
         "name": "",
-        "outputDir": "/work/frontend/test-results",
+        "outputDir": "/work/apps/web/test-results",
         "repeatEach": 1,
         "retries": 0,
         "testDir": "/work/e2e",

@@ -244,9 +244,9 @@ if [ -n "$coverage_universe" ]; then
   # The marker pair below stays at column 0, like the pair above: the
   # allowlist reader strips comment lines, and the scrub removes the block.
   zero_match_allowlist="$(sed -e '/^#/d' <<'ALLOWLIST'
-frontend/*.config.mts
-frontend/*.config.cjs
-frontend/*.config.js
+apps/web/*.config.mts
+apps/web/*.config.cjs
+apps/web/*.config.js
 *.config.ts
 *.config.mts
 *.config.cjs

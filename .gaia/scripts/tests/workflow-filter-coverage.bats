@@ -1262,7 +1262,7 @@ pnpm-workspace.yaml
 package.json
 .node-version
 .npmrc
-frontend/package.json
+apps/web/package.json
 .gaia/tests/concurrency/**
 .gaia/state-registry.json
 .gaia/cli/src/**
@@ -1333,13 +1333,13 @@ instantiate_glob() {
 
 @test "a frontend-only change arms no leg" {
   require_yaml_parser
-  [ "$(filter_coverage filtermatch "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" code,scoped,sandbox,commitlint frontend/app/root.tsx)" = "no-match" ]
+  [ "$(filter_coverage filtermatch "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" code,scoped,sandbox,commitlint apps/web/app/root.tsx)" = "no-match" ]
 }
 
 @test "the install inputs arm commitlint, and docs, hooks, CLI source and wiki pages are change-scoped" {
   require_yaml_parser
   local workflow="$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" path gaps=""
-  for path in pnpm-lock.yaml frontend/package.json; do
+  for path in pnpm-lock.yaml apps/web/package.json; do
     [ "$(filter_coverage filtermatch "$workflow" commitlint "$path")" = "match" ] || gaps="${gaps}  ${path} does not match commitlint"$'\n'
   done
   for path in .claude/skills/x/SKILL.md .claude/commands/x.md .claude/agents/x.md .claude/hooks/x.sh .gaia/cli/src/x.ts wiki/x.md; do

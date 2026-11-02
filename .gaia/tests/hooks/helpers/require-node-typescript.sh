@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Shared dependency gate for the node-dependent RED suites under
-# .gaia/tests/hooks: red-ledger-lib, capture-red-observations,
-# red-verify-commit-check, red-verify-e2e and worthiness-presence-check.
+# Shared dependency gate for the node-dependent suites: the RED suites under
+# .gaia/tests/hooks (red-ledger-lib, capture-red-observations,
+# red-verify-commit-check, red-verify-e2e and worthiness-presence-check), and
+# the suites that run the CLI from source through tsx, which the CI root
+# install provides under .gaia/cli/node_modules.
 #
-# They all drive .gaia/scripts/red-ledger/extract-test-signals.mjs;
+# The RED suites all drive .gaia/scripts/red-ledger/extract-test-signals.mjs;
 # red-verify-commit-check, red-verify-e2e and worthiness-presence-check also
 # drive .gaia/scripts/classifier/classify-determinism.mjs. Both resolve
 # `typescript` through createRequire against the repo root's node_modules. With
@@ -21,7 +23,7 @@
 #   }
 #
 # WHY THE CI BRANCH FAILS RATHER THAN SKIPPING, which is the whole point of
-# this file. Each of the suites above previously spelled the gate inline as
+# this file. Each of the RED suites above previously spelled the gate inline as
 #
 #   [ -d "$ROOT/node_modules/typescript" ] || skip "typescript not installed ..."
 #
@@ -74,9 +76,9 @@ require_node_typescript() {
     # and Actions parses a workflow command only at column 0, so the
     # annotation that spelling promises would never render. The `return 1` is
     # what gates.
-    echo "typescript is not installed under $root on a CI runner; this node-dependent RED suite would skip to green. Check the 'Setup Node for the node-dependent RED suites' step in .github/workflows/audit-ci-tests.yml." >&2
+    echo "typescript is not installed under $root on a CI runner; this node-dependent suite would skip to green. Check the 'Setup Node for the node-dependent RED suites' step in .github/workflows/audit-ci-tests.yml." >&2
     return 1
   fi
 
-  skip "typescript not installed (node-dependent RED suite)"
+  skip "typescript not installed (node-dependent suite)"
 }

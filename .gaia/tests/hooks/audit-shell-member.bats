@@ -46,7 +46,7 @@ adopter_roster() {
 @test "an adopter clone routes shell, bats, hooks, git hooks and composite-action scripts to the adopter shell member" {
   local roster path owner
   roster="$(adopter_roster)"
-  for path in scripts/build.sh tests/shell/a.bats .claude/hooks/x.sh .githooks/pre-commit .github/actions/x/run.sh frontend/app/x.sh; do
+  for path in scripts/build.sh tests/shell/a.bats .claude/hooks/x.sh .githooks/pre-commit .github/actions/x/run.sh apps/web/app/x.sh; do
     owner="$(owner_of "$roster" "$path")"
     [ "$owner" = code-audit-shell ] || { echo "$path -> $owner" >&2; return 1; }
   done
