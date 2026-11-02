@@ -26,7 +26,7 @@ Branch on its first word:
 
 **`OK`:** continue.
 
-**`MISSING`:** tell the user "Installing pnpm globally: `corepack disable pnpm`, if corepack is here, then `npm install -g pnpm@latest`", then run the block below. Otherwise continue.
+**`MISSING`:** tell the user "Installing pnpm globally: `corepack disable pnpm`, if corepack is here, then `npm install -g pnpm@latest`", then run the block below, then continue.
 
 **`BELOW`:** a stale pnpm. Do not silently proceed. Ask with `AskUserQuestion` for consent before touching the user's toolchain, naming the installed version and the floor from that line, with exactly these two options:
 
@@ -42,7 +42,7 @@ npm install -g pnpm@latest
 
 When `npm install -g` fails with `EACCES` or `EPERM`, npm cannot write to its global prefix. Stop and tell the user: "Do not use sudo. Point npm at a folder you own, then re-run: `npm config set prefix ~/.npm-global`, then `export PATH="$HOME/.npm-global/bin:$PATH"` (add the export line to ~/.zshrc or ~/.bashrc too), or install Node with a version manager (nvm, fnm, Volta)." On Windows: "Do not re-run as Administrator. Install Node with a version manager (fnm, Volta), then re-run." On any other failure, stop and report the error.
 
-It is a global install, so the user is always told. A pnpm run directly switches itself to the version `package.json` pins; under corepack it never switches, and stops with `ERR_PNPM_BAD_PM_VERSION` when corepack runs any other version. So the block only removes corepack's `pnpm` shim and never enables corepack, and the one npm-installed pnpm is the one this check updates.
+It is a global install, so the user is always told. A pnpm run directly switches itself to the version `package.json` pins; under corepack it never switches, and stops with `ERR_PNPM_BAD_PM_VERSION` when corepack runs any other version. So the block only removes corepack's `pnpm` shim and never enables corepack.
 
 If the check still prints `BELOW`, a non-corepack pnpm (Homebrew, the standalone installer) is shadowing the update earlier on `PATH`. Show which binary wins with `command -v pnpm` and stop: "pnpm <version> at <path> is older than the required <floor> and takes precedence on your PATH. Update or remove it (e.g. `brew upgrade pnpm`, `pnpm self-update`), then re-run."
 
