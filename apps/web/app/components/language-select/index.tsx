@@ -84,6 +84,10 @@ const LanguageSelect = ({
     if (event.key === 'Enter') await submitLanguage();
   };
 
+  const handleBlurSelect = async () => {
+    await submitLanguage();
+  };
+
   const handlePointerDownSelect = () => {
     isKeyboardInputRef.current = false;
   };
@@ -101,7 +105,7 @@ const LanguageSelect = ({
         aria-label={t('language')}
         defaultValue={language}
         name="language"
-        onBlur={submitLanguage}
+        onBlur={handleBlurSelect}
         onKeyDown={handleKeyDownSelect}
         onPointerDown={handlePointerDownSelect}
         size="sm"
