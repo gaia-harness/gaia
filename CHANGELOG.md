@@ -25,6 +25,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Changed
 
+- **New projects ship a leaner test suite:** the app template's Vitest suite drops from 492 to 379 tests and its Playwright run from 123 to 100. Tests another test already covers are gone, and the tests that guard GAIA's own wiring no longer ship, though GAIA's CI still runs them. Tests that checked markup or class names now assert behavior (#3250)
 - **The app moves from `frontend/` to `apps/web`, and its package is named `web`:** the harness now treats the app as one workspace member among any number of apps and libraries, and the root `typecheck`, `lint` and `test:ci` scripts run across all of them. **Action required:** `/update-gaia` stops at the blocking 2.4.0 migration note, which performs the move, rewrites the registry and descriptor, and keeps your history; follow it. Ignored env files do not travel with the move, so on every other clone move `frontend/.env*` to `apps/web/` by hand (#3234)
 - `/gaia-init` and `/setup-gaia` install pnpm with `npm install -g pnpm@latest` instead of corepack, which on Node 22.22 left a broken pnpm (#3206)
 - `/setup-gaia` now catches a stale pnpm on a clone, and `/update-gaia` refreshes the React Doctor skill after its merge (#3206)

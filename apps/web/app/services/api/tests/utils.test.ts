@@ -122,17 +122,6 @@ describe('api utils', () => {
     );
   });
 
-  test('requestToSnakeCase converts a JSON body to snake_case', async () => {
-    const convertedRequest = await runRequestToSnakeCase(
-      JSON.stringify({helloWorld: 1})
-    );
-
-    expect(convertedRequest).toBeInstanceOf(Request);
-    expect(await (convertedRequest as Request).text()).toBe(
-      '{"hello_world":1}'
-    );
-  });
-
   test('requestToSnakeCase forwards a non-JSON body unchanged', async () => {
     const convertedRequest = await runRequestToSnakeCase('plain text body');
 

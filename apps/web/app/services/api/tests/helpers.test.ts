@@ -60,14 +60,6 @@ describe('attempt', () => {
     ]);
   });
 
-  test('plain Error: rejects (re-thrown)', async () => {
-    await expect(
-      attempt(async () => {
-        throw new Error('boom');
-      })
-    ).rejects.toThrow('boom');
-  });
-
   test('unknown non-Error throw: resolves to [{status: 500, statusText: "Unknown error"}, undefined]', async () => {
     const attemptOutcome = await attempt(async () => {
       throw 'something unexpected';

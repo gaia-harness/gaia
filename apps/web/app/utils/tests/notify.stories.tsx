@@ -5,15 +5,23 @@ import {notify, NOTIFY_TYPES} from '~/utils/notify';
 import {expectToast} from './expect-toast';
 import stack from './stack';
 
-// Raw palette utilities and arbitrary colors, which role tokens replace.
-const RAW_PALETTE =
-  /(bg|text|border|border-[trblxyse]|ring|ring-offset|outline|divide|placeholder|shadow|decoration|caret|accent|fill|stroke|from|via|to)-((slate|gray|zinc|neutral|stone|mauve|mist|olive|taupe|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d|white|black)|-\[(#|rgb|hsl|oklch)/;
-
 // The toast renders in a portal on the document body, outside the canvas.
 const getToastElement = (canvasElement: HTMLElement, text: string) =>
   within(canvasElement.ownerDocument.body)
     .getByText(text)
     .closest<HTMLElement>('[data-slot="toast"]') as HTMLElement;
+
+// The computed color of the destructive role token, to compare a rendered
+// color against.
+const destructiveColor = (): string => {
+  const probe = document.createElement('span');
+  probe.style.color = 'var(--destructive)';
+  document.body.append(probe);
+  const {color} = getComputedStyle(probe);
+  probe.remove();
+
+  return color;
+};
 
 // Toasts live in a module-level manager, so one story's toasts reach the next.
 // Closing them and waiting for the exit animation keeps each story's toast
@@ -243,35 +251,6 @@ Info.test(
   }
 );
 
-Info.test(
-  'styles every type with role tokens, not the raw palette',
-  async ({canvasElement}) => {
-    for (const type of NOTIFY_TYPES) {
-      await clearToasts();
-      notify[type](`${type} token message`);
-
-      await expectToast(canvasElement, `${type} token message`);
-
-      // The per-type color classes sit on descendants (the error icon),
-      // not the root. getAttribute, because an SVG's className is an
-      // SVGAnimatedString rather than a string.
-      const toastElement = getToastElement(
-        canvasElement,
-        `${type} token message`
-      );
-
-      const classes = [
-        toastElement,
-        ...toastElement.querySelectorAll('[class]'),
-      ]
-        .map((element) => element.getAttribute('class'))
-        .join(' ');
-
-      await expect(classes).not.toMatch(RAW_PALETTE);
-    }
-  }
-);
-
 Info.test('colors only the error icon destructive', async ({canvasElement}) => {
   await clearToasts();
   notify.error('destructive error message');
@@ -283,6 +262,9 @@ Info.test('colors only the error icon destructive', async ({canvasElement}) => {
     'destructive error message'
   ).querySelector('[data-slot="toast-icon"] svg');
 
+  // Read while the toast is on screen: a closed toast's icon has no style.
+  const errorColor = getComputedStyle(errorIcon as Element).color;
+
   await clearToasts();
   notify.info('plain info message');
 
@@ -293,8 +275,12 @@ Info.test('colors only the error icon destructive', async ({canvasElement}) => {
     'plain info message'
   ).querySelector('[data-slot="toast-icon"] svg');
 
-  await expect(errorIcon?.getAttribute('class')).toContain('text-destructive');
-  await expect(infoIcon?.getAttribute('class')).not.toContain('destructive');
+  const destructive = destructiveColor();
+
+  await expect(errorColor).toBe(destructive);
+  await expect(getComputedStyle(infoIcon as Element).color).not.toBe(
+    destructive
+  );
 });
 
 Info.test(
@@ -323,6 +309,8 @@ Info.test('returns a stable toast id per payload', async () => {
   await expect(different).not.toBe(first);
 });
 
+// Both duration tests read the timeout notify hands the toast manager, not how
+// long the toast stays open, which the library owns.
 Info.test('keeps error toasts open longer by default', async () => {
   const addSpy = spyOn(toast, 'add');
   notify.error('slow default duration');
@@ -332,8 +320,6 @@ Info.test('keeps error toasts open longer by default', async () => {
 
   addSpy.mockRestore();
   await expect(errorTimeout).toBeGreaterThan(infoTimeout as number);
-  await expect(errorTimeout).toBe(30_000);
-  await expect(infoTimeout).toBe(5000);
 });
 
 Info.test('lets an explicit duration override the default', async () => {

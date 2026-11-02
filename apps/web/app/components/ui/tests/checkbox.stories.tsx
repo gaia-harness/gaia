@@ -2,7 +2,6 @@ import {useTranslation} from 'react-i18next';
 import {expect, userEvent} from 'storybook/test';
 import preview from '#.storybook/preview';
 import {Checkbox} from '~/components/ui/checkbox';
-import {Field, FieldLabel} from '~/components/ui/field';
 import {Label} from '~/components/ui/label';
 
 const meta = preview.meta({
@@ -69,19 +68,6 @@ export const WithLabel = meta.story({
   ),
 });
 
-export const WithFieldLabel = meta.story({
-  render: () => (
-    <Field orientation="horizontal">
-      <Checkbox id="accept" />
-      <FieldLabel htmlFor="accept">Accept</FieldLabel>
-    </Field>
-  ),
-});
-
-export const WithClassName = meta.story({
-  render: () => <Checkbox aria-label="Accept" className="mt-2" />,
-});
-
 WithLabel.test('takes its accessible name from the label', async ({canvas}) => {
   await expect(
     canvas.getByRole('checkbox', {name: 'Accept'})
@@ -103,18 +89,3 @@ WithLabel.test(
     await expect(checkbox).toHaveFocus();
   }
 );
-
-WithFieldLabel.test(
-  'takes its accessible name from the field label',
-  async ({canvas}) => {
-    await expect(
-      canvas.getByRole('checkbox', {name: 'Accept'})
-    ).toHaveAccessibleName('Accept');
-  }
-);
-
-WithClassName.test('applies the passed class name', async ({canvas}) => {
-  await expect(canvas.getByRole('checkbox', {name: 'Accept'})).toHaveClass(
-    'mt-2'
-  );
-});

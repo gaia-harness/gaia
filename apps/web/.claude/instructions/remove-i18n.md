@@ -228,7 +228,6 @@ rm -rf \
   apps/web/app/routes/actions.set-language.ts \
   apps/web/app/components/language-select \
   apps/web/.storybook/i18next.ts \
-  apps/web/test/storybook-default-locale.test.tsx \
   apps/web/.playwright/e2e/language-switch-a11y.spec.ts \
   apps/web/.claude/rules/i18n.md \
   apps/web/.claude/agents/code-audit-frontend/react-i18next.md \
