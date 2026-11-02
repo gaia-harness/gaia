@@ -9,14 +9,19 @@
 # does not depend on the committed bundle being rebuilt. Assertion style:
 # .claude/rules/bats-assertions.md.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
+  . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
+  require_node_typescript "$REPO_ROOT"
+  pnpm_path=$(command -v pnpm) || { echo "pnpm is not on PATH; the CLI wrapper cannot run" >&2; return 1; }
   TREE=$(cd "$(mktemp -d -t settings-drift-stub-XXXXXX)" && pwd -P)
   mkdir -p "$TREE/.claude/hooks/lib" "$TREE/.gaia/scripts" "$TREE/.gaia/cli"
   cp "$REPO_ROOT/.claude/settings.json" "$TREE/.claude/settings.json"
   cp "$REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" "$TREE/.claude/hooks/lib/"
   cp "$REPO_ROOT/.gaia/scripts/check-settings-drift.sh" "$TREE/.gaia/scripts/"
-  printf '#!/bin/sh\nexec "%s" -C "%s/.gaia/cli" exec tsx src/index.ts "$@"\n' "$(command -v pnpm)" "$REPO_ROOT" >"$TREE/.gaia/cli/gaia"
+  printf '#!/bin/sh\nexec "%s" -C "%s/.gaia/cli" exec tsx src/index.ts "$@"\n' "$pnpm_path" "$REPO_ROOT" >"$TREE/.gaia/cli/gaia"
   chmod +x "$TREE/.gaia/cli/gaia"
   printf '[{"name":"web","path":"apps/web"},{"name":"optin","path":"libs/optin"},{"name":"api","path":"apps/api"},{"name":"tool","path":"tools/tool"}]\n' >"$TREE/.gaia/packages.json"
   write_member web apps/web ',"stack":"web"'

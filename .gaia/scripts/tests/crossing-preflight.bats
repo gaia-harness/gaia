@@ -14,6 +14,8 @@
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   bash .gaia/scripts/bats5.sh .gaia/scripts/tests/crossing-preflight.bats < /dev/null
 
+# bats file_tags=installed-dependencies
+
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -21,6 +23,8 @@ setup() {
   LEGACY=frontend
   GAIA="${GAIA_CROSSING_CLI:-$BATS_TEST_TMPDIR/gaia}"
   if [ -z "${GAIA_CROSSING_CLI:-}" ]; then
+    . "$BATS_TEST_DIRNAME/../../tests/hooks/helpers/require-node-typescript.sh"
+    require_node_typescript "$CLI_DIR/../.."
     printf '#!/usr/bin/env bash\nexec "%s/node_modules/.bin/tsx" "%s/src/index.ts" "$@"\n' \
       "$CLI_DIR" "$CLI_DIR" >"$GAIA"
     chmod +x "$GAIA"

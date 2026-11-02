@@ -13,6 +13,8 @@
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   bash .gaia/scripts/bats5.sh .gaia/scripts/tests/web-stack-reach.bats < /dev/null
 
+# bats file_tags=installed-dependencies
+
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -26,6 +28,8 @@ setup() {
   if [ -n "${GAIA_CROSSING_CLI:-}" ]; then
     GAIA="$GAIA_CROSSING_CLI"
   else
+    . "$BATS_TEST_DIRNAME/../../tests/hooks/helpers/require-node-typescript.sh"
+    require_node_typescript "$REPO_ROOT"
     GAIA="$BATS_TEST_TMPDIR/gaia"
     printf '#!/usr/bin/env bash\nexec "%s/node_modules/.bin/tsx" "%s/src/index.ts" "$@"\n' \
       "$CLI_DIR" "$CLI_DIR" >"$GAIA"
