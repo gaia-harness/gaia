@@ -25,8 +25,8 @@ setup_file() {
 
 # Entry names only, so a live session's flush growing usage.jsonl changes
 # nothing. The dot-prefixed `.tmp.` names are the writers' temp-then-rename
-# files, which any live session's flush creates in the shared main checkout
-# mid-suite. A missing folder lists nothing.
+# files, which a live session's flush or branch-memo save creates in the
+# shared main checkout mid-suite. A missing folder lists nothing.
 telemetry_names() {
   [ -d "$1" ] || return 0
   ls -A "$1" | { grep -vE '^\..*\.tmp\.' || true; } | LC_ALL=C sort
@@ -223,6 +223,6 @@ binding_refs() { jq -r 'select(.kind == "binding") | .ref' "$TEL/usage.jsonl"; }
 }
 
 @test "the real checkout's telemetry directory is untouched by this suite" {
-  # This file is the suite's last case.
+  # Keep this case last in the file, so it sees every earlier case's writes.
   assert_telemetry_names_unchanged "$BATS_FILE_TMPDIR/real-before" "$REAL/.gaia/local/telemetry"
 }
