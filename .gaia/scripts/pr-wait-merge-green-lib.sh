@@ -21,11 +21,10 @@
 # GAIA-Audit is the one declared context an absence does not hold: GREEN means
 # CI is green, and the merge gate decides the audit. The merge hook denies a
 # merge that owes a marker, and on an out-of-scope or chore(deps) bypass it
-# posts the status itself while `gh pr merge` runs, so waiting for it here
-# would never end; the base branch's protection or ruleset still requires the
-# status to merge. A
-# present GAIA-Audit that is pending holds GREEN, and a failing one ends the
-# wait as CHECK_FAILED like any required check.
+# posts the status itself while `gh pr merge` runs, so waiting for it here would
+# never end; the base branch's protection or ruleset still requires the status
+# to merge. A present GAIA-Audit that is pending holds GREEN, and a failing one
+# ends the wait as CHECK_FAILED like any required check.
 # shellcheck disable=SC2016
 GREEN_JQ='. as $checks | [$declared[] | . as $name | select([$checks[] | select(.name == $name)] | if length == 0 then $name != "GAIA-Audit" else any(.bucket != "pass" and .bucket != "skipping") end)] | if ($declared | length) == 0 then "waiting: no required check is declared" elif length == 0 then "green" else "waiting: " + join(", ") end'
 # Each prints one JSON-encoded context name per line, so the names reach the
@@ -49,11 +48,11 @@ read_api() {
 # Sets DECLARED_REQUIRED to a JSON array of the required contexts <base>
 # declares, the union of branch protection and rulesets since GitHub enforces
 # both, and DECLARED_OTHER_THAN_AUDIT to those names other than GAIA-Audit,
-# comma-separated, and returns 0. On a failed read it sets GREEN_BLOCKER and returns 1, so
-# the caller retries on the next attempt. It never records an unread set as
-# `[]`, which the parent would hold for the rest of the bound and report as no
-# required check declared. Both endpoints answer
-# with read access, unlike the protection endpoint proper, which needs admin.
+# comma-separated, and returns 0. On a failed read it sets GREEN_BLOCKER and
+# returns 1, so the caller retries on the next attempt. It never records an
+# unread set as `[]`, which the parent would hold for the rest of the bound and
+# report as no required check declared. Both endpoints answer with read access,
+# unlike the protection endpoint proper, which needs admin.
 resolve_declared_required() {
   local base="$1" protection rulesets names name bare
   if ! protection=$(read_api "repos/{owner}/{repo}/branches/$base" "$PROTECTION_JQ") ||
