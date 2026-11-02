@@ -6,10 +6,8 @@ import {expectToast} from './expect-toast';
 import stack from './stack';
 
 // The toast renders in a portal on the document body, outside the canvas.
-const getToastElement = (canvasElement: HTMLElement, text: string) =>
-  within(canvasElement.ownerDocument.body)
-    .getByText(text)
-    .closest<HTMLElement>('[data-slot="toast"]') as HTMLElement;
+const getToastElement = (canvasElement: HTMLElement, title: string) =>
+  within(canvasElement.ownerDocument.body).getByRole('dialog', {name: title});
 
 const destructiveColor = (): string => {
   const probe = document.createElement('span');
@@ -164,14 +162,9 @@ export const DescriptionOnlyPromoted = meta.story({
 DescriptionOnlyPromoted.test(
   'promotes the description to the title',
   async ({canvasElement}) => {
-    const toastElement = getToastElement(canvasElement, 'only a description');
-
     await expect(
-      toastElement.querySelector('[data-slot="toast-title"]')
-    ).toHaveTextContent('only a description');
-    await expect(
-      toastElement.querySelector('[data-slot="toast-description"]')
-    ).toBeNull();
+      getToastElement(canvasElement, 'only a description')
+    ).not.toHaveAccessibleDescription();
   }
 );
 
@@ -189,14 +182,9 @@ export const EmptyMessagePromoted = meta.story({
 EmptyMessagePromoted.test(
   'promotes the description when the message is empty',
   async ({canvasElement}) => {
-    const toastElement = getToastElement(canvasElement, 'Saved empty message');
-
     await expect(
-      toastElement.querySelector('[data-slot="toast-title"]')
-    ).toHaveTextContent('Saved empty message');
-    await expect(
-      toastElement.querySelector('[data-slot="toast-description"]')
-    ).toBeNull();
+      getToastElement(canvasElement, 'Saved empty message')
+    ).not.toHaveAccessibleDescription();
   }
 );
 
@@ -220,7 +208,7 @@ MessageRenderedAsText.test(
 Info.test(
   'gives each notification type a distinct icon',
   async ({canvasElement}) => {
-    const glyphClasses: string[] = [];
+    const drawings: string[] = [];
 
     for (const type of NOTIFY_TYPES) {
       await clearToasts();
@@ -228,24 +216,19 @@ Info.test(
 
       await expectToast(canvasElement, `${type} icon message`);
 
+      // The icon is aria-hidden, so it is reached through its toast. The
+      // svg's child shapes are its drawing, whatever the icon library names
+      // its classes.
       const icon = getToastElement(
         canvasElement,
         `${type} icon message`
-      ).querySelector('[data-slot="toast-icon"] svg');
+      ).querySelector('svg');
 
-      await expect(icon).toHaveClass('lucide');
-
-      // Only the glyph class (lucide-<name>) identifies the icon; the full
-      // class string also carries per-type color classes.
-      const glyph = [...(icon?.classList ?? [])].find((name) =>
-        name.startsWith('lucide-')
-      );
-
-      await expect(glyph).toBeDefined();
-      glyphClasses.push(glyph ?? '');
+      await expect(icon).not.toBeNull();
+      drawings.push(icon?.innerHTML ?? '');
     }
 
-    await expect(new Set(glyphClasses).size).toBe(NOTIFY_TYPES.length);
+    await expect(new Set(drawings).size).toBe(NOTIFY_TYPES.length);
   }
 );
 
