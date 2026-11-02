@@ -4,6 +4,7 @@ export default {
   email: 'Email',
   emailPlaceholder: 'user@domain.com',
   form: {
+    accept: 'Accept',
     allFieldsAreRequired: 'All fields are required',
     ok: 'OK',
     optional: 'Optional',
