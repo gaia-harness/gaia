@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Retired-path gate. The React app and its frontend-only harness live under
-# `apps/web/`; the root no longer holds `app/`, `test/`, `public/`,
-# `.playwright/`, `.storybook/`, the moved root config files, or the moved
-# `.claude/` units. A hook, script, workflow, CLI string, rule glob, agent, or
-# skill that still cites one of those at the root is a coupling the move missed:
-# it resolves to nothing, and a guard that resolves to nothing fails silently.
-# This gate fails on any such citation unless the line is named in the committed
-# allowlist with a reason.
+# `apps/web/`. The root holds no `app/`, `test/`, `public/`, `.playwright/`,
+# `.storybook/`, moved root config files, or moved `.claude/` units, and the
+# old `frontend/` package root is retired as a whole. A hook, script, workflow,
+# CLI string, rule glob, agent, skill, rule body, or wiki page that still cites
+# one of those at the root is a coupling the move missed: it resolves to
+# nothing, and a guard that resolves to nothing fails silently. This gate fails
+# on any such citation unless the line is named in the committed allowlist with
+# a reason.
 #
 # Usage: check-retired-paths.sh [--root <dir>] [--allowlist <file>]
 #
@@ -20,15 +21,20 @@
 #   BAD-ALLOW <line>: <why>         an allowlist row with no needle or no reason
 #   TRACKED <path>                  git tracks a path under a retired root entry
 #
-# Scan set (tracked files only, read from `git ls-files -z`):
-#   .claude/hooks/**, .gaia/scripts/** (not tests/ or fixtures/ directories),
-#   .github/workflows/**, .github/actions/**, .github/**/*.sh,
-#   .gaia/cli/src/** (not *.test.ts or __tests__/), .gaia/cli/templates/**,
-#   .claude/agents/*.md,
-#   .claude/skills/**/*.md, .claude/commands/*.md, and the frontmatter of
-#   .claude/rules/*.md and .claude/rules/maintainers/*.md (the `paths:` globs;
-#   rule bodies are prose and are not scanned). `apps/web/.claude/**` is
-#   package-relative by contract and is not scanned.
+# Scan set (tracked files only, read from `git ls-files -z`), two tiers:
+#   Full tier, every retired token:
+#     .claude/hooks/**, .gaia/scripts/** (not tests/ or fixtures/ directories),
+#     .github/workflows/**, .github/actions/**, .github/**/*.sh,
+#     .gaia/cli/src/** (not *.test.ts or __tests__/), .gaia/cli/templates/**,
+#     .claude/agents/*.md, .claude/skills/**/*.md, .claude/commands/*.md, and
+#     the frontmatter of .claude/rules/*.md and .claude/rules/maintainers/*.md
+#     (the `paths:` globs).
+#   `frontend/` tier, the retired package root only: the bodies of those rule
+#     files, `apps/web/.claude/**`, and every other tracked Markdown file
+#     (`wiki/**`, root docs, `docs/**`, the migration notes) except the two
+#     frozen history files `CHANGELOG.md` and `wiki/log.md`. Tests and fixtures
+#     directories are skipped here too. The rest of `apps/web/.claude/**` is
+#     package-relative by contract and is not scanned for the other tokens.
 #
 # The gate itself is not scanned: its patterns and its tracked-path table spell
 # every retired name by design.
@@ -64,6 +70,9 @@
 #     comments describe layouts package-relative by the repo convention, so they
 #     cite `app/` without naming the root. Markdown has no comment form and is
 #     scanned line by line. A code line carrying a trailing comment is scanned.
+#   - `frontend/` must not follow a letter, digit, `_`, `.`, `\` or `-`, and not
+#     `/` either: `code-audit-frontend/` and `apps/web/frontend/` are other
+#     names, not the retired root.
 #   - The `.claude/` unit citations trip unless the text before them ends in
 #     `apps/web/` or a `<path>/` placeholder, so an absolute or variable-prefixed root citation
 #     (`$root/.claude/skills/tailwind`) is caught while
@@ -119,12 +128,14 @@ fi
 
 scan_list="$temporary_directory/scan"
 : >"$scan_list"
+frontend_only_list="$temporary_directory/scan-frontend-only"
+: >"$frontend_only_list"
 tracked_hits="$temporary_directory/tracked-hits"
 : >"$tracked_hits"
 
 while IFS= read -r -d '' tracked_path; do
   case "$tracked_path" in
-    app/* | test/* | public/* | .playwright/* | .storybook/* | \
+    frontend/* | app/* | test/* | public/* | .playwright/* | .storybook/* | \
       vite.config.ts | vitest.config.ts | playwright.config.ts | react-router.config.ts | \
       stylelint.config.mjs | knip.config.ts | doctor.config.ts | tsconfig.json | Dockerfile | \
       .env.example | eslint.config.mjs | .lintstagedrc.json | .dockerignore | \
@@ -148,7 +159,13 @@ while IFS= read -r -d '' tracked_path; do
     .claude/hooks/* | .gaia/scripts/* | .github/workflows/* | .github/actions/* | .github/*.sh | \
       .gaia/cli/src/* | .gaia/cli/templates/* | .claude/rules/*.md | .claude/agents/*.md | .claude/skills/*.md | .claude/commands/*.md)
       printf '%s\n' "$tracked_path" >>"$scan_list"
+      continue
       ;;
+  esac
+  case "$tracked_path" in
+    CHANGELOG.md | wiki/log.md) continue ;;
+    */tests/* | */fixtures/* | */__tests__/*) continue ;;
+    apps/web/.claude/* | *.md) printf '%s\n' "$tracked_path" >>"$frontend_only_list" ;;
   esac
 done <"$tracked_list"
 
@@ -161,6 +178,9 @@ awk_program='
 function trim_text(text) {
   gsub(/^[ \t]+|[ \t]+$/, "", text)
   return text
+}
+function frontend_hit(line) {
+  return (line ~ /(^|[^A-Za-z0-9_.\\\/-])frontend\//)
 }
 function hit_kind(line,    rest, offset, before, lead) {
   gsub(/public\/(internal|private)|test\/(CI|describe)|Dockerfile\.dockerignore/, "", line)
@@ -201,7 +221,15 @@ BEGIN {
   }
   close(allowlist)
   hits = 0
-  while ((getline path < scan_list) > 0) {
+  total = 0
+  while ((getline path < scan_list) > 0) paths[total++] = path
+  close(scan_list)
+  full_count = total
+  while ((getline path < frontend_only_list) > 0) paths[total++] = path
+  close(frontend_only_list)
+  for (p = 0; p < total; p++) {
+    path = paths[p]
+    full = (p < full_count)
     is_rule = (path ~ /^\.claude\/rules\/(maintainers\/)?[^\/]+\.md$/)
     is_markdown = (path ~ /\.md$/)
     in_front = 0
@@ -210,15 +238,15 @@ BEGIN {
     while ((getline line < path) > 0) {
       line_number++
       if (is_rule) {
-        if (line_number == 1) {
-          if (line == "---") { in_front = 1; seen_open = 1 }
-          continue
-        }
-        if (!in_front) continue
-        if (line == "---") { in_front = 0; continue }
+        if (line_number == 1 && line == "---") { in_front = 1; seen_open = 1; continue }
+        if (in_front && line == "---") { in_front = 0; continue }
       }
       if (!is_markdown && line ~ /^[ \t]*(#|\/\/|\*|\/\*)/) continue
-      if (!hit_kind(line)) continue
+      if (full && (!is_rule || in_front)) {
+        if (!hit_kind(line) && !frontend_hit(line)) continue
+      } else {
+        if (!frontend_hit(line)) continue
+      }
       allowed = 0
       for (i = 0; i < allow_count; i++) {
         if (allow_file[i] == path && allow_needle[i] != "" && index(line, allow_needle[i]) > 0) {
@@ -249,7 +277,7 @@ effective_allowlist="$allowlist"
 [ -f "$effective_allowlist" ] || effective_allowlist="$temporary_directory/allowlist-empty"
 
 status=0
-(cd "$root" && awk -v allowlist="$effective_allowlist" -v scan_list="$scan_list" "$awk_program" </dev/null) || status=1
+(cd "$root" && awk -v allowlist="$effective_allowlist" -v scan_list="$scan_list" -v frontend_only_list="$frontend_only_list" "$awk_program" </dev/null) || status=1
 
 if [ -s "$tracked_hits" ]; then
   LC_ALL=C sort "$tracked_hits"
@@ -257,6 +285,6 @@ if [ -s "$tracked_hits" ]; then
 fi
 
 if [ "$status" -eq 0 ]; then
-  printf 'check-retired-paths: clean (%s files scanned)\n' "$(wc -l <"$scan_list" | tr -d ' ')"
+  printf 'check-retired-paths: clean (%s files scanned)\n' "$(cat "$scan_list" "$frontend_only_list" | wc -l | tr -d ' ')"
 fi
 exit "$status"

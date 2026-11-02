@@ -61,3 +61,7 @@
 .claude/hooks/lib/audit-quick-classify-lines-lib.sh	"${prefix}app/languages/	The path is composed onto the owning web member prefix from the registry, so app/languages is member-relative here, not a root path.
 .gaia/scripts/audit-resolve-scope.sh	language_file_pattern='^(.*/)?app/languages/	Fail-open pattern for an unreadable registry: matches app/languages under any member prefix, not a root path.
 .gaia/scripts/audit-resolve-scope.sh	${web_member_alternation})app/languages/	The pattern is composed onto the web member paths from the registry, so app/languages is member-relative here, not a root path.
+.gaia/cli/src/util/gaia-packages-corpus-fixture.ts	'frontend/gaia.package.json'	Corpus cases keep their descriptor in a case-local directory named frontend; it is a fixture directory, not the app root.
+.gaia/scripts/fitness-nudge-lib.sh	'chore: point references at frontend/'	Literal commit subject the 2.0.0 migration wrote into adopter history, matched as a prefix.
+.gaia/migrations/2.0.0.md	frontend/	Frozen migration note: describes the 2.0.0 move into the old package root.
+.gaia/migrations/2.4.0.md	frontend/	Migration note that owns the hop from the old package root to apps/web, so it names the old root.
