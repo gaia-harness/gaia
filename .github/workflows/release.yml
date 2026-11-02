@@ -226,7 +226,7 @@ jobs:
       # check).
       - name: Distribution test gate (Layers 0+1)
         env:
-          GAIA_DISTRIBUTION_REQUIRE_COREPACK: '1'
+          GAIA_DISTRIBUTION_FORBID_SKIP: '1'
         run: bash .gaia/tests/distribution/run-all.sh
 
       # The asset is named gaia-bundle-<tag>.tar.gz, not gaia-<tag>.tar.gz, on

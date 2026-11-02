@@ -4,13 +4,13 @@ status: active
 priority: 1
 date: 2026-04-26
 created: 2026-04-26
-updated: 2026-10-09
+updated: 2026-11-03
 tags: [decision, tooling, package-manager, security]
 ---
 
 # Decision: pnpm as the Package Manager
 
-The project uses **pnpm** for installs and dependency resolution. The `packageManager` field in `package.json` pins the exact version; `corepack enable pnpm` reads that field and provisions it transparently.
+The project uses **pnpm** for installs and dependency resolution. The `packageManager` field in `package.json` pins the exact version; a pnpm run directly switches itself to that version.
 
 ## Why
 
@@ -33,8 +33,8 @@ The project uses **pnpm** for installs and dependency resolution. The `packageMa
 - `pnpm-lock.yaml` opens with a separate YAML document recording pnpm itself (`packageManagerDependencies`, with per-platform `@pnpm/exe.*` integrity hashes) ahead of the dependency lockfile. Bumping `packageManager` rewrites that header; it is expected churn, not drift.
 - CI provisioning routes through `.github/actions/gaia-setup-node`, which answers for the pnpm pin, the `cache: 'pnpm'` setting, and the frozen-lockfile install; bumping `packageManager` moves its pnpm version in lockstep.
 - A Docker stage that runs a pnpm command needs `pnpm-workspace.yaml` copied alongside `package.json` and `pnpm-lock.yaml`. `apps/web/Dockerfile` copies it with the other two in `build-env` before `pnpm install`, and into the final stage before `pnpm start`. pnpm reads `overrides`, `allowBuilds`, and supply-chain policy only from that file, so a selective-copy stage that omits it risks two failures: `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` on a `--frozen-lockfile` install, and `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` when a script such as `pnpm start` runs its pre-run deps check in a no-TTY stage. Copy all three together in any selective-copy stage.
-- The final runtime stage resolves pnpm at build time (`corepack prepare --activate && pnpm --version`). `corepack enable` alone installs only a shim, and pnpm's first run also fetches its native `@pnpm/exe` binary, so without that step every container start downloads pnpm and a start without registry access fails before the server boots. The runtime stays on `pnpm start` rather than invoking `react-router-serve` directly because the app's env schema requires `npm_package_version`, which only a package-manager script run sets.
-- Adopters bootstrap pnpm with `npm install -g pnpm@latest`, and pnpm then switches itself to the pinned version. corepack is not the route: the copy bundled with Node 22.22 cannot run a current pnpm. `.claude/skills/gaia/references/toolchain.md` holds the steps.
+- The `pnpm-env` base stage installs the exact pnpm that `packageManager` pins at build time: `npm pack` fetches that version's tarball, `sha512sum -c` checks it against the pin's hash, and `npm install -g` installs it. Both `build-env` and the runtime stage build from it, so a container start downloads nothing and boots without registry access. The runtime stays on `pnpm start` rather than invoking `react-router-serve` directly because the app's env schema requires `npm_package_version`, which only a package-manager script run sets.
+- Adopters install pnpm one way: `corepack disable pnpm` if corepack is present, then `npm install -g pnpm@latest`; corepack is never enabled. Under corepack pnpm never switches to the pinned version, and stops with `ERR_PNPM_BAD_PM_VERSION` when corepack runs any other version. `.claude/skills/gaia/references/toolchain.md` holds the steps.
 
 ## Pinning
 

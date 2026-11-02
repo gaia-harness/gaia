@@ -6,16 +6,18 @@
 #
 # What this DOES test:
 #   - Tarball extraction works without dev tools.
-#   - Corepack-driven pnpm bootstrap (the path adopters hit on first
-#     run) succeeds.
-#   - `pnpm install --frozen-lockfile` works after corepack provisions
-#     pnpm.
+#   - The adopter pnpm install (`npm install -g pnpm@latest`, the one
+#     create-gaia and /gaia-init run) succeeds, into a global prefix under the
+#     isolated HOME so the host's global npm is untouched.
+#   - That pnpm switches itself to the version the staged package.json's
+#     packageManager pins.
+#   - `pnpm install --frozen-lockfile` works with it.
 #   - bats is absent before install; after it, `pnpm exec bats --version`
 #     prints the version the staged package.json pins.
 #   - With a bash 4+ first on PATH, `pnpm test:shell` runs a one-test suite
 #     (TAP plan 1..1, ok 1); with a bash older than 4 first it exits non-zero
 #     with one line naming the shell stack reference and plans no test. The
-#     bash 4 run is skipped (a failure under GAIA_DISTRIBUTION_REQUIRE_COREPACK=1)
+#     bash 4 run is skipped (a failure under GAIA_DISTRIBUTION_FORBID_SKIP=1)
 #     on a host with no bash 4+.
 #
 # What this does NOT test:
@@ -23,23 +25,23 @@
 #   - Full filesystem isolation (a true Docker run is the answer; deferred).
 #   - Linux-only adopter environments (the host OS is what it is).
 #
-# Skipped automatically (soft PASS) if `corepack` is not on PATH; the
-# bootstrap path is unverifiable without it. Setting
-# GAIA_DISTRIBUTION_REQUIRE_COREPACK=1 turns that skip into a failure, so a
-# release gate cannot count a run whose frozen install never happened.
+# Skipped automatically (soft PASS) if `npm` is not on PATH; the install is
+# unverifiable without it. Setting GAIA_DISTRIBUTION_FORBID_SKIP=1 turns that
+# skip into a failure, so a release gate cannot count a run whose frozen
+# install never happened.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/lib.sh"
 
 require_command jq "jq required to read the pinned bats version from the staged package.json"
 
-if ! command -v corepack >/dev/null 2>&1; then
-  if [ "${GAIA_DISTRIBUTION_REQUIRE_COREPACK:-}" = "1" ]; then
-    fail "corepack not on PATH and GAIA_DISTRIBUTION_REQUIRE_COREPACK=1 forbids skipping"
+if ! command -v npm >/dev/null 2>&1; then
+  if [ "${GAIA_DISTRIBUTION_FORBID_SKIP:-}" = "1" ]; then
+    fail "npm not on PATH and GAIA_DISTRIBUTION_FORBID_SKIP=1 forbids skipping"
     exit 1
   fi
-  log "corepack not on PATH; skipping (Node 16.13+ ships corepack)"
-  pass "corepack unavailable; scenario skipped (Node ships corepack since v16.13)"
+  log "npm not on PATH; skipping"
+  pass "npm unavailable; scenario skipped"
   exit 0
 fi
 
@@ -62,32 +64,36 @@ TARBALL="$(mktemp -t gaia-dist-cleanenv-tar.XXXXXX).tar.gz"
 trap 'rm -rf "$STAGING" "$SCAFFOLD" "$FAKE_HOME" "$TARBALL"' EXIT
 tar -czf "$TARBALL" -C "$STAGING" .
 
-# Resolve the corepack and node paths in the OUTER PATH (we'll stash
+# Resolve the node and npm paths in the OUTER PATH (we'll stash
 # them so the inner subshell can still find them; the test isn't about
 # hiding Node itself, just dev tools the adopter wouldn't have).
 NODE_BIN="$(command -v node)"
-COREPACK_BIN="$(command -v corepack)"
+NPM_BIN="$(command -v npm)"
 TAR_BIN="$(command -v tar)"
 GIT_BIN="$(command -v git)"
-[ -n "$NODE_BIN" ]     || { fail "node unavailable on outer PATH"; exit 1; }
-[ -n "$COREPACK_BIN" ] || { fail "corepack unavailable on outer PATH"; exit 1; }
+[ -n "$NODE_BIN" ] || { fail "node unavailable on outer PATH"; exit 1; }
+
+expected_pnpm_version="$(jq -r '.packageManager // empty' "$STAGING/package.json")"
+expected_pnpm_version="${expected_pnpm_version#pnpm@}"
+expected_pnpm_version="${expected_pnpm_version%%+*}"
+[ -n "$expected_pnpm_version" ] || { fail "the staged root package.json pins no pnpm packageManager"; exit 1; }
 
 # Run the bootstrap in a subshell with stripped PATH and isolated HOME.
-# PATH includes only system binaries plus the directories holding node /
-# corepack / tar / git that we resolved above. Nothing from
+# PATH includes only system binaries plus the node / npm / tar / git
+# resolved above and the isolated npm global prefix. Nothing from
 # /usr/local/bin or homebrew, so any pnpm/uv/claude on the maintainer's
 # machine becomes invisible.
-mkdir -p "$FAKE_HOME/bin"
-ln -s "$NODE_BIN"     "$FAKE_HOME/bin/node"
-ln -s "$COREPACK_BIN" "$FAKE_HOME/bin/corepack"
-ln -s "$TAR_BIN"      "$FAKE_HOME/bin/tar"
-ln -s "$GIT_BIN"      "$FAKE_HOME/bin/git"
+mkdir -p "$FAKE_HOME/bin" "$FAKE_HOME/npm-global"
+ln -s "$NODE_BIN" "$FAKE_HOME/bin/node"
+ln -s "$NPM_BIN"  "$FAKE_HOME/bin/npm"
+ln -s "$TAR_BIN"  "$FAKE_HOME/bin/tar"
+ln -s "$GIT_BIN"  "$FAKE_HOME/bin/git"
 
 # The shell test stack reads the first bash on PATH, so the scenario decides
 # which bash each run sees. A bash 4+ directory comes from the first candidate
 # that reports a major of 4 or more; a stock macOS host has none on the default
 # PATH, so the Homebrew locations are tried too. Without one the bash-4 run is
-# skipped, which GAIA_DISTRIBUTION_REQUIRE_COREPACK=1 turns into a failure so a
+# skipped, which GAIA_DISTRIBUTION_FORBID_SKIP=1 turns into a failure so a
 # release gate cannot count a run that never exercised it.
 expected_bats_version="$(jq -r '.devDependencies.bats // empty' "$STAGING/package.json")"
 [ -n "$expected_bats_version" ] || { fail "the staged root package.json pins no bats devDependency"; exit 1; }
@@ -111,8 +117,8 @@ for candidate_bash in "$(command -v bash || true)" /opt/homebrew/bin/bash /usr/l
   fi
 done
 if [ -z "$BASH4_DIRECTORY" ]; then
-  if [ "${GAIA_DISTRIBUTION_REQUIRE_COREPACK:-}" = "1" ]; then
-    fail "no bash 4+ found for the shell test run and GAIA_DISTRIBUTION_REQUIRE_COREPACK=1 forbids skipping"
+  if [ "${GAIA_DISTRIBUTION_FORBID_SKIP:-}" = "1" ]; then
+    fail "no bash 4+ found for the shell test run and GAIA_DISTRIBUTION_FORBID_SKIP=1 forbids skipping"
     exit 1
   fi
   log "no bash 4+ found; the bats run under bash 4 is skipped"
@@ -131,9 +137,10 @@ else
 fi
 
 (
-  unset PNPM_HOME UV_HOME npm_config_prefix
+  unset PNPM_HOME UV_HOME
   export HOME="$FAKE_HOME"
-  export PATH="/usr/bin:/bin:$FAKE_HOME/bin"
+  export npm_config_prefix="$FAKE_HOME/npm-global"
+  export PATH="/usr/bin:/bin:$FAKE_HOME/bin:$npm_config_prefix/bin"
 
   # Confirm pnpm is NOT visible; this is the test invariant.
   if command -v pnpm >/dev/null 2>&1; then
@@ -153,16 +160,20 @@ fi
   git config commit.gpgsign false
   git add . >/dev/null 2>&1
 
-  # Mirror create-gaia's ensurePnpm(); corepack first, npm install -g
-  # fallback. Only test the corepack path here (the npm fallback would
-  # mutate the host's global npm, which we don't want in a test).
-  corepack enable pnpm
-
-  # Now pnpm should be visible (provisioned by corepack into ~/.local/...).
+  # create-gaia's ensurePnpm() install. Its `corepack disable pnpm` step is
+  # left out: no corepack shim is on this PATH to remove, and running it would
+  # touch the host Node's bin directory.
+  npm install -g pnpm@latest >/dev/null 2>&1 \
+    || { printf 'npm install -g pnpm@latest failed\n' >&2; exit 1; }
   command -v pnpm >/dev/null 2>&1 \
-    || { printf 'corepack did not provision pnpm into PATH\n' >&2; exit 1; }
+    || { printf 'npm install -g did not put pnpm on PATH\n' >&2; exit 1; }
 
-  pnpm --version >/dev/null
+  pnpm_version_output="$(pnpm --version 2>&1)" \
+    || { printf 'pnpm --version failed: %s\n' "$pnpm_version_output" >&2; exit 1; }
+  if [ "$(printf '%s\n' "$pnpm_version_output" | tail -n 1)" != "$expected_pnpm_version" ]; then
+    printf 'pnpm reports "%s", expected the pinned "%s"\n' "$pnpm_version_output" "$expected_pnpm_version" >&2
+    exit 1
+  fi
   install_log="$(mktemp "$FAKE_HOME/pnpm-install-XXXXXX")"
   if ! pnpm install --frozen-lockfile >"$install_log" 2>&1; then
     printf 'FAIL: pnpm install --frozen-lockfile failed; last 40 lines of output:\n' >&2
@@ -213,4 +224,4 @@ SMOKE
   fi
 )
 
-pass "clean-env bootstrap (PATH-strip + corepack pnpm provision) succeeded; frozen install ran"
+pass "clean-env bootstrap (PATH-strip + npm-installed pnpm at the pinned version) succeeded; frozen install ran"
