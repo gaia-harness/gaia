@@ -24,6 +24,8 @@ type ReactRouterDecoratorOptions = {
   actions?: Record<string, ActionFunction>;
   /** Each path renders `Navigated to {path}` inside a main landmark, so a play can assert arrival by visible text. */
   destinations?: string[];
+  /** The main route's id, so `useRouteLoaderData(id)` reads its `loader` data (`'root'` for the root loader). */
+  id?: string;
   /** The URL the stub starts at; defaults to `path`, so a param route can declare `/items/:id` and start at `/items/1`. */
   initialEntry?: string;
   loader?: (args: LoaderFunctionArgs) => Promise<unknown>;
@@ -152,6 +154,7 @@ const decorator =
       action,
       actions = {},
       destinations = [],
+      id,
       initialEntry,
       path = '/',
       route: routeModule,
@@ -169,6 +172,9 @@ const decorator =
         Component: () => <Story />,
         ...rest,
         ...routeBinding,
+        // A plain `id` key, present as undefined when unset, fails
+        // createRoutesStub's route type, so the key is added only when set.
+        ...(id === undefined ? {} : {id}),
         path,
       },
       // loading different routes will select different stories

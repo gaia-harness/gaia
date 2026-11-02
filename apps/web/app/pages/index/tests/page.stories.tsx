@@ -3,11 +3,27 @@ import stubs from 'test/stubs';
 import preview from '#.storybook/preview';
 import {LANGUAGES} from '~/languages';
 import common from '~/languages/en/common';
+import type {RequestInfo} from '~/utils/request-info';
 import IndexPage from '../page';
 
 const meta = preview.meta({
   component: IndexPage,
-  decorators: [stubs.reactRouter()],
+  decorators: [
+    stubs.reactRouter(({parameters}) =>
+      parameters.storedTheme ?
+        {
+          id: 'root',
+          loader: async () => ({
+            requestInfo: {
+              origin: '',
+              path: '/',
+              userPreferences: {theme: parameters.storedTheme},
+            } satisfies RequestInfo,
+          }),
+        }
+      : {}
+    ),
+  ],
   render: () => <IndexPage />,
   title: 'Pages/Index',
 });
@@ -39,6 +55,20 @@ Default.test(
     // preference reaches the component and the mode is the "system" default.
     await expect(
       canvas.getByRole('button', {name: common.theme.enableLightMode})
+    ).toBeInTheDocument();
+  }
+);
+
+export const StoredDarkTheme = meta.story({
+  parameters: {storedTheme: 'dark'},
+});
+
+StoredDarkTheme.test(
+  'passes the stored theme preference to the theme switch',
+  async ({canvas}) => {
+    // A stored dark preference makes the switch offer the system theme next.
+    await expect(
+      await canvas.findByRole('button', {name: common.theme.useSystemTheme})
     ).toBeInTheDocument();
   }
 );

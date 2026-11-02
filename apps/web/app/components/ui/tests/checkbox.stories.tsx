@@ -60,12 +60,16 @@ export const Disabled = meta.story({
 });
 
 export const WithLabel = meta.story({
-  render: () => (
-    <div className="flex gap-2">
-      <Checkbox id="acceptPlain" />
-      <Label htmlFor="acceptPlain">Accept</Label>
-    </div>
-  ),
+  render: () => {
+    const {t} = useTranslation();
+
+    return (
+      <div className="flex gap-2">
+        <Checkbox id="acceptPlain" />
+        <Label htmlFor="acceptPlain">{t('form.accept')}</Label>
+      </div>
+    );
+  },
 });
 
 WithLabel.test('takes its accessible name from the label', async ({canvas}) => {

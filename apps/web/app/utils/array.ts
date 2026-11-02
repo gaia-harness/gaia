@@ -24,13 +24,13 @@ type ComparableKey<T> = {
 }[keyof T];
 
 export const sortBy = <T>(array: T[], key: ComparableKey<T>): T[] =>
-  array.toSorted((a, b) => {
-    const valueA = a[key];
-    const valueB = b[key];
+  array.toSorted((firstItem, secondItem) => {
+    const firstValue = firstItem[key];
+    const secondValue = secondItem[key];
 
     return (
-      valueA < valueB ? -1
-      : valueA > valueB ? 1
+      firstValue < secondValue ? -1
+      : firstValue > secondValue ? 1
       : 0
     );
   });
