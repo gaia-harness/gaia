@@ -1,7 +1,8 @@
-import type {PartialStoryFn} from 'storybook/internal/types';
+import type {ReactRenderer} from '@storybook/react-vite';
+import type {DecoratorFunction} from 'storybook/internal/types';
 import State from '~/state';
 
-const decorator = () => (Story: PartialStoryFn) => (
+const decorator = (): DecoratorFunction<ReactRenderer> => (Story) => (
   <State>
     <Story />
   </State>
