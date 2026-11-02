@@ -2,8 +2,8 @@
 # Shared dependency gate for the node-dependent suites: the RED suites under
 # .gaia/tests/hooks (red-ledger-lib, capture-red-observations,
 # red-verify-commit-check, red-verify-e2e and worthiness-presence-check), and
-# the suites that run the CLI from source through tsx, which the same root
-# install provides.
+# the suites that run the CLI from source through tsx, which the CI root
+# install provides under .gaia/cli/node_modules.
 #
 # The RED suites all drive .gaia/scripts/red-ledger/extract-test-signals.mjs;
 # red-verify-commit-check, red-verify-e2e and worthiness-presence-check also
@@ -23,7 +23,7 @@
 #   }
 #
 # WHY THE CI BRANCH FAILS RATHER THAN SKIPPING, which is the whole point of
-# this file. Each of the suites above previously spelled the gate inline as
+# this file. Each of the RED suites above previously spelled the gate inline as
 #
 #   [ -d "$ROOT/node_modules/typescript" ] || skip "typescript not installed ..."
 #
