@@ -5,7 +5,8 @@
 # until_green_reached once per attempt. It reads the parent's PR and REPO, and
 # the base_branch each attempt's view read sets; it owns DECLARED_REQUIRED and
 # GREEN_BLOCKER, which the parent initializes, reporting GREEN_BLOCKER on
-# TIMEOUT.
+# TIMEOUT, and DECLARED_OTHER_THAN_AUDIT, which it sets alongside
+# DECLARED_REQUIRED.
 #
 # Bash 3.2 compatible. Never `cd`.
 
@@ -47,7 +48,8 @@ read_api() {
 
 # Sets DECLARED_REQUIRED to a JSON array of the required contexts <base>
 # declares, the union of branch protection and rulesets since GitHub enforces
-# both, and returns 0. On a failed read it sets GREEN_BLOCKER and returns 1, so
+# both, and DECLARED_OTHER_THAN_AUDIT to those names other than GAIA-Audit,
+# comma-separated, and returns 0. On a failed read it sets GREEN_BLOCKER and returns 1, so
 # the caller retries on the next attempt. It never records an unread set as
 # `[]`, which the parent would hold for the rest of the bound and report as no
 # required check declared. Both endpoints answer

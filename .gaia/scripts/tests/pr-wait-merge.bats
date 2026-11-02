@@ -607,7 +607,7 @@ case "$2" in
       shift
     done
     [ "$(jq 'length' "$STUB_DIRECTORY/checks.json")" = 0 ] && {
-      printf 'no required checks reported for the head\n' >&2
+      printf "no required checks reported on the 'feature' branch\n" >&2
       exit 1
     }
     jq -r "$filter" "$STUB_DIRECTORY/checks.json"
