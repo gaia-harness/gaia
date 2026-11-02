@@ -87,7 +87,7 @@
 #   SPECIALIST=<name> <trigger>:<path>[ <trigger>:<path>]... line per
 #   specialist that runs, in the order react-patterns, typescript,
 #   translation, with the tokens in CHANGED order; SPECIALIST lines print last,
-#   after DIRTY, and a specialist with no qualifying path prints no line.
+#   after DIRTY and the LENSES lines, and a specialist with no qualifying path prints no line.
 #   <trigger> is tsx, ts, language-file or i18n-signal. REVIEW_DIFF names the member's review input, a diff file under
 #   <root>/.gaia/local/audit/ holding the branch's changed hunks on the CHANGED
 #   paths since the anchor plus the remerge-diff of any merge commit that

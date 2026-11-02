@@ -69,8 +69,6 @@ write_member_manifest() {
 write_descriptor() {
   local directory="$1" pre_commit_source="$2"
   mkdir -p "$directory"
-  # The hook runs a step only where the member defines it, so the manifest
-  # defines all three (typecheck, test:lint-staged, lint-staged).
   write_member_manifest "$directory"
   cat > "$directory/gaia.package.json" <<JSON
 {

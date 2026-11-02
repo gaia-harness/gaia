@@ -36,7 +36,7 @@ Verified against react-doctor 0.9.18, running `install --yes --cwd frontend` in 
 
 Verdicts:
 
-- With `--cwd apps/web` the devDependency still lands in the root `package.json` and the `doctor` script in `apps/web/package.json`, so the script removes the dependency at the root and the script key with `pnpm --dir apps/web`.
+- With `--cwd` on the web member the devDependency still lands in the root `package.json` and the `doctor` script in the member's `package.json`, so the script removes the dependency at the root and the script key with `pnpm --dir <web member path>`.
 - `pnpm remove` at the workspace root works without `-w` on GAIA's pinned pnpm.
 - `pnpm remove` does not return the lockfile to its pre-install state. The install resolves `oxlint` and `@opentelemetry/api` into optional peer slots of `@gaia-harness/lint` and `vitest`, and those resolutions survive `pnpm remove`, `pnpm install`, and `pnpm dedupe`. Only restoring a snapshot taken before the install clears them, which is why the install runs inside the strip block.
 - The installer writes the CI workflow even under `--yes`.
