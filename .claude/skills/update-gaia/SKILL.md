@@ -201,7 +201,7 @@ Each failure line names the tag and removes that tag's cache directory, so a re-
 
 ## Step 3c2: Check the toolchain
 
-An existing project never reruns `/setup-gaia`, so the update checks the tools the incoming release needs before anything changes. The target bundle's own check runs, never the project's copy, so the incoming release sets the floor:
+An existing project never reruns `/setup-gaia`, so the update checks the tools the incoming release needs before it branches, prunes or merges anything. The target bundle's own check runs, never the project's copy, so the incoming release sets the floor:
 
 ```bash
 bash <LATEST_DIR>/.gaia/scripts/toolchain-check.sh
