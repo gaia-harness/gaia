@@ -103,15 +103,15 @@ jobs:
       # `git diff --name-only`). Every path under `apps/` and `packages/` is
       # test-relevant by prefix: this job runs the tests and typecheck over
       # every member (the Lint step lints `apps/web` only), so a path outside
-      # the list reports the required check green without running. The root-level entries are the shared manifests and
-      # config: the one workspace lockfile and manifest, `.node-version`,
-      # `.gaia/packages.json` (the package registry the harness reads), this
-      # workflow, the apt
-      # archive cache action and the Lint step's script, which both serve this
-      # job. `pnpm-workspace.yaml` and `.npmrc` are here because pnpm 11 reads
+      # the list reports the required check green without running. The
+      # root-level entries are the shared manifests and config: the one
+      # workspace lockfile and manifest, `.node-version`, `.gaia/packages.json`
+      # (the package registry the harness reads), this workflow, the apt archive
+      # cache action and the Lint step's script, which both serve this job.
+      # `pnpm-workspace.yaml` and `.npmrc` are here because pnpm 11 reads
       # install behavior from them that the lockfile's own `settings:` block
-      # does not carry, so a change to either can break `--frozen-lockfile`
-      # for the next unrelated PR.
+      # does not carry, so a change to either can break `--frozen-lockfile` for
+      # the next unrelated PR.
       - name: Detect test-relevant changes in the incremental delta
         id: filter
         if: steps.chore-deps.outputs.skip == 'false'

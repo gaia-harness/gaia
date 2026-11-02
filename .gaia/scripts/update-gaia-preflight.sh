@@ -105,8 +105,8 @@ done
 
 # Step: refuse a 1.x baseline. A three-way merge from a 1.x baseline would read
 # every baseline app path as an upstream deletion (the 2.x manifest is keyed on
-# the frontend folder), so a 1.x project migrates through the 2.0.0 migration note and
-# never through this command. It runs before any download so nothing has been
+# the moved app folder), so a 1.x project migrates through the 2.0.0 migration
+# note and never through this command. It runs before any download so nothing has been
 # fetched, created or pruned when it refuses.
 refuse_1x() {
   local baseline_major="${baseline%%.*}"

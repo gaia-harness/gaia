@@ -34,7 +34,7 @@ It fills in the environment values `app/env.server.ts` requires when they are un
 
 ```bash
 node .gaia/tests/distribution/fixtures/data-layer/ssr/check-ssr-isolation.mjs \
-  --frontend <staged>/frontend \
+  --frontend <staged>/apps/web \
   --seed /ssr-seed --read /ssr-read --client-loader /ssr-query \
   --fallback-marker hydrate-fallback-rendered --forbidden query-data-rendered \
   --title 'Query probe loading'

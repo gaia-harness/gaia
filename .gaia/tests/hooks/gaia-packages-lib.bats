@@ -367,7 +367,7 @@ check_case() {
   true
 }
 
-@test "an all-empty single member leaves every ERE empty except preCommitSource" {
+@test "an all-empty single member leaves tddUnitTests empty, keeps preCommitSource and has no web member" {
   # shellcheck source=/dev/null
   . "$LIBRARY"
   materialize "$CORPUS/non-web-all-empty" "$BATS_TEST_TMPDIR/r"

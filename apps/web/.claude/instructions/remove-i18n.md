@@ -41,7 +41,7 @@ Resolve translation keys via the `apps/web/app/languages/en/` files. Example: `t
 grep -rln "components/language-select" apps/web/app apps/web/test
 ```
 
-After unwrapping all source files, re-run the grep. If any matches remain in `apps/web/app/` or `apps/web/test/` outside the deletion targets above, unwrap those too. Repeat until grep returns no apps/web/app/test matches.
+After unwrapping all source files, re-run the grep. If any matches remain in `apps/web/app/` or `apps/web/test/` outside the deletion targets above, unwrap those too. Repeat until the grep prints no file outside them.
 
 ---
 

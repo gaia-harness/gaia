@@ -301,7 +301,7 @@ Only when Q3 obtained no real handle (the user picked `Set it later`, or automat
 
 ## Step 6: Verify the build
 
-Run sequentially from the repository root, stopping at the first failure (the root scripts proxy to the `frontend` package):
+Run sequentially from the repository root, stopping at the first failure (the root `typecheck`, `lint` and `test:ci` run in every workspace member, and `build` runs in `apps/web`):
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm test:ci && pnpm build

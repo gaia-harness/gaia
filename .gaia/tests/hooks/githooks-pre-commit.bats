@@ -20,7 +20,7 @@
 #
 # The "path ." fixtures write a literal registry and descriptor into the sandbox
 # (the transitional layout) and never copy the live files, so the suite states
-# what it asserts and stays green once the live registry points at `frontend`.
+# what it asserts and stays green whatever path the live registry names.
 # The one test that reads the live descriptor says so.
 
 setup() {
@@ -616,7 +616,7 @@ assert_gate_not_invoked() {
 @test "today's hook text does not run the apps/web/ gate" {
   use_frontend_package
   # The pre-frontend/ hook shape, inlined: the gate runs at the repo root, never
-  # `pnpm -C <repo>/frontend`. The old text has no shebang, so this copy runs
+  # `pnpm -C <repo>/apps/web`. The old text has no shebang, so this copy runs
   # through `sh -e`.
   cat >"$REPO/old-pre-commit" <<'OLD_HOOK'
 HAS_APP_CHANGED=$(git diff --cached --name-only -z --diff-filter=ACDM | tr '\0' '\n' | grep 'app/' || true)

@@ -416,7 +416,7 @@ while IFS= read -r path; do
 
   # Contract-marker carve-out: a rendered route-surface contract test is born
   # `test.fails`, which Vitest reports as passed, so it cannot record a failing
-  # run; its red is proven by the audit gate's annotation scan until the owning
+  # run; its red is proven by the UAT gate's annotation scan until the owning
   # phase turns it plain. A new-at-HEAD `.fails` test in a staged file whose
   # FIRST line is the contract marker therefore owes no RED. A plain `test(`
   # there owes RED as usual, and so does a marker on any later line. Honest

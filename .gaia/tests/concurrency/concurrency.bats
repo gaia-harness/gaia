@@ -497,7 +497,7 @@ JS
     .gaia/scripts/link-worktree.sh
   gaia_copy_registry "$MAIN"
   # The registry and descriptor are written as literals in the post-flip layout
-  # (package dir `frontend`), not copied from the live repo, so this fixture
+  # (package dir `apps/web`), not copied from the live repo, so this fixture
   # proves the same layout whatever the real registry says.
   # shellcheck disable=SC1091
   . "$BATS_TEST_DIRNAME/../hooks/helpers/package-fixture.sh"
@@ -999,7 +999,7 @@ test("adds two numbers c407", () => {
   # checkout's own installed binary rather than installing one per worktree,
   # so a fixture-local stub at the same borrowed path is a faithful proxy for
   # the real typegen call.
-  # Typegen runs per registered package (the built-in default is `frontend`)
+  # Typegen runs per registered package (the built-in default is `web`)
   # that carries a react-router config, from that package's directory.
   mkdir -p "$MAIN/apps/web/node_modules/.bin"
   echo 'export default {};' > "$MAIN/apps/web/react-router.config.ts"

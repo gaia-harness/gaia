@@ -1,10 +1,10 @@
 ---
-description: 'Render step of the generated plan orchestrator: render the e2e-routed UATs into red Playwright specs and the route-routed UATs into red Vitest route tests in the frontend package before Phase 1.'
+description: 'Render step of the generated plan orchestrator: render the e2e-routed UATs into red Playwright specs and the route-routed UATs into red Vitest route tests in the web member before Phase 1.'
 ---
 
 # UAT render step
 
-The orchestrator runs this step before Phase 1 on every start and every resume. It renders each e2e-routed UAT of the plan's SPEC into one red Playwright spec (`test.fail()`) under `apps/web/.playwright/e2e/` (the e2e directory of the frontend package registered in `.gaia/packages.json`), and each route-routed UAT into one red Vitest test (`test.fails(`) under `apps/web/app/route-tests/` (the route-tests directory of the same package), so a failing harness exists before source is edited. The render is idempotent.
+The orchestrator runs this step before Phase 1 on every start and every resume. It renders each e2e-routed UAT of the plan's SPEC into one red Playwright spec (`test.fail()`) under `apps/web/.playwright/e2e/` (the e2e directory of the web member registered in `.gaia/packages.json`), and each route-routed UAT into one red Vitest test (`test.fails(`) under `apps/web/app/route-tests/` (the route-tests directory of the same package), so a failing harness exists before source is edited. The render is idempotent.
 
 ## Inputs
 
@@ -21,7 +21,7 @@ bash .gaia/scripts/spec/working-doc-id-scan.sh
 
 Capture the renderer's stdout JSON as is: `{"ok":true,"e2e_directory":"...","summary":{"written":0,"rewritten":0,"unchanged":0,"preserved":0,"deleted":0,"conflict":0},"details":[{"uat_id":"...","path":"...","action":"written"}]}`. A conflict detail also carries `reason`. The renderer validates the routing table and the SPEC before it writes anything, and keeps a render ledger (`uat-render.json`) beside the plan README so a later run finds the spec of a removed or re-routed UAT. The ledger lives in the plan folder and is never committed.
 
-The id scan checks every path and every text file under `apps/web/.playwright/` (the frontend package's Playwright directory), except the `output/` run-artifacts folder, and under `apps/web/app/route-tests/`, for a working-document id. Run it even when the renderer reported nothing changed.
+The id scan checks every path and every text file under `apps/web/.playwright/` (the web member's Playwright directory), except the `output/` run-artifacts folder, and under `apps/web/app/route-tests/`, for a working-document id. Run it even when the renderer reported nothing changed.
 
 ## Exit codes
 

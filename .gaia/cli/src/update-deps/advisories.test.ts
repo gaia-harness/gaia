@@ -244,8 +244,8 @@ const registerCliMember = (listed: boolean): void => {
   writeFileSync(
     path.join(sandbox.root, 'pnpm-workspace.yaml'),
     listed ?
-      `packages:\n  - frontend\n  - ${MEMBER}\n`
-    : 'packages:\n  - frontend\n'
+      `packages:\n  - apps/web\n  - ${MEMBER}\n`
+    : 'packages:\n  - apps/web\n'
   );
 };
 

@@ -105,7 +105,7 @@ _ag_say() {
 
 # _ag_shaped <pinned-question-json|null>: true when a questions[] entry has the
 # header the pinned question carries (`Audit loop`, set in audit-loop-state-lib.sh)
-# or an option label equal to a pinned label, each compared without a trailing
+# or an option label equal to a pinned label, both labels compared without a trailing
 # ` (Recommended)`. Exact equality only.
 _ag_shaped() {
   printf '%s' "$payload" | jq -r --argjson pin "${1:-null}" '

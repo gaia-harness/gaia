@@ -173,7 +173,7 @@ describe('built-in default', () => {
     expect(patterns.some((p) => p.test('app/utils/x.test.ts'))).toBe(false);
   });
 
-  test('the built-in registry is frontend at frontend', () => {
+  test('the built-in registry is web at apps/web', () => {
     expect(BUILTIN_REGISTRY).toEqual([{name: 'web', path: 'apps/web'}]);
   });
 

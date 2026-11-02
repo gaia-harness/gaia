@@ -31,24 +31,24 @@ afterEach(() => {
 
 describe('readCliWorkspaceMember', () => {
   test('returns the member when the workspace lists it and its manifest exists', () => {
-    writeWorkspace('packages:\n  - frontend\n  - .gaia/cli\n');
+    writeWorkspace('packages:\n  - apps/web\n  - .gaia/cli\n');
     writeMemberManifest();
     expect(readCliWorkspaceMember(repoRoot)).toBe(CLI_WORKSPACE_MEMBER);
   });
 
   test('returns the member for a quoted list item', () => {
-    writeWorkspace("packages:\n  - frontend\n  - '.gaia/cli'\n");
+    writeWorkspace("packages:\n  - apps/web\n  - '.gaia/cli'\n");
     writeMemberManifest();
     expect(readCliWorkspaceMember(repoRoot)).toBe(CLI_WORKSPACE_MEMBER);
   });
 
   test('returns null when the workspace lists the member but its manifest is missing', () => {
-    writeWorkspace('packages:\n  - frontend\n  - .gaia/cli\n');
+    writeWorkspace('packages:\n  - apps/web\n  - .gaia/cli\n');
     expect(readCliWorkspaceMember(repoRoot)).toBeNull();
   });
 
   test.each([
-    ['does not list the member', 'packages:\n  - frontend\n'],
+    ['does not list the member', 'packages:\n  - apps/web\n'],
     ['is unparseable', 'packages: [unclosed\n  - : :\n'],
     ['has a non-list packages value', 'packages: .gaia/cli\n'],
   ])('returns null when the workspace file %s', (_label, content) => {

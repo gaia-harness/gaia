@@ -73,7 +73,7 @@ write_builtin_descriptor() {
 }
 
 # write_packages_moved <root> [unit-json] [strict-json] [emergent-json]
-# The 2.0.0 layout: the app at `apps/web/` (registry path `apps/web`).
+# The 2.4.0 layout: the app at `apps/web/` (registry path `apps/web`).
 write_packages_moved() {
   local root="$1"
   shift
