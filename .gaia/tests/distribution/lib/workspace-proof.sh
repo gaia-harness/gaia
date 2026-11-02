@@ -4,8 +4,8 @@
 # crossed-fixture.sh; defines functions only.
 #
 # API:
-#   proof_tool_bin                    - prints the real checkout's directory of
-#                                       tsc and vitest, or fails
+#   proof_tool_bin                    - installs the staged scaffold and prints
+#                                       its directory of tsc and vitest, or fails
 #   proof_install_machinery STAGING DIR
 #                                     - copies the staged hooks, scripts, agents
 #                                       and audit libraries into DIR and commits
@@ -15,13 +15,15 @@
 #   proof_write_registry DIR NAME=PATH...
 #                                     - writes .gaia/packages.json
 
-# The checkout's own binaries run against scratch files: the scratch tree gets no
-# install and no link into the checkout, so nothing a package manager writes can
-# reach the real node_modules.
+# The tools come from an install of the staged scaffold, never the checkout's
+# node_modules, which a CI runner does not install. The fixture tree itself
+# stays uninstalled, so its members' scripts run only these binaries.
 proof_tool_bin() {
-  local tool_directory="$PROJECT_ROOT/apps/web/node_modules/.bin"
+  local tool_directory="$SCAFFOLD/apps/web/node_modules/.bin"
+  run_logged "pnpm install --frozen-lockfile (scaffold tools)" "$WORK/tools-install.log" \
+    pnpm -C "$SCAFFOLD" install --frozen-lockfile
   [ -x "$tool_directory/tsc" ] && [ -x "$tool_directory/vitest" ] \
-    || { fail "the checkout has no installed tsc and vitest at $tool_directory"; return 1; }
+    || { fail "the scaffold install left no tsc and vitest at $tool_directory"; return 1; }
   printf '%s' "$tool_directory"
 }
 

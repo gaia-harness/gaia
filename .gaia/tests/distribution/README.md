@@ -71,7 +71,7 @@ The app lives at `apps/web` in a workspace of `apps/*` and `packages/*`. These s
 - `18-fresh-apps-web.sh` is a fresh project: no path named for the retired app root, `packages/` holding only `.gitkeep`, a frozen install that tolerates the unmatched glob, the setup env seed writing `apps/web/.env`, then typecheck, lint, test:ci, build, Playwright and a dev-server smoke from the root. The test run must report at least as many test files as the source tree holds, derived rather than pinned, because `test:ci` passes when it finds none. Exclusive.
 - `19-crossing-edits.sh` runs the committed copies of each older release's note selector against the staged bundle, then the real crossing verbs on a monorepo fixture and a stock tree: the workspace list, the registry, the opt-in settings and the by-name report of an unlisted folder.
 - `20-member-reach.sh` builds the crossed fixture with `lib/crossed-fixture.sh` and runs the staged pre-commit hook, dispatch resolver and the scope command quoted in the frontend agent file against a library with empty globs and an infrastructure member.
-- `21-workspace-gate.sh` runs the staged root gate scripts across members on different runners with the checkout's own `tsc` and `vitest` (no install in the scratch tree), the member warning script and the Quick check. Exclusive.
+- `21-workspace-gate.sh` runs the staged root gate scripts across members on different runners with the `tsc` and `vitest` of an installed staged scaffold (no install in the fixture tree), the member warning script and the Quick check. Exclusive.
 
 `lib/workspace-proof.sh` holds the helpers 20 and 21 share.
 

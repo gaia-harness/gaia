@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # 21-workspace-gate.sh
 # distribution-runner: exclusive
+# distribution-runner: paths package.json pnpm-workspace.yaml pnpm-lock.yaml apps/web/package.json .claude/hooks/lib/gaia-packages.sh .gaia/scripts/gate-member-warnings.sh wiki/decisions/Quality* .gaia/tests/distribution/lib/**
 #
 # The root gate across members that are not the web app, run with the staged
 # bundle's own root scripts and gate tooling. Two members run Vitest, a third
 # runs a runner that exits 1 on any argument, so the root test:ci must forward
-# none. The checkout's own tsc and vitest run against the scratch files; the
+# none. The staged scaffold's tsc and vitest run against the scratch files; the
 # scratch tree has no install.
 #
 #   1. A green control: the root typecheck and test:ci exit 0, the third
@@ -20,8 +21,9 @@
 #      gate with only the web member's package.json staged and with only a
 #      library tsconfig staged.
 #
-# Layer 0.5: runs on the host or runner, no install; exclusive because Vitest
-# uses every core.
+# Layer 0: no Docker; needs host pnpm and network access to install the
+# scaffold that supplies tsc and vitest. Exclusive because Vitest uses every
+# core.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/lib.sh"

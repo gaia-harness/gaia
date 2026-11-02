@@ -132,6 +132,13 @@ jobs:
               - 'apps/web/app/state/**'
               - 'apps/web/app/services/**'
               - 'apps/web/test/**'
+              # Declared by the workspace-gate scenario: the root scripts, the
+              # member registry reader and warning script it copies, and the
+              # Quality Gate page whose Quick check it runs.
+              - 'package.json'
+              - '.claude/hooks/lib/gaia-packages.sh'
+              - '.gaia/scripts/gate-member-warnings.sh'
+              - 'wiki/decisions/Quality*'
       - if: steps.release.outputs.fast != 'true' && (steps.filter.outputs.code == 'true' || github.event_name != 'pull_request')
         name: Setup Node
         uses: ./.github/actions/gaia-setup-node
