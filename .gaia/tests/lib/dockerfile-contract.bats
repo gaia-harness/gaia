@@ -141,3 +141,19 @@ manifest_version() {
   [ -n "$(manifest_version "$differing")" ]
   [ "$(manifest_version "$differing")" != "$(manifest_version "$REPO_ROOT/package.json")" ]
 }
+
+# A pnpm run under corepack never switches to the pinned version, so the image
+# installs pnpm with npm, the one method GAIA ships.
+@test "Dockerfile never runs corepack" {
+  run grep -ci 'corepack' <<<"$(dockerfile_instructions)"
+  [ "$output" -eq 0 ]
+}
+
+@test "Dockerfile npm-installs the pinned pnpm only after checking its tarball against the pin's sha512" {
+  local instructions
+  instructions="$(dockerfile_instructions)"
+  [[ "$instructions" == *'packageManager'* ]]
+  [[ "$instructions" == *'npm pack'* ]]
+  [[ "$instructions" == *'sha512sum -c'* ]]
+  [[ "$instructions" == *'npm install -g "./pnpm-'* ]]
+}
