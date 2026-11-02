@@ -28,6 +28,7 @@ setup() {
   THIS_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
   REPO_ROOT="$(cd "$THIS_DIRECTORY/../../.." && pwd)"
   WAIT="$REPO_ROOT/.gaia/scripts/pr-wait-merge.sh"
+  GREEN_LIB="$REPO_ROOT/.gaia/scripts/pr-wait-merge-green-lib.sh"
   TEMPORARY_DIRECTORY="$(mktemp -d -t pr-wait-merge-XXXXXX)"
   # Absolute, because the gh-absent test below empties PATH, and `env` could
   # then not find the interpreter itself.
@@ -288,14 +289,14 @@ tsv() {
 # These run the filters through real jq against the shapes gh actually
 # returns, so the defect the stub cannot see reds here instead.
 
-@test "VIEW_JQ maps a null mergeable to UNKNOWN and keeps the state" {
+@test "VIEW_JQ maps a null mergeable to UNKNOWN and keeps the state and base branch" {
   local filter jq_output
   filter=$(sed -n "s/^VIEW_JQ='\(.*\)'$/\1/p" "$WAIT")
   [ -n "$filter" ] || return 1
-  jq_output=$(jq -r "$filter" <<<'{"state":"OPEN","mergeable":null}')
-  [ "$jq_output" = "$(printf 'OPEN\tUNKNOWN')" ] || return 1
-  jq_output=$(jq -r "$filter" <<<'{"state":"OPEN","mergeable":"CONFLICTING"}')
-  [ "$jq_output" = "$(printf 'OPEN\tCONFLICTING')" ]
+  jq_output=$(jq -r "$filter" <<<'{"state":"OPEN","mergeable":null,"baseRefName":"main"}')
+  [ "$jq_output" = "$(printf 'OPEN\tUNKNOWN\tmain')" ] || return 1
+  jq_output=$(jq -r "$filter" <<<'{"state":"OPEN","mergeable":"CONFLICTING","baseRefName":"main"}')
+  [ "$jq_output" = "$(printf 'OPEN\tCONFLICTING\tmain')" ]
 }
 
 @test "CHECKS_JQ counts the failed and cancelled buckets and nothing else" {
@@ -564,82 +565,275 @@ tsv() {
 
 # --- --until-green: the wait for a repository with auto-merge off -------------
 
-# stub_green <view-tsv> <green-answer>: the failure read answers 0, and the
-# green read, told apart by its filter text, answers <green-answer>.
-stub_green() {
+# stub_required <view-tsv> <protection> <rulesets> <checks-json>
+#
+# The --until-green stub. <view-tsv> answers `gh pr view`. <protection> and
+# <rulesets> answer the two `gh api` reads of the base branch's declared
+# required checks, each as the post-filter text gh prints (one JSON-encoded
+# context name per line); `-` makes that read fail. <checks-json> is the
+# `--json name,bucket` list `gh pr checks` returns. Unlike the stubs above,
+# both checks reads, the failure read and the green read, run the script's own
+# `--jq` filter through real jq over it, so the filters themselves are under
+# test, not canned answers.
+stub_required() {
   stub_gh "$1" 0
-  printf '%s\n' "$2" >"$TEMPORARY_DIRECTORY/green.txt"
+  printf '%s' "$2" >"$TEMPORARY_DIRECTORY/protection.txt"
+  printf '%s' "$3" >"$TEMPORARY_DIRECTORY/rulesets.txt"
+  printf '%s' "$4" >"$TEMPORARY_DIRECTORY/checks.json"
   cat >"$TEMPORARY_DIRECTORY/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$STUB_DIRECTORY/argv.log"
+answer_api() {
+  [ "$(cat "$1")" = "-" ] && exit 1
+  [ -s "$1" ] && { cat "$1"; printf '\n'; }
+  exit 0
+}
+case "$1" in
+  api)
+    printf 'repo=%s\n' "${GH_REPO:-}" >>"$STUB_DIRECTORY/api-repo.log"
+    case "$*" in
+      */rules/branches/*) answer_api "$STUB_DIRECTORY/rulesets.txt" ;;
+      */branches/*) answer_api "$STUB_DIRECTORY/protection.txt" ;;
+      *) exit 1 ;;
+    esac
+    ;;
+esac
 case "$2" in
   view) cat "$STUB_DIRECTORY/view.tsv"; printf '\n' ;;
   checks)
-    case "$*" in
-      *'"green"'*) cat "$STUB_DIRECTORY/green.txt" ;;
-      *) cat "$STUB_DIRECTORY/checks.txt" ;;
-    esac
+    filter=""
+    while [ "$#" -gt 0 ]; do
+      [ "$1" = "--jq" ] && filter="$2"
+      shift
+    done
+    jq -r "$filter" "$STUB_DIRECTORY/checks.json"
     ;;
   *) exit 1 ;;
 esac
 EOF
 }
 
-@test "--until-green returns GREEN once required checks pass and the pull request is mergeable" {
-  stub_green "$(tsv OPEN MERGEABLE)" green
+# A pull request on base `main`, open and mergeable.
+open_on_main() {
+  printf 'OPEN\tMERGEABLE\tmain'
+}
+
+# The two declared contexts the fixtures below use, as gh's --jq prints them.
+TWO_DECLARED='"Shellcheck and bats"
+"Audit CI Tests"'
+BOTH_PASSED='[{"name":"Shellcheck and bats","bucket":"pass"},{"name":"Audit CI Tests","bucket":"pass"}]'
+# The same two plus the audit status, declared the way this repository's
+# ruleset declares it.
+WITH_AUDIT_DECLARED='"GAIA-Audit"
+"Shellcheck and bats"
+"Audit CI Tests"'
+
+# --- the audit status: the merge gate decides it --------------------------------
+
+@test "--until-green does not wait for an absent GAIA-Audit once every other declared check passed" {
+  stub_required "$(open_on_main)" '' "$WITH_AUDIT_DECLARED" "$BOTH_PASSED"
   run bash "$WAIT" --pr 7 --until-green --interval 0
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "GREEN" ]
 }
 
+@test "--until-green holds on a present GAIA-Audit that is pending" {
+  stub_required "$(open_on_main)" '' "$WITH_AUDIT_DECLARED" \
+    '[{"name":"Shellcheck and bats","bucket":"pass"},{"name":"Audit CI Tests","bucket":"pass"},{"name":"GAIA-Audit","bucket":"pending"}]'
+  run bash "$WAIT" --pr 7 --until-green --attempts 2 --interval 0
+  [ "$status" -eq 5 ]
+  grep -qF -- 'not yet present and passed: GAIA-Audit' <<<"$output"
+}
+
+@test "--until-green reports a present failing GAIA-Audit as a failed required check" {
+  stub_required "$(open_on_main)" '' "$WITH_AUDIT_DECLARED" \
+    '[{"name":"Shellcheck and bats","bucket":"pass"},{"name":"Audit CI Tests","bucket":"pass"},{"name":"GAIA-Audit","bucket":"fail"}]'
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 4 ]
+  [ "${lines[0]}" = "CHECK_FAILED" ]
+}
+
+@test "an absent GAIA-Audit excuses no other declared check" {
+  stub_required "$(open_on_main)" '' "$WITH_AUDIT_DECLARED" \
+    '[{"name":"Shellcheck and bats","bucket":"pass"}]'
+  run bash "$WAIT" --pr 7 --until-green --attempts 2 --interval 0
+  [ "$status" -eq 5 ]
+  grep -qF -- 'not yet present and passed: Audit CI Tests.' <<<"$output"
+}
+
+# The two bypasses the merge hook stamps: it posts GAIA-Audit as a success
+# whose description starts `skipped:` while `gh pr merge` runs, never before.
+# `gh pr checks` reads only its bucket, so each is driven as the wait sees it
+# on either side of the merge: absent before, passed after.
+@test "an out-of-scope pull request reaches GREEN before the merge posts its skipped status" {
+  stub_required "$(open_on_main)" '' "$WITH_AUDIT_DECLARED" "$BOTH_PASSED"
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ] || return 1
+  [ "${lines[0]}" = "GREEN" ] || return 1
+  stub_required "$(open_on_main)" '' "$WITH_AUDIT_DECLARED" \
+    '[{"name":"Shellcheck and bats","bucket":"pass"},{"name":"Audit CI Tests","bucket":"pass"},{"name":"GAIA-Audit","bucket":"pass"}]'
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "GREEN" ]
+}
+
+@test "a chore(deps) manifest-only pull request reaches GREEN before the merge posts its skipped status" {
+  stub_required "$(open_on_main)" '' '"GAIA-Audit"
+"Vitest and Playwright"' '[{"name":"Vitest and Playwright","bucket":"pass"}]'
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ] || return 1
+  [ "${lines[0]}" = "GREEN" ] || return 1
+  stub_required "$(open_on_main)" '' '"GAIA-Audit"
+"Vitest and Playwright"' '[{"name":"Vitest and Playwright","bucket":"pass"},{"name":"GAIA-Audit","bucket":"pass"}]'
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "GREEN" ]
+}
+
+@test "--until-green returns GREEN once every declared required check passed and the pull request is mergeable" {
+  stub_required "$(open_on_main)" "$TWO_DECLARED" '' "$BOTH_PASSED"
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "GREEN" ]
+}
+
+@test "--until-green keeps waiting while a declared required check has not registered" {
+  # The registered required checks all pass, and one declared context, a
+  # `needs:` aggregator, has no check run yet. A filter that reads only the
+  # registered list calls that green.
+  stub_required "$(open_on_main)" "$TWO_DECLARED" '' \
+    '[{"name":"Shellcheck and bats","bucket":"pass"}]'
+  run bash "$WAIT" --pr 7 --until-green --attempts 3 --interval 0
+  [ "$status" -eq 5 ]
+  [ "${lines[0]}" = "TIMEOUT" ]
+  [ "$(view_calls)" -eq 3 ]
+  grep -qF -- 'Audit CI Tests' <<<"$output"
+}
+
+@test "--until-green counts contexts a ruleset declares, beside branch protection's" {
+  stub_required "$(open_on_main)" '"Shellcheck and bats"' '"Audit CI Tests"' \
+    '[{"name":"Shellcheck and bats","bucket":"pass"}]'
+  run bash "$WAIT" --pr 7 --until-green --attempts 2 --interval 0
+  [ "$status" -eq 5 ]
+  grep -qF -- 'Audit CI Tests' <<<"$output"
+}
+
+@test "--until-green reads rulesets alone when branch protection declares nothing" {
+  stub_required "$(open_on_main)" '' "$TWO_DECLARED" "$BOTH_PASSED"
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "GREEN" ]
+}
+
+@test "--until-green never falls back to the registered checks when the declared set cannot be read" {
+  stub_required "$(open_on_main)" - '' "$BOTH_PASSED"
+  run bash "$WAIT" --pr 7 --until-green --attempts 2 --interval 0
+  [ "$status" -eq 5 ]
+  [ "${lines[0]}" = "TIMEOUT" ]
+  grep -qF -- 'could not be read' <<<"$output"
+}
+
+@test "--until-green times out naming why when no required check is declared" {
+  stub_required "$(open_on_main)" '' '' "$BOTH_PASSED"
+  run bash "$WAIT" --pr 7 --until-green --attempts 1 --interval 0
+  [ "$status" -eq 5 ]
+  grep -qF -- 'no required check is declared' <<<"$output"
+}
+
+@test "--until-green keeps waiting when the base branch cannot be read" {
+  stub_required "$(tsv OPEN MERGEABLE)" "$TWO_DECLARED" '' "$BOTH_PASSED"
+  run bash "$WAIT" --pr 7 --until-green --attempts 1 --interval 0
+  [ "$status" -eq 5 ]
+  grep -qF -- 'base branch' <<<"$output"
+}
+
+@test "--until-green reads the declared set once, not once per attempt" {
+  stub_required "$(open_on_main)" "$TWO_DECLARED" '' \
+    '[{"name":"Shellcheck and bats","bucket":"pass"}]'
+  run bash "$WAIT" --pr 7 --until-green --attempts 3 --interval 0
+  [ "$status" -eq 5 ]
+  [ "$(grep -c '^api ' "$TEMPORARY_DIRECTORY/argv.log")" -eq 2 ]
+}
+
+@test "--until-green passes --repo to the declared-set reads" {
+  stub_required "$(open_on_main)" "$TWO_DECLARED" '' "$BOTH_PASSED"
+  run bash "$WAIT" --pr 7 --repo gaia-react/create-gaia --until-green --interval 0
+  [ "$status" -eq 0 ]
+  # gh api takes no --repo, so the script carries it as GH_REPO.
+  grep -vxF -- 'repo=gaia-react/create-gaia' "$TEMPORARY_DIRECTORY/api-repo.log" && return 1
+  [ "$(grep -c . "$TEMPORARY_DIRECTORY/api-repo.log")" -eq 2 ]
+}
+
 @test "twin: without --until-green the same state keeps waiting and never prints GREEN" {
-  stub_green "$(tsv OPEN MERGEABLE)" green
+  stub_required "$(open_on_main)" "$TWO_DECLARED" '' "$BOTH_PASSED"
   run bash "$WAIT" --pr 7 --attempts 2 --interval 0
   [ "$status" -eq 5 ]
   [ "${lines[0]}" = "TIMEOUT" ]
+  grep -q '^api ' "$TEMPORARY_DIRECTORY/argv.log" && return 1
+  true
 }
 
 @test "--until-green keeps waiting on a pending required check" {
-  stub_green "$(tsv OPEN MERGEABLE)" waiting
+  stub_required "$(open_on_main)" "$TWO_DECLARED" '' \
+    '[{"name":"Shellcheck and bats","bucket":"pass"},{"name":"Audit CI Tests","bucket":"pending"}]'
   run bash "$WAIT" --pr 7 --until-green --attempts 3 --interval 0
   [ "$status" -eq 5 ]
   [ "$(view_calls)" -eq 3 ]
 }
 
 @test "--until-green keeps waiting while mergeable reads UNKNOWN, though checks are green" {
-  stub_green "$(tsv OPEN UNKNOWN)" green
+  stub_required "$(printf 'OPEN\tUNKNOWN\tmain')" "$TWO_DECLARED" '' "$BOTH_PASSED"
   run bash "$WAIT" --pr 7 --until-green --attempts 2 --interval 0
   [ "$status" -eq 5 ]
 }
 
 @test "--until-green still stops on a conflict and on a failed required check" {
-  stub_green "$(tsv OPEN CONFLICTING)" green
+  stub_required "$(printf 'OPEN\tCONFLICTING\tmain')" "$TWO_DECLARED" '' "$BOTH_PASSED"
   run bash "$WAIT" --pr 7 --until-green --interval 0
   [ "$status" -eq 3 ]
-  stub_gh "$(tsv OPEN MERGEABLE)" 1
+  stub_gh "$(open_on_main)" 1
   run bash "$WAIT" --pr 7 --until-green --interval 0
   [ "$status" -eq 4 ]
 }
 
 @test "--until-green reads required checks only, on both the failure and the green read" {
-  stub_green "$(tsv OPEN MERGEABLE)" green
+  stub_required "$(open_on_main)" "$TWO_DECLARED" '' "$BOTH_PASSED"
   run bash "$WAIT" --pr 7 --until-green --interval 0
   [ "$status" -eq 0 ]
   grep 'pr checks' "$TEMPORARY_DIRECTORY/argv.log" | grep -qv -- '--required' && return 1
   true
 }
 
-@test "the green filter refuses an empty list and any bucket that is not finished" {
+@test "a non-required Chromatic status never holds --until-green" {
+  # Chromatic's per-app statuses (`UI Tests`) are not declared required, so
+  # neither read sees them: the declared set does not name them, and the
+  # `--required` checks read does not list them. Its required CI job,
+  # `Run Chromatic`, still has to pass like any other declared context.
+  stub_required "$(open_on_main)" '"Run Chromatic"' '' \
+    '[{"name":"Run Chromatic","bucket":"skipping"}]'
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "GREEN" ]
+}
+
+@test "the green filter answers green only when every declared context is present and finished" {
   local filter
-  filter="$(sed -n "s/^GREEN_JQ='\(.*\)'\$/\1/p" "$WAIT")"
-  [ -n "$filter" ]
-  [ "$(jq -n '[]' | jq -r "$filter")" = waiting ]
-  [ "$(jq -n '[{bucket:"pass"},{bucket:"pending"}]' | jq -r "$filter")" = waiting ]
-  [ "$(jq -n '[{bucket:"pass"},{bucket:"skipping"}]' | jq -r "$filter")" = green ]
+  filter="$(sed -n "s/^GREEN_JQ='\(.*\)'\$/\1/p" "$GREEN_LIB")"
+  [ -n "$filter" ] || return 1
+  green() { jq -r "$1 as \$declared | $filter"; }
+  [ "$(jq -n '[]' | green '["A"]')" = 'waiting: A' ] || return 1
+  [ "$(jq -n '[{name:"A",bucket:"pass"},{name:"B",bucket:"pending"}]' | green '["A","B"]')" = 'waiting: B' ] || return 1
+  [ "$(jq -n '[{name:"A",bucket:"pass"}]' | green '["A","B"]')" = 'waiting: B' ] || return 1
+  [ "$(jq -n '[{name:"A",bucket:"pass"},{name:"B",bucket:"skipping"}]' | green '["A","B"]')" = green ] || return 1
+  [ "$(jq -n '[{name:"A",bucket:"pass"},{name:"A",bucket:"pending"}]' | green '["A"]')" = 'waiting: A' ] || return 1
+  [ "$(jq -n '[{name:"A",bucket:"pass"}]' | green '[]')" = 'waiting: no required check is declared' ] || return 1
+  [ "$(jq -n '[{name:"A",bucket:"pass"}]' | green '["GAIA-Audit","A"]')" = green ] || return 1
+  [ "$(jq -n '[{name:"A",bucket:"pass"},{name:"GAIA-Audit",bucket:"pending"}]' | green '["GAIA-Audit","A"]')" = 'waiting: GAIA-Audit' ] || return 1
+  [ "$(jq -n '[]' | green '["GAIA-Audit","A"]')" = 'waiting: A' ]
 }
 
 @test "MERGED during --until-green is still MERGED" {
-  stub_green "$(tsv MERGED MERGEABLE)" green
+  stub_required "$(printf 'MERGED\tMERGEABLE\tmain')" "$TWO_DECLARED" '' "$BOTH_PASSED"
   run bash "$WAIT" --pr 7 --until-green --interval 0
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "MERGED" ]

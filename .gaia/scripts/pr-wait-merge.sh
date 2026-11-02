@@ -9,9 +9,11 @@
 #                                       [--attempts <N>] [--interval <seconds>]
 #                                       [--until-green]
 #
-# --until-green, for a repository with auto-merge off: GREEN once every required
-# check passed and the pull request is mergeable, and the caller then merges.
-# A non-required check that never finishes cannot hold it.
+# --until-green, for a repository with auto-merge off: GREEN means CI is green
+# and the caller merges. Every required check the base branch declares (branch
+# protection and rulesets) has run and passed, and the pull request is
+# mergeable. The merge gate decides the audit, so an absent GAIA-Audit does not
+# hold it; pr-wait-merge-green-lib.sh says why.
 #
 # Exit codes, one per verdict, so a caller branches on the status rather than
 # parsing prose. The verdict token is also printed to stdout on its own line.
@@ -102,9 +104,11 @@ Usage: bash .gaia/scripts/$PROGRAM_NAME --pr <number> [--repo <[HOST/]OWNER/REPO
   --interval  seconds to sleep between reads. Default $DEFAULT_INTERVAL.
               Zero is allowed, which polls without sleeping.
   --until-green
-              return GREEN when every required check passed and the pull
-              request is mergeable, for a repository with auto-merge off. The
-              caller then runs gh pr merge. Non-required checks are ignored.
+              return GREEN when every required check the base branch declares
+              has run and passed and the pull request is mergeable, for a
+              repository with auto-merge off. An absent GAIA-Audit is left
+              to the merge gate. The caller then runs gh pr merge.
+              Non-required checks are ignored.
 
 Prints one verdict token on stdout and exits:
   MERGED (0), GREEN (0, --until-green only), CONFLICTING (3), CHECK_FAILED (4),
@@ -222,17 +226,20 @@ trap 'exit 143' TERM
 # filter says, so a repair landing in one branch alone would leave a wait that
 # passes `--repo` reading a different shape than one that does not.
 # shellcheck disable=SC2016
-VIEW_JQ='[.state, (.mergeable // "UNKNOWN")] | @tsv'
+VIEW_JQ='[.state, (.mergeable // "UNKNOWN"), .baseRefName] | @tsv'
 # shellcheck disable=SC2016
 CHECKS_JQ='map(select(.bucket == "fail" or .bucket == "cancel")) | length'
-# shellcheck disable=SC2016
-GREEN_JQ='if length > 0 and all(.bucket == "pass" or .bucket == "skipping") then "green" else "waiting" end'
+
+self_directory="${BASH_SOURCE[0]%/*}"
+[ "$self_directory" != "${BASH_SOURCE[0]}" ] || self_directory="."
+# shellcheck source=.gaia/scripts/pr-wait-merge-green-lib.sh
+. "$self_directory/pr-wait-merge-green-lib.sh"
 
 read_state() {
   if [ -n "$REPO" ]; then
-    gh pr view "$PR" --repo "$REPO" --json state,mergeable --jq "$VIEW_JQ" 2>/dev/null
+    gh pr view "$PR" --repo "$REPO" --json state,mergeable,baseRefName --jq "$VIEW_JQ" 2>/dev/null
   else
-    gh pr view "$PR" --json state,mergeable --jq "$VIEW_JQ" 2>/dev/null
+    gh pr view "$PR" --json state,mergeable,baseRefName --jq "$VIEW_JQ" 2>/dev/null
   fi
 }
 
@@ -257,22 +264,6 @@ required_check_failed() {
   [ "$failed" -gt 0 ]
 }
 
-# 0 when required checks exist and every one passed or was skipped. A pending
-# bucket, an empty list and an unreadable answer all keep the wait going: green
-# has to be proved, and a repository with no required check times out here
-# rather than reporting a green nothing established.
-required_checks_green() {
-  local answer
-  if [ -n "$REPO" ]; then
-    answer=$(gh pr checks "$PR" --repo "$REPO" --required --json bucket \
-      --jq "$GREEN_JQ" 2>/dev/null) || return 1
-  else
-    answer=$(gh pr checks "$PR" --required --json bucket \
-      --jq "$GREEN_JQ" 2>/dev/null) || return 1
-  fi
-  [ "$answer" = "green" ]
-}
-
 verdict="TIMEOUT"
 attempt=0
 # Whether ANY read across the whole bound came back with a state. Zero is what
@@ -280,19 +271,25 @@ attempt=0
 # otherwise the same blank line. Gated on the whole bound rather than on a
 # single failure, so one transient error still keeps waiting.
 reads_ok=0
+DECLARED_REQUIRED=""
+GREEN_BLOCKER=""
 
 while [ "$attempt" -lt "$ATTEMPTS" ]; do
   attempt=$((attempt + 1))
 
   line=$(read_state)
   state="${line%%$'\t'*}"
-  mergeable="${line#*$'\t'}"
-  # An unreadable answer leaves both halves equal to the whole line (no tab to
-  # split on), including the empty string. Blank them rather than letting a gh
+  rest="${line#*$'\t'}"
+  mergeable="${rest%%$'\t'*}"
+  base_branch=""
+  [ "$mergeable" != "$rest" ] && base_branch="${rest#*$'\t'}"
+  # An unreadable answer leaves `state` equal to the whole line (no tab to split
+  # on), the empty string included. Blank every field rather than letting a gh
   # error message flow into the comparisons below as if it were a state.
   if [ "$state" = "$line" ]; then
     state=""
     mergeable=""
+    base_branch=""
   fi
   [ -n "$state" ] && reads_ok=$((reads_ok + 1))
 
@@ -332,7 +329,7 @@ while [ "$attempt" -lt "$ATTEMPTS" ]; do
 
   # MERGEABLE only, so a green read during the UNKNOWN window after a push keeps
   # waiting instead of handing the caller a merge that may conflict.
-  if [ "$UNTIL_GREEN" -eq 1 ] && [ "$mergeable" = "MERGEABLE" ] && required_checks_green; then
+  if [ "$UNTIL_GREEN" -eq 1 ] && [ "$mergeable" = "MERGEABLE" ] && until_green_reached; then
     verdict="GREEN"
     break
   fi
@@ -395,6 +392,9 @@ case "$verdict" in
     printf 'merge queued with --auto completes when its checks pass; with none queued,\n' >&2
     printf 'nothing is merging this pull request yet and the wait alone will not change\n' >&2
     printf 'that. Do no local cleanup until gh pr view %s --json state reads MERGED.\n' "$PR" >&2
+    if [ "$UNTIL_GREEN" -eq 1 ]; then
+      printf 'GREEN was not proved: %s.\n' "${GREEN_BLOCKER:-the pull request never read MERGEABLE}" >&2
+    fi
     exit 5
     ;;
 esac
