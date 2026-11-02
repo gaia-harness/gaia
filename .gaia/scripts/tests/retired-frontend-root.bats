@@ -120,11 +120,12 @@ run_gate() {
 @test "the two repo-wide rules keep their intended globs and name no frontend path" {
   local comments="$REPO_ROOT/.claude/rules/code-comments.md"
   local doc_ids="$REPO_ROOT/.claude/rules/working-doc-ids.md"
-  grep -qF -- "  - 'apps/web/app/**/*.{ts,tsx,js,jsx,css}'" "$comments"
-  grep -qF -- "  - '.gaia/**/*.ts'" "$comments"
-  grep -qF -- "  - '**/*.bats'" "$comments"
+  grep -qF -- "  - '**/*.{ts,tsx,js,jsx,mjs,cjs}'" "$comments"
+  grep -qF -- "  - '**/*.{sh,bats,jq,awk,sed}'" "$comments"
+  grep -qF -- "  - '**/*.{yml,yaml}'" "$comments"
+  grep -qF -- "  - '**/*.{ts,tsx,js,jsx,mjs,cjs}'" "$doc_ids"
   grep -qF -- "  - 'apps/web/.claude/**/*.md'" "$doc_ids"
-  grep -qF -- "  - '.claude/**/*.{md,sh}'" "$doc_ids"
+  grep -qF -- "  - '.claude/**/*.md'" "$doc_ids"
   grep -qF -- "  - 'wiki/**/*.md'" "$doc_ids"
   grep -qF -- "frontend/" "$comments" && return 1
   grep -qF -- "frontend/" "$doc_ids" && return 1
