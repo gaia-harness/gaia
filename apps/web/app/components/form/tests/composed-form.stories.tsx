@@ -68,6 +68,7 @@ const isDisabled = (control: HTMLElement) =>
 Disabled.test('disables every control', async ({canvas}) => {
   const controls = [
     ...canvas.getAllByRole('textbox'),
+    canvas.getByLabelText(/password/i),
     canvas.getByRole('combobox'),
     ...canvas.getAllByRole('checkbox'),
     ...canvas.getAllByRole('radio'),

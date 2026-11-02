@@ -9,7 +9,7 @@ import stack from './stack';
 const getToastElement = (canvasElement: HTMLElement, title: string) =>
   within(canvasElement.ownerDocument.body).getByRole('dialog', {name: title});
 
-const destructiveColor = (): string => {
+const readDestructiveColor = (): string => {
   const probe = document.createElement('span');
   probe.style.color = 'var(--destructive)';
   document.body.append(probe);
@@ -216,14 +216,13 @@ Info.test(
 
       await expectToast(canvasElement, `${type} icon message`);
 
-      // The icon is aria-hidden, so it is reached through its toast: it is the
-      // toast's first svg, because the close button's icon renders after it.
-      // The svg's child shapes are its drawing, whatever the icon library
-      // names its classes.
+      // The icon is aria-hidden, so it is reached through its toast's icon
+      // slot. The svg's child shapes are its drawing, whatever the icon
+      // library names its classes.
       const icon = getToastElement(
         canvasElement,
         `${type} icon message`
-      ).querySelector('svg');
+      ).querySelector('[data-slot="toast-icon"] svg');
 
       await expect(icon).not.toBeNull();
       drawings.push(icon?.innerHTML ?? '');
@@ -257,7 +256,7 @@ Info.test('colors only the error icon destructive', async ({canvasElement}) => {
     'plain info message'
   ).querySelector('[data-slot="toast-icon"] svg');
 
-  const destructive = destructiveColor();
+  const destructive = readDestructiveColor();
 
   await expect(errorColor).toBe(destructive);
   await expect(getComputedStyle(infoIcon as Element).color).not.toBe(
