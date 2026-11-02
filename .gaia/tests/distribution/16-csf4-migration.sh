@@ -33,6 +33,11 @@
 #   9. --update-merge on a real post-merge tree (the update's CSF4 files laid
 #      over a committed CSF3-era tree, uncommitted) converts only the adopter
 #      stories and leaves every overlaid file byte-identical.
+#  10. A crossing: a 2.2.0-shaped CSF3 project at the old app root, moved by
+#      `crossing move` with its config already merged, leaves every story a
+#      staged rename. --update-merge converts them; a story edited on top of
+#      the rename refuses with dirty-write-set, and so does a renamed config
+#      the repair must rewrite.
 #
 # Layer 0: needs host pnpm and network access for the install, the codemod
 # fetch, and Chromium.
@@ -351,4 +356,75 @@ csf4_story_check shape $(frontend_stories) || { fail "a story file is not in CSF
 csf4_hash_list "$WORK/overlay.txt" | diff "$WORK/overlay-before.sha256" - >&2 \
   || { fail "the migration changed an overlaid file"; exit 1; }
 
-pass "migrate-csf4: conversion, rerun, refusals, load failure, verification failures, mixed tree, and both update paths all green (${SECONDS}s)"
+# --- 10. A crossing leaves the stories as staged renames ---------------------
+
+# Reverses the committed tree to its 2.2.0 shape (the app at the old root,
+# registered under the old name), commits it, then runs the real crossing move.
+# The directory rename carries the ignored install with it, so the install is
+# usable again once the app is back at its new home.
+crossed_csf3_tree() {
+  csf4_reset_tree
+  if [ "${1:-}" = csf3-config ]; then
+    csf4_use_config preview.csf3.ts
+  fi
+  csf4_install_fixture "$FIXTURES/adopter"
+  csf4_commit "csf3 stories at the new home"
+  csf4_git mv apps/web frontend
+  # shellcheck disable=SC2016 # JavaScript source, not a shell expansion
+  (cd "$SCAFFOLD" && node -e '
+    const fs = require("node:fs");
+    const edit = (file, change) => {
+      const value = JSON.parse(fs.readFileSync(file, "utf8"));
+      change(value);
+      fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n");
+    };
+    edit("frontend/package.json", (manifest) => { manifest.name = "frontend"; });
+    edit("frontend/gaia.package.json", (descriptor) => {
+      descriptor.name = "frontend";
+      delete descriptor.stack;
+    });
+    fs.writeFileSync(".gaia/packages.json", JSON.stringify([{name: "frontend", path: "frontend"}]) + "\n");
+    const workspace = fs.readFileSync("pnpm-workspace.yaml", "utf8")
+      .replace(/^ {2}- apps\/\*$/mu, "  - frontend")
+      .replace(/^ {2}- packages\/\*\n/mu, "");
+    fs.writeFileSync("pnpm-workspace.yaml", workspace);
+  ') || { fail "could not reshape the tree to its 2.2.0 form"; exit 1; }
+  csf4_commit "2.2.0 shape"
+  [ ! -d "$FRONTEND" ] || { fail "the app is still at its new home before the crossing"; exit 1; }
+  (cd "$SCAFFOLD" && "$GAIA" update crossing move) > "$WORK/crossing-move.txt" 2>&1 \
+    || { cat "$WORK/crossing-move.txt" >&2; fail "crossing move failed"; exit 1; }
+  [ -d "$FRONTEND" ] || { fail "crossing move left no app at its new home"; exit 1; }
+}
+
+log "migrate-csf4 --update-merge on a crossed tree"
+crossed_csf3_tree
+[ "$(csf4_git diff --cached --name-status -M | grep -c '^R100.*\.stories\.tsx$')" -gt 0 ] \
+  || { fail "the crossing did not leave staged story renames"; exit 1; }
+csf4_migrate --update-merge
+csf4_expect "crossed tree" 0
+csf4_assert "crossed tree" 'parsed.refused === null && parsed.unexpectedChanges.length' 0
+csf4_assert "crossed tree" 'parsed.converted.length' 4
+assert_all_loaded_and_passed "crossed tree"
+# shellcheck disable=SC2046
+csf4_story_check shape $(frontend_stories) || { fail "a crossed story is not in CSF Next form"; exit 1; }
+
+log "migrate-csf4 --update-merge on a crossed tree with an edited story"
+crossed_csf3_tree
+printf '\n// edited on top of the rename\n' >> "$FRONTEND/app/components/counter/tests/index.stories.tsx"
+csf4_fingerprint > "$WORK/crossed-before.txt"
+csf4_migrate --update-merge
+csf4_expect "crossed edited story" 3
+csf4_assert "crossed edited story" 'parsed.refused.reason' dirty-write-set
+csf4_assert "crossed edited story" "parsed.refused.paths.includes('$STORY/counter/tests/index.stories.tsx')" true
+csf4_fingerprint | diff "$WORK/crossed-before.txt" - >&2 || { fail "the refusal changed a file"; exit 1; }
+
+log "migrate-csf4 --update-merge on a crossed tree whose config needs a repair"
+crossed_csf3_tree csf3-config
+csf4_fingerprint > "$WORK/crossed-config-before.txt"
+csf4_migrate --update-merge
+csf4_expect "crossed config" 3
+csf4_assert "crossed config" 'parsed.refused.reason' dirty-write-set
+csf4_assert "crossed config" "parsed.refused.paths.length > 0 && parsed.refused.paths.every((entry) => entry.startsWith('apps/web/'))" true
+csf4_fingerprint | diff "$WORK/crossed-config-before.txt" - >&2 || { fail "the config refusal changed a file"; exit 1; }
+
+pass "migrate-csf4: conversion, rerun, refusals, load failure, verification failures, mixed tree, both update paths, and a crossed tree all green (${SECONDS}s)"
