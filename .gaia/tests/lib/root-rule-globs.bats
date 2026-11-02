@@ -115,7 +115,7 @@ write_retired_scratch_rule() {
   rule_matches_path "$RULES_DIRECTORY/code-comments.md" "apps/web/.playwright/e2e/hydration.spec.ts"
 }
 
-@test "code-comments.md matches workflow YAML, a Dockerfile, a git hook, harness scripts and code in a future package" {
+@test "code-comments.md matches workflow YAML, a Dockerfile, a git hook, harness scripts and code in a future app or package" {
   local code_path
   for code_path in .github/workflows/cli-tests.yml apps/web/Dockerfile .githooks/pre-commit \
     .gaia/scripts/overlap/check-proposals.mjs .gaia/scripts/spec/uat-write.sh \
