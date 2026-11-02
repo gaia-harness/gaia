@@ -216,9 +216,10 @@ Info.test(
 
       await expectToast(canvasElement, `${type} icon message`);
 
-      // The icon is aria-hidden, so it is reached through its toast. The
-      // svg's child shapes are its drawing, whatever the icon library names
-      // its classes.
+      // The icon is aria-hidden, so it is reached through its toast: it is the
+      // toast's first svg, because the close button's icon renders after it.
+      // The svg's child shapes are its drawing, whatever the icon library
+      // names its classes.
       const icon = getToastElement(
         canvasElement,
         `${type} icon message`
