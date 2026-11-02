@@ -11,8 +11,6 @@ const getToastElement = (canvasElement: HTMLElement, text: string) =>
     .getByText(text)
     .closest<HTMLElement>('[data-slot="toast"]') as HTMLElement;
 
-// The computed color of the destructive role token, to compare a rendered
-// color against.
 const destructiveColor = (): string => {
   const probe = document.createElement('span');
   probe.style.color = 'var(--destructive)';
