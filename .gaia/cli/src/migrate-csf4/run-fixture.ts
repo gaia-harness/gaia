@@ -140,7 +140,7 @@ const exec = (
   }
 };
 
-/** A temp git repo shaped like a GAIA checkout: registered `frontend` package, committed. */
+/** A temp git repo shaped like a GAIA checkout: registered `web` package, committed. */
 export const makeRepo = (
   files: Record<string, string>,
   storybookVersion = '10.6.3'
@@ -151,17 +151,17 @@ export const makeRepo = (
   git(root, 'config', 'user.email', 'a@b.c');
   git(root, 'config', 'user.name', 'a');
   git(root, 'config', 'commit.gpgsign', 'false');
-  writeFrontendRegistry(root, 'frontend');
+  writeFrontendRegistry(root, 'apps/web');
   writeTree(root, {
     '.gitignore': 'node_modules\n',
-    'frontend/node_modules/msw-storybook-addon/build/migrate.mjs': '',
-    'frontend/node_modules/msw-storybook-addon/package.json': JSON.stringify({
+    'apps/web/node_modules/msw-storybook-addon/build/migrate.mjs': '',
+    'apps/web/node_modules/msw-storybook-addon/package.json': JSON.stringify({
       bin: {'msw-storybook-addon': './build/migrate.mjs'},
     }),
-    'frontend/node_modules/storybook/package.json': JSON.stringify({
+    'apps/web/node_modules/storybook/package.json': JSON.stringify({
       version: storybookVersion,
     }),
-    'frontend/package.json': '{"name": "frontend"}\n',
+    'apps/web/package.json': '{"name": "web"}\n',
     ...files,
   });
   git(root, 'add', '-A');
@@ -196,7 +196,7 @@ export const makeHarness = (
   behavior: Behavior = {},
   options: {repairs?: Repairs; withoutTypescript?: boolean} = {}
 ): Harness => {
-  const packageDir = path.join(root, 'frontend');
+  const packageDir = path.join(root, 'apps', 'web');
   const calls: Calls = [];
   const out: string[] = [];
   const err: string[] = [];

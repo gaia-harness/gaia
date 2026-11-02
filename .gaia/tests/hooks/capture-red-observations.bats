@@ -536,14 +536,14 @@ test("adds two numbers", () => {
 
 make_package_fixture() {
   FIXTURE=$(cd "$BATS_TEST_TMPDIR" && pwd -P)/package-fixture
-  mkdir -p "$FIXTURE/.gaia/scripts" "$FIXTURE/frontend/app/utils" "$FIXTURE/app/utils"
+  mkdir -p "$FIXTURE/.gaia/scripts" "$FIXTURE/apps/web/app/utils" "$FIXTURE/app/utils"
   git -C "$FIXTURE" init --quiet --initial-branch=main
   git -C "$FIXTURE" config user.email "test@example.com"
   git -C "$FIXTURE" config user.name "Test"
   git -C "$FIXTURE" config commit.gpgsign false
   write_builtin_descriptor "$FIXTURE"
   ln -s "$REPO_ROOT/.gaia/scripts/red-ledger" "$FIXTURE/.gaia/scripts/red-ledger"
-  printf '%s' "$PACKAGE_TEST_BODY" >"$FIXTURE/frontend/app/utils/x.test.ts"
+  printf '%s' "$PACKAGE_TEST_BODY" >"$FIXTURE/apps/web/app/utils/x.test.ts"
   printf '%s' "$PACKAGE_TEST_BODY" >"$FIXTURE/app/utils/x.test.ts"
   echo "# readme" >"$FIXTURE/README.md"
   git -C "$FIXTURE" add README.md
@@ -602,44 +602,44 @@ fixture_ledger_lines() {
 assert_frontend_capture() {
   [ "$status" -eq 0 ]
   [ "$(fixture_ledger_lines)" -eq 1 ]
-  [ "$(jq -r '.file' "$FIXTURE_LEDGER")" = "frontend/app/utils/x.test.ts" ]
-  grep -qxF -- "cwd=$FIXTURE/frontend" "$STUB_VITEST_LOG"
+  [ "$(jq -r '.file' "$FIXTURE_LEDGER")" = "apps/web/app/utils/x.test.ts" ]
+  grep -qxF -- "cwd=$FIXTURE/apps/web" "$STUB_VITEST_LOG"
   grep -qxF -- "scope=app/utils/x.test.ts" "$STUB_VITEST_LOG"
 }
 
-@test "package scope: the root proxy 'pnpm test --run frontend/...' re-runs in frontend/ with a package-relative scope" {
+@test "package scope: the root proxy 'pnpm test --run apps/web/...' re-runs in apps/web/ with a package-relative scope" {
   make_package_fixture
-  run_capture_in_fixture "$FIXTURE" "pnpm test --run frontend/app/utils/x.test.ts"
+  run_capture_in_fixture "$FIXTURE" "pnpm test --run apps/web/app/utils/x.test.ts"
   assert_frontend_capture
 }
 
-@test "package scope: 'pnpm -C frontend test --run app/...' from the root records the repo-relative key" {
+@test "package scope: 'pnpm -C apps/web test --run app/...' from the root records the repo-relative key" {
   make_package_fixture
-  run_capture_in_fixture "$FIXTURE" "pnpm -C frontend test --run app/utils/x.test.ts"
+  run_capture_in_fixture "$FIXTURE" "pnpm -C apps/web test --run app/utils/x.test.ts"
   assert_frontend_capture
 }
 
-@test "package scope: 'pnpm --filter frontend test --run app/...' resolves the package through the registry" {
+@test "package scope: 'pnpm --filter web test --run app/...' resolves the package through the registry" {
   make_package_fixture
-  run_capture_in_fixture "$FIXTURE" "pnpm --filter frontend test --run app/utils/x.test.ts"
+  run_capture_in_fixture "$FIXTURE" "pnpm --filter web test --run app/utils/x.test.ts"
   assert_frontend_capture
 }
 
-@test "package scope: 'pnpm test --run app/...' from inside frontend/ is keyed frontend/app/..." {
+@test "package scope: 'pnpm test --run app/...' from inside apps/web/ is keyed apps/web/app/..." {
   make_package_fixture
-  run_capture_in_fixture "$FIXTURE/frontend" "pnpm test --run app/utils/x.test.ts"
+  run_capture_in_fixture "$FIXTURE/apps/web" "pnpm test --run app/utils/x.test.ts"
   assert_frontend_capture
 }
 
 @test "package scope: the recorded key is the one the commit gate computes, so the retried commit is allowed" {
   make_package_fixture
-  git -C "$FIXTURE" add frontend/app/utils/x.test.ts
+  git -C "$FIXTURE" add apps/web/app/utils/x.test.ts
   local commit_payload
   commit_payload=$(jq -nc '{tool_name:"Bash", tool_input:{command:"git commit -m change"}}')
   invoke_hook_in "$FIXTURE" "$commit_payload" "$REPO_ROOT/.claude/hooks/red-verify-commit-check.sh"
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
 
-  run_capture_in_fixture "$FIXTURE" "pnpm test --run frontend/app/utils/x.test.ts"
+  run_capture_in_fixture "$FIXTURE" "pnpm test --run apps/web/app/utils/x.test.ts"
   assert_frontend_capture
 
   invoke_hook_in "$FIXTURE" "$commit_payload" "$REPO_ROOT/.claude/hooks/red-verify-commit-check.sh"
@@ -648,13 +648,13 @@ assert_frontend_capture() {
   true
 }
 
-@test "package scope: a root app/ path is not a frontend package path, so nothing is keyed under frontend/" {
+@test "package scope: a root app/ path is not a frontend package path, so nothing is keyed under apps/web/" {
   make_package_fixture
   run_capture_in_fixture "$FIXTURE" "pnpm test --run app/utils/x.test.ts"
   [ "$status" -eq 0 ]
-  grep -qxF -- "cwd=$FIXTURE/frontend" "$STUB_VITEST_LOG" && return 1
+  grep -qxF -- "cwd=$FIXTURE/apps/web" "$STUB_VITEST_LOG" && return 1
   if [ -f "$FIXTURE_LEDGER" ]; then
-    grep -qF -- '"file":"frontend/' "$FIXTURE_LEDGER" && return 1
+    grep -qF -- '"file":"apps/web/' "$FIXTURE_LEDGER" && return 1
   fi
   true
 }
@@ -673,7 +673,7 @@ assert_frontend_capture() {
 @test "package scope: an unparseable registry records nothing and blocks with the gaia-packages reason" {
   make_package_fixture
   write_package_registry "$FIXTURE" '{'
-  run_capture_in_fixture "$FIXTURE" "pnpm test --run frontend/app/utils/x.test.ts"
+  run_capture_in_fixture "$FIXTURE" "pnpm test --run apps/web/app/utils/x.test.ts"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.decision' <<<"$output")" = block ]
   jq -r '.reason' <<<"$output" | grep -qF -- 'gaia-packages: .gaia/packages.json is malformed'
@@ -683,12 +683,12 @@ assert_frontend_capture() {
 
 @test "package scope: a registered package with no descriptor records nothing and blocks with the gaia-packages reason" {
   make_package_fixture
-  rm "$FIXTURE/frontend/gaia.package.json"
-  write_package_registry "$FIXTURE" '[{"name":"frontend","path":"frontend"}]'
-  run_capture_in_fixture "$FIXTURE" "pnpm test --run frontend/app/utils/x.test.ts"
+  rm "$FIXTURE/apps/web/gaia.package.json"
+  write_package_registry "$FIXTURE" '[{"name":"web","path":"apps/web"}]'
+  run_capture_in_fixture "$FIXTURE" "pnpm test --run apps/web/app/utils/x.test.ts"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.decision' <<<"$output")" = block ]
-  jq -r '.reason' <<<"$output" | grep -qF -- 'gaia-packages: frontend/gaia.package.json is missing'
+  jq -r '.reason' <<<"$output" | grep -qF -- 'gaia-packages: apps/web/gaia.package.json is missing'
   [ "$(fixture_ledger_lines)" -eq 0 ]
 }
 
@@ -712,20 +712,20 @@ assert_frontend_capture() {
   command -v pnpm >/dev/null
   make_package_fixture
   rm "$STUB_BIN/pnpm"
-  mkdir -p "$FIXTURE/frontend/local-dependency"
-  printf '{"name":"local-dependency","version":"1.0.0"}\n' >"$FIXTURE/frontend/local-dependency/package.json"
+  mkdir -p "$FIXTURE/apps/web/local-dependency"
+  printf '{"name":"local-dependency","version":"1.0.0"}\n' >"$FIXTURE/apps/web/local-dependency/package.json"
   printf '{"name":"frontend","version":"1.0.0","private":true,"dependencies":{"local-dependency":"link:./local-dependency"}}\n' \
-    >"$FIXTURE/frontend/package.json"
-  pnpm_config_verify_deps_before_run=false pnpm -C "$FIXTURE/frontend" install --offline >/dev/null 2>&1
-  printf '{"name":"frontend","version":"1.0.0","private":true}\n' >"$FIXTURE/frontend/package.json"
+    >"$FIXTURE/apps/web/package.json"
+  pnpm_config_verify_deps_before_run=false pnpm -C "$FIXTURE/apps/web" install --offline >/dev/null 2>&1
+  printf '{"name":"frontend","version":"1.0.0","private":true}\n' >"$FIXTURE/apps/web/package.json"
   local lockfile_hash_before
-  lockfile_hash_before=$(git hash-object "$FIXTURE/frontend/pnpm-lock.yaml")
+  lockfile_hash_before=$(git hash-object "$FIXTURE/apps/web/pnpm-lock.yaml")
 
-  run_capture_in_fixture "$FIXTURE" "pnpm -C frontend test --run app/utils/x.test.ts"
+  run_capture_in_fixture "$FIXTURE" "pnpm -C apps/web test --run app/utils/x.test.ts"
   [ "$status" -eq 0 ]
   [ -s "$STUB_VITEST_LOG" ]
-  [ "$(git hash-object "$FIXTURE/frontend/pnpm-lock.yaml")" = "$lockfile_hash_before" ]
-  [ -e "$FIXTURE/frontend/node_modules/local-dependency" ]
+  [ "$(git hash-object "$FIXTURE/apps/web/pnpm-lock.yaml")" = "$lockfile_hash_before" ]
+  [ -e "$FIXTURE/apps/web/node_modules/local-dependency" ]
 }
 
 # --- the failure event: a failing run's Bash call errors ----------------------
@@ -749,14 +749,14 @@ failure_payload() {
 @test "failure event: both settings files register the capture on PostToolUseFailure for Bash" {
   hook_registered "$REPO_ROOT/.claude/settings.json" \
     '.hooks.PostToolUseFailure[] | select(.matcher == "Bash")' capture-red-observations.sh
-  hook_registered "$REPO_ROOT/frontend/.claude/settings.json" \
+  hook_registered "$REPO_ROOT/apps/web/.claude/settings.json" \
     '.hooks.PostToolUseFailure[] | select(.matcher == "Bash")' capture-red-observations.sh
 }
 
 @test "failure event: both settings files still register the capture on PostToolUse for Bash" {
   hook_registered "$REPO_ROOT/.claude/settings.json" \
     '.hooks.PostToolUse[] | select(.matcher == "Bash")' capture-red-observations.sh
-  hook_registered "$REPO_ROOT/frontend/.claude/settings.json" \
+  hook_registered "$REPO_ROOT/apps/web/.claude/settings.json" \
     '.hooks.PostToolUse[] | select(.matcher == "Bash")' capture-red-observations.sh
 }
 
@@ -771,7 +771,7 @@ failure_payload() {
 
 @test "failure event: a failing package run re-runs in the package and records the repo-relative key" {
   make_package_fixture
-  invoke_hook_in "$FIXTURE" "$(failure_payload "pnpm -C frontend test --run app/utils/x.test.ts" "$FIXTURE")" "$HOOK"
+  invoke_hook_in "$FIXTURE" "$(failure_payload "pnpm -C apps/web test --run app/utils/x.test.ts" "$FIXTURE")" "$HOOK"
   assert_frontend_capture
 }
 
@@ -786,7 +786,7 @@ failure_payload() {
 @test "failure event: an unusable registry says why as context, not as an unsupported block" {
   make_package_fixture
   write_package_registry "$FIXTURE" '{'
-  invoke_hook_in "$FIXTURE" "$(failure_payload "pnpm test --run frontend/app/utils/x.test.ts" "$FIXTURE")" "$HOOK"
+  invoke_hook_in "$FIXTURE" "$(failure_payload "pnpm test --run apps/web/app/utils/x.test.ts" "$FIXTURE")" "$HOOK"
   [ "$status" -eq 0 ]
   jq -e 'has("decision") | not' <<<"$output"
   jq -e '.hookSpecificOutput.hookEventName == "PostToolUseFailure"' <<<"$output"

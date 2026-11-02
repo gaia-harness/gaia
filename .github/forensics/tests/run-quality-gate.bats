@@ -154,8 +154,8 @@ pnpm_log_count() {
   run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 0 ]
   grep -qF '"browsers"' "$SUMMARY"
-  [ "$(grep -cE '^pnpm -C frontend exec playwright install .*chromium' "$PNPM_LOG")" = "1" ]
-  browsers_line=$(grep -nE '^pnpm -C frontend exec playwright install' "$PNPM_LOG" | head -1 | cut -d: -f1)
+  [ "$(grep -cE '^pnpm -C apps/web exec playwright install .*chromium' "$PNPM_LOG")" = "1" ]
+  browsers_line=$(grep -nE '^pnpm -C apps/web exec playwright install' "$PNPM_LOG" | head -1 | cut -d: -f1)
   lint_line=$(grep -nE '^pnpm lint( |$)' "$PNPM_LOG" | head -1 | cut -d: -f1)
   test_line=$(grep -nE '^pnpm test( |$)' "$PNPM_LOG" | head -1 | cut -d: -f1)
   [ "$lint_line" -lt "$browsers_line" ]
@@ -173,9 +173,9 @@ pnpm_log_count() {
 @test "all-green on Linux: apt dependencies install through the helper, then the browser" {
   UNAME_SYSTEM=Linux run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 0 ]
-  [ "$(grep -cxF 'node frontend/node_modules/playwright/cli.js install-deps chromium' "$PNPM_LOG")" = "1" ]
+  [ "$(grep -cxF 'node apps/web/node_modules/playwright/cli.js install-deps chromium' "$PNPM_LOG")" = "1" ]
   deps_line=$(grep -nF 'install-deps chromium' "$PNPM_LOG" | head -1 | cut -d: -f1)
-  browsers_line=$(grep -nxF 'pnpm -C frontend exec playwright install chromium' "$PNPM_LOG" | head -1 | cut -d: -f1)
+  browsers_line=$(grep -nxF 'pnpm -C apps/web exec playwright install chromium' "$PNPM_LOG" | head -1 | cut -d: -f1)
   [ "$deps_line" -lt "$browsers_line" ]
   grep -qF -- '--with-deps' "$PNPM_LOG" && return 1
   true
@@ -185,7 +185,7 @@ pnpm_log_count() {
   UNAME_SYSTEM=Linux NODE_INSTALL_DEPS_EXIT=100 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   [ "$(grep -cF 'install-deps chromium' "$PNPM_LOG")" = "3" ]
-  grep -qxF 'pnpm -C frontend exec playwright install chromium' "$PNPM_LOG" && return 1
+  grep -qxF 'pnpm -C apps/web exec playwright install chromium' "$PNPM_LOG" && return 1
   [ "$(pnpm_log_count test)" = "0" ]
   grep -qF '"failed_step": "browsers"' "$SUMMARY"
   grep -qF 'gh run rerun' "$SUMMARY"
@@ -252,7 +252,7 @@ pnpm_log_count() {
   PNPM_BROWSERS_STDOUT="Failed to download Chromium" PNPM_BROWSERS_EXIT=1 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   [ "$(pnpm_log_count lint)" = "1" ]
-  grep -qE '^pnpm -C frontend exec playwright install' "$PNPM_LOG"
+  grep -qE '^pnpm -C apps/web exec playwright install' "$PNPM_LOG"
   [ "$(pnpm_log_count test)" = "0" ]
   [ "$(pnpm_log_count knip)" = "0" ]
   grep -qF '"failed_step": "browsers"' "$SUMMARY"

@@ -13,6 +13,6 @@ tags: [dependency, ui]
 Cookie-backed flash messages for redirect-based UX, rendered by the shadcn `toast` component, which is built on Base UI's Toast primitive.
 
 - `getToast(request)` extracts the cookie; `setToastCookieOptions` signs it; `dataWithToast(...)` returns toast-bearing action responses
-- `notify[type](toast)` (`frontend/app/utils/notify.ts`) drives the ui `toast` manager; the bare `<Toaster />` from `~/components/ui/toast` displays it ([[shadcn Component Layer]])
+- `notify[type](toast)` (`apps/web/app/utils/notify.ts`) drives the ui `toast` manager; the bare `<Toaster />` from `~/components/ui/toast` displays it ([[shadcn Component Layer]])
 
 See [[Form Submit Flow]].

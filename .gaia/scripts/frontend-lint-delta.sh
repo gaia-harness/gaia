@@ -8,7 +8,7 @@
 #
 # --base is the last-green base the job resolved (.github/audit/resolve-check-base.sh).
 # --plan prints the decision instead of linting: `full`, `none`, or `delta`
-# followed by one changed path per line, relative to frontend/.
+# followed by one changed path per line, relative to apps/web/.
 #
 # A change to a lint input (the ESLint or Prettier config, a tsconfig the
 # type-aware rules read, or a manifest or lockfile that can move a lint plugin)
@@ -62,7 +62,7 @@ if ! git -C "$root" diff --name-only -z --no-renames --diff-filter=d "${base}...
   exit 2
 fi
 
-lint_input_pattern='^frontend/(eslint|prettier)\.config\.|^frontend/tsconfig[^/]*\.json$|^frontend/package\.json$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$'
+lint_input_pattern='^apps/web/(eslint|prettier)\.config\.|^apps/web/tsconfig[^/]*\.json$|^apps/web/package\.json$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$'
 # A here-string, not a pipe into `grep -q`: under pipefail an early-exiting
 # reader can SIGPIPE the writer and turn a match into a false miss.
 delta_lines="$(tr '\0' '\n' < "$delta_file")"
@@ -72,14 +72,14 @@ if grep -qE "$lint_input_pattern" <<<"$delta_lines"; then
     exit 0
   fi
   echo "frontend-lint-delta: a lint input changed, linting every frontend file"
-  exec pnpm -C "$root/frontend" lint-dry
+  exec pnpm -C "$root/apps/web" lint-dry
 fi
 
 lint_paths=()
 while IFS= read -r -d '' path; do
   case "$path" in
-    frontend/*.js | frontend/*.jsx | frontend/*.ts | frontend/*.tsx | frontend/*.mjs | frontend/*.cjs)
-      lint_paths+=("${path#frontend/}") ;;
+    apps/web/*.js | apps/web/*.jsx | apps/web/*.ts | apps/web/*.tsx | apps/web/*.mjs | apps/web/*.cjs)
+      lint_paths+=("${path#apps/web/}") ;;
   esac
 done < "$delta_file"
 
@@ -99,4 +99,4 @@ if [ "$plan" = true ]; then
 fi
 
 echo "frontend-lint-delta: linting ${#lint_paths[@]} changed file(s)"
-exec pnpm -C "$root/frontend" exec eslint --fix-dry-run --max-warnings=0 --no-warn-ignored -- ${lint_paths[@]+"${lint_paths[@]}"}
+exec pnpm -C "$root/apps/web" exec eslint --fix-dry-run --max-warnings=0 --no-warn-ignored -- ${lint_paths[@]+"${lint_paths[@]}"}

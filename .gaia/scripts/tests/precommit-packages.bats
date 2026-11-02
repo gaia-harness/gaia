@@ -51,8 +51,8 @@ JSON
 }
 
 use_frontend_package() {
-  printf '[{"name":"frontend","path":"frontend"}]\n' > "$REPO/.gaia/packages.json"
-  write_descriptor "$REPO/frontend" frontend '["app/**", "test/**", ".storybook/**", ".playwright/**"]'
+  printf '[{"name":"web","path":"apps/web"}]\n' > "$REPO/.gaia/packages.json"
+  write_descriptor "$REPO/apps/web" web '["app/**", "test/**", ".storybook/**", ".playwright/**"]'
 }
 
 plan() {
@@ -109,27 +109,27 @@ stage_renames() {
 
 @test "a frontend change plans the frontend package" {
   use_frontend_package
-  stage_files frontend/app/x.tsx
+  stage_files apps/web/app/x.tsx
   plan
   [ "$status" -eq 0 ]
-  [ "$output" = $'package\tfrontend' ]
+  [ "$output" = $'package\tapps/web' ]
 }
 
 @test "a path matching no preCommitSource glob plans nothing" {
   use_frontend_package
-  stage_files frontend/README.md docs/a.md .claude/rules/a.md
+  stage_files apps/web/README.md docs/a.md .claude/rules/a.md
   plan
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
-@test "a root app/ path is not a frontend change when the package is at frontend/" {
+@test "a root app/ path is not a frontend change when the package is at apps/web/" {
   use_frontend_package
   stage_files app/x.tsx
   plan
   [ "$status" -eq 0 ]
   # Not a package change; it is the MIG-013 retired-path record instead.
-  grep -qxF -- "$(printf 'retired-add\tapp/x.tsx\tfrontend/app/x.tsx')" <<<"$output"
+  grep -qxF -- "$(printf 'retired-add\tapp/x.tsx\tapps/web/app/x.tsx')" <<<"$output"
   [ "$(grep -c '^package' <<<"$output" || true)" -eq 0 ]
 }
 
@@ -137,8 +137,8 @@ stage_renames() {
 # matches plans nothing, so the descriptor decides.
 @test "a descriptor that gates nothing here plans nothing for a frontend path" {
   use_frontend_package
-  write_descriptor "$REPO/frontend" frontend '["nomatch/**"]'
-  stage_files frontend/app/x.tsx
+  write_descriptor "$REPO/apps/web" web '["nomatch/**"]'
+  stage_files apps/web/app/x.tsx
   plan
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -146,56 +146,56 @@ stage_renames() {
 
 @test "a deletion counts" {
   use_frontend_package
-  stage_files frontend/app/x.tsx
+  stage_files apps/web/app/x.tsx
   git -C "$REPO" commit --quiet -m "add"
-  git -C "$REPO" rm --quiet frontend/app/x.tsx
+  git -C "$REPO" rm --quiet apps/web/app/x.tsx
   plan
   [ "$status" -eq 0 ]
-  [ "$output" = $'package\tfrontend' ]
+  [ "$output" = $'package\tapps/web' ]
 }
 
 @test "a spaced and a non-ASCII path count and are not C-quoted into a miss" {
   use_frontend_package
-  stage_files "frontend/app/caf"$'\303\251'" x.tsx"
+  stage_files "apps/web/app/caf"$'\303\251'" x.tsx"
   plan
   [ "$status" -eq 0 ]
-  [ "$output" = $'package\tfrontend' ]
+  [ "$output" = $'package\tapps/web' ]
 }
 
 @test "two registered packages plan only the one with a staged source path" {
-  printf '[{"name":"frontend","path":"frontend"},{"name":"admin","path":"admin"}]\n' > "$REPO/.gaia/packages.json"
-  write_descriptor "$REPO/frontend" frontend '["app/**"]'
+  printf '[{"name":"web","path":"apps/web"},{"name":"admin","path":"admin"}]\n' > "$REPO/.gaia/packages.json"
+  write_descriptor "$REPO/apps/web" web '["app/**"]'
   write_descriptor "$REPO/admin" admin '["app/**"]'
   stage_files admin/app/y.ts
   plan
   [ "$output" = $'package\tadmin' ]
-  stage_files frontend/app/x.ts
+  stage_files apps/web/app/x.ts
   plan
-  [ "$(printf '%s\n' "$output" | sort)" = $'package\tadmin\npackage\tfrontend' ]
+  [ "$(printf '%s\n' "$output" | sort)" = $'package\tadmin\npackage\tapps/web' ]
 }
 
 @test "doctor guard: two configs in a package dir are reported with the directory" {
   use_frontend_package
-  : > "$REPO/frontend/doctor.config.ts"
-  : > "$REPO/frontend/doctor.config.json"
+  : > "$REPO/apps/web/doctor.config.ts"
+  : > "$REPO/apps/web/doctor.config.json"
   plan
   [ "$status" -eq 0 ]
-  grep -qxF $'doctor\tfrontend' <<<"$output"
-  grep -qxF $'doctor-file\tfrontend/doctor.config.json' <<<"$output"
-  grep -qxF $'doctor-file\tfrontend/doctor.config.ts' <<<"$output"
+  grep -qxF $'doctor\tapps/web' <<<"$output"
+  grep -qxF $'doctor-file\tapps/web/doctor.config.json' <<<"$output"
+  grep -qxF $'doctor-file\tapps/web/doctor.config.ts' <<<"$output"
 }
 
 @test "doctor guard: a config whose name holds a space is counted with the others" {
   use_frontend_package
-  : > "$REPO/frontend/doctor.config.ts"
-  : > "$REPO/frontend/doctor.config.local copy.ts"
-  : > "$REPO/frontend/not-a-config.ts"
+  : > "$REPO/apps/web/doctor.config.ts"
+  : > "$REPO/apps/web/doctor.config.local copy.ts"
+  : > "$REPO/apps/web/not-a-config.ts"
   plan
   [ "$status" -eq 0 ]
   [ "$(grep -c '^doctor-file' <<<"$output")" -eq 2 ]
-  grep -qxF $'doctor\tfrontend' <<<"$output"
-  grep -qxF $'doctor-file\tfrontend/doctor.config.ts' <<<"$output"
-  grep -qxF $'doctor-file\tfrontend/doctor.config.local copy.ts' <<<"$output"
+  grep -qxF $'doctor\tapps/web' <<<"$output"
+  grep -qxF $'doctor-file\tapps/web/doctor.config.ts' <<<"$output"
+  grep -qxF $'doctor-file\tapps/web/doctor.config.local copy.ts' <<<"$output"
 }
 
 @test "doctor guard: a package at the repo root reports its configs repo-relative" {
@@ -213,7 +213,7 @@ stage_renames() {
 
 @test "doctor guard: one config in a package dir reports nothing" {
   use_frontend_package
-  : > "$REPO/frontend/doctor.config.ts"
+  : > "$REPO/apps/web/doctor.config.ts"
   plan
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -231,7 +231,7 @@ stage_renames() {
 @test "an unparseable registry exits 1 with the gaia-packages message" {
   use_frontend_package
   printf 'not json {\n' > "$REPO/.gaia/packages.json"
-  stage_files frontend/app/x.tsx
+  stage_files apps/web/app/x.tsx
   plan
   [ "$status" -eq 1 ]
   grep -qF -- "gaia-packages: " <<<"$output"
@@ -239,8 +239,8 @@ stage_renames() {
 
 @test "a missing descriptor exits 1 with the gaia-packages message" {
   use_frontend_package
-  rm "$REPO/frontend/gaia.package.json"
-  stage_files frontend/app/x.tsx
+  rm "$REPO/apps/web/gaia.package.json"
+  stage_files apps/web/app/x.tsx
   plan
   [ "$status" -eq 1 ]
   grep -qF -- "gaia-packages: " <<<"$output"
@@ -249,7 +249,7 @@ stage_renames() {
 @test "a missing registry reader exits 1 rather than allowing" {
   use_frontend_package
   rm "$REPO/.claude/hooks/lib/gaia-packages.sh"
-  stage_files frontend/app/x.tsx
+  stage_files apps/web/app/x.tsx
   plan
   [ "$status" -eq 1 ]
   grep -qF -- "gaia-packages: " <<<"$output"
@@ -262,57 +262,57 @@ stage_renames() {
 # and the one renamed pair. Each source is a retired root path; each
 # destination is its C6 counterpart.
 C6_PAIRS=(
-  "app/routes/home.tsx:frontend/app/routes/home.tsx"
-  "app/components/button/index.tsx:frontend/app/components/button/index.tsx"
-  "app/components/button/tests/index.test.tsx:frontend/app/components/button/tests/index.test.tsx"
-  "app/sessions.server/cookie ü.ts:frontend/app/sessions.server/cookie ü.ts"
-  "test/setup.ts:frontend/test/setup.ts"
-  "public/favicon.ico:frontend/public/favicon.ico"
-  ".storybook/main.ts:frontend/.storybook/main.ts"
-  ".playwright/e2e/home.spec.ts:frontend/.playwright/e2e/home.spec.ts"
-  "vite.config.ts:frontend/vite.config.ts"
-  "vitest.config.ts:frontend/vitest.config.ts"
-  "playwright.config.ts:frontend/playwright.config.ts"
-  "react-router.config.ts:frontend/react-router.config.ts"
-  "stylelint.config.mjs:frontend/stylelint.config.mjs"
-  "knip.config.ts:frontend/knip.config.ts"
-  "doctor.config.ts:frontend/doctor.config.ts"
-  "tsconfig.json:frontend/tsconfig.json"
-  "Dockerfile:frontend/Dockerfile"
-  ".env.example:frontend/.env.example"
-  "eslint.config.mjs:frontend/eslint.config.mjs"
-  ".lintstagedrc.json:frontend/.lintstagedrc.json"
-  ".dockerignore:frontend/Dockerfile.dockerignore"
-  ".claude/skills/a11y-fixes/SKILL.md:frontend/.claude/skills/a11y-fixes/SKILL.md"
-  ".claude/skills/eslint-fixes/SKILL.md:frontend/.claude/skills/eslint-fixes/SKILL.md"
-  ".claude/skills/gaia-react-perf/SKILL.md:frontend/.claude/skills/gaia-react-perf/SKILL.md"
-  ".claude/skills/new-component/SKILL.md:frontend/.claude/skills/new-component/SKILL.md"
-  ".claude/skills/new-hook/SKILL.md:frontend/.claude/skills/new-hook/SKILL.md"
-  ".claude/skills/new-route/SKILL.md:frontend/.claude/skills/new-route/SKILL.md"
-  ".claude/skills/new-service/SKILL.md:frontend/.claude/skills/new-service/SKILL.md"
-  ".claude/skills/playwright-cli/SKILL.md:frontend/.claude/skills/playwright-cli/SKILL.md"
-  ".claude/skills/playwright-cli/references/a.md:frontend/.claude/skills/playwright-cli/references/a.md"
-  ".claude/skills/react-code/SKILL.md:frontend/.claude/skills/react-code/SKILL.md"
-  ".claude/skills/skeleton-loaders/SKILL.md:frontend/.claude/skills/skeleton-loaders/SKILL.md"
-  ".claude/skills/tailwind/SKILL.md:frontend/.claude/skills/tailwind/SKILL.md"
-  ".claude/skills/typescript/SKILL.md:frontend/.claude/skills/typescript/SKILL.md"
-  ".claude/rules/accessibility.md:frontend/.claude/rules/accessibility.md"
-  ".claude/rules/api-service.md:frontend/.claude/rules/api-service.md"
-  ".claude/rules/design-baseline.md:frontend/.claude/rules/design-baseline.md"
-  ".claude/rules/i18n.md:frontend/.claude/rules/i18n.md"
-  ".claude/rules/playwright.md:frontend/.claude/rules/playwright.md"
-  ".claude/rules/react-router-docs.md:frontend/.claude/rules/react-router-docs.md"
-  ".claude/rules/routes.md:frontend/.claude/rules/routes.md"
-  ".claude/rules/state-pattern.md:frontend/.claude/rules/state-pattern.md"
-  ".claude/rules/storybook.md:frontend/.claude/rules/storybook.md"
-  ".claude/rules/tailwind.md:frontend/.claude/rules/tailwind.md"
-  ".claude/instructions/add-locale.md:frontend/.claude/instructions/add-locale.md"
-  ".claude/instructions/remove-i18n.md:frontend/.claude/instructions/remove-i18n.md"
-  ".claude/agents/code-audit-frontend/README.md:frontend/.claude/agents/code-audit-frontend/README.md"
-  ".claude/agents/code-audit-frontend/cn.md:frontend/.claude/agents/code-audit-frontend/cn.md"
-  ".claude/agents/code-audit-frontend/conform.md:frontend/.claude/agents/code-audit-frontend/conform.md"
-  ".claude/agents/code-audit-frontend/form-components.md:frontend/.claude/agents/code-audit-frontend/form-components.md"
-  ".claude/agents/code-audit-frontend/react-i18next.md:frontend/.claude/agents/code-audit-frontend/react-i18next.md"
+  "app/routes/home.tsx:apps/web/app/routes/home.tsx"
+  "app/components/button/index.tsx:apps/web/app/components/button/index.tsx"
+  "app/components/button/tests/index.test.tsx:apps/web/app/components/button/tests/index.test.tsx"
+  "app/sessions.server/cookie ü.ts:apps/web/app/sessions.server/cookie ü.ts"
+  "test/setup.ts:apps/web/test/setup.ts"
+  "public/favicon.ico:apps/web/public/favicon.ico"
+  ".storybook/main.ts:apps/web/.storybook/main.ts"
+  ".playwright/e2e/home.spec.ts:apps/web/.playwright/e2e/home.spec.ts"
+  "vite.config.ts:apps/web/vite.config.ts"
+  "vitest.config.ts:apps/web/vitest.config.ts"
+  "playwright.config.ts:apps/web/playwright.config.ts"
+  "react-router.config.ts:apps/web/react-router.config.ts"
+  "stylelint.config.mjs:apps/web/stylelint.config.mjs"
+  "knip.config.ts:apps/web/knip.config.ts"
+  "doctor.config.ts:apps/web/doctor.config.ts"
+  "tsconfig.json:apps/web/tsconfig.json"
+  "Dockerfile:apps/web/Dockerfile"
+  ".env.example:apps/web/.env.example"
+  "eslint.config.mjs:apps/web/eslint.config.mjs"
+  ".lintstagedrc.json:apps/web/.lintstagedrc.json"
+  ".dockerignore:apps/web/Dockerfile.dockerignore"
+  ".claude/skills/a11y-fixes/SKILL.md:apps/web/.claude/skills/a11y-fixes/SKILL.md"
+  ".claude/skills/eslint-fixes/SKILL.md:apps/web/.claude/skills/eslint-fixes/SKILL.md"
+  ".claude/skills/gaia-react-perf/SKILL.md:apps/web/.claude/skills/gaia-react-perf/SKILL.md"
+  ".claude/skills/new-component/SKILL.md:apps/web/.claude/skills/new-component/SKILL.md"
+  ".claude/skills/new-hook/SKILL.md:apps/web/.claude/skills/new-hook/SKILL.md"
+  ".claude/skills/new-route/SKILL.md:apps/web/.claude/skills/new-route/SKILL.md"
+  ".claude/skills/new-service/SKILL.md:apps/web/.claude/skills/new-service/SKILL.md"
+  ".claude/skills/playwright-cli/SKILL.md:apps/web/.claude/skills/playwright-cli/SKILL.md"
+  ".claude/skills/playwright-cli/references/a.md:apps/web/.claude/skills/playwright-cli/references/a.md"
+  ".claude/skills/react-code/SKILL.md:apps/web/.claude/skills/react-code/SKILL.md"
+  ".claude/skills/skeleton-loaders/SKILL.md:apps/web/.claude/skills/skeleton-loaders/SKILL.md"
+  ".claude/skills/tailwind/SKILL.md:apps/web/.claude/skills/tailwind/SKILL.md"
+  ".claude/skills/typescript/SKILL.md:apps/web/.claude/skills/typescript/SKILL.md"
+  ".claude/rules/accessibility.md:apps/web/.claude/rules/accessibility.md"
+  ".claude/rules/api-service.md:apps/web/.claude/rules/api-service.md"
+  ".claude/rules/design-baseline.md:apps/web/.claude/rules/design-baseline.md"
+  ".claude/rules/i18n.md:apps/web/.claude/rules/i18n.md"
+  ".claude/rules/playwright.md:apps/web/.claude/rules/playwright.md"
+  ".claude/rules/react-router-docs.md:apps/web/.claude/rules/react-router-docs.md"
+  ".claude/rules/routes.md:apps/web/.claude/rules/routes.md"
+  ".claude/rules/state-pattern.md:apps/web/.claude/rules/state-pattern.md"
+  ".claude/rules/storybook.md:apps/web/.claude/rules/storybook.md"
+  ".claude/rules/tailwind.md:apps/web/.claude/rules/tailwind.md"
+  ".claude/instructions/add-locale.md:apps/web/.claude/instructions/add-locale.md"
+  ".claude/instructions/remove-i18n.md:apps/web/.claude/instructions/remove-i18n.md"
+  ".claude/agents/code-audit-frontend/README.md:apps/web/.claude/agents/code-audit-frontend/README.md"
+  ".claude/agents/code-audit-frontend/cn.md:apps/web/.claude/agents/code-audit-frontend/cn.md"
+  ".claude/agents/code-audit-frontend/conform.md:apps/web/.claude/agents/code-audit-frontend/conform.md"
+  ".claude/agents/code-audit-frontend/form-components.md:apps/web/.claude/agents/code-audit-frontend/form-components.md"
+  ".claude/agents/code-audit-frontend/react-i18next.md:apps/web/.claude/agents/code-audit-frontend/react-i18next.md"
 )
 
 @test "C13: the whole C6 move set, as renames only, plans exempt with no registry and no descriptor" {
@@ -329,13 +329,13 @@ C6_PAIRS=(
 # Each negative stages the whole C6 set plus one entry that must not be exempt,
 # and asserts the exemption is refused (the plan is not `exempt`). The extra
 # pair rides in the same seed commit, so only renames are ever staged.
-@test "C13 refusal: an R100 rename inside frontend/ beside the C6 set is not exempt and plans the package" {
+@test "C13 refusal: an R100 rename inside apps/web/ beside the C6 set is not exempt and plans the package" {
   use_frontend_package
-  stage_renames "${C6_PAIRS[@]}" "frontend/app/utils/a.ts:frontend/app/utils/b.ts"
+  stage_renames "${C6_PAIRS[@]}" "apps/web/app/utils/a.ts:apps/web/app/utils/b.ts"
   [ "$(git -C "$REPO" diff --cached --name-status -M100% | grep -c '^R100')" -eq $((${#C6_PAIRS[@]} + 1)) ]
   plan
   [ "$status" -eq 0 ]
-  [ "$output" = $'package\tfrontend' ]
+  [ "$output" = $'package\tapps/web' ]
 }
 
 @test "C13 refusal: a harness rename outside the C6 units beside the C6 set is not exempt" {
@@ -355,17 +355,17 @@ C6_PAIRS=(
   [ "$output" != "exempt" ]
 }
 
-@test "C13 refusal: a source renamed under a different name inside frontend/ is not exempt" {
+@test "C13 refusal: a source renamed under a different name inside apps/web/ is not exempt" {
   use_frontend_package
-  stage_renames "app/x.tsx:frontend/app/y.tsx"
+  stage_renames "app/x.tsx:apps/web/app/y.tsx"
   plan
   [ "$status" -eq 0 ]
-  [ "$output" = $'package\tfrontend' ]
+  [ "$output" = $'package\tapps/web' ]
 }
 
 @test "C13 refusal: a .claude file outside the C6 units is not exempt" {
   use_frontend_package
-  stage_renames ".claude/rules/quality-gate.md:frontend/.claude/rules/quality-gate.md"
+  stage_renames ".claude/rules/quality-gate.md:apps/web/.claude/rules/quality-gate.md"
   plan
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -373,7 +373,7 @@ C6_PAIRS=(
 
 @test "C13 refusal: a root config file outside the C6 list is not exempt" {
   use_frontend_package
-  stage_renames "package.json:frontend/package.json"
+  stage_renames "package.json:apps/web/package.json"
   plan
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -381,7 +381,7 @@ C6_PAIRS=(
 
 @test "C13 refusal: the dockerignore pair with a different destination is not exempt" {
   use_frontend_package
-  stage_renames ".dockerignore:frontend/.dockerignore"
+  stage_renames ".dockerignore:apps/web/.dockerignore"
   plan
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -389,10 +389,10 @@ C6_PAIRS=(
 
 @test "C13 refusal: a C6 rename carrying a content change is not exempt" {
   use_frontend_package
-  stage_renames "app/x.tsx:frontend/app/x.tsx"
-  printf 'a changed line\n' >> "$REPO/frontend/app/x.tsx"
-  git -C "$REPO" add frontend/app/x.tsx
+  stage_renames "app/x.tsx:apps/web/app/x.tsx"
+  printf 'a changed line\n' >> "$REPO/apps/web/app/x.tsx"
+  git -C "$REPO" add apps/web/app/x.tsx
   plan
-  [ "$output" = $'package\tfrontend' ]
+  [ "$output" = $'package\tapps/web' ]
 }
 

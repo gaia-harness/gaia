@@ -147,7 +147,7 @@ describe('fail-closed results', () => {
     mkdirSync(path.join(root, '.gaia'), {recursive: true});
     writeFileSync(
       path.join(root, '.gaia/packages.json'),
-      JSON.stringify([{name: 'frontend', path: `frontend"; touch ${marker}`}])
+      JSON.stringify([{name: 'web', path: `frontend"; touch ${marker}`}])
     );
 
     expect(loadPackages(root)).toMatchObject({
@@ -159,7 +159,7 @@ describe('fail-closed results', () => {
 });
 
 describe('built-in default', () => {
-  test('registry absent: source is builtin, the committed descriptor drives it, frontend/app matches and root app does not', () => {
+  test('registry absent: source is builtin, the committed descriptor drives it, apps/web/app matches and root app does not', () => {
     const root = path.join(SCRATCH, 'absent');
     writeBuiltinDescriptor(root);
     const result = loadPackages(root);
@@ -167,14 +167,14 @@ describe('built-in default', () => {
     expect(result.ok && result.source).toBe('builtin');
     const patterns =
       result.ok ? repoRegExps(result.packages, 'tddUnitTests') : [];
-    expect(patterns.some((p) => p.test('frontend/app/utils/x.test.ts'))).toBe(
+    expect(patterns.some((p) => p.test('apps/web/app/utils/x.test.ts'))).toBe(
       true
     );
     expect(patterns.some((p) => p.test('app/utils/x.test.ts'))).toBe(false);
   });
 
   test('the built-in registry is frontend at frontend', () => {
-    expect(BUILTIN_REGISTRY).toEqual([{name: 'frontend', path: 'frontend'}]);
+    expect(BUILTIN_REGISTRY).toEqual([{name: 'web', path: 'apps/web'}]);
   });
 
   test('the committed registry loads clean from the repo root', () => {
@@ -208,7 +208,7 @@ describe('the web stack', () => {
     const result = loadPackages(REPO_ROOT);
 
     expect(result.ok && webMembers(result.packages).map((p) => p.name)).toEqual(
-      ['frontend']
+      ['web']
     );
   });
 

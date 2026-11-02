@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Doc and code pins for Playwright per-worker isolation: the worker-scoped
-# server fixture and Given builder type in frontend/.playwright/fixtures.ts,
+# server fixture and Given builder type in apps/web/.playwright/fixtures.ts,
 # the stock config staying fully parallel with no serial project, and the
 # Playwright rule and wiki page dropping the shared-state instructions.
 #
@@ -17,9 +17,9 @@
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  FIXTURES_FILE="${FIXTURES_FILE:-$ROOT/frontend/.playwright/fixtures.ts}"
-  PW_CONFIG_FILE="${PW_CONFIG_FILE:-$ROOT/frontend/playwright.config.ts}"
-  PW_RULE_FILE="${PW_RULE_FILE:-$ROOT/frontend/.claude/rules/playwright.md}"
+  FIXTURES_FILE="${FIXTURES_FILE:-$ROOT/apps/web/.playwright/fixtures.ts}"
+  PW_CONFIG_FILE="${PW_CONFIG_FILE:-$ROOT/apps/web/playwright.config.ts}"
+  PW_RULE_FILE="${PW_RULE_FILE:-$ROOT/apps/web/.claude/rules/playwright.md}"
   PW_WIKI_FILE="${PW_WIKI_FILE:-$ROOT/wiki/dependencies/Playwright.md}"
 }
 

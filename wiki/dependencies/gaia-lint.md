@@ -24,7 +24,7 @@ GAIA's lint config, extracted to a standalone package under `github.com/gaia-har
 
 Source of truth: the package's `src/configs/*.ts`. Custom plugins live in its `src/plugins/`.
 
-The project's `frontend/eslint.config.mjs` is a thin consumer: it spreads the package's exported arrays and adds project-specific overrides last.
+The project's `apps/web/eslint.config.mjs` is a thin consumer: it spreads the package's exported arrays and adds project-specific overrides last.
 
 ## Override pattern
 
@@ -67,8 +67,8 @@ export default defineConfig([
 | `i18n` | `i18next/no-literal-string` in `jsx-text-only` mode on source `.tsx`/`.jsx`, minus stories, tests and vendored ui | Opt-in, added in 3.0.0; spread only when the UI is translated |
 | `zod` | `eslint-plugin-zod` recommended, minus `consistent-import` | Opt-in for Zod 4 projects, added in 3.0.0 |
 | `testing` | Test honesty: `vitest/prefer-called-with`, `no-restricted-imports` (blocks `*.server` / internals from consumer tests) | Added in 1.6.0 |
-| `storybook` | `eslint-plugin-storybook` recommended, scoped to `*.stories.*` and `frontend/.storybook/main.*` | `frontend/.storybook/` half reaches files from 1.11.0 |
-| `playwright` | `eslint-plugin-playwright` recommended, scoped to `frontend/.playwright/**`; `expect-expect` counts `expect*()` helpers as the assertion, `no-skipped-test` allows the conditional `test.skip(condition, reason)` form | block reaches files from 1.11.0; `allowConditional` added there |
+| `storybook` | `eslint-plugin-storybook` recommended, scoped to `*.stories.*` and `apps/web/.storybook/main.*` | `apps/web/.storybook/` half reaches files from 1.11.0 |
+| `playwright` | `eslint-plugin-playwright` recommended, scoped to `apps/web/.playwright/**`; `expect-expect` counts `expect*()` helpers as the assertion, `no-skipped-test` allows the conditional `test.skip(condition, reason)` form | block reaches files from 1.11.0; `allowConditional` added there |
 | `guardrails` | `no-enum`, `no-switch`, `no-jsx-iife`, `no-null-render` (autofix: converts `return null` in render context to `return undefined`; does not touch loaders, actions, or utilities), `no-zod-enum` (errors on `z.enum([...])`; use `z.literal([...])` for string unions), `cn-conditional` (errors on an object conditional or a ternary with an empty branch passed to the `cn` import from `cn`, at any depth, in every file type including tests and stories; write `cond && 'class'`) custom plugins; `gaia/no-restricted-syntax` selectors ban `cond ? <JSX/> : null` and `cond ? null : <JSX/>` (flag-only, no autofix) and flag `.length && <JSX/>` numeric-0 leaks (report-only); the `sonarjs` recommended set, whose `parameterized-tests` errors where three or more sibling tests differ only by their data and wants one `test.each` table instead (no autofix); `eslint-plugin-regexp` recommended (ReDoS and dead-pattern checks) | `regexp` added in 3.0.0; `no-null-render` added in 1.8.0; `.length` selector added in 1.8.0; `no-zod-enum` added in 1.9.0; `cn-conditional` added in 2.3.0; `sonarjs/parameterized-tests` reaches files from 2.1.0 |
 | `guardrails` | `import-x/no-restricted-paths` with carve-outs: `resources.*` and `actions.*` route files are exempt for UI layers | Carve-out added in 1.6.0; spelling moved to `actions.*`/`resources.*` in 2.2.0 (the older `+` folders are still accepted on the 2.x line) |
 | `styleHygiene` | Canonical import paths, `perfectionist` sorting, `unicorn`, `unused-imports`, `check-file` naming | Owner is `src/configs/style-hygiene.ts` in the package |
@@ -82,12 +82,12 @@ export default defineConfig([
 
 The `shadcn` group and the `FC` ban ship in 3.0.0 of `@gaia-harness/lint`; the `eslint` peer floor is `>=9.30.0` within the 9 line, which `@shadcn/lint` requires.
 
-The `resources.*` and `actions.*` carve-out means UI-layer files may import typed action/loader types from flat-file resource routes without an `eslint-disable` comment. Consumer tests must not import from `*.server` files or internal server surfaces; the `frontend/test/setup.ts` global Vitest setupFile is the single sanctioned place to start the MSW harness.
+The `resources.*` and `actions.*` carve-out means UI-layer files may import typed action/loader types from flat-file resource routes without an `eslint-disable` comment. Consumer tests must not import from `*.server` files or internal server surfaces; the `apps/web/test/setup.ts` global Vitest setupFile is the single sanctioned place to start the MSW harness.
 
 ## When to edit
 
 - Change `@gaia-harness/lint` upstream when the rule should propagate to **all** consumers.
-- Override in the project's `frontend/eslint.config.mjs` when the change is **project-specific** (folder layout, app-only relaxations).
+- Override in the project's `apps/web/eslint.config.mjs` when the change is **project-specific** (folder layout, app-only relaxations).
 
 <!-- gaia:maintainer-only:start -->
 ## CLI consumer

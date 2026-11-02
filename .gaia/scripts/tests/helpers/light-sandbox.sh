@@ -107,9 +107,9 @@ _lsb_build() {
   cp "$LSB_REPO_ROOT/.gaia/audit-ci.yml" "$LSB_ROOT/.gaia/audit-ci.yml" || return 1
   cp "$LSB_REPO_ROOT/.gaia/VERSION" "$LSB_ROOT/.gaia/VERSION" || return 1
   printf '.gaia/local/\n' >"$LSB_ROOT/.gitignore"
-  mkdir -p "$LSB_ROOT/frontend/app"
-  printf 'seed\n' >"$LSB_ROOT/frontend/app/seed.md"
-  printf '{"schemaVersion":1,"name":"frontend","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}\n' >"$LSB_ROOT/frontend/gaia.package.json"
+  mkdir -p "$LSB_ROOT/apps/web/app"
+  printf 'seed\n' >"$LSB_ROOT/apps/web/app/seed.md"
+  printf '{"schemaVersion":1,"name":"web","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}\n' >"$LSB_ROOT/apps/web/gaia.package.json"
   if [ "${1:-}" = "--maintainer" ]; then
     mkdir -p "$LSB_ROOT/.claude/rules/maintainers"
     printf '# maintainer repository marker\n' >"$LSB_ROOT/.claude/rules/maintainers/harness-triage-threshold.md"
@@ -128,7 +128,7 @@ _lsb_build() {
   # One commit on the branch, so a clearance written straight after lsb_init
   # sits on a branch commit: the merge-base itself is outside every walk range
   # and can never anchor.
-  lsb_commit frontend/app/branch-start.md "branch start" || return 1
+  lsb_commit apps/web/app/branch-start.md "branch start" || return 1
   printf '%s' "$LSB_SLUG" >"$BATS_TEST_TMPDIR/slug"
 }
 

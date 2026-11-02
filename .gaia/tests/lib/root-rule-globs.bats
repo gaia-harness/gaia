@@ -2,7 +2,7 @@
 #
 # Root rule glob guard. A rule in the root .claude/rules anchors its `paths:`
 # globs at the repository root from both launch directories, so after the React
-# app moved into frontend/ a glob that still begins with a retired root
+# app moved into apps/web/ a glob that still begins with a retired root
 # frontend path (app/, test/, public/, .playwright/, .storybook/, or a moved
 # config filename) silently stops loading on the frontend files it governs.
 #
@@ -84,7 +84,7 @@ copy_rules_to_scratch() {
 
 @test "checker flags code-comments.md with its globs reverted to the retired form" {
   copy_rules_to_scratch
-  sed -i.bak -E "s#'frontend/(app|test|\.playwright|\.storybook)/#'\1/#" "$SCRATCH_RULES/code-comments.md"
+  sed -i.bak -E "s#'apps/web/(app|test|\.playwright|\.storybook)/#'\1/#" "$SCRATCH_RULES/code-comments.md"
   rm -f "$SCRATCH_RULES/code-comments.md.bak"
   run retired_globs_in "$SCRATCH_RULES"
   [ "$status" -eq 1 ]
@@ -108,14 +108,14 @@ copy_rules_to_scratch() {
 }
 
 @test "code-comments.md matches the frontend app file and the frontend playwright spec" {
-  rule_matches_path "$RULES_DIRECTORY/code-comments.md" "frontend/app/components/button/index.tsx"
-  rule_matches_path "$RULES_DIRECTORY/code-comments.md" "frontend/.playwright/e2e/hydration.spec.ts"
+  rule_matches_path "$RULES_DIRECTORY/code-comments.md" "apps/web/app/components/button/index.tsx"
+  rule_matches_path "$RULES_DIRECTORY/code-comments.md" "apps/web/.playwright/e2e/hydration.spec.ts"
 }
 
 @test "wiki-style.md matches a wiki page and no code file" {
   local code_path
   rule_matches_path "$RULES_DIRECTORY/wiki-style.md" "wiki/concepts/Notebook.md"
-  for code_path in frontend/app/components/button/index.tsx frontend/.playwright/e2e/hydration.spec.ts \
+  for code_path in apps/web/app/components/button/index.tsx apps/web/.playwright/e2e/hydration.spec.ts \
     .claude/hooks/ports-session-start.sh .gaia/scripts/spec/ledger-lib.sh; do
     run rule_matches_path "$RULES_DIRECTORY/wiki-style.md" "$code_path"
     [ "$status" -eq 1 ] || { echo "wiki-style.md matched $code_path" >&2; return 1; }
@@ -123,17 +123,17 @@ copy_rules_to_scratch() {
 }
 
 @test "guards-must-fail.md matches the frontend playwright spec and not the frontend app file" {
-  rule_matches_path "$RULES_DIRECTORY/guards-must-fail.md" "frontend/.playwright/e2e/hydration.spec.ts"
-  run rule_matches_path "$RULES_DIRECTORY/guards-must-fail.md" "frontend/app/components/button/index.tsx"
+  rule_matches_path "$RULES_DIRECTORY/guards-must-fail.md" "apps/web/.playwright/e2e/hydration.spec.ts"
+  run rule_matches_path "$RULES_DIRECTORY/guards-must-fail.md" "apps/web/app/components/button/index.tsx"
   [ "$status" -eq 1 ]
 }
 
 @test "the match check refuses code-comments.md once its globs are reverted" {
   copy_rules_to_scratch
-  sed -i.bak -E "s#'frontend/(app|test|\.playwright|\.storybook)/#'\1/#" "$SCRATCH_RULES/code-comments.md"
+  sed -i.bak -E "s#'apps/web/(app|test|\.playwright|\.storybook)/#'\1/#" "$SCRATCH_RULES/code-comments.md"
   rm -f "$SCRATCH_RULES/code-comments.md.bak"
-  run rule_matches_path "$SCRATCH_RULES/code-comments.md" "frontend/app/components/button/index.tsx"
+  run rule_matches_path "$SCRATCH_RULES/code-comments.md" "apps/web/app/components/button/index.tsx"
   [ "$status" -eq 1 ]
-  run rule_matches_path "$SCRATCH_RULES/code-comments.md" "frontend/.playwright/e2e/hydration.spec.ts"
+  run rule_matches_path "$SCRATCH_RULES/code-comments.md" "apps/web/.playwright/e2e/hydration.spec.ts"
   [ "$status" -eq 1 ]
 }

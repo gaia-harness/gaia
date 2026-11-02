@@ -54,11 +54,11 @@ type Classification = {
 
 // The classifier reads the package registry from its working directory, so the
 // suite runs it from a scratch tree with no `.gaia/packages.json`: the built-in
-// default (the app at `frontend/`), the 2.0.0 layout, whatever shape the real
-// checkout is in. The three named real files are copied in under `frontend/`.
+// default (the app at `apps/web/`), the 2.0.0 layout, whatever shape the real
+// checkout is in. The three named real files are copied in under `apps/web/`.
 let FIXTURE_ROOT = '';
 
-// Where a real app file lives in this checkout: under `frontend/` once the app
+// Where a real app file lives in this checkout: under `apps/web/` once the app
 // has moved, at the repo root before.
 const realAppFile = (frontendRelativePath: string): string => {
   const moved = path.join(REPO_ROOT, frontendRelativePath);
@@ -72,9 +72,9 @@ beforeAll(() => {
   FIXTURE_ROOT = mkdtempSync(path.join(os.tmpdir(), 'classify-determinism-'));
 
   for (const file of [
-    'frontend/app/utils/date.ts',
-    'frontend/app/utils/string.ts',
-    'frontend/gaia.package.json',
+    'apps/web/app/utils/date.ts',
+    'apps/web/app/utils/string.ts',
+    'apps/web/gaia.package.json',
   ]) {
     mkdirSync(path.join(FIXTURE_ROOT, path.dirname(file)), {recursive: true});
     copyFileSync(realAppFile(file), path.join(FIXTURE_ROOT, file));
@@ -143,7 +143,7 @@ const descriptor = (strict: string[]): string =>
       tddStrictCandidates: strict,
       tddUnitTests: ['app/**/*.test.ts'],
     },
-    name: 'frontend',
+    name: 'web',
     schemaVersion: 1,
     wiki: {
       flowPaths: ['app/'],
@@ -155,11 +155,11 @@ const descriptor = (strict: string[]): string =>
 describe('classify-determinism', () => {
   test('emits the {file, classification, reasons} contract shape', () => {
     const result = classifySource(
-      'frontend/app/utils/example.ts',
+      'apps/web/app/utils/example.ts',
       'export const add = (a: number, b: number): number => a + b;\n'
     );
 
-    expect(result.file).toBe('frontend/app/utils/example.ts');
+    expect(result.file).toBe('apps/web/app/utils/example.ts');
     expect(result.classification).toBe('strict');
     expect(Array.isArray(result.reasons)).toBe(true);
   });
@@ -167,7 +167,7 @@ describe('classify-determinism', () => {
   describe('condition 1: path scoping', () => {
     test('classifies a pure file outside the candidate paths EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/routes/_index.tsx',
+        'apps/web/app/routes/_index.tsx',
         'export const add = (a: number, b: number): number => a + b;\n'
       );
 
@@ -177,7 +177,7 @@ describe('classify-determinism', () => {
 
     test('classifies a .tsx file under app/components EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/components/Foo/utils.tsx',
+        'apps/web/app/components/Foo/utils.tsx',
         'export const add = (a: number, b: number): number => a + b;\n'
       );
 
@@ -186,7 +186,7 @@ describe('classify-determinism', () => {
 
     test('classifies a pure .ts file under app/components STRICT', () => {
       const result = classifySource(
-        'frontend/app/components/Foo/utils.ts',
+        'apps/web/app/components/Foo/utils.ts',
         'export const add = (a: number, b: number): number => a + b;\n'
       );
 
@@ -195,7 +195,7 @@ describe('classify-determinism', () => {
 
     test('classifies a pure file under app/services STRICT', () => {
       const result = classifySource(
-        'frontend/app/services/example/parse.ts',
+        'apps/web/app/services/example/parse.ts',
         'export const toUpper = (s: string): string => s.toUpperCase();\n'
       );
 
@@ -206,7 +206,7 @@ describe('classify-determinism', () => {
   describe('condition 2: module-reachable non-determinism', () => {
     test('classifies a default-parameter new Date() EMERGENT (the FI-3 fix)', () => {
       const result = classifySource(
-        'frontend/app/utils/date.ts',
+        'apps/web/app/utils/date.ts',
         "import {format} from 'date-fns';\n" +
           "export const formatMY = (date = new Date()): string => format(date, 'MM/yy');\n"
       );
@@ -217,7 +217,7 @@ describe('classify-determinism', () => {
 
     test('classifies a module-level new Date() constant EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/utils/clock.ts',
+        'apps/web/app/utils/clock.ts',
         'const TODAY = new Date();\nexport const year = (): number => TODAY.getFullYear();\n'
       );
 
@@ -226,7 +226,7 @@ describe('classify-determinism', () => {
 
     test('classifies a class-field Math.random() initializer EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/utils/id.ts',
+        'apps/web/app/utils/id.ts',
         'export class Id {\n  value = Math.random();\n}\n'
       );
 
@@ -236,7 +236,7 @@ describe('classify-determinism', () => {
 
     test('classifies a Date.now() call EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/utils/now.ts',
+        'apps/web/app/utils/now.ts',
         'export const stamp = (): number => Date.now();\n'
       );
 
@@ -245,7 +245,7 @@ describe('classify-determinism', () => {
 
     test('classifies a crypto usage EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/utils/token.ts',
+        'apps/web/app/utils/token.ts',
         'export const token = (): string => crypto.randomUUID();\n'
       );
 
@@ -254,7 +254,7 @@ describe('classify-determinism', () => {
 
     test('classifies a top-level await EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/utils/config.ts',
+        'apps/web/app/utils/config.ts',
         "const data = await import('./other');\nexport const value = data;\n"
       );
 
@@ -265,7 +265,7 @@ describe('classify-determinism', () => {
   describe('condition 3: hook call-surface rule', () => {
     test('classifies a hook reading a react-router runtime hook EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/hooks/useThing.ts',
+        'apps/web/app/hooks/useThing.ts',
         "import {useNavigate} from 'react-router';\n" +
           'export const useThing = () => {\n  const navigate = useNavigate();\n  return navigate;\n};\n'
       );
@@ -276,7 +276,7 @@ describe('classify-determinism', () => {
 
     test('classifies a hook calling a DOM-layout API EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/hooks/useSize.ts',
+        'apps/web/app/hooks/useSize.ts',
         'export const useSize = (el: HTMLElement) => {\n' +
           '  return el.getBoundingClientRect();\n};\n'
       );
@@ -286,7 +286,7 @@ describe('classify-determinism', () => {
 
     test('classifies a useState/useMemo-only hook STRICT', () => {
       const result = classifySource(
-        'frontend/app/hooks/useToggle.ts',
+        'apps/web/app/hooks/useToggle.ts',
         "import {useState, useCallback} from 'react';\n" +
           'export const useToggle = () => {\n' +
           '  const [on, setOn] = useState(false);\n' +
@@ -299,7 +299,7 @@ describe('classify-determinism', () => {
 
     test('classifies a hook using only the allowlisted matchMedia STRICT', () => {
       const result = classifySource(
-        'frontend/app/hooks/useMedia.ts',
+        'apps/web/app/hooks/useMedia.ts',
         "import {useState} from 'react';\n" +
           'export const useMedia = (q: string) => {\n' +
           '  const [match] = useState(() => globalThis.matchMedia(q).matches);\n' +
@@ -313,7 +313,7 @@ describe('classify-determinism', () => {
       // A hook is a hook even under app/utils/**: it is judged by its call
       // surface (condition 3), and a plain useState hook is STRICT.
       const result = classifySource(
-        'frontend/app/utils/useCounter.ts',
+        'apps/web/app/utils/useCounter.ts',
         "import {useState} from 'react';\n" +
           'export const useCounter = () => {\n' +
           '  const [n, setN] = useState(0);\n' +
@@ -327,7 +327,7 @@ describe('classify-determinism', () => {
   describe('condition 4: no public async I/O export', () => {
     test('classifies a public async export wrapping fetch EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/services/example/load.ts',
+        'apps/web/app/services/example/load.ts',
         'export const load = async (url: string): Promise<Response> =>\n' +
           '  fetch(url);\n'
       );
@@ -337,7 +337,7 @@ describe('classify-determinism', () => {
 
     test('classifies a public async setTimeout-as-sleep export EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/services/example/sleep.ts',
+        'apps/web/app/services/example/sleep.ts',
         'export const sleep = async (ms: number): Promise<void> =>\n' +
           '  new Promise((resolve) => setTimeout(resolve, ms));\n'
       );
@@ -349,7 +349,7 @@ describe('classify-determinism', () => {
   describe('versioned DOM-API allowlist + unknown-API default', () => {
     test('classifies a hook calling a DOM API absent from the allowlist EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/hooks/useBattery.ts',
+        'apps/web/app/hooks/useBattery.ts',
         'export const useBattery = () => {\n' +
           '  return globalThis.navigator.getBattery();\n};\n'
       );
@@ -365,7 +365,7 @@ describe('classify-determinism', () => {
 
     test('classifies a test in a route-tests tests folder as ROUTE with a reason', () => {
       const result = classifySource(
-        'frontend/app/route-tests/orders/tests/refuses-anonymous.test.ts',
+        'apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts',
         testSource
       );
 
@@ -374,9 +374,9 @@ describe('classify-determinism', () => {
     });
 
     test.each([
-      'frontend/app/route-tests/orders/refuses.test.ts',
-      'frontend/app/route-tests/orders/tests/refuses.spec.ts',
-      'frontend/app/other/orders/tests/refuses.test.ts',
+      'apps/web/app/route-tests/orders/refuses.test.ts',
+      'apps/web/app/route-tests/orders/tests/refuses.spec.ts',
+      'apps/web/app/other/orders/tests/refuses.test.ts',
     ])('does not classify %s as ROUTE', (candidatePath) => {
       const result = classifySource(candidatePath, testSource);
 
@@ -390,10 +390,10 @@ describe('classify-determinism', () => {
     const pureSource = 'export const double = (n: number): number => n * 2;\n';
 
     test.each([
-      'frontend/app/utils/tests/notify.stories.tsx',
-      'frontend/app/services/api/tests/client.stories.tsx',
-      'frontend/app/hooks/tests/use-thing.stories.tsx',
-      'frontend/app/components/Foo/tests/index.stories.tsx',
+      'apps/web/app/utils/tests/notify.stories.tsx',
+      'apps/web/app/services/api/tests/client.stories.tsx',
+      'apps/web/app/hooks/tests/use-thing.stories.tsx',
+      'apps/web/app/components/Foo/tests/index.stories.tsx',
     ])('classifies %s EMERGENT with the story reason', (storyPath) => {
       const result = classifySource(storyPath, pureSource);
 
@@ -403,10 +403,10 @@ describe('classify-determinism', () => {
 
     test('classifies a pure story under a strict-candidate folder EMERGENT while the same content in a .ts file is STRICT', () => {
       const asStory = classifySource(
-        'frontend/app/utils/tests/pure.stories.tsx',
+        'apps/web/app/utils/tests/pure.stories.tsx',
         pureSource
       );
-      const asModule = classifySource('frontend/app/utils/pure.ts', pureSource);
+      const asModule = classifySource('apps/web/app/utils/pure.ts', pureSource);
 
       expect(asStory.classification).toBe('emergent');
       expect(asModule.classification).toBe('strict');
@@ -414,7 +414,7 @@ describe('classify-determinism', () => {
 
     test('classifies a .stories.ts file EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/utils/tests/pure.stories.ts',
+        'apps/web/app/utils/tests/pure.stories.ts',
         pureSource
       );
 
@@ -426,7 +426,7 @@ describe('classify-determinism', () => {
   describe('file-granularity limitation', () => {
     test('classifies a mixed pure-export/impure-constant file whole-file EMERGENT', () => {
       const result = classifySource(
-        'frontend/app/utils/mixed.ts',
+        'apps/web/app/utils/mixed.ts',
         'const SEED = Math.random();\n' +
           'export const pure = (a: number, b: number): number => a + b;\n' +
           'export const tainted = (): number => SEED;\n'
@@ -437,14 +437,14 @@ describe('classify-determinism', () => {
   });
 
   describe('named regression fixtures (real files on disk)', () => {
-    test('classifies frontend/app/utils/date.ts EMERGENT (default-param new Date())', () => {
-      const result = classifyFile('frontend/app/utils/date.ts');
+    test('classifies apps/web/app/utils/date.ts EMERGENT (default-param new Date())', () => {
+      const result = classifyFile('apps/web/app/utils/date.ts');
 
       expect(result.classification).toBe('emergent');
     });
 
-    test('classifies frontend/app/utils/string.ts STRICT (pure string helpers)', () => {
-      const result = classifyFile('frontend/app/utils/string.ts');
+    test('classifies apps/web/app/utils/string.ts STRICT (pure string helpers)', () => {
+      const result = classifyFile('apps/web/app/utils/string.ts');
 
       expect(result.classification).toBe('strict');
     });
@@ -459,7 +459,7 @@ describe('classify-determinism', () => {
 
       expect(result.classification).toBe('emergent');
       expect(result.reasons.join(' ')).toContain(
-        'path not in frontend/app/utils/**'
+        'path not in apps/web/app/utils/**'
       );
       expect(result.reasons.join(' ')).not.toContain('path not in app/utils');
     });
@@ -475,7 +475,7 @@ describe('classify-determinism', () => {
     test("a literal path-'.' registry keeps today's layout: root app/utils is strict", () => {
       withTree(
         {
-          '.gaia/packages.json': '[{"name":"frontend","path":"."}]',
+          '.gaia/packages.json': '[{"name":"web","path":"."}]',
           'gaia.package.json': descriptor(['app/utils/**']),
         },
         (cwd) => {
@@ -490,18 +490,18 @@ describe('classify-determinism', () => {
     test('a descriptor whose strict globs match nothing classifies the same file emergent (the guard can fail)', () => {
       withTree(
         {
-          '.gaia/packages.json': '[{"name":"frontend","path":"frontend"}]',
-          'frontend/gaia.package.json': descriptor(['nomatch/**']),
+          '.gaia/packages.json': '[{"name":"web","path":"apps/web"}]',
+          'apps/web/gaia.package.json': descriptor(['nomatch/**']),
         },
         (cwd) => {
-          const result = run(cwd, 'frontend/app/utils/x.ts');
+          const result = run(cwd, 'apps/web/app/utils/x.ts');
 
           expect(result.status).toBe(0);
           const parsed = JSON.parse(result.stdout);
 
           expect(parsed.classification).toBe('emergent');
           expect(parsed.reasons.join(' ')).toContain(
-            'path not in frontend/nomatch/**'
+            'path not in apps/web/nomatch/**'
           );
         }
       );
@@ -509,7 +509,7 @@ describe('classify-determinism', () => {
 
     test('an empty registry has no strict candidates, so a pure file classifies emergent', () => {
       withTree({'.gaia/packages.json': '[]'}, (cwd) => {
-        const result = run(cwd, 'frontend/app/utils/x.ts');
+        const result = run(cwd, 'apps/web/app/utils/x.ts');
 
         expect(result.status).toBe(0);
         expect(JSON.parse(result.stdout).classification).toBe('emergent');
@@ -518,18 +518,18 @@ describe('classify-determinism', () => {
 
     test('no registry and no descriptor exits 7 naming the restore step', () => {
       withTree({}, (cwd) => {
-        const result = run(cwd, 'frontend/app/utils/x.ts');
+        const result = run(cwd, 'apps/web/app/utils/x.ts');
 
         expect(result.status).toBe(7);
         expect(JSON.parse(result.stdout).error).toContain(
-          'git checkout origin/main -- frontend/gaia.package.json'
+          'git checkout origin/main -- apps/web/gaia.package.json'
         );
       });
     });
 
     test('an unparseable registry exits 7 with {"error"} on stdout and classifies nothing', () => {
       withTree({'.gaia/packages.json': '{'}, (cwd) => {
-        const result = run(cwd, 'frontend/app/utils/x.ts');
+        const result = run(cwd, 'apps/web/app/utils/x.ts');
 
         expect(result.status).toBe(7);
         const parsed = JSON.parse(result.stdout);
@@ -543,13 +543,13 @@ describe('classify-determinism', () => {
 
     test('a registered package with no descriptor exits 7 with {"error"} naming the descriptor', () => {
       withTree(
-        {'.gaia/packages.json': '[{"name":"frontend","path":"frontend"}]'},
+        {'.gaia/packages.json': '[{"name":"web","path":"apps/web"}]'},
         (cwd) => {
-          const result = run(cwd, 'frontend/app/utils/x.ts');
+          const result = run(cwd, 'apps/web/app/utils/x.ts');
 
           expect(result.status).toBe(7);
           expect(JSON.parse(result.stdout).error).toContain(
-            'frontend/gaia.package.json is missing'
+            'apps/web/gaia.package.json is missing'
           );
         }
       );

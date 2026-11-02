@@ -48,7 +48,7 @@ require_command node "node required to read the command's JSON output"
 
 SECONDS=0
 GAIA_CLI_FIXTURES="$HERE/../../cli/test-fixtures/migrate-csf4"
-STORY="frontend/app/components"
+STORY="apps/web/app/components"
 csf4_stage_tree
 
 # Clean CSF3 project with only the small status-badge component.
@@ -61,7 +61,7 @@ lean_csf3_tree() {
 
 # Every story file, relative to the frontend package.
 frontend_stories() {
-  csf4_story_files | sed 's#^frontend/##'
+  csf4_story_files | sed 's#^apps/web/##'
 }
 
 # Fails unless the last report's per-file status matches the Vitest report.
@@ -204,7 +204,7 @@ diff "$WORK/csf2-before.txt" "$WORK/csf2-after.txt" >&2 || { fail "csf2 refusal 
 lean_csf3_tree
 csf4_install_fixture "$FIXTURES/load-failure"
 csf4_commit "load-failure project"
-FRAGILE="frontend/app/components/fragile/tests/index.stories.tsx"
+FRAGILE="apps/web/app/components/fragile/tests/index.stories.tsx"
 file_hashes > "$WORK/load-before.txt"
 log "migrate-csf4 on the load-failure project"
 csf4_migrate
@@ -265,7 +265,7 @@ csf4_assert "type error" "parsed.typecheck.files.includes('$STORY/meter/tests/in
 csf4_reset_tree
 csf4_install_fixture "$FIXTURES/adopter"
 csf4_commit "mixed tree"
-csf4_git ls-files 'frontend/app/**/*.stories.tsx' 'frontend/.storybook/preview.ts' 'frontend/.storybook/main.ts' \
+csf4_git ls-files 'apps/web/app/**/*.stories.tsx' 'apps/web/.storybook/preview.ts' 'apps/web/.storybook/main.ts' \
   | grep -vE 'counter|signup-form|status-badge|item-list' > "$WORK/csf4-files.txt"
 csf4_hash_list "$WORK/csf4-files.txt" > "$WORK/csf4-before.sha256"
 log "migrate-csf4 on the mixed tree"
@@ -293,7 +293,7 @@ csf4_assert "update-merge dirty write set" 'parsed.refused.reason' dirty-write-s
 csf4_assert "update-merge dirty write set" "parsed.refused.paths.includes('$STORY/counter/tests/index.stories.tsx')" true
 csf4_fingerprint | diff "$WORK/merge-before.txt" - >&2 || { fail "the refusal changed a file"; exit 1; }
 
-csf4_git checkout -q -- frontend/app/components/counter/tests/index.stories.tsx
+csf4_git checkout -q -- apps/web/app/components/counter/tests/index.stories.tsx
 OUTSIDE_BEFORE="$(hash_file "$FRONTEND/app/components/ui/tests/alert.stories.tsx") $(hash_file "$FRONTEND/notes.txt")"
 log "migrate-csf4 --update-merge on the committed mixed tree"
 csf4_migrate --update-merge
@@ -333,9 +333,9 @@ done
 csf4_commit "pre-update tree"
 
 # The update's three-way merge leaves GAIA's CSF4 files over HEAD, uncommitted.
-csf4_git ls-tree -r --name-only "$BASE_COMMIT" -- frontend/app \
+csf4_git ls-tree -r --name-only "$BASE_COMMIT" -- apps/web/app \
   | grep '\.stories\.tsx$' > "$WORK/overlay.txt"
-printf '%s\n' frontend/.storybook/preview.ts frontend/.storybook/main.ts frontend/package.json >> "$WORK/overlay.txt"
+printf '%s\n' apps/web/.storybook/preview.ts apps/web/.storybook/main.ts apps/web/package.json >> "$WORK/overlay.txt"
 # shellcheck disable=SC2046 # one path per line, none with whitespace
 csf4_git checkout -q "$BASE_COMMIT" -- $(cat "$WORK/overlay.txt")
 csf4_hash_list "$WORK/overlay.txt" > "$WORK/overlay-before.sha256"

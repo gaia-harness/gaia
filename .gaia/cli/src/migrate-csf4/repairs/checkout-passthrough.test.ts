@@ -14,7 +14,7 @@ import {
 // already-migrated project change nothing.
 describe("GAIA's converted Storybook files pass through unchanged", () => {
   test('the preview', () => {
-    const source = readCheckoutFile('frontend/.storybook/preview.ts');
+    const source = readCheckoutFile('apps/web/.storybook/preview.ts');
 
     expect(rewirePreview(ts, source)).toEqual({
       changed: false,
@@ -24,21 +24,21 @@ describe("GAIA's converted Storybook files pass through unchanged", () => {
   });
 
   test('the main', () => {
-    const source = readCheckoutFile('frontend/.storybook/main.ts');
+    const source = readCheckoutFile('apps/web/.storybook/main.ts');
 
     expect(setTestSyntaxFlag(ts, source)).toEqual({changed: false, source});
   });
 
   test('the package.json', () => {
-    const text = readCheckoutFile('frontend/package.json');
+    const text = readCheckoutFile('apps/web/package.json');
 
     expect(ensurePreviewImportsSubpath(text)).toEqual({changed: false, text});
   });
 
   test.each([
-    'frontend/app/components/errors/error-stack/tests/index.stories.tsx',
-    'frontend/app/components/form/tests/composed-form.stories.tsx',
-    'frontend/app/components/ui/tests/toast.stories.tsx',
+    'apps/web/app/components/errors/error-stack/tests/index.stories.tsx',
+    'apps/web/app/components/form/tests/composed-form.stories.tsx',
+    'apps/web/app/components/ui/tests/toast.stories.tsx',
   ])('the story %s', (relativePath) => {
     const source = readCheckoutFile(relativePath);
     const facts = capturePreCodemodFacts(ts, source, relativePath);

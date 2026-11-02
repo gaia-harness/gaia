@@ -24,9 +24,9 @@
 # function answers as if nothing were loaded, so a guard that ignores the
 # status sees an empty ERE rather than a stale one.
 #
-# FAIL-CLOSED. An absent registry is the built-in default (frontend at
-# `frontend`), never "nothing in scope", and its descriptor is still read from
-# `frontend/gaia.package.json`: a missing one is status 3, never a fallback. A
+# FAIL-CLOSED. An absent registry is the built-in default (web at
+# `apps/web`), never "nothing in scope", and its descriptor is still read from
+# `apps/web/gaia.package.json`: a missing one is status 3, never a fallback. A
 # present registry that fails any check returns an error and never a partial
 # answer. A missing jq returns 4 rather
 # than guessing: this library parses JSON with nothing else, so it cannot
@@ -67,7 +67,7 @@ _GAIA_PKG_ERE_dependencyManifests=''
 # committed `gaia.package.json` is the one copy of the default globs.
 _gaia_packages_builtin_registry() {
   cat <<'JSON'
-[{"name":"frontend","path":"frontend"}]
+[{"name":"web","path":"apps/web"}]
 JSON
 }
 

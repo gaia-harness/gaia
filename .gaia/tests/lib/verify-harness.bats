@@ -68,7 +68,7 @@ every_label_is() {
 }
 
 missing_manifest_diagnostic() {
-  printf '  - Manifest claims paths missing from staging tree:\n  -   frontend/app/gone.ts\nFAIL  01-files-present.sh: 1 manifest path(s) missing from staging'
+  printf '  - Manifest claims paths missing from staging tree:\n  -   apps/web/app/gone.ts\nFAIL  01-files-present.sh: 1 manifest path(s) missing from staging'
 }
 
 @test "branch mode reports every failure and withholds the pass record" {
@@ -82,7 +82,7 @@ missing_manifest_diagnostic() {
   has 'suites/whole.bats: whole content'
   has_line '^FAIL  bats whole-tree \([0-9]+s\)$'
   has_line '^FAIL  01-files-present \([0-9]+s\)$'
-  has 'frontend/app/gone.ts'
+  has 'apps/web/app/gone.ts'
   has_line '^PASS  shell-lint \([0-9]+s\)$'
   has '  reproduce: bash .gaia/tests/distribution/01-files-present.sh'
   has '  reproduce: bash .gaia/scripts/bats5.sh --filter-tags whole-tree suites/whole.bats < /dev/null'
@@ -95,7 +95,7 @@ missing_manifest_diagnostic() {
   fixture
   vhf_control x-input "broken"
   vhf_commit "break the x suite"
-  printf 'page two\n' >frontend/app/page.txt
+  printf 'page two\n' >apps/web/app/page.txt
   vhf_commit "an unrelated HEAD commit"
   run_runner branch
   [ "$status" -eq 1 ]
@@ -111,7 +111,7 @@ missing_manifest_diagnostic() {
   vhf_write_suite suites/listed.bats tests+:listed listed other
   vhf_commit "suites marking one test each"
   vhf_branch
-  printf 'page two\n' >frontend/app/page.txt
+  printf 'page two\n' >apps/web/app/page.txt
   vhf_commit "an unrelated branch change"
   run_runner branch
   [ "$status" -eq 0 ]
@@ -122,7 +122,7 @@ missing_manifest_diagnostic() {
 
 @test "the whole-tree step runs every test of a file-marked suite nothing selects" {
   fixture
-  printf 'page two\n' >frontend/app/page.txt
+  printf 'page two\n' >apps/web/app/page.txt
   vhf_commit "an unrelated branch change"
   run_runner branch
   [ "$status" -eq 0 ]
@@ -156,7 +156,7 @@ missing_manifest_diagnostic() {
 
 @test "round mode skips both bats steps when no suite references its delta" {
   fixture
-  printf 'page two\n' >frontend/app/page.txt
+  printf 'page two\n' >apps/web/app/page.txt
   vhf_commit "a frontend-only change"
   run_runner round
   [ "$status" -eq 0 ]
@@ -495,13 +495,13 @@ release_fixture() {
   printf '1.0.0\n' >.gaia/VERSION
   printf '{"files": {}, "generated": "a", "version": "1.0.0"}\n' >"$manifest"
   printf '{"name": "gaia", "version": "1.0.0"}\n' >package.json
-  printf '{"name": "frontend", "version": "1.0.0"}\n' >frontend/package.json
+  printf '{"name": "frontend", "version": "1.0.0"}\n' >apps/web/package.json
   printf '# Changelog\n\n## [Unreleased]\n\n- **Thing.**\n\n[Unreleased]: https://github.com/example/repo/compare/v1.0.0...HEAD\n' >CHANGELOG.md
   vhf_commit "release files" && vhf_branch || return 1
   printf '1.1.0\n' >.gaia/VERSION
   printf '{"files": {}, "generated": "b", "version": "1.1.0"}\n' >"$manifest"
   printf '{"name": "gaia", "version": "1.1.0"}\n' >package.json
-  printf '{"name": "frontend", "version": "1.1.0"}\n' >frontend/package.json
+  printf '{"name": "frontend", "version": "1.1.0"}\n' >apps/web/package.json
   printf '# Changelog\n\n## [Unreleased]\n\n## [1.1.0] - 2026-10-29\n\n- **Thing.**\n\n[Unreleased]: https://github.com/example/repo/compare/v1.1.0...HEAD\n[1.1.0]: https://github.com/example/repo/releases/tag/v1.1.0\n' >CHANGELOG.md
   vhf_commit "chore(release): v1.1.0"
 }

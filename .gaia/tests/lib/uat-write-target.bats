@@ -2,7 +2,7 @@
 #
 # .gaia/scripts/spec/uat-write.sh: where the rendered Playwright specs
 # land. The target is the web-stack package (the registry, or the
-# built-in default `frontend/`) plus each e2e row's feature folder and file
+# built-in default `apps/web/`) plus each e2e row's feature folder and file
 # name, and the JSON `e2e_directory` reports the repo-relative directory the
 # specs render under.
 #
@@ -13,7 +13,7 @@ setup() {
   SCRIPT="$REPO_ROOT_REAL/.gaia/scripts/spec/uat-write.sh"
   . "$BATS_TEST_DIRNAME/../hooks/helpers/package-fixture.sh"
   WORK="$BATS_TEST_TMPDIR/work"
-  DEFAULT_MEMBER_PATH=frontend
+  DEFAULT_MEMBER_PATH=apps/web
   mkdir -p "$WORK/.gaia" "$BATS_TEST_TMPDIR/plan"
   SPEC="$WORK/SPEC.md"
   ROUTING="$BATS_TEST_TMPDIR/plan/README.md"
@@ -62,14 +62,14 @@ run_uat_write() {
   run bash -c "cd '$WORK' && bash '$SCRIPT' '$SPEC' --routing '$ROUTING'"
 }
 
-@test "built-in default: specs render under frontend/.playwright/e2e and nothing under the root .playwright" {
+@test "built-in default: specs render under apps/web/.playwright/e2e and nothing under the root .playwright" {
   write_builtin_descriptor "$WORK"
   run_uat_write
   [ "$status" -eq 0 ]
-  [ -f "$WORK/frontend/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts" ] || return 1
+  [ -f "$WORK/apps/web/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts" ] || return 1
   [ ! -e "$WORK/.playwright" ] || return 1
-  grep -qF -- '"e2e_directory":"frontend/.playwright/e2e"' <<<"$output" || return 1
-  grep -qF -- '"path":"frontend/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts"' <<<"$output"
+  grep -qF -- '"e2e_directory":"apps/web/.playwright/e2e"' <<<"$output" || return 1
+  grep -qF -- '"path":"apps/web/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts"' <<<"$output"
 }
 
 @test "a literal path-dot registry renders under the root .playwright" {
@@ -102,10 +102,10 @@ run_uat_write() {
   write_builtin_descriptor "$WORK"
   run_uat_write
   [ "$status" -eq 0 ] || return 1
-  [ -f "$WORK/frontend/app/route-tests/sign-in/tests/sign-in-page-opens.test.ts" ] || return 1
-  grep -qF -- '"route_tests_directory":"frontend/app/route-tests"' <<<"$output" || return 1
+  [ -f "$WORK/apps/web/app/route-tests/sign-in/tests/sign-in-page-opens.test.ts" ] || return 1
+  grep -qF -- '"route_tests_directory":"apps/web/app/route-tests"' <<<"$output" || return 1
 
-  rm -rf "$WORK/frontend" "$BATS_TEST_TMPDIR/plan/uat-render.json"
+  rm -rf "$WORK/apps/web" "$BATS_TEST_TMPDIR/plan/uat-render.json"
   mkdir -p "$WORK/apps/site"
   printf '[{"name":"storefront","path":"apps/site"}]\n' > "$WORK/.gaia/packages.json"
   write_literal_descriptor "$WORK/apps/site/gaia.package.json" storefront
@@ -129,11 +129,11 @@ run_uat_write() {
 }
 
 @test "a registry with a missing descriptor exits non-zero and writes nothing" {
-  printf '[{"name":"frontend","path":"frontend"}]\n' > "$WORK/.gaia/packages.json"
+  printf '[{"name":"web","path":"apps/web"}]\n' > "$WORK/.gaia/packages.json"
 
   run_uat_write
   [ "$status" -eq 1 ]
-  grep -qF -- "gaia-packages: frontend/gaia.package.json is missing" <<<"$output" || return 1
+  grep -qF -- "gaia-packages: apps/web/gaia.package.json is missing" <<<"$output" || return 1
   [ ! -e "$WORK/$DEFAULT_MEMBER_PATH" ] || return 1
   [ ! -e "$BATS_TEST_TMPDIR/plan/uat-render.json" ] || return 1
   [ ! -e "$WORK/.gaia/local" ]
@@ -175,7 +175,7 @@ run_uat_write() {
   write_builtin_descriptor "$WORK"
   run_uat_write
   [ "$status" -eq 0 ]
-  rendered="$WORK/frontend/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts"
+  rendered="$WORK/apps/web/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts"
   [ -f "$rendered" ] || return 1
   mkdir -p "$WORK/.playwright/e2e/sign-in"
   cp "$rendered" "$WORK/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts"

@@ -1,7 +1,7 @@
-diff --git a/frontend/app/utils/average.ts b/frontend/app/utils/average.ts
+diff --git a/apps/web/app/utils/average.ts b/apps/web/app/utils/average.ts
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/utils/average.ts
++++ b/apps/web/app/utils/average.ts
 @@ -0,0 +1,9 @@
 +const mean = (values: number[]): number =>
 +  values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -12,10 +12,10 @@ new file mode 100644
 +
 +  return mean(values);
 +};
-diff --git a/frontend/app/utils/page.ts b/frontend/app/utils/page.ts
+diff --git a/apps/web/app/utils/page.ts b/apps/web/app/utils/page.ts
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/utils/page.ts
++++ b/apps/web/app/utils/page.ts
 @@ -0,0 +1,14 @@
 +import {z} from 'zod';
 +
@@ -31,10 +31,10 @@ new file mode 100644
 +/** The row offset of the page a `page` search parameter names. */
 +export const pageOffset = (raw: null | string, pageSize: number): number =>
 +  (parsePage(raw) - 1) * pageSize;
-diff --git a/frontend/app/utils/tests/average.test.ts b/frontend/app/utils/tests/average.test.ts
+diff --git a/apps/web/app/utils/tests/average.test.ts b/apps/web/app/utils/tests/average.test.ts
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/utils/tests/average.test.ts
++++ b/apps/web/app/utils/tests/average.test.ts
 @@ -0,0 +1,12 @@
 +import {describe, expect, test} from 'vitest';
 +import {averageOrZero} from '../average';
@@ -48,10 +48,10 @@ new file mode 100644
 +    expect(averageOrZero([2, 4, 9])).toBe(5);
 +  });
 +});
-diff --git a/frontend/app/utils/tests/page.test.ts b/frontend/app/utils/tests/page.test.ts
+diff --git a/apps/web/app/utils/tests/page.test.ts b/apps/web/app/utils/tests/page.test.ts
 new file mode 100644
 --- /dev/null
-+++ b/frontend/app/utils/tests/page.test.ts
++++ b/apps/web/app/utils/tests/page.test.ts
 @@ -0,0 +1,15 @@
 +import {describe, expect, test} from 'vitest';
 +import {pageOffset} from '../page';

@@ -17,14 +17,14 @@
 
 setup_file() {
   REPO_ROOT_REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLAYWRIGHT_BIN="$REPO_ROOT_REAL/frontend/node_modules/.bin/playwright"
+  PLAYWRIGHT_BIN="$REPO_ROOT_REAL/apps/web/node_modules/.bin/playwright"
   export REPO_ROOT_REAL PLAYWRIGHT_BIN
   if [ ! -x "$PLAYWRIGHT_BIN" ]; then
     echo "Playwright is not installed at $PLAYWRIGHT_BIN; run pnpm install" >&2
     return 1
   fi
   local chromium_path
-  chromium_path=$(cd "$REPO_ROOT_REAL/frontend" && node -e "process.stdout.write(require('@playwright/test').chromium.executablePath())" < /dev/null 2>/dev/null) || chromium_path=''
+  chromium_path=$(cd "$REPO_ROOT_REAL/apps/web" && node -e "process.stdout.write(require('@playwright/test').chromium.executablePath())" < /dev/null 2>/dev/null) || chromium_path=''
   if [ -z "$chromium_path" ] || [ ! -e "$chromium_path" ]; then
     echo "Chromium is not installed for Playwright (looked for '$chromium_path'); run pnpm install:browsers" >&2
     return 1
@@ -34,8 +34,8 @@ setup_file() {
 teardown_file() {
   # No test leaves anything under the real Playwright tree: tracked files only.
   local leftover
-  leftover=$(git -C "$REPO_ROOT_REAL" status --porcelain -- frontend/.playwright)
-  [ -z "$leftover" ] || { echo "scratch left under frontend/.playwright: $leftover" >&2; return 1; }
+  leftover=$(git -C "$REPO_ROOT_REAL" status --porcelain -- apps/web/.playwright)
+  [ -z "$leftover" ] || { echo "scratch left under apps/web/.playwright: $leftover" >&2; return 1; }
 }
 
 setup() {
@@ -45,7 +45,7 @@ setup() {
   PLAN="$BATS_TEST_TMPDIR/plan"
   SPEC="$PLAN/SPEC.md"
   ROUTING="$PLAN/README.md"
-  mkdir -p "$TREE/.gaia" "$TREE/frontend/.playwright/e2e" "$PLAN"
+  mkdir -p "$TREE/.gaia" "$TREE/apps/web/.playwright/e2e" "$PLAN"
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   write_builtin_descriptor "$TREE"
   # The renderer writes its ledger beside the routing file, so the fixtures
@@ -53,9 +53,9 @@ setup() {
   cp "$FIXTURES/SPEC.md" "$SPEC"
   cp "$FIXTURES/README.md" "$ROUTING"
   # No packages registry: the package library resolves the built-in default
-  # frontend/. node_modules is the real one, so no install happens here.
-  ln -s "$REPO_ROOT_REAL/frontend/node_modules" "$TREE/frontend/node_modules"
-  cat > "$TREE/frontend/playwright.config.ts" <<'CONFIG'
+  # apps/web/. node_modules is the real one, so no install happens here.
+  ln -s "$REPO_ROOT_REAL/apps/web/node_modules" "$TREE/apps/web/node_modules"
+  cat > "$TREE/apps/web/playwright.config.ts" <<'CONFIG'
 import {defineConfig, devices} from '@playwright/test';
 
 export default defineConfig({
@@ -78,11 +78,11 @@ in_tree() {
 # playwright_report <report-path> <spec-file>: one owned-file run with the JSON
 # reporter, run from the temporary frontend package.
 playwright_report() {
-  ( cd "$TREE/frontend" && PLAYWRIGHT_JSON_OUTPUT_NAME="$1" "$PLAYWRIGHT_BIN" test "$2" --reporter=json < /dev/null > /dev/null 2>&1 )
+  ( cd "$TREE/apps/web" && PLAYWRIGHT_JSON_OUTPUT_NAME="$1" "$PLAYWRIGHT_BIN" test "$2" --reporter=json < /dev/null > /dev/null 2>&1 )
 }
 
 @test "a rendered UAT runs red, the gate refuses it, and once an implementer turns it green the gate, divergence check and id scan pass" {
-  local rendered="frontend/.playwright/e2e/fixture-flow/fixture-flow-confirms.spec.ts"
+  local rendered="apps/web/.playwright/e2e/fixture-flow/fixture-flow-confirms.spec.ts"
   local red_report="$BATS_TEST_TMPDIR/red.json" green_report="$BATS_TEST_TMPDIR/green.json"
 
   # 1. Render.
@@ -90,7 +90,7 @@ playwright_report() {
   [ "$status" -eq 0 ]
   [ "$(jq -r '.summary.written' <<<"$output")" = "1" ]
   [ "$(jq -r '.details[0].path' <<<"$output")" = "$rendered" ]
-  [ "$(find "$TREE/frontend/.playwright/e2e" -type f | wc -l | tr -d ' ')" = "1" ]
+  [ "$(find "$TREE/apps/web/.playwright/e2e" -type f | wc -l | tr -d ' ')" = "1" ]
   [ -f "$TREE/$rendered" ]
 
   # 2. Red run. The owned file alone is run, standing in for a whole-suite
@@ -128,7 +128,7 @@ GREEN
   [ "$status" -eq 0 ]
   run in_tree bash "$SPEC_SCRIPTS/uat-divergence-check.sh" "$SPEC" --routing "$ROUTING" --all
   [ "$status" -eq 0 ]
-  run in_tree bash "$SPEC_SCRIPTS/working-doc-id-scan.sh" "$TREE/frontend/.playwright"
+  run in_tree bash "$SPEC_SCRIPTS/working-doc-id-scan.sh" "$TREE/apps/web/.playwright"
   [ "$status" -eq 0 ]
 
   # 6. The pre-audit form over every e2e row.
@@ -137,7 +137,7 @@ GREEN
 }
 
 @test "the live Playwright step of the gate passes a green owned spec on a real run" {
-  local rendered="frontend/.playwright/e2e/fixture-flow/fixture-flow-confirms.spec.ts"
+  local rendered="apps/web/.playwright/e2e/fixture-flow/fixture-flow-confirms.spec.ts"
   run in_tree bash "$SPEC_SCRIPTS/uat-write.sh" "$SPEC" --routing "$ROUTING"
   [ "$status" -eq 0 ]
   sed -n '1,/^const outcome = {/p' "$TREE/$rendered" | sed '$d' > "$BATS_TEST_TMPDIR/green.spec.ts"
@@ -172,7 +172,7 @@ SHIM
   local unique folder rendered_file
   unique=$(basename "$BATS_RUN_TMPDIR" | tr 'A-Z_.' 'a-z--' | tr -c 'a-z0-9\n-' '-')
   folder="lifecycle-scratch-$unique"
-  SCRATCH_DIR="$REPO_ROOT_REAL/frontend/.playwright/e2e/$folder"
+  SCRATCH_DIR="$REPO_ROOT_REAL/apps/web/.playwright/e2e/$folder"
   sed "s/| fixture-flow |/| $folder |/" "$FIXTURES/README.md" > "$ROUTING"
   grep -qF -- "| $folder |" "$ROUTING" || return 1
 
@@ -187,7 +187,7 @@ SHIM
   source "$SPEC_SCRIPTS/uat-lib.sh"
   [ "$(uat_lib_embedded_hash "$rendered_file")" = "$(uat_lib_body_hash "$rendered_file")" ]
 
-  run pnpm -C "$REPO_ROOT_REAL/frontend" exec eslint --fix "$rendered_file"
+  run pnpm -C "$REPO_ROOT_REAL/apps/web" exec eslint --fix "$rendered_file"
   [ "$status" -eq 0 ]
   cmp "$BATS_TEST_TMPDIR/before.spec.ts" "$rendered_file"
   [ "$(uat_lib_embedded_hash "$rendered_file")" = "$(uat_lib_body_hash "$rendered_file")" ]
@@ -198,13 +198,13 @@ SHIM
   "include": ["./fixture-flow-confirms.spec.ts"]
 }
 TSCONFIG
-  run pnpm -C "$REPO_ROOT_REAL/frontend" exec tsc --noEmit -p "$SCRATCH_DIR/tsconfig.json"
+  run pnpm -C "$REPO_ROOT_REAL/apps/web" exec tsc --noEmit -p "$SCRATCH_DIR/tsconfig.json"
   echo "$output" >&2
   [ "$status" -eq 0 ]
 }
 
 @test "a route-only plan renders into the route tests directory, and the gate passes it on a Vitest report with no e2e message" {
-  local rendered="frontend/app/route-tests/fixture-flow/tests/fixture-flow-confirms.test.ts"
+  local rendered="apps/web/app/route-tests/fixture-flow/tests/fixture-flow-confirms.test.ts"
   local report="$BATS_TEST_TMPDIR/vitest.json"
   sed 's#^| UAT-001 | e2e | 1 | fixture-flow | fixture-flow-confirms.spec.ts |#| UAT-001 | route | 1 | fixture-flow | fixture-flow-confirms.test.ts |#' "$ROUTING" >"$ROUTING.new"
   mv "$ROUTING.new" "$ROUTING"
@@ -217,7 +217,7 @@ TSCONFIG
   [ "$(jq -r '.summary.written' <<<"$output")" = "1" ]
   [ "$(jq -r '.details[0].path' <<<"$output")" = "$rendered" ]
   [ -f "$TREE/$rendered" ]
-  [ "$(find "$TREE/frontend/.playwright/e2e" -type f | wc -l | tr -d ' ')" = "0" ]
+  [ "$(find "$TREE/apps/web/.playwright/e2e" -type f | wc -l | tr -d ' ')" = "0" ]
 
   # The rendered red test is refused by the gate.
   run in_tree bash "$SPEC_SCRIPTS/uat-gate.sh" "$SPEC" --routing "$ROUTING" --phase 1 --vitest-report "$BATS_TEST_TMPDIR/absent.json"

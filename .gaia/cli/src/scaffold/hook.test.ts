@@ -480,11 +480,11 @@ describe('gaia scaffold hook root resolution', () => {
     }
 
     expect(code).toBe(0);
-    expect(existsSync(path.join(root, 'frontend/app/hooks/use-foo.ts'))).toBe(
+    expect(existsSync(path.join(root, 'apps/web/app/hooks/use-foo.ts'))).toBe(
       true
     );
     expect(
-      existsSync(path.join(root, 'frontend/app/hooks/tests/use-foo.test.ts'))
+      existsSync(path.join(root, 'apps/web/app/hooks/tests/use-foo.test.ts'))
     ).toBe(true);
   });
 
@@ -509,10 +509,10 @@ describe('gaia scaffold hook root resolution', () => {
     }
 
     expect(code).toBe(0);
-    expect(existsSync(path.join(root, 'frontend/app/hooks/use-bar.ts'))).toBe(
+    expect(existsSync(path.join(root, 'apps/web/app/hooks/use-bar.ts'))).toBe(
       true
     );
     expect(existsSync(path.join(inner, 'app/hooks/use-bar.ts'))).toBe(false);
-    expect(existsSync(path.join(inner, 'frontend'))).toBe(false);
+    expect(existsSync(path.join(inner, 'apps', 'web'))).toBe(false);
   });
 });

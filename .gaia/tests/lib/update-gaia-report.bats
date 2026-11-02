@@ -288,7 +288,7 @@ assert_option_row() {
 }
 
 @test "option order: version-pin without a higher side" {
-  assert_option_row frontend/package.json version-pin keep,gaia,defer
+  assert_option_row apps/web/package.json version-pin keep,gaia,defer
 }
 
 @test "option order: field-conflict" {
@@ -333,13 +333,13 @@ assert_option_row() {
 }
 
 @test "both-changed excludes field-aware files that differ on every side" {
-  for field_aware in package.json frontend/package.json pnpm-workspace.yaml .gaia/audit-ci.yml; do
+  for field_aware in package.json apps/web/package.json pnpm-workspace.yaml .gaia/audit-ci.yml; do
     if cmp -s "$TREE/$field_aware" "$BASELINE/$field_aware"; then return 1; fi
     if cmp -s "$BASELINE/$field_aware" "$LATEST/$field_aware"; then return 1; fi
   done
   run_both_changed --extra "v2.0.0=$WORK/deferred-baseline"
   [ "$status" -eq 0 ]
-  for field_aware in package.json frontend/package.json pnpm-workspace.yaml .gaia/audit-ci.yml; do
+  for field_aware in package.json apps/web/package.json pnpm-workspace.yaml .gaia/audit-ci.yml; do
     grep -qxF "$field_aware" <<<"$output" && return 1
   done
   true
@@ -359,22 +359,22 @@ assert_option_row() {
   [ "$status" -eq 0 ]
   grep -qxF 'web/package.json' <<<"$output" && return 1
   # frontend is no longer registered, so its package.json is an ordinary file.
-  grep -qxF 'frontend/package.json' <<<"$output"
+  grep -qxF 'apps/web/package.json' <<<"$output"
 }
 
 @test "both-changed excludes the design-system paths only when established" {
-  for design_path in 'wiki/concepts/Design System.md' frontend/.claude/rules/design-baseline.md; do
+  for design_path in 'wiki/concepts/Design System.md' apps/web/.claude/rules/design-baseline.md; do
     if cmp -s "$TREE/$design_path" "$BASELINE/$design_path"; then return 1; fi
     if cmp -s "$BASELINE/$design_path" "$LATEST/$design_path"; then return 1; fi
   done
   run_both_changed --extra "v2.0.0=$WORK/deferred-baseline"
   grep -qxF 'wiki/concepts/Design System.md' <<<"$output" && return 1
-  grep -qxF 'frontend/.claude/rules/design-baseline.md' <<<"$output" && return 1
+  grep -qxF 'apps/web/.claude/rules/design-baseline.md' <<<"$output" && return 1
   printf -- '---\nestablished: false\n---\nadopter\n' >"$TREE/wiki/concepts/Design System.md"
   run_both_changed --extra "v2.0.0=$WORK/deferred-baseline"
   [ "$status" -eq 0 ]
   grep -qxF 'wiki/concepts/Design System.md' <<<"$output"
-  grep -qxF 'frontend/.claude/rules/design-baseline.md' <<<"$output"
+  grep -qxF 'apps/web/.claude/rules/design-baseline.md' <<<"$output"
 }
 
 @test "chunk --size 2 writes three chunks, both-changed.txt and clears a stale chunk" {

@@ -17,14 +17,14 @@ setup() {
   SCRIPT="$REPO_ROOT/.gaia/scripts/frontend-lint-delta.sh"
   WORKFLOW="$REPO_ROOT/.github/workflows/tests.yml"
   FIXTURE="$BATS_TEST_TMPDIR/fixture"
-  mkdir -p "$FIXTURE/frontend/app" "$FIXTURE/wiki"
+  mkdir -p "$FIXTURE/apps/web/app" "$FIXTURE/wiki"
   git -C "$FIXTURE" init -q
   git -C "$FIXTURE" config user.email bats@example.com
   git -C "$FIXTURE" config user.name bats
   git -C "$FIXTURE" config commit.gpgsign false
-  printf 'export const kept = 1;\n' > "$FIXTURE/frontend/app/kept.ts"
-  printf 'export const moved = 1;\n' > "$FIXTURE/frontend/app/old-name.ts"
-  printf 'export const gone = 1;\n' > "$FIXTURE/frontend/app/gone.ts"
+  printf 'export const kept = 1;\n' > "$FIXTURE/apps/web/app/kept.ts"
+  printf 'export const moved = 1;\n' > "$FIXTURE/apps/web/app/old-name.ts"
+  printf 'export const gone = 1;\n' > "$FIXTURE/apps/web/app/gone.ts"
   printf '{}\n' > "$FIXTURE/package.json"
   git -C "$FIXTURE" add -A
   git -C "$FIXTURE" commit -q -m base
@@ -38,8 +38,8 @@ commit_change() {
 }
 
 @test "a changed frontend source file is linted and a non-frontend file is not" {
-  printf 'export const kept = 2;\n' > "$FIXTURE/frontend/app/kept.ts"
-  printf 'body {}\n' > "$FIXTURE/frontend/app/style.css"
+  printf 'export const kept = 2;\n' > "$FIXTURE/apps/web/app/kept.ts"
+  printf 'body {}\n' > "$FIXTURE/apps/web/app/style.css"
   printf 'note\n' > "$FIXTURE/wiki/page.md"
   commit_change
   run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
@@ -49,7 +49,7 @@ commit_change() {
 
 @test "each lintable extension is selected" {
   for extension in js jsx ts tsx mjs cjs; do
-    printf 'export const value = 1;\n' > "$FIXTURE/frontend/app/file.$extension"
+    printf 'export const value = 1;\n' > "$FIXTURE/apps/web/app/file.$extension"
   done
   commit_change
   run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
@@ -59,8 +59,8 @@ commit_change() {
 }
 
 @test "a deleted file is dropped and a moved file lists only its new path" {
-  git -C "$FIXTURE" rm -q frontend/app/gone.ts
-  git -C "$FIXTURE" mv frontend/app/old-name.ts frontend/app/new-name.ts
+  git -C "$FIXTURE" rm -q apps/web/app/gone.ts
+  git -C "$FIXTURE" mv apps/web/app/old-name.ts apps/web/app/new-name.ts
   commit_change
   run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
   [ "$status" -eq 0 ]
@@ -68,7 +68,7 @@ commit_change() {
 }
 
 @test "a path with a non-ASCII name is selected, not C-quoted out" {
-  printf 'export const value = 1;\n' > "$FIXTURE/frontend/app/café.ts"
+  printf 'export const value = 1;\n' > "$FIXTURE/apps/web/app/café.ts"
   commit_change
   run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
   [ "$status" -eq 0 ]
@@ -76,8 +76,8 @@ commit_change() {
 }
 
 @test "each lint input change selects the full lint" {
-  for input in frontend/eslint.config.mjs frontend/prettier.config.js frontend/tsconfig.json \
-    frontend/tsconfig.node.json frontend/package.json package.json pnpm-lock.yaml pnpm-workspace.yaml; do
+  for input in apps/web/eslint.config.mjs apps/web/prettier.config.js apps/web/tsconfig.json \
+    apps/web/tsconfig.node.json apps/web/package.json package.json pnpm-lock.yaml pnpm-workspace.yaml; do
     git -C "$FIXTURE" reset -q --hard "$BASE"
     mkdir -p "$FIXTURE/$(dirname "$input")"
     printf 'changed %s\n' "$input" >> "$FIXTURE/$input"
@@ -112,7 +112,7 @@ commit_change() {
 }
 
 @test "an unreadable base fails rather than reading as no change" {
-  printf 'export const kept = 2;\n' > "$FIXTURE/frontend/app/kept.ts"
+  printf 'export const kept = 2;\n' > "$FIXTURE/apps/web/app/kept.ts"
   commit_change
   run "$SCRIPT" --root "$FIXTURE" --base refs/heads/no-such-branch --plan
   [ "$status" -eq 2 ]

@@ -14,9 +14,9 @@ A failed command, or a probe that still fails after the install: print one `[ok]
 
 Two external tools need per-machine setup. Probes: React Doctor, Playwright CLI.
 
-Run each tool's install only when its own probe fails, so a React Doctor skill already on disk is recorded without being installed again. A session that read a file under `frontend/` before this install lists the skill only from its next session; the closing message adds no restart line for it.
+Run each tool's install only when its own probe fails, so a React Doctor skill already on disk is recorded without being installed again. A session that read a file under `apps/web/` before this install lists the skill only from its next session; the closing message adds no restart line for it.
 
-- [React Doctor](https://github.com/millionco/react-doctor): Run `bash .gaia/scripts/install-react-doctor.sh`. It installs the Claude Code skill under `frontend/.claude/skills/`, strips the installer's extras, and leaves `package.json`, `pnpm-lock.yaml` and `.githooks/pre-commit` unchanged; `wiki/dependencies/react-doctor.md` holds the verification record.
+- [React Doctor](https://github.com/millionco/react-doctor): Run `bash .gaia/scripts/install-react-doctor.sh`. It installs the Claude Code skill under `apps/web/.claude/skills/`, strips the installer's extras, and leaves `package.json`, `pnpm-lock.yaml` and `.githooks/pre-commit` unchanged; `wiki/dependencies/react-doctor.md` holds the verification record.
 - [Playwright CLI](https://github.com/microsoft/playwright-cli): `npm install -g @playwright/cli@latest`. The bundled skill shells out to the global binary; `/update-deps` keeps it current; `wiki/dependencies/playwright-cli.md` covers the fallback.
 
 Record line: `.gaia/cli/gaia setup record install-tools applied`.
@@ -43,13 +43,13 @@ Record line: `.gaia/cli/gaia setup record chmod-statusline applied`.
 
 ## Step 4: bootstrap-env
 
-The app's `.env` lives in the `frontend/` package and is gitignored. When `frontend/.env` is absent and `frontend/.env.example` exists, the CLI copies it; otherwise it is a no-op (the project may not use `.env`, or an earlier bootstrap already wrote it):
+The app's `.env` lives in the `apps/web/` package and is gitignored. When `apps/web/.env` is absent and `apps/web/.env.example` exists, the CLI copies it; otherwise it is a no-op (the project may not use `.env`, or an earlier bootstrap already wrote it):
 
 ```bash
 .gaia/cli/gaia setup bootstrap-env
 ```
 
-Run the CLI, never a `cp` onto `frontend/.env`: the project's `Edit(frontend/.env)` deny refuses any Bash command that writes that file, guarded or not, while the CLI subprocess is outside its reach.
+Run the CLI, never a `cp` onto `apps/web/.env`: the project's `Edit(apps/web/.env)` deny refuses any Bash command that writes that file, guarded or not, while the CLI subprocess is outside its reach.
 
 Record line: `.gaia/cli/gaia setup record bootstrap-env applied`.
 
@@ -59,7 +59,7 @@ After a step's commands, run each of its probes and emit one line per component:
 
 | Component      | Probe                                                                        |
 | -------------- | ---------------------------------------------------------------------------- |
-| React Doctor   | `[ -d frontend/.claude/skills/react-doctor ]` (gitignored, kept per-machine) |
+| React Doctor   | `[ -d apps/web/.claude/skills/react-doctor ]` (gitignored, kept per-machine) |
 | Playwright CLI | `command -v playwright-cli && playwright-cli --version >/dev/null 2>&1`      |
 | typescript-lsp | `claude plugin list 2>/dev/null \| grep -q 'typescript-lsp'`                 |
 

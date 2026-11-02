@@ -7,8 +7,8 @@ import {z} from 'zod';
  * message text included, so a reason string changed here changes in the other.
  *
  * Fail-closed: an absent `.gaia/packages.json` is the built-in default registry
- * (frontend at `frontend`), never "nothing in scope", and its descriptor is
- * still read from `frontend/gaia.package.json`; a present registry that is
+ * (web at `apps/web`), never "nothing in scope", and its descriptor is
+ * still read from `apps/web/gaia.package.json`; a present registry that is
  * malformed, or a descriptor that is missing or invalid, returns an error
  * result and never a partial answer.
  *
@@ -105,7 +105,7 @@ export {globToRegExp} from './glob-regexp.js';
 export {joinGlob} from './glob-regexp.js';
 
 export const BUILTIN_REGISTRY: readonly RegistryEntry[] = [
-  {name: 'frontend', path: 'frontend'},
+  {name: 'web', path: 'apps/web'},
 ];
 
 const registryError = (reason: string): LoadResult => {

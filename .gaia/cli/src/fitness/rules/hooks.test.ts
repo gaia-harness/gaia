@@ -156,7 +156,7 @@ describe('hooks.path-exists-executable', () => {
   test('passes a hook in a nested settings file', () => {
     const project = hookProject(`"${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`, {
       files: {[EXAMPLE_SCRIPT]: '#!/usr/bin/env bash\n'},
-      path: 'frontend/.claude/settings.json',
+      path: 'apps/web/.claude/settings.json',
     });
 
     expect(findingIds(project, {executable: [EXAMPLE_SCRIPT]}).ids).toEqual([]);

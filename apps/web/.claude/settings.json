@@ -1,0 +1,480 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash .gaia/scripts/audit-noop-detect.sh:*)",
+      "Bash(bash .gaia/scripts/branch-name-lib.sh:*)",
+      "Bash(bash .gaia/scripts/check-debt-issue-metadata.sh:*)",
+      "Bash(bash .gaia/scripts/debt-dedup.sh:*)",
+      "Bash(bash .gaia/scripts/debt-stale-claims.sh:*)",
+      "Bash(bash .gaia/scripts/notebook/notebook-lib.sh:*)",
+      "Bash(bash .gaia/scripts/notebook/reconcile.sh:*)",
+      "Bash(bash .gaia/scripts/notebook/research-reaper.sh:*)",
+      "Bash(bash .gaia/scripts/plan-archive.sh:*)",
+      "Bash(bash .gaia/scripts/plan-resume-point.sh:*)",
+      "Bash(bash .gaia/scripts/pr-wait-merge.sh:*)",
+      "Bash(bash .gaia/scripts/spec/handoff-clear.sh:*)",
+      "Bash(bash .gaia/scripts/spec/ledger-update.sh:*)",
+      "Bash(bash .gaia/scripts/spec/lint.sh:*)",
+      "Bash(bash .gaia/scripts/spec/plan-allocator.sh:*)",
+      "Bash(bash .gaia/scripts/spec/plan-archive-merged.sh:*)",
+      "Bash(bash .gaia/scripts/spec/plan-reconcile.sh:*)",
+      "Bash(bash .gaia/scripts/spec/plan-verify.sh:*)",
+      "Bash(bash .gaia/scripts/spec/spec-abandon-empty.sh:*)",
+      "Bash(bash .gaia/scripts/spec/spec-allocator.sh:*)",
+      "Bash(bash .gaia/scripts/spec/spec-archive-abandoned.sh:*)",
+      "Bash(bash .gaia/scripts/spec/spec-archive-merged.sh:*)",
+      "Bash(bash .gaia/scripts/spec/spec-reconcile.sh:*)",
+      "Bash(bash .gaia/scripts/spec/spec-save.sh:*)",
+      "Bash(bash .gaia/scripts/spec/spec-session-lock.sh:*)",
+      "Bash(bash .gaia/scripts/spec/title-normalize.sh:*)",
+      "Bash(bash .gaia/scripts/spec/uat-divergence-check.sh:*)",
+      "Bash(bash .gaia/scripts/spec/uat-gate.sh:*)",
+      "Bash(bash .gaia/scripts/overlap-check.sh:*)",
+      "Bash(bash .gaia/scripts/spec/uat-write.sh:*)",
+      "Bash(bash .gaia/scripts/spec/working-doc-id-scan.sh:*)",
+      "Bash(bash .gaia/scripts/state-cleanup.sh:*)",
+      "Bash(bash .gaia/scripts/summary-verify.sh:*)",
+      "Bash(corepack enable pnpm)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git show:*)",
+      "Bash(git stash:*)",
+      "Bash(git status:*)",
+      "Bash(git switch:*)",
+      "Bash(git symbolic-ref:*)",
+      "Bash(git worktree *)",
+      "Bash(mkdir -p .gaia/local)",
+      "Bash(mkdir -p .gaia/local/*)",
+      "Bash(pnpm -C .gaia/cli bundle)",
+      "Bash(pnpm -C .gaia/cli lint)",
+      "Bash(pnpm -C .gaia/cli test:*)",
+      "Bash(pnpm -C apps/web build:*)",
+      "Bash(pnpm -C apps/web dev:*)",
+      "Bash(pnpm -C apps/web exec playwright test:*)",
+      "Bash(pnpm -C apps/web format)",
+      "Bash(pnpm -C apps/web lint)",
+      "Bash(pnpm -C apps/web lint-dry)",
+      "Bash(pnpm -C apps/web pw-ui:*)",
+      "Bash(pnpm -C apps/web pw:*)",
+      "Bash(pnpm -C apps/web storybook:*)",
+      "Bash(pnpm -C apps/web stylelint)",
+      "Bash(pnpm -C apps/web test:*)",
+      "Bash(pnpm -C apps/web test:ci:*)",
+      "Bash(pnpm -C apps/web typecheck:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm dev:*)",
+      "Bash(pnpm format)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm lint-dry)",
+      "Bash(pnpm ls:*)",
+      "Bash(pnpm outdated:*)",
+      "Bash(pnpm pw-ui:*)",
+      "Bash(pnpm pw:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm storybook:*)",
+      "Bash(pnpm stylelint)",
+      "Bash(pnpm test:ci:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(rm -f .gaia/local/cache/*)",
+      "Bash(rm -rf .gaia/cache)",
+      "Bash(rm -rf .gaia/local/cache/*)",
+      "Bash(rm -rf .notebook/plans/*)",
+      "Bash(rm -rf .notebook/specs/*)",
+      "Edit(../../.claude/agents/**)",
+      "Edit(../../.claude/commands/**)",
+      "Edit(../../.claude/rules/**)",
+      "Edit(../../.claude/skills/**)",
+      "Edit(../../.gaia/**)",
+      "Edit(../../CHANGELOG.md)",
+      "Edit(../../apps/web/.claude/agents/**)",
+      "Edit(../../apps/web/.claude/instructions/**)",
+      "Edit(../../apps/web/.claude/rules/**)",
+      "Edit(../../apps/web/.claude/skills/**)",
+      "Edit(../../apps/web/.playwright/**)",
+      "Edit(../../apps/web/.storybook/**)",
+      "Edit(../../apps/web/app/**)",
+      "Edit(../../apps/web/public/**)",
+      "Edit(../../apps/web/test/**)",
+      "Edit(../../wiki/**)",
+      "WebFetch(domain:context7.com)"
+    ],
+    "ask": [
+      "Edit(**/.claude/settings.json)",
+      "Edit(../../.claude/settings.json)"
+    ],
+    "deny": [
+      "Bash(git push --force-with-lease *main*)",
+      "Bash(git push --force-with-lease *master*)",
+      "Bash(git reset --hard HEAD~*)",
+      "Edit(**/.env)",
+      "Edit(../../.env)",
+      "Edit(../../.gaia/local/audit/*.ok)",
+      "Edit(../../.gaia/local/audit/*.refused)",
+      "Edit(../../apps/web/.claude/settings.json)",
+      "Edit(../../pnpm-lock.yaml)"
+    ],
+    "additionalDirectories": [
+      "../.."
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/provision-worktree.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/wiki-session-start.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/debt-session-reconcile.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/usage-capture.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/state-reaper-session-start.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/provision-worktree.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/workflow-doctrine-inject.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/ports-session-start.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/usage-capture.sh\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/audit-loop-grant.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-eslint-config-edit.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-secrets-write.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-manifest-write.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-worktree-path-mismatch.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-audit-loop-write.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-handrolled-pr-poll.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-main-destructive-git.sh\"",
+            "statusMessage": "Checking main-branch protection…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-no-verify.sh\"",
+            "statusMessage": "Checking commit-floor bypass…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/red-verify-commit-check.sh\"",
+            "statusMessage": "Checking RED-before-GREEN gate…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-rm-rf.sh\"",
+            "statusMessage": "Checking rm -rf safety…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/pr-merge-audit-check.sh\"",
+            "statusMessage": "Checking PR-merge audit gate…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-fork-pr-checkout.sh\"",
+            "statusMessage": "Checking fork PR checkout…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/worthiness-presence-check.sh\"",
+            "statusMessage": "Checking worthiness presence gate…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-manifest-write.sh\"",
+            "statusMessage": "Checking manifest-write guard…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-settings-write.sh\"",
+            "statusMessage": "Checking settings-write guard…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-sensitive-read.sh\"",
+            "statusMessage": "Checking dotenv and secret-path read guard…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-audit-loop-write.sh\"",
+            "statusMessage": "Checking audit loop state guard…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-invalid-pr-title.sh\"",
+            "statusMessage": "Checking PR title…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-machine-local-ref-gh-text.sh\"",
+            "statusMessage": "Checking PR and issue text for machine-local references…"
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-pr-create-without-draft.sh\"",
+            "statusMessage": "Checking PR is a draft…"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-sensitive-read.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-sensitive-read.sh\"",
+            "statusMessage": "Checking dotenv and secret-path read guard…"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr merge *)",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/post-findings-block-on-merge.sh\"",
+            "statusMessage": "Posting local audit findings block…"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/audit-loop-bound.sh\"",
+            "timeout": 30,
+            "statusMessage": "Checking audit loop checkpoint…"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/audit-loop-ask-grant.sh\"",
+            "timeout": 15,
+            "statusMessage": "Recording audit checkpoint answer…"
+          }
+        ]
+      },
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/provision-worktree.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/workflow-doctrine-inject.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr merge *)",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/pr-merge-cost.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/capture-red-observations.sh\""
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh *)",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/debt-sentinel-touch.sh\""
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr merge *)",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/issue-claim-release.sh\""
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr create *)",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/capture-gh-artifact.sh\""
+          },
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/workflow-doctrine-inject.sh\""
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr checkout *)",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/workflow-doctrine-inject.sh\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/context-checkpoint-inject.sh\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/context-checkpoint-subagent.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/capture-red-observations.sh\""
+          }
+        ]
+      }
+    ]
+  },
+  "sandbox": {
+    "filesystem": {
+      "denyRead": [
+        "../../.env",
+        "../../.env.*",
+        "**/.env",
+        "**/.env.*",
+        "**/*.key",
+        "**/*.pem",
+        "**/*credential*",
+        "**/secrets/**",
+        "**/secrets/**/*credential*.ts",
+        "**/secrets/**/*credential*.tsx",
+        "**/secrets/**/*credential*.mts",
+        "**/secrets/**/*credential*.cts"
+      ],
+      "allowRead": [
+        "../../.env.example",
+        "**/.env.example",
+        "**/*credential*.ts",
+        "**/*credential*.tsx",
+        "**/*credential*.mts",
+        "**/*credential*.cts"
+      ]
+    }
+  },
+  "skillOverrides": {
+    "gaia-debt": "name-only",
+    "gaia-plan": "name-only",
+    "gaia-spec": "name-only",
+    "release-notes": "name-only",
+    "update-deps": "name-only",
+    "update-gaia": "name-only"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.gaia/statusline/gaia-statusline.sh\"",
+    "refreshInterval": 15
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true
+  }
+}

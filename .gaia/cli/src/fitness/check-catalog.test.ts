@@ -226,7 +226,7 @@ const ownedHarnessPaths = (): string[] => {
     .filter(
       ([relative, ownership]) =>
         ownership === 'owned' &&
-        ['.claude/', 'frontend/.claude/', 'wiki/'].some((prefix) =>
+        ['.claude/', 'apps/web/.claude/', 'wiki/'].some((prefix) =>
           relative.startsWith(prefix)
         )
     )

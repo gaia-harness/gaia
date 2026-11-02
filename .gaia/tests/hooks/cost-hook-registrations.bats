@@ -2,7 +2,7 @@
 #
 # Bats suite for which hooks the cost path registers. The `gh pr merge`
 # PostToolUse registration in .claude/settings.json and
-# frontend/.claude/settings.json names pr-merge-cost.sh, and that hook invokes
+# apps/web/.claude/settings.json names pr-merge-cost.sh, and that hook invokes
 # no script beyond the libraries it loads and usage-merge.sh.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
@@ -12,7 +12,7 @@ bats_require_minimum_version 1.5.0
 
 setup() {
   SOURCE_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  SETTINGS_FILES=("$SOURCE_ROOT/.claude/settings.json" "$SOURCE_ROOT/frontend/.claude/settings.json")
+  SETTINGS_FILES=("$SOURCE_ROOT/.claude/settings.json" "$SOURCE_ROOT/apps/web/.claude/settings.json")
 }
 
 # merge_commands <settings-file>: the commands of the PostToolUse registrations

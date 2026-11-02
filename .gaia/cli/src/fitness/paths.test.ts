@@ -41,7 +41,7 @@ describe('asRepositoryPath', () => {
     'docs.example.org/guide.md',
     '.md',
     '.sh',
-    'frontend/.claude/...',
+    'apps/web/.claude/...',
     '',
   ])('%s is not a path', (candidate) => {
     expect(asRepositoryPath(candidate)).toBeUndefined();

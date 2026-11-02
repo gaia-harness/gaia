@@ -21,9 +21,9 @@ type PackageJson = {
 const OLD_LINT = ['@gaia', 'react/lint'].join('-');
 const NEW_LINT = '@gaia-harness/lint';
 const OWNED_CONFIGS = [
-  'frontend/eslint.config.mjs',
-  'frontend/prettier.config.mjs',
-  'frontend/stylelint.config.mjs',
+  'apps/web/eslint.config.mjs',
+  'apps/web/prettier.config.mjs',
+  'apps/web/stylelint.config.mjs',
   'prettier.config.mjs',
 ];
 
@@ -34,7 +34,7 @@ const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
 const LINT_VERSION =
   (
     JSON.parse(
-      readFileSync(path.join(repoRoot, 'frontend/package.json'), 'utf8')
+      readFileSync(path.join(repoRoot, 'apps/web/package.json'), 'utf8')
     ) as PackageJson
   ).devDependencies?.[NEW_LINT] ?? '';
 
@@ -186,7 +186,7 @@ describe('merge outcome edge cases', () => {
   });
 
   test('the mixed-state guard fails when the new package is missing from the release file', () => {
-    const real = readRepoJson('frontend/package.json');
+    const real = readRepoJson('apps/web/package.json');
     const withoutNewLint: PackageJson = {
       ...real,
       devDependencies: Object.fromEntries(
@@ -205,7 +205,7 @@ describe('merge outcome edge cases', () => {
 });
 
 describe('real release files', () => {
-  test.each(['frontend/package.json', 'package.json'])(
+  test.each(['apps/web/package.json', 'package.json'])(
     'the untouched old lint pin merged into %s swaps to the new package',
     (relativePath) => {
       const report = mergeReport({

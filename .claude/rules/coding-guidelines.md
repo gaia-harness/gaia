@@ -3,7 +3,7 @@
 ## File Naming
 
 - **Files and folders**: kebab-case, ASCII English, except names a tool or convention fixes: React Router route modules (`_public._index.tsx`, `$id`) and the language files that mirror them, wiki pages (Title Case with spaces), the uppercase convention files (`CLAUDE.md`, `README.md`, `SKILL.md`, `Dockerfile`, `VERSION`), and tool-generated files (`mockServiceWorker.js`)
-- **React components and hooks** (file and folder layout, naming): `frontend/.claude/rules/coding-guidelines-react.md`, loaded on frontend files
+- **React components and hooks** (file and folder layout, naming): `apps/web/.claude/rules/coding-guidelines-react.md`, loaded on frontend files
 
 ## 1. Simplicity First
 
@@ -29,7 +29,7 @@ Touch only what's needed: don't improve adjacent code, don't refactor unbroken t
 
 When building new features or fixing bugs, follow the TDD workflow described in `.claude/skills/tdd/SKILL.md` (read it on demand, do not preload).
 
-- Test individual functions in isolation and user flows end to end; the frontend stack (Vitest, Storybook, Playwright) is in `frontend/CLAUDE.md` (`## Tests and prerequisites`) and the `tdd-react` skill
+- Test individual functions in isolation and user flows end to end; the frontend stack (Vitest, Storybook, Playwright) is in `apps/web/CLAUDE.md` (`## Tests and prerequisites`) and the `tdd-react` skill
 
 ## 4. Always Verify Your Work
 

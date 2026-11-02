@@ -63,7 +63,7 @@ class_of() {
 }
 
 @test "the old literal root no longer classifies when no member sits there" {
-  run class_of frontend/app/components/button/index.tsx
+  run class_of apps/web/app/components/button/index.tsx
   [ "$output" = "none" ]
 }
 

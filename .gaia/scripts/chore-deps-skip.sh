@@ -6,8 +6,8 @@
 # lists literally (led by the root package.json, pnpm-lock.yaml and
 # pnpm-workspace.yaml), or a path
 # matching a registered package's `dependencyManifests` globs (registry and
-# descriptor: `.claude/hooks/lib/gaia-packages.sh`), so `frontend/package.json`
-# is one and a nested manifest such as `frontend/app/foo/package.json`, or one
+# descriptor: `.claude/hooks/lib/gaia-packages.sh`), so `apps/web/package.json`
+# is one and a nested manifest such as `apps/web/app/foo/package.json`, or one
 # under an unregistered directory, is not.
 #
 # Usage: bash .gaia/scripts/chore-deps-skip.sh <subject> <<<"$paths"

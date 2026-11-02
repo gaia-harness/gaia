@@ -17,8 +17,8 @@
 
 bats_require_minimum_version 1.5.0
 
-WIDGET="frontend/app/components/Widget/widget.test.tsx"
-MARKER_STORY="frontend/app/components/Marker/marker.stories.tsx"
+WIDGET="apps/web/app/components/Widget/widget.test.tsx"
+MARKER_STORY="apps/web/app/components/Marker/marker.stories.tsx"
 EMERGENT_GLOBS='["app/components/**/*.test.tsx",".playwright/**/*.spec.ts","app/**/*.stories.tsx"]'
 
 setup() {
@@ -39,7 +39,7 @@ setup() {
   write_builtin_descriptor "$REPO" '' '' "$EMERGENT_GLOBS"
   install_harness
 
-  mkdir -p "$REPO/frontend/app/components/Widget" "$REPO/frontend/app/components/Marker"
+  mkdir -p "$REPO/apps/web/app/components/Widget" "$REPO/apps/web/app/components/Marker"
   widget_source >"$REPO/$WIDGET"
   story_source >"$REPO/$MARKER_STORY"
   printf '# readme\n' >"$REPO/README.md"
@@ -307,8 +307,8 @@ state_checksum() {
 }
 
 @test "an extractor refusal exits 3 with the reason on stderr and never an empty list" {
-  cp "$HOME_ROOT/.gaia/tests/hooks/fixtures/red-ledger/csf3-old-format.stories.tsx" "$REPO/frontend/app/components/Marker/old.stories.tsx"
-  commit_paths frontend/app/components/Marker/old.stories.tsx
+  cp "$HOME_ROOT/.gaia/tests/hooks/fixtures/red-ledger/csf3-old-format.stories.tsx" "$REPO/apps/web/app/components/Marker/old.stories.tsx"
+  commit_paths apps/web/app/components/Marker/old.stories.tsx
   run_route
   [ "$status" -eq 3 ]
   grep -qF -- "old-format" <<<"$stderr"
@@ -458,7 +458,7 @@ state_checksum() {
   {
     jq -nc --arg f "$WIDGET" --arg s "$current" '{source: "worthiness", member: "worthiness-evaluator", finding_class: "holistic/unclassified", path: $f, line: 9, reason: "r", file: $f, fullName: "second", signal: $s}'
     jq -nc --arg f "$WIDGET" --arg s "$stale" '{source: "worthiness", member: "worthiness-evaluator", finding_class: "holistic/unclassified", path: $f, line: 3, reason: "r", file: $f, fullName: "first", signal: $s}'
-    jq -nc '{source: "filing-replay", member: "code-audit-frontend", finding_class: "rule/x", path: "frontend/a.ts", line: 0, reason: "r"}'
+    jq -nc '{source: "filing-replay", member: "code-audit-frontend", finding_class: "rule/x", path: "apps/web/a.ts", line: 0, reason: "r"}'
   } >"$RUN_FOLDER/recorded-residuals.jsonl"
   run bash "$STEP" prune --root "$REPO" --run-folder "$RUN_FOLDER"
   [ "$status" -eq 0 ]
@@ -466,7 +466,7 @@ state_checksum() {
   [ "$(jq -r '.fullName // .source' "$RUN_FOLDER/recorded-residuals.jsonl" | tr '\n' ' ')" = "second filing-replay " ]
 }
 
-ROUTE_TEST="frontend/app/route-tests/orders/tests/refuses-anonymous.test.ts"
+ROUTE_TEST="apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts"
 
 commit_route_test() {
   mkdir -p "$REPO/$(dirname "$ROUTE_TEST")"

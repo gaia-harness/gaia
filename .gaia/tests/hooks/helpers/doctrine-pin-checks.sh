@@ -20,7 +20,7 @@ PIN_RE='model[`"]*:[[:space:]]*[`"]*(haiku|opus|sonnet|fable)([^a-z]|$)|(haiku|o
 
 # Prints every tracked file outside the doctrine page that pins a model.
 pin_site_files() {
-  git -C "$1" grep -l -i -E -e "$PIN_RE" -- .claude frontend/.claude wiki .gaia/cli/health \
+  git -C "$1" grep -l -i -E -e "$PIN_RE" -- .claude apps/web/.claude wiki .gaia/cli/health \
     ':!wiki/log.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md'
 }
 

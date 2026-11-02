@@ -126,11 +126,11 @@ describe.each(SCAFFOLDERS)('gaia scaffold $name package root', (scaffolder) => {
 
   test.each([
     ['the repo root', ''],
-    ['inside frontend/', 'frontend'],
+    ['inside apps/web/', 'apps/web'],
   ])(
-    'built-in default writes under frontend/ when run from %s',
+    'built-in default writes under apps/web/ when run from %s',
     (_label, cwdRelative) => {
-      const packageDir = path.join(root, 'frontend');
+      const packageDir = path.join(root, 'apps', 'web');
       writeBuiltinDescriptor(root);
       seedPackage(packageDir, scaffolder.seed);
       const cwd = path.join(root, cwdRelative);
@@ -155,7 +155,7 @@ describe.each(SCAFFOLDERS)('gaia scaffold $name package root', (scaffolder) => {
     for (const relative of scaffolder.expected) {
       expect(existsSync(path.join(root, relative))).toBe(true);
     }
-    expect(existsSync(path.join(root, 'frontend'))).toBe(false);
+    expect(existsSync(path.join(root, 'apps', 'web'))).toBe(false);
   });
 
   test('a malformed registry refuses with the gaia-packages message and writes nothing', () => {
@@ -170,7 +170,7 @@ describe.each(SCAFFOLDERS)('gaia scaffold $name package root', (scaffolder) => {
       before
     );
     expect(existsSync(path.join(root, 'app'))).toBe(false);
-    expect(existsSync(path.join(root, 'frontend'))).toBe(false);
+    expect(existsSync(path.join(root, 'apps', 'web'))).toBe(false);
   });
 });
 
@@ -213,7 +213,7 @@ describe.each(SCAFFOLDERS)('gaia scaffold $name web member', (scaffolder) => {
       );
     }
     expect(existsSync(path.join(root, 'packages/lib/app'))).toBe(false);
-    expect(existsSync(path.join(root, 'frontend'))).toBe(false);
+    expect(existsSync(path.join(root, 'apps', 'web'))).toBe(false);
   });
 
   test('--package naming a non-web member refuses, names the web member, and changes no file', () => {
@@ -274,7 +274,7 @@ describe('gaia scaffold component --parent normalization', () => {
     root = realpathSync(mkdtempSync(path.join(tmpdir(), 'gaia-parent-')));
     writeBuiltinDescriptor(root);
     execGaiaGit(['init', '-q', '-b', 'main'], root);
-    mkdirSync(path.join(root, 'frontend/app/components/form'), {
+    mkdirSync(path.join(root, 'apps/web/app/components/form'), {
       recursive: true,
     });
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -285,7 +285,7 @@ describe('gaia scaffold component --parent normalization', () => {
     rmSync(root, {force: true, recursive: true});
   });
 
-  test.each(['app/components/form', 'frontend/app/components/form'])(
+  test.each(['app/components/form', 'apps/web/app/components/form'])(
     'resolves --parent %s against the package and titles the story package-relative',
     (parent) => {
       expect(runComponent(['Field', '--parent', parent], {cwd: root})).toBe(
@@ -295,13 +295,13 @@ describe('gaia scaffold component --parent normalization', () => {
       const story = readFileSync(
         path.join(
           root,
-          'frontend/app/components/form/field/tests/index.stories.tsx'
+          'apps/web/app/components/form/field/tests/index.stories.tsx'
         ),
         'utf8'
       );
 
       expect(story).toContain('Components/Form/Field');
-      expect(existsSync(path.join(root, 'frontend/frontend'))).toBe(false);
+      expect(existsSync(path.join(root, 'apps/web/frontend'))).toBe(false);
     }
   );
 });

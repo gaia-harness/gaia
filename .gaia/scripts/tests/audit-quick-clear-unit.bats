@@ -9,8 +9,8 @@
 
 bats_require_minimum_version 1.5.0
 
-QUICK_ENGLISH="frontend/app/languages/en/common.ts"
-QUICK_JAPANESE="frontend/app/languages/ja/common.ts"
+QUICK_ENGLISH="apps/web/app/languages/en/common.ts"
+QUICK_JAPANESE="apps/web/app/languages/ja/common.ts"
 
 # quick_locale_text <title>: a one-key language file.
 quick_locale_text() {

@@ -743,7 +743,7 @@ YAML
   [ -z "$output" ]
 }
 
-# ---- SPEC-092: the committed roster claims the frontend/ package ------------
+# ---- SPEC-092: the committed roster claims the apps/web/ package ------------
 # These drive the roster that ships (seed_audit_roster copies the committed
 # `auditors:` block), so they pin the real globs rather than a fixture mirror.
 
@@ -753,26 +753,27 @@ seed_committed_roster() {
   seed_audit_roster "$SANDBOX"
 }
 
-@test "committed roster: a frontend/app diff resolves to the default member by its own frontend/app/** glob" {
+@test "committed roster: a apps/web/app diff resolves to the default member by its own apps/web/app/** glob" {
   seed_committed_roster
-  stage frontend/app/routes/x.tsx
+  stage apps/web/app/routes/x.tsx
   commit "frontend app change"
   run run_resolver
   [ "$status" -eq 0 ]
   [ "$output" = "code-audit-frontend" ]
 
-  # Attribution: drop only the member's own `frontend/app/**` glob and the same
-  # diff resolves to nobody, so the match came from that glob and nothing else.
-  grep -vF -- '"frontend/app/**"' "$SANDBOX/.gaia/audit-ci.yml" > "$SANDBOX/.gaia/audit-ci.yml.tmp"
+  # Attribution: drop the member's own `apps/web/app/**` glob and the broader
+  # `apps/**` one, and the same diff resolves to nobody, so the match came from
+  # those globs and nothing else.
+  grep -vF -e '"apps/web/app/**"' -e '"apps/**"' "$SANDBOX/.gaia/audit-ci.yml" > "$SANDBOX/.gaia/audit-ci.yml.tmp"
   mv "$SANDBOX/.gaia/audit-ci.yml.tmp" "$SANDBOX/.gaia/audit-ci.yml"
   run run_resolver
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
-@test "committed roster: frontend/.claude and frontend/gaia.package.json resolve to the frontend member" {
+@test "committed roster: apps/web/.claude and apps/web/gaia.package.json resolve to the frontend member" {
   seed_committed_roster
-  stage frontend/.claude/rules/x.md frontend/gaia.package.json frontend/CLAUDE.md
+  stage apps/web/.claude/rules/x.md apps/web/gaia.package.json apps/web/CLAUDE.md
   commit "frontend harness change"
   run run_resolver
   [ "$status" -eq 0 ]
@@ -798,18 +799,18 @@ seed_committed_roster() {
   [ -z "$output" ]
 }
 
-@test "committed roster: a frontend/public change resolves to no member (declared unowned, merge layer reviews it)" {
+@test "committed roster: an apps/web/public change resolves to the default member (it carries a service worker)" {
   seed_committed_roster
-  stage frontend/public/sw.js
+  stage apps/web/public/sw.js
   commit "public"
   run run_resolver
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [ "$output" = "code-audit-frontend" ]
 }
 
-@test "base roster guard can fail: the pre-move roster attributes nothing to frontend/app/**" {
+@test "base roster guard can fail: the pre-move roster attributes nothing to apps/web/app/**" {
   # A roster still carrying only root-form frontend globs (the 1.6.1 shape)
-  # leaves a frontend/ diff unowned, the RED state this change repairs.
+  # leaves a apps/web/ diff unowned, the RED state this change repairs.
   cat > "$SANDBOX/.gaia/audit-ci.yml" <<'YAML'
 auditors:
   - name: code-audit-frontend
@@ -819,14 +820,14 @@ auditors:
     audience: adopter
     default: true
 YAML
-  stage frontend/app/routes/x.tsx
+  stage apps/web/app/routes/x.tsx
   commit "frontend app change"
   run run_resolver
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
-@test "committed roster: a frontend/app change rotates the default member digest" {
+@test "committed roster: a apps/web/app change rotates the default member digest" {
   # The digest measures the branch's own patch against the base reference, so
   # the sandbox needs an origin carrying `main`. The fixture removes an existing
   # origin first, and that removal fails under errexit when there is none.
@@ -834,12 +835,12 @@ YAML
   git -C "$SANDBOX" remote add origin "$BATS_TEST_TMPDIR/placeholder-origin.git"
   catchup_add_origin "$SANDBOX" main
   seed_committed_roster
-  stage frontend/app/routes/x.tsx
+  stage apps/web/app/routes/x.tsx
   commit "one"
   local digest_one digest_two
   digest_one="$(bash "$THIS_DIRECTORY/../audit-member-digest.sh" --root "$SANDBOX" --member code-audit-frontend)"
-  printf 'y\n' > "$SANDBOX/frontend/app/routes/x.tsx"
-  git -C "$SANDBOX" add frontend/app/routes/x.tsx
+  printf 'y\n' > "$SANDBOX/apps/web/app/routes/x.tsx"
+  git -C "$SANDBOX" add apps/web/app/routes/x.tsx
   commit "two"
   digest_two="$(bash "$THIS_DIRECTORY/../audit-member-digest.sh" --root "$SANDBOX" --member code-audit-frontend)"
   [ -n "$digest_one" ]

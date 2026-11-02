@@ -14,10 +14,10 @@ setup() {
   LISTENER="$REPO_ROOT/.gaia/tests/fixtures/ports/listen.mjs"
   export GAIA_PORTS_STATE_DIRECTORY="$BATS_TEST_TMPDIR/state"
   unset GAIA_PORTS_DEV_BASE_PORT GAIA_PORTS_STORYBOOK_BASE_PORT SITE_URL CLAUDE_CODE_SESSION_ID PORT SBCONFIG_PORT
-  mkdir -p "$BATS_TEST_TMPDIR/main/frontend" "$BATS_TEST_TMPDIR/trees" "$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$BATS_TEST_TMPDIR/main/apps/web" "$BATS_TEST_TMPDIR/trees" "$BATS_TEST_TMPDIR/bin"
   git init -q -b main "$BATS_TEST_TMPDIR/main"
   FIXTURE_MAIN="$(cd "$BATS_TEST_TMPDIR/main" && pwd -P)"
-  : >"$FIXTURE_MAIN/frontend/react-router.config.ts"
+  : >"$FIXTURE_MAIN/apps/web/react-router.config.ts"
   mkdir -p "$FIXTURE_MAIN/.gaia/scripts" "$FIXTURE_MAIN/.claude/hooks/lib"
   cp "$REPO_ROOT"/.gaia/scripts/{storybook-launch,ports,worktree-ports-lib,exclusive-lock-lib,server-process-lib,server-process-discovery,server-process-stop,server-process-sessions,main-root-lib}.sh "$FIXTURE_MAIN/.gaia/scripts/"
   cp "$REPO_ROOT"/.claude/hooks/lib/*.sh "$FIXTURE_MAIN/.claude/hooks/lib/"
@@ -35,7 +35,7 @@ teardown() {
 }
 
 launch_in() {
-  ( cd "$1/frontend" && PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash "$1/.gaia/scripts/storybook-launch.sh" "${@:2}" )
+  ( cd "$1/apps/web" && PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash "$1/.gaia/scripts/storybook-launch.sh" "${@:2}" )
 }
 
 linked_worktree() {
@@ -47,7 +47,7 @@ linked_worktree() {
 provisioned_worktree() {
   tree="$(linked_worktree "$1")" || return 1
   cp -R "$FIXTURE_MAIN/.gaia" "$tree/" && mkdir -p "$tree/.claude/hooks" && cp -R "$FIXTURE_MAIN/.claude/hooks/lib" "$tree/.claude/hooks/"
-  printf 'GAIA_PORT_SLOT=%s\nDEV_PORT=%s\nSTORYBOOK_PORT=%s\nSITE_URL=http://localhost:%s\n' "$2" "$((5173 + $2))" "$3" "$((5173 + $2))" >"$tree/frontend/.gaia-ports"
+  printf 'GAIA_PORT_SLOT=%s\nDEV_PORT=%s\nSTORYBOOK_PORT=%s\nSITE_URL=http://localhost:%s\n' "$2" "$((5173 + $2))" "$3" "$((5173 + $2))" >"$tree/apps/web/.gaia-ports"
   printf '%s\n' "$tree"
 }
 

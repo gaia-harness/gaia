@@ -6,7 +6,7 @@
       "finding_class": "holistic/swallowed-error",
       "severity": "minor",
       "security": false,
-      "path": "frontend/app/lost.ts",
+      "path": "apps/web/app/lost.ts",
       "line": 20,
       "title": "fixture finding",
       "failure_mode": "fixture",

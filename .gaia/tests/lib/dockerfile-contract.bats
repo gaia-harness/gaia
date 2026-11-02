@@ -5,9 +5,9 @@
 # inside" run belong to the verification phase; this suite pins the files that
 # make them possible.
 #
-#   - frontend/Dockerfile builds from the repo root, installs from the root
+#   - apps/web/Dockerfile builds from the repo root, installs from the root
 #     lockfile, deploys the frontend package, and keeps `pnpm start`.
-#   - frontend/Dockerfile.dockerignore keeps every dotenv file out of the
+#   - apps/web/Dockerfile.dockerignore keeps every dotenv file out of the
 #     context. The ignore rules are evaluated with git's matcher
 #     (`git check-ignore --no-index` over a temp repo whose .gitignore is a
 #     copy of the patterns). That approximates Docker's matcher, and is exact
@@ -16,8 +16,8 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  DOCKERFILE="$REPO_ROOT/frontend/Dockerfile"
-  IGNORE_FILE="$REPO_ROOT/frontend/Dockerfile.dockerignore"
+  DOCKERFILE="$REPO_ROOT/apps/web/Dockerfile"
+  IGNORE_FILE="$REPO_ROOT/apps/web/Dockerfile.dockerignore"
   DOTENV=".env"
   DOTENV_STAR=".env.*"
 }
@@ -44,7 +44,7 @@ copies_whole_context() {
 @test "Dockerfile deploys the frontend package from the root install" {
   run dockerfile_instructions
   [ "$status" -eq 0 ]
-  [[ "$output" == *"pnpm deploy --filter frontend"* ]]
+  [[ "$output" == *"pnpm deploy --filter web"* ]]
 }
 
 @test "Dockerfile copies the root lockfile and workspace file and installs frozen" {
@@ -81,14 +81,14 @@ copies_whole_context() {
   [ "$status" -eq 0 ]
 }
 
-@test "dockerignore excludes the dotenv files but includes frontend/app/root.tsx" {
+@test "dockerignore excludes the dotenv files but includes apps/web/app/root.tsx" {
   run ignored_by_patterns "$IGNORE_FILE" "$DOTENV"
   [ "$status" -eq 0 ]
-  run ignored_by_patterns "$IGNORE_FILE" "frontend/$DOTENV"
+  run ignored_by_patterns "$IGNORE_FILE" "apps/web/$DOTENV"
   [ "$status" -eq 0 ]
-  run ignored_by_patterns "$IGNORE_FILE" "frontend/${DOTENV}.local"
+  run ignored_by_patterns "$IGNORE_FILE" "apps/web/${DOTENV}.local"
   [ "$status" -eq 0 ]
-  run ignored_by_patterns "$IGNORE_FILE" "frontend/app/root.tsx"
+  run ignored_by_patterns "$IGNORE_FILE" "apps/web/app/root.tsx"
   [ "$status" -eq 1 ]
 }
 
@@ -99,10 +99,10 @@ copies_whole_context() {
   [ "$output" -ge 1 ]
 }
 
-@test "guard: without the dotenv lines the evaluation reports frontend/.env as included" {
+@test "guard: without the dotenv lines the evaluation reports apps/web/.env as included" {
   local stripped="$BATS_TEST_TMPDIR/stripped.dockerignore"
   grep -Fvx -e "**/$DOTENV" -e "**/$DOTENV_STAR" "$IGNORE_FILE" >"$stripped"
-  run ignored_by_patterns "$stripped" "frontend/$DOTENV"
+  run ignored_by_patterns "$stripped" "apps/web/$DOTENV"
   [ "$status" -eq 1 ]
   run ignored_by_patterns "$stripped" "$DOTENV"
   [ "$status" -eq 1 ]
@@ -124,10 +124,10 @@ manifest_version() {
 
 # The app reads npm_package_version, which pnpm sets only from the running
 # package's own manifest, so the frontend manifest must carry the root version.
-@test "frontend/package.json carries a non-empty version equal to the root version" {
+@test "apps/web/package.json carries a non-empty version equal to the root version" {
   local root_version frontend_version
   root_version="$(manifest_version "$REPO_ROOT/package.json")"
-  frontend_version="$(manifest_version "$REPO_ROOT/frontend/package.json")"
+  frontend_version="$(manifest_version "$REPO_ROOT/apps/web/package.json")"
   [ -n "$root_version" ]
   [ -n "$frontend_version" ]
   [ "$frontend_version" = "$root_version" ]
@@ -135,9 +135,9 @@ manifest_version() {
 
 @test "guard: a frontend manifest without a version, or with a different one, is refused" {
   local without="$BATS_TEST_TMPDIR/without.json" differing="$BATS_TEST_TMPDIR/differing.json"
-  grep -v '"version"' "$REPO_ROOT/frontend/package.json" >"$without"
+  grep -v '"version"' "$REPO_ROOT/apps/web/package.json" >"$without"
   [ -z "$(manifest_version "$without")" ]
-  sed -E 's/("version"[[:space:]]*:[[:space:]]*")[^"]*/\10.0.0-other/' "$REPO_ROOT/frontend/package.json" >"$differing"
+  sed -E 's/("version"[[:space:]]*:[[:space:]]*")[^"]*/\10.0.0-other/' "$REPO_ROOT/apps/web/package.json" >"$differing"
   [ -n "$(manifest_version "$differing")" ]
   [ "$(manifest_version "$differing")" != "$(manifest_version "$REPO_ROOT/package.json")" ]
 }

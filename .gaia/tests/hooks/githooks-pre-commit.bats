@@ -75,7 +75,7 @@ write_descriptor() {
   cat > "$directory/gaia.package.json" <<JSON
 {
   "schemaVersion": 1,
-  "name": "frontend",
+  "name": "web",
   "globs": {
     "tddUnitTests": ["app/**/*.test.ts"],
     "tddStrictCandidates": ["app/utils/**"],
@@ -92,15 +92,15 @@ JSON
 # The transitional layout: the frontend package lives at the repo root.
 use_root_package() {
   mkdir -p "$REPO/.gaia"
-  printf '[{"name":"frontend","path":"."}]\n' > "$REPO/.gaia/packages.json"
+  printf '[{"name":"web","path":"."}]\n' > "$REPO/.gaia/packages.json"
   write_descriptor "$REPO" '["app/**", "test/**", ".storybook/**", ".playwright/**"]'
 }
 
-# The 2.0.0 layout: the frontend package lives at frontend/.
+# The 2.0.0 layout: the frontend package lives at apps/web/.
 use_frontend_package() {
   mkdir -p "$REPO/.gaia"
-  printf '[{"name":"frontend","path":"frontend"}]\n' > "$REPO/.gaia/packages.json"
-  write_descriptor "$REPO/frontend" '["app/**", "test/**", ".storybook/**", ".playwright/**"]'
+  printf '[{"name":"web","path":"apps/web"}]\n' > "$REPO/.gaia/packages.json"
+  write_descriptor "$REPO/apps/web" '["app/**", "test/**", ".storybook/**", ".playwright/**"]'
 }
 
 teardown() {
@@ -239,10 +239,10 @@ assert_gate_skipped() {
 
 # The live frontend package directory, from the committed registry. When the
 # move has landed the config sits under it; between the rename-only commit and
-# the registry flip the registry still says `.`, so fall back to frontend/.
+# the registry flip the registry still says `.`, so fall back to apps/web/.
 live_package_directory() {
   local registered
-  registered=$(jq -r '.[] | select(.name == "frontend") | .path' "$REPO_ROOT/.gaia/packages.json") || return 1
+  registered=$(jq -r '.[] | select(.name == "web") | .path' "$REPO_ROOT/.gaia/packages.json") || return 1
   [ -n "$registered" ] || return 1
   printf '%s\n' "$registered"
 }
@@ -250,7 +250,7 @@ live_package_directory() {
 live_lintstaged_file() {
   local directory candidate
   directory=$(live_package_directory) || return 1
-  for candidate in "$REPO_ROOT/$directory/.lintstagedrc.json" "$REPO_ROOT/frontend/.lintstagedrc.json"; do
+  for candidate in "$REPO_ROOT/$directory/.lintstagedrc.json" "$REPO_ROOT/apps/web/.lintstagedrc.json"; do
     if [ -f "$candidate" ]; then
       printf '%s\n' "$candidate"
       return 0
@@ -597,25 +597,25 @@ assert_gate_not_invoked() {
   [ ! -s "$PNPM_LOG" ]
 }
 
-@test "frontend/ package: staging frontend/app/x.tsx runs the gate in frontend/" {
+@test "apps/web/ package: staging apps/web/app/x.tsx runs the gate in apps/web/" {
   use_frontend_package
-  stage_and_run "frontend/app/x.tsx"
-  assert_gate_ran "$REPO/frontend"
+  stage_and_run "apps/web/app/x.tsx"
+  assert_gate_ran "$REPO/apps/web"
 }
 
 # The guard can fail: with a descriptor that gates nothing the staged file
 # matches, a frontend commit skips. Proves the descriptor decides, rather than
 # an unanchored substring of the path.
-@test "frontend/ package: a descriptor whose preCommitSource names nothing here skips the gate" {
+@test "apps/web/ package: a descriptor whose preCommitSource names nothing here skips the gate" {
   use_frontend_package
-  write_descriptor "$REPO/frontend" '["nomatch/**"]'
-  stage_and_run "frontend/app/x.tsx"
+  write_descriptor "$REPO/apps/web" '["nomatch/**"]'
+  stage_and_run "apps/web/app/x.tsx"
   assert_gate_skipped
 }
 
 # The RED on today's tree: the unmodified hook text, run against the same
-# frontend-layout fixture, never runs the gate in frontend/.
-@test "today's hook text does not run the frontend/ gate" {
+# frontend-layout fixture, never runs the gate in apps/web/.
+@test "today's hook text does not run the apps/web/ gate" {
   use_frontend_package
   # The pre-frontend/ hook shape, inlined: the gate runs at the repo root, never
   # `pnpm -C <repo>/frontend`. The old text has no shebang, so this copy runs
@@ -630,20 +630,20 @@ then
 	pnpm test:lint-staged
 fi
 OLD_HOOK
-  mkdir -p "$REPO/frontend/app"
-  echo "// content" > "$REPO/frontend/app/x.tsx"
-  git -C "$REPO" add frontend/app/x.tsx
+  mkdir -p "$REPO/apps/web/app"
+  echo "// content" > "$REPO/apps/web/app/x.tsx"
+  git -C "$REPO" add apps/web/app/x.tsx
   run env PATH="$STUB_BIN:$PATH" PNPM_LOG="$PNPM_LOG" \
     sh -c 'cd "$1" && sh -e "$2"' _ "$REPO" "$REPO/old-pre-commit"
   [ "$status" -eq 0 ]
-  ! grep -qxF -- "-C $REPO/frontend exec lint-staged" "$PNPM_LOG"
+  ! grep -qxF -- "-C $REPO/apps/web exec lint-staged" "$PNPM_LOG"
 }
 
-@test "frontend/ package: a root app/x.tsx is refused and runs no gate step" {
+@test "apps/web/ package: a root app/x.tsx is refused and runs no gate step" {
   use_frontend_package
   stage_and_run "app/x.tsx"
   [ "$status" -ne 0 ]
-  grep -qF -- "app/x.tsx -> frontend/app/x.tsx" <<<"$output"
+  grep -qF -- "app/x.tsx -> apps/web/app/x.tsx" <<<"$output"
   [ ! -s "$PNPM_LOG" ]
 }
 
@@ -709,13 +709,13 @@ OLD_HOOK
   [ ! -s "$PNPM_LOG" ]
 }
 
-@test "built-in default: with no registry, frontend/app/x.tsx runs the gate in frontend/" {
+@test "built-in default: with no registry, apps/web/app/x.tsx runs the gate in apps/web/" {
   rm -f "$REPO/.gaia/packages.json"
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   write_builtin_descriptor "$REPO"
-  write_member_manifest "$REPO/frontend"
-  stage_and_run "frontend/app/x.tsx"
-  assert_gate_ran "$REPO/frontend"
+  write_member_manifest "$REPO/apps/web"
+  stage_and_run "apps/web/app/x.tsx"
+  assert_gate_ran "$REPO/apps/web"
 }
 
 # --- C13: the migration-rename exemption ---
@@ -742,30 +742,30 @@ stage_rename() {
 
 @test "C13: a staged set of only C6 renames skips the gate, even with the descriptor missing" {
   commit_root_frontend_files app/x.tsx .dockerignore test/setup.ts public/favicon.ico .storybook/main.ts .playwright/a.spec.ts vite.config.ts .claude/skills/tailwind/SKILL.md .claude/rules/i18n.md .claude/agents/code-audit-frontend/cn.md
-  stage_rename app/x.tsx frontend/app/x.tsx
-  stage_rename .dockerignore frontend/Dockerfile.dockerignore
-  stage_rename test/setup.ts frontend/test/setup.ts
-  stage_rename public/favicon.ico frontend/public/favicon.ico
-  stage_rename .storybook/main.ts frontend/.storybook/main.ts
-  stage_rename .playwright/a.spec.ts frontend/.playwright/a.spec.ts
-  stage_rename vite.config.ts frontend/vite.config.ts
-  stage_rename .claude/skills/tailwind/SKILL.md frontend/.claude/skills/tailwind/SKILL.md
-  stage_rename .claude/rules/i18n.md frontend/.claude/rules/i18n.md
-  stage_rename .claude/agents/code-audit-frontend/cn.md frontend/.claude/agents/code-audit-frontend/cn.md
+  stage_rename app/x.tsx apps/web/app/x.tsx
+  stage_rename .dockerignore apps/web/Dockerfile.dockerignore
+  stage_rename test/setup.ts apps/web/test/setup.ts
+  stage_rename public/favicon.ico apps/web/public/favicon.ico
+  stage_rename .storybook/main.ts apps/web/.storybook/main.ts
+  stage_rename .playwright/a.spec.ts apps/web/.playwright/a.spec.ts
+  stage_rename vite.config.ts apps/web/vite.config.ts
+  stage_rename .claude/skills/tailwind/SKILL.md apps/web/.claude/skills/tailwind/SKILL.md
+  stage_rename .claude/rules/i18n.md apps/web/.claude/rules/i18n.md
+  stage_rename .claude/agents/code-audit-frontend/cn.md apps/web/.claude/agents/code-audit-frontend/cn.md
   # No registry and no descriptor anywhere: the exemption runs before the load.
-  rm -rf "$REPO/.gaia/packages.json" "$REPO/gaia.package.json" "$REPO/frontend/gaia.package.json"
+  rm -rf "$REPO/.gaia/packages.json" "$REPO/gaia.package.json" "$REPO/apps/web/gaia.package.json"
   git -C "$REPO" diff --cached --name-status -M100% | grep -c '^R100' | grep -qx 10
   run_hook
   assert_gate_skipped
 }
 
-@test "C13 refusal: an R100 rename inside frontend/ runs the full gate" {
+@test "C13 refusal: an R100 rename inside apps/web/ runs the full gate" {
   use_frontend_package
-  commit_root_frontend_files frontend/app/utils/a.ts
-  stage_rename frontend/app/utils/a.ts frontend/app/utils/b.ts
+  commit_root_frontend_files apps/web/app/utils/a.ts
+  stage_rename apps/web/app/utils/a.ts apps/web/app/utils/b.ts
   git -C "$REPO" diff --cached --name-status -M100% | grep -q '^R100'
   run_hook
-  assert_gate_ran "$REPO/frontend"
+  assert_gate_ran "$REPO/apps/web"
 }
 
 @test "C13 refusal: a rename to a destination that is not the C6 counterpart runs the full gate" {
@@ -780,41 +780,41 @@ stage_rename() {
 @test "C13 refusal: a C6 rename with one changed line runs the full gate" {
   use_frontend_package
   commit_root_frontend_files app/x.tsx
-  stage_rename app/x.tsx frontend/app/x.tsx
-  printf 'a changed line\n' >> "$REPO/frontend/app/x.tsx"
-  git -C "$REPO" add frontend/app/x.tsx
+  stage_rename app/x.tsx apps/web/app/x.tsx
+  printf 'a changed line\n' >> "$REPO/apps/web/app/x.tsx"
+  git -C "$REPO" add apps/web/app/x.tsx
   run_hook
-  assert_gate_ran "$REPO/frontend"
+  assert_gate_ran "$REPO/apps/web"
 }
 
 @test "C13 refusal: one non-exempt entry beside C6 renames runs the full gate" {
   use_frontend_package
   commit_root_frontend_files app/x.tsx
-  stage_rename app/x.tsx frontend/app/x.tsx
-  mkdir -p "$REPO/frontend/app"
-  echo "// new" > "$REPO/frontend/app/new.tsx"
-  git -C "$REPO" add frontend/app/new.tsx
+  stage_rename app/x.tsx apps/web/app/x.tsx
+  mkdir -p "$REPO/apps/web/app"
+  echo "// new" > "$REPO/apps/web/app/new.tsx"
+  git -C "$REPO" add apps/web/app/new.tsx
   run_hook
-  assert_gate_ran "$REPO/frontend"
+  assert_gate_ran "$REPO/apps/web"
 }
 
 # --- doctor guard, one config per package directory ---
 
-@test "doctor guard: two configs under frontend/ fail the commit naming frontend" {
+@test "doctor guard: two configs under apps/web/ fail the commit naming apps/web" {
   use_frontend_package
-  mkdir -p "$REPO/frontend"
-  : > "$REPO/frontend/doctor.config.ts"
-  : > "$REPO/frontend/doctor.config.json"
+  mkdir -p "$REPO/apps/web"
+  : > "$REPO/apps/web/doctor.config.ts"
+  : > "$REPO/apps/web/doctor.config.json"
   stage_and_run "docs/notes.md"
   [ "$status" -eq 1 ]
-  grep -qF -- "Multiple react-doctor configs found in frontend" <<<"$output"
-  grep -qF -- "frontend/doctor.config.json" <<<"$output"
+  grep -qF -- "Multiple react-doctor configs found in apps/web" <<<"$output"
+  grep -qF -- "apps/web/doctor.config.json" <<<"$output"
   [ ! -s "$PNPM_LOG" ]
 }
 
-@test "doctor guard: one config under frontend/ passes" {
+@test "doctor guard: one config under apps/web/ passes" {
   use_frontend_package
-  : > "$REPO/frontend/doctor.config.ts"
+  : > "$REPO/apps/web/doctor.config.ts"
   stage_and_run "docs/notes.md"
   assert_gate_skipped
 }
@@ -824,7 +824,7 @@ stage_rename() {
 @test "an unparseable registry fails the commit with the gaia-packages message" {
   use_frontend_package
   printf 'not json {\n' > "$REPO/.gaia/packages.json"
-  stage_and_run "frontend/app/x.tsx"
+  stage_and_run "apps/web/app/x.tsx"
   [ "$status" -eq 1 ]
   grep -qF -- "gaia-packages: " <<<"$output"
   [ ! -s "$PNPM_LOG" ]
@@ -832,8 +832,8 @@ stage_rename() {
 
 @test "a missing descriptor fails the commit with the gaia-packages message" {
   use_frontend_package
-  rm "$REPO/frontend/gaia.package.json"
-  stage_and_run "frontend/app/x.tsx"
+  rm "$REPO/apps/web/gaia.package.json"
+  stage_and_run "apps/web/app/x.tsx"
   [ "$status" -eq 1 ]
   grep -qF -- "gaia-packages: " <<<"$output"
   [ ! -s "$PNPM_LOG" ]
@@ -874,7 +874,7 @@ install_hook_into_sandbox() {
 @test "the hook arms its own errexit" {
   install_failing_typecheck_stub
   use_frontend_package
-  stage_and_run "frontend/app/x.tsx"
+  stage_and_run "apps/web/app/x.tsx"
   [ "$status" -ne 0 ]
   grep -qF -- "typecheck" "$PNPM_LOG"
   grep -qF -- "exec lint-staged" "$PNPM_LOG" && return 1
@@ -886,9 +886,9 @@ install_hook_into_sandbox() {
 commit_frontend_file_through_hook() {
   use_frontend_package
   install_hook_into_sandbox
-  mkdir -p "$REPO/frontend/app"
-  echo "// content" > "$REPO/frontend/app/x.tsx"
-  git -C "$REPO" add frontend/app/x.tsx
+  mkdir -p "$REPO/apps/web/app"
+  echo "// content" > "$REPO/apps/web/app/x.tsx"
+  git -C "$REPO" add apps/web/app/x.tsx
   head_before=$(git -C "$REPO" rev-parse HEAD)
   run env PATH="$STUB_BIN:$PATH" PNPM_LOG="$PNPM_LOG" \
     git -C "$REPO" commit --quiet -m x
@@ -907,8 +907,8 @@ commit_frontend_file_through_hook() {
   commit_frontend_file_through_hook
   [ "$status" -eq 0 ]
   [ "$(git -C "$REPO" rev-parse HEAD)" != "$head_before" ]
-  grep -qxF -- "-C $REPO/frontend typecheck" "$PNPM_LOG"
-  grep -qxF -- "-C $REPO/frontend exec lint-staged" "$PNPM_LOG"
+  grep -qxF -- "-C $REPO/apps/web typecheck" "$PNPM_LOG"
+  grep -qxF -- "-C $REPO/apps/web exec lint-staged" "$PNPM_LOG"
 }
 
 # --- the root prepare script ---

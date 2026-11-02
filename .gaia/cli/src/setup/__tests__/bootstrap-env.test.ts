@@ -39,10 +39,10 @@ afterEach(() => {
 });
 
 const frontendFile = (name: string): string =>
-  path.join(root, 'frontend', name);
+  path.join(root, 'apps', 'web', name);
 
 describe('gaia setup bootstrap-env', () => {
-  test('copies frontend/.env.example to frontend/.env when .env is absent', () => {
+  test('copies apps/web/.env.example to apps/web/.env when .env is absent', () => {
     writeFileSync(frontendFile('.env.example'), 'FOO=bar\n', 'utf8');
 
     expect(run([], {cwd: root})).toBe(EXIT_CODES.OK);

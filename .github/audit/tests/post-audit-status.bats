@@ -278,10 +278,10 @@ install_resolver() {
 # code-audit-maintainer-shell (.gaia/**/*.sh) against the seeded roster.
 commit_mixed_diff() {
   git -C "$SANDBOX" checkout --quiet -b feature
-  mkdir -p "$SANDBOX/frontend/app" "$SANDBOX/.gaia/scripts"
-  echo "export const x = 1;" > "$SANDBOX/frontend/app/x.ts"
+  mkdir -p "$SANDBOX/apps/web/app" "$SANDBOX/.gaia/scripts"
+  echo "export const x = 1;" > "$SANDBOX/apps/web/app/x.ts"
   echo "#!/bin/bash" > "$SANDBOX/.gaia/scripts/example.sh"
-  git -C "$SANDBOX" add frontend/app/x.ts .gaia/scripts/example.sh
+  git -C "$SANDBOX" add apps/web/app/x.ts .gaia/scripts/example.sh
   git -C "$SANDBOX" commit --quiet -m "mixed change"
   # Push before any later local-only commit, so the pushed head sha this
   # captures is the one post-audit-status.sh must target (not local HEAD).
@@ -484,13 +484,13 @@ run_shell_member_handshake() {
   [ ! -f "$POST_LOG" ]
 }
 
-@test "chore(deps) waiver: a dep-bump title whose PR changes frontend/app/x.ts leaves frontend pending" {
+@test "chore(deps) waiver: a dep-bump title whose PR changes apps/web/app/x.ts leaves frontend pending" {
   install_gh_mock ok
   install_resolver
   install_chore_deps_predicate
   commit_mixed_diff
   printf '%s' "chore(deps): bump vite to 8.3.0" > "$BATS_TEST_TMPDIR/pr-title"
-  install_pr_files "package.json" "frontend/app/x.ts"
+  install_pr_files "package.json" "apps/web/app/x.ts"
 
   run_shell_member_handshake
 
@@ -878,7 +878,7 @@ write_both_markers() {
 build_audited_branch() {
   install_resolver
   catchup_add_origin "$SANDBOX" main --feature feat/catchup || return 1
-  catchup_branch_commit frontend/app/x.ts "export const x = 1;" || return 1
+  catchup_branch_commit apps/web/app/x.ts "export const x = 1;" || return 1
   catchup_branch_commit .gaia/scripts/example.sh "#!/bin/bash" || return 1
   install_base_stub
   refresh_stub

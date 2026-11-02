@@ -59,9 +59,9 @@
 #      an in-scope file exists so this never applies there): every file the PR
 #      changes lives on a surface outside audit scope, wiki, instruction files
 #      (.claude), .gaia metadata, prose docs, and root-level
-#      markdown. Evaluated fail-closed: any in-scope path (frontend/app/, frontend/test/,
+#      markdown. Evaluated fail-closed: any in-scope path (apps/web/app/, apps/web/test/,
 #      configs, .github/workflows/) makes the marker mandatory again. An
-#      in-scope-but-ownerless path (a root Makefile, frontend/public/**) is folded into
+#      in-scope-but-ownerless path (a root Makefile, apps/web/public/**) is folded into
 #      the frontend member's digest input set, so a stale marker computed for a
 #      prior digest never matches such a change either; this bypass and that
 #      digest fold close the same band from two directions.

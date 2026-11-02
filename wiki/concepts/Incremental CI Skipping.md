@@ -52,7 +52,7 @@ The gated workflow does two things before its expensive steps:
    reports its required check green.
 
 When the suite does run, its lint step reuses the same base: it lints only the
-JavaScript and TypeScript files under `frontend/` that `<base>...HEAD` adds or
+JavaScript and TypeScript files under `apps/web/` that `<base>...HEAD` adds or
 modifies, not the whole tree, because the commit-time [[Quality Gate]] already
 lints staged files and CI is the backstop. A change to a lint input (the ESLint
 or Prettier config, a tsconfig, a manifest or the lockfile) can turn an

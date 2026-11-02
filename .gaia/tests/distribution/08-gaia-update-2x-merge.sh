@@ -2,7 +2,7 @@
 # 08-gaia-update-2x-merge.sh
 #
 # Adopter-flow regression for a 2.x to 2.x /update-gaia (SPEC-092, COV-010).
-# From 2.0.0 the app lives under frontend/, so the update has two package.json
+# From 2.0.0 the app lives under apps/web/, so the update has two package.json
 # files to merge and one generated settings file to rebuild:
 #
 #   1. The field-aware walk runs once per package.json (root plus each package
@@ -11,9 +11,9 @@
 #   2. Each package.json merges through the CLI's `gaia update merge-package`,
 #      the command merge-execution.md calls, run from the source tree's built
 #      CLI: an upstream pin change the adopter still tracks lands in `applied`
-#      for the root and for frontend/package.json, and an adopter re-pin of
+#      for the root and for apps/web/package.json, and an adopter re-pin of
 #      another key lands in `conflicts` as a version-valued key.
-#   3. Step 7e regenerates frontend/.claude/settings.json after the root
+#   3. Step 7e regenerates apps/web/.claude/settings.json after the root
 #      settings merge. A root settings change that the generated file lacks is
 #      drift (the check exits 1); `gaia packages sync-settings` repairs it and
 #      the drift check goes clean.
@@ -79,8 +79,8 @@ log "scenario 1 (registry yields root and frontend): OK"
 
 # --- Scenario 2: upstream pin changes merge in both package.json files -------
 ROOT_KEY="$(jq -r '.devDependencies | keys_unsorted[0]' "$STAGING/package.json")"
-FRONTEND_KEY_A="$(jq -r '.devDependencies | keys_unsorted[0]' "$STAGING/frontend/package.json")"
-FRONTEND_KEY_B="$(jq -r '.devDependencies | keys_unsorted[1]' "$STAGING/frontend/package.json")"
+FRONTEND_KEY_A="$(jq -r '.devDependencies | keys_unsorted[0]' "$STAGING/apps/web/package.json")"
+FRONTEND_KEY_B="$(jq -r '.devDependencies | keys_unsorted[1]' "$STAGING/apps/web/package.json")"
 [ -n "$ROOT_KEY" ] && [ -n "$FRONTEND_KEY_A" ] && [ -n "$FRONTEND_KEY_B" ] \
   || { fail "scenario 2: the staged package.json files have too few devDependencies to stage a merge"; exit 1; }
 
@@ -94,11 +94,11 @@ set_dev_dependency() {
   mv "$scratch" "$file"
 }
 set_dev_dependency "$BASELINE/package.json" "$ROOT_KEY" "0.0.1-baseline"
-set_dev_dependency "$BASELINE/frontend/package.json" "$FRONTEND_KEY_A" "0.0.1-baseline"
-set_dev_dependency "$BASELINE/frontend/package.json" "$FRONTEND_KEY_B" "0.0.2-baseline"
+set_dev_dependency "$BASELINE/apps/web/package.json" "$FRONTEND_KEY_A" "0.0.1-baseline"
+set_dev_dependency "$BASELINE/apps/web/package.json" "$FRONTEND_KEY_B" "0.0.2-baseline"
 set_dev_dependency "$ADOPTER/package.json" "$ROOT_KEY" "0.0.1-baseline"
-set_dev_dependency "$ADOPTER/frontend/package.json" "$FRONTEND_KEY_A" "0.0.1-baseline"
-set_dev_dependency "$ADOPTER/frontend/package.json" "$FRONTEND_KEY_B" "9.9.9-adopter"
+set_dev_dependency "$ADOPTER/apps/web/package.json" "$FRONTEND_KEY_A" "0.0.1-baseline"
+set_dev_dependency "$ADOPTER/apps/web/package.json" "$FRONTEND_KEY_B" "9.9.9-adopter"
 
 merge_package_for() {
   local directory="$1"
@@ -112,7 +112,7 @@ merge_package_for() {
 ROOT_MERGE="$(merge_package_for .)" \
   || fail_with_stderr "scenario 2: gaia update merge-package failed for the root package.json"
 FRONTEND_MERGE="$(merge_package_for frontend)" \
-  || fail_with_stderr "scenario 2: gaia update merge-package failed for frontend/package.json"
+  || fail_with_stderr "scenario 2: gaia update merge-package failed for apps/web/package.json"
 
 # 0 when merge report $1 lists devDependencies key $3 in bucket $2.
 in_bucket() {
@@ -137,9 +137,9 @@ fi
 log "scenario 2 (applied and conflict verdicts per package.json): OK"
 
 # --- Scenario 3: generated settings drift, then regenerate -------------------
-GENERATED="$ADOPTER/frontend/.claude/settings.json"
+GENERATED="$ADOPTER/apps/web/.claude/settings.json"
 [ -f "$GENERATED" ] \
-  || { fail "scenario 3: the staged tree ships no frontend/.claude/settings.json"; exit 1; }
+  || { fail "scenario 3: the staged tree ships no apps/web/.claude/settings.json"; exit 1; }
 
 # Start drift-clean: what a fresh 2.x scaffold looks like.
 bash "$ADOPTER/.gaia/scripts/check-settings-drift.sh" "$ADOPTER" > /dev/null 2>&1 \

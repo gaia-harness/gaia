@@ -127,8 +127,8 @@ QUICK_LINE_CAP=40
 # light_hard_full glob is never in this list, so it still fires.
 QUICK_STORY_EXEMPT_GLOBS='**/tests/**
 **/*.stories.*
-frontend/app/**/tests/**
-frontend/app/**/*.stories.tsx'
+apps/web/app/**/tests/**
+apps/web/app/**/*.stories.tsx'
 
 _light_route_usage() {
   printf 'usage: audit-light-route.sh --root <abs-checkout-root> --member <name> [--check]\n' >&2

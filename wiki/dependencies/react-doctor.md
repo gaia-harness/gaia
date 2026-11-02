@@ -14,9 +14,9 @@ Deterministic scanner for React security, performance, correctness, and accessib
 
 ## Conventions
 
-- Config: `frontend/doctor.config.ts`. GAIA ships exactly one config file (see Single config below).
+- Config: `apps/web/doctor.config.ts`. GAIA ships exactly one config file (see Single config below).
 - Run: `npx react-doctor@latest .`. react-doctor is not a project dependency; it is always invoked at latest via `npx`. The config therefore stays a plain `export default` and does not import react-doctor's config type.
-- Install (`/gaia-init`, `/setup-gaia`): `/gaia-init` runs the script at the end of its dependency step, before anything reads `frontend/`, so the session that runs onboarding lists the skill; `/setup-gaia`'s install-tools probe then finds the skill and records the step, and installs it only when the probe finds none. A `/setup-gaia` run in a session that already read a file under `frontend/` installs the skill after that folder's skill scan, so it appears from the next session. `.gaia/scripts/install-react-doctor.sh` runs `npx -y react-doctor@latest install --yes --cwd frontend`, which installs the skill for every agent it detects. The Claude Code skill lands at `frontend/.claude/skills/react-doctor/` (gitignored, kept per-machine, never committed). For any non-Claude agent it detects it also writes a `.agents/skills/react-doctor/` copy under `frontend/`; the script strips that copy along with the installer's standalone GitHub Actions workflow, commit-hook block, `doctor` package script, and pinned `react-doctor` devDependency, so the Claude Code skill remains the sole trigger point.
+- Install (`/gaia-init`, `/setup-gaia`): `/gaia-init` runs the script at the end of its dependency step, before anything reads `apps/web/`, so the session that runs onboarding lists the skill; `/setup-gaia`'s install-tools probe then finds the skill and records the step, and installs it only when the probe finds none. A `/setup-gaia` run in a session that already read a file under `apps/web/` installs the skill after that folder's skill scan, so it appears from the next session. `.gaia/scripts/install-react-doctor.sh` runs `npx -y react-doctor@latest install --yes --cwd frontend`, which installs the skill for every agent it detects. The Claude Code skill lands at `apps/web/.claude/skills/react-doctor/` (gitignored, kept per-machine, never committed). For any non-Claude agent it detects it also writes a `.agents/skills/react-doctor/` copy under `apps/web/`; the script strips that copy along with the installer's standalone GitHub Actions workflow, commit-hook block, `doctor` package script, and pinned `react-doctor` devDependency, so the Claude Code skill remains the sole trigger point.
 - Runs automatically pre-merge inside the [[Code Review Audit Agent]] (alongside [[knip]] and [[pnpm-audit]]). Findings are advisory and never block the audit marker.
 - Not part of the [[Quality Gate]] (pre-commit).
 
@@ -26,17 +26,17 @@ Verified against react-doctor 0.9.18, running `install --yes --cwd frontend` in 
 
 | Path the installer writes | Strip step |
 |---|---|
-| `frontend/.claude/skills/react-doctor/` | kept: the Claude Code skill is the sole trigger point |
+| `apps/web/.claude/skills/react-doctor/` | kept: the Claude Code skill is the sole trigger point |
 | `.github/workflows/react-doctor.yml` | `rm -f .github/workflows/react-doctor.yml` |
-| `frontend/.agents/skills/react-doctor/` | `rm -rf frontend/.agents/skills/react-doctor`, then `rmdir` of the empty parents |
+| `apps/web/.agents/skills/react-doctor/` | `rm -rf apps/web/.agents/skills/react-doctor`, then `rmdir` of the empty parents |
 | root `package.json` devDependency `react-doctor` | `pnpm remove react-doctor --config.ignore-scripts=true` (root package, no `-w` needed) |
-| `frontend/package.json` script `doctor` | `pnpm --dir frontend pkg delete scripts.doctor 'scripts["react-doctor"]'` |
+| `apps/web/package.json` script `doctor` | `pnpm --dir frontend pkg delete scripts.doctor 'scripts["react-doctor"]'` |
 | block between `# react-doctor hook start` and `# react-doctor hook end` in the file `core.hooksPath` names (`.githooks/pre-commit`) | the block is deleted in place, then `git config core.hooksPath .githooks` re-arms the hook path |
 | `pnpm-lock.yaml` | a pre-install snapshot is copied back over it, then `pnpm install --frozen-lockfile --config.ignore-scripts=true` resyncs `node_modules` |
 
 Verdicts:
 
-- With `--cwd frontend` the devDependency still lands in the root `package.json` and the `doctor` script in `frontend/package.json`, so the script removes the dependency at the root and the script key with `pnpm --dir frontend`.
+- With `--cwd frontend` the devDependency still lands in the root `package.json` and the `doctor` script in `apps/web/package.json`, so the script removes the dependency at the root and the script key with `pnpm --dir frontend`.
 - `pnpm remove` at the workspace root works without `-w` on GAIA's pinned pnpm.
 - `pnpm remove` does not return the lockfile to its pre-install state. The install resolves `oxlint` and `@opentelemetry/api` into optional peer slots of `@gaia-harness/lint` and `vitest`, and those resolutions survive `pnpm remove`, `pnpm install`, and `pnpm dedupe`. Only restoring a snapshot taken before the install clears them, which is why the install runs inside the strip block.
 - The installer writes the CI workflow even under `--yes`.
@@ -49,7 +49,7 @@ Verdicts:
 
 react-doctor resolves config in extension-precedence order (`.ts > .mts > .cts > .js > .mjs > .cjs > .json > .jsonc`) and uses the first file it finds, silently ignoring the rest. Two config files means the lower-precedence one is shadowed with no warning.
 
-The canonical config is `frontend/doctor.config.ts`:
+The canonical config is `apps/web/doctor.config.ts`:
 
 - `.ts` matches the repo's `*.config.ts` convention (vite/knip/playwright/react-router), so it lives where config is expected and is found.
 - `.ts` is the highest-precedence extension, so a stray `doctor.config.json`/`.jsonc` cannot shadow it.

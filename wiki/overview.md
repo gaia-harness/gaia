@@ -23,7 +23,7 @@ See [[GAIA Philosophy]] for the long version.
 - **Forms**: [[Conform]] + [[Zod]] composed with ui `Field` parts, see [[Form Components]]
 - **Styling**: [[Tailwind]] v4 with `cn` and role tokens, [[shadcn]] components, and [[lucide-react]] icons
 - **i18n**: [[remix-i18next]] with TypeScript language files (not JSON)
-- **State**: minimal; `frontend/app/state/index.tsx` is a passthrough; theme is cookie-based (no React state for theme)
+- **State**: minimal; `apps/web/app/state/index.tsx` is a passthrough; theme is cookie-based (no React state for theme)
 - **Testing**: [[Vitest]] running [[Storybook]] stories as component tests ([[Stories as Tests]]) + [[Playwright]] + [[Chromatic]], with MSW seed data shared across them
 - **Mocking**: [[MSW]] + `@msw/data` for tests, Storybook, and dev
 - **Storybook** v10 with links, i18n, dark mode, Vitest and a11y addons; the MSW addon is wired, so stories mock the API through msw handlers installed in `beforeEach` and read seed data from the shared `@msw/data` collections
@@ -33,7 +33,7 @@ See [[GAIA Philosophy]] for the long version.
 ## Top-Level Architecture
 
 ```
-frontend/app/
+apps/web/app/
 ├── components/       shared UI (button, form/*, toast, layout, ...)
 ├── hooks/            use-breakpoint, use-component-rect, use-debounce, use-theme, use-timeout
 ├── languages/        TS-based i18n (en by default)

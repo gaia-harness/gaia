@@ -78,7 +78,7 @@ if [ -f "wiki/concepts/Design System.md" ] && grep -qE '^established:[[:space:]]
 fi
 ```
 
-If `design_established=true`, the adopter has committed their design system, and both `wiki/concepts/Design System.md` and `frontend/.claude/rules/design-baseline.md` are adopter-owned from then on: record each as `skip` with note `design-system` and leave it out of the rest of the walk (no overwrite, no merge, no question, no backup). Otherwise both take the table below as their manifest class dictates.
+If `design_established=true`, the adopter has committed their design system, and both `wiki/concepts/Design System.md` and `apps/web/.claude/rules/design-baseline.md` are adopter-owned from then on: record each as `skip` with note `design-system` and leave it out of the rest of the walk (no overwrite, no merge, no question, no backup). Otherwise both take the table below as their manifest class dictates.
 
 **Field-aware files are walked separately.** Every `package.json` (the root and each registered package), `pnpm-workspace.yaml` and `.gaia/audit-ci.yml` takes Step 7a to 7c instead of the table below, because a whole-file comparison cannot separate the adopter's identity fields and intentional removals from the real upstream delta. The package directories:
 
@@ -86,12 +86,12 @@ If `design_established=true`, the adopter has committed their design system, and
 PKG_DIRS="$(
   {
     printf '.\n'
-    jq -r '.[].path' .gaia/packages.json 2>/dev/null || printf 'frontend\n'
+    jq -r '.[].path' .gaia/packages.json 2>/dev/null || printf 'apps/web\n'
   } | grep -E '^(\.|[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)*)$' | grep -v '\.\.' | sort -u
 )"
 ```
 
-The registry is `.gaia/packages.json` (adopter-owned, a JSON array of `{name, path}`; absent means the stock `frontend` package); the filter rejects any `path` that is not a plain relative directory, so a hand-edited registry cannot steer the merge outside the tree. A package's generated `<path>/.claude/settings.json` is not in the manifest at all (Step 7e regenerates it), so the walk never sees it.
+The registry is `.gaia/packages.json` (adopter-owned, a JSON array of `{name, path}`; absent means the stock `web` package at `apps/web`); the filter rejects any `path` that is not a plain relative directory, so a hand-edited registry cannot steer the merge outside the tree. A package's generated `<path>/.claude/settings.json` is not in the manifest at all (Step 7e regenerates it), so the walk never sees it.
 
 **The decision table.** Iterate every `<path>: <class>` entry of `$LATEST_MANIFEST`'s `.files`. Let A be `<path>` in the acting tree, B the baseline copy (as Step 6 chose it), L `$LATEST_DIR/<path>`. Use `cmp -s` for equality and `mkdir -p` before writing. A declared region path compares through the region oracle instead (`merge-generated.md`, `Compare a declared path`). Match in order; the first matching row wins:
 

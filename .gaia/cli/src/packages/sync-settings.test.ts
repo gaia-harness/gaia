@@ -34,7 +34,7 @@ const HOOK = {
 const ROOT_SETTINGS = {
   hooks: {PreToolUse: [HOOK]},
   permissions: {
-    allow: ['Bash(pnpm lint)', 'Edit(frontend/app/**)', 'Edit(//abs/x)'],
+    allow: ['Bash(pnpm lint)', 'Edit(apps/web/app/**)', 'Edit(//abs/x)'],
     deny: [
       'Edit(.env)',
       'Edit(pnpm-lock.yaml)',
@@ -82,7 +82,7 @@ describe('generateSettings', () => {
       'Edit(../pnpm-lock.yaml)',
       'Bash(git reset --hard HEAD~*)',
     ]);
-    expect(output.permissions.allow).toContain('Edit(../frontend/app/**)');
+    expect(output.permissions.allow).toContain('Edit(../apps/web/app/**)');
     expect(output.permissions.allow).toContain('Edit(//abs/x)');
     expect(output.permissions.allow).toContain('Bash(pnpm lint)');
     expect(output.permissions.additionalDirectories).toEqual(['..']);
@@ -224,15 +224,15 @@ describe('generateSettings', () => {
 
 describe('run', () => {
   let root: string;
-  const generatedFile = () => path.join(root, 'frontend/.claude/settings.json');
+  const generatedFile = () => path.join(root, 'apps/web/.claude/settings.json');
   const overlayFile = () =>
-    path.join(root, 'frontend/.claude/settings.overlay.json');
+    path.join(root, 'apps/web/.claude/settings.overlay.json');
 
   beforeEach(() => {
     root = mkdtempSync(path.join(tmpdir(), 'sync-settings-'));
-    writeFrontendRegistry(root, 'frontend');
+    writeFrontendRegistry(root, 'apps/web');
     mkdirSync(path.join(root, '.claude'), {recursive: true});
-    mkdirSync(path.join(root, 'frontend/.claude'), {recursive: true});
+    mkdirSync(path.join(root, 'apps/web/.claude'), {recursive: true});
     writeFileSync(
       path.join(root, '.claude/settings.json'),
       JSON.stringify(ROOT_SETTINGS)
@@ -305,12 +305,12 @@ describe('run', () => {
     }
   );
 
-  test.each(['front end', 'frontend/../x'])(
+  test.each(['front end', 'apps/web/../x'])(
     'a hostile registry path %j exits 2 and writes nothing',
     (hostile) => {
       writeFileSync(
         path.join(root, '.gaia/packages.json'),
-        JSON.stringify([{name: 'frontend', path: hostile}])
+        JSON.stringify([{name: 'web', path: hostile}])
       );
 
       expect(run(['--repo-root', root])).toBe(2);

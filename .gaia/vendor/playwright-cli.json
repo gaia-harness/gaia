@@ -3,7 +3,7 @@
   "version": "0.1.22",
   "integrity": "sha512-6WMkQNM4VEzqMkdr/l60X9Cr7i+tI/arK87IWz2K7pB6j8I2ZJ8KN+1JfhJDLnK+SXnab6Op8xGt4adcGLsyfA==",
   "source": "skills/playwright-cli",
-  "target": "frontend/.claude/skills/playwright-cli",
+  "target": "apps/web/.claude/skills/playwright-cli",
   "files": {
     "SKILL.md": "9bba755285a4c9ad72a4a41b9c7baef6fb516d329c0b44ed0573715f4479b906",
     "references/element-attributes.md": "bf19aa4671e0a50a0fefa9c790f39124e803060eefe395042b723c29fcb7faa2",

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-route_file="frontend/app/routes.ts"
+route_file="apps/web/app/routes.ts"
 cli_config=".gaia/cli/tsconfig.json"
-vite_config="frontend/vite.config.ts"
-instruction="frontend/.claude/instructions/add-locale.md"
+vite_config="apps/web/vite.config.ts"
+instruction="apps/web/.claude/instructions/add-locale.md"
 ignore_file="Dockerfile.dockerignore"
 visibility="public/internal"
 pair="test/CI"
-escaped='^frontend/\.storybook/'
+escaped='^apps/web/\.storybook/'
 templated="<path>/.claude/agents/code-audit-frontend/README.md"
 generic="Dockerfiles are built from the repo root"

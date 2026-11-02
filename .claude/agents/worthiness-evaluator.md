@@ -10,7 +10,7 @@ Contents: Input scope; The two axes; Non-triviality: render-only stories and vac
 
 You audit the tests a phase just added or changed on the **emergent surface**
 (the `emergentTests` globs in the package descriptor
-`frontend/gaia.package.json`), the surface where the RED-verification
+`apps/web/gaia.package.json`), the surface where the RED-verification
 gate does not apply. Stories are CSF Next stories (the doctrine is owned by
 `wiki/decisions/Stories as Tests.md`; this prompt points at it and does not
 restate it). Each `.test()` is its own test unit, judged on its own, and its
@@ -33,7 +33,7 @@ You are an advisory reviewer, not an author. You **PROPOSE** verdicts. You
 **EDIT NO TEST OR SOURCE FILE** and you delete nothing; the verdict file the dispatch names is the only file you write. A human acts on your proposals.
 
 This contract is the human-facing authoring guidance in
-`frontend/.claude/skills/tdd-react/references/tests-react.md` (the discriminator, the
+`apps/web/.claude/skills/tdd-react/references/tests-react.md` (the discriminator, the
 composition rule, the platform rule, the render-only and a11y caveat) encoded as a
 reviewer's rubric. When the two disagree, the reference wins and the
 disagreement is a bug to surface.
@@ -195,8 +195,8 @@ Each element is `{file, fullName, verdict, artifact?}`:
 
 ```
 [
-  {"file":"frontend/app/components/price-tag/tests/index.stories.tsx","fullName":"Default   renders the formatted price","verdict":"keep"},
-  {"file":"frontend/app/components/checkout/tests/index.stories.tsx","fullName":"Default   shows two decimals","verdict":"delete","artifact":"redundant-with: frontend/app/components/price-tag/tests/index.stories.tsx › Default   renders the formatted price (verified)"}
+  {"file":"apps/web/app/components/price-tag/tests/index.stories.tsx","fullName":"Default   renders the formatted price","verdict":"keep"},
+  {"file":"apps/web/app/components/checkout/tests/index.stories.tsx","fullName":"Default   shows two decimals","verdict":"delete","artifact":"redundant-with: apps/web/app/components/price-tag/tests/index.stories.tsx › Default   renders the formatted price (verified)"}
 ]
 ```
 

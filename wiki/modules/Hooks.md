@@ -1,6 +1,6 @@
 ---
 type: module
-path: frontend/app/hooks/
+path: apps/web/app/hooks/
 status: active
 language: typescript
 purpose: Global custom React hooks
@@ -11,16 +11,16 @@ tags: [module, hooks]
 
 # Hooks
 
-Global custom hooks live in `frontend/app/hooks/`. Component-specific hooks live in each component or page folder's own `hooks/` folder. A few context-bound hooks live under `frontend/app/utils/` instead (`useNonce` in `nonce.ts`, `useOptionalRequestInfo` in `request-info.ts`).
+Global custom hooks live in `apps/web/app/hooks/`. Component-specific hooks live in each component or page folder's own `hooks/` folder. A few context-bound hooks live under `apps/web/app/utils/` instead (`useNonce` in `nonce.ts`, `useOptionalRequestInfo` in `request-info.ts`).
 
 ## Lift rule
 
-A hook starts in the component that needs it. When a second component needs the same logic, lift it to the lowest shared ancestor's `hooks/` folder. Only lift to `frontend/app/hooks/` when the hook is genuinely cross-cutting (breakpoint, viewport, timing primitives).
+A hook starts in the component that needs it. When a second component needs the same logic, lift it to the lowest shared ancestor's `hooks/` folder. Only lift to `apps/web/app/hooks/` when the hook is genuinely cross-cutting (breakpoint, viewport, timing primitives).
 
 ## Conventions
 
-Named export, `use` prefix, one hook per file, tests in `frontend/app/hooks/tests/`. Use `/new-hook` to scaffold. File names and the layout are owned by `frontend/.claude/rules/coding-guidelines-react.md`; see [[Coding Guidelines]] for the general naming rules.
+Named export, `use` prefix, one hook per file, tests in `apps/web/app/hooks/tests/`. Use `/new-hook` to scaffold. File names and the layout are owned by `apps/web/.claude/rules/coding-guidelines-react.md`; see [[Coding Guidelines]] for the general naming rules.
 
-For the current bundled inventory and signatures, list `frontend/app/hooks/`.
+For the current bundled inventory and signatures, list `apps/web/app/hooks/`.
 
-See the `react-code` skill (`frontend/.claude/skills/react-code/SKILL.md`) for `useEffect` and `useState` rules, and its `## Memoization: compiler-first` section for memoization.
+See the `react-code` skill (`apps/web/.claude/skills/react-code/SKILL.md`) for `useEffect` and `useState` rules, and its `## Memoization: compiler-first` section for memoization.

@@ -36,7 +36,7 @@ export type ClassifyPaths = {
    *
    * GAIA's own clone deliberately leaves this at the default while overriding
    * the other two: the default already names the template it ships under
-   * `frontend/app/`. The key exists because the branch is load-bearing for
+   * `apps/web/app/`. The key exists because the branch is load-bearing for
    * the React template it ships, not on the chance someone might want it.
    */
   inventoryPaths: readonly string[];

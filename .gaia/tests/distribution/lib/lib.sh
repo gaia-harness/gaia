@@ -121,5 +121,5 @@ fail_with_stderr() {
 # them and adds fonts, through an apt mirror that can stall for minutes and
 # take the job past its timeout with every scenario green.
 install_chromium() {
-  pnpm -C "$1/frontend" exec playwright install chromium
+  pnpm -C "$1/apps/web" exec playwright install chromium
 }

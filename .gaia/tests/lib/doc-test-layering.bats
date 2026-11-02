@@ -27,9 +27,9 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PAGE="$REPO_ROOT/wiki/decisions/Test Layering.md"
-  TESTS_REACT="$REPO_ROOT/frontend/.claude/skills/tdd-react/references/tests-react.md"
-  ROUTES_RULE="$REPO_ROOT/frontend/.claude/rules/routes.md"
-  SESSION_README="$REPO_ROOT/frontend/app/routes/_session/README.md"
+  TESTS_REACT="$REPO_ROOT/apps/web/.claude/skills/tdd-react/references/tests-react.md"
+  ROUTES_RULE="$REPO_ROOT/apps/web/.claude/rules/routes.md"
+  SESSION_README="$REPO_ROOT/apps/web/app/routes/_session/README.md"
   ROUTING="$REPO_ROOT/wiki/modules/Routing.md"
   INDEX="$REPO_ROOT/wiki/index.md"
   CHANGED_PAGES=(
@@ -49,7 +49,7 @@ setup() {
     "$TESTS_REACT"
     "$ROUTES_RULE"
     "$SESSION_README"
-    "$REPO_ROOT/frontend/.claude/rules/coding-guidelines-react.md"
+    "$REPO_ROOT/apps/web/.claude/rules/coding-guidelines-react.md"
     "$REPO_ROOT/README.md"
   )
   RATIONALE='the lowest layer that can prove it'

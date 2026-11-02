@@ -1,12 +1,12 @@
 #!/usr/bin/env bats
-# install-react-doctor.sh: installs the react-doctor skill into frontend/ and strips the extras
+# install-react-doctor.sh: installs the react-doctor skill into apps/web/ and strips the extras
 # its installer adds. Every case builds a scratch git repo under BATS_TEST_TMPDIR with stub
 # `npx` and `pnpm` first on PATH, so no real package manager ever runs. INSTALL_REACT_DOCTOR_SCRIPT
 # points the suite at a mutant copy for the mutation proofs.
 
 SCRIPT="${INSTALL_REACT_DOCTOR_SCRIPT:-$BATS_TEST_DIRNAME/../install-react-doctor.sh}"
 
-# The stub installer mimics the verified `react-doctor install --yes --cwd frontend` layout.
+# The stub installer mimics the verified `react-doctor install --yes --cwd apps/web` layout.
 # STUB_NPX_MODE picks the outcome:
 #   ok            every artifact, exit 0
 #   fail_noskill  touches the lockfile, writes no skill, exit 3
@@ -23,11 +23,11 @@ if [ "$mode" = fail_noskill ]; then
   exit 3
 fi
 if [ "$mode" != no_skill_ok ]; then
-  mkdir -p frontend/.claude/skills/react-doctor
-  printf 'skill\n' >frontend/.claude/skills/react-doctor/SKILL.md
+  mkdir -p apps/web/.claude/skills/react-doctor
+  printf 'skill\n' >apps/web/.claude/skills/react-doctor/SKILL.md
 fi
-mkdir -p frontend/.agents/skills/react-doctor .github/workflows
-printf 'copy\n' >frontend/.agents/skills/react-doctor/SKILL.md
+mkdir -p apps/web/.agents/skills/react-doctor .github/workflows
+printf 'copy\n' >apps/web/.agents/skills/react-doctor/SKILL.md
 printf 'name: react-doctor\n' >.github/workflows/react-doctor.yml
 start_marker='# react-doctor hook start'
 if [ "$mode" = bad_hook ]; then
@@ -74,18 +74,18 @@ write_web_descriptor() {
 setup() {
   REPO="$BATS_TEST_TMPDIR/repo"
   STUB_BIN="$BATS_TEST_TMPDIR/bin"
-  mkdir -p "$REPO/frontend" "$REPO/.githooks" "$STUB_BIN"
+  mkdir -p "$REPO/apps/web" "$REPO/.githooks" "$STUB_BIN"
   git -C "$REPO" init -q -b main
   git -C "$REPO" config user.email t@example.com
   git -C "$REPO" config user.name t
   git -C "$REPO" config commit.gpgsign false
   git -C "$REPO" config core.hooksPath .githooks
   printf '{"name":"root"}\n' >"$REPO/package.json"
-  printf 'packages:\n  - frontend\n' >"$REPO/pnpm-workspace.yaml"
-  printf '{"name":"frontend"}\n' >"$REPO/frontend/package.json"
+  printf 'packages:\n  - apps/*\n' >"$REPO/pnpm-workspace.yaml"
+  printf '{"name":"web"}\n' >"$REPO/apps/web/package.json"
   mkdir -p "$REPO/.claude/hooks/lib"
   cp "$BATS_TEST_DIRNAME/../../../.claude/hooks/lib/gaia-packages.sh" "$REPO/.claude/hooks/lib/"
-  write_web_descriptor frontend frontend
+  write_web_descriptor web apps/web
   printf 'lockfileVersion: 9\n' >"$REPO/pnpm-lock.yaml"
   printf '#!/bin/sh\necho existing hook\n' >"$REPO/.githooks/pre-commit"
   chmod +x "$REPO/.githooks/pre-commit"
@@ -103,41 +103,41 @@ setup() {
 }
 
 assert_happy_outcomes() {
-  [ -f frontend/.claude/skills/react-doctor/SKILL.md ]
+  [ -f apps/web/.claude/skills/react-doctor/SKILL.md ]
   [ ! -e .github/workflows/react-doctor.yml ]
-  [ ! -e frontend/.agents ]
+  [ ! -e apps/web/.agents ]
   cmp -s .githooks/pre-commit "$BATS_TEST_TMPDIR/hook.before"
   [ -x .githooks/pre-commit ]
   cmp -s pnpm-lock.yaml "$BATS_TEST_TMPDIR/lock.before"
   [ "$(git config --local --get core.hooksPath)" = ".githooks" ]
 }
 
-@test "happy path installs the skill under frontend and strips every extra" {
+@test "happy path installs the skill under apps/web and strips every extra" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   assert_happy_outcomes
-  [ "$(cat "$NPX_LOG")" = "-y react-doctor@latest install --yes --cwd frontend" ]
+  [ "$(cat "$NPX_LOG")" = "-y react-doctor@latest install --yes --cwd apps/web" ]
   expected_log='remove react-doctor --config.ignore-scripts=true
---dir frontend pkg delete scripts.doctor scripts["react-doctor"]
+--dir apps/web pkg delete scripts.doctor scripts["react-doctor"]
 install --frozen-lockfile --config.ignore-scripts=true'
   [ "$(cat "$PNPM_LOG")" = "$expected_log" ]
 }
 
-@test "unrelated frontend/.agents content survives" {
-  mkdir -p frontend/.agents/skills/other
-  printf 'keep\n' >frontend/.agents/skills/other/SKILL.md
+@test "unrelated apps/web/.agents content survives" {
+  mkdir -p apps/web/.agents/skills/other
+  printf 'keep\n' >apps/web/.agents/skills/other/SKILL.md
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ -f frontend/.agents/skills/other/SKILL.md ]
-  [ ! -e frontend/.agents/skills/react-doctor ]
+  [ -f apps/web/.agents/skills/other/SKILL.md ]
+  [ ! -e apps/web/.agents/skills/react-doctor ]
 }
 
-@test "unrelated frontend/.agents sibling file keeps frontend/.agents in place" {
-  mkdir -p frontend/.agents
-  printf 'keep\n' >frontend/.agents/notes.txt
+@test "unrelated apps/web/.agents sibling file keeps apps/web/.agents in place" {
+  mkdir -p apps/web/.agents
+  printf 'keep\n' >apps/web/.agents/notes.txt
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ -f frontend/.agents/notes.txt ]
+  [ -f apps/web/.agents/notes.txt ]
 }
 
 @test "a second run exits 0 and changes nothing" {
@@ -161,7 +161,7 @@ install --frozen-lockfile --config.ignore-scripts=true'
   [ "$status" -eq 0 ]
   assert_happy_outcomes
   [ "$(printf '%s\n' "$output" | grep -c 'pnpm remove')" -eq 1 ]
-  grep -qF -- '--dir frontend pkg delete' "$PNPM_LOG"
+  grep -qF -- '--dir apps/web pkg delete' "$PNPM_LOG"
   grep -qF 'install --frozen-lockfile --config.ignore-scripts=true' "$PNPM_LOG"
 }
 
@@ -224,16 +224,16 @@ install --frozen-lockfile --config.ignore-scripts=true'
 }
 
 @test "--refresh reinstalls where a web member already holds the skill" {
-  mkdir -p frontend/.claude/skills/react-doctor
-  printf 'old\n' >frontend/.claude/skills/react-doctor/SKILL.md
+  mkdir -p apps/web/.claude/skills/react-doctor
+  printf 'old\n' >apps/web/.claude/skills/react-doctor/SKILL.md
   run bash "$SCRIPT" --refresh
   [ "$status" -eq 0 ]
-  [[ "$(cat "$NPX_LOG")" == *"--cwd frontend"* ]]
+  [[ "$(cat "$NPX_LOG")" == *"--cwd apps/web"* ]]
 }
 
 @test "a registry with no web-stack member exits 0 without running the installer" {
-  jq 'del(.stack)' frontend/gaia.package.json >frontend/gaia.package.json.tmp
-  mv frontend/gaia.package.json.tmp frontend/gaia.package.json
+  jq 'del(.stack)' apps/web/gaia.package.json >apps/web/gaia.package.json.tmp
+  mv apps/web/gaia.package.json.tmp apps/web/gaia.package.json
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"stack"* ]]
@@ -241,10 +241,10 @@ install --frozen-lockfile --config.ignore-scripts=true'
 }
 
 @test "the skill is installed under a web member named storefront at its own path" {
-  rm -rf frontend
+  rm -rf apps/web
   write_web_descriptor storefront apps/storefront
   printf '{"name":"storefront"}\n' >apps/storefront/package.json
-  sed -i.bak 's#frontend#apps/storefront#g' "$STUB_BIN/npx"
+  sed -i.bak 's#apps/web#apps/storefront#g' "$STUB_BIN/npx"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ -f apps/storefront/.claude/skills/react-doctor/SKILL.md ]

@@ -116,8 +116,8 @@ refresh() {
 # trip; this one is over the nested limit, the root sits exactly at its limit,
 # and a deeper file is committed too.
 write_budget_fixture() {
-  mkdir -p "$REPOSITORY_FIXTURE/frontend" "$REPOSITORY_FIXTURE/a/b/c"
-  write_words 450 "$REPOSITORY_FIXTURE/frontend/CLAUDE.md"
+  mkdir -p "$REPOSITORY_FIXTURE/apps/web" "$REPOSITORY_FIXTURE/a/b/c"
+  write_words 450 "$REPOSITORY_FIXTURE/apps/web/CLAUDE.md"
   write_words 500 "$REPOSITORY_FIXTURE/CLAUDE.md"
   write_words 900 "$REPOSITORY_FIXTURE/a/b/c/CLAUDE.md"
 }
@@ -134,7 +134,7 @@ budget_finding_files() {
   [ "$(cache_value cleanseNudgeReason)" = "over budget" ]
 
   run "$GAIA_TEST_FITNESS_BUNDLE" fitness check --json --scope all --only claudemd.budget --root "$REPOSITORY_FIXTURE"
-  [ "$(budget_finding_files "$output")" = "frontend/CLAUDE.md" ]
+  [ "$(budget_finding_files "$output")" = "apps/web/CLAUDE.md" ]
 }
 
 @test "a root CLAUDE.md of 501 words records the over-budget nudge" {
@@ -154,8 +154,8 @@ budget_finding_files() {
 }
 
 @test "every auto-load file within budget records no nudge" {
-  mkdir -p "$REPOSITORY_FIXTURE/frontend"
-  write_words 400 "$REPOSITORY_FIXTURE/frontend/CLAUDE.md"
+  mkdir -p "$REPOSITORY_FIXTURE/apps/web"
+  write_words 400 "$REPOSITORY_FIXTURE/apps/web/CLAUDE.md"
   write_words 500 "$REPOSITORY_FIXTURE/CLAUDE.md"
   awk 'BEGIN { for (i = 0; i < 200; i++) print "line" }' > "$REPOSITORY_FIXTURE/.claude/rules/edge.md"
   commit_fixture

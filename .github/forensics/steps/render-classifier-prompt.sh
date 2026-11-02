@@ -41,7 +41,7 @@ allowlist='- `.gaia/cli/` (except the `gaia` and `gaia-maintainer` bundles)
 - `.gaia/manifest.json`'
 
 # shellcheck disable=SC2016
-denylist='- `frontend/app/`, `wiki/`, `studio/`, `website/`
+denylist='- `apps/web/app/`, `wiki/`, `studio/`, `website/`
 - `.notebook/`
 - `.gaia/templates/spec/`
 - `.claude/skills/gaia/references/spec/clarify-prompts.md`, `.claude/skills/gaia/references/spec/system-prompt.md`, `.claude/skills/gaia/references/spec/spec-template.md`

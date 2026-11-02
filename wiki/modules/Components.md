@@ -1,6 +1,6 @@
 ---
 type: module
-path: frontend/app/components/
+path: apps/web/app/components/
 status: active
 language: typescript
 purpose: Shared UI components used across pages
@@ -11,13 +11,13 @@ tags: [module, components]
 
 # Components
 
-`frontend/app/components/` holds shared UI components. Page-specific UI lives in `frontend/app/pages/` (see [[Pages]]).
+`apps/web/app/components/` holds shared UI components. Page-specific UI lives in `apps/web/app/pages/` (see [[Pages]]).
 
-The base controls are vendored shadcn components in `frontend/app/components/ui/` (flat files, stories and tests in `ui/tests/`); the policy and local patches are in [[shadcn Component Layer]]. The kept GAIA components compose them.
+The base controls are vendored shadcn components in `apps/web/app/components/ui/` (flat files, stories and tests in `ui/tests/`); the policy and local patches are in [[shadcn Component Layer]]. The kept GAIA components compose them.
 
 ## Component folder convention (ESLint-enforced)
 
-Each component lives in its own kebab-case folder under `frontend/app/components/`. Folder naming, the `ui/` exception, and story and test placement are owned by `frontend/.claude/rules/coding-guidelines-react.md`. A component folder holds:
+Each component lives in its own kebab-case folder under `apps/web/app/components/`. Folder naming, the `ui/` exception, and story and test placement are owned by `apps/web/.claude/rules/coding-guidelines-react.md`. A component folder holds:
 
 - `index.tsx`: main component
 - `styles.module.css`: CSS module styles (when needed)
@@ -40,14 +40,14 @@ Not strict, but a strong default. Refactoring is easier when the folder hierarch
 
 ## Naming conventions
 
-- Folder names, `index.tsx`, and the default export name: see `frontend/.claude/rules/coding-guidelines-react.md`
+- Folder names, `index.tsx`, and the default export name: see `apps/web/.claude/rules/coding-guidelines-react.md`
 
 ## Where to look up the inventory
 
-The current set of bundled components changes over time. List `frontend/app/components/` rather than maintaining a roster here. Notable exceptions:
+The current set of bundled components changes over time. List `apps/web/app/components/` rather than maintaining a roster here. Notable exceptions:
 
 - `ui/`: vendored shadcn components, refreshed with `pnpm shadcn add`, never hand-edited ([[shadcn Component Layer]])
 - `form/`: the composed form fixture ([[Form Components]])
-- `ThemeSwitch` lives at `frontend/app/components/theme-switch/`. Its resource-route action and Zod schema live separately at `frontend/app/routes/resources.theme-switch.tsx`, and its theme hooks live at `frontend/app/hooks/use-theme.ts`. See [[Theme Flow]].
+- `ThemeSwitch` lives at `apps/web/app/components/theme-switch/`. Its resource-route action and Zod schema live separately at `apps/web/app/routes/resources.theme-switch.tsx`, and its theme hooks live at `apps/web/app/hooks/use-theme.ts`. See [[Theme Flow]].
 
 See [[Component Testing]] for how stories with `.test()` behaviors test a component, and [[Stories as Tests]] for the doctrine.

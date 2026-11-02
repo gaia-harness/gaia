@@ -209,7 +209,7 @@ const findOnDiskLocalFiles = (root: string, realRoot: string): string[] => {
 
 const READ_TARGET = /\bRead\s+`([^`\n]+)`/g;
 
-const PLAYBOOK_ROOTS = ['.claude/', 'frontend/.claude/'] as const;
+const PLAYBOOK_ROOTS = ['.claude/', 'apps/web/.claude/'] as const;
 
 const playbookTargets = (
   routing: DiscoveredFile,

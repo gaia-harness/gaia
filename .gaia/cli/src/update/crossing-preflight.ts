@@ -12,6 +12,7 @@
 import {existsSync, readdirSync, realpathSync} from 'node:fs';
 import path from 'node:path';
 import {execGaiaGit} from '../util/git-env.js';
+import {resolveMainWorktreeRoot, sameRealPath} from '../util/main-root.js';
 import {
   DESCRIPTOR_FILE,
   done,
@@ -73,22 +74,11 @@ const isResume = (root: string): boolean => {
 };
 
 const isLinkedWorktree = (root: string): boolean => {
-  const gitDirectory = git(root, [
-    'rev-parse',
-    '--path-format=absolute',
-    '--git-dir',
-  ]);
-  const commonDirectory = git(root, [
-    'rev-parse',
-    '--path-format=absolute',
-    '--git-common-dir',
-  ]);
-
-  if (gitDirectory === undefined || commonDirectory === undefined) {
+  try {
+    return !sameRealPath(root, resolveMainWorktreeRoot(root));
+  } catch {
     return false;
   }
-
-  return realpathSync(gitDirectory) !== realpathSync(commonDirectory);
 };
 
 const hasRunningPlan = (directory: string, depth = 0): boolean => {

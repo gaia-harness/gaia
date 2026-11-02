@@ -20,17 +20,17 @@ setup_file() {
   REPORT="$BATS_FILE_TMPDIR/reporter.json"
   RUN_OUTPUT="$BATS_FILE_TMPDIR/run-output.txt"
   export HOME_ROOT REPORT RUN_OUTPUT
-  [ -d "$HOME_ROOT/frontend/node_modules" ] || return 0
+  [ -d "$HOME_ROOT/apps/web/node_modules" ] || return 0
   # The run's own exit status is not read: the verdict is the report below, and
   # a no-Chromium run writes one with zero tests next to a launch error.
-  pnpm -C "$HOME_ROOT/frontend" exec vitest run --project storybook \
+  pnpm -C "$HOME_ROOT/apps/web" exec vitest run --project storybook \
     app/utils/tests/csf-shapes.stories.tsx app/utils/tests/csf-meta-play.stories.tsx \
     --reporter=json --outputFile="$REPORT" < /dev/null > "$RUN_OUTPUT" 2>&1 || true
 }
 
 setup() {
   EXTRACTOR="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
-  if [ ! -d "$HOME_ROOT/frontend/node_modules" ]; then
+  if [ ! -d "$HOME_ROOT/apps/web/node_modules" ]; then
     echo "the frontend workspace is not installed; run pnpm install" >&2
     return 1
   fi
@@ -48,7 +48,7 @@ reporter_names_for() {
 
 # The extractor's fullNames for one fixture file, sorted.
 extractor_names_for() {
-  ( cd "$HOME_ROOT" && node "$EXTRACTOR" "frontend/$1" | jq -r '.fullName' ) | LC_ALL=C sort
+  ( cd "$HOME_ROOT" && node "$EXTRACTOR" "apps/web/$1" | jq -r '.fullName' ) | LC_ALL=C sort
 }
 
 # The tests the reporter runs that the extractor must not emit: a render-only

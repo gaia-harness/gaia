@@ -26,21 +26,21 @@
 #                   the tree up for the remaining steps. Same surface as
 #                   04; no new assertions added here.
 #
-#   configure-i18n  frontend/app/languages/index.ts keeps the 'en' import
+#   configure-i18n  apps/web/app/languages/index.ts keeps the 'en' import
 #                   and does not import 'es', whose language tree add-locale
-#                   creates later; frontend/app/i18n.ts has fallbackLng: 'en'.
+#                   creates later; apps/web/app/i18n.ts has fallbackLng: 'en'.
 #
 #   configure-data-layer
 #                   Prints one JSON line on stdout (the one step exempt from
 #                   the no-stdout contract) whose `changed` list is empty;
 #                   the domain layer's create() keeps no isSnakeCaseEnabled
-#                   argument and frontend/package.json gains no TanStack
+#                   argument and apps/web/package.json gains no TanStack
 #                   Query dependency.
 #
 #   rename          package.json "name" == "test-project"; CLAUDE.md
 #                   first H1 line == "# Test Project";
-#                   frontend/app/languages/en/common.ts has siteName: 'Test
-#                   Project'; frontend/app/languages/en/pages/_index.ts keeps
+#                   apps/web/app/languages/en/common.ts has siteName: 'Test
+#                   Project'; apps/web/app/languages/en/pages/_index.ts keeps
 #                   title: '$t(common:meta.siteName)'.
 #
 #   wire-statusline .claude/settings.json contains the canonical GAIA
@@ -96,22 +96,22 @@ rsync -a "$STAGING"/ "$SCAFFOLD"/
   || { fail "staged tree missing .gaia/templates/README.md (strip-branding template source)"; exit 1; }
 
 # configure-i18n targets.
-[ -f "$SCAFFOLD/frontend/app/languages/index.ts" ] \
-  || { fail "staged tree missing frontend/app/languages/index.ts (configure-i18n target)"; exit 1; }
-[ -f "$SCAFFOLD/frontend/app/services/gaia/api.ts" ] \
-  || { fail "staged tree missing frontend/app/services/gaia/api.ts (configure-data-layer target)"; exit 1; }
-[ -f "$SCAFFOLD/frontend/app/i18n.ts" ] \
-  || { fail "staged tree missing frontend/app/i18n.ts (configure-i18n fallbackLng target)"; exit 1; }
+[ -f "$SCAFFOLD/apps/web/app/languages/index.ts" ] \
+  || { fail "staged tree missing apps/web/app/languages/index.ts (configure-i18n target)"; exit 1; }
+[ -f "$SCAFFOLD/apps/web/app/services/gaia/api.ts" ] \
+  || { fail "staged tree missing apps/web/app/services/gaia/api.ts (configure-data-layer target)"; exit 1; }
+[ -f "$SCAFFOLD/apps/web/app/i18n.ts" ] \
+  || { fail "staged tree missing apps/web/app/i18n.ts (configure-i18n fallbackLng target)"; exit 1; }
 
 # rename targets.
 [ -f "$SCAFFOLD/package.json" ] \
   || { fail "staged tree missing package.json (rename target)"; exit 1; }
 [ -f "$SCAFFOLD/CLAUDE.md" ] \
   || { fail "staged tree missing CLAUDE.md (rename H1 target)"; exit 1; }
-[ -f "$SCAFFOLD/frontend/app/languages/en/common.ts" ] \
-  || { fail "staged tree missing frontend/app/languages/en/common.ts (rename siteName target)"; exit 1; }
-[ -f "$SCAFFOLD/frontend/app/languages/en/pages/_index.ts" ] \
-  || { fail "staged tree missing frontend/app/languages/en/pages/_index.ts (rename siteName reference target)"; exit 1; }
+[ -f "$SCAFFOLD/apps/web/app/languages/en/common.ts" ] \
+  || { fail "staged tree missing apps/web/app/languages/en/common.ts (rename siteName target)"; exit 1; }
+[ -f "$SCAFFOLD/apps/web/app/languages/en/pages/_index.ts" ] \
+  || { fail "staged tree missing apps/web/app/languages/en/pages/_index.ts (rename siteName reference target)"; exit 1; }
 
 # finalize target; the staged tree must ship the command file so
 # finalize has something to delete.
@@ -211,13 +211,13 @@ run_step "strip-branding" \
 run_step "configure-i18n" \
   init configure-i18n --locales "en,es" --strip false
 
-LANGUAGES_INDEX="$SCAFFOLD/frontend/app/languages/index.ts"
+LANGUAGES_INDEX="$SCAFFOLD/apps/web/app/languages/index.ts"
 grep -q "^import en from './en';" "$LANGUAGES_INDEX" \
-  || { fail "configure-i18n dropped the 'en' import from frontend/app/languages/index.ts"; exit 1; }
+  || { fail "configure-i18n dropped the 'en' import from apps/web/app/languages/index.ts"; exit 1; }
 grep -q "^import es from './es';" "$LANGUAGES_INDEX" \
   && { fail "configure-i18n imported 'es' before its language tree exists"; exit 1; }
-grep -q "fallbackLng: 'en'" "$SCAFFOLD/frontend/app/i18n.ts" \
-  || { fail "configure-i18n did not set fallbackLng: 'en' in frontend/app/i18n.ts"; exit 1; }
+grep -q "fallbackLng: 'en'" "$SCAFFOLD/apps/web/app/i18n.ts" \
+  || { fail "configure-i18n did not set fallbackLng: 'en' in apps/web/app/i18n.ts"; exit 1; }
 
 # Step 3; configure-data-layer, with the Automatic defaults (camelCase,
 # no TanStack Query). Additive: with these answers nothing changes.
@@ -230,12 +230,12 @@ DATA_LAYER_CHANGED="$(printf '%s' "$DATA_LAYER_JSON" | node -e '
   || { fail "configure-data-layer stdout is not one JSON line (got: $DATA_LAYER_JSON)"; exit 1; }
 [ "$DATA_LAYER_CHANGED" = "0" ] \
   || { fail "configure-data-layer --casing camel --query false changed files (got: $DATA_LAYER_JSON)"; exit 1; }
-if grep -q 'isSnakeCaseEnabled' "$SCAFFOLD/frontend/app/services/gaia/api.ts"; then
-  fail "configure-data-layer --casing camel left an isSnakeCaseEnabled argument in frontend/app/services/gaia/api.ts"
+if grep -q 'isSnakeCaseEnabled' "$SCAFFOLD/apps/web/app/services/gaia/api.ts"; then
+  fail "configure-data-layer --casing camel left an isSnakeCaseEnabled argument in apps/web/app/services/gaia/api.ts"
   exit 1
 fi
-if grep -q '@tanstack/react-query' "$SCAFFOLD/frontend/package.json"; then
-  fail "configure-data-layer --query false added @tanstack/react-query to frontend/package.json"
+if grep -q '@tanstack/react-query' "$SCAFFOLD/apps/web/package.json"; then
+  fail "configure-data-layer --query false added @tanstack/react-query to apps/web/package.json"
   exit 1
 fi
 
@@ -253,12 +253,12 @@ first_h1="$(grep -m1 '^# ' "$SCAFFOLD/CLAUDE.md" || true)"
 [ "$first_h1" = "# $TITLE" ] \
   || { fail "rename did not rewrite CLAUDE.md first H1 to '# $TITLE' (got: '$first_h1')"; exit 1; }
 # common.ts siteName.
-grep -qE "siteName:\s*['\"]Test Project['\"]" "$SCAFFOLD/frontend/app/languages/en/common.ts" \
+grep -qE "siteName:\s*['\"]Test Project['\"]" "$SCAFFOLD/apps/web/app/languages/en/common.ts" \
   || { fail "rename did not set siteName: 'Test Project' in en/common.ts"; exit 1; }
 # _index.ts title: the shipped meta.title is a nesting reference to
 # common:meta.siteName, so the title lives only in common.ts (asserted above)
 # and rename leaves the reference untouched.
-grep -qF "title: '\$t(common:meta.siteName)'" "$SCAFFOLD/frontend/app/languages/en/pages/_index.ts" \
+grep -qF "title: '\$t(common:meta.siteName)'" "$SCAFFOLD/apps/web/app/languages/en/pages/_index.ts" \
   || { fail "rename altered the \$t(common:meta.siteName) title reference in en/pages/_index.ts"; exit 1; }
 
 # Step 5; wire-statusline merges into the scaffold's .claude/settings.json.

@@ -9,10 +9,10 @@
 #    sidecars and loop state would land there), marker-stripped, sentinel
 #    written. The toolkit's README says why the marker goes.
 # 2. On the clone's `main`, the bundle's harness replaces the base's:
-#    .claude, .github/audit, wiki, frontend/.claude and .gaia (never
+#    .claude, .github/audit, wiki, apps/web/.claude and .gaia (never
 #    .gaia/local, which is untracked) are removed and checked out from the
 #    bundle commit, so a file the bundle deleted does not linger as a stale
-#    rule or agent definition. frontend/.claude holds the frontend member's
+#    rule or agent definition. apps/web/.claude holds the frontend member's
 #    extension rules. The maintainer marker is deleted again when the bundle
 #    restored it, and the result is committed as the replay's `main`.
 # 3. The change under review, `git diff <base> <head>` minus the marker path,
@@ -36,7 +36,7 @@ set -euo pipefail
 SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 PREPARE_SCRATCH_CLONE="$SCRIPT_DIRECTORY/../audit-cost/prepare-scratch-clone.sh"
 MARKER_PATH=".claude/rules/maintainers/harness-triage-threshold.md"
-HARNESS_PATHS=(.claude .github/audit wiki frontend/.claude .gaia)
+HARNESS_PATHS=(.claude .github/audit wiki apps/web/.claude .gaia)
 
 usage() {
   echo "usage: build-tree.sh --repo <maintainer checkout> --bundle <sha> --base <sha> --head <sha> --clone <dir>" >&2

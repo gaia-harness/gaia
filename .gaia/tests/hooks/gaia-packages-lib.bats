@@ -273,15 +273,15 @@ check_case() {
   [ -z "${lines[1]:-}" ]
 }
 
-@test "registry absent: the committed descriptor drives the built-in default, frontend/app matches and root app does not" {
+@test "registry absent: the committed descriptor drives the built-in default, apps/web/app matches and root app does not" {
   # shellcheck source=/dev/null
   . "$LIBRARY"
-  mkdir -p "$BATS_TEST_TMPDIR/absent/frontend"
-  cp "$REPO_ROOT/frontend/gaia.package.json" "$BATS_TEST_TMPDIR/absent/frontend/"
+  mkdir -p "$BATS_TEST_TMPDIR/absent/apps/web"
+  cp "$REPO_ROOT/apps/web/gaia.package.json" "$BATS_TEST_TMPDIR/absent/apps/web/"
   gaia_packages_load "$BATS_TEST_TMPDIR/absent"
   local ere
   ere="$(gaia_package_globs_ere tddUnitTests)"
-  [[ "frontend/app/utils/x.test.ts" =~ $ere ]]
+  [[ "apps/web/app/utils/x.test.ts" =~ $ere ]]
   [[ "app/utils/x.test.ts" =~ $ere ]] && return 1
   true
 }

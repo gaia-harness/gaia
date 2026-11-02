@@ -117,7 +117,7 @@ ledger:
   prompt. Reads only the changed emergent test files plus their sibling suites,
   judges both axes, returns `{keep, fix, delete}` per test, edits no files. The
   human-facing encoding of the same contract is
-  `frontend/.claude/skills/tdd-react/references/tests-react.md` (the discriminator, composition,
+  `apps/web/.claude/skills/tdd-react/references/tests-react.md` (the discriminator, composition,
   and platform rules).
 - `.gaia/scripts/audit-ledger/append-worthiness.mjs`: the ledger writer. Takes a
   repo-relative test path, a `fullName`, a verdict, and (for non-keep) an

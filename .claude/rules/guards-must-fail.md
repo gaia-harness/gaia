@@ -2,7 +2,7 @@
 paths:
   - '**/*.bats'
   - '.gaia/scripts/**/*.sh'
-  - 'frontend/.playwright/**/*.ts'
+  - 'apps/web/.playwright/**/*.ts'
   - '.claude/hooks/**/*.sh'
   - '.github/workflows/**/*.yml'
 ---

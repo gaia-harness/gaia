@@ -104,9 +104,9 @@ as a failed run, never as no proposals.
 Each element, every field required except `bug`, which only `keep-both` needs:
 
 ```
-{"proposal":"drop","file":"frontend/.playwright/e2e/records.spec.ts","fullName":"lists the signed in user's records","seam":true,
+{"proposal":"drop","file":"apps/web/.playwright/e2e/records.spec.ts","fullName":"lists the signed in user's records","seam":true,
  "property":"a user sees only their own records","actor":"a signed in user","action":"open the records page",
- "sibling":{"file":"frontend/app/route-tests/records.test.ts","line":14,"fullName":"loader returns only the caller's records","assertion":"expect(records).toEqual(ownRecords)"}}
+ "sibling":{"file":"apps/web/app/route-tests/records.test.ts","line":14,"fullName":"loader returns only the caller's records","assertion":"expect(records).toEqual(ownRecords)"}}
 ```
 
 - `file` and `sibling.file` are repo-relative, as the `changed` list prints

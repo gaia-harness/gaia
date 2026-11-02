@@ -1,7 +1,7 @@
 /**
  * Test fixtures that pin a temp tree to a literal registry and descriptor, by
  * default the transitional layout (the app at the repo root). The descriptor
- * is the committed `frontend/gaia.package.json`, the one copy of the default
+ * is the committed `apps/web/gaia.package.json`, the one copy of the default
  * globs.
  */
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
@@ -9,13 +9,14 @@ import path from 'node:path';
 import type {PackageDescriptor} from './packages.js';
 import {resolveRepoRootFromImportMeta} from './repo-root-fixture.js';
 
-/** The committed frontend descriptor, parsed. */
+/** The committed web descriptor, parsed. */
 export const committedFrontendDescriptor = (): PackageDescriptor =>
   JSON.parse(
     readFileSync(
       path.join(
         resolveRepoRootFromImportMeta(import.meta.url),
-        'frontend',
+        'apps',
+        'web',
         'gaia.package.json'
       ),
       'utf8'
@@ -23,13 +24,13 @@ export const committedFrontendDescriptor = (): PackageDescriptor =>
   ) as PackageDescriptor;
 
 /**
- * Write the committed descriptor at `frontend/`, with no registry: the tree an
- * adopter has, where the built-in registry names the frontend package.
+ * Write the committed descriptor at `apps/web/`, with no registry: the tree an
+ * adopter has, where the built-in registry names the web package.
  */
 export const writeBuiltinDescriptor = (root: string): void => {
-  mkdirSync(path.join(root, 'frontend'), {recursive: true});
+  mkdirSync(path.join(root, 'apps', 'web'), {recursive: true});
   writeFileSync(
-    path.join(root, 'frontend', 'gaia.package.json'),
+    path.join(root, 'apps', 'web', 'gaia.package.json'),
     JSON.stringify(committedFrontendDescriptor())
   );
 };
@@ -75,11 +76,11 @@ export const writeMemberRegistry = (
   }
 };
 
-/** Register the frontend package at `packagePath` with the committed descriptor. */
+/** Register the web package at `packagePath` with the committed descriptor. */
 export const writeFrontendRegistry = (
   root: string,
   packagePath = '.',
-  name = 'frontend'
+  name = 'web'
 ): void => {
   writeMemberRegistry(root, [{name, path: packagePath}]);
 };

@@ -54,7 +54,7 @@ build_base() {
 # not own, then a full clearance on it. A clearance on the merge base never
 # anchors, so the router would answer no-full-clearance.
 anchor_and_clear() {
-  lsb_commit frontend/app/anchor.md "anchor" || return 1
+  lsb_commit apps/web/app/anchor.md "anchor" || return 1
   lsb_full_clearance "$SHELL_MEMBER"
 }
 

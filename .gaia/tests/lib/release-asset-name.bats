@@ -2,7 +2,7 @@
 # The 2.0.0 release fence (SPEC-092 contracts C9 and C10).
 #
 # v1.6.1's /update-gaia downloads with `--pattern "gaia-${tag}.tar.gz"`. The 2.x
-# manifest is keyed on frontend/ paths, so a 1.6.1 merge against it would read
+# manifest is keyed on apps/web/ paths, so a 1.6.1 merge against it would read
 # every baseline app path as an upstream deletion. The fence is the asset name:
 # 2.x publishes `gaia-bundle-${TAG}.tar.gz`, which that glob cannot match, so
 # 1.6.1 stops at its fetch step before it writes anything.

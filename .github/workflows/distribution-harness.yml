@@ -121,17 +121,17 @@ jobs:
               # sources, and the adopter toolchain the generated code is gated
               # by.
               - '.claude/commands/gaia-init.md'
-              - 'frontend/package.json'
-              - 'frontend/.storybook/**'
-              - 'frontend/eslint.config.mjs'
-              - 'frontend/tsconfig.json'
-              - 'frontend/vite.config.ts'
-              - 'frontend/vitest.config.ts'
-              - 'frontend/react-router.config.ts'
-              - 'frontend/app/root.tsx'
-              - 'frontend/app/state/**'
-              - 'frontend/app/services/**'
-              - 'frontend/test/**'
+              - 'apps/web/package.json'
+              - 'apps/web/.storybook/**'
+              - 'apps/web/eslint.config.mjs'
+              - 'apps/web/tsconfig.json'
+              - 'apps/web/vite.config.ts'
+              - 'apps/web/vitest.config.ts'
+              - 'apps/web/react-router.config.ts'
+              - 'apps/web/app/root.tsx'
+              - 'apps/web/app/state/**'
+              - 'apps/web/app/services/**'
+              - 'apps/web/test/**'
       - if: steps.release.outputs.fast != 'true' && (steps.filter.outputs.code == 'true' || github.event_name != 'pull_request')
         name: Setup Node
         uses: ./.github/actions/gaia-setup-node

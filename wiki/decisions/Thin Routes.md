@@ -10,7 +10,7 @@ tags: [decision, routing, architecture]
 
 # Decision: Thin Routes, Fat Pages
 
-Route files (`frontend/app/routes/**`) contain only data exports and a one-line render of a page component: `loader`, `clientLoader`, `action`, `clientAction`, and `HydrateFallback` (metadata renders as JSX, not a `meta` export). No hooks live in a route module, except the index route's `useLoaderData` read for its `<title>`/`<meta>` (see Meta pattern). All UI, and every hook, lives in a folder under `frontend/app/pages/` derived from the route path (layout owned by `frontend/.claude/rules/coding-guidelines-react.md`). The page types its loader data with `LoaderData` from its own folder's `types.ts` and never imports from a route (the lint boundary forbids it). Which loader to export is the decision in [[Data Loading]].
+Route files (`apps/web/app/routes/**`) contain only data exports and a one-line render of a page component: `loader`, `clientLoader`, `action`, `clientAction`, and `HydrateFallback` (metadata renders as JSX, not a `meta` export). No hooks live in a route module, except the index route's `useLoaderData` read for its `<title>`/`<meta>` (see Meta pattern). All UI, and every hook, lives in a folder under `apps/web/app/pages/` derived from the route path (layout owned by `apps/web/.claude/rules/coding-guidelines-react.md`). The page types its loader data with `LoaderData` from its own folder's `types.ts` and never imports from a route (the lint boundary forbids it). Which loader to export is the decision in [[Data Loading]].
 
 ## Rationale
 
@@ -29,7 +29,7 @@ Scaffolded route actions and client actions validate with `parseWithZod` from `@
 
 ## Enforcement
 
-- `frontend/app/routes/**` rule (`frontend/.claude/rules/routes.md`) guides code review
+- `apps/web/app/routes/**` rule (`apps/web/.claude/rules/routes.md`) guides code review
 - The `new-route` skill scaffolds in this exact pattern
 
-See [[Routing]], [[Pages]], and the `routes` rule at `frontend/.claude/rules/routes.md`.
+See [[Routing]], [[Pages]], and the `routes` rule at `apps/web/.claude/rules/routes.md`.

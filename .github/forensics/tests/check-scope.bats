@@ -12,7 +12,7 @@ setup() {
 # --- exit-code contract ----------------------------------------------------
 
 @test "exit code is always 0 (consumer reads ok from JSON)" {
-  run "$SCRIPT" frontend/app/foo.ts
+  run "$SCRIPT" apps/web/app/foo.ts
   [ "$status" -eq 0 ]
   run "$SCRIPT" .gaia/cli/foo.sh
   [ "$status" -eq 0 ]
@@ -54,9 +54,9 @@ setup() {
 
 # --- denylist hits ---------------------------------------------------------
 
-@test "denylist: frontend/app/" {
-  run "$SCRIPT" frontend/app/foo.ts
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"frontend/app/foo.ts","reason":"denylist"}]}' ]
+@test "denylist: apps/web/app/" {
+  run "$SCRIPT" apps/web/app/foo.ts
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"apps/web/app/foo.ts","reason":"denylist"}]}' ]
 }
 
 @test "retired root app/ is no longer denylisted (default-deny, not allowed)" {
@@ -230,8 +230,8 @@ setup() {
 }
 
 @test "multi: any-deny flips ok:false; allowed/denied partition the input" {
-  run "$SCRIPT" .gaia/cli/foo.sh frontend/app/bar.ts eslint.config.ts
-  [ "$output" = '{"ok":false,"allowed":[".gaia/cli/foo.sh"],"denied":[{"path":"frontend/app/bar.ts","reason":"denylist"},{"path":"eslint.config.ts","reason":"default-deny-unenumerated"}]}' ]
+  run "$SCRIPT" .gaia/cli/foo.sh apps/web/app/bar.ts eslint.config.ts
+  [ "$output" = '{"ok":false,"allowed":[".gaia/cli/foo.sh"],"denied":[{"path":"apps/web/app/bar.ts","reason":"denylist"},{"path":"eslint.config.ts","reason":"default-deny-unenumerated"}]}' ]
 }
 
 @test "multi: deny reasons are recorded per-path (mixed denylist + default-deny)" {

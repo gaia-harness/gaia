@@ -310,7 +310,7 @@ write_package() {
   cat > "$SANDBOX/$directory/gaia.package.json" <<'JSON'
 {
   "schemaVersion": 1,
-  "name": "frontend",
+  "name": "web",
   "globs": {
     "tddUnitTests": ["app/**/*.test.ts"],
     "tddStrictCandidates": ["app/utils/**"],
@@ -326,13 +326,13 @@ JSON
 
 use_frontend_registry() {
   make_sandbox
-  printf '[{"name":"frontend","path":"frontend"}]\n' > "$SANDBOX/.gaia/packages.json"
-  write_package frontend
+  printf '[{"name":"web","path":"apps/web"}]\n' > "$SANDBOX/.gaia/packages.json"
+  write_package apps/web
 }
 
 use_root_registry() {
   make_sandbox
-  printf '[{"name":"frontend","path":"."}]\n' > "$SANDBOX/.gaia/packages.json"
+  printf '[{"name":"web","path":"."}]\n' > "$SANDBOX/.gaia/packages.json"
   write_package .
 }
 
@@ -350,27 +350,27 @@ sandbox_predicate() {
   [ "$status" -eq 0 ]
 }
 
-@test "package manifests: a lockfile plus frontend/package.json is dependency-only" {
+@test "package manifests: a lockfile plus apps/web/package.json is dependency-only" {
   use_frontend_registry
-  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\nfrontend/package.json'
+  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json'
   [ "$output" = "true" ]
 }
 
 @test "package manifests: the same paths under a feat subject are not" {
   use_frontend_registry
-  sandbox_predicate 'feat: x' $'pnpm-lock.yaml\nfrontend/package.json'
+  sandbox_predicate 'feat: x' $'pnpm-lock.yaml\napps/web/package.json'
   [ "$output" = "false" ]
 }
 
 @test "package manifests: a frontend source file beside the manifests is not dependency-only" {
   use_frontend_registry
-  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\nfrontend/package.json\nfrontend/app/a.ts'
+  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json\napps/web/app/a.ts'
   [ "$output" = "false" ]
 }
 
 @test "package manifests: a nested package.json under the package is not a manifest" {
   use_frontend_registry
-  sandbox_predicate 'chore(deps): bump x' 'frontend/app/foo/package.json'
+  sandbox_predicate 'chore(deps): bump x' 'apps/web/app/foo/package.json'
   [ "$output" = "false" ]
 }
 
@@ -388,31 +388,31 @@ sandbox_predicate() {
 
 @test "package manifests: a registered package manifest is not accepted when the registry omits it" {
   make_sandbox
-  printf '[{"name":"frontend","path":"frontend"}]\n' > "$SANDBOX/.gaia/packages.json"
-  write_package frontend
+  printf '[{"name":"web","path":"apps/web"}]\n' > "$SANDBOX/.gaia/packages.json"
+  write_package apps/web
   printf '[]\n' > "$SANDBOX/.gaia/packages.json"
-  sandbox_predicate 'chore(deps): bump x' 'frontend/package.json'
+  sandbox_predicate 'chore(deps): bump x' 'apps/web/package.json'
   [ "$output" = "false" ]
 }
 
 @test "package manifests: with no registry the built-in frontend package is used" {
   make_sandbox
   write_builtin_descriptor "$SANDBOX"
-  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\nfrontend/package.json'
+  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json'
   [ "$output" = "true" ]
 }
 
 @test "package manifests: an unparseable registry prints false and the reason on stderr" {
   use_frontend_registry
   printf 'not json {\n' > "$SANDBOX/.gaia/packages.json"
-  sandbox_predicate_split 'chore(deps): bump x' $'pnpm-lock.yaml\nfrontend/package.json'
+  sandbox_predicate_split 'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json'
   [ "$STDOUT_TEXT" = "false" ]
   grep -qF -- "gaia-packages: " <<<"$STDERR_TEXT"
 }
 
 @test "package manifests: a missing descriptor prints false, even for root manifests only" {
   use_frontend_registry
-  rm "$SANDBOX/frontend/gaia.package.json"
+  rm "$SANDBOX/apps/web/gaia.package.json"
   sandbox_predicate_split 'chore(deps): bump x' $'pnpm-lock.yaml\npackage.json'
   [ "$STDOUT_TEXT" = "false" ]
   grep -qF -- "gaia-packages: " <<<"$STDERR_TEXT"

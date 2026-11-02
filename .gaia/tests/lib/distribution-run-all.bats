@@ -77,7 +77,7 @@ changed() {
 
 @test "change-scoped: a declared scenario runs when a path matching one of its globs changed" {
   scenario 01-fast.sh 0
-  scenario 02-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/scaffold/** frontend/package.json'
+  scenario 02-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/scaffold/** apps/web/package.json'
   run_all --changed-paths "$(changed .gaia/cli/src/scaffold/route-data.ts)"
   [ "$status" -eq 0 ]
   [ -f "$RAN/01-fast.sh" ]
@@ -97,8 +97,8 @@ changed() {
 }
 
 @test "change-scoped: globs on a second paths line select too" {
-  scenario 01-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/init/**' '# distribution-runner: paths frontend/.storybook/**'
-  run_all --changed-paths "$(changed frontend/.storybook/preview.ts)"
+  scenario 01-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/init/**' '# distribution-runner: paths apps/web/.storybook/**'
+  run_all --changed-paths "$(changed apps/web/.storybook/preview.ts)"
   [ "$status" -eq 0 ]
   [ -f "$RAN/01-slow.sh" ]
 }
@@ -200,7 +200,7 @@ duplicate_scenario_numbers() {
 @test "the CSF4 migration scenario declares the migrate-csf4 sources and nothing in the frontend" {
   local scenario_file="$REPO_ROOT/.gaia/tests/distribution/16-csf4-migration.sh"
   grep '^# distribution-runner: paths ' "$scenario_file" | grep -qF '.gaia/cli/src/migrate-csf4/**'
-  grep '^# distribution-runner: paths ' "$scenario_file" | grep -qF 'frontend/' && return 1
+  grep '^# distribution-runner: paths ' "$scenario_file" | grep -qF 'apps/web/' && return 1
   true
 }
 
@@ -256,8 +256,8 @@ uncovered_globs() {
 
 @test "red twin: a declared glob outside the code filter is reported" {
   local uncovered
-  uncovered="$(uncovered_globs 'frontend/app/routes/**' "$(workflow_code_filter "$REPO_ROOT/.github/workflows/distribution-harness.yml")")"
-  [ "$uncovered" = 'frontend/app/routes/**' ]
+  uncovered="$(uncovered_globs 'apps/web/app/routes/**' "$(workflow_code_filter "$REPO_ROOT/.github/workflows/distribution-harness.yml")")"
+  [ "$uncovered" = 'apps/web/app/routes/**' ]
 }
 
 @test "the harness workflow runs the full harness on every push to main and change-scopes only pull requests" {

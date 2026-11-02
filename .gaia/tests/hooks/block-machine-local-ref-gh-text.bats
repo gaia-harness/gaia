@@ -183,7 +183,7 @@ assert_allowed() {
 
 @test "the hook is registered on PreToolUse Bash in both settings files" {
   local settings
-  for settings in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/frontend/.claude/settings.json"; do
+  for settings in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/apps/web/.claude/settings.json"; do
     jq -e '[.hooks.PreToolUse[] | select(.matcher | test("(^|\\|)Bash(\\||$)")) | .hooks[].command]
       | any(endswith("/.claude/hooks/block-machine-local-ref-gh-text.sh\""))' "$settings" >/dev/null
   done

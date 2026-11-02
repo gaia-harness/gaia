@@ -29,7 +29,7 @@ setup_file() {
       mkdir -p "$BATS_TEST_TMPDIR"
       if [ "$flavor" = maintainer ]; then lsb_init --maintainer; else lsb_init; fi
       lsb_full_clearance code-audit-frontend
-      lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+      lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
       routed="$(bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member code-audit-frontend)"
       [ "$routed" = "$(printf 'light\tlight-eligible')" ] || { printf 'template router: %s\n' "$routed" >&2; exit 1; }
       cp "$LSB_TEMPLATE_ROOT/$flavor/slug" "$BATS_TEST_TMPDIR/slug"
@@ -65,8 +65,8 @@ setup_file() {
   done
 }
 
-QUICK_ENGLISH="frontend/app/languages/en/common.ts"
-QUICK_JAPANESE="frontend/app/languages/ja/common.ts"
+QUICK_ENGLISH="apps/web/app/languages/en/common.ts"
+QUICK_JAPANESE="apps/web/app/languages/ja/common.ts"
 
 # quick_locale_text <title>: a one-key language file.
 quick_locale_text() {
@@ -354,8 +354,8 @@ light_sidecar_files() {
 @test "one escalated file among clear files escalates the whole review" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/one.md "one"
-  lsb_commit frontend/app/two.md "two"
+  lsb_commit apps/web/app/one.md "one"
+  lsb_commit apps/web/app/two.md "two"
   lsb_route "$FRONTEND"
   expect_line "$(printf 'light\tlight-eligible')"
   clear_reply_to_file
@@ -421,7 +421,7 @@ light_sidecar_files() {
 # bats test_tags=whole-tree
 @test "a reply that is a JSON array prints full verdict-noop" {
   use_shared_light
-  printf '[{"path":"frontend/app/notes.md","verdict":"clear"}]' >"$REPLY_FILE"
+  printf '[{"path":"apps/web/app/notes.md","verdict":"clear"}]' >"$REPLY_FILE"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_full verdict-noop
   assert_no_marker
@@ -431,8 +431,8 @@ light_sidecar_files() {
 @test "a files array one short prints full verdict-noop (the expected count catches it)" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/one.md "one"
-  lsb_commit frontend/app/two.md "two"
+  lsb_commit apps/web/app/one.md "one"
+  lsb_commit apps/web/app/two.md "two"
   lsb_route "$FRONTEND"
   clear_reply_to_file
   reply_edit '.files |= .[0:1]'
@@ -445,7 +445,7 @@ light_sidecar_files() {
 @test "a file path the route record does not list prints full verdict-mismatch" {
   use_shared_light
   clear_reply_to_file
-  reply_edit '.files[0].path = "frontend/app/other.md"'
+  reply_edit '.files[0].path = "apps/web/app/other.md"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_full verdict-mismatch
   assert_no_marker
@@ -455,8 +455,8 @@ light_sidecar_files() {
 @test "a duplicated file path in place of a routed one prints full verdict-mismatch" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/one.md "one"
-  lsb_commit frontend/app/two.md "two"
+  lsb_commit apps/web/app/one.md "one"
+  lsb_commit apps/web/app/two.md "two"
   lsb_route "$FRONTEND"
   clear_reply_to_file
   reply_edit '.files[1].path = .files[0].path'
@@ -512,7 +512,7 @@ light_sidecar_files() {
 @test "an absent route record prints full no-route-record" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/notes.md "one line"
+  lsb_commit apps/web/app/notes.md "one line"
   printf '{}' >"$REPLY_FILE"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_full no-route-record
@@ -566,7 +566,7 @@ light_sidecar_files() {
 @test "a record stored light that the fresh router now calls full prints full recheck-full" {
   prepare_light
   clear_reply_to_file
-  printf 'dirty\n' >>"$LSB_ROOT/frontend/app/notes.md"
+  printf 'dirty\n' >>"$LSB_ROOT/apps/web/app/notes.md"
   lsb_route "$FRONTEND" --check
   expect_line "$(printf 'full\tdirty-tree')"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -592,7 +592,7 @@ light_sidecar_files() {
 @test "HEAD moving during the review by an owned change prints full and writes no marker" {
   prepare_light
   clear_reply_to_file
-  lsb_commit frontend/app/later.md "committed while the reviewer ran"
+  lsb_commit apps/web/app/later.md "committed while the reviewer ran"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   [ "$status" -eq 0 ]
   case "$output" in
@@ -628,12 +628,12 @@ light_sidecar_files() {
 # repair (every line rewritten, or the given file body), routed light.
 prepare_refusal_anchored() {
   lsb_init
-  lsb_commit_lines frontend/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 major false),$(lsb_finding frontend/app/notes.md 4 minor false)]"
+  lsb_commit_lines apps/web/app/notes.md 5 line
+  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding apps/web/app/notes.md 2 major false),$(lsb_finding apps/web/app/notes.md 4 minor false)]"
   if [ -n "${1:-}" ]; then
-    lsb_commit frontend/app/notes.md "$1"
+    lsb_commit apps/web/app/notes.md "$1"
   else
-    lsb_commit_lines frontend/app/notes.md 5 fixed
+    lsb_commit_lines apps/web/app/notes.md 5 fixed
   fi
   lsb_route "$FRONTEND"
   [ "$output" = "$(printf 'light\trefusal-anchored')" ] || { printf 'router: %s\n' "$output" >&2; return 1; }
@@ -783,7 +783,7 @@ line 5')"
   clear_reply_to_file
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_line "light-cleared"
-  lsb_commit frontend/app/more.md "more"
+  lsb_commit apps/web/app/more.md "more"
   lsb_route "$FRONTEND"
   expect_line "$(printf 'light\tlight-eligible')"
   lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
@@ -1027,7 +1027,7 @@ line 5')"
   cp "$resolver" "$LSB_ROOT/.github/audit/resolve-audit-base.sh"
   lsb_git add -A && lsb_git commit -q -m "pin the resolver answer"
   lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   lsb_route "$FRONTEND"
   [ "$output" = "$(printf 'light\tlight-eligible')" ]
   preseed_full_sidecar

@@ -9,7 +9,7 @@ setup() {
   T="$BATS_TEST_TMPDIR"
   R="$T/repo"
   D="$T/run"
-  mkdir -p "$T/scripts" "$T/bin" "$R/.gaia/scripts" "$R/frontend/app" "$D"
+  mkdir -p "$T/scripts" "$T/bin" "$R/.gaia/scripts" "$R/apps/web/app" "$D"
   cp "$REAL_SCRIPT" "$T/scripts/audit-gate-owed.sh"
   G="$T/scripts/audit-gate-owed.sh"
   CALLS="$T/calls.log"
@@ -28,7 +28,7 @@ EOF
 #!/usr/bin/env bash
 printf 'pnpm %s\n' "\$*" >>"$CALLS"
 [ ! -f "$T/fail-\$3" ] || exit 1
-[ ! -f "$T/edit-\$3" ] || printf 'x\n' >>"$R/frontend/app/a.ts"
+[ ! -f "$T/edit-\$3" ] || printf 'x\n' >>"$R/apps/web/app/a.ts"
 exit 0
 EOF
   cat >"$R/.gaia/scripts/dev-smoke.sh" <<EOF
@@ -45,7 +45,7 @@ EOF
   git -C "$R" config user.name T
   git -C "$R" config commit.gpgsign false
   printf 'readme\n' >"$R/README.md"
-  printf 'export const a = 1;\n' >"$R/frontend/app/a.ts"
+  printf 'export const a = 1;\n' >"$R/apps/web/app/a.ts"
   git -C "$R" add -A
   git -C "$R" commit --quiet -m init
 }
@@ -113,7 +113,7 @@ fix_entry() {
 # --- mark, status, selection -------------------------------------------------
 
 @test "status after mark on a frontend path is owed, and a harness-only commit keeps it owed" {
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 1
   run gate status
   [ "$status" -eq 1 ]
@@ -121,7 +121,7 @@ fix_entry() {
   run gate status
   [ "$status" -eq 1 ]
   run gate selection
-  [ "$output" = frontend/app/a.ts ]
+  [ "$output" = apps/web/app/a.ts ]
 }
 
 @test "status is clear with no record" {
@@ -138,7 +138,7 @@ fix_entry() {
 # --- run ---------------------------------------------------------------------
 
 @test "run executes only the three rooted steps in order and a pass clears" {
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 1
   run gate run
   [ "$status" -eq 0 ]
@@ -152,7 +152,7 @@ pnpm -C $R build" ]
 }
 
 @test "a failing step leaves the gate owed and writes the failure record" {
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 2
   touch "$T/fail-build"
   run gate run
@@ -165,7 +165,7 @@ pnpm -C $R build" ]
 }
 
 @test "a step that edits a tracked file fails the run though it exited 0" {
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 1
   touch "$T/edit-pw"
   run gate run
@@ -174,7 +174,7 @@ pnpm -C $R build" ]
 }
 
 @test "an unreadable current round exits 3 and writes no failure record" {
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 1
   touch "$T/fail-pw"
   rm "$T/current-round"
@@ -185,7 +185,7 @@ pnpm -C $R build" ]
 
 @test "a smoke refusal of 2 or 3 stays owed, writes no failure record and exits 3" {
   local code
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 1
   for code in 3 2; do
     printf '%s' "$code" >"$T/smoke-rc"
@@ -201,24 +201,24 @@ pnpm -C $R build" ]
 # --- pass-tree rule and since ------------------------------------------------
 
 @test "after a pass a harness-only commit is clear, a later frontend commit is owed" {
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 1
   gate steps-passed
   commit_path .claude/rules/x.md
   run gate status
   [ "$status" -eq 0 ]
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   run gate status
   [ "$status" -eq 1 ]
   [ "$(jq -r .owed "$D/gate-owed.json")" = false ]
 }
 
 @test "a catch-up merge carrying frontend paths after a pass is clear" {
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 1
   gate steps-passed
   git -C "$R" checkout --quiet -b side HEAD~1
-  commit_path frontend/app/side.ts
+  commit_path apps/web/app/side.ts
   git -C "$R" checkout --quiet main
   git -C "$R" merge --quiet --no-ff --no-edit side
   run gate status
@@ -226,7 +226,7 @@ pnpm -C $R build" ]
 }
 
 @test "since advances: a harness-only mark after a pass selects nothing" {
-  commit_path frontend/app/a.ts
+  commit_path apps/web/app/a.ts
   gate mark --round 1
   gate steps-passed
   commit_path .claude/rules/x.md
@@ -244,12 +244,12 @@ pnpm -C $R build" ]
   git -C "$main" config user.email t@example.com
   git -C "$main" config user.name T
   git -C "$main" config commit.gpgsign false
-  mkdir -p "$main/frontend/app"
-  printf 'x\n' >"$main/frontend/app/a.ts"
+  mkdir -p "$main/apps/web/app"
+  printf 'x\n' >"$main/apps/web/app/a.ts"
   git -C "$main" add -A
   git -C "$main" commit --quiet -m init
   git -C "$main" worktree add --quiet -b feat/gate-fixture "$worktree"
-  printf 'y\n' >>"$worktree/frontend/app/a.ts"
+  printf 'y\n' >>"$worktree/apps/web/app/a.ts"
   git -C "$worktree" commit --quiet -am change
   key="$(. "$(dirname "$REAL_SCRIPT")/audit-loop-state-lib.sh"; gaia_loop_key "$worktree")"
   folder="$(cd "$main" && pwd -P)/.gaia/local/runs/$key"

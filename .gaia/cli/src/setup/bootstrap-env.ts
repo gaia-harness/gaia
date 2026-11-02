@@ -1,7 +1,7 @@
 /**
  * The `/setup-gaia` per-machine `.env` step. A teammate's fresh clone has no
- * `frontend/.env` (it is gitignored), and a Bash `cp` onto it is refused by the
- * project's `Edit(frontend/.env)` deny, so the copy runs in this subprocess.
+ * `apps/web/.env` (it is gitignored), and a Bash `cp` onto it is refused by the
+ * project's `Edit(apps/web/.env)` deny, so the copy runs in this subprocess.
  * Unlike `gaia init bootstrap-env` it writes no `.gaia/init-state.json`: that
  * cursor is scaffold-time state, and a clone that never ran `/gaia-init` would
  * be left holding an untracked file. Setup progress is recorded by the caller
@@ -13,7 +13,7 @@ import {seedEnvironmentFile} from '../util/seed-environment-file.js';
 
 const HELP_TEXT = `Usage: gaia setup bootstrap-env
 
-  Copy .env.example to .env in the frontend package root (frontend/) when
+  Copy .env.example to .env in the frontend package root (apps/web/) when
   .env does not yet exist. No-op when .env already exists or .env.example is
   absent. Records no progress; run \`gaia setup mark-step bootstrap-env\` after.
 

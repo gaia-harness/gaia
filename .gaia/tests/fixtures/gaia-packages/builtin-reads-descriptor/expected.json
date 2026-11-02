@@ -1,25 +1,25 @@
 {
   "load": 0,
   "source": "builtin",
-  "list": [["frontend", "frontend"]],
+  "list": [["web", "apps/web"]],
   "globs": {
     "tddUnitTests": {
-      "match": ["frontend/src/x.test.ts"],
-      "noMatch": ["frontend/app/x.test.ts"]
+      "match": ["apps/web/src/x.test.ts"],
+      "noMatch": ["apps/web/app/x.test.ts"]
     },
     "tddStrictCandidates": {
-      "match": ["frontend/src/lib/x.ts"],
-      "noMatch": ["frontend/app/utils/x.ts"]
+      "match": ["apps/web/src/lib/x.ts"],
+      "noMatch": ["apps/web/app/utils/x.ts"]
     },
     "preCommitSource": {
-      "match": ["frontend/src/x.ts"],
-      "noMatch": ["frontend/app/x.ts"]
+      "match": ["apps/web/src/x.ts"],
+      "noMatch": ["apps/web/app/x.ts"]
     }
   },
   "forPath": {
-    "frontend/src/x.ts": "frontend"
+    "apps/web/src/x.ts": "web"
   },
   "dir": {
-    "frontend": "frontend"
+    "web": "apps/web"
   }
 }

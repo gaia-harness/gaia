@@ -6,7 +6,7 @@
       "finding_class": "holistic/unclassified",
       "severity": "minor",
       "security": false,
-      "path": "frontend/app/window.ts",
+      "path": "apps/web/app/window.ts",
       "line": 55,
       "title": "fixture finding",
       "failure_mode": "fixture",

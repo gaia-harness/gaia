@@ -38,9 +38,9 @@ write_report() {
 
 INVENTORY_MIXED='[
   {"path":".claude/rules/a.md","kinds":["rule"],"ownership":"adopter"},
-  {"path":"frontend/.claude/skills/x/SKILL.md","kinds":["skill"],"ownership":"adopter"},
+  {"path":"apps/web/.claude/skills/x/SKILL.md","kinds":["skill"],"ownership":"adopter"},
   {"path":"CLAUDE.md","kinds":["claudemd"],"ownership":"adopter"},
-  {"path":"frontend/CLAUDE.md","kinds":["claudemd"],"ownership":"gaia-shipped"},
+  {"path":"apps/web/CLAUDE.md","kinds":["claudemd"],"ownership":"gaia-shipped"},
   {"path":"wiki/concepts/A.md","kinds":["wiki"],"ownership":"adopter"},
   {"path":".gaia/tests/fixtures/.claude/rules/b.md","kinds":["rule"],"ownership":"adopter"},
   {"path":".claude/skills/vendor-skill/SKILL.md","kinds":["skill"],"ownership":"third-party"},
@@ -165,8 +165,8 @@ INVENTORY_MIXED='[
   [ "$status" -eq 0 ]
   [ "$output" = ".claude/rules/a.md
 CLAUDE.md
-frontend/.claude/skills/x/SKILL.md
-frontend/CLAUDE.md" ]
+apps/web/.claude/skills/x/SKILL.md
+apps/web/CLAUDE.md" ]
 }
 
 @test "pathspecs list the includes then the excludes, each sorted" {
@@ -174,9 +174,9 @@ frontend/CLAUDE.md" ]
   run gaia_fitness_harness_pathspecs "$FIXTURE_REPORT"
   [ "$status" -eq 0 ]
   [ "$output" = ":(glob).claude/rules/**/*.md
-:(glob)frontend/.claude/skills/**/*.md
+:(glob)apps/web/.claude/skills/**/*.md
 :(literal)CLAUDE.md
-:(literal)frontend/CLAUDE.md
+:(literal)apps/web/CLAUDE.md
 :(exclude,glob).claude/skills/vendor-skill/**" ]
 }
 
@@ -250,11 +250,11 @@ pathspecs_into_array() {
   run gaia_fitness_count_commits "$repo" "" 999 "${PATHSPECS[@]}"
   [ "$output" = "1" ]
 
-  commit_file "$repo" frontend/app/routes/x.tsx "app route"
+  commit_file "$repo" apps/web/app/routes/x.tsx "app route"
   run gaia_fitness_count_commits "$repo" "" 999 "${PATHSPECS[@]}"
   [ "$output" = "1" ]
 
-  commit_file "$repo" frontend/CLAUDE.md "frontend claude"
+  commit_file "$repo" apps/web/CLAUDE.md "frontend claude"
   run gaia_fitness_count_commits "$repo" "" 999 "${PATHSPECS[@]}"
   [ "$output" = "2" ]
 

@@ -16,8 +16,8 @@
 #   - probe hooks (SessionStart, InstructionsLoaded, PreToolUse, PostToolUse)
 #     appended to each settings file, tagged with the file they live in, so a
 #     probe line names its source: .claude/settings.json (root-settings),
-#     .claude/settings.local.json (root-local), frontend/.claude/settings.json
-#     (frontend-settings), frontend/.claude/settings.local.json
+#     .claude/settings.local.json (root-local), apps/web/.claude/settings.json
+#     (frontend-settings), apps/web/.claude/settings.local.json
 #     (frontend-local). A settings.json that is absent stays absent: creating
 #     one would hide the defect the hook rows exist to find. The two .local
 #     files are created when absent (they are untracked by design) and carry
@@ -28,7 +28,7 @@
 #   - a temporary root .mcp.json registering fixtures/mcp-probe-server.mjs.
 #   - the claude-mechanics Q2 glob-anchor experiment rules (gaia-probe-a..d),
 #     an unscoped frontend rule (gaia-probe-u) whose lazy load is the
-#     root-launch "frontend rules load after a Read of frontend/CLAUDE.md"
+#     root-launch "frontend rules load after a Read of apps/web/CLAUDE.md"
 #     observation, and a frontend agent (gaia-probe-agent) for the Q4 row.
 #   - the permission-row targets when absent: root and frontend .env, the
 #     audit markers, and a pnpm-lock.yaml stub.
@@ -45,8 +45,8 @@ settings_targets() {
   printf '%s\t%s\t%s\n' \
     root-settings .claude/settings.json no \
     root-local .claude/settings.local.json yes \
-    frontend-settings frontend/.claude/settings.json no \
-    frontend-local frontend/.claude/settings.local.json yes
+    frontend-settings apps/web/.claude/settings.json no \
+    frontend-local apps/web/.claude/settings.local.json yes
 }
 
 probe_files() {
@@ -54,16 +54,16 @@ probe_files() {
     .mcp.json \
     .claude/rules/gaia-probe-a.md \
     .claude/rules/gaia-probe-b.md \
-    frontend/.claude/rules/gaia-probe-c.md \
-    frontend/.claude/rules/gaia-probe-d.md \
-    frontend/.claude/rules/gaia-probe-u.md \
-    frontend/.claude/agents/gaia-probe-agent.md
+    apps/web/.claude/rules/gaia-probe-c.md \
+    apps/web/.claude/rules/gaia-probe-d.md \
+    apps/web/.claude/rules/gaia-probe-u.md \
+    apps/web/.claude/agents/gaia-probe-agent.md
 }
 
 permission_targets() {
   printf '%s\n' \
     .env \
-    frontend/.env \
+    apps/web/.env \
     pnpm-lock.yaml \
     .gaia/local/audit/x.ok \
     .gaia/local/audit/x.refused
@@ -190,19 +190,19 @@ write_rule() {
   } >"$TREE_ROOT/$relative_path"
 }
 
-# The Q2 glob-anchor experiment: the same target file, frontend/app/..., read
+# The Q2 glob-anchor experiment: the same target file, apps/web/app/..., read
 # from each launch dir, against four anchorings of the glob.
-write_rule .claude/rules/gaia-probe-a.md "'frontend/app/**'" "Root rule, repo-root-anchored glob. Probe fixture; carries no instruction."
+write_rule .claude/rules/gaia-probe-a.md "'apps/web/app/**'" "Root rule, repo-root-anchored glob. Probe fixture; carries no instruction."
 write_rule .claude/rules/gaia-probe-b.md "'**/app/**'" "Root rule, depth-agnostic glob. Probe fixture; carries no instruction."
-write_rule frontend/.claude/rules/gaia-probe-c.md "'app/**'" "Frontend rule, package-relative glob. Probe fixture; carries no instruction."
-write_rule frontend/.claude/rules/gaia-probe-d.md "'frontend/app/**'" "Frontend rule, repo-root-anchored glob. Probe fixture; carries no instruction."
-write_rule frontend/.claude/rules/gaia-probe-u.md "" "Frontend rule with no paths. Probe fixture; carries no instruction."
+write_rule apps/web/.claude/rules/gaia-probe-c.md "'app/**'" "Frontend rule, package-relative glob. Probe fixture; carries no instruction."
+write_rule apps/web/.claude/rules/gaia-probe-d.md "'apps/web/app/**'" "Frontend rule, repo-root-anchored glob. Probe fixture; carries no instruction."
+write_rule apps/web/.claude/rules/gaia-probe-u.md "" "Frontend rule with no paths. Probe fixture; carries no instruction."
 
-mkdir -p "$TREE_ROOT/frontend/.claude/agents"
-cat >"$TREE_ROOT/frontend/.claude/agents/gaia-probe-agent.md" <<'AGENT'
+mkdir -p "$TREE_ROOT/apps/web/.claude/agents"
+cat >"$TREE_ROOT/apps/web/.claude/agents/gaia-probe-agent.md" <<'AGENT'
 ---
 name: gaia-probe-agent
-description: Claude probe fixture agent. Never dispatch it; it exists only so the probe can observe whether frontend/.claude/agents is listed.
+description: Claude probe fixture agent. Never dispatch it; it exists only so the probe can observe whether apps/web/.claude/agents is listed.
 ---
 
 Reply with the single word OK.

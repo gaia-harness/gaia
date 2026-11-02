@@ -10,7 +10,7 @@ tags: [decision, testing, tdd, layering, authorization]
 
 # Test Layering
 
-Every check lives at the lowest layer that can prove it. A browser is the most expensive layer, so a check that a cheaper layer proves does not get a browser test. This page owns that principle, its rationale and the stack mapping. The operational ladder a plan follows is in `.claude/skills/gaia/references/plan/planner.md`; the React testing reference is `frontend/.claude/skills/tdd-react/references/tests-react.md`. Both link here rather than restate it.
+Every check lives at the lowest layer that can prove it. A browser is the most expensive layer, so a check that a cheaper layer proves does not get a browser test. This page owns that principle, its rationale and the stack mapping. The operational ladder a plan follows is in `.claude/skills/gaia/references/plan/planner.md`; the React testing reference is `apps/web/.claude/skills/tdd-react/references/tests-react.md`. Both link here rather than restate it.
 
 ## Rationale
 
@@ -42,7 +42,7 @@ Each isolation technique fits any stack whose database supports it.
 
 ## Worker isolation
 
-Parallel workers that share one database cannot hold independent state. Each worker reaches its own database through the server it talks to, keyed on its worker index. A serial project is not an accepted way to share one. The shipped pattern is in `frontend/.playwright/fixtures.ts` and its rule is in `frontend/.claude/rules/playwright.md`.
+Parallel workers that share one database cannot hold independent state. Each worker reaches its own database through the server it talks to, keyed on its worker index. A serial project is not an accepted way to share one. The shipped pattern is in `apps/web/.playwright/fixtures.ts` and its rule is in `apps/web/.claude/rules/playwright.md`.
 
 ## Authorization bug classes
 

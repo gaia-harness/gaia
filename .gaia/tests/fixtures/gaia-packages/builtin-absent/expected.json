@@ -1,4 +1,4 @@
 {
   "load": 3,
-  "error": "gaia-packages: frontend/gaia.package.json is missing. Next step: restore it with git checkout origin/main -- frontend/gaia.package.json, or run /update-gaia."
+  "error": "gaia-packages: apps/web/gaia.package.json is missing. Next step: restore it with git checkout origin/main -- apps/web/gaia.package.json, or run /update-gaia."
 }

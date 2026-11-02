@@ -344,15 +344,15 @@ COMPANION_PATHS=(
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh"
   local scratch_library="$BATS_TEST_TMPDIR/rules-extra-companion.sh" unmatched="" row_member row_path
-  awk '{ print } /^code-audit-frontend \.gaia\/scripts\/audit-frontend-oracles\.sh$/ { print "code-audit-frontend frontend/app/not-machinery.ts" }' "$RULES_LIBRARY" >"$scratch_library"
-  grep -qF "frontend/app/not-machinery.ts" "$scratch_library"
+  awk '{ print } /^code-audit-frontend \.gaia\/scripts\/audit-frontend-oracles\.sh$/ { print "code-audit-frontend apps/web/app/not-machinery.ts" }' "$RULES_LIBRARY" >"$scratch_library"
+  grep -qF "apps/web/app/not-machinery.ts" "$scratch_library"
   # shellcheck source=/dev/null
   . "$scratch_library"
   while IFS=' ' read -r row_member row_path; do
     case "$row_member" in ""|"#"*) continue ;; esac
     audit_path_is_machinery "$row_path" || unmatched="$unmatched $row_path"
   done <<<"$AUDIT_MEMBER_COMPANION_PATHS"
-  [ "$unmatched" = " frontend/app/not-machinery.ts" ]
+  [ "$unmatched" = " apps/web/app/not-machinery.ts" ]
 }
 
 # bash 3.2 mis-parses an apostrophe inside a command substitution that wraps a

@@ -10,13 +10,13 @@ tags: [dependency, testing, e2e]
 
 # Playwright
 
-End-to-end testing. Tests live in `frontend/.playwright/e2e/*.spec.ts`. Config in `frontend/playwright.config.ts`.
+End-to-end testing. Tests live in `apps/web/.playwright/e2e/*.spec.ts`. Config in `apps/web/playwright.config.ts`.
 
 ## Architecture
 
 E2E tests run against this tree's `pnpm dev` server, on the port `bash .gaia/scripts/ports.sh` prints (5173 in the main checkout). Playwright refuses to reuse a server on that port that is not this tree's own, and an unprovisioned linked worktree refuses to run (see [[Worktrees]]). With `MSW_ENABLED=true` the dev server mocks both browser and SSR requests, so tests exercise the full React Router loader/action stack with MSW intercepting API calls (see [[MSW]]); no separate mock server required.
 
-Per-worker database isolation, Given builders and the session rules are in `frontend/.claude/rules/playwright.md` (`## Worker isolation`), with the pattern in `frontend/.playwright/fixtures.ts`.
+Per-worker database isolation, Given builders and the session rules are in `apps/web/.claude/rules/playwright.md` (`## Worker isolation`), with the pattern in `apps/web/.playwright/fixtures.ts`.
 
 ## Relationship to the story tests
 
@@ -25,7 +25,7 @@ Component and page behavior is tested by story `.test()` behaviors under Vitest 
 ## Hydration helper
 
 > [!key-insight] React Router SSR + Playwright timing
-> Pages are rendered server-side first; Playwright sees them before JS hydrates. The `hydration()` helper in `frontend/.playwright/utils.ts` waits for `<meta name="hydrated" content="true">` before any interaction proceeds.
+> Pages are rendered server-side first; Playwright sees them before JS hydrates. The `hydration()` helper in `apps/web/.playwright/utils.ts` waits for `<meta name="hydrated" content="true">` before any interaction proceeds.
 
 ```ts
 import {hydration} from '../utils';
@@ -36,7 +36,7 @@ await hydration(page); // must come before any interaction
 
 `hydration()` self-heals the cold dev-server race: the first browser hit of a route after a cold start triggers Vite's dep-optimize mid-flight, which can fail the dynamic import of `entry.client.tsx` so the page never hydrates. The helper probes briefly for the hydrated meta; on a cold miss it reloads once onto the now-optimized bundle and waits with a generous window. On a warm server it returns within the probe and skips the reload.
 
-A `globalSetup` (`frontend/playwright.config.ts` → `frontend/.playwright/global-setup.ts`) fires a serial `/` navigation after the dev server boots, front-loading the initial dep-optimize before the parallel specs race for it. Together these two mechanisms eliminate the need for local retries: `retries: 0` locally, `retries: 2` in CI as general flake insurance.
+A `globalSetup` (`apps/web/playwright.config.ts` → `apps/web/.playwright/global-setup.ts`) fires a serial `/` navigation after the dev server boots, front-loading the initial dep-optimize before the parallel specs race for it. Together these two mechanisms eliminate the need for local retries: `retries: 0` locally, `retries: 2` in CI as general flake insurance.
 
 ## Asserting on errors, watch both channels
 
@@ -99,7 +99,7 @@ Asserting on the first load makes a successful self-heal fail the test.
 Resetting alone only moves the exposure, because the asserted load can
 self-heal too, so `hydration()` returns whether it did: assert it did not, and
 a recovered load fails on that fact instead of on the noise it produced.
-`frontend/.playwright/e2e/hydration.spec.ts` is the worked example.
+`apps/web/.playwright/e2e/hydration.spec.ts` is the worked example.
 
 One residual remains, and it is worth knowing rather than discovering. The
 flag describes the asserted load's own hydration probe; it is not a provenance
@@ -118,23 +118,23 @@ well), which is not worth doing until it actually flakes.
 
 ## Selectors
 
-Prefer ARIA roles and accessible names; fall back to `page.locator()` with text/attribute filters. Never use CSS class selectors or XPath. See `frontend/.claude/rules/playwright.md` for examples.
+Prefer ARIA roles and accessible names; fall back to `page.locator()` with text/attribute filters. Never use CSS class selectors or XPath. See `apps/web/.claude/rules/playwright.md` for examples.
 
 ## Locale and language tests
 
-Set locale and `Accept-Language` per `test.describe` block, not globally. See `frontend/.claude/rules/playwright.md` for the canonical pattern.
+Set locale and `Accept-Language` per `test.describe` block, not globally. See `apps/web/.claude/rules/playwright.md` for the canonical pattern.
 
 ## Auth / session setup
 
-Session setup for a project with authentication is in `frontend/.claude/rules/playwright.md` (`## Auth / session setup`).
+Session setup for a project with authentication is in `apps/web/.claude/rules/playwright.md` (`## Auth / session setup`).
 
 ## Parallelism and CI
 
-`fullyParallel: true`; CI uses `workers: '100%'` (one per runner core), `retries: 2`. Locally, `retries: 0`: the global-setup warm-up and the `hydration()` probe-then-reload self-heal the cold dep-optimize race, so a real flake fails instead of being masked. Multi-browser (webkit, Firefox, mobile) is opt-in via `TEST_ALL_BROWSERS`. See `frontend/.claude/rules/playwright.md` for the full table.
+`fullyParallel: true`; CI uses `workers: '100%'` (one per runner core), `retries: 2`. Locally, `retries: 0`: the global-setup warm-up and the `hydration()` probe-then-reload self-heal the cold dep-optimize race, so a real flake fails instead of being masked. Multi-browser (webkit, Firefox, mobile) is opt-in via `TEST_ALL_BROWSERS`. See `apps/web/.claude/rules/playwright.md` for the full table.
 
 ## Traces
 
-`trace: 'retain-on-failure'`: traces saved to `frontend/.playwright/output/` on test failure. Use the Playwright trace viewer (`pnpm exec playwright show-trace`) to inspect.
+`trace: 'retain-on-failure'`: traces saved to `apps/web/.playwright/output/` on test failure. Use the Playwright trace viewer (`pnpm exec playwright show-trace`) to inspect.
 
 ## Scripts
 
@@ -147,5 +147,5 @@ pnpm install:browsers  # provision every browser + OS deps (run once locally; Vi
 ## Companion packages
 
 - `@vitest/browser-playwright`: Vitest's browser provider reuses the Playwright browsers `pnpm install:browsers` provisions, so the `browser` and `storybook` Vitest projects run in the same Chromium ([[Stories as Tests]])
-- Playwright lint rules come from `eslint-plugin-playwright`, supplied transitively by the shared `@gaia-harness/lint` config (spread as `...lint.playwright` in `frontend/eslint.config.mjs`) rather than declared directly here.
+- Playwright lint rules come from `eslint-plugin-playwright`, supplied transitively by the shared `@gaia-harness/lint` config (spread as `...lint.playwright` in `apps/web/eslint.config.mjs`) rather than declared directly here.
 - `pnpm install:browsers` runs `playwright install --with-deps` to provision browsers; local developers run it on demand. CI splits it: Chromium's OS dependencies install through the bounded, cached apt helper in `.github/actions/gaia-apt-cache/`, so a slow Ubuntu mirror retries instead of stalling the job, then `playwright install chromium` fetches the browser. `/gaia-init` and `/setup-gaia` install Chromium alone (`playwright install chromium`, no OS dependencies, so no `sudo`), enough for the Vitest browser projects

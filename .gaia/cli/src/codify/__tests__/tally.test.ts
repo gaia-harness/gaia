@@ -1236,8 +1236,8 @@ const WAIVED_BODY = [
 const ACCEPTED_BODY = [
   '## Accepted residuals (recorded, not fixed)',
   '',
-  '- `frontend/app/utils/date.ts:7` Pre-existing and matches the repo-wide convention for module constants; folding it would rotate the frontend digest after the member cleared.. <!-- gaia-debt-key: v1 class=holistic/unclassified path=frontend/app/utils/date.ts line=7 -->',
-  '- `frontend/app/utils/tests/date.test.ts:13` Pre-existing and matches the repo-wide SCREAMING_SNAKE convention; folding it would rotate the frontend digest after the member cleared.. <!-- gaia-debt-key: v1 class=holistic/unclassified path=frontend/app/utils/tests/date.test.ts line=13 -->',
+  '- `apps/web/app/utils/date.ts:7` Pre-existing and matches the repo-wide convention for module constants; folding it would rotate the frontend digest after the member cleared.. <!-- gaia-debt-key: v1 class=holistic/unclassified path=apps/web/app/utils/date.ts line=7 -->',
+  '- `apps/web/app/utils/tests/date.test.ts:13` Pre-existing and matches the repo-wide SCREAMING_SNAKE convention; folding it would rotate the frontend digest after the member cleared.. <!-- gaia-debt-key: v1 class=holistic/unclassified path=apps/web/app/utils/tests/date.test.ts line=13 -->',
   '',
   'Closes #2929',
   '',
@@ -1444,12 +1444,12 @@ describe('codify-tally run: findings the PR body disposes of', () => {
     // The block posted beside ACCEPTED_BODY: three classless findings, two of
     // them the accepted residuals.
     const utilsFinding: BlockFinding = {
-      area_tags: ['frontend/app/utils'],
+      area_tags: ['apps/web/app/utils'],
       finding_class: 'holistic/unclassified',
       severity: 'minor',
     };
     const testsFinding: BlockFinding = {
-      area_tags: ['frontend/app/utils/tests'],
+      area_tags: ['apps/web/app/utils/tests'],
       finding_class: 'holistic/unclassified',
       severity: 'minor',
     };

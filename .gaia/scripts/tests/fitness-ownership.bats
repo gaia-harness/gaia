@@ -22,8 +22,8 @@ setup() {
   PROJECT="$BATS_TEST_TMPDIR/project"
   mkdir -p "$PROJECT/.gaia/vendor" "$PROJECT/.claude/skills"
   git -C "$PROJECT" init -q
-  write_manifest '{".claude/skills/gaia/references/fitness.md": "owned", "CLAUDE.md": "shared", "wiki/index.md": "wiki-owned", "frontend/.claude/skills/playwright-cli/SKILL.md": "owned"}'
-  write_vendor_pin playwright-cli frontend/.claude/skills/playwright-cli
+  write_manifest '{".claude/skills/gaia/references/fitness.md": "owned", "CLAUDE.md": "shared", "wiki/index.md": "wiki-owned", "apps/web/.claude/skills/playwright-cli/SKILL.md": "owned"}'
+  write_vendor_pin playwright-cli apps/web/.claude/skills/playwright-cli
   printf '**/.claude/skills/react-doctor/\n' >"$PROJECT/.gitignore"
 }
 
@@ -100,23 +100,23 @@ class_of() {
 # --- third-party: vendor pins ---
 
 @test "third-party: a file under a vendor pin target classifies third-party even when the manifest owns it" {
-  classify frontend/.claude/skills/playwright-cli/SKILL.md frontend/.claude/skills/playwright-cli/references/x.md
+  classify apps/web/.claude/skills/playwright-cli/SKILL.md apps/web/.claude/skills/playwright-cli/references/x.md
   [ "$status" -eq 0 ]
-  [ "$(class_of frontend/.claude/skills/playwright-cli/SKILL.md)" = "third-party" ]
-  [ "$(class_of frontend/.claude/skills/playwright-cli/references/x.md)" = "third-party" ]
+  [ "$(class_of apps/web/.claude/skills/playwright-cli/SKILL.md)" = "third-party" ]
+  [ "$(class_of apps/web/.claude/skills/playwright-cli/references/x.md)" = "third-party" ]
 }
 
 @test "third-party: a sibling sharing the vendor target as a name prefix is not vendored" {
-  classify frontend/.claude/skills/playwright-cli-extra/SKILL.md
+  classify apps/web/.claude/skills/playwright-cli-extra/SKILL.md
   [ "$status" -eq 0 ]
-  [ "$(class_of frontend/.claude/skills/playwright-cli-extra/SKILL.md)" = "adopter" ]
+  [ "$(class_of apps/web/.claude/skills/playwright-cli-extra/SKILL.md)" = "adopter" ]
 }
 
 @test "third-party red twin: without the vendor pin the same path classifies gaia-shipped" {
   rm "$PROJECT/.gaia/vendor/playwright-cli.json"
-  classify frontend/.claude/skills/playwright-cli/SKILL.md
+  classify apps/web/.claude/skills/playwright-cli/SKILL.md
   [ "$status" -eq 0 ]
-  [ "$(class_of frontend/.claude/skills/playwright-cli/SKILL.md)" = "gaia-shipped" ]
+  [ "$(class_of apps/web/.claude/skills/playwright-cli/SKILL.md)" = "gaia-shipped" ]
 }
 
 # --- third-party: outside the project tree ---

@@ -31,12 +31,12 @@ PLAN=$(bash "$ROOT/.gaia/scripts/precommit-packages.sh" "$ROOT") || {
 TAB=$(printf '\t')
 
 # Migration renames: a staged set of only exact renames from a retired
-# root frontend path to its `frontend/` counterpart carries no content change,
+# root frontend path to its `apps/web/` counterpart carries no content change,
 # so the gate has nothing to check. The helper decides this before it loads the
-# registry; every other entry, including a rename inside `frontend/`, counts.
+# registry; every other entry, including a rename inside `apps/web/`, counts.
 if [ "$PLAN" = "exempt" ]; then
   printf "\x1b[32m"
-  printf "✅ Only frontend/ migration renames staged -- skipping lint-staged\n\n"
+  printf "✅ Only apps/web/ migration renames staged -- skipping lint-staged\n\n"
   printf "\x1b[0m"
   exit 0
 fi
@@ -74,13 +74,13 @@ if [ -n "$SETTINGS_DRIFT" ]; then
 fi
 
 # Retired-path guard: with no package at the repo root, a new file under a retired
-# root frontend path belongs under frontend/. The helper names each one with its
-# frontend/ equivalent; an exempt migration rename never reaches here (it exits above).
+# root frontend path belongs under apps/web/. The helper names each one with its
+# apps/web/ equivalent; an exempt migration rename never reaches here (it exits above).
 RETIRED_ADDS=$(printf '%s\n' "$PLAN" | while IFS="$TAB" read -r KIND VALUE REPLACEMENT; do
   if [ "$KIND" = "retired-add" ]; then printf '  %s -> %s\n' "$VALUE" "$REPLACEMENT"; fi
 done)
 if [ -n "$RETIRED_ADDS" ]; then
-  printf "\x1b[31m✖ The React app lives in frontend/ now; move these new files there:\x1b[0m\n"
+  printf "\x1b[31m✖ The React app lives in apps/web/ now; move these new files there:\x1b[0m\n"
   printf '%s\n' "$RETIRED_ADDS"
   exit 1
 fi

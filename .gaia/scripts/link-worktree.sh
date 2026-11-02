@@ -16,7 +16,7 @@
 #   <worktree>/<pkg>/.env, <worktree>/<pkg>/.env.* -> <main>/<pkg>/.env, <main>/<pkg>/.env.*
 #
 # `<pkg>` is every package the registry (.gaia/packages.json, or the built-in
-# default `frontend`) names, so an app that lives in a package directory keeps
+# default `web` at `apps/web`) names, so an app that lives in a package directory keeps
 # its secrets reachable from a worktree. A package directory the worktree's
 # branch does not have is skipped rather than created.
 #

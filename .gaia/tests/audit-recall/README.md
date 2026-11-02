@@ -49,7 +49,7 @@ Skip reasons: `unreachable`, `title-carries-local-reference`, `head-unresolved`,
 bash .gaia/tests/audit-recall/build-tree.sh --repo <maintainer checkout> --bundle <sha> --base <sha> --head <sha> --clone <dir>
 ```
 
-The clone comes from the measurement toolkit's `prepare-scratch-clone.sh` at the base: a standalone clone, never a linked worktree (a linked worktree's `.gaia/local` is a symlink into the live audit store), with the maintainer marker stripped and the sentinel written. Why the marker goes: the `Scratch-clone rule` section of `../audit-cost/README.md`. On `main`, the base's harness (`.claude`, `.github/audit`, `wiki`, `frontend/.claude`, `.gaia`) is replaced by the bundle's, the marker is stripped again when the bundle restored it, and the result is committed. The change `base..head` is applied with `git apply --3way` on a `replay` branch; a conflict exits 4 `patch-conflicts-overlay`. The bundle's `resolve-audit-base.sh` must resolve the replay `main` in the clone.
+The clone comes from the measurement toolkit's `prepare-scratch-clone.sh` at the base: a standalone clone, never a linked worktree (a linked worktree's `.gaia/local` is a symlink into the live audit store), with the maintainer marker stripped and the sentinel written. Why the marker goes: the `Scratch-clone rule` section of `../audit-cost/README.md`. On `main`, the base's harness (`.claude`, `.github/audit`, `wiki`, `apps/web/.claude`, `.gaia`) is replaced by the bundle's, the marker is stripped again when the bundle restored it, and the result is committed. The change `base..head` is applied with `git apply --3way` on a `replay` branch; a conflict exits 4 `patch-conflicts-overlay`. The bundle's `resolve-audit-base.sh` must resolve the replay `main` in the clone.
 
 ## Run
 

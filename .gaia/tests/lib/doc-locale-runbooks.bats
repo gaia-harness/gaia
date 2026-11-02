@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 #
 # Doc-conformance suite for the two locale runbooks under
-# frontend/.claude/instructions/ and the /gaia-init step that drives them.
+# apps/web/.claude/instructions/ and the /gaia-init step that drives them.
 # add-locale's Step 2 is the only writer that registers a locale in
-# frontend/app/languages/index.ts; `gaia init configure-i18n` only drops the
+# apps/web/app/languages/index.ts; `gaia init configure-i18n` only drops the
 # locales the user did not pick. /gaia-init runs add-locale's Steps 1 to 7 for
 # every locale, re-runs configure-i18n so the template locale is dropped once a
 # picked one is registered, and verifies once after that, so the verify sees
@@ -14,8 +14,8 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   INIT_MD="$REPO_ROOT/.claude/commands/gaia-init.md"
-  ADD_LOCALE_MD="$REPO_ROOT/frontend/.claude/instructions/add-locale.md"
-  REMOVE_I18N_MD="$REPO_ROOT/frontend/.claude/instructions/remove-i18n.md"
+  ADD_LOCALE_MD="$REPO_ROOT/apps/web/.claude/instructions/add-locale.md"
+  REMOVE_I18N_MD="$REPO_ROOT/apps/web/.claude/instructions/remove-i18n.md"
 }
 
 # init_step_four <file>: the body of the "## Step 4" section.
@@ -41,7 +41,7 @@ verifies_once_after_last() {
 
 # deletes_add_locale <file>: rc 0 when the file runs an rm naming add-locale.md.
 deletes_add_locale() {
-  grep -qE '^rm .*frontend/\.claude/instructions/add-locale\.md' "$1"
+  grep -qE '^rm .*apps/web/\.claude/instructions/add-locale\.md' "$1"
 }
 
 @test "gaia-init Step 4 verifies once after the last locale" {
@@ -71,11 +71,11 @@ deletes_add_locale() {
 
 @test "the self-delete check fires on a scratch copy that removes add-locale.md" {
   local scratch="$BATS_TEST_TMPDIR/add-locale.scratch.md"
-  { cat "$ADD_LOCALE_MD"; printf '%s\n' 'rm frontend/.claude/instructions/add-locale.md'; } >"$scratch"
+  { cat "$ADD_LOCALE_MD"; printf '%s\n' 'rm apps/web/.claude/instructions/add-locale.md'; } >"$scratch"
   deletes_add_locale "$scratch"
 }
 
 @test "remove-i18n.md deletes add-locale.md along with itself" {
   deletes_add_locale "$REMOVE_I18N_MD"
-  grep -qE '^rm .*frontend/\.claude/instructions/remove-i18n\.md' "$REMOVE_I18N_MD"
+  grep -qE '^rm .*apps/web/\.claude/instructions/remove-i18n\.md' "$REMOVE_I18N_MD"
 }

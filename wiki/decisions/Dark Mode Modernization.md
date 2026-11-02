@@ -22,12 +22,12 @@ The old implementation had three real problems:
 
 ## What changed
 
-- **Added** `frontend/app/utils/theme.server.ts`, `frontend/app/utils/request-info.ts`, `frontend/app/hooks/use-theme.ts` (then named `useTheme.ts`).
-- **Added** `frontend/app/routes/resources.theme-switch.tsx` (originally `resources+/theme-switch.tsx`, before the flat fs-routes rename): co-located `action` + Zod `ThemeFormSchema`. The theme hooks live in `frontend/app/hooks/use-theme.ts` (then named `useTheme.ts`) and the switcher component in `frontend/app/components/theme-switch/index.tsx` (then `ThemeSwitch/`).
-- **Removed** `frontend/app/state/theme.tsx`, `frontend/app/sessions.server/theme.ts`, `frontend/app/routes/actions+/set-theme.ts`, the old `ThemeSwitcher` component folder.
-- **Updated** `frontend/app/root.tsx` loader to return `requestInfo`. `<State>` no longer carries `theme`.
-- **Updated** `frontend/app/components/document/index.tsx` (then `Document/`) to call `useOptionalTheme()` and, when no explicit cookie preference exists, render an inline pre-paint `<script>` (`THEME_SCRIPT`) in `<head>` that adds the `dark` class from `matchMedia`.
-- **Updated** `frontend/app/components/errors/root-error-boundary/index.tsx` (then `Errors/RootErrorBoundary/`) to drop `getPreferredTheme()`.
+- **Added** `apps/web/app/utils/theme.server.ts`, `apps/web/app/utils/request-info.ts`, `apps/web/app/hooks/use-theme.ts` (then named `useTheme.ts`).
+- **Added** `apps/web/app/routes/resources.theme-switch.tsx` (originally `resources+/theme-switch.tsx`, before the flat fs-routes rename): co-located `action` + Zod `ThemeFormSchema`. The theme hooks live in `apps/web/app/hooks/use-theme.ts` (then named `useTheme.ts`) and the switcher component in `apps/web/app/components/theme-switch/index.tsx` (then `ThemeSwitch/`).
+- **Removed** `apps/web/app/state/theme.tsx`, `apps/web/app/sessions.server/theme.ts`, `apps/web/app/routes/actions+/set-theme.ts`, the old `ThemeSwitcher` component folder.
+- **Updated** `apps/web/app/root.tsx` loader to return `requestInfo`. `<State>` no longer carries `theme`.
+- **Updated** `apps/web/app/components/document/index.tsx` (then `Document/`) to call `useOptionalTheme()` and, when no explicit cookie preference exists, render an inline pre-paint `<script>` (`THEME_SCRIPT`) in `<head>` that adds the `dark` class from `matchMedia`.
+- **Updated** `apps/web/app/components/errors/root-error-boundary/index.tsx` (then `Errors/RootErrorBoundary/`) to drop `getPreferredTheme()`.
 
 ## Trade-offs
 

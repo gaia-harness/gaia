@@ -95,7 +95,7 @@ transforms:
   - type: json-strip
     paths:
       - "package.json"
-      - "frontend/package.json"
+      - "apps/web/package.json"
     keys:
       - "bin"
       - "scripts.test:forensics"
@@ -113,7 +113,7 @@ transforms:
   - type: json-strip
     paths:
       - ".claude/settings.json"
-      - "frontend/.claude/settings.json"
+      - "apps/web/.claude/settings.json"
     keys:
       - "skillOverrides.release-notes"
 

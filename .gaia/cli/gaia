@@ -28431,7 +28431,7 @@ var findOnDiskLocalFiles = (root, realRoot) => {
   );
 };
 var READ_TARGET = /\bRead\s+`([^`\n]+)`/g;
-var PLAYBOOK_ROOTS = [".claude/", "frontend/.claude/"];
+var PLAYBOOK_ROOTS = [".claude/", "apps/web/.claude/"];
 var playbookTargets = (routing, tracked) => {
   const routingDirectory = path12.posix.dirname(routing.path);
   const mentioned = Array.from(
@@ -30251,7 +30251,7 @@ import { readFileSync as readFileSync11 } from "node:fs";
 import path16 from "node:path";
 var MAINTAINER_MARKER_PATH = ".claude/rules/maintainers/harness-triage-threshold.md";
 var CEILINGS_PATH = ".claude/maintainers/line-limit-ceilings.json";
-var HARNESS_ROOTS = [".claude/", ".gaia/", ".github/", "frontend/.claude/"];
+var HARNESS_ROOTS = [".claude/", ".gaia/", ".github/", "apps/web/.claude/"];
 var CODE_FILE = /\.(?:bash|cjs|js|mjs|sh|ts)$/;
 var WORKFLOW_FILE = /^\.github\/(?:actions|workflows)\/.+\.ya?ml$/;
 var TEST_DIRECTORY = /(?:^|\/)(?:__snapshots__|__tests__|fixtures|test|test-fixtures|tests)\//;
@@ -30915,7 +30915,7 @@ var descriptorSchema = (expectedName) => external_exports.object({
   })
 });
 var BUILTIN_REGISTRY = [
-  { name: "frontend", path: "frontend" }
+  { name: "web", path: "apps/web" }
 ];
 var registryError = (reason) => {
   const detail = reason === "" ? "" : `: ${reason}`;
@@ -31129,7 +31129,7 @@ var collectWikiMarkdown = (cwd) => {
 var HELP_TEXT4 = `Usage: gaia wiki dead-paths [--json]
 
   Scan wiki/**/*.md for backticked repo-relative paths under .claude/, .gaia/,
-  wiki/ and the registered package paths (frontend/) that no longer exist on
+  wiki/ and the registered package paths (apps/web/) that no longer exist on
   disk, plus any reference to
   sibling-monorepo paths (studio/, website/) which reach outside the GAIA
   tarball and never resolve on a single-repo clone. Excludes wiki/log.md
@@ -31160,7 +31160,7 @@ var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
 ]);
 var MACHINE_LOCAL_PATHS = /* @__PURE__ */ new Set([
   ".claude/settings.local.json",
-  "frontend/.env"
+  "apps/web/.env"
 ]);
 var ABSENT_BY_DESIGN_PATHS = /* @__PURE__ */ new Set([
   ".claude/commands/gaia-init.md",
@@ -43274,7 +43274,7 @@ var seedEnvironmentFile = (cwd, subcommand) => {
 // src/setup/bootstrap-env.ts
 var HELP_TEXT34 = `Usage: gaia setup bootstrap-env
 
-  Copy .env.example to .env in the frontend package root (frontend/) when
+  Copy .env.example to .env in the frontend package root (apps/web/) when
   .env does not yet exist. No-op when .env already exists or .env.example is
   absent. Records no progress; run \`gaia setup mark-step bootstrap-env\` after.
 
@@ -47971,20 +47971,11 @@ var isResume = (root) => {
   return keys?.some((key) => key.startsWith(LEGACY_PREFIX)) ?? false;
 };
 var isLinkedWorktree = (root) => {
-  const gitDirectory = git(root, [
-    "rev-parse",
-    "--path-format=absolute",
-    "--git-dir"
-  ]);
-  const commonDirectory = git(root, [
-    "rev-parse",
-    "--path-format=absolute",
-    "--git-common-dir"
-  ]);
-  if (gitDirectory === void 0 || commonDirectory === void 0) {
+  try {
+    return !sameRealPath(root, resolveMainWorktreeRoot(root));
+  } catch {
     return false;
   }
-  return realpathSync9(gitDirectory) !== realpathSync9(commonDirectory);
 };
 var hasRunningPlan = (directory, depth = 0) => {
   if (depth > NOTEBOOK_DEPTH) return false;
@@ -48676,7 +48667,7 @@ var HELP_TEXT58 = `Usage: gaia update lockfile-command --root <dir> [--ref <git 
   Prints dedupe, install or none: the pnpm command the lockfile needs after the
   tree under <dir> changed against <ref> (default HEAD). Compares the root
   pnpm-workspace.yaml and every package.json (the root plus each package in
-  .gaia/packages.json, default frontend).
+  .gaia/packages.json, default web at apps/web).
 
   Exit codes:
     0  success

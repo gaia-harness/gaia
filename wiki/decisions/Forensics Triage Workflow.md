@@ -65,7 +65,7 @@ Deny matches on file names and exact files compare case-insensitively, because a
 
 | Path                                  | Notes                                                                   |
 | ------------------------------------- | ----------------------------------------------------------------------- |
-| `frontend/app/`                                | Application source.                                                     |
+| `apps/web/app/`                                | Application source.                                                     |
 | `wiki/`                               | Knowledge base; human-curated.                                          |
 | `studio/`                             | Private strategy vault; human-curated.                                  |
 | `website/`                            | Marketing/docs site; human-curated.                                     |

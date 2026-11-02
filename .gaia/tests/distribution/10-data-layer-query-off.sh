@@ -2,7 +2,7 @@
 # 10-data-layer-query-off.sh
 # distribution-runner: exclusive
 # distribution-runner: paths .gaia/cli/src/init/** .gaia/cli/src/scaffold/** .gaia/cli/templates/** .gaia/tests/distribution/fixtures/data-layer/** .claude/commands/gaia-init.md pnpm-lock.yaml
-# distribution-runner: paths frontend/package.json frontend/.storybook/** frontend/eslint.config.mjs frontend/tsconfig.json frontend/vite.config.ts frontend/vitest.config.ts frontend/react-router.config.ts frontend/app/root.tsx frontend/app/state/** frontend/app/services/** frontend/test/**
+# distribution-runner: paths apps/web/package.json apps/web/.storybook/** apps/web/eslint.config.mjs apps/web/tsconfig.json apps/web/vite.config.ts apps/web/vitest.config.ts apps/web/react-router.config.ts apps/web/app/root.tsx apps/web/app/state/** apps/web/app/services/** apps/web/test/**
 #
 # Adopter-flow regression for the Automatic-defaults data layer (camelCase,
 # no TanStack Query) in a staged release tree:
@@ -10,7 +10,7 @@
 #   1. Runs `/gaia-init` Step 3's CLI sequence as `.claude/commands/gaia-init.md`
 #      writes it, through `configure-data-layer`, with the placeholders filled
 #      from that page's Automatic defaults. `configure-data-layer` reports no
-#      change and leaves every file under `frontend/` byte-identical; the domain
+#      change and leaves every file under `apps/web/` byte-identical; the domain
 #      layer's `create()` keeps no `isSnakeCaseEnabled`; no Query dependency appears
 #      (UAT-003, UAT-017).
 #   2. A frozen install, then typecheck, lint, test:ci, and build on the

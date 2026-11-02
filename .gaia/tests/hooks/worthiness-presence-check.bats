@@ -165,7 +165,7 @@ denied() { [[ "$output" == *'"permissionDecision": "deny"'* ]]; }
 # line when allowed (the completed `if` exits 0). See .claude/rules/bats-assertions.md.
 refute_denied() { if denied; then return 1; fi; }
 
-# An emergent component test (.tsx under frontend/app/components/** classifies emergent).
+# An emergent component test (.tsx under apps/web/app/components/** classifies emergent).
 EMERGENT_TEST='import {expect, test} from "vitest";
 test("renders a label", () => {
   expect(true).toBe(true);
@@ -197,7 +197,7 @@ test("renders a widget", () => {
 });
 '
 
-# A deterministic util test (.ts under frontend/app/utils/** classifies strict) -> the
+# A deterministic util test (.ts under apps/web/app/utils/** classifies strict) -> the
 # presence gate excludes it (RED-gated, not worthiness-gated).
 STRICT_TEST='import {expect, test} from "vitest";
 test("adds two numbers", () => {
@@ -215,14 +215,14 @@ test("adds two numbers", () => {
 }
 
 @test "allows a PR changing only a deterministic util test (RED-gated, excluded)" {
-  commit_file "frontend/app/utils/x/index.test.ts" "$STRICT_TEST"
+  commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   ! denied
 }
 
-@test "allows a PR changing only non-test source under frontend/app/components" {
-  commit_file "frontend/app/components/Foo/index.tsx" "export const Foo = () => null;"
+@test "allows a PR changing only non-test source under apps/web/app/components" {
+  commit_file "apps/web/app/components/Foo/index.tsx" "export const Foo = () => null;"
   run_merge_hook
   [ "$status" -eq 0 ]
   ! denied
@@ -231,7 +231,7 @@ test("adds two numbers", () => {
 # --- clean-case deny: emergent test changed, no matching ledger line ---
 
 @test "denies an emergent component test with no ledger entry" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
@@ -244,8 +244,8 @@ test("adds two numbers", () => {
   # subdirectory the loads and the reads all failed and every path out of them
   # was a fail-open. One `cd` cleared the merge with no verdict demanded, and
   # nothing said so.
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook_from "frontend/app/components"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook_from "apps/web/app/components"
   [ "$status" -eq 0 ]
   denied
   grep -qF -- "renders a label" <<<"$output"
@@ -254,9 +254,9 @@ test("adds two numbers", () => {
 @test "still allows a matching verdict when the working directory is a subdirectory" {
   # The other half: the rooting must not make the gate deny everything from a
   # subdirectory either, which would be a different silent break.
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  seed_matching "frontend/app/components/Foo/tests/index.test.tsx" "renders a label" "keep"
-  run_merge_hook_from "frontend/app/components"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  seed_matching "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" "keep"
+  run_merge_hook_from "apps/web/app/components"
   [ "$status" -eq 0 ]
   refute_denied
 }
@@ -266,7 +266,7 @@ test("adds two numbers", () => {
   # refs/remotes/origin/main. A shadowing branch sitting at the feature head
   # collapses the merge base onto HEAD, empties the changed set, and clears a
   # merge whose emergent test has no verdict.
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   git -C "$REPO" update-ref refs/remotes/origin/main main
   git -C "$REPO" branch origin/main HEAD
   run_merge_hook
@@ -276,8 +276,8 @@ test("adds two numbers", () => {
 }
 
 @test "denies an emergent test when the ledger has only an unrelated line" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  seed_ledger "frontend/app/components/Other/tests/index.test.tsx" "something else" "sha256:deadbeef" "keep"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  seed_ledger "apps/web/app/components/Other/tests/index.test.tsx" "something else" "sha256:deadbeef" "keep"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
@@ -286,19 +286,19 @@ test("adds two numbers", () => {
 # --- allow: matching ledger line present ---
 
 @test "allows an emergent test with a matching keep line" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  seed_matching "frontend/app/components/Foo/tests/index.test.tsx" "renders a label" "keep"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  seed_matching "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" "keep"
   run_merge_hook
   [ "$status" -eq 0 ]
   ! denied
 }
 
 @test "allows on a matching line regardless of verdict (verdict not gated)" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   # A `fix` verdict still satisfies presence + signal match; the verdict is
   # advisory and never read for the presence decision.
-  seed_ledger "frontend/app/components/Foo/tests/index.test.tsx" "renders a label" \
-    "$(signals_for frontend/app/components/Foo/tests/index.test.tsx | jq -r 'select(.fullName=="renders a label") | .signal')" \
+  seed_ledger "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" \
+    "$(signals_for apps/web/app/components/Foo/tests/index.test.tsx | jq -r 'select(.fullName=="renders a label") | .signal')" \
     "fix" "no-interaction-assertions"
   run_merge_hook
   [ "$status" -eq 0 ]
@@ -308,9 +308,9 @@ test("adds two numbers", () => {
 # --- stale-signal rejection ---
 
 @test "denies when the ledger line carries a stale (pre-edit) signal" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   # A line written before a later edit: real file, real fullName, wrong signal.
-  seed_ledger "frontend/app/components/Foo/tests/index.test.tsx" "renders a label" \
+  seed_ledger "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" \
     "sha256:0000000000000000000000000000000000000000000000000000000000000000" "keep"
   run_merge_hook
   [ "$status" -eq 0 ]
@@ -320,15 +320,15 @@ test("adds two numbers", () => {
 # --- playwright emergent surface ---
 
 @test "denies an emergent .playwright spec with no ledger entry" {
-  commit_file "frontend/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
+  commit_file "apps/web/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
 }
 
 @test "allows an emergent .playwright spec with a matching line" {
-  commit_file "frontend/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
-  seed_matching "frontend/.playwright/e2e/home.spec.ts" "renders a label" "keep"
+  commit_file "apps/web/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
+  seed_matching "apps/web/.playwright/e2e/home.spec.ts" "renders a label" "keep"
   run_merge_hook
   [ "$status" -eq 0 ]
   ! denied
@@ -343,7 +343,7 @@ test("adds two numbers", () => {
 # passes on exactly the input it exists to hold -- indistinguishable, by then,
 # from having nothing to flag.
 @test "denies an emergent component test whose path carries non-ASCII bytes" {
-  commit_file "frontend/app/components/Café/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Café/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
@@ -352,7 +352,7 @@ test("adds two numbers", () => {
 # --- fail-open: unparseable file is skipped, not denied ---
 
 @test "skips (allows) an emergent test file with a syntax error" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" 'import {test} from "vitest";
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" 'import {test} from "vitest";
 test("oops" => { syntax(((;'
   run_merge_hook
   [ "$status" -eq 0 ]
@@ -362,14 +362,14 @@ test("oops" => { syntax(((;'
 # --- command-position match ---
 
 @test "ignores commands that are not gh pr merge" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook "git status"
   [ "$status" -eq 0 ]
   ! denied
 }
 
 @test "matches gh pr merge after a shell separator" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook "git fetch origin && gh pr merge 30 --squash"
   [ "$status" -eq 0 ]
   denied
@@ -378,14 +378,14 @@ test("oops" => { syntax(((;'
 # --- coexistence: deny names this gate, distinct from the audit gate ---
 
 @test "deny reason references the worthiness presence gate" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   [[ "$output" == *"Worthiness presence gate"* ]]
 }
 
 @test "deny reason names the evaluator as the one unblock path" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   grep -qF -- "To unblock:" <<<"$output"
@@ -396,7 +396,7 @@ test("oops" => { syntax(((;'
 # The refusal reaches Claude, so naming the ledger writer in it offers a way to
 # record a verdict without the review the gate exists to require.
 @test "deny reason never offers a direct ledger write" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
@@ -407,10 +407,10 @@ test("oops" => { syntax(((;'
 # --- comment-only edit vs. an assertion absorbed into a comment (UAT-005, UAT-014, UAT-008) ---
 
 @test "allows a comment-only reword after a matching verdict (emergent, UAT-005)" {
-  commit_file "frontend/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
+  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
   # Seed BEFORE the edit, against the pre-edit revision's real signal.
-  seed_matching "frontend/app/components/Widget/tests/index.test.tsx" "renders a widget"
-  commit_file "frontend/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_POST"
+  seed_matching "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget"
+  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_POST"
   run_merge_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -419,19 +419,19 @@ test("oops" => { syntax(((;'
 }
 
 @test "denies the same comment-reword fixture when the ledger's signal doesn't match (UAT-005 negative control)" {
-  commit_file "frontend/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
-  seed_ledger "frontend/app/components/Widget/tests/index.test.tsx" "renders a widget" \
+  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
+  seed_ledger "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget" \
     "sha256:0000000000000000000000000000000000000000000000000000000000000000" "keep"
-  commit_file "frontend/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_POST"
+  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_POST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
 }
 
 @test "denies when a live assertion is absorbed into a comment after a matching verdict (emergent, UAT-014)" {
-  commit_file "frontend/app/components/Widget/tests/index.test.tsx" "$ABSORB_EMERGENT_PRE"
-  seed_matching "frontend/app/components/Widget/tests/index.test.tsx" "renders a widget"
-  commit_file "frontend/app/components/Widget/tests/index.test.tsx" "$ABSORB_EMERGENT_POST"
+  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$ABSORB_EMERGENT_PRE"
+  seed_matching "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget"
+  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$ABSORB_EMERGENT_POST"
   run_merge_hook
   [ "$status" -eq 0 ]
   grep -qF -- "renders a widget" <<<"$output"
@@ -439,16 +439,16 @@ test("oops" => { syntax(((;'
 }
 
 @test "three-run transition: deny, then allow once a matching line is appended, then allow again (UAT-008, TST-009)" {
-  commit_file "frontend/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
+  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
   # Run 1: a non-matching literal seeded -- deny.
-  seed_ledger "frontend/app/components/Widget/tests/index.test.tsx" "renders a widget" \
+  seed_ledger "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget" \
     "sha256:0000000000000000000000000000000000000000000000000000000000000000" "keep"
   run_merge_hook
   [ "$status" -eq 0 ]
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
 
   # Run 2: append a line at the CURRENT signal -- allow.
-  seed_matching "frontend/app/components/Widget/tests/index.test.tsx" "renders a widget"
+  seed_matching "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget"
   run_merge_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -479,7 +479,7 @@ run_merge_hook_library_absent() {
 }
 
 @test "arming: a quoted verb now reaches the gate (tokenizer arm)" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook 'gh pr "merge" 30 --squash'
   [ "$status" -eq 0 ]
   denied
@@ -487,21 +487,21 @@ run_merge_hook_library_absent() {
 }
 
 @test "arming: a cat-to-file heredoc body carrying the verb does not reach the gate" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook $'cat > f.txt <<EOF\ngh pr merge 30 --squash\nEOF\n'
   [ "$status" -eq 0 ]
   refute_denied
 }
 
 @test "arming: removing the heredoc opener line leaves the same body text reaching the gate" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook $'gh pr merge 30 --squash\nEOF\n'
   [ "$status" -eq 0 ]
   denied
 }
 
 @test "arming: a heredoc piped into bash still reaches the gate" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook $'cat <<EOF | bash\ngh pr merge 30 --squash\nEOF\n'
   [ "$status" -eq 0 ]
   denied
@@ -534,7 +534,7 @@ run_merge_hook_staged_root() {
 
 # bats test_tags=whole-tree
 @test "library-absent: audit-base-provenance.sh missing fails open on a merge the intact stage denies" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook_staged_root ""
   [ "$status" -eq 0 ]
   denied
@@ -576,7 +576,7 @@ run_merge_hook_in() {
 
 @test "a leading cd into a linked worktree reads that worktree's changed tests" {
   make_worktree
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST" "$WORKTREE"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST" "$WORKTREE"
   run_merge_hook_in "$REPO" "cd $WORKTREE && gh pr merge 30 --squash"
   [ "$status" -eq 0 ]
   denied
@@ -587,7 +587,7 @@ run_merge_hook_in() {
   # The false-deny half. The session's own un-ledgered emergent test belongs to
   # a tree this merge never lands on.
   make_worktree
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook_in "$REPO" "cd $WORKTREE && gh pr merge 30 --squash"
   [ "$status" -eq 0 ]
   refute_denied
@@ -597,8 +597,8 @@ run_merge_hook_in() {
   # The ledger is per-tree state, so following the command's target has to
   # reach the ledger lookup as well as the diff.
   make_worktree
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST" "$WORKTREE"
-  seed_matching "frontend/app/components/Foo/tests/index.test.tsx" "renders a label" "keep" "$WORKTREE"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST" "$WORKTREE"
+  seed_matching "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" "keep" "$WORKTREE"
   run_merge_hook_in "$REPO" "cd $WORKTREE && gh pr merge 30 --squash"
   [ "$status" -eq 0 ]
   refute_denied
@@ -639,11 +639,11 @@ install_stub_classifier_home() {
 }
 
 @test "UAT-016: an emergent frontend component test with no ledger line denies; the same test at a root app/ path is ignored" {
-  commit_file "frontend/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
-  grep -qF -- "frontend/app/components/X/tests/X.test.tsx" <<<"$output"
+  grep -qF -- "apps/web/app/components/X/tests/X.test.tsx" <<<"$output"
 
   git -C "$REPO" reset --quiet --hard main
   commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
@@ -652,8 +652,8 @@ install_stub_classifier_home() {
   refute_denied
 }
 
-@test "an emergent .playwright spec under frontend/ with no ledger line denies; a root .playwright spec is ignored" {
-  commit_file "frontend/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
+@test "an emergent .playwright spec under apps/web/ with no ledger line denies; a root .playwright spec is ignored" {
+  commit_file "apps/web/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
   run_merge_hook
   denied
   git -C "$REPO" reset --quiet --hard main
@@ -665,7 +665,7 @@ install_stub_classifier_home() {
 
 @test "emergent globs that match nothing let the same merge through (the guard can fail)" {
   write_packages_moved "$REPO"
-  commit_file "frontend/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   denied
   write_packages_moved "$REPO" '["app/**/*.test.ts"]' '["app/utils/**"]' '["nomatch/**"]'
@@ -676,18 +676,18 @@ install_stub_classifier_home() {
 
 @test "denies an emergent page test with no ledger entry when the emergent globs cover app/pages" {
   write_packages_moved "$REPO" '["app/**/*.test.ts"]' '["app/utils/**"]' '["app/pages/**/*.test.tsx"]'
-  commit_file "frontend/app/pages/x/tests/page.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/pages/x/tests/page.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
   [[ "$output" == *"renders a label"* ]]
 }
 
-@test "DP-002: an exact rename into frontend/ is skipped, so a PR that only moves its tests needs no ledger line" {
+@test "DP-002: an exact rename into apps/web/ is skipped, so a PR that only moves its tests needs no ledger line" {
   commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   advance_base_to_head
-  mkdir -p "$REPO/frontend/app/components/X/tests"
-  git -C "$REPO" mv app/components/X/tests/X.test.tsx frontend/app/components/X/tests/X.test.tsx
+  mkdir -p "$REPO/apps/web/app/components/X/tests"
+  git -C "$REPO" mv app/components/X/tests/X.test.tsx apps/web/app/components/X/tests/X.test.tsx
   git -C "$REPO" commit --quiet -m "move X test"
   git -C "$REPO" diff --name-status -M100% main...HEAD | grep -q '^R100'
   run_merge_hook
@@ -698,10 +698,10 @@ install_stub_classifier_home() {
 @test "DP-002: the same rename plus a new emergent test with no ledger line still denies, naming the new one" {
   commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   advance_base_to_head
-  mkdir -p "$REPO/frontend/app/components/X/tests"
-  git -C "$REPO" mv app/components/X/tests/X.test.tsx frontend/app/components/X/tests/X.test.tsx
+  mkdir -p "$REPO/apps/web/app/components/X/tests"
+  git -C "$REPO" mv app/components/X/tests/X.test.tsx apps/web/app/components/X/tests/X.test.tsx
   git -C "$REPO" commit --quiet -m "move X test"
-  commit_file "frontend/app/components/Y/tests/Y.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Y/tests/Y.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
@@ -713,25 +713,25 @@ install_stub_classifier_home() {
 @test "DP-002: a rename that also changes a line is in scope at its new path and denies" {
   commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   advance_base_to_head
-  mkdir -p "$REPO/frontend/app/components/X/tests"
-  git -C "$REPO" mv app/components/X/tests/X.test.tsx frontend/app/components/X/tests/X.test.tsx
+  mkdir -p "$REPO/apps/web/app/components/X/tests"
+  git -C "$REPO" mv app/components/X/tests/X.test.tsx apps/web/app/components/X/tests/X.test.tsx
   printf '%s' 'import {expect, test} from "vitest";
 test("renders a label", () => {
   expect(false).toBe(false);
 });
-' >"$REPO/frontend/app/components/X/tests/X.test.tsx"
-  git -C "$REPO" add frontend/app/components/X/tests/X.test.tsx
+' >"$REPO/apps/web/app/components/X/tests/X.test.tsx"
+  git -C "$REPO" add apps/web/app/components/X/tests/X.test.tsx
   git -C "$REPO" commit --quiet -m "move and edit X test"
   git -C "$REPO" diff --name-status -M100% main...HEAD | grep -q '^R' && return 1
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
-  grep -qF -- "frontend/app/components/X/tests/X.test.tsx" <<<"$output"
+  grep -qF -- "apps/web/app/components/X/tests/X.test.tsx" <<<"$output"
 }
 
 @test "an unparseable registry denies with the gaia-packages reason, never an allow" {
   write_package_registry "$REPO" '{'
-  commit_file "frontend/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
@@ -739,18 +739,18 @@ test("renders a label", () => {
 }
 
 @test "a registered package with no descriptor denies with the gaia-packages reason, never an allow" {
-  rm "$REPO/frontend/gaia.package.json"
-  write_package_registry "$REPO" '[{"name":"frontend","path":"frontend"}]'
-  commit_file "frontend/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  rm "$REPO/apps/web/gaia.package.json"
+  write_package_registry "$REPO" '[{"name":"web","path":"apps/web"}]'
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
-  reason_of_output | grep -qF -- 'gaia-packages: frontend/gaia.package.json is missing'
+  reason_of_output | grep -qF -- 'gaia-packages: apps/web/gaia.package.json is missing'
 }
 
 # bats test_tags=whole-tree
 @test "a classifier that exits 7 denies with its error; exit 3 fails open; an emergent verdict demands the line" {
-  commit_file "frontend/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   install_stub_classifier_home 7 '{"error":"gaia-packages: stub descriptor failure. Next step: fix it."}'
   run_merge_hook
   denied
@@ -767,14 +767,14 @@ test("renders a label", () => {
   reason_of_output | grep -qF -- 'Worthiness presence gate'
 }
 
-@test "today's layout, a literal path-dot registry: a root app/ emergent test is gated and a frontend/ one is not" {
+@test "today's layout, a literal path-dot registry: a root app/ emergent test is gated and a apps/web/ one is not" {
   write_packages_today "$REPO"
   commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   denied
   grep -qF -- "app/components/X/tests/X.test.tsx" <<<"$output"
   git -C "$REPO" reset --quiet --hard main
-  commit_file "frontend/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -824,8 +824,8 @@ write_story_descriptor() {
 
 @test "denies a changed CSF4 story under app/components and one under app/utils/tests, then allows once verdicts are recorded" {
   write_story_descriptor
-  local component_story="frontend/app/components/Marker/tests/marker.stories.tsx"
-  local utility_story="frontend/app/utils/tests/utility-marker.stories.tsx"
+  local component_story="apps/web/app/components/Marker/tests/marker.stories.tsx"
+  local utility_story="apps/web/app/utils/tests/utility-marker.stories.tsx"
   commit_file "$component_story" "$(story_source ShowsComponentMarker 'component marker')"
   commit_file "$utility_story" "$(story_source ShowsUtilityMarker 'utility marker')"
 
@@ -847,7 +847,7 @@ write_story_descriptor() {
 
 @test "a story test with no verdict is denied even when its base story has one" {
   write_story_descriptor
-  local story="frontend/app/utils/tests/utility-marker.stories.tsx"
+  local story="apps/web/app/utils/tests/utility-marker.stories.tsx"
   commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker')"
   record_verdict "$story" "Shows Utility Marker   base story"
   run_merge_hook
@@ -860,7 +860,7 @@ write_story_descriptor() {
 
 @test "a story whose test changed after its verdict is denied again" {
   write_story_descriptor
-  local story="frontend/app/utils/tests/utility-marker.stories.tsx"
+  local story="apps/web/app/utils/tests/utility-marker.stories.tsx"
   commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker')"
   record_story_verdicts "$story" "Shows Utility Marker"
   commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker edited')"
@@ -872,7 +872,7 @@ write_story_descriptor() {
 
 @test "a render-only CSF4 story file demands no verdict" {
   write_story_descriptor
-  commit_file "frontend/app/components/Marker/tests/marker.stories.tsx" "import preview from '#.storybook/preview';
+  commit_file "apps/web/app/components/Marker/tests/marker.stories.tsx" "import preview from '#.storybook/preview';
 
 const Marker = () => <p>marker</p>;
 
@@ -887,7 +887,7 @@ export const Plain = meta.story({});
 
 @test "an old-format story file is denied with the extractor's migration line, not skipped" {
   write_story_descriptor
-  local story="frontend/app/utils/tests/old-format.stories.tsx"
+  local story="apps/web/app/utils/tests/old-format.stories.tsx"
   commit_file "$story" "$(cat "$BATS_TEST_DIRNAME/fixtures/red-ledger/csf3-old-format.stories.tsx")"
   run_merge_hook
   [ "$status" -eq 0 ]
@@ -898,7 +898,7 @@ export const Plain = meta.story({});
 
 @test "a story whose play is an imported identifier is denied naming the file and the unsupported shape" {
   write_story_descriptor
-  local story="frontend/app/utils/tests/imported-play.stories.tsx"
+  local story="apps/web/app/utils/tests/imported-play.stories.tsx"
   commit_file "$story" "import preview from '#.storybook/preview';
 import {sharedPlay} from './shared-play';
 
@@ -918,7 +918,7 @@ export const UsesImportedPlay = meta.story({play: sharedPlay});
 
 @test "a story file with a syntax error still passes through (the extractor's other failures fail open)" {
   write_story_descriptor
-  commit_file "frontend/app/utils/tests/broken.stories.tsx" "export const Broken = {play: async ((( => {"
+  commit_file "apps/web/app/utils/tests/broken.stories.tsx" "export const Broken = {play: async ((( => {"
   run_merge_hook
   [ "$status" -eq 0 ]
   refute_denied
@@ -1020,16 +1020,16 @@ export const UsesImportedPlay = meta.story({play: sharedPlay});
 "
 
 @test "the library's walk and the hook agree on a changed file, an exact rename, a deletion and a non-emergent test" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$TWO_TEST_FILE"
-  commit_file "frontend/app/components/Moved/tests/index.test.tsx" "$EMERGENT_TEST"
-  commit_file "frontend/app/components/Gone/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$TWO_TEST_FILE"
+  commit_file "apps/web/app/components/Moved/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Gone/tests/index.test.tsx" "$EMERGENT_TEST"
   advance_base_to_head
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "${TWO_TEST_FILE/expect(1)/expect(3)}"
-  mkdir -p "$REPO/frontend/app/components/Renamed/tests"
-  git -C "$REPO" mv frontend/app/components/Moved/tests/index.test.tsx frontend/app/components/Renamed/tests/index.test.tsx
-  git -C "$REPO" rm --quiet frontend/app/components/Gone/tests/index.test.tsx
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "${TWO_TEST_FILE/expect(1)/expect(3)}"
+  mkdir -p "$REPO/apps/web/app/components/Renamed/tests"
+  git -C "$REPO" mv apps/web/app/components/Moved/tests/index.test.tsx apps/web/app/components/Renamed/tests/index.test.tsx
+  git -C "$REPO" rm --quiet apps/web/app/components/Gone/tests/index.test.tsx
   git -C "$REPO" commit --quiet -m "rename and delete"
-  commit_file "frontend/app/utils/x/index.test.ts" "$STRICT_TEST"
+  commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
 
   run_selection_walk "$REPO"
   grep -qx 'status=0' <<<"$output"
@@ -1038,8 +1038,8 @@ export const UsesImportedPlay = meta.story({play: sharedPlay});
     printf '%s %s\n' "$walk_path" "$(jq -r '.fullName' <<<"$walk_line")"
   done | sort)
   [ "$walk_pairs" = "$(printf '%s\n%s' \
-    'frontend/app/components/Foo/tests/index.test.tsx first label' \
-    'frontend/app/components/Foo/tests/index.test.tsx second label')" ]
+    'apps/web/app/components/Foo/tests/index.test.tsx first label' \
+    'apps/web/app/components/Foo/tests/index.test.tsx second label')" ]
 
   run_merge_hook
   denied
@@ -1049,7 +1049,7 @@ export const UsesImportedPlay = meta.story({play: sharedPlay});
 
 @test "the library returns the extractor refusal status with the reason set, and the hook denies with that same reason" {
   write_story_descriptor
-  commit_file "frontend/app/utils/tests/imported-play.stories.tsx" "$IMPORTED_PLAY_STORY"
+  commit_file "apps/web/app/utils/tests/imported-play.stories.tsx" "$IMPORTED_PLAY_STORY"
   run_selection_walk "$REPO"
   grep -qx 'status=7' <<<"$output"
   local walk_reason
@@ -1084,7 +1084,7 @@ install_piped_walk_hook() {
 # bats test_tags=whole-tree
 @test "red twin: routing the walk through a pipe loses the refusal reason" {
   write_story_descriptor
-  commit_file "frontend/app/utils/tests/imported-play.stories.tsx" "$IMPORTED_PLAY_STORY"
+  commit_file "apps/web/app/utils/tests/imported-play.stories.tsx" "$IMPORTED_PLAY_STORY"
   run_merge_hook
   local expected_reason
   expected_reason=$(reason_of_output)
@@ -1096,7 +1096,7 @@ install_piped_walk_hook() {
 }
 
 @test "the library returns 9 and emits nothing when a required input is unset; a set but empty glob returns 0 with no records" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
 
   run_selection_walk "$REPO" unset-classifier
   [ -z "$(walk_records)" ]
@@ -1120,7 +1120,7 @@ refusal_free_of_debt_wording() {
 }
 
 @test "the refusal tells the agent to run the evaluator, fix on the branch, and ask with the rotation and CI cost, without debt wording" {
-  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   denied
   local refusal
@@ -1148,7 +1148,7 @@ refusal_free_of_debt_wording() {
 
 # --- route tests: worthiness-audited as well as RED-gated ---
 
-ROUTE_TEST_PATH="frontend/app/route-tests/orders/tests/refuses-anonymous.test.ts"
+ROUTE_TEST_PATH="apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts"
 ROUTE_TEST_SOURCE='import {expect, test} from "vitest";
 test("refuses an anonymous visitor", () => {
   expect(1 + 1).toBe(2);

@@ -18,14 +18,14 @@ setup() {
   . "$REPO_ROOT/.claude/hooks/lib/audit-light-route-lib.sh"
   # shellcheck source=.claude/hooks/lib/audit-quick-classify-lib.sh
   . "$LIBRARY"
-  mkdir -p "$BATS_TEST_TMPDIR/registry/frontend"
-  printf '%s\n' '{"schemaVersion":1,"name":"frontend","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$BATS_TEST_TMPDIR/registry/frontend/gaia.package.json"
+  mkdir -p "$BATS_TEST_TMPDIR/registry/apps/web"
+  printf '%s\n' '{"schemaVersion":1,"name":"web","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$BATS_TEST_TMPDIR/registry/apps/web/gaia.package.json"
   quick_load_registry "$BATS_TEST_TMPDIR/registry"
-  COMPONENT="frontend/app/components/card/index.tsx"
-  STORY="frontend/app/components/card/tests/index.stories.tsx"
-  CHIP="frontend/app/components/ui/chip.tsx"
-  ENGLISH="frontend/app/languages/en/common.ts"
-  JAPANESE="frontend/app/languages/ja/common.ts"
+  COMPONENT="apps/web/app/components/card/index.tsx"
+  STORY="apps/web/app/components/card/tests/index.stories.tsx"
+  CHIP="apps/web/app/components/ui/chip.tsx"
+  ENGLISH="apps/web/app/languages/en/common.ts"
+  JAPANESE="apps/web/app/languages/ja/common.ts"
   COMPONENT_BASE="$(cat <<'EOF'
 import {cn} from 'cn';
 
@@ -283,7 +283,7 @@ qc_start() {
   QC_ROOT="$BATS_TEST_TMPDIR/repo"
   rm -rf "$QC_ROOT"
   git init -q "$QC_ROOT"
-  qc_put frontend/gaia.package.json '{"schemaVersion":1,"name":"frontend","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}'
+  qc_put apps/web/gaia.package.json '{"schemaVersion":1,"name":"web","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}'
 }
 
 qc_put() {
@@ -545,15 +545,15 @@ EOF
 # --- path shapes ------------------------------------------------------------
 
 @test "quick_story_component maps an own story to its component and refuses any other shape" {
-  run quick_story_component frontend/app/components/x/tests/index.stories.tsx
-  [ "$status" -eq 0 ] && [ "$output" = "frontend/app/components/x/index.tsx" ]
-  run quick_story_component frontend/app/components/ui/tests/button.stories.tsx
-  [ "$status" -eq 0 ] && [ "$output" = "frontend/app/components/ui/button.tsx" ]
-  run quick_story_component frontend/app/styles/tests/inline-link.stories.tsx
-  [ "$status" -eq 0 ] && [ "$output" = "frontend/app/styles/inline-link.tsx" ]
-  run quick_story_component frontend/app/components/x/tests/tests/index.stories.tsx
+  run quick_story_component apps/web/app/components/x/tests/index.stories.tsx
+  [ "$status" -eq 0 ] && [ "$output" = "apps/web/app/components/x/index.tsx" ]
+  run quick_story_component apps/web/app/components/ui/tests/button.stories.tsx
+  [ "$status" -eq 0 ] && [ "$output" = "apps/web/app/components/ui/button.tsx" ]
+  run quick_story_component apps/web/app/styles/tests/inline-link.stories.tsx
+  [ "$status" -eq 0 ] && [ "$output" = "apps/web/app/styles/inline-link.tsx" ]
+  run quick_story_component apps/web/app/components/x/tests/tests/index.stories.tsx
   [ "$status" -eq 1 ] && [ -z "$output" ]
-  run quick_story_component frontend/app/components/x/index.stories.tsx
+  run quick_story_component apps/web/app/components/x/index.stories.tsx
   [ "$status" -eq 1 ] && [ -z "$output" ]
   run quick_story_component tests/index.stories.tsx
   [ "$status" -eq 1 ] && [ -z "$output" ]
@@ -562,20 +562,20 @@ EOF
 @test "quick_path_class prints the class of each allowlisted shape and none for everything else" {
   local pair path expected
   for pair in \
-    "frontend/app/components/card/index.tsx component" \
-    "frontend/app/components/ui/button.tsx component" \
-    "frontend/app/pages/home/page.tsx page" \
-    "frontend/app/pages/home/hero/index.tsx page" \
-    "frontend/app/languages/en/common.ts language" \
-    "frontend/app/languages/ja/pages/_index.ts language" \
-    "frontend/app/components/card/tests/index.stories.tsx none" \
-    "frontend/app/styles/tailwind.css none" \
-    "frontend/app/components/errors/x/index.tsx none" \
-    "frontend/app/components/document/index.tsx none" \
-    "frontend/app/components/card/hooks/index.tsx none" \
-    "frontend/app/languages/en/index.ts none" \
-    "frontend/app/languages/index.ts none" \
-    "frontend/app/routes/_index.tsx none"; do
+    "apps/web/app/components/card/index.tsx component" \
+    "apps/web/app/components/ui/button.tsx component" \
+    "apps/web/app/pages/home/page.tsx page" \
+    "apps/web/app/pages/home/hero/index.tsx page" \
+    "apps/web/app/languages/en/common.ts language" \
+    "apps/web/app/languages/ja/pages/_index.ts language" \
+    "apps/web/app/components/card/tests/index.stories.tsx none" \
+    "apps/web/app/styles/tailwind.css none" \
+    "apps/web/app/components/errors/x/index.tsx none" \
+    "apps/web/app/components/document/index.tsx none" \
+    "apps/web/app/components/card/hooks/index.tsx none" \
+    "apps/web/app/languages/en/index.ts none" \
+    "apps/web/app/languages/index.ts none" \
+    "apps/web/app/routes/_index.tsx none"; do
     path="${pair% *}"
     expected="${pair##* }"
     run quick_path_class "$path"
@@ -587,8 +587,8 @@ EOF
 
 @test "red quick-path: a stylesheet, a route, the document component and a language aggregator each route deep" {
   local path
-  for path in frontend/app/styles/tailwind.css frontend/app/routes/_index.tsx \
-    frontend/app/components/document/index.tsx frontend/app/languages/en/index.ts; do
+  for path in apps/web/app/styles/tailwind.css apps/web/app/routes/_index.tsx \
+    apps/web/app/components/document/index.tsx apps/web/app/languages/en/index.ts; do
     qc_start
     qc_put "$path" 'export default {};'
     qc_base
@@ -628,8 +628,8 @@ EOF
 }
 
 @test "red quick-path: a story paired with a page, and one paired with a non-component sibling" {
-  local page="frontend/app/pages/home/page.tsx" page_story="frontend/app/pages/home/tests/page.stories.tsx"
-  local sibling="frontend/app/styles/inline-link.tsx" sibling_story="frontend/app/styles/tests/inline-link.stories.tsx"
+  local page="apps/web/app/pages/home/page.tsx" page_story="apps/web/app/pages/home/tests/page.stories.tsx"
+  local sibling="apps/web/app/styles/inline-link.tsx" sibling_story="apps/web/app/styles/tests/inline-link.stories.tsx"
   qc_start
   qc_put "$page" '<p>Hi</p>;'
   qc_put "$page_story" "export const A = {args: {label: 'a'}};"
@@ -651,7 +651,7 @@ EOF
 }
 
 @test "red quick-file-status: an added component file" {
-  local added="frontend/app/components/badge/index.tsx"
+  local added="apps/web/app/components/badge/index.tsx"
   qc_component
   qc_put "$added" '<span>New</span>;'
   qc_paths "$added"
@@ -666,9 +666,9 @@ EOF
 }
 
 @test "red quick-file-status: a renamed component reads as a delete plus an add, named by the first selected path" {
-  local renamed="frontend/app/components/panel/index.tsx"
+  local renamed="apps/web/app/components/panel/index.tsx"
   qc_component
-  mkdir -p "$QC_ROOT/frontend/app/components/panel"
+  mkdir -p "$QC_ROOT/apps/web/app/components/panel"
   qc_git mv "$COMPONENT" "$renamed"
   qc_paths "$COMPONENT" "$renamed"
   qc_expect_deep quick-file-status "$COMPONENT" - || return 1
@@ -910,7 +910,7 @@ EOF
 }
 
 @test "red quick-unclassified: text inside an existing style element, beside the same edit in a p" {
-  local page="frontend/app/pages/home/page.tsx"
+  local page="apps/web/app/pages/home/page.tsx"
   qc_start
   qc_put "$page" "$(printf 'const Home = () => (\n  <div>\n    <style>\n      a\n    </style>\n    <p>\n      Hello\n    </p>\n  </div>\n);\n')"
   qc_base

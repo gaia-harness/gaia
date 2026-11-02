@@ -264,12 +264,12 @@ setup() {
   # .gaia/audit-ci.yml's globs), none of them listed in
   # .claude/hooks/lib/audit-machinery.sh, so diverging one rotates only its
   # owning member's digest, never every member's at once.
-  mkdir -p "$MAIN/frontend/app" "$MAIN/frontend/scripts" "$MAIN/.github/workflows" "$MAIN/.gaia/cli/src" "$MAIN/.claude/skills/audit-root-fixture"
-  printf 'export const x = 1;\n' > "$MAIN/frontend/app/x.ts"
+  mkdir -p "$MAIN/apps/web/app" "$MAIN/apps/web/scripts" "$MAIN/.github/workflows" "$MAIN/.gaia/cli/src" "$MAIN/.claude/skills/audit-root-fixture"
+  printf 'export const x = 1;\n' > "$MAIN/apps/web/app/x.ts"
   printf 'name: ci\n' > "$MAIN/.github/workflows/ci.yml"
   printf '#!/bin/bash\necho shell\n' > "$MAIN/.gaia/scripts/fixture-example.sh"
   chmod +x "$MAIN/.gaia/scripts/fixture-example.sh"
-  printf '#!/bin/bash\necho adopter\n' > "$MAIN/frontend/scripts/fixture-adopter.sh"
+  printf '#!/bin/bash\necho adopter\n' > "$MAIN/apps/web/scripts/fixture-adopter.sh"
   printf 'export const y = 1;\n' > "$MAIN/.gaia/cli/src/foo.ts"
   printf '# fixture skill\n' > "$MAIN/.claude/skills/audit-root-fixture/SKILL.md"
 
@@ -290,10 +290,10 @@ setup() {
   # Diverge every roster member's owned file so MAIN and WORKTREE produce genuinely
   # different per-member content digests (verified by the fixture-sanity test
   # below).
-  printf 'export const x = 2;\n' > "$WORKTREE/frontend/app/x.ts"
+  printf 'export const x = 2;\n' > "$WORKTREE/apps/web/app/x.ts"
   printf 'name: ci-changed\n' > "$WORKTREE/.github/workflows/ci.yml"
   printf '#!/bin/bash\necho shell-changed\n' > "$WORKTREE/.gaia/scripts/fixture-example.sh"
-  printf '#!/bin/bash\necho adopter-changed\n' > "$WORKTREE/frontend/scripts/fixture-adopter.sh"
+  printf '#!/bin/bash\necho adopter-changed\n' > "$WORKTREE/apps/web/scripts/fixture-adopter.sh"
   printf 'export const y = 2;\n' > "$WORKTREE/.gaia/cli/src/foo.ts"
   printf '# fixture skill changed\n' > "$WORKTREE/.claude/skills/audit-root-fixture/SKILL.md"
   git -C "$WORKTREE" add -A
@@ -722,7 +722,7 @@ run_audit_root_block() {
 
 @test "stage 4 (flag: --root) a subdirectory of WORKTREE, from OUTSIDE: exits 2 and writes nothing" {
   local subdir before_snapshot after_snapshot
-  subdir="$WORKTREE/frontend/app"
+  subdir="$WORKTREE/apps/web/app"
   before_snapshot="$(pool_snapshot "$WORKTREE")"
   run_stdout_only bash "$SCRIPT_WRITE_CLEARANCE" --root "$subdir" --member code-audit-frontend --provenance earned
   [ "$status" -eq 2 ]
@@ -734,7 +734,7 @@ run_audit_root_block() {
 @test "stage 4 non-vacuity (source mutation): removing the toplevel-equals-ROOT validation turns the subdirectory-rejection assertion red; byte-identical restore verified" {
   local orig_sum subdir before_snapshot after_snapshot start mutated_sum went_red=0 restored_sum
   orig_sum="$(backup_file "$SCRIPT_WRITE_CLEARANCE")"
-  subdir="$WORKTREE/frontend/app"
+  subdir="$WORKTREE/apps/web/app"
   # The mutated writer treats the subdirectory as the root and reads its roster
   # from there, so seed one: without it the mutated run fails on the missing
   # roster and stays green for the wrong reason. Link a .gaia/local there too,

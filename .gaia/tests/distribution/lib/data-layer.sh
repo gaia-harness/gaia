@@ -113,7 +113,7 @@ stage_adopter_tree() {
 
   GAIA="$SCAFFOLD/.gaia/cli/gaia"
   # shellcheck disable=SC2034 # read by the scenario that sources this file
-  FRONTEND="$SCAFFOLD/frontend"
+  FRONTEND="$SCAFFOLD/apps/web"
   export GAIA_TELEMETRY_PING_DISABLE=1
 }
 
@@ -172,7 +172,7 @@ assert_frontend_unchanged() {
   local label="$1" before_file="$2"
   hash_frontend "$SCAFFOLD" > "$WORK/after-check.sha256"
   if ! diff "$before_file" "$WORK/after-check.sha256" >&2; then
-    fail "$label changed a file under frontend/ or pnpm-lock.yaml"
+    fail "$label changed a file under apps/web/ or pnpm-lock.yaml"
     exit 1
   fi
 }

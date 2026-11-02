@@ -99,8 +99,8 @@ SWEPT_DIRS=(
   .claude/skills
   .claude/commands
   .claude/agents
-  frontend/.claude/skills
-  frontend/.claude/agents
+  apps/web/.claude/skills
+  apps/web/.claude/agents
 )
 SWEPT_WIKI_PAGES=(
   "wiki/concepts/PR Merge Workflow.md"

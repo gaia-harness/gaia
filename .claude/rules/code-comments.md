@@ -1,9 +1,9 @@
 ---
 paths:
-  - 'frontend/app/**/*.{ts,tsx,js,jsx,css}'
-  - 'frontend/test/**/*.{ts,tsx}'
-  - 'frontend/.playwright/**/*.ts'
-  - 'frontend/.storybook/**/*.{ts,tsx}'
+  - 'apps/web/app/**/*.{ts,tsx,js,jsx,css}'
+  - 'apps/web/test/**/*.{ts,tsx}'
+  - 'apps/web/.playwright/**/*.ts'
+  - 'apps/web/.storybook/**/*.{ts,tsx}'
   - '.gaia/**/*.ts'
   - '.gaia/**/*.sh'
   - '.claude/hooks/**/*.sh'

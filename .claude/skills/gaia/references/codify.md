@@ -42,7 +42,7 @@ Name every reported path to the human in this run's output, with its reason; nev
       "finding_class": "rule/use-effect-derived-state",
       "distinct_pr_count": 4,
       "pr_numbers": [311, 314, 318, 320],
-      "area_tags": ["frontend/app/components"],
+      "area_tags": ["apps/web/app/components"],
       "severity_max": "major",
       "is_oracle": false
     }
@@ -50,7 +50,7 @@ Name every reported path to the human in this run's output, with its reason; nev
   "unclassified": {
     "distinct_pr_count": 3,
     "pr_numbers": [401, 405, 409],
-    "area_tags": ["frontend/app/routes"],
+    "area_tags": ["apps/web/app/routes"],
     "severity_max": "minor"
   },
   "audited_pr_count": 400,
@@ -63,7 +63,7 @@ Name every reported path to the human in this run's output, with its reason; nev
       "finding_class": "rule/example-declined",
       "distinct_pr_count": 5,
       "pr_numbers": [330, 331, 335, 338, 340],
-      "area_tags": ["frontend/app/routes"],
+      "area_tags": ["apps/web/app/routes"],
       "severity_max": "minor",
       "is_oracle": false
     }
@@ -111,7 +111,7 @@ GAIA maintainers: before judging a candidate whose findings sit on harness paths
 Before choosing a form, check whether an existing artifact already covers the class's territory. Grep the candidate surfaces:
 
 ```bash
-grep -rln "<keywords derived from the finding_class>" .claude/rules .claude/skills .claude/hooks frontend/.claude/rules frontend/.claude/skills
+grep -rln "<keywords derived from the finding_class>" .claude/rules .claude/skills .claude/hooks apps/web/.claude/rules apps/web/.claude/skills
 ```
 
 Also check whether the quality gate (`wiki/decisions/Quality Gate.md`) already lists a step for it. If an existing rule, skill, or hook covers the territory, recommend EDITING that artifact, not creating a new one. Name the artifact to edit and what to add.
@@ -259,7 +259,7 @@ Write to `.claude/rules/<slug>.md`, where `<slug>` is a short kebab-case name de
 ```markdown
 ---
 paths:
-  - '<glob derived from area_tags, e.g. frontend/app/components/**/*>'
+  - '<glob derived from area_tags, e.g. apps/web/app/components/**/*>'
 ---
 <!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-cleanse on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
 
@@ -278,7 +278,7 @@ paths:
 
 Rules for filling it in:
 
-- **`paths:` is mandatory.** Derive the glob from the candidate's `area_tags` (e.g. an `area_tags` of `["frontend/app/components"]` becomes `frontend/app/components/**/*`; the rule file lives in the root `.claude/rules/`, whose globs anchor at the repository root, so the glob keeps the `frontend/` prefix). When `area_tags` is empty or holds non-path strings, fall back: derive the glob from the finding's bucket/surface (e.g. a `rule/*` React class scopes to `frontend/app/**/*`) or ask the human for the intended scope with `AskUserQuestion`, the derived glob first and marked ` (Recommended)`, a typed glob arriving through the tool's own Other. One or more single-quoted globs, one per line. A rule with no `paths:` frontmatter is never produced, and an unscoped `**/*` glob is never emitted; path-scoping is what bounds per-task context weight regardless of how many promoted rules accumulate.
+- **`paths:` is mandatory.** Derive the glob from the candidate's `area_tags` (e.g. an `area_tags` of `["apps/web/app/components"]` becomes `apps/web/app/components/**/*`; the rule file lives in the root `.claude/rules/`, whose globs anchor at the repository root, so the glob keeps the `apps/web/` prefix). When `area_tags` is empty or holds non-path strings, fall back: derive the glob from the finding's bucket/surface (e.g. a `rule/*` React class scopes to `apps/web/app/**/*`) or ask the human for the intended scope with `AskUserQuestion`, the derived glob first and marked ` (Recommended)`, a typed glob arriving through the tool's own Other. One or more single-quoted globs, one per line. A rule with no `paths:` frontmatter is never produced, and an unscoped `**/*` glob is never emitted; path-scoping is what bounds per-task context weight regardless of how many promoted rules accumulate.
 - **The provenance marker is verbatim and single-line**, placed immediately after the closing `---` of the frontmatter, with `<class>` replaced by the actual finding_class. It references the `finding_class`, never a SPEC or UAT id.
 - **Body prose is present tense** and follows `.claude/rules/wiki-style.md` and `.claude/rules/working-doc-ids.md`, which carry the authoritative ban lists. Use repo-relative paths only.
 - **Verify every path, script, and owner the rule cites before writing it.** Open each file and confirm it holds what the sentence says it holds. A rule that names the wrong owner teaches the wrong thing, and fixing it after the audit costs a whole extra round.

@@ -1,7 +1,7 @@
-diff --git a/frontend/app/languages/en/common.ts b/frontend/app/languages/en/common.ts
+diff --git a/apps/web/app/languages/en/common.ts b/apps/web/app/languages/en/common.ts
 index d91e114..fb622b8 100644
---- a/frontend/app/languages/en/common.ts
-+++ b/frontend/app/languages/en/common.ts
+--- a/apps/web/app/languages/en/common.ts
++++ b/apps/web/app/languages/en/common.ts
 @@ -1,5 +1,37 @@
  export default {
 -  copyToClipboard: 'Copy to clipboard',
@@ -41,10 +41,10 @@ index d91e114..fb622b8 100644
    description: 'Description',
    email: 'Email',
    emailPlaceholder: 'user@domain.com',
-diff --git a/frontend/app/languages/en/errors.ts b/frontend/app/languages/en/errors.ts
+diff --git a/apps/web/app/languages/en/errors.ts b/apps/web/app/languages/en/errors.ts
 index 82109c5..56de21b 100644
---- a/frontend/app/languages/en/errors.ts
-+++ b/frontend/app/languages/en/errors.ts
+--- a/apps/web/app/languages/en/errors.ts
++++ b/apps/web/app/languages/en/errors.ts
 @@ -1,4 +1,20 @@
  export default {
    invalidEmail: 'Email is invalid',

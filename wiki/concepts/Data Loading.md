@@ -8,7 +8,7 @@ tags: [concept, services, routing, data-loading]
 
 # Data Loading
 
-How a route gets its data, and how the data layer behind it is wired. The rule text lives in `frontend/.claude/skills/react-code/SKILL.md`; this page explains the decision logic and shows short excerpts. The scaffold templates under `.gaia/cli/templates/` (`route/`, `service/`, `data-layer/`) are the authoritative code, so a full listing is never repeated here.
+How a route gets its data, and how the data layer behind it is wired. The rule text lives in `apps/web/.claude/skills/react-code/SKILL.md`; this page explains the decision logic and shows short excerpts. The scaffold templates under `.gaia/cli/templates/` (`route/`, `service/`, `data-layer/`) are the authoritative code, so a full listing is never repeated here.
 
 Related: [[API Service Pattern]], [[Services]], [[Thin Routes]], [[Routing]], [[Ky]], [[State]], [[Stories as Tests]], [[MSW Handlers]]
 
@@ -82,7 +82,7 @@ The templates are `.gaia/cli/templates/service/requests.ts.tmpl` and `queries.ts
 
 ## QueryClient scope
 
-`gaia init configure-data-layer --query true` writes `query-client.ts` into `frontend/app/` and `query-provider.tsx` into `frontend/app/state/`, from the templates in `.gaia/cli/templates/data-layer/`; neither file exists until Query is turned on. `query-client.ts` exposes one accessor, `getQueryClient()`. On the server it returns a fresh client on every call; in the browser it returns a lazily built singleton with `staleTime: 30_000`, long enough that a `clientLoader`'s fetch is still fresh when the page reads it. No module exports a client instance, so nothing can capture one at import time.
+`gaia init configure-data-layer --query true` writes `query-client.ts` into `apps/web/app/` and `query-provider.tsx` into `apps/web/app/state/`, from the templates in `.gaia/cli/templates/data-layer/`; neither file exists until Query is turned on. `query-client.ts` exposes one accessor, `getQueryClient()`. On the server it returns a fresh client on every call; in the browser it returns a lazily built singleton with `staleTime: 30_000`, long enough that a `clientLoader`'s fetch is still fresh when the page reads it. No module exports a client instance, so nothing can capture one at import time.
 
 `query-provider.tsx` obtains its client once per render tree (`useState(getQueryClient)`) and is composed inside `<State>` ([[State]]). A server render never shares a cache with another request, because the module-level singleton exists only when `window` does. A module-scope client on the server would serve one user's cached data into another user's HTML.
 
@@ -93,7 +93,7 @@ Route actions are the default for mutations: the form posts, the action runs the
 ## Gaps and costs
 
 - `<Link prefetch>` never runs a `clientLoader`. A prefetch warms the route's JavaScript and a server `loader`'s data, not a `clientLoader`, so a `clientLoader` route always fetches on navigation.
-- Every `clientAction` also revalidates the root server loader (`frontend/app/root.tsx`), so a client-action submit still costs one server round trip.
+- Every `clientAction` also revalidates the root server loader (`apps/web/app/root.tsx`), so a client-action submit still costs one server round trip.
 - Opting into Query puts `@tanstack/react-query` in the root chunk, because the provider mounts in the root. The data-layer subcommand is the opt-in; Query-off projects ship no Query code.
 
 ## Security
@@ -112,7 +112,7 @@ For a large or fast-moving API, a generator such as Hey API or Orval can produce
 
 ## Turning it on later, and reversing it
 
-`gaia init` asks two data-layer questions (backend casing and whether to use TanStack Query; see [[GAIA Init Workflow]]). After init has finished, `./.gaia/cli/gaia init configure-data-layer --query true` adds Query: it writes the dependency into `frontend/package.json`, the runtime files, and one anchored edit in each of the provider, Storybook preview, and the two Vite configs, then prints the `next` commands (`pnpm install`, and `scaffold service <name> --queries-only` for each eligible existing service). It never runs pnpm.
+`gaia init` asks two data-layer questions (backend casing and whether to use TanStack Query; see [[GAIA Init Workflow]]). After init has finished, `./.gaia/cli/gaia init configure-data-layer --query true` adds Query: it writes the dependency into `apps/web/package.json`, the runtime files, and one anchored edit in each of the provider, Storybook preview, and the two Vite configs, then prints the `next` commands (`pnpm install`, and `scaffold service <name> --queries-only` for each eligible existing service). It never runs pnpm.
 
 The subcommand is additive and removes nothing. To remove Query, delete the three files it wrote, the `QueryProvider` wrapper, the Storybook decorator entry, the `optimizeDeps` entries, and the dependency by hand. To return a layer to the camelCase default, drop `isSnakeCaseEnabled` (or set it to `false`) on the layer's `create()` call.
 

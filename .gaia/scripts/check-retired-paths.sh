@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Retired-path gate. The React app and its frontend-only harness live under
-# `frontend/`; the root no longer holds `app/`, `test/`, `public/`,
+# `apps/web/`; the root no longer holds `app/`, `test/`, `public/`,
 # `.playwright/`, `.storybook/`, the moved root config files, or the moved
 # `.claude/` units. A hook, script, workflow, CLI string, rule glob, agent, or
 # skill that still cites one of those at the root is a coupling the move missed:
@@ -27,7 +27,7 @@
 #   .claude/agents/*.md,
 #   .claude/skills/**/*.md, .claude/commands/*.md, and the frontmatter of
 #   .claude/rules/*.md and .claude/rules/maintainers/*.md (the `paths:` globs;
-#   rule bodies are prose and are not scanned). `frontend/.claude/**` is
+#   rule bodies are prose and are not scanned). `apps/web/.claude/**` is
 #   package-relative by contract and is not scanned.
 #
 # The gate itself is not scanned: its patterns and its tracked-path table spell
@@ -40,13 +40,13 @@
 #
 # Token-boundary tuning decisions, each made against the tracked tree:
 #   - `app/`, `test/`, `public/` must not follow a letter, digit, `_`, `.`, `/`
-#     or `-`. A `/` before the word means a longer path (`frontend/app/`,
+#     or `-`. A `/` before the word means a longer path (`apps/web/app/`,
 #     `.gaia/cli/src/test/`, `$root/app/`), which is the package-relative or
 #     nested form and not a root citation. Leaving `/` out of the boundary set
-#     would flag every `frontend/app/` citation.
+#     would flag every `apps/web/app/` citation.
 #   - `.playwright/` and `.storybook/` use the same rule minus the `.` (the dot
 #     is part of the token). A backslash also blocks the match, so a regex that
-#     escapes the dot (`^frontend/\.storybook/`) is read as the nested form. A
+#     escapes the dot (`^apps/web/\.storybook/`) is read as the nested form. A
 #     `#` blocks it too: `#.storybook/preview` is a package.json `imports`
 #     subpath specifier that resolves inside the package, not a root path.
 #   - A config name must also end at a non-word boundary, so `Dockerfiles` and
@@ -54,7 +54,7 @@
 #     is the package-side name, not a retired one.
 #   - The moved root config names (`vite.config.ts`, `tsconfig.json`, ...) must
 #     not follow a letter, digit, `_`, `.`, `/` or `-`, so `.gaia/cli/tsconfig.json`,
-#     `frontend/vite.config.ts`, and `my.tsconfig.json` do not trip. `.dockerignore`
+#     `apps/web/vite.config.ts`, and `my.tsconfig.json` do not trip. `.dockerignore`
 #     after `Dockerfile` (`Dockerfile.dockerignore`) does not trip for the same
 #     reason: the dot token follows a letter.
 #   - `public/internal`, `public/private`, `test/CI` and `test/describe` are English
@@ -65,9 +65,9 @@
 #     cite `app/` without naming the root. Markdown has no comment form and is
 #     scanned line by line. A code line carrying a trailing comment is scanned.
 #   - The `.claude/` unit citations trip unless the text before them ends in
-#     `frontend/` or a `<path>/` placeholder, so an absolute or variable-prefixed root citation
+#     `apps/web/` or a `<path>/` placeholder, so an absolute or variable-prefixed root citation
 #     (`$root/.claude/skills/tailwind`) is caught while
-#     `frontend/.claude/skills/tailwind` is not.
+#     `apps/web/.claude/skills/tailwind` is not.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
 set -u
@@ -171,7 +171,7 @@ function hit_kind(line,    rest, offset, before, lead) {
   offset = 0
   while (match(rest, /\.claude\/(skills\/(a11y-fixes|eslint-fixes|gaia-react-perf|new-component|new-hook|new-route|new-service|playwright-cli|react-code|skeleton-loaders|tailwind|typescript)|rules\/(accessibility|api-service|design-baseline|i18n|playwright|react-router-docs|routes|state-pattern|storybook|tailwind)\.md|instructions\/(add-locale|remove-i18n)\.md|agents\/code-audit-frontend\/)/)) {
     before = substr(line, 1, offset + RSTART - 1)
-    if (before !~ /(frontend|<path>)\/$/) return 1
+    if (before !~ /(apps\/web|<path>)\/$/) return 1
     offset += RSTART + RLENGTH - 1
     rest = substr(line, offset + 1)
   }

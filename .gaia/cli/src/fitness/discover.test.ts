@@ -43,7 +43,7 @@ describe('kindsOfPath', () => {
     ['a/CLAUDE.local.md', ['claudemd-local']],
     ['wiki/concepts/Page.md', ['wiki']],
     ['.claude/settings.json', ['settings']],
-    ['frontend/.claude/settings.json', ['settings']],
+    ['apps/web/.claude/settings.json', ['settings']],
     ['.claude/settings.local.json', ['settings-local']],
     ['.claude/gaia-fitness.json', ['fitness-config']],
     ['src/index.ts', []],

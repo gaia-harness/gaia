@@ -36,7 +36,7 @@ The manifest assigns each shipped file exactly one class. Anything **not** in th
 
 Sentinel paths (always adopter-owned regardless of what GAIA ships): `wiki/log.md`, `CHANGELOG.md`, `.gaia/VERSION`, `.gaia/manifest.json`, `.gaia/packages.json`, `.gaia/finding-classes.json`.
 
-A package's generated `<path>/.claude/settings.json` (`frontend/.claude/settings.json`) ships in the tarball but has no manifest class: it is regenerated from the root settings and the package's `settings.overlay.json` after the merge, never three-way merged. The overlay, `frontend/gaia.package.json`, `frontend/package.json`, and `frontend/CLAUDE.md` are `shared`.
+A package's generated `<path>/.claude/settings.json` (`apps/web/.claude/settings.json`) ships in the tarball but has no manifest class: it is regenerated from the root settings and the package's `settings.overlay.json` after the merge, never three-way merged. The overlay, `apps/web/gaia.package.json`, `apps/web/package.json`, and `apps/web/CLAUDE.md` are `shared`.
 
 ## Flow
 
@@ -44,7 +44,7 @@ The step list, its order, and every command live in the `update-gaia` skill (`.c
 
 - **Nothing changes before the adopter confirms.** Version resolution, the 1.x refusal, the bundle download and verification, and the migration-note selection all run before the Proceed question. An early exit (up to date, refused, a failed verification, a blocking note, an Abort) leaves no branch and no prune; only the verified update cache remains.
 - **Every bundle is verified in the run that reads it.** The baseline and target tarballs are checked against the release's `.sha256` asset, and the trees the merge reads are extracted again from those verified tarballs. A cached tarball skips only the download. The tarball name, `gaia-bundle-<tag>.tar.gz`, is also the 2.0.0 release fence: a 1.6.1 `/update-gaia` asks for `gaia-<tag>.tar.gz`, finds nothing, and stops at its fetch step before it writes a file.
-- **A 1.x baseline migrates through the bundled 2.0.0 note.** The 2.0.0 layout moved the app into `frontend/`, and a three-way merge across that move would read every baseline app path as an upstream deletion. The refusal prints a command that downloads, verifies and extracts the v2.0.0 release, and points at the migration note inside it.
+- **A 1.x baseline migrates through the bundled 2.0.0 note.** The 2.0.0 layout moved the app into the `frontend` folder, and a three-way merge across that move would read every baseline app path as an upstream deletion. The refusal prints a command that downloads, verifies and extracts the v2.0.0 release, and points at the migration note inside it.
 - **Migration notes come from the verified target bundle only.** The target release's own selector picks the notes the update crosses, so a mode a later release adds is judged by that release. A blocking note stops the run before anything is branched, pruned or merged, and owns the hop to its own version. After-merge notes are followed after the three-way merge and before the version bump. See [[Migration Notes]] for the note format and what each mode obliges.
 - **The adopter sees the full CHANGELOG range** from the baseline to the target, and confirms. The update worktree and its branch are created only after that confirmation.
 - **A run in the main checkout works in its own worktree, on any branch.** Everything before Proceed runs read-only in the main checkout. Proceed creates a linked worktree on the update branch, cut from the default branch on `origin`, and the merge, backups, questions, version write, the adopter's commit and the draft PR all happen there; the main checkout's branch, files and `node_modules` do not move, whichever branch it holds. A re-run classifies an existing update branch from its own state: merged but not bumped resumes in a worktree holding it, and applied but uncommitted, or committed, is reported with its next step and never re-merged. See [Worktree isolation](#worktree-isolation).
@@ -144,7 +144,7 @@ Each side is normalized on its own, so a side that carries no marker pair is sti
 
 ## `package.json` (field-aware merge)
 
-The merge runs once for the root `package.json` and once for each package registered in `.gaia/packages.json` (`frontend/package.json`; an absent registry means the stock `frontend` package). A package whose `package.json` is missing on any of the three sides is skipped, which is how an adopter-added package GAIA does not ship stays untouched. The rest of this section describes one file.
+The merge runs once for the root `package.json` and once for each package registered in `.gaia/packages.json` (`apps/web/package.json`; an absent registry means the stock `frontend` package). A package whose `package.json` is missing on any of the three sides is skipped, which is how an adopter-added package GAIA does not ship stays untouched. The rest of this section describes one file.
 
 A whole-file three-way merge of `package.json` is pure noise: every adopter rewrites `name` / `description` / `author` and resets `version` at init, and GAIA bumps its own `version` every release, so adopter, baseline, and latest all differ on every release. `package.json` is therefore merged at JSON-key granularity, acting only on the genuine upstream delta `B → L`.
 

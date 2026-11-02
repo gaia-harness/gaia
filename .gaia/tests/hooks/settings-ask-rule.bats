@@ -5,14 +5,14 @@
 # live permission probe needs Claude auth), so this suite pins what the ask
 # rests on: the rule's presence and spelling, the absence of an allow rule that
 # would shadow it, the settings-write guard's registration, and the generated
-# package settings file a `frontend/` launch reads.
+# package settings file a `apps/web/` launch reads.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
   REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   SETTINGS="$REPO_ROOT/.claude/settings.json"
-  GENERATED="$REPO_ROOT/frontend/.claude/settings.json"
+  GENERATED="$REPO_ROOT/apps/web/.claude/settings.json"
   # shellcheck source=../../../.gaia/tests/helpers/hook-registration.sh
   . "$REPO_ROOT/.gaia/tests/helpers/hook-registration.sh"
 }
@@ -34,7 +34,10 @@ shadowing_allow_entries() {
      "Write(**/.claude/settings.json)", "Edit(../.claude/**)",
      "Write(../.claude/**)", "Edit(../**)", "Write(../**)",
      "Edit(../.claude/settings.json)",
-     "Write(../.claude/settings.json)"] as $bad
+     "Write(../.claude/settings.json)", "Edit(../../.claude/**)",
+     "Write(../../.claude/**)", "Edit(../../**)", "Write(../../**)",
+     "Edit(../../.claude/settings.json)",
+     "Write(../../.claude/settings.json)"] as $bad
     | (.permissions.allow // [])[] | select(. as $e | $bad | index($e))' "$1")
   if [ -n "$offenders" ]; then
     printf '%s\n' "$offenders"
@@ -58,7 +61,7 @@ root_anchored_rule_present() {
 }
 
 @test "the frontend overlay adds nothing: the root settings own the ask rules" {
-  run jq -e '. == {}' "$REPO_ROOT/frontend/.claude/settings.overlay.json"
+  run jq -e '. == {}' "$REPO_ROOT/apps/web/.claude/settings.overlay.json"
   [ "$status" -eq 0 ]
 }
 
@@ -90,13 +93,13 @@ root_anchored_rule_present() {
 
 @test "the generated frontend settings carry the ask rule and the registration" {
   ask_rule_present "$GENERATED"
-  root_anchored_rule_present "$GENERATED" "Edit(../.claude/settings.json)"
+  root_anchored_rule_present "$GENERATED" "Edit(../../.claude/settings.json)"
   hook_registered "$GENERATED" '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")' block-settings-write.sh
 }
 
 @test "the root-file check fails when the generated rule is removed" {
-  jq '.permissions.ask -= ["Edit(../.claude/settings.json)"]' "$GENERATED" >"$BATS_TEST_TMPDIR/no-root-rule.json"
-  run root_anchored_rule_present "$BATS_TEST_TMPDIR/no-root-rule.json" "Edit(../.claude/settings.json)"
+  jq '.permissions.ask -= ["Edit(../../.claude/settings.json)"]' "$GENERATED" >"$BATS_TEST_TMPDIR/no-root-rule.json"
+  run root_anchored_rule_present "$BATS_TEST_TMPDIR/no-root-rule.json" "Edit(../../.claude/settings.json)"
   [ "$status" -ne 0 ]
 }
 

@@ -11,9 +11,9 @@ tags: [decision, security, csp]
 # Decision: Content Security Policy
 
 GAIA serves a per-request nonce-based Content Security Policy. `handleRequest`
-(`frontend/app/entry.server.tsx`) generates a 16-byte hex nonce per request and threads
+(`apps/web/app/entry.server.tsx`) generates a 16-byte hex nonce per request and threads
 it through `NonceProvider` and `ServerRouter`; `getContentSecurityPolicy`
-(`frontend/app/utils/http.server.ts`) builds the policy string with that nonce.
+(`apps/web/app/utils/http.server.ts`) builds the policy string with that nonce.
 
 ## Enforced
 
@@ -22,8 +22,8 @@ server-rendered and streamed script carries the per-request nonce, React
 Router's single-fetch stream scripts and post-shell chunks included, so
 enforcement does not block hydration. App-authored inline scripts read the
 nonce through `useNonce()`: the `window.process` ENV bootstrap in
-`frontend/app/root.tsx`, and the dark-mode probe plus `ScrollRestoration` / `Scripts` /
-`Links` in `frontend/app/components/document`. The browser blanks a nonce attribute
+`apps/web/app/root.tsx`, and the dark-mode probe plus `ScrollRestoration` / `Scripts` /
+`Links` in `apps/web/app/components/document`. The browser blanks a nonce attribute
 after parsing, and React 19.3+ hydrates `nonce` against the element's `.nonce`
 property, which keeps the real value. The client's empty-string default
 therefore always differs from the server's real nonce, so every nonced element
@@ -50,7 +50,7 @@ handles that diff:
 ## Code review
 
 The Code Audit Team (`code-audit-frontend`) reviews the branch diff, so a PR that touches
-`frontend/app/utils/http.server.ts` or `frontend/app/entry.server.tsx` re-surfaces the
+`apps/web/app/utils/http.server.ts` or `apps/web/app/entry.server.tsx` re-surfaces the
 `'unsafe-inline'` and missing-`report-uri` observations; they sit in the diff
 scope. Both are accepted trade-offs, recorded here and in code comments at the
 directives themselves, not regressions.

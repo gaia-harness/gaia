@@ -221,7 +221,7 @@ const pnpm = async (argv: readonly string[]): Promise<string> => {
 const workspaceYaml = (windowMinutes: number, exclude: string[]): string =>
   [
     'packages:',
-    '  - frontend',
+    '  - apps/*',
     `minimumReleaseAge: ${windowMinutes}`,
     'minimumReleaseAgeStrict: true',
     ...(exclude.length > 0 ?
@@ -242,7 +242,7 @@ const lockedChildVersions = (): string[] => {
 };
 
 const readManifests = (): string[] =>
-  ['package.json', 'frontend/package.json', 'pnpm-workspace.yaml'].map((file) =>
+  ['package.json', 'apps/web/package.json', 'pnpm-workspace.yaml'].map((file) =>
     readFileSync(path.join(fixtureDir, file), 'utf8')
   );
 
@@ -335,13 +335,13 @@ afterAll(async () => {
 
 beforeEach(() => {
   fixtureDir = mkdtempSync(path.join(tmpdir(), 'refresh-method-'));
-  mkdirSync(path.join(fixtureDir, 'frontend'));
+  mkdirSync(path.join(fixtureDir, 'apps', 'web'), {recursive: true});
   writeFileSync(
     path.join(fixtureDir, 'package.json'),
     JSON.stringify({name: 'refresh-fixture', private: true})
   );
   writeFileSync(
-    path.join(fixtureDir, 'frontend', 'package.json'),
+    path.join(fixtureDir, 'apps', 'web', 'package.json'),
     JSON.stringify({
       dependencies: {[PARENT]: '1.0.0'},
       name: 'refresh-frontend',

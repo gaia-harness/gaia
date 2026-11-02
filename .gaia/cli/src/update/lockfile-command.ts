@@ -29,7 +29,7 @@ const HELP_TEXT = `Usage: gaia update lockfile-command --root <dir> [--ref <git 
   Prints dedupe, install or none: the pnpm command the lockfile needs after the
   tree under <dir> changed against <ref> (default HEAD). Compares the root
   pnpm-workspace.yaml and every package.json (the root plus each package in
-  .gaia/packages.json, default frontend).
+  .gaia/packages.json, default web at apps/web).
 
   Exit codes:
     0  success
@@ -168,7 +168,7 @@ const PLAIN_DIRECTORY =
   /^(?:\.|[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*)$/;
 
 // Mirrors how the update flow builds its package list: an absent or unreadable
-// registry means the stock frontend package, and a path that is not a plain
+// registry means the stock web package, and a path that is not a plain
 // relative directory is dropped so a hand-edited registry cannot steer the
 // comparison outside the tree.
 const packageDirectories = (root: string): string[] => {

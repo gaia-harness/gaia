@@ -6,7 +6,7 @@
       "finding_class": "holistic/unclassified",
       "severity": "minor",
       "security": false,
-      "path": "frontend/app/kept.ts",
+      "path": "apps/web/app/kept.ts",
       "line": 30,
       "title": "fixture finding",
       "failure_mode": "fixture",

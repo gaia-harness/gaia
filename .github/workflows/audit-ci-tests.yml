@@ -356,7 +356,7 @@ jobs:
               - 'package.json'
               - '.node-version'
               - '.npmrc'
-              - 'frontend/package.json'
+              - 'apps/web/package.json'
               - '.gaia/cli/package.json'
               - '.gaia/tests/concurrency/**'
               - '.gaia/state-registry.json'
@@ -373,19 +373,19 @@ jobs:
               # dockerfile-contract.bats reads the Dockerfile pair and the
               # package manifests, and pins every dotenv file out of the image
               # context. Each suite names the file it reads.
-              - 'frontend/.lintstagedrc.json'
-              - 'frontend/gaia.package.json'
-              - 'frontend/.claude/settings.json'
-              - 'frontend/.claude/settings.overlay.json'
-              - 'frontend/Dockerfile'
-              - 'frontend/Dockerfile.dockerignore'
+              - 'apps/web/.lintstagedrc.json'
+              - 'apps/web/gaia.package.json'
+              - 'apps/web/.claude/settings.json'
+              - 'apps/web/.claude/settings.overlay.json'
+              - 'apps/web/Dockerfile'
+              - 'apps/web/Dockerfile.dockerignore'
               # frontend-rule-globs.bats reads every frontend rule (whole-tree
               # marked), main-only-lib.bats names the perf skill it renders,
               # and doc-noop-terminal-contract.bats searches the whole tree for
               # dispatch-prompt carriers (whole-tree marked). Suites reading
               # the frontend rules router name it.
-              - 'frontend/.claude/**'
-              - 'frontend/CLAUDE.md'
+              - 'apps/web/.claude/**'
+              - 'apps/web/CLAUDE.md'
               # Every wiki page, the executed ones (PR Merge Workflow, the
               # audit round and gate pages, the disposition, policy-memory and
               # audit-agent pages, the Code Audit Team pages, the fitness page)
@@ -496,7 +496,7 @@ jobs:
               - 'pnpm-workspace.yaml'
               - '.npmrc'
               - '.node-version'
-              - 'frontend/package.json'
+              - 'apps/web/package.json'
               - '.gaia/cli/package.json'
               # The composite action the Node setup step uses.
               - '.github/actions/**'
@@ -805,7 +805,7 @@ jobs:
       # take this leg past `timeout-minutes` with every test green.
       - if: contains(fromJSON('["hooks-2", "hooks-3", "hooks-4", "hooks-5", "hooks-6"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode) && steps.selection.outputs.needs_chromium == '1'
         name: Install Chromium for the Chromium suites
-        run: pnpm -C frontend exec playwright install chromium
+        run: pnpm -C apps/web exec playwright install chromium
       # One run step per exchange group, because each group's runtime differs
       # and a step's `timeout-minutes` has to be an integer literal (W5 refuses
       # an expression, so a per-leg value cannot come from the matrix). Each

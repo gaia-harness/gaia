@@ -6,7 +6,7 @@ import {makeRepo} from './run-fixture.js';
 import {exactFilesGlob} from './tools.js';
 import {judgeStoryFile, parseEslintFiles, parseTscFiles} from './verify.js';
 
-const context = {packageDir: '/r/frontend', repoRoot: '/r'};
+const context = {packageDir: '/r/apps/web', repoRoot: '/r'};
 const roots: string[] = [];
 
 afterEach(() => {
@@ -61,19 +61,19 @@ describe('parsers', () => {
         'app/a.tsx(1,2): error TS1: x\napp/b.tsx:3:4 - error TS2: y\nnoise',
         context
       )
-    ).toEqual(['frontend/app/a.tsx', 'frontend/app/b.tsx']);
+    ).toEqual(['apps/web/app/a.tsx', 'apps/web/app/b.tsx']);
   });
 
   test('eslint json keeps only files with errors; garbage is undefined', () => {
     expect(
       parseEslintFiles(
         JSON.stringify([
-          {errorCount: 0, filePath: '/r/frontend/a.ts'},
-          {errorCount: 2, filePath: '/r/frontend/b.ts'},
+          {errorCount: 0, filePath: '/r/apps/web/a.ts'},
+          {errorCount: 2, filePath: '/r/apps/web/b.ts'},
         ]),
         context
       )
-    ).toEqual(['frontend/b.ts']);
+    ).toEqual(['apps/web/b.ts']);
     expect(parseEslintFiles('not json', context)).toBeUndefined();
   });
 });
@@ -93,17 +93,17 @@ const inventory = (
 
   roots.push(root);
 
-  return inventoryStoryFiles(typescript, `${root}/frontend`);
+  return inventoryStoryFiles(typescript, `${root}/apps/web`);
 };
 
 describe('inventoryStoryFiles', () => {
   test('reads literal globs relative to the config directory and skips docs pages', () => {
     const result = inventory({
-      'frontend/.storybook/main.ts':
+      'apps/web/.storybook/main.ts':
         "export default {stories: ['../app/**/*.mdx', '../app/**/*.stories.@(ts|tsx)']};\n",
-      'frontend/app/a.stories.tsx': 'x',
-      'frontend/app/docs.mdx': 'x',
-      'frontend/other/b.stories.tsx': 'x',
+      'apps/web/app/a.stories.tsx': 'x',
+      'apps/web/app/docs.mdx': 'x',
+      'apps/web/other/b.stories.tsx': 'x',
     });
 
     expect(result.storyFiles).toEqual(['app/a.stories.tsx']);
@@ -112,10 +112,10 @@ describe('inventoryStoryFiles', () => {
 
   test('non-literal globs fall back to the default app glob and say why', () => {
     const result = inventory({
-      'frontend/.storybook/main.ts':
+      'apps/web/.storybook/main.ts':
         "const g = '../x'; export default {stories: [g]};\n",
-      'frontend/app/a.stories.tsx': 'x',
-      'frontend/other/b.stories.tsx': 'x',
+      'apps/web/app/a.stories.tsx': 'x',
+      'apps/web/other/b.stories.tsx': 'x',
     });
 
     expect(result.storyFiles).toEqual(['app/a.stories.tsx']);

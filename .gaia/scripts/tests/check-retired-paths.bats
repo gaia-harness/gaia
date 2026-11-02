@@ -1,13 +1,13 @@
 #!/usr/bin/env bats
 # Conformance suite for .gaia/scripts/check-retired-paths.sh, the gate that fails
-# on a harness citation of a root path that moved under frontend/.
+# on a harness citation of a root path that moved under apps/web/.
 #
 # Every test builds a temporary git repository holding a copy of the gate, so
 # the verdict never depends on the real tree's state or on git history. One test
 # runs the gate over the real working tree. The failing states (a hit, a stale
 # or malformed allowlist row, a tracked retired path, an empty scan set) are
 # each driven on their own, and the over-match negatives pin the other
-# direction: a gate that flagged `frontend/app/` would fail every run.
+# direction: a gate that flagged `apps/web/app/` would fail every run.
 #
 # Run under bash 5: `bash .gaia/scripts/bats5.sh .gaia/scripts/tests/check-retired-paths.bats`.
 #
@@ -89,7 +89,7 @@ run_gate() {
   grep -qF -- 'RETIRED .claude/commands/x.md:3:' <<<"$output"
 }
 
-@test "the same citation under frontend/ does not trip the gate" {
+@test "the same citation under apps/web/ does not trip the gate" {
   local repo
   repo="$(make_repo negative)"
   cp "$FIXTURES/over-match-negatives.txt" "$repo/.claude/hooks/x.sh"
@@ -140,7 +140,7 @@ run_gate() {
   local repo
   repo="$(make_repo rule)"
   mkdir -p "$repo/.claude/rules"
-  printf '%s\n' '---' 'paths:' '  - "frontend/app/**"' '---' 'Prose about app/x.ts in the body.' >"$repo/.claude/rules/r.md"
+  printf '%s\n' '---' 'paths:' '  - "apps/web/app/**"' '---' 'Prose about app/x.ts in the body.' >"$repo/.claude/rules/r.md"
   stage_all "$repo"
   run_gate "$repo"
   [ "$status" -eq 0 ]
@@ -153,10 +153,10 @@ run_gate() {
 @test "files under tests and fixtures directories and package-relative harness are not scanned" {
   local repo
   repo="$(make_repo excluded)"
-  mkdir -p "$repo/.gaia/scripts/tests/fixtures" "$repo/frontend/.claude/hooks"
+  mkdir -p "$repo/.gaia/scripts/tests/fixtures" "$repo/apps/web/.claude/hooks"
   cp "$FIXTURES/hook-cites-root-app.txt" "$repo/.gaia/scripts/tests/fixtures/x.sh"
   cp "$FIXTURES/hook-cites-root-app.txt" "$repo/.gaia/scripts/tests/y.sh"
-  cp "$FIXTURES/hook-cites-root-app.txt" "$repo/frontend/.claude/hooks/z.sh"
+  cp "$FIXTURES/hook-cites-root-app.txt" "$repo/apps/web/.claude/hooks/z.sh"
   stage_all "$repo"
   run_gate "$repo"
   [ "$status" -eq 0 ]
@@ -240,11 +240,11 @@ run_gate() {
   grep -qxF -- 'TRACKED .claude/skills/tailwind/SKILL.md' <<<"$output"
 }
 
-@test "a tracked file under frontend/ and an untracked root app/ file do not trip TRACKED" {
+@test "a tracked file under apps/web/ and an untracked root app/ file do not trip TRACKED" {
   local repo
   repo="$(make_repo tracked-negative)"
-  mkdir -p "$repo/frontend/app" "$repo/app"
-  printf 'export {};\n' >"$repo/frontend/app/x.ts"
+  mkdir -p "$repo/apps/web/app" "$repo/app"
+  printf 'export {};\n' >"$repo/apps/web/app/x.ts"
   printf '{}\n' >"$repo/.gaia/packages-sample.json"
   stage_all "$repo"
   printf 'export {};\n' >"$repo/app/untracked.ts"

@@ -21,7 +21,7 @@ Command-line browser automation for Claude: open a page, snapshot it, click, fil
 
 ## The vendored skill
 
-The skill under `frontend/.claude/skills/playwright-cli/` is upstream's published folder, copied verbatim and never edited, so anything GAIA wants to say about it lives here. See [[Vendored Third-Party Skills]] for the convention. The vendored version is recorded in `.gaia/vendor/playwright-cli.json`; read it there.
+The skill under `apps/web/.claude/skills/playwright-cli/` is upstream's published folder, copied verbatim and never edited, so anything GAIA wants to say about it lives here. See [[Vendored Third-Party Skills]] for the convention. The vendored version is recorded in `.gaia/vendor/playwright-cli.json`; read it there.
 
 <!-- gaia:maintainer-only:start -->
 A maintainer-only `/update-deps` phase re-vendors the skill when upstream publishes a new version, and a maintainer-only offline check fails on any drift from the recorded marker.

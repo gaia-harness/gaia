@@ -18,15 +18,15 @@ setup() {
     skip "no sha256 tool"
   fi
   SANDBOX="$BATS_TEST_TMPDIR/repo"
-  mkdir -p "$SANDBOX/frontend/app" "$SANDBOX/frontend/.playwright/e2e/x" "$SANDBOX/.gaia/scripts" \
+  mkdir -p "$SANDBOX/apps/web/app" "$SANDBOX/apps/web/.playwright/e2e/x" "$SANDBOX/.gaia/scripts" \
     "$SANDBOX/.gaia/cli/src" "$SANDBOX/.github/workflows" "$SANDBOX/wiki/concepts"
   git -C "$SANDBOX" init --quiet --initial-branch=main
   git -C "$SANDBOX" config user.email "test@example.com"
   git -C "$SANDBOX" config user.name "Test"
   git -C "$SANDBOX" config commit.gpgsign false
   seed_audit_roster "$SANDBOX"
-  echo "export const x = 1;" > "$SANDBOX/frontend/app/x.ts"
-  echo "export const spec = 1;" > "$SANDBOX/frontend/.playwright/e2e/x/y.spec.ts"
+  echo "export const x = 1;" > "$SANDBOX/apps/web/app/x.ts"
+  echo "export const spec = 1;" > "$SANDBOX/apps/web/.playwright/e2e/x/y.spec.ts"
   echo "#!/usr/bin/env bash" > "$SANDBOX/.gaia/scripts/foo.sh"
   echo "export const y = 2;" > "$SANDBOX/.gaia/cli/src/index.ts"
   echo "name: ci" > "$SANDBOX/.github/workflows/ci.yml"
@@ -86,12 +86,12 @@ all_digests() {
   echo "promoted" >> "$SANDBOX/wiki/concepts/page.md"
   git -C "$SANDBOX" add wiki/concepts/page.md
   git -C "$SANDBOX" commit --quiet -m "promote wiki pages"
-  echo "export const later = 1;" >> "$SANDBOX/frontend/app/x.ts"
+  echo "export const later = 1;" >> "$SANDBOX/apps/web/app/x.ts"
   git -C "$SANDBOX" commit --quiet -am "change after promotion"
   with_promotion="$(bash "$DIGEST_CLI" --root "$SANDBOX" --member code-audit-frontend --ref HEAD)"
   [ -n "$with_promotion" ]
   git -C "$SANDBOX" reset --quiet --hard HEAD~2
-  echo "export const later = 1;" >> "$SANDBOX/frontend/app/x.ts"
+  echo "export const later = 1;" >> "$SANDBOX/apps/web/app/x.ts"
   git -C "$SANDBOX" commit --quiet -am "change before promotion"
   echo "promoted" >> "$SANDBOX/wiki/concepts/page.md"
   git -C "$SANDBOX" commit --quiet -am "promote wiki pages"
@@ -102,7 +102,7 @@ all_digests() {
 @test "red twin: a commit inside code-audit-frontend's remit rotates its digest" {
   before="$(bash "$DIGEST_CLI" --root "$SANDBOX" --member code-audit-frontend --ref HEAD)"
   [ -n "$before" ]
-  echo "export const changed = 1;" >> "$SANDBOX/frontend/.playwright/e2e/x/y.spec.ts"
+  echo "export const changed = 1;" >> "$SANDBOX/apps/web/.playwright/e2e/x/y.spec.ts"
   git -C "$SANDBOX" commit --quiet -am "edit a rendered spec"
   after="$(bash "$DIGEST_CLI" --root "$SANDBOX" --member code-audit-frontend --ref HEAD)"
   [ -n "$after" ]

@@ -29,14 +29,14 @@
 # goes out as additionalContext.
 #
 # Package scope: the test run may name a package three ways, and the
-# hook recognizes all of them. `pnpm test --run frontend/app/x.test.ts` from the
-# repo root (the root proxy script), `pnpm -C frontend test --run app/x.test.ts`
+# hook recognizes all of them. `pnpm test --run apps/web/app/x.test.ts` from the
+# repo root (the root proxy script), `pnpm -C apps/web test --run app/x.test.ts`
 # or `pnpm --filter <name> test --run app/x.test.ts` from anywhere, and
 # `pnpm test --run app/x.test.ts` from inside the package directory. Each scope
 # path is resolved to the package that owns it (the registry's longest-prefix
 # owner), the json re-run happens in that package's directory with the
 # package-relative scope, and the ledger key stays REPO-relative
-# (`frontend/app/x.test.ts`), the key red-verify-commit-check.sh computes for
+# (`apps/web/app/x.test.ts`), the key red-verify-commit-check.sh computes for
 # the staged path.
 #
 # The root proxy form is recognized but never prescribed: the proxy script

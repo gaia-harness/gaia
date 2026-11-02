@@ -565,7 +565,7 @@ run_hook_monitor() {
 }
 
 @test "a rendered UAT spec whose name only mentions credentials is readable" {
-  run_hook_read "frontend/.playwright/e2e/auth/login-rejects-invalid-credentials.spec.ts"
+  run_hook_read "apps/web/.playwright/e2e/auth/login-rejects-invalid-credentials.spec.ts"
   assert_allowed_by_json
 }
 

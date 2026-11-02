@@ -16,19 +16,19 @@
 # This header owns the lists below. Wiki pages and the reviewer definition point
 # here and never copy them.
 #
-# Path classes (quick_path_class; path shape only). `frontend/` below stands for
+# Path classes (quick_path_class; path shape only). `apps/web/` below stands for
 # the path of whichever web-stack member owns the path, read from the package
 # registry; a path owned by no member, or by a member that is not web-stack, is
 # class none, so it is never a language file, component or page:
-#   component  frontend/app/components/<dirs>/index.tsx and
-#              frontend/app/components/ui/<name>.tsx
-#   page       frontend/app/pages/<dirs>/page.tsx and
-#              frontend/app/pages/<dirs>/index.tsx
-#   language   frontend/app/languages/<locale>/<path>.ts, except any index.ts
+#   component  apps/web/app/components/<dirs>/index.tsx and
+#              apps/web/app/components/ui/<name>.tsx
+#   page       apps/web/app/pages/<dirs>/page.tsx and
+#              apps/web/app/pages/<dirs>/index.tsx
+#   language   apps/web/app/languages/<locale>/<path>.ts, except any index.ts
 #   none       everything else, including every story. Component and page
 #              exclude any path with a `hooks` or `tests` segment and anything
-#              under frontend/app/components/document/ or
-#              frontend/app/components/errors/.
+#              under apps/web/app/components/document/ or
+#              apps/web/app/components/errors/.
 # A story <dir>/tests/<base>.stories.tsx is admitted only by pairing: its
 # component <dir>/<base>.tsx (quick_story_component) is in the selected set and
 # is of class component.
@@ -201,17 +201,17 @@ quick_web_member_prefix() {
 }
 
 # quick_path_class <path>: the path's class from the allowlist above, read as
-# if the owning web member sat at the allowlist's `frontend/` spelling.
+# if the owning web member sat at the allowlist's `apps/web/` spelling.
 quick_path_class() {
   local original="$1" path rest base prefix
   prefix="$(quick_web_member_prefix "$original")" || {
     printf 'none\n'
     return 0
   }
-  path="frontend/${original#"$prefix"}"
+  path="apps/web/${original#"$prefix"}"
   case "$path" in
-    frontend/app/languages/*/*.ts)
-      rest="${path#frontend/app/languages/}"
+    apps/web/app/languages/*/*.ts)
+      rest="${path#apps/web/app/languages/}"
       base="${path##*/}"
       if [ -n "${rest%%/*}" ] && [ "$base" != "index.ts" ]; then
         printf 'language\n'
@@ -228,11 +228,11 @@ quick_path_class() {
       ;;
   esac
   case "$path" in
-    frontend/app/components/document/* | frontend/app/components/errors/*)
+    apps/web/app/components/document/* | apps/web/app/components/errors/*)
       printf 'none\n'
       ;;
-    frontend/app/components/ui/*.tsx)
-      rest="${path#frontend/app/components/ui/}"
+    apps/web/app/components/ui/*.tsx)
+      rest="${path#apps/web/app/components/ui/}"
       case "$rest" in
         */*) case "$path" in
                */index.tsx) printf 'component\n' ;;
@@ -241,10 +241,10 @@ quick_path_class() {
         *) printf 'component\n' ;;
       esac
       ;;
-    frontend/app/components/*/index.tsx)
+    apps/web/app/components/*/index.tsx)
       printf 'component\n'
       ;;
-    frontend/app/pages/*/page.tsx | frontend/app/pages/*/index.tsx)
+    apps/web/app/pages/*/page.tsx | apps/web/app/pages/*/index.tsx)
       printf 'page\n'
       ;;
     *)

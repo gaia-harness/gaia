@@ -2,7 +2,7 @@
 # 09-data-layer-query-on.sh
 # distribution-runner: exclusive
 # distribution-runner: paths .gaia/cli/src/init/** .gaia/cli/src/scaffold/** .gaia/cli/templates/** .gaia/tests/distribution/fixtures/data-layer/** pnpm-lock.yaml
-# distribution-runner: paths frontend/package.json frontend/.storybook/** frontend/eslint.config.mjs frontend/tsconfig.json frontend/vite.config.ts frontend/vitest.config.ts frontend/react-router.config.ts frontend/app/root.tsx frontend/app/state/** frontend/app/services/** frontend/test/**
+# distribution-runner: paths apps/web/package.json apps/web/.storybook/** apps/web/eslint.config.mjs apps/web/tsconfig.json apps/web/vite.config.ts apps/web/vitest.config.ts apps/web/react-router.config.ts apps/web/app/root.tsx apps/web/app/state/** apps/web/app/services/** apps/web/test/**
 #
 # Adopter-flow regression for the opt-in TanStack Query data layer. The
 # template ships without Query and without any example service or route, so
@@ -15,7 +15,7 @@
 #      `react-router.config.ts` byte-identical (UAT-002, UAT-003).
 #   2. A non-frozen `pnpm install` (the lockfile gains Query), then two reruns
 #      (`--query true`, `--query false`) change nothing: every file under
-#      `frontend/` and the root lockfile stays byte-identical (UAT-003).
+#      `apps/web/` and the root lockfile stays byte-identical (UAT-003).
 #   3. `scaffold service items --mocks` writes `queries.ts`, and four routes
 #      bound to it cover every wiring variant with an action: the Query list
 #      and detail pair, plus a server-loader list and a clientLoader list that
@@ -51,7 +51,7 @@ ROUTER_CONFIG_HASH="$(hash_file "$FRONTEND/react-router.config.ts")"
 ROOT_HASH="$(hash_file "$FRONTEND/app/root.tsx")"
 
 QUERY_ON_JSON="$(gaia_json "query on" init configure-data-layer --casing snake --query true)"
-for expected_path in frontend/package.json frontend/app/query-client.ts frontend/app/state/index.tsx frontend/app/services/gaia/api.ts; do
+for expected_path in apps/web/package.json apps/web/app/query-client.ts apps/web/app/state/index.tsx apps/web/app/services/gaia/api.ts; do
   [ "$(json_get "$QUERY_ON_JSON" "parsed.changed.includes('$expected_path')")" = "true" ] \
     || { fail "configure-data-layer --casing snake --query true did not list $expected_path in changed (got: $QUERY_ON_JSON)"; exit 1; }
 done

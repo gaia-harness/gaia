@@ -49,7 +49,7 @@ If the check still prints `BELOW`, a non-corepack pnpm (Homebrew, the standalone
 Stories and hook tests run in headless Chromium and `pnpm install` installs no browsers. Run:
 
 ```bash
-pnpm -C frontend exec playwright install chromium
+pnpm -C apps/web exec playwright install chromium
 ```
 
-It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a browser launch can still fail with `Host system is missing dependencies`; then give the user `! pnpm -C frontend exec playwright install-deps chromium` to type in the prompt (it asks for their `sudo` password to install the system libraries).
+It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a browser launch can still fail with `Host system is missing dependencies`; then give the user `! pnpm -C apps/web exec playwright install-deps chromium` to type in the prompt (it asks for their `sudo` password to install the system libraries).

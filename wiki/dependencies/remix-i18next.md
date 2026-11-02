@@ -10,7 +10,7 @@ tags: [dependency, i18n]
 
 # remix-i18next
 
-i18n integration built on `i18next` for React Router. The app wires it through middleware (`frontend/app/middleware/i18next.ts`) and exposes server-side translation for loaders via `getInstance(context)`. All exports come from the bare `remix-i18next` package; there are no subpath exports. The package peers `react-router ^8`.
+i18n integration built on `i18next` for React Router. The app wires it through middleware (`apps/web/app/middleware/i18next.ts`) and exposes server-side translation for loaders via `getInstance(context)`. All exports come from the bare `remix-i18next` package; there are no subpath exports. The package peers `react-router ^8`.
 
 ## Companion
 
@@ -27,6 +27,6 @@ Versions come from `package.json`.
 
 ## Client wiring
 
-The server middleware resolves the request language; the browser entry (`frontend/app/entry.client.tsx`) initializes its own `i18next` instance with `.use(LanguageDetector)` from `i18next-browser-languagedetector`, detecting the language client-side from the `htmlTag` set during SSR.
+The server middleware resolves the request language; the browser entry (`apps/web/app/entry.client.tsx`) initializes its own `i18next` instance with `.use(LanguageDetector)` from `i18next-browser-languagedetector`, detecting the language client-side from the `htmlTag` set during SSR.
 
 See [[i18n]], [[Language Flow]].

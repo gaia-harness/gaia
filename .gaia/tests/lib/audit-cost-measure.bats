@@ -344,7 +344,7 @@ make_throwaway() {
   THROWAWAY="$BATS_TEST_TMPDIR/throwaway"
   git init -q --bare "$THROWAWAY_ORIGIN"
   git init -q -b main "$THROWAWAY"
-  for relative_path in frontend/app/languages/en/common.ts frontend/app/languages/en/errors.ts frontend/app/routes/_public.tsx; do
+  for relative_path in apps/web/app/languages/en/common.ts apps/web/app/languages/en/errors.ts apps/web/app/routes/_public.tsx; do
     mkdir -p "$THROWAWAY/$(dirname "$relative_path")"
     git -C "$REPO_ROOT" show "HEAD:$relative_path" >"$THROWAWAY/$relative_path"
   done
@@ -424,18 +424,18 @@ make_throwaway() {
 }
 
 # bats test_tags=whole-tree
-@test "the replay patches name only the contract's paths, add more than the quick line cap, and apply to HEAD's frontend/app" {
+@test "the replay patches name only the contract's paths, add more than the quick line cap, and apply to HEAD's apps/web/app" {
   local patch changed_paths
   changed_paths="$(grep '^diff --git' "$TOOLKIT/replays/language-file.patch" | sed 's#^diff --git a/\(.*\) b/.*#\1#' | sort | tr '\n' ' ')"
-  [ "$changed_paths" = "frontend/app/languages/en/common.ts frontend/app/languages/en/errors.ts " ]
+  [ "$changed_paths" = "apps/web/app/languages/en/common.ts apps/web/app/languages/en/errors.ts " ]
   changed_paths="$(grep '^diff --git' "$TOOLKIT/replays/tsx-variant.patch" | sed 's#^diff --git a/\(.*\) b/.*#\1#' | sort | tr '\n' ' ')"
-  [ "$changed_paths" = "frontend/app/languages/en/common.ts frontend/app/languages/en/errors.ts frontend/app/routes/_public.tsx " ]
+  [ "$changed_paths" = "apps/web/app/languages/en/common.ts apps/web/app/languages/en/errors.ts apps/web/app/routes/_public.tsx " ]
   grep -q '^+import {useTranslation} from' "$TOOLKIT/replays/tsx-variant.patch" || return 1
   grep -q "^+.*{t('" "$TOOLKIT/replays/tsx-variant.patch" || return 1
 
   local scratch_export="$BATS_TEST_TMPDIR/export"
   mkdir -p "$scratch_export"
-  git -C "$REPO_ROOT" archive HEAD frontend/app | tar -x -C "$scratch_export"
+  git -C "$REPO_ROOT" archive HEAD apps/web/app | tar -x -C "$scratch_export"
   for patch in language-file tsx-variant; do
     (cd "$scratch_export" && git apply --check "$TOOLKIT/replays/$patch.patch")
   done

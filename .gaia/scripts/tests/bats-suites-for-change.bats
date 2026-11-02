@@ -126,15 +126,15 @@ commit_base_files() {
 
 @test "a source file sharing its basename, in a tree with no suite, selects only suites naming its unique trailing path" {
   base="$(commit_base_files \
-    'frontend/app/form-error/index.tsx=a' \
-    'frontend/app/form-error/tests/index.test.tsx=b' \
-    'frontend/app/date/index.tsx=c' \
-    'frontend/app/date/tests/index.test.tsx=d' \
-    'tests/component-source.bats=# reads frontend/app/form-error/index.tsx' \
+    'apps/web/app/form-error/index.tsx=a' \
+    'apps/web/app/form-error/tests/index.test.tsx=b' \
+    'apps/web/app/date/index.tsx=c' \
+    'apps/web/app/date/tests/index.test.tsx=d' \
+    'tests/component-source.bats=# reads apps/web/app/form-error/index.tsx' \
     'tests/component-test.bats=# reads form-error/tests/index.test.tsx' \
     'tests/fixture-index.bats=stage index.tsx tests/index.test.tsx')"
-  printf 'edited\n' >> "$FIXTURE/frontend/app/form-error/index.tsx"
-  printf 'edited\n' >> "$FIXTURE/frontend/app/form-error/tests/index.test.tsx"
+  printf 'edited\n' >> "$FIXTURE/apps/web/app/form-error/index.tsx"
+  printf 'edited\n' >> "$FIXTURE/apps/web/app/form-error/tests/index.test.tsx"
   git -C "$FIXTURE" commit -q -am edit
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
@@ -148,11 +148,11 @@ commit_base_files() {
 
 @test "a deleted source file sharing its basename still selects suites naming its unique trailing path" {
   base="$(commit_base_files \
-    'frontend/app/form-error/index.tsx=a' \
-    'frontend/app/date/index.tsx=c' \
+    'apps/web/app/form-error/index.tsx=a' \
+    'apps/web/app/date/index.tsx=c' \
     'tests/date-source.bats=# reads app/date/index.tsx' \
     'tests/fixture-index.bats=stage index.tsx')"
-  git -C "$FIXTURE" rm -q frontend/app/date/index.tsx
+  git -C "$FIXTURE" rm -q apps/web/app/date/index.tsx
   git -C "$FIXTURE" commit -q -m delete
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
@@ -181,9 +181,9 @@ commit_base_files() {
 
 @test "a source file with a basename no other file has, in a tree with no suite, selects suites naming its basename" {
   base="$(commit_base_files \
-    'frontend/app/date/year-month-day.tsx=a' \
+    'apps/web/app/date/year-month-day.tsx=a' \
     'tests/names-date.bats=# reads "$COMPONENTS/year-month-day.tsx"')"
-  printf 'edited\n' >> "$FIXTURE/frontend/app/date/year-month-day.tsx"
+  printf 'edited\n' >> "$FIXTURE/apps/web/app/date/year-month-day.tsx"
   git -C "$FIXTURE" commit -q -am edit
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD

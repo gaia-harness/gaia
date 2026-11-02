@@ -4,7 +4,7 @@
  * Step 2 of the maintainer release runbook. Scans conventional-commit
  * subjects (and bodies) since the last tag, classifies the highest
  * semver bump, and either reports the proposal or applies it to
- * `package.json`, `frontend/package.json` and `.gaia/VERSION`.
+ * `package.json`, `apps/web/package.json` and `.gaia/VERSION`.
  *
  * Bump rules; highest severity wins:
  *
@@ -19,7 +19,7 @@
  *
  * Without `--auto` the command prints `vCURRENT -> vNEXT (bump)` and
  * exits 0 without writing. With `--auto` it writes the new version to
- * `package.json`, `frontend/package.json` (kept at the root's version: the
+ * `package.json`, `apps/web/package.json` (kept at the root's version: the
  * app reads it through `npm_package_version`), and `.gaia/VERSION`, then
  * prints the new version on stdout.
  *
@@ -45,7 +45,7 @@ const HELP_TEXT = `Usage: gaia-maintainer release bump [--auto]
 
   Compute the next semver bump from conventional-commit subjects since
   the last tag. Without --auto, prints the proposal. With --auto, writes
-  package.json, frontend/package.json and .gaia/VERSION.
+  package.json, apps/web/package.json and .gaia/VERSION.
 
   Exit codes:
     0  success
@@ -314,7 +314,7 @@ const writePackageJsonVersion = (
 // Packages whose `package.json` carries the same version as the root. The
 // frontend app reads `npm_package_version` (env.server.ts), and a bats case
 // fails the release PR when the two drift, so the bump writes both.
-const PACKAGE_VERSION_FILES: readonly string[] = ['frontend/package.json'];
+const PACKAGE_VERSION_FILES: readonly string[] = ['apps/web/package.json'];
 
 const writePackageVersions = (cwd: string, newVersion: string): void => {
   for (const relative of PACKAGE_VERSION_FILES) {

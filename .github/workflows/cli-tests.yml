@@ -153,7 +153,7 @@ jobs:
               # drift the check exists to catch, and without these lines it
               # resolves `code=false`, skips the step, and greens this required
               # check having verified nothing.
-              - 'frontend/.claude/skills/playwright-cli/**'
+              - 'apps/web/.claude/skills/playwright-cli/**'
               - '.gaia/vendor/**'
               - '.gaia/scripts/verify-vendored-skills.sh'
               # src/red-ledger/extract-test-signals.test.ts spawns this helper
@@ -211,7 +211,7 @@ jobs:
             # pins and ownership script that decide which files are GAIA's.
             fitness:
               - '.claude/**'
-              - 'frontend/.claude/**'
+              - 'apps/web/.claude/**'
               - '**/CLAUDE.md'
               - '**/CLAUDE.local.md'
               - '.gaia/cli/**'

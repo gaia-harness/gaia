@@ -148,8 +148,8 @@ const initSandboxRepo = (root: string, omit?: ReadonlySet<string>): void => {
 /**
  * `transitionalLayout` pins the app at the repo root with a literal registry
  * and descriptor in the baseline commit; without it the sandbox has no
- * registry and commits the committed descriptor under `frontend/`, so the
- * built-in default (the app under `frontend/`) applies.
+ * registry and commits the committed descriptor under `apps/web/`, so the
+ * built-in default (the app under `apps/web/`) applies.
  */
 const setupSandbox = (transitionalLayout = true): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-wiki-classify-'));
@@ -172,13 +172,13 @@ const setupSandbox = (transitionalLayout = true): Sandbox => {
 
   if (transitionalLayout) {
     baseline['.gaia/packages.json'] = JSON.stringify([
-      {name: 'frontend', path: '.'},
+      {name: 'web', path: '.'},
     ]);
     baseline['gaia.package.json'] = JSON.stringify(
       committedFrontendDescriptor()
     );
   } else {
-    baseline['frontend/gaia.package.json'] = JSON.stringify(
+    baseline['apps/web/gaia.package.json'] = JSON.stringify(
       committedFrontendDescriptor()
     );
   }
@@ -947,9 +947,9 @@ describe('wiki commit-classify under the built-in frontend package', () => {
     vi.restoreAllMocks();
   });
 
-  test('a frontend/app source commit is source-bearing', () => {
+  test('a apps/web/app source commit is source-bearing', () => {
     sandbox.commit('feat: add a module', {
-      'frontend/app/foo.ts': 'export const x = 1;\n',
+      'apps/web/app/foo.ts': 'export const x = 1;\n',
     });
 
     const {commits} = classify(sandbox);
@@ -957,9 +957,9 @@ describe('wiki commit-classify under the built-in frontend package', () => {
     expect(commits[0]?.suggestion_reason).toContain('source-bearing');
   });
 
-  test('frontend/app/components is inventory and skips', () => {
+  test('apps/web/app/components is inventory and skips', () => {
     sandbox.commit('feat: add Button variant', {
-      'frontend/app/components/X/index.tsx': 'export const X = null;\n',
+      'apps/web/app/components/X/index.tsx': 'export const X = null;\n',
     });
 
     const {commits} = classify(sandbox);
@@ -967,9 +967,9 @@ describe('wiki commit-classify under the built-in frontend package', () => {
     expect(commits[0]?.suggestion_reason).toContain('inventory');
   });
 
-  test('frontend/app/routes.ts is flows-relevant', () => {
+  test('apps/web/app/routes.ts is flows-relevant', () => {
     sandbox.commit('chore: touch routes', {
-      'frontend/app/routes.ts': 'export default [];\n',
+      'apps/web/app/routes.ts': 'export default [];\n',
     });
 
     const {commits} = classify(sandbox);
@@ -995,7 +995,7 @@ describe('wiki commit-classify under the built-in frontend package', () => {
       'cli/src/parse.ts': 'export const x = 1;\n',
     });
     sandbox.commit('fix: repair the app', {
-      'frontend/app/foo.ts': 'export const x = 1;\n',
+      'apps/web/app/foo.ts': 'export const x = 1;\n',
     });
 
     const {commits} = classify(sandbox);

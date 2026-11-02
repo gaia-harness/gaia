@@ -13,40 +13,42 @@ You conduct comprehensive code audits for production React 19 / React Router 7 S
 ## Remit and self-skip
 
 <!-- gaia:audit-remit:start -->
-- `frontend/app/**`
-- `frontend/test/**`
-- `frontend/.storybook/**`
+- `apps/**`
+- `packages/**`
+- `apps/web/app/**`
+- `apps/web/test/**`
+- `apps/web/.storybook/**`
 - `.github/workflows/**`
 - `package.json`
 - `pnpm-lock.yaml`
 - `pnpm-workspace.yaml`
-- `frontend/package.json`
-- `frontend/tsconfig*.json`
-- `frontend/*.config.ts`
-- `frontend/*.config.mts`
-- `frontend/*.config.mjs`
-- `frontend/*.config.cjs`
-- `frontend/*.config.js`
-- `frontend/dev-ports*.ts`
+- `apps/web/package.json`
+- `apps/web/tsconfig*.json`
+- `apps/web/*.config.ts`
+- `apps/web/*.config.mts`
+- `apps/web/*.config.mjs`
+- `apps/web/*.config.cjs`
+- `apps/web/*.config.js`
+- `apps/web/dev-ports*.ts`
 - `*.config.ts`
 - `*.config.mts`
 - `*.config.mjs`
 - `*.config.cjs`
 - `*.config.js`
-- `frontend/.playwright/**`
+- `apps/web/.playwright/**`
 - `.npmrc`
 - `.prettierignore`
 - `.nvmrc`
 - `.node-version`
-- `frontend/.lintstagedrc.json`
-- `frontend/.prettierignore`
-- `frontend/Dockerfile`
-- `frontend/Dockerfile.dockerignore`
-- `frontend/.env.example`
-- `frontend/components.json`
-- `frontend/gaia.package.json`
-- `frontend/.claude/**`
-- `frontend/CLAUDE.md`
+- `apps/web/.lintstagedrc.json`
+- `apps/web/.prettierignore`
+- `apps/web/Dockerfile`
+- `apps/web/Dockerfile.dockerignore`
+- `apps/web/.env.example`
+- `apps/web/components.json`
+- `apps/web/gaia.package.json`
+- `apps/web/.claude/**`
+- `apps/web/CLAUDE.md`
 
 Your globs above are a **second precedence tier**: every claimant member's globs are matched first, first-match-wins over roster order, and a path any claimant claims belongs to that claimant even when a glob above also matches it. Only a path no claimant claims reaches you. The roster is the whole truth about your reach; nothing outside this region grants you a file it does not declare.
 <!-- gaia:audit-remit:end -->
@@ -114,7 +116,7 @@ Analyze the changed code across these dimensions, focusing on cross-cutting conc
 
 - **N+1 patterns**: Sequential awaits inside loops that could be parallelized with `Promise.all`, and O(n^2) work split across a function or component boundary that no single scope shows: a list row component or per-item helper that scans the full collection (`find`, `filter`, `includes`, `some`); fix by building a `Map` or `Set` once above the per-item work, or by passing the looked-up item down
 - **Compiler bail-outs**: a component or hook the React Compiler report shows skipped or failing (a Rules-of-React violation) when a compile report is available; manual memos and `"use no memo"` directives are judged by the react-buckets compiler-first rule, not here
-- **Bundle size**: Large imports that could be tree-shaken or lazy-loaded, duplicate logic, named imports over namespace imports (the barrel-import false-positive caveat under "Merge findings" applies here too: the project's documented barrel modules, e.g. `frontend/app/services/gaia/*` and `frontend/test/mocks/*`, are the intended pattern, not defects)
+- **Bundle size**: Large imports that could be tree-shaken or lazy-loaded, duplicate logic, named imports over namespace imports (the barrel-import false-positive caveat under "Merge findings" applies here too: the project's documented barrel modules, e.g. `apps/web/app/services/gaia/*` and `apps/web/test/mocks/*`, are the intended pattern, not defects)
 - **SSR performance**: Heavy computation in loaders that blocks response, missing caching for cacheable upstream responses
 - **Service-layer efficiency**: Over-fetching data, missing pagination/limits on list endpoints, redundant requests that could be coalesced
 - **Network waterfall**: Sequential fetches that could be parallel, missing prefetching opportunities
@@ -126,7 +128,7 @@ Analyze the changed code across these dimensions, focusing on cross-cutting conc
 - **Dependency direction**: Lower-level modules importing from higher-level ones, circular dependencies
 - **Consistency**: Patterns that deviate from established project conventions without good reason
 - **Testability**: Tightly coupled code that's hard to test, side effects in pure functions
-- **State placement**: Context vs. URL state vs. local, used appropriately per `frontend/.claude/rules/state-pattern.md`
+- **State placement**: Context vs. URL state vs. local, used appropriately per `apps/web/.claude/rules/state-pattern.md`
 - **Module-level duplication**: Repeated logic across files that should be extracted (line-level duplication is for the subagents). For each constant list, union type, schema, lookup map, or helper the diff adds, search the whole repo for an existing definition of the same set or behavior, matching on values and not only on names; the copy a diff duplicates usually sits outside the diff. A hit is `holistic/drifting-duplicate`, repaired by importing or deriving from the existing source (typescript skill, "One Source of Truth")
 
 ### 4. Robustness & Edge Cases
@@ -161,8 +163,8 @@ Beyond general best practices, verify adherence to these project-specific patter
 
 - No `eslint-disable react-hooks/exhaustive-deps` to hide missing fetcher deps, fix the deps instead
 - No `.catch(() => {})` to silence a promise: an event handler that fires one is `async` and `await`s it; any other fire-and-forget statement uses `void`
-- Route files (`frontend/app/routes/`) are thin shells: they may export `loader`, `clientLoader`, `action`, `clientAction`, and `HydrateFallback`, plus a one-line page import. UI belongs in `frontend/app/pages/`.
-- Data-loading review checks (review-only, no lint): flag render-time schema parsing, `as any` on query results, effect-based fetching, a hand-rolled fetch cache, a module-scope QueryClient on the server, and `invalidateQueries` scattered outside actions and mutation callbacks. The rule: `frontend/.claude/skills/react-code/SKILL.md`.
+- Route files (`apps/web/app/routes/`) are thin shells: they may export `loader`, `clientLoader`, `action`, `clientAction`, and `HydrateFallback`, plus a one-line page import. UI belongs in `apps/web/app/pages/`.
+- Data-loading review checks (review-only, no lint): flag render-time schema parsing, `as any` on query results, effect-based fetching, a hand-rolled fetch cache, a module-scope QueryClient on the server, and `invalidateQueries` scattered outside actions and mutation callbacks. The rule: `apps/web/.claude/skills/react-code/SKILL.md`.
 - Localization: every user-facing string comes from `t()`. Hardcoded JSX strings are bugs (except approximate skeleton-loader placeholders standing in for dynamic values).
 
 ## Findings grading
@@ -335,8 +337,8 @@ Enforced by `.gaia/scripts/tests/audit-blend-scope.bats`, test "a clean catch-up
 Read the oracle table's knip row and `<scratch>/knip.json` (an `issues[]` array keyed by file with `files`, `dependencies`, `devDependencies`, `unlisted`, `binaries`, `unresolved`, `exports`, `types`, `enumMembers`, `duplicates`). Classify each finding into one of the three buckets from `wiki/dependencies/knip.md`:
 
 1. **Real dead code**: unused file/export/type with no remaining callers. Recommend deletion.
-2. **Unconsumed template surface**: exported on purpose though nothing in this repo imports it yet. Recommend covering it with an `entry` glob in `frontend/knip.config.ts`, as narrow as the case allows.
-3. **Implicit dependency**: package used via config plugin, CSS, or runtime resolution that knip can't trace. Recommend adding to `ignoreDependencies` in `frontend/knip.config.ts`.
+2. **Unconsumed template surface**: exported on purpose though nothing in this repo imports it yet. Recommend covering it with an `entry` glob in `apps/web/knip.config.ts`, as narrow as the case allows.
+3. **Implicit dependency**: package used via config plugin, CSS, or runtime resolution that knip can't trace. Recommend adding to `ignoreDependencies` in `apps/web/knip.config.ts`.
 
 Knip findings are **advisory, not blocking**, like react-doctor's: surface them in the Tooling table with the recommended bucket and action. When `issues` is an empty array, write **No issues**. A `skipped` or `failed` row is reported as such in the table, never as a clean result.
 

@@ -12,12 +12,12 @@ tags: [dependency, testing, visual]
 
 Visual regression service that consumes Storybook stories. Runs in CI via `.github/workflows/chromatic.yml`.
 
-- `pnpm chromatic`: uploads stories from a local run (flags in `frontend/package.json`); CI uses `chromaui/action` with the inputs in `chromatic.yml`
+- `pnpm chromatic`: uploads stories from a local run (flags in `apps/web/package.json`); CI uses `chromaui/action` with the inputs in `chromatic.yml`
 - `CHROMATIC_PROJECT_TOKEN`: env var on CI
 
 ## Modes: one snapshot per theme
 
-`parameters.chromatic.modes` in `frontend/.storybook/preview.ts` takes the modes `frontend/.storybook/modes.ts` defines: `light` and `dark`, both at a 1280px viewport. Chromatic renders the story once per mode, so a story's `play` runs unchanged in each, and the dark mode's `theme` global puts `dark` on `<html>` through the Chromatic decorator (see [[Storybook Stories]]). A `.test()` is a behavior check and adds no snapshot; [[Stories as Tests]] owns the doctrine.
+`parameters.chromatic.modes` in `apps/web/.storybook/preview.ts` takes the modes `apps/web/.storybook/modes.ts` defines: `light` and `dark`, both at a 1280px viewport. Chromatic renders the story once per mode, so a story's `play` runs unchanged in each, and the dark mode's `theme` global puts `dark` on `<html>` through the Chromatic decorator (see [[Storybook Stories]]). A `.test()` is a behavior check and adds no snapshot; [[Stories as Tests]] owns the doctrine.
 
 Each mode is its own snapshot with its own baseline, so every snapshotted story costs two snapshots against the Chromatic quota, one per theme. `disableSnapshot: true` removes a story from both.
 
@@ -37,7 +37,7 @@ The `.github/workflows/chromatic.yml` workflow triggers on a push to `main` and 
 
 ## TurboSnap and dependency changes
 
-`onlyChanged` turns on TurboSnap, which re-tests only the stories whose import graph a change reaches. When a commit touches `frontend/package.json` or `pnpm-lock.yaml`, TurboSnap pairs `frontend/package.json` with the root `pnpm-lock.yaml`, reads the `frontend` importer's resolved dependencies at HEAD and at the baseline, and re-tests only the stories that import a package whose version changed.
+`onlyChanged` turns on TurboSnap, which re-tests only the stories whose import graph a change reaches. When a commit touches `apps/web/package.json` or `pnpm-lock.yaml`, TurboSnap pairs `apps/web/package.json` with the root `pnpm-lock.yaml`, reads the `frontend` importer's resolved dependencies at HEAD and at the baseline, and re-tests only the stories that import a package whose version changed.
 
 pnpm writes `pnpm-lock.yaml` as two YAML documents. Only a Chromatic CLI at 18.10.0 or later parses that, so the `chromaui/action` pin in `.github/workflows/chromatic.yml` must stay at or above it. On an older CLI the build log prints `Could not retrieve dependency changes from lockfiles; checking package.json`, and any edit to `package.json`, a script change included, disables TurboSnap for a full build. That line in a build log means the lockfile trace failed.
 
@@ -51,8 +51,8 @@ Do not list `package.json` under `untraced` to suppress those full builds: it al
 
 ## Preview publishes no environment values
 
-Before uploading, the workflow builds Storybook once with sentinel values standing in for every key `frontend/app/env.server.ts`'s `schema` declares except `NODE_ENV` (which needs its real value for the build itself), then fails if any sentinel survives into `storybook-static/`. The published preview is a static Vite artifact with no build-time `define` substitution wired to it, so this step asserts that fact directly rather than trusting it never regresses: a substitution re-added to any Storybook config or plugin that inlined an env value would fail the build instead of silently shipping a secret- or deployment-value-carrying preview.
+Before uploading, the workflow builds Storybook once with sentinel values standing in for every key `apps/web/app/env.server.ts`'s `schema` declares except `NODE_ENV` (which needs its real value for the build itself), then fails if any sentinel survives into `storybook-static/`. The published preview is a static Vite artifact with no build-time `define` substitution wired to it, so this step asserts that fact directly rather than trusting it never regresses: a substitution re-added to any Storybook config or plugin that inlined an env value would fail the build instead of silently shipping a secret- or deployment-value-carrying preview.
 
 ## Opt-out
 
-Removing Chromatic means uninstalling `chromatic`, deleting its GitHub workflow, the `frontend/.storybook/chromatic/` folder and `frontend/.storybook/modes.ts`, and updating `frontend/.storybook/preview.ts` to use `WrapDecorator` directly and drop `parameters.chromatic` and the `theme` global. Ask Claude to walk through the steps.
+Removing Chromatic means uninstalling `chromatic`, deleting its GitHub workflow, the `apps/web/.storybook/chromatic/` folder and `apps/web/.storybook/modes.ts`, and updating `apps/web/.storybook/preview.ts` to use `WrapDecorator` directly and drop `parameters.chromatic` and the `theme` global. Ask Claude to walk through the steps.

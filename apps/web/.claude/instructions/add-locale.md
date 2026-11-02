@@ -1,0 +1,174 @@
+---
+name: add-locale
+description: Add a locale to the project's i18n setup, at /gaia-init or any time after. Parameterized, substitute LOCALE_CODE / LANGUAGE_NAME_EN / LANGUAGE_NAME_NATIVE / IS_RTL before executing.
+---
+
+# add-locale instruction
+
+All paths in this file are repo-relative. The executing agent runs from the project root.
+
+Contents: When this runs; Variable substitution; Step 1, Mirror the English language tree; Step 2, Register the locale; Step 3, LanguageSelect; Step 4, Storybook preview; Step 5, RTL handling (only if `{{IS_RTL}}` is `true`); Step 6, Playwright spec; Step 7, Manifest (no change needed); Step 8, Verify; Step 9, Summary.
+
+## When this runs
+
+`/gaia-init` runs it for each language picked at setup, and a request to add a language later ("add French") runs it the same way. The file stays in place after a run, so it serves every later language too.
+
+- **i18n removed.** When `apps/web/app/languages/` does not exist, the project removed i18n: stop and say that adding a language first needs the i18n scaffolding rebuilt.
+- **Several locales in one run.** Run Steps 1 to 7 for every locale first, each with its own substitution, then Step 8 once and Step 9 once per locale. Each locale is registered only once its own tree exists, so a verify would pass after any locale; one verify after the last spares a typecheck and lint run per extra locale.
+
+## Variable substitution
+
+Before executing any step, verify all four variables below have been replaced with real values. If any variable is still in `{{...}}` form, **refuse to proceed** and report which variables are unsubstituted.
+
+| Variable                   | Expected form                                    |
+| -------------------------- | ------------------------------------------------ |
+| `{{LOCALE_CODE}}`          | ISO 639-1 lowercase, e.g. `pl`, `es`, `ja`, `ar` |
+| `{{LANGUAGE_NAME_EN}}`     | English display name, e.g. `Polish`              |
+| `{{LANGUAGE_NAME_NATIVE}}` | Native display name, e.g. `Polski`, `العربية`    |
+| `{{IS_RTL}}`               | `true` or `false`                                |
+
+---
+
+## Step 1, Mirror the English language tree
+
+For each file under `apps/web/app/languages/en/`, create the same path under `apps/web/app/languages/{{LOCALE_CODE}}/` with the same TypeScript module shape (same keys, same exports).
+
+Files to create (mirroring the `en/` tree):
+
+- `apps/web/app/languages/{{LOCALE_CODE}}/common.ts`
+- `apps/web/app/languages/{{LOCALE_CODE}}/errors.ts`
+- `apps/web/app/languages/{{LOCALE_CODE}}/index.ts`
+- `apps/web/app/languages/{{LOCALE_CODE}}/pages/_index.ts`
+- `apps/web/app/languages/{{LOCALE_CODE}}/pages/index.ts`
+
+Translation rules:
+
+- Translate all user-visible string values from English to `{{LANGUAGE_NAME_EN}}`.
+- If a confident translation cannot be produced for a key (proper noun, brand name, code identifier embedded in a string, placeholder like `{{count}}` or `{{name}}`), copy the English value verbatim, an English placeholder is better than a wrong translation.
+- Keep all TypeScript structure, export shapes, key names, template literals (`{{count}}`, `{{name}}`, `{{status}}`), and nesting references (`$t(common:meta.siteName)`) identical to the `en/` source. Only string values change. A value that is wholly a nesting reference is copied verbatim, never replaced by the text it resolves to.
+
+---
+
+## Step 2, Register the locale
+
+Edit `apps/web/app/languages/index.ts`. This step is the one place a locale is registered: `/gaia-init`'s `configure-i18n` registers none, so the index never imports a language tree that does not exist yet. Skip any of the four entries below that is already present, so a re-run changes nothing:
+
+1. Add `import {{LOCALE_CODE}} from './{{LOCALE_CODE}}';` in alphabetical order among existing locale imports.
+2. Append `'{{LOCALE_CODE}}'` to the `LANGUAGES` array, keeping the array alphabetically sorted.
+3. Append `| '{{LOCALE_CODE}}'` to the `Language` union type, keeping the union alphabetically sorted.
+4. Add `{{LOCALE_CODE}}` to the default export object in alphabetical order among existing keys.
+
+---
+
+## Step 3, LanguageSelect
+
+Edit `apps/web/app/components/language-select/index.tsx`:
+
+Add `{{LOCALE_CODE}}: '{{LANGUAGE_NAME_NATIVE}}'` to the `LANGUAGE_LABELS` record (keep `en: 'English'` first). Do **not** edit `options`, it is derived inside the component by mapping over the `languages` prop (default `LANGUAGES`, registered in Step 2) and falls back to the bare locale code when a label is missing. Adding the `LANGUAGE_LABELS` entry is what gives the new option its native display name.
+
+The dropdown's option order follows the `LANGUAGES` array order from Step 2, so there is no manual sorting to do here.
+
+---
+
+## Step 4, Storybook preview
+
+Edit `apps/web/.storybook/preview.ts`:
+
+In the `definePreview({...})` call that the file exports, inside `initialGlobals.locales`, add an entry for the new locale:
+
+```
+{{LOCALE_CODE}}: {left: '<flag emoji>', right: '{{LOCALE_CODE}}', title: '{{LANGUAGE_NAME_NATIVE}}'}
+```
+
+Pick the flag emoji from this lookup table:
+
+| Locale code | Flag emoji |
+| ----------- | ---------- |
+| `ar`        | 🇸🇦         |
+| `de`        | 🇩🇪         |
+| `es`        | 🇪🇸         |
+| `fa`        | 🇮🇷         |
+| `fr`        | 🇫🇷         |
+| `he`        | 🇮🇱         |
+| `hi`        | 🇮🇳         |
+| `it`        | 🇮🇹         |
+| `ja`        | 🇯🇵         |
+| `ko`        | 🇰🇷         |
+| `nl`        | 🇳🇱         |
+| `pl`        | 🇵🇱         |
+| `pt`        | 🇧🇷         |
+| `ru`        | 🇷🇺         |
+| `sv`        | 🇸🇪         |
+| `tr`        | 🇹🇷         |
+| `uk`        | 🇺🇦         |
+| `ur`        | 🇵🇰         |
+| `zh`        | 🇨🇳         |
+
+If `{{LOCALE_CODE}}` is not in the table above, use the locale code in brackets as the left value, e.g. `[{{LOCALE_CODE}}]`.
+
+---
+
+## Step 5, RTL handling (only if `{{IS_RTL}}` is `true`)
+
+**Only execute this step when `{{IS_RTL}}` is `true`.**
+
+Verify that `apps/web/app/root.tsx` already uses `i18n.dir(i18n.language)` for the `dir` attribute on the HTML element. The seeded template sets this up, i18next handles RTL natively for locales in its known-RTL list.
+
+No additional work is needed for the four standard ISO 639-1 RTL codes that i18next recognizes natively: `ar`, `he`, `fa`, `ur`.
+
+**If `{{IS_RTL}}` is `false`, skip this step entirely.**
+
+---
+
+## Step 6, Playwright spec
+
+Check whether `apps/web/.playwright/e2e/language-switch-a11y.spec.ts` exists.
+
+**Pick a verification key that genuinely differs between English and `{{LOCALE_CODE}}`.** Do **not** assert against `common:meta.siteName` (the seed's only rendered string): the Step 1 translation rule copies a brand / proper-noun value verbatim, so it is identical in every locale and a switch assertion against it never changes. Pick a key the index page renders whose English and `{{LOCALE_CODE}}` values differ, adding a body string to the index page first if it renders none. Read the English value from the English language file that holds it and the translated value from the matching `apps/web/app/languages/{{LOCALE_CODE}}/` file. Before writing the assertion, confirm the two values actually differ.
+
+**If the file does not exist**, create it as a new spec. The spec must:
+
+- Import from `@playwright/test`.
+- Use a `test.describe` block named `'language switch, EN ↔ {{LOCALE_CODE}}'`.
+- Test the following flow:
+  1. Navigate to `/`.
+  2. Assert the English verification text is visible.
+  3. Find the language select and switch to `{{LOCALE_CODE}}`.
+  4. Assert the verification text changes to the `{{LOCALE_CODE}}` translation from the matching `apps/web/app/languages/{{LOCALE_CODE}}/` file.
+  5. Switch back to English and assert the English verification text is restored.
+
+**If the file already exists**, append a new `test.describe` block for the new locale, shaped like the `If the file does not exist` spec above (the shipped file holds only the a11y test, no describe block yet). Do not modify existing tests.
+
+---
+
+## Step 7, Manifest (no change needed)
+
+`.gaia/manifest.json` is release-generated and lists only files GAIA ships. New-locale files are adopter-owned, so **do not add them to the manifest**, a path absent from the manifest is adopter-owned and invisible to `/update-gaia`. No manifest edit is needed here.
+
+---
+
+## Step 8, Verify
+
+Run from the project root:
+
+```
+pnpm typecheck && pnpm lint
+```
+
+If either command fails:
+
+- **STOP immediately.**
+- Report the exact error output.
+- **Do not print the Step 9 summary.**
+
+Only proceed to Step 9 if both commands exit with code 0.
+
+---
+
+## Step 9, Summary
+
+On success (both `pnpm typecheck` and `pnpm lint` pass), leave this file in place and print a one-line summary:
+
+```
+add-locale {{LOCALE_CODE}} ({{LANGUAGE_NAME_EN}}), done
+```

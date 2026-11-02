@@ -1,6 +1,6 @@
 ---
 type: module
-path: frontend/.storybook/
+path: apps/web/.storybook/
 status: active
 language: typescript
 purpose: Storybook setup with React Router, i18n, dark mode, and Chromatic snapshots
@@ -14,7 +14,7 @@ tags: [module, storybook, testing]
 
 # Storybook Stories
 
-Storybook v10 with the `@storybook/react-vite` framework. Configured to discover `*.stories.tsx` anywhere in `frontend/app/`. Stories are written in CSF Next (CSF4): each file imports the preview as `import preview from '#.storybook/preview'`, builds its meta with `preview.meta({...})`, and declares stories with `meta.story({...})`, `.extend({...})` and `.test()`. `.storybook/main.ts` turns on `features.experimentalTestSyntax`, and `.storybook/preview.ts` is a `definePreview` call that wires the addons.
+Storybook v10 with the `@storybook/react-vite` framework. Configured to discover `*.stories.tsx` anywhere in `apps/web/app/`. Stories are written in CSF Next (CSF4): each file imports the preview as `import preview from '#.storybook/preview'`, builds its meta with `preview.meta({...})`, and declares stories with `meta.story({...})`, `.extend({...})` and `.test()`. `.storybook/main.ts` turns on `features.experimentalTestSyntax`, and `.storybook/preview.ts` is a `definePreview` call that wires the addons.
 
 ## Why Storybook is also the test driver
 
@@ -32,13 +32,13 @@ Interactive sessions skip the Chromatic decorator: `WrapDecorator → ToastDecor
 
 ## Stubs
 
-`frontend/test/stubs/` provides story-level decorators (`stubs.state()`, `stubs.reactRouter()`). Apply as `[stubs.state(), stubs.reactRouter()]` when both are needed. `stubs.reactRouter` binds one route, and its `route` option accepts the client-side exports (`clientLoader`, `clientAction`, `HydrateFallback`) as well as `loader` and `action`. See `frontend/.claude/rules/storybook.md` for the full option list.
+`apps/web/test/stubs/` provides story-level decorators (`stubs.state()`, `stubs.reactRouter()`). Apply as `[stubs.state(), stubs.reactRouter()]` when both are needed. `stubs.reactRouter` binds one route, and its `route` option accepts the client-side exports (`clientLoader`, `clientAction`, `HydrateFallback`) as well as `loader` and `action`. See `apps/web/.claude/rules/storybook.md` for the full option list.
 
 ## Dark-mode handling
 
 `preview.ts` sets `darkClass` and `lightClass` to the `dark` or `light` class plus the role-token utilities `bg-background` and `text-foreground`, applied to the preview document root when the toolbar toggle fires, so the `.dark` token block in `theme.css` drives both themes. `stylePreview: true` extends the theme to Storybook chrome.
 
-Chromatic loads only the preview iframe, so the toolbar toggle never fires there. Instead `frontend/.storybook/modes.ts` defines a `light` and a `dark` [[Chromatic]] mode, each setting the `theme` global (declared in `preview.ts` `initialGlobals`, since Storybook drops an undeclared global) and the 1280px viewport. Chromatic snapshots every story once per mode, and `ChromaticDecorator` applies the global. Vitest and the Playwright scan never add that decorator, so `theme` changes nothing there.
+Chromatic loads only the preview iframe, so the toolbar toggle never fires there. Instead `apps/web/.storybook/modes.ts` defines a `light` and a `dark` [[Chromatic]] mode, each setting the `theme` global (declared in `preview.ts` `initialGlobals`, since Storybook drops an undeclared global) and the 1280px viewport. Chromatic snapshots every story once per mode, and `ChromaticDecorator` applies the global. Vitest and the Playwright scan never add that decorator, so `theme` changes nothing there.
 
 ## i18n in stories
 
@@ -46,8 +46,8 @@ Chromatic loads only the preview iframe, so the toolbar toggle never fires there
 
 ## Test data: MSW
 
-`msw-storybook-addon` is wired: `.storybook/main.ts` serves `public/` as a static directory (so built Storybook and Chromatic find `mockServiceWorker.js`), and `.storybook/preview.ts` lists `addonMsw()` in `definePreview`'s `addons`. A story installs handlers in its `beforeEach` through the addon's CSF Next API. Handlers read a mutation body with `request.json()`. Seed data comes from the `@msw/data` collections in `frontend/test/mocks/database`. See `frontend/.claude/rules/storybook.md` for the usage pattern, [[Stories as Tests]] for the doctrine, and [[MSW Handlers]] for the handler structure.
+`msw-storybook-addon` is wired: `.storybook/main.ts` serves `public/` as a static directory (so built Storybook and Chromatic find `mockServiceWorker.js`), and `.storybook/preview.ts` lists `addonMsw()` in `definePreview`'s `addons`. A story installs handlers in its `beforeEach` through the addon's CSF Next API. Handlers read a mutation body with `request.json()`. Seed data comes from the `@msw/data` collections in `apps/web/test/mocks/database`. See `apps/web/.claude/rules/storybook.md` for the usage pattern, [[Stories as Tests]] for the doctrine, and [[MSW Handlers]] for the handler structure.
 
 When TanStack Query is on, a Storybook decorator (`.storybook/decorators/query-client-decorator.tsx`) gives each story a fresh QueryClient. See [[Data Loading]].
 
-For the current file inventory, list `frontend/.storybook/`.
+For the current file inventory, list `apps/web/.storybook/`.

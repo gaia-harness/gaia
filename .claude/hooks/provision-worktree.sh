@@ -120,7 +120,7 @@ esac
 
 # Every ledger, marker and port-file call below keys on one physical tree
 # root. A symlinked path would otherwise be recorded literally while the ports
-# reclaim compares physical worktree paths, and a launch from <tree>/frontend
+# reclaim compares physical worktree paths, and a launch from <tree>/apps/web
 # would fail the .git marker read. A directory outside any work tree has
 # nothing to provision.
 tree="$(gaia_resolve_tree_root "$tree" 2>/dev/null)" || exit 0

@@ -87,7 +87,7 @@ pins_present() {
 
 # bats test_tags=whole-tree
 @test "no tracked file under wiki or the claude folders offers Leave it running" {
-  run git -C "$ROOT" grep -n 'Leave it running' -- wiki .claude frontend/.claude
+  run git -C "$ROOT" grep -n 'Leave it running' -- wiki .claude apps/web/.claude
   [ "$status" -eq 1 ]
   [ -z "$output" ]
 }

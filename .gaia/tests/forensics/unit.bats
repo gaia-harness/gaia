@@ -129,12 +129,12 @@ setup() {
 
 @test "UAT-007: mixed allow + deny path proposal denies the whole attempt" {
   # Two paths: one in the allowlist (`.claude/skills/`), one on the canonical
-  # denylist (`frontend/app/`). Per UAT-007 the WHOLE attempt is denied;
+  # denylist (`apps/web/app/`). Per UAT-007 the WHOLE attempt is denied;
   # `ok:false`; not just the denylisted path.
-  run "$SCOPE" .claude/skills/gaia/SKILL.md frontend/app/routes/_index.tsx
+  run "$SCOPE" .claude/skills/gaia/SKILL.md apps/web/app/routes/_index.tsx
   [ "$status" -eq 0 ]
   [[ "$output" == *'"ok":false'* ]]
-  [[ "$output" == *'frontend/app/routes/_index.tsx'* ]]
+  [[ "$output" == *'apps/web/app/routes/_index.tsx'* ]]
   [[ "$output" == *'"reason":"denylist"'* ]]
   # The allowed leg still appears in `allowed[]`; the partition is informational
   # but `ok` is false, which is what the workflow gates on.

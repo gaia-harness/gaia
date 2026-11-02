@@ -52,7 +52,7 @@ install_inputs=(
   "pnpm-workspace.yaml"
   ".npmrc"
   ".node-version"
-  "frontend/package.json"
+  "apps/web/package.json"
   ".gaia/cli/package.json"
 )
 

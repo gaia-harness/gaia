@@ -219,7 +219,7 @@ export const writeItemsService = (
     JSON.stringify({
       dependencies:
         options.query === true ? {'@tanstack/react-query': '5.104.1'} : {},
-      name: 'frontend',
+      name: 'web',
     })
   );
 

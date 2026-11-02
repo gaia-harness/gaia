@@ -8,7 +8,7 @@ export type PackageTarget =
 
 /**
  * The tree a CLI command acts on: the calling working tree's root, so a
- * command run from `frontend/` and from the repo root name the same tree.
+ * command run from `apps/web/` and from the repo root name the same tree.
  * Falls back to `cwd` when git cannot answer, because scaffolding must not
  * require a repository (an adopter may scaffold before `git init`).
  */
@@ -76,7 +76,7 @@ export const resolveWebTarget = (
 
 /**
  * Normalize a user-supplied path to package-relative: a repo-relative value
- * that begins with the package path (`frontend/app/components/form`) loses
+ * that begins with the package path (`apps/web/app/components/form`) loses
  * that prefix, a package-relative one passes through.
  */
 export const toPackageRelative = (

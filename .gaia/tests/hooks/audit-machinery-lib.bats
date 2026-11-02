@@ -163,7 +163,7 @@ PATHS
   audit_path_is_machinery ".claude/agents/code-audit-frontend.md" || return 1
   audit_path_is_machinery ".claude/agents/code-audit-python.md" || return 1
   audit_path_is_machinery ".claude/agents/code-audit-python/notes.md" && return 1
-  audit_path_is_machinery "frontend/.claude/agents/code-audit-frontend/README.md" && return 1
+  audit_path_is_machinery "apps/web/.claude/agents/code-audit-frontend/README.md" && return 1
   audit_path_is_machinery ".claude/agents/fitness-judge.md" && return 1
   run audit_machinery_flags <<'PATHS'
 .claude/agents/code-audit-python.md

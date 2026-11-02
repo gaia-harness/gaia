@@ -76,7 +76,7 @@ runs:
         npm_config_fetch_timeout: '60000'
     # The workspace has one lockfile, the root pnpm-lock.yaml, so the cache key
     # and the frozen install below stay at the root even though the app lives in
-    # frontend/.
+    # apps/web/.
     - name: Setup Node
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:

@@ -23,7 +23,7 @@ setup() {
     ".claude/settings.json"
     "./.claude/settings.json"
     "/Users/you/app/.claude/settings.json"
-    "frontend/.claude/settings.json"
+    "apps/web/.claude/settings.json"
     ".claude/worktrees/w1/.claude/settings.json"
     "\"/Users/you/my app/.claude/settings.json\""
     "~/.claude/settings.json"
@@ -155,7 +155,7 @@ assert_settings_ask() {
     "cp .claude/settings.json /tmp/x" \
     "cat .claude/settings.json | tee /tmp/x" \
     "sed -n p .claude/settings.json" \
-    "echo x > frontend/package.json" \
+    "echo x > apps/web/package.json" \
     "echo x > .claude/settings.json.bak" \
     "sed -i s/a/b/ .claude/settings.local.json" \
     "cp a .claude/settings.local.json" \

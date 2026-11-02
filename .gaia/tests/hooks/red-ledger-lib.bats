@@ -532,9 +532,9 @@ run_library() {
         return 1
       }
     fi
-  done < <(git -C "$REPO_ROOT" ls-files -z 'frontend/app/**/*.test.ts' 'frontend/app/**/*.test.tsx' \
-    'frontend/.playwright/**/*.spec.ts' 'frontend/.playwright/**/*.spec.tsx' \
-    'frontend/.playwright/**/*.test.ts' 'frontend/.playwright/**/*.test.tsx')
+  done < <(git -C "$REPO_ROOT" ls-files -z 'apps/web/app/**/*.test.ts' 'apps/web/app/**/*.test.tsx' \
+    'apps/web/.playwright/**/*.spec.ts' 'apps/web/.playwright/**/*.spec.tsx' \
+    'apps/web/.playwright/**/*.test.ts' 'apps/web/.playwright/**/*.test.tsx')
 
   # Without these the floor check above passes vacuously: on an empty file set
   # (a glob that stopped matching), or on one where no file contributed a floor.

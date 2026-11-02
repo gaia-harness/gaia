@@ -37,7 +37,7 @@
 # exit code to short-circuit; the JSON summary feeds the issue comment.
 #
 # Each step runs through the root pnpm proxy scripts, which forward to
-# `pnpm -C frontend <script>` (the app lives in frontend/); install
+# `pnpm -C apps/web <script>` (the app lives in apps/web/); install
 # stays at the root because the workspace has one lockfile.
 #
 # Knip caveat:
@@ -174,9 +174,9 @@ install_browsers() {
   if [ "$(uname -s)" = Linux ] && command -v apt-get >/dev/null 2>&1; then
     bash "$apt_cached_install" --archive-dir "${RUNNER_TEMP:-$work_directory}/gaia-apt-cache/forensics-playwright" \
       --update-seconds 0 --install-seconds 180 --attempts 3 \
-      -- node frontend/node_modules/playwright/cli.js install-deps chromium || return
+      -- node apps/web/node_modules/playwright/cli.js install-deps chromium || return
   fi
-  pnpm -C frontend exec playwright install chromium
+  pnpm -C apps/web exec playwright install chromium
 }
 
 # ---------------------------------------------------------------------------

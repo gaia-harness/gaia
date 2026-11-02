@@ -1,6 +1,6 @@
 ### Transitive refresh instructions
 
-Operate on the root workspace and its `frontend` package only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C frontend` is the one allowed path argument. Frozen names: `{FROZEN_NAMES}`.
+Operate on the root workspace and its `frontend` package only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument. Frozen names: `{FROZEN_NAMES}`.
 
 1. **Snapshot** the files the refresh could touch, and the direct dependencies' resolved versions. Run each command below as its own call, in order. **If any of them exits non-zero or is refused, stop here:** do not run step 2 or anything after it, change nothing, and report `Not run (snapshot failed: <command>: <first error line>)`. A refresh with no baseline can only be undone by resetting to HEAD, which also throws away the run's uncommitted Wave A and Wave B edits.
 
@@ -16,21 +16,21 @@ Operate on the root workspace and its `frontend` package only: run every `pnpm` 
    ```bash
    git cat-file -e <baseline>:pnpm-lock.yaml
    mkdir -p /tmp/update-deps-refresh
-   pnpm -C frontend ls --depth 0 --json | jq -e '.[0] | (.dependencies // {}) + (.devDependencies // {}) | map_values(.version)' > /tmp/update-deps-refresh/direct.json
+   pnpm -C apps/web ls --depth 0 --json | jq -e '.[0] | (.dependencies // {}) + (.devDependencies // {}) | map_values(.version)' > /tmp/update-deps-refresh/direct.json
    ```
 2. **Refresh:**
    ```bash
    pnpm cache delete '*'
-   pnpm -C frontend update --no-save
+   pnpm -C apps/web update --no-save
    ```
    The first line drops pnpm's cached package metadata. pnpm treats metadata it cached within the release-age window as complete, which holds for every version the window admits but not for one a `minimumReleaseAgeExclude` entry admits early: a release published since that fetch is otherwise invisible to the refresh, which then exits 0 having moved nothing. pnpm's metadata cache is per machine, not per project, so this clears it for every project on the machine. That is safe: the cache holds only registry metadata, never packages or lockfiles, so the cost is a refetch on each project's next resolve, and the whole-tree refresh here measures no slower with an empty cache. `--no-save` leaves every range in `package.json` as declared, so direct specs stay with Waves A and B; pnpm's default depth is unlimited, so this re-resolves the whole tree. Do not pass `--depth Infinity`: pnpm takes only an integer depth and exits on that value. Do not use `pnpm update --latest` (it ignores ranges) or `pnpm dedupe` (it moves a transitive only when that removes a duplicate). pnpm applies `minimumReleaseAge` while it resolves, so no version younger than the window lands; never add a `minimumReleaseAgeExclude` entry or change any setting to get a version through. If the command exits non-zero, revert (step 6) with reason `install error: <first error line>`.
 3. **Check what it touched.**
-   - `package.json`, `frontend/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the baseline:
+   - `package.json`, `apps/web/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the baseline:
      ```bash
-     git diff --quiet <baseline> -- package.json frontend/package.json pnpm-workspace.yaml
+     git diff --quiet <baseline> -- package.json apps/web/package.json pnpm-workspace.yaml
      ```
-     Exit 1 means pnpm rewrote a range or recorded a release-age exemption: revert with reason `rewrote <file>`, naming the file `git diff --stat <baseline> -- package.json frontend/package.json pnpm-workspace.yaml` lists.
-   - Re-run the step 1 `pnpm -C frontend ls` line into `/tmp/update-deps-refresh/direct-after.json` and compare each frozen name's version with `direct.json`. A frozen name whose version changed means the refresh moved a held or snoozed package inside its range: revert with reason `moved frozen <name> (<from> -> <to>); pin it to an exact version in package.json to let the refresh run`.
+     Exit 1 means pnpm rewrote a range or recorded a release-age exemption: revert with reason `rewrote <file>`, naming the file `git diff --stat <baseline> -- package.json apps/web/package.json pnpm-workspace.yaml` lists.
+   - Re-run the step 1 `pnpm -C apps/web ls` line into `/tmp/update-deps-refresh/direct-after.json` and compare each frozen name's version with `direct.json`. A frozen name whose version changed means the refresh moved a held or snoozed package inside its range: revert with reason `moved frozen <name> (<from> -> <to>); pin it to an exact version in package.json to let the refresh run`.
 4. **List what moved**, from the lockfile's `packages:` keys before and after. Write out the baseline's lockfile first, as its own call:
    ```bash
    git show <baseline>:pnpm-lock.yaml > /tmp/update-deps-refresh/lock-before.yaml
@@ -58,9 +58,9 @@ Operate on the root workspace and its `frontend` package only: run every `pnpm` 
    On any failure, revert (step 6) with reason `quality gate failed: <step>`. No remediation pass: one gate run cannot say which of the moved packages broke it.
 6. **Revert** restores the whole refresh, never part of it, from the baseline, leaving the index as it was. Run each line as its own call:
    ```bash
-   git restore --source=<baseline> --worktree -- package.json pnpm-lock.yaml pnpm-workspace.yaml frontend/package.json
+   git restore --source=<baseline> --worktree -- package.json pnpm-lock.yaml pnpm-workspace.yaml apps/web/package.json
    pnpm install --frozen-lockfile
-   git diff --quiet <baseline> -- package.json pnpm-lock.yaml pnpm-workspace.yaml frontend/package.json
+   git diff --quiet <baseline> -- package.json pnpm-lock.yaml pnpm-workspace.yaml apps/web/package.json
    ```
    The last line exits 0 when all four files match the baseline again.
 

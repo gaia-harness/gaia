@@ -21,9 +21,9 @@ Utility-first CSS framework. GAIA ships **Tailwind v4** with the Vite plugin.
 Tailwind-aware tooling ships via [[gaia-lint]] (`@gaia-harness/lint`), not as direct dependencies:
 
 - `prettier-plugin-tailwindcss`: class auto-sort, loaded by `@gaia-harness/lint/prettier`, which owns the sorting configuration
-- `eslint-plugin-better-tailwindcss`: `better-tailwindcss/*` rules, wired via `lint.betterTailwind()` in `frontend/eslint.config.mjs`
+- `eslint-plugin-better-tailwindcss`: `better-tailwindcss/*` rules, wired via `lint.betterTailwind()` in `apps/web/eslint.config.mjs`
 - `stylelint-config-tailwindcss`: extended by `@gaia-harness/lint/stylelint`
 
 ## Conventions
 
-See `tailwind` rule (`frontend/.claude/rules/tailwind.md`) for the full ruleset. The `.dark` token block in `theme.css`, selected through the `dark` custom variant, powers the [[Theme Flow]]. Token values live in `frontend/app/styles/theme.css` ([[shadcn Component Layer]]).
+See `tailwind` rule (`apps/web/.claude/rules/tailwind.md`) for the full ruleset. The `.dark` token block in `theme.css`, selected through the `dark` custom variant, powers the [[Theme Flow]]. Token values live in `apps/web/app/styles/theme.css` ([[shadcn Component Layer]]).

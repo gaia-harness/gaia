@@ -210,13 +210,13 @@ describe('wiki dead-paths', () => {
   test('ignores the gitignored per-machine env file, by exact token, and still flags a missing tracked path', () => {
     sandbox.writeFile(
       'wiki/concepts/Environment.md',
-      '# Environment\n\nCopy `frontend/.env.example` to `frontend/.env`, never `frontend/.env.bak`. See `frontend/app/missing.ts`.\n'
+      '# Environment\n\nCopy `apps/web/.env.example` to `apps/web/.env`, never `apps/web/.env.bak`. See `apps/web/app/missing.ts`.\n'
     );
 
     expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
-      'frontend/.env.example',
-      'frontend/.env.bak',
-      'frontend/app/missing.ts',
+      'apps/web/.env.example',
+      'apps/web/.env.bak',
+      'apps/web/app/missing.ts',
     ]);
   });
 
@@ -358,7 +358,7 @@ describe('wiki dead-paths', () => {
     );
     sandbox.writeFile(
       'wiki/concepts/B.md',
-      '# B\n\nSee `frontend/app/missing.ts` and `frontend/app/components/Removed/index.tsx`.\n'
+      '# B\n\nSee `apps/web/app/missing.ts` and `apps/web/app/components/Removed/index.tsx`.\n'
     );
 
     const {dead} = scanWikiPaths(sandbox.root);
@@ -366,8 +366,8 @@ describe('wiki dead-paths', () => {
       dead.map((d) => d.path).toSorted((a, b) => a.localeCompare(b))
     ).toEqual([
       '.gaia/cli/src/missing/index.ts',
-      'frontend/app/components/Removed/index.tsx',
-      'frontend/app/missing.ts',
+      'apps/web/app/components/Removed/index.tsx',
+      'apps/web/app/missing.ts',
     ]);
   });
 

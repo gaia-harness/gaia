@@ -1,6 +1,6 @@
 # Claude probe
 
-Maintainer-only (all of `.gaia/tests` is release-excluded). The probe observes how Claude Code loads GAIA's harness in the SPEC-092 layout (harness at the repository root, the app and its frontend-only harness under `frontend/`) and judges each observation against a committed expectation table. It is SPEC-092's Phase 0 gate (plan Phase 1) and the instrument behind UAT-001, UAT-017 and UAT-023.
+Maintainer-only (all of `.gaia/tests` is release-excluded). The probe observes how Claude Code loads GAIA's harness in the SPEC-092 layout (harness at the repository root, the app and its frontend-only harness under `apps/web/`) and judges each observation against a committed expectation table. It is SPEC-092's Phase 0 gate (plan Phase 1) and the instrument behind UAT-001, UAT-017 and UAT-023.
 
 It spends tokens and needs Claude auth, so it runs by hand on a maintainer machine under a cost cap. Nothing runs it in CI.
 
@@ -42,7 +42,7 @@ Flags: `--only <row-id-glob>` runs and judges only the matching rows (the floor 
 
 ## Cost model
 
-Every scenario is a fresh `claude -p` session: one call per scenario, plus a second (`--resume`) listing turn for an after-read scenario whose rows observe agents or MCP servers (skill rows read the first turn, below). One repetition is 10 `claude` calls from the root launch dir (9 scenarios plus one listing turn), 7 from `frontend/`, and 1 from the worktree. Each call's first turn pays for the system prompt, tool definitions, GAIA's root CLAUDE.md and always-loaded rules, and the skill and agent listings (roughly 50k tokens); later turns in the session mostly read that prefix from the cache.
+Every scenario is a fresh `claude -p` session: one call per scenario, plus a second (`--resume`) listing turn for an after-read scenario whose rows observe agents or MCP servers (skill rows read the first turn, below). One repetition is 10 `claude` calls from the root launch dir (9 scenarios plus one listing turn), 7 from `apps/web/`, and 1 from the worktree. Each call's first turn pays for the system prompt, tool definitions, GAIA's root CLAUDE.md and always-loaded rules, and the skill and agent listings (roughly 50k tokens); later turns in the session mostly read that prefix from the cache.
 
 Estimate for **2 launch dirs x 3 reps on Sonnet** (Sonnet 5.5: $2 / $10 per million input / output tokens, cache writes about $2.50 and reads $0.20 per million): 48 calls at about $0.125 for the first turn, plus about 110 follow-up turns at about $0.012, is **about $7.50**. The worktree launch adds about $0.40. The spike run (`20261003T020501Z-spike`, all three launch dirs, 3 reps) measured **$8.08**; splitting each scripted commit into its own `git add` and `git commit` calls adds about 12 follow-up turns per 3 reps (about $0.15), and once commits get past the commit-to-main guard, pre-commit output lands in the commit tool results (a few cents more), so plan on **about $8.50** for a 3-rep run. The `after_task:hook-if` scenario is one more root call per repetition carrying one Bash call per command in its list (about 20): about $0.125 for the first turn plus about 20 follow-up turns at $0.012, so **about $0.40 a repetition** and about $1.20 for 3 reps, which a full 3-rep run adds to the $8.50. Run alone (`--only 'root-if-*' --launches root --reps 3`), a cap of $3 covers it. A cap of **$15** leaves 2x headroom on a full run for retries the model makes inside a session. The real figure is in `spent-usd` in the evidence dir after each call; `--max-budget-usd` is also passed to every call with the remaining budget.
 
@@ -66,7 +66,7 @@ A hook row is `registered` when a probe line proves its settings file was a live
 A lazy-discovery row (`after_read:<path>`) is judged only once a `PostToolUse` line proves the Read happened; without that line every row of the scenario reports `read_not_verified`. How each kind is judged after the Read:
 
 - `claude_md`: `loaded` on an `InstructionsLoaded` line for the file, **or** on a verified Read of exactly that file. A direct Read of a CLAUDE.md puts its content in context through the Read and emits no `InstructionsLoaded` for it; a Read of any other file under its directory does emit one, with `load_reason: nested_traversal` (spike run `20261003T020501Z-spike`). Rules stay `InstructionsLoaded`-only.
-- `skill`: the first turn's `init` listing plus every `commands_changed` event after it. The `init` event is a session-start snapshot and never shows a nested `.claude/skills` directory discovered mid-session; Claude Code emits `commands_changed` with the full command list whenever the set changes, and the Read of `frontend/CLAUDE.md` drew one adding exactly the frontend skills.
+- `skill`: the first turn's `init` listing plus every `commands_changed` event after it. The `init` event is a session-start snapshot and never shows a nested `.claude/skills` directory discovered mid-session; Claude Code emits `commands_changed` with the full command list whenever the set changes, and the Read of `apps/web/CLAUDE.md` drew one adding exactly the frontend skills.
 - `listing`: the union of `names` across every `skill_listing` attachment in the first turn's transcript. The `init` event's `skills` array is not a reliable listing signal (it listed a `disable-model-invocation` skill and command and omitted a shown command), so a row that proves a command is or is not in the model's listing reads the transcript. `listed` / `not_listed` is judged only when the transcript exists and holds at least one `skill_listing` attachment; without one the row reports `no_transcript` or `no_skill_listing`, never `not_listed`.
 - `agent`, `mcp`: the `init` event of a second, `--resume` turn. That is also a session-start snapshot; no structural mid-session agent listing has been observed yet.
 
@@ -109,7 +109,7 @@ A contradiction of a **floor** row, or of constraint 2 (ancestor walk plus gener
 
 ### The floor
 
-`compare.mjs --check-table` fails with `MISSING_FLOOR <item>` unless every SPEC-092 Phase 0 floor item has a `floor: true` row, and, given `--root-settings`, unless every root `Edit(...)` deny is exercised by a floor row from both the root and `frontend/` launch dirs. The item list lives in `lib/table.mjs` (`FLOOR_ITEMS`); `--floor-map` prints which rows meet each.
+`compare.mjs --check-table` fails with `MISSING_FLOOR <item>` unless every SPEC-092 Phase 0 floor item has a `floor: true` row, and, given `--root-settings`, unless every root `Edit(...)` deny is exercised by a floor row from both the root and `apps/web/` launch dirs. The item list lives in `lib/table.mjs` (`FLOOR_ITEMS`); `--floor-map` prints which rows meet each.
 
 ## What the spike run is expected to show
 

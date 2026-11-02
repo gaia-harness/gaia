@@ -129,9 +129,9 @@ pnpm install --config.confirm-modules-purge=false
 
 If install fails, stop and report the error.
 
-Then tell the user "Installing Chromium for the browser tests…" and run `pnpm -C frontend exec playwright install chromium`. It runs here because Step 6's `pnpm test:ci` fails without a browser. If it fails, or a Linux browser launch reports missing dependencies, follow `## Chromium` in `.claude/skills/gaia/references/toolchain.md`, and stop `/gaia-init` until it is fixed.
+Then tell the user "Installing Chromium for the browser tests…" and run `pnpm -C apps/web exec playwright install chromium`. It runs here because Step 6's `pnpm test:ci` fails without a browser. If it fails, or a Linux browser launch reports missing dependencies, follow `## Chromium` in `.claude/skills/gaia/references/toolchain.md`, and stop `/gaia-init` until it is fixed.
 
-Then tell the user "Installing the React Doctor skill…" and run `bash .gaia/scripts/install-react-doctor.sh`. It runs here, before any later step reads a file under `frontend/`, because Claude Code lists the skills in `frontend/.claude/skills/` the first time the session reads a file in that folder, and a skill added after that scan appears only from the next session. It records nothing: `/setup-gaia`'s tool step finds the skill already installed and records it. If it fails, show its error as a warning and continue; `/setup-gaia` runs the same install again.
+Then tell the user "Installing the React Doctor skill…" and run `bash .gaia/scripts/install-react-doctor.sh`. It runs here, before any later step reads a file under `apps/web/`, because Claude Code lists the skills in `apps/web/.claude/skills/` the first time the session reads a file in that folder, and a skill added after that scan appears only from the next session. It records nothing: `/setup-gaia`'s tool step finds the skill already installed and records it. If it fails, show its error as a warning and continue; `/setup-gaia` runs the same install again.
 
 ## Step 2: Gather user input (in the user's language)
 
@@ -275,7 +275,7 @@ If any of these exit non-zero, surface the structured error verbatim (the CLI pr
 
 ## Step 4: Locale-specific scaffolding (when not stripping i18n)
 
-If `STRIP_I18N == false` and `LOCALES` holds any locale other than `en`, read `frontend/.claude/instructions/add-locale.md` once, then:
+If `STRIP_I18N == false` and `LOCALES` holds any locale other than `en`, read `apps/web/.claude/instructions/add-locale.md` once, then:
 
 1. For each locale in `LOCALES` that is not `en`: resolve its English display name (e.g. `Polish`), native display name (e.g. `Polski`), and RTL flag (`true` for `ar`/`he`/`fa`/`ur`, otherwise `false`); substitute the four template variables, `{{LOCALE_CODE}}`, `{{LANGUAGE_NAME_EN}}`, `{{LANGUAGE_NAME_NATIVE}}`, `{{IS_RTL}}`; and execute Steps 1 to 7.
 2. After the last locale, re-run Step 3's `configure-i18n` line with the same arguments. Every picked locale is registered by now, so it drops any template locale the user did not pick (`en`, when `LOCALES` leaves it out).
@@ -283,7 +283,7 @@ If `STRIP_I18N == false` and `LOCALES` holds any locale other than `en`, read `f
 
 Stop on any failure. `add-locale.md` (`## When this runs`) says why verify runs once.
 
-If `STRIP_I18N == true`, read `frontend/.claude/instructions/remove-i18n.md` and execute every step. Stop on any failure.
+If `STRIP_I18N == true`, read `apps/web/.claude/instructions/remove-i18n.md` and execute every step. Stop on any failure.
 
 ## Step 5: Create CODEOWNERS
 

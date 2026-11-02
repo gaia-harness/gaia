@@ -76,7 +76,7 @@ Cross-link: [[Claude Skills]].
 
 ## 5. Rule `paths:` frontmatter
 
-Rules in `.claude/rules/*.md` with a `paths:` YAML list auto-load **only** when a matching file is in scope. Rules without `paths:` auto-load every session. Keep the always-load list tight. A rule under `frontend/.claude/rules/` anchors its globs at `frontend/`, so it writes package-relative globs (`app/**`); a root rule anchors at the repo root and writes `frontend/app/**`. See [[Package Descriptor]].
+Rules in `.claude/rules/*.md` with a `paths:` YAML list auto-load **only** when a matching file is in scope. Rules without `paths:` auto-load every session. Keep the always-load list tight. A rule under `apps/web/.claude/rules/` anchors its globs at `apps/web/`, so it writes package-relative globs (`app/**`); a root rule anchors at the repo root and writes `apps/web/app/**`. See [[Package Descriptor]].
 
 ```yaml
 ---
@@ -92,15 +92,15 @@ A new or re-scoped rule closes with `.gaia/cli/gaia fitness check --json`, which
 
 ## 6. Monorepo retrofit playbook
 
-GAIA ships its React app as the `frontend/` package of a pnpm workspace whose root holds the shared harness. This playbook adds a further package beside it, such as a backend. The package's folder is a project decision; `{PKG}` stands for its path below. `frontend/` is the worked example for every step: copy its shape, not its contents.
+GAIA ships its React app as the `apps/web/` package of a pnpm workspace whose root holds the shared harness. This playbook adds a further package beside it, such as a backend. The package's folder is a project decision; `{PKG}` stands for its path below. `apps/web/` is the worked example for every step: copy its shape, not its contents.
 
 1. **Join the workspace.** List `{PKG}` under `packages:` in `pnpm-workspace.yaml` and give it a `package.json`. The pre-commit hook drives each package through `pnpm -C {PKG}`, so the manifest is needed even for a stack outside Node.
 2. **Register it.** Add its entry to `.gaia/packages.json`, keeping the `frontend` entry, and write `{PKG}/gaia.package.json`, as [[Package Descriptor]] describes. Its globs are package-relative and decide which of the package's files each guard sees, the pre-commit gate included. A registered package with no descriptor fails closed, so land both files in one commit.
-3. **Give it its own `CLAUDE.md` and `.claude/`.** `{PKG}/CLAUDE.md` carries the stack, its commands and its test setup, the way `frontend/CLAUDE.md` does. Stack-specific rules and skills go in `{PKG}/.claude/rules/` and `{PKG}/.claude/skills/`, with `paths:` globs relative to `{PKG}`. Add a section to the root `CLAUDE.md` telling a root session to Read `{PKG}/CLAUDE.md` before touching `{PKG}/`, mirroring its frontend section: in a root session that Read is what loads the package's rules and skills.
+3. **Give it its own `CLAUDE.md` and `.claude/`.** `{PKG}/CLAUDE.md` carries the stack, its commands and its test setup, the way `apps/web/CLAUDE.md` does. Stack-specific rules and skills go in `{PKG}/.claude/rules/` and `{PKG}/.claude/skills/`, with `paths:` globs relative to `{PKG}`. Add a section to the root `CLAUDE.md` telling a root session to Read `{PKG}/CLAUDE.md` before touching `{PKG}/`, mirroring its frontend section: in a root session that Read is what loads the package's rules and skills.
 4. **Generate its settings.** `{PKG}/.claude/settings.json` is generated from the root `.claude/settings.json`, never hand-edited: package-only settings go in `{PKG}/.claude/settings.overlay.json`, then run `./.gaia/cli/gaia packages sync-settings`. The pre-commit hook refuses a commit that leaves any generated settings file missing or stale.
 5. **Meet the pre-commit floor.** For each package with a staged path matching its pre-commit globs, the hook runs the package's typecheck, lint-staged and test scripts; `.githooks/pre-commit` names the scripts `{PKG}/package.json` must define. See [[Pre-commit Hooks]].
-6. **Add a stack-specific quality gate**, as §8 describes. The shared gate's executable steps check only `frontend/`, and its skip check matches JavaScript, TypeScript and CSS sources, so a package in another language gets no gate until its own names its checks.
-7. **Give it CI.** `.github/workflows/tests.yml` runs only the frontend suite, and its incremental-skip pattern (the `pattern=` line of its `Detect test-relevant changes` step) arms only on `frontend/` and root config, so a change under `{PKG}` alone runs no tests in CI. Add a workflow of its own, `{PKG}-tests.yml` or the stack's equivalent, named per [[Workflow Naming Convention]], copying the shape of `tests.yml`: default-deny `permissions: {}` with per-job grants, the same `concurrency` group, and the package's own typecheck, lint and test scripts. A job that becomes a required check gates its steps inside the job, as `tests.yml` does, rather than with a workflow `paths:` filter, because a check that never reports leaves the pull request waiting ([[Incremental CI Skipping]]). Add `{PKG}` to the `tests.yml` pattern only when the frontend suite depends on the package, such as a shared types package the app imports.
+6. **Add a stack-specific quality gate**, as §8 describes. The shared gate's executable steps check only `apps/web/`, and its skip check matches JavaScript, TypeScript and CSS sources, so a package in another language gets no gate until its own names its checks.
+7. **Give it CI.** `.github/workflows/tests.yml` runs only the frontend suite, and its incremental-skip pattern (the `pattern=` line of its `Detect test-relevant changes` step) arms only on `apps/web/` and root config, so a change under `{PKG}` alone runs no tests in CI. Add a workflow of its own, `{PKG}-tests.yml` or the stack's equivalent, named per [[Workflow Naming Convention]], copying the shape of `tests.yml`: default-deny `permissions: {}` with per-job grants, the same `concurrency` group, and the package's own typecheck, lint and test scripts. A job that becomes a required check gates its steps inside the job, as `tests.yml` does, rather than with a workflow `paths:` filter, because a check that never reports leaves the pull request waiting ([[Incremental CI Skipping]]). Add `{PKG}` to the `tests.yml` pattern only when the frontend suite depends on the package, such as a shared types package the app imports.
 8. **Give it an auditor.** The Code Audit Team assigns each changed file to the member whose globs in `.gaia/audit-ci.yml` match it. A file no member claims still owes `code-audit-frontend`, the default member, so the merge gate holds the branch to an audit, but by a React lens with no remit for the package's stack. Register a member for the package, as [[Registering a Code Audit Team Member]] describes, or grant its globs to an existing member whose lens fits. Run `bash .gaia/scripts/verify-audit-roster.sh` after the roster change: it reports every tracked path no member owns and no `unowned:` entry declares, and the pre-commit hook runs it on any commit that stages the roster. An `unowned:` entry only quiets that report and suppresses no review.
 9. **Leave the wiki hooks alone.** `wiki-session-start.sh` is git-level and names no package path.
 
@@ -119,7 +119,7 @@ The first proves the package meets the pre-commit floor, the second that its gen
 
 ### A backend and worktrees
 
-GAIA provisions per-worktree isolation for the `frontend/` package only: the port slot, the port file, and the refusals that keep one tree's servers off another's ports ([[Worktrees#Ports per worktree]]). A backend added beside it gets none of that automatically: it has no port slot, and its database, migrations, seed data and queues are shared by every tree. It takes one of two shapes:
+GAIA provisions per-worktree isolation for the `apps/web/` package only: the port slot, the port file, and the refusals that keep one tree's servers off another's ports ([[Worktrees#Ports per worktree]]). A backend added beside it gets none of that automatically: it has no port slot, and its database, migrations, seed data and queues are shared by every tree. It takes one of two shapes:
 
 - **One shared backend** that every worktree points at. It is simple, but branches that change the schema or the data collide.
 - **A backend per worktree**, with its own port, database and seed. It isolates each branch, but every tree pays the setup and running cost.
@@ -138,7 +138,7 @@ When adding an external service (Supabase, Firebase, Stripe, Auth0, etc.):
 
 Multiple gates coexist via path scoping:
 
-- `.claude/rules/quality-gate.md`: shared/default gate (always loaded; not stack-neutral, since its gate's package steps check only `frontend/`)
+- `.claude/rules/quality-gate.md`: shared/default gate (always loaded; not stack-neutral, since its gate's package steps check only `apps/web/`)
 - `.claude/rules/quality-gate-{stack}.md`: stack-specific gate with `paths:` frontmatter
 
 **How the two coexist.** The stack gate adds to the shared gate and replaces none of it. It loads when a `{PKG}` file is in scope and owns that package's checks; the shared gate stays loaded and keeps its own skip check, which reads file extensions rather than packages, so a commit staging TypeScript under `{PKG}` selects both and runs both. The stack gate never restates the shared steps (simplify, localization, the stop-and-report step); it points at them. A stack gate is new and adopter-owned, so `/update-gaia` never touches it, while the shared gate is `owned`: change it only by adding a stack gate.
@@ -169,12 +169,12 @@ Steps 1 and 3 are scripts the pre-commit floor already requires of `{PKG}/packag
 
 When replacing the default API layer (Ky + Zod) with Supabase, Firebase, GraphQL, or another REST client:
 
-1. Delete or archive `frontend/.claude/rules/api-service.md` (GAIA's default Ky pattern).
-2. Delete `frontend/.claude/skills/new-service/` if it scaffolds the outgoing pattern.
+1. Delete or archive `apps/web/.claude/rules/api-service.md` (GAIA's default Ky pattern).
+2. Delete `apps/web/.claude/skills/new-service/` if it scaffolds the outgoing pattern.
 3. Add `.claude/rules/{new-service}.md` with `paths:` scoped to affected directories.
 4. Add `.claude/agents/code-audit-frontend/{new-service}.md` with `subagents: [react-patterns, typescript]`.
 5. Update `{CONTAINER}/{APP}/CLAUDE.md` (or root) with dev-server commands for the new service.
-6. Update `frontend/test/mocks/`: remove MSW handlers that shimmed the old layer if the new layer has its own test fakes.
+6. Update `apps/web/test/mocks/`: remove MSW handlers that shimmed the old layer if the new layer has its own test fakes.
 
 ## 10. Per-app CLAUDE.md hierarchy (monorepo)
 
@@ -198,7 +198,7 @@ See root `CLAUDE.md` § Wiki for the authoritative directive.
 
 ## 12. React Doctor (per-machine install)
 
-Do **not** vendor `react-doctor` into the repo. Do not symlink it. Install per-machine with `.gaia/scripts/install-react-doctor.sh`, which `/gaia-init` runs at the end of its dependency step, before anything reads `frontend/`, and `/setup-gaia` runs through `.claude/skills/gaia/references/setup/per-machine.md` when the skill is absent. The skill lands in `frontend/.claude/skills/react-doctor/`.
+Do **not** vendor `react-doctor` into the repo. Do not symlink it. Install per-machine with `.gaia/scripts/install-react-doctor.sh`, which `/gaia-init` runs at the end of its dependency step, before anything reads `apps/web/`, and `/setup-gaia` runs through `.claude/skills/gaia/references/setup/per-machine.md` when the skill is absent. The skill lands in `apps/web/.claude/skills/react-doctor/`.
 
 The `code-audit-frontend` agent dispatches react-doctor **in parallel** with its specialist subagents. `.claude/agents/code-audit-frontend.md` owns the command and its scope flag.
 

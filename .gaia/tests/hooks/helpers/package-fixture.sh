@@ -5,7 +5,7 @@
 #
 # Every writer emits LITERAL JSON. A "today's layout" fixture must never copy the
 # live `.gaia/packages.json` or `gaia.package.json`: those change when the
-# registry flips from path `.` to path `frontend`, and a fixture that tracked
+# registry flips from path `.` to path `apps/web`, and a fixture that tracked
 # them would silently stop proving the layout it is named for.
 #
 # Source it from `setup()`, never `setup_file()`, for the reason run-hook.sh
@@ -37,7 +37,7 @@ write_package_descriptor() {
   mkdir -p "$(dirname "$target")"
   jq -n --argjson unit "$unit" --argjson strict "$strict" --argjson emergent "$emergent" '{
     schemaVersion: 1,
-    name: "frontend",
+    name: "web",
     stack: "web",
     globs: {
       tddUnitTests: $unit,
@@ -59,24 +59,24 @@ write_package_descriptor() {
 # The transitional layout: the app at the repo root (registry path `.`), with the
 # default descriptor beside the registry.
 write_packages_today() {
-  write_package_registry "$1" '[{"name":"frontend","path":"."}]'
+  write_package_registry "$1" '[{"name":"web","path":"."}]'
   write_package_descriptor "$1" .
 }
 
 # write_builtin_descriptor <root> [unit-json] [strict-json] [emergent-json]
-# The adopter layout with no registry: the built-in registry names the frontend
-# package at `frontend`, whose descriptor is still read from disk.
+# The adopter layout with no registry: the built-in registry names the web
+# package at `apps/web`, whose descriptor is still read from disk.
 write_builtin_descriptor() {
   local root="$1"
   shift
-  write_package_descriptor "$root" frontend "$@"
+  write_package_descriptor "$root" apps/web "$@"
 }
 
 # write_packages_moved <root> [unit-json] [strict-json] [emergent-json]
-# The 2.0.0 layout: the app at `frontend/` (registry path `frontend`).
+# The 2.0.0 layout: the app at `apps/web/` (registry path `apps/web`).
 write_packages_moved() {
   local root="$1"
   shift
-  write_package_registry "$root" '[{"name":"frontend","path":"frontend"}]'
-  write_package_descriptor "$root" frontend "$@"
+  write_package_registry "$root" '[{"name":"web","path":"apps/web"}]'
+  write_package_descriptor "$root" apps/web "$@"
 }

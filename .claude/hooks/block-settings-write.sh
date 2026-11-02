@@ -19,7 +19,7 @@
 #
 # Path rule: the path equals .claude/settings.json or ends with
 # /.claude/settings.json after surrounding quotes and one leading ./ are
-# removed. Nested package copies (frontend/.claude/settings.json), worktree
+# removed. Nested package copies (apps/web/.claude/settings.json), worktree
 # copies under .claude/worktrees/<name>/ and ~/.claude/settings.json all ask.
 # settings.local.json and any other name do not.
 #

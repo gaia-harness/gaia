@@ -184,7 +184,7 @@ describe('line-limit rules', () => {
     '.gaia/release-scrub.yml',
     '.github/ISSUE_TEMPLATE/big.yml',
     '.claude/skills/example/SKILL.md',
-    'frontend/app/big.ts',
+    'apps/web/app/big.ts',
     'scripts/big.sh',
   ])('%s is out of scope', (file) => {
     expect(summaryOf(maintainerProject({[file]: filler(401)}, {}))).toEqual([]);

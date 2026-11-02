@@ -3,10 +3,10 @@ import {describe, expect, test} from 'vitest';
 import {readCheckoutFile, readMigrationFixture} from './repairs-fixture.js';
 import {mainAddonSpecifiers, rewirePreview} from './index.js';
 
-const TARGET = readCheckoutFile('frontend/.storybook/preview.ts');
+const TARGET = readCheckoutFile('apps/web/.storybook/preview.ts');
 const GAIA_MAIN_ADDONS = mainAddonSpecifiers(
   ts,
-  readCheckoutFile('frontend/.storybook/main.ts')
+  readCheckoutFile('apps/web/.storybook/main.ts')
 );
 
 /** The block of `source` from `first` through the line starting `last`. */

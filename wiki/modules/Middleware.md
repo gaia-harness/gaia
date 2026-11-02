@@ -1,6 +1,6 @@
 ---
 type: module
-path: frontend/app/middleware/
+path: apps/web/app/middleware/
 status: active
 language: typescript
 purpose: React Router middleware
@@ -11,10 +11,10 @@ tags: [module, middleware]
 
 # Middleware
 
-`frontend/app/middleware/` is for [React Router middleware](https://reactrouter.com/how-to/middleware).
+`apps/web/app/middleware/` is for [React Router middleware](https://reactrouter.com/how-to/middleware).
 
 ## Hook point, not a feature surface
 
 Middleware is the right home for per-request setup that loaders shouldn't have to repeat; i18n is the canonical example. Add new middleware here when a concern needs to run on every request before any loader executes.
 
-The current i18next middleware exposes `i18nextMiddleware` (registered in `root.tsx`), `getLanguage(context)`, and `getInstance(context)` for server-side `t()` calls in loaders. See [[i18n]] for usage. For the current file inventory and signatures, read `frontend/app/middleware/`.
+The current i18next middleware exposes `i18nextMiddleware` (registered in `root.tsx`), `getLanguage(context)`, and `getInstance(context)` for server-side `t()` calls in loaders. See [[i18n]] for usage. For the current file inventory and signatures, read `apps/web/app/middleware/`.

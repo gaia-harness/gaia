@@ -25,8 +25,8 @@ Vitest-aware lint rules come from `@vitest/eslint-plugin`, which the shared `@ga
 - `*.test.{ts,tsx}` for pure code, server code and hooks; component and page tests are stories (`*.stories.tsx`) whose behaviors are `.test()` calls ([[Stories as Tests]])
 - Tests and stories live in `tests/` subfolders next to components/pages/hooks
 - Explicit imports in every test file: `import {describe, expect, test} from 'vitest'`
-- Keep `vitest/globals` out of `frontend/tsconfig.json` types: the explicit imports are what type-check
-- `frontend/vitest.config.ts` defines three projects (`node`, `browser`, `storybook`); read it for membership and settings. `frontend/test/setup.ts` serves the `node` project: it loads `test.server`, resets test data after each test, and supplies fallback env vars (see the file for the current list) so server modules parse in clean environments. `frontend/test/setup.browser.ts` serves the `browser` project. The `storybook` project takes its setup from `.storybook/preview.ts`
+- Keep `vitest/globals` out of `apps/web/tsconfig.json` types: the explicit imports are what type-check
+- `apps/web/vitest.config.ts` defines three projects (`node`, `browser`, `storybook`); read it for membership and settings. `apps/web/test/setup.ts` serves the `node` project: it loads `test.server`, resets test data after each test, and supplies fallback env vars (see the file for the current list) so server modules parse in clean environments. `apps/web/test/setup.browser.ts` serves the `browser` project. The `storybook` project takes its setup from `.storybook/preview.ts`
 - The browser projects need Chromium: run `pnpm install:browsers` once. See [[Testing]]
 
 ## Run rules

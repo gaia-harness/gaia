@@ -37,8 +37,8 @@ setup() {
 # cleared_pull_request: a pull request changing one frontend file, its record
 # and the frontend marker for the digest the gate will compute.
 cleared_pull_request() {
-  mgf_commit "frontend/app/x.ts" "export const x = 1"
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_commit "apps/web/app/x.ts" "export const x = 1"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_marker code-audit-frontend >/dev/null
 }
 
@@ -175,10 +175,10 @@ assert_allowed() {
 # bases with the base tip; the marker is earned for the digest the gate would
 # compute against one of them.
 criss_cross_pull_request() {
-  mgf_commit "frontend/app/x.ts" "export const x = 1"
+  mgf_commit "apps/web/app/x.ts" "export const x = 1"
   catchup_criss_cross
   [ "$(git -C "$REPO" merge-base --all HEAD "refs/remotes/origin/main" | grep -c .)" -eq 2 ]
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_marker code-audit-frontend "$(digest_against_origin_tip code-audit-frontend)" >/dev/null
 }
 
@@ -190,7 +190,7 @@ criss_cross_pull_request() {
   git -C "$REPO" merge -q --no-edit refs/remotes/origin/main >/dev/null
   [ "$(git -C "$REPO" merge-base --all HEAD "refs/remotes/origin/main" | grep -c .)" -eq 1 ]
   mgf_marker code-audit-frontend "$(digest_against_origin_tip code-audit-frontend)" >/dev/null
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_run_merge
   assert_allowed
 }
@@ -228,7 +228,7 @@ assert_catch_up_leaves_gate_allowing() {
 
   catchup_base_commit "base-landed.txt" "landed on the base"
   catchup_merge_base
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   after="$(digest_against_origin_tip code-audit-frontend "$base")"
   [ "$before" = "$after" ]
   mgf_run_merge
@@ -270,8 +270,8 @@ second_branch_from_base() {
   assert_allowed
 
   second_branch_from_base
-  mgf_commit "frontend/app/x.ts" "export const x = 1"
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_commit "apps/web/app/x.ts" "export const x = 1"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   [ "$(git -C "$REPO" diff --stat main HEAD)" = "$(git -C "$REPO" diff --stat main feature)" ]
   mgf_run_merge
   assert_denied_naming 'code-audit-frontend'
@@ -283,23 +283,23 @@ second_branch_from_base() {
   # lags, which is what still dispatches the member.
   local initial_tip landed_tip
   initial_tip="$(git -C "$REPO" rev-parse refs/remotes/origin/main)"
-  mgf_commit "frontend/app/x.ts" "export const x = 1"
-  catchup_base_commit "frontend/app/x.ts" "export const x = 1"
+  mgf_commit "apps/web/app/x.ts" "export const x = 1"
+  catchup_base_commit "apps/web/app/x.ts" "export const x = 1"
   landed_tip="$(git -C "$CATCHUP_ORIGIN" rev-parse refs/heads/main)"
   git -C "$REPO" merge -q --no-edit "$landed_tip" >/dev/null
   git -C "$REPO" update-ref refs/remotes/origin/main "$initial_tip"
   [ -z "$(git -C "$REPO" diff "$landed_tip" HEAD)" ]
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_marker code-audit-frontend >/dev/null
   mgf_run_merge
   assert_allowed
 
   second_branch_from_base
-  mgf_commit "frontend/app/x.ts" "export const x = 1"
+  mgf_commit "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" merge -q --no-edit "$landed_tip" >/dev/null
   git -C "$REPO" update-ref refs/remotes/origin/main "$initial_tip"
   [ -z "$(git -C "$REPO" diff "$landed_tip" HEAD)" ]
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_run_merge
   assert_denied_naming 'code-audit-frontend'
 }
@@ -317,12 +317,12 @@ second_branch_from_base() {
     return 1
   fi
 
-  mgf_commit "frontend/app/x.ts" "export const x = 1"
+  mgf_commit "apps/web/app/x.ts" "export const x = 1"
   digest="$(digest_at code-audit-frontend "$(git -C "$REPO" merge-base HEAD main)" "$scratch/.claude/hooks/lib")"
   mgf_marker code-audit-frontend "$digest" >/dev/null
   second_branch_from_base
-  mgf_commit "frontend/app/x.ts" "export const x = 1"
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_commit "apps/web/app/x.ts" "export const x = 1"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
 
   mgf_run_merge "gh pr merge 12 --squash" "$mutant"
   assert_allowed
@@ -335,8 +335,8 @@ second_branch_from_base() {
 
 @test "a marker and a GAIA-Audit status keyed to the previous content digest do not clear the gate" {
   local previous_digest
-  mgf_commit "frontend/app/x.ts" "export const x = 1"
-  mgf_record 12 false "feat: x" "frontend/app/x.ts"
+  mgf_commit "apps/web/app/x.ts" "export const x = 1"
+  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   # A digest of HEAD's whole content, the shape the marker key had before it was
   # bound to the branch's own patch; the gate never recomputes it, it only has to
   # fail to match the current one.

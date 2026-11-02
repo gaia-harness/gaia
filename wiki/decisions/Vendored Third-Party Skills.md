@@ -12,7 +12,7 @@ GAIA vendors a third-party skill byte-identical to the folder its upstream packa
 
 ## Context
 
-A skill authored by someone else changes with every upstream release: sections move, commands are renamed, whole reference files appear and disappear. A copy GAIA edits by hand turns each upgrade into a three-way merge between upstream's rewrite and GAIA's patches, and a stray patch can hide inside the diff. [[Claude Skills]] describes the skills GAIA authors; this page covers the ones it borrows. The first is the playwright-cli skill under `frontend/.claude/skills/playwright-cli/`.
+A skill authored by someone else changes with every upstream release: sections move, commands are renamed, whole reference files appear and disappear. A copy GAIA edits by hand turns each upgrade into a three-way merge between upstream's rewrite and GAIA's patches, and a stray patch can hide inside the diff. [[Claude Skills]] describes the skills GAIA authors; this page covers the ones it borrows. The first is the playwright-cli skill under `apps/web/.claude/skills/playwright-cli/`.
 
 ## Decision
 
