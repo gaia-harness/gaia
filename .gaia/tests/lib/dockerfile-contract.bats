@@ -148,7 +148,7 @@ manifest_version() {
   [ "$output" -eq 0 ]
 }
 
-@test "Dockerfile npm-installs the pinned pnpm only after checking its tarball against the pin's sha512" {
+@test "Dockerfile npm-installs the pinned pnpm only after checking its launcher tarball against the pin's sha512" {
   local instructions
   instructions="$(dockerfile_instructions)"
   [[ "$instructions" == *'npm install -g "./pnpm-'* ]]

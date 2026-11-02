@@ -4,8 +4,9 @@
 # every .env out of the context.
 
 # The exact pnpm that package.json's packageManager pins, installed with npm at build time, so a
-# container start needs no registry. The pin's sha512 is the hash of pnpm's npm tarball, so the
-# tarball is checked against it before the install.
+# container start needs no registry. The pin's sha512 is the hash of pnpm's npm tarball, which is a
+# launcher: the check covers that tarball only, and the platform @pnpm/exe.* binary npm then fetches
+# is vouched for by registry integrity alone.
 FROM node:22.23-alpine AS pnpm-env
 WORKDIR /pin
 COPY package.json ./
@@ -16,7 +17,8 @@ RUN pin="$(node -p "require('./package.json').packageManager")" \
   && echo "${pin##*+sha512.}  pnpm-$version.tgz" | sha512sum -c - \
   && npm install -g "./pnpm-$version.tgz" \
   && rm "pnpm-$version.tgz" \
-  && pnpm --version
+  && pnpm --version \
+  && npm cache clean --force
 
 FROM pnpm-env AS build-env
 WORKDIR /repo
