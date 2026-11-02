@@ -162,7 +162,7 @@ changed() {
     grep -qxF '# distribution-runner: skip' "$file" && { echo "$name is skip-marked" >&2; return 1; }
     grep -q '^# distribution-runner: paths ' "$file" && declared+=("$name")
   done
-  [ "${declared[*]}" = "09-data-layer-query-on.sh 10-data-layer-query-off.sh 16-csf4-migration.sh 17-csf4-scaffolds.sh" ] \
+  [ "${declared[*]}" = "09-data-layer-query-on.sh 10-data-layer-query-off.sh 16-csf4-migration.sh 17-csf4-scaffolds.sh 18-fresh-apps-web.sh" ] \
     || { echo "declared: ${declared[*]}" >&2; return 1; }
 }
 

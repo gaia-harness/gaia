@@ -24,6 +24,10 @@
 #       the crossing, and the finished tree then places that member at
 #       apps/<name>. Prints nothing on success and sets, in the caller's shell:
 #         CROSSED_WEB_NAME  CROSSED_WEB_PATH
+#       Two optional inputs: CROSSED_FIXTURE_LOG_DIR, an existing directory that
+#       receives each crossing verb's output as <verb>.log, and
+#       CROSSED_FIXTURE_UNLISTED_APP, the name of an extra folder under apps/ that
+#       the old workspace list does not name.
 #       Returns non-zero at the first failing step, names the step on stderr and
 #       removes <dir>, so a partial tree can never be mistaken for the fixture.
 #
@@ -82,6 +86,9 @@ _crossed_fixture_crossing() {
     _crossed_fixture_fail "$root" "crossing $verb failed: $detail"
     return 1
   fi
+  if [ -n "${CROSSED_FIXTURE_LOG_DIR:-}" ]; then
+    cp "$log" "$CROSSED_FIXTURE_LOG_DIR/$verb.log"
+  fi
   rm -f "$log"
 }
 
@@ -115,6 +122,12 @@ crossed_fixture_build() {
   _crossed_fixture_member "$root" packages/shared shared
   _crossed_fixture_member "$root" packages/tokens tokens
   _crossed_fixture_member "$root" infra infra
+  # A folder the old workspace list never named, which the new apps glob matches.
+  if [ -n "${CROSSED_FIXTURE_UNLISTED_APP:-}" ]; then
+    mkdir -p "$root/apps/$CROSSED_FIXTURE_UNLISTED_APP"
+    printf '{\n  "name": "%s",\n  "private": true\n}\n' "$CROSSED_FIXTURE_UNLISTED_APP" \
+      >"$root/apps/$CROSSED_FIXTURE_UNLISTED_APP/package.json"
+  fi
   # An API app with its own Claude settings file is the one the crossing opts in.
   mkdir -p "$root/apps/api/.claude"
   printf '{}\n' >"$root/apps/api/.claude/settings.json"

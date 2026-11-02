@@ -114,9 +114,14 @@ if [ "$(printf '%s' "$ROSTER_MERGE" | jq '[.[][]? | select(.key == "code-audit-m
 fi
 
 # --- Assertion 2: the selector hands the previous update the prune note ------
-NOTE_FILES="$(grep -l 'roster-prune-overbroad.sh' "$STAGING"/.gaia/migrations/*.md || true)"
+# Only an after-merge note: the blocking crossing note also runs the prune, but
+# the selector hands it over by its own range, never as the previous update's
+# follow-up.
+NOTE_FILES="$(grep -l 'roster-prune-overbroad.sh' "$STAGING"/.gaia/migrations/*.md | while IFS= read -r candidate; do
+  if grep -qx 'mode: after-merge' "$candidate"; then printf '%s\n' "$candidate"; fi
+done || true)"
 [ "$(grep -c . <<<"$NOTE_FILES")" -eq 1 ] \
-  || { fail "expected exactly one staged migration note naming the prune script, got: $NOTE_FILES"; exit 1; }
+  || { fail "expected exactly one staged after-merge migration note naming the prune script, got: $NOTE_FILES"; exit 1; }
 NOTE_FILE="$NOTE_FILES"
 NOTE_VERSION="$(basename "$NOTE_FILE" .md)"
 # The baseline is the newest release below the note's, so only the note's own

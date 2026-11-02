@@ -111,7 +111,7 @@ merge_package_for() {
 
 ROOT_MERGE="$(merge_package_for .)" \
   || fail_with_stderr "scenario 2: gaia update merge-package failed for the root package.json"
-FRONTEND_MERGE="$(merge_package_for frontend)" \
+FRONTEND_MERGE="$(merge_package_for apps/web)" \
   || fail_with_stderr "scenario 2: gaia update merge-package failed for apps/web/package.json"
 
 # 0 when merge report $1 lists devDependencies key $3 in bucket $2.
@@ -162,7 +162,7 @@ fi
   || fail_with_stderr "scenario 3: gaia packages sync-settings exited non-zero on the staged tree"
 bash "$ADOPTER/.gaia/scripts/check-settings-drift.sh" "$ADOPTER" > /dev/null 2>&1 \
   || { fail "scenario 3: the drift check still fails after sync-settings"; exit 1; }
-jq -e --arg d "Edit(../zz-new-deny-from-update)" '.permissions.deny | index($d) != null' "$GENERATED" > /dev/null \
+jq -e --arg d "Edit(../../zz-new-deny-from-update)" '.permissions.deny | index($d) != null' "$GENERATED" > /dev/null \
   || { fail "scenario 3: the regenerated file lacks the re-anchored new deny"; exit 1; }
 log "scenario 3 (settings drift, regenerate, drift-clean): OK"
 
