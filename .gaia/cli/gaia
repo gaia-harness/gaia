@@ -33356,7 +33356,7 @@ var resolveTreeRoot = (cwd) => {
     return cwd;
   }
 };
-var resolveWebTarget = (cwd, packageName2) => {
+var resolveWebTarget = (cwd, packageName2, acceptsPackageFlag = false) => {
   const repoRoot = resolveTreeRoot(cwd);
   const loaded = loadPackages(repoRoot);
   if (!loaded.ok) {
@@ -33372,7 +33372,7 @@ var resolveWebTarget = (cwd, packageName2) => {
   }
   if (packageName2 === void 0 && candidates.length > 1) {
     return {
-      message: `gaia-packages: several packages declare the web stack (${listed}). Next step: pass --package <name> to choose one.`,
+      message: acceptsPackageFlag ? `gaia-packages: several packages declare the web stack (${listed}). Next step: pass --package <name> to choose one.` : `gaia-packages: several packages declare the web stack (${listed}), and this command supports one web package. Next step: leave exactly one package declaring "stack": "web" in its gaia.package.json.`,
       ok: false
     };
   }
@@ -33422,7 +33422,7 @@ var splitPackageFlag = (rawArgv, subcommand) => {
   return { argv, packageName: packageName2 };
 };
 var resolveScaffoldTarget = (cwd, subcommand, packageName2) => {
-  const target = resolveWebTarget(cwd, packageName2);
+  const target = resolveWebTarget(cwd, packageName2, true);
   if (!target.ok) {
     structuredError({
       code: "gaia_packages",

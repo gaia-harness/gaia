@@ -56,6 +56,21 @@ describe('resolveWebTarget', () => {
     expect(target.ok ? '' : target.message).toContain('admin');
   });
 
+  test('the several-members refusal names --package only for a caller that takes it', () => {
+    register([
+      {name: 'storefront', path: 'apps/storefront'},
+      {name: 'admin', path: 'apps/admin'},
+    ]);
+
+    const withoutFlag = resolveWebTarget(root);
+    const withFlag = resolveWebTarget(root, undefined, true);
+
+    expect(withoutFlag.ok ? '' : withoutFlag.message).not.toContain(
+      '--package'
+    );
+    expect(withFlag.ok ? '' : withFlag.message).toContain('--package');
+  });
+
   test('no web member fails naming the registry and the stack field', () => {
     register([{name: 'lib', path: 'packages/lib', web: false}]);
 

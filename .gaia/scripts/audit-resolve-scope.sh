@@ -590,24 +590,24 @@ if [ "$specialists" -eq 1 ]; then
   if [ "$packages_status" -ne 0 ]; then
     printf 'could not read the package registry (%s); every lens stays on for every path\n' "${GAIA_PACKAGES_ERROR:-unknown error}" >&2
     every_path_web=1
-    language_file_pattern='^(.*/)?app/languages/[^/]+/.+\.ts$'
-  else
-    web_member_alternation=""
-    while IFS=$'\t' read -r web_member_name web_member_path; do
-      [ -n "$web_member_name" ] || continue
-      if [ "$web_member_path" = . ]; then
-        web_member_alternation="${web_member_alternation:+$web_member_alternation|}"
-      else
-        escaped_member_path="${web_member_path//./\\.}"
-        web_member_alternation="${web_member_alternation:+$web_member_alternation|}${escaped_member_path}/"
-      fi
-    done < <(gaia_packages_web_members)
-    if [ -n "$web_member_alternation" ]; then
-      language_file_pattern="^(${web_member_alternation})app/languages/[^/]+/.+\\.ts\$"
-    else
-      language_file_pattern='^$.^'
-    fi
   fi
+
+  # _ars_is_language_file <path>: status 0 when the path is a locale file of
+  # its owning web member. The owner's directory is stripped first (nothing for
+  # a member at `.`), so no member prefix is composed into a regex.
+  _ars_is_language_file() {
+    local owner owner_dir remainder="$1"
+    if [ "$every_path_web" -eq 1 ]; then
+      [[ "$1" =~ ^(.*/)?app/languages/[^/]+/.+\.ts$ ]]
+      return
+    fi
+    owner="$(gaia_package_for_path "$1")"
+    [ -n "$owner" ] || return 1
+    gaia_package_is_web "$owner" || return 1
+    owner_dir="$(gaia_package_dir "$owner")" || return 1
+    [ "$owner_dir" = . ] || remainder="${1#"$owner_dir"/}"
+    [[ "$remainder" =~ ^app/languages/[^/]+/.+\.ts$ ]]
+  }
 
   # _ars_path_is_web <path>: status 0 when the path takes the web lenses.
   _ars_path_is_web() {
@@ -633,7 +633,7 @@ if [ "$specialists" -eq 1 ]; then
         typescript_tokens="$typescript_tokens ts:$path" ;;
     esac
     [ "$path_is_web" -eq 1 ] || continue
-    if [[ "$path" =~ $language_file_pattern ]]; then
+    if _ars_is_language_file "$path"; then
       translation_tokens="$translation_tokens language-file:$path"
     elif ! git -C "$root" show "HEAD:$path" > "$ars_temporary_directory/blob" 2>/dev/null; then
       printf 'could not read HEAD:%s; running every specialist it qualifies for\n' "$path" >&2

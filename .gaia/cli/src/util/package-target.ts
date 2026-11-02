@@ -25,11 +25,14 @@ const resolveTreeRoot = (cwd: string): string => {
  * and the registry, never from `cwd` itself. With no `packageName` the single
  * web member is the target; a name must be a web member. A registry or
  * descriptor failure comes back as its `gaia-packages:` message so the caller
- * can refuse before it writes anything.
+ * can refuse before it writes anything. `acceptsPackageFlag` is true only for
+ * callers whose command takes `--package`; the several-members refusal names
+ * that flag as the next step only there.
  */
 export const resolveWebTarget = (
   cwd: string,
-  packageName?: string
+  packageName?: string,
+  acceptsPackageFlag = false
 ): PackageTarget => {
   const repoRoot = resolveTreeRoot(cwd);
   const loaded = loadPackages(repoRoot);
@@ -50,7 +53,10 @@ export const resolveWebTarget = (
 
   if (packageName === undefined && candidates.length > 1) {
     return {
-      message: `gaia-packages: several packages declare the web stack (${listed}). Next step: pass --package <name> to choose one.`,
+      message:
+        acceptsPackageFlag ?
+          `gaia-packages: several packages declare the web stack (${listed}). Next step: pass --package <name> to choose one.`
+        : `gaia-packages: several packages declare the web stack (${listed}), and this command supports one web package. Next step: leave exactly one package declaring "stack": "web" in its gaia.package.json.`,
       ok: false,
     };
   }

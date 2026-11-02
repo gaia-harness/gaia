@@ -100,27 +100,17 @@ jobs:
           echo "base=${base}" >> "$GITHUB_OUTPUT"
           echo "tests: incremental base = ${base}" >&2
       # Allowlist of paths that affect the test suite (ERE, matched against
-      # `git diff --name-only`). The app lives in
-      # `apps/web/`, so its entries carry that prefix while the one
-      # workspace lockfile and manifests stay at the root; the two
-      # `gaia.package.json`/`packages.json` entries are the package registry
-      # and descriptor the harness reads. Anything outside this list reports the
-      # required check green without running, so a path that carries tests
-      # must appear here: `apps/web/.playwright/` holds the e2e specs and their
-      # helpers, which `playwright.config.` alone does not cover.
-      # This job also runs typecheck and lint, so a path those cover belongs
-      # here too even when it carries no tests: `apps/web/.storybook/` holds neither
-      # tests nor stories, but it is inside the tsconfig `include` and is
-      # linted, and Chromatic's Vite build strips types instead of checking
-      # them, so it is not a substitute. The `*.config.*` alternation names
-      # every apps/web/ config for the same reason, not only the four whose tools
-      # this job runs: each one is linted, the `.ts` ones are also in the
-      # tsconfig program (the `.mjs` ones are not, since `include` lists no
-      # `.mjs` glob and `allowJs` is off), and `react-router.config.` feeds the
-      # typegen step that runs before `tsc`. `pnpm-workspace.yaml` and `.npmrc`
-      # are here because pnpm 11 reads install behavior from them that the
-      # lockfile's own `settings:` block does not carry, so a change to either
-      # can break `--frozen-lockfile` for the next unrelated PR.
+      # `git diff --name-only`). Every path under `apps/` and `packages/` is
+      # test-relevant by prefix: this job runs the tests, typecheck and lint
+      # over them, so a path outside the list reports the required check green
+      # without running. The root-level entries are the shared manifests and
+      # config: the one workspace lockfile and manifest, `.gaia/packages.json`
+      # (the package registry the harness reads), this workflow, the apt
+      # archive cache action and the Lint step's script, which both serve this
+      # job. `pnpm-workspace.yaml` and `.npmrc` are here because pnpm 11 reads
+      # install behavior from them that the lockfile's own `settings:` block
+      # does not carry, so a change to either can break `--frozen-lockfile`
+      # for the next unrelated PR.
       - name: Detect test-relevant changes in the incremental delta
         id: filter
         if: steps.chore-deps.outputs.skip == 'false'
@@ -137,12 +127,6 @@ jobs:
           # --no-renames, so a file moved out of apps/web/app/ lists its old path too:
           # rename detection reports only the new path, and a move to docs/
           # would read as no relevant change while its importers break.
-          # The root-level dev-ports modules are imported by vite.config.ts and
-          # playwright.config.ts, so a change to one is test-relevant too.
-          # The committed msw worker script is read by the node-project drift
-          # test, so a change to it alone is test-relevant.
-          # The apt archive cache action and the Lint step's script both serve
-          # this job, so a change to either must run the job.
           changed=$(set -o pipefail; git diff --name-only -z --no-renames "${CHECK_BASE}...HEAD" | tr '\0' '\n')
           pattern='^(apps|packages)/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version)$|^\.gaia/packages\.json$|^\.github/workflows/tests\.yml$|^\.github/actions/gaia-apt-cache/|^\.gaia/scripts/frontend-lint-delta\.sh$'
           if printf '%s\n' "$changed" | grep -qE "$pattern"; then

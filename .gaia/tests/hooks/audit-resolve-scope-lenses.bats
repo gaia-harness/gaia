@@ -144,6 +144,28 @@ resolve() {
   true
 }
 
+@test "a language file under a sole web member at the repository root is a language-file token" {
+  write_descriptor . root web
+  build_base '[{"name":"root","path":"."}]'
+  put app/languages/en/common.ts 'export default { a: "b" };'
+  commit_files
+  run --separate-stderr resolve
+  [ "$status" -eq 0 ]
+  has_line "SPECIALIST=translation language-file:app/languages/en/common.ts"
+}
+
+@test "a root web member beside apps/storefront keeps a language-file token for both" {
+  write_descriptor . root web
+  build_base '[{"name":"root","path":"."},{"name":"storefront","path":"apps/storefront"}]'
+  put app/languages/en/common.ts 'export default { a: "b" };'
+  put apps/storefront/app/languages/en/common.ts 'export default { a: "b" };'
+  commit_files
+  run --separate-stderr resolve
+  [ "$status" -eq 0 ]
+  specialist_line_names translation "language-file:app/languages/en/common.ts"
+  specialist_line_names translation "language-file:apps/storefront/app/languages/en/common.ts"
+}
+
 @test "a path owned by no member reads as not web" {
   build_base '[{"name":"storefront","path":"apps/storefront"}]'
   put scripts/orphan.tsx 'export const O = () => t("x");'

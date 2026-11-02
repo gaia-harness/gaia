@@ -54,7 +54,7 @@ export const resolveScaffoldTarget = (
   subcommand: string,
   packageName?: string
 ): ResolvedTarget | undefined => {
-  const target = resolveWebTarget(cwd, packageName);
+  const target = resolveWebTarget(cwd, packageName, true);
 
   if (!target.ok) {
     structuredError({
