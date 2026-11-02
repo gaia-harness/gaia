@@ -11,7 +11,7 @@
 #
 # --until-green, for a repository with auto-merge off: GREEN means CI is green
 # and the caller merges. Every required check the base branch declares (branch
-# protection and rulesets) has run and passed, and the pull request is
+# protection and rulesets) has passed or been skipped, and the pull request is
 # mergeable. The merge gate decides the audit, so an absent GAIA-Audit does not
 # hold it; pr-wait-merge-green-lib.sh says why.
 #
@@ -105,9 +105,9 @@ Usage: bash .gaia/scripts/$PROGRAM_NAME --pr <number> [--repo <[HOST/]OWNER/REPO
               Zero is allowed, which polls without sleeping.
   --until-green
               return GREEN when every required check the base branch declares
-              has run and passed and the pull request is mergeable, for a
-              repository with auto-merge off. An absent GAIA-Audit is left
-              to the merge gate. The caller then runs gh pr merge.
+              has passed or been skipped and the pull request is mergeable,
+              for a repository with auto-merge off. An absent GAIA-Audit is
+              left to the merge gate. The caller then runs gh pr merge.
               Non-required checks are ignored.
 
 Prints one verdict token on stdout and exits:
@@ -200,12 +200,12 @@ fi
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# Reads the pull request's state and mergeability as one tab-separated line,
-# and returns gh's own exit status.
+# Reads the pull request's state, mergeability and base branch as one
+# tab-separated line, and returns gh's own exit status.
 #
 # The `// "UNKNOWN"` is what keeps rule 1 above true when GitHub answers with
 # a null `mergeable` rather than the literal string, which it does on a pull
-# request it has not computed yet. Only the two field reads live in the jq
+# request it has not computed yet. Only the field reads live in the jq
 # filter; the decision is made in shell below, where it is readable and where
 # the bats suite can drive it.
 #

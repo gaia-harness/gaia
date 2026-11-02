@@ -4,7 +4,8 @@
 # The --until-green half of pr-wait-merge.sh, which sources it and calls
 # until_green_reached once per attempt. It reads the parent's PR and REPO, and
 # the base_branch each attempt's view read sets; it owns DECLARED_REQUIRED and
-# GREEN_BLOCKER, which the parent initializes and reports on TIMEOUT.
+# GREEN_BLOCKER, which the parent initializes, reporting GREEN_BLOCKER on
+# TIMEOUT.
 #
 # Bash 3.2 compatible. Never `cd`.
 
@@ -20,7 +21,8 @@
 # CI is green, and the merge gate decides the audit. The merge hook denies a
 # merge that owes a marker, and on an out-of-scope or chore(deps) bypass it
 # posts the status itself while `gh pr merge` runs, so waiting for it here
-# would never end; branch protection still requires the status to merge. A
+# would never end; the base branch's protection or ruleset still requires the
+# status to merge. A
 # present GAIA-Audit that is pending holds GREEN, and a failing one ends the
 # wait as CHECK_FAILED like any required check.
 # shellcheck disable=SC2016
@@ -46,8 +48,9 @@ read_api() {
 # Sets DECLARED_REQUIRED to a JSON array of the required contexts <base>
 # declares, the union of branch protection and rulesets since GitHub enforces
 # both, and returns 0. On a failed read it sets GREEN_BLOCKER and returns 1, so
-# the caller retries on the next attempt; it never treats an unread set as
-# empty, which would put the registered-only rule back. Both endpoints answer
+# the caller retries on the next attempt. It never records an unread set as
+# `[]`, which the parent would hold for the rest of the bound and report as no
+# required check declared. Both endpoints answer
 # with read access, unlike the protection endpoint proper, which needs admin.
 resolve_declared_required() {
   local base="$1" protection rulesets names name

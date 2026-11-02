@@ -622,8 +622,7 @@ open_on_main() {
 TWO_DECLARED='"Shellcheck and bats"
 "Audit CI Tests"'
 BOTH_PASSED='[{"name":"Shellcheck and bats","bucket":"pass"},{"name":"Audit CI Tests","bucket":"pass"}]'
-# The same two plus the audit status, declared the way this repository's
-# ruleset declares it.
+# The same two plus the audit status, declared through a ruleset.
 WITH_AUDIT_DECLARED='"GAIA-Audit"
 "Shellcheck and bats"
 "Audit CI Tests"'
@@ -808,7 +807,7 @@ WITH_AUDIT_DECLARED='"GAIA-Audit"
   # Chromatic's per-app statuses (`UI Tests`) are not declared required, so
   # neither read sees them: the declared set does not name them, and the
   # `--required` checks read does not list them. Its required CI job,
-  # `Run Chromatic`, still has to pass like any other declared context.
+  # `Run Chromatic`, still has to pass or skip like any other declared context.
   stub_required "$(open_on_main)" '"Run Chromatic"' '' \
     '[{"name":"Run Chromatic","bucket":"skipping"}]'
   run bash "$WAIT" --pr 7 --until-green --interval 0
@@ -816,7 +815,7 @@ WITH_AUDIT_DECLARED='"GAIA-Audit"
   [ "${lines[0]}" = "GREEN" ]
 }
 
-@test "the green filter answers green only when every declared context is present and finished" {
+@test "the green filter answers green only when every declared context is present and passed or skipped" {
   local filter
   filter="$(sed -n "s/^GREEN_JQ='\(.*\)'\$/\1/p" "$GREEN_LIB")"
   [ -n "$filter" ] || return 1
