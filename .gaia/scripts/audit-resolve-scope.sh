@@ -592,9 +592,9 @@ if [ "$specialists" -eq 1 ]; then
     every_path_web=1
   fi
 
-  # _ars_is_language_file <path>: status 0 when the path is a locale file of
-  # its owning web member. The owner's directory is stripped first (nothing for
-  # a member at `.`), so no member prefix is composed into a regex.
+  # _ars_is_language_file <path>: 0 for a locale file of its owning web member,
+  # or any app/languages/<locale>/*.ts path when the registry is unreadable. The
+  # owner's directory is stripped first (none at `.`), so no prefix enters a regex.
   _ars_is_language_file() {
     local owner owner_dir remainder="$1"
     if [ "$every_path_web" -eq 1 ]; then

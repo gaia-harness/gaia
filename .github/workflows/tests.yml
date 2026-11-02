@@ -104,8 +104,9 @@ jobs:
       # test-relevant by prefix: this job runs the tests, typecheck and lint
       # over them, so a path outside the list reports the required check green
       # without running. The root-level entries are the shared manifests and
-      # config: the one workspace lockfile and manifest, `.gaia/packages.json`
-      # (the package registry the harness reads), this workflow, the apt
+      # config: the one workspace lockfile and manifest, `.node-version`,
+      # `.gaia/packages.json` (the package registry the harness reads), this
+      # workflow, the apt
       # archive cache action and the Lint step's script, which both serve this
       # job. `pnpm-workspace.yaml` and `.npmrc` are here because pnpm 11 reads
       # install behavior from them that the lockfile's own `settings:` block

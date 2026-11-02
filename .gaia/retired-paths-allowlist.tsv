@@ -59,7 +59,7 @@
 .gaia/scripts/classifier/classify-determinism.mjs	a test under app/route-tests/<route>/tests/	Reason string naming the frontend package-relative home of route tests, not a root path.
 .claude/hooks/lib/audit-quick-classify-lines-lib.sh	"${prefix}"app/languages/}	The path is composed onto the owning web member prefix from the registry, so app/languages is member-relative here, not a root path.
 .claude/hooks/lib/audit-quick-classify-lines-lib.sh	"${prefix}app/languages/	The path is composed onto the owning web member prefix from the registry, so app/languages is member-relative here, not a root path.
-.gaia/scripts/audit-resolve-scope.sh	[[ "$1" =~ ^(.*/)?app/languages/	Fail-open pattern for an unreadable registry: matches app/languages under any member prefix, not a root path.
+.gaia/scripts/audit-resolve-scope.sh	[[ "$1" =~ ^(.*/)?app/languages/	Fail-open pattern for an unreadable registry: matches app/languages under any path prefix, not a root path.
 .gaia/scripts/audit-resolve-scope.sh	[[ "$remainder" =~ ^app/languages/	The member directory is stripped first, so app/languages is member-relative here, not a root path.
 .gaia/cli/src/util/gaia-packages-corpus-fixture.ts	'frontend/gaia.package.json'	Corpus cases keep their descriptor in a case-local directory named frontend; it is a fixture directory, not the app root.
 .gaia/scripts/fitness-nudge-lib.sh	'chore: point references at frontend/'	Literal commit subject the 2.0.0 migration wrote into adopter history, matched as a prefix.
