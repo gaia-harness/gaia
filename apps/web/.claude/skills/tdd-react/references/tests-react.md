@@ -4,7 +4,7 @@ Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHoo
 
 ## Testing Layers
 
-Five layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story `.test()`, not a browser test; a route's redirect is a route test, a loader's parsing is a service test. The principle and its rationale are in `wiki/decisions/Test Layering.md`.
+Six layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story `.test()`, not a browser test; a route's redirect is a route test, a loader's parsing is a service test. The principle and its rationale are in `wiki/decisions/Test Layering.md`.
 
 The story-versus-route boundary: rendered output on one component is a story. A status, a redirect, returned data, a validation error, an authorization outcome or a side effect is a route test.
 

@@ -2,10 +2,10 @@
 // The one definition of "this Playwright file opens a browser page".
 //
 // A real-server test drives the running server through the `request` fixture
-// and opens no page; a browser test opens one. Three places need that line
-// drawn the same way: the UAT gate's no-page check on a rendered real-server
-// test, the overlap check's layer map (a spec that opens no page is on the
-// real-server layer), and the post-merge browser-test count. This module is
+// and opens no page; a browser test opens one. Two places need that line drawn
+// the same way: the UAT gate's no-page check on a rendered real-server test
+// and the overlap check's layer map (a spec that opens no page is on the
+// real-server layer). This module is
 // that definition. It reads the file's AST with the TypeScript compiler API, so
 // words in a title, a string or a comment are never a use.
 //

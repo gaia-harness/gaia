@@ -27,7 +27,7 @@ From lowest to highest:
 3. **Real server.** The live stack, driven by Playwright's request fixture: it opens no page and makes no browser round trip. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, a forged request against a live route, and the server's rendered HTML, read through the request fixture and a parsed response body.
 4. **Browser.** A real page: hydration, focus, client navigation, client-submitted forms and a multi-page journey, one test per user flow.
 
-A plan routes each row to `real-server` or `browser`, never to a bare end-to-end surface; the operational ladder is in `.claude/skills/gaia/references/plan/planner.md`.
+A plan routes a live-stack UAT to `real-server` or `browser`, never to the legacy end-to-end surface; the operational ladder is in `.claude/skills/gaia/references/plan/planner.md`.
 
 Only the frontend package renders route rows today. [[Testing]] describes the frontend's layers in place.
 

@@ -120,7 +120,8 @@ const pathRankOf = (file) => {
 };
 
 // A file-level layer: any page use anywhere in the spec makes it browser, and
-// an unreadable spec is browser, the rank that clears the fewest proposals.
+// an unreadable spec is browser too: no citation in it can verify, so its rank
+// clears nothing.
 const rankOf = (file) => {
   const rank = pathRankOf(file);
   if (rank !== PLAYWRIGHT) return rank;

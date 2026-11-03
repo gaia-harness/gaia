@@ -6,7 +6,7 @@ Contents: Owning-phase UAT gate; Pre-audit UAT checks; Consolidation; Post-merge
 
 ## Owning-phase UAT gate
 
-**When it runs.** For a spec-derived plan, after `pnpm typecheck && pnpm lint` pass for a phase whose number appears in a `real-server`, `browser`, `e2e` or `route` row of the UAT routing table in `<PLAN_DIR>/README.md`, and before that phase commits. A phase that owns neither skips it.
+**When it runs.** For a spec-derived plan, after `pnpm typecheck && pnpm lint` pass for a phase whose number appears in a `real-server`, `browser`, `e2e` or `route` row of the UAT routing table in `<PLAN_DIR>/README.md`, and before that phase commits. A phase that owns none of these rows skips it.
 
 **Command**, from `<RESOLVED_ROOT>`:
 
