@@ -91,7 +91,7 @@ describe('object utils', () => {
   });
 
   test('convertCase', () => {
-    expect(convertCase((f) => f, {})).toEqual({});
+    expect(convertCase((text) => text, {})).toEqual({});
     const mixedCaseNestedRecord = {
       a: [
         {
@@ -111,7 +111,9 @@ describe('object utils', () => {
         c: undefined,
       },
     };
-    expect(convertCase((f) => `${f}${f}`, mixedCaseNestedRecord)).toEqual({
+    expect(
+      convertCase((text) => `${text}${text}`, mixedCaseNestedRecord)
+    ).toEqual({
       aa: [
         {
           aa: 1,
