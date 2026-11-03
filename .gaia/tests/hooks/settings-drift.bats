@@ -13,6 +13,8 @@
 # Git runs the hook directly, so the hook cases do too, with `pnpm` stubbed onto
 # PATH. Assertion style: .claude/rules/bats-assertions.md.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   ROOT_SETTINGS="$REPO_ROOT/.claude/settings.json"
