@@ -3,10 +3,11 @@
 # extracted and run against stubbed `gh` and `sleep`. A new repository can
 # start no workflow run while its Actions settings read enabled, so the probe
 # waits a bounded time for a run on the pushed commit, and the recovery
-# dispatches `tests.yml` once and checks once. Every outcome that is not a run
-# reports itself (`no-run`, `dispatch-failed`); none loops past its bound.
+# dispatches `tests.yml` once and polls again with the same bound. Every
+# outcome that is not a run reports itself (`no-run`, `dispatch-failed`); none
+# loops past its bound.
 #
-# Mutation tests prove the bound and the skip guard can fail.
+# Mutation tests prove the probe's bound and its main-branch guard can fail.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -156,7 +157,7 @@ api_calls() { grep -c '^api ' "$GH_LOG" || true; }
   grep -qF -- '! gh workflow run tests.yml --ref main' <<<"$section"
   grep -qF -- '**I enabled it** (Recommended)' <<<"$section"
   grep -qF -- '**Skip for now**' <<<"$section"
-  grep -qF -- 'Then run `## First CI run` below' "$PAGE"
+  grep -qF -- 'then run `## First CI run` below' "$PAGE"
 }
 
 @test "mutation: a probe with its poll bound removed fails the bound fixture" {

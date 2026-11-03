@@ -103,9 +103,9 @@ Flip the repo to public or internal only after this second confirmation.
 
 **Secret-scanning push-protection (best-effort).** Immediately after create, run `## Push protection` below, so it guards every later push and is in place before any public/internal flip.
 
-**First CI run.** Then run `## First CI run` below, before anything relies on CI.
+**First CI run.** Cache `owner`/`repo` from the new remote, then run `## First CI run` below.
 
-After creation, cache `owner`/`repo` from the new remote. The repo exists with its default branch pushed, so record it, then return to `### Recommended defaults` in `setup-gaia.md`:
+The repo exists with its default branch pushed, so record it, then return to `### Recommended defaults` in `setup-gaia.md`:
 
 ```bash
 [ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record github-repository applied
@@ -197,7 +197,7 @@ When GitHub does not offer it for this repository (e.g. a private repo without G
 
 ## First CI run
 
-GitHub can leave Actions off on a new repository while its Actions settings API still reads enabled, so pushes start no workflow run, and enabling Actions later does not replay them. The only sign is a missing run. The shipped `.github/workflows/tests.yml` triggers on a push to `main` and creates a run even when its jobs skip, so the probe expects one for the pushed commit, and skips when the default branch is not `main` or the file is gone:
+GitHub can leave Actions off on a new repository while its Actions settings API still reads enabled, so pushes start no workflow run, and enabling Actions later does not replay them. The shipped `.github/workflows/tests.yml` triggers on a push to `main` and creates a run even when its jobs skip, so the probe expects one for the pushed commit, and skips when the default branch is not `main` or the file is gone:
 
 ```bash
 first_run_probe() {
@@ -227,7 +227,7 @@ On `skipped` or `run-seen`, return to the option. On `no-run`, ask (AskUserQuest
 > - **I enabled it** (Recommended)
 > - **Skip for now**
 
-On `I enabled it`, start a run, since enabling replays nothing, and check once with the same bound:
+On `I enabled it`, dispatch `tests.yml` and poll again with the same bound:
 
 ```bash
 first_run_dispatch() {
