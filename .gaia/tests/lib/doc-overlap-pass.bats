@@ -292,7 +292,9 @@ check_report_and_never() {
 
 check_judge() {
   has_all "$1" \
-    'Playwright e2e specs and Vitest route tests' \
+    'Playwright real-server and browser specs and Vitest route tests' \
+    '`Surface: <uat_id> <real-server | browser | route>`' \
+    'this divergence applies only to a `browser` surface' \
     '`Spec: <uat_id> <absolute path to the rendered test>`' \
     '`Guard: <uat_id> <absolute path to the guard file>`' \
     'Meeting a Given through a builder or fixture is cosmetic too, unless the UAT'"'"'s flow is that setup' \
@@ -304,9 +306,10 @@ check_judge() {
 
 check_divergence() {
   has_all "$1" \
-    'a Playwright e2e spec or a Vitest route test' \
+    'a Playwright real-server or browser spec or a Vitest route test' \
     'Meeting a Given through a builder, a fixture or a helper that sets up the state is cosmetic too, unless the UAT'"'"'s flow is that setup' \
-    'A body that makes only a request where the Then-clause is something only a browser shows (focus, hydration, client navigation) is a logical divergence'
+    'On a browser row, a body that makes only a request where the Then-clause is something only a browser shows (focus, hydration, client navigation) is a logical divergence' \
+    'On a real-server row a request-only body is the contract'
 }
 
 @test "the judge is surface-neutral and names the builder, stubbed-guard, request-only and refusal-check divergences" {
@@ -319,7 +322,7 @@ check_divergence() {
 
 @test "red twin: removing any judge or divergence clause fails its check" {
   local copy="$BATS_TEST_TMPDIR/copy.md" clause
-  for clause in 'Meeting a Given through a builder or fixture is cosmetic too' 'stubs or mocks a guard a `Guard:` line names' 'only makes a request where the Then-clause is something only a browser shows' 'sets no `maxRedirects: 0`' 'Playwright e2e specs and Vitest route tests'; do
+  for clause in 'Meeting a Given through a builder or fixture is cosmetic too' 'stubs or mocks a guard a `Guard:` line names' 'only makes a request where the Then-clause is something only a browser shows' 'sets no `maxRedirects: 0`' 'Playwright real-server and browser specs and Vitest route tests' '`Surface: <uat_id> <real-server | browser | route>`' 'this divergence applies only to a `browser` surface'; do
     mutate "$JUDGE" "$clause" 'removed' "$copy"
     run check_judge "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$clause' did not fail" >&2; return 1; }

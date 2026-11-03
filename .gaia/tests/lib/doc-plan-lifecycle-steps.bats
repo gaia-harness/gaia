@@ -632,18 +632,27 @@ check_ladder() {
     'only a real browser can show' \
     'one journey per user flow' \
     'API-only behavior goes here, or to no UAT when it is not a contract worth pinning' \
-    'a real-server row' \
+    '`real-server`, driven by Playwright'"'"'s request fixture with no page' \
+    'a then-clause naming only server-rendered HTML with no client behavior' \
+    '4. `browser` only when' \
     'one HTTP check per route module where wiring is the risk' \
     'a forged request against a live route' \
     '`maxRedirects: 0`' \
     'asserts the status and the `Location` header, and states its actor' \
     'also carries one real-server check per guarded route module' \
-    'as an `e2e` row when a UAT names it and otherwise as a task its owning phase delivers' \
+    'as a `real-server` row when a UAT names it and otherwise as a task its owning phase delivers' \
+    'A new plan never routes to `e2e`' \
     'names the file of the guard'; do
     grep -qF -- "$needle" <<<"$para" || { printf 'ladder lacks: %s\n' "$needle" >&2; return 1; }
   done
   grep -qF -- 'the lowest layer that can prove it' "$file" && { printf 'planner.md copies the rationale phrase\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | route | <owning phase> | <kebab-case feature folder> | <behavior-named-kebab-case>.test.ts |' "$file" || { printf 'no route row in the routing table example\n' >&2; return 1; }
+  grep -qF -- '| <uat_id> | real-server |' "$file" || { printf 'no real-server row in the routing table example\n' >&2; return 1; }
+  grep -qF -- '| <uat_id> | browser |' "$file" || { printf 'no browser row in the routing table example\n' >&2; return 1; }
+  grep -qF -- '| <uat_id> | e2e |' "$file" && { printf 'the routing table example restores an e2e row\n' >&2; return 1; }
+  if grep -v 'A new plan never routes to `e2e`' <<<"$para" | grep -qF '`e2e`'; then
+    printf 'a bare e2e surface survives in the ladder paragraph\n' >&2; return 1
+  fi
   return 0
 }
 
@@ -653,11 +662,12 @@ check_route_triggers() {
   local file="$1" needle
   for needle in \
     'Skipped: no e2e-routed or route-routed UATs' \
-    'appears in an `e2e` or `route` row of' \
+    'appears in a `real-server`, `browser`, `e2e` or `route` row of' \
     'a spec under `<frontend package>/.playwright/e2e/` or a route test under `<frontend package>/app/route-tests/`'; do
     grep -qF -- "$needle" "$file" || { printf 'planner.md lacks: %s\n' "$needle" >&2; return 1; }
   done
   grep -qF -- 'Skipped: no e2e-routed UATs' "$file" && { printf 'the e2e-only skip line survives\n' >&2; return 1; }
+  grep -qF -- 'appears in an `e2e` or `route` row of' "$file" && { printf 'the pre-split gate trigger survives\n' >&2; return 1; }
   grep -qF -- 'appears in an `e2e` row of' "$file" && { printf 'the e2e-only gate trigger survives\n' >&2; return 1; }
   return 0
 }
@@ -668,7 +678,7 @@ check_route_triggers() {
 
 @test "red twin: dropping a ladder clause, the link or adding the rationale phrase fails" {
   local copy="$BATS_TEST_TMPDIR/planner.md" needle
-  for needle in 'one journey per user flow' 'wiki/decisions/Test Layering.md' '`maxRedirects: 0`' 'also carries one real-server check per guarded route module' 'names the file of the guard' 'a forged request against a live route'; do
+  for needle in 'one journey per user flow' 'wiki/decisions/Test Layering.md' '`maxRedirects: 0`' 'also carries one real-server check per guarded route module' 'names the file of the guard' 'a forged request against a live route' 'a then-clause naming only server-rendered HTML with no client behavior' 'A new plan never routes to `e2e`'; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$copy"
     run check_ladder "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
@@ -676,11 +686,14 @@ check_route_triggers() {
   { cat "$PLANNER_MD"; printf '\nTests belong at the lowest layer that can prove it.\n'; } >"$copy"
   run check_ladder "$copy"
   [ "$status" -ne 0 ]
+  sed 's/| <uat_id> | real-server |/| <uat_id> | e2e |/' "$PLANNER_MD" >"$copy"
+  run check_ladder "$copy"
+  [ "$status" -ne 0 ]
 }
 
 @test "the render, gate and implementer triggers cover a route row, and lifecycle.md and uat-write.md say so" {
   check_route_triggers "$PLANNER_MD"
-  grep -qF 'appears in an `e2e` or `route` row' "$LIFECYCLE_MD"
+  grep -qF 'appears in a `real-server`, `browser`, `e2e` or `route` row' "$LIFECYCLE_MD"
   grep -qF 'no owned UAT tests' "$LIFECYCLE_MD"
   grep -qF 'no owned e2e specs' "$LIFECYCLE_MD" && return 1
   grep -qF 'Skipped: no e2e-routed or route-routed UATs' "$REPO_ROOT/.claude/skills/gaia/references/spec/uat-write.md"
@@ -691,7 +704,10 @@ check_route_triggers() {
   sed 's/Skipped: no e2e-routed or route-routed UATs/Skipped: no e2e-routed UATs/' "$PLANNER_MD" >"$copy"
   run check_route_triggers "$copy"
   [ "$status" -ne 0 ]
-  sed 's/appears in an `e2e` or `route` row of/appears in an `e2e` row of/' "$PLANNER_MD" >"$copy"
+  sed 's/appears in a `real-server`, `browser`, `e2e` or `route` row of/appears in an `e2e` row of/' "$PLANNER_MD" >"$copy"
+  run check_route_triggers "$copy"
+  [ "$status" -ne 0 ]
+  sed 's/appears in a `real-server`, `browser`, `e2e` or `route` row of/appears in an `e2e` or `route` row of/' "$PLANNER_MD" >"$copy"
   run check_route_triggers "$copy"
   [ "$status" -ne 0 ]
   sed 's/ or a route test under `<frontend package>\/app\/route-tests\/`//' "$PLANNER_MD" >"$copy"
@@ -699,11 +715,65 @@ check_route_triggers() {
   [ "$status" -ne 0 ]
 }
 
-@test "lifecycle.md sends the judge one Spec line per e2e or route row with a real path and an optional Guard line" {
-  grep -qF 'one `Spec:` line per `e2e` or `route` row' "$LIFECYCLE_MD"
+# check_spec_lines <lifecycle>: the fidelity dispatch's Spec and Surface lines.
+check_spec_lines() {
+  local file="$1" needle
+  for needle in \
+    'one `Spec:` line per `real-server`, `browser`, legacy `e2e` or `route` row' \
+    '<frontend package>/.playwright/e2e/` for a `real-server`, `browser` or legacy `e2e` row' \
+    '`Surface: <uat_id> <real-server | browser | route>`' \
+    'a legacy `e2e` row written as `browser`' \
+    'it adds no verdict entry'; do
+    grep -qF -- "$needle" "$file" || { printf 'lifecycle lacks: %s\n' "$needle" >&2; return 1; }
+  done
+}
+
+# check_real_server_prerequisites <lifecycle>: the three-way prerequisites and
+# the no-page check.
+check_real_server_prerequisites() {
+  local file="$1" needle
+  for needle in \
+    'A `browser` or legacy `e2e` row needs Playwright'"'"'s Chromium installed' \
+    'A `real-server` row opens no page and makes no browser round trip' \
+    'whose global setup launches Chromium to warm the server' \
+    'so it needs Chromium installed, free ports, and Node and `typescript` for the no-page check' \
+    'the reason `opens-page`' \
+    '.gaia/scripts/spec/page-use.mjs' \
+    'neither Chromium nor free ports'; do
+    grep -qF -- "$needle" "$file" || { printf 'lifecycle lacks: %s\n' "$needle" >&2; return 1; }
+  done
+  grep -qiF -- 'needs no Chromium' "$file" && { printf 'lifecycle claims a row needs no Chromium\n' >&2; return 1; }
+  return 0
+}
+
+@test "lifecycle.md sends the judge one Spec line per real-server, browser, e2e or route row with a Surface line and an optional Guard line" {
+  check_spec_lines "$LIFECYCLE_MD"
   grep -qF '<frontend package>/app/route-tests/' "$LIFECYCLE_MD"
   grep -qF 'Guard: <uat_id>' "$LIFECYCLE_MD"
-  grep -qF 'neither Chromium nor free ports' "$LIFECYCLE_MD"
+}
+
+@test "red twin: a Spec-line sentence without real-server fails" {
+  local copy="$BATS_TEST_TMPDIR/lifecycle.md"
+  sed 's/one `Spec:` line per `real-server`, `browser`, legacy/one `Spec:` line per `browser`, legacy/' "$LIFECYCLE_MD" >"$copy"
+  run check_spec_lines "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "lifecycle.md splits the prerequisites three ways and keeps Chromium for a real-server row" {
+  check_real_server_prerequisites "$LIFECYCLE_MD"
+}
+
+@test "red twin: a lifecycle copy saying a real-server row needs no Chromium fails" {
+  local copy="$BATS_TEST_TMPDIR/lifecycle.md"
+  sed 's/so it needs Chromium installed, free ports,/so it needs no Chromium, free ports,/' "$LIFECYCLE_MD" >"$copy"
+  run check_real_server_prerequisites "$copy"
+  [ "$status" -ne 0 ]
+  { cat "$LIFECYCLE_MD"; printf '\nA real-server row needs no Chromium.\n'; } >"$copy"
+  run check_real_server_prerequisites "$copy"
+  [ "$status" -ne 0 ]
+  sed 's/the reason `opens-page`/a reason/' "$LIFECYCLE_MD" >"$copy"
+  run check_real_server_prerequisites "$copy"
+  [ "$status" -ne 0 ]
 }
 
 # check_record_arm <lifecycle>: which pass writes the promotion record.

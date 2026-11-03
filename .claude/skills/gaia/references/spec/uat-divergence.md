@@ -1,15 +1,15 @@
 ---
-description: 'The cosmetic versus logical line for a rendered UAT test (an e2e spec or a route test), how it is enforced, how an executor reports a logical divergence, and how a SPEC is reopened.'
+description: 'The cosmetic versus logical line for a rendered UAT test (a real-server spec, a browser spec or a route test), how it is enforced, how an executor reports a logical divergence, and how a SPEC is reopened.'
 ---
 
 # UAT Divergence Policy
 
-When an owning phase turns a red UAT test green, a Playwright e2e spec or a Vitest route test, the test body has to bind abstract user-acceptance language ("the user sees a confirmation") to concrete surface (selectors, button labels, copy strings, route paths, response shapes).
+When an owning phase turns a red UAT test green, a Playwright real-server or browser spec or a Vitest route test, the test body has to bind abstract user-acceptance language ("the user sees a confirmation") to concrete surface (selectors, button labels, copy strings, route paths, response shapes).
 
 ## Contract
 
 - **Cosmetic divergence**: selector text, button label, accessible-name strings, copy, role names, URL slugs, layout-only assertions: **editable** by the implementer. The PO authored the UAT against an idealized UI; the implementer reconciles it with the shipped UI. Edits to cosmetic surface stay in the test file and require no SPEC reopen. Meeting a Given through a builder, a fixture or a helper that sets up the state is cosmetic too, unless the UAT's flow is that setup, so a judge does not return `diverges` for it.
-- **Logical divergence**: the user flow, the success criteria, the error-handling branch, the asserted side effect, the precondition, the post-state: **forbidden**. If the implementation cannot satisfy the UAT's logic as written, the spec is NOT edited. The executor reports the divergence, the orchestrator halts, and the SPEC is reopened to refine the UAT (`## Reopen`). A body that makes only a request where the Then-clause is something only a browser shows (focus, hydration, client navigation) is a logical divergence: it asserts a weaker thing. The render step then regenerates the test from the corrected UAT.
+- **Logical divergence**: the user flow, the success criteria, the error-handling branch, the asserted side effect, the precondition, the post-state: **forbidden**. If the implementation cannot satisfy the UAT's logic as written, the spec is NOT edited. The executor reports the divergence, the orchestrator halts, and the SPEC is reopened to refine the UAT (`## Reopen`). On a browser row, a body that makes only a request where the Then-clause is something only a browser shows (focus, hydration, client navigation) is a logical divergence: it asserts a weaker thing. On a real-server row a request-only body is the contract, and a body that opens a page diverges. The render step then regenerates the test from the corrected UAT.
 
 ## Enforcement
 
