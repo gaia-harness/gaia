@@ -1,13 +1,14 @@
 #!/usr/bin/env bats
 # Doc and code pins for Playwright per-worker isolation: the worker-scoped
 # server fixture and Given builder type in apps/web/.playwright/fixtures.ts,
+# the server launch in apps/web/.playwright/worker-server.ts,
 # the stock config staying fully parallel with no serial project, and the
 # Playwright rule and wiki page dropping the shared-state instructions.
 #
 # Each check is a function over a file path, run once on the real file and
 # once on a mutated scratch copy that must fail, so a check that cannot go red
-# is caught. FIXTURES_FILE, PW_CONFIG_FILE, PW_RULE_FILE and PW_WIKI_FILE
-# override the paths.
+# is caught. FIXTURES_FILE, WORKER_SERVER_FILE, PW_CONFIG_FILE, PW_RULE_FILE
+# and PW_WIKI_FILE override the paths.
 #
 # Assertion style: .claude/rules/bats-assertions.md. `.gaia/tests/` is
 # release-excluded, so SPEC-151 UAT ids in the test names are traceability.
@@ -18,6 +19,7 @@
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   FIXTURES_FILE="${FIXTURES_FILE:-$ROOT/apps/web/.playwright/fixtures.ts}"
+  WORKER_SERVER_FILE="${WORKER_SERVER_FILE:-$ROOT/apps/web/.playwright/worker-server.ts}"
   PW_CONFIG_FILE="${PW_CONFIG_FILE:-$ROOT/apps/web/playwright.config.ts}"
   PW_RULE_FILE="${PW_RULE_FILE:-$ROOT/apps/web/.claude/rules/playwright.md}"
   PW_WIKI_FILE="${PW_WIKI_FILE:-$ROOT/wiki/dependencies/Playwright.md}"
@@ -143,11 +145,11 @@ scratch_copy() {
 }
 
 @test "the spawn call passes databaseFile as DATABASE_URL" {
-  check_spawn_database_url "$FIXTURES_FILE"
+  check_spawn_database_url "$WORKER_SERVER_FILE"
 }
 
 @test "the DATABASE_URL pin goes red when the env value changes" {
-  copy="$(scratch_copy "$FIXTURES_FILE" 's/DATABASE_URL: databaseFile/DATABASE_URL: baseURL/')"
+  copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/DATABASE_URL: databaseFile/DATABASE_URL: baseURL/')"
   run check_spawn_database_url "$copy"
   [ "$status" -ne 0 ]
 }

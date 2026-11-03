@@ -67,5 +67,13 @@ export default defineConfig({
   },
   server: {
     open: canOpenBrowser,
+    // Playwright writes traces (with .html resources) and per-worker databases
+    // under its output folder, and Vite answers any watched .html change with
+    // a full page reload in every running dev server, mid-test. Vite's default
+    // ignore covers Playwright's default `test-results`, not this outputDir.
+    // A RegExp, not a glob: the watcher's globs skip dot-named folders such as
+    // `.playwright-artifacts-*`, so a glob matches the files inside only by
+    // way of the folder above them.
+    watch: {ignored: [/[/\\]\.playwright[/\\]output(?:[/\\]|$)/]},
   },
 });
