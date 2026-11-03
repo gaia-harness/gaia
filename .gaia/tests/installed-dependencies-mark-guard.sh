@@ -29,7 +29,14 @@
 #     (non-relative, non-built-in) specifier, named literally or through a
 #     variable the file assigns from it; or node with -e, -p or --eval text
 #     holding a bare require, import or from specifier;
-#   - require_node_typescript.
+#   - require_node_typescript;
+#   - `command -v` or `-V` naming pnpm, npx, playwright or vitest inside a
+#     command substitution: the suite captures the real tool's path to run it
+#     later, often from a string it writes out as a wrapper. A stub of the same
+#     name in the file does not cancel it: a suite captures the real path
+#     before its stub reaches PATH, and a capture that resolved a stub would
+#     cost only a needless Node install. A bare `command -v` probe is not a
+#     use.
 # A command word is read after assignments, `run` and its flags, `!`, `if`,
 # `then`, `do`, `while`, `exec`, `env`, `nohup`, `time`, `timeout <n>` and
 # `sudo`; after `|`, `;`, `&&`, `||`, `&`, a subshell or a command
@@ -300,7 +307,13 @@ function classify(L,   i, n, t, word, rest, k, name, args, sname, ref, j, variab
     }
     if (word == "!" || word == "if" || word == "then" || word == "else" || word == "elif" || word == "do" || word == "while" || word == "until" || word == "time" || word == "exec" || word == "nohup" || word == "sudo") { i++; continue }
     if (word == "command" || word == "builtin") {
-      if (i < n && tokv[L, i + 1] ~ /^-/) return
+      if (i < n && tokv[L, i + 1] ~ /^-/) {
+        if (word == "command" && (kind[L] == "S" || kind[L] == "B") && tokv[L, i + 1] ~ /^-[vV]$/ && i + 2 <= n) {
+          name = strip_quotes(tokv[L, i + 2])
+          if (name == "pnpm" || name == "npx" || name == "playwright" || name == "vitest") out("U", name "-path")
+        }
+        return
+      }
       i++; continue
     }
     if (word == "timeout") {

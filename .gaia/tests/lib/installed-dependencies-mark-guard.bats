@@ -151,6 +151,35 @@ SUITE
   [ "$status" -eq 0 ]
 }
 
+@test "a captured command -v path is a call, even beside a stub of the same name" {
+  local shape
+  for shape in \
+    'printf '"'"'exec "%s" x\n'"'"' "$(command -v pnpm)" >"$BATS_TEST_TMPDIR/wrapper"' \
+    'pnpm_path=$(command -v npx)' \
+    'tool=`command -v vitest`'; do
+    rm -f "$SUITE_DIRECTORY"/*.bats
+    write_suite captured <<SUITE
+TEST "shape" {
+  $shape
+  printf '#!/bin/sh\nexit 0\n' >"\$BATS_TEST_TMPDIR/stub-bin/pnpm"
+}
+SUITE
+    run_guard
+    if [ "$status" -ne 1 ]; then
+      printf 'shape not detected: %s\n%s\n' "$shape" "$output" >&2
+      return 1
+    fi
+  done
+  rm -f "$SUITE_DIRECTORY"/*.bats
+  write_suite captured marked <<'SUITE'
+TEST "shape" {
+  path=$(command -v pnpm)
+}
+SUITE
+  run_guard
+  [ "$status" -eq 0 ]
+}
+
 @test "a call through run, a prefix word, a pipe or a subshell is detected" {
   local shape
   for shape in \
