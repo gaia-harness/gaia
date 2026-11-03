@@ -13,11 +13,11 @@
 #          retired name is matched by v1.6.1's pattern, and a pattern that
 #          drifts from the upload name is reported.
 #   B1-B6  the 1.x baseline refusal (update-gaia-preflight.sh refuse-1x; B4
-#          pins the skill's prose order): the printed
-#          download-and-verify command equals the routing line's, agrees with
-#          the 2.0.0 note's own Step 2, and works and fails closed when run.
-#   C1-C5  .gaia/scripts/compose-release-body.sh, which puts the routing line
-#          first in the release body.
+#          pins the skill's prose order): the printed download-and-verify
+#          command agrees with the 2.0.0 note's own Step 2, and works and fails
+#          closed when run.
+#   C1-C2  release.yml publishes the extracted CHANGELOG section as the
+#          release body, with nothing composed in front of it.
 #
 # Assertion style per .claude/rules/bats-assertions.md: no bare mid-test
 # [[ ... ]]; POSIX [ ] and grep, `case` for glob matching.
@@ -29,37 +29,11 @@ setup() {
   RELEASE_YML="$REPO_ROOT/.github/workflows/release.yml"
   SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
   PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
-  COMPOSE="$REPO_ROOT/.gaia/scripts/compose-release-body.sh"
-  ROUTING_LINE="$(bash "$COMPOSE" --routing-line)"
-}
-
-# The retired routing line, assembled from parts so no tracked file holds it.
-retired_routing_line() {
-  printf '%s %s%s %s' 'On GAIA 1.6.1? Choose Abort,' 'then paste the prompt from https://gaiareact.com' '/migrate' 'into a fresh session.'
 }
 
 # The URL-absence token, assembled so this suite never matches itself.
 migrate_url_token() {
   printf '%s/%s' gaiareact.com migrate
-}
-
-# 0 when the routing line `$1` carries every content requirement; 1 on the
-# first one it lacks.
-routing_line_has_content() {
-  line="$1"
-  for needle in \
-    'choose Abort' \
-    'only after the user says yes' \
-    "gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0" \
-    'shasum -a 256 -c' \
-    '-C .gaia/local/cache/shared/migrate-2/v2.0.0/tree' \
-    'tree/.gaia/migrations/2.0.0.md' \
-    'before its step 1, change nothing else in the repository' \
-    'Reading this on GitHub?'; do
-    printf '%s' "$line" | grep -qF -- "$needle" || return 1
-  done
-  printf '%s' "$line" | grep -qF -- "$(migrate_url_token)" && return 1
-  return 0
 }
 
 # The first argument of the `gh release create` call in a workflow file: the
@@ -175,25 +149,19 @@ block_after_heading() {
   grep -qF -- 'tar -czf "gaia-bundle-${TAG}.tar.gz" -C /tmp "gaia-${TAG}"' "$RELEASE_YML"
 }
 
-# The command between the first pair of backticks in the routing line.
-routing_line_command() {
-  printf '%s\n' "$ROUTING_LINE" | sed -n 's/^[^`]*`\([^`]*\)`.*$/\1/p'
-}
-
 # The command the refusal prints: the line it indents by two spaces.
 refusal_command() {
   printf '%s\n' "$1" | sed -n 's/^  \(mkdir -p .*\)$/\1/p' | head -n 1
 }
 
-@test "B1: a 1.6.1 baseline is refused with the routing line's download-and-verify command" {
+@test "B1: a 1.6.1 baseline is refused with a download-and-verify command for the v2.0.0 bundle" {
   run bash "$PREFLIGHT" refuse-1x --baseline 1.6.1
   [ "$status" -eq 1 ]
   printf '%s' "$output" | grep -qF 'REFUSED'
   printf '%s' "$output" | grep -qF '.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md'
   command_line="$(refusal_command "$output")"
-  expected="$(routing_line_command)"
-  [ -n "$expected" ]
-  [ "$command_line" = "$expected" ]
+  [ -n "$command_line" ]
+  printf '%s' "$command_line" | grep -qF -- "gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0"
   # Verification runs before extraction, and the extract lands in the note's tree.
   verify_at="$(printf '%s' "$command_line" | awk '{ print index($0, "shasum -a 256 -c") }')"
   extract_at="$(printf '%s' "$command_line" | awk '{ print index($0, "tar -xzf") }')"
@@ -334,81 +302,25 @@ write_fixture_release() {
   [ -d "$tampered/.gaia/local/cache/shared/migrate-2/v2.0.0/tree" ]
 }
 
-@test "C1: the composed body starts with the routing line and carries the sha256" {
-  notes="$BATS_TEST_TMPDIR/notes.md"
-  sha="$BATS_TEST_TMPDIR/asset.sha256"
-  out="$BATS_TEST_TMPDIR/body.md"
-  printf '## [2.0.0] - 2026-10-03\n\n### Breaking\n\n%s\n\n- the entry\n' "$ROUTING_LINE" > "$notes"
-  printf 'deadbeef  gaia-bundle-v2.0.0.tar.gz\n' > "$sha"
-  run bash "$COMPOSE" v2.0.0 "$notes" "$sha" "$out"
-  [ "$status" -eq 0 ]
-  [ "$(head -n 1 "$out")" = "$ROUTING_LINE" ]
-  grep -qF 'deadbeef  gaia-bundle-v2.0.0.tar.gz' "$out"
-  grep -qF 'FETCH_FAILED' "$out"
-  # The routing line appears once: hoisted, not duplicated.
-  [ "$(grep -cxF -- "$ROUTING_LINE" "$out")" -eq 1 ]
-  grep -qF '## [2.0.0] - 2026-10-03' "$out"
-  routing_line_has_content "$(head -n 1 "$out")"
-  sed -n 3p "$out" | grep -qF 'Choosing Proceed on 1.6.1'
-  grep -qxF 'sha256: deadbeef  gaia-bundle-v2.0.0.tar.gz' "$out"
+# 0 when workflow file `$1` publishes the extracted CHANGELOG section,
+# release-notes.md, as the release body: the build job hands it to the publish
+# job, `gh release create` reads it as the notes file, and no step composes a
+# separate body.
+release_body_is_notes() {
+  grep -qE -- '--notes-file release-notes\.md$' "$1" || return 1
+  awk '/name: release-assets/ { armed = 1 } armed && /^[[:space:]]*release-notes\.md$/ { found = 1 } END { exit !found }' "$1" || return 1
+  grep -qE -- 'release-body\.md|compose-release-body' "$1" && return 1
+  return 0
 }
 
-@test "C1b: --routing-line prints exactly the one line and exits 0" {
-  run bash "$COMPOSE" --routing-line
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 1 ]
-  routing_line_has_content "$output"
+@test "C1: the release body is the CHANGELOG section, with no 1.6.1 routing block" {
+  release_body_is_notes "$RELEASE_YML"
+  [ ! -e "$REPO_ROOT/.gaia/scripts/compose-release-body.sh" ]
 }
 
-@test "C1c: the content check fails on a line without the yes-gate and on the retired line" {
-  routing_line_has_content "$ROUTING_LINE"
-  without_gate="${ROUTING_LINE//only after the user says yes/now}"
-  [ "$without_gate" != "$ROUTING_LINE" ]
-  routing_line_has_content "$without_gate" && return 1
-  routing_line_has_content "$(retired_routing_line)" && return 1
-  true
-}
-
-@test "C2: v2.0.0 notes without the routing line still lead with it" {
-  notes="$BATS_TEST_TMPDIR/notes.md"
-  sha="$BATS_TEST_TMPDIR/asset.sha256"
-  out="$BATS_TEST_TMPDIR/body.md"
-  printf '## [2.0.0] - 2026-10-03\n\n- the entry\n' > "$notes"
-  printf 'deadbeef  gaia-bundle-v2.0.0.tar.gz\n' > "$sha"
-  run bash "$COMPOSE" v2.0.0 "$notes" "$sha" "$out"
-  [ "$status" -eq 0 ]
-  [ "$(head -n 1 "$out")" = "$ROUTING_LINE" ]
-  grep -qF -- '- the entry' "$out"
-}
-
-@test "C3: an empty sha256 file is refused" {
-  notes="$BATS_TEST_TMPDIR/notes.md"
-  sha="$BATS_TEST_TMPDIR/asset.sha256"
-  out="$BATS_TEST_TMPDIR/body.md"
-  printf '## [2.1.0] - 2026-10-03\n\n- the entry\n' > "$notes"
-  : > "$sha"
-  run bash "$COMPOSE" v2.1.0 "$notes" "$sha" "$out"
-  [ "$status" -eq 1 ]
-  [ ! -e "$out" ]
-}
-
-@test "C4: a later release without the routing line in its notes still leads with it" {
-  notes="$BATS_TEST_TMPDIR/notes.md"
-  sha="$BATS_TEST_TMPDIR/asset.sha256"
-  out="$BATS_TEST_TMPDIR/body.md"
-  printf '## [2.4.0] - 2026-11-03\n\n- the entry\n' > "$notes"
-  printf 'cafe  gaia-bundle-v2.4.0.tar.gz\n' > "$sha"
-  run bash "$COMPOSE" v2.4.0 "$notes" "$sha" "$out"
-  [ "$status" -eq 0 ]
-  [ "$(head -n 1 "$out")" = "$ROUTING_LINE" ]
-  [ "$(grep -cxF -- "$ROUTING_LINE" "$out")" -eq 1 ]
-  sed -n 3p "$out" | grep -qF 'Choosing Proceed on 1.6.1'
-  grep -qxF 'sha256: cafe  gaia-bundle-v2.4.0.tar.gz' "$out"
-  grep -qF '## [2.4.0] - 2026-11-03' "$out"
-  grep -qF -- '- the entry' "$out"
-}
-
-@test "C5: a wrong argument count is a usage error" {
-  run bash "$COMPOSE" v2.0.0
-  [ "$status" -eq 2 ]
+@test "C2: a release.yml that still publishes a composed body is reported" {
+  fixture="$BATS_TEST_TMPDIR/release.yml"
+  sed 's/--notes-file release-notes\.md/--notes-file release-body.md/' "$RELEASE_YML" > "$fixture"
+  run release_body_is_notes "$fixture"
+  [ "$status" -ne 0 ]
 }

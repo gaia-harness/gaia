@@ -48,7 +48,6 @@ The 2.0.0 note is the blocking example. A 1.6.1 project cannot run its own `/upd
 - Each new note gets a per-file ship answer from `/distribution-vet` in the pull request that adds it, before that pull request's first push. No glob answer exists, and the runtime-dependency check refuses a push whose shipped script names an unanswered path.
 - `.gaia/release-scrub.yml` exempts `.gaia/migrations/**` from the excluded-refs check alone, because a note must name the paths it deletes or moves.
 - `.gaia/audit-ci.yml` declares `.gaia/migrations/**` unowned: no audit member has a lens for instruction prose.
-- The release-body routing line is defined once, in `.gaia/scripts/compose-release-body.sh` (`--routing-line`). Every check compares against that output.
 <!-- gaia:maintainer-only:end -->
 
 ## See also
