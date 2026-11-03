@@ -40,7 +40,7 @@ A note does not carry a new setup feature to existing projects. A setup feature 
 
 ## Worked example: the 2.0.0 note
 
-The 2.0.0 note is the blocking example. A 1.6.1 project cannot run its own `/update-gaia` across the layout change, so the first line of the v2.0.0 release body carries a literal fetch-and-verify command. A 1.6.1 session that reads the line offers the migration, and only on the user's yes runs the command, which downloads the release bundle, checks it against its `.sha256` asset and extracts it. The session then follows the note from the extracted, verified bundle. Read the note itself for the shape a blocking note takes.
+The 2.0.0 note is the blocking example. A 1.6.1 project cannot run its own `/update-gaia` across the layout change, so the session downloads the v2.0.0 release bundle, checks it against its `.sha256` asset, extracts it, and follows the note from the extracted, verified bundle. Read the note itself for the shape a blocking note takes.
 
 <!-- gaia:maintainer-only:start -->
 ## Maintainer facts
