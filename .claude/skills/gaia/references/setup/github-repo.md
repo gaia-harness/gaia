@@ -4,7 +4,7 @@
 
 Every project-scope record line below is gated on `MAY_RECORD_PROJECT` (`setup-decisions.md`), and the owed and declined checks are the lines that file defines. In each block, declare `OWNER`, `REPO`, `DEFAULT_BRANCH` and `MAY_RECORD_PROJECT` with the cached values.
 
-Contents: Connect the repository; CODEOWNERS placeholder; Push protection; Remaining defaults; Owed and recorded settings.
+Contents: Connect the repository; CODEOWNERS placeholder; Push protection; First CI run; Remaining defaults; Owed and recorded settings.
 
 ## Connect the repository
 
@@ -103,6 +103,8 @@ Flip the repo to public or internal only after this second confirmation.
 
 **Secret-scanning push-protection (best-effort).** Immediately after create, run `## Push protection` below, so it guards every later push and is in place before any public/internal flip.
 
+**First CI run.** Then run `## First CI run` below, before anything relies on CI.
+
 After creation, cache `owner`/`repo` from the new remote. The repo exists with its default branch pushed, so record it, then return to `### Recommended defaults` in `setup-gaia.md`:
 
 ```bash
@@ -192,6 +194,71 @@ fi
 ```
 
 When GitHub does not offer it for this repository (e.g. a private repo without GitHub Advanced Security), the one-line note says so and the id records `not-applicable`. Any other failure records nothing, so the next run retries; continue setup.
+
+## First CI run
+
+GitHub can leave Actions off on a new repository while its Actions settings API still reads enabled, so pushes start no workflow run, and enabling Actions later does not replay them. The only sign is a missing run. The shipped `.github/workflows/tests.yml` triggers on a push to `main` and creates a run even when its jobs skip, so the probe expects one for the pushed commit, and skips when the default branch is not `main` or the file is gone:
+
+```bash
+first_run_probe() {
+  if [ "$DEFAULT_BRANCH" != main ] || [ ! -f .github/workflows/tests.yml ]; then
+    echo "actions-probe: skipped"
+    return 0
+  fi
+  local pushed_sha runs attempt
+  pushed_sha="$(git rev-parse HEAD)"
+  for attempt in 1 2 3 4 5 6 7 8 9; do
+    runs="$(gh api "repos/$OWNER/$REPO/actions/runs?head_sha=$pushed_sha" --jq .total_count 2>/dev/null)"
+    if [ "${runs:-0}" -gt 0 ] 2>/dev/null; then
+      echo "actions-probe: run-seen"
+      return 0
+    fi
+    [ "$attempt" -lt 9 ] && sleep 10
+  done
+  echo "actions-probe: no-run"
+}
+first_run_probe
+```
+
+On `skipped` or `run-seen`, return to the option. On `no-run`, ask (AskUserQuestion), header `Actions`:
+
+> GitHub started no workflow run for the push to <owner>/<repo>, so CI is not running there. GitHub sometimes leaves Actions off on a new repository. Open https://github.com/<owner>/<repo>/actions and click **Enable Actions**.
+>
+> - **I enabled it** (Recommended)
+> - **Skip for now**
+
+On `I enabled it`, start a run, since enabling replays nothing, and check once with the same bound:
+
+```bash
+first_run_dispatch() {
+  local pushed_sha runs attempt
+  pushed_sha="$(git rev-parse HEAD)"
+  if ! gh workflow run tests.yml --repo "$OWNER/$REPO" --ref main >/dev/null 2>&1; then
+    echo "actions-probe: dispatch-failed"
+    return 0
+  fi
+  for attempt in 1 2 3 4 5 6 7 8 9; do
+    runs="$(gh api "repos/$OWNER/$REPO/actions/runs?head_sha=$pushed_sha" --jq .total_count 2>/dev/null)"
+    if [ "${runs:-0}" -gt 0 ] 2>/dev/null; then
+      echo "actions-probe: run-seen"
+      return 0
+    fi
+    [ "$attempt" -lt 9 ] && sleep 10
+  done
+  echo "actions-probe: no-run"
+}
+first_run_dispatch
+```
+
+On `run-seen`, print `GitHub Actions is running on <owner>/<repo>.` and return to the option. On `dispatch-failed`, `no-run` or `Skip for now`, print the following, then return to the option. Nothing is recorded, and nothing is retried:
+
+```
+CI is not running on <owner>/<repo> yet. Open https://github.com/<owner>/<repo>/actions, click Enable Actions if it shows, then start the first run:
+```
+
+```
+! gh workflow run tests.yml --ref main
+```
 
 ## Remaining defaults
 
