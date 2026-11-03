@@ -23,7 +23,7 @@ setup() {
   PROJECT="${BATS_TEST_TMPDIR}/project"
   mkdir -p "${PROJECT}/.github/workflows"
   : >"${PROJECT}/.github/workflows/tests.yml"
-  git -C "$PROJECT" init -q
+  git -C "$PROJECT" init -q -b main
   git -C "$PROJECT" -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false \
     commit -q --allow-empty --no-verify -m init
   STUB_BIN="${BATS_TEST_TMPDIR}/stub-bin"
@@ -70,13 +70,22 @@ extract() {
   [ -s "${BATS_TEST_TMPDIR}/fence.sh" ]
 }
 
-# run_fence [<default branch>]: run fence.sh from the project with the stubs.
+# run_fence [<branch>]: run fence.sh from the project with the stubs, on
+# <branch> when given. DEFAULT_BRANCH is empty, as the create path leaves it.
 run_fence() {
-  run env OWNER=acme REPO=app DEFAULT_BRANCH="${1:-main}" PATH="${STUB_BIN}:${PATH}" \
+  [ -z "${1:-}" ] || git -C "$PROJECT" checkout -q -b "$1"
+  run env OWNER=acme REPO=app DEFAULT_BRANCH= PATH="${STUB_BIN}:${PATH}" \
     bash -c 'cd "$1" && bash "$2"' _ "$PROJECT" "${BATS_TEST_TMPDIR}/fence.sh"
 }
 
 api_calls() { grep -c '^api ' "$GH_LOG" || true; }
+
+@test "probe: on main with the cached DEFAULT_BRANCH empty, it polls rather than skipping" {
+  extract 'first_run_probe()'
+  run_fence
+  [ "$output" = "actions-probe: no-run" ]
+  [ "$(api_calls)" -eq "$POLL_LIMIT" ]
+}
 
 @test "probe: a run on the first poll reports run-seen with no wait" {
   extract 'first_run_probe()'
@@ -157,7 +166,7 @@ api_calls() { grep -c '^api ' "$GH_LOG" || true; }
   grep -qF -- '! gh workflow run tests.yml --ref main' <<<"$section"
   grep -qF -- '**I enabled it** (Recommended)' <<<"$section"
   grep -qF -- '**Skip for now**' <<<"$section"
-  grep -qF -- 'then run `## First CI run` below' "$PAGE"
+  grep -qF -- 'Then run `## First CI run` below' "$PAGE"
 }
 
 @test "mutation: a probe with its poll bound removed fails the bound fixture" {
@@ -171,7 +180,7 @@ api_calls() { grep -c '^api ' "$GH_LOG" || true; }
 
 @test "mutation: a probe without its main guard calls gh on master" {
   local mutant="${BATS_TEST_TMPDIR}/mutant.md"
-  sed 's/if \[ "\$DEFAULT_BRANCH" != main \] || /if /' "$PAGE" >"$mutant"
+  sed 's/if \[ "\$(git branch --show-current)" != main \] || /if /' "$PAGE" >"$mutant"
   cmp -s "$PAGE" "$mutant" && return 1
   extract 'first_run_probe()' "$mutant"
   run_fence master

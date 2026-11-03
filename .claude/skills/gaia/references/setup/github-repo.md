@@ -101,9 +101,9 @@ A **public or internal** repo is created **only** after a separate, explicit con
 
 Flip the repo to public or internal only after this second confirmation.
 
-**Secret-scanning push-protection (best-effort).** Immediately after create, run `## Push protection` below, so it guards every later push and is in place before any public/internal flip.
+**Secret-scanning push-protection (best-effort).** Immediately after create, cache `owner`/`repo` from the new remote and run `## Push protection` below, so it guards every later push and is in place before any public/internal flip.
 
-**First CI run.** Cache `owner`/`repo` from the new remote, then run `## First CI run` below.
+**First CI run.** Then run `## First CI run` below.
 
 The repo exists with its default branch pushed, so record it, then return to `### Recommended defaults` in `setup-gaia.md`:
 
@@ -197,11 +197,11 @@ When GitHub does not offer it for this repository (e.g. a private repo without G
 
 ## First CI run
 
-GitHub can leave Actions off on a new repository while its Actions settings API still reads enabled, so pushes start no workflow run, and enabling Actions later does not replay them. The shipped `.github/workflows/tests.yml` triggers on a push to `main` and creates a run even when its jobs skip, so the probe expects one for the pushed commit, and skips when the default branch is not `main` or the file is gone:
+GitHub can leave Actions off on a new repository while its Actions settings API still reads enabled, so pushes start no workflow run, and enabling Actions later does not replay them. The shipped `.github/workflows/tests.yml` triggers on a push to `main` and creates a run even when its jobs skip, so the probe expects one for the pushed commit. It reads the pushed branch from git, because the cached `DEFAULT_BRANCH` is still empty on this path, and skips when that branch is not `main` or the file is gone:
 
 ```bash
 first_run_probe() {
-  if [ "$DEFAULT_BRANCH" != main ] || [ ! -f .github/workflows/tests.yml ]; then
+  if [ "$(git branch --show-current)" != main ] || [ ! -f .github/workflows/tests.yml ]; then
     echo "actions-probe: skipped"
     return 0
   fi
