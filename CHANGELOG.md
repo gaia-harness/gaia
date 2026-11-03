@@ -39,7 +39,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
-- **Per-worker Playwright servers start reliably at high worker counts:** concurrent `pnpm dev` starts deleted each other's generated route types and exited, so they now start one at a time; each binds `127.0.0.1` and is probed there, so a server bound only to IPv6 `::1` no longer times out; and a failed start names a log holding the server's output (#3270)
+- **Per-worker Playwright servers start reliably at high worker counts:** concurrent `pnpm dev` starts deleted each other's generated route types and exited, so they now start one at a time; each binds and is probed on `127.0.0.1`, so a start no longer times out where `localhost` resolves to IPv6 `::1` first; and a failed start names a log holding the server's output (#3270)
 - **The vendored playwright-cli skill is updated to 0.1.23:** its tracing examples open a browser before `tracing-start`, which records nothing without one; it now says `--raw` keeps the result, errors and snapshot; and it recommends `not.toBeChecked()` in place of the nonexistent `toBeUnchecked()` matcher (#2727, #2728)
 - **`/gaia-spec`'s final review prints as plain Markdown:** the brief you approve before the SPEC saves no longer prints inside a code fence; it uses bold labels, like the first review (#3217)
 - **A fixed veto no longer blocks the audit's closing round:** a vetoed finding that was fixed and then reviewed clean now counts as satisfied, so a human-accepted closing round completes without a hand-written entry. The checkpoint hook also stays silent on questions unrelated to an audit checkpoint (#3224)

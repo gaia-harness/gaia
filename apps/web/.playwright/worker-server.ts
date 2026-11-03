@@ -20,8 +20,8 @@ export const SERVER_READY_TIMEOUT_MILLISECONDS = 60_000;
 
 // Starts run one at a time, so the last worker of a full set waits for every
 // start ahead of it. A real start takes a fraction of its ready timeout, so
-// four of them cover a full set of workers, while a run stuck behind a hung
-// holder still fails.
+// four ready timeouts cover a full set of workers, while a run stuck behind a
+// hung holder still fails.
 export const START_LOCK_TIMEOUT_MILLISECONDS =
   4 * SERVER_READY_TIMEOUT_MILLISECONDS;
 
