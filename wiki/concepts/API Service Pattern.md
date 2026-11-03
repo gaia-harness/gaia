@@ -58,7 +58,7 @@ The call validates the body through Ky's `.json(schema)` over Standard Schema an
 
 `attempt` (from `~/services/api/helpers`) wraps a request into `[ApiError, undefined] | [undefined, T]`; use in loaders/actions when you need to handle errors without throwing. It maps an HTTP error to its status, and a Ky `SchemaValidationError` to `{status: 500}` with a constant message (the issues are logged on the server only).
 
-## Backend casing
+## API casing
 
 `create()` passes keys through unchanged, for a backend that speaks camelCase. A snake_case backend needs `isSnakeCaseEnabled: true` on that `create()` instance: incoming response keys then convert to camelCase, and outgoing JSON bodies and search params convert to snake_case. The symptom of a missing flag on a snake_case backend is Zod schema failures (500s through `attempt`) on responses and requests arriving with camelCase keys. `gaia init configure-data-layer --casing snake` writes the flag into the domain layer's `api.ts`; see [[GAIA Init Workflow]].
 

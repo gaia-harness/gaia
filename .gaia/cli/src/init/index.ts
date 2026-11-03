@@ -29,7 +29,7 @@ const HELP_TEXT = `Usage: gaia init <subcommand> [args]
   configure-i18n --locales <list> --strip <bool>
                             Configure or strip the i18n surface.
   configure-data-layer [--casing <c>] [--query <bool>] [--layer <folder>]
-                            Apply the backend-casing and TanStack Query answers.
+                            Apply the API casing and TanStack Query answers.
                             Writes one JSON line to stdout. Rerunnable after
                             init finalizes, e.g. --query true adds Query later.
   rename --title <T> --kebab <K>
