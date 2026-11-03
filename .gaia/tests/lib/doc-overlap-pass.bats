@@ -12,6 +12,8 @@
 #     re-check and the HALTED heading, the unattended arm, the report and the
 #     never line;
 #   - the `--root` and `--post-fix` spellings;
+#   - the lowest-layer purpose, the fixer's replacement for a sibling-less
+#     demote and the post-fix refusal of one with no replacement;
 #   - the judge and the divergence policy: a builder meets a Given cosmetically,
 #     a stubbed guard, a request-only body under a browser-only clause and a
 #     refusal check without the redirect, status and actor assertions diverge.
@@ -202,6 +204,62 @@ check_dispose() {
   [ "$status" -ne 0 ]
 }
 
+# ---------- purpose and the sibling-less demote ----------
+
+check_lowest_layer_purpose() {
+  has_all "$1" \
+    'across the unit, route, real-server and browser layers' \
+    'each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer'
+}
+
+check_sibling_less_fixer() {
+  has_all "$1" \
+    'For each approved sibling-less demote (a `target` and no `sibling`), the fixer writes the replacement real-server test (the request fixture only, no page)' \
+    'lists it in its JSON result as `{file, fullName, replacement: {file, line, fullName, assertion}}`' \
+    'The orchestrator merges each `replacement` into the kept list'"'"'s entry with that `file` and `fullName` before running `--post-fix`' || return 1
+  [ "$(line_of "$1" 'the fixer writes the replacement real-server test')" -le "$(line_of "$1" '--proposals <file> --post-fix')" ] || { printf 'the replacement merge does not precede the post-fix re-check\n' >&2; return 1; }
+}
+
+check_post_fix_refusal() {
+  has_all "$1" 'a sibling-less demote with no replacement is refused there'
+}
+
+@test "the page states the lowest-layer purpose beside duplication" {
+  check_lowest_layer_purpose "$REF"
+}
+
+@test "red twin: a purpose naming only duplication fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" ', and that each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer' '' "$copy"
+  run check_lowest_layer_purpose "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the fixer writes and lists a replacement for each sibling-less demote, merged before the post-fix re-check" {
+  check_sibling_less_fixer "$REF"
+}
+
+@test "red twin: a fixer that writes no replacement, or a missing merge, fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'the fixer writes the replacement real-server test (the request fixture only, no page)' 'the fixer deletes the subject' "$copy"
+  run check_sibling_less_fixer "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$REF" 'The orchestrator merges each `replacement`' 'The orchestrator ignores each `replacement`' "$copy"
+  run check_sibling_less_fixer "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the post-fix re-check refuses a sibling-less demote with no replacement" {
+  check_post_fix_refusal "$REF"
+}
+
+@test "red twin: a post-fix sentence that accepts a missing replacement fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'a sibling-less demote with no replacement is refused there' 'a sibling-less demote needs nothing more' "$copy"
+  run check_post_fix_refusal "$copy"
+  [ "$status" -ne 0 ]
+}
+
 # ---------- rules 8 and 9: report and never ----------
 
 check_report_and_never() {
@@ -234,7 +292,9 @@ check_report_and_never() {
 
 check_judge() {
   has_all "$1" \
-    'Playwright e2e specs and Vitest route tests' \
+    'Playwright real-server and browser specs and Vitest route tests' \
+    '`Surface: <uat_id> <real-server | browser | route>`' \
+    'this divergence applies only to a `browser` surface' \
     '`Spec: <uat_id> <absolute path to the rendered test>`' \
     '`Guard: <uat_id> <absolute path to the guard file>`' \
     'Meeting a Given through a builder or fixture is cosmetic too, unless the UAT'"'"'s flow is that setup' \
@@ -246,9 +306,10 @@ check_judge() {
 
 check_divergence() {
   has_all "$1" \
-    'a Playwright e2e spec or a Vitest route test' \
+    'a Playwright real-server or browser spec or a Vitest route test' \
     'Meeting a Given through a builder, a fixture or a helper that sets up the state is cosmetic too, unless the UAT'"'"'s flow is that setup' \
-    'A body that makes only a request where the Then-clause is something only a browser shows (focus, hydration, client navigation) is a logical divergence'
+    'On a browser row, a body that makes only a request where the Then-clause is something only a browser shows (focus, hydration, client navigation) is a logical divergence' \
+    'On a real-server row a request-only body is the contract'
 }
 
 @test "the judge is surface-neutral and names the builder, stubbed-guard, request-only and refusal-check divergences" {
@@ -261,7 +322,7 @@ check_divergence() {
 
 @test "red twin: removing any judge or divergence clause fails its check" {
   local copy="$BATS_TEST_TMPDIR/copy.md" clause
-  for clause in 'Meeting a Given through a builder or fixture is cosmetic too' 'stubs or mocks a guard a `Guard:` line names' 'only makes a request where the Then-clause is something only a browser shows' 'sets no `maxRedirects: 0`' 'Playwright e2e specs and Vitest route tests'; do
+  for clause in 'Meeting a Given through a builder or fixture is cosmetic too' 'stubs or mocks a guard a `Guard:` line names' 'only makes a request where the Then-clause is something only a browser shows' 'sets no `maxRedirects: 0`' 'Playwright real-server and browser specs and Vitest route tests' '`Surface: <uat_id> <real-server | browser | route>`' 'this divergence applies only to a `browser` surface'; do
     mutate "$JUDGE" "$clause" 'removed' "$copy"
     run check_judge "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$clause' did not fail" >&2; return 1; }

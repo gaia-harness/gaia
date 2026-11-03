@@ -30,6 +30,13 @@ PLAIN_UNIT_SIBLING='apps/web/test/x.test.ts'
 OFF_LAYER='apps/web/lib/other.test.ts'
 REFUSE_UNIT='apps/web/app/utils/refuse.test.ts'
 SESSION_UNIT='apps/web/app/sessions.server/plain.test.ts'
+DEMOTE='apps/web/.playwright/e2e/demote.spec.ts'
+SERVED='apps/web/.playwright/e2e/served.spec.ts'
+LOOPED='apps/web/.playwright/e2e/route-status.spec.ts'
+HELPERS='apps/web/.playwright/e2e/helpers.spec.ts'
+RENDERED_HELPERS='apps/web/.playwright/e2e/rendered-helpers.spec.ts'
+REPLACEMENT='apps/web/.playwright/e2e/demote-served.spec.ts'
+MIXED='apps/web/.playwright/e2e/mixed.spec.ts'
 
 setup() {
   HOME_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -56,6 +63,7 @@ setup() {
 
   cp -R "$FIXTURES/." "$REPO/"
   legacy_source 'stops legacy access' >"$REPO/$LEGACY_EDITED"
+  write_layer_fixtures
   git -C "$REPO" add -A
   git -C "$REPO" commit -q -m feature
   CHECK="$REPO/.gaia/scripts/overlap-check.sh"
@@ -68,7 +76,7 @@ install_harness() {
   for library in gaia-packages.sh audit-base-provenance.sh; do
     ln -sfn "$HOME_ROOT/.claude/hooks/lib/$library" "$REPO/.claude/hooks/lib/$library"
   done
-  for library in branch-authorship-lib.sh main-root-lib.sh red-ledger overlap; do
+  for library in branch-authorship-lib.sh main-root-lib.sh red-ledger overlap spec; do
     ln -sfn "$HOME_ROOT/.gaia/scripts/$library" "$REPO/.gaia/scripts/$library"
   done
   cp "$CHECK_SOURCE" "$REPO/.gaia/scripts/overlap-check.sh"
@@ -84,6 +92,97 @@ legacy_source() {
     "});"
 }
 
+# The fixtures for the real-server and browser layers, the sibling-less demote,
+# the looped templated title and the helper-call citations. Each opens a page
+# only where its name says it does.
+write_layer_fixtures() {
+  cat >"$REPO/$DEMOTE" <<'EOF'
+import {expect, test} from '@playwright/test';
+
+test('shows the archive heading', async ({page}) => {
+  const response = await page.goto('/archive');
+  expect(response?.status()).toBe(200);
+  await expect(page.locator('h1')).toHaveText('Archive');
+});
+
+test('refuses the forbidden admin page', async ({page}) => {
+  const response = await page.goto('/admin');
+  expect(response?.status()).toBe(403);
+});
+EOF
+  cat >"$REPO/$SERVED" <<'EOF'
+import {expect, test} from '@playwright/test';
+
+test('serves the records list', async ({request}) => {
+  const response = await request.get('/records');
+  expect(response.status()).toBe(200);
+});
+EOF
+  cat >"$REPO/$LOOPED" <<'EOF'
+import {expect, test} from '@playwright/test';
+
+const PAGES = [
+  {heading: 'Home', path: '/'},
+  {heading: 'About', path: '/about'},
+];
+
+for (const {heading, path} of PAGES) {
+  test(`${path} responds 200 and renders its own page`, async ({request}) => {
+    const response = await request.get(path);
+    expect(response.status()).toBe(200);
+    expect(await response.text()).toContain(heading);
+  });
+}
+EOF
+  cat >"$REPO/$HELPERS" <<'EOF'
+import {expect, test} from '@playwright/test';
+import {expectHeading} from '../support/assertions';
+
+const assertNothing = async (page) => {
+  await page.waitForLoadState();
+};
+
+async function assertTitle(page) {
+  expect(await page.title()).toBe('Records');
+}
+
+test('calls a helper that asserts nothing', async ({page}) => {
+  await page.goto('/records');
+  await assertNothing(page);
+});
+
+test('calls a helper that asserts', async ({page}) => {
+  await page.goto('/records');
+  await assertTitle(page);
+});
+
+test('calls an imported helper', async ({page}) => {
+  await page.goto('/records');
+  await expectHeading(page, 'Records');
+});
+
+test('answers a missing record over several lines', async ({request}) => {
+  const response = await request.get('/records/missing');
+  expect(
+    response.status(),
+  ).toBe(404);
+});
+EOF
+  cat >"$REPO/$RENDERED_HELPERS" <<'EOF'
+// gaia-uat-contract sha256:0000000000000000000000000000000000000000000000000000000000000000
+import {expect, test} from '@playwright/test';
+
+async function assertTitle(page) {
+  expect(await page.title()).toBe('Records');
+}
+
+test('a rendered test that calls a helper', async ({page}) => {
+  await page.goto('/records');
+  await assertTitle(page);
+});
+EOF
+}
+
 line_of() { grep -n -F -m1 -- "$2" "$REPO/$1" | cut -d: -f1; }
 
 # cite <kind> <file> <fullName> <seam> <sibling-file> <sibling-fullName> <assertion> [bug]
@@ -96,6 +195,75 @@ cite() {
       property: "the property", actor: "the actor", action: "the action",
       sibling: {file: $sf, line: $sl, fullName: $sn, assertion: $sa}
     } + (if $bug == "" then {} else {bug: $bug} end)'
+}
+
+# target_cite <file> <fullName> <seam> <assertion>...: a sibling-less demote
+# whose target cites each assertion where it sits in <file>. CITE_LINE pins
+# every cited line, TARGET_LAYER the target layer, KIND the proposal kind.
+target_cite() {
+  local file="$1" name="$2" seam="$3" assertion line assertions='[]'
+  shift 3
+  for assertion in "$@"; do
+    line="${CITE_LINE:-$(line_of "$file" "$assertion")}"
+    assertions="$(jq -c --argjson l "${line:-0}" --arg a "$assertion" '. + [{line: $l, assertion: $a}]' <<<"$assertions")"
+  done
+  jq -n --arg kind "${KIND:-demote}" --arg file "$file" --arg name "$name" --argjson seam "$seam" \
+    --arg layer "${TARGET_LAYER:-real-server}" --argjson assertions "$assertions" '{
+      proposal: $kind, file: $file, fullName: $name, seam: $seam,
+      property: "the property", actor: "the actor", action: "the action",
+      target: {layer: $layer, assertions: $assertions}
+    }'
+}
+
+# kept_with_replacement <fullName> <file> <test name> <assertion>: the last
+# check's kept list, the named entry carrying the fixer's replacement citation,
+# the way the orchestrator merges it before --post-fix.
+kept_with_replacement() {
+  local line
+  line="$(line_of "$2" "$4")"
+  jq --arg n "$1" --arg f "$2" --argjson l "${line:-1}" --arg t "$3" --arg a "$4" \
+    '[.kept[] | if .fullName == $n then . + {replacement: {file: $f, line: $l, fullName: $t, assertion: $a}} else . end]' <<<"$output"
+}
+
+# write_served_replacement: the fixer's request-only tests for both demotes.
+write_served_replacement() {
+  cat >"$REPO/$REPLACEMENT" <<'EOF'
+import {expect, test} from '@playwright/test';
+
+test('serves the archive heading', async ({request}) => {
+  const response = await request.get('/archive');
+  expect(response.status()).toBe(200);
+});
+
+test('refuses the admin page', async ({request}) => {
+  const response = await request.get('/admin');
+  expect(response.status()).toBe(403);
+});
+EOF
+}
+
+# mutate <from> <to> <in> <out>: a copy with the first occurrence replaced,
+# failing when <from> is absent so a red twin never runs the unmutated file.
+mutate() {
+  awk -v from="$1" -v to="$2" '{ if (!done && (i = index($0, from)) > 0) { $0 = substr($0, 1, i - 1) to substr($0, i + length(from)); done = 1 } print }' "$3" >"$4"
+  ! cmp -s "$3" "$4" || { printf '"%s" is not in %s\n' "$1" "$3" >&2; return 1; }
+}
+
+# install_mutated_module <module> <from> <to>: the fixture's overlap directory
+# becomes real, every entry a link to the checkout's file except <module>, a
+# mutated copy. node_modules links to the checkout's so the copy resolves
+# typescript; red-ledger and spec stay linked whole.
+install_mutated_module() {
+  local overlap="$REPO/.gaia/scripts/overlap" entry
+  rm -f "$overlap"
+  mkdir -p "$overlap"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
+  for entry in "$HOME_ROOT/.gaia/scripts/overlap/"*; do
+    ln -sfn "$entry" "$overlap/$(basename "$entry")"
+  done
+  rm -f "$overlap/$1"
+  mutate "$2" "$3" "$HOME_ROOT/.gaia/scripts/overlap/$1" "$overlap/$1" || return 1
+  ln -sfn "$HOME_ROOT/node_modules" "$REPO/node_modules"
 }
 
 run_check() {
@@ -271,10 +439,10 @@ UNIT_ASSERTION="expect(formatTitle('a')).toBe('A')"
     cite merge "$REFUSE_UNIT" 'refuses blank input' true "$SIBLING" 'shows the records page' "$LIVE_ASSERTION"
   )
   [ "$(kept_field 'refuses an edit to another account' seam)" = true ]
-  [ "$(kept_field 'refuses an edit to another account' layer)" = e2e ]
-  [ "$(kept_field 'refuses an edit to another account' siblingLayer)" = e2e ]
+  [ "$(kept_field 'refuses an edit to another account' layer)" = browser ]
+  [ "$(kept_field 'refuses an edit to another account' siblingLayer)" = browser ]
   [ "$(jq '[.kept[] | select(.fullName == "refuses blank input")] | length' <<<"$output")" -eq 2 ]
-  [ "$(jq -r '[.kept[] | select(.fullName == "refuses blank input") | .siblingLayer] | join(",")' <<<"$output")" = route,e2e ]
+  [ "$(jq -r '[.kept[] | select(.fullName == "refuses blank input") | .siblingLayer] | join(",")' <<<"$output")" = route,browser ]
 }
 
 @test "a keep-both naming the bug is kept even for a seam citing a lower layer" {
@@ -400,6 +568,258 @@ UNIT_ASSERTION="expect(formatTitle('a')).toBe('A')"
   [ "$(reason_of 'repeats the records title')" = citation-unverified ]
 }
 
+# --- the sibling-less demote -------------------------------------------------
+
+ARCHIVE_STATUS='expect(response?.status()).toBe(200)'
+ARCHIVE_HEADING="await expect(page.locator('h1')).toHaveText('Archive')"
+ADMIN_STATUS='expect(response?.status()).toBe(403)'
+SERVED_ARCHIVE='expect(response.status()).toBe(200)'
+SERVED_ADMIN='expect(response.status()).toBe(403)'
+
+@test "a sibling-less demote of a builder browser test is kept with its target layer and offered" {
+  check_all < <(target_cite "$DEMOTE" 'shows the archive heading' false "$ARCHIVE_STATUS" "$ARCHIVE_HEADING")
+  is_kept 'shows the archive heading'
+  [ "$(kept_field 'shows the archive heading' layer)" = browser ]
+  [ "$(kept_field 'shows the archive heading' targetLayer)" = real-server ]
+  [ "$(kept_field 'shows the archive heading' disposition)" = offer ]
+}
+
+@test "a sibling-less demote of a security-boundary browser test is kept as a seam" {
+  check_all < <(target_cite "$DEMOTE" 'refuses the forbidden admin page' false "$ADMIN_STATUS")
+  is_kept 'refuses the forbidden admin page'
+  [ "$(kept_field 'refuses the forbidden admin page' seam)" = true ]
+  [ "$(kept_field 'refuses the forbidden admin page' targetLayer)" = real-server ]
+}
+
+# bats test_tags=whole-tree
+@test "red twin: the seam rule against the subject's own rank refuses the browser seam demote" {
+  install_mutated_module check-proposals.mjs 'Math.min(subjectRank, SEAM_CEILING)' 'subjectRank'
+  check_all < <(target_cite "$DEMOTE" 'refuses the forbidden admin page' false "$ADMIN_STATUS")
+  [ "$(reason_of 'refuses the forbidden admin page')" = seam-no-sibling-at-or-above ]
+}
+
+@test "a target assertion whose line or text is not in the subject test is citation-unverified" {
+  check_all < <(CITE_LINE="$(line_of "$DEMOTE" "$ADMIN_STATUS")" target_cite "$DEMOTE" 'shows the archive heading' false "$ARCHIVE_STATUS")
+  [ "$(reason_of 'shows the archive heading')" = citation-unverified ]
+  check_all < <(CITE_LINE="$(line_of "$DEMOTE" "$ARCHIVE_STATUS")" target_cite "$DEMOTE" 'shows the archive heading' false 'toBe(418)')
+  [ "$(reason_of 'shows the archive heading')" = citation-unverified ]
+}
+
+@test "a demote of a rendered test is report-only with reason rendered in both shapes" {
+  check_all < <(cite demote "$RENDERED" 'shows the rendered page' false "$SIBLING" 'shows the records page' "$LIVE_ASSERTION")
+  [ "$(kept_field 'shows the rendered page' disposition)" = report-only ]
+  [ "$(kept_field 'shows the rendered page' reportReason)" = rendered ]
+  check_all < <(target_cite "$RENDERED" 'shows the rendered page' false "expect(await page.title()).toBe('Rendered')")
+  [ "$(kept_field 'shows the rendered page' disposition)" = report-only ]
+  [ "$(kept_field 'shows the rendered page' reportReason)" = rendered ]
+}
+
+@test "a sibling-less demote of a route test or a real-server spec is target-not-below-subject" {
+  check_all < <(
+    target_cite "$ROUTE_SIBLING" 'the records route answers 200' false 'expect(200).toBe(200)'
+    target_cite "$SERVED" 'serves the records list' false "$SERVED_ARCHIVE"
+  )
+  [ "$(reason_of 'the records route answers 200')" = target-not-below-subject ]
+  [ "$(reason_of 'serves the records list')" = target-not-below-subject ]
+  check_all < <(TARGET_LAYER=route target_cite "$DEMOTE" 'shows the archive heading' false "$ARCHIVE_STATUS")
+  [ "$(reason_of 'shows the archive heading')" = target-not-below-subject ]
+}
+
+@test "a target on a drop and a proposal with both sibling and target are malformed" {
+  check_all < <(KIND=drop target_cite "$DEMOTE" 'shows the archive heading' false "$ARCHIVE_STATUS")
+  [ "$(reason_of 'shows the archive heading')" = malformed ]
+  check_all < <(
+    jq -s '.[0] + {target: .[1].target}' \
+      <(cite demote "$DEMOTE" 'shows the archive heading' false "$SIBLING" 'shows the records page' "$LIVE_ASSERTION") \
+      <(target_cite "$DEMOTE" 'shows the archive heading' false "$ARCHIVE_STATUS")
+  )
+  [ "$(reason_of 'shows the archive heading')" = malformed ]
+}
+
+@test "a browser seam dropped on a route sibling is still refused, and a real-server sibling clears it" {
+  check_all < <(
+    cite drop "$SUBJECTS" 'refuses an edit to another account' false "$ROUTE_SIBLING" 'the records route answers 200' "expect(200).toBe(200)"
+    cite drop "$SUBJECTS" 'denies entry to guests' false "$SERVED" 'serves the records list' "$SERVED_ARCHIVE"
+  )
+  [ "$(reason_of 'refuses an edit to another account')" = seam-no-sibling-at-or-above ]
+  is_kept 'denies entry to guests'
+  [ "$(kept_field 'denies entry to guests' siblingLayer)" = real-server ]
+}
+
+# --- the sibling-less demote at --post-fix -----------------------------------
+
+# prefix_kept <fullName> <assertion>: run the pre-fix check on one sibling-less
+# demote of the demote fixture, leaving its output for kept_with_replacement.
+prefix_kept() {
+  check_all < <(target_cite "$DEMOTE" "$1" false "$2")
+  is_kept "$1"
+}
+
+@test "post-fix keeps each demote whose fixer wrote a request-only replacement" {
+  write_served_replacement
+  prefix_kept 'shows the archive heading' "$ARCHIVE_STATUS"
+  kept_with_replacement 'shows the archive heading' "$REPLACEMENT" 'serves the archive heading' "$SERVED_ARCHIVE" >"$BATS_TEST_TMPDIR/archive.json"
+  prefix_kept 'refuses the forbidden admin page' "$ADMIN_STATUS"
+  kept_with_replacement 'refuses the forbidden admin page' "$REPLACEMENT" 'refuses the admin page' "$SERVED_ADMIN" >"$BATS_TEST_TMPDIR/admin.json"
+  rm -f "$REPO/$DEMOTE"
+  jq -s 'add' "$BATS_TEST_TMPDIR/archive.json" "$BATS_TEST_TMPDIR/admin.json" >"$PROPOSALS"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  is_kept 'shows the archive heading'
+  is_kept 'refuses the forbidden admin page'
+  [ "$(kept_field 'refuses the forbidden admin page' seam)" = true ]
+  [ "$(kept_field 'shows the archive heading' targetLayer)" = real-server ]
+}
+
+@test "post-fix refuses a demote with no replacement, an unwritten one, or one that opens a page" {
+  prefix_kept 'refuses the forbidden admin page' "$ADMIN_STATUS"
+  jq '.kept' <<<"$output" >"$BATS_TEST_TMPDIR/bare.json"
+  write_served_replacement
+  kept_with_replacement 'refuses the forbidden admin page' "$REPLACEMENT" 'refuses the admin page' "$SERVED_ADMIN" >"$BATS_TEST_TMPDIR/cited.json"
+  rm -f "$REPO/$DEMOTE"
+  cp "$BATS_TEST_TMPDIR/bare.json" "$PROPOSALS"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(reason_of 'refuses the forbidden admin page')" = replacement-missing ]
+  jq 'map(.replacement.file = "apps/web/.playwright/e2e/never-written.spec.ts")' "$BATS_TEST_TMPDIR/cited.json" >"$PROPOSALS"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(reason_of 'refuses the forbidden admin page')" = citation-unverified ]
+  sed -e 's/async ({request})/async ({page, request})/' "$REPO/$REPLACEMENT" >"$BATS_TEST_TMPDIR/paged.ts"
+  cp "$BATS_TEST_TMPDIR/paged.ts" "$REPO/$REPLACEMENT"
+  cp "$BATS_TEST_TMPDIR/cited.json" "$PROPOSALS"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(reason_of 'refuses the forbidden admin page')" = replacement-wrong-layer ]
+}
+
+# bats test_tags=whole-tree
+@test "red twin: a post-fix that skips the replacement check keeps the demote with no replacement" {
+  prefix_kept 'refuses the forbidden admin page' "$ADMIN_STATUS"
+  jq '.kept' <<<"$output" >"$PROPOSALS"
+  rm -f "$REPO/$DEMOTE"
+  install_mutated_module check-proposals.mjs "if (!isCitation(p.replacement)) return {reason: 'replacement-missing'};" "if (!isCitation(p.replacement)) return {reason: null, rank: REAL_SERVER};"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  is_kept 'refuses the forbidden admin page'
+}
+
+# write_in_place_rewrite: the fixer rewrites the demoted test in its own file as
+# a request-only test under the same name.
+write_in_place_rewrite() {
+  cat >"$REPO/$DEMOTE" <<'EOF'
+import {expect, test} from '@playwright/test';
+
+test('shows the archive heading', async ({request}) => {
+  const response = await request.get('/archive');
+  expect(response.status()).toBe(200);
+});
+EOF
+}
+
+# write_mixed_replacement: the replacement beside a test that still opens a page.
+write_mixed_replacement() {
+  cat >"$REPO/$MIXED" <<'EOF'
+import {expect, test} from '@playwright/test';
+
+test('still opens the archive page', async ({page}) => {
+  await page.goto('/archive');
+  expect(await page.title()).toBe('Archive');
+});
+
+test('serves the archive heading', async ({request}) => {
+  const response = await request.get('/archive');
+  expect(response.status()).toBe(200);
+});
+EOF
+}
+
+@test "post-fix judges layers per test: an in-place rewrite and a replacement in a mixed file are kept" {
+  prefix_kept 'shows the archive heading' "$ARCHIVE_STATUS"
+  write_in_place_rewrite
+  kept_with_replacement 'shows the archive heading' "$DEMOTE" 'shows the archive heading' "$SERVED_ARCHIVE" >"$PROPOSALS"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  is_kept 'shows the archive heading'
+  write_layer_fixtures
+  prefix_kept 'shows the archive heading' "$ARCHIVE_STATUS"
+  write_mixed_replacement
+  kept_with_replacement 'shows the archive heading' "$MIXED" 'serves the archive heading' "$SERVED_ARCHIVE" >"$PROPOSALS"
+  rm -f "$REPO/$DEMOTE"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  is_kept 'shows the archive heading'
+}
+
+# bats test_tags=whole-tree
+@test "red twin: re-reading the subject's file at post-fix refuses the in-place rewrite" {
+  prefix_kept 'shows the archive heading' "$ARCHIVE_STATUS"
+  write_in_place_rewrite
+  kept_with_replacement 'shows the archive heading' "$DEMOTE" 'shows the archive heading' "$SERVED_ARCHIVE" >"$PROPOSALS"
+  install_mutated_module check-proposals.mjs 'options.postFix && pathRankOf(p.file) === PLAYWRIGHT' 'false && pathRankOf(p.file) === PLAYWRIGHT'
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(reason_of 'shows the archive heading')" = target-not-below-subject ]
+}
+
+# bats test_tags=whole-tree
+@test "red twin: judging the replacement by its whole file refuses the mixed-file replacement" {
+  prefix_kept 'shows the archive heading' "$ARCHIVE_STATUS"
+  write_mixed_replacement
+  kept_with_replacement 'shows the archive heading' "$MIXED" 'serves the archive heading' "$SERVED_ARCHIVE" >"$PROPOSALS"
+  rm -f "$REPO/$DEMOTE"
+  install_mutated_module check-proposals.mjs 'const rank = testRankOf(p.replacement.file, test);' 'const rank = rankOf(p.replacement.file);'
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(reason_of 'shows the archive heading')" = replacement-wrong-layer ]
+}
+
+@test "a page a hook opens counts against a replacement in the same file" {
+  prefix_kept 'shows the archive heading' "$ARCHIVE_STATUS"
+  write_served_replacement
+  awk 'NR == 2 { print ""; print "test.beforeEach(async ({page}) => {"; print "  await page.goto(\"/\");"; print "});" } { print }' "$REPO/$REPLACEMENT" >"$BATS_TEST_TMPDIR/hooked.ts"
+  cp "$BATS_TEST_TMPDIR/hooked.ts" "$REPO/$REPLACEMENT"
+  kept_with_replacement 'shows the archive heading' "$REPLACEMENT" 'serves the archive heading' "$SERVED_ARCHIVE" >"$PROPOSALS"
+  rm -f "$REPO/$DEMOTE"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(reason_of 'shows the archive heading')" = replacement-wrong-layer ]
+}
+
+# --- templated titles and helper calls ---------------------------------------
+
+LOOPED_STATUS='expect(response.status()).toBe(200)'
+
+@test "a sibling inside a looped test with a templated title verifies by its runtime name" {
+  check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$LOOPED" '/ responds 200 and renders its own page' "$LOOPED_STATUS")
+  is_kept 'repeats the records title'
+  [ "$(kept_field 'repeats the records title' siblingLayer)" = real-server ]
+  check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$LOOPED" '/about responds 404 and renders its own page' "$LOOPED_STATUS")
+  [ "$(reason_of 'repeats the records title')" = citation-unverified ]
+}
+
+@test "a cited call to an in-file helper that asserts nothing is citation-unverified" {
+  check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$HELPERS" 'calls a helper that asserts nothing' 'await assertNothing(page)')
+  [ "$(reason_of 'repeats the records title')" = citation-unverified ]
+}
+
+@test "a cited call to an in-file helper that asserts is kept in a builder test" {
+  check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$HELPERS" 'calls a helper that asserts' 'await assertTitle(page)')
+  is_kept 'repeats the records title'
+}
+
+@test "a cited in-file helper call in a rendered test is citation-unverified even when the helper asserts" {
+  check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$RENDERED_HELPERS" 'a rendered test that calls a helper' 'await assertTitle(page)')
+  [ "$(reason_of 'repeats the records title')" = citation-unverified ]
+}
+
+@test "a multi-line expect continuation and an imported helper call still verify" {
+  check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$HELPERS" 'answers a missing record over several lines' ').toBe(404)')
+  is_kept 'repeats the records title'
+  check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$HELPERS" 'calls an imported helper' "await expectHeading(page, 'Records')")
+  is_kept 'repeats the records title'
+}
+
 # --- route and changed -------------------------------------------------------
 
 branch_with() {
@@ -423,6 +843,47 @@ branch_with() {
   [ "$output" = run ]
 }
 
+# branch_with_specs: a branch changing one request-only spec and one spec that
+# opens a page.
+branch_with_specs() {
+  git -C "$REPO" checkout -q -B alt main
+  printf "import {expect, test} from '@playwright/test';\n\ntest('served', async ({request}) => {\n  expect((await request.get('/')).status()).toBe(200);\n});\n" >"$REPO/apps/web/.playwright/e2e/served-only.spec.ts"
+  printf "import {expect, test} from '@playwright/test';\n\ntest('paged', async ({page}) => {\n  await page.goto('/');\n  expect(await page.title()).toBe('Home');\n});\n" >"$REPO/apps/web/.playwright/e2e/paged.spec.ts"
+  git -C "$REPO" add -A
+  git -C "$REPO" commit -q -m alt
+}
+
+@test "changed reads each spec: a request-only spec is real-server and a page-opening spec is browser" {
+  branch_with_specs
+  run bash "$CHECK" changed --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.[] | select(.file == "apps/web/.playwright/e2e/served-only.spec.ts") | .layer' <<<"$output")" = real-server ]
+  [ "$(jq -r '.[] | select(.file == "apps/web/.playwright/e2e/paged.spec.ts") | .layer' <<<"$output")" = browser ]
+}
+
+@test "route runs when only a request-only spec changed and skips when only a route test changed" {
+  branch_with apps/web/.playwright/e2e/only.spec.ts
+  run bash "$CHECK" changed --root "$REPO"
+  [ "$(jq -r '.[0].layer' <<<"$output")" = real-server ]
+  run bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = run ]
+  branch_with apps/web/app/route-tests/only.test.ts
+  run bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = skip-no-playwright-change ]
+}
+
+@test "red twin: a route that still tests the e2e layer skips a request-only-only branch" {
+  local mutated="$BATS_TEST_TMPDIR/overlap-check.sh"
+  mutate '.layer == "real-server" or .layer == "browser"' '.layer == "e2e"' "$HOME_ROOT/.gaia/scripts/overlap-check.sh" "$mutated"
+  CHECK_SOURCE="$mutated" install_harness
+  branch_with apps/web/.playwright/e2e/only.spec.ts
+  run bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = skip-no-playwright-change ]
+}
+
 @test "route skips when only unit tests changed" {
   branch_with apps/web/app/utils/only.test.ts
   run bash "$CHECK" route --root "$REPO"
@@ -440,7 +901,7 @@ branch_with() {
 @test "changed lists every changed test file that sits on a layer" {
   run bash "$CHECK" changed --root "$REPO"
   [ "$status" -eq 0 ]
-  jq -e --arg f "$SIBLING" 'any(.[]; .file == $f and .layer == "e2e")' <<<"$output" >/dev/null
+  jq -e --arg f "$SIBLING" 'any(.[]; .file == $f and .layer == "browser")' <<<"$output" >/dev/null
   jq -e --arg f "$ROUTE_SIBLING" 'any(.[]; .file == $f and .layer == "route")' <<<"$output" >/dev/null
   jq -e --arg f "$SERVER_SIBLING" 'any(.[]; .file == $f and .layer == "route")' <<<"$output" >/dev/null
   jq -e --arg f "$UNIT_SIBLING" 'any(.[]; .file == $f and .layer == "unit")' <<<"$output" >/dev/null
@@ -456,7 +917,7 @@ branch_with() {
   [ "$output" = run ]
   run bash "$CHECK" changed --root "$REPO"
   [ "$status" -eq 0 ]
-  jq -e 'any(.[]; .file == "apps/web/.playwright/e2e/café.spec.ts" and .layer == "e2e")' <<<"$output" >/dev/null
+  jq -e 'any(.[]; .file == "apps/web/.playwright/e2e/café.spec.ts" and .layer == "real-server")' <<<"$output" >/dev/null
   jq -e 'any(.[]; .file == "apps/web/app/utils/naïve.test.ts" and .layer == "unit")' <<<"$output" >/dev/null
 }
 
@@ -493,7 +954,7 @@ register_members() {
   [ "$output" = run ]
   run bash "$CHECK" changed --root "$REPO"
   [ "$status" -eq 0 ]
-  jq -e 'any(.[]; .file == "apps/storefront/.playwright/e2e/only.spec.ts" and .layer == "e2e")' <<<"$output" >/dev/null || return 1
+  jq -e 'any(.[]; .file == "apps/storefront/.playwright/e2e/only.spec.ts" and .layer == "real-server")' <<<"$output" >/dev/null || return 1
   jq -e 'any(.[]; .file == "apps/storefront/app/utils/only.test.ts" and .layer == "unit")' <<<"$output" >/dev/null
 }
 

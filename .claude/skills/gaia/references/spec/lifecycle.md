@@ -6,7 +6,7 @@ Contents: Owning-phase UAT gate; Pre-audit UAT checks; Consolidation; Post-merge
 
 ## Owning-phase UAT gate
 
-**When it runs.** For a spec-derived plan, after `pnpm typecheck && pnpm lint` pass for a phase whose number appears in an `e2e` or `route` row of the UAT routing table in `<PLAN_DIR>/README.md`, and before that phase commits. A phase that owns neither skips it.
+**When it runs.** For a spec-derived plan, after `pnpm typecheck && pnpm lint` pass for a phase whose number appears in a `real-server`, `browser`, `e2e` or `route` row of the UAT routing table in `<PLAN_DIR>/README.md`, and before that phase commits. A phase that owns none of these rows skips it.
 
 **Command**, from `<RESOLVED_ROOT>`:
 
@@ -16,9 +16,9 @@ bash .gaia/scripts/spec/uat-gate.sh <SPEC_PATH> --routing <PLAN_DIR>/README.md -
 
 Here `<N>` is the phase number.
 
-**Prerequisites and cost.** Split by arm. An `e2e` row needs Playwright's Chromium installed and `pnpm storybook` stopped (the run boots its own servers); each such run boots two webServers, so budget roughly a minute per owning phase. A `route` row runs under Vitest's node project and needs neither Chromium nor free ports, and costs seconds. A route-only phase runs the route arm alone; a phase owning both runs the route arm first, and a route failure exits 1 before Playwright starts.
+**Prerequisites and cost.** Split by arm. A `browser` or legacy `e2e` row needs Playwright's Chromium installed and `pnpm storybook` stopped (the run boots its own servers); each such run boots two webServers, so budget roughly a minute per owning phase. A `real-server` row opens no page and makes no browser round trip, but it still runs under Playwright, whose global setup launches Chromium to warm the server and whose config boots its web servers, so it needs Chromium installed, free ports, and Node and `typescript` for the no-page check. A `route` row runs under Vitest's node project and needs neither Chromium nor free ports, and costs seconds. A route-only phase runs the route arm alone; a phase owning both runs the route arm first, and a route failure exits 1 before Playwright starts.
 
-**What it checks.** Per owned test: the file exists and starts with its contract marker; no `test.fail`, `test.fixme`, `test.skip`, `.only` or skipped or fixme `describe` annotation remains (for a route test, none of the inverting or skipping annotations the comment on `gate_route_annotated` in `.gaia/scripts/spec/uat-gate-route.sh` names); the deterministic floor holds (for an `e2e` spec a `page.` call or a request-fixture call, and for a route test a `loader(` or `action(` call, each with an `expect(` on a real value); the contract comment still matches the SPEC UAT; no working-doc id appears in the e2e or route-test tree; and the runner's JSON reporter (Playwright for an `e2e` file, Vitest for a `route` file) records every test in the file as passed. Whether the test body still asserts the contract is not decided here: the `uat-fidelity-judge` agent judges it once, in `## Pre-audit UAT checks`.
+**What it checks.** Per owned test: the file exists and starts with its contract marker; no `test.fail`, `test.fixme`, `test.skip`, `.only` or skipped or fixme `describe` annotation remains (for a route test, none of the inverting or skipping annotations the comment on `gate_route_annotated` in `.gaia/scripts/spec/uat-gate-route.sh` names); the deterministic floor holds (for a `browser` or legacy `e2e` spec a `page.` call or a request-fixture call, for a `real-server` spec a request-fixture call that a `page.` call does not satisfy, and for a route test a `loader(` or `action(` call, each with an `expect(` on a real value); the contract comment still matches the SPEC UAT; a `real-server` spec passes the no-page check, which refuses a test that opens a page with the reason `opens-page` and takes its one definition of "opens a page" from `.gaia/scripts/spec/page-use.mjs`; no working-doc id appears in the e2e or route-test tree; and the runner's JSON reporter (Playwright for a `real-server`, `browser` or `e2e` file, Vitest for a `route` file) records every test in the file as passed. Whether the test body still asserts the contract is not decided here: the `uat-fidelity-judge` agent judges it once, in `## Pre-audit UAT checks`.
 
 **Outcome.**
 
@@ -27,7 +27,7 @@ Here `<N>` is the phase number.
 | 0 | every owned spec passed, or the phase owns none | continue to the phase commit |
 | 1 | gate failure; stderr names each failing file and its comma-joined reasons | do not commit; append the block below to `<PLAN_DIR>/PROGRESS.md` and stop |
 | 2 | invalid input (SPEC, routing table, arguments) | do not commit; append a `## Phase N, <title> (HALTED)` block with `Reason: UAT gate input invalid` and the stderr line, and stop |
-| 4 | a runner could not run (no browser, port held or server failed to boot for an `e2e` row; `jq` or `pnpm` missing or no Vitest report for a `route` row) | do not commit; append a `## Phase N, <title> (HALTED)` block with `Reason: UAT gate prerequisite missing` naming the prerequisite from stderr, and stop |
+| 4 | a runner could not run (no browser, port held or server failed to boot for a `real-server`, `browser` or `e2e` row, or no Node or `typescript` for the `real-server` no-page check; `jq` or `pnpm` missing or no Vitest report for a `route` row) | do not commit; append a `## Phase N, <title> (HALTED)` block with `Reason: UAT gate prerequisite missing` naming the prerequisite from stderr, and stop |
 
 ```
 ## Phase N, <title> (HALTED)
@@ -45,7 +45,7 @@ For a spec-derived plan, after the last phase commits and before the worthiness 
 bash .gaia/scripts/spec/uat-gate.sh <SPEC_PATH> --routing <PLAN_DIR>/README.md --all
 ```
 
-`--all` runs the same checks over every `e2e` and `route` row, which includes the divergence check and the working-doc id scan across every rendered spec. A non-zero exit is a HALT: stop and surface stderr, including any next-step line the gate prints. It is never an audit finding to fix inside a fix round.
+`--all` runs the same checks over every `real-server`, `browser`, `e2e` and `route` row, which includes the divergence check and the working-doc id scan across every rendered spec. A non-zero exit is a HALT: stop and surface stderr, including any next-step line the gate prints. It is never an audit finding to fix inside a fix round.
 
 Then confirm the render landed before the first phase. When `<PLAN_DIR>/PROGRESS.md`'s first `## UAT render` block carries a `Commit: <short-sha>` (not `none`, not `Skipped:`), take the Phase 1 SHA from the last `## Phase 1` block carrying a `Commit:` line and run:
 
@@ -58,16 +58,17 @@ A non-zero exit is a HALT naming both SHAs: Phase 1 was committed without the re
 Then judge the test bodies. The gate proves each spec still carries its contract and passes, but never reads the body, so a body can keep its contract comment and stop asserting it. That judgment goes to one fresh `uat-fidelity-judge` agent per run, never to the orchestrator, which would be grading its own phases' work. Skip this step when the gate printed `no owned UAT tests`.
 
 1. Take `<VERDICT_FILE>` as `uat-fidelity.json` in the session's scratchpad directory, or in a `mktemp -d` directory when the session lists none, never under `<PLAN_DIR>`: in a worktree, `.notebook` is a symlink into the main checkout and worktree isolation refuses the judge's Write (`.claude/rules/subagent-dispatch.md`). Pre-clear it: `rm -f <VERDICT_FILE>`.
-2. Dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of these lines, one `Spec:` line per `e2e` or `route` row of the routing table in `<PLAN_DIR>/README.md`, with the real path joined from `<RESOLVED_ROOT>`: `<frontend package>/.playwright/e2e/` for an `e2e` row and `<frontend package>/app/route-tests/` for a `route` row, then the row's `feature_folder`, then `tests/` for a `route` row only, then its `file_name`. When the owning task doc names a guard's file for a route row, add one `Guard: <uat_id> <absolute path of the guard file>` line after that row's `Spec:` line:
+2. Dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of these lines, one `Spec:` line per `real-server`, `browser`, legacy `e2e` or `route` row of the routing table in `<PLAN_DIR>/README.md`, with the real path joined from `<RESOLVED_ROOT>`: `<frontend package>/.playwright/e2e/` for a `real-server`, `browser` or legacy `e2e` row and `<frontend package>/app/route-tests/` for a `route` row, then the row's `feature_folder`, then `tests/` for a `route` row only, then its `file_name`. After each `Spec:` line add one `Surface: <uat_id> <real-server | browser | route>` line, a legacy `e2e` row written as `browser`; it adds no verdict entry. When the owning task doc names a guard's file for a route row, add one `Guard: <uat_id> <absolute path of the guard file>` line after that row's `Surface:` line:
 
    ```
    SPEC path: <SPEC_PATH>
    Verdict file: <VERDICT_FILE>
    Spec: <uat_id> <absolute path of the rendered test>
+   Surface: <uat_id> <real-server | browser | route>
    Guard: <uat_id> <absolute path of the guard file>   (optional, route rows only)
    ```
 
-3. Wait for the agent's completion notification, never classifying when the dispatch call returns, then classify the file, which is a JSON array with one entry per `Spec:` line (a `Guard:` line adds none):
+3. Wait for the agent's completion notification, never classifying when the dispatch call returns, then classify the file, which is a JSON array with one entry per `Spec:` line (a `Surface:` or `Guard:` line adds none):
 
    ```bash
    bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <VERDICT_FILE> --expect-count <number of Spec lines>

@@ -1,10 +1,10 @@
 ---
-description: 'Render step of the generated plan orchestrator: render the e2e-routed UATs into red Playwright specs and the route-routed UATs into red Vitest route tests in the web member before Phase 1.'
+description: 'Render step of the generated plan orchestrator: render the `real-server`-routed UATs into red request-fixture stubs, the `browser`-routed (and legacy `e2e`-routed) UATs into red browser stubs, and the route-routed UATs into red Vitest route tests in the web member before Phase 1.'
 ---
 
 # UAT render step
 
-The orchestrator runs this step before Phase 1 on every start and every resume. It renders each e2e-routed UAT of the plan's SPEC into one red Playwright spec (`test.fail()`) under `apps/web/.playwright/e2e/` (the e2e directory of the web member registered in `.gaia/packages.json`), and each route-routed UAT into one red Vitest test (`test.fails(`) under `apps/web/app/route-tests/` (the route-tests directory of the same package), so a failing harness exists before source is edited. The render is idempotent.
+The orchestrator runs this step before Phase 1 on every start and every resume. It renders each `real-server`-routed UAT of the plan's SPEC into one red request-fixture stub (`test.fail()`, no page) and each `browser`-routed or legacy `e2e`-routed UAT into one red browser stub, all under `apps/web/.playwright/e2e/` (the e2e directory of the web member registered in `.gaia/packages.json`; the row's surface, not the path, tells them apart), and each route-routed UAT into one red Vitest test (`test.fails(`) under `apps/web/app/route-tests/` (the route-tests directory of the same package), so a failing harness exists before source is edited. The render is idempotent.
 
 ## Inputs
 
@@ -31,7 +31,7 @@ Renderer:
 |---|---|---|
 | 0 | Success, no conflict | Run the id scan, then `## Record` |
 | 1 | Operational failure (stdout `{"ok":false,"error":"..."}`), nothing written | HALT |
-| 2 | Invalid input: usage, malformed SPEC, invalid routing table, or a working-document id in an e2e-routed or route-routed UAT (stderr only), nothing written | HALT |
+| 2 | Invalid input: usage, malformed SPEC, invalid routing table, or a working-document id in a `real-server`, `browser`, `e2e` or `route` UAT (stderr only), nothing written | HALT |
 | 3 | Conflict: every non-conflict action still applied, the summary printed with `"ok":true`, every conflict file left byte-identical | `## Conflicts` |
 
 The id scan exits 0 when clean, 1 printing `<path>:<line>: <match>` per hit, 2 on a usage error. A non-zero id scan HALTs, naming each file and line.
@@ -62,14 +62,14 @@ Summary: written <n>, rewritten <n>, unchanged <n>, preserved <n>, deleted <n>, 
 ```
 
 - Nothing changed (no `written`, `rewritten` or `deleted`): no commit; the block carries `Commit: none (nothing changed)`.
-- Neither an `e2e` nor a `route` row in the routing table: the renderer writes nothing, so record `Skipped: no e2e-routed or route-routed UATs` in place of the `Commit:` line. A table with only `route` rows renders and commits, and never records `Skipped`.
+- No `real-server`, `browser`, legacy `e2e` or `route` row in the routing table: the renderer writes nothing, so record `Skipped: no e2e-routed or route-routed UATs` in place of the `Commit:` line. A table with only `route` rows renders and commits, and never records `Skipped`.
 
 ## Conflicts
 
 Each `conflict` detail names a file the renderer left byte-identical, with a `reason`:
 
 - `changed-and-edited`: the UAT text changed and the rendered file was edited since it was rendered.
-- `unmarked-file-at-target`: a file with no contract marker already sits at the path an e2e or route row resolves to.
+- `unmarked-file-at-target`: a file with no contract marker already sits at the path a `real-server`, `browser`, `e2e` or `route` row resolves to.
 - `removed-or-rerouted-and-edited`: no row claims the file any more and it was edited.
 
 For each conflict, ask the human once with `AskUserQuestion`:
@@ -81,7 +81,7 @@ With no human present (unattended or auto), or when the human keeps the edited f
 
 ## The rendered file
 
-Each rendered test starts with a contract marker (line 1, `// gaia-uat-contract sha256:<digest>`), then the UAT's canonical `Given`, `When` and `Then` lines and the divergence rule pointer. An e2e spec's body is a `const outcome = {text: '<then-clause>'}` followed by `test(outcome.text, () => { test.fail(); expect(false, outcome.text).toBe(true); })`. No path, title or comment carries a working-document id.
+Each rendered test starts with a contract marker (line 1, `// gaia-uat-contract sha256:<digest>`), then the UAT's canonical `Given`, `When` and `Then` lines and the divergence rule pointer. A `browser` or legacy `e2e` spec's body is a `const outcome = {text: '<then-clause>'}` followed by `test(outcome.text, () => { test.fail(); expect(false, outcome.text).toBe(true); })`. A `real-server` stub uses the same `outcome` const, but its test callback destructures only `{request}` and its body is `test.fail(); expect(request, outcome.text).toBeUndefined();`; the owning phase writes a request-fixture body, and the gate refuses one that opens a page. No path, title or comment carries a working-document id.
 
 - The digest covers everything after line 1. A file counts as edited when the digest differs from the file's current content.
 - The renderer rewrites or deletes only a file whose first line is a contract marker. A hand-written file in the same folders, with no marker, is never read for writing and never listed in the summary.

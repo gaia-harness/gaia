@@ -62,8 +62,8 @@ SPEC_EOF
 | uat_id | surface | phase | feature_folder | file_name |
 |---|---|---|---|---|
 | UAT-001 | non-ui | 1 | - | - |
-| UAT-002 | e2e | 2 | checkout | guest-checkout-confirms-order.spec.ts |
-| UAT-003 | e2e | 3 | orders | order-history-lists-orders.spec.ts |
+| UAT-002 | browser | 2 | checkout | guest-checkout-confirms-order.spec.ts |
+| UAT-003 | browser | 3 | orders | order-history-lists-orders.spec.ts |
 <!-- gaia:uat-routing:end -->
 ROUTING_EOF
 }
@@ -554,7 +554,7 @@ ROUTE_GREEN_LINES="  const response = await loader({request: new Request('http:/
 # phase (default 3); the rendered red test is replaced by a green body.
 prepare_route() {
   write_spec
-  sed -i.bak "s#^| UAT-003 | e2e | 3 | orders | order-history-lists-orders.spec.ts |#| UAT-003 | route | ${1:-3} | orders | order-history-lists-orders.test.ts |#" "$ROUTING"
+  sed -i.bak "s#^| UAT-003 | browser | 3 | orders | order-history-lists-orders.spec.ts |#| UAT-003 | route | ${1:-3} | orders | order-history-lists-orders.test.ts |#" "$ROUTING"
   rm -f "$ROUTING.bak"
   grep -qF -- '| UAT-003 | route |' "$ROUTING" || return 1
   render_specs
@@ -850,7 +850,7 @@ divergence() {
 
 @test "divergence names the route test path, the UAT and then when a route test's Then line was altered" {
   write_spec
-  sed -i.bak 's#^| UAT-003 | e2e | 3 | orders | order-history-lists-orders.spec.ts |#| UAT-003 | route | 3 | orders | order-history-lists-orders.test.ts |#' "$ROUTING"
+  sed -i.bak 's#^| UAT-003 | browser | 3 | orders | order-history-lists-orders.spec.ts |#| UAT-003 | route | 3 | orders | order-history-lists-orders.test.ts |#' "$ROUTING"
   rm -f "$ROUTING.bak"
   grep -qF -- '| UAT-003 | route |' "$ROUTING" || return 1
   render_specs
@@ -1042,5 +1042,75 @@ scan() {
 @test "scan over this repository's own Playwright tree exits zero today" {
   run bash -c "cd '$REPO_ROOT_REAL' && bash '$SCAN'"
   [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# --- Gate: legacy e2e rows read as browser; real-server rows are selected ---
+
+# legacy_routing: the routing table with every browser row written as the
+# legacy e2e surface.
+legacy_routing() {
+  sed -i.bak 's/| browser |/| e2e |/' "$ROUTING"
+  rm -f "$ROUTING.bak"
+  grep -qF -- '| e2e |' "$ROUTING"
+}
+
+@test "a legacy e2e row gates the same as a browser row: pass on a passed report, same reason on a failed one, counted as owned" {
+  prepare_green
+  gate --phase 2 --report "$REPORTS/passed.json"
+  [ "$status" -eq 0 ] || return 1
+  browser_pass_output="$output"
+  gate --phase 2 --report "$REPORTS/failed.json"
+  [ "$status" -eq 1 ] || return 1
+  browser_failure=$(cat "$STDERR_FILE")
+
+  legacy_routing
+  gate --phase 2 --report "$REPORTS/passed.json"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "$browser_pass_output" ] || return 1
+  [ "$output" != "no owned UAT tests" ] || return 1
+  gate --phase 2 --report "$REPORTS/failed.json"
+  [ "$status" -eq 1 ] || return 1
+  [ "$(cat "$STDERR_FILE")" = "$browser_failure" ]
+}
+
+# prepare_mixed: UAT-002 browser (phase 2) and UAT-003 real-server (phase 3),
+# both rendered and given a passing-looking body.
+prepare_mixed() {
+  write_spec
+  sed -i.bak 's/| UAT-003 | browser |/| UAT-003 | real-server |/' "$ROUTING"
+  rm -f "$ROUTING.bak"
+  render_specs
+  green_body "$FILE_PHASE_TWO"
+  green_body "$FILE_PHASE_THREE" "test('every past order is listed newest first', async ({request}) => {
+  const response = await request.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+}
+
+@test "divergence reports a mutated Then line in a browser file and in a real-server file, and passes when both match" {
+  prepare_mixed
+  run bash -c "cd '$WORK' && bash '$DIVERGENCE' '$SPEC' --routing '$ROUTING' --all"
+  [ "$status" -eq 0 ] || return 1
+  cp "$FILE_PHASE_TWO" "$BATS_TEST_TMPDIR/original.spec.ts"
+  sed -i.bak 's#^// Then: .*#// Then: mutated#' "$FILE_PHASE_TWO"
+  rm -f "$FILE_PHASE_TWO.bak"
+  run bash -c "cd '$WORK' && bash '$DIVERGENCE' '$SPEC' --routing '$ROUTING' --all"
+  [ "$status" -eq 1 ] || return 1
+  [ "$output" = "$FILE_PHASE_TWO_RELATIVE UAT-002 then" ] || return 1
+  cp "$BATS_TEST_TMPDIR/original.spec.ts" "$FILE_PHASE_TWO"
+  sed -i.bak 's#^// Then: .*#// Then: mutated#' "$FILE_PHASE_THREE"
+  rm -f "$FILE_PHASE_THREE.bak"
+  run bash -c "cd '$WORK' && bash '$DIVERGENCE' '$SPEC' --routing '$ROUTING' --all"
+  [ "$status" -eq 1 ] || return 1
+  [ "$output" = "$FILE_PHASE_THREE_RELATIVE UAT-003 then" ]
+}
+
+@test "divergence fails closed on an unknown surface: exit 2 and no file named" {
+  write_spec
+  sed -i.bak 's/| UAT-003 | browser |/| UAT-003 | desktop |/' "$ROUTING"
+  rm -f "$ROUTING.bak"
+  run bash -c "cd '$WORK' && bash '$DIVERGENCE' '$SPEC' --routing '$ROUTING' --all 2>/dev/null"
+  [ "$status" -eq 2 ] || return 1
   [ -z "$output" ]
 }

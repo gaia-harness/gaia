@@ -9,7 +9,7 @@
 #   - the page holds the principle, a route row and an isolation row naming a
 #     non-React stack, the frontend-only statement, each bug class with its
 #     layer, and the `pnpm dev` limit of a real-server check;
-#   - tests-react.md holds a route row between service and E2E, each honest
+#   - tests-react.md holds route, real-server and browser rows in order, each honest
 #     limit, a link to the page, no copy of the rationale and no sentence
 #     sending a route's redirect to E2E;
 #   - routes.md holds its new path and both anonymous-access conventions;
@@ -73,7 +73,8 @@ check_page() {
     'A rule function returns the wrong answer' \
     'A route module omits its guard' \
     'A refusal is served with the wrong HTTP status' \
-    '`pnpm dev` with MSW'; do
+    '`pnpm dev` with MSW' \
+    "the server's rendered HTML"; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
   grep -E '^\| A rule function.*\| Unit ' "$file" >/dev/null || return 1
@@ -82,12 +83,14 @@ check_page() {
 }
 
 check_tests_react() {
-  local file="$1" service route end_to_end needle
+  local file="$1" service route real_server browser needle
   service=$(line_of "$file" '| Pure / service')
   route=$(line_of "$file" '| Route ')
-  end_to_end=$(line_of "$file" '| E2E ')
-  [ -n "$service" ] && [ -n "$route" ] && [ -n "$end_to_end" ] || return 1
-  [ "$service" -lt "$route" ] && [ "$route" -lt "$end_to_end" ] || return 1
+  real_server=$(line_of "$file" '| Real server ')
+  browser=$(line_of "$file" '| Browser ')
+  [ -n "$service" ] && [ -n "$route" ] && [ -n "$real_server" ] && [ -n "$browser" ] || return 1
+  [ "$service" -lt "$route" ] && [ "$route" -lt "$real_server" ] && [ "$real_server" -lt "$browser" ] || return 1
+  has "$file" '| E2E ' && return 1
   for needle in \
     'skips middleware, so a middleware guard is proven by a real-server check' \
     'A parent loader guards no action' \
@@ -175,6 +178,9 @@ mutate_copy() {
   copy=$(mutate_copy "$PAGE" 's/`pnpm dev` with MSW/a server/')
   run check_page "$copy"
   [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" "s/the server's rendered HTML/something/")
+  run check_page "$copy"
+  [ "$status" -ne 0 ]
 }
 
 # ---------- tests-react.md ----------
@@ -203,9 +209,16 @@ mutate_copy() {
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: a route row placed after E2E fails" {
+@test "red twin: a route row placed after the Playwright rows fails" {
   local copy="$BATS_TEST_TMPDIR/reordered.md"
-  awk '/^\| Route /{held=$0; next} {print} /^\| E2E /{print held}' "$TESTS_REACT" >"$copy"
+  awk '/^\| Route /{held=$0; next} {print} /^\| Browser /{print held}' "$TESTS_REACT" >"$copy"
+  run check_tests_react "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "red twin: a single E2E row in place of the real-server and browser rows fails" {
+  local copy="$BATS_TEST_TMPDIR/single-row.md"
+  awk '/^\| Real server /{print "| E2E               | Playwright | Playwright | x | y |"; next} /^\| Browser /{next} {print}' "$TESTS_REACT" >"$copy"
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
 }

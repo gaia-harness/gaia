@@ -5,28 +5,38 @@
 // and the seam list.
 //
 // Usage:
-//   node check-proposals.mjs layer --package-dir <dir>      (NUL-separated paths on stdin)
+//   node check-proposals.mjs layer --root <tree> --package-dir <dir>   (NUL-separated paths on stdin)
 //   node check-proposals.mjs check --root <tree> --proposals <file>
 //        [--package-dir <dir>] [--post-fix]
 //
 // layer prints a JSON array of {file, layer} for the stdin paths that sit on a
-// layer. check prints {"kept":[...],"discarded":[...]}; a kept element still
+// layer; it reads each Playwright spec under --root to tell real-server from
+// browser. check prints {"kept":[...],"discarded":[...]}; a kept element still
 // carries the private fields _ranges, _rendered and _present that the caller
 // turns into a disposition and removes.
 //
 // Exit codes: 0 success, 2 usage, 3 unreadable input or no TypeScript.
 //
 // A citation is verified through the signal extractor, which already resolves
-// test and story files: a test with the cited fullName exists, the cited line
-// is inside its ranges, and the assertion text sits on that line outside a
-// comment. Whether the sibling asserts the same property is not decided here.
+// test and story files, plus the resolvers in citations.mjs: a test with the
+// cited fullName exists, the cited line is inside its ranges, and the
+// assertion text sits on that line outside a comment. Whether the sibling
+// asserts the same property is not decided here.
+//
+// A demote may name no sibling: `target` carries the subject's own assertion
+// lines and the real-server layer it moves to, because the lower test does not
+// exist until the fixer writes it. At --post-fix such an entry must carry
+// `replacement`, the fixer's new test, which is verified like a sibling and
+// must itself open no page.
 
 import {createRequire} from 'node:module';
 import {existsSync, readFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {isSkipped, loadStems, pathIsSeam, subjectIsSeam} from './test-inspection.mjs';
+import {loadStems, pathIsSeam, subjectIsSeam} from './test-inspection.mjs';
+import {hookSpansOf, isRendered, locateTests, maskComments, verifyCitation} from './citations.mjs';
+import {pageUsesOf} from '../spec/page-use.mjs';
 
 const require = createRequire(import.meta.url);
 const extractorPath = path.join(
@@ -66,7 +76,13 @@ for (let index = 0; index < argv.length; index += 1) {
 
 // Layers ----------------------------------------------------------------------
 
-const LAYER_NAMES = {1: 'unit', 2: 'route', 3: 'e2e'};
+const LAYER_NAMES = {1: 'unit', 2: 'route', 3: 'real-server', 4: 'browser'};
+const LAYER_RANKS = {unit: 1, route: 2, 'real-server': 3, browser: 4};
+const REAL_SERVER = 3;
+const BROWSER = 4;
+// The highest rank a seam's sibling must reach: a served refusal shows on the
+// real-server layer, so a browser seam may move there and no lower.
+const SEAM_CEILING = REAL_SERVER;
 
 const packagePrefix =
   options['package-dir'] === undefined
@@ -81,10 +97,12 @@ const packageRelative = (file) => {
   return file.startsWith(packagePrefix) ? file.slice(packagePrefix.length) : null;
 };
 
-// Rank 1 unit and story, 2 route, 3 e2e. The route test folder is not a unit
-// layer even for a .tsx test the route glob does not name.
+// Rank 1 unit and story, 2 route, then a Playwright spec, which is real-server
+// (3) when it opens no page and browser (4) when it does. The route test folder
+// is not a unit layer even for a .tsx test the route glob does not name.
+const PLAYWRIGHT = 'playwright';
 const RANK_PATTERNS = [
-  [3, /^\.playwright\/(.+\/)?[^/]+\.spec\.ts$/],
+  [PLAYWRIGHT, /^\.playwright\/(.+\/)?[^/]+\.spec\.ts$/],
   [2, /^app\/route-tests\/(.+\/)?[^/]+\.test\.ts$/],
   [2, /^test\/(.+\/)?[^/]+\.server\.test\.ts$/],
   [1, /^app\/(.+\/)?[^/]+\.stories\.tsx$/],
@@ -92,7 +110,7 @@ const RANK_PATTERNS = [
   [1, /^test\/(.+\/)?[^/]+\.test\.tsx?$/],
 ];
 
-const rankOf = (file) => {
+const pathRankOf = (file) => {
   const relative = packageRelative(file);
   if (relative === null) return null;
   for (const [rank, pattern] of RANK_PATTERNS) {
@@ -101,10 +119,21 @@ const rankOf = (file) => {
   return null;
 };
 
+// A file-level layer: any page use anywhere in the spec makes it browser, and
+// an unreadable spec is browser too: no citation in it can verify, so its rank
+// clears nothing.
+const rankOf = (file) => {
+  const rank = pathRankOf(file);
+  if (rank !== PLAYWRIGHT) return rank;
+  const parsed = parseFile(file);
+  return parsed !== null && pageUsesOf(ts, parsed.sourceFile).length === 0 ? REAL_SERVER : BROWSER;
+};
+
 // Files -----------------------------------------------------------------------
 
 const fileCache = new Map();
-let rootDirectory = '';
+const parseCache = new Map();
+let rootDirectory = null;
 
 const isSafeRelative = (file) =>
   typeof file === 'string' &&
@@ -113,42 +142,29 @@ const isSafeRelative = (file) =>
   !file.includes('\0') &&
   !file.split('/').includes('..');
 
-function commentSpansOf(sourceFile, source) {
-  const raw = [];
-  const walkTokens = (node) => {
-    const children = node.getChildren(sourceFile);
-    if (children.length === 0) {
-      for (const range of ts.getLeadingCommentRanges(source, node.getFullStart()) ?? []) raw.push([range.pos, range.end]);
-      for (const range of ts.getTrailingCommentRanges(source, node.getEnd()) ?? []) raw.push([range.pos, range.end]);
-      return;
+function parseFile(file) {
+  if (parseCache.has(file)) return parseCache.get(file);
+  let parsed = null;
+  if (rootDirectory !== null && isSafeRelative(file) && existsSync(path.join(rootDirectory, file))) {
+    try {
+      const source = readFileSync(path.join(rootDirectory, file), 'utf8');
+      const kind = /\.tsx$/i.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+      parsed = {source, sourceFile: ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind)};
+    } catch {
+      parsed = null;
     }
-    for (const child of children) walkTokens(child);
-  };
-  walkTokens(sourceFile);
-  // JSX text that looks like a comment is not one.
-  const jsxText = [];
-  const findJsxText = (node) => {
-    if (node.kind === ts.SyntaxKind.JsxText) jsxText.push([node.pos, node.end]);
-    ts.forEachChild(node, findJsxText);
-  };
-  ts.forEachChild(sourceFile, findJsxText);
-  return raw.filter(([a, b]) => !jsxText.some(([x, y]) => a < y && x < b));
+  }
+  parseCache.set(file, parsed);
+  return parsed;
 }
 
 function loadFile(file) {
   if (fileCache.has(file)) return fileCache.get(file);
   let entry = null;
-  const absolute = path.join(rootDirectory, file);
-  if (isSafeRelative(file) && existsSync(absolute)) {
+  const parsed = parseFile(file);
+  if (parsed !== null) {
     try {
-      const source = readFileSync(absolute, 'utf8');
-      const sourceFile = ts.createSourceFile(
-        file,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-        /\.tsx$/i.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-      );
+      const {source, sourceFile} = parsed;
       const extracted = spawnSync(process.execPath, [extractorPath, file], {cwd: rootDirectory, encoding: 'utf8'});
       let tests = null;
       if (extracted.status === 0) {
@@ -161,22 +177,13 @@ function loadFile(file) {
             ranges: test.ranges?.length > 0 ? test.ranges : [[test.firstLine, test.firstLine]],
           }));
       }
-      const spans = commentSpansOf(sourceFile, source);
-      let masked = '';
-      let cursor = 0;
-      for (const [a, b] of [...spans].sort((p, q) => p[0] - q[0])) {
-        if (a < cursor) continue;
-        masked += source.slice(cursor, a) + source.slice(a, b).replace(/[^\n]/g, ' ');
-        cursor = b;
-      }
-      masked += source.slice(cursor);
       entry = {
         source,
         sourceFile,
         tests,
         isStories: /\.stories\.tsx?$/.test(file),
         rawLines: source.split('\n'),
-        maskedLines: masked.split('\n'),
+        maskedLines: maskComments(sourceFile, source).split('\n'),
         calls: null,
       };
     } catch {
@@ -187,60 +194,71 @@ function loadFile(file) {
   return entry;
 }
 
-const testsNamed = (entry, fullName) => (entry?.tests ?? []).filter((test) => test.fullName === fullName);
-const rangesHold = (test, line) => test.ranges.some(([start, end]) => start <= line && line <= end);
-
-// Citations -------------------------------------------------------------------
-
-const collapse = (text) => text.replace(/\s+/g, ' ').trim();
-const holdsText = (line, needle) => line !== undefined && (line.includes(needle) || collapse(line).includes(collapse(needle)));
-
-// null when the sibling is verified, else the discard reason.
-function verifySibling(sibling) {
-  const entry = loadFile(sibling.file);
-  const candidates = testsNamed(entry, sibling.fullName);
-  if (candidates.length === 0) return 'citation-unverified';
-  const needle = sibling.assertion;
-  if (!options.postFix) {
-    if (!holdsText(entry.rawLines[sibling.line - 1], needle)) return 'citation-unverified';
-    if (!holdsText(entry.maskedLines[sibling.line - 1], needle)) return 'citation-not-live';
-    const test = candidates.find((candidate) => rangesHold(candidate, sibling.line));
-    if (!test) return 'citation-unverified';
-    return isSkipped(entry, test) ? 'citation-not-live' : null;
-  }
-  // The recorded line may have moved under a same-file edit, so look for the
-  // text anywhere in the named test.
-  let notLive = false;
-  for (const test of candidates) {
-    for (const [start, end] of test.ranges) {
-      for (let line = start; line <= end; line += 1) {
-        if (holdsText(entry.maskedLines[line - 1], needle)) {
-          if (!isSkipped(entry, test)) return null;
-          notLive = true;
-        } else if (holdsText(entry.rawLines[line - 1], needle)) {
-          notLive = true;
-        }
-      }
-    }
-  }
-  return notLive ? 'citation-not-live' : 'citation-unverified';
-}
-
 // The check -------------------------------------------------------------------
 
 const KINDS = new Set(['drop', 'merge', 'demote', 'keep-both']);
 const REMOVING = new Set(['drop', 'merge', 'demote']);
 const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0;
-const MARKER = /^\/\/ gaia-uat-contract sha256:/;
 const keyOf = (file, fullName) => `${file}\u0000${fullName}`;
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isLine = (value) => Number.isInteger(value) && value >= 1;
+const isCitation = (c) => isObject(c) && isSafeRelative(c.file) && isLine(c.line) && nonEmpty(c.fullName) && nonEmpty(c.assertion);
+const isTarget = (t) =>
+  isObject(t) &&
+  nonEmpty(t.layer) &&
+  Array.isArray(t.assertions) &&
+  t.assertions.length > 0 &&
+  t.assertions.every((a) => isObject(a) && isLine(a.line) && nonEmpty(a.assertion));
 
+// Exactly one of sibling and target; a target only on a demote.
 function wellFormed(p) {
-  if (p === null || typeof p !== 'object' || Array.isArray(p)) return false;
+  if (!isObject(p)) return false;
   if (!KINDS.has(p.proposal) || !isSafeRelative(p.file) || !nonEmpty(p.fullName)) return false;
   if (typeof p.seam !== 'boolean' || !nonEmpty(p.property) || !nonEmpty(p.actor) || !nonEmpty(p.action)) return false;
-  const s = p.sibling;
-  if (s === null || typeof s !== 'object' || Array.isArray(s)) return false;
-  return isSafeRelative(s.file) && Number.isInteger(s.line) && s.line >= 1 && nonEmpty(s.fullName) && nonEmpty(s.assertion);
+  if ((p.sibling === undefined) === (p.target === undefined)) return false;
+  if (p.target !== undefined) return p.proposal === 'demote' && isTarget(p.target);
+  return isCitation(p.sibling);
+}
+
+// At --post-fix a kept browser entry keeps its recorded layer: the fixer may
+// have rewritten the subject's file as request-only in place.
+const subjectRankOf = (p) =>
+  options.postFix && pathRankOf(p.file) === PLAYWRIGHT && (p.layer === 'browser' || p.layer === 'real-server')
+    ? LAYER_RANKS[p.layer]
+    : rankOf(p.file);
+
+// A per-test layer: a Playwright test is real-server unless a page use sits in
+// its own range or a hook, or the file imports a browser launcher. Another test
+// in the same file that opens a page does not move this one.
+function testRankOf(file, test) {
+  const rank = pathRankOf(file);
+  if (rank !== PLAYWRIGHT) return rank;
+  const entry = loadFile(file);
+  if (entry === null) return BROWSER;
+  const spans = [...test.ranges, ...hookSpansOf(entry)];
+  const opens = pageUsesOf(ts, entry.sourceFile).some(
+    (use) => use.reason === 'browser-import' || spans.some(([start, end]) => start <= use.line && use.line <= end),
+  );
+  return opens ? BROWSER : REAL_SERVER;
+}
+
+// The sibling-less demote: null and the rank the property moves to when it
+// verifies, else the discard reason.
+function checkTarget(p, subjectRank) {
+  if (p.target.layer !== 'real-server' || subjectRank !== BROWSER) return {reason: 'target-not-below-subject'};
+  if (!options.postFix) {
+    const entry = loadFile(p.file);
+    for (const assertion of p.target.assertions) {
+      const {reason} = verifyCitation(entry, {fullName: p.fullName, ...assertion}, false);
+      if (reason !== null) return {reason};
+    }
+    return {reason: null, rank: REAL_SERVER};
+  }
+  if (!isCitation(p.replacement)) return {reason: 'replacement-missing'};
+  const {reason, test} = verifyCitation(loadFile(p.replacement.file), p.replacement, true);
+  if (reason !== null) return {reason};
+  const rank = testRankOf(p.replacement.file, test);
+  return rank === REAL_SERVER ? {reason: null, rank} : {reason: 'replacement-wrong-layer'};
 }
 
 function runCheck() {
@@ -267,33 +285,43 @@ function runCheck() {
     // A subject that is not a test, or sits on no layer, goes before the seam
     // rule: otherwise a wrong name would skip the seam scan.
     const subjectEntry = loadFile(p.file);
-    const subject = testsNamed(subjectEntry, p.fullName)[0] ?? null;
+    const subject = locateTests(subjectEntry, p.fullName)[0] ?? null;
     if (!subject && !options.postFix) {
       refuse('subject-not-found');
       continue;
     }
-    const subjectRank = rankOf(p.file);
+    const subjectRank = subjectRankOf(p);
     if (subjectRank === null) {
       refuse('subject-no-layer');
       continue;
     }
-    const siblingRank = rankOf(p.sibling.file);
-    if (siblingRank === null) {
-      refuse('sibling-no-layer');
-      continue;
-    }
-    if (p.sibling.file === p.file && p.sibling.fullName === p.fullName) {
-      refuse('self-citation');
-      continue;
-    }
-    const citation = verifySibling(p.sibling);
-    if (citation !== null) {
-      refuse(citation);
-      continue;
+    let coverRank;
+    if (p.target !== undefined) {
+      const target = checkTarget(p, subjectRank);
+      if (target.reason !== null) {
+        refuse(target.reason);
+        continue;
+      }
+      coverRank = target.rank;
+    } else {
+      coverRank = rankOf(p.sibling.file);
+      if (coverRank === null) {
+        refuse('sibling-no-layer');
+        continue;
+      }
+      if (p.sibling.file === p.file && p.sibling.fullName === p.fullName) {
+        refuse('self-citation');
+        continue;
+      }
+      const {reason} = verifyCitation(loadFile(p.sibling.file), p.sibling, options.postFix);
+      if (reason !== null) {
+        refuse(reason);
+        continue;
+      }
     }
     const effectiveSeam =
       p.seam || pathIsSeam(packageRelative(p.file) ?? p.file) || (subject !== null && subjectIsSeam(subjectEntry, subject, stems));
-    if (REMOVING.has(p.proposal) && effectiveSeam && siblingRank < subjectRank) {
+    if (REMOVING.has(p.proposal) && effectiveSeam && coverRank < Math.min(subjectRank, SEAM_CEILING)) {
       refuse('seam-no-sibling-at-or-above');
       continue;
     }
@@ -304,14 +332,14 @@ function runCheck() {
     survivors.push({
       proposal: p,
       subjectKey: keyOf(p.file, p.fullName),
-      siblingKey: keyOf(p.sibling.file, p.sibling.fullName),
+      siblingKey: p.sibling === undefined ? null : keyOf(p.sibling.file, p.sibling.fullName),
       kept: {
         ...p,
         seam: effectiveSeam,
         layer: LAYER_NAMES[subjectRank],
-        siblingLayer: LAYER_NAMES[siblingRank],
+        ...(p.sibling === undefined ? {targetLayer: LAYER_NAMES[coverRank]} : {siblingLayer: LAYER_NAMES[coverRank]}),
         _ranges: subject ? subject.ranges : null,
-        _rendered: subject ? MARKER.test(subjectEntry.rawLines[0] ?? '') : false,
+        _rendered: subject ? isRendered(subjectEntry) : false,
         _present: subject !== null,
       },
     });
@@ -324,11 +352,11 @@ function runCheck() {
     const removed = new Set();
     for (const a of survivors) {
       for (const b of survivors) {
-        if (a !== b && a.siblingKey === b.subjectKey && b.siblingKey === a.subjectKey) mutual.add(a);
+        if (a !== b && a.siblingKey !== null && a.siblingKey === b.subjectKey && b.siblingKey === a.subjectKey) mutual.add(a);
       }
     }
     for (const a of survivors) {
-      if (mutual.has(a)) continue;
+      if (mutual.has(a) || a.siblingKey === null) continue;
       const taken = survivors.some((b) => b !== a && REMOVING.has(b.proposal.proposal) && b.subjectKey === a.siblingKey);
       if (taken) removed.add(a);
     }
@@ -350,6 +378,7 @@ process.stdout.on('error', (error) => {
 if (subcommand === 'layer') {
   const lines = readFileSync(0, 'utf8').split('\0').filter((line) => line.length > 0);
   const rows = [];
+  if (options.root) rootDirectory = path.resolve(options.root);
   for (const file of lines) {
     const rank = rankOf(file);
     if (rank !== null) rows.push({file, layer: LAYER_NAMES[rank]});

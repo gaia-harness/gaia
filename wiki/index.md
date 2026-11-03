@@ -63,6 +63,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[remix-utils]]: per-helper adopt-vs-hand-roll decision map.
 - [[Conform]]
 - [[Zod]]
+- [[node-html-parser]]
 - [[Ky]]
 - [[i18next]]
 - [[Tailwind]]

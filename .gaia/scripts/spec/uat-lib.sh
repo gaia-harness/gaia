@@ -255,7 +255,7 @@ uat_lib_parse_routing() {
 
 uat_lib_validate_routing() {
   local spec_path="${1:-}" routing_file="${2:-}" spec_rows routing_rows spec_ids
-  local problems=0 routed_ids='' e2e_paths='' route_paths='' route_problems='' row uat_id surface phase feature_folder file_name
+  local problems=0 routed_ids='' playwright_paths='' playwright_problems='' route_paths='' route_problems='' row uat_id surface phase feature_folder file_name
   local cell_count spec_id_entry kebab_segment='[a-z0-9]+(-[a-z0-9]+)*'
 
   spec_rows=$(uat_lib_parse_spec "$spec_path") || return 2
@@ -285,24 +285,10 @@ uat_lib_validate_routing() {
       problems=$((problems + 1))
     fi
     case "$surface" in
-      e2e)
-        if ! [[ "$feature_folder" =~ ^$kebab_segment(/$kebab_segment)*$ ]]; then
-          printf "uat-routing: %s is e2e with feature_folder '%s'; expected kebab-case segments\n" "$uat_id" "$feature_folder" >&2
-          problems=$((problems + 1))
-        fi
-        if ! [[ "$file_name" =~ ^$kebab_segment\.spec\.ts$ ]]; then
-          printf "uat-routing: %s is e2e with file_name '%s'; expected a kebab-case name ending .spec.ts\n" "$uat_id" "$file_name" >&2
-          problems=$((problems + 1))
-        fi
-        if grep -qiE '(spec|uat|plan)-[0-9]' <<<"$feature_folder/$file_name"; then
-          printf "uat-routing: %s's feature_folder or file_name carries a working-document id; name the behavior instead\n" "$uat_id" >&2
-          problems=$((problems + 1))
-        fi
-        if grep -qxF -- "$feature_folder/$file_name" <<<"$e2e_paths"; then
-          printf 'uat-routing: %s resolves to %s/%s, a path another e2e row already claims\n' "$uat_id" "$feature_folder" "$file_name" >&2
-          problems=$((problems + 1))
-        fi
-        e2e_paths="$e2e_paths$feature_folder/$file_name"$'\n'
+      real-server | browser | e2e)
+        playwright_problems=$(uat_lib_playwright_row_problems "$surface" "$uat_id" "$feature_folder" "$file_name" "$playwright_paths") || true
+        problems=$((problems + ${playwright_problems:-0}))
+        playwright_paths="$playwright_paths$feature_folder/$file_name"$'\n'
         ;;
       route)
         route_problems=$(uat_lib_route_row_problems "$uat_id" "$feature_folder" "$file_name" "$route_paths") || true
@@ -316,7 +302,7 @@ uat_lib_validate_routing() {
         fi
         ;;
       *)
-        printf "uat-routing: %s has surface '%s'; expected e2e, route, story or non-ui\n" "$uat_id" "$surface" >&2
+        printf "uat-routing: %s has surface '%s'; expected real-server, browser, route, story or non-ui\n" "$uat_id" "$surface" >&2
         problems=$((problems + 1))
         ;;
     esac

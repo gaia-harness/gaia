@@ -10,11 +10,11 @@ tags: [dependency, testing, e2e]
 
 # Playwright
 
-End-to-end testing. Tests live in `apps/web/.playwright/e2e/*.spec.ts`. Config in `apps/web/playwright.config.ts`.
+Live-stack testing on two surfaces: real-server tests drive the server through the request fixture and open no page, browser tests drive a real page. [[Test Layering]] owns which proves what. Tests live in `apps/web/.playwright/e2e/`. Config in `apps/web/playwright.config.ts`.
 
 ## Architecture
 
-E2E tests run against this tree's `pnpm dev` server, on the port `bash .gaia/scripts/ports.sh` prints (5173 in the main checkout). Playwright refuses to reuse a server on that port that is not this tree's own, and an unprovisioned linked worktree refuses to run (see [[Worktrees]]). With `MSW_ENABLED=true` the dev server mocks both browser and SSR requests, so tests exercise the full React Router loader/action stack with MSW intercepting API calls (see [[MSW]]); no separate mock server required.
+Playwright tests run against this tree's `pnpm dev` server, on the port `bash .gaia/scripts/ports.sh` prints (5173 in the main checkout). Playwright refuses to reuse a server on that port that is not this tree's own, and an unprovisioned linked worktree refuses to run (see [[Worktrees]]). With `MSW_ENABLED=true` the dev server mocks both browser and SSR requests, so tests exercise the full React Router loader/action stack with MSW intercepting API calls (see [[MSW]]); no separate mock server required.
 
 Per-worker database isolation, Given builders and the session rules are in `apps/web/.claude/rules/playwright.md` (`## Worker isolation`), with the pattern in `apps/web/.playwright/fixtures.ts`.
 

@@ -7,7 +7,15 @@
 # scripts are stubs that append their name to a log, so no install is needed.
 # Assertion style: .claude/rules/bats-assertions.md.
 
+# bats file_tags=installed-dependencies
+
 setup() {
+  # The hook calls pnpm, so a leg without Node fails here by name rather than
+  # as a 127 inside the hook; the capture also derives this suite's mark.
+  [ -n "$(command -v pnpm)" ] || {
+    echo 'pnpm not on PATH: this suite needs a leg that sets up Node (needs_node)' >&2
+    return 1
+  }
   REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   HOOK_ABSOLUTE_PATH="$REPO_ROOT/.githooks/pre-commit"
   REPO=$(cd "$(mktemp -d -t githooks-steps-XXXXXX)" && pwd -P)

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Renders a SPEC's e2e-routed UATs into red Playwright specs and its route-routed
-# UATs into red Vitest route tests. The generated
+# Renders a SPEC's real-server-, browser- and legacy e2e-routed UATs into red
+# Playwright specs (a real-server row from the request-fixture template, a
+# browser or e2e row from the page template) and its route-routed UATs into red
+# Vitest route tests. The generated
 # plan orchestrator runs it at its UAT render step, from the resolved isolation
 # root, with the absolute SPEC path and the plan README that holds the UAT
 # routing table; the step's procedure is
@@ -14,7 +16,7 @@
 #      when it fails before the apply phase, otherwise some renders may already
 #      be on disk
 #   2  invalid input (usage, malformed SPEC, invalid routing table, a
-#      working-document id in an e2e- or route-routed UAT); stderr only; nothing written
+#      working-document id in a Playwright- or route-routed UAT); stderr only; nothing written
 #   3  conflict: every other action applied, the JSON summary printed, every
 #      conflict file left byte-identical. --overwrite names the conflict paths a
 #      human chose to replace on the next run.
@@ -49,6 +51,7 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=.gaia/scripts/spec/uat-lib.sh
 source "$script_directory/uat-lib.sh"
 template_path="$script_directory/../../templates/spec/uat-spec.ts.tmpl"
+real_server_template_path="$script_directory/../../templates/spec/uat-real-server-spec.ts.tmpl"
 route_template_path="$script_directory/../../templates/spec/uat-route-test.ts.tmpl"
 repo_root="$PWD"
 
@@ -101,7 +104,7 @@ refuse_working_document_id() {
 }
 while IFS=$'\t' read -r uat_id surface _ feature_folder file_name; do
   case "$surface" in
-    e2e) rendered_path="$feature_folder/$file_name" ;;
+    real-server | browser | e2e) rendered_path="$feature_folder/$file_name" ;;
     route) rendered_path=$(uat_lib_route_test_path "$feature_folder" "$file_name") ;;
     *) continue ;;
   esac
@@ -120,7 +123,7 @@ fi
 if ! route_directory=$(uat_lib_route_tests_directory "$repo_root" 2>&1); then
   fail_operation "$route_directory"
 fi
-for checked_template in "$template_path" "$route_template_path"; do
+for checked_template in "$template_path" "$real_server_template_path" "$route_template_path"; do
   if [ ! -f "$checked_template" ]; then
     fail_operation "template missing: $checked_template. Next step: restore it from the GAIA release."
   fi
@@ -239,7 +242,11 @@ while IFS=$'\t' read -r uat_id surface relative_path given_text when_text then_t
     chosen_template="$route_template_path"
   else
     relative_path="$e2e_directory/$relative_path"
-    chosen_template="$template_path"
+    if [ "$surface" = "real-server" ]; then
+      chosen_template="$real_server_template_path"
+    else
+      chosen_template="$template_path"
+    fi
   fi
   absolute_path="$repo_root/$relative_path"
   claimed_paths="$claimed_paths$relative_path"$'\n'

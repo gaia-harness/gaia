@@ -206,10 +206,10 @@ TSCONFIG
 @test "a route-only plan renders into the route tests directory, and the gate passes it on a Vitest report with no e2e message" {
   local rendered="apps/web/app/route-tests/fixture-flow/tests/fixture-flow-confirms.test.ts"
   local report="$BATS_TEST_TMPDIR/vitest.json"
-  sed 's#^| UAT-001 | e2e | 1 | fixture-flow | fixture-flow-confirms.spec.ts |#| UAT-001 | route | 1 | fixture-flow | fixture-flow-confirms.test.ts |#' "$ROUTING" >"$ROUTING.new"
+  sed 's#^| UAT-001 | browser | 1 | fixture-flow | fixture-flow-confirms.spec.ts |#| UAT-001 | route | 1 | fixture-flow | fixture-flow-confirms.test.ts |#' "$ROUTING" >"$ROUTING.new"
   mv "$ROUTING.new" "$ROUTING"
   grep -qF -- '| UAT-001 | route |' "$ROUTING" || return 1
-  grep -qF -- ' e2e ' "$ROUTING" && return 1
+  grep -qF -- ' browser ' "$ROUTING" && return 1
 
   # Render: one file under the route tests directory, none under e2e.
   run in_tree bash "$SPEC_SCRIPTS/uat-write.sh" "$SPEC" --routing "$ROUTING"

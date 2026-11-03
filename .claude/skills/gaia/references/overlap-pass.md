@@ -2,7 +2,7 @@
 
 Contents: When it runs; The step (skip, reuse, dispatch, classify, check, dispose, report); What it never does.
 
-This page owns the overlap pass of a plan run: a check that no test the branch changed duplicates a property another test already asserts, across the unit, route and end-to-end layers. The orchestrator follows it after the worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) and before the wiki promotion. The judgment is `.claude/agents/overlap-evaluator.md`; the deterministic half is `.gaia/scripts/overlap-check.sh`.
+This page owns the overlap pass of a plan run: a check that no test the branch changed duplicates a property another test already asserts, across the unit, route, real-server and browser layers, and that each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer. The orchestrator follows it after the worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) and before the wiki promotion. The judgment is `.claude/agents/overlap-evaluator.md`; the deterministic half is `.gaia/scripts/overlap-check.sh`.
 
 ## When it runs
 
@@ -56,7 +56,7 @@ Write its output plus the current HEAD as the `head` field to `<RUN_FOLDER>/over
 
 Attended: print every kept proposal as one review list (`.claude/rules/user-questions.md`). Each seam proposal shows its property, actor, action and the cited sibling, so the human judges whether the sibling asserts the same property for the same actor and action; the check proves only the citation and the layer. List report-only entries as information. Then ask one `AskUserQuestion`: `Accept all as recommended (Recommended)` or `Revise`.
 
-Approved proposals with disposition `offer` go to one fresh `general-purpose` fixer on `model: "sonnet"`, under the same prompt constraints as the worthiness Fix step: the working root, the expected-tree check, the listed test files as its only editable paths, no state-changing git, no edit outside the list, a JSON result file in the scratchpad and a short summary. Then re-verify the proposals the fixer acted on, before the commit. `--post-fix` accepts either the original proposals file or the kept list:
+Approved proposals with disposition `offer` go to one fresh `general-purpose` fixer on `model: "sonnet"`, under the same prompt constraints as the worthiness Fix step: the working root, the expected-tree check, the listed test files as its only editable paths, no state-changing git, no edit outside the list, a JSON result file in the scratchpad and a short summary. For each approved sibling-less demote (a `target` and no `sibling`), the fixer writes the replacement real-server test (the request fixture only, no page) and lists it in its JSON result as `{file, fullName, replacement: {file, line, fullName, assertion}}`; the replacement's file joins its editable paths. The orchestrator merges each `replacement` into the kept list's entry with that `file` and `fullName` before running `--post-fix`. Then re-verify the proposals the fixer acted on, before the commit. `--post-fix` accepts either the original proposals file or the kept list, and a sibling-less demote with no replacement is refused there:
 
 ```bash
 bash .gaia/scripts/overlap-check.sh check --root <RESOLVED_ROOT> --proposals <file> --post-fix

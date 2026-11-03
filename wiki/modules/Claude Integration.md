@@ -75,7 +75,7 @@ Pre-seeded with GAIA's architecture knowledge. Durable findings belong in the wi
 
 `worthiness-evaluator` is an opus advisory agent that judges each emergent-surface test (the package descriptor's `emergentTests` globs: components, pages, and Playwright) on honesty and worthiness, returning a keep / fix / delete verdict per test. It proposes only and edits no test or source file, writing its verdicts to the JSON file the dispatch names; every delete is human-gated. The shared worthiness step and the tdd skill's arm dispatch it, and the verdicts feed the worthiness ledger that `worthiness-presence-check.sh` enforces at merge.
 
-`overlap-evaluator` is the advisory agent of the overlap pass (`.claude/skills/gaia/references/overlap-pass.md`), which runs after the worthiness step. It reads the branch's changed tests on every layer, may read unchanged tests as candidate siblings, edits no tracked file, and writes a JSON array of drop, merge, demote and keep-both proposals. A deterministic check discards an unverified citation, and nothing applies without a human's approval. See [[Test Layering]].
+`overlap-evaluator` is the advisory agent of the overlap pass (`.claude/skills/gaia/references/overlap-pass.md`), which runs after the worthiness step. It reads the branch's changed tests on every layer, may read unchanged tests as candidate siblings, edits no tracked file, and writes a JSON array of drop, merge, demote and keep-both proposals, including demoting a browser test whose property needs no page to the real-server layer. A deterministic check discards an unverified citation, and nothing applies without a human's approval. See [[Test Layering]].
 
 ## Skills
 

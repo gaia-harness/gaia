@@ -1,41 +1,48 @@
 #!/usr/bin/env bash
 # The owning-phase UAT gate. The generated plan orchestrator runs it from the
 # resolved isolation root before an owning phase may commit, and once more over
-# every e2e and route row before the pre-merge audit; the procedure is
+# every real-server, browser, legacy e2e and route row before the pre-merge audit; the procedure is
 # .claude/skills/gaia/references/spec/lifecycle.md.
 #
 #   uat-gate.sh <spec-path> --routing <routing-file> (--phase <N> | --all) [--report <playwright-json>] [--vitest-report <vitest-json>]
 #
-# For the selected e2e and route rows (the phase's own, or every one), in order:
+# For the selected Playwright (real-server, browser, legacy e2e) and route rows
+# (the phase's own, or every one), in order:
 #   1. static checks per test file: it exists, line 1 is a contract marker, it
-#      holds no annotation, and it clears a deterministic floor. An e2e file
+#      holds no annotation, and it clears a deterministic floor. A Playwright file
 #      holds none of test.fail(, test.fixme(, test.skip(, .only(,
 #      test.describe.skip( or test.describe.fixme(, and has a page.<method>(
 #      call or a request-fixture call, plus an expect( whose first argument is
-#      not a bare literal. A route file's annotations and floor (a loader( or
+#      not a bare literal. A real-server file's floor is a verb call on a
+#      request context (a page.<method>( call does not count) plus that expect,
+#      and it must open no page: page-use.mjs (Node and typescript) decides, a
+#      use reports opens-page. A route file's annotations and floor (a loader( or
 #      action( call) live in uat-gate-route.sh;
 #   2. uat-divergence-check.sh over the same selection;
 #   3. working-doc-id-scan.sh over the frontend's test trees;
 #   4. the route arm, when route rows are selected: Vitest (node project) over
 #      only the selected files, unless --vitest-report supplies the JSON. It
 #      boots no browser and no server, and a failure exits 1 before Playwright;
-#   5. the Playwright arm, when e2e rows are selected: Playwright over only the
+#   5. the Playwright arm, when Playwright rows are selected: Playwright over only the
 #      selected files with the JSON reporter, unless --report supplies that
 #      JSON: every test in a file must be expected to pass and have passed, and
 #      each file must hold at least one test. --report is Playwright-only.
 # A failure in steps 1 to 3 stops before either runner starts.
 #
 # Exit codes the caller branches on:
-#   0  pass; also when the selection has no e2e or route rows (prints `no owned UAT tests`)
+#   0  pass; also when the selection has no Playwright or route rows (prints `no owned UAT tests`)
 #   1  gate failure; one stderr line per failing file: `uat-gate: <file>: <reason>`
-#      with reason one or more of missing, annotation, floor, divergence,
+#      with reason one or more of missing, annotation, floor, opens-page, divergence,
 #      working-doc-id, expected-failure, skipped, fixme, failed, no-tests,
 #      no-report-entry, collection-failed, todo
 #      (a line 1 that is not a contract marker reports missing), then one
-#      `uat-gate: next step for floor: ...` line when any file failed the floor
+#      `uat-gate: next step for floor: ...` line when any file failed the floor,
+#      and one `uat-gate: next step for opens-page: ...` line when a real-server
+#      file opens a page
 #   2  invalid input (usage, malformed SPEC, invalid routing table, unreadable
 #      --report or --vitest-report)
-#   4  a test runner could not run (jq, pnpm or a browser is missing, the dev or
+#   4  a test runner could not run (jq, pnpm or a browser is missing, node or
+#      the typescript package is missing for the real-server no-page check, the dev or
 #      Storybook port is held, a server failed to boot, Vitest wrote no
 #      report); stderr names the runner and the prerequisite, and the other
 #      tree when a process of one holds a port
@@ -147,14 +154,15 @@ route_files=''
 selected_count=0
 while IFS=$'\t' read -r uat_id surface phase feature_folder file_name; do
   case "$surface" in
-    e2e | route) ;;
+    real-server | browser | e2e | route) ;;
     *) continue ;;
   esac
   if [ -n "$selected_phase" ] && [ "$phase" != "$selected_phase" ]; then
     continue
   fi
-  if [ "$surface" = "e2e" ]; then
-    selected_files="$selected_files$e2e_directory/$feature_folder/$file_name"$'\n'
+  if [ "$surface" != "route" ]; then
+    # Each row is path, a tab, then the normalized surface (a legacy e2e row is browser).
+    selected_files="$selected_files$e2e_directory/$feature_folder/$file_name"$'\t'"$(uat_lib_playwright_surface "$surface")"$'\n'
   else
     route_files="$route_files$route_directory/$(uat_lib_route_test_path "$feature_folder" "$file_name")"$'\n'
   fi
@@ -175,7 +183,9 @@ add_failure() {
 
 floor_e2e=0
 floor_route=0
-while IFS= read -r relative_path; do
+floor_real_server=0
+opens_page=0
+while IFS=$'\t' read -r relative_path file_surface; do
   [ -n "$relative_path" ] || continue
   is_route=0
   case "$relative_path" in
@@ -203,7 +213,20 @@ while IFS= read -r relative_path; do
   if grep -qE 'test\.fail\(|test\.fixme\(|test\.skip\(|\.only\(|test\.describe\.skip\(|test\.describe\.fixme\(' "$absolute_path"; then
     add_failure "$relative_path" annotation
   fi
-  if ! has_e2e_call "$absolute_path" || ! has_non_literal_expect "$absolute_path"; then
+  if [ "$file_surface" = real-server ]; then
+    if ! has_request_call "$absolute_path" || ! has_non_literal_expect "$absolute_path"; then
+      add_failure "$relative_path" floor
+      floor_real_server=1
+    fi
+    gate_opens_page "$absolute_path"
+    case $? in
+      1)
+        add_failure "$relative_path" opens-page
+        opens_page=1
+        ;;
+      4) exit 4 ;;
+    esac
+  elif ! has_e2e_call "$absolute_path" || ! has_non_literal_expect "$absolute_path"; then
     add_failure "$relative_path" floor
     floor_e2e=1
   fi
@@ -254,6 +277,12 @@ report_failures() {
   # a shared helper reads as absent even when the behavior works.
   if [ "$floor_e2e" -eq 1 ]; then
     printf 'uat-gate: next step for floor: the spec file itself must call page.<method>( or a request-fixture call (request.get(, request.post( and the other verbs, or request.newContext( with a verb call) and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
+  fi
+  if [ "$floor_real_server" -eq 1 ]; then
+    printf 'uat-gate: next step for floor: the real-server test file itself must call a verb on the request fixture (request.get(, request.post( and the other verbs, on a request-context fixture the test callback destructures, or on a request.newContext( variable; a page.<method>( call does not count) and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
+  fi
+  if [ "$opens_page" -eq 1 ]; then
+    printf 'uat-gate: next step for opens-page: a real-server test must not open a page; drive it through the request fixture and read rendered HTML with the helper in %s/html.ts. When the Then-clause truly needs a browser, the routing row is wrong: stop and report it instead of editing the test.\n' "${e2e_directory%/e2e}" >&2
   fi
   if [ "$floor_route" -eq 1 ]; then
     printf 'uat-gate: next step for floor: the route test file itself must call the route'"'"'s loader( or action( and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
@@ -321,7 +350,7 @@ if [ -z "$report_path" ]; then
   trap 'rm -rf "$gate_temporary"' EXIT
   report_path="$gate_temporary/report.json"
   playwright_arguments=()
-  while IFS= read -r relative_path; do
+  while IFS=$'\t' read -r relative_path _; do
     [ -n "$relative_path" ] || continue
     playwright_arguments+=("${relative_path#"$package_prefix"}")
   done <<<"$selected_files"
@@ -344,7 +373,7 @@ if jq -e '((.errors // []) | length) > 0 or ([.. | objects | select(has("results
   exit 4
 fi
 
-while IFS= read -r relative_path; do
+while IFS=$'\t' read -r relative_path _; do
   [ -n "$relative_path" ] || continue
   from_package="${relative_path#"$package_prefix"}"
   from_test_directory="${relative_path#"$e2e_directory"/}"

@@ -4,23 +4,39 @@ paths:
   - 'playwright.config.*'
 ---
 
-# Playwright E2E Conventions
+# Playwright Conventions (real-server and browser)
 
-Contents: File locations; Spec file naming; Selectors, prefer semantic over structural; Waiting, web-first assertions only; Hydration barrier; MSW + real dev server; Worker isolation; Auth / session setup; Locale / language; Parallelism and CI; Accessibility scans.
+Contents: File locations; Spec file naming; Real-server HTML check; Selectors, prefer semantic over structural; Waiting, web-first assertions only; Hydration barrier; MSW + real dev server; Worker isolation; Auth / session setup; Locale / language; Parallelism and CI; Accessibility scans.
 
 ## File locations
 
 - Config: `playwright.config.ts` (package root)
-- Specs: `.playwright/e2e/<feature>/<flow>.spec.ts`, grouped in feature folders; a flat `.playwright/e2e/*.spec.ts` stays valid for cross-cutting checks
-- Shared helpers: `.playwright/utils.ts`
+- Specs: real-server and browser specs both live at `.playwright/e2e/<feature>/<flow>.spec.ts`, grouped in feature folders; a flat `.playwright/e2e/*.spec.ts` stays valid for cross-cutting checks. The surface, not the path, tells them apart: a real-server spec drives the request fixture and opens no page, a browser spec drives a page
+- Shared helpers: `.playwright/utils.ts`; the HTML helper for real-server checks is `.playwright/html.ts`
 - Output/traces: `.playwright/output/` (gitignored)
 
 ## Spec file naming
 
 Match the feature or route: `language-switch.spec.ts`, `things.spec.ts`.
-One spec file per UAT-backed flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`); one `test.describe` block per scenario group.
+One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`); one `test.describe` block per scenario group. A flow's per-transition rules (a status, a redirect, a validation error) are route tests, not more browser files.
 
 A file whose first line is `// gaia-uat-contract sha256:...` was rendered from a SPEC UAT. Its Given/When/Then comment is the contract: make cosmetic edits only (selectors, labels, copy, layout) and report logical changes (`.claude/skills/gaia/references/spec/uat-divergence.md`). The owning phase removes the `test.fail();` call and replaces the placeholder `expect(false, ...)` with a real body that drives the app. Rendered route tests: `.claude/skills/gaia/references/spec/uat-write.md` (`## The rendered file`).
+
+## Real-server HTML check
+
+A real-server test reads the server's rendered HTML through the request fixture and parses the body with the helper in `.playwright/html.ts`. It opens no page and makes no browser round trip. The helper returns nodes; the test file holds every `expect(`.
+
+```ts
+import {expect, test} from '@playwright/test';
+import {parseHtml} from '../../html';
+
+test('home page serves its heading', async ({request}) => {
+  const response = await request.get('/');
+  expect(response.status()).toBe(200);
+  const root = parseHtml(await response.text());
+  expect(root.querySelector('h1')?.text).toBe('Welcome');
+});
+```
 
 ## Selectors, prefer semantic over structural
 
@@ -79,11 +95,38 @@ Every worker reaches its own database through the server it talks to. A serial p
 
 - Setup goes through Given builders, which write to the worker's own database; one spec per form stays on the UI path.
 - A request-fixture refusal check sets `maxRedirects: 0` and asserts the status and the `Location` header, and states the actor: the request fixture follows redirects by default, is a separate context from `page` and inherits `storageState`.
+- A database-only or harness self-check that opens no page runs in the Vitest node project, not under Playwright.
 - This rule governs new setup. An existing suite moves to it only by decision.
 
 ## Auth / session setup
 
-When a project has authentication, each worker holds its own session, built in a worker-scoped fixture that logs in against that worker's server and hands the saved storage state to its tests. A single shared login does not work with a per-worker database. Clear cookies explicitly in tests that must start unauthenticated:
+When a project has authentication, each worker holds its own session, built in a worker-scoped fixture that logs in against that worker's server and hands the saved storage state to its tests. A single shared login does not work with a per-worker database. An auth-gated real-server test opens no page: the worker-scoped fixture exposes a request context named `signedInRequest`, built with `playwright.request.newContext({baseURL, storageState})` or from a cookie taken from a request-fixture sign-in.
+
+```ts
+import {expect, test as base} from '@playwright/test';
+import type {APIRequestContext} from '@playwright/test';
+
+export const test = base.extend<object, {signedInRequest: APIRequestContext}>({
+  signedInRequest: [
+    async ({playwright}, use, workerInfo) => {
+      const context = await playwright.request.newContext({
+        baseURL: workerInfo.project.use.baseURL,
+        storageState: '.playwright/output/signed-in.json',
+      });
+      await use(context);
+      await context.dispose();
+    },
+    {scope: 'worker'},
+  ],
+});
+
+test('the account page serves its heading', async ({signedInRequest}) => {
+  const response = await signedInRequest.get('/account');
+  expect(response.status()).toBe(200);
+});
+```
+
+Clear cookies explicitly in tests that must start unauthenticated:
 
 ```ts
 await page.context().clearCookies();
@@ -101,7 +144,7 @@ await page.setExtraHTTPHeaders({'Accept-Language': 'ja'});
 
 ## Parallelism and CI
 
-Chromium only by default. Setting the `TEST_ALL_BROWSERS` constant in `playwright.config.ts` to `true` adds webkit, firefox and mobile locally; CI stays on Chromium. Workers, retries and `forbidOnly` are in the config.
+Chromium only by default. Every Playwright run needs Chromium installed, real-server tests included: a real-server test opens no page, but the config's global setup launches Chromium to warm the server. Setting the `TEST_ALL_BROWSERS` constant in `playwright.config.ts` to `true` adds webkit, firefox and mobile locally; CI stays on Chromium. Workers, retries and `forbidOnly` are in the config.
 
 ## Accessibility scans
 
