@@ -282,7 +282,7 @@ report_failures() {
     printf 'uat-gate: next step for floor: the real-server test file itself must call a verb on the request fixture (request.get(, request.post( and the other verbs, on a request-context fixture the test callback destructures, or on a request.newContext( variable; a page.<method>( call does not count) and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
   fi
   if [ "$opens_page" -eq 1 ]; then
-    printf 'uat-gate: next step for opens-page: a real-server test must not open a page; drive it through the request fixture and read rendered HTML with the helper in .playwright/html.ts. When the Then-clause truly needs a browser, the routing row is wrong: stop and report it instead of editing the test.\n' >&2
+    printf 'uat-gate: next step for opens-page: a real-server test must not open a page; drive it through the request fixture and read rendered HTML with the helper in %s/html.ts. When the Then-clause truly needs a browser, the routing row is wrong: stop and report it instead of editing the test.\n' "${e2e_directory%/e2e}" >&2
   fi
   if [ "$floor_route" -eq 1 ]; then
     printf 'uat-gate: next step for floor: the route test file itself must call the route'"'"'s loader( or action( and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2

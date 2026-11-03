@@ -14,7 +14,7 @@
 
 bats_require_minimum_version 1.5.0
 
-NEXT_STEP_LITERAL='uat-gate: next step for opens-page: a real-server test must not open a page; drive it through the request fixture and read rendered HTML with the helper in .playwright/html.ts. When the Then-clause truly needs a browser, the routing row is wrong: stop and report it instead of editing the test.'
+NEXT_STEP_LITERAL='uat-gate: next step for opens-page: a real-server test must not open a page; drive it through the request fixture and read rendered HTML with the helper in apps/web/.playwright/html.ts. When the Then-clause truly needs a browser, the routing row is wrong: stop and report it instead of editing the test.'
 
 setup() {
   REPO_ROOT_REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -286,6 +286,7 @@ signedIn('every past order is listed newest first', async ({$1}) => {
 install_gate_without_no_page() {
   local entry
   mkdir -p "$WORK/.gaia/scripts/spec" "$WORK/.claude/hooks/lib"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
   for entry in "$SCRIPTS"/*; do
     ln -sfn "$entry" "$WORK/.gaia/scripts/spec/$(basename "$entry")"
   done
@@ -296,6 +297,7 @@ install_gate_without_no_page() {
   ln -sfn "$REPO_ROOT_REAL/.gaia/scripts/machine-local-ref-lib.sh" "$WORK/.gaia/scripts/machine-local-ref-lib.sh"
 }
 
+# bats test_tags=whole-tree
 @test "red proof: with the no-page call removed the first shape passes, with the real scripts it is refused" {
   local body="test('every past order is listed newest first', async ({page, request}) => {
   const response = await request.get('/orders');

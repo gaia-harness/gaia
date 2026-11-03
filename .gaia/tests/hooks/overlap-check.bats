@@ -257,6 +257,7 @@ install_mutated_module() {
   local overlap="$REPO/.gaia/scripts/overlap" entry
   rm -f "$overlap"
   mkdir -p "$overlap"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
   for entry in "$HOME_ROOT/.gaia/scripts/overlap/"*; do
     ln -sfn "$entry" "$overlap/$(basename "$entry")"
   done
@@ -590,6 +591,7 @@ SERVED_ADMIN='expect(response.status()).toBe(403)'
   [ "$(kept_field 'refuses the forbidden admin page' targetLayer)" = real-server ]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: the seam rule against the subject's own rank refuses the browser seam demote" {
   install_mutated_module check-proposals.mjs 'Math.min(subjectRank, SEAM_CEILING)' 'subjectRank'
   check_all < <(target_cite "$DEMOTE" 'refuses the forbidden admin page' false "$ADMIN_STATUS")
@@ -691,6 +693,7 @@ prefix_kept() {
   [ "$(reason_of 'refuses the forbidden admin page')" = replacement-wrong-layer ]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a post-fix that skips the replacement check keeps the demote with no replacement" {
   prefix_kept 'refuses the forbidden admin page' "$ADMIN_STATUS"
   jq '.kept' <<<"$output" >"$PROPOSALS"
@@ -748,6 +751,7 @@ EOF
   is_kept 'shows the archive heading'
 }
 
+# bats test_tags=whole-tree
 @test "red twin: re-reading the subject's file at post-fix refuses the in-place rewrite" {
   prefix_kept 'shows the archive heading' "$ARCHIVE_STATUS"
   write_in_place_rewrite
@@ -758,6 +762,7 @@ EOF
   [ "$(reason_of 'shows the archive heading')" = target-not-below-subject ]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: judging the replacement by its whole file refuses the mixed-file replacement" {
   prefix_kept 'shows the archive heading' "$ARCHIVE_STATUS"
   write_mixed_replacement
