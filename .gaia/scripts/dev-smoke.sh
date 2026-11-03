@@ -2,8 +2,8 @@
 # shellcheck shell=bash
 #
 # The Quality Gate's dev smoke test: starts this tree's dev server on this
-# tree's dev port, requests one route until it answers, and stops only the
-# server it started.
+# tree's dev port, requests one route until it answers, follows same-origin
+# redirects, and stops only the server it started.
 #
 #   bash .gaia/scripts/dev-smoke.sh [--tree <directory>] [--path <route>] [--timeout <seconds>]
 #
@@ -15,9 +15,11 @@
 # pattern kill and no port-wide kill ever runs. An exit or interrupt at any
 # point still stops what was started.
 #
-# Exit codes: 0 the route answered HTTP 200 and the server stopped; 1 the smoke
-# test failed (another status, the server exited or never answered in time, or
-# the server it started could not be stopped); 2 usage; 3 refused to start (no
+# Exit codes: 0 the route answered HTTP 200, directly or after at most five
+# redirects within the dev server's own origin, and the server stopped; 1 the
+# smoke test failed (another final status, a redirect off that origin or past
+# the limit, the server exited or never answered in time, or the server it
+# started could not be stopped); 2 usage; 3 refused to start (no
 # package with a react-router.config.* file, no resolvable port, the port is
 # already held, or no process backend to tell who holds it).
 #
@@ -174,30 +176,63 @@ server_command="${GAIA_DEV_SMOKE_SERVER_COMMAND:-pnpm dev}"
 (cd "$package_directory" && GAIA_DEV_SMOKE_PORT="$dev_port" exec bash -c "$server_command") >"$server_log" 2>&1 </dev/null &
 started_pid="$!"
 
-url="http://localhost:$dev_port$route_path"
+fail_smoke() {
+  printf 'GAIA dev smoke: %s\n' "$1" >&2
+  print_server_log
+  exit 1
+}
+
+# Sets status (000 when nothing answered) and redirect_target, the absolute
+# Location curl resolved, empty when there is none. curl is not given -L: it
+# would follow a redirect to any host.
+request_once() {
+  local response
+  response="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 10 "$1" 2>/dev/null)" || response='000'
+  status="${response%% *}"
+  redirect_target="${response#"$status"}"
+  redirect_target="${redirect_target# }"
+}
+
+origin="http://localhost:$dev_port"
+url="$origin$route_path"
+# An app routing `/` through a login page and on to a landing page takes two
+# hops; five leaves room for a locale or trailing-slash hop and still ends a loop.
+maximum_redirects=5
 deadline=$((SECONDS + timeout_seconds))
 while :; do
-  if ! gaia_server_pid_alive "$started_pid"; then
-    printf 'GAIA dev smoke: the dev server exited before %s answered.\n' "$url" >&2
-    print_server_log
-    exit 1
-  fi
-  status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" 2>/dev/null)" || status='000'
+  gaia_server_pid_alive "$started_pid" || fail_smoke "the dev server exited before $url answered."
+  request_once "$url"
   [ "$status" = '000' ] || break
-  if [ "$SECONDS" -ge "$deadline" ]; then
-    printf 'GAIA dev smoke: %s did not answer within %s seconds.\n' "$url" "$timeout_seconds" >&2
-    print_server_log
-    exit 1
-  fi
+  [ "$SECONDS" -lt "$deadline" ] || fail_smoke "$url did not answer within $timeout_seconds seconds."
   sleep "$poll_interval_seconds"
 done
 
-if [ "$status" != 200 ]; then
-  printf 'GAIA dev smoke: %s answered HTTP %s, expected 200.\n' "$url" "$status" >&2
-  print_server_log
-  exit 1
-fi
+# A redirect is followed only within this dev server's origin: a page elsewhere
+# answering 200 proves nothing about this tree.
+final_url="$url"
+redirect_count=0
+while :; do
+  case "$status" in
+    3??) ;;
+    *) break ;;
+  esac
+  [ -n "$redirect_target" ] || fail_smoke "$final_url answered HTTP $status with no redirect target, expected 200."
+  case "$redirect_target" in
+    "$origin" | "$origin"/*) ;;
+    *) fail_smoke "$final_url redirected to $redirect_target, outside $origin, expected 200 from this dev server." ;;
+  esac
+  [ "$redirect_count" -lt "$maximum_redirects" ] || fail_smoke "$url redirected more than $maximum_redirects times, expected 200."
+  redirect_count=$((redirect_count + 1))
+  final_url="$redirect_target"
+  request_once "$final_url"
+  [ "$status" != '000' ] || fail_smoke "$final_url, a redirect from $url, did not answer."
+done
 
+redirect_note=''
+[ "$final_url" = "$url" ] || redirect_note=" at $final_url"
+[ "$status" = 200 ] || fail_smoke "$url answered HTTP $status$redirect_note, expected 200."
+
+[ -z "$redirect_note" ] || redirect_note=" after following redirects to $final_url"
 stop_started_server || exit 1
-printf 'GAIA dev smoke: %s answered HTTP 200; the dev server it started is stopped.\n' "$url"
+printf 'GAIA dev smoke: %s answered HTTP 200%s; the dev server it started is stopped.\n' "$url" "$redirect_note"
 exit 0
