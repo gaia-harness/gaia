@@ -12,8 +12,9 @@
 #
 # route prints run, skip-no-playwright-change or skip-no-base. changed prints a
 # JSON array of {file, layer}. check prints {"kept":[...],"discarded":[...]};
-# a kept element carries seam, layer, siblingLayer and a disposition (offer, or
-# report-only with a reportReason). --post-fix re-verifies the same proposals
+# a kept element carries seam, layer, siblingLayer (or targetLayer for a demote
+# that names no sibling) and a disposition (offer, or report-only with a
+# reportReason). --post-fix re-verifies the same proposals
 # after the fixer ran, before the commit.
 #
 # Exit 2 on usage, 3 on unreadable input or a package error, with the reason on
@@ -76,11 +77,13 @@ resolve_subject() {
   IFS=$'\t' read -r _ _ base <<<"$provenance" || true
 }
 
+# The root lets the checker read each Playwright spec: one that opens no page
+# is real-server, one that does is browser.
 run_layers() {
   if [ "$has_package_dir" -eq 1 ]; then
-    node "$checker_script" layer --package-dir "$package_dir"
+    node "$checker_script" layer --root "$1" --package-dir "$package_dir"
   else
-    node "$checker_script" layer
+    node "$checker_script" layer --root "$1"
   fi
 }
 
@@ -104,9 +107,9 @@ cmd_route() {
     rm -f "$names"
     die_input "cannot list the files changed since $base"
   fi
-  layered="$(run_layers <"$names")" || { rm -f "$names"; die_input 'the layer mapping failed'; }
+  layered="$(run_layers "$root" <"$names")" || { rm -f "$names"; die_input 'the layer mapping failed'; }
   rm -f "$names"
-  if printf '%s' "$layered" | jq -e 'any(.[]; .layer == "e2e")' >/dev/null 2>&1; then
+  if printf '%s' "$layered" | jq -e 'any(.[]; .layer == "real-server" or .layer == "browser")' >/dev/null 2>&1; then
     printf 'run\n'
   else
     printf 'skip-no-playwright-change\n'
@@ -134,7 +137,7 @@ cmd_changed() {
     rm -f "$names"
     die_input "cannot list the files changed since $base"
   fi
-  run_layers <"$names" || { rm -f "$names"; die_input 'the layer mapping failed'; }
+  run_layers "$root" <"$names" || { rm -f "$names"; die_input 'the layer mapping failed'; }
   rm -f "$names"
 }
 

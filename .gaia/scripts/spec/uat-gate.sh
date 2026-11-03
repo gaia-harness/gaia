@@ -13,7 +13,10 @@
 #      holds none of test.fail(, test.fixme(, test.skip(, .only(,
 #      test.describe.skip( or test.describe.fixme(, and has a page.<method>(
 #      call or a request-fixture call, plus an expect( whose first argument is
-#      not a bare literal. A route file's annotations and floor (a loader( or
+#      not a bare literal. A real-server file's floor is a verb call on a
+#      request context (a page.<method>( call does not count) plus that expect,
+#      and it must open no page: page-use.mjs (Node and typescript) decides, a
+#      use reports opens-page. A route file's annotations and floor (a loader( or
 #      action( call) live in uat-gate-route.sh;
 #   2. uat-divergence-check.sh over the same selection;
 #   3. working-doc-id-scan.sh over the frontend's test trees;
@@ -29,14 +32,17 @@
 # Exit codes the caller branches on:
 #   0  pass; also when the selection has no Playwright or route rows (prints `no owned UAT tests`)
 #   1  gate failure; one stderr line per failing file: `uat-gate: <file>: <reason>`
-#      with reason one or more of missing, annotation, floor, divergence,
+#      with reason one or more of missing, annotation, floor, opens-page, divergence,
 #      working-doc-id, expected-failure, skipped, fixme, failed, no-tests,
 #      no-report-entry, collection-failed, todo
 #      (a line 1 that is not a contract marker reports missing), then one
-#      `uat-gate: next step for floor: ...` line when any file failed the floor
+#      `uat-gate: next step for floor: ...` line when any file failed the floor,
+#      and one `uat-gate: next step for opens-page: ...` line when a real-server
+#      file opens a page
 #   2  invalid input (usage, malformed SPEC, invalid routing table, unreadable
 #      --report or --vitest-report)
-#   4  a test runner could not run (jq, pnpm or a browser is missing, the dev or
+#   4  a test runner could not run (jq, pnpm or a browser is missing, node or
+#      the typescript package is missing for the real-server no-page check, the dev or
 #      Storybook port is held, a server failed to boot, Vitest wrote no
 #      report); stderr names the runner and the prerequisite, and the other
 #      tree when a process of one holds a port
@@ -177,7 +183,9 @@ add_failure() {
 
 floor_e2e=0
 floor_route=0
-while IFS=$'\t' read -r relative_path _; do
+floor_real_server=0
+opens_page=0
+while IFS=$'\t' read -r relative_path file_surface; do
   [ -n "$relative_path" ] || continue
   is_route=0
   case "$relative_path" in
@@ -205,7 +213,20 @@ while IFS=$'\t' read -r relative_path _; do
   if grep -qE 'test\.fail\(|test\.fixme\(|test\.skip\(|\.only\(|test\.describe\.skip\(|test\.describe\.fixme\(' "$absolute_path"; then
     add_failure "$relative_path" annotation
   fi
-  if ! has_e2e_call "$absolute_path" || ! has_non_literal_expect "$absolute_path"; then
+  if [ "$file_surface" = real-server ]; then
+    if ! has_request_call "$absolute_path" || ! has_non_literal_expect "$absolute_path"; then
+      add_failure "$relative_path" floor
+      floor_real_server=1
+    fi
+    gate_opens_page "$absolute_path"
+    case $? in
+      1)
+        add_failure "$relative_path" opens-page
+        opens_page=1
+        ;;
+      4) exit 4 ;;
+    esac
+  elif ! has_e2e_call "$absolute_path" || ! has_non_literal_expect "$absolute_path"; then
     add_failure "$relative_path" floor
     floor_e2e=1
   fi
@@ -256,6 +277,12 @@ report_failures() {
   # a shared helper reads as absent even when the behavior works.
   if [ "$floor_e2e" -eq 1 ]; then
     printf 'uat-gate: next step for floor: the spec file itself must call page.<method>( or a request-fixture call (request.get(, request.post( and the other verbs, or request.newContext( with a verb call) and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
+  fi
+  if [ "$floor_real_server" -eq 1 ]; then
+    printf 'uat-gate: next step for floor: the real-server test file itself must call a verb on the request fixture (request.get(, request.post( and the other verbs, on a request-context fixture the test callback destructures, or on a request.newContext( variable; a page.<method>( call does not count) and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
+  fi
+  if [ "$opens_page" -eq 1 ]; then
+    printf 'uat-gate: next step for opens-page: a real-server test must not open a page; drive it through the request fixture and read rendered HTML with the helper in .playwright/html.ts. When the Then-clause truly needs a browser, the routing row is wrong: stop and report it instead of editing the test.\n' >&2
   fi
   if [ "$floor_route" -eq 1 ]; then
     printf 'uat-gate: next step for floor: the route test file itself must call the route'"'"'s loader( or action( and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2

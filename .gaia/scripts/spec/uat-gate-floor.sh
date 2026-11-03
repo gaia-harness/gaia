@@ -66,3 +66,55 @@ has_e2e_call() {
   grep -qE "(^|[^A-Za-z0-9_\$])request\.$verbs\(" <<<"$code" && return 0
   grep -qE '(^|[^A-Za-z0-9_$])request\.newContext\(' <<<"$code" && grep -qE "\\.$verbs\(" <<<"$code"
 }
+
+# request_receiver_names <file>: one receiver name per line that a verb call
+# may legitimately use as a request context. `request` itself; every name the
+# first destructured parameter of some callback binds (a project request-context
+# fixture such as the signed-in one); and every variable the file assigns from
+# request.newContext( or playwright.request.newContext(. Read from the
+# code-only text, never decided by a name suffix. A destructured page-backed
+# fixture lands in the list too, but no verb call on it is a request call, so
+# the no-page check refuses it, not this list.
+request_receiver_names() {
+  local code flat
+  code=$(uat_lib_code_only "$1") || return 1
+  flat=$(printf '%s' "$code" | tr '\n\r\t' '   ')
+  printf '%s\n' request
+  printf '%s' "$flat" | grep -oE '\([[:space:]]*\{[^{}]*\}[[:space:]]*[,)]' | sed -E 's/^\([[:space:]]*\{//; s/\}[[:space:]]*[,)]$//' | tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]*=.*$//; s/^.*:[[:space:]]*//; s/[[:space:]]+$//' | grep -E '^[A-Za-z_$][A-Za-z0-9_$]*$'
+  printf '%s' "$flat" | grep -oE '[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=[[:space:]]*(await[[:space:]]+)?(playwright\.)?request\.newContext\(' | sed -E 's/[[:space:]]*=.*$//'
+  return 0
+}
+
+# True when the code-only text of a real-server test calls a verb on a request
+# context (request_receiver_names). A page.<method>( call does not satisfy it.
+has_request_call() {
+  local code verbs='(get|post|put|patch|delete|head|fetch)' receiver
+  code=$(uat_lib_code_only "$1") || return 1
+  while IFS= read -r receiver; do
+    [ -n "$receiver" ] || continue
+    receiver=${receiver//\$/\\\$}
+    grep -qE "(^|[^A-Za-z0-9_\$])$receiver\\.$verbs\\(" <<<"$code" && return 0
+  done < <(request_receiver_names "$1")
+  return 1
+}
+
+# gate_opens_page <file>: run the shared page-use detector (page-use.mjs, the
+# one definition of "opens a page") over one real-server test. Returns 0 clean,
+# 1 a use, 4 when the detector could not run, after naming the prerequisite.
+gate_opens_page() {
+  local detector_status
+  if ! command -v node >/dev/null 2>&1; then
+    printf 'uat-gate.sh: node is not on PATH, so the real-server no-page check cannot run. Prerequisites: Node and the typescript package in the repo'"'"'s dependencies. Next step: install them and retry.\n' >&2
+    return 4
+  fi
+  node "$(dirname "${BASH_SOURCE[0]}")/page-use.mjs" "$1" >/dev/null 2>&1
+  detector_status=$?
+  case "$detector_status" in
+    0) return 0 ;;
+    1) return 1 ;;
+    *)
+      printf 'uat-gate.sh: the real-server no-page check could not run (page-use.mjs exited %s). Prerequisites: Node and the typescript package in the repo'"'"'s dependencies. Next step: install them and retry.\n' "$detector_status" >&2
+      return 4
+      ;;
+  esac
+}

@@ -397,7 +397,7 @@ run_fixture() {
 
 # --- overlap pass -------------------------------------------------------------
 
-@test "overlap pass: an apps/web .playwright/e2e spec classifies as e2e and a packages/x spec does not" {
+@test "overlap pass: an apps/web .playwright/e2e spec that opens no page classifies as real-server and a packages/x spec does not" {
   local repo="$BATS_TEST_TMPDIR/overlap-repo"
   scratch_repo "$repo"
   . "$REPO_ROOT/.gaia/tests/hooks/helpers/package-fixture.sh"
@@ -413,7 +413,7 @@ run_fixture() {
   git -C "$repo" commit -q -m feature
   run bash "$REPO_ROOT/.gaia/scripts/overlap-check.sh" changed --root "$repo"
   [ "$status" -eq 0 ]
-  jq -e 'any(.[]; .file == "apps/web/.playwright/e2e/x.spec.ts" and .layer == "e2e")' <<<"$output" >/dev/null
+  jq -e 'any(.[]; .file == "apps/web/.playwright/e2e/x.spec.ts" and .layer == "real-server")' <<<"$output" >/dev/null
   jq -e 'any(.[]; .file == "packages/x/y.spec.ts") | not' <<<"$output" >/dev/null
   run bash "$REPO_ROOT/.gaia/scripts/overlap-check.sh" route --root "$repo"
   [ "$output" = "run" ]

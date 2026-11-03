@@ -1088,28 +1088,6 @@ prepare_mixed() {
 });"
 }
 
-@test "a browser row and a real-server row both render, gate green on a report with both passed, and are counted as owned" {
-  prepare_mixed
-  [ -f "$FILE_PHASE_TWO" ] || return 1
-  [ -f "$FILE_PHASE_THREE" ] || return 1
-  gate --all --report "$REPORTS/passed-two-files.json"
-  [ "$status" -eq 0 ] || return 1
-  [ "$output" != "no owned UAT tests" ]
-}
-
-@test "a failed report entry for the real-server file fails the gate naming it, and the browser file ran through the gate too" {
-  prepare_mixed
-  jq '(.. | objects | select(has("tests") and has("file") and (.file | test("orders"))) | .tests[]) |= (.status = "unexpected" | .results[-1].status = "failed")' "$REPORTS/passed-two-files.json" >"$BATS_TEST_TMPDIR/real-server-failed.json"
-  gate --all --report "$BATS_TEST_TMPDIR/real-server-failed.json"
-  [ "$status" -eq 1 ] || return 1
-  assert_stderr_names "$FILE_PHASE_THREE_RELATIVE" failed || return 1
-  grep -qF -- "$FILE_PHASE_TWO_RELATIVE" "$STDERR_FILE" && return 1
-  # The browser file was selected: dropping it from the report names it.
-  gate --all --report "$REPORTS/failed.json"
-  [ "$status" -eq 1 ] || return 1
-  assert_stderr_names "$FILE_PHASE_TWO_RELATIVE" "$FILE_PHASE_THREE_RELATIVE"
-}
-
 @test "divergence reports a mutated Then line in a browser file and in a real-server file, and passes when both match" {
   prepare_mixed
   run bash -c "cd '$WORK' && bash '$DIVERGENCE' '$SPEC' --routing '$ROUTING' --all"

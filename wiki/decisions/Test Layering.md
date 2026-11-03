@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-11-01
 created: 2026-11-01
-updated: 2026-11-01
+updated: 2026-11-04
 tags: [decision, testing, tdd, layering, authorization]
 ---
 
@@ -16,7 +16,7 @@ Every check lives at the lowest layer that can prove it. A browser is the most e
 
 Browser time is the expensive layer in three ways. A browser test boots the server and Chromium, so each one costs seconds where a unit or route test costs milliseconds. Browser tests share a live stack, so parallel workers contend for one database and a test needs per-worker isolation (see [[#Worker isolation]]). And a failing browser test names a flow, not a cause, so finding the broken rule costs more than the test saved.
 
-A check that duplicates one a lower layer already proves adds cost and no coverage. The overlap pass reads every layer and proposes dropping, merging or demoting such a duplicate; the worthiness audit stays on its own surface, the emergent tests, and does not compare across layers ([[Worthiness Audit]]).
+A check that duplicates one a lower layer already proves adds cost and no coverage. The overlap pass reads every layer and proposes dropping or merging such a duplicate and demoting a test to the lowest layer that shows its property, including a browser test to the real-server layer; the worthiness audit stays on its own surface, the emergent tests, and does not compare across layers ([[Worthiness Audit]]).
 
 ## The layers
 
@@ -24,8 +24,10 @@ From lowest to highest:
 
 1. **Unit and story.** A function, a hook, or one component given props. Vitest `node` and `browser` projects and Storybook stories ([[Stories as Tests]]).
 2. **Route.** A request taken in process by a route module's `loader` or `action`, with no browser and no server. The route surface is the lowest layer that takes a request in process: it shows a status, a redirect, returned data, a validation error, an authorization outcome or a side effect. It runs in the Vitest `node` project.
-3. **Real server.** The live stack, driven by Playwright's request fixture with no page. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, a forged request against a live route.
-4. **Browser.** Hydration, focus, client navigation and a multi-page journey, one test per user flow.
+3. **Real server.** The live stack, driven by Playwright's request fixture: it opens no page and makes no browser round trip. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, a forged request against a live route, and the server's rendered HTML, read through the request fixture and a parsed response body.
+4. **Browser.** A real page: hydration, focus, client navigation, client-submitted forms and a multi-page journey, one test per user flow.
+
+A plan routes each row to `real-server` or `browser`, never to a bare end-to-end surface; the operational ladder is in `.claude/skills/gaia/references/plan/planner.md`.
 
 Only the frontend package renders route rows today. [[Testing]] describes the frontend's layers in place.
 

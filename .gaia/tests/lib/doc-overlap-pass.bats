@@ -12,6 +12,8 @@
 #     re-check and the HALTED heading, the unattended arm, the report and the
 #     never line;
 #   - the `--root` and `--post-fix` spellings;
+#   - the lowest-layer purpose, the fixer's replacement for a sibling-less
+#     demote and the post-fix refusal of one with no replacement;
 #   - the judge and the divergence policy: a builder meets a Given cosmetically,
 #     a stubbed guard, a request-only body under a browser-only clause and a
 #     refusal check without the redirect, status and actor assertions diverge.
@@ -199,6 +201,62 @@ check_dispose() {
   [ "$status" -ne 0 ]
   mutate "$REF" '## Overlap pass (HALTED)' '## Overlap pass' "$copy"
   run check_dispose "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------- purpose and the sibling-less demote ----------
+
+check_lowest_layer_purpose() {
+  has_all "$1" \
+    'across the unit, route, real-server and browser layers' \
+    'each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer'
+}
+
+check_sibling_less_fixer() {
+  has_all "$1" \
+    'For each approved sibling-less demote (a `target` and no `sibling`), the fixer writes the replacement real-server test (the request fixture only, no page)' \
+    'lists it in its JSON result as `{file, fullName, replacement: {file, line, fullName, assertion}}`' \
+    'The orchestrator merges each `replacement` into the kept list'"'"'s entry with that `file` and `fullName` before running `--post-fix`' || return 1
+  [ "$(line_of "$1" 'the fixer writes the replacement real-server test')" -le "$(line_of "$1" '--proposals <file> --post-fix')" ] || { printf 'the replacement merge does not precede the post-fix re-check\n' >&2; return 1; }
+}
+
+check_post_fix_refusal() {
+  has_all "$1" 'a sibling-less demote with no replacement is refused there'
+}
+
+@test "the page states the lowest-layer purpose beside duplication" {
+  check_lowest_layer_purpose "$REF"
+}
+
+@test "red twin: a purpose naming only duplication fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" ', and that each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer' '' "$copy"
+  run check_lowest_layer_purpose "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the fixer writes and lists a replacement for each sibling-less demote, merged before the post-fix re-check" {
+  check_sibling_less_fixer "$REF"
+}
+
+@test "red twin: a fixer that writes no replacement, or a missing merge, fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'the fixer writes the replacement real-server test (the request fixture only, no page)' 'the fixer deletes the subject' "$copy"
+  run check_sibling_less_fixer "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$REF" 'The orchestrator merges each `replacement`' 'The orchestrator ignores each `replacement`' "$copy"
+  run check_sibling_less_fixer "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the post-fix re-check refuses a sibling-less demote with no replacement" {
+  check_post_fix_refusal "$REF"
+}
+
+@test "red twin: a post-fix sentence that accepts a missing replacement fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'a sibling-less demote with no replacement is refused there' 'a sibling-less demote needs nothing more' "$copy"
+  run check_post_fix_refusal "$copy"
   [ "$status" -ne 0 ]
 }
 

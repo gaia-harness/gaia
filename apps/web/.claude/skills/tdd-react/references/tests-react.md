@@ -4,7 +4,7 @@ Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHoo
 
 ## Testing Layers
 
-Five layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story `.test()`, not E2E; a route's redirect is a route test, a loader's parsing is a service test. The principle and its rationale are in `wiki/decisions/Test Layering.md`.
+Five layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story `.test()`, not a browser test; a route's redirect is a route test, a loader's parsing is a service test. The principle and its rationale are in `wiki/decisions/Test Layering.md`.
 
 The story-versus-route boundary: rendered output on one component is a story. A status, a redirect, returned data, a validation error, an authorization outcome or a side effect is a route test.
 
@@ -14,7 +14,8 @@ The story-versus-route boundary: rendered output on one component is a story. A 
 | Hook              | `renderHook` from `vitest-browser-react` | `browser`   | `app/hooks/tests/`                      | hook return values, state transitions, callbacks    |
 | Pure / service    | MSW handlers + Zod                    | `node`         | `app/services/<name>/tests/`, `app/utils/tests/` | parsed response shape, request payload, error cases |
 | Route             | `loader` / `action` called with a `Request` | `node`      | `app/route-tests/<feature>/tests/*.test.ts` | status, redirect, returned data, validation errors, authorization outcome, side effect |
-| E2E               | Playwright + dev-server MSW              | Playwright     | `.playwright/e2e/*.spec.ts`             | full user flow across routes                        |
+| Real server       | Playwright request fixture + dev-server MSW | Playwright  | `.playwright/e2e/<feature>/<flow>.spec.ts` | what the live server serves, with no page: middleware, refusal status, forged requests, rendered HTML; see `wiki/decisions/Test Layering.md` |
+| Browser           | Playwright page + dev-server MSW         | Playwright     | `.playwright/e2e/<feature>/<flow>.spec.ts` | hydration, focus, client navigation, client-submitted forms, one journey per user flow; see `wiki/decisions/Test Layering.md` |
 
 One Vitest config (`vitest.config.ts`) holds three projects. `node` runs `*.test.ts` outside any `hooks/` folder; `browser` runs `*.test.tsx` and `hooks/**/*.test.ts` in headless Chromium; `storybook` runs every `*.stories.tsx` through `@storybook/addon-vitest`. There is no DOM emulation: component and hook code runs in a real browser, so install Chromium once with `pnpm install:browsers`. Run a subset with `pnpm test --run --project storybook <story-file>`.
 
@@ -226,7 +227,7 @@ Mock at **system boundaries** only:
 
 **Mutating data in a test**: write to `database` directly; reset in `afterEach` via `resetTestData()` from `test/mocks/database`. The read-then-verify shape tests the interface end-to-end and survives schema renames as long as the public service contract holds.
 
-The MSW server runs in the `node` Vitest project and Playwright E2E runs against the dev server, where MSW mocks both browser and SSR requests (`wiki/dependencies/MSW.md`); stories install handlers in `beforeEach` through the `msw` context or read seed data from the same `database` collections directly.
+The MSW server runs in the `node` Vitest project and Playwright browser and real-server tests run against the dev server, where MSW mocks both browser and SSR requests (`wiki/dependencies/MSW.md`); stories install handlers in `beforeEach` through the `msw` context or read seed data from the same `database` collections directly.
 
 ## Testing Forms with Conform
 

@@ -3,7 +3,7 @@ type: module
 path: apps/web/test/, apps/web/.playwright/
 status: active
 language: typescript
-purpose: Five-layer testing setup: unit, stories as component tests, route tests, E2E, visual regression
+purpose: Five-layer testing setup: unit, stories as component tests, route tests, Playwright (real-server and browser), visual regression
 depends_on:
   - '[[Vitest]]'
   - '[[Storybook]]'
@@ -22,7 +22,7 @@ Testing has **five layers**, all sharing a common [[MSW Handlers|MSW]] mocking l
 - Unit: [[Vitest]] in `apps/web/app/utils/tests/` (pure and server code), and `vitest-browser-react` tests for hooks
 - Component and page: Storybook stories with `.test()` behaviors in `apps/web/app/components/*/tests/`, `apps/web/app/pages/*/tests/`, run by Vitest through `@storybook/addon-vitest`
 - Route: Vitest `node` tests in `apps/web/app/route-tests/<feature>/tests/` that call a route module's `loader` or `action` with a `Request`
-- E2E: [[Playwright]] in `apps/web/.playwright/e2e/*.spec.ts`
+- Playwright: [[Playwright]] in `apps/web/.playwright/e2e/`, on two surfaces, real-server (request fixture, no page) and browser (a real page); [[Test Layering]] owns which proves what
 - Visual regression: [[Chromatic]] (CI only), driven by the same stories
 
 A story is the component test and the visual-regression input, so both share one source of truth. A page's rendered states are page stories, which mount the route's exports through `stubs.reactRouter` and drive MSW handlers. A route module's status, redirect, returned data, validation error, authorization outcome or side effect is a route test. [[Test Layering]] owns which layer proves what. See [[Stories as Tests]] and [[Component Testing]].
@@ -50,7 +50,7 @@ Test a component or page with a story that carries a `.test()` for each behavior
 
 ## Playwright
 
-- Tests in `apps/web/.playwright/e2e/*.spec.ts`, config in `apps/web/playwright.config.ts`
+- Real-server and browser tests in `apps/web/.playwright/e2e/`, config in `apps/web/playwright.config.ts`
 - Use the bundled `hydration(page)` helper after `page.goto()` to wait for React Router hydration before interacting
 
 ### a11y scanning
