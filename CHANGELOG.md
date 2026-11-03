@@ -38,6 +38,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **The vendored playwright-cli skill is updated to 0.1.23:** its tracing examples open a browser before `tracing-start`, which records nothing without one; it now says `--raw` keeps the result, errors and snapshot; and it recommends `not.toBeChecked()` in place of the nonexistent `toBeUnchecked()` matcher (#2727, #2728)
 - **`/gaia-spec`'s final review prints as plain Markdown:** the brief you approve before the SPEC saves no longer prints inside a code fence; it uses bold labels, like the first review (#3217)
 - **A fixed veto no longer blocks the audit's closing round:** a vetoed finding that was fixed and then reviewed clean now counts as satisfied, so a human-accepted closing round completes without a hand-written entry. The checkpoint hook also stays silent on questions unrelated to an audit checkpoint (#3224)
 - **The audit's Minor-only stop runs in a worktree:** Claude Code's worktree isolation refused the evaluator call that decides the stop, because its subcommand was named after the shell builtin `eval`. The subcommand is now `audit-loop-eval.sh evaluate-round`, so a worktree-isolated audit round can end on Minor-only churn instead of paying for another fix round (#3231)
