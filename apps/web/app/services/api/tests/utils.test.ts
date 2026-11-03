@@ -1,4 +1,4 @@
-import type {BeforeRequestState} from 'ky';
+import type {AfterResponseState, BeforeRequestState} from 'ky';
 import {describe, expect, test, vi} from 'vitest';
 import {
   appendSearchParams,
@@ -14,6 +14,13 @@ const runRequestToSnakeCase = async (body: string) => {
     options: {body},
     request: new Request('https://example.test', {method: 'POST'}),
   } as unknown as BeforeRequestState;
+
+  return hook?.(state);
+};
+
+const runResponseToCamelCase = async (response: Response) => {
+  const hook = getHooks(true)?.afterResponse?.[0];
+  const state = {response} as unknown as AfterResponseState;
 
   return hook?.(state);
 };
@@ -126,6 +133,12 @@ describe('api utils', () => {
     const convertedRequest = await runRequestToSnakeCase('plain text body');
 
     expect(convertedRequest).toBeUndefined();
+  });
+
+  test('responseToCamelCase delivers a JSON body of false as false', async () => {
+    const converted = await runResponseToCamelCase(Response.json(false));
+
+    expect(await (converted as Response).json()).toBe(false);
   });
 
   test('buildRequestHeaders applies per-request token and language', () => {
