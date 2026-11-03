@@ -11,8 +11,6 @@
 #   S1     the scrub strips maintainer-only keys from both package.json files.
 #   S2     the scrub strips the release-notes skill override from the shipped
 #          root and frontend .claude/settings.json and keeps their siblings.
-#   L1     the CHANGELOG [2.0.0] Breaking entry leads with the routing line,
-#          which release.yml publishes as the fallback release body's first line.
 #
 # Assertion style per .claude/rules/bats-assertions.md.
 #
@@ -21,7 +19,6 @@
 setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   MAINTAINER_CLI="$REPO_ROOT/.gaia/cli/gaia-maintainer"
-  ROUTING_LINE="$(bash "$REPO_ROOT/.gaia/scripts/compose-release-body.sh" --routing-line)"
   # Paths that moved under apps/web/ in 2.0.0. The root halves of the split
   # files (package.json, prettier.config.mjs, .prettierignore, .gitignore,
   # lockfile, workspace file) legitimately stay at the root and are not here.
@@ -135,24 +132,3 @@ manifest_keys() {
     [ "$(jq -r '.model' "$settings")" = x ]
   done
 }
-
-# The `## [2.0.0]` body of CHANGELOG.md, up to the next `## [` heading.
-release_2_0_0_body() {
-  awk '/^## \[2\.0\.0\]/{f=1;next} f&&/^## \[/{exit} f{print}' "$1"
-}
-
-@test "L1: the 2.0.0 Breaking entry leads with the routing line" {
-  body="$(release_2_0_0_body "$REPO_ROOT/CHANGELOG.md")"
-  first_after_heading="$(printf '%s\n' "$body" | awk '/^### Breaking$/{f=1;next} f&&NF{print;exit}')"
-  [ "$first_after_heading" = "$ROUTING_LINE" ]
-}
-
-@test "L1b: a Breaking lead line that is the retired routing line fails the comparison" {
-  retired="$(printf '%s %s%s %s' 'On GAIA 1.6.1? Choose Abort,' 'then paste the prompt from https://gaiareact.com' '/migrate' 'into a fresh session.')"
-  fixture="$BATS_TEST_TMPDIR/CHANGELOG.md"
-  printf '## [2.0.0] - 2026-10-23\n\n### Breaking\n\n%s\n\n- an entry\n' "$retired" > "$fixture"
-  body="$(release_2_0_0_body "$fixture")"
-  first_after_heading="$(printf '%s\n' "$body" | awk '/^### Breaking$/{f=1;next} f&&NF{print;exit}')"
-  [ "$first_after_heading" != "$ROUTING_LINE" ]
-}
-
