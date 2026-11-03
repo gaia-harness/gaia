@@ -15,10 +15,13 @@ export const WORKER_SERVER_HOST = '127.0.0.1';
 /** The start lock's file name inside the Playwright output folder. */
 export const START_LOCK_FILE_NAME = 'worker-server-start.lock';
 
+/** How long a started worker server has to answer its first request. */
 export const SERVER_READY_TIMEOUT_MILLISECONDS = 60_000;
 
 // Starts run one at a time, so the last worker of a full set waits for every
-// start ahead of it; a live holder releases within its own ready timeout.
+// start ahead of it. A real start takes a fraction of its ready timeout, so
+// four of them cover a full set of workers, while a run stuck behind a hung
+// holder still fails.
 export const START_LOCK_TIMEOUT_MILLISECONDS =
   4 * SERVER_READY_TIMEOUT_MILLISECONDS;
 
@@ -139,6 +142,7 @@ const stopProcessGroup = (processId: number | undefined): void => {
   }
 };
 
+/** A started worker server: its origin, its database file, and its stop. */
 export type WorkerServer = {
   baseURL: string;
   databaseFile: string;

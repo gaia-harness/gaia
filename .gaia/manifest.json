@@ -701,7 +701,6 @@
     "apps/web/test/test.server.ts": "owned",
     "apps/web/test/theme-tokens.test.ts": "owned",
     "apps/web/test/utils.ts": "owned",
-    "apps/web/test/vite-watch.test.ts": "owned",
     "apps/web/test/worker-server.test.ts": "owned",
     "apps/web/test/worker.ts": "owned",
     "apps/web/tsconfig.json": "owned",
