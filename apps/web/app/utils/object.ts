@@ -97,8 +97,10 @@ export const convertCase = (
     return Object.entries(input).reduce(
       (accumulated: Record<string, unknown>, [key, value]) => {
         if (Array.isArray(value)) {
-          accumulated[transformKey(key)] = value.map<unknown>((item) =>
-            isObject(item) ? convertCase(transformKey, item) : item
+          accumulated[transformKey(key)] = value.map<unknown>((arrayElement) =>
+            isObject(arrayElement) ?
+              convertCase(transformKey, arrayElement)
+            : arrayElement
           );
         } else if (isObject(value)) {
           accumulated[transformKey(key)] = convertCase(transformKey, value);
@@ -116,10 +118,10 @@ export const convertCase = (
 };
 
 export const toSnakeCase = <T = unknown>(input: unknown): T | undefined =>
-  input ? (convertCase(snakeCase, input) as T) : undefined;
+  input === undefined ? undefined : (convertCase(snakeCase, input) as T);
 
 export const toCamelCase = <T = unknown>(input: unknown): T | undefined =>
-  input ? (convertCase(camelCase, input) as T) : undefined;
+  input === undefined ? undefined : (convertCase(camelCase, input) as T);
 
 export const compact = (
   record: Record<string, unknown>,
