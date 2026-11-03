@@ -248,14 +248,6 @@ jobs:
           shasum -a 256 "gaia-bundle-${TAG}.tar.gz" > "gaia-bundle-${TAG}.tar.gz.sha256"
           cat "gaia-bundle-${TAG}.tar.gz.sha256"
 
-      - name: Compose release body
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          bash .gaia/scripts/compose-release-body.sh \
-            "$TAG" release-notes.md "gaia-bundle-${TAG}.tar.gz.sha256" release-body.md
-          head -n 1 release-body.md
-
       # Runs on a dry run too, so the dispatch proves the hand-off to the
       # publish job and leaves the bundle it built inspectable. One day of
       # retention: the publish job reads it minutes later, and the release
@@ -267,7 +259,7 @@ jobs:
           path: |
             gaia-bundle-${{ steps.version.outputs.tag }}.tar.gz
             gaia-bundle-${{ steps.version.outputs.tag }}.tar.gz.sha256
-            release-body.md
+            release-notes.md
           if-no-files-found: error
           retention-days: 1
 
@@ -305,4 +297,4 @@ jobs:
             "gaia-bundle-${TAG}.tar.gz" \
             "gaia-bundle-${TAG}.tar.gz.sha256" \
             --title "$TAG" \
-            --notes-file release-body.md
+            --notes-file release-notes.md

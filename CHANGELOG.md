@@ -36,6 +36,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **No debt on your own branch's code:** `file-tech-debt.sh file` now refuses a non-security finding on a line the branch wrote, routing it to a fix on the branch or an accepted residual, so the debt backlog holds only security findings and findings on code the branch did not write (#3210)
 - **The audit loop stops on Minor-only fix churn:** from round 3, a round that reviewed only the latest changes and found nothing but ordinary Minor findings ends the loop on its own. Those findings are listed on the pull request as accepted residuals, and an interactive run asks once before the status posts whether to merge or fix chosen ones. Fix rounds whose fixes are all Minor skip Playwright, the dev smoke test and the build, which then run once on the final tree before the status posts (#3224)
 - `/gaia-init` asks how your API names JSON fields, not your backend; the `--casing` flag is unchanged (#3263)
+- **Release notes start with the notes (maintainer repo only):** GitHub release bodies no longer open with the 1.6.1 migration command, its Proceed warning and the bundle checksum. The last 1.6.1 project migrates through a hand-written prompt instead (#3202)
 
 ### Fixed
 
@@ -51,6 +52,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **Main-branch guard judges the acting agent's checkout:** a `git commit`, `git push` or hard reset from a worktree agent, including one that uses a relative `cd` or `-C` path, is judged against the worktree, not the main checkout (#3221)
 - **Harness verification catches line-limit breaches:** `verify-harness.sh` now runs the fitness lint's harness line-limit rule in branch and round modes, so an audit round's fix that grows a harness file past 400 lines or past its grandfathered ceiling fails the round gate instead of turning CI red after the push (#3228)
 - **Audit CI Tests hooks legs no longer time out:** the slowest hooks suite now runs on the pinned leg, and the hooks tests spread over five weighted legs instead of three, so the required check stops timing out with every test green as hooks suites are added (#3232)
+- **Snake-case API responses keep falsy bodies:** with snake-case conversion on, a response body of `false`, `0` or `""` reaches the caller as sent instead of as `null` (#3238)
 
 ### Security
 
