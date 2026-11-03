@@ -100,8 +100,12 @@ export const test = base.extend<AxeFixtures, WorkerServerFixtures>({
     },
     {
       scope: 'worker',
+      // The margin lets a slow start report its own error and stop its server
+      // before this timeout fires.
       timeout:
-        START_LOCK_TIMEOUT_MILLISECONDS + SERVER_READY_TIMEOUT_MILLISECONDS,
+        START_LOCK_TIMEOUT_MILLISECONDS +
+        SERVER_READY_TIMEOUT_MILLISECONDS +
+        10_000,
     },
   ],
 });

@@ -35,16 +35,16 @@ const READY_POLL_INTERVAL_MILLISECONDS = 250;
 // recorded process is gone is taken over. An unreadable lock was released
 // between the failed create and this read.
 const isHolderAlive = (lockFile: string): boolean => {
-  let holder: number;
+  let holderProcessId: number;
 
   try {
-    holder = Number(fs.readFileSync(lockFile, 'utf8'));
+    holderProcessId = Number(fs.readFileSync(lockFile, 'utf8'));
   } catch {
     return true;
   }
 
   try {
-    process.kill(holder, 0);
+    process.kill(holderProcessId, 0);
 
     return true;
   } catch (error) {
@@ -66,11 +66,11 @@ export const acquireStartLock = async (
     try {
       fs.writeFileSync(lockFile, String(process.pid), {flag: 'wx'});
 
-      let held = true;
+      let isHeld = true;
 
       return () => {
-        if (held) fs.rmSync(lockFile, {force: true});
-        held = false;
+        if (isHeld) fs.rmSync(lockFile, {force: true});
+        isHeld = false;
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
@@ -117,7 +117,9 @@ const waitForServer = async (origin: string): Promise<void> => {
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(origin);
+      const response = await fetch(origin, {
+        signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+      });
 
       // Any answer means the server is up; the rendered page is not needed.
       await response.body?.cancel();
@@ -186,7 +188,7 @@ export const startWorkerServer = async ({
   fs.mkdirSync(outputDirectory, {recursive: true});
   fs.rmSync(databaseFile, {force: true});
 
-  const log = fs.openSync(logFile, 'a');
+  const logFileDescriptor = fs.openSync(logFile, 'a');
   const releaseStartLock = await acquireStartLock(
     path.join(outputDirectory, START_LOCK_FILE_NAME),
     START_LOCK_TIMEOUT_MILLISECONDS
@@ -214,7 +216,7 @@ export const startWorkerServer = async ({
           [DEV_PORT_OVERRIDE_ENV]: String(port),
           SITE_URL: baseURL,
         },
-        stdio: ['ignore', log, log],
+        stdio: ['ignore', logFileDescriptor, logFileDescriptor],
       }
     );
 
@@ -244,6 +246,6 @@ export const startWorkerServer = async ({
     throw error;
   } finally {
     // The child holds its own copy of the descriptor.
-    fs.closeSync(log);
+    fs.closeSync(logFileDescriptor);
   }
 };
