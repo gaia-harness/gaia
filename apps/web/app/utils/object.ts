@@ -116,10 +116,10 @@ export const convertCase = (
 };
 
 export const toSnakeCase = <T = unknown>(input: unknown): T | undefined =>
-  input ? (convertCase(snakeCase, input) as T) : undefined;
+  input === undefined ? undefined : (convertCase(snakeCase, input) as T);
 
 export const toCamelCase = <T = unknown>(input: unknown): T | undefined =>
-  input ? (convertCase(camelCase, input) as T) : undefined;
+  input === undefined ? undefined : (convertCase(camelCase, input) as T);
 
 export const compact = (
   record: Record<string, unknown>,

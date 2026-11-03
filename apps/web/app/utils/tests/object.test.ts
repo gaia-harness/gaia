@@ -168,6 +168,14 @@ describe('object utils', () => {
     });
   });
 
+  test.each([false, 0, '', null])(
+    'toSnakeCase and toCamelCase keep the falsy value %j',
+    (value) => {
+      expect(toSnakeCase(value)).toBe(value);
+      expect(toCamelCase(value)).toBe(value);
+    }
+  );
+
   test('compact', () => {
     const obj = {a: 'b', c: '', d: false, e: null, f: []};
     expect(compact(obj)).toEqual({a: 'b'});
