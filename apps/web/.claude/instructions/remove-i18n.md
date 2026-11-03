@@ -294,7 +294,9 @@ For each caller, drop the import and replace any usage with the literal `'en'`.
 
 ### D3. `apps/web/.playwright/e2e/route-status.spec.ts` and `apps/web/app/action-paths.ts`
 
-Delete the `'set-language action redirects and sets the language cookie'` test (the one that POSTs to `ACTION_PATHS.setLanguage`) from `apps/web/.playwright/e2e/route-status.spec.ts`, leaving the page-status and theme-toggle tests.
+Delete the `'set-language action redirects and sets the language cookie'` test (the one that POSTs to `ACTION_PATHS.setLanguage`) from `apps/web/.playwright/e2e/route-status.spec.ts`, leaving the page-status test.
+
+The page-status test imports `common` from `../../app/languages/en/common` for the expected `/` heading, and Section C deletes that module. Drop the import and replace `common.meta.siteName` in the `PAGES` entry with the resolved string from `meta.siteName` in `apps/web/app/languages/en/common.ts`.
 
 Remove the `setLanguage` key from `ACTION_PATHS` in `apps/web/app/action-paths.ts`:
 

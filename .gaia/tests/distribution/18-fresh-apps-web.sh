@@ -85,7 +85,7 @@ run_pnpm_steps fresh- "fresh project" build
 
 log "pnpm pw"
 run_logged "pnpm pw" "$WORK/pw.log" \
-  pnpm -C "$SCAFFOLD" pw .playwright/e2e/route-status.spec.ts .playwright/e2e/hydration.spec.ts .playwright/e2e/home-a11y.spec.ts
+  pnpm -C "$SCAFFOLD" pw .playwright/e2e/route-status.spec.ts .playwright/e2e/theme-toggle.spec.ts .playwright/e2e/hydration.spec.ts .playwright/e2e/home-a11y.spec.ts
 
 # --- Dev-server smoke --------------------------------------------------------
 

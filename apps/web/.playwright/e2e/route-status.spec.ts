@@ -1,57 +1,27 @@
-import type {Page} from '@playwright/test';
 import {ACTION_PATHS} from '../../app/action-paths';
 import common from '../../app/languages/en/common';
 import {expect, test} from '../fixtures';
-import {hydration} from '../utils';
+import {parseHtml} from '../html';
 
-type PageContent = {
-  expectContent: (page: Page) => Promise<void>;
+type PageHeading = {
+  heading: string;
   path: string;
 };
 
-// Each check asserts content the page component itself owns, so a route that
+// Each check asserts the heading the page component itself owns, so a route that
 // imports the wrong page fails here even when the status is still 200.
-const PAGES: readonly PageContent[] = [
-  {
-    expectContent: async (page) => {
-      await expect(
-        page.getByRole('heading', {level: 1, name: common.meta.siteName})
-      ).toBeVisible();
-    },
-    path: '/',
-  },
+const PAGES: readonly PageHeading[] = [
+  {heading: common.meta.siteName, path: '/'},
 ];
 
-for (const {expectContent, path} of PAGES) {
-  test(`${path} responds 200 and renders its own page`, async ({page}) => {
-    const response = await page.goto(path);
-    expect(response?.status()).toBe(200);
-    await expectContent(page);
+for (const {heading, path} of PAGES) {
+  test(`${path} responds 200 and renders its own page`, async ({request}) => {
+    const response = await request.get(path);
+    expect(response.status()).toBe(200);
+    const document = parseHtml(await response.text());
+    expect(document.querySelector('h1')?.text.trim()).toBe(heading);
   });
 }
-
-test('theme toggle POST resolves 2xx', async ({page}) => {
-  await page.goto('/');
-  await hydration(page);
-
-  const toggle = page.getByRole('button', {
-    name: /enable (dark|light) mode|use system theme/i,
-  });
-  await expect(toggle).toBeVisible();
-
-  const [response] = await Promise.all([
-    page.waitForResponse(
-      (candidateResponse) =>
-        candidateResponse.request().method() === 'POST' &&
-        new URL(candidateResponse.url()).pathname.startsWith(
-          ACTION_PATHS.themeSwitch
-        )
-    ),
-    toggle.click(),
-  ]);
-  expect(response.status()).toBeGreaterThanOrEqual(200);
-  expect(response.status()).toBeLessThan(300);
-});
 
 test('set-language action redirects and sets the language cookie', async ({
   request,

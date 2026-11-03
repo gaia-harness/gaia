@@ -93,6 +93,7 @@
     "knip": "6.44.0",
     "msw": "3.0.3",
     "msw-storybook-addon": "3.0.3",
+    "node-html-parser": "9.0.5",
     "playwright": "1.64.1",
     "prettier": "3.9.10",
     "shadcn": "4.23.0",
