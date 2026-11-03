@@ -18,8 +18,8 @@ for (const {heading, path} of PAGES) {
   test(`${path} responds 200 and renders its own page`, async ({request}) => {
     const response = await request.get(path);
     expect(response.status()).toBe(200);
-    const document = parseHtml(await response.text());
-    expect(document.querySelector('h1')?.text.trim()).toBe(heading);
+    const root = parseHtml(await response.text());
+    expect(root.querySelector('h1')?.text.trim()).toBe(heading);
   });
 }
 
