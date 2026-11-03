@@ -31,12 +31,10 @@
 #     holding a bare require, import or from specifier;
 #   - require_node_typescript;
 #   - `command -v` or `-V` naming pnpm, npx, playwright or vitest inside a
-#     command substitution: the suite captures the real tool's path to run it
-#     later, often from a string it writes out as a wrapper. A stub of the same
-#     name in the file does not cancel it: a suite captures the real path
-#     before its stub reaches PATH, and a capture that resolved a stub would
-#     cost only a needless Node install. A bare `command -v` probe is not a
-#     use.
+#     command substitution or backticks: the suite captures the tool's path to
+#     run it later. A stub of the same name in the file does not cancel it: a
+#     capture that resolved a stub would cost only a needless Node install. A
+#     bare `command -v` probe is not a use.
 # A command word is read after assignments, `run` and its flags, `!`, `if`,
 # `then`, `do`, `while`, `exec`, `env`, `nohup`, `time`, `timeout <n>` and
 # `sudo`; after `|`, `;`, `&&`, `||`, `&`, a subshell or a command

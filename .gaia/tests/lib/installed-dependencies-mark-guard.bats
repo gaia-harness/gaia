@@ -152,16 +152,18 @@ SUITE
 }
 
 @test "a captured command -v path is a call, even beside a stub of the same name" {
-  local shape
+  local tool shape
   for shape in \
-    'printf '"'"'exec "%s" x\n'"'"' "$(command -v pnpm)" >"$BATS_TEST_TMPDIR/wrapper"' \
-    'pnpm_path=$(command -v npx)' \
-    'tool=`command -v vitest`'; do
+    'pnpm|printf '"'"'exec "%s" x\n'"'"' "$(command -v pnpm)" >"$BATS_TEST_TMPDIR/wrapper"' \
+    'npx|tool_path=$(command -v npx)' \
+    'vitest|tool_path=`command -v vitest`'; do
+    tool="${shape%%|*}"
+    shape="${shape#*|}"
     rm -f "$SUITE_DIRECTORY"/*.bats
     write_suite captured <<SUITE
 TEST "shape" {
   $shape
-  printf '#!/bin/sh\nexit 0\n' >"\$BATS_TEST_TMPDIR/stub-bin/pnpm"
+  printf '#!/bin/sh\nexit 0\n' >"\$BATS_TEST_TMPDIR/stub-bin/$tool"
 }
 SUITE
     run_guard
