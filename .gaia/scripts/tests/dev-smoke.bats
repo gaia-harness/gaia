@@ -2,8 +2,9 @@
 #
 # Suite for .gaia/scripts/dev-smoke.sh: the Quality Gate's dev smoke test.
 # Proves it answers on this tree's dev port, stops only the server it started
-# (also when the listener is a grandchild, the way pnpm runs vite), and refuses
-# a port someone else holds without touching the holder.
+# (also when the listener is a grandchild, the way pnpm runs vite), follows
+# only same-origin redirects to a final 200, and refuses a port someone else
+# holds without touching the holder.
 #
 # Fixtures: a throwaway git repository with a port package, an ephemeral
 # slot-0 dev port through GAIA_PORTS_DEV_BASE_PORT, a stand-in dev server
@@ -83,10 +84,11 @@ start_listener() {
   STARTED_PIDS+=("$LISTENER_PID")
 }
 
-# server_command <status>: the stand-in dev server, writing its pid where a
-# test can read it after the script returns.
+# server_command <status> [<location>]: the stand-in dev server, writing its
+# pid where a test can read it after the script returns. With <location>, its
+# `/` 302s there.
 server_command() {
-  printf 'echo $$ >%q; exec node %q "$GAIA_DEV_SMOKE_PORT" %q' "$SCRATCH/server.pid" "$HTTP_FIXTURE" "$1"
+  printf 'echo $$ >%q; exec node %q "$GAIA_DEV_SMOKE_PORT" %q %q' "$SCRATCH/server.pid" "$HTTP_FIXTURE" "$1" "${2:-}"
 }
 
 # The stand-in server the script launched is gone and nothing listens on the
@@ -122,6 +124,46 @@ assert_server_stopped() {
   run bash "$SCRIPT" --tree "$TREE" --timeout 30
   [ "$status" -eq 1 ]
   [[ "$output" == *"answered HTTP 500, expected 200"* ]]
+  assert_server_stopped
+}
+
+@test "same-origin redirect to a page that renders: exit 0" {
+  GAIA_DEV_SMOKE_SERVER_COMMAND="$(server_command 200 /login)"
+  export GAIA_DEV_SMOKE_SERVER_COMMAND
+  run bash "$SCRIPT" --tree "$TREE" --timeout 30
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"localhost:$DEV_PORT/ answered HTTP 200 after following redirects to http://localhost:$DEV_PORT/login"* ]]
+  assert_server_stopped
+}
+
+@test "same-origin redirect to an error page: exit 1 names the final status" {
+  GAIA_DEV_SMOKE_SERVER_COMMAND="$(server_command 500 /login)"
+  export GAIA_DEV_SMOKE_SERVER_COMMAND
+  run bash "$SCRIPT" --tree "$TREE" --timeout 30
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"answered HTTP 500 at http://localhost:$DEV_PORT/login, expected 200"* ]]
+  assert_server_stopped
+}
+
+# The other origin answers 200, so a smoke that followed it would pass.
+@test "redirect to another origin: exit 1 without following it" {
+  local other_port=$((DEV_PORT + 150)) other_log="$SCRATCH/other.log"
+  (nohup node "$HTTP_FIXTURE" "$other_port" 200 >"$other_log" 2>&1 </dev/null 3>&- & echo $! >"$SCRATCH/other.pid")
+  STARTED_PIDS+=("$(cat "$SCRATCH/other.pid")")
+  GAIA_DEV_SMOKE_SERVER_COMMAND="$(server_command 200 "http://localhost:$other_port/")"
+  export GAIA_DEV_SMOKE_SERVER_COMMAND
+  run bash "$SCRIPT" --tree "$TREE" --timeout 30
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"redirected to http://localhost:$other_port/, outside http://localhost:$DEV_PORT"* ]]
+  assert_server_stopped
+}
+
+@test "redirect loop: exit 1 after the redirect limit" {
+  GAIA_DEV_SMOKE_SERVER_COMMAND="$(server_command 200 /)"
+  export GAIA_DEV_SMOKE_SERVER_COMMAND
+  run bash "$SCRIPT" --tree "$TREE" --timeout 30
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"redirected more than 5 times"* ]]
   assert_server_stopped
 }
 

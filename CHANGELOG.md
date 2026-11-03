@@ -40,6 +40,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **The dev smoke test passes an app whose `/` redirects:** an auth-gated app that sends `/` to a login page failed the Quality Gate's dev server step, and the post-audit gate, though its server was healthy. The smoke now follows up to five redirects within the dev server's own origin and passes when the final page answers 200; a redirect to another host, a redirect loop or a final error page still fails (#3274)
 - **Per-worker Playwright servers start reliably at high worker counts:** concurrent `pnpm dev` starts deleted each other's generated route types and exited, so they now start one at a time; each binds and is probed on `127.0.0.1`, so a start no longer times out where `localhost` resolves to IPv6 `::1` first; and a failed start names a log holding the server's output (#3270)
 - **The vendored playwright-cli skill is updated to 0.1.23:** its tracing examples open a browser before `tracing-start`, which records nothing without one; it now says `--raw` keeps the result, errors and snapshot; and it recommends `not.toBeChecked()` in place of the nonexistent `toBeUnchecked()` matcher (#2727, #2728)
 - **`/gaia-spec`'s final review prints as plain Markdown:** the brief you approve before the SPEC saves no longer prints inside a code fence; it uses bold labels, like the first review (#3217)
