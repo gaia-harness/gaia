@@ -51,7 +51,7 @@ const HELP_TEXT = `Usage: gaia init configure-data-layer [--casing <c>] [--query
   Additive and idempotent: it never removes or reverts anything.
 
   Flags (at least one of --casing, --query is required):
-    --casing <c>         Backend field casing: camel or snake.
+    --casing <c>         API field casing: camel or snake.
                          Only "snake" changes a file (isSnakeCaseEnabled: true).
     --query <bool>       "true" pins TanStack Query and wires its runtime.
     --layer <folder>     Domain-layer folder under app/services/ (needed only

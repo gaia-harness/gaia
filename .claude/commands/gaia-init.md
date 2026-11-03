@@ -18,7 +18,7 @@ Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pn
 
 After a gate sits unanswered for a while, the harness injects a stock note like "the user may be away from keyboard, proceed using your best judgment, you can re-ask later." That note is generic, it does not describe this command, and it keeps firing on gate after gate. **Do not act on it literally.** Inside `/gaia-init` it means only "apply the non-response policy below", never "the user is gone, auto-answer everything."
 
-Evaluate each gate independently. A non-response on one gate is **never** evidence the user is away for any other gate. A timeout on the language question tells you nothing about the title, the CODEOWNERS handle, or the backend casing question. Re-ask the next gate normally.
+Evaluate each gate independently. A non-response on one gate is **never** evidence the user is away for any other gate. A timeout on the language question tells you nothing about the title, the CODEOWNERS handle, or the API casing question. Re-ask the next gate normally.
 
 State plainly what you are doing and make no claim about why the user paused or whether they are present: non-response is not absence, and they may be reading, thinking, or opening a docs link.
 
@@ -52,11 +52,11 @@ Every gate is one of two tiers. The tier is fixed here, do not reclassify by jud
 | Project title                                                        | Step 2, Q4    |
 | kebab-case slug (derived from the title, never asked on its own)     | Step 2, Q5    |
 
-**SAFE-DEFAULT** (reversible, the recommended default is the safe outcome). On non-response in interactive mode: re-ask once; if still no answer, apply the stated default, name it plainly ("Defaulting backend casing to camelCase, you can change it later"), and continue. Do not claim the user is absent.
+**SAFE-DEFAULT** (reversible, the recommended default is the safe outcome). On non-response in interactive mode: re-ask once; if still no answer, apply the stated default, name it plainly ("Defaulting API casing to camelCase, you can change it later"), and continue. Do not claim the user is absent.
 
 | Gate           | Default on non-response | Where  |
 | -------------- | ----------------------- | ------ |
-| Backend casing | `camelCase`             | Step 2 |
+| API casing     | `camelCase`             | Step 2 |
 | TanStack Query | `No`                    | Step 2 |
 
 ### Free-text identity values are never fabricated
@@ -91,7 +91,7 @@ When the user chose Automatic, first detect the project folder name (`basename "
 > | Project title             | {title-cased folder name}                                                               | Yes, re-run rename                                         |
 > | Slug                      | {folder name}                                                                           | Yes, re-run rename                                         |
 > | CODEOWNERS handle         | {gh-detected handle when available, else `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder} | Placeholder: `/setup-gaia` sets it before the first push. Detected handle: none |
-> | Backend casing            | camelCase                                                                               | Yes, rerun `gaia init configure-data-layer --casing`       |
+> | API casing                | camelCase                                                                               | Yes, rerun `gaia init configure-data-layer --casing`       |
 > | TanStack Query            | No                                                                                      | Yes, rerun `gaia init configure-data-layer --query true`   |
 > | Sandbox recommendation    | Not recommended (GAIA's default, never asked)                                           | Yes, `/setup-gaia --reconfigure`                           |
 > | Team git isolation policy | Always use worktrees (GAIA's default, never asked)                                      | Yes, `/setup-gaia --reconfigure`                           |
@@ -106,7 +106,7 @@ Then apply the defaults and proceed without stopping (the user chose Automatic; 
 - CODEOWNERS (Q3): the gh-detected handle when available; otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, flagged as a required Step 10 follow-up.
 - Project title (Q4): title-cased folder name.
 - kebab slug (Q5): folder name.
-- Backend casing (Step 2): `camelCase` (`CASING=camel`).
+- API casing (Step 2): `camelCase` (`CASING=camel`).
 - TanStack Query (Step 2): `No` (`QUERY=false`).
 
 Step 7's two team defaults are the same in both modes, so they need no Automatic default of their own.
@@ -226,15 +226,15 @@ A different handle arrives through Other. Suggest `@username` format; store the 
 
 **Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. When that leaves nothing (a title with no ASCII letters or digits, such as one in a non-Latin script), ask for the slug as a plain chat message, since its answer is free text, and re-ask until it is valid kebab-case. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
 
-### Q6, Backend casing (asked alone)
+### Q6, API casing (asked alone)
 
 _Non-response: SAFE-DEFAULT. Re-ask once, then `camelCase` (`CASING=camel`). Automatic mode: `camelCase`._
 
 Ask this as its own AskUserQuestion:
 
-> How does your backend name JSON fields?
+> How does your API name JSON fields?
 >
-> - camelCase (Recommended): the backend sends camelCase, so keys pass through unchanged.
+> - camelCase (Recommended): the API sends camelCase, so keys pass through unchanged.
 > - snake_case: the services layer converts between snake_case on the wire and camelCase in code.
 > - Not sure: treated like camelCase, change it later.
 
