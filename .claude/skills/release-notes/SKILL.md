@@ -205,7 +205,7 @@ export default {
 2. Read `../website/src/pages/changelog/types.ts` for the current `Release` fields and the newest `releases/*.ts` for the current file form. Then read the version's block from `CHANGELOG.md`. Classify every line: keep, drop (rules 7/8), consolidate with siblings (rule 10), reframe or drop a `/update-gaia`-automated cleanup (rule 14), or ambiguous (rule 9).
 3. Rewrite the kept lines through the rules. Group by bucket (rule 13). Merge consolidations. Find the docs page for each subject and link it (rule 15).
 4. Draft two or three `headline` options per Output (a) and rule 17, recommended first, or a `summary` in place of buckets when one of Output (a)'s three `summary` cases applies.
-5. Assemble the `.ts` in the form of the file you read in step 2, with no `preamble`. Sweep for em-dashes, explanatory colons, bullets that don't name a feature the reader recognizes, and bullets over 40 words or carrying a file path, flag, config key or instruction the reader doesn't need (rules 1/2/6/12).
+5. Assemble the `.ts` in the form of the file you read in step 2. Sweep for em-dashes, explanatory colons, bullets that don't name a feature the reader recognizes, and bullets over 40 words or carrying a file path, flag, config key or instruction the reader doesn't need (rules 1/2/6/12).
 6. Write `<version>.ts`.
 7. Print the editorial-decisions report. Every changelog line that didn't survive appears under Dropped or Needs a human ruling, no silent cuts.
 8. Put each **Needs a human ruling** line to the maintainer with `AskUserQuestion` (Keep / Drop, recommended first), then apply the answers to the `.ts` file.
