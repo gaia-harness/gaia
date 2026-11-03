@@ -97,8 +97,10 @@ export const convertCase = (
     return Object.entries(input).reduce(
       (accumulated: Record<string, unknown>, [key, value]) => {
         if (Array.isArray(value)) {
-          accumulated[transformKey(key)] = value.map<unknown>((item) =>
-            isObject(item) ? convertCase(transformKey, item) : item
+          accumulated[transformKey(key)] = value.map<unknown>((arrayElement) =>
+            isObject(arrayElement) ?
+              convertCase(transformKey, arrayElement)
+            : arrayElement
           );
         } else if (isObject(value)) {
           accumulated[transformKey(key)] = convertCase(transformKey, value);

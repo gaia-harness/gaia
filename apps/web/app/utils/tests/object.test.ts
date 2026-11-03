@@ -92,7 +92,7 @@ describe('object utils', () => {
 
   test('convertCase', () => {
     expect(convertCase((f) => f, {})).toEqual({});
-    const obj = {
+    const mixedCaseNestedRecord = {
       a: [
         {
           a: 1,
@@ -111,7 +111,7 @@ describe('object utils', () => {
         c: undefined,
       },
     };
-    expect(convertCase((f) => `${f}${f}`, obj)).toEqual({
+    expect(convertCase((f) => `${f}${f}`, mixedCaseNestedRecord)).toEqual({
       aa: [
         {
           aa: 1,
@@ -177,9 +177,21 @@ describe('object utils', () => {
   );
 
   test('compact', () => {
-    const obj = {a: 'b', c: '', d: false, e: null, f: []};
-    expect(compact(obj)).toEqual({a: 'b'});
-    expect(compact(obj, {keepFalsy: true})).toEqual({a: 'b', c: '', d: false});
-    expect(compact(obj, {keepEmptyArray: true})).toEqual({a: 'b', f: []});
+    const recordWithFalsyAndEmptyValues = {
+      a: 'b',
+      c: '',
+      d: false,
+      e: null,
+      f: [],
+    };
+    expect(compact(recordWithFalsyAndEmptyValues)).toEqual({a: 'b'});
+    expect(compact(recordWithFalsyAndEmptyValues, {keepFalsy: true})).toEqual({
+      a: 'b',
+      c: '',
+      d: false,
+    });
+    expect(
+      compact(recordWithFalsyAndEmptyValues, {keepEmptyArray: true})
+    ).toEqual({a: 'b', f: []});
   });
 });
