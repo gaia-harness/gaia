@@ -39,7 +39,7 @@ uats:
   - uat_id: UAT-001
     given: a visitor with items in the cart
     when: they check out as a guest
-    then: the confirmation page shows the order number
+    then: focus lands on the order number after checkout
   - uat_id: UAT-002
     given: the save button is shown
     when: the user presses save
@@ -59,7 +59,7 @@ write_routing() {
 <!-- gaia:uat-routing:start -->
 | uat_id | surface | phase | feature_folder | file_name |
 |---|---|---|---|---|
-| UAT-001 | e2e | 2 | checkout | guest-checkout-confirms-order.spec.ts |
+| UAT-001 | browser | 2 | checkout | guest-checkout-confirms-order.spec.ts |
 | UAT-002 | story | 3 | - | - |
 | UAT-003 | non-ui | 1 | - | - |
 <!-- gaia:uat-routing:end -->
@@ -630,11 +630,136 @@ strip_marked() {
   done
 }
 
-@test "the misrouting warning names a route before an e2e UAT" {
+@test "the misrouting warning names a route before a browser UAT" {
   spec_fixture
   write_spec 'the page navigates to /checkout'
   write_task '- Story test criterion (UAT-002): the page navigates to /checkout'
   verify_spec
   [ "$status" -eq 0 ]
-  echo "$output" | grep -qF 'confirm it is not a route or, when only a browser shows it, an e2e UAT'
+  echo "$output" | grep -qF 'confirm it is not a route or, when only a browser shows it, a browser UAT'
+}
+
+# one_uat_plan <surface> <then-clause>: a spec-derived plan with the one UAT
+# routed to <surface>; the SPEC and routing file are written fresh.
+one_uat_plan() {
+  local file_cells='checkout | guest-checkout-confirms-order.spec.ts'
+  cat >"$SPEC" <<EOF2
+---
+spec_id: SPEC-901
+uats:
+  - uat_id: UAT-001
+    given: a visitor
+    when: they act
+    then: $2
+---
+EOF2
+  cat >"$PLAN/README.md" <<EOF2
+# Plan
+
+<!-- gaia:uat-routing:start -->
+| uat_id | surface | phase | feature_folder | file_name |
+|---|---|---|---|---|
+| UAT-001 | $1 | 1 | $file_cells |
+<!-- gaia:uat-routing:end -->
+EOF2
+  write_orchestrator "${SPEC_ORDER[@]}"
+  printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
+  write_task '- nothing'
+}
+
+# scratch_verifier <edit-expression>: a copy of plan-verify.sh (with the
+# libraries it sources and planner.md) in the test tmp dir, run through sed.
+scratch_verifier() {
+  local root="$BATS_TEST_TMPDIR/scratch"
+  mkdir -p "$root/.gaia/scripts/spec" "$root/.claude/skills/gaia/references/plan"
+  cp "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$root/.gaia/scripts/spec/"
+  cp "$PLANNER_MD" "$root/.claude/skills/gaia/references/plan/planner.md"
+  sed "$1" "$SCRIPT" >"$root/.gaia/scripts/spec/plan-verify.sh"
+  SCRATCH_SCRIPT="$root/.gaia/scripts/spec/plan-verify.sh"
+}
+
+@test "a plan with a real-server row passes" {
+  one_uat_plan real-server 'the sign-in response sets the session cookie'
+  verify_spec
+  [ "$status" -eq 0 ]
+}
+
+@test "a browser row naming only a status or redirect warns toward the route surface and exits 0" {
+  one_uat_plan browser 'the response status is 302 and it redirects to the sign-in path'
+  verify_spec
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF 'WARN: UAT-001 is routed browser but its then-clause names only a status or a redirect; the route surface is the likely home'
+}
+
+@test "a browser row naming only server-rendered text warns toward real-server and exits 0" {
+  one_uat_plan browser 'the page shows the heading Orders'
+  verify_spec
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF 'WARN: UAT-001 is routed browser but its then-clause names only server-rendered text; the real-server surface is the likely home'
+}
+
+@test "a browser row naming client behavior draws no warning" {
+  one_uat_plan browser 'focus moves to the first field of the dialog'
+  verify_spec
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF 'WARN:' && return 1
+  true
+}
+
+@test "red twin: without the rendered-text pattern the server-rendered text fixture prints no warning" {
+  one_uat_plan browser 'the page shows the heading Orders'
+  scratch_verifier 's/render|shows?|displays?|heading|text|html|lists?|label|title|message|visible/zzzznomatch/'
+  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF 'server-rendered text' && return 1
+  true
+}
+
+@test "a new plan with an e2e row exits 1, naming the UAT and both replacement surfaces" {
+  one_uat_plan e2e 'focus moves to the first field of the dialog'
+  verify_spec
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -qF 'plan-verify: uat-routing: UAT-001 uses the e2e surface, which a new plan no longer takes; route it real-server (the live stack with no page) or browser (only a real browser shows it)'
+}
+
+@test "red twin: without the e2e refusal the same plan exits 0" {
+  one_uat_plan e2e 'focus moves to the first field of the dialog'
+  scratch_verifier 's/^          fail "uat-routing: \$uat_id uses the e2e surface.*$/          :/'
+  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ]
+}
+
+@test "the shared validator accepts an e2e row, refuses a real-server and browser row on one path, and names an unknown surface" {
+  one_uat_plan e2e 'focus moves'
+  run bash -c ". '$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh'; uat_lib_validate_routing '$SPEC' '$PLAN/README.md'"
+  [ "$status" -eq 0 ]
+  cat >"$SPEC" <<'EOF2'
+---
+spec_id: SPEC-901
+uats:
+  - uat_id: UAT-001
+    given: a
+    when: b
+    then: c
+  - uat_id: UAT-002
+    given: a
+    when: b
+    then: d
+---
+EOF2
+  cat >"$PLAN/README.md" <<'EOF2'
+<!-- gaia:uat-routing:start -->
+| uat_id | surface | phase | feature_folder | file_name |
+|---|---|---|---|---|
+| UAT-001 | real-server | 1 | checkout | one.spec.ts |
+| UAT-002 | browser | 1 | checkout | one.spec.ts |
+<!-- gaia:uat-routing:end -->
+EOF2
+  run bash -c ". '$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh'; uat_lib_validate_routing '$SPEC' '$PLAN/README.md'"
+  [ "$status" -eq 2 ]
+  echo "$output" | grep -qF 'UAT-002 resolves to checkout/one.spec.ts, a path another real-server, browser or e2e row already claims'
+  sed -i.bak 's/| browser |/| desktop |/' "$PLAN/README.md"
+  run bash -c ". '$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh'; uat_lib_validate_routing '$SPEC' '$PLAN/README.md'"
+  [ "$status" -eq 2 ]
+  echo "$output" | grep -qF "uat-routing: UAT-002 has surface 'desktop'; expected real-server, browser, route, story or non-ui"
 }

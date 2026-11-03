@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compares each rendered e2e spec's Given/When/Then contract comment with the
+# Compares each rendered Playwright spec's (real-server, browser or legacy e2e) Given/When/Then contract comment with the
 # SPEC's UAT text, through the plan's routing table. The generated plan
 # orchestrator and the owning-phase gate (uat-gate.sh) call it from the resolved
 # isolation root; the contract it enforces is
@@ -7,7 +7,8 @@
 #
 #   uat-divergence-check.sh <spec-path> --routing <routing-file> [--phase <N> | --all]
 #
-# With neither --phase nor --all, every e2e and route row is checked.
+# With neither --phase nor --all, every real-server, browser, legacy e2e and route row is checked;
+# story and non-ui rows render nothing and are skipped.
 #
 # Exit codes the caller branches on:
 #   0  every selected spec's contract matches the SPEC
@@ -91,9 +92,13 @@ route_directory=$(uat_lib_route_tests_directory "$repo_root") || exit 2
 mismatches=0
 while IFS=$'\t' read -r uat_id surface phase feature_folder file_name; do
   case "$surface" in
-    e2e) relative_path="$e2e_directory/$feature_folder/$file_name" ;;
+    real-server | browser | e2e) relative_path="$e2e_directory/$feature_folder/$file_name" ;;
     route) relative_path="$route_directory/$(uat_lib_route_test_path "$feature_folder" "$file_name")" ;;
-    *) continue ;;
+    story | non-ui) continue ;;
+    *)
+      printf 'uat-divergence-check.sh: %s has surface %s, which this check does not know\n' "$uat_id" "$surface" >&2
+      exit 2
+      ;;
   esac
   if [ -n "$selected_phase" ] && [ "$phase" != "$selected_phase" ]; then
     continue

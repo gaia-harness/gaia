@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # The owning-phase UAT gate. The generated plan orchestrator runs it from the
 # resolved isolation root before an owning phase may commit, and once more over
-# every e2e and route row before the pre-merge audit; the procedure is
+# every real-server, browser, legacy e2e and route row before the pre-merge audit; the procedure is
 # .claude/skills/gaia/references/spec/lifecycle.md.
 #
 #   uat-gate.sh <spec-path> --routing <routing-file> (--phase <N> | --all) [--report <playwright-json>] [--vitest-report <vitest-json>]
 #
-# For the selected e2e and route rows (the phase's own, or every one), in order:
+# For the selected Playwright (real-server, browser, legacy e2e) and route rows
+# (the phase's own, or every one), in order:
 #   1. static checks per test file: it exists, line 1 is a contract marker, it
-#      holds no annotation, and it clears a deterministic floor. An e2e file
+#      holds no annotation, and it clears a deterministic floor. A Playwright file
 #      holds none of test.fail(, test.fixme(, test.skip(, .only(,
 #      test.describe.skip( or test.describe.fixme(, and has a page.<method>(
 #      call or a request-fixture call, plus an expect( whose first argument is
@@ -19,14 +20,14 @@
 #   4. the route arm, when route rows are selected: Vitest (node project) over
 #      only the selected files, unless --vitest-report supplies the JSON. It
 #      boots no browser and no server, and a failure exits 1 before Playwright;
-#   5. the Playwright arm, when e2e rows are selected: Playwright over only the
+#   5. the Playwright arm, when Playwright rows are selected: Playwright over only the
 #      selected files with the JSON reporter, unless --report supplies that
 #      JSON: every test in a file must be expected to pass and have passed, and
 #      each file must hold at least one test. --report is Playwright-only.
 # A failure in steps 1 to 3 stops before either runner starts.
 #
 # Exit codes the caller branches on:
-#   0  pass; also when the selection has no e2e or route rows (prints `no owned UAT tests`)
+#   0  pass; also when the selection has no Playwright or route rows (prints `no owned UAT tests`)
 #   1  gate failure; one stderr line per failing file: `uat-gate: <file>: <reason>`
 #      with reason one or more of missing, annotation, floor, divergence,
 #      working-doc-id, expected-failure, skipped, fixme, failed, no-tests,
@@ -147,14 +148,15 @@ route_files=''
 selected_count=0
 while IFS=$'\t' read -r uat_id surface phase feature_folder file_name; do
   case "$surface" in
-    e2e | route) ;;
+    real-server | browser | e2e | route) ;;
     *) continue ;;
   esac
   if [ -n "$selected_phase" ] && [ "$phase" != "$selected_phase" ]; then
     continue
   fi
-  if [ "$surface" = "e2e" ]; then
-    selected_files="$selected_files$e2e_directory/$feature_folder/$file_name"$'\n'
+  if [ "$surface" != "route" ]; then
+    # Each row is path, a tab, then the normalized surface (a legacy e2e row is browser).
+    selected_files="$selected_files$e2e_directory/$feature_folder/$file_name"$'\t'"$(uat_lib_playwright_surface "$surface")"$'\n'
   else
     route_files="$route_files$route_directory/$(uat_lib_route_test_path "$feature_folder" "$file_name")"$'\n'
   fi
@@ -175,7 +177,7 @@ add_failure() {
 
 floor_e2e=0
 floor_route=0
-while IFS= read -r relative_path; do
+while IFS=$'\t' read -r relative_path _; do
   [ -n "$relative_path" ] || continue
   is_route=0
   case "$relative_path" in
@@ -321,7 +323,7 @@ if [ -z "$report_path" ]; then
   trap 'rm -rf "$gate_temporary"' EXIT
   report_path="$gate_temporary/report.json"
   playwright_arguments=()
-  while IFS= read -r relative_path; do
+  while IFS=$'\t' read -r relative_path _; do
     [ -n "$relative_path" ] || continue
     playwright_arguments+=("${relative_path#"$package_prefix"}")
   done <<<"$selected_files"
@@ -344,7 +346,7 @@ if jq -e '((.errors // []) | length) > 0 or ([.. | objects | select(has("results
   exit 4
 fi
 
-while IFS= read -r relative_path; do
+while IFS=$'\t' read -r relative_path _; do
   [ -n "$relative_path" ] || continue
   from_package="${relative_path#"$package_prefix"}"
   from_test_directory="${relative_path#"$e2e_directory"/}"

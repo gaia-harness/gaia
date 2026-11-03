@@ -2,7 +2,8 @@
 #
 # Sourced by uat-lib.sh, never executed. Helpers that keep uat-lib.sh under
 # its line limit: uat_lib_code_only, which reads a rendered test as code alone,
-# the route-row validation arm of uat_lib_validate_routing, and the frontend
+# the route-row and Playwright-row validation arms of uat_lib_validate_routing,
+# the surface normalizer, and the frontend
 # package lookup behind the directory helpers.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
@@ -85,6 +86,44 @@ uat_lib_route_row_problems() {
     problems=$((problems + 1))
   fi
   printf '%s\n' "$problems"
+}
+
+# One real-server, browser or legacy e2e row's refusals, each one
+# `uat-routing:` line on stderr; the surface name in a message is the row's own.
+# Prints the number of problems to stdout. Arguments: surface, uat_id,
+# feature_folder, file_name, the newline-joined paths any earlier real-server,
+# browser or e2e row claims (one path space across the three surfaces).
+uat_lib_playwright_row_problems() {
+  local surface="$1" uat_id="$2" feature_folder="$3" file_name="$4" claimed_paths="$5"
+  local problems=0 kebab_segment='[a-z0-9]+(-[a-z0-9]+)*'
+  if ! [[ "$feature_folder" =~ ^$kebab_segment(/$kebab_segment)*$ ]]; then
+    printf "uat-routing: %s is %s with feature_folder '%s'; expected kebab-case segments\n" "$uat_id" "$surface" "$feature_folder" >&2
+    problems=$((problems + 1))
+  fi
+  if ! [[ "$file_name" =~ ^$kebab_segment\.spec\.ts$ ]]; then
+    printf "uat-routing: %s is %s with file_name '%s'; expected a kebab-case name ending .spec.ts\n" "$uat_id" "$surface" "$file_name" >&2
+    problems=$((problems + 1))
+  fi
+  if grep -qiE '(spec|uat|plan)-[0-9]' <<<"$feature_folder/$file_name"; then
+    printf "uat-routing: %s's feature_folder or file_name carries a working-document id; name the behavior instead\n" "$uat_id" >&2
+    problems=$((problems + 1))
+  fi
+  if grep -qxF -- "$feature_folder/$file_name" <<<"$claimed_paths"; then
+    printf 'uat-routing: %s resolves to %s/%s, a path another real-server, browser or e2e row already claims\n' "$uat_id" "$feature_folder" "$file_name" >&2
+    problems=$((problems + 1))
+  fi
+  printf '%s\n' "$problems"
+}
+
+# Prints the Playwright surface a routing surface names: real-server for
+# real-server, browser for browser or the legacy e2e. Prints nothing and
+# returns 1 for any other surface. The one place a legacy e2e row reads as browser.
+uat_lib_playwright_surface() {
+  case "${1:-}" in
+    real-server) printf 'real-server\n' ;;
+    browser | e2e) printf 'browser\n' ;;
+    *) return 1 ;;
+  esac
 }
 
 # Prints a subdirectory of the web package, bare for package path `.`.

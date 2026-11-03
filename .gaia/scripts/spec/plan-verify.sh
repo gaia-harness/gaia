@@ -27,8 +27,22 @@
 # README.md validates (delegated to uat_lib_validate_routing); the three UAT
 # sentinels are required; every story-routed UAT has a story test
 # criterion line in some task doc whose text carries the UAT's then-clause.
-# A non-e2e row whose then-clause reads like a route, navigation, URL, redirect,
-# session or server-state check prints a non-fatal WARN: line (misrouting hint).
+# A story or non-ui row whose then-clause reads like a route, navigation, URL,
+# redirect, session or server-state check prints a non-fatal WARN: line
+# (misrouting hint). An e2e row, which only a plan generated before the split
+# holds, fails with a line telling the planner to route it real-server (the live
+# stack with no page) or browser (only a real browser shows it); the shared
+# validator still accepts it. A browser row's then-clause is checked against
+# three case-insensitive word lists, in this precedence, and the result is a
+# non-fatal WARN: line that never changes the exit code:
+#   CLIENT   focus|hydrat|client[- ]?(side|navigation|submitted)|navigat|click|
+#            keyboard|submit|drag|scroll|hover|javascript
+#            a match means a browser is needed: no WARN
+#   RENDERED render|shows?|displays?|heading|text|html|lists?|label|title|
+#            message|visible
+#            a match: the real-server surface is the likely home
+#   STATUS   status|redirect|[1-5][0-9]{2}([^0-9]|$)|not found|forbidden|refus
+#            a match: the route surface is the likely home
 #
 # Every failure is reported on stderr, one line each, in a single run.
 #
@@ -293,9 +307,23 @@ if [ -n "$spec_path" ] && [ -f "$readme" ]; then
           ;;
       esac
       case "$surface" in
+        e2e)
+          fail "uat-routing: $uat_id uses the e2e surface, which a new plan no longer takes; route it real-server (the live stack with no page) or browser (only a real browser shows it)"
+          ;;
+        browser)
+          if grep -qiE 'focus|hydrat|client[- ]?(side|navigation|submitted)|navigat|click|keyboard|submit|drag|scroll|hover|javascript' <<<"$then_clause"; then
+            :
+          elif grep -qiE 'render|shows?|displays?|heading|text|html|lists?|label|title|message|visible' <<<"$then_clause"; then
+            printf 'WARN: %s is routed browser but its then-clause names only server-rendered text; the real-server surface is the likely home\n' "$uat_id" >&2
+          elif grep -qiE 'status|redirect|[1-5][0-9]{2}([^0-9]|$)|not found|forbidden|refus' <<<"$then_clause"; then
+            printf 'WARN: %s is routed browser but its then-clause names only a status or a redirect; the route surface is the likely home\n' "$uat_id" >&2
+          fi
+          ;;
+      esac
+      case "$surface" in
         story | non-ui)
           if grep -qiE 'route|navigat|redirect|session|server[ -]?(side )?state|(^|[^a-z])urls?([^a-z]|$)' <<<"$then_clause"; then
-            printf 'WARN: %s is routed %s but its then-clause reads like a route, navigation, URL, redirect, session or server-state check; confirm it is not a route or, when only a browser shows it, an e2e UAT\n' "$uat_id" "$surface" >&2
+            printf 'WARN: %s is routed %s but its then-clause reads like a route, navigation, URL, redirect, session or server-state check; confirm it is not a route or, when only a browser shows it, a browser UAT\n' "$uat_id" "$surface" >&2
           fi
           ;;
       esac

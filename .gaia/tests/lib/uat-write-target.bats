@@ -32,7 +32,7 @@ EOF
 <!-- gaia:uat-routing:start -->
 | uat_id | surface | phase | feature_folder | file_name |
 |---|---|---|---|---|
-| UAT-001 | e2e | 1 | sign-in | sign-in-page-opens.spec.ts |
+| UAT-001 | browser | 1 | sign-in | sign-in-page-opens.spec.ts |
 <!-- gaia:uat-routing:end -->
 EOF
 }
@@ -96,7 +96,7 @@ run_uat_write() {
 }
 
 @test "a route row renders under the frontend package's app/route-tests, built-in default and a non-default package path" {
-  sed -i.bak 's/| UAT-001 | e2e | 1 | sign-in | sign-in-page-opens.spec.ts |/| UAT-001 | route | 1 | sign-in | sign-in-page-opens.test.ts |/' "$ROUTING"
+  sed -i.bak 's/| UAT-001 | browser | 1 | sign-in | sign-in-page-opens.spec.ts |/| UAT-001 | route | 1 | sign-in | sign-in-page-opens.test.ts |/' "$ROUTING"
   grep -qF -- '| UAT-001 | route |' "$ROUTING" || return 1
 
   write_builtin_descriptor "$WORK"
@@ -181,7 +181,7 @@ run_uat_write() {
   cp "$rendered" "$WORK/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts"
 
   # The UAT is re-routed off e2e, so the ledger names an unclaimed, unedited file.
-  sed -i.bak 's/| UAT-001 | e2e | 1 | sign-in | sign-in-page-opens.spec.ts |/| UAT-001 | non-ui | 1 | - | - |/' "$ROUTING"
+  sed -i.bak 's/| UAT-001 | browser | 1 | sign-in | sign-in-page-opens.spec.ts |/| UAT-001 | non-ui | 1 | - | - |/' "$ROUTING"
   grep -qF -- '| UAT-001 | non-ui |' "$ROUTING" || return 1
 
   run_uat_write

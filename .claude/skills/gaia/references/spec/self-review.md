@@ -49,6 +49,8 @@ Each UAT must be testable. Flag UATs that:
 
 A UAT states a rule and one representative journey; case tables belong to the lowest layer, written by the implementer. Flag a UAT whose `then` enumerates input values or outcomes of one rule about user-visible behavior (a list of inputs each with its own result). Suggest stating the rule with one representative journey and leaving the cases to the lowest layer.
 
+Also flag several UATs that walk one user flow and differ only in which transition they exercise (assign, decline, reopen, confirm). Suggest that the author fold them into one browser journey UAT for the flow plus one route-surface UAT per transition rule, each route UAT a SPEC UAT (contract-marked, gated and judged like any other): left as siblings, each becomes its own browser file, while one journey and a route test per rule prove the same contracts.
+
 Exempt a UAT on harness, script or doc behavior: its distinct outcomes are the contract, so enumerating them is correct.
 
 ### 6. Pending clarifications
@@ -70,6 +72,7 @@ self-review findings (gate 2 gate):
   inconsistency: <N>: <description>
   ambiguous_uats: <N>: UAT-NNN: <phrasing>
   case_enumerating_uats: <N>: UAT-NNN: <phrasing>
+  sibling_transition_uats: <N>: UAT-NNN, UAT-NNN: <flow>
   pending: <N>: <item summary>, ... (listed as pending_clarifications for the wrapper to ask)
 ```
 

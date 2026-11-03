@@ -75,8 +75,8 @@ uats:
 ---
 EOF
   write_routing \
-    '| UAT-001 | e2e | 1 | checkout | guest-checkout-confirms-order.spec.ts |' \
-    '| UAT-002 | e2e | 2 | orders | order-history-lists-orders.spec.ts |'
+    '| UAT-001 | browser | 1 | checkout | guest-checkout-confirms-order.spec.ts |' \
+    '| UAT-002 | browser | 2 | orders | order-history-lists-orders.spec.ts |'
 }
 
 FILE_A_RELATIVE='apps/web/.playwright/e2e/checkout/guest-checkout-confirms-order.spec.ts'
@@ -108,7 +108,7 @@ uats:
 ---
 EOF
   write_routing \
-    '| UAT-001 | e2e | 2 | checkout | guest-checkout-confirms-order.spec.ts |' \
+    '| UAT-001 | browser | 2 | checkout | guest-checkout-confirms-order.spec.ts |' \
     '| UAT-002 | story | 3 | - | - |' \
     '| UAT-003 | non-ui | 1 | - | - |'
 
@@ -223,8 +223,8 @@ uats:
 ---
 EOF
   write_routing \
-    '| UAT-001 | e2e | 1 | cart | cart-total-drops.spec.ts |' \
-    '| UAT-002 | e2e | 1 | cart | coupon-discount-appears.spec.ts |'
+    '| UAT-001 | browser | 1 | cart | cart-total-drops.spec.ts |' \
+    '| UAT-002 | browser | 1 | cart | coupon-discount-appears.spec.ts |'
   render
   [ "$status" -eq 0 ]
   hand_written="$E2E/cart/cart-hand-written.spec.ts"
@@ -291,8 +291,8 @@ uats:
 ---
 EOF
   write_routing \
-    '| UAT-001 | e2e | 1 | quoting | raw-literal.spec.ts |' \
-    '| UAT-002 | e2e | 1 | quoting | quoted-literal.spec.ts |'
+    '| UAT-001 | browser | 1 | quoting | raw-literal.spec.ts |' \
+    '| UAT-002 | browser | 1 | quoting | quoted-literal.spec.ts |'
 
   render
   [ "$status" -eq 0 ]
@@ -343,9 +343,9 @@ uats:
 ---
 EOF
   write_routing \
-    '| UAT-001 | e2e | 1 | quoting | plain-form.spec.ts |' \
-    '| UAT-002 | e2e | 1 | quoting | double-form.spec.ts |' \
-    '| UAT-003 | e2e | 1 | quoting | single-form.spec.ts |'
+    '| UAT-001 | browser | 1 | quoting | plain-form.spec.ts |' \
+    '| UAT-002 | browser | 1 | quoting | double-form.spec.ts |' \
+    '| UAT-003 | browser | 1 | quoting | single-form.spec.ts |'
 
   givens=$(uat_lib_parse_spec "$SPEC" | cut -f2 | LC_ALL=C sort -u)
   [ "$givens" = "a visitor's \"cart\" & C:\\x" ] || return 1
@@ -374,8 +374,8 @@ uats:
 ---
 EOF
   write_routing \
-    '| UAT-001 | e2e | 1 | checkout | guest-checkout-confirms-order.spec.ts |' \
-    '| UAT-002 | e2e | 1 | followup | follow-up-holds.spec.ts |'
+    '| UAT-001 | browser | 1 | checkout | guest-checkout-confirms-order.spec.ts |' \
+    '| UAT-002 | browser | 1 | followup | follow-up-holds.spec.ts |'
 
   render
   [ "$status" -eq 2 ]
@@ -383,7 +383,7 @@ EOF
   assert_nothing_written || return 1
 
   write_routing \
-    '| UAT-001 | e2e | 1 | checkout | guest-checkout-confirms-order.spec.ts |' \
+    '| UAT-001 | browser | 1 | checkout | guest-checkout-confirms-order.spec.ts |' \
     '| UAT-002 | non-ui | 1 | - | - |'
   render
   [ "$status" -eq 0 ]
@@ -419,7 +419,7 @@ assert_routing_refused() {
   assert_nothing_written
 }
 
-VALID_ROW_ONE='| UAT-001 | e2e | 1 | checkout | guest-checkout-confirms-order.spec.ts |'
+VALID_ROW_ONE='| UAT-001 | browser | 1 | checkout | guest-checkout-confirms-order.spec.ts |'
 VALID_ROW_TWO='| UAT-002 | non-ui | 2 | - | - |'
 
 @test "routing validation: a valid table renders (the twin that keeps the refusals honest)" {
@@ -462,7 +462,7 @@ VALID_ROW_TWO='| UAT-002 | non-ui | 2 | - | - |'
 }
 
 @test "routing validation: an invalid surface is refused" {
-  assert_routing_refused "UAT-002 has surface 'browser'" "$VALID_ROW_ONE" '| UAT-002 | browser | 2 | - | - |'
+  assert_routing_refused "UAT-002 has surface 'desktop'" "$VALID_ROW_ONE" '| UAT-002 | desktop | 2 | - | - |'
 }
 
 @test "routing validation: a non-integer phase is refused" {
@@ -470,19 +470,19 @@ VALID_ROW_TWO='| UAT-002 | non-ui | 2 | - | - |'
 }
 
 @test "routing validation: an e2e row without a folder and file is refused" {
-  assert_routing_refused "UAT-002 is e2e with feature_folder '-'" "$VALID_ROW_ONE" '| UAT-002 | e2e | 2 | - | - |'
+  assert_routing_refused "UAT-002 is browser with feature_folder '-'" "$VALID_ROW_ONE" '| UAT-002 | browser | 2 | - | - |'
 }
 
 @test "routing validation: an e2e file name without the .spec.ts suffix is refused" {
-  assert_routing_refused "expected a kebab-case name ending .spec.ts" "$VALID_ROW_ONE" '| UAT-002 | e2e | 2 | orders | order-history.ts |'
+  assert_routing_refused "expected a kebab-case name ending .spec.ts" "$VALID_ROW_ONE" '| UAT-002 | browser | 2 | orders | order-history.ts |'
 }
 
 @test "routing validation: a working-document id in an e2e file name is refused" {
-  assert_routing_refused "carries a working-document id" "$VALID_ROW_ONE" '| UAT-002 | e2e | 2 | orders | uat-002-order-history.spec.ts |'
+  assert_routing_refused "carries a working-document id" "$VALID_ROW_ONE" '| UAT-002 | browser | 2 | orders | uat-002-order-history.spec.ts |'
 }
 
 @test "routing validation: two e2e rows on one path are refused" {
-  assert_routing_refused "a path another e2e row already claims" "$VALID_ROW_ONE" '| UAT-002 | e2e | 2 | checkout | guest-checkout-confirms-order.spec.ts |'
+  assert_routing_refused "a path another real-server, browser or e2e row already claims" "$VALID_ROW_ONE" '| UAT-002 | browser | 2 | checkout | guest-checkout-confirms-order.spec.ts |'
 }
 
 @test "re-running on unchanged inputs reports every file unchanged and leaves a clean tree" {
@@ -512,7 +512,7 @@ uats:
     then: '"Saved" toast reads "Done"'
 ---
 EOF
-  write_routing '| UAT-001 | e2e | 1 | drafts | saved-toast-reads-done.spec.ts |'
+  write_routing '| UAT-001 | browser | 1 | drafts | saved-toast-reads-done.spec.ts |'
   file="$E2E/drafts/saved-toast-reads-done.spec.ts"
 
   render
@@ -541,7 +541,7 @@ uats:
     then: "'Saved' toast reads 'Done'"
 ---
 EOF
-  write_routing '| UAT-001 | e2e | 1 | drafts | saved-toast-reads-done.spec.ts |'
+  write_routing '| UAT-001 | browser | 1 | drafts | saved-toast-reads-done.spec.ts |'
   file="$E2E/drafts/saved-toast-reads-done.spec.ts"
 
   render
@@ -645,7 +645,7 @@ assert_route_nothing_written() {
 }
 
 @test "route validation: the unknown-surface message names all four surfaces" {
-  assert_routing_refused "expected e2e, route, story or non-ui" "$ROUTE_ROW_ONE" '| UAT-002 | browser | 2 | - | - |'
+  assert_routing_refused "uat-routing: UAT-002 has surface 'desktop'; expected real-server, browser, route, story or non-ui" "$ROUTE_ROW_ONE" '| UAT-002 | desktop | 2 | - | - |'
 }
 
 @test "a route-routed UAT carrying a working-document id is refused and nothing is written" {
@@ -713,7 +713,7 @@ assert_route_nothing_written() {
   write_routing "$ROUTE_ROW_ONE" "$ROUTE_ROW_TWO"
   render
   [ "$status" -eq 0 ] || return 1
-  write_routing "$ROUTE_ROW_ONE" '| UAT-002 | e2e | 2 | orders | order-history-lists-orders.spec.ts |'
+  write_routing "$ROUTE_ROW_ONE" '| UAT-002 | browser | 2 | orders | order-history-lists-orders.spec.ts |'
   render
   [ "$status" -eq 0 ] || return 1
   [ ! -e "$WORK/$ROUTE_FILE_B_RELATIVE" ] || return 1
@@ -726,7 +726,7 @@ assert_route_nothing_written() {
   render
   [ "$status" -eq 0 ] || return 1
   [ -f "$WORK/$FILE_B_RELATIVE" ] || return 1
-  write_routing '| UAT-001 | e2e | 1 | checkout | guest-checkout-confirms-order.spec.ts |' "$ROUTE_ROW_TWO"
+  write_routing '| UAT-001 | browser | 1 | checkout | guest-checkout-confirms-order.spec.ts |' "$ROUTE_ROW_TWO"
   render
   [ "$status" -eq 0 ] || return 1
   [ ! -e "$WORK/$FILE_B_RELATIVE" ] || return 1
@@ -748,4 +748,93 @@ assert_route_nothing_written() {
   grep -qE 'test\.(skip|only|fixme)|it\.skip' <<<"$output" && return 1
   grep -qF -- 'const kept = 1;' <<<"$output" || return 1
   grep -qF -- 'test.fails(' <<<"$output"
+}
+
+# write_surface_spec: one UAT, no routing rows yet.
+write_surface_spec() {
+  cat >"$SPEC" <<'EOF'
+---
+spec_id: SPEC-901
+uats:
+  - uat_id: UAT-001
+    given: a visitor
+    when: they request the orders page
+    then: the response lists the orders
+---
+EOF
+}
+
+# real_server_stub_problems <file>: nothing on stdout when the file is a
+# request-only red stub, one line per problem otherwise.
+real_server_stub_problems() {
+  local file="$1" code_only
+  head -n 1 "$file" | grep -qE '^// gaia-uat-contract sha256:[0-9a-f]{64}$' || echo 'no contract marker'
+  grep -qE 'async \(\{request\}\)' "$file" || echo 'no request destructure'
+  grep -qF -- 'test.fail()' "$file" || echo 'no test.fail()'
+  code_only=$(uat_lib_code_only "$file")
+  grep -qwE 'page|context|browser' <<<"$code_only" && echo 'names a page, context or browser'
+  return 0
+}
+
+@test "a real-server row renders a request-only red stub at its routed path" {
+  write_surface_spec
+  write_routing '| UAT-001 | real-server | 1 | orders | orders-list-in-response.spec.ts |'
+  render
+  [ "$status" -eq 0 ] || return 1
+  file="$E2E/orders/orders-list-in-response.spec.ts"
+  [ -f "$file" ] || return 1
+  [ -z "$(real_server_stub_problems "$file")" ]
+}
+
+@test "red twin: the request-only check fails on the file a browser row renders" {
+  write_surface_spec
+  write_routing '| UAT-001 | browser | 1 | orders | orders-list-in-response.spec.ts |'
+  render
+  [ "$status" -eq 0 ] || return 1
+  [ -n "$(real_server_stub_problems "$E2E/orders/orders-list-in-response.spec.ts")" ]
+}
+
+@test "a legacy e2e row and a browser row render byte-identical files" {
+  write_surface_spec
+  write_routing '| UAT-001 | e2e | 1 | orders | orders-list-in-response.spec.ts |'
+  render
+  [ "$status" -eq 0 ] || return 1
+  cp "$E2E/orders/orders-list-in-response.spec.ts" "$BATS_TEST_TMPDIR/legacy.spec.ts"
+  rm -rf "$E2E" "$LEDGER"
+  write_routing '| UAT-001 | browser | 1 | orders | orders-list-in-response.spec.ts |'
+  render
+  [ "$status" -eq 0 ] || return 1
+  cmp -s "$BATS_TEST_TMPDIR/legacy.spec.ts" "$E2E/orders/orders-list-in-response.spec.ts"
+}
+
+@test "a browser row and a real-server row in one plan render from their own templates" {
+  cat >"$SPEC" <<'EOF'
+---
+spec_id: SPEC-901
+uats:
+  - uat_id: UAT-001
+    given: a visitor
+    when: they open the dialog
+    then: focus moves to the first field
+  - uat_id: UAT-002
+    given: a visitor
+    when: they request the orders page
+    then: the response lists the orders
+---
+EOF
+  write_routing \
+    '| UAT-001 | browser | 1 | orders | dialog-focuses-first-field.spec.ts |' \
+    '| UAT-002 | real-server | 1 | orders | orders-list-in-response.spec.ts |'
+  render
+  [ "$status" -eq 0 ] || return 1
+  [ -n "$(real_server_stub_problems "$E2E/orders/dialog-focuses-first-field.spec.ts")" ] || return 1
+  [ -z "$(real_server_stub_problems "$E2E/orders/orders-list-in-response.spec.ts")" ]
+}
+
+@test "validation refuses an unknown surface so no file is written" {
+  write_surface_spec
+  write_routing '| UAT-001 | desktop | 1 | orders | orders-list-in-response.spec.ts |'
+  render
+  [ "$status" -eq 2 ] || return 1
+  assert_nothing_written
 }

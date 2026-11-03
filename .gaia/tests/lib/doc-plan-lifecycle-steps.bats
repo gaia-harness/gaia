@@ -239,7 +239,7 @@ EOF
 <!-- gaia:uat-routing:start -->
 | uat_id | surface | phase | feature_folder | file_name |
 |---|---|---|---|---|
-| UAT-001 | e2e | 1 | checkout | guest-checkout-confirms-order.spec.ts |
+| UAT-001 | browser | 1 | checkout | guest-checkout-confirms-order.spec.ts |
 <!-- gaia:uat-routing:end -->
 EOF
   printf 'You are the orchestrator.\n' >"$FIXTURE_PLAN/KICKOFF.md"
