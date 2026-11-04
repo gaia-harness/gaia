@@ -53,6 +53,7 @@ setup() {
   S_RENDER='<!-- gaia:orchestrator-step uat-render -->'
   S_GATE='<!-- gaia:orchestrator-step uat-gate -->'
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
+  S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
   S_PRE='<!-- gaia:orchestrator-step uat-pre-audit -->'
   S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
   S_OVERLAP='<!-- gaia:orchestrator-step overlap-pass -->'
@@ -119,7 +120,7 @@ section_of() {
 # ---------- checks (each returns non-zero with a reason) ----------
 
 check_sentinels_once_in_fences() {
-  local file="$1" sentinel total fenced count=0
+  local file="$1" sentinel total fenced count=0 want
   while IFS= read -r sentinel; do
     count=$((count + 1))
     total="$(count_trimmed "$file" "$sentinel")"
@@ -129,7 +130,10 @@ check_sentinels_once_in_fences() {
       return 1
     fi
   done < <(sentinel_set)
-  [ "$count" -eq 10 ] || { printf 'derived %s sentinels from plan-verify.sh, want 10\n' "$count" >&2; return 1; }
+  # The planner's own sentinel lines are an independent count of the set, so a
+  # short read of plan-verify.sh, or a block it does not require, fails here.
+  want="$(grep -cE '^[[:space:]]*<!-- gaia:orchestrator-step [a-z-]+ -->[[:space:]]*$' "$file")"
+  [ "$count" -gt 0 ] && [ "$count" -eq "$want" ] || { printf 'derived %s sentinels from plan-verify.sh, %s in %s\n' "$count" "$want" "$file" >&2; return 1; }
 }
 
 # check_block_has <file> <sentinel> <needle>...
@@ -148,6 +152,7 @@ check_block_contents() {
   check_block_has "$file" "$S_RENDER" 'uat-write.sh' '{SPEC_PATH}' '--routing' || return 1
   check_block_has "$file" "$S_GATE" 'uat-gate.sh' '--phase' || return 1
   check_block_has "$file" "$S_YIELD" 'gaia_context_yield_limit' 'Yield handoff:' '(YIELD k)' || return 1
+  check_block_has "$file" "$S_RETRY" '(GATE RETRY 1)' 'Yield handoff:' 'Stop conditions' || return 1
   check_block_has "$file" "$S_PRE" '--all' || return 1
   check_block_has "$file" "$S_WORTH" 'worthiness-step.md' || return 1
   check_block_has "$file" "$S_OVERLAP" 'overlap-pass.md' '## Overlap pass' || return 1
@@ -337,7 +342,7 @@ check_entry_file_has_no_blocks() {
 
 @test "blocks copied as a planner copies them pass plan-verify.sh --spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   # The copy keeps the template's indentation, so the trim rule is exercised.
   grep -qE "^[[:space:]]+<!-- gaia:orchestrator-step uat-render -->$" "$FIXTURE_PLAN/ORCHESTRATOR.md"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
@@ -346,7 +351,7 @@ check_entry_file_has_no_blocks() {
 
 @test "blocks copied as a planner copies them pass plan-verify.sh without a spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_YIELD" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_YIELD" "$S_RETRY" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
