@@ -50,7 +50,7 @@ Pass no count: an empty array means no proposals and is a valid result. A no-op 
 bash .gaia/scripts/overlap-check.sh check --root <RESOLVED_ROOT> --proposals <proposals file>
 ```
 
-Write its output plus the current HEAD as the `head` field to `<RUN_FOLDER>/overlap-proposals.json` first, before any question, so a resume reuses the checked set. A `discarded` entry is logged as unverified and goes no further.
+Write its output, the current HEAD as the `head` field, and the changed test files the evaluator's summary names as having no proposal as a `skipped` field (`[{file, reason}]`) to `<RUN_FOLDER>/overlap-proposals.json` first, before any question, so a resume reuses the checked set. A `discarded` entry is logged as unverified and goes no further.
 
 ### 6. Dispose
 
@@ -75,7 +75,7 @@ Only after disposal completes, append to `PROGRESS.md`:
 Outcome: <applied | proposals listed | no proposals | skipped (<reason>) | did not run>
 Counts: kept <n>, discarded <n>, applied <n>, report-only <n>
 <one line per proposal: kind, file, fullName, disposition>
-<one line per changed test file with no proposal: file, the evaluator's reason>
+<one line per `skipped` entry: file, reason>
 ```
 
 and put the block in the final summary.

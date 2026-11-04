@@ -16,7 +16,8 @@
 #     demote and the post-fix refusal of one with no replacement;
 #   - the evaluator proposing an unsettled pair flagged `Uncertain:` rather
 #     than skipping it, and naming each changed file it skipped; the pass
-#     listing those proposals last and reporting the skipped files;
+#     listing those proposals last and persisting and reporting the skipped
+#     files;
 #   - the judge and the divergence policy: a builder meets a Given cosmetically,
 #     a stubbed guard, a request-only body under a browser-only clause and a
 #     refusal check without the redirect, status and actor assertions diverge.
@@ -152,7 +153,8 @@ check_dispatch() {
 check_check_step() {
   has_all "$1" \
     'bash .gaia/scripts/overlap-check.sh check --root <RESOLVED_ROOT> --proposals <proposals file>' \
-    'Write its output plus the current HEAD as the `head` field to `<RUN_FOLDER>/overlap-proposals.json` first' \
+    'Write its output, the current HEAD as the `head` field,' \
+    'to `<RUN_FOLDER>/overlap-proposals.json` first, before any question' \
     'A `discarded` entry is logged as unverified'
 }
 
@@ -162,7 +164,7 @@ check_check_step() {
 
 @test "red twin: dropping the head write or the discarded log fails" {
   local copy="$BATS_TEST_TMPDIR/ref.md"
-  mutate "$REF" 'plus the current HEAD as the `head` field' 'alone' "$copy"
+  mutate "$REF" 'the current HEAD as the `head` field,' 'nothing else,' "$copy"
   run check_check_step "$copy"
   [ "$status" -ne 0 ]
   mutate "$REF" 'is logged as unverified' 'is ignored' "$copy"
@@ -295,7 +297,7 @@ check_report_and_never() {
 check_evaluator_flags_uncertainty() {
   has_all "$1" \
     'begin `property` with `Uncertain:`' \
-    'set `seam: true` when the doubt is about a boundary' \
+    '`seam: true` whenever you are unsure' \
     'Every changed test file is in scope, fixture and harness specs included' \
     'each changed test file you made no proposal for, with a one-line reason' || return 1
   grep -qF 'propose nothing for it' "$1" && { printf '%s still skips an unsettled pair\n' "$1" >&2; return 1; }
@@ -305,7 +307,8 @@ check_evaluator_flags_uncertainty() {
 check_pass_orders_uncertain_and_reports_skips() {
   has_all "$1" \
     'Proposals whose `property` begins `Uncertain:` come last.' \
-    '<one line per changed test file with no proposal: file, the evaluator'"'"'s reason>'
+    'as a `skipped` field (`[{file, reason}]`)' \
+    '<one line per `skipped` entry: file, reason>'
 }
 
 @test "the evaluator flags an unsettled pair instead of skipping it, and names every file it skipped" {
@@ -334,7 +337,10 @@ check_pass_orders_uncertain_and_reports_skips() {
   mutate "$REF" 'Proposals whose `property` begins `Uncertain:` come last.' '' "$copy"
   run check_pass_orders_uncertain_and_reports_skips "$copy"
   [ "$status" -ne 0 ]
-  mutate "$REF" '<one line per changed test file with no proposal: file, the evaluator'"'"'s reason>' '' "$copy"
+  mutate "$REF" '<one line per `skipped` entry: file, reason>' '' "$copy"
+  run check_pass_orders_uncertain_and_reports_skips "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$REF" 'as a `skipped` field' 'as nothing' "$copy"
   run check_pass_orders_uncertain_and_reports_skips "$copy"
   [ "$status" -ne 0 ]
 }

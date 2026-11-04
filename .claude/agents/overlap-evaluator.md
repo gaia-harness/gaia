@@ -36,8 +36,7 @@ Read ONLY:
 Do NOT review the whole codebase and do NOT judge tests the branch did not
 change. A sibling may be unchanged; the subject of a proposal is always a test
 the branch changed.
-Every changed test file is in scope, fixture and harness specs included, unless
-a rule on this page excludes it.
+Every changed test file is in scope, fixture and harness specs included.
 
 ## Rubric
 
@@ -86,7 +85,8 @@ Four kinds:
   does not exist yet.
 - `keep-both`: the pair looks duplicated but is not. It requires `bug`: the
   specific defect that fails the subject and passes the sibling. No such bug
-  means it is not a keep-both; propose a drop or say nothing.
+  means it is not a keep-both; propose a drop, or nothing when the two do not
+  overlap.
 
 Every proposal cites the surviving test by file, line and test name, with the
 assertion text exactly as it appears on that line; a sibling-less demote cites
@@ -122,9 +122,8 @@ sibling to decide.
    read it, and judge whether a browser test belongs on the real-server layer.
 3. Judge the pair with the rubric. When the code cannot settle a pair, still
    propose what the evidence leans toward: begin `property` with `Uncertain:`
-   and the doubt, and set `seam: true` when the doubt is about a boundary. A
-   human reviews every proposal, so a doubtful one costs a review line; a skip
-   hides the test.
+   and the doubt. A human reviews every proposal the check keeps, so a doubtful
+   one costs a review line; a skip hides the test.
 4. Write the proposals file and return a short summary.
 
 ## Output
