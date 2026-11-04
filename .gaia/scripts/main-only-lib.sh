@@ -277,8 +277,9 @@ _gaia_pull_gate_default_branch() {
 # refs/remotes/origin/<default> lacks, else 0. A worktree cut fresh from
 # origin/<default> would drop those commits, and a branch cut from HEAD would
 # carry them into its pull request. It reads the remote-tracking ref without
-# fetching: a stale ref can only under-report, because a local commit reaches
-# origin/<default> only through a push, pull or fetch, each of which updates it.
+# fetching, so a stale ref can over-report: a commit that reached origin by
+# another route (a push from another clone, a squash merge of the same change)
+# still counts, and the printed reconcile is the way out.
 _gaia_pull_gate_main_ahead() {
   local main_root="$1" command_name="$2" default_branch ahead_count noun=commits
   default_branch="$(_gaia_pull_gate_default_branch "$main_root")"
