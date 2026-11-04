@@ -52,6 +52,6 @@ Findings fall into three buckets:
 2. **Domain mismatch**: a rule that does not apply to a path (e.g. a web-input rule firing on Node CLI tooling, or a generated artifact). Add a scoped `ignore.overrides` entry naming the rule and files, or `ignore.files` for output that should never be scanned (e.g. `build/**`).
 3. **Tool overlap**: dead-code analysis (`deslop`) duplicates [[knip]], the single dead-code authority. `deadCode: false` disables it.
 
-Suppress with the narrowest control: prefer a per-path `ignore.overrides` entry over a blanket rule-off. Every suppression carries a comment with the evidence so it can be re-evaluated when the ruleset changes (rules drift between versions, so re-check suppressions whenever the pin moves).
+Suppress with the narrowest control: prefer a per-path `ignore.overrides` entry over a blanket rule-off. Every suppression carries a comment with the evidence so it can be re-evaluated when the ruleset changes.
 
 See [[Quality Gate]], [[Code Review Audit Agent]].

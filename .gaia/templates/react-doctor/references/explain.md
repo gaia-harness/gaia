@@ -1,7 +1,5 @@
 # Explaining and configuring rules
 
-Use this when the user wants a rule explained or wants to change which rules run, not to fix diagnostics. Triggers: "why did this rule fire", "I disagree with this rule", "turn this rule off", "too noisy", "disable design rules".
-
 ## Workflow
 
 1. Take the rule key from the diagnostic (e.g. `react-doctor/no-array-index-as-key`).
@@ -12,7 +10,7 @@ npx -y react-doctor@{{REACT_DOCTOR_VERSION}} rules explain react-doctor/no-array
 ```
 
 3. Pick the narrowest control that matches the intent (decision guide below).
-4. Apply it with a `rules` subcommand, which edits the existing `doctor.config.*` in place.
+4. Apply it: a `rules` subcommand edits the existing `doctor.config.*` in place; an `ignore.overrides` entry or a `surfaces` change is a hand edit to `doctor.config.ts`.
 5. Confirm the change did what the user wanted:
 
 ```bash
