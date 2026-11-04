@@ -580,6 +580,7 @@ owed_steps_passes() {
   grep -qF -- 'wait with Monitor on `gate-owed exit`.' <<<"$owed" || return 1
   grep -qF -- 'Exit 1 where a fixer can run dispatches the next unit from step 1, and the bound hook reopens the round' <<<"$owed" || return 1
   grep -qF -- 'stops `needs-human` naming the step, and no status posts.' <<<"$owed" || return 1
+  grep -qF -- '`steps-passed` clears only on the pass evidence `gate-steps` recorded for the HEAD tree, and otherwise exits 4 with the steps still owed.' <<<"$owed" || return 1
   grep -qF -- 'Exit 3 is a refusal, such as a held dev port: nothing reopens, the steps stay owed, and the main thread asks the human as step 7 of [[Quality Gate]] does' <<<"$owed" || return 1
   grep -qF -- 'This covers every ending: clean, default stop, closing round, quick or light clear, and the late worthiness pass.' <<<"$owed" || return 1
   grep -qF -- 'A post-clearance commit, a CHANGELOG commit, a catch-up merge or a wiki-only correction owes nothing' <<<"$owed"
@@ -593,6 +594,8 @@ owed_steps_passes() {
   mutated="$(replace_in "$RUNBOOK" 'a CHANGELOG commit,' 'a CHANGELOG commit that touches source,')" || return 1
   owed_steps_passes "$mutated" && return 1
   mutated="$(replace_in "$RUNBOOK" 'Exit 3 is a refusal' 'Exit 3 is a failure')" || return 1
+  owed_steps_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'and otherwise exits 4 with the steps still owed' 'and otherwise clears on request')" || return 1
   owed_steps_passes "$mutated" && return 1
   true
 }
