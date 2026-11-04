@@ -1,7 +1,7 @@
 /**
  * The `/setup-gaia` per-machine `.env` step. A teammate's fresh clone has no
  * `apps/web/.env` (it is gitignored), and a Bash `cp` onto it is refused by the
- * project's `Edit(apps/web/.env)` deny, so the copy runs in this subprocess.
+ * project's `.env` Edit deny, so the copy runs in this subprocess.
  * It writes no `.gaia/init-state.json`: that cursor is scaffold-time state,
  * and a clone that never ran `/gaia-init` would be left holding an untracked
  * file. Setup progress is recorded by the caller through `gaia setup
