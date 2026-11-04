@@ -33,7 +33,8 @@
 #     worthiness blocks the late pass feeds;
 #   - lifecycle.md says which pass writes the wiki promotion record;
 #   - a plan-time directive never picks a UAT's surface: planner.md routes by
-#     the ladder first, and spec/audit.md writes a directive as a property.
+#     the ladder first, and spec/audit.md writes a directive as a property
+#     or a code constraint.
 #
 # Every check is a function taking the file(s) it reads, so each red twin
 # runs the same function against a mutated copy and proves it can fail.
@@ -900,7 +901,8 @@ check_maintainer_note_costs() {
 
 # check_directive_routing <planner> <audit>: the planner routes by the ladder
 # before honoring a directive, and the SPEC audit writes a directive as the
-# property a test proves, never the layer, fixture or helper that proves it.
+# property a test proves or the constraint the code meets, never the layer,
+# fixture or helper that proves it.
 check_directive_routing() {
   local planner="$1" audit="$2" para needle
   para="$(grep -F 'Its `## Plan-time directives` section' "$planner")"
