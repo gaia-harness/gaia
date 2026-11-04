@@ -3,10 +3,15 @@
  * rule; the deny rule guards against Claude writing secrets into .env, not
  * against seeding it from the example file.
  *
+ * The write is an exclusive create, never an existence check then a copy: the
+ * OS sandbox's denyRead also denies stat on `.env`, so a check reports a
+ * present file as absent, and macOS's copyfile needs read access to the
+ * destination, so a copy fails with EPERM where an exclusive create succeeds.
+ *
  * The env the app reads lives in the frontend package root, so both files are
  * resolved there through the package registry, never from `cwd` itself.
  */
-import {copyFileSync, existsSync} from 'node:fs';
+import {readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
@@ -34,18 +39,23 @@ export const seedEnvironmentFile = (
   const envPath = path.join(target.packageDir, '.env');
   const examplePath = path.join(target.packageDir, '.env.example');
 
-  if (!existsSync(envPath) && existsSync(examplePath)) {
-    try {
-      copyFileSync(examplePath, envPath);
-    } catch (error) {
-      structuredError({
-        code: 'bootstrap_env_failed',
-        message: error instanceof Error ? error.message : String(error),
-        subcommand,
-      });
+  try {
+    writeFileSync(envPath, readFileSync(examplePath), {flag: 'wx'});
+  } catch (error) {
+    const {code} = error as NodeJS.ErrnoException;
 
-      return UNEXPECTED_EXIT;
+    // ENOENT: no example to seed from; EEXIST: the .env is already there.
+    if (code === 'ENOENT' || code === 'EEXIST') {
+      return EXIT_CODES.OK;
     }
+
+    structuredError({
+      code: 'bootstrap_env_failed',
+      message: error instanceof Error ? error.message : String(error),
+      subcommand,
+    });
+
+    return UNEXPECTED_EXIT;
   }
 
   return EXIT_CODES.OK;
