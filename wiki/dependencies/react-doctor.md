@@ -27,7 +27,7 @@ Deterministic scanner for React security, performance, correctness, and accessib
 `/update-deps` does not see the pin, because it is not in `package.json`. Move it by hand:
 
 1. Read the new release's changes and the skill it bundles (`dist/skills/react-doctor/` in `npm pack react-doctor@<version>`).
-2. Port any new command or flag worth having into `.gaia/templates/react-doctor/`. Never port a `/doctor` trigger or a remote fetch; the template guard in `.gaia/scripts/tests/install-react-doctor.bats` fails on either.
+2. Port any new command or flag worth having into `.gaia/templates/react-doctor/`. Never port a `/doctor` trigger, a remote fetch or an unpinned version.
 3. Write the version to `.gaia/react-doctor-version`, run `bash .gaia/scripts/install-react-doctor.sh --refresh`, then a full scan to confirm `apps/web/doctor.config.ts` still loads and its suppressions still match the ruleset.
 
 ## Single config, highest precedence
