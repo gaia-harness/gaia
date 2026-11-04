@@ -29,21 +29,33 @@ const isDisabled = (control: HTMLElement): boolean => {
   return false;
 };
 
-const selectValue = (select: HTMLElement): string | undefined => {
-  const options = select.querySelectorAll('option');
-  const chosen =
-    options.findLast((option) => option.hasAttribute('selected')) ??
-    options.at(0);
+const isOptionDisabled = (option: HTMLElement): boolean =>
+  option.hasAttribute('disabled') ||
+  (option.parentNode?.tagName === 'OPTGROUP' &&
+    option.parentNode.hasAttribute('disabled'));
 
-  if (!chosen) return undefined;
+const readSelectedOptionValue = (select: HTMLElement): string | undefined => {
+  const options = select.querySelectorAll('option');
+  const selected = options.findLast((option) =>
+    option.hasAttribute('selected')
+  );
+  const showsListbox =
+    select.hasAttribute('multiple') || Number(select.getAttribute('size')) > 1;
+  const chosen =
+    selected ??
+    (showsListbox ? undefined : (
+      options.find((option) => !isOptionDisabled(option))
+    ));
+
+  if (!chosen || isOptionDisabled(chosen)) return undefined;
 
   return chosen.getAttribute('value') ?? chosen.text.trim();
 };
 
-const controlValue = (control: HTMLElement): string | undefined => {
+const readControlValue = (control: HTMLElement): string | undefined => {
   const tag = control.tagName.toLowerCase();
 
-  if (tag === 'select') return selectValue(control);
+  if (tag === 'select') return readSelectedOptionValue(control);
   if (tag === 'textarea') return control.text;
 
   const type = (control.getAttribute('type') ?? 'text').toLowerCase();
@@ -59,7 +71,7 @@ const controlValue = (control: HTMLElement): string | undefined => {
   return control.getAttribute('value') ?? '';
 };
 
-/** Serializes a parsed form as a browser submits it, so a request-fixture post sends the page's own fields. */
+/** Serializes the named, enabled controls inside a parsed form element, one value per name with the last winning, so a request-fixture post sends the page's own fields. */
 export const serializeForm = (
   form: HTMLElement,
   options: SerializeFormOptions = {}
@@ -71,7 +83,7 @@ export const serializeForm = (
   for (const control of form.querySelectorAll('input, select, textarea')) {
     const name = control.getAttribute('name');
     const value =
-      name && !isDisabled(control) ? controlValue(control) : undefined;
+      name && !isDisabled(control) ? readControlValue(control) : undefined;
 
     if (name && value !== undefined) fields[name] = value;
   }

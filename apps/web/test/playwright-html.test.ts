@@ -102,4 +102,40 @@ describe('serializeForm', () => {
 
     expect(serializeForm(form)).toEqual({pick: 'Plain'});
   });
+
+  test('skips a disabled first option when choosing the default', () => {
+    const form = formOf(`
+      <form><select name="pick"><option value="" disabled>Pick</option><option value="a">A</option></select></form>
+    `);
+
+    expect(serializeForm(form)).toEqual({pick: 'a'});
+  });
+
+  test('omits a select whose selected option is disabled', () => {
+    const form = formOf(`
+      <form><select name="pick"><option value="" selected disabled>Pick</option><option value="a">A</option></select></form>
+    `);
+
+    expect(serializeForm(form)).toEqual({});
+  });
+
+  test('skips options inside a disabled optgroup', () => {
+    const form = formOf(`
+      <form><select name="pick"><optgroup disabled><option value="x">X</option></optgroup><option value="a">A</option></select></form>
+    `);
+
+    expect(serializeForm(form)).toEqual({pick: 'a'});
+  });
+
+  test('omits a multiple or listbox select with nothing selected', () => {
+    const form = formOf(`
+      <form>
+        <select name="many" multiple><option value="a">A</option></select>
+        <select name="list" size="3"><option value="b">B</option></select>
+        <select name="chosen" multiple><option value="c">C</option><option value="d" selected>D</option></select>
+      </form>
+    `);
+
+    expect(serializeForm(form)).toEqual({chosen: 'd'});
+  });
 });
