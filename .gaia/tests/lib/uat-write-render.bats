@@ -634,6 +634,22 @@ assert_route_nothing_written() {
   [ ! -e "$ROUTE" ]
 }
 
+@test "route validation: a tests segment anywhere in the feature folder is refused" {
+  local folder
+  for folder in orders/tests tests tests/orders; do
+    assert_routing_refused "UAT-002 is route with feature_folder '$folder'; a route row's feature_folder names the feature; the renderer adds tests/" "$ROUTE_ROW_ONE" "| UAT-002 | route | 2 | $folder | orders.test.ts |" || return 1
+    [ ! -e "$ROUTE" ] || return 1
+  done
+}
+
+@test "route validation: a segment that only contains tests is accepted" {
+  write_two_uat_spec
+  write_routing "$ROUTE_ROW_ONE" '| UAT-002 | route | 2 | contests/test-utils | orders.test.ts |'
+  render
+  [ "$status" -eq 0 ]
+  [ -f "$WORK/apps/web/app/route-tests/contests/test-utils/tests/orders.test.ts" ]
+}
+
 @test "route validation: a working-document id in the path is refused" {
   assert_routing_refused "carries a working-document id" "$ROUTE_ROW_ONE" '| UAT-002 | route | 2 | orders | uat-002-orders.test.ts |' || return 1
   [ ! -e "$ROUTE" ]

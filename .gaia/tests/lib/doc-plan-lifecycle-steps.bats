@@ -674,7 +674,7 @@ check_ladder() {
   done
   grep -qF -- 'the word lists live in the header' "$file" && { printf 'planner.md still describes the word-list WARN\n' >&2; return 1; }
   grep -qF -- 'the lowest layer that can prove it' "$file" && { printf 'planner.md copies the rationale phrase\n' >&2; return 1; }
-  grep -qF -- '| <uat_id> | route | <owning phase> | <kebab-case feature folder> | <behavior-named-kebab-case>.test.ts |' "$file" || { printf 'no route row in the routing table example\n' >&2; return 1; }
+  grep -qF -- '| <uat_id> | route | <owning phase> | <kebab-case feature path, no tests segment> | <behavior-named-kebab-case>.test.ts |' "$file" || { printf 'no route row in the routing table example\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | real-server |' "$file" || { printf 'no real-server row in the routing table example\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | browser |' "$file" || { printf 'no browser row in the routing table example\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | e2e |' "$file" && { printf 'the routing table example restores an e2e row\n' >&2; return 1; }
