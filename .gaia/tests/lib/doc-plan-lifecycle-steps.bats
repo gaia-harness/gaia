@@ -656,7 +656,7 @@ check_ladder() {
     'Real-server reason (<uat_id>)' \
     'serializeForm' \
     'when that HTML is itself the SPEC'"'"'s requirement' \
-    'A status, refusal or error outcome routes by step 2 even when the SPEC names the page or error boundary that renders it' \
+    'A status, refusal or error outcome a direct `loader` or `action` call returns routes by step 2 even when the SPEC names the page or error boundary that renders it' \
     'the UAT takes a `route` row and its owning phase delivers the HTML check as a real-server task' \
     'A JavaScript-disabled Given or a native form rules out `browser` and nothing else'; do
     grep -qF -- "$needle" <<<"$para" || { printf 'ladder lacks: %s\n' "$needle" >&2; return 1; }
@@ -710,7 +710,7 @@ check_route_triggers() {
   { cat "$PLANNER_MD"; printf '\nTests belong at the lowest layer that can prove it.\n'; } >"$copy"
   run check_ladder "$copy"
   [ "$status" -ne 0 ]
-  local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'Real-server reason (<uat_id>)' 'serializeForm' 'A JavaScript-disabled Given or a native form rules out `browser` and nothing else' 'when that HTML is itself the SPEC'"'"'s requirement' 'A status, refusal or error outcome routes by step 2 even when the SPEC names the page or error boundary that renders it' 'the UAT takes a `route` row and its owning phase delivers the HTML check as a real-server task')
+  local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'Real-server reason (<uat_id>)' 'serializeForm' 'A JavaScript-disabled Given or a native form rules out `browser` and nothing else' 'when that HTML is itself the SPEC'"'"'s requirement' 'A status, refusal or error outcome a direct `loader` or `action` call returns routes by step 2 even when the SPEC names the page or error boundary that renders it' 'the UAT takes a `route` row and its owning phase delivers the HTML check as a real-server task')
   while IFS= read -r needle; do new_needles+=("$needle"); done < <(capability_tokens_of_header)
   for needle in "${new_needles[@]}"; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$copy"
