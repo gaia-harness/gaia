@@ -655,13 +655,17 @@ check_ladder() {
     'Browser capability (<uat_id>)' \
     'Real-server reason (<uat_id>)' \
     'serializeForm' \
-    'A UAT whose Given says JavaScript is disabled, a native form post and a multi-page workflow over native forms route to `real-server`'; do
+    'when that HTML is itself the SPEC'"'"'s requirement' \
+    'A status, refusal or error outcome routes by step 2 even when the SPEC names the page or error boundary that renders it' \
+    'the UAT takes a `route` row and its owning phase delivers the HTML check as a real-server task' \
+    'A JavaScript-disabled Given or a native form rules out `browser` and nothing else'; do
     grep -qF -- "$needle" <<<"$para" || { printf 'ladder lacks: %s\n' "$needle" >&2; return 1; }
   done
   while IFS= read -r token; do
     grep -qF -- "$token" <<<"$para" || { printf 'ladder lacks capability: %s\n' "$token" >&2; return 1; }
   done <<<"$tokens"
-  for needle in 'a client-submitted form' 'a multi-page journey' 'prints a non-fatal WARN on a `browser` row'; do
+  for needle in 'a client-submitted form' 'a multi-page journey' 'prints a non-fatal WARN on a `browser` row' \
+    'route to `real-server`, and a real-server form post' 'an error-boundary page' 'an element shown or hidden by role or status'; do
     grep -qF -- "$needle" <<<"$para" && { printf 'ladder still holds: %s\n' "$needle" >&2; return 1; }
   done
   grep -qF -- 'the word lists live in the header' "$file" && { printf 'planner.md still describes the word-list WARN\n' >&2; return 1; }
@@ -706,14 +710,15 @@ check_route_triggers() {
   { cat "$PLANNER_MD"; printf '\nTests belong at the lowest layer that can prove it.\n'; } >"$copy"
   run check_ladder "$copy"
   [ "$status" -ne 0 ]
-  local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'Real-server reason (<uat_id>)' 'serializeForm' 'a native form post and a multi-page workflow over native forms route to `real-server`')
+  local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'Real-server reason (<uat_id>)' 'serializeForm' 'A JavaScript-disabled Given or a native form rules out `browser` and nothing else' 'when that HTML is itself the SPEC'"'"'s requirement' 'A status, refusal or error outcome routes by step 2 even when the SPEC names the page or error boundary that renders it' 'the UAT takes a `route` row and its owning phase delivers the HTML check as a real-server task')
   while IFS= read -r needle; do new_needles+=("$needle"); done < <(capability_tokens_of_header)
   for needle in "${new_needles[@]}"; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$copy"
     run check_ladder "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
   done
-  for needle in 'a client-submitted form' 'a multi-page journey' 'prints a non-fatal WARN on a `browser` row' 'the word lists live in the header'; do
+  for needle in 'a client-submitted form' 'a multi-page journey' 'prints a non-fatal WARN on a `browser` row' 'the word lists live in the header' \
+    'native forms route to `real-server`, and a real-server form post' 'an error-boundary page' 'an element shown or hidden by role or status'; do
     awk -v needle="$needle" '/^    4\. `browser` only when/ { $0 = $0 " " needle } { print }' "$PLANNER_MD" >"$copy"
     run check_ladder "$copy"
     [ "$status" -ne 0 ] || { echo "restoring '$needle' did not fail" >&2; return 1; }
