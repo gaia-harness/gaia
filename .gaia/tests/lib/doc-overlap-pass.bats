@@ -14,6 +14,9 @@
 #   - the `--root` and `--post-fix` spellings;
 #   - the lowest-layer purpose, the fixer's replacement for a sibling-less
 #     demote and the post-fix refusal of one with no replacement;
+#   - the evaluator proposing an unsettled pair flagged `Uncertain:` rather
+#     than skipping it, and naming each changed file it skipped; the pass
+#     listing those proposals last and reporting the skipped files;
 #   - the judge and the divergence policy: a builder meets a Given cosmetically,
 #     a stubbed guard, a request-only body under a browser-only clause and a
 #     refusal check without the redirect, status and actor assertions diverge.
@@ -27,6 +30,7 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   REF="$REPO_ROOT/.claude/skills/gaia/references/overlap-pass.md"
+  EVALUATOR="$REPO_ROOT/.claude/agents/overlap-evaluator.md"
   JUDGE="$REPO_ROOT/.claude/agents/uat-fidelity-judge.md"
   DIVERGENCE="$REPO_ROOT/.claude/skills/gaia/references/spec/uat-divergence.md"
   UAT_WRITE="$REPO_ROOT/.claude/skills/gaia/references/spec/uat-write.md"
@@ -280,6 +284,58 @@ check_report_and_never() {
   local copy="$BATS_TEST_TMPDIR/ref.md"
   mutate "$REF" 'It files no tech debt, records no accepted residual, and edits no report-only test.' 'It files tech debt.' "$copy"
   run check_report_and_never "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------- uncertain proposals and skipped files ----------
+
+# check_evaluator_flags_uncertainty <file>: the evaluator proposes a pair it
+# cannot settle, flagged, keeps every changed file in scope, and names each
+# file it made no proposal for.
+check_evaluator_flags_uncertainty() {
+  has_all "$1" \
+    'begin `property` with `Uncertain:`' \
+    'set `seam: true` when the doubt is about a boundary' \
+    'Every changed test file is in scope, fixture and harness specs included' \
+    'each changed test file you made no proposal for, with a one-line reason' || return 1
+  grep -qF 'propose nothing for it' "$1" && { printf '%s still skips an unsettled pair\n' "$1" >&2; return 1; }
+  true
+}
+
+check_pass_orders_uncertain_and_reports_skips() {
+  has_all "$1" \
+    'Proposals whose `property` begins `Uncertain:` come last.' \
+    '<one line per changed test file with no proposal: file, the evaluator'"'"'s reason>'
+}
+
+@test "the evaluator flags an unsettled pair instead of skipping it, and names every file it skipped" {
+  check_evaluator_flags_uncertainty "$EVALUATOR"
+}
+
+@test "red twin: a skip-on-doubt rule, a scope exemption or a missing skip list fails the evaluator check" {
+  local copy="$BATS_TEST_TMPDIR/evaluator.md"
+  { cat "$EVALUATOR"; printf '\nWhen a pair is a judgment call, propose nothing for it.\n'; } >"$copy"
+  run check_evaluator_flags_uncertainty "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$EVALUATOR" 'fixture and harness specs included' 'fixture and harness specs excluded' "$copy"
+  run check_evaluator_flags_uncertainty "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$EVALUATOR" 'each changed test file you made no proposal for, with a one-line reason' 'counts per kind' "$copy"
+  run check_evaluator_flags_uncertainty "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the pass lists uncertain proposals last and reports every skipped file" {
+  check_pass_orders_uncertain_and_reports_skips "$REF"
+}
+
+@test "red twin: dropping the ordering line or the skipped-file report line fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'Proposals whose `property` begins `Uncertain:` come last.' '' "$copy"
+  run check_pass_orders_uncertain_and_reports_skips "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$REF" '<one line per changed test file with no proposal: file, the evaluator'"'"'s reason>' '' "$copy"
+  run check_pass_orders_uncertain_and_reports_skips "$copy"
   [ "$status" -ne 0 ]
 }
 

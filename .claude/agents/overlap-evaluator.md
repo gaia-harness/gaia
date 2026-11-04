@@ -36,6 +36,8 @@ Read ONLY:
 Do NOT review the whole codebase and do NOT judge tests the branch did not
 change. A sibling may be unchanged; the subject of a proposal is always a test
 the branch changed.
+Every changed test file is in scope, fixture and harness specs included, unless
+a rule on this page excludes it.
 
 ## Rubric
 
@@ -118,16 +120,20 @@ sibling to decide.
 1. Get the changed list and read the changed tests.
 2. For each, search the other layers and its folder for a candidate sibling and
    read it, and judge whether a browser test belongs on the real-server layer.
-3. Judge the pair with the rubric. When a pair is a judgment call you cannot
-   settle from the code, propose nothing for it.
+3. Judge the pair with the rubric. When the code cannot settle a pair, still
+   propose what the evidence leans toward: begin `property` with `Uncertain:`
+   and the doubt, and set `seam: true` when the doubt is about a boundary. A
+   human reviews every proposal, so a doubtful one costs a review line; a skip
+   hides the test.
 4. Write the proposals file and return a short summary.
 
 ## Output
 
 The dispatch prompt holds a `Proposals file: <absolute path>` line. Write the
 proposals to that path with the Write tool as a JSON array and nothing else, and
-return a short summary (counts per kind and anything the caller must know). An
-empty array means no proposals, and it is a valid result; an absent file reads
+return a short summary: counts per kind, then
+each changed test file you made no proposal for, with a one-line reason, then
+anything the caller must know. An empty array means no proposals, and it is a valid result; an absent file reads
 as a failed run, never as no proposals.
 
 Each element, every field required except `bug`, which only `keep-both` needs,
