@@ -214,8 +214,6 @@ finish() {
   exit "$1"
 }
 
-# $1 is run (the committed tree; a failure is recorded and a pass clears) or
-# gate-steps (the working tree before a commit; records nothing but evidence).
 run_steps() {
   local mode="$1" number log step before rounds_current existing updated command_status pass_tree
   number=$(($(find "$folder" -maxdepth 1 -name 'gate-owed-*.log' 2>/dev/null | wc -l | tr -d ' ') + 1))
