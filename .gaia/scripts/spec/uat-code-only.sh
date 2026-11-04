@@ -72,6 +72,12 @@ uat_lib_route_row_problems() {
     printf "uat-routing: %s is route with feature_folder '%s'; a hooks segment would leave the Vitest node project\n" "$uat_id" "$feature_folder" >&2
     problems=$((problems + 1))
   fi
+  # uat_lib_route_test_path appends tests/, so a tests segment here renders a
+  # doubled tests/.../tests/ path. Playwright rows take no suffix, so they skip this.
+  if [[ "/$feature_folder/" == */tests/* ]]; then
+    printf "uat-routing: %s is route with feature_folder '%s'; a route row's feature_folder names the feature; drop the tests segment, since the renderer adds tests/\n" "$uat_id" "$feature_folder" >&2
+    problems=$((problems + 1))
+  fi
   # A .server test, not .spec: lint limits a .server import to *.server.test.* files.
   if ! [[ "$file_name" =~ ^$kebab_segment(\.server)?\.test\.ts$ ]]; then
     printf "uat-routing: %s is route with file_name '%s'; expected a kebab-case name ending .test.ts or .server.test.ts\n" "$uat_id" "$file_name" >&2
