@@ -56,9 +56,9 @@
 # A browser row whose Given says JavaScript is disabled (javascript or js
 # followed by disabled, off, turned off or not enabled; or without or no
 # javascript or js) is refused whatever its capability line says, since a
-# request client never runs JavaScript and the UAT belongs on real-server. The
-# pattern is word-bounded, so a Given that says "no JavaScript errors" is
-# refused too: an accepted false positive, resolved by routing.
+# request client never runs JavaScript and the UAT routes by the ladder's route
+# and real-server steps. The pattern is word-bounded, so a Given that says "no
+# JavaScript errors" is refused too: an accepted false positive, resolved by routing.
 #
 # A real-server row needs its own non-blank line in any task-*.md, so one
 # blanket sentence cannot cover several rows; whether it is true is unchecked:
@@ -147,7 +147,7 @@ browser_row_check() {
     fi
   fi
   if grep -qiE "$javascript_disabled_pattern" <<<"$given_text"; then
-    fail "$uat is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes to real-server"
+    fail "$uat is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes by the ladder's route and real-server steps"
   fi
 }
 
