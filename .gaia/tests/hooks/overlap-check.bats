@@ -861,6 +861,18 @@ branch_with_specs() {
   [ "$(jq -r '.[] | select(.file == "apps/web/.playwright/e2e/paged.spec.ts") | .layer' <<<"$output")" = browser ]
 }
 
+@test "changed maps a spec whose page-backed fixture lives in a sibling fixtures module to browser, run from outside the root" {
+  git -C "$REPO" checkout -q -B alt main
+  printf "import {test as base} from '@playwright/test';\nexport const test = base.extend({\n  signedInPage: async ({page}, use) => {\n    await use(page);\n  },\n});\n" >"$REPO/apps/web/.playwright/project-fixtures.ts"
+  printf "import {test} from '../project-fixtures';\n\ntest('signed in', async ({signedInPage}) => {\n  await signedInPage.goto('/');\n});\n" >"$REPO/apps/web/.playwright/e2e/signed-in.spec.ts"
+  git -C "$REPO" add -A
+  git -C "$REPO" commit -q -m alt
+  [ "$PWD" != "$REPO" ]
+  run bash "$CHECK" changed --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.[] | select(.file == "apps/web/.playwright/e2e/signed-in.spec.ts") | .layer' <<<"$output")" = browser ]
+}
+
 @test "route runs when only a request-only spec changed and skips when only a route test changed" {
   branch_with apps/web/.playwright/e2e/only.spec.ts
   run bash "$CHECK" changed --root "$REPO"

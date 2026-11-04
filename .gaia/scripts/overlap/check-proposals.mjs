@@ -126,7 +126,7 @@ const rankOf = (file) => {
   const rank = pathRankOf(file);
   if (rank !== PLAYWRIGHT) return rank;
   const parsed = parseFile(file);
-  return parsed !== null && pageUsesOf(ts, parsed.sourceFile).length === 0 ? REAL_SERVER : BROWSER;
+  return parsed !== null && pageUsesOf(ts, parsed.sourceFile, path.join(rootDirectory, file)).length === 0 ? REAL_SERVER : BROWSER;
 };
 
 // Files -----------------------------------------------------------------------
@@ -236,7 +236,7 @@ function testRankOf(file, test) {
   const entry = loadFile(file);
   if (entry === null) return BROWSER;
   const spans = [...test.ranges, ...hookSpansOf(entry)];
-  const opens = pageUsesOf(ts, entry.sourceFile).some(
+  const opens = pageUsesOf(ts, entry.sourceFile, path.join(rootDirectory, file)).some(
     (use) => use.reason === 'browser-import' || spans.some(([start, end]) => start <= use.line && use.line <= end),
   );
   return opens ? BROWSER : REAL_SERVER;

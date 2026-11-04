@@ -212,6 +212,175 @@ SRC
   [ -z "$output" ]
 }
 
+# module <name>: write stdin to $BATS_TEST_TMPDIR/<name>.ts, a sibling the
+# spec written by detect imports through a relative path.
+module() {
+  cat >"$BATS_TEST_TMPDIR/$1.ts"
+}
+
+@test "a page-backed fixture a sibling module defines is a project-page-fixture" {
+  module project-fixtures <<'SRC'
+import {test as base} from '@playwright/test';
+export const test = base.extend({
+  signedInPage: async ({page}, use) => {
+    await use(page);
+  },
+});
+SRC
+  detect cross-module <<'SRC'
+import {test} from './project-fixtures';
+test('x', async ({signedInPage}) => {
+  await signedInPage.goto('/');
+});
+SRC
+  [ "$output" = "${SPEC_FILE}${TAB}2${TAB}x${TAB}project-page-fixture" ]
+}
+
+@test "a page-backed fixture is followed through a fixtures module's own imports" {
+  module base-fixtures <<'SRC'
+import {test as base} from '@playwright/test';
+export const test = base.extend({
+  signedInPage: async ({context}, use) => {
+    await use(await context.newPage());
+  },
+});
+SRC
+  module layered-fixtures <<'SRC'
+import {test as base} from './base-fixtures';
+export const test = base.extend({
+  dashboard: async ({signedInPage}, use) => {
+    await use(signedInPage);
+  },
+});
+SRC
+  detect layered <<'SRC'
+import {test} from './layered-fixtures';
+test('x', async ({dashboard}) => {
+  await dashboard.goto('/');
+});
+SRC
+  assert_reason project-page-fixture
+}
+
+@test "a fixtures import cycle terminates and keeps the page-backed verdict" {
+  module cycle-a <<'SRC'
+import {test as base} from './cycle-b';
+export const test = base.extend({
+  signedInPage: async ({page}, use) => {
+    await use(page);
+  },
+});
+SRC
+  module cycle-b <<'SRC'
+import {test as base} from './cycle-a';
+export const test = base.extend({
+  other: async ({request}, use) => {
+    await use(request);
+  },
+});
+SRC
+  detect cycle <<'SRC'
+import {test} from './cycle-a';
+test('x', async ({signedInPage}) => {
+  await signedInPage.goto('/');
+});
+SRC
+  assert_reason project-page-fixture
+}
+
+@test "a fixtures module two imports reach counts for both" {
+  module shared-fixtures <<'SRC'
+import {test as base} from '@playwright/test';
+export const test = base.extend({
+  signedInPage: async ({page}, use) => {
+    await use(page);
+  },
+});
+SRC
+  module first-layer <<'SRC'
+import {test as base} from './shared-fixtures';
+export const test = base.extend({
+  other: async ({request}, use) => {
+    await use(request);
+  },
+});
+SRC
+  module second-layer <<'SRC'
+import {test as base} from './shared-fixtures';
+export const test = base.extend({
+  dashboard: async ({signedInPage}, use) => {
+    await use(signedInPage);
+  },
+});
+SRC
+  detect diamond <<'SRC'
+import {test as first} from './first-layer';
+import {test} from './second-layer';
+test('x', async ({dashboard}) => {
+  await dashboard.goto('/');
+});
+SRC
+  assert_reason project-page-fixture
+}
+
+@test "a request-backed fixture a sibling module defines is clean" {
+  module api-fixtures <<'SRC'
+import {test as base} from '@playwright/test';
+export const test = base.extend({
+  apiContext: async ({request}, use) => {
+    await use(request);
+  },
+});
+SRC
+  detect cross-module-request 0 <<'SRC'
+import {test} from './api-fixtures';
+test('x', async ({apiContext}) => {
+  await apiContext.get('/');
+});
+SRC
+  [ -z "$output" ]
+}
+
+@test "an unresolvable fixtures import keeps the one-file verdict" {
+  detect unresolvable 0 <<'SRC'
+import {test} from './missing-fixtures';
+test('x', async ({signedInPage}) => {
+  await signedInPage.goto('/');
+});
+SRC
+  [ -z "$output" ]
+}
+
+@test "pageUsesOf resolves imports against the file path it is handed" {
+  mkdir -p "$BATS_TEST_TMPDIR/root/e2e"
+  cat >"$BATS_TEST_TMPDIR/root/e2e/fixtures.ts" <<'SRC'
+import {test as base} from '@playwright/test';
+export const test = base.extend({
+  signedInPage: async ({page}, use) => {
+    await use(page);
+  },
+});
+SRC
+  cat >"$BATS_TEST_TMPDIR/root/e2e/x.spec.ts" <<'SRC'
+import {test} from './fixtures';
+test('x', async ({signedInPage}) => {
+  await signedInPage.goto('/');
+});
+SRC
+  cd "$BATS_TEST_TMPDIR"
+  run node --input-type=module -e "
+    import {createRequire} from 'node:module';
+    import {readFileSync} from 'node:fs';
+    import {pageUsesOf} from '$DETECTOR';
+    const ts = createRequire('$DETECTOR')('typescript');
+    const file = 'e2e/x.spec.ts';
+    const sourceFile = ts.createSourceFile(file, readFileSync('root/' + file, 'utf8'), ts.ScriptTarget.Latest, true);
+    console.log(pageUsesOf(ts, sourceFile).length, pageUsesOf(ts, sourceFile, 'root/' + file).length);
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "0 1" ]
+}
+
 @test "a use prints file, line, static title and reason separated by tabs" {
   detect exact-line <<'SRC'
 import {test} from '@playwright/test';
