@@ -286,7 +286,9 @@ has_bare_shell_eval() {
 @test "the gate choice runs before the gate, marks or records after the commit, and never runs the owed steps" {
   assert_pinned 'audit-gate-owed.sh choose --root <root> --run-folder <run> --round <r>'
   assert_pinned '`smaller` runs the page'"'"'s smaller gate, then `audit-gate-owed.sh mark --root <root> --run-folder <run> --round <r>` after the commit.'
-  assert_pinned '`full` runs the whole gate, then `audit-gate-owed.sh steps-passed --root <root> --run-folder <run>` after the commit, and only when Playwright, the dev smoke test and the build actually ran'
+  assert_pinned '`full` runs the whole gate with its Playwright, dev smoke and build steps as one `audit-gate-owed.sh gate-steps --root <root> --run-folder <run>`'
+  assert_pinned 'then `audit-gate-owed.sh steps-passed --root <root> --run-folder <run>` after the commit.'
+  assert_pinned '`steps-passed` clears only on the pass `gate-steps` recorded for the committed tree; its exit 4 is no stop'
   assert_pinned 'The unit never runs `audit-gate-owed.sh run`: the main thread does.'
 }
 
