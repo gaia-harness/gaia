@@ -130,10 +130,11 @@ const testImportsOf = (ts, sourceFile) => {
   return specifiers;
 };
 
-// Page-backed fixture names the modules this file imports `test` from define,
-// transitively. `namesByModule` memoizes each module, so a module two imports
-// reach is read once and counts for both; an entry is empty while its module
-// is being read, which ends an import cycle. An unreadable module adds nothing.
+// Page-backed fixture names the modules this file imports `test` or `it` from
+// define, transitively. `namesByModule` memoizes each module, so a module two
+// imports reach is read once and counts for both; its entry exists before its
+// own imports are read, which ends an import cycle. An unreadable module adds
+// nothing.
 function importedPageBacked(ts, filePath, sourceFile, namesByModule, depth) {
   const names = new Set();
   if (depth >= MAXIMUM_IMPORT_DEPTH) return names;

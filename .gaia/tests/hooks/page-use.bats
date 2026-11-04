@@ -262,7 +262,7 @@ SRC
   assert_reason project-page-fixture
 }
 
-@test "fixtures modules that import each other end and keep the page-backed verdict" {
+@test "a fixtures import cycle terminates and keeps the page-backed verdict" {
   module cycle-a <<'SRC'
 import {test as base} from './cycle-b';
 export const test = base.extend({

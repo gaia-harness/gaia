@@ -18,11 +18,11 @@
 //   project-page-fixture  the first parameter destructures a page-backed project
 //                         fixture: a name on PAGE_BACKED_FIXTURES
 //                         (page-use-fixtures.mjs), or a test.extend fixture
-//                         whose callback destructures page,
-//                         context, browser or another page-backed fixture,
-//                         defined in this file or in a module it imports `test`
-//                         from by a relative path (followed through that
-//                         module's own such imports). Never a name-suffix rule:
+//                         whose callback destructures page, context, browser
+//                         or another page-backed fixture, defined in this file
+//                         or in a module it imports `test` or `it` from by a
+//                         relative path (followed through that module's own
+//                         such imports). Never a name-suffix rule:
 //                         `apiContext` built over `request` is not a use
 //   new-page              `.newPage(` or `.newContext(` on any receiver except
 //                         an identifier named `request` or `playwright.request`
@@ -33,11 +33,12 @@
 //
 // Honest limit: a page opened inside an imported helper is caught only through
 // the fixture the test hands the helper. A page-backed fixture is found in
-// another module only through a relative import of `test`; one reached through
-// a path alias or a package is caught only when its name is on
-// PAGE_BACKED_FIXTURES, which must grow when the template adds one. An import
-// that does not resolve to a readable file adds nothing, so the verdict falls
-// back to this file alone.
+// another module only through a relative named import of `test` or `it` (not
+// a namespace import or an `export ... from` re-export), followed no deeper
+// than MAXIMUM_IMPORT_DEPTH; one reached any other way, such as a path alias
+// or a package, is caught only when its name is on PAGE_BACKED_FIXTURES, which
+// must grow when the template adds one. An import that does not resolve to a
+// readable file adds nothing.
 //
 // Callers: uat-gate.sh through uat-gate-floor.sh (the CLI) and
 // overlap/check-proposals.mjs (the pageUsesOf export).
