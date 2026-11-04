@@ -686,10 +686,65 @@ scratch_verifier() {
   SCRATCH_SCRIPT="$root/.gaia/scripts/spec/plan-verify.sh"
 }
 
-@test "a plan with a real-server row passes" {
+@test "a plan with a real-server row and its reason line passes" {
+  one_uat_plan real-server 'the sign-in response sets the session cookie' '- Real-server reason (UAT-001): the cookie the served response sets, which a direct action call never sends'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "reason: a real-server row with no reason line is refused naming the UAT and the line" {
   one_uat_plan real-server 'the sign-in response sets the session cookie'
   verify_spec
-  [ "$status" -eq 0 ]
+  expect_refusal 'plan-verify: UAT-001 is routed real-server but no task doc carries its line: - Real-server reason (UAT-001): <what a route test cannot show>'
+}
+
+@test "reason: an empty or blank reason is refused" {
+  local reason_line
+  for reason_line in '- Real-server reason (UAT-001):' '- Real-server reason (UAT-001):   '; do
+    one_uat_plan real-server 'the sign-in response sets the session cookie' "$reason_line"
+    verify_spec
+    expect_refusal 'UAT-001 is routed real-server but no task doc carries its line' || return 1
+  done
+}
+
+@test "reason: one blanket line naming two real-server rows satisfies neither" {
+  cat >"$SPEC" <<'EOF2'
+---
+spec_id: SPEC-901
+uats:
+  - uat_id: UAT-001
+    given: a visitor
+    when: they sign in
+    then: the response sets the session cookie
+  - uat_id: UAT-002
+    given: a visitor
+    when: they sign out
+    then: the response clears the session cookie
+---
+EOF2
+  cat >"$PLAN/README.md" <<'EOF2'
+# Plan
+
+<!-- gaia:uat-routing:start -->
+| uat_id | surface | phase | feature_folder | file_name |
+|---|---|---|---|---|
+| UAT-001 | real-server | 1 | auth | sign-in-sets-cookie.spec.ts |
+| UAT-002 | real-server | 1 | auth | sign-out-clears-cookie.spec.ts |
+<!-- gaia:uat-routing:end -->
+EOF2
+  write_orchestrator "${SPEC_ORDER[@]}"
+  printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
+  write_task '- Real-server reason (UAT-001, UAT-002): these need the live stack'
+  verify_spec
+  expect_refusal 'UAT-001 is routed real-server but no task doc carries its line' || return 1
+  echo "$output" | grep -qF 'UAT-002 is routed real-server but no task doc carries its line' || { echo "$output" >&2; return 1; }
+}
+
+@test "red twin: without the reason check a real-server row with no line exits 0" {
+  scratch_verifier 's/^        real-server)$/        real-server-disabled)/'
+  one_uat_plan real-server 'the sign-in response sets the session cookie'
+  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
 @test "a new plan with an e2e row exits 1, naming the UAT and both replacement surfaces" {

@@ -50,11 +50,11 @@ Pass no count: an empty array means no proposals and is a valid result. A no-op 
 bash .gaia/scripts/overlap-check.sh check --root <RESOLVED_ROOT> --proposals <proposals file>
 ```
 
-Write its output plus the current HEAD as the `head` field to `<RUN_FOLDER>/overlap-proposals.json` first, before any question, so a resume reuses the checked set. A `discarded` entry is logged as unverified and goes no further.
+Write its output, the current HEAD as the `head` field, and the changed test files the evaluator's summary names as having no proposal as a `skipped` field (`[{file, reason}]`) to `<RUN_FOLDER>/overlap-proposals.json` first, before any question, so a resume reuses the checked set. A `discarded` entry is logged as unverified and goes no further.
 
 ### 6. Dispose
 
-Attended: print every kept proposal as one review list (`.claude/rules/user-questions.md`). Each seam proposal shows its property, actor, action and the cited sibling, so the human judges whether the sibling asserts the same property for the same actor and action; the check proves only the citation and the layer. List report-only entries as information. Then ask one `AskUserQuestion`: `Accept all as recommended (Recommended)` or `Revise`.
+Attended: print every kept proposal as one review list (`.claude/rules/user-questions.md`). Each seam proposal shows its property, actor, action and the cited sibling, so the human judges whether the sibling asserts the same property for the same actor and action; the check proves only the citation and the layer. List report-only entries as information. Proposals whose `property` begins `Uncertain:` come last. Then ask one `AskUserQuestion`: `Accept all as recommended (Recommended)` or `Revise`.
 
 Approved proposals with disposition `offer` go to one fresh `general-purpose` fixer on `model: "sonnet"`, under the same prompt constraints as the worthiness Fix step: the working root, the expected-tree check, the listed test files as its only editable paths, no state-changing git, no edit outside the list, a JSON result file in the scratchpad and a short summary. For each approved sibling-less demote (a `target` and no `sibling`), the fixer writes the replacement real-server test (the request fixture only, no page) and lists it in its JSON result as `{file, fullName, replacement: {file, line, fullName, assertion}}`; the replacement's file joins its editable paths. The orchestrator merges each `replacement` into the kept list's entry with that `file` and `fullName` before running `--post-fix`. Then re-verify the proposals the fixer acted on, before the commit. `--post-fix` accepts either the original proposals file or the kept list, and a sibling-less demote with no replacement is refused there:
 
@@ -75,6 +75,7 @@ Only after disposal completes, append to `PROGRESS.md`:
 Outcome: <applied | proposals listed | no proposals | skipped (<reason>) | did not run>
 Counts: kept <n>, discarded <n>, applied <n>, report-only <n>
 <one line per proposal: kind, file, fullName, disposition>
+<one line per `skipped` entry: file, reason>
 ```
 
 and put the block in the final summary.

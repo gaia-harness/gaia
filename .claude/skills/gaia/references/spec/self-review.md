@@ -44,6 +44,7 @@ Each UAT must be testable. Flag UATs that:
 - Use hedging ("should", "might", "ideally").
 - Lack a falsifiable `then`.
 - Reference an undefined system (e.g. "the orchestrator" without prior naming).
+- Place one element relative to another (beside, above, below, next to, aligned with) when the placement only stands for a relationship. Record a `major` `ambiguity` whose `suggested_fix` states the testable requirement instead, such as the error naming its field through `aria-describedby`. When the layout itself is the requirement, keep it, phrased with a cue word plan-verify accepts for the layout capability (`.gaia/scripts/spec/plan-verify.sh`'s header), so the plan can route the UAT to `browser`.
 
 ### 5. Case-enumerating UATs
 

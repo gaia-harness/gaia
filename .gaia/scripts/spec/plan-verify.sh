@@ -60,6 +60,10 @@
 # pattern is word-bounded, so a Given that says "no JavaScript errors" is
 # refused too: an accepted false positive, resolved by routing.
 #
+# A real-server row needs its own non-blank line in any task-*.md, so one
+# blanket sentence cannot cover several rows; whether it is true is unchecked:
+#   - Real-server reason (<uat_id>): <what a route test cannot show>
+#
 # Every failure is reported on stderr, one line each, in a single run.
 #
 # Exit codes: 0 pass; 1 one or more failures; 2 usage error.
@@ -145,6 +149,16 @@ browser_row_check() {
   if grep -qiE "$javascript_disabled_pattern" <<<"$given_text"; then
     fail "$uat is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes to real-server"
   fi
+}
+
+real_server_row_check() {
+  local uat="$1" marker="Real-server reason ($1):" reason_text
+  # /dev/null keeps grep off stdin when no task doc exists.
+  while IFS= read -r reason_text; do
+    reason_text="${reason_text#*"$marker"}"
+    [ -n "${reason_text//[[:space:]]/}" ] && return 0
+  done < <(grep -hF -- "$marker" /dev/null ${task_files[@]+"${task_files[@]}"})
+  fail "$uat is routed real-server but no task doc carries its line: - $marker <what a route test cannot show>"
 }
 
 readme="$plan_directory/README.md"
@@ -366,6 +380,9 @@ if [ -n "$spec_path" ] && [ -f "$readme" ]; then
           ;;
         browser)
           browser_row_check "$uat_id" "$then_clause" "$(printf '%s\n' "$spec_rows" | awk -F'\t' -v id="$uat_id" '$1 == id { print $2; exit }')"
+          ;;
+        real-server)
+          real_server_row_check "$uat_id"
           ;;
       esac
       case "$surface" in
