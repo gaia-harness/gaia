@@ -356,7 +356,13 @@ Append-only. New entries at the TOP.
 
 ## Step 9: Finalize
 
-Mark setup as running first, in its own call. Finalize deletes this command file, which ends the statusline's mid-init gate, and setup runs next in this session, so the marker keeps the statusline from telling the user to run the setup that is about to run:
+Seed `apps/web/.env` first: the commit's Quality Gate runs E2E and the dev smoke test, which need it. The CLI copies `apps/web/.env.example` only when `.env` is absent and records no setup step. Never `cp` it: the `Edit(**/.env)` deny refuses that. On non-zero, surface the error and stop:
+
+```bash
+.gaia/cli/gaia setup bootstrap-env
+```
+
+Then mark setup as running, in its own call. Finalize deletes this command file, which ends the statusline's mid-init gate, and setup runs next in this session, so the marker keeps the statusline from telling the user to run the setup that is about to run:
 
 ```bash
 mkdir -p .gaia/local && touch .gaia/local/setup-running
