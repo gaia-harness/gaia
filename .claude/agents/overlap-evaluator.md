@@ -36,6 +36,7 @@ Read ONLY:
 Do NOT review the whole codebase and do NOT judge tests the branch did not
 change. A sibling may be unchanged; the subject of a proposal is always a test
 the branch changed.
+Every changed test file is in scope, fixture and harness specs included.
 
 ## Rubric
 
@@ -84,7 +85,8 @@ Four kinds:
   does not exist yet.
 - `keep-both`: the pair looks duplicated but is not. It requires `bug`: the
   specific defect that fails the subject and passes the sibling. No such bug
-  means it is not a keep-both; propose a drop or say nothing.
+  means it is not a keep-both; propose a drop, or nothing when the two do not
+  overlap.
 
 Every proposal cites the surviving test by file, line and test name, with the
 assertion text exactly as it appears on that line; a sibling-less demote cites
@@ -118,16 +120,19 @@ sibling to decide.
 1. Get the changed list and read the changed tests.
 2. For each, search the other layers and its folder for a candidate sibling and
    read it, and judge whether a browser test belongs on the real-server layer.
-3. Judge the pair with the rubric. When a pair is a judgment call you cannot
-   settle from the code, propose nothing for it.
+3. Judge the pair with the rubric. When the code cannot settle a pair, still
+   propose what the evidence leans toward: begin `property` with `Uncertain:`
+   and the doubt. A doubtful proposal costs one review line; a skip leaves the
+   pair unjudged.
 4. Write the proposals file and return a short summary.
 
 ## Output
 
 The dispatch prompt holds a `Proposals file: <absolute path>` line. Write the
 proposals to that path with the Write tool as a JSON array and nothing else, and
-return a short summary (counts per kind and anything the caller must know). An
-empty array means no proposals, and it is a valid result; an absent file reads
+return a short summary: counts per kind, then
+each changed test file you made no proposal for, with a one-line reason, then
+anything the caller must know. An empty array means no proposals, and it is a valid result; an absent file reads
 as a failed run, never as no proposals.
 
 Each element, every field required except `bug`, which only `keep-both` needs,
