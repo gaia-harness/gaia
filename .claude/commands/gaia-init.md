@@ -356,7 +356,7 @@ Append-only. New entries at the TOP.
 
 ## Step 9: Finalize
 
-Seed `apps/web/.env` first: the commit's Quality Gate runs E2E and the dev smoke test, which need it. The CLI copies `apps/web/.env.example` only when `.env` is absent and records no setup step. Never `cp` it: the `Edit(apps/web/.env)` deny refuses that. On non-zero, surface the error and stop:
+Seed `apps/web/.env` first: the commit's Quality Gate runs E2E and the dev smoke test, which need it. The CLI copies `apps/web/.env.example` only when `.env` is absent and records no setup step. Never `cp` it: the `Edit(**/.env)` deny refuses that. On non-zero, surface the error and stop:
 
 ```bash
 .gaia/cli/gaia setup bootstrap-env
