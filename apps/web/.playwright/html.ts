@@ -85,7 +85,7 @@ const readControlValue = (control: HTMLElement): string | undefined => {
   return control.getAttribute('value') ?? '';
 };
 
-/** Serializes a parsed form's successful controls, one value per name (the last wins), so a request-fixture post sends the page's own fields. */
+/** Serializes a parsed form's text-valued controls (file inputs skipped, an image submitter sent as name=value), one value per name (the last wins), so a request-fixture post sends the page's own fields. */
 export const serializeForm = (
   form: HTMLElement,
   options: SerializeFormOptions = {}
