@@ -3,8 +3,9 @@
 # Suite for .gaia/scripts/audit-veto-lib.sh: when a veto key counts as
 # satisfied, the in-memory stop override the bound hook applies to a
 # snapshot, and the reopened-round test's fail-loud reads. Pure state and
-# run-folder fixtures: no repository is needed, because no function here
-# reads git.
+# run-folder fixtures, except the inline-fix cases: satisfaction by a commit
+# made outside the fixer reads the diff between two round trees, so those
+# cases commit real trees in a repository at MAIN.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/scripts/tests/audit-veto-lib.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -125,6 +126,86 @@ assert_unsatisfied() {
   satisfied_base
   STATE="$(jq -c '.history.rounds[1].snapshot = null' <<<"$STATE")"
   assert_unsatisfied
+}
+
+# inline_trees: a repository at MAIN with three commits, carried as
+# TREE_WAIVED (f.txt and g.txt), TREE_UNRELATED (only g.txt changed) and
+# TREE_FIXED (f.txt changed too). The run folder under MAIN stays untracked.
+inline_trees() {
+  [ -n "${TREE_FIXED-}" ] && return 0
+  git init -q "$MAIN" || return 1
+  printf 'a\n' >"$MAIN/f.txt"
+  printf 'a\n' >"$MAIN/g.txt"
+  git -C "$MAIN" add f.txt g.txt && git -C "$MAIN" -c user.name=t -c user.email=t@t commit -q -m waived || return 1
+  TREE_WAIVED="$(git -C "$MAIN" rev-parse 'HEAD^{tree}')"
+  printf 'b\n' >"$MAIN/g.txt"
+  git -C "$MAIN" -c user.name=t -c user.email=t@t commit -q -am unrelated || return 1
+  # shellcheck disable=SC2034 # inline_base reads it by name
+  TREE_UNRELATED="$(git -C "$MAIN" rev-parse 'HEAD^{tree}')"
+  printf 'b\n' >"$MAIN/f.txt"
+  git -C "$MAIN" -c user.name=t -c user.email=t@t commit -q -am fixed || return 1
+  TREE_FIXED="$(git -C "$MAIN" rev-parse 'HEAD^{tree}')"
+}
+
+# inline_base <round-2-tree-variable>: the main-thread fix sequence at round
+# 2, the tree named by variable since the trees exist only once built. Round 1
+# held the waiver on TREE_WAIVED; the veto binds from round 2; no dispositions
+# or fixer file exists, so only the inline path can satisfy it. Round 2's
+# member left the key out.
+inline_base() {
+  inline_trees || return 1
+  veto 2
+  STATE="$(state_with "[{\"tree\":\"$TREE_WAIVED\",\"members\":[\"code-audit-frontend\"],\"keys\":[$VETOED_IDENTITY]},
+    {\"tree\":\"${!1}\",\"members\":[\"code-audit-frontend\"],\"keys\":null}]")"
+  ROUND_KEYS='[["code-audit-frontend","rule/y","f.txt",9]]'
+}
+
+inline_veto_state() {
+  gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 2 "$ROUND_KEYS"
+}
+
+@test "veto-state inline: a main-thread commit touching the key's path after the waiver round, then a clean review, satisfies the veto with no fixer result" {
+  inline_base TREE_FIXED || return 1
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
+}
+
+@test "veto-state inline: unsatisfied when the tree is unmoved, moved without touching the key's path, or the member re-reports the key" {
+  local unsatisfied="{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}"
+  inline_base TREE_WAIVED || return 1
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "unmoved"; return 1; }
+  inline_base TREE_UNRELATED || return 1
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "path untouched"; return 1; }
+  inline_base TREE_FIXED || return 1
+  ROUND_KEYS="[$VETOED_IDENTITY]"
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "re-reported"; return 1; }
+}
+
+@test "veto-state inline: an edit that only moves the finding to another line of the file leaves the veto unsatisfied" {
+  inline_base TREE_FIXED || return 1
+  ROUND_KEYS='[["code-audit-frontend","rule/x","f.txt",7]]'
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ] || return 1
+  # Another class on the same path, or the same class on another path, is not the vetoed finding.
+  ROUND_KEYS="[[\"code-audit-frontend\",\"rule/y\",\"f.txt\",7],[\"code-audit-frontend\",\"rule/x\",\"g.txt\",2]]"
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
+}
+
+@test "veto-state inline: unsatisfied when no round after the fix dispatched the key's member, or a tree cannot be read" {
+  local unsatisfied="{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}"
+  inline_base TREE_FIXED || return 1
+  STATE="$(jq -c '.history.rounds[1].members = ["code-audit-shell"]' <<<"$STATE")"
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "member not dispatched"; return 1; }
+  inline_base TREE_FIXED || return 1
+  STATE="$(jq -c --arg tree "$TREE_TWO" '.history.rounds[1].tree = $tree' <<<"$STATE")"
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "unreadable tree"; return 1; }
+}
+
+@test "veto-state inline: a veto binding from round 1 has no waiver round to diff against, so only the fixer path satisfies it" {
+  inline_base TREE_FIXED || return 1
+  veto 1
+  # Round 1 left the key out too, so only the missing waiver round keeps the
+  # veto unsatisfied (jq reads index -1 as the last round, not as absent).
+  STATE="$(jq -c '.history.rounds[0].snapshot.keys = [["code-audit-frontend","rule/y","f.txt",9]]' <<<"$STATE")"
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ]
 }
 
 @test "veto-state: a malformed vetoes file fails" {

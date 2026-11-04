@@ -33,34 +33,78 @@ _gaia_veto_fix_records() {
   jq -n -c --argjson fixes "$fixes" --argjson fixed "$fixed" '{fixes: $fixes, fixed: $fixed}'
 }
 
+# _gaia_veto_changed_paths <main-root> <state-json> <r> <vetoes-file>: for
+# every veto effective by round r, the paths that differ between the tree of
+# the round before its effective_from_round (the round that held the waiver)
+# and each round tree from effective_from_round through r, as
+# {"<waiver-tree>..<round-tree>": [paths]}. A pair whose diff cannot be read
+# is left out, which can only leave a veto unsatisfied.
+_gaia_veto_changed_paths() {
+  local main="$1" pairs pair waiver_tree round_tree changed answer="{}"
+  pairs="$(jq -r -s --argjson state "$2" --argjson round "$3" '
+    $state.history.rounds as $rounds
+    | [.[0].keys[]? | .effective_from_round | select(type == "number" and . >= 2 and . <= $round)
+      | . as $from | range($from; $round + 1) | [$rounds[$from - 2].tree, $rounds[. - 1].tree]
+      | select(all(.[]; type == "string") and .[0] != .[1]) | join("..")] | unique | .[]' <"$4" 2>/dev/null)" || return 0
+  while IFS= read -r pair; do
+    [ -n "$pair" ] || continue
+    waiver_tree="${pair%%..*}"
+    round_tree="${pair#*..}"
+    if ! gaia_loop_is_oid "$waiver_tree" || ! gaia_loop_is_oid "$round_tree"; then continue; fi
+    changed="$(_gaia_loop_git -C "$main" diff-tree -r --name-only "$waiver_tree" "$round_tree" 2>/dev/null)" || continue
+    answer="$(printf '%s' "$changed" | jq -R -s -c --argjson answer "$answer" --arg pair "$pair" '$answer + {($pair): (split("\n") | map(select(. != "")))}')" || return 0
+  done <<<"$pairs"
+  printf '%s\n' "$answer"
+}
+
 # gaia_veto_keys_state <main-root> <B> <state-json> <r> <round-r-keys-json>:
 # prints {"satisfied":[keys],"unsatisfied":[keys]} over the vetoes effective
-# by round r. A key is satisfied when one round k, effective_from_round <= k
-# < r, holds all of: a `fix` entry on the exact key; a fixer result `fixed`
-# on it; a later recorded round on a different tree than round k (the fix was
-# committed); and at least one round j, k < j <= r, that dispatched the key's
-# member, with the exact key absent from every such round's keys (round r's
-# from the argument, earlier ones from the stored snapshot, where null keys
-# prove nothing). rc 1 on an unreadable or malformed vetoes.json.
+# by round r. A key is satisfied by a fix made after the round that held the
+# waiver that a member then reviewed, by either of two routes:
+#   fixer: one round k, effective_from_round <= k < r, holds a `fix` entry on
+#     the exact key, a fixer result `fixed` on it, and a later recorded round
+#     on a different tree than round k (the fix was committed); reviewed over
+#     rounds k+1..r.
+#   commit: a fix committed outside the loop's fixer (on the main thread)
+#     leaves no fixer result, so instead one round j, effective_from_round <= j
+#     <= r, sits on a tree whose diff from the waiver round's tree (round
+#     effective_from_round - 1) touches the key's path; reviewed over rounds
+#     j..r with the line ignored: a change to the path can shift lines, so the
+#     same finding re-reported at another line must not read as fixed. A
+#     veto effective from round 1 has no waiver round and only the fixer
+#     route.
+# Reviewed: at least one round in the span dispatched the key's member, with
+# the key absent from every such round's keys (round r's from the argument,
+# earlier ones from the stored snapshot, where null keys prove nothing). rc 1
+# on an unreadable or malformed vetoes.json.
 gaia_veto_keys_state() {
-  local run vetoes_file records answer
+  local run vetoes_file records changed_paths answer
   run="$(gaia_loop_run_directory "$1" "$2")"
   vetoes_file="$run/vetoes.json"
   [ -e "$vetoes_file" ] || { printf '{"satisfied":[],"unsatisfied":[]}\n'; return 0; }
   records="$(_gaia_veto_fix_records "$run" "$4")" || return 1
-  answer="$(jq -c -s --argjson state "$3" --argjson round "$4" --argjson round_keys "$5" --argjson records "$records" '
+  changed_paths="$(_gaia_veto_changed_paths "$1" "$3" "$4" "$vetoes_file")"
+  [ -n "$changed_paths" ] || changed_paths="{}"
+  answer="$(jq -c -s --argjson state "$3" --argjson round "$4" --argjson round_keys "$5" --argjson records "$records" --argjson changed_paths "$changed_paths" '
     if length == 1 and (.[0] | type == "object" and .version == 1 and (.keys | type) == "array"
         and all(.keys[]; type == "object" and (.effective_from_round | type == "number" and . == floor)))
     then .[0] else error("malformed vetoes.json") end
     | $state.history.rounds as $rounds
     | def keys_of($j): if $j == $round then $round_keys else ($rounds[$j - 1].snapshot | if type == "object" then .keys else null end) end;
+    def reviewed_from($first; $key; $width):
+      [range($first; $round + 1) | select(any(($rounds[. - 1].members // [])[]; . == $key[0]))] as $dispatched
+      | ($dispatched | length) > 0
+        and all($dispatched[]; keys_of(.) as $keys | ($keys | type) == "array" and (any($keys[]; .[0:$width] == $key[0:$width]) | not));
     def fixed_in($k; $key):
       any($records.fixes[]; .round == $k and .key == $key) and any($records.fixed[]; .round == $k and .key == $key)
       and ($rounds[$k - 1].tree as $tree | any($rounds[$k:][]; .tree != $tree))
-      and ([range($k + 1; $round + 1) | select(any(($rounds[. - 1].members // [])[]; . == $key[0]))] as $dispatched
-           | ($dispatched | length) > 0 and all($dispatched[]; keys_of(.) as $keys | ($keys | type) == "array" and (any($keys[]; . == $key) | not)));
-    [.keys[] | select(.effective_from_round <= $round) | [.member, .finding_class, .path, .line] as $key
-      | {key: $key, satisfied: any(range([.effective_from_round, 1] | max; $round); fixed_in(.; $key))}]
+      and reviewed_from($k + 1; $key; 4);
+    def committed_by($j; $from; $key):
+      ($changed_paths["\($rounds[$from - 2].tree)..\($rounds[$j - 1].tree)"] // []) as $paths
+      | any($paths[]; . == $key[2]) and reviewed_from($j; $key; 3);
+    [.keys[] | select(.effective_from_round <= $round) | .effective_from_round as $from | [.member, .finding_class, .path, .line] as $key
+      | {key: $key, satisfied: (any(range([$from, 1] | max; $round); fixed_in(.; $key))
+          or ($from >= 2 and any(range($from; $round + 1); committed_by(.; $from; $key))))}]
     | {satisfied: map(select(.satisfied) | .key), unsatisfied: map(select(.satisfied | not) | .key)}' <"$vetoes_file" 2>/dev/null)" || return 1
   [ -n "$answer" ] || return 1
   printf '%s\n' "$answer"

@@ -228,10 +228,13 @@ vetoes() {
   green
 }
 
-@test "unknown-key: an entry for a key no member reported fails" {
+@test "unknown-key: a non-fix entry for a key no member reported fails; a fix entry passes" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 9 c/ghost waive-out-of-scope because triage-threshold)]")"
+  run_check 1
+  red unknown-key "$(key_json c/ghost f.txt 9)" || return 1
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 9 c/ghost fix)]")"
   run_check 1
-  red unknown-key "$(key_json c/ghost f.txt 9)"
+  green
 }
 
 @test "undisposed: an omitted branch-authored Critical fails" {
@@ -1584,6 +1587,29 @@ veto_unsatisfied_red() {
   write_dispositions 4 "$(fill "$(without_veto_key)" '[]')"
   run_check 4
   green
+}
+
+@test "vetoes: a main-thread fix reviewed clean satisfies the veto, and its synthetic fix entry passes with the veto kept or retired" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  vetoes 2 c/imp f.txt 3
+  alf_set_line f.txt 3 "fixed on the main thread"
+  alf_commit "inline veto fix"
+  open_round 2 "$(without_veto_key)"
+  write_dispositions 2 "$(fill "$(without_veto_key)" '[]')"
+  run_check 2
+  green || { echo "inline fix not satisfied"; return 1; }
+  write_dispositions 2 "$(fill "$(without_veto_key)" "[$(disposition_entry f.txt 3 c/imp fix)]")"
+  run_check 2
+  green || { echo "synthetic entry, veto kept"; return 1; }
+  printf '{"version":1,"keys":[]}\n' >"$RUN_FOLDER/vetoes.json"
+  write_dispositions 2 "$(fill "$(without_veto_key)" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
+  run_check 2
+  red unknown-key "$(key_json c/imp f.txt 3)" || { echo "a retired key's waiver must still fail"; return 1; }
+  write_dispositions 2 "$(fill "$(without_veto_key)" "[$(disposition_entry f.txt 3 c/imp fix)]")"
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || { echo "synthetic entry, veto retired"; return 1; }
 }
 
 @test "lapse guard: a veto past every dispositions file fails the read-only check-all and passes the bound hook's call" {
