@@ -6,7 +6,9 @@
 # STEP_ORDER. It also pins the single-session shape: the React Doctor install
 # sits once in Step 1, before any line names a `apps/web/` path; the command
 # reads no setup reference, records no per-machine step and runs only the
-# unrecorded .env seed, in Step 9 before finalize; it asks for
+# unrecorded .env seed, in Step 9 before finalize; Step 9 runs the Quality
+# Gate after the seed and before finalize, and the gate page lets that commit
+# skip the Commit/Hold stop; it asks for
 # no exit, restart or reload; Step 9 finalizes and Step 10 hands off to
 # /setup-gaia, ending on the read of the setup command with RECONFIGURE false
 # and the halt rule; the wiki log claims no install; the resume section names no
@@ -481,6 +483,78 @@ check_env_seeded() {
   run check_env_seeded "$scratch"
   [ "$status" -ne 0 ]
   grep -qF 'copies onto .env with cp' <<<"$output"
+}
+
+# ---------------------------------------------------------------------------
+# Init's commit goes through the Quality Gate
+# ---------------------------------------------------------------------------
+
+GATE_PAGE_PATH='wiki/decisions/Quality Gate.md'
+RUNNING_MARKER_CALL='mkdir -p .gaia/local && touch .gaia/local/setup-running'
+
+# check_gate_before_commit <init>: Step 9 sends Claude to the gate page on a
+# line after the .env seed (E2E and the dev smoke need the file) and before
+# the setup-running marker and init finalize, so a gate that does not pass
+# stops the run while the resume cursor still exists, ahead of the commit.
+check_gate_before_commit() {
+  local file="$1" step gate_line seed_line marker_line finalize_line
+  step="$(section_of "$file" '## Step 9: Finalize')"
+  gate_line="$(grep -nF -- "\`$GATE_PAGE_PATH\`" <<<"$step" | head -n 1 | cut -d: -f1)"
+  seed_line="$(grep -nxF -- "$SEED_ENV_CALL" <<<"$step" | head -n 1 | cut -d: -f1)"
+  marker_line="$(grep -nxF -- "$RUNNING_MARKER_CALL" <<<"$step" | head -n 1 | cut -d: -f1)"
+  finalize_line="$(grep -nxF -- '.gaia/cli/gaia init finalize' <<<"$step" | head -n 1 | cut -d: -f1)"
+  { [ -n "$seed_line" ] && [ -n "$marker_line" ] && [ -n "$finalize_line" ]; } || {
+    echo "Step 9 lacks the seed, marker or finalize call this check orders against" >&2
+    return 1
+  }
+  { [ -n "$gate_line" ] && [ "$seed_line" -lt "$gate_line" ] &&
+    [ "$gate_line" -lt "$marker_line" ] && [ "$gate_line" -lt "$finalize_line" ]; } || {
+    echo "Step 9 does not run the Quality Gate between the .env seed and the marker" >&2
+    return 1
+  }
+}
+
+@test "gaia-init.md runs the Quality Gate in Step 9 after the .env seed and before finalize" {
+  check_gate_before_commit "$INIT_MD"
+}
+
+@test "the gate check fails when Step 9 stops naming the gate page" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  remove_text "$INIT_MD" "$scratch" "\`$GATE_PAGE_PATH\`"
+  run check_gate_before_commit "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'does not run the Quality Gate' <<<"$output"
+}
+
+@test "the gate check fails when the gate line moves after the commit heading" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md" moved="$BATS_TEST_TMPDIR/gaia-init.moved.md"
+  remove_text "$INIT_MD" "$scratch" "\`$GATE_PAGE_PATH\`"
+  insert_after "$scratch" "$moved" "Run the gate: \`$GATE_PAGE_PATH\`." '### Commit the init output'
+  run check_gate_before_commit "$moved"
+  [ "$status" -ne 0 ]
+  grep -qF 'does not run the Quality Gate' <<<"$output"
+}
+
+# check_gate_lists_init <gate page>: the gate's stop-and-report step lists
+# /gaia-init's commit among the workflows that commit without the Commit/Hold
+# stop; without it, an automatic-mode init would wait on a question nobody answers.
+check_gate_lists_init() {
+  grep -E '^10\. \*\*Stop and report\*\*' "$1" | grep -qF -- '`/gaia-init`' || {
+    echo "the gate page's step 10 does not list /gaia-init's commit" >&2
+    return 1
+  }
+}
+
+@test "the Quality Gate page's step 10 lists /gaia-init's init commit" {
+  check_gate_lists_init "$REPO_ROOT/$GATE_PAGE_PATH"
+}
+
+@test "the gate-list check fails when step 10 drops /gaia-init" {
+  local scratch="$BATS_TEST_TMPDIR/quality-gate.scratch.md"
+  remove_text "$REPO_ROOT/$GATE_PAGE_PATH" "$scratch" '`/gaia-init`'
+  run check_gate_lists_init "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'does not list /gaia-init' <<<"$output"
 }
 
 # ---------------------------------------------------------------------------

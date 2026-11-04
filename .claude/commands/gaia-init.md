@@ -356,11 +356,13 @@ Append-only. New entries at the TOP.
 
 ## Step 9: Finalize
 
-Seed `apps/web/.env` first: the commit's Quality Gate runs E2E and the dev smoke test, which need it. The CLI copies `apps/web/.env.example` only when `.env` is absent and records no setup step. Never `cp` it: the `Edit(**/.env)` deny refuses that. On non-zero, surface the error and stop:
+Seed `apps/web/.env` first: the Quality Gate below runs E2E and the dev smoke test, which need it. The CLI copies `apps/web/.env.example` only when `.env` is absent and records no setup step. Never `cp` it: the `Edit(**/.env)` deny refuses that. On non-zero, surface the error and stop:
 
 ```bash
 .gaia/cli/gaia setup bootstrap-env
 ```
+
+Then run the Quality Gate over the init output: read `wiki/decisions/Quality Gate.md` and run its steps as written. It runs before the marker and finalize below, so a gate that does not pass stops the run with the resume cursor intact. Never commit past it.
 
 Then mark setup as running, in its own call. Finalize deletes this command file, which ends the statusline's mid-init gate, and setup runs next in this session, so the marker keeps the statusline from telling the user to run the setup that is about to run:
 
