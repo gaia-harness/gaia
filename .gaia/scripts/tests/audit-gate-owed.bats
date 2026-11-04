@@ -208,7 +208,7 @@ pnpm -C $R build" ]
   [ "$status" -eq 1 ]
   run gate steps-passed
   [ "$status" -eq 4 ]
-  [[ "$output" == *"steps-passed refused: no pass evidence for HEAD tree"* ]]
+  [[ "$output" == *"steps-passed refused: no pass evidence for HEAD tree"* ]] || return 1
   [ "$(jq -r .owed "$D/gate-owed.json")" = true ]
   [ "$(jq -r .last_failure.step "$D/gate-owed.json")" = build ]
   run gate status
