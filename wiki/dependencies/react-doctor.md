@@ -4,7 +4,7 @@ status: active
 package: react-doctor
 role: react-quality-scanner
 created: 2026-06-23
-updated: 2026-10-26
+updated: 2026-11-04
 tags: [dependency, quality, ci]
 ---
 
@@ -22,7 +22,7 @@ Deterministic scanner for React security, performance, correctness, and accessib
 
 ## Installer verification record
 
-Verified against react-doctor 0.9.18, running `install --yes --cwd apps/web` in a two-package pnpm workspace. The installer writes the paths below. Each maps to one step of `.gaia/scripts/install-react-doctor.sh`, in the script's order:
+Verified against react-doctor 0.9.22, running `install --yes --cwd apps/web` in a two-package pnpm workspace. The installer writes the paths below. Each maps to one step of `.gaia/scripts/install-react-doctor.sh`, in the script's order:
 
 | Path the installer writes | Strip step |
 |---|---|
