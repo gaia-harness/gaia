@@ -12,6 +12,10 @@ export const ssrQueryOptions = () =>
     queryFn: async ({signal}) => {
       const response = await fetch('/ssr-query-probe.json', {signal});
 
+      if (!response.ok) {
+        throw new Error(`ssr-query probe failed: ${response.status}`);
+      }
+
       return (await response.json()) as SsrQueryData;
     },
     queryKey: ['ssr-query-probe'],
