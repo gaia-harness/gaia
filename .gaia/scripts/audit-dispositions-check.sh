@@ -57,8 +57,10 @@
 #                               needs one stops the unit with needs-human)
 #   missing-basis               waive-out-of-scope without basis triage-threshold|cross-remit
 #   cross-remit-basis-mismatch  basis cross-remit on a finding not flagged cross_remit
-#   unknown-key                 an entry with no matching finding and no veto: reads as
-#                               Critical and security (fail closed)
+#   unknown-key                 a non-fix entry with no matching finding and no binding
+#                               veto: reads as Critical and security (fail closed). A fix
+#                               entry already meets both, so it passes: a satisfied or
+#                               retired veto's synthetic fix entry refuses no later round
 #   edited-after-check          the dispositions file no longer matches its snapshot
 #   outcome-missing             (check-outcomes) a file or divert entry with no line in
 #                               <D>/filing-outcomes-<r>.jsonl, the filing script's record
@@ -216,7 +218,7 @@ def security_class: ((.severity | IN("major", "minor")) | not) or (.security | i
 | (if $version >= 2 then $carried else {filed: [], accepted: []} end) as $carried_keys
 | (
     (.entries[] | . as $entry | key_array as $key | $lookup_by_key[($key | tojson)] as $lookup_entry | ($vetoed_keys | any(. == $key)) as $is_vetoed | (key_object | tojson) as $key_json
-      | (if $lookup_entry == null and ($is_vetoed | not) then ["unknown-key"]
+      | (if $lookup_entry == null and ($is_vetoed | not) and .disposition != "fix" then ["unknown-key"]
          else [
            (if $lookup_entry != null and .disposition != "fix"
                and ((($lookup_entry.severity | IN("major", "minor")) | not) or ($lookup_entry.security | if type == "boolean" then . else true end))
