@@ -793,6 +793,7 @@
     "wiki/decisions/pnpm.md": "wiki-owned",
     "wiki/decisions/Quality Gate.md": "wiki-owned",
     "wiki/decisions/React Compiler.md": "wiki-owned",
+    "wiki/decisions/Route Browser UATs By The Capability That Needs A Browser.md": "wiki-owned",
     "wiki/decisions/shadcn Component Layer.md": "wiki-owned",
     "wiki/decisions/Shared Codify Declines.md": "wiki-owned",
     "wiki/decisions/Stories as Tests.md": "wiki-owned",
@@ -858,7 +859,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-04T03:47:20.093Z",
+  "generated": "2026-11-04T04:03:57.369Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
