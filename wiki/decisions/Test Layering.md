@@ -25,7 +25,9 @@ From lowest to highest:
 1. **Unit and story.** A function, a hook, or one component given props. Vitest `node` and `browser` projects and Storybook stories ([[Stories as Tests]]).
 2. **Route.** A request taken in process by a route module's `loader` or `action`, with no browser and no server. The route surface is the lowest layer that takes a request in process: it shows a status, a redirect, returned data, a validation error, an authorization outcome or a side effect. It runs in the Vitest `node` project.
 3. **Real server.** The live stack, driven by Playwright's request fixture: it opens no page and makes no browser round trip. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, a forged request against a live route, and the server's rendered HTML, read through the request fixture and a parsed response body.
-4. **Browser.** A real page: hydration, focus, client navigation, client-submitted forms and a multi-page journey, one test per user flow.
+4. **Browser.** A real page, used only for a capability no lower layer shows, from the closed list at the browser step of the planner's ladder (`.claude/skills/gaia/references/plan/planner.md`), one test per user flow. A JavaScript-disabled Given, a native form post and a multi-page workflow over native forms are real-server checks, with the form body built by `serializeForm` (`apps/web/.playwright/html.ts`) from the served page.
+
+Sibling browser UATs that walk one flow fold into one browser journey UAT, and the fold is the recommended fix. Each transition, status or role rule stays its own UAT, routed by the planner's ladder. Sibling non-browser UATs stay separate, one per rule.
 
 A new plan routes a live-stack UAT to `real-server` or `browser`, never to the legacy end-to-end surface; the operational ladder is in `.claude/skills/gaia/references/plan/planner.md`.
 

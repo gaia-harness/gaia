@@ -33,12 +33,14 @@ Spawn a `general-purpose` Agent with this prompt (interpolate `<DRAFT_PATH>` and
 >     {
 >       "id": "SR-NNN",
 >       "severity": "minor" | "major" | "critical",
->       "kind": "placeholder" | "ambiguity" | "inconsistency" | "drift" | "scope_change" | "missing_uat" | "case_enumeration" | "sibling_fold" | "other",
+>       "kind": "placeholder" | "ambiguity" | "inconsistency" | "drift" | "scope_change" | "missing_uat" | "case_enumeration" | "sibling_fold" | "refusal_split" | "other",
 >       "location": "<section heading or UAT-NNN>",
 >       "excerpt": "<short verbatim excerpt, keep under 200 chars>",
 >       "issue": "<one sentence, what is wrong>",
 >       "suggested_fix": "<one sentence, what to change to resolve>"
 >     }
+>
+> A `sibling_fold` finding's `suggested_fix` is always the fold (one browser journey UAT for the flow, each rule its own UAT), never keep-as-is.
 >
 > **Apply** every `minor` `suggested_fix` yourself to the draft at `<DRAFT_PATH>` in a single `Write` (you have already read the whole draft). Do NOT apply the `critical` or `major` findings; the wrapper gates those.
 >

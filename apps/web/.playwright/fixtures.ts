@@ -29,8 +29,8 @@ import {
  *       provide(async ({name}) => insertThing(workerServer.databaseFile, name)),
  *   });
  *
- * One spec per form stays on the UI path, so the form itself is still driven
- * through the browser.
+ * A form's own submission is a real-server post whose body `serializeForm`
+ * (`./html.ts`) builds from the served form.
  */
 export type GivenBuilder<Input, Row> = (input: Input) => Promise<Row>;
 

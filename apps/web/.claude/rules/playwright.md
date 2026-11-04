@@ -18,7 +18,7 @@ Contents: File locations; Spec file naming; Real-server HTML check; Selectors, p
 ## Spec file naming
 
 Match the feature or route: `language-switch.spec.ts`, `things.spec.ts`.
-One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`); one `test.describe` block per scenario group. A flow's per-transition rules (a status, a redirect, a validation error) are route tests, not more browser files.
+One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`); one `test.describe` block per scenario group. Each transition, status or role rule is its own UAT routed by the ladder in `.claude/skills/gaia/references/plan/planner.md`, not more browser files. A browser spec exists only for a capability on that ladder's browser step; a JavaScript-disabled flow, a native form post and a multi-page workflow over native forms are real-server specs.
 
 A file whose first line is `// gaia-uat-contract sha256:...` was rendered from a SPEC UAT. Its Given/When/Then comment is the contract: make cosmetic edits only (selectors, labels, copy, layout) and report logical changes (`.claude/skills/gaia/references/spec/uat-divergence.md`). The owning phase removes the `test.fail();` call and replaces the placeholder `expect(false, ...)` with a real body that drives the app. Rendered route tests: `.claude/skills/gaia/references/spec/uat-write.md` (`## The rendered file`).
 
@@ -35,6 +35,25 @@ test('home page serves its heading', async ({request}) => {
   expect(response.status()).toBe(200);
   const root = parseHtml(await response.text());
   expect(root.querySelector('h1')?.text).toBe('Welcome');
+});
+```
+
+A form post follows the same shape: get the page, parse it, select the form and post a body `serializeForm` builds from it. A body built from the served form catches a renamed field, a changed hidden intent or a moved default option.
+
+```ts
+import {expect, test} from '@playwright/test';
+import {parseHtml, serializeForm} from '../../html';
+
+test('the sign-up form redirects on success', async ({request}) => {
+  const page = await request.get('/sign-up');
+  const form = parseHtml(await page.text()).querySelector('form');
+  if (!form) throw new Error('no form on the page');
+  const response = await request.post('/sign-up', {
+    form: serializeForm(form, {overrides: {email: 'new@example.com'}}),
+    maxRedirects: 0,
+  });
+  expect(response.status()).toBe(302);
+  expect(response.headers()['location']).toBe('/welcome');
 });
 ```
 
@@ -93,7 +112,7 @@ State in the MSW handlers of the dev server is out of reach of the Playwright pr
 
 Every worker reaches its own database through the server it talks to. A serial project is not an accepted way to share a database: it runs the suite on one core. The worker-scoped server fixture and the typed `GivenBuilder` pattern are in `.playwright/fixtures.ts`; read its comment before adding any project that holds state. The stock suite does not request the fixture, so `pnpm pw` starts no extra server.
 
-- Setup goes through Given builders, which write to the worker's own database; one spec per form stays on the UI path.
+- Setup goes through Given builders, which write to the worker's own database; a form's own submission is checked over HTTP with a body `serializeForm` builds from the served page.
 - A request-fixture refusal check sets `maxRedirects: 0` and asserts the status and the `Location` header, and states the actor: the request fixture follows redirects by default, is a separate context from `page` and inherits `storageState`.
 - A database-only or harness self-check that opens no page runs in the Vitest node project, not under Playwright.
 - This rule governs new setup. An existing suite moves to it only by decision.

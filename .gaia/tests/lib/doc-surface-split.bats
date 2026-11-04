@@ -18,6 +18,9 @@ setup() {
   PAGE="$REPO_ROOT/wiki/decisions/Test Layering.md"
   ROUTING_SENTENCE='A database-only or harness self-check that opens no page runs in the Vitest node project, not under Playwright.'
   WIRING_SENTENCE='A self-test of the Playwright fixture wiring itself is dropped: the specs that use the fixture prove it.'
+  GIVEN_SENTENCE="A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them."
+  PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
+  LADDER='.claude/skills/gaia/references/plan/planner.md'
 }
 
 # ---------- helpers ----------
@@ -56,6 +59,67 @@ check_wiring_sentence() {
     bullet=$(bullet_of "$1" "$lead") || { echo "no bullet: $lead" >&2; return 1; }
     printf '%s' "$bullet" | grep -qF -- "$WIRING_SENTENCE" || { echo "no wiring sentence in: $lead" >&2; return 1; }
   done
+}
+
+check_given_sentence() {
+  local lead bullet
+  for lead in 'Decomposition & dependency soundness' 'SPEC coverage'; do
+    bullet=$(bullet_of "$1" "$lead") || { echo "no bullet: $lead" >&2; return 1; }
+    printf '%s' "$bullet" | grep -qF -- "$GIVEN_SENTENCE" || { echo "no Given sentence in: $lead" >&2; return 1; }
+  done
+}
+
+# The closed capability tokens, one per line, read from plan-verify.sh's source form.
+capability_tokens_of() {
+  local tokens
+  tokens=$(sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$PLAN_VERIFY" | grep -oE '"[^"]+"' | tr -d '"')
+  [ "$(printf '%s\n' "$tokens" | wc -l)" -eq 5 ] || { echo "expected five capability tokens" >&2; return 1; }
+  printf '%s\n' "$tokens"
+}
+
+# The docs point at the planner's ladder and copy none of the five tokens.
+check_no_copied_tokens() {
+  local token file tokens
+  tokens=$(capability_tokens_of) || return 1
+  for file in "$@"; do
+    while IFS= read -r token; do
+      grep -qF -- "$token" "$file" && { echo "copied token '$token' in $file" >&2; return 1; }
+    done <<<"$tokens"
+  done
+  return 0
+}
+
+# Absent phrases that route a form, a journey or a rule to the browser.
+check_no_browser_overrouting() {
+  local file phrase
+  for file in "$@"; do
+    for phrase in 'client-submitted' 'multi-page journey' 'are route tests, not more browser files' \
+      'one spec per form stays on the UI path' 'route-surface UAT'; do
+      grep -qiF -- "$phrase" "$file" && { echo "has '$phrase' in $file" >&2; return 1; }
+    done
+  done
+  return 0
+}
+
+check_realserver_routing_wording() {
+  local file="$1"
+  grep -qiF 'JavaScript-disabled' "$file" || { echo "no JavaScript-disabled routing: $file" >&2; return 1; }
+  grep -qiF 'native form post' "$file" || { echo "no native form post routing: $file" >&2; return 1; }
+  grep -qiF 'multi-page workflow over native forms' "$file" || { echo "no multi-page workflow routing: $file" >&2; return 1; }
+  grep -qiE 'real-server (check|spec)s?' "$file" || { echo "no real-server routing: $file" >&2; return 1; }
+}
+
+check_rule_points_at_ladder() {
+  grep -qF -- "$LADDER" "$1" || { echo "rule lacks the ladder pointer" >&2; return 1; }
+  grep -qF 'serializeForm' "$1" || { echo "rule lacks serializeForm" >&2; return 1; }
+  check_realserver_routing_wording "$1"
+}
+
+check_page_points_at_ladder() {
+  grep -qF "planner's ladder" "$1" || { echo "page lacks the ladder pointer" >&2; return 1; }
+  grep -qF 'recommended fix' "$1" || { echo "page lacks the fold as recommended fix" >&2; return 1; }
+  grep -qF 'Each transition, status or role rule stays its own UAT' "$1" || { echo "page lacks the per-rule wording" >&2; return 1; }
+  check_realserver_routing_wording "$1"
 }
 
 # No line routes a self-check or self-test to Playwright.
@@ -173,5 +237,97 @@ check_page_surfaces() {
   [ "$status" -ne 0 ]
   copy=$(copy_with "$PAGE" e2e.md 's/^1\. \*\*Unit and story\.\*\*/1. **Unit and story.** an `e2e` row/')
   run check_page_surfaces "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------- Given-builder sentence ----------
+
+@test "both audit bullets drop a self-test of the plan's own Given builders" {
+  check_given_sentence "$AUDIT"
+}
+
+@test "red twin: the Given-builder sentence missing from one bullet fails" {
+  local copy
+  copy=$(copy_with "$AUDIT" given-dp.md "/^- \\*\\*Decomposition & dependency soundness/s/ A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them\\.//")
+  run check_given_sentence "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$AUDIT" given-cov.md "/^- \\*\\*SPEC coverage/s/ A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them\\.//")
+  run check_given_sentence "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------- the docs point at the ladder ----------
+
+@test "the rule and the page point at the planner's ladder and route the native checks to real-server" {
+  check_rule_points_at_ladder "$PW_RULE"
+  check_page_points_at_ladder "$PAGE"
+}
+
+@test "red twin: a rule without the ladder pointer, serializeForm or a routing phrase fails" {
+  local copy
+  copy=$(copy_with "$PW_RULE" noladder.md 's#references/plan/planner\.md#references/plan/other.md#g')
+  run check_rule_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PW_RULE" noserialize.md 's/serializeForm/serializeBody/g')
+  run check_rule_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PW_RULE" nojs.md 's/JavaScript-disabled/scripted/g')
+  run check_rule_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PW_RULE" nopost.md 's/native form post/form post/g')
+  run check_rule_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PW_RULE" nomulti.md 's/multi-page workflow over native forms/workflow/g')
+  run check_rule_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "red twin: a page without the ladder, the fold wording or a routing phrase fails" {
+  local copy
+  copy=$(copy_with "$PAGE" noladder.md "s/planner's ladder/planner/g")
+  run check_page_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PAGE" nofold.md 's/the fold is the recommended fix/the fold is an option/')
+  run check_page_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PAGE" norule.md 's/Each transition, status or role rule stays its own UAT/Each rule folds/')
+  run check_page_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PAGE" nojs.md 's/JavaScript-disabled/scripted/g')
+  run check_page_points_at_ladder "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the plan-verify header yields five capability tokens" {
+  run capability_tokens_of
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 5 ]
+}
+
+@test "neither doc copies a capability token or routes a form, journey or rule to the browser" {
+  check_no_copied_tokens "$PW_RULE" "$PAGE"
+  check_no_browser_overrouting "$PW_RULE" "$PAGE"
+}
+
+@test "red twin: a copied token or an over-routing phrase fails" {
+  local copy token
+  token=$(capability_tokens_of | head -n 1)
+  copy=$(copy_with "$PW_RULE" token.md "s/^# Playwright Conventions.*/&\n\nA browser spec for $token./")
+  run check_no_copied_tokens "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PAGE" submitted.md 's/a native form post/client-submitted forms/')
+  run check_no_browser_overrouting "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PAGE" journey.md 's/a multi-page workflow over native forms/a multi-page journey/')
+  run check_no_browser_overrouting "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PW_RULE" routetests.md 's/, not more browser files\./ are route tests, not more browser files./')
+  run check_no_browser_overrouting "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PW_RULE" ui.md "s/a form's own submission is checked/one spec per form stays on the UI path; a form submission is checked/")
+  run check_no_browser_overrouting "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$PAGE" surface.md 's/Sibling non-browser UATs stay separate, one per rule\./A route-surface UAT per rule./')
+  run check_no_browser_overrouting "$copy"
   [ "$status" -ne 0 ]
 }

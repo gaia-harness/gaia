@@ -186,7 +186,7 @@ test -f "$PLAN_DIR/README.md" \
 
 If any required file is missing, surface the failure to the user with the planner's return payload. Do not retry silently, the user decides through `AskUserQuestion`: `Investigate first` (Recommended) or `Re-spawn the planner`. Never proceed to step 4.6 with an incomplete plan folder.
 
-Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, and for a spec-derived plan that the README's UAT routing table validates against the SPEC and every `story`-routed UAT has its criterion line in a task doc. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
+Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, and for a spec-derived plan that the README's UAT routing table validates against the SPEC and every `story`-routed UAT has its criterion line in a task doc and every `browser`-routed UAT has its capability line in a task doc. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
 
 ```bash
 if [[ -n "${SPEC_PATH:-}" ]]; then

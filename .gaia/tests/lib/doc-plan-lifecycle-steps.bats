@@ -239,7 +239,7 @@ EOF
 <!-- gaia:uat-routing:start -->
 | uat_id | surface | phase | feature_folder | file_name |
 |---|---|---|---|---|
-| UAT-001 | browser | 1 | checkout | guest-checkout-confirms-order.spec.ts |
+| UAT-001 | real-server | 1 | checkout | guest-checkout-confirms-order.spec.ts |
 <!-- gaia:uat-routing:end -->
 EOF
   printf 'You are the orchestrator.\n' >"$FIXTURE_PLAN/KICKOFF.md"
@@ -621,10 +621,18 @@ check_final_summary_names_worthiness() {
 
 # ---------- routing ladder and the e2e-or-route triggers ----------
 
+# capability_tokens_of_header: the closed browser-capability list, one token
+# per line, extracted from plan-verify.sh, which owns it.
+capability_tokens_of_header() {
+  sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$PLAN_VERIFY" | grep -oE '"[^"]+"' | tr -d '"'
+}
+
 # check_ladder <planner>: the operational routing ladder, the link to the
 # principle's page, and no copy of that page's rationale.
 check_ladder() {
-  local file="$1" para needle
+  local file="$1" para needle tokens token
+  tokens="$(capability_tokens_of_header)"
+  [ "$(wc -l <<<"$tokens" | tr -d ' ')" -eq 5 ] || { printf 'expected five capability tokens\n' >&2; return 1; }
   para="$(sed -n '/Route each UAT by the ladder/,/is the owning phase number/p' "$file")"
   [ -n "$para" ] || { printf 'no routing ladder paragraph\n' >&2; return 1; }
   for needle in \
@@ -642,9 +650,20 @@ check_ladder() {
     'also carries one real-server check per guarded route module' \
     'as a `real-server` row when a UAT names it and otherwise as a task its owning phase delivers' \
     'A new plan never routes to `e2e`' \
-    'names the file of the guard'; do
+    'names the file of the guard' \
+    '.gaia/scripts/spec/plan-verify.sh' \
+    'Browser capability (<uat_id>)' \
+    'serializeForm' \
+    'A UAT whose Given says JavaScript is disabled, a native form post and a multi-page workflow over native forms route to `real-server`'; do
     grep -qF -- "$needle" <<<"$para" || { printf 'ladder lacks: %s\n' "$needle" >&2; return 1; }
   done
+  while IFS= read -r token; do
+    grep -qF -- "$token" <<<"$para" || { printf 'ladder lacks capability: %s\n' "$token" >&2; return 1; }
+  done <<<"$tokens"
+  for needle in 'a client-submitted form' 'a multi-page journey' 'prints a non-fatal WARN on a `browser` row'; do
+    grep -qF -- "$needle" <<<"$para" && { printf 'ladder still holds: %s\n' "$needle" >&2; return 1; }
+  done
+  grep -qF -- 'the word lists live in the header' "$file" && { printf 'planner.md still describes the word-list WARN\n' >&2; return 1; }
   grep -qF -- 'the lowest layer that can prove it' "$file" && { printf 'planner.md copies the rationale phrase\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | route | <owning phase> | <kebab-case feature folder> | <behavior-named-kebab-case>.test.ts |' "$file" || { printf 'no route row in the routing table example\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | real-server |' "$file" || { printf 'no real-server row in the routing table example\n' >&2; return 1; }
@@ -686,8 +705,31 @@ check_route_triggers() {
   { cat "$PLANNER_MD"; printf '\nTests belong at the lowest layer that can prove it.\n'; } >"$copy"
   run check_ladder "$copy"
   [ "$status" -ne 0 ]
+  local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'serializeForm' 'a native form post and a multi-page workflow over native forms route to `real-server`')
+  while IFS= read -r needle; do new_needles+=("$needle"); done < <(capability_tokens_of_header)
+  for needle in "${new_needles[@]}"; do
+    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$copy"
+    run check_ladder "$copy"
+    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
+  done
+  for needle in 'a client-submitted form' 'a multi-page journey' 'prints a non-fatal WARN on a `browser` row' 'the word lists live in the header'; do
+    awk -v needle="$needle" '/^    4\. `browser` only when/ { $0 = $0 " " needle } { print }' "$PLANNER_MD" >"$copy"
+    run check_ladder "$copy"
+    [ "$status" -ne 0 ] || { echo "restoring '$needle' did not fail" >&2; return 1; }
+  done
   sed 's/| <uat_id> | real-server |/| <uat_id> | e2e |/' "$PLANNER_MD" >"$copy"
   run check_ladder "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "plan.md names the browser-row capability line among the plan checks" {
+  grep -qF -- '`browser`-routed UAT has its capability line in a task doc' "$PLAN_MD"
+}
+
+@test "red twin: plan.md without the capability-line clause fails the needle" {
+  local copy="$BATS_TEST_TMPDIR/plan.md"
+  sed 's/`browser`-routed UAT has its capability line in a task doc/removed/' "$PLAN_MD" >"$copy"
+  run grep -qF -- '`browser`-routed UAT has its capability line in a task doc' "$copy"
   [ "$status" -ne 0 ]
 }
 

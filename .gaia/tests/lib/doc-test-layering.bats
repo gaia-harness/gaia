@@ -50,6 +50,8 @@ setup() {
     "$ROUTES_RULE"
     "$SESSION_README"
     "$REPO_ROOT/apps/web/.claude/rules/coding-guidelines-react.md"
+    "$REPO_ROOT/apps/web/.claude/rules/playwright.md"
+    "$REPO_ROOT/.claude/skills/gaia/references/plan/decomposition-audit.md"
     "$REPO_ROOT/README.md"
   )
   RATIONALE='the lowest layer that can prove it'
@@ -97,9 +99,18 @@ check_tests_react() {
     'a direct anonymous call to it is the proof' \
     'proven by a real-server `.data` request naming only the child route' \
     'cannot be proven by a route test' \
-    'wiki/decisions/Test Layering.md'; do
+    'wiki/decisions/Test Layering.md' \
+    '.claude/skills/gaia/references/plan/planner.md' \
+    'serializeForm'; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
+  has "$file" 'client-submitted' && return 1
+  local token tokens
+  tokens=$(sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh" | grep -oE '"[^"]+"' | tr -d '"')
+  [ "$(printf '%s\n' "$tokens" | wc -l)" -eq 5 ] || { echo "expected five capability tokens"; return 1; }
+  while IFS= read -r token; do
+    has "$file" "$token" && { echo "copied token: $token"; return 1; }
+  done <<<"$tokens"
   has "$file" "$RATIONALE" && return 1
   has "$file" "a route's redirect is E2E" && return 1
   return 0
@@ -188,6 +199,24 @@ mutate_copy() {
 @test "tests-react holds the route row, the limits and the link, with no rationale copy" {
   run check_tests_react "$TESTS_REACT"
   [ "$status" -eq 0 ]
+}
+
+@test "red twin: tests-react without the ladder pointer or serializeForm, or with a client-submitted row or a copied token, fails" {
+  local copy token
+  copy=$(mutate_copy "$TESTS_REACT" 's#references/plan/planner\.md#references/plan/other.md#')
+  run check_tests_react "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$TESTS_REACT" 's/serializeForm/serializeBody/')
+  run check_tests_react "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$TESTS_REACT" 's/one journey per user flow/client-submitted forms, one journey per user flow/')
+  run check_tests_react "$copy"
+  [ "$status" -ne 0 ]
+  token=$(sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh" | grep -oE '"[^"]+"' | tr -d '"' | head -n 1)
+  [ -n "$token" ]
+  copy=$(mutate_copy "$TESTS_REACT" "s/one journey per user flow/$token, one journey per user flow/")
+  run check_tests_react "$copy"
+  [ "$status" -ne 0 ]
 }
 
 @test "red twin: tests-react with a missing limit, a rationale copy or the old redirect line fails" {
