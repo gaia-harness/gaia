@@ -20,10 +20,19 @@ const skippedInputTypes = new Set([
 const isDisabled = (control: HTMLElement): boolean => {
   if (control.hasAttribute('disabled')) return true;
 
+  let cameFrom: HTMLElement = control;
+
   for (let node = control.parentNode; node; node = node.parentNode) {
-    if (node.tagName === 'FIELDSET' && node.hasAttribute('disabled')) {
+    if (
+      node.tagName === 'FIELDSET' &&
+      node.hasAttribute('disabled') &&
+      // A browser keeps the controls of a disabled fieldset's first legend enabled.
+      node.children.find((child) => child.tagName === 'LEGEND') !== cameFrom
+    ) {
       return true;
     }
+
+    cameFrom = node;
   }
 
   return false;
@@ -39,24 +48,29 @@ const readSelectedOptionValue = (select: HTMLElement): string | undefined => {
   const selected = options.findLast((option) =>
     option.hasAttribute('selected')
   );
-  const showsListbox =
+  const isListbox =
     select.hasAttribute('multiple') || Number(select.getAttribute('size')) > 1;
   const chosen =
     selected ??
-    (showsListbox ? undefined : (
+    (isListbox ? undefined : (
       options.find((option) => !isOptionDisabled(option))
     ));
 
   if (!chosen || isOptionDisabled(chosen)) return undefined;
 
-  return chosen.getAttribute('value') ?? chosen.text.trim();
+  return (
+    chosen.getAttribute('value') ??
+    chosen.text.replaceAll(/[\t\n\f\r ]+/g, ' ').trim()
+  );
 };
 
 const readControlValue = (control: HTMLElement): string | undefined => {
   const tag = control.tagName.toLowerCase();
 
   if (tag === 'select') return readSelectedOptionValue(control);
-  if (tag === 'textarea') return control.text;
+  if (tag === 'textarea')
+    // A browser's parser drops the one newline right after the start tag.
+    return control.text.replace(/^\r?\n/, '');
 
   const type = (control.getAttribute('type') ?? 'text').toLowerCase();
 

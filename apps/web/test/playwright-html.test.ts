@@ -1,7 +1,7 @@
 import {describe, expect, test} from 'vitest';
 import {parseHtml, serializeForm} from '../.playwright/html';
 
-const formOf = (markup: string) => {
+const parseFirstForm = (markup: string) => {
   const [form] = parseHtml(markup).querySelectorAll('form');
 
   return form;
@@ -9,7 +9,7 @@ const formOf = (markup: string) => {
 
 describe('serializeForm', () => {
   test('serializes the fields a browser would submit and applies an override', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form>
         <input name="title" value="Hello" />
         <input type="hidden" name="intent" value="create" />
@@ -37,7 +37,7 @@ describe('serializeForm', () => {
   });
 
   test('submits a checked checkbox value, or on when it has none', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form>
         <input type="checkbox" name="a" value="yes" checked />
         <input type="checkbox" name="b" checked />
@@ -48,7 +48,7 @@ describe('serializeForm', () => {
   });
 
   test('submits only the checked radio and a textarea text', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form>
         <input type="radio" name="plan" value="free" />
         <input type="radio" name="plan" value="pro" checked />
@@ -60,7 +60,7 @@ describe('serializeForm', () => {
   });
 
   test('omits a submit button and an unnamed input unless the button is the submitter', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form>
         <input name="title" value="Hi" />
         <input value="unnamed" />
@@ -77,7 +77,7 @@ describe('serializeForm', () => {
   });
 
   test('omits a control inside a disabled fieldset', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form>
         <input name="open" value="1" />
         <fieldset disabled><input name="shut" value="2" /></fieldset>
@@ -88,7 +88,9 @@ describe('serializeForm', () => {
   });
 
   test('replaces a key the form already holds with the override', () => {
-    const form = formOf('<form><input name="title" value="form" /></form>');
+    const form = parseFirstForm(
+      '<form><input name="title" value="form" /></form>'
+    );
 
     expect(serializeForm(form, {overrides: {title: 'override'}})).toEqual({
       title: 'override',
@@ -96,7 +98,7 @@ describe('serializeForm', () => {
   });
 
   test('submits an option with no value attribute as its trimmed text', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form><select name="pick"><option>  Plain  </option></select></form>
     `);
 
@@ -104,7 +106,7 @@ describe('serializeForm', () => {
   });
 
   test('skips a disabled first option when choosing the default', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form><select name="pick"><option value="" disabled>Pick</option><option value="a">A</option></select></form>
     `);
 
@@ -112,7 +114,7 @@ describe('serializeForm', () => {
   });
 
   test('omits a select whose selected option is disabled', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form><select name="pick"><option value="" selected disabled>Pick</option><option value="a">A</option></select></form>
     `);
 
@@ -120,7 +122,7 @@ describe('serializeForm', () => {
   });
 
   test('skips options inside a disabled optgroup', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form><select name="pick"><optgroup disabled><option value="x">X</option></optgroup><option value="a">A</option></select></form>
     `);
 
@@ -128,7 +130,7 @@ describe('serializeForm', () => {
   });
 
   test('omits a multiple or listbox select with nothing selected', () => {
-    const form = formOf(`
+    const form = parseFirstForm(`
       <form>
         <select name="many" multiple><option value="a">A</option></select>
         <select name="list" size="3"><option value="b">B</option></select>
@@ -137,5 +139,33 @@ describe('serializeForm', () => {
     `);
 
     expect(serializeForm(form)).toEqual({chosen: 'd'});
+  });
+
+  test('drops the single newline a browser strips after the textarea start tag', () => {
+    const form = parseFirstForm(
+      '<form><textarea name="a">\n\nhello</textarea></form>'
+    );
+
+    expect(serializeForm(form)).toEqual({a: '\nhello'});
+  });
+
+  test('keeps a control in the first legend of a disabled fieldset enabled', () => {
+    const form = parseFirstForm(`
+      <form><fieldset disabled>
+        <legend><input name="inLegend" value="1" /></legend>
+        <legend><input name="inSecond" value="2" /></legend>
+        <input name="inBody" value="3" />
+      </fieldset></form>
+    `);
+
+    expect(serializeForm(form)).toEqual({inLegend: '1'});
+  });
+
+  test('collapses internal whitespace in an option text fallback', () => {
+    const form = parseFirstForm(
+      '<form><select name="pick"><option>  a \n  b  </option></select></form>'
+    );
+
+    expect(serializeForm(form)).toEqual({pick: 'a b'});
   });
 });
