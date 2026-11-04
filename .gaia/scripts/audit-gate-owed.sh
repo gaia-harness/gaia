@@ -8,16 +8,26 @@
 #
 #   audit-gate-owed.sh choose       --root <R> --run-folder <D> --round <r>
 #   audit-gate-owed.sh mark         --root <R> --run-folder <D> --round <r>
+#   audit-gate-owed.sh gate-steps   --root <R> --run-folder <D>
 #   audit-gate-owed.sh steps-passed --root <R> --run-folder <D>
 #   audit-gate-owed.sh selection    --root <R> --run-folder <D>
 #   audit-gate-owed.sh status       --root <R> [--run-folder <D>]
 #   audit-gate-owed.sh run          --root <R> --run-folder <D>
 #
 # choose prints smaller or full. status exits 0 clear, 1 owed, 3 unreadable
-# (read as owed by every caller). run exits 0 pass, 1 failure, 3 refused; its
-# last output line is `gate-owed exit <status>`. A refusal is the dev smoke
-# test exiting 2 (usage) or 3 (refused to start, such as a held port): it is
-# not a defect, so it records nothing.
+# (read as owed by every caller). run and gate-steps exit 0 pass, 1 failure,
+# 3 refused; their last output line is `gate-owed exit <status>`. A refusal is
+# the dev smoke test exiting 2 (usage) or 3 (refused to start, such as a held
+# port): it is not a defect, so it records nothing.
+# run executes the owed steps on the committed tree and, on a pass, clears the
+# record. gate-steps executes the same steps for a gate before its commit and
+# touches no record: on a pass it leaves the evidence below for the working
+# tree, which steps-passed then clears once that tree is committed.
+# gate-pass.json is the pass evidence: the tree the three steps passed on.
+# steps-passed clears only when it holds that evidence for the HEAD tree, else
+# exits 4 and changes nothing, so a failed gate never clears by hand. A new run
+# or gate-steps discards the evidence before its steps start. The evidence is
+# a local file, so it stops a mistaken call, not a forged file.
 # gate-failure.json is the failure record the reopened-round hook and the unit
 # read. Exit 2 is usage, 3 an unreadable input.
 
@@ -33,7 +43,7 @@ GATE_FRONTEND_FILTER_PATTERN='^\.gaia/(cli|tests|scripts)/'
 # gaia:maintainer-only:end
 
 usage() {
-  printf 'usage: audit-gate-owed.sh choose|mark|steps-passed|selection|status|run --root <R> [--run-folder <D>] [--round <r>]\n' >&2
+  printf 'usage: audit-gate-owed.sh choose|mark|gate-steps|steps-passed|selection|status|run --root <R> [--run-folder <D>] [--round <r>]\n' >&2
   exit 2
 }
 
@@ -53,7 +63,7 @@ while [ "$#" -gt 0 ]; do
   esac
   shift 2
 done
-case "$subcommand" in choose | mark | steps-passed | selection | status | run) ;; *) usage ;; esac
+case "$subcommand" in choose | mark | gate-steps | steps-passed | selection | status | run) ;; *) usage ;; esac
 case "$root" in /*) ;; *) usage ;; esac
 case "$subcommand" in
   choose | mark) case "$round" in '' | *[!0-9]*) usage ;; esac ;;
@@ -73,10 +83,28 @@ case "$folder" in /*) ;; *) usage ;; esac
 
 record="$folder/gate-owed.json"
 failure_file="$folder/gate-failure.json"
+evidence_file="$folder/gate-pass.json"
 evaluator="$script_directory/audit-loop-eval.sh"
 
 head_commit() { git -C "$root" rev-parse HEAD 2>/dev/null; }
 head_tree() { git -C "$root" rev-parse 'HEAD^{tree}' 2>/dev/null; }
+
+# The tree a commit of everything in the working tree would hold: tracked
+# changes plus untracked, non-ignored files, hashed through a scratch index so
+# the real index is untouched.
+working_tree() {
+  local index tree
+  index="$(mktemp)" || return 3
+  if ! cp "$(git -C "$root" rev-parse --path-format=absolute --git-path index 2>/dev/null)" "$index" 2>/dev/null; then
+    GIT_INDEX_FILE="$index" git -C "$root" read-tree HEAD 2>/dev/null || { rm -f "$index"; return 3; }
+  fi
+  if GIT_INDEX_FILE="$index" git -C "$root" add -A 2>/dev/null; then
+    tree="$(GIT_INDEX_FILE="$index" git -C "$root" write-tree 2>/dev/null)"
+  fi
+  rm -f "$index"
+  [ -n "${tree:-}" ] || return 3
+  printf '%s\n' "$tree"
+}
 
 record_valid() {
   jq -e 'type == "object" and .version == 1 and (.owed | type) == "boolean" and (.since | type) == "string"
@@ -150,7 +178,13 @@ mark() {
 }
 
 steps_passed() {
-  local existing updated
+  local existing updated tree
+  tree="$(head_tree)"
+  if ! jq -e --arg tree "$tree" 'type == "object" and .version == 1 and .tree == $tree and .exit == 0
+      and .steps == ["pw", "smoke", "build"]' "$evidence_file" >/dev/null 2>&1; then
+    printf 'audit-gate-owed: steps-passed refused: no pass evidence for HEAD tree %s; run audit-gate-owed.sh run\n' "$tree" >&2
+    return 4
+  fi
   existing="$(current_record)" || return 3
   updated="$(printf '%s' "$existing" | jq -c --arg tree "$(head_tree)" --arg commit "$(head_commit)" \
     '.owed = false | .passed = {tree: $tree, commit: $commit} | .last_failure = null')" || return 3
@@ -181,9 +215,10 @@ finish() {
 }
 
 run_steps() {
-  local number log step before rounds_current existing updated command_status
+  local mode="$1" number log step before rounds_current existing updated command_status pass_tree
   number=$(($(find "$folder" -maxdepth 1 -name 'gate-owed-*.log' 2>/dev/null | wc -l | tr -d ' ') + 1))
   mkdir -p "$folder" || finish 3
+  rm -f "$evidence_file" || finish 3
   log="$folder/gate-owed-$number.log"
   : >"$log"
   existing="$(current_record)" || finish 3
@@ -202,6 +237,9 @@ run_steps() {
       printf 'gate-owed: step %s changed the working tree\n' "$step" >>"$log"
       command_status=1
     fi
+    if [ "$command_status" -ne 0 ] && [ "$mode" = gate-steps ]; then
+      finish 1
+    fi
     if [ "$command_status" -ne 0 ]; then
       rounds_current="$(bash "$evaluator" current-round --root "$root" 2>/dev/null)" || finish 3
       case "$rounds_current" in '' | *[!0-9]*) finish 3 ;; esac
@@ -213,6 +251,11 @@ run_steps() {
       finish 1
     fi
   done
+  if [ "$mode" = gate-steps ]; then pass_tree="$(working_tree)" || finish 3; else pass_tree="$(head_tree)"; fi
+  jq -n -c --arg tree "$pass_tree" --arg commit "$(head_commit)" \
+    '{version: 1, tree: $tree, commit: $commit, steps: ["pw", "smoke", "build"], exit: 0}' >"$evidence_file.tmp" || finish 3
+  mv "$evidence_file.tmp" "$evidence_file" || finish 3
+  [ "$mode" = gate-steps ] && finish 0
   steps_passed || finish 3
   rm -f "$failure_file"
   finish 0
@@ -224,5 +267,6 @@ case "$subcommand" in
   steps-passed) steps_passed; exit $? ;;
   selection) selection; exit $? ;;
   status) status; exit $? ;;
-  run) run_steps ;;
+  gate-steps) run_steps gate-steps ;;
+  run) run_steps run ;;
 esac

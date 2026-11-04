@@ -198,12 +198,116 @@ pnpm -C $R build" ]
   done
 }
 
+# --- pass evidence -----------------------------------------------------------
+
+@test "steps-passed with no pass evidence refuses with exit 4 and the gate stays owed" {
+  commit_path apps/web/app/a.ts
+  gate mark --round 1
+  touch "$T/fail-build"
+  run gate run
+  [ "$status" -eq 1 ]
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"steps-passed refused: no pass evidence for HEAD tree"* ]] || return 1
+  [ "$(jq -r .owed "$D/gate-owed.json")" = true ]
+  [ "$(jq -r .last_failure.step "$D/gate-owed.json")" = build ]
+  run gate status
+  [ "$status" -eq 1 ]
+}
+
+@test "steps-passed refuses evidence recorded for another tree" {
+  commit_path apps/web/app/a.ts
+  gate mark --round 1
+  run gate gate-steps
+  [ "$status" -eq 0 ]
+  commit_path apps/web/app/a.ts
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+  run gate status
+  [ "$status" -eq 1 ]
+}
+
+@test "steps-passed refuses a malformed evidence file or one missing a step" {
+  local tree
+  commit_path apps/web/app/a.ts
+  gate mark --round 1
+  tree="$(git -C "$R" rev-parse 'HEAD^{tree}')"
+  printf 'not json\n' >"$D/gate-pass.json"
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+  jq -n -c --arg tree "$tree" '{version: 1, tree: $tree, commit: "x", steps: ["pw", "build"], exit: 0}' >"$D/gate-pass.json"
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+  jq -n -c --arg tree "$tree" '{version: 1, tree: $tree, commit: "x", steps: ["pw", "smoke", "build"], exit: 1}' >"$D/gate-pass.json"
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+  run gate status
+  [ "$status" -eq 1 ]
+}
+
+@test "a run failure discards earlier evidence for the same tree" {
+  commit_path apps/web/app/a.ts
+  gate mark --round 1
+  gate gate-steps >/dev/null
+  touch "$T/fail-build"
+  run gate run
+  [ "$status" -eq 1 ]
+  [ ! -e "$D/gate-pass.json" ]
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+}
+
+@test "gate-steps passing before a commit lets steps-passed clear the committed tree" {
+  commit_path apps/web/app/a.ts
+  gate mark --round 1
+  printf 'export const b = 2;\n' >"$R/apps/web/app/b.ts"
+  run gate gate-steps
+  [ "$status" -eq 0 ]
+  [ "${lines[${#lines[@]}-1]}" = "gate-owed exit 0" ]
+  [ "$(cat "$CALLS")" = "pnpm -C $R pw
+smoke --tree $R
+pnpm -C $R build" ]
+  [ "$(jq -r .owed "$D/gate-owed.json")" = true ]
+  git -C "$R" add -A
+  git -C "$R" commit --quiet -m "fix round"
+  run gate steps-passed
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .owed "$D/gate-owed.json")" = false ]
+  run gate status
+  [ "$status" -eq 0 ]
+}
+
+@test "a commit that leaves out a gated change gives steps-passed nothing to clear" {
+  commit_path apps/web/app/a.ts
+  gate mark --round 1
+  printf 'export const b = 2;\n' >"$R/apps/web/app/b.ts"
+  printf 'export const c = 3;\n' >"$R/apps/web/app/c.ts"
+  gate gate-steps >/dev/null
+  git -C "$R" add apps/web/app/b.ts
+  git -C "$R" commit --quiet -m "partial"
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+}
+
+@test "a failing gate-steps writes no evidence and leaves the owed record alone" {
+  commit_path apps/web/app/a.ts
+  gate mark --round 1
+  touch "$T/fail-pw"
+  run gate gate-steps
+  [ "$status" -eq 1 ]
+  [ ! -e "$D/gate-pass.json" ]
+  [ ! -e "$D/gate-failure.json" ]
+  [ "$(jq -r .last_failure "$D/gate-owed.json")" = null ]
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+}
+
 # --- pass-tree rule and since ------------------------------------------------
 
 @test "after a pass a harness-only commit is clear, a later frontend commit is owed" {
   commit_path apps/web/app/a.ts
   gate mark --round 1
-  gate steps-passed
+  gate run >/dev/null
   commit_path .claude/rules/x.md
   run gate status
   [ "$status" -eq 0 ]
@@ -216,7 +320,7 @@ pnpm -C $R build" ]
 @test "a catch-up merge carrying frontend paths after a pass is clear" {
   commit_path apps/web/app/a.ts
   gate mark --round 1
-  gate steps-passed
+  gate run >/dev/null
   git -C "$R" checkout --quiet -b side HEAD~1
   commit_path apps/web/app/side.ts
   git -C "$R" checkout --quiet main
@@ -228,7 +332,7 @@ pnpm -C $R build" ]
 @test "since advances: a harness-only mark after a pass selects nothing" {
   commit_path apps/web/app/a.ts
   gate mark --round 1
-  gate steps-passed
+  gate run >/dev/null
   commit_path .claude/rules/x.md
   gate mark --round 2
   run gate selection
