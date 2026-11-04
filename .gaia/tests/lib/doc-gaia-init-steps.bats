@@ -5,7 +5,8 @@
 # and its resume step list names the same steps, in the same order, as the CLI's
 # STEP_ORDER. It also pins the single-session shape: the React Doctor install
 # sits once in Step 1, before any line names a `apps/web/` path; the command
-# reads no setup reference and runs or records no per-machine step; it asks for
+# reads no setup reference, records no per-machine step and runs only the
+# unrecorded .env seed, in Step 9 before finalize; it asks for
 # no exit, restart or reload; Step 9 finalizes and Step 10 hands off to
 # /setup-gaia, ending on the read of the setup command with RECONFIGURE false
 # and the halt rule; the wiki log claims no install; the resume section names no
@@ -370,7 +371,6 @@ check_setup_names_per_machine() {
 SETUP_STEP_NEEDLES=(
   'gaia setup finalize'
   'gaia setup mark-step'
-  'gaia setup bootstrap-env'
   'gaia setup record install-tools'
   'gaia setup record install-plugins'
   'gaia setup record chmod-statusline'
@@ -423,6 +423,64 @@ check_no_setup_step() {
   run check_no_setup_step "$scratch"
   [ "$status" -ne 0 ]
   grep -qF 'Step 7 no longer records the sandbox recommendation' <<<"$output"
+}
+
+# ---------------------------------------------------------------------------
+# Init seeds apps/web/.env before finalize and its commit
+# ---------------------------------------------------------------------------
+
+SEED_ENV_CALL='.gaia/cli/gaia setup bootstrap-env'
+
+# check_env_seeded <init>: the seed call is the only line naming it, sits in
+# Step 9 before the finalize call (so a failed seed stops while the resume
+# cursor still exists, and before the commit's Quality Gate needs the file),
+# and no line copies onto the .env with `cp`, which the Edit deny refuses.
+check_env_seeded() {
+  local file="$1" step seed_line finalize_line
+  [ "$(grep -cF -- "$SEED_ENV_CALL" "$file" || true)" = 1 ] || {
+    echo "the init command does not name the seed call exactly once" >&2
+    return 1
+  }
+  step="$(section_of "$file" '## Step 9: Finalize')"
+  seed_line="$(grep -nxF -- "$SEED_ENV_CALL" <<<"$step" | head -n 1 | cut -d: -f1)"
+  finalize_line="$(grep -nxF -- '.gaia/cli/gaia init finalize' <<<"$step" | head -n 1 | cut -d: -f1)"
+  { [ -n "$seed_line" ] && [ -n "$finalize_line" ] && [ "$seed_line" -lt "$finalize_line" ]; } || {
+    echo "Step 9 does not seed .env before init finalize" >&2
+    return 1
+  }
+  if grep -qE '(^|[^[:alnum:]_])cp [^`]*\.env' "$file"; then
+    echo "the init command copies onto .env with cp" >&2
+    return 1
+  fi
+}
+
+@test "gaia-init.md seeds apps/web/.env in Step 9 before finalize, never with cp" {
+  check_env_seeded "$INIT_MD"
+}
+
+@test "the seed check fails when the seed call is deleted" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  drop_line "$INIT_MD" "$scratch" "$SEED_ENV_CALL"
+  run check_env_seeded "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "the seed check fails when the seed call moves after the commit" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md" moved="$BATS_TEST_TMPDIR/gaia-init.moved.md"
+  drop_line "$INIT_MD" "$scratch" "$SEED_ENV_CALL"
+  insert_before "$scratch" "$moved" "$SEED_ENV_CALL" '## Step 10: Continue into /setup-gaia'
+  run check_env_seeded "$moved"
+  [ "$status" -ne 0 ]
+  grep -qF 'does not seed .env before init finalize' <<<"$output"
+}
+
+@test "the seed check fails when a cp onto .env comes back" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  cp "$INIT_MD" "$scratch"
+  printf '\n%s\n' 'cp -n apps/web/.env.example apps/web/.env' >>"$scratch"
+  run check_env_seeded "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'copies onto .env with cp' <<<"$output"
 }
 
 # ---------------------------------------------------------------------------
