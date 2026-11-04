@@ -22,7 +22,7 @@ Deterministic scanner for React security, performance, correctness, and accessib
 
 ## Installer verification record
 
-Verified against react-doctor 0.9.22, running `install --yes --cwd apps/web` in a two-package pnpm workspace. The installer writes the paths below. Each maps to one step of `.gaia/scripts/install-react-doctor.sh`, in the script's order:
+The path table is verified against react-doctor 0.9.22, running `install --yes --cwd apps/web` in a two-package pnpm workspace. The installer writes the paths below. Each one except the kept skill maps to one step of `.gaia/scripts/install-react-doctor.sh`, in the script's order:
 
 | Path the installer writes | Strip step |
 |---|---|
@@ -42,8 +42,8 @@ Verdicts:
 - The installer writes the CI workflow even under `--yes`.
 - GAIA never passes `--agent-hooks`. Without that flag `--yes` installs no agent hooks. With it the installer adds a Stop hook to `.claude/settings.json`, a `react-doctor.mjs` script under `.claude/hooks/`, and Cursor hook files.
 - The `.agents/skills/` copy is written for many agents (Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Pi, Warp, and others), not only Copilot and Warp.
-- Known extra: when Factory Droid is installed the installer also writes `.factory/skills/react-doctor/` under the target directory. the Factory Droid copy is gitignored like the Claude Code copy, so it never lands in a commit or dirties the tree; GAIA still has no strip step for it, and it appears only on a machine with Droid.
-- The audit invocation uses `--scope changed`; `--diff` is a deprecated hidden alias for it. The command lives in `.claude/agents/code-audit-frontend.md`.
+- Known extra: when Factory Droid is installed the installer also writes `.factory/skills/react-doctor/` under the target directory. The Factory Droid copy is gitignored like the Claude Code copy, so it never lands in a commit or dirties the tree; GAIA still has no strip step for it, and it appears only on a machine with Droid.
+- The audit invocation uses `--scope changed`; `--diff` is a deprecated hidden alias for it. The command lives in `.gaia/scripts/audit-frontend-oracles.sh`.
 
 ## Single config, highest precedence
 
