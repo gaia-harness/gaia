@@ -85,7 +85,7 @@ react_doctor_version="$(react_doctor_pinned_version "$version_file")" || exit 1
 
 # Render beside the target, then swap, so a failed render leaves any installed skill untouched.
 mkdir -p "$package_directory/.claude/skills"
-staging_directory="$(mktemp -d "$package_directory/.claude/skills/.react-doctor.XXXXXX")"
+staging_directory="$(mktemp -d "$skill_directory.staging.XXXXXX")"
 trap remove_staging EXIT
 while IFS= read -r template_file; do
   relative_path="${template_file#"$template_directory"/}"
