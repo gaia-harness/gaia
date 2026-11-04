@@ -10,7 +10,7 @@ npx -y react-doctor@{{REACT_DOCTOR_VERSION}} rules explain react-doctor/no-array
 ```
 
 3. Pick the narrowest control that matches the intent (decision guide below).
-4. Apply it: a `rules` subcommand edits the existing `doctor.config.*` in place; an `ignore.overrides` entry or a `surfaces` change is a hand edit to `doctor.config.ts`.
+4. Apply it: a `rules` subcommand edits `doctor.config.ts` in place; an `ignore.overrides` entry or a `surfaces` change is a hand edit to the same file.
 5. Confirm the change did what the user wanted:
 
 ```bash
