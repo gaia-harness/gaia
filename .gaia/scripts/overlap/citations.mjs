@@ -5,11 +5,12 @@
 // reads an entry it loaded.
 //
 // A test is found two ways. The signal extractor reports every test whose
-// title is a plain string. A test whose title is a template literal with
-// substitutions, such as one test per row of a `for` loop, is skipped by the
-// extractor, so it is found here by matching the cited fullName against the
-// title's static parts, each substitution standing for one or more
-// characters, under enclosing describe titles that are themselves static.
+// title is a plain string. It skips a title with substitutions, such as one
+// test per row of a `for` loop, and every title a `.each` or `.for` table
+// expands, so those are found here by matching the cited fullName against the
+// title's static parts, each substitution or table token standing for the
+// text it prints, under enclosing describe titles that are static or
+// table-expanded themselves.
 //
 // A cited line that only calls a helper is an assertion only when the helper
 // asserts. The check follows a helper defined in the cited file (a function
@@ -124,45 +125,73 @@ function blockKindOf(call) {
 
 const escapeForPattern = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Vitest's .each/.for title tokens: printf tokens take a row value, %c takes
+// one and prints nothing, %% takes one and prints "% " then that value (an
+// empty string prints nothing after the space), %# prints the row index and %$ the
+// index plus one, and $key or $key.path (or $0 for an array row) print a
+// property. Honest limit: a $key token is a wildcard here even when the rows
+// are arrays, where vitest prints it literally, so such a title also verifies
+// names no row prints.
+const TABLE_TOKEN = /%%|%#|%\$|%c|%[sdjifoO]|\$[$\p{ID_Continue}.]+/gu;
+const TABLE_TOKEN_PATTERN = {'%%': '% (?:.*)', '%c': '', '%#': '\\d+', '%$': '\\d+'};
+
+function tableTitlePattern(text) {
+  let pattern = '';
+  let cursor = 0;
+  for (const match of text.matchAll(TABLE_TOKEN)) {
+    pattern += escapeForPattern(text.slice(cursor, match.index)) + (TABLE_TOKEN_PATTERN[match[0]] ?? '(?:.+)');
+    cursor = match.index + match[0].length;
+  }
+  return pattern + escapeForPattern(text.slice(cursor));
+}
+
+function titlePartsOf(title) {
+  if (title === undefined) return null;
+  if (ts.isStringLiteral(title) || ts.isNoSubstitutionTemplateLiteral(title)) return [title.text];
+  if (ts.isTemplateExpression(title)) return [title.head.text, ...title.templateSpans.map((span) => span.literal.text)];
+  return null;
+}
+
+// ancestors holds each enclosing describe title as pattern source. A test is
+// collected here only when the extractor skips it: its title has
+// substitutions, it is a .each or .for test, or an enclosing describe expands
+// per row.
 function templatedTestsOf(entry) {
   if (entry.templated !== undefined) return entry.templated;
   const found = [];
-  const visit = (node, ancestors, unmatchable) => {
-    if (ts.isCallExpression(node)) {
-      const kind = blockKindOf(node);
+  const visit = (node, ancestors, unmatchable, expanded) => {
+    const kind = ts.isCallExpression(node) ? blockKindOf(node) : null;
+    if (kind !== null) {
       const {properties} = calleeParts(node);
       const expands = properties.includes('each') || properties.includes('for');
       const title = node.arguments[0];
+      const parts = titlePartsOf(title);
+      const toPattern = expands ? tableTitlePattern : escapeForPattern;
       if (kind === 'test') {
-        if (!unmatchable && !expands && title !== undefined && ts.isTemplateExpression(title)) {
-          const parts = [title.head.text, ...title.templateSpans.map((span) => span.literal.text)];
-          const prefix = ancestors.length > 0 ? `${ancestors.join(' ')} ` : '';
-          const body = parts.map(escapeForPattern).join('(?:.+)');
+        if (!unmatchable && parts !== null && (expands || expanded || parts.length > 1)) {
+          const prefix = ancestors.map((ancestor) => `${ancestor} `).join('');
           found.push({
-            pattern: new RegExp(`^${escapeForPattern(prefix)}${body}$`, 's'),
+            pattern: new RegExp(`^${prefix}${parts.map(toPattern).join('(?:.+)')}$`, 's'),
             ranges: [[lineAt(entry, node.getStart(entry.sourceFile)), lineAt(entry, node.getEnd() - 1)]],
           });
         }
-        ts.forEachChild(node, (child) => visit(child, ancestors, unmatchable));
+        ts.forEachChild(node, (child) => visit(child, ancestors, unmatchable, expanded));
         return;
       }
       if (kind === 'describe') {
         if (title !== undefined && ts.isFunctionLike(title)) {
-          ts.forEachChild(node, (child) => visit(child, ancestors, unmatchable));
+          ts.forEachChild(node, (child) => visit(child, ancestors, unmatchable, expanded));
           return;
         }
-        const literal =
-          !expands && title !== undefined && (ts.isStringLiteral(title) || ts.isNoSubstitutionTemplateLiteral(title))
-            ? title.text
-            : null;
-        const next = literal === null ? ancestors : [...ancestors, literal];
-        ts.forEachChild(node, (child) => visit(child, next, unmatchable || literal === null));
+        const matchable = parts !== null && (expands || parts.length === 1);
+        const next = matchable ? [...ancestors, parts.map(toPattern).join('(?:.+)')] : ancestors;
+        ts.forEachChild(node, (child) => visit(child, next, unmatchable || !matchable, expanded || expands));
         return;
       }
     }
-    ts.forEachChild(node, (child) => visit(child, ancestors, unmatchable));
+    ts.forEachChild(node, (child) => visit(child, ancestors, unmatchable, expanded));
   };
-  visit(entry.sourceFile, [], false);
+  visit(entry.sourceFile, [], false, false);
   entry.templated = found;
   return found;
 }
