@@ -126,10 +126,11 @@ function blockKindOf(call) {
 const escapeForPattern = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Vitest's .each/.for title tokens: printf tokens take a row value, %c takes
-// one and prints nothing, %% prints %, %# and %$ print the row index, and
-// $key or $key.path (or $0 for an array row) print a property. Honest limit: a
-// $key token is a wildcard here even when the rows are arrays, where vitest
-// prints it literally, so such a title verifies a little more than it yields.
+// one and prints nothing, %% prints %, %# prints the row index and %$ the
+// index plus one, and $key or $key.path (or $0 for an array row) print a
+// property. Honest limit: a $key token is a wildcard here even when the rows
+// are arrays, where vitest prints it literally, so such a title also verifies
+// names no row prints.
 const TABLE_TOKEN = /%%|%#|%\$|%c|%[sdjifoO]|\$[$\p{ID_Continue}.]+/gu;
 const TABLE_TOKEN_PATTERN = {'%%': '%', '%c': '', '%#': '\\d+', '%$': '\\d+'};
 
@@ -143,8 +144,6 @@ function tableTitlePattern(text) {
   return pattern + escapeForPattern(text.slice(cursor));
 }
 
-// A title's static parts, split at each template substitution; null for a
-// title that is not written out (an identifier, a call, none).
 function titlePartsOf(title) {
   if (title === undefined) return null;
   if (ts.isStringLiteral(title) || ts.isNoSubstitutionTemplateLiteral(title)) return [title.text];
@@ -154,7 +153,8 @@ function titlePartsOf(title) {
 
 // ancestors holds each enclosing describe title as pattern source. A test is
 // collected here only when the extractor skips it: its title has
-// substitutions or table tokens, or an enclosing describe expands per row.
+// substitutions, it is a .each or .for test, or an enclosing describe expands
+// per row.
 function templatedTestsOf(entry) {
   if (entry.templated !== undefined) return entry.templated;
   const found = [];

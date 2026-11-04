@@ -857,6 +857,8 @@ TABLE_OUTCOME='expect(outcome).toEqual(expectedOutcome(pageKey, userKey))'
   is_kept 'refuses blank input'
   check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status 0: rita takes 100%% of the quota' 'expect(quotaOf(userKey)).toBe(1)')
   [ "$(reason_of 'refuses blank input')" = citation-unverified ]
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status first: rita takes 100% of the quota' 'expect(quotaOf(userKey)).toBe(1)')
+  [ "$(reason_of 'refuses blank input')" = citation-unverified ]
 }
 
 @test "a test under a describe.each verifies by the expanded describe prefix, and a name no row yields does not" {
