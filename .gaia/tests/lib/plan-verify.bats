@@ -4,8 +4,8 @@
 # table, the story test criterion line, the orchestrator step
 # sentinels (match rule, order rule, per-arm requirements), the verbatim
 # blocks (yield handling, worthiness step, wiki promotion, code audit and
-# post-clearance), failure aggregation and the misrouting warning. Shell
-# level only.
+# post-clearance), failure aggregation, the story and non-ui misrouting
+# warning and the browser capability refusals. Shell level only.
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
 
@@ -131,6 +131,7 @@ spec_fixture() {
   write_orchestrator "${SPEC_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task '- Story test criterion (UAT-002): the toast reads Saved'
+  printf '# Browser\n\n- Browser capability (UAT-001): focus or keyboard: focus lands on the order number\n' >"$PLAN/task-browser.md"
 }
 
 # spec_less_fixture: a passing spec-less plan folder.
@@ -476,7 +477,7 @@ mutate_orchestrator() {
 @test "red twin: a planner.md without the fenced block fails naming planner.md" {
   local tree="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$tree/.gaia/scripts/spec" "$tree/.claude/skills/gaia/references/plan"
-  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$tree/.gaia/scripts/spec/"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$tree/.gaia/scripts/spec/"
   grep -vE '^[[:space:]]*```' "$PLANNER_MD" >"$tree/.claude/skills/gaia/references/plan/planner.md"
   spec_less_fixture
   run bash "$tree/.gaia/scripts/spec/plan-verify.sh" "$PLAN"
@@ -533,7 +534,7 @@ mutate_orchestrator() {
 marker_tree() {
   MARKER_TREE="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$MARKER_TREE/.gaia/scripts/spec" "$MARKER_TREE/.claude/skills/gaia/references/plan"
-  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$MARKER_TREE/.gaia/scripts/spec/"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$MARKER_TREE/.gaia/scripts/spec/"
   cp "$1" "$MARKER_TREE/.claude/skills/gaia/references/plan/planner.md"
 }
 
@@ -639,8 +640,9 @@ strip_marked() {
   echo "$output" | grep -qF 'confirm it is not a route or, when only a browser shows it, a browser UAT'
 }
 
-# one_uat_plan <surface> <then-clause>: a spec-derived plan with the one UAT
-# routed to <surface>; the SPEC and routing file are written fresh.
+# one_uat_plan <surface> <then-clause> [<capability-line>] [<given>]: a
+# spec-derived plan with the one UAT routed to <surface>; the SPEC and routing
+# file are written fresh. A non-empty third argument becomes a task-doc line.
 one_uat_plan() {
   local file_cells='checkout | guest-checkout-confirms-order.spec.ts'
   cat >"$SPEC" <<EOF2
@@ -648,7 +650,7 @@ one_uat_plan() {
 spec_id: SPEC-901
 uats:
   - uat_id: UAT-001
-    given: a visitor
+    given: ${4:-a visitor}
     when: they act
     then: $2
 ---
@@ -665,15 +667,21 @@ EOF2
   write_orchestrator "${SPEC_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task '- nothing'
+  if [ -n "${3:-}" ]; then
+    write_task "- nothing"$'\n'"$3"
+  fi
 }
 
 # scratch_verifier <edit-expression>: a copy of plan-verify.sh (with the
-# libraries it sources and planner.md) in the test tmp dir, run through sed.
+# libraries it sources and planner.md) in the test tmp dir. The edit runs over
+# plan-verify.sh and the capability-line lib, since a guard can live in either;
+# an edit that matches neither leaves the guard in place, so a twin fails loud.
 scratch_verifier() {
   local root="$BATS_TEST_TMPDIR/scratch"
   mkdir -p "$root/.gaia/scripts/spec" "$root/.claude/skills/gaia/references/plan"
   cp "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$root/.gaia/scripts/spec/"
   cp "$PLANNER_MD" "$root/.claude/skills/gaia/references/plan/planner.md"
+  sed "$1" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" >"$root/.gaia/scripts/spec/browser-capability-lib.sh"
   sed "$1" "$SCRIPT" >"$root/.gaia/scripts/spec/plan-verify.sh"
   SCRATCH_SCRIPT="$root/.gaia/scripts/spec/plan-verify.sh"
 }
@@ -682,37 +690,6 @@ scratch_verifier() {
   one_uat_plan real-server 'the sign-in response sets the session cookie'
   verify_spec
   [ "$status" -eq 0 ]
-}
-
-@test "a browser row naming only a status or redirect warns toward the route surface and exits 0" {
-  one_uat_plan browser 'the response status is 302 and it redirects to the sign-in path'
-  verify_spec
-  [ "$status" -eq 0 ]
-  echo "$output" | grep -qF 'WARN: UAT-001 is routed browser but its then-clause names only a status or a redirect; the route surface is the likely home'
-}
-
-@test "a browser row naming only server-rendered text warns toward real-server and exits 0" {
-  one_uat_plan browser 'the page shows the heading Orders'
-  verify_spec
-  [ "$status" -eq 0 ]
-  echo "$output" | grep -qF 'WARN: UAT-001 is routed browser but its then-clause names only server-rendered text; the real-server surface is the likely home'
-}
-
-@test "a browser row naming client behavior draws no warning" {
-  one_uat_plan browser 'focus moves to the first field of the dialog'
-  verify_spec
-  [ "$status" -eq 0 ]
-  echo "$output" | grep -qF 'WARN:' && return 1
-  true
-}
-
-@test "red twin: without the rendered-text pattern the server-rendered text fixture prints no warning" {
-  one_uat_plan browser 'the page shows the heading Orders'
-  scratch_verifier 's/render|shows?|displays?|heading|text|html|lists?|label|title|message|visible/zzzznomatch/'
-  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
-  [ "$status" -eq 0 ]
-  echo "$output" | grep -qF 'server-rendered text' && return 1
-  true
 }
 
 @test "a new plan with an e2e row exits 1, naming the UAT and both replacement surfaces" {
@@ -762,4 +739,288 @@ EOF2
   run bash -c ". '$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh'; uat_lib_validate_routing '$SPEC' '$PLAN/README.md'"
   [ "$status" -eq 2 ]
   echo "$output" | grep -qF "uat-routing: UAT-002 has surface 'desktop'; expected real-server, browser, route, story or non-ui"
+}
+
+# ---------- the browser capability refusals ----------
+
+capability_tokens_of() {
+  sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$1" | grep -oE '"[^"]+"' | tr -d '"'
+}
+
+capability_cues_of() {
+  sed -n "s/^capability_cues=(\(.*\))\$/\1/p" "$1" | grep -oE "'[^']+'" | tr -d "'"
+}
+
+# two_browser_plan <then-1> <then-2> <task-text>: two browser rows over one
+# task doc.
+two_browser_plan() {
+  cat >"$SPEC" <<EOF2
+---
+spec_id: SPEC-901
+uats:
+  - uat_id: UAT-001
+    given: a visitor
+    when: they act
+    then: $1
+  - uat_id: UAT-002
+    given: a visitor
+    when: they act again
+    then: $2
+---
+EOF2
+  cat >"$PLAN/README.md" <<'EOF2'
+# Plan
+
+<!-- gaia:uat-routing:start -->
+| uat_id | surface | phase | feature_folder | file_name |
+|---|---|---|---|---|
+| UAT-001 | browser | 1 | checkout | first.spec.ts |
+| UAT-002 | browser | 1 | checkout | second.spec.ts |
+<!-- gaia:uat-routing:end -->
+EOF2
+  write_orchestrator "${SPEC_ORDER[@]}"
+  printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
+  write_task "$3"
+}
+
+# expect_refusal <message-fragment>: the last run exited 1 with this fragment.
+expect_refusal() {
+  [ "$status" -eq 1 ] || { echo "$output" >&2; return 1; }
+  echo "$output" | grep -qF -- "$1" || { echo "$output" >&2; return 1; }
+}
+
+@test "capability: a browser row with no line is refused naming the closed list while the row with a line is not named" {
+  two_browser_plan 'focus moves to the first field' 'focus moves to the second field' '- Browser capability (UAT-001): focus or keyboard: focus moves to the first field'
+  verify_spec
+  expect_refusal 'UAT-002 is routed browser but no task doc carries its line'
+  echo "$output" | grep -qF 'a browser row needs a capability from the closed list' || return 1
+  echo "$output" | grep -F 'plan-verify: UAT-001' && return 1
+  true
+}
+
+@test "capability: an unknown capability is refused naming the UAT and all five tokens" {
+  local tokens token count=0
+  tokens=$(capability_tokens_of "$SCRIPT")
+  while IFS= read -r token; do count=$((count + 1)); done <<<"$tokens"
+  [ "$count" -eq 5 ] || return 1
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): hover: focus moves to the first field'
+  verify_spec
+  expect_refusal "UAT-001 names browser capability 'hover', which is not in the closed list"
+  while IFS= read -r token; do
+    echo "$output" | grep -qF -- "$token" || { echo "missing $token" >&2; return 1; }
+  done <<<"$tokens"
+}
+
+@test "capability: an absent phrase and a phrase with no cue word are each refused on their own line" {
+  two_browser_plan 'focus moves to the first field' 'focus moves to the second field' '- Browser capability (UAT-001): focus or keyboard: the cursor lands in the field
+- Browser capability (UAT-002): focus or keyboard: the second field'
+  verify_spec
+  [ "$status" -eq 1 ] || return 1
+  echo "$output" | grep -F 'UAT-001 cites the phrase' | grep -qF 'the capability phrase must appear verbatim in its then-clause and contain a cue word of that capability' || return 1
+  echo "$output" | grep -F 'UAT-002 cites the phrase' | grep -qF 'the capability phrase must appear verbatim in its then-clause and contain a cue word of that capability' || return 1
+}
+
+@test "capability: a strict sub-phrase of a longer then-clause passes" {
+  one_uat_plan browser 'after saving, focus moves to the first field of the dialog' '- Browser capability (UAT-001): focus or keyboard: focus moves to the first field'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "red twin: with the grounding inverted to the story direction the sub-phrase fixture exits 1" {
+  one_uat_plan browser 'after saving, focus moves to the first field of the dialog' '- Browser capability (UAT-001): focus or keyboard: focus moves to the first field'
+  scratch_verifier 's/phrase_is_word_bounded "\$phrase_text" "\$then_text" &&/[[ "$phrase_text" == *"$then_text"* ]] \&\&/'
+  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
+  expect_refusal 'UAT-001 cites the phrase'
+}
+
+@test "capability: an empty phrase, a bare trailing colon and a mid-word start are refused as ungrounded" {
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): focus or keyboard: '
+  verify_spec
+  expect_refusal 'UAT-001 cites the phrase'
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): focus or keyboard:'
+  verify_spec
+  expect_refusal 'UAT-001 cites the phrase'
+  echo "$output" | grep -qF 'not in the closed list' && return 1
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): focus or keyboard: ocus moves'
+  verify_spec
+  expect_refusal 'UAT-001 cites the phrase'
+}
+
+@test "capability: a phrase holding a colon, an enclosing quote pair, backticks or a backslash passes" {
+  one_uat_plan browser 'the hint: beside the field' '- Browser capability (UAT-001): layout or visual position: the hint: beside the field'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): focus or keyboard: "focus moves to the first field"'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): focus or keyboard: `focus moves to the first field`'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  one_uat_plan browser 'focus moves to a\b' '- Browser capability (UAT-001): focus or keyboard: focus moves to a\b'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "capability: a token with different case is refused as unknown" {
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): Focus or keyboard: focus moves to the first field'
+  verify_spec
+  expect_refusal "UAT-001 names browser capability 'Focus or keyboard', which is not in the closed list"
+}
+
+@test "capability: the line in a second task doc, not the one holding the story line, satisfies the row" {
+  one_uat_plan browser 'focus moves to the first field'
+  printf '# Other\n\n- Browser capability (UAT-001): focus or keyboard: focus moves to the first field\n' >"$PLAN/task-two.md"
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "capability: with several lines the row passes when any one validates" {
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): hover: nothing
+- Browser capability (UAT-001): focus or keyboard: focus moves to the first field'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+js_disabled_case() {
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): focus or keyboard: focus moves to the first field' "$1"
+  verify_spec
+}
+
+@test "JavaScript-disabled Given: JavaScript is disabled is refused" {
+  js_disabled_case 'JavaScript is disabled'
+  expect_refusal 'UAT-001 is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes to real-server'
+}
+
+@test "JavaScript-disabled Given: JS off is refused" {
+  js_disabled_case 'a visitor with JS off'
+  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+}
+
+@test "JavaScript-disabled Given: JavaScript turned off is refused" {
+  js_disabled_case 'a visitor with JavaScript turned off'
+  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+}
+
+@test "JavaScript-disabled Given: JavaScript not enabled is refused" {
+  js_disabled_case 'JavaScript not enabled'
+  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+}
+
+@test "JavaScript-disabled Given: the hyphenated JavaScript-disabled is refused" {
+  js_disabled_case 'a JavaScript-disabled browser'
+  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+}
+
+@test "JavaScript-disabled Given: without JavaScript is refused" {
+  js_disabled_case 'a visitor without JavaScript'
+  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+}
+
+@test "JavaScript-disabled Given: no-JS is refused" {
+  js_disabled_case 'a no-JS visitor'
+  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+}
+
+@test "JavaScript-disabled Given: JavaScript enabled and a JSON body are not refused" {
+  js_disabled_case 'a visitor with JavaScript enabled'
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  js_disabled_case 'a JSON body is posted'
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "JavaScript-disabled Given: the console shows no JavaScript errors is refused, the false positive the header documents" {
+  js_disabled_case 'the console shows no JavaScript errors'
+  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+  grep -qF 'no JavaScript errors' "$SCRIPT" || return 1
+}
+
+@test "a browser row with a layout capability draws no warning and exits 0" {
+  one_uat_plan browser 'the error message shows beside its field' '- Browser capability (UAT-001): layout or visual position: beside its field'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  echo "$output" | grep -qE '^WARN: UAT-001' && return 1
+  true
+}
+
+@test "red twin: a re-inserted rendered-word warning arm makes the same fixture print a warning" {
+  one_uat_plan browser 'the error message shows beside its field' '- Browser capability (UAT-001): layout or visual position: beside its field'
+  scratch_verifier 's/^          browser_row_check \(.*\)$/          printf "WARN: %s is routed browser but its then-clause names only server-rendered text\\n" "$uat_id" >\&2; browser_row_check \1/'
+  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  echo "$output" | grep -qE '^WARN: UAT-001' || return 1
+}
+
+# guard_twin <sed-expression> <fixture-fn>: the fixture fails on the real
+# script and passes once the guard is replaced by a no-op.
+guard_twin() {
+  "$2"
+  verify_spec
+  [ "$status" -eq 1 ] || { echo "$output" >&2; return 1; }
+  scratch_verifier "$1"
+  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+fixture_without_line() {
+  one_uat_plan browser 'focus moves to the first field'
+}
+
+fixture_unknown_capability() {
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): hover: focus moves to the first field'
+}
+
+fixture_ungrounded_phrase() {
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): focus or keyboard: the cursor lands'
+}
+
+fixture_javascript_disabled() {
+  one_uat_plan browser 'focus moves to the first field' '- Browser capability (UAT-001): focus or keyboard: focus moves to the first field' 'JavaScript is disabled'
+}
+
+@test "red twin: without the missing-line refusal the no-line fixture exits 0" {
+  guard_twin 's/^      fail "\$uat is routed browser but no task doc.*$/      :/' fixture_without_line
+}
+
+@test "red twin: without the unknown-capability refusal the fixture exits 0" {
+  guard_twin 's/^    printf "%s names browser capability.*$/    :/' fixture_unknown_capability
+}
+
+@test "red twin: without the ungrounded refusal the fixture exits 0" {
+  guard_twin 's/^  printf "%s cites the phrase.*$/  :/' fixture_ungrounded_phrase
+}
+
+@test "red twin: without the JavaScript-disabled refusal the fixture exits 0" {
+  guard_twin 's/^    fail "\$uat is routed browser but its Given.*$/    :/' fixture_javascript_disabled
+}
+
+# header_lists_capabilities <script>: the header comment names every code
+# token with its cue ERE, and no word-list label survives.
+header_lists_capabilities() {
+  local script="$1" header tokens cues token cue count=0
+  header=$(awk '/^#/ { print; next } { exit }' "$script")
+  tokens=$(capability_tokens_of "$script")
+  cues=$(capability_cues_of "$script")
+  while IFS= read -r token; do
+    count=$((count + 1))
+    cue=$(printf '%s\n' "$cues" | sed -n "${count}p")
+    [ -n "$cue" ] || return 1
+    printf '%s\n' "$header" | grep -qFx -- "#   capability: $token | cues: $cue" || { echo "header lacks $token" >&2; return 1; }
+  done <<<"$tokens"
+  [ "$count" -eq 5 ] || return 1
+  [ "$(printf '%s\n' "$cues" | wc -l | tr -d ' ')" -eq 5 ] || return 1
+  grep -qE 'CLIENT|RENDERED|STATUS|is routed browser but its then-clause names only' "$script" && return 1
+  true
+}
+
+@test "the header lists the five capabilities with the code's own cue words and drops the word lists" {
+  header_lists_capabilities "$SCRIPT"
+}
+
+@test "red twin: a header missing a token or carrying an altered cue ERE fails the header check" {
+  scratch_verifier '/^#   capability: focus or keyboard/d'
+  run header_lists_capabilities "$SCRATCH_SCRIPT"
+  [ "$status" -ne 0 ]
+  scratch_verifier '/^#   capability: focus or keyboard/s/tab key$/tab keyz/'
+  run header_lists_capabilities "$SCRATCH_SCRIPT"
+  [ "$status" -ne 0 ]
 }

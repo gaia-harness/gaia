@@ -32,28 +32,49 @@
 # (misrouting hint). An e2e row, which only a plan generated before the split
 # holds, fails with a line telling the planner to route it real-server (the live
 # stack with no page) or browser (only a real browser shows it); the shared
-# validator still accepts it. A browser row's then-clause is checked against
-# three case-insensitive word lists, in this precedence, and the result is a
-# non-fatal WARN: line that never changes the exit code:
-#   CLIENT   focus|hydrat|client[- ]?(side|navigation|submitted)|navigat|click|
-#            keyboard|submit|drag|scroll|hover|javascript
-#            a match means a browser is needed: no WARN
-#   RENDERED render|shows?|displays?|heading|text|html|lists?|label|title|
-#            message|visible
-#            a match: the real-server surface is the likely home
-#   STATUS   status|redirect|[1-5][0-9]{2}([^0-9]|$)|not found|forbidden|refus
-#            a match: the route surface is the likely home
+# validator still accepts it.
+#
+# A browser row must name the capability that needs a real browser, from this
+# closed list (matched exactly as spelled, case-sensitive), each with the cue
+# words its phrase must carry (case-insensitive, word-bounded):
+#   capability: client JavaScript | cues: without a reload|client-side|optimistic(ally)?|live
+#   capability: layout or visual position | cues: beside|above|below|position(s|ed)?|viewport|layout
+#   capability: focus or keyboard | cues: focus(es|ed|ing)?|keyboard|tab key
+#   capability: rendered-DOM accessibility scan | cues: accessibility|axe|screen readers?
+#   capability: browser-only navigation | cues: back button|browser history|client navigation
+# The line lives in any task-*.md:
+#   - Browser capability (<uat_id>): <capability>: <then-clause phrase, verbatim>
+# Parse: the text after the marker is trimmed, then split on the first colon
+# followed by a space or the end of the text; the left side is the capability,
+# the right side the phrase. A bare trailing colon, or no such colon, gives an
+# empty phrase. One enclosing pair of double quotes or backticks is stripped
+# from the phrase, then whitespace is normalized. The phrase must be a
+# case-sensitive substring of the whitespace-normalized then-clause with at
+# least one word-bounded occurrence, and must contain a cue word of the
+# capability it names. With several lines for one UAT the row passes when any
+# one validates; otherwise the first line found is the one reported.
+# A browser row whose Given says JavaScript is disabled (javascript or js
+# followed by disabled, off, turned off or not enabled; or without or no
+# javascript or js) is refused whatever its capability line says, since a
+# request client never runs JavaScript and the UAT belongs on real-server. The
+# pattern is word-bounded, so a Given that says "no JavaScript errors" is
+# refused too: an accepted false positive, resolved by routing.
 #
 # Every failure is reported on stderr, one line each, in a single run.
 #
 # Exit codes: 0 pass; 1 one or more failures; 2 usage error.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
+capability_tokens=("client JavaScript" "layout or visual position" "focus or keyboard" "rendered-DOM accessibility scan" "browser-only navigation")
+capability_cues=('without a reload|client-side|optimistic(ally)?|live' 'beside|above|below|position(s|ed)?|viewport|layout' 'focus(es|ed|ing)?|keyboard|tab key' 'accessibility|axe|screen readers?' 'back button|browser history|client navigation')
+javascript_disabled_pattern='(^|[^[:alnum:]])((javascript|js)[ -](is )?(disabled|off|turned off|not enabled)|without (javascript|js)|no[ -](javascript|js))([^[:alnum:]]|$)'
 set -uo pipefail
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=.gaia/scripts/spec/uat-lib.sh
 . "$script_directory/uat-lib.sh"
+# shellcheck source=.gaia/scripts/spec/browser-capability-lib.sh
+. "$script_directory/browser-capability-lib.sh"
 
 usage() {
   printf 'usage: plan-verify.sh <plan-dir> [--spec <spec-path>]\n' >&2
@@ -91,6 +112,38 @@ failures=0
 fail() {
   printf 'plan-verify: %s\n' "$1" >&2
   failures=$((failures + 1))
+}
+
+capability_allowed_list=''
+for capability_token in "${capability_tokens[@]}"; do
+  capability_allowed_list="${capability_allowed_list:+$capability_allowed_list, }$capability_token"
+done
+
+# The capability line scan runs over every task doc; the JavaScript-disabled
+# check reads the Given and fires independently of the line.
+browser_row_check() {
+  local uat="$1" then_text="$2" given_text="$3" marker task_line problem first_problem='' passed=0
+  marker="Browser capability ($uat)"
+  if [ "${#task_files[@]}" -gt 0 ]; then
+    while IFS= read -r task_line; do
+      problem=$(capability_line_problem "$uat" "$then_text" "${task_line#*"$marker"}")
+      if [ -z "$problem" ]; then
+        passed=1
+        break
+      fi
+      [ -n "$first_problem" ] || first_problem="$problem"
+    done < <(grep -hF -- "$marker" "${task_files[@]}")
+  fi
+  if [ "$passed" -eq 0 ]; then
+    if [ -n "$first_problem" ]; then
+      fail "$first_problem"
+    else
+      fail "$uat is routed browser but no task doc carries its line: - $marker: <capability>: <then-clause phrase>; a browser row needs a capability from the closed list: $capability_allowed_list"
+    fi
+  fi
+  if printf '%s\n' "$given_text" | grep -qiE "$javascript_disabled_pattern"; then
+    fail "$uat is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes to real-server"
+  fi
 }
 
 readme="$plan_directory/README.md"
@@ -311,13 +364,7 @@ if [ -n "$spec_path" ] && [ -f "$readme" ]; then
           fail "uat-routing: $uat_id uses the e2e surface, which a new plan no longer takes; route it real-server (the live stack with no page) or browser (only a real browser shows it)"
           ;;
         browser)
-          if grep -qiE 'focus|hydrat|client[- ]?(side|navigation|submitted)|navigat|click|keyboard|submit|drag|scroll|hover|javascript' <<<"$then_clause"; then
-            :
-          elif grep -qiE 'render|shows?|displays?|heading|text|html|lists?|label|title|message|visible' <<<"$then_clause"; then
-            printf 'WARN: %s is routed browser but its then-clause names only server-rendered text; the real-server surface is the likely home\n' "$uat_id" >&2
-          elif grep -qiE 'status|redirect|[1-5][0-9]{2}([^0-9]|$)|not found|forbidden|refus' <<<"$then_clause"; then
-            printf 'WARN: %s is routed browser but its then-clause names only a status or a redirect; the route surface is the likely home\n' "$uat_id" >&2
-          fi
+          browser_row_check "$uat_id" "$then_clause" "$(printf '%s\n' "$spec_rows" | awk -F'\t' -v id="$uat_id" '$1 == id { print $2; exit }')"
           ;;
       esac
       case "$surface" in
