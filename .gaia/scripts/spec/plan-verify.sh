@@ -57,8 +57,8 @@
 # followed by disabled, off, turned off or not enabled; or without or no
 # javascript or js) is refused whatever its capability line says, since a
 # request client never runs JavaScript and the UAT routes by the ladder's route
-# and real-server steps. The pattern is word-bounded, so a Given that says "no
-# JavaScript errors" is refused too: an accepted false positive, resolved by routing.
+# and real-server steps. The pattern is word-bounded, so a Given that says
+# "no JavaScript errors" is refused too: an accepted false positive.
 #
 # A real-server row needs its own non-blank line in any task-*.md, so one
 # blanket sentence cannot cover several rows; whether it is true is unchecked:
