@@ -69,7 +69,7 @@ _gaia_veto_changed_paths() {
 #     leaves no fixer result, so instead one round j, effective_from_round <= j
 #     <= r, sits on a tree whose diff from the waiver round's tree (round
 #     effective_from_round - 1) touches the key's path; reviewed over rounds
-#     j..r with the line ignored: any change to the path shifts lines, so the
+#     j..r with the line ignored: a change to the path can shift lines, so the
 #     same finding re-reported at another line must not read as fixed. A
 #     veto effective from round 1 has no waiver round and only the fixer
 #     route.
