@@ -43,6 +43,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - `/gaia-init` asks how your API names JSON fields, not your backend; the `--casing` flag is unchanged (#3263)
 - **Release notes start with the notes (maintainer repo only):** GitHub release bodies no longer open with the 1.6.1 migration command, its Proceed warning and the bundle checksum. The last 1.6.1 project migrates through a hand-written prompt instead (#3202)
 - **The app template's lint package moves to `@gaia-harness/lint` 3.1.1:** it adds curated React Doctor rules, TanStack Query's recommended rules (only when TanStack Query is installed), and turns `react/jsx-key` back on, so `pnpm lint` can report new findings in your own code after updating. The template's own code passes them as shipped (#3287)
+- **Questions no longer recommend widening Claude's own authority:** outside the audit checkpoint, a question that would grant a standing pass past a gate, clear a failed gate, merge a plan build or merge over audit residuals, or take the user's word for a step nothing checks now recommends the conservative option or nothing, so a picker that accepts the recommendation cannot pass the halt that asked it. The plan's progress ledger records the selected answer instead of crediting "the human", and a failed owed gate clears only when its steps pass (#3275)
 
 ### Fixed
 

@@ -523,7 +523,8 @@ count_read_passes() {
 }
 
 # residual_question_passes <runbook>: rc 0 when the residual question asks
-# under a header other than the checkpoint's and does not pause an unattended run.
+# under a header other than the checkpoint's, recommends neither option, and does
+# not pause an unattended run.
 residual_question_passes() {
   local paragraph header
   paragraph="$(section "$DISPATCH_UNIT" "$1" | sentences)" || return 1
@@ -531,7 +532,8 @@ residual_question_passes() {
   [ "$header" = Residuals ] || return 1
   grep -qF -- 'never `Audit loop`' <<<"$paragraph" || return 1
   grep -qF -- "\`.ask\` is non-zero" <<<"$paragraph" || return 1
-  grep -qF -- 'The options are `Merge (Recommended)` and `Fix chosen ones`.' <<<"$paragraph" || return 1
+  grep -qF -- 'It recommends nothing, so its options are `Fix chosen ones` then `Merge`, neither marked `(Recommended)`.' <<<"$paragraph" || return 1
+  [ "$(grep -oF -- '(Recommended)' <<<"$paragraph" | wc -l | tr -d ' ')" = 1 ] || return 1
   grep -qF -- 'An unattended run does not pause; the residue drain is the route after the merge.' <<<"$paragraph"
 }
 
@@ -542,6 +544,8 @@ residual_question_passes() {
   mutated="$(replace_in "$RUNBOOK" 'with the header `Residuals`, never `Audit loop`' 'with the header `Audit loop`, never `Residuals`')" || return 1
   residual_question_passes "$mutated" && return 1
   mutated="$(replace_in "$RUNBOOK" 'An unattended run does not pause;' 'An unattended run asks too;')" || return 1
+  residual_question_passes "$mutated" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'neither marked `(Recommended)`.' 'neither marked `(Recommended)`. The options are `Merge (Recommended)` and `Fix chosen ones`.')" || return 1
   residual_question_passes "$mutated" && return 1
   true
 }
