@@ -59,8 +59,8 @@ _gaia_veto_changed_paths() {
 
 # gaia_veto_keys_state <main-root> <B> <state-json> <r> <round-r-keys-json>:
 # prints {"satisfied":[keys],"unsatisfied":[keys]} over the vetoes effective
-# by round r. A key is satisfied by a fix made after the veto that a member
-# then reviewed, by either of two routes:
+# by round r. A key is satisfied by a fix made after the round that held the
+# waiver that a member then reviewed, by either of two routes:
 #   fixer: one round k, effective_from_round <= k < r, holds a `fix` entry on
 #     the exact key, a fixer result `fixed` on it, and a later recorded round
 #     on a different tree than round k (the fix was committed); reviewed over

@@ -59,8 +59,9 @@
 #   cross-remit-basis-mismatch  basis cross-remit on a finding not flagged cross_remit
 #   unknown-key                 a non-fix entry with no matching finding and no binding
 #                               veto: reads as Critical and security (fail closed). A fix
-#                               entry already meets both, so it passes: a satisfied or
-#                               retired veto's synthetic fix entry refuses no later round
+#                               entry passes, since it can only add work, never hide a
+#                               finding: a satisfied or retired veto's synthetic fix entry
+#                               refuses no later round
 #   edited-after-check          the dispositions file no longer matches its snapshot
 #   outcome-missing             (check-outcomes) a file or divert entry with no line in
 #                               <D>/filing-outcomes-<r>.jsonl, the filing script's record
