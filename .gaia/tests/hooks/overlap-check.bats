@@ -37,6 +37,7 @@ HELPERS='apps/web/.playwright/e2e/helpers.spec.ts'
 RENDERED_HELPERS='apps/web/.playwright/e2e/rendered-helpers.spec.ts'
 REPLACEMENT='apps/web/.playwright/e2e/demote-served.spec.ts'
 MIXED='apps/web/.playwright/e2e/mixed.spec.ts'
+TABLES='apps/web/app/route-tests/tables.server.test.ts'
 
 setup() {
   HOME_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -93,9 +94,45 @@ legacy_source() {
 }
 
 # The fixtures for the real-server and browser layers, the sibling-less demote,
-# the looped templated title and the helper-call citations. Each opens a page
-# only where its name says it does.
+# the looped templated title, the table-driven titles and the helper-call
+# citations. Each opens a page only where its name says it does.
 write_layer_fixtures() {
+  mkdir -p "$REPO/apps/web/app/route-tests"
+  cat >"$REPO/$TABLES" <<'EOF'
+import {describe, expect, test} from 'vitest';
+
+const ROLE_ROWS = [
+  ['dashboard', 'rita', 'rita@example.com'],
+  ['settings', 'sam', 'sam@example.com'],
+];
+
+const PAGE_ROWS = [
+  {page: 'dashboard', status: 200},
+  {page: 'settings', status: 403},
+];
+
+describe('per-role page status', () => {
+  test.each(ROLE_ROWS)('%s as %s', async (pageKey, userKey, email) => {
+    const outcome = await visit(pageKey, email);
+    expect(outcome).toEqual(expectedOutcome(pageKey, userKey));
+  });
+
+  test.for(PAGE_ROWS)('$page answers $status', ({page, status}) => {
+    expect(statusOf(page)).toBe(status);
+  });
+
+  test.each(['rita'])('%#: %s takes 100%% of the quota', (userKey) => {
+    expect(quotaOf(userKey)).toBe(1);
+  });
+});
+
+describe.each(['admin', 'guest'])('as %s', (role) => {
+  test('opens the records list', () => {
+    expect(canOpen(role, 'records')).toBe(true);
+  });
+});
+EOF
+
   cat >"$REPO/$DEMOTE" <<'EOF'
 import {expect, test} from '@playwright/test';
 
@@ -796,6 +833,37 @@ LOOPED_STATUS='expect(response.status()).toBe(200)'
   [ "$(kept_field 'repeats the records title' siblingLayer)" = real-server ]
   check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$LOOPED" '/about responds 404 and renders its own page' "$LOOPED_STATUS")
   [ "$(reason_of 'repeats the records title')" = citation-unverified ]
+}
+
+TABLE_OUTCOME='expect(outcome).toEqual(expectedOutcome(pageKey, userKey))'
+
+@test "a sibling row of a printf test.each table verifies by its row name, and a name no row yields does not" {
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status dashboard as rita' "$TABLE_OUTCOME")
+  is_kept 'refuses blank input'
+  [ "$(kept_field 'refuses blank input' siblingLayer)" = route ]
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status dashboard for rita' "$TABLE_OUTCOME")
+  [ "$(reason_of 'refuses blank input')" = citation-unverified ]
+}
+
+@test "a sibling row of an object test.for table verifies by its row name, and a name no row yields does not" {
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status settings answers 403' 'expect(statusOf(page)).toBe(status)')
+  is_kept 'refuses blank input'
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status settings returns 403' 'expect(statusOf(page)).toBe(status)')
+  [ "$(reason_of 'refuses blank input')" = citation-unverified ]
+}
+
+@test "a table title's row index and escaped percent sign match the name vitest prints" {
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status 0: rita takes 100% of the quota' 'expect(quotaOf(userKey)).toBe(1)')
+  is_kept 'refuses blank input'
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status 0: rita takes 100%% of the quota' 'expect(quotaOf(userKey)).toBe(1)')
+  [ "$(reason_of 'refuses blank input')" = citation-unverified ]
+}
+
+@test "a test under a describe.each verifies by the expanded describe prefix, and a name no row yields does not" {
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'as admin opens the records list' "expect(canOpen(role, 'records')).toBe(true)")
+  is_kept 'refuses blank input'
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'admin opens the records list' "expect(canOpen(role, 'records')).toBe(true)")
+  [ "$(reason_of 'refuses blank input')" = citation-unverified ]
 }
 
 @test "a cited call to an in-file helper that asserts nothing is citation-unverified" {
