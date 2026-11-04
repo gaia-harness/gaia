@@ -359,6 +359,7 @@
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
     ".gaia/scripts/spec/ledger-update.sh": "owned",
     ".gaia/scripts/spec/lint.sh": "owned",
+    ".gaia/scripts/spec/page-use-fixtures.mjs": "owned",
     ".gaia/scripts/spec/page-use.mjs": "owned",
     ".gaia/scripts/spec/plan-allocator.sh": "owned",
     ".gaia/scripts/spec/plan-archive-merged.sh": "owned",
@@ -855,7 +856,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-03T16:46:38.723Z",
+  "generated": "2026-11-04T02:34:30.877Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

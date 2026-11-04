@@ -16,10 +16,13 @@
 //                         or reads `.page`, `.context` or `.browser` off a
 //                         non-destructured first parameter
 //   project-page-fixture  the first parameter destructures a page-backed project
-//                         fixture: a name on PAGE_BACKED_FIXTURES below, or a
-//                         fixture this same file defines through test.extend
-//                         whose callback destructures page, context, browser or
-//                         another page-backed fixture. Never a name-suffix rule:
+//                         fixture: a name on PAGE_BACKED_FIXTURES
+//                         (page-use-fixtures.mjs), or a test.extend fixture
+//                         whose callback destructures page,
+//                         context, browser or another page-backed fixture,
+//                         defined in this file or in a module it imports `test`
+//                         from by a relative path (followed through that
+//                         module's own such imports). Never a name-suffix rule:
 //                         `apiContext` built over `request` is not a use
 //   new-page              `.newPage(` or `.newContext(` on any receiver except
 //                         an identifier named `request` or `playwright.request`
@@ -28,10 +31,13 @@
 //   browser-import        an import of chromium, firefox or webkit from
 //                         `@playwright/test` or `playwright`
 //
-// Honest limit: it reads one file. A page opened inside an imported helper is
-// caught only through the fixture the test hands the helper. A page-backed
-// project fixture defined in another module is caught only when its name is on
-// PAGE_BACKED_FIXTURES, which must grow when the template adds one.
+// Honest limit: a page opened inside an imported helper is caught only through
+// the fixture the test hands the helper. A page-backed fixture is found in
+// another module only through a relative import of `test`; one reached through
+// a path alias or a package is caught only when its name is on
+// PAGE_BACKED_FIXTURES, which must grow when the template adds one. An import
+// that does not resolve to a readable file adds nothing, so the verdict falls
+// back to this file alone.
 //
 // Callers: uat-gate.sh through uat-gate-floor.sh (the CLI) and
 // overlap/check-proposals.mjs (the pageUsesOf export).
@@ -43,29 +49,27 @@
 import {createRequire} from 'node:module';
 import {readFileSync, realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
+import {
+  BROWSER_FIXTURES,
+  destructuredKeysOf,
+  extendFixturesOf,
+  isExtendCall,
+  isFunctionNode,
+  pageBackedFixturesOf,
+} from './page-use-fixtures.mjs';
 
-// Page-backed fixtures the template defines in another module:
-// apps/web/.playwright/fixtures.ts builds makeAxeBuilder over `{page}`.
-const PAGE_BACKED_FIXTURES = ['makeAxeBuilder'];
-
-const BROWSER_FIXTURES = new Set(['page', 'context', 'browser']);
 const HOOK_NAMES = new Set(['beforeEach', 'beforeAll', 'afterEach', 'afterAll']);
 const BROWSER_LAUNCHERS = new Set(['chromium', 'firefox', 'webkit']);
 const PLAYWRIGHT_MODULES = new Set(['@playwright/test', 'playwright']);
 
-export function pageUsesOf(ts, sourceFile) {
+// The page uses in one parsed Playwright file. `filePath` locates it on disk
+// for its relative imports: pass it when sourceFile.fileName is not a path
+// from the current working directory.
+export function pageUsesOf(ts, sourceFile, filePath = sourceFile.fileName) {
   const uses = [];
-  const isFunction = (node) =>
-    ts.isArrowFunction(node) ||
-    ts.isFunctionExpression(node) ||
-    ts.isMethodDeclaration(node);
+  const isFunction = (node) => isFunctionNode(ts, node);
   const lineOf = (node) =>
     sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-  const nameText = (name) =>
-    name !== undefined &&
-    (ts.isIdentifier(name) || ts.isStringLiteralLike(name))
-      ? name.text
-      : null;
 
   // The callee of a test( ... ) call: `test`, `it`, a bare hook, or a member
   // chain rooted at `test` (test.only, test.beforeEach) or ending in a hook.
@@ -85,38 +89,11 @@ export function pageUsesOf(ts, sourceFile) {
     }
     return false;
   };
-  const isExtendCall = (node) =>
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    node.expression.name.text === 'extend';
 
-  // Fixture definitions of every test.extend({...}) in the file.
-  const fixtures = [];
+  const fixtures = extendFixturesOf(ts, sourceFile);
   const testCallbacks = [];
   const visitCollect = (node) => {
-    if (isExtendCall(node)) {
-      for (const argument of node.arguments) {
-        if (!ts.isObjectLiteralExpression(argument)) continue;
-        for (const property of argument.properties) {
-          const name = nameText(property.name);
-          let callback = null;
-          if (ts.isMethodDeclaration(property)) {
-            callback = property;
-          } else if (ts.isPropertyAssignment(property)) {
-            const value = property.initializer;
-            if (isFunction(value)) callback = value;
-            else if (
-              ts.isArrayLiteralExpression(value) &&
-              value.elements.length > 0 &&
-              isFunction(value.elements[0])
-            ) {
-              callback = value.elements[0];
-            }
-          }
-          if (name !== null && callback !== null) fixtures.push({callback, name});
-        }
-      }
-    } else if (ts.isCallExpression(node) && isTestCallee(node.expression)) {
+    if (!isExtendCall(ts, node) && ts.isCallExpression(node) && isTestCallee(node.expression)) {
       for (const argument of node.arguments) {
         if (isFunction(argument)) testCallbacks.push({call: node, callback: argument});
       }
@@ -125,32 +102,7 @@ export function pageUsesOf(ts, sourceFile) {
   };
   visitCollect(sourceFile);
 
-  const destructuredNames = (callback) => {
-    const first = callback.parameters[0];
-    if (first === undefined || !ts.isObjectBindingPattern(first.name)) return [];
-    return first.name.elements.map((element) => ({
-      element,
-      key: nameText(element.propertyName ?? element.name),
-    }));
-  };
-
-  // Page-backed project fixtures: the named list, then a fixpoint over this
-  // file's own extend fixtures.
-  const pageBacked = new Set(PAGE_BACKED_FIXTURES);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const {callback, name} of fixtures) {
-      if (pageBacked.has(name)) continue;
-      const backed = destructuredNames(callback).some(
-        ({key}) => key !== null && (BROWSER_FIXTURES.has(key) || pageBacked.has(key)),
-      );
-      if (backed) {
-        pageBacked.add(name);
-        grew = true;
-      }
-    }
-  }
+  const pageBacked = pageBackedFixturesOf(ts, sourceFile, filePath, fixtures);
 
   const staticTitle = (call) => {
     const first = call.arguments[0];
@@ -163,7 +115,7 @@ export function pageUsesOf(ts, sourceFile) {
     const first = callback.parameters[0];
     if (first === undefined) return;
     if (ts.isObjectBindingPattern(first.name)) {
-      for (const {element, key} of destructuredNames(callback)) {
+      for (const {element, key} of destructuredKeysOf(ts, callback)) {
         if (key === null) continue;
         if (BROWSER_FIXTURES.has(key)) record(element, test, 'page-fixture');
         else if (pageBacked.has(key)) record(element, test, 'project-page-fixture');

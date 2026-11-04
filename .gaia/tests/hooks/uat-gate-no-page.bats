@@ -138,6 +138,42 @@ withSignedIn('every past order is listed newest first', async ({signedInPage, re
 });"
 }
 
+# prepare_cross_module <fixture-parameter>: a real-server test importing `test`
+# from a sibling fixtures module whose signedInPage fixture destructures
+# <fixture-parameter>. The gate runs from the fixture root, so the detector
+# resolves the import from a working directory other than the spec's own.
+prepare_cross_module() {
+  local rewritten="$BATS_TEST_TMPDIR/rewritten.spec.ts"
+  prepare real-server "test('every past order is listed newest first', async ({signedInPage, request}) => {
+  const response = await request.get('/orders');
+  await signedInPage.goto('/orders');
+  expect(response.status()).toBe(200);
+});"
+  printf '%s\n' "import {test as base} from '@playwright/test';
+export {expect} from '@playwright/test';
+export const test = base.extend({
+  signedInPage: async ({$1}, use) => {
+    await use($1);
+  },
+});" >"$WORK/apps/web/.playwright/project-fixtures.ts"
+  sed "s#from '@playwright/test'#from '../../project-fixtures'#" "$TARGET" >"$rewritten"
+  mv "$rewritten" "$TARGET"
+  grep -qF "from '../../project-fixtures'" "$TARGET"
+}
+
+@test "a real-server test using a page-backed fixture from a sibling fixtures module is refused" {
+  prepare_cross_module page
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 1 ]
+  grep -qE "^uat-gate: $TARGET_RELATIVE: .*opens-page" "$STDERR_FILE"
+}
+
+@test "red twin: the same fixture built over request in the sibling module passes the no-page check" {
+  prepare_cross_module request
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
 @test "a real-server test destructuring the template makeAxeBuilder fixture is refused" {
   refuses_opens_page "test('every past order is listed newest first', async ({makeAxeBuilder, request}) => {
   const response = await request.get('/orders');
