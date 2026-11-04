@@ -2,8 +2,8 @@
 #
 # Sourced by plan-verify.sh, never executed. Parses and validates one browser
 # capability line from a task doc. The closed capability list and its cue
-# patterns stay in plan-verify.sh (capability_tokens, capability_cues and
-# capability_allowed_list, parallel by index); these helpers read them as
+# patterns stay in plan-verify.sh (capability_tokens and capability_cues,
+# parallel by index, plus the joined capability_allowed_list); these helpers read them as
 # globals, along with uat_lib_whitespace_text from uat-lib.sh.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
