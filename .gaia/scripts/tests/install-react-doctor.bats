@@ -29,7 +29,7 @@ expected_skill() {
   while IFS= read -r template_file; do
     mkdir -p "$1/$(dirname "${template_file#"$template_root"/}")"
     sed "s/{{REACT_DOCTOR_VERSION}}/$version/g" "$template_file" >"$1/${template_file#"$template_root"/}"
-  # gaia-lint-ignore whole-tree-mark-guard: the operand is the react-doctor template folder this suite names, not the tracked tree, so a template change selects this suite
+  # gaia-lint-ignore whole-tree-mark-guard: the operand is the react-doctor template folder, not the tracked tree
   done < <(find "$template_root" -type f)
 }
 
