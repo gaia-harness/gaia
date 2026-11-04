@@ -24,7 +24,7 @@ From lowest to highest:
 
 1. **Unit and story.** A function, a hook, or one component given props. Vitest `node` and `browser` projects and Storybook stories ([[Stories as Tests]]).
 2. **Route.** A request taken in process by a route module's `loader` or `action`, with no browser and no server. The route surface is the lowest layer that takes a request in process: it shows a status, a redirect, returned data, a validation error, an authorization outcome or a side effect. It runs in the Vitest `node` project.
-3. **Real server.** The live stack, driven by Playwright's request fixture: it opens no page and makes no browser round trip. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, a forged request against a live route, and the server's rendered HTML, read through the request fixture and a parsed response body.
+3. **Real server.** The live stack, driven by Playwright's request fixture: it opens no page and makes no browser round trip. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, cookies and the session across the server, and the server's rendered HTML, read through the request fixture and a parsed response body. A forged request belongs here only when its guard is one a direct route call skips, and rendered HTML only when it is a contract of its own; a heading whose text is data the loader returns is a route check.
 4. **Browser.** A real page, used only for a capability no lower layer shows, from the closed list at the browser step of the planner's ladder (`.claude/skills/gaia/references/plan/planner.md`), one test per user flow. A JavaScript-disabled Given, a native form post and a multi-page workflow over native forms are real-server checks, with the form body built by `serializeForm` (`apps/web/.playwright/html.ts`) from the served page.
 
 Sibling browser UATs that walk one flow fold into one browser journey UAT, and the fold is the recommended fix. Each transition, status or role rule stays its own UAT, routed by the planner's ladder. Sibling non-browser UATs stay separate, one per rule.
@@ -56,7 +56,7 @@ Each class of authorization bug has one layer that fails for it, and a test that
 | A route module omits its guard               | Route       | The `action` or `loader` called with an anonymous `Request` returns data or performs the write   |
 | A refusal is served with the wrong HTTP status | Real server | A request with redirects off asserts the status and the `Location` header the framework serves   |
 
-A route test does not observe the status the framework serves, so only the third class needs the real server. A plan carries one real-server check per guarded route module.
+A route test does not observe the status the framework serves, so only the third class needs the real server. A plan carries one real-server check per guarded route module; every other refusal a direct `loader` or `action` call shows is a route check.
 
 ### What a route test cannot prove
 
