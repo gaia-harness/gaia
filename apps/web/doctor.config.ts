@@ -1,7 +1,7 @@
 // React Doctor configuration.
 //
-// react-doctor runs via `npx react-doctor@latest` (it is not a project
-// dependency), so this is a plain `export default` rather than importing
+// react-doctor runs via `npx` at the version `.gaia/react-doctor-version` pins
+// (it is not a project dependency), so this is a plain `export default` rather than importing
 // react-doctor's config type. The `.ts` extension matches the repo's config
 // convention (vite/knip/playwright/react-router) and is the highest-precedence
 // extension react-doctor resolves, so a stray doctor.config.json/.jsonc can

@@ -63,6 +63,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 ### Security
 
 - **glob:** Storybook's docgen plugin now resolves glob 14.0.3 through a security floor, closing GHSA-3g3m-2fjr-6pw4 (medium). It is a development-time dependency and never reaches the built app (#3204)
+- **GAIA ships its own React Doctor skill, and react-doctor is pinned:** the skill no longer answers `/doctor` (Claude Code's built-in) or fetches instructions from react-doctor's website at run time, and every react-doctor run, from the skill or the frontend audit, uses the version in `.gaia/react-doctor-version` (0.9.22) instead of `@latest`. The install no longer runs react-doctor's installer, so it touches no tracked file. Merging the update through Claude replaces the installed skill; after a merge made elsewhere, run `bash .gaia/scripts/install-react-doctor.sh --refresh` (#3285)
 
 ## [2.3.1] - 2026-10-29
 

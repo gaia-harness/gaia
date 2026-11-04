@@ -255,6 +255,7 @@
     ".gaia/migrations/2.0.0.md": "owned",
     ".gaia/migrations/2.3.0.md": "owned",
     ".gaia/migrations/2.4.0.md": "owned",
+    ".gaia/react-doctor-version": "owned",
     ".gaia/scripts/audit-dispositions-check.sh": "owned",
     ".gaia/scripts/audit-fix-verify.sh": "owned",
     ".gaia/scripts/audit-frontend-oracles.sh": "owned",
@@ -341,6 +342,7 @@
     ".gaia/scripts/pr-wait-merge.sh": "owned",
     ".gaia/scripts/precommit-packages.sh": "owned",
     ".gaia/scripts/provision-wait.sh": "owned",
+    ".gaia/scripts/react-doctor-version-lib.sh": "owned",
     ".gaia/scripts/red-ledger/extract-story-signals.mjs": "owned",
     ".gaia/scripts/red-ledger/extract-test-signals.mjs": "owned",
     ".gaia/scripts/red-ledger/README.md": "owned",
@@ -434,6 +436,8 @@
     ".gaia/statusline/gaia-statusline-right.sh": "owned",
     ".gaia/statusline/gaia-statusline.sh": "owned",
     ".gaia/statusline/setup-owed.sh": "owned",
+    ".gaia/templates/react-doctor/references/explain.md": "owned",
+    ".gaia/templates/react-doctor/SKILL.md": "owned",
     ".gaia/templates/README.md": "owned",
     ".gaia/templates/spec/uat-real-server-spec.ts.tmpl": "owned",
     ".gaia/templates/spec/uat-route-test.ts.tmpl": "owned",
@@ -859,7 +863,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-04T04:03:57.369Z",
+  "generated": "2026-11-04T07:15:54.436Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

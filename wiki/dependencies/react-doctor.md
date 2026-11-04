@@ -15,35 +15,20 @@ Deterministic scanner for React security, performance, correctness, and accessib
 ## Conventions
 
 - Config: `apps/web/doctor.config.ts`. GAIA ships exactly one config file (see Single config below).
-- Run: `npx react-doctor@latest .`. react-doctor is not a project dependency; it is always invoked at latest via `npx`. The config therefore stays a plain `export default` and does not import react-doctor's config type.
-- Install (`/gaia-init`, `/setup-gaia`): `/gaia-init` runs the script at the end of its dependency step, before anything reads `apps/web/`, so the session that runs onboarding lists the skill; `/setup-gaia`'s install-tools probe then finds the skill and records the step, and installs it only when the probe finds none. A `/setup-gaia` run in a session that already read a file under `apps/web/` installs the skill after that folder's skill scan, so it appears from the next session. `.gaia/scripts/install-react-doctor.sh` runs `npx -y react-doctor@latest install --yes --cwd <web member path>` (`apps/web` in a stock project), which installs the skill for every agent it detects. The Claude Code skill lands at `apps/web/.claude/skills/react-doctor/` (gitignored, kept per-machine, never committed). For any non-Claude agent it detects it also writes a `.agents/skills/react-doctor/` copy under `apps/web/`; the script strips that copy along with the installer's standalone GitHub Actions workflow, commit-hook block, `doctor` package script, and pinned `react-doctor` devDependency, so the Claude Code skill remains the sole trigger point.
+- Run: `npx -y react-doctor@<version> .`, at the version `.gaia/react-doctor-version` pins; the audit oracle and the skill's commands both run it. react-doctor is not a project dependency, so the config stays a plain `export default` and does not import react-doctor's config type.
+- Install (`/gaia-init`, `/setup-gaia`): `/gaia-init` runs the script at the end of its dependency step, before anything reads `apps/web/`, so the session that runs onboarding lists the skill; `/setup-gaia`'s install-tools probe then finds the skill and records the step, and installs it only when the probe finds none. A `/setup-gaia` run in a session that already read a file under `apps/web/` installs the skill after that folder's skill scan, so it appears from the next session. `.gaia/scripts/install-react-doctor.sh` renders GAIA's own skill from `.gaia/templates/react-doctor/` into `<web member path>/.claude/skills/react-doctor/` (`apps/web` in a stock project; gitignored, kept per-machine, never committed), substituting the pinned version. It never runs react-doctor's own installer: that skill claims Claude Code's built-in `/doctor` and fetches instructions from react-doctor's website at run time, and the installer's other writes (CI workflow, commit-hook block, package script, devDependency, lockfile churn) are project churn. `--refresh`, which the cleanup after a `/update-gaia` merge runs, replaces the whole skill directory, including a skill react-doctor's installer wrote.
 - Runs automatically pre-merge inside the [[Code Review Audit Agent]] (alongside [[knip]] and [[pnpm-audit]]). Findings are advisory and never block the audit marker.
 - Not part of the [[Quality Gate]] (pre-commit).
 
-## Installer verification record
-
-The path table is verified against react-doctor 0.9.22, running `install --yes --cwd apps/web` in a multi-package pnpm workspace. Each path except the kept skill maps to one step of `.gaia/scripts/install-react-doctor.sh`, in the script's order:
-
-| Path the installer writes | Strip step |
-|---|---|
-| `apps/web/.claude/skills/react-doctor/` | kept: the Claude Code skill is the sole trigger point |
-| `.github/workflows/react-doctor.yml` | `rm -f .github/workflows/react-doctor.yml` |
-| `apps/web/.agents/skills/react-doctor/` | `rm -rf apps/web/.agents/skills/react-doctor`, then `rmdir` of the empty parents |
-| root `package.json` devDependency `react-doctor` | `pnpm remove react-doctor --config.ignore-scripts=true` (root package, no `-w` needed) |
-| `apps/web/package.json` script `doctor` | `pnpm --dir apps/web pkg delete scripts.doctor 'scripts["react-doctor"]'` |
-| block between `# react-doctor hook start` and `# react-doctor hook end` in the file `core.hooksPath` names (`.githooks/pre-commit`) | the block is deleted in place, then `git config core.hooksPath .githooks` re-arms the hook path |
-| `pnpm-lock.yaml` | a pre-install snapshot is copied back over it, then `pnpm install --frozen-lockfile --config.ignore-scripts=true` resyncs `node_modules` |
-
-Verdicts:
-
-- With `--cwd` on the web member the devDependency still lands in the root `package.json` and the `doctor` script in the member's `package.json`, so the script removes the dependency at the root and the script key with `pnpm --dir <web member path>`.
-- `pnpm remove` at the workspace root works without `-w` on GAIA's pinned pnpm.
-- `pnpm remove` does not return the lockfile to its pre-install state. The install resolves `oxlint` and `@opentelemetry/api` into optional peer slots of `@gaia-harness/lint` and `vitest`, and those resolutions survive `pnpm remove`, `pnpm install`, and `pnpm dedupe`. Only restoring a snapshot taken before the install clears them, which is why the install runs inside the strip block.
-- The installer writes the CI workflow even under `--yes`.
-- GAIA never passes `--agent-hooks`. Without that flag `--yes` installs no agent hooks. With it the installer adds a Stop hook to `.claude/settings.json`, a `react-doctor.mjs` script under `.claude/hooks/`, and Cursor hook files.
-- The `.agents/skills/` copy is written for many agents (Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Pi, Warp, and others), not only Copilot and Warp.
-- Known extra: when Factory Droid is installed the installer also writes `.factory/skills/react-doctor/` under the target directory. The Factory Droid copy is gitignored like the Claude Code copy, so it never lands in a commit or dirties the tree; GAIA still has no strip step for it, and it appears only on a machine with Droid.
 - The audit invocation uses `--scope changed`; `--diff` is a deprecated hidden alias for it. The command lives in `.gaia/scripts/audit-frontend-oracles.sh`.
+
+## Moving the pin
+
+`/update-deps` does not see the pin, because it is not in `package.json`. Move it by hand:
+
+1. Read the new release's changes and the skill it bundles (`dist/skills/react-doctor/` in `npm pack react-doctor@<version>`).
+2. Port any new command or flag worth having into `.gaia/templates/react-doctor/`. Never port a `/doctor` trigger or a remote fetch; the template guard in `.gaia/scripts/tests/install-react-doctor.bats` fails on either.
+3. Write the version to `.gaia/react-doctor-version`, run `bash .gaia/scripts/install-react-doctor.sh --refresh`, then a full scan to confirm `apps/web/doctor.config.ts` still loads and its suppressions still match the ruleset.
 
 ## Single config, highest precedence
 
@@ -67,6 +52,6 @@ Findings fall into three buckets:
 2. **Domain mismatch**: a rule that does not apply to a path (e.g. a web-input rule firing on Node CLI tooling, or a generated artifact). Add a scoped `ignore.overrides` entry naming the rule and files, or `ignore.files` for output that should never be scanned (e.g. `build/**`).
 3. **Tool overlap**: dead-code analysis (`deslop`) duplicates [[knip]], the single dead-code authority. `deadCode: false` disables it.
 
-Suppress with the narrowest control: prefer a per-path `ignore.overrides` entry over a blanket rule-off. Every suppression carries a comment with the evidence so it can be re-evaluated when the ruleset changes (rules also drift between versions, since the scan runs at `npx ...@latest`).
+Suppress with the narrowest control: prefer a per-path `ignore.overrides` entry over a blanket rule-off. Every suppression carries a comment with the evidence so it can be re-evaluated when the ruleset changes (rules drift between versions, so re-check suppressions whenever the pin moves).
 
 See [[Quality Gate]], [[Code Review Audit Agent]].

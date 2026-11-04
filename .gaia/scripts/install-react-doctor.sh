@@ -1,47 +1,37 @@
 #!/usr/bin/env bash
-# Installs the react-doctor Claude Code skill into a web-stack member's .claude/skills/ and strips the extras
-# its installer adds, so GAIA stays the sole controller of when react-doctor runs (the skill's
-# auto-run after edits and the code-audit-frontend agent).
+# Installs GAIA's react-doctor Claude Code skill into a web-stack member's .claude/skills/. The
+# skill is rendered from the tracked template in .gaia/templates/react-doctor/, with the version
+# pinned in .gaia/react-doctor-version substituted for {{REACT_DOCTOR_VERSION}}. react-doctor's own
+# installer is never run: its skill answers `/doctor` (Claude Code's built-in) and fetches remote
+# instructions at run time, and everything else it writes is project churn GAIA would remove.
 #
 # Usage: bash .gaia/scripts/install-react-doctor.sh [--refresh]   (from the repository root)
 #
 # --refresh reinstalls only where a web-stack member already holds the skill, and exits 0 with one
-# line when none does, so a cleanup step never adds the skill to a project that never had it.
+# line when none does, so a cleanup step never adds the skill to a project that never had it. It
+# replaces the whole skill directory, so a skill react-doctor's installer wrote is replaced too.
 #
-# Exit codes:
-#   0  done, including two tolerated failures that each print one warning line: `pnpm remove`
-#      failing (the dependency can be absent when a trust policy or pnpm's release-age hold
-#      skipped its install), and a non-zero installer that still left the skill (a partial
-#      install; the strip and the verification still run and decide the exit code)
-#   1  the installer failed without leaving the skill, another step failed, or verification failed
-#   2  usage error
+# Exit codes: 0 done (or nothing to do), 1 a step failed, 2 usage error.
 #
 # The package directory is the web-stack member of `.gaia/packages.json`, whatever its name or
-# path: the one already holding the skill, else the first. `--cwd` there makes the skill land where
-# its "before committing React code" trigger only lists for React work. With no web-stack member
-# the script prints one line and exits 0. The installer has no skill-only flag, so everything else
-# it writes is removed below.
+# path: the one already holding the skill, else the first. Installing there makes the skill list
+# only for React work. With no web-stack member the script prints one line and exits 0.
 
 set -euo pipefail
 
 usage="Usage: bash .gaia/scripts/install-react-doctor.sh [--refresh] (run from the repository root)"
-
-lockfile_snapshot=""
+version_file=".gaia/react-doctor-version"
+template_directory=".gaia/templates/react-doctor"
+staging_directory=""
 
 fail() {
   printf 'install-react-doctor: %s\n' "$1" >&2
   exit 1
 }
 
-warn() {
-  printf 'install-react-doctor: warning: %s\n' "$1" >&2
-}
-
-restore_lockfile() {
-  if [ -n "$lockfile_snapshot" ] && [ -f "$lockfile_snapshot" ]; then
-    cat "$lockfile_snapshot" >pnpm-lock.yaml
-    rm -f "$lockfile_snapshot"
-    lockfile_snapshot=""
+remove_staging() {
+  if [ -n "$staging_directory" ]; then
+    rm -rf "$staging_directory"
   fi
 }
 
@@ -88,67 +78,26 @@ if [ -z "$package_directory" ]; then
 fi
 skill_directory="$package_directory/.claude/skills/react-doctor"
 
-# The installer's dependency resolution fills optional peer slots of other packages in
-# pnpm-lock.yaml, which `pnpm remove` leaves behind. The snapshot is restored byte for byte on
-# every exit path, so lockfile edits made before the install survive it.
-[ -f pnpm-lock.yaml ] || fail "pnpm-lock.yaml not found; run from the repository root"
-lockfile_snapshot="$(mktemp)"
-trap restore_lockfile EXIT
-cat pnpm-lock.yaml >"$lockfile_snapshot"
+# shellcheck source=react-doctor-version-lib.sh
+. .gaia/scripts/react-doctor-version-lib.sh
+react_doctor_version="$(react_doctor_pinned_version "$version_file")" || exit 1
+[ -f "$template_directory/SKILL.md" ] || fail "skill template $template_directory/SKILL.md not found"
 
-installer_status=0
-npx -y react-doctor@latest install --yes --cwd "$package_directory" || installer_status=$?
-if [ "$installer_status" -ne 0 ]; then
-  if [ -d "$skill_directory" ]; then
-    warn "react-doctor installer exited with status $installer_status but left the skill; continuing"
-  else
-    fail "react-doctor install step failed with status $installer_status and left no skill"
-  fi
-fi
-
-rm -f .github/workflows/react-doctor.yml
-
-# The non-Claude skill copy (Codex, Cursor, Copilot, Warp, and others). The now-empty parents go
-# too, but unrelated .agents/ content stays untouched because rmdir refuses a non-empty directory.
-rm -rf "$package_directory/.agents/skills/react-doctor"
-rmdir "$package_directory/.agents/skills" "$package_directory/.agents" 2>/dev/null || true
-
-if ! pnpm remove react-doctor --config.ignore-scripts=true 2>/dev/null; then
-  warn "pnpm remove react-doctor failed; the dependency may already be absent, continuing"
-fi
-
-# The hyphenated key is written in bracket-and-quote form to be safe across pnpm
-# versions.
-pnpm --dir "$package_directory" pkg delete scripts.doctor 'scripts["react-doctor"]' \
-  || fail "pnpm pkg delete step failed removing the react-doctor package scripts"
-
-# Remove the installer's block (and the blank line it adds before it) from the pre-commit hook it
-# wrote into. The file is rewritten in place with `cat >` rather than `mv` to keep its executable bit.
-hook_file="$(git rev-parse --git-path hooks/pre-commit)"
-if [ -f "$hook_file" ] && grep -q '^# react-doctor hook start$' "$hook_file"; then
-  hook_stripped="$(mktemp)"
-  awk '
-    /^# react-doctor hook start$/ { in_block = 1; if (have_prev && prev == "") have_prev = 0; next }
-    in_block { if ($0 == "# react-doctor hook end") in_block = 0; next }
-    { if (have_prev) print prev; prev = $0; have_prev = 1 }
-    END { if (have_prev) print prev }
-  ' "$hook_file" >"$hook_stripped" || fail "hook strip step failed reading $hook_file"
-  cat "$hook_stripped" >"$hook_file"
-  rm -f "$hook_stripped"
-fi
+# Render beside the target, then swap, so a failed render leaves any installed skill untouched.
+mkdir -p "$package_directory/.claude/skills"
+staging_directory="$(mktemp -d "$package_directory/.claude/skills/.react-doctor.XXXXXX")"
+trap remove_staging EXIT
+while IFS= read -r template_file; do
+  relative_path="${template_file#"$template_directory"/}"
+  mkdir -p "$staging_directory/$(dirname "$relative_path")"
+  sed "s/{{REACT_DOCTOR_VERSION}}/$react_doctor_version/g" "$template_file" >"$staging_directory/$relative_path" \
+    || fail "rendering $template_file failed"
+done < <(find "$template_directory" -type f)
+rm -rf "$skill_directory"
+mv "$staging_directory" "$skill_directory" || fail "moving the rendered skill into $skill_directory failed"
+staging_directory=""
 
 # Re-arm the hook path: a clone whose dependencies were installed before `git init` skipped `prepare`.
 if [ "$(git config --local --get core.hooksPath || true)" != ".githooks" ]; then
   git config core.hooksPath .githooks || fail "git config step failed setting core.hooksPath"
 fi
-
-restore_lockfile
-pnpm install --frozen-lockfile --config.ignore-scripts=true \
-  || fail "pnpm install step failed resyncing node_modules to the restored lockfile"
-
-[ -d "$skill_directory" ] || fail "verification failed: $skill_directory is missing"
-if [ -f "$hook_file" ] && grep -q 'react-doctor hook' "$hook_file"; then
-  fail "verification failed: $hook_file still carries a react-doctor hook line"
-fi
-[ "$(git config --local --get core.hooksPath || true)" = ".githooks" ] \
-  || fail "verification failed: core.hooksPath is not .githooks"
