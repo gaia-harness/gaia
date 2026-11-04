@@ -943,37 +943,37 @@ js_disabled_case() {
 
 @test "JavaScript-disabled Given: JavaScript is disabled is refused" {
   js_disabled_case 'JavaScript is disabled'
-  expect_refusal 'UAT-001 is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes to real-server'
+  expect_refusal 'UAT-001 is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes by the ladder'"'"'s route and real-server steps'
 }
 
 @test "JavaScript-disabled Given: JS off is refused" {
   js_disabled_case 'a visitor with JS off'
-  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+  expect_refusal 'a JavaScript-disabled UAT routes by the ladder'"'"'s route and real-server steps'
 }
 
 @test "JavaScript-disabled Given: JavaScript turned off is refused" {
   js_disabled_case 'a visitor with JavaScript turned off'
-  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+  expect_refusal 'a JavaScript-disabled UAT routes by the ladder'"'"'s route and real-server steps'
 }
 
 @test "JavaScript-disabled Given: JavaScript not enabled is refused" {
   js_disabled_case 'JavaScript not enabled'
-  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+  expect_refusal 'a JavaScript-disabled UAT routes by the ladder'"'"'s route and real-server steps'
 }
 
 @test "JavaScript-disabled Given: the hyphenated JavaScript-disabled is refused" {
   js_disabled_case 'a JavaScript-disabled browser'
-  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+  expect_refusal 'a JavaScript-disabled UAT routes by the ladder'"'"'s route and real-server steps'
 }
 
 @test "JavaScript-disabled Given: without JavaScript is refused" {
   js_disabled_case 'a visitor without JavaScript'
-  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+  expect_refusal 'a JavaScript-disabled UAT routes by the ladder'"'"'s route and real-server steps'
 }
 
 @test "JavaScript-disabled Given: no-JS is refused" {
   js_disabled_case 'a no-JS visitor'
-  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+  expect_refusal 'a JavaScript-disabled UAT routes by the ladder'"'"'s route and real-server steps'
 }
 
 @test "JavaScript-disabled Given: JavaScript enabled and a JSON body are not refused" {
@@ -985,7 +985,7 @@ js_disabled_case() {
 
 @test "JavaScript-disabled Given: the console shows no JavaScript errors is refused, the false positive the header documents" {
   js_disabled_case 'the console shows no JavaScript errors'
-  expect_refusal 'a JavaScript-disabled UAT routes to real-server'
+  expect_refusal 'a JavaScript-disabled UAT routes by the ladder'"'"'s route and real-server steps'
   grep -qF 'no JavaScript errors' "$SCRIPT" || return 1
 }
 

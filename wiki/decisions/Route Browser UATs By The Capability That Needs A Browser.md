@@ -11,7 +11,7 @@ tags: [testing, playwright, plan, routing]
 
 # Route browser UATs by the capability that needs a browser
 
-A GAIA plan routes a UAT to the browser surface only when its then-clause needs a capability that a real browser alone shows, and the plan names that capability for every browser row. Everything else that runs against the live stack, including a JavaScript-disabled flow, a native form post and a multi-page workflow over native forms, routes to the real-server surface, where Playwright's request fixture drives the app with no page.
+A GAIA plan routes a UAT to the browser surface only when its then-clause needs a capability that a real browser alone shows, and the plan names that capability for every browser row. A JavaScript-disabled flow or a native form post leaves the browser and routes by the rest of the ladder: to the real-server surface, where Playwright's request fixture drives the app with no page, when it needs the live stack (such as a then-clause that needs the served form or a multi-page workflow over native forms), and otherwise to a route test.
 
 ## Decisions
 

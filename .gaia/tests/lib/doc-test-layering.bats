@@ -74,14 +74,14 @@ check_page() {
     'Only the frontend package' \
     'A rule function returns the wrong answer' \
     'A route module omits its guard' \
-    'A refusal is served with the wrong HTTP status' \
+    'A guarded route module'"'"'s refusal is served with the wrong HTTP status' \
     '`pnpm dev` with MSW' \
     "the server's rendered HTML"; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
   grep -E '^\| A rule function.*\| Unit ' "$file" >/dev/null || return 1
   grep -E '^\| A route module omits.*\| Route ' "$file" >/dev/null || return 1
-  grep -E '^\| A refusal is served.*\| Real server ' "$file" >/dev/null || return 1
+  grep -E '^\| A guarded route module.s refusal is served.*\| Real server ' "$file" >/dev/null || return 1
 }
 
 check_tests_react() {
