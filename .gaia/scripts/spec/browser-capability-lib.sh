@@ -82,7 +82,7 @@ capability_line_problem() {
   cue="${capability_cues[$index]}"
   if [ -n "$phrase_text" ] &&
     phrase_is_word_bounded "$phrase_text" "$then_text" &&
-    printf '%s\n' "$phrase_text" | LC_ALL=C grep -qiE "(^|[^[:alnum:]])($cue)([^[:alnum:]]|\$)"; then
+    LC_ALL=C grep -qiE "(^|[^[:alnum:]])($cue)([^[:alnum:]]|\$)" <<<"$phrase_text"; then
     return
   fi
   printf "%s cites the phrase '%s' for %s; the capability phrase must appear verbatim in its then-clause and contain a cue word of that capability" "$uat" "$phrase_text" "$capability_name"

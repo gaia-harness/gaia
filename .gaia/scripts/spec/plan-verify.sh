@@ -66,6 +66,7 @@
 #
 # Bash 3.2 compatible; BSD and GNU tools.
 capability_tokens=("client JavaScript" "layout or visual position" "focus or keyboard" "rendered-DOM accessibility scan" "browser-only navigation")
+# shellcheck disable=SC2034 # read by the sourced browser-capability-lib.sh
 capability_cues=('without a reload|client-side|optimistic(ally)?|live' 'beside|above|below|position(s|ed)?|viewport|layout' 'focus(es|ed|ing)?|keyboard|tab key' 'accessibility|axe|screen readers?' 'back button|browser history|client navigation')
 javascript_disabled_pattern='(^|[^[:alnum:]])((javascript|js)[ -](is )?(disabled|off|turned off|not enabled)|without (javascript|js)|no[ -](javascript|js))([^[:alnum:]]|$)'
 set -uo pipefail
@@ -115,7 +116,7 @@ fail() {
 }
 
 capability_allowed_list=''
-for capability_token in "${capability_tokens[@]}"; do
+for capability_token in ${capability_tokens[@]+"${capability_tokens[@]}"}; do
   capability_allowed_list="${capability_allowed_list:+$capability_allowed_list, }$capability_token"
 done
 
@@ -132,7 +133,7 @@ browser_row_check() {
         break
       fi
       [ -n "$first_problem" ] || first_problem="$problem"
-    done < <(grep -hF -- "$marker" "${task_files[@]}")
+    done < <(grep -hF -- "$marker" ${task_files[@]+"${task_files[@]}"})
   fi
   if [ "$passed" -eq 0 ]; then
     if [ -n "$first_problem" ]; then
@@ -141,7 +142,7 @@ browser_row_check() {
       fail "$uat is routed browser but no task doc carries its line: - $marker: <capability>: <then-clause phrase>; a browser row needs a capability from the closed list: $capability_allowed_list"
     fi
   fi
-  if printf '%s\n' "$given_text" | grep -qiE "$javascript_disabled_pattern"; then
+  if grep -qiE "$javascript_disabled_pattern" <<<"$given_text"; then
     fail "$uat is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes to real-server"
   fi
 }
