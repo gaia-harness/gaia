@@ -25335,8 +25335,7 @@ var PROSE_PATH_ALLOWLIST = /* @__PURE__ */ new Set([
   ".claude/skills/tailwind",
   ".claude/skills/typescript",
   ".gaia/packages",
-  ".github/workflows",
-  ".github/workflows/react-doctor.yml"
+  ".github/workflows"
 ]);
 var PATH_BODY_CHAR = /[\w./-]/;
 var PATH_TRUNCATING_METACHAR = /[$*?[{]/;

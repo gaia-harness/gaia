@@ -38,6 +38,8 @@ setup() {
 
   mkdir -p "$SANDBOX/.gaia/scripts" "$SANDBOX/.gaia/cli" "$STUB_DIR"
   cp "$SCRIPT_SOURCE" "$SANDBOX/.gaia/scripts/audit-frontend-oracles.sh"
+  cp "$REPO_ROOT/.gaia/scripts/react-doctor-version-lib.sh" "$SANDBOX/.gaia/scripts/"
+  cp "$REPO_ROOT/.gaia/react-doctor-version" "$SANDBOX/.gaia/react-doctor-version"
   SCRIPT="$SANDBOX/.gaia/scripts/audit-frontend-oracles.sh"
 
   git -C "$SANDBOX" init -q -b main
@@ -60,6 +62,7 @@ write_stubs() {
   cat >"$STUB_DIR/npx" <<'EOF'
 #!/usr/bin/env bash
 echo "npx start $(date +%s)" >>"$STUB_LOG"
+echo "$*" >"$STUB_LOG.npx-args"
 sleep "${STUB_SLEEP:-0}"
 [ -n "${STUB_REACT_DOCTOR_OUTPUT:-}" ] && cat "$STUB_REACT_DOCTOR_OUTPUT"
 echo "npx end $(date +%s)" >>"$STUB_LOG"
@@ -355,4 +358,22 @@ invoked() {
   branch_with app/page.tsx
   run_oracles "$BASE_SHA"
   [ -z "$(printf '%s\n' "$output" | grep -v '^|' | grep -v '^$')" ]
+}
+
+@test "react-doctor runs at the version .gaia/react-doctor-version pins" {
+  branch_with app/page.tsx
+  run_oracles "$BASE_SHA"
+  [ "$status" -eq 0 ]
+  pinned="$(cat "$REPO_ROOT/.gaia/react-doctor-version")"
+  [ "$(cat "$STUB_LOG.npx-args")" = "-y react-doctor@$pinned . --verbose --scope changed" ]
+}
+
+@test "a missing react-doctor pin is a failed row, not an unpinned run" {
+  rm "$SANDBOX/.gaia/react-doctor-version"
+  branch_with app/page.tsx
+  run_oracles "$BASE_SHA"
+  [ "$status" -eq 0 ]
+  [ "$(invoked npx)" -eq 0 ]
+  row react-doctor | grep -q 'failed (exit 1)'
+  grep -q 'react-doctor-version' "$OUT_DIR/react-doctor.txt"
 }

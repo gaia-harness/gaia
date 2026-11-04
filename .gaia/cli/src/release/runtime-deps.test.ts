@@ -212,20 +212,16 @@ describe('extractPathRefs', () => {
     expect(refs.map((r) => r.path)).toContain('.claude/settings.json');
   });
 
-  test('skips the allowlisted installer outputs the React Doctor install script strips', () => {
-    // install-react-doctor.sh names the per-machine skill directory the
-    // installer writes (to verify it landed) and the workflow the installer
-    // writes (to delete it). Neither is ever sourced or executed, so the exact
-    // tokens are allowlisted.
+  test('skips the allowlisted skill directory the React Doctor install script renders into', () => {
+    // install-react-doctor.sh names the per-machine, gitignored skill
+    // directory it writes. It is never sourced or executed, so the exact token
+    // is allowlisted.
     const refs = extractPathRefs(
       '.gaia/scripts/install-react-doctor.sh',
-      'skill_directory="$package_directory/.claude/skills/react-doctor"\nrm -f .github/workflows/react-doctor.yml\n'
+      'skill_directory="$package_directory/.claude/skills/react-doctor"\n'
     );
     expect(refs.map((r) => r.path)).not.toContain(
       '.claude/skills/react-doctor'
-    );
-    expect(refs.map((r) => r.path)).not.toContain(
-      '.github/workflows/react-doctor.yml'
     );
   });
 
