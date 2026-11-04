@@ -85,7 +85,7 @@ const readControlValue = (control: HTMLElement): string | undefined => {
   return control.getAttribute('value') ?? '';
 };
 
-/** Serializes the named, enabled controls inside a parsed form element, one value per name with the last winning, so a request-fixture post sends the page's own fields. */
+/** Serializes a parsed form's successful controls, one value per name (the last wins), so a request-fixture post sends the page's own fields. */
 export const serializeForm = (
   form: HTMLElement,
   options: SerializeFormOptions = {}
@@ -93,7 +93,7 @@ export const serializeForm = (
   const {overrides, submitter} = options;
   const fields: Record<string, string> = {};
 
-  // A repeated name keeps its last value; pass the intended one through overrides.
+  // Pass a repeated name's intended value through overrides.
   for (const control of form.querySelectorAll('input, select, textarea')) {
     const name = control.getAttribute('name');
     const value =
