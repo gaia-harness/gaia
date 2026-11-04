@@ -1,12 +1,16 @@
 # Pull gate
 
-Every gated command reads this file when `gaia_pull_gate "<command>"` exited non-zero. The gate stops a fresh start of new work while the main checkout's GAIA version lags origin's, because that work would branch from a stale default branch. The function already printed its message line; this file decides what happens next. A resume never reaches it: continuing an earlier run, a half-finished plan or an owed publish passes ungated.
+Every gated command reads this file when `gaia_pull_gate "<command>"` exited non-zero. The gate stops a fresh start of new work while the main checkout's GAIA version lags origin's, because that work would branch from a stale default branch, or while its local default branch holds commits origin lacks, because a worktree cut from origin would leave them out and a branch cut from HEAD would carry them into its pull request. The function already printed its message line; this file decides what happens next. A resume never reaches it: continuing an earlier run, a half-finished plan or an owed publish passes ungated.
 
 ## Inputs
 
 - **Command**: the gated command's name, as passed to the gate.
 - **Arguments**: the arguments the command was invoked with, kept verbatim, an `auto` token included.
-- **Exit code**: the gate's exit code, `1` or `2`.
+- **Exit code**: the gate's exit code, `1`, `2` or `3`.
+
+## Unpushed default-branch commits (exit 3)
+
+The gate printed the count of local default-branch commits origin lacks. Stop the command, in auto mode too. Nothing was created. Hand the user the push (`git push origin <default branch>`) to run themselves, or a reconcile when origin moved too, and never push for them. Never offer to pull and never restart.
 
 ## Step 1: A linked worktree (exit 2)
 

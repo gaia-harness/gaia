@@ -962,3 +962,100 @@ Next step: run /update-gaia in the main checkout at $REPO to pull, then start /g
   run_gate "$WORKTREE" bash /gaia-plan "$mutant/main-only-lib.sh"
   [ "$status" -eq 1 ]
 }
+
+# ---------- gaia_pull_gate: local main ahead of origin ----------
+
+# add_origin <repo>: a bare origin that has received <repo>'s main, so
+# refs/remotes/origin/main matches local main.
+add_origin() {
+  local repo="$1" raw origin
+  raw=$(mktemp -d -t gaia-mol-origin-XXXXXX)
+  origin="$(cd "$raw" && pwd -P)"
+  CLEANUP_DIRECTORIES+=("$origin")
+  git init -q --bare "$origin"
+  git -C "$repo" remote add origin "$origin"
+  git -C "$repo" push -q origin main
+}
+
+commit_on_main() {
+  git -C "$1" commit -q --allow-empty -m "local only"
+}
+
+@test "pull gate: local main ahead of origin/main returns 3 naming the count and the fix" {
+  make_gate_repo 2.0.4 -
+  add_origin "$REPO"
+  commit_on_main "$REPO"
+  commit_on_main "$REPO"
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 3 ]
+  [ "$output" = "Local main has 2 commits that origin/main lacks. Push main, or reconcile it with origin/main, then start /gaia-plan again." ]
+  [ ! -s "$GH_LOG" ]
+}
+
+@test "pull gate: one unpushed commit is named in the singular" {
+  make_gate_repo 2.0.4 -
+  add_origin "$REPO"
+  commit_on_main "$REPO"
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 3 ]
+  [ "$output" = "Local main has 1 commit that origin/main lacks. Push main, or reconcile it with origin/main, then start /gaia-plan again." ]
+}
+
+@test "pull gate: local main ahead wins over a GAIA version behind origin" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  add_origin "$REPO"
+  commit_on_main "$REPO"
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 3 ]
+}
+
+@test "pull gate: local main equal to origin/main passes silently" {
+  make_gate_repo 2.0.4 -
+  add_origin "$REPO"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: local main behind origin/main passes silently" {
+  make_gate_repo 2.0.4 -
+  add_origin "$REPO"
+  commit_on_main "$REPO"
+  git -C "$REPO" push -q origin main
+  git -C "$REPO" reset -q --hard HEAD~1
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: a repo with no remote passes silently" {
+  make_gate_repo 2.0.4 -
+  commit_on_main "$REPO"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: a remote that never received main passes silently" {
+  make_gate_repo 2.0.4 -
+  add_origin "$REPO"
+  git -C "$REPO" update-ref -d refs/remotes/origin/main
+  commit_on_main "$REPO"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: inside a linked worktree local main ahead is not checked" {
+  make_gate_repo 2.0.4 -
+  add_origin "$REPO"
+  commit_on_main "$REPO"
+  make_worktree "$REPO" gate-ahead gate-ahead-branch
+  run_gate "$WORKTREE" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: sourced under zsh local main ahead still returns 3" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+  make_gate_repo 2.0.4 -
+  add_origin "$REPO"
+  commit_on_main "$REPO"
+  run_gate "$REPO" zsh /gaia-plan
+  [ "$status" -eq 3 ]
+}

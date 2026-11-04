@@ -170,7 +170,7 @@ EnterWorktree({name: "<branch-name>"})
 The harness owns creation. GAIA registers no hook on it and runs no creation script of its own: the runtime
 cuts the branch, lands the tree under `.claude/worktrees/<name>/`, and switches the session into it. The
 branch is cut fresh from the repository's default base rather than from the current HEAD, which is the
-runtime's own `worktree.baseRef: fresh` default. The branch is already cut, so the caller runs no manual
+runtime's own `worktree.baseRef: fresh` default. Local default-branch commits origin lacks are not in it; the caller's pull gate refuses that state before this point. The branch is already cut, so the caller runs no manual
 `git checkout -b`. Everything the caller does after this point runs from inside the worktree.
 
 **The harness names the branch `worktree-<name>`, with every `/` in `<name>` written as `+`, and GAIA renames it straight away.** A worktree
