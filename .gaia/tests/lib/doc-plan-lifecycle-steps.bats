@@ -243,7 +243,7 @@ EOF
 <!-- gaia:uat-routing:end -->
 EOF
   printf 'You are the orchestrator.\n' >"$FIXTURE_PLAN/KICKOFF.md"
-  printf '# Task\n\n- builds checkout\n' >"$FIXTURE_PLAN/task-checkout.md"
+  printf '# Task\n\n- builds checkout\n- Real-server reason (UAT-001): the confirmation page is server-rendered HTML\n' >"$FIXTURE_PLAN/task-checkout.md"
 }
 
 # ---------- sentinels and block contents ----------
@@ -653,6 +653,7 @@ check_ladder() {
     'names the file of the guard' \
     '.gaia/scripts/spec/plan-verify.sh' \
     'Browser capability (<uat_id>)' \
+    'Real-server reason (<uat_id>)' \
     'serializeForm' \
     'A UAT whose Given says JavaScript is disabled, a native form post and a multi-page workflow over native forms route to `real-server`'; do
     grep -qF -- "$needle" <<<"$para" || { printf 'ladder lacks: %s\n' "$needle" >&2; return 1; }
@@ -705,7 +706,7 @@ check_route_triggers() {
   { cat "$PLANNER_MD"; printf '\nTests belong at the lowest layer that can prove it.\n'; } >"$copy"
   run check_ladder "$copy"
   [ "$status" -ne 0 ]
-  local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'serializeForm' 'a native form post and a multi-page workflow over native forms route to `real-server`')
+  local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'Real-server reason (<uat_id>)' 'serializeForm' 'a native form post and a multi-page workflow over native forms route to `real-server`')
   while IFS= read -r needle; do new_needles+=("$needle"); done < <(capability_tokens_of_header)
   for needle in "${new_needles[@]}"; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$copy"
