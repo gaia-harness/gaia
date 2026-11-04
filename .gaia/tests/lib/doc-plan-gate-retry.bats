@@ -7,9 +7,9 @@
 # self-check in the task prompt template, the Stop conditions halt question
 # and the ledger record the retry writes. A model executes that text, so an
 # edit that drops one clause (the attribution rule, the once-per-phase cap,
-# the conservative first option) would ship silently. This suite pins each
-# clause, and drives plan-resume-point.sh over a ledger holding a retry
-# record.
+# the conservative first option, the resume-time dirty-tree question) would
+# ship silently. This suite pins each clause, and drives plan-resume-point.sh
+# over a ledger holding a retry record.
 #
 # Method: every check takes a root directory and reads one region (a fenced
 # block or a bullet range); each red twin mutates one clause of a scratch
@@ -90,6 +90,7 @@ retry_block() { fence_with "$1/$PLANNER_REL" "$S_RETRY" | trim_lines; }
 invocation_range() { range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | trim_lines; }
 ledger_range() { range_of "$1/$PLANNER_REL" '**Phase findings ledger (' '- **Stop conditions.**' | trim_lines; }
 stop_range() { range_of "$1/$PLANNER_REL" '- **Stop conditions.**' '- **Final summary.**' | trim_lines; }
+resume_range() { range_of "$1/$PLANNER_REL" '**Resume detection (cold-start' '- **Pre-flight isolation.**' | trim_lines; }
 summary_range() { grep -F -- '- **Final summary.**' "$1/$PLANNER_REL" | trim_lines; }
 
 # mutated_tree <old> <new>: a scratch copy of planner.md (TREE) with the first
@@ -151,7 +152,7 @@ check_retry_cap() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '- **Halt instead.**' \
-    'An unattributable failure, or a gate failure after this phase already retried, halts under Stop conditions.' || return 1
+    'An unattributable failure, or a gate failure in a phase that already has a `(GATE RETRY 1)` block in `{PLAN_DIR}/PROGRESS.md`, halts under Stop conditions.' || return 1
 }
 
 check_retry_record() {
@@ -204,7 +205,7 @@ check_executor_self_check() {
     '**The prompt template MUST also require a typecheck of the sub-agent'"'"'s own work before it returns**' \
     'in a wave of one task, `pnpm -C <package dir> typecheck`' \
     'in a wave of more than one, `pnpm -C <package dir> exec tsc --noEmit`' \
-    'acts only on errors in files its task owns' \
+    'in either wave the sub-agent acts only on errors in files its task owns' \
     'goes under `### Findings`' || return 1
 }
 
@@ -217,7 +218,7 @@ check_stop_question() {
     '`## Phase N, <title> (HALTED)`' \
     '`Gate retries: <0 or 1>`' \
     'then ask one `AskUserQuestion`' \
-    '`Stay halted (Recommended)` first' \
+    '`Stay halted (Recommended)` first, which ends the run with the phase' \
     '`Discuss this`' \
     '`Answered: <label>`' || return 1
 }
@@ -239,6 +240,21 @@ check_summary_retries_line() {
     'a yields line, a gate retries line' \
     '`Gate retries: Phase <N>, Phase <M>`' \
     '`Gate retries: none`' || return 1
+}
+
+check_dirty_resume_question() {
+  local range
+  range="$(resume_range "$1")"
+  need_text 'Resume detection' "$range" || return 1
+  in_order "$range" \
+    '**Failed reconnect:**' \
+    '- **Dirty tree on resume.**' \
+    'one `AskUserQuestion`' \
+    '`Stay halted (Recommended)` first, which ends the run' \
+    '`Discuss this`' \
+    'It never offers to stash, discard or commit the edits' \
+    '`Reason: dirty working tree`' \
+    '`Answered: <label>`' || return 1
 }
 
 # ---------- resume-point fixtures ----------
@@ -281,7 +297,7 @@ resume_point() {
 }
 
 @test "red twin: a second retry in the same phase fails" {
-  red check_retry_cap 'or a gate failure after this phase already retried, halts' 'or a third gate failure in the phase, halts'
+  red check_retry_cap 'already has a `(GATE RETRY 1)` block in' 'already has two `(GATE RETRY 1)` blocks in'
 }
 
 @test "the retry record carries no Commit line" {
@@ -325,7 +341,7 @@ resume_point() {
 }
 
 @test "red twin: a halt that recommends discussing first fails" {
-  red check_stop_question '`Stay halted (Recommended)` first' '`Discuss this (Recommended)` first'
+  red check_stop_question '`Stay halted (Recommended)` first, which ends the run with' '`Discuss this (Recommended)` first, which ends the run with'
 }
 
 @test "the ledger documents the gate retry block" {
@@ -342,6 +358,18 @@ resume_point() {
 
 @test "red twin: a summary without the gate retries line fails" {
   red check_summary_retries_line 'a yields line, a gate retries line' 'a yields line'
+}
+
+@test "a dirty tree on resume asks with Stay halted recommended first and offers no discard" {
+  green check_dirty_resume_question
+}
+
+@test "red twin: a resume question that offers to discard the edits fails" {
+  red check_dirty_resume_question 'It never offers to stash, discard or commit the edits' 'It offers to discard the edits'
+}
+
+@test "red twin: a resume question that recommends discussing first fails" {
+  red check_dirty_resume_question '`Stay halted (Recommended)` first, which ends the run' '`Discuss this (Recommended)` first, which ends the run'
 }
 
 @test "a gate retry block with no later commit resumes at its phase" {
