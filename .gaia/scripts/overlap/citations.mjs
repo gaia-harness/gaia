@@ -126,13 +126,14 @@ function blockKindOf(call) {
 const escapeForPattern = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Vitest's .each/.for title tokens: printf tokens take a row value, %c takes
-// one and prints nothing, %% prints %, %# prints the row index and %$ the
+// one and prints nothing, %% takes one and prints "% " then that value (an
+// empty string prints nothing after the space), %# prints the row index and %$ the
 // index plus one, and $key or $key.path (or $0 for an array row) print a
 // property. Honest limit: a $key token is a wildcard here even when the rows
 // are arrays, where vitest prints it literally, so such a title also verifies
 // names no row prints.
 const TABLE_TOKEN = /%%|%#|%\$|%c|%[sdjifoO]|\$[$\p{ID_Continue}.]+/gu;
-const TABLE_TOKEN_PATTERN = {'%%': '%', '%c': '', '%#': '\\d+', '%$': '\\d+'};
+const TABLE_TOKEN_PATTERN = {'%%': '% (?:.*)', '%c': '', '%#': '\\d+', '%$': '\\d+'};
 
 function tableTitlePattern(text) {
   let pattern = '';

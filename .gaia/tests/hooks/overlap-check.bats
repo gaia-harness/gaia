@@ -124,6 +124,10 @@ describe('per-role page status', () => {
   test.each(['rita'])('%#: %s takes 100%% of the quota', (userKey) => {
     expect(quotaOf(userKey)).toBe(1);
   });
+
+  test.each([['']])('pays 1%% now', (fee) => {
+    expect(feeOf(fee)).toBe(1);
+  });
 });
 
 describe.each(['admin', 'guest'])('as %s', (role) => {
@@ -853,12 +857,17 @@ TABLE_OUTCOME='expect(outcome).toEqual(expectedOutcome(pageKey, userKey))'
 }
 
 @test "a table title's row index and escaped percent sign match the name vitest prints" {
-  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status 0: rita takes 100% of the quota' 'expect(quotaOf(userKey)).toBe(1)')
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status 0: rita takes 100% undefined of the quota' 'expect(quotaOf(userKey)).toBe(1)')
   is_kept 'refuses blank input'
-  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status 0: rita takes 100%% of the quota' 'expect(quotaOf(userKey)).toBe(1)')
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status 0: rita takes 100% of the quota' 'expect(quotaOf(userKey)).toBe(1)')
   [ "$(reason_of 'refuses blank input')" = citation-unverified ]
-  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status first: rita takes 100% of the quota' 'expect(quotaOf(userKey)).toBe(1)')
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status first: rita takes 100% undefined of the quota' 'expect(quotaOf(userKey)).toBe(1)')
   [ "$(reason_of 'refuses blank input')" = citation-unverified ]
+}
+
+@test "an escaped percent sign whose row value prints empty matches the name vitest prints" {
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'per-role page status pays 1%  now' 'expect(feeOf(fee)).toBe(1)')
+  is_kept 'refuses blank input'
 }
 
 @test "a test under a describe.each verifies by the expanded describe prefix, and a name no row yields does not" {
