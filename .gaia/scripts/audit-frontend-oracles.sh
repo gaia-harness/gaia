@@ -10,7 +10,9 @@
 #
 # Oracles (each runs with <root> as its working directory, in its own subshell;
 # this script never changes the parent shell's directory):
-#   react-doctor  npx -y react-doctor@latest . --verbose --scope changed
+#   react-doctor  npx -y react-doctor@<version> . --verbose --scope changed, at the
+#                 version .gaia/react-doctor-version pins (a missing or malformed
+#                 pin is a failed row, never an unpinned run)
 #   knip          pnpm knip --reporter json
 #   advisories    .gaia/cli/gaia update-deps advisories --emit <out>/advisories.json
 #
@@ -130,13 +132,18 @@ else
   done <"$scope_file"
 fi
 
+script_directory="$(dirname "$0")"
+
 react_doctor_pid=""
 knip_pid=""
 
 if [ "$run_react_doctor" -eq 1 ]; then
   (
+    # shellcheck source=react-doctor-version-lib.sh
+    . "$script_directory/react-doctor-version-lib.sh" || exit 1
+    react_doctor_version="$(react_doctor_pinned_version "$script_directory/../react-doctor-version")" || exit 1
     cd "$root" || exit 1
-    exec npx -y react-doctor@latest . --verbose --scope changed
+    exec npx -y "react-doctor@$react_doctor_version" . --verbose --scope changed
   ) >"$out/react-doctor.txt" 2>&1 &
   react_doctor_pid=$!
 fi

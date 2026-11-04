@@ -38,6 +38,7 @@ You also own the declarative half of that same subsystem: the roster your own di
 - `.github/audit/tests/fixtures/**/*.golden`
 - `.gaia/tests/fixtures/**/*.allowlist`
 - `.gaia/VERSION`
+- `.gaia/react-doctor-version`
 - `.claude/settings.json`
 - `.github/CODEOWNERS`
 - `.claude/agents/code-audit-*.md`

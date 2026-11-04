@@ -16,7 +16,7 @@ Two external tools need per-machine setup. Probes: React Doctor, Playwright CLI.
 
 Run each tool's install only when its own probe fails, so a React Doctor skill already on disk is recorded without being installed again. A session that read a file under `apps/web/` before this install lists the skill only from its next session; the closing message adds no restart line for it.
 
-- [React Doctor](https://github.com/millionco/react-doctor): Run `bash .gaia/scripts/install-react-doctor.sh`. It installs the Claude Code skill under `apps/web/.claude/skills/`, strips the installer's extras, and leaves `package.json`, `pnpm-lock.yaml` and `.githooks/pre-commit` unchanged; `wiki/dependencies/react-doctor.md` holds the verification record.
+- [React Doctor](https://github.com/millionco/react-doctor): Run `bash .gaia/scripts/install-react-doctor.sh`. It renders GAIA's React Doctor skill under `apps/web/.claude/skills/` and changes no tracked file; `wiki/dependencies/react-doctor.md` describes it.
 - [Playwright CLI](https://github.com/microsoft/playwright-cli): `npm install -g @playwright/cli@latest`. The bundled skill shells out to the global binary; `/update-deps` keeps it current; `wiki/dependencies/playwright-cli.md` covers the fallback.
 
 Record line: `.gaia/cli/gaia setup record install-tools applied`.
