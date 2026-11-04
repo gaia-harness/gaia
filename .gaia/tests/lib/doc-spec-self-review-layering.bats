@@ -2,9 +2,11 @@
 #
 # Doc-conformance suite: SPEC authoring guidance keeps case tables out of UATs.
 # The self-review flags a case-enumerating UAT and several sibling UATs that
-# differ only in the transition they exercise (with its fold recommendation and
-# report line), the dispatch schema carries both kinds, and the template tells
-# the author to state a rule with one journey.
+# differ only in the transition they exercise (with the fold as the suggested
+# fix, scoped to browser capabilities and pointing at the planner ladder, and
+# its report line), flags an access refusal mixed into a browser journey, never
+# recommends a route-surface UAT per rule, the dispatch schema carries every
+# kind, and the template tells the author to state a rule with one journey.
 # Each assertion has a red twin run on a scratch copy.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
@@ -42,8 +44,35 @@ sibling_ok() {
   local file="$1" section
   section="$(case_section "$file")"
   grep -qF 'several UATs that walk one user flow and differ only in which transition they exercise' <<<"$section" || return 1
-  grep -qF 'fold them into one browser journey UAT for the flow plus one route-surface UAT per transition rule' <<<"$section" || return 1
+  grep -qF 'one browser journey UAT for the flow' <<<"$section" || return 1
+  grep -qF 'its own UAT routed by the ladder' <<<"$section" || return 1
+  grep -qF '.claude/skills/gaia/references/plan/planner.md' <<<"$section" || return 1
+  grep -qF 'are not flagged' <<<"$section" || return 1
   grep -qF 'sibling_transition_uats: <N>: UAT-NNN, UAT-NNN: <flow>' "$file" || return 1
+}
+
+# 0 when the file carries no route-surface-per-rule recommendation.
+fold_absence_ok() {
+  grep -qF 'route-surface UAT per transition rule' "$1" && return 1
+  grep -qF 'route test per rule' "$1" && return 1
+  return 0
+}
+
+# 0 when section 5 states the sibling_fold suggested fix is the fold.
+fold_suggested_ok() {
+  grep -qF "A \`sibling_fold\` finding's \`suggested_fix\` is the fold" "$1"
+}
+
+fold_dispatch_ok() {
+  grep -qF "A \`sibling_fold\` finding's \`suggested_fix\` is always the fold" "$1"
+}
+
+refusal_ok() {
+  local section
+  section="$(case_section "$1")"
+  grep -qF 'A `refusal_split` finding' <<<"$section" || return 1
+  grep -qF 'splits the refusal into its own UAT' <<<"$section" || return 1
+  grep -qF 'access_refusal_in_journey: <N>: UAT-NNN: <refusal>' "$1" || return 1
 }
 
 sibling_dispatch_ok() {
@@ -131,7 +160,7 @@ template_ok() {
 
 @test "sibling check fails on a copy without the recommended fold" {
   scratch="$BATS_TEST_TMPDIR/self-review.md"
-  sed 's/fold them into one browser journey UAT for the flow plus one route-surface UAT per transition rule/merge them/' "$REVIEW" >"$scratch"
+  sed 's/one browser journey UAT for the flow/merge them/' "$REVIEW" >"$scratch"
   run sibling_ok "$scratch"
   [ "$status" -ne 0 ]
 }
@@ -153,4 +182,108 @@ template_ok() {
   sed 's/"sibling_fold" | //' "$DISPATCH" >"$scratch"
   run sibling_dispatch_ok "$scratch"
   [ "$status" -ne 0 ]
+}
+
+@test "sibling check fails on a copy without the ladder pointer" {
+  scratch="$BATS_TEST_TMPDIR/self-review.md"
+  sed 's#references/plan/planner.md#references/plan/other.md#' "$REVIEW" >"$scratch"
+  run sibling_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "sibling check fails on a copy that flags siblings with no browser capability" {
+  scratch="$BATS_TEST_TMPDIR/self-review.md"
+  sed 's/are not flagged/are flagged/' "$REVIEW" >"$scratch"
+  run sibling_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "sibling check fails on a copy without the routed-by-the-ladder rule fold" {
+  scratch="$BATS_TEST_TMPDIR/self-review.md"
+  sed 's/its own UAT routed by the ladder/its own UAT/' "$REVIEW" >"$scratch"
+  run sibling_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "self-review no longer recommends a route-surface UAT per rule" {
+  run fold_absence_ok "$REVIEW"
+  [ "$status" -eq 0 ]
+  run fold_absence_ok "$DISPATCH"
+  [ "$status" -eq 0 ]
+}
+
+@test "absence check fails on a copy that restores the route-surface UAT per rule" {
+  scratch="$BATS_TEST_TMPDIR/self-review.md"
+  cp "$REVIEW" "$scratch"
+  printf '%s\n' 'one route-surface UAT per transition rule' >>"$scratch"
+  run fold_absence_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "absence check fails on a copy that restores the route test per rule clause" {
+  scratch="$BATS_TEST_TMPDIR/self-review.md"
+  cp "$REVIEW" "$scratch"
+  printf '%s\n' 'one journey and a route test per rule prove the same contracts' >>"$scratch"
+  run fold_absence_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "self-review and dispatch state the sibling fold is the suggested fix" {
+  run fold_suggested_ok "$REVIEW"
+  [ "$status" -eq 0 ]
+  run fold_dispatch_ok "$DISPATCH"
+  [ "$status" -eq 0 ]
+}
+
+@test "fold suggested-fix check fails on a self-review copy without the sentence" {
+  scratch="$BATS_TEST_TMPDIR/self-review.md"
+  sed 's/suggested_fix` is the fold/suggested_fix` is a merge/' "$REVIEW" >"$scratch"
+  run fold_suggested_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "fold suggested-fix check fails on a dispatch copy without the sentence" {
+  scratch="$BATS_TEST_TMPDIR/dispatch.md"
+  sed 's/suggested_fix` is always the fold/suggested_fix` is a merge/' "$DISPATCH" >"$scratch"
+  run fold_dispatch_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "self-review carries the refusal split paragraph and report key" {
+  run refusal_ok "$REVIEW"
+  [ "$status" -eq 0 ]
+}
+
+@test "refusal check fails on a copy without the split suggestion" {
+  scratch="$BATS_TEST_TMPDIR/self-review.md"
+  sed 's/splits the refusal into its own UAT/keeps it/' "$REVIEW" >"$scratch"
+  run refusal_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "refusal check fails on a copy without the report key" {
+  scratch="$BATS_TEST_TMPDIR/self-review.md"
+  grep -vF 'access_refusal_in_journey:' "$REVIEW" >"$scratch"
+  run refusal_ok "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "dispatch lists the refusal_split kind" {
+  run grep -qF '"refusal_split"' "$DISPATCH"
+  [ "$status" -eq 0 ]
+}
+
+@test "refusal dispatch check fails on a copy without the kind" {
+  scratch="$BATS_TEST_TMPDIR/dispatch.md"
+  sed 's/"refusal_split" | //' "$DISPATCH" >"$scratch"
+  run grep -qF '"refusal_split"' "$scratch"
+  [ "$status" -ne 0 ]
+}
+
+@test "neither reference restates a capability token" {
+  for token in 'client JavaScript' 'layout or visual position' 'focus or keyboard' 'rendered-DOM accessibility scan' 'browser-only navigation'; do
+    grep -qF "$token" "$REVIEW" && return 1
+    grep -qF "$token" "$DISPATCH" && return 1
+  done
+  true
 }

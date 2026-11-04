@@ -49,7 +49,9 @@ Each UAT must be testable. Flag UATs that:
 
 A UAT states a rule and one representative journey; case tables belong to the lowest layer, written by the implementer. Flag a UAT whose `then` enumerates input values or outcomes of one rule about user-visible behavior (a list of inputs each with its own result). Suggest stating the rule with one representative journey and leaving the cases to the lowest layer.
 
-Also flag several UATs that walk one user flow and differ only in which transition they exercise (assign, decline, reopen, confirm). Suggest that the author fold them into one browser journey UAT for the flow plus one route-surface UAT per transition rule: left as siblings, each becomes its own browser file, while one journey and a route test per rule prove the same contracts.
+Also flag several UATs that walk one user flow and differ only in which transition they exercise (assign, decline, reopen, confirm), when their then-clauses name a browser capability (the closed list at the browser step of the routing ladder in `.claude/skills/gaia/references/plan/planner.md`; point there, never copy the list). Left as siblings, each becomes its own browser file. A `sibling_fold` finding's `suggested_fix` is the fold: one browser journey UAT for the flow, and each transition, status or role rule its own UAT routed by the ladder. Keeping the siblings needs a stated reason and is only a non-recommended alternative, never the recommendation. Siblings whose then-clauses name no browser capability are not flagged: each is a cheap non-browser test.
+
+Also flag a UAT that mixes a browser-capability journey with an access refusal (a 403 page, a refused post). A `refusal_split` finding's `suggested_fix` splits the refusal into its own UAT, which the ladder routes off the browser.
 
 Exempt a UAT on harness, script or doc behavior: its distinct outcomes are the contract, so enumerating them is correct.
 
@@ -73,6 +75,7 @@ self-review findings (gate 2 gate):
   ambiguous_uats: <N>: UAT-NNN: <phrasing>
   case_enumerating_uats: <N>: UAT-NNN: <phrasing>
   sibling_transition_uats: <N>: UAT-NNN, UAT-NNN: <flow>
+  access_refusal_in_journey: <N>: UAT-NNN: <refusal>
   pending: <N>: <item summary>, ... (listed as pending_clarifications for the wrapper to ask)
 ```
 
