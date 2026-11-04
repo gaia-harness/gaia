@@ -332,7 +332,7 @@ check_pass_orders_uncertain_and_reports_skips() {
   check_pass_orders_uncertain_and_reports_skips "$REF"
 }
 
-@test "red twin: dropping the ordering line or the skipped-file report line fails" {
+@test "red twin: dropping the ordering line, the skipped field or the skipped-file report line fails" {
   local copy="$BATS_TEST_TMPDIR/ref.md"
   mutate "$REF" 'Proposals whose `property` begins `Uncertain:` come last.' '' "$copy"
   run check_pass_orders_uncertain_and_reports_skips "$copy"

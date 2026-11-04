@@ -122,8 +122,8 @@ sibling to decide.
    read it, and judge whether a browser test belongs on the real-server layer.
 3. Judge the pair with the rubric. When the code cannot settle a pair, still
    propose what the evidence leans toward: begin `property` with `Uncertain:`
-   and the doubt. A human reviews every proposal the check keeps, so a doubtful
-   one costs a review line; a skip hides the test.
+   and the doubt. A doubtful proposal costs one review line; a skip leaves the
+   pair unjudged.
 4. Write the proposals file and return a short summary.
 
 ## Output
