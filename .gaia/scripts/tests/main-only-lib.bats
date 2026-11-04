@@ -965,16 +965,21 @@ Next step: run /update-gaia in the main checkout at $REPO to pull, then start /g
 
 # ---------- gaia_pull_gate: local main ahead of origin ----------
 
-# add_origin <repo>: a bare origin that has received <repo>'s main, so
-# refs/remotes/origin/main matches local main.
-add_origin() {
+# add_remote <repo>: a bare origin that has received nothing.
+add_remote() {
   local repo="$1" raw origin
   raw=$(mktemp -d -t gaia-mol-origin-XXXXXX)
   origin="$(cd "$raw" && pwd -P)"
   CLEANUP_DIRECTORIES+=("$origin")
   git init -q --bare "$origin"
   git -C "$repo" remote add origin "$origin"
-  git -C "$repo" push -q origin main
+}
+
+# add_origin <repo>: a bare origin that has received <repo>'s main, so
+# refs/remotes/origin/main matches local main.
+add_origin() {
+  add_remote "$1"
+  git -C "$1" push -q origin main
 }
 
 commit_on_main() {
@@ -1035,8 +1040,7 @@ commit_on_main() {
 
 @test "pull gate: a remote that never received main passes silently" {
   make_gate_repo 2.0.4 -
-  add_origin "$REPO"
-  git -C "$REPO" update-ref -d refs/remotes/origin/main
+  add_remote "$REPO"
   commit_on_main "$REPO"
   run_gate "$REPO" bash /gaia-plan
   assert_gate_silent_pass
