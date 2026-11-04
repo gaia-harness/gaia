@@ -31,7 +31,10 @@
 #   - the post-clearance block commits no SUMMARY.md, the wiki promotion block
 #     sits above the code audit block, and the final summary names the
 #     worthiness blocks the late pass feeds;
-#   - lifecycle.md says which pass writes the wiki promotion record.
+#   - lifecycle.md says which pass writes the wiki promotion record;
+#   - a plan-time directive never picks a UAT's surface: planner.md routes by
+#     the ladder first, and spec/audit.md writes a directive as a property
+#     or a code constraint.
 #
 # Every check is a function taking the file(s) it reads, so each red twin
 # runs the same function against a mutated copy and proves it can fail.
@@ -44,6 +47,7 @@ setup() {
   PLANNER_MD="$REPO_ROOT/.claude/skills/gaia/references/plan/planner.md"
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   WIKI_PROMOTE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/wiki-promote.md"
+  AUDIT_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/audit.md"
   PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
   S_RENDER='<!-- gaia:orchestrator-step uat-render -->'
@@ -891,4 +895,43 @@ check_maintainer_note_costs() {
   sed 's/shell re-audit/other work/g' "$WIKI_PROMOTE_MD" >"$copy"
   run check_maintainer_note_costs "$copy"
   [ "$status" -ne 0 ]
+}
+
+# ---------- plan-time directives never pick the surface ----------
+
+# check_directive_routing <planner> <audit>: the planner routes by the ladder
+# before honoring a directive, and the SPEC audit writes a directive as the
+# property a test proves or the constraint the code meets, never the layer,
+# fixture or helper that proves it.
+check_directive_routing() {
+  local planner="$1" audit="$2" para needle
+  para="$(grep -F 'Its `## Plan-time directives` section' "$planner")"
+  for needle in \
+    'A directive constrains what a test proves or what the code does, never which surface a UAT routes to' \
+    'applies as written only where the ladder already routed the UAT there' \
+    'honor its intent on the routed surface'; do
+    grep -qF -- "$needle" <<<"$para" || { printf 'planner AUDIT_PATH paragraph lacks: %s\n' "$needle" >&2; return 1; }
+  done
+  grep -qF -- 'Write it as the property a test proves or the constraint the code meets, never the test layer, fixture or helper that proves it' "$audit" ||
+    { printf 'audit.md 7c lacks the property-not-layer rule\n' >&2; return 1; }
+  grep -qF -- 'naming no test layer, fixture or helper' "$audit" ||
+    { printf 'audit.md 7d template lacks the no-layer clause\n' >&2; return 1; }
+}
+
+@test "a plan-time directive never picks the test surface, in planner.md and the SPEC audit" {
+  check_directive_routing "$PLANNER_MD" "$AUDIT_MD"
+}
+
+@test "red twin: dropping either half of the directive rule fails" {
+  local needle plan_copy="$BATS_TEST_TMPDIR/planner.md" audit_copy="$BATS_TEST_TMPDIR/audit.md"
+  for needle in 'never which surface a UAT routes to' 'applies as written only where the ladder already routed the UAT there' 'honor its intent on the routed surface'; do
+    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$plan_copy"
+    run check_directive_routing "$plan_copy" "$AUDIT_MD"
+    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
+  done
+  for needle in 'never the test layer, fixture or helper that proves it' 'naming no test layer, fixture or helper'; do
+    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
+    run check_directive_routing "$PLANNER_MD" "$audit_copy"
+    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
+  done
 }
