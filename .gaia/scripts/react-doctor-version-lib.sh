@@ -10,7 +10,7 @@ react_doctor_pinned_version() {
   if [ -f "$1" ]; then
     pinned_version="$(tr -d '[:space:]' <"$1")"
   fi
-  if ! printf '%s\n' "$pinned_version" | grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+'; then
+  if ! grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+' <<<"$pinned_version"; then
     printf '%s holds no version such as 0.9.22\n' "$1" >&2
     return 1
   fi
