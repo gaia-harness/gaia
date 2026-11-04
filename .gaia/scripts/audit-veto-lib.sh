@@ -69,12 +69,14 @@ _gaia_veto_changed_paths() {
 #     leaves no fixer result, so instead one round j, effective_from_round <= j
 #     <= r, sits on a tree whose diff from the waiver round's tree (round
 #     effective_from_round - 1) touches the key's path; reviewed over rounds
-#     j..r. A veto effective from round 1 has no waiver round and only the
-#     fixer route.
+#     j..r with the line ignored: any change to the path shifts lines, so the
+#     same finding re-reported at another line must not read as fixed. A
+#     veto effective from round 1 has no waiver round and only the fixer
+#     route.
 # Reviewed: at least one round in the span dispatched the key's member, with
-# the exact key absent from every such round's keys (round r's from the
-# argument, earlier ones from the stored snapshot, where null keys prove
-# nothing). rc 1 on an unreadable or malformed vetoes.json.
+# the key absent from every such round's keys (round r's from the argument,
+# earlier ones from the stored snapshot, where null keys prove nothing). rc 1
+# on an unreadable or malformed vetoes.json.
 gaia_veto_keys_state() {
   local run vetoes_file records changed_paths answer
   run="$(gaia_loop_run_directory "$1" "$2")"
@@ -89,16 +91,17 @@ gaia_veto_keys_state() {
     then .[0] else error("malformed vetoes.json") end
     | $state.history.rounds as $rounds
     | def keys_of($j): if $j == $round then $round_keys else ($rounds[$j - 1].snapshot | if type == "object" then .keys else null end) end;
-    def reviewed_from($first; $key):
+    def reviewed_from($first; $key; $width):
       [range($first; $round + 1) | select(any(($rounds[. - 1].members // [])[]; . == $key[0]))] as $dispatched
-      | ($dispatched | length) > 0 and all($dispatched[]; keys_of(.) as $keys | ($keys | type) == "array" and (any($keys[]; . == $key) | not));
+      | ($dispatched | length) > 0
+        and all($dispatched[]; keys_of(.) as $keys | ($keys | type) == "array" and (any($keys[]; .[0:$width] == $key[0:$width]) | not));
     def fixed_in($k; $key):
       any($records.fixes[]; .round == $k and .key == $key) and any($records.fixed[]; .round == $k and .key == $key)
       and ($rounds[$k - 1].tree as $tree | any($rounds[$k:][]; .tree != $tree))
-      and reviewed_from($k + 1; $key);
+      and reviewed_from($k + 1; $key; 4);
     def committed_by($j; $from; $key):
       ($changed_paths["\($rounds[$from - 2].tree)..\($rounds[$j - 1].tree)"] // []) as $paths
-      | any($paths[]; . == $key[2]) and reviewed_from($j; $key);
+      | any($paths[]; . == $key[2]) and reviewed_from($j; $key; 3);
     [.keys[] | select(.effective_from_round <= $round) | .effective_from_round as $from | [.member, .finding_class, .path, .line] as $key
       | {key: $key, satisfied: (any(range([$from, 1] | max; $round); fixed_in(.; $key))
           or ($from >= 2 and any(range($from; $round + 1); committed_by(.; $from; $key))))}]

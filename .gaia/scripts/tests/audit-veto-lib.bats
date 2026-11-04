@@ -157,7 +157,7 @@ inline_base() {
   veto 2
   STATE="$(state_with "[{\"tree\":\"$TREE_WAIVED\",\"members\":[\"code-audit-frontend\"],\"keys\":[$VETOED_IDENTITY]},
     {\"tree\":\"${!1}\",\"members\":[\"code-audit-frontend\"],\"keys\":null}]")"
-  ROUND_KEYS="[$OTHER_IDENTITY]"
+  ROUND_KEYS='[["code-audit-frontend","rule/y","f.txt",9]]'
 }
 
 inline_veto_state() {
@@ -180,6 +180,15 @@ inline_veto_state() {
   [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "re-reported"; return 1; }
 }
 
+@test "veto-state inline: an edit that only moves the finding to another line of the file leaves the veto unsatisfied" {
+  inline_base TREE_FIXED || return 1
+  ROUND_KEYS='[["code-audit-frontend","rule/x","f.txt",7]]'
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ] || return 1
+  # Another class on the same path, or the same class on another path, is not the vetoed finding.
+  ROUND_KEYS="[[\"code-audit-frontend\",\"rule/y\",\"f.txt\",7],[\"code-audit-frontend\",\"rule/x\",\"g.txt\",2]]"
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
+}
+
 @test "veto-state inline: unsatisfied when no round after the fix dispatched the key's member, or a tree cannot be read" {
   local unsatisfied="{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}"
   inline_base TREE_FIXED || return 1
@@ -195,7 +204,7 @@ inline_veto_state() {
   veto 1
   # Round 1 left the key out too, so only the missing waiver round keeps the
   # veto unsatisfied (jq reads index -1 as the last round, not as absent).
-  STATE="$(jq -c --argjson identity "$OTHER_IDENTITY" '.history.rounds[0].snapshot.keys = [$identity]' <<<"$STATE")"
+  STATE="$(jq -c '.history.rounds[0].snapshot.keys = [["code-audit-frontend","rule/y","f.txt",9]]' <<<"$STATE")"
   [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ]
 }
 
