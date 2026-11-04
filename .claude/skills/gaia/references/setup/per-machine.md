@@ -49,7 +49,7 @@ The app's `.env` lives in the `apps/web/` package and is gitignored. When `apps/
 .gaia/cli/gaia setup bootstrap-env
 ```
 
-Run the CLI, never a `cp` onto `apps/web/.env`: the project's `Edit(apps/web/.env)` deny refuses any Bash command that writes that file, guarded or not, while the CLI subprocess is outside its reach.
+Run the CLI, never a `cp` onto `apps/web/.env`: the project's `Edit(**/.env)` deny refuses any Bash command that writes that file, guarded or not, while the CLI subprocess is outside its reach.
 
 Record line: `.gaia/cli/gaia setup record bootstrap-env applied`.
 
