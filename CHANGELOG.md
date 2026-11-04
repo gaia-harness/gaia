@@ -40,6 +40,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **The audit loop stops on Minor-only fix churn:** from round 3, a round that reviewed only the latest changes and found nothing but ordinary Minor findings ends the loop on its own. Those findings are listed on the pull request as accepted residuals, and an interactive run asks once before the status posts whether to merge or fix chosen ones. Fix rounds whose fixes are all Minor skip Playwright, the dev smoke test and the build, which then run once on the final tree before the status posts (#3224)
 - `/gaia-init` asks how your API names JSON fields, not your backend; the `--casing` flag is unchanged (#3263)
 - **Release notes start with the notes (maintainer repo only):** GitHub release bodies no longer open with the 1.6.1 migration command, its Proceed warning and the bundle checksum. The last 1.6.1 project migrates through a hand-written prompt instead (#3202)
+- **The app template's lint package moves to `@gaia-harness/lint` 3.1.1:** it adds curated React Doctor rules, TanStack Query's recommended rules (only when TanStack Query is installed), and turns `react/jsx-key` back on, so `pnpm lint` can report new findings in your own code after updating. The template's own code passes them as shipped (#3287)
 
 ### Fixed
 
