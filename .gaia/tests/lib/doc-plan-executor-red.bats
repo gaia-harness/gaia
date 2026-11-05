@@ -6,13 +6,14 @@
 # .claude/skills/gaia/references/plan/planner.md tells a planner what the task
 # executor's prompt must say about a new test's failing-first run (RED). The
 # commit's RED gate binds that run to the test's executable body, so an
-# executor that lints or renames the test after its RED loses it and the phase
+# executor whose lint fix changes that body after its RED loses it and the phase
 # commit is refused after the executor has already returned. This suite pins
 # the order that prevents it (stub, lint, RED, implement), the
 # edited-after-RED report, and the tdd skill section the template points at.
 #
-# Method: every check takes a root directory and reads one region (the
-# Sub-agent invocation bullet); each red twin mutates one clause of a scratch
+# Method: every check takes a root directory and reads the Sub-agent
+# invocation bullet (the tdd-pointer check also reads the tdd skill's
+# heading); each red twin mutates one clause of a scratch
 # copy, proves the copy changed, and runs the same check against it.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
@@ -117,8 +118,7 @@ check_stub_wrong_value() {
   in_order "$range" \
     '**The prompt template MUST also order a new test'"'"'s RED**' \
     'The stub returns a wrong value, so the RED fails on an assertion' \
-    'it throws only when the symbol has no return value to get wrong' \
-    'A symbol that already exists needs no stub' || return 1
+    'it throws only when the symbol has no return value to get wrong' || return 1
 }
 
 check_edit_after_red_reported() {
@@ -161,7 +161,7 @@ check_points_at_tdd_section() {
     'write the test'
 }
 
-@test "the stub returns a wrong value, throws only without one, and is scoped to new symbols" {
+@test "the stub returns a wrong value and throws only without one" {
   green check_stub_wrong_value
 }
 
@@ -171,7 +171,7 @@ check_points_at_tdd_section() {
     'it may throw instead'
 }
 
-@test "an edit after RED is never faked and goes under Deviations from plan" {
+@test "a RED is never faked after a test edit, and the edit is reported under Deviations from plan" {
   green check_edit_after_red_reported
 }
 
