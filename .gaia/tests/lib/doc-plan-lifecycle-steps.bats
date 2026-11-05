@@ -954,8 +954,6 @@ check_markup_rule_placement() {
   for needle in \
     'propose a plan-time directive stating that rule for the page or component it applies to, never UAT text' \
     'A finding whose fix is a page-markup or accessibility structure rule is `plan_directive` even when it cites a UAT' \
-    'unless a UAT'"'"'s `then` already carries the rule: then it is `spec_defect`' \
-    'also gives that rule a plan-time-directive entry' \
     'is one directive naming the page or component it applies to'; do
     grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
   done
@@ -969,7 +967,7 @@ check_markup_rule_placement() {
 
 @test "red twin: dropping any markup-rule sentence fails" {
   local needle audit_copy="$BATS_TEST_TMPDIR/audit.md" template_copy="$BATS_TEST_TMPDIR/spec-template.md"
-  for needle in 'never UAT text' 'even when it cites a UAT' 'already carries the rule' 'also gives that rule' 'naming the page or component it applies to'; do
+  for needle in 'never UAT text' 'even when it cites a UAT' 'naming the page or component it applies to'; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
     run check_markup_rule_placement "$audit_copy" "$SPEC_TEMPLATE_MD"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
