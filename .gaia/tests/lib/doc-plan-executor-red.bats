@@ -137,11 +137,12 @@ check_edit_after_red_reported() {
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
     '**Implementer clause.**' \
-    'Never edit the executable body of a test the test author wrote' \
+    'Never edit the executable body of a test in the task doc'"'"'s `New tests:` files' \
+    'at any layer, Vitest or Playwright, whether or not the RED ledger tracks it' \
     'any such edit voids its RED' \
     'never set aside implementation to record one' \
-    'Report a needed edit (file, test name, what changed) under `### Deviations from plan`' \
-    'and say that test'"'"'s RED is void' || return 1
+    'Leave a test you judge wrong as it is' \
+    'report the needed edit (file, test name, what changed) under `### Deviations from plan`' || return 1
 }
 
 # The implementer writes no test of its own: the test author's tests are the
@@ -322,10 +323,16 @@ check_tdd_stub_first() {
     'what changed) under `### Findings`'
 }
 
-@test "red twin: an edited-after-RED report that keeps its RED fails" {
+@test "red twin: an implementer clause that guards only the RED ledger's tests fails" {
   red check_edit_after_red_reported "$PLANNER_REL" \
-    ' and say that test'"'"'s RED is void' \
-    ''
+    'at any layer, Vitest or Playwright, whether or not the RED ledger tracks it' \
+    'for a test the RED ledger tracks'
+}
+
+@test "red twin: an implementer clause that lets a wrong test be edited fails" {
+  red check_edit_after_red_reported "$PLANNER_REL" \
+    'Leave a test you judge wrong as it is' \
+    'Fix a test you judge wrong'
 }
 
 @test "the executor template stubs each symbol with its final signature, async included" {

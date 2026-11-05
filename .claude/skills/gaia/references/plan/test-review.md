@@ -35,14 +35,12 @@ Map each `defect` entry's `file` to the task whose `New tests:` line names it.
       Tasks: <task-<T>.md of each owning task>
       Defects: <file:line › test: expected, for each defect entry>
 
-- **Re-dispatch the owning test authors only**, in parallel, each a test-author dispatch of yield unit `phase-<N>-task-<T>-tests` with its handoff pre-cleared as in step 1 of the test-first split block: the task prompt with the test-author clause, then the line `A review found that these assertions do not state the specified behavior. Fix only these test bodies, against the stubs. Write no implementation, lint, and run the RED command for each file you changed:`, then that task's defect lines, then its `Yield handoff:` line.
+- **Re-dispatch the owning test authors only**, in parallel, each a test-author dispatch of yield unit `phase-<N>-task-<T>-tests` with its handoff pre-cleared as in step 1 of the test-first split block: the task prompt with the test-author clause, then the line `A review found that these assertions do not state the specified behavior. Fix only these test bodies, against the stubs. Run the RED command for each file you changed:`, then that task's defect lines, then the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md`, k being that unit's yield count plus one.
 - **Re-check the REDs.** Run `bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>`. An edited test body voids its old RED, so this proves the new one. Exit 2 halts under Stop conditions. Exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED after test review` and each `file › test name`, and stops.
 
 ## Round 2
 
-Exit 0 runs round 1 again as round 2: `<VERDICT_FILE>` ends `-r2.json`, and the dispatch names only the owning tasks' task docs and test files. Every entry `ok` goes to the implementers; any `defect` takes the halt above, because each owning task is now on a `(TEST REVIEW 1)` line.
-
-A resumed phase keeps its `(TEST REVIEW 1)` blocks, so a defect in a task already fixed once halts rather than opening another round.
+When the RED re-check exits 0, run round 1 again as round 2: `<VERDICT_FILE>` ends `-r2.json`, and the dispatch names only the owning tasks' task docs and test files. Every entry `ok` goes to the implementers; any `defect` takes the halt above.
 
 ## A no-op review
 
@@ -59,11 +57,11 @@ Test file: <absolute path to a New tests file>
 Verdict file: <VERDICT_FILE>
 ```
 
-You review new tests before any implementation exists. Each test already fails against a stub that returns a wrong value, so a RED is on record. Your one judgment: does each assertion state the behavior the task doc and the SPEC specify?
+You review new tests before any implementation exists. Each test already fails against a stub, so a RED is on record. Your one judgment: does each assertion state the behavior the task doc and the SPEC specify?
 
 Read the SPEC, each task doc and each test file named above, plus any file a test imports from the same test folder. Edit nothing and run no command that writes a file; the verdict file is the one file you write.
 
-A test is a `defect` only when you can cite the line it breaks: a SPEC Then-clause or listed case, or a task doc line. No citation, no defect. The three defects:
+A test is a `defect` only when you can cite the line it breaks: a SPEC Then-clause or listed case, or a task doc line. No citation, no defect. With no `SPEC path:` line, cite the task doc only. The three defects:
 
 - **Over-constraint**: it asserts something the cited line does not fix: values carried over from earlier state (spreading a previous row or response into the expectation), generated ids, timestamps, exact wording, or an order the line leaves open.
 - **Under-constraint**: it never asserts a Then-clause or listed case the cited line gives it, or asserts something weaker (a status where the line names a saved record).
