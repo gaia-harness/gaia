@@ -362,7 +362,7 @@ Seed `apps/web/.env` first: the Quality Gate below runs E2E and the dev smoke te
 .gaia/cli/gaia setup bootstrap-env
 ```
 
-Then run the Quality Gate over the init output: read `wiki/decisions/Quality Gate.md` and run its steps as written. It runs before the marker and finalize below, so a gate that does not pass stops the run with the resume cursor intact. Never commit past it.
+Then run the Quality Gate over the init output: read `wiki/decisions/Quality Gate.md` and run its steps as written. Run every step: nothing is staged yet, so the page's skip check does not apply. Fix every failure and rerun until it passes. When a step cannot pass, stop here, before the marker, finalize and commit, and say what blocks it; once fixed, continue from this gate, never through `gaia init resume`, which would run finalize ungated.
 
 Then mark setup as running, in its own call. Finalize deletes this command file, which ends the statusline's mid-init gate, and setup runs next in this session, so the marker keeps the statusline from telling the user to run the setup that is about to run:
 

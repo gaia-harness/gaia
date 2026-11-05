@@ -537,7 +537,8 @@ check_gate_before_commit() {
 
 # check_gate_lists_init <gate page>: the gate's stop-and-report step lists
 # /gaia-init's commit among the workflows that commit without the Commit/Hold
-# stop; without it, an automatic-mode init would wait on a question nobody answers.
+# stop; without it, the gate would stop init on a Commit/Hold question its own
+# commit step never asks.
 check_gate_lists_init() {
   grep -E '^10\. \*\*Stop and report\*\*' "$1" | grep -qF -- '`/gaia-init`' || {
     echo "the gate page's step 10 does not list /gaia-init's commit" >&2
