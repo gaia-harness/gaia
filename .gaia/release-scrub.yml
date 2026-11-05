@@ -467,6 +467,7 @@ transforms:
           - "CONTRIBUTING.md"
           - "LICENSE"
           - "README.md"
+          - "SECURITY.md"
           - "SUPPORTERS.md"
 
       # ---- Wikilinks resolving to release-excluded slugs ----
