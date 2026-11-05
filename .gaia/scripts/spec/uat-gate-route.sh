@@ -27,14 +27,25 @@ gate_route_annotated() {
 # `new Request(` is not a route call. Honest limits: code alone blanks a
 # template literal, so an interpolated template as the only expect argument
 # reads as a literal; neither form checks which module the name comes from;
-# an alias counts only inside the braces of an import statement that starts
+# an alias counts only between the braces of an import statement that starts
 # its line, with `loader as X` on one line, so a default import, a renaming
-# destructure (`{loader: X}`) or a name another module binds is not followed
-# and fails the floor, the safe direction.
+# destructure (`{loader: X}`) or a name another module binds, for example, is
+# not followed and fails the floor, the safe direction.
 gate_route_clears_floor() {
   local code import_braces route_name alias_name
   code=$(uat_lib_code_only "$1") || return 1
-  import_braces=$(LC_ALL=C awk '/^[[:space:]]*import[[:space:]]/ && /\{/ { inside = 1 } inside { print; if (/\}/) inside = 0 }' <<<"$code")
+  import_braces=$(LC_ALL=C awk '
+    inside {
+      close_at = index($0, "}")
+      if (close_at) { print substr($0, 1, close_at); inside = 0 } else print
+      next
+    }
+    /^[[:space:]]*import[[:space:]]+(type[[:space:]]+)?([A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*,[[:space:]]*)?\{/ {
+      rest = substr($0, index($0, "{"))
+      close_at = index(rest, "}")
+      if (close_at) print substr(rest, 1, close_at); else { print rest; inside = 1 }
+    }
+  ' <<<"$code")
   route_name='loader|action'
   while IFS= read -r alias_name; do
     [ -n "$alias_name" ] || continue

@@ -695,7 +695,12 @@ test('t', async () => {
 });"
 }
 
-@test "gate refuses a call through a type cast of loader outside an import, with the floor reason" {
+@test "gate refuses a call through a type cast of loader outside the import braces with the floor reason" {
+  route_case floor "import {meta, loader} from '../../orders/route'; const handler = pick(1, loader as Handler);
+test('t', async () => {
+  const response = await Handler({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
   route_case floor "import {loader} from '../../orders/route';
 test('t', async () => {
   const handler = pick(1, loader as Handler, 2);
