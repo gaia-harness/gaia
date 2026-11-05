@@ -945,6 +945,58 @@ check_directive_routing() {
   done
 }
 
+# ---------- a directive or a UAT's listed cases never add a test file ----------
+
+# A directive written as a test demand, or the cases a SPEC lists for a UAT
+# given their own file, let a plan name tests beyond the owned acceptance
+# tests, the required real-server checks and both-condition unit tests, which
+# breaks the trophy's one test per behavior.
+DIRECTIVE_NEW_TEST_NEEDLE='It never asks for a new test, a test file, or a rule proven on its own'
+UNCOVERED_RULE_NEEDLE='Any other finding that a rule or case set has no UAT proving it is `spec_defect`, never `plan_directive`'
+FOLD_INTO_UAT_NEEDLE='folds into the intent as a case listed for that UAT, never into its then-clause; a new UAT is added only for a behavior no UAT states'
+HONOR_INSIDE_NEEDLE='as a constraint on the code the task delivers or an assertion inside a test a task doc may name (`## Plan files`)'
+DIRECTIVE_FOLLOW_UP_NEEDLE='a directive that would need any other test goes under `## Follow-ups` in `README.md` instead'
+CASE_ROWS_NEEDLE='Cases the SPEC lists for a UAT are rows of that UAT'"'"'s own parameterized test on its routed surface, real-server included, and only those cases: never a second file'
+
+# check_directive_test_scope <planner> <audit>
+check_directive_test_scope() {
+  local planner="$1" audit="$2" para needle
+  for needle in "$DIRECTIVE_NEW_TEST_NEEDLE" "$UNCOVERED_RULE_NEEDLE" "$FOLD_INTO_UAT_NEEDLE"; do
+    grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
+  done
+  para="$(grep -F 'Its `## Plan-time directives` section' "$planner")"
+  for needle in "$HONOR_INSIDE_NEEDLE" "$DIRECTIVE_FOLLOW_UP_NEEDLE"; do
+    grep -qF -- "$needle" <<<"$para" || { printf 'planner AUDIT_PATH paragraph lacks: %s\n' "$needle" >&2; return 1; }
+  done
+  grep -qF -- "$CASE_ROWS_NEEDLE" "$planner" || { printf 'planner.md lacks the case-rows rule\n' >&2; return 1; }
+}
+
+@test "a plan-time directive or a UAT's listed cases never add a test file, in the SPEC audit and planner.md" {
+  check_directive_test_scope "$PLANNER_MD" "$AUDIT_MD"
+}
+
+@test "red twin: dropping any clause of the directive and listed-case test scope fails" {
+  local needle file copy mutated
+  for needle in "$DIRECTIVE_NEW_TEST_NEEDLE" "$UNCOVERED_RULE_NEEDLE" "$FOLD_INTO_UAT_NEEDLE" \
+    "$HONOR_INSIDE_NEEDLE" "$DIRECTIVE_FOLLOW_UP_NEEDLE" "$CASE_ROWS_NEEDLE"; do
+    mutated=0
+    for file in "$PLANNER_MD" "$AUDIT_MD"; do
+      grep -qF -- "$needle" "$file" || continue
+      copy="$BATS_TEST_TMPDIR/$(basename "$file")"
+      awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$file" >"$copy"
+      cmp -s "$file" "$copy" && { echo "mutation left $file unchanged: $needle" >&2; return 1; }
+      if [ "$file" = "$PLANNER_MD" ]; then
+        run check_directive_test_scope "$copy" "$AUDIT_MD"
+      else
+        run check_directive_test_scope "$PLANNER_MD" "$copy"
+      fi
+      [ "$status" -ne 0 ] || { echo "removing '$needle' from $file did not fail" >&2; return 1; }
+      mutated=1
+    done
+    [ "$mutated" -eq 1 ] || { echo "no file holds: $needle" >&2; return 1; }
+  done
+}
+
 # ---------- a page-markup rule is a directive, never then-clause text ----------
 
 # check_markup_rule_placement <audit> <template>: the SPEC audit's testability
