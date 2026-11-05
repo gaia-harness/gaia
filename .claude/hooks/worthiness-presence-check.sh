@@ -34,7 +34,7 @@
 # never a literal `app/` prefix) and the determinism classifier
 # (.gaia/scripts/classifier/classify-determinism.mjs) labels it `strict`,
 # `emergent` or `route`. A strict (deterministic) test is RED-gated for honesty
-# and worthiness-gated for worth only: both gates apply to it. When ZERO tests in
+# and worthiness-gated for worth only. When ZERO tests in
 # scope changed, the gate is a NO-OP and allows the merge. An unusable registry
 # or descriptor DENIES: with no globs the gate would silently match nothing. An
 # EXACT rename (R100: the content is byte-identical, so there is nothing new to

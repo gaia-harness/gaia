@@ -231,8 +231,6 @@ Then write the following files directly to `{PLAN_DIR}/`:
       **Worthiness step (every start and every resume, before the wiki promotion).** After the last phase commits and the pre-audit UAT checks pass, read `.claude/skills/gaia/references/worthiness-step.md` and run it from `RESOLVED_ROOT`. Its `route` makes it skip-safe, so a resume re-enters here and settles only what is still open. It records each outcome as a `## Worthiness step` block in `{PLAN_DIR}/PROGRESS.md`.
       ```
 
-      A resumed plan generated before this change has its unit tests judged by the widened worthiness selection, advisory as every verdict is.
-
     - **Overlap pass.** Place this block after the worthiness step block and before the wiki promotion block, in a spec-derived and a spec-less plan alike. The reference page owns the step's mechanics:
 
       ```

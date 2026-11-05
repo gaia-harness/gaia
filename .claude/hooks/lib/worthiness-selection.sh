@@ -3,7 +3,7 @@
 # worthiness presence check: every changed test under the scope globs (the
 # descriptor's emergentTests and tddUnitTests) that the determinism classifier
 # labels strict, emergent or route. A deterministic (strict) test is RED-gated
-# for honesty and worthiness-gated for worth only; both gates apply to it. The merge hook and the worthiness step both
+# for honesty and worthiness-gated for worth only. The merge hook and the worthiness step both
 # call it, so the set they judge and the set the hook demands cannot drift.
 #
 # Sourced, never executed; nothing runs at source time.
