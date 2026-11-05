@@ -137,6 +137,21 @@ check_tdd_loop() {
   lacks "$text" 'One test at a time' || return 1
 }
 
+check_task_doc_test_naming() {
+  local text
+  text="$(flat "$1/$PLANNER_REL")"
+  need "$text" 'A task doc names a test only for an acceptance test its phase owns' || return 1
+  need "$text" 'a unit test for logic meeting both unit-test conditions (`wiki/decisions/Test Layering.md`), naming the condition met' || return 1
+  need "$text" 'Any other test worth having goes under `## Follow-ups` in `README.md`, never into a task doc.' || return 1
+}
+
+check_route_call_floor() {
+  local text
+  text="$(flat "$1/$PLANNER_REL")"
+  need "$text" 'Each route UAT test calls the route module'"'"'s `loader` or `action` itself, through a named import (an alias counts) or a member call such as `logout.action(args)`' || return 1
+  need "$text" 'a shared helper may build the request, args and context, but never makes the call' || return 1
+}
+
 # ---------- tests ----------
 
 @test "planner names behaviors and acceptance tests and drops the per-guard criterion line" {
@@ -181,4 +196,24 @@ check_tdd_loop() {
 
 @test "red twin: restoring the one-test-at-a-time loop fails" {
   red check_tdd_loop "$TDD_REL" 'Don'"'"'t anticipate future tests.' 'Don'"'"'t anticipate future tests. One test at a time.'
+}
+
+@test "a task doc names only owned acceptance tests and both-condition unit tests; other tests go to README follow-ups" {
+  green check_task_doc_test_naming
+}
+
+@test "red twin: letting a task doc name any test the planner judges worthwhile fails" {
+  red check_task_doc_test_naming "$PLANNER_REL" 'goes under `## Follow-ups` in `README.md`, never into a task doc.' 'may go into a task doc.'
+}
+
+@test "red twin: dropping the named unit-test condition fails" {
+  red check_task_doc_test_naming "$PLANNER_REL" ', naming the condition met' ''
+}
+
+@test "a route UAT test makes the loader or action call itself; a harness never does" {
+  green check_route_call_floor
+}
+
+@test "red twin: a harness that makes the route call fails" {
+  red check_route_call_floor "$PLANNER_REL" 'but never makes the call' 'and may make the call'
 }
