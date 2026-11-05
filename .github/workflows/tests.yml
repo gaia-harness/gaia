@@ -23,10 +23,11 @@ jobs:
     # reports an ordinary red check to re-run rather than hanging. A full run
     # here is a few minutes: typecheck, lint, Vitest (whose storybook and
     # storybook-dark projects run the a11y scan over every story in light and
-    # dark) and Playwright (one worker per core). The cap leaves room for
-    # failures to report in full even when the system-dependency install below
-    # spends most of its own 10-minute bound on a slow apt mirror. The browser install below
-    # fetches one engine rather than every engine Playwright ships.
+    # dark), the Storybook build and Playwright (one worker per core). The cap
+    # leaves room for failures to report in full even when the
+    # system-dependency install below spends most of its own 10-minute bound on
+    # a slow apt mirror. The browser install below fetches one engine rather
+    # than every engine Playwright ships.
     timeout-minutes: 25
     runs-on: ubuntu-latest
     permissions:
@@ -173,8 +174,9 @@ jobs:
         run: bash .gaia/scripts/frontend-lint-delta.sh --root . --base "$CHECK_BASE"
       # Only the engine the suites run. Vitest's browser, storybook and
       # storybook-dark projects and the Playwright specs all launch Chromium, so
-      # this one install serves both steps below and must precede the first of them. `playwright install` resolves its browser
-      # set from its arguments alone and reads nothing from playwright.config.ts,
+      # this one install serves the Vitest and Playwright steps and must precede
+      # both. `playwright install` resolves its browser set from its arguments
+      # alone and reads nothing from playwright.config.ts,
       # so with none named it adds firefox and webkit on top of what this suite
       # needs, for a config whose CI project list is chromium alone (its
       # `otherBrowsers` are gated on `!CI`). Naming chromium still installs the

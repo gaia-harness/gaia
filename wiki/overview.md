@@ -45,7 +45,7 @@ apps/web/app/
 ├── state/            React Context providers
 ├── styles/           tailwind.css, theme.css
 ├── types/            global TS types
-├── utils/            pure helpers
+├── utils/            shared helpers
 ├── root.tsx          root layout, i18n hookup, theme, toast
 ├── routes.ts         fs-routes route config
 └── env.server.ts     Zod-validated env vars
