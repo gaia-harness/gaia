@@ -30,7 +30,8 @@ Touch only what's needed: don't improve adjacent code, don't refactor unbroken t
 
 When building new features or fixing bugs, follow the TDD workflow described in `.claude/skills/tdd/SKILL.md` (read it on demand, do not preload).
 
-- Test individual functions in isolation and user flows end to end; the frontend stack (Vitest, Storybook, Playwright) is in `apps/web/CLAUDE.md` (`## Tests and prerequisites`) and the `tdd-react` skill
+- Write tests, not too many, mostly integration (the testing trophy): route tests are the default home for behavior; a unit test only when integration cannot cover its cases cheaply and the logic is important or likely to fail; keep browser tests few, for critical flows; one test per user-observable behavior. Full rule: `wiki/decisions/Test Layering.md`
+- The frontend stack (Vitest, Storybook, Playwright) is in `apps/web/CLAUDE.md` (`## Tests and prerequisites`) and the `tdd-react` skill
 
 ## 4. Always Verify Your Work
 
