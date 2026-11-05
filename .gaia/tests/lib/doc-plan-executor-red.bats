@@ -144,7 +144,7 @@ check_edit_after_red_reported() {
     'Leave a test you judge wrong as it is' \
     'report the needed edit (file, test name, what changed) under `### Deviations from plan`' \
     'The one exception is a phase gate retry'"'"'s `floor` line: change only the call the floor counts, its receiver or arguments' \
-    'never add, remove or change an assertion, a test or any other call' \
+    'Add no test and no other call, even one an assertion would read; add, remove or change no assertion' \
     'report the edit under `### Deviations from plan` (file:line, before -> after)' || return 1
 }
 
@@ -340,8 +340,8 @@ check_tdd_stub_first() {
 
 @test "red twin: a floor exception that lets an assertion change fails" {
   red check_edit_after_red_reported "$PLANNER_REL" \
-    'never add, remove or change an assertion, a test or any other call' \
-    'never add a test'
+    'add, remove or change no assertion' \
+    'change an assertion only as the floor needs'
 }
 
 @test "red twin: a floor exception edit not reported under Deviations fails" {
