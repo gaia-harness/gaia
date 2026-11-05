@@ -194,7 +194,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
       ```
       <!-- gaia:orchestrator-step gate-retry -->
-      **Phase gate retry (at most once per phase).** When the phase's `pnpm typecheck` or `pnpm lint` fails, send each owning task's errors to a fresh executor for that task instead of halting at once. Never fix it on the main thread. Any other gate failure, the owning-phase UAT gate included, halts under Stop conditions with no retry.
+      **Phase gate retry (at most once per phase).** When the phase's `pnpm typecheck` or `pnpm lint` fails, send each owning task's errors to a fresh executor for that task instead of halting at once. Never fix it on the main thread. Any other gate failure, the owning-phase UAT gate included, halts under Stop conditions with no retry. A phase commit the RED gate (`.claude/hooks/red-verify-commit-check.sh`) denies halts the same way: once the implementation exists no honest run can fail, so never edit, revert or set aside implementation, here or through an executor and in any number of calls, to record a RED; the HALTED block names each denied test (file, test name, why no RED exists).
 
       - **Attribute.** Map each error in the gate output to the file it names, and each file to the task whose `task-*.md` declares it. A failure is attributable only when every error names a file exactly one task declares. An error with no file path, or on a file no task or more than one task declares, makes the failure unattributable.
       - **Halt instead.** An unattributable failure, or a gate failure in a phase that already has a `(GATE RETRY 1)` block in `{PLAN_DIR}/PROGRESS.md`, halts under Stop conditions.
