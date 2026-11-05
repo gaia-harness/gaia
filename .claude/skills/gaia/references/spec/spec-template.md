@@ -22,8 +22,8 @@ uats:
       no hedging. The verifier can read this and write a test
       assertion against it. A UAT states a rule with one representative
       journey; case tables belong to the lowest layer, so do not list
-      every input value or outcome here. State what the user observes:
-      a page-markup or accessibility structure rule (an element's whole
+      every input value or outcome here. State what the user observes.
+      A page-markup or accessibility structure rule (an element's whole
       text, a heading level) is not a then-clause; the SPEC audit
       records it as a plan-time directive.>
 scope_boundaries:

@@ -948,16 +948,17 @@ check_directive_routing() {
 # lens, its refuter and its directive rule send a page-markup or accessibility
 # structure rule to one plan-time directive naming the page, and the SPEC
 # template keeps such a rule out of a UAT's then-clause. Inside a then-clause
-# the rule forces the UAT onto a served-markup test instead of a route test.
+# the rule forces the UAT onto a real-server test instead of a route test.
 check_markup_rule_placement() {
   local audit="$1" template="$2" needle
   for needle in \
-    'propose a plan-time directive stating that rule for the page or field pattern, never UAT text' \
+    'propose a plan-time directive stating that rule for the page or component it applies to, never UAT text' \
     'A finding whose fix is a page-markup or accessibility structure rule is `plan_directive` even when it cites a UAT' \
+    'its fold removes the clause, and the applier also lists the rule under `## Plan-time directives`' \
     'is one directive naming the page or component it applies to'; do
     grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
   done
-  grep -qF -- 'a page-markup or accessibility structure rule' "$template" ||
+  grep -qF -- 'A page-markup or accessibility structure rule' "$template" ||
     { printf 'spec-template.md then: lacks the markup-rule clause\n' >&2; return 1; }
 }
 
@@ -967,12 +968,12 @@ check_markup_rule_placement() {
 
 @test "red twin: dropping any markup-rule sentence fails" {
   local needle audit_copy="$BATS_TEST_TMPDIR/audit.md" template_copy="$BATS_TEST_TMPDIR/spec-template.md"
-  for needle in 'never UAT text' 'even when it cites a UAT' 'naming the page or component it applies to'; do
+  for needle in 'never UAT text' 'even when it cites a UAT' 'also lists the rule' 'naming the page or component it applies to'; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
     run check_markup_rule_placement "$audit_copy" "$SPEC_TEMPLATE_MD"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
   done
-  sed 's/a page-markup or accessibility structure rule/removed/' "$SPEC_TEMPLATE_MD" >"$template_copy"
+  sed 's/A page-markup or accessibility structure rule/removed/' "$SPEC_TEMPLATE_MD" >"$template_copy"
   run check_markup_rule_placement "$AUDIT_MD" "$template_copy"
   [ "$status" -ne 0 ]
 }
