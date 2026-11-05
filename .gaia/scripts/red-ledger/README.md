@@ -78,6 +78,14 @@ entry, the test statement); they are not part of the signal. Exit `0`
 on success (no output when no tests are found); non-zero with a one-line stderr
 message on a failure. The exit codes are listed in the helper's header.
 
+A test-level `.each`/`.for` call is one line named by its declared template,
+plus a `rowPattern` field: an anchored regular expression that matches every
+fullName vitest can expand a row into. The capture hook files a failing row's
+RED under the template's fullName, so one failing row satisfies the gate. A
+title made only of substitution tokens, and every test under a
+`describe.each`/`describe.for`, emit nothing (`wiki/decisions/TDD RED
+Verification.md`, `## Dynamic-title carve-out`).
+
 **Story mode.** A path ending `.stories.tsx` or `.stories.ts` is read as a
 CSF4 story file (`preview.meta`, `meta.story`, `.extend`, `.test()`), whose
 stories `@storybook/addon-vitest` runs as tests. The helper prints

@@ -114,6 +114,28 @@ UNIT_PATH="apps/web/app/utils/x/index.test.ts"
   [[ "$output" == *"adds two numbers"* ]]
 }
 
+CASE_TABLE_TEST='import {expect, test} from "vitest";
+test.for([{email: "a@x.io"}, {email: "b@x.io"}])("rejects $email", ({email}) => {
+  expect(email).toContain("@");
+});
+'
+CASE_TABLE_NAME='rejects $email'
+
+@test "a new test.for whose rows never failed is pending under its template name" {
+  write_file "$UNIT_PATH" "$CASE_TABLE_TEST"
+  run bash "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 1 ]
+  [ "$output" = "$UNIT_PATH	$CASE_TABLE_NAME" ]
+}
+
+@test "a new test.for clears once a RED is recorded under its template name" {
+  write_file "$UNIT_PATH" "$CASE_TABLE_TEST"
+  seed_matching_red "$UNIT_PATH" "$CASE_TABLE_NAME"
+  run bash "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "an emergent test owes no RED, the same as at the commit gate" {
   write_file "apps/web/app/components/Widget/tests/index.test.tsx" 'import {expect, test} from "vitest";
 test("renders something", () => { expect(true).toBe(true); });
