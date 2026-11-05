@@ -69,6 +69,9 @@ setup() {
   # The fourth: nothing depends on the overlap pass, so a double no-op records
   # `did not run` and the run continues.
   OVERLAP_RELATIVE_PATH='.claude/skills/gaia/references/overlap-pass.md'
+  # The fifth: the plan orchestrator halts rather than review its own wave's
+  # tests inline.
+  TEST_REVIEW_RELATIVE_PATH='.claude/skills/gaia/references/plan/test-review.md'
 
   OWNER="$ROOT/$OWNER_RELATIVE_PATH"
   GATE="$ROOT/$GATE_RELATIVE_PATH"
@@ -81,6 +84,7 @@ setup() {
     '.claude/skills/gaia/references/fitness.md'
     '.claude/skills/gaia/references/overlap-pass.md'
     '.claude/skills/gaia/references/plan/decomposition-audit.md'
+    '.claude/skills/gaia/references/plan/test-review.md'
     '.claude/skills/gaia/references/spec/audit.md'
     '.claude/skills/gaia/references/spec/lens-dispatch.md'
     '.claude/skills/gaia/references/spec/lifecycle.md'
@@ -220,6 +224,7 @@ terminal_segments() {
     [ "$relative_path" = "$LIFECYCLE_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$WORTHINESS_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$OVERLAP_RELATIVE_PATH" ] && continue
+    [ "$relative_path" = "$TEST_REVIEW_RELATIVE_PATH" ] && continue
     lines="$(terminal_segments "$ROOT/$relative_path")"
     [ -n "$lines" ] || { echo "no terminal statement read in ${relative_path}" >&2; return 1; }
     # Per statement, not per file: a file whose ending drifted at one of
@@ -310,6 +315,25 @@ terminal_segments() {
   grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$WORTHINESS_RELATIVE_PATH"
   grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$WORTHINESS_RELATIVE_PATH"
   grep -qF -- 'same deliberate departure from the general inline ending' "$ROOT/$WORTHINESS_RELATIVE_PATH"
+}
+
+@test "the owner page admits the test review's exception and states its reason" {
+  grep -qF -- "$TEST_REVIEW_RELATIVE_PATH" "$OWNER"
+  grep -qF -- 'the run grading its own wave' "$OWNER"
+}
+
+@test "the test review's terminal statement halts and does not fall back inline" {
+  local lines
+  lines="$(terminal_segments "$ROOT/$TEST_REVIEW_RELATIVE_PATH")"
+  [ -n "$lines" ] || { echo "no terminal statement read in $TEST_REVIEW_RELATIVE_PATH" >&2; return 1; }
+  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
+  printf '%s\n' "$lines" | grep -qF -- '(HALTED)'
+}
+
+@test "the test review declares its departure as deliberate and names the owner" {
+  grep -qF -- 'departs from the general inline ending' "$ROOT/$TEST_REVIEW_RELATIVE_PATH"
+  grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$TEST_REVIEW_RELATIVE_PATH"
+  grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$TEST_REVIEW_RELATIVE_PATH"
 }
 
 @test "the owner page admits the overlap pass's exception and states its reason" {

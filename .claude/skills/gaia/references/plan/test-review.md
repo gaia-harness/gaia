@@ -44,7 +44,7 @@ When the RED re-check exits 0, run round 1 again as round 2: `<VERDICT_FILE>` en
 
 ## A no-op review
 
-Re-dispatch the round once against the re-cleared path. A second no-op appends `## Phase N, <title> (HALTED)` with `Reason: test review produced no verdict file` and stops. Never review on the main thread: the orchestrator would be grading its own wave.
+Re-dispatch the round once against the re-cleared path. A second no-op appends `## Phase N, <title> (HALTED)` with `Reason: test review produced no verdict file` and stops. This departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the orchestrator dispatched the wave under review, so it cannot legitimately do the work itself.
 
 ## The prompt template
 
@@ -57,7 +57,7 @@ Test file: <absolute path to a New tests file>
 Verdict file: <VERDICT_FILE>
 ```
 
-You review new tests before any implementation exists. Each test already fails against a stub, so a RED is on record. Your one judgment: does each assertion state the behavior the task doc and the SPEC specify?
+You review new tests before any implementation exists; each runs against a stub. Your one judgment: does each assertion state the behavior the task doc and the SPEC specify?
 
 Read the SPEC, each task doc and each test file named above, plus any file a test imports from the same test folder. Edit nothing and run no command that writes a file; the verdict file is the one file you write.
 

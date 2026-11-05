@@ -151,6 +151,7 @@
     ".claude/skills/gaia/references/plan.md": "owned",
     ".claude/skills/gaia/references/plan/decomposition-audit.md": "owned",
     ".claude/skills/gaia/references/plan/planner.md": "owned",
+    ".claude/skills/gaia/references/plan/test-review.md": "owned",
     ".claude/skills/gaia/references/residue.md": "owned",
     ".claude/skills/gaia/references/setup/auto-merge.md": "owned",
     ".claude/skills/gaia/references/setup/github-repo.md": "owned",
@@ -855,7 +856,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-05T17:45:25.371Z",
+  "generated": "2026-11-05T20:36:50.438Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

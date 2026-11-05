@@ -414,7 +414,7 @@ check_test_review() {
     '## Round 2' \
     '## A no-op review' \
     'Reason: test review produced no verdict file' \
-    'Never review on the main thread' \
+    'This departs from the general inline ending' \
     '## The prompt template' \
     'No citation, no defect.' \
     '**Over-constraint**' \
