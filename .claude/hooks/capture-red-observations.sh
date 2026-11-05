@@ -355,25 +355,24 @@ else
     >"${rerun_output_file:-/dev/null}" 2>&1 || true
   set +f
 
-  # Hook tests run in a real browser, so a machine without Chromium records no
-  # RED. Vitest still writes a parseable report in that case, one with zero
-  # tests, so "no usable report" means unparseable or empty. That one cause is
-  # named, because the missing RED would otherwise surface only as a
-  # commit-gate denial with nothing tying it to this run.
+  # No usable report (absent, unparseable, or zero tests) is said out loud, or
+  # the missing RED surfaces only as a commit-gate denial with no cause. Usually
+  # the scope was read from the wrong directory: a `cd` inside the agent's
+  # command moves its run, not this re-run, which then finds no vitest (no
+  # report) or no file (zero tests). A machine without Chromium also writes a
+  # zero-test report, beside the launch error, and gets its own message.
   if [ ! -s "$json_file" ] || ! jq -e '(.numTotalTests // 0) > 0' "$json_file" >/dev/null 2>&1; then
-    if [ -n "$rerun_output_file" ] && grep -qE "Executable doesn't exist|playwright install|browserType\.launch" "$rerun_output_file" 2>/dev/null; then
-      rm -f "$json_file" "$rerun_output_file" 2>/dev/null || true
+    browser_missing=0
+    [ -n "$rerun_output_file" ] && grep -qE "Executable doesn't exist|playwright install|browserType\.launch" "$rerun_output_file" 2>/dev/null && browser_missing=1
+    rm -f "$json_file" "$rerun_output_file" 2>/dev/null || true
+    if [ "$browser_missing" -eq 1 ]; then
       emit_context "RED capture failed: the test re-run could not start a browser (Chromium is not installed), so no failing (RED) result was recorded and the RED-verification commit gate will not see this run. Install the browsers with: pnpm install:browsers, then re-run the test."
-      exit 0
+    else
+      emit_context "RED capture recorded nothing: re-running $(printf '%s' "$scope" | tr '\n' ' ' | sed 's/ *$//') from $run_directory produced no test results. A test path is read relative to the -C directory, else to the directory this Bash call started in ($scope_base), never to a \`cd\` inside the command. If a new test failed here, record its RED by running it as a Bash call of its own: pnpm -C <package dir> test --run <test-file>, the path relative to that package directory."
     fi
-  fi
-  [ -n "$rerun_output_file" ] && rm -f "$rerun_output_file" 2>/dev/null || true
-
-  # If vitest produced no parseable json (binary missing, etc.), bail silently.
-  if [ ! -s "$json_file" ] || ! jq -e . "$json_file" >/dev/null 2>&1; then
-    [ "$cleanup_json" -eq 1 ] && rm -f "$json_file" 2>/dev/null || true
     exit 0
   fi
+  [ -n "$rerun_output_file" ] && rm -f "$rerun_output_file" 2>/dev/null || true
 fi
 
 # --- parse per-test failures, attach signals, append to the ledger ------------

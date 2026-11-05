@@ -574,7 +574,7 @@ for argument in "$@"; do
 done
 printf 'cwd=%s\nscope=%s\n' "$(pwd -P)" "$scope" >>"$STUB_VITEST_LOG"
 cat >"$output_file" <<JSON
-{"testResults":[{"name":"$(pwd -P)/$scope","status":"failed","message":"","assertionResults":[{"title":"adds two numbers","fullName":"adds two numbers","status":"failed","failureMessages":["AssertionError: expected 1 to be 2"]}]}]}
+{"numTotalTests":1,"testResults":[{"name":"$(pwd -P)/$scope","status":"failed","message":"","assertionResults":[{"title":"adds two numbers","fullName":"adds two numbers","status":"failed","failureMessages":["AssertionError: expected 1 to be 2"]}]}]}
 JSON
 exit 1
 SH
@@ -845,12 +845,44 @@ SH
   jq -r '.hookSpecificOutput.additionalContext' <<<"$output" | grep -qF -- 'pnpm install:browsers'
 }
 
-@test "a re-run that yields no report for another reason stays silent" {
-  stub_failing_pnpm
-  run_capture "Bash" "pnpm test --run $FIXTURE_RELATIVE_DIRECTORY/mixed-pass-fail.test.ts"
+# A `cd` inside the command never moves the re-run: the scope is read from the
+# call's starting directory, where vitest is not installed, so no report is
+# written. The output text is the real pnpm error for that case.
+assert_no_results_context() {
+  local event="$1"
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
   [ "$(ledger_lines)" -eq 0 ]
+  jq -e --arg e "$event" '.hookSpecificOutput.hookEventName == $e' <<<"$output"
+  context=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
+  grep -qF -- 'produced no test results' <<<"$context"
+  grep -qF -- "($REPO_ROOT)" <<<"$context"
+  grep -qF -- 'never to a `cd` inside the command' <<<"$context"
+  grep -qF -- 'as a Bash call of its own: pnpm -C <package dir> test --run <test-file>' <<<"$context"
+}
+
+@test "a cd inside the command leaves the re-run with no report, and the context says how to record the RED" {
+  stub_failing_pnpm
+  STUB_PNPM_OUTPUT_SOURCE="$BATS_TEST_TMPDIR/vitest-not-found.txt"
+  printf ' ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found\n' >"$STUB_PNPM_OUTPUT_SOURCE"
+  export STUB_PNPM_OUTPUT_SOURCE
+  run_capture "Bash" "cd apps/web && pnpm test --run app/route-tests/x.server.test.ts"
+  assert_no_results_context PostToolUse
+}
+
+@test "a re-run whose report holds zero tests says how to record the RED" {
+  stub_failing_pnpm
+  STUB_PNPM_JSON_SOURCE="$BATS_TEST_DIRNAME/fixtures/no-test-files-vitest-report.json"
+  export STUB_PNPM_JSON_SOURCE
+  run_capture "Bash" "pnpm test --run app/route-tests/x.server.test.ts"
+  assert_no_results_context PostToolUse
+}
+
+@test "failure event: a re-run with no results says so under PostToolUseFailure" {
+  stub_failing_pnpm
+  local failure_payload
+  failure_payload=$(jq -n '{hook_event_name: "PostToolUseFailure", tool_name: "Bash", tool_input: {command: "cd apps/web && pnpm test --run app/route-tests/x.server.test.ts"}}')
+  invoke_hook_in "$REPO_ROOT" "$failure_payload" "$HOOK"
+  assert_no_results_context PostToolUseFailure
 }
 
 @test "hook-payload.sh missing: exit 0 with empty stdout, writes nothing" {
