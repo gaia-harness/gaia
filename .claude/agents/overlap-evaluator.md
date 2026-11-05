@@ -65,7 +65,7 @@ the property, or with the sibling-less `target` shape, citing the subject's own
 assertion lines, when none does. Security-boundary tests are included: the
 real-server layer shows a served refusal status as well as a browser does.
 
-A drop, merge or demote whose covering test is a unit test needs a reason: see the `demote` bullet under `## Proposals` and the `unitReason` field under `## Output`.
+A drop, merge or demote whose covering test is a unit test (not a story) needs a reason when the subject sits on the route layer or higher: see the `unitReason` field under `## Output`.
 
 Never propose a demote of a rendered UAT test (line 1 is the
 `// gaia-uat-contract` marker): it is report-only.
