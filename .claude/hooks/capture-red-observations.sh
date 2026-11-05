@@ -356,17 +356,18 @@ else
   set +f
 
   # No usable report (absent, unparseable, or zero tests) is reported, or the
-  # missing RED surfaces only as a commit-gate denial with no cause. A known
-  # cause is a scope read from the wrong directory: a `cd` inside the agent's
-  # command moves its run, not this re-run, which then finds no vitest (no
-  # report) or no file (zero tests). A machine without Chromium also writes a
-  # zero-test report, beside the launch error, and gets its own message.
+  # missing RED surfaces only as a commit-gate denial with no cause. Causes: a
+  # `cd` in the agent's command moves its run, not this re-run (no vitest or
+  # file); no Chromium (a launch error); a test file that fails to load.
   if [ ! -s "$json_file" ] || ! jq -e '(.numTotalTests // 0) > 0' "$json_file" >/dev/null 2>&1; then
     browser_missing=0
     [ -n "$rerun_output_file" ] && grep -qE "Executable doesn't exist|playwright install|browserType\.launch" "$rerun_output_file" 2>/dev/null && browser_missing=1
+    load_error=$(jq -r '[.testResults[]? | select(.status == "failed" and (.assertionResults | length) == 0 and (.message // "") != "")][0] | select(.) | "\(.name): \(.message[0:200])"' "$json_file" 2>/dev/null)
     rm -f "$json_file" "$rerun_output_file" 2>/dev/null || true
     if [ "$browser_missing" -eq 1 ]; then
       emit_context "RED capture failed: the test re-run could not start a browser (Chromium is not installed), so no failing (RED) result was recorded and the RED-verification commit gate will not see this run. Install the browsers with: pnpm install:browsers, then re-run the test."
+    elif [ -n "$load_error" ]; then
+      emit_context "RED capture recorded nothing: a test file failed to load on the re-run ($load_error). A file that fails to load records no RED: the test must import its stub and fail on an assertion."
     else
       emit_context "RED capture recorded nothing: re-running $(printf '%s' "$scope" | tr '\n' ' ' | sed 's/ *$//') from $run_directory produced no test results. A test path is read relative to $scope_base (the -C, --dir or --filter package directory, else the directory this Bash call started in), never to a \`cd\` inside the command. If a new test failed here, record its RED by running it as a Bash call of its own: pnpm -C <package dir> test --run <test-file>, the path relative to that package directory."
     fi
