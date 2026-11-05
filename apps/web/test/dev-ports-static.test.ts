@@ -64,28 +64,21 @@ describe('port literals in config files', () => {
     ).toBe(true);
   });
 
-  test('a scratch file holding a hardcoded dev url is caught (the check can fail)', () => {
-    scratchDirectory = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'dev-ports-static-')
-    );
-    const scratchFile = path.join(scratchDirectory, 'bad.ts');
-    fs.writeFileSync(
-      scratchFile,
-      "export const url = 'http://localhost:5173';\n"
-    );
+  test.each([
+    ['bad.ts', "export const url = 'http://localhost:5173';\n"],
+    ['bad.json', '{"storybook": "storybook dev -p 6006"}\n'],
+  ])(
+    'a scratch file %s holding a hardcoded port is caught (the check can fail)',
+    (name, content) => {
+      scratchDirectory = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'dev-ports-static-')
+      );
+      const scratchFile = path.join(scratchDirectory, name);
+      fs.writeFileSync(scratchFile, content);
 
-    expect(findLiterals([scratchFile])).toHaveLength(1);
-  });
-
-  test('a scratch file holding a hardcoded Storybook port is caught', () => {
-    scratchDirectory = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'dev-ports-static-')
-    );
-    const scratchFile = path.join(scratchDirectory, 'bad.json');
-    fs.writeFileSync(scratchFile, '{"storybook": "storybook dev -p 6006"}\n');
-
-    expect(findLiterals([scratchFile])).toHaveLength(1);
-  });
+      expect(findLiterals([scratchFile])).toHaveLength(1);
+    }
+  );
 
   test('no scanned config file carries a 5173 or 6006 literal', () => {
     expect(findLiterals(listScannedFiles())).toEqual([]);

@@ -43,7 +43,6 @@ Where the app intentionally does not reach for remix-utils, with the reason:
 - **redirect** → The app parses the target with `LocalRedirectSchema` (`apps/web/app/utils/http.ts`), a Zod `.transform()` over `resolveLocalRedirect`: it resolves the target against a fixed origin with `new URL()`, rejects any target that resolves elsewhere, and the action redirects to the resolved path, never the raw input. Resolve-and-reject fits the app's Conform/Zod architecture better than safe-redirect's sanitize-and-fallback.
 - **responses** → The app uses native React Router `data()`, the modern idiom over remix-utils `responses`.
 - **cookie** → The app uses native `createCookie`; locale is a known string, so a typed-cookie wrapper is low value.
-- **value-debounce** → The app's `useDebounce` is a *value* debounce, which is **not** remix-utils' fetcher-debounce (`use-debounce-fetcher`). No overlap, so both coexist.
 
 ## Where each layer lives
 

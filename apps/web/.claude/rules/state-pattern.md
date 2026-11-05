@@ -52,13 +52,11 @@ ThingsProvider.displayName = 'ThingsProvider';
 
 ### Editable (useState tuple)
 
-Context holds `[value, setter]`; use `noop` as default setter.
+Context holds `[value, setter]`; an empty function is the default setter.
 
 ```tsx
-import {noop} from '~/utils/function';
-
 type XContextValue = [Maybe<number>, Dispatch<SetStateAction<Maybe<number>>>];
-const XContext = createContext<XContextValue>([undefined, noop]);
+const XContext = createContext<XContextValue>([undefined, () => {}]);
 
 export const useX = () => {
   const context = use(XContext) as Maybe<XContextValue>;

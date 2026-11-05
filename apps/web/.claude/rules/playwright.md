@@ -101,7 +101,7 @@ E2E tests run against this tree's `pnpm dev` server, on the port
 working directory, on any branch) uses 5173. Playwright
 refuses to reuse a server on that port that is not this tree's own. A second
 `webServer` serves the built `storybook-static` on this tree's Storybook port for
-the story scan (see Accessibility scans). With
+the Storybook specs (see Accessibility scans). With
 `MSW_ENABLED=true` the dev server mocks both browser and SSR requests (wiring in
 `wiki/dependencies/MSW.md`), so tests exercise the real route/loader/action stack
 with MSW intercepting API calls. No separate mock server is needed for e2e.
@@ -167,7 +167,7 @@ Chromium only by default. Every Playwright run needs Chromium installed, real-se
 
 ## Accessibility scans
 
-The Storybook scan (`storybook-a11y.spec.ts`, `storybook-focus.spec.ts`) runs axe over every story in dark and checks focus visibility in light and dark, against `storybook-static`. `pnpm pw` does not build Storybook: run `pnpm build-storybook` first (about 2 seconds). The story server starts even with no build so the other specs run; the story spec fails, never skips, naming `pnpm build-storybook` when `storybook-static/index.json` is missing or its story count differs from the story exports in source. The light theme is not scanned per story here: the Vitest storybook project runs addon-a11y on every story in light, failing on any impact.
+The Storybook specs (`storybook-a11y.spec.ts`, `storybook-focus.spec.ts`) run against `storybook-static`: `storybook-a11y.spec.ts` only checks that the built index matches the story exports in source, and `storybook-focus.spec.ts` checks focus visibility in light and dark. `pnpm pw` does not build Storybook: run `pnpm build-storybook` first (about 2 seconds). The story server starts even with no build so the other specs run; the story spec fails, never skips, naming `pnpm build-storybook` when `storybook-static/index.json` is missing or its story count differs from the story exports in source. Axe over every story is not run here: the Vitest `storybook` and `storybook-dark` projects run addon-a11y on every story in light and dark, failing on any impact.
 
 Use `expectNoSeriousA11yViolations` from `.playwright/a11y.ts` for axe-core
 scans of fully-rendered pages. The fixture in `.playwright/fixtures.ts`

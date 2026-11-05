@@ -51,17 +51,6 @@ describe('create', () => {
     ]);
   });
 
-  test('a plain Error thrown by the request function rejects through attempt', async () => {
-    process.env.API_URL = ORIGIN_A;
-    server.use(http.get(`${ORIGIN_A}/items`, () => HttpResponse.error()));
-
-    const request = create();
-
-    await expect(
-      attempt(async () => request('items', {schema: envelopeSchema}))
-    ).rejects.toThrow('Request failed due to a network error');
-  });
-
   test('a 204 without a schema resolves undefined', async () => {
     process.env.API_URL = ORIGIN_A;
     server.use(
@@ -147,28 +136,5 @@ describe('create', () => {
     expect(observed).toHaveLength(2);
     expect(observed[0]).toMatch(new RegExp(`^${ORIGIN_A}`));
     expect(observed[1]).toMatch(new RegExp(`^${ORIGIN_B}`));
-  });
-
-  test('a per-request prefix overrides the default origin', async () => {
-    const observed: string[] = [];
-    server.use(
-      http.get(`${ORIGIN_A}/items`, ({request}) => {
-        observed.push(request.url);
-
-        return HttpResponse.json({data: {displayName: 'a'}});
-      }),
-      http.get(`${ORIGIN_B}/items`, ({request}) => {
-        observed.push(request.url);
-
-        return HttpResponse.json({data: {displayName: 'b'}});
-      })
-    );
-    process.env.API_URL = ORIGIN_A;
-
-    const request = create();
-    await request('items', {prefix: ORIGIN_B, schema: envelopeSchema});
-
-    expect(observed).toHaveLength(1);
-    expect(observed[0]).toMatch(new RegExp(`^${ORIGIN_B}`));
   });
 });

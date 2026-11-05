@@ -18,7 +18,7 @@ This page owns the doctrine. Every other page that teaches stories states it in 
 
 - Each snapshot means one thing. A story that is also a pile of assertions snapshots a state nobody chose; a story that only sets up a state is a clean Chromatic baseline.
 - Each behavior is a named, separately reported test. A failing `.test()` names the behavior that broke in the Vitest and Storybook UI reports, where a failing `play` reports one opaque story.
-- One artifact. The story carries the decorators, stubs, i18n and seed data the component needs, so the same file feeds Storybook, Chromatic, the Playwright story scan and the Vitest run. A separate test file that re-composes the story duplicates that wiring and lets the two drift.
+- One artifact. The story carries the decorators, stubs, i18n and seed data the component needs, so the same file feeds Storybook, Chromatic and the Vitest run in both themes. A separate test file that re-composes the story duplicates that wiring and lets the two drift.
 - Real browser. Layout, focus, pointer and keyboard behavior, and axe contrast checks run in Chromium, not in an emulation that approximates it.
 - Every story and every attached test is axe-checked by `@storybook/addon-a11y`. See [[Accessibility]].
 
@@ -67,13 +67,14 @@ Each export is a direct `meta.story({...})` or `.extend({...})` call; a story bu
 - Hooks stay `*.test.ts` under a `hooks/` folder. They classify by the normal rules, so a deterministic hook keeps the RED demand ([[TDD RED Verification]]).
 - When Chromium is missing, the RED capture hook says so and names `pnpm install:browsers` rather than recording nothing silently.
 
-## The three Vitest projects
+## The Vitest projects
 
-`apps/web/vitest.config.ts` defines three projects; read it for the exact membership instead of a copy here.
+`apps/web/vitest.config.ts` defines the projects; read it for the exact membership instead of a copy here.
 
 - `node`: pure and server code (`*.test.ts` outside hook folders), no DOM, with the MSW node server and the test-data reset in `test/setup.ts`.
 - `browser`: hooks (`vitest-browser-react`) and any `*.test.tsx`, in Chromium, with `test/setup.browser.ts`. GAIA supplies no React Testing Library setup, so a test file that imports it brings its own render wrapper and dependencies; converting it to a story is the supported path.
 - `storybook`: every story, through `storybookTest` from `@storybook/addon-vitest`. The preview annotations, addon presets included, apply automatically; no setup file in `.storybook/` calls `setProjectAnnotations`, because a file that does switches that automatic provisioning off.
+- `storybook-dark`: the same stories with the `theme` global pinned to `dark`, plus `test/setup.story-dark.ts`, which fails a story that logs a console or page error, renders no content, or lacks the dark class.
 
 All browser projects need Chromium. See [[Testing]] for the `pnpm install:browsers` prerequisite.
 

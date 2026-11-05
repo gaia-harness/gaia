@@ -1,5 +1,7 @@
+import type {ReactRenderer} from '@storybook/react-vite';
 import {DARK_MODE_EVENT_NAME} from '@vueless/storybook-dark-mode';
 import isChromatic from 'chromatic/isChromatic';
+import type {DecoratorFunction} from 'storybook/internal/types';
 import {addons} from 'storybook/preview-api';
 import ToastDecorator from '../decorators/toast-decorator';
 import WrapDecorator from '../decorators/wrap-decorator';
@@ -30,7 +32,12 @@ if (!isChromaticSnapshot) {
   });
 }
 
-export const decorators =
-  isChromaticSnapshot ?
-    [WrapDecorator, ChromaticDecorator, ToastDecorator]
-  : [WrapDecorator, ToastDecorator];
+// The theme decorator applies the `theme` global, which a Chromatic mode sets
+// and the `storybook-dark` Vitest project pins to dark. Anywhere else the
+// dark-mode addon owns the class, so the decorator stays out of its way.
+const ThemeDecorator: DecoratorFunction<ReactRenderer> = (storyFn, context) =>
+  isChromaticSnapshot || context.globals.theme === 'dark' ?
+    ChromaticDecorator(storyFn, context)
+  : storyFn();
+
+export const decorators = [WrapDecorator, ThemeDecorator, ToastDecorator];

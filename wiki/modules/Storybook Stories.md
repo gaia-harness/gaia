@@ -18,17 +18,17 @@ Storybook v10 with the `@storybook/react-vite` framework. Configured to discover
 
 ## Why Storybook is also the test driver
 
-`@storybook/addon-vitest` runs every story as a Vitest test in headless Chromium, and a behavior is a `.test()` attached to a story (a story's `play` only drives the UI into the state its snapshot shows), so one source of truth drives the component test, visual regression (Chromatic) and the Playwright story scan. `@storybook/addon-a11y` axe-checks each story. See [[Stories as Tests]], [[Component Testing]] and [[Testing]].
+`@storybook/addon-vitest` runs every story as a Vitest test in headless Chromium, and a behavior is a `.test()` attached to a story (a story's `play` only drives the UI into the state its snapshot shows), so one source of truth drives the component test in both themes and visual regression (Chromatic). `@storybook/addon-a11y` axe-checks each story. See [[Stories as Tests]], [[Component Testing]] and [[Testing]].
 
 ## Decorator stack: the load-bearing convention
 
-Innermost to outermost (array order in `.storybook/chromatic/index.ts`): **`WrapDecorator → ChromaticDecorator → ToastDecorator`**.
+Innermost to outermost (array order in `.storybook/chromatic/index.ts`): **`WrapDecorator → ThemeDecorator → ToastDecorator`**.
 
 - `WrapDecorator`: reads `parameters.wrap` and wraps the story (use `parameters: {wrap: 'p-4'}` for padding instead of hardcoding divs in stories)
-- `ChromaticDecorator`: Chromatic snapshots only; renders the story once, puts `dark` on `<html>` when the `theme` global is `dark`, and clears `sessionStorage` before each snapshot
+- `ThemeDecorator`: applies `ChromaticDecorator` on a Chromatic snapshot or when the `theme` global is `dark` (the `storybook-dark` Vitest project pins it); `ChromaticDecorator` renders the story once, puts `dark` on `<html>` when the `theme` global is `dark`, and clears `sessionStorage` before each snapshot
 - `ToastDecorator`: renders a bare `<Toaster />` from `~/components/ui/toast` after every story except one that sets `parameters.toaster: false`, so a toast call from any other story is rendered
 
-Interactive sessions skip the Chromatic decorator: `WrapDecorator → ToastDecorator`.
+Interactive sessions skip `ChromaticDecorator`, since the dark-mode addon owns the `dark` class there.
 
 ## Stubs
 
@@ -38,7 +38,7 @@ Interactive sessions skip the Chromatic decorator: `WrapDecorator → ToastDecor
 
 `preview.ts` sets `darkClass` and `lightClass` to the `dark` or `light` class plus the role-token utilities `bg-background` and `text-foreground`, applied to the preview document root when the toolbar toggle fires, so the `.dark` token block in `theme.css` drives both themes. `stylePreview: true` extends the theme to Storybook chrome.
 
-Chromatic loads only the preview iframe, so the toolbar toggle never fires there. Instead `apps/web/.storybook/modes.ts` defines a `light` and a `dark` [[Chromatic]] mode, each setting the `theme` global (declared in `preview.ts` `initialGlobals`, since Storybook drops an undeclared global) and the 1280px viewport. Chromatic snapshots every story once per mode, and `ChromaticDecorator` applies the global. Vitest and the Playwright scan never add that decorator, so `theme` changes nothing there.
+Chromatic loads only the preview iframe, so the toolbar toggle never fires there. Instead `apps/web/.storybook/modes.ts` defines a `light` and a `dark` [[Chromatic]] mode, each setting the `theme` global (declared in `preview.ts` `initialGlobals`, since Storybook drops an undeclared global) and the 1280px viewport. Chromatic snapshots every story once per mode, and `ChromaticDecorator` applies the global. The `storybook-dark` Vitest project pins the same global to `dark`; the `storybook` project keeps the declared `light`, so `theme` changes nothing there.
 
 ## i18n in stories
 

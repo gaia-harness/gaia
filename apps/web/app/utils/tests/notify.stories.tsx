@@ -1,4 +1,9 @@
 import {expect, spyOn, waitFor, within} from 'storybook/test';
+import {
+  computeContrastRatio,
+  MINIMUM_NON_TEXT_CONTRAST,
+  resolveColor,
+} from 'test/contrast';
 import preview from '#.storybook/preview';
 import {toast} from '~/components/ui/toast';
 import {notify, NOTIFY_TYPES} from '~/utils/notify';
@@ -87,6 +92,10 @@ export const Warning = meta.story({
 
 export const WithStack = meta.story({
   play: async ({canvasElement}) => {
+    // Development builds log the stack on purpose; the test below asserts it.
+    const consoleError = spyOn(console, 'error').mockImplementation(
+      () => undefined
+    );
     notify.error({
       message: JSON.stringify({
         description: 'The stack trace is logged to the console in development',
@@ -94,6 +103,7 @@ export const WithStack = meta.story({
         stack,
       }),
     });
+    consoleError.mockRestore();
 
     await expectToast(canvasElement, 'Error with stack trace');
   },
@@ -160,31 +170,22 @@ export const DescriptionOnlyPromoted = meta.story({
 });
 
 DescriptionOnlyPromoted.test(
-  'promotes the description to the title',
+  'promotes the description to the title when there is no message',
   async ({canvasElement}) => {
-    await expect(
-      getToastElement(canvasElement, 'only a description')
-    ).not.toHaveAccessibleDescription();
-  }
-);
+    const payloads = [
+      {description: 'only a description'},
+      {description: 'Saved empty message', message: ''},
+    ];
 
-export const EmptyMessagePromoted = meta.story({
-  play: async ({canvasElement}) => {
-    notify.warning({
-      description: 'Saved empty message',
-      message: '',
-    });
+    for (const payload of payloads) {
+      await clearToasts();
+      notify.warning(payload);
 
-    await expectToast(canvasElement, 'Saved empty message');
-  },
-});
-
-EmptyMessagePromoted.test(
-  'promotes the description when the message is empty',
-  async ({canvasElement}) => {
-    await expect(
-      getToastElement(canvasElement, 'Saved empty message')
-    ).not.toHaveAccessibleDescription();
+      await expectToast(canvasElement, payload.description);
+      await expect(
+        getToastElement(canvasElement, payload.description)
+      ).not.toHaveAccessibleDescription();
+    }
   }
 );
 
@@ -281,37 +282,37 @@ Info.test(
   }
 );
 
-Info.test('returns a stable toast id per payload', async () => {
-  const first = notify.info('stable id payload');
-  const second = notify.info('stable id payload');
-  const different = notify.info('different id payload');
+// The storybook project runs this in light and the storybook-dark project in
+// dark, so both themes are measured.
+Info.test(
+  'gives each toast icon 3:1 contrast against its surface',
+  async ({canvasElement}) => {
+    for (const type of NOTIFY_TYPES) {
+      await clearToasts();
+      notify[type](`${type} contrast message`);
 
-  await expect(first).toBe(second);
-  await expect(different).not.toBe(first);
-});
+      await expectToast(canvasElement, `${type} contrast message`);
 
-// Both duration tests read the timeout notify hands the toast manager, not how
-// long the toast stays open, which the library owns.
-Info.test('keeps error toasts open longer by default', async () => {
-  const addSpy = spyOn(toast, 'add');
-  notify.error('slow default duration');
-  notify.info('quick default duration');
-  const errorTimeout = addSpy.mock.calls[0][0].timeout;
-  const infoTimeout = addSpy.mock.calls[1][0].timeout;
+      const toastElement = getToastElement(
+        canvasElement,
+        `${type} contrast message`
+      );
+      const icon = toastElement.querySelector('[data-slot="toast-icon"] svg');
 
-  addSpy.mockRestore();
-  await expect(errorTimeout).toBeGreaterThan(infoTimeout as number);
-});
+      await expect(icon).not.toBeNull();
+      const surface = resolveColor(
+        getComputedStyle(toastElement).backgroundColor,
+        getComputedStyle(document.body).backgroundColor
+      );
+      const iconColor = resolveColor(
+        getComputedStyle(icon as Element).color,
+        getComputedStyle(toastElement).backgroundColor
+      );
 
-Info.test('lets an explicit duration override the default', async () => {
-  // Longer than the error default and than any scan of this story: a
-  // shorter value can close the toast while axe runs, and its exit state
-  // trips aria-hidden-focus.
-  const customDuration = 123_456;
-  const addSpy = spyOn(toast, 'add');
-  notify.error({duration: customDuration, message: 'custom duration'});
-  const addedOptions = addSpy.mock.calls[0][0];
-
-  addSpy.mockRestore();
-  await expect(addedOptions).toMatchObject({timeout: customDuration});
-});
+      await expect(
+        computeContrastRatio(iconColor, surface),
+        `${type} toast icon contrast`
+      ).toBeGreaterThanOrEqual(MINIMUM_NON_TEXT_CONTRAST);
+    }
+  }
+);

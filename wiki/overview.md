@@ -35,7 +35,7 @@ See [[GAIA Philosophy]] for the long version.
 ```
 apps/web/app/
 ├── components/       shared UI (button, form/*, toast, layout, ...)
-├── hooks/            use-breakpoint, use-component-rect, use-debounce, use-theme, use-timeout
+├── hooks/            use-theme
 ├── languages/        TS-based i18n (en by default)
 ├── middleware/       i18next middleware
 ├── pages/            page-specific UI
@@ -45,7 +45,7 @@ apps/web/app/
 ├── state/            React Context providers
 ├── styles/           tailwind.css, theme.css
 ├── types/            global TS types
-├── utils/            pure helpers (date, dom, http, string, ...)
+├── utils/            shared helpers
 ├── root.tsx          root layout, i18n hookup, theme, toast
 ├── routes.ts         fs-routes route config
 └── env.server.ts     Zod-validated env vars

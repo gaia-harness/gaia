@@ -36,17 +36,13 @@ describe('no-imperative-query-fetch in the resolved project config', () => {
     ).toEqual([2]);
   });
 
-  test('keeps the inherited no-restricted-properties entries', () => {
-    expect(optionsOf('no-restricted-properties')).toContainEqual(
-      expect.objectContaining({object: 'Math', property: 'pow'})
-    );
-  });
-
-  test('keeps the inherited no-restricted-syntax selectors', () => {
-    expect(optionsOf('no-restricted-syntax')).toContainEqual(
-      expect.objectContaining({
-        selector: 'ExportDefaultDeclaration > FunctionDeclaration',
-      })
-    );
+  test.each([
+    ['no-restricted-properties', {object: 'Math', property: 'pow'}],
+    [
+      'no-restricted-syntax',
+      {selector: 'ExportDefaultDeclaration > FunctionDeclaration'},
+    ],
+  ])('keeps the inherited %s entries', (ruleId, entry) => {
+    expect(optionsOf(ruleId)).toContainEqual(expect.objectContaining(entry));
   });
 });

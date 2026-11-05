@@ -21,66 +21,6 @@ export const some = (
   predicate: (value: unknown) => boolean
 ): boolean => Object.values(record).some(predicate);
 
-export const isNil = (value: unknown): boolean =>
-  value === null || value === undefined;
-
-export const deepRemoveNil = (input: unknown): unknown => {
-  if (isNil(input)) {
-    return;
-  }
-
-  if (Array.isArray(input)) {
-    return input.reduce<unknown[]>((accumulated, value) => {
-      if (!isNil(value)) {
-        accumulated.push(deepRemoveNil(value));
-      }
-
-      return accumulated;
-    }, []);
-  }
-
-  if (isObject(input)) {
-    return Object.entries(input).reduce<Record<string, unknown>>(
-      (accumulated, [key, value]) => {
-        if (!isNil(value)) {
-          accumulated[key] = deepRemoveNil(value);
-        }
-
-        return accumulated;
-      },
-      {}
-    );
-  }
-
-  return input;
-};
-
-export const mapKeys = (
-  record: Record<string, unknown>,
-  transformKey: (key: string) => string
-): Record<string, unknown> =>
-  Object.entries(record).reduce<Record<string, unknown>>(
-    (accumulated, [key, value]) => {
-      accumulated[transformKey(key)] = value;
-
-      return accumulated;
-    },
-    {}
-  );
-
-export const mapValues = (
-  record: Record<string, unknown>,
-  transformValue: (value: unknown) => unknown
-): Record<string, unknown> =>
-  Object.entries(record).reduce<Record<string, unknown>>(
-    (accumulated, [key, value]) => {
-      accumulated[key] = transformValue(value);
-
-      return accumulated;
-    },
-    {}
-  );
-
 export const convertCase = (
   transformKey: (text: string) => string,
   input: unknown
@@ -122,21 +62,3 @@ export const toSnakeCase = <T = unknown>(input: unknown): T | undefined =>
 
 export const toCamelCase = <T = unknown>(input: unknown): T | undefined =>
   input === undefined ? undefined : (convertCase(camelCase, input) as T);
-
-export const compact = (
-  record: Record<string, unknown>,
-  options?: {keepEmptyArray?: boolean; keepFalsy?: boolean}
-): Record<string, unknown> =>
-  Object.entries(record).reduce<Record<string, unknown>>(
-    (accumulated, [key, value]) => {
-      if (
-        ((options?.keepFalsy && !isNil(value)) || value) &&
-        (!Array.isArray(value) || options?.keepEmptyArray || value.length > 0)
-      ) {
-        accumulated[key] = value;
-      }
-
-      return accumulated;
-    },
-    {}
-  );

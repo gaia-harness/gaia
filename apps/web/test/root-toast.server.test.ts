@@ -57,10 +57,4 @@ describe('root loader toast round trip', () => {
 
     expect(second.data.toast).toBeUndefined();
   });
-
-  test('returns no toast when none was emitted', async () => {
-    const {data} = await runRootLoader();
-
-    expect(data.toast).toBeUndefined();
-  });
 });

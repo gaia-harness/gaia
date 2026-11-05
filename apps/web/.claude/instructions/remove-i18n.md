@@ -335,7 +335,7 @@ The spec the property gated is deleted in Section C.
 
 ### D5. Tooling config that still names the i18n stack
 
-Each file below still references a package Section E removes or a path Section C deletes. Leaving any of them breaks Storybook, the Vitest storybook project, the Playwright story scan, or `pnpm knip`.
+Each file below still references a package Section E removes or a path Section C deletes. Leaving any of them breaks Storybook, the Vitest storybook projects, or `pnpm knip`.
 
 `apps/web/.storybook/main.ts`: remove the addon from `addons`:
 
@@ -355,12 +355,12 @@ Each file below still references a package Section E removes or a path Section C
 
 `apps/web/vitest.config.ts`:
 
-- Remove `'i18next',` from the storybook project's `optimizeDeps.include`.
+- Remove `'i18next',` from the storybook projects' `optimizeDeps.include` (in `createStorybookProject`).
 - In `test.coverage.exclude`, change `'app/{languages,routes,sessions.server,state,types}/**/*'` to `'app/{routes,sessions.server,state,types}/**/*'`, and change `'app/{entry.client,entry.server,env.server,i18n,root}.*'` to `'app/{entry.client,entry.server,env.server,root}.*'`.
 
 `apps/web/knip.config.ts`: remove the `'app/languages/index.ts',` entry from `entry`.
 
-`apps/web/.playwright/e2e/storybook-a11y.spec.ts`: the language select story is the only member of `RENDERS_NOTHING_BY_DESIGN`. Delete the comment and the set, and drop the set from `isExempt`. An emptied set would fail `pnpm lint` (`sonarjs/no-empty-collection` has no autofix):
+`apps/web/test/setup.story-dark.ts`: the language select story is the only member of `RENDERS_NOTHING_BY_DESIGN`. Delete the comment and the set, and drop the set check from `expectStoryHasContent`. An emptied set would fail `pnpm lint` (`sonarjs/no-empty-collection` has no autofix):
 
 ```ts
 // Stories whose subject renders nothing in this project: the language select
@@ -370,18 +370,13 @@ const RENDERS_NOTHING_BY_DESIGN = new Set([
 ]);
 ```
 
-is deleted, and
+is deleted, and the line
 
 ```ts
-  const isExempt =
-    TOAST_STORY_IDS.has(storyId) || RENDERS_NOTHING_BY_DESIGN.has(storyId);
+  if (RENDERS_NOTHING_BY_DESIGN.has(id)) return;
 ```
 
-becomes
-
-```ts
-  const isExempt = TOAST_STORY_IDS.has(storyId);
-```
+in `expectStoryHasContent` is deleted with it, and so is the `rendered no content` message's mention of `RENDERS_NOTHING_BY_DESIGN`.
 
 ---
 

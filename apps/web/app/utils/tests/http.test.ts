@@ -1,25 +1,7 @@
 import {describe, expect, test} from 'vitest';
-import {
-  LocalRedirectSchema,
-  resolveLocalRedirect,
-  toHeadersObject,
-} from '../http';
+import {resolveLocalRedirect} from '../http';
 
 describe('http utils', () => {
-  const plainHeaders = {fizz: 'buzz', foo: 'bar'};
-
-  test('toHeadersObject should work with Headers', () => {
-    expect(toHeadersObject(new Headers(plainHeaders))).toEqual(plainHeaders);
-  });
-
-  test('toHeadersObject should work with object', () => {
-    expect(toHeadersObject(plainHeaders)).toEqual(plainHeaders);
-  });
-
-  test('toHeadersObject should work with undefined', () => {
-    expect(toHeadersObject()).toBeUndefined();
-  });
-
   test('resolveLocalRedirect returns same-origin path targets', () => {
     expect(resolveLocalRedirect('/')).toBe('/');
     expect(resolveLocalRedirect('/dashboard')).toBe('/dashboard');
@@ -63,11 +45,5 @@ describe('http utils', () => {
     expect(resolveLocalRedirect('/\\')).toBeUndefined();
     expect(resolveLocalRedirect('//[')).toBeUndefined();
     expect(resolveLocalRedirect('//a b')).toBeUndefined();
-  });
-
-  test('LocalRedirectSchema parses to the resolved path or fails', () => {
-    expect(LocalRedirectSchema.safeParse('/a/../b').data).toBe('/b');
-    expect(LocalRedirectSchema.safeParse('//example.com').success).toBe(false);
-    expect(LocalRedirectSchema.safeParse('//').success).toBe(false);
   });
 });

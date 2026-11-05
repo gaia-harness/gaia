@@ -26,7 +26,7 @@ Vitest-aware lint rules come from `@vitest/eslint-plugin`, which the shared `@ga
 - Tests and stories live in `tests/` subfolders next to components/pages/hooks
 - Explicit imports in every test file: `import {describe, expect, test} from 'vitest'`
 - Keep `vitest/globals` out of `apps/web/tsconfig.json` types: the explicit imports are what type-check
-- `apps/web/vitest.config.ts` defines three projects (`node`, `browser`, `storybook`); read it for membership and settings. `apps/web/test/setup.ts` serves the `node` project: it loads `test.server`, resets test data after each test, and supplies fallback env vars (see the file for the current list) so server modules parse in clean environments. `apps/web/test/setup.browser.ts` serves the `browser` project. The `storybook` project takes its setup from `.storybook/preview.ts`
+- `apps/web/vitest.config.ts` defines the projects (`node`, `browser`, `storybook`, `storybook-dark`); read it for membership and settings. `apps/web/test/setup.ts` serves the `node` project: it loads `test.server`, resets test data after each test, and supplies fallback env vars (see the file for the current list) so server modules parse in clean environments. `apps/web/test/setup.browser.ts` serves the `browser` project. The storybook projects take their setup from `.storybook/preview.ts`, and `storybook-dark` adds `apps/web/test/setup.story-dark.ts`
 - The browser projects need Chromium: run `pnpm install:browsers` once. See [[Testing]]
 
 ## Run rules

@@ -30,18 +30,3 @@ export const tryCatch = <T, A extends readonly unknown[]>(
 
   return [undefined, returnValue] as TryCatchResult<T>;
 };
-
-export const compose =
-  <T>(...transforms: ((value: T) => T)[]): ((value: T) => T) =>
-  (value: T): T =>
-    transforms.reduceRight(
-      (composedValue, transform) => transform(composedValue),
-      value
-    );
-
-export const noop = (): void => {};
-
-export const sleep = async (durationInMilliseconds: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, durationInMilliseconds);
-  });

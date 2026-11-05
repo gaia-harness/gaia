@@ -3,10 +3,39 @@ import {expect, test} from '../fixtures';
 import {expectDarkTheme} from '../theme';
 import {hydration} from '../utils';
 
-test('home page has no serious a11y violations', async ({page}, testInfo) => {
+test('home page has no serious a11y violations', async ({
+  makeAxeBuilder,
+  page,
+}, testInfo) => {
   await page.goto('/');
   await hydration(page);
   await expectNoSeriousA11yViolations(page, testInfo);
+
+  // Run axe with the best-practice tag to cover landmark and heading rules.
+  const axe = makeAxeBuilder().withTags(['best-practice']);
+  const {violations} = await axe.analyze();
+
+  const targetRules = new Set([
+    'heading-order',
+    'landmark-one-main',
+    'page-has-heading-one',
+    'region',
+  ]);
+  // Project each violation to its triage fields: a failure names the rule, its
+  // impact, and how many nodes tripped it, without dumping serialized axe nodes.
+  const relevant = violations
+    .filter((violation) => targetRules.has(violation.id))
+    .map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      nodes: violation.nodes.length,
+    }));
+
+  expect(relevant).toEqual([]);
+
+  // Structural invariants: exactly one <main> (Layout-owned) and one <h1>.
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.locator('h1')).toHaveCount(1);
 });
 
 test('home dark mode has no serious a11y violations', async ({
@@ -34,38 +63,4 @@ test('home dark mode has no serious a11y violations', async ({
 
   await expectDarkTheme(page);
   await expectNoSeriousA11yViolations(page, testInfo, {label: 'dark'});
-});
-
-test('home page landmarks and headings pass best-practice rules', async ({
-  makeAxeBuilder,
-  page,
-}) => {
-  await page.goto('/');
-  await hydration(page);
-
-  // Run axe with the best-practice tag to cover landmark and heading rules.
-  const axe = makeAxeBuilder().withTags(['best-practice']);
-  const {violations} = await axe.analyze();
-
-  const targetRules = new Set([
-    'heading-order',
-    'landmark-one-main',
-    'page-has-heading-one',
-    'region',
-  ]);
-  // Project each violation to its triage fields: a failure names the rule, its
-  // impact, and how many nodes tripped it, without dumping serialized axe nodes.
-  const relevant = violations
-    .filter((violation) => targetRules.has(violation.id))
-    .map((violation) => ({
-      id: violation.id,
-      impact: violation.impact,
-      nodes: violation.nodes.length,
-    }));
-
-  expect(relevant).toEqual([]);
-
-  // Structural invariants: exactly one <main> (Layout-owned) and one <h1>.
-  await expect(page.locator('main')).toHaveCount(1);
-  await expect(page.locator('h1')).toHaveCount(1);
 });

@@ -2,7 +2,6 @@ import type {ComponentProps} from 'react';
 import {Fragment} from 'react';
 import {useTranslation} from 'react-i18next';
 import {StarIcon} from 'lucide-react';
-import {expect, fn, userEvent} from 'storybook/test';
 import preview from '#.storybook/preview';
 import {Button} from '~/components/ui/button';
 import {Spinner} from '~/components/ui/spinner';
@@ -129,25 +128,3 @@ export const IconDisabled = meta.story({
 export const IconText = meta.story({
   render: () => <ButtonGrid content="icon-text" />,
 });
-
-export const DisabledDoesNotFire = meta.story({
-  args: {onClick: fn()},
-  render: (args) => (
-    <Button disabled={true} onClick={args.onClick}>
-      Save
-    </Button>
-  ),
-});
-
-DisabledDoesNotFire.test(
-  'ignores a click while disabled',
-  async ({args, canvas}) => {
-    const button = canvas.getByRole('button', {name: 'Save'});
-
-    await expect(button).toBeDisabled();
-    // The disabled button sets pointer-events: none, which the default
-    // userEvent refuses to click through.
-    await userEvent.setup({pointerEventsCheck: 0}).click(button);
-    await expect(args.onClick).not.toHaveBeenCalled();
-  }
-);

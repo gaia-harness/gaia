@@ -1,14 +1,5 @@
 import {z} from 'zod';
 
-export const toHeadersObject = (
-  headers?: Headers | Record<string, string>
-): Record<string, string> | undefined =>
-  headers ?
-    headers instanceof Headers ?
-      Object.fromEntries(headers)
-    : headers
-  : undefined;
-
 // A reserved .invalid host, so no real origin can equal it.
 const LOCAL_ORIGIN = 'https://local.invalid';
 

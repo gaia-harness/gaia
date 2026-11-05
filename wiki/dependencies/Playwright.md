@@ -20,7 +20,7 @@ Per-worker database isolation, Given builders and the session rules are in `apps
 
 ## Relationship to the story tests
 
-Component and page behavior is tested by story `.test()` behaviors under Vitest ([[Stories as Tests]]), not by Playwright. Playwright keeps user flows against the running app and the story scan, which skips the index entries Storybook adds for `.test()` (they are behaviors, not visual states) and which axe-checks every story in dark at merge time. Vitest's addon-a11y covers the light theme only, so `pnpm pw` is the dark-theme check to run on any theme or token change.
+Component and page behavior is tested by story `.test()` behaviors under Vitest ([[Stories as Tests]]), not by Playwright. Playwright keeps user flows against the running app and the Storybook specs, which check that the built story index matches source and focus visibility. Axe over every story, light and dark, is the `storybook` and `storybook-dark` Vitest projects.
 
 ## Hydration helper
 

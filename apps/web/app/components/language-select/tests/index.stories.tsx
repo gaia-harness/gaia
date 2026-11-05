@@ -80,6 +80,8 @@ Default.test(
   async ({args, canvas, userEvent}) => {
     const select = await findSelect(canvas);
 
+    // An earlier arrow keydown must not swallow the pointer choice.
+    await fireEvent.keyDown(select, {key: 'ArrowDown'});
     await userEvent.selectOptions(select, 'ja');
 
     await expectSubmittedOnce(args.onSubmit, 'ja');
@@ -105,8 +107,12 @@ Default.test('submits on Enter', async ({args, canvas, userEvent}) => {
   await expect(select).toHaveFocus();
   await arrowTo(select, 'ja');
   await userEvent.keyboard('{Enter}');
-
   await expectSubmittedOnce(args.onSubmit, 'ja');
+
+  // Leaving after Enter must not submit a second time.
+  await userEvent.tab();
+  await settle();
+  await expect(args.onSubmit).toHaveBeenCalledTimes(1);
 });
 
 Default.test(
@@ -125,22 +131,6 @@ Default.test(
 );
 
 Default.test(
-  'submits once when Enter is followed by leaving',
-  async ({args, canvas, userEvent}) => {
-    const select = await findSelect(canvas);
-
-    select.focus();
-    await arrowTo(select, 'ja');
-    await userEvent.keyboard('{Enter}');
-    await expectSubmittedOnce(args.onSubmit, 'ja');
-    await userEvent.tab();
-
-    await settle();
-    await expect(args.onSubmit).toHaveBeenCalledTimes(1);
-  }
-);
-
-Default.test(
   'does not submit when leaving back on the current language',
   async ({args, canvas, userEvent}) => {
     const select = await findSelect(canvas);
@@ -152,18 +142,6 @@ Default.test(
 
     await settle();
     await expect(args.onSubmit).not.toHaveBeenCalled();
-  }
-);
-
-Default.test(
-  'submits a pointer choice made after an arrow keydown',
-  async ({args, canvas, userEvent}) => {
-    const select = await findSelect(canvas);
-
-    await fireEvent.keyDown(select, {key: 'ArrowDown'});
-    await userEvent.selectOptions(select, 'ja');
-
-    await expectSubmittedOnce(args.onSubmit, 'ja');
   }
 );
 

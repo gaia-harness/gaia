@@ -6,6 +6,9 @@ const meta = preview.meta({
   component: RootErrorBoundary,
   decorators: [stubs.reactRouter()],
   parameters: {
+    // Each story renders a whole Document, which development React warns
+    // about once it is nested in the story canvas.
+    storyScan: {rendersDocument: true},
     toaster: false,
   },
   title: 'Components/Errors/RootErrorBoundary',
