@@ -672,7 +672,7 @@ test("uses wall-clock time", () => {
   stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
-  grep -qF -- 'Breaking, reverting or setting aside an implementation that already exists to get a failing run fabricates the RED, in any number of calls' <<<"$output"
+  grep -qF -- 'Breaking, reverting or setting aside existing implementation for a failing run, in one call or several, fabricates the RED' <<<"$output"
   grep -qF -- 'report the test instead' <<<"$output"
   denied
 }
