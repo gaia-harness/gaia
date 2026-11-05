@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# The one implementation of which emergent tests a pull request puts in scope
-# for the worthiness presence check. The merge hook and the worthiness step both
+# The one implementation of which tests a pull request puts in scope for the
+# worthiness presence check: every changed test under the scope globs (the
+# descriptor's emergentTests and tddUnitTests) that the determinism classifier
+# labels strict, emergent or route. A deterministic (strict) test is RED-gated
+# for honesty and worthiness-gated for worth only; both gates apply to it. The merge hook and the worthiness step both
 # call it, so the set they judge and the set the hook demands cannot drift.
 #
 # Sourced, never executed; nothing runs at source time.
@@ -8,7 +11,7 @@
 # Caller contract, all of it set before the call in the caller's own shell:
 #   - gaia-packages.sh and red-ledger.sh sourced, and gaia_packages_load run for
 #     the tree (its failure is the caller's own package-error path).
-#   - WORTHINESS_SELECTION_ERE: `gaia_package_globs_ere emergentTests`. Set but
+#   - WORTHINESS_SELECTION_ERE: `worthiness_selection_scope_ere`. Set but
 #     empty matches nothing (no records, return 0). Unset is a caller that
 #     skipped this step, so the walk returns 9 rather than read it as nothing in
 #     scope.
@@ -35,9 +38,26 @@ WORTHINESS_SELECTION_ERROR=''
 _worthiness_selection_is_emergent=0
 _worthiness_selection_package_error=''
 
+# Print the ERE of the scope globs: the union of the descriptor's emergentTests
+# and tddUnitTests, each from gaia_package_globs_ere, empty ones skipped, two
+# non-empty ones joined as (<a>)|(<b>). Precondition: gaia-packages.sh sourced
+# and gaia_packages_load run.
+worthiness_selection_scope_ere() {
+  local emergent_ere unit_ere
+  emergent_ere=$(gaia_package_globs_ere emergentTests)
+  unit_ere=$(gaia_package_globs_ere tddUnitTests)
+  if [ -n "$emergent_ere" ] && [ -n "$unit_ere" ]; then
+    printf '(%s)|(%s)\n' "$emergent_ere" "$unit_ere"
+  elif [ -n "$emergent_ere" ]; then
+    printf '%s\n' "$emergent_ere"
+  else
+    printf '%s\n' "$unit_ere"
+  fi
+}
+
 # Sets _worthiness_selection_is_emergent to 1 only when the classifier
-# affirmatively answers emergent or route (a route test is worthiness-audited
-# and RED-gated both). Exit 7 is the one failure that is not a quiet
+# affirmatively answers strict, emergent or route (a strict or route test is
+# worthiness-audited and RED-gated both). Exit 7 is the one failure that is not a quiet
 # 0: the classifier could not read the package descriptor. Not a command
 # substitution at the call site, so both variables survive.
 _worthiness_selection_classify() {
@@ -56,7 +76,7 @@ _worthiness_selection_classify() {
   [ "$classifier_status" -eq 0 ] || return 0
   [ -n "$classifier_output" ] || return 0
   if [ -n "$(printf '%s' "$classifier_output" \
-    | jq -r 'select((.classification // "") == "emergent" or (.classification // "") == "route") | "emergent"' \
+    | jq -r 'select((.classification // "") == "emergent" or (.classification // "") == "route" or (.classification // "") == "strict") | "emergent"' \
         2>/dev/null \
     | head -1)" ]; then
     _worthiness_selection_is_emergent=1
@@ -64,7 +84,7 @@ _worthiness_selection_classify() {
 }
 
 # Emit one record per test the presence check examines in <tree_root> against
-# <base>: every test of an emergent file that changed, the exact renames,
+# <base>: every test of an in-scope test file that changed, the exact renames,
 # deletions, parse failures and files with no emitted tests skipped.
 worthiness_selection_walk() {
   local tree_root="$1" base="$2"
@@ -73,7 +93,7 @@ worthiness_selection_walk() {
 
   WORTHINESS_SELECTION_ERROR=''
   if [ -z "${WORTHINESS_SELECTION_ERE+set}" ] || [ -z "${WORTHINESS_SELECTION_CLASSIFIER+set}" ]; then
-    WORTHINESS_SELECTION_ERROR='Worthiness selection: the caller did not set WORTHINESS_SELECTION_ERE and WORTHINESS_SELECTION_CLASSIFIER before the walk, so the emergent tests in scope are unknown.'
+    WORTHINESS_SELECTION_ERROR='Worthiness selection: the caller did not set WORTHINESS_SELECTION_ERE and WORTHINESS_SELECTION_CLASSIFIER before the walk, so the tests in scope are unknown.'
     return 9
   fi
 
@@ -111,8 +131,9 @@ worthiness_selection_walk() {
     # "deleted" for every file and empties the scan into a clean pass.
     [ -f "$tree_root/$relative_path" ] || continue
 
-    # The classifier decides emergent membership. A deterministic `.ts` test is
-    # RED-gated, not worthiness-gated. A classifier failure other than a package
+    # The classifier decides membership: strict, emergent and route are in
+    # scope (a strict test is RED-gated and worthiness-gated both, worth only).
+    # A classifier failure other than a package
     # error is not emergent (fail-open; the RED gate owns that surface).
     _worthiness_selection_package_error=''
     _worthiness_selection_classify "$relative_path" "$tree_root"

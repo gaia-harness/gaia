@@ -75,6 +75,6 @@ The classifier is **file-granular**: it labels a whole file STRICT or EMERGENT a
 ## Consumers
 
 - The RED carve-out at commit time scopes the RED demand to STRICT files and `route` files; EMERGENT files commit without a RED proof.
-- The worthiness audit and the merge presence gate scope to the EMERGENT surface, the test files a package's `emergentTests` globs name ([[Package Descriptor]]), and to `route` files.
+- The worthiness audit and the merge presence gate scope to the strict, emergent and `route` test files the worthiness selection names (the `emergentTests` and `tddUnitTests` globs, per [[Package Descriptor]]). The review is worth-only on strict files: the RED gate is their honesty proof ([[Worthiness Audit]]).
 
 The `{file, classification, reasons}` output shape and the emergent-signal set are a stable contract these consumers depend on.

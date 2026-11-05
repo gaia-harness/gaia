@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The deterministic half of the pre-audit worthiness step: what each emergent
-# test's stored state means (route), recording verdicts (record), settling a
+# The deterministic half of the pre-audit worthiness step: what each test in
+# scope's stored state means (route), recording verdicts (record), settling a
 # test the step finished with (settle), building the filer's finding (finding)
 # and dropping stale recorded residuals (prune). Dispatching the evaluator and
 # asking the human stay in the step's instructions.
@@ -126,7 +126,7 @@ cmd_route() {
   gaia_packages_load "$root" || packages_status=$?
   [ "$packages_status" -eq 0 ] || die_input "$GAIA_PACKAGES_ERROR"
   local classifier="$script_root/.gaia/scripts/classifier/classify-determinism.mjs"
-  [ -f "$classifier" ] || die_input "the determinism classifier is missing at $classifier, so the emergent tests in scope are unknown"
+  [ -f "$classifier" ] || die_input "the determinism classifier is missing at $classifier, so the tests in scope are unknown"
 
   prov="$(audit_resolve_base_provenance "$root" default-branch)" || prov=''
   IFS=$'\t' read -r _ _ base <<<"$prov" || true
@@ -136,7 +136,7 @@ cmd_route() {
   fi
 
   # shellcheck disable=SC2034
-  WORTHINESS_SELECTION_ERE="$(gaia_package_globs_ere emergentTests)"
+  WORTHINESS_SELECTION_ERE="$(worthiness_selection_scope_ere)"
   # shellcheck disable=SC2034
   WORTHINESS_SELECTION_CLASSIFIER="$classifier"
   records_file="$scratch_directory/records"

@@ -116,15 +116,15 @@ Determinism roll-up:
   • apps/web/app/components/cart/tests/index.stories.tsx  emergent (story file: a *.stories.tsx is emergent regardless of path)
 ```
 
-### 6. Worthiness Audit (emergent surface)
+### 6. Worthiness Audit
 
 A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/Stories as Tests.md`); a story file is emergent, so a behavior added as a `.test()` goes through the audit below, not the RED gate.
 
-The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `apps/web/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent` or `route`).
+The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `apps/web/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. The audit judges every test the task changed that the worthiness selection names: emergent and `route` tests on honesty and worth, strict tests on worth only. Run it after green (the classifier roll-up above tells you which touched files are `strict`, `emergent` or `route`).
 
 #### Dispatch and record
 
-Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` after green, over the emergent test and story files the task changed. A genuine fresh-context evaluator judges them (the author shares their own blind spots, so an in-context self-review does not satisfy this step), and the arm records each verdict in the worthiness ledger. The arm dispatches and records only: it runs no repair, makes no commit and asks no question, since this skill runs on uncommitted work. Surface the verdicts in the same end-of-task summary (see "Surfacing the advisory findings").
+Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` after green, over the test and story files the task changed. A genuine fresh-context evaluator judges them (the author shares their own blind spots, so an in-context self-review does not satisfy this step), and the arm records each verdict in the worthiness ledger. The arm dispatches and records only: it runs no repair, makes no commit and asks no question, since this skill runs on uncommitted work. Surface the verdicts in the same end-of-task summary (see "Surfacing the advisory findings").
 
 #### Path-scoped guarantees
 

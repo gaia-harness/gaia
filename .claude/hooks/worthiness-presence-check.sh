@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# PreToolUse Bash hook: DENY `gh pr merge` when an emergent test the PR changed
+# PreToolUse Bash hook: DENY `gh pr merge` when a test in scope the PR changed
 # has no worthiness-ledger line matching its CURRENT content. This is the
 # merge-time half of the worthiness audit: the evaluator
-# (.claude/agents/worthiness-evaluator.md) judges each emergent test and the
+# (.claude/agents/worthiness-evaluator.md) judges each test in scope and the
 # tdd skill's step and the worthiness step each append one ledger line per
 # judged test (.gaia/scripts/audit-ledger/append-worthiness.mjs); this hook enforces at merge
 # that such a line exists for the content being merged. It sits ALONGSIDE
@@ -27,24 +27,23 @@
 # already enforces ruthlessly. The worthiness gate owns presence; lint owns
 # honesty.
 #
-# SCOPE. The gate scopes to the EMERGENT test files THIS PR changed (git diff
-# against the merge base with the default branch), not the whole repo's emergent
-# tests. Emergent membership is decided by the determinism classifier
-# (.gaia/scripts/classifier/classify-determinism.mjs): a changed test file whose
-# classifier verdict is `emergent` is in scope; a `.ts` test under
-# <package>/app/components/** that the classifier proves deterministic is
-# RED-gated, not worthiness-gated, and is excluded. When ZERO emergent test
-# files changed, the gate is a NO-OP and allows the merge. Which paths are
-# emergent-surface tests is read from the package descriptor (`emergentTests`,
-# via .claude/hooks/lib/gaia-packages.sh), never from a literal `app/` prefix,
-# and an unusable registry or descriptor DENIES: with no globs the
-# gate would silently match nothing. An EXACT rename (R100: the content is
-# byte-identical, so there is nothing new to judge) is skipped; any other change,
-# including a rename that also edits the file, is in scope at its new path.
+# SCOPE. The gate scopes to the test files THIS PR changed (the diff against
+# the merge base with the default branch), not the whole repo's tests. A changed
+# test file is in scope when it matches the package descriptor's scope globs
+# (`emergentTests` and `tddUnitTests`, via .claude/hooks/lib/gaia-packages.sh,
+# never a literal `app/` prefix) and the determinism classifier
+# (.gaia/scripts/classifier/classify-determinism.mjs) labels it `strict`,
+# `emergent` or `route`. A strict (deterministic) test is RED-gated for honesty
+# and worthiness-gated for worth only: both gates apply to it. When ZERO tests in
+# scope changed, the gate is a NO-OP and allows the merge. An unusable registry
+# or descriptor DENIES: with no globs the gate would silently match nothing. An
+# EXACT rename (R100: the content is byte-identical, so there is nothing new to
+# judge) is skipped; any other change, including a rename that also edits the
+# file, is in scope at its new path.
 #
-# COST/LATENCY. The recompute is O(emergent test files changed in the PR): each
+# COST/LATENCY. The recompute is O(test files in scope changed in the PR): each
 # in-scope file is fed through the signal helper once. Wall-clock therefore
-# scales with the emergent test count; this axis is not made sub-linear.
+# scales with the in-scope test count; this axis is not made sub-linear.
 #
 # Fail-open vs fail-closed (threat model: a cooperative-but-fallible agent):
 #   - git / node / the RED-ledger lib / the classifier unavailable -> exit 0
@@ -52,7 +51,7 @@
 #     answers. A missing jq refuses loudly (exit 2) through lib/jq-availability.sh
 #     for a command that carries `gh`, and an unloadable jq-availability.sh or
 #     hook-payload.sh also exits 2.
-#   - a changed emergent test file the signal helper cannot parse (mid-edit
+#   - a changed in-scope test file the signal helper cannot parse (mid-edit
 #     syntax error) -> that file is skipped, never denied. Fail-open.
 #   - the load and extractor failures deny through deny_with_reason below; the
 #     verb-arming deny and the missing-ledger-line deny build their own jq
@@ -233,10 +232,10 @@ tree_root="$(gaia_resolve_tree_root "$source_cwd" 2>/dev/null)" || exit 0
 # zero matches, which denies for the clean case below.
 ledger="$(worthiness_ledger_path "$tree_root")" || exit 0
 
-# The package descriptor decides which changed paths are emergent-surface tests.
+# The package descriptor decides which changed paths are tests in scope.
 # Loaded from the ACTING tree (its registry and descriptor are the ones under
 # test) through the library rooted at this hook's own location. A missing
-# library or an unusable registry denies: an empty glob would let every emergent
+# library or an unusable registry denies: an empty glob would let every
 # test through unjudged.
 deny_with_reason() {
   jq -n --arg r "$1" '{
@@ -250,14 +249,13 @@ deny_with_reason() {
 }
 [ -n "$_hook_library_directory" ] && [ -f "$_hook_library_directory/gaia-packages.sh" ] && . "$_hook_library_directory/gaia-packages.sh"
 if ! type gaia_packages_load >/dev/null 2>&1; then
-  deny_with_reason "Worthiness presence gate: cannot load .claude/hooks/lib/gaia-packages.sh, so the emergent-test globs are unknown and this merge cannot be checked. Next step: restore .claude/hooks/lib/gaia-packages.sh from the GAIA release and retry."
+  deny_with_reason "Worthiness presence gate: cannot load .claude/hooks/lib/gaia-packages.sh, so the test globs are unknown and this merge cannot be checked. Next step: restore .claude/hooks/lib/gaia-packages.sh from the GAIA release and retry."
 fi
 packages_status=0
 gaia_packages_load "$tree_root" || packages_status=$?
 if [ "$packages_status" -ne 0 ]; then
   deny_with_reason "$GAIA_PACKAGES_ERROR"
 fi
-emergent_test_ere=$(gaia_package_globs_ere emergentTests)
 
 # ---------------------------------------------------------------------------
 # Resolve the PR base in the ACTING tree: the branch being merged is that
@@ -274,20 +272,20 @@ prov="$(audit_resolve_base_provenance "$tree_root" default-branch)" || prov=""
 IFS=$'\t' read -r _ _ base <<< "$prov" || true
 [ -n "$base" ] || exit 0
 
-# The selection (which changed files are emergent tests, which tests they hold,
+# The selection (which changed files are tests in scope, which tests they hold,
 # which refusals deny) lives in lib/worthiness-selection.sh, shared with the
 # worthiness step so the two judge the same set. The walk writes to a file and
 # runs in this shell: a pipe or command substitution would lose its status and
 # the refusal reason, and a lost refusal reads as an allowed merge.
 if ! [ -n "$_hook_library_directory" ] || ! [ -f "$_hook_library_directory/worthiness-selection.sh" ]; then
-  deny_with_reason "Worthiness presence gate: cannot load .claude/hooks/lib/worthiness-selection.sh, so the emergent tests in scope are unknown and this merge cannot be checked. Next step: restore .claude/hooks/lib/worthiness-selection.sh from the GAIA release and retry."
+  deny_with_reason "Worthiness presence gate: cannot load .claude/hooks/lib/worthiness-selection.sh, so the tests in scope are unknown and this merge cannot be checked. Next step: restore .claude/hooks/lib/worthiness-selection.sh from the GAIA release and retry."
 fi
 # shellcheck source=lib/worthiness-selection.sh
 . "$_hook_library_directory/worthiness-selection.sh"
 # shellcheck disable=SC2034
 WORTHINESS_SELECTION_CLASSIFIER="$classifier_script"
 # shellcheck disable=SC2034
-WORTHINESS_SELECTION_ERE="$emergent_test_ere"
+WORTHINESS_SELECTION_ERE="$(worthiness_selection_scope_ere)"
 records_file=$(mktemp "${TMPDIR:-/tmp}/worthiness-records-XXXXXX") || exit 0
 walk_status=0
 worthiness_selection_walk "$tree_root" "$base" >"$records_file" || walk_status=$?
@@ -336,7 +334,7 @@ if [ -z "$offenders" ]; then
   exit 0
 fi
 
-reason="Worthiness presence gate: an emergent test this PR changed has no matching worthiness-ledger line at its current content."
+reason="Worthiness presence gate: a test this PR changed has no matching worthiness-ledger line at its current content."
 
 if [ -n "$offenders" ]; then
   missing_list=$(printf '%s' "$offenders" \
@@ -350,7 +348,7 @@ No worthiness-ledger line matches the current signal for:
 
 ${missing_list}
 
-These emergent tests changed in this PR, but no worthiness verdict was recorded for their current content. The line proves only that the test-identity extractor ran over the current bytes, not that judgement was applied; the human PR rollup carries that. The signal covers the test's comment-free content, so rewording a comment leaves the line intact, but a change to what the test executes invalidates the line (the signal changes), so a fresh verdict must be recorded for the current body."
+These tests changed in this PR, but no worthiness verdict was recorded for their current content. The line proves only that the test-identity extractor ran over the current bytes, not that judgement was applied; the human PR rollup carries that. The signal covers the test's comment-free content, so rewording a comment leaves the line intact, but a change to what the test executes invalidates the line (the signal changes), so a fresh verdict must be recorded for the current body."
 fi
 
 reason="${reason}
