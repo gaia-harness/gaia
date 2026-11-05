@@ -332,6 +332,7 @@
     ".gaia/scripts/overlap-check.sh": "owned",
     ".gaia/scripts/overlap/check-proposals.mjs": "owned",
     ".gaia/scripts/overlap/citations.mjs": "owned",
+    ".gaia/scripts/overlap/fold-up.mjs": "owned",
     ".gaia/scripts/overlap/test-inspection.mjs": "owned",
     ".gaia/scripts/override-audit-advisory-ids.sh": "owned",
     ".gaia/scripts/plan-archive.sh": "owned",
@@ -366,6 +367,7 @@
     ".gaia/scripts/spec/page-use.mjs": "owned",
     ".gaia/scripts/spec/plan-allocator.sh": "owned",
     ".gaia/scripts/spec/plan-archive-merged.sh": "owned",
+    ".gaia/scripts/spec/plan-phases-lib.sh": "owned",
     ".gaia/scripts/spec/plan-reconcile.sh": "owned",
     ".gaia/scripts/spec/plan-verify.sh": "owned",
     ".gaia/scripts/spec/spec-abandon-empty.sh": "owned",
@@ -803,6 +805,7 @@
     "wiki/decisions/Stories as Tests.md": "wiki-owned",
     "wiki/decisions/TDD RED Verification.md": "wiki-owned",
     "wiki/decisions/Test Layering.md": "wiki-owned",
+    "wiki/decisions/Testing Trophy Doctrine.md": "wiki-owned",
     "wiki/decisions/Thin Routes.md": "wiki-owned",
     "wiki/decisions/TypeScript 7 Readiness.md": "wiki-owned",
     "wiki/decisions/TypeScript Language Files.md": "wiki-owned",
@@ -863,7 +866,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-04T07:15:54.436Z",
+  "generated": "2026-11-05T08:15:00.794Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
