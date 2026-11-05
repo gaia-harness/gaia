@@ -1,7 +1,16 @@
 import {afterEach, beforeEach, describe, expect, test} from 'vitest';
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {execGaiaGit} from '../util/git-env.js';
+import {newMainCheckout} from '../util/main-checkout-fixture.js';
 import {
   collectOutstandingGroups,
   collectSnoozedGroups,
@@ -116,6 +125,45 @@ describe('declines ledger I/O', () => {
     );
     // Only the well-formed record survives.
     expect(loadDeclines(sandbox.root)).toEqual([declineRecord()]);
+  });
+});
+
+describe('declines ledger anchoring', () => {
+  let mainRoot: string;
+
+  beforeEach(() => {
+    mainRoot = newMainCheckout('gaia-declines-anchor-');
+  });
+
+  afterEach(() => {
+    rmSync(mainRoot, {force: true, recursive: true});
+  });
+
+  const mainLedger = (): string =>
+    path.join(mainRoot, '.gaia', 'local', 'declined-updates.json');
+
+  test('a call from a subdirectory writes and reads the root ledger', () => {
+    const subdirectory = path.join(mainRoot, 'nested', 'deeper');
+    mkdirSync(subdirectory, {recursive: true});
+
+    saveDeclines(subdirectory, [declineRecord()]);
+
+    expect(declinedLedgerPath(subdirectory)).toBe(mainLedger());
+    expect(existsSync(mainLedger())).toBe(true);
+    expect(existsSync(path.join(subdirectory, '.gaia'))).toBe(false);
+    expect(loadDeclines(mainRoot)).toEqual([declineRecord()]);
+    expect(loadDeclines(subdirectory)).toEqual([declineRecord()]);
+  });
+
+  test('a call from a linked worktree resolves to the main checkout ledger', () => {
+    const worktree = path.join(mainRoot, 'linked');
+    execGaiaGit(['worktree', 'add', '-q', '-b', 'linked', worktree], mainRoot);
+
+    saveDeclines(worktree, [declineRecord()]);
+
+    expect(declinedLedgerPath(worktree)).toBe(mainLedger());
+    expect(existsSync(path.join(worktree, '.gaia'))).toBe(false);
+    expect(loadDeclines(mainRoot)).toEqual([declineRecord()]);
   });
 });
 

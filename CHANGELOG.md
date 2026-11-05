@@ -48,6 +48,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **`/update-deps` snoozes hold from any directory:** `gaia update-deps decline` and `run` resolved the snooze ledger against the working directory, so a snooze or `--clear` run from a subdirectory wrote a second ledger there that `run` from the root never read. Inside a repository the ledger now resolves to the main checkout's `.gaia/local/declined-updates.json` (#3308)
 - **`/gaia-init`'s first commit runs the full Quality Gate:** E2E and the dev smoke test included, without a Commit/Hold stop; before, whether init ran them depended on the agent (#3304)
 - **New work no longer silently drops unpushed `main` commits:** a worktree is cut from `origin/main`, so commits made on local `main` and never pushed were missing from the branch, and its pull request would ship without them. The pull gate every new-work command runs now stops when local `main` is ahead of `origin/main`, naming the count, and asks you to push or reconcile first. A repository with no remote, or whose `main` was never pushed, is unaffected (#3302)
 - **A route row's feature folder can no longer double its `tests/` folder:** the route test renderer adds `tests/` under the row's feature folder, so a plan naming `admin/tests` rendered its contract to `app/route-tests/admin/tests/tests/`, where no task doc pointed. plan-verify and the UAT renderer now refuse a route row whose feature folder has a `tests` segment, and the planner's routing table says the folder is the feature path alone (#3301)

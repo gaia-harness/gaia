@@ -20,6 +20,7 @@
  */
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
+import {resolveMainWorktreeRoot} from '../util/main-root.js';
 import {compareSegments, parseSegments} from './version.js';
 
 /** A declined group reappears once it is this old, regardless of versions. */
@@ -80,8 +81,22 @@ type DeclinedLedger = {
   schema_version: 1;
 };
 
-export const declinedLedgerPath = (cwd: string): string =>
-  path.join(cwd, LEDGER_RELATIVE_PATH);
+/**
+ * The ledger is clone-wide state, so it anchors on the main checkout from any
+ * subdirectory or linked worktree, and falls back to `cwd` when the main
+ * checkout cannot be resolved.
+ */
+export const declinedLedgerPath = (cwd: string): string => {
+  let root: string;
+
+  try {
+    root = resolveMainWorktreeRoot(cwd);
+  } catch {
+    root = cwd;
+  }
+
+  return path.join(root, LEDGER_RELATIVE_PATH);
+};
 
 /**
  * Validate and normalize one raw ledger entry. Returns `null` for anything
