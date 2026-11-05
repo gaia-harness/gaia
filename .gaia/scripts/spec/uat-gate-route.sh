@@ -25,10 +25,11 @@ gate_route_annotated() {
 # (`{loader as requestList}` then `requestList(`), and holds an expect( whose
 # first argument is not a bare literal. A bare `new Request(` is not a route
 # call. Honest limits: code alone blanks a template literal, so an
-# interpolated template as the only expect argument reads as a literal; the
-# alias must sit on one line after `{`, `,` or the line start, so a default
-# import, a destructured dynamic import or a re-export under another name is
-# not followed and fails the floor, the safe direction.
+# interpolated template as the only expect argument reads as a literal; an
+# alias counts only as a whole import specifier on one line (`loader as X`
+# between `{`/`,`/line start and `,`/`}`/line end), so a default import, a
+# renaming destructure (`{loader: X}`) or a name another module binds is not
+# followed and fails the floor, the safe direction.
 gate_route_clears_floor() {
   local code route_name alias_name
   code=$(uat_lib_code_only "$1") || return 1
@@ -37,7 +38,7 @@ gate_route_clears_floor() {
     [ -n "$alias_name" ] || continue
     route_name="$route_name|$(printf '%s' "$alias_name" | sed 's/\$/\\$/g')"
   done <<EOF
-$(grep -oE '(^|[{,])[[:space:]]*(loader|action)[[:space:]]+as[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*' <<<"$code" | sed -E 's/.*[[:space:]]as[[:space:]]+//')
+$(grep -oE '(^|[{,])[[:space:]]*(loader|action)[[:space:]]+as[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*([,}]|$)' <<<"$code" | sed -E 's/.*[[:space:]]as[[:space:]]+//; s/[[:space:]]*[,}]?$//')
 EOF
   grep -qE "(^|[^A-Za-z0-9_\$])($route_name)[[:space:]]*\\(" <<<"$code" || return 1
   has_non_literal_expect <(printf '%s\n' "$code")
