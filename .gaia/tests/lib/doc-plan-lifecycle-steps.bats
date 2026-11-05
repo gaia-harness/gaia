@@ -48,6 +48,7 @@ setup() {
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   WIKI_PROMOTE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/wiki-promote.md"
   AUDIT_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/audit.md"
+  SPEC_TEMPLATE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
   PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
   S_RESUME='<!-- gaia:orchestrator-step resume-detection -->'
@@ -940,4 +941,39 @@ check_directive_routing() {
     run check_directive_routing "$PLANNER_MD" "$audit_copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
   done
+}
+
+# ---------- a page-markup rule is a directive, never then-clause text ----------
+
+# check_markup_rule_placement <audit> <template>: the SPEC audit's testability
+# lens, its refuter and its directive rule send a page-markup or accessibility
+# structure rule to one plan-time directive naming the page, and the SPEC
+# template keeps such a rule out of a UAT's then-clause. Inside a then-clause
+# the rule can force the UAT onto a real-server test instead of a route test.
+check_markup_rule_placement() {
+  local audit="$1" template="$2" needle
+  for needle in \
+    'propose a plan-time directive stating that rule for the page or component it applies to, never UAT text' \
+    'A finding whose fix is a page-markup or accessibility structure rule is `plan_directive` even when it cites a UAT' \
+    'is one directive naming the page or component it applies to'; do
+    grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
+  done
+  grep -qF -- 'A page-markup or accessibility structure rule' "$template" ||
+    { printf 'spec-template.md then: lacks the markup-rule clause\n' >&2; return 1; }
+}
+
+@test "a page-markup rule is a plan-time directive, in the SPEC audit and the SPEC template" {
+  check_markup_rule_placement "$AUDIT_MD" "$SPEC_TEMPLATE_MD"
+}
+
+@test "red twin: dropping any markup-rule sentence fails" {
+  local needle audit_copy="$BATS_TEST_TMPDIR/audit.md" template_copy="$BATS_TEST_TMPDIR/spec-template.md"
+  for needle in 'never UAT text' 'even when it cites a UAT' 'naming the page or component it applies to'; do
+    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
+    run check_markup_rule_placement "$audit_copy" "$SPEC_TEMPLATE_MD"
+    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
+  done
+  sed 's/A page-markup or accessibility structure rule/removed/' "$SPEC_TEMPLATE_MD" >"$template_copy"
+  run check_markup_rule_placement "$AUDIT_MD" "$template_copy"
+  [ "$status" -ne 0 ]
 }
