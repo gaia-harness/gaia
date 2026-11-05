@@ -948,6 +948,44 @@ gate_exit_2_arm_holds() {
   true
 }
 
+GATE_EXIT_3='## Unpushed default-branch commits (exit 3)'
+
+# 0 when gate reference copy `$1`'s unpushed-commits arm precedes the question,
+# stops in auto mode too, never pushes for the user, and offers no pull or
+# restart.
+gate_exit_3_arm_holds() {
+  local arm
+  in_order "$1" "$GATE_EXIT_3" "$GATE_STEP_2" || return 1
+  arm="$(section_of "$1" "$GATE_EXIT_3")"
+  [ -n "$arm" ] || return 1
+  grep -qF 'Stop the command, in auto mode too' <<<"$arm" || return 1
+  grep -qF 'never push for them' <<<"$arm" || return 1
+  grep -qF 'Never offer to pull and never restart' <<<"$arm" || return 1
+  grep -qF 'AskUserQuestion' <<<"$arm" && return 1
+  grep -qF 'pull-mode.md' <<<"$arm" && return 1
+  return 0
+}
+
+@test "pull gate: the unpushed-commits arm stops, never pushes, and offers no pull or restart" {
+  gate_exit_3_arm_holds "$GATE_REF"
+  # Failing state: the arm gone.
+  grep -vF "$GATE_EXIT_3" "$GATE_REF" > "$COPY"
+  gate_exit_3_arm_holds "$COPY" && return 1
+  # Failing state: the arm after the question.
+  { grep -vF "$GATE_EXIT_3" "$GATE_REF"; printf '%s\n' "$GATE_EXIT_3"; } > "$COPY"
+  gate_exit_3_arm_holds "$COPY" && return 1
+  # Failing state: auto mode no longer stops.
+  sed 's|Stop the command, in auto mode too|Stop the command|' "$GATE_REF" > "$COPY"
+  gate_exit_3_arm_holds "$COPY" && return 1
+  # Failing state: the push prohibition dropped.
+  sed 's|never push for them|push for them|' "$GATE_REF" > "$COPY"
+  gate_exit_3_arm_holds "$COPY" && return 1
+  # Failing state: the arm follows pull mode.
+  insert_after "$GATE_REF" "$GATE_EXIT_3" 'Follow `pull-mode.md`.'
+  gate_exit_3_arm_holds "$COPY" && return 1
+  true
+}
+
 # 0 when gate reference copy `$1` names the three commands only a user can
 # start and the plan orchestrator's KICKOFF re-run line.
 gate_restart_kinds_hold() {
