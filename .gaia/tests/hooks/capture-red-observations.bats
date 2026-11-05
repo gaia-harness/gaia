@@ -845,9 +845,6 @@ SH
   jq -r '.hookSpecificOutput.additionalContext' <<<"$output" | grep -qF -- 'pnpm install:browsers'
 }
 
-# A `cd` inside the command never moves the re-run: the scope is read from the
-# call's starting directory, where vitest is not installed, so no report is
-# written. The output text is the real pnpm error for that case.
 assert_no_results_context() {
   local event="$1"
   [ "$status" -eq 0 ]
@@ -855,11 +852,14 @@ assert_no_results_context() {
   jq -e --arg e "$event" '.hookSpecificOutput.hookEventName == $e' <<<"$output"
   context=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
   grep -qF -- 'produced no test results' <<<"$context"
-  grep -qF -- "($REPO_ROOT)" <<<"$context"
+  grep -qF -- "relative to $REPO_ROOT (the -C" <<<"$context"
   grep -qF -- 'never to a `cd` inside the command' <<<"$context"
   grep -qF -- 'as a Bash call of its own: pnpm -C <package dir> test --run <test-file>' <<<"$context"
 }
 
+# A `cd` inside the command never moves the re-run: the scope is read from the
+# call's starting directory, where vitest is not installed, so no report is
+# written. The output text is the real pnpm error for that case.
 @test "a cd inside the command leaves the re-run with no report, and the context says how to record the RED" {
   stub_failing_pnpm
   STUB_PNPM_OUTPUT_SOURCE="$BATS_TEST_TMPDIR/vitest-not-found.txt"
