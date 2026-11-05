@@ -952,7 +952,7 @@ check_directive_routing() {
 # tests, the required real-server checks and both-condition unit tests, which
 # breaks the trophy's one test per behavior.
 DIRECTIVE_NEW_TEST_NEEDLE='It never asks for a new test, a test file, or a rule proven on its own'
-UNCOVERED_RULE_NEEDLE='A finding that a rule or case set has no UAT proving it is `spec_defect`, never `plan_directive`'
+UNCOVERED_RULE_NEEDLE='Any other finding that a rule or case set has no UAT proving it is `spec_defect`, never `plan_directive`'
 FOLD_INTO_UAT_NEEDLE='folds into the intent as a case listed for that UAT, never into its then-clause; a new UAT is added only for a behavior no UAT states'
 HONOR_INSIDE_NEEDLE='as a constraint on the code the task delivers or an assertion inside a test a task doc may name (`## Plan files`)'
 DIRECTIVE_FOLLOW_UP_NEEDLE='a directive that would need any other test goes under `## Follow-ups` in `README.md` instead'
