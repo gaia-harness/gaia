@@ -262,3 +262,59 @@ test("adds two numbers", () => {
   denied && return 1
   true
 }
+
+# ---------------------------------------------------------------------------
+# The executor's stub order: the test imports a stub that returns a wrong
+# value, its RED is captured against the stub, then the stub's body becomes the
+# real implementation. The test body never changes, so the commit carrying
+# both files is allowed.
+# ---------------------------------------------------------------------------
+STUB_TEST='import {expect, test} from "vitest";
+import {parseEnvironment} from "./index";
+test("reads the port", () => {
+  expect(parseEnvironment({PORT: "4100"}).port).toBe(4100);
+});
+'
+
+@test "a RED captured against a stub stays valid once the stub becomes the implementation" {
+  write_file "apps/web/app/utils/x/index.ts" 'export const parseEnvironment = (_environment: Record<string, string>) => ({port: 0});
+'
+  write_file "apps/web/app/utils/x/index.test.ts" "$STUB_TEST"
+
+  json="$REPO/canned.json"
+  canned_fail_json "$json" "apps/web/app/utils/x/index.test.ts" "reads the port"
+  run_capture "apps/web/app/utils/x/index.test.ts" "$json"
+  [ "$status" -eq 0 ]
+  [ "$(ledger_lines)" -eq 1 ]
+
+  write_file "apps/web/app/utils/x/index.ts" 'export const parseEnvironment = (environment: Record<string, string>) => ({port: Number(environment.PORT)});
+'
+  stage "apps/web/app/utils/x/index.ts"
+  stage "apps/web/app/utils/x/index.test.ts"
+  run_check
+  [ "$status" -eq 0 ]
+  denied && return 1
+  true
+}
+
+# ---------------------------------------------------------------------------
+# The shape the stub order prevents: a lint rename of the imported symbol,
+# applied to the test after its RED, changes the test's executable body, so
+# the captured RED no longer counts and the commit is denied.
+# ---------------------------------------------------------------------------
+@test "a symbol rename applied to the test after its RED is denied" {
+  write_file "apps/web/app/utils/x/index.test.ts" "${STUB_TEST//parseEnvironment/parseEnv}"
+
+  json="$REPO/canned.json"
+  canned_fail_json "$json" "apps/web/app/utils/x/index.test.ts" "reads the port"
+  run_capture "apps/web/app/utils/x/index.test.ts" "$json"
+  [ "$status" -eq 0 ]
+  [ "$(ledger_lines)" -eq 1 ]
+
+  write_file "apps/web/app/utils/x/index.test.ts" "$STUB_TEST"
+  stage "apps/web/app/utils/x/index.test.ts"
+  run_check
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"reads the port"* ]]
+}
