@@ -45370,7 +45370,15 @@ var LEDGER_RELATIVE_PATH = path71.join(
   "local",
   "declined-updates.json"
 );
-var declinedLedgerPath = (cwd) => path71.join(cwd, LEDGER_RELATIVE_PATH);
+var declinedLedgerPath = (cwd) => {
+  let root;
+  try {
+    root = resolveMainWorktreeRoot(cwd);
+  } catch {
+    root = cwd;
+  }
+  return path71.join(root, LEDGER_RELATIVE_PATH);
+};
 var parseDeclinedRecord = (entry) => {
   if (entry === null || typeof entry !== "object") return null;
   const record2 = entry;
