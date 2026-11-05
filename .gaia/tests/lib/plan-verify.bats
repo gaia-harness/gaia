@@ -3,8 +3,8 @@
 # .gaia/scripts/spec/plan-verify.sh behavior: existence checks, the routing
 # table, the story test criterion line, the orchestrator step
 # sentinels (match rule, order rule, per-arm requirements), the verbatim
-# blocks (resume detection, yield handling, gate retry, worthiness step, wiki
-# promotion, code audit and post-clearance), failure aggregation, the story and non-ui misrouting
+# blocks (resume detection, yield handling, gate retry, worthiness step,
+# overlap pass, wiki promotion, code audit and post-clearance), failure aggregation, the story and non-ui misrouting
 # warning and the browser capability refusals. Shell level only.
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
