@@ -12,7 +12,7 @@ The React app: routes, pages, components, services, tests, Storybook, Playwright
 
 ## Tests and prerequisites
 
-Components and pages are tested by their Storybook stories (a `.test()` per behavior, run by `@storybook/addon-vitest`; see `wiki/decisions/Stories as Tests.md`), hooks with `vitest-browser-react`, and route modules (by route tests in `app/route-tests/`, the default layer) and pure and server code in the `node` Vitest project. Stories and hook tests run in headless Chromium, which `pnpm install` does not install: `/gaia-init` and `/setup-gaia` install it, and outside them run `pnpm install:browsers` once; without it Vitest fails with a missing-browser error. The rules are in `apps/web/.claude/rules/storybook.md` and the `tdd-react` skill.
+Components and pages are tested by their Storybook stories (a `.test()` per behavior, run by `@storybook/addon-vitest`; see `wiki/decisions/Stories as Tests.md`), hooks with `vitest-browser-react`, and route modules (route tests in `app/route-tests/`, the default layer) and pure and server code, both in the `node` Vitest project. Stories and hook tests run in headless Chromium, which `pnpm install` does not install: `/gaia-init` and `/setup-gaia` install it, and outside them run `pnpm install:browsers` once; without it Vitest fails with a missing-browser error. The rules are in `apps/web/.claude/rules/storybook.md` and the `tdd-react` skill.
 
 ## Running the gate
 
