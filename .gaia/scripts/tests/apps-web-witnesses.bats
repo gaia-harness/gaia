@@ -431,7 +431,7 @@ run_fixture() {
   commit_paths "$repo" apps/web/app/x.ts
   run bash "$REPO_ROOT/.gaia/scripts/overlap-check.sh" route --root "$repo"
   [ "$status" -eq 0 ]
-  [ "$output" = "skip-no-playwright-change" ]
+  [ "$output" = "skip-no-test-change" ]
 }
 
 # --- deny entries -------------------------------------------------------------
