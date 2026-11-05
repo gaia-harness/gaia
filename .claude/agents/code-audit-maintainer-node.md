@@ -18,6 +18,7 @@ You audit the framework's own Node/CLI TypeScript, the code behind GAIA's CLI: r
 - `.gaia/cli/src/**/*.snap`
 - `.gaia/cli/templates/.gitkeep`
 - `.gaia/cli/test-fixtures/migrate-csf4/**`
+- `.gaia/cli/src/classifier/fixtures/**`
 - `.gaia/cli/package.json`
 - `.gaia/cli/tsconfig*.json`
 - `.gaia/cli/*.config.ts`

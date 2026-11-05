@@ -312,6 +312,9 @@ auditors:
       # the upstream codemod's output), stored under suffixes so no story
       # reader loads them; their contents decide what the repair tests prove.
       - ".gaia/cli/test-fixtures/migrate-csf4/**"
+      # Frozen app sources the determinism classifier suite classifies, stored
+      # under a suffix so no app tooling loads them.
+      - ".gaia/cli/src/classifier/fixtures/**"
       # The CLI build/config surface beside src/: the bundle build scripts and
       # runtime deps (package.json), the build config (tsconfig*.json), and
       # the CLI's own
