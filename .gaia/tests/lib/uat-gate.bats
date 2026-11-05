@@ -687,7 +687,7 @@ test('t', async () => {
   [ "$status" -eq 0 ]
 }
 
-@test "gate refuses a loader alias that is never called with the floor reason" {
+@test "gate refuses an uncalled loader alias with the floor reason" {
   route_case floor "import {loader as requestList} from '../../orders/route';
 test('t', async () => {
   const request = new Request('http://localhost/orders');
