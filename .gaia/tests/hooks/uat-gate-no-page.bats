@@ -301,7 +301,7 @@ withSignIn${SIGN_IN_TEST#test}"
   [ "$status" -eq 0 ]
 }
 
-@test "the same call clears the floor when the fixture lives in a sibling module" {
+@test "the same call clears the floor when the fixture lives in another module" {
   local rewritten="$BATS_TEST_TMPDIR/rewritten.spec.ts"
   prepare real-server "$SIGN_IN_TEST"
   sed "s#from '@playwright/test'#from '../../project-fixtures'#" "$TARGET" >"$rewritten"

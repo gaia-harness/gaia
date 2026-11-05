@@ -71,8 +71,8 @@ has_e2e_call() {
 # may legitimately use as a request context. `request` itself; every name the
 # first destructured parameter of some callback binds (a project request-context
 # fixture such as the signed-in one); every variable the file assigns from
-# request.newContext( or playwright.request.newContext(; and every variable
-# bound by awaiting a call to one of those destructured names
+# request.newContext( or playwright.request.newContext(; and every const, let
+# or var declared from awaiting a call to one of those destructured names
 # (`const rita = await signIn(...)`, a fixture that returns a context). Read
 # from the code-only text, never decided by a name suffix. A destructured
 # page-backed fixture lands in the list too, but no verb call on it is a
