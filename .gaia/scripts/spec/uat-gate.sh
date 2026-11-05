@@ -152,7 +152,7 @@ route_directory=$(uat_lib_route_tests_directory "$repo_root") || exit 2
 selected_files=''
 route_files=''
 selected_count=0
-while IFS=$'\t' read -r uat_id surface phase feature_folder file_name; do
+while IFS=$'\t' read -r _ surface phase feature_folder file_name; do
   case "$surface" in
     real-server | browser | e2e | route) ;;
     *) continue ;;
