@@ -364,6 +364,7 @@ CODE_OF_CONDUCT.md
 CONTRIBUTING.md
 LICENSE
 README.md
+SECURITY.md
 SUPPORTERS.md
 # GAIA's own Sponsor button (github: gaia-react); an adopter's funding is their own, and gaia init strip-branding already deletes it from fresh projects.
 .github/FUNDING.yml
