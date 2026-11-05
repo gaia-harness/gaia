@@ -23,5 +23,5 @@ This section owns the layout rule. Every other rule, skill, agent and wiki page 
 
 ## Test Driven Development
 
-- Use Playwright to test user flows required by the feature specifications
+- Test each feature-specification behavior at the lowest layer that shows it, by the ladder in `.claude/skills/gaia/references/plan/planner.md`: a route test by default, Playwright only for its real-server and browser steps
 - Every test, story and mock builds its dates with `date()` from `test/utils.ts`, never `new Date()` or `Date.now()`, so the result does not depend on the time of day (the year follows the current year)
