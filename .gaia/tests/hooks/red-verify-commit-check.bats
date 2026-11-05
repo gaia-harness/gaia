@@ -668,6 +668,15 @@ test("uses wall-clock time", () => {
   denied
 }
 
+@test "deny reason calls breaking an existing implementation for a failing run a fabricated RED" {
+  stage_file "apps/web/app/utils/x/index.test.ts" "$PASSING_TEST"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  grep -qF -- 'Breaking, reverting or setting aside existing implementation for a failing run, in one call or several, fabricates the RED' <<<"$output"
+  grep -qF -- 'report the test instead' <<<"$output"
+  denied
+}
+
 # --- release-delivered tests: a test arriving unchanged from a verified GAIA
 # release bundle carries no RED of the adopter's to observe ---
 
