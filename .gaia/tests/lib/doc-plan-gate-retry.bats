@@ -132,9 +132,9 @@ check_retry_scope() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '**Phase gate retry (at most once per phase).**' \
-    'When the phase'"'"'s `pnpm typecheck` or `pnpm lint` fails' \
+    'When the phase'"'"'s `pnpm typecheck` or `pnpm lint` fails, or the owning-phase UAT gate fails with `floor` as every file'"'"'s only reason,' \
     'Never fix it on the main thread.' \
-    'Any other gate failure, the owning-phase UAT gate included, halts under Stop conditions with no retry.' || return 1
+    'Any other gate failure, any other owning-phase UAT gate failure included, halts under Stop conditions with no retry.' || return 1
 }
 
 check_red_deny_halts() {
@@ -142,7 +142,7 @@ check_red_deny_halts() {
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
-    'Any other gate failure, the owning-phase UAT gate included, halts under Stop conditions with no retry.' \
+    'Any other gate failure, any other owning-phase UAT gate failure included, halts under Stop conditions with no retry.' \
     'A phase commit the RED gate (`.claude/hooks/red-verify-commit-check.sh`) denies halts the same way' \
     'once the implementation exists no honest run can fail' \
     'never edit, revert or set aside implementation, here or through an executor and in any number of calls, to record a RED' \
@@ -296,12 +296,16 @@ resume_point() {
 
 # ---------- tests ----------
 
-@test "the gate-retry block retries only typecheck and lint, never inline, and halts on any other gate" {
+@test "the gate-retry block retries only typecheck, lint and a floor-only UAT gate failure, never inline, and halts on any other gate" {
   green check_retry_scope
 }
 
 @test "red twin: a retry that also covers the UAT gate fails" {
-  red check_retry_scope 'the owning-phase UAT gate included, halts' 'the owning-phase UAT gate included, retries'
+  red check_retry_scope 'any other owning-phase UAT gate failure included, halts' 'any other owning-phase UAT gate failure included, retries'
+}
+
+@test "red twin: a retry that covers any UAT gate failure, not only a floor-only one, fails" {
+  red check_retry_scope 'fails with `floor` as every file'"'"'s only reason,' 'fails,'
 }
 
 @test "a RED-gate commit deny halts, and implementation is never broken to record a RED" {
