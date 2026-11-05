@@ -666,6 +666,73 @@ exit 1"
 });"
 }
 
+@test "gate accepts loader and action calls through a named-import alias" {
+  prepare_route
+  green_body "$ROUTE_FILE" "import {loader as requestList} from '../../orders/route';
+test('t', async () => {
+  const response = await requestList({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+  green_body "$ROUTE_FILE" "import {
+  meta,
+  action as signOut,
+} from '../../sign-out/route';
+test('t', async () => {
+  const response = await signOut({request: new Request('http://localhost/sign-out', {method: 'POST'})});
+  expect(response.status).toBe(302);
+});"
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "gate refuses an uncalled loader alias with the floor reason" {
+  route_case floor "import {loader as requestList} from '../../orders/route';
+test('t', async () => {
+  const request = new Request('http://localhost/orders');
+  expect(request.method).toBe('GET');
+});"
+}
+
+@test "gate refuses a call through a type cast of loader outside the import braces with the floor reason" {
+  route_case floor "import {meta, loader} from '../../orders/route'; const handler = pick(1, loader as Handler);
+test('t', async () => {
+  const response = await Handler({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
+  route_case floor "import {loader} from '../../orders/route';
+test('t', async () => {
+  const handler = pick(1, loader as Handler, 2);
+  const response = await Handler({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
+  route_case floor "import {loader} from '../../orders/route';
+test('t', async () => {
+  const handlers = [
+    loader as Handler,
+  ];
+  const response = await Handler({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
+}
+
+@test "gate refuses a member call that only shares a loader alias's name with the floor reason" {
+  route_case floor "import {loader as requestList} from '../../orders/route';
+test('t', async () => {
+  const response = await api.requestList({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
+}
+
+@test "gate refuses a call through an alias of another export with the floor reason" {
+  route_case floor "import {meta as loader2} from '../../orders/route';
+test('t', async () => {
+  const result = await loader2({request: new Request('http://localhost/orders')});
+  expect(result.title).toBe('Orders');
+});"
+}
+
 @test "gate refuses test.todo in a route test with the annotation reason" {
   route_case annotation "test.todo('later');
 test('t', async () => {

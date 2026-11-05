@@ -20,15 +20,43 @@ gate_route_annotated() {
   grep -qE '(^|[^A-Za-z0-9_$.])(test|it|describe|suite)(\.[A-Za-z_$][A-Za-z0-9_$]*)*\.(fails|skip|skipIf|runIf|todo|only)([^A-Za-z0-9_$]|$)|(^|[^A-Za-z0-9_$])fails[[:space:]]*:[[:space:]]*true([^A-Za-z0-9_$]|$)' <<<"$code"
 }
 
-# True when the file, read as code alone, calls a route's loader( or action(
-# (member access allowed) and holds an expect( whose first argument is not a
-# bare literal. A bare `new Request(` is not a route call. Honest limit: code
+# True when the file, read as code alone, calls loader( or action( (member
+# access allowed), or calls the local name a named import binds to a loader or
+# action export (`import {loader as requestList}` then `requestList(`, never
+# as a member), and holds an expect( whose first argument is not a bare
+# literal. A bare `new Request(` is not a route call. Honest limits: code
 # alone blanks a template literal, so an interpolated template as the only
-# expect argument reads as a literal.
+# expect argument reads as a literal; neither form checks which module the
+# name comes from, and a method or function defined under either name reads
+# as a call; an alias counts only between the braces of an import statement that starts
+# its line, with `loader as X` on one line, so a default import, a renaming
+# destructure (`{loader: X}`) or a name another module binds, for example, is
+# not followed and fails the floor, the safe direction.
 gate_route_clears_floor() {
-  local code
+  local code import_braces alias_names='' alias_name
   code=$(uat_lib_code_only "$1") || return 1
-  grep -qE '(^|[^A-Za-z0-9_$])(loader|action)[[:space:]]*\(' <<<"$code" || return 1
+  import_braces=$(LC_ALL=C awk '
+    inside {
+      close_at = index($0, "}")
+      if (close_at) { print substr($0, 1, close_at); inside = 0 } else print
+      next
+    }
+    /^[[:space:]]*import[[:space:]]+(type[[:space:]]+)?([A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*,[[:space:]]*)?\{/ {
+      rest = substr($0, index($0, "{"))
+      close_at = index(rest, "}")
+      if (close_at) print substr(rest, 1, close_at); else { print rest; inside = 1 }
+    }
+  ' <<<"$code")
+  while IFS= read -r alias_name; do
+    [ -n "$alias_name" ] || continue
+    alias_names="$alias_names|$(printf '%s' "$alias_name" | sed 's/\$/\\$/g')"
+  done <<EOF
+$(grep -oE '(^|[{,])[[:space:]]*(loader|action)[[:space:]]+as[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*' <<<"$import_braces" | sed -E 's/.*[[:space:]]as[[:space:]]+//')
+EOF
+  if ! grep -qE '(^|[^A-Za-z0-9_$])(loader|action)[[:space:]]*\(' <<<"$code"; then
+    [ -n "$alias_names" ] || return 1
+    grep -qE "(^|[^A-Za-z0-9_\$.])(${alias_names#|})[[:space:]]*\\(" <<<"$code" || return 1
+  fi
   has_non_literal_expect <(printf '%s\n' "$code")
 }
 
