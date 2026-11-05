@@ -717,6 +717,14 @@ test('t', async () => {
 });"
 }
 
+@test "gate refuses a member call that only shares a loader alias's name with the floor reason" {
+  route_case floor "import {loader as requestList} from '../../orders/route';
+test('t', async () => {
+  const response = await api.requestList({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
+}
+
 @test "gate refuses a call through an alias of another export with the floor reason" {
   route_case floor "import {meta as loader2} from '../../orders/route';
 test('t', async () => {
