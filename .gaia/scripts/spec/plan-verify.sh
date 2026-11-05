@@ -11,7 +11,7 @@
 # needs, each on a line of its own (leading and trailing whitespace allowed,
 # nothing else), in the order the template places them. Without --spec the plan
 # is spec-less and the three UAT sentinels are not required. The
-# resume-detection, yield-handling, gate-retry, worthiness-step, overlap-pass, wiki-promotion,
+# resume-detection, yield-handling, red-split, gate-retry, worthiness-step, overlap-pass, wiki-promotion,
 # code-audit and post-clearance blocks are also checked verbatim: each one's non-blank lines
 # (trimmed) must equal the fenced block planner.md holds, with the
 # plan-directory and SPEC-path placeholders replaced by this plan's absolute
@@ -22,6 +22,7 @@
 # existed is not re-verified: only /gaia-plan step 4.5 runs this script.
 # README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no
 # literal {PLAN_DIR}, {SPEC_PATH} or {AUDIT_PATH}; one failure line per hit.
+# Every task-*.md carries a `New tests:` line.
 #
 # With --spec (a spec-derived plan) additionally: the UAT routing table in
 # README.md validates (delegated to uat_lib_validate_routing); the three UAT
@@ -160,7 +161,7 @@ sentinels=('<!-- gaia:orchestrator-step resume-detection -->')
 if [ -n "$spec_path" ]; then
   sentinels+=('<!-- gaia:orchestrator-step uat-render -->' '<!-- gaia:orchestrator-step uat-gate -->')
 fi
-sentinels+=('<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step gate-retry -->')
+sentinels+=('<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step red-split -->' '<!-- gaia:orchestrator-step gate-retry -->')
 if [ -n "$spec_path" ]; then
   sentinels+=('<!-- gaia:orchestrator-step uat-pre-audit -->')
 fi
@@ -173,7 +174,7 @@ sentinels+=(
   '<!-- gaia:orchestrator-step post-merge-close -->'
 )
 verbatim_sentinels=(
-  '<!-- gaia:orchestrator-step resume-detection -->' '<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step gate-retry -->'
+  '<!-- gaia:orchestrator-step resume-detection -->' '<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step red-split -->' '<!-- gaia:orchestrator-step gate-retry -->'
   '<!-- gaia:orchestrator-step worthiness-step -->'
   '<!-- gaia:orchestrator-step overlap-pass -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
@@ -308,6 +309,13 @@ for generated_file in "$readme" "$orchestrator" "$plan_directory/KICKOFF.md" ${t
       fail "$(basename "$generated_file"):$hit_line holds the unsubstituted placeholder $placeholder"
     done < <(grep -nF -- "$placeholder" "$generated_file" 2>/dev/null)
   done
+done
+
+# The test-first split block decides a task's dispatches from this line, so a
+# task doc without it leaves a cold orchestrator nothing to split on.
+for task_file in ${task_files[@]+"${task_files[@]}"}; do
+  grep -qE '^New tests: [^[:space:]]' "$task_file" \
+    || fail "$(basename "$task_file") has no 'New tests: <test files>' or 'New tests: none' line"
 done
 
 if [ -n "$spec_path" ] && [ -f "$readme" ]; then

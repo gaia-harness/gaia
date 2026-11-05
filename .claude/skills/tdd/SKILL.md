@@ -81,7 +81,7 @@ WRONG:  write the test importing a parse-amount module that does not exist → r
 WRONG:  implement parseAmount() → write the test → break parseAmount() to force red → restore it → green
 ```
 
-**Never break working production code to force a red, then restore it.** The content signal covers the test's comment-free content (rewording a comment leaves a captured RED intact; editing what the test executes invalidates it) and never the implementation, so the gate cannot catch this: it is an authoring obligation, not an enforced one.
+**Never break working production code to force a red, then restore it.** The content signal covers the test's comment-free content (rewording a comment leaves a captured RED intact; editing what the test executes invalidates it) and never the implementation, so the gate cannot catch this: it is an authoring obligation, not an enforced one. A plan build makes the order structural instead: the test author and the implementer are separate dispatches (`.claude/skills/gaia/references/plan/planner.md`, the test-first split block).
 
 **Single-pass-author exemption.** When the implementation already exists in the same change with no prior failing observation (a single-pass author landing impl and test together), author the test honestly against the existing behavior and route it to the worthiness audit, exactly as an emergent test is routed.
 

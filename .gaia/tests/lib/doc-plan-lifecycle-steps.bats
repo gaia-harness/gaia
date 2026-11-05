@@ -55,6 +55,7 @@ setup() {
   S_RENDER='<!-- gaia:orchestrator-step uat-render -->'
   S_GATE='<!-- gaia:orchestrator-step uat-gate -->'
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
+  S_SPLIT='<!-- gaia:orchestrator-step red-split -->'
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
   S_PRE='<!-- gaia:orchestrator-step uat-pre-audit -->'
   S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
@@ -255,7 +256,7 @@ EOF
 EOF
   printf '| Phase 1 | tasks | sonnet | none |\n' >>"$FIXTURE_PLAN/README.md"
   printf 'You are the orchestrator.\n' >"$FIXTURE_PLAN/KICKOFF.md"
-  printf '# Task\n\n- builds checkout\n- Real-server reason (UAT-001): the confirmation page is server-rendered HTML\n' >"$FIXTURE_PLAN/task-checkout.md"
+  printf '# Task\n\nNew tests: none\n- builds checkout\n- Real-server reason (UAT-001): the confirmation page is server-rendered HTML\n' >"$FIXTURE_PLAN/task-checkout.md"
 }
 
 # ---------- sentinels and block contents ----------
@@ -345,7 +346,7 @@ check_entry_file_has_no_blocks() {
 
 @test "blocks copied as a planner copies them pass plan-verify.sh --spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   # The copy keeps the template's indentation, so the trim rule is exercised.
   grep -qE "^[[:space:]]+<!-- gaia:orchestrator-step uat-render -->$" "$FIXTURE_PLAN/ORCHESTRATOR.md"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
@@ -354,7 +355,7 @@ check_entry_file_has_no_blocks() {
 
 @test "blocks copied as a planner copies them pass plan-verify.sh without a spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
