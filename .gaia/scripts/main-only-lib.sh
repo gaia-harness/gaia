@@ -84,7 +84,13 @@
 #   claim or id). Compares the main checkout's live `.gaia/VERSION` with the
 #   origin version cached as `gaiaOriginVersion` in
 #   "<main_root>/.gaia/local/cache/shared/update-check.json". It reads only
-#   those two files and never calls gh or the network.
+#   those two files and local git refs, and never calls gh or the network.
+#
+#   First, outside a linked worktree: when the main checkout's local default
+#   branch has commits origin/<default branch> lacks, prints `Local <default
+#   branch> has <n> commit(s) that origin/<default branch> lacks.` and the fix,
+#   and returns 3. No local default branch or no remote-tracking ref (a repo
+#   with no remote, or one never pushed) skips this check.
 #
 #   Returns 0, printing nothing, when the checkout is not behind origin or
 #   when anything needed is unavailable: no main root, no jq, a missing or
@@ -266,13 +272,39 @@ _gaia_pull_gate_default_branch() {
   fi
 }
 
+# _gaia_pull_gate_main_ahead <main_root> <command-name>: returns 1, printing
+# the count and the fix, when local <default> has commits
+# refs/remotes/origin/<default> lacks, else 0. A worktree cut fresh from
+# origin/<default> would drop those commits, and a branch cut from HEAD would
+# carry them into its pull request. It reads the remote-tracking ref without
+# fetching, so it can over-report: a commit that reached origin by another
+# route (a push from another clone not yet fetched, or a squash merge of the
+# same change, which no fetch clears) still counts, and the printed reconcile
+# is the way out.
+_gaia_pull_gate_main_ahead() {
+  local main_root="$1" command_name="$2" default_branch ahead_count noun=commits
+  default_branch="$(_gaia_pull_gate_default_branch "$main_root")"
+  git -C "$main_root" show-ref --verify --quiet "refs/heads/$default_branch" 2>/dev/null || return 0
+  git -C "$main_root" show-ref --verify --quiet "refs/remotes/origin/$default_branch" 2>/dev/null || return 0
+  ahead_count="$(git -C "$main_root" rev-list --count "refs/remotes/origin/$default_branch..refs/heads/$default_branch" 2>/dev/null)" || return 0
+  [ "$ahead_count" -gt 0 ] 2>/dev/null || return 0
+  [ "$ahead_count" -eq 1 ] && noun=commit
+  printf 'Local %s has %s %s that origin/%s lacks. Push %s, or reconcile it with origin/%s, then start %s again.\n' \
+    "$default_branch" "$ahead_count" "$noun" "$default_branch" "$default_branch" "$default_branch" "$command_name"
+  return 1
+}
+
 gaia_pull_gate() {
   local command_name="$1" main_root cache_file origin_version version_file local_version="" default_branch
 
-  command -v jq >/dev/null 2>&1 || return 0
-
   main_root="$(gaia_resolve_main_root 2>/dev/null)" || return 0
   [ -n "$main_root" ] || return 0
+
+  if ! gaia_is_linked_worktree; then
+    _gaia_pull_gate_main_ahead "$main_root" "$command_name" || return 3
+  fi
+
+  command -v jq >/dev/null 2>&1 || return 0
 
   cache_file="$main_root/.gaia/local/cache/shared/update-check.json"
   [ -r "$cache_file" ] || return 0
