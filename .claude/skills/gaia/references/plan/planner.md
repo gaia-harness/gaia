@@ -298,7 +298,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
       That names the stops that are not wanted. The failure-triggered STOP under Stop conditions below stays wanted: a sub-agent blocked by something it cannot resolve says so under `### Deviations from plan` and returns.
 
-      **The prompt template MUST end with the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-yield-<k>.md`**, the path the yield-handling step pre-clears for that dispatch. It is the dispatch prompt's final line because the hook reads only an opt-in line that ends the prompt. A nested dispatch an executor makes never carries it.
+      **The prompt template MUST end with the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-yield-<k>.md`**, the path the yield-handling step pre-clears for that dispatch. It is the dispatch prompt's final line because the hook reads only an opt-in line that ends the prompt. A nested dispatch an executor makes never carries it. Neither does a phase gate retry prompt (the gate-retry step).
 
       **For a spec-derived plan, the prompt template MUST also carry this block verbatim**, because a rendered UAT spec is the SPEC's contract and an executor that rewrites its logic to make it pass silently changes what was agreed:
 
