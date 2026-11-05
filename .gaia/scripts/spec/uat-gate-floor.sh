@@ -70,18 +70,31 @@ has_e2e_call() {
 # request_receiver_names <file>: one receiver name per line that a verb call
 # may legitimately use as a request context. `request` itself; every name the
 # first destructured parameter of some callback binds (a project request-context
-# fixture such as the signed-in one); and every variable the file assigns from
-# request.newContext( or playwright.request.newContext(. Read from the
-# code-only text, never decided by a name suffix. A destructured page-backed
-# fixture lands in the list too, but no verb call on it is a request call, so
-# the no-page check refuses it, not this list.
+# fixture such as the signed-in one); every variable the file assigns from
+# request.newContext( or playwright.request.newContext(; and every variable
+# bound by awaiting a call to one of those destructured names
+# (`const rita = await signIn(...)`, a fixture that returns a context). Read
+# from the code-only text, never decided by a name suffix. A destructured
+# page-backed fixture lands in the list too, but no verb call on it is a
+# request call, so the no-page check refuses it, not this list.
+# Limit: the awaited-fixture arm cannot see what the fixture returns. A fixture
+# that makes the request itself returns a response, which has no verb method,
+# so it stays refused; one returning a Map or Headers would pass on `.get(`.
+# An imported helper is not a destructured name, so a context it returns does
+# not count.
 request_receiver_names() {
-  local code flat
+  local code flat fixtures fixture
   code=$(uat_lib_code_only "$1") || return 1
   flat=$(printf '%s' "$code" | tr '\n\r\t' '   ')
   printf '%s\n' request
-  printf '%s' "$flat" | grep -oE '\([[:space:]]*\{[^{}]*\}[[:space:]]*[,)]' | sed -E 's/^\([[:space:]]*\{//; s/\}[[:space:]]*[,)]$//' | tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]*=.*$//; s/^.*:[[:space:]]*//; s/[[:space:]]+$//' | grep -E '^[A-Za-z_$][A-Za-z0-9_$]*$'
+  fixtures=$(printf '%s' "$flat" | grep -oE '\([[:space:]]*\{[^{}]*\}[[:space:]]*[,)]' | sed -E 's/^\([[:space:]]*\{//; s/\}[[:space:]]*[,)]$//' | tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]*=.*$//; s/^.*:[[:space:]]*//; s/[[:space:]]+$//' | grep -E '^[A-Za-z_$][A-Za-z0-9_$]*$')
+  [ -z "$fixtures" ] || printf '%s\n' "$fixtures"
   printf '%s' "$flat" | grep -oE '[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=[[:space:]]*(await[[:space:]]+)?(playwright\.)?request\.newContext\(' | sed -E 's/[[:space:]]*=.*$//'
+  while IFS= read -r fixture; do
+    [ -n "$fixture" ] || continue
+    fixture=${fixture//\$/\\\$}
+    printf '%s' "$flat" | grep -oE "(const|let|var)[[:space:]]+[A-Za-z_\$][A-Za-z0-9_\$]*[[:space:]]*=[[:space:]]*await[[:space:]]+$fixture\\(" | sed -E 's/^(const|let|var)[[:space:]]+//; s/[[:space:]]*=.*$//'
+  done <<<"$fixtures"
   return 0
 }
 
