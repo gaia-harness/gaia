@@ -199,7 +199,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       <!-- gaia:orchestrator-step red-split -->
       **Test-first split (every wave).** A task whose `New tests:` line names files runs as two dispatches, a test author and then an implementer, so each new test's failing run (RED) is on record before any implementation exists. A task whose line reads `none` runs as one dispatch, the implementer.
 
-      1. **Test authors.** Dispatch a test author for every splitting task in the wave, in parallel: the task prompt with the test-author clause. Its yield handoff unit is `phase-<N>-task-<T>-tests`, so it pre-clears and names `{PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md`.
+      1. **Test authors.** Dispatch a test author for every splitting task in the wave, in parallel: the task prompt with the test-author clause. The test author is its own yield unit, `phase-<N>-task-<T>-tests`, with its own yield count: for this dispatch the orchestrator uses that unit wherever the yield-handling block names `phase-<N>-task-<T>`, so the handoff path is `{PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md`.
       2. **Check.** Once every test author has returned, run from `RESOLVED_ROOT`:
 
              bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>
