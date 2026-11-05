@@ -218,7 +218,7 @@ check_preflight_sites() {
 assemble_orchestrator() {
   local source="$1" out="$2" sentinel block
   shift 2
-  printf '# Orchestrator\n\nResume detection, pre-flight isolation, RUNNING sentinel.\n\n' >"$out"
+  printf '# Orchestrator\n\nResume detection, pre-flight isolation, RUNNING sentinel.\n\n**Phase 1, x.**\n\n' >"$out"
   for sentinel in "$@"; do
     block="$(fence_with "$source" "$sentinel")"
     [ -n "$block" ] || { printf 'no block for %s\n' "$sentinel" >&2; return 1; }
@@ -253,6 +253,7 @@ EOF
 | UAT-001 | real-server | 1 | checkout | guest-checkout-confirms-order.spec.ts |
 <!-- gaia:uat-routing:end -->
 EOF
+  printf '| Phase 1 | tasks | sonnet | none |\n' >>"$FIXTURE_PLAN/README.md"
   printf 'You are the orchestrator.\n' >"$FIXTURE_PLAN/KICKOFF.md"
   printf '# Task\n\n- builds checkout\n- Real-server reason (UAT-001): the confirmation page is server-rendered HTML\n' >"$FIXTURE_PLAN/task-checkout.md"
 }
