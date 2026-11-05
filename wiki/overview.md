@@ -35,7 +35,7 @@ See [[GAIA Philosophy]] for the long version.
 ```
 apps/web/app/
 ├── components/       shared UI (button, form/*, toast, layout, ...)
-├── hooks/            use-breakpoint, use-component-rect, use-debounce, use-theme, use-timeout
+├── hooks/            use-theme
 ├── languages/        TS-based i18n (en by default)
 ├── middleware/       i18next middleware
 ├── pages/            page-specific UI

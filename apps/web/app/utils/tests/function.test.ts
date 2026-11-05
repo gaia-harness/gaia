@@ -1,5 +1,10 @@
-import {describe, expect, test, vi} from 'vitest';
-import {compose, noop, sleep, tryCatch} from '../function';
+import {describe, expect, test} from 'vitest';
+import {tryCatch} from '../function';
+
+const sleep = async (durationInMilliseconds: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, durationInMilliseconds);
+  });
 
 describe('function utils', () => {
   test('tryCatch async result', async () => {
@@ -20,10 +25,6 @@ describe('function utils', () => {
         throw new Error('failed');
       })
     ).toEqual([new Error('failed'), undefined]);
-  });
-
-  test('tryCatch sync result', async () => {
-    expect(tryCatch((value: number) => 10 / value, 5)).toEqual([undefined, 2]);
   });
 
   test('tryCatch sync error', async () => {
@@ -51,27 +52,4 @@ describe('function utils', () => {
       ).toEqual([thrownValue, undefined]);
     }
   );
-});
-
-const double = (value: number) => value * 2;
-const addOne = (value: number) => value + 1;
-
-describe('noop', () => {
-  test('is callable without throwing', () => {
-    expect(() => noop()).not.toThrow();
-  });
-});
-
-describe('compose', () => {
-  test('applies functions right-to-left', () => {
-    const doubleThenAdd = compose(addOne, double);
-    expect(doubleThenAdd(3)).toBe(7);
-  });
-
-  test('handles a single function', () => {
-    const spy = vi.fn((inputValue: number) => inputValue * 3);
-    const composed = compose(spy);
-    expect(composed(4)).toBe(12);
-    expect(spy).toHaveBeenCalledWith(4);
-  });
 });

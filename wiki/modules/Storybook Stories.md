@@ -22,13 +22,13 @@ Storybook v10 with the `@storybook/react-vite` framework. Configured to discover
 
 ## Decorator stack: the load-bearing convention
 
-Innermost to outermost (array order in `.storybook/chromatic/index.ts`): **`WrapDecorator → ChromaticDecorator → ToastDecorator`**.
+Innermost to outermost (array order in `.storybook/chromatic/index.ts`): **`WrapDecorator → ThemeDecorator → ToastDecorator`**.
 
 - `WrapDecorator`: reads `parameters.wrap` and wraps the story (use `parameters: {wrap: 'p-4'}` for padding instead of hardcoding divs in stories)
-- `ChromaticDecorator`: Chromatic snapshots only; renders the story once, puts `dark` on `<html>` when the `theme` global is `dark`, and clears `sessionStorage` before each snapshot
+- `ThemeDecorator`: applies `ChromaticDecorator` on a Chromatic snapshot or when the `theme` global is `dark` (the `storybook-dark` Vitest project pins it); `ChromaticDecorator` renders the story once, puts `dark` on `<html>` when the `theme` global is `dark`, and clears `sessionStorage` before each snapshot
 - `ToastDecorator`: renders a bare `<Toaster />` from `~/components/ui/toast` after every story except one that sets `parameters.toaster: false`, so a toast call from any other story is rendered
 
-Interactive sessions skip the Chromatic decorator: `WrapDecorator → ToastDecorator`.
+Interactive sessions skip `ChromaticDecorator`, since the dark-mode addon owns the `dark` class there.
 
 ## Stubs
 

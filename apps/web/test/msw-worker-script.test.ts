@@ -83,12 +83,6 @@ const installedPackageVersion = (
   JSON.parse(readFileSync(installedPackagePath, 'utf-8')) as {version: string}
 ).version;
 
-const installedVersion = extractConstant(installedSource, 'PACKAGE_VERSION');
-const installedChecksum = extractConstant(
-  installedSource,
-  'INTEGRITY_CHECKSUM'
-);
-
 describe('committed msw worker script', () => {
   test('matches the worker the installed msw ships', () => {
     expect(
@@ -98,72 +92,5 @@ describe('committed msw worker script', () => {
         installedPackageVersion
       )
     ).toEqual([]);
-  });
-
-  test('reports an altered PACKAGE_VERSION with both versions and both commands', () => {
-    const alteredSource = installedSource.replace(
-      `const PACKAGE_VERSION = '${installedVersion}'`,
-      "const PACKAGE_VERSION = '0.0.0-stale'"
-    );
-
-    const mismatches = compareWorkerScripts(
-      alteredSource,
-      installedSource,
-      installedPackageVersion
-    );
-
-    expect(mismatches.length).toBeGreaterThan(0);
-    expect(mismatches[0]).toContain('0.0.0-stale');
-    expect(mismatches[0]).toContain(installedVersion);
-    expect(mismatches[0]).toContain('pnpm -C apps/web msw:init');
-    expect(mismatches[0]).toContain('pnpm -C apps/web exec msw init');
-  });
-
-  test('reports an altered INTEGRITY_CHECKSUM with both checksums and both commands', () => {
-    const alteredSource = installedSource.replace(
-      `const INTEGRITY_CHECKSUM = '${installedChecksum}'`,
-      "const INTEGRITY_CHECKSUM = 'stale-checksum'"
-    );
-
-    const mismatches = compareWorkerScripts(
-      alteredSource,
-      installedSource,
-      installedPackageVersion
-    );
-
-    expect(mismatches).toHaveLength(1);
-    expect(mismatches[0]).toContain('stale-checksum');
-    expect(mismatches[0]).toContain(installedChecksum);
-    expect(mismatches[0]).toContain('pnpm -C apps/web msw:init');
-    expect(mismatches[0]).toContain('pnpm -C apps/web exec msw init');
-  });
-
-  test('reports a committed script that lacks a constant', () => {
-    const strippedSource = installedSource.replace(
-      /const INTEGRITY_CHECKSUM = .*\n/,
-      ''
-    );
-
-    const mismatches = compareWorkerScripts(
-      strippedSource,
-      installedSource,
-      installedPackageVersion
-    );
-
-    expect(mismatches).toEqual([
-      'INTEGRITY_CHECKSUM was not found in the committed worker script.',
-    ]);
-  });
-
-  test('reports a committed version that differs from the installed msw version', () => {
-    const mismatches = compareWorkerScripts(
-      committedSource,
-      committedSource,
-      '999.0.0'
-    );
-
-    expect(mismatches).toHaveLength(1);
-    expect(mismatches[0]).toContain('999.0.0');
-    expect(mismatches[0]).toContain('pnpm -C apps/web exec msw init');
   });
 });

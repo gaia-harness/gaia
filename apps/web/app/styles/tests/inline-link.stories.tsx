@@ -1,3 +1,4 @@
+import {expect} from 'storybook/test';
 import preview from '#.storybook/preview';
 
 const meta = preview.meta({
@@ -22,4 +23,14 @@ export const Default = meta.story({
       </p>
     </div>
   ),
+});
+
+Default.test('underlines links in running text', async ({canvasElement}) => {
+  const links = [...canvasElement.querySelectorAll('p a')];
+
+  await expect(links).not.toHaveLength(0);
+
+  for (const link of links) {
+    await expect(getComputedStyle(link).textDecorationLine).toBe('underline');
+  }
 });

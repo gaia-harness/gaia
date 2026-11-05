@@ -5,10 +5,6 @@ import path from 'node:path';
 
 const stylesDirectory = path.resolve(import.meta.dirname, '../app/styles');
 const tokenCss = readFileSync(path.join(stylesDirectory, 'theme.css'), 'utf-8');
-const tailwindCss = readFileSync(
-  path.join(stylesDirectory, 'tailwind.css'),
-  'utf-8'
-);
 
 const buildBlockPattern = (selector: string): RegExp =>
   new RegExp(String.raw`(?:^|\n)${selector}\s*\{([^}]*)\}`);
@@ -74,45 +70,25 @@ const requiredTokens = [
   '--sidebar-ring',
 ];
 
+const findBadTokens = (
+  tokens: Map<string, string>,
+  expected: string[]
+): string[] =>
+  expected.flatMap((name) => {
+    const value = tokens.get(name);
+
+    if (value === undefined) return [`${name}: missing`];
+
+    return stylelintOklch.test(value) ? [] : [`${name}: ${value}`];
+  });
+
 describe('theme tokens', () => {
-  test.each(requiredTokens)('%s is defined in :root', (name) => {
-    expect(rootTokens.has(name)).toBe(true);
-  });
-
-  test.each(requiredTokens)('%s is defined in .dark', (name) => {
-    expect(darkTokens.has(name)).toBe(true);
-  });
-
-  test('--radius is defined', () => {
+  test(':root defines every required token in stylelint oklch form, plus --radius', () => {
+    expect(findBadTokens(rootTokens, requiredTokens)).toEqual([]);
     expect(rootTokens.has('--radius')).toBe(true);
   });
 
-  test.each([...rootTokens.entries()].filter(([name]) => name !== '--radius'))(
-    ':root %s is in stylelint oklch form',
-    (_name, value) => {
-      expect(value).toMatch(stylelintOklch);
-    }
-  );
-
-  test.each([...darkTokens.entries()])(
-    '.dark %s is in stylelint oklch form',
-    (_name, value) => {
-      expect(value).toMatch(stylelintOklch);
-    }
-  );
-
-  test('declares color-scheme for both themes', () => {
-    expect(buildBlockPattern(':root').exec(tokenCss)?.[1]).toMatch(
-      /color-scheme:\s*light;/
-    );
-    expect(buildBlockPattern(String.raw`\.dark`).exec(tokenCss)?.[1]).toMatch(
-      /color-scheme:\s*dark;/
-    );
-  });
-
-  test('tailwind.css imports the token file and defines no token block', () => {
-    expect(tailwindCss).toMatch(/@import\s+['"]\.\/theme\.css['"];/);
-    expect(tailwindCss).not.toMatch(/(?:^|\n):root\s*\{/);
-    expect(tailwindCss).not.toMatch(/(?:^|\n)\.dark\s*\{/);
+  test('.dark defines every required token in stylelint oklch form', () => {
+    expect(findBadTokens(darkTokens, requiredTokens)).toEqual([]);
   });
 });

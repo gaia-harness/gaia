@@ -1,16 +1,10 @@
-import {HTTPError, SchemaValidationError} from 'ky';
+import {HTTPError} from 'ky';
 import {describe, expect, test} from 'vitest';
 import type {ZodError} from 'zod';
 import {z} from 'zod';
 import {attempt} from '../helpers';
 
 describe('attempt', () => {
-  test('success: resolves to [undefined, result]', async () => {
-    const attemptOutcome = await attempt(async () => 'ok');
-
-    expect(attemptOutcome).toEqual([undefined, 'ok']);
-  });
-
   test('HTTPError: resolves to [{status, statusText}, undefined]', async () => {
     const response = new Response('', {status: 404, statusText: 'Not Found'});
     const request = new Request('https://example.test');
@@ -45,40 +39,17 @@ describe('attempt', () => {
     ]);
   });
 
-  test('SchemaValidationError: resolves to a constant statusText with no issues in it', async () => {
-    const schemaError = new SchemaValidationError([
-      {message: 'secret detail', path: ['a']},
-    ]);
+  test.each(['something unexpected', null])(
+    'non-Error throw (%o): resolves to [{status: 500, statusText: "Unknown error"}, undefined]',
+    async (thrownValue) => {
+      const attemptOutcome = await attempt(async () => {
+        throw thrownValue;
+      });
 
-    const attemptOutcome = await attempt(async () => {
-      throw schemaError;
-    });
-
-    expect(attemptOutcome).toEqual([
-      {status: 500, statusText: 'Response failed schema validation'},
-      undefined,
-    ]);
-  });
-
-  test('unknown non-Error throw: resolves to [{status: 500, statusText: "Unknown error"}, undefined]', async () => {
-    const attemptOutcome = await attempt(async () => {
-      throw 'something unexpected';
-    });
-
-    expect(attemptOutcome).toEqual([
-      {status: 500, statusText: 'Unknown error'},
-      undefined,
-    ]);
-  });
-
-  test('falsy non-Error throw: resolves to [{status: 500, statusText: "Unknown error"}, undefined]', async () => {
-    const attemptOutcome = await attempt(async () => {
-      throw null;
-    });
-
-    expect(attemptOutcome).toEqual([
-      {status: 500, statusText: 'Unknown error'},
-      undefined,
-    ]);
-  });
+      expect(attemptOutcome).toEqual([
+        {status: 500, statusText: 'Unknown error'},
+        undefined,
+      ]);
+    }
+  );
 });

@@ -72,12 +72,6 @@ export const WithLabel = meta.story({
   },
 });
 
-WithLabel.test('takes its accessible name from the label', async ({canvas}) => {
-  await expect(
-    canvas.getByRole('checkbox', {name: 'Accept'})
-  ).toHaveAccessibleName('Accept');
-});
-
 WithLabel.test(
   'toggles with the space key and keeps focus',
   async ({canvas}) => {

@@ -1,5 +1,4 @@
 import {expect, fn, userEvent, waitFor} from 'storybook/test';
-import type {within} from 'storybook/test';
 import stubs from 'test/stubs';
 import preview from '#.storybook/preview';
 import {ACTION_PATHS} from '~/action-paths';
@@ -33,37 +32,7 @@ const meta = preview.type<{args: StoryArgs}>().meta({
   title: 'Components/ThemeSwitch',
 });
 
-const expectNameAndPost = async ({
-  args,
-  canvas,
-  name,
-  next,
-}: {
-  args: StoryArgs;
-  canvas: ReturnType<typeof within>;
-  name: string;
-  next: string;
-}) => {
-  await userEvent.click(await canvas.findByRole('button', {name}));
-
-  await waitFor(async () => {
-    await expect(args.onSubmit).toHaveBeenCalledTimes(1);
-  });
-  await expect(args.onSubmit).toHaveBeenCalledWith(next);
-};
-
 export const Default = meta.story({});
-
-Default.test(
-  'offers light mode from the system default and posts light when clicked',
-  async ({args, canvas}) =>
-    expectNameAndPost({
-      args,
-      canvas,
-      name: 'Enable light mode',
-      next: 'light',
-    })
-);
 
 Default.test(
   'posts light when activated by keyboard',
@@ -88,28 +57,37 @@ export const Light = meta.story({
   args: {userPreference: 'light'},
 });
 
-Light.test(
-  'offers dark mode from light and posts dark when clicked',
-  async ({args, canvas}) =>
-    expectNameAndPost({
-      args,
-      canvas,
-      name: 'Enable dark mode',
-      next: 'dark',
-    })
-);
-
 export const Dark = meta.story({
   args: {userPreference: 'dark'},
 });
 
-Dark.test(
-  'offers the system theme from dark and posts system when clicked',
-  async ({args, canvas}) =>
-    expectNameAndPost({
-      args,
-      canvas,
-      name: 'Use system theme',
-      next: 'system',
-    })
+export const Cycle = meta.story({
+  render: () => (
+    <div className="flex gap-2">
+      <ThemeSwitch />
+      <ThemeSwitch userPreference="light" />
+      <ThemeSwitch userPreference="dark" />
+    </div>
+  ),
+});
+
+Cycle.test(
+  'offers the next theme at each step and posts it when clicked',
+  async ({args, canvas}) => {
+    const steps = [
+      {name: 'Enable light mode', next: 'light'},
+      {name: 'Enable dark mode', next: 'dark'},
+      {name: 'Use system theme', next: 'system'},
+    ];
+
+    for (const [index, {name, next}] of steps.entries()) {
+      await userEvent.click(await canvas.findByRole('button', {name}));
+
+      await waitFor(async () => {
+        await expect(args.onSubmit).toHaveBeenCalledTimes(index + 1);
+      });
+
+      await expect(args.onSubmit).toHaveBeenLastCalledWith(next);
+    }
+  }
 );

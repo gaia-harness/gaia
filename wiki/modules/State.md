@@ -30,10 +30,10 @@ Every state slice in `apps/web/app/state/` follows one of two variants; full imp
 Context holds `Maybe<T>`; hook asserts non-null and returns `T`. Optional `useMaybeX()` variant returns `Maybe<T>` without throwing.
 
 **Editable** (client-side mutation needed):
-Context holds `[value, setter]` tuple (same shape as `useState`); use `noop` from `~/utils/function` as the default setter.
+Context holds `[value, setter]` tuple (same shape as `useState`); an empty function is the default setter.
 
 ```tsx
-const XContext = createContext<XContextValue>([undefined, noop]);
+const XContext = createContext<XContextValue>([undefined, () => {}]);
 export const XProvider = ({children, initialState}: XProviderProps) => {
   const value = useState(initialState);
   return <XContext.Provider value={value}>{children}</XContext.Provider>;

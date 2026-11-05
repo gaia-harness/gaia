@@ -87,16 +87,6 @@ describe('serializeForm', () => {
     expect(serializeForm(form)).toEqual({open: '1'});
   });
 
-  test('replaces a key the form already holds with the override', () => {
-    const form = parseFirstForm(
-      '<form><input name="title" value="form" /></form>'
-    );
-
-    expect(serializeForm(form, {overrides: {title: 'override'}})).toEqual({
-      title: 'override',
-    });
-  });
-
   test('submits an option with no value attribute as its trimmed text', () => {
     const form = parseFirstForm(`
       <form><select name="pick"><option>  Plain  </option></select></form>

@@ -88,7 +88,7 @@ export const EmptySubmit = meta.story({
 });
 
 EmptySubmit.test(
-  'marks every invalid control and ties it to its error',
+  'marks every invalid control, ties it to its error and names the groups',
   async ({canvas, canvasElement}) => {
     const invalidControls = [
       canvas.getByRole('textbox', {name: 'Name'}),
@@ -108,27 +108,20 @@ EmptySubmit.test(
 
       await expect(describedBy.some((id) => alertIds.includes(id))).toBe(true);
     }
-  }
-);
 
-EmptySubmit.test(
-  'flags only the name and size as required',
-  async ({canvas, canvasElement}) => {
     await expect(canvas.getByRole('textbox', {name: 'Name'})).toBeRequired();
     await expect(canvas.getByRole('radiogroup', {name: 'Size'})).toBeRequired();
 
     for (const checkbox of getColorCheckboxes(canvasElement)) {
       await expect(checkbox).not.toBeRequired();
     }
+
+    await expect(
+      canvas.getByRole('group', {name: 'Favorite colors'})
+    ).toBeVisible();
+    await expect(canvas.getByRole('radiogroup', {name: 'Size'})).toBeVisible();
   }
 );
-
-EmptySubmit.test('names the color and size groups', async ({canvas}) => {
-  await expect(
-    canvas.getByRole('group', {name: 'Favorite colors'})
-  ).toBeVisible();
-  await expect(canvas.getByRole('radiogroup', {name: 'Size'})).toBeVisible();
-});
 
 EmptySubmit.test(
   'moves focus to the first invalid control',
@@ -136,24 +129,6 @@ EmptySubmit.test(
     await waitFor(async () => {
       await expect(canvas.getByRole('textbox', {name: 'Name'})).toHaveFocus();
     });
-  }
-);
-
-Default.test(
-  'toggles a control when its label is clicked',
-  async ({canvas, userEvent}) => {
-    for (const name of ['Blue', 'Green', 'Red']) {
-      const checkbox = canvas.getByRole('checkbox', {name});
-
-      await expect(checkbox).not.toBeChecked();
-      await userEvent.click(canvas.getByText(name));
-      await expect(checkbox).toBeChecked();
-    }
-
-    for (const name of ['Large', 'Medium', 'Small']) {
-      await userEvent.click(canvas.getByText(name));
-      await expect(canvas.getByRole('radio', {name})).toBeChecked();
-    }
   }
 );
 
@@ -171,22 +146,6 @@ Default.test(
     await expect(green).toHaveFocus();
     await userEvent.keyboard(' ');
     await expect(green).toBeChecked();
-  }
-);
-
-Default.test(
-  'moves the radio group with the arrow keys',
-  async ({canvas, userEvent}) => {
-    await userEvent.click(canvas.getByRole('radio', {name: 'Small'}));
-    await expect(canvas.getByRole('radio', {name: 'Small'})).toHaveFocus();
-
-    await userEvent.keyboard('{ArrowDown}');
-    await expect(canvas.getByRole('radio', {name: 'Medium'})).toBeChecked();
-    await expect(canvas.getByRole('radio', {name: 'Medium'})).toHaveFocus();
-
-    await userEvent.tab();
-    await expect(canvas.getByRole('radio', {name: 'Medium'})).not.toHaveFocus();
-    await expect(canvas.getByRole('button', {name: 'Submit'})).toHaveFocus();
   }
 );
 

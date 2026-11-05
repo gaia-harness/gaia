@@ -3,16 +3,19 @@ import {expect} from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import type {Rgba} from '../test/contrast';
 
-export type Rgba = {a: number; b: number; g: number; r: number};
+export type {Rgba} from '../test/contrast';
+
+export {
+  computeContrastRatio,
+  MINIMUM_NON_TEXT_CONTRAST,
+} from '../test/contrast';
 
 /** Every theme a scan covers, in the order the specs run them. */
 export const THEMES = ['light', 'dark'] as const;
 
 export type Theme = (typeof THEMES)[number];
-
-/** WCAG 1.4.11 minimum contrast for focus indicators and meaningful icons. */
-export const MINIMUM_NON_TEXT_CONTRAST = 3;
 
 const themeCss = fs.readFileSync(
   path.resolve(
@@ -71,25 +74,6 @@ export const resolveColors = async (
       return {a: alpha / 255, b: blue, g: green, r: red};
     });
   }, colors);
-
-const linearizeChannel = (channelByte: number): number => {
-  const scaled = channelByte / 255;
-
-  return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
-};
-
-const computeLuminance = ({b, g, r}: Rgba): number =>
-  0.2126 * linearizeChannel(r) +
-  0.7152 * linearizeChannel(g) +
-  0.0722 * linearizeChannel(b);
-
-/** WCAG 2.x contrast ratio between two opaque colors. */
-export const computeContrastRatio = (first: Rgba, second: Rgba): number => {
-  const lighter = Math.max(computeLuminance(first), computeLuminance(second));
-  const darker = Math.min(computeLuminance(first), computeLuminance(second));
-
-  return (lighter + 0.05) / (darker + 0.05);
-};
 
 /**
  * Fails unless the page is really in dark mode: `html` carries `dark` and the

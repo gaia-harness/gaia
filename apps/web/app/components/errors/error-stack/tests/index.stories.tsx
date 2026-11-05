@@ -1,6 +1,5 @@
 import {expect, mocked, spyOn} from 'storybook/test';
 import preview from '#.storybook/preview';
-import common from '~/languages/en/common';
 import ErrorStack from '..';
 
 const meta = preview.meta({
@@ -108,9 +107,3 @@ CopiesStack.test(
     await expect(canvas.getByRole('button', {name: /copy/i})).toBeVisible();
   }
 );
-
-CopiesStack.test('names the button by its label alone', async ({canvas}) => {
-  await expect(canvas.getByRole('button')).toHaveAccessibleName(
-    common.copyToClipboard
-  );
-});

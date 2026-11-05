@@ -55,8 +55,12 @@ type Classification = {
 // The classifier reads the package registry from its working directory, so the
 // suite runs it from a scratch tree with no `.gaia/packages.json`: the built-in
 // default (the app at `apps/web/`), the 2.0.0 layout, whatever shape the real
-// checkout is in. The three named real files are copied in under `apps/web/`.
+// checkout is in. The package descriptor is copied in from the real checkout;
+// the two util sources come from `fixtures/`, frozen copies of helpers the
+// template no longer ships, so the regressions they pin keep a subject.
 let FIXTURE_ROOT = '';
+
+const FIXTURE_SOURCES = path.join(import.meta.dirname, 'fixtures');
 
 // Where a real app file lives in this checkout: under `apps/web/` once the app
 // has moved, at the repo root before.
@@ -71,13 +75,19 @@ const realAppFile = (frontendRelativePath: string): string => {
 beforeAll(() => {
   FIXTURE_ROOT = mkdtempSync(path.join(os.tmpdir(), 'classify-determinism-'));
 
-  for (const file of [
-    'apps/web/app/utils/date.ts',
-    'apps/web/app/utils/string.ts',
-    'apps/web/gaia.package.json',
-  ]) {
+  for (const [file, source] of [
+    [
+      'apps/web/app/utils/date.ts',
+      path.join(FIXTURE_SOURCES, 'date.ts.fixture'),
+    ],
+    [
+      'apps/web/app/utils/string.ts',
+      path.join(FIXTURE_SOURCES, 'string.ts.fixture'),
+    ],
+    ['apps/web/gaia.package.json', realAppFile('apps/web/gaia.package.json')],
+  ] as const) {
     mkdirSync(path.join(FIXTURE_ROOT, path.dirname(file)), {recursive: true});
-    copyFileSync(realAppFile(file), path.join(FIXTURE_ROOT, file));
+    copyFileSync(source, path.join(FIXTURE_ROOT, file));
   }
 });
 

@@ -14,8 +14,8 @@ import {
 
 const ignoreWarnings = ['React DevTools', 'React Router Future Flag Warning'];
 
-// The viewport matches the `Desktop Chrome` device the Playwright story scan
-// uses, so a story is judged at the same size by both.
+// The viewport matches the `Desktop Chrome` device the Playwright story specs
+// use, so a story is judged at the same size by both.
 // Each browser project names its one instance: two projects on the same
 // browser need distinct instance names or Vitest refuses to start.
 const createBrowserOptions = (instanceName: string): BrowserConfigOptions => ({
@@ -27,6 +27,44 @@ const createBrowserOptions = (instanceName: string): BrowserConfigOptions => ({
     contextOptions: {reducedMotion: 'reduce'},
   }),
   viewport: {height: 720, width: 1280},
+});
+
+// Each storybook project needs its own plugin instance.
+const createStorybookProject = (
+  name: string,
+  {
+    initialGlobals,
+    setupFiles,
+  }: {initialGlobals?: Record<string, unknown>; setupFiles?: string[]} = {}
+) => ({
+  // Vite discovers these while the first story loads, and the re-bundle it
+  // triggers reloads the page under every other story on a cold cache.
+  // No stock story imports the service layer (`ky`, `query-string`), so
+  // without them the first story of a newly scaffolded service triggers
+  // the same reload against an already warm cache.
+  optimizeDeps: {
+    include: [
+      '@vueless/storybook-dark-mode',
+      'chromatic/isChromatic',
+      'i18next',
+      'ky',
+      'msw-storybook-addon',
+      'msw/browser',
+      'msw/http',
+      'query-string',
+      'storybook/theming',
+    ],
+  },
+  plugins: [
+    storybookTest({configDir: '.storybook', initialGlobals}),
+    tailwindcss(),
+    reactCompiler,
+  ],
+  test: {
+    browser: createBrowserOptions(name),
+    name,
+    setupFiles,
+  },
 });
 
 // The suite deliberately does not read `.env`. Workers inherit the shell's own
@@ -70,6 +108,7 @@ export default defineConfig({
       '.storybook/**',
       'test/setup.ts',
       'test/setup.browser.ts',
+      'test/setup.story-dark.ts',
     ],
     onConsoleLog: (message) => {
       if (ignoreWarnings.some((warning) => message.includes(warning))) {
@@ -109,35 +148,15 @@ export default defineConfig({
           setupFiles: ['./test/setup.browser.ts'],
         },
       },
-      {
-        // Vite discovers these while the first story loads, and the re-bundle it
-        // triggers reloads the page under every other story on a cold cache.
-        // No stock story imports the service layer (`ky`, `query-string`), so
-        // without them the first story of a newly scaffolded service triggers
-        // the same reload against an already warm cache.
-        optimizeDeps: {
-          include: [
-            '@vueless/storybook-dark-mode',
-            'chromatic/isChromatic',
-            'i18next',
-            'ky',
-            'msw-storybook-addon',
-            'msw/browser',
-            'msw/http',
-            'query-string',
-            'storybook/theming',
-          ],
-        },
-        plugins: [
-          storybookTest({configDir: '.storybook'}),
-          tailwindcss(),
-          reactCompiler,
-        ],
-        test: {
-          browser: createBrowserOptions('storybook'),
-          name: 'storybook',
-        },
-      },
+      createStorybookProject('storybook'),
+      // The same stories again in the dark theme, so a dark-only failure (a
+      // token with too little contrast, a missing `dark:` variant) fails here
+      // like a light one. The theme global is what the Chromatic dark mode
+      // sets; the setup file adds the checks axe cannot make.
+      createStorybookProject('storybook-dark', {
+        initialGlobals: {theme: 'dark'},
+        setupFiles: ['./test/setup.story-dark.ts'],
+      }),
     ],
   },
 });

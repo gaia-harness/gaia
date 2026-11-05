@@ -1,95 +1,7 @@
 import {describe, expect, test} from 'vitest';
-import {
-  compact,
-  convertCase,
-  deepRemoveNil,
-  every,
-  isNil,
-  mapKeys,
-  mapValues,
-  md5,
-  some,
-  toCamelCase,
-  toSnakeCase,
-} from '../object';
-
-const predicate = (value: any) => !!value;
+import {convertCase, toCamelCase, toSnakeCase} from '../object';
 
 describe('object utils', () => {
-  test('every', () => {
-    expect(every({}, predicate)).toBe(false);
-    expect(every({hello: 'world'}, predicate)).toBe(true);
-    expect(every({foo: 0, hello: 'world'}, predicate)).toBe(false);
-  });
-
-  test('some', () => {
-    expect(some({}, predicate)).toBe(false);
-    expect(some({foo: 0, hello: 'world'}, predicate)).toBe(true);
-    expect(some({hello: 0}, predicate)).toBe(false);
-  });
-
-  test('md5', () => {
-    expect(md5({a: 'b'})).toBe('92eff9dda44cb8003ee13990782580ff');
-  });
-
-  test('isNil', () => {
-    expect(isNil(undefined)).toBe(true);
-    expect(isNil(null)).toBe(true);
-    expect(isNil(1)).toBe(false);
-    expect(isNil('foo')).toBe(false);
-    expect(isNil({})).toBe(false);
-  });
-
-  test('deepRemoveNil', () => {
-    expect(deepRemoveNil(undefined)).toBeUndefined();
-    expect(deepRemoveNil(null)).toBeUndefined();
-    expect(deepRemoveNil({a: 1, b: undefined, c: 3, d: null})).toEqual({
-      a: 1,
-      c: 3,
-    });
-    expect(deepRemoveNil([1, null, undefined, 2, 3, 0])).toEqual([1, 2, 3, 0]);
-    expect(
-      deepRemoveNil({
-        history: [{0: null, 1: undefined, a: [1, 2, null], b: []}],
-        hobbies: {
-          fishing: 'yes',
-          snowboarding: {
-            0: 'yes',
-            2: null,
-          },
-        },
-        name: 'JohnDoe',
-        nestedArray: [[[4]], null],
-      })
-    ).toEqual({
-      history: [{a: [1, 2], b: []}],
-      hobbies: {
-        fishing: 'yes',
-        snowboarding: {
-          0: 'yes',
-        },
-      },
-      name: 'JohnDoe',
-      nestedArray: [[[4]]],
-    });
-  });
-
-  test('mapKeys', () => {
-    expect(mapKeys({bar: 'baz', foo: 'bar'}, (key) => `${key}1`)).toEqual({
-      bar1: 'baz',
-      foo1: 'bar',
-    });
-  });
-
-  test('mapValues', () => {
-    expect(
-      mapValues({bar: 'baz', foo: 'bar'}, (value) => `${String(value)}1`)
-    ).toEqual({
-      bar: 'baz1',
-      foo: 'bar1',
-    });
-  });
-
   test('convertCase', () => {
     expect(convertCase((text) => text, {})).toEqual({});
     const mixedCaseNestedRecord = {
@@ -134,42 +46,6 @@ describe('object utils', () => {
     });
   });
 
-  test('toSnakeCase', () => {
-    expect(
-      toSnakeCase({
-        nestedObject: {
-          biz: 'baz',
-          fizzBuzz: 5,
-        },
-        someValue: 'foo',
-      })
-    ).toEqual({
-      nested_object: {
-        biz: 'baz',
-        fizz_buzz: 5,
-      },
-      some_value: 'foo',
-    });
-  });
-
-  test('toCamelCase', () => {
-    expect(
-      toCamelCase({
-        nested_object: {
-          biz: 'baz',
-          fizz_buzz: 5,
-        },
-        some_value: 'foo',
-      })
-    ).toEqual({
-      nestedObject: {
-        biz: 'baz',
-        fizzBuzz: 5,
-      },
-      someValue: 'foo',
-    });
-  });
-
   test.each([false, 0, '', null])(
     'toSnakeCase and toCamelCase keep the falsy value %j',
     (value) => {
@@ -177,23 +53,4 @@ describe('object utils', () => {
       expect(toCamelCase(value)).toBe(value);
     }
   );
-
-  test('compact', () => {
-    const recordWithFalsyAndEmptyValues = {
-      a: 'b',
-      c: '',
-      d: false,
-      e: null,
-      f: [],
-    };
-    expect(compact(recordWithFalsyAndEmptyValues)).toEqual({a: 'b'});
-    expect(compact(recordWithFalsyAndEmptyValues, {keepFalsy: true})).toEqual({
-      a: 'b',
-      c: '',
-      d: false,
-    });
-    expect(
-      compact(recordWithFalsyAndEmptyValues, {keepEmptyArray: true})
-    ).toEqual({a: 'b', f: []});
-  });
 });

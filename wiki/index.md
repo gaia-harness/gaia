@@ -95,7 +95,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[TypeScript 7 Readiness]]: tsconfig pre-adopts the TS7 strict baseline; the 7.1 upgrade is a dep swap gated on typescript-eslint's programmatic API.
 - [[Thin Routes]]
 - [[Co-located Tests Folder]]
-- [[Stories as Tests]]: the story doctrine owner: a story is a visual state, a behavior is a `.test()` on it, and a play only reaches the state; the CSF4 shape, how `.test()` runs, where the format is enforced, the three Vitest projects, and the `languages` prop and router stub conventions.
+- [[Stories as Tests]]: the story doctrine owner: a story is a visual state, a behavior is a `.test()` on it, and a play only reaches the state; the CSF4 shape, how `.test()` runs, where the format is enforced, the Vitest projects, and the `languages` prop and router stub conventions.
 - [[Dark Mode Modernization]]
 - [[Content Security Policy]]: per-request nonce CSP, enforced; documents the `unsafe-inline` and no-`report-uri` trade-offs.
 <!-- gaia:maintainer-only:start -->

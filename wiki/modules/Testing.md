@@ -31,7 +31,7 @@ Server-side tests (the QueryClient accessor, `attempt`, base-URL resolution) run
 
 ## Vitest
 
-One config, `apps/web/vitest.config.ts`, defines three projects: `node` for pure and server code, `browser` for hooks and any `*.test.tsx`, and `storybook` for every story. Read it for the exact membership. The `browser` and `storybook` projects run in headless Chromium; no project uses an emulated DOM.
+One config, `apps/web/vitest.config.ts`, defines the projects: `node` for pure and server code, `browser` for hooks and any `*.test.tsx`, `storybook` for every story, and `storybook-dark` for the same stories in the dark theme. Read it for the exact membership. The `browser` and storybook projects run in headless Chromium; no project uses an emulated DOM.
 
 > [!info] Watch mode needs a TTY
 > Vitest only enters watch mode with an interactive TTY; in CI or under Claude, a bare `pnpm test` runs once and exits. Use `pnpm test --run` for an explicit single pass. See [[Vitest]].
@@ -42,7 +42,7 @@ Vitest's browser projects need Chromium, and `pnpm install` installs no browsers
 
 ### Accessibility coverage
 
-`@storybook/addon-a11y` axe-checks every story under Vitest, in the **light theme only**. The dark-theme check is `pnpm pw` (the Playwright story scan), so run it on any theme or token change. See [[Accessibility]].
+`@storybook/addon-a11y` axe-checks every story under Vitest, in the light theme (`storybook`) and again in dark (`storybook-dark`), so `pnpm test` checks a theme or token change. See [[Accessibility]].
 
 ## Component test pattern
 
