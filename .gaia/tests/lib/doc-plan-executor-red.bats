@@ -9,11 +9,12 @@
 # executor whose lint fix changes that body after its RED loses it and the phase
 # commit is refused after the executor has already returned. This suite pins
 # the order that prevents it (stub, lint, RED, implement), the
-# edited-after-RED report, and the tdd skill section the template points at.
+# edited-after-RED report, the tdd skill section the template points at, and
+# that section's own stub-first order.
 #
 # Method: every check takes a root directory and reads the Sub-agent
-# invocation bullet (the tdd-pointer check also reads the tdd skill's
-# heading); each red twin mutates one clause of a scratch
+# invocation bullet or the tdd skill's honest-RED section; each red twin
+# mutates one clause of a scratch
 # copy, proves the copy changed, and runs the same check against it.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
@@ -143,6 +144,22 @@ check_points_at_tdd_section() {
   need_text "tdd skill heading $TDD_HEADING" "$heading" || return 1
 }
 
+check_tdd_stub_first() {
+  local range
+  range="$(range_of "$1/$TDD_REL" "$TDD_HEADING" '**Never break working production code' | trim_lines)"
+  need_text 'tdd honest-RED section' "$range" || return 1
+  in_order "$range" \
+    'write a stub of each new exported symbol the test imports, under its final name' \
+    'returning a wrong value' \
+    'throwing only when the symbol has no return value to get wrong' \
+    'Write the test against the stub' \
+    'lint both' \
+    'run it' \
+    'Then write the implementation' \
+    'Never point the test at a module file that does not exist yet' \
+    'no RED is recorded' || return 1
+}
+
 # ---------- tests ----------
 
 @test "the executor template orders stub, lint, RED, then implementation, after the lint command" {
@@ -183,6 +200,22 @@ check_points_at_tdd_section() {
 
 @test "the template points at the tdd skill's honest-RED section, which exists" {
   green check_points_at_tdd_section
+}
+
+@test "the tdd skill's honest RED writes a wrong-value stub first, then the test, lint, RED, implementation" {
+  green check_tdd_stub_first
+}
+
+@test "red twin: a tdd section that tests a missing symbol instead of a stub fails" {
+  red check_tdd_stub_first "$TDD_REL" \
+    'write a stub of each new exported symbol the test imports, under its final name' \
+    'point the test at a symbol that does not exist yet'
+}
+
+@test "red twin: a tdd section without the missing-module warning fails" {
+  red check_tdd_stub_first "$TDD_REL" \
+    'Never point the test at a module file that does not exist yet' \
+    'Avoid'
 }
 
 @test "red twin: a renamed tdd skill heading fails" {
