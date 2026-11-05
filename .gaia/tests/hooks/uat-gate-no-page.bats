@@ -281,6 +281,67 @@ signedIn('every past order is listed newest first', async ({$1}) => {
   [ "$status" -eq 0 ]
 }
 
+# --- A context bound by awaiting a destructured fixture ---
+
+SIGN_IN_TEST="test('every past order is listed newest first', async ({signIn}) => {
+  const rita = await signIn('rita@example.test');
+  const response = await rita.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+
+@test "a verb call on a context bound by awaiting an in-file fixture clears the floor" {
+  prepare real-server "const withSignIn = test.extend({
+  signIn: async ({playwright, baseURL}, use) => {
+    await use(async (email) => playwright.request.newContext({baseURL, extraHTTPHeaders: {email}}));
+  },
+});
+
+withSignIn${SIGN_IN_TEST#test}"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "the same call clears the floor when the fixture lives in another module" {
+  local rewritten="$BATS_TEST_TMPDIR/rewritten.spec.ts"
+  prepare real-server "$SIGN_IN_TEST"
+  sed "s#from '@playwright/test'#from '../../project-fixtures'#" "$TARGET" >"$rewritten"
+  mv "$rewritten" "$TARGET"
+  grep -qF "from '../../project-fixtures'" "$TARGET" || return 1
+  printf '%s\n' "import {test as base} from '@playwright/test';
+export {expect} from '@playwright/test';
+export const test = base.extend({
+  signIn: async ({playwright, baseURL}, use) => {
+    await use(async (email) => playwright.request.newContext({baseURL, extraHTTPHeaders: {email}}));
+  },
+});" >"$WORK/apps/web/.playwright/project-fixtures.ts"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "a fixture that makes the request itself and returns the response stays refused" {
+  prepare real-server "test('every past order is listed newest first', async ({fetchOrders}) => {
+  const response = await fetchOrders('/orders');
+  expect(response.status()).toBe(200);
+});"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 1 ] || return 1
+  grep -qE "^uat-gate: $TARGET_RELATIVE: floor\$" "$STDERR_FILE"
+}
+
+@test "a context bound by awaiting an imported helper, not a destructured fixture, stays refused" {
+  prepare real-server "import {signInAs} from '../../sign-in';
+
+test('every past order is listed newest first', async ({playwright}) => {
+  const rita = await signInAs(playwright, 'rita@example.test');
+  const response = await rita.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 1 ] || return 1
+  grep -qE "^uat-gate: $TARGET_RELATIVE: floor\$" "$STDERR_FILE" || return 1
+  stderr_has 'The counted call must be the one the Then-clause asserts read: never add a call whose result no Then assert reads only to clear the floor.'
+}
+
 # --- Prerequisite ---
 
 @test "a detector that exits 3 makes a real-server selection exit 4 naming Node and typescript" {
