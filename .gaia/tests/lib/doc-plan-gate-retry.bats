@@ -137,6 +137,18 @@ check_retry_scope() {
     'Any other gate failure, the owning-phase UAT gate included, halts under Stop conditions with no retry.' || return 1
 }
 
+check_red_deny_halts() {
+  local block
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    'Any other gate failure, the owning-phase UAT gate included, halts under Stop conditions with no retry.' \
+    'A phase commit the RED gate (`.claude/hooks/red-verify-commit-check.sh`) denies halts the same way' \
+    'once the implementation exists no honest run can fail' \
+    'never edit, revert or set aside implementation, here or through an executor and in any number of calls, to record a RED' \
+    'the HALTED block names each denied test (file, test name, why no RED exists).' || return 1
+}
+
 check_retry_attribution() {
   local block
   block="$(retry_block "$1")"
@@ -290,6 +302,18 @@ resume_point() {
 
 @test "red twin: a retry that also covers the UAT gate fails" {
   red check_retry_scope 'the owning-phase UAT gate included, halts' 'the owning-phase UAT gate included, retries'
+}
+
+@test "a RED-gate commit deny halts, and implementation is never broken to record a RED" {
+  green check_red_deny_halts
+}
+
+@test "red twin: a RED deny that retries instead of halting fails" {
+  red check_red_deny_halts 'denies halts the same way' 'denies gets one retry'
+}
+
+@test "red twin: a RED rule that lets an executor set implementation aside fails" {
+  red check_red_deny_halts 'here or through an executor and in any number of calls' 'here, in one call'
 }
 
 @test "a failure is attributable only when every error names a file exactly one task declares" {
