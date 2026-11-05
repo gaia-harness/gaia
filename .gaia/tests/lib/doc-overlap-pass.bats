@@ -12,7 +12,7 @@
 #     re-check and the HALTED heading, the unattended arm, the report and the
 #     never line;
 #   - the `--root` and `--post-fix` spellings;
-#   - the lowest-layer purpose, the fixer's replacement for a sibling-less
+#   - the trophy-layer purpose, the fixer's replacement for a sibling-less
 #     demote and the post-fix refusal of one with no replacement;
 #   - the evaluator proposing an unsettled pair flagged `Uncertain:` rather
 #     than skipping it, and naming each changed file it skipped; the pass
@@ -212,10 +212,10 @@ check_dispose() {
 
 # ---------- purpose and the sibling-less demote ----------
 
-check_lowest_layer_purpose() {
+check_trophy_purpose() {
   has_all "$1" \
     'across the unit, route, real-server and browser layers' \
-    'each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer'
+    'sits on the layer the trophy rule in `wiki/decisions/Test Layering.md` picks'
 }
 
 check_sibling_less_fixer() {
@@ -230,14 +230,14 @@ check_post_fix_refusal() {
   has_all "$1" 'a sibling-less demote with no replacement is refused there'
 }
 
-@test "the page states the lowest-layer purpose beside duplication" {
-  check_lowest_layer_purpose "$REF"
+@test "the page states the trophy purpose beside duplication" {
+  check_trophy_purpose "$REF"
 }
 
-@test "red twin: a purpose naming only duplication fails" {
+@test "red twin: a purpose that drops the trophy layer rule fails" {
   local copy="$BATS_TEST_TMPDIR/ref.md"
-  mutate "$REF" ', and that each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer' '' "$copy"
-  run check_lowest_layer_purpose "$copy"
+  mutate "$REF" 'sits on the layer the trophy rule in `wiki/decisions/Test Layering.md` picks' 'sits somewhere' "$copy"
+  run check_trophy_purpose "$copy"
   [ "$status" -ne 0 ]
 }
 

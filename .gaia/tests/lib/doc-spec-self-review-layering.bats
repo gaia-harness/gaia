@@ -83,7 +83,7 @@ template_ok() {
   local flat
   flat="$(tr '\n' ' ' <"$1" | tr -s ' ')"
   grep -qF 'states a rule with one representative journey' <<<"$flat" || return 1
-  grep -qF 'case tables belong to the lowest layer' <<<"$flat" || return 1
+  grep -qF 'case tables belong to one parameterized test' <<<"$flat" || return 1
 }
 
 @test "self-review carries the case-enumeration section, key, trigger and exemption" {
@@ -134,7 +134,7 @@ template_ok() {
 
 @test "template check fails on a copy without the layering sentence" {
   scratch="$BATS_TEST_TMPDIR/template.md"
-  sed 's/case tables belong to the lowest layer/nothing/' "$TEMPLATE" >"$scratch"
+  sed 's/case tables belong to one parameterized test/nothing/' "$TEMPLATE" >"$scratch"
   run template_ok "$scratch"
   [ "$status" -ne 0 ]
 }

@@ -50,7 +50,7 @@ worthiness step's concern, not yours.
 The question for a candidate pair: for the same actor, the same action and the
 same route module, does the sibling assert the same property the subject does?
 Cross-layer duplication is the target: a slow browser test whose property a
-route test or a unit test already asserts is the usual find. The reverse
+real-server or route test already asserts is the usual find. The reverse
 direction, a browser test covering what a lower layer cannot see, is not a
 duplicate.
 
@@ -74,7 +74,7 @@ a real page, it stays, even when each of its assertions could be shown lower.
 
 ## Proposals
 
-Four kinds:
+Five kinds:
 
 - `drop`: the subject adds nothing the sibling does not assert; delete it.
 - `merge`: the subject asserts one extra detail; move it into the sibling and
@@ -82,7 +82,13 @@ Four kinds:
 - `demote`: the property belongs on a lower layer; write it there and delete the
   subject. A demotion writes a test. It cites a `sibling` when a lower test
   already asserts the property, or a `target` (see Output) when the lower test
-  does not exist yet.
+  does not exist yet. A demote whose covering test is a unit test (not a story)
+  needs a reason stating both unit-test conditions
+  (wiki/decisions/Test Layering.md).
+- `fold-up`: two or more subject tests whose property one existing integration
+  test (route, story or real-server) already asserts; delete the subjects and
+  write nothing. A fold-up that would need a new or widened test is report-only
+  (see Output).
 - `keep-both`: the pair looks duplicated but is not. It requires `bug`: the
   specific defect that fails the subject and passes the sibling. No such bug
   means it is not a keep-both; propose a drop, or nothing when the two do not

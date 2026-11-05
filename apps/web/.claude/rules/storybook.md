@@ -34,7 +34,7 @@ Every story is a direct `meta.story({...})` export; never build exports with a f
 
 ## When to write a story
 
-Write a story per visual state and a `.test()` per GAIA behavior a component or page owns: each interaction, state transition and error path, named for the behavior (`'submits on Enter'`, not `'test 1'`). A render-only story still runs and passes axe, and is complete only for a component with no interactive behavior. For an interactive component the tests cover a keyboard path and a focus outcome. Skip stories only for pure-utility components with no visual output (e.g. context providers, HOCs with no markup); those get a `node` or `browser` Vitest test instead.
+Write a story per visual state and `.test()` blocks for the behavior a component or page owns that a user can observe: one test per behavior, with a parameterized table counting as one (`wiki/decisions/Test Layering.md`), named for the behavior (`'submits on Enter'`, not `'test 1'`). A render-only story still runs and passes axe, and is complete only for a component with no interactive behavior. For an interactive component the tests cover a keyboard path and a focus outcome. Skip stories only for pure-utility components with no visual output (e.g. context providers, HOCs with no markup); those get a `node` or `browser` Vitest test instead.
 
 Configure a story through props and args (for example `LanguageSelect`'s `languages` prop), not by mutating shared constants.
 

@@ -121,7 +121,8 @@ no interactive behavior** (a Spinner, a static badge).
 For a **behavior-rich** component, a story file whose stories carry no `.test()`,
 or whose only `.test()` asserts that something rendered, is the START of a test,
 not the whole of it: the interactions, state transitions, and error paths still
-need a `.test()` each. For such a file the non-triviality axis returns **`fix`
+need `.test()` coverage of the behavior a user sees
+(`wiki/decisions/Test Layering.md`). For such a file the non-triviality axis returns **`fix`
 (needs interaction assertions), NOT `keep`.** For an **interactive** component,
 the `.test()` units together must assert a keyboard path (Tab, Enter, Escape or
 arrows, whichever the widget requires) and a focus outcome (where focus lands, or

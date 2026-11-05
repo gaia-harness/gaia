@@ -2,7 +2,7 @@
 
 Contents: When it runs; The step (skip, reuse, dispatch, classify, check, dispose, report); What it never does.
 
-This page owns the overlap pass of a plan run: a check that no test the branch changed duplicates a property another test already asserts, across the unit, route, real-server and browser layers, and that each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer. The orchestrator follows it after the worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) and before the wiki promotion. The judgment is `.claude/agents/overlap-evaluator.md`; the deterministic half is `.gaia/scripts/overlap-check.sh`.
+This page owns the overlap pass of a plan run: a check that no test the branch changed duplicates a property another test already asserts, across the unit, route, real-server and browser layers, and that each one sits on the layer the trophy rule in `wiki/decisions/Test Layering.md` picks: the pass folds tests into an existing integration test that already asserts their property, moves a browser test to the real-server or route layer, moves component behavior to a story, and moves a test to the unit layer only with a reason stating both unit-test conditions. The orchestrator follows it after the worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) and before the wiki promotion. The judgment is `.claude/agents/overlap-evaluator.md`; the deterministic half is `.gaia/scripts/overlap-check.sh`.
 
 ## When it runs
 
