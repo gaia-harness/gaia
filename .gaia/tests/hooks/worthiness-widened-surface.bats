@@ -23,7 +23,7 @@
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/worthiness-widened-surface.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=installed-dependencies
+# bats file_tags=installed-dependencies,whole-tree
 
 bats_require_minimum_version 1.5.0
 
