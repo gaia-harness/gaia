@@ -4,8 +4,9 @@
 #
 # .claude/skills/gaia/references/plan/planner.md holds the gate-retry step
 # block a planner copies into a generated ORCHESTRATOR.md, the executor's
-# self-check in the task prompt template, the Stop conditions halt question
-# and the ledger record the retry writes. A model executes that text, so an
+# self-check in the task prompt template, the Stop conditions halt question,
+# the resume detection's dirty-tree question and the ledger record the retry
+# writes. A model executes that text, so an
 # edit that drops one clause (the attribution rule, the once-per-phase cap,
 # the conservative first option, the resume-time dirty-tree question) would
 # ship silently. This suite pins each clause, and drives plan-resume-point.sh
@@ -175,15 +176,22 @@ check_retry_redispatch() {
   in_order "$block" \
     '- **Re-dispatch the owning tasks.**' \
     'Leave the working tree as it is: no commit, stash, reset, checkout or discard.' \
-    'dispatch a fresh executor for each owning task' \
+    'Dispatch a fresh executor for each owning task' \
     'A task with no attributed error is not re-dispatched.' \
     'carries the original task prompt first, without its `Yield handoff:` line' \
     'then the line `The phase quality gate failed on files this task owns. Fix only these errors, within this task'"'"'s scope, and edit no other file:`' \
-    'then the gate output lines for its files' \
-    'then the last line `Yield handoff: <that path>`' \
+    'then the gate output lines for its files.' \
+    'It carries no `Yield handoff:` line, so a retry executor never yields' \
     'Never continue an executor with SendMessage.' \
     '- **Re-run the gate.**' \
     'run the whole phase gate again' || return 1
+}
+
+check_yield_opt_in_excepts_retry() {
+  local block
+  block="$(fence_with "$1/$PLANNER_REL" '<!-- gaia:orchestrator-step yield-handling -->' | trim_lines)"
+  need_text 'yield-handling block' "$block" || return 1
+  in_order "$block" 'Every task executor dispatch except a phase gate retry opts into the sub-agent context checkpoint' || return 1
 }
 
 check_retry_not_a_grant() {
@@ -313,11 +321,23 @@ resume_point() {
 }
 
 @test "red twin: a retry that commits first fails" {
-  red check_retry_redispatch 'Leave the working tree as it is: no commit, stash, reset, checkout or discard. Take each owning task' 'Commit the working tree first. Take each owning task'
+  red check_retry_redispatch 'Leave the working tree as it is: no commit, stash, reset, checkout or discard. Dispatch a fresh executor' 'Commit the working tree first. Dispatch a fresh executor'
+}
+
+@test "red twin: a retry prompt that opts into yielding fails" {
+  red check_retry_redispatch 'It carries no `Yield handoff:` line, so a retry executor never yields' 'It ends with a `Yield handoff:` line'
 }
 
 @test "red twin: a retry that continues the executor with SendMessage fails" {
   red check_retry_redispatch 'Never continue an executor with SendMessage.' 'Continue the executor with SendMessage.'
+}
+
+@test "the yield-handling block exempts a gate retry from the yield opt-in" {
+  green check_yield_opt_in_excepts_retry
+}
+
+@test "red twin: a yield block that opts every dispatch in fails" {
+  red check_yield_opt_in_excepts_retry 'dispatch except a phase gate retry opts' 'dispatch opts'
 }
 
 @test "the retry grants nothing and the UAT block still binds" {
