@@ -666,6 +666,43 @@ exit 1"
 });"
 }
 
+@test "gate accepts loader and action calls through a named-import alias" {
+  prepare_route
+  green_body "$ROUTE_FILE" "import {loader as requestList} from '../../orders/route';
+test('t', async () => {
+  const response = await requestList({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+  green_body "$ROUTE_FILE" "import {
+  meta,
+  action as signOut,
+} from '../../sign-out/route';
+test('t', async () => {
+  const response = await signOut({request: new Request('http://localhost/sign-out', {method: 'POST'})});
+  expect(response.status).toBe(302);
+});"
+  gate --phase 3 --vitest-report "$VITEST_REPORTS/passed.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "gate refuses a loader alias that is never called with the floor reason" {
+  route_case floor "import {loader as requestList} from '../../orders/route';
+test('t', async () => {
+  const request = new Request('http://localhost/orders');
+  expect(request.method).toBe('GET');
+});"
+}
+
+@test "gate refuses a call through an alias of another export with the floor reason" {
+  route_case floor "import {meta as loader2} from '../../orders/route';
+test('t', async () => {
+  const result = await loader2({request: new Request('http://localhost/orders')});
+  expect(result.title).toBe('Orders');
+});"
+}
+
 @test "gate refuses test.todo in a route test with the annotation reason" {
   route_case annotation "test.todo('later');
 test('t', async () => {
