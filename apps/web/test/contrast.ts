@@ -1,5 +1,8 @@
-// Shared by the Playwright specs (Node) and story tests (the browser), so it
-// imports nothing from either side.
+// The type and the contrast-ratio math are shared by the Playwright specs
+// (Node) and story tests (the browser), so this file imports nothing from
+// either side. The canvas color resolution is not shared: `resolveColors` in
+// `.playwright/theme.ts` duplicates `resolveColor` below, so keep the two in
+// step.
 
 export type Rgba = {a: number; b: number; g: number; r: number};
 

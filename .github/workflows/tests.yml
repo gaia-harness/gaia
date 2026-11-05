@@ -21,12 +21,11 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     # 25 minutes bounds execution: a job that hits the cap is cancelled and
     # reports an ordinary red check to re-run rather than hanging. A full run
-    # here is a few minutes: typecheck, lint, Vitest and Playwright (which
-    # includes the per-story dark a11y scan over the built Storybook, one
-    # worker per core). On CI each broken story costs about 3.5 minutes across
-    # its retries, so the cap leaves room for a few broken stories to report
-    # in full even when the system-dependency install below spends most of
-    # its own 10-minute bound on a slow apt mirror. The browser install below
+    # here is a few minutes: typecheck, lint, Vitest (whose storybook and
+    # storybook-dark projects run the a11y scan over every story in light and
+    # dark) and Playwright (one worker per core). The cap leaves room for
+    # failures to report in full even when the system-dependency install below
+    # spends most of its own 10-minute bound on a slow apt mirror. The browser install below
     # fetches one engine rather than every engine Playwright ships.
     timeout-minutes: 25
     runs-on: ubuntu-latest
@@ -172,9 +171,9 @@ jobs:
         env:
           CHECK_BASE: ${{ steps.base.outputs.base }}
         run: bash .gaia/scripts/frontend-lint-delta.sh --root . --base "$CHECK_BASE"
-      # Only the engine the suites run. Vitest's browser and storybook projects
-      # and the Playwright story scan all launch Chromium, so this one install
-      # serves both steps below and must precede the first of them. `playwright install` resolves its browser
+      # Only the engine the suites run. Vitest's browser, storybook and
+      # storybook-dark projects and the Playwright specs all launch Chromium, so
+      # this one install serves both steps below and must precede the first of them. `playwright install` resolves its browser
       # set from its arguments alone and reads nothing from playwright.config.ts,
       # so with none named it adds firefox and webkit on top of what this suite
       # needs, for a config whose CI project list is chromium alone (its
