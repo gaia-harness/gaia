@@ -142,7 +142,10 @@ check_edit_after_red_reported() {
     'any such edit voids its RED' \
     'never set aside implementation to record one' \
     'Leave a test you judge wrong as it is' \
-    'report the needed edit (file, test name, what changed) under `### Deviations from plan`' || return 1
+    'report the needed edit (file, test name, what changed) under `### Deviations from plan`' \
+    'The one exception is a phase gate retry'"'"'s `floor` line: change only the call the floor counts, its receiver or arguments' \
+    'never add, remove or change an assertion, a test or any other call' \
+    'report the edit under `### Deviations from plan` (file:line, before -> after)' || return 1
 }
 
 # The implementer writes no test of its own: the test author's tests are the
@@ -327,6 +330,24 @@ check_tdd_stub_first() {
   red check_edit_after_red_reported "$PLANNER_REL" \
     'at any layer, Vitest or Playwright, whether or not the RED ledger tracks it' \
     'for a test the RED ledger tracks'
+}
+
+@test "red twin: a floor exception that reaches past the one counted call fails" {
+  red check_edit_after_red_reported "$PLANNER_REL" \
+    'change only the call the floor counts, its receiver or arguments' \
+    'change the test as the floor needs'
+}
+
+@test "red twin: a floor exception that lets an assertion change fails" {
+  red check_edit_after_red_reported "$PLANNER_REL" \
+    'never add, remove or change an assertion, a test or any other call' \
+    'never add a test'
+}
+
+@test "red twin: a floor exception edit not reported under Deviations fails" {
+  red check_edit_after_red_reported "$PLANNER_REL" \
+    'report the edit under `### Deviations from plan` (file:line, before -> after)' \
+    'report the edit under `### Findings`'
 }
 
 @test "red twin: an implementer clause that lets a wrong test be edited fails" {
