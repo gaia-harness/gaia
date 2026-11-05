@@ -3,9 +3,9 @@ import http from 'node:http';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-// Serves the built Storybook (`pnpm build-storybook`) for the story a11y scan.
-// A missing build still starts the server, so the other specs run; the story
-// spec is the one that fails, naming the build command. `/__ready` answers 200
+// Serves the built Storybook (`pnpm build-storybook`) for the Storybook specs.
+// A missing build still starts the server, so the other specs run; every
+// Storybook spec fails, naming the build command. `/__ready` answers 200
 // regardless, so Playwright's readiness probe never depends on the build.
 
 const MIME_TYPES: Record<string, string> = {
