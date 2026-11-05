@@ -84,7 +84,7 @@ type DeclinedLedger = {
 /**
  * The ledger is clone-wide state, so it anchors on the main checkout from any
  * subdirectory or linked worktree, and falls back to `cwd` when the main
- * checkout cannot be resolved (not a repository, or no git).
+ * checkout cannot be resolved.
  */
 export const declinedLedgerPath = (cwd: string): string => {
   let root: string;
