@@ -16,7 +16,7 @@
 # test on stdout. Exit 2: a usage or setup error (no jq, not a git work tree,
 # gate missing, the tree could not be staged), or the gate could not decide (it
 # denied naming no test, such as an unusable package registry); the reason goes
-# to stderr. A gate that fails open (no node) reports nothing pending, the
+# to stderr. A gate that fails open (such as no node) reports nothing pending, the
 # same verdict the commit would get.
 set -uo pipefail
 

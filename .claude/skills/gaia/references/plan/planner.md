@@ -211,7 +211,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
              Tasks: <task-<T>.md of each owning task>
              Tests: <file › test name of each line>
 
-         Then dispatch a fresh test author for each owning task only: the task prompt with the test-author clause, then the line `These tests have no recorded failing run. Run the RED command for each, and make any test that cannot fail fail on an assertion through its stub:`, then its lines, then the `Yield handoff:` line at that unit's next yield path. No implementation exists yet, so a RED recorded now is honest. Re-run the check. A second exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED` and each `file › test name`, and stops.
+         Then dispatch a fresh test author for each owning task only: the task prompt with the test-author clause, then the line `These tests have no recorded failing run. Run the RED command for each, and make any test that cannot fail fail on an assertion through its stub:`, then its lines, then the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md`, k being that unit's yield count plus one, pre-cleared as in step 1. No implementation exists yet, so a RED recorded now is honest. Re-run the check. A second exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED` and each `file › test name`, and stops.
       4. **Implementers.** Dispatch an implementer for every task in the wave, split or not, in parallel: the task prompt with the implementer clause. A task with no test waits for this step so no sibling's implementation lands before the check.
       ```
 
