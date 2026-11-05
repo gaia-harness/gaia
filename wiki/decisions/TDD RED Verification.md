@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-06-04
 created: 2026-06-04
-updated: 2026-10-28
+updated: 2026-11-06
 tags: [decision, tdd, hooks, quality]
 ---
 
@@ -45,6 +45,7 @@ The content signal is a normalized hash of the test's comment-free content, so t
 
 - `.gaia/scripts/red-ledger/extract-test-signals.mjs`: Node ESM helper using the TypeScript compiler API to emit `{fullName, signal, kind}` NDJSON for each test in a file.
 - `.claude/hooks/lib/red-ledger.sh`: shared shell library sourced by both hooks. Owns ledger path resolution, repo-relative normalization, and signal invocation.
+- `.gaia/scripts/red-ledger/red-pending.sh`: runs the commit check against the whole working tree through a temporary index, without committing, and lists each new test it would deny. A plan orchestrator runs it after the test-author dispatch and before the implementer dispatch (`.claude/skills/gaia/references/plan/planner.md`, the test-first split block), while an honest RED is still possible.
 
 ## Type-only tests
 

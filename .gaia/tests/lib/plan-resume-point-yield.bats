@@ -120,3 +120,21 @@ resume() {
   run bash "$mutated" --git-dir "$REPO" --plan-dir "$PLAN" --phases 4
   [ "${lines[0]}" = "4" ]
 }
+
+# The test-first split's retry block is another commit-less block, so it too
+# leaves its phase incomplete until a commit block follows.
+@test "a RED RETRY block for phase 2 leaves phase 2 incomplete; its later commit block completes it" {
+  local sha_one sha_two
+  sha_one="$(commit_one one)"
+  {
+    commit_block 1 "$sha_one"
+    printf '## Phase 2, Phase 2 title (RED RETRY 1)\nTasks: task-build.md\nTests: apps/web/app/x.test.ts › adds\n\n'
+  } >"$PLAN/PROGRESS.md"
+  resume --phases 3
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "2" ]
+  sha_two="$(commit_one two)"
+  commit_block 2 "$sha_two" >>"$PLAN/PROGRESS.md"
+  resume --phases 3
+  [ "${lines[0]}" = "3" ]
+}

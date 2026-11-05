@@ -8,10 +8,11 @@
 # commit's RED gate binds that run to the test's executable body, so an
 # executor whose lint fix changes that body after its RED loses it and the phase
 # commit is refused after the executor has already returned. This suite pins
-# the order that prevents it (stub, lint, RED, implement), the stub's final
-# signature (type-aware lint on the test reads it), the edited-after-RED
-# report, the tdd skill section the template points at, and that section's own
-# stub-first order.
+# the order that prevents it, split across two dispatches (a test author that
+# stubs, lints and runs RED, then an implementer), the orchestrator's split
+# block between them, the stub's final signature (type-aware lint on the test
+# reads it), the edited-after-RED report, the tdd skill section the template
+# points at, and that section's own stub-first order.
 #
 # Method: every check takes a root directory and reads the Sub-agent
 # invocation bullet or the tdd skill's honest-RED section; each red twin
@@ -25,6 +26,7 @@ setup() {
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   TDD_REL=".claude/skills/tdd/SKILL.md"
   TDD_HEADING='#### Authoring an honest RED on the deterministic surface'
+  DISPATCH_CLAUSES='**The prompt template MUST also carry the two dispatch clauses below, and a dispatch sends only the one for its kind**'
 }
 
 # ---------- helpers ----------
@@ -106,11 +108,14 @@ check_red_order() {
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
     '**The prompt template MUST also name the command that lints a sub-agent'"'"'s own files**' \
-    '**The prompt template MUST also order a new test'"'"'s RED**' \
-    'write the test and a stub of each new exported symbol it imports, under its final name' \
-    'lint the test and the stub with the lint command above, fixing every finding by hand' \
-    'run the RED command' \
-    'only then write the implementation and lint it' || return 1
+    "$DISPATCH_CLAUSES" \
+    '**Test-author clause.**' \
+    'For each new exported symbol a test imports, write a stub under its final name' \
+    'Lint the tests and stubs with the lint command above, fixing every finding by hand' \
+    'then run the RED command for each test file and return' \
+    'Write no implementation.' \
+    '**Implementer clause.**' \
+    'Replace the stubs with the implementation and lint it' || return 1
 }
 
 check_stub_wrong_value() {
@@ -118,7 +123,7 @@ check_stub_wrong_value() {
   range="$(invocation_range "$1")"
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
-    '**The prompt template MUST also order a new test'"'"'s RED**' \
+    '**Test-author clause.**' \
     'The stub returns a wrong value, so the RED fails on an assertion' \
     'it throws only when the symbol has no return value to get wrong' || return 1
 }
@@ -128,11 +133,59 @@ check_edit_after_red_reported() {
   range="$(invocation_range "$1")"
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
-    '**The prompt template MUST also order a new test'"'"'s RED**' \
-    'Any edit to the executable body of a new test after its RED voids that RED' \
-    'never fakes a RED' \
-    'reports the test (file, test name, what changed) under `### Deviations from plan`' \
-    'and says that test'"'"'s RED is void' || return 1
+    '**Implementer clause.**' \
+    'Never edit the executable body of a test the test author wrote' \
+    'any such edit voids its RED' \
+    'never set aside implementation to record one' \
+    'Report a needed edit (file, test name, what changed) under `### Deviations from plan`' \
+    'and say that test'"'"'s RED is void' || return 1
+}
+
+# The implementer writes no test of its own: the test author's tests are the
+# only ones with a RED, so any other new test would reach the phase commit
+# with none.
+check_implementer_writes_no_test() {
+  local range
+  range="$(invocation_range "$1")"
+  need_text 'executor template range' "$range" || return 1
+  in_order "$range" \
+    '**Implementer clause.**' \
+    'Write no new test: a test you judge worth adding goes under `### Findings`' || return 1
+}
+
+# A test author stubs only in its own task's files; a stub in a sibling's file
+# is the planning error the decomposition audit owns.
+check_stub_ownership() {
+  local range
+  range="$(invocation_range "$1")"
+  need_text 'executor template range' "$range" || return 1
+  in_order "$range" \
+    '**Test-author clause.**' \
+    'Put a stub only in a file this task declares' \
+    '`decomposition-audit.md`, the dependency-soundness lens' || return 1
+  grep -qF -- '**Decomposition & dependency soundness' "$1/.claude/skills/gaia/references/plan/decomposition-audit.md" \
+    || { printf 'decomposition-audit.md has no dependency-soundness lens\n' >&2; return 1; }
+}
+
+# The orchestrator's test-first split: test authors, the check, one retry,
+# then implementers, with a no-test task held until the check passes.
+check_split_block() {
+  local block
+  block="$(range_of "$1/$PLANNER_REL" '<!-- gaia:orchestrator-step red-split -->' '**Phase gate retry.**' | trim_lines)"
+  need_text 'red-split block' "$block" || return 1
+  in_order "$block" \
+    '**Test authors.**' \
+    'Dispatch a test author for every splitting task in the wave, in parallel' \
+    '**Check.** Once every test author has returned' \
+    'bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>' \
+    'Exit 2 halts under Stop conditions' \
+    'A file no task names halts.' \
+    '## Phase N, <title> (RED RETRY 1)' \
+    'dispatch a fresh test author for each owning task only' \
+    'A second exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED`' \
+    '**Implementers.**' \
+    'Dispatch an implementer for every task in the wave, split or not' \
+    'A task with no test waits for this step' || return 1
 }
 
 check_stub_signature() {
@@ -140,7 +193,7 @@ check_stub_signature() {
   range="$(invocation_range "$1")"
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
-    '**The prompt template MUST also order a new test'"'"'s RED**' \
+    '**Test-author clause.**' \
     'under its final name and with its final signature' \
     'a Promise-returning function is stubbed async' \
     'type-aware lint on the test reads the signature' \
@@ -163,8 +216,8 @@ check_points_at_tdd_section() {
   range="$(invocation_range "$1")"
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
-    '**The prompt template MUST also order a new test'"'"'s RED**' \
-    "(\`$TDD_REL\`, \`$TDD_HEADING\`)" || return 1
+    "$DISPATCH_CLAUSES" \
+    "\`$TDD_REL\`, \`$TDD_HEADING\`)" || return 1
   heading="$(grep -Fx -- "$TDD_HEADING" "$1/$TDD_REL")"
   need_text "tdd skill heading $TDD_HEADING" "$heading" || return 1
 }
@@ -187,20 +240,62 @@ check_tdd_stub_first() {
 
 # ---------- tests ----------
 
-@test "the executor template orders stub, lint, RED, then implementation, after the lint command" {
+@test "the test author stubs, lints and runs RED with no implementation; the implementer comes after" {
   green check_red_order
 }
 
 @test "red twin: a RED run placed before the lint step fails" {
   red check_red_order "$PLANNER_REL" \
-    'lint the test and the stub with the lint command above, fixing every finding by hand' \
-    'run the RED command, then lint the test and the stub'
+    'Lint the tests and stubs with the lint command above, fixing every finding by hand, then run the RED command' \
+    'Run the RED command, then lint the tests and stubs'
 }
 
 @test "red twin: a dropped stub step fails" {
   red check_red_order "$PLANNER_REL" \
-    'write the test and a stub of each new exported symbol it imports, under its final name' \
-    'write the test'
+    'For each new exported symbol a test imports, write a stub under its final name' \
+    'Write the tests'
+}
+
+@test "red twin: a test author allowed to write implementation fails" {
+  red check_red_order "$PLANNER_REL" \
+    'Write no implementation.' \
+    'Then write the implementation.'
+}
+
+@test "the implementer writes no new test and routes one it wants to Findings" {
+  green check_implementer_writes_no_test
+}
+
+@test "red twin: an implementer allowed to add a test fails" {
+  red check_implementer_writes_no_test "$PLANNER_REL" \
+    'Write no new test: a test you judge worth adding goes under `### Findings`' \
+    'Add any test you judge worth adding'
+}
+
+@test "a test author stubs only in its own task's files, pointing at the dependency lens" {
+  green check_stub_ownership
+}
+
+@test "red twin: a test author free to stub in any file fails" {
+  red check_stub_ownership "$PLANNER_REL" \
+    'Put a stub only in a file this task declares' \
+    'Put a stub wherever the symbol belongs'
+}
+
+@test "the split block runs test authors, the check, one retry, then every implementer" {
+  green check_split_block
+}
+
+@test "red twin: a split block without the retry fails" {
+  red check_split_block "$PLANNER_REL" \
+    '## Phase N, <title> (RED RETRY 1)' \
+    '## Phase N, <title> (HALTED)'
+}
+
+@test "red twin: a split block that dispatches no-test tasks before the check fails" {
+  red check_split_block "$PLANNER_REL" \
+    'A task with no test waits for this step' \
+    'A task with no test runs alongside the test authors'
 }
 
 @test "the stub returns a wrong value and throws only without one" {
@@ -219,13 +314,13 @@ check_tdd_stub_first() {
 
 @test "red twin: an edited-after-RED report routed to Findings fails" {
   red check_edit_after_red_reported "$PLANNER_REL" \
-    'under `### Deviations from plan`' \
-    'under `### Findings`'
+    'what changed) under `### Deviations from plan`' \
+    'what changed) under `### Findings`'
 }
 
 @test "red twin: an edited-after-RED report that keeps its RED fails" {
   red check_edit_after_red_reported "$PLANNER_REL" \
-    ' and says that test'"'"'s RED is void' \
+    ' and say that test'"'"'s RED is void' \
     ''
 }
 

@@ -341,7 +341,7 @@ resume_point() {
 }
 
 @test "red twin: a retry record carrying a Commit line fails" {
-  red check_retry_record 'Tasks: <task-<T>.md' 'Commit: abc1234'
+  red check_retry_record $'Retry: 1\n            Tasks: <task-<T>.md' $'Retry: 1\n            Commit: abc1234'
 }
 
 @test "the retry re-dispatches only owning tasks, fresh, with the original prompt then the gate output" {

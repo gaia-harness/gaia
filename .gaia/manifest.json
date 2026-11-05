@@ -347,6 +347,7 @@
     ".gaia/scripts/red-ledger/extract-story-signals.mjs": "owned",
     ".gaia/scripts/red-ledger/extract-test-signals.mjs": "owned",
     ".gaia/scripts/red-ledger/README.md": "owned",
+    ".gaia/scripts/red-ledger/red-pending.sh": "owned",
     ".gaia/scripts/red-ledger/story-format.mjs": "owned",
     ".gaia/scripts/resolve-audit-members.sh": "owned",
     ".gaia/scripts/roster-prune-overbroad.sh": "owned",
@@ -854,7 +855,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-05T10:27:30.397Z",
+  "generated": "2026-11-05T17:45:25.371Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

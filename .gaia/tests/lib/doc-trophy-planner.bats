@@ -21,7 +21,7 @@ setup() {
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   TDD_REL=".claude/skills/tdd/SKILL.md"
   LIMIT_CLAUSE='**The prompt template MUST also limit the tests a sub-agent writes**'
-  RED_CLAUSE='**The prompt template MUST also order a new test'"'"'s RED**'
+  RED_CLAUSE='**The prompt template MUST also carry the two dispatch clauses below'
 }
 
 # ---------- helpers ----------
@@ -172,7 +172,7 @@ check_route_call_floor() {
 }
 
 @test "red twin: moving the executor limit after the RED clause fails" {
-  red check_executor_limit "$PLANNER_REL" 'MUST also limit the tests' 'MUST also order a new test'"'"'s RED** (moved) **The prompt template MUST also limit the tests'
+  red check_executor_limit "$PLANNER_REL" 'MUST also limit the tests' 'MUST also carry the two dispatch clauses below (moved) **The prompt template MUST also limit the tests'
 }
 
 @test "planner cuts vertical slices and names the infrastructure marker" {
