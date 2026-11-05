@@ -138,3 +138,20 @@ resume() {
   resume --phases 3
   [ "${lines[0]}" = "3" ]
 }
+
+# The test review's fix-round block is commit-less too.
+@test "a TEST REVIEW block for phase 2 leaves phase 2 incomplete; its later commit block completes it" {
+  local sha_one sha_two
+  sha_one="$(commit_one one)"
+  {
+    commit_block 1 "$sha_one"
+    printf '## Phase 2, Phase 2 title (TEST REVIEW 1)\nTasks: task-build.md\nDefects: apps/web/app/x.test.ts:9 › adds: the new row only\n\n'
+  } >"$PLAN/PROGRESS.md"
+  resume --phases 3
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "2" ]
+  sha_two="$(commit_one two)"
+  commit_block 2 "$sha_two" >>"$PLAN/PROGRESS.md"
+  resume --phases 3
+  [ "${lines[0]}" = "3" ]
+}

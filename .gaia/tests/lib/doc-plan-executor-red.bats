@@ -10,7 +10,8 @@
 # commit is refused after the executor has already returned. This suite pins
 # the order that prevents it, split across two dispatches (a test author that
 # stubs, lints and runs RED, then an implementer), the orchestrator's split
-# block between them, the stub's final signature (type-aware lint on the test
+# block between them, the test review that checks the tests before any
+# implementer runs, the stub's final signature (type-aware lint on the test
 # reads it), the edited-after-RED report, the tdd skill section the template
 # points at, and that section's own stub-first order.
 #
@@ -25,6 +26,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   TDD_REL=".claude/skills/tdd/SKILL.md"
+  REVIEW_REL=".claude/skills/gaia/references/plan/test-review.md"
   TDD_HEADING='#### Authoring an honest RED on the deterministic surface'
   DISPATCH_CLAUSES='**The prompt template MUST also carry the two dispatch clauses below, and a dispatch sends only the one for its kind**'
 }
@@ -65,14 +67,15 @@ need_text() {
 
 invocation_range() { range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | trim_lines; }
 
-# mutated_tree <relpath> <old> <new>: copy planner.md and the tdd skill into a
+# mutated_tree <relpath> <old> <new>: copy planner.md, the tdd skill and the
+# test review page into a
 # scratch tree (TREE), replace the first fixed-string <old> in <relpath> with
 # <new>, and prove the copy changed.
 mutated_tree() {
   local rel="$1" old="$2" new="$3" file content mutated
   TREE="$BATS_TEST_TMPDIR/tree"
   rm -rf "$TREE"
-  for file in "$PLANNER_REL" "$TDD_REL"; do
+  for file in "$PLANNER_REL" "$TDD_REL" "$REVIEW_REL"; do
     mkdir -p "$TREE/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$TREE/$file"
   done
@@ -178,13 +181,14 @@ check_split_block() {
     'Dispatch a test author for every splitting task in the wave, in parallel' \
     '**Check.** Once every test author has returned' \
     'bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>' \
+    'Exit 0 goes to the test review block below' \
     'Exit 2 halts under Stop conditions' \
     'A file no task names halts.' \
     '## Phase N, <title> (RED RETRY 1)' \
     'dispatch a fresh test author for each owning task only' \
     'A second exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED`' \
     '**Implementers.**' \
-    'Dispatch an implementer for every task in the wave, split or not' \
+    'Once the test review passes, dispatch an implementer for every task in the wave, split or not' \
     'A task with no test waits for this step' || return 1
 }
 
@@ -374,4 +378,80 @@ check_tdd_stub_first() {
   red check_points_at_tdd_section "$TDD_REL" \
     "$TDD_HEADING" \
     '#### Authoring a RED'
+}
+
+# The test review between the RED check and the implementers: the planner's
+# block points at the page, and the page dispatches a pinned Sonnet reviewer,
+# guards the verdict file, fixes once through the test authors, re-proves the
+# REDs, and halts on a defect after that fix.
+check_test_review() {
+  local block page
+  block="$(range_of "$1/$PLANNER_REL" '<!-- gaia:orchestrator-step test-review -->' '**Phase gate retry.**' | trim_lines)"
+  need_text 'test-review block' "$block" || return 1
+  in_order "$block" \
+    'After the test-first split'"'"'s RED check passes and before its implementers' \
+    '.claude/skills/gaia/references/plan/test-review.md' || return 1
+  page="$(cat "$1/$REVIEW_REL" 2>/dev/null)"
+  need_text 'test review page' "$page" || return 1
+  in_order "$page" \
+    '## Round 1' \
+    'Agent(subagent_type: "general-purpose", model: "sonnet")' \
+    'bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file' \
+    'Every entry `ok`: go to step 4 of the test-first split block' \
+    '## A defect' \
+    'Reason: test review defect after one fix' \
+    '## Phase N, <title> (TEST REVIEW 1)' \
+    '**Re-dispatch the owning test authors only**' \
+    'bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>' \
+    'Reason: no recorded RED after test review' \
+    '## Round 2' \
+    '## A no-op review' \
+    'Reason: test review produced no verdict file' \
+    'Never review on the main thread' \
+    '## The prompt template' \
+    'No citation, no defect.' \
+    '**Over-constraint**' \
+    '**Under-constraint**' \
+    '**Contradiction**' \
+    'Out of scope:' || return 1
+}
+
+@test "the test review sits between the RED check and the implementers, and its page owns the fix round and the halts" {
+  green check_test_review
+}
+
+@test "red twin: a split block whose implementers do not wait for the test review fails" {
+  red check_split_block "$PLANNER_REL" \
+    'Once the test review passes, dispatch an implementer' \
+    'Dispatch an implementer'
+}
+
+@test "red twin: a test review page with no halt after one fix fails" {
+  red check_test_review "$REVIEW_REL" \
+    'Reason: test review defect after one fix' \
+    'Reason: none'
+}
+
+@test "red twin: a test review that does not pin the Sonnet reviewer fails" {
+  red check_test_review "$REVIEW_REL" \
+    'Agent(subagent_type: "general-purpose", model: "sonnet")' \
+    'Agent(subagent_type: "general-purpose")'
+}
+
+@test "red twin: a test review that skips the RED re-check after the fix fails" {
+  red check_test_review "$REVIEW_REL" \
+    'bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>' \
+    'nothing'
+}
+
+@test "red twin: a test review page without the citation rule fails" {
+  red check_test_review "$REVIEW_REL" \
+    'No citation, no defect.' \
+    'Use judgment.'
+}
+
+@test "red twin: a planner without the test review block fails" {
+  red check_test_review "$PLANNER_REL" \
+    '<!-- gaia:orchestrator-step test-review -->' \
+    '<!-- gone -->'
 }

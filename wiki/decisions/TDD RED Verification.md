@@ -47,6 +47,8 @@ The content signal is a normalized hash of the test's comment-free content, so t
 - `.claude/hooks/lib/red-ledger.sh`: shared shell library sourced by both hooks. Owns ledger path resolution, repo-relative normalization, and signal invocation.
 - `.gaia/scripts/red-ledger/red-pending.sh`: runs the commit check against the whole working tree through a temporary index, without committing, and lists each new test it would deny. A plan orchestrator runs it after the test-author dispatch and before the implementer dispatch (`.claude/skills/gaia/references/plan/planner.md`, the test-first split block), while an honest RED is still possible.
 
+A RED proves a test can fail, not that it asserts the right thing: a wrong assertion fails against a stub too. So once the REDs are on record, a plan build reviews each new test against its task doc and SPEC before any implementer runs, while a fix and a new RED are still honest (`.claude/skills/gaia/references/plan/test-review.md`).
+
 ## Type-only tests
 
 A type-level assertion is invisible to the test runner: vitest runs without `--typecheck`, so `expectTypeOf`/`assertType` calls and `@ts-expect-error` proofs neither pass nor fail at runtime. A test built only from these always passes the runner yet can never produce a failing run, so demanding a runtime RED for it is unsatisfiable. The signal helper therefore classifies every test and the commit check exempts the type-only ones, delegating their correctness to the `tsc` step of the [[Quality Gate]].

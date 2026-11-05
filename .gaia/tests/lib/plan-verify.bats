@@ -21,6 +21,7 @@ setup() {
   S_GATE='<!-- gaia:orchestrator-step uat-gate -->'
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
   S_SPLIT='<!-- gaia:orchestrator-step red-split -->'
+  S_REVIEW='<!-- gaia:orchestrator-step test-review -->'
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
   S_PRE='<!-- gaia:orchestrator-step uat-pre-audit -->'
   S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
@@ -29,8 +30,8 @@ setup() {
   S_AUDIT='<!-- gaia:orchestrator-step code-audit -->'
   S_CLEAR='<!-- gaia:orchestrator-step post-clearance -->'
   S_CLOSE='<!-- gaia:orchestrator-step post-merge-close -->'
-  SPEC_ORDER=("$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
-  SPEC_LESS_ORDER=("$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
+  SPEC_ORDER=("$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
+  SPEC_LESS_ORDER=("$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
 }
 
 # write_spec [<story then-clause>]: three UATs, one per surface.
@@ -110,7 +111,7 @@ yield_block() {
 # is_verbatim <sentinel>: the sentinels whose whole block is copied.
 is_verbatim() {
   case "$1" in
-    "$S_RESUME" | "$S_YIELD" | "$S_SPLIT" | "$S_RETRY" | "$S_WORTH" | "$S_OVERLAP" | "$S_WIKI" | "$S_AUDIT" | "$S_CLEAR") return 0 ;;
+    "$S_RESUME" | "$S_YIELD" | "$S_SPLIT" | "$S_REVIEW" | "$S_RETRY" | "$S_WORTH" | "$S_OVERLAP" | "$S_WIKI" | "$S_AUDIT" | "$S_CLEAR") return 0 ;;
   esac
   return 1
 }
@@ -307,6 +308,8 @@ verify_spec_less() {
     printf '\n'
     block_of "$S_SPLIT" 6
     printf '\n'
+    block_of "$S_REVIEW" 6
+    printf '\n'
     block_of "$S_RETRY" 6
     printf '\n      %s\n\n' "$S_PRE"
     for literal in "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
@@ -321,7 +324,7 @@ verify_spec_less() {
 
 @test "a sentinel line carrying trailing prose does not match" {
   spec_fixture
-  write_orchestrator "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE see below"
+  write_orchestrator "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE see below"
   verify_spec
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF -- "$S_CLOSE"
@@ -329,7 +332,7 @@ verify_spec_less() {
 
 @test "the render sentinel below the gate sentinel is out of order and named" {
   spec_fixture
-  write_orchestrator "$S_RESUME" "$S_GATE" "$S_RENDER" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_RESUME" "$S_GATE" "$S_RENDER" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
   [ "$status" -eq 1 ]
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_RENDER"
@@ -337,7 +340,7 @@ verify_spec_less() {
 
 @test "a spec-less plan with the close sentinel above the promotion sentinel fails" {
   spec_less_fixture
-  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_WORTH" "$S_CLOSE" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"
+  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_WORTH" "$S_CLOSE" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"
   verify_spec_less
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF 'out of order'
@@ -445,6 +448,8 @@ mutate_orchestrator() {
     printf '\n'
     block_of "$S_SPLIT" 6
     printf '\n'
+    block_of "$S_REVIEW" 6
+    printf '\n'
     block_of "$S_RETRY" 6
     printf '\n      %s\n\n' "$S_PRE"
     for literal in "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
@@ -464,6 +469,8 @@ mutate_orchestrator() {
     yield_block 6
     printf '\n'
     block_of "$S_SPLIT" 6
+    printf '\n'
+    block_of "$S_REVIEW" 6
     printf '\n'
     block_of "$S_RETRY" 6
     printf '\n'
@@ -552,7 +559,7 @@ mutate_orchestrator() {
     swapped[index]="${order[$((index + 1))]}"
     swapped[$((index + 1))]="${order[$index]}"
     spec_fixture
-    write_orchestrator "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "${swapped[@]}"
+    write_orchestrator "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "${swapped[@]}"
     verify_spec
     [ "$status" -eq 1 ] || { echo "swap at $index exited $status" >&2; return 1; }
     echo "$output" | grep -F 'out of order' | grep -qF -- "${order[$index]}" || { echo "swap at $index not named: $output" >&2; return 1; }
@@ -656,17 +663,17 @@ strip_marked() {
     echo "$output" | grep -F 'missing the sentinel line' | grep -qF -- "$S_OVERLAP" || return 1
   done
   spec_fixture
-  write_orchestrator "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_OVERLAP" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_OVERLAP" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
   [ "$status" -eq 1 ] || return 1
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_OVERLAP" || return 1
   spec_fixture
-  write_orchestrator "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_PRE" "$S_OVERLAP" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_PRE" "$S_OVERLAP" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
   [ "$status" -eq 1 ] || return 1
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_WORTH" || return 1
   spec_less_fixture
-  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_WORTH" "$S_WIKI" "$S_OVERLAP" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_WORTH" "$S_WIKI" "$S_OVERLAP" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec_less
   [ "$status" -eq 1 ] || return 1
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_OVERLAP" || return 1
@@ -730,7 +737,7 @@ strip_marked() {
 
 @test "red twin: resume-detection after the first later step is out of order and named, in both arms" {
   spec_fixture
-  write_orchestrator "$S_RENDER" "$S_RESUME" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_RENDER" "$S_RESUME" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
   [ "$status" -eq 1 ] || return 1
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_RESUME" || return 1
