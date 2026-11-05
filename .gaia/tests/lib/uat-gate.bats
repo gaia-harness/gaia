@@ -695,10 +695,18 @@ test('t', async () => {
 });"
 }
 
-@test "gate refuses a call through a type cast of loader, which is no import alias, with the floor reason" {
+@test "gate refuses a call through a type cast of loader outside an import, with the floor reason" {
   route_case floor "import {loader} from '../../orders/route';
 test('t', async () => {
-  const handler = pick(1, loader as Handler);
+  const handler = pick(1, loader as Handler, 2);
+  const response = await Handler({request: new Request('http://localhost/orders')});
+  expect(response.status).toBe(200);
+});"
+  route_case floor "import {loader} from '../../orders/route';
+test('t', async () => {
+  const handlers = [
+    loader as Handler,
+  ];
   const response = await Handler({request: new Request('http://localhost/orders')});
   expect(response.status).toBe(200);
 });"
