@@ -367,7 +367,7 @@ else
     if [ "$browser_missing" -eq 1 ]; then
       emit_context "RED capture failed: the test re-run could not start a browser (Chromium is not installed), so no failing (RED) result was recorded and the RED-verification commit gate will not see this run. Install the browsers with: pnpm install:browsers, then re-run the test."
     elif [ -n "$load_error" ]; then
-      emit_context "RED capture recorded nothing: a test file failed to load on the re-run ($load_error). A file that fails to load records no RED: the test must import its stub and fail on an assertion."
+      emit_context "RED capture recorded nothing: a test file failed to load on the re-run ($load_error), so no test body ran. Fix the load error; a new test imports its stub and fails on an assertion or the stub's throw."
     else
       emit_context "RED capture recorded nothing: re-running $(printf '%s' "$scope" | tr '\n' ' ' | sed 's/ *$//') from $run_directory produced no test results. A test path is read relative to $scope_base (the -C, --dir or --filter package directory, else the directory this Bash call started in), never to a \`cd\` inside the command. If a new test failed here, record its RED by running it as a Bash call of its own: pnpm -C <package dir> test --run <test-file>, the path relative to that package directory."
     fi

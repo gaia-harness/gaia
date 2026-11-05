@@ -877,7 +877,7 @@ assert_no_results_context() {
   assert_no_results_context PostToolUse
 }
 
-@test "a re-run whose report holds a collection error names the file and says a file that fails to load records no RED" {
+@test "a re-run whose report holds a collection error names the file and says no test body ran" {
   stub_failing_pnpm
   STUB_PNPM_JSON_SOURCE="$BATS_TEST_DIRNAME/fixtures/red-ledger/json/collection-error.json"
   export STUB_PNPM_JSON_SOURCE
@@ -887,7 +887,7 @@ assert_no_results_context() {
   context=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
   grep -qF -- 'broken.test.ts' <<<"$context"
   grep -qF -- 'PARSE_ERROR' <<<"$context"
-  grep -qF -- 'fails to load records no RED' <<<"$context"
+  grep -qF -- 'no test body ran' <<<"$context"
   ! grep -qF -- '`cd`' <<<"$context"
 }
 
