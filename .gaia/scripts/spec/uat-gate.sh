@@ -152,7 +152,7 @@ route_directory=$(uat_lib_route_tests_directory "$repo_root") || exit 2
 selected_files=''
 route_files=''
 selected_count=0
-while IFS=$'\t' read -r uat_id surface phase feature_folder file_name; do
+while IFS=$'\t' read -r _ surface phase feature_folder file_name; do
   case "$surface" in
     real-server | browser | e2e | route) ;;
     *) continue ;;
@@ -285,7 +285,7 @@ report_failures() {
     printf 'uat-gate: next step for opens-page: a real-server test must not open a page; drive it through the request fixture and read rendered HTML with the helper in %s/html.ts. When the Then-clause truly needs a browser, the routing row is wrong: stop and report it instead of editing the test.\n' "${e2e_directory%/e2e}" >&2
   fi
   if [ "$floor_route" -eq 1 ]; then
-    printf 'uat-gate: next step for floor: the route test file itself must call the route'"'"'s loader( or action( and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
+    printf 'uat-gate: next step for floor: the route test file itself must call the route'"'"'s loader( or action(, by a named import (an alias such as import {action as signOut} counts) or a member call such as logout.action(args), and hold an expect( on a real value; a shared helper may build the request, args and context, but a helper that receives the route module and makes the call (runAction(logout, ...)) does not count. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
   fi
   return 0
 }

@@ -641,7 +641,7 @@ exit 1"
   const response = await fetchOrders();
   expect(response.status).toBe(200);
 });"
-  assert_stderr_names "loader( or action("
+  assert_stderr_names "loader( or action(" "import {action as signOut}" "logout.action(args)" "runAction(logout, ...)) does not count"
   if grep -qF 'page.<method>(' "$STDERR_FILE"; then return 1; fi
 }
 

@@ -25,7 +25,7 @@ Here `<N>` is the phase number.
 | Exit | Meaning | Action |
 |---|---|---|
 | 0 | every owned spec passed, or the phase owns none | continue to the phase commit |
-| 1 | gate failure; stderr names each failing file and its comma-joined reasons | do not commit; append the block below to `<PLAN_DIR>/PROGRESS.md` and stop |
+| 1 | gate failure; stderr names each failing file and its comma-joined reasons | do not commit; when `floor` is every file's only reason, the plan's gate-retry block retries a floor failure, and the phase has no gate retry yet, take that retry; otherwise append the block below to `<PLAN_DIR>/PROGRESS.md` and stop |
 | 2 | invalid input (SPEC, routing table, arguments) | do not commit; append a `## Phase N, <title> (HALTED)` block with `Reason: UAT gate input invalid` and the stderr line, and stop |
 | 4 | a runner could not run (no browser, port held or server failed to boot for a `real-server`, `browser` or `e2e` row, or no Node or `typescript` for the `real-server` no-page check; `jq` or `pnpm` missing or no Vitest report for a `route` row) | do not commit; append a `## Phase N, <title> (HALTED)` block with `Reason: UAT gate prerequisite missing` naming the prerequisite from stderr, and stop |
 
