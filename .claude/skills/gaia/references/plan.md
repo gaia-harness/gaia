@@ -96,7 +96,7 @@ The deep synthesis runs in the planner spawned at step 4, and the planner's mode
   - If the user picks the current model: spawn without a model override (inherit current).
 - Whichever model the planner gets, the inherited one included, its dispatches pass no `effort` parameter: the planner runs at the session effort, so the plan is drafted at the level the user chose. Every other subagent in this skill runs at the session effort too.
 
-This decision governs the **planner** only. The plan's **execution** sub-agents are a separate decision: they default to Sonnet, pinned in the `ORCHESTRATOR.md`/`KICKOFF.md` the planner writes (see the Sub-agent invocation bullet in `.claude/skills/gaia/references/plan/planner.md`). Do not conflate the two.
+This decision governs the **planner** only. The plan's **execution** sub-agents are a separate decision: they default to Sonnet, pinned in the `ORCHESTRATOR.md`/`KICKOFF.md` the planner writes (see the Sub-agent invocation bullet in `.claude/skills/gaia/references/plan/planner.md`); the test reviewer is pinned to Sonnet in `.claude/skills/gaia/references/plan/test-review.md`. Do not conflate the two.
 
 ### 3. Resolve plan directory
 

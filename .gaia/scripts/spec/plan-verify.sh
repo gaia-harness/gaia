@@ -11,7 +11,7 @@
 # needs, each on a line of its own (leading and trailing whitespace allowed,
 # nothing else), in the order the template places them. Without --spec the plan
 # is spec-less and the three UAT sentinels are not required. The
-# resume-detection, yield-handling, red-split, gate-retry, worthiness-step, overlap-pass, wiki-promotion,
+# resume-detection, yield-handling, red-split, test-review, gate-retry, worthiness-step, overlap-pass, wiki-promotion,
 # code-audit and post-clearance blocks are also checked verbatim: each one's non-blank lines
 # (trimmed) must equal the fenced block planner.md holds, with the
 # plan-directory and SPEC-path placeholders replaced by this plan's absolute
@@ -161,7 +161,7 @@ sentinels=('<!-- gaia:orchestrator-step resume-detection -->')
 if [ -n "$spec_path" ]; then
   sentinels+=('<!-- gaia:orchestrator-step uat-render -->' '<!-- gaia:orchestrator-step uat-gate -->')
 fi
-sentinels+=('<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step red-split -->' '<!-- gaia:orchestrator-step gate-retry -->')
+sentinels+=('<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step red-split -->' '<!-- gaia:orchestrator-step test-review -->' '<!-- gaia:orchestrator-step gate-retry -->')
 if [ -n "$spec_path" ]; then
   sentinels+=('<!-- gaia:orchestrator-step uat-pre-audit -->')
 fi
@@ -174,7 +174,7 @@ sentinels+=(
   '<!-- gaia:orchestrator-step post-merge-close -->'
 )
 verbatim_sentinels=(
-  '<!-- gaia:orchestrator-step resume-detection -->' '<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step red-split -->' '<!-- gaia:orchestrator-step gate-retry -->'
+  '<!-- gaia:orchestrator-step resume-detection -->' '<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step red-split -->' '<!-- gaia:orchestrator-step test-review -->' '<!-- gaia:orchestrator-step gate-retry -->'
   '<!-- gaia:orchestrator-step worthiness-step -->'
   '<!-- gaia:orchestrator-step overlap-pass -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
