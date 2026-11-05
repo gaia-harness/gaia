@@ -8,8 +8,8 @@
 # commit's RED gate binds that run to the test's executable body, so an
 # executor whose lint fix changes that body after its RED loses it and the phase
 # commit is refused after the executor has already returned. This suite pins
-# the order that prevents it (stub, lint, RED, implement), the
-# edited-after-RED report, the tdd skill section the template points at, and
+# the order that prevents it (stub, lint, RED, implement), the stub's final
+# signature (type-aware lint on the test reads it), the edited-after-RED report, the tdd skill section the template points at, and
 # that section's own stub-first order.
 #
 # Method: every check takes a root directory and reads the Sub-agent
@@ -130,7 +130,31 @@ check_edit_after_red_reported() {
     '**The prompt template MUST also order a new test'"'"'s RED**' \
     'Any edit to the executable body of a new test after its RED voids that RED' \
     'never fakes a RED' \
-    'reports the test (file, test name, what changed) under `### Deviations from plan`' || return 1
+    'reports the test (file, test name, what changed) under `### Deviations from plan`' \
+    'and says that test'"'"'s RED is void' || return 1
+}
+
+check_stub_signature() {
+  local range
+  range="$(invocation_range "$1")"
+  need_text 'executor template range' "$range" || return 1
+  in_order "$range" \
+    '**The prompt template MUST also order a new test'"'"'s RED**' \
+    'under its final name and with its final signature' \
+    'a Promise-returning function is stubbed async' \
+    'type-aware lint on the test reads the signature' \
+    'run the RED command' || return 1
+}
+
+check_tdd_stub_signature() {
+  local range
+  range="$(range_of "$1/$TDD_REL" "$TDD_HEADING" '**Never break working production code' | trim_lines)"
+  need_text 'tdd honest-RED section' "$range" || return 1
+  in_order "$range" \
+    'under its final name and with its final signature' \
+    'a Promise-returning function is stubbed async' \
+    'type-aware lint on the test reads the signature' \
+    'returning a wrong value' || return 1
 }
 
 check_points_at_tdd_section() {
@@ -196,6 +220,38 @@ check_tdd_stub_first() {
   red check_edit_after_red_reported "$PLANNER_REL" \
     'under `### Deviations from plan`' \
     'under `### Findings`'
+}
+
+@test "red twin: an edited-after-RED report that keeps its RED fails" {
+  red check_edit_after_red_reported "$PLANNER_REL" \
+    ' and says that test'"'"'s RED is void' \
+    ''
+}
+
+@test "the executor template stubs each symbol with its final signature, async included" {
+  green check_stub_signature
+}
+
+@test "red twin: an executor stub with only its final name fails" {
+  red check_stub_signature "$PLANNER_REL" \
+    'under its final name and with its final signature' \
+    'under its final name'
+}
+
+@test "red twin: an executor stub that may stay sync fails" {
+  red check_stub_signature "$PLANNER_REL" \
+    'a Promise-returning function is stubbed async' \
+    'any function may be stubbed sync'
+}
+
+@test "the tdd skill stubs each symbol with its final signature, async included" {
+  green check_tdd_stub_signature
+}
+
+@test "red twin: a tdd stub with only its final name fails" {
+  red check_tdd_stub_signature "$TDD_REL" \
+    'under its final name and with its final signature' \
+    'under its final name'
 }
 
 @test "the template points at the tdd skill's honest-RED section, which exists" {
