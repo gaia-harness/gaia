@@ -9,8 +9,9 @@
 # executor whose lint fix changes that body after its RED loses it and the phase
 # commit is refused after the executor has already returned. This suite pins
 # the order that prevents it (stub, lint, RED, implement), the stub's final
-# signature (type-aware lint on the test reads it), the edited-after-RED report, the tdd skill section the template points at, and
-# that section's own stub-first order.
+# signature (type-aware lint on the test reads it), the edited-after-RED
+# report, the tdd skill section the template points at, and that section's own
+# stub-first order.
 #
 # Method: every check takes a root directory and reads the Sub-agent
 # invocation bullet or the tdd skill's honest-RED section; each red twin
