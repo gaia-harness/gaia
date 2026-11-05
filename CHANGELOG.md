@@ -48,6 +48,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **A plan executor's lint fixes no longer void a new test's failing-first run:** executors now stub each new symbol a test imports under its final name and lint the test and stub before the RED run, so a lint rename no longer lands after the RED and gets the phase commit refused. An executor that still has to edit a test after its RED reports it to the orchestrator rather than faking a new failing run (#3311)
 - **A generated plan carries its resume procedure word for word:** the resume procedure (reconnect, the dirty-tree question with `Stay halted` recommended, the resume point and its confirmation) is now a verbatim step block that plan-verify requires first and compares line by line. A plan can no longer paraphrase it into a free-text question that leaves an unattended resume with no answer to record (#3309)
 - **`/update-deps` snoozes hold from any directory:** `gaia update-deps decline` and `run` resolved the snooze ledger against the working directory, so a snooze or `--clear` run from a subdirectory wrote a second ledger there that `run` from the root never read. Inside a repository the ledger now resolves to the main checkout's `.gaia/local/declined-updates.json` (#3308)
 - **`/gaia-init`'s first commit runs the full Quality Gate:** E2E and the dev smoke test included, without a Commit/Hold stop; before, whether init ran them depended on the agent (#3304)
