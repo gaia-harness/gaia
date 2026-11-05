@@ -1,5 +1,4 @@
 import {describe, expect, test} from 'vitest';
-// Runs in the node project.
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
 

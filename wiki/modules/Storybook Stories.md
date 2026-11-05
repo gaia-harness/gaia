@@ -18,7 +18,7 @@ Storybook v10 with the `@storybook/react-vite` framework. Configured to discover
 
 ## Why Storybook is also the test driver
 
-`@storybook/addon-vitest` runs every story as a Vitest test in headless Chromium, and a behavior is a `.test()` attached to a story (a story's `play` only drives the UI into the state its snapshot shows), so one source of truth drives the component test, visual regression (Chromatic) and the Playwright story scan. `@storybook/addon-a11y` axe-checks each story. See [[Stories as Tests]], [[Component Testing]] and [[Testing]].
+`@storybook/addon-vitest` runs every story as a Vitest test in headless Chromium, and a behavior is a `.test()` attached to a story (a story's `play` only drives the UI into the state its snapshot shows), so one source of truth drives the component test in both themes and visual regression (Chromatic). `@storybook/addon-a11y` axe-checks each story. See [[Stories as Tests]], [[Component Testing]] and [[Testing]].
 
 ## Decorator stack: the load-bearing convention
 
@@ -38,7 +38,7 @@ Interactive sessions skip `ChromaticDecorator`, since the dark-mode addon owns t
 
 `preview.ts` sets `darkClass` and `lightClass` to the `dark` or `light` class plus the role-token utilities `bg-background` and `text-foreground`, applied to the preview document root when the toolbar toggle fires, so the `.dark` token block in `theme.css` drives both themes. `stylePreview: true` extends the theme to Storybook chrome.
 
-Chromatic loads only the preview iframe, so the toolbar toggle never fires there. Instead `apps/web/.storybook/modes.ts` defines a `light` and a `dark` [[Chromatic]] mode, each setting the `theme` global (declared in `preview.ts` `initialGlobals`, since Storybook drops an undeclared global) and the 1280px viewport. Chromatic snapshots every story once per mode, and `ChromaticDecorator` applies the global. Vitest and the Playwright scan never add that decorator, so `theme` changes nothing there.
+Chromatic loads only the preview iframe, so the toolbar toggle never fires there. Instead `apps/web/.storybook/modes.ts` defines a `light` and a `dark` [[Chromatic]] mode, each setting the `theme` global (declared in `preview.ts` `initialGlobals`, since Storybook drops an undeclared global) and the 1280px viewport. Chromatic snapshots every story once per mode, and `ChromaticDecorator` applies the global. The `storybook-dark` Vitest project pins the same global to `dark`; the `storybook` project leaves it unset, so `theme` changes nothing there.
 
 ## i18n in stories
 
