@@ -52,7 +52,7 @@ Before writing any code:
 - [ ] Confirm which behaviors to test (prioritize)
 - [ ] Identify opportunities for [deep modules](deep-modules.md), small interface, deep implementation
 - [ ] Design interfaces for [testability](interface-design.md)
-- [ ] List the behaviors to test (not implementation steps)
+- [ ] Name the user-observable behaviors and the acceptance test that owns each (not implementation steps, not one test per function)
 - [ ] Get user approval on the plan with `AskUserQuestion`: `Approve the plan` (Recommended) or `Revise`
 
 Ask: "What should the public interface look like? Which behaviors are most important to test?"
@@ -65,7 +65,7 @@ Write ONE test that confirms ONE thing end-to-end for this layer. `RED → GREEN
 
 ### 3. Incremental Loop
 
-For each remaining behavior: `RED → GREEN`. One test at a time. Only enough code to pass the current test. Don't anticipate future tests.
+For each behavior your task names (a plan's task doc, or the plan approved in step 1): `RED → GREEN`. Write a new test only for those behaviors and their acceptance tests, plus a unit test for logic meeting both unit-test conditions (`wiki/decisions/Test Layering.md`): the integration layer cannot cover its cases cheaply, and the logic is important or likely to fail. Only enough code to pass the current test. Don't anticipate future tests.
 
 **Bound the green chase.** If a test won't pass after a few focused attempts, stop and reassess instead of thrashing the implementation: the test, the interface, or an assumption may be wrong. Surface the blocker rather than looping indefinitely to force green.
 
@@ -116,15 +116,15 @@ Determinism roll-up:
   • apps/web/app/components/cart/tests/index.stories.tsx  emergent (story file: a *.stories.tsx is emergent regardless of path)
 ```
 
-### 6. Worthiness Audit (emergent surface)
+### 6. Worthiness Audit
 
 A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/Stories as Tests.md`); a story file is emergent, so a behavior added as a `.test()` goes through the audit below, not the RED gate.
 
-The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `apps/web/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent` or `route`).
+The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `apps/web/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. The audit judges every test the task changed that the worthiness selection names: emergent and `route` tests on honesty and worth, strict tests on worth only. Run it after green (the classifier roll-up above tells you which touched files are `strict`, `emergent` or `route`).
 
 #### Dispatch and record
 
-Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` after green, over the emergent test and story files the task changed. A genuine fresh-context evaluator judges them (the author shares their own blind spots, so an in-context self-review does not satisfy this step), and the arm records each verdict in the worthiness ledger. The arm dispatches and records only: it runs no repair, makes no commit and asks no question, since this skill runs on uncommitted work. Surface the verdicts in the same end-of-task summary (see "Surfacing the advisory findings").
+Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` after green, over the test and story files the task changed. A genuine fresh-context evaluator judges them (the author shares their own blind spots, so an in-context self-review does not satisfy this step), and the arm records each verdict in the worthiness ledger. The arm dispatches and records only: it runs no repair, makes no commit and asks no question, since this skill runs on uncommitted work. Surface the verdicts in the same end-of-task summary (see "Surfacing the advisory findings").
 
 #### Path-scoped guarantees
 

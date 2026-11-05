@@ -498,3 +498,20 @@ commit_route_test() {
   [ "$status" -eq 0 ]
   [ "$output" = "[]" ]
 }
+
+@test "route: a strict util test and a test helper folder test are both listed" {
+  write_builtin_descriptor "$REPO" '' '' '["test/**/*.test.ts"]'
+  mkdir -p "$REPO/apps/web/app/utils/x" "$REPO/apps/web/test"
+  printf '%s\n' \
+    "import {expect, test} from 'vitest';" \
+    "" \
+    "test('adds two numbers', () => {" \
+    "  expect(1 + 1).toBe(2);" \
+    "});" >"$REPO/apps/web/app/utils/x/index.test.ts"
+  cp "$REPO/apps/web/app/utils/x/index.test.ts" "$REPO/apps/web/test/helper.test.ts"
+  commit_paths apps/web/app/utils/x/index.test.ts apps/web/test/helper.test.ts
+  run_route
+  [ "$status" -eq 0 ]
+  [ "$(field apps/web/app/utils/x/index.test.ts 'adds two numbers' .route)" = evaluate ]
+  [ "$(field apps/web/test/helper.test.ts 'adds two numbers' .route)" = evaluate ]
+}

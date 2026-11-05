@@ -408,11 +408,11 @@ If it prints `MERGED`, do NOT retry the merge. Treat it as merged, run any post-
 
 `gh pr merge` passes through a second, independent PreToolUse hook,
 `.claude/hooks/worthiness-presence-check.sh`. It denies the merge when an
-emergent test the PR changed (matching the package's `emergentTests` globs in its `gaia.package.json`, as
+test the PR changed that the worthiness selection names (the package's `emergentTests` and `tddUnitTests` globs in its `gaia.package.json`, as
 the [[Determinism Classifier]] labels it) has no worthiness-ledger line matching
 its current content. The pre-audit worthiness step normally satisfies this
 gate; the hook backs up a missing or stale line only. It checks presence and signal match only, never the
-keep/fix/delete verdict, and scopes to the emergent tests this PR changed (a no-op
+keep/fix/delete verdict, and scopes to the in-scope tests this PR changed (a no-op
 when none changed). It is a separate denial
 from the Code Audit Team markers above; both must clear.
 See [[Worthiness Presence Gate]] for the full contract.

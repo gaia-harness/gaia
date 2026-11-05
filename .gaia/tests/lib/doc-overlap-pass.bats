@@ -12,7 +12,7 @@
 #     re-check and the HALTED heading, the unattended arm, the report and the
 #     never line;
 #   - the `--root` and `--post-fix` spellings;
-#   - the lowest-layer purpose, the fixer's replacement for a sibling-less
+#   - the trophy-layer purpose, the fixer's replacement for a sibling-less
 #     demote and the post-fix refusal of one with no replacement;
 #   - the evaluator proposing an unsettled pair flagged `Uncertain:` rather
 #     than skipping it, and naming each changed file it skipped; the pass
@@ -68,6 +68,13 @@ check_skip() {
     '`Outcome: skipped (<reason>)` in `PROGRESS.md`, with no commit'
 }
 
+# check_skip_token <file>: the route's no-change token is the any-test one and
+# the old playwright-only token is gone.
+check_skip_token() {
+  has_all "$1" 'A printed `skip-no-test-change` or `skip-no-base`' || return 1
+  ! grep -qF 'skip-no-playwright-change' "$1" || { printf '%s still names skip-no-playwright-change\n' "$1" >&2; return 1; }
+}
+
 @test "the skip rule: exact heading, did-not-run suppression and the route skip record" {
   check_skip "$REF"
 }
@@ -82,6 +89,20 @@ check_skip() {
   [ "$status" -ne 0 ]
 }
 
+@test "the skip token is skip-no-test-change and the playwright-only token is gone" {
+  check_skip_token "$REF"
+}
+
+@test "red twin: the old playwright-only skip token fails the skip token check" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'A printed `skip-no-test-change`' 'A printed `skip-no-playwright-change`' "$copy"
+  run check_skip_token "$copy"
+  [ "$status" -ne 0 ]
+  { cat "$REF"; printf '\nskip-no-playwright-change\n'; } >"$copy"
+  run check_skip_token "$copy"
+  [ "$status" -ne 0 ]
+}
+
 # ---------- rule 2: reuse ----------
 
 check_reuse() {
@@ -90,8 +111,9 @@ check_reuse() {
     '<RUN_FOLDER>/overlap-proposals.json' \
     'its `head` field equals the current HEAD' \
     'skip steps 3 to 5' \
-    'Otherwise discard the file' \
-    'Step 5 writes that `head` field'
+    'and its `format` field is `2`' \
+    'Otherwise discard the file before any disposal' \
+    'Step 5 writes `"format": 2` and that `head` field'
 }
 
 @test "the reuse branch skips the dispatch only on a file whose head equals HEAD" {
@@ -101,6 +123,13 @@ check_reuse() {
 @test "red twin: a reuse branch without the HEAD check fails" {
   local copy="$BATS_TEST_TMPDIR/ref.md"
   mutate "$REF" 'its `head` field equals the current HEAD' 'it exists' "$copy"
+  run check_reuse "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "red twin: a reuse branch without the format requirement fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'and its `format` field is `2`' 'and nothing else' "$copy"
   run check_reuse "$copy"
   [ "$status" -ne 0 ]
 }
@@ -154,6 +183,7 @@ check_check_step() {
   has_all "$1" \
     'bash .gaia/scripts/overlap-check.sh check --root <RESOLVED_ROOT> --proposals <proposals file>' \
     'Write its output, the current HEAD as the `head` field,' \
+    '`"format": 2` as the `format` field' \
     'to `<RUN_FOLDER>/overlap-proposals.json` first, before any question' \
     'A `discarded` entry is logged as unverified'
 }
@@ -168,6 +198,9 @@ check_check_step() {
   run check_check_step "$copy"
   [ "$status" -ne 0 ]
   mutate "$REF" 'is logged as unverified' 'is ignored' "$copy"
+  run check_check_step "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$REF" '`"format": 2` as the `format` field' 'nothing more' "$copy"
   run check_check_step "$copy"
   [ "$status" -ne 0 ]
 }
@@ -212,10 +245,10 @@ check_dispose() {
 
 # ---------- purpose and the sibling-less demote ----------
 
-check_lowest_layer_purpose() {
+check_trophy_purpose() {
   has_all "$1" \
     'across the unit, route, real-server and browser layers' \
-    'each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer'
+    'sits on the layer the trophy rule in `wiki/decisions/Test Layering.md` picks'
 }
 
 check_sibling_less_fixer() {
@@ -230,14 +263,14 @@ check_post_fix_refusal() {
   has_all "$1" 'a sibling-less demote with no replacement is refused there'
 }
 
-@test "the page states the lowest-layer purpose beside duplication" {
-  check_lowest_layer_purpose "$REF"
+@test "the page states the trophy purpose beside duplication" {
+  check_trophy_purpose "$REF"
 }
 
-@test "red twin: a purpose naming only duplication fails" {
+@test "red twin: a purpose that drops the trophy layer rule fails" {
   local copy="$BATS_TEST_TMPDIR/ref.md"
-  mutate "$REF" ', and that each one sits on the lowest layer that shows its property, so the pass also moves a test down to that layer' '' "$copy"
-  run check_lowest_layer_purpose "$copy"
+  mutate "$REF" 'sits on the layer the trophy rule in `wiki/decisions/Test Layering.md` picks' 'sits somewhere' "$copy"
+  run check_trophy_purpose "$copy"
   [ "$status" -ne 0 ]
 }
 
@@ -266,6 +299,61 @@ check_post_fix_refusal() {
   [ "$status" -ne 0 ]
 }
 
+# ---------- fold-up disposal and report-only routing ----------
+
+check_fold_up_fixer() {
+  has_all "$1" \
+    'For each approved fold-up, the fixer deletes the subject tests' \
+    'a subject file left with no test is deleted' \
+    'and writes no test' \
+    '`--post-fix` runs over the kept list for a fold-up'
+}
+
+check_report_only_excluded() {
+  has_all "$1" 'Report-only entries (`needs-new-test` among them) are listed as information and never sent to the fixer'
+}
+
+check_pr_body_entries() {
+  has_all "$1" \
+    '`needs-new-test` entries also go into the PR body (`gh pr edit` with a body file) under a short heading'
+}
+
+@test "a fold-up has its subjects deleted and no test written, re-verified over the kept list" {
+  check_fold_up_fixer "$REF"
+}
+
+@test "red twin: a fixer that writes a test for a fold-up fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'and writes no test' 'and writes the folded test' "$copy"
+  run check_fold_up_fixer "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$REF" 'the fixer deletes the subject tests' 'the fixer rewrites the subject tests' "$copy"
+  run check_fold_up_fixer "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "report-only entries are listed and never sent to the fixer" {
+  check_report_only_excluded "$REF"
+}
+
+@test "red twin: dropping the report-only exclusion from the fixer fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" 'and never sent to the fixer' 'and sent to the fixer' "$copy"
+  run check_report_only_excluded "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "needs-new-test entries reach the PR body" {
+  check_pr_body_entries "$REF"
+}
+
+@test "red twin: removing the PR-body line fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  mutate "$REF" '`needs-new-test` entries also go into the PR body' '`needs-new-test` entries stay in PROGRESS.md' "$copy"
+  run check_pr_body_entries "$copy"
+  [ "$status" -ne 0 ]
+}
+
 # ---------- rules 8 and 9: report and never ----------
 
 check_report_and_never() {
@@ -275,7 +363,7 @@ check_report_and_never() {
     'Outcome:' \
     'put the block in the final summary' \
     '## What it never does' \
-    'It files no tech debt, records no accepted residual, and edits no report-only test.'
+    'It files no tech debt, records no accepted residual, and edits no report-only test and writes no new test for a fold-up.'
 }
 
 @test "the report is written after disposal and the never line holds" {
@@ -284,7 +372,7 @@ check_report_and_never() {
 
 @test "red twin: a never line that allows tech debt fails" {
   local copy="$BATS_TEST_TMPDIR/ref.md"
-  mutate "$REF" 'It files no tech debt, records no accepted residual, and edits no report-only test.' 'It files tech debt.' "$copy"
+  mutate "$REF" 'It files no tech debt, records no accepted residual, and edits no report-only test and writes no new test for a fold-up.' 'It files tech debt.' "$copy"
   run check_report_and_never "$copy"
   [ "$status" -ne 0 ]
 }

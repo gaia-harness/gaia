@@ -12,7 +12,8 @@
 // layer prints a JSON array of {file, layer} for the stdin paths that sit on a
 // layer; it reads each Playwright spec under --root to tell real-server from
 // browser. check prints {"kept":[...],"discarded":[...]}; a kept element still
-// carries the private fields _ranges, _rendered and _present that the caller
+// carries the private fields _ranges, _rendered and _present (a fold-up:
+// _subjects, [{file, ranges, rendered}]) and _needsNewTest that the caller
 // turns into a disposition and removes.
 //
 // Exit codes: 0 success, 2 usage, 3 unreadable input or no TypeScript.
@@ -28,6 +29,10 @@
 // exist until the fixer writes it. At --post-fix such an entry must carry
 // `replacement`, the fixer's new test, which is verified like a sibling and
 // must itself open no page.
+//
+// The fold-up kind and the unit reason a removing proposal with a unit-test
+// cover owes are described, with the shape checks and the fixed point, in
+// fold-up.mjs.
 
 import {createRequire} from 'node:module';
 import {existsSync, readFileSync} from 'node:fs';
@@ -36,6 +41,18 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {loadStems, pathIsSeam, subjectIsSeam} from './test-inspection.mjs';
 import {hookSpansOf, isRendered, locateTests, maskComments, verifyCitation} from './citations.mjs';
+import {
+  REMOVING,
+  checkFoldUp,
+  isCitation,
+  isSafeRelative,
+  isStoryFile,
+  keyOf,
+  nonEmpty,
+  settle,
+  unitReasonProblem,
+  wellFormed,
+} from './fold-up.mjs';
 import {pageUsesOf} from '../spec/page-use.mjs';
 
 const require = createRequire(import.meta.url);
@@ -135,13 +152,6 @@ const fileCache = new Map();
 const parseCache = new Map();
 let rootDirectory = null;
 
-const isSafeRelative = (file) =>
-  typeof file === 'string' &&
-  file.length > 0 &&
-  !file.startsWith('/') &&
-  !file.includes('\0') &&
-  !file.split('/').includes('..');
-
 function parseFile(file) {
   if (parseCache.has(file)) return parseCache.get(file);
   let parsed = null;
@@ -196,30 +206,6 @@ function loadFile(file) {
 
 // The check -------------------------------------------------------------------
 
-const KINDS = new Set(['drop', 'merge', 'demote', 'keep-both']);
-const REMOVING = new Set(['drop', 'merge', 'demote']);
-const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0;
-const keyOf = (file, fullName) => `${file}\u0000${fullName}`;
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-const isLine = (value) => Number.isInteger(value) && value >= 1;
-const isCitation = (c) => isObject(c) && isSafeRelative(c.file) && isLine(c.line) && nonEmpty(c.fullName) && nonEmpty(c.assertion);
-const isTarget = (t) =>
-  isObject(t) &&
-  nonEmpty(t.layer) &&
-  Array.isArray(t.assertions) &&
-  t.assertions.length > 0 &&
-  t.assertions.every((a) => isObject(a) && isLine(a.line) && nonEmpty(a.assertion));
-
-// Exactly one of sibling and target; a target only on a demote.
-function wellFormed(p) {
-  if (!isObject(p)) return false;
-  if (!KINDS.has(p.proposal) || !isSafeRelative(p.file) || !nonEmpty(p.fullName)) return false;
-  if (typeof p.seam !== 'boolean' || !nonEmpty(p.property) || !nonEmpty(p.actor) || !nonEmpty(p.action)) return false;
-  if ((p.sibling === undefined) === (p.target === undefined)) return false;
-  if (p.target !== undefined) return p.proposal === 'demote' && isTarget(p.target);
-  return isCitation(p.sibling);
-}
-
 // At --post-fix a kept browser entry keeps its recorded layer: the fixer may
 // have rewritten the subject's file as request-only in place.
 const subjectRankOf = (p) =>
@@ -272,15 +258,31 @@ function runCheck() {
   }
   if (!Array.isArray(proposals)) fail(3, `${options.proposals} is not a JSON array`);
   const stems = loadStems(rootDirectory);
+  const seamOf = (flag, file, entry, test) =>
+    flag || pathIsSeam(packageRelative(file) ?? file) || (test !== null && subjectIsSeam(entry, test, stems));
+  const foldUpContext = {
+    postFix: options.postFix,
+    loadFile,
+    rankOf,
+    seamOf,
+    seamCeiling: SEAM_CEILING,
+    layerName: (rank, isStory) => (isStory ? 'story' : LAYER_NAMES[rank]),
+  };
 
   const discarded = [];
-  let survivors = [];
+  const survivors = [];
   for (const p of proposals) {
     if (!wellFormed(p)) {
       discarded.push({...(p !== null && typeof p === 'object' && !Array.isArray(p) ? p : {value: p}), reason: 'malformed'});
       continue;
     }
     const refuse = (reason) => discarded.push({...p, reason});
+    if (p.proposal === 'fold-up') {
+      const {reason, kept, subjectKeys, coverKey} = checkFoldUp(p, foldUpContext);
+      if (reason === null) survivors.push({proposal: p, subjectKeys, coverKey, kept});
+      else refuse(reason);
+      continue;
+    }
 
     // A subject that is not a test, or sits on no layer, goes before the seam
     // rule: otherwise a wrong name would skip the seam scan.
@@ -295,7 +297,8 @@ function runCheck() {
       refuse('subject-no-layer');
       continue;
     }
-    let coverRank;
+    // Null stays for a demote that needs a new test: it has no cover yet.
+    let coverRank = null;
     if (p.target !== undefined) {
       const target = checkTarget(p, subjectRank);
       if (target.reason !== null) {
@@ -303,7 +306,7 @@ function runCheck() {
         continue;
       }
       coverRank = target.rank;
-    } else {
+    } else if (p.sibling !== undefined) {
       coverRank = rankOf(p.sibling.file);
       if (coverRank === null) {
         refuse('sibling-no-layer');
@@ -319,10 +322,14 @@ function runCheck() {
         continue;
       }
     }
-    const effectiveSeam =
-      p.seam || pathIsSeam(packageRelative(p.file) ?? p.file) || (subject !== null && subjectIsSeam(subjectEntry, subject, stems));
-    if (REMOVING.has(p.proposal) && effectiveSeam && coverRank < Math.min(subjectRank, SEAM_CEILING)) {
+    const effectiveSeam = seamOf(p.seam, p.file, subjectEntry, subject);
+    if (REMOVING.has(p.proposal) && effectiveSeam && coverRank !== null && coverRank < Math.min(subjectRank, SEAM_CEILING)) {
       refuse('seam-no-sibling-at-or-above');
+      continue;
+    }
+    const unitProblem = unitReasonProblem(p, subjectRank, coverRank, p.sibling !== undefined && isStoryFile(p.sibling.file));
+    if (unitProblem !== null) {
+      refuse(unitProblem);
       continue;
     }
     if (p.proposal === 'keep-both' && !nonEmpty(p.bug)) {
@@ -331,42 +338,23 @@ function runCheck() {
     }
     survivors.push({
       proposal: p,
-      subjectKey: keyOf(p.file, p.fullName),
-      siblingKey: p.sibling === undefined ? null : keyOf(p.sibling.file, p.sibling.fullName),
+      subjectKeys: [keyOf(p.file, p.fullName)],
+      coverKey: p.sibling === undefined ? null : keyOf(p.sibling.file, p.sibling.fullName),
       kept: {
         ...p,
         seam: effectiveSeam,
         layer: LAYER_NAMES[subjectRank],
-        ...(p.sibling === undefined ? {targetLayer: LAYER_NAMES[coverRank]} : {siblingLayer: LAYER_NAMES[coverRank]}),
+        ...(coverRank === null ? {} : p.sibling === undefined ? {targetLayer: LAYER_NAMES[coverRank]} : {siblingLayer: LAYER_NAMES[coverRank]}),
         _ranges: subject ? subject.ranges : null,
         _rendered: subject ? isRendered(subjectEntry) : false,
         _present: subject !== null,
+        ...(p.needsNewTest === undefined ? {} : {_needsNewTest: true}),
       },
     });
   }
 
-  // Fixed point: every round judges against the set the round started with, so
-  // the outcome does not depend on proposal order.
-  for (;;) {
-    const mutual = new Set();
-    const removed = new Set();
-    for (const a of survivors) {
-      for (const b of survivors) {
-        if (a !== b && a.siblingKey !== null && a.siblingKey === b.subjectKey && b.siblingKey === a.subjectKey) mutual.add(a);
-      }
-    }
-    for (const a of survivors) {
-      if (mutual.has(a) || a.siblingKey === null) continue;
-      const taken = survivors.some((b) => b !== a && REMOVING.has(b.proposal.proposal) && b.subjectKey === a.siblingKey);
-      if (taken) removed.add(a);
-    }
-    if (mutual.size === 0 && removed.size === 0) break;
-    for (const a of mutual) discarded.push({...a.proposal, reason: 'mutual-citation'});
-    for (const a of removed) discarded.push({...a.proposal, reason: 'sibling-removed'});
-    survivors = survivors.filter((a) => !mutual.has(a) && !removed.has(a));
-  }
-
-  process.stdout.write(`${JSON.stringify({kept: survivors.map((a) => a.kept), discarded})}\n`);
+  const settled = settle(survivors, discarded);
+  process.stdout.write(`${JSON.stringify({kept: settled.map((a) => a.kept), discarded})}\n`);
   process.exitCode = 0;
 }
 

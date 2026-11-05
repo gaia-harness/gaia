@@ -4,15 +4,15 @@ status: active
 priority: 1
 date: 2026-06-23
 created: 2026-06-23
-updated: 2026-10-28
+updated: 2026-11-05
 tags: [decision, tdd, testing, audit, merge, quality]
 ---
 
 # Worthiness Presence Gate
 
-A merge-time `gh pr merge` gate that requires each emergent test a PR changes to
+A merge-time `gh pr merge` gate that requires each test in the worthiness selection a PR changes to
 carry a worthiness-ledger line matching its current content. It is the
-merge-time half of the [[Worthiness Audit]]: the evaluator judges each emergent
+merge-time half of the [[Worthiness Audit]]: the evaluator judges each changed
 test and the shared worthiness step or the tdd skill's arm appends one ledger
 line per judged test; this gate
 enforces at merge that such a line exists for the content being merged. It sits
@@ -40,7 +40,7 @@ that an honest audit ran.
 
 The presence decision reads **presence and signal match only**; it never reads
 the keep/fix/delete verdict. That keeps the verdict advisory and avoids
-double-gating the emergent surface on a judgement call.
+gating the merge on a judgement call.
 
 ## Honesty lint is not re-checked here
 
@@ -71,19 +71,15 @@ rubber-stamp produces, so the rollup, not this gate, makes that call.
 
 ## Scope
 
-The gate scopes to the emergent test files **this PR changed**, the diff against
-the merge base with the default branch, not the whole repo's emergent tests. A
-whole-repo scope would demand a ledger line for every existing emergent test and
+The gate scopes to the test files **this PR changed** that the worthiness selection names, the diff against
+the merge base with the default branch, not the whole repo's tests. A
+whole-repo scope would demand a ledger line for every existing test and
 block every unrelated merge.
 
-Emergent membership is decided by the [[Determinism Classifier]]
-(`.gaia/scripts/classifier/classify-determinism.mjs`), not a second hand-rolled
-classifier. A changed test file that a package's `emergentTests` globs name ([[Package Descriptor]])
-and whose classifier verdict is `emergent` is in scope (a `*.stories.tsx` is in scope through its own globs entry, one ledger line per base story and per attached `.test()`, and per story with a play and no tests; an old-format story file denies, see [[Stories as Tests]]); a `.ts` component test
-that the classifier proves deterministic is RED-gated by the
-[[TDD RED Verification]] gate, not worthiness-gated, and is excluded. A test the classifier labels `route` is in scope as an emergent test is, although the RED gate covers it too; the classifier's `route` verdict is what selects it.
+Membership is decided by the worthiness selection library
+(`.claude/hooks/lib/worthiness-selection.sh`): a changed test file that a package's `emergentTests` or `tddUnitTests` globs name ([[Package Descriptor]]) and whose [[Determinism Classifier]] verdict (`.gaia/scripts/classifier/classify-determinism.mjs`) is `emergent`, `strict` or `route` is in scope (a `*.stories.tsx` is in scope through its own globs entry, one ledger line per base story and per attached `.test()`, and per story with a play and no tests; an old-format story file denies, see [[Stories as Tests]]). A strict test is RED-gated at commit by the [[TDD RED Verification]] gate and worthiness-gated here at merge, where the review judges it on worth only; a `route` test is in scope although the RED gate covers it too.
 
-When zero emergent test files changed, the gate is a no-op and allows the merge.
+When zero in-scope test files changed, the gate is a no-op and allows the merge.
 
 ## Stale-signal rejection
 
@@ -99,11 +95,11 @@ invalidation.
 
 ## Cost and latency
 
-The recompute is O(emergent test files changed in the PR): each in-scope file is
-fed through the signal helper once. Wall-clock therefore scales with the emergent
+The recompute is O(in-scope test files changed in the PR): each in-scope file is
+fed through the signal helper once. Wall-clock therefore scales with the in-scope
 test count. This is a separate axis from the per-test token cost, which does not
 scale with suite size; the recompute is deliberately linear in the changed
-emergent file count and is not made sub-linear.
+in-scope file count and is not made sub-linear.
 
 ## Fail-open posture
 
@@ -112,12 +108,13 @@ The `Fail-open vs fail-closed` block in `.claude/hooks/worthiness-presence-check
 ## Relationship to the other merge gates
 
 - The Code Audit Team gate ([[PR Merge Workflow]]) proves a clean code review
-  ran against HEAD. This gate proves the emergent tests the PR changed carry
+  ran against HEAD. This gate proves the in-scope tests the PR changed carry
   worthiness verdicts for their current content. They are independent denials;
   both must clear.
 - The [[TDD RED Verification]] commit gate owns the deterministic surface at
-  commit time. This gate owns the emergent surface at merge time. The classifier
-  draws the line between the two so a test is never gated by both.
+  commit time. This gate covers the whole worthiness selection at merge time,
+  so a strict test is RED-gated at commit and worthiness-gated at merge, the
+  review judging it on worth only (see [[Worthiness Audit]]).
 
 See [[Worthiness Audit]], [[PR Merge Workflow]], [[Determinism Classifier]],
 [[TDD RED Verification]].

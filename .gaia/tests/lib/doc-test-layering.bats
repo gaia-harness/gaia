@@ -54,7 +54,7 @@ setup() {
     "$REPO_ROOT/.claude/skills/gaia/references/plan/decomposition-audit.md"
     "$REPO_ROOT/README.md"
   )
-  RATIONALE='the lowest layer that can prove it'
+  RATIONALE='the route layer is the default home for behavior'
 }
 
 # ---------- helpers ----------
@@ -68,6 +68,10 @@ check_page() {
   local file="$1" needle
   for needle in \
     "$RATIONALE" \
+    'both unit-test conditions' \
+    'the integration layer cannot cover its cases cheaply' \
+    'the logic is important or likely to fail' \
+    'a parameterized table is one test' \
     'Rails request specs' 'Django test client' 'supertest' 'httptest' \
     'one Postgres schema per worker' 'Rails `parallelize`' 'pytest-xdist' \
     'one SQLite file and server per worker' \
@@ -79,6 +83,7 @@ check_page() {
     "the server's rendered HTML"; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
+  has "$file" 'Every check lives at the lowest layer that can prove it' && { echo "present: old axiom"; return 1; }
   grep -E '^\| A rule function.*\| Unit ' "$file" >/dev/null || return 1
   grep -E '^\| A route module omits.*\| Route ' "$file" >/dev/null || return 1
   grep -E '^\| A guarded route module.s refusal is served.*\| Real server ' "$file" >/dev/null || return 1
@@ -194,6 +199,28 @@ mutate_copy() {
   [ "$status" -ne 0 ]
 }
 
+@test "red twin: the page without the trophy axiom or a unit-test needle, or with the old axiom restored, fails" {
+  local copy
+  copy=$(mutate_copy "$PAGE" 's/the route layer is the default home for behavior/the route layer is one home/')
+  run check_page "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" 's/both unit-test conditions/the unit-test conditions/g')
+  run check_page "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" 's/the integration layer cannot cover its cases cheaply/the integration layer is slow/')
+  run check_page "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" 's/the logic is important or likely to fail/the logic is complex/')
+  run check_page "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" 's/a parameterized table is one test/a table is a test/')
+  run check_page "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" 's/^Write tests, not too many/Every check lives at the lowest layer that can prove it. Write tests, not too many/')
+  run check_page "$copy"
+  [ "$status" -ne 0 ]
+}
+
 # ---------- tests-react.md ----------
 
 @test "tests-react holds the route row, the limits and the link, with no rationale copy" {
@@ -227,7 +254,7 @@ mutate_copy() {
   copy=$(mutate_copy "$TESTS_REACT" 's/A parent loader guards no action/A parent loader guards/')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$TESTS_REACT" 's/Write tests at the/Write tests at the lowest layer that can prove it, the/')
+  copy=$(mutate_copy "$TESTS_REACT" 's/Write tests at the/Write tests at the route layer is the default home for behavior, the/')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
   copy=$(mutate_copy "$TESTS_REACT" "s/a route's redirect is a route test/a route's redirect is E2E/")

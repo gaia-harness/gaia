@@ -4,17 +4,15 @@ status: active
 priority: 1
 date: 2026-06-23
 created: 2026-06-23
-updated: 2026-10-28
+updated: 2026-11-05
 tags: [decision, tdd, testing, audit, quality]
 ---
 
 # Worthiness Audit
 
-An advisory, two-axis review of the tests on the **emergent surface**
-(the tests a package's `emergentTests` globs name, per [[Package Descriptor]]), the surface where the
-[[TDD RED Verification]] gate does not apply. The emergent surface has no stable
+An advisory review of the tests the worthiness selection names (the `emergentTests` and `tddUnitTests` globs, per [[Package Descriptor]]). An emergent test has no stable
 failing-then-passing run to gate on, so its honesty and worthiness come from a
-fresh-context reviewer instead of a mechanical RED proof. A route test under the route-test folder is also in scope, although the RED gate covers it too ([[Determinism Classifier]]); a file whose first line carries the contract marker takes no `delete` verdict, since a divergence there goes to a reopen. The reviewer
+fresh-context reviewer instead of a mechanical RED proof. A test the [[Determinism Classifier]] labels strict is on the surface the [[TDD RED Verification]] gate covers: the RED gate is its honesty proof, so it is judged on worth only and never gets an honesty-axis verdict. A route test under the route-test folder is judged on both axes, although the RED gate covers it too; a file whose first line carries the contract marker takes no `delete` verdict, since a divergence there goes to a reopen. The reviewer
 **proposes** verdicts and **edits no files**; a human acts on every proposal.
 
 ## Problem
@@ -28,7 +26,7 @@ adds maintenance cost while catching none of its own component's bugs.
 
 ## Decision
 
-A committed reviewer prompt judges each changed emergent test on two axes and
+A committed reviewer prompt judges each changed test on two axes (worth only for a strict test) and
 returns one verdict per test. A fresh-context reviewer is the cheapest way to
 recover the honesty signal the RED gate cannot supply here, because the author
 who wrote the tests shares their blind spots.
@@ -69,7 +67,11 @@ A story is a visual state and a behavior is a `.test()` attached to it ([[Storie
 
 ### Layers
 
-The composition rule compares a story's tests with its own children's stories. The audit stays on its own surface and does not compare a test with one at another layer; that comparison is the overlap pass, which reads every layer ([[Test Layering]]).
+The composition rule compares a story's tests with its own children's stories. The review judges each test on its own worth and does not propose moves across layers; [[Test Layering]] states the division of work between the review and the overlap pass.
+
+### Strict tests: worth only
+
+A test the classifier labels strict is judged on worth only. It never gets an honesty-axis verdict, because the RED gate is its honesty proof. The reviewer asks whether the test is worth having: trivial, covered by an integration test, proving what the type checker or lint already proves, a table that should be one test, or a unit test whose logic is neither important nor likely to fail. The verdict is `keep` or a human-gated `delete` naming the criterion, never an honesty `fix`.
 
 ### Two-tier surfacing
 
@@ -114,7 +116,7 @@ ledger:
 ## Infrastructure
 
 - `.claude/agents/worthiness-evaluator.md`: the committed, versioned reviewer
-  prompt. Reads only the changed emergent test files plus their sibling suites,
+  prompt. Reads only the changed in-scope test files plus their sibling suites,
   judges both axes, returns `{keep, fix, delete}` per test, edits no files. The
   human-facing encoding of the same contract is
   `apps/web/.claude/skills/tdd-react/references/tests-react.md` (the discriminator, composition,
@@ -136,4 +138,4 @@ ledger:
   deterministic surface, the fresh-subagent audit if dispatched) are distinct
   from the orchestrated-only guarantee (leaf isolation).
 - The merge presence gate reads this ledger, recomputes each test's signal, and
-  scopes to the emergent set the [[Determinism Classifier]] defines.
+  scopes to the same worthiness selection the review reads.

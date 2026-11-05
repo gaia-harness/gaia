@@ -4,7 +4,7 @@ Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHoo
 
 ## Testing Layers
 
-Six layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story `.test()`, not a browser test; a route's redirect is a route test, a loader's parsing is a service test. The principle and its rationale are in `wiki/decisions/Test Layering.md`.
+Six layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the layer the trophy rule in `wiki/decisions/Test Layering.md` picks, mostly route tests: a button's disabled state is a story `.test()`, not a browser test; a route's redirect is a route test; a loader's parsing gets a unit test only when it meets both unit-test conditions. The principle and its rationale are in `wiki/decisions/Test Layering.md`.
 
 The story-versus-route boundary: rendered output on one component is a story. A status, a redirect, returned data, a validation error, an authorization outcome or a side effect is a route test.
 
@@ -50,7 +50,7 @@ Discounted.test('strikes through the original price', async ({canvas}) => {
 
 Import `expect`, `fn`, `waitFor` and (when a native event has no `userEvent` equivalent) `fireEvent` from `storybook/test`, which re-exports the jest-dom matchers and user-event; a `.test()` and a `play` receive `canvas`, `canvasElement`, `args` and `userEvent` in their context. Use ARIA roles and accessible names as selectors, `getByRole('button', {name: 'Save'})`, `getByText('$49.99')`, not class selectors or test ids, and `await` every `userEvent` call and every `expect`.
 
-One story per visual state, one `.test()` per behavior, named for the behavior. The story export name is the story's display name (`Discounted` is "Discounted"); a string `name` overrides it. A story that carries any `.test()` runs its own render and play as `base story`, and the play runs again before every attached test, so put a step in `play` only when it builds the state every test and the snapshot need. A `play` on the meta is inherited by every story in the file, so put a shared play on the meta only when every story should run it. Write every story as a direct `meta.story({...})` export: the indexer cannot attach `.test()` to an export built by a factory function.
+One story per visual state and a `.test()` for each user-observable behavior (a parameterized table is one test), named for the behavior. The story export name is the story's display name (`Discounted` is "Discounted"); a string `name` overrides it. A story that carries any `.test()` runs its own render and play as `base story`, and the play runs again before every attached test, so put a step in `play` only when it builds the state every test and the snapshot need. A `play` on the meta is inherited by every story in the file, so put a shared play on the meta only when every story should run it. Write every story as a direct `meta.story({...})` export: the indexer cannot attach `.test()` to an export built by a factory function.
 
 ### Driving input
 
@@ -364,15 +364,13 @@ test('formats as USD', () => expect(formatPrice(49.99)).toBe('$49.99'));
 //   return new Intl.NumberFormat(LOCALE_BY_CURRENCY[currency],
 //     {style: 'currency', currency}).format(cents / 100);
 // };
-test('renders nothing for a null amount', () =>
-  expect(formatPrice(null, 'USD')).toBe(''));
-test('converts cents to major units', () =>
-  expect(formatPrice(4999, 'USD')).toBe('$49.99'));
-test('picks the locale for the currency', () => {
+test.each([
+  {case: 'null amount', cents: null, currency: 'USD', match: /^$/},
+  {case: 'cents to major units', cents: 4999, currency: 'USD', match: /^\$49\.99$/},
   // Tolerant matcher: Intl spacing varies by ICU version.
-  const out = formatPrice(4999, 'EUR');
-  expect(out).toMatch(/49,99/);
-  expect(out).toContain('€');
+  {case: 'locale for the currency', cents: 4999, currency: 'EUR', match: /49,99.*€|€.*49,99/},
+])('formatPrice applies its own logic: $case', ({cents, currency, match}) => {
+  expect(formatPrice(cents, currency)).toMatch(match);
 });
 ```
 
@@ -380,7 +378,7 @@ The null-amount guard and the cents-to-major conversion and the currency-to-loca
 
 ## Render-only stories and a11y
 
-A story with no `.test()` renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off); the check runs for the base story and again for each attached test. That is **complete evidence ONLY for a component with no interactive behavior** (a Spinner, a static badge). For a behavior-rich component a render-only story is the start of a test, not the whole of it: the interactions, state transitions, and error paths still need a `.test()` per behavior.
+A story with no `.test()` renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off); the check runs for the base story and again for each attached test. That is **complete evidence ONLY for a component with no interactive behavior** (a Spinner, a static badge). For a behavior-rich component a render-only story is the start of a test, not the whole of it: the behavior it owns still needs `.test()` coverage of the behavior a user sees (interactions, state transitions and error paths), not one test per interaction.
 
 An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. For an interactive component, the tests assert a keyboard path (Tab, Enter, Escape, arrows as the widget requires) and a focus outcome (where focus lands, or that it returns to the trigger). Page stories also carry a `.test()` for the landmark structure (one `main`, one level-1 heading), which the story-level axe run does not check. Opting a story out of addon-a11y needs its story id and a reason recorded in `A11Y_OPT_OUT_REASONS` in `test/story-a11y-opt-out.test.tsx`.
 

@@ -1,6 +1,6 @@
 ---
 name: overlap-evaluator
-description: 'Dispatched only by a plan run''s overlap pass: proposes drop, merge, demote or keep-both for tests the branch changed that another test already covers or that belong on a lower layer (unit, route, real-server, browser), written to the proposals file the dispatch names; proposes only, edits no tracked file. Never invoked directly.'
+description: 'Dispatched only by a plan run''s overlap pass: proposes drop, merge, demote, fold-up or keep-both for tests the branch changed that another test already covers or that belong on another layer (unit, route, real-server, browser), written to the proposals file the dispatch names; proposes only, edits no tracked file. Never invoked directly.'
 model: opus
 tools: Bash, Read, Write
 color: green
@@ -50,7 +50,7 @@ worthiness step's concern, not yours.
 The question for a candidate pair: for the same actor, the same action and the
 same route module, does the sibling assert the same property the subject does?
 Cross-layer duplication is the target: a slow browser test whose property a
-route test or a unit test already asserts is the usual find. The reverse
+real-server or route test already asserts is the usual find. The reverse
 direction, a browser test covering what a lower layer cannot see, is not a
 duplicate.
 
@@ -65,6 +65,8 @@ the property, or with the sibling-less `target` shape, citing the subject's own
 assertion lines, when none does. Security-boundary tests are included: the
 real-server layer shows a served refusal status as well as a browser does.
 
+A drop, merge or demote whose covering test is a unit test (not a story) needs a reason when the subject sits on the route layer or higher: see the `unitReason` field under `## Output`.
+
 Never propose a demote of a rendered UAT test (line 1 is the
 `// gaia-uat-contract` marker): it is report-only.
 
@@ -74,7 +76,7 @@ a real page, it stays, even when each of its assertions could be shown lower.
 
 ## Proposals
 
-Four kinds:
+Five kinds:
 
 - `drop`: the subject adds nothing the sibling does not assert; delete it.
 - `merge`: the subject asserts one extra detail; move it into the sibling and
@@ -82,7 +84,13 @@ Four kinds:
 - `demote`: the property belongs on a lower layer; write it there and delete the
   subject. A demotion writes a test. It cites a `sibling` when a lower test
   already asserts the property, or a `target` (see Output) when the lower test
-  does not exist yet.
+  does not exist yet. A demote whose covering test is a unit test (not a story)
+  needs a reason stating both unit-test conditions
+  (wiki/decisions/Test Layering.md).
+- `fold-up`: two or more subject tests whose property one existing integration
+  test (route, story or real-server) already asserts; delete the subjects and
+  write nothing. A fold-up that would need a new or widened test is report-only
+  (see Output).
 - `keep-both`: the pair looks duplicated but is not. It requires `bug`: the
   specific defect that fails the subject and passes the sibling. No such bug
   means it is not a keep-both; propose a drop, or nothing when the two do not
@@ -120,6 +128,8 @@ sibling to decide.
 1. Get the changed list and read the changed tests.
 2. For each, search the other layers and its folder for a candidate sibling and
    read it, and judge whether a browser test belongs on the real-server layer.
+   Also look for an existing integration test that already asserts the property
+   of two or more changed tests.
 3. Judge the pair with the rubric. When the code cannot settle a pair, still
    propose what the evidence leans toward: begin `property` with `Uncertain:`
    and the doubt. A doubtful proposal costs one review line; a skip leaves the
@@ -165,4 +175,35 @@ and with exactly one of `sibling` or `target`:
 - `target.layer` is `real-server`, and the subject must be on `browser`.
 - `target.assertions` holds at least one entry; each `line` is the 1-based line
   holding its `assertion`, inside the subject test's body.
+- `unitReason` is required on a `drop`, `merge` or `demote` whose covering test
+  (`sibling`) is a unit test that is not a story file (`*.stories.tsx`) while the
+  subject sits on the route layer or higher. Both strings are non-empty:
+
+```
+"unitReason":{"integrationCost":"the integration layer cannot cover the cases cheaply because ...","risk":"the logic is important or likely to fail because ..."}
+```
+
+- A `fold-up` names two or more `subjects` and no top-level `file` or
+  `fullName`. `into` cites a live assertion of an existing route, story or
+  real-server test that already asserts the property; a fold-up into a unit test
+  or a browser test is refused:
+
+```
+{"proposal":"fold-up","subjects":[{"file":"apps/web/app/utils/a.test.ts","fullName":"parses a"},{"file":"apps/web/app/utils/b.test.ts","fullName":"parses b"}],
+ "seam":false,"property":"the route rejects a malformed date","actor":"a signed in user","action":"submit the form with a bad date",
+ "into":{"file":"apps/web/app/route-tests/x/tests/y.test.ts","line":14,"fullName":"rejects a malformed date","assertion":"expect(response.status).toBe(400)"}}
+```
+
+- Never propose a fold-up into a test you would have to write or widen. Emit it
+  as report-only instead: a `fold-up` with `subjects`, no `into`, and
+  `needsNewTest` stating why no existing test asserts the property, or a
+  `demote` with `file` and `fullName`, no `sibling` or `target`, and
+  `needsNewTest` plus `unitReason`. The fixer never acts on it:
+
+```
+{"proposal":"fold-up","subjects":[{"file":"apps/web/app/utils/a.test.ts","fullName":"parses a"},{"file":"apps/web/app/utils/b.test.ts","fullName":"parses b"}],
+ "seam":false,"property":"the route rejects a malformed date","actor":"a signed in user","action":"submit the form with a bad date",
+ "needsNewTest":"no route test submits a bad date"}
+```
+
 - Propose each subject at most once.

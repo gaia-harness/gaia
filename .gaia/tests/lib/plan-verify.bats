@@ -66,6 +66,15 @@ write_routing() {
 | UAT-003 | non-ui | 1 | - | - |
 <!-- gaia:uat-routing:end -->
 EOF2
+  phase_rows 1 2 3 >>"$PLAN/README.md"
+}
+
+# phase_rows <n>...: README task-graph rows naming these phases (default 1).
+phase_rows() {
+  local phase
+  for phase in "${@:-1}"; do
+    printf '| Phase %s | tasks | sonnet | none |\n' "$phase"
+  done
 }
 
 # block_of <sentinel> [<indent>]: the block that sentinel opens, as the planner
@@ -108,9 +117,14 @@ is_verbatim() {
 # write_orchestrator <sentinel>...: ORCHESTRATOR.md with these lines in this
 # order; a verbatim sentinel stands for the whole copied block.
 write_orchestrator() {
-  local entry
+  local entry phase
   {
     printf '# Orchestrator\n\n'
+    # One phase entry per README phase row, outside every block.
+    for phase in $(sed -nE 's/^[|][[:space:]]*Phase[[:space:]]+([0-9]+).*/\1/p' "$PLAN/README.md" 2>/dev/null | grep . || echo 1); do
+      printf '**Phase %s, x.**\n' "$phase"
+    done
+    printf '\n'
     for entry in "$@"; do
       if is_verbatim "$entry"; then
         block_of "$entry" 0 || return 1
@@ -138,7 +152,7 @@ spec_fixture() {
 
 # spec_less_fixture: a passing spec-less plan folder.
 spec_less_fixture() {
-  printf '# Plan\n' >"$PLAN/README.md"
+  { printf '# Plan\n\n'; phase_rows 1; } >"$PLAN/README.md"
   write_orchestrator "${SPEC_LESS_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task '- nothing'
@@ -285,6 +299,7 @@ verify_spec_less() {
   local literal
   spec_fixture
   {
+    printf '**Phase 1, x.**\n**Phase 2, x.**\n**Phase 3, x.**\n\n'
     block_of "$S_RESUME" 6
     printf '\n      %s\n\n' "$S_RENDER" "$S_GATE"
     yield_block 6
@@ -420,7 +435,7 @@ mutate_orchestrator() {
   local literal
   spec_fixture
   {
-    printf '# Orchestrator\n\n'
+    printf '# Orchestrator\n\n**Phase 1, x.**\n**Phase 2, x.**\n**Phase 3, x.**\n\n'
     block_of "$S_RESUME" 6
     printf '\n      %s\n\n' "$S_RENDER" "$S_GATE"
     yield_block 6
@@ -507,7 +522,7 @@ mutate_orchestrator() {
 @test "red twin: a planner.md without the fenced block fails naming planner.md" {
   local tree="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$tree/.gaia/scripts/spec" "$tree/.claude/skills/gaia/references/plan"
-  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$tree/.gaia/scripts/spec/"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/plan-phases-lib.sh" "$tree/.gaia/scripts/spec/"
   grep -vE '^[[:space:]]*```' "$PLANNER_MD" >"$tree/.claude/skills/gaia/references/plan/planner.md"
   spec_less_fixture
   run bash "$tree/.gaia/scripts/spec/plan-verify.sh" "$PLAN"
@@ -565,7 +580,7 @@ mutate_orchestrator() {
 marker_tree() {
   MARKER_TREE="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$MARKER_TREE/.gaia/scripts/spec" "$MARKER_TREE/.claude/skills/gaia/references/plan"
-  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$MARKER_TREE/.gaia/scripts/spec/"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/plan-phases-lib.sh" "$MARKER_TREE/.gaia/scripts/spec/"
   cp "$1" "$MARKER_TREE/.claude/skills/gaia/references/plan/planner.md"
 }
 
@@ -752,6 +767,7 @@ EOF2
 | UAT-001 | $1 | 1 | $file_cells |
 <!-- gaia:uat-routing:end -->
 EOF2
+  phase_rows 1 >>"$PLAN/README.md"
   write_orchestrator "${SPEC_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task '- nothing'
@@ -762,7 +778,8 @@ EOF2
 
 # scratch_verifier <edit-expression>: a copy of plan-verify.sh (with the
 # libraries it sources and planner.md) in the test tmp dir. The edit runs over
-# plan-verify.sh and the capability-line lib, since a guard can live in either;
+# plan-verify.sh, the capability-line lib and the phase-ownership lib, since a
+# guard can live in any of them;
 # an edit that matches neither leaves the guard in place, so a twin fails loud.
 scratch_verifier() {
   local root="$BATS_TEST_TMPDIR/scratch"
@@ -770,6 +787,7 @@ scratch_verifier() {
   cp "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$root/.gaia/scripts/spec/"
   cp "$PLANNER_MD" "$root/.claude/skills/gaia/references/plan/planner.md"
   sed "$1" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" >"$root/.gaia/scripts/spec/browser-capability-lib.sh"
+  sed "$1" "$REPO_ROOT_REAL/.gaia/scripts/spec/plan-phases-lib.sh" >"$root/.gaia/scripts/spec/plan-phases-lib.sh"
   sed "$1" "$SCRIPT" >"$root/.gaia/scripts/spec/plan-verify.sh"
   SCRATCH_SCRIPT="$root/.gaia/scripts/spec/plan-verify.sh"
 }
@@ -820,6 +838,7 @@ EOF2
 | UAT-002 | real-server | 1 | auth | sign-out-clears-cookie.spec.ts |
 <!-- gaia:uat-routing:end -->
 EOF2
+  phase_rows 1 >>"$PLAN/README.md"
   write_orchestrator "${SPEC_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task '- Real-server reason (UAT-001, UAT-002): these need the live stack'
@@ -921,6 +940,7 @@ EOF2
 | UAT-002 | browser | 1 | checkout | second.spec.ts |
 <!-- gaia:uat-routing:end -->
 EOF2
+  phase_rows 1 >>"$PLAN/README.md"
   write_orchestrator "${SPEC_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task "$3"
@@ -1166,4 +1186,156 @@ header_lists_capabilities() {
   scratch_verifier '/^#   capability: focus or keyboard/s/tab key$/tab keyz/'
   run header_lists_capabilities "$SCRATCH_SCRIPT"
   [ "$status" -ne 0 ]
+}
+
+# ---------- the phase-ownership check ----------
+
+# phases_plan [<readme-line>...]: the fixture's README lists Phases 1 to 3 and
+# routes only Phases 1 and 3; each argument is added as a README line.
+phases_plan() {
+  local line
+  spec_fixture
+  sed -i.bak 's/| UAT-001 | browser | 2 |/| UAT-001 | browser | 3 |/' "$PLAN/README.md"
+  rm -f "$PLAN/README.md.bak"
+  for line in "$@"; do
+    printf '%s\n' "$line" >>"$PLAN/README.md"
+  done
+  write_orchestrator "${SPEC_ORDER[@]}"
+}
+
+@test "phases: an unmarked phase that owns no acceptance test is refused naming the phase" {
+  phases_plan
+  verify_spec
+  expect_refusal 'plan-verify: Phase 2 owns no acceptance test' || return 1
+  [ "$(echo "$output" | grep -c 'owns no acceptance test')" -eq 1 ]
+}
+
+@test "phases: an infrastructure marker with a reason lets the phase pass" {
+  phases_plan '- Phase 2: Infrastructure: builds the parser the Phase 3 route test exercises'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "phases: a marker with an empty or whitespace-only reason is refused" {
+  local marker
+  for marker in '- Phase 2: Infrastructure:' '- Phase 2: Infrastructure:    '; do
+    phases_plan "$marker"
+    verify_spec
+    expect_refusal "Phase 2's Infrastructure marker has an empty reason" || return 1
+  done
+}
+
+@test "phases: a marker naming a phase the README lacks is refused" {
+  phases_plan '- Phase 2: Infrastructure: builds the parser' '- Phase 7: Infrastructure: builds nothing'
+  verify_spec
+  expect_refusal "the Infrastructure marker names Phase 7, which README.md's phase list lacks"
+}
+
+# surface_plan <surface> <then> <task-line>: Phase 2 is named only by the one
+# row; Phase 1 is marked infrastructure.
+surface_plan() {
+  one_uat_plan "$1" "$2" "$3"
+  sed -i.bak 's/^| UAT-001 | \([a-z-]*\) | 1 |/| UAT-001 | \1 | 2 |/' "$PLAN/README.md"
+  rm -f "$PLAN/README.md.bak"
+  printf '%s\n%s\n' '| Phase 2 | tasks | sonnet | none |' '- Phase 1: Infrastructure: prepares the row' >>"$PLAN/README.md"
+  write_orchestrator "${SPEC_ORDER[@]}"
+}
+
+@test "phases: a row of any surface gives its phase ownership" {
+  local surface task
+  for surface in story route real-server browser non-ui; do
+    task=''
+    case "$surface" in
+      story) task='- Story test criterion (UAT-001): focus moves to the first field' ;;
+      real-server) task='- Real-server reason (UAT-001): the cookie the served response sets' ;;
+      browser) task='- Browser capability (UAT-001): focus or keyboard: focus moves to the first field' ;;
+    esac
+    surface_plan "$surface" 'focus moves to the first field' "$task"
+    verify_spec
+    echo "$output" | grep -qF 'owns no acceptance test' && { echo "$surface: $output" >&2; return 1; }
+    echo "$output" | grep -qF 'Phase 2' && { echo "$surface: $output" >&2; return 1; }
+  done
+  true
+}
+
+@test "phases: a spec-less plan listing phases and routing none passes" {
+  spec_less_fixture
+  verify_spec_less
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "phases: a README naming no phase and one skipping a phase are refused" {
+  spec_fixture
+  grep -v '^| Phase' "$PLAN/README.md" >"$PLAN/README.new"
+  mv "$PLAN/README.new" "$PLAN/README.md"
+  verify_spec
+  expect_refusal "README.md names no phase" || return 1
+  spec_fixture
+  sed -i.bak '/^| Phase 2 /d' "$PLAN/README.md"
+  rm -f "$PLAN/README.md.bak"
+  verify_spec
+  expect_refusal "README.md's phase list skips Phase 2"
+}
+
+@test "phases: ORCHESTRATOR.md and README.md must name the same phases" {
+  spec_fixture
+  grep -v '^\*\*Phase 3, ' "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.new"
+  mv "$PLAN/ORCHESTRATOR.new" "$PLAN/ORCHESTRATOR.md"
+  verify_spec
+  expect_refusal 'ORCHESTRATOR.md has no phase entry for Phase 3' || return 1
+  spec_fixture
+  printf '**Phase 4, extra.**\n' >>"$PLAN/ORCHESTRATOR.md"
+  verify_spec
+  expect_refusal "ORCHESTRATOR.md names Phase 4, which README.md's phase list lacks"
+}
+
+@test "phases: fenced ORCHESTRATOR text is never read and a heading is not an entry" {
+  one_uat_plan non-ui 'the script exits zero'
+  sed -i.bak 's/| UAT-001 | non-ui | 1 | .*|$/| UAT-001 | non-ui | 1 | - | - |/' "$PLAN/README.md"
+  rm -f "$PLAN/README.md.bak"
+  {
+    printf '```\n## Phase 2, Helper implementation\n## Phase 2, Helper implementation (YIELD 1)\n```\n\n'
+    cat "$PLAN/ORCHESTRATOR.md"
+  } >"$PLAN/ORCHESTRATOR.new"
+  mv "$PLAN/ORCHESTRATOR.new" "$PLAN/ORCHESTRATOR.md"
+  verify_spec
+  echo "$output" | grep -qF 'Phase 2' && { echo "$output" >&2; return 1; }
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  sed -i.bak 's/^\*\*Phase 1, x\.\*\*$/## Phase 1/' "$PLAN/ORCHESTRATOR.md"
+  rm -f "$PLAN/ORCHESTRATOR.md.bak"
+  verify_spec
+  expect_refusal 'ORCHESTRATOR.md has no phase entry for Phase 1'
+}
+
+@test "phases: a routing row routed to a phase the README lacks names the UAT and the phase" {
+  spec_fixture
+  sed -i.bak 's/| UAT-003 | non-ui | 1 |/| UAT-003 | non-ui | 5 |/' "$PLAN/README.md"
+  rm -f "$PLAN/README.md.bak"
+  verify_spec
+  expect_refusal "UAT-003 is routed to Phase 5, which README.md's phase list lacks"
+}
+
+@test "phases: two problems are both reported in one run" {
+  phases_plan '- Phase 7: Infrastructure: builds nothing'
+  verify_spec
+  expect_refusal 'Phase 2 owns no acceptance test' || return 1
+  echo "$output" | grep -qF 'Phase 7, which README.md' || { echo "$output" >&2; return 1; }
+}
+
+@test "red twin: without the plan_phases_check call the unmarked-phase fixture passes" {
+  phases_plan
+  verify_spec
+  [ "$status" -eq 1 ] || return 1
+  scratch_verifier 's/^    done < <(plan_phases_check .*$/    done <\/dev\/null/'
+  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "a tree without plan-phases-lib.sh exits 2 naming the missing function" {
+  scratch_verifier 's/^$/&/'
+  rm "$BATS_TEST_TMPDIR/scratch/.gaia/scripts/spec/plan-phases-lib.sh"
+  spec_fixture
+  run bash "$SCRATCH_SCRIPT" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 2 ] || { echo "$output" >&2; return 1; }
+  echo "$output" | grep -qF 'plan-phases-lib.sh did not define plan_phases_check'
 }

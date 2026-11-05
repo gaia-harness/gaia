@@ -90,7 +90,8 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[shadcn Component Layer]]: GAIA's component layer, the vendored-ui policy.
 - [[React Compiler]]: React Compiler runs by default in build, dev, Vitest and Storybook from one shared module; thresholds, adopter steps and rollback.
 - [[TypeScript Language Files]]
-- [[Test Layering]]: each check sits at the lowest layer that proves it; the route surface, the stack mapping and which layer fails for which authorization bug.
+- [[Test Layering]]: the testing trophy (mostly route tests, a unit test only when both unit-test conditions hold); the route surface, the stack mapping and which layer fails for which authorization bug.
+- [[Testing Trophy Doctrine|Testing Trophy Doctrine]]
 - [[TypeScript 7 Readiness]]: tsconfig pre-adopts the TS7 strict baseline; the 7.1 upgrade is a dep swap gated on typescript-eslint's programmatic API.
 - [[Thin Routes]]
 - [[Co-located Tests Folder]]
@@ -123,8 +124,8 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Determinism Classifier]]: per-file AST signal labelling a source file strict (RED-gated) or emergent (advisory audit); versioned DOM-API allowlist, file-granular.
 - [[Workspace Standard For Apps And Packages]]
 - [[Worthiness And Wiki Before The Audit]]: the worthiness step and wiki promotion run before the first audit round; `file-tech-debt.sh file` refuses a non-security finding on branch-authored code.
-- [[Worthiness Audit]]: advisory two-axis (honesty + worthiness) review of emergent-surface tests; fresh-context reviewer proposes keep/fix/delete, deletes human-gated, audit ledger sibling to the RED ledger; stories audited as emergent tests; two-tier end-of-task surfacing.
-- [[Worthiness Presence Gate]]: merge-time `gh pr merge` hook requiring each changed emergent test to carry a worthiness-ledger line matching its current content; presence + signal match only (never the verdict), scoped to the PR's changed emergent tests, fail-open.
+- [[Worthiness Audit]]: advisory review of every changed test the worthiness selection names (honesty + worth for emergent tests, worth only for strict tests); fresh-context reviewer proposes keep/fix/delete, deletes human-gated, audit ledger sibling to the RED ledger; stories audited as emergent tests; two-tier end-of-task surfacing.
+- [[Worthiness Presence Gate]]: merge-time `gh pr merge` hook requiring each changed test the worthiness selection names to carry a worthiness-ledger line matching its current content; presence + signal match only (never the verdict), scoped to the PR's changed in-scope tests, fail-open.
 <!-- gaia:maintainer-only:start -->
 - [[Dependabot as a Data Source]]: Dependabot alerts feed `/update-deps`, which resolves advisories through the local quality gate; GAIA renders no Dependabot config and keeps automated security fixes off.
 - [[Bundle-time Scrub]]: marker-strip + leak-check + runtime-deps; closes the audit-round loop with build-time enforcement.

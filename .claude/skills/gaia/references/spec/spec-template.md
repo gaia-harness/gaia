@@ -21,8 +21,8 @@ uats:
     then: <Observable outcome, concrete and falsifiable. No "should",
       no hedging. The verifier can read this and write a test
       assertion against it. A UAT states a rule with one representative
-      journey; case tables belong to the lowest layer, so do not list
-      every input value or outcome here. State what the user observes.
+      journey; case tables belong to one parameterized test at the layer the trophy rule picks (wiki/decisions/Test Layering.md),
+      so do not list every input value or outcome here. State what the user observes.
       A page-markup or accessibility structure rule (an element's whole
       text, a heading level) is not a then-clause; the SPEC audit
       records it as a plan-time directive.>

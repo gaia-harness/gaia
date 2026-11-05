@@ -218,7 +218,7 @@ check_preflight_sites() {
 assemble_orchestrator() {
   local source="$1" out="$2" sentinel block
   shift 2
-  printf '# Orchestrator\n\nResume detection, pre-flight isolation, RUNNING sentinel.\n\n' >"$out"
+  printf '# Orchestrator\n\nResume detection, pre-flight isolation, RUNNING sentinel.\n\n**Phase 1, x.**\n\n' >"$out"
   for sentinel in "$@"; do
     block="$(fence_with "$source" "$sentinel")"
     [ -n "$block" ] || { printf 'no block for %s\n' "$sentinel" >&2; return 1; }
@@ -253,6 +253,7 @@ EOF
 | UAT-001 | real-server | 1 | checkout | guest-checkout-confirms-order.spec.ts |
 <!-- gaia:uat-routing:end -->
 EOF
+  printf '| Phase 1 | tasks | sonnet | none |\n' >>"$FIXTURE_PLAN/README.md"
   printf 'You are the orchestrator.\n' >"$FIXTURE_PLAN/KICKOFF.md"
   printf '# Task\n\n- builds checkout\n- Real-server reason (UAT-001): the confirmation page is server-rendered HTML\n' >"$FIXTURE_PLAN/task-checkout.md"
 }
@@ -680,7 +681,7 @@ check_ladder() {
     grep -qF -- "$needle" <<<"$para" && { printf 'ladder still holds: %s\n' "$needle" >&2; return 1; }
   done
   grep -qF -- 'the word lists live in the header' "$file" && { printf 'planner.md still describes the word-list WARN\n' >&2; return 1; }
-  grep -qF -- 'the lowest layer that can prove it' "$file" && { printf 'planner.md copies the rationale phrase\n' >&2; return 1; }
+  grep -qF -- 'the route layer is the default home for behavior' "$file" && { printf 'planner.md copies the rationale phrase\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | route | <owning phase> | <kebab-case feature path, no tests segment> | <behavior-named-kebab-case>.test.ts |' "$file" || { printf 'no route row in the routing table example\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | real-server |' "$file" || { printf 'no real-server row in the routing table example\n' >&2; return 1; }
   grep -qF -- '| <uat_id> | browser |' "$file" || { printf 'no browser row in the routing table example\n' >&2; return 1; }
@@ -718,7 +719,7 @@ check_route_triggers() {
     run check_ladder "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
   done
-  { cat "$PLANNER_MD"; printf '\nTests belong at the lowest layer that can prove it.\n'; } >"$copy"
+  { cat "$PLANNER_MD"; printf '\nWrite tests, not too many, mostly integration: the route layer is the default home for behavior.\n'; } >"$copy"
   run check_ladder "$copy"
   [ "$status" -ne 0 ]
   local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'Real-server reason (<uat_id>)' 'serializeForm' 'A JavaScript-disabled Given or a native form rules out `browser` and nothing else' 'when that HTML is itself the SPEC'"'"'s requirement' 'A status, refusal or error outcome a direct `loader` or `action` call returns routes by step 2 even when the SPEC names the page or error boundary that renders it' 'the UAT takes a `route` row and its owning phase delivers the HTML check as a real-server task')

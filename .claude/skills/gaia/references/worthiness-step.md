@@ -93,7 +93,7 @@ A residual decided here reaches the PR body through the status post's rewrite (`
 
 The tdd skill follows this arm only. It dispatches and records, nothing else, because tdd runs once its tests pass, on work still in the working tree and possibly with no PR, and `route` selects from the saved `base...HEAD` range, so it would read such a test as `[]`.
 
-- The test list is the task's own changed emergent files, not a `route` result.
+- The test list is the task's own changed in-scope test files, not a `route` result.
 - Dispatch the evaluator with a `Verdict file:` line in the scratchpad and classify the file as the Evaluate step does, with `--expect-count`.
 - Record with `bash .gaia/scripts/worthiness-step.sh record --root <root> --verdicts <verdict file>`, with no `--expect`.
 - Run no repair agent, make no history change and ask no question. The verdicts go in tdd's end-of-task summary. A second no-op is reported in that summary rather than halting, because tdd never interrupts mid-implementation and the presence check backs up a missing line. This is the same deliberate departure from the general inline ending as the Evaluate step's.

@@ -64,6 +64,10 @@
 # blanket sentence cannot cover several rows; whether it is true is unchecked:
 #   - Real-server reason (<uat_id>): <what a route test cannot show>
 #
+# A spec-derived plan also gets the phase-ownership check in
+# plan-phases-lib.sh (its header owns the rules): a README phase that no routing
+# row names must carry a "- Phase <N>: Infrastructure: <reason>" line.
+#
 # Every failure is reported on stderr, one line each, in a single run.
 #
 # Exit codes: 0 pass; 1 one or more failures; 2 usage error.
@@ -72,7 +76,6 @@
 capability_tokens=("client JavaScript" "layout or visual position" "focus or keyboard" "rendered-DOM accessibility scan" "browser-only navigation")
 # shellcheck disable=SC2034 # read by the sourced browser-capability-lib.sh
 capability_cues=('without a reload|client-side|optimistic(ally)?|live' 'beside|above|below|position(s|ed)?|viewport|layout' 'focus(es|ed|ing)?|keyboard|tab key' 'accessibility|axe|screen readers?' 'back button|browser history|client navigation')
-javascript_disabled_pattern='(^|[^[:alnum:]])((javascript|js)[ -](is )?(disabled|off|turned off|not enabled)|without (javascript|js)|no[ -](javascript|js))([^[:alnum:]]|$)'
 set -uo pipefail
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -80,6 +83,12 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$script_directory/uat-lib.sh"
 # shellcheck source=.gaia/scripts/spec/browser-capability-lib.sh
 . "$script_directory/browser-capability-lib.sh"
+# shellcheck source=.gaia/scripts/spec/plan-phases-lib.sh
+. "$script_directory/plan-phases-lib.sh"
+if ! declare -F plan_phases_check >/dev/null; then
+  printf 'plan-verify: plan-phases-lib.sh did not define plan_phases_check\n' >&2
+  exit 2
+fi
 
 usage() {
   printf 'usage: plan-verify.sh <plan-dir> [--spec <spec-path>]\n' >&2
@@ -123,33 +132,6 @@ capability_allowed_list=''
 for capability_token in ${capability_tokens[@]+"${capability_tokens[@]}"}; do
   capability_allowed_list="${capability_allowed_list:+$capability_allowed_list, }$capability_token"
 done
-
-# The capability line scan runs over every task doc; the JavaScript-disabled
-# check reads the Given and fires independently of the line.
-browser_row_check() {
-  local uat="$1" then_text="$2" given_text="$3" marker task_line problem first_problem='' passed=0
-  marker="Browser capability ($uat)"
-  if [ "${#task_files[@]}" -gt 0 ]; then
-    while IFS= read -r task_line; do
-      problem=$(capability_line_problem "$uat" "$then_text" "${task_line#*"$marker"}")
-      if [ -z "$problem" ]; then
-        passed=1
-        break
-      fi
-      [ -n "$first_problem" ] || first_problem="$problem"
-    done < <(grep -hF -- "$marker" ${task_files[@]+"${task_files[@]}"})
-  fi
-  if [ "$passed" -eq 0 ]; then
-    if [ -n "$first_problem" ]; then
-      fail "$first_problem"
-    else
-      fail "$uat is routed browser but no task doc carries its line: - $marker: <capability>: <then-clause phrase>; a browser row needs a capability from the closed list: $capability_allowed_list"
-    fi
-  fi
-  if grep -qiE "$javascript_disabled_pattern" <<<"$given_text"; then
-    fail "$uat is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes by the ladder's route and real-server steps"
-  fi
-}
 
 real_server_row_check() {
   local uat="$1" marker="Real-server reason ($1):" reason_text
@@ -393,6 +375,10 @@ if [ -n "$spec_path" ] && [ -f "$readme" ]; then
           ;;
       esac
     done <<<"$routing_rows"
+    while IFS= read -r phase_problem; do
+      [ -n "$phase_problem" ] || continue
+      fail "$phase_problem"
+    done < <(plan_phases_check "$readme" "$orchestrator" "$routing_rows")
   fi
 fi
 

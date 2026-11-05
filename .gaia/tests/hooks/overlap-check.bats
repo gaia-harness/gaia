@@ -31,6 +31,7 @@ OFF_LAYER='apps/web/lib/other.test.ts'
 REFUSE_UNIT='apps/web/app/utils/refuse.test.ts'
 SESSION_UNIT='apps/web/app/sessions.server/plain.test.ts'
 DEMOTE='apps/web/.playwright/e2e/demote.spec.ts'
+SESSION_NAME='adds two numbers'
 SERVED='apps/web/.playwright/e2e/served.spec.ts'
 LOOPED='apps/web/.playwright/e2e/route-status.spec.ts'
 HELPERS='apps/web/.playwright/e2e/helpers.spec.ts'
@@ -38,6 +39,11 @@ RENDERED_HELPERS='apps/web/.playwright/e2e/rendered-helpers.spec.ts'
 REPLACEMENT='apps/web/.playwright/e2e/demote-served.spec.ts'
 MIXED='apps/web/.playwright/e2e/mixed.spec.ts'
 TABLES='apps/web/app/route-tests/tables.server.test.ts'
+SLUG_UNIT='apps/web/app/utils/slug.test.ts'
+TRIM_UNIT='apps/web/app/utils/trim.test.ts'
+SLUG_ROUTE='apps/web/app/route-tests/slugs.test.ts'
+TROPHY_ROUTE='apps/web/app/route-tests/trophy.test.ts'
+STORY='apps/web/app/components/card/tests/card.stories.tsx'
 
 setup() {
   HOME_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -65,6 +71,7 @@ setup() {
   cp -R "$FIXTURES/." "$REPO/"
   legacy_source 'stops legacy access' >"$REPO/$LEGACY_EDITED"
   write_layer_fixtures
+  write_trophy_fixtures
   git -C "$REPO" add -A
   git -C "$REPO" commit -q -m feature
   CHECK="$REPO/.gaia/scripts/overlap-check.sh"
@@ -224,18 +231,135 @@ test('a rendered test that calls a helper', async ({page}) => {
 EOF
 }
 
+# The fold-up and unit-reason fixtures: two unit subjects in two files, the
+# route tests that already assert their property, route subjects for the
+# reason rule, and a story whose attached test is a cover.
+write_trophy_fixtures() {
+  mkdir -p "$REPO/apps/web/app/utils" "$REPO/apps/web/app/route-tests" "$REPO/$(dirname "$STORY")"
+  write_slug_unit 'slugs a title' 'keeps digits'
+  write_trim_unit 'trims spaces'
+  write_slug_route
+  cat >"$REPO/$TROPHY_ROUTE" <<'EOF'
+import {expect, test} from 'vitest';
+
+test('demote with both conditions', () => {
+  expect(1).toBe(1);
+});
+
+test('demote with no reason', () => {
+  expect(1).toBe(1);
+});
+
+test('demote with one condition', () => {
+  expect(1).toBe(1);
+});
+
+test('demote onto a story', () => {
+  expect(1).toBe(1);
+});
+
+test('drops a route check', () => {
+  expect(1).toBe(1);
+});
+
+test('drop onto a folded subject', () => {
+  expect(1).toBe(1);
+});
+EOF
+  cat >"$REPO/$STORY" <<'EOF'
+import {expect} from 'storybook/test';
+import preview from '#.storybook/preview';
+import {Card} from '../index';
+
+const meta = preview.meta({
+  component: Card,
+  title: 'Card',
+});
+
+export const Default = meta.story({
+  args: {title: 'Title'},
+});
+
+Default.test('shows the title', async ({canvas}) => {
+  await expect(canvas.getByText('Title')).toBeVisible();
+});
+EOF
+}
+
+# write_slug_route [extra test name]: the route tests a fold-up folds into,
+# plus one more test when named, the way a fixer that wrote a test leaves it.
+write_slug_route() {
+  {
+    printf "import {expect, test} from 'vitest';\n"
+    printf "\ntest('the slug route answers the slug', async () => {\n  expect(await slugRoute(' A b ')).toBe('a-b');\n});\n"
+    printf "\ntest('the trim route answers the trimmed text', async () => {\n  expect(await trimRoute(' a ')).toBe('a');\n});\n"
+    [ -z "${1:-}" ] || printf "\ntest('%s', async () => {\n  expect(await slugRoute('x')).toBe('x');\n});\n" "$1"
+  } >"$REPO/$SLUG_ROUTE"
+}
+
+# write_slug_unit <name>... and write_trim_unit <name>...: each unit file
+# holding only the named tests, the way a fixer leaves it after a deletion.
+write_slug_unit() {
+  local name
+  {
+    printf "import {expect, test} from 'vitest';\n"
+    for name in "$@"; do
+      case "$name" in
+        'slugs a title') printf "\ntest('slugs a title', () => {\n  expect(slugOf('A b')).toBe('a-b');\n});\n" ;;
+        *) printf "\ntest('%s', () => {\n  expect(slugOf('a1')).toBe('a1');\n});\n" "$name" ;;
+      esac
+    done
+  } >"$REPO/$SLUG_UNIT"
+}
+
+write_trim_unit() {
+  local name
+  {
+    printf "import {expect, test} from 'vitest';\n"
+    for name in "$@"; do
+      printf "\ntest('%s', () => {\n  expect(trim(' a ')).toBe('a');\n});\n" "$name"
+    done
+  } >"$REPO/$TRIM_UNIT"
+}
+
 line_of() { grep -n -F -m1 -- "$2" "$REPO/$1" | cut -d: -f1; }
+
+# cite attaches this unit reason unless UNIT_REASON says otherwise: `null`
+# leaves it out, any other value is the JSON attached. A proposal that needs
+# no reason is judged the same with or without it.
+DEFAULT_UNIT_REASON='{"integrationCost":"the route layer cannot reach every case cheaply","risk":"the logic is likely to fail"}'
 
 # cite <kind> <file> <fullName> <seam> <sibling-file> <sibling-fullName> <assertion> [bug]
 # The cited line is CITE_LINE when set, else where the assertion sits.
 cite() {
   local line="${CITE_LINE:-$(line_of "$5" "$7")}"
   jq -n --arg kind "$1" --arg file "$2" --arg name "$3" --argjson seam "$4" \
-    --arg sf "$5" --argjson sl "${line:-0}" --arg sn "$6" --arg sa "$7" --arg bug "${8:-}" '{
+    --arg sf "$5" --argjson sl "${line:-0}" --arg sn "$6" --arg sa "$7" --arg bug "${8:-}" \
+    --argjson reason "${UNIT_REASON:-$DEFAULT_UNIT_REASON}" '{
       proposal: $kind, file: $file, fullName: $name, seam: $seam,
       property: "the property", actor: "the actor", action: "the action",
       sibling: {file: $sf, line: $sl, fullName: $sn, assertion: $sa}
-    } + (if $bug == "" then {} else {bug: $bug} end)'
+    } + (if $bug == "" then {} else {bug: $bug} end)
+      + (if $reason == null then {} else {unitReason: $reason} end)'
+}
+
+# fold_up <property> <into-file> <into-fullName> <assertion> <file> <fullName> [<file> <fullName>]...
+# An <into-file> of - leaves out `into`; NEEDS sets needsNewTest. A fold-up has
+# no top-level fullName, so fold_reason and fold_field find it by property.
+fold_up() {
+  local property="$1" into_file="$2" into_name="$3" assertion="$4" subjects='[]' line=''
+  shift 4
+  while [ "$#" -ge 2 ]; do
+    subjects="$(jq -c --arg f "$1" --arg n "$2" '. + [{file: $f, fullName: $n}]' <<<"$subjects")"
+    shift 2
+  done
+  [ "$into_file" = - ] || line="${CITE_LINE:-$(line_of "$into_file" "$assertion")}"
+  jq -n --arg property "$property" --arg f "$into_file" --arg n "$into_name" --arg a "$assertion" \
+    --argjson l "${line:-0}" --argjson subjects "$subjects" --arg needs "${NEEDS:-}" '{
+      proposal: "fold-up", subjects: $subjects, seam: false,
+      property: $property, actor: "the actor", action: "the action"
+    } + (if $f == "-" then {} else {into: {file: $f, line: $l, fullName: $n, assertion: $a}} end)
+      + (if $needs == "" then {} else {needsNewTest: $needs} end)'
 }
 
 # target_cite <file> <fullName> <seam> <assertion>...: a sibling-less demote
@@ -321,6 +445,8 @@ check_all() {
 reason_of() { jq -r --arg n "$1" '[.discarded[] | select(.fullName == $n) | .reason] | join(",")' <<<"$output"; }
 kept_field() { jq -r --arg n "$1" --arg f "$2" '[.kept[] | select(.fullName == $n) | .[$f]] | map(tostring) | join(",")' <<<"$output"; }
 is_kept() { [ "$(jq -r --arg n "$1" '[.kept[] | select(.fullName == $n)] | length' <<<"$output")" = 1 ]; }
+fold_reason() { jq -r --arg p "$1" '[.discarded[] | select(.property == $p) | .reason] | join(",")' <<<"$output"; }
+fold_field() { jq -r --arg p "$1" --arg f "$2" '[.kept[] | select(.property == $p) | .[$f]] | map(tostring) | join(",")' <<<"$output"; }
 
 LIVE_ASSERTION="expect(await page.title()).toBe('Records')"
 UNIT_ASSERTION="expect(formatTitle('a')).toBe('A')"
@@ -899,6 +1025,138 @@ TABLE_OUTCOME='expect(outcome).toEqual(expectedOutcome(pageKey, userKey))'
   is_kept 'repeats the records title'
 }
 
+# --- fold-up and the unit reason ---------------------------------------------
+
+SLUG_ROUTE_NAME='the slug route answers the slug'
+SLUG_ROUTE_ASSERTION="expect(await slugRoute(' A b ')).toBe('a-b')"
+TRIM_ROUTE_NAME='the trim route answers the trimmed text'
+TRIM_ROUTE_ASSERTION="expect(await trimRoute(' a ')).toBe('a')"
+STORY_NAME='Default   shows the title'
+STORY_ASSERTION="await expect(canvas.getByText('Title')).toBeVisible()"
+
+# fold_two: the fold-up of both unit subjects into the slug route test.
+fold_two() {
+  fold_up 'folds two unit subjects' "$SLUG_ROUTE" "$SLUG_ROUTE_NAME" "$SLUG_ROUTE_ASSERTION" \
+    "$SLUG_UNIT" 'slugs a title' "$TRIM_UNIT" 'trims spaces'
+}
+
+@test "one check keeps the fold-up and the justified demotes and refuses each malformed or under-justified variant by name" {
+  check_all < <(
+    fold_two
+    cite demote "$TROPHY_ROUTE" 'demote with both conditions' false "$UNIT_SIBLING" 'formats a title' "$UNIT_ASSERTION"
+    UNIT_REASON=null cite demote "$TROPHY_ROUTE" 'demote onto a story' false "$STORY" "$STORY_NAME" "$STORY_ASSERTION"
+    fold_up 'one subject' "$SLUG_ROUTE" "$SLUG_ROUTE_NAME" "$SLUG_ROUTE_ASSERTION" "$SLUG_UNIT" 'slugs a title'
+    fold_up 'into a unit test' "$UNIT_SIBLING" 'formats a title' "$UNIT_ASSERTION" "$SLUG_UNIT" 'slugs a title' "$TRIM_UNIT" 'trims spaces'
+    fold_up 'into a browser test' "$SIBLING" 'shows the records page' "$LIVE_ASSERTION" "$SLUG_UNIT" 'slugs a title' "$TRIM_UNIT" 'trims spaces'
+    CITE_LINE="$(line_of "$SLUG_ROUTE" "$SLUG_ROUTE_ASSERTION")" fold_up 'into an absent assertion' "$SLUG_ROUTE" "$SLUG_ROUTE_NAME" "toBe('nowhere')" \
+      "$SLUG_UNIT" 'slugs a title' "$TRIM_UNIT" 'trims spaces'
+    UNIT_REASON=null cite demote "$TROPHY_ROUTE" 'demote with no reason' false "$UNIT_SIBLING" 'formats a title' "$UNIT_ASSERTION"
+    UNIT_REASON='{"integrationCost":"the route layer is slow","risk":"  "}' cite demote "$TROPHY_ROUTE" 'demote with one condition' false "$UNIT_SIBLING" 'formats a title' "$UNIT_ASSERTION"
+    UNIT_REASON=null cite drop "$TROPHY_ROUTE" 'drops a route check' false "$UNIT_SIBLING" 'formats a title' "$UNIT_ASSERTION"
+    UNIT_REASON=null cite drop "$TROPHY_ROUTE" 'drops a route check' false "$STORY" "$STORY_NAME" "$STORY_ASSERTION"
+    NEEDS='no existing test asserts the joined slug' fold_up 'needs a new test' - - - "$SLUG_UNIT" 'keeps digits' "$TRIM_UNIT" 'trims spaces'
+    fold_up 'no target' - - - "$SLUG_UNIT" 'keeps digits' "$TRIM_UNIT" 'trims spaces'
+  )
+  [ "$(fold_field 'folds two unit subjects' intoLayer)" = route ]
+  [ "$(fold_field 'folds two unit subjects' disposition)" = offer ]
+  [ "$(jq -c '[.kept[] | select(.property == "folds two unit subjects") | .baseline[] | .file] | sort' <<<"$output")" = \
+    "$(jq -nc --arg a "$SLUG_ROUTE" --arg b "$SLUG_UNIT" --arg c "$TRIM_UNIT" '[$a, $b, $c] | sort')" ]
+  [ "$(jq -c --arg f "$SLUG_UNIT" '[.kept[] | .baseline[]? | select(.file == $f) | .names] | first' <<<"$output")" = '["slugs a title","keeps digits"]' ]
+  [ "$(jq '[.kept[] | select(has("_subjects") or has("_needsNewTest"))] | length' <<<"$output")" -eq 0 ]
+  is_kept 'demote with both conditions'
+  is_kept 'demote onto a story'
+  [ "$(fold_reason 'one subject')" = fold-up-one-subject ]
+  [ "$(fold_reason 'into a unit test')" = fold-up-target-layer ]
+  [ "$(fold_reason 'into a browser test')" = fold-up-target-layer ]
+  [ "$(fold_reason 'into an absent assertion')" = citation-unverified ]
+  [ "$(reason_of 'demote with no reason')" = unit-reason-missing ]
+  [ "$(reason_of 'demote with one condition')" = unit-reason-one-condition ]
+  [ "$(reason_of 'drops a route check')" = unit-reason-missing ]
+  is_kept 'drops a route check'
+  [ "$(kept_field 'drops a route check' siblingLayer)" = unit ]
+  [ "$(fold_field 'needs a new test' disposition)" = report-only ]
+  [ "$(fold_field 'needs a new test' reportReason)" = needs-new-test ]
+  [ "$(fold_reason 'no target')" = fold-up-no-target ]
+}
+
+@test "post-fix keeps an applied fold-up only when its subjects are gone and no test name was added" {
+  fold_two | jq -s . >"$BATS_TEST_TMPDIR/original.json"
+  cp "$BATS_TEST_TMPDIR/original.json" "$PROPOSALS"
+  run_check
+  [ "$status" -eq 0 ]
+  [ "$(fold_field 'folds two unit subjects' disposition)" = offer ]
+  jq '.kept' <<<"$output" >"$BATS_TEST_TMPDIR/kept.json"
+  cp "$BATS_TEST_TMPDIR/kept.json" "$PROPOSALS"
+  write_slug_unit 'keeps digits'
+  write_trim_unit
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(fold_field 'folds two unit subjects' intoLayer)" = route ]
+  [ "$(jq '.discarded | length' <<<"$output")" -eq 0 ]
+  cp "$BATS_TEST_TMPDIR/original.json" "$PROPOSALS"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(fold_reason 'folds two unit subjects')" = fold-up-baseline-missing ]
+  cp "$BATS_TEST_TMPDIR/kept.json" "$PROPOSALS"
+  write_trim_unit 'trims spaces'
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(fold_reason 'folds two unit subjects')" = fold-up-subject-present ]
+  write_trim_unit
+  write_slug_route 'answers a slug the fixer added'
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(fold_reason 'folds two unit subjects')" = fold-up-new-test ]
+}
+
+@test "post-fix judges each applied subject by the seam flag recorded for it, not the proposal aggregate" {
+  fold_up 'mixed seam fold-up' "$SLUG_ROUTE" "$SLUG_ROUTE_NAME" "$SLUG_ROUTE_ASSERTION" \
+    "$SESSION_UNIT" "$SESSION_NAME" "$SERVED" 'serves the records list' | jq -s . >"$PROPOSALS"
+  run_check
+  [ "$status" -eq 0 ]
+  [ "$(fold_field 'mixed seam fold-up' disposition)" = offer ]
+  [ "$(jq -c '[.kept[] | select(.property == "mixed seam fold-up") | .subjectSeams[]]' <<<"$output")" = '[true,false]' ]
+  jq '.kept' <<<"$output" >"$BATS_TEST_TMPDIR/kept.json"
+  cp "$BATS_TEST_TMPDIR/kept.json" "$PROPOSALS"
+  rm -f "$REPO/$SESSION_UNIT" "$REPO/$SERVED"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(jq '.discarded | length' <<<"$output")" -eq 0 ]
+  [ "$(fold_field 'mixed seam fold-up' intoLayer)" = route ]
+}
+
+@test "a drop is not sibling-removed by a report-only proposal that needs a new test" {
+  check_all < <(
+    NEEDS='no existing test asserts the joined slug' fold_up 'needs a new test' - - - "$SLUG_UNIT" 'keeps digits' "$TRIM_UNIT" 'trims spaces'
+    cite drop "$TROPHY_ROUTE" 'drop onto a folded subject' false "$SLUG_UNIT" 'keeps digits' "expect(slugOf('a1')).toBe('a1')"
+  )
+  is_kept 'drop onto a folded subject'
+  [ "$(fold_field 'needs a new test' disposition)" = report-only ]
+}
+
+@test "a drop citing a fold-up subject and a fold-up into a dropped test are both sibling-removed" {
+  check_all < <(
+    fold_two
+    cite drop "$TROPHY_ROUTE" 'drop onto a folded subject' false "$SLUG_UNIT" 'slugs a title' "expect(slugOf('A b')).toBe('a-b')"
+    fold_up 'into a dropped test' "$SLUG_ROUTE" "$TRIM_ROUTE_NAME" "$TRIM_ROUTE_ASSERTION" "$SLUG_UNIT" 'keeps digits' "$TRIM_UNIT" 'trims spaces'
+    UNIT_REASON=null cite drop "$SLUG_ROUTE" "$TRIM_ROUTE_NAME" false "$STORY" "$STORY_NAME" "$STORY_ASSERTION"
+  )
+  [ "$(reason_of 'drop onto a folded subject')" = sibling-removed ]
+  [ "$(fold_reason 'into a dropped test')" = sibling-removed ]
+  is_kept "$TRIM_ROUTE_NAME"
+  [ "$(fold_field 'folds two unit subjects' intoLayer)" = route ]
+}
+
+@test "a fold-up with a subject the branch did not write is not-authored, and an unknown authorship answer is authorship-unknown" {
+  check_all < <(fold_up 'folds a legacy subject' "$SLUG_ROUTE" "$SLUG_ROUTE_NAME" "$SLUG_ROUTE_ASSERTION" "$LEGACY" 'legacy stays put' "$SLUG_UNIT" 'slugs a title')
+  [ "$(fold_field 'folds a legacy subject' disposition)" = report-only ]
+  [ "$(fold_field 'folds a legacy subject' reportReason)" = not-authored ]
+  git -C "$REPO" branch -m main trunk
+  check_all < <(fold_two)
+  [ "$(fold_field 'folds two unit subjects' disposition)" = report-only ]
+  [ "$(fold_field 'folds two unit subjects' reportReason)" = authorship-unknown ]
+}
+
 # --- route and changed -------------------------------------------------------
 
 branch_with() {
@@ -952,7 +1210,7 @@ branch_with_specs() {
   [ "$(jq -r '.[] | select(.file == "apps/web/.playwright/e2e/signed-in.spec.ts") | .layer' <<<"$output")" = browser ]
 }
 
-@test "route runs when only a request-only spec changed and skips when only a route test changed" {
+@test "route runs when only a request-only spec changed and when only a route test changed" {
   branch_with apps/web/.playwright/e2e/only.spec.ts
   run bash "$CHECK" changed --root "$REPO"
   [ "$(jq -r '.[0].layer' <<<"$output")" = real-server ]
@@ -962,24 +1220,28 @@ branch_with_specs() {
   branch_with apps/web/app/route-tests/only.test.ts
   run bash "$CHECK" route --root "$REPO"
   [ "$status" -eq 0 ]
-  [ "$output" = skip-no-playwright-change ]
+  [ "$output" = run ]
 }
 
-@test "red twin: a route that still tests the e2e layer skips a request-only-only branch" {
+@test "red twin: a route that runs only for Playwright layers skips a unit-only branch" {
   local mutated="$BATS_TEST_TMPDIR/overlap-check.sh"
-  mutate '.layer == "real-server" or .layer == "browser"' '.layer == "e2e"' "$HOME_ROOT/.gaia/scripts/overlap-check.sh" "$mutated"
+  mutate '.layer != null' '.layer == "real-server" or .layer == "browser"' "$HOME_ROOT/.gaia/scripts/overlap-check.sh" "$mutated"
   CHECK_SOURCE="$mutated" install_harness
-  branch_with apps/web/.playwright/e2e/only.spec.ts
-  run bash "$CHECK" route --root "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = skip-no-playwright-change ]
-}
-
-@test "route skips when only unit tests changed" {
   branch_with apps/web/app/utils/only.test.ts
   run bash "$CHECK" route --root "$REPO"
   [ "$status" -eq 0 ]
-  [ "$output" = skip-no-playwright-change ]
+  [ "$output" = skip-no-test-change ]
+}
+
+@test "route runs when only unit tests changed and skips when only non-test source changed" {
+  branch_with apps/web/app/utils/only.test.ts
+  run bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = run ]
+  branch_with apps/web/app/utils/only.ts
+  run bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = skip-no-test-change ]
 }
 
 @test "route prints skip-no-base when no default branch resolves" {
@@ -1019,7 +1281,7 @@ branch_with_specs() {
   [ "$output" = '[]' ]
   run bash "$CHECK" route --root "$REPO"
   [ "$status" -eq 0 ]
-  [ "$output" = skip-no-playwright-change ]
+  [ "$output" = skip-no-test-change ]
 }
 
 # register_members <name:path>...: replaces the registry with these members,
@@ -1065,7 +1327,7 @@ register_members() {
   mv "$REPO/descriptor.tmp" "$REPO/apps/storefront/gaia.package.json"
   run --separate-stderr bash "$CHECK" route --root "$REPO"
   [ "$status" -eq 0 ]
-  [ "$output" = skip-no-playwright-change ] || return 1
+  [ "$output" = skip-no-test-change ] || return 1
   [[ "$stderr" == *stack* ]]
 }
 

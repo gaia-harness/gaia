@@ -10,12 +10,15 @@
 #   overlap-check.sh changed --root <tree>
 #   overlap-check.sh check   --root <tree> --proposals <file> [--post-fix]
 #
-# route prints run, skip-no-playwright-change or skip-no-base. changed prints a
-# JSON array of {file, layer}. check prints {"kept":[...],"discarded":[...]};
-# a kept element carries seam, layer, siblingLayer (or targetLayer for a demote
-# that names no sibling) and a disposition (offer, or report-only with a
-# reportReason). --post-fix re-verifies the same proposals
-# after the fixer ran, before the commit.
+# route prints run when any file changed since the base sits on a test layer
+# (unit or story, route, real-server, browser), else skip-no-test-change, or
+# skip-no-base. changed prints a JSON array of {file, layer}. check prints
+# {"kept":[...],"discarded":[...]}; a kept element carries seam, layer,
+# siblingLayer (or targetLayer for a demote that names no sibling; a fold-up
+# carries intoLayer and baseline instead) and a disposition (offer, or
+# report-only with a reportReason; a needs-new-test entry is always
+# report-only). --post-fix re-verifies the same proposals after the fixer
+# ran, before the commit.
 #
 # Exit 2 on usage, 3 on unreadable input or a package error, with the reason on
 # stderr: a silent empty answer would read as nothing to do.
@@ -109,10 +112,10 @@ cmd_route() {
   fi
   layered="$(run_layers "$root" <"$names")" || { rm -f "$names"; die_input 'the layer mapping failed'; }
   rm -f "$names"
-  if printf '%s' "$layered" | jq -e 'any(.[]; .layer == "real-server" or .layer == "browser")' >/dev/null 2>&1; then
+  if printf '%s' "$layered" | jq -e 'any(.[]; .layer != null)' >/dev/null 2>&1; then
     printf 'run\n'
   else
-    printf 'skip-no-playwright-change\n'
+    printf 'skip-no-test-change\n'
   fi
 }
 
@@ -141,22 +144,31 @@ cmd_changed() {
   rm -f "$names"
 }
 
+# A fold-up's subjects are judged together: one rendered subject makes it
+# rendered, one not-authored or unknown line makes it that. At --post-fix its
+# subjects are gone (null ranges), so it keeps the disposition it was given.
 # shellcheck disable=SC2016
 DISPOSITION_JQ='
-def answer_for($file; $line): {path: $file, line: $line} | authorship($names; $hunks);
+def answers_for($file; $ranges): [$ranges[] | range(.[0]; .[1] + 1) | {path: $file, line: .} | authorship($names; $hunks)];
+def recorded: {disposition: (.disposition // "offer")} + (if .reportReason then {reportReason: .reportReason} else {} end);
+def verdict_of($answers):
+  if any($answers[]; . == "not-authored") then {disposition: "report-only", reportReason: "not-authored"}
+  elif any($answers[]; . == "unknown") then {disposition: "report-only", reportReason: "authorship-unknown"}
+  else {disposition: "offer"} end;
 def disposition_of:
-  if ._rendered then {disposition: "report-only", reportReason: "rendered"}
-  elif ._present == false then
-    {disposition: (.disposition // "offer")} + (if .reportReason then {reportReason: .reportReason} else {} end)
+  if ._needsNewTest then {disposition: "report-only", reportReason: "needs-new-test"}
+  elif ._subjects then
+    if any(._subjects[]; .rendered) then {disposition: "report-only", reportReason: "rendered"}
+    elif any(._subjects[]; .ranges == null) then recorded
+    elif $state == "on-default-branch" then {disposition: "report-only", reportReason: "not-authored"}
+    else verdict_of([._subjects[] | answers_for(.file; .ranges)[]]) end
+  elif ._rendered then {disposition: "report-only", reportReason: "rendered"}
+  elif ._present == false then recorded
   elif $state == "on-default-branch" then {disposition: "report-only", reportReason: "not-authored"}
-  else
-    .file as $file
-    | [._ranges[] | range(.[0]; .[1] + 1) | answer_for($file; .)] as $answers
-    | if any($answers[]; . == "not-authored") then {disposition: "report-only", reportReason: "not-authored"}
-      elif any($answers[]; . == "unknown") then {disposition: "report-only", reportReason: "authorship-unknown"}
-      else {disposition: "offer"} end
-  end;
-{kept: [.kept[] | disposition_of as $verdict | del(._ranges, ._rendered, ._present, .disposition, .reportReason) + $verdict], discarded: .discarded}
+  else verdict_of(answers_for(.file; ._ranges)) end;
+{kept: [.kept[] | disposition_of as $verdict
+  | del(._ranges, ._rendered, ._present, ._subjects, ._needsNewTest, .disposition, .reportReason) + $verdict],
+ discarded: .discarded}
 '
 
 cmd_check() {

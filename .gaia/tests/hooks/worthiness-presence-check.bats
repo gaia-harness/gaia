@@ -197,8 +197,9 @@ test("renders a widget", () => {
 });
 '
 
-# A deterministic util test (.ts under apps/web/app/utils/** classifies strict) -> the
-# presence gate excludes it (RED-gated, not worthiness-gated).
+# A deterministic util test (.ts under apps/web/app/utils/** classifies strict).
+# It is RED-gated for honesty and worthiness-gated for worth, so the presence
+# gate demands a verdict for it like any other test in scope.
 STRICT_TEST='import {expect, test} from "vitest";
 test("adds two numbers", () => {
   expect(1 + 1).toBe(2);
@@ -214,11 +215,70 @@ test("adds two numbers", () => {
   ! denied
 }
 
-@test "allows a PR changing only a deterministic util test (RED-gated, excluded)" {
+@test "denies a PR changing only a deterministic util test with no ledger line" {
   commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
-  ! denied
+  denied
+  [[ "$output" == *"adds two numbers"* ]]
+}
+
+@test "allows a PR changing only a deterministic util test once its verdict is recorded" {
+  commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
+  seed_matching "apps/web/app/utils/x/index.test.ts" "adds two numbers" "keep"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "red twin: a selection library that drops the strict verdict lets the util test through" {
+  commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
+  run_merge_hook
+  denied
+  # The hook loads the library from its own location, so the mutation is a
+  # scratch copy of the whole hook directory.
+  local stage="$BATS_TEST_TMPDIR/staged-hooks-strict"
+  cp -r "$(dirname "$HOOK_ABSOLUTE_PATH")" "$stage"
+  sed 's/ or (.classification \/\/ "") == "strict"//' "$HOME_ROOT/.claude/hooks/lib/worthiness-selection.sh" >"$stage/lib/worthiness-selection.sh"
+  if grep -q '== "strict"' "$stage/lib/worthiness-selection.sh"; then return 1; fi
+  HOOK_ABSOLUTE_PATH="$stage/worthiness-presence-check.sh"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+# The app's test helper folder joins the emergent list as one glob.
+write_helper_folder_descriptor() {
+  write_builtin_descriptor "$REPO" '' '' '["app/components/**/*.test.ts","app/components/**/*.test.tsx",".playwright/**/*.spec.ts",".playwright/**/*.spec.tsx",".playwright/**/*.test.ts",".playwright/**/*.test.tsx","app/route-tests/**/*.test.ts","test/**/*.test.ts"]'
+}
+
+@test "denies a PR changing only a test helper folder test with no ledger line" {
+  write_helper_folder_descriptor
+  commit_file "apps/web/test/helper.test.ts" "$STRICT_TEST"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"adds two numbers"* ]]
+}
+
+@test "allows a PR changing only a test helper folder test once its verdict is recorded" {
+  write_helper_folder_descriptor
+  commit_file "apps/web/test/helper.test.ts" "$STRICT_TEST"
+  seed_matching "apps/web/test/helper.test.ts" "adds two numbers" "keep"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "red twin: the default emergent list without the helper folder glob lets the helper folder test through" {
+  write_helper_folder_descriptor
+  commit_file "apps/web/test/helper.test.ts" "$STRICT_TEST"
+  run_merge_hook
+  denied
+  write_builtin_descriptor "$REPO"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
 }
 
 @test "allows a PR changing only non-test source under apps/web/app/components" {
@@ -976,7 +1036,7 @@ gaia_packages_load "$tree" || exit 5
 case "$mode" in
   empty-ere) WORTHINESS_SELECTION_ERE='' ;;
   unset-ere) ;;
-  *) WORTHINESS_SELECTION_ERE=$(gaia_package_globs_ere emergentTests) ;;
+  *) WORTHINESS_SELECTION_ERE=$(worthiness_selection_scope_ere) ;;
 esac
 if [ "$mode" != unset-classifier ]; then
   WORTHINESS_SELECTION_CLASSIFIER="$home_root/.gaia/scripts/classifier/classify-determinism.mjs"
@@ -1019,7 +1079,7 @@ const meta = preview.meta({component: Marker, title: 'Internal/Imported'});
 export const UsesImportedPlay = meta.story({play: sharedPlay});
 "
 
-@test "the library's walk and the hook agree on a changed file, an exact rename, a deletion and a non-emergent test" {
+@test "the library's walk and the hook agree on a changed file, an exact rename, a deletion, a strict util test and a test outside the scope globs" {
   commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$TWO_TEST_FILE"
   commit_file "apps/web/app/components/Moved/tests/index.test.tsx" "$EMERGENT_TEST"
   commit_file "apps/web/app/components/Gone/tests/index.test.tsx" "$EMERGENT_TEST"
@@ -1030,6 +1090,7 @@ export const UsesImportedPlay = meta.story({play: sharedPlay});
   git -C "$REPO" rm --quiet apps/web/app/components/Gone/tests/index.test.tsx
   git -C "$REPO" commit --quiet -m "rename and delete"
   commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
+  commit_file "apps/web/tools/x/index.test.ts" "$STRICT_TEST"
 
   run_selection_walk "$REPO"
   grep -qx 'status=0' <<<"$output"
@@ -1037,9 +1098,10 @@ export const UsesImportedPlay = meta.story({play: sharedPlay});
   walk_pairs=$(walk_records | while IFS=$'\t' read -r walk_path walk_line; do
     printf '%s %s\n' "$walk_path" "$(jq -r '.fullName' <<<"$walk_line")"
   done | sort)
-  [ "$walk_pairs" = "$(printf '%s\n%s' \
+  [ "$walk_pairs" = "$(printf '%s\n%s\n%s' \
     'apps/web/app/components/Foo/tests/index.test.tsx first label' \
-    'apps/web/app/components/Foo/tests/index.test.tsx second label')" ]
+    'apps/web/app/components/Foo/tests/index.test.tsx second label' \
+    'apps/web/app/utils/x/index.test.ts adds two numbers')" ]
 
   run_merge_hook
   denied

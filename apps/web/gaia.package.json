@@ -21,7 +21,9 @@
       ".playwright/**/*.test.ts",
       ".playwright/**/*.test.tsx",
       "app/**/*.stories.tsx",
-      "app/route-tests/**/*.test.ts"
+      "app/route-tests/**/*.test.ts",
+      "test/**/*.test.ts",
+      "test/**/*.test.tsx"
     ],
     "preCommitSource": ["app/**", "test/**", ".storybook/**", ".playwright/**"],
     "doctorConfigs": ["doctor.config.*", "react-doctor.config.*"],

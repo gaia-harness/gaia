@@ -4,12 +4,16 @@
 # capability line from a task doc. The closed capability list and its cue
 # patterns stay in plan-verify.sh (capability_tokens and capability_cues,
 # parallel by index, plus the joined capability_allowed_list); these helpers read them as
-# globals, along with uat_lib_whitespace_text from uat-lib.sh.
+# globals, along with uat_lib_whitespace_text from uat-lib.sh. browser_row_check
+# also reads plan-verify.sh's task_files, fail and capability_allowed_list, and
+# the javascript_disabled_pattern this file defines.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
 
 # plan-verify.sh assigns the capability globals before it calls these helpers.
 # shellcheck disable=SC2154
+
+javascript_disabled_pattern='(^|[^[:alnum:]])((javascript|js)[ -](is )?(disabled|off|turned off|not enabled)|without (javascript|js)|no[ -](javascript|js))([^[:alnum:]]|$)'
 
 # Sets capability_name and phrase_text from the text after the line marker's
 # colon: split on the first colon followed by a space or the end of the text.
@@ -86,4 +90,31 @@ capability_line_problem() {
     return
   fi
   printf "%s cites the phrase '%s' for %s; the capability phrase must appear verbatim in its then-clause and contain a cue word of that capability" "$uat" "$phrase_text" "$capability_name"
+}
+
+# The capability line scan runs over every task doc; the JavaScript-disabled
+# check reads the Given and fires independently of the line.
+browser_row_check() {
+  local uat="$1" then_text="$2" given_text="$3" marker task_line problem first_problem='' passed=0
+  marker="Browser capability ($uat)"
+  if [ "${#task_files[@]}" -gt 0 ]; then
+    while IFS= read -r task_line; do
+      problem=$(capability_line_problem "$uat" "$then_text" "${task_line#*"$marker"}")
+      if [ -z "$problem" ]; then
+        passed=1
+        break
+      fi
+      [ -n "$first_problem" ] || first_problem="$problem"
+    done < <(grep -hF -- "$marker" ${task_files[@]+"${task_files[@]}"})
+  fi
+  if [ "$passed" -eq 0 ]; then
+    if [ -n "$first_problem" ]; then
+      fail "$first_problem"
+    else
+      fail "$uat is routed browser but no task doc carries its line: - $marker: <capability>: <then-clause phrase>; a browser row needs a capability from the closed list: $capability_allowed_list"
+    fi
+  fi
+  if grep -qiE "$javascript_disabled_pattern" <<<"$given_text"; then
+    fail "$uat is routed browser but its Given says JavaScript is disabled; a JavaScript-disabled UAT routes by the ladder's route and real-server steps"
+  fi
 }
