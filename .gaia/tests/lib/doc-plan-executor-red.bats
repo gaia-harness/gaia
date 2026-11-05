@@ -184,7 +184,7 @@ check_split_block() {
     'dispatch a fresh test author for each owning task only' \
     'A second exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED`' \
     '**Implementers.**' \
-    'dispatch an implementer for every task in the wave, split or not' \
+    'Dispatch an implementer for every task in the wave, split or not' \
     'A task with no test waits for this step' || return 1
 }
 

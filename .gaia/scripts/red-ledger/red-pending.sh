@@ -13,10 +13,11 @@
 # recompute: no test runs and no RED is recorded. The real index is untouched.
 #
 # Exit 0: nothing pending. Exit 1: one `file<TAB>fullName` line per pending
-# test on stdout. Exit 2: usage error, or the gate could not decide (it denied
-# naming no test, such as an unusable package registry); its reason goes to
-# stderr. A gate that fails open (no node or git) reports nothing pending,
-# the same verdict the commit would get.
+# test on stdout. Exit 2: a usage or setup error (no jq, not a git work tree,
+# gate missing, the tree could not be staged), or the gate could not decide (it
+# denied naming no test, such as an unusable package registry); the reason goes
+# to stderr. A gate that fails open (no node) reports nothing pending, the
+# same verdict the commit would get.
 set -uo pipefail
 
 root=''
