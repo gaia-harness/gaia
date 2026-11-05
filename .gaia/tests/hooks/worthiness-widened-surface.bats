@@ -51,7 +51,7 @@ setup() {
   git -C "$REPO" config commit.gpgsign false
   # The default emergent list plus the helper-folder glob, as the live descriptor
   # carries it; the shared fixture's default does not track the live descriptor.
-  write_builtin_descriptor "$REPO" '' '' '["app/components/**/*.test.ts","app/components/**/*.test.tsx",".playwright/**/*.spec.ts",".playwright/**/*.spec.tsx",".playwright/**/*.test.ts",".playwright/**/*.test.tsx","app/route-tests/**/*.test.ts","test/**/*.test.ts"]'
+  write_builtin_descriptor "$REPO" '' '' '["app/components/**/*.test.ts","app/components/**/*.test.tsx",".playwright/**/*.spec.ts",".playwright/**/*.spec.tsx",".playwright/**/*.test.ts",".playwright/**/*.test.tsx","app/route-tests/**/*.test.ts","test/**/*.test.ts","test/**/*.test.tsx"]'
   install_harness
   printf '# readme\n' >"$REPO/README.md"
   git -C "$REPO" add README.md
@@ -148,6 +148,15 @@ mutate() {
   commit_branch_tests
   [ "$(classification_of "$UTIL_TEST")" = strict ]
   [ "$(classification_of "$HOOK_TEST")" = strict ]
+}
+
+@test "the worthiness step lists a helper folder test written as tsx" {
+  write_test 'apps/web/test/fixture-builder.test.tsx' "$HELPER_NAME"
+  git -C "$REPO" add apps
+  git -C "$REPO" commit -q -m "add tsx helper test"
+  run_route
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -r 'map(.file) | join(",")')" = 'apps/web/test/fixture-builder.test.tsx' ]
 }
 
 @test "the worthiness step lists a strict utility test, a strict hook test and a helper folder test" {

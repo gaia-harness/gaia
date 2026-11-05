@@ -132,13 +132,16 @@ export function checkFoldUp(p, ctx) {
   // At --post-fix an applied fold-up's subjects are meant to be gone.
   const applied = ctx.postFix && p.into !== undefined;
   const subjects = [];
-  for (const s of p.subjects) {
+  for (const [index, s] of p.subjects.entries()) {
     const entry = ctx.loadFile(s.file);
     const test = locateTests(entry, s.fullName)[0] ?? null;
     if (test === null && !applied) return {reason: 'subject-not-found'};
     const rank = ctx.rankOf(s.file);
     if (rank === null) return {reason: 'subject-no-layer'};
-    subjects.push({file: s.file, entry, test, rank, seam: ctx.seamOf(p.seam, s.file, entry, test)});
+    // An applied subject's test is gone, so its own seam flag is the one recorded at check time.
+    const recorded = applied && Array.isArray(p.subjectSeams) ? p.subjectSeams[index] : undefined;
+    const seam = typeof recorded === 'boolean' ? recorded : ctx.seamOf(p.seam, s.file, entry, test);
+    subjects.push({file: s.file, entry, test, rank, seam});
   }
   if (applied) {
     if (!baselineCovers(p)) return {reason: 'fold-up-baseline-missing'};
@@ -159,6 +162,7 @@ export function checkFoldUp(p, ctx) {
   const kept = {
     ...p,
     seam: subjects.some((s) => s.seam),
+    subjectSeams: subjects.map((s) => s.seam),
     ...(intoLayer === null ? {} : {intoLayer}),
     ...(intoLayer !== null && !ctx.postFix
       ? {baseline: buildBaseline([...p.subjects.map((s) => s.file), p.into.file], ctx.loadFile)}
@@ -189,7 +193,7 @@ export function settle(survivors, discarded) {
     }
     for (const a of left) {
       if (mutual.has(a) || a.coverKey === null) continue;
-      const taken = left.some((b) => b !== a && REMOVING.has(b.proposal.proposal) && b.subjectKeys.includes(a.coverKey));
+      const taken = left.some((b) => b !== a && REMOVING.has(b.proposal.proposal) && b.proposal.needsNewTest === undefined && b.subjectKeys.includes(a.coverKey));
       if (taken) removed.add(a);
     }
     if (mutual.size === 0 && removed.size === 0) return left;

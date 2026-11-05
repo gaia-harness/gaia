@@ -31,6 +31,7 @@ OFF_LAYER='apps/web/lib/other.test.ts'
 REFUSE_UNIT='apps/web/app/utils/refuse.test.ts'
 SESSION_UNIT='apps/web/app/sessions.server/plain.test.ts'
 DEMOTE='apps/web/.playwright/e2e/demote.spec.ts'
+SESSION_NAME='adds two numbers'
 SERVED='apps/web/.playwright/e2e/served.spec.ts'
 LOOPED='apps/web/.playwright/e2e/route-status.spec.ts'
 HELPERS='apps/web/.playwright/e2e/helpers.spec.ts'
@@ -1106,6 +1107,31 @@ fold_two() {
   run_check --post-fix
   [ "$status" -eq 0 ]
   [ "$(fold_reason 'folds two unit subjects')" = fold-up-new-test ]
+}
+
+@test "post-fix judges each applied subject by the seam flag recorded for it, not the proposal aggregate" {
+  fold_up 'mixed seam fold-up' "$SLUG_ROUTE" "$SLUG_ROUTE_NAME" "$SLUG_ROUTE_ASSERTION" \
+    "$SESSION_UNIT" "$SESSION_NAME" "$SERVED" 'serves the records list' | jq -s . >"$PROPOSALS"
+  run_check
+  [ "$status" -eq 0 ]
+  [ "$(fold_field 'mixed seam fold-up' disposition)" = offer ]
+  [ "$(jq -c '[.kept[] | select(.property == "mixed seam fold-up") | .subjectSeams[]]' <<<"$output")" = '[true,false]' ]
+  jq '.kept' <<<"$output" >"$BATS_TEST_TMPDIR/kept.json"
+  cp "$BATS_TEST_TMPDIR/kept.json" "$PROPOSALS"
+  rm -f "$REPO/$SESSION_UNIT" "$REPO/$SERVED"
+  run_check --post-fix
+  [ "$status" -eq 0 ]
+  [ "$(jq '.discarded | length' <<<"$output")" -eq 0 ]
+  [ "$(fold_field 'mixed seam fold-up' intoLayer)" = route ]
+}
+
+@test "a drop is not sibling-removed by a report-only proposal that needs a new test" {
+  check_all < <(
+    NEEDS='no existing test asserts the joined slug' fold_up 'needs a new test' - - - "$SLUG_UNIT" 'keeps digits' "$TRIM_UNIT" 'trims spaces'
+    cite drop "$TROPHY_ROUTE" 'drop onto a folded subject' false "$SLUG_UNIT" 'keeps digits' "expect(slugOf('a1')).toBe('a1')"
+  )
+  is_kept 'drop onto a folded subject'
+  [ "$(fold_field 'needs a new test' disposition)" = report-only ]
 }
 
 @test "a drop citing a fold-up subject and a fold-up into a dropped test are both sibling-removed" {
