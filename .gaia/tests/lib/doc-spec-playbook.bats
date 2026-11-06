@@ -11,8 +11,10 @@
 #      spec.md has a `Read` line there, and the self-review checklist carries
 #      its marked bullet (read by the sub-agent, never the main thread);
 #   c. each moved section lives in exactly one file of the playbook set;
+#   d. every closed-set menu fits AskUserQuestion: no Other label, no save
+#      escape, and no more than four entries;
 #   e. the SPEC audit's coverage and consistency lens flags a UAT the SPEC's
-#      own state rules make impossible, citing both lines.
+#      own behavior rules make impossible, citing both lines.
 #
 # DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
 # playbook files; each invariant has a red twin that breaks such a copy and
@@ -302,7 +304,7 @@ menus_fit() {
 
 COV_BULLET='- **Coverage & consistency (id prefix `COV`).**'
 RT_BULLET='- **Red-team & feasibility (id prefix `RT`).**'
-IMPOSSIBLE_UAT_CLAUSE="a UAT whose \`given\`, \`when\` or \`then\` the SPEC's own behavior rules make impossible, such as a control, transition or value the SPEC allows only in another state, is a contract defect: cite the UAT line and the rule line; "
+IMPOSSIBLE_UAT_CLAUSE="UATs whose \`given\`, \`when\` or \`then\` the SPEC's own behavior rules make impossible, such as a control, transition or value the SPEC allows only in another state (cite the UAT line and the rule line); "
 IMPOSSIBLE_UAT_NEEDLES=(
   "the SPEC's own behavior rules make impossible"
   'allows only in another state'
