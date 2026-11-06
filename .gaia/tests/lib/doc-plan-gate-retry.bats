@@ -23,7 +23,7 @@ setup() {
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
-  TEST_BODY_BULLET='- **Test body error.** A typecheck or lint error in a file a task'"'"'s `New tests:` line names, other than an authored Playwright file, halts under Stop conditions with no retry, `Reason: type or lint error in a test body after its RED; the test author'"'"'s typecheck missed it`, naming each file:line and error code or rule: the implementer clause bars editing that body, and an edit voids its RED.'
+  TEST_BODY_BULLET='- **Test body error.** A typecheck or lint error in a file a task'"'"'s `New tests:` line names, other than an authored Playwright file, halts under Stop conditions with no retry, `Reason: type or lint error in a test body after its RED`, naming each file:line and error code or rule: the implementer clause bars editing that body, and an edit voids any RED it has.'
 }
 
 # ---------- helpers ----------
@@ -241,9 +241,9 @@ check_author_arm() {
     '- **Re-run the gate.**' || return 1
 }
 
-# A type or lint error in a ledger-tracked New tests body has no lawful fixer
-# after its RED: the implementer clause bars the edit, and an edit voids the
-# RED. So it halts, and never reaches an executor.
+# A type or lint error in a New tests body (not an authored Playwright file)
+# has no lawful fixer after its RED: the implementer clause bars the edit, and
+# an edit voids any RED it has. So it halts, and never reaches an executor.
 check_test_body_halt() {
   local block
   block="$(retry_block "$1")"
@@ -265,8 +265,7 @@ check_author_arm_type_lint() {
     'A typecheck or lint error in an authored Playwright file goes to the author arm too, in the same retry as the executor re-dispatch for any other error.' \
     'Never fix it on the main thread.' \
     '- **Author arm.**' \
-    'For a typecheck or lint error in an authored Playwright file, the owning task is the one whose `New tests:` line names that file' \
-    'the line after the task prompt is `A test file this task authored fails the phase typecheck or lint. Fix only these errors, in these tests'"'"' files; edit no app code, and never loosen an assertion to clear one. Report each edit under ### Deviations from plan as file:line, before -> after. The errors:`, then the gate output lines for its files.' \
+    'For a typecheck or lint error in an authored Playwright file, the line after the task prompt is `A test file this task authored fails the phase typecheck or lint. Fix only these errors, in these tests'"'"' files; edit no app code, and never loosen an assertion to clear one. Report each edit under ### Deviations from plan as file:line, before -> after. The errors:`, then the gate output lines for its files.' \
     'An author-arm prompt carries no `Yield handoff:` line.' || return 1
 }
 
