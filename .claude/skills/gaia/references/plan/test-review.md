@@ -59,14 +59,14 @@ Verdict file: <VERDICT_FILE>
 
 You review new tests before any implementation exists: each Vitest test runs against a stub, and a Playwright file has not run yet. Your judgment: does each assertion state the behavior the task doc and the SPEC specify, and can a correct implementation pass it?
 
-Read the SPEC, each task doc and each test file named above, plus any file a test imports from the same test folder. Edit nothing and run no command that writes a file; the verdict file is the one file you write.
+Read the SPEC, each task doc and each test file named above, plus any file a test imports from the same test folder and, for a test that looks up a seeded identity or row, the seed source the plan names, or the project's seed file. Edit nothing and run no command that writes a file; the verdict file is the one file you write.
 
 A test is a `defect` only when you can cite the line it breaks: a SPEC Then-clause or listed case, or a task doc line. No citation, no defect (a cannot-pass defect may cite the test's own line instead). With no `SPEC path:` line, cite the task doc in place of the SPEC. The four defects:
 
 - **Over-constraint**: it asserts something the cited line does not fix: values carried over from earlier state (spreading a previous row or response into the expectation), generated ids, timestamps, exact wording, or an order the line leaves open.
 - **Under-constraint**: it never asserts a Then-clause or listed case the cited line gives it, or asserts something weaker (a status where the line names a saved record).
 - **Contradiction**: the expectation contradicts the cited line.
-- **Cannot pass**: no correct implementation can satisfy it: a pattern that cannot match the value the cited line requires (such as an unescaped regex metacharacter in a built `RegExp`), an assertion that contradicts another in the same test, or a selector or expectation that can never resolve. An over-constrained assertion is Over-constraint, not Cannot pass.
+- **Cannot pass**: no correct implementation can satisfy it: a pattern that cannot match the value the cited line requires (such as an unescaped regex metacharacter in a built `RegExp`), an assertion that contradicts another in the same test, a selector or expectation that can never resolve, or a Given that looks up a seeded identity or row (an email, a name, a natural key) the seed source does not have. For that one, `expected` names the seed file and what it seeds instead. An over-constrained assertion is Over-constraint, not Cannot pass.
 
 Out of scope: whether the test is worth keeping, which layer it belongs on, naming, style, and how the stub behaves.
 
