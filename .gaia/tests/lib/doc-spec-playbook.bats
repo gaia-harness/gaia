@@ -329,6 +329,7 @@ remove_text() {
   mv "$1.new" "$1"
 }
 
+# bats test_tags=whole-tree
 @test "e. the coverage lens flags a UAT the SPEC's own rules make impossible" {
   cov_flags_impossible_uat "$PLAYBOOK_ROOT"
 }
