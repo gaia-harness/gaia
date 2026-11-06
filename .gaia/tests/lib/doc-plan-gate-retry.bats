@@ -231,7 +231,7 @@ check_author_arm() {
     '- **Author arm.**' \
     'names the failing file, in place of **Attribute** and the executor re-dispatch above;' \
     'the original task prompt, without its `Yield handoff:` line and with neither dispatch clause' \
-    'If the test is wrong, fix only that test'"'"'s body in this file; edit no app code and no other file.' \
+    'If a test is wrong, fix only that test'"'"'s body; edit no app code and no file but these tests'"'"' files.' \
     'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so, and the phase halts.' \
     'Report each edit under ### Deviations from plan as file:line, before -> after. The failing tests:' \
     'then the implementer'"'"'s `### Deviations from plan` note if it had one.' \
@@ -424,7 +424,7 @@ resume_point() {
 }
 
 @test "red twin: an author arm whose author may edit app code fails" {
-  red check_author_arm 'edit no app code and no other file.' 'edit any file.'
+  red check_author_arm 'edit no app code and no file but these tests'"'"' files.' 'edit any file.'
 }
 
 @test "red twin: an author arm that lets the author loosen a correct assertion fails" {
@@ -443,7 +443,7 @@ resume_point() {
   red check_author_arm 'An author-arm prompt carries no `Yield handoff:` line.' 'An author-arm prompt ends with a `Yield handoff:` line.'
 }
 
-@test "red twin: an author arm that re-dispatches an executor instead fails" {
+@test "red twin: an author arm that does not replace the executor re-dispatch fails" {
   red check_author_arm ', in place of **Attribute** and the executor re-dispatch above;' ';'
 }
 
