@@ -384,6 +384,7 @@
     ".gaia/scripts/spec/title-normalize.sh": "owned",
     ".gaia/scripts/spec/uat-code-only.sh": "owned",
     ".gaia/scripts/spec/uat-divergence-check.sh": "owned",
+    ".gaia/scripts/spec/uat-fidelity-cache.sh": "owned",
     ".gaia/scripts/spec/uat-gate-floor.sh": "owned",
     ".gaia/scripts/spec/uat-gate-route.sh": "owned",
     ".gaia/scripts/spec/uat-gate.sh": "owned",
@@ -857,7 +858,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-06T00:38:20.236Z",
+  "generated": "2026-11-06T12:37:42.178Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

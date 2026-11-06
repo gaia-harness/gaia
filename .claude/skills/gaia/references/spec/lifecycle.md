@@ -55,10 +55,16 @@ git -C <RESOLVED_ROOT> merge-base --is-ancestor <render sha> <Phase 1 sha>
 
 A non-zero exit is a HALT naming both SHAs: Phase 1 was committed without the rendered red specs under it.
 
-Then judge the test bodies. The gate proves each spec still carries its contract and passes, but never reads the body, so a body can keep its contract comment and stop asserting it. That judgment goes to one fresh `uat-fidelity-judge` agent per run, never to the orchestrator, which would be grading its own phases' work. Skip this step when the gate printed `no owned UAT tests`.
+Then judge the test bodies. The gate proves each spec still carries its contract and passes, but never reads the body, so a body can keep its contract comment and stop asserting it. That judgment goes to one fresh `uat-fidelity-judge` agent per run, never to the orchestrator, which would be grading its own phases' work. A resume judges only the tests whose key changed since the last pre-audit in this plan; `.gaia/scripts/spec/uat-fidelity-cache.sh` owns the key and carries every other verdict forward, `diverges` included. Skip this step when the gate printed `no owned UAT tests`.
 
-1. Take `<VERDICT_FILE>` as `uat-fidelity.json` in the session's scratchpad directory, or in a `mktemp -d` directory when the session lists none, never under `<PLAN_DIR>`: in a worktree, `.notebook` is a symlink into the main checkout and worktree isolation refuses the judge's Write (`.claude/rules/subagent-dispatch.md`). Pre-clear it: `rm -f <VERDICT_FILE>`.
-2. Dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of these lines, one `Spec:` line per `real-server`, `browser`, legacy `e2e` or `route` row of the routing table in `<PLAN_DIR>/README.md`, with the real path joined from `<RESOLVED_ROOT>`: `<frontend package>/.playwright/e2e/` for a `real-server`, `browser` or legacy `e2e` row and `<frontend package>/app/route-tests/` for a `route` row, then the row's `feature_folder`, then `tests/` for a `route` row only, then its `file_name`. After each `Spec:` line add one `Surface: <uat_id> <real-server | browser | route>` line, a legacy `e2e` row written as `browser`; it adds no verdict entry. When the owning task doc names a guard's file for a route row, add one `Guard: <uat_id> <absolute path of the guard file>` line after that row's `Surface:` line:
+1. Take `<VERDICT_FILE>`, `<BRIEF_FILE>`, `<PENDING_FILE>`, `<CARRIED_FILE>` and `<MERGED_FILE>` as `uat-fidelity.json`, `uat-fidelity-brief.txt`, `uat-fidelity-pending.txt`, `uat-fidelity-carried.json` and `uat-fidelity-merged.json` in the session's scratchpad directory, or in a `mktemp -d` directory when the session lists none, never under `<PLAN_DIR>`: in a worktree, `.notebook` is a symlink into the main checkout and worktree isolation refuses the judge's Write (`.claude/rules/subagent-dispatch.md`). Pre-clear all five with `rm -f`.
+2. Write to `<BRIEF_FILE>` one `Spec:` line per `real-server`, `browser`, legacy `e2e` or `route` row of the routing table in `<PLAN_DIR>/README.md`, with the real path joined from `<RESOLVED_ROOT>`: `<frontend package>/.playwright/e2e/` for a `real-server`, `browser` or legacy `e2e` row and `<frontend package>/app/route-tests/` for a `route` row, then the row's `feature_folder`, then `tests/` for a `route` row only, then its `file_name`. After each `Spec:` line add one `Surface: <uat_id> <real-server | browser | route>` line, a legacy `e2e` row written as `browser`; it adds no verdict entry. When the owning task doc names a guard's file for a route row, add one `Guard: <uat_id> <absolute path of the guard file>` line after that row's `Surface:` line. Then select the tests to judge; it prints their count, and a non-zero exit is a HALT:
+
+   ```bash
+   bash .gaia/scripts/spec/uat-fidelity-cache.sh select <PLAN_DIR>/uat-fidelity-cache.json --spec <SPEC_PATH> --brief <BRIEF_FILE> --pending <PENDING_FILE> --carried <CARRIED_FILE>
+   ```
+
+   When it printed `0`, write `[]` to `<VERDICT_FILE>` and go to step 3's `record`. Otherwise dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of the two lines below followed by the lines of `<PENDING_FILE>`:
 
    ```
    SPEC path: <SPEC_PATH>
@@ -68,17 +74,24 @@ Then judge the test bodies. The gate proves each spec still carries its contract
    Guard: <uat_id> <absolute path of the guard file>   (optional, route rows only)
    ```
 
-3. Wait for the agent's completion notification, never classifying when the dispatch call returns, then classify the file, which is a JSON array with one entry per `Spec:` line (a `Surface:` or `Guard:` line adds none):
+3. Wait for the agent's completion notification, never classifying when the dispatch call returns, then classify the file, which is a JSON array with one entry per `Spec:` line it was given (a `Surface:` or `Guard:` line adds none):
 
    ```bash
-   bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <VERDICT_FILE> --expect-count <number of Spec lines>
+   bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <VERDICT_FILE> --expect-count <count select printed>
    ```
 
    Exit 1 is a no-op: re-dispatch exactly once against the re-cleared path. A second consecutive no-op is a HALT, never a judgment the orchestrator makes itself. This departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the orchestrator wrote the phases under judgment, so it cannot legitimately do the work itself. The halt message names the verdict file and the specs from the `Spec:` lines, and gives the next step: resume the plan to run this step again, or have a human read each listed spec against its contract, then tell the orchestrator to continue to the final summary when every body still asserts it, or fix a diverging one as step 4 states.
+
+   Once the file classifies real, merge the new and carried verdicts and record them for the next resume; a non-zero exit is a HALT:
+
+   ```bash
+   bash .gaia/scripts/spec/uat-fidelity-cache.sh record <PLAN_DIR>/uat-fidelity-cache.json --spec <SPEC_PATH> --brief <BRIEF_FILE> --carried <CARRIED_FILE> --verdicts <VERDICT_FILE> --out <MERGED_FILE>
+   ```
+
 4. Halt on any divergence:
 
    ```bash
-   jq -e 'all(.[]; .verdict == "asserts")' <VERDICT_FILE>
+   jq -e 'all(.[]; .verdict == "asserts")' <MERGED_FILE>
    ```
 
    A non-zero exit is a HALT: surface each `diverges` entry's file and reason. When the reason says the Then-clause is asserted only in a helper the body calls, the fix is moving that assertion into the test body and running this step again. Otherwise the fix is implementing the behavior or reopening the SPEC (`.claude/skills/gaia/references/spec/uat-divergence.md` `## Reopen`). Never an edit to the contract comment and never re-adding `test.fail()`. Like the gate, it is never an audit finding to fix inside a fix round.
