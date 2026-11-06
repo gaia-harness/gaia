@@ -27,6 +27,20 @@ export const collections = {
   seedFixtures: new Collection({schema: seedFixtureSchema}),
 };
 
+/** The record the store holds before any Given builder seeds one. */
+export const BASELINE_SEED_FIXTURE = {
+  id: 'baseline-seed-fixture',
+  name: 'Hammer',
+  quantity: 1,
+};
+
+// Empty until this runs, the way a project's collections hold their baseline
+// only after `resetTestData`.
+export const resetTestData = async (): Promise<void> => {
+  collections.seedFixtures.clear();
+  await collections.seedFixtures.create(BASELINE_SEED_FIXTURE);
+};
+
 export const NETWORK_ERROR_URL = `${SEED_FIXTURE_ORIGIN}/network-error`;
 
 export const handlers = [
