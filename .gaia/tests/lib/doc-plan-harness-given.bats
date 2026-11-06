@@ -5,8 +5,9 @@
 #
 # planner.md step 2 holds a harness choice that changes a UAT's Given to the
 # precondition-divergence rule, step 1 keeps a Given check out of Follow-ups,
-# and the decomposition audit's SPEC coverage lens grades a harness that departs from a Given as critical.
-# This suite pins that text where each rule lives.
+# and the decomposition audit's SPEC coverage lens grades a harness that
+# departs from a Given as critical. This suite pins that text where each rule
+# lives.
 #
 # Method: every check takes a root directory and reads the files from it; each
 # red twin mutates one substring of a scratch copy, proves the copy changed,
