@@ -26,7 +26,7 @@ A file whose first line is `// gaia-uat-contract sha256:...` was rendered from a
 
 A real-server test reads the server's rendered HTML through the request fixture and parses the body with the helper in `.playwright/html.ts`. It opens no page and makes no browser round trip. The helper returns nodes; the test file holds every `expect(`.
 
-The UAT gate reads request contexts from the test file's text, not its types. Take `request` or a request-context fixture, or build each context in the test body (`const rita = await playwright.request.newContext()`), and make every Then-clause read a verb call on that variable (`rita.get(`). A helper takes the context as a parameter (`signIn(rita, email)`). A helper in the test file that builds the context from a parameter not named `request` (`apiRequest.newContext()`) is refused as `opens-page`, and a verb call read off a helper's returned object (`rita.context.get(`) does not clear `floor`.
+The UAT gate reads request contexts from the test file's text, not its types. Take `request` or a request-context fixture, or build each context in the test body (`const rita = await playwright.request.newContext()`), and make every Then-clause read a verb call on that variable (`rita.get(`). A helper takes the context as a parameter (`signIn(rita, email)`). A `.newContext(` on any receiver but `request` or `playwright.request` (`apiRequest.newContext()`) is refused as `opens-page`, and a verb call read off a helper's returned object (`rita.context.get(`) does not clear `floor`.
 
 ```ts
 import {expect, test} from '@playwright/test';
