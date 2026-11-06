@@ -3,11 +3,8 @@
 # Doc-conformance suite for the planner's rule that a UAT's Given binds the
 # harness its test runs under.
 #
-# A plan once isolated a real-server spec through an environment override that
-# changed the UAT's Given, then filed the unexercised Given as a Follow-up; only
-# the pre-audit fidelity judge caught it, so the run halted late. planner.md
-# step 2 now holds such a harness choice to the precondition-divergence rule,
-# step 1 keeps a Given check out of Follow-ups, and the decomposition audit's
+# planner.md step 2 holds a harness choice that changes a UAT's Given to the
+# precondition-divergence rule, step 1 keeps a Given check out of Follow-ups, and the decomposition audit's
 # SPEC coverage lens grades a harness that departs from a Given as critical.
 # This suite pins that text where each rule lives.
 #
@@ -92,7 +89,7 @@ green() {
 
 # The paragraph lives in step 2 (README), after the routing ladder, and states
 # the rule, its pointer, both outcomes and the Follow-ups ban. It stays generic:
-# a real-backend Given belongs to the routing ladder, not to this paragraph.
+# real-backend Givens are out of its scope, so it names no database.
 check_given_paragraph() {
   local step paragraph
   step="$(range_of "$1/$PLANNER_REL" '2.  **`{PLAN_DIR}/README.md`**' '3.  **`{PLAN_DIR}/ORCHESTRATOR.md`**')"
@@ -120,8 +117,8 @@ check_coverage_lens() {
   local bullet
   bullet="$(range_of "$1/$AUDIT_REL" '- **SPEC coverage (id prefix `COV`' '## 4.6b. Apply findings')"
   [ -n "$bullet" ] || { printf 'SPEC coverage lens not found\n' >&2; return 1; }
-  need "$bullet" 'Compare each UAT'"'"'s Given with what the README contracts and task docs set up for its test' || return 1
-  need "$bullet" 'an environment variable, seeded state or server mode set differently from the Given' || return 1
+  need "$bullet" 'Compare each UAT'"'"'s Given with what the README'"'"'s interface contracts and task docs set up for its test' || return 1
+  need "$bullet" 'a harness, fixture or helper that sets up the precondition differently from the Given' || return 1
   need "$bullet" 'a `## Follow-ups` entry conceding part of a Given goes unexercised' || return 1
   need "$bullet" 'is `critical`' || return 1
 }
