@@ -219,7 +219,7 @@ check_split_block() {
     'A file no task names halts.' \
     '## Phase N, <title> (RED RETRY 1)' \
     'dispatch a fresh test author for each owning task only' \
-    'A second exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED`' \
+    'A second exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED; a case may assert behavior an earlier phase built, so correct the plan`' \
     '**Implementers.**' \
     'Once the test review passes, dispatch an implementer for every task in the wave, split or not' \
     'A task with no test waits for this step' || return 1
