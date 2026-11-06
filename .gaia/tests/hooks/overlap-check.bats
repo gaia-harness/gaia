@@ -141,6 +141,11 @@ describe.each(['admin', 'guest'])('as %s', (role) => {
   test('opens the records list', () => {
     expect(canOpen(role, 'records')).toBe(true);
   });
+
+  test('opens the archive', () => {
+    test.skip();
+    expect(canOpen(role, 'archive')).toBe(true);
+  });
 });
 EOF
 
@@ -1001,6 +1006,11 @@ TABLE_OUTCOME='expect(outcome).toEqual(expectedOutcome(pageKey, userKey))'
   is_kept 'refuses blank input'
   check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'admin opens the records list' "expect(canOpen(role, 'records')).toBe(true)")
   [ "$(reason_of 'refuses blank input')" = citation-unverified ]
+}
+
+@test "citation text in a test.skip under a describe.each is citation-not-live" {
+  check_all < <(cite drop "$REFUSE_UNIT" 'refuses blank input' false "$TABLES" 'as %s opens the archive' "expect(canOpen(role, 'archive')).toBe(true)")
+  [ "$(reason_of 'refuses blank input')" = citation-not-live ]
 }
 
 @test "a cited call to an in-file helper that asserts nothing is citation-unverified" {

@@ -18,9 +18,9 @@
 //    "firstLine":N,"ranges":[[start,end],...]}
 // firstLine and ranges are 1-based inclusive lines of the regions the signal
 // hashes, comments above a region excluded; a story entry lists several.
-// A test under a .each/.for table (test or describe level) is named by its
-// declared templates and adds "rowPattern" (./row-pattern.mjs), which the
-// capture hook matches rows to; each enclosing describe table is hashed too.
+// A test under a .each/.for table is named by its templates and adds "rowPattern"
+// (./row-pattern.mjs) for the capture hook; each enclosing describe table is
+// hashed too, listed in ranges after the test's own call (read first by overlap).
 //
 // Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF4
 // story file; its fullName and signal rules and refusal list live in the
@@ -457,7 +457,7 @@ function visit(node, ancestors, unmatchable) {
             signal: signalFor(hashed),
             kind: classifyKind(node),
             firstLine: rangeOf(node)[0],
-            ranges: hashed.map(rangeOf),
+            ranges: [node, ...hashed.slice(0, -1)].map(rangeOf),
             ...(rowPattern === null ? {} : {rowPattern}),
           }),
         );

@@ -75,7 +75,7 @@ per discovered `test(...)`/`it(...)` call, newline-delimited:
 `firstLine` and `ranges` are 1-based inclusive line numbers of the regions the
 signal hashes (a story entry lists its story, play, meta and, for a `.test()`
 entry, the test statement; a test under a `describe.each`/`describe.for` lists
-each enclosing table, then the test); they are not part of the signal. Exit `0`
+the test, then each enclosing table); they are not part of the signal. Exit `0`
 on success (no output when no tests are found); non-zero with a one-line stderr
 message on a failure. The exit codes are listed in the helper's header.
 
