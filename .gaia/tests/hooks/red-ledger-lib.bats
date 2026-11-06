@@ -38,12 +38,12 @@ setup() {
   # a title wrapped onto the next line) and never overcounts outside the
   # exemption below. That is why it is a floor and not an equality.
   PLAIN_TEST_PATTERN="^[[:space:]]*(test|it)(\.(only|skip|todo|fails|concurrent|sequential))*\([[:space:]]*['\"]"
-  # Inside a `.each`/`.for` describe or one with a non-literal title the helper
-  # records nothing by design, so a floor counted over such a file would demand
-  # records the helper must not emit. The second arm also catches the
-  # `describe.each(table)` spelling; the first is there for the tagged-template
-  # one. Over-matching only drops a file from the floor, the safe direction.
-  UNRECORDED_SUBTREE_PATTERN="describe\.(each|for)|describe(\.[a-z]+)*\([[:space:]]*[^'\"[:space:]]"
+  # Inside a describe with a non-literal title the helper records nothing by
+  # design, so a floor counted over such a file would demand records the helper
+  # must not emit. It also matches the `describe.each(table)` spelling, whose
+  # tests the helper does record; over-matching only drops a file from the
+  # floor, the safe direction.
+  UNRECORDED_SUBTREE_PATTERN="describe(\.[a-z]+)*\([[:space:]]*[^'\"[:space:]]"
 }
 
 # Run the Node helper from the repo root with a repo-relative fixture path.
@@ -561,29 +561,30 @@ run_library() {
 
 # The corpus check's exemption is dormant while no tracked frontend test holds
 # such a describe, so these fixtures are what keep it able to fail.
-@test "the corpus floor's exemption fires on a tagged-template describe.each and on a non-literal describe title, and on no literal describe" {
-  local fixture file_floor file_record_count
-  for fixture in each-describe.test.ts dynamic-title-describe.test.ts; do
-    run_helper "$FIXTURE_RELATIVE_DIRECTORY/$fixture"
-    [ "$status" -eq 0 ]
-    file_record_count=0
-    [ -z "$output" ] || file_record_count=$(printf '%s\n' "$output" | grep -c '"fullName"')
-    file_floor=$(grep -cE "$PLAIN_TEST_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || true)
-    # Without the exemption the floor would red here: grep counts a test the
-    # helper must not record.
-    [ "$file_floor" -gt "$file_record_count" ] || {
-      echo "$fixture: floor $file_floor does not exceed $file_record_count record(s); the fixture no longer exercises the exemption" >&2
-      return 1
-    }
-    grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || {
-      echo "$fixture: the exemption pattern does not match" >&2
+@test "the corpus floor's exemption fires on a non-literal describe title, and on no literal describe or tagged-template describe.each" {
+  local fixture=dynamic-title-describe.test.ts file_floor file_record_count
+  run_helper "$FIXTURE_RELATIVE_DIRECTORY/$fixture"
+  [ "$status" -eq 0 ]
+  file_record_count=0
+  [ -z "$output" ] || file_record_count=$(printf '%s\n' "$output" | grep -c '"fullName"')
+  file_floor=$(grep -cE "$PLAIN_TEST_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || true)
+  # Without the exemption the floor would red here: grep counts a test the
+  # helper must not record.
+  [ "$file_floor" -gt "$file_record_count" ] || {
+    echo "$fixture: floor $file_floor does not exceed $file_record_count record(s); the fixture no longer exercises the exemption" >&2
+    return 1
+  }
+  grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || {
+    echo "$fixture: the exemption pattern does not match" >&2
+    return 1
+  }
+
+  # A tagged-template describe.each records its tests, so it stays on the floor.
+  for fixture in nested-describe.test.ts each-describe.test.ts; do
+    grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" && {
+      echo "$fixture: the exemption matches a describe whose tests the helper records, which would drop its file from the floor" >&2
       return 1
     }
   done
-
-  grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/nested-describe.test.ts" && {
-    echo "the exemption matches a literal-titled describe, which would drop its file from the floor" >&2
-    return 1
-  }
   true
 }

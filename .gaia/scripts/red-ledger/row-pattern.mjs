@@ -13,16 +13,26 @@ const ROW_TOKEN = /%[a-zA-Z#$%]|\$[$\p{ID_Continue}.]+/gu;
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const literalPartsOf = ({title, expands}) =>
+  expands ? title.split(ROW_TOKEN) : [title];
+
 /**
- * The anchored pattern a row's fullName matches, or null when the title has
- * no literal text outside its tokens: that pattern is the describe prefix plus
- * a wildcard and could claim the failure of any unemitted test under that
- * describe, so the test stays exempt instead.
+ * The anchored pattern a row's fullName matches, given the titles from the
+ * outermost describe down to the test, each flagged when a `.each`/`.for`
+ * expands it. Vitest joins them with one space. Null when the titles from the
+ * first expanding one down hold no literal text outside their tokens: that
+ * pattern is a static describe prefix plus a wildcard and could claim the
+ * failure of any unemitted test under that prefix, so the test stays exempt
+ * instead.
  */
-export function rowPatternFor(prefix, title) {
-  const literalParts = title.split(ROW_TOKEN);
-  if (literalParts.join('').trim() === '') {
+export function rowPatternFor(segments) {
+  const parts = segments.map(literalPartsOf);
+  const firstExpanding = segments.findIndex((segment) => segment.expands);
+  if (parts.slice(firstExpanding).flat().join('').trim() === '') {
     return null;
   }
-  return `^${escapeRegExp(prefix)}${literalParts.map(escapeRegExp).join('[\\s\\S]*')}$`;
+  const segmentPatterns = parts.map((literals) =>
+    literals.map(escapeRegExp).join('[\\s\\S]*'),
+  );
+  return `^${segmentPatterns.join(' ')}$`;
 }
