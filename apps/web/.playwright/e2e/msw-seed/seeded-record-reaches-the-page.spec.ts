@@ -1,6 +1,8 @@
+import type {Page} from '@playwright/test';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
+  BASELINE_SEED_FIXTURE,
   FIXTURE_DEV_COMMAND,
   SEED_FIXTURE_ORIGIN,
 } from '../../../test/msw-seed/fixture-service';
@@ -65,20 +67,28 @@ const test = base.extend<
 // origin through `connect-src`, which this check stands in for.
 test.use({bypassCSP: true});
 
+const listSeedFixtures = async (page: Page): Promise<unknown[]> => {
+  await page.goto('/');
+  await hydration(page);
+
+  return page.evaluate(async (origin) => {
+    const response = await fetch(`${origin}/seed-fixtures`);
+
+    return ((await response.json()) as {data: unknown[]}).data;
+  }, SEED_FIXTURE_ORIGIN);
+};
+
 test('a record a Given builder seeded reaches a cross-origin fetch in the page', async ({
   givenSeedFixture,
   page,
 }) => {
   const seeded = await givenSeedFixture({name: 'Wrench'});
 
-  await page.goto('/');
-  await hydration(page);
+  expect(await listSeedFixtures(page)).toContainEqual(seeded);
+});
 
-  const listed = await page.evaluate(async (origin) => {
-    const response = await fetch(`${origin}/seed-fixtures`);
-
-    return ((await response.json()) as {data: unknown[]}).data;
-  }, SEED_FIXTURE_ORIGIN);
-
-  expect(listed).toContainEqual(seeded);
+test('the resetTestData baseline is in the store without any Given builder', async ({
+  page,
+}) => {
+  expect(await listSeedFixtures(page)).toContainEqual(BASELINE_SEED_FIXTURE);
 });
