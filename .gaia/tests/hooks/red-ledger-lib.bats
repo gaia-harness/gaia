@@ -562,24 +562,22 @@ run_library() {
 # The corpus check's exemption is dormant while no tracked frontend test holds
 # such a describe, so these fixtures are what keep it able to fail.
 @test "the corpus floor's exemption fires on a non-literal describe title, and on no literal describe or tagged-template describe.each" {
-  local fixture file_floor file_record_count
-  for fixture in dynamic-title-describe.test.ts; do
-    run_helper "$FIXTURE_RELATIVE_DIRECTORY/$fixture"
-    [ "$status" -eq 0 ]
-    file_record_count=0
-    [ -z "$output" ] || file_record_count=$(printf '%s\n' "$output" | grep -c '"fullName"')
-    file_floor=$(grep -cE "$PLAIN_TEST_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || true)
-    # Without the exemption the floor would red here: grep counts a test the
-    # helper must not record.
-    [ "$file_floor" -gt "$file_record_count" ] || {
-      echo "$fixture: floor $file_floor does not exceed $file_record_count record(s); the fixture no longer exercises the exemption" >&2
-      return 1
-    }
-    grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || {
-      echo "$fixture: the exemption pattern does not match" >&2
-      return 1
-    }
-  done
+  local fixture=dynamic-title-describe.test.ts file_floor file_record_count
+  run_helper "$FIXTURE_RELATIVE_DIRECTORY/$fixture"
+  [ "$status" -eq 0 ]
+  file_record_count=0
+  [ -z "$output" ] || file_record_count=$(printf '%s\n' "$output" | grep -c '"fullName"')
+  file_floor=$(grep -cE "$PLAIN_TEST_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || true)
+  # Without the exemption the floor would red here: grep counts a test the
+  # helper must not record.
+  [ "$file_floor" -gt "$file_record_count" ] || {
+    echo "$fixture: floor $file_floor does not exceed $file_record_count record(s); the fixture no longer exercises the exemption" >&2
+    return 1
+  }
+  grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || {
+    echo "$fixture: the exemption pattern does not match" >&2
+    return 1
+  }
 
   # A tagged-template describe.each records its tests, so it stays on the floor.
   for fixture in nested-describe.test.ts each-describe.test.ts; do
