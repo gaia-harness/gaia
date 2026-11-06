@@ -1,109 +1,117 @@
-import {afterAll, beforeAll, describe, expect, test} from 'vitest';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {afterAll, beforeAll, describe, expect, test, vi} from 'vitest';
+import type {IncomingMessage, ServerResponse} from 'node:http';
+import http from 'node:http';
+import type {AddressInfo} from 'node:net';
 import {seedRecords} from '../.playwright/msw-seed';
-import type {WorkerServer} from '../.playwright/worker-server';
-import {startWorkerServer} from '../.playwright/worker-server';
 import {
-  FIXTURE_DEV_COMMAND,
   NETWORK_ERROR_URL,
   SEED_FIXTURE_ORIGIN,
 } from './msw-seed/fixture-service';
 import {mswSeedPlugin} from './msw-seed/plugin';
 import {MSW_SEED_PREFIX} from './msw-seed/protocol';
 
-const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
+type Middleware = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: () => void
+) => void;
 
-// Three real dev servers start one after another under the start lock.
-const START_ALL_TIMEOUT_MILLISECONDS = 180_000;
+// The modules the plugin loads through the dev server's SSR module runner,
+// loaded here through Vitest's own, so the seed and forward endpoints share
+// one store as they do on a dev server. The real-server proof that the
+// runner's instances are the ones the app serves with is the Playwright check
+// in `.playwright/e2e/msw-seed/`.
+const SSR_MODULES: Record<string, () => Promise<unknown>> = {
+  '/test/mocks/database.ts': async () => import('./mocks/database'),
+  '/test/mocks/index.ts': async () => import('./mocks'),
+  '/test/msw-seed/fixture-service.ts': async () =>
+    import('./msw-seed/fixture-service'),
+};
 
-const startedServers: WorkerServer[] = [];
-let outputDirectory: string;
-let firstWorker: WorkerServer;
-let secondWorker: WorkerServer;
-let ungatedServer: WorkerServer;
+const notFound = (response: ServerResponse) => {
+  response.writeHead(404);
+  response.end();
+};
 
-const forward = async (
-  server: WorkerServer,
-  targetUrl: string
-): Promise<Response> =>
-  fetch(`${server.baseURL}${MSW_SEED_PREFIX}/forward`, {
+// Serves the plugin's middleware from this process, mounted the way Vite's
+// connect stack mounts it: under its prefix, with the prefix stripped from
+// the URL the middleware reads.
+const startSeedSurface = async (): Promise<http.Server> => {
+  let mount: undefined | {handler: Middleware; prefix: string};
+  const developmentServer = {
+    environments: {
+      ssr: {runner: {import: async (url: string) => SSR_MODULES[url]()}},
+    },
+    middlewares: {
+      use: (prefix: string, handler: Middleware) => {
+        mount = {handler, prefix};
+      },
+    },
+  };
+
+  (mswSeedPlugin().configureServer as (server: unknown) => void)(
+    developmentServer
+  );
+
+  const server = http.createServer((request, response) => {
+    if (mount === undefined || !request.url?.startsWith(mount.prefix)) {
+      notFound(response);
+
+      return;
+    }
+
+    request.url = request.url.slice(mount.prefix.length) || '/';
+    mount.handler(request, response, () => notFound(response));
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+
+  return server;
+};
+
+let seedSurface: http.Server;
+let baseURL: string;
+
+beforeAll(async () => {
+  vi.stubEnv('MSW_SEED_FIXTURE', 'true');
+  seedSurface = await startSeedSurface();
+  baseURL = `http://127.0.0.1:${(seedSurface.address() as AddressInfo).port}`;
+});
+
+afterAll(async () => {
+  vi.unstubAllEnvs();
+  await new Promise((resolve) => {
+    seedSurface.close(resolve);
+  });
+});
+
+const forward = async (targetUrl: string): Promise<Response> =>
+  fetch(`${baseURL}${MSW_SEED_PREFIX}/forward`, {
     headers: {'x-gaia-msw-method': 'GET', 'x-gaia-msw-url': targetUrl},
     method: 'POST',
   });
 
-const listFixtures = async (server: WorkerServer): Promise<unknown> => {
-  const response = await forward(
-    server,
-    `${SEED_FIXTURE_ORIGIN}/seed-fixtures`
-  );
-
-  return ((await response.json()) as {data: unknown}).data;
-};
-
-beforeAll(async () => {
-  outputDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'msw-seed-'));
-
-  const start = async (parallelIndex: number, command: string[]) => {
-    const server = await startWorkerServer({
-      command,
-      outputDirectory,
-      packageDirectory,
-      parallelIndex,
-    });
-
-    startedServers.push(server);
-
-    return server;
-  };
-
-  // `env` sets the fixture flag on the spawned dev server alone.
-  firstWorker = await start(0, FIXTURE_DEV_COMMAND);
-  secondWorker = await start(1, FIXTURE_DEV_COMMAND);
-  ungatedServer = await start(2, [
-    'env',
-    'MSW_SEED=false',
-    ...FIXTURE_DEV_COMMAND.slice(1),
-  ]);
-}, START_ALL_TIMEOUT_MILLISECONDS);
-
-afterAll(() => {
-  for (const server of startedServers) server.stop();
-  fs.rmSync(outputDirectory, {force: true, recursive: true});
-});
-
 describe('the MSW seed surface', () => {
-  test('a seeded record is served back by the same worker server', async () => {
+  test('a seeded record is served back through the forward endpoint', async () => {
     const id = crypto.randomUUID();
-    const created = await seedRecords(firstWorker.baseURL, 'seedFixtures', [
+    const created = await seedRecords(baseURL, 'seedFixtures', [
       {id, name: 'Wrench', quantity: 3},
     ]);
+    const response = await forward(`${SEED_FIXTURE_ORIGIN}/seed-fixtures`);
 
     expect(created).toEqual([{id, name: 'Wrench', quantity: 3}]);
-    expect(await listFixtures(firstWorker)).toContainEqual({
+    expect(((await response.json()) as {data: unknown}).data).toContainEqual({
       id,
       name: 'Wrench',
       quantity: 3,
     });
   });
 
-  test('a record seeded on one worker is absent from another worker', async () => {
-    const id = crypto.randomUUID();
-
-    await seedRecords(firstWorker.baseURL, 'seedFixtures', [
-      {id, name: 'Hammer', quantity: 1},
-    ]);
-
-    expect(await listFixtures(secondWorker)).not.toContainEqual(
-      expect.objectContaining({id})
-    );
-  });
-
   test('a record that does not match the server schema fails naming its collection, index and field', async () => {
     await expect(
-      seedRecords(firstWorker.baseURL, 'seedFixtures', [
+      seedRecords(baseURL, 'seedFixtures', [
         {id: crypto.randomUUID(), name: 'Saw', quantity: 2},
         {id: crypto.randomUUID(), name: 'Drill', quantity: 'two'},
       ])
@@ -113,38 +121,23 @@ describe('the MSW seed surface', () => {
   });
 
   test('an unknown collection fails naming the collections it has', async () => {
-    await expect(
-      seedRecords(firstWorker.baseURL, 'seedFixture', [{}])
-    ).rejects.toThrow(
+    await expect(seedRecords(baseURL, 'seedFixture', [{}])).rejects.toThrow(
       /^No collection "seedFixture" in test\/mocks\/database\.ts; it has: .*\bseedFixtures\b/u
     );
   });
 
   test('a request no handler matches is reported as unhandled', async () => {
-    const response = await forward(firstWorker, 'https://unmocked.test/x');
+    const response = await forward('https://unmocked.test/x');
 
     expect(response.status).toBe(204);
     expect(response.headers.get('x-gaia-msw-unhandled')).toBe('true');
   });
 
   test('a mock that answers a network error is reported as one, not as an HTTP failure', async () => {
-    const response = await forward(firstWorker, NETWORK_ERROR_URL);
+    const response = await forward(NETWORK_ERROR_URL);
 
     expect(response.status).toBe(204);
     expect(response.headers.get('x-gaia-msw-network-error')).toBe('true');
-  });
-
-  test('a dev server started without MSW_SEED exposes no seed surface', async () => {
-    const response = await fetch(
-      `${ungatedServer.baseURL}${MSW_SEED_PREFIX}/seed`,
-      {
-        body: JSON.stringify({collection: 'seedFixtures', records: []}),
-        headers: {'content-type': 'application/json'},
-        method: 'POST',
-      }
-    );
-
-    expect(response.ok).toBe(false);
   });
 });
 

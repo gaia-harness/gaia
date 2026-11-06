@@ -1,11 +1,14 @@
 import {afterEach, beforeEach, describe, expect, test} from 'vitest';
-import {spawnSync} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
+import {once} from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
+import {fileURLToPath} from 'node:url';
 import {
   acquireStartLock,
+  isProcessAlive,
   START_LOCK_FILE_NAME,
   startWorkerServer,
   WORKER_SERVER_HOST,
@@ -81,6 +84,7 @@ http
     response.end(JSON.stringify({
       mswEnabled: process.env.MSW_ENABLED,
       mswSeed: process.env.MSW_SEED,
+      pid: process.pid,
       siteUrl: process.env.SITE_URL,
     }));
   })
@@ -116,6 +120,7 @@ describe('startWorkerServer', () => {
       expect(await response.json()).toEqual({
         mswEnabled: 'true',
         mswSeed: 'true',
+        pid: expect.any(Number),
         siteUrl: server.baseURL,
       });
     } finally {
@@ -133,6 +138,7 @@ describe('startWorkerServer', () => {
     const logFile = path.join(directory, 'worker-3-server.log');
 
     await expect(start).rejects.toThrow(logFile);
+    await expect(start).rejects.toThrow('(code 1, signal null)');
     expect(fs.readFileSync(logFile, 'utf8')).toContain(
       'route typegen failed: ENOTEMPTY'
     );
@@ -140,4 +146,99 @@ describe('startWorkerServer', () => {
       false
     );
   });
+});
+
+// A process that starts a worker server and prints the server's pid, then ends
+// the way its mode names without calling `stop`: `exit` exits at once without
+// running any teardown, `wait` stays up until the test signals it, and `drain`
+// leaves nothing scheduled, so it ends when its event loop empties.
+const OWNER = String.raw`
+import {startWorkerServer} from ${JSON.stringify(
+  new URL('../.playwright/worker-server.ts', import.meta.url).href
+)};
+const [mode, serverScript, directory] = process.argv.slice(2);
+const server = await startWorkerServer({
+  command: [process.execPath, serverScript],
+  outputDirectory: directory,
+  packageDirectory: directory,
+  parallelIndex: 0,
+});
+const {pid} = await (await fetch(server.baseURL)).json();
+process.stdout.write(pid + '\n');
+if (mode === 'exit') process.exit(0);
+if (mode === 'wait') setInterval(() => undefined, 1000);
+`;
+
+const OWNER_DEADLINE_MILLISECONDS = 10_000;
+
+const waitUntil = async (condition: () => boolean): Promise<boolean> => {
+  const deadline = Date.now() + OWNER_DEADLINE_MILLISECONDS;
+
+  while (Date.now() < deadline) {
+    if (condition()) return true;
+    await delay(50);
+  }
+
+  return condition();
+};
+
+describe('a worker server whose owner ends without stopping it', () => {
+  test.each([
+    {ending: 'exits', mode: 'exit'},
+    {ending: 'is sent SIGTERM', mode: 'wait', signal: 'SIGTERM'},
+    {ending: 'is killed', mode: 'wait', signal: 'SIGKILL'},
+    {ending: 'lets its event loop drain', mode: 'drain'},
+  ] as {ending: string; mode: string; signal?: NodeJS.Signals}[])(
+    'stops when the owner $ending, and never holds the owner open',
+    async ({mode, signal}) => {
+      const owner = spawn(
+        process.execPath,
+        [
+          '--import',
+          'tsx',
+          writeScript('owner.mts', OWNER),
+          mode,
+          writeScript('server.mjs', STAND_IN_SERVER),
+          directory,
+        ],
+        {cwd: fileURLToPath(new URL('..', import.meta.url))}
+      );
+      let hasOwnerExited = false;
+      let ownerErrorOutput = '';
+      let serverProcessId: number | undefined;
+
+      owner.stderr.on('data', (chunk: Buffer) => {
+        ownerErrorOutput += chunk.toString();
+      });
+      owner.once('exit', () => {
+        hasOwnerExited = true;
+      });
+
+      try {
+        const line = await Promise.race([
+          once(owner.stdout, 'data').then(([chunk]) => String(chunk)),
+          once(owner, 'exit').then(() => {
+            throw new Error(
+              `The owner exited before printing the server pid:\n${ownerErrorOutput}`
+            );
+          }),
+        ]);
+
+        serverProcessId = Number(line.trim());
+
+        if (signal !== undefined) owner.kill(signal);
+
+        expect(await waitUntil(() => hasOwnerExited)).toBe(true);
+        expect(await waitUntil(() => !isProcessAlive(serverProcessId!))).toBe(
+          true
+        );
+      } finally {
+        owner.kill('SIGKILL');
+
+        if (serverProcessId !== undefined && isProcessAlive(serverProcessId)) {
+          process.kill(serverProcessId, 'SIGKILL');
+        }
+      }
+    }
+  );
 });

@@ -31,6 +31,17 @@ export const START_LOCK_TIMEOUT_MILLISECONDS =
 const LOCK_POLL_INTERVAL_MILLISECONDS = 50;
 const READY_POLL_INTERVAL_MILLISECONDS = 250;
 
+/** Whether a process exists; one owned by another user counts as alive. */
+export const isProcessAlive = (processId: number): boolean => {
+  try {
+    process.kill(processId, 0);
+
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+};
+
 // A holder that died mid-start never removes its lock, so a lock whose
 // recorded process is gone is taken over. An unreadable lock was released
 // between the failed create and this read.
@@ -43,13 +54,7 @@ const isHolderAlive = (lockFile: string): boolean => {
     return true;
   }
 
-  try {
-    process.kill(holderProcessId, 0);
-
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
-  }
+  return isProcessAlive(holderProcessId);
 };
 
 /**
@@ -133,6 +138,38 @@ const waitForServer = async (origin: string): Promise<void> => {
   throw new Error(`The worker server at ${origin} did not answer in time.`);
 };
 
+// Runs the server command under a supervisor that leads its own process group,
+// so a stop reaches the dev server behind `pnpm`, and stops that group once its
+// stdin closes. The owner holds the only write end of that pipe, and the kernel
+// closes it however the owner ends (a clean exit, a signal, a SIGKILL), which
+// no exit or signal handler in the owner can cover. The child's exit code or
+// signal passes through, so a server that dies on start still reports its own;
+// a signal that does not end the supervisor itself (one Node ignores or
+// handles) becomes the shell's 128 plus the signal number, never a clean exit.
+const SUPERVISOR = `
+const {spawn} = require('node:child_process');
+const {constants} = require('node:os');
+const [executable, ...commandArguments] = process.argv.slice(1);
+const stopGroup = () => {
+  try {
+    process.kill(-process.pid, 'SIGTERM');
+  } catch {}
+};
+process.stdin.on('end', stopGroup);
+process.stdin.on('error', stopGroup);
+process.stdin.resume();
+const child = spawn(executable, commandArguments, {stdio: ['ignore', 'inherit', 'inherit']});
+child.once('error', (error) => {
+  console.error(String(error));
+  process.exit(127);
+});
+child.once('exit', (code, signal) => {
+  if (signal === null) process.exit(code ?? 1);
+  process.kill(process.pid, signal);
+  process.exit(128 + (constants.signals[signal] ?? 0));
+});
+`;
+
 const stopProcessGroup = (processId: number | undefined): void => {
   if (processId === undefined) return;
 
@@ -201,10 +238,9 @@ export const startWorkerServer = async ({
   try {
     const port = await findFreePort();
     const baseURL = `http://${WORKER_SERVER_HOST}:${port}`;
-    const [executable, ...commandArguments] = command;
     const server = spawn(
-      executable,
-      [...commandArguments, '--host', WORKER_SERVER_HOST],
+      process.execPath,
+      ['-e', SUPERVISOR, '--', ...command, '--host', WORKER_SERVER_HOST],
       {
         cwd: packageDirectory,
         detached: true,
@@ -215,10 +251,15 @@ export const startWorkerServer = async ({
           MSW_SEED: 'true',
           SITE_URL: baseURL,
         },
-        stdio: ['ignore', logFileDescriptor, logFileDescriptor],
+        stdio: ['pipe', logFileDescriptor, logFileDescriptor],
       }
     );
 
+    // Neither the server nor the pipe to it keeps the owner's event loop
+    // alive: an owner that never calls `stop` still exits, and its exit is
+    // what stops the server.
+    server.unref();
+    (server.stdin as net.Socket).unref();
     serverProcessId = server.pid;
 
     const serverStopped = new Promise<never>((_, reject) => {
