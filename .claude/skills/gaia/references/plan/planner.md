@@ -207,14 +207,14 @@ Then write the following files directly to `{PLAN_DIR}/`:
       <!-- gaia:orchestrator-step red-split -->
       **Test-first split (every wave).** A task whose `New tests:` line names files runs as two dispatches, a test author and then an implementer, with the test review between them, so each new test's failing run (RED) is on record and its assertions are checked before any implementation exists. A task whose line reads `none` runs as one dispatch, the implementer.
 
-      1. **Test authors.** Dispatch a test author for every splitting task in the wave, in parallel: the task prompt with the test-author clause. The test author is its own yield unit, `phase-<N>-task-<T>-tests`, with its own yield count: for every test-author dispatch, step 2's scope retry, step 3's retry, the test review's fix round and each yield re-dispatch included, the orchestrator uses that unit wherever the yield-handling block names `phase-<N>-task-<T>`, so the handoff path is `{PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md`. Right before every round of test-author dispatches in a wave, this step's, step 2's scope retry, step 3's retry and the test review's fix round, snapshot the tree:
+      1. **Test authors.** Dispatch a test author for every splitting task in the wave, in parallel: the task prompt with the test-author clause. The test author is its own yield unit, `phase-<N>-task-<T>-tests`, with its own yield count: for every test-author dispatch, step 2's scope retry, step 3's retry, the test review's fix round and each yield re-dispatch included, the orchestrator uses that unit wherever the yield-handling block names `phase-<N>-task-<T>`, so the handoff path is `{PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md`. Right before the wave's first test author is dispatched, snapshot the tree once for the whole wave:
 
              bash .gaia/scripts/red-ledger/author-scope.sh snapshot --root <RESOLVED_ROOT> --out {PLAN_DIR}/.work/author-scope/phase-<N>
 
-         and once that round has returned, run step 2's scope check before its RED check.
+         Every round of test authors in the wave (this step's, step 2's scope retry, step 3's retry and the test review's fix round) runs step 2's scope check against that one snapshot before its RED check, so a later round may still change a stub the wave wrote.
       2. **Check.** Once every test author has returned, first check that they changed only their tests and the stubs those tests import:
 
-             bash .gaia/scripts/red-ledger/author-scope.sh check --root <RESOLVED_ROOT> --snapshot {PLAN_DIR}/.work/author-scope/phase-<N> --revert --tests <every New tests file of the round's tasks>
+             bash .gaia/scripts/red-ledger/author-scope.sh check --root <RESOLVED_ROOT> --snapshot {PLAN_DIR}/.work/author-scope/phase-<N> --revert --tests <every New tests file of the wave's splitting tasks>
 
          Exit 2 halts under Stop conditions, carrying its stderr. Exit 1 has already reverted every path it prints as `<path><TAB><reason>`. Attribute each path to the round's task when the round has only one, else to the one task of the round whose task doc names it; a path no task or several tasks name halts. On a task's first breach in the wave, append this block to `{PLAN_DIR}/PROGRESS.md`:
 
@@ -222,7 +222,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
              Tasks: <task-<T>.md of each owning task>
              Paths: <each line>
 
-         Then take a fresh snapshot and dispatch a fresh test author for each owning task only: the task prompt with the test-author clause, then the line `Your previous run wrote outside a test author's scope, and these paths were reverted. Seed data, mock handlers and fixtures are the implementer's; take each identity from the seed source. Your tests are as you left them; if a stub they import was reverted, write it again adding lines only, then run the RED command for each test you change:`, then its lines, then the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md` as in step 3. Run the scope check again. A task's second breach in the wave appends `## Phase N, <title> (HALTED)` with `Reason: test author wrote outside its scope` and each path, and stops. Exit 0 goes on to the RED check, run from `RESOLVED_ROOT`:
+         Then dispatch a fresh test author for each owning task only: the task prompt with the test-author clause, then the line `Your previous run wrote outside a test author's scope, and these paths were reverted. Seed data, mock handlers and fixtures are the implementer's; take each identity from the seed source. Your tests are as you left them; if a stub they import was reverted, write it again adding lines only, then run the RED command for each test you change:`, then its lines, then the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md` as in step 3. Run the scope check again. A task's second breach in the wave appends `## Phase N, <title> (HALTED)` with `Reason: test author wrote outside its scope` and each path, and stops. Exit 0 goes on to the RED check, run from `RESOLVED_ROOT`:
 
              bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>
 

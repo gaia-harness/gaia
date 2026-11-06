@@ -86,6 +86,17 @@ TEST_FILE=apps/web/app/services/api/tests/base-url.test.ts
   [[ "$output" == $'apps/web/app/services/api/index.ts\tstub file edit removes or changes existing lines'* ]]
 }
 
+@test "a later round may change a stub the wave added to an existing file" {
+  snapshot
+  write_file "$TEST_FILE" $'import {create, remove} from \'..\';\n'
+  printf 'export const remove = () => 0;\n' >> "$REPO/apps/web/app/services/api/index.ts"
+  check --tests "$TEST_FILE"
+  [ "$status" -eq 0 ]
+  write_file apps/web/app/services/api/index.ts $'export const create = () => 1;\nexport const remove = () => 99;\n'
+  check --tests "$TEST_FILE"
+  [ "$status" -eq 0 ]
+}
+
 @test "an earlier wave's uncommitted edit the authors left alone is not flagged" {
   write_file apps/web/app/env.server.ts $'export const apiUrl = "wave one";\n'
   write_file apps/web/app/wave-one.ts $'export const one = 1;\n'

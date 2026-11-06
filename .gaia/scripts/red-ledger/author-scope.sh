@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Holds a plan run's test authors to their file scope: the wave's New tests
-# files and the stubs those tests import. A plan orchestrator takes a snapshot
-# right before each round of a wave's test authors and checks the tree once it returns,
+# files and the stubs those tests import. A plan orchestrator takes one snapshot
+# before a wave's first test author and checks the tree after each round of them,
 # before the RED check, so an author that wrote implementation is caught while
 # the test review can still run against stubs only.
 #
