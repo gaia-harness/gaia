@@ -144,6 +144,19 @@ check_stub_wrong_value() {
     'it throws only when the symbol has no return value to get wrong' || return 1
 }
 
+# A guessed seeded email makes the RED a setup lookup throw, not an assertion,
+# and the implementer's later fix to the email voids that RED.
+check_seed_identity() {
+  local range
+  range="$(invocation_range "$1")"
+  need_text 'executor template range' "$range" || return 1
+  in_order "$range" \
+    '**Test-author clause.**' \
+    'from the seed source the plan names, or the project'"'"'s seed file' \
+    'never guess one' \
+    '**Implementer clause.**' || return 1
+}
+
 check_edit_after_red_reported() {
   local range
   range="$(invocation_range "$1")"
@@ -357,6 +370,16 @@ check_tdd_stub_first() {
     'it may throw instead'
 }
 
+@test "the test author takes seeded identities from the seed source and never guesses one" {
+  green check_seed_identity
+}
+
+@test "red twin: a test author free to guess a seeded identity fails" {
+  red check_seed_identity "$PLANNER_REL" \
+    'never guess one' \
+    'guess when unsure'
+}
+
 @test "a RED is never faked after a test edit, and the edit is reported under Deviations from plan" {
   green check_edit_after_red_reported
 }
@@ -485,6 +508,8 @@ check_test_review() {
     '**Under-constraint**' \
     '**Contradiction**' \
     '**Cannot pass**: no correct implementation can satisfy it' \
+    'or a Given that looks up a seeded identity or row' \
+    'the seed source does not have' \
     'Out of scope:' || return 1
 }
 
@@ -526,6 +551,12 @@ check_test_review() {
   red check_test_review "$REVIEW_REL" \
     '**Cannot pass**: no correct implementation can satisfy it' \
     '**Other**: anything else'
+}
+
+@test "red twin: a cannot-pass defect that ignores unseeded Givens fails" {
+  red check_test_review "$REVIEW_REL" \
+    'or a Given that looks up a seeded identity or row' \
+    'or a fixture'
 }
 
 @test "red twin: a test review that never asks whether a test can pass fails" {
