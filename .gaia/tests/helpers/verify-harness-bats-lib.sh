@@ -28,7 +28,7 @@ verify_installed_dependencies_mark_pattern='^# bats file_tags=([^,]*,)*installed
 #             the statement being the source text bats names as the one that
 #             failed, empty when the failure text names none. Source text, not
 #             a path or a status, so a HEAD run and a base run compare equal
-#             only when the same line failed.
+#             only when the failing statement's text matches.
 #   passes:   "<suite path>\t<test name>" per testcase that ran and passed
 #   missing:  each suite with no testsuite entry in the report
 # The report names a suite relative to the common directory of the suites run
