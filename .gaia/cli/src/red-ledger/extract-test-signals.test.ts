@@ -235,7 +235,7 @@ describe('extract-test-signals describe-level .each/.for rows', () => {
     );
   });
 
-  test('a test under a describe table with no literal text past the first token emits nothing', () => {
+  test('a test whose titles from the describe table down are only tokens emits nothing', () => {
     const lines = runOnSource(`
       describe.each([{group: 'a'}])('$group', () => {
         test.each([1])('%s', (count) => {
