@@ -257,14 +257,14 @@ check_test_file_halt() {
 # A Playwright failure in a file this phase neither authored nor owns halts
 # under a reason that names the case: re-dispatching another phase's author
 # would widen scope, and the cause may lie outside every task.
-check_earlier_phase_halt() {
+check_outside_phase_halt() {
   local block
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     "$TEST_FILE_BULLET" \
-    '- **Earlier phase'"'"'s Playwright test.**' \
-    'halts under Stop conditions with no retry, `Reason: an earlier phase'"'"'s Playwright test fails in this phase'"'"'s gate`' \
+    '- **Playwright test outside this phase.**' \
+    'halts under Stop conditions with no retry, `Reason: a Playwright test outside this phase fails in this phase'"'"'s gate`' \
     'naming each `file › test name`' \
     '- **Halt instead.**' || return 1
 }
@@ -507,12 +507,12 @@ resume_point() {
   red check_test_file_halt 'line names, other than an authored Playwright file, halts' 'line names halts'
 }
 
-@test "a Playwright failure in an earlier phase's file halts with a reason naming the case" {
-  green check_earlier_phase_halt
+@test "a Playwright failure in a file outside this phase halts with a reason naming the case" {
+  green check_outside_phase_halt
 }
 
-@test "red twin: an earlier phase's Playwright failure that retries instead of halting fails" {
-  red check_earlier_phase_halt 'halts under Stop conditions with no retry, `Reason: an earlier phase'"'"'s Playwright' 'goes to a fresh test author, `Reason: an earlier phase'"'"'s Playwright'
+@test "red twin: a Playwright failure outside this phase that retries instead of halting fails" {
+  red check_outside_phase_halt 'halts under Stop conditions with no retry, `Reason: a Playwright test outside this phase' 'goes to a fresh test author, `Reason: a Playwright test outside this phase'
 }
 
 @test "a type or lint error in an authored Playwright file goes to its test author" {

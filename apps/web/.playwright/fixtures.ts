@@ -55,11 +55,11 @@ const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
  * free port with a per-worker file database in its own temp folder on local
  * disk, passes that file to the process as `DATABASE_URL` (the project's
  * database module reads it), and stops only what it started;
- * `./worker-server.ts` owns the start. It is keyed on `workerInfo.parallelIndex`, which stays stable when a
- * worker restarts after a failure, so a restarted worker appends to the same
- * server log under `.playwright/output/`. It is lazy: a
- * fixture nothing requests never runs, so the stock suite starts no extra
- * server and `pnpm pw` is unchanged.
+ * `./worker-server.ts` owns the start. It is keyed on
+ * `workerInfo.parallelIndex`, which stays stable when a worker restarts after
+ * a failure, so a restarted worker appends to the same server log under
+ * `.playwright/output/`. It is lazy: a fixture nothing requests never runs,
+ * so the stock suite starts no extra server and `pnpm pw` is unchanged.
  *
  * A project activates it by overriding `baseURL` from `workerServer` in its
  * own file extending this `test` (see `GivenBuilder` above for the shape).
