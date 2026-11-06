@@ -5,8 +5,8 @@
 #
 # A case asserting behavior an earlier phase already built passes before its
 # phase writes anything, so the test-first split never records its RED and the
-# build halts. planner.md step 2 keeps that build in the phase owning the UAT,
-# and the decomposition audit's dependency-soundness lens grades a case that
+# build halts. planner.md step 2 bars a task from building what a later phase's
+# test asserts, and the decomposition audit's dependency-soundness lens grades a case that
 # breaks it as critical. This suite pins that text where each rule lives.
 #
 # Method: every check takes a root directory and reads the files from it; each
@@ -87,8 +87,7 @@ check_planner_rule() {
   local paragraph
   paragraph="$(range_of "$1/$PLANNER_REL" '**Cut phases as vertical slices.**' 'Route each UAT by the ladder below')"
   [ -n "$paragraph" ] || { printf 'vertical-slice paragraph not found\n' >&2; return 1; }
-  need "$paragraph" 'The phase that owns a UAT builds every then-clause the UAT asserts' || return 1
-  need "$paragraph" 'no earlier task builds what a later phase'"'"'s test asserts' || return 1
+  need "$paragraph" 'No task builds what a later phase'"'"'s test asserts' || return 1
   need "$paragraph" 'passes on its phase'"'"'s base and can never record a RED' || return 1
 }
 
@@ -103,20 +102,20 @@ check_dependency_lens() {
 
 # ---------- green ----------
 
-@test "planner step 2 keeps every then-clause of a UAT in the phase that owns it" { green check_planner_rule; }
+@test "planner step 2 bars a task from building what a later phase's test asserts" { green check_planner_rule; }
 @test "the dependency-soundness lens grades a case an earlier phase satisfies as critical" { green check_dependency_lens; }
 
 # ---------- red twins ----------
 
-@test "red twin: dropping the owning-phase rule fails the planner check" {
-  red check_planner_rule "$PLANNER_REL" 'The phase that owns a UAT builds every then-clause the UAT asserts' 'The phase that owns a UAT builds its main then-clause'
+@test "red twin: allowing a task to build what a later phase's test asserts fails the planner check" {
+  red check_planner_rule "$PLANNER_REL" 'No task builds what a later phase'"'"'s test asserts' 'A task may build what a later phase'"'"'s test asserts'
 }
 
-@test "red twin: allowing an earlier task to build an asserted clause fails the planner check" {
-  red check_planner_rule "$PLANNER_REL" 'no earlier task builds what a later phase'"'"'s test asserts' 'an earlier task may build what a later phase'"'"'s test asserts'
+@test "red twin: dropping the no-RED consequence fails the planner check" {
+  red check_planner_rule "$PLANNER_REL" 'passes on its phase'"'"'s base and can never record a RED' 'is redundant'
 }
 
-@test "red twin: dropping the critical grade fails the lens check" {
+@test "red twin: downgrading the grade to minor fails the lens check" {
   red check_dependency_lens "$AUDIT_REL" 'grade it `critical`' 'grade it `minor`'
 }
 
