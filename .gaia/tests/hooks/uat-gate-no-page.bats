@@ -156,7 +156,7 @@ export const test = base.extend({
     await use($1);
   },
 });" >"$WORK/apps/web/.playwright/project-fixtures.ts"
-  sed "s#from '@playwright/test'#from '../../project-fixtures'#" "$TARGET" >"$rewritten"
+  sed "s#from '../../fixtures'#from '../../project-fixtures'#" "$TARGET" >"$rewritten"
   mv "$rewritten" "$TARGET"
   grep -qF "from '../../project-fixtures'" "$TARGET"
 }
@@ -304,7 +304,7 @@ withSignIn${SIGN_IN_TEST#test}"
 @test "the same call clears the floor when the fixture lives in another module" {
   local rewritten="$BATS_TEST_TMPDIR/rewritten.spec.ts"
   prepare real-server "$SIGN_IN_TEST"
-  sed "s#from '@playwright/test'#from '../../project-fixtures'#" "$TARGET" >"$rewritten"
+  sed "s#from '../../fixtures'#from '../../project-fixtures'#" "$TARGET" >"$rewritten"
   mv "$rewritten" "$TARGET"
   grep -qF "from '../../project-fixtures'" "$TARGET" || return 1
   printf '%s\n' "import {test as base} from '@playwright/test';
@@ -314,6 +314,23 @@ export const test = base.extend({
     await use(async (email) => playwright.request.newContext({baseURL, extraHTTPHeaders: {email}}));
   },
 });" >"$WORK/apps/web/.playwright/project-fixtures.ts"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "a stub importing the project fixtures clears the floor when it uses none of their page-backed fixtures" {
+  prepare real-server "test('every past order is listed newest first', async ({request}) => {
+  const response = await request.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+  grep -qF "from '../../fixtures'" "$TARGET" || return 1
+  printf '%s\n' "import {test as base} from '@playwright/test';
+export {expect} from '@playwright/test';
+export const test = base.extend({
+  makeAxeBuilder: async ({page}, use) => {
+    await use(page);
+  },
+});" >"$WORK/apps/web/.playwright/fixtures.ts"
   gate --phase 1 --report "$REPORTS/passed-two-files.json"
   [ "$status" -eq 0 ]
 }

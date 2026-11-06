@@ -132,6 +132,31 @@ EOF
   [ "$(detail_field "$FILE_A_RELATIVE" action)" = "written" ]
 }
 
+@test "each Playwright stub imports test from .playwright/fixtures at its own folder depth" {
+  cat >"$SPEC" <<'EOF'
+---
+spec_id: SPEC-901
+uats:
+  - uat_id: UAT-001
+    given: a visitor with items in the cart
+    when: they check out as a guest
+    then: the confirmation page shows the order number
+  - uat_id: UAT-002
+    given: a signed in member
+    when: they open the order history
+    then: every past order is listed newest first
+---
+EOF
+  write_routing \
+    '| UAT-001 | browser | 2 | checkout | guest-checkout-confirms-order.spec.ts |' \
+    '| UAT-002 | real-server | 2 | account/orders | order-history-lists-orders.spec.ts |'
+
+  render
+  [ "$status" -eq 0 ] || return 1
+  grep -qxF -- "import {expect, test} from '../../fixtures';" "$E2E/checkout/guest-checkout-confirms-order.spec.ts" || return 1
+  grep -qxF -- "import {expect, test} from '../../../fixtures';" "$E2E/account/orders/order-history-lists-orders.spec.ts"
+}
+
 @test "a routing table with no e2e rows writes nothing under the e2e directory and reports zero counts" {
   cat >"$SPEC" <<'EOF'
 ---
