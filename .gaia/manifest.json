@@ -345,6 +345,7 @@
     ".gaia/scripts/precommit-packages.sh": "owned",
     ".gaia/scripts/provision-wait.sh": "owned",
     ".gaia/scripts/react-doctor-version-lib.sh": "owned",
+    ".gaia/scripts/red-ledger/author-scope.sh": "owned",
     ".gaia/scripts/red-ledger/extract-story-signals.mjs": "owned",
     ".gaia/scripts/red-ledger/extract-test-signals.mjs": "owned",
     ".gaia/scripts/red-ledger/README.md": "owned",
@@ -865,7 +866,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-06T13:44:11.569Z",
+  "generated": "2026-11-06T19:30:52.043Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
