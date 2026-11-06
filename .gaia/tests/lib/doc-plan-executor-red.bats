@@ -225,6 +225,32 @@ check_split_block() {
     'A task with no test waits for this step' || return 1
 }
 
+# The split block's scope check: a snapshot before each round of test authors,
+# the check after it and before the RED check, one retry, then a halt; and the
+# role line that casts a test author as one, not as the task's executor.
+check_author_scope() {
+  local block range
+  block="$(range_of "$1/$PLANNER_REL" '<!-- gaia:orchestrator-step red-split -->' '**Phase gate retry.**' | trim_lines)"
+  need_text 'red-split block' "$block" || return 1
+  in_order "$block" \
+    '**Test authors.**' \
+    'bash .gaia/scripts/red-ledger/author-scope.sh snapshot --root <RESOLVED_ROOT>' \
+    '**Check.** Once every test author has returned' \
+    'bash .gaia/scripts/red-ledger/author-scope.sh check --root <RESOLVED_ROOT>' \
+    '--revert --tests' \
+    '## Phase N, <title> (SCOPE RETRY 1)' \
+    'Seed data, mock handlers and fixtures are the implementer' \
+    'with `Reason: test author wrote outside its scope`' \
+    'bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>' || return 1
+  range="$(invocation_range "$1")"
+  need_text 'executor template range' "$range" || return 1
+  in_order "$range" \
+    '**The prompt template MUST open with the dispatch' \
+    '`You are a task executor for the <plan> plan, Phase <N>, task-<T>.`' \
+    '`You are the test author for the <plan> plan, Phase <N>, task-<T>:' \
+    'Write no implementation, even where the task doc describes it.`' || return 1
+}
+
 check_stub_signature() {
   local range
   range="$(invocation_range "$1")"
@@ -361,6 +387,28 @@ check_tdd_stub_first() {
   red check_split_block "$PLANNER_REL" \
     'A task with no test waits for this step' \
     'A task with no test runs alongside the test authors'
+}
+
+@test "test authors are snapshotted, scope-checked before the RED check, retried once, then halted; their prompt opens as a test author" {
+  green check_author_scope
+}
+
+@test "red twin: a split block that runs the RED check without the scope check fails" {
+  red check_author_scope "$PLANNER_REL" \
+    'bash .gaia/scripts/red-ledger/author-scope.sh check --root <RESOLVED_ROOT>' \
+    'review the diffs by eye'
+}
+
+@test "red twin: a scope check with no halt on a second breach fails" {
+  red check_author_scope "$PLANNER_REL" \
+    'with `Reason: test author wrote outside its scope`' \
+    'and retries again'
+}
+
+@test "red twin: a test author opened as the task's executor fails" {
+  red check_author_scope "$PLANNER_REL" \
+    '`You are the test author for the <plan> plan' \
+    '`You are a task executor for the <plan> plan'
 }
 
 @test "the stub returns a wrong value and throws only without one" {
