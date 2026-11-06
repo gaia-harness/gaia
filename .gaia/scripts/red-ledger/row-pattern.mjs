@@ -16,8 +16,8 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
  * The anchored pattern a row's fullName matches, or null when the title has
  * no literal text outside its tokens: that pattern is the describe prefix plus
- * a wildcard and could claim the failure of a dynamic-title sibling under
- * that describe, so the test stays exempt instead.
+ * a wildcard and could claim the failure of any unemitted test under that
+ * describe, so the test stays exempt instead.
  */
 export function rowPatternFor(prefix, title) {
   const literalParts = title.split(ROW_TOKEN);
