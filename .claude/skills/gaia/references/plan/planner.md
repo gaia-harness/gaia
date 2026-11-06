@@ -214,7 +214,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
          Every round of test authors in the wave (this step's, step 2's scope retry, step 3's retry and the test review's fix round) runs step 2's scope check against that one snapshot before its RED check, so a later round may still change a stub the wave wrote.
       2. **Check.** Once every test author has returned, first check that they changed only their tests and the stubs those tests import:
 
-             bash .gaia/scripts/red-ledger/author-scope.sh check --root <RESOLVED_ROOT> --snapshot {PLAN_DIR}/.work/author-scope/phase-<N> --revert --tests <every New tests file of the wave's splitting tasks>
+             bash .gaia/scripts/red-ledger/author-scope.sh check --root <RESOLVED_ROOT> --snapshot {PLAN_DIR}/.work/author-scope/phase-<N> --revert --tests <every New tests file of the wave's splitting tasks, repo-relative and space-separated>
 
          Exit 2 halts under Stop conditions, carrying its stderr. Exit 1 has already reverted every path it prints as `<path><TAB><reason>`. Attribute each path to the round's task when the round has only one, else to the one task of the round whose task doc names it; a path no task or several tasks name halts. On a task's first breach in the wave, append this block to `{PLAN_DIR}/PROGRESS.md`:
 

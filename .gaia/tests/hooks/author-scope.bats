@@ -137,6 +137,29 @@ TEST_FILE=apps/web/app/services/api/tests/base-url.test.ts
   [ "$status" -eq 0 ]
 }
 
+@test "an absolute or comma-terminated --tests path is matched and the test file is kept" {
+  snapshot
+  write_file "$TEST_FILE" $'import {create} from \'..\';\n'
+  write_file apps/web/app/sessions.server/secret.ts $'export const s = 1;\n'
+  check --revert --tests "$REPO/$TEST_FILE,"
+  [ "$status" -eq 1 ]
+  [ "$output" = $'apps/web/app/sessions.server/secret.ts\toutside the tests and their stubs' ]
+  [ -f "$REPO/$TEST_FILE" ]
+  [ ! -e "$REPO/apps/web/app/sessions.server/secret.ts" ]
+}
+
+@test "a --tests value that cannot be normalized exits 2 and deletes nothing" {
+  snapshot
+  write_file "$TEST_FILE" $'import {create} from \'..\';\n'
+  check --revert --tests /elsewhere/base-url.test.ts
+  [ "$status" -eq 2 ]
+  check --revert --tests "$TEST_FILE,other.test.ts"
+  [ "$status" -eq 2 ]
+  check --revert --tests ../outside.test.ts
+  [ "$status" -eq 2 ]
+  [ -f "$REPO/$TEST_FILE" ]
+}
+
 @test "a snapshot dir inside the tree is never reported" {
   run bash "$SCRIPT" snapshot --root "$REPO" --out "$REPO/plan/.work/author-scope/unit"
   [ "$status" -eq 0 ]

@@ -15,7 +15,8 @@
 #
 # check lists each path whose content changed since the snapshot (any tool:
 # Edit, Write, a heredoc or a script) and is outside the allowed set:
-#   - a --tests file (repo-relative);
+#   - a --tests file (repo-relative; an absolute path under the root or a
+#     trailing comma is accepted, and any other form exits 2);
 #   - a stub file: a file a --tests file imports through a relative or `~/`
 #     specifier (`~/` is `<nearest package dir>/app/`). A stub file new since
 #     the snapshot is allowed whole; one that existed may only gain lines, since
@@ -49,6 +50,7 @@ while [ "$#" -gt 0 ]; do
 done
 case "$mode" in snapshot|check) ;; *) die 'usage: author-scope.sh snapshot|check --root <tree root> ...' ;; esac
 [ -n "$root" ] && [ -n "$snapshot" ] || die "$mode needs --root and a snapshot dir (--out or --snapshot)"
+given_root="${root%/}"
 root=$(git -C "$root" rev-parse --show-toplevel 2>/dev/null) || die "not a git work tree: $root"
 if [ "$mode" = snapshot ]; then
   { rm -rf "$snapshot" && mkdir -p "$snapshot/files"; } || die "cannot create $snapshot"
@@ -164,7 +166,24 @@ work_directory=$(mktemp -d) || exit 2
 trap 'rm -rf "$work_directory"' EXIT
 allowed_tests="$work_directory/tests"
 allowed_stubs="$work_directory/stubs"
-printf '%s' "$tests" | sed '/^$/d' | sort -u > "$allowed_tests"
+# A --tests value is repo-relative, but the absolute spelling and the trailing
+# comma of the comma-separated New tests line are accepted. A value still
+# unusable halts here, before anything is reverted: reverting against an
+# unmatched path would delete the author's own test file.
+: > "$allowed_tests"
+while IFS= read -r test_value; do
+  [ -n "$test_value" ] || continue
+  while [ "${test_value%,}" != "$test_value" ]; do test_value="${test_value%,}"; done
+  case "$test_value" in
+    "$root"/*) test_value="${test_value#"$root"/}" ;;
+    "$given_root"/*) test_value="${test_value#"$given_root"/}" ;;
+  esac
+  case "$test_value" in
+    /*|*,*|..|../*|*/..|*/../*) die "--tests value is not a repo-relative path inside the root: $test_value" ;;
+  esac
+  printf '%s\n' "$(normalize "$test_value")" >> "$allowed_tests"
+done <<< "$tests"
+sort -u "$allowed_tests" | sed '/^$/d' > "$allowed_tests.sorted" && mv "$allowed_tests.sorted" "$allowed_tests"
 : > "$allowed_stubs"
 while IFS= read -r test_file; do
   [ -f "$root/$test_file" ] || continue
