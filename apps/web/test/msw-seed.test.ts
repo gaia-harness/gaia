@@ -234,7 +234,6 @@ describe('mswSeedPlugin', () => {
 
   const apply = mswSeedPlugin().apply as ApplyHook;
 
-  // Its middleware, the baseline gate included, exists only where it applies.
   test('applies only to a dev server started with MSW_SEED=true', () => {
     const previous = process.env.MSW_SEED;
 

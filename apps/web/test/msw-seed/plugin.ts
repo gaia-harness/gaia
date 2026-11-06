@@ -223,10 +223,11 @@ export const mswSeedPlugin = (): Plugin => ({
 
     // `resetTestData` is the store's baseline. Nothing on a dev server runs it
     // otherwise, and a store seeded by an import side effect is empty until
-    // something happens to import that module, so every request, the app's and
-    // the seed surface's, waits for it once. Not in `configureServer` itself:
-    // the SSR runner is not ready that early. Never retried: a failed reset
-    // fails every request rather than serving a partial store.
+    // something happens to import that module, so it runs once and every
+    // request, the app's and the seed surface's, waits on it. Not in
+    // `configureServer` itself: the SSR runner is not ready that early. Never
+    // retried: a failed reset fails every request rather than serving a
+    // partial store.
     server.middlewares.use((_request, _response, next) => {
       baseline ??= loadMocks(server).then(async (mocks) =>
         mocks.resetTestData()
