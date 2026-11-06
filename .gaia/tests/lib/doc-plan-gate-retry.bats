@@ -225,16 +225,18 @@ check_author_arm() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '**Phase gate retry (at most once per phase).**' \
-    'When a Playwright run in the phase gate fails and every failing test is in an authored Playwright file, a file under `<frontend package>/.playwright/` that one task'"'"'s `New tests:` line names and the README'"'"'s UAT routing table does not, send it to a fresh test author instead (the author arm below).' \
+    'When a Playwright run in the phase gate fails and every failing test is in an authored Playwright file, a file under `<frontend package>/.playwright/` that one task'"'"'s `New tests:` line names and `{PLAN_DIR}/README.md`'"'"'s UAT routing table does not, send it to a fresh test author instead (the author arm below).' \
     'Any other gate failure, any other owning-phase UAT gate failure included, halts under Stop conditions with no retry.' \
     '- **Halt instead.**' \
     '- **Author arm.**' \
+    'names the failing file, in place of **Attribute** and the executor re-dispatch above;' \
     'the original task prompt, without its `Yield handoff:` line and with neither dispatch clause' \
     'If the test is wrong, fix only that test'"'"'s body in this file; edit no app code and no other file.' \
     'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so, and the phase halts.' \
-    'Report each edit under ### Deviations from plan as file:line, before -> after:' \
+    'Report each edit under ### Deviations from plan as file:line, before -> after. The failing tests:' \
     'then the implementer'"'"'s `### Deviations from plan` note if it had one.' \
     'An author-arm prompt carries no `Yield handoff:` line.' \
+    'An author that edits nothing halts the phase under Stop conditions with no re-run.' \
     '- **Re-run the gate.**' || return 1
 }
 
@@ -414,7 +416,7 @@ resume_point() {
 }
 
 @test "red twin: an author arm that also retries a rendered UAT file fails" {
-  red check_author_arm ' names and the README'"'"'s UAT routing table does not,' ' names,'
+  red check_author_arm ' names and `{PLAN_DIR}/README.md`'"'"'s UAT routing table does not,' ' names,'
 }
 
 @test "red twin: an author arm that also retries a Vitest or ledger-tracked test fails" {
@@ -434,11 +436,15 @@ resume_point() {
 }
 
 @test "red twin: an author arm that does not report its edits fails" {
-  red check_author_arm 'Report each edit under ### Deviations from plan as file:line, before -> after:' 'Report nothing:'
+  red check_author_arm 'Report each edit under ### Deviations from plan as file:line, before -> after.' 'Report nothing.'
 }
 
 @test "red twin: an author arm that opts into yielding fails" {
   red check_author_arm 'An author-arm prompt carries no `Yield handoff:` line.' 'An author-arm prompt ends with a `Yield handoff:` line.'
+}
+
+@test "red twin: an author arm that re-dispatches an executor instead fails" {
+  red check_author_arm ', in place of **Attribute** and the executor re-dispatch above;' ';'
 }
 
 @test "a plan step never states its own retry or halt rule for a gate failure" {

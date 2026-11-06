@@ -2,7 +2,7 @@
 
 Contents: When it runs; Round 1; A defect; Round 2; A no-op review; The prompt template.
 
-This page owns the test review of a plan run: a check, after a wave's test authors have recorded their REDs and before any implementer runs, that each new test asserts the behavior its task doc and SPEC specify. A recorded RED proves a test can fail, not that it asserts the right thing; a wrong assertion still fails against a stub. Once the implementation exists, fixing that assertion voids its RED and no honest run can record a new one, so the phase halts. While only stubs exist, a fix is still honest.
+This page owns the test review of a plan run: a check, after a wave's test authors have recorded their REDs and before any implementer runs, that each new test asserts the behavior its task doc and SPEC specify and that a correct implementation can pass it. A recorded RED proves a test can fail, not that it asserts the right thing; a wrong assertion still fails against a stub. Once the implementation exists, fixing that assertion voids its RED and no honest run can record a new one, so the phase halts. While only stubs exist, a fix is still honest.
 
 ## When it runs
 
@@ -35,7 +35,7 @@ Map each `defect` entry's `file` to the task whose `New tests:` line names it.
       Tasks: <task-<T>.md of each owning task>
       Defects: <file:line › test: expected, for each defect entry>
 
-- **Re-dispatch the owning test authors only**, in parallel, each a test-author dispatch of yield unit `phase-<N>-task-<T>-tests` with its handoff pre-cleared as in step 1 of the test-first split block: the task prompt with the test-author clause, then the line `A review found that these assertions do not state the specified behavior or cannot pass. Fix only these test bodies, against the stubs. Run the RED command for each file you changed:`, then that task's defect lines, then the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md`, k being that unit's yield count plus one.
+- **Re-dispatch the owning test authors only**, in parallel, each a test-author dispatch of yield unit `phase-<N>-task-<T>-tests` with its handoff pre-cleared as in step 1 of the test-first split block: the task prompt with the test-author clause, then the line `A review found that these assertions do not state the specified behavior or cannot pass. Fix only these test bodies, against the stubs. Run the RED command for each Vitest file you changed:`, then that task's defect lines, then the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-tests-yield-<k>.md`, k being that unit's yield count plus one.
 - **Re-check the REDs.** Run `bash .gaia/scripts/red-ledger/red-pending.sh --root <RESOLVED_ROOT>`. An edited test body voids its old RED, so this proves the new one. Exit 2 halts under Stop conditions. Exit 1 appends `## Phase N, <title> (HALTED)` with `Reason: no recorded RED after test review` and each `file › test name`, and stops.
 
 ## Round 2
@@ -61,12 +61,12 @@ You review new tests before any implementation exists: each Vitest test runs aga
 
 Read the SPEC, each task doc and each test file named above, plus any file a test imports from the same test folder. Edit nothing and run no command that writes a file; the verdict file is the one file you write.
 
-A test is a `defect` only when you can cite the line it breaks: a SPEC Then-clause or listed case, or a task doc line. No citation, no defect (a cannot-pass defect cites the test's own line). With no `SPEC path:` line, cite the task doc only. The four defects:
+A test is a `defect` only when you can cite the line it breaks: a SPEC Then-clause or listed case, or a task doc line. No citation, no defect (a cannot-pass defect may cite the test's own line instead). With no `SPEC path:` line, cite the task doc only. The four defects:
 
 - **Over-constraint**: it asserts something the cited line does not fix: values carried over from earlier state (spreading a previous row or response into the expectation), generated ids, timestamps, exact wording, or an order the line leaves open.
 - **Under-constraint**: it never asserts a Then-clause or listed case the cited line gives it, or asserts something weaker (a status where the line names a saved record).
 - **Contradiction**: the expectation contradicts the cited line.
-- **Cannot pass**: no correct implementation can satisfy it: a pattern that cannot match the value the cited line requires (such as an unescaped regex metacharacter in a built `RegExp`), an assertion that contradicts another in the same test, or a selector or expectation that can never resolve. In `expected`, say why no implementation passes. Style, brittleness and over-constraint stay in their own classes.
+- **Cannot pass**: no correct implementation can satisfy it: a pattern that cannot match the value the cited line requires (such as an unescaped regex metacharacter in a built `RegExp`), an assertion that contradicts another in the same test, or a selector or expectation that can never resolve. In `expected`, say why no implementation passes. An over-constrained assertion is Over-constraint, not Cannot pass.
 
 Out of scope: whether the test is worth keeping, which layer it belongs on, naming, style, and how the stub behaves.
 
@@ -79,7 +79,7 @@ Write the verdict file with the Write tool, once, as a JSON array with one objec
     "line": 0,
     "test": "<test name as written>",
     "verdict": "ok",
-    "cite": "<for a defect: the SPEC or task doc line, quoted>",
+    "cite": "<for a defect: the SPEC or task doc line, or for a cannot-pass defect the test's own line, quoted>",
     "expected": "<for a defect: what the assertion should state, in words>"
   }
 ]
