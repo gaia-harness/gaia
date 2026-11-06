@@ -78,7 +78,7 @@ const startSeedSurface = async (
   const server = http.createServer((request, response) => {
     const url = request.url ?? '/';
 
-    const run = (index: number, error?: unknown): void => {
+    const runMiddlewareAt = (index: number, error?: unknown): void => {
       if (error !== undefined) {
         response.writeHead(500);
         response.end(String(error));
@@ -96,7 +96,7 @@ const startSeedSurface = async (
       }
 
       if (!url.startsWith(mount.prefix)) {
-        run(index + 1);
+        runMiddlewareAt(index + 1);
 
         return;
       }
@@ -104,11 +104,11 @@ const startSeedSurface = async (
       request.url = url.slice(mount.prefix.length) || '/';
       mount.handler(request, response, (nextError) => {
         request.url = url;
-        run(index + 1, nextError);
+        runMiddlewareAt(index + 1, nextError);
       });
     };
 
-    run(0);
+    runMiddlewareAt(0);
   });
 
   await new Promise<void>((resolve) => {
@@ -118,7 +118,7 @@ const startSeedSurface = async (
   return server;
 };
 
-const urlOf = (server: http.Server): string =>
+const readServerUrl = (server: http.Server): string =>
   `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
 const closeSurface = async (server: http.Server): Promise<void> =>
@@ -132,7 +132,7 @@ let baseURL: string;
 beforeAll(async () => {
   vi.stubEnv('MSW_SEED_FIXTURE', 'true');
   seedSurface = await startSeedSurface();
-  baseURL = urlOf(seedSurface);
+  baseURL = readServerUrl(seedSurface);
 });
 
 afterAll(async () => {
@@ -217,8 +217,12 @@ describe('a baseline reset that fails', () => {
       // Bounded: a first-request gate that never settles would hang every
       // request instead of failing it.
       const signal = AbortSignal.timeout(2000);
-      const first = await fetch(`${urlOf(surface)}${APP_PATH}`, {signal});
-      const second = await fetch(`${urlOf(surface)}${APP_PATH}`, {signal});
+      const first = await fetch(`${readServerUrl(surface)}${APP_PATH}`, {
+        signal,
+      });
+      const second = await fetch(`${readServerUrl(surface)}${APP_PATH}`, {
+        signal,
+      });
 
       expect([first.status, second.status]).toEqual([500, 500]);
       expect(await second.text()).toContain('baseline seed broke');
