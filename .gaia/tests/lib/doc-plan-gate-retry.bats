@@ -240,7 +240,7 @@ check_author_arm() {
     '- **Re-run the gate.**' || return 1
 }
 
-# An authored test that fails because of app code reaches the owning task's
+# A failing authored Playwright test reaches the owning task's
 # implementer in the same retry as its author: whose fault a locator miss is
 # cannot be read from the failure, so both look, each on its own side of the
 # test/app line, and an unsure author leaves the test as the tie-break.
@@ -282,7 +282,7 @@ check_outside_arm() {
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
-    'When it is in an outside Playwright file that this phase'"'"'s code may have broken, send it to the phase'"'"'s implementers (the outside arm below).' \
+    'When it is in an outside Playwright file and passes the three checks below, send it to the phase'"'"'s implementers (the outside arm below).' \
     'Never fix it on the main thread.' \
     'One retry carries every arm the failure set needs; a failure that halts halts the whole set.' \
     "$TEST_FILE_BULLET" \
@@ -297,11 +297,11 @@ check_outside_arm() {
     '- **Halt instead.**' \
     'or each `file › test name` of an outside Playwright failure followed by its `known-green: phase <k> gate` or `known-green: merge-base`' \
     '- **Outside arm.**' \
-    'dispatch a fresh executor for each candidate task' \
+    'record the retry as above with each candidate on its Tasks line, then dispatch a fresh executor for each candidate task' \
     'edit no Playwright or other test file, the failing one included, even one this task declares.' \
     'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings.' \
     'write outside spec stale under ### Findings' \
-    'It shares the phase'"'"'s one retry and carries no `Yield handoff:` line.' \
+    'A candidate that also owns a failing authored test gets one executor whose prompt carries both arms'"'"' lines.' \
     'Never send it to a test author.' \
     'When no candidate edits a file, the phase halts under Stop conditions with no re-run' \
     'listing each `outside spec stale` line.' \
@@ -316,7 +316,7 @@ check_author_arm_type_lint() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '(the author arm below).' \
-    'A typecheck or lint error in an authored Playwright file goes to the author arm too, in the same retry as the executor re-dispatch for any other error.' \
+    'A typecheck or lint error in an authored Playwright file goes to the author arm too.' \
     'Never fix it on the main thread.' \
     '- **Author arm.**' \
     'For a typecheck or lint error in an authored Playwright file, the line after the task prompt is `A test file this task authored fails the phase typecheck or lint. Fix only these errors, in these tests'"'"' files; edit no app code, and never loosen an assertion to clear one. Report each edit under ### Deviations from plan as file:line, before -> after. The errors:`, then the gate output lines for its files.' \
@@ -598,8 +598,12 @@ resume_point() {
   red check_outside_arm 'edit no Playwright or other test file, the failing one included, even one this task declares.' 'edit the failing test if needed.'
 }
 
-@test "red twin: an outside arm with a retry budget of its own fails" {
-  red check_outside_arm 'It shares the phase'"'"'s one retry' 'It has a retry of its own'
+@test "red twin: an outside arm that sends one task two parallel executors fails" {
+  red check_outside_arm 'A candidate that also owns a failing authored test gets one executor whose prompt carries both arms'"'"' lines.' ''
+}
+
+@test "red twin: an outside arm that records no retry fails" {
+  red check_outside_arm 'record the retry as above with each candidate on its Tasks line, then ' ''
 }
 
 @test "red twin: an outside arm whose candidates all edit nothing and re-run the gate fails" {
@@ -614,7 +618,7 @@ resume_point() {
   red check_outside_arm 'listing each `outside spec stale` line.' 'naming the tests.'
 }
 
-@test "red twin: a mixed failure set that does not split across the arms fails" {
+@test "red twin: a mixed failure set with no one retry carrying every arm fails" {
   red check_outside_arm 'One retry carries every arm the failure set needs; ' ''
 }
 
@@ -627,7 +631,7 @@ resume_point() {
 }
 
 @test "red twin: a Playwright type or lint error routed to an executor fails" {
-  red check_author_arm_type_lint 'goes to the author arm too, in the same retry' 'goes to its executor, in the same retry'
+  red check_author_arm_type_lint 'goes to the author arm too.' 'goes to its executor.'
 }
 
 @test "a plan step never states its own retry or halt rule for a gate failure" {
