@@ -83,8 +83,7 @@ has_e2e_call() {
 # not this list.
 # Limit: neither awaited arm can see what the call returns. A fixture or helper
 # that makes the request itself returns a response, which has no verb method,
-# so it stays refused; one returning a Map or Headers would pass on `.get(`,
-# so a helper handed a context counts even when it returns something else.
+# so it stays refused; one returning a Map or Headers would pass on `.get(`.
 # A receiver as a property (`settings.request`), an object key, a property read
 # off a receiver, a destructured result (`const {api} = await setup(request)`)
 # and a helper handed no counted receiver do not count, so those refuse an
