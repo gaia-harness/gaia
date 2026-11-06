@@ -89,6 +89,16 @@ mutated_tree() {
   return 0
 }
 
+# mutate_again <relpath> <old> <new>: a second fixed-string replacement in the
+# scratch tree mutated_tree built, for a twin one replacement cannot express.
+mutate_again() {
+  local content mutated
+  content="$(cat "$TREE/$1"; printf x)"
+  mutated="${content/"$2"/"$3"}"
+  [ "$mutated" != "$content" ] || { printf 'second mutation left %s unchanged: %s\n' "$1" "$2" >&2; return 1; }
+  printf '%s' "${mutated%x}" > "$TREE/$1"
+}
+
 red() {
   local check="$1"
   shift
@@ -114,8 +124,11 @@ check_red_order() {
     "$DISPATCH_CLAUSES" \
     '**Test-author clause.**' \
     'For each new exported symbol a test imports, write a stub under its final name' \
-    'Lint the tests and stubs with the lint command above, fixing every finding by hand' \
-    'then run the RED command for each test file and return' \
+    'Lint the tests and stubs with the lint command above' \
+    'then typecheck with `pnpm -C <package dir> typecheck` in any wave, in place of the typecheck above' \
+    'Fix by hand every lint finding and type error in a file you wrote, re-running both until clean' \
+    'a TS2307 on a `+types` module may be a sibling'"'"'s typegen mid-write: re-run once; if it persists, it is yours to fix' \
+    'Then run the RED command for each test file and return' \
     'Write no implementation.' \
     '**Implementer clause.**' \
     'Replace the stubs with the implementation and lint it' || return 1
@@ -254,8 +267,36 @@ check_tdd_stub_first() {
 
 @test "red twin: a RED run placed before the lint step fails" {
   red check_red_order "$PLANNER_REL" \
-    'Lint the tests and stubs with the lint command above, fixing every finding by hand, then run the RED command' \
-    'Run the RED command, then lint the tests and stubs'
+    'Lint the tests and stubs with the lint command above, then typecheck' \
+    'Run the RED command, then lint the tests and stubs with the lint command above, then typecheck'
+}
+
+@test "red twin: a test author that typechecks after its RED fails" {
+  mutated_tree "$PLANNER_REL" 'Then run the RED command for each test file and return.' 'Return.' || return 1
+  mutate_again "$PLANNER_REL" \
+    'Lint the tests and stubs with the lint command above, then typecheck' \
+    'Lint the tests and stubs with the lint command above. Then run the RED command for each test file and return, then typecheck' || return 1
+  run check_red_order "$TREE"
+  [ "$status" -ne 0 ] || { printf 'check_red_order still passed with the RED before the typecheck\n' >&2; return 1; }
+  [ -n "$output" ]
+}
+
+@test "red twin: a test author that typechecks with tsc alone fails" {
+  red check_red_order "$PLANNER_REL" \
+    'then typecheck with `pnpm -C <package dir> typecheck` in any wave' \
+    'then typecheck with `pnpm -C <package dir> exec tsc --noEmit` in any wave'
+}
+
+@test "red twin: a test author whose typecheck depends on the wave size fails" {
+  red check_red_order "$PLANNER_REL" \
+    '`pnpm -C <package dir> typecheck` in any wave, in place' \
+    '`pnpm -C <package dir> typecheck` in a wave of one task, in place'
+}
+
+@test "red twin: an unbounded re-run on a sibling's typegen race fails" {
+  red check_red_order "$PLANNER_REL" \
+    'mid-write: re-run once; if it persists, it is yours to fix' \
+    'mid-write: re-run until it clears'
 }
 
 @test "red twin: a dropped stub step fails" {
