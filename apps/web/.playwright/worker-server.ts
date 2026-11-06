@@ -162,9 +162,9 @@ export type WorkerServer = {
  * the server listens, so holding the lock until the server answers covers it.
  *
  * The server's output is appended to `<logName>-<parallelIndex>-server.log`
- * (`logName` defaults to `worker`) in the output folder, so two servers one
- * worker starts keep separate logs: appended, because a worker restarted after a failure keeps
- * its index and would otherwise overwrite the log of the start that failed.
+ * in the output folder. `logName` (default `worker`) keeps a second server in
+ * the same worker on its own log; appending keeps the log of a failed start,
+ * since a restarted worker keeps its index.
  */
 export const startWorkerServer = async ({
   command = ['pnpm', 'dev'],
