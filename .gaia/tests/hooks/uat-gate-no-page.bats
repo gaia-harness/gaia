@@ -410,6 +410,47 @@ test('every past order is listed newest first', async ({page}) => {
   grep -qE "^uat-gate: $TARGET_RELATIVE: opens-page\$" "$STDERR_FILE"
 }
 
+# The pair below pins the shape apps/web/.claude/rules/playwright.md
+# (`## Real-server HTML check`) tells authors to write against the one it warns
+# off, so the rule and the gate agree. Both are r13's real-server UAT, cut down:
+# the hand-patched shape, then the halted one.
+@test "a context built in the test body and handed to an in-file helper clears the floor and the no-page check" {
+  prepare real-server "import type {APIRequestContext} from '@playwright/test';
+
+const signIn = async (context: APIRequestContext, email: string) =>
+  context.post('/login', {form: {email}, maxRedirects: 0});
+
+test('every past order is listed newest first', async ({playwright}) => {
+  const rita = await playwright.request.newContext();
+  const signedIn = await signIn(rita, 'rita@example.test');
+  expect(signedIn.status()).toBe(302);
+  const response = await rita.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "red twin: a context built inside an in-file helper and read off its result is refused for floor and opens-page" {
+  prepare real-server "import type {APIRequest} from '@playwright/test';
+
+const signIn = async (apiRequest: APIRequest, email: string) => {
+  const context = await apiRequest.newContext();
+  const response = await context.post('/login', {form: {email}, maxRedirects: 0});
+  return {context, response};
+};
+
+test('every past order is listed newest first', async ({playwright}) => {
+  const rita = await signIn(playwright.request, 'rita@example.test');
+  expect(rita.response.status()).toBe(302);
+  const response = await rita.context.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 1 ] || return 1
+  grep -qE "^uat-gate: $TARGET_RELATIVE: floor,opens-page\$" "$STDERR_FILE"
+}
+
 # --- Prerequisite ---
 
 @test "a detector that exits 3 makes a real-server selection exit 4 naming Node and typescript" {
