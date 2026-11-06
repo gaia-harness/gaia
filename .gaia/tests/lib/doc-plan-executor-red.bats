@@ -145,7 +145,7 @@ check_stub_wrong_value() {
 }
 
 # A guessed seeded email makes the RED a setup lookup throw, not an assertion,
-# and the implementer's later fix to the email voids that RED.
+# and the later fix to the email voids that RED.
 check_seed_identity() {
   local range
   range="$(invocation_range "$1")"
@@ -154,6 +154,8 @@ check_seed_identity() {
     '**Test-author clause.**' \
     'from the seed source the plan names, or the project'"'"'s seed file' \
     'never guess one' \
+    'Make each identity a test creates in its Given' \
+    'unique to that test' \
     '**Implementer clause.**' || return 1
 }
 
@@ -378,6 +380,12 @@ check_tdd_stub_first() {
   red check_seed_identity "$PLANNER_REL" \
     'never guess one' \
     'guess when unsure'
+}
+
+@test "red twin: a test author free to reuse a created identity across tests fails" {
+  red check_seed_identity "$PLANNER_REL" \
+    'unique to that test' \
+    'shared freely'
 }
 
 @test "a RED is never faked after a test edit, and the edit is reported under Deviations from plan" {
