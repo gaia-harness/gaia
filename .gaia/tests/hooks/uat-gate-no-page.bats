@@ -328,18 +328,86 @@ export const test = base.extend({
   grep -qE "^uat-gate: $TARGET_RELATIVE: floor\$" "$STDERR_FILE"
 }
 
-@test "a context bound by awaiting an imported helper, not a destructured fixture, stays refused" {
+# --- A context bound by awaiting a helper handed a counted receiver ---
+
+# helper_test <arguments>: a real-server body that awaits an imported helper
+# called with <arguments> and makes its verb call on the result.
+helper_test() {
+  printf '%s\n' "import {signInAs} from '../../sign-in';
+
+test('every past order is listed newest first', async ({request, playwright}) => {
+  const rita = await signInAs($1);
+  const response = await rita.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+}
+
+@test "a context awaited from an imported helper handed request clears the floor" {
+  prepare real-server "$(helper_test "request, 'rita@example.test'")"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "a context awaited from an imported helper handed a destructured fixture clears the floor" {
+  prepare real-server "$(helper_test "playwright, 'rita@example.test'")"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "a context awaited from an imported helper handed a newContext variable clears the floor" {
   prepare real-server "import {signInAs} from '../../sign-in';
 
 test('every past order is listed newest first', async ({playwright}) => {
-  const rita = await signInAs(playwright, 'rita@example.test');
+  const base = await playwright.request.newContext();
+  const rita = await signInAs({context: base, email: 'rita@example.test'});
+  const response = await rita.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "a context awaited from a helper handed another helper's context clears the floor" {
+  prepare real-server "import {promote, signInAs} from '../../sign-in';
+
+test('every past order is listed newest first', async ({request}) => {
+  const rita = await signInAs(request, 'rita@example.test');
+  const admin = await promote(rita);
+  const response = await admin.get('/orders');
+  expect(response.status()).toBe(200);
+});"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "a context awaited from a helper handed no counted receiver stays refused" {
+  prepare real-server "$(helper_test "'rita@example.test'")"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 1 ] || return 1
+  grep -qE "^uat-gate: $TARGET_RELATIVE: floor\$" "$STDERR_FILE" || return 1
+  stderr_has 'pass the request fixture or the request-context fixture into that helper' 'The counted call must be the one the Then-clause asserts read: never add a call whose result no Then assert reads only to clear the floor.'
+}
+
+@test "a receiver named only as a property or an object key does not count for a helper" {
+  prepare real-server "$(helper_test "{request: settings.request, email: 'rita@example.test'}")"
+  gate --phase 1 --report "$REPORTS/passed-two-files.json"
+  [ "$status" -eq 1 ] || return 1
+  grep -qE "^uat-gate: $TARGET_RELATIVE: floor\$" "$STDERR_FILE"
+}
+
+# The helper arm counts a destructured `page` like any fixture name, so the
+# floor clears and the refusal is the no-page check's alone.
+@test "a context awaited from a helper handed only the page fixture is refused by the no-page check" {
+  prepare real-server "import {signInAs} from '../../sign-in';
+
+test('every past order is listed newest first', async ({page}) => {
+  const rita = await signInAs(page);
   const response = await rita.get('/orders');
   expect(response.status()).toBe(200);
 });"
   gate --phase 1 --report "$REPORTS/passed-two-files.json"
   [ "$status" -eq 1 ] || return 1
-  grep -qE "^uat-gate: $TARGET_RELATIVE: floor\$" "$STDERR_FILE" || return 1
-  stderr_has 'The counted call must be the one the Then-clause asserts read: never add a call whose result no Then assert reads only to clear the floor.'
+  grep -qE "^uat-gate: $TARGET_RELATIVE: opens-page\$" "$STDERR_FILE"
 }
 
 # --- Prerequisite ---
