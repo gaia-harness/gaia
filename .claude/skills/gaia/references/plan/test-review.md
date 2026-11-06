@@ -59,7 +59,7 @@ Verdict file: <VERDICT_FILE>
 
 You review new tests before any implementation exists: each Vitest test runs against a stub, and a Playwright file has not run yet. Your judgment: does each assertion state the behavior the task doc and the SPEC specify, and can a correct implementation pass it?
 
-Read the SPEC, each task doc and each test file named above, plus any file a test imports from the same test folder and, for a test that looks up a seeded identity or row, the project's seed source. Edit nothing and run no command that writes a file; the verdict file is the one file you write.
+Read the SPEC, each task doc and each test file named above, plus any file a test imports from the same test folder and, for a test that looks up a seeded identity or row, the seed source the plan names, or the project's seed file. Edit nothing and run no command that writes a file; the verdict file is the one file you write.
 
 A test is a `defect` only when you can cite the line it breaks: a SPEC Then-clause or listed case, or a task doc line. No citation, no defect (a cannot-pass defect may cite the test's own line instead). With no `SPEC path:` line, cite the task doc in place of the SPEC. The four defects:
 

@@ -145,7 +145,8 @@ check_stub_wrong_value() {
 }
 
 # A guessed seeded email makes the RED a setup lookup throw, not an assertion,
-# and the later fix to the email voids that RED.
+# and the later fix to the email voids that RED; an identity two tests both
+# create collides on a shared database.
 check_seed_identity() {
   local range
   range="$(invocation_range "$1")"
