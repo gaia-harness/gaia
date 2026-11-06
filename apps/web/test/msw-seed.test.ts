@@ -116,7 +116,7 @@ describe('the MSW seed surface', () => {
     await expect(
       seedRecords(firstWorker.baseURL, 'seedFixture', [{}])
     ).rejects.toThrow(
-      'No collection "seedFixture" in test/mocks/database.ts; it has: seedFixtures.'
+      /^No collection "seedFixture" in test\/mocks\/database\.ts; it has: .*\bseedFixtures\b/u
     );
   });
 
