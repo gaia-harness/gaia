@@ -435,7 +435,7 @@ if [ -n "$failures" ]; then
     [ -n "$cached_signals" ] || continue
 
     # A failing fullName matches a helper entry exactly, else the one `.each`/`.for`
-    # template whose rowPattern it matches; none, or two, records nothing.
+    # template whose rowPattern it matches; none, or more than one, records nothing.
     IFS=$'\t' read -r recorded_name signal < <(printf '%s\n' "$cached_signals" | jq -rs --arg fn "$full_name" '(map(select(.fullName == $fn)) | first)
       // (map(select(.rowPattern as $pattern | $pattern != null and ($fn | test($pattern)))) | if length == 1 then .[0] else empty end) | [.fullName, .signal] | @tsv' 2>/dev/null)
     [ -n "$signal" ] || continue

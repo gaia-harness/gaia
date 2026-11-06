@@ -18,9 +18,9 @@
 #
 # Scope is driven entirely by the signal helper's emitted current-test set.
 # Tests with dynamic titles (computed names, a title of only row tokens, any
-# test under a `describe.each`/`.for`) emit NO signal from the helper, so they
-# are EXEMPT by construction: an uncomputable identity yields no RED demand. A
-# test-level `.each`/`.for` is one test named by its declared template; the
+# test under a `describe.each`/`.for` or a dynamic-title describe) emit NO
+# signal from the helper, so they are EXEMPT by construction: an uncomputable
+# identity yields no RED demand. A test-level `.each`/`.for` is one test named by its declared template; the
 # capture hook files a failing row's RED under that name, so one row clears it.
 #
 # Type-only tests are EXEMPT for a distinct, principled reason: the helper tags
