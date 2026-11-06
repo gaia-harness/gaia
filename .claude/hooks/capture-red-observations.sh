@@ -434,17 +434,17 @@ if [ -n "$failures" ]; then
     fi
     [ -n "$cached_signals" ] || continue
 
-    # Match the failing fullName to the helper's signal output. Exact-match the
-    # fullName field; skip (fail-open) when no signal is found, never invent one.
-    signal=$(printf '%s\n' "$cached_signals" | jq -r --arg fn "$full_name" \
-      'select(.fullName == $fn) | .signal' 2>/dev/null | head -n1)
+    # A failing fullName matches a helper entry exactly, else the one `.each`/`.for`
+    # template whose rowPattern it matches; none, or two, records nothing.
+    IFS=$'\t' read -r recorded_name signal < <(printf '%s\n' "$cached_signals" | jq -rs --arg fn "$full_name" '(map(select(.fullName == $fn)) | first)
+      // (map(select(.rowPattern as $pattern | $pattern != null and ($fn | test($pattern)))) | if length == 1 then .[0] else empty end) | [.fullName, .signal] | @tsv' 2>/dev/null)
     [ -n "$signal" ] || continue
 
     # Build the ledger line safely with jq -n --arg (never string-concat json).
     jq -c -n \
       --argjson schema 1 \
       --arg file "$relative_file" \
-      --arg fullName "$full_name" \
+      --arg fullName "$recorded_name" \
       --arg signal "$signal" \
       --arg failureKind "$kind" \
       --arg observedAt "$observed_at" \

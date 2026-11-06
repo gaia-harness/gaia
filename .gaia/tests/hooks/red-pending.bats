@@ -136,6 +136,23 @@ CASE_TABLE_NAME='rejects $email'
   [ -z "$output" ]
 }
 
+@test "a test.for clears once the capture hook records one failing row" {
+  local report="$BATS_TEST_TMPDIR/report.json" payload
+  write_file "$UNIT_PATH" "$CASE_TABLE_TEST"
+  # vitest names the file by its physical path (macOS /private/var, not /var).
+  jq -n --arg file "$(cd "$REPO" && pwd -P)/$UNIT_PATH" '{testResults: [{name: $file, status: "failed", message: "",
+    assertionResults: [
+      {fullName: "rejects a@x.io", status: "failed", failureMessages: ["AssertionError: expected a@x.io"]},
+      {fullName: "rejects b@x.io", status: "passed", failureMessages: []}]}]}' > "$report"
+  payload=$(jq -nc --arg command "pnpm test --run $UNIT_PATH" --arg cwd "$REPO" \
+    '{tool_name: "Bash", tool_input: {command: $command}, tool_response: {stdout: "", stderr: "", interrupted: false}, cwd: $cwd}')
+  (cd "$REPO" && printf '%s' "$payload" \
+    | RED_CAPTURE_JSON_OVERRIDE="$report" bash "$HOME_ROOT/.claude/hooks/capture-red-observations.sh") >/dev/null
+  run bash "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "an emergent test owes no RED, the same as at the commit gate" {
   write_file "apps/web/app/components/Widget/tests/index.test.tsx" 'import {expect, test} from "vitest";
 test("renders something", () => { expect(true).toBe(true); });
