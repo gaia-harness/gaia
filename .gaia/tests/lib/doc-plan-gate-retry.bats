@@ -226,19 +226,37 @@ check_author_arm() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '**Phase gate retry (at most once per phase).**' \
-    'When a Playwright run in the phase gate fails and every failing test is in an authored Playwright file, a file under `<frontend package>/.playwright/` that one task'"'"'s `New tests:` line names and `{PLAN_DIR}/README.md`'"'"'s UAT routing table does not, send it to a fresh test author instead (the author arm below).' \
+    'When a failing Playwright test is in an authored Playwright file, a file under `<frontend package>/.playwright/` that one task'"'"'s `New tests:` line names and `{PLAN_DIR}/README.md`'"'"'s UAT routing table does not, send it to a fresh test author and the owning task'"'"'s implementer instead (the author arm below).' \
     'Any other gate failure, any other owning-phase UAT gate failure included, halts under Stop conditions with no retry.' \
     '- **Halt instead.**' \
     '- **Author arm.**' \
     'names the failing file, in place of **Attribute** and the executor re-dispatch above;' \
     'the original task prompt, without its `Yield handoff:` line and with neither dispatch clause' \
     'If a test is wrong, fix only that test'"'"'s body; edit no app code and no file but these tests'"'"' files.' \
-    'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so, and the phase halts.' \
+    'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so.' \
     'Report each edit under ### Deviations from plan as file:line, before -> after. The failing tests:' \
     'then the implementer'"'"'s `### Deviations from plan` note if it had one.' \
     'An author-arm prompt carries no `Yield handoff:` line.' \
-    'An author that edits nothing halts the phase under Stop conditions with no re-run.' \
     '- **Re-run the gate.**' || return 1
+}
+
+# An authored test that fails because of app code reaches the owning task's
+# implementer in the same retry as its author: whose fault a locator miss is
+# cannot be read from the failure, so both look, each on its own side of the
+# test/app line, and an unsure author leaves the test as the tie-break.
+check_author_arm_implementer() {
+  local block
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    '- **Author arm.**' \
+    'This task'"'"'s implementer is fixing app code in parallel: when you cannot tell whether the test or the app is wrong, leave the test unchanged and say so.' \
+    'For a failing test (not a typecheck or lint error), also dispatch a fresh executor for the owning task in parallel with its author' \
+    'Fix the cause only in this task'"'"'s own non-test files; edit no test file.' \
+    'If the test is wrong rather than the app, edit nothing and write test wrong under ### Findings, naming the test.' \
+    'When neither the author nor the executor for a task edits a file' \
+    'the phase halts under Stop conditions with no re-run, listing each `test wrong` line.' \
+    '- **Outside arm.**' || return 1
 }
 
 # A type or lint error in a New tests file (not an authored Playwright file)
@@ -254,19 +272,40 @@ check_test_file_halt() {
     '- **Halt instead.**' || return 1
 }
 
-# A Playwright failure in a file this phase neither authored nor owns halts
-# under a reason that names the case: re-dispatching another phase's author
-# would widen scope, and the cause may lie outside every task.
-check_outside_phase_halt() {
+# A Playwright test from outside the phase that the phase's own code breaks
+# goes to the phase's implementers once, never to a test author: the test
+# passed at a known point, so the phase's app diff is the likely cause. A
+# harness or environment failure, or a test with no known-green point, still
+# halts, and a failure set that holds any halting failure halts whole.
+check_outside_arm() {
   local block
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
+    'When it is in an outside Playwright file that this phase'"'"'s code may have broken, send it to the phase'"'"'s implementers (the outside arm below).' \
+    'Never fix it on the main thread.' \
+    'One retry carries every arm the failure set needs; a failure that halts halts the whole set.' \
     "$TEST_FILE_BULLET" \
     '- **Playwright test outside this phase.**' \
-    'halts under Stop conditions with no retry, `Reason: a Playwright test outside this phase fails in this phase'"'"'s gate`' \
+    'otherwise it halts under Stop conditions with no retry, `Reason: a Playwright test outside this phase fails in this phase'"'"'s gate`' \
     'naming each `file › test name`' \
-    '- **Halt instead.**' || return 1
+    '(`known-green: phase <k> gate`)' \
+    '(`known-green: merge-base`)' \
+    'at least one test in the same Playwright run passed, and the failure is raised inside a test body' \
+    'not by the web server start, global setup or a missing build.' \
+    'declares a non-test file the phase changed' \
+    '- **Halt instead.**' \
+    'or each `file › test name` of an outside Playwright failure followed by its `known-green: phase <k> gate` or `known-green: merge-base`' \
+    '- **Outside arm.**' \
+    'dispatch a fresh executor for each candidate task' \
+    'edit no Playwright or other test file, the failing one included, even one this task declares.' \
+    'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings.' \
+    'write outside spec stale under ### Findings' \
+    'It shares the phase'"'"'s one retry and carries no `Yield handoff:` line.' \
+    'Never send it to a test author.' \
+    'When no candidate edits a file, the phase halts under Stop conditions with no re-run' \
+    'listing each `outside spec stale` line.' \
+    '- **Re-run the gate.**' || return 1
 }
 
 # A type or lint error in an authored Playwright file (no RED to void) goes to
@@ -472,7 +511,35 @@ resume_point() {
 }
 
 @test "red twin: an author arm that lets the author loosen a correct assertion fails" {
-  red check_author_arm 'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so, and the phase halts.' ''
+  red check_author_arm 'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so.' ''
+}
+
+@test "an authored test failing on app code reaches the owning task's implementer in the same retry" {
+  green check_author_arm_implementer
+}
+
+@test "red twin: an author arm that never dispatches the implementer fails" {
+  red check_author_arm_implementer 'also dispatch a fresh executor for the owning task in parallel with its author' 'dispatch nothing else'
+}
+
+@test "red twin: an author-arm implementer that may edit a test file fails" {
+  red check_author_arm_implementer 'Fix the cause only in this task'"'"'s own non-test files; edit no test file.' 'Fix the cause in any file.'
+}
+
+@test "red twin: an author-arm implementer that also takes a typecheck or lint error fails" {
+  red check_author_arm_implementer 'For a failing test (not a typecheck or lint error), also' 'For any authored Playwright failure, also'
+}
+
+@test "red twin: an author arm that halts when only the author edits nothing fails" {
+  red check_author_arm_implementer 'When neither the author nor the executor for a task edits a file' 'When the author edits nothing'
+}
+
+@test "red twin: an author-arm halt that does not list the test wrong lines fails" {
+  red check_author_arm_implementer 'listing each `test wrong` line.' 'naming the tests.'
+}
+
+@test "red twin: an author prompt with no leave-the-test-when-unsure clause fails" {
+  red check_author_arm_implementer 'when you cannot tell whether the test or the app is wrong, leave the test unchanged and say so.' ''
 }
 
 @test "red twin: an author arm that sends the implementer clause fails" {
@@ -507,12 +574,52 @@ resume_point() {
   red check_test_file_halt 'line names, other than an authored Playwright file, halts' 'line names halts'
 }
 
-@test "a Playwright failure in a file outside this phase halts with a reason naming the case" {
-  green check_outside_phase_halt
+@test "an outside Playwright test this phase broke goes to the phase's implementers once, else halts naming the case" {
+  green check_outside_arm
 }
 
-@test "red twin: a Playwright failure outside this phase that retries instead of halting fails" {
-  red check_outside_phase_halt 'halts under Stop conditions with no retry, `Reason: a Playwright test outside this phase' 'goes to a fresh test author, `Reason: a Playwright test outside this phase'
+@test "red twin: an outside failure that fails its checks and retries instead of halting fails" {
+  red check_outside_arm 'otherwise it halts under Stop conditions with no retry' 'otherwise it goes to a fresh test author'
+}
+
+@test "red twin: an outside arm with no merge-base known-green proof fails" {
+  red check_outside_arm '(`known-green: merge-base`)' ''
+}
+
+@test "red twin: an outside arm that retries a harness or environment failure fails" {
+  red check_outside_arm 'at least one test in the same Playwright run passed, and ' ''
+}
+
+@test "red twin: an outside arm sent to a test author fails" {
+  red check_outside_arm 'dispatch a fresh executor for each candidate task' 'dispatch a fresh test author for each candidate task'
+}
+
+@test "red twin: an outside arm whose implementer may edit the outside spec fails" {
+  red check_outside_arm 'edit no Playwright or other test file, the failing one included, even one this task declares.' 'edit the failing test if needed.'
+}
+
+@test "red twin: an outside arm with a retry budget of its own fails" {
+  red check_outside_arm 'It shares the phase'"'"'s one retry' 'It has a retry of its own'
+}
+
+@test "red twin: an outside arm whose candidates all edit nothing and re-run the gate fails" {
+  red check_outside_arm 'When no candidate edits a file, the phase halts under Stop conditions with no re-run' 'When no candidate edits a file, re-run the gate'
+}
+
+@test "red twin: an outside arm with no outside spec stale report fails" {
+  red check_outside_arm 'write outside spec stale under ### Findings' 'say so under ### Findings'
+}
+
+@test "red twin: a halt that does not list the outside spec stale lines fails" {
+  red check_outside_arm 'listing each `outside spec stale` line.' 'naming the tests.'
+}
+
+@test "red twin: a mixed failure set that does not split across the arms fails" {
+  red check_outside_arm 'One retry carries every arm the failure set needs; ' ''
+}
+
+@test "red twin: a retry record whose outside failures carry no known-green source fails" {
+  red check_outside_arm ' followed by its `known-green: phase <k> gate` or `known-green: merge-base`' ''
 }
 
 @test "a type or lint error in an authored Playwright file goes to its test author" {
