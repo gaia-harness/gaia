@@ -168,7 +168,7 @@ scratch_copy() {
 }
 
 @test "fixtures.ts phrase check goes red when the out-of-reach claim returns" {
-  copy="$(scratch_copy "$FIXTURES_FILE" 's/^ \* A form.s own submission/ * MSW state is out of reach of the Playwright process.\n * A form'"'"'s own submission/')"
+  copy="$(scratch_copy "$FIXTURES_FILE" 's/^ \* A form.s own submission/ * MSW state is out of reach of the Playwright process.\n&/')"
   run check_fixture_phrases "$copy"
   [ "$status" -ne 0 ]
 }
