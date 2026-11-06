@@ -103,11 +103,7 @@ refuse_working_document_id() {
   fi
 }
 while IFS=$'\t' read -r uat_id surface _ feature_folder file_name; do
-  case "$surface" in
-    real-server | browser | e2e) rendered_path="$feature_folder/$file_name" ;;
-    route) rendered_path=$(uat_lib_route_test_path "$feature_folder" "$file_name") ;;
-    *) continue ;;
-  esac
+  rendered_path=$(uat_lib_rendered_path "$surface" "$feature_folder" "$file_name") || continue
   spec_row=$(awk -F'\t' -v wanted="$uat_id" '$1 == wanted { print; exit }' <<<"$spec_rows")
   IFS=$'\t' read -r _ given_text when_text then_text <<<"$spec_row"
   refuse_working_document_id "$uat_id" given "$given_text"

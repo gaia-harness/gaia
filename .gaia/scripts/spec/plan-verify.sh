@@ -69,6 +69,10 @@
 # plan-phases-lib.sh (its header owns the rules): a README phase that no routing
 # row names must carry a "- Phase <N>: Infrastructure: <reason>" line.
 #
+# Each real-server, browser and route row's rendered file name is linted with
+# the web package's own eslint (uat_lib_filename_lint_problems owns the rules);
+# a refused name fails with eslint's message, which names the suggested name.
+#
 # Every failure is reported on stderr, one line each, in a single run.
 #
 # Exit codes: 0 pass; 1 one or more failures; 2 usage error.
@@ -383,10 +387,11 @@ if [ -n "$spec_path" ] && [ -f "$readme" ]; then
           ;;
       esac
     done <<<"$routing_rows"
-    while IFS= read -r phase_problem; do
-      [ -n "$phase_problem" ] || continue
-      fail "$phase_problem"
-    done < <(plan_phases_check "$readme" "$orchestrator" "$routing_rows")
+    # $PWD is the repo root, as uat-write.sh takes it: both run from there.
+    while IFS= read -r plan_problem; do
+      [ -n "$plan_problem" ] || continue
+      fail "$plan_problem"
+    done < <(plan_phases_check "$readme" "$orchestrator" "$routing_rows"; uat_lib_filename_lint_problems "$PWD" "$routing_rows")
   fi
 fi
 
