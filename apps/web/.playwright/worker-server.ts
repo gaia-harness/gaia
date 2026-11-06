@@ -142,10 +142,13 @@ const waitForServer = async (origin: string): Promise<void> => {
 // so a stop reaches the dev server behind `pnpm`, and stops that group once its
 // stdin closes. The owner holds the only write end of that pipe, and the kernel
 // closes it however the owner ends (a clean exit, a signal, a SIGKILL), which
-// no exit or signal handler in the owner can cover. The child's exit code or signal passes through, so a server
-// that dies on start still reports its own.
+// no exit or signal handler in the owner can cover. The child's exit code or
+// signal passes through, so a server that dies on start still reports its own;
+// a signal that does not end the supervisor itself (one Node ignores or
+// handles) becomes the shell's 128 plus the signal number, never a clean exit.
 const SUPERVISOR = `
 const {spawn} = require('node:child_process');
+const {constants} = require('node:os');
 const [executable, ...commandArguments] = process.argv.slice(1);
 const stopGroup = () => {
   try {
@@ -163,6 +166,7 @@ child.once('error', (error) => {
 child.once('exit', (code, signal) => {
   if (signal === null) process.exit(code ?? 1);
   process.kill(process.pid, signal);
+  process.exit(128 + (constants.signals[signal] ?? 0));
 });
 `;
 

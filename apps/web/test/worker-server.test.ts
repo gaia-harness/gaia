@@ -203,21 +203,32 @@ describe('a worker server whose owner ends without stopping it', () => {
         ],
         {cwd: fileURLToPath(new URL('..', import.meta.url))}
       );
-      let ownerExited = false;
+      let hasOwnerExited = false;
+      let ownerErrorOutput = '';
       let serverProcessId: number | undefined;
 
+      owner.stderr.on('data', (chunk: Buffer) => {
+        ownerErrorOutput += chunk.toString();
+      });
       owner.once('exit', () => {
-        ownerExited = true;
+        hasOwnerExited = true;
       });
 
       try {
-        const [line] = (await once(owner.stdout, 'data')) as [Buffer];
+        const line = await Promise.race([
+          once(owner.stdout, 'data').then(([chunk]) => String(chunk)),
+          once(owner, 'exit').then(() => {
+            throw new Error(
+              `The owner exited before printing the server pid:\n${ownerErrorOutput}`
+            );
+          }),
+        ]);
 
-        serverProcessId = Number(line.toString().trim());
+        serverProcessId = Number(line.trim());
 
         if (signal !== undefined) owner.kill(signal);
 
-        expect(await waitUntil(() => ownerExited)).toBe(true);
+        expect(await waitUntil(() => hasOwnerExited)).toBe(true);
         expect(await waitUntil(() => !isProcessAlive(serverProcessId!))).toBe(
           true
         );
