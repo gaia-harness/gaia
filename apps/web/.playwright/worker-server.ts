@@ -16,6 +16,8 @@ export const WORKER_SERVER_HOST = '127.0.0.1';
 /** The start lock's file name inside the Playwright output folder. */
 export const START_LOCK_FILE_NAME = 'worker-server-start.lock';
 
+const DATABASE_DIRECTORY_PREFIX = 'gaia-worker-db-';
+
 /** How long a started worker server has to answer its first request. */
 export const SERVER_READY_TIMEOUT_MILLISECONDS = 60_000;
 
@@ -145,6 +147,25 @@ const stopProcessGroup = (processId: number | undefined): void => {
   }
 };
 
+// A worker killed before `stop` runs leaves its database folder behind, and
+// each start mints a new name, so the folder is recorded per index in the
+// output folder and removed by the next start for that index. Only a folder
+// of this prefix is removed, never a glob sweep: another tree may own a live
+// one.
+const reclaimAbandonedDatabaseDirectory = (recordFile: string): void => {
+  let abandonedDirectory: string;
+
+  try {
+    abandonedDirectory = fs.readFileSync(recordFile, 'utf8');
+  } catch {
+    return;
+  }
+
+  if (path.basename(abandonedDirectory).startsWith(DATABASE_DIRECTORY_PREFIX)) {
+    fs.rmSync(abandonedDirectory, {force: true, recursive: true});
+  }
+};
+
 /** A started worker server: its origin, its database file, and its stop. */
 export type WorkerServer = {
   baseURL: string;
@@ -154,7 +175,8 @@ export type WorkerServer = {
 
 /**
  * Starts one worker's dev server on a free port with its own file database in
- * a new temp folder, which `stop` removes, and resolves once it answers.
+ * a new temp folder, which `stop` removes (and the next start for the same
+ * index removes if `stop` never ran), and resolves once it answers.
  *
  * Starts are serialized across worker processes: each `react-router dev`
  * regenerates route types into the package's shared `.react-router/types`
@@ -184,6 +206,10 @@ export const startWorkerServer = async ({
 
   fs.mkdirSync(outputDirectory, {recursive: true});
 
+  const recordFile = path.join(
+    outputDirectory,
+    `worker-${parallelIndex}.database-directory`
+  );
   const logFileDescriptor = fs.openSync(logFile, 'a');
   const releaseStartLock = await acquireStartLock(
     path.join(outputDirectory, START_LOCK_FILE_NAME),
@@ -202,16 +228,20 @@ export const startWorkerServer = async ({
   };
 
   try {
+    reclaimAbandonedDatabaseDirectory(recordFile);
+
     // Off the tree, on local disk: SQLite's WAL needs file locks shared across
     // processes, and a bind mount such as Docker Desktop's does not share them,
     // so a builder's closing connection deletes the WAL the server still reads.
     databaseDirectory = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'gaia-worker-db-')
+      path.join(os.tmpdir(), DATABASE_DIRECTORY_PREFIX)
     );
     const databaseFile = path.join(
       databaseDirectory,
       `worker-${parallelIndex}.sqlite`
     );
+
+    fs.writeFileSync(recordFile, databaseDirectory);
     const port = await findFreePort();
     const baseURL = `http://${WORKER_SERVER_HOST}:${port}`;
     const [executable, ...commandArguments] = command;

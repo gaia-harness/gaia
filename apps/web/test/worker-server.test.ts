@@ -143,6 +143,31 @@ describe('startWorkerServer', () => {
     expect(fs.existsSync(databaseDirectory)).toBe(false);
   });
 
+  test('the next start for the same index removes a database folder whose stop never ran', async () => {
+    const abandonedDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gaia-worker-db-')
+    );
+
+    fs.writeFileSync(
+      path.join(directory, 'worker-4.database-directory'),
+      abandonedDirectory
+    );
+
+    const server = await startWorkerServer({
+      command: [process.execPath, writeScript('server.mjs', STAND_IN_SERVER)],
+      outputDirectory: directory,
+      packageDirectory: directory,
+      parallelIndex: 4,
+    });
+
+    try {
+      expect(fs.existsSync(abandonedDirectory)).toBe(false);
+    } finally {
+      server.stop();
+      fs.rmSync(abandonedDirectory, {force: true, recursive: true});
+    }
+  });
+
   test('a server that exits names its log, which holds the server output', async () => {
     const start = startWorkerServer({
       command: [process.execPath, writeScript('server.mjs', FAILING_SERVER)],
