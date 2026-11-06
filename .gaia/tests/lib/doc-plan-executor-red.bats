@@ -226,7 +226,7 @@ check_split_block() {
 }
 
 # The split block's scope check: one snapshot per wave, before its first test author,
-# the check after it and before the RED check, one retry, then a halt; and the
+# the check after each round of them and before the RED check, one retry, then a halt; and the
 # role line that casts a test author as one, not as the task's executor.
 check_author_scope() {
   local block range
