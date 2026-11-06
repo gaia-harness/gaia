@@ -149,8 +149,8 @@ describe('startWorkerServer', () => {
 });
 
 // A process that starts a worker server and prints the server's pid, then ends
-// the way its mode names without calling `stop`: `exit` exits at once (a run
-// stopped by `--bail`), `wait` stays up until the test signals it, and `drain`
+// the way its mode names without calling `stop`: `exit` exits at once without
+// running any teardown, `wait` stays up until the test signals it, and `drain`
 // leaves nothing scheduled, so it ends when its event loop empties.
 const OWNER = String.raw`
 import {startWorkerServer} from ${JSON.stringify(

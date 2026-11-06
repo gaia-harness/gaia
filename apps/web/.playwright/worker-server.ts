@@ -138,12 +138,11 @@ const waitForServer = async (origin: string): Promise<void> => {
   throw new Error(`The worker server at ${origin} did not answer in time.`);
 };
 
-// Runs the server command as the leader of its own process group, so a stop
-// reaches the dev server behind `pnpm`, and stops that group once its stdin
-// closes. The owner holds the only write end of that pipe, and the kernel
-// closes it however the owner ends (a clean exit, a signal, a SIGKILL, a
-// `--bail` run that skips its teardown), which no exit or signal handler in the
-// owner can cover. The child's exit code or signal passes through, so a server
+// Runs the server command under a supervisor that leads its own process group,
+// so a stop reaches the dev server behind `pnpm`, and stops that group once its
+// stdin closes. The owner holds the only write end of that pipe, and the kernel
+// closes it however the owner ends (a clean exit, a signal, a SIGKILL), which
+// no exit or signal handler in the owner can cover. The child's exit code or signal passes through, so a server
 // that dies on start still reports its own.
 const SUPERVISOR = `
 const {spawn} = require('node:child_process');
