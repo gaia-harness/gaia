@@ -297,6 +297,7 @@ check_outside_arm() {
     '- **Halt instead.**' \
     'or each `file › test name` of an outside Playwright failure followed by its `known-green: phase <k> gate` or `known-green: merge-base`' \
     '- **Outside arm.**' \
+    'For an outside Playwright failure that passes all three checks, in place of **Attribute**,' \
     'record the retry as above with each candidate on its Tasks line, then dispatch a fresh executor for each candidate task' \
     'edit no Playwright or other test file, the failing one included, even one this task declares.' \
     'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings.' \
@@ -600,6 +601,14 @@ resume_point() {
 
 @test "red twin: an outside arm that sends one task two parallel executors fails" {
   red check_outside_arm 'A candidate that also owns a failing authored test gets one executor whose prompt carries both arms'"'"' lines.' ''
+}
+
+@test "red twin: an outside arm that bypasses the once-per-phase halt fails" {
+  red check_outside_arm 'passes all three checks, in place of **Attribute**,' 'passes all three checks, in place of **Attribute** and **Halt instead**,'
+}
+
+@test "red twin: an author arm that bypasses the once-per-phase halt fails" {
+  red check_author_arm 'in place of **Attribute** and the executor re-dispatch above;' 'in place of **Attribute**, **Halt instead** and the executor re-dispatch above;'
 }
 
 @test "red twin: an outside arm that records no retry fails" {
