@@ -74,7 +74,7 @@ describe('acquireStartLock', () => {
       const [output] = (await once(parent.stdout, 'data')) as [Buffer];
       const zombieProcessId = Number(String(output).trim());
 
-      // Long enough for `sleep 0` to exit and stay unreaped.
+      // Lets `sleep 0` exit, so the holder is a zombie at the first lock read.
       await delay(200);
       fs.writeFileSync(lockFile, String(zombieProcessId));
 

@@ -59,7 +59,8 @@ export const isProcessAlive = (processId: number): boolean => {
 
   // A signal probe still finds a zombie, and nothing reaps one whose parent
   // never waits (a container whose PID 1 is node). A failed read keeps the
-  // probe's answer: a live holder taken for dead would start a second server.
+  // probe's answer: a live holder taken for dead would let two starts run at
+  // once.
   try {
     return !readProcessState(processId).startsWith('Z');
   } catch {
