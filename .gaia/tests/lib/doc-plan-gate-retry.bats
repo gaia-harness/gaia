@@ -23,6 +23,7 @@ setup() {
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
+  TEST_FILE_BULLET='- **New tests file error.** A typecheck or lint error in a file a task'"'"'s `New tests:` line names, other than an authored Playwright file, halts under Stop conditions with no retry, `Reason: type or lint error in a New tests file after its RED`, naming each file:line and error code or rule: the file is the test author'"'"'s, the implementer clause bars editing a test'"'"'s body, and an edit there voids any RED it has.'
 }
 
 # ---------- helpers ----------
@@ -240,6 +241,34 @@ check_author_arm() {
     '- **Re-run the gate.**' || return 1
 }
 
+# A type or lint error in a New tests file (not an authored Playwright file)
+# halts and never reaches an executor: the implementer clause bars editing a
+# test's body, and an edit there voids any RED it has.
+check_test_file_halt() {
+  local block
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    '- **Attribute.**' \
+    "$TEST_FILE_BULLET" \
+    '- **Halt instead.**' || return 1
+}
+
+# A type or lint error in an authored Playwright file (no RED to void) goes to
+# its test author, in the same retry as the executors for any other error.
+check_author_arm_type_lint() {
+  local block
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    '(the author arm below).' \
+    'A typecheck or lint error in an authored Playwright file goes to the author arm too, in the same retry as the executor re-dispatch for any other error.' \
+    'Never fix it on the main thread.' \
+    '- **Author arm.**' \
+    'For a typecheck or lint error in an authored Playwright file, the line after the task prompt is `A test file this task authored fails the phase typecheck or lint. Fix only these errors, in these tests'"'"' files; edit no app code, and never loosen an assertion to clear one. Report each edit under ### Deviations from plan as file:line, before -> after. The errors:`, then the gate output lines for its files.' \
+    'An author-arm prompt carries no `Yield handoff:` line.' || return 1
+}
+
 # The planner never writes a gate's retry or halt rule into a step of its own:
 # an improvised "not retryable" sentence contradicts the author arm.
 check_step_owns_no_retry() {
@@ -445,6 +474,30 @@ resume_point() {
 
 @test "red twin: an author arm that does not replace the executor re-dispatch fails" {
   red check_author_arm ', in place of **Attribute** and the executor re-dispatch above;' ';'
+}
+
+@test "a type or lint error in a New tests file halts and never reaches an executor" {
+  green check_test_file_halt
+}
+
+@test "red twin: a gate retry without the New tests file halt fails" {
+  red check_test_file_halt "$TEST_FILE_BULLET" ''
+}
+
+@test "red twin: a New tests file error that re-dispatches instead of halting fails" {
+  red check_test_file_halt 'halts under Stop conditions with no retry, `Reason: type or lint error in a New tests file' 'goes to a fresh executor, `Reason: type or lint error in a New tests file'
+}
+
+@test "red twin: a New tests file halt that also catches authored Playwright files fails" {
+  red check_test_file_halt 'line names, other than an authored Playwright file, halts' 'line names halts'
+}
+
+@test "a type or lint error in an authored Playwright file goes to its test author" {
+  green check_author_arm_type_lint
+}
+
+@test "red twin: a Playwright type or lint error routed to an executor fails" {
+  red check_author_arm_type_lint 'goes to the author arm too, in the same retry' 'goes to its executor, in the same retry'
 }
 
 @test "a plan step never states its own retry or halt rule for a gate failure" {
