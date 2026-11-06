@@ -29,6 +29,7 @@ const test = base.extend<
     async ({}, provide, workerInfo) => {
       const {baseURL, stop} = await startWorkerServer({
         command: FIXTURE_DEV_COMMAND,
+        logName: 'seed-fixture',
         outputDirectory: path.join(packageDirectory, '.playwright', 'output'),
         packageDirectory,
         parallelIndex: workerInfo.parallelIndex,

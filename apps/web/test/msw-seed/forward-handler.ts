@@ -1,8 +1,9 @@
-import {http, passthrough} from 'msw';
+import {http, HttpResponse, passthrough} from 'msw';
 import {
   FORWARD_METHOD_HEADER,
   FORWARD_URL_HEADER,
   MSW_SEED_PREFIX,
+  NETWORK_ERROR_HEADER,
   UNHANDLED_HEADER,
 } from './protocol';
 
@@ -39,6 +40,10 @@ const forwardToDevelopmentServer = http.all('*', async ({request}) => {
   });
 
   if (answer.headers.get(UNHANDLED_HEADER) === 'true') return passthrough();
+
+  if (answer.headers.get(NETWORK_ERROR_HEADER) === 'true') {
+    return HttpResponse.error();
+  }
 
   return answer;
 });

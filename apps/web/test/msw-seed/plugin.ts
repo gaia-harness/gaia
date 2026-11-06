@@ -7,6 +7,7 @@ import {
   FORWARD_METHOD_HEADER,
   FORWARD_URL_HEADER,
   MSW_SEED_PREFIX,
+  NETWORK_ERROR_HEADER,
   UNHANDLED_HEADER,
 } from './protocol.ts';
 import type {SeedIssue} from './protocol.ts';
@@ -113,18 +114,22 @@ const seed = async (
 
   // Every record is checked before any is created, so a bad batch seeds
   // nothing, and the error names the field @msw/data would only log.
-  const results = await Promise.all(
+  const validationResults = await Promise.all(
     records.map(async (record) =>
       collection.options.schema['~standard'].validate(record)
     )
   );
-  const index = results.findIndex((result) => result.issues !== undefined);
+  const index = validationResults.findIndex(
+    (validationResult) => validationResult.issues !== undefined
+  );
 
   if (index !== -1) {
-    const issues: SeedIssue[] = (results[index].issues ?? []).map((issue) => ({
-      message: issue.message,
-      path: formatPath(issue),
-    }));
+    const issues: SeedIssue[] = (validationResults[index].issues ?? []).map(
+      (issue) => ({
+        message: issue.message,
+        path: formatPath(issue),
+      })
+    );
 
     sendJson(response, 400, {collection: name, index, issues});
 
@@ -172,6 +177,15 @@ const forward = async (
 
   if (mocked === undefined) {
     response.writeHead(204, {[UNHANDLED_HEADER]: 'true'});
+    response.end();
+
+    return;
+  }
+
+  // A network-error response has status 0, which `writeHead` rejects, so the
+  // browser handler is told to rebuild it.
+  if (mocked.type === 'error') {
+    response.writeHead(204, {[NETWORK_ERROR_HEADER]: 'true'});
     response.end();
 
     return;

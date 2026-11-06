@@ -27,7 +27,10 @@ export const collections = {
   seedFixtures: new Collection({schema: seedFixtureSchema}),
 };
 
+export const NETWORK_ERROR_URL = `${SEED_FIXTURE_ORIGIN}/network-error`;
+
 export const handlers = [
+  http.get(NETWORK_ERROR_URL, () => HttpResponse.error()),
   http.get(`${SEED_FIXTURE_ORIGIN}/seed-fixtures`, () =>
     HttpResponse.json({data: collections.seedFixtures.findMany()})
   ),

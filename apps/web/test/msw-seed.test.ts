@@ -8,6 +8,7 @@ import type {WorkerServer} from '../.playwright/worker-server';
 import {startWorkerServer} from '../.playwright/worker-server';
 import {
   FIXTURE_DEV_COMMAND,
+  NETWORK_ERROR_URL,
   SEED_FIXTURE_ORIGIN,
 } from './msw-seed/fixture-service';
 import {mswSeedPlugin} from './msw-seed/plugin';
@@ -124,6 +125,13 @@ describe('the MSW seed surface', () => {
 
     expect(response.status).toBe(204);
     expect(response.headers.get('x-gaia-msw-unhandled')).toBe('true');
+  });
+
+  test('a mock that answers a network error is reported as one, not as an HTTP failure', async () => {
+    const response = await forward(firstWorker, NETWORK_ERROR_URL);
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('x-gaia-msw-network-error')).toBe('true');
   });
 
   test('a dev server started without MSW_SEED exposes no seed surface', async () => {

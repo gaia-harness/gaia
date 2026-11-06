@@ -21,3 +21,6 @@ export type SeedIssue = {message: string; path: string};
 
 /** Set on the forward endpoint's 204 when no handler matched the request. */
 export const UNHANDLED_HEADER = 'x-gaia-msw-unhandled';
+
+/** Set on the forward endpoint's 204 when the handler answered a network error. */
+export const NETWORK_ERROR_HEADER = 'x-gaia-msw-network-error';

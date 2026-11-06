@@ -161,24 +161,27 @@ export type WorkerServer = {
  * each other's files and exit. Typegen begins in Vite's config phase, before
  * the server listens, so holding the lock until the server answers covers it.
  *
- * The server's output is appended to `worker-<parallelIndex>-server.log` in the
- * output folder: appended, because a worker restarted after a failure keeps
+ * The server's output is appended to `<logName>-<parallelIndex>-server.log`
+ * (`logName` defaults to `worker`) in the output folder, so two servers one
+ * worker starts keep separate logs: appended, because a worker restarted after a failure keeps
  * its index and would otherwise overwrite the log of the start that failed.
  */
 export const startWorkerServer = async ({
   command = ['pnpm', 'dev'],
+  logName = 'worker',
   outputDirectory,
   packageDirectory,
   parallelIndex,
 }: {
   command?: string[];
+  logName?: string;
   outputDirectory: string;
   packageDirectory: string;
   parallelIndex: number;
 }): Promise<WorkerServer> => {
   const logFile = path.join(
     outputDirectory,
-    `worker-${parallelIndex}-server.log`
+    `${logName}-${parallelIndex}-server.log`
   );
 
   fs.mkdirSync(outputDirectory, {recursive: true});
