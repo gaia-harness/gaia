@@ -412,8 +412,7 @@ test('every past order is listed newest first', async ({page}) => {
 
 # The pair below pins the shape apps/web/.claude/rules/playwright.md
 # (`## Real-server HTML check`) tells authors to write against the one it warns
-# off, so the rule and the gate agree. Both are r13's real-server UAT, cut down:
-# the hand-patched shape, then the halted one.
+# off, so the rule and the gate agree.
 @test "a context built in the test body and handed to an in-file helper clears the floor and the no-page check" {
   prepare real-server "import type {APIRequestContext} from '@playwright/test';
 
