@@ -83,6 +83,11 @@ specs before this feature can be invoked. List explicitly.>
 - <Slot reservations: hook signatures or extension points reserved
   here so the contract is stable, but whose logic ships in a later
   SPEC. Mark these clearly.>
+- <Adopter-owned end-to-end: behavior only a real backend can show, such
+  as data surviving a restart, a database reset, or a production start
+  against a real store. Name it here, never as a UAT: GAIA's layers run
+  against MSW handlers that mirror the API contract, so it belongs to the
+  project's own end-to-end suite.>
 
 ## Required reading
 

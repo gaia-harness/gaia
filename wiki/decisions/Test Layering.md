@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-11-01
 created: 2026-11-01
-updated: 2026-11-05
+updated: 2026-11-06
 tags: [decision, testing, tdd, layering, authorization]
 ---
 
@@ -14,7 +14,7 @@ Write tests, not too many, mostly integration: the route layer is the default ho
 
 ## Rationale
 
-Browser time is the expensive layer in three ways. A browser test boots the server and Chromium, so each one costs seconds where a unit or route test costs milliseconds. Browser tests share a live stack, so parallel workers contend for one database and a test needs per-worker isolation (see [[#Worker isolation]]). And a failing browser test names a flow, not a cause, so finding the broken rule costs more than the test saved.
+Browser time is the expensive layer in three ways. A browser test boots the server and Chromium, so each one costs seconds where a unit or route test costs milliseconds. Browser tests share a live stack, so parallel workers contend for one store and a test needs per-worker isolation (see [[#Worker isolation]]). And a failing browser test names a flow, not a cause, so finding the broken rule costs more than the test saved.
 
 A check that duplicates one another test already proves adds cost and no coverage. The overlap pass reads every layer and proposes dropping or merging a duplicate, folding two or more tests into an existing integration test that already asserts their property, moving a browser test to the real-server or route layer, moving component behavior to a story, and moving a test to the unit layer only with a reason stating both unit-test conditions. The worthiness review judges each new test on its own worth and may cite an integration test that covers a unit test; proposals across layers are the overlap pass's ([[Worthiness Audit]]).
 
@@ -44,7 +44,7 @@ The layers are not React-specific. Each has an equivalent in other server stacks
 
 ## Worker isolation
 
-Parallel workers that share one database cannot hold independent state. Each worker reaches its own database through the server it talks to, keyed on its worker index. A serial project is not an accepted way to share one. The shipped pattern is in `apps/web/.playwright/fixtures.ts` and its rule is in `apps/web/.claude/rules/playwright.md`.
+Parallel workers that share one store cannot hold independent state. Each worker seeds and reads the MSW store of its own dev server, keyed on its worker index. A serial project is not an accepted way to share one. The shipped pattern is in `apps/web/.playwright/fixtures.ts` and its rule is in `apps/web/.claude/rules/playwright.md`.
 
 ## Authorization bug classes
 
@@ -67,6 +67,10 @@ A route test does not observe the status the framework serves, so only the third
 ### What a real-server check cannot prove
 
 The Playwright stack is `pnpm dev` with MSW. Production-only cookie and error behavior is not exercised, and neither is authorization an upstream API owns, since MSW answers for it.
+
+## What mocks cannot prove
+
+GAIA's layers run against MSW handlers that mirror the backend's contract. They cannot prove the hookup (auth cookies, CORS, environment config, proxies), which needs a thin smoke suite the project runs against its real backend, and drift between the handlers and the backend's contract is the project's to guard. Behavior only a real backend shows is that suite's, never a GAIA layer's.
 
 ## Related
 

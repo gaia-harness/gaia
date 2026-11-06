@@ -4,7 +4,7 @@ status: active
 package: msw
 role: api-mocking
 created: 2026-04-20
-updated: 2026-10-28
+updated: 2026-11-06
 tags: [dependency, testing, mocking]
 ---
 
@@ -19,6 +19,14 @@ tags: [dependency, testing, mocking]
 - `apps/web/test/test.server.ts` calls `setupServer(...handlers)` from `msw/node` for the Vitest `node` project.
 
 All three share the handler set from `apps/web/test/mocks`. Handler and utility imports come from MSW 3 subpaths (`msw/http`, `msw/utils/<name>`); only `setupWorker` (`msw/browser`) and `setupServer` (`msw/node`) come from their own entry points. The unhandled-request option is `onUnhandledFrame`.
+
+## Seed surface
+
+The dev server holds two `@msw/data` stores: the server network's, which answers loaders, actions and `.data` requests, and the browser network's, one per page load. A Playwright Given builder seeds the server's store, and forwarding makes it the only store a seeded page reads.
+
+- **Gate:** `apps/web/test/msw-seed/plugin.ts`, registered in `apps/web/vite.config.ts`, applies only to `vite serve` with `MSW_SEED=true`, which only the Playwright worker server sets (with `MSW_ENABLED=true`). A build or a plain `pnpm dev` carries none of it.
+- **Seed:** `POST /__gaia/msw/seed` with `{collection, records}` validates every record against the collection's server schema first, then creates them; a bad record gets a 400 naming the collection, index and field. Builders reach it through `seedRecords` (`apps/web/.playwright/msw-seed.ts`), never a spec directly.
+- **Forwarding:** with the gate on, the browser network runs one handler that forwards every request not addressed to the page's own origin to `POST /__gaia/msw/forward`, which answers from the server's handlers and store, so a seeded record reaches client loaders and client fetches; an unhandled request passes through. Forwarding works only once the project's CSP `connect-src` allows its API origin.
 
 ## Worker script
 
