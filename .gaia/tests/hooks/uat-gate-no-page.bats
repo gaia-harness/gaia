@@ -385,7 +385,7 @@ test('every past order is listed newest first', async ({request}) => {
   gate --phase 1 --report "$REPORTS/passed-two-files.json"
   [ "$status" -eq 1 ] || return 1
   grep -qE "^uat-gate: $TARGET_RELATIVE: floor\$" "$STDERR_FILE" || return 1
-  stderr_has 'pass the request fixture or the request-context fixture into that helper' 'The counted call must be the one the Then-clause asserts read: never add a call whose result no Then assert reads only to clear the floor.'
+  stderr_has 'pass the request fixture or a request-context fixture into that helper' 'The counted call must be the one the Then-clause asserts read: never add a call whose result no Then assert reads only to clear the floor.'
 }
 
 @test "a receiver named only as a property or an object key does not count for a helper" {
