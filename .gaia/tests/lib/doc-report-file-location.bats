@@ -47,7 +47,9 @@ assert_pinned() {
 }
 
 @test "the UAT fidelity verdict file sits in the scratchpad, not in the plan folder" {
-  assert_pinned "$LIFECYCLE" 'Take `<VERDICT_FILE>` as `uat-fidelity.json` in the session'"'"'s scratchpad directory, or in a `mktemp -d` directory when the session lists none, never under `<PLAN_DIR>`'
+  assert_pinned "$LIFECYCLE" 'Take `<VERDICT_FILE>`, '
+  assert_pinned "$LIFECYCLE" 'as `uat-fidelity.json`, '
+  assert_pinned "$LIFECYCLE" 'in the session'"'"'s scratchpad directory, or in a `mktemp -d` directory when the session lists none, never under `<PLAN_DIR>`'
   assert_pinned "$LIFECYCLE" 'Verdict file: <VERDICT_FILE>'
   grep -nF -- '<PLAN_DIR>/uat-fidelity.json' "$LIFECYCLE" && return 1
   true
