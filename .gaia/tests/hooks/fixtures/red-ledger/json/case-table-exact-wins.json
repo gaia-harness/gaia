@@ -1,0 +1,32 @@
+{
+  "numFailedTests": 1,
+  "numPassedTests": 2,
+  "success": false,
+  "testResults": [
+    {
+      "name": ".gaia/tests/hooks/fixtures/red-ledger/case-table.test.ts",
+      "status": "failed",
+      "message": "",
+      "assertionResults": [
+        {
+          "title": "rejects a@x.io",
+          "fullName": "rejects a@x.io",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "title": "rejects b@x.io",
+          "fullName": "rejects b@x.io",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "title": "rejects static",
+          "fullName": "rejects static",
+          "status": "failed",
+          "failureMessages": ["AssertionError: expected 1 to be 2"]
+        }
+      ]
+    }
+  ]
+}

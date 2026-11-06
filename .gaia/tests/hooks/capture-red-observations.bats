@@ -239,6 +239,35 @@ assert_spaced_redirect_target_absent() {
 
 # --- failureKind classification -----------------------------------------------
 
+@test "a failing test.for row records one RED under its template's name and signal" {
+  local fixture="$FIXTURE_RELATIVE_DIRECTORY/case-table.test.ts" expected_signal
+  run_capture "Bash" "pnpm test --run $fixture" \
+    "$JSON_FIXTURE_RELATIVE_DIRECTORY/case-table-row-fail.json"
+  [ "$status" -eq 0 ]
+  [ "$(ledger_lines)" -eq 1 ]
+  line=$(cat "$LEDGER_ABSOLUTE_PATH")
+  [ "$(printf '%s' "$line" | jq -r '.fullName')" = 'rejects $email' ]
+  expected_signal=$( (cd "$REPO_ROOT" && node .gaia/scripts/red-ledger/extract-test-signals.mjs "$fixture") \
+    | jq -r 'select(.fullName == "rejects $email") | .signal')
+  [ -n "$expected_signal" ]
+  [ "$(printf '%s' "$line" | jq -r '.signal')" = "$expected_signal" ]
+}
+
+@test "an exact fullName match wins over a template whose pattern also matches" {
+  run_capture "Bash" "pnpm test --run $FIXTURE_RELATIVE_DIRECTORY/case-table.test.ts" \
+    "$JSON_FIXTURE_RELATIVE_DIRECTORY/case-table-exact-wins.json"
+  [ "$status" -eq 0 ]
+  [ "$(ledger_lines)" -eq 1 ]
+  [ "$(jq -r '.fullName' "$LEDGER_ABSOLUTE_PATH")" = "rejects static" ]
+}
+
+@test "a failing row that matches two templates' patterns records nothing" {
+  run_capture "Bash" "pnpm test --run $FIXTURE_RELATIVE_DIRECTORY/case-table-ambiguous.test.ts" \
+    "$JSON_FIXTURE_RELATIVE_DIRECTORY/case-table-ambiguous.json"
+  [ "$status" -eq 0 ]
+  [ "$(ledger_lines)" -eq 0 ]
+}
+
 @test "failureKind is runtime for a missing-implementation error" {
   run_capture "Bash" \
     "pnpm test --run $FIXTURE_RELATIVE_DIRECTORY/runtime-fail.test.ts" \

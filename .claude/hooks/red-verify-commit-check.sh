@@ -17,12 +17,11 @@
 # (MERGE_HEAD) already holds counts as present too.
 #
 # Scope is driven entirely by the signal helper's emitted current-test set.
-# Tests with dynamic titles (template-literal/computed names, test.each rows
-# templated with substitutions) emit NO signal from the helper, so they never
-# appear in the current-test set and are therefore EXEMPT by construction: an
-# uncomputable identity yields no RED demand, matching the SPEC's fail-open
-# posture for uncomputable identity and its "edits/refactors never demand a
-# RED" spirit. A new dynamic-title test passing on first run is not blocked.
+# Tests with dynamic titles (computed names, a title of only row tokens, any
+# test under a `describe.each`/`.for` or a dynamic-title describe) emit NO
+# signal from the helper, so they are EXEMPT by construction: an uncomputable
+# identity yields no RED demand. A test-level `.each`/`.for` is one test named by its declared template; the
+# capture hook files a failing row's RED under that name, so one row clears it.
 #
 # Type-only tests are EXEMPT for a distinct, principled reason: the helper tags
 # each test kind=type-only when its assertions are all type-level (expectTypeOf

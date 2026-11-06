@@ -506,7 +506,7 @@ run_library() {
   # Checked against the floor setup() defines rather than a pinned total. A
   # pinned total follows nothing, so it reds an unrelated harness PR after any
   # frontend PR adds a test. The test runner's own listing is no oracle either:
-  # it expands `.each` rows the helper deliberately leaves unrecorded, and the
+  # it lists each `.each` row where the helper records the table once, and the
   # CI leg that runs this suite installs no runner. A file the exemption
   # matches skips only the floor and keeps every other check below.
   local file_count=0
@@ -546,8 +546,12 @@ run_library() {
   [ -z "$bad_signal" ]
 
   local shapes
-  shapes=$(jq -r '[keys_unsorted[]] | join(",")' "$corpus" | sort -u)
-  [ "$shapes" = "fullName,signal,kind,firstLine,ranges" ]
+  # A test-level `.each`/`.for` line carries a trailing rowPattern; every
+  # other line has the plain shape.
+  shapes=$(jq -r '[keys_unsorted[]] | join(",")' "$corpus" | sort -u \
+    | grep -vxF -e 'fullName,signal,kind,firstLine,ranges' \
+      -e 'fullName,signal,kind,firstLine,ranges,rowPattern' || true)
+  [ -z "$shapes" ]
 
   # Zero in-scope tests classify type-only today, so this is a floor rather
   # than a check; the real catcher for `kind` classification is the

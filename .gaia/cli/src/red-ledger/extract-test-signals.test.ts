@@ -1,9 +1,10 @@
 /**
- * Pins the title-handling carve-outs of the RED-ledger signal helper
- * (`.gaia/scripts/red-ledger/extract-test-signals.mjs`): a `.each`, `.for`, or
- * dynamic-title `describe`/`test` has no source title vitest preserves
- * verbatim at runtime, so the helper must emit nothing for one rather than
- * recording an identity the RED ledger could never match back up.
+ * Pins the title handling of the RED-ledger signal helper
+ * (`.gaia/scripts/red-ledger/extract-test-signals.mjs`): a dynamic-title
+ * `test`, or anything under a `.each`/`.for` or dynamic-title `describe`, has
+ * no source title vitest preserves verbatim at runtime, so the helper emits
+ * nothing for it rather than an identity the RED ledger could never match. A
+ * test-level `.each`/`.for` is named by its template plus a row pattern.
  */
 import {describe, expect, test} from 'vitest';
 import {execFileSync, spawnSync} from 'node:child_process';
@@ -26,17 +27,10 @@ const HELPER_ENV = {...process.env, NODE_PATH: CLI_NODE_MODULES};
 
 const TEST_FILE_REL = 'apps/web/app/generated/tests/index.test.ts';
 
-/**
- * Pins the `.each` carve-out (gaia-react/gaia#2224): vitest expands an
- * `.each` row into the title at runtime, so a title argument on the call is
- * never the fullName the RED ledger records, whatever kind of literal it is.
- * `red-verify-commit-check.sh`'s own carve-out (lines 19-24) treats a test
- * with NO emitted signal as uncomputable identity and therefore never
- * blocked, so the fix this suite drives is: emit nothing for an `.each` call.
- */
 type ExtractedSignal = {
   fullName: string;
   kind: string;
+  rowPattern?: string;
   signal: string;
 };
 
@@ -51,39 +45,69 @@ const runOnSource = (source: string): ExtractedSignal[] =>
     .filter((line) => line.length > 0)
     .map((line) => JSON.parse(line) as ExtractedSignal);
 
-describe('extract-test-signals .each title handling', () => {
-  test('test.each with a $prop title emits no signal', () => {
-    const lines = runOnSource(`
-      test.each([{from: '/en', to: '/'}])('301s $from to $to', ({from, to}) => {
-        expect(from).not.toBe(to);
+/**
+ * A test-level `.each`/`.for` call is one test owing one RED: the helper names
+ * it by its declared template and adds a `rowPattern` that matches every
+ * fullName vitest can expand a row into, so the capture hook can file a
+ * failing row's RED under the template. A describe-level one still emits
+ * nothing for its subtree (below).
+ */
+const rowEntry = (source: string): ExtractedSignal => {
+  const lines = runOnSource(source);
+  expect(lines).toHaveLength(1);
+  const [entry] = lines;
+
+  if (entry?.rowPattern === undefined) {
+    throw new Error('expected a rowPattern entry');
+  }
+
+  return entry;
+};
+
+const matchesRow = (entry: ExtractedSignal, rowName: string) =>
+  new RegExp(entry.rowPattern ?? '(?!)').test(rowName);
+
+describe('extract-test-signals test-level .each/.for rows', () => {
+  test.for([
+    {
+      call: "test.each([{from: '/en', to: '/'}])",
+      row: '301s /en to /',
+      template: '301s $from to $to',
+    },
+    {
+      call: "test.each([['a', 'b']])",
+      row: 'converts a to b',
+      template: 'converts %s to %s',
+    },
+    {call: 'it.each([{n: 1}])', row: 'handles 1', template: 'handles $n'},
+    {
+      call: "test.for([{from: '/en', to: '/'}])",
+      row: '301s /en to /',
+      template: '301s $from to $to',
+    },
+    {
+      call: "test.for([{user: {name: 'ann'}}])",
+      row: 'signs in as ann (row 1)',
+      template: 'signs in as $user.name (row %$)',
+    },
+  ])(
+    '$call names the test $template and matches its row',
+    ({call, row, template}) => {
+      const entry = rowEntry(`
+      ${call}('${template}', (value) => {
+        expect(value).toBeTruthy();
       });
     `);
 
-    expect(lines).toEqual([]);
-  });
+      expect(entry.fullName).toBe(template);
+      expect(entry.kind).toBe('runtime');
+      expect(matchesRow(entry, row)).toBe(true);
+      expect(matchesRow(entry, `other ${row}`)).toBe(false);
+    }
+  );
 
-  test('test.each with a printf %s title emits no signal', () => {
-    const lines = runOnSource(`
-      test.each([['a', 'b']])('converts %s to %s', (a, b) => {
-        expect(a).not.toBe(b);
-      });
-    `);
-
-    expect(lines).toEqual([]);
-  });
-
-  test('it.each with a $prop title emits no signal', () => {
-    const lines = runOnSource(`
-      it.each([{n: 1}])('handles $n', ({n}) => {
-        expect(n).toBeGreaterThan(0);
-      });
-    `);
-
-    expect(lines).toEqual([]);
-  });
-
-  test('tagged-template test.each emits no signal', () => {
-    const lines = runOnSource(`
+  test('a tagged-template test.each is one entry whose pattern matches its rows', () => {
+    const entry = rowEntry(`
       test.each\`
         a    | b
         \${1} | \${2}
@@ -92,9 +116,55 @@ describe('extract-test-signals .each title handling', () => {
       });
     `);
 
-    expect(lines).toEqual([]);
+    expect(entry.fullName).toBe('sums $a and $b');
+    expect(matchesRow(entry, 'sums 1 and 2')).toBe(true);
   });
 
+  test('the describe prefix and regex metacharacters in the title are matched literally', () => {
+    const entry = rowEntry(`
+      describe('form body', () => {
+        test.for([{field: 'email'}])('rejects (blank) $field + more', ({field}) => {
+          expect(field).toBeTruthy();
+        });
+      });
+    `);
+
+    expect(entry.fullName).toBe('form body rejects (blank) $field + more');
+    expect(matchesRow(entry, 'form body rejects (blank) email + more')).toBe(
+      true
+    );
+    expect(matchesRow(entry, 'form body rejects blank email + more')).toBe(
+      false
+    );
+    expect(matchesRow(entry, 'rejects (blank) email + more')).toBe(false);
+  });
+
+  test('a substitution-free title is matched verbatim', () => {
+    const entry = rowEntry(`
+      test.each([1, 2])('fixed title', (n) => {
+        expect(n).toBeGreaterThan(0);
+      });
+    `);
+
+    expect(entry.fullName).toBe('fixed title');
+    expect(matchesRow(entry, 'fixed title')).toBe(true);
+    expect(matchesRow(entry, 'fixed title 2')).toBe(false);
+  });
+
+  test('a title that is only tokens emits nothing: its pattern would match any sibling', () => {
+    const lines = runOnSource(`
+      describe('sign in', () => {
+        test.for([{name: 'ann'}])('$name', ({name}) => {
+          expect(name).toBeTruthy();
+        });
+      });
+    `);
+
+    expect(lines).toEqual([]);
+  });
+});
+
+describe('extract-test-signals describe-level .each handling', () => {
   test('describe.each with a $prop title emits no signal for a nested static-titled test', () => {
     const lines = runOnSource(`
       describe.each([{group: 'a'}])('group $group', ({group}) => {
@@ -209,24 +279,7 @@ describe('extract-test-signals dynamic-title describe handling', () => {
   });
 });
 
-/**
- * Pins the `.for` carve-out (gaia-react/gaia#2224's `.each` fix, widened):
- * vitest 5.0.0 declares `for` alongside `each` on both the test and suite
- * chainable APIs, and interpolates the same `$prop` / printf tokens into a
- * `.for` title. It is the same unsatisfiable-identity hazard `.each` has, so
- * it gets the same treatment: emit nothing for a `.for` call.
- */
-describe('extract-test-signals .for title handling', () => {
-  test('test.for with a $prop title emits no signal', () => {
-    const lines = runOnSource(`
-      test.for([{from: '/en', to: '/'}])('301s $from to $to', ({from, to}) => {
-        expect(from).not.toBe(to);
-      });
-    `);
-
-    expect(lines).toEqual([]);
-  });
-
+describe('extract-test-signals describe-level .for handling', () => {
   test('describe.for with a $prop title emits no signal for a nested static-titled test', () => {
     const lines = runOnSource(`
       describe.for([{group: 'a'}])('group $group', ({group}) => {

@@ -18,6 +18,8 @@
 //    "firstLine":N,"ranges":[[start,end],...]}
 // firstLine and ranges are 1-based inclusive lines of the regions the signal
 // hashes, comments above a region excluded; a story entry lists several.
+// A test-level .each/.for line names its declared template and adds
+// "rowPattern" (./row-pattern.mjs), which the capture hook matches rows to.
 //
 // Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF4
 // story file; its fullName and signal rules and refusal list live in the
@@ -75,6 +77,7 @@ import {
   extractStorySignals,
   StoryFileRefusal,
 } from './extract-story-signals.mjs';
+import {rowPatternFor} from './row-pattern.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -207,18 +210,10 @@ function calleeChainHasProperty(node, propertyNames) {
 
 // The first string-literal/template title argument of a test/describe call.
 // Returns the literal text, or null when the title is dynamic (template with
-// substitutions, an identifier, etc.) or the call carries a title-expanding
-// modifier (`.each`/`.for`); a dynamic title cannot be matched to a recorded
-// fullName, so we skip it. The modifier check is unconditional even though a
-// substitution-free `.each`/`.for` title (no $prop, no printf token) is
-// recorded verbatim once per row: distinguishing that case would mean
-// hand-rolling a parser for vitest's substitution grammar, so the
-// suppression stays deliberately wider than strictly necessary and trades
-// away that narrow slice of coverage.
+// substitutions, an identifier, etc.); a dynamic title cannot be matched to a
+// recorded fullName, so we skip it. A `.each`/`.for` title is returned as the
+// declared template; the caller decides what a row-expanding call records.
 function titleOf(node) {
-  if (calleeChainHasProperty(node, TITLE_EXPANDING_MODIFIERS)) {
-    return null;
-  }
   const arg = node.arguments[0];
   if (!arg) {
     return null;
@@ -448,15 +443,19 @@ function visit(node, ancestors, unmatchable) {
     const blockKind = blockKindOf(node);
     if (blockKind === 'test') {
       const title = unmatchable ? null : titleOf(node);
-      if (title !== null) {
-        const fullName = [...ancestors, title].join(' ');
+      const expandsRows = calleeChainHasProperty(node, TITLE_EXPANDING_MODIFIERS);
+      const prefix = ancestors.map((name) => `${name} `).join('');
+      const rowPattern =
+        title !== null && expandsRows ? rowPatternFor(prefix, title) : null;
+      if (title !== null && (!expandsRows || rowPattern !== null)) {
         lines.push(
           JSON.stringify({
-            fullName,
+            fullName: prefix + title,
             signal: signalFor(node),
             kind: classifyKind(node),
             firstLine: rangeOf(node)[0],
             ranges: [rangeOf(node)],
+            ...(rowPattern === null ? {} : {rowPattern}),
           }),
         );
       }
@@ -473,7 +472,8 @@ function visit(node, ancestors, unmatchable) {
         ts.forEachChild(node, (child) => visit(child, ancestors, unmatchable));
         return;
       }
-      const title = unmatchable ? null : titleOf(node);
+      const expandsRows = calleeChainHasProperty(node, TITLE_EXPANDING_MODIFIERS);
+      const title = unmatchable || expandsRows ? null : titleOf(node);
       const nextAncestors =
         title !== null ? [...ancestors, title] : ancestors;
       const nextUnmatchable = unmatchable || title === null;

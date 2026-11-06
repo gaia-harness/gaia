@@ -1,0 +1,26 @@
+{
+  "numFailedTests": 1,
+  "numPassedTests": 1,
+  "success": false,
+  "testResults": [
+    {
+      "name": ".gaia/tests/hooks/fixtures/red-ledger/case-table-ambiguous.test.ts",
+      "status": "failed",
+      "message": "",
+      "assertionResults": [
+        {
+          "title": "signs in ann",
+          "fullName": "signs in ann",
+          "status": "failed",
+          "failureMessages": ["AssertionError: expected 'ann' to be ''"]
+        },
+        {
+          "title": "signs in lee",
+          "fullName": "signs in lee",
+          "status": "passed",
+          "failureMessages": []
+        }
+      ]
+    }
+  ]
+}
