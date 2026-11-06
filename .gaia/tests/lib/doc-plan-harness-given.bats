@@ -4,8 +4,8 @@
 # harness its test runs under.
 #
 # planner.md step 2 holds a harness choice that changes a UAT's Given to the
-# precondition-divergence rule, step 1 keeps a Given check out of Follow-ups, and the decomposition audit's
-# SPEC coverage lens grades a harness that departs from a Given as critical.
+# precondition-divergence rule, step 1 keeps a Given check out of Follow-ups,
+# and the decomposition audit's SPEC coverage lens grades a harness that departs from a Given as critical.
 # This suite pins that text where each rule lives.
 #
 # Method: every check takes a root directory and reads the files from it; each
@@ -88,8 +88,8 @@ green() {
 # ---------- checks (each takes a root and returns non-zero with a reason) ----------
 
 # The paragraph lives in step 2 (README), after the routing ladder, and states
-# the rule, its pointer, both outcomes and the Follow-ups ban. It stays generic:
-# real-backend Givens are out of its scope, so it names no database.
+# the rule, its pointer, both outcomes and the Follow-ups ban. Its examples
+# stay generic, so it names no database.
 check_given_paragraph() {
   local step paragraph
   step="$(range_of "$1/$PLANNER_REL" '2.  **`{PLAN_DIR}/README.md`**' '3.  **`{PLAN_DIR}/ORCHESTRATOR.md`**')"
