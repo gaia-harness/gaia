@@ -20,12 +20,16 @@ setup() {
   WORK="$BATS_TEST_TMPDIR/work"
   mkdir -p "$WORK/plan"
   write_builtin_descriptor "$WORK"
-  PROBE_NAME="zz-lint-probe-real-server-$$.spec.ts"
+  # The probe sits one folder deep, like the stub's own feature folder, so
+  # the stub's relative fixtures import resolves from it.
+  PROBE_DIR="$REPO_ROOT_REAL/apps/web/.playwright/e2e/zz-lint-probe-$$"
+  mkdir -p "$PROBE_DIR"
+  PROBE_NAME="zz-lint-probe-$$/real-server.spec.ts"
   PROBE="$REPO_ROOT_REAL/apps/web/.playwright/e2e/$PROBE_NAME"
 }
 
 teardown() {
-  rm -f "$PROBE"
+  rm -rf "$PROBE_DIR"
 }
 
 # render_real_server_stub: render one real-server row into the scratch project
