@@ -64,7 +64,7 @@ Then judge the test bodies. The gate proves each spec still carries its contract
    bash .gaia/scripts/spec/uat-fidelity-cache.sh select <PLAN_DIR>/uat-fidelity-cache.json --spec <SPEC_PATH> --brief <BRIEF_FILE> --pending <PENDING_FILE> --carried <CARRIED_FILE>
    ```
 
-   When it printed `0`, write `[]` to `<VERDICT_FILE>` and go to step 3's `record`. Otherwise dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of the two lines below followed by the lines of `<PENDING_FILE>`:
+   When it printed `0`, write `[]` to `<VERDICT_FILE>` and go to step 3's `record`. Otherwise dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of the block's `SPEC path:` and `Verdict file:` lines followed by the lines of `<PENDING_FILE>` (the block's `Spec:`, `Surface:` and `Guard:` lines show their shape):
 
    ```
    SPEC path: <SPEC_PATH>
