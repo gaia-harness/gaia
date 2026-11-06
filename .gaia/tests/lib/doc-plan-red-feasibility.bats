@@ -111,8 +111,8 @@ check_dependency_lens() {
   red check_planner_rule "$PLANNER_REL" 'No task builds what a later phase'"'"'s test asserts' 'A task may build what a later phase'"'"'s test asserts'
 }
 
-@test "red twin: dropping the no-RED consequence fails the planner check" {
-  red check_planner_rule "$PLANNER_REL" 'passes on its phase'"'"'s base and can never record a RED' 'is redundant'
+@test "red twin: dropping the no-RED reason fails the planner check" {
+  red check_planner_rule "$PLANNER_REL" ' passes on its phase'"'"'s base and can never record a RED,' ''
 }
 
 @test "red twin: downgrading the grade to minor fails the lens check" {
