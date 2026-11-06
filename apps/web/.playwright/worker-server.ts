@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {DEV_PORT_OVERRIDE_ENV, isPortTaken} from '../dev-ports';
@@ -152,8 +153,8 @@ export type WorkerServer = {
 };
 
 /**
- * Starts one worker's dev server on a free port with its own file database,
- * and resolves once it answers.
+ * Starts one worker's dev server on a free port with its own file database in
+ * a new temp folder, which `stop` removes, and resolves once it answers.
  *
  * Starts are serialized across worker processes: each `react-router dev`
  * regenerates route types into the package's shared `.react-router/types`
@@ -176,28 +177,34 @@ export const startWorkerServer = async ({
   packageDirectory: string;
   parallelIndex: number;
 }): Promise<WorkerServer> => {
-  const databaseFile = path.join(
-    outputDirectory,
-    `worker-${parallelIndex}.sqlite`
-  );
   const logFile = path.join(
     outputDirectory,
     `worker-${parallelIndex}-server.log`
   );
 
   fs.mkdirSync(outputDirectory, {recursive: true});
-  fs.rmSync(databaseFile, {force: true});
 
   const logFileDescriptor = fs.openSync(logFile, 'a');
   const releaseStartLock = await acquireStartLock(
     path.join(outputDirectory, START_LOCK_FILE_NAME),
     START_LOCK_TIMEOUT_MILLISECONDS
   );
+  // Off the tree, on local disk: SQLite's WAL needs file locks shared across
+  // processes, and a bind mount such as Docker Desktop's does not share them,
+  // so a builder's closing connection deletes the WAL the server still reads.
+  const databaseDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'gaia-worker-db-')
+  );
+  const databaseFile = path.join(
+    databaseDirectory,
+    `worker-${parallelIndex}.sqlite`
+  );
   let serverProcessId: number | undefined;
 
   const stop = () => {
     releaseStartLock();
     stopProcessGroup(serverProcessId);
+    fs.rmSync(databaseDirectory, {force: true, recursive: true});
   };
 
   try {

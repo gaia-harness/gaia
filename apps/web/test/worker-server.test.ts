@@ -121,6 +121,28 @@ describe('startWorkerServer', () => {
     }
   });
 
+  test('keeps its database in its own temp folder outside the output folder, removed on stop', async () => {
+    const server = await startWorkerServer({
+      command: [process.execPath, writeScript('server.mjs', STAND_IN_SERVER)],
+      outputDirectory: directory,
+      packageDirectory: directory,
+      parallelIndex: 0,
+    });
+    const databaseDirectory = path.dirname(server.databaseFile);
+
+    try {
+      expect(path.relative(directory, server.databaseFile)).toMatch(/^\.\./);
+      expect(
+        path.relative(os.tmpdir(), databaseDirectory).startsWith('..')
+      ).toBe(false);
+      expect(fs.existsSync(databaseDirectory)).toBe(true);
+    } finally {
+      server.stop();
+    }
+
+    expect(fs.existsSync(databaseDirectory)).toBe(false);
+  });
+
   test('a server that exits names its log, which holds the server output', async () => {
     const start = startWorkerServer({
       command: [process.execPath, writeScript('server.mjs', FAILING_SERVER)],

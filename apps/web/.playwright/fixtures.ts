@@ -52,12 +52,12 @@ const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
  * Worker isolation. Every worker reaches its own database through the server
  * it talks to, so a spec that seeds a database proves something only against
  * the server that reads it. `workerServer` starts this tree's `pnpm dev` on a
- * free port with a per-worker file database under `.playwright/output/`,
- * passes that file to the process as `DATABASE_URL` (the project's database
- * module reads it), and stops only what it started; `./worker-server.ts`
- * owns the start. It is keyed on
- * `workerInfo.parallelIndex`, which stays stable when a worker restarts after
- * a failure, so a restarted worker lands on the same file. It is lazy: a
+ * free port with a per-worker file database in its own temp folder on local
+ * disk, passes that file to the process as `DATABASE_URL` (the project's
+ * database module reads it), and stops only what it started;
+ * `./worker-server.ts` owns the start. It is keyed on `workerInfo.parallelIndex`, which stays stable when a
+ * worker restarts after a failure, so a restarted worker appends to the same
+ * server log under `.playwright/output/`. It is lazy: a
  * fixture nothing requests never runs, so the stock suite starts no extra
  * server and `pnpm pw` is unchanged.
  *
@@ -71,7 +71,7 @@ const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
  *   worker on a shared server. A shared database server's key includes the
  *   tree identity along with `parallelIndex`, as `.gaia/scripts/ports.sh` does
  *   for ports, so two trees never collide on one worker's schema. A file
- *   database under this tree's output folder is already unique to the tree.
+ *   database in its own temp folder is already unique to the tree.
  * - State in the dev server's MSW handlers is out of reach of the Playwright
  *   process, so a stock project has no builder target: builders need a real
  *   database.
