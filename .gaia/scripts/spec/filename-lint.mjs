@@ -7,7 +7,7 @@
 //   node .gaia/scripts/spec/filename-lint.mjs --package <dir> <path relative to package>...
 //
 // Output (stdout): one `<path>\t<rule>: <eslint message>` line per refusal.
-// Exit codes, which plan-verify.sh maps:
+// Exit codes, which uat_lib_filename_lint_problems (uat-code-only.sh) maps:
 //   0  every name is clean
 //   1  one or more refusals
 //   2  eslint does not resolve from the package (dependencies not installed);
@@ -18,14 +18,10 @@
 // Why the API and not `eslint --stdin --stdin-filename`: the type-aware parser
 // refuses a path that does not exist ("not found by the project service")
 // before any rule runs. Here the project service is switched off and every rule
-// but the filename rules is turned off, so only the name is judged, on empty
-// text.
-//
-// The scope is deliberately the path-based filename rules below, a rule-id list
-// rather than a word list: the project's configured options for each rule
-// (replacements, allowList, case) decide. Any other rule could fire on the
-// empty text (unicorn/no-empty-file would), so none is let through. Folder
-// names are not judged, matching the render commit, where eslint lints files.
+// but the path-based filename rules below is turned off (any other could fire on
+// the empty text, as unicorn/no-empty-file would), so only the name is judged,
+// under the project's own options for those rules.
+// Folder names are not judged, matching the render commit, where eslint lints files.
 import {createRequire} from 'node:module';
 import path from 'node:path';
 

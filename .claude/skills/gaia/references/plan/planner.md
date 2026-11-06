@@ -63,7 +63,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
     <!-- gaia:uat-routing:end -->
     ```
 
-    Spell words out in folder and file names the way the project's lint requires (`development`, not `dev`): `/gaia-plan` step 4.5 lints each routed file name with the project's own eslint config, the same lint the render commit runs.
+    Spell words out in file names the way the project's lint requires (`development`, not `dev`): `/gaia-plan` step 4.5 lints each routed file name with the project's own eslint config, the same lint the render commit runs.
 
     **Cut phases as vertical slices.** Each phase delivers a behavior end to end and owns the acceptance test that proves it, the test that phase turns from expected-failure to passing; a phase owns an acceptance test when its number appears in any routing-table row, whatever the surface. No task builds what a later phase's test asserts: such a test passes on its phase's base and can never record a RED, so the build halts. The README names each phase on a `| Phase <N>` task-graph row or a `### Phase <N>` heading. A genuinely infrastructure phase, one that delivers no user-observable behavior, carries the README line `- Phase <N>: Infrastructure: <reason>` with a non-empty reason, and may carry unit tests only for logic meeting both unit-test conditions (`wiki/decisions/Test Layering.md`). `.gaia/scripts/spec/plan-verify.sh` refuses an unmarked phase that owns no acceptance test in a spec-derived plan and checks only the marker's syntax; the decomposition audit judges the reason. A plan generated before this rule is not re-verified for infrastructure markers (only step 4.5 runs the script).
 

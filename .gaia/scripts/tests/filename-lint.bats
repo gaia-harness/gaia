@@ -3,7 +3,7 @@
 # .gaia/scripts/spec/filename-lint.mjs against the real frontend package's
 # eslint config: a refused name carries eslint's suggested name, a spelled-out
 # name is clean, only the filename rules ever fire, and the two setup failures
-# split as plan-verify.sh needs them (eslint absent warns, a broken config fails).
+# split as uat_lib_filename_lint_problems needs them (eslint absent warns, a broken config fails).
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
 
