@@ -108,7 +108,7 @@ the Storybook specs (see Accessibility scans). With
 `wiki/dependencies/MSW.md`), so tests exercise the real route/loader/action stack
 with MSW intercepting API calls. No separate mock server is needed for e2e.
 
-With `MSW_ENABLED=true` and `MSW_SEED=true`, which only the worker server sets, the dev server exposes a seed surface over its `@msw/data` store; a Given builder seeds through it (see Worker isolation).
+With `MSW_SEED=true`, which only the worker server sets (alongside `MSW_ENABLED=true`), the dev server exposes a seed surface over its `@msw/data` store; a Given builder seeds through it (see Worker isolation).
 
 ## Worker isolation
 

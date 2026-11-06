@@ -26,8 +26,8 @@ const describeFailure = async (
 /**
  * Creates records in a collection of the worker server's MSW store, through
  * the collection's server schema, and returns them as created. A Given
- * builder calls it; a spec never does, so swapping builders for ones that
- * seed a real backend is the only change a project's own end-to-end run needs.
+ * builder calls it; a spec never does, so a project's own end-to-end run
+ * changes its builders and its server, never its specs.
  */
 export const seedRecords = async <Created>(
   baseURL: string,

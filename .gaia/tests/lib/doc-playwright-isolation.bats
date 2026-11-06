@@ -112,7 +112,7 @@ check_rule() {
   local text
   text="$(tr '\n' ' ' <"$1" | sed -E 's/[[:space:]]+/ /g')"
   printf '%s' "$text" | grep -Fq 'serial project is not an accepted way to share one store' || { echo "no refusal" >&2; return 1; }
-  printf '%s' "$text" | grep -Fq 'With `MSW_ENABLED=true` and `MSW_SEED=true`, which only the worker server sets, the dev server exposes a seed surface' || { echo "no seed surface gate" >&2; return 1; }
+  printf '%s' "$text" | grep -Fq 'With `MSW_SEED=true`, which only the worker server sets (alongside `MSW_ENABLED=true`), the dev server exposes a seed surface' || { echo "no seed surface gate" >&2; return 1; }
   printf '%s' "$text" | grep -Fq '.playwright/fixtures.ts' || { echo "no pointer to fixtures.ts" >&2; return 1; }
   grep -Fq 'resetTestData' "$1" && { echo "resetTestData survives" >&2; return 1; }
   grep -Fq 'auth.setup.ts' "$1" && { echo "auth.setup.ts survives" >&2; return 1; }
@@ -216,7 +216,7 @@ scratch_copy() {
 }
 
 @test "the rule check goes red when the seed surface gate sentence is gone" {
-  copy="$(scratch_copy "$PW_RULE_FILE" 's/which only the worker server sets, the dev server exposes/the dev server exposes/')"
+  copy="$(scratch_copy "$PW_RULE_FILE" 's/which only the worker server sets \(alongside `MSW_ENABLED=true`\), the dev server exposes/the dev server exposes/')"
   run check_rule "$copy"
   [ "$status" -ne 0 ]
 }

@@ -182,8 +182,6 @@ javascript_literal() {
   }'
 }
 
-# Placeholders are spliced in one left-to-right pass, so text a value carries
-# (even a literal placeholder name) is never substituted a second time.
 # fixtures_import <path under the e2e directory>: the import specifier from
 # that spec to `.playwright/fixtures`, one level up per folder plus the e2e
 # folder itself, since a feature folder may nest.
@@ -193,6 +191,8 @@ fixtures_import() {
   printf '%s' "$specifier"
 }
 
+# Placeholders are spliced in one left-to-right pass, so text a value carries
+# (even a literal placeholder name) is never substituted a second time.
 render_spec_file() {
   local output_file="$4" body_file="$4.body" digest chosen_template="${5:-$template_path}"
   UAT_GIVEN="$1" UAT_WHEN="$2" UAT_THEN="$3" UAT_THEN_JS="$(javascript_literal "$3")" UAT_FIXTURES_IMPORT="${6:-}" \

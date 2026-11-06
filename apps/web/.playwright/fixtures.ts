@@ -43,7 +43,8 @@ import {
  * The builders are the seam between the mocks and a real backend: specs reach
  * setup only through them, never through the seed surface. A project that
  * runs the same specs as its own end-to-end suite swaps in builders that seed
- * its real backend and runs with `MSW_ENABLED=false`; GAIA ships none.
+ * its real backend and points `baseURL` at a server running without MSW;
+ * GAIA ships none.
  *
  * A form's own submission is a real-server post whose body `serializeForm`
  * (`./html.ts`) builds from the served form.

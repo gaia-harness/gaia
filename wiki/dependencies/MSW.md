@@ -22,7 +22,7 @@ All three share the handler set from `apps/web/test/mocks`. Handler and utility 
 
 ## Seed surface
 
-The dev server holds two `@msw/data` stores: the server network's, which answers loaders, actions and `.data` requests, and the browser network's, one per page load. A Playwright Given builder seeds the server's store, and forwarding makes it the only store a seeded page reads.
+A dev run holds two `@msw/data` stores: the server network's in the dev server, which answers the API calls loaders and actions make, and the browser network's in the page, one per page load. A Playwright Given builder seeds the server's store, and forwarding makes it the only store a seeded page reads.
 
 - **Gate:** `apps/web/test/msw-seed/plugin.ts`, registered in `apps/web/vite.config.ts`, applies only to `vite serve` with `MSW_SEED=true`, which only the Playwright worker server sets (with `MSW_ENABLED=true`). A build or a plain `pnpm dev` carries none of it.
 - **Seed:** `POST /__gaia/msw/seed` with `{collection, records}` validates every record against the collection's server schema first, then creates them; a bad record gets a 400 naming the collection, index and field. Builders reach it through `seedRecords` (`apps/web/.playwright/msw-seed.ts`), never a spec directly.
