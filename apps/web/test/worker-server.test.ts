@@ -58,6 +58,35 @@ describe('acquireStartLock', () => {
     release();
   });
 
+  // A parent that never reaps (a container whose PID 1 is node, here a shell
+  // that execs `sleep`) leaves an exited holder as a zombie, which a signal
+  // probe still finds.
+  test('takes over a lock whose holder is a zombie', async () => {
+    const parent = spawn(
+      '/bin/sh',
+      ['-c', 'sleep 0 & echo $!; exec sleep 30'],
+      {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }
+    );
+
+    try {
+      const [output] = (await once(parent.stdout, 'data')) as [Buffer];
+      const zombieProcessId = Number(String(output).trim());
+
+      // Lets `sleep 0` exit, so the holder is a zombie at the first lock read.
+      await delay(200);
+      fs.writeFileSync(lockFile, String(zombieProcessId));
+
+      const release = await acquireStartLock(lockFile, 1000);
+
+      expect(fs.readFileSync(lockFile, 'utf8')).toBe(String(process.pid));
+      release();
+    } finally {
+      parent.kill('SIGKILL');
+    }
+  });
+
   test('a second release leaves a later holder lock in place', async () => {
     const release = await acquireStartLock(lockFile);
 

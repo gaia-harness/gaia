@@ -1,4 +1,4 @@
-import {spawn} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -31,14 +31,40 @@ export const START_LOCK_TIMEOUT_MILLISECONDS =
 const LOCK_POLL_INTERVAL_MILLISECONDS = 50;
 const READY_POLL_INTERVAL_MILLISECONDS = 250;
 
-/** Whether a process exists; one owned by another user counts as alive. */
+// The process state letter: Linux's /proc stat field after the command name,
+// which can itself hold spaces and parentheses, so the last ')' ends it; other
+// systems have no /proc, so ask `ps`.
+const readProcessState = (processId: number): string => {
+  if (process.platform === 'linux') {
+    const stat = fs.readFileSync(`/proc/${processId}/stat`, 'utf8');
+
+    return stat.slice(stat.lastIndexOf(')') + 1).trim();
+  }
+
+  return spawnSync('/bin/ps', ['-o', 'stat=', '-p', String(processId)], {
+    encoding: 'utf8',
+  }).stdout.trim();
+};
+
+/**
+ * Whether a process is running. One owned by another user counts as alive;
+ * one that exited but is not yet reaped (a zombie) counts as dead.
+ */
 export const isProcessAlive = (processId: number): boolean => {
   try {
     process.kill(processId, 0);
-
-    return true;
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+
+  // A signal probe still finds a zombie, and nothing reaps one whose parent
+  // never waits (a container whose PID 1 is node). A failed read keeps the
+  // probe's answer: a live holder taken for dead would let two starts run at
+  // once.
+  try {
+    return !readProcessState(processId).startsWith('Z');
+  } catch {
+    return true;
   }
 };
 
