@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Holds a plan run's test authors to their file scope: the wave's New tests
 # files and the stubs those tests import. A plan orchestrator takes a snapshot
-# right before a wave's test authors run and checks the tree once they return,
+# right before each round of a wave's test authors and checks the tree once it returns,
 # before the RED check, so an author that wrote implementation is caught while
 # the test review can still run against stubs only.
 #
@@ -10,7 +10,7 @@
 #   author-scope.sh check --root <tree root> --snapshot <snapshot dir> [--revert] --tests <file>...
 #
 # snapshot records every tracked path that differs from HEAD and every
-# untracked, not-ignored path, with a copy of its content: a later wave starts
+# untracked, not-ignored path, with a copy of its content when it exists: a later wave starts
 # on an earlier wave's uncommitted edits, so HEAD alone is the wrong baseline.
 #
 # check lists each path whose content changed since the snapshot (any tool:

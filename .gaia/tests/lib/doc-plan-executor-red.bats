@@ -246,9 +246,9 @@ check_author_scope() {
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
     '**The prompt template MUST open with the dispatch' \
-    '`You are a task executor for the <plan> plan, Phase <N>, task-<T>.`' \
     '`You are the test author for the <plan> plan, Phase <N>, task-<T>:' \
-    'Write no implementation, even where the task doc describes it.`' || return 1
+    'Write no implementation, even where the task doc describes it.`' \
+    '`You are a task executor for the <plan> plan, Phase <N>, task-<T>.`' || return 1
 }
 
 check_stub_signature() {
