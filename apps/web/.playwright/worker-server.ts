@@ -149,9 +149,9 @@ const stopProcessGroup = (processId: number | undefined): void => {
 
 // A worker killed before `stop` runs leaves its database folder behind, and
 // each start mints a new name, so the folder is recorded per index in the
-// output folder and removed by the next start for that index. Only a folder
-// of this prefix is removed, never a glob sweep: another tree may own a live
-// one.
+// output folder and removed by the next start for that index. It removes only
+// a folder named with `DATABASE_DIRECTORY_PREFIX`, never a glob sweep: another
+// tree may own a live one.
 const reclaimAbandonedDatabaseDirectory = (recordFile: string): void => {
   let abandonedDirectory: string;
 
@@ -175,8 +175,8 @@ export type WorkerServer = {
 
 /**
  * Starts one worker's dev server on a free port with its own file database in
- * a new temp folder, which `stop` removes (and the next start for the same
- * index removes if `stop` never ran), and resolves once it answers.
+ * a new temp folder, which `stop` removes, or the next start for the same
+ * index if `stop` never ran, and resolves once it answers.
  *
  * Starts are serialized across worker processes: each `react-router dev`
  * regenerates route types into the package's shared `.react-router/types`
