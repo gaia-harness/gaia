@@ -176,13 +176,10 @@ test("adds two numbers", () => {
 }
 
 # ---------------------------------------------------------------------------
-# .each carve-out (gaia-react/gaia#2224): a test.each title carries its
-# per-row substitutions inside a plain string literal ($prop or printf %s),
-# which the signal helper cannot tell apart from an ordinary static title by
-# AST kind alone. vitest expands the row into the fullName it records, so the
-# declared title here never matches what the ledger would hold; the helper
-# must emit no signal for it, the same "uncomputable identity" carve-out a
-# template-literal title gets, so a never-captured .each test still commits.
+# A test.each table is one test owing one RED, named by its declared template.
+# vitest records each row under its expanded title, so the capture hook files a
+# failing row under the template whose rowPattern the row matches, and one
+# failing row clears the table.
 # ---------------------------------------------------------------------------
 TEST_EACH_TEST='import {expect, test} from "vitest";
 test.each([
@@ -193,10 +190,22 @@ test.each([
 });
 '
 
-@test "a new test.each test with a \$prop title commits with no RED demand" {
+@test "a new test.each test with no RED is denied under its template name" {
   write_file "apps/web/app/utils/x/index.test.ts" "$TEST_EACH_TEST"
   stage "apps/web/app/utils/x/index.test.ts"
   [ "$(ledger_lines)" -eq 0 ]
+  run_check
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *'301s $from to $to'* ]]
+}
+
+@test "a new test.each test commits once one failing row is captured" {
+  write_file "apps/web/app/utils/x/index.test.ts" "$TEST_EACH_TEST"
+  canned_fail_json "$REPO/canned.json" "apps/web/app/utils/x/index.test.ts" "301s /en to /"
+  run_capture "apps/web/app/utils/x/index.test.ts" "$REPO/canned.json"
+  [ "$(ledger_lines)" -eq 1 ]
+  stage "apps/web/app/utils/x/index.test.ts"
   run_check
   [ "$status" -eq 0 ]
   ! denied
