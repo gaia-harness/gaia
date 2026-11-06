@@ -435,8 +435,8 @@ function classifyKind(testNode) {
 const lines = [];
 
 // ancestors: one {title, expands, table} per enclosing describe, outermost
-// first; table is a `.each`/`.for` describe's table expression, which the
-// signal hashes with the test. unmatchable: true once an enclosing describe's
+// first; table is a `.each`/`.for` describe's callee (`describe.each(rows)` or
+// its tagged template), which the signal hashes with the test. unmatchable: true once an enclosing describe's
 // title is not a literal (a template substitution, an identifier, any other
 // expression): its runtime name is in no source text a pattern could match,
 // and a static title further down cannot repair that, so it covers the subtree.
