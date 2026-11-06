@@ -136,21 +136,70 @@ CASE_TABLE_NAME='rejects $email'
   [ -z "$output" ]
 }
 
-@test "a test.for clears once the capture hook records one failing row" {
+# Feeds the capture hook a vitest report on $UNIT_PATH whose failing rows are
+# the arguments, each a fullName as vitest prints it.
+capture_failing_rows() {
   local report="$BATS_TEST_TMPDIR/report.json" payload
-  write_file "$UNIT_PATH" "$CASE_TABLE_TEST"
   # vitest names the file by its physical path (macOS /private/var, not /var).
   jq -n --arg file "$(cd "$REPO" && pwd -P)/$UNIT_PATH" '{testResults: [{name: $file, status: "failed", message: "",
-    assertionResults: [
-      {fullName: "rejects a@x.io", status: "failed", failureMessages: ["AssertionError: expected a@x.io"]},
-      {fullName: "rejects b@x.io", status: "passed", failureMessages: []}]}]}' > "$report"
+    assertionResults: [$ARGS.positional[] | {fullName: ., status: "failed", failureMessages: ["AssertionError: row failed"]}]}]}' \
+    --args "$@" > "$report"
   payload=$(jq -nc --arg command "pnpm test --run $UNIT_PATH" --arg cwd "$REPO" \
     '{tool_name: "Bash", tool_input: {command: $command}, tool_response: {stdout: "", stderr: "", interrupted: false}, cwd: $cwd}')
   (cd "$REPO" && printf '%s' "$payload" \
     | RED_CAPTURE_JSON_OVERRIDE="$report" bash "$HOME_ROOT/.claude/hooks/capture-red-observations.sh") >/dev/null
+}
+
+@test "a test.for clears once the capture hook records one failing row" {
+  write_file "$UNIT_PATH" "$CASE_TABLE_TEST"
+  capture_failing_rows "rejects a@x.io"
   run bash "$SCRIPT" --root "$REPO"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+}
+
+# vitest names a describe.each row by the expanded describe title, one space,
+# then the test title.
+DESCRIBE_TABLE_TEST='import {describe, expect, test} from "vitest";
+describe.each([{group: "a"}, {group: "b"}])("group $group", ({group}) => {
+  test("accepts the group", () => {
+    expect(group).toBe("b");
+  });
+  test.each([1, 2])("counts %s", (count) => {
+    expect(count).toBe(2);
+  });
+});
+'
+
+@test "each test in a new describe.each whose rows never failed is pending under its template name" {
+  write_file "$UNIT_PATH" "$DESCRIBE_TABLE_TEST"
+  run bash "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 1 ]
+  [ "$output" = "$UNIT_PATH	group \$group accepts the group
+$UNIT_PATH	group \$group counts %s" ]
+}
+
+@test "a describe.each test clears once one of its rows fails, and only that test clears" {
+  write_file "$UNIT_PATH" "$DESCRIBE_TABLE_TEST"
+  capture_failing_rows "group a accepts the group"
+  run bash "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 1 ]
+  [ "$output" = "$UNIT_PATH	group \$group counts %s" ]
+
+  capture_failing_rows "group b counts 1"
+  run bash "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "editing a describe.each table after its RED makes the test pending again" {
+  write_file "$UNIT_PATH" "$DESCRIBE_TABLE_TEST"
+  capture_failing_rows "group a accepts the group" "group a counts 1"
+  write_file "$UNIT_PATH" "$(printf '%s' "$DESCRIBE_TABLE_TEST" | sed 's/group: "b"/group: "c"/')"
+  run bash "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 1 ]
+  [ "$output" = "$UNIT_PATH	group \$group accepts the group
+$UNIT_PATH	group \$group counts %s" ]
 }
 
 @test "an emergent test owes no RED, the same as at the commit gate" {

@@ -18,8 +18,9 @@
 //    "firstLine":N,"ranges":[[start,end],...]}
 // firstLine and ranges are 1-based inclusive lines of the regions the signal
 // hashes, comments above a region excluded; a story entry lists several.
-// A test-level .each/.for line names its declared template and adds
-// "rowPattern" (./row-pattern.mjs), which the capture hook matches rows to.
+// A test under a .each/.for table (test or describe level) is named by its
+// declared templates and adds "rowPattern" (./row-pattern.mjs), which the
+// capture hook matches rows to; each enclosing describe table is hashed too.
 //
 // Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF4
 // story file; its fullName and signal rules and refusal list live in the
@@ -362,9 +363,12 @@ function rangeOf(node) {
   return [start.line + 1, end.line + 1];
 }
 
-function signalFor(node) {
-  const text = textWithoutComments(node.getStart(sourceFile), node.getEnd());
-  const normalized = normalize(text);
+// One node hashes as itself; several (a describe table, then the test) hash
+// newline-joined, so a plain test's signal is unchanged by the join.
+function signalFor(nodes) {
+  const normalized = nodes
+    .map((node) => normalize(textWithoutComments(node.getStart(sourceFile), node.getEnd())))
+    .join('\n');
   const hex = createHash('sha256').update(normalized, 'utf8').digest('hex');
   return `sha256:${hex}`;
 }
@@ -430,31 +434,30 @@ function classifyKind(testNode) {
 
 const lines = [];
 
-// unmatchable: true once an enclosing describe's own title is uncomputable,
-// whether because it carries a title-expanding modifier (a per-row runtime
-// expansion) or because titleOf otherwise returned null (a template
-// substitution, an identifier, or any other non-literal title argument). Either way the block's runtime name
-// is not the declared source text, so every descendant's fullName would be
-// built on a prefix that does not exist anywhere but at runtime; an
-// otherwise-static title further down cannot repair that, so the state
-// propagates to the whole subtree rather than resetting at the next describe.
+// ancestors: one {title, expands, table} per enclosing describe, outermost
+// first; table is a `.each`/`.for` describe's table expression, which the
+// signal hashes with the test. unmatchable: true once an enclosing describe's
+// title is not a literal (a template substitution, an identifier, any other
+// expression): its runtime name is in no source text a pattern could match,
+// and a static title further down cannot repair that, so it covers the subtree.
 function visit(node, ancestors, unmatchable) {
   if (ts.isCallExpression(node)) {
     const blockKind = blockKindOf(node);
+    const expands = calleeChainHasProperty(node, TITLE_EXPANDING_MODIFIERS);
     if (blockKind === 'test') {
       const title = unmatchable ? null : titleOf(node);
-      const expandsRows = calleeChainHasProperty(node, TITLE_EXPANDING_MODIFIERS);
-      const prefix = ancestors.map((name) => `${name} `).join('');
-      const rowPattern =
-        title !== null && expandsRows ? rowPatternFor(prefix, title) : null;
-      if (title !== null && (!expandsRows || rowPattern !== null)) {
+      const segments = [...ancestors, {title, expands}];
+      const anyExpands = segments.some((segment) => segment.expands);
+      const rowPattern = title !== null && anyExpands ? rowPatternFor(segments) : null;
+      if (title !== null && (!anyExpands || rowPattern !== null)) {
+        const hashed = [...ancestors.flatMap(({table}) => table ?? []), node];
         lines.push(
           JSON.stringify({
-            fullName: prefix + title,
-            signal: signalFor(node),
+            fullName: segments.map((segment) => segment.title).join(' '),
+            signal: signalFor(hashed),
             kind: classifyKind(node),
             firstLine: rangeOf(node)[0],
-            ranges: [rangeOf(node)],
+            ranges: hashed.map(rangeOf),
             ...(rowPattern === null ? {} : {rowPattern}),
           }),
         );
@@ -472,13 +475,10 @@ function visit(node, ancestors, unmatchable) {
         ts.forEachChild(node, (child) => visit(child, ancestors, unmatchable));
         return;
       }
-      const expandsRows = calleeChainHasProperty(node, TITLE_EXPANDING_MODIFIERS);
-      const title = unmatchable || expandsRows ? null : titleOf(node);
-      const nextAncestors =
-        title !== null ? [...ancestors, title] : ancestors;
-      const nextUnmatchable = unmatchable || title === null;
+      const title = unmatchable ? null : titleOf(node);
+      const segment = {title, expands, table: expands ? node.expression : null};
       ts.forEachChild(node, (child) =>
-        visit(child, nextAncestors, nextUnmatchable),
+        visit(child, [...ancestors, segment], unmatchable || title === null),
       );
       return;
     }

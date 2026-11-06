@@ -1,10 +1,11 @@
 /**
  * Pins the title handling of the RED-ledger signal helper
  * (`.gaia/scripts/red-ledger/extract-test-signals.mjs`): a dynamic-title
- * `test`, or anything under a `.each`/`.for` or dynamic-title `describe`, has
- * no source title vitest preserves verbatim at runtime, so the helper emits
- * nothing for it rather than an identity the RED ledger could never match. A
- * test-level `.each`/`.for` is named by its template plus a row pattern.
+ * `test`, or anything under a dynamic-title `describe`, has no source title
+ * vitest preserves verbatim at runtime, so the helper emits nothing for it
+ * rather than an identity the RED ledger could never match. A test under a
+ * `.each`/`.for` table, at test or describe level, is named by its template
+ * plus a row pattern.
  */
 import {describe, expect, test} from 'vitest';
 import {execFileSync, spawnSync} from 'node:child_process';
@@ -46,11 +47,10 @@ const runOnSource = (source: string): ExtractedSignal[] =>
     .map((line) => JSON.parse(line) as ExtractedSignal);
 
 /**
- * A test-level `.each`/`.for` call is one test owing one RED: the helper names
- * it by its declared template and adds a `rowPattern` that matches every
+ * A test under a `.each`/`.for` table is one test owing one RED: the helper
+ * names it by its declared template and adds a `rowPattern` that matches every
  * fullName vitest can expand a row into, so the capture hook can file a
- * failing row's RED under the template. A describe-level one still emits
- * nothing for its subtree (below).
+ * failing row's RED under the template.
  */
 const rowEntry = (source: string): ExtractedSignal => {
   const lines = runOnSource(source);
@@ -164,28 +164,82 @@ describe('extract-test-signals test-level .each/.for rows', () => {
   });
 });
 
-describe('extract-test-signals describe-level .each handling', () => {
-  test('describe.each with a $prop title emits no signal for a nested static-titled test', () => {
-    const lines = runOnSource(`
-      describe.each([{group: 'a'}])('group $group', ({group}) => {
+const describeTableSource = (group: string) => `
+  describe.each([{group: '${group}'}])('group $group', ({group}) => {
+    test('does the static thing', () => {
+      expect(group).toBeTruthy();
+    });
+  });
+`;
+
+describe('extract-test-signals describe-level .each/.for rows', () => {
+  test.for([
+    {call: "describe.each([{group: 'a'}])", template: 'group $group'},
+    {call: "describe.for([{group: 'a'}])", template: 'group $group'},
+    {call: "describe.each([['a']])", template: '%s group'},
+  ])(
+    '$call names a nested test by its template and matches its row',
+    ({call, template}) => {
+      const entry = rowEntry(`
+      ${call}('${template}', (group) => {
+        test('does the static thing', () => {
+          expect(group).toBeTruthy();
+        });
+      });
+    `);
+      const row = `${template.replace(/\$group|%s/, 'a')} does the static thing`;
+
+      expect(entry.fullName).toBe(`${template} does the static thing`);
+      expect(matchesRow(entry, row)).toBe(true);
+      expect(matchesRow(entry, `${row} later`)).toBe(false);
+    }
+  );
+
+  test('a tagged-template describe.each names a nested test by its template', () => {
+    const entry = rowEntry(`
+      describe.each\`
+        group
+        \${'a'}
+      \`('group $group', ({group}) => {
         test('does the static thing', () => {
           expect(group).toBeTruthy();
         });
       });
     `);
 
-    expect(lines).toEqual([]);
+    expect(entry.fullName).toBe('group $group does the static thing');
+    expect(matchesRow(entry, 'group a does the static thing')).toBe(true);
   });
 
-  test('tagged-template describe.each emits no signal for a nested static-titled test', () => {
+  test('every title on the path joins the pattern, however deep the tables nest', () => {
+    const entry = rowEntry(`
+      describe('form', () => {
+        describe.each([{group: 'a'}])('group $group', () => {
+          describe('inner', () => {
+            test.each([1])('counts %s', (count) => {
+              expect(count).toBe(1);
+            });
+          });
+        });
+      });
+    `);
+
+    expect(entry.fullName).toBe('form group $group inner counts %s');
+    expect(matchesRow(entry, 'form group a inner counts 1')).toBe(true);
+    expect(matchesRow(entry, 'form group a counts 1')).toBe(false);
+  });
+
+  test('editing the describe table changes the nested test signal', () => {
+    expect(rowEntry(describeTableSource('a')).signal).not.toBe(
+      rowEntry(describeTableSource('b')).signal
+    );
+  });
+
+  test('a test under a describe table with no literal text past the first token emits nothing', () => {
     const lines = runOnSource(`
-      describe.each\`
-        group
-        \${'a'}
-        \${'b'}
-      \`('group $group', ({group}) => {
-        test('does the static thing', () => {
-          expect(group).toBeTruthy();
+      describe.each([{group: 'a'}])('$group', () => {
+        test.each([1])('%s', (count) => {
+          expect(count).toBe(1);
         });
       });
     `);
@@ -207,13 +261,12 @@ describe('extract-test-signals describe-level .each handling', () => {
 });
 
 /**
- * Pins the dynamic-title describe carve-out (gaia-react/gaia#2224, reached
- * through the template-literal trigger rather than `.each`): a describe whose
- * title is a template literal with a substitution is expanded by vitest at
- * runtime, same as `.each`, so the declared source title is never the prefix
- * vitest records. `titleOf` already returns null for it; this suite pins that
- * null propagates to `unmatchable` for every title-null reason, not only
- * `.each`, so descendants stop emitting under a silently shortened prefix.
+ * Pins the dynamic-title describe carve-out: a describe whose title is a
+ * template literal with a substitution is computed at runtime, so the declared
+ * source title is never the prefix vitest records, and no row pattern can
+ * stand in for it. `titleOf` returns null for it; this suite pins that the
+ * null makes the whole subtree unmatchable, so descendants never emit under a
+ * silently shortened prefix.
  */
 describe('extract-test-signals dynamic-title describe handling', () => {
   test('a template-literal-titled describe emits no signal for a nested static test', () => {
@@ -276,20 +329,6 @@ describe('extract-test-signals dynamic-title describe handling', () => {
 
     expect(lines).toHaveLength(1);
     expect(lines[0]?.fullName).toBe('outer static sibling');
-  });
-});
-
-describe('extract-test-signals describe-level .for handling', () => {
-  test('describe.for with a $prop title emits no signal for a nested static-titled test', () => {
-    const lines = runOnSource(`
-      describe.for([{group: 'a'}])('group $group', ({group}) => {
-        test('does the static thing', () => {
-          expect(group).toBeTruthy();
-        });
-      });
-    `);
-
-    expect(lines).toEqual([]);
   });
 });
 

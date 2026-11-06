@@ -268,6 +268,19 @@ assert_spaced_redirect_target_absent() {
   [ "$(ledger_lines)" -eq 0 ]
 }
 
+# The JSON fixture is a real vitest run of the fixture file, trimmed to the
+# fields the hook reads, so the row names are the ones vitest really reports.
+@test "a failing row of a describe.each files its RED under each test's template" {
+  local fixture="$FIXTURE_RELATIVE_DIRECTORY/case-table-describe.test.ts" signals
+  run_capture "Bash" "pnpm test --run $fixture" \
+    "$JSON_FIXTURE_RELATIVE_DIRECTORY/case-table-describe-row-fail.json"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.fullName' "$LEDGER_ABSOLUTE_PATH" | sort | tr '\n' '|')" = 'group $group accepts the group|group $group counts %s|group $group counts %s|' ]
+  signals=$( (cd "$REPO_ROOT" && node .gaia/scripts/red-ledger/extract-test-signals.mjs "$fixture") \
+    | jq -sc 'map({key: .fullName, value: .signal}) | from_entries')
+  [ "$(jq -sc --argjson signals "$signals" '[.[] | select(.signal != $signals[.fullName])] | length' "$LEDGER_ABSOLUTE_PATH")" = 0 ]
+}
+
 @test "failureKind is runtime for a missing-implementation error" {
   run_capture "Bash" \
     "pnpm test --run $FIXTURE_RELATIVE_DIRECTORY/runtime-fail.test.ts" \

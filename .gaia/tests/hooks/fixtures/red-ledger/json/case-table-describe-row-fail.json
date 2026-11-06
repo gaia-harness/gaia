@@ -1,0 +1,74 @@
+{
+  "numFailedTests": 3,
+  "numPassedTests": 3,
+  "success": false,
+  "testResults": [
+    {
+      "name": ".gaia/tests/hooks/fixtures/red-ledger/case-table-describe.test.ts",
+      "status": "failed",
+      "message": "",
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "group a"
+          ],
+          "title": "accepts the group",
+          "fullName": "group a accepts the group",
+          "status": "failed",
+          "failureMessages": [
+            "AssertionError: expected 'a' to be 'b' // Object.is equality"
+          ]
+        },
+        {
+          "ancestorTitles": [
+            "group a"
+          ],
+          "title": "counts 1",
+          "fullName": "group a counts 1",
+          "status": "failed",
+          "failureMessages": [
+            "AssertionError: expected 1 to be 2 // Object.is equality"
+          ]
+        },
+        {
+          "ancestorTitles": [
+            "group a"
+          ],
+          "title": "counts 2",
+          "fullName": "group a counts 2",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "group b"
+          ],
+          "title": "accepts the group",
+          "fullName": "group b accepts the group",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "group b"
+          ],
+          "title": "counts 1",
+          "fullName": "group b counts 1",
+          "status": "failed",
+          "failureMessages": [
+            "AssertionError: expected 1 to be 2 // Object.is equality"
+          ]
+        },
+        {
+          "ancestorTitles": [
+            "group b"
+          ],
+          "title": "counts 2",
+          "fullName": "group b counts 2",
+          "status": "passed",
+          "failureMessages": []
+        }
+      ]
+    }
+  ]
+}
