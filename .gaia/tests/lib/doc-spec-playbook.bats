@@ -10,7 +10,9 @@
 #      index (.claude/commands/gaia-spec.md), each sub-reference moved out of
 #      spec.md has a `Read` line there, and the self-review checklist carries
 #      its marked bullet (read by the sub-agent, never the main thread);
-#   c. each moved section lives in exactly one file of the playbook set.
+#   c. each moved section lives in exactly one file of the playbook set;
+#   e. the SPEC audit's coverage and consistency lens flags a UAT the SPEC's
+#      own state rules make impossible, citing both lines.
 #
 # DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
 # playbook files; each invariant has a red twin that breaks such a copy and
@@ -293,5 +295,60 @@ menus_fit() {
     mv "$file.new" "$file"
   done
   run menus_fit "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# --- e. the coverage lens checks UATs against the SPEC's own rules ------------
+
+COV_BULLET='- **Coverage & consistency (id prefix `COV`).**'
+RT_BULLET='- **Red-team & feasibility (id prefix `RT`).**'
+IMPOSSIBLE_UAT_CLAUSE="a UAT whose \`given\`, \`when\` or \`then\` the SPEC's own behavior rules make impossible, such as a control, transition or value the SPEC allows only in another state, is a contract defect: cite the UAT line and the rule line; "
+IMPOSSIBLE_UAT_NEEDLES=(
+  "the SPEC's own behavior rules make impossible"
+  'allows only in another state'
+  'cite the UAT line and the rule line'
+)
+
+# cov_flags_impossible_uat <root>: audit.md has exactly one coverage lens
+# bullet, and that bullet carries every needle of the impossible-UAT clause.
+cov_flags_impossible_uat() {
+  local audit="$1/$REFERENCES/spec/audit.md" bullet count needle
+  count="$(awk -v want="$COV_BULLET" 'index($0, want) == 1 { n++ } END { print n + 0 }' "$audit")"
+  [ "$count" -eq 1 ] || { printf 'expected one coverage lens bullet, found %s\n' "$count" >&2; return 1; }
+  bullet="$(awk -v want="$COV_BULLET" 'index($0, want) == 1' "$audit")"
+  for needle in "${IMPOSSIBLE_UAT_NEEDLES[@]}"; do
+    grep -qF -- "$needle" <<<"$bullet" || { printf 'coverage lens lacks: %s\n' "$needle" >&2; return 1; }
+  done
+}
+
+# remove_text <file> <text>: deletes every occurrence of text in file, in place.
+remove_text() {
+  awk -v needle="$2" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) substr($0, i + length(needle)) } { print }' "$1" >"$1.new"
+  mv "$1.new" "$1"
+}
+
+@test "e. the coverage lens flags a UAT the SPEC's own rules make impossible" {
+  cov_flags_impossible_uat "$PLAYBOOK_ROOT"
+}
+
+@test "e. the impossible-UAT check goes red when any needle is dropped" {
+  local needle copy
+  for needle in "${IMPOSSIBLE_UAT_NEEDLES[@]}"; do
+    copy="$(scratch_copy)"
+    remove_text "$copy/$REFERENCES/spec/audit.md" "$needle"
+    run cov_flags_impossible_uat "$copy"
+    [ "$status" -ne 0 ] || { printf 'dropping "%s" stayed green\n' "$needle" >&2; return 1; }
+  done
+}
+
+@test "e. the impossible-UAT check goes red when the clause moves to the red-team lens" {
+  copy="$(scratch_copy)"
+  audit="$copy/$REFERENCES/spec/audit.md"
+  grep -qF -- "$IMPOSSIBLE_UAT_CLAUSE" "$audit"
+  remove_text "$audit" "$IMPOSSIBLE_UAT_CLAUSE"
+  awk -v want="$RT_BULLET" -v clause="$IMPOSSIBLE_UAT_CLAUSE" 'index($0, want) == 1 { $0 = $0 " " clause } { print }' "$audit" >"$audit.new"
+  mv "$audit.new" "$audit"
+  grep -qF -- "$IMPOSSIBLE_UAT_CLAUSE" "$audit"
+  run cov_flags_impossible_uat "$copy"
   [ "$status" -ne 0 ]
 }
