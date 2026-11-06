@@ -148,7 +148,7 @@ TEST_FILE=apps/web/app/services/api/tests/base-url.test.ts
   [ ! -e "$REPO/apps/web/app/sessions.server/secret.ts" ]
 }
 
-@test "a --tests value that cannot be normalized exits 2 and deletes nothing" {
+@test "a --tests value that is not a repo-relative path inside the root exits 2 and deletes nothing" {
   snapshot
   write_file "$TEST_FILE" $'import {create} from \'..\';\n'
   check --revert --tests /elsewhere/base-url.test.ts

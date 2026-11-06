@@ -16,7 +16,8 @@
 # check lists each path whose content changed since the snapshot (any tool:
 # Edit, Write, a heredoc or a script) and is outside the allowed set:
 #   - a --tests file (repo-relative; an absolute path under the root or a
-#     trailing comma is accepted, and any other form exits 2);
+#     trailing comma is accepted; an absolute path outside the root, an inner
+#     comma or a `..` segment exits 2);
 #   - a stub file: a file a --tests file imports through a relative or `~/`
 #     specifier (`~/` is `<nearest package dir>/app/`). A stub file new since
 #     the snapshot is allowed whole; one that existed may only gain lines, since
@@ -166,9 +167,7 @@ work_directory=$(mktemp -d) || exit 2
 trap 'rm -rf "$work_directory"' EXIT
 allowed_tests="$work_directory/tests"
 allowed_stubs="$work_directory/stubs"
-# A --tests value is repo-relative, but the absolute spelling and the trailing
-# comma of the comma-separated New tests line are accepted. A value still
-# unusable halts here, before anything is reverted: reverting against an
+# Halt on an unusable value before anything is reverted: reverting against an
 # unmatched path would delete the author's own test file.
 : > "$allowed_tests"
 while IFS= read -r test_value; do
