@@ -236,7 +236,7 @@ check_author_arm() {
     'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, or you cannot tell whether the test or the app is wrong, leave it unchanged and say so;' \
     'Report each edit under ### Deviations from plan as file:line, before -> after. The failing tests:' \
     'then the implementer'"'"'s `### Deviations from plan` note if it had one.' \
-    'An author-arm prompt carries no `Yield handoff:` line.' \
+    'An author-arm prompt carries no `Yield handoff:` line' \
     '- **Re-run the gate.**' || return 1
 }
 
@@ -254,6 +254,7 @@ check_author_arm_implementer() {
     'For a failing test (not a typecheck or lint error), also dispatch a fresh executor for the owning task in parallel with its author' \
     'Fix the cause only in this task'"'"'s own non-test files; edit no test file.' \
     'If the test is wrong rather than the app, edit nothing and write test wrong under ### Deviations from plan, naming the test.' \
+    'opens with its own dispatch'"'"'s role line, the test author'"'"'s or the task executor'"'"'s.' \
     'When neither the author nor the executor for a task edits a file' \
     'the phase halts under Stop conditions with no re-run, listing each `test wrong` line.' \
     '- **Outside arm.**' || return 1
@@ -321,7 +322,7 @@ check_author_arm_type_lint() {
     'Never fix it on the main thread.' \
     '- **Author arm.**' \
     'For a typecheck or lint error in an authored Playwright file, the line after the task prompt is `A test file this task authored fails the phase typecheck or lint. Fix only these errors, in these tests'"'"' files; edit no app code, and never loosen an assertion to clear one. Report each edit under ### Deviations from plan as file:line, before -> after. The errors:`, then the gate output lines for its files.' \
-    'An author-arm prompt carries no `Yield handoff:` line.' || return 1
+    'An author-arm prompt carries no `Yield handoff:` line' || return 1
 }
 
 # The planner never writes a gate's retry or halt rule into a step of its own:
@@ -539,6 +540,10 @@ resume_point() {
   red check_author_arm_implementer 'listing each `test wrong` line.' 'naming the tests.'
 }
 
+@test "red twin: an author arm that does not say which role line each prompt opens with fails" {
+  red check_author_arm_implementer ' and opens with its own dispatch'"'"'s role line, the test author'"'"'s or the task executor'"'"'s.' '.'
+}
+
 @test "red twin: an author prompt with no leave-the-test-when-unsure clause fails" {
   red check_author_arm_implementer 'or you cannot tell whether the test or the app is wrong, ' ''
 }
@@ -552,7 +557,7 @@ resume_point() {
 }
 
 @test "red twin: an author arm that opts into yielding fails" {
-  red check_author_arm 'An author-arm prompt carries no `Yield handoff:` line.' 'An author-arm prompt ends with a `Yield handoff:` line.'
+  red check_author_arm 'An author-arm prompt carries no `Yield handoff:` line' 'An author-arm prompt ends with a `Yield handoff:` line'
 }
 
 @test "red twin: an author arm that does not replace the executor re-dispatch fails" {
