@@ -71,30 +71,77 @@ has_e2e_call() {
 # may legitimately use as a request context. `request` itself; every name the
 # first destructured parameter of some callback binds (a project request-context
 # fixture such as the signed-in one); every variable the file assigns from
-# request.newContext( or playwright.request.newContext(; and every const, let
-# or var declared from awaiting a call to one of those destructured names
-# (`const rita = await signIn(...)`, a fixture that returns a context). Read
-# from the code-only text, never decided by a name suffix. A destructured
-# page-backed fixture lands in the list too, but no verb call on it is a
-# request call, so the no-page check refuses it, not this list.
-# Limit: the awaited-fixture arm cannot see what the fixture returns. A fixture
+# request.newContext( or playwright.request.newContext(; every const, let or
+# var declared from awaiting a call to one of those destructured names
+# (`const rita = await signIn(...)`, a fixture that returns a context); and,
+# repeated until no name is added, every one declared from awaiting any call
+# whose arguments name a counted receiver as a value
+# (`const rita = await signInAs(request, ...)`, an imported helper). Read from
+# the code-only text, never decided by a name suffix. A destructured
+# page-backed fixture lands in the list too, but no verb call on it, or on what
+# a helper builds from it, is a request call, so the no-page check refuses it,
+# not this list.
+# Limit: neither awaited arm can see what the call returns. A fixture or helper
 # that makes the request itself returns a response, which has no verb method,
 # so it stays refused; one returning a Map or Headers would pass on `.get(`.
-# An imported helper is not a destructured name, so a context it returns does
-# not count.
+# A receiver as a property (`settings.request`), an object key, a property read
+# off a receiver, a destructured result (`const {api} = await setup(request)`)
+# and a helper handed no counted receiver do not count, so those refuse an
+# honest test rather than pass a dishonest one.
 request_receiver_names() {
-  local code flat fixtures fixture
+  local code flat fixtures fixture counted declarations name arguments receiver added
   code=$(uat_lib_code_only "$1") || return 1
   flat=$(printf '%s' "$code" | tr '\n\r\t' '   ')
-  printf '%s\n' request
   fixtures=$(printf '%s' "$flat" | grep -oE '\([[:space:]]*\{[^{}]*\}[[:space:]]*[,)]' | sed -E 's/^\([[:space:]]*\{//; s/\}[[:space:]]*[,)]$//' | tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]*=.*$//; s/^.*:[[:space:]]*//; s/[[:space:]]+$//' | grep -E '^[A-Za-z_$][A-Za-z0-9_$]*$')
-  [ -z "$fixtures" ] || printf '%s\n' "$fixtures"
-  printf '%s' "$flat" | grep -oE '[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=[[:space:]]*(await[[:space:]]+)?(playwright\.)?request\.newContext\(' | sed -E 's/[[:space:]]*=.*$//'
-  while IFS= read -r fixture; do
-    [ -n "$fixture" ] || continue
-    fixture=${fixture//\$/\\\$}
-    printf '%s' "$flat" | grep -oE "(const|let|var)[[:space:]]+[A-Za-z_\$][A-Za-z0-9_\$]*[[:space:]]*=[[:space:]]*await[[:space:]]+$fixture\\(" | sed -E 's/^(const|let|var)[[:space:]]+//; s/[[:space:]]*=.*$//'
-  done <<<"$fixtures"
+  counted=$(
+    printf '%s\n' request
+    [ -z "$fixtures" ] || printf '%s\n' "$fixtures"
+    printf '%s' "$flat" | grep -oE '[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=[[:space:]]*(await[[:space:]]+)?(playwright\.)?request\.newContext\(' | sed -E 's/[[:space:]]*=.*$//'
+    while IFS= read -r fixture; do
+      [ -n "$fixture" ] || continue
+      fixture=${fixture//\$/\\\$}
+      printf '%s' "$flat" | grep -oE "(const|let|var)[[:space:]]+[A-Za-z_\$][A-Za-z0-9_\$]*[[:space:]]*=[[:space:]]*await[[:space:]]+$fixture\\(" | sed -E 's/^(const|let|var)[[:space:]]+//; s/[[:space:]]*=.*$//'
+    done <<<"$fixtures"
+  )
+  # One `name<TAB>arguments` line per awaited declaration, the argument list
+  # cut at its balanced closing parenthesis.
+  declarations=$(printf '%s' "$flat" | awk '
+    { text = text $0 }
+    END {
+      rest = text
+      while (match(rest, /(const|let|var)[ ]+[A-Za-z_$][A-Za-z0-9_$]*[ ]*=[ ]*await[ ]+[A-Za-z_$][A-Za-z0-9_$.]*[ ]*\(/)) {
+        name = substr(rest, RSTART, RLENGTH)
+        rest = substr(rest, RSTART + RLENGTH)
+        sub(/^(const|let|var)[ ]+/, "", name)
+        sub(/[ ]*=.*$/, "", name)
+        depth = 1
+        arguments = ""
+        for (index_of = 1; index_of <= length(rest); index_of++) {
+          character = substr(rest, index_of, 1)
+          if (character == "(") depth++
+          if (character == ")" && --depth == 0) break
+          arguments = arguments character
+        }
+        print name "\t" arguments
+      }
+    }')
+  added=1
+  while [ "$added" -eq 1 ]; do
+    added=0
+    while IFS=$'\t' read -r name arguments; do
+      [ -n "$name" ] || continue
+      grep -qxF -- "$name" <<<"$counted" && continue
+      while IFS= read -r receiver; do
+        receiver=${receiver//\$/\\\$}
+        if grep -qE "(^|[^A-Za-z0-9_\$.])${receiver}[[:space:]]*([^A-Za-z0-9_\$:.[:space:]]|\$)" <<<"$arguments"; then
+          counted=$(printf '%s\n%s' "$counted" "$name")
+          added=1
+          break
+        fi
+      done <<<"$counted"
+    done <<<"$declarations"
+  done
+  printf '%s\n' "$counted"
   return 0
 }
 
