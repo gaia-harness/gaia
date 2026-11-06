@@ -178,7 +178,7 @@ test("adds two numbers", () => {
 # ---------------------------------------------------------------------------
 # A test.each table is one test owing one RED, named by its declared template.
 # vitest records each row under its expanded title, so the capture hook files a
-# failing row under the template whose rowPattern the row matches, and one
+# failing row under the one template whose rowPattern matches it, and one
 # failing row clears the table.
 # ---------------------------------------------------------------------------
 TEST_EACH_TEST='import {expect, test} from "vitest";
