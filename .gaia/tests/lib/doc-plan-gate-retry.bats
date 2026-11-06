@@ -23,7 +23,7 @@ setup() {
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
-  TEST_BODY_BULLET='- **Test body error.** A typecheck or lint error in a file a task'"'"'s `New tests:` line names, other than an authored Playwright file, halts under Stop conditions with no retry, `Reason: type or lint error in a test body after its RED`, naming each file:line and error code or rule: the implementer clause bars editing that body, and an edit voids any RED it has.'
+  TEST_FILE_BULLET='- **New tests file error.** A typecheck or lint error in a file a task'"'"'s `New tests:` line names, other than an authored Playwright file, halts under Stop conditions with no retry, `Reason: type or lint error in a New tests file after its RED`, naming each file:line and error code or rule: the file is the test author'"'"'s, the implementer clause bars editing a test'"'"'s body, and an edit there voids any RED it has.'
 }
 
 # ---------- helpers ----------
@@ -241,16 +241,16 @@ check_author_arm() {
     '- **Re-run the gate.**' || return 1
 }
 
-# A type or lint error in a New tests body (not an authored Playwright file)
-# has no lawful fixer after its RED: the implementer clause bars the edit, and
-# an edit voids any RED it has. So it halts, and never reaches an executor.
-check_test_body_halt() {
+# A type or lint error in a New tests file (not an authored Playwright file)
+# halts and never reaches an executor: the implementer clause bars editing a
+# test's body, and an edit there voids any RED it has.
+check_test_file_halt() {
   local block
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '- **Attribute.**' \
-    "$TEST_BODY_BULLET" \
+    "$TEST_FILE_BULLET" \
     '- **Halt instead.**' || return 1
 }
 
@@ -476,20 +476,20 @@ resume_point() {
   red check_author_arm ', in place of **Attribute** and the executor re-dispatch above;' ';'
 }
 
-@test "a type or lint error in a New tests body halts and never reaches an executor" {
-  green check_test_body_halt
+@test "a type or lint error in a New tests file halts and never reaches an executor" {
+  green check_test_file_halt
 }
 
-@test "red twin: a gate retry without the test body halt fails" {
-  red check_test_body_halt "$TEST_BODY_BULLET" ''
+@test "red twin: a gate retry without the New tests file halt fails" {
+  red check_test_file_halt "$TEST_FILE_BULLET" ''
 }
 
-@test "red twin: a test body error that re-dispatches instead of halting fails" {
-  red check_test_body_halt 'halts under Stop conditions with no retry, `Reason: type or lint error in a test body' 'goes to a fresh executor, `Reason: type or lint error in a test body'
+@test "red twin: a New tests file error that re-dispatches instead of halting fails" {
+  red check_test_file_halt 'halts under Stop conditions with no retry, `Reason: type or lint error in a New tests file' 'goes to a fresh executor, `Reason: type or lint error in a New tests file'
 }
 
-@test "red twin: a test body halt that also catches authored Playwright files fails" {
-  red check_test_body_halt 'line names, other than an authored Playwright file, halts' 'line names halts'
+@test "red twin: a New tests file halt that also catches authored Playwright files fails" {
+  red check_test_file_halt 'line names, other than an authored Playwright file, halts' 'line names halts'
 }
 
 @test "a type or lint error in an authored Playwright file goes to its test author" {
