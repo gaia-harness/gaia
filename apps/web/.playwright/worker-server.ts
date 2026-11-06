@@ -189,25 +189,29 @@ export const startWorkerServer = async ({
     path.join(outputDirectory, START_LOCK_FILE_NAME),
     START_LOCK_TIMEOUT_MILLISECONDS
   );
-  // Off the tree, on local disk: SQLite's WAL needs file locks shared across
-  // processes, and a bind mount such as Docker Desktop's does not share them,
-  // so a builder's closing connection deletes the WAL the server still reads.
-  const databaseDirectory = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'gaia-worker-db-')
-  );
-  const databaseFile = path.join(
-    databaseDirectory,
-    `worker-${parallelIndex}.sqlite`
-  );
+  let databaseDirectory: string | undefined;
   let serverProcessId: number | undefined;
 
   const stop = () => {
     releaseStartLock();
     stopProcessGroup(serverProcessId);
-    fs.rmSync(databaseDirectory, {force: true, recursive: true});
+
+    if (databaseDirectory !== undefined) {
+      fs.rmSync(databaseDirectory, {force: true, recursive: true});
+    }
   };
 
   try {
+    // Off the tree, on local disk: SQLite's WAL needs file locks shared across
+    // processes, and a bind mount such as Docker Desktop's does not share them,
+    // so a builder's closing connection deletes the WAL the server still reads.
+    databaseDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'gaia-worker-db-')
+    );
+    const databaseFile = path.join(
+      databaseDirectory,
+      `worker-${parallelIndex}.sqlite`
+    );
     const port = await findFreePort();
     const baseURL = `http://${WORKER_SERVER_HOST}:${port}`;
     const [executable, ...commandArguments] = command;

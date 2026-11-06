@@ -171,7 +171,7 @@ scratch_copy() {
 }
 
 @test "the database location pin goes red when the file moves back under the output folder" {
-  copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/^    databaseDirectory,$/    outputDirectory,/')"
+  copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/^ +databaseDirectory,$/      outputDirectory,/')"
   run check_database_off_tree "$copy"
   [ "$status" -ne 0 ]
 }
