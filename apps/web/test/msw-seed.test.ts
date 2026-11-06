@@ -4,6 +4,8 @@ import http from 'node:http';
 import type {AddressInfo} from 'node:net';
 import {seedRecords} from '../.playwright/msw-seed';
 import {
+  BASELINE_SEED_FIXTURE,
+  collections as fixtureCollections,
   NETWORK_ERROR_URL,
   SEED_FIXTURE_ORIGIN,
 } from './msw-seed/fixture-service';
@@ -13,38 +15,58 @@ import {MSW_SEED_PREFIX} from './msw-seed/protocol';
 type Middleware = (
   request: IncomingMessage,
   response: ServerResponse,
-  next: () => void
+  next: (error?: unknown) => void
 ) => void;
+
+type ModuleLoaders = Record<string, () => Promise<unknown>>;
 
 // The modules the plugin loads through the dev server's SSR module runner,
 // loaded here through Vitest's own, so the seed and forward endpoints share
 // one store as they do on a dev server. The real-server proof that the
 // runner's instances are the ones the app serves with is the Playwright check
 // in `.playwright/e2e/msw-seed/`.
-const SSR_MODULES: Record<string, () => Promise<unknown>> = {
+const SSR_MODULES: ModuleLoaders = {
   '/test/mocks/database.ts': async () => import('./mocks/database'),
   '/test/mocks/index.ts': async () => import('./mocks'),
   '/test/msw-seed/fixture-service.ts': async () =>
     import('./msw-seed/fixture-service'),
 };
 
+const APP_PATH = '/app-reads-the-store';
+
 const notFound = (response: ServerResponse) => {
   response.writeHead(404);
   response.end();
 };
 
-// Serves the plugin's middleware from this process, mounted the way Vite's
-// connect stack mounts it: under its prefix, with the prefix stripped from
-// the URL the middleware reads.
-const startSeedSurface = async (): Promise<http.Server> => {
-  let mount: undefined | {handler: Middleware; prefix: string};
+// Stands in for the app the dev server renders after every middleware: it
+// reads the store directly, as a route's mocked API call does, never through
+// the seed surface.
+const serveApp = (response: ServerResponse) => {
+  response.writeHead(200, {'content-type': 'application/json'});
+  response.end(
+    JSON.stringify({data: fixtureCollections.seedFixtures.findMany()})
+  );
+};
+
+// Serves the plugin's middleware from this process in the order Vite's
+// connect stack runs it: a prefixed mount sees only its own URLs, with the
+// prefix stripped, and `next(error)` ends the request as a server error.
+const startSeedSurface = async (
+  modules: ModuleLoaders = SSR_MODULES
+): Promise<http.Server> => {
+  const mounts: {handler: Middleware; prefix: string}[] = [];
   const developmentServer = {
     environments: {
-      ssr: {runner: {import: async (url: string) => SSR_MODULES[url]()}},
+      ssr: {runner: {import: async (url: string) => modules[url]()}},
     },
     middlewares: {
-      use: (prefix: string, handler: Middleware) => {
-        mount = {handler, prefix};
+      use: (...mount: [Middleware] | [string, Middleware]) => {
+        mounts.push(
+          mount.length === 1 ?
+            {handler: mount[0], prefix: ''}
+          : {handler: mount[1], prefix: mount[0]}
+        );
       },
     },
   };
@@ -54,14 +76,39 @@ const startSeedSurface = async (): Promise<http.Server> => {
   );
 
   const server = http.createServer((request, response) => {
-    if (mount === undefined || !request.url?.startsWith(mount.prefix)) {
-      notFound(response);
+    const url = request.url ?? '/';
 
-      return;
-    }
+    const runMiddlewareAt = (index: number, error?: unknown): void => {
+      if (error !== undefined) {
+        response.writeHead(500);
+        response.end(String(error));
 
-    request.url = request.url.slice(mount.prefix.length) || '/';
-    mount.handler(request, response, () => notFound(response));
+        return;
+      }
+
+      const mount = mounts.at(index);
+
+      if (mount === undefined) {
+        if (url === APP_PATH) serveApp(response);
+        else notFound(response);
+
+        return;
+      }
+
+      if (!url.startsWith(mount.prefix)) {
+        runMiddlewareAt(index + 1);
+
+        return;
+      }
+
+      request.url = url.slice(mount.prefix.length) || '/';
+      mount.handler(request, response, (nextError) => {
+        request.url = url;
+        runMiddlewareAt(index + 1, nextError);
+      });
+    };
+
+    runMiddlewareAt(0);
   });
 
   await new Promise<void>((resolve) => {
@@ -71,20 +118,26 @@ const startSeedSurface = async (): Promise<http.Server> => {
   return server;
 };
 
+const readServerUrl = (server: http.Server): string =>
+  `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+const closeSurface = async (server: http.Server): Promise<void> =>
+  new Promise((resolve) => {
+    server.close(() => resolve());
+  });
+
 let seedSurface: http.Server;
 let baseURL: string;
 
 beforeAll(async () => {
   vi.stubEnv('MSW_SEED_FIXTURE', 'true');
   seedSurface = await startSeedSurface();
-  baseURL = `http://127.0.0.1:${(seedSurface.address() as AddressInfo).port}`;
+  baseURL = readServerUrl(seedSurface);
 });
 
 afterAll(async () => {
   vi.unstubAllEnvs();
-  await new Promise((resolve) => {
-    seedSurface.close(resolve);
-  });
+  await closeSurface(seedSurface);
 });
 
 const forward = async (targetUrl: string): Promise<Response> =>
@@ -94,6 +147,15 @@ const forward = async (targetUrl: string): Promise<Response> =>
   });
 
 describe('the MSW seed surface', () => {
+  // First in the file: the shared surface must not have served a request yet.
+  test('the app reads the resetTestData baseline on its first request, before any seed call', async () => {
+    const response = await fetch(`${baseURL}${APP_PATH}`);
+
+    expect(((await response.json()) as {data: unknown}).data).toEqual([
+      BASELINE_SEED_FIXTURE,
+    ]);
+  });
+
   test('a seeded record is served back through the forward endpoint', async () => {
     const id = crypto.randomUUID();
     const created = await seedRecords(baseURL, 'seedFixtures', [
@@ -138,6 +200,36 @@ describe('the MSW seed surface', () => {
 
     expect(response.status).toBe(204);
     expect(response.headers.get('x-gaia-msw-network-error')).toBe('true');
+  });
+});
+
+describe('a baseline reset that fails', () => {
+  test('fails every request as a server error instead of leaving it waiting, and is not retried', async () => {
+    const resetTestData = vi.fn(async () => {
+      throw new Error('baseline seed broke');
+    });
+    const surface = await startSeedSurface({
+      ...SSR_MODULES,
+      '/test/mocks/database.ts': async () => ({default: {}, resetTestData}),
+    });
+
+    try {
+      // Bounded: a first-request gate that never settles would hang every
+      // request instead of failing it.
+      const signal = AbortSignal.timeout(2000);
+      const first = await fetch(`${readServerUrl(surface)}${APP_PATH}`, {
+        signal,
+      });
+      const second = await fetch(`${readServerUrl(surface)}${APP_PATH}`, {
+        signal,
+      });
+
+      expect([first.status, second.status]).toEqual([500, 500]);
+      expect(await second.text()).toContain('baseline seed broke');
+      expect(resetTestData).toHaveBeenCalledTimes(1);
+    } finally {
+      await closeSurface(surface);
+    }
   });
 });
 

@@ -6,7 +6,7 @@ language: typescript
 purpose: API mocking layer shared across Vitest, Storybook, and dev
 depends_on: [[MSW]]
 created: 2026-04-20
-updated: 2026-10-28
+updated: 2026-11-07
 tags: [module, msw, testing, mocking]
 ---
 
@@ -80,7 +80,7 @@ await things.update((q) => q.where({id: 'abc'}), {
 
 ### When `resetTestData()` runs
 
-`resetTestData()` is async and runs automatically in an `afterEach` hook in `apps/web/test/setup.ts`, the setup file of the `node` Vitest project. Every test in that project starts from a freshly wiped and re-seeded database; no manual reset is needed.
+`resetTestData()` is async and runs automatically in an `afterEach` hook in `apps/web/test/setup.ts`, the setup file of the `node` Vitest project. Every test in that project starts from a freshly wiped and re-seeded database; no manual reset is needed. A Playwright worker server runs it once, before serving its first request ([[MSW#Seed surface]]). Baseline records belong in a `reset*()` default seed: the reset clears records created anywhere else.
 
 ```ts
 // apps/web/test/setup.ts

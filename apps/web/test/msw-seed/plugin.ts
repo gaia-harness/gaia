@@ -15,6 +15,7 @@ import type {SeedIssue} from './protocol.ts';
 type MockSet = {
   collections: Record<string, SeedCollection>;
   handlers: RequestHandler[];
+  resetTestData: () => Promise<void>;
 };
 
 type SeedCollection = {
@@ -50,14 +51,16 @@ const loadMocks = async (server: ViteDevServer): Promise<MockSet> => {
     runner: {import: <T>(url: string) => Promise<T>};
   };
   const [database, handlers] = await Promise.all([
-    runner.import<{default: Record<string, SeedCollection>}>(
-      '/test/mocks/database.ts'
-    ),
+    runner.import<{
+      default: Record<string, SeedCollection>;
+      resetTestData: () => Promise<void>;
+    }>('/test/mocks/database.ts'),
     runner.import<{default: RequestHandler[]}>('/test/mocks/index.ts'),
   ]);
-  const mocks = {
+  const mocks: MockSet = {
     collections: {...database.default},
     handlers: [...handlers.default],
+    resetTestData: database.resetTestData,
   };
 
   if (process.env.MSW_SEED_FIXTURE === 'true') {
@@ -67,6 +70,10 @@ const loadMocks = async (server: ViteDevServer): Promise<MockSet> => {
 
     Object.assign(mocks.collections, fixture.collections);
     mocks.handlers.push(...fixture.handlers);
+
+    mocks.resetTestData = async () => {
+      await Promise.all([database.resetTestData(), fixture.resetTestData()]);
+    };
   }
 
   return mocks;
@@ -212,6 +219,21 @@ export const mswSeedPlugin = (): Plugin => ({
     define: {'import.meta.env.GAIA_MSW_SEED': 'true'},
   }),
   configureServer: (server) => {
+    let baseline: Promise<void> | undefined;
+
+    // `resetTestData` is the store's baseline. Nothing on a dev server runs it
+    // otherwise, and a store seeded by an import side effect is empty until
+    // something happens to import that module, so it runs once and every
+    // request, the app's and the seed surface's, waits on it. Not in
+    // `configureServer` itself: the SSR runner is not ready that early. Never
+    // retried: a failed reset fails every request rather than serving a
+    // partial store.
+    server.middlewares.use((_request, _response, next) => {
+      baseline ??= loadMocks(server).then(async (mocks) =>
+        mocks.resetTestData()
+      );
+      baseline.then(() => next(), next);
+    });
     server.middlewares.use(MSW_SEED_PREFIX, (request, response, next) => {
       const route = ROUTES.get(request.url ?? '');
 
