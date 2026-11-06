@@ -64,9 +64,9 @@ case "$snapshot/" in "$root"/*) snapshot_relative="${snapshot#"$root"/}" ;; esac
 # Paths that differ from HEAD (tracked) or are untracked and not ignored, one per line.
 dirty_paths() {
   {
-    git -C "$root" diff --name-only HEAD -- 2>/dev/null
-    git -C "$root" ls-files --others --exclude-standard 2>/dev/null
-  } | while IFS= read -r path; do
+    git -C "$root" diff --name-only -z HEAD -- 2>/dev/null
+    git -C "$root" ls-files -z --others --exclude-standard 2>/dev/null
+  } | tr '\0' '\n' | while IFS= read -r path; do
     if [ -n "$snapshot_relative" ]; then
       case "$path/" in "$snapshot_relative"/*) continue ;; esac
     fi
