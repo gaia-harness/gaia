@@ -233,7 +233,7 @@ check_author_arm() {
     'names the failing file, in place of **Attribute** and the executor re-dispatch above;' \
     'the original task prompt, without its `Yield handoff:` line and with neither dispatch clause' \
     'If a test is wrong, fix only that test'"'"'s body; edit no app code and no file but these tests'"'"' files.' \
-    'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so.' \
+    'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, or you cannot tell whether the test or the app is wrong, leave it unchanged and say so;' \
     'Report each edit under ### Deviations from plan as file:line, before -> after. The failing tests:' \
     'then the implementer'"'"'s `### Deviations from plan` note if it had one.' \
     'An author-arm prompt carries no `Yield handoff:` line.' \
@@ -250,10 +250,10 @@ check_author_arm_implementer() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '- **Author arm.**' \
-    'This task'"'"'s implementer is fixing app code in parallel: when you cannot tell whether the test or the app is wrong, leave the test unchanged and say so.' \
+    'or you cannot tell whether the test or the app is wrong, leave it unchanged and say so; this task'"'"'s implementer is fixing app code in parallel.' \
     'For a failing test (not a typecheck or lint error), also dispatch a fresh executor for the owning task in parallel with its author' \
     'Fix the cause only in this task'"'"'s own non-test files; edit no test file.' \
-    'If the test is wrong rather than the app, edit nothing and write test wrong under ### Findings, naming the test.' \
+    'If the test is wrong rather than the app, edit nothing and write test wrong under ### Deviations from plan, naming the test.' \
     'When neither the author nor the executor for a task edits a file' \
     'the phase halts under Stop conditions with no re-run, listing each `test wrong` line.' \
     '- **Outside arm.**' || return 1
@@ -282,7 +282,7 @@ check_outside_arm() {
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
-    'When it is in an outside Playwright file and passes the three checks below, send it to the phase'"'"'s implementers (the outside arm below).' \
+    'When it is in an outside Playwright file and passes the three checks below, send it to the candidate tasks'"'"' implementers (the outside arm below).' \
     'Never fix it on the main thread.' \
     'One retry carries every arm the failure set needs; a failure that halts halts the whole set.' \
     "$TEST_FILE_BULLET" \
@@ -300,9 +300,9 @@ check_outside_arm() {
     'record the retry as above with each candidate on its Tasks line, then dispatch a fresh executor for each candidate task' \
     'edit no Playwright or other test file, the failing one included, even one this task declares.' \
     'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings.' \
-    'write outside spec stale under ### Findings' \
+    'write outside spec stale under ### Deviations from plan' \
     'A candidate that also owns a failing authored test gets one executor whose prompt carries both arms'"'"' lines.' \
-    'Never send it to a test author.' \
+    'Never send an outside failure to a test author.' \
     'When no candidate edits a file, the phase halts under Stop conditions with no re-run' \
     'listing each `outside spec stale` line.' \
     '- **Re-run the gate.**' || return 1
@@ -511,7 +511,7 @@ resume_point() {
 }
 
 @test "red twin: an author arm that lets the author loosen a correct assertion fails" {
-  red check_author_arm 'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so.' ''
+  red check_author_arm 'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, or you cannot tell whether the test or the app is wrong, leave it unchanged and say so;' ''
 }
 
 @test "an authored test failing on app code reaches the owning task's implementer in the same retry" {
@@ -539,7 +539,7 @@ resume_point() {
 }
 
 @test "red twin: an author prompt with no leave-the-test-when-unsure clause fails" {
-  red check_author_arm_implementer 'when you cannot tell whether the test or the app is wrong, leave the test unchanged and say so.' ''
+  red check_author_arm_implementer 'or you cannot tell whether the test or the app is wrong, ' ''
 }
 
 @test "red twin: an author arm that sends the implementer clause fails" {
@@ -611,7 +611,7 @@ resume_point() {
 }
 
 @test "red twin: an outside arm with no outside spec stale report fails" {
-  red check_outside_arm 'write outside spec stale under ### Findings' 'say so under ### Findings'
+  red check_outside_arm 'write outside spec stale under ### Deviations from plan' 'say so under ### Deviations from plan'
 }
 
 @test "red twin: a halt that does not list the outside spec stale lines fails" {
