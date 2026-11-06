@@ -2,8 +2,9 @@
 #
 # .gaia/scripts/spec/filename-lint.mjs against the real frontend package's
 # eslint config: a refused name carries eslint's suggested name, a spelled-out
-# name is clean, only the filename rules ever fire, and the two setup failures
-# split as uat_lib_filename_lint_problems needs them (eslint absent warns, a broken config fails).
+# name is clean, and only the filename rules ever fire. Scratch packages pin the
+# setup-failure exits uat_lib_filename_lint_problems maps: eslint absent exits 2
+# (warn), a broken config exits 3 (fail).
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
 

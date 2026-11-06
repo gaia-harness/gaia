@@ -145,11 +145,11 @@ uat_lib_rendered_path() {
 
 # Lints the name of every file the routing rows render with the web package's
 # own eslint (filename-lint.mjs), since the render commit's lint-staged eslint
-# refuses a name it rejects and halts the build. Prints one `uat-routing:`
-# failure line per refused name, or one when no web package is found or the
-# lint itself fails, since a broken setup must not pass silently. When eslint does not resolve (no
-# installed dependencies, as before a first install) or node is absent, it
-# warns on stderr and prints nothing.
+# would refuse the name and halt the build. Prints one `uat-routing:` failure
+# line per refused name, or one when no web package is found or the lint itself
+# fails, since a broken setup must not pass silently. When eslint does not
+# resolve (no installed dependencies, as before a first install) or node is
+# absent, it warns on stderr and prints nothing.
 uat_lib_filename_lint_problems() {
   local repo_root="${1:-}" routing_rows="${2:-}" package_path tree_directory
   local uat_id surface feature_folder file_name rendered_path lint_output
