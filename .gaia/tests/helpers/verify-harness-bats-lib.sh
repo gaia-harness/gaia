@@ -249,8 +249,9 @@ verify_run_bats_step() {
         base_status=$?
         base_elapsed=$((SECONDS - start_seconds))
         if [ "$load_failure" -eq 0 ]; then
-          # Same test, same failing statement: a base failure anywhere else is
-          # a different failure, however the test is named.
+          # Same test, same failing statement text: a base failure with other
+          # text is a different failure. A statement repeated verbatim within
+          # one test is not told apart.
           head_statements="$(mktemp "$run_temporary_directory/statements.XXXXXX")"
           base_statements="$(mktemp "$run_temporary_directory/statements.XXXXXX")"
           differing_items="$(mktemp "$run_temporary_directory/items.XXXXXX")"

@@ -25,8 +25,8 @@
 # Pre-existing classification never downgrades on doubt: an item counts as
 # reproduced only when the merge-base re-run positively shows it. A suite
 # absent at the base, a base re-run that cannot start, a bats suite that fails
-# to load at HEAD but runs at the base, and a bats test the base fails at a
-# different statement all stay new failures. A base failure in a suite that
+# to load at HEAD but runs at the base, and a bats test the base fails with a
+# different statement text all stay new failures. A base failure in a suite that
 # reads the installed dependencies, on a branch that changes a dependency
 # manifest, is UNVERIFIED-BASE: the base ran on the branch's linked
 # dependencies, so it says nothing about main.
