@@ -24,8 +24,12 @@
 #
 # Pre-existing classification never downgrades on doubt: an item counts as
 # reproduced only when the merge-base re-run positively shows it. A suite
-# absent at the base, a base re-run that cannot start, and a bats suite that
-# fails to load at HEAD but runs at the base all stay new failures.
+# absent at the base, a base re-run that cannot start, a bats suite that fails
+# to load at HEAD but runs at the base, and a bats test the base fails at a
+# different statement all stay new failures. A base failure in a suite that
+# reads the installed dependencies, on a branch that changes a dependency
+# manifest, is UNVERIFIED-BASE: the base ran on the branch's linked
+# dependencies, so it says nothing about main.
 #
 # Maintainer-only: .gaia/tests is release-excluded wholesale.
 
@@ -261,15 +265,22 @@ verify_normalize_distribution_output() {
 }
 
 # verify_report_outcome <label> <elapsed> <head-items> <base-items> <base-status|"">
-#   <base-elapsed> <short-base> <raw-output> <reproduce>
-# Prints the PRE-EXISTING and FAIL lines and updates the run's lists. A base
-# status of "" means no base re-run happened, so nothing can be pre-existing.
+#   <base-elapsed> <short-base> <raw-output> <reproduce> [<untrusted-items>] [<differing-items>]
+# Prints the PRE-EXISTING, UNVERIFIED-BASE and FAIL lines and updates the
+# run's lists. A base status of "" means no base re-run happened, so nothing
+# can be pre-existing. Both optional files hold sorted items: an untrusted item
+# the base reproduces is UNVERIFIED-BASE, which fails the run like a new
+# failure, and a differing item is one the base failed at another statement,
+# named under FAIL so the reader sees why it is not a reproduction.
 verify_report_outcome() {
   local label="$1" elapsed="$2" head_items="$3" base_items="$4" base_status="$5" base_elapsed="$6"
-  local short_base="$7" raw_output="$8" reproduce="$9" reproduced_items new_items
+  local short_base="$7" raw_output="$8" reproduce="$9" untrusted_items="${10:-}" differing_items="${11:-}"
+  local reproduced_items new_items unverified_items
   reproduced_items="$run_temporary_directory/reproduced.$$"
   new_items="$run_temporary_directory/new.$$"
+  unverified_items="$run_temporary_directory/unverified.$$"
   : >"$reproduced_items"
+  : >"$unverified_items"
   if [ -s "$head_items" ]; then
     cp "$head_items" "$new_items"
     if [ -n "$base_status" ] && [ "$base_status" -ne 0 ] && [ -s "$base_items" ]; then
@@ -284,6 +295,11 @@ verify_report_outcome() {
       : >"$new_items"
     fi
   fi
+  if [ -n "$untrusted_items" ] && [ -s "$untrusted_items" ] && [ -s "$reproduced_items" ]; then
+    LC_ALL=C comm -12 "$reproduced_items" "$untrusted_items" >"$unverified_items"
+    LC_ALL=C comm -23 "$reproduced_items" "$untrusted_items" >"$reproduced_items.trusted"
+    mv "$reproduced_items.trusted" "$reproduced_items"
+  fi
   if [ -s "$reproduced_items" ]; then
     printf 'PRE-EXISTING  %s: also fails on merge base %s; main is red (%ss)\n' "$label" "$short_base" "$elapsed"
     if [ -s "$head_items" ]; then
@@ -294,9 +310,17 @@ verify_report_outcome() {
     printf '  merge-base re-run: %ss\n' "$base_elapsed"
     printf '%s\n' "$label" >>"$preexisting_list_file"
   fi
+  if [ -s "$unverified_items" ]; then
+    printf 'UNVERIFIED-BASE  %s: also fails on merge base %s, but the base ran on this branch'\''s dependencies, which differ from main'\''s, so it cannot show main is red (%ss)\n' \
+      "$label" "$short_base" "$elapsed"
+    verify_indent "$unverified_items"
+    printf '  merge-base re-run: %ss\n' "$base_elapsed"
+    printf '  next: run these suites on a clean main install; if they pass there, this branch broke them\n'
+    printf '  reproduce: %s\n' "$reproduce"
+  fi
   if [ -s "$new_items" ]; then
     printf 'FAIL  %s (%ss)\n' "$label" "$elapsed"
-    if [ -s "$reproduced_items" ]; then
+    if [ -s "$reproduced_items" ] || [ -s "$unverified_items" ]; then
       verify_indent "$new_items"
     else
       verify_print_raw_detail "$raw_output"
@@ -306,10 +330,16 @@ verify_report_outcome() {
     else
       printf '  (no merge-base re-run: %s)\n' "${verify_no_base_reason:-no merge base}"
     fi
+    if [ -n "$differing_items" ] && [ -s "$differing_items" ]; then
+      printf '  the merge base failed these at a different statement, so they are not reproductions:\n'
+      sed 's/^/    /' "$differing_items"
+    fi
     printf '  reproduce: %s\n' "$reproduce"
+  fi
+  if [ -s "$unverified_items" ] || [ -s "$new_items" ]; then
     new_failure_count=$((new_failure_count + 1))
   fi
-  rm -f "$reproduced_items" "$new_items"
+  rm -f "$reproduced_items" "$new_items" "$unverified_items"
 }
 
 # verify_run_check <kind> <tree> <merge-base|""> <label-suffix> <reproduce-prefix>
