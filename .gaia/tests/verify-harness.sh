@@ -37,7 +37,12 @@
 # a temporary worktree. A failure that reproduces there prints PRE-EXISTING
 # ("main is red") and does not fail the run. The ref is never fetched; a
 # missing one is a WARN naming `git fetch origin main`, and then every failure
-# counts as new.
+# counts as new. A bats test reproduces only when the base fails it with the
+# same statement text. A statement repeated verbatim within one test is not
+# told apart, so a failure at another copy of it reads as reproduced. A
+# reproduced failure in an installed-dependencies suite, on a branch that
+# changes a dependency manifest, prints UNVERIFIED-BASE and fails the run: the
+# base runs on the branch's linked dependencies.
 #
 # A failing bats test is first re-run alone at HEAD, in the same tree, filtered
 # to the failing names the way the base re-run is. A wall-clock budget suite

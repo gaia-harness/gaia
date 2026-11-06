@@ -24,6 +24,11 @@ verify_installed_dependencies_mark_pattern='^# bats file_tags=([^,]*,)*installed
 
 # verify_junit <mode> <suites-file> <report-file>
 #   failures: "<suite path>\t<test name>" per failing testcase
+#   statements: "<suite path>\t<test name>\t<statement>" per failing testcase,
+#             the statement being the source text bats names as the one that
+#             failed, empty when the failure text names none. Source text, not
+#             a path or a status, so a HEAD run and a base run compare equal
+#             only when the failing statement's text matches.
 #   passes:   "<suite path>\t<test name>" per testcase that ran and passed
 #   missing:  each suite with no testsuite entry in the report
 # The report names a suite relative to the common directory of the suites run
@@ -61,7 +66,7 @@ verify_junit() {
     /<testsuite / { reported[unescape(attribute($0, "name"))] = 1 }
     /<testcase / {
       classname = unescape(attribute($0, "classname")); test_name = unescape(attribute($0, "name"))
-      open = ($0 !~ /\/>[[:space:]]*$/); failed = 0; skipped = 0; failure_path = ""
+      open = ($0 !~ /\/>[[:space:]]*$/); failed = 0; skipped = 0; failure_path = ""; statement = ""; statement_read = 0
       if (!open && mode == "passes") print suite_for(classname, "") "\t" test_name
     }
     open && (/<failure/ || /<error/) { failed = 1 }
@@ -69,8 +74,17 @@ verify_junit() {
     open && failed && failure_path == "" && match($0, /in test file [^,]*, line/) {
       failure_path = unescape(substr($0, RSTART + 13, RLENGTH - 19))
     }
+    # bats prints the failing command as two spaces, a backtick, its source
+    # text, a closing quote and " failed", with " with status N" when known.
+    open && failed && !statement_read && /^[[:space:]]*`/ {
+      statement = unescape($0)
+      sub(/^[[:space:]]*`/, "", statement)
+      sub("\047 failed( with status [0-9]+)?$", "", statement)
+      statement_read = 1
+    }
     /<\/testcase>/ {
       if (open && failed && mode == "failures") print suite_for(classname, failure_path) "\t" test_name
+      if (open && failed && mode == "statements") print suite_for(classname, failure_path) "\t" test_name "\t" statement
       if (open && !failed && !skipped && mode == "passes") print suite_for(classname, "") "\t" test_name
       open = 0; failed = 0; skipped = 0
     }
@@ -169,6 +183,7 @@ verify_run_bats_step() {
   local report_directory output_file error_file status start_seconds elapsed failures_file
   local head_items base_items base_tree base_suites base_report base_output base_error base_status=""
   local base_elapsed=0 short_base="" suite_path filter="" load_failure=0 reproduce_suites flaky_items
+  local head_statements base_statements differing_items="" untrusted_items
   report_directory="$(mktemp -d "$run_temporary_directory/junit.XXXXXX")"
   output_file="$(mktemp "$run_temporary_directory/output.XXXXXX")"
   error_file="$(mktemp "$run_temporary_directory/error.XXXXXX")"
@@ -224,12 +239,29 @@ verify_run_bats_step() {
       fi
       if [ -s "$base_suites" ]; then
         start_seconds="$SECONDS"
-        verify_invoke_bats "$base_tree" "$base_suites" "$base_report" "$base_output" "$base_error" "$filter" "$base_tag_filter"
+        # The base tree's node_modules are links to the verified tree's, which
+        # pnpm's pre-run dependency check judges stale for the new path. It
+        # then tries an install that cannot write through the link and prints
+        # its error to stdout ahead of the command's own output. pnpm 12 reads
+        # only the pnpm_config_ spelling of the setting.
+        pnpm_config_verify_deps_before_run=false \
+          verify_invoke_bats "$base_tree" "$base_suites" "$base_report" "$base_output" "$base_error" "$filter" "$base_tag_filter"
         base_status=$?
         base_elapsed=$((SECONDS - start_seconds))
         if [ "$load_failure" -eq 0 ]; then
-          verify_junit failures "$base_suites" "$base_report/report.xml" \
+          # Same test, same failing statement text: a base failure with other
+          # text is a different failure. A statement repeated verbatim within
+          # one test is not told apart.
+          head_statements="$(mktemp "$run_temporary_directory/statements.XXXXXX")"
+          base_statements="$(mktemp "$run_temporary_directory/statements.XXXXXX")"
+          differing_items="$(mktemp "$run_temporary_directory/items.XXXXXX")"
+          verify_junit statements "$suites_file" "$report_directory/report.xml" | LC_ALL=C sort -u >"$head_statements"
+          verify_junit statements "$base_suites" "$base_report/report.xml" | LC_ALL=C sort -u >"$base_statements"
+          LC_ALL=C comm -12 "$head_statements" "$base_statements" \
             | awk -F'\t' '{ print $1 ": " $2 }' | LC_ALL=C sort -u >"$base_items"
+          verify_junit failures "$base_suites" "$base_report/report.xml" \
+            | awk -F'\t' '{ print $1 ": " $2 }' | LC_ALL=C sort -u \
+            | LC_ALL=C comm -23 - "$base_items" | LC_ALL=C comm -12 - "$head_items" >"$differing_items"
         elif [ "$base_status" -ne 0 ] \
           && [ -z "$(verify_junit failures "$base_suites" "$base_report/report.xml")" ]; then
           # The base fails to run the same suites too.
@@ -252,8 +284,28 @@ verify_run_bats_step() {
   else
     cp "$head_items" "$output_file"
   fi
+  untrusted_items="$(mktemp "$run_temporary_directory/items.XXXXXX")"
+  if [ -n "$base_status" ]; then
+    verify_dependency_reading_items "$tree" "$merge_base" "$head_items" >"$untrusted_items"
+  fi
   verify_report_outcome "$label" "$elapsed" "$head_items" "$base_items" "$base_status" "$base_elapsed" \
-    "$short_base" "$output_file" "${reproduce_prefix}${reproduce_suites}< /dev/null"
+    "$short_base" "$output_file" "${reproduce_prefix}${reproduce_suites}< /dev/null" \
+    "$untrusted_items" "$differing_items"
+}
+
+# verify_dependency_reading_items <tree> <merge-base> <items>: the items whose
+# suite carries the installed-dependencies mark, sorted, when the tree differs
+# from the merge base in a dependency manifest; nothing otherwise. A diff that
+# cannot be read counts as a difference, so doubt never trusts the base.
+verify_dependency_reading_items() {
+  local tree="$1" merge_base="$2" items="$3" item suite_path
+  git -C "$tree" diff --quiet "$merge_base" -- pnpm-lock.yaml pnpm-workspace.yaml ':(glob)**/package.json' \
+    2>/dev/null && return 0
+  while IFS= read -r item; do
+    suite_path="${item%%: *}"
+    [ -f "$tree/$suite_path" ] && grep -qE "$verify_installed_dependencies_mark_pattern" "$tree/$suite_path" \
+      && printf '%s\n' "$item"
+  done <"$items" | LC_ALL=C sort -u
 }
 
 # verify_marked_suites <tree>: every tracked suite carrying the whole-tree mark.
