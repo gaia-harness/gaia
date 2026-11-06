@@ -216,6 +216,41 @@ check_retry_not_a_grant() {
     'the rendered UAT block in the original prompt still binds' || return 1
 }
 
+# The author arm: a phase-authored Playwright file (no RED ledger entry, not a
+# rendered UAT) that fails the phase gate goes back to its test author once,
+# under the same one-retry budget, and the author may only fix that test.
+check_author_arm() {
+  local block
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    '**Phase gate retry (at most once per phase).**' \
+    'When a Playwright run in the phase gate fails and every failing test is in an authored Playwright file, a file under `<frontend package>/.playwright/` that one task'"'"'s `New tests:` line names and `{PLAN_DIR}/README.md`'"'"'s UAT routing table does not, send it to a fresh test author instead (the author arm below).' \
+    'Any other gate failure, any other owning-phase UAT gate failure included, halts under Stop conditions with no retry.' \
+    '- **Halt instead.**' \
+    '- **Author arm.**' \
+    'names the failing file, in place of **Attribute** and the executor re-dispatch above;' \
+    'the original task prompt, without its `Yield handoff:` line and with neither dispatch clause' \
+    'If a test is wrong, fix only that test'"'"'s body; edit no app code and no file but these tests'"'"' files.' \
+    'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so, and the phase halts.' \
+    'Report each edit under ### Deviations from plan as file:line, before -> after. The failing tests:' \
+    'then the implementer'"'"'s `### Deviations from plan` note if it had one.' \
+    'An author-arm prompt carries no `Yield handoff:` line.' \
+    'An author that edits nothing halts the phase under Stop conditions with no re-run.' \
+    '- **Re-run the gate.**' || return 1
+}
+
+# The planner never writes a gate's retry or halt rule into a step of its own:
+# an improvised "not retryable" sentence contradicts the author arm.
+check_step_owns_no_retry() {
+  local line
+  line="$(grep -F -- '- **Phase gate retry.**' "$1/$PLANNER_REL" | trim_lines)"
+  need_text 'gate-retry placement line' "$line" || return 1
+  in_order "$line" \
+    'A plan step never states its own retry or halt rule for a gate failure; the gate-retry block owns which failures retry.' \
+    'Place this block inside the phase loop' || return 1
+}
+
 check_executor_self_check() {
   local range
   range="$(invocation_range "$1")"
@@ -374,6 +409,50 @@ resume_point() {
 
 @test "red twin: a retry that drops the UAT binding fails" {
   red check_retry_not_a_grant 'the rendered UAT block in the original prompt still binds' 'the UAT block is lifted'
+}
+
+@test "an authored Playwright test failing the gate goes back to its test author once, test body only" {
+  green check_author_arm
+}
+
+@test "red twin: an author arm that also retries a rendered UAT file fails" {
+  red check_author_arm ' names and `{PLAN_DIR}/README.md`'"'"'s UAT routing table does not,' ' names,'
+}
+
+@test "red twin: an author arm that also retries a Vitest or ledger-tracked test fails" {
+  red check_author_arm 'a file under `<frontend package>/.playwright/` that one task' 'a file that one task'
+}
+
+@test "red twin: an author arm whose author may edit app code fails" {
+  red check_author_arm 'edit no app code and no file but these tests'"'"' files.' 'edit any file.'
+}
+
+@test "red twin: an author arm that lets the author loosen a correct assertion fails" {
+  red check_author_arm 'Never loosen an assertion to match the implementation: if the test states what the task doc or SPEC specifies, leave it unchanged and say so, and the phase halts.' ''
+}
+
+@test "red twin: an author arm that sends the implementer clause fails" {
+  red check_author_arm 'and with neither dispatch clause' 'and with the implementer clause'
+}
+
+@test "red twin: an author arm that does not report its edits fails" {
+  red check_author_arm 'Report each edit under ### Deviations from plan as file:line, before -> after.' 'Report nothing.'
+}
+
+@test "red twin: an author arm that opts into yielding fails" {
+  red check_author_arm 'An author-arm prompt carries no `Yield handoff:` line.' 'An author-arm prompt ends with a `Yield handoff:` line.'
+}
+
+@test "red twin: an author arm that does not replace the executor re-dispatch fails" {
+  red check_author_arm ', in place of **Attribute** and the executor re-dispatch above;' ';'
+}
+
+@test "a plan step never states its own retry or halt rule for a gate failure" {
+  green check_step_owns_no_retry
+}
+
+@test "red twin: a placement line that lets a step state its own retry rule fails" {
+  red check_step_owns_no_retry 'A plan step never states its own retry or halt rule for a gate failure; the gate-retry block owns which failures retry. ' ''
 }
 
 @test "the executor typechecks its own work, wave-safe" {

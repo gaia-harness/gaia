@@ -437,10 +437,13 @@ check_test_review() {
     'Reason: test review produced no verdict file' \
     'This departs from the general inline ending' \
     '## The prompt template' \
-    'No citation, no defect.' \
+    'and can a correct implementation pass it?' \
+    'No citation, no defect' \
+    'The four defects:' \
     '**Over-constraint**' \
     '**Under-constraint**' \
     '**Contradiction**' \
+    '**Cannot pass**: no correct implementation can satisfy it' \
     'Out of scope:' || return 1
 }
 
@@ -474,8 +477,20 @@ check_test_review() {
 
 @test "red twin: a test review page without the citation rule fails" {
   red check_test_review "$REVIEW_REL" \
-    'No citation, no defect.' \
-    'Use judgment.'
+    'No citation, no defect' \
+    'Use judgment'
+}
+
+@test "red twin: a test review without the cannot-pass defect fails" {
+  red check_test_review "$REVIEW_REL" \
+    '**Cannot pass**: no correct implementation can satisfy it' \
+    '**Other**: anything else'
+}
+
+@test "red twin: a test review that never asks whether a test can pass fails" {
+  red check_test_review "$REVIEW_REL" \
+    ', and can a correct implementation pass it?' \
+    '?'
 }
 
 @test "red twin: a planner without the test review block fails" {
