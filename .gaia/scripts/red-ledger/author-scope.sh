@@ -20,8 +20,9 @@
 #     specifier (`~/` is `<nearest package dir>/app/`). A stub file new since
 #     the snapshot is allowed whole; one that existed may only gain lines, since
 #     a stub adds a new export and an implementation rewrites existing code.
-#     Implementation inside a new stub file is not caught here; the test review
-#     and the implementer's stub replacement are the backstop.
+#     Implementation inside a new stub file, or added as new lines to an
+#     existing one, is not caught here; the test review and the implementer's
+#     stub replacement are the backstop.
 # Import parsing is per line (`from '...'`, `import '...'`, `import('...')`);
 # a specifier split across lines is missed, which errs toward a breach.
 # Gitignored paths (such as .env) are out of this check's sight. The snapshot

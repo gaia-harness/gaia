@@ -225,7 +225,7 @@ check_split_block() {
     'A task with no test waits for this step' || return 1
 }
 
-# The split block's scope check: a snapshot before each round of test authors,
+# The split block's scope check: one snapshot per wave, before its first test author,
 # the check after it and before the RED check, one retry, then a halt; and the
 # role line that casts a test author as one, not as the task's executor.
 check_author_scope() {
