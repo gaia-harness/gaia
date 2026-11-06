@@ -78,6 +78,18 @@ check_spawn_database_url() {
     || { echo "spawn does not pass databaseFile as DATABASE_URL" >&2; return 1; }
 }
 
+# The database lives in a temp folder on local disk, never the tree's output
+# folder: a bind mount does not share the file locks SQLite's WAL needs.
+check_database_off_tree() {
+  local code
+  code="$(code_only "$1" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')" || return 1
+  printf '%s' "$code" | grep -Eq "databaseDirectory = fs\.mkdtempSync\( path\.join\(os\.tmpdir\(\)" \
+    || { echo "the database folder is not a mkdtemp under os.tmpdir()" >&2; return 1; }
+  printf '%s' "$code" | grep -Eq "databaseFile = path\.join\( databaseDirectory," \
+    || { echo "databaseFile is not in the temp folder" >&2; return 1; }
+  return 0
+}
+
 check_config_parallel() {
   require_file "$1" || return 1
   grep -Fq 'fullyParallel: true' "$1" || { echo "no fullyParallel: true" >&2; return 1; }
@@ -151,6 +163,22 @@ scratch_copy() {
 @test "the DATABASE_URL pin goes red when the env value changes" {
   copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/DATABASE_URL: databaseFile/DATABASE_URL: baseURL/')"
   run check_spawn_database_url "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the worker database lives in a temp folder off the tree" {
+  check_database_off_tree "$WORKER_SERVER_FILE"
+}
+
+@test "the database location pin goes red when the file moves back under the output folder" {
+  copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/^ +databaseDirectory,$/      outputDirectory,/')"
+  run check_database_off_tree "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the database location pin goes red when the folder leaves the temp directory" {
+  copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/os\.tmpdir\(\)/outputDirectory/')"
+  run check_database_off_tree "$copy"
   [ "$status" -ne 0 ]
 }
 
