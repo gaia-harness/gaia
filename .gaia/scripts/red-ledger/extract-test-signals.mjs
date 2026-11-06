@@ -363,7 +363,7 @@ function rangeOf(node) {
   return [start.line + 1, end.line + 1];
 }
 
-// One node hashes as itself; several (a describe table, then the test) hash
+// One node hashes as itself; several (each enclosing describe table, then the test) hash
 // newline-joined, so a plain test's signal is unchanged by the join.
 function signalFor(nodes) {
   const normalized = nodes

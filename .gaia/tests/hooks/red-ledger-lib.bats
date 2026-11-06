@@ -584,7 +584,7 @@ run_library() {
   # A tagged-template describe.each records its tests, so it stays on the floor.
   for fixture in nested-describe.test.ts each-describe.test.ts; do
     grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" && {
-      echo "$fixture: the exemption matches a literal-titled describe, which would drop its file from the floor" >&2
+      echo "$fixture: the exemption matches a describe whose tests the helper records, which would drop its file from the floor" >&2
       return 1
     }
   done
