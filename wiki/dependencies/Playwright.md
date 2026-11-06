@@ -4,7 +4,7 @@ status: active
 package: '@playwright/test'
 role: e2e-testing
 created: 2026-04-20
-updated: 2026-10-28
+updated: 2026-11-06
 tags: [dependency, testing, e2e]
 ---
 
@@ -16,7 +16,7 @@ Live-stack testing on two surfaces: real-server tests drive the server through t
 
 Playwright tests run against this tree's `pnpm dev` server, on the port `bash .gaia/scripts/ports.sh` prints (5173 in the main checkout). Playwright refuses to reuse a server on that port that is not this tree's own, and an unprovisioned linked worktree refuses to run (see [[Worktrees]]). With `MSW_ENABLED=true` the dev server mocks both browser and SSR requests, so tests exercise the full React Router loader/action stack with MSW intercepting API calls (see [[MSW]]); no separate mock server required.
 
-Per-worker database isolation, Given builders and the session rules are in `apps/web/.claude/rules/playwright.md` (`## Worker isolation`), with the pattern in `apps/web/.playwright/fixtures.ts`.
+Per-worker MSW stores, the Given builders that seed them and the session rules are in `apps/web/.claude/rules/playwright.md` (`## Worker isolation`), with the pattern in `apps/web/.playwright/fixtures.ts`.
 
 ## Relationship to the story tests
 

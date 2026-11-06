@@ -10,51 +10,66 @@ import {
 } from './worker-server';
 
 /**
- * One Given builder: takes the input a spec names and returns the row it made.
- * A project's builders live in an adopter-owned file that extends the `test`
- * exported here, because this file is owned by the harness and is overwritten
- * on update. Each builder writes through the database the worker's own server
- * reads, so a spec meets its Given without driving a form:
+ * One Given builder: takes the input a spec names and returns the record it
+ * made. A project's builders live in an adopter-owned file that extends the
+ * `test` exported here, because this file is owned by the harness and is
+ * overwritten on update. Each builder seeds the MSW store of the worker's own
+ * server through `seedRecords` (`./msw-seed.ts`), which checks every record
+ * against its collection's server schema, so a spec meets its Given without
+ * driving a form. Give each record a unique identity (`crypto.randomUUID()`,
+ * a unique email): a worker's store lives as long as its server, across specs.
  *
  *   // .playwright/project-fixtures.ts (adopter-owned)
  *   import {test as base} from './fixtures';
  *   import type {GivenBuilder} from './fixtures';
+ *   import {seedRecords} from './msw-seed';
  *
- *   type Builders = {givenThing: GivenBuilder<{name: string}, ThingRow>};
+ *   type Builders = {givenThing: GivenBuilder<{name: string}, ServerThing>};
  *
  *   export const test = base.extend<Builders>({
  *     baseURL: async ({workerServer}, provide) =>
  *       provide(workerServer.baseURL),
  *     givenThing: async ({workerServer}, provide) =>
- *       provide(async ({name}) => insertThing(workerServer.databaseFile, name)),
+ *       provide(async ({name}) => {
+ *         const [thing] = await seedRecords<ServerThing>(
+ *           workerServer.baseURL,
+ *           'things',
+ *           [{id: crypto.randomUUID(), name}]
+ *         );
+ *         return thing;
+ *       }),
  *   });
+ *
+ * The builders are the seam between the mocks and a real backend: specs reach
+ * setup only through them, never through the seed surface. A project that
+ * runs the same specs as its own end-to-end suite swaps in builders that seed
+ * its real backend and points `baseURL` at a server running without MSW;
+ * GAIA ships none.
  *
  * A form's own submission is a real-server post whose body `serializeForm`
  * (`./html.ts`) builds from the served form.
  */
-export type GivenBuilder<Input, Row> = (input: Input) => Promise<Row>;
+export type GivenBuilder<Input, Created> = (input: Input) => Promise<Created>;
 
 type AxeFixtures = {
   makeAxeBuilder: () => AxeBuilder;
 };
 
 type WorkerServerFixtures = {
-  workerServer: {baseURL: string; databaseFile: string};
+  workerServer: {baseURL: string};
 };
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 
 /**
  * Extended Playwright test with an axe-core builder fixture (default tag set:
- * WCAG 2.0/2.1 A and AA) and a worker-scoped server fixture for database
- * isolation.
+ * WCAG 2.0/2.1 A and AA) and a worker-scoped server fixture that gives each
+ * worker its own MSW store.
  *
- * Worker isolation. Every worker reaches its own database through the server
- * it talks to, so a spec that seeds a database proves something only against
- * the server that reads it. `workerServer` starts this tree's `pnpm dev` on a
- * free port with a per-worker file database in its own temp folder on local
- * disk, passes that file to the process as `DATABASE_URL` (the project's
- * database module reads it), and stops only what it started;
+ * Worker isolation. Every worker seeds and reads the MSW store of its own
+ * server, so a seeded record proves something only against the server that
+ * holds it. `workerServer` starts this tree's `pnpm dev` on a free port with
+ * MSW and its seed surface on, and stops only what it started;
  * `./worker-server.ts` owns the start. It is keyed on
  * `workerInfo.parallelIndex`, which stays stable when a worker restarts after
  * a failure, so a restarted worker appends to the same server log under
@@ -64,17 +79,8 @@ const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
  * A project activates it by overriding `baseURL` from `workerServer` in its
  * own file extending this `test` (see `GivenBuilder` above for the shape).
  *
- * Rules for a project that does:
- * - A serial project is not an accepted way to share one database. It runs
- *   the suite on one core. Give each worker its own database instead.
- * - Schema selection is the mapping for a database server: one schema per
- *   worker on a shared server. A shared database server's key includes the
- *   tree identity along with `parallelIndex`, as `.gaia/scripts/ports.sh` does
- *   for ports, so two trees never collide on one worker's schema. A file
- *   database in its own temp folder is already unique to the tree.
- * - State in the dev server's MSW handlers is out of reach of the Playwright
- *   process, so a stock project has no builder target: builders need a real
- *   database.
+ * A serial project is not an accepted way to share one store: it runs the
+ * suite on one core.
  */
 export const test = base.extend<AxeFixtures, WorkerServerFixtures>({
   makeAxeBuilder: async ({page}, provide) => {
@@ -86,14 +92,14 @@ export const test = base.extend<AxeFixtures, WorkerServerFixtures>({
 
   workerServer: [
     async ({}, provide, workerInfo) => {
-      const {baseURL, databaseFile, stop} = await startWorkerServer({
+      const {baseURL, stop} = await startWorkerServer({
         outputDirectory: path.join(packageDirectory, '.playwright', 'output'),
         packageDirectory,
         parallelIndex: workerInfo.parallelIndex,
       });
 
       try {
-        await provide({baseURL, databaseFile});
+        await provide({baseURL});
       } finally {
         stop();
       }

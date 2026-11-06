@@ -587,6 +587,33 @@ describe('gaia scaffold service', () => {
     expect(barrel).toContain('const handlers = [...get, post, put, del];');
   });
 
+  test('POST and PUT mocks parse the body with the server schema and answer 400 naming the issues', () => {
+    run(
+      [
+        'projects',
+        '--endpoints',
+        'post,put',
+        '--schema',
+        'id:string,title:string',
+        '--mocks',
+      ],
+      {cwd: sandbox.dir}
+    );
+    const mockDirectory = path.join(sandbox.dir, 'test', 'mocks', 'projects');
+    const post = read(path.join(mockDirectory, 'post.ts'));
+    const put = read(path.join(mockDirectory, 'put.ts'));
+
+    expect(post).toContain('serverProjectSchema.safeParse(');
+    expect(put).toMatch(/serverProjectSchema\s*\.partial\(\)\s*\.safeParse\(/u);
+
+    for (const handler of [post, put]) {
+      expect(handler).toContain("error: 'Invalid project'");
+      expect(handler).toContain('issues: parsed.error.issues');
+      expect(handler).toContain('{status: 400}');
+      expect(handler).not.toMatch(/ as (Partial<)?ServerProject/u);
+    }
+  });
+
   test('mock data schema keeps camelCase field names by default', () => {
     run(
       [

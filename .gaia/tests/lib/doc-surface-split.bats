@@ -16,7 +16,7 @@ setup() {
   PW_RULE="$REPO_ROOT/apps/web/.claude/rules/playwright.md"
   AUDIT="$REPO_ROOT/.claude/skills/gaia/references/plan/decomposition-audit.md"
   PAGE="$REPO_ROOT/wiki/decisions/Test Layering.md"
-  ROUTING_SENTENCE='A database-only or harness self-check that opens no page runs in the Vitest node project, not under Playwright.'
+  ROUTING_SENTENCE='A harness self-check that opens no page runs in the Vitest node project, not under Playwright.'
   WIRING_SENTENCE='A self-test of the Playwright fixture wiring itself is dropped: the specs that use the fixture prove it.'
   GIVEN_SENTENCE="A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them."
   PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
@@ -168,17 +168,17 @@ check_page_surfaces() {
 
 @test "red twin: a rule copy without the sentence fails" {
   local copy
-  copy=$(copy_with "$PW_RULE" rule.md 's/A database-only or harness self-check that opens no page runs in the Vitest node project, not under Playwright\.//')
+  copy=$(copy_with "$PW_RULE" rule.md 's/A harness self-check that opens no page runs in the Vitest node project, not under Playwright\.//')
   run check_playwright_rule_sentence "$copy"
   [ "$status" -ne 0 ]
 }
 
 @test "red twin: the sentence removed from the DP bullet only, or the COV bullet only, fails" {
   local copy
-  copy=$(copy_with "$AUDIT" dp.md '/^- \*\*Decomposition & dependency soundness/s/A database-only or harness self-check that opens no page runs in the Vitest node project, not under Playwright\.//')
+  copy=$(copy_with "$AUDIT" dp.md '/^- \*\*Decomposition & dependency soundness/s/A harness self-check that opens no page runs in the Vitest node project, not under Playwright\.//')
   run check_audit_bullet_sentence "$copy"
   [ "$status" -ne 0 ]
-  copy=$(copy_with "$AUDIT" cov.md '/^- \*\*SPEC coverage/s/A database-only or harness self-check that opens no page runs in the Vitest node project, not under Playwright\.//')
+  copy=$(copy_with "$AUDIT" cov.md '/^- \*\*SPEC coverage/s/A harness self-check that opens no page runs in the Vitest node project, not under Playwright\.//')
   run check_audit_bullet_sentence "$copy"
   [ "$status" -ne 0 ]
 }

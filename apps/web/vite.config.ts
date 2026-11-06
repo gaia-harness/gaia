@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {devPortsPlugin} from './dev-ports-vite-plugin.ts';
 import {resolveDevPorts, resolveSiteUrl} from './dev-ports.ts';
 import {reactCompiler} from './react-compiler.config.ts';
+import {mswSeedPlugin} from './test/msw-seed/plugin.ts';
 
 const packageDirectory = fileURLToPath(new URL('.', import.meta.url));
 
@@ -61,6 +62,7 @@ export default defineConfig({
     reactRouter(),
     reactCompiler,
     msw(),
+    mswSeedPlugin(),
   ],
   resolve: {
     tsconfigPaths: true,

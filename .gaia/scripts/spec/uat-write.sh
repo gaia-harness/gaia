@@ -182,11 +182,20 @@ javascript_literal() {
   }'
 }
 
+# fixtures_import <path under the e2e directory>: the import specifier from
+# that spec to `.playwright/fixtures`, one level up per folder plus the e2e
+# folder itself, since a feature folder may nest.
+fixtures_import() {
+  local folders="${1//[^\/]/}" specifier='../fixtures' index
+  for ((index = 0; index < ${#folders}; index++)); do specifier="../$specifier"; done
+  printf '%s' "$specifier"
+}
+
 # Placeholders are spliced in one left-to-right pass, so text a value carries
 # (even a literal placeholder name) is never substituted a second time.
 render_spec_file() {
   local output_file="$4" body_file="$4.body" digest chosen_template="${5:-$template_path}"
-  UAT_GIVEN="$1" UAT_WHEN="$2" UAT_THEN="$3" UAT_THEN_JS="$(javascript_literal "$3")" \
+  UAT_GIVEN="$1" UAT_WHEN="$2" UAT_THEN="$3" UAT_THEN_JS="$(javascript_literal "$3")" UAT_FIXTURES_IMPORT="${6:-}" \
     LC_ALL=C awk 'NR > 1 {
       line = $0
       result = ""
@@ -194,7 +203,7 @@ render_spec_file() {
         rest = substr(line, start + 2)
         finish = index(rest, "}")
         name = finish > 0 ? substr(rest, 1, finish - 1) : ""
-        if (name == "UAT_GIVEN" || name == "UAT_WHEN" || name == "UAT_THEN" || name == "UAT_THEN_JS") {
+        if (name == "UAT_GIVEN" || name == "UAT_WHEN" || name == "UAT_THEN" || name == "UAT_THEN_JS" || name == "UAT_FIXTURES_IMPORT") {
           result = result substr(line, 1, start - 1) ENVIRON[name]
           line = substr(rest, finish + 1)
         } else {
@@ -240,7 +249,9 @@ while IFS=$'\t' read -r uat_id surface relative_path given_text when_text then_t
   if [ "$surface" = "route" ]; then
     relative_path="$route_directory/$relative_path"
     chosen_template="$route_template_path"
+    fixtures_specifier=''
   else
+    fixtures_specifier=$(fixtures_import "$relative_path")
     relative_path="$e2e_directory/$relative_path"
     if [ "$surface" = "real-server" ]; then
       chosen_template="$real_server_template_path"
@@ -253,7 +264,7 @@ while IFS=$'\t' read -r uat_id surface relative_path given_text when_text then_t
   ledger_next="$ledger_next$uat_id"$'\t'"$relative_path"$'\n'
   staged_count=$((staged_count + 1))
   staged_file="$staging_directory/$staged_count.spec.ts"
-  render_spec_file "$given_text" "$when_text" "$then_text" "$staged_file" "$chosen_template"
+  render_spec_file "$given_text" "$when_text" "$then_text" "$staged_file" "$chosen_template" "$fixtures_specifier"
 
   if [ ! -e "$absolute_path" ] && [ ! -L "$absolute_path" ]; then
     action=written

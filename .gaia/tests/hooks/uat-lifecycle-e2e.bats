@@ -63,6 +63,8 @@ export default defineConfig({
   testDir: './.playwright/e2e',
 });
 CONFIG
+  # Rendered stubs import `test` from the project fixtures module.
+  printf '%s\n' "export {expect, test} from '@playwright/test';" >"$TREE/apps/web/.playwright/fixtures.ts"
   SCRATCH_DIR=''
 }
 
@@ -195,6 +197,7 @@ SHIM
   cat > "$SCRATCH_DIR/tsconfig.json" <<'TSCONFIG'
 {
   "extends": "../../../tsconfig.json",
+  "compilerOptions": {"types": ["node", "vite/client"]},
   "include": ["./fixture-flow-confirms.spec.ts"]
 }
 TSCONFIG

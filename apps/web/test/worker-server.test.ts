@@ -79,7 +79,8 @@ if (hostIndex === -1) {
 http
   .createServer((_request, response) => {
     response.end(JSON.stringify({
-      databaseUrl: process.env.DATABASE_URL,
+      mswEnabled: process.env.MSW_ENABLED,
+      mswSeed: process.env.MSW_SEED,
       siteUrl: process.env.SITE_URL,
     }));
   })
@@ -100,7 +101,7 @@ const writeScript = (name: string, source: string): string => {
 };
 
 describe('startWorkerServer', () => {
-  test('answers on the origin it bound, with that origin as SITE_URL and its own database', async () => {
+  test('answers on the origin it bound, with that origin as SITE_URL and MSW and its seed surface on', async () => {
     const server = await startWorkerServer({
       command: [process.execPath, writeScript('server.mjs', STAND_IN_SERVER)],
       outputDirectory: directory,
@@ -113,58 +114,12 @@ describe('startWorkerServer', () => {
 
       expect(new URL(server.baseURL).hostname).toBe(WORKER_SERVER_HOST);
       expect(await response.json()).toEqual({
-        databaseUrl: server.databaseFile,
+        mswEnabled: 'true',
+        mswSeed: 'true',
         siteUrl: server.baseURL,
       });
     } finally {
       server.stop();
-    }
-  });
-
-  test('keeps its database in its own temp folder outside the output folder, removed on stop', async () => {
-    const server = await startWorkerServer({
-      command: [process.execPath, writeScript('server.mjs', STAND_IN_SERVER)],
-      outputDirectory: directory,
-      packageDirectory: directory,
-      parallelIndex: 0,
-    });
-    const databaseDirectory = path.dirname(server.databaseFile);
-
-    try {
-      expect(path.relative(directory, server.databaseFile)).toMatch(/^\.\./);
-      expect(
-        path.relative(os.tmpdir(), databaseDirectory).startsWith('..')
-      ).toBe(false);
-      expect(fs.existsSync(databaseDirectory)).toBe(true);
-    } finally {
-      server.stop();
-    }
-
-    expect(fs.existsSync(databaseDirectory)).toBe(false);
-  });
-
-  test('the next start for the same index removes a database folder whose stop never ran', async () => {
-    const abandonedDirectory = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'gaia-worker-db-')
-    );
-
-    fs.writeFileSync(
-      path.join(directory, 'worker-4.database-directory'),
-      abandonedDirectory
-    );
-
-    const server = await startWorkerServer({
-      command: [process.execPath, writeScript('server.mjs', STAND_IN_SERVER)],
-      outputDirectory: directory,
-      packageDirectory: directory,
-      parallelIndex: 4,
-    });
-
-    try {
-      expect(fs.existsSync(abandonedDirectory)).toBe(false);
-    } finally {
-      server.stop();
-      fs.rmSync(abandonedDirectory, {force: true, recursive: true});
     }
   });
 

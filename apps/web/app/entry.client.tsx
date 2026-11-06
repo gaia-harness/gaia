@@ -10,7 +10,12 @@ const prepareApp = async () => {
   if (import.meta.env.DEV && window.process.env.MSW_ENABLED === true) {
     const [{network}, {default: handlers}] = await Promise.all([
       import('virtual:msw'),
-      import('../test/mocks'),
+      // A seed-enabled dev server answers from its own store, so the page
+      // shares the records a Given builder seeded instead of holding a second
+      // store of its own.
+      import.meta.env.GAIA_MSW_SEED ?
+        import('../test/msw-seed/forward-handler')
+      : import('../test/mocks'),
     ]);
 
     network.configure({

@@ -108,20 +108,20 @@ the Storybook specs (see Accessibility scans). With
 `wiki/dependencies/MSW.md`), so tests exercise the real route/loader/action stack
 with MSW intercepting API calls. No separate mock server is needed for e2e.
 
-State in the MSW handlers of the dev server is out of reach of the Playwright process, so a stock project has no target for a Given builder; a project that needs seeded state adds a real database (see Worker isolation).
+With `MSW_SEED=true`, which only the worker server sets (alongside `MSW_ENABLED=true`), the dev server exposes a seed surface over its `@msw/data` store; a Given builder seeds through it (see Worker isolation).
 
 ## Worker isolation
 
-Every worker reaches its own database through the server it talks to. A serial project is not an accepted way to share a database: it runs the suite on one core. The worker-scoped server fixture and the typed `GivenBuilder` pattern are in `.playwright/fixtures.ts`; read its comment before adding any project that holds state. The stock suite does not request the fixture, so `pnpm pw` starts no extra server.
+Every worker seeds and reads the MSW store of its own server. A serial project is not an accepted way to share one store: it runs the suite on one core. The worker-scoped server fixture and the typed `GivenBuilder` pattern are in `.playwright/fixtures.ts`; read its comment before adding any project that holds state. The stock suite does not request `workerServer`; only `.playwright/e2e/msw-seed/seeded-record-reaches-the-page.spec.ts` starts a server of its own, logging to `seed-fixture-<parallelIndex>-server.log`.
 
-- Setup goes through Given builders, which write to the worker's own database; a form's own submission is checked over HTTP with a body `serializeForm` builds from the served page.
+- Setup goes through Given builders, which seed the worker's own store with unique identities; a form's own submission is checked over HTTP with a body `serializeForm` builds from the served page.
 - A request-fixture refusal check sets `maxRedirects: 0` and asserts the status and the `Location` header, and states the actor: the request fixture follows redirects by default, is a separate context from `page` and inherits `storageState`.
-- A database-only or harness self-check that opens no page runs in the Vitest node project, not under Playwright.
+- A harness self-check that opens no page runs in the Vitest node project, not under Playwright.
 - This rule governs new setup. An existing suite moves to it only by decision.
 
 ## Auth / session setup
 
-When a project has authentication, each worker holds its own session, built in a worker-scoped fixture that logs in against that worker's server and hands the saved storage state to its tests. A single shared login does not work with a per-worker database. An auth-gated real-server test opens no page: the worker-scoped fixture exposes a request context named `signedInRequest`, built with `playwright.request.newContext({baseURL, storageState})` or from a cookie taken from a request-fixture sign-in.
+When a project has authentication, each worker holds its own session, built in a worker-scoped fixture that logs in against that worker's server and hands the saved storage state to its tests. A single shared login does not work with per-worker stores. An auth-gated real-server test opens no page: the worker-scoped fixture exposes a request context named `signedInRequest`, built with `playwright.request.newContext({baseURL, storageState})` or from a cookie taken from a request-fixture sign-in.
 
 ```ts
 import {expect, test as base} from '@playwright/test';

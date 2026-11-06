@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # Doc and code pins for Playwright per-worker isolation: the worker-scoped
 # server fixture and Given builder type in apps/web/.playwright/fixtures.ts,
-# the server launch in apps/web/.playwright/worker-server.ts,
+# the server launch (MSW and its seed gate on, no database) in
+# apps/web/.playwright/worker-server.ts,
 # the stock config staying fully parallel with no serial project, and the
 # Playwright rule and wiki page dropping the shared-state instructions.
 #
@@ -53,14 +54,31 @@ check_fixture_code() {
 }
 
 PHRASES=(
-  'every worker reaches its own database through the server it talks to'
-  'schema selection is the mapping for a database server'
-  'a serial project is not an accepted way to share one database'
-  "includes the tree identity along with \`parallelIndex\`"
-  'is out of reach of the Playwright process'
+  'every worker seeds and reads the MSW store of its own server'
+  "checks every record against its collection's server schema"
+  'a serial project is not an accepted way to share one store'
+  'keyed on `workerInfo.parallelIndex`'
   'stays stable when a worker restarts after a failure'
   'adopter-owned file that extends the `test`'
+  'specs reach setup only through them, never through the seed surface'
 )
+
+# Claims the seed surface made false: a stock project has a Given target now.
+ABSENT_PHRASES=(
+  'out of reach of the Playwright process'
+  'adds a real database'
+)
+
+# check_absent_phrases <file>: none of ABSENT_PHRASES, whitespace-collapsed.
+check_absent_phrases() {
+  local text phrase
+  require_file "$1" || return 1
+  text="$(tr '\n' ' ' <"$1" | sed -E 's/[[:space:]*]+/ /g')"
+  for phrase in "${ABSENT_PHRASES[@]}"; do
+    printf '%s' "$text" | grep -Fqi -- "$phrase" && { echo "stale phrase: $phrase" >&2; return 1; }
+  done
+  return 0
+}
 
 check_fixture_phrases() {
   local text phrase
@@ -69,24 +87,16 @@ check_fixture_phrases() {
   for phrase in "${PHRASES[@]}"; do
     printf '%s' "$text" | grep -Fqi -- "$phrase" || { echo "missing phrase: $phrase" >&2; return 1; }
   done
-  return 0
+  check_absent_phrases "$1"
 }
 
-check_spawn_database_url() {
-  code_only "$1" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' \
-    | grep -Eq "spawn\([^;]*DATABASE_URL: databaseFile" \
-    || { echo "spawn does not pass databaseFile as DATABASE_URL" >&2; return 1; }
-}
-
-# The database lives in a temp folder on local disk, never the tree's output
-# folder: a bind mount does not share the file locks SQLite's WAL needs.
-check_database_off_tree() {
+# The spawned dev server gets MSW and its seed gate, and no database.
+check_spawn_seed_env() {
   local code
   code="$(code_only "$1" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')" || return 1
-  printf '%s' "$code" | grep -Eq "databaseDirectory = fs\.mkdtempSync\( path\.join\(os\.tmpdir\(\)" \
-    || { echo "the database folder is not a mkdtemp under os.tmpdir()" >&2; return 1; }
-  printf '%s' "$code" | grep -Eq "databaseFile = path\.join\( databaseDirectory," \
-    || { echo "databaseFile is not in the temp folder" >&2; return 1; }
+  printf '%s' "$code" | grep -Eq "spawn\([^;]*MSW_ENABLED: 'true', MSW_SEED: 'true'" \
+    || { echo "spawn does not set MSW_ENABLED and MSW_SEED" >&2; return 1; }
+  printf '%s' "$code" | grep -Fq 'DATABASE_URL' && { echo "DATABASE_URL survives" >&2; return 1; }
   return 0
 }
 
@@ -101,11 +111,12 @@ check_rule() {
   require_file "$1" || return 1
   local text
   text="$(tr '\n' ' ' <"$1" | sed -E 's/[[:space:]]+/ /g')"
-  printf '%s' "$text" | grep -Fq 'serial project is not an accepted way to share a database' || { echo "no refusal" >&2; return 1; }
+  printf '%s' "$text" | grep -Fq 'serial project is not an accepted way to share one store' || { echo "no refusal" >&2; return 1; }
+  printf '%s' "$text" | grep -Fq 'With `MSW_SEED=true`, which only the worker server sets (alongside `MSW_ENABLED=true`), the dev server exposes a seed surface' || { echo "no seed surface gate" >&2; return 1; }
   printf '%s' "$text" | grep -Fq '.playwright/fixtures.ts' || { echo "no pointer to fixtures.ts" >&2; return 1; }
   grep -Fq 'resetTestData' "$1" && { echo "resetTestData survives" >&2; return 1; }
   grep -Fq 'auth.setup.ts' "$1" && { echo "auth.setup.ts survives" >&2; return 1; }
-  return 0
+  check_absent_phrases "$1"
 }
 
 check_wiki() {
@@ -151,34 +162,30 @@ scratch_copy() {
 }
 
 @test "fixtures.ts phrase check goes red when a phrase is reworded" {
-  copy="$(scratch_copy "$FIXTURES_FILE" 's/schema selection is the mapping/schema choice is the mapping/I')"
+  copy="$(scratch_copy "$FIXTURES_FILE" 's/never through the seed surface/or the seed surface/')"
   run check_fixture_phrases "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "the spawn call passes databaseFile as DATABASE_URL" {
-  check_spawn_database_url "$WORKER_SERVER_FILE"
-}
-
-@test "the DATABASE_URL pin goes red when the env value changes" {
-  copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/DATABASE_URL: databaseFile/DATABASE_URL: baseURL/')"
-  run check_spawn_database_url "$copy"
+@test "fixtures.ts phrase check goes red when the out-of-reach claim returns" {
+  copy="$(scratch_copy "$FIXTURES_FILE" 's/^ \* A form.s own submission/ * MSW state is out of reach of the Playwright process.\n&/')"
+  run check_fixture_phrases "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "the worker database lives in a temp folder off the tree" {
-  check_database_off_tree "$WORKER_SERVER_FILE"
+@test "the spawn call turns MSW and its seed gate on, with no DATABASE_URL" {
+  check_spawn_seed_env "$WORKER_SERVER_FILE"
 }
 
-@test "the database location pin goes red when the file moves back under the output folder" {
-  copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/^ +databaseDirectory,$/      outputDirectory,/')"
-  run check_database_off_tree "$copy"
+@test "the spawn pin goes red when the seed gate is off" {
+  copy="$(scratch_copy "$WORKER_SERVER_FILE" "s/MSW_SEED: 'true'/MSW_SEED: 'false'/")"
+  run check_spawn_seed_env "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "the database location pin goes red when the folder leaves the temp directory" {
-  copy="$(scratch_copy "$WORKER_SERVER_FILE" 's/os\.tmpdir\(\)/outputDirectory/')"
-  run check_database_off_tree "$copy"
+@test "the spawn pin goes red when DATABASE_URL returns" {
+  copy="$(scratch_copy "$WORKER_SERVER_FILE" "s/MSW_SEED: 'true',/MSW_SEED: 'true', DATABASE_URL: 'x',/")"
+  run check_spawn_seed_env "$copy"
   [ "$status" -ne 0 ]
 }
 
@@ -204,6 +211,18 @@ scratch_copy() {
 
 @test "the rule check goes red when the refusal sentence is gone" {
   copy="$(scratch_copy "$PW_RULE_FILE" 's/is not an accepted way/is a fine way/')"
+  run check_rule "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the rule check goes red when the seed surface gate sentence is gone" {
+  copy="$(scratch_copy "$PW_RULE_FILE" 's/which only the worker server sets \(alongside `MSW_ENABLED=true`\), the dev server exposes/the dev server exposes/')"
+  run check_rule "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the rule check goes red when the real-database claim returns" {
+  copy="$(scratch_copy "$PW_RULE_FILE" 's/^## Locale \/ language/A project that needs seeded state adds a real database.\n\n## Locale \/ language/')"
   run check_rule "$copy"
   [ "$status" -ne 0 ]
 }
