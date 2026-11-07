@@ -166,7 +166,12 @@ describe('Vite dependency pre-bundling', () => {
   // ignore covers Playwright's default outputDir, test-results, not a
   // configured one.
   test('the dev server does not watch the Playwright output folder', () => {
+    // Vite's watcher matches its ignore globs against absolute paths, with
+    // `dot: true`. A fixed root keeps the checkout's own dot folders (a
+    // worktree under `.claude`) out of `path.matchesGlob`, which takes no
+    // `dot` option.
     const traceFile = path.join(
+      '/project',
       readPlaywrightOutputDirectory(),
       'traces/resources/page.html'
     );
