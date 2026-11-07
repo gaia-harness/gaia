@@ -77,8 +77,9 @@ function normalize(lines, verbatimIndexes) {
 
 // Finds the closing line of a block opened at `index`, skipping heredoc bodies
 // so a `}` inside one does not end it. A heredoc opener the scan misreads (a
-// `<<` in arithmetic, or inside a quoted string that spans lines) swallows the
-// rest of the file and ends unterminated, which refuses rather than passes.
+// `<<` in arithmetic, or inside a quoted string that spans lines) swallows
+// lines up to the next line equal to the misread marker; with no such line it
+// ends unterminated and refuses.
 function findBlockEnd(lines, index, closer) {
   const heredocLines = new Set();
   let marker = null;
