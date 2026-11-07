@@ -14,7 +14,10 @@ import reactRouterConfig from '../react-router.config';
 
 const webRoot = fileURLToPath(new URL('..', import.meta.url));
 const mocksRoot = path.join(webRoot, 'test/mocks');
-const forwardHandler = path.join(webRoot, 'test/msw-seed/forward-handler.ts');
+const forwardHandlerPath = path.join(
+  webRoot,
+  'test/msw-seed/forward-handler.ts'
+);
 
 const LOCAL_PREFIXES = ['.', '~/', 'test/', 'node:'];
 
@@ -145,7 +148,7 @@ describe('Vite dependency pre-bundling', () => {
   test('every package the browser-loaded mock modules import is pre-bundled', () => {
     const include = readViteConfigList('include');
     const firstImporterBySpecifier = collectPackageImports([
-      forwardHandler,
+      forwardHandlerPath,
       ...listSourceFiles(mocksRoot),
     ]);
 
