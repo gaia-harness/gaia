@@ -17,20 +17,18 @@
 # Checks performed:
 #   - frontmatter present (--- ... ---)
 #   - required frontmatter fields: spec_id, type, status, immutable, wiki_promote_default,
-#     chain_trigger, intent, success_criteria, uats, scope_boundaries, clarifications,
+#     chain_trigger, intent, success_criteria, flows, scope_boundaries, clarifications,
 #     research_summary, created, updated
 #   - immutable: true
 #   - status in {in-progress, reopened, closed}
 #   - spec_id matches SPEC-NNN
-#   - every UAT has a frozen uat_id matching UAT-NNN
-#   - no UAT given/when/then carries a working-document id (finding code
-#     working_document_id)
+#   - flows validate through flows-lib.sh: a uats: key, a missing flows: key, or a
+#     malformed flow is refused, each under the finding code flows-lib reports
 #   - optional lineage: list; every entry is a research:/issue:/init:/spec:/plan: ref
 #     (finding code invalid_lineage)
 #   - no placeholder text ([PLACEHOLDER], <TODO>, TBD, FIXME, <TBD>)
-#   - reopen ceremony: when status == reopened, body must contain a UAT diff capture
-#     and a rationale block (markers: "## Reopen rationale" and "## UAT diff"
-#     headings, case-insensitive)
+#   - reopen ceremony: when status == reopened, body must contain a rationale block
+#     (marker: "## Reopen rationale" heading, case-insensitive)
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then
@@ -41,8 +39,8 @@ fi
 spec_file="$1"
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=.gaia/scripts/spec/uat-lib.sh
-source "$script_directory/uat-lib.sh"
+# shellcheck source=.gaia/scripts/spec/flows-lib.sh
+source "$script_directory/flows-lib.sh"
 
 if [ ! -f "$spec_file" ]; then
   echo "lint.sh: file not found: $spec_file" >&2
@@ -140,7 +138,7 @@ required_keys=(
   chain_trigger
   intent
   success_criteria
-  uats
+  flows
   scope_boundaries
   clarifications
   research_summary
@@ -176,30 +174,6 @@ esac
 # immutable must be true.
 if [ -n "$immutable_value" ] && [ "$immutable_value" != "true" ]; then
   add_finding "not_immutable" "immutable must be true; got '$immutable_value'" "frontmatter.immutable"
-fi
-
-# --- UAT id check: every entry under uats: must have uat_id: UAT-NNN ---
-# Extract the uats: block (lines from "uats:" up to next top-level key).
-uats_block=$(printf '%s' "$frontmatter_block" | awk '
-  /^uats:/ { capture = 1; next }
-  capture && /^[A-Za-z_][A-Za-z0-9_]*:/ { capture = 0 }
-  capture { print }
-')
-
-if [ -n "$uats_block" ]; then
-  # Count list entries (lines starting with "  - ") and uat_id occurrences.
-  # uat_id can appear either inline on the dash line ("  - uat_id: UAT-<n>")
-  # or on a continuation line ("    uat_id: UAT-<n>"). Match both.
-  entry_count=$(printf '%s\n' "$uats_block" | grep -cE '^[[:space:]]*-[[:space:]]' || true)
-  uat_id_count=$(printf '%s\n' "$uats_block" | grep -cE '^[[:space:]]*(-[[:space:]]+)?uat_id:[[:space:]]+UAT-[0-9]+' || true)
-  if [ "$entry_count" -gt 0 ] && [ "$uat_id_count" -lt "$entry_count" ]; then
-    add_finding "missing_uat_id" "Some UAT entries lack uat_id: UAT-NNN ($uat_id_count of $entry_count have ids)" "frontmatter.uats"
-  fi
-  # Detect malformed ids (uat_id present but not UAT-NNN shape).
-  bad_ids=$(printf '%s\n' "$uats_block" | grep -E '^[[:space:]]*(-[[:space:]]+)?uat_id:' | grep -vE '^[[:space:]]*(-[[:space:]]+)?uat_id:[[:space:]]+UAT-[0-9]+[[:space:]]*$' || true)
-  if [ -n "$bad_ids" ]; then
-    add_finding "bad_uat_id" "UAT id(s) do not match UAT-NNN frozen format" "frontmatter.uats"
-  fi
 fi
 
 # --- Lineage check (optional key): every entry must be a parent ref ---
@@ -242,26 +216,17 @@ if has_frontmatter_key lineage; then
   done <<<"$lineage_entries"
 fi
 
-# --- UAT text check: no working-document id in a given, when or then ---
-# The e2e render refuses such a UAT, and a saved SPEC changes only through the
-# reopen ceremony, so failing here lets the wording be fixed before that. Every
-# UAT is checked because the routing that picks the e2e ones does not exist yet.
-# A uats: block uat-lib cannot parse is skipped: the uat_id checks above report
-# a malformed id, and the render refuses anything else unparseable by name.
-if uat_rows=$(uat_lib_parse_spec "$spec_file" 2>/dev/null); then
-  while IFS=$'\t' read -r uat_id given_text when_text then_text; do
-    for uat_field in given when 'then'; do
-      case "$uat_field" in
-        given) uat_field_text="$given_text" ;;
-        when) uat_field_text="$when_text" ;;
-        then) uat_field_text="$then_text" ;;
-      esac
-      if uat_lib_carries_working_document_id "$uat_field_text"; then
-        add_finding "working_document_id" "$uat_id $uat_field carries a working-document id (a SPEC, UAT or plan id); describe the behavior without it" "frontmatter.uats.$uat_id.$uat_field"
-      fi
-    done
-  done <<<"$uat_rows"
+# --- Flows check: flows-lib owns the rules; each line is code, message, location ---
+flow_status=0
+flow_lines=$(flows_lib_validate_spec "$spec_file" 2>/dev/null) || flow_status=$?
+if [ "$flow_status" -ne 0 ]; then
+  echo "lint.sh: cannot read flows: $spec_file" >&2
+  exit 2
 fi
+while IFS=$'\t' read -r flow_code flow_message flow_location; do
+  [ -n "$flow_code" ] || continue
+  add_finding "$flow_code" "$flow_message" "$flow_location"
+done <<<"$flow_lines"
 
 # --- Placeholder text scan over the whole file ---
 # Patterns: [PLACEHOLDER], <TODO>, <TBD>, FIXME, bare TBD as standalone token.
@@ -284,22 +249,15 @@ if grep -nE '(^|[^A-Za-z<])TBD([^A-Za-z>]|$)' "$spec_file" > /dev/null; then
 fi
 
 # --- Reopen ceremony check ---
-# When status == reopened, body must include a rationale block AND a UAT diff capture.
+# When status == reopened, body must include a rationale block.
 if [ "$status_value" = "reopened" ]; then
   # Look for case-insensitive markers in the body.
   rationale_ok=0
-  diff_ok=0
   if grep -qiE '^##[[:space:]]+Reopen[[:space:]]+rationale' <<<"$body"; then
     rationale_ok=1
   fi
-  if grep -qiE '^##[[:space:]]+UAT[[:space:]]+diff' <<<"$body"; then
-    diff_ok=1
-  fi
   if [ "$rationale_ok" -eq 0 ]; then
-    add_finding "reopen_missing_rationale" "Reopened SPEC must include a '## Reopen rationale' section before any UAT mutation." "body"
-  fi
-  if [ "$diff_ok" -eq 0 ]; then
-    add_finding "reopen_missing_diff" "Reopened SPEC must include a '## UAT diff' section capturing the pre-mutation UAT state." "body"
+    add_finding "reopen_missing_rationale" "Reopened SPEC must include a '## Reopen rationale' section before any flow mutation." "body"
   fi
 fi
 

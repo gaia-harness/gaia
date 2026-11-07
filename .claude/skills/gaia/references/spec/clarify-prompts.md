@@ -131,7 +131,7 @@ Example:
 > What's the smallest version of this feature that would still feel
 > like a win to you?
 >
-> I'm asking now so we can scope the UATs around the floor, not the
+> I'm asking now so we can scope the flows around the floor, not the
 > ceiling.
 
 ---
@@ -236,7 +236,7 @@ Ask about the highest-value remaining topic, not the next one in table
 order. Rank what is left by **impact x uncertainty**:
 
 - **Impact:** how much of the SPEC's downstream shape changes if this
-  is wrong. A wrong Scope answer re-cuts the UATs; a wrong Prior-art
+  is wrong. A wrong Scope answer re-cuts the flows; a wrong Prior-art
   answer costs a paragraph.
 - **Uncertainty:** how far the PO is from being able to state the
   answer itself. A topic the PO could answer with its own
@@ -307,7 +307,7 @@ pick?".
 | User       | Who is this for, and how do you know?                                  | The user you talked to last about this.     |
 | Success    | What signals success after five real uses?                             | The metric you'd quote to a stakeholder.    |
 | Scope      | What's in, what's deliberately out, what's adjacent?                   | The cut that ships in one week.             |
-| UATs       | What three observations would prove this works?                        | One UAT per success criterion.              |
+| Flows      | Which user paths would block the main task if they broke?              | One flow per critical user path.            |
 | Trade-offs | What are you giving up to ship this version?                           | Naming the cost honestly.                   |
 | Risk       | What's the most likely way this lands and we regret it?                | The failure mode you've seen before.        |
 | Prior art  | What does the closest existing thing do, and where does it fall short? | Dispatch research subagent.                 |

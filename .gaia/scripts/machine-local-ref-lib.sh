@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# The one detector for machine-local references: a SPEC, UAT or plan number,
+# The one detector for machine-local references: a SPEC, FLOW or plan number,
 # or a concrete path under .notebook/ or .gaia/local/ that one machine
 # generated. The rule it enforces is .claude/rules/working-doc-ids.md, whose
 # ## Enforced section owns the list of what runs it. Dual-mode: source it for
@@ -30,12 +30,15 @@
 # The match logic, shared by every verb. Inputs set with -v:
 #   mode     text | message | file | diff
 #   style    prose | hash | slash | both (which lines of a file are read)
-#   strict   1 refuses an id in any case at any length
-# An id is SPEC, UAT or PLAN, a dash and digits, not preceded by a word
+#   strict   1 refuses a SPEC or PLAN id in any case at any length
+# An id is SPEC, FLOW or PLAN, a dash and digits, not preceded by a word
 # character: uppercase at any length, any case at three digits or more, so the
 # lowercase branch and scope spelling is caught while a plan revision folder
 # (one digit) is not. The Playwright tree runs strict: no revision folder lives
-# there, and a test title is where a lowercase short id gets copied.
+# there, and a test title is where a lowercase short id gets copied. FLOW is
+# narrower: uppercase at any length, any other case only at exactly three
+# digits (the FLOW-NNN shape), because flow is an ordinary word (a dated
+# login-flow-2024-01-15.webm name). Strict does not widen lowercase flow-.
 # shellcheck disable=SC2016 # an awk program: its $ fields are awk's, not the shell's
 _MACHINE_LOCAL_REF_AWK='
 function placeholder(segment,   index_position) {
@@ -71,14 +74,16 @@ function boundary(line, start) {
 function scan(line,   lowered, offset, start, found, digits, rest, length_found, token) {
   lowered = tolower(line)
   offset = 0
-  while (match(substr(lowered, offset + 1), /(spec|uat|plan)-[0-9]+/)) {
+  while (match(substr(lowered, offset + 1), /(spec|flow|plan)-[0-9]+/)) {
     start = offset + RSTART
     length_found = RLENGTH
     found = substr(line, start, length_found)
     if (boundary(line, start)) {
       digits = found
       sub(/^[A-Za-z]+-/, "", digits)
-      if (strict || found ~ /^(SPEC|UAT|PLAN)-/ || length(digits) >= 3) report(found)
+      if (found ~ /^FLOW-/) report(found)
+      else if (found ~ /^[Ff][Ll][Oo][Ww]-/) { if (length(digits) == 3) report(found) }
+      else if (strict || found ~ /^(SPEC|PLAN)-/ || length(digits) >= 3) report(found)
     }
     offset = start + length_found - 1
   }
@@ -172,7 +177,7 @@ machine_local_ref_style() {
 machine_local_ref_explain() {
   cat <<'EXPLAIN'
 A machine-local reference names a document that exists on one machine only: a
-SPEC, UAT or plan number, or a concrete path under .notebook/ or .gaia/local/.
+SPEC, FLOW or plan number, or a concrete path under .notebook/ or .gaia/local/.
 Nobody else can open it, so write out what the reference means instead: the
 behavior, decision or evidence it stood for. A placeholder passes (SPEC-NNN, a
 <date>-<topic> folder), and so does a state location GAIA owns on every

@@ -41,7 +41,7 @@ check_planner() {
 
 check_template() {
   has_collapsed "$1" '- <Adopter-owned end-to-end: behavior only a real backend can show' || return 1
-  has_collapsed "$1" 'Name it here, never as a UAT' || return 1
+  has_collapsed "$1" 'Name it here, never as a flow' || return 1
   local section bullet
   section=$(grep -nF '## Out of scope (for this SPEC)' "$1" | head -n 1 | cut -d: -f1)
   bullet=$(grep -nF -- '- <Adopter-owned end-to-end' "$1" | head -n 1 | cut -d: -f1)
@@ -49,8 +49,8 @@ check_template() {
 }
 
 check_spec_audit() {
-  grep -E '^- \*\*UAT testability' "$1" \
-    | grep -Fq 'A UAT whose then-clause needs a real backend (persistence across a restart, a database reset, a production start against a real store) is a finding: move it to Out of scope as adopter-owned end-to-end.' \
+  grep -E '^- \*\*Flow and criteria testability' "$1" \
+    | grep -Fq 'A flow or success criterion that needs a real backend (persistence across a restart, a database reset, a production start against a real store) is a finding: move it to Out of scope as adopter-owned end-to-end.' \
     || { echo "testability lens lacks the real-backend finding" >&2; return 1; }
 }
 

@@ -325,7 +325,7 @@ $GREEN_TEST_LINES
 
 @test "gate refuses a working-document id anywhere under the Playwright tree with the working-doc-id reason" {
   prepare_green
-  printf '// see UAT-123 for context\n' >"$WORK/apps/web/.playwright/helper.ts"
+  printf '// see SPEC-123 for context\n' >"$WORK/apps/web/.playwright/helper.ts"
   gate --phase 2 --report "$REPORTS/passed.json"
   [ "$status" -eq 1 ]
   assert_stderr_names "apps/web/.playwright/helper.ts" working-doc-id
@@ -1041,10 +1041,10 @@ scan() {
 
 @test "scan names path:line for an id in a test title" {
   scan_tree
-  printf "test('UAT-007 shows the total', async () => {});\n" >>"$BATS_TEST_TMPDIR/$SCAN_TREE/e2e/clean.spec.ts"
+  printf "test('SPEC-007 shows the total', async () => {});\n" >>"$BATS_TEST_TMPDIR/$SCAN_TREE/e2e/clean.spec.ts"
   scan
   [ "$status" -eq 1 ]
-  [ "$output" = "$SCAN_TREE/e2e/clean.spec.ts:3: UAT-007" ]
+  [ "$output" = "$SCAN_TREE/e2e/clean.spec.ts:3: SPEC-007" ]
 }
 
 @test "scan names path:line for an id in a line comment, case-insensitively" {
@@ -1066,17 +1066,17 @@ scan() {
 
 @test "scan names the path for an id in a path segment" {
   scan_tree
-  mkdir -p "$BATS_TEST_TMPDIR/$SCAN_TREE/e2e/uat-004-checkout"
-  printf 'export {};\n' >"$BATS_TEST_TMPDIR/$SCAN_TREE/e2e/uat-004-checkout/total.spec.ts"
+  mkdir -p "$BATS_TEST_TMPDIR/$SCAN_TREE/e2e/spec-004-checkout"
+  printf 'export {};\n' >"$BATS_TEST_TMPDIR/$SCAN_TREE/e2e/spec-004-checkout/total.spec.ts"
   scan
   [ "$status" -eq 1 ]
-  [ "$output" = "$SCAN_TREE/e2e/uat-004-checkout/total.spec.ts:0: uat-004" ]
+  [ "$output" = "$SCAN_TREE/e2e/spec-004-checkout/total.spec.ts:0: spec-004" ]
 }
 
 @test "scan ignores a hit under output/" {
   scan_tree
   mkdir -p "$BATS_TEST_TMPDIR/$SCAN_TREE/output"
-  printf 'UAT-001 artifact\n' >"$BATS_TEST_TMPDIR/$SCAN_TREE/output/trace.txt"
+  printf 'SPEC-001 artifact\n' >"$BATS_TEST_TMPDIR/$SCAN_TREE/output/trace.txt"
   scan
   [ "$status" -eq 0 ]
 }
@@ -1099,10 +1099,10 @@ scan() {
   [ "$status" -eq 0 ] || return 1
   [ -z "$output" ] || return 1
   mkdir -p "$WORK/apps/web/app/route-tests/checkout/tests"
-  printf '// covers UAT-004\n' >"$WORK/apps/web/app/route-tests/checkout/tests/total.test.ts"
+  printf '// covers SPEC-004\n' >"$WORK/apps/web/app/route-tests/checkout/tests/total.test.ts"
   run bash -c "cd '$WORK' && bash '$SCAN' 2>'$STDERR_FILE'"
   [ "$status" -eq 1 ]
-  [ "$output" = "apps/web/app/route-tests/checkout/tests/total.test.ts:1: UAT-004" ]
+  [ "$output" = "apps/web/app/route-tests/checkout/tests/total.test.ts:1: SPEC-004" ]
 }
 
 # bats test_tags=whole-tree

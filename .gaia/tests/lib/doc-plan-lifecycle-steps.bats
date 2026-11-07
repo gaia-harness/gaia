@@ -965,8 +965,8 @@ check_directive_routing() {
 # tests, the required real-server checks and both-condition unit tests, which
 # breaks the trophy's one test per behavior.
 DIRECTIVE_NEW_TEST_NEEDLE='It never asks for a new test, a test file, or a rule proven on its own'
-UNCOVERED_RULE_NEEDLE='Any other finding that a rule or case set has no UAT proving it is `spec_defect`, never `plan_directive`'
-FOLD_INTO_UAT_NEEDLE='folds into the intent as a case listed for that UAT, never into its then-clause; a new UAT is added only for a behavior no UAT states'
+UNCOVERED_RULE_NEEDLE='Any other finding that a rule has no flow or success criterion stating it is `spec_defect`, never `plan_directive`'
+FOLD_INTO_UAT_NEEDLE='folds into the intent or a success criterion, never into the flow as a branch or case list; a new flow is added only for a critical path no flow names'
 HONOR_INSIDE_NEEDLE='as a constraint on the code the task delivers or an assertion inside a test a task doc may name (`## Plan files`)'
 DIRECTIVE_FOLLOW_UP_NEEDLE='a directive that would need any other test goes under `## Follow-ups` in `README.md` instead'
 CASE_ROWS_NEEDLE='Cases the SPEC lists for a UAT are rows of that UAT'"'"'s own parameterized test on its routed surface, real-server included, and only those cases: never a second file'
@@ -1015,13 +1015,12 @@ check_directive_test_scope() {
 # check_markup_rule_placement <audit> <template>: the SPEC audit's testability
 # lens, its refuter and its directive rule send a page-markup or accessibility
 # structure rule to one plan-time directive naming the page, and the SPEC
-# template keeps such a rule out of a UAT's then-clause. Inside a then-clause
-# the rule can force the UAT onto a real-server test instead of a route test.
+# template keeps such a rule out of a success criterion and a flow name.
 check_markup_rule_placement() {
   local audit="$1" template="$2" needle
   for needle in \
-    'propose a plan-time directive stating that rule for the page or component it applies to, never UAT text' \
-    'A finding whose fix is a page-markup or accessibility structure rule is `plan_directive` even when it cites a UAT' \
+    'propose a plan-time directive stating that rule for the page or component it applies to, never flow or success-criterion text' \
+    'A finding whose fix is a page-markup or accessibility structure rule is `plan_directive` even when it cites a flow' \
     'is one directive naming the page or component it applies to'; do
     grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
   done
@@ -1035,7 +1034,7 @@ check_markup_rule_placement() {
 
 @test "red twin: dropping any markup-rule sentence fails" {
   local needle audit_copy="$BATS_TEST_TMPDIR/audit.md" template_copy="$BATS_TEST_TMPDIR/spec-template.md"
-  for needle in 'never UAT text' 'even when it cites a UAT' 'naming the page or component it applies to'; do
+  for needle in 'never flow or success-criterion text' 'even when it cites a flow' 'naming the page or component it applies to'; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
     run check_markup_rule_placement "$audit_copy" "$SPEC_TEMPLATE_MD"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }

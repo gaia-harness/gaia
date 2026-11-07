@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-05-08
 created: 2026-05-08
-updated: 2026-10-09
+updated: 2026-11-08
 tags: [decision, release, maintainer, distribution-boundary]
 ---
 
@@ -17,7 +17,7 @@ The release tarball passes through two enforcement primitives between staging an
 
 ## Why
 
-The pre-#97 process was free-form audits of the distribution boundary. Across thirteen independent audit rounds the trajectory averaged roughly one novel issue class per round: UAT/SPEC narrative leaks, dead wikilinks to release-excluded targets, monorepo-prefix paths in adopter-shipped files, runtime references to release-excluded scripts. Each class had a codifiable detection pattern after the fact, but free-form audits do not converge: the next round always finds something.
+The pre-#97 process was free-form audits of the distribution boundary. Across thirteen independent audit rounds the trajectory averaged roughly one novel issue class per round: working-document id leaks, dead wikilinks to release-excluded targets, monorepo-prefix paths in adopter-shipped files, runtime references to release-excluded scripts. Each class had a codifiable detection pattern after the fact, but free-form audits do not converge: the next round always finds something.
 
 Build-time enforcement closes the loop. The patterns the audit rounds surfaced become entries in `.gaia/release-scrub.yml`. Future leaks become deterministic build failures with structured reports rather than human-eyeball findings.
 

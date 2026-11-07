@@ -16,7 +16,7 @@ Body prose describes **what is** in present tense. The historical record lives i
 ## Rules
 
 - **Present tense only.** State the current behavior directly; `git log` answers when and why it changed, so body prose carries no PR, commit or date-of-change reference.
-- **No working-document ids.** SPEC, UAT, plan, and directive ids, issue or pull request references, and paths to machine-local artifacts under `.gaia/local/`: `.claude/rules/working-doc-ids.md` owns what is banned and what is exempt.
+- **No working-document ids.** SPEC, FLOW, plan, and directive ids, issue or pull request references, and paths to machine-local artifacts under `.gaia/local/`: `.claude/rules/working-doc-ids.md` owns what is banned and what is exempt.
 - **No conventions and no enumerations on a descriptive page, only a pointer to what owns them.** A page describing how something works does not restate the naming rule, the file list, the matcher set, the roster, the glob list, or the version. Name the rule file, the config file, or the command that holds it, and stop. Corollary, which is where the reflex goes wrong: when an enumeration is found stale, **delete it and point**, do not complete it. A corrected list restarts the same decay from a fresher number, and the enumeration that was wrong twice is the one most likely to be wrong again.
 - **No unreleased or speculative roadmap as current behavior.** Body prose describes what ships today. Do not document a planned, deferred, or not-yet-built feature as if it already exists, a reader cannot tell aspiration from shipped fact. State current behavior; keep forward-looking notes out of the page, or label them plainly as deferred and not yet built.
   <!-- gaia:maintainer-only:start -->
@@ -36,7 +36,7 @@ Body prose describes **what is** in present tense. The historical record lives i
 - **`wiki/meta/`**: audit artifacts (lint reports, consolidate reports). Their purpose is referencing specific commits / SHAs / dates, so the present-tense rule's ban on PR, commit and date-of-change references does not apply; the machine-local reference ban still does.
 - **Frontmatter (`created`, `updated`, `status`, etc.)**: metadata, not prose.
 <!-- gaia:maintainer-only:start -->
-- **`.gaia/tests/` is out of scope entirely.** It is release-excluded maintainer-only test infrastructure that never reaches an adopter, so a UAT/SPEC reference there is never shipped-surface drift. Its suites use `UAT-NNN` / `SEC-N` / `TST-NN` test-name prefixes, header comments, and section headers as deliberate SPEC-conformance traceability; those stay. The audit greps below omit `.gaia/tests/` for this reason, matching the release boundary. Do not add `.gaia/tests/` to any of them.
+- **`.gaia/tests/` is out of scope entirely.** It is release-excluded maintainer-only test infrastructure that never reaches an adopter, so a SPEC reference there is never shipped-surface drift. Its suites use `UAT-NNN` / `SEC-N` / `TST-NN` test-name prefixes, header comments, and section headers as deliberate SPEC-conformance traceability; those stay as a convention, and a `FLOW-` id is never one of them. The audit greps below omit `.gaia/tests/` for this reason, matching the release boundary. Do not add `.gaia/tests/` to any of them.
 <!-- gaia:maintainer-only:end -->
 - **Targeted archival labels**: e.g. the `## Historical context (from <older-title>)` heading the consolidate stage of `/gaia-wiki` writes when merging a superseded page is a deliberate label that identifies lifted content; not the prose pattern this rule bans.
 
@@ -45,13 +45,13 @@ Body prose describes **what is** in present tense. The historical record lives i
 Before merging changes that touch any in-scope path, and before running `/gaia-wiki`:
 
 ```bash
-# UAT / SPEC refs in wiki body prose (excluding log.md and meta/ audit reports)
-grep -rEn "UAT-[0-9]+|SPEC-[0-9]+" wiki/ --include="*.md" --exclude="log.md" --exclude-dir="meta"
+# FLOW / SPEC refs in wiki body prose (excluding log.md and meta/ audit reports)
+grep -rEn "FLOW-[0-9]+|SPEC-[0-9]+" wiki/ --include="*.md" --exclude="log.md" --exclude-dir="meta"
 
-# UAT-NNN narrative refs in instruction files, spec-lifecycle scripts, and spec templates
+# FLOW-NNN narrative refs in instruction files, spec-lifecycle scripts, and spec templates
 # (functional fixture values are kept; the maintainer triages each match per
 # the structural-vs-narrative distinction in `.claude/rules/working-doc-ids.md`)
-grep -rEn "UAT-[0-9]{3}" \
+grep -rEn "FLOW-[0-9]{3}" \
   .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ apps/web/.claude/ \
   .gaia/scripts/spec/ .gaia/templates/spec/
 

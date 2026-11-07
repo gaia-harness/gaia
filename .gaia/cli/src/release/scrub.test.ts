@@ -127,12 +127,12 @@ const LEAK_ONLY_CONFIG = String.raw`
 transforms:
   - type: leak-check
     checks:
-      - id: uat-narrative
-        pattern: "UAT-[0-9]{3}"
+      - id: flow-narrative
+        pattern: "FLOW-[0-9]{3}"
         scope:
           - ".claude/**"
         line-allowlist:
-          - "uat[-_]id"
+          - "flow[-_]id"
       - id: maintainer-paths
         pattern: "\\.gaia/cli/src/"
         scope:
@@ -152,8 +152,8 @@ transforms:
 
   - type: leak-check
     checks:
-      - id: uat-narrative
-        pattern: "UAT-[0-9]{3}"
+      - id: flow-narrative
+        pattern: "FLOW-[0-9]{3}"
         scope:
           - "wiki/**"
 `;
@@ -454,26 +454,26 @@ transforms:
     expect(after).toBe('- a list item\n- another item\n');
   });
 
-  test('flags UAT-NNN narrative in shipped instruction surfaces', () => {
+  test('flags FLOW-NNN narrative in shipped instruction surfaces', () => {
     sandbox = setupSandbox({config: LEAK_ONLY_CONFIG});
     sandbox.writeStaged(
       '.claude/skills/foo/SKILL.md',
-      '# Foo\n\nImplements UAT-007 (working-doc reference).\n'
+      '# Foo\n\nImplements FLOW-007 (working-doc reference).\n'
     );
 
     const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
     expect(exit).toBe(1);
 
     const out = stdio.outputs.join('');
-    expect(out).toContain('uat-narrative');
-    expect(out).toContain('UAT-007');
+    expect(out).toContain('flow-narrative');
+    expect(out).toContain('FLOW-007');
   });
 
   test('exempts lines with structural identifier fragments', () => {
     sandbox = setupSandbox({config: LEAK_ONLY_CONFIG});
     sandbox.writeStaged(
       '.claude/skills/foo/SKILL.md',
-      '# Foo\n\nUse `--uat-id UAT-099` to filter; the `uat_id` field is required.\n'
+      '# Foo\n\nUse `--flow-id FLOW-099` to filter; the `flow_id` field is required.\n'
     );
 
     const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
@@ -507,7 +507,7 @@ transforms:
         '# Index',
         '',
         '<!-- gaia:maintainer-only:start -->',
-        'Refers to UAT-007 inside the maintainer block.',
+        'Refers to FLOW-007 inside the maintainer block.',
         '<!-- gaia:maintainer-only:end -->',
         '',
       ].join('\n')
@@ -548,7 +548,7 @@ transforms:
         '',
         'Public content.',
         '<!-- gaia:maintainer-only:start -->',
-        'UAT-001 maintainer reference.',
+        'FLOW-001 maintainer reference.',
         '<!-- gaia:maintainer-only:end -->',
         '',
       ].join('\n')
@@ -1320,8 +1320,8 @@ describe('wikilink-to-excluded derived check', () => {
 transforms:
   - type: leak-check
     checks:
-      - id: uat-narrative
-        pattern: "UAT-[0-9]{3}"
+      - id: flow-narrative
+        pattern: "FLOW-[0-9]{3}"
         scope:
           - "wiki/**"
       - id: wikilink-to-excluded
@@ -1333,14 +1333,14 @@ transforms:
 `;
     sandbox = setupSandbox({config: mixedConfig});
     seedExcludedSource(sandbox);
-    sandbox.writeStaged('wiki/a.md', '# A\n\nUAT-007 reference.\n');
+    sandbox.writeStaged('wiki/a.md', '# A\n\nFLOW-007 reference.\n');
     sandbox.writeStaged('wiki/b.md', '# B\n\n[[Bundle-time Scrub]]\n');
 
     const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
     expect(exit).toBe(1);
 
     const out = stdio.outputs.join('');
-    expect(out).toContain('uat-narrative');
+    expect(out).toContain('flow-narrative');
     expect(out).toContain('wikilink-to-excluded');
   });
 });
@@ -1989,8 +1989,8 @@ transforms:
 transforms:
   - type: leak-check
     checks:
-      - id: uat-narrative
-        pattern: "UAT-[0-9]{3}"
+      - id: flow-narrative
+        pattern: "FLOW-[0-9]{3}"
         scope:
           - "wiki/**"
         title-opt-out:
@@ -2025,8 +2025,8 @@ transforms:
 transforms:
   - type: leak-check
     checks:
-      - id: uat-narrative
-        pattern: "UAT-[0-9]{3}"
+      - id: flow-narrative
+        pattern: "FLOW-[0-9]{3}"
         scope:
           - "wiki/**"
       - id: excluded-titles
@@ -2040,7 +2040,7 @@ transforms:
 `;
     sandbox = setupSandbox({config: mixedConfig});
     seedTitleSource(sandbox);
-    sandbox.writeStaged('wiki/a.md', '# A\n\nUAT-007 reference.\n');
+    sandbox.writeStaged('wiki/a.md', '# A\n\nFLOW-007 reference.\n');
     sandbox.writeStaged(
       'wiki/b.md',
       '# B\n\nThe Bundle-time Scrub runs here.\n'
@@ -2050,7 +2050,7 @@ transforms:
     expect(exit).toBe(1);
 
     const out = stdio.outputs.join('');
-    expect(out).toContain('uat-narrative');
+    expect(out).toContain('flow-narrative');
     expect(out).toContain('excluded-titles');
   });
 });
@@ -2306,8 +2306,8 @@ transforms:
     scope-skip:
       - "**/*.png"
     checks:
-      - id: uat-narrative
-        pattern: "UAT-[0-9]{3}"
+      - id: flow-narrative
+        pattern: "FLOW-[0-9]{3}"
         scope:
           - "**"
       - id: maintainer-paths
@@ -2332,7 +2332,7 @@ describe('leak-check scope-skip', () => {
   });
 
   test('skips a file the skip list names even when the scope admits it', () => {
-    sandbox.writeStaged('public/icon.png', 'UAT-042');
+    sandbox.writeStaged('public/icon.png', 'FLOW-042');
 
     expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
     expect(stdio.outputs.join('')).toContain('leaks: none');
@@ -2345,7 +2345,7 @@ describe('leak-check scope-skip', () => {
   });
 
   test('still scans a file the skip list does not name', () => {
-    sandbox.writeStaged('docs/notes.md', 'UAT-042');
+    sandbox.writeStaged('docs/notes.md', 'FLOW-042');
 
     expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
     expect(stdio.outputs.join('')).toContain('docs/notes.md');
@@ -2927,5 +2927,53 @@ describe('shipped local-artifact-paths check', () => {
     );
 
     expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
+  });
+});
+
+// Handed to the real engine as shipped: the check plus its holding transform,
+// siblings filtered out so an unrelated pattern cannot decide these fixtures.
+const shippedFlowNarrativeConfig = (): string => {
+  const {check, transform} = shippedLeakCheck('flow-narrative');
+
+  return dumpYaml({transforms: [{...transform, checks: [check]}]});
+};
+
+describe('shipped flow-narrative check', () => {
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
+
+  beforeEach(() => {
+    stdio = captureStdio();
+    sandbox = setupSandbox({config: shippedFlowNarrativeConfig()});
+  });
+
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test('flags a flow id in a shipped instruction file', () => {
+    sandbox.writeStaged(
+      '.claude/skills/example/SKILL.md',
+      '# Example\n\nImplements FLOW-123 end to end.\n'
+    );
+
+    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
+
+    const out = stdio.outputs.join('');
+
+    expect(out).toContain('flow-narrative');
+    expect(out).toContain('FLOW-123');
+  });
+
+  test('passes a frontmatter-style flow_id line', () => {
+    sandbox.writeStaged(
+      '.claude/skills/example/SKILL.md',
+      '---\nflow_id: FLOW-123\n---\n\n# Example\n'
+    );
+
+    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
+    expect(stdio.outputs.join('')).toContain('leaks: none');
   });
 });

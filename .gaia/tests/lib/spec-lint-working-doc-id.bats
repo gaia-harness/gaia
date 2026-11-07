@@ -1,67 +1,76 @@
 #!/usr/bin/env bats
-# UAT text lint: a working-document id in a UAT's given, when or then fails the
-# save-time lint (working_document_id), the same rule the e2e render applies.
+# Flow text lint: a working-document id in a flow's name or why fails the
+# save-time lint (working_document_id), with where naming the flow and field.
+# A placeholder id with no number stays clean.
 #
-# Fixtures are built in $BATS_TEST_TMPDIR from the real SPEC template, so the
-# lint runs against the shipped shape. Hermetic: no real specs, no telemetry.
+# Fixtures are built in $BATS_TEST_TMPDIR with ids assembled at run time.
+# Hermetic: no real specs, no telemetry.
 
 REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
 LINT="$REPO_ROOT/.gaia/scripts/spec/lint.sh"
-TEMPLATE="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
 
-# Filled SPEC from the template; the optional sed expression edits its UAT text.
+SPEC_ID="SPEC-""001"
+FLOW_ONE="FLOW-""001"
+
+# make_spec <path> <name text> <why text> [why continuation line]
 make_spec() {
-  local output_path="$1" uat_edit="${2:-}"
-  sed 's/SPEC-NNN/SPEC-001/;s/UAT-NNN/UAT-001/' "$TEMPLATE" >"$output_path"
-  if [ -n "$uat_edit" ]; then
-    sed -i.bak "$uat_edit" "$output_path"
-  fi
+  local output_path="$1" name_text="$2" why_text="$3" why_more="${4:-}"
+  {
+    printf '%s\n' '---'
+    printf 'spec_id: %s\n' "$SPEC_ID"
+    printf '%s\n' 'type: feature' 'status: in-progress' 'immutable: true' \
+      'wiki_promote_default: yes' 'chain_trigger: gaia-plan' 'lineage: []' \
+      'intent: |' '  A member signs in.' 'success_criteria:' '  - A member reaches the dashboard.' \
+      'flows:'
+    printf '  - flow_id: %s\n' "$FLOW_ONE"
+    printf '    slug: sign-in\n    name: %s\n    why: %s\n' "$name_text" "$why_text"
+    if [ -n "$why_more" ]; then printf '      %s\n' "$why_more"; fi
+    printf '%s\n' '    covers: [app/pages/sign-in]' \
+      'scope_boundaries:' '  always:' '    - Keep sessions private.' \
+      'clarifications:' '  answered: []' '  pending: []' \
+      'research_summary: |' '  None.' 'created: 2026-01-01' 'updated: 2026-01-01' '---' '' '# Sign in'
+  } >"$output_path"
 }
 
 working_document_id_findings() {
   printf '%s' "$1" | jq -c '[.findings[] | select(.code == "working_document_id")]'
 }
 
-@test "the template's UAT fields are the lines the fixtures edit" {
-  grep -q '^    given: <Initial state' "$TEMPLATE"
-  grep -q '^      no hedging\. The verifier' "$TEMPLATE"
-}
-
-@test "filled template lints clean: its uat_id line is not UAT text" {
-  make_spec "$BATS_TEST_TMPDIR/s.md"
+@test "a clean flow lints clean" {
+  make_spec "$BATS_TEST_TMPDIR/s.md" "A member signs in" "Breaking sign-in blocks every task."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 0 ]
   [ "$output" = '{"ok":true,"findings":[]}' ]
 }
 
-@test "a UAT id in given fails the lint, naming the UAT and the field" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 's/^    given: <Initial state/    given: <As in UAT-003, initial state/'
+@test "a plan id in name fails the lint, naming the flow and the field" {
+  make_spec "$BATS_TEST_TMPDIR/s.md" "As in PLAN-""003, a member signs in" "Breaking sign-in blocks every task."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 1 ]
   findings="$(working_document_id_findings "$output")"
   [ "$(printf '%s' "$findings" | jq 'length')" -eq 1 ]
-  [ "$(printf '%s' "$findings" | jq -r '.[0].where')" = "frontmatter.uats.UAT-001.given" ]
+  [ "$(printf '%s' "$findings" | jq -r '.[0].where')" = "frontmatter.flows.$FLOW_ONE.name" ]
 }
 
-@test "an id on a then continuation line fails the lint" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 's/^      no hedging\. The verifier/      no hedging, unlike the wrong-password case in UAT-003. The verifier/'
+@test "a spec id on a why continuation line fails the lint" {
+  make_spec "$BATS_TEST_TMPDIR/s.md" "A member signs in" "Breaking sign-in blocks every task," "unlike the case in SPEC-""003."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 1 ]
   findings="$(working_document_id_findings "$output")"
   [ "$(printf '%s' "$findings" | jq 'length')" -eq 1 ]
-  [ "$(printf '%s' "$findings" | jq -r '.[0].where')" = "frontmatter.uats.UAT-001.then" ]
+  [ "$(printf '%s' "$findings" | jq -r '.[0].where')" = "frontmatter.flows.$FLOW_ONE.why" ]
 }
 
-@test "SPEC and PLAN ids in any case fail the lint, one finding per field" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 's/^    given: <Initial state/    given: <Per spec-12, initial state/;s/^    when: <Action/    when: <Plan-4 action/'
+@test "ids in both name and why fail the lint, one finding per field" {
+  make_spec "$BATS_TEST_TMPDIR/s.md" "Per SPEC-""012, a member signs in" "Plan PLAN-""004 needs it."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 1 ]
   findings="$(working_document_id_findings "$output")"
-  [ "$(printf '%s' "$findings" | jq -c '[.[].where]')" = '["frontmatter.uats.UAT-001.given","frontmatter.uats.UAT-001.when"]' ]
+  [ "$(printf '%s' "$findings" | jq -c '[.[].where]')" = "[\"frontmatter.flows.$FLOW_ONE.name\",\"frontmatter.flows.$FLOW_ONE.why\"]" ]
 }
 
 @test "a placeholder id with no number stays clean" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 's/^    given: <Initial state/    given: <Like any UAT-NNN, initial state/'
+  make_spec "$BATS_TEST_TMPDIR/s.md" "Like any FLOW-NNN, a member signs in" "Breaking sign-in blocks every task."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 0 ]
 }

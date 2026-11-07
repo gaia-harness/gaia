@@ -26,14 +26,79 @@ write_lines() {
   printf '%s\n' "$@" > "$file"
 }
 
-@test "text: refuses SPEC, UAT and PLAN numbers and names each line and match" {
-  write_lines "$WORK/text" 'implements SPEC-128 cleanly' 'nothing here' 'covers UAT-004 and PLAN-12'
+# Scan the file $1 in strict mode, the way the Playwright tree is read.
+strict_scan() {
+  bash -c 'source "$1" && machine_local_ref_files 1 "$2"' _ "$LIB" "$1"
+}
+
+@test "text: refuses SPEC and PLAN numbers and names each line and match" {
+  write_lines "$WORK/text" 'implements SPEC-128 cleanly' 'nothing here' 'covers PLAN-12'
   run bash "$LIB" text "$WORK/text"
   [ "$status" -eq 1 ]
   [[ "$output" == *"line 1: SPEC-128"* ]]
-  [[ "$output" == *"line 3: UAT-004"* ]]
   [[ "$output" == *"line 3: PLAN-12"* ]]
   [[ "$output" != *"line 2"* ]]
+}
+
+@test "text: refuses an uppercase FLOW number" {
+  write_lines "$WORK/text" 'implements FLOW-001 cleanly'
+  run bash "$LIB" text "$WORK/text"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line 1: FLOW-001"* ]]
+}
+
+@test "strict: refuses an uppercase FLOW number" {
+  write_lines "$WORK/text" 'implements FLOW-001 cleanly'
+  run strict_scan "$WORK/text"
+  [[ "$output" == *"FLOW-001"* ]]
+}
+
+@test "text: refuses a lowercase three-digit flow id" {
+  write_lines "$WORK/text" 'branch feat/flow-123-x'
+  run bash "$LIB" text "$WORK/text"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line 1: flow-123"* ]]
+}
+
+@test "text: refuses flow-004 in default mode" {
+  write_lines "$WORK/text" 'see flow-004 here'
+  run bash "$LIB" text "$WORK/text"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line 1: flow-004"* ]]
+}
+
+@test "strict: refuses flow-004" {
+  write_lines "$WORK/text" 'see flow-004 here'
+  run strict_scan "$WORK/text"
+  [[ "$output" == *"flow-004"* ]]
+}
+
+@test "text: passes a dated flow file name in default mode" {
+  write_lines "$WORK/text" 'recorded login-flow-2024-01-15.webm'
+  run bash "$LIB" text "$WORK/text"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "strict: passes a dated flow file name" {
+  write_lines "$WORK/text" 'recorded login-flow-2024-01-15.webm'
+  run strict_scan "$WORK/text"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "text: passes the FLOW-NNN placeholder" {
+  write_lines "$WORK/text" 'a FLOW-NNN id names one flow'
+  run bash "$LIB" text "$WORK/text"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "text: no longer treats a UAT number as an id" {
+  write_lines "$WORK/text" 'covers UAT-004 today'
+  run bash "$LIB" text "$WORK/text"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 @test "text: refuses a lowercase three-digit id, the branch and scope spelling" {
@@ -195,6 +260,15 @@ make_repo() {
   [[ "$output" == *"wiki/page.md:5: PLAN-007"* ]]
   [[ "$output" == *"SPEC-001"* ]] && return 1
   true
+}
+
+@test "staged: refuses a FLOW id in an added prose line" {
+  make_repo
+  printf '# Page\n\nOld text citing SPEC-001 stays until edited.\n\nNew line naming FLOW-007.\n' > "$REPO/wiki/page.md"
+  git -C "$REPO" add wiki/page.md
+  run bash "$LIB" staged "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"wiki/page.md:5: FLOW-007"* ]]
 }
 
 @test "staged: scans a full-line code comment, not a code line" {

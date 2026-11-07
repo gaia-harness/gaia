@@ -36,21 +36,21 @@ SITES=(
 # folded to spaces. A gate that softens back to "Suggested text" drops its
 # required print, so that phrase is forbidden at both gates.
 PRINT_PINS=(
-  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|every UAT in the draft, one plain-language line each"
-  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never summarize the UATs as a count or a theme list"
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|the proposed critical flows, one line each"
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never summarize the flows as a count or a theme list"
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never point the user at the draft file"
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|terseness preferences do not shorten gate content"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|a synthesis of the draft and its AUDIT.md"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|never print the whole rendered artifact"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|every UAT in the draft, one line each, keeping its number"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|every flow in the draft, one line each, with its covered folders or test path"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**Plan will"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**You are signing off on:**"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**Not settled"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|the draft path and the AUDIT.md path"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|at most 50 lines"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|never drops or merges a UAT, a sign-off item, or a not-settled item"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|never drops or merges a flow, a sign-off item, or a not-settled item"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|terseness preferences do not shorten gate content"
-  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|every UAT as one plain-language line"
+  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|the proposed critical flows, one line each"
   "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|print the gate 2 brief"
   "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|never the whole rendered artifact"
   "$REFERENCES/spec/system-prompt.md|^- \*\*Plain language|^- \*\*Concision|never cite an id or label the human has not read"
@@ -292,14 +292,14 @@ copy_tree_into_scratch() {
 }
 
 # bats test_tags=whole-tree
-@test "red twin: a gate 1 that stops requiring every UAT line fails" {
+@test "red twin: a gate 1 that stops requiring every flow line fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  sed 's/every UAT in the draft, one plain-language line each/the UATs in brief/' "$file" >"$file.new"
+  sed 's/the proposed critical flows, one line each/the flows in brief/' "$file" >"$file.new"
   mv "$file.new" "$file"
   run prints_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing"*"every UAT in the draft"* ]]
+  [[ "$output" == *"print pin missing"*"the proposed critical flows"* ]]
 }
 
 # bats test_tags=whole-tree
@@ -347,14 +347,14 @@ copy_tree_into_scratch() {
 }
 
 # bats test_tags=whole-tree
-@test "red twin: a gate 2 brief that lets length drop a UAT fails" {
+@test "red twin: a gate 2 brief that lets length drop a flow fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  sed 's/never drops or merges a UAT, a sign-off item, or a not-settled item/may trim UATs when long/' "$file" >"$file.new"
+  sed 's/never drops or merges a flow, a sign-off item, or a not-settled item/may trim flows when long/' "$file" >"$file.new"
   mv "$file.new" "$file"
   run prints_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing"*"never drops or merges a UAT"* ]]
+  [[ "$output" == *"print pin missing"*"never drops or merges a flow"* ]]
 }
 
 # bats test_tags=whole-tree

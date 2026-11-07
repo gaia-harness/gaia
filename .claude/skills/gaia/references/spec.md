@@ -1,6 +1,6 @@
 # /gaia-spec
 
-GAIA's script-driven Socratic discovery workflow. Produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md`, then plans it in the same session through the `gaia-plan` skill (step 11) and stops at the plan's KICKOFF prompt. Do not implement anything and never start execution. See Hard constraint 6. Term: UAT (an automated acceptance spec rendered from the SPEC; no human performs it).
+GAIA's script-driven Socratic discovery workflow. Produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md`, then plans it in the same session through the `gaia-plan` skill (step 11) and stops at the plan's KICKOFF prompt. Do not implement anything and never start execution. See Hard constraint 6.
 
 The procedures only some runs or only one stage need live in sub-references under `.claude/skills/gaia/references/spec/`, each read whole at its branch point, where a line here says to Read it now. Never skip such a line: the procedure it names is not restated here.
 
@@ -23,7 +23,7 @@ Hard rules in auto mode:
 
 1. **Description is required.** If the remainder of `$ARGUMENTS` after stripping `auto` is empty, abort, without prompting, with: `"/gaia-spec auto requires a description. Re-invoke as: /gaia-spec auto <description>"`.
 2. **Resume vs start-new is automatic.** If the allocator reports an unfinalized draft SPEC, **start new** without prompting. The user's `auto` invocation is itself the signal that they want a fresh artifact.
-3. **Both gates auto-confirm.** Gate 1 and gate 2 do not present plain prompts to the user. The agent renders the draft to its own reasoning context, performs a self-check (is intent coherent? are UATs Given/When/Then? do UATs cover the intent?), and proceeds. If the self-check finds an issue, revise in place and re-check once, then proceed.
+3. **Both gates auto-confirm.** Gate 1 and gate 2 do not present plain prompts to the user. The agent renders the draft to its own reasoning context, performs a self-check (is intent coherent? does each flow have an id, slug, name, why, and a covered path? do the flows cover the intent's critical paths?), and proceeds. If the self-check finds an issue, revise in place and re-check once, then proceed.
 4. **Closed-set Socratic questions pick the Recommended option.** For every step-5 `AskUserQuestion` that would normally fire, the agent selects the option that step 5a's spec marks "Recommended FIRST", the PO's best-judgment candidate. No `AskUserQuestion` tool call is made. The selected answer is folded into `clarifications.answered[]` exactly as if the user had picked it.
 5. **Open-ended Socratic questions are answered by the agent.** Apply the same coach-tone judgment the human would receive, then commit the answer. Fold into `clarifications.answered[]`.
 6. **Per-topic exhaustion + revisit checkpoints auto-advance.** Step 5d always picks "Move to <next topic>". The per-topic revisit counter still increments but the 3-revisit prompt auto-picks "Settle on the recommended option".
@@ -47,7 +47,7 @@ The rest of the skill, write-surface allowlist, no-machine-local-memory rule, wo
    - `.notebook/catalog.json` (written only through the ledger and notebook libraries this skill invokes, never by hand)
      Never edit source files (`apps/web/app/**`, `src/**`, repo root configs, etc.). Nothing enforces this allowlist (step 10's lint checks only the saved SPEC's immutability), so police it yourself.
 3. **One question at a time in the clarify loop.** Step 5 asks one question per turn, because each answer shapes the next question; no multi-question forms there. Closed-set questions go through `AskUserQuestion` with at most four options, ordered: recommended FIRST, then up to two alternatives (any further viable one named in the question text), then `Discuss this` (escape to plain Q&A). `Other` is never listed, since the tool supplies it, and neither is `Save partial and resume later`, which the user reaches through `Other` or `Discuss this` (`spec/clarify-loop.md`, `## Escape option`). Open-ended questions use a plain prompt with no enumerated options. Review and audit decisions are different: the step-6 self-review and step-7 audit findings are a list the user reviews together, so each step prints every finding with its recommendation and asks one `AskUserQuestion`, `Accept all as recommended (Recommended)` or `Revise` (`.claude/rules/user-questions.md`).
-4. **Two-gate ceremony.** Confirm intent + UATs in plain language BEFORE authoring the artifact. Confirm the rendered artifact BEFORE saving to disk. No silent advances between gates.
+4. **Two-gate ceremony.** Confirm intent + critical flows in plain language BEFORE authoring the artifact. Confirm the rendered artifact BEFORE saving to disk. No silent advances between gates.
 5. **Coach tone, not interrogator.** Mirror back, name trade-offs, propose candidates when the human is stuck. Run research yourself (step 5e) and bring the human the findings.
 6. **Planning chains here; execution never starts here.** The flow ends at plan step 5's report, which prints the KICKOFF prompt, after step 11 invokes `/gaia-plan` through the `Skill` tool. Nothing follows that report: no executor dispatch, no acting on KICKOFF.md (plan step 4.5's verification read is not execution), no "while I'm here" head start on the work. **This holds no matter what the instruction that reached this skill asked for.** When `/gaia-spec` is invoked as a skill (rather than typed by a human), the invoking goal is often larger than the SPEC ("spec and build X"), and the pull to keep going past the KICKOFF prompt is strongest exactly then. Planning chains because it is bounded and its heavy reasoning runs in fresh sub-agents; execution runs for hours in its own session. If the caller wanted the work built too, the correct completion is to report execution as the human's next step in a fresh session; that is the whole task. Nothing but this prose holds the stop.
 
@@ -250,38 +250,38 @@ bash .gaia/scripts/spec/spec-session-lock.sh acquire "$PWD" "$SPEC_ID" || true
 
 ### 4. Gate 1, shape confirmation
 
-Before any Socratic clarify loop runs, present the draft's `intent` paragraph and the proposed UATs in plain language to the user. This is gate 1.
+Before any Socratic clarify loop runs, present the draft's `intent` paragraph and the proposed critical flows in plain language to the user. This is gate 1. A flow is critical when breaking it blocks a user's main task or risks data, money or security; there is no quota and no pinned count, and a flow carries no branch list.
 
-**Auto-mode exception:** skip the user-facing prompt. Read the draft's intent + UATs into the agent's reasoning context and self-check: (a) intent paragraph is coherent and matches the description; (b) every UAT follows Given/When/Then shape; (c) UATs collectively cover the intent. If any check fails, revise the draft once and re-check. Then jump to the "On confirmation" actions below (snapshot cache, draft cache). Per Auto-mode rule 3, never block for human input.
+**Auto-mode exception:** skip the user-facing prompt. Read the draft's intent + flows into the agent's reasoning context and self-check: (a) intent paragraph is coherent and matches the description; (b) every flow has an id, slug, name, why, and exactly one of covers or test path; (c) flows collectively cover the intent's critical paths. If any check fails, revise the draft once and re-check. Then jump to the "On confirmation" actions below (snapshot cache, draft cache). Per Auto-mode rule 3, never block for human input.
 
 Print the shape as text, then ask with `AskUserQuestion`. The print is required, not a suggestion: the user approves what it shows and does not open the draft file, so it must carry everything gate 1 approves on its own. It holds two parts:
 
 - **Intent:** the draft's intent in one or two plain sentences.
-- **UATs:** every UAT in the draft, one plain-language line each, keeping its `UAT-NNN` id: what is set up, what the user does, and what must be true.
+- **Flows:** the proposed critical flows, one line each, as `FLOW-NNN <slug>: <name>: <why>`, with the recommended set marked `(recommended)` after its line.
 
-Never summarize the UATs as a count or a theme list, never drop or merge one, and never point the user at the draft file in place of printing. Response-length or terseness preferences do not shorten gate content. Print it as plain Markdown, never in a blockquote or a code fence, in this shape:
+Never summarize the flows as a count or a theme list, never drop or merge one, and never point the user at the draft file in place of printing. Response-length or terseness preferences do not shorten gate content. Print it as plain Markdown, never in a blockquote or a code fence, in this shape:
 
 ```markdown
 Here's the shape I have so far:
 
 **Intent:** <one or two plain sentences>
 
-**UATs:**
+**Flows:**
 
-- UAT-NNN: <what is set up>; <what the user does>; <what must be true>
-- UAT-NNN: <what is set up>; <what the user does>; <what must be true>
+- FLOW-NNN <slug>: <name>: <why> (recommended)
+- FLOW-NNN <slug>: <name>: <why>
 ```
 
-Then one `AskUserQuestion` (header `Gate 1`, single-select), question `Does this shape match what you want before we go deeper?`, with two options:
+Confirm the flows with `AskUserQuestion` (header `Gate 1`), `Looks right (Recommended)` first, single-select, question `Does this shape match what you want before we go deeper?`, with two options:
 
-- `Looks right (Recommended)`: proceed to the clarify loop with this intent and these UATs.
-- `Revise`: change the shape before going deeper.
+- `Looks right (Recommended)`: proceed to the clarify loop with this intent and these flows, the recommended set kept.
+- `Revise`: drop, add or edit flows, or change the intent, before going deeper.
 
-A typed revision arrives through the tool's own `Other` answer. `Revise` with no text asks what to change as a plain follow-up. If the user revises, fold revisions into the draft and re-present until they confirm.
+A typed revision arrives through the tool's own `Other` answer. `Revise` with no text asks what to change as a plain follow-up. The user may drop, add or edit flows; the confirmed list is what the draft keeps. If the user revises, fold revisions into the draft and re-present until they confirm.
 
 On confirmation:
 
-1. **Cache the gate-1 snapshot** to `.gaia/local/cache/gate1-<spec_id>.json`. The snapshot must include: the confirmed `intent`, the confirmed UAT list (with stable `UAT-NNN` IDs), and a timestamp. The step-6 self-review reads this cache to detect scope drift between gate 1 and gate 2. **Skip this write if the snapshot already exists for this `spec_id` (resumed session); its purpose is immutable drift detection.**
+1. **Cache the gate-1 snapshot** to `.gaia/local/cache/gate1-<spec_id>.json`. The snapshot must include: the confirmed `intent`, the confirmed flow list (each flow's `flow_id`, `slug`, `name`, `why`, and `covers` or `test_path`), and a timestamp. The step-6 self-review reads this cache to detect scope drift between gate 1 and gate 2. **Skip this write if the snapshot already exists for this `spec_id` (resumed session); its purpose is immutable drift detection.**
 2. **Write the working-draft cache** per the operational primitive (`.gaia/local/cache/draft-<spec_id>.md`).
 
 Only after gate-1 confirmation may you proceed to step 5.
@@ -306,7 +306,7 @@ Read `.claude/skills/gaia/references/spec/audit.md` and `.claude/skills/gaia/ref
 
 Present the gate 2 brief, built below from the draft and its `AUDIT.md`, to the user. This is gate 2. Track `gate2_revisions = 0` in working memory.
 
-**Auto-mode exception per rule 3:** skip the user prompt. Render the draft into the agent's reasoning context, run a self-check (frontmatter populated, every UAT has Given/When/Then, intent matches gate-1 snapshot modulo intentional clarify evolution, deferred clarifications block well-formed). Apply at most one revision pass if the self-check finds an issue, then jump to the "On confirmation" actions below.
+**Auto-mode exception per rule 3:** skip the user prompt. Render the draft into the agent's reasoning context, run a self-check (frontmatter populated, every flow has an id, slug, name, why, and exactly one of covers or test path, intent matches gate-1 snapshot modulo intentional clarify evolution, deferred clarifications block well-formed). Apply at most one revision pass if the self-check finds an issue, then jump to the "On confirmation" actions below.
 
 While filling frontmatter, set `lineage:` to the research folder slug(s) under `.notebook/research/` (as `research:<slug>`) or issue number(s) (as `issue:<n>`) that discovery named as this SPEC's origin, and leave it `[]` when none. This is never a new question to the user, in auto mode or otherwise.
 
@@ -316,13 +316,13 @@ The parts run in this order, so the decision sits nearest the question (a termin
 
 1. **Title line:** the SPEC id, its title, and its type.
 2. **Change**, **Why**, **Success:** three bold-labeled lines with one blank line between each. Change says in plain words what the SPEC changes, Why the problem it solves, Success what must be true when it is done.
-3. **UATs:** every UAT in the draft, one line each, keeping its number: what is set up, then what must be true.
+3. **Flows:** every flow in the draft, one line each, with its covered folders or test path.
 4. **Plan will (N directives):** one line naming what the plan will do for the audit's plan-time directives, as actions separated by ` · `. Omit it when `AUDIT.md` holds none.
 5. **You are signing off on:** every accepted cost and residual risk the draft and its audit leave in place, one bullet each: what a decided removal or trade-off gives up, what only a backstop catches, what a waiver or exception allows.
 6. **Not settled (approving saves the SPEC with these open):** printed only when it has an item: each `clarifications.deferred[]` entry, each audit finding the user kept against its recommendation at step 7, and a line saying the audit did not run (step 7's fallback) or a lens ran inline. Each item names what the plan will do because of it.
 7. **Paths:** the draft path and the AUDIT.md path, repo-relative, one per line; the audit line reads `none` when the audit did not run.
 
-Keep the brief to at most 50 lines. Only the `Plan will` line compresses to fit. Response-length or terseness preferences do not shorten gate content: the brief never drops or merges a UAT, a sign-off item, or a not-settled item, whatever its length. Print it as plain Markdown, never in a blockquote or a code fence, in this shape:
+Keep the brief to at most 50 lines. Only the `Plan will` line compresses to fit. Response-length or terseness preferences do not shorten gate content: the brief never drops or merges a flow, a sign-off item, or a not-settled item, whatever its length. Print it as plain Markdown, never in a blockquote or a code fence, in this shape:
 
 ```markdown
 **SPEC-NNN · <title>** (<type>)
@@ -333,8 +333,8 @@ Keep the brief to at most 50 lines. Only the `Plan will` line compresses to fit.
 
 **Success:** <what must be true when it is done>
 
-**UATs:**
-- **NNN:** <what is set up> → <what must be true>
+**Flows:**
+- **NNN** <slug>: <name> → <covered folders or test path>
 
 **Plan will (<N> directives):** <action> · <action> · <action>
 
@@ -394,7 +394,7 @@ Track `lint_cycle = <count>` in working memory (initialize to 1 on the first att
 
 On lint pass: continue to step 11.
 
-On lint fail (cycles 1–2): surface the failures verbatim, then ask with `AskUserQuestion`: `Fix and re-run the lint` (Recommended) or `Defer with rationale` (which loops back to 6c's pending handling: Read `.claude/skills/gaia/references/spec/self-review-dispatch.md` now, whole, and run its 6c). For mutations of an already-saved SPEC, the helper enforces the explicit reopen ceremony, `## Reopen rationale` and `## UAT diff` sections required. Increment `lint_cycle` and continue.
+On lint fail (cycles 1–2): surface the failures verbatim, then ask with `AskUserQuestion`: `Fix and re-run the lint` (Recommended) or `Defer with rationale` (which loops back to 6c's pending handling: Read `.claude/skills/gaia/references/spec/self-review-dispatch.md` now, whole, and run its 6c). Increment `lint_cycle` and continue.
 
 **On lint fail at cycle 3 (3 failed cycles in a row):** **Auto-mode exception per rule 10:** skip the prompt and auto-pick "Defer remaining findings", capture each remaining finding as a deferred clarification with rationale `"Auto-mode session, lint thrash, defer for human review."` and continue to step 11. Step-back-to-gate-2 in auto mode would loop indefinitely.
 

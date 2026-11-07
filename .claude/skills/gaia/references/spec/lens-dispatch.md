@@ -19,8 +19,8 @@ There is no tier below Minor: what is worth reporting is Minor, what is not is n
 | Artifact under audit (`<ARTIFACT>`) | the working draft at `<DRAFT_PATH>` (spec `<spec_id>`) | the plan in `<PLAN_DIR>`: `<PLAN_DIR>/README.md` plus every `<PLAN_DIR>/task-*.md` |
 | First Read | `<DRAFT_PATH>` | `<PLAN_DIR>/README.md` (the task graph and frozen interface contracts), then every `<PLAN_DIR>/task-*.md` |
 | Defect target | a flawed plan or implementation downstream | a broken or conflicting orchestrator result |
-| Evidence form | SPEC section or UAT id, plus `file:line` | task doc plus `file:line` |
-| `location` meaning | SPEC section or UAT id | task doc or README section |
+| Evidence form | SPEC section or flow id, plus `file:line` | task doc plus `file:line` |
+| `location` meaning | SPEC section or flow id | task doc or README section |
 | Findings directory (`<FINDINGS_DIR>`) | `.gaia/local/cache/audit-<spec_id>/findings/` | `<PLAN_DIR>/audit/` |
 | Write tool | the ordinary write tools | `Bash`, see below |
 | `critical` | the SPEC is wrong or will produce broken or misleading work; fix before gate 2 | the plan is wrong or will produce broken or conflicting work; fix before execution |

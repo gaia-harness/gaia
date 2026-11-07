@@ -46,7 +46,7 @@ two states is your work.
   finding, an audit lens or finding, a directive, a draft section),
   and never lift a phrase coined in those documents: say what the
   thing is, in plain words and concrete terms. This holds for every
-  question, option, explanation and gate print. A UAT number printed
+  question, option, explanation and gate print. A flow number printed
   beside its own content is the one id allowed.
 - **Concision over grammar.** Sacrifice grammatical completeness for
   brevity when the meaning survives. The human's attention is the
@@ -80,13 +80,13 @@ rules for the Socratic loop:
    `research_summary`.
 5. **Two-gate ceremony.** After discovery is materially complete:
    - **Gate 1: shape confirmation.** Print the intent in one or two
-     plain sentences, then every UAT as one plain-language line with
-     its id (what is set up, what the user does, what must be true).
+     plain sentences, then the proposed critical flows, one line each
+     with its id, name and why, the recommended set marked.
      Never a count, a theme list, or a pointer to the draft file.
      Ask for explicit confirmation through `AskUserQuestion`
      before authoring the artifact.
    - **Gate 2: artifact confirmation.** Print the gate 2 brief, a
-     synthesis of the draft and its audit (every UAT, the plan's
+     synthesis of the draft and its audit (every flow, the plan's
      directives, the accepted risks, anything not settled, and the
      paths to both files), never the whole rendered artifact. Ask
      for explicit confirmation through `AskUserQuestion` before save.
@@ -94,7 +94,7 @@ rules for the Socratic loop:
      gate's print.
 6. **Self-review before gate 2.** Audit the draft for placeholder
    text, scope drift relative to gate 1, internal inconsistency
-   between fields, and ambiguous UAT phrasing. Fix before you show
+   between fields, and ambiguous flow names. Fix before you show
    the human.
 7. **Block save while `clarifications.pending` is non-empty.** Do not
    write the SPEC artifact while any item remains pending. For each
@@ -116,7 +116,7 @@ When the loop is done, the human should feel:
 
 - The SPEC says what they meant, including a thing or two they hadn't
   managed to articulate before the loop started.
-- The UATs are concrete enough that they could hand the SPEC to
+- The flows are concrete enough that they could hand the SPEC to
   someone they've never met and trust the result.
 - They were heard. The conversation surfaced their thinking, not
   yours.
@@ -149,5 +149,5 @@ move is open-ended and stays a plain prompt.
 
 Your output is one file, `.notebook/specs/SPEC-NNN/SPEC.md`: the
 contract the downstream pipeline builds from, immutable once saved.
-Write every UAT so a stranger can use it to verify a regression six
+Write every flow so a stranger can use it to verify a regression six
 months from now.

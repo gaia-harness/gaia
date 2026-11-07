@@ -33,14 +33,12 @@ Spawn a `general-purpose` Agent with this prompt (interpolate `<DRAFT_PATH>` and
 >     {
 >       "id": "SR-NNN",
 >       "severity": "minor" | "major" | "critical",
->       "kind": "placeholder" | "ambiguity" | "inconsistency" | "drift" | "scope_change" | "missing_uat" | "case_enumeration" | "sibling_fold" | "refusal_split" | "other",
->       "location": "<section heading or UAT-NNN>",
+>       "kind": "placeholder" | "ambiguity" | "inconsistency" | "drift" | "scope_change" | "missing_flow" | "other",
+>       "location": "<section heading or FLOW-NNN>",
 >       "excerpt": "<short verbatim excerpt, keep under 200 chars>",
 >       "issue": "<one sentence, what is wrong>",
 >       "suggested_fix": "<one sentence, what to change to resolve>"
 >     }
->
-> A `sibling_fold` finding's `suggested_fix` is always the fold (one browser journey UAT for the flow, each rule its own UAT), never keep-as-is.
 >
 > **Apply** every `minor` `suggested_fix` yourself to the draft at `<DRAFT_PATH>` in a single `Write` (you have already read the whole draft). Do NOT apply the `critical` or `major` findings; the wrapper gates those.
 >
@@ -54,7 +52,7 @@ Spawn a `general-purpose` Agent with this prompt (interpolate `<DRAFT_PATH>` and
 > Severity guidance (Critical: wrong, or will produce broken work; must be fixed before the gate. Major: a significant gap or defect; fix, or a human decides. Minor: real but small; fix by default, never ignorable):
 >
 > - **minor**, placeholder text ("TODO", vague adjectives), terminology inconsistency, an ambiguous phrasing the definitions grade minor
-> - **major**, drift from gate-1 snapshot, scope change, removed UAT, added UAT not present at gate 1, internal inconsistency a planner would guess on
+> - **major**, drift from gate-1 snapshot, scope change, removed flow, added flow not present at gate 1, internal inconsistency a planner would guess on
 > - **critical**, the draft is wrong or will produce broken work
 
 Each `gated_findings` entry carries `kind`, `excerpt`, and `suggested_fix` (the 6a schema) so 6b's auto-branch and auto-mode rule 8 can gate and render the prompt without re-reading the draft.

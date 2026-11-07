@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Fails on any working-document id in the files it scans: a SPEC, UAT or PLAN
-# id followed by digits (any case, any length), or a machine-local path, in a
+# Fails on any working-document id in the files it scans: a SPEC, FLOW or PLAN
+# id followed by digits (any case and length, except a lowercase flow- id, which
+# counts at exactly three digits), or a machine-local path, in a
 # file path or in a file's content, which covers path segments, test titles and
 # both comment forms. The detector is machine-local-ref-lib.sh in strict mode.
 # Its callers, by role, are the owning-phase gate and the generated plan
