@@ -32,6 +32,60 @@ setup() {
   S_CLOSE='<!-- gaia:orchestrator-step post-merge-close -->'
   SPEC_ORDER=("$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
   SPEC_LESS_ORDER=("$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
+  # plan-verify.sh lints routed file names from the repo it runs in, so every
+  # case runs from a fixture repo whose web package resolves a fake eslint:
+  # fast, and independent of the real package's installed dependencies.
+  FIXTURE_REPO="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$FIXTURE_REPO/apps/web"
+  cp "$REPO_ROOT_REAL/apps/web/gaia.package.json" "$FIXTURE_REPO/apps/web/"
+  write_fake_eslint
+  cd "$FIXTURE_REPO" || return 1
+}
+
+# write_fake_eslint [throw]: an eslint the fixture web package resolves. It
+# refuses a file name holding the word `dev`, suggesting `development`, the way
+# unicorn/prevent-abbreviations does; with `throw`, lintText throws instead.
+write_fake_eslint() {
+  local module="$FIXTURE_REPO/apps/web/node_modules/eslint" throw_on_lint=false
+  [ "${1:-}" != throw ] || throw_on_lint=true
+  mkdir -p "$module"
+  printf '{"name":"eslint","main":"index.js"}\n' >"$module/package.json"
+  cat >"$module/index.js" <<EOF2
+const path = require('node:path');
+const throwOnLint = $throw_on_lint;
+class ESLint {
+  async calculateConfigForFile() {
+    return {rules: {'unicorn/prevent-abbreviations': ['error']}};
+  }
+  async lintText(text, {filePath}) {
+    if (throwOnLint) throw new Error('fake config failure');
+    const name = path.basename(filePath);
+    if (!/(^|-)dev[-.]/.test(name)) return [{messages: []}];
+    const suggested = name.replace(/(^|-)dev([-.])/, '\$1development\$2');
+    return [{messages: [{ruleId: 'unicorn/prevent-abbreviations', message: 'The filename \`' + name + '\` should be named \`' + suggested + '\`.'}]}];
+  }
+}
+module.exports = {ESLint};
+EOF2
+}
+
+# copy_packages_library <root>: the package registry reader a copied verifier
+# tree needs to find the web package whose file names it lints.
+copy_packages_library() {
+  mkdir -p "$1/.claude/hooks/lib"
+  cp "$REPO_ROOT_REAL/.claude/hooks/lib/gaia-packages.sh" "$1/.claude/hooks/lib/"
+}
+
+# route_dev_names: UAT-003 routed real-server and UAT-001 routed route, each
+# under a file name holding `dev`.
+route_dev_names() {
+  sed -i.bak \
+    -e 's/^| UAT-003 | non-ui | 1 | - | - |$/| UAT-003 | real-server | 1 | runtime | clean-checkout-dev-server-signs-in.spec.ts |/' \
+    -e 's/^| UAT-001 | browser | 2 | checkout | guest-checkout-confirms-order.spec.ts |$/| UAT-001 | route | 2 | checkout | guest-dev-checkout.test.ts |/' \
+    "$PLAN/README.md"
+  grep -qF 'clean-checkout-dev-server-signs-in.spec.ts' "$PLAN/README.md" || return 1
+  grep -qF 'guest-dev-checkout.test.ts' "$PLAN/README.md" || return 1
+  printf '%s\n' '- Real-server reason (UAT-003): only the served app signs in' >>"$PLAN/task-one.md"
 }
 
 # write_spec [<story then-clause>]: three UATs, one per surface.
@@ -190,6 +244,33 @@ verify_spec_less() {
   spec_fixture
   verify_spec
   [ "$status" -eq 0 ]
+}
+
+@test "a routed file name the project's lint refuses fails, naming the rendered file and the suggested name" {
+  spec_fixture
+  route_dev_names
+  verify_spec
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"plan-verify: uat-routing: UAT-003 file name apps/web/.playwright/e2e/runtime/clean-checkout-dev-server-signs-in.spec.ts fails the project's lint: unicorn/prevent-abbreviations: The filename \`clean-checkout-dev-server-signs-in.spec.ts\` should be named \`clean-checkout-development-server-signs-in.spec.ts\`."* ]]
+  [[ "$output" == *"plan-verify: uat-routing: UAT-001 file name apps/web/app/route-tests/checkout/tests/guest-dev-checkout.test.ts fails the project's lint: "*"\`guest-development-checkout.test.ts\`"* ]]
+  [ "$(grep -c 'fails the project' <<<"$output")" -eq 2 ]
+}
+
+@test "a lint that throws fails the plan rather than skipping the file name check" {
+  spec_fixture
+  write_fake_eslint throw
+  verify_spec
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'plan-verify: uat-routing: the file name lint failed: '*'fake config failure'* ]]
+}
+
+@test "a web package without installed dependencies warns and skips the file name check" {
+  spec_fixture
+  route_dev_names
+  rm -rf "$FIXTURE_REPO/apps/web/node_modules"
+  NODE_PATH='' verify_spec
+  [ "$status" -eq 0 ]
+  [[ "$output" == 'WARN: '*'eslint does not resolve'* ]]
 }
 
 @test "a complete spec-less plan passes" {
@@ -536,7 +617,8 @@ mutate_orchestrator() {
 @test "red twin: a planner.md without the fenced block fails naming planner.md" {
   local tree="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$tree/.gaia/scripts/spec" "$tree/.claude/skills/gaia/references/plan"
-  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/plan-phases-lib.sh" "$tree/.gaia/scripts/spec/"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/plan-phases-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/filename-lint.mjs" "$tree/.gaia/scripts/spec/"
+  copy_packages_library "$tree"
   grep -vE '^[[:space:]]*```' "$PLANNER_MD" >"$tree/.claude/skills/gaia/references/plan/planner.md"
   spec_less_fixture
   run bash "$tree/.gaia/scripts/spec/plan-verify.sh" "$PLAN"
@@ -594,7 +676,8 @@ mutate_orchestrator() {
 marker_tree() {
   MARKER_TREE="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$MARKER_TREE/.gaia/scripts/spec" "$MARKER_TREE/.claude/skills/gaia/references/plan"
-  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/plan-phases-lib.sh" "$MARKER_TREE/.gaia/scripts/spec/"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/plan-phases-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/filename-lint.mjs" "$MARKER_TREE/.gaia/scripts/spec/"
+  copy_packages_library "$MARKER_TREE"
   cp "$1" "$MARKER_TREE/.claude/skills/gaia/references/plan/planner.md"
 }
 
@@ -798,7 +881,8 @@ EOF2
 scratch_verifier() {
   local root="$BATS_TEST_TMPDIR/scratch"
   mkdir -p "$root/.gaia/scripts/spec" "$root/.claude/skills/gaia/references/plan"
-  cp "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$root/.gaia/scripts/spec/"
+  cp "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-code-only.sh" "$REPO_ROOT_REAL/.gaia/scripts/spec/filename-lint.mjs" "$root/.gaia/scripts/spec/"
+  copy_packages_library "$root"
   cp "$PLANNER_MD" "$root/.claude/skills/gaia/references/plan/planner.md"
   sed "$1" "$REPO_ROOT_REAL/.gaia/scripts/spec/browser-capability-lib.sh" >"$root/.gaia/scripts/spec/browser-capability-lib.sh"
   sed "$1" "$REPO_ROOT_REAL/.gaia/scripts/spec/plan-phases-lib.sh" >"$root/.gaia/scripts/spec/plan-phases-lib.sh"

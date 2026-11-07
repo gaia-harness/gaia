@@ -363,6 +363,7 @@
     ".gaia/scripts/shell-checks-lint.sh": "owned",
     ".gaia/scripts/shell-checks-select.sh": "owned",
     ".gaia/scripts/spec/browser-capability-lib.sh": "owned",
+    ".gaia/scripts/spec/filename-lint.mjs": "owned",
     ".gaia/scripts/spec/handoff-clear.sh": "owned",
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
     ".gaia/scripts/spec/ledger-update.sh": "owned",
@@ -866,7 +867,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-06T19:30:52.043Z",
+  "generated": "2026-11-06T23:42:56.696Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

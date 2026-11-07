@@ -3,8 +3,9 @@
 # Sourced by uat-lib.sh, never executed. Helpers that keep uat-lib.sh under
 # its line limit: uat_lib_code_only, which reads a rendered test as code alone,
 # the route-row and Playwright-row validation arms of uat_lib_validate_routing,
-# the surface normalizer, and the frontend
-# package lookup behind the directory helpers.
+# the surface normalizer, the rendered-path helper the renderer and the plan
+# check share, the planned file name lint, and the frontend package lookup
+# behind the directory helpers.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
 
@@ -130,6 +131,72 @@ uat_lib_playwright_surface() {
     browser | e2e) printf 'browser\n' ;;
     *) return 1 ;;
   esac
+}
+
+# Prints where a routed row's test renders, relative to its surface's tree (the
+# Playwright tree or the route test tree); returns 1 for a surface with no file.
+uat_lib_rendered_path() {
+  case "${1:-}" in
+    real-server | browser | e2e) printf '%s/%s\n' "${2:-}" "${3:-}" ;;
+    route) uat_lib_route_test_path "${2:-}" "${3:-}" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Lints the name of every file the routing rows render with the web package's
+# own eslint (filename-lint.mjs), since the render commit's lint-staged eslint
+# would refuse the name and halt the build. Prints one `uat-routing:` failure
+# line per refused name, or one when no web package is found or the lint itself
+# fails, since a broken setup must not pass silently. When eslint does not
+# resolve (no installed dependencies, as before a first install) or node is
+# absent, it warns on stderr and prints nothing.
+uat_lib_filename_lint_problems() {
+  local repo_root="${1:-}" routing_rows="${2:-}" package_path tree_directory
+  local uat_id surface feature_folder file_name rendered_path lint_output
+  local lint_status=0 refused_path lint_message index e2e_directory route_directory
+  local package_paths=() repo_paths=() uat_ids=()
+  if ! package_path=$(_uat_lib_web_package_path "$repo_root" 2>&1); then
+    printf 'uat-routing: the file name lint found no web package: %s\n' "$package_path"
+    return 0
+  fi
+  e2e_directory=$(uat_lib_e2e_directory "$repo_root") || return 0
+  route_directory=$(uat_lib_route_tests_directory "$repo_root") || return 0
+  while IFS=$'\t' read -r uat_id surface _ feature_folder file_name; do
+    rendered_path=$(uat_lib_rendered_path "$surface" "$feature_folder" "$file_name") || continue
+    tree_directory="$e2e_directory"
+    [ "$surface" != route ] || tree_directory="$route_directory"
+    repo_paths+=("$tree_directory/$rendered_path")
+    package_paths+=("${tree_directory#"$package_path"/}/$rendered_path")
+    uat_ids+=("$uat_id")
+  done <<<"$routing_rows"
+  [ "${#package_paths[@]}" -gt 0 ] || return 0
+  if ! command -v node >/dev/null 2>&1; then
+    printf '%s\n' 'WARN: node is not on PATH, so planned test file names were not linted' >&2
+    return 0
+  fi
+  lint_output=$(node "$_UAT_LIB_DIRECTORY/filename-lint.mjs" --package "$repo_root/$package_path" "${package_paths[@]}" 2>&1) || lint_status=$?
+  case "$lint_status" in
+    0) return 0 ;;
+    1) ;;
+    2)
+      printf 'WARN: %s; planned test file names were not linted\n' "${lint_output#filename-lint: }" >&2
+      return 0
+      ;;
+    *)
+      printf 'uat-routing: the file name lint failed: %s\n' "$(tr '\n' ' ' <<<"$lint_output")"
+      return 0
+      ;;
+  esac
+  while IFS=$'\t' read -r refused_path lint_message; do
+    [ -n "$refused_path" ] || continue
+    index=0
+    while [ "$index" -lt "${#package_paths[@]}" ]; do
+      if [ "${package_paths[$index]}" = "$refused_path" ]; then
+        printf "uat-routing: %s file name %s fails the project's lint: %s\n" "${uat_ids[$index]}" "${repo_paths[$index]}" "$lint_message"
+      fi
+      index=$((index + 1))
+    done
+  done <<<"$lint_output"
 }
 
 # Prints a subdirectory of the web package, bare for package path `.`.
