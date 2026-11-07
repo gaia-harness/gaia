@@ -50,9 +50,12 @@ const readRuntimeImports = (file: string): string[] =>
 // Reads only the first match, so each key read here must appear once in
 // vite.config.ts.
 const readViteConfigList = (key: string): string[] => {
-  const config = fs.readFileSync(path.join(webRoot, 'vite.config.ts'), 'utf8');
+  const viteConfigSource = fs.readFileSync(
+    path.join(webRoot, 'vite.config.ts'),
+    'utf8'
+  );
   const list = new RegExp(String.raw`\b${key}:\s*\[([^\]]*)\]`).exec(
-    config
+    viteConfigSource
   )?.[1];
 
   return [...(list ?? '').matchAll(/['"]([^'"]+)['"]/g)].map(
@@ -61,11 +64,13 @@ const readViteConfigList = (key: string): string[] => {
 };
 
 const readPlaywrightOutputDirectory = (): string => {
-  const config = fs.readFileSync(
+  const playwrightConfigSource = fs.readFileSync(
     path.join(webRoot, 'playwright.config.ts'),
     'utf8'
   );
-  const directory = /\boutputDir:\s*['"]([^'"]+)['"]/.exec(config)?.[1];
+  const directory = /\boutputDir:\s*['"]([^'"]+)['"]/.exec(
+    playwrightConfigSource
+  )?.[1];
 
   if (directory === undefined) {
     throw new Error('playwright.config.ts sets no string outputDir.');
@@ -112,7 +117,7 @@ const resolveLocal = (
 // Maps each package import path the walk reaches to the first file found
 // importing it.
 const collectPackageImports = (roots: string[]): Map<string, string> => {
-  const found = new Map<string, string>();
+  const firstImporterBySpecifier = new Map<string, string>();
   const visited = new Set<string>();
   const pending = [...roots];
 
@@ -127,27 +132,27 @@ const collectPackageImports = (roots: string[]): Map<string, string> => {
         const resolved = resolveLocal(file, specifier);
 
         if (resolved !== undefined) pending.push(resolved);
-      } else if (!found.has(specifier)) {
-        found.set(specifier, path.relative(webRoot, file));
+      } else if (!firstImporterBySpecifier.has(specifier)) {
+        firstImporterBySpecifier.set(specifier, path.relative(webRoot, file));
       }
     }
   }
 
-  return found;
+  return firstImporterBySpecifier;
 };
 
 describe('Vite dependency pre-bundling', () => {
   test('every package the browser-loaded mock modules import is pre-bundled', () => {
     const include = readViteConfigList('include');
-    const imports = collectPackageImports([
+    const firstImporterBySpecifier = collectPackageImports([
       forwardHandler,
       ...listSourceFiles(mocksRoot),
     ]);
 
     expect(include.length).toBeGreaterThan(0);
-    expect(imports.size).toBeGreaterThan(0);
+    expect(firstImporterBySpecifier.size).toBeGreaterThan(0);
 
-    const missing = [...imports]
+    const missing = [...firstImporterBySpecifier]
       .filter(([specifier]) => !include.includes(specifier))
       .map(([specifier, file]) => `${specifier} (imported by ${file})`);
 
