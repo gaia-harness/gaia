@@ -1,7 +1,8 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 
-// The stock barrel is empty until the first `/new-service`, so the store here
-// is the seed fixture service: a real collection with a real `reset*` seed.
+// The stock `test/mocks/database.ts` is empty until the first `/new-service`,
+// so the store here is the seed fixture service: a real collection with a real
+// `reset*` seed.
 // Hoisted so the mock and the assertions share one store: `vi.resetModules`
 // keeps a mock's cached factory result but hands a plain import a fresh module.
 const fixture = await vi.hoisted(
@@ -35,7 +36,7 @@ afterEach(() => {
 });
 
 describe('the server entry on an MSW dev server', () => {
-  test('a plain MSW dev server holds the baseline records before it serves a request', async () => {
+  test('a plain MSW dev server holds the baseline records once the server entry loads', async () => {
     await loadEntryServer();
 
     expect(fixture.collections.seedFixtures.findMany()).toEqual([
