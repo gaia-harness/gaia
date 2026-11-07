@@ -96,12 +96,15 @@ export default defineConfig({
   // entry.client.tsx so the page never hydrates), so a real flake fails instead
   // of being masked. CI keeps retries as general flake insurance.
   retries: process.env.CI ? 2 : 0,
-  testDir: './.playwright/e2e',
+  // Collects the template specs in `.playwright/e2e/` and one spec per critical
+  // flow in `.playwright/flows/`; the helper modules and `.playwright/output/`
+  // beside them are never collected.
+  testDir: './.playwright',
   // The language switcher renders only with two or more languages, so its spec
   // is excluded until a second language is added to LANGUAGES.
   testIgnore:
     languageCount < 2 ? ['**/language-switch-a11y.spec.ts'] : undefined,
-  testMatch: '**/*.spec.ts',
+  testMatch: ['e2e/**/*.spec.ts', 'flows/**/*.spec.ts'],
 
   use: {
     baseURL: devUrl,

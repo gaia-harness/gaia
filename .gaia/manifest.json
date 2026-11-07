@@ -542,6 +542,7 @@
     "apps/web/.playwright/e2e/storybook-a11y.spec.ts": "owned",
     "apps/web/.playwright/e2e/storybook-focus.spec.ts": "owned",
     "apps/web/.playwright/fixtures.ts": "owned",
+    "apps/web/.playwright/flows/.gitkeep": "owned",
     "apps/web/.playwright/global-setup.ts": "owned",
     "apps/web/.playwright/html.ts": "owned",
     "apps/web/.playwright/msw-seed.ts": "owned",
@@ -872,7 +873,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-07T11:24:58.844Z",
+  "generated": "2026-11-07T13:09:24.399Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

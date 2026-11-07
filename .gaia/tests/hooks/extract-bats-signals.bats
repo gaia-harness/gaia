@@ -7,6 +7,8 @@
 
 bats_require_minimum_version 1.5.0
 
+# bats file_tags=installed-dependencies
+
 setup() {
   HOME_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   EXTRACTOR="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"

@@ -758,22 +758,22 @@ jobs:
       # The root workspace for the suites marked as reading installed
       # dependencies (`# bats file_tags=installed-dependencies`): the RED
       # signal and determinism suites, which resolve `typescript` through
-      # createRequire against the repo root, and the two Chromium suites, which
-      # run the frontend's Vitest and Playwright. The plan's `needs_node` is set
-      # when the set this leg will run holds one of them, so a change-scoped leg
-      # that owes none of them skips the install. The suites are the authority
-      # on the set; `.gaia/tests/installed-dependencies-mark-guard.sh` derives it
-      # from what they run and fails on a stale or missing mark.
+      # createRequire against the repo root, the two Chromium suites (frontend
+      # Vitest, Playwright), and the lib Playwright collection suite. The plan's
+      # `needs_node` is set when the set this leg will run holds one, so a
+      # change-scoped leg owing none skips the install. The suites own that set;
+      # `.gaia/tests/installed-dependencies-mark-guard.sh` derives it from what
+      # they run and fails on a stale or missing mark.
       #
-      # THE LEG LIST IS A WHOLE EXCHANGE GROUP, which is what makes it safe to
-      # write here. Every such suite the guard lists as unprovisioned elsewhere
-      # lives in HOOKS_DIRECTORY or SCRIPTS_TESTS_DIRECTORY and none is pinned,
-      # so bats-shards.sh assigns them across HOOKS_GREEDY_IDS or SCRIPTS_IDS,
-      # and a reshuffle moves a file BETWEEN those legs and never out of them. A
-      # marked suite another workflow provisions (its backstop line names that
-      # workflow) needs no install here. audit-ci-shards.bats derives the list
-      # from the guard's `--list-derived` minus `--list-backstopped`, rounded up
-      # to whole exchange groups, and reds when this one disagrees.
+      # THE LEG LIST IS A WHOLE EXCHANGE GROUP, so it is safe to write here.
+      # Every such suite the guard lists as unprovisioned elsewhere lives in
+      # HOOKS_DIRECTORY, LIBRARY_DIRECTORY or SCRIPTS_TESTS_DIRECTORY and none
+      # is pinned, so bats-shards.sh spreads them across HOOKS_GREEDY_IDS,
+      # LIBRARY_IDS or SCRIPTS_IDS, and a reshuffle only moves a file between
+      # legs of its own group. A suite another workflow provisions (its backstop
+      # line names it) needs no install here. audit-ci-shards.bats derives the
+      # list from the guard's `--list-derived` minus `--list-backstopped`,
+      # rounded up to whole exchange groups, and reds on disagreement.
       #
       # The suites fail loudly without the install:
       # .gaia/tests/hooks/helpers/require-node-typescript.sh returns non-zero
@@ -783,7 +783,7 @@ jobs:
       # The cost is bounded by something already on this job rather than by an
       # estimate: it is the same composite action the `concurrency` leg runs,
       # the same install, with the pnpm store cached the same way.
-      - if: contains(fromJSON('["hooks-2", "hooks-3", "hooks-4", "hooks-5", "hooks-6", "scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode) && steps.selection.outputs.needs_node == '1'
+      - if: contains(fromJSON('["hooks-2", "hooks-3", "hooks-4", "hooks-5", "hooks-6", "lib-1", "lib-2", "lib-3", "scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode) && steps.selection.outputs.needs_node == '1'
         name: Setup Node for the node-dependent RED suites
         uses: ./.github/actions/gaia-setup-node
         with:

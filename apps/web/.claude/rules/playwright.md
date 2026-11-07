@@ -11,7 +11,7 @@ Contents: File locations; Spec file naming; Real-server HTML check; Selectors, p
 ## File locations
 
 - Config: `playwright.config.ts` (package root)
-- Specs: real-server and browser specs both live at `.playwright/e2e/<feature>/<flow>.spec.ts`, grouped in feature folders; a flat `.playwright/e2e/*.spec.ts` stays valid for cross-cutting checks. The surface, not the path, tells them apart: a real-server spec drives the request fixture and opens no page, a browser spec drives a page
+- Specs: real-server and browser specs live at `.playwright/e2e/<feature>/<flow>.spec.ts`, grouped in feature folders; a flat `.playwright/e2e/*.spec.ts` stays valid for cross-cutting checks. A critical user flow's spec lives at `.playwright/flows/<slug>.spec.ts`, and Playwright collects both folders. The surface, not the path, tells them apart: a real-server spec drives the request fixture and opens no page, a browser spec drives a page
 - Shared helpers: `.playwright/utils.ts`; the HTML helper for real-server checks is `.playwright/html.ts`
 - Output/traces: `.playwright/output/` (gitignored)
 
