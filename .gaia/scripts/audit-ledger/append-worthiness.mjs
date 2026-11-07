@@ -22,7 +22,7 @@
 //
 // IDENTITY: `signal` is the SAME sha256-of-normalized-test-call the shared
 // test-signal extractor (.gaia/scripts/test-signals/extract-test-signals.mjs)
-// computes, and the RED ledger computes the same signal. This writer
+// computes. This writer
 // reuses that helper directly (spawns it, matches the named test's fullName),
 // so the signal byte-matches what the RED ledger and the presence-gate
 // recompute produce. It does NOT reinvent the identity primitive.

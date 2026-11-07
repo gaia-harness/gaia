@@ -23,7 +23,8 @@
 # flow-tests file lists (flow_id, slug, kind, path rows) is selected whatever the
 # scope globs say, and its element carries "flow": {flowId, slug, name, why,
 # kind, covers, testPath}. Without them the output is unchanged. record accepts
-# an optional per-verdict "flow" key and refuses a malformed one (exit 3).
+# an optional per-verdict "flow" key and refuses a malformed one, or a keep
+# whose flow names a gap (exit 3, nothing recorded).
 #
 # WORTHINESS_LEDGER_PATH is a test seam shared with the ledger writer; route and
 # record read the same file through it.

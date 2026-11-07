@@ -636,7 +636,7 @@ check_final_summary_names_worthiness() {
 # ---------- routing ladder and the e2e-or-route triggers ----------
 
 # capability_tokens_of_header: the closed browser-capability list, one token
-# per line, read from Test Layering, which owns it.
+# per line, read from Test Layering's real-browser list.
 capability_tokens_of_header() {
   local tokens
   tokens=$(awk '

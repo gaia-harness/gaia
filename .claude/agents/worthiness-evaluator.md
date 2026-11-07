@@ -57,11 +57,10 @@ public interface.
 ## The two axes
 
 Judge every test on BOTH axes. A test must clear both to earn `keep`. The
-honesty axis applies to every test it judges, strict included: a RED run proves
-a test can fail, not that it asserts the outcome that matters.
+honesty axis applies to every test it judges, strict included.
 
-The determinism classifier's remaining role is to pick which judgment arm and
-evidence a test gets, not whether honesty is judged: a strict test's subject is
+The determinism classifier picks which judgment arm and evidence a test gets,
+not whether honesty is judged: a strict test's subject is
 deterministic, so a weak assertion there is a defect, not noise. Tell which
 files are strict by running
 `node .gaia/scripts/classifier/classify-determinism.mjs <repo-relative path>`
@@ -182,7 +181,7 @@ permission denials). A flow test may be a Playwright spec, a bats suite or a
   `undeclaredFolders`. The folders the SPEC lists are the flow-coverage
   script's job, not yours.
 
-A flow verdict is `fix` whenever any non-empty member is present: any non-empty member makes the verdict `fix`, never `keep`.
+For a flow test, any non-empty member makes the verdict `fix`, never `keep`.
 
 ## Verdicts
 

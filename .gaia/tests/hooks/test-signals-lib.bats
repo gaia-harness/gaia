@@ -2,8 +2,8 @@
 
 # Tests for the test-signal foundation: the Node signal helper
 # (.gaia/scripts/test-signals/extract-test-signals.mjs) and the shared shell
-# lib (.claude/hooks/lib/test-signals.sh) the worthiness, presence and overlap
-# audits source.
+# lib (.claude/hooks/lib/test-signals.sh) the worthiness step, the presence gate
+# and the RED hooks source.
 #
 # The signal helper parses a TS/TSX test file and emits one
 # {"fullName","signal"} line per test/it call. The shell lib provides

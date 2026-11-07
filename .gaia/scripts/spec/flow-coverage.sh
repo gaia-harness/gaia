@@ -23,7 +23,7 @@
 #   0  clean, nothing printed
 #   1  one or more findings
 #   2  usage error, or a SPEC the flows reader refuses (reason on stderr)
-#   3  operational failure (no diff base, unreadable or failed listing, git)
+#   3  operational failure (reason on stderr)
 set -uo pipefail
 
 usage() {

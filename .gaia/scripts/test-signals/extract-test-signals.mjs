@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Extract per-test (fullName, content signal) pairs from a vitest/jest test
-// file, for the worthiness and overlap audits and the commit gate that share it.
+// file: the one test-identity extractor the RED hooks, the worthiness ledger and
+// presence gate, and the overlap check share.
 //
 // A test is identified by (file, fullName, signal). The signal changes
 // whenever the test body changes, so a verdict or observation recorded
@@ -26,11 +27,10 @@
 // story file; its fullName and signal rules and refusal list live in the
 // header of ./extract-story-signals.mjs.
 //
-// Bats mode: a path ending `.bats` is read by ./extract-bats-signals.mjs (its
-// header owns the fullName and signal rules) before "typescript" is resolved,
-// so a bats file needs no TypeScript. Exit 6 there is an unterminated `@test`
-// block. The CLI handling (read, NDJSON, exit 4 and 6) lives there as
-// runBatsSignalsCli, which exits the process.
+// Bats mode: a path ending `.bats` goes to runBatsSignalsCli in
+// ./extract-bats-signals.mjs (its header owns the fullName and signal rules)
+// before "typescript" is resolved, so a bats file needs no TypeScript. Exit 6
+// there is an unterminated `@test` block.
 //
 // Exit codes (each failure writes one stderr line and nothing to stdout):
 //   0  success, including zero tests or stories found (emits nothing)

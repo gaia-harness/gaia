@@ -43,7 +43,7 @@ A browser test is written only for a capability no lower layer shows. The closed
 - `rendered-DOM accessibility scan`: an automated accessibility check of the DOM the browser renders.
 - `browser-only navigation`: history, back and forward, or a client-side transition no request shows.
 
-One exception to the closed list: a critical web flow gets one Playwright spec, written after the build in `<frontend package>/.playwright/flows/`. The list does not bar that spec, so one Playwright spec per critical web flow is admitted on the browser rung whatever a cheaper layer could prove. The list still governs every other browser test.
+One exception: one Playwright spec per critical web flow, written after the build in `<frontend package>/.playwright/flows/`, is admitted on the browser layer whatever a cheaper layer could prove. The list governs every other browser test.
 
 ## Stack mapping
 

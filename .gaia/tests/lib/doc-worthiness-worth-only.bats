@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 #
 # Acceptance suite for how a strict-classified test is judged. Every changed
-# test, strict included, is judged on honesty, so the evaluator prompt, the
-# Worthiness Audit page and the Presence Gate page no longer say a strict test
-# is judged on worth only. The evaluator and the audit page state the
+# test, strict included, is judged on honesty, so none of the evaluator prompt,
+# the Worthiness Audit page or the Presence Gate page says a strict test is
+# judged on worth only. The evaluator and the audit page state the
 # classifier's remaining role, and the evaluator keeps the five worth criteria.
 # The evaluator does not keep the review off the deterministic surface, and
 # the Presence Gate page no longer claims a test is never gated by both.

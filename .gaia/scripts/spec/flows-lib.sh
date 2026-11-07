@@ -6,8 +6,10 @@
 # shape breaks every caller.
 #
 # Every function writes data to stdout and diagnostics to stderr. Status 2 means
-# invalid input; status 1 an operational failure. No `set -e` here: callers own
-# their shell options.
+# invalid input. Status 1 is an operational failure, except for the predicates:
+# flows_lib_covers_paths returns 1 when there is no declaration and
+# flows_lib_carries_working_document_id returns 1 when there is no id. No
+# `set -e` here: callers own their shell options.
 #
 # A SPEC flow field is canonicalized by flows_lib_canonical_text (fold
 # continuation lines, strip one layer of YAML quotes, normalize whitespace);
@@ -15,8 +17,8 @@
 # quote stripping is not idempotent.
 #
 # Bash 3.2 compatible; BSD and GNU tools. User text never reaches awk through
-# `-v` (which processes backslash escapes): it arrives on stdin or through
-# ENVIRON.
+# `-v` (which processes backslash escapes): it arrives on stdin or as a file
+# operand.
 
 if [ -n "${FLOWS_LIB_SH:-}" ]; then
   return 0
@@ -299,7 +301,7 @@ flows_lib_parse_spec() {
   if [ -n "$findings" ]; then
     count=$(grep -c . <<<"$findings")
     first=$(head -n 1 <<<"$findings" | cut -f3)
-    [ "$count" -le 1 ] || more=" (and $((count - 1)) more problems)"
+    [ "$count" -le 1 ] || more=" (and $((count - 1)) more)"
     printf 'flows-lib: %s in %s%s\n' "$first" "$spec_path" "$more" >&2
     return 2
   fi

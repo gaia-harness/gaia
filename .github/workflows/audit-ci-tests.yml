@@ -756,10 +756,10 @@ jobs:
           install: root
           cache-dependency-path: pnpm-lock.yaml
       # The root workspace for the suites marked as reading installed
-      # dependencies (`# bats file_tags=installed-dependencies`): the RED
-      # signal and determinism suites, which resolve `typescript` through
-      # createRequire against the repo root, the two Chromium suites (frontend
-      # Vitest, Playwright), and the lib Playwright collection suite. The plan's
+      # dependencies (`# bats file_tags=installed-dependencies`), among them
+      # the RED signal and determinism suites, which resolve `typescript` via
+      # createRequire against the repo root, the Chromium suites (frontend
+      # Vitest, Playwright) and the lib Playwright collection suite. The plan's
       # `needs_node` is set when the set this leg will run holds one, so a
       # change-scoped leg owing none skips the install. The suites own that set;
       # `.gaia/tests/installed-dependencies-mark-guard.sh` derives it from what

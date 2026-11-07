@@ -71,7 +71,7 @@ The composition rule compares a story's tests with its own children's stories. T
 
 ### Strict tests: honesty and worth
 
-Every changed test, strict included, is judged on honesty. The classifier's remaining role is which judgment arm and evidence a test gets, not whether honesty is judged: a strict test's subject is deterministic, so a weak assertion there is a defect, not noise. The RED gate proves a strict test can fail; it does not prove the test asserts the outcome that matters. On worth, the reviewer asks whether the test is worth having: trivial, covered by an integration test, proving what the type checker or lint already proves, a table that should be one test, or a unit test whose logic is neither important nor likely to fail. The verdict is `keep` or a human-gated `delete` naming the criterion, or a `fix` when the test fails the honesty axis.
+Every changed test, strict included, is judged on honesty. The classifier picks which judgment arm and evidence a test gets, not whether honesty is judged: a strict test's subject is deterministic, so a weak assertion there is a defect, not noise. The RED gate proves a strict test can fail; it does not prove the test asserts the outcome that matters. On worth, the reviewer asks whether the test is worth having: trivial, covered by an integration test, proving what the type checker or lint already proves, a table that should be one test, or a unit test whose logic is neither important nor likely to fail. The verdict is `keep` or a human-gated `delete` naming the criterion, or a `fix` when the test fails the honesty axis.
 
 ### Two-tier surfacing
 

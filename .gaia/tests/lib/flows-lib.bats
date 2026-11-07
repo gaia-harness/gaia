@@ -145,7 +145,7 @@ finding_codes() {
   printf '%s\n' "$output" | grep -q "^flow_missing_field${TAB}.*${TAB}frontmatter.flows.FLOW-001.why\$"
 }
 
-@test "validate reports bad_flow_id for an id that is not FLOW and three digits" {
+@test "validate reports bad_flow_id for an id that is not FLOW and three or more digits" {
   write_spec \
     'flows:' \
     '  - flow_id: FLOW-1' \

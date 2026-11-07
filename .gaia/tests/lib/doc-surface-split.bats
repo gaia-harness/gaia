@@ -313,7 +313,7 @@ check_page_surfaces() {
   [ "${#lines[@]}" -eq 5 ]
 }
 
-@test "the rule copies no capability token and neither doc or routes a form, journey or rule to the browser" {
+@test "the rule copies no capability token, and neither doc routes a form, journey or rule to the browser" {
   check_no_copied_tokens "$PW_RULE"
   check_no_browser_overrouting "$PW_RULE" "$PAGE"
 }

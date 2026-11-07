@@ -106,7 +106,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Local Bundle Sync (Decision)|Local Bundle Sync]]: a local build is recorded in a sidecar file and a prerelease `-dev` tag, never a version suffix, so every version-file reader stays untouched.
 - [[Shared Codify Declines]]: a `/gaia-codify` decline is one committed file per decline, published through the codify pull request; it lapses by age, a teammate overrides it by approving, and the folder is the adopter's own data.
 - [[Deliberate Configuration Asymmetries]]: config that differs from its siblings on purpose; the `.claude/hooks/` Edit carve-out, the skill `model:` pinning criterion, the non-opt-outable update check, and why the agent-teams flag is not enabled.
-- [[Flow Machinery For A Test-after Testing Layer (build)|Flow machinery for a test-after testing layer (build)]]: the SPEC flows reader, the flow-coverage check, flow-aware worthiness and the flows Playwright folder; nothing in the pipeline calls them yet.
+- [[Flow Machinery For A Test-after Testing Layer|Flow machinery for a test-after testing layer]]: the SPEC flows reader, the flow-coverage check, flow-aware worthiness and the flows Playwright folder; nothing in the pipeline calls them yet.
 <!-- gaia:maintainer-only:start -->
 - [[CLI-Binary-Split]]
 - [[Folding Shell Scripts into the CLI Binary]]: considered and declined; the manifest is a never-merged sentinel and the fold is a delete, so it cannot deliver simpler diffs.
