@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-11-01
 created: 2026-11-01
-updated: 2026-11-07
+updated: 2026-11-08
 tags: [decision, testing, tdd, layering, authorization]
 ---
 
@@ -89,4 +89,4 @@ GAIA's layers run against MSW handlers that mirror the backend's contract. They 
 - [[Testing]]: the frontend's layers in place.
 - [[Stories as Tests]]: the component layer.
 - [[Worthiness Audit]]: the emergent surface the audit judges.
-- [[Determinism Classifier]] and [[TDD RED Verification]]: how a route test is gated.
+- [[Determinism Classifier]]: the per-file signal that labels a test file strict or emergent for the worthiness audit.
