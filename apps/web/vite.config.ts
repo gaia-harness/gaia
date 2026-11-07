@@ -35,6 +35,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: [
+      '@faker-js/faker',
       '@msw/data',
       'accept-language-parser',
       'cn',
@@ -43,6 +44,7 @@ export default defineConfig({
       'i18next-browser-languagedetector',
       'ky',
       'lodash-es',
+      'msw',
       'msw/browser',
       'msw/experimental',
       'msw/http',
@@ -69,5 +71,6 @@ export default defineConfig({
   },
   server: {
     open: canOpenBrowser,
+    watch: {ignored: ['**/.playwright/output/**']},
   },
 });
