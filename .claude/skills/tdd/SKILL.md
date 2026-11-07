@@ -81,7 +81,7 @@ WRONG:  write the test importing a parse-amount module that does not exist → r
 WRONG:  implement parseAmount() → write the test → break parseAmount() to force red → restore it → green
 ```
 
-**Never break working production code to force a red, then restore it.** Nothing enforces this, so it is an authoring obligation. A plan build keeps the order structural by dispatching the test author and the implementer separately.
+**Never break working production code to force a red, then restore it.** Nothing enforces this, so it is an authoring obligation.
 
 **Single-pass-author exemption.** When the implementation already exists in the same change with no prior failing observation (a single-pass author landing impl and test together), author the test honestly against the existing behavior and route it to the worthiness audit, exactly as an emergent test is routed.
 

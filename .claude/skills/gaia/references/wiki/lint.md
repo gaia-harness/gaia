@@ -154,7 +154,7 @@ grep -rEn "\bSPEC-[0-9]{3,}\b" \
 
 Both scans return raw match lines. Apply the structural-vs-narrative filter from `working-doc-ids.md`:
 
-- **Skip (structural, not findings):** template format examples (`> - FLOW-NNN → Given …`), CLI argument values (`--flow-id FLOW-<n>`), JS/Python/YAML literals (`flow_id: 'FLOW-<n>'`), regex targets that match SPEC YAML structure, filename literals (`flow-<n>.spec.ts`), generic placeholders (`SPEC-NNN`, `SPEC-NNN.md`), variable-name fragments (`flow_id`).
+- **Skip (structural, not findings):** template format examples (`- flow_id: FLOW-NNN`), CLI argument values and JS/Python/YAML literals (`flow_id: 'FLOW-<n>'`), regex targets that match SPEC YAML structure, generic placeholders (`SPEC-NNN`, `SPEC-NNN.md`), variable-name fragments (`flow_id`).
 - **Flag (narrative, findings):** section-header parentheticals (`#### 5b. Discuss-this escape (FLOW-<n>)`), inline narrative parentheticals (`(FLOW-<n>, FLOW-<n>)`), comments naming specific working-doc IDs, pass/fail label prefixes (`pass "FLOW-<n> …"`), prose using a maintainer SPEC ID as a system-wide constant (`operate under SPEC-<n>'s scope_boundaries`).
 
 If both scans produce zero narrative findings (all matches are structural):

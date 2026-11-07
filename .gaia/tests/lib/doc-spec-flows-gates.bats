@@ -4,7 +4,7 @@
 # .claude/skills/gaia/references/spec.md proposes the feature's critical flows
 # at gate 1, confirms them through AskUserQuestion with the recommended option
 # first, caches the confirmed list in the gate-1 snapshot, prints every flow at
-# gate 2, and self-checks flows in auto mode. It no longer reasons over UATs.
+# gate 2, and self-checks flows in auto mode.
 #
 # DOC_SPEC_FLOWS_ROOT points the suite at a scratch copy of the repo; the
 # recommended-set and snapshot pins have red twins that delete the pinned

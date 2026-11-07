@@ -11,7 +11,7 @@ tags: [promoted, decisions]
 
 # Flow machinery for a test-after testing layer
 
-The harness reads a SPEC's critical user flows and checks that each one has a test. The spec stage, the SPEC lint, the planner and `plan-verify.sh` call these pieces; the removal of the older test-first machinery is not yet done.
+The harness reads a SPEC's critical user flows and checks that each one has a test. The spec stage, the SPEC lint, the planner and `plan-verify.sh` call these pieces.
 
 ## Decisions
 
