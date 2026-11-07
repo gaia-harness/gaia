@@ -65,8 +65,8 @@ Node ESM, Node stdlib only (resolves `typescript` from `node_modules` for a
 robust AST walk).
 
 ```
-node .gaia/scripts/red-ledger/extract-test-signals.mjs <repo-relative-test-path>
-node .gaia/scripts/red-ledger/extract-test-signals.mjs <path> --stdin
+node .gaia/scripts/test-signals/extract-test-signals.mjs <repo-relative-test-path>
+node .gaia/scripts/test-signals/extract-test-signals.mjs <path> --stdin
 ```
 
 Reads the file from disk (or stdin with `--stdin`) and prints one JSON object

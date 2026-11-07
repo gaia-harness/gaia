@@ -1583,7 +1583,7 @@ plan_fixture() {
     grep -qx 'mode=full' <<<"$output" && return 1
   done
   [ "$marked_count" -gt 0 ]
-  for shard_file in capture-red-observations red-ledger-lib red-verify-commit-check red-verify-e2e worthiness-presence-check extract-test-signals-stories-reporter uat-lifecycle-e2e; do
+  for shard_file in capture-red-observations test-signals-lib red-verify-commit-check red-verify-e2e worthiness-presence-check extract-test-signals-stories-reporter uat-lifecycle-e2e; do
     grep -q "/$shard_file\.bats\$" <<<"$union"
   done
 }

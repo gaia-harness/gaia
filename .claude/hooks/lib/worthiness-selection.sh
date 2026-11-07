@@ -2,14 +2,15 @@
 # The one implementation of which tests a pull request puts in scope for the
 # worthiness presence check: every changed test under the scope globs (the
 # descriptor's emergentTests and tddUnitTests) that the determinism classifier
-# labels strict, emergent or route. A deterministic (strict) test is RED-gated
-# for honesty and worthiness-gated for worth only. The merge hook and the worthiness step both
+# labels strict, emergent or route, plus every changed file the caller names as
+# a flow test. A deterministic (strict) test is RED-gated and worthiness-gated
+# both: the review judges it on honesty and worth. The merge hook and the worthiness step both
 # call it, so the set they judge and the set the hook demands cannot drift.
 #
 # Sourced, never executed; nothing runs at source time.
 #
 # Caller contract, all of it set before the call in the caller's own shell:
-#   - gaia-packages.sh and red-ledger.sh sourced, and gaia_packages_load run for
+#   - gaia-packages.sh and test-signals.sh sourced, and gaia_packages_load run for
 #     the tree (its failure is the caller's own package-error path).
 #   - WORTHINESS_SELECTION_ERE: `worthiness_selection_scope_ere`. Set but
 #     empty matches nothing (no records, return 0). Unset is a caller that
@@ -18,6 +19,10 @@
 #   - WORTHINESS_SELECTION_CLASSIFIER: absolute path of the caller's own
 #     classify-determinism.mjs. It is never derived from the tree argument, so
 #     the classifier that runs does not change when two trees differ.
+#   - WORTHINESS_SELECTION_FLOW_FILES (optional): newline-separated
+#     repo-relative paths of flow test files. A changed path in the list is
+#     selected whatever the ERE and the classifier say; the deletion check and
+#     the extractor refusals still apply. Unset or empty changes nothing.
 #
 # Call shape. A pipe or command substitution loses the return status and the
 # error variable, and a lost refusal reads as an allowed merge:
@@ -27,8 +32,8 @@
 #   while IFS= read -r record; do ...; done <"$records_file"
 #
 # Records on stdout: <repo-relative path><TAB><extractor NDJSON line>.
-# Returns 0 on a complete walk; RED_LEDGER_UNRESOLVABLE_SHAPE_STATUS or
-# RED_LEDGER_OLD_FORMAT_STATUS on an extractor refusal; 9 on a classifier package
+# Returns 0 on a complete walk; TEST_SIGNALS_UNRESOLVABLE_SHAPE_STATUS or
+# TEST_SIGNALS_OLD_FORMAT_STATUS on an extractor refusal; 9 on a classifier package
 # error or a missing input. Each non-zero sets WORTHINESS_SELECTION_ERROR to the
 # reason the hook prints.
 
@@ -89,7 +94,7 @@ _worthiness_selection_classify() {
 worthiness_selection_walk() {
   local tree_root="$1" base="$2"
   local changed='' diff_status diff_path diff_new_path
-  local path relative_path extractor_error_file extractor_status extractor_error_line current_ndjson line
+  local is_flow_file path relative_path extractor_error_file extractor_status extractor_error_line current_ndjson line
 
   WORTHINESS_SELECTION_ERROR=''
   if [ -z "${WORTHINESS_SELECTION_ERE+set}" ] || [ -z "${WORTHINESS_SELECTION_CLASSIFIER+set}" ]; then
@@ -122,9 +127,16 @@ worthiness_selection_walk() {
 
     # The signal helper only emits for test files; a non-test file that slips
     # through emits nothing and drops out below. An empty ERE matches nothing.
-    [ -n "$WORTHINESS_SELECTION_ERE" ] && [[ "$path" =~ $WORTHINESS_SELECTION_ERE ]] || continue
+    is_flow_file=0
+    if [ -n "${WORTHINESS_SELECTION_FLOW_FILES:-}" ] \
+       && grep -Fxq -- "$path" <<<"$WORTHINESS_SELECTION_FLOW_FILES"; then
+      is_flow_file=1
+    fi
+    if [ "$is_flow_file" -eq 0 ]; then
+      [ -n "$WORTHINESS_SELECTION_ERE" ] && [[ "$path" =~ $WORTHINESS_SELECTION_ERE ]] || continue
+    fi
 
-    relative_path=$(red_ledger_repo_relative_path "$path")
+    relative_path=$(test_signals_repo_relative_path "$path")
 
     # A deletion leaves nothing to recompute. Tested against the tree, not the
     # process working directory: from a subdirectory a cwd test answers
@@ -132,16 +144,19 @@ worthiness_selection_walk() {
     [ -f "$tree_root/$relative_path" ] || continue
 
     # The classifier decides membership: strict, emergent and route are in
-    # scope (a strict test is RED-gated and worthiness-gated both, worth only).
+    # scope (a strict test is RED-gated and worthiness-gated both; the review
+    # judges it on honesty and worth). A listed flow file skips it.
     # A classifier failure other than a package
     # error is not emergent (fail-open; the RED gate owns that surface).
-    _worthiness_selection_package_error=''
-    _worthiness_selection_classify "$relative_path" "$tree_root"
-    if [ -n "$_worthiness_selection_package_error" ]; then
-      WORTHINESS_SELECTION_ERROR="$_worthiness_selection_package_error"
-      return 9
+    if [ "$is_flow_file" -eq 0 ]; then
+      _worthiness_selection_package_error=''
+      _worthiness_selection_classify "$relative_path" "$tree_root"
+      if [ -n "$_worthiness_selection_package_error" ]; then
+        WORTHINESS_SELECTION_ERROR="$_worthiness_selection_package_error"
+        return 9
+      fi
+      [ "$_worthiness_selection_is_emergent" -eq 1 ] || continue
     fi
-    [ "$_worthiness_selection_is_emergent" -eq 1 ] || continue
 
     # Run from the tree for the reason above: the helper reads the file at the
     # repo-relative path. Exit 7 (a story play it cannot follow) and exit 8 (an
@@ -149,11 +164,11 @@ worthiness_selection_walk() {
     # test through. Every other non-zero is a mid-edit parse error, skipped.
     extractor_error_file=$(mktemp "${TMPDIR:-/tmp}/worthiness-extractor-XXXXXX") || extractor_error_file=/dev/null
     extractor_status=0
-    current_ndjson=$( cd "$tree_root" && red_ledger_signals "$relative_path" 2>"$extractor_error_file" ) || extractor_status=$?
-    if [ "$extractor_status" = "$RED_LEDGER_UNRESOLVABLE_SHAPE_STATUS" ] || [ "$extractor_status" = "$RED_LEDGER_OLD_FORMAT_STATUS" ]; then
+    current_ndjson=$( cd "$tree_root" && test_signals_signals "$relative_path" 2>"$extractor_error_file" ) || extractor_status=$?
+    if [ "$extractor_status" = "$TEST_SIGNALS_UNRESOLVABLE_SHAPE_STATUS" ] || [ "$extractor_status" = "$TEST_SIGNALS_OLD_FORMAT_STATUS" ]; then
       extractor_error_line=$(head -n 1 "$extractor_error_file" 2>/dev/null || true)
       [ "$extractor_error_file" = /dev/null ] || rm -f "$extractor_error_file"
-      WORTHINESS_SELECTION_ERROR=$(red_ledger_refusal_reason "$extractor_status" "$relative_path" "$extractor_error_line")
+      WORTHINESS_SELECTION_ERROR=$(test_signals_refusal_reason "$extractor_status" "$relative_path" "$extractor_error_line")
       return "$extractor_status"
     fi
     [ "$extractor_error_file" = /dev/null ] || rm -f "$extractor_error_file"

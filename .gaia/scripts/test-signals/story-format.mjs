@@ -1,4 +1,4 @@
-// The story-file format predicate every story reader shares: the RED-ledger
+// The story-file format predicate every story reader shares: the test-signal
 // extractor parses `csf4`, sends `csf2` and `csf3` to the migration command
 // (exit 8) and refuses `unknown` (exit 7). The migration command's
 // classifyStoryFile and quick-classify's line patterns implement the same

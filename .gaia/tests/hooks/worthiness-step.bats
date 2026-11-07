@@ -55,10 +55,10 @@ setup() {
 install_harness() {
   mkdir -p "$REPO/.claude/hooks/lib" "$REPO/.gaia/scripts"
   local library
-  for library in gaia-packages.sh red-ledger.sh worthiness-ledger.sh worthiness-selection.sh audit-base-provenance.sh; do
+  for library in gaia-packages.sh test-signals.sh worthiness-ledger.sh worthiness-selection.sh audit-base-provenance.sh; do
     ln -sfn "$HOME_ROOT/.claude/hooks/lib/$library" "$REPO/.claude/hooks/lib/$library"
   done
-  for library in branch-authorship-lib.sh main-root-lib.sh audit-ledger red-ledger classifier; do
+  for library in branch-authorship-lib.sh main-root-lib.sh machine-local-ref-lib.sh audit-ledger test-signals classifier spec; do
     ln -sfn "$HOME_ROOT/.gaia/scripts/$library" "$REPO/.gaia/scripts/$library"
   done
   cp "$STEP_SOURCE" "$REPO/.gaia/scripts/worthiness-step.sh"
@@ -144,7 +144,7 @@ field() {
 }
 
 signal_of() {
-  (cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs" "$1") |
+  (cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs" "$1") |
     jq -r --arg n "$2" 'select(.fullName == $n) | .signal'
 }
 
@@ -307,7 +307,7 @@ state_checksum() {
 }
 
 @test "an extractor refusal exits 3 with the reason on stderr and never an empty list" {
-  cp "$HOME_ROOT/.gaia/tests/hooks/fixtures/red-ledger/csf3-old-format.stories.tsx" "$REPO/apps/web/app/components/Marker/old.stories.tsx"
+  cp "$HOME_ROOT/.gaia/tests/hooks/fixtures/test-signals/csf3-old-format.stories.tsx" "$REPO/apps/web/app/components/Marker/old.stories.tsx"
   commit_paths apps/web/app/components/Marker/old.stories.tsx
   run_route
   [ "$status" -eq 3 ]
@@ -514,4 +514,127 @@ commit_route_test() {
   [ "$status" -eq 0 ]
   [ "$(field apps/web/app/utils/x/index.test.ts 'adds two numbers' .route)" = evaluate ]
   [ "$(field apps/web/test/helper.test.ts 'adds two numbers' .route)" = evaluate ]
+}
+
+FLOW_BATS=".gaia/tests/lib/refuses-bad-input.bats"
+FLOW_WEB="apps/web/.playwright/flows/sign-in.spec.ts"
+
+write_flows_spec() {
+  FLOWS_SPEC="$BATS_TEST_TMPDIR/SPEC.md"
+  printf '%s\n' \
+    '---' \
+    'spec_id: SPEC-900' \
+    'title: Sample' \
+    'flows:' \
+    '  - flow_id: FLOW-001' \
+    '    slug: sign-in' \
+    '    name: A returning user signs in' \
+    '    why: Breaking it blocks the main task' \
+    '    covers: [app/pages/sign-in, app/routes/drafts]' \
+    '  - flow_id: FLOW-002' \
+    '    slug: refuses-bad-input' \
+    '    name: The command refuses bad input' \
+    '    why: A silent pass would hide a broken gate' \
+    "    test_path: $FLOW_BATS" \
+    '---' \
+    '' \
+    '# Sample' >"$FLOWS_SPEC"
+}
+
+# A bats flow test the scope globs exclude, and a web flow spec they include;
+# the flow-tests file lists both.
+# shellcheck disable=SC2016
+commit_flow_tests() {
+  local AT=@
+  mkdir -p "$REPO/$(dirname "$FLOW_BATS")" "$REPO/$(dirname "$FLOW_WEB")"
+  printf '%s\n' \
+    '#!/usr/bin/env bats' \
+    "${AT}test \"refuses bad input\" {" \
+    '  run false' \
+    '  [ "$status" -eq 1 ]' \
+    '}' >"$REPO/$FLOW_BATS"
+  printf '%s\n' \
+    "import {expect, test} from '@playwright/test';" \
+    "" \
+    "test('signs in', async () => {" \
+    "  expect(1).toBe(1);" \
+    "});" >"$REPO/$FLOW_WEB"
+  commit_paths "$FLOW_BATS" "$FLOW_WEB"
+  FLOW_TESTS="$BATS_TEST_TMPDIR/flow-tests.tsv"
+  printf 'FLOW-001\tsign-in\tweb\t%s\nFLOW-002\trefuses-bad-input\tcommand\t%s\n' "$FLOW_WEB" "$FLOW_BATS" >"$FLOW_TESTS"
+}
+
+run_flow_route() {
+  run --separate-stderr bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER" --flows-spec "$FLOWS_SPEC" --flow-tests "$FLOW_TESTS"
+}
+
+@test "route with flow inputs selects a flow test the globs exclude and tags it with its flow" {
+  commit_widget_edits
+  commit_flow_tests
+  write_flows_spec
+  run_flow_route
+  [ "$status" -eq 0 ]
+  [ "$(field "$FLOW_BATS" 'refuses bad input' .route)" = evaluate ]
+  [ "$(field "$FLOW_BATS" 'refuses bad input' .flow.name)" = "The command refuses bad input" ]
+  [ "$(field "$FLOW_BATS" 'refuses bad input' .flow.why)" = "A silent pass would hide a broken gate" ]
+  [ "$(field "$FLOW_BATS" 'refuses bad input' .flow.testPath)" = "$FLOW_BATS" ]
+  [ "$(field "$FLOW_BATS" 'refuses bad input' .flow.covers)" = null ]
+  [ "$(field "$WIDGET" first 'has("flow")')" = false ]
+}
+
+@test "route with flow inputs gives a web flow spec its covers from the SPEC" {
+  commit_flow_tests
+  write_flows_spec
+  run_flow_route
+  [ "$status" -eq 0 ]
+  [ "$(field "$FLOW_WEB" 'signs in' .flow.flowId)" = FLOW-001 ]
+  [ "$(field "$FLOW_WEB" 'signs in' '.flow.covers | join(",")')" = "app/pages/sign-in,app/routes/drafts" ]
+  [ "$(field "$FLOW_WEB" 'signs in' .flow.testPath)" = null ]
+}
+
+@test "route refuses one flow flag without the other, and a SPEC carrying uats" {
+  commit_flow_tests
+  write_flows_spec
+  run bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER" --flows-spec "$FLOWS_SPEC"
+  [ "$status" -eq 2 ]
+  run bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER" --flow-tests "$FLOW_TESTS"
+  [ "$status" -eq 2 ]
+  printf '%s\n' '---' 'spec_id: SPEC-900' 'uats:' '  - uat_id: UAT-001' '---' >"$FLOWS_SPEC"
+  run_flow_route
+  [ "$status" -eq 3 ]
+  [ -n "$stderr" ]
+  [ "$output" != "[]" ]
+}
+
+flow_verdicts() {
+  jq -nc --arg f "$FLOW_BATS" --argjson flow "$1" --arg v "$2" \
+    '[{file: $f, fullName: "refuses bad input", verdict: $v, flow: $flow} + (if $v == "keep" then {} else {artifact: "an artifact"} end)]' >"$BATS_TEST_TMPDIR/verdicts.json"
+}
+
+@test "record keeps a well-formed flow key on a bats flow test's ledger line" {
+  commit_flow_tests
+  flow_verdicts '{"flowId":"FLOW-002","untestedErrorPaths":[{"source":"a.sh:3","description":"no test for the timeout"}],"missingOutcome":null,"undeclaredFolders":[]}' fix
+  run bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.flow.flowId' "$LEDGER")" = FLOW-002 ]
+  [ "$(jq -r '.flow.untestedErrorPaths[0].source' "$LEDGER")" = "a.sh:3" ]
+  [ "$(jq -r '.signal' "$LEDGER")" = "$(signal_of "$FLOW_BATS" 'refuses bad input')" ]
+}
+
+@test "record refuses a flow key missing undeclaredFolders and appends nothing" {
+  commit_flow_tests
+  flow_verdicts '{"flowId":"FLOW-002","untestedErrorPaths":[],"missingOutcome":null}' fix
+  run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
+  [ "$status" -eq 3 ]
+  grep -qF -- "refuses bad input" <<<"$stderr"
+  [ ! -s "$LEDGER" ]
+}
+
+@test "record refuses a keep verdict whose flow lists an untested error path" {
+  commit_flow_tests
+  flow_verdicts '{"flowId":"FLOW-002","untestedErrorPaths":[{"source":"a.sh:3","description":"d"}],"missingOutcome":null,"undeclaredFolders":[]}' keep
+  run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
+  [ "$status" -eq 3 ]
+  grep -qF -- "refuses bad input" <<<"$stderr"
+  [ ! -s "$LEDGER" ]
 }

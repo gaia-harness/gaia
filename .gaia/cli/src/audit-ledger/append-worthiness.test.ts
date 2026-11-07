@@ -4,7 +4,7 @@
  * JSON Lines record per judged test to the append-only worthiness ledger.
  * Its identity field (`signal`) is the SAME sha256-of-normalized-test-call
  * the RED ledger computes via
- * `.gaia/scripts/red-ledger/extract-test-signals.mjs`; the writer reuses
+ * `.gaia/scripts/test-signals/extract-test-signals.mjs`; the writer reuses
  * that helper so the two signals byte-match and the merge presence gate's
  * recompute lines up. A non-keep verdict carries a machine-checkable
  * `artifact`.
@@ -30,7 +30,7 @@ const WRITER = path.join(
 );
 const SIGNAL_HELPER = path.join(
   REPO_ROOT,
-  '.gaia/scripts/red-ledger/extract-test-signals.mjs'
+  '.gaia/scripts/test-signals/extract-test-signals.mjs'
 );
 
 // The helper (and the signal helper the writer spawns) resolves `typescript`

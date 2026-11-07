@@ -106,6 +106,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Local Bundle Sync (Decision)|Local Bundle Sync]]: a local build is recorded in a sidecar file and a prerelease `-dev` tag, never a version suffix, so every version-file reader stays untouched.
 - [[Shared Codify Declines]]: a `/gaia-codify` decline is one committed file per decline, published through the codify pull request; it lapses by age, a teammate overrides it by approving, and the folder is the adopter's own data.
 - [[Deliberate Configuration Asymmetries]]: config that differs from its siblings on purpose; the `.claude/hooks/` Edit carve-out, the skill `model:` pinning criterion, the non-opt-outable update check, and why the agent-teams flag is not enabled.
+- [[Flow Machinery For A Test-after Testing Layer|Flow machinery for a test-after testing layer]]: the SPEC flows reader, the flow-coverage check, flow-aware worthiness and the flows Playwright folder; nothing in the pipeline calls them yet.
 <!-- gaia:maintainer-only:start -->
 - [[CLI-Binary-Split]]
 - [[Folding Shell Scripts into the CLI Binary]]: considered and declined; the manifest is a never-merged sentinel and the fold is a delete, so it cannot deliver simpler diffs.
@@ -124,7 +125,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Determinism Classifier]]: per-file AST signal labelling a source file strict (RED-gated) or emergent (advisory audit); versioned DOM-API allowlist, file-granular.
 - [[Workspace Standard For Apps And Packages]]
 - [[Worthiness And Wiki Before The Audit]]: the worthiness step and wiki promotion run before the first audit round; `file-tech-debt.sh file` refuses a non-security finding on branch-authored code.
-- [[Worthiness Audit]]: advisory review of every changed test the worthiness selection names (honesty + worth for emergent tests, worth only for strict tests); fresh-context reviewer proposes keep/fix/delete, deletes human-gated, audit ledger sibling to the RED ledger; stories audited as emergent tests; two-tier end-of-task surfacing.
+- [[Worthiness Audit]]: advisory review of every changed test the worthiness selection names (honesty + worth for every changed test, strict included); fresh-context reviewer proposes keep/fix/delete, deletes human-gated, audit ledger sibling to the RED ledger; stories audited as emergent tests; two-tier end-of-task surfacing.
 - [[Worthiness Presence Gate]]: merge-time `gh pr merge` hook requiring each changed test the worthiness selection names to carry a worthiness-ledger line matching its current content; presence + signal match only (never the verdict), scoped to the PR's changed in-scope tests, fail-open.
 <!-- gaia:maintainer-only:start -->
 - [[Dependabot as a Data Source]]: Dependabot alerts feed `/update-deps`, which resolves advisories through the local quality gate; GAIA renders no Dependabot config and keeps automated security fixes off.

@@ -65,3 +65,6 @@
 .gaia/scripts/fitness-nudge-lib.sh	'chore: point references at frontend/'	Literal commit subject the 2.0.0 migration wrote into adopter history, matched as a prefix.
 .gaia/migrations/2.0.0.md	frontend/	Frozen migration note: describes the 2.0.0 move into the old package root.
 .gaia/migrations/2.4.0.md	frontend/	Migration note that owns the hop from the old package root to apps/web, so it names the old root.
+.gaia/scripts/spec/working-doc-id-scan.sh	.playwright/e2e	Package-relative e2e directory name joined to the package path from the registry, not a root path.
+.gaia/scripts/spec/working-doc-id-scan.sh	app/route-tests	Package-relative route-test directory name joined to the package path from the registry, not a root path.
+.gaia/scripts/spec/flow-coverage.sh	.playwright/flows	Package-relative flow test directory name joined to the package path from the registry, not a root path.

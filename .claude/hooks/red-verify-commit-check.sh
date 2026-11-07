@@ -128,8 +128,8 @@ fi
 # ---------------------------------------------------------------------------
 [ -n "$_library_directory" ] && [ -f "$_library_directory/red-ledger.sh" ] && . "$_library_directory/red-ledger.sh"
 type red_ledger_path >/dev/null 2>&1 || exit 0
-type red_ledger_signals >/dev/null 2>&1 || exit 0
-type red_ledger_signal_script >/dev/null 2>&1 || exit 0
+type test_signals_signals >/dev/null 2>&1 || exit 0
+type test_signals_signal_script >/dev/null 2>&1 || exit 0
 
 command -v git >/dev/null 2>&1 || exit 0
 command -v node >/dev/null 2>&1 || exit 0
@@ -174,7 +174,7 @@ fi
 tree_root="$(gaia_resolve_tree_root "$source_cwd" 2>/dev/null)" || exit 0
 
 ledger=$(red_ledger_path "$tree_root") || exit 0
-signal_script=$(red_ledger_signal_script)
+signal_script=$(test_signals_signal_script)
 
 # Deny with a one-line reason. --arg safely escapes it; never interpolate
 # dynamic values into the JSON.
@@ -336,7 +336,7 @@ while IFS= read -r path; do
   # unit test once the app lives at `apps/web/`. An empty ERE matches nothing.
   [ -n "$unit_test_ere" ] && [[ "$path" =~ $unit_test_ere ]] || continue
 
-  relative_path=$(red_ledger_repo_relative_path "$path")
+  relative_path=$(test_signals_repo_relative_path "$path")
 
   # Carve-out: an emergent-subject test commits without a RED demand. Skip the
   # whole file when the classifier affirmatively labels it emergent; the
@@ -357,13 +357,13 @@ while IFS= read -r path; do
   # helper reads the staged file from disk at the repo-relative path, so from a
   # subdirectory it finds nothing, and "no signals" is a `continue` -- the file
   # leaves the offender scan and the commit passes ungated.
-  current_ndjson=$( cd "$tree_root" && red_ledger_signals "$relative_path" 2>/dev/null ) || { continue; }
+  current_ndjson=$( cd "$tree_root" && test_signals_signals "$relative_path" 2>/dev/null ) || { continue; }
   # No emitted tests (empty file, only dynamic-title tests, or no-tests file):
   # nothing in scope for this file.
   [ -n "$current_ndjson" ] || continue
 
   # HEAD tests: feed the HEAD blob (`git show HEAD:<path>`) through the helper
-  # via --stdin. The shared red_ledger_signals reads from disk only, so call the
+  # via --stdin. The shared test_signals_signals reads from disk only, so call the
   # helper script directly here with --stdin to parse HEAD content rather than
   # the staged working-tree file. A new-at-HEAD file yields empty HEAD content
   # -> every current test is new. If HEAD content is unparseable we cannot prove
@@ -379,7 +379,7 @@ while IFS= read -r path; do
   if [ -n "$head_source" ]; then
     # From the acting tree, unlike head_source just above (a bare `git show`, which
     # resolves against the hook's own cwd rather than $tree_root): $signal_script
-    # is the bare repo-relative literal red_ledger_signal_script returns, so from a
+    # is the bare repo-relative literal test_signals_signal_script returns, so from a
     # subdirectory node cannot find it, `|| true` swallows the failure, and
     # head_fullnames stays empty. Empty means "nothing pre-existed at HEAD", so
     # every current test reads as new-at-HEAD and an ordinary edit to a test

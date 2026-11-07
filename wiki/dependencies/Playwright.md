@@ -4,13 +4,13 @@ status: active
 package: '@playwright/test'
 role: e2e-testing
 created: 2026-04-20
-updated: 2026-11-06
+updated: 2026-11-07
 tags: [dependency, testing, e2e]
 ---
 
 # Playwright
 
-Live-stack testing on two surfaces: real-server tests drive the server through the request fixture and open no page, browser tests drive a real page. [[Test Layering]] owns which proves what. Tests live in `apps/web/.playwright/e2e/`. Config in `apps/web/playwright.config.ts`.
+Live-stack testing on two surfaces: real-server tests drive the server through the request fixture and open no page, browser tests drive a real page. [[Test Layering]] owns which proves what. Tests live in `apps/web/.playwright/e2e/`, and one spec per critical user flow lives in `apps/web/.playwright/flows/<slug>.spec.ts`; Playwright collects both folders. Config in `apps/web/playwright.config.ts`.
 
 ## Architecture
 

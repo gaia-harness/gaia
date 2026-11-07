@@ -12,7 +12,7 @@ setup() {
   HOME_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$HOME_ROOT"
-  EXTRACTOR="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
+  EXTRACTOR="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
   TEST_SOURCE="$BATS_TEST_TMPDIR/sample.test.ts"
   STORY_SOURCE="$BATS_TEST_TMPDIR/sample.stories.tsx"
   cat >"$TEST_SOURCE" <<'EOF'

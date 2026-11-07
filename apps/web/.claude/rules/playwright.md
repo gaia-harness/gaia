@@ -11,14 +11,14 @@ Contents: File locations; Spec file naming; Real-server HTML check; Selectors, p
 ## File locations
 
 - Config: `playwright.config.ts` (package root)
-- Specs: real-server and browser specs both live at `.playwright/e2e/<feature>/<flow>.spec.ts`, grouped in feature folders; a flat `.playwright/e2e/*.spec.ts` stays valid for cross-cutting checks. The surface, not the path, tells them apart: a real-server spec drives the request fixture and opens no page, a browser spec drives a page
+- Specs: real-server and browser specs live at `.playwright/e2e/<feature>/<flow>.spec.ts`, grouped in feature folders; a flat `.playwright/e2e/*.spec.ts` stays valid for cross-cutting checks. A critical user flow's spec lives at `.playwright/flows/<slug>.spec.ts`, and Playwright collects both folders. The surface, not the path, tells them apart: a real-server spec drives the request fixture and opens no page, a browser spec drives a page
 - Shared helpers: `.playwright/utils.ts`; the HTML helper for real-server checks is `.playwright/html.ts`
 - Output/traces: `.playwright/output/` (gitignored)
 
 ## Spec file naming
 
 Match the feature or route: `language-switch.spec.ts`, `things.spec.ts`.
-One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`); one `test.describe` block per scenario group. Each transition, status or role rule is its own UAT routed by the ladder in `.claude/skills/gaia/references/plan/planner.md`, not more browser files. A browser spec exists only for a capability on that ladder's browser step; a JavaScript-disabled flow or a native form post is never a browser spec: it routes by that ladder's route and real-server steps, and a then-clause that needs the served form or a multi-page workflow over native forms is a real-server spec.
+One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`, or `.playwright/flows/<slug>.spec.ts` for a critical flow); one `test.describe` block per scenario group. Each transition, status or role rule is its own UAT routed by the ladder in `.claude/skills/gaia/references/plan/planner.md`, not more browser files. A browser spec exists only for a capability on that ladder's browser step, except a critical flow's spec, which is allowed even when a cheaper layer could prove the behavior; a JavaScript-disabled flow or a native form post is never a browser spec: it routes by that ladder's route and real-server steps, and a then-clause that needs the served form or a multi-page workflow over native forms is a real-server spec.
 
 A file whose first line is `// gaia-uat-contract sha256:...` was rendered from a SPEC UAT. Its Given/When/Then comment is the contract: make cosmetic edits only (selectors, labels, copy, layout) and report logical changes (`.claude/skills/gaia/references/spec/uat-divergence.md`). The owning phase removes the `test.fail();` call and replaces the placeholder `expect(false, ...)` with a real body that drives the app. Rendered route tests: `.claude/skills/gaia/references/spec/uat-write.md` (`## The rendered file`).
 

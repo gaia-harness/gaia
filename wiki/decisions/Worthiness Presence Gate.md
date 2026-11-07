@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-06-23
 created: 2026-06-23
-updated: 2026-11-05
+updated: 2026-11-07
 tags: [decision, tdd, testing, audit, merge, quality]
 ---
 
@@ -31,7 +31,7 @@ that the test-identity extractor **ran over the test's current content** and a
 verdict was recorded against that exact content. It does **not** prove that
 judgement was applied.
 
-A scripted rubber-stamp, run `.gaia/scripts/red-ledger/extract-test-signals.mjs`
+A scripted rubber-stamp, run `.gaia/scripts/test-signals/extract-test-signals.mjs`
 over the changed files and append a `keep` for every emitted signal, mints every
 matching line at near-zero cost and is the cost-minimizing path through this
 gate. The judgement guarantee rests on the human PR rollup, not on the presence
@@ -77,7 +77,7 @@ whole-repo scope would demand a ledger line for every existing test and
 block every unrelated merge.
 
 Membership is decided by the worthiness selection library
-(`.claude/hooks/lib/worthiness-selection.sh`): a changed test file that a package's `emergentTests` or `tddUnitTests` globs name ([[Package Descriptor]]) and whose [[Determinism Classifier]] verdict (`.gaia/scripts/classifier/classify-determinism.mjs`) is `emergent`, `strict` or `route` is in scope (a `*.stories.tsx` is in scope through its own globs entry, one ledger line per base story and per attached `.test()`, and per story with a play and no tests; an old-format story file denies, see [[Stories as Tests]]). A strict test is RED-gated at commit by the [[TDD RED Verification]] gate and worthiness-gated here at merge, where the review judges it on worth only; a `route` test is in scope although the RED gate covers it too.
+(`.claude/hooks/lib/worthiness-selection.sh`): a changed test file that a package's `emergentTests` or `tddUnitTests` globs name ([[Package Descriptor]]) and whose [[Determinism Classifier]] verdict (`.gaia/scripts/classifier/classify-determinism.mjs`) is `emergent`, `strict` or `route` is in scope (a `*.stories.tsx` is in scope through its own globs entry, one ledger line per base story and per attached `.test()`, and per story with a play and no tests; an old-format story file denies, see [[Stories as Tests]]). A strict test is RED-gated at commit by the [[TDD RED Verification]] gate and worthiness-gated here at merge, where the review judges it on honesty and worth; a `route` test is in scope although the RED gate covers it too. A changed test in any file the run folder's `flow-tests.tsv` lists is in scope whatever the globs and the classifier say, which is what brings a bats or CLI flow test in.
 
 When zero in-scope test files changed, the gate is a no-op and allows the merge.
 
@@ -114,7 +114,7 @@ The `Fail-open vs fail-closed` block in `.claude/hooks/worthiness-presence-check
 - The [[TDD RED Verification]] commit gate owns the deterministic surface at
   commit time. This gate covers the whole worthiness selection at merge time,
   so a strict test is RED-gated at commit and worthiness-gated at merge, the
-  review judging it on worth only (see [[Worthiness Audit]]).
+  review judging it on honesty and worth (see [[Worthiness Audit]]).
 
 See [[Worthiness Audit]], [[PR Merge Workflow]], [[Determinism Classifier]],
 [[TDD RED Verification]].

@@ -18,7 +18,7 @@ package-lock.json
 # are release-excluded and absent from adopter projects, so `gaia-maintainer
 # release scrub` strips this block from the bundle. Prettier reformatting any
 # of them breaks the bats suites: forensics golden files are compared
-# byte-for-byte and its parser fixtures are deliberately malformed; red-ledger
+# byte-for-byte and its parser fixtures are deliberately malformed; test-signals
 # fixtures carry deliberate non-standard indentation (stable-b) and deliberate
 # malformation (broken.test.ts, which prettier errors on).
 .gaia/tests/forensics/fixtures/

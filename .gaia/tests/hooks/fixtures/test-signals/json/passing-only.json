@@ -6,7 +6,7 @@
   "success": true,
   "testResults": [
     {
-      "name": ".gaia/tests/hooks/fixtures/red-ledger/two-tests.test.ts",
+      "name": ".gaia/tests/hooks/fixtures/test-signals/two-tests.test.ts",
       "status": "passed",
       "message": "",
       "assertionResults": [

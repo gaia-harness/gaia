@@ -53,7 +53,7 @@ Each export is a direct `meta.story({...})` or `.extend({...})` call; a story bu
 
 ## What counts as a test to the harness
 
-`.gaia/scripts/red-ledger/extract-story-signals.mjs` names each story and each `.test()` the way the reporter does (its header owns the exact names, the signal regions and the refusal list), so the [[Worthiness Presence Gate]] and the [[Worthiness Audit]] see one identity per base story and one per attached test. The harness does not count a render-only story with no tests.
+`.gaia/scripts/test-signals/extract-story-signals.mjs` names each story and each `.test()` the way the reporter does (its header owns the exact names, the signal regions and the refusal list), so the [[Worthiness Presence Gate]] and the [[Worthiness Audit]] see one identity per base story and one per attached test. The harness does not count a render-only story with no tests.
 
 ## Where the format is enforced
 

@@ -29,7 +29,7 @@ setup_file() {
 }
 
 setup() {
-  EXTRACTOR="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
+  EXTRACTOR="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
   if [ ! -d "$HOME_ROOT/apps/web/node_modules" ]; then
     echo "the frontend workspace is not installed; run pnpm install" >&2
     return 1

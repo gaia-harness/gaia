@@ -26,11 +26,13 @@ bash .gaia/scripts/worthiness-step.sh prune --root <RESOLVED_ROOT> --run-folder 
 bash .gaia/scripts/worthiness-step.sh route --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> > <route file>
 ```
 
+When `<RUN_FOLDER>/flow-tests.tsv` exists (`.gaia/scripts/spec/flow-coverage.sh --flow-tests-out` writes it), add `--flows-spec <the plan's SPEC path> --flow-tests <RUN_FOLDER>/flow-tests.tsv` to the `route` call: every test in a listed flow file is then selected, and its element carries a `flow` key. With no such file, the call is as above.
+
 Exit 3 stops the step: surface the reason on stderr. An array whose every element is `keep` or `settled`, or an empty array, ends the step with no dispatch and no commit.
 
 ### 2. Evaluate
 
-For the tests whose route is `evaluate`: pre-clear a scratchpad verdict file with `rm -f`, then dispatch `Agent(subagent_type: "worthiness-evaluator")`. The prompt holds a `Verdict file: <path>` line, says the file is JSON, and lists one `Test: <file> › <fullName>` line per test. Wait for the completion notification, then classify the file:
+For the tests whose route is `evaluate`: pre-clear a scratchpad verdict file with `rm -f`, then dispatch `Agent(subagent_type: "worthiness-evaluator")`. The prompt holds a `Verdict file: <path>` line, says the file is JSON, and lists one `Test: <file> › <fullName>` line per test. When `<RUN_FOLDER>/flow-tests.tsv` exists, route was called with `--flows-spec` and `--flow-tests` as in step 1, and the prompt also holds one line `Flows spec: <path>` and, beside the `Test:` line of each test whose element has `flow`, one line `Flow: <file> › <flowId> <slug>`. Wait for the completion notification, then classify the file:
 
 ```bash
 bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <verdict file> --expect-count <n>
