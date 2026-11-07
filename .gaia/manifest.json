@@ -361,6 +361,7 @@
     ".gaia/scripts/shell-checks-select.sh": "owned",
     ".gaia/scripts/spec/browser-capability-lib.sh": "owned",
     ".gaia/scripts/spec/filename-lint.mjs": "owned",
+    ".gaia/scripts/spec/flow-coverage.sh": "owned",
     ".gaia/scripts/spec/flows-lib.sh": "owned",
     ".gaia/scripts/spec/handoff-clear.sh": "owned",
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
@@ -401,6 +402,7 @@
     ".gaia/scripts/storybook-launch.sh": "owned",
     ".gaia/scripts/summary-verify.sh": "owned",
     ".gaia/scripts/test-shell.sh": "owned",
+    ".gaia/scripts/test-signals/extract-bats-signals.mjs": "owned",
     ".gaia/scripts/test-signals/extract-story-signals.mjs": "owned",
     ".gaia/scripts/test-signals/extract-test-signals.mjs": "owned",
     ".gaia/scripts/test-signals/row-pattern.mjs": "owned",
@@ -870,7 +872,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-07T10:04:22.625Z",
+  "generated": "2026-11-07T11:24:58.844Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

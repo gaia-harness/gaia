@@ -1,10 +1,11 @@
 #!/usr/bin/env bats
 #
-# Acceptance suite for how a strict-classified test is judged. The worthiness
-# evaluator prompt and the Worthiness Audit page both say a test the
-# determinism classifier labels strict is judged on worth only and never gets
-# an honesty-axis verdict, and the evaluator names the five worth criteria.
-# The evaluator no longer keeps the review off the deterministic surface, and
+# Acceptance suite for how a strict-classified test is judged. Every changed
+# test, strict included, is judged on honesty, so the evaluator prompt, the
+# Worthiness Audit page and the Presence Gate page no longer say a strict test
+# is judged on worth only. The evaluator and the audit page state the
+# classifier's remaining role, and the evaluator keeps the five worth criteria.
+# The evaluator does not keep the review off the deterministic surface, and
 # the Presence Gate page no longer claims a test is never gated by both.
 #
 # Both files are hard-wrapped, so every check matches on whitespace-normalized
@@ -19,10 +20,14 @@ setup() {
   EVALUATOR="$REPO_ROOT/.claude/agents/worthiness-evaluator.md"
   AUDIT="$REPO_ROOT/wiki/decisions/Worthiness Audit.md"
   GATE="$REPO_ROOT/wiki/decisions/Worthiness Presence Gate.md"
-  SHARED_NEEDLES=(
+  ABSENT_NEEDLES=(
     'judged on worth only'
+    'worth only'
     'never gets an honesty-axis verdict'
-    'the RED gate is its honesty proof'
+  )
+  SHARED_NEEDLES=(
+    'every changed test, strict included, is judged on honesty'
+    'not whether honesty is judged'
   )
   CRITERIA_NEEDLES=(
     'trivial'
@@ -64,6 +69,27 @@ old_line_absent() {
   ! has_needle "$file" "$old_line"
 }
 
+# Fails when the file text carries the needle: a positive match plus return 1.
+needle_absent() {
+  local file="$1" needle="$2"
+  has_needle "$file" "$needle" && return 1
+  return 0
+}
+
+# Fails with the first needle of the list the file text still carries.
+all_needles_absent() {
+  local file="$1"
+  shift
+  local needle
+  for needle in "$@"; do
+    needle_absent "$file" "$needle" || {
+      printf 'still carries: %s (%s)\n' "$needle" "$file" >&2
+      return 1
+    }
+  done
+  return 0
+}
+
 # Writes the normalized file text with every occurrence of the needle replaced
 # by a marker, to a scratch path.
 scratch_without() {
@@ -79,9 +105,15 @@ scratch_without() {
   }' > "$scratch"
 }
 
-@test "the evaluator and the Worthiness Audit page both say a strict test is judged on worth only" {
+@test "the evaluator and the Worthiness Audit page both say every changed test, strict included, is judged on honesty" {
   all_needles_present "$EVALUATOR" "${SHARED_NEEDLES[@]}"
   all_needles_present "$AUDIT" "${SHARED_NEEDLES[@]}"
+}
+
+@test "no page says a strict test is judged on worth only or never gets an honesty-axis verdict" {
+  all_needles_absent "$EVALUATOR" "${ABSENT_NEEDLES[@]}"
+  all_needles_absent "$AUDIT" "${ABSENT_NEEDLES[@]}"
+  all_needles_absent "$GATE" "${ABSENT_NEEDLES[@]}"
 }
 
 @test "the evaluator names the five worth criteria for a strict test" {
@@ -100,7 +132,21 @@ scratch_without() {
   old_line_absent "$GATE" "$OLD_GATE_LINE"
 }
 
-@test "red twin: removing any shared needle from either file fails the presence check" {
+@test "red twin: restoring any worth-only needle into each page fails the absence check" {
+  local file needle scratch
+  scratch="$BATS_TEST_TMPDIR/scratch.md"
+  for file in "$EVALUATOR" "$AUDIT" "$GATE"; do
+    for needle in "${ABSENT_NEEDLES[@]}"; do
+      { cat "$file"; printf '\n%s\n' "$needle"; } > "$scratch"
+      if all_needles_absent "$scratch" "${ABSENT_NEEDLES[@]}" 2>/dev/null; then
+        printf 'check stayed green with: %s (%s)\n' "$needle" "$file" >&2
+        return 1
+      fi
+    done
+  done
+}
+
+@test "red twin: removing any honesty needle from either file fails the presence check" {
   local file needle scratch
   scratch="$BATS_TEST_TMPDIR/scratch.md"
   for file in "$EVALUATOR" "$AUDIT"; do

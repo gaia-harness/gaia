@@ -4,7 +4,7 @@ path: .claude/
 status: active
 purpose: Claude Code integration, commands, rules, hooks, agents, skills
 created: 2026-04-20
-updated: 2026-10-18
+updated: 2026-11-07
 tags: [module, claude, hooks]
 ---
 
@@ -73,7 +73,7 @@ The committed command runs the session checkout's own copy of `.gaia/statusline/
 
 Pre-seeded with GAIA's architecture knowledge. Durable findings belong in the wiki (`wiki/concepts/Code Review Audit Agent.md` and adjacent pages). The `.claude/agent-memory/` path is a gitignored scratch path (created on demand under a per-agent subdir such as `code-audit-frontend/`), not a source of truth.
 
-`worthiness-evaluator` is an opus advisory agent that judges each changed test the worthiness selection names (the package descriptor's `emergentTests` and `tddUnitTests` globs): emergent tests on honesty and worth, strict tests on worth only. It returns a keep / fix / delete verdict per test. It proposes only and edits no test or source file, writing its verdicts to the JSON file the dispatch names; every delete is human-gated. The shared worthiness step and the tdd skill's arm dispatch it, and the verdicts feed the worthiness ledger that `worthiness-presence-check.sh` enforces at merge.
+`worthiness-evaluator` is an opus advisory agent that judges each changed test the worthiness selection names (the package descriptor's `emergentTests` and `tddUnitTests` globs): every test on honesty and worth, strict included. It returns a keep / fix / delete verdict per test. It proposes only and edits no test or source file, writing its verdicts to the JSON file the dispatch names; every delete is human-gated. The shared worthiness step and the tdd skill's arm dispatch it, and the verdicts feed the worthiness ledger that `worthiness-presence-check.sh` enforces at merge.
 
 `overlap-evaluator` is the advisory agent of the overlap pass (`.claude/skills/gaia/references/overlap-pass.md`), which runs after the worthiness step. It reads the branch's changed tests on every layer, may read unchanged tests as candidate siblings, edits no tracked file, and writes a JSON array of drop, merge, demote, fold-up and keep-both proposals, including demoting a browser test whose property needs no page to the real-server layer; the evaluator owns the reason a unit-layer demote needs. A deterministic check discards an unverified citation, and nothing applies without a human's approval. See [[Test Layering]].
 

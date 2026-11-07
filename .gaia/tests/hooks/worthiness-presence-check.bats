@@ -1232,3 +1232,65 @@ test("refuses an anonymous visitor", () => {
   [ "$status" -eq 0 ]
   refute_denied
 }
+
+# --- flow files: a listed bats or CLI test is demanded whatever the scope globs say ---
+
+FLOW_BATS_PATH=".gaia/tests/lib/flow-sample.bats"
+FLOW_BATS_SOURCE=
+build_flow_bats_source() {
+  local AT=@
+  FLOW_BATS_SOURCE="#!/usr/bin/env bats
+
+${AT}test \"refuses a spec that still carries uats\" {
+  run echo refused
+  [ \"\$status\" -eq 0 ]
+}
+"
+}
+FLOW_CLI_PATH=".gaia/cli/src/flow-sample/flow-sample.test.ts"
+
+# Write the run folder's flow-tests.tsv (flow_id, slug, kind, path) in the
+# folder the hook derives from the tree's branch key. The key comes from the
+# same library function the hook calls.
+write_flow_tests_file() {
+  local flow_path="$1" key run_folder
+  key="$( . "$HOME_ROOT/.gaia/scripts/audit-loop-state-lib.sh" && gaia_loop_key "$REPO" )"
+  run_folder="$( . "$HOME_ROOT/.gaia/scripts/audit-loop-state-lib.sh" && gaia_loop_run_directory "$REPO" "$key" )"
+  mkdir -p "$run_folder"
+  printf 'FLOW-001\tflow-sample\tcommand\t%s\n' "$flow_path" >"$run_folder/flow-tests.tsv"
+}
+
+@test "flow files: a listed bats flow test is denied without a verdict, allowed with one, and not demanded when unlisted" {
+  build_flow_bats_source
+  commit_file "$FLOW_BATS_PATH" "$FLOW_BATS_SOURCE"
+
+  # No flow-tests.tsv: the bats file is outside every scope glob, so nothing is demanded.
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+
+  write_flow_tests_file "$FLOW_BATS_PATH"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"refuses a spec that still carries uats"* ]]
+
+  ( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/audit-ledger/append-worthiness.mjs" \
+      "$FLOW_BATS_PATH" "refuses a spec that still carries uats" keep )
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "flow files: a listed CLI flow test is denied without a verdict" {
+  commit_file "$FLOW_CLI_PATH" 'import {expect, test} from "vitest";
+test("refuses a spec that still carries uats", () => {
+  expect(1 + 1).toBe(2);
+});
+'
+  write_flow_tests_file "$FLOW_CLI_PATH"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"refuses a spec that still carries uats"* ]]
+}

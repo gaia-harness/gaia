@@ -26,6 +26,12 @@
 // story file; its fullName and signal rules and refusal list live in the
 // header of ./extract-story-signals.mjs.
 //
+// Bats mode: a path ending `.bats` is read by ./extract-bats-signals.mjs (its
+// header owns the fullName and signal rules) before "typescript" is resolved,
+// so a bats file needs no TypeScript. Exit 6 there is an unterminated `@test`
+// block. The CLI handling (read, NDJSON, exit 4 and 6) lives there as
+// runBatsSignalsCli, which exits the process.
+//
 // Exit codes (each failure writes one stderr line and nothing to stdout):
 //   0  success, including zero tests or stories found (emits nothing)
 //   2  missing path argument
@@ -78,6 +84,7 @@ import {
   extractStorySignals,
   StoryFileRefusal,
 } from './extract-story-signals.mjs';
+import {runBatsSignalsCli} from './extract-bats-signals.mjs';
 import {rowPatternFor} from './row-pattern.mjs';
 
 const require = createRequire(import.meta.url);
@@ -91,6 +98,10 @@ if (!filePath) {
     'extract-test-signals: missing <repo-relative-test-path> argument\n',
   );
   process.exit(2);
+}
+
+if (/\.bats$/.test(filePath)) {
+  runBatsSignalsCli(filePath, useStdin);
 }
 
 let ts;

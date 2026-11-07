@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-06-23
 created: 2026-06-23
-updated: 2026-11-05
+updated: 2026-11-07
 tags: [decision, tdd, testing, audit, quality]
 ---
 
@@ -12,7 +12,7 @@ tags: [decision, tdd, testing, audit, quality]
 
 An advisory review of the tests the worthiness selection names (the `emergentTests` and `tddUnitTests` globs, per [[Package Descriptor]]). An emergent test has no stable
 failing-then-passing run to gate on, so its honesty and worthiness come from a
-fresh-context reviewer instead of a mechanical RED proof. A test the [[Determinism Classifier]] labels strict is on the surface the [[TDD RED Verification]] gate covers: the RED gate is its honesty proof, so it is judged on worth only and never gets an honesty-axis verdict. A route test under the route-test folder is judged on both axes, although the RED gate covers it too; a file whose first line carries the contract marker takes no `delete` verdict, since a divergence there goes to a reopen. The reviewer
+fresh-context reviewer instead of a mechanical RED proof. Every changed test, strict included, is judged on honesty and worth. A test the [[Determinism Classifier]] labels strict is on the surface the [[TDD RED Verification]] gate covers, and the RED gate proves such a test can fail; the reviewer still judges whether it asserts the outcome that matters. A route test under the route-test folder is judged on both axes, although the RED gate covers it too; a file whose first line carries the contract marker takes no `delete` verdict, since a divergence there goes to a reopen. The reviewer
 **proposes** verdicts and **edits no files**; a human acts on every proposal.
 
 ## Problem
@@ -26,7 +26,7 @@ adds maintenance cost while catching none of its own component's bugs.
 
 ## Decision
 
-A committed reviewer prompt judges each changed test on two axes (worth only for a strict test) and
+A committed reviewer prompt judges each changed test on two axes (every changed test, strict included, is judged on honesty and worth) and
 returns one verdict per test. A fresh-context reviewer is the cheapest way to
 recover the honesty signal the RED gate cannot supply here, because the author
 who wrote the tests shares their blind spots.
@@ -69,9 +69,9 @@ A story is a visual state and a behavior is a `.test()` attached to it ([[Storie
 
 The composition rule compares a story's tests with its own children's stories. The review judges each test on its own worth and does not propose moves across layers; [[Test Layering]] states the division of work between the review and the overlap pass.
 
-### Strict tests: worth only
+### Strict tests: honesty and worth
 
-A test the classifier labels strict is judged on worth only. It never gets an honesty-axis verdict, because the RED gate is its honesty proof. The reviewer asks whether the test is worth having: trivial, covered by an integration test, proving what the type checker or lint already proves, a table that should be one test, or a unit test whose logic is neither important nor likely to fail. The verdict is `keep` or a human-gated `delete` naming the criterion, never an honesty `fix`.
+Every changed test, strict included, is judged on honesty. The classifier's remaining role is which judgment arm and evidence a test gets, not whether honesty is judged: a strict test's subject is deterministic, so a weak assertion there is a defect, not noise. The RED gate proves a strict test can fail; it does not prove the test asserts the outcome that matters. On worth, the reviewer asks whether the test is worth having: trivial, covered by an integration test, proving what the type checker or lint already proves, a table that should be one test, or a unit test whose logic is neither important nor likely to fail. The verdict is `keep` or a human-gated `delete` naming the criterion, or a `fix` when the test fails the honesty axis.
 
 ### Two-tier surfacing
 

@@ -33,8 +33,10 @@
 # (`emergentTests` and `tddUnitTests`, via .claude/hooks/lib/gaia-packages.sh,
 # never a literal `app/` prefix) and the determinism classifier
 # (.gaia/scripts/classifier/classify-determinism.mjs) labels it `strict`,
-# `emergent` or `route`. A strict (deterministic) test is RED-gated for honesty
-# and worthiness-gated for worth only. When ZERO tests in
+# `emergent` or `route`. A strict (deterministic) test is RED-gated and
+# worthiness-gated both: the review judges it on honesty and worth. A changed
+# test in a file the run folder's flow-tests.tsv lists (a bats or CLI flow test)
+# is in scope whatever the globs and the classifier say. When ZERO tests in
 # scope changed, the gate is a NO-OP and allows the merge. An unusable registry
 # or descriptor DENIES: with no globs the gate would silently match nothing. An
 # EXACT rename (R100: the content is byte-identical, so there is nothing new to
@@ -286,6 +288,27 @@ fi
 WORTHINESS_SELECTION_CLASSIFIER="$classifier_script"
 # shellcheck disable=SC2034
 WORTHINESS_SELECTION_ERE="$(worthiness_selection_scope_ere)"
+
+# Flow tests: the branch's run folder lists each resolved flow test file in
+# flow-tests.tsv (flow_id, slug, kind, path). A changed test in a listed file is
+# in scope whatever the globs say, so a bats or CLI flow test is demanded too.
+# No resolvable key or run folder, or no file, leaves the input unset (fail-open,
+# this gate's posture for its own tooling).
+# shellcheck disable=SC2034 # read by worthiness_selection_walk
+WORTHINESS_SELECTION_FLOW_FILES=''
+if [ -f "$gaia_scripts/audit-loop-state-lib.sh" ]; then
+  flow_run_folder=$(
+    # shellcheck source=/dev/null
+    . "$gaia_scripts/audit-loop-state-lib.sh" 2>/dev/null || exit 0
+    flow_main_root=$(gaia_resolve_main_root "$tree_root" 2>/dev/null) || exit 0
+    flow_key=$(gaia_loop_key "$tree_root" 2>/dev/null) || exit 0
+    gaia_loop_run_directory "$flow_main_root" "$flow_key"
+  ) || flow_run_folder=''
+  if [ -n "$flow_run_folder" ] && [ -r "$flow_run_folder/flow-tests.tsv" ]; then
+    # shellcheck disable=SC2034 # read by worthiness_selection_walk
+    WORTHINESS_SELECTION_FLOW_FILES=$(cut -f4 "$flow_run_folder/flow-tests.tsv" 2>/dev/null || true)
+  fi
+fi
 records_file=$(mktemp "${TMPDIR:-/tmp}/worthiness-records-XXXXXX") || exit 0
 walk_status=0
 worthiness_selection_walk "$tree_root" "$base" >"$records_file" || walk_status=$?
