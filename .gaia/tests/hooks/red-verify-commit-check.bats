@@ -64,6 +64,7 @@ setup() {
   require_node_typescript "$HOME_ROOT"
   HOOK_ABSOLUTE_PATH="$HOME_ROOT/.claude/hooks/red-verify-commit-check.sh"
   HELPER="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
+  # gaia-lint-ignore whole-tree-mark-guard: --tree-key derives a key from the root path and lists no tracked file
   TREE_KEY=$(bash "$HOME_ROOT/.gaia/scripts/main-root-lib.sh" --tree-key "$HOME_ROOT")
 
   REPO=$(mktemp -d -t red-verify-test-XXXXXX)
