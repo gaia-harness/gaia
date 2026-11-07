@@ -2,7 +2,7 @@
 
 The procedures a generated `ORCHESTRATOR.md` and both pre-flights point at. `.claude/skills/gaia/references/plan/planner.md` owns the order of the orchestrator's steps and the verbatim blocks a planner copies; this page owns what each step does. Every command runs from the directory each section names, with the placeholders the orchestrator holds: `<SPEC_PATH>` (the absolute, main-anchored `SPEC.md`, stored in the main checkout: the clone's primary working directory, on any branch), `<PLAN_DIR>` (the absolute, main-anchored plan folder), `<RESOLVED_ROOT>` (the working copy the isolation reference resolved) and `<N>` (the PR number).
 
-Contents: Owning-phase UAT gate; Pre-audit UAT checks; Consolidation; Post-merge close; Pre-flight sweep.
+Contents: Owning-phase UAT gate; Pre-audit UAT checks; Pre-audit flow checks; Consolidation; Post-merge close; Pre-flight sweep.
 
 ## Owning-phase UAT gate
 
@@ -95,6 +95,23 @@ Then judge the test bodies. The gate proves each spec still carries its contract
    ```
 
    A non-zero exit is a HALT: surface each `diverges` entry's file and reason. When the reason says the Then-clause is asserted only in a helper the body calls, the fix is moving that assertion into the test body and running this step again. Otherwise the fix is implementing the behavior or reopening the SPEC (`.claude/skills/gaia/references/spec/uat-divergence.md` `## Reopen`). Never an edit to the contract comment and never re-adding `test.fail()`. Like the gate, it is never an audit finding to fix inside a fix round.
+
+## Pre-audit flow checks
+
+For a spec-derived plan written with a closing flow-test phase, the orchestrator's `flow-checks` block runs after the last phase commits and before the worthiness step, from `<RESOLVED_ROOT>`:
+
+```bash
+bash .gaia/scripts/spec/flow-coverage.sh --spec <SPEC_PATH> --root <RESOLVED_ROOT> --flow-tests-out <RUN_FOLDER>/flow-tests.tsv
+```
+
+`<RUN_FOLDER>` is the branch's run folder (`.claude/doctrine/execution.md`, `## Run folder`). The script checks that each SPEC flow has its test file and that the branch changed it, and for a web flow that the spec is in the Playwright listing and its `@covers` header names every SPEC folder the branch changed; it also scans each flow test for a working-document id. It writes `<RUN_FOLDER>/flow-tests.tsv`, one row per flow whose test exists, which the worthiness step reads as its flow inputs and the merge-time presence gate reads so that a changed test in a listed flow file with no recorded worthiness verdict denies the merge.
+
+- Exit 0: every flow passed; the block records a `## Flow checks` block and goes on.
+- Exit 1: one or more findings, one stdout line each; the block's one fixer round runs, then the script runs once more.
+- Exit 2: a usage error or a refused SPEC (a `uats:` key, or no `flows:`); the block halts.
+- Exit 3: an operational failure, such as a Playwright listing that could not run; the block halts.
+
+The fixer, the retry bound of one and the `## Flow checks (HALTED)` record are the `flow-checks` block's, in `.claude/skills/gaia/references/plan/planner.md`. A failure here is a HALT, never an audit finding to fix inside a fix round.
 
 ## Consolidation
 

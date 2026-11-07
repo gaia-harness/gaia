@@ -14,6 +14,6 @@ Read `.claude/skills/gaia/references/plan.md` from the project root and follow i
 - `.claude/skills/gaia/references/plan/decomposition-audit.md`: step 4.6, when the gauge runs the audit.
 - `.claude/skills/gaia/references/spec/lens-dispatch.md`: step 4.6, with the audit.
 - `.claude/skills/gaia/references/plan/planner.md`: never read on this thread; the planner sub-agent spawned at step 4 reads it first.
-- `.claude/skills/gaia/references/spec/uat-write.md`, `.claude/skills/gaia/references/spec/uat-divergence.md`, `.claude/skills/gaia/references/spec/wiki-promote.md`: never read on this thread; `planner.md` routes the planner to each at the step that needs it.
-- `.claude/skills/gaia/references/plan/test-review.md`: never read on this thread; the orchestrator the planner writes reads it before the implementers of each wave with a splitting task.
+- `.claude/skills/gaia/references/spec/wiki-promote.md`: never read on this thread; `planner.md` routes the planner to it at the step that needs it.
+- `.claude/skills/gaia/references/plan/test-review.md`: never read on this thread, nor by the orchestrator the planner writes.
 - `.claude/skills/gaia/references/overlap-pass.md`: never read on this thread; the orchestrator the planner writes reads it after the worthiness step.

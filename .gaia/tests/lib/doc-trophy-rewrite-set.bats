@@ -57,7 +57,6 @@ setup() {
 
   # file|needle (must stay present)
   KEPT_ROWS=(
-    ".claude/skills/gaia/references/plan/planner.md|taking the lowest step whose layer can show its then-clause"
     "$LAYERING|Browser time is the expensive layer in three ways"
     "$LAYERING|The route surface is the lowest layer that takes a request in process"
     "$LAYERING|one test per user flow"

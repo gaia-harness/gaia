@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
 # Doc pins for routing a real-backend then-clause out of GAIA's layers: the
-# planner's paragraph after the routing ladder, the SPEC template's
-# out-of-scope bullet, the SPEC audit's testability finding, and the Test
-# Layering page's statement of what mocks cannot prove.
+# SPEC template's out-of-scope bullet, the SPEC audit's testability finding,
+# and the Test Layering page's statement of what mocks cannot prove.
 #
 # Each check is a function over a file path, run once on the real file and
 # once on a mutated scratch copy that must fail.
@@ -13,7 +12,6 @@
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLANNER_FILE="$ROOT/.claude/skills/gaia/references/plan/planner.md"
   TEMPLATE_FILE="$ROOT/.claude/skills/gaia/references/spec/spec-template.md"
   SPEC_AUDIT_FILE="$ROOT/.claude/skills/gaia/references/spec/audit.md"
   LAYERING_FILE="$ROOT/wiki/decisions/Test Layering.md"
@@ -24,19 +22,6 @@ has_collapsed() {
   [ -f "$1" ] || { echo "target $1 does not exist" >&2; return 1; }
   tr '\n' ' ' <"$1" | sed -E 's/[[:space:]]+/ /g' | grep -Fq -- "$2" \
     || { echo "missing in $(basename "$1"): $2" >&2; return 1; }
-}
-
-check_planner() {
-  has_collapsed "$1" 'A then-clause only a real backend can show (data surviving a restart, a database reset, a production start against a real store) has no surface.' || return 1
-  has_collapsed "$1" 'as adopter-owned end-to-end; no task builds harness for it.' || return 1
-  has_collapsed "$1" "A Given that needs data seeds it through a Given builder on the worker's MSW store" || return 1
-  # The paragraph sits after the ladder's last step, before the authorization rule.
-  local ladder paragraph authorization
-  ladder=$(grep -nF '5. `non-ui` for harness' "$1" | head -n 1 | cut -d: -f1)
-  paragraph=$(grep -nF 'A then-clause only a real backend can show' "$1" | head -n 1 | cut -d: -f1)
-  authorization=$(grep -nF 'A plan routing an authorization UAT' "$1" | head -n 1 | cut -d: -f1)
-  [ -n "$ladder" ] && [ -n "$paragraph" ] && [ -n "$authorization" ] || return 1
-  [ "$ladder" -lt "$paragraph" ] && [ "$paragraph" -lt "$authorization" ]
 }
 
 check_template() {
@@ -68,22 +53,6 @@ scratch_copy() {
   sed -E "$2" "$1" >"$copy"
   cmp -s "$1" "$copy" && { echo "mutation changed nothing in $1" >&2; return 1; }
   printf '%s\n' "$copy"
-}
-
-@test "planner.md routes a real-backend then-clause out after the ladder" {
-  check_planner "$PLANNER_FILE"
-}
-
-@test "red twin: the planner check fails without the paragraph or with it before the ladder" {
-  copy="$(scratch_copy "$PLANNER_FILE" 's/ no task builds harness for it\./ a task builds it./')"
-  run check_planner "$copy"
-  [ "$status" -ne 0 ]
-  copy="$(scratch_copy "$PLANNER_FILE" 's/on the worker.s MSW store/in a database/')"
-  run check_planner "$copy"
-  [ "$status" -ne 0 ]
-  copy="$(scratch_copy "$PLANNER_FILE" '/^    5\. `non-ui` for harness/d')"
-  run check_planner "$copy"
-  [ "$status" -ne 0 ]
 }
 
 @test "the SPEC template names adopter-owned end-to-end under Out of scope" {

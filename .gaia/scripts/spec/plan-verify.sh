@@ -7,93 +7,45 @@
 # Usage: plan-verify.sh <plan-dir> [--spec <spec-path>]
 #
 # Always checked: README.md, ORCHESTRATOR.md, KICKOFF.md and at least one
-# task-*.md exist; ORCHESTRATOR.md carries the verbatim step sentinels the plan
+# task-*.md exist; task file names match task-[a-z0-9][a-z0-9-]*.md and none
+# ends in -tests; ORCHESTRATOR.md carries the verbatim step sentinels the plan
 # needs, each on a line of its own (leading and trailing whitespace allowed,
-# nothing else), in the order the template places them. Without --spec the plan
-# is spec-less and the three UAT sentinels are not required. The
-# resume-detection, yield-handling, red-split, test-review, gate-retry, worthiness-step, overlap-pass, wiki-promotion,
-# code-audit and post-clearance blocks are also checked verbatim: each one's non-blank lines
-# (trimmed) must equal the fenced block planner.md holds, with the
-# plan-directory and SPEC-path placeholders replaced by this plan's absolute
-# values, so a paraphrased or shortened copy cannot ship. Maintainer-only marker
-# lines inside a block are compared like any other line, so a plan matches the
-# planner.md it was generated from, marked or stripped, and a plan that dropped a
-# marked pair its planner.md keeps fails. A plan generated before a block
-# existed is not re-verified: only /gaia-plan step 4.5 runs this script.
-# README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no
-# literal {PLAN_DIR}, {SPEC_PATH} or {AUDIT_PATH}; one failure line per hit.
-# Every task-*.md carries a `New tests:` line.
+# nothing else), in the order the template places them (flow-checks only with
+# --spec). Every sentinel but post-merge-close is also checked verbatim: each
+# block's non-blank lines (trimmed) must equal the fenced block planner.md
+# holds, with the plan-directory and SPEC-path placeholders replaced by this
+# plan's absolute values, so a paraphrased or shortened copy cannot ship.
+# Maintainer-only marker lines inside a block are compared like any other line,
+# so a plan matches the planner.md it was generated from, marked or stripped.
+# README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no literal
+# {PLAN_DIR}, {SPEC_PATH} or {AUDIT_PATH}; one failure line per hit.
 #
-# With --spec (a spec-derived plan) additionally: the UAT routing table in
-# README.md validates (delegated to uat_lib_validate_routing); the three UAT
-# sentinels are required; every story-routed UAT has a story test
-# criterion line in some task doc whose text carries the UAT's then-clause.
-# A story or non-ui row whose then-clause reads like a route, navigation, URL,
-# redirect, session or server-state check prints a non-fatal WARN: line
-# (misrouting hint). An e2e row, which only a plan generated before the split
-# holds, fails with a line telling the planner to route it real-server (the live
-# stack with no page) or browser (only a real browser shows it); the shared
-# validator still accepts it.
+# With --spec (a spec-derived plan) additionally, after the SPEC's flows are
+# read (a uats: key or a malformed flow fails the plan with the reader's
+# reason):
+# - Each README `| Phase <N> |` row names its tasks as backticked task-<name>
+#   stems; a task doc's phase is the row naming its stem, and a stem in no row
+#   or in two rows fails. The last phase is the highest <N>.
+# - Every task doc in the last phase carries exactly one line
+#     - Flow test (<flow_id>): <repo-relative test path>
+#   and every SPEC flow has exactly one such line. A line naming a flow the SPEC
+#   lacks, a line in an earlier phase's task doc, or a path other than the
+#   flow's expected path fails. The expected path is a web flow's
+#   <web package>/.playwright/flows/<slug>.spec.ts, or a command flow's
+#   test_path.
+# - ORCHESTRATOR.md's last-phase entry (from the **Phase <N>, line outside every
+#   fenced block to the next **Phase or ## line outside one) holds, for each
+#   Flow test line, a line with the test path's basename and a runner
+#   (playwright test, test:shell, bats5.sh, test --run).
 #
-# A browser row must name the capability that needs a real browser, from this
-# closed list (matched exactly as spelled, case-sensitive), each with the cue
-# words its phrase must carry (case-insensitive, word-bounded):
-#   capability: client JavaScript | cues: without a reload|client-side|optimistic(ally)?|live
-#   capability: layout or visual position | cues: beside|above|below|position(s|ed)?|viewport|layout
-#   capability: focus or keyboard | cues: focus(es|ed|ing)?|keyboard|tab key
-#   capability: rendered-DOM accessibility scan | cues: accessibility|axe|screen readers?
-#   capability: browser-only navigation | cues: back button|browser history|client navigation
-# The line lives in any task-*.md:
-#   - Browser capability (<uat_id>): <capability>: <then-clause phrase, verbatim>
-# Parse: the text after the marker is trimmed, then split on the first colon
-# followed by a space or the end of the text; the left side is the capability,
-# the right side the phrase. A bare trailing colon, or no such colon, gives an
-# empty phrase. One enclosing pair of double quotes or backticks is stripped
-# from the phrase, then whitespace is normalized. The phrase must be a
-# case-sensitive substring of the whitespace-normalized then-clause with at
-# least one word-bounded occurrence, and must contain a cue word of the
-# capability it names. With several lines for one UAT the row passes when any
-# one validates; otherwise the first line found is the one reported.
-# A browser row whose Given says JavaScript is disabled (javascript or js
-# followed by disabled, off, turned off or not enabled; or without or no
-# javascript or js) is refused whatever its capability line says, since a
-# request client never runs JavaScript and the UAT routes by the ladder's route
-# and real-server steps. The pattern is word-bounded, so a Given that says
-# "no JavaScript errors" is refused too: an accepted false positive.
-#
-# A real-server row needs its own non-blank line in any task-*.md, so one
-# blanket sentence cannot cover several rows; whether it is true is unchecked:
-#   - Real-server reason (<uat_id>): <what a route test cannot show>
-#
-# A spec-derived plan also gets the phase-ownership check in
-# plan-phases-lib.sh (its header owns the rules): a README phase that no routing
-# row names must carry a "- Phase <N>: Infrastructure: <reason>" line.
-#
-# Each real-server, browser and route row's rendered file name is linted with
-# the web package's own eslint (uat_lib_filename_lint_problems owns the rules);
-# a refused name fails with eslint's message, which names the suggested name.
-#
-# Every failure is reported on stderr, one line each, in a single run.
-#
-# Exit codes: 0 pass; 1 one or more failures; 2 usage error.
-#
-# Bash 3.2 compatible; BSD and GNU tools.
-capability_tokens=("client JavaScript" "layout or visual position" "focus or keyboard" "rendered-DOM accessibility scan" "browser-only navigation")
-# shellcheck disable=SC2034 # read by the sourced browser-capability-lib.sh
-capability_cues=('without a reload|client-side|optimistic(ally)?|live' 'beside|above|below|position(s|ed)?|viewport|layout' 'focus(es|ed|ing)?|keyboard|tab key' 'accessibility|axe|screen readers?' 'back button|browser history|client navigation')
+# Every failure is reported on stderr, one line each, in a single run. Exit
+# codes: 0 pass; 1 one or more failures; 2 usage error. Bash 3.2 compatible; BSD and GNU tools.
 set -uo pipefail
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=.gaia/scripts/spec/uat-lib.sh
-. "$script_directory/uat-lib.sh"
-# shellcheck source=.gaia/scripts/spec/browser-capability-lib.sh
-. "$script_directory/browser-capability-lib.sh"
-# shellcheck source=.gaia/scripts/spec/plan-phases-lib.sh
-. "$script_directory/plan-phases-lib.sh"
-if ! declare -F plan_phases_check >/dev/null; then
-  printf 'plan-verify: plan-phases-lib.sh did not define plan_phases_check\n' >&2
-  exit 2
-fi
+repository_root="$(cd "$script_directory/../../.." && pwd)"
+# shellcheck source=.gaia/scripts/spec/flows-lib.sh
+. "$script_directory/flows-lib.sh"
 
 usage() {
   printf 'usage: plan-verify.sh <plan-dir> [--spec <spec-path>]\n' >&2
@@ -133,21 +85,6 @@ fail() {
   failures=$((failures + 1))
 }
 
-capability_allowed_list=''
-for capability_token in ${capability_tokens[@]+"${capability_tokens[@]}"}; do
-  capability_allowed_list="${capability_allowed_list:+$capability_allowed_list, }$capability_token"
-done
-
-real_server_row_check() {
-  local uat="$1" marker="Real-server reason ($1):" reason_text
-  # /dev/null keeps grep off stdin when no task doc exists.
-  while IFS= read -r reason_text; do
-    reason_text="${reason_text#*"$marker"}"
-    [ -n "${reason_text//[[:space:]]/}" ] && return 0
-  done < <(grep -hF -- "$marker" /dev/null ${task_files[@]+"${task_files[@]}"})
-  fail "$uat is routed real-server but no task doc carries its line: - $marker <what a route test cannot show>"
-}
-
 readme="$plan_directory/README.md"
 orchestrator="$plan_directory/ORCHESTRATOR.md"
 
@@ -156,18 +93,24 @@ orchestrator="$plan_directory/ORCHESTRATOR.md"
 [ -f "$plan_directory/KICKOFF.md" ] || fail "KICKOFF.md is missing from $plan_directory"
 task_files=()
 for candidate in "$plan_directory"/task-*.md; do
-  [ -f "$candidate" ] && task_files+=("$candidate")
+  [ -f "$candidate" ] || continue
+  task_files+=("$candidate")
+  case "$(basename "$candidate")" in
+    *-tests.md) fail "$(basename "$candidate") ends in -tests; a task doc is named for its task, not for a test-author unit" ;;
+  esac
+  grep -qE '^task-[a-z0-9][a-z0-9-]*\.md$' <<<"$(basename "$candidate")" \
+    || fail "$(basename "$candidate") does not match task-[a-z0-9][a-z0-9-]*.md"
 done
 [ "${#task_files[@]}" -gt 0 ] || fail "no task-*.md file exists in $plan_directory"
 
 # Required sentinels in the order the template places them.
-sentinels=('<!-- gaia:orchestrator-step resume-detection -->')
+sentinels=(
+  '<!-- gaia:orchestrator-step resume-detection -->'
+  '<!-- gaia:orchestrator-step yield-handling -->'
+  '<!-- gaia:orchestrator-step gate-retry -->'
+)
 if [ -n "$spec_path" ]; then
-  sentinels+=('<!-- gaia:orchestrator-step uat-render -->' '<!-- gaia:orchestrator-step uat-gate -->')
-fi
-sentinels+=('<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step red-split -->' '<!-- gaia:orchestrator-step test-review -->' '<!-- gaia:orchestrator-step gate-retry -->')
-if [ -n "$spec_path" ]; then
-  sentinels+=('<!-- gaia:orchestrator-step uat-pre-audit -->')
+  sentinels+=('<!-- gaia:orchestrator-step flow-checks -->')
 fi
 sentinels+=(
   '<!-- gaia:orchestrator-step worthiness-step -->'
@@ -178,7 +121,8 @@ sentinels+=(
   '<!-- gaia:orchestrator-step post-merge-close -->'
 )
 verbatim_sentinels=(
-  '<!-- gaia:orchestrator-step resume-detection -->' '<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step red-split -->' '<!-- gaia:orchestrator-step test-review -->' '<!-- gaia:orchestrator-step gate-retry -->'
+  '<!-- gaia:orchestrator-step resume-detection -->' '<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step gate-retry -->'
+  '<!-- gaia:orchestrator-step flow-checks -->'
   '<!-- gaia:orchestrator-step worthiness-step -->'
   '<!-- gaia:orchestrator-step overlap-pass -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
@@ -315,84 +259,139 @@ for generated_file in "$readme" "$orchestrator" "$plan_directory/KICKOFF.md" ${t
   done
 done
 
-# The test-first split block decides a task's dispatches from this line, so a
-# task doc without it leaves a cold orchestrator nothing to split on.
-for task_file in ${task_files[@]+"${task_files[@]}"}; do
-  grep -qE '^New tests: [^[:space:]]' "$task_file" \
-    || fail "$(basename "$task_file") has no 'New tests: <test files>' or 'New tests: none' line"
-done
+# Prints `<phase><TAB><stem>` for each backticked task-<name> stem in the tasks
+# cell of a README `| Phase <N> |` row.
+readme_phase_stems() {
+  awk -F'|' '
+    { phase = $2; gsub(/^[ \t]+|[ \t]+$/, "", phase) }
+    phase ~ /^Phase [0-9]+$/ {
+      sub(/^Phase /, "", phase)
+      cell = $3
+      while (match(cell, /`task-[a-z0-9][a-z0-9-]*`/)) {
+        print phase "\t" substr(cell, RSTART + 1, RLENGTH - 2)
+        cell = substr(cell, RSTART + RLENGTH)
+      }
+    }' "$1"
+}
 
-if [ -n "$spec_path" ] && [ -f "$readme" ]; then
-  routing_problems=''
-  routing_status=0
-  routing_problems=$(uat_lib_validate_routing "$spec_path" "$readme" 2>&1 >/dev/null) || routing_status=$?
-  if [ "$routing_status" -ne 0 ]; then
-    if [ -z "$routing_problems" ]; then
-      routing_problems="uat-routing: the routing table in $readme did not validate"
+# Prints the entry of ORCHESTRATOR.md for phase $2: ENTRY, then its lines.
+phase_entry() {
+  awk -v phase="$2" '
+    { trimmed = $0; sub(/^[ \t]+/, "", trimmed); sub(/[ \t\r]+$/, "", trimmed) }
+    trimmed ~ /^```/ { in_fence = !in_fence; if (inside) print; next }
+    !in_fence && inside && (trimmed ~ /^\*\*Phase / || trimmed ~ /^## /) { exit }
+    !in_fence && !inside && index(trimmed, "**Phase " phase ", ") == 1 { inside = 1; print "ENTRY"; print; next }
+    inside { print }' "$1"
+}
+
+flow_checks() {
+  local flow_output flow_status=0 web_directory='' flow_id slug kind target
+  local stems_text phase last_phase=0 task_file task_name task_stem task_phase matches
+  local line_text path_text expected_path flow_lines='' entry_text entry_line base_name
+  local line_count line_files line_task line_phase line_flow_id run_found
+  flow_output=$(flows_lib_parse_spec "$spec_path" 2>&1) || flow_status=$?
+  if [ "$flow_status" -ne 0 ]; then
+    while IFS= read -r line_text; do
+      [ -z "$line_text" ] || fail "$line_text"
+    done <<<"$flow_output"
+    return 0
+  fi
+  [ -f "$readme" ] || return 0
+
+  stems_text=$(readme_phase_stems "$readme")
+  if [ -z "$stems_text" ]; then
+    fail "README.md has no '| Phase <N> |' task-graph row naming backticked task-<name> stems"
+    return 0
+  fi
+  while IFS=$'\t' read -r phase _; do
+    [ "$phase" -le "$last_phase" ] || last_phase="$phase"
+  done <<<"$stems_text"
+
+  # flow_lines holds <task doc>, <phase>, <flow id>, <path> per Flow test line.
+  for task_file in ${task_files[@]+"${task_files[@]}"}; do
+    task_name="$(basename "$task_file")"
+    task_stem="${task_name%.md}"
+    matches=$(awk -F'\t' -v stem="$task_stem" '$2 == stem { print $1 }' <<<"$stems_text")
+    task_phase=''
+    if [ -z "$matches" ]; then
+      fail "$task_name: no README '| Phase <N> |' row names the stem \`$task_stem\`"
+    elif [ "$(grep -c . <<<"$matches")" -gt 1 ]; then
+      fail "$task_name: more than one README '| Phase <N> |' row names the stem \`$task_stem\`"
+    else
+      task_phase="$matches"
     fi
-    while IFS= read -r problem_line; do
-      [ -n "$problem_line" ] || continue
-      fail "$problem_line"
-    done <<<"$routing_problems"
-  fi
+    line_count=0
+    while IFS= read -r line_text || [ -n "$line_text" ]; do
+      [[ "$line_text" =~ ^[[:space:]]*-[[:space:]]+Flow\ test\ \(([^\)]*)\):[[:space:]]*(.*)$ ]] || continue
+      path_text="${BASH_REMATCH[2]}"
+      path_text="${path_text%"${path_text##*[![:space:]]}"}"
+      flow_lines="${flow_lines}${task_name}"$'\t'"$task_phase"$'\t'"${BASH_REMATCH[1]}"$'\t'"$path_text"$'\n'
+      line_count=$((line_count + 1))
+    done <"$task_file"
+    if [ "$task_phase" = "$last_phase" ]; then
+      if [ "$line_count" -eq 0 ]; then
+        fail "$task_name: the last-phase (Phase $last_phase) task doc has no '- Flow test (<flow_id>): <path>' line"
+      elif [ "$line_count" -gt 1 ]; then
+        fail "$task_name: carries $line_count Flow test lines; a last-phase task owns exactly one flow"
+      fi
+    fi
+  done
 
-  spec_rows=''
-  routing_rows=''
-  if spec_rows=$(uat_lib_parse_spec "$spec_path" 2>/dev/null) && routing_rows=$(uat_lib_parse_routing "$readme" 2>/dev/null); then
-    while IFS=$'\t' read -r uat_id surface _ _ _; do
-      [ -n "$uat_id" ] || continue
-      then_clause=$(printf '%s\n' "$spec_rows" | awk -F'\t' -v id="$uat_id" '$1 == id { print $4; exit }')
-      [ -n "$then_clause" ] || continue
-      case "$surface" in
-        story)
-          marker="Story test criterion ($uat_id)"
-          found=0
-          for task_file in ${task_files[@]+"${task_files[@]}"}; do
-            while IFS= read -r task_line; do
-              case "$task_line" in
-                *"$marker"*) ;;
-                *) continue ;;
-              esac
-              remainder=$(printf '%s' "${task_line#*"$marker"}" | uat_lib_whitespace_text)
-              case "$remainder" in
-                *"$then_clause"*)
-                  found=1
-                  break
-                  ;;
-              esac
-            done <"$task_file"
-            [ "$found" -eq 0 ] || break
-          done
-          if [ "$found" -eq 0 ]; then
-            fail "$uat_id is story-routed but no task doc carries its line: - $marker: <then-clause verbatim>"
-          fi
-          ;;
-      esac
-      case "$surface" in
-        e2e)
-          fail "uat-routing: $uat_id uses the e2e surface, which a new plan no longer takes; route it real-server (the live stack with no page) or browser (only a real browser shows it)"
-          ;;
-        browser)
-          browser_row_check "$uat_id" "$then_clause" "$(printf '%s\n' "$spec_rows" | awk -F'\t' -v id="$uat_id" '$1 == id { print $2; exit }')"
-          ;;
-        real-server)
-          real_server_row_check "$uat_id"
-          ;;
-      esac
-      case "$surface" in
-        story | non-ui)
-          if grep -qiE 'route|navigat|redirect|session|server[ -]?(side )?state|(^|[^a-z])urls?([^a-z]|$)' <<<"$then_clause"; then
-            printf 'WARN: %s is routed %s but its then-clause reads like a route, navigation, URL, redirect, session or server-state check; confirm it is not a route or, when only a browser shows it, a browser UAT\n' "$uat_id" "$surface" >&2
-          fi
-          ;;
-      esac
-    done <<<"$routing_rows"
-    # $PWD is the repo root, as uat-write.sh takes it: both run from there.
-    while IFS= read -r plan_problem; do
-      [ -n "$plan_problem" ] || continue
-      fail "$plan_problem"
-    done < <(plan_phases_check "$readme" "$orchestrator" "$routing_rows"; uat_lib_filename_lint_problems "$PWD" "$routing_rows")
+  while IFS=$'\t' read -r flow_id slug _ _ kind target; do
+    [ -n "$flow_id" ] || continue
+    expected_path="$target"
+    if [ "$kind" = web ]; then
+      if [ -z "$web_directory" ]; then
+        web_directory=$(flows_lib_web_subdirectory "$repository_root" .playwright/flows 2>&1) || {
+          fail "$flow_id: cannot place its web flow test: $web_directory"
+          continue
+        }
+      fi
+      expected_path="$web_directory/$slug.spec.ts"
+    fi
+    line_files=$(awk -F'\t' -v id="$flow_id" '$3 == id { print $1 }' <<<"$flow_lines" | paste -sd, - | sed 's/,/, /g')
+    line_count=$(awk -F'\t' -v id="$flow_id" '$3 == id' <<<"$flow_lines" | grep -c .)
+    if [ "$line_count" -eq 0 ]; then
+      fail "$flow_id has no '- Flow test ($flow_id): $expected_path' line in any task doc"
+    elif [ "$line_count" -gt 1 ]; then
+      fail "$flow_id is named on $line_count Flow test lines ($line_files); one task owns one flow"
+    fi
+    while IFS=$'\t' read -r line_task _ line_flow_id path_text; do
+      [ "$line_flow_id" = "$flow_id" ] || continue
+      [ "$path_text" = "$expected_path" ] || fail "$line_task: the Flow test line for $flow_id has path $path_text; the expected path is $expected_path"
+    done <<<"$flow_lines"
+  done <<<"$flow_output"
+
+  while IFS=$'\t' read -r line_task line_phase line_flow_id _; do
+    [ -n "$line_task" ] || continue
+    grep -qxF -- "$line_flow_id" <<<"$(cut -f1 <<<"$flow_output")" \
+      || fail "$line_task: the Flow test line names $line_flow_id, which the SPEC does not define"
+    if [ -n "$line_phase" ] && [ "$line_phase" != "$last_phase" ]; then
+      fail "$line_task (Phase $line_phase): the Flow test line for $line_flow_id belongs in a last-phase (Phase $last_phase) task doc"
+    fi
+  done <<<"$flow_lines"
+
+  [ -f "$orchestrator" ] || return 0
+  entry_text=$(phase_entry "$orchestrator" "$last_phase")
+  if [ -z "$entry_text" ]; then
+    fail "ORCHESTRATOR.md has no **Phase $last_phase, entry for the last phase"
+    return 0
   fi
+  while IFS=$'\t' read -r line_task line_phase line_flow_id path_text; do
+    [ -n "$line_task" ] && [ "$line_phase" = "$last_phase" ] || continue
+    base_name="$(basename "$path_text")"
+    run_found=0
+    while IFS= read -r entry_line; do
+      case "$entry_line" in
+        *"$base_name"*"playwright test"* | *"playwright test"*"$base_name"* | *"$base_name"*"test:shell"* | *"test:shell"*"$base_name"* | *"$base_name"*"bats5.sh"* | *"bats5.sh"*"$base_name"* | *"$base_name"*"test --run"* | *"test --run"*"$base_name"*) run_found=1 ;;
+      esac
+    done <<<"$entry_text"
+    [ "$run_found" -eq 1 ] || fail "ORCHESTRATOR.md: the Phase $last_phase entry runs no flow test for $line_flow_id: no line holds $base_name with a runner (playwright test, test:shell, bats5.sh, test --run)"
+  done <<<"$flow_lines"
+}
+
+if [ -n "$spec_path" ]; then
+  flow_checks
 fi
 
 [ "$failures" -eq 0 ] || exit 1
