@@ -803,6 +803,7 @@
     "wiki/decisions/Deliberate Configuration Asymmetries.md": "wiki-owned",
     "wiki/decisions/Determinism Classifier.md": "wiki-owned",
     "wiki/decisions/Flow Machinery For A Test-after Testing Layer.md": "wiki-owned",
+    "wiki/decisions/Flow-based Test-after Pipeline.md": "wiki-owned",
     "wiki/decisions/Local Bundle Sync (Decision).md": "wiki-owned",
     "wiki/decisions/Naming Conventions.md": "wiki-owned",
     "wiki/decisions/per-call-bash-hook-cost-cut.md": "wiki-owned",
@@ -876,7 +877,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-07T14:10:14.844Z",
+  "generated": "2026-11-07T23:19:27.925Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

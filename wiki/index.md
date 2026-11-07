@@ -107,6 +107,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Shared Codify Declines]]: a `/gaia-codify` decline is one committed file per decline, published through the codify pull request; it lapses by age, a teammate overrides it by approving, and the folder is the adopter's own data.
 - [[Deliberate Configuration Asymmetries]]: config that differs from its siblings on purpose; the `.claude/hooks/` Edit carve-out, the skill `model:` pinning criterion, the non-opt-outable update check, and why the agent-teams flag is not enabled.
 - [[Flow Machinery For A Test-after Testing Layer|Flow machinery for a test-after testing layer]]: the SPEC flows reader, the flow-coverage check, flow-aware worthiness and the flows Playwright folder; the spec stage, SPEC lint, planner and plan check call them.
+- [[Flow-based Test-after Pipeline|Flow-based test-after pipeline]]: SPECs name critical flows, plans build first and test each flow in a closing phase, Test What Matters is the testing principle, and the RED hooks are unregistered.
 <!-- gaia:maintainer-only:start -->
 - [[CLI-Binary-Split]]
 - [[Folding Shell Scripts into the CLI Binary]]: considered and declined; the manifest is a never-merged sentinel and the fold is a delete, so it cannot deliver simpler diffs.
