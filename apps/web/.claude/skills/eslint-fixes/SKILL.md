@@ -42,7 +42,7 @@ export const FITNESS_GOALS = ['weight_loss'] as const;
 
 ## sonarjs/deprecation
 
-Never suppress with `eslint-disable`. Always fix the underlying deprecation.
+Never suppress with `eslint-disable`. Always fix the underlying deprecation: a deprecation names its replacement, so the fix is never worse than the rule.
 
 Common case: Zod v4 deprecated `z.string().email()` in favor of `z.email()`.
 

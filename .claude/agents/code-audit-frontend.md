@@ -155,13 +155,13 @@ Review this dimension only over paths whose `LENSES=` line lists `accessibility`
 - **Magic values**: Unexplained numbers, strings used as identifiers without constants
 - **Dead code**: Unused exports, unreachable branches, commented-out code left behind
 - **Coupling**: Changes that would ripple across many files, tight coupling to implementation details
+- **Lint disables**: Judge each added `eslint-disable`; a disable is not itself a finding. Flag one whose flagged code has a reasonable fix (disabling `no-unused-vars` instead of deleting the variable, `react-hooks/exhaustive-deps` to hide missing fetcher deps) or whose `--` reason does not say why the fix would be worse. A sound reason (a false positive, a library typing gap, a rule that does not fit the case) passes. Grade it Minor, unless the disable hides a real defect (a stale closure, a missing dependency), which is graded on that defect
 - **Comments**: Judge every comment against `.claude/rules/code-comments.md`, which states the standard; do not restate it here, a second copy drifts from the first. Flag a comment that fails it, most often one naming a file, symbol, or ticket that no longer resolves, or one restating the line or signature below it. Do not flag missing comments.
 
 ## Project-Specific Rules to Enforce
 
 Beyond general best practices, verify adherence to these project-specific patterns, over paths whose `LENSES=` line lists `project-specific-rules` (a non-web path keeps every other dimension, security included):
 
-- No `eslint-disable react-hooks/exhaustive-deps` to hide missing fetcher deps, fix the deps instead
 - No `.catch(() => {})` to silence a promise: an event handler that fires one is `async` and `await`s it; any other fire-and-forget statement uses `void`
 - Route files (`apps/web/app/routes/`) are thin shells: they may export `loader`, `clientLoader`, `action`, `clientAction`, and `HydrateFallback`, plus a one-line page import. UI belongs in `apps/web/app/pages/`.
 - Data-loading review checks (review-only, no lint): flag render-time schema parsing, `as any` on query results, effect-based fetching, a hand-rolled fetch cache, a module-scope QueryClient on the server, and `invalidateQueries` scattered outside actions and mutation callbacks. The rule: `apps/web/.claude/skills/react-code/SKILL.md`.
