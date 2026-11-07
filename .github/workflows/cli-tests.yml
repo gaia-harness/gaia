@@ -156,15 +156,16 @@ jobs:
               - 'apps/web/.claude/skills/playwright-cli/**'
               - '.gaia/vendor/**'
               - '.gaia/scripts/verify-vendored-skills.sh'
-              # src/test-signals/extract-test-signals.test.ts spawns this helper
-              # to pin its title-handling carve-outs: a `.each`, `.for`, or
-              # dynamic-title describe/test must emit no signal, since vitest
-              # never preserves such a title verbatim at runtime. A change to
-              # this file and nothing else is otherwise invisible to that
+              # src/test-signals/extract-test-signals.test.ts spawns the helper
+              # in this directory to pin its title-handling carve-outs: a
+              # `.each`, `.for`, or dynamic-title describe/test must emit no
+              # signal, since vitest never preserves such a title verbatim at
+              # runtime. The helper imports its sibling modules, so a change to
+              # any file here and nothing else is otherwise invisible to that
               # suite: without this line such a pull request resolves
               # `code=false`, skips the Vitest step, and reports this required
               # check green having run the assertion zero times.
-              - '.gaia/scripts/test-signals/extract-test-signals.mjs'
+              - '.gaia/scripts/test-signals/**'
               # The label registry, read from the repo root by suites that live
               # under `.gaia/cli/**`: `src/labels/__tests__/registry.test.ts`
               # pins the registry's entry count, and

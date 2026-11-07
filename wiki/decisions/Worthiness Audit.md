@@ -102,7 +102,7 @@ ledger:
   `.gaia/local/red-ledger/<tree_key>/observations.jsonl`). `<tree_key>` identifies
   the working tree, printed by `bash .gaia/scripts/main-root-lib.sh --tree-key`.
 - `signal` is the SAME `sha256`-of-normalized-test-call the RED ledger computes
-  via `.gaia/scripts/red-ledger/extract-test-signals.mjs`. The writer reuses
+  via `.gaia/scripts/test-signals/extract-test-signals.mjs`. The writer reuses
   that helper, so the signal byte-matches what the merge presence gate
   recomputes; reinventing the identity primitive would desync the gate. The
   hash covers the test's comment-free content, so rewording a comment inside a

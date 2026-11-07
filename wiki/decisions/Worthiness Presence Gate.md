@@ -31,7 +31,7 @@ that the test-identity extractor **ran over the test's current content** and a
 verdict was recorded against that exact content. It does **not** prove that
 judgement was applied.
 
-A scripted rubber-stamp, run `.gaia/scripts/red-ledger/extract-test-signals.mjs`
+A scripted rubber-stamp, run `.gaia/scripts/test-signals/extract-test-signals.mjs`
 over the changed files and append a `keep` for every emitted signal, mints every
 matching line at near-zero cost and is the cost-minimizing path through this
 gate. The judgement guarantee rests on the human PR rollup, not on the presence

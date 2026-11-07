@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 #
 # Shared reader of SPEC flows and of a Playwright spec's @covers declaration.
-# Sourced, never executed: the flow-coverage check, the worthiness step and the
-# SPEC checks call these functions by name, so a rename or a changed output
+# Sourced, never executed: the flow-coverage check and the worthiness step call
+# these functions by name, so a rename or a changed output
 # shape breaks every caller.
 #
 # Every function writes data to stdout and diagnostics to stderr. Status 2 means
