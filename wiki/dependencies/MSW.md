@@ -14,7 +14,7 @@ tags: [dependency, testing, mocking]
 
 ## Entry points
 
-- Dev: the `msw()` plugin from `msw/vite` in `apps/web/vite.config.ts`, plus `virtual:msw` imported by both `apps/web/app/entry.client.tsx` and `apps/web/app/entry.server.tsx`. With `MSW_ENABLED=true` the dev server mocks browser and SSR requests through that one network. Each entry gates the import on `import.meta.env.DEV`, so production builds drop it. Each entry calls `network.configure({handlers, onUnhandledFrame: 'bypass'})` and then `await network.enable()`.
+- Dev: the `msw()` plugin from `msw/vite` in `apps/web/vite.config.ts`, plus `virtual:msw` imported by both `apps/web/app/entry.client.tsx` and `apps/web/app/entry.server.tsx`. With `MSW_ENABLED=true` the dev server mocks browser and SSR requests through that one network. Each entry gates the import on `import.meta.env.DEV`, so production builds drop it. Each entry calls `network.configure({handlers, onUnhandledFrame: 'bypass'})` and then `await network.enable()`. Before that, the server entry runs `resetTestData()` unless the seed surface below is on, since there the gated server owns the baseline.
 - `apps/web/test/worker.ts` calls `setupWorker(...)` from `msw/browser` for browser-project tests. It is not the dev server's worker.
 - `apps/web/test/test.server.ts` calls `setupServer(...handlers)` from `msw/node` for the Vitest `node` project.
 

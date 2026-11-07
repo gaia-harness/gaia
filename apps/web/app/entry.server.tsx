@@ -20,10 +20,17 @@ import 'dotenv/config';
 setToastCookieOptions({secrets: [env.SESSION_SECRET]});
 
 if (import.meta.env.DEV && env.MSW_ENABLED) {
-  const [{network}, {default: handlers}] = await Promise.all([
+  const [{network}, {default: handlers}, {resetTestData}] = await Promise.all([
     import('virtual:msw'),
     import('../test/mocks'),
+    import('../test/mocks/database'),
   ]);
+
+  // A Playwright worker server's baseline belongs to the seed plugin, which
+  // runs it before the first request. This module evaluates on the first
+  // document request, after a Given builder may have seeded, so a reset here
+  // would wipe that seed.
+  if (!import.meta.env.GAIA_MSW_SEED) await resetTestData();
 
   network.configure({handlers, onUnhandledFrame: 'bypass'});
   await network.enable();

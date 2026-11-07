@@ -80,7 +80,7 @@ await things.update((q) => q.where({id: 'abc'}), {
 
 ### When `resetTestData()` runs
 
-`resetTestData()` is async and runs automatically in an `afterEach` hook in `apps/web/test/setup.ts`, the setup file of the `node` Vitest project. Every test in that project starts from a freshly wiped and re-seeded database; no manual reset is needed. A Playwright worker server runs it once, before serving its first request ([[MSW#Seed surface]]). Baseline records belong in a `reset*()` default seed: the reset clears records created anywhere else.
+`resetTestData()` is async and runs automatically in an `afterEach` hook in `apps/web/test/setup.ts`, the setup file of the `node` Vitest project. Every test in that project starts from a freshly wiped and re-seeded database; no manual reset is needed. A Playwright worker server runs it once, before serving its first request ([[MSW#Seed surface]]). Any other dev server started with `MSW_ENABLED=true` runs it from `apps/web/app/entry.server.tsx` when that module evaluates, which is again whenever an edit reloads it, so an edit to a mock or another module the entry imports resets records created by hand to the baseline. Baseline records belong in a `reset*()` default seed: the reset clears records created anywhere else.
 
 ```ts
 // apps/web/test/setup.ts

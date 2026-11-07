@@ -221,9 +221,9 @@ export const mswSeedPlugin = (): Plugin => ({
   configureServer: (server) => {
     let baseline: Promise<void> | undefined;
 
-    // `resetTestData` is the store's baseline. Nothing on a dev server runs it
-    // otherwise, and a store seeded by an import side effect is empty until
-    // something happens to import that module, so it runs once and every
+    // `resetTestData` is the store's baseline. The server entry skips it on
+    // this server, because it evaluates on the first document request, after
+    // a Given builder may have seeded; so it runs here once and every
     // request, the app's and the seed surface's, waits on it. Not in
     // `configureServer` itself: the SSR runner is not ready that early. Never
     // retried: a failed reset fails every request rather than serving a
