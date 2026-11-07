@@ -13,8 +13,8 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$HOME_ROOT"
   PROMPT="$HOME_ROOT/.claude/agents/worthiness-evaluator.md"
-  EXTRACTOR="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
-  CSF4_FIXTURE=".gaia/tests/hooks/fixtures/red-ledger/csf4-with-tests.stories.tsx"
+  EXTRACTOR="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
+  CSF4_FIXTURE=".gaia/tests/hooks/fixtures/test-signals/csf4-with-tests.stories.tsx"
 }
 
 # Succeeds only for a prompt that names the per-test unit shape and `base story`

@@ -19,7 +19,6 @@ setup() {
   ROUTING_SENTENCE='A harness self-check that opens no page runs in the Vitest node project, not under Playwright.'
   WIRING_SENTENCE='A self-test of the Playwright fixture wiring itself is dropped: the specs that use the fixture prove it.'
   GIVEN_SENTENCE="A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them."
-  PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
   LADDER='.claude/skills/gaia/references/plan/planner.md'
 }
 
@@ -69,10 +68,20 @@ check_given_sentence() {
   done
 }
 
-# The closed capability tokens, one per line, read from plan-verify.sh's source form.
+# The closed capability tokens, one per line: the leading backticked or bold name
+# of each bullet under Test Layering's real-browser heading.
 capability_tokens_of() {
   local tokens
-  tokens=$(sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$PLAN_VERIFY" | grep -oE '"[^"]+"' | tr -d '"')
+  tokens=$(awk '
+    $0 == "## When a test needs a real browser" { inside = 1; next }
+    inside && /^## / { inside = 0 }
+    inside && /^- / {
+      line = $0
+      sub(/^- (`|\*\*)/, "", line)
+      sub(/(`|\*\*).*$/, "", line)
+      print line
+    }
+  ' "$PAGE")
   [ "$(printf '%s\n' "$tokens" | wc -l)" -eq 5 ] || { echo "expected five capability tokens" >&2; return 1; }
   printf '%s\n' "$tokens"
 }
@@ -116,9 +125,9 @@ check_rule_points_at_ladder() {
 }
 
 check_page_points_at_ladder() {
-  grep -qF "planner's ladder" "$1" || { echo "page lacks the ladder pointer" >&2; return 1; }
+  grep -qxF '## When a test needs a real browser' "$1" || { echo "page lacks the capability list heading" >&2; return 1; }
   grep -qF 'recommended fix' "$1" || { echo "page lacks the fold as recommended fix" >&2; return 1; }
-  grep -qF 'Each transition, status or role rule stays its own UAT' "$1" || { echo "page lacks the per-rule wording" >&2; return 1; }
+  grep -qF 'each transition, status or role rule stays its own test' "$1" || { echo "page lacks the per-rule wording" >&2; return 1; }
   check_realserver_routing_wording "$1"
 }
 
@@ -284,13 +293,13 @@ check_page_surfaces() {
 
 @test "red twin: a page without the ladder, the fold wording or a routing phrase fails" {
   local copy
-  copy=$(copy_with "$PAGE" noladder.md "s/planner's ladder/planner/g")
+  copy=$(copy_with "$PAGE" noladder.md 's/^## When a test needs a real browser$/## Browsers/')
   run check_page_points_at_ladder "$copy"
   [ "$status" -ne 0 ]
   copy=$(copy_with "$PAGE" nofold.md 's/the fold is the recommended fix/the fold is an option/')
   run check_page_points_at_ladder "$copy"
   [ "$status" -ne 0 ]
-  copy=$(copy_with "$PAGE" norule.md 's/Each transition, status or role rule stays its own UAT/Each rule folds/')
+  copy=$(copy_with "$PAGE" norule.md 's/each transition, status or role rule stays its own test/each rule folds/')
   run check_page_points_at_ladder "$copy"
   [ "$status" -ne 0 ]
   copy=$(copy_with "$PAGE" nojs.md 's/JavaScript-disabled/scripted/g')
@@ -298,14 +307,14 @@ check_page_surfaces() {
   [ "$status" -ne 0 ]
 }
 
-@test "the plan-verify header yields five capability tokens" {
+@test "the page's real-browser list yields five capability tokens" {
   run capability_tokens_of
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 5 ]
 }
 
-@test "neither doc copies a capability token or routes a form, journey or rule to the browser" {
-  check_no_copied_tokens "$PW_RULE" "$PAGE"
+@test "the rule copies no capability token and neither doc or routes a form, journey or rule to the browser" {
+  check_no_copied_tokens "$PW_RULE"
   check_no_browser_overrouting "$PW_RULE" "$PAGE"
 }
 
@@ -327,7 +336,7 @@ check_page_surfaces() {
   copy=$(copy_with "$PW_RULE" ui.md "s/a form's own submission is checked/one spec per form stays on the UI path; a form submission is checked/")
   run check_no_browser_overrouting "$copy"
   [ "$status" -ne 0 ]
-  copy=$(copy_with "$PAGE" surface.md 's/Sibling non-browser UATs stay separate, one per rule\./A route-surface UAT per rule./')
+  copy=$(copy_with "$PAGE" surface.md 's/Sibling non-browser tests stay separate, one per rule\./A route-surface UAT per rule./')
   run check_no_browser_overrouting "$copy"
   [ "$status" -ne 0 ]
 }

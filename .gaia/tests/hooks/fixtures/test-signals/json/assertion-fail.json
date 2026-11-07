@@ -6,22 +6,22 @@
   "success": false,
   "testResults": [
     {
-      "name": ".gaia/tests/hooks/fixtures/red-ledger/csf4-with-tests.stories.tsx",
+      "name": ".gaia/tests/hooks/fixtures/test-signals/mixed-pass-fail.test.ts",
       "status": "failed",
       "message": "",
       "assertionResults": [
         {
-          "title": "hides nothing else",
-          "fullName": "Default   hides nothing else",
+          "title": "passes fine",
+          "fullName": "passes fine",
           "status": "passed",
           "failureMessages": []
         },
         {
-          "title": "shows the marker",
-          "fullName": "Default   shows the marker",
+          "title": "fails on assertion",
+          "fullName": "fails on assertion",
           "status": "failed",
           "failureMessages": [
-            "AssertionError: expected null to be truthy // Object.is equality\n    at <anonymous>"
+            "AssertionError: expected 1 to be 2 // Object.is equality\n    at <anonymous>"
           ]
         }
       ]

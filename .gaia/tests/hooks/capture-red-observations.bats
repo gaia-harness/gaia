@@ -9,7 +9,7 @@
 # only observes; it never blocks and always exits 0.
 #
 # vitest's config `include` glob is `./app/**/*.test.{ts,tsx}`, so the fixture
-# test files under .gaia/tests/hooks/fixtures/red-ledger/ cannot be run by a
+# test files under .gaia/tests/hooks/fixtures/test-signals/ cannot be run by a
 # real vitest invocation (they fall outside the include set). The deterministic
 # assertions therefore feed CANNED vitest json via the hook's documented test
 # seam RED_CAPTURE_JSON_OVERRIDE, while the source-file fixtures supply the real
@@ -19,7 +19,7 @@
 #
 # The hook resolves the ledger via the shared red_ledger_path (tree-keyed,
 # under .gaia/local/red-ledger/), so the suite runs from the repo root (like
-# red-ledger-lib.bats) and asserts on that same resolved, gitignored path.
+# test-signals-lib.bats) and asserts on that same resolved, gitignored path.
 # setup/teardown stash and restore any pre-existing local ledger so a
 # developer's scratch ledger is never clobbered.
 
@@ -42,7 +42,7 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$REPO_ROOT"
   HOOK="$REPO_ROOT/.claude/hooks/capture-red-observations.sh"
-  FIXTURE_RELATIVE_DIRECTORY=".gaia/tests/hooks/fixtures/red-ledger"
+  FIXTURE_RELATIVE_DIRECTORY=".gaia/tests/hooks/fixtures/test-signals"
   JSON_FIXTURE_RELATIVE_DIRECTORY="$FIXTURE_RELATIVE_DIRECTORY/json"
   # Ask the shipped lib where the ledger belongs (tree-keyed) rather than
   # hardcoding a second copy of the keyed literal.
@@ -219,7 +219,7 @@ assert_spaced_redirect_target_absent() {
   [ "$status" -eq 0 ]
 
   recorded=$(printf '%s' "$(cat "$LEDGER_ABSOLUTE_PATH")" | jq -r '.signal')
-  expected=$(cd "$REPO_ROOT" && node .gaia/scripts/red-ledger/extract-test-signals.mjs \
+  expected=$(cd "$REPO_ROOT" && node .gaia/scripts/test-signals/extract-test-signals.mjs \
     "$FIXTURE_RELATIVE_DIRECTORY/mixed-pass-fail.test.ts" \
     | jq -r 'select(.fullName == "fails on assertion") | .signal')
   [ -n "$expected" ]
@@ -247,7 +247,7 @@ assert_spaced_redirect_target_absent() {
   [ "$(ledger_lines)" -eq 1 ]
   line=$(cat "$LEDGER_ABSOLUTE_PATH")
   [ "$(printf '%s' "$line" | jq -r '.fullName')" = 'rejects $email' ]
-  expected_signal=$( (cd "$REPO_ROOT" && node .gaia/scripts/red-ledger/extract-test-signals.mjs "$fixture") \
+  expected_signal=$( (cd "$REPO_ROOT" && node .gaia/scripts/test-signals/extract-test-signals.mjs "$fixture") \
     | jq -r 'select(.fullName == "rejects $email") | .signal')
   [ -n "$expected_signal" ]
   [ "$(printf '%s' "$line" | jq -r '.signal')" = "$expected_signal" ]
@@ -276,7 +276,7 @@ assert_spaced_redirect_target_absent() {
     "$JSON_FIXTURE_RELATIVE_DIRECTORY/case-table-describe-row-fail.json"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.fullName' "$LEDGER_ABSOLUTE_PATH" | sort | tr '\n' '|')" = 'group $group accepts the group|group $group counts %s|group $group counts %s|' ]
-  signals=$( (cd "$REPO_ROOT" && node .gaia/scripts/red-ledger/extract-test-signals.mjs "$fixture") \
+  signals=$( (cd "$REPO_ROOT" && node .gaia/scripts/test-signals/extract-test-signals.mjs "$fixture") \
     | jq -sc 'map({key: .fullName, value: .signal}) | from_entries')
   [ "$(jq -sc --argjson signals "$signals" '[.[] | select(.signal != $signals[.fullName])] | length' "$LEDGER_ABSOLUTE_PATH")" = 0 ]
 }
@@ -585,6 +585,7 @@ make_package_fixture() {
   git -C "$FIXTURE" config commit.gpgsign false
   write_builtin_descriptor "$FIXTURE"
   ln -s "$REPO_ROOT/.gaia/scripts/red-ledger" "$FIXTURE/.gaia/scripts/red-ledger"
+  ln -s "$REPO_ROOT/.gaia/scripts/test-signals" "$FIXTURE/.gaia/scripts/test-signals"
   printf '%s' "$PACKAGE_TEST_BODY" >"$FIXTURE/apps/web/app/utils/x.test.ts"
   printf '%s' "$PACKAGE_TEST_BODY" >"$FIXTURE/app/utils/x.test.ts"
   echo "# readme" >"$FIXTURE/README.md"
@@ -921,7 +922,7 @@ assert_no_results_context() {
 
 @test "a re-run whose report holds a collection error names the file and says no test body ran" {
   stub_failing_pnpm
-  STUB_PNPM_JSON_SOURCE="$BATS_TEST_DIRNAME/fixtures/red-ledger/json/collection-error.json"
+  STUB_PNPM_JSON_SOURCE="$BATS_TEST_DIRNAME/fixtures/test-signals/json/collection-error.json"
   export STUB_PNPM_JSON_SOURCE
   run_capture "Bash" "pnpm -C apps/web test --run app/broken.test.ts"
   [ "$status" -eq 0 ]

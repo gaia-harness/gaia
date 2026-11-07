@@ -168,10 +168,10 @@ fi
 # Shared RED-ledger lib: the signal-helper wrapper and repo-relative
 # normalization. The worthiness ledger writer uses the SAME helper, so signals
 # byte-match. Without it we cannot recompute identity, so fail-open.
-[ -n "$_hook_library_directory" ] && [ -f "$_hook_library_directory/red-ledger.sh" ] && . "$_hook_library_directory/red-ledger.sh"
-type red_ledger_repo_relative_path >/dev/null 2>&1 || exit 0
-type red_ledger_signals >/dev/null 2>&1 || exit 0
-type red_ledger_signal_script >/dev/null 2>&1 || exit 0
+[ -n "$_hook_library_directory" ] && [ -f "$_hook_library_directory/test-signals.sh" ] && . "$_hook_library_directory/test-signals.sh"
+type test_signals_repo_relative_path >/dev/null 2>&1 || exit 0
+type test_signals_signals >/dev/null 2>&1 || exit 0
+type test_signals_signal_script >/dev/null 2>&1 || exit 0
 
 # Shared worthiness-ledger lib: the one definition of where a tree's
 # worthiness verdicts live, also called by the ledger writer

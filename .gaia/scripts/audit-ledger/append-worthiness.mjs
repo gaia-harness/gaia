@@ -20,8 +20,9 @@
 //    "signal":"sha256:...","verdict":"keep"|"fix"|"delete",
 //    "auditedAt":"<iso>","artifact":"<...>"}
 //
-// IDENTITY: `signal` is the SAME sha256-of-normalized-test-call the RED ledger
-// computes via .gaia/scripts/red-ledger/extract-test-signals.mjs. This writer
+// IDENTITY: `signal` is the SAME sha256-of-normalized-test-call the shared
+// test-signal extractor (.gaia/scripts/test-signals/extract-test-signals.mjs)
+// computes, and the RED ledger computes the same signal. This writer
 // reuses that helper directly (spawns it, matches the named test's fullName),
 // so the signal byte-matches what the RED ledger and the presence-gate
 // recompute produce. It does NOT reinvent the identity primitive.
@@ -52,7 +53,7 @@ const SCRIPTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SIGNAL_HELPER = path.join(
   SCRIPTS_DIR,
   '..',
-  'red-ledger',
+  'test-signals',
   'extract-test-signals.mjs',
 );
 

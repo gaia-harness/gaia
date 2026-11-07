@@ -55,10 +55,10 @@ setup() {
 install_harness() {
   mkdir -p "$REPO/.claude/hooks/lib" "$REPO/.gaia/scripts"
   local library
-  for library in gaia-packages.sh red-ledger.sh worthiness-ledger.sh worthiness-selection.sh audit-base-provenance.sh; do
+  for library in gaia-packages.sh test-signals.sh worthiness-ledger.sh worthiness-selection.sh audit-base-provenance.sh; do
     ln -sfn "$HOME_ROOT/.claude/hooks/lib/$library" "$REPO/.claude/hooks/lib/$library"
   done
-  for library in branch-authorship-lib.sh main-root-lib.sh audit-ledger red-ledger classifier; do
+  for library in branch-authorship-lib.sh main-root-lib.sh audit-ledger test-signals classifier; do
     ln -sfn "$HOME_ROOT/.gaia/scripts/$library" "$REPO/.gaia/scripts/$library"
   done
   cp "$STEP_SOURCE" "$REPO/.gaia/scripts/worthiness-step.sh"
@@ -144,7 +144,7 @@ field() {
 }
 
 signal_of() {
-  (cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs" "$1") |
+  (cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs" "$1") |
     jq -r --arg n "$2" 'select(.fullName == $n) | .signal'
 }
 
@@ -307,7 +307,7 @@ state_checksum() {
 }
 
 @test "an extractor refusal exits 3 with the reason on stderr and never an empty list" {
-  cp "$HOME_ROOT/.gaia/tests/hooks/fixtures/red-ledger/csf3-old-format.stories.tsx" "$REPO/apps/web/app/components/Marker/old.stories.tsx"
+  cp "$HOME_ROOT/.gaia/tests/hooks/fixtures/test-signals/csf3-old-format.stories.tsx" "$REPO/apps/web/app/components/Marker/old.stories.tsx"
   commit_paths apps/web/app/components/Marker/old.stories.tsx
   run_route
   [ "$status" -eq 3 ]

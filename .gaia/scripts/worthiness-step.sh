@@ -49,7 +49,7 @@ load_libraries() {
   local library
   for library in \
     "$library_directory/gaia-packages.sh" \
-    "$library_directory/red-ledger.sh" \
+    "$library_directory/test-signals.sh" \
     "$library_directory/worthiness-ledger.sh" \
     "$library_directory/worthiness-selection.sh" \
     "$library_directory/audit-base-provenance.sh" \
@@ -287,7 +287,7 @@ cmd_prune() {
   : >"$current_file"
   while IFS= read -r file; do
     [ -n "$file" ] && [ -f "$root/$file" ] || continue
-    red_ledger_signals "$file" 2>/dev/null | jq -c --arg f "$file" 'select(.signal != null) | {file: $f, fullName, signal}' >>"$current_file" 2>/dev/null || true
+    test_signals_signals "$file" 2>/dev/null | jq -c --arg f "$file" 'select(.signal != null) | {file: $f, fullName, signal}' >>"$current_file" 2>/dev/null || true
   done <<EOF
 $(jq -r 'select(.source == "worthiness") | .file // empty' "$residuals" 2>/dev/null | sort -u)
 EOF

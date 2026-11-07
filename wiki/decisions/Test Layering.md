@@ -4,13 +4,13 @@ status: active
 priority: 2
 date: 2026-11-01
 created: 2026-11-01
-updated: 2026-11-06
+updated: 2026-11-07
 tags: [decision, testing, tdd, layering, authorization]
 ---
 
 # Test Layering
 
-Write tests, not too many, mostly integration: the route layer is the default home for behavior. Story interaction tests carry component behavior and real-server checks carry what the framework serves; unit and browser tests stay thin. A unit test is written only when both unit-test conditions hold: the integration layer cannot cover its cases cheaply, and the logic is important or likely to fail. Important means a wrong result corrupts data, breaks auth or a security or trust boundary, mishandles untrusted input, or computes money, dates or other values users rely on. Likely to fail means non-obvious logic: parsing, normalization, edge-heavy rules, concurrency. Branchy but low-stakes helpers do not qualify: formatting, small array, string and object utilities, and thin wrappers get their coverage from the integration tests that use them, or none if nothing uses them. One test per user-observable behavior; a parameterized table is one test; nothing the type checker or lint already proves is tested. Browser tests stay few and focused on critical flows, and a simple project needs less than the full shape: a tiny app gets few tests, not a scaled-down copy of a big app's suite. A browser is the most expensive layer, so a check that a cheaper layer proves does not get a browser test. This page owns that principle, its rationale and the stack mapping. The operational ladder a plan follows is in `.claude/skills/gaia/references/plan/planner.md`; the React testing reference is `apps/web/.claude/skills/tdd-react/references/tests-react.md`. Both link here rather than restate it.
+Write tests, not too many, mostly integration: the route layer is the default home for behavior. Story interaction tests carry component behavior and real-server checks carry what the framework serves; unit and browser tests stay thin. A unit test is written only when both unit-test conditions hold: the integration layer cannot cover its cases cheaply, and the logic is important or likely to fail. Important means a wrong result corrupts data, breaks auth or a security or trust boundary, mishandles untrusted input, or computes money, dates or other values users rely on. Likely to fail means non-obvious logic: parsing, normalization, edge-heavy rules, concurrency. Branchy but low-stakes helpers do not qualify: formatting, small array, string and object utilities, and thin wrappers get their coverage from the integration tests that use them, or none if nothing uses them. One test per user-observable behavior; a parameterized table is one test; nothing the type checker or lint already proves is tested. Browser tests stay few and focused on critical flows, and a simple project needs less than the full shape: a tiny app gets few tests, not a scaled-down copy of a big app's suite. A browser is the most expensive layer, so a check that a cheaper layer proves does not get a browser test. This page owns that principle, its rationale and the stack mapping. The React testing reference is `apps/web/.claude/skills/tdd-react/references/tests-react.md`; it links here rather than restating it.
 
 ## Rationale
 
@@ -25,13 +25,25 @@ From lowest to highest:
 1. **Unit and story.** A function, a hook, or one component given props; a unit test needs both unit-test conditions above. Vitest `node` and `browser` projects and Storybook stories ([[Stories as Tests]]).
 2. **Route.** A request taken in process by a route module's `loader` or `action`, with no browser and no server. The route surface is the lowest layer that takes a request in process: it shows a status, a redirect, returned data, a validation error, an authorization outcome or a side effect. It runs in the Vitest `node` project.
 3. **Real server.** The live stack, driven by Playwright's request fixture: it opens no page and makes no browser round trip. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, cookies and the session across the server, and the server's rendered HTML, read through the request fixture and a parsed response body. A forged request belongs here only when its guard is one a direct route call skips, and rendered HTML only when that HTML is itself the requirement; a heading whose text is data the loader returns is a route check, and so is a refusal or error outcome a direct `loader` or `action` call returns, even when a page or error boundary renders it.
-4. **Browser.** A real page, used only for a capability no lower layer shows, from the closed list at the browser step of the planner's ladder (`.claude/skills/gaia/references/plan/planner.md`), one test per user flow. A JavaScript-disabled Given or a native form post rules out the browser and nothing else: it routes by the route and real-server layers, and a then-clause that needs the served form or a multi-page workflow over native forms is a real-server check, with the form body built by `serializeForm` (`apps/web/.playwright/html.ts`) from the served page.
+4. **Browser.** A real page, used only for a capability no lower layer shows, from the closed list under [[#When a test needs a real browser]], one test per user flow, plus one Playwright spec per critical web flow (see that section). A JavaScript-disabled Given or a native form post rules out the browser and nothing else: it routes by the route and real-server layers, and a then-clause that needs the served form or a multi-page workflow over native forms is a real-server check, with the form body built by `serializeForm` (`apps/web/.playwright/html.ts`) from the served page.
 
-Sibling browser UATs that walk one flow fold into one browser journey UAT, and the fold is the recommended fix. Each transition, status or role rule stays its own UAT, routed by the planner's ladder. Sibling non-browser UATs stay separate, one per rule.
+Sibling browser tests that walk one flow fold into one journey, and the fold is the recommended fix; each transition, status or role rule stays its own test. Sibling non-browser tests stay separate, one per rule.
 
-A new plan routes a live-stack UAT to `real-server` or `browser`, never to the legacy end-to-end surface; the operational ladder is in `.claude/skills/gaia/references/plan/planner.md`.
+A live-stack test goes to the real-server or browser surface, never to the legacy end-to-end surface.
 
 Only the frontend package renders route rows today. [[Testing]] describes the frontend's layers in place.
+
+## When a test needs a real browser
+
+A browser test is written only for a capability no lower layer shows. The closed list:
+
+- `client JavaScript`: behavior that runs in the page, such as an update without a reload or an optimistic change.
+- `layout or visual position`: where an element sits relative to another, or whether it fits the viewport.
+- `focus or keyboard`: where focus lands and how keys move it.
+- `rendered-DOM accessibility scan`: an automated accessibility check of the DOM the browser renders.
+- `browser-only navigation`: history, back and forward, or a client-side transition no request shows.
+
+One exception to the closed list: a critical web flow gets one Playwright spec, written after the build in `<frontend package>/.playwright/flows/`. The list does not bar that spec, so one Playwright spec per critical web flow is admitted on the browser rung whatever a cheaper layer could prove. The list still governs every other browser test.
 
 ## Stack mapping
 

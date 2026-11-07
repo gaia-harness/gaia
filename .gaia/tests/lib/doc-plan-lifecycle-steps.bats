@@ -636,9 +636,21 @@ check_final_summary_names_worthiness() {
 # ---------- routing ladder and the e2e-or-route triggers ----------
 
 # capability_tokens_of_header: the closed browser-capability list, one token
-# per line, extracted from plan-verify.sh, which owns it.
+# per line, read from Test Layering, which owns it.
 capability_tokens_of_header() {
-  sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$PLAN_VERIFY" | grep -oE '"[^"]+"' | tr -d '"'
+  local tokens
+  tokens=$(awk '
+    $0 == "## When a test needs a real browser" { inside = 1; next }
+    inside && /^## / { inside = 0 }
+    inside && /^- / {
+      line = $0
+      sub(/^- (`|\*\*)/, "", line)
+      sub(/(`|\*\*).*$/, "", line)
+      print line
+    }
+  ' "$REPO_ROOT/wiki/decisions/Test Layering.md")
+  [ "$(printf '%s\n' "$tokens" | grep -c .)" -eq 5 ] || { printf 'expected five capability names\n' >&2; return 1; }
+  printf '%s\n' "$tokens"
 }
 
 # check_ladder <planner>: the operational routing ladder, the link to the

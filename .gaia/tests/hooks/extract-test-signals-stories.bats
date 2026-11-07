@@ -14,11 +14,11 @@ setup() {
   HOME_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$HOME_ROOT"
-  EXTRACTOR="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
+  EXTRACTOR="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
   SHAPES_PATH="apps/web/app/utils/tests/csf-shapes.stories.tsx"
   META_PLAY_PATH="apps/web/app/utils/tests/csf-meta-play.stories.tsx"
-  CSF3_PATH=".gaia/tests/hooks/fixtures/red-ledger/csf3-old-format.stories.tsx"
-  CSF2_PATH=".gaia/tests/hooks/fixtures/red-ledger/csf2-old-format.stories.tsx"
+  CSF3_PATH=".gaia/tests/hooks/fixtures/test-signals/csf3-old-format.stories.tsx"
+  CSF2_PATH=".gaia/tests/hooks/fixtures/test-signals/csf2-old-format.stories.tsx"
   MIGRATE_LINE_SUFFIX="is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4"
 }
 

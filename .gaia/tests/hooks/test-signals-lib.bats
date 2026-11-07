@@ -1,14 +1,15 @@
 #!/usr/bin/env bats
 
-# Tests for the RED-ledger foundation: the Node signal helper
-# (.gaia/scripts/red-ledger/extract-test-signals.mjs) and the shared shell lib
-# (.claude/hooks/lib/red-ledger.sh) that both RED hooks source.
+# Tests for the test-signal foundation: the Node signal helper
+# (.gaia/scripts/test-signals/extract-test-signals.mjs) and the shared shell
+# lib (.claude/hooks/lib/test-signals.sh) the worthiness, presence and overlap
+# audits source.
 #
 # The signal helper parses a TS/TSX test file and emits one
-# {"fullName","signal"} line per test/it call. The shell lib provides the
-# ledger path, repo-relative path normalization, and a thin wrapper that runs
-# the helper. These tests exercise both against the fixture test files under
-# fixtures/red-ledger/.
+# {"fullName","signal"} line per test/it call. The shell lib provides
+# repo-relative path normalization, a thin wrapper that runs the helper, and the
+# refusal text for a file the helper cannot read. These tests exercise both
+# against the fixture test files under fixtures/test-signals/.
 
 # bats file_tags=whole-tree,installed-dependencies
 
@@ -19,16 +20,12 @@ setup() {
   # precondition the job installs; see the helper for why.
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$REPO_ROOT"
-  HELPER="$REPO_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
-  LIBRARY="$REPO_ROOT/.claude/hooks/lib/red-ledger.sh"
+  HELPER="$REPO_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
+  LIBRARY="$REPO_ROOT/.claude/hooks/lib/test-signals.sh"
 
   # Repo-relative fixture paths (helper + lib expect repo-relative input run
   # from the repo root).
-  FIXTURE_RELATIVE_DIRECTORY=".gaia/tests/hooks/fixtures/red-ledger"
-
-  # The ledger path is keyed to the repo's own tree key; ask the shipped
-  # resolver for it rather than hardcoding a second copy of the literal.
-  TREE_KEY=$(bash "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" --tree-key "$REPO_ROOT")
+  FIXTURE_RELATIVE_DIRECTORY=".gaia/tests/hooks/fixtures/test-signals"
 
   # The corpus standing check's floor, counted by grep rather than by the
   # helper's TypeScript parser, so a parser regression that drops records
@@ -219,60 +216,73 @@ run_library() {
   [ ! -s "$stderr_file" ]
 }
 
-# --- shell lib: red_ledger_path ---
+# --- shell lib: test_signals_repo_relative_path ---
 
-@test "red_ledger_path with an explicit root joins it onto the tree-keyed ledger path" {
-  run_library "red_ledger_path '$REPO_ROOT'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO_ROOT/.gaia/local/red-ledger/$TREE_KEY/observations.jsonl" ]
-}
-
-@test "red_ledger_path with no root defaults to gaia_resolve_tree_root of the process cwd, keyed the same way" {
-  run_library 'red_ledger_path'
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO_ROOT/.gaia/local/red-ledger/$TREE_KEY/observations.jsonl" ]
-}
-
-# --- shell lib: red_ledger_repo_relative_path ---
-
-@test "red_ledger_repo_relative_path strips the repo-root prefix from an absolute path" {
-  run_library "red_ledger_repo_relative_path '$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
+@test "test_signals_repo_relative_path strips the repo-root prefix from an absolute path" {
+  run_library "test_signals_repo_relative_path '$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
   [ "$status" -eq 0 ]
   [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ]
 }
 
-@test "red_ledger_repo_relative_path strips a leading ./" {
-  run_library "red_ledger_repo_relative_path './$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
+@test "test_signals_repo_relative_path strips a leading ./" {
+  run_library "test_signals_repo_relative_path './$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
   [ "$status" -eq 0 ]
   [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ]
 }
 
-@test "red_ledger_repo_relative_path is idempotent on an already-relative path" {
-  run_library "red_ledger_repo_relative_path '$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
+@test "test_signals_repo_relative_path is idempotent on an already-relative path" {
+  run_library "test_signals_repo_relative_path '$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
   [ "$status" -eq 0 ]
   [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ]
 }
 
-# --- shell lib: red_ledger_signals ---
+# --- shell lib: test_signals_signals ---
 
-@test "red_ledger_signals returns the helper NDJSON for a valid fixture" {
-  run_library "red_ledger_signals '$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
+@test "test_signals_signals returns the helper NDJSON for a valid fixture" {
+  run_library "test_signals_signals '$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
   [ "$status" -eq 0 ]
   [[ "$output" == *'"fullName":"adds two numbers"'* ]]
   [[ "$output" == *'"signal":"sha256:'* ]]
 }
 
-@test "red_ledger_signals propagates the helper non-zero exit on a broken file" {
-  run_library "red_ledger_signals '$FIXTURE_RELATIVE_DIRECTORY/broken.test.ts'"
+@test "test_signals_signals propagates the helper non-zero exit on a broken file" {
+  run_library "test_signals_signals '$FIXTURE_RELATIVE_DIRECTORY/broken.test.ts'"
   [ "$status" -ne 0 ]
 }
 
 # --- double-sourcing is safe ---
 
 @test "sourcing the lib twice is a no-op" {
-  run bash -c "cd '$REPO_ROOT' && set -uo pipefail && . '$LIBRARY' && . '$LIBRARY' && red_ledger_path '$REPO_ROOT'"
+  run bash -c "cd '$REPO_ROOT' && set -uo pipefail && . '$LIBRARY' && . '$LIBRARY' && test_signals_repo_relative_path '$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
   [ "$status" -eq 0 ]
-  [ "$output" = "$REPO_ROOT/.gaia/local/red-ledger/$TREE_KEY/observations.jsonl" ]
+  [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ]
+}
+
+# --- shell lib: refusal status constants and reason text ---
+
+@test "the lib exports the unresolvable-shape and old-format statuses as 7 and 8" {
+  run_library "echo \$TEST_SIGNALS_UNRESOLVABLE_SHAPE_STATUS \$TEST_SIGNALS_OLD_FORMAT_STATUS"
+  [ "$status" -eq 0 ]
+  [ "$output" = "7 8" ]
+}
+
+@test "test_signals_signals on a story file the extractor cannot parse exits with the unresolvable-shape status, and its refusal reason names the file" {
+  local source="$BATS_TEST_TMPDIR/unknown.stories.tsx"
+  printf '%s\n' \
+    "import preview from '#.storybook/preview';" \
+    "const meta = preview.meta({title: 'Internal/Unknown'});" \
+    "export const Leftover = {args: {text: 'left over'}};" > "$source"
+  run_library "extractor_status=0; extractor_line=\$(test_signals_signals '$source' 2>&1 >/dev/null) || extractor_status=\$?; [ \"\$extractor_status\" -eq \"\$TEST_SIGNALS_UNRESOLVABLE_SHAPE_STATUS\" ] || exit 1; test_signals_refusal_reason \"\$extractor_status\" '$source' \"\$extractor_line\""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Worthiness presence gate: the test-identity extractor cannot read $source"* ]]
+  [[ "$output" == *"unsupported story shape"* ]]
+}
+
+@test "test_signals_signals_or_warn emits no signals and returns 0 for an old-format story file" {
+  run bash -c "cd '$REPO_ROOT' && set -uo pipefail && . '$LIBRARY' && test_signals_signals_or_warn '$FIXTURE_RELATIVE_DIRECTORY/csf3-old-format.stories.tsx' 2>'$BATS_TEST_TMPDIR/warn.txt'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  grep -qF 'old-format story file' "$BATS_TEST_TMPDIR/warn.txt"
 }
 
 # --- signal helper: comment-free content, fixture pairs ---
@@ -406,7 +416,7 @@ run_library() {
 
 # --- signal helper: one computation across disk, stdin, and the ledger writer ---
 
-# All three legs below assert a non-empty signal first: red_ledger_signals
+# All three legs below assert a non-empty signal first: test_signals_signals
 # fail-opens to empty when node is missing, and a run in which every leg
 # yields empty output would satisfy an equality check without proving
 # anything.

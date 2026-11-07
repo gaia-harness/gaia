@@ -1,5 +1,5 @@
 /**
- * The story-file format predicate every reader shares (the red-ledger
+ * The story-file format predicate every reader shares (the test-signal
  * extractor, quick-classify and the migration command apply the same clauses
  * in the same order), decided from the source text alone and never by
  * resolving a path on disk.

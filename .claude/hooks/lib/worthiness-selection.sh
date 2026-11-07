@@ -9,7 +9,7 @@
 # Sourced, never executed; nothing runs at source time.
 #
 # Caller contract, all of it set before the call in the caller's own shell:
-#   - gaia-packages.sh and red-ledger.sh sourced, and gaia_packages_load run for
+#   - gaia-packages.sh and test-signals.sh sourced, and gaia_packages_load run for
 #     the tree (its failure is the caller's own package-error path).
 #   - WORTHINESS_SELECTION_ERE: `worthiness_selection_scope_ere`. Set but
 #     empty matches nothing (no records, return 0). Unset is a caller that
@@ -27,8 +27,8 @@
 #   while IFS= read -r record; do ...; done <"$records_file"
 #
 # Records on stdout: <repo-relative path><TAB><extractor NDJSON line>.
-# Returns 0 on a complete walk; RED_LEDGER_UNRESOLVABLE_SHAPE_STATUS or
-# RED_LEDGER_OLD_FORMAT_STATUS on an extractor refusal; 9 on a classifier package
+# Returns 0 on a complete walk; TEST_SIGNALS_UNRESOLVABLE_SHAPE_STATUS or
+# TEST_SIGNALS_OLD_FORMAT_STATUS on an extractor refusal; 9 on a classifier package
 # error or a missing input. Each non-zero sets WORTHINESS_SELECTION_ERROR to the
 # reason the hook prints.
 
@@ -124,7 +124,7 @@ worthiness_selection_walk() {
     # through emits nothing and drops out below. An empty ERE matches nothing.
     [ -n "$WORTHINESS_SELECTION_ERE" ] && [[ "$path" =~ $WORTHINESS_SELECTION_ERE ]] || continue
 
-    relative_path=$(red_ledger_repo_relative_path "$path")
+    relative_path=$(test_signals_repo_relative_path "$path")
 
     # A deletion leaves nothing to recompute. Tested against the tree, not the
     # process working directory: from a subdirectory a cwd test answers
@@ -149,11 +149,11 @@ worthiness_selection_walk() {
     # test through. Every other non-zero is a mid-edit parse error, skipped.
     extractor_error_file=$(mktemp "${TMPDIR:-/tmp}/worthiness-extractor-XXXXXX") || extractor_error_file=/dev/null
     extractor_status=0
-    current_ndjson=$( cd "$tree_root" && red_ledger_signals "$relative_path" 2>"$extractor_error_file" ) || extractor_status=$?
-    if [ "$extractor_status" = "$RED_LEDGER_UNRESOLVABLE_SHAPE_STATUS" ] || [ "$extractor_status" = "$RED_LEDGER_OLD_FORMAT_STATUS" ]; then
+    current_ndjson=$( cd "$tree_root" && test_signals_signals "$relative_path" 2>"$extractor_error_file" ) || extractor_status=$?
+    if [ "$extractor_status" = "$TEST_SIGNALS_UNRESOLVABLE_SHAPE_STATUS" ] || [ "$extractor_status" = "$TEST_SIGNALS_OLD_FORMAT_STATUS" ]; then
       extractor_error_line=$(head -n 1 "$extractor_error_file" 2>/dev/null || true)
       [ "$extractor_error_file" = /dev/null ] || rm -f "$extractor_error_file"
-      WORTHINESS_SELECTION_ERROR=$(red_ledger_refusal_reason "$extractor_status" "$relative_path" "$extractor_error_line")
+      WORTHINESS_SELECTION_ERROR=$(test_signals_refusal_reason "$extractor_status" "$relative_path" "$extractor_error_line")
       return "$extractor_status"
     fi
     [ "$extractor_error_file" = /dev/null ] || rm -f "$extractor_error_file"
