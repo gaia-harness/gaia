@@ -36,3 +36,5 @@ When building new features or fixing bugs, follow the TDD workflow described in 
 ## 4. Always Verify Your Work
 
 Leave formatting and auto-fixable lint to the gate's `pnpm lint` (`eslint --fix`, with Prettier wired in as an `eslint` rule), which normalizes it in one terminal pass; spend tokens only on non-auto-fixable lint.
+
+When lint flags something, fix the code first. An `eslint-disable` is a last resort, acceptable only when fixing the code would be worse than disabling the rule (a false positive, a gap in a library's typings, a rule that does not fit the case), and its `--` reason names which.

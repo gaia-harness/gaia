@@ -102,13 +102,14 @@ export default defineConfig({
       ],
       provider: 'v8',
     },
+    // Vitest matches these against absolute paths, so each pattern needs a
+    // leading `**/`. A file pattern takes no trailing `/**`, which picomatch
+    // matches against the file itself for some patterns but not others.
     forceRerunTriggers: [
-      '**/package.json/**',
-      '**/{vitest,vite}.config.*/**',
-      '.storybook/**',
-      'test/setup.ts',
-      'test/setup.browser.ts',
-      'test/setup.story-dark.ts',
+      '**/package.json',
+      '**/{vitest,vite}.config.*',
+      '**/.storybook/**',
+      '**/test/setup{,.browser,.story-dark}.ts',
     ],
     onConsoleLog: (message) => {
       if (ignoreWarnings.some((warning) => message.includes(warning))) {

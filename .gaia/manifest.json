@@ -692,8 +692,10 @@
     "apps/web/test/axe-tags.ts": "owned",
     "apps/web/test/contrast.ts": "owned",
     "apps/web/test/dev-ports-static.test.ts": "owned",
+    "apps/web/test/entry-server-msw.test.ts": "owned",
     "apps/web/test/eslint/no-imperative-query-fetch.test.ts": "owned",
     "apps/web/test/fixtures/a11y-test-child-opt-out.stories.tsx": "owned",
+    "apps/web/test/force-rerun-triggers.test.ts": "owned",
     "apps/web/test/mocks/database.ts": "owned",
     "apps/web/test/mocks/faker.ts": "owned",
     "apps/web/test/mocks/index.ts": "owned",
@@ -874,7 +876,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-07T13:41:31.786Z",
+  "generated": "2026-11-07T13:44:12.612Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
