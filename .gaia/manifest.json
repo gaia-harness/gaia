@@ -716,6 +716,7 @@
     "apps/web/test/test.server.ts": "owned",
     "apps/web/test/theme-tokens.test.ts": "owned",
     "apps/web/test/utils.ts": "owned",
+    "apps/web/test/vite-optimize-deps.test.ts": "owned",
     "apps/web/test/worker-server.test.ts": "owned",
     "apps/web/test/worker.ts": "owned",
     "apps/web/tsconfig.json": "owned",
@@ -867,7 +868,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-06T23:42:56.696Z",
+  "generated": "2026-11-07T07:04:27.870Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
