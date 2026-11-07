@@ -6,7 +6,7 @@
 # asking the human stay in the step's instructions.
 #
 # Usage:
-#   worthiness-step.sh route  --root <tree> --run-folder <dir>
+#   worthiness-step.sh route  --root <tree> --run-folder <dir> [--flows-spec <SPEC.md> --flow-tests <file>]
 #   worthiness-step.sh record --root <tree> --verdicts <file> [--expect <route-json-file>]
 #   worthiness-step.sh settle --run-folder <dir> --file <f> --full-name <n> --signal <s>
 #                             --as residual|refused|filed|fixed [--first-line <n> --reason <text>]
@@ -18,6 +18,12 @@
 # extractor refusal, a package error or a missing classifier, with the reason on
 # stderr: a silent empty list would read as nothing to do. A base that does not
 # resolve prints [] and exits 0, as the merge hook allows.
+#
+# --flows-spec and --flow-tests come together: every test in a file the
+# flow-tests file lists (flow_id, slug, kind, path rows) is selected whatever the
+# scope globs say, and its element carries "flow": {flowId, slug, name, why,
+# kind, covers, testPath}. Without them the output is unchanged. record accepts
+# an optional per-verdict "flow" key and refuses a malformed one (exit 3).
 #
 # WORTHINESS_LEDGER_PATH is a test seam shared with the ledger writer; route and
 # record read the same file through it.
@@ -105,20 +111,60 @@ split("\n") | map(select(length > 0) | index("\t") as $tab | {path: .[:$tab], te
      elif $authored then "fix"
      else "file" end) as $route
   | {file: $record.path, fullName: $test.fullName, signal: $test.signal, firstLine: $first,
-     authored: $authored, route: $route, artifact: ($stored.artifact // null)})
+     authored: $authored, route: $route, artifact: ($stored.artifact // null)}
+    + (($flows | map(select(.path == $record.path)) | first // null) as $flow
+       | if $flow == null then {} else {flow: ($flow | del(.path))} end))
 '
+
+# Joins the SPEC's flow rows to the flow-tests rows into a JSON array of
+# {path, flowId, slug, name, why, kind, covers, testPath}.
+# shellcheck disable=SC2016
+FLOWS_JQ='
+def rows: split("\n") | map(select(length > 0) | split("\t"));
+(rows) as $tests
+| ($specrows | split("\n") | map(select(length > 0) | split("\t"))) as $spec
+| [$tests[] | . as $t
+   | ($spec | map(select(.[0] == $t[0])) | first) as $s
+   | if $s == null then error("flow-tests names \($t[0]), which the SPEC does not declare") else
+     {path: $t[3], flowId: $s[0], slug: $s[1], name: $s[2], why: $s[3], kind: $s[4],
+      covers: (if $s[4] == "web" then ($s[5] | split(" ")) else null end),
+      testPath: (if $s[4] == "web" then null else $s[5] end)} end]
+'
+
+# build_flows <spec> <flow-tests>: prints the joined JSON array, or exits 3.
+build_flows() {
+  local spec_rows spec_status=0
+  [ -f "$2" ] || die_input "cannot read the flow-tests file $2"
+  # shellcheck source=/dev/null
+  . "$script_directory/spec/flows-lib.sh" || die_input 'cannot load flows-lib.sh'
+  spec_rows="$(flows_lib_parse_spec "$1" 2>"$scratch_directory/flows-spec.err")" || spec_status=$?
+  [ "$spec_status" -eq 0 ] || die_input "$(cat "$scratch_directory/flows-spec.err") ($1)"
+  jq -R -s -c --arg specrows "$spec_rows" "$FLOWS_JQ" "$2" 2>"$scratch_directory/flows-join.err" ||
+    die_input "cannot join the flow-tests file to the SPEC: $(cat "$scratch_directory/flows-join.err")"
+}
 
 cmd_route() {
   local root='' run_folder='' base prov records_file walk_status=0 authorship_json state ledger_path
+  local flows_spec='' flow_tests='' flows_json='[]'
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --root) require_value "$1" "$#"; root="$(absolute "$2")"; shift 2 ;;
       --run-folder) require_value "$1" "$#"; run_folder="$(absolute "$2")"; shift 2 ;;
+      --flows-spec) require_value "$1" "$#"; flows_spec="$(absolute "$2")"; shift 2 ;;
+      --flow-tests) require_value "$1" "$#"; flow_tests="$(absolute "$2")"; shift 2 ;;
       *) die_usage "unknown argument $1" ;;
     esac
   done
   [ -n "$root" ] && [ -n "$run_folder" ] || die_usage 'route needs --root and --run-folder'
+  if [ -n "$flows_spec" ] || [ -n "$flow_tests" ]; then
+    [ -n "$flows_spec" ] && [ -n "$flow_tests" ] || die_usage '--flows-spec and --flow-tests come together'
+  fi
   load_libraries
+  if [ -n "$flows_spec" ]; then
+    flows_json="$(build_flows "$flows_spec" "$flow_tests")" || exit "$?"
+    # shellcheck disable=SC2034
+    WORTHINESS_SELECTION_FLOW_FILES="$(jq -r '.[].path' <<<"$flows_json")"
+  fi
   # The walk and the extractor read the working directory for repo-relative paths.
   cd "$root" || die_input "cannot enter $root"
 
@@ -153,6 +199,7 @@ cmd_route() {
   jq -R -s -c \
     --argjson ledger "$(read_jsonl "$ledger_path")" \
     --argjson settlements "$(read_jsonl "$run_folder/worthiness-settlements.jsonl")" \
+    --argjson flows "$flows_json" \
     --argjson names "$(printf '%s' "$authorship_json" | jq -c '.names')" \
     --argjson hunks "$(printf '%s' "$authorship_json" | jq -c '.hunks')" \
     --arg state "$state" \
@@ -160,7 +207,7 @@ cmd_route() {
 }
 
 cmd_record() {
-  local root='' verdicts='' expect='' ledger_path missing count index file name verdict artifact
+  local root='' verdicts='' expect='' ledger_path missing count index file name verdict artifact flow bad_flow
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --root) require_value "$1" "$#"; root="$(absolute "$2")"; shift 2 ;;
@@ -184,6 +231,22 @@ cmd_record() {
       exit 1
     fi
   fi
+  # Validate every flow key before anything is appended, so a refusal leaves the
+  # ledger untouched.
+  # shellcheck disable=SC2016
+  bad_flow="$(jq -r 'def well_formed: type == "object"
+        and (.flowId | type == "string" and test("^FLOW-[0-9]{3,}$"))
+        and (.untestedErrorPaths | type == "array"
+          and all(.[]; type == "object" and (.source | type == "string") and (.description | type == "string")))
+        and (.missingOutcome | type == "string" or . == null)
+        and (.undeclaredFolders | type == "array" and all(.[]; type == "string"));
+      def non_empty: (.untestedErrorPaths | length > 0) or .missingOutcome != null or (.undeclaredFolders | length > 0);
+      .[] | select(has("flow")) | select((.flow | well_formed | not) or (.verdict == "keep" and (.flow | non_empty)))
+      | "\(.file) > \(.fullName)"' "$verdicts" 2>/dev/null)" || die_input "cannot read the flow keys in $verdicts"
+  if [ -n "$bad_flow" ]; then
+    printf 'worthiness-step: malformed flow key, or a keep verdict with a non-empty flow member, nothing was recorded:\n%s\n' "$bad_flow" >&2
+    exit 3
+  fi
   resolve_ledger "$root"
   export WORTHINESS_LEDGER_PATH="$ledger_path"
   cd "$root" || die_input "cannot enter $root"
@@ -194,10 +257,11 @@ cmd_record() {
     name="$(jq -r ".[$index].fullName" "$verdicts")"
     verdict="$(jq -r ".[$index].verdict" "$verdicts")"
     artifact="$(jq -r ".[$index].artifact // empty" "$verdicts")"
+    flow="$(jq -c ".[$index].flow // empty" "$verdicts")"
     if [ -n "$artifact" ]; then
-      node "$writer_script" "$file" "$name" "$verdict" "$artifact" || die_input "the ledger writer refused $file > $name"
+      WORTHINESS_FLOW_JSON="$flow" node "$writer_script" "$file" "$name" "$verdict" "$artifact" || die_input "the ledger writer refused $file > $name"
     else
-      node "$writer_script" "$file" "$name" "$verdict" || die_input "the ledger writer refused $file > $name"
+      WORTHINESS_FLOW_JSON="$flow" node "$writer_script" "$file" "$name" "$verdict" || die_input "the ledger writer refused $file > $name"
     fi
     index=$((index + 1))
   done

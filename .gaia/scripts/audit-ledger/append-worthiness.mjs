@@ -18,7 +18,7 @@
 // The ledger line (frozen schema the merge presence gate reads):
 //   {"schema":1,"file":"<repo-rel>","fullName":"<vitest fullName>",
 //    "signal":"sha256:...","verdict":"keep"|"fix"|"delete",
-//    "auditedAt":"<iso>","artifact":"<...>"}
+//    "auditedAt":"<iso>","artifact":"<...>","flow":{...}}   (artifact, flow optional)
 //
 // IDENTITY: `signal` is the SAME sha256-of-normalized-test-call the shared
 // test-signal extractor (.gaia/scripts/test-signals/extract-test-signals.mjs)
@@ -134,6 +134,18 @@ const record = {
 };
 if (artifact) {
   record.artifact = artifact;
+}
+
+// Optional flow verdict (WORTHINESS_FLOW_JSON, set by `worthiness-step.sh
+// record` after it validated the shape): recorded as a ledger member the
+// presence gate never reads.
+const flowJson = process.env.WORTHINESS_FLOW_JSON;
+if (flowJson) {
+  try {
+    record.flow = JSON.parse(flowJson);
+  } catch {
+    fail('WORTHINESS_FLOW_JSON is not valid JSON', 9);
+  }
 }
 
 // Resolve the default ledger path via the shared resolver, anchored on the
