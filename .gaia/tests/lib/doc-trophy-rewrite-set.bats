@@ -64,7 +64,6 @@ setup() {
     "$LAYERING|A plan carries one real-server check per guarded route module"
     ".claude/skills/tdd/SKILL.md|Good tests are integration-style"
     ".claude/skills/tdd/SKILL.md|You can't test everything."
-    ".claude/skills/tdd/SKILL.md|is RED-gated: a new test there commits only after a genuine failing-first run is observed at its current body"
     ".claude/skills/tdd/SKILL.md|Author the test against a stub of the implementation symbol."
     ".claude/skills/tdd/SKILL.md|Every proposed DELETE requires human confirmation and renders its evidence INLINE."
     'wiki/decisions/Worthiness Audit.md|**proposes** verdicts and **edits no files**; a human acts on every proposal.'

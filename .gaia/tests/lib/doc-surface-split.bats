@@ -19,7 +19,6 @@ setup() {
   ROUTING_SENTENCE='A harness self-check that opens no page runs in the Vitest node project, not under Playwright.'
   WIRING_SENTENCE='A self-test of the Playwright fixture wiring itself is dropped: the specs that use the fixture prove it.'
   GIVEN_SENTENCE="A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them."
-  LADDER='.claude/skills/gaia/references/plan/planner.md'
 }
 
 # ---------- helpers ----------
@@ -119,7 +118,8 @@ check_realserver_routing_wording() {
 }
 
 check_rule_points_at_ladder() {
-  grep -qF -- "$LADDER" "$1" || { echo "rule lacks the ladder pointer" >&2; return 1; }
+  grep -qF -- 'wiki/decisions/Test Layering.md' "$1" || { echo "rule lacks the ladder pointer" >&2; return 1; }
+  grep -qF -- 'When a test needs a real browser' "$1" || { echo "rule lacks the browser-rung pointer" >&2; return 1; }
   grep -qF 'serializeForm' "$1" || { echo "rule lacks serializeForm" >&2; return 1; }
   check_realserver_routing_wording "$1"
 }
@@ -267,14 +267,14 @@ check_page_surfaces() {
 
 # ---------- the docs point at the ladder ----------
 
-@test "the rule and the page point at the planner's ladder and route the native checks to real-server" {
+@test "the rule and the page point at the Test Layering ladder and route the native checks to real-server" {
   check_rule_points_at_ladder "$PW_RULE"
   check_page_points_at_ladder "$PAGE"
 }
 
 @test "red twin: a rule without the ladder pointer, serializeForm or a routing phrase fails" {
   local copy
-  copy=$(copy_with "$PW_RULE" noladder.md 's#references/plan/planner\.md#references/plan/other.md#g')
+  copy=$(copy_with "$PW_RULE" noladder.md 's#wiki/decisions/Test Layering\.md#wiki/decisions/other.md#g')
   run check_rule_points_at_ladder "$copy"
   [ "$status" -ne 0 ]
   copy=$(copy_with "$PW_RULE" noserialize.md 's/serializeForm/serializeBody/g')

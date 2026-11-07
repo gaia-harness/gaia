@@ -5,6 +5,6 @@ description: Provides the React testing reference for the tdd skill. Covers test
 
 # TDD for React (frontend package)
 
-The stack reference the generic `tdd` skill (`.claude/skills/tdd/SKILL.md`) points at for the React frontend. The red-green-refactor loop, the RED gate, the determinism roll-up, and the worthiness audit live in `tdd`; this skill holds only the React and Vitest specifics.
+The stack reference the generic `tdd` skill (`.claude/skills/tdd/SKILL.md`) points at for the React frontend. The red-green-refactor loop, the determinism roll-up, and the worthiness audit live in `tdd`; this skill holds only the React and Vitest specifics.
 
 Read [references/tests-react.md](references/tests-react.md) before writing the first red test.

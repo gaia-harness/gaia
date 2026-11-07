@@ -789,18 +789,22 @@ failure_payload() {
      + (if $directory == "" then {} else {cwd:$directory} end)'
 }
 
-@test "failure event: both settings files register the capture on PostToolUseFailure for Bash" {
-  hook_registered "$REPO_ROOT/.claude/settings.json" \
-    '.hooks.PostToolUseFailure[] | select(.matcher == "Bash")' capture-red-observations.sh
-  hook_registered "$REPO_ROOT/apps/web/.claude/settings.json" \
-    '.hooks.PostToolUseFailure[] | select(.matcher == "Bash")' capture-red-observations.sh
+@test "failure event: neither settings file registers the capture on PostToolUseFailure for Bash" {
+  for settings_file in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/apps/web/.claude/settings.json"; do
+    run jq '[(.hooks.PostToolUseFailure // [])[] | select(.matcher == "Bash") | .hooks[].command
+      | select(contains("capture-red-observations.sh"))] | length' "$settings_file"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 0 ]
+  done
 }
 
-@test "failure event: both settings files still register the capture on PostToolUse for Bash" {
-  hook_registered "$REPO_ROOT/.claude/settings.json" \
-    '.hooks.PostToolUse[] | select(.matcher == "Bash")' capture-red-observations.sh
-  hook_registered "$REPO_ROOT/apps/web/.claude/settings.json" \
-    '.hooks.PostToolUse[] | select(.matcher == "Bash")' capture-red-observations.sh
+@test "failure event: neither settings file registers the capture on PostToolUse for Bash" {
+  for settings_file in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/apps/web/.claude/settings.json"; do
+    run jq '[(.hooks.PostToolUse // [])[] | select(.matcher == "Bash") | .hooks[].command
+      | select(contains("capture-red-observations.sh"))] | length' "$settings_file"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 0 ]
+  done
 }
 
 @test "failure event: a failing run's payload records the RED" {

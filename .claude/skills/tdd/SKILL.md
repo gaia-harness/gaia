@@ -1,9 +1,11 @@
 ---
 name: tdd
-description: Runs test-driven development with a red-green-refactor loop. Use when the user wants to build features or fix bugs using TDD, mentions "red-green-refactor", wants integration tests, or asks for test-first development.
+description: Runs test-driven development with a red-green-refactor loop, an opt-in tool for logic where test-first helps. Use when the user wants to build features or fix bugs using TDD, mentions "red-green-refactor", wants integration tests, or asks for test-first development.
 ---
 
 # Test-Driven Development
+
+An opt-in tool for logic where test-first helps, not a rule: the principle is Test What Matters (`.claude/rules/coding-guidelines.md`, section 3). The skill verifies its own red step: run the new test, see it fail for the right reason, then implement. No hook or ledger records it.
 
 Contents: Selecting a Stack Reference; Philosophy; Anti-Pattern: Horizontal Slices; Workflow; Checklist Per Cycle.
 
@@ -40,8 +42,6 @@ RIGHT (vertical):
   ...
 ```
 
-Plan-rendered UAT specs (`test.fail()`) are the orchestrator's, not a horizontal slice; your phase removes `test.fail()` when its UAT passes. A rendered route test uses `test.fails(`: your phase removes the `.fails`, so it becomes `test(`, and gives it a real body that calls the loader or action.
-
 ## Workflow
 
 ### 1. Planning
@@ -69,19 +69,19 @@ For each behavior your task names (a plan's task doc, or the plan approved in st
 
 **Bound the green chase.** If a test won't pass after a few focused attempts, stop and reassess instead of thrashing the implementation: the test, the interface, or an assumption may be wrong. Surface the blocker rather than looping indefinitely to force green.
 
-#### Authoring an honest RED on the deterministic surface
+#### Running an honest red step
 
-The deterministic surface (pure utils, service parsers, spec-derivable hooks) is RED-gated: a new test there commits only after a genuine failing-first run is observed at its current body.
+For every new test, run it before implementing and look at the failure: `pnpm -C <package dir> test --run <test-file>` (path relative to the package), or the stack reference's runner. It must fail for the right reason, an assertion that the missing behavior breaks (or the stub's throw), never a collection or import error.
 
-**Author the test against a stub of the implementation symbol.** First write a stub of each new exported symbol the test imports, under its final name and with its final signature (async-ness, parameter and return types; a Promise-returning function is stubbed async, since type-aware lint on the test reads the signature), returning a wrong value (throwing only when the symbol has no return value to get wrong). Write the test against the stub, lint both (a lint fix to the test's executable body after the RED voids the RED), then run it: it fails on the assertion (or the stub's throw) because the implementation is missing. That failure is the honest RED, not a manufactured one. Then write the implementation that turns it green. Never point the test at a module file that does not exist yet: vitest fails the file at collection, no test body runs, and no RED is recorded.
+**Author the test against a stub of the implementation symbol.** First write a stub of each new exported symbol the test imports, under its final name and with its final signature (async-ness, parameter and return types; a Promise-returning function is stubbed async, since type-aware lint on the test reads the signature), returning a wrong value (throwing only when the symbol has no return value to get wrong). Write the test against the stub, lint both, then run it: it fails on the assertion (or the stub's throw) because the implementation is missing. That failure is the honest red, not a manufactured one. Then write the implementation that turns it green. Never point the test at a module file that does not exist yet: vitest fails the file at collection, no test body runs, and nothing shows the test can fail.
 
 ```
 RIGHT:  stub parseAmount() returning a wrong value → write the test → lint → run → fails on the assertion → implement → green
-WRONG:  write the test importing a parse-amount module that does not exist → run → collection error, no RED recorded
+WRONG:  write the test importing a parse-amount module that does not exist → run → collection error, no honest red
 WRONG:  implement parseAmount() → write the test → break parseAmount() to force red → restore it → green
 ```
 
-**Never break working production code to force a red, then restore it.** The content signal covers the test's comment-free content (rewording a comment leaves a captured RED intact; editing what the test executes invalidates it) and never the implementation, so the gate cannot catch this: it is an authoring obligation, not an enforced one. A plan build makes the order structural instead: the test author and the implementer are separate dispatches (`.claude/skills/gaia/references/plan/planner.md`, the test-first split block).
+**Never break working production code to force a red, then restore it.** Nothing enforces this, so it is an authoring obligation. A plan build keeps the order structural by dispatching the test author and the implementer separately.
 
 **Single-pass-author exemption.** When the implementation already exists in the same change with no prior failing observation (a single-pass author landing impl and test together), author the test honestly against the existing behavior and route it to the worthiness audit, exactly as an emergent test is routed.
 
@@ -106,7 +106,7 @@ Run the determinism classifier over each touched source file:
 node .gaia/scripts/classifier/classify-determinism.mjs <repo-relative-source-path>
 ```
 
-It emits `{file, classification: "strict" | "emergent" | "route", reasons}`. A `strict` file is on the deterministic surface and owes a RED; an `emergent` file is clock-/entropy-/I-O-bound or tree-dependent and commits without one; a `route` test owes both the RED and the worthiness audit.
+It emits `{file, classification: "strict" | "emergent" | "route", reasons}`. A `strict` file is on the deterministic surface, where the red step is easy to run and show; an `emergent` file is clock-/entropy-/I-O-bound or tree-dependent, with no stable failing-then-passing run; a `route` test gets both the red step and the worthiness audit.
 
 **Emit one verdict line per touched file in the end-of-task summary, routine-looking ones included**: a silent misclassification (a pure-looking file the classifier marks emergent, or vice versa) stays auditable only if it appears as a named line.
 
@@ -118,19 +118,19 @@ Determinism roll-up:
 
 ### 6. Worthiness Audit
 
-A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/Stories as Tests.md`); a story file is emergent, so a behavior added as a `.test()` goes through the audit below, not the RED gate.
+A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/Stories as Tests.md`); a story file is emergent, so a behavior added as a `.test()` goes through the audit below.
 
-The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `apps/web/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. The audit judges every test the task changed that the worthiness selection names: emergent and `route` tests on honesty and worth, strict tests on worth only. Run it after green (the classifier roll-up above tells you which touched files are `strict`, `emergent` or `route`).
+On every surface the honesty proof is this skill's own red step plus the audit. The emergent surface (the `emergentTests` globs in the package descriptor `apps/web/gaia.package.json`) has no stable failing-then-passing run to show, so its honesty and worthiness come from an **advisory audit**. The audit judges every test the task changed that the worthiness selection names: emergent, route and strict tests on honesty and worth. Run it after green (the classifier roll-up above tells you which touched files are `strict`, `emergent` or `route`).
 
 #### Dispatch and record
 
-Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` after green, over the test and story files the task changed. A genuine fresh-context evaluator judges them (the author shares their own blind spots, so an in-context self-review does not satisfy this step), and the arm records each verdict in the worthiness ledger. The arm dispatches and records only: it runs no repair, makes no commit and asks no question, since this skill runs on uncommitted work. Surface the verdicts in the same end-of-task summary (see "Surfacing the advisory findings").
+Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` after green, over the test and story files the task changed. A genuine fresh-context evaluator judges them (the author shares their own blind spots, so an in-context self-review does not satisfy this step), and the arm records each verdict in the worthiness ledger. The arm dispatches the evaluator and records its verdicts only: it runs no repair, makes no commit and asks no question, since this skill runs on uncommitted work. Surface the verdicts in the same end-of-task summary (see "Surfacing the advisory findings").
 
 #### Path-scoped guarantees
 
 The guarantee this audit provides is scoped to **the subset a same-model fresh-context reviewer reliably flags**, not a proof of test worthiness. State the surviving guarantees by path:
 
-- **No-orchestrator path (this skill alone), surviving guarantees:** static honesty lint on every test; a real RED on the deterministic surface; the fresh-subagent worthiness audit **if it was dispatched**. On this path the audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only the static lint, the RED gate and the merge presence check.
+- **No-orchestrator path (this skill alone), surviving guarantees:** static honesty lint on every test; the red step you ran and saw fail; the fresh-subagent worthiness audit **if it was dispatched**. On this path the audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only the static lint, your own red step and the merge presence check.
 - **Orchestrated path, additional guarantees (NOT available here):** leaf isolation enforced by the orchestrator. That is orchestrator-owned; the no-orchestrator path does not provide it. The merge presence gate (which recomputes signals and refuses a merge whose audit ledger is absent or mismatched) is a repo-wide hook that fires on every `gh pr merge`: see `wiki/concepts/PR Merge Workflow.md`, "Second merge gate: the worthiness presence gate".
 
 ### 7. Surfacing the advisory findings

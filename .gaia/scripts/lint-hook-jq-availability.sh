@@ -75,19 +75,15 @@ readonly SETTINGS=".claude/settings.json"
 # Blocking PreToolUse hooks whose jq arm still stands the hook down instead of
 # refusing.
 #
-# The current entry stands down by design, not pending a conversion: that
-# guard protects no secret, main, or merge gate, so a jq-less machine
-# losing it fails open on nothing that needs a refusal.
-#
-# It stays a named variable rather than going away with its last entry, because
-# the shape is what a conversion that cannot land in one change needs: a hook
-# registered before its arm can be written goes here, tracked by issue, and is
-# read out again by the exact-assert below.
+# No hook is baselined today. The variable stays rather than going away with its
+# last entry, because the shape is what a conversion that cannot land in one
+# change needs: a hook registered before its arm can be written goes here,
+# tracked by issue, and is read out again by the exact-assert below.
 #
 # The list is asserted EXACT below: an entry that no longer fails is reported so
 # it must be deleted here, which is what keeps a baseline from quietly becoming
 # a permanent exemption.
-BASELINE="red-verify-commit-check.sh"
+BASELINE=""
 
 # uses_jq <hook_script_path>
 #
