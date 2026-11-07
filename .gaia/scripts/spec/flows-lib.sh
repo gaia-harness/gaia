@@ -1,9 +1,9 @@
 # shellcheck shell=bash
 #
 # Shared reader of SPEC flows and of a Playwright spec's @covers declaration.
-# Sourced, never executed: the flow-coverage check and the worthiness step call
-# these functions by name, so a rename or a changed output
-# shape breaks every caller.
+# Sourced, never executed: several scripts call these functions by name, so
+# before a rename or a changed output shape, grep the tree for the function name
+# (git grep -n flows_lib_).
 #
 # Every function writes data to stdout and diagnostics to stderr. Status 2 means
 # invalid input. Status 1 is an operational failure, except for the predicates:
