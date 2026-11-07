@@ -433,3 +433,36 @@ markers_balanced() {
   run markers_balanced "$copy"
   [ "$status" -ne 0 ]
 }
+
+# ---------- flow inputs ----------
+
+H_ROUTE='### 1. Route'
+H_EVALUATE='### 2. Evaluate'
+
+# flow_inputs_pinned <file>: the Route step passes the flow flags when the run
+# folder holds flow-tests.tsv, and the Evaluate step does the same and adds the
+# two prompt lines.
+flow_inputs_pinned() {
+  local section
+  for section in "$H_ROUTE" "$H_EVALUATE"; do
+    section_text "$1" "$section" | grep -qF -- 'flow-tests.tsv' || return 1
+    section_text "$1" "$section" | grep -qF -- '--flows-spec' || return 1
+    section_text "$1" "$section" | grep -qF -- '--flow-tests' || return 1
+  done
+  section_text "$1" "$H_EVALUATE" | grep -qF -- 'Flows spec: ' || return 1
+  section_text "$1" "$H_EVALUATE" | grep -qF -- 'Flow: <file>'
+}
+
+@test "the route and evaluate steps pass the flow inputs when flow-tests.tsv exists and add the flow prompt lines" {
+  flow_inputs_pinned "$REF"
+}
+
+@test "red twin: dropping the Flow prompt line or the flow-tests.tsv condition fails" {
+  local copy="$BATS_TEST_TMPDIR/ref.md"
+  sed 's/Flow: <file>/x/g' "$REF" > "$copy"
+  run flow_inputs_pinned "$copy"
+  [ "$status" -ne 0 ]
+  sed 's/flow-tests\.tsv/x/g' "$REF" > "$copy"
+  run flow_inputs_pinned "$copy"
+  [ "$status" -ne 0 ]
+}

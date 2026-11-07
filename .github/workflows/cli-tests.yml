@@ -156,7 +156,7 @@ jobs:
               - 'apps/web/.claude/skills/playwright-cli/**'
               - '.gaia/vendor/**'
               - '.gaia/scripts/verify-vendored-skills.sh'
-              # src/red-ledger/extract-test-signals.test.ts spawns this helper
+              # src/test-signals/extract-test-signals.test.ts spawns this helper
               # to pin its title-handling carve-outs: a `.each`, `.for`, or
               # dynamic-title describe/test must emit no signal, since vitest
               # never preserves such a title verbatim at runtime. A change to
@@ -164,7 +164,7 @@ jobs:
               # suite: without this line such a pull request resolves
               # `code=false`, skips the Vitest step, and reports this required
               # check green having run the assertion zero times.
-              - '.gaia/scripts/red-ledger/extract-test-signals.mjs'
+              - '.gaia/scripts/test-signals/extract-test-signals.mjs'
               # The label registry, read from the repo root by suites that live
               # under `.gaia/cli/**`: `src/labels/__tests__/registry.test.ts`
               # pins the registry's entry count, and

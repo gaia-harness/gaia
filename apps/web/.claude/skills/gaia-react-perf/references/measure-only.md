@@ -41,7 +41,7 @@ micro-interaction, then collects; it passes `{isRunDirectoryKept: true}` so the 
 survives the Playwright process for the reduce step, and it logs the written
 `rawPath`. Use the template below.
 
-Write a temporary spec under `apps/web/.playwright/e2e/` (the configured `testDir`), for
+Write a temporary spec under `apps/web/.playwright/e2e/` (the config's `testMatch` collects only `e2e/` and `flows/` under `.playwright`), for
 example `apps/web/.playwright/e2e/react-perf-drive.spec.ts`:
 
 ```ts

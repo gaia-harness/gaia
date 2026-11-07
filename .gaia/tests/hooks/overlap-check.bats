@@ -84,7 +84,7 @@ install_harness() {
   for library in gaia-packages.sh audit-base-provenance.sh; do
     ln -sfn "$HOME_ROOT/.claude/hooks/lib/$library" "$REPO/.claude/hooks/lib/$library"
   done
-  for library in branch-authorship-lib.sh main-root-lib.sh red-ledger overlap spec; do
+  for library in branch-authorship-lib.sh main-root-lib.sh test-signals overlap spec; do
     ln -sfn "$HOME_ROOT/.gaia/scripts/$library" "$REPO/.gaia/scripts/$library"
   done
   cp "$CHECK_SOURCE" "$REPO/.gaia/scripts/overlap-check.sh"
@@ -422,7 +422,7 @@ mutate() {
 # install_mutated_module <module> <from> <to>: the fixture's overlap directory
 # becomes real, every entry a link to the checkout's file except <module>, a
 # mutated copy. node_modules links to the checkout's so the copy resolves
-# typescript; red-ledger and spec stay linked whole.
+# typescript; test-signals and spec stay linked whole.
 install_mutated_module() {
   local overlap="$REPO/.gaia/scripts/overlap" entry
   rm -f "$overlap"

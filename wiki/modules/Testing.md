@@ -11,7 +11,7 @@ depends_on:
   - '[[Chromatic]]'
   - '[[MSW]]'
 created: 2026-04-20
-updated: 2026-10-28
+updated: 2026-11-07
 tags: [module, testing]
 ---
 
@@ -22,7 +22,7 @@ Testing has **five layers**, all sharing a common [[MSW Handlers|MSW]] mocking l
 - Unit: [[Vitest]] in `apps/web/app/utils/tests/` (pure and server code), and `vitest-browser-react` tests for hooks
 - Component and page: Storybook stories with `.test()` behaviors in `apps/web/app/components/*/tests/`, `apps/web/app/pages/*/tests/`, run by Vitest through `@storybook/addon-vitest`
 - Route: Vitest `node` tests in `apps/web/app/route-tests/<feature>/tests/` that call a route module's `loader` or `action` with a `Request`
-- Playwright: [[Playwright]] in `apps/web/.playwright/e2e/`, on two surfaces, real-server (request fixture, no page) and browser (a real page); [[Test Layering]] owns which proves what
+- Playwright: [[Playwright]] in `apps/web/.playwright/e2e/` and `apps/web/.playwright/flows/`, on two surfaces, real-server (request fixture, no page) and browser (a real page); [[Test Layering]] owns which proves what
 - Visual regression: [[Chromatic]] (CI only), driven by the same stories
 
 A story is the component test and the visual-regression input, so both share one source of truth. A page's rendered states are page stories, which mount the route's exports through `stubs.reactRouter` and drive MSW handlers. A route module's status, redirect, returned data, validation error, authorization outcome or side effect is a route test. [[Test Layering]] owns which layer proves what. See [[Stories as Tests]] and [[Component Testing]].
@@ -50,12 +50,12 @@ Test a component or page with a story that carries a `.test()` for each behavior
 
 ## Playwright
 
-- Real-server and browser tests in `apps/web/.playwright/e2e/`, config in `apps/web/playwright.config.ts`
+- Real-server and browser tests in `apps/web/.playwright/e2e/` and `apps/web/.playwright/flows/<slug>.spec.ts`, config in `apps/web/playwright.config.ts`
 - Use the bundled `hydration(page)` helper after `page.goto()` to wait for React Router hydration before interacting
 
 ### a11y scanning
 
-The shipped specs live in `apps/web/.playwright/e2e/`. `apps/web/.playwright/a11y.ts` exports `expectNoSeriousA11yViolations(page, testInfo, options?)`: critical and serious violations fail the test; moderate and minor violations attach as an `axe-advisory.json` and surface via `console.warn`. `apps/web/.playwright/fixtures.ts` exposes the `makeAxeBuilder` fixture (WCAG 2.0/2.1 A and AA tags) for custom scans.
+The shipped specs live in `apps/web/.playwright/e2e/`; critical-flow specs go in `apps/web/.playwright/flows/`. `apps/web/.playwright/a11y.ts` exports `expectNoSeriousA11yViolations(page, testInfo, options?)`: critical and serious violations fail the test; moderate and minor violations attach as an `axe-advisory.json` and surface via `console.warn`. `apps/web/.playwright/fixtures.ts` exposes the `makeAxeBuilder` fixture (WCAG 2.0/2.1 A and AA tags) for custom scans.
 
 ### Cold-start hydration self-heal
 

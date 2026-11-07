@@ -6,7 +6,7 @@
   "success": false,
   "testResults": [
     {
-      "name": ".gaia/tests/hooks/fixtures/red-ledger/runtime-fail.test.ts",
+      "name": ".gaia/tests/hooks/fixtures/test-signals/runtime-fail.test.ts",
       "status": "failed",
       "message": "",
       "assertionResults": [

@@ -31,18 +31,18 @@
 
 # Mirror the repo-relative layout the hook resolves from a tree's own root, in
 # whatever tree a case aims a merge at. Every such tree needs its own copy: the
-# signal helper is invoked by the repo-relative path red_ledger_signal_script
+# signal helper is invoked by the repo-relative path test_signals_signal_script
 # returns, run from the tree the gate decides the merge acts on, so a linked
 # worktree lacking it emits no signals and drops out of the offender scan.
 install_tree_links() {
   local directory="$1"
   mkdir -p "$directory/.claude/hooks/lib" "$directory/.gaia/scripts"
-  ln -sfn "$HOME_ROOT/.claude/hooks/lib/red-ledger.sh" "$directory/.claude/hooks/lib/red-ledger.sh"
+  ln -sfn "$HOME_ROOT/.claude/hooks/lib/test-signals.sh" "$directory/.claude/hooks/lib/test-signals.sh"
   for repo_scope_file in repo-scope.sh repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
     ln -sfn "$HOME_ROOT/.claude/hooks/lib/$repo_scope_file" "$directory/.claude/hooks/lib/$repo_scope_file"
   done
   ln -sfn "$HOME_ROOT/.claude/hooks/lib/worthiness-ledger.sh" "$directory/.claude/hooks/lib/worthiness-ledger.sh"
-  ln -sfn "$HOME_ROOT/.gaia/scripts/red-ledger" "$directory/.gaia/scripts/red-ledger"
+  ln -sfn "$HOME_ROOT/.gaia/scripts/test-signals" "$directory/.gaia/scripts/test-signals"
   ln -sfn "$HOME_ROOT/.gaia/scripts/classifier" "$directory/.gaia/scripts/classifier"
   # red_ledger_path and worthiness_ledger_path (inside the symlinked libs
   # above) each source this relative to THEIR OWN location to reach
@@ -61,7 +61,7 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$HOME_ROOT"
   HOOK_ABSOLUTE_PATH="$HOME_ROOT/.claude/hooks/worthiness-presence-check.sh"
-  HELPER="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
+  HELPER="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
 
   REPO=$(mktemp -d -t worthiness-presence-test-XXXXXX)
   git -C "$REPO" init --quiet --initial-branch=main
@@ -948,7 +948,7 @@ export const Plain = meta.story({});
 @test "an old-format story file is denied with the extractor's migration line, not skipped" {
   write_story_descriptor
   local story="apps/web/app/utils/tests/old-format.stories.tsx"
-  commit_file "$story" "$(cat "$BATS_TEST_DIRNAME/fixtures/red-ledger/csf3-old-format.stories.tsx")"
+  commit_file "$story" "$(cat "$BATS_TEST_DIRNAME/fixtures/test-signals/csf3-old-format.stories.tsx")"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
@@ -1030,7 +1030,7 @@ run_selection_walk() {
   cat >"$BATS_TEST_TMPDIR/walk-driver.sh" <<'DRIVER'
 tree="$1"; mode="$2"; home_root="$3"
 . "$home_root/.claude/hooks/lib/gaia-packages.sh"
-. "$home_root/.claude/hooks/lib/red-ledger.sh"
+. "$home_root/.claude/hooks/lib/test-signals.sh"
 . "$home_root/.claude/hooks/lib/worthiness-selection.sh"
 gaia_packages_load "$tree" || exit 5
 case "$mode" in
@@ -1231,4 +1231,66 @@ test("refuses an anonymous visitor", () => {
   run_merge_hook
   [ "$status" -eq 0 ]
   refute_denied
+}
+
+# --- flow files: a listed bats or CLI test is demanded whatever the scope globs say ---
+
+FLOW_BATS_PATH=".gaia/tests/lib/flow-sample.bats"
+FLOW_BATS_SOURCE=
+build_flow_bats_source() {
+  local AT=@
+  FLOW_BATS_SOURCE="#!/usr/bin/env bats
+
+${AT}test \"refuses a spec that still carries uats\" {
+  run echo refused
+  [ \"\$status\" -eq 0 ]
+}
+"
+}
+FLOW_CLI_PATH=".gaia/cli/src/flow-sample/flow-sample.test.ts"
+
+# Write the run folder's flow-tests.tsv (flow_id, slug, kind, path) in the
+# folder the hook derives from the tree's branch key. The key comes from the
+# same library function the hook calls.
+write_flow_tests_file() {
+  local flow_path="$1" key run_folder
+  key="$( . "$HOME_ROOT/.gaia/scripts/audit-loop-state-lib.sh" && gaia_loop_key "$REPO" )"
+  run_folder="$( . "$HOME_ROOT/.gaia/scripts/audit-loop-state-lib.sh" && gaia_loop_run_directory "$REPO" "$key" )"
+  mkdir -p "$run_folder"
+  printf 'FLOW-001\tflow-sample\tcommand\t%s\n' "$flow_path" >"$run_folder/flow-tests.tsv"
+}
+
+@test "flow files: a listed bats flow test is denied without a verdict, allowed with one, and not demanded when unlisted" {
+  build_flow_bats_source
+  commit_file "$FLOW_BATS_PATH" "$FLOW_BATS_SOURCE"
+
+  # No flow-tests.tsv: the bats file is outside every scope glob, so nothing is demanded.
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+
+  write_flow_tests_file "$FLOW_BATS_PATH"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"refuses a spec that still carries uats"* ]]
+
+  ( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/audit-ledger/append-worthiness.mjs" \
+      "$FLOW_BATS_PATH" "refuses a spec that still carries uats" keep )
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "flow files: a listed CLI flow test is denied without a verdict" {
+  commit_file "$FLOW_CLI_PATH" 'import {expect, test} from "vitest";
+test("refuses a spec that still carries uats", () => {
+  expect(1 + 1).toBe(2);
+});
+'
+  write_flow_tests_file "$FLOW_CLI_PATH"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"refuses a spec that still carries uats"* ]]
 }

@@ -13,8 +13,8 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$HOME_ROOT"
   PROMPT="$HOME_ROOT/.claude/agents/worthiness-evaluator.md"
-  EXTRACTOR="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
-  CSF4_FIXTURE=".gaia/tests/hooks/fixtures/red-ledger/csf4-with-tests.stories.tsx"
+  EXTRACTOR="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
+  CSF4_FIXTURE=".gaia/tests/hooks/fixtures/test-signals/csf4-with-tests.stories.tsx"
 }
 
 # Succeeds only for a prompt that names the per-test unit shape and `base story`
@@ -89,4 +89,93 @@ prompt_names_tdd_as_one_dispatcher() {
   printf '%s\n' "The tdd skill is the only dispatcher of this audit, not the shared worthiness step." > "$old_prompt"
   run prompt_names_tdd_as_one_dispatcher "$old_prompt"
   [ "$status" -ne 0 ]
+}
+
+# Whitespace-collapsed prompt text, so a pin survives the prompt's hard wrapping.
+normalized_prompt() {
+  tr '\n' ' ' < "$1" | tr -s ' '
+}
+
+# Fails with the first needle of the list the prompt lacks.
+prompt_carries_every() {
+  local prompt_file="$1"
+  shift
+  local needle text
+  text=$(normalized_prompt "$prompt_file")
+  for needle in "$@"; do
+    grep -qF -- "$needle" <<<"$text" || {
+      printf 'missing needle: %s\n' "$needle" >&2
+      return 1
+    }
+  done
+  return 0
+}
+
+flow_input_needles() {
+  FLOW_INPUT_NEEDLES=(
+    'Flows spec: <path>'
+    'Flow: <file> › <flowId> <slug>'
+  )
+}
+
+# shellcheck disable=SC2016
+flow_verdict_needles() {
+  FLOW_VERDICT_NEEDLES=(
+    'untestedErrorPaths'
+    'missingOutcome'
+    'undeclaredFolders'
+    'any non-empty member makes the verdict `fix`, never `keep`'
+    'only for a test that had a `Flow:` line'
+  )
+}
+
+flow_judgment_needles() {
+  FLOW_JUDGMENT_NEEDLES=(
+    'name the error paths the build actually has'
+    'the SPEC does not list'
+    'honesty axis applies to every test it judges, strict included'
+  )
+}
+
+@test "the evaluator prompt names each flow input line it takes" {
+  flow_input_needles
+  local needle
+  for needle in "${FLOW_INPUT_NEEDLES[@]}"; do
+    prompt_carries_every "$PROMPT" "$needle"
+  done
+}
+
+@test "the evaluator prompt pins each flow verdict member and the rule that a non-empty one forbids keep" {
+  flow_verdict_needles
+  local needle
+  for needle in "${FLOW_VERDICT_NEEDLES[@]}"; do
+    prompt_carries_every "$PROMPT" "$needle"
+  done
+}
+
+@test "the evaluator prompt reads flow source for error paths, excludes SPEC-listed folders, and judges honesty on strict tests" {
+  flow_judgment_needles
+  local needle
+  for needle in "${FLOW_JUDGMENT_NEEDLES[@]}"; do
+    prompt_carries_every "$PROMPT" "$needle"
+  done
+}
+
+@test "the flow pin check rejects a prompt that lacks any one flow needle" {
+  flow_input_needles
+  flow_verdict_needles
+  flow_judgment_needles
+  local all_needles=("${FLOW_INPUT_NEEDLES[@]}" "${FLOW_VERDICT_NEEDLES[@]}" "${FLOW_JUDGMENT_NEEDLES[@]}")
+  local needle scratch="$BATS_TEST_TMPDIR/prompt.md" other
+  for needle in "${all_needles[@]}"; do
+    : > "$scratch"
+    for other in "${all_needles[@]}"; do
+      [ "$other" = "$needle" ] || printf '%s\n' "$other" >> "$scratch"
+    done
+    run prompt_carries_every "$scratch" "${all_needles[@]}"
+    [ "$status" -ne 0 ] || {
+      printf 'check stayed green without: %s\n' "$needle" >&2
+      return 1
+    }
+  done
 }

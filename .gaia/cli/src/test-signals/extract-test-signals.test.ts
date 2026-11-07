@@ -1,9 +1,9 @@
 /**
- * Pins the title handling of the RED-ledger signal helper
- * (`.gaia/scripts/red-ledger/extract-test-signals.mjs`): a dynamic-title
+ * Pins the title handling of the test-signal helper
+ * (`.gaia/scripts/test-signals/extract-test-signals.mjs`): a dynamic-title
  * `test`, or anything under a dynamic-title `describe`, has no source title
  * vitest preserves verbatim at runtime, so the helper emits nothing for it
- * rather than an identity the RED ledger could never match. A test under a
+ * rather than an identity a consumer could never match. A test under a
  * `.each`/`.for` table, at test or describe level, is named by its template
  * plus a row pattern.
  */
@@ -15,7 +15,7 @@ import {resolveRepoRootFromImportMeta} from '../util/repo-root-fixture.js';
 const REPO_ROOT = resolveRepoRootFromImportMeta(import.meta.url);
 const SIGNAL_HELPER = path.join(
   REPO_ROOT,
-  '.gaia/scripts/red-ledger/extract-test-signals.mjs'
+  '.gaia/scripts/test-signals/extract-test-signals.mjs'
 );
 
 // The helper resolves `typescript` by walking up from its own location to the
@@ -47,7 +47,7 @@ const runOnSource = (source: string): ExtractedSignal[] =>
     .map((line) => JSON.parse(line) as ExtractedSignal);
 
 /**
- * A test under a `.each`/`.for` table is one test owing one RED: the helper
+ * A test under a `.each`/`.for` table is one test: the helper
  * names it by its declared template and adds a `rowPattern` that matches every
  * fullName vitest can expand a row into, so the capture hook can file a
  * failing row's RED under the template.

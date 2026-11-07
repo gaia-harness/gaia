@@ -414,7 +414,7 @@ if [ -n "$failures" ]; then
     # shared normalizer covers an already-relative name.
     case "$raw_file" in
       "$tree_root"/*) relative_file="${raw_file#"$tree_root"/}" ;;
-      *) relative_file=$(red_ledger_repo_relative_path "$raw_file") ;;
+      *) relative_file=$(test_signals_repo_relative_path "$raw_file") ;;
     esac
     [ -n "$relative_file" ] || continue
 
@@ -430,7 +430,7 @@ if [ -n "$failures" ]; then
       # RED-before-GREEN commit gate, which now enforces from a subdirectory.
       # A feeder that silently records nothing there would leave that gate
       # denying every new test with no way to satisfy it.
-      cached_signals=$( cd "$tree_root" && red_ledger_signals_or_warn "$relative_file" || echo "")
+      cached_signals=$( cd "$tree_root" && test_signals_signals_or_warn "$relative_file" || echo "")
     fi
     [ -n "$cached_signals" ] || continue
 

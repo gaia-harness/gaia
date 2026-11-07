@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // Extract per-test (fullName, content signal) pairs from a vitest/jest test
-// file, for the RED-observation ledger.
+// file: the one test-identity extractor the RED hooks, the worthiness ledger and
+// presence gate, and the overlap check share.
 //
-// A RED observation binds to a test by (file, fullName, signal). The signal
-// lets the commit gate invalidate a RED once the test body changes: a fresh
-// failing run must then be observed. vitest's --reporter=json emits
+// A test is identified by (file, fullName, signal). The signal changes
+// whenever the test body changes, so a verdict or observation recorded
+// against an earlier body no longer matches. vitest's --reporter=json emits
 // location: null for every assertion, so the signal cannot come from the
 // reporter. It is derived here, from the test file source.
 //
 // Invocation:
-//   node .gaia/scripts/red-ledger/extract-test-signals.mjs <repo-relative-test-path>
+//   node .gaia/scripts/test-signals/extract-test-signals.mjs <repo-relative-test-path>
 //   ... --stdin   (read source bytes from stdin instead of disk)
 //
 // Output (stdout): one JSON object per discovered test(...)/it(...) call,
@@ -25,6 +26,11 @@
 // Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF4
 // story file; its fullName and signal rules and refusal list live in the
 // header of ./extract-story-signals.mjs.
+//
+// Bats mode: a path ending `.bats` goes to runBatsSignalsCli in
+// ./extract-bats-signals.mjs (its header owns the fullName and signal rules)
+// before "typescript" is resolved, so a bats file needs no TypeScript. Exit 6
+// there is an unterminated `@test` block.
 //
 // Exit codes (each failure writes one stderr line and nothing to stdout):
 //   0  success, including zero tests or stories found (emits nothing)
@@ -78,6 +84,7 @@ import {
   extractStorySignals,
   StoryFileRefusal,
 } from './extract-story-signals.mjs';
+import {runBatsSignalsCli} from './extract-bats-signals.mjs';
 import {rowPatternFor} from './row-pattern.mjs';
 
 const require = createRequire(import.meta.url);
@@ -91,6 +98,10 @@ if (!filePath) {
     'extract-test-signals: missing <repo-relative-test-path> argument\n',
   );
   process.exit(2);
+}
+
+if (/\.bats$/.test(filePath)) {
+  runBatsSignalsCli(filePath, useStdin);
 }
 
 let ts;

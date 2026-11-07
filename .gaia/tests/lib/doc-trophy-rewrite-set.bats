@@ -97,7 +97,7 @@ setup() {
     "One test per user-observable behavior"
     "a parameterized table is one test"
     "nothing the type checker or lint already proves"
-    "from the closed list at the browser step of the planner's ladder"
+    "from the closed list under [[#When a test needs a real browser]]"
   )
 }
 

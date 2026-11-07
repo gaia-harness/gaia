@@ -389,7 +389,8 @@ JS
     .gaia/scripts/main-root-lib.sh \
     .gaia/scripts/state-registry-lib.sh \
     .gaia/scripts/link-worktree.sh \
-    .claude/hooks/lib/red-ledger.sh
+    .claude/hooks/lib/red-ledger.sh \
+    .claude/hooks/lib/test-signals.sh
   gaia_copy_registry "$MAIN"
   gaia_commit_all "$MAIN" "add link-worktree deps"
 
@@ -488,6 +489,7 @@ JS
     .claude/hooks/lib/hook-payload.sh \
     .claude/hooks/lib/jq-availability.sh \
     .claude/hooks/lib/red-ledger.sh \
+    .claude/hooks/lib/test-signals.sh \
     .claude/hooks/lib/repo-scope.sh \
     .claude/hooks/lib/repo-scope-segment.sh \
     .claude/hooks/lib/repo-scope-scan.sh \
@@ -512,7 +514,7 @@ JS
   # exactly as they do in production. Linked in MAIN, before the commit below,
   # so treeA and treeB check out the IDENTICAL symlink (a git blob is just the
   # target-path string) rather than two independently-constructed ones.
-  gaia_link_real "$MAIN" .gaia/scripts/red-ledger .gaia/scripts/classifier
+  gaia_link_real "$MAIN" .gaia/scripts/red-ledger .gaia/scripts/test-signals .gaia/scripts/classifier
 
   gaia_commit_all "$MAIN" "add RED-verify gate deps"
 

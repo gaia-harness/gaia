@@ -30,17 +30,19 @@
 # Mirror the repo-relative layout the hook resolves from a tree's own root, in
 # whatever tree a case aims a commit at. Every such tree needs its own copy:
 # the signal helper is invoked by the repo-relative path
-# red_ledger_signal_script returns, run from the tree the gate decides the
+# test_signals_signal_script returns, run from the tree the gate decides the
 # commit acts on, so a linked worktree lacking it emits no signals and drops
 # out of the offender scan.
 install_tree_links() {
   local directory="$1"
   mkdir -p "$directory/.claude/hooks/lib" "$directory/.gaia/scripts"
   ln -sfn "$HOME_ROOT/.claude/hooks/lib/red-ledger.sh" "$directory/.claude/hooks/lib/red-ledger.sh"
+  ln -sfn "$HOME_ROOT/.claude/hooks/lib/test-signals.sh" "$directory/.claude/hooks/lib/test-signals.sh"
   for repo_scope_file in repo-scope.sh repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
     ln -sfn "$HOME_ROOT/.claude/hooks/lib/$repo_scope_file" "$directory/.claude/hooks/lib/$repo_scope_file"
   done
   ln -sfn "$HOME_ROOT/.gaia/scripts/red-ledger" "$directory/.gaia/scripts/red-ledger"
+  ln -sfn "$HOME_ROOT/.gaia/scripts/test-signals" "$directory/.gaia/scripts/test-signals"
   # red_ledger_path (inside the symlinked red-ledger.sh above) sources this
   # relative to ITS OWN location to reach gaia_tree_key, so it needs to
   # resolve inside the tree too, not just from the hook's own BASH_SOURCE.
@@ -61,7 +63,9 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/require-node-typescript.sh"
   require_node_typescript "$HOME_ROOT"
   HOOK_ABSOLUTE_PATH="$HOME_ROOT/.claude/hooks/red-verify-commit-check.sh"
-  HELPER="$HOME_ROOT/.gaia/scripts/red-ledger/extract-test-signals.mjs"
+  HELPER="$HOME_ROOT/.gaia/scripts/test-signals/extract-test-signals.mjs"
+  # gaia-lint-ignore whole-tree-mark-guard: --tree-key derives a key from the root path and lists no tracked file
+  TREE_KEY=$(bash "$HOME_ROOT/.gaia/scripts/main-root-lib.sh" --tree-key "$HOME_ROOT")
 
   REPO=$(mktemp -d -t red-verify-test-XXXXXX)
   git -C "$REPO" init --quiet --initial-branch=main
@@ -1032,4 +1036,18 @@ $ROUTE_FAILS_BODY"
 @test "descriptor pin: the route-tests glob stays in emergentTests" {
   run jq -e '.globs.emergentTests | index("app/route-tests/**/*.test.ts")' "$HOME_ROOT/apps/web/gaia.package.json"
   [ "$status" -eq 0 ]
+}
+
+# --- the ledger path helper ---
+
+@test "red_ledger_path with an explicit root joins it onto the tree-keyed ledger path" {
+  run bash -c "cd '$HOME_ROOT' && set -uo pipefail && . '$HOME_ROOT/.claude/hooks/lib/red-ledger.sh' && red_ledger_path '$HOME_ROOT'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$HOME_ROOT/.gaia/local/red-ledger/$TREE_KEY/observations.jsonl" ]
+}
+
+@test "red_ledger_path with no root defaults to gaia_resolve_tree_root of the process cwd, keyed the same way" {
+  run bash -c "cd '$HOME_ROOT' && set -uo pipefail && . '$HOME_ROOT/.claude/hooks/lib/red-ledger.sh' && red_ledger_path"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$HOME_ROOT/.gaia/local/red-ledger/$TREE_KEY/observations.jsonl" ]
 }

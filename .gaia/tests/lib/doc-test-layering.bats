@@ -28,6 +28,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PAGE="$REPO_ROOT/wiki/decisions/Test Layering.md"
   TESTS_REACT="$REPO_ROOT/apps/web/.claude/skills/tdd-react/references/tests-react.md"
+  CODING_GUIDELINES_REACT="$REPO_ROOT/apps/web/.claude/rules/coding-guidelines-react.md"
   ROUTES_RULE="$REPO_ROOT/apps/web/.claude/rules/routes.md"
   SESSION_README="$REPO_ROOT/apps/web/app/routes/_session/README.md"
   ROUTING="$REPO_ROOT/wiki/modules/Routing.md"
@@ -105,13 +106,12 @@ check_tests_react() {
     'proven by a real-server `.data` request naming only the child route' \
     'cannot be proven by a route test' \
     'wiki/decisions/Test Layering.md' \
-    '.claude/skills/gaia/references/plan/planner.md' \
     'serializeForm'; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
   has "$file" 'client-submitted' && return 1
   local token tokens
-  tokens=$(sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh" | grep -oE '"[^"]+"' | tr -d '"')
+  tokens=$(capability_names_of "$PAGE")
   [ "$(printf '%s\n' "$tokens" | wc -l)" -eq 5 ] || { echo "expected five capability tokens"; return 1; }
   while IFS= read -r token; do
     has "$file" "$token" && { echo "copied token: $token"; return 1; }
@@ -164,6 +164,69 @@ check_no_pilot_figures() {
 
 check_no_working_doc_ids() {
   grep -E 'UAT-[0-9]+|SPEC-[0-9]+' "$@" >/dev/null && return 1
+  return 0
+}
+
+LAYERING_HEADING='## When a test needs a real browser'
+
+# The five browser capabilities, as the page's list names them.
+CAPABILITY_NAMES=(
+  'client JavaScript'
+  'layout or visual position'
+  'focus or keyboard'
+  'rendered-DOM accessibility scan'
+  'browser-only navigation'
+)
+
+# Prints the leading backticked or bold name of each bullet between the list
+# heading and the next `## ` heading, one per line.
+capability_names_of() {
+  awk -v heading="$LAYERING_HEADING" '
+    $0 == heading { inside = 1; next }
+    inside && /^## / { inside = 0 }
+    inside && /^- / {
+      line = $0
+      sub(/^- (`|\*\*)/, "", line)
+      sub(/(`|\*\*).*$/, "", line)
+      print line
+    }
+  ' "$1"
+}
+
+# The page's list names exactly the five capabilities, each one under the heading.
+check_capability_list() {
+  local file="$1" names count name
+  has "$file" "$LAYERING_HEADING" || { echo "missing heading"; return 1; }
+  names=$(capability_names_of "$file")
+  count=$(printf '%s\n' "$names" | grep -c .)
+  [ "$count" -eq 5 ] || { echo "expected five capability names, read $count"; return 1; }
+  for name in "${CAPABILITY_NAMES[@]}"; do
+    printf '%s\n' "$names" | grep -qxF -- "$name" || { echo "missing capability: $name"; return 1; }
+  done
+}
+
+check_flow_spec_admission() {
+  local file="$1" needle
+  for needle in \
+    '.playwright/flows/' \
+    'one Playwright spec per critical web flow' \
+    'whatever a cheaper layer could prove'; do
+    has "$file" "$needle" || { echo "missing: $needle"; return 1; }
+  done
+}
+
+check_points_at_layering() {
+  local file="$1"
+  has "$file" 'wiki/decisions/Test Layering.md' || { echo "missing Test Layering pointer"; return 1; }
+  has "$file" 'planner.md' && { echo "present: planner.md pointer"; return 1; }
+  return 0
+}
+
+check_layering_absences() {
+  local file="$1"
+  has "$file" 'planner.md' && { echo "present: planner.md pointer"; return 1; }
+  has "$file" "planner's ladder" && { echo "present: planner's ladder"; return 1; }
+  grep -qE '\bUATs?\b' "$file" && { echo "present: UAT term"; return 1; }
   return 0
 }
 
@@ -228,18 +291,15 @@ mutate_copy() {
   [ "$status" -eq 0 ]
 }
 
-@test "red twin: tests-react without the ladder pointer or serializeForm, or with a client-submitted row or a copied token, fails" {
+@test "red twin: tests-react without serializeForm, or with a client-submitted row or a copied token, fails" {
   local copy token
-  copy=$(mutate_copy "$TESTS_REACT" 's#references/plan/planner\.md#references/plan/other.md#')
-  run check_tests_react "$copy"
-  [ "$status" -ne 0 ]
   copy=$(mutate_copy "$TESTS_REACT" 's/serializeForm/serializeBody/')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
   copy=$(mutate_copy "$TESTS_REACT" 's/one journey per user flow/client-submitted forms, one journey per user flow/')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
-  token=$(sed -n 's/^capability_tokens=(\(.*\))$/\1/p' "$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh" | grep -oE '"[^"]+"' | tr -d '"' | head -n 1)
+  token=$(capability_names_of "$PAGE" | head -n 1)
   [ -n "$token" ]
   copy=$(mutate_copy "$TESTS_REACT" "s/one journey per user flow/$token, one journey per user flow/")
   run check_tests_react "$copy"
@@ -362,5 +422,79 @@ mutate_copy() {
   [ "$status" -ne 0 ]
   printf 'see UAT-007\n' >"$copy"
   run check_no_working_doc_ids "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------- the browser capability list ----------
+
+@test "the page lists each browser capability under the real-browser heading" {
+  run check_capability_list "$PAGE"
+  [ "$status" -eq 0 ]
+}
+
+@test "red twin: a page missing a capability, the heading or a bullet fails" {
+  local copy name
+  for name in "${CAPABILITY_NAMES[@]}"; do
+    copy="$BATS_TEST_TMPDIR/dropped.md"
+    grep -vF -- "$name" "$PAGE" >"$copy"
+    run check_capability_list "$copy"
+    [ "$status" -ne 0 ]
+  done
+  copy=$(mutate_copy "$PAGE" 's/^## When a test needs a real browser$/## Browsers/')
+  run check_capability_list "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the page admits one browser spec per critical web flow whatever a cheaper layer could prove" {
+  run check_flow_spec_admission "$PAGE"
+  [ "$status" -eq 0 ]
+}
+
+@test "red twin: a page without the flows folder, the admission or the override fails" {
+  local copy
+  copy=$(mutate_copy "$PAGE" 's#\.playwright/flows/#.playwright/other/#g')
+  run check_flow_spec_admission "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" 's/one Playwright spec per critical web flow/one spec/g')
+  run check_flow_spec_admission "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" 's/whatever a cheaper layer could prove/when nothing cheaper proves it/g')
+  run check_flow_spec_admission "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the React rule and the tests reference point at the page, not at the planner, for the ladder" {
+  local file
+  for file in "$CODING_GUIDELINES_REACT" "$TESTS_REACT"; do
+    run check_points_at_layering "$file"
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "red twin: a React rule or reference that points at the planner or loses the page pointer fails" {
+  local copy
+  copy=$(mutate_copy "$CODING_GUIDELINES_REACT" 's#wiki/decisions/Test Layering\.md#nowhere#g')
+  run check_points_at_layering "$copy"
+  [ "$status" -ne 0 ]
+  printf 'wiki/decisions/Test Layering.md and .claude/skills/gaia/references/plan/planner.md\n' >"$BATS_TEST_TMPDIR/pointer.md"
+  run check_points_at_layering "$BATS_TEST_TMPDIR/pointer.md"
+  [ "$status" -ne 0 ]
+}
+
+@test "the page carries no planner pointer, no planner ladder and no UAT term" {
+  run check_layering_absences "$PAGE"
+  [ "$status" -eq 0 ]
+}
+
+@test "red twin: a restored planner pointer, planner ladder or UAT word fails" {
+  local copy
+  copy=$(mutate_copy "$PAGE" 's#^Only the frontend package#See planner.md. Only the frontend package#')
+  run check_layering_absences "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" "s#^Only the frontend package#Routed by the planner's ladder. Only the frontend package#")
+  run check_layering_absences "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$PAGE" 's#^Only the frontend package#Sibling UATs fold. Only the frontend package#')
+  run check_layering_absences "$copy"
   [ "$status" -ne 0 ]
 }

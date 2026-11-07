@@ -5,8 +5,8 @@
 # tree's worthiness verdicts live. Both the ledger writer
 # (.gaia/scripts/audit-ledger/append-worthiness.mjs) and its reader
 # (.claude/hooks/worthiness-presence-check.sh) call this instead of hand-
-# building the path literal independently, matching the problem
-# .claude/hooks/lib/red-ledger.sh already solves for the RED ledger. Dual-
+# building the path literal independently, the same problem the RED ledger
+# solves for its own path. Dual-
 # mode: source it for the function below, or run it directly as a script so
 # the Node writer can shell out to it (see "Usage (executable)" below).
 #

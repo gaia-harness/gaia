@@ -59,7 +59,7 @@ const require = createRequire(import.meta.url);
 const extractorPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
-  'red-ledger',
+  'test-signals',
   'extract-test-signals.mjs',
 );
 
