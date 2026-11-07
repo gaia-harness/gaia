@@ -307,7 +307,7 @@ flow_checks() {
     [ "$phase" -le "$last_phase" ] || last_phase="$phase"
   done <<<"$stems_text"
 
-  # flow_lines holds <task doc>, <phase>, <flow id>, <path> per Flow test line.
+  # flow_lines holds <task doc>, <phase>, <flow id>, <path> per Flow test line; a task doc with no single README phase records '-' because the tab-split reads collapse an empty field.
   for task_file in ${task_files[@]+"${task_files[@]}"}; do
     task_name="$(basename "$task_file")"
     task_stem="${task_name%.md}"
@@ -325,7 +325,7 @@ flow_checks() {
       [[ "$line_text" =~ ^[[:space:]]*-[[:space:]]+Flow\ test\ \(([^\)]*)\):[[:space:]]*(.*)$ ]] || continue
       path_text="${BASH_REMATCH[2]}"
       path_text="${path_text%"${path_text##*[![:space:]]}"}"
-      flow_lines="${flow_lines}${task_name}"$'\t'"$task_phase"$'\t'"${BASH_REMATCH[1]}"$'\t'"$path_text"$'\n'
+      flow_lines="${flow_lines}${task_name}"$'\t'"${task_phase:--}"$'\t'"${BASH_REMATCH[1]}"$'\t'"$path_text"$'\n'
       line_count=$((line_count + 1))
     done <"$task_file"
     if [ "$task_phase" = "$last_phase" ]; then
@@ -366,7 +366,7 @@ flow_checks() {
     [ -n "$line_task" ] || continue
     grep -qxF -- "$line_flow_id" <<<"$(cut -f1 <<<"$flow_output")" \
       || fail "$line_task: the Flow test line names $line_flow_id, which the SPEC does not define"
-    if [ -n "$line_phase" ] && [ "$line_phase" != "$last_phase" ]; then
+    if [ "$line_phase" != - ] && [ "$line_phase" != "$last_phase" ]; then
       fail "$line_task (Phase $line_phase): the Flow test line for $line_flow_id belongs in a last-phase (Phase $last_phase) task doc"
     fi
   done <<<"$flow_lines"

@@ -866,6 +866,18 @@ add_readme_task() {
   refusal_line 'task-orphan.md'
 }
 
+@test "flows: a flow line in a task doc no phase row names adds no false phase or undefined-flow findings" {
+  spec_fixture
+  printf '# Web flow\n\n- nothing\n' >"$PLAN/task-flow-web.md"
+  printf '# Orphan\n\n- Flow test (FLOW-901): %s\n' "$WEB_TEST_PATH" >"$PLAN/task-orphan.md"
+  verify_spec
+  [ "$status" -eq 1 ]
+  refusal_line 'task-orphan.md'
+  grep -qF '(Phase FLOW-' <<<"$output" && return 1
+  grep -qF 'does not define' <<<"$output" && return 1
+  true
+}
+
 @test "flows: a task stem two README phase rows name fails naming the task doc" {
   spec_fixture
   add_readme_task 1 task-flow-web
