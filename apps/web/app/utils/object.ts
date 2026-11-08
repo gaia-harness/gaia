@@ -4,6 +4,12 @@ import SparkMD5 from 'spark-md5';
 const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
+/** Strips Conform's `type`, an input attribute the Base UI checkbox root does not take. */
+export const omitType = <Props extends {type?: unknown}>({
+  type: _type,
+  ...props
+}: Props): Omit<Props, 'type'> => props;
+
 export const md5 = (record: Record<string, unknown>): string =>
   SparkMD5.hash(JSON.stringify(record));
 

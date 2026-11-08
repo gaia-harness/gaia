@@ -47,42 +47,44 @@ const textHelpers = (i18n: boolean): TextHelpers => ({
 
 const formFieldMarkup = (field: ServiceField, text: TextHelpers): string => {
   const meta = `fields.${field.name}`;
-  const label = element(
-    12,
-    `<FieldLabel htmlFor={${meta}.id}>`,
-    text.child(meta, fieldLabel(field))
-  );
-  const errors = block(
-    '            <FieldError',
-    `              errors={${meta}.errors?.map((message) => ({message}))}`,
-    `              id={${meta}.errorId}`,
-    '            />'
-  );
-  const close = block('          </Field>');
-
-  if (field.kind === 'boolean') {
-    const checkbox = block(
-      '          <Field',
-      `            data-invalid={${meta}.errors ? true : undefined}`,
-      '            orientation="horizontal"',
-      '          >',
-      '            <Checkbox',
-      `              {...omitType(getInputProps(${meta}, {type: 'checkbox'}))}`,
-      '            />'
-    );
-
-    return `${checkbox}${label}${errors}${close}`;
-  }
-
+  const isCheckbox = field.kind === 'boolean';
+  const attributes = [
+    `field={${meta}}`,
+    `label=${text.attribute(meta, fieldLabel(field))}`,
+    ...(isCheckbox ? ['orientation="horizontal"'] : []),
+  ];
+  const open = fitOnLine(`          <ConformField ${attributes.join(' ')}>`, [
+    '          <ConformField',
+    ...attributes.map((attribute) => `            ${attribute}`),
+    '          >',
+  ]);
   const inputType = field.kind === 'number' ? 'number' : 'text';
-  const open = block(
-    `          <Field data-invalid={${meta}.errors ? true : undefined}>`
-  );
-  const input = block(
-    `            <Input {...getInputProps(${meta}, {type: '${inputType}'})} />`
-  );
+  const control =
+    isCheckbox ?
+      [
+        '              <Checkbox',
+        '                {...omitType(',
+        `                  getInputProps(${meta}, {`,
+        '                    ...controlOptions,',
+        "                    type: 'checkbox',",
+        '                  })',
+        '                )}',
+      ]
+    : [
+        '              <Input',
+        `                {...getInputProps(${meta}, {`,
+        '                  ...controlOptions,',
+        `                  type: '${inputType}',`,
+        '                })}',
+      ];
 
-  return `${open}${label}${input}${errors}${close}`;
+  return `${open}${block(
+    '            {(controlOptions) => (',
+    ...control,
+    '              />',
+    '            )}',
+    '          </ConformField>'
+  )}`;
 };
 
 const formMarkup = (context: DataRouteContext, text: TextHelpers): string => {
@@ -162,13 +164,14 @@ const formImportLines = (
   const hasInput = inputFields.some((field) => field.kind !== 'boolean');
 
   return [
+    "import ConformField from '~/components/form/conform-field';",
     "import {Button} from '~/components/ui/button';",
     ...(hasBoolean ?
       ["import {Checkbox} from '~/components/ui/checkbox';"]
     : []),
-    "import {Field, FieldError, FieldLabel} from '~/components/ui/field';",
     ...(hasInput ? ["import {Input} from '~/components/ui/input';"] : []),
     `import {${derived.singular}InputSchema} from '${serviceImportPath(context)}';`,
+    ...(hasBoolean ? ["import {omitType} from '~/utils/object';"] : []),
   ];
 };
 
@@ -193,7 +196,7 @@ const pageImportLines = (
       [
         "import type {SubmissionResult} from '@conform-to/react';",
         "import {getFormProps, getInputProps, useForm} from '@conform-to/react';",
-        "import {parseWithZod} from '@conform-to/zod/v4';",
+        "import {getZodConstraint, parseWithZod} from '@conform-to/zod/v4';",
       ]
     : []),
     ...(isQuery ?
@@ -235,6 +238,7 @@ const formHookLines = (context: DataRouteContext): string => {
   return block(
     '  const lastResult = useActionData<SubmissionResult>();',
     '  const [form, fields] = useForm({',
+    `    constraint: getZodConstraint(${singular}InputSchema),`,
     ...(isList(context) ? [] : [`    defaultValue: ${singular},`]),
     '    lastResult,',
     '    onValidate: ({formData}) =>',
@@ -244,18 +248,9 @@ const formHookLines = (context: DataRouteContext): string => {
   );
 };
 
-const CHECKBOX_HELPER = block(
-  "// Conform's `type` is an input attribute the Base UI checkbox root does not take.",
-  'const omitType = <Props extends {type?: unknown}>({',
-  '  type: _type,',
-  '  ...props',
-  '}: Props) => props;',
-  ''
-);
-
 /** Variables for `page.data.tsx.tmpl`. */
 export const buildDataPageVars = (context: DataRouteContext): TemplateVars => {
-  const {action, i18n} = context.flags;
+  const {i18n} = context.flags;
   const text = textHelpers(i18n);
   const i18nLine =
     i18n ?
@@ -268,7 +263,6 @@ export const buildDataPageVars = (context: DataRouteContext): TemplateVars => {
   );
 
   return {
-    checkboxHelper: action && hasBoolean ? CHECKBOX_HELPER : '',
     dataMarkup:
       isList(context) ? listMarkup(context) : detailMarkup(context, text),
     formMarkup: formMarkup(context, text),

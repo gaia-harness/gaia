@@ -214,6 +214,10 @@ Replace each `lang={DEFAULT_LOCALE}` with `lang="en"`, replace the `{errors.unex
 
 Delete the `...lint.i18n,` line. With no i18next the bundle's `i18n` block reports every JSX string. A project that adds i18n back restores the line.
 
+### B6. `apps/web/app/components/form/conform-field-error/index.tsx`
+
+Its `t(message)` takes a dynamic key, and it imports the language file Section C deletes. Delete both i18n imports (`useTranslation`, `~/languages/en/errors`) and the `useTranslation` call, then copy the `validation` block from `apps/web/app/languages/en/errors.ts` into a local `VALIDATION_MESSAGES` constant typed `Record<string, string>`, and render each error as `{message: VALIDATION_MESSAGES[message] ?? message}`. Delete `ValidationKey` and `isValidationKey`.
+
 ---
 
 ## Section C, Delete files

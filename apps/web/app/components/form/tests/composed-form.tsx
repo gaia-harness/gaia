@@ -11,21 +11,17 @@ import {
 } from '@conform-to/react';
 import {getZodConstraint, parseWithZod} from '@conform-to/zod/v4';
 import {z} from 'zod';
+import ConformField from '~/components/form/conform-field';
+import ConformFieldError from '~/components/form/conform-field-error';
 import {Button} from '~/components/ui/button';
 import {Checkbox} from '~/components/ui/checkbox';
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from '~/components/ui/field';
+import {Field, FieldLabel, FieldLegend, FieldSet} from '~/components/ui/field';
 import {Input} from '~/components/ui/input';
 import {NativeSelect, NativeSelectOption} from '~/components/ui/native-select';
 import {RadioGroup, RadioGroupItem} from '~/components/ui/radio-group';
 import {Spinner} from '~/components/ui/spinner';
 import {Textarea} from '~/components/ui/textarea';
+import {omitType} from '~/utils/object';
 
 // Sorted `as const` lists feed the schema; the display-order lists drive rendering.
 const COLORS = ['blue', 'green', 'red'] as const;
@@ -69,16 +65,10 @@ export const composedFormSchema = z.object({
   country: z.literal(COUNTRIES).optional(),
   email: z.email({error: 'email'}).optional(),
   name: z.string({error: REQUIRED_MESSAGE}).min(1, REQUIRED_MESSAGE),
-  password: z.string().min(8, 'password').optional(),
+  password: z.string().min(8, FIXTURE_TEXT.passwordError).optional(),
   size: z.literal(SIZES, {error: REQUIRED_MESSAGE}),
   terms: z.boolean().optional(),
 });
-
-// Conform's `type` is an input attribute the Base UI checkbox root does not take.
-const omitType = <Props extends {type?: unknown}>({
-  type: _type,
-  ...props
-}: Props) => props;
 
 type ComposedFormProps = {
   disabled?: boolean;
@@ -99,11 +89,6 @@ export const ComposedForm = ({disabled = false}: ComposedFormProps) => {
     shouldValidate: 'onBlur',
   });
 
-  const errorMessages: Record<string, string> = {
-    email: t('invalidEmail', {ns: 'errors'}),
-    password: FIXTURE_TEXT.passwordError,
-    required: t('form.required'),
-  };
   const colorLabels = FIXTURE_TEXT.colorOptions satisfies Record<
     (typeof COLORS)[number],
     string
@@ -117,101 +102,91 @@ export const ComposedForm = ({disabled = false}: ComposedFormProps) => {
     string
   >;
 
-  const mapToFieldErrors = (messages?: string[]) =>
-    messages?.map((message) => ({message: errorMessages[message]}));
-
   return (
     <Form
       className="flex max-w-md flex-col gap-6 p-4"
       method="post"
       {...getFormProps(form)}
     >
-      <Field data-invalid={fields.name.errors ? true : undefined}>
-        <FieldLabel htmlFor={fields.name.id}>{t('name')}</FieldLabel>
-        <Input
-          {...getInputProps(fields.name, {type: 'text'})}
-          disabled={disabled}
-        />
-        <FieldError
-          errors={mapToFieldErrors(fields.name.errors)}
-          id={fields.name.errorId}
-        />
-      </Field>
+      <ConformField field={fields.name} label={t('name')}>
+        {(controlOptions) => (
+          <Input
+            {...getInputProps(fields.name, {...controlOptions, type: 'text'})}
+            disabled={disabled}
+          />
+        )}
+      </ConformField>
 
-      <Field data-invalid={fields.email.errors ? true : undefined}>
-        <FieldLabel htmlFor={fields.email.id}>{t('email')}</FieldLabel>
-        <Input
-          {...getInputProps(fields.email, {type: 'email'})}
-          disabled={disabled}
-          placeholder={t('emailPlaceholder')}
-        />
-        <FieldError
-          errors={mapToFieldErrors(fields.email.errors)}
-          id={fields.email.errorId}
-        />
-      </Field>
+      <ConformField field={fields.email} label={t('email')}>
+        {(controlOptions) => (
+          <Input
+            {...getInputProps(fields.email, {...controlOptions, type: 'email'})}
+            disabled={disabled}
+            placeholder={t('emailPlaceholder')}
+          />
+        )}
+      </ConformField>
 
-      <Field data-invalid={fields.password.errors ? true : undefined}>
-        <FieldLabel htmlFor={fields.password.id}>{t('password')}</FieldLabel>
-        <Input
-          {...getInputProps(fields.password, {
-            ariaDescribedBy: fields.password.descriptionId,
-            type: 'password',
-          })}
-          disabled={disabled}
-        />
-        <FieldDescription id={fields.password.descriptionId}>
-          {FIXTURE_TEXT.passwordDescription}
-        </FieldDescription>
-        <FieldError
-          errors={mapToFieldErrors(fields.password.errors)}
-          id={fields.password.errorId}
-        />
-      </Field>
+      <ConformField
+        description={FIXTURE_TEXT.passwordDescription}
+        field={fields.password}
+        label={t('password')}
+      >
+        {(controlOptions) => (
+          <Input
+            {...getInputProps(fields.password, {
+              ...controlOptions,
+              type: 'password',
+            })}
+            disabled={disabled}
+          />
+        )}
+      </ConformField>
 
-      <Field data-invalid={fields.bio.errors ? true : undefined}>
-        <FieldLabel htmlFor={fields.bio.id}>{FIXTURE_TEXT.bio}</FieldLabel>
-        <Textarea {...getTextareaProps(fields.bio)} disabled={disabled} />
-        <FieldError
-          errors={mapToFieldErrors(fields.bio.errors)}
-          id={fields.bio.errorId}
-        />
-      </Field>
+      <ConformField field={fields.bio} label={FIXTURE_TEXT.bio}>
+        {(controlOptions) => (
+          <Textarea
+            {...getTextareaProps(fields.bio, controlOptions)}
+            disabled={disabled}
+          />
+        )}
+      </ConformField>
 
-      <Field data-invalid={fields.country.errors ? true : undefined}>
-        <FieldLabel htmlFor={fields.country.id}>
-          {FIXTURE_TEXT.country}
-        </FieldLabel>
-        <NativeSelect {...getSelectProps(fields.country)} disabled={disabled}>
-          <NativeSelectOption value="">
-            {FIXTURE_TEXT.countryOptions.none}
-          </NativeSelectOption>
-          {COUNTRIES.map((country) => (
-            <NativeSelectOption key={country} value={country}>
-              {countryLabels[country]}
+      <ConformField field={fields.country} label={FIXTURE_TEXT.country}>
+        {(controlOptions) => (
+          <NativeSelect
+            {...getSelectProps(fields.country, controlOptions)}
+            disabled={disabled}
+          >
+            <NativeSelectOption value="">
+              {FIXTURE_TEXT.countryOptions.none}
             </NativeSelectOption>
-          ))}
-        </NativeSelect>
-        <FieldError
-          errors={mapToFieldErrors(fields.country.errors)}
-          id={fields.country.errorId}
-        />
-      </Field>
+            {COUNTRIES.map((country) => (
+              <NativeSelectOption key={country} value={country}>
+                {countryLabels[country]}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        )}
+      </ConformField>
 
-      <Field
-        data-invalid={fields.terms.errors ? true : undefined}
+      <ConformField
+        field={fields.terms}
+        label={FIXTURE_TEXT.terms}
         orientation="horizontal"
       >
-        <Checkbox
-          {...omitType(getInputProps(fields.terms, {type: 'checkbox'}))}
-          disabled={disabled}
-        />
-        <FieldLabel htmlFor={fields.terms.id}>{FIXTURE_TEXT.terms}</FieldLabel>
-        <FieldError
-          errors={mapToFieldErrors(fields.terms.errors)}
-          id={fields.terms.errorId}
-        />
-      </Field>
+        {(controlOptions) => (
+          <Checkbox
+            {...omitType(
+              getInputProps(fields.terms, {
+                ...controlOptions,
+                type: 'checkbox',
+              })
+            )}
+            disabled={disabled}
+          />
+        )}
+      </ConformField>
 
       <FieldSet disabled={disabled}>
         <FieldLegend variant="label">{FIXTURE_TEXT.colors}</FieldLegend>
@@ -230,10 +205,7 @@ export const ComposedForm = ({disabled = false}: ComposedFormProps) => {
             </FieldLabel>
           </Field>
         ))}
-        <FieldError
-          errors={mapToFieldErrors(fields.colors.errors)}
-          id={fields.colors.errorId}
-        />
+        <ConformFieldError field={fields.colors} />
       </FieldSet>
 
       <Field data-invalid={fields.size.errors ? true : undefined}>
@@ -251,7 +223,7 @@ export const ComposedForm = ({disabled = false}: ComposedFormProps) => {
             disabled={disabled}
             id={fields.size.id}
             name={fields.size.name}
-            required={true}
+            required={fields.size.required}
           >
             {SIZES_DISPLAY_ORDER.map((size) => (
               <Field
@@ -266,10 +238,7 @@ export const ComposedForm = ({disabled = false}: ComposedFormProps) => {
               </Field>
             ))}
           </RadioGroup>
-          <FieldError
-            errors={mapToFieldErrors(fields.size.errors)}
-            id={fields.size.errorId}
-          />
+          <ConformFieldError field={fields.size} />
         </FieldSet>
       </Field>
 

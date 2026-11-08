@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-10-05
 created: 2026-10-05
-updated: 2026-10-26
+updated: 2026-11-09
 tags: [decision, components, shadcn, styling, accessibility]
 ---
 
@@ -14,9 +14,9 @@ GAIA's component layer is [[shadcn]]: Base UI primitives, the `base-nova` style,
 
 ## What is decided
 
-- **Every component with a shadcn equivalent is the ui component.** GAIA ships no parallel Button, Input, Select, Checkbox, radio or field wrapper.
+- **Every component with a shadcn equivalent is the ui component.** GAIA ships no parallel Button, Input, Select, Checkbox or radio wrapper.
 - **Kept app-logic components compose ui components.** `ThemeSwitch`, `LanguageSelect`, `Document`, `MetaHydrated`, `Layout`, `ErrorStack` and `RootErrorBoundary` hold behavior shadcn does not supply (theme cookie, language, dev-only stacks, document shell) and render ui components for their surfaces. They use role tokens only.
-- **Forms are composed, not wrapped.** There is no GAIA form wrapper. A form is built from the ui `Field` parts and ui controls with Conform's props and ids applied directly (`getInputProps`, `getSelectProps`, `getTextareaProps`, `getCollectionProps`, `useInputControl`). The pattern lives in `apps/web/.claude/skills/react-code/references/conform-forms.md`; see [[Form Components]].
+- **One thin form-field wrapper handles the wiring, and the control stays the caller's.** `ConformField` wires a single control to its label, description and errors, and takes the ui control as a child, so any control fits. `ConformFieldError` is the shared error rendering behind it. Hand-wiring repeated the invalid state, label link and error link in every field, and missing one silently cost that field its accessibility, so the wiring lives in one place. Still banned: a parallel per-control wrapper (no GAIA Input, Select or Checkbox) and any wrapper that owns the control. Groups stay composed from the ui `Field` parts, because a legend names them and they render a control per option. The pattern lives in `apps/web/.claude/skills/react-code/references/conform-forms.md`; see [[Form Components]].
 - **Components are typed inline.** `type XProps = {...}` and `const X = ({...}: XProps) => ...`. GAIA has no `FC` or `FunctionComponent` convention, and lint bans importing either from `react` ([[gaia-lint]]).
 - **The baseline stays a placeholder.** The token values are shadcn's neutral set, which the adopter replaces. [[Design System]] keeps `established: false`.
 

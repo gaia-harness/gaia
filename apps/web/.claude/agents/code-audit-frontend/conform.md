@@ -16,3 +16,6 @@ import {getZodConstraint} from '@conform-to/zod';
 import {parseWithZod} from '@conform-to/zod/v4';
 import {getZodConstraint} from '@conform-to/zod/v4';
 ```
+
+- A `useForm` for a form with a Zod schema must pass `constraint: getZodConstraint(schema)`. Flag one that omits it as **Major**: Conform takes `required` from the constraint, so without it no control is marked required, and nothing fails.
+- A composed control rendered from `getFieldList()` must set `key={field.key}`. Flag one that omits it as **Major**: Conform's getters leave the key out, so after a list intent a row keyed by position shows the old value. `ConformField` already sets it.

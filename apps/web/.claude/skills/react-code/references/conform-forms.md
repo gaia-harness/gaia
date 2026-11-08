@@ -1,8 +1,53 @@
 # Conform + Zod Form Wiring
 
-Forms are composed directly from the ui `Field` parts, ui controls and Conform; GAIA has no form wrappers. Import Conform's Zod helpers from `@conform-to/zod/v4` (react-code Gate 2); the examples use `/v4` throughout.
+Wrap every single control in `ConformField` (`~/components/form/conform-field`). You write the control and spread Conform's props on it; the wrapper does the rest. A hand-wired `Field` around one control is an audit finding. Import Conform's Zod helpers from `@conform-to/zod/v4` (react-code Gate 2); the examples use `/v4` throughout.
 
-Contents: Form setup; The composed Field; Actions and disabled states; Zod Patterns.
+Contents: One control: ConformField; Commonly missed; Form setup; Groups stay composed; Actions and disabled states; Zod Patterns.
+
+## One control: ConformField
+
+```tsx
+import {getInputProps} from '@conform-to/react';
+import ConformField from '~/components/form/conform-field';
+import {Input} from '~/components/ui/input';
+
+<ConformField
+  description={t('emailDescription')}
+  field={fields.email}
+  label={t('email')}
+>
+  {(controlOptions) => (
+    <Input {...getInputProps(fields.email, {...controlOptions, type: 'email'})} />
+  )}
+</ConformField>;
+```
+
+The child function receives `controlOptions`; always pass them to Conform's getter, because they link the description to `aria-describedby`.
+
+| Control | Child |
+| --- | --- |
+| `ui/input` | `<Input {...getInputProps(field, {...controlOptions, type: 'email'})} />` |
+| `ui/textarea` | `<Textarea {...getTextareaProps(field, controlOptions)} />` |
+| `ui/native-select` | `<NativeSelect {...getSelectProps(field, controlOptions)}>` with its options |
+| `ui/checkbox`, alone | `<Checkbox {...omitType(getInputProps(field, {...controlOptions, type: 'checkbox'}))} />` with `orientation="horizontal"` on `ConformField`, which puts the control before its label |
+| Stateful custom control | `getInputProps(field, {...controlOptions, type: 'text', value: false})` with `useInputControl` supplying `value`, `onChange` and `onBlur` |
+
+`omitType` from `~/utils/object` strips Conform's `type`, an input attribute the Base UI checkbox root does not take.
+
+**What it wires:** `data-invalid`, the label's `htmlFor`, the description's id, the errors and the control's `key`. Conform's getter supplies `id`, `name`, `aria-invalid`, `aria-describedby`, and `required`.
+
+**Error messages:** a schema message is a key in `errors.validation` in the language files. `ConformFieldError`, which `ConformField` renders, translates it. A message with no key there shows as written, so a missing translation key appears as its raw key, and a translated server error passes through.
+
+## Commonly missed
+
+Scenarios that fail with no error. A new miss goes in `ConformField` if the wrapper can absorb it; otherwise it becomes an audit check and an entry here. `ConformField` already handles the `key` and the error wiring for a single control.
+
+| Scenario | What silently goes wrong | Fix | Applies |
+| --- | --- | --- | --- |
+| `useForm` without `constraint` | No control is marked required, so assistive technology never announces it | `constraint: getZodConstraint(schema)` | Every form with a schema |
+| A composed control in a field list with no `key` | After a list `remove`, `insert` or `reorder`, a row keyed by position shows the old value | `key={field.key}` on the control | Optional: only a composed control rendered from `getFieldList()` |
+| A group's `FieldError` fed Conform's errors or a page-local mapper | A schema key shows raw, or a map miss shows nothing | `<ConformFieldError field={field} />` | Optional: only a composed group |
+| A `RadioGroup` missing Conform's attributes, which no getter supplies for it | Screen readers get no invalid state, error link or required state | Set `aria-invalid`, `aria-describedby` and `required={field.required}` as `### Radio group` shows | Optional: only a radio group |
 
 ## Form setup
 
@@ -16,7 +61,7 @@ const schema = z.object({
 });
 ```
 
-Schema messages are keys, not display text; the page maps each key to a translated string (see `toErrors` below).
+Schema messages are keys in `errors.validation`, not display text.
 
 ### 2. Action (in the route file)
 
@@ -63,14 +108,9 @@ const MyPage = () => {
     shouldValidate: 'onBlur',
   });
 
-  // Conform returns string messages; ui FieldError wants {message} objects.
-  const errorMessages: Record<string, string> = {required: t('required')};
-  const toErrors = (messages?: string[]) =>
-    messages?.map((message) => ({message: errorMessages[message]}));
-
   return (
     <Form method="post" {...getFormProps(form)}>
-      {/* one composed Field per control, shown below */}
+      {/* one ConformField per control, a composed group per group */}
       <Button disabled={isSubmitting} type="submit">
         {isSubmitting && <Spinner aria-label={t('submitting')} />}
         {t('save')}
@@ -80,52 +120,9 @@ const MyPage = () => {
 };
 ```
 
-## The composed Field
+## Groups stay composed
 
-Every control sits in a `Field` with the same wiring:
-
-- `FieldLabel htmlFor={field.id}` names the control (a group uses `FieldLegend` inside a `FieldSet`).
-- The control spreads Conform's props (`getInputProps` and friends), which set `id`, `name`, `required`, `aria-invalid` and `aria-describedby` from `field`.
-- `data-invalid` on `Field` styles the invalid state: `data-invalid={field.errors ? true : undefined}`.
-- `FieldDescription id={field.descriptionId}` carries help text, and `getInputProps` lists it in `aria-describedby` when you pass `ariaDescribedBy: field.descriptionId`.
-- `FieldError id={field.errorId} role="alert"` renders the messages, mapped from Conform's string errors. (ui `FieldError` already renders `role="alert"`; writing it keeps the contract visible. It renders nothing when there are no errors.)
-
-A raw ui control carries none of this wiring on its own, which is why each example repeats it.
-
-### Text input
-
-`getInputProps` spread on `ui/input`:
-
-```tsx
-import {getInputProps} from '@conform-to/react';
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from '~/components/ui/field';
-import {Input} from '~/components/ui/input';
-
-<Field data-invalid={fields.email.errors ? true : undefined}>
-  <FieldLabel htmlFor={fields.email.id}>{t('email')}</FieldLabel>
-  <Input
-    {...getInputProps(fields.email, {
-      ariaDescribedBy: fields.email.descriptionId,
-      type: 'email',
-    })}
-  />
-  <FieldDescription id={fields.email.descriptionId}>
-    {t('emailDescription')}
-  </FieldDescription>
-  <FieldError
-    errors={toErrors(fields.email.errors)}
-    id={fields.email.errorId}
-    role="alert"
-  />
-</Field>;
-```
-
-Textareas use `getTextareaProps` on `ui/textarea`; native selects use `getSelectProps` on `ui/native-select`. Both follow the same `Field` shape.
+A group is named by a legend, which `FieldLabel htmlFor` cannot do, and it renders one control per option, so it is built from the ui `Field` parts with `ConformFieldError` for its errors.
 
 ### Checkbox group
 
@@ -133,11 +130,11 @@ Textareas use `getTextareaProps` on `ui/textarea`; native selects use `getSelect
 
 ```tsx
 import {getCollectionProps} from '@conform-to/react';
+import ConformFieldError from '~/components/form/conform-field-error';
 import {Checkbox} from '~/components/ui/checkbox';
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldLabel,
   FieldLegend,
   FieldSet,
@@ -161,25 +158,19 @@ import {
       <FieldLabel htmlFor={checkboxProps.id}>{colorLabels[checkboxProps.value]}</FieldLabel>
     </Field>
   ))}
-  <FieldError
-    errors={toErrors(fields.colors.errors)}
-    id={fields.colors.errorId}
-    role="alert"
-  />
+  <ConformFieldError field={fields.colors} />
 </FieldSet>;
 ```
-
-A single checkbox is one `Field orientation="horizontal"` with `getInputProps(field, {type: 'checkbox'})` (type dropped the same way) and its `FieldLabel` after it.
 
 ### Radio group
 
 `ui/radio-group` in a `FieldSet` and `FieldLegend`, given `name` and `defaultValue` from Conform and labelled by the legend (Conform has no radio-group props helper, so the invalid and described-by attributes are set by hand):
 
 ```tsx
+import ConformFieldError from '~/components/form/conform-field-error';
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldLabel,
   FieldLegend,
   FieldSet,
@@ -205,7 +196,7 @@ import {RadioGroup, RadioGroupItem} from '~/components/ui/radio-group';
       defaultValue={fields.size.initialValue}
       id={fields.size.id}
       name={fields.size.name}
-      required={true}
+      required={fields.size.required}
     >
       {SIZES.map((size) => (
         <Field
@@ -220,11 +211,7 @@ import {RadioGroup, RadioGroupItem} from '~/components/ui/radio-group';
         </Field>
       ))}
     </RadioGroup>
-    <FieldError
-      errors={toErrors(fields.size.errors)}
-      id={fields.size.errorId}
-      role="alert"
-    />
+    <ConformFieldError field={fields.size} />
   </FieldSet>
 </Field>;
 ```
