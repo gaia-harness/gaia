@@ -4,10 +4,9 @@
 # counts at exactly three digits), or a machine-local path, in a
 # file path or in a file's content, which covers path segments, test titles and
 # both comment forms. The detector is machine-local-ref-lib.sh in strict mode.
-# Its callers, by role, are the owning-phase gate and the generated plan
-# orchestrator's render step (run from the resolved isolation root) and the
-# flow-coverage check (run over the flow test files it resolves); the rule it
-# enforces is .claude/rules/working-doc-ids.md.
+# Its caller is the flow-coverage check (flow-coverage.sh, run at a spec-derived
+# plan's pre-audit flow checks over the flow test files it resolves); the rule
+# it enforces is .claude/rules/working-doc-ids.md.
 #
 #   working-doc-id-scan.sh [<file-or-directory> ...]
 #

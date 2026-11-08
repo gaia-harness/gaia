@@ -39,7 +39,6 @@ build_scratch_repo() {
   copy_in .gaia/scripts/spec/flows-lib.sh
   copy_in .gaia/scripts/spec/flow-coverage.sh
   copy_in .gaia/scripts/spec/working-doc-id-scan.sh
-  copy_in .gaia/scripts/spec/uat-lib.sh
   copy_in .gaia/scripts/machine-local-ref-lib.sh
   copy_in .claude/hooks/lib/gaia-packages.sh
   copy_in .claude/hooks/lib/audit-base-provenance.sh

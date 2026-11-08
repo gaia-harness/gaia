@@ -71,7 +71,6 @@ setup() {
     ".claude/agents/worthiness-evaluator.md|state of the controls a user drives. A suite of tests for an interactive"
     "$TESTS_REACT|For an interactive component, the tests assert a keyboard path"
     ".claude/skills/gaia/references/spec/clarify-prompts.md|One flow per critical user path."
-    'wiki/decisions/Route Browser UATs By The Capability That Needs A Browser.md|one UAT per transition, status or role rule keeps traceability'
     "apps/web/.claude/rules/playwright.md|One journey per user flow"
     '.claude/skills/tdd/references/tests-shell.md|one `.bats` file per script under test'
     ".claude/skills/tdd/references/tests-shell.md|One test, one change, repeat."

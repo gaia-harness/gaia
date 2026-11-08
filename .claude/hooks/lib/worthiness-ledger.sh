@@ -5,8 +5,8 @@
 # tree's worthiness verdicts live. Both the ledger writer
 # (.gaia/scripts/audit-ledger/append-worthiness.mjs) and its reader
 # (.claude/hooks/worthiness-presence-check.sh) call this instead of hand-
-# building the path literal independently, the same problem the RED ledger
-# solves for its own path. Dual-
+# building the path literal independently, the path must not drift between
+# them. Dual-
 # mode: source it for the function below, or run it directly as a script so
 # the Node writer can shell out to it (see "Usage (executable)" below).
 #
@@ -33,8 +33,7 @@ WORTHINESS_LEDGER_LIBRARY_SOURCED=1
 # is always derived from ROOT itself, never from the process cwd, so a
 # caller's own root resolution and this function's key agree. The resolver
 # is sourced here, deferred into this function's own body (never at source
-# time), matching red_ledger_path's own "no side effects at source time"
-# contract.
+# time), with no side effects at source time.
 worthiness_ledger_path() {
   local root="${1:-}"
   local self_directory

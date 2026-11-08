@@ -26,7 +26,7 @@ FIXTURE_REGISTRY='{
      "retention": {"class": "branch-spent", "key": "slug-dot-field", "days": 7}},
     {"id": "pr-cache", "path": "cache/gh-artifact-pr.*.json", "match": "glob", "kind": "file",
      "retention": {"class": "branch-spent", "key": "slug-glob", "days": 7}},
-    {"id": "red", "path": "red-ledger/", "match": "prefix", "kind": "dir", "retention": {"class": "tree-gone"}},
+    {"id": "worthiness", "path": "worthiness-ledger/", "match": "prefix", "kind": "dir", "retention": {"class": "tree-gone"}},
     {"id": "spec-scratch", "path": "cache/draft-*.md|cache/draft.md", "match": "glob", "kind": "file",
      "retention": {"class": "spec-finalized", "days": 30}},
     {"id": "audit-loop", "path": "protected/audit-loop/", "match": "prefix", "kind": "dir",
@@ -133,7 +133,7 @@ EOF
   local valid
   for valid in \
     '{"path":"runs/","retention":{"class":"branch-spent","key":"normalized-path","days":7,"session_days":30}}' \
-    '{"path":"red-ledger/","retention":{"class":"tree-gone"}}' \
+    '{"path":"worthiness-ledger/","retention":{"class":"tree-gone"}}' \
     '{"path":"cache/draft-*.md","retention":{"class":"spec-finalized","days":30}}' \
     '{"path":"cache/x/","retention":{"class":"age","days":7,"types":["file"],"names":["*.json"]}}' \
     '{"path":"ports/","retention":{"class":"owned","owner":"the ports reaper"}}' \
@@ -319,16 +319,16 @@ EOF
   pruned_key="$(gaia_tree_key "$BATS_TEST_TMPDIR/linked/pruned")"
   "$REAL_GIT" -C "$MAIN" worktree remove "$BATS_TEST_TMPDIR/linked/removed"
   rm -rf "$BATS_TEST_TMPDIR/linked/pruned"
-  put "red-ledger/$main_key/observations.jsonl"
-  put "red-ledger/$kept_key/observations.jsonl"
-  put "red-ledger/$removed_key/observations.jsonl"
-  put "red-ledger/$pruned_key/observations.jsonl"
+  put "worthiness-ledger/$main_key/worthiness.jsonl"
+  put "worthiness-ledger/$kept_key/worthiness.jsonl"
+  put "worthiness-ledger/$removed_key/worthiness.jsonl"
+  put "worthiness-ledger/$pruned_key/worthiness.jsonl"
   snap
-  reap red
-  present "red-ledger/$main_key/observations.jsonl"
-  present "red-ledger/$kept_key/observations.jsonl"
-  absent "red-ledger/$removed_key"
-  absent "red-ledger/$pruned_key"
+  reap worthiness
+  present "worthiness-ledger/$main_key/worthiness.jsonl"
+  present "worthiness-ledger/$kept_key/worthiness.jsonl"
+  absent "worthiness-ledger/$removed_key"
+  absent "worthiness-ledger/$pruned_key"
 }
 
 @test "a listed worktree path that cannot be keyed disables the tree-gone pass" {
@@ -340,13 +340,13 @@ EOF
   printf '%s/.git\n' "$GHOST_DIRECTORY" >"$MAIN/.git/worktrees/listed/gitdir"
   run "$REAL_GIT" -C "$MAIN" worktree list --porcelain
   printf '%s\n' "$output" | grep -q "prunable" && return 1
-  put red-ledger/0000000000000000/observations.jsonl
+  put worthiness-ledger/0000000000000000/worthiness.jsonl
   snap
   [ -z "$GAIA_REAPER_TREES_OK" ]
   printf '%s\n' "$GAIA_REAPER_SKIPPED" | grep -q 'tree-gone: cannot key the listed worktree'
-  reap red
-  present red-ledger/0000000000000000/observations.jsonl
-  printf '%s\n' "$REAP_OUTPUT" | grep -q '^skipped red:'
+  reap worthiness
+  present worthiness-ledger/0000000000000000/worthiness.jsonl
+  printf '%s\n' "$REAP_OUTPUT" | grep -q '^skipped worthiness:'
 }
 
 @test "spec scratch follows its catalog row, falls back to age without one, and an unreadable catalog reaps none" {
@@ -398,7 +398,7 @@ EOF
   make_main
   put runs/gone/STATE.md 8
   age runs 8
-  put red-ledger/0000000000000000/observations.jsonl
+  put worthiness-ledger/0000000000000000/worthiness.jsonl
   put audit/0123abcd.gone.m.findings.json 8
   put scratch/old.txt 8
   fail_git 'worktree list'
@@ -410,11 +410,11 @@ EOF
   run gaia_reaper_reap_row "$MAIN" "$(row runs)"
   [ "$status" -eq 0 ]
   reap runs
-  reap red
+  reap worthiness
   reap findings
   reap scratch
   present runs/gone/STATE.md
-  present red-ledger/0000000000000000/observations.jsonl
+  present worthiness-ledger/0000000000000000/worthiness.jsonl
   present audit/0123abcd.gone.m.findings.json
   absent scratch/old.txt
 }

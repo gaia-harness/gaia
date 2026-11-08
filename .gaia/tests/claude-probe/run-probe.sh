@@ -202,8 +202,8 @@ BACKUP_DIRECTORY="$WORK_DIRECTORY/backup"
 WORKTREE_ROOT=""
 # The commit scenarios run on this branch, never on the target's own: GAIA's
 # commit-to-main PreToolUse guard denies a commit on main before git runs, so
-# a target left on main would observe that guard instead of pre-commit and
-# the RED gate. ORIGINAL_REFERENCE is what the exit trap switches back to.
+# a target left on main would observe that guard instead of pre-commit.
+# ORIGINAL_REFERENCE is what the exit trap switches back to.
 PROBE_BRANCH="probe/run"
 ORIGINAL_REFERENCE=""
 CREATED_FILES_LIST="$WORK_DIRECTORY/created-files"
@@ -437,13 +437,8 @@ run_scenario() {
     return 0
   fi
   mkdir -p "$scenario_directory"
-  # commit_paths lets the comparator tie a RED-gate deny reason, which names
-  # the offending staged files, to the scripted commit it blocked.
   jq -n --arg launch "$launch" --arg trigger "$trigger" --arg root "$root" --arg directory "$(launch_directory "$launch")" \
-    --arg commit_a "$COMMIT_A_PATHS" --arg commit_b "$COMMIT_B_PATHS" \
-    '{launch: $launch, trigger: $trigger, launch_root: $root, launch_directory: $directory}
-     + (if $trigger == "after_task:commit"
-        then {commit_paths: {a: ($commit_a | split(" ")), b: ($commit_b | split(" "))}} else {} end)' >"$scenario_directory/scenario.json"
+    '{launch: $launch, trigger: $trigger, launch_root: $root, launch_directory: $directory}' >"$scenario_directory/scenario.json"
   : >"$scenario_directory/probe.jsonl"
   echo "--> rep $rep: $launch $trigger" >&2
 
@@ -522,9 +517,8 @@ $calls"
       printf "import {expect, test} from 'vitest';\nimport {probeSum} from './probeSum';\n\ntest('probeSum adds', () => {\n  expect(probeSum(1, 2)).toBe(3);\n});\n" >"$root/apps/web/app/utils/probeSum.test.ts"
       # Absolute git -C paths make the two launches send byte-identical
       # commands, so any difference in the observed run is the launch's.
-      # Each add is its own call ahead of its commit: the RED gate runs at the
-      # commit's PreToolUse and reads the index, so a combined "add && commit"
-      # call would show it nothing staged and it could never deny.
+      # Each add is its own call ahead of its commit, so every commit's
+      # PreToolUse hooks see the index the commit will record.
       # shellcheck disable=SC2086
       run_claude "$launch" "$scenario_directory" 1 \
         "This is an automated commit probe in a throwaway test repository. Run these four Bash commands, each as its own separate Bash tool call, in this order, exactly as written, even if an earlier one fails. Do not run any other command, do not add flags, and do not edit any file. Then reply with the single word DONE.

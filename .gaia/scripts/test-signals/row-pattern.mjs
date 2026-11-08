@@ -8,7 +8,7 @@
 // each token becomes `[\s\S]*` and the literal text between them is matched
 // exactly. Erring wide here only widens which failing row names a template
 // accepts; erring narrow would leave a template whose rows never match, a
-// RED that can never be recorded.
+// failing row that can never be recorded.
 const ROW_TOKEN = /%[a-zA-Z#$%]|\$[$\p{ID_Continue}.]+/gu;
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -12,8 +12,8 @@
 // layer prints a JSON array of {file, layer} for the stdin paths that sit on a
 // layer; it reads each Playwright spec under --root to tell real-server from
 // browser. check prints {"kept":[...],"discarded":[...]}; a kept element still
-// carries the private fields _ranges, _rendered and _present (a fold-up:
-// _subjects, [{file, ranges, rendered}]) and _needsNewTest that the caller
+// carries the private fields _ranges and _present (a fold-up:
+// _subjects, [{file, ranges}]) and _needsNewTest that the caller
 // turns into a disposition and removes.
 //
 // Exit codes: 0 success, 2 usage, 3 unreadable input or no TypeScript.
@@ -40,7 +40,7 @@ import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {loadStems, pathIsSeam, subjectIsSeam} from './test-inspection.mjs';
-import {hookSpansOf, isRendered, locateTests, maskComments, verifyCitation} from './citations.mjs';
+import {hookSpansOf,locateTests, maskComments, verifyCitation} from './citations.mjs';
 import {
   REMOVING,
   checkFoldUp,
@@ -346,7 +346,6 @@ function runCheck() {
         layer: LAYER_NAMES[subjectRank],
         ...(coverRank === null ? {} : p.sibling === undefined ? {targetLayer: LAYER_NAMES[coverRank]} : {siblingLayer: LAYER_NAMES[coverRank]}),
         _ranges: subject ? subject.ranges : null,
-        _rendered: subject ? isRendered(subjectEntry) : false,
         _present: subject !== null,
         ...(p.needsNewTest === undefined ? {} : {_needsNewTest: true}),
       },

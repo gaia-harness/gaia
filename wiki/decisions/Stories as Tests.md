@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-10-05
 created: 2026-10-05
-updated: 2026-10-28
+updated: 2026-11-08
 tags: [decision, testing, storybook, vitest, a11y, csf4]
 ---
 
@@ -63,8 +63,8 @@ Each export is a direct `meta.story({...})` or `.extend({...})` call; a story bu
 
 ## Classification and gates
 
-- A `*.stories.tsx` classifies **emergent** wherever it sits, before any path or AST check ([[Determinism Classifier]]). Stories are never RED-gated; the [[Worthiness Audit]] judges each test, and the presence gate requires a ledger line per identity the PR changes.
-- Hooks stay `*.test.ts` under a `hooks/` folder. They classify by the normal rules, so a deterministic hook keeps the RED demand ([[TDD RED Verification]]).
+- A `*.stories.tsx` classifies **emergent** wherever it sits, before any path or AST check ([[Determinism Classifier]]). Stories carry no failing-first proof; the [[Worthiness Audit]] judges each test, and the presence gate requires a ledger line per identity the PR changes.
+- Hooks stay `*.test.ts` under a `hooks/` folder. They classify by the normal rules, so a deterministic hook is labelled strict and a hook that reads the clock or real I/O emergent; the [[Worthiness Audit]] judges each hook test on its arm.
 - When Chromium is missing, the RED capture hook says so and names `pnpm install:browsers` rather than recording nothing silently.
 
 ## The Vitest projects

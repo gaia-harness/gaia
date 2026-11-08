@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Shared dependency gate for the node-dependent suites: the RED suites under
-# .gaia/tests/hooks (test-signals-lib, capture-red-observations,
-# red-verify-commit-check, red-verify-e2e and worthiness-presence-check), and
+# Shared dependency gate for the node-dependent suites: the signal suites under
+# .gaia/tests/hooks (test-signals-lib and worthiness-presence-check), and
 # the suites that run the CLI from source through tsx, which the CI root
 # install provides under .gaia/cli/node_modules.
 #
-# The RED suites all drive .gaia/scripts/test-signals/extract-test-signals.mjs;
-# red-verify-commit-check, red-verify-e2e and worthiness-presence-check also
+# The signal suites drive .gaia/scripts/test-signals/extract-test-signals.mjs;
+# worthiness-presence-check also
 # drive .gaia/scripts/classifier/classify-determinism.mjs. Both resolve
 # `typescript` through createRequire against the repo root's node_modules. With
 # that absent the suites cannot answer at all.
@@ -23,7 +22,7 @@
 #   }
 #
 # WHY THE CI BRANCH FAILS RATHER THAN SKIPPING, which is the whole point of
-# this file. Each of the RED suites above previously spelled the gate inline as
+# this file. Each of the suites above previously spelled the gate inline as
 #
 #   [ -d "$ROOT/node_modules/typescript" ] || skip "typescript not installed ..."
 #

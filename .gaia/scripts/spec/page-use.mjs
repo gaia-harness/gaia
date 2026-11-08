@@ -3,10 +3,8 @@
 //
 // A real-server test drives the running server through the `request` fixture
 // and opens no page; a browser test opens one. Two places need that line drawn
-// the same way: the UAT gate's no-page check on a rendered real-server test
-// and the overlap check's layer map (a spec that opens no page is on the
-// real-server layer). This module is
-// that definition. It reads the file's AST with the TypeScript compiler API, so
+// the same way: the overlap check's layer map (a spec that opens no page is on the
+// real-server layer). This module is that definition. It reads the file's AST with the TypeScript compiler API, so
 // words in a title, a string or a comment are never a use.
 //
 // A use is one of these reasons:
@@ -40,8 +38,7 @@
 // must grow when the template adds one. An import that does not resolve to a
 // readable file adds nothing.
 //
-// Callers: uat-gate.sh through uat-gate-floor.sh (the CLI) and
-// overlap/check-proposals.mjs (the pageUsesOf export).
+// Caller: overlap/check-proposals.mjs (the pageUsesOf export).
 //
 // Usage: node page-use.mjs <file>...
 // Output: one line per use, `<file>\t<line>\t<test title or ->\t<reason>`.

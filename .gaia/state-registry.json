@@ -332,26 +332,13 @@
       }
     },
     {
-      "id": "red-ledger",
-      "path": "red-ledger/",
-      "match": "prefix",
-      "kind": "dir",
-      "scope": "per-tree",
-      "keyed_by": "the tree key (gaia_tree_key, .gaia/scripts/main-root-lib.sh): the first 16 hex characters of a sha256 over this working tree's physically-resolved root. The entry addresses itself at red-ledger/<tree_key>/, so it stays private to its tree once .gaia/local is shared.",
-      "why": "A RED observation is a claim about one working tree at one commit; sharing it across trees would be a category error. The identity rule's own reference example of correctly per-tree state.",
-      "writer": "code",
-      "retention": {
-        "class": "tree-gone"
-      }
-    },
-    {
       "id": "audit-worthiness-ledger",
       "path": "worthiness-ledger/",
       "match": "prefix",
       "kind": "dir",
       "scope": "per-tree",
       "keyed_by": "the tree key (gaia_tree_key, .gaia/scripts/main-root-lib.sh): the first 16 hex characters of a sha256 over this working tree's physically-resolved root. The entry addresses itself at worthiness-ledger/<tree_key>/, so it stays private to its tree once .gaia/local is shared.",
-      "why": "A worthiness observation is a claim about one working tree's emergent-surface tests at one commit, the same kind of per-tree fact as a RED observation. It lives under worthiness-ledger/, outside the wholesale-symlinked audit/ segment, so it is per-tree by the same mechanism as its RED-ledger sibling: gaia_registry_linkable_paths only symlinks scope:\"shared\" entries, and this one is not.",
+      "why": "A worthiness observation is a claim about one working tree's emergent-surface tests at one commit, a per-tree fact. It lives under worthiness-ledger/, outside the wholesale-symlinked audit/ segment, so it is per-tree by keying under the tree key: gaia_registry_linkable_paths only symlinks scope:\"shared\" entries, and this one is not.",
       "writer": "code",
       "retention": {
         "class": "tree-gone"
@@ -863,6 +850,13 @@
     }
   ],
   "residue": [
+    {
+      "id": "red-ledger-residue",
+      "path": "red-ledger/",
+      "match": "prefix",
+      "why": "Per-tree observations of the removed test-first commit gate; nothing reads or writes them.",
+      "writer": "none-residue"
+    },
     {
       "id": "project-id-residue",
       "path": ".project-id",

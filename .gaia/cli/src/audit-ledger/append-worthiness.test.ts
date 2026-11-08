@@ -3,7 +3,7 @@
  * (`.gaia/scripts/audit-ledger/append-worthiness.mjs`), which appends one
  * JSON Lines record per judged test to the append-only worthiness ledger.
  * Its identity field (`signal`) is the SAME sha256-of-normalized-test-call
- * the RED ledger computes via
+ * the test-signals helper computes via
  * `.gaia/scripts/test-signals/extract-test-signals.mjs`; the writer reuses
  * that helper so the two signals byte-match and the merge presence gate's
  * recompute lines up. A non-keep verdict carries a machine-checkable
@@ -66,9 +66,9 @@ let workDir: string;
 let ledgerPath: string;
 let testFileAbs: string;
 
-// Recompute the RED-ledger signal for the fixture's single test, so the
+// Recompute the test-signals signal for the fixture's single test, so the
 // assertion checks byte-equality against the canonical primitive.
-const redSignalFor = (fullName: string): string => {
+const testSignalFor = (fullName: string): string => {
   const out = execFileSync('node', [SIGNAL_HELPER, TEST_FILE_REL, '--stdin'], {
     cwd: workDir,
     encoding: 'utf8',
@@ -121,7 +121,7 @@ afterEach(() => {
 });
 
 describe('append-worthiness', () => {
-  test('appends a keep line whose signal byte-matches the RED-ledger signal', () => {
+  test('appends a keep line whose signal byte-matches the test-signals signal', () => {
     runWriter([TEST_FILE_REL, 'renders formatted price', 'keep']);
 
     const lines = readLedger();
@@ -133,7 +133,7 @@ describe('append-worthiness', () => {
       file: TEST_FILE_REL,
       fullName: 'renders formatted price',
       schema: 1,
-      signal: redSignalFor('renders formatted price'),
+      signal: testSignalFor('renders formatted price'),
       verdict: 'keep',
     });
   });

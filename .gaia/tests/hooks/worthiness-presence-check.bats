@@ -7,7 +7,7 @@
 # worthiness-ledger line (.gaia/local/worthiness-ledger/<tree-key>/worthiness.jsonl)
 # matching its current content. It scopes to the emergent test files this PR changed (the diff
 # against the merge base with the default branch), decides emergent membership via
-# the determinism classifier, recomputes each test's signal via the shared RED
+# the determinism classifier, recomputes each test's signal via the shared test-signals
 # helper, and checks PRESENCE + signal match only, never the verdict. Stale-signal
 # lines are rejected on recompute. It fails open on missing git/jq/node/lib/
 # classifier and skips unparseable files. When zero emergent tests changed, it is
@@ -44,7 +44,7 @@ install_tree_links() {
   ln -sfn "$HOME_ROOT/.claude/hooks/lib/worthiness-ledger.sh" "$directory/.claude/hooks/lib/worthiness-ledger.sh"
   ln -sfn "$HOME_ROOT/.gaia/scripts/test-signals" "$directory/.gaia/scripts/test-signals"
   ln -sfn "$HOME_ROOT/.gaia/scripts/classifier" "$directory/.gaia/scripts/classifier"
-  # red_ledger_path and worthiness_ledger_path (inside the symlinked libs
+  # worthiness_ledger_path (inside the symlinked libs
   # above) each source this relative to THEIR OWN location to reach
   # gaia_tree_key, so it needs to resolve inside the tree too, not just from
   # the hook's own BASH_SOURCE.
@@ -198,7 +198,7 @@ test("renders a widget", () => {
 '
 
 # A deterministic util test (.ts under apps/web/app/utils/** classifies strict).
-# It is RED-gated for honesty and worthiness-gated for worth, so the presence
+# It is judged on honesty and worth like any other, so the presence
 # gate demands a verdict for it like any other test in scope.
 STRICT_TEST='import {expect, test} from "vitest";
 test("adds two numbers", () => {
@@ -1208,7 +1208,7 @@ refusal_free_of_debt_wording() {
   done
 }
 
-# --- route tests: worthiness-audited as well as RED-gated ---
+# --- route tests: worthiness-audited on both axes ---
 
 ROUTE_TEST_PATH="apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts"
 ROUTE_TEST_SOURCE='import {expect, test} from "vitest";

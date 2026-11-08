@@ -39,7 +39,6 @@ setup() {
     "$REPO_ROOT/wiki/modules/Testing.md"
     "$REPO_ROOT/wiki/modules/Claude Integration.md"
     "$REPO_ROOT/wiki/decisions/Determinism Classifier.md"
-    "$REPO_ROOT/wiki/decisions/TDD RED Verification.md"
     "$REPO_ROOT/wiki/decisions/Worthiness Audit.md"
     "$REPO_ROOT/wiki/decisions/Worthiness Presence Gate.md"
     "$REPO_ROOT/wiki/decisions/Worthiness And Wiki Before The Audit.md"

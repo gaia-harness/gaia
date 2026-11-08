@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-21
+updated: 2026-11-08
 tags: [concept, claude, agent, review]
 ---
 
@@ -57,11 +57,7 @@ Detection and the single hardened re-dispatch are the same on every surface. Wha
 
 **Some surfaces depart from that ending, on purpose.** The pre-merge audit gate ([[Audit Round Procedure]]) stops and surfaces the double no-op to the operator instead of falling back inline, because a Code Audit Team member's clearance marker is that member's own attestation: an orchestrator that reviewed the diff itself inline would be writing a clearance nobody earned. Stopping is safe there in a way it is not elsewhere, because that gate is fail-closed, no marker still means no merge. That page states the departure and its reason.
 
-The UAT fidelity judge of a spec-derived plan (`.claude/skills/gaia/references/spec/lifecycle.md`, `## Pre-audit UAT checks`) halts the run instead of falling back inline. Its caller is the orchestrator whose phases wrote the specs under judgment, so it cannot legitimately do the work itself: an inline verdict would be the implementer grading its own work. Halting is safe there because the run stops before the pre-merge audit and the merge. That page states the departure and its reason.
-
-The worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) halts as well, for the same reason: its caller wrote the code under judgment, and an absent verdict is not a keep. Its tdd arm reports the double no-op in the end-of-task summary instead of halting, because tdd never interrupts mid-implementation and the presence check backs up a missing line at merge. That page states both departures and their reason.
-
-A plan's test review (`.claude/skills/gaia/references/plan/test-review.md`) halts too. Its caller is the orchestrator that dispatched the tests under review, so an inline verdict would be the run grading its own wave. That page states the departure and its reason.
+The worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) halts instead of falling back inline: its caller wrote the code under judgment, and an absent verdict is not a keep. Its tdd arm reports the double no-op in the end-of-task summary instead of halting, because tdd never interrupts mid-implementation and the presence check backs up a missing line at merge. That page states both departures and their reason.
 
 The overlap pass (`.claude/skills/gaia/references/overlap-pass.md`) records `Outcome: did not run` and lets the run continue. Nothing depends on the overlap pass, so an absent proposal set loses an optimization and no correctness, and neither a halt nor an inline pass is worth its cost. That page states the departure and its reason.
 

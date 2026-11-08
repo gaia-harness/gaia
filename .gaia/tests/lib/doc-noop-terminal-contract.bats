@@ -8,9 +8,8 @@
 # several prose surfaces, and one of them states a DIFFERENT ending on purpose:
 # the pre-merge audit gate (stop and surface, never inline fallback, because a
 # Code Audit Team member's clearance marker is that member's own attestation).
-# The plan orchestrator's UAT fidelity judge departs too, halting rather than
-# letting the orchestrator grade its own phases' specs inline. The worthiness
-# step departs for the same reason, and its tdd arm reports instead of halting.
+# The worthiness step departs too, halting rather than letting its caller grade
+# its own code inline, and its tdd arm reports instead of halting.
 # An undeclared deliberate exception is worse than drift: the safe-looking
 # reading of an unexplained difference is that the agreeing sites are right and
 # the odd one is stale, and acting on that turns a fail-closed merge gate into
@@ -61,17 +60,11 @@ setup() {
   GATE_RELATIVE_PATH='wiki/concepts/Audit Round Procedure.md'
   # The runbook states the same stop for the unit file the main thread reads.
   RUNBOOK_RELATIVE_PATH='wiki/concepts/PR Merge Workflow.md'
-  # The second deliberate departure: the plan orchestrator halts rather than
-  # judge its own phases' UAT specs inline.
-  LIFECYCLE_RELATIVE_PATH='.claude/skills/gaia/references/spec/lifecycle.md'
-  # The third: the caller wrote the code the evaluator judges.
+  # The second deliberate departure: the caller wrote the code the evaluator judges.
   WORTHINESS_RELATIVE_PATH='.claude/skills/gaia/references/worthiness-step.md'
-  # The fourth: nothing depends on the overlap pass, so a double no-op records
+  # The third: nothing depends on the overlap pass, so a double no-op records
   # `did not run` and the run continues.
   OVERLAP_RELATIVE_PATH='.claude/skills/gaia/references/overlap-pass.md'
-  # The fifth: the plan orchestrator halts rather than review its own wave's
-  # tests inline.
-  TEST_REVIEW_RELATIVE_PATH='.claude/skills/gaia/references/plan/test-review.md'
 
   OWNER="$ROOT/$OWNER_RELATIVE_PATH"
   GATE="$ROOT/$GATE_RELATIVE_PATH"
@@ -84,10 +77,8 @@ setup() {
     '.claude/skills/gaia/references/fitness.md'
     '.claude/skills/gaia/references/overlap-pass.md'
     '.claude/skills/gaia/references/plan/decomposition-audit.md'
-    '.claude/skills/gaia/references/plan/test-review.md'
     '.claude/skills/gaia/references/spec/audit.md'
     '.claude/skills/gaia/references/spec/lens-dispatch.md'
-    '.claude/skills/gaia/references/spec/lifecycle.md'
     '.claude/skills/gaia/references/worthiness-step.md'
     '.claude/rules/subagent-dispatch.md'
     '.claude/skills/update-gaia/references/conflict-flow.md'
@@ -221,10 +212,8 @@ terminal_segments() {
   for relative_path in "${ROSTER[@]}"; do
     [ "$relative_path" = "$GATE_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$RUNBOOK_RELATIVE_PATH" ] && continue
-    [ "$relative_path" = "$LIFECYCLE_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$WORTHINESS_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$OVERLAP_RELATIVE_PATH" ] && continue
-    [ "$relative_path" = "$TEST_REVIEW_RELATIVE_PATH" ] && continue
     lines="$(terminal_segments "$ROOT/$relative_path")"
     [ -n "$lines" ] || { echo "no terminal statement read in ${relative_path}" >&2; return 1; }
     # Per statement, not per file: a file whose ending drifted at one of
@@ -276,25 +265,6 @@ terminal_segments() {
   grep -qF -- "own attestation" "$OWNER"
 }
 
-@test "the owner page admits the UAT fidelity judge's exception and states its reason" {
-  grep -qF -- "$LIFECYCLE_RELATIVE_PATH" "$OWNER"
-  grep -qF -- 'the implementer grading its own work' "$OWNER"
-}
-
-@test "the UAT fidelity judge's terminal statement halts and does not fall back inline" {
-  local lines
-  lines="$(terminal_segments "$ROOT/$LIFECYCLE_RELATIVE_PATH")"
-  [ -n "$lines" ] || { echo "no terminal statement read in $LIFECYCLE_RELATIVE_PATH" >&2; return 1; }
-  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
-  printf '%s\n' "$lines" | grep -qF -- 'HALT'
-}
-
-@test "the UAT fidelity judge declares its departure as deliberate and names the owner" {
-  grep -qF -- 'departs from the general inline ending' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
-  grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
-  grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
-}
-
 @test "the owner page admits the worthiness step's exception and states its reason" {
   grep -qF -- "$WORTHINESS_RELATIVE_PATH" "$OWNER"
   grep -qF -- 'an absent verdict is not a keep' "$OWNER"
@@ -315,25 +285,6 @@ terminal_segments() {
   grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$WORTHINESS_RELATIVE_PATH"
   grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$WORTHINESS_RELATIVE_PATH"
   grep -qF -- 'same deliberate departure from the general inline ending' "$ROOT/$WORTHINESS_RELATIVE_PATH"
-}
-
-@test "the owner page admits the test review's exception and states its reason" {
-  grep -qF -- "$TEST_REVIEW_RELATIVE_PATH" "$OWNER"
-  grep -qF -- 'the run grading its own wave' "$OWNER"
-}
-
-@test "the test review's terminal statement halts and does not fall back inline" {
-  local lines
-  lines="$(terminal_segments "$ROOT/$TEST_REVIEW_RELATIVE_PATH")"
-  [ -n "$lines" ] || { echo "no terminal statement read in $TEST_REVIEW_RELATIVE_PATH" >&2; return 1; }
-  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
-  printf '%s\n' "$lines" | grep -qF -- '(HALTED)'
-}
-
-@test "the test review declares its departure as deliberate and names the owner" {
-  grep -qF -- 'departs from the general inline ending' "$ROOT/$TEST_REVIEW_RELATIVE_PATH"
-  grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$TEST_REVIEW_RELATIVE_PATH"
-  grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$TEST_REVIEW_RELATIVE_PATH"
 }
 
 @test "the owner page admits the overlap pass's exception and states its reason" {

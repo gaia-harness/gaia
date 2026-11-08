@@ -281,7 +281,6 @@ jobs:
               # record through the real bundle name it too.
               - '.claude/gaia-fitness.json'
               - '.gaia/cli/gaia'
-              - '.gaia/templates/spec/**'
               # The doc-isolation suite (.gaia/tests/lib/) renders the prompt
               # out of the shared isolation reference and greps both callers'
               # pointer wiring, naming each.

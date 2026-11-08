@@ -20,7 +20,7 @@
 // Honest limit: the baseline holds the names the signal extractor reports, so
 // a new templated-title test in a baseline file is not seen as a new name.
 
-import {isRendered, locateTests, verifyCitation} from './citations.mjs';
+import {locateTests, verifyCitation} from './citations.mjs';
 
 // check-proposals.mjs's layer ranks: 1 unit and story, 2 route, 4 browser.
 const UNIT = 1;
@@ -167,7 +167,7 @@ export function checkFoldUp(p, ctx) {
     ...(intoLayer !== null && !ctx.postFix
       ? {baseline: buildBaseline([...p.subjects.map((s) => s.file), p.into.file], ctx.loadFile)}
       : {}),
-    _subjects: subjects.map((s) => ({file: s.file, ranges: s.test === null ? null : s.test.ranges, rendered: isRendered(s.entry)})),
+    _subjects: subjects.map((s) => ({file: s.file, ranges: s.test === null ? null : s.test.ranges})),
     ...(p.needsNewTest === undefined ? {} : {_needsNewTest: true}),
   };
   return {reason: null, kept, subjectKeys: [...keys], coverKey: p.into === undefined ? null : keyOf(p.into.file, p.into.fullName)};

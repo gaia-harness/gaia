@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Shared fixture writers for the RED-gate suites that read the package registry
-# and descriptor (SPEC-092): red-verify-commit-check, red-verify-e2e,
-# capture-red-observations and worthiness-presence-check.
+# Shared fixture writers for the suites that read the package registry
+# and descriptor, such as worthiness-presence-check.
 #
 # Every writer emits LITERAL JSON. A "today's layout" fixture must never copy the
 # live `.gaia/packages.json` or `gaia.package.json`: those change when the

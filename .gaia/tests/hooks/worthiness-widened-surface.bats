@@ -9,14 +9,11 @@
 #   - worthiness-step.sh route lists all three tests for review.
 #   - the merge-time presence gate denies until each has a recorded verdict.
 #   - an unattended delete verdict is recorded and leaves the test file as it was.
-#   - the RED gate still refuses a commit of the utility or hook test with no
-#     recorded failing run, and does not newly demand one for the helper folder.
 #   - the overlap pass runs instead of skipping.
 #
 # Every case builds one fixture repo with a real merge base: the harness is
 # linked in, a base commit holds a readme, and the feature branch adds the three
-# tests. The RED-gate cases stage the tests instead of committing them, since
-# the RED gate judges tests new at HEAD. The two scripts a case may mutate are
+# tests. The two scripts a case may mutate are
 # copied into the fixture's own .gaia/scripts, so a mutant runs against a
 # scratch copy and never touches the real file.
 #
@@ -60,7 +57,6 @@ setup() {
   STEP="$REPO/.gaia/scripts/worthiness-step.sh"
   CHECK="$REPO/.gaia/scripts/overlap-check.sh"
   PRESENCE_HOOK="$HOME_ROOT/.claude/hooks/worthiness-presence-check.sh"
-  RED_HOOK="$HOME_ROOT/.claude/hooks/red-verify-commit-check.sh"
 }
 
 # The fixture mirrors the repo-relative layout every script resolves from its
@@ -126,12 +122,6 @@ run_merge_hook() {
   local json
   json=$(jq -nc '{tool_name:"Bash", tool_input:{command:"gh pr merge 30 --squash --delete-branch"}}')
   invoke_hook_in "$REPO" "$json" "$PRESENCE_HOOK"
-}
-
-run_commit_hook() {
-  local json
-  json=$(jq -nc '{tool_name:"Bash", tool_input:{command:"git commit -m change"}}')
-  invoke_hook_in "$REPO" "$json" "$RED_HOOK"
 }
 
 denied() { [[ "$output" == *'"permissionDecision": "deny"'* ]]; }
@@ -212,27 +202,6 @@ mutate() {
   grep -qF -- "$NEEDLE" "$HOME_ROOT/.claude/skills/gaia/references/worthiness-step.md"
   mutate "$NEEDLE" 'With no human, ask again.' "$HOME_ROOT/.claude/skills/gaia/references/worthiness-step.md" "$BATS_TEST_TMPDIR/worthiness-step.md"
   if grep -qF -- "$NEEDLE" "$BATS_TEST_TMPDIR/worthiness-step.md"; then return 1; fi
-}
-
-@test "the RED gate refuses an unrecorded failing run for the utility test and for the hook test" {
-  write_test "$UTIL_TEST" "$UTIL_NAME"
-  git -C "$REPO" add "$UTIL_TEST"
-  run_commit_hook
-  denied
-  git -C "$REPO" reset -q "$UTIL_TEST"
-
-  write_test "$HOOK_TEST" "$HOOK_NAME"
-  git -C "$REPO" add "$HOOK_TEST"
-  run_commit_hook
-  denied
-}
-
-@test "the RED gate does not newly demand a failing run for the helper folder test" {
-  write_test "$HELPER_TEST" "$HELPER_NAME"
-  git -C "$REPO" add "$HELPER_TEST"
-  run_commit_hook
-  [ "$status" -eq 0 ]
-  refute_denied
 }
 
 @test "the overlap route runs on a branch that changed only unit and helper folder tests" {

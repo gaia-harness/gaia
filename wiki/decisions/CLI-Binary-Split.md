@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-05-09
 created: 2026-05-09
-updated: 2026-10-26
+updated: 2026-11-08
 tags: [decision, distribution, maintainer, cli]
 ---
 
@@ -45,7 +45,7 @@ The `/gaia-release` command invokes `.gaia/cli/gaia-maintainer release <subcomma
 
 ## GAIA-internal code placement rule
 
-GAIA-internal functionality that does not need to live in a specific folder for an external integration should live under `.gaia/`. The folders `.claude/` and `apps/web/app/` exist at the root because Claude Code and the React Router build require those exact locations; the spec lifecycle lives under `.gaia/scripts/spec/` and `.gaia/templates/spec/`, with its Claude-read prose under `.claude/skills/gaia/references/spec/`. Everything else GAIA-owned (scripts, manifest, templates, statusline, cache, and the CLI binaries and source) belongs under `.gaia/`; the npm `bin` field points at `.gaia/cli/gaia`, so even the CLI binary lives under `.gaia/`.
+GAIA-internal functionality that does not need to live in a specific folder for an external integration should live under `.gaia/`. The folders `.claude/` and `apps/web/app/` exist at the root because Claude Code and the React Router build require those exact locations; the spec lifecycle lives under `.gaia/scripts/spec/`, with its Claude-read prose under `.claude/skills/gaia/references/spec/`. Everything else GAIA-owned (scripts, manifest, templates, statusline, cache, and the CLI binaries and source) belongs under `.gaia/`; the npm `bin` field points at `.gaia/cli/gaia`, so even the CLI binary lives under `.gaia/`.
 
 **Why:** The adopter's repo root is precious surface: every top-level folder competes with the adopter's own code for attention. Keeping GAIA-internal tooling under `.gaia/` makes the boundary between "GAIA scaffolding" and "your app" obvious, simplifies `/update-gaia` semantics (one tree to manage), and matches the principle already applied to `.gaia/scripts/`, `.gaia/statusline/`, and `.gaia/templates/`.
 

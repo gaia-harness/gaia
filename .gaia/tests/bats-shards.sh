@@ -793,7 +793,7 @@ subcommand_plan() {
   while IFS= read -r suite_path; do
     [ -n "$suite_path" ] || continue
     case "${suite_path##*/}" in
-      extract-test-signals-stories-reporter.bats | uat-lifecycle-e2e.bats) needs_chromium=1 ;;
+      extract-test-signals-stories-reporter.bats) needs_chromium=1 ;;
     esac
     if grep -qE "$verify_installed_dependencies_mark_pattern" "$(resolve_directory "$suite_path")"; then
       needs_node=1

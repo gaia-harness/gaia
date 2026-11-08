@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
 #
-# Doc-conformance suite for the overlap pass reference and the fidelity judge's
-# surface-neutral wording.
+# Doc-conformance suite for the overlap pass reference.
 #
 # .claude/skills/gaia/references/overlap-pass.md owns the overlap pass of a plan
 # run. This suite pins:
@@ -17,10 +16,7 @@
 #   - the evaluator proposing an unsettled pair flagged `Uncertain:` rather
 #     than skipping it, and naming each changed file it skipped; the pass
 #     listing those proposals last and persisting and reporting the skipped
-#     files;
-#   - the judge and the divergence policy: a builder meets a Given cosmetically,
-#     a stubbed guard, a request-only body under a browser-only clause and a
-#     refusal check without the redirect, status and actor assertions diverge.
+#     files.
 #
 # Every check is a function taking the file it reads, so each red twin runs the
 # same function against a mutated copy and proves it can fail.
@@ -32,9 +28,6 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   REF="$REPO_ROOT/.claude/skills/gaia/references/overlap-pass.md"
   EVALUATOR="$REPO_ROOT/.claude/agents/overlap-evaluator.md"
-  JUDGE="$REPO_ROOT/.claude/agents/uat-fidelity-judge.md"
-  DIVERGENCE="$REPO_ROOT/.claude/skills/gaia/references/spec/uat-divergence.md"
-  UAT_WRITE="$REPO_ROOT/.claude/skills/gaia/references/spec/uat-write.md"
 }
 
 # has_all <file> <literal>...: every literal is in the file.
@@ -436,56 +429,4 @@ check_pass_orders_uncertain_and_reports_skips() {
 @test "the page names no working-document id" {
   run grep -nE 'SPEC-[0-9]+|UAT-[0-9]+|PLAN-[0-9]+' "$REF"
   [ "$status" -eq 1 ]
-}
-
-# ---------- judge and divergence wording ----------
-
-check_judge() {
-  has_all "$1" \
-    'Playwright real-server and browser specs and Vitest route tests' \
-    '`Surface: <uat_id> <real-server | browser | route>`' \
-    'this divergence applies only to a `browser` surface' \
-    '`Spec: <uat_id> <absolute path to the rendered test>`' \
-    '`Guard: <uat_id> <absolute path to the guard file>`' \
-    'Meeting a Given through a builder or fixture is cosmetic too, unless the UAT'"'"'s flow is that setup' \
-    'stubs or mocks a guard a `Guard:` line names' \
-    'only makes a request where the Then-clause is something only a browser shows' \
-    'sets no `maxRedirects: 0`, asserts no status and `Location`, or states no actor' \
-    'tools: Read, Write'
-}
-
-check_divergence() {
-  has_all "$1" \
-    'a Playwright real-server or browser spec or a Vitest route test' \
-    'Meeting a Given through a builder, a fixture or a helper that sets up the state is cosmetic too, unless the UAT'"'"'s flow is that setup' \
-    'On a browser row, a body that makes only a request where the Then-clause is something only a browser shows (focus, hydration, client navigation) is a logical divergence' \
-    'On a real-server row a request-only body is the contract'
-}
-
-@test "the judge is surface-neutral and names the builder, stubbed-guard, request-only and refusal-check divergences" {
-  check_judge "$JUDGE"
-}
-
-@test "the divergence policy is surface-neutral and carries the builder and request-only rules" {
-  check_divergence "$DIVERGENCE"
-}
-
-@test "red twin: removing any judge or divergence clause fails its check" {
-  local copy="$BATS_TEST_TMPDIR/copy.md" clause
-  for clause in 'Meeting a Given through a builder or fixture is cosmetic too' 'stubs or mocks a guard a `Guard:` line names' 'only makes a request where the Then-clause is something only a browser shows' 'sets no `maxRedirects: 0`' 'Playwright real-server and browser specs and Vitest route tests' '`Surface: <uat_id> <real-server | browser | route>`' 'this divergence applies only to a `browser` surface'; do
-    mutate "$JUDGE" "$clause" 'removed' "$copy"
-    run check_judge "$copy"
-    [ "$status" -ne 0 ] || { echo "removing '$clause' did not fail" >&2; return 1; }
-  done
-  mutate "$DIVERGENCE" 'cosmetic too, unless the UAT'"'"'s flow is that setup' 'removed' "$copy"
-  run check_divergence "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "uat-write.md describes the route file shape and the removal of .fails" {
-  has_all "$UAT_WRITE" \
-    'test.fails(' \
-    'becomes `test(`' \
-    'calls the route module'"'"'s loader or action directly' \
-    'Skipped: no e2e-routed or route-routed UATs'
 }

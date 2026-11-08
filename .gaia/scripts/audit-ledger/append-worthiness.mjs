@@ -24,12 +24,12 @@
 // test-signal extractor (.gaia/scripts/test-signals/extract-test-signals.mjs)
 // computes. This writer
 // reuses that helper directly (spawns it, matches the named test's fullName),
-// so the signal byte-matches what the RED ledger and the presence-gate
-// recompute produce. It does NOT reinvent the identity primitive.
+// so the signal byte-matches what the presence-gate
+// recompute produces. It does NOT reinvent the identity primitive.
 //
 // Ledger path: .gaia/local/worthiness-ledger/<tree-key>/worthiness.jsonl
-// (append-only, gitignored, grows-forever), a directory sibling to the RED
-// ledger's .gaia/local/red-ledger/<tree-key>/. Both the tree-key subpath and
+// (append-only, gitignored, grows-forever), a directory keyed per tree.
+// Both the tree-key subpath and
 // the anchoring on the ACTING tree's own root (never a repo-relative literal)
 // are resolved by shelling out to the one canonical definition,
 // .claude/hooks/lib/worthiness-ledger.sh, so this writer and its reader
@@ -98,7 +98,7 @@ if (verdict !== 'keep' && !artifact) {
   fail(`verdict "${verdict}" requires a machine-checkable artifact argument`, 4);
 }
 
-// Reuse the RED-ledger signal helper. Spawning it (rather than recomputing the
+// Reuse the test-signals helper. Spawning it (rather than recomputing the
 // hash here) guarantees the signal byte-matches the canonical primitive.
 let signalNdjson;
 try {

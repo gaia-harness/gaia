@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-06-23
 created: 2026-06-23
-updated: 2026-11-07
+updated: 2026-11-08
 tags: [decision, tdd, testing, audit, quality]
 ---
 
@@ -12,14 +12,13 @@ tags: [decision, tdd, testing, audit, quality]
 
 An advisory review of the tests the worthiness selection names (the `emergentTests` and `tddUnitTests` globs, per [[Package Descriptor]]). An emergent test has no stable
 failing-then-passing run to gate on, so its honesty and worthiness come from a
-fresh-context reviewer instead of a mechanical RED proof. Every changed test, strict included, is judged on honesty and worth. A test the [[Determinism Classifier]] labels strict is on the surface the [[TDD RED Verification]] gate covers, and the RED gate proves such a test can fail; the reviewer still judges whether it asserts the outcome that matters. A route test under the route-test folder is judged on both axes, although the RED gate covers it too; a file whose first line carries the contract marker takes no `delete` verdict, since a divergence there goes to a reopen. The reviewer
+fresh-context reviewer. Every changed test, strict included, is judged on honesty and worth. A test the [[Determinism Classifier]] labels strict is judged on whether it asserts the outcome that matters; nothing proves mechanically that it can fail. A route test under the route-test folder is judged on both axes like any other. The reviewer
 **proposes** verdicts and **edits no files**; a human acts on every proposal.
 
 ## Problem
 
-The RED gate proves a deterministic test can fail. It cannot run on the emergent
-surface: a component-interaction test, an async test, a layout test, an E2E test
-have no honest RED to observe. Without a mechanism, an emergent test that always
+A component-interaction test, an async test, a layout test or an E2E test has no
+stable failing-then-passing run to observe. Without a mechanism, an emergent test that always
 passes (a tautology, a child-redundant re-prove, a platform-byte assertion, a
 behavior-rich component covered only by a tracer bullet) ships unchallenged and
 adds maintenance cost while catching none of its own component's bugs.
@@ -28,7 +27,7 @@ adds maintenance cost while catching none of its own component's bugs.
 
 A committed reviewer prompt judges each changed test on two axes (every changed test, strict included, is judged on honesty and worth) and
 returns one verdict per test. A fresh-context reviewer is the cheapest way to
-recover the honesty signal the RED gate cannot supply here, because the author
+recover the honesty signal a failing run cannot supply here, because the author
 who wrote the tests shares their blind spots.
 
 ### The two axes
@@ -71,7 +70,7 @@ The composition rule compares a story's tests with its own children's stories. T
 
 ### Strict tests: honesty and worth
 
-Every changed test, strict included, is judged on honesty. The classifier picks which judgment arm and evidence a test gets, not whether honesty is judged: a strict test's subject is deterministic, so a weak assertion there is a defect, not noise. The RED gate proves a strict test can fail; it does not prove the test asserts the outcome that matters. On worth, the reviewer asks whether the test is worth having: trivial, covered by an integration test, proving what the type checker or lint already proves, a table that should be one test, or a unit test whose logic is neither important nor likely to fail. The verdict is `keep` or a human-gated `delete` naming the criterion, or a `fix` when the test fails the honesty axis.
+Every changed test, strict included, is judged on honesty. The classifier picks which judgment arm and evidence a test gets, not whether honesty is judged: a strict test's subject is deterministic, so a weak assertion there is a defect, not noise. Nothing proves mechanically that a strict test can fail, so the review is where it is checked that the test asserts the outcome that matters. On worth, the reviewer asks whether the test is worth having: trivial, covered by an integration test, proving what the type checker or lint already proves, a table that should be one test, or a unit test whose logic is neither important nor likely to fail. The verdict is `keep` or a human-gated `delete` naming the criterion, or a `fix` when the test fails the honesty axis.
 
 ### Two-tier surfacing
 
@@ -90,18 +89,17 @@ summary.
 
 ## Audit ledger
 
-Each verdict appends one line to an append-only ledger, sibling to the RED
-ledger:
+Each verdict appends one line to an append-only ledger, per tree:
 
 ```json
 {"schema": 1, "file": "<repo-rel>", "fullName": "<vitest fullName>", "signal": "sha256:...", "verdict": "keep"|"fix"|"delete", "auditedAt": "<iso>", "artifact": "<...>"}
 ```
 
 - Path: `.gaia/local/worthiness-ledger/<tree_key>/worthiness.jsonl` (append-only,
-  gitignored, grows-forever, a directory sibling to
-  `.gaia/local/red-ledger/<tree_key>/observations.jsonl`). `<tree_key>` identifies
+  gitignored, grows-forever, a directory keyed per tree).
+  `<tree_key>` identifies
   the working tree, printed by `bash .gaia/scripts/main-root-lib.sh --tree-key`.
-- `signal` is the SAME `sha256`-of-normalized-test-call the RED ledger computes
+- `signal` is the SAME `sha256`-of-normalized-test-call the test-signals helper computes
   via `.gaia/scripts/test-signals/extract-test-signals.mjs`. The writer reuses
   that helper, so the signal byte-matches what the merge presence gate
   recomputes; reinventing the identity primitive would desync the gate. The
@@ -123,7 +121,7 @@ ledger:
   and platform rules).
 - `.gaia/scripts/audit-ledger/append-worthiness.mjs`: the ledger writer. Takes a
   repo-relative test path, a `fullName`, a verdict, and (for non-keep) an
-  artifact; recomputes the signal via the RED-ledger helper and appends one
+  artifact; recomputes the signal via the test-signals helper and appends one
   JSONL line. Rejects an unknown verdict and a non-keep with no artifact.
 
 ## Consumers
@@ -134,8 +132,8 @@ ledger:
   ledger writer. The tdd skill dispatches the reviewer through that page's tdd arm,
   which dispatches and records only (otherwise principle-6 always-on is
   violated). The tdd path's
-  surviving no-orchestrator guarantees (static honesty lint, RED on the
-  deterministic surface, the fresh-subagent audit if dispatched) are distinct
+  surviving no-orchestrator guarantees (static honesty lint, the fresh-subagent
+  audit if dispatched) are distinct
   from the orchestrated-only guarantee (leaf isolation).
 - The merge presence gate reads this ledger, recomputes each test's signal, and
   scopes to the same worthiness selection the review reads.

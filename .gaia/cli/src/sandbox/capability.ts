@@ -5,9 +5,8 @@
  * `DetectionResult` with no host I/O. `gaia sandbox detect` (./index.ts)
  * falls back to real host probes (process.platform, `command -v
  * bwrap`/`socat`, WSL detection) for whichever flags are omitted, then
- * calls this function, so the tier/seed/apply UATs run deterministically
- * on `ubuntu-latest` CI regardless of the runner's real OS (AUDIT
- * plan-time directive #4).
+ * calls this function, so the tier, seed and apply tests run deterministically
+ * on `ubuntu-latest` CI regardless of the runner's real OS.
  */
 export type Capability = 'needs-deps' | 'ready' | 'unsupported';
 

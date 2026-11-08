@@ -253,13 +253,13 @@ run_linter() {
 # actually was rather than where it was convenient to demonstrate. The first is
 # the only site of the eight that failed OPEN.
 
-@test "reds against the pre-fix red-verify-commit-check.sh --cached derivation" {
+@test "reds against the pre-fix commit-gate hook --cached derivation" {
   fixture_repo
-  fixture_file .claude/hooks/red-verify-commit-check.sh \
+  fixture_file .claude/hooks/commit-gate-fixture.sh \
     $'#!/usr/bin/env bash\nstaged=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)'
   run_linter
   [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/red-verify-commit-check.sh:2" <<<"$output"
+  grep -qF -- ".claude/hooks/commit-gate-fixture.sh:2" <<<"$output"
 }
 
 @test "reds against the pre-fix forensics-triage.yml --staged derivation" {

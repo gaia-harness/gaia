@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-05-08
 created: 2026-05-08
-updated: 2026-10-23
+updated: 2026-11-08
 tags: [decision, ci, automation, security]
 ---
 
@@ -70,7 +70,6 @@ Deny matches on file names and exact files compare case-insensitively, because a
 | `studio/`                             | Private strategy vault; human-curated.                                  |
 | `website/`                            | Marketing/docs site; human-curated.                                     |
 | `.notebook/`                          | GAIA spec, plan and research artifacts ([[Notebook]]).                  |
-| `.gaia/templates/spec/`               | Template literals; mutating these affects every adopter.                |
 | `.claude/skills/gaia/references/spec/clarify-prompts.md`, `.claude/skills/gaia/references/spec/system-prompt.md`, `.claude/skills/gaia/references/spec/spec-template.md` | Prose template literals, denied by file so the sibling runbooks under the allowed skills root stay allowed; mutating these affects every adopter. |
 | `.github/workflows/`                  | Workflow files; covers self-modification of the triage workflow itself. |
 | `.claude/hooks/`, `.gaia/statusline/`, `.githooks/`, `.claude/settings.json`, `.claude/settings.local.json`, `.gaia/cli/gaia`, `.gaia/cli/gaia-maintainer` | Run on their own once a branch is checked out locally (Claude Code hooks and the settings that register them, the statusline, git hooks, and the CLI bundles they call). The workflow pushes a fix branch before anyone reads it, so it never edits them. |

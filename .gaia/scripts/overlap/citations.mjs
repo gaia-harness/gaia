@@ -16,9 +16,7 @@
 // asserts. The check follows a helper defined in the cited file (a function
 // declaration, a const bound to a function, or a function-valued property of
 // a const object) and refuses the citation when its body holds no expect()
-// call. In a rendered test (contract marker on line 1) any cited in-file
-// helper call is refused, since a rendered test's assertions belong in its own
-// body. Honest limit: a helper imported from another module is not followed,
+// call. Honest limit: a helper imported from another module is not followed,
 // so a call to one verifies as any other cited text does. A cited line that
 // itself calls expect is an assertion and is never treated as a helper call.
 
@@ -33,9 +31,6 @@ try {
 } catch {
   ts = null;
 }
-
-const MARKER = /^\/\/ gaia-uat-contract sha256:/;
-export const isRendered = (entry) => MARKER.test(entry?.rawLines[0] ?? '');
 
 const lineAt = (entry, position) => entry.sourceFile.getLineAndCharacterOfPosition(position).line + 1;
 const rangesHold = (test, line) => test.ranges.some(([start, end]) => start <= line && line <= end);
@@ -263,8 +258,7 @@ function calledHelperName(call) {
 }
 
 // True when the line is a call to an in-file helper that does not count as an
-// assertion: one whose body holds no expect(), or any in-file helper in a
-// rendered test. A line that itself calls expect is never refused here.
+// assertion: one whose body holds no expect(). A line that itself calls expect is never refused here.
 function helperCallRefused(entry, line) {
   const helpers = helpersOf(entry);
   if (helpers.size === 0) return false;
@@ -275,10 +269,9 @@ function helperCallRefused(entry, line) {
   };
   visit(entry.sourceFile);
   if (onLine.some((call) => calleeParts(call).root === 'expect')) return false;
-  const rendered = isRendered(entry);
   return onLine.some((call) => {
     const name = calledHelperName(call);
-    return name !== null && helpers.has(name) && (rendered || !helpers.get(name));
+    return name !== null && helpers.has(name) && !helpers.get(name);
   });
 }
 

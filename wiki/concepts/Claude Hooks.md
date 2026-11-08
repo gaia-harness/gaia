@@ -251,4 +251,4 @@ A bundled hook is a guard the rest of the harness assumes is live, so Claude con
 
 See [[Customizing GAIA]] for where every other customization goes.
 
-See [[Quality Gate]], [[Pre-commit Hooks]], [[Git Workflow]], [[Claude Integration Conventions]], [[TDD RED Verification]].
+See [[Quality Gate]], [[Pre-commit Hooks]], [[Git Workflow]], [[Claude Integration Conventions]].

@@ -43,7 +43,6 @@ allowlist='- `.gaia/cli/` (except the `gaia` and `gaia-maintainer` bundles)
 # shellcheck disable=SC2016
 denylist='- `apps/web/app/`, `wiki/`, `studio/`, `website/`
 - `.notebook/`
-- `.gaia/templates/spec/`
 - `.claude/skills/gaia/references/spec/clarify-prompts.md`, `.claude/skills/gaia/references/spec/system-prompt.md`, `.claude/skills/gaia/references/spec/spec-template.md`
 - `.github/workflows/`, `.github/forensics/`, `.github/`
 - `.claude/hooks/`, `.gaia/statusline/`, `.githooks/`, `.claude/settings.json`, `.claude/settings.local.json` (they run on their own in a local session)

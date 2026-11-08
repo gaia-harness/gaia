@@ -1,9 +1,9 @@
 /**
  * Exercises the determinism classifier AST helper
  * (`.gaia/scripts/classifier/classify-determinism.mjs`), which labels a
- * touched source file STRICT (deterministic; goes under the RED gate) or
- * EMERGENT (clock-/entropy-/I-O-bound or tree-dependent; advisory audit
- * only). Path scopes the candidate set; content decides. The bias is
+ * touched source file STRICT (deterministic) or
+ * EMERGENT (clock-/entropy-/I-O-bound or tree-dependent). The label picks the
+ * worthiness judgment arm and evidence. Path scopes the candidate set; content decides. The bias is
  * deliberate: err EMERGENT. Over-strict is the worse failure.
  *
  * The helper ships to adopters (manifest `owned`, run by shipped hooks); this

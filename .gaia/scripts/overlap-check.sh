@@ -144,8 +144,8 @@ cmd_changed() {
   rm -f "$names"
 }
 
-# A fold-up's subjects are judged together: one rendered subject makes it
-# rendered, one not-authored or unknown line makes it that. At --post-fix its
+# A fold-up's subjects are judged together: one not-authored or unknown line
+# makes it that. At --post-fix its
 # subjects are gone (null ranges), so it keeps the disposition it was given.
 # shellcheck disable=SC2016
 DISPOSITION_JQ='
@@ -158,16 +158,14 @@ def verdict_of($answers):
 def disposition_of:
   if ._needsNewTest then {disposition: "report-only", reportReason: "needs-new-test"}
   elif ._subjects then
-    if any(._subjects[]; .rendered) then {disposition: "report-only", reportReason: "rendered"}
-    elif any(._subjects[]; .ranges == null) then recorded
+    if any(._subjects[]; .ranges == null) then recorded
     elif $state == "on-default-branch" then {disposition: "report-only", reportReason: "not-authored"}
     else verdict_of([._subjects[] | answers_for(.file; .ranges)[]]) end
-  elif ._rendered then {disposition: "report-only", reportReason: "rendered"}
   elif ._present == false then recorded
   elif $state == "on-default-branch" then {disposition: "report-only", reportReason: "not-authored"}
   else verdict_of(answers_for(.file; ._ranges)) end;
 {kept: [.kept[] | disposition_of as $verdict
-  | del(._ranges, ._rendered, ._present, ._subjects, ._needsNewTest, .disposition, .reportReason) + $verdict],
+  | del(._ranges,._present, ._subjects, ._needsNewTest, .disposition, .reportReason) + $verdict],
  discarded: .discarded}
 '
 

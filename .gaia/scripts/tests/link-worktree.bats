@@ -101,8 +101,8 @@ run_in() {
 @test "pre-existing plain .gaia/local: backed up whole, then symlinked" {
   # A real (non-symlink) .gaia/local with content, as a worktree used before
   # this cutover would have (per-tree entries as real directories under it).
-  mkdir -p "$LINKED/.gaia/local/red-ledger"
-  printf 'stale-content' > "$LINKED/.gaia/local/red-ledger/observations.jsonl"
+  mkdir -p "$LINKED/.gaia/local/worthiness-ledger"
+  printf 'stale-content' > "$LINKED/.gaia/local/worthiness-ledger/worthiness.jsonl"
 
   run run_in "$LINKED"
   [ "$status" -eq 0 ]
@@ -111,7 +111,7 @@ run_in() {
 
   backup_name="$(ls "$LINKED/.gaia/" | grep '^local\.bak\.')"
   [ -n "$backup_name" ]
-  [ "$(cat "$LINKED/.gaia/$backup_name/red-ledger/observations.jsonl")" = "stale-content" ]
+  [ "$(cat "$LINKED/.gaia/$backup_name/worthiness-ledger/worthiness.jsonl")" = "stale-content" ]
 
   [[ "$output" == *"linked-after-backup: $LINKED/.gaia/local"* ]] || return 1
 }
@@ -198,17 +198,17 @@ FAKE
 # ---------- 9. Write-through: a per-tree-keyed write from the worktree ----------
 # lands in the main checkout, because .gaia/local is now the SAME physical
 # directory reached from either side, not a per-entry symlink into it.
-@test "write-through: a keyed red-ledger write on the worktree side lands in the main checkout" {
+@test "write-through: a keyed worthiness-ledger write on the worktree side lands in the main checkout" {
   run run_in "$LINKED"
   [ "$status" -eq 0 ]
 
   [ -L "$LINKED/.gaia/local" ]
   [ "$(readlink "$LINKED/.gaia/local")" = "$MAIN/.gaia/local" ]
 
-  mkdir -p "$LINKED/.gaia/local/red-ledger/deadbeefdeadbeef"
-  printf '%s\n' '{"total":42}' >> "$LINKED/.gaia/local/red-ledger/deadbeefdeadbeef/observations.jsonl"
-  [ -f "$MAIN/.gaia/local/red-ledger/deadbeefdeadbeef/observations.jsonl" ]
-  [ "$(cat "$MAIN/.gaia/local/red-ledger/deadbeefdeadbeef/observations.jsonl")" = '{"total":42}' ]
+  mkdir -p "$LINKED/.gaia/local/worthiness-ledger/deadbeefdeadbeef"
+  printf '%s\n' '{"total":42}' >> "$LINKED/.gaia/local/worthiness-ledger/deadbeefdeadbeef/worthiness.jsonl"
+  [ -f "$MAIN/.gaia/local/worthiness-ledger/deadbeefdeadbeef/worthiness.jsonl" ]
+  [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/deadbeefdeadbeef/worthiness.jsonl")" = '{"total":42}' ]
 }
 
 # ---------- 9b. Codify decline ledger durability (write-through to main) ----------

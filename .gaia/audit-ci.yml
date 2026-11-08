@@ -469,7 +469,6 @@ unowned:
   - ".gaia/migrations/**"
   - ".claude/agents/worthiness-evaluator.md"
   - ".claude/agents/overlap-evaluator.md"
-  - ".claude/agents/uat-fidelity-judge.md"
   - ".claude/commands/**/*.md"
   - ".gaia/cli/health/**/*.md"
   - ".github/forensics/prompt.md"

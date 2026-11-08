@@ -1380,7 +1380,7 @@ write_plan_fixture() {
   {
     printf '#!/usr/bin/env bats\n'
     printf '%s "lifecycle" {\n  true\n}\n' "$at_test"
-  } >"$directory/audit/uat-lifecycle-e2e.bats"
+  } >"$directory/audit/extract-test-signals-stories-reporter.bats"
   cat >"$directory/selector.sh" <<'STUB'
 #!/usr/bin/env bash
 [ -z "${STUB_SELECTOR_FAILS:-}" ] || exit 3
@@ -1478,7 +1478,7 @@ plan_fixture() {
 @test "P5: a change that owes nothing selects nothing and installs nothing" {
   local directory="$BATS_TEST_TMPDIR/p5"
   write_plan_fixture "$directory"
-  rm "$directory/audit/dependent.bats" "$directory/audit/marked.bats" "$directory/audit/uat-lifecycle-e2e.bats"
+  rm "$directory/audit/dependent.bats" "$directory/audit/marked.bats" "$directory/audit/extract-test-signals-stories-reporter.bats"
 
   run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
   [ "$status" -eq 0 ]
@@ -1495,7 +1495,7 @@ plan_fixture() {
   local directory="$BATS_TEST_TMPDIR/p6"
   write_plan_fixture "$directory"
 
-  STUB_SELECTOR_PICKS="$directory/audit/uat-lifecycle-e2e.bats" run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  STUB_SELECTOR_PICKS="$directory/audit/extract-test-signals-stories-reporter.bats" run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
   grep -qx 'needs_chromium=1' <<<"$output"
   run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
   grep -qx 'needs_chromium=0' <<<"$output"
@@ -1583,7 +1583,7 @@ plan_fixture() {
     grep -qx 'mode=full' <<<"$output" && return 1
   done
   [ "$marked_count" -gt 0 ]
-  for shard_file in capture-red-observations test-signals-lib red-verify-commit-check red-verify-e2e worthiness-presence-check extract-test-signals-stories-reporter uat-lifecycle-e2e; do
+  for shard_file in test-signals-lib worthiness-presence-check extract-test-signals-stories-reporter; do
     grep -q "/$shard_file\.bats\$" <<<"$union"
   done
 }

@@ -3,7 +3,7 @@ type: meta
 title: Index
 status: active
 created: 2026-04-20
-updated: 2026-10-28
+updated: 2026-11-08
 tags: [meta]
 ---
 
@@ -86,7 +86,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 
 - [[Audit Convergence On Minor-only Fix Churn|Audit convergence on Minor-only fix churn]]
 - [[per-call-bash-hook-cost-cut|Per-call Bash hook cost cut]]: what each registered hook costs every matched tool call
-- [[Route Browser UATs By The Capability That Needs A Browser|Route browser UATs by the capability that needs a browser]]
 - [[shadcn Component Layer]]: GAIA's component layer, the vendored-ui policy.
 - [[React Compiler]]: React Compiler runs by default in build, dev, Vitest and Storybook from one shared module; thresholds, adopter steps and rollback.
 - [[TypeScript Language Files]]
@@ -122,11 +121,10 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Vendored Third-Party Skills]]: third-party skills are vendored byte-identical with a GAIA-owned version marker; GAIA guidance lives outside the vendored folder; updates re-vendor.
 - [[Wiki Management]]: wiki primitives, state file, deterministic classification
 - [[Claude Integration Fitness]]: why `/gaia-fitness` is a deterministic linter, what it grades, and its ownership-checked heal protocol.
-- [[TDD RED Verification]]: mechanical enforcement that a new test was observed failing before commit; RED-observation ledger + two hooks.
-- [[Determinism Classifier]]: per-file AST signal labelling a source file strict (RED-gated) or emergent (advisory audit); versioned DOM-API allowlist, file-granular.
+- [[Determinism Classifier]]: per-file AST signal labelling a source file strict, emergent or route; it picks the worthiness judgment arm and evidence; versioned DOM-API allowlist, file-granular.
 - [[Workspace Standard For Apps And Packages]]
 - [[Worthiness And Wiki Before The Audit]]: the worthiness step and wiki promotion run before the first audit round; `file-tech-debt.sh file` refuses a non-security finding on branch-authored code.
-- [[Worthiness Audit]]: advisory review of every changed test the worthiness selection names (honesty + worth for every changed test, strict included); fresh-context reviewer proposes keep/fix/delete, deletes human-gated, audit ledger sibling to the RED ledger; stories audited as emergent tests; two-tier end-of-task surfacing.
+- [[Worthiness Audit]]: advisory review of every changed test the worthiness selection names (honesty + worth for every changed test, strict included); fresh-context reviewer proposes keep/fix/delete, deletes human-gated, per-tree audit ledger; stories audited as emergent tests; two-tier end-of-task surfacing.
 - [[Worthiness Presence Gate]]: merge-time `gh pr merge` hook requiring each changed test the worthiness selection names to carry a worthiness-ledger line matching its current content; presence + signal match only (never the verdict), scoped to the PR's changed in-scope tests, fail-open.
 <!-- gaia:maintainer-only:start -->
 - [[Dependabot as a Data Source]]: Dependabot alerts feed `/update-deps`, which resolves advisories through the local quality gate; GAIA renders no Dependabot config and keeps automated security fixes off.

@@ -164,7 +164,7 @@ export const FLOOR_ITEMS = [
     `uat017-root-${subject.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')}`,
     `UAT-017 root launch: ${subject} denied`,
     { launch: 'root', kind: 'permission', subject, trigger: 'after_task:permissions-edit', expect: 'deny' })),
-  item('uat023-commit-parity', 'UAT-023: a frontend launch commit runs pre-commit and the RED gate exactly as a root launch', { launch: 'frontend', kind: 'task', subject: 'commit-parity', trigger: 'after_task:commit', expect: 'value:match-root' }),
+  item('uat023-commit-parity', 'a frontend launch commit runs pre-commit exactly as a root launch', { launch: 'frontend', kind: 'task', subject: 'commit-parity', trigger: 'after_task:commit', expect: 'value:match-root' }),
   item('uat023-frontend-pre-commit-ran', 'UAT-023: pre-commit runs on a frontend launch commit', { launch: 'frontend', kind: 'task', subject: 'commit-a:pre-commit', trigger: 'after_task:commit', expect: 'value:ran' }),
   item('uat023-root-pre-commit-ran', 'UAT-023: pre-commit runs on a root launch commit', { launch: 'root', kind: 'task', subject: 'commit-a:pre-commit', trigger: 'after_task:commit', expect: 'value:ran' }),
 ];

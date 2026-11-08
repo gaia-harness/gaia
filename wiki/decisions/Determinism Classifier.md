@@ -4,21 +4,21 @@ status: active
 priority: 1
 date: 2026-06-23
 created: 2026-06-23
-updated: 2026-11-07
+updated: 2026-11-08
 tags: [decision, tdd, hooks, quality, classifier]
 ---
 
 # Determinism Classifier
 
-A per-file, statically-checkable AST signal that labels a touched source file **STRICT** (deterministic; goes under the [[TDD RED Verification]] gate) or **EMERGENT** (clock-, entropy-, or I/O-bound, or dependent on the rendered tree; advisory audit only, no RED proof required). Path scopes the candidate set; content decides. No LLM round-trip.
+A per-file, statically-checkable AST signal that labels a touched source file **STRICT** (deterministic) or **EMERGENT** (clock-, entropy-, or I/O-bound, or dependent on the rendered tree). The label picks the judgment arm and evidence a test gets in the worthiness review, and feeds the worthiness selection ([[Worthiness Audit]]). Path scopes the candidate set; content decides. No LLM round-trip.
 
 ## Problem
 
-Not every source file can honestly carry a RED proof. Code that reads the clock, draws entropy, performs real I/O, or depends on a live DOM or router tree has no stable failing-then-passing run to observe: forcing a RED onto it produces theatre that corrupts the RED-observation ledger. A deterministic mechanism is needed to decide, per file, whether the RED gate applies.
+Not every source file is judged the same way. Code that reads the clock, draws entropy, performs real I/O, or depends on a live DOM or router tree has no stable failing-then-passing run to observe, so a test of it needs different evidence than a test of a pure function. A deterministic mechanism is needed to decide, per file, which arm applies.
 
 ## Decision
 
-The classifier emits one of two labels per file, plus `route` for a route-surface test (see [[#Route tests]]). **The bias is deliberate: err EMERGENT.** A missed RED is caught late by the advisory worthiness audit; an over-strict label forces RED theatre that is the worse failure. Ambiguous cases classify EMERGENT.
+The classifier emits one of two labels per file, plus `route` for a route-surface test (see [[#Route tests]]). **The bias is deliberate: err EMERGENT.** A missed strict is caught late by the advisory worthiness audit; an over-strict label judges non-deterministic code as if it were deterministic, which is the worse failure. Ambiguous cases classify EMERGENT.
 
 A file classifies **STRICT only when ALL of conditions 1 through 4 hold.** Failing any of conditions 2 through 4 classifies it EMERGENT regardless of path.
 
@@ -58,23 +58,22 @@ The allowlist is a constant in the classifier with a version marker (`DOM_ALLOWL
 
 ## Story files are emergent
 
-A path ending `.stories.tsx` or `.stories.ts` classifies EMERGENT before any path scoping or AST check, with the reason `story file: a *.stories.tsx is emergent regardless of path`. A story renders in a real browser and carries its own tests and play, so it is never a deterministic subject, and a story outside the package descriptor's globs still lands on the worthiness-gated surface. See [[Stories as Tests]].
+A path ending `.stories.tsx` or `.stories.ts` classifies EMERGENT before any path scoping or AST check, with the reason `story file: a *.stories.tsx is emergent regardless of path`. A story renders in a real browser and carries its own tests and play, so it is never a deterministic subject, and a story outside the package descriptor's globs still lands on the worthiness surface. See [[Stories as Tests]].
 
 ## Route tests
 
-A path matching `app/route-tests/<feature>/tests/<file>.test.ts` classifies `route`, a third verdict, before any path scoping or AST check. A route test calls a route module's `loader` or `action` in process, so it is deterministic enough to owe a RED and, unlike a strict test, is also in worthiness scope. The `route` verdict keeps it in both gates, where a strict or an emergent label would put it in only one. [[Test Layering]] places the route surface among the layers.
+A path matching `app/route-tests/<feature>/tests/<file>.test.ts` classifies `route`, a third verdict, before any path scoping or AST check. A route test calls a route module's `loader` or `action` in process, so it is deterministic, yet it is judged on both axes in the worthiness review. The `route` verdict names that third arm, where a strict or an emergent label would not. [[Test Layering]] places the route surface among the layers.
 
 ## File-granularity limitation
 
-The classifier is **file-granular**: it labels a whole file STRICT or EMERGENT and **cannot split a pure export from an impure module constant in the same file.** A file with even one module-reachable non-deterministic constant classifies EMERGENT in full; its otherwise-pure exports cannot be independently RED-gated without first refactoring that constant behind a function. This is an honest limitation of the mechanism, not a verdict that those exports are untestable.
+The classifier is **file-granular**: it labels a whole file STRICT or EMERGENT and **cannot split a pure export from an impure module constant in the same file.** A file with even one module-reachable non-deterministic constant classifies EMERGENT in full; its otherwise-pure exports cannot be independently labeled strict without first refactoring that constant behind a function. This is an honest limitation of the mechanism, not a verdict that those exports are untestable.
 
 ## Infrastructure
 
-- `.gaia/scripts/classifier/classify-determinism.mjs`: Node ESM helper using the TypeScript compiler API. Takes a repo-relative source path (or `--stdin`, where the path argument names the file identity for path scoping and `.ts`-vs-`.tsx` script kind). Emits one JSON object: `{file, classification: "strict" | "emergent" | "route", reasons: [...]}`. Exits 0 on success; exits non-zero with a one-line stderr message on a missing argument, a missing `typescript`, an unreadable file, or a parse failure, so a bash caller can apply its own fail-open policy. The strict-candidate globs come from the package registry, read through `.claude/hooks/lib/gaia-packages.sh` ([[Package Descriptor]]); an unusable registry or descriptor exits 7 with `{"error": ...}` on stdout, the one failure a caller must not treat as fail-open. Mirrors `extract-test-signals.mjs` (see [[TDD RED Verification]]).
+- `.gaia/scripts/classifier/classify-determinism.mjs`: Node ESM helper using the TypeScript compiler API. Takes a repo-relative source path (or `--stdin`, where the path argument names the file identity for path scoping and `.ts`-vs-`.tsx` script kind). Emits one JSON object: `{file, classification: "strict" | "emergent" | "route", reasons: [...]}`. Exits 0 on success; exits non-zero with a one-line stderr message on a missing argument, a missing `typescript`, an unreadable file, or a parse failure, so a bash caller can apply its own fail-open policy. The strict-candidate globs come from the package registry, read through `.claude/hooks/lib/gaia-packages.sh` ([[Package Descriptor]]); an unusable registry or descriptor exits 7 with `{"error": ...}` on stdout, the one failure a caller must not treat as fail-open. Mirrors `extract-test-signals.mjs`.
 
 ## Consumers
 
-- The RED carve-out at commit time scopes the RED demand to STRICT files and `route` files; EMERGENT files commit without a RED proof.
 - The worthiness audit and the merge presence gate scope to the strict, emergent and `route` test files the worthiness selection names (the `emergentTests` and `tddUnitTests` globs, per [[Package Descriptor]]). The review judges strict files on honesty and worth; the classifier picks the judgment arm, not whether honesty is judged ([[Worthiness Audit]]).
 
 The `{file, classification, reasons}` output shape and the emergent-signal set are a stable contract these consumers depend on.
