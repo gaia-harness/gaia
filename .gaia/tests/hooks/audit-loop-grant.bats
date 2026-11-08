@@ -132,19 +132,16 @@ allowed() { gaia_loop_allowed "$(cat "$ALF_STATE")"; }
   printf '%s' "$output" | grep -qF 'not interactive'
 }
 
-# mutated_library <sed-expression>: HOOK becomes a copy of the hook whose
-# scripts folder links every library except a mutated audit-loop-state-lib.sh.
+# mutated_library <sed-expression>: HOOK becomes a copy of the hook that redefines
+# the interactive check, after sourcing the libraries, as the library's own
+# function with the edit applied; proves the edit took.
 mutated_library() {
-  local scratch_directory="$BATS_TEST_TMPDIR/mutant" script_path
-  mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
-  cp "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh" "$scratch_directory/.claude/hooks/"
-  for script_path in "$REPO_ROOT"/.gaia/scripts/*; do
-    ln -s "$script_path" "$scratch_directory/.gaia/scripts/"
-  done
-  rm "$scratch_directory/.gaia/scripts/audit-loop-state-lib.sh"
-  sed "$1" "$REPO_ROOT/.gaia/scripts/audit-loop-state-lib.sh" >"$scratch_directory/.gaia/scripts/audit-loop-state-lib.sh"
-  cmp -s "$REPO_ROOT/.gaia/scripts/audit-loop-state-lib.sh" "$scratch_directory/.gaia/scripts/audit-loop-state-lib.sh" && return 1
-  HOOK="$scratch_directory/.claude/hooks/audit-loop-grant.sh"
+  local original="$BATS_TEST_TMPDIR/interactive-check.sh" mutant="$BATS_TEST_TMPDIR/interactive-check-mutant.sh"
+  sed -n '/^gaia_loop_session_is_interactive() {$/,/^}$/p' "$REPO_ROOT/.gaia/scripts/audit-loop-state-lib.sh" >"$original"
+  [ -s "$original" ]
+  sed "$1" "$original" >"$mutant"
+  cmp -s "$original" "$mutant" && return 1
+  scratch_hook 's|^prompt="\$(printf|. "'"$mutant"'"; &|'
 }
 
 # recorded_one: the mutant admitted what the real check refuses.
