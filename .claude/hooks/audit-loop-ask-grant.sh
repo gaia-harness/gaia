@@ -70,8 +70,9 @@
 #
 # Never exit 2 and never block: PostToolUse cannot undo the question, and every
 # decline exits 0 with both fields (stdout JSON shows only on exit 0). jq is
-# checked inline rather than through lib/jq-availability.sh, whose missing-jq arm exits 2. Bash 3.2; never `cd`s
-# outside the command substitution that locates the libraries.
+# checked inline rather than through lib/jq-availability.sh, whose missing-jq
+# arm exits 2. Bash 3.2; never `cd`s outside the command substitution that
+# locates the libraries.
 
 set -u
 
