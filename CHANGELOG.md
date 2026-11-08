@@ -16,6 +16,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Added
 
+- **5-hour and 7-day usage in the statusline:** GAIA's default left side now shows `🕔` and `📅` percentages when Claude Code reports those limits, colored as they fill, with the time until reset once a window is nearly used up (#3374)
 - Playwright collects specs in `apps/web/.playwright/flows/` beside `.playwright/e2e/`, the home for one spec per critical user flow; the template ships the empty folder.
 - A SPEC flows reader (`.gaia/scripts/spec/flows-lib.sh`) and a flow-coverage check (`.gaia/scripts/spec/flow-coverage.sh`) for flow-based SPECs.
 - **The overlap pass can demote a browser test to the real-server layer:** a browser test whose property a real-server check shows is proposed for demotion (#3280)

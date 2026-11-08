@@ -25,7 +25,7 @@ The choice below still runs after the warning: it takes effect once the statusLi
 
 Use `AskUserQuestion`, header **`Statusline`**, question "You have your own global statusline. Which one should draw the left side of the statusline in this project?", with these two options in this exact order:
 
-- **Use GAIA's statusline bar (Recommended)**: project, branch, model and effort, and a context bar whose colors match the audit checkpoint line.
+- **Use GAIA's statusline bar (Recommended)**: project, branch, model and effort, a context bar whose colors match the audit checkpoint line, and 5-hour and 7-day usage when Claude Code reports them.
 - **Keep my own statusline**: your global `statusLine.command` keeps drawing the left side.
 
 Either way GAIA's nudges stay on the right and context readings are still written. Choosing "Other" or dismissing the question writes nothing, so the question re-fires on a later `/setup-gaia` run.
