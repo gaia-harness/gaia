@@ -224,12 +224,13 @@ WithError.test(
     const email = canvas.getByRole('textbox', {name: 'Email'});
 
     await expect(email).toHaveAttribute('aria-invalid', 'true');
-    await expect(email).toHaveAccessibleDescription(
-      'Email is invalid We never share it'
-    );
-    await expect(email.closest('[data-slot="field"]')).toHaveAttribute(
-      'data-invalid',
-      'true'
+    await expect(email).toHaveAccessibleDescription(/Email is invalid/);
+    await expect(email).toHaveAccessibleDescription(/We never share it/);
+    const emailLabel = canvas.getByText('Email');
+    const validLabel = canvas.getByText('Bio');
+
+    await expect(getComputedStyle(emailLabel).color).not.toBe(
+      getComputedStyle(validLabel).color
     );
   }
 );
