@@ -12,7 +12,8 @@
 #      (so the adopter's existing global statusline appears unchanged), unless
 #      the machine chose GAIA's bar in /setup-gaia (statusline.left "gaia").
 #   2. No global command → the default left side (project, branch with a
-#      linked-worktree marker, model and effort, a colored context bar).
+#      linked-worktree marker, model and effort, a colored context bar, usage
+#      windows).
 #   3. Last resort, when that cannot render → bare "Claude Code" label.
 #
 # Whatever the left side is, the right side always renders, and every render
@@ -57,13 +58,15 @@ input=$(cat)
 # linked worktrees either, so the install path is the only checkout there --
 # which keeps a scaffolded-but-not-yet-`git init` project rendering.
 # One jq call extracts every stdin field this script uses (session directory,
-# the context reading, model and effort); fields are joined by a control
-# character no value contains. `used_tokens` is pinned as
+# the context reading, model and effort, the usage windows); fields are joined
+# by a control character no value contains. `used_tokens` is pinned as
 # round(used_percentage / 100 * context_window_size), never the payload's
 # total_input_tokens, which counts something else. The percentage is rounded to
 # six decimals so the writer's validation accepts it; a field that is absent or
 # the wrong type comes out empty. Silent on jq failure: every field then reads
-# empty, nothing is written, and the render continues.
+# empty, nothing is written, and the render continues. Indexing a non-object
+# throws and would fail the whole call, so `context_window`, `rate_limits` and
+# its windows are narrowed before they are read.
 session_id=""
 session_directory=""
 context_percentage=""
@@ -71,9 +74,18 @@ context_window_size=""
 context_used_tokens=""
 model_name=""
 effort_level=""
+five_hour_percentage=""
+five_hour_resets_at=""
+seven_day_percentage=""
+seven_day_resets_at=""
 fields=$(printf '%s' "$input" | jq -r '
   def printable_string: if type == "string" then gsub("[\u0000-\u001f]"; "") else "" end;
-  (.context_window | if type == "object" then . else {} end) as $context
+  def usage_percentage: if type == "number" and . >= 0 and . <= 999 then (round | tostring) else "" end;
+  def epoch_seconds: if type == "number" and . >= 1 and . <= 999999999999 then (floor | tostring) else "" end;
+  (.rate_limits | if type == "object" then . else {} end) as $rate_limits
+  | ($rate_limits.five_hour | if type == "object" then . else {} end) as $five_hour
+  | ($rate_limits.seven_day | if type == "object" then . else {} end) as $seven_day
+  | (.context_window | if type == "object" then . else {} end) as $context
   | (if ($context.used_percentage | type) == "number" and $context.used_percentage >= 0 and $context.used_percentage <= 999
      then ($context.used_percentage * 1000000 | round) / 1000000 else null end) as $percentage
   | (if ($context.context_window_size | type) == "number" and $context.context_window_size >= 1 and $context.context_window_size <= 999999999999
@@ -84,9 +96,13 @@ fields=$(printf '%s' "$input" | jq -r '
       (if $percentage != null and $window_size != null then ($window_size | tostring) else "" end),
       (if $percentage != null and $window_size != null then ($percentage / 100 * $window_size | round | tostring) else "" end),
       (.model.display_name | printable_string),
-      (.effort.level | printable_string) ]
+      (.effort.level | printable_string),
+      ($five_hour.used_percentage | usage_percentage),
+      ($five_hour.resets_at | epoch_seconds),
+      ($seven_day.used_percentage | usage_percentage),
+      ($seven_day.resets_at | epoch_seconds) ]
   | join("\u001f")' 2>/dev/null) || fields=""
-IFS=$'\037' read -r session_id session_directory context_percentage context_window_size context_used_tokens model_name effort_level <<<"$fields"
+IFS=$'\037' read -r session_id session_directory context_percentage context_window_size context_used_tokens model_name effort_level five_hour_percentage five_hour_resets_at seven_day_percentage seven_day_resets_at <<<"$fields"
 [ -n "$session_directory" ] || session_directory="$PROJECT_ROOT"
 
 if [ -f "$GAIA_DIRECTORY/scripts/main-root-lib.sh" ]; then
@@ -138,7 +154,8 @@ fi
 
 # ---------- Left side ----------
 # First match wins: the user's own global `statusLine.command`, then the ported
-# default (project, branch, model and effort, context bar), then the bare label.
+# default (project, branch, model and effort, context bar, usage windows), then
+# the bare label.
 # A machine whose opt-ins file (main's .gaia/local/settings.json, written by
 # /setup-gaia) says statusline.left "gaia" skips the global command. Any other
 # value, a missing key, or a file without version 1 or that does not parse
@@ -166,7 +183,7 @@ if [ -z "$left" ] && [ -f "$GAIA_DIRECTORY/statusline/gaia-statusline-left.sh" ]
   # shellcheck source=/dev/null
   . "$GAIA_DIRECTORY/statusline/gaia-statusline-left.sh" 2>/dev/null || true
   if command -v gaia_statusline_left >/dev/null 2>&1; then
-    if gaia_statusline_left "$STATE_ROOT" "$session_directory" "$IS_WORKTREE" "$model_name" "$effort_level" "$context_percentage" "$context_window_size" "$context_used_tokens" 2>/dev/null; then
+    if gaia_statusline_left "$STATE_ROOT" "$session_directory" "$IS_WORKTREE" "$model_name" "$effort_level" "$context_percentage" "$context_window_size" "$context_used_tokens" "$five_hour_percentage" "$five_hour_resets_at" "$seven_day_percentage" "$seven_day_resets_at" 2>/dev/null; then
       left="$_GAIA_STATUSLINE_LEFT"
     fi
   fi
