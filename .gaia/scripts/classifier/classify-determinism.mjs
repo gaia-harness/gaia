@@ -5,8 +5,8 @@
 //
 // Path scopes the candidate set; content decides. A file classifies STRICT only
 // when ALL of conditions 1-4 hold. Failing any of 2-4 -> EMERGENT regardless of
-// path. The bias is deliberate: err EMERGENT. A missed strict is caught late by the
-// advisory audit; judging non-deterministic code as strict produces theater.
+// path. The bias is deliberate: err EMERGENT. A missed strict costs only a weaker
+// judgment arm in the worthiness review; judging non-deterministic code as strict produces theater.
 // Over-strict is the worse failure.
 //
 // The rule, the versioned DOM-API allowlist, and the file-granularity limitation

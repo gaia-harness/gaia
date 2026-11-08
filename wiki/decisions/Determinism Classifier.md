@@ -18,7 +18,7 @@ Not every source file is judged the same way. Code that reads the clock, draws e
 
 ## Decision
 
-The classifier emits one of two labels per file, plus `route` for a route-surface test (see [[#Route tests]]). **The bias is deliberate: err EMERGENT.** A missed strict is caught late by the advisory worthiness audit; an over-strict label judges non-deterministic code as if it were deterministic, which is the worse failure. Ambiguous cases classify EMERGENT.
+The classifier emits one of two labels per file, plus `route` for a route-surface test (see [[#Route tests]]). **The bias is deliberate: err EMERGENT.** A missed strict costs only a weaker judgment arm in the worthiness review; an over-strict label judges non-deterministic code as if it were deterministic, which is the worse failure. Ambiguous cases classify EMERGENT.
 
 A file classifies **STRICT only when ALL of conditions 1 through 4 hold.** Failing any of conditions 2 through 4 classifies it EMERGENT regardless of path.
 
@@ -62,7 +62,7 @@ A path ending `.stories.tsx` or `.stories.ts` classifies EMERGENT before any pat
 
 ## Route tests
 
-A path matching `app/route-tests/<feature>/tests/<file>.test.ts` classifies `route`, a third verdict, before any path scoping or AST check. A route test calls a route module's `loader` or `action` in process, so it is deterministic, yet it is judged on both axes in the worthiness review. The `route` verdict names that third arm, where a strict or an emergent label would not. [[Test Layering]] places the route surface among the layers.
+A path matching `app/route-tests/<feature>/tests/<file>.test.ts` classifies `route`, a third verdict, before any path scoping or AST check. A route test calls a route module's `loader` or `action` in process, so it is deterministic; the `route` verdict keeps it apart from a strict unit test. [[Test Layering]] places the route surface among the layers.
 
 ## File-granularity limitation
 

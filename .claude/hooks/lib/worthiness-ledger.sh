@@ -5,8 +5,7 @@
 # tree's worthiness verdicts live. Both the ledger writer
 # (.gaia/scripts/audit-ledger/append-worthiness.mjs) and its reader
 # (.claude/hooks/worthiness-presence-check.sh) call this instead of hand-
-# building the path literal independently, the path must not drift between
-# them. Dual-
+# building the path literal, so the path cannot drift between them. Dual-
 # mode: source it for the function below, or run it directly as a script so
 # the Node writer can shell out to it (see "Usage (executable)" below).
 #

@@ -1402,7 +1402,7 @@
       "expect": "value:match-root",
       "signal": "git_log",
       "floor": true,
-      "source": "(pre-commit runs exactly as from a root launch); signal git_log reads git trace2 hook runs",
+      "source": "pre-commit runs exactly as from a root launch; signal git_log reads git trace2 hook runs",
       "cited_run": null
     },
     {

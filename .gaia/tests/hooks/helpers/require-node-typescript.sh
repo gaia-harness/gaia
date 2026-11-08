@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Shared dependency gate for the node-dependent suites: the signal suites under
-# .gaia/tests/hooks (test-signals-lib and worthiness-presence-check), and
+# Shared dependency gate for the node-dependent suites: the suites under
+# .gaia/tests/hooks that source this file, and
 # the suites that run the CLI from source through tsx, which the CI root
 # install provides under .gaia/cli/node_modules.
 #
 # The signal suites drive .gaia/scripts/test-signals/extract-test-signals.mjs;
-# worthiness-presence-check also
-# drive .gaia/scripts/classifier/classify-determinism.mjs. Both resolve
+# some also drive .gaia/scripts/classifier/classify-determinism.mjs. Both resolve
 # `typescript` through createRequire against the repo root's node_modules. With
 # that absent the suites cannot answer at all.
 #

@@ -23,8 +23,7 @@ the story name is Storybook's name for the export, for example `ErrorType` is
 `fullName` `<Story Name>   base story`. A play-only story with no tests is one
 unit under its plain `<Story Name>`. A story with neither a play nor a `.test()`
 is a render-only story and is not judged as a test of its own; the
-non-triviality rule below covers whether a component needs more than one. Each test that is
-a route test under `app/route-tests/` is judged on both axes like any other.
+non-triviality rule below covers whether a component needs more than one.
 
 You are an advisory reviewer, not an author. You **PROPOSE** verdicts. You
 **EDIT NO TEST OR SOURCE FILE** and you delete nothing; the verdict file the dispatch names is the only file you write. A human acts on your proposals.

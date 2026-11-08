@@ -12,7 +12,7 @@ tags: [decision, tdd, testing, audit, quality]
 
 An advisory review of the tests the worthiness selection names (the `emergentTests` and `tddUnitTests` globs, per [[Package Descriptor]]). An emergent test has no stable
 failing-then-passing run to gate on, so its honesty and worthiness come from a
-fresh-context reviewer. Every changed test, strict included, is judged on honesty and worth. A test the [[Determinism Classifier]] labels strict is judged on whether it asserts the outcome that matters; nothing proves mechanically that it can fail. A route test under the route-test folder is judged on both axes like any other. The reviewer
+fresh-context reviewer. Every changed test, strict included, is judged on honesty and worth. A test the [[Determinism Classifier]] labels strict is judged on whether it asserts the outcome that matters; nothing proves mechanically that it can fail. The reviewer
 **proposes** verdicts and **edits no files**; a human acts on every proposal.
 
 ## Problem

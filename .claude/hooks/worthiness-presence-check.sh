@@ -62,8 +62,7 @@
 # The signal covers the test's comment-free content, so a comment reword
 # leaves it unchanged and a matching line still counts. Stale-signal lines (a
 # line written before a later edit to what the test executes) carry the old
-# signal and so never match the recomputed current signal -> rejected, exactly
-# as a stale signal always does.
+# signal and so never match the recomputed current signal -> rejected.
 #
 # See wiki/decisions/Worthiness Presence Gate.md for the full contract.
 

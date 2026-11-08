@@ -2,9 +2,9 @@
 // The one definition of "this Playwright file opens a browser page".
 //
 // A real-server test drives the running server through the `request` fixture
-// and opens no page; a browser test opens one. Two places need that line drawn
-// the same way: the overlap check's layer map (a spec that opens no page is on the
-// real-server layer). This module is that definition. It reads the file's AST with the TypeScript compiler API, so
+// and opens no page; a browser test opens one. The overlap check's layer map
+// (a spec that opens no page is on the real-server layer) draws that line
+// through this module. It reads the file's AST with the TypeScript compiler API, so
 // words in a title, a string or a comment are never a use.
 //
 // A use is one of these reasons:

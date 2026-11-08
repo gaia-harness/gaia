@@ -11,7 +11,7 @@ tags: [promoted, decisions]
 
 # Flow-based test-after pipeline
 
-GAIA's spec-to-build pipeline runs on critical flows and tests them after the build. The tree carries no test-first machinery: a test is written after the build, never before it, and nothing proves it failed first.
+GAIA's spec-to-build pipeline runs on critical flows and tests them after the build. The tree carries no test-first machinery: a plan writes its tests after the build, and nothing proves a test failed first.
 
 ## Decisions
 

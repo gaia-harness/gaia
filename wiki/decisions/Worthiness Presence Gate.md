@@ -77,7 +77,7 @@ whole-repo scope would demand a ledger line for every existing test and
 block every unrelated merge.
 
 Membership is decided by the worthiness selection library
-(`.claude/hooks/lib/worthiness-selection.sh`): a changed test file that a package's `emergentTests` or `tddUnitTests` globs name ([[Package Descriptor]]) and whose [[Determinism Classifier]] verdict (`.gaia/scripts/classifier/classify-determinism.mjs`) is `emergent`, `strict` or `route` is in scope (a `*.stories.tsx` is in scope through its own globs entry, one ledger line per base story and per attached `.test()`, and per story with a play and no tests; an old-format story file denies, see [[Stories as Tests]]). Every changed test the selection names is in scope, strict and `route` included, and the review judges it on honesty and worth. A changed test in any file the run folder's `flow-tests.tsv` lists is in scope whatever the globs and the classifier say, which is what brings a bats or CLI flow test in.
+(`.claude/hooks/lib/worthiness-selection.sh`): a changed test file that a package's `emergentTests` or `tddUnitTests` globs name ([[Package Descriptor]]) and whose [[Determinism Classifier]] verdict (`.gaia/scripts/classifier/classify-determinism.mjs`) is `emergent`, `strict` or `route` is in scope (a `*.stories.tsx` is in scope through its own globs entry, one ledger line per base story and per attached `.test()`, and per story with a play and no tests; an old-format story file denies, see [[Stories as Tests]]). A changed test in any file the run folder's `flow-tests.tsv` lists is in scope whatever the globs and the classifier say, which is what brings a bats or CLI flow test in.
 
 When zero in-scope test files changed, the gate is a no-op and allows the merge.
 

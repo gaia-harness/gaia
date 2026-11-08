@@ -67,9 +67,8 @@
 // kind: "type-only" when the test's assertions are all type-level (an
 // expectTypeOf(...)/assertType(...) call, or a `@ts-expect-error` proof
 // directive) AND it carries no runtime assertion (expect(...)/assert(...));
-// "runtime" otherwise. A type-only test has no runtime failure mode, so it
-// is treated as exempt from runtime judgment, delegating type correctness to
-// the `tsc` Quality Gate step. The
+// "runtime" otherwise. A type-only test has no runtime failure mode; its
+// correctness is the `tsc` Quality Gate step's, and no gate acts on kind. The
 // predicate requires a positive type-level signal and defaults to "runtime"
 // (enforce) when unsure, so a no-assertion test is never silently exempted.
 // kind reads the RAW span, comments included, so a directive comment is

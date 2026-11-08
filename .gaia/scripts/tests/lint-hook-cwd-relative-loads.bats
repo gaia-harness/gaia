@@ -32,9 +32,9 @@
 # operator-facing deny messages that quote the very repair it recommends.
 #
 # One test is load-bearing beyond coverage. "reds against the historical
-# blocking-hook shape" carries the exact line gaia-react/gaia#1854 was
-# filed against, so the gate is proven to reach the instance it was written for
-# rather than a tidied stand-in.
+# blocking-hook shape" carries the line gaia-react/gaia#1854 was
+# filed against with only the library name changed (the original hook is gone),
+# so the gate is proven to reach that shape.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 #
