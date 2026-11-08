@@ -18,7 +18,7 @@ Before writing new code, walk this order and use the first step that fully solve
 4. Add a new dependency only when the earlier steps fall short and it earns its weight, never to save writing a few lines.
 5. Only then write the minimum new code.
 
-Design new code as deep modules (small interface, deep implementation), take collaborators as parameters, and prefer pure functions.
+Design new code as deep modules, inject dependencies, and prefer pure functions.
 
 On a bug fix whose defect lives in shared code, fix it there once rather than at each call site, then check that every caller still holds. Change only callers your fix breaks; a problem found in any other caller is out of scope, so file it as tech debt.
 
