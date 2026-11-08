@@ -47,7 +47,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
     A plan that deletes a page route and points a spec that loaded it at another route gives the deleted page's document head to the task that owns the new target: its acceptance criteria name a `<title>` and a meta description, rendered the way the deleted route rendered them (`apps/web/.claude/rules/i18n.md`), so the moved spec's accessibility scan still passes.
 
-    A task that adds a page rendered inside the app layout says in its acceptance criteria that the page's content sits inside the `<main>` the layout renders (`apps/web/app/components/layout/index.tsx`) and adds no `<main>` of its own, so the page keeps a single main landmark (`apps/web/.playwright/e2e/home-a11y.spec.ts` asserts exactly one `<main>`).
+    A task that adds a page rendered inside the app layout says in its acceptance criteria that the page adds no `<main>` of its own: the layout already renders one (`apps/web/app/components/layout/index.tsx`), and a page keeps a single main landmark.
 
 2.  **`{PLAN_DIR}/README.md`**: task graph showing phases, which tasks run in parallel within each phase, and the frozen interface contracts shared across tasks. **Annotate each phase with its execution model** (e.g. `Phase 1 (2 sub-agents, model sonnet)`); Sonnet is the default, so call out any phase you escalate to Opus explicitly and briefly say why. **If `{SPEC_PATH}` was provided** (i.e. this plan was derived from a SPEC), the README MUST open with a `## Source SPEC` section naming the SPEC id and the absolute path, so plan→SPEC discovery is one read away. Format: `Derived from {SPEC-id} ({SPEC_PATH}).` **If `{AUDIT_PATH}` was also provided**, append a second line: `Adversarial audit: {AUDIT_PATH}.`
 
