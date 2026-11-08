@@ -50,8 +50,6 @@ Before writing any code:
 
 - [ ] Confirm which layer owns this test (see stack reference for layer breakdown)
 - [ ] Confirm which behaviors to test (prioritize)
-- [ ] Identify opportunities for [deep modules](deep-modules.md), small interface, deep implementation
-- [ ] Design interfaces for [testability](interface-design.md)
 - [ ] Name the user-observable behaviors and the acceptance test that owns each (not implementation steps, not one test per function)
 - [ ] Get user approval on the plan with `AskUserQuestion`: `Approve the plan` (Recommended) or `Revise`
 
@@ -87,11 +85,10 @@ WRONG:  implement parseAmount() → write the test → break parseAmount() to fo
 
 ### 4. Refactor
 
-After all tests pass, look for [refactor candidates](refactoring.md):
+After all tests pass, refactor the code this cycle wrote:
 
 - [ ] Extract duplication
 - [ ] Deepen modules (move complexity behind simple interfaces)
-- [ ] Consider what new code reveals about existing code
 - [ ] Run tests after each refactor step
 
 Refactor only on GREEN.
