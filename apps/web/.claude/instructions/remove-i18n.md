@@ -216,7 +216,7 @@ Delete the `...lint.i18n,` line. With no i18next the bundle's `i18n` block repor
 
 ### B6. `apps/web/app/components/form/conform-field-error/index.tsx`
 
-Its `t(message)` takes a dynamic key, and it imports the language file Section C deletes. Delete both i18n imports (`useTranslation`, `~/languages/en/errors`) and the `useTranslation` call, then copy the `validation` block from `apps/web/app/languages/en/errors.ts` into a local `VALIDATION_MESSAGES` constant typed `Record<string, string>`, and render each error as `{message: VALIDATION_MESSAGES[message] ?? message}`. Delete `ValidationKey` and `isValidationKey`. Then reword `apps/web/.claude/skills/react-code/references/conform-forms.md` and `wiki/modules/Form Components.md`, where a schema message is a key in `errors.validation` that `ConformFieldError` translates: it becomes a key in `VALIDATION_MESSAGES`.
+Its `t(message)` takes a dynamic key, and it imports the language file Section C deletes. Delete both i18n imports (`useTranslation`, `~/languages/en/errors`) and the `useTranslation` call, then copy the `validation` block from `apps/web/app/languages/en/errors.ts` into a local `VALIDATION_MESSAGES` constant typed `Record<string, string>`, and render each error as `{message: VALIDATION_MESSAGES[message] ?? message}`. Delete `ValidationKey` and `isValidationKey`. Then reword that component's docblock, `apps/web/.claude/skills/react-code/references/conform-forms.md` and `wiki/modules/Form Components.md`, where a schema message is a key in `errors.validation` that `ConformFieldError` translates: it becomes a key in `VALIDATION_MESSAGES`.
 
 ---
 

@@ -42,12 +42,12 @@ The child function receives `controlOptions`; always pass them to Conform's gett
 
 Scenarios that fail with no error. A new miss goes in `ConformField` if the wrapper can absorb it; otherwise it becomes an audit check and an entry here.
 
-| Scenario | What silently goes wrong | Fix | Applies |
-| --- | --- | --- | --- |
-| `useForm` without `constraint` | No control is marked required, so assistive technology never announces it | `constraint: getZodConstraint(schema)` | Every form with a schema |
-| A composed control in a field list with no `key` | After a list `remove`, `insert` or `reorder`, a row keyed by position shows the old value | `key={field.key}` on the control or its row | Only a composed control rendered from `getFieldList()` |
-| A group's `FieldError` fed Conform's messages as `{message}` objects, or through a page-local mapper | A schema key shows raw, or a map miss shows nothing | `<ConformFieldError field={field} />` | Only a composed group |
-| A `RadioGroup` missing Conform's attributes, which no getter supplies for it | Screen readers get no invalid state, error link or required state | Set `aria-invalid`, `aria-describedby` and `required={field.required}` as `### Radio group` shows | Only a radio group |
+| Scenario | What silently goes wrong | Fix |
+| --- | --- | --- |
+| `useForm` without `constraint`, in any form with a schema | No control is marked required, so assistive technology never announces it | `constraint: getZodConstraint(schema)` |
+| A composed control rendered from `getFieldList()` with no `key` | After a list `remove`, `insert` or `reorder`, a row keyed by position shows the old value | `key={field.key}` on the control or its row |
+| A group's `FieldError` fed Conform's messages as `{message}` objects, or through a page-local mapper | A schema key shows raw, or a map miss shows nothing | `<ConformFieldError field={field} />` |
+| A `RadioGroup` missing Conform's attributes, which no getter supplies for it | Screen readers get no invalid state, error link or required state | Set `aria-invalid`, `aria-describedby` and `required={field.required}` as `### Radio group` shows |
 
 ## Form setup
 

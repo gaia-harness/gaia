@@ -14,7 +14,7 @@ tags: [module, components, forms]
 
 # Form Components
 
-`ConformField` wires one [[Conform]] field to its label, description and errors, and the caller renders the ui control ([[shadcn Component Layer]]) as its child, spreading Conform's props. `ConformFieldError` renders a field's errors. Each control's invalid state, required state and keyboard behavior come from the ui component plus Conform's attributes, its accessible name comes from the label `ConformField` links to it, and [[Zod]] supplies validation.
+`ConformField` wires one [[Conform]] field to its label, description and errors, and the caller renders the ui control ([[shadcn Component Layer]]) as its child, spreading Conform's props. `ConformFieldError` renders a field's errors. A wrapped control's invalid state, required state and keyboard behavior come from the ui component plus Conform's attributes, its accessible name comes from the label `ConformField` links to it, and [[Zod]] supplies validation.
 
 ## The wrapper
 
