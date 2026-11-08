@@ -307,7 +307,7 @@ flow_checks() {
     [ "$phase" -le "$last_phase" ] || last_phase="$phase"
   done <<<"$stems_text"
 
-  # flow_lines holds <task doc>, <phase>, <flow id>, <path> per Flow test line; a task doc with no single README phase records '-' because the tab-split reads collapse an empty field.
+  # flow_lines holds <task doc>, <phase>, <flow id>, <path> per Flow test line; '-' marks a task doc with no single README phase (tab-split reads collapse an empty field).
   for task_file in ${task_files[@]+"${task_files[@]}"}; do
     task_name="$(basename "$task_file")"
     task_stem="${task_name%.md}"
