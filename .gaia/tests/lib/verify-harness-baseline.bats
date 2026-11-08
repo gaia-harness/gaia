@@ -345,7 +345,7 @@ write_load_gated_suite() {
   run_runner push "$(vhf_git rev-parse HEAD)"
   [ "$status" -eq 1 ]
   has_line '^FAIL  release-scrub leak check \([0-9]+s\)$'
-  has '  next: register each path above in the release manifest with /distribution-vet, or keep these commits local and push once the commit adding the file and its manifest answer lands'
+  has '  next: register each referenced path that should ship with /distribution-vet, or keep these commits local and push once the commit adding it and its manifest answer lands; stop referencing a path that does not ship'
   lacks '--no-verify'
 }
 

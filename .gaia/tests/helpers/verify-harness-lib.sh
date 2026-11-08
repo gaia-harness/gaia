@@ -379,12 +379,12 @@ verify_run_check() {
   local failures_before="$new_failure_count"
   verify_report_outcome "$label" "$elapsed" "$head_items" "$base_items" "$base_status" "$base_elapsed" \
     "$short_base" "$output_file" "$reproduce_prefix$(verify_reproduce_for "$kind")"
-  # A new runtime-dependency leak refuses the push, and no flag skips the
-  # hook, so name the two ways forward. A pre-existing one lets the push
+  # A new runtime-dependency leak refuses the push, and Claude is blocked from
+  # --no-verify, so name the ways forward. A pre-existing one lets the push
   # through and needs no hint.
   if [ "$kind" = leak ] && [ "$mode" = push ] && [ "$new_failure_count" -gt "$failures_before" ] &&
     grep -q '^runtime-dependency leaks (' "$output_file"; then
-    printf '  next: register each path above in the release manifest with /distribution-vet, or keep these commits local and push once the commit adding the file and its manifest answer lands\n'
+    printf '  next: register each referenced path that should ship with /distribution-vet, or keep these commits local and push once the commit adding it and its manifest answer lands; stop referencing a path that does not ship\n'
   fi
 }
 
