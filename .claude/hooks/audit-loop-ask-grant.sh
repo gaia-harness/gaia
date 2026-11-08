@@ -69,9 +69,8 @@
 # headless runs. A person typing a label's exact text into Other is a person answering.
 #
 # Never exit 2 and never block: PostToolUse cannot undo the question, and every
-# decline exits 0 with both fields (stdout JSON shows only on exit 0). A write
-# failure is a decline like any other. jq is checked inline rather than through
-# lib/jq-availability.sh, whose missing-jq arm exits 2. Bash 3.2; never `cd`s
+# decline exits 0 with both fields (stdout JSON shows only on exit 0). jq is
+# checked inline rather than through lib/jq-availability.sh, whose missing-jq arm exits 2. Bash 3.2; never `cd`s
 # outside the command substitution that locates the libraries.
 
 set -u
@@ -245,7 +244,7 @@ interactive_exit_status=0
 gaia_loop_session_is_interactive "$transcript" || interactive_exit_status=$?
 case "$interactive_exit_status" in
   0) ;;
-  2) _ag_decline "this session has no transcript record yet to show it is interactive. Send any other message first, then answer." ;;
+  2) _ag_decline "this session has no transcript record yet to show it is interactive. Send any other message first, then have Claude ask again." ;;
   *) _ag_decline "this session is not interactive (a person must answer in a Claude Code terminal session)." ;;
 esac
 

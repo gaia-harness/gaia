@@ -311,10 +311,10 @@ gaia_loop_new_nonce() {
 # CLAUDE_CODE_ENTRYPOINT is `cli`, the transcript exists, and every record
 # carrying `entrypoint` holds `cli`. Shared by both recorders. Every other rc
 # is a refusal. rc 2 narrows one for the message: the environment says `cli`
-# but no record says so yet, the shape of a session's first prompt, since
-# UserPromptSubmit fires before Claude Code writes the transcript. The
-# environment alone is not enough to admit it: the record is the check's second
-# witness, and a recorder's job is to stay refused when only one speaks.
+# but no record says so yet, the shape of a session's first prompt, when
+# UserPromptSubmit can fire before Claude Code writes a record carrying
+# `entrypoint`. The environment alone does not admit it: the record is the
+# check's second witness.
 gaia_loop_session_is_interactive() {
   local transcript="${1-}" entry=""
   [ "${CLAUDE_CODE_ENTRYPOINT-}" = cli ] || return 1

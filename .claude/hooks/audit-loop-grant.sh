@@ -33,9 +33,8 @@
 #      `sdk-cli` in its environment, and a resumed one (`claude -c -p`)
 #      appends records whose entrypoint is not `cli` to the same transcript.
 #      The UserPromptSubmit event alone is not proof a person typed the line.
-#      A session's first prompt fails this check too, because the hook fires
-#      before the transcript is written: it is refused, and the message says to
-#      send another message and then type the line.
+#      A session's first prompt can fail this check too: until a record
+#      carrying `entrypoint` is written, it is refused.
 #
 # Other channels. An AskUserQuestion selection is recorded only by
 # audit-loop-ask-grant.sh, and only against a question the bound hook pinned
@@ -158,7 +157,7 @@ case "$interactive_exit_status" in
   0) ;;
   2)
     printf 'audit-loop-grant: no transcript record yet; nothing recorded\n' >&2
-    _gl_say "Not recorded: this is the session's first prompt, so it has no transcript record yet to show it is interactive. Send any other message first, then type the line again."
+    _gl_say "Not recorded: the transcript has no record yet to show this session is interactive, as on a session's first prompt. Send any other message first, then type the line again."
     exit 0
     ;;
   *)
