@@ -2918,13 +2918,13 @@ w25_check() {
 # derives as reading installed dependencies needs the root workspace on its
 # leg, unless another workflow provisions it (its backstop line). The set of
 # legs holding such a suite, rounded up to whole exchange groups for the
-# reason W10's header gives, must equal the RED-suite Node step's leg list.
+# reason W10's header gives, must equal the node-dependent-suite Node step's leg list.
 # Without this, a reshuffle or a newly marked suite lands on a leg that never
 # installs Node, and the suite fails there (or, if it skips, greens having
 # asserted nothing).
 
 DEPENDENCY_GUARD_RELATIVE='.gaia/tests/installed-dependencies-mark-guard.sh'
-NODE_STEP_NAME='Setup Node for the node-dependent RED suites'
+NODE_STEP_NAME='Setup Node for the node-dependent suites'
 
 # split_dependency_listing <root> <directory>
 #

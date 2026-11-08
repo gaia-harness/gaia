@@ -48,7 +48,7 @@
 # a comment. The pointer above says which gate without tripping the scan.
 #
 # The complement is .github/workflows/audit-ci-tests.yml's
-# "Setup Node for the node-dependent RED suites" step, gated to the exchange
+# "Setup Node for the node-dependent suites" step, gated to the exchange
 # group holding them. Dropping either half without the other reds those
 # legs, which is the intended direction: the failure this file exists to
 # prevent is a green one.
@@ -75,7 +75,7 @@ require_node_typescript() {
     # and Actions parses a workflow command only at column 0, so the
     # annotation that spelling promises would never render. The `return 1` is
     # what gates.
-    echo "typescript is not installed under $root on a CI runner; this node-dependent suite would skip to green. Check the 'Setup Node for the node-dependent RED suites' step in .github/workflows/audit-ci-tests.yml." >&2
+    echo "typescript is not installed under $root on a CI runner; this node-dependent suite would skip to green. Check the 'Setup Node for the node-dependent suites' step in .github/workflows/audit-ci-tests.yml." >&2
     return 1
   fi
 

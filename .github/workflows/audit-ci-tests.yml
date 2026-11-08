@@ -727,7 +727,7 @@ jobs:
         name: Install the root workspace only
         run: bash .github/actions/gaia-setup-node/bounded-install.sh --attempt-seconds 180 -- pnpm install --frozen-lockfile --filter .
       # One root install on THIS leg provisions both things the meter needs:
-      # the root dependencies C4-04 and C4-07 resolve `typescript` from, and
+      # the root dependencies C4-04 resolves `typescript` from, and
       # the CLI member's node_modules, which C3-05 needs because it runs the
       # CLI's own tsx binary out of .gaia/cli/node_modules (gitignored, so
       # absent on a fresh checkout). Skipping the install flips a landed, green
@@ -740,7 +740,7 @@ jobs:
       # shard depends on a Node runtime or an installed workspace dependency,
       # which is what makes it safe for those legs to run on a box that never
       # sets Node up at all" -- and that was false the whole time: a group of
-      # suites under .gaia/tests/hooks drives the RED signal helper and the
+      # suites under .gaia/tests/hooks drives the test-signal helper and the
       # determinism classifier, both of which resolve `typescript` from the
       # repo root.
       # They did not red those legs, they SKIPPED, and a skip reports `ok`, so
@@ -756,7 +756,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       # The root workspace for the suites marked as reading installed
       # dependencies (`# bats file_tags=installed-dependencies`), among them
-      # the RED signal and determinism suites, which resolve `typescript` via
+      # the test-signal and determinism suites, which resolve `typescript` via
       # createRequire against the repo root, the Chromium suites (frontend
       # Vitest, Playwright) and the lib Playwright collection suite. The plan's
       # `needs_node` is set when the set this leg will run holds one, so a
@@ -783,7 +783,7 @@ jobs:
       # estimate: it is the same composite action the `concurrency` leg runs,
       # the same install, with the pnpm store cached the same way.
       - if: contains(fromJSON('["hooks-2", "hooks-3", "hooks-4", "hooks-5", "hooks-6", "lib-1", "lib-2", "lib-3", "scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode) && steps.selection.outputs.needs_node == '1'
-        name: Setup Node for the node-dependent RED suites
+        name: Setup Node for the node-dependent suites
         uses: ./.github/actions/gaia-setup-node
         with:
           install: root

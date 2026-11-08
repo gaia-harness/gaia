@@ -8,12 +8,12 @@
 # sibling shape: that script exits non-zero when any test fails. This one
 # also fails on a `skip`: skip is banned in this suite, because a skipped
 # scenario reports green, which is the opposite of what this meter means.
-# C3-05, C4-04, and C4-07 need node + pnpm rather than skipping past the
+# C3-05 and C4-04 need node + pnpm rather than skipping past the
 # property they exist to prove.
 #
 # Run: bash .gaia/tests/concurrency/meter-gate.sh
-# Prerequisites: bats-core on PATH. The suite drives node in three scenarios
-# (C3-05, C4-04, C4-07), which need `pnpm install` at the repo root, which
+# Prerequisites: bats-core on PATH. The suite drives node in two scenarios
+# (C3-05, C4-04), which need `pnpm install` at the repo root, which
 # provisions the CLI member too; see README.md.
 set -euo pipefail
 
