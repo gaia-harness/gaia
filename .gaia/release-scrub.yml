@@ -147,7 +147,7 @@ transforms:
     workspace: "pnpm-workspace.yaml"
     lockfile: "pnpm-lock.yaml"
 
-  # The six token-leak checks (uat-narrative through monorepo-prefix) plus
+  # The six token-leak checks (flow-narrative through monorepo-prefix) plus
   # `absolute-paths` each carry `scope: ["**"]`, the whole staging tree. That
   # tree IS the shipped set, so their scope cannot drift from what ships, and
   # there is no list left to be wrong: five earlier repairs of this class
@@ -169,10 +169,10 @@ transforms:
       - "**/*.png"
       - "**/*.ico"
     checks:
-      # ---- UAT-NNN narrative refs (working-doc identifiers) ----
-      - id: uat-narrative
-        description: "UAT-NNN narrative references in shipped instruction surfaces"
-        pattern: "UAT-[0-9]{3}"
+      # ---- FLOW-NNN narrative refs (working-doc identifiers) ----
+      - id: flow-narrative
+        description: "FLOW-NNN narrative references in shipped instruction surfaces"
+        pattern: "FLOW-[0-9]{3}"
         scope:
           - "**"
         path-allowlist:
@@ -182,11 +182,11 @@ transforms:
         # Lines matching ANY of these regexes are exempt. Structural matches
         # only; see `.claude/rules/working-doc-ids.md` for the contract.
         line-allowlist:
-          # Identifier fragments inside variable names: uat_id, uats_block,
-          # seen_uat_files, --uat-id CLI flag form.
-          - "uat[-_]id|uats_block|seen_uat_files"
-          # Frontmatter-style fixture: `uat_id: 'UAT-<n>'` or `uat_id: UAT-<n>`.
-          - "uat_id\\s*[:=]\\s*['\"]?UAT-"
+          # Identifier fragments inside names: flow_id, the --flow-id CLI flag
+          # form.
+          - "flow[-_]id"
+          # Frontmatter-style fixture: `flow_id: 'FLOW-<n>'` or `flow_id: FLOW-<n>`.
+          - "flow_id\\s*[:=]\\s*['\"]?FLOW-"
 
       # ---- Concrete maintainer SPEC IDs ----
       - id: spec-concrete-ids

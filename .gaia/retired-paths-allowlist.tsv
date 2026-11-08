@@ -50,7 +50,7 @@
 .gaia/scripts/spec/uat-lib.sh	.playwright/e2e	Package-relative e2e directory name joined to the package path from the registry, not a root path.
 .gaia/scripts/spec/uat-lib.sh	'app/route-tests'	Package-relative route-test directory name joined to the package path from the registry, not a root path.
 .claude/hooks/red-verify-commit-check.sh	pnpm -C apps/web test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
-.claude/skills/gaia/references/plan/planner.md	pnpm -C apps/web test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
+.claude/skills/gaia/references/plan/planner.md	pnpm -C apps/web exec eslint app/components/x/index.tsx	Example test path relative to the package directory the -C option names, not a root path.
 .gaia/cli/src/migrate-csf4/inventory.ts	'app/**/*.stories.{ts,tsx}'	Fallback story glob, resolved against the adopter package directory.
 .gaia/cli/src/migrate-csf4/inventory.ts	no .storybook/main file	Refusal text naming the package-relative main file.
 .gaia/cli/src/migrate-csf4/run-fixture.ts	'.storybook/main.ts'	Test-double codemod writing into the package-relative work copy.
@@ -68,3 +68,5 @@
 .gaia/scripts/spec/working-doc-id-scan.sh	.playwright/e2e	Package-relative e2e directory name joined to the package path from the registry, not a root path.
 .gaia/scripts/spec/working-doc-id-scan.sh	app/route-tests	Package-relative route-test directory name joined to the package path from the registry, not a root path.
 .gaia/scripts/spec/flow-coverage.sh	.playwright/flows	Package-relative flow test directory name joined to the package path from the registry, not a root path.
+.gaia/scripts/spec/plan-verify.sh	.playwright/flows	Package-relative flow test directory name joined to the web package path from the registry, not a root path.
+.claude/skills/gaia/references/plan/planner.md	.playwright/flows/	Package-relative flow test path run from or joined to the frontend package the line names, not a root path.

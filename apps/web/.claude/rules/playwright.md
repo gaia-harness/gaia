@@ -18,15 +18,11 @@ Contents: File locations; Spec file naming; Real-server HTML check; Selectors, p
 ## Spec file naming
 
 Match the feature or route: `language-switch.spec.ts`, `things.spec.ts`.
-One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`, or `.playwright/flows/<slug>.spec.ts` for a critical flow); one `test.describe` block per scenario group. Each transition, status or role rule is its own UAT routed by the ladder in `.claude/skills/gaia/references/plan/planner.md`, not more browser files. A browser spec exists only for a capability on that ladder's browser step, except a critical flow's spec, which is allowed even when a cheaper layer could prove the behavior; a JavaScript-disabled flow or a native form post is never a browser spec: it routes by that ladder's route and real-server steps, and a then-clause that needs the served form or a multi-page workflow over native forms is a real-server spec.
-
-A file whose first line is `// gaia-uat-contract sha256:...` was rendered from a SPEC UAT. Its Given/When/Then comment is the contract: make cosmetic edits only (selectors, labels, copy, layout) and report logical changes (`.claude/skills/gaia/references/spec/uat-divergence.md`). The owning phase removes the `test.fail();` call and replaces the placeholder `expect(false, ...)` with a real body that drives the app. Rendered route tests: `.claude/skills/gaia/references/spec/uat-write.md` (`## The rendered file`).
+One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`, or `.playwright/flows/<slug>.spec.ts` for a critical flow); one `test.describe` block per scenario group. Each transition, status or role rule is a test at the layer `wiki/decisions/Test Layering.md` picks (`## When a test needs a real browser`), not more browser files. A browser spec exists only for a capability that section names, except a critical flow's spec, which is allowed even when a cheaper layer could prove the behavior; a JavaScript-disabled flow or a native form post is never a browser spec: it routes by that page's route and real-server steps, and a check that needs the served form or a multi-page workflow over native forms is a real-server spec.
 
 ## Real-server HTML check
 
 A real-server test reads the server's rendered HTML through the request fixture and parses the body with the helper in `.playwright/html.ts`. It opens no page and makes no browser round trip. The helper returns nodes; the test file holds every `expect(`.
-
-The UAT gate reads request contexts from the test file's text, not its types. Take `request` or a request-context fixture, or build each context in the test body (`const rita = await playwright.request.newContext()`), and make every Then-clause read a verb call on that variable (`rita.get(`). A helper takes the context as a parameter (`signIn(rita, email)`). A `.newContext(` on any receiver but `request` or `playwright.request` (`apiRequest.newContext()`) is refused as `opens-page`, and a verb call read off a helper's returned object (`rita.context.get(`) does not clear `floor`.
 
 ```ts
 import {expect, test} from '@playwright/test';

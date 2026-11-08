@@ -21,7 +21,7 @@ This section owns the layout rule. Every other rule, skill, agent and wiki page 
 - **Reserved names**: `assets`, `hooks`, `state`, `tests` and `utils` are the only non-component subfolders inside a component or page folder; a page folder never takes one of them as its own name.
 - **Hooks**: a component- or page-local hook is that folder's `hooks/use-<name>.ts` (test in `hooks/tests/use-<name>.test.ts`); lift it to `app/hooks/` when a second consumer appears. Shared hooks are `app/hooks/use-<name>.ts` with camelCase named exports (`use-theme.ts` exports `useOptionalTheme`).
 
-## Test Driven Development
+## Testing
 
 - Test each feature-specification behavior at the lowest layer in `wiki/decisions/Test Layering.md` that shows it; Playwright runs only its real-server and browser layers
 - Every test, story and mock builds its dates with `date()` from `test/utils.ts`, never `new Date()` or `Date.now()`, so the result does not depend on the time of day (the year follows the current year)

@@ -39,7 +39,7 @@ step3_range() {
 
 @test "a filled template lints clean" {
   filled="$BATS_TEST_TMPDIR/filled.md"
-  sed 's/SPEC-NNN/SPEC-001/;s/UAT-NNN/UAT-001/' "$TEMPLATE" > "$filled"
+  awk '/^spec_id:/ { sub(/SPEC-NNN/, "SPEC-001") } /flow_id:/ { sub(/FLOW-NNN/, (++flow_count == 1 ? "FLOW-001" : "FLOW-002")) } /^ *(- )?slug:/ { sub(/slug:.*/, "slug: flow-" ++slug_count) } /^ *(- )?covers:/ { sub(/covers:.*/, "covers: [app/pages]") } /^ *(- )?test_path:/ { sub(/test_path:.*/, "test_path: .gaia/tests/lib/example.bats") } { print }' "$TEMPLATE" > "$filled"
 
   run bash "$LINT" "$filled"
   [ "$status" -eq 0 ]

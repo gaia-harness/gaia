@@ -156,7 +156,12 @@ wiki_promote_default: ask
 chain_trigger: none
 intent: test intent
 success_criteria: test criteria
-uats: []
+flows:
+  - flow_id: FLOW-001
+    slug: example
+    name: example flow
+    why: example reason
+    test_path: .gaia/tests/lib/example.bats
 scope_boundaries: test scope
 clarifications: none
 research_summary: none

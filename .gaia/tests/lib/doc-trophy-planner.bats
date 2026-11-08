@@ -4,7 +4,7 @@
 #
 # .claude/skills/gaia/references/plan/planner.md tells a planner to name
 # behaviors and the acceptance tests that own them, to drive a guard red at the
-# layer where the user sees the refusal, to cut phases as vertical slices, and
+# layer where the user sees the refusal, to cut build phases as vertical slices, and
 # to bound the tests a task executor writes. The tdd skill's loop carries the
 # matching limit. This suite pins that text and the ORCHESTRATOR phase-entry
 # form the phase-ownership check reads.
@@ -21,7 +21,6 @@ setup() {
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   TDD_REL=".claude/skills/tdd/SKILL.md"
   LIMIT_CLAUSE='**The prompt template MUST also limit the tests a sub-agent writes**'
-  RED_CLAUSE='**The prompt template MUST also carry the two dispatch clauses below'
 }
 
 # ---------- helpers ----------
@@ -108,17 +107,12 @@ check_executor_limit() {
   [ -n "$range" ] || { printf 'executor template range not found\n' >&2; return 1; }
   need "$range" "$LIMIT_CLAUSE" || return 1
   need "$range" 'a new test only for a behavior or acceptance test its task doc names' || return 1
-  need "$range" "$RED_CLAUSE" || return 1
-  local before_red="${range%%"$RED_CLAUSE"*}"
-  has "$before_red" "$LIMIT_CLAUSE" || { printf 'limit clause does not precede the RED clause\n' >&2; return 1; }
 }
 
 check_vertical_slicing() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'owns the acceptance test that proves it' || return 1
-  need "$text" '- Phase <N>: Infrastructure: <reason>' || return 1
-  need "$text" 'whatever the surface' || return 1
+  need "$text" '**Cut build phases as vertical slices.** Each build phase delivers a behavior end to end.' || return 1
 }
 
 check_phase_entry_form() {
@@ -140,17 +134,9 @@ check_tdd_loop() {
 check_task_doc_test_naming() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'A task doc names a test only for an acceptance test its phase owns' || return 1
+  need "$text" 'A task doc names a test only for the flow test it owns in the closing phase' || return 1
   need "$text" 'a unit test for logic meeting both unit-test conditions (`wiki/decisions/Test Layering.md`), stating how each condition holds' || return 1
   need "$text" 'Any other test worth having goes under `## Follow-ups` in `README.md`, never into a task doc.' || return 1
-}
-
-check_route_call_floor() {
-  local text
-  text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'Each route UAT test calls the route module'"'"'s `loader` or `action` itself, through a named import (an alias counts) or a member call such as `logout.action(args)`' || return 1
-  need "$text" 'a shared helper may build the request, args and context, but never makes the call' || return 1
-  need "$text" 'The owning task doc lists the route test file among its files to touch, so a floor failure attributes to that task.' || return 1
 }
 
 # ---------- tests ----------
@@ -163,7 +149,7 @@ check_route_call_floor() {
   red check_acceptance_text "$PLANNER_REL" 'not a list of tests per function' 'not a list of tests per function. One criterion per guard, refusal, or gate'
 }
 
-@test "the executor template limits the tests a sub-agent writes, ahead of the RED order" {
+@test "the executor template limits the tests a sub-agent writes" {
   green check_executor_limit
 }
 
@@ -171,16 +157,12 @@ check_route_call_floor() {
   red check_executor_limit "$PLANNER_REL" 'the tests a sub-agent writes**' 'the tests a sub-agent writes (removed)'
 }
 
-@test "red twin: moving the executor limit after the RED clause fails" {
-  red check_executor_limit "$PLANNER_REL" 'MUST also limit the tests' 'MUST also carry the two dispatch clauses below (moved) **The prompt template MUST also limit the tests'
-}
-
-@test "planner cuts vertical slices and names the infrastructure marker" {
+@test "planner cuts build phases as vertical slices" {
   green check_vertical_slicing
 }
 
-@test "red twin: removing the infrastructure marker literal fails" {
-  red check_vertical_slicing "$PLANNER_REL" '- Phase <N>: Infrastructure: <reason>' '- Phase <N>: Plumbing: <reason>'
+@test "red twin: removing the vertical-slice rule fails" {
+  red check_vertical_slicing "$PLANNER_REL" 'Each build phase delivers a behavior end to end.' 'Each build phase does some work.'
 }
 
 @test "the Phase order bullet requires the ORCHESTRATOR phase entry form" {
@@ -199,7 +181,7 @@ check_route_call_floor() {
   red check_tdd_loop "$TDD_REL" 'Don'"'"'t anticipate future tests.' 'Don'"'"'t anticipate future tests. One test at a time.'
 }
 
-@test "a task doc names only owned acceptance tests and both-condition unit tests; other tests go to README follow-ups" {
+@test "a task doc names only its own flow test, seam tests and both-condition unit tests; other tests go to README follow-ups" {
   green check_task_doc_test_naming
 }
 
@@ -209,16 +191,4 @@ check_route_call_floor() {
 
 @test "red twin: dropping how each unit-test condition holds fails" {
   red check_task_doc_test_naming "$PLANNER_REL" ', stating how each condition holds' ''
-}
-
-@test "a route UAT test makes the loader or action call itself; a harness never does" {
-  green check_route_call_floor
-}
-
-@test "red twin: a harness that makes the route call fails" {
-  red check_route_call_floor "$PLANNER_REL" 'but never makes the call' 'and may make the call'
-}
-
-@test "red twin: a task doc that need not list its route test file fails" {
-  red check_route_call_floor "$PLANNER_REL" 'lists the route test file among its files to touch' 'may list the route test file'
 }

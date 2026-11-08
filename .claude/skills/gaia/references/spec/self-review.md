@@ -9,7 +9,7 @@ The `/gaia-spec` wrapper dispatches this at step 6 as a `general-purpose` Agent,
 ## Inputs
 
 - The in-progress SPEC draft. The wrapper writes the working draft to `.gaia/local/cache/draft-<spec_id>.md` during the loop and passes its path in the dispatch prompt.
-- The gate-1 snapshot at `.gaia/local/cache/gate1-<spec_id>.json`, captured when the user confirmed intent + UATs.
+- The gate-1 snapshot at `.gaia/local/cache/gate1-<spec_id>.json`, captured when the user confirmed intent + critical flows.
 
 ## Audit checklist
 
@@ -24,7 +24,7 @@ Scan for `[PLACEHOLDER]`, `<TODO>`, `<TBD>`, `FIXME`, and bare `TBD` tokens. Any
 Compare draft fields against the gate-1 snapshot:
 
 - `intent` paragraph diverged in shape, not just polish.
-- A UAT was renumbered, removed, or added since gate 1.
+- A flow was renumbered, removed, or added since gate 1.
 - `success_criteria` gained or lost an entry without a corresponding answered clarification.
 
 For each drift, name the gate-1 value, the current value, and ask the wrapper to surface a confirmation prompt before gate 2 (or to revert).
@@ -33,28 +33,22 @@ For each drift, name the gate-1 value, the current value, and ask the wrapper to
 
 Cross-check fields against each other:
 
-- A UAT references a behavior absent from `intent` or `success_criteria`.
+- A flow names a behavior absent from `intent` or `success_criteria`.
 - `scope_boundaries.always` includes a behavior contradicted by `scope_boundaries.never`.
 - `clarifications.answered[]` entries that contradict the current `intent`.
 
-### 4. Ambiguous UAT phrasing
+### 4. Ambiguous flow wording
 
-Each UAT must be testable. Flag UATs that:
+Each flow names one critical user path and says why it is critical. Flag flows that:
 
 - Use hedging ("should", "might", "ideally").
-- Lack a falsifiable `then`.
+- Name no observable user path, or only an implementation detail.
 - Reference an undefined system (e.g. "the orchestrator" without prior naming).
-- Place one element relative to another (beside, above, below, next to, aligned with) when the placement only stands for a relationship. Record a `major` `ambiguity` whose `suggested_fix` states the testable requirement instead, such as the error naming its field through `aria-describedby`. When the layout itself is the requirement, keep it, phrased with a cue word plan-verify accepts for the layout capability (`.gaia/scripts/spec/plan-verify.sh`'s header), so the plan can route the UAT to `browser`.
+- Place one element relative to another (beside, above, below, next to, aligned with) when the placement only stands for a relationship. Record a `major` `ambiguity` whose `suggested_fix` states the testable requirement instead, such as the error naming its field through `aria-describedby`.
 
-### 5. Case-enumerating UATs
+### 5. Missing flows
 
-A UAT states a rule and one representative journey; case tables belong to one parameterized test at the layer the trophy rule picks (`wiki/decisions/Test Layering.md`), written by the implementer. Flag a UAT whose `then` enumerates input values or outcomes of one rule about user-visible behavior (a list of inputs each with its own result). Suggest stating the rule with one representative journey and leaving the cases to that one test.
-
-Also flag several UATs that walk one user flow and differ only in which transition they exercise (assign, decline, reopen, confirm), when their then-clauses name a browser capability (the closed list at the browser step of the routing ladder in `.claude/skills/gaia/references/plan/planner.md`; point there, never copy the list). Left as siblings, each becomes its own browser file. A `sibling_fold` finding's `suggested_fix` is the fold: one browser journey UAT for the flow, and each transition, status or role rule its own UAT routed by the ladder. Keeping the siblings needs a stated reason and is only a non-recommended alternative, never the recommendation. Siblings whose then-clauses name no browser capability are not flagged: each is a cheap non-browser test.
-
-Also flag a UAT that mixes a browser-capability journey with an access refusal (a 403 page, a refused post). A `refusal_split` finding's `suggested_fix` splits the refusal into its own UAT, which the ladder routes off the browser.
-
-Exempt a UAT on harness, script or doc behavior: its distinct outcomes are the contract, so enumerating them is correct.
+Compare the intent's critical paths with the flows: a path whose breakage would block a user's main task, or risk data, money or security, with no flow, is a `missing_flow` finding. Flow shape: each flow has an id, slug, name, why, and exactly one of covers or test path. A flow lists no branches, inputs or outcomes; case tables belong to one parameterized test at the layer the trophy rule picks (`wiki/decisions/Test Layering.md`), so flag a flow that enumerates cases.
 
 ### 6. Pending clarifications
 
@@ -73,10 +67,8 @@ self-review findings (gate 2 gate):
   placeholders: <N>: <field>:<line>, ...
   scope_drift:  <N>: gate1.<field> vs current.<field>
   inconsistency: <N>: <description>
-  ambiguous_uats: <N>: UAT-NNN: <phrasing>
-  case_enumerating_uats: <N>: UAT-NNN: <phrasing>
-  sibling_transition_uats: <N>: UAT-NNN, UAT-NNN: <flow>
-  access_refusal_in_journey: <N>: UAT-NNN: <refusal>
+  ambiguous_flows: <N>: FLOW-NNN: <phrasing>
+  missing_flows: <N>: <critical path with no flow>
   pending: <N>: <item summary>, ... (listed as pending_clarifications for the wrapper to ask)
 ```
 

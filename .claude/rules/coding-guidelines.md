@@ -26,11 +26,11 @@ Smaller code never justifies cutting trust-boundary validation, error handling t
 
 Touch only what's needed: don't improve adjacent code, don't refactor unbroken things, match existing style. Remove only the imports/variables YOUR changes made unused; mention (don't delete) pre-existing dead code.
 
-## 3. Always Use Test Driven Development
+## 3. Test What Matters
 
-When building new features or fixing bugs, follow the TDD workflow described in `.claude/skills/tdd/SKILL.md` (read it on demand, do not preload).
+Test critical flows at the seams, after the code exists: one test per critical user flow at its real entry point, covering its happy path and the error paths the build has. A seam worth pinning gets a route test; tricky pure logic gets a unit test; a bug fix gets a test that reproduces the bug. Test-first with `/tdd` is a tool for logic where it helps, not a rule.
 
-- Write tests, not too many, mostly integration (the testing trophy): route tests are the default home for behavior; a unit test only when integration cannot cover its cases cheaply and the logic is important or likely to fail; keep browser tests few, for critical flows; one test per user-observable behavior. Full rule: `wiki/decisions/Test Layering.md`
+- Write tests, not too many, mostly integration (the testing trophy); one test per user-observable behavior. Full rule: `wiki/decisions/Test Layering.md`
 - The frontend stack (Vitest, Storybook, Playwright) is in `apps/web/CLAUDE.md` (`## Tests and prerequisites`) and the `tdd-react` skill
 
 ## 4. Always Verify Your Work

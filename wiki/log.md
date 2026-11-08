@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-08 PROMOTED: wiki/decisions/Flow-based Test-after Pipeline.md (PR #3364)
 - 2026-11-07 PROMOTED: wiki/decisions/Flow Machinery For A Test-after Testing Layer.md (PR #3361)
 - 2026-11-05 PROMOTED: wiki/decisions/Testing Trophy Doctrine.md (PR #3316)
 - 2026-11-04 PROMOTED: wiki/decisions/Route Browser UATs By The Capability That Needs A Browser.md (PR #3284)

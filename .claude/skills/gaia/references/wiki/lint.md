@@ -2,7 +2,7 @@
 
 Dispatched by the `/gaia-wiki` router (`references/wiki.md` → "Lint", stage 1). Runs in a Haiku subagent context, the lookup, scaffold, mechanical row of the model table in `wiki/concepts/Workflow Doctrine.md`. It detects and reports only; the parent fixes the findings afterwards (`references/wiki/lint-fix.md`).
 
-Contents: Playbook; Step 1: Create the report shell; Step 2: GAIA check #11: Wiki drift; Step 3: GAIA check #12: Dead repo-relative paths; Step 4: GAIA check #13: UAT/SPEC narrative-ref drift; Step 5: GAIA check #14: Orphan pages; Step 6: GAIA check #15: Frontmatter gaps; Step 7: GAIA check #16: Empty sections; Step 8: GAIA check #17: Broken wikilinks; Step 9: Surface to the user; Notes.
+Contents: Playbook; Step 1: Create the report shell; Step 2: GAIA check #11: Wiki drift; Step 3: GAIA check #12: Dead repo-relative paths; Step 4: GAIA check #13: FLOW/SPEC narrative-ref drift; Step 5: GAIA check #14: Orphan pages; Step 6: GAIA check #15: Frontmatter gaps; Step 7: GAIA check #16: Empty sections; Step 8: GAIA check #17: Broken wikilinks; Step 9: Surface to the user; Notes.
 
 ## Playbook
 
@@ -126,9 +126,9 @@ Otherwise:
 
 List every dead reference (one per line). Do not truncate: the count is small enough to be actionable.
 
-## Step 4: GAIA check #13: UAT/SPEC narrative-ref drift
+## Step 4: GAIA check #13: FLOW/SPEC narrative-ref drift
 
-Detects narrative `UAT-NNN` and concrete maintainer `SPEC-NNN` references that crept into instruction files (`.claude/skills/`, `.claude/commands/`, `.claude/agents/`, `.claude/rules/`, `.claude/hooks/`), the spec-lifecycle scripts (`.gaia/scripts/spec/`), and the spec templates (`.gaia/templates/spec/`). The rule rationale + structural-vs-narrative triage lives in `.claude/rules/working-doc-ids.md`.
+Detects narrative `FLOW-NNN` and concrete maintainer `SPEC-NNN` references that crept into instruction files (`.claude/skills/`, `.claude/commands/`, `.claude/agents/`, `.claude/rules/`, `.claude/hooks/`), the spec-lifecycle scripts (`.gaia/scripts/spec/`), and the spec templates (`.gaia/templates/spec/`). The rule rationale + structural-vs-narrative triage lives in `.claude/rules/working-doc-ids.md`.
 
 <!-- gaia:maintainer-only:start -->
 Both scans deliberately exclude `.gaia/tests/`: it is release-excluded maintainer-only test infrastructure that never reaches an adopter, so its UAT/SEC/TST test labels are legitimate SPEC-conformance traceability, not shipped-surface drift. Do not re-add `.gaia/tests/` to either grep.
@@ -139,8 +139,8 @@ Both scans deliberately exclude `.gaia/tests/`: it is release-excluded maintaine
 Two scans, run from the repo root:
 
 ```bash
-# UAT-NNN narrative-ref candidates
-grep -rEn "UAT-[0-9]{3}" \
+# FLOW-NNN narrative-ref candidates
+grep -rEn "FLOW-[0-9]{3}" \
   .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ \
   .gaia/scripts/spec/ .gaia/templates/spec/
 
@@ -154,25 +154,25 @@ grep -rEn "\bSPEC-[0-9]{3,}\b" \
 
 Both scans return raw match lines. Apply the structural-vs-narrative filter from `working-doc-ids.md`:
 
-- **Skip (structural, not findings):** template format examples (`> - UAT-NNN → Given …`), CLI argument values (`--uat-id UAT-<n>`), JS/Python/YAML literals (`uat_id: 'UAT-<n>'`), regex targets that match SPEC YAML structure, filename literals (`uat-<n>.spec.ts`), generic placeholders (`SPEC-NNN`, `SPEC-NNN.md`), variable-name fragments (`uat_id`, `uats_block`).
-- **Flag (narrative, findings):** section-header parentheticals (`#### 5b. Discuss-this escape (UAT-<n>)`), inline narrative parentheticals (`(UAT-<n>, UAT-<n>)`), comments naming specific working-doc IDs, pass/fail label prefixes (`pass "UAT-<n> …"`), prose using a maintainer SPEC ID as a system-wide constant (`operate under SPEC-<n>'s scope_boundaries`).
+- **Skip (structural, not findings):** template format examples (`- flow_id: FLOW-NNN`), CLI argument values and JS/Python/YAML literals (`flow_id: 'FLOW-<n>'`), regex targets that match SPEC YAML structure, generic placeholders (`SPEC-NNN`, `SPEC-NNN.md`), variable-name fragments (`flow_id`).
+- **Flag (narrative, findings):** section-header parentheticals (`#### 5b. Discuss-this escape (FLOW-<n>)`), inline narrative parentheticals (`(FLOW-<n>, FLOW-<n>)`), comments naming specific working-doc IDs, pass/fail label prefixes (`pass "FLOW-<n> …"`), prose using a maintainer SPEC ID as a system-wide constant (`operate under SPEC-<n>'s scope_boundaries`).
 
 If both scans produce zero narrative findings (all matches are structural):
 
 ```markdown
-## #13: UAT/SPEC narrative-ref drift
+## #13: FLOW/SPEC narrative-ref drift
 
-✓ No narrative `UAT-NNN` or concrete maintainer `SPEC-NNN` references detected outside the structural exemptions in `.claude/rules/working-doc-ids.md`.
+✓ No narrative `FLOW-NNN` or concrete maintainer `SPEC-NNN` references detected outside the structural exemptions in `.claude/rules/working-doc-ids.md`.
 ```
 
 Otherwise:
 
 ```markdown
-## #13: UAT/SPEC narrative-ref drift
+## #13: FLOW/SPEC narrative-ref drift
 
 ⚠ {N} narrative ref(s) found in instruction files / spec-lifecycle scripts:
 
-- `.claude/skills/foo/SKILL.md:42` → `(UAT-<n>)` parenthetical in section header
+- `.claude/skills/foo/SKILL.md:42` → `(FLOW-<n>)` parenthetical in section header
 - `.claude/skills/gaia/references/spec/bar.md:88` → `operate under SPEC-<n>'s scope_boundaries` prose
 ```
 
@@ -335,7 +335,7 @@ Then print each line below whose condition holds, on its own line, as the prefix
 
 - `WIKI DRIFT:` when `drift_severity` is `high` (count: `commits_ahead`)
 - `WIKI DEAD-PATHS:` when `dead.length > 0`
-- `UAT-SPEC DRIFT:` when narrative-ref findings > 0
+- `FLOW-SPEC DRIFT:` when narrative-ref findings > 0
 - `WIKI ORPHANS:` when `orphans.length > 0`
 - `WIKI FRONTMATTER:` when `gaps.length > 0`
 - `WIKI EMPTY-SECTIONS:` when `empty.length > 0`

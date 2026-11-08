@@ -57,7 +57,6 @@ setup() {
 
   # file|needle (must stay present)
   KEPT_ROWS=(
-    ".claude/skills/gaia/references/plan/planner.md|taking the lowest step whose layer can show its then-clause"
     "$LAYERING|Browser time is the expensive layer in three ways"
     "$LAYERING|The route surface is the lowest layer that takes a request in process"
     "$LAYERING|one test per user flow"
@@ -65,17 +64,15 @@ setup() {
     "$LAYERING|A plan carries one real-server check per guarded route module"
     ".claude/skills/tdd/SKILL.md|Good tests are integration-style"
     ".claude/skills/tdd/SKILL.md|You can't test everything."
-    ".claude/skills/tdd/SKILL.md|is RED-gated: a new test there commits only after a genuine failing-first run is observed at its current body"
     ".claude/skills/tdd/SKILL.md|Author the test against a stub of the implementation symbol."
     ".claude/skills/tdd/SKILL.md|Every proposed DELETE requires human confirmation and renders its evidence INLINE."
     'wiki/decisions/Worthiness Audit.md|**proposes** verdicts and **edits no files**; a human acts on every proposal.'
     ".claude/agents/overlap-evaluator.md|The journey floor: never propose demoting or dropping a flow's only browser journey."
     ".claude/agents/worthiness-evaluator.md|state of the controls a user drives. A suite of tests for an interactive"
     "$TESTS_REACT|For an interactive component, the tests assert a keyboard path"
-    ".claude/skills/gaia/references/spec/clarify-prompts.md|One UAT per success criterion."
+    ".claude/skills/gaia/references/spec/clarify-prompts.md|One flow per critical user path."
     'wiki/decisions/Route Browser UATs By The Capability That Needs A Browser.md|one UAT per transition, status or role rule keeps traceability'
     "apps/web/.claude/rules/playwright.md|One journey per user flow"
-    '.claude/skills/gaia/references/spec/self-review-dispatch.md|A `sibling_fold` finding'"'"'s `suggested_fix` is always the fold'
     '.claude/skills/tdd/references/tests-shell.md|one `.bats` file per script under test'
     ".claude/skills/tdd/references/tests-shell.md|One test, one change, repeat."
     'wiki/concepts/Code Review Audit Agent.md|records `Outcome: did not run` and lets the run continue'

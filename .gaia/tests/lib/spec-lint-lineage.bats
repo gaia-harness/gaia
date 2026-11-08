@@ -13,11 +13,11 @@ TEMPLATE="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
 make_spec() {
   local output_path="$1" replacement="${2-__DROP__}"
   if [ "$replacement" = "__DROP__" ]; then
-    sed 's/SPEC-NNN/SPEC-001/;s/UAT-NNN/UAT-001/;/^lineage: \[\]$/d' "$TEMPLATE" >"$output_path"
+    awk '/^spec_id:/ { sub(/SPEC-NNN/, "SPEC-001") } /flow_id:/ { sub(/FLOW-NNN/, (++flow_count == 1 ? "FLOW-001" : "FLOW-002")) } /^ *(- )?slug:/ { sub(/slug:.*/, "slug: flow-" ++slug_count) } /^ *(- )?covers:/ { sub(/covers:.*/, "covers: [app/pages]") } /^ *(- )?test_path:/ { sub(/test_path:.*/, "test_path: .gaia/tests/lib/example.bats") } { print }' "$TEMPLATE" | sed '/^lineage: \[\]$/d' >"$output_path"
   else
     local replacement_file="$BATS_TEST_TMPDIR/repl.txt"
     printf '%s\n' "$replacement" >"$replacement_file"
-    sed 's/SPEC-NNN/SPEC-001/;s/UAT-NNN/UAT-001/' "$TEMPLATE" \
+    awk '/^spec_id:/ { sub(/SPEC-NNN/, "SPEC-001") } /flow_id:/ { sub(/FLOW-NNN/, (++flow_count == 1 ? "FLOW-001" : "FLOW-002")) } /^ *(- )?slug:/ { sub(/slug:.*/, "slug: flow-" ++slug_count) } /^ *(- )?covers:/ { sub(/covers:.*/, "covers: [app/pages]") } /^ *(- )?test_path:/ { sub(/test_path:.*/, "test_path: .gaia/tests/lib/example.bats") } { print }' "$TEMPLATE" \
       | awk -v replacement_file_path="$replacement_file" '/^lineage: \[\]$/ { while ((getline replacement_line < replacement_file_path) > 0) print replacement_line; next } { print }' >"$output_path"
   fi
 }

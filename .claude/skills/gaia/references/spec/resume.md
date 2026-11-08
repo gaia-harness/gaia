@@ -70,9 +70,9 @@ LOCK_STATUS="$(bash .gaia/scripts/spec/spec-session-lock.sh status "$PWD" "$SPEC
 
 ## Resume, start new, or discard
 
-Read `$WORKING` and extract: intent first line, UAT count, frontmatter `updated` timestamp (or filesystem mtime if absent). Surface via `AskUserQuestion`:
+Read `$WORKING` and extract: intent first line, flow count, frontmatter `updated` timestamp (or filesystem mtime if absent). Surface via `AskUserQuestion`:
 
-- question: `"SPEC-NNN in progress (last touched <updated>, <UAT count> UATs drafted): \"<intent first line>\". Resume, start new, or discard?"`
+- question: `"SPEC-NNN in progress (last touched <updated>, <flow count> flows drafted): \"<intent first line>\". Resume, start new, or discard?"`
 - header: `"Existing SPEC"`
 - options:
   - `{ label: "Resume SPEC-NNN (Recommended)", description: "Continue from the latest draft (working cache preferred over canonical if newer)." }`

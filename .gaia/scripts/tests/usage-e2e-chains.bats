@@ -36,9 +36,9 @@ close_row() {
   spec="$REPO/.notebook/specs/$id/SPEC.md"
   draft="$REPO/.gaia/local/cache/draft-$id.md"
   mkdir -p "${draft%/*}"
-  sed -e "s/SPEC-NNN/$id/g" -e 's/UAT-NNN/UAT-001/g' \
-    -e 's/^lineage: \[\]$/lineage: [research:topic-a-2026-10-01]/' \
-    "$REPO/.claude/skills/gaia/references/spec/spec-template.md" >"$draft"
+  awk '/flow_id:/ { sub(/FLOW-NNN/, (++flow_count == 1 ? "FLOW-001" : "FLOW-002")) } /^ *(- )?slug:/ { sub(/slug:.*/, "slug: flow-" ++slug_count) } /^ *(- )?covers:/ { sub(/covers:.*/, "covers: [app/pages]") } /^ *(- )?test_path:/ { sub(/test_path:.*/, "test_path: .gaia/tests/lib/example.bats") } { print }' "$REPO/.claude/skills/gaia/references/spec/spec-template.md" \
+    | sed -e "s/SPEC-NNN/$id/g" \
+      -e 's/^lineage: \[\]$/lineage: [research:topic-a-2026-10-01]/' >"$draft"
 
   fence="$(awk '
     /^```bash$/ { buffer = ""; in_block = 1; next }
@@ -92,7 +92,7 @@ parity() {
   references_file="$TEMPORARY_DIRECTORY/refs.txt"
   corpus >"$references_file"
   awk -v references_file="$references_file" '/^lineage: \[\]$/ { print "lineage:"; while ((getline reference_line < references_file) > 0) print "  - " reference_line; next } { print }' \
-    "$REPO/.claude/skills/gaia/references/spec/spec-template.md" | sed -e 's/SPEC-NNN/SPEC-001/g' -e 's/UAT-NNN/UAT-001/g' >"$spec"
+    "$REPO/.claude/skills/gaia/references/spec/spec-template.md" | sed -e 's/SPEC-NNN/SPEC-001/g' >"$spec"
   lint_bad="$(bash "$lint" "$spec" | jq -r '.findings[] | select(.code == "invalid_lineage") | .message | capture("'"'"'(?<reference>.*)'"'"'$").reference')"
   # shellcheck source=/dev/null
   . "$REPO/.gaia/scripts/usage-lib.sh"
@@ -116,15 +116,18 @@ parity() {
 }
 
 @test "guards-must-fail (grammar parity): a lint.sh copy that loosens the SPEC digits is reported with the offending ref" {
-  local mutant_script="$TEMPORARY_DIRECTORY/lint-mutant.sh"
-  # lint.sh sources uat-lib.sh, which sources uat-code-only.sh, from its own directory.
-  cp "$REPO/.gaia/scripts/spec/uat-lib.sh" "$REPO/.gaia/scripts/spec/uat-code-only.sh" "$TEMPORARY_DIRECTORY/"
+  local mutant_script="$TEMPORARY_DIRECTORY/spec/lint-mutant.sh"
+  # lint.sh sources flows-lib.sh from its own directory, and flows-lib.sh sources
+  # machine-local-ref-lib.sh one directory above it.
+  mkdir -p "$TEMPORARY_DIRECTORY/spec"
+  cp "$REPO/.gaia/scripts/machine-local-ref-lib.sh" "$TEMPORARY_DIRECTORY/"
+  cp "$REPO/.gaia/scripts/spec/flows-lib.sh" "$TEMPORARY_DIRECTORY/spec/"
   sed 's/\^spec:SPEC-\[0-9\]{3,}\$/^spec:SPEC-[0-9]{2,}$/' "$REPO/.gaia/scripts/spec/lint.sh" >"$mutant_script"
   if cmp -s "$mutant_script" "$REPO/.gaia/scripts/spec/lint.sh"; then echo "mutation did not apply" >&2; return 1; fi
   # A mutant that crashes prints nothing, which parity reads as accepting every
   # ref, so the expected mismatch appears without the lint having run. Require
   # real lint output from it first.
-  sed -e 's/SPEC-NNN/SPEC-001/g' -e 's/UAT-NNN/UAT-001/g' \
+  sed -e 's/SPEC-NNN/SPEC-001/g' \
     "$REPO/.claude/skills/gaia/references/spec/spec-template.md" >"$TEMPORARY_DIRECTORY/mutant-probe-spec.md"
   run bash "$mutant_script" "$TEMPORARY_DIRECTORY/mutant-probe-spec.md"
   jq -e 'has("ok") and has("findings")' <<<"$output" >/dev/null

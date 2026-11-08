@@ -5,23 +5,23 @@
 # .claude/skills/gaia/references/plan/planner.md, the file the planner
 # sub-agent reads, holds the verbatim step blocks a planner copies into a
 # generated ORCHESTRATOR.md, each opening with a sentinel line plan-verify.sh
-# checks: the UAT render, the owning-phase UAT gate, the sub-agent yield
-# handling, the pre-audit UAT checks, the worthiness step, the wiki promotion,
-# the code audit, the post-clearance step and the post-merge close.
-# .claude/skills/gaia/references/spec/lifecycle.md holds the procedures those
-# blocks point at, and .claude/skills/gaia/references/plan.md, the
+# checks: the resume detection, the sub-agent yield handling, the phase gate
+# retry, the pre-audit flow checks, the worthiness step, the overlap pass, the
+# wiki promotion, the code audit, the post-clearance step and the post-merge
+# close. .claude/skills/gaia/references/spec/lifecycle.md holds the procedures
+# those blocks point at, and .claude/skills/gaia/references/plan.md, the
 # /gaia-plan entry file, keeps the pre-flight sweep pointer. This suite pins:
 #
-#   - each sentinel sits once in planner.md, inside a fenced block, and each
-#     block carries the command or pointer it exists for;
+#   - the sentinel list for each plan kind, from one array here: each sentinel
+#     sits once in planner.md, inside a fenced block, in that order; the
+#     verbatim-block sentence names each in order and the compared set; and
+#     each block carries the command or pointer it exists for;
 #   - plan.md holds no sentinel and never names plan-archive.sh, so the
 #     blocks have one home;
 #   - nothing in planner.md archives the plan folder or removes SPEC.md before
 #     the post-merge close, and lifecycle.md's close confirms MERGED first;
 #   - the blocks, assembled the way a planner copies them (indentation
-#     kept), pass plan-verify.sh;
-#   - the render block routes exit 3 and runs on every resume, and the stop
-#     conditions name the SPEC reopen;
+#     kept) into a plan with a closing flow-test phase, pass plan-verify.sh;
 #   - the shared pre-flight sweep runs its reconcile scan before the reap that
 #     reads what it stamps, and the post-merge close passes the PR number;
 #   - the new PROGRESS.md blocks never move plan-resume-point.sh's answer;
@@ -32,14 +32,33 @@
 #     sits above the code audit block, and the final summary names the
 #     worthiness blocks the late pass feeds;
 #   - lifecycle.md says which pass writes the wiki promotion record;
-#   - a plan-time directive never picks a UAT's surface: planner.md routes by
-#     the ladder first, and spec/audit.md writes a directive as a property
+#   - a plan-time directive constrains the code or a flow test's assertions,
+#     never a test layer, and spec/audit.md writes a directive as a property
 #     or a code constraint.
 #
 # Every check is a function taking the file(s) it reads, so each red twin
 # runs the same function against a mutated copy and proves it can fail.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
+
+# The orchestrator step blocks of a spec-derived plan, in order. A spec-less
+# plan carries the same list without flow-checks. Every step but
+# post-merge-close is compared verbatim by plan-verify.sh.
+SPEC_DERIVED_STEPS=(
+  resume-detection
+  yield-handling
+  gate-retry
+  flow-checks
+  worthiness-step
+  overlap-pass
+  wiki-promotion
+  code-audit
+  post-clearance
+  post-merge-close
+)
+SPEC_DERIVED_STEP_COUNT=10
+SPEC_ONLY_STEP=flow-checks
+UNCOMPARED_STEP=post-merge-close
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -51,14 +70,9 @@ setup() {
   SPEC_TEMPLATE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
   PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
-  S_RESUME='<!-- gaia:orchestrator-step resume-detection -->'
-  S_RENDER='<!-- gaia:orchestrator-step uat-render -->'
-  S_GATE='<!-- gaia:orchestrator-step uat-gate -->'
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
-  S_SPLIT='<!-- gaia:orchestrator-step red-split -->'
-  S_REVIEW='<!-- gaia:orchestrator-step test-review -->'
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
-  S_PRE='<!-- gaia:orchestrator-step uat-pre-audit -->'
+  S_FLOW='<!-- gaia:orchestrator-step flow-checks -->'
   S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
   S_OVERLAP='<!-- gaia:orchestrator-step overlap-pass -->'
   S_WIKI='<!-- gaia:orchestrator-step wiki-promotion -->'
@@ -69,10 +83,19 @@ setup() {
 
 # ---------- helpers ----------
 
-# sentinel_set: the sentinel literals plan-verify.sh requires, in its order.
-# plan-verify.sh owns the set, so the suite derives it rather than retyping it.
-sentinel_set() {
-  grep -oE "'<!-- gaia:orchestrator-step [a-z-]+ -->'" "$PLAN_VERIFY" | tr -d "'" | awk '!seen[$0]++'
+# steps_of <spec-derived | spec-less>: the plan kind's step names, in order.
+steps_of() {
+  local step
+  [ "${#SPEC_DERIVED_STEPS[@]}" -eq "$SPEC_DERIVED_STEP_COUNT" ] || { printf 'read %s steps, want %s\n' "${#SPEC_DERIVED_STEPS[@]}" "$SPEC_DERIVED_STEP_COUNT" >&2; return 1; }
+  for step in "${SPEC_DERIVED_STEPS[@]}"; do
+    [ "$1" = spec-less ] && [ "$step" = "$SPEC_ONLY_STEP" ] && continue
+    printf '%s\n' "$step"
+  done
+}
+
+# sentinel_of <step>: the sentinel line of a step.
+sentinel_of() {
+  printf '<!-- gaia:orchestrator-step %s -->' "$1"
 }
 
 # count_trimmed <file> <literal>: lines equal to <literal> after trimming.
@@ -124,20 +147,71 @@ section_of() {
 # ---------- checks (each returns non-zero with a reason) ----------
 
 check_sentinels_once_in_fences() {
-  local file="$1" sentinel total fenced count=0 want
-  while IFS= read -r sentinel; do
+  local file="$1" step sentinel total fenced count=0 want
+  while IFS= read -r step; do
     count=$((count + 1))
+    sentinel="$(sentinel_of "$step")"
     total="$(count_trimmed "$file" "$sentinel")"
     fenced="$(count_in_fences "$file" "$sentinel")"
     if [ "$total" -ne 1 ] || [ "$fenced" -ne 1 ]; then
       printf '%s: %s appears %s times, %s inside a fence (want 1 and 1)\n' "$file" "$sentinel" "$total" "$fenced" >&2
       return 1
     fi
-  done < <(sentinel_set)
+  done < <(steps_of spec-derived)
   # The planner's own sentinel lines are an independent count of the set, so a
-  # short read of plan-verify.sh, or a block it does not require, fails here.
+  # block the list does not name, or one it names twice, fails here.
   want="$(grep -cE '^[[:space:]]*<!-- gaia:orchestrator-step [a-z-]+ -->[[:space:]]*$' "$file")"
-  [ "$count" -gt 0 ] && [ "$count" -eq "$want" ] || { printf 'derived %s sentinels from plan-verify.sh, %s in %s\n' "$count" "$want" "$file" >&2; return 1; }
+  [ "$count" -eq "$SPEC_DERIVED_STEP_COUNT" ] && [ "$count" -eq "$want" ] || { printf 'listed %s steps, %s sentinel lines in %s\n' "$count" "$want" "$file" >&2; return 1; }
+}
+
+# check_sentinel_file_order <file>: the sentinel lines sit in the list's order,
+# so the flow-checks block falls after the gate retry and before the
+# worthiness step.
+check_sentinel_file_order() {
+  local file="$1" step line previous=0 previous_step=start
+  while IFS= read -r step; do
+    line="$(awk -v want="$(sentinel_of "$step")" '{ t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) } t == want { print NR; exit }' "$file")"
+    [ -n "$line" ] || { printf 'no %s sentinel in %s\n' "$step" "$file" >&2; return 1; }
+    [ "$line" -gt "$previous" ] || { printf '%s (line %s) is not after %s (line %s)\n' "$step" "$line" "$previous_step" "$previous" >&2; return 1; }
+    previous="$line"
+    previous_step="$step"
+  done < <(steps_of spec-derived)
+}
+
+# check_verbatim_sentence <file>: the verbatim-block sentence names every
+# step in order and no other, mentions spec-less plans, and
+# names every step but post-merge-close among the blocks plan-verify.sh
+# compares.
+check_verbatim_sentence() {
+  local file="$1" sentence order compared step rest listed
+  sentence="$(grep -F '**Verbatim step blocks.**' "$file")"
+  [ -n "$sentence" ] || { printf 'no verbatim-block sentence in %s\n' "$file" >&2; return 1; }
+  order="${sentence#*in this order: }"
+  [ "$order" != "$sentence" ] || { printf 'the sentence has no "in this order:" list\n' >&2; return 1; }
+  order="${order%%. *}"
+  listed="$(grep -oE '`[a-z-]+`' <<<"$order" | grep -c .)"
+  [ "$listed" -eq "$SPEC_DERIVED_STEP_COUNT" ] || { printf 'the order list names %s steps, want %s: %s\n' "$listed" "$SPEC_DERIVED_STEP_COUNT" "$order" >&2; return 1; }
+  rest="$order"
+  while IFS= read -r step; do
+    case "$rest" in
+      *"\`$step\`"*) rest="${rest#*\`"$step"\`}" ;;
+      *) printf 'the order list lacks `%s`, or names it out of order: %s\n' "$step" "$order" >&2; return 1 ;;
+    esac
+  done < <(steps_of spec-derived)
+  # The spec-less omission in any wording: the sentence names spec-less plans.
+  grep -qiF -- 'spec-less' <<<"$sentence" ||
+    { printf 'the sentence does not say how a spec-less plan treats `%s`\n' "$SPEC_ONLY_STEP" >&2; return 1; }
+  compared="${sentence#*compares the text of the }"
+  [ "$compared" != "$sentence" ] || { printf 'the sentence names no compared set\n' >&2; return 1; }
+  compared="${compared%% blocks*}"
+  while IFS= read -r step; do
+    if [ "$step" = "$UNCOMPARED_STEP" ]; then
+      grep -qF -- "$step" <<<"$compared" && { printf 'the compared set names %s, which plan-verify.sh does not compare\n' "$step" >&2; return 1; }
+    else
+      grep -qE -- "(^|[ ,])$step(,| and|$)" <<<"$compared" || { printf 'the compared set lacks %s: %s\n' "$step" "$compared" >&2; return 1; }
+    fi
+  done < <(steps_of spec-derived)
+  return 0
 }
 
 # check_block_has <file> <sentinel> <needle>...
@@ -153,12 +227,10 @@ check_block_has() {
 
 check_block_contents() {
   local file="$1"
-  check_block_has "$file" "$S_RENDER" 'uat-write.sh' '{SPEC_PATH}' '--routing' || return 1
-  check_block_has "$file" "$S_GATE" 'uat-gate.sh' '--phase' || return 1
   check_block_has "$file" "$S_YIELD" 'gaia_context_yield_limit' 'Yield handoff:' '(YIELD k)' || return 1
   check_block_has "$file" "$S_RETRY" '(GATE RETRY 1)' 'Yield handoff:' 'Stop conditions' || return 1
-  check_block_has "$file" "$S_PRE" '--all' || return 1
-  check_block_has "$file" "$S_WORTH" 'worthiness-step.md' || return 1
+  check_block_has "$file" "$S_FLOW" 'flow-coverage.sh' '--spec {SPEC_PATH}' '--flow-tests-out' 'flow-tests.tsv' '{PLAN_DIR}/PROGRESS.md' 'before the worthiness step' || return 1
+  check_block_has "$file" "$S_WORTH" 'worthiness-step.md' 'flow checks' || return 1
   check_block_has "$file" "$S_OVERLAP" 'overlap-pass.md' '## Overlap pass' || return 1
   check_block_has "$file" "$S_WIKI" 'wiki-promote.md' 'promoted-pages.txt' 'Pass: pre-audit' 'verify-harness.sh branch' || return 1
   check_block_has "$file" "$S_AUDIT" 'resolve-audit-members.sh' 'worthiness-step.md' || return 1
@@ -194,15 +266,6 @@ check_lifecycle_close_order() {
   [ "$merged" -lt "$removal" ] || { printf 'SPEC.md removal precedes MERGED in the close\n' >&2; return 1; }
 }
 
-check_pinned_literals() {
-  local plan="$1" range block
-  range="$(range_of "$plan" '**Stop conditions.**' '**Final summary.**')"
-  grep -qiF 'reopen the SPEC' <<<"$range" || { printf 'stop conditions do not name the SPEC reopen\n' >&2; return 1; }
-  block="$(fence_with "$plan" "$S_RENDER")"
-  grep -qF 'Exit 3' <<<"$block" || { printf 'render block does not route exit 3\n' >&2; return 1; }
-  grep -qF 'every resume' <<<"$block" || { printf 'render block does not run on resume\n' >&2; return 1; }
-}
-
 check_preflight_sites() {
   local lifecycle="$1" section scan reap
   section="$(section_of "$lifecycle" '## Pre-flight sweep')"
@@ -220,7 +283,9 @@ check_preflight_sites() {
 assemble_orchestrator() {
   local source="$1" out="$2" sentinel block
   shift 2
-  printf '# Orchestrator\n\nResume detection, pre-flight isolation, RUNNING sentinel.\n\n**Phase 1, x.**\n\n' >"$out"
+  # The last phase's entry runs the closing phase's flow test in its gate,
+  # the run line plan-verify.sh's closing-phase gate check reads.
+  printf '# Orchestrator\n\nResume detection, pre-flight isolation, RUNNING sentinel.\n\n**Phase 1, build the checkout.**\n\nQuality gate: pnpm typecheck && pnpm lint.\n\n**Phase 2, closing flow test.**\n\nQuality gate: pnpm typecheck && pnpm lint, then bash .gaia/scripts/bats5.sh %s < /dev/null; a failing run refuses the commit.\n\n' "$FIXTURE_FLOW_TEST" >"$out"
   for sentinel in "$@"; do
     block="$(fence_with "$source" "$sentinel")"
     [ -n "$block" ] || { printf 'no block for %s\n' "$sentinel" >&2; return 1; }
@@ -230,34 +295,48 @@ assemble_orchestrator() {
   done
 }
 
+# write_plan_fixture: a two-phase plan from a SPEC with one command flow. The
+# README task graph names each task by its backticked stem, so Phase 2 is the
+# last phase, and its one task doc carries the flow's one Flow test line.
 write_plan_fixture() {
   FIXTURE_PLAN="$BATS_TEST_TMPDIR/plan"
   FIXTURE_SPEC="$BATS_TEST_TMPDIR/SPEC.md"
+  FIXTURE_FLOW_TEST='.gaia/tests/lib/guest-checkout-confirms-order.bats'
   mkdir -p "$FIXTURE_PLAN"
-  cat >"$FIXTURE_SPEC" <<'EOF'
+  cat >"$FIXTURE_SPEC" <<EOF
 ---
 spec_id: SPEC-901
-uats:
-  - uat_id: UAT-001
-    given: a visitor with items in the cart
-    when: they check out as a guest
-    then: the confirmation page shows the order number
+flows:
+  - flow_id: FLOW-001
+    slug: guest-checkout-confirms-order
+    name: A guest checks out and sees the order number
+    why: A broken checkout loses the sale
+    test_path: $FIXTURE_FLOW_TEST
 ---
 EOF
   cat >"$FIXTURE_PLAN/README.md" <<'EOF'
 # Plan
 
-## UAT routing
+## Task graph
 
-<!-- gaia:uat-routing:start -->
-| uat_id | surface | phase | feature_folder | file_name |
-|---|---|---|---|---|
-| UAT-001 | real-server | 1 | checkout | guest-checkout-confirms-order.spec.ts |
-<!-- gaia:uat-routing:end -->
+| Phase | Tasks | Model | Notes |
+|---|---|---|---|
+| Phase 1 | `task-checkout` | sonnet | build |
+| Phase 2 | `task-checkout-flow` | sonnet | closing flow-test phase |
 EOF
-  printf '| Phase 1 | tasks | sonnet | none |\n' >>"$FIXTURE_PLAN/README.md"
   printf 'You are the orchestrator.\n' >"$FIXTURE_PLAN/KICKOFF.md"
-  printf '# Task\n\nNew tests: none\n- builds checkout\n- Real-server reason (UAT-001): the confirmation page is server-rendered HTML\n' >"$FIXTURE_PLAN/task-checkout.md"
+  printf '# Task\n\n- builds checkout\n' >"$FIXTURE_PLAN/task-checkout.md"
+  printf '# Task\n\n- tests the checkout flow\n- Flow test (FLOW-001): %s\n' "$FIXTURE_FLOW_TEST" >"$FIXTURE_PLAN/task-checkout-flow.md"
+}
+
+# assembled_sentinels <spec-derived | spec-less>: the plan kind's sentinel
+# lines, in order, for assemble_orchestrator.
+assembled_sentinels() {
+  local step
+  while IFS= read -r step; do
+    sentinel_of "$step"
+    printf '\n'
+  done < <(steps_of "$1")
 }
 
 # ---------- sentinels and block contents ----------
@@ -266,15 +345,69 @@ EOF
   check_sentinels_once_in_fences "$PLANNER_MD"
 }
 
-@test "red twin: a duplicated or unfenced sentinel fails the sentinel check" {
+@test "red twin: a duplicated, unfenced or unlisted sentinel fails the sentinel check" {
+  check_sentinels_once_in_fences "$PLANNER_MD"
   copy="$BATS_TEST_TMPDIR/planner.md"
   cp "$PLANNER_MD" "$copy"
-  printf '\n%s\n' "$S_GATE" >>"$copy"
+  printf '\n%s\n' "$S_FLOW" >>"$copy"
   run check_sentinels_once_in_fences "$copy"
   [ "$status" -ne 0 ]
   # Unfenced: drop every fence line, so the sentinel lines sit in prose.
   grep -vE '^[[:space:]]*```' "$PLANNER_MD" >"$copy"
   run check_sentinels_once_in_fences "$copy"
+  [ "$status" -ne 0 ]
+  # A block the list does not name, inside its own fence.
+  { cat "$PLANNER_MD"; printf '\n```\n<!-- gaia:orchestrator-step red-split -->\n```\n'; } >"$copy"
+  run check_sentinels_once_in_fences "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the sentinels sit in planner.md in the list's order, flow-checks between the gate retry and the worthiness step" {
+  check_sentinel_file_order "$PLANNER_MD"
+}
+
+@test "red twin: a flow-checks block below the worthiness step fails the order check" {
+  check_sentinel_file_order "$PLANNER_MD"
+  copy="$BATS_TEST_TMPDIR/planner.md"
+  awk -v flow="$S_FLOW" -v worth="$S_WORTH" '
+    { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) }
+    t == flow { sub(/flow-checks/, "TEMP-SENTINEL") }
+    t == worth { sub(/worthiness-step/, "flow-checks") }
+    { print }' "$PLANNER_MD" >"$copy"
+  sed -i.bak 's/TEMP-SENTINEL/worthiness-step/' "$copy"
+  run check_sentinel_file_order "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the verbatim-block sentence names each step in order, the spec-less omission and the compared set" {
+  check_verbatim_sentence "$PLANNER_MD"
+}
+
+@test "red twin: a step missing, out of order or wrongly compared in the verbatim-block sentence fails" {
+  check_verbatim_sentence "$PLANNER_MD"
+  local copy="$BATS_TEST_TMPDIR/planner.md" step
+  for step in "${SPEC_DERIVED_STEPS[@]}"; do
+    awk -v step="\`$step\`" '/\*\*Verbatim step blocks\.\*\*/ { i = index($0, step); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(step)) } { print }' "$PLANNER_MD" >"$copy"
+    cmp -s "$PLANNER_MD" "$copy" && { echo "\`$step\` is not in the verbatim-block sentence" >&2; return 1; }
+    run check_verbatim_sentence "$copy"
+    [ "$status" -ne 0 ] || { echo "dropping $step from the order list did not fail" >&2; return 1; }
+  done
+  # Swap two neighbours in the order list.
+  sed '/\*\*Verbatim step blocks\.\*\*/s/`gate-retry`, `flow-checks`/`flow-checks`, `gate-retry`/' "$PLANNER_MD" >"$copy"
+  cmp -s "$PLANNER_MD" "$copy" && { echo "gate-retry, flow-checks is not in the order list" >&2; return 1; }
+  run check_verbatim_sentence "$copy"
+  [ "$status" -ne 0 ]
+  awk '/\*\*Verbatim step blocks\.\*\*/ { gsub(/[Ss]pec-less/, "other") } { print }' "$PLANNER_MD" >"$copy"
+  cmp -s "$PLANNER_MD" "$copy" && { echo "the verbatim-block sentence does not mention spec-less plans" >&2; return 1; }
+  run check_verbatim_sentence "$copy"
+  [ "$status" -ne 0 ]
+  sed '/\*\*Verbatim step blocks\.\*\*/s/compares the text of the resume-detection, /compares the text of the /' "$PLANNER_MD" >"$copy"
+  cmp -s "$PLANNER_MD" "$copy" && { echo "the compared set does not open with resume-detection" >&2; return 1; }
+  run check_verbatim_sentence "$copy"
+  [ "$status" -ne 0 ]
+  sed '/\*\*Verbatim step blocks\.\*\*/s/ and post-clearance blocks/, post-clearance and post-merge-close blocks/' "$PLANNER_MD" >"$copy"
+  cmp -s "$PLANNER_MD" "$copy" && { echo "the compared set does not end with post-clearance" >&2; return 1; }
+  run check_verbatim_sentence "$copy"
   [ "$status" -ne 0 ]
 }
 
@@ -283,9 +416,10 @@ EOF
 }
 
 @test "red twin: a block missing its command fails the contents check" {
+  check_block_contents "$PLANNER_MD"
   copy="$BATS_TEST_TMPDIR/planner.md"
   local needle
-  for needle in 'uat-write.sh' '--phase' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' '--all' 'wiki-promote.md' 'runs only after' 'worthiness-step.md' 'overlap-pass.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
+  for needle in 'flow-coverage.sh' 'flow-tests.tsv' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' 'wiki-promote.md' 'runs only after' 'worthiness-step.md' 'overlap-pass.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
     awk -v needle="$needle" '{ gsub(needle, "removed") } { print }' "$PLANNER_MD" >"$copy"
     run check_block_contents "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail the check" >&2; return 1; }
@@ -346,35 +480,28 @@ check_entry_file_has_no_blocks() {
 # ---------- assembled blocks pass plan-verify.sh ----------
 
 @test "blocks copied as a planner copies them pass plan-verify.sh --spec" {
+  local -a order=()
+  local sentinel
+  while IFS= read -r sentinel; do order+=("$sentinel"); done < <(assembled_sentinels spec-derived)
+  [ "${#order[@]}" -eq "$SPEC_DERIVED_STEP_COUNT" ]
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RESUME" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_PRE" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "${order[@]}"
   # The copy keeps the template's indentation, so the trim rule is exercised.
-  grep -qE "^[[:space:]]+<!-- gaia:orchestrator-step uat-render -->$" "$FIXTURE_PLAN/ORCHESTRATOR.md"
+  grep -qE "^[[:space:]]+<!-- gaia:orchestrator-step flow-checks -->$" "$FIXTURE_PLAN/ORCHESTRATOR.md"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
 @test "blocks copied as a planner copies them pass plan-verify.sh without a spec" {
+  local -a order=()
+  local sentinel
+  while IFS= read -r sentinel; do order+=("$sentinel"); done < <(assembled_sentinels spec-less)
+  [ "${#order[@]}" -eq "$((SPEC_DERIVED_STEP_COUNT - 1))" ]
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RESUME" "$S_YIELD" "$S_SPLIT" "$S_REVIEW" "$S_RETRY" "$S_WORTH" "$S_OVERLAP" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "${order[@]}"
+  grep -qF "$S_FLOW" "$FIXTURE_PLAN/ORCHESTRATOR.md" && return 1
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
-
-# ---------- pinned literals ----------
-
-@test "the render block routes exit 3 and runs on every resume, and stop conditions name the SPEC reopen" {
-  check_pinned_literals "$PLANNER_MD"
-}
-
-@test "red twin: removing any routing literal fails the literal check" {
-  local literal plan_copy="$BATS_TEST_TMPDIR/planner.md"
-  for literal in 'Exit 3' 'every resume' 'reopen the SPEC'; do
-    awk -v literal="$literal" '{ while ((i = index($0, literal)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(literal)) } { print }' "$PLANNER_MD" >"$plan_copy"
-    if cmp -s "$PLANNER_MD" "$plan_copy"; then echo "'$literal' is not in planner.md" >&2; return 1; fi
-    run check_pinned_literals "$plan_copy"
-    [ "$status" -ne 0 ] || { echo "removing '$literal' did not fail the check" >&2; return 1; }
-  done
 }
 
 # ---------- pre-flight sweep call sites and order ----------
@@ -413,20 +540,20 @@ resume_point() {
   bash "$RESUME_POINT" --plan-dir "$PROGRESS_DIR" --phases 3 --git-dir "$REPO" | sed -n 1p
 }
 
-@test "the UAT render, wiki promotion and gate HALTED blocks leave the resume point unchanged" {
+@test "the flow checks, wiki promotion and gate HALTED blocks leave the resume point unchanged" {
   resume_fixture
   printf '## Phase 1, One\nCommit: %s\n\n_No notes._\n\n## Phase 2, Two\nCommit: %s\n\n_No notes._\n' "$SHA_ONE" "$SHA_TWO" >"$PROGRESS_DIR/PROGRESS.md"
   baseline="$(resume_point)"
   [ "$baseline" = "3" ]
   cat >>"$PROGRESS_DIR/PROGRESS.md" <<'EOF'
 
-## UAT render
-Commit: none (nothing changed)
-Summary: written 0, rewritten 0, unchanged 1, preserved 0, deleted 0, conflict 0
+## Flow checks
+Result: every flow has a test changed on the branch
+Flow tests: .gaia/tests/lib/a.bats
 
-## UAT render (HALTED)
-Reason: UAT render conflict
-Spec files: apps/web/.playwright/e2e/checkout/a.spec.ts changed-and-edited
+## Flow checks (HALTED)
+Reason: flow coverage failed after one fixer round
+Failures: flow-coverage: a flow test not changed on the branch
 
 ## Wiki promotion
 Default: ask   Choice: skipped-unattended
@@ -450,15 +577,15 @@ Pages: wiki/concepts/Page.md   Commit: def5678
 Reason: summary-verify.sh failed: no body
 
 ## Phase 3, Three (HALTED)
-Reason: UAT gate failed
-Spec files: apps/web/.playwright/e2e/checkout/a.spec.ts failed
+Reason: flow test failed in the closing gate
+Failures: .gaia/tests/lib/a.bats failed
 EOF
   [ "$(resume_point)" = "$baseline" ]
 }
 
 @test "red twin: a HALTED phase 2 with no Commit line lowers the resume point" {
   resume_fixture
-  printf '## Phase 1, One\nCommit: %s\n\n_No notes._\n\n## Phase 2, Two (HALTED)\nReason: UAT gate failed\n' "$SHA_ONE" >"$PROGRESS_DIR/PROGRESS.md"
+  printf '## Phase 1, One\nCommit: %s\n\n_No notes._\n\n## Phase 2, Two (HALTED)\nReason: flow test failed in the closing gate\n' "$SHA_ONE" >"$PROGRESS_DIR/PROGRESS.md"
   [ "$(resume_point)" = "2" ]
 }
 
@@ -633,160 +760,13 @@ check_final_summary_names_worthiness() {
   [ "$status" -ne 0 ]
 }
 
-# ---------- routing ladder and the e2e-or-route triggers ----------
+# ---------- lifecycle.md's kept owning-phase gate and pre-audit UAT checks ----------
 
-# capability_tokens_of_header: the closed browser-capability list, one token
-# per line, read from Test Layering's real-browser list.
-capability_tokens_of_header() {
-  local tokens
-  tokens=$(awk '
-    $0 == "## When a test needs a real browser" { inside = 1; next }
-    inside && /^## / { inside = 0 }
-    inside && /^- / {
-      line = $0
-      sub(/^- (`|\*\*)/, "", line)
-      sub(/(`|\*\*).*$/, "", line)
-      print line
-    }
-  ' "$REPO_ROOT/wiki/decisions/Test Layering.md")
-  [ "$(printf '%s\n' "$tokens" | grep -c .)" -eq 5 ] || { printf 'expected five capability names\n' >&2; return 1; }
-  printf '%s\n' "$tokens"
-}
-
-# check_ladder <planner>: the operational routing ladder, the link to the
-# principle's page, and no copy of that page's rationale.
-check_ladder() {
-  local file="$1" para needle tokens token
-  tokens="$(capability_tokens_of_header)"
-  [ "$(wc -l <<<"$tokens" | tr -d ' ')" -eq 5 ] || { printf 'expected five capability tokens\n' >&2; return 1; }
-  para="$(sed -n '/Route each UAT by the ladder/,/is the owning phase number/p' "$file")"
-  [ -n "$para" ] || { printf 'no routing ladder paragraph\n' >&2; return 1; }
-  for needle in \
-    'wiki/decisions/Test Layering.md' \
-    'only a real browser can show' \
-    'one journey per user flow' \
-    'API-only behavior goes here, or to no UAT when it is not a contract worth pinning' \
-    '`real-server`, driven by Playwright'"'"'s request fixture with no page' \
-    'a then-clause naming only server-rendered HTML with no client behavior' \
-    '4. `browser` only when' \
-    'one HTTP check per route module where wiring is the risk' \
-    'a forged request against a live route' \
-    '`maxRedirects: 0`' \
-    'asserts the status and the `Location` header, and states its actor' \
-    'also carries one real-server check per guarded route module' \
-    'as a `real-server` row when a UAT names it and otherwise as a task its owning phase delivers' \
-    'A new plan never routes to `e2e`' \
-    'names the file of the guard' \
-    '.gaia/scripts/spec/plan-verify.sh' \
-    'Browser capability (<uat_id>)' \
-    'Real-server reason (<uat_id>)' \
-    'serializeForm' \
-    'when that HTML is itself the SPEC'"'"'s requirement' \
-    'A status, refusal or error outcome a direct `loader` or `action` call returns routes by step 2 even when the SPEC names the page or error boundary that renders it' \
-    'the UAT takes a `route` row and its owning phase delivers the HTML check as a real-server task' \
-    'A JavaScript-disabled Given or a native form rules out `browser` and nothing else'; do
-    grep -qF -- "$needle" <<<"$para" || { printf 'ladder lacks: %s\n' "$needle" >&2; return 1; }
-  done
-  while IFS= read -r token; do
-    grep -qF -- "$token" <<<"$para" || { printf 'ladder lacks capability: %s\n' "$token" >&2; return 1; }
-  done <<<"$tokens"
-  for needle in 'a client-submitted form' 'a multi-page journey' 'prints a non-fatal WARN on a `browser` row' \
-    'route to `real-server`, and a real-server form post' 'an error-boundary page' 'an element shown or hidden by role or status'; do
-    grep -qF -- "$needle" <<<"$para" && { printf 'ladder still holds: %s\n' "$needle" >&2; return 1; }
-  done
-  grep -qF -- 'the word lists live in the header' "$file" && { printf 'planner.md still describes the word-list WARN\n' >&2; return 1; }
-  grep -qF -- 'the route layer is the default home for behavior' "$file" && { printf 'planner.md copies the rationale phrase\n' >&2; return 1; }
-  grep -qF -- '| <uat_id> | route | <owning phase> | <kebab-case feature path, no tests segment> | <behavior-named-kebab-case>.test.ts |' "$file" || { printf 'no route row in the routing table example\n' >&2; return 1; }
-  grep -qF -- '| <uat_id> | real-server |' "$file" || { printf 'no real-server row in the routing table example\n' >&2; return 1; }
-  grep -qF -- '| <uat_id> | browser |' "$file" || { printf 'no browser row in the routing table example\n' >&2; return 1; }
-  grep -qF -- '| <uat_id> | e2e |' "$file" && { printf 'the routing table example restores an e2e row\n' >&2; return 1; }
-  if grep -v 'A new plan never routes to `e2e`' <<<"$para" | grep -qF '`e2e`'; then
-    printf 'a bare e2e surface survives in the ladder paragraph\n' >&2; return 1
-  fi
-  return 0
-}
-
-# check_route_triggers <planner>: each render, gate and implementer trigger
-# covers a route row as well as an e2e row.
-check_route_triggers() {
-  local file="$1" needle
-  for needle in \
-    'Skipped: no e2e-routed or route-routed UATs' \
-    'appears in a `real-server`, `browser`, `e2e` or `route` row of' \
-    'a spec under `<frontend package>/.playwright/e2e/` or a route test under `<frontend package>/app/route-tests/`'; do
-    grep -qF -- "$needle" "$file" || { printf 'planner.md lacks: %s\n' "$needle" >&2; return 1; }
-  done
-  grep -qF -- 'Skipped: no e2e-routed UATs' "$file" && { printf 'the e2e-only skip line survives\n' >&2; return 1; }
-  grep -qF -- 'appears in an `e2e` or `route` row of' "$file" && { printf 'the pre-split gate trigger survives\n' >&2; return 1; }
-  grep -qF -- 'appears in an `e2e` row of' "$file" && { printf 'the e2e-only gate trigger survives\n' >&2; return 1; }
-  return 0
-}
-
-@test "planner.md holds the routing ladder, links the layering page and copies no rationale" {
-  check_ladder "$PLANNER_MD"
-}
-
-@test "red twin: dropping a ladder clause, the link or adding the rationale phrase fails" {
-  local copy="$BATS_TEST_TMPDIR/planner.md" needle
-  for needle in 'one journey per user flow' 'wiki/decisions/Test Layering.md' '`maxRedirects: 0`' 'also carries one real-server check per guarded route module' 'names the file of the guard' 'a forged request against a live route' 'a then-clause naming only server-rendered HTML with no client behavior' 'A new plan never routes to `e2e`'; do
-    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$copy"
-    run check_ladder "$copy"
-    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
-  done
-  { cat "$PLANNER_MD"; printf '\nWrite tests, not too many, mostly integration: the route layer is the default home for behavior.\n'; } >"$copy"
-  run check_ladder "$copy"
-  [ "$status" -ne 0 ]
-  local -a new_needles=('.gaia/scripts/spec/plan-verify.sh' 'Browser capability (<uat_id>)' 'Real-server reason (<uat_id>)' 'serializeForm' 'A JavaScript-disabled Given or a native form rules out `browser` and nothing else' 'when that HTML is itself the SPEC'"'"'s requirement' 'A status, refusal or error outcome a direct `loader` or `action` call returns routes by step 2 even when the SPEC names the page or error boundary that renders it' 'the UAT takes a `route` row and its owning phase delivers the HTML check as a real-server task')
-  while IFS= read -r needle; do new_needles+=("$needle"); done < <(capability_tokens_of_header)
-  for needle in "${new_needles[@]}"; do
-    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$copy"
-    run check_ladder "$copy"
-    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
-  done
-  for needle in 'a client-submitted form' 'a multi-page journey' 'prints a non-fatal WARN on a `browser` row' 'the word lists live in the header' \
-    'native forms route to `real-server`, and a real-server form post' 'an error-boundary page' 'an element shown or hidden by role or status'; do
-    awk -v needle="$needle" '/^    4\. `browser` only when/ { $0 = $0 " " needle } { print }' "$PLANNER_MD" >"$copy"
-    run check_ladder "$copy"
-    [ "$status" -ne 0 ] || { echo "restoring '$needle' did not fail" >&2; return 1; }
-  done
-  sed 's/| <uat_id> | real-server |/| <uat_id> | e2e |/' "$PLANNER_MD" >"$copy"
-  run check_ladder "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "plan.md names the browser-row capability line among the plan checks" {
-  grep -qF -- '`browser`-routed UAT has its capability line in a task doc' "$PLAN_MD"
-}
-
-@test "red twin: plan.md without the capability-line clause fails the needle" {
-  local copy="$BATS_TEST_TMPDIR/plan.md"
-  sed 's/`browser`-routed UAT has its capability line in a task doc/removed/' "$PLAN_MD" >"$copy"
-  run grep -qF -- '`browser`-routed UAT has its capability line in a task doc' "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the render, gate and implementer triggers cover a route row, and lifecycle.md and uat-write.md say so" {
-  check_route_triggers "$PLANNER_MD"
+@test "lifecycle.md's owning-phase gate covers a route row, and uat-write.md says so" {
   grep -qF 'appears in a `real-server`, `browser`, `e2e` or `route` row' "$LIFECYCLE_MD"
   grep -qF 'no owned UAT tests' "$LIFECYCLE_MD"
   grep -qF 'no owned e2e specs' "$LIFECYCLE_MD" && return 1
   grep -qF 'Skipped: no e2e-routed or route-routed UATs' "$REPO_ROOT/.claude/skills/gaia/references/spec/uat-write.md"
-}
-
-@test "red twin: reverting any trigger to e2e alone fails the trigger check" {
-  local copy="$BATS_TEST_TMPDIR/planner.md"
-  sed 's/Skipped: no e2e-routed or route-routed UATs/Skipped: no e2e-routed UATs/' "$PLANNER_MD" >"$copy"
-  run check_route_triggers "$copy"
-  [ "$status" -ne 0 ]
-  sed 's/appears in a `real-server`, `browser`, `e2e` or `route` row of/appears in an `e2e` row of/' "$PLANNER_MD" >"$copy"
-  run check_route_triggers "$copy"
-  [ "$status" -ne 0 ]
-  sed 's/appears in a `real-server`, `browser`, `e2e` or `route` row of/appears in an `e2e` or `route` row of/' "$PLANNER_MD" >"$copy"
-  run check_route_triggers "$copy"
-  [ "$status" -ne 0 ]
-  sed 's/ or a route test under `<frontend package>\/app\/route-tests\/`//' "$PLANNER_MD" >"$copy"
-  run check_route_triggers "$copy"
-  [ "$status" -ne 0 ]
 }
 
 # check_spec_lines <lifecycle>: the fidelity dispatch's Spec and Surface lines.
@@ -919,20 +899,18 @@ check_maintainer_note_costs() {
   [ "$status" -ne 0 ]
 }
 
-# ---------- plan-time directives never pick the surface ----------
+# ---------- plan-time directives never pick a test layer ----------
 
-# check_directive_routing <planner> <audit>: the planner routes by the ladder
-# before honoring a directive, and the SPEC audit writes a directive as the
-# property a test proves or the constraint the code meets, never the layer,
-# fixture or helper that proves it.
+# check_directive_routing <planner> <audit>: the planner's directive paragraph
+# carries no routing-ladder or surface wording, and the SPEC audit writes a
+# directive as the property a test proves or the constraint the code meets,
+# never the layer, fixture or helper that proves it.
 check_directive_routing() {
-  local planner="$1" audit="$2" para needle
+  local planner="$1" audit="$2" para word
   para="$(grep -F 'Its `## Plan-time directives` section' "$planner")"
-  for needle in \
-    'A directive constrains what a test proves or what the code does, never which surface a UAT routes to' \
-    'applies as written only where the ladder already routed the UAT there' \
-    'honor its intent on the routed surface'; do
-    grep -qF -- "$needle" <<<"$para" || { printf 'planner AUDIT_PATH paragraph lacks: %s\n' "$needle" >&2; return 1; }
+  [ -n "$para" ] || { printf 'planner.md has no AUDIT_PATH directive paragraph\n' >&2; return 1; }
+  for word in 'ladder' 'surface' 'routes to' 'routed'; do
+    grep -qiF -- "$word" <<<"$para" && { printf 'planner AUDIT_PATH paragraph still holds routing wording: %s\n' "$word" >&2; return 1; }
   done
   grep -qF -- 'Write it as the property a test proves or the constraint the code meets, never the test layer, fixture or helper that proves it' "$audit" ||
     { printf 'audit.md 7c lacks the property-not-layer rule\n' >&2; return 1; }
@@ -940,16 +918,18 @@ check_directive_routing() {
     { printf 'audit.md 7d template lacks the no-layer clause\n' >&2; return 1; }
 }
 
-@test "a plan-time directive never picks the test surface, in planner.md and the SPEC audit" {
+@test "a plan-time directive never picks a test layer, in planner.md and the SPEC audit" {
   check_directive_routing "$PLANNER_MD" "$AUDIT_MD"
 }
 
-@test "red twin: dropping either half of the directive rule fails" {
+@test "red twin: routing wording in the directive paragraph, or an audit without the no-layer rule, fails" {
+  check_directive_routing "$PLANNER_MD" "$AUDIT_MD"
   local needle plan_copy="$BATS_TEST_TMPDIR/planner.md" audit_copy="$BATS_TEST_TMPDIR/audit.md"
-  for needle in 'never which surface a UAT routes to' 'applies as written only where the ladder already routed the UAT there' 'honor its intent on the routed surface'; do
-    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$PLANNER_MD" >"$plan_copy"
+  for needle in 'route it by the ladder first' 'honor its intent on the routed surface'; do
+    awk -v needle="$needle" '/Its `## Plan-time directives` section/ { $0 = $0 " " needle "." } { print }' "$PLANNER_MD" >"$plan_copy"
+    cmp -s "$PLANNER_MD" "$plan_copy" && { echo "the directive paragraph is not in planner.md" >&2; return 1; }
     run check_directive_routing "$plan_copy" "$AUDIT_MD"
-    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
+    [ "$status" -ne 0 ] || { echo "adding '$needle' did not fail" >&2; return 1; }
   done
   for needle in 'never the test layer, fixture or helper that proves it' 'naming no test layer, fixture or helper'; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
@@ -958,18 +938,18 @@ check_directive_routing() {
   done
 }
 
-# ---------- a directive or a UAT's listed cases never add a test file ----------
+# ---------- a directive never adds a test file, and a flow is one test ----------
 
-# A directive written as a test demand, or the cases a SPEC lists for a UAT
-# given their own file, let a plan name tests beyond the owned acceptance
-# tests, the required real-server checks and both-condition unit tests, which
-# breaks the trophy's one test per behavior.
+# A directive written as a test demand, or a flow's paths split across files,
+# let a plan name tests beyond the one flow test per flow and both-condition
+# unit tests, which breaks the trophy's one test per behavior.
 DIRECTIVE_NEW_TEST_NEEDLE='It never asks for a new test, a test file, or a rule proven on its own'
-UNCOVERED_RULE_NEEDLE='Any other finding that a rule or case set has no UAT proving it is `spec_defect`, never `plan_directive`'
-FOLD_INTO_UAT_NEEDLE='folds into the intent as a case listed for that UAT, never into its then-clause; a new UAT is added only for a behavior no UAT states'
-HONOR_INSIDE_NEEDLE='as a constraint on the code the task delivers or an assertion inside a test a task doc may name (`## Plan files`)'
-DIRECTIVE_FOLLOW_UP_NEEDLE='a directive that would need any other test goes under `## Follow-ups` in `README.md` instead'
-CASE_ROWS_NEEDLE='Cases the SPEC lists for a UAT are rows of that UAT'"'"'s own parameterized test on its routed surface, real-server included, and only those cases: never a second file'
+UNCOVERED_RULE_NEEDLE='Any other finding that a rule has no flow or success criterion stating it is `spec_defect`, never `plan_directive`'
+FOLD_INTO_UAT_NEEDLE='folds into the intent or a success criterion, never into the flow as a branch or case list; a new flow is added only for a critical path no flow names'
+HONOR_INSIDE_NEEDLE='or an assertion inside a flow test the plan names'
+DIRECTIVE_OTHER_TEST_NEEDLE='any other test'
+DIRECTIVE_FOLLOW_UP_NEEDLE='`## Follow-ups`'
+FLOW_TEST_PATHS_NEEDLE='covering the happy path and each error path the build has'
 
 # check_directive_test_scope <planner> <audit>
 check_directive_test_scope() {
@@ -978,20 +958,21 @@ check_directive_test_scope() {
     grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
   done
   para="$(grep -F 'Its `## Plan-time directives` section' "$planner")"
-  for needle in "$HONOR_INSIDE_NEEDLE" "$DIRECTIVE_FOLLOW_UP_NEEDLE"; do
+  for needle in "$HONOR_INSIDE_NEEDLE" "$DIRECTIVE_OTHER_TEST_NEEDLE" "$DIRECTIVE_FOLLOW_UP_NEEDLE"; do
     grep -qF -- "$needle" <<<"$para" || { printf 'planner AUDIT_PATH paragraph lacks: %s\n' "$needle" >&2; return 1; }
   done
-  grep -qF -- "$CASE_ROWS_NEEDLE" "$planner" || { printf 'planner.md lacks the case-rows rule\n' >&2; return 1; }
+  grep -qF -- "$FLOW_TEST_PATHS_NEEDLE" "$planner" || { printf 'planner.md lacks the one-test-per-flow paths rule\n' >&2; return 1; }
 }
 
-@test "a plan-time directive or a UAT's listed cases never add a test file, in the SPEC audit and planner.md" {
+@test "a plan-time directive never adds a test file and a flow's paths stay in its one test, in the SPEC audit and planner.md" {
   check_directive_test_scope "$PLANNER_MD" "$AUDIT_MD"
 }
 
-@test "red twin: dropping any clause of the directive and listed-case test scope fails" {
+@test "red twin: dropping any clause of the directive and flow-test scope fails" {
+  check_directive_test_scope "$PLANNER_MD" "$AUDIT_MD"
   local needle file copy mutated
   for needle in "$DIRECTIVE_NEW_TEST_NEEDLE" "$UNCOVERED_RULE_NEEDLE" "$FOLD_INTO_UAT_NEEDLE" \
-    "$HONOR_INSIDE_NEEDLE" "$DIRECTIVE_FOLLOW_UP_NEEDLE" "$CASE_ROWS_NEEDLE"; do
+    "$HONOR_INSIDE_NEEDLE" "$DIRECTIVE_OTHER_TEST_NEEDLE" "$DIRECTIVE_FOLLOW_UP_NEEDLE" "$FLOW_TEST_PATHS_NEEDLE"; do
     mutated=0
     for file in "$PLANNER_MD" "$AUDIT_MD"; do
       grep -qF -- "$needle" "$file" || continue
@@ -1015,13 +996,12 @@ check_directive_test_scope() {
 # check_markup_rule_placement <audit> <template>: the SPEC audit's testability
 # lens, its refuter and its directive rule send a page-markup or accessibility
 # structure rule to one plan-time directive naming the page, and the SPEC
-# template keeps such a rule out of a UAT's then-clause. Inside a then-clause
-# the rule can force the UAT onto a real-server test instead of a route test.
+# template keeps such a rule out of a success criterion and a flow name.
 check_markup_rule_placement() {
   local audit="$1" template="$2" needle
   for needle in \
-    'propose a plan-time directive stating that rule for the page or component it applies to, never UAT text' \
-    'A finding whose fix is a page-markup or accessibility structure rule is `plan_directive` even when it cites a UAT' \
+    'propose a plan-time directive stating that rule for the page or component it applies to, never flow or success-criterion text' \
+    'A finding whose fix is a page-markup or accessibility structure rule is `plan_directive` even when it cites a flow' \
     'is one directive naming the page or component it applies to'; do
     grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
   done
@@ -1035,7 +1015,7 @@ check_markup_rule_placement() {
 
 @test "red twin: dropping any markup-rule sentence fails" {
   local needle audit_copy="$BATS_TEST_TMPDIR/audit.md" template_copy="$BATS_TEST_TMPDIR/spec-template.md"
-  for needle in 'never UAT text' 'even when it cites a UAT' 'naming the page or component it applies to'; do
+  for needle in 'never flow or success-criterion text' 'even when it cites a flow' 'naming the page or component it applies to'; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
     run check_markup_rule_placement "$audit_copy" "$SPEC_TEMPLATE_MD"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }

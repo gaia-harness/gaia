@@ -74,9 +74,14 @@ assert_allowed() {
   grep -qF -- '.notebook/research/2026-10-07-review/README.md' <<<"$output"
 }
 
-@test "gh issue edit with a UAT number in the title is blocked" {
-  run_hook 'gh issue edit 12 --title "UAT-001 fails"'
+@test "gh issue edit with a FLOW number in the title is blocked" {
+  run_hook 'gh issue edit 12 --title "FLOW-001 fails"'
   assert_blocked
+}
+
+@test "gh issue edit with a UAT number in the title is allowed" {
+  run_hook 'gh issue edit 12 --title "UAT-001 fails"'
+  assert_allowed
 }
 
 @test "a gh pr view carrying a SPEC number is not read" {

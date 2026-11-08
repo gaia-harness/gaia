@@ -1,6 +1,6 @@
 # /gaia-plan
 
-Plan a complex feature using the task orchestration pattern. Do not implement anything. Term: UAT (an automated acceptance spec rendered from the SPEC; no human performs it).
+Plan a complex feature using the task orchestration pattern. Do not implement anything. Term: flow (a critical user flow the SPEC names, tested after the build).
 
 This command is the plan-specific case of the Workflow Doctrine (`wiki/concepts/Workflow Doctrine.md`), which defines roles, git ownership, checkpoint and resume, and model choice. For plan runs, the plan contract in `.claude/skills/gaia/references/plan/planner.md` (per-phase commits and gates, `PROGRESS.md`, the orchestrator's executor pins) governs where the two differ.
 
@@ -186,7 +186,7 @@ test -f "$PLAN_DIR/README.md" \
 
 If any required file is missing, surface the failure to the user with the planner's return payload. Do not retry silently, the user decides through `AskUserQuestion`: `Investigate first` (Recommended) or `Re-spawn the planner`. Never proceed to step 4.6 with an incomplete plan folder.
 
-Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, and for a spec-derived plan that the README's UAT routing table validates against the SPEC and every `story`-routed UAT has its criterion line in a task doc and every `browser`-routed UAT has its capability line in a task doc. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
+Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, and for a spec-derived plan that every SPEC flow has exactly one `Flow test` line, in a task doc of the closing phase, at the flow's expected path, that every closing-phase task doc carries exactly one such line, that each task doc maps to one README phase row, and that the closing phase's `ORCHESTRATOR.md` entry runs each flow test. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
 
 ```bash
 if [[ -n "${SPEC_PATH:-}" ]]; then
@@ -196,7 +196,7 @@ else
 fi
 ```
 
-A non-zero exit is handled exactly like a missing file. `WARN:` lines on a passing run are surfaced too; they flag a UAT that may be misrouted. This check runs even when step 4.6 skips the decomposition audit.
+A non-zero exit is handled exactly like a missing file. This check runs even when step 4.6 skips the decomposition audit.
 
 ### 4.6. Adversarial decomposition audit
 

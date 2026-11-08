@@ -300,15 +300,15 @@ menus_fit() {
   [ "$status" -ne 0 ]
 }
 
-# --- e. the coverage lens checks UATs against the SPEC's own rules ------------
+# --- e. the coverage lens checks flows against the SPEC's own rules ------------
 
 COV_BULLET='- **Coverage & consistency (id prefix `COV`).**'
 RT_BULLET='- **Red-team & feasibility (id prefix `RT`).**'
-IMPOSSIBLE_UAT_CLAUSE="UATs whose \`given\`, \`when\` or \`then\` the SPEC's own behavior rules make impossible, such as a control, transition or value the SPEC allows only in another state (cite the UAT line and the rule line); "
+IMPOSSIBLE_UAT_CLAUSE="flows the SPEC's own behavior rules make impossible, such as a control, transition or value the SPEC allows only in another state (cite the flow line and the rule line); "
 IMPOSSIBLE_UAT_NEEDLES=(
   "the SPEC's own behavior rules make impossible"
   'allows only in another state'
-  'cite the UAT line and the rule line'
+  'cite the flow line and the rule line'
 )
 
 # cov_flags_impossible_uat <root>: audit.md has exactly one coverage lens
@@ -330,11 +330,11 @@ remove_text() {
 }
 
 # bats test_tags=whole-tree
-@test "e. the coverage lens flags a UAT the SPEC's own rules make impossible" {
+@test "e. the coverage lens flags a flow the SPEC's own rules make impossible" {
   cov_flags_impossible_uat "$PLAYBOOK_ROOT"
 }
 
-@test "e. the impossible-UAT check goes red when any needle is dropped" {
+@test "e. the impossible-flow check goes red when any needle is dropped" {
   local needle copy
   for needle in "${IMPOSSIBLE_UAT_NEEDLES[@]}"; do
     copy="$(scratch_copy)"
@@ -344,7 +344,7 @@ remove_text() {
   done
 }
 
-@test "e. the impossible-UAT check goes red when the clause moves to the red-team lens" {
+@test "e. the impossible-flow check goes red when the clause moves to the red-team lens" {
   copy="$(scratch_copy)"
   audit="$copy/$REFERENCES/spec/audit.md"
   grep -qF -- "$IMPOSSIBLE_UAT_CLAUSE" "$audit"

@@ -14,18 +14,30 @@ success_criteria:
   - <Observable outcome that, if true, proves the feature works.>
   - <One bullet per criterion. No internal mechanism, only outcomes
     a human or test can verify from outside the system.>
-uats:
-  - uat_id: UAT-NNN
-    given: <Initial state, preconditions a verifier can establish.>
-    when: <Action, a single trigger, user-driven or system-driven.>
-    then: <Observable outcome, concrete and falsifiable. No "should",
-      no hedging. The verifier can read this and write a test
-      assertion against it. A UAT states a rule with one representative
-      journey; case tables belong to one parameterized test at the layer the trophy rule picks (wiki/decisions/Test Layering.md),
-      so do not list every input value or outcome here. State what the user observes.
-      A page-markup or accessibility structure rule (an element's whole
-      text, a heading level) is not a then-clause; the SPEC audit
-      records it as a plan-time directive.>
+flows:
+  # A flow is a critical user path: breaking it blocks a user's main task or
+  # risks data, money or security. No quota and no pinned count. A flow has no
+  # branch list and no Given/When/Then. A flow names one critical user path; case tables belong to one parameterized test at the layer the trophy rule picks (wiki/decisions/Test Layering.md), so list no inputs, branches or outcomes here.
+  # A slug may repeat an earlier SPEC's slug on purpose: that flow is covered
+  # by extending the existing test file.
+  # A page-markup or accessibility structure rule (an element's whole text, a
+  # heading level) is never a flow name or a success criterion; the SPEC audit
+  # records it as a plan-time directive.
+  # Web flow: covers lists folders relative to the frontend package root, and
+  # the flow test declares them with @covers.
+  - flow_id: FLOW-NNN
+    slug: <kebab-case-slug>
+    name: <The critical user path, in one line.>
+    why: <Why breaking it matters: the main task blocked, or the data, money
+      or security at risk.>
+    covers: [<folder relative to the frontend package root>, ...]
+  # Command flow: test_path is the repo-root-relative test path; covers and
+  # @covers apply to web flows only.
+  - flow_id: FLOW-NNN
+    slug: <kebab-case-slug>
+    name: <The critical command path, in one line.>
+    why: <Why breaking it matters.>
+    test_path: <repo-root-relative test path>
 scope_boundaries:
   always:
     - <Behavior that MUST hold for every invocation. Imperative voice.>
@@ -85,7 +97,7 @@ specs before this feature can be invoked. List explicitly.>
   SPEC. Mark these clearly.>
 - <Adopter-owned end-to-end: behavior only a real backend can show, such
   as data surviving a restart, a database reset, or a production start
-  against a real store. Name it here, never as a UAT: GAIA's layers run
+  against a real store. Name it here, never as a flow: GAIA's layers run
   against MSW handlers that mirror the API contract, so it belongs to the
   project's own end-to-end suite.>
 
