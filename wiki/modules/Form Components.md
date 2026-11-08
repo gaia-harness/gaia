@@ -14,7 +14,7 @@ tags: [module, components, forms]
 
 # Form Components
 
-`ConformField` wires one [[Conform]] field to its label, description and errors, and the caller renders the ui control ([[shadcn Component Layer]]) as its child, spreading Conform's props. `ConformFieldError` renders a field's errors. Each control's accessible name, invalid state, required state and keyboard behavior come from the ui component plus Conform's attributes, and [[Zod]] supplies validation.
+`ConformField` wires one [[Conform]] field to its label, description and errors, and the caller renders the ui control ([[shadcn Component Layer]]) as its child, spreading Conform's props. `ConformFieldError` renders a field's errors. Each control's invalid state, required state and keyboard behavior come from the ui component plus Conform's attributes, its accessible name comes from the label `ConformField` links to it, and [[Zod]] supplies validation.
 
 ## The wrapper
 
@@ -26,9 +26,11 @@ tags: [module, components, forms]
 
 Groups of checkboxes or radios stay composed: a `FieldSet` with a `FieldLegend`, a ui `Field` per option, and `ConformFieldError`. Checkboxes share one name through `getCollectionProps`.
 
+## Submit button and reference
+
 The submit button is a `ui/button` that shows a `ui/spinner` and disables itself while the navigation is submitting.
 
-The step-by-step pattern, the Zod schema and action wiring are in `apps/web/.claude/skills/react-code/references/conform-forms.md`. The runnable reference is `apps/web/app/components/form/tests/composed-form.tsx` and its story, whose `.test()` behaviors are the tests ([[Stories as Tests]]).
+The step-by-step pattern and the Zod schema and action wiring are in `apps/web/.claude/skills/react-code/references/conform-forms.md`. The runnable reference is `apps/web/app/components/form/tests/composed-form.tsx` and its story, whose `.test()` behaviors are the tests ([[Stories as Tests]]).
 
 ## Conform + custom components
 
