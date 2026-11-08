@@ -47,7 +47,7 @@
 # the glob was case-sensitive, and any path under a secrets directory matches
 # where the glob reached only a file directly inside it. One narrows it: a
 # TypeScript file whose name mentions credentials is readable, because the bare
-# substring denied ordinary source and tests (a rendered login UAT spec named
+# substring denied ordinary source and tests (a login spec named
 # for invalid credentials) while no credential store uses that extension. A
 # Markdown file stays denied: a hand-written credentials note is plausible.
 #
@@ -238,7 +238,7 @@ is_secret_path() {
   esac
 
   # A TypeScript file whose name mentions credentials is source or tests about
-  # them (a login UAT named for invalid credentials), not a credential store;
+  # them (a login test named for invalid credentials), not a credential store;
   # no tool writes a secret store under those extensions. Markdown is not
   # excepted: a hand-written credentials note would be one.
   # A secrets/ directory below still denies one.

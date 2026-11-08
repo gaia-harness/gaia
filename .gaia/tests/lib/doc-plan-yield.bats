@@ -447,20 +447,6 @@ check_ledger_documents_yield_block() {
   lacks "$example" 'Commit:' || return 1
 }
 
-check_lifecycle_yield_block_no_commit() {
-  local file="$1/$LIFECYCLE_REL" text
-  text="$(cat "$file")"
-  in_order "$text" \
-    'A HALTED phase block carries no `Commit:` line, so a resume re-runs the phase.' \
-    'A yield block (`## Phase N, <title> (YIELD k)`, format owned by `plan/planner.md`) carries no `Commit:` line either.' || return 1
-}
-
-check_lifecycle_render_ancestry() {
-  local text
-  text="$(cat "$1/$LIFECYCLE_REL")"
-  in_order "$text" 'take the Phase 1 SHA from the last `## Phase 1` block carrying a `Commit:` line' || return 1
-}
-
 check_task_doc_naming() {
   local line
   line="$(grep -F '**One task doc per parallel workstream**' "$1/$PLANNER_REL")"
@@ -678,22 +664,6 @@ check_yield_limit_is_positive_integer() {
 
 @test "UAT-014 red: a reconnect sentence that drops the dirty tree fails" {
   red check_failed_reconnect_sentence "$PLANNER_REL" 'or the working tree is dirty, surface' 'or the branch moved, surface'
-}
-
-@test "UAT-019: lifecycle says a yield block carries no Commit line" {
-  green check_lifecycle_yield_block_no_commit
-}
-
-@test "UAT-019 red: a dropped lifecycle yield sentence fails" {
-  red check_lifecycle_yield_block_no_commit "$LIFECYCLE_REL" 'carries no `Commit:` line either.' 'carries a note.'
-}
-
-@test "UAT-019: lifecycle takes the Phase 1 SHA from the last block carrying a Commit line" {
-  green check_lifecycle_render_ancestry
-}
-
-@test "UAT-019 red: a reverted render-ancestry wording fails" {
-  red check_lifecycle_render_ancestry "$LIFECYCLE_REL" 'from the last `## Phase 1` block carrying' 'from its `## Phase 1` block carrying'
 }
 
 @test "UAT-009: the task doc naming rule requires lowercase kebab-case names" {

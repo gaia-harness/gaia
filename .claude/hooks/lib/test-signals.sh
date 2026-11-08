@@ -2,7 +2,7 @@
 # Shared helpers for computing a test file's signals, sourced by the worthiness
 # selection walk (.claude/hooks/lib/worthiness-selection.sh), the worthiness
 # presence check (.claude/hooks/worthiness-presence-check.sh), the worthiness
-# step (.gaia/scripts/worthiness-step.sh) and the RED hooks. Keeping the
+# step (.gaia/scripts/worthiness-step.sh). Keeping the
 # repo-relative normalization, the signal invocation and the extractor-refusal
 # text in one place keeps those callers in sync by construction.
 #

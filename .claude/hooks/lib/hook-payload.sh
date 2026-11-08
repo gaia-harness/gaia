@@ -54,9 +54,7 @@
 #   - A blocking hook that cannot load this file refuses with exit 2 and
 #     `BLOCKED: <hook> cannot load lib/hook-payload.sh, so this call cannot be
 #     checked. Fail-loud, not fail-open -- restore the library.`; an advisory
-#     hook exits 0. The one named exception is red-verify-commit-check.sh, which
-#     has no jq-availability arm, documents exit 0 when git, jq or node is
-#     unavailable, and so exits 0 on a load failure too.
+#     hook exits 0.
 #   - Fields outside this fixed set stay as the hook's own extra jq reads.
 
 [ -n "${GAIA_HOOK_PAYLOAD_SH:-}" ] && return 0

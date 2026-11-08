@@ -48,20 +48,20 @@ Before merging changes that touch any in-scope path, and before running `/gaia-w
 # FLOW / SPEC refs in wiki body prose (excluding log.md and meta/ audit reports)
 grep -rEn "FLOW-[0-9]+|SPEC-[0-9]+" wiki/ --include="*.md" --exclude="log.md" --exclude-dir="meta"
 
-# FLOW-NNN narrative refs in instruction files, spec-lifecycle scripts, and spec templates
+# FLOW-NNN narrative refs in instruction files and spec-lifecycle scripts
 # (functional fixture values are kept; the maintainer triages each match per
 # the structural-vs-narrative distinction in `.claude/rules/working-doc-ids.md`)
 grep -rEn "FLOW-[0-9]{3}" \
   .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ apps/web/.claude/ \
-  .gaia/scripts/spec/ .gaia/templates/spec/
+  .gaia/scripts/spec/
 
-# Concrete maintainer SPEC IDs in instruction files, spec-lifecycle scripts, and spec templates
+# Concrete maintainer SPEC IDs in instruction files and spec-lifecycle scripts
 grep -rEn "\bSPEC-[0-9]{3,}\b" \
   .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ apps/web/.claude/ \
-  .gaia/scripts/spec/ .gaia/templates/spec/
+  .gaia/scripts/spec/
 
 # Historical-style phrasing in wiki body prose
 grep -rEn "\bchanged from|was changed|previously (did|was|stated|had|used)|previously set|as of [0-9]{4}|in PR #?[0-9]+|in commit [a-f0-9]{6,}" wiki/ --include="*.md" --exclude="log.md" --exclude-dir="meta"
 ```
 
-Any non-empty match outside this rule's prose is a candidate for rewrite. The narrative-vs-structural triage for the `.claude/` / `.gaia/scripts/spec/` / `.gaia/templates/spec/` greps is a human read, the regex flags candidates; `.claude/rules/working-doc-ids.md` codifies what stays.
+Any non-empty match outside this rule's prose is a candidate for rewrite. The narrative-vs-structural triage for the `.claude/` / `.gaia/scripts/spec/` greps is a human read, the regex flags candidates; `.claude/rules/working-doc-ids.md` codifies what stays.

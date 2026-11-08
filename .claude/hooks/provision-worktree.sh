@@ -140,7 +140,7 @@ esac
 # ---------- carry forward per-tree ledger/report data under the tree key ----------
 # The per-tree .gaia/local segments moved one path segment deeper, keyed by
 # this tree's own gaia_tree_key, so multiple trees stop shadowing each other's
-# data at one shared unkeyed path: red-ledger/observations.jsonl,
+# data at one shared unkeyed path:
 # worthiness-ledger/worthiness.jsonl, forensics/<file>.
 # Every reader looks at the keyed path only -- this is the one place that
 # migrates the old data, so anything left behind here is gone from its own
@@ -158,8 +158,8 @@ esac
 # keyed file a live session already wrote, is left untouched and unkeyed
 # content never overwrites keyed content. Nothing to move is a silent
 # no-op; a tree key that could not be resolved, or a move that fails, is
-# not -- a stranded red-ledger or worthiness-ledger file is exactly the
-# condition that silently blocks the next commit gate, so both are logged
+# not -- a stranded worthiness-ledger file is exactly the
+# condition that silently blocks the next merge at the worthiness gate, so both are logged
 # loudly enough to act on.
 carry_forward_file() {
   local local_subdirectory="$1"
@@ -167,7 +167,7 @@ carry_forward_file() {
   local old="$tree/.gaia/local/$local_subdirectory/$file"
   [ -f "$old" ] || return 0
   if [ -z "$tree_key" ]; then
-    log "CARRY-FORWARD FAILED: $local_subdirectory/$file has no resolvable tree key for $tree -- move it to $local_subdirectory/<tree-key>/$file by hand, or a stranded ledger will silently block the next commit gate"
+    log "CARRY-FORWARD FAILED: $local_subdirectory/$file has no resolvable tree key for $tree -- move it to $local_subdirectory/<tree-key>/$file by hand, or a stranded ledger will silently block the next merge at the worthiness gate"
     return 0
   fi
   local new_directory="$tree/.gaia/local/$local_subdirectory/$tree_key"
@@ -176,7 +176,7 @@ carry_forward_file() {
   if mkdir -p "$new_directory" 2>/dev/null && mv "$old" "$new" 2>/dev/null; then
     log "carried forward $local_subdirectory/$file -> $local_subdirectory/$tree_key/$file"
   else
-    log "CARRY-FORWARD FAILED: $local_subdirectory/$file -> $local_subdirectory/$tree_key/$file -- move it by hand, or a stranded ledger will silently block the next commit gate"
+    log "CARRY-FORWARD FAILED: $local_subdirectory/$file -> $local_subdirectory/$tree_key/$file -- move it by hand, or a stranded ledger will silently block the next merge at the worthiness gate"
   fi
 }
 
@@ -193,7 +193,7 @@ carry_forward_directory_contents() {
   while IFS= read -r file_path; do
     base="$(basename "$file_path")"
     if [ -z "$tree_key" ]; then
-      log "CARRY-FORWARD FAILED: $local_subdirectory/$base has no resolvable tree key for $tree -- move it to $local_subdirectory/<tree-key>/$base by hand, or a stranded ledger will silently block the next commit gate"
+      log "CARRY-FORWARD FAILED: $local_subdirectory/$base has no resolvable tree key for $tree -- move it to $local_subdirectory/<tree-key>/$base by hand, or a stranded ledger will silently block the next merge at the worthiness gate"
       continue
     fi
     new_directory="$tree/.gaia/local/$local_subdirectory/$tree_key"
@@ -202,7 +202,7 @@ carry_forward_directory_contents() {
     if mkdir -p "$new_directory" 2>/dev/null && mv "$file_path" "$new" 2>/dev/null; then
       log "carried forward $local_subdirectory/$base -> $local_subdirectory/$tree_key/$base"
     else
-      log "CARRY-FORWARD FAILED: $local_subdirectory/$base -> $local_subdirectory/$tree_key/$base -- move it by hand, or a stranded ledger will silently block the next commit gate"
+      log "CARRY-FORWARD FAILED: $local_subdirectory/$base -> $local_subdirectory/$tree_key/$base -- move it by hand, or a stranded ledger will silently block the next merge at the worthiness gate"
     fi
   done < <(find "$old_directory" -maxdepth 1 -type f 2>/dev/null)
 }
@@ -216,8 +216,8 @@ carry_forward_directory_contents() {
 # and its contract is explicit that nothing under the backup is inspected or
 # merged. So without this step the per-tree entries -- including the ones
 # the carry-forward above has just keyed correctly -- end up inside a backup
-# nobody reads. A stranded RED observation is not a missing file: it silently
-# BLOCKS a commit the gate should pass, which is precisely the failure the
+# nobody reads. A stranded ledger entry is not a missing file: it silently
+# BLOCKS a merge the worthiness gate should pass, which is precisely the failure the
 # cutover's back-off condition names.
 #
 # So the keyed subtree moves to main's .gaia/local before the linker runs.
@@ -239,7 +239,7 @@ migrate_keyed_subtrees_to_main() {
   [ "$main_root" = "$tree" ] && return 0
 
   local local_subdirectory source destination
-  for local_subdirectory in red-ledger worthiness-ledger forensics; do
+  for local_subdirectory in worthiness-ledger forensics; do
     source="$tree/.gaia/local/$local_subdirectory/$tree_key"
     [ -d "$source" ] || continue
     destination="$main_root/.gaia/local/$local_subdirectory/$tree_key"
@@ -250,7 +250,7 @@ migrate_keyed_subtrees_to_main() {
     if mkdir -p "$main_root/.gaia/local/$local_subdirectory" 2>/dev/null && mv "$source" "$destination" 2>/dev/null; then
       log "migrated $local_subdirectory/$tree_key into $main_root/.gaia/local"
     else
-      log "CUTOVER MIGRATION FAILED: $local_subdirectory/$tree_key -- move it into $main_root/.gaia/local/$local_subdirectory/ by hand, or a stranded ledger will silently block the next commit gate"
+      log "CUTOVER MIGRATION FAILED: $local_subdirectory/$tree_key -- move it into $main_root/.gaia/local/$local_subdirectory/ by hand, or a stranded ledger will silently block the next merge at the worthiness gate"
     fi
   done
 }
@@ -301,7 +301,6 @@ migrate_audit_artifacts_to_main() {
 # which state it is in.
 if [ ! -L "$tree/.gaia/local" ]; then
   tree_key="$(gaia_tree_key "$tree" 2>/dev/null)" || tree_key=""
-  carry_forward_file "red-ledger" "observations.jsonl"
   carry_forward_file "worthiness-ledger" "worthiness.jsonl"
   carry_forward_directory_contents "forensics"
   migrate_keyed_subtrees_to_main

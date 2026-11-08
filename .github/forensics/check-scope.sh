@@ -70,7 +70,6 @@ dir|deny|wiki/
 dir|deny|studio/
 dir|deny|website/
 dir|deny|.notebook/
-dir|deny|.gaia/templates/spec/
 file|deny|.claude/skills/gaia/references/spec/clarify-prompts.md
 file|deny|.claude/skills/gaia/references/spec/system-prompt.md
 file|deny|.claude/skills/gaia/references/spec/spec-template.md

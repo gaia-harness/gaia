@@ -156,8 +156,8 @@ cat "$root/.gaia/local/plans/x.json"'
 @test "resolver: a hook that inherits its root via a resolver-backed lib, holding no literal of its own, passes" {
   local repo; repo="$(make_fixture_repo resolver-inherits)"
   add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
-. .claude/hooks/lib/red-ledger.sh
-ledger="$(red_ledger_path)"
+. .gaia/scripts/state-registry-lib.sh
+ledger="$(gaia_registry_path)"
 echo "$ledger"'
   run gaia_check_hook_scope_manifest "$repo"
   [ "$status" -eq 0 ]

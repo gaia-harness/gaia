@@ -303,7 +303,7 @@ JS
 
   # Target: each tree's own ledger, at worthiness-ledger/ (scope "per-tree",
   # never symlinked -- link-worktree.sh only symlinks scope:"shared" entries,
-  # exactly like its RED-ledger sibling), holds only its own observation.
+  # like every per-tree entry), holds only its own observation.
   # worthiness-ledger/ sits outside the audit/ directory that link-worktree.sh
   # symlinks WHOLESALE into main (audit/ carries four other scope:"shared"
   # entries), which is what made the two trees' appends land in the SAME
@@ -389,8 +389,7 @@ JS
     .gaia/scripts/main-root-lib.sh \
     .gaia/scripts/state-registry-lib.sh \
     .gaia/scripts/link-worktree.sh \
-    .claude/hooks/lib/red-ledger.sh \
-    .claude/hooks/lib/test-signals.sh
+    .claude/hooks/lib/worthiness-ledger.sh
   gaia_copy_registry "$MAIN"
   gaia_commit_all "$MAIN" "add link-worktree deps"
 
@@ -399,25 +398,25 @@ JS
   gaia_link_worktree "$WORKTREE_A"
   gaia_link_worktree "$WORKTREE_B"
 
-  # WHY the RED ledger is not symlinked, asked of the shipped code rather than
+  # WHY the worthiness ledger is not symlinked, asked of the shipped code rather than
   # asserted by hand: the registry classifies it per-tree, and the linker's own
   # shared-set function is the single thing that decides what gets a symlink. A
   # registry entry that started calling it shared -- the precise Phase-6
   # cutover risk this scenario guards -- fails here rather than silently
   # sharing the ledger.
   classify="$(run_in "$WORKTREE_A" -- bash -c \
-    '. .gaia/scripts/state-registry-lib.sh; gaia_registry_classify red-ledger/observations.jsonl' 2>/dev/null)"
+    '. .gaia/scripts/state-registry-lib.sh; gaia_registry_classify worthiness-ledger/worthiness.jsonl' 2>/dev/null)"
   [ "$classify" = "per-tree" ]
 
   linkable="$(run_in "$WORKTREE_A" -- bash -c \
     '. .gaia/scripts/state-registry-lib.sh; gaia_registry_linkable_paths' 2>/dev/null)"
   [ -n "$linkable" ]
-  grep -qxF red-ledger <<<"$linkable" && return 1
+  grep -qxF worthiness-ledger <<<"$linkable" && return 1
 
   # Positive control on the linker itself. link-worktree.sh always exits 0 by
   # contract (a broken hook must not break worktree creation), so a run that
   # linked NOTHING -- unreadable registry, no symlink permission -- would leave
-  # red-ledger/ unlinked too and every isolation check below would pass for the
+  # worthiness-ledger/ unlinked too and every isolation check below would pass for the
   # wrong reason. Assert that shared state really is shared, by resolution
   # rather than by "is a symlink".
   #
@@ -439,205 +438,45 @@ JS
   # No shared-state symlink exists for the per-tree entry in either tree. This
   # is the mechanism check for TODAY's per-entry linking; the physical-path
   # checks further down are what carry the guarantee across the cutover.
-  [ -L "$WORKTREE_A/.gaia/local/red-ledger" ] && return 1
-  [ -L "$WORKTREE_B/.gaia/local/red-ledger" ] && return 1
+  [ -L "$WORKTREE_A/.gaia/local/worthiness-ledger" ] && return 1
+  [ -L "$WORKTREE_B/.gaia/local/worthiness-ledger" ] && return 1
 
   # The shipped path function decides where each tree's ledger lives -- the
   # capture hook and the commit gate both address it through this one function
   # -- so the fixture asks GAIA where to write instead of hand-building a path.
-  LEDGER_A="$(run_in "$WORKTREE_A" -- bash -c '. .claude/hooks/lib/red-ledger.sh; red_ledger_path')"
-  LEDGER_B="$(run_in "$WORKTREE_B" -- bash -c '. .claude/hooks/lib/red-ledger.sh; red_ledger_path')"
+  LEDGER_A="$(run_in "$WORKTREE_A" -- bash -c '. .claude/hooks/lib/worthiness-ledger.sh; worthiness_ledger_path')"
+  LEDGER_B="$(run_in "$WORKTREE_B" -- bash -c '. .claude/hooks/lib/worthiness-ledger.sh; worthiness_ledger_path')"
   [ -n "$LEDGER_A" ]
   [ -n "$LEDGER_B" ]
 
   mkdir -p "$(dirname "$LEDGER_A")" "$(dirname "$LEDGER_B")"
-  printf '%s\n' '{"tree":"treeA","observation":"red-a"}' > "$LEDGER_A"
-  printf '%s\n' '{"tree":"treeB","observation":"red-b"}' > "$LEDGER_B"
+  printf '%s\n' '{"tree":"treeA","observation":"worth-a"}' > "$LEDGER_A"
+  printf '%s\n' '{"tree":"treeB","observation":"worth-b"}' > "$LEDGER_B"
 
   # The half that still holds AFTER the cutover, and the reason this scenario
   # is the named cutover guard. Once .gaia/local is ITSELF one symlink to main,
-  # red-ledger/ stays a plain directory while resolving inside main, so the -L
+  # worthiness-ledger/ stays a plain directory while resolving inside main, so the -L
   # checks above stop being sufficient on their own. Physical resolution is
   # what catches that: the two ledgers must sit in different real directories,
   # and neither in main's.
   PHYSICAL_PATH_A="$(cd "$(dirname "$LEDGER_A")" && pwd -P)"
   PHYSICAL_PATH_B="$(cd "$(dirname "$LEDGER_B")" && pwd -P)"
   [ "$PHYSICAL_PATH_A" != "$PHYSICAL_PATH_B" ]
-  [ "$PHYSICAL_PATH_A" != "$MAIN/.gaia/local/red-ledger" ]
-  [ "$PHYSICAL_PATH_B" != "$MAIN/.gaia/local/red-ledger" ]
+  [ "$PHYSICAL_PATH_A" != "$MAIN/.gaia/local/worthiness-ledger" ]
+  [ "$PHYSICAL_PATH_B" != "$MAIN/.gaia/local/worthiness-ledger" ]
 
   # Each tree's own observation is still there (a write that landed elsewhere,
   # or that the peer overwrote, fails here -- an absence check alone would pass
   # vacuously over an empty file), and neither ledger carries the other's.
-  grep -qF red-a "$LEDGER_A"
-  grep -qF red-b "$LEDGER_B"
-  grep -qF red-b "$LEDGER_A" && return 1
-  grep -qF red-a "$LEDGER_B" && return 1
+  grep -qF worth-a "$LEDGER_A"
+  grep -qF worth-b "$LEDGER_B"
+  grep -qF worth-b "$LEDGER_A" && return 1
+  grep -qF worth-a "$LEDGER_B" && return 1
 
-  if [ -e "$MAIN/.gaia/local/red-ledger/observations.jsonl" ]; then
-    echo "a per-tree RED observation resolved into main's copy" >&2
+  if [ -e "$MAIN/.gaia/local/worthiness-ledger/worthiness.jsonl" ]; then
+    echo "a per-tree worthiness observation resolved into main's copy" >&2
     return 1
   fi
-}
-
-@test "C4-07: one tree's RED never satisfies another tree's commit gate" {
-  MAIN="$(gaia_new_main gaia-c407-main)"
-  gaia_copy_real "$MAIN" \
-    .claude/hooks/red-verify-commit-check.sh \
-    .claude/hooks/capture-red-observations.sh \
-    .claude/hooks/lib/gaia-packages.sh \
-    .claude/hooks/lib/hook-payload.sh \
-    .claude/hooks/lib/jq-availability.sh \
-    .claude/hooks/lib/red-ledger.sh \
-    .claude/hooks/lib/test-signals.sh \
-    .claude/hooks/lib/repo-scope.sh \
-    .claude/hooks/lib/repo-scope-segment.sh \
-    .claude/hooks/lib/repo-scope-scan.sh \
-    .claude/hooks/lib/repo-scope-home.sh \
-    .gaia/scripts/main-root-lib.sh \
-    .gaia/scripts/state-registry-lib.sh \
-    .gaia/scripts/link-worktree.sh
-  gaia_copy_registry "$MAIN"
-  # The registry and descriptor are written as literals in the post-flip layout
-  # (package dir `apps/web`), not copied from the live repo, so this fixture
-  # proves the same layout whatever the real registry says.
-  # shellcheck disable=SC1091
-  . "$BATS_TEST_DIRNAME/../hooks/helpers/package-fixture.sh"
-  write_packages_moved "$MAIN"
-
-  # Both node helpers the gate calls (the signal extractor and the determinism
-  # classifier) resolve `typescript` via createRequire(import.meta.url), which
-  # is anchored to THEIR OWN on-disk file, not the caller's cwd. A plain
-  # gaia_copy_real copy would carry no node_modules of its own and could never
-  # resolve `typescript`; a symlink's realpath instead lands back in the real
-  # repo, where `typescript` is actually installed, so both helpers resolve it
-  # exactly as they do in production. Linked in MAIN, before the commit below,
-  # so treeA and treeB check out the IDENTICAL symlink (a git blob is just the
-  # target-path string) rather than two independently-constructed ones.
-  gaia_link_real "$MAIN" .gaia/scripts/red-ledger .gaia/scripts/test-signals .gaia/scripts/classifier
-
-  gaia_commit_all "$MAIN" "add RED-verify gate deps"
-
-  WORKTREE_A="$(gaia_add_worktree "$MAIN" treeA treeA)"
-  WORKTREE_B="$(gaia_add_worktree "$MAIN" treeB treeB)"
-  gaia_link_worktree "$WORKTREE_A"
-  gaia_link_worktree "$WORKTREE_B"
-
-  # A test under apps/web/app/utils/** so the determinism classifier (scoped to
-  # app/utils, app/services, app/hooks, and .ts under app/components) returns
-  # "strict" for it rather than "emergent" -- an emergent verdict would make
-  # the check hook skip the file outright, and the deny in check 2 below would
-  # never fire, for a reason that has nothing to do with tree isolation.
-  test_relative_path="apps/web/app/utils/c407/index.test.ts"
-  full_name="adds two numbers c407"
-  test_body='import {expect, test} from "vitest";
-test("adds two numbers c407", () => {
-  expect(1 + 1).toBe(2);
-});
-'
-  mkdir -p "$WORKTREE_A/apps/web/app/utils/c407" "$WORKTREE_B/apps/web/app/utils/c407"
-  # Both trees write the IDENTICAL body: same fullName, same content signal.
-  # That identity is the whole point -- it is what makes tree A's observation
-  # a candidate to satisfy tree B's gate for a test B never ran.
-  printf '%s' "$test_body" > "$WORKTREE_A/$test_relative_path"
-  printf '%s' "$test_body" > "$WORKTREE_B/$test_relative_path"
-
-  canned="$(gaia_make_temporary_directory gaia-c407-json)/canned.json"
-  jq -nc --arg name "$test_relative_path" --arg full "$full_name" '{
-    numTotalTestSuites: 1, numFailedTests: 1, numPassedTests: 0,
-    numTotalTests: 1, success: false,
-    testResults: [{
-      name: $name, status: "failed", message: "",
-      assertionResults: [
-        {title: $full, fullName: $full, status: "failed",
-         failureMessages: ["AssertionError: expected 1 to be 2"]}
-      ]
-    }]
-  }' > "$canned"
-
-  # Drive the REAL capture hook FROM <tree>'s OWN checkout, feeding the canned
-  # vitest json above through its documented RED_CAPTURE_JSON_OVERRIDE seam (a
-  # real vitest run in bats is impractical -- see red-verify-e2e.bats). The
-  # SIGNAL is NOT canned: the hook recomputes it from the staged file's real
-  # on-disk body via the (symlinked) signal helper, so what gets recorded is a
-  # genuine per-tree observation, not a fixture fiction. pwd and the payload's
-  # own .cwd both name <tree>, matching how the check hook below resolves the
-  # acting tree.
-  capture_in() {
-    local tree="$1"
-    local payload
-    payload=$(jq -nc --arg command_line "pnpm test --run $test_relative_path" --arg working_directory "$tree" \
-      '{tool_name:"Bash", tool_input:{command:$command_line}, cwd:$working_directory, tool_response:{stdout:"", stderr:"", interrupted:false}}')
-    run run_in "$tree" -- run_with RED_CAPTURE_JSON_OVERRIDE="$canned" -- \
-      gaia_deliver_hook "$payload" "$tree/.claude/hooks/capture-red-observations.sh"
-  }
-
-  # Drive the REAL check hook for a `git commit` PreToolUse, FROM <tree>'s OWN
-  # checkout -- never the real repo's copy, because the check hook derives its
-  # lib paths from BASH_SOURCE, so in production each worktree enforces with
-  # its own on-disk copy of the hook.
-  check_in() {
-    local tree="$1"
-    local payload
-    payload=$(jq -nc --arg command_line "git commit -m change" --arg working_directory "$tree" \
-      '{tool_name:"Bash", tool_input:{command:$command_line}, cwd:$working_directory}')
-    run run_in "$tree" -- gaia_deliver_hook "$payload" "$tree/.claude/hooks/red-verify-commit-check.sh"
-  }
-
-  # ---------------------------------------------------------------------------
-  # Check 1 -- the handshake works (positive control). Tree A records its own
-  # RED via the real capture hook, then stages the test; the real check hook
-  # run from A allows. Without this, a deny anywhere below could just as
-  # easily be this fixture never producing an allow at all.
-  # ---------------------------------------------------------------------------
-  capture_in "$WORKTREE_A"
-  [ "$status" -eq 0 ]
-
-  git -C "$WORKTREE_A" add "$test_relative_path"
-  check_in "$WORKTREE_A"
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" && return 1
-
-  # ---------------------------------------------------------------------------
-  # Check 2 -- the assertion. Tree B stages the IDENTICAL test; the RED exists
-  # ONLY in tree A's ledger, never in B's. The real check hook run from B
-  # denies: tree A's observation of the test failing is not tree B's
-  # observation of the test failing. This is the INVERSE of C4-06's "never
-  # blocks tree B's commit" clause -- C4-06 guards against one tree's state
-  # wrongly BLOCKING a peer's commit; this guards against one tree's state
-  # wrongly CLEARING a peer's gate. A gate that never falsely blocks can still
-  # falsely pass, and no assertion shaped like C4-06's catches that, so this
-  # is a distinct scenario, not a variant folded into it.
-  # ---------------------------------------------------------------------------
-  git -C "$WORKTREE_B" add "$test_relative_path"
-  check_in "$WORKTREE_B"
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" || return 1
-
-  # ---------------------------------------------------------------------------
-  # Check 3 -- the deny is caused by the missing per-tree observation, and
-  # nothing else. Record a RED in tree B too (the real capture hook, the same
-  # canned failure, the same on-disk body), then re-run the SAME check from
-  # the SAME tree: it now allows. Without this, check 2's deny could be
-  # produced by any fixture defect unrelated to isolation (a wrong staged
-  # path, a body the helper cannot parse, a missing node/typescript) and the
-  # scenario would still show a deny -- a vacuous "pass". Closing that
-  # vacuity is exactly what C4-06 was repaired for; omitting it here would
-  # reintroduce the same hole this suite exists to catch.
-  # ---------------------------------------------------------------------------
-  capture_in "$WORKTREE_B"
-  [ "$status" -eq 0 ]
-
-  check_in "$WORKTREE_B"
-  [ "$status" -eq 0 ]
-  # Not the assertion's final statement: a `grep ... && return 1` whose good
-  # case is grep failing (nothing found) would otherwise hand grep's own
-  # non-zero status back as the TEST's exit code when it is the function's
-  # last command, per .claude/rules/bats-assertions.md's "custom checks end
-  # the failing branch with an explicit return 1" note -- the same hazard in
-  # its final-statement form.
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" && return 1
-  return 0
 }
 
 @test "C4-08: one tree's forensics reports are not another tree's to read" {
@@ -655,7 +494,7 @@ test("adds two numbers c407", () => {
   gaia_link_worktree "$WORKTREE_B"
 
   # WHY this scenario exists and why it is not folded into C4-06 or C4-04:
-  # those two guard the RED ledger and the worthiness ledger, each of which is
+  # those two guard per-tree ledgers, each of which is
   # addressed by a shipped shell function. `forensics/` has no function and no
   # script at all -- it is instruction prose an agent executes, which
   # PROGRAM.md section 6 calls a fifth execution surface. Until

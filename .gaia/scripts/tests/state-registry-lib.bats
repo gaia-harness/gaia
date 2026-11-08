@@ -207,10 +207,10 @@ run_in_registry_repo() {
   [ "$status" -eq 0 ]
 }
 
-@test "gaia_registry_linkable_paths: a per-tree entry (red-ledger) never appears" {
+@test "gaia_registry_linkable_paths: a per-tree entry (worthiness-ledger) never appears" {
   run_in_repo gaia_registry_linkable_paths
   [ "$status" -eq 0 ]
-  grep -qxF 'red-ledger' <<<"$output" && return 1
+  grep -qxF 'worthiness-ledger' <<<"$output" && return 1
   return 0
 }
 
@@ -275,8 +275,8 @@ run_in_registry_repo() {
 
 # ========== gaia_registry_recognizes ==========
 
-@test "gaia_registry_recognizes: a known per-tree directory (red-ledger, type d) is recognized" {
-  run_in_repo gaia_registry_recognizes "red-ledger" d
+@test "gaia_registry_recognizes: a known per-tree directory (worthiness-ledger, type d) is recognized" {
+  run_in_repo gaia_registry_recognizes "worthiness-ledger" d
   [ "$status" -eq 0 ]
 }
 
@@ -328,10 +328,16 @@ run_in_registry_repo() {
 
 # ========== gaia_registry_classify ==========
 
-@test "gaia_registry_classify: red-ledger classifies as per-tree" {
-  run_in_repo gaia_registry_classify "red-ledger"
+@test "gaia_registry_classify: worthiness-ledger classifies as per-tree" {
+  run_in_repo gaia_registry_classify "worthiness-ledger"
   [ "$status" -eq 0 ]
   [ "$output" = "per-tree" ]
+}
+
+@test "gaia_registry_classify: a leftover red-ledger observations file classifies as residue" {
+  run_in_registry_repo gaia_registry_classify "red-ledger/observations.jsonl"
+  [ "$status" -eq 0 ]
+  [ "$output" = "residue" ]
 }
 
 @test "gaia_registry_classify: mentorship.json classifies as residue" {
@@ -356,7 +362,7 @@ run_in_registry_repo() {
   saved_path="$PATH"
   # shellcheck disable=SC2123 # deliberately blank PATH to make jq unfindable; restored right after the call
   PATH=""
-  run gaia_registry_classify "red-ledger"
+  run gaia_registry_classify "worthiness-ledger"
   PATH="$saved_path"
   [ "$status" -eq 1 ]
   [ -z "$output" ]
@@ -376,7 +382,7 @@ run_in_registry_repo() {
     "telemetry/token-rates.override.json:shared"
     "debt/count.json:shared"
     "debt/refresh-requested:shared"
-    "red-ledger/observations.jsonl:per-tree"
+    "red-ledger/observations.jsonl:residue"
     "worthiness-ledger/worthiness.jsonl:per-tree"
     "forensics/2026-07-23-x.md:per-tree"
     "codify/declines.json:shared"
@@ -706,7 +712,6 @@ telemetry-usage-branch-memo keep - - - - -
 telemetry-usage-sweep-lock owned - - - - -
 telemetry-usage-tmp age 7 - - file -
 debt-count-and-refresh keep - - - - -
-red-ledger tree-gone - - - - -
 audit-worthiness-ledger tree-gone - - - - -
 forensics tree-gone - - - - -
 codify-declines keep - - - - -

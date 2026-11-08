@@ -265,7 +265,7 @@ set_handler_if() {
 deny_guards_with_if() {
   jq -r '.hooks | to_entries[] | .key as $event | .value[] | .hooks[]
     | select(.["if"]) | (.command | capture("hooks/(?<name>[^\"]+)").name) as $name
-    | select($name | test("^(block-.*|pr-merge-audit-check|worthiness-presence-check|red-verify-commit-check)\\.sh$"))
+    | select($name | test("^(block-.*|pr-merge-audit-check|worthiness-presence-check)\\.sh$"))
     | "\($event) \($name)"' "$1"
 }
 

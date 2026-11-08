@@ -20,7 +20,6 @@ EMERGENT_GLOBS='["app/components/**/*.test.tsx",".playwright/**/*.spec.ts","app/
 SIBLING='apps/web/.playwright/e2e/sibling.spec.ts'
 SUBJECTS='apps/web/.playwright/e2e/subjects.spec.ts'
 DROPPABLE='apps/web/.playwright/e2e/droppable.spec.ts'
-RENDERED='apps/web/.playwright/e2e/rendered.spec.ts'
 LEGACY='apps/web/.playwright/e2e/legacy.spec.ts'
 LEGACY_EDITED='apps/web/.playwright/e2e/legacy-edited.spec.ts'
 ROUTE_SIBLING='apps/web/app/route-tests/records.test.ts'
@@ -35,7 +34,6 @@ SESSION_NAME='adds two numbers'
 SERVED='apps/web/.playwright/e2e/served.spec.ts'
 LOOPED='apps/web/.playwright/e2e/route-status.spec.ts'
 HELPERS='apps/web/.playwright/e2e/helpers.spec.ts'
-RENDERED_HELPERS='apps/web/.playwright/e2e/rendered-helpers.spec.ts'
 REPLACEMENT='apps/web/.playwright/e2e/demote-served.spec.ts'
 MIXED='apps/web/.playwright/e2e/mixed.spec.ts'
 TABLES='apps/web/app/route-tests/tables.server.test.ts'
@@ -219,19 +217,6 @@ test('answers a missing record over several lines', async ({request}) => {
   expect(
     response.status(),
   ).toBe(404);
-});
-EOF
-  cat >"$REPO/$RENDERED_HELPERS" <<'EOF'
-// gaia-uat-contract sha256:0000000000000000000000000000000000000000000000000000000000000000
-import {expect, test} from '@playwright/test';
-
-async function assertTitle(page) {
-  expect(await page.title()).toBe('Records');
-}
-
-test('a rendered test that calls a helper', async ({page}) => {
-  await page.goto('/records');
-  await assertTitle(page);
 });
 EOF
 }
@@ -674,12 +659,6 @@ UNIT_ASSERTION="expect(formatTitle('a')).toBe('A')"
   [ "$(kept_field 'repeats the records title' disposition)" = offer ]
 }
 
-@test "a rendered spec is report-only with reason rendered" {
-  check_all < <(cite drop "$RENDERED" 'shows the rendered page' false "$SIBLING" 'shows the records page' "$LIVE_ASSERTION")
-  [ "$(kept_field 'shows the rendered page' disposition)" = report-only ]
-  [ "$(kept_field 'shows the rendered page' reportReason)" = rendered ]
-}
-
 @test "a test the branch did not touch is report-only with reason not-authored" {
   check_all < <(cite drop "$LEGACY" 'legacy stays put' false "$SIBLING" 'shows the records page' "$LIVE_ASSERTION")
   [ "$(kept_field 'legacy stays put' disposition)" = report-only ]
@@ -775,15 +754,6 @@ SERVED_ADMIN='expect(response.status()).toBe(403)'
   [ "$(reason_of 'shows the archive heading')" = citation-unverified ]
   check_all < <(CITE_LINE="$(line_of "$DEMOTE" "$ARCHIVE_STATUS")" target_cite "$DEMOTE" 'shows the archive heading' false 'toBe(418)')
   [ "$(reason_of 'shows the archive heading')" = citation-unverified ]
-}
-
-@test "a demote of a rendered test is report-only with reason rendered in both shapes" {
-  check_all < <(cite demote "$RENDERED" 'shows the rendered page' false "$SIBLING" 'shows the records page' "$LIVE_ASSERTION")
-  [ "$(kept_field 'shows the rendered page' disposition)" = report-only ]
-  [ "$(kept_field 'shows the rendered page' reportReason)" = rendered ]
-  check_all < <(target_cite "$RENDERED" 'shows the rendered page' false "expect(await page.title()).toBe('Rendered')")
-  [ "$(kept_field 'shows the rendered page' disposition)" = report-only ]
-  [ "$(kept_field 'shows the rendered page' reportReason)" = rendered ]
 }
 
 @test "a sibling-less demote of a route test or a real-server spec is target-not-below-subject" {
@@ -1021,11 +991,6 @@ TABLE_OUTCOME='expect(outcome).toEqual(expectedOutcome(pageKey, userKey))'
 @test "a cited call to an in-file helper that asserts is kept in a builder test" {
   check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$HELPERS" 'calls a helper that asserts' 'await assertTitle(page)')
   is_kept 'repeats the records title'
-}
-
-@test "a cited in-file helper call in a rendered test is citation-unverified even when the helper asserts" {
-  check_all < <(cite drop "$DROPPABLE" 'repeats the records title' false "$RENDERED_HELPERS" 'a rendered test that calls a helper' 'await assertTitle(page)')
-  [ "$(reason_of 'repeats the records title')" = citation-unverified ]
 }
 
 @test "a multi-line expect continuation and an imported helper call still verify" {

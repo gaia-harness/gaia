@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Extract per-test (fullName, content signal) pairs from a vitest/jest test
-// file: the one test-identity extractor the RED hooks, the worthiness ledger and
-// presence gate, and the overlap check share.
+// file: the one test-identity extractor the worthiness ledger and presence
+// gate, and the overlap check share.
 //
 // A test is identified by (file, fullName, signal). The signal changes
 // whenever the test body changes, so a verdict or observation recorded
@@ -67,9 +67,8 @@
 // kind: "type-only" when the test's assertions are all type-level (an
 // expectTypeOf(...)/assertType(...) call, or a `@ts-expect-error` proof
 // directive) AND it carries no runtime assertion (expect(...)/assert(...));
-// "runtime" otherwise. A type-only test has no runtime failure mode, so the
-// RED-verification commit gate has no runtime red-green to demand from it and
-// exempts it, delegating type correctness to the `tsc` Quality Gate step. The
+// "runtime" otherwise. A type-only test has no runtime failure mode; its
+// correctness is the `tsc` Quality Gate step's, and no gate acts on kind. The
 // predicate requires a positive type-level signal and defaults to "runtime"
 // (enforce) when unsure, so a no-assertion test is never silently exempted.
 // kind reads the RAW span, comments included, so a directive comment is
@@ -257,7 +256,7 @@ function blockKindOf(node) {
   return null;
 }
 
-// Runtime assertions give a test a runtime failure mode (a RED). Type-level
+// Runtime assertions give a test a runtime failure mode. Type-level
 // proofs do not: they are evaluated by tsc, never by the test runner.
 const RUNTIME_ASSERTION_NAMES = new Set(['expect', 'assert']);
 const TYPE_ASSERTION_NAMES = new Set(['expectTypeOf', 'assertType']);
@@ -520,7 +519,7 @@ if (/\.stories\.tsx?$/.test(filePath)) {
 // Exiting explicitly truncates. A pipe-backed stdout is asynchronous on macOS,
 // so process.exit() discards whatever has not flushed past the 64KB pipe
 // buffer while still reporting success. A large enough test file would hand
-// the RED gate a truncated record set and clear it on the tests whose records
+// a reader a truncated record set and clear it on the tests whose records
 // were cut.
 //
 // Not exiting explicitly throws. A reader that stops early (`| head`) closes

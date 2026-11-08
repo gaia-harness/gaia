@@ -760,75 +760,7 @@ check_final_summary_names_worthiness() {
   [ "$status" -ne 0 ]
 }
 
-# ---------- lifecycle.md's kept owning-phase gate and pre-audit UAT checks ----------
-
-@test "lifecycle.md's owning-phase gate covers a route row, and uat-write.md says so" {
-  grep -qF 'appears in a `real-server`, `browser`, `e2e` or `route` row' "$LIFECYCLE_MD"
-  grep -qF 'no owned UAT tests' "$LIFECYCLE_MD"
-  grep -qF 'no owned e2e specs' "$LIFECYCLE_MD" && return 1
-  grep -qF 'Skipped: no e2e-routed or route-routed UATs' "$REPO_ROOT/.claude/skills/gaia/references/spec/uat-write.md"
-}
-
-# check_spec_lines <lifecycle>: the fidelity dispatch's Spec and Surface lines.
-check_spec_lines() {
-  local file="$1" needle
-  for needle in \
-    'one `Spec:` line per `real-server`, `browser`, legacy `e2e` or `route` row' \
-    '<frontend package>/.playwright/e2e/` for a `real-server`, `browser` or legacy `e2e` row' \
-    '`Surface: <uat_id> <real-server | browser | route>`' \
-    'a legacy `e2e` row written as `browser`' \
-    'it adds no verdict entry'; do
-    grep -qF -- "$needle" "$file" || { printf 'lifecycle lacks: %s\n' "$needle" >&2; return 1; }
-  done
-}
-
-# check_real_server_prerequisites <lifecycle>: the three-way prerequisites and
-# the no-page check.
-check_real_server_prerequisites() {
-  local file="$1" needle
-  for needle in \
-    'A `browser` or legacy `e2e` row needs Playwright'"'"'s Chromium installed' \
-    'A `real-server` row opens no page and makes no browser round trip' \
-    'whose global setup launches Chromium to warm the server' \
-    'so it needs Chromium installed, free ports, and Node and `typescript` for the no-page check' \
-    'the reason `opens-page`' \
-    '.gaia/scripts/spec/page-use.mjs' \
-    'neither Chromium nor free ports'; do
-    grep -qF -- "$needle" "$file" || { printf 'lifecycle lacks: %s\n' "$needle" >&2; return 1; }
-  done
-  grep -qiF -- 'needs no Chromium' "$file" && { printf 'lifecycle claims a row needs no Chromium\n' >&2; return 1; }
-  return 0
-}
-
-@test "lifecycle.md sends the judge one Spec line per real-server, browser, e2e or route row with a Surface line and an optional Guard line" {
-  check_spec_lines "$LIFECYCLE_MD"
-  grep -qF '<frontend package>/app/route-tests/' "$LIFECYCLE_MD"
-  grep -qF 'Guard: <uat_id>' "$LIFECYCLE_MD"
-}
-
-@test "red twin: a Spec-line sentence without real-server fails" {
-  local copy="$BATS_TEST_TMPDIR/lifecycle.md"
-  sed 's/one `Spec:` line per `real-server`, `browser`, legacy/one `Spec:` line per `browser`, legacy/' "$LIFECYCLE_MD" >"$copy"
-  run check_spec_lines "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "lifecycle.md splits the prerequisites three ways and keeps Chromium for a real-server row" {
-  check_real_server_prerequisites "$LIFECYCLE_MD"
-}
-
-@test "red twin: a lifecycle copy saying a real-server row needs no Chromium fails" {
-  local copy="$BATS_TEST_TMPDIR/lifecycle.md"
-  sed 's/so it needs Chromium installed, free ports,/so it needs no Chromium, free ports,/' "$LIFECYCLE_MD" >"$copy"
-  run check_real_server_prerequisites "$copy"
-  [ "$status" -ne 0 ]
-  { cat "$LIFECYCLE_MD"; printf '\nA real-server row needs no Chromium.\n'; } >"$copy"
-  run check_real_server_prerequisites "$copy"
-  [ "$status" -ne 0 ]
-  sed 's/the reason `opens-page`/a reason/' "$LIFECYCLE_MD" >"$copy"
-  run check_real_server_prerequisites "$copy"
-  [ "$status" -ne 0 ]
-}
+# ---------- lifecycle.md's promotion record ----------
 
 # check_record_arm <lifecycle>: which pass writes the promotion record.
 check_record_arm() {

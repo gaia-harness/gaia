@@ -186,8 +186,8 @@ plant_git_failure_fixture() {
   local branch_window
   branch_window="$(window audit-review-diffs)"
   plant_branch_entries "fix/gone" "fix/gone" $((branch_window + 1))
-  plant_dir "red-ledger/aaaaaaaaaaaaaaaa" 1
-  GONE_TREE_ENTRY="red-ledger/aaaaaaaaaaaaaaaa"
+  plant_dir "worthiness-ledger/aaaaaaaaaaaaaaaa" 1
+  GONE_TREE_ENTRY="worthiness-ledger/aaaaaaaaaaaaaaaa"
   AGED_ENTRY="cache/doctrine-injected.sess"
   plant_file "$AGED_ENTRY" $(($(window doctrine-injected-marker) + 1))
 }
@@ -263,14 +263,14 @@ plant_git_failure_fixture() {
   [ "$main_key" != "$live_key" ]
   [ "$live_key" != "$gone_key" ]
   [ "$main_key" != "$gone_key" ]
-  for ledger in red-ledger worthiness-ledger; do
+  for ledger in worthiness-ledger forensics; do
     plant_dir "$ledger/$main_key" 1
     plant_dir "$ledger/$live_key" 1
     plant_dir "$ledger/$gone_key" 1
   done
   run_reaper
   [ "$status" -eq 0 ]
-  for ledger in red-ledger worthiness-ledger; do
+  for ledger in worthiness-ledger forensics; do
     absent "$ledger/$gone_key"
     present "$ledger/$main_key"
     present "$ledger/$live_key"

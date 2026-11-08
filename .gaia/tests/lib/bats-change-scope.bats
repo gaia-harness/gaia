@@ -341,7 +341,7 @@ $scoped_path -> status $status, output: $output"
   local real_root
   real_root="$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)"
   local library_path
-  for library_path in ".claude/hooks/lib/gaia-packages.sh" ".gaia/scripts/spec/uat-lib.sh"; do
+  for library_path in ".claude/hooks/lib/gaia-packages.sh" ".gaia/scripts/spec/flows-lib.sh"; do
     printf '%s\n' "$library_path" > "$BATS_TEST_TMPDIR/real-paths.txt"
     run bash "$CLASSIFIER" --dir "$real_root" --paths "$BATS_TEST_TMPDIR/real-paths.txt"
     [ "$status" -eq 0 ]

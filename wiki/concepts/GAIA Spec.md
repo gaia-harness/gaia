@@ -11,7 +11,7 @@ tags: [concept, claude, skill, orchestration]
 
 `/gaia-spec [description]` is GAIA's script-driven Socratic discovery workflow; no spec-kit runtime is involved. It produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md` (see [[Notebook]]), then plans the SPEC in the same session through [[GAIA Plan]] and stops at the plan's KICKOFF prompt; execution starts in a fresh session. The skill body lives at `.claude/skills/gaia/references/spec.md` (dispatched by the `/gaia-spec` command, which reads this reference).
 
-The workflow runs on GAIA's own scripts in `.gaia/scripts/spec/`, Claude-read prose in `.claude/skills/gaia/references/spec/`, and script-consumed templates in `.gaia/templates/spec/`, called directly by the skill.
+The workflow runs on GAIA's own scripts in `.gaia/scripts/spec/` and Claude-read prose in `.claude/skills/gaia/references/spec/`, called directly by the skill.
 
 For cross-cutting architecture, consider `/effort high` before starting.
 

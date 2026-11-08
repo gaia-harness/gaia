@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-03
-updated: 2026-11-02
+updated: 2026-11-08
 tags: [concept, monorepo, guards, claude]
 ---
 
@@ -26,7 +26,7 @@ Two implementations of one contract, both pinned to the same shared conformance 
 - Bash, `.claude/hooks/lib/gaia-packages.sh`, for hooks and guard scripts. Node scripts outside the CLI, such as the determinism classifier, read the registry through it rather than carrying a reader of their own.
 - TypeScript, in the CLI source, for the CLI (scaffolds, wiki tooling, settings sync).
 
-Consumers include the TDD classifier ([[Determinism Classifier]]), the RED gate ([[TDD RED Verification]]), the worthiness gate ([[Worthiness Presence Gate]]), the pre-commit plan ([[Pre-commit Hooks]]), and the wiki dead-path scan.
+Consumers include the TDD classifier ([[Determinism Classifier]]), the worthiness gate ([[Worthiness Presence Gate]]), the pre-commit plan ([[Pre-commit Hooks]]), and the wiki dead-path scan.
 
 ## Fail-closed rule
 

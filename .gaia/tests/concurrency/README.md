@@ -26,7 +26,7 @@ Or read the raw suite by hand, without the gate:
 
 - `bats-core` on PATH.
 - `pnpm install` at the repo root, which provisions every workspace member
-  including the CLI: three scenarios (`C3-05`, `C4-04`, `C4-07`) drive real
+  including the CLI: two scenarios (`C3-05` and `C4-04`) drive real
   node code and need it to pass rather than red for want of a dependency.
 
 ## Files

@@ -28,23 +28,23 @@
 # runs with the working directory of whatever tool call triggered it, which is
 # the agent's session cwd and persists for the whole session. A load written as
 #
-#     [ -f .claude/hooks/lib/red-ledger.sh ] && . .claude/hooks/lib/red-ledger.sh
-#     type red_ledger_path >/dev/null 2>&1 || exit 0
+#     [ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh
+#     type worthiness_ledger_path >/dev/null 2>&1 || exit 0
 #
 # is therefore false from any directory below the repository root, and the
 # capability probe behind it stands the hook down. That `exit 0` is a deliberate
 # fail-open written for a BROKEN or ABSENT library, and it is correct for that
 # case; a cwd-relative load is what makes a MOVED WORKING DIRECTORY
 # indistinguishable from a missing file, so a single `cd` buys the fail-open.
-# Two of the hooks carrying the shape are blocking guards (the RED-before-GREEN
-# commit gate and the worthiness merge gate), and neither emits a diagnostic
-# when it stands down, so the disarm is indistinguishable from a clean pass.
+# A hook carrying the shape can be a blocking guard (the worthiness merge gate),
+# and it emits no diagnostic when it stands down, so the disarm is
+# indistinguishable from a clean pass.
 #
 # The repair, which the tree already used correctly in several places before
 # this gate existed, roots the path at the hook's own on-disk location:
 #
 #     _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=''
-#     [ -n "$_library_directory" ] && [ -f "$_library_directory/red-ledger.sh" ] && . "$_library_directory/red-ledger.sh"
+#     [ -n "$_library_directory" ] && [ -f "$_library_directory/worthiness-ledger.sh" ] && . "$_library_directory/worthiness-ledger.sh"
 #
 # `${BASH_SOURCE[0]}` is the path the registration invoked, so it names the
 # ACTING tree: a worktree session loads that worktree's libraries, and the main

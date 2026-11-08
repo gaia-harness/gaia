@@ -1,8 +1,8 @@
 /**
  * The residue tally's corpus injection seam (RD-008).
  *
- * Nearly every UAT for `/gaia-residue` is stated against live GitHub state
- * and is unfalsifiable in CI without a way to substitute a fixture corpus for
+ * Nearly every acceptance check for `/gaia-residue` is stated against live
+ * GitHub state and is unfalsifiable in CI without a way to substitute a fixture corpus for
  * `gh` and `git`. `resolveProvider` is the one place a process variable
  * decides which implementation the rest of the tally sees; nothing below it
  * reads `GAIA_RESIDUE_FIXTURE_DIR` directly.

@@ -67,9 +67,6 @@ real-server layer shows a served refusal status as well as a browser does.
 
 A drop, merge or demote whose covering test is a unit test (not a story) needs a reason when the subject sits on the route layer or higher: see the `unitReason` field under `## Output`.
 
-Never propose a demote of a rendered UAT test (line 1 is the
-`// gaia-uat-contract` marker): it is report-only.
-
 The journey floor: never propose demoting or dropping a flow's only browser journey.
 When the browser test you are judging is the one test that walks a user flow in
 a real page, it stays, even when each of its assertions could be shown lower.

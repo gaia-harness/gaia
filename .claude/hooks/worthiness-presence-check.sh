@@ -33,8 +33,8 @@
 # (`emergentTests` and `tddUnitTests`, via .claude/hooks/lib/gaia-packages.sh,
 # never a literal `app/` prefix) and the determinism classifier
 # (.gaia/scripts/classifier/classify-determinism.mjs) labels it `strict`,
-# `emergent` or `route`. A strict (deterministic) test is RED-gated and
-# worthiness-gated both: the review judges it on honesty and worth. A changed
+# `emergent` or `route`. A strict (deterministic) test is in scope
+# too: the review judges it on honesty and worth. A changed
 # test in a file the run folder's flow-tests.tsv lists (a bats or CLI flow test)
 # is in scope whatever the globs and the classifier say. When ZERO tests in
 # scope changed, the gate is a NO-OP and allows the merge. An unusable registry
@@ -48,7 +48,7 @@
 # scales with the in-scope test count; this axis is not made sub-linear.
 #
 # Fail-open vs fail-closed (threat model: a cooperative-but-fallible agent):
-#   - git / node / the RED-ledger lib / the classifier unavailable -> exit 0
+#   - git / node / the test-signals lib / the classifier unavailable -> exit 0
 #     (allow). Sibling-hook posture; the gate enforces only where its tooling
 #     answers. A missing jq refuses loudly (exit 2) through lib/jq-availability.sh
 #     for a command that carries `gh`, and an unloadable jq-availability.sh or
@@ -62,8 +62,7 @@
 # The signal covers the test's comment-free content, so a comment reword
 # leaves it unchanged and a matching line still counts. Stale-signal lines (a
 # line written before a later edit to what the test executes) carry the old
-# signal and so never match the recomputed current signal -> rejected, exactly
-# like the RED gate's stale-signal invalidation.
+# signal and so never match the recomputed current signal -> rejected.
 #
 # See wiki/decisions/Worthiness Presence Gate.md for the full contract.
 
@@ -167,7 +166,7 @@ if type command_targets_foreign_repo >/dev/null 2>&1 \
   exit 0
 fi
 
-# Shared RED-ledger lib: the signal-helper wrapper and repo-relative
+# Shared test-signals lib: the signal-helper wrapper and repo-relative
 # normalization. The worthiness ledger writer uses the SAME helper, so signals
 # byte-match. Without it we cannot recompute identity, so fail-open.
 [ -n "$_hook_library_directory" ] && [ -f "$_hook_library_directory/test-signals.sh" ] && . "$_hook_library_directory/test-signals.sh"
@@ -229,7 +228,7 @@ if [ -n "${GAIA_REPO_SCOPE_LEAD_CD:-}" ] \
 fi
 tree_root="$(gaia_resolve_tree_root "$source_cwd" 2>/dev/null)" || exit 0
 
-# Worthiness ledger location (sibling to the RED ledger), anchored on and
+# Worthiness ledger location (per tree), anchored on and
 # keyed to this tree's root via the shared resolver. A missing ledger means
 # zero matches, which denies for the clean case below.
 ledger="$(worthiness_ledger_path "$tree_root")" || exit 0

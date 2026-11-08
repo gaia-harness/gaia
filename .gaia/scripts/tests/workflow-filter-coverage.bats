@@ -1235,7 +1235,6 @@ OLD_CODE_ENTRIES='.github/audit/**
 .claude/agents/**/*.md
 .claude/gaia-fitness.json
 .gaia/cli/gaia
-.gaia/templates/spec/**
 .claude/skills/gaia/references/isolation.md
 .claude/skills/gaia/references/debt.md
 .claude/skills/file-tech-debt/SKILL.md

@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Shared dependency gate for the node-dependent suites: the RED suites under
-# .gaia/tests/hooks (test-signals-lib, capture-red-observations,
-# red-verify-commit-check, red-verify-e2e and worthiness-presence-check), and
+# Shared dependency gate for the node-dependent suites: the suites under
+# .gaia/tests/hooks that source this file, and
 # the suites that run the CLI from source through tsx, which the CI root
 # install provides under .gaia/cli/node_modules.
 #
-# The RED suites all drive .gaia/scripts/test-signals/extract-test-signals.mjs;
-# red-verify-commit-check, red-verify-e2e and worthiness-presence-check also
-# drive .gaia/scripts/classifier/classify-determinism.mjs. Both resolve
+# The signal suites drive .gaia/scripts/test-signals/extract-test-signals.mjs;
+# some also drive .gaia/scripts/classifier/classify-determinism.mjs. Both resolve
 # `typescript` through createRequire against the repo root's node_modules. With
 # that absent the suites cannot answer at all.
 #
@@ -23,7 +21,7 @@
 #   }
 #
 # WHY THE CI BRANCH FAILS RATHER THAN SKIPPING, which is the whole point of
-# this file. Each of the RED suites above previously spelled the gate inline as
+# this file. Each of the suites above previously spelled the gate inline as
 #
 #   [ -d "$ROOT/node_modules/typescript" ] || skip "typescript not installed ..."
 #
@@ -49,7 +47,7 @@
 # a comment. The pointer above says which gate without tripping the scan.
 #
 # The complement is .github/workflows/audit-ci-tests.yml's
-# "Setup Node for the node-dependent RED suites" step, gated to the exchange
+# "Setup Node for the node-dependent suites" step, gated to the exchange
 # group holding them. Dropping either half without the other reds those
 # legs, which is the intended direction: the failure this file exists to
 # prevent is a green one.
@@ -76,7 +74,7 @@ require_node_typescript() {
     # and Actions parses a workflow command only at column 0, so the
     # annotation that spelling promises would never render. The `return 1` is
     # what gates.
-    echo "typescript is not installed under $root on a CI runner; this node-dependent suite would skip to green. Check the 'Setup Node for the node-dependent RED suites' step in .github/workflows/audit-ci-tests.yml." >&2
+    echo "typescript is not installed under $root on a CI runner; this node-dependent suite would skip to green. Check the 'Setup Node for the node-dependent suites' step in .github/workflows/audit-ci-tests.yml." >&2
     return 1
   fi
 

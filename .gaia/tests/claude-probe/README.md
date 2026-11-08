@@ -58,7 +58,7 @@ Never from model text. A model saying a rule loaded is not evidence that it did.
 | `transcript_listing` | the `skill_listing` attachments of the session transcript Claude Code writes under `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/`, copied into the scenario dir as `transcript-<turn>.jsonl` | `listing` |
 | `post_tool_use` | `PostToolUse` probe lines (ran), the stream's `result.permission_denials`, and the structured `tool_use` / `tool_result` blocks | `permission`, component `task` |
 | `probe_if` | the always-on `PreToolUse` / `PostToolUse` probe lines carrying a `probe-if-<marker>`, the `IfGate` lines `if-gate.sh` writes, and the root settings snapshot's gated handlers | `hook_if` |
-| `git_log` | git's own records: `GIT_TRACE2_EVENT` hook-run events (`child_start`, `hook_name: pre-commit`) and whether a `git commit` process started; for the RED gate, also that hook's own deny reason (below) | commit `task` |
+| `git_log` | git's own records: `GIT_TRACE2_EVENT` hook-run events (`child_start`, `hook_name: pre-commit`) and whether a `git commit` process started | commit `task` |
 | `manual` | not observable under `-p`; carries its reason in `source` and is never compared | |
 
 A hook row is `registered` when a probe line proves its settings file was a live source for the session and that file's snapshot holds the entry (event, matcher, command) byte for byte. The probe tags (`root-settings`, `root-local`, `frontend-settings`, `frontend-local`) also keep identical probe commands from being deduplicated across files.
@@ -70,7 +70,7 @@ A lazy-discovery row (`after_read:<path>`) is judged only once a `PostToolUse` l
 - `listing`: the union of `names` across every `skill_listing` attachment in the first turn's transcript. The `init` event's `skills` array is not a reliable listing signal (it listed a `disable-model-invocation` skill and command and omitted a shown command), so a row that proves a command is or is not in the model's listing reads the transcript. `listed` / `not_listed` is judged only when the transcript exists and holds at least one `skill_listing` attachment; without one the row reports `no_transcript` or `no_skill_listing`, never `not_listed`.
 - `agent`, `mcp`: the `init` event of a second, `--resume` turn. That is also a session-start snapshot; no structural mid-session agent listing has been observed yet.
 
-Commit rows: the scenario issues four separate Bash calls, `git add` then `git commit` for each of the two scripted commits, because the RED gate runs at the commit's `PreToolUse` and reads the index: a combined `add && commit` call shows it nothing staged. `pre-commit` is `ran` when trace2 shows the commit process starting that hook. `red-gate` is the gate's own decision, never "some hook denied": `deny` when a deny reason opening with `TDD RED-verification:` reaches the commit's `tool_result`, or a `PreToolUse` `hook_response` carries one naming that commit's staged paths (recorded as `commit_paths` in `scenario.json`); `allow` when the commit process started; `blocked_before_git` when another hook or the permission layer stopped the call; `undetermined` when it was attempted with none of these; `not_reached` when it was never attempted.
+Commit rows: the scenario issues four separate Bash calls, `git add` then `git commit` for each of the two scripted commits, so every commit's `PreToolUse` hooks see the index the commit will record. `pre-commit` is `ran` when trace2 shows the commit process starting that hook.
 
 ### Hook `if` rows
 
@@ -97,7 +97,7 @@ Permission rows: an Edit row targets a path held absent for the scenario and ask
 - a glob in the plan's C3 dialect over the launch's file list, for example `.claude/skills/*/SKILL.md`; a `#unscoped` or `#scoped` suffix keeps only rules without or with `paths:` frontmatter, and a `#model-invocable` or `#model-invocation-disabled` suffix keeps only the command or skill files whose frontmatter does not, or does, set `disable-model-invocation: true`;
 - `hooks:<settings path>`: one row per hook entry of that settings file, probe entries excluded.
 
-A row whose expansion finds nothing fails as `EMPTY`; a claim over an empty set is not a pass. Subjects are repo-relative paths, except skills and agents (matched by name, derived from the path), MCP servers (by server name), permissions (`<Tool> <path>`), env (`CLAUDE_PROJECT_DIR`, `pwd`, `git_toplevel`, values relative to the launch's repo root) and commit tasks (`commit-<a|b>:<pre-commit|red-gate>`, `commit-parity`).
+A row whose expansion finds nothing fails as `EMPTY`; a claim over an empty set is not a pass. Subjects are repo-relative paths, except skills and agents (matched by name, derived from the path), MCP servers (by server name), permissions (`<Tool> <path>`), env (`CLAUDE_PROJECT_DIR`, `pwd`, `git_toplevel`, values relative to the launch's repo root) and commit tasks (`commit-<a|b>:pre-commit`, `commit-parity`).
 
 `UNLISTED` covers what the target owns: instruction files inside the launch's repo root, and skills, commands, agents and MCP servers the target defines. Ambient items (the user's own CLAUDE.md and auto memory, personal and built-in skills and agents, user MCP servers) are out of scope.
 
@@ -116,7 +116,6 @@ A contradiction of a **floor** row, or of constraint 2 (ancestor walk plus gener
 The spike tree carries today's hooks and rule globs, moved but not yet rewritten. Non-floor rows whose `source` names a later plan phase are written for the finished tree and are expected to mismatch on the spike:
 
 - the path-triggered rule rows (`*-tsx-*`, `*-pw-*`; source "plan C7"), until Phase 7 rewrites rule `paths:` from the probe decisions;
-- `*-commit-b-red-gate` and `*-commit-b-pre-commit` (source "plan C5"), until Phase 3 makes the RED gate descriptor-driven.
 
 The `*-glob-anchor-*` rows are the claude-mechanics Q2 experiment: their expectation is the launch-dir-anchor hypothesis, and whichever way they come out sets the C7 probe decisions. The floor rows, and the commit-parity row, must hold on the spike as well as on the final tree. The `SUMMARY` line splits mismatches into floor and other.
 

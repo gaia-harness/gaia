@@ -377,50 +377,73 @@ SH
   return 0
 }
 
-# ---------- 13. Carry-forward: red-ledger, the case the phase exists for ----------
-@test "unkeyed red-ledger data is carried forward to the keyed path, byte for byte" {
+# ---------- 13. Carry-forward: worthiness-ledger ----------
+@test "unkeyed worthiness-ledger data is carried forward to the keyed path, byte for byte" {
   make_main
-  WORKTREE_PATH="$(add_worktree feat-carry-red)"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/red-ledger"
-  printf '{"a":1}\n{"a":2}\n' > "$WORKTREE_PATH/.gaia/local/red-ledger/observations.jsonl"
+  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger)"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
+  printf '{"a":1}\n{"a":2}\n' > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
 
   key="$(tree_key_for "$WORKTREE_PATH")"
-  [ -f "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl" ] || return 1
-  [ -e "$WORKTREE_PATH/.gaia/local/red-ledger/observations.jsonl" ] && return 1
-  diff <(printf '{"a":1}\n{"a":2}\n') "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl"
+  [ -f "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
+  [ -e "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
+  diff <(printf '{"a":1}\n{"a":2}\n') "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
+}
+
+# The removed test-first commit gate's per-tree data is no longer migrated: a
+# leftover unkeyed file stays where it is and nothing logs a carry-forward.
+@test "a leftover unkeyed red-ledger observations file is left where it is" {
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-carry-leftover)"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/red-ledger"
+  echo leftover > "$WORKTREE_PATH/.gaia/local/red-ledger/observations.jsonl"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+
+  key="$(tree_key_for "$WORKTREE_PATH")"
+  [ -e "$WORKTREE_PATH/.gaia/local/red-ledger/$key" ] && return 1
+  grep -qF -- "carried forward red-ledger" <<<"$output" && return 1
+  [ -e "$MAIN/.gaia/local/red-ledger/$key" ] && return 1
+  backup_directory=""
+  for backup_candidate in "$WORKTREE_PATH"/.gaia/local.bak.*; do
+    [ -d "$backup_candidate" ] && backup_directory="$backup_candidate"
+  done
+  [ -n "$backup_directory" ] || return 1
+  [ "$(cat "$backup_directory/red-ledger/observations.jsonl")" = "leftover" ]
 }
 
 # ---------- 14. Carry-forward is idempotent ----------
-@test "carrying forward the RED ledger twice loses nothing on the second run" {
+@test "carrying forward the worthiness ledger twice loses nothing on the second run" {
   make_main
-  WORKTREE_PATH="$(add_worktree feat-carry-red-twice)"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/red-ledger"
-  printf 'line-one\n' > "$WORKTREE_PATH/.gaia/local/red-ledger/observations.jsonl"
+  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger-twice)"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
+  printf 'line-one\n' > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
   key="$(tree_key_for "$WORKTREE_PATH")"
-  [ -f "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl" ] || return 1
+  [ -f "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
-  [ "$(cat "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl")" = "line-one" ]
-  [ -e "$WORKTREE_PATH/.gaia/local/red-ledger/observations.jsonl" ] && return 1
+  [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "line-one" ]
+  [ -e "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
   return 0
 }
 
 # ---------- 15. Carry-forward never overwrites keyed data ----------
-@test "keyed red-ledger data already present is never overwritten by stale unkeyed data" {
+@test "keyed worthiness-ledger data already present is never overwritten by stale unkeyed data" {
   make_main
-  WORKTREE_PATH="$(add_worktree feat-carry-red-noclobber)"
+  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger-noclobber)"
   key="$(tree_key_for "$WORKTREE_PATH")"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/red-ledger/$key"
-  echo keyed > "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/red-ledger"
-  echo stale > "$WORKTREE_PATH/.gaia/local/red-ledger/observations.jsonl"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key"
+  echo keyed > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
+  echo stale > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
@@ -428,7 +451,7 @@ SH
   # The keyed data survives untouched, reached through the worktree's new
   # symlink into main's .gaia/local: migrate_keyed_subtrees_to_main moved it
   # there, never overwriting it.
-  [ "$(cat "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl")" = "keyed" ]
+  [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "keyed" ]
 
   # The stale unkeyed file was carry-forward's to move, and carry-forward
   # declined because the keyed file already existed -- so it was never
@@ -440,7 +463,7 @@ SH
     [ -d "$backup_candidate" ] && backup_directory="$backup_candidate"
   done
   [ -n "$backup_directory" ] || return 1
-  [ "$(cat "$backup_directory/red-ledger/observations.jsonl")" = "stale" ]
+  [ "$(cat "$backup_directory/worthiness-ledger/worthiness.jsonl")" = "stale" ]
 }
 
 # The gate this test exercises exists for a change not yet landed: a linked
@@ -452,8 +475,8 @@ SH
   make_main
   WORKTREE_PATH="$(add_worktree feat-carry-symlink)"
   target_directory="$(mktemp -d -t gaia-provision-symlink-target-XXXXXX)"
-  mkdir -p "$target_directory/red-ledger"
-  echo untouched > "$target_directory/red-ledger/observations.jsonl"
+  mkdir -p "$target_directory/worthiness-ledger"
+  echo untouched > "$target_directory/worthiness-ledger/worthiness.jsonl"
   rm -rf "$WORKTREE_PATH/.gaia/local"
   ln -s "$target_directory" "$WORKTREE_PATH/.gaia/local"
 
@@ -461,11 +484,11 @@ SH
   [ "$status" -eq 0 ]
 
   key="$(tree_key_for "$WORKTREE_PATH")"
-  if [ -e "$target_directory/red-ledger/$key" ]; then
+  if [ -e "$target_directory/worthiness-ledger/$key" ]; then
     rm -rf "$target_directory"
     return 1
   fi
-  if [ "$(cat "$target_directory/red-ledger/observations.jsonl")" != "untouched" ]; then
+  if [ "$(cat "$target_directory/worthiness-ledger/worthiness.jsonl")" != "untouched" ]; then
     rm -rf "$target_directory"
     return 1
   fi
@@ -477,17 +500,17 @@ SH
 # own session start to carry this forward.
 @test "the main checkout's own unkeyed data is carried forward" {
   make_main
-  mkdir -p "$MAIN/.gaia/local/red-ledger"
-  echo main-red > "$MAIN/.gaia/local/red-ledger/observations.jsonl"
+  mkdir -p "$MAIN/.gaia/local/worthiness-ledger"
+  echo main-worthiness > "$MAIN/.gaia/local/worthiness-ledger/worthiness.jsonl"
 
   payload="$(jq -nc --arg tree_path "$MAIN" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
   invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
 
   key="$(tree_key_for "$MAIN")"
-  [ -f "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl" ] || return 1
-  [ "$(cat "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl")" = "main-red" ]
-  [ -e "$MAIN/.gaia/local/red-ledger/observations.jsonl" ] && return 1
+  [ -f "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
+  [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "main-worthiness" ]
+  [ -e "$MAIN/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
   return 0
 }
 
@@ -553,7 +576,7 @@ SH
   # symlink into main's .gaia/local.
   [ "$(cat "$WORKTREE_PATH/.gaia/local/forensics/$key/20260101T000000Z-hook.md")" = "keyed-report" ]
 
-  # Same reasoning as the red-ledger sibling: carry-forward declined to move
+  # Same reasoning as the worthiness-ledger case above: carry-forward declined to move
   # the stale unkeyed report because the keyed one already existed, so it
   # rides along inside the whole pre-cutover .gaia/local the linker backs up
   # wholesale, unread and unmerged.
@@ -575,20 +598,20 @@ SH
   make_main
   WORKTREE_PATH="$(add_worktree feat-migrate-basic)"
   key="$(tree_key_for "$WORKTREE_PATH")"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/red-ledger/$key" "$WORKTREE_PATH/.gaia/local/forensics/$key"
-  printf '{"a":1}\n{"a":2}\n' > "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key" "$WORKTREE_PATH/.gaia/local/forensics/$key"
+  printf '{"a":1}\n{"a":2}\n' > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
   echo forensic-body > "$WORKTREE_PATH/.gaia/local/forensics/$key/20260101T000000Z-hook.md"
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
 
   # Landed in MAIN's own .gaia/local, byte for byte.
-  diff <(printf '{"a":1}\n{"a":2}\n') "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl"
+  diff <(printf '{"a":1}\n{"a":2}\n') "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
   [ "$(cat "$MAIN/.gaia/local/forensics/$key/20260101T000000Z-hook.md")" = "forensic-body" ]
 
   # Reachable from the worktree through the new single symlink too.
   [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
-  diff <(printf '{"a":1}\n{"a":2}\n') "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl"
+  diff <(printf '{"a":1}\n{"a":2}\n') "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
   [ "$(cat "$WORKTREE_PATH/.gaia/local/forensics/$key/20260101T000000Z-hook.md")" = "forensic-body" ]
 }
 
@@ -596,21 +619,21 @@ SH
   make_main
   WORKTREE_PATH="$(add_worktree feat-migrate-idempotent)"
   key="$(tree_key_for "$WORKTREE_PATH")"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/red-ledger/$key"
-  echo line-one > "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key"
+  echo line-one > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
-  [ "$(cat "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl")" = "line-one" ]
+  [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "line-one" ]
 
   # After the first run .gaia/local is a symlink, so the migration gate skips
   # entirely -- the second run must neither re-log a migration nor disturb
   # what the first run already moved.
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
-  grep -qF -- "migrated red-ledger/$key into" <<<"$output" && return 1
-  [ "$(cat "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl")" = "line-one" ]
-  [ "$(cat "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl")" = "line-one" ]
+  grep -qF -- "migrated worthiness-ledger/$key into" <<<"$output" && return 1
+  [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "line-one" ]
+  [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "line-one" ]
 }
 
 @test "a destination that already exists in main is skipped, not overwritten, not merged, and logged loudly" {
@@ -618,19 +641,19 @@ SH
   WORKTREE_PATH="$(add_worktree feat-migrate-conflict)"
   key="$(tree_key_for "$WORKTREE_PATH")"
 
-  mkdir -p "$MAIN/.gaia/local/red-ledger/$key"
-  echo main-data > "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl"
+  mkdir -p "$MAIN/.gaia/local/worthiness-ledger/$key"
+  echo main-data > "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
 
-  mkdir -p "$WORKTREE_PATH/.gaia/local/red-ledger/$key"
-  echo worktree-data > "$WORKTREE_PATH/.gaia/local/red-ledger/$key/observations.jsonl"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key"
+  echo worktree-data > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
 
-  grep -qF -- "CUTOVER MIGRATION SKIPPED: red-ledger/$key exists in both this worktree and the main checkout" <<<"$output" || return 1
+  grep -qF -- "CUTOVER MIGRATION SKIPPED: worthiness-ledger/$key exists in both this worktree and the main checkout" <<<"$output" || return 1
 
   # Main's own data is untouched -- not overwritten, not merged.
-  [ "$(cat "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl")" = "main-data" ]
+  [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "main-data" ]
 
   # The worktree's copy is untouched by the migration step itself; it only
   # leaves the live worktree path when the linker backs up the whole
@@ -640,21 +663,21 @@ SH
     [ -d "$backup_candidate" ] && backup_directory="$backup_candidate"
   done
   [ -n "$backup_directory" ] || return 1
-  [ "$(cat "$backup_directory/red-ledger/$key/observations.jsonl")" = "worktree-data" ]
+  [ "$(cat "$backup_directory/worthiness-ledger/$key/worthiness.jsonl")" = "worktree-data" ]
 }
 
 @test "the main checkout itself is never migrated -- it is not a linked worktree" {
   make_main
   key="$(tree_key_for "$MAIN")"
-  mkdir -p "$MAIN/.gaia/local/red-ledger/$key"
-  echo main-own-data > "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl"
+  mkdir -p "$MAIN/.gaia/local/worthiness-ledger/$key"
+  echo main-own-data > "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
 
   payload="$(jq -nc --arg tree_path "$MAIN" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
   invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
 
   grep -qF -- "CUTOVER MIGRATION" <<<"$output" && return 1
-  [ "$(cat "$MAIN/.gaia/local/red-ledger/$key/observations.jsonl")" = "main-own-data" ]
+  [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "main-own-data" ]
   [ -L "$MAIN/.gaia/local" ] && return 1
   return 0
 }
@@ -762,7 +785,7 @@ SH
   #
   # This used to strip one directory and read the residue as safe, on the
   # stated ground that CI reaches here with no pnpm at all. That ground is
-  # gone: the Node install for the node-dependent RED suites runs on this leg,
+  # gone: the Node install for the node-dependent suites runs on this leg,
   # ahead of the bats step. A test must not depend on a tool being absent from
   # the environment by accident.
   # The rebuild itself lives in the shared helper, which is also where the

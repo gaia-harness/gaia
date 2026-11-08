@@ -1402,7 +1402,7 @@
       "expect": "value:match-root",
       "signal": "git_log",
       "floor": true,
-      "source": "UAT-023 (pre-commit and the RED gate run exactly as from a root launch); signal git_log reads git trace2 hook runs",
+      "source": "pre-commit runs exactly as from a root launch; signal git_log reads git trace2 hook runs",
       "cited_run": null
     },
     {
@@ -1415,46 +1415,7 @@
       "expect": "value:ran",
       "signal": "git_log",
       "floor": true,
-      "source": "UAT-023 (the commit runs .githooks/pre-commit)",
-      "cited_run": null
-    },
-    {
-      "id": "frontend-commit-a-red-gate",
-      "launch": "frontend",
-      "kind": "task",
-      "subject": "commit-a:red-gate",
-      "expand": null,
-      "trigger": "after_task:commit",
-      "expect": "value:allow",
-      "signal": "git_log",
-      "floor": false,
-      "source": "UAT-023; red-verify-commit-check.sh allows a commit with no new test",
-      "cited_run": null
-    },
-    {
-      "id": "frontend-commit-b-red-gate",
-      "launch": "frontend",
-      "kind": "task",
-      "subject": "commit-b:red-gate",
-      "expand": null,
-      "trigger": "after_task:commit",
-      "expect": "value:deny",
-      "signal": "git_log",
-      "floor": false,
-      "source": "UAT-023; UAT-004; plan C5 (descriptor-driven RED gate denies a new passing deterministic test with no RED; the spike tree predates the Phase 3 coupling)",
-      "cited_run": null
-    },
-    {
-      "id": "frontend-commit-b-pre-commit",
-      "launch": "frontend",
-      "kind": "task",
-      "subject": "commit-b:pre-commit",
-      "expand": null,
-      "trigger": "after_task:commit",
-      "expect": "value:not_run",
-      "signal": "git_log",
-      "floor": false,
-      "source": "UAT-023 (a commit the RED gate denies never reaches pre-commit)",
+      "source": "the commit runs .githooks/pre-commit",
       "cited_run": null
     },
     {
@@ -1467,46 +1428,7 @@
       "expect": "value:ran",
       "signal": "git_log",
       "floor": true,
-      "source": "UAT-023 (the commit runs .githooks/pre-commit)",
-      "cited_run": null
-    },
-    {
-      "id": "root-commit-a-red-gate",
-      "launch": "root",
-      "kind": "task",
-      "subject": "commit-a:red-gate",
-      "expand": null,
-      "trigger": "after_task:commit",
-      "expect": "value:allow",
-      "signal": "git_log",
-      "floor": false,
-      "source": "UAT-023; red-verify-commit-check.sh allows a commit with no new test",
-      "cited_run": null
-    },
-    {
-      "id": "root-commit-b-red-gate",
-      "launch": "root",
-      "kind": "task",
-      "subject": "commit-b:red-gate",
-      "expand": null,
-      "trigger": "after_task:commit",
-      "expect": "value:deny",
-      "signal": "git_log",
-      "floor": false,
-      "source": "UAT-023; UAT-004; plan C5 (descriptor-driven RED gate denies a new passing deterministic test with no RED; the spike tree predates the Phase 3 coupling)",
-      "cited_run": null
-    },
-    {
-      "id": "root-commit-b-pre-commit",
-      "launch": "root",
-      "kind": "task",
-      "subject": "commit-b:pre-commit",
-      "expand": null,
-      "trigger": "after_task:commit",
-      "expect": "value:not_run",
-      "signal": "git_log",
-      "floor": false,
-      "source": "UAT-023 (a commit the RED gate denies never reaches pre-commit)",
+      "source": "the commit runs .githooks/pre-commit",
       "cited_run": null
     },
     {

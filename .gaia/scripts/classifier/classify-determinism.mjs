@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Determinism classifier: label one touched source file STRICT (deterministic;
-// goes under the RED gate) or EMERGENT (clock-/entropy-/I-O-bound or
-// tree-dependent; advisory audit only, no RED proof required).
+// Determinism classifier: label one touched source file STRICT (deterministic)
+// or EMERGENT (clock-/entropy-/I-O-bound or tree-dependent). The label picks
+// the worthiness judgment arm and evidence.
 //
 // Path scopes the candidate set; content decides. A file classifies STRICT only
 // when ALL of conditions 1-4 hold. Failing any of 2-4 -> EMERGENT regardless of
-// path. The bias is deliberate: err EMERGENT. A missed RED is caught late by the
-// advisory audit; forcing RED onto non-deterministic code produces theater that
-// corrupts the ledger. Over-strict is the worse failure.
+// path. The bias is deliberate: err EMERGENT. A missed strict costs only a weaker
+// judgment arm in the worthiness review; judging non-deterministic code as strict produces theater.
+// Over-strict is the worse failure.
 //
 // The rule, the versioned DOM-API allowlist, and the file-granularity limitation
 // are documented in `wiki/decisions/Determinism Classifier.md`.
@@ -214,7 +214,7 @@ const addReason = (reason) => {
 
 const STORY_FILE_PATTERN = /\.stories\.tsx?$/;
 // A route-surface contract test lives under app/route-tests/<route>/tests/. It
-// is `route`: owed both the RED gate and the worthiness audit.
+// is `route`: owed the worthiness review on both axes.
 const ROUTE_TEST_PATTERN = /(^|\/)app\/route-tests\/.+\/tests\/[^/]+\.test\.ts$/;
 
 const inCandidatePath = () =>
@@ -529,17 +529,16 @@ const checkAsyncIoExport = () => {
 // write happens once at the tail. Each arm's checks run for their addReason
 // side effects, so `reasons` is only complete once this returns.
 const classify = () => {
-  // A route test is both gated: it is neither strict nor emergent, so the RED
-  // gate (which relaxes only on emergent) and the worthiness selection (which
-  // takes emergent and route) each read it as theirs.
+  // A route test is neither strict nor emergent, so the worthiness selection
+  // (which takes emergent and route) reads it as its own.
   if (ROUTE_TEST_PATTERN.test(filePath)) {
-    addReason('route test: a test under app/route-tests/<route>/tests/ owes RED and worthiness');
+    addReason('route test: a test under app/route-tests/<route>/tests/ is owed the worthiness review on both axes');
     return 'route';
   }
 
   // A story file is a rendered, browser-bound test whatever its path: it is
   // emergent before path scoping and before any AST check, so a story under a
-  // strict-candidate folder never reaches the RED gate.
+  // strict-candidate folder never reads as strict.
   if (STORY_FILE_PATTERN.test(filePath)) {
     addReason('story file: a *.stories.tsx is emergent regardless of path');
     return 'emergent';

@@ -203,67 +203,18 @@ const fileToolOutcome = (data, toolNames, relativePath) => {
   return outcomes.includes('deny') ? 'deny' : 'error';
 };
 
-// red-verify-commit-check.sh opens every deny reason with this prefix; it is
-// how the RED gate's own decision is told apart from any other PreToolUse
-// hook that denied the same call (the spike's commit-to-main guard).
-export const RED_GATE_REASON_PREFIX = 'TDD RED-verification:';
-
-const hookDenyReasons = (stream) => (stream ?? [])
-  .filter((event) => event.type === 'system' && event.subtype === 'hook_response' && event.hook_event === 'PreToolUse')
-  .map((event) => {
-    try {
-      const output = JSON.parse(event.stdout || event.output || 'null');
-      const decision = output?.hookSpecificOutput;
-      return decision?.permissionDecision === 'deny' ? String(decision.permissionDecisionReason ?? '') : null;
-    } catch {
-      return null;
-    }
-  })
-  .filter((reason) => reason !== null);
-
-// Whether the RED gate itself denied commit <marker>. Two structural sources,
-// neither of them model text: the denied call's own tool_result (Claude Code
-// quotes the hook's reason there), and a PreToolUse hook_response whose
-// RED-gate reason names one of the marker's staged paths (run-probe.sh records
-// them in scenario.json as commit_paths).
-const redGateDenied = (data, marker, commitAttempts) => {
-  const { results } = toolAttempts(data);
-  const inResult = commitAttempts.some((attempt) => {
-    const result = results.get(attempt.id);
-    return Boolean(result?.is_error) && resultText(result).includes(RED_GATE_REASON_PREFIX);
-  });
-  if (inResult) return true;
-  const paths = data.scenario.commit_paths?.[marker] ?? [];
-  if (paths.length === 0) return false;
-  return data.streams.flatMap(hookDenyReasons).some((reason) => reason.startsWith(RED_GATE_REASON_PREFIX)
-    && paths.some((path) => reason.includes(path)));
-};
-
 const commitObservation = (data, marker) => {
   const commitProcesses = data.trace2.filter((event) => event.event === 'start' && Array.isArray(event.argv)
     && event.argv.includes('commit') && event.argv.join(' ').includes(`probe-commit-${marker}`));
   const sids = new Set(commitProcesses.map((event) => event.sid));
   const preCommit = data.trace2.some((event) => event.event === 'child_start' && sids.has(event.sid)
     && event.child_class === 'hook' && event.hook_name === 'pre-commit') ? 'ran' : 'not_run';
-  const { attempts, results, denied } = toolAttempts(data);
-  const commitAttempts = attempts.filter((attempt) => attempt.name === 'Bash'
-    && String(attempt.input.command ?? '').includes(`probe-commit-${marker}`));
-  const attempted = commitAttempts.length > 0
-    || data.probe.some((line) => line.event === 'PreToolUse' && line.probe_commit_marker === marker);
-  // The RED gate's own decision only: a call some other PreToolUse hook
-  // denied never reached git, so it says nothing about the gate and is
-  // reported as blocked_before_git, never as the gate's deny.
-  let redGate = 'not_reached';
-  if (redGateDenied(data, marker, commitAttempts)) redGate = 'deny';
-  else if (commitProcesses.length > 0) redGate = 'allow';
-  else if (commitAttempts.some((attempt) => denied.has(attempt.id) || results.get(attempt.id)?.is_error)) redGate = 'blocked_before_git';
-  else if (attempted) redGate = 'undetermined';
-  return { 'pre-commit': preCommit, 'red-gate': redGate };
+  return { 'pre-commit': preCommit };
 };
 
 export const commitTuple = (data) => ['a', 'b'].map((marker) => {
   const observation = commitObservation(data, marker);
-  return `${marker}.pre-commit=${observation['pre-commit']},${marker}.red-gate=${observation['red-gate']}`;
+  return `${marker}.pre-commit=${observation['pre-commit']}`;
 }).join(';');
 
 const envValue = (data, subject) => {
@@ -377,7 +328,7 @@ export const observe = (row, expanded, data, snapshotDirectory, context = {}) =>
           const root = commitTuple(context.rootCommit);
           return mine === root ? 'value:match-root' : `value:differs(${data.scenario.launch}=${mine} root=${root})`;
         }
-        const match = /^commit-([a-z]):(pre-commit|red-gate)$/.exec(subject);
+        const match = /^commit-([a-z]):(pre-commit)$/.exec(subject);
         if (!match) return 'unknown_commit_subject';
         return `value:${commitObservation(data, match[1])[match[2]]}`;
       }

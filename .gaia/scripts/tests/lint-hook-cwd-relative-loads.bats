@@ -32,9 +32,9 @@
 # operator-facing deny messages that quote the very repair it recommends.
 #
 # One test is load-bearing beyond coverage. "reds against the historical
-# red-verify-commit-check shape" carries the exact line gaia-react/gaia#1854 was
-# filed against, so the gate is proven to reach the instance it was written for
-# rather than a tidied stand-in.
+# blocking-hook shape" carries the line gaia-react/gaia#1854 was
+# filed against with only the library name changed (the original hook is gone),
+# so the gate is proven to reach that shape.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 #
@@ -110,10 +110,10 @@ run_linter() {
 
 # --- the class fires, one test per position the header enumerates -----------
 
-@test "reds against the historical red-verify-commit-check shape" {
+@test "reds against the historical blocking-hook shape" {
   fixture_repo
-  fixture_hook '[ -f .claude/hooks/lib/red-ledger.sh ] && . .claude/hooks/lib/red-ledger.sh
-type red_ledger_path >/dev/null 2>&1 || exit 0'
+  fixture_hook '[ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh
+type worthiness_ledger_path >/dev/null 2>&1 || exit 0'
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
@@ -129,7 +129,7 @@ type red_ledger_path >/dev/null 2>&1 || exit 0'
   # pattern. Both bracket forms and the quoted spelling ride this one test
   # because the negation is admitted once, ahead of the rest of the arm.
   fixture_repo
-  fixture_hook '[ ! -f .claude/hooks/lib/red-ledger.sh ] && exit 0
+  fixture_hook '[ ! -f .claude/hooks/lib/worthiness-ledger.sh ] && exit 0
 [[ ! -f ".gaia/scripts/main-root-lib.sh" ]] && exit 0'
   run_linter
   [ "$status" -eq 1 ]
@@ -150,7 +150,7 @@ type red_ledger_path >/dev/null 2>&1 || exit 0'
 @test "flags an INDENTED source operand, the idiomatic spelling of the class" {
   fixture_repo
   fixture_hook 'if true; then
-  . .claude/hooks/lib/red-ledger.sh
+  . .claude/hooks/lib/worthiness-ledger.sh
 fi'
   run_linter
   [ "$status" -eq 1 ]
@@ -161,7 +161,7 @@ fi'
 @test "an indented VARIABLE-rooted load is still the repair, not a hit" {
   fixture_repo
   fixture_hook 'if true; then
-  . "$_hook_dir/lib/red-ledger.sh"
+  . "$_hook_dir/lib/worthiness-ledger.sh"
 fi'
   run_linter
   [ "$status" -eq 0 ]
@@ -192,7 +192,7 @@ fi'
   # as its bare spelling does. A gate that read only the bare form would report
   # clean over half its own class, and the tree carried a live quoted instance.
   fixture_repo
-  fixture_hook '[ -f ".claude/hooks/lib/red-ledger.sh" ] && . ".claude/hooks/lib/red-ledger.sh"
+  fixture_hook '[ -f ".claude/hooks/lib/worthiness-ledger.sh" ] && . ".claude/hooks/lib/worthiness-ledger.sh"
 bash ".gaia/scripts/usage.sh" pr 1'
   run_linter
   [ "$status" -eq 1 ]
@@ -215,7 +215,7 @@ bash ".gaia/scripts/usage.sh" pr 1'
   # not turn the advertised repair into a finding.
   fixture_repo
   fixture_hook '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
-[ -f "$_library_directory/red-ledger.sh" ] && . "$_library_directory/red-ledger.sh"
+[ -f "$_library_directory/worthiness-ledger.sh" ] && . "$_library_directory/worthiness-ledger.sh"
 bash "$_library_directory/../../.gaia/scripts/usage.sh"'
   run_linter
   [ "$status" -eq 0 ]
@@ -228,7 +228,7 @@ bash "$_library_directory/../../.gaia/scripts/usage.sh"'
   # that way. Run from a subdirectory of the fixture it must still find the
   # planted hook rather than reporting an empty surface.
   fixture_repo
-  fixture_hook '[ -f .claude/hooks/lib/red-ledger.sh ] && . .claude/hooks/lib/red-ledger.sh'
+  fixture_hook '[ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh'
   mkdir -p "$TEMPORARY_DIRECTORY/app/components"
   run bash -c "cd '$TEMPORARY_DIRECTORY/app/components' && bash '$STAGED_LINTER' 2>&1"
   [ "$status" -eq 1 ]
@@ -252,7 +252,7 @@ bash "$_library_directory/../../.gaia/scripts/usage.sh"'
 @test "quiet on the BASH_SOURCE repair it advertises" {
   fixture_repo
   fixture_hook '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
-[ -n "$_library_directory" ] && [ -f "$_library_directory/red-ledger.sh" ] && . "$_library_directory/red-ledger.sh"'
+[ -n "$_library_directory" ] && [ -f "$_library_directory/worthiness-ledger.sh" ] && . "$_library_directory/worthiness-ledger.sh"'
   run_linter
   [ "$status" -eq 0 ]
   grep -qF -- "check.sh" <<<"$output" && return 1
@@ -265,7 +265,7 @@ bash "$_library_directory/../../.gaia/scripts/usage.sh"'
   # style has to stay the repair rather than become a finding.
   fixture_repo
   fixture_hook '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
-[ ! -f "$_library_directory/red-ledger.sh" ] && exit 0'
+[ ! -f "$_library_directory/worthiness-ledger.sh" ] && exit 0'
   run_linter
   [ "$status" -eq 0 ]
   grep -qF -- "check.sh" <<<"$output" && return 1
@@ -358,8 +358,8 @@ EOF'
 
 @test "quiet on the class in a comment, whole-line and trailing" {
   fixture_repo
-  fixture_hook '# Usage: [ -f .claude/hooks/lib/red-ledger.sh ] && . .claude/hooks/lib/red-ledger.sh
-true  # Usage: [ -f .claude/hooks/lib/red-ledger.sh ] && . .claude/hooks/lib/red-ledger.sh'
+  fixture_hook '# Usage: [ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh
+true  # Usage: [ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh'
   run_linter
   [ "$status" -eq 0 ]
   grep -qF -- "check.sh" <<<"$output" && return 1
@@ -372,7 +372,7 @@ true  # Usage: [ -f .claude/hooks/lib/red-ledger.sh ] && . .claude/hooks/lib/red
   fixture_repo
   # The mention sits BEHIND the `#`, so only the quote tracker keeps it in the
   # scanned prefix: a cut at that `#` would drop it and report clean.
-  fixture_hook 'msg="the shape is # [ -f .claude/hooks/lib/red-ledger.sh ]"'
+  fixture_hook 'msg="the shape is # [ -f .claude/hooks/lib/worthiness-ledger.sh ]"'
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
@@ -382,7 +382,7 @@ true  # Usage: [ -f .claude/hooks/lib/red-ledger.sh ] && . .claude/hooks/lib/red
 @test "a comment carrying an apostrophe does not blind the next line" {
   fixture_repo
   fixture_hook "# The gate own tracker must not read this apostrophe as a quote: don't.
-[ -f .claude/hooks/lib/red-ledger.sh ] && . .claude/hooks/lib/red-ledger.sh"
+[ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh"
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- ".claude/hooks/check.sh:4:" <<<"$output"

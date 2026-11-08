@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-04-20
 created: 2026-04-20
-updated: 2026-11-05
+updated: 2026-11-08
 tags: [decision, ci, quality]
 ---
 
@@ -18,7 +18,7 @@ The contract lives at the repo root. Steps 3 to 5 are root scripts that run acro
 
 1. **Simplify**: run `simplify` skill; apply all endorsed changes.
 2. **Localization check**: no hardcoded user-facing strings or unfilled keys.
-3. `pnpm typecheck`: zero errors in every member. This is the sole enforcer for type-only tests (`expectTypeOf`/`assertType`/`@ts-expect-error`), which [[TDD RED Verification]] exempts from its runtime-RED demand.
+3. `pnpm typecheck`: zero errors in every member. This is the sole enforcer for type-only tests (`expectTypeOf`/`assertType`/`@ts-expect-error`).
 4. `pnpm lint`: zero errors in every member, zero warnings. In the web app it runs `eslint --fix`, so it auto-fixes every fixable lint rule **and** Prettier formatting (Prettier is wired in as an `eslint` rule via `prettier/prettier`); only non-auto-fixable issues need manual attention. Hand-formatting while authoring is wasted effort; this step normalizes it. Outside the `.gaia/cli` member, `pnpm lint` ignores `.gaia/**`.
    <!-- gaia:maintainer-only:start -->
    `.gaia/cli` is a recursive workspace member here, so the root `pnpm lint`, `pnpm typecheck` and `pnpm test:ci` already cover it; `pnpm lint:cli` (`pnpm -C .gaia/cli lint`) remains the CLI's own ESLint run for focused work. The CLI's ESLint and vitest runs do not type-check, which is why its `typecheck` script matters.

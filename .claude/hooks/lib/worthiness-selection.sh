@@ -3,8 +3,8 @@
 # worthiness presence check: every changed test under the scope globs (the
 # descriptor's emergentTests and tddUnitTests) that the determinism classifier
 # labels strict, emergent or route, plus every changed file the caller names as
-# a flow test. A deterministic (strict) test is RED-gated and worthiness-gated
-# both: the review judges it on honesty and worth. The merge hook and the worthiness step both
+# a flow test. A deterministic (strict) test is in scope
+# too: the review judges it on honesty and worth. The merge hook and the worthiness step both
 # call it, so the set they judge and the set the hook demands cannot drift.
 #
 # Sourced, never executed; nothing runs at source time.
@@ -62,7 +62,7 @@ worthiness_selection_scope_ere() {
 
 # Sets _worthiness_selection_is_emergent to 1 only when the classifier
 # affirmatively answers strict, emergent or route (a strict or route test is
-# worthiness-audited and RED-gated both). Exit 7 is the one failure that is not a quiet
+# worthiness-audited). Exit 7 is the one failure that is not a quiet
 # 0: the classifier could not read the package descriptor. Not a command
 # substitution at the call site, so both variables survive.
 _worthiness_selection_classify() {
@@ -144,10 +144,10 @@ worthiness_selection_walk() {
     [ -f "$tree_root/$relative_path" ] || continue
 
     # The classifier decides membership: strict, emergent and route are in
-    # scope (a strict test is RED-gated and worthiness-gated both; the review
+    # scope (a strict test is in scope too; the review
     # judges it on honesty and worth). A listed flow file skips it.
     # A classifier failure other than a package
-    # error is not emergent (fail-open; the RED gate owns that surface).
+    # error is not emergent (fail-open).
     if [ "$is_flow_file" -eq 0 ]; then
       _worthiness_selection_package_error=''
       _worthiness_selection_classify "$relative_path" "$tree_root"
