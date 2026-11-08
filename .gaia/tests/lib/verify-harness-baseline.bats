@@ -324,6 +324,31 @@ write_load_gated_suite() {
   [ "$(worktree_count)" -eq 1 ]
 }
 
+@test "push mode names the next step for a new runtime-dependency leak, not for one main already has" {
+  local leak_report
+  leak_report='runtime-dependency leaks (1):
+  .claude/hooks/old.sh:3  .claude/hooks/lib/old.sh'
+  fixture --no-branch
+  vhf_control build-staging "$leak_report"
+  vhf_commit "main leaks old.sh"
+  vhf_branch
+  printf 'page two\n' >apps/web/app/page.txt
+  vhf_commit "an unrelated branch change"
+  run_runner push "$(vhf_git rev-parse HEAD)"
+  [ "$status" -eq 0 ]
+  has_line '^PRE-EXISTING  release-scrub leak check: '
+  lacks '  next: '
+
+  vhf_control build-staging "$leak_report
+  .claude/hooks/new.sh:5  .claude/hooks/lib/new.sh"
+  vhf_commit "a hook gains an unregistered dependency"
+  run_runner push "$(vhf_git rev-parse HEAD)"
+  [ "$status" -eq 1 ]
+  has_line '^FAIL  release-scrub leak check \([0-9]+s\)$'
+  has '  next: register each referenced path that should ship with /distribution-vet, or keep these commits local and push once the commit adding it and its manifest answer lands; stop referencing a path that does not ship'
+  lacks '--no-verify'
+}
+
 @test "push mode labels each check with its short sha when several commits are pushed" {
   fixture
   local first_sha second_sha
