@@ -18,7 +18,7 @@ tags: [module, components, forms]
 
 ## The wrapper
 
-`ConformField` takes the field's metadata, a label, an optional description and an orientation. Its child is a function that receives the options for Conform's prop getter and returns the control, which is how the description reaches `aria-describedby` without the wrapper knowing the control. It sets `data-invalid`, the label's `htmlFor`, the description's id and the control's `key`. Conform's list intents reach an uncontrolled control only through that key, and Conform's getters leave it out.
+`ConformField` takes the field's metadata, a label, an optional description and an orientation. Its child is a function that receives the options for Conform's prop getter and returns the control, which is how the description reaches `aria-describedby` without the wrapper knowing the control. It sets `data-invalid`, the label's `htmlFor`, the description's id and the control's `key`. Conform's list intents reach an uncontrolled control only through that key, and Conform's getters leave it out. Only the `remove` intent has a test; `insert` and `reorder` rest on reading Conform's source.
 
 `ConformFieldError` translates each schema message found in `errors.validation` and shows any other message as written, so a missing translation key appears as its raw key and a translated server error passes through.
 
