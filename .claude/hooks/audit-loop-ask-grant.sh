@@ -22,9 +22,10 @@
 # shape; a shaped question never exits silently.
 #
 # It records an answer only when ALL of these hold, checked in this order after
-# the shape test, and each decline is its own visible `systemMessage` saying
-# nothing was recorded and naming the typed fallback (a silent decline reads as
-# a recorded grant). Unreadable (corrupt) state declines whatever the shape:
+# the shape test, and each decline says nothing was recorded and names the typed
+# fallback, to the person in `systemMessage` and to Claude in `additionalContext`
+# (a decline only one of them sees reads as a recorded grant to the other).
+# Unreadable (corrupt) state declines whatever the shape:
 #
 #   1. The payload has no `agent_id`: the call came from the main thread, not a
 #      sub-agent.
@@ -68,8 +69,8 @@
 # headless runs. A person typing a label's exact text into Other is a person answering.
 #
 # Never exit 2 and never block: PostToolUse cannot undo the question, and every
-# decline exits 0 with a `systemMessage` (stdout JSON shows only on exit 0). A
-# write failure is a visible decline. jq is checked inline rather than through
+# decline exits 0 with both fields (stdout JSON shows only on exit 0). A write
+# failure is a decline like any other. jq is checked inline rather than through
 # lib/jq-availability.sh, whose missing-jq arm exits 2. Bash 3.2; never `cd`s
 # outside the command substitution that locates the libraries.
 
@@ -92,15 +93,12 @@ _ag_escape_json() {
   printf '%s' "$text"
 }
 
-# _ag_say <message> [claude-context]: the visible note, and optionally the same
-# fact for Claude, as the PostToolUse JSON response.
+# _ag_say <message> [claude-context]: the PostToolUse JSON response. With no
+# context it is a decline, and Claude gets the message and what it means.
 _ag_say() {
-  if [ -n "${2-}" ]; then
-    printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' \
-      "$(_ag_escape_json "$1")" "$(_ag_escape_json "$2")"
-  else
-    printf '{"systemMessage":"%s"}\n' "$(_ag_escape_json "$1")"
-  fi
+  printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' \
+    "$(_ag_escape_json "$1")" \
+    "$(_ag_escape_json "${2:-$1 Claude: no grant or accept was recorded and the audit allowance is unchanged. Do not say it was recorded, and do not dispatch another audit round on it. Tell the person why and what to do next.}")"
 }
 
 # _ag_shaped <pinned-question-json|null>: true when a questions[] entry has the
@@ -243,9 +241,13 @@ fi
 
 # 2. Interactive session.
 transcript="$(printf '%s' "$payload" | jq -r '.transcript_path // "" | strings' 2>/dev/null)" || transcript=""
-if ! gaia_loop_session_is_interactive "$transcript"; then
-  _ag_decline "this session is not interactive (a person must answer in a Claude Code terminal session)."
-fi
+interactive_exit_status=0
+gaia_loop_session_is_interactive "$transcript" || interactive_exit_status=$?
+case "$interactive_exit_status" in
+  0) ;;
+  2) _ag_decline "this session has no transcript record yet to show it is interactive. Send any other message first, then answer." ;;
+  *) _ag_decline "this session is not interactive (a person must answer in a Claude Code terminal session)." ;;
+esac
 
 # 3. Permission mode.
 mode="$(printf '%s' "$payload" | jq -r '.permission_mode // "" | strings' 2>/dev/null)" || mode=""

@@ -309,14 +309,24 @@ gaia_loop_new_nonce() {
 
 # gaia_loop_session_is_interactive <transcript_path>: rc 0 only when
 # CLAUDE_CODE_ENTRYPOINT is `cli`, the transcript exists, and every record
-# carrying `entrypoint` holds `cli`. Shared by both recorders.
+# carrying `entrypoint` holds `cli`. Shared by both recorders. Every other rc
+# is a refusal. rc 2 narrows one for the message: the environment says `cli`
+# but no record says so yet, the shape of a session's first prompt, since
+# UserPromptSubmit fires before Claude Code writes the transcript. The
+# environment alone is not enough to admit it: the record is the check's second
+# witness, and a recorder's job is to stay refused when only one speaks.
 gaia_loop_session_is_interactive() {
   local transcript="${1-}" entry=""
   [ "${CLAUDE_CODE_ENTRYPOINT-}" = cli ] || return 1
-  if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-    entry="$(jq -r -n '[inputs | select(type == "object" and has("entrypoint")) | .entrypoint] | if length > 0 and all(. == "cli") then "cli" else "other" end' <"$transcript" 2>/dev/null)" || entry=""
-  fi
-  [ "$entry" = cli ]
+  [ -n "$transcript" ] || return 1
+  [ -e "$transcript" ] || return 2
+  [ -f "$transcript" ] || return 1
+  entry="$(jq -r -n '[inputs | select(type == "object" and has("entrypoint")) | .entrypoint] | if length == 0 then "none" elif all(. == "cli") then "cli" else "other" end' <"$transcript" 2>/dev/null)" || entry=""
+  case "$entry" in
+    cli) return 0 ;;
+    none) return 2 ;;
+    *) return 1 ;;
+  esac
 }
 
 # gaia_loop_recommended <trigger> <snapshot-json>: `grant`, `accept` or `stop`, the

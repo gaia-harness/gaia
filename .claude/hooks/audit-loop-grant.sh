@@ -33,6 +33,9 @@
 #      `sdk-cli` in its environment, and a resumed one (`claude -c -p`)
 #      appends records whose entrypoint is not `cli` to the same transcript.
 #      The UserPromptSubmit event alone is not proof a person typed the line.
+#      A session's first prompt fails this check too, because the hook fires
+#      before the transcript is written: it is refused, and the message says to
+#      send another message and then type the line.
 #
 # Other channels. An AskUserQuestion selection is recorded only by
 # audit-loop-ask-grant.sh, and only against a question the bound hook pinned
@@ -57,9 +60,10 @@
 # any jq or git call, using shell builtins only.
 #
 # Never exit 2: that blocks the prompt and erases it. Every decline exits 0
-# with a visible `systemMessage` (Claude Code shows stdout JSON only on exit
-# 0). Bash 3.2; never `cd`s outside the command substitution that locates the
-# libraries.
+# (Claude Code shows stdout JSON only on exit 0) with the reason in both fields:
+# `systemMessage` reaches only the person and `additionalContext` reaches only
+# Claude, which otherwise reports a grant that was never recorded. Bash 3.2;
+# never `cd`s outside the command substitution that locates the libraries.
 
 set -u
 
@@ -75,15 +79,14 @@ _gl_escape_json() {
   printf '%s' "$text"
 }
 
-# _gl_say <message> [claude-context]: the visible note, and optionally the
-# same fact for Claude, as the UserPromptSubmit JSON response.
+_GL_NOTHING_RECORDED_FOR_CLAUDE="Claude: no grant or accept was recorded and the audit allowance is unchanged."
+
+# _gl_say <message> [claude-context]: the UserPromptSubmit JSON response. With
+# no context it is a decline, and Claude gets the message and what it means.
 _gl_say() {
-  if [ -n "${2-}" ]; then
-    printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"}}\n' \
-      "$(_gl_escape_json "$1")" "$(_gl_escape_json "$2")"
-  else
-    printf '{"systemMessage":"%s"}\n' "$(_gl_escape_json "$1")"
-  fi
+  printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"}}\n' \
+    "$(_gl_escape_json "$1")" \
+    "$(_gl_escape_json "${2:-$1 $_GL_NOTHING_RECORDED_FOR_CLAUDE Do not say it was recorded, and do not dispatch another audit round on it. Tell the person why and what to do next.}")"
 }
 
 # Arguments mean someone is running the recorder by hand.
@@ -141,18 +144,29 @@ case "$parsed" in
   malformed)
     gline="$(gaia_loop_grant_line 1)"
     gline="${gline% 1} <n>"
-    _gl_say "Not recorded: the whole prompt must be exactly $gline (n from 1 to 10) or exactly $(gaia_loop_accept_line), with nothing else in the message."
+    malformed_message="Not recorded: the whole prompt must be exactly $gline (n from 1 to 10) or exactly $(gaia_loop_accept_line), with nothing else in the message."
+    _gl_say "$malformed_message" "$malformed_message $_GL_NOTHING_RECORDED_FOR_CLAUDE If the person was only mentioning the line, answer them normally; otherwise tell them this."
     exit 0
     ;;
 esac
 
 # Interactive check.
 transcript="$(printf '%s' "$payload" | jq -r '.transcript_path // "" | strings' 2>/dev/null)" || transcript=""
-if ! gaia_loop_session_is_interactive "$transcript"; then
-  printf 'audit-loop-grant: session is not interactive; nothing recorded\n' >&2
-  _gl_say "Not recorded: this session is not interactive (a person must type the line in a Claude Code terminal session)."
-  exit 0
-fi
+interactive_exit_status=0
+gaia_loop_session_is_interactive "$transcript" || interactive_exit_status=$?
+case "$interactive_exit_status" in
+  0) ;;
+  2)
+    printf 'audit-loop-grant: no transcript record yet; nothing recorded\n' >&2
+    _gl_say "Not recorded: this is the session's first prompt, so it has no transcript record yet to show it is interactive. Send any other message first, then type the line again."
+    exit 0
+    ;;
+  *)
+    printf 'audit-loop-grant: session is not interactive; nothing recorded\n' >&2
+    _gl_say "Not recorded: this session is not interactive (a person must type the line in a Claude Code terminal session)."
+    exit 0
+    ;;
+esac
 
 session_id="$(printf '%s' "$payload" | jq -r '.session_id // "" | strings' 2>/dev/null)" || session_id=""
 cwd="$(printf '%s' "$payload" | jq -r '.cwd // "" | strings' 2>/dev/null)" || cwd=""
