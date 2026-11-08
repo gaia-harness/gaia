@@ -150,14 +150,14 @@ recorded_one() {
   [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
 }
 
-@test "mutant: admitting the missing-transcript shape records, so that refusal can fail" {
+@test "mutant: admitting the missing-transcript shape records" {
   seed_pending
   mutated_library 's/\[ -e "\$transcript" \] || return 2/[ -e "$transcript" ] || return 0/'
   send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/no-such.jsonl"
   recorded_one
 }
 
-@test "mutant: admitting the no-entrypoint shape records, so that refusal can fail" {
+@test "mutant: admitting the no-entrypoint shape records" {
   seed_pending
   mutated_library 's/none) return 2 ;;/none) return 0 ;;/'
   : >"$BATS_TEST_TMPDIR/tx-empty.jsonl"
@@ -165,14 +165,14 @@ recorded_one() {
   recorded_one
 }
 
-@test "mutant: dropping the environment check records for sdk-cli, so that refusal can fail" {
+@test "mutant: dropping the environment check records for sdk-cli" {
   seed_pending
   mutated_library '/CLAUDE_CODE_ENTRYPOINT-}" = cli \] || return 1/d'
   CLAUDE_CODE_ENTRYPOINT=sdk-cli send 'audit-grant 3'
   recorded_one
 }
 
-@test "mutant: reading any instead of all records a mixed transcript, so that refusal can fail" {
+@test "mutant: reading any instead of all records a mixed transcript" {
   seed_pending
   mutated_library 's/elif all(\. == "cli")/elif any(. == "cli")/'
   printf '%s\n' '{"type":"user","entrypoint":"cli"}' '{"type":"user","entrypoint":"sdk-cli"}' >"$BATS_TEST_TMPDIR/tx-mixed.jsonl"
@@ -180,21 +180,21 @@ recorded_one() {
   recorded_one
 }
 
-@test "mutant: admitting a directory path records, so that refusal can fail" {
+@test "mutant: admitting a directory path records" {
   seed_pending
   mutated_library 's/\[ -f "\$transcript" \] || return 1/[ -f "$transcript" ] || return 0/'
   send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR"
   recorded_one
 }
 
-@test "mutant: admitting an empty path records, so that refusal can fail" {
+@test "mutant: admitting an empty path records" {
   seed_pending
   mutated_library 's/\[ -n "\$transcript" \] || return 1/[ -n "$transcript" ] || return 0/'
   send 'audit-grant 3' "$ALF_ROOT" s1 ""
   recorded_one
 }
 
-@test "mutant: a hook ignoring the check's status records, so that refusal can fail" {
+@test "mutant: a hook ignoring the check's status records" {
   seed_pending
   scratch_hook 's/|| interactive_exit_status=\$?/|| true/'
   send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/no-such.jsonl"
@@ -468,8 +468,8 @@ claude_told_nothing_recorded() {
     || { printf 'Claude not told for %s: %s\n' "$1" "$output" >&2; return 1; }
 }
 
-# scratch_hook <sed-expression>: a mutated copy of the hook with its libraries
-# reached through a `.gaia` symlink beside it; sets HOOK and proves the edit took.
+# scratch_hook <sed-expression>: a mutated copy of the hook; sets HOOK and proves
+# the edit took.
 scratch_hook() {
   local scratch_directory="$BATS_TEST_TMPDIR/scratch"
   mkdir -p "$scratch_directory/.claude/hooks"
@@ -480,7 +480,7 @@ scratch_hook() {
   HOOK="$scratch_directory/.claude/hooks/audit-loop-grant.sh"
 }
 
-@test "each decline reachable from pending state tells Claude nothing was recorded" {
+@test "a malformed line, a non-interactive session, no checkout, a held lock and nothing pending each tell Claude nothing was recorded" {
   seed_pending
   snapshot
   send 'audit-grant 0'
@@ -536,6 +536,15 @@ scratch_hook() {
   cp "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh" "$lone_hook"
   HOOK="$lone_hook" send 'audit-grant 2'
   claude_told_nothing_recorded "libraries missing"
+}
+
+@test "a failed state read under the lock tells Claude nothing was recorded" {
+  seed_pending
+  snapshot
+  scratch_hook 's/^state="\$(gaia_loop_read_state "\$target" 2>\/dev\/null)"$/false/'
+  send 'audit-grant 2'
+  claude_told_nothing_recorded "read failed"
+  printf '%s\n' "$output" | grep -qF 'could not be read'
 }
 
 @test "a failed state write tells Claude nothing was recorded" {

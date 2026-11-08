@@ -327,7 +327,7 @@ CASES
   printf '%s' "$output" | grep -qF 'not interactive'
 }
 
-@test "mutant: a hook ignoring the check's status records, so that refusal can fail" {
+@test "mutant: a hook ignoring the check's status records" {
   seed_pinned
   scratch_hook 's/|| interactive_exit_status=\$?/|| true/'
   TX="$TX_SDK" send "$(continue_label)"
@@ -502,6 +502,21 @@ CASES
   cp "$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh" "$lone_hook"
   HOOK="$lone_hook" send_payload "$payload_json"
   declined "libraries missing"
+}
+
+@test "a failed state read before or under the lock tells Claude nothing was recorded" {
+  seed_pinned
+  snapshot
+  scratch_hook 's/^state="\$(gaia_loop_read_state "\$target" 2>\/dev\/null)" || _ag_decline/false || _ag_decline/'
+  send "$(continue_label)"
+  declined "read failed before the lock"
+  printf '%s' "$output" | grep -qF 'could not be read'
+  rm -rf "$BATS_TEST_TMPDIR/scratch"
+  HOOK="$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh"
+  scratch_hook 's/^state="\$(gaia_loop_read_state "\$target" 2>\/dev\/null)"$/false/'
+  send "$(continue_label)"
+  declined "read failed under the lock"
+  printf '%s' "$output" | grep -qF 'could not be read'
 }
 
 @test "a failed state write tells Claude nothing was recorded" {
