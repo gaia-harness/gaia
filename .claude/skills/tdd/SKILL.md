@@ -50,7 +50,7 @@ Before writing any code:
 
 - [ ] Confirm which layer owns this test (see stack reference for layer breakdown)
 - [ ] Confirm which behaviors to test (prioritize)
-- [ ] Design the interface as deep modules with injected dependencies and pure functions (`.claude/rules/coding-guidelines.md`, `## 1. Simplicity First`)
+- [ ] Design the interface as deep modules, inject dependencies, and prefer pure functions (`.claude/rules/coding-guidelines.md`, `## 1. Simplicity First`)
 - [ ] Name the user-observable behaviors and the acceptance test that owns each (not implementation steps, not one test per function)
 - [ ] Get user approval on the plan with `AskUserQuestion`: `Approve the plan` (Recommended) or `Revise`
 
