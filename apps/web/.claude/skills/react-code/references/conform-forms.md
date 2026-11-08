@@ -45,7 +45,7 @@ Scenarios that fail with no error. A new miss goes in `ConformField` if the wrap
 | Scenario | What silently goes wrong | Fix |
 | --- | --- | --- |
 | `useForm` without `constraint`, in any form with a schema | No control is marked required, so assistive technology never announces it | `constraint: getZodConstraint(schema)` |
-| A composed control rendered from `getFieldList()` with no `key` | After a list `remove`, `insert` or `reorder`, a row keyed by position shows the old value | `key={field.key}` on the control or its row |
+| A composed control rendered from `getFieldList()` not keyed by `field.key` | After a list `remove`, `insert` or `reorder`, a row keyed by position shows the old value | `key={field.key}` on the control or its row |
 | A group's `FieldError` fed Conform's messages as `{message}` objects, or through a page-local mapper | A schema key shows raw, or a map miss shows nothing | `<ConformFieldError field={field} />` |
 | A `RadioGroup` missing Conform's attributes, which no getter supplies for it | Screen readers get no invalid state, error link or required state | Set `aria-invalid`, `aria-describedby` and `required={field.required}` as `### Radio group` shows |
 
