@@ -184,9 +184,6 @@
     ".claude/skills/gaia/references/worthiness-step.md": "owned",
     ".claude/skills/naming-conventions/references/examples.md": "owned",
     ".claude/skills/naming-conventions/SKILL.md": "owned",
-    ".claude/skills/tdd/deep-modules.md": "owned",
-    ".claude/skills/tdd/interface-design.md": "owned",
-    ".claude/skills/tdd/refactoring.md": "owned",
     ".claude/skills/tdd/references/tests-shell.md": "owned",
     ".claude/skills/tdd/SKILL.md": "owned",
     ".claude/skills/update-deps/references/final-report.md": "owned",
@@ -846,7 +843,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-08T03:27:42.968Z",
+  "generated": "2026-11-08T06:08:38.977Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
