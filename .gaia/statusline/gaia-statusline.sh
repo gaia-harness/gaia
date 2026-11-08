@@ -12,7 +12,8 @@
 #      (so the adopter's existing global statusline appears unchanged), unless
 #      the machine chose GAIA's bar in /setup-gaia (statusline.left "gaia").
 #   2. No global command → the default left side (project, branch with a
-#      linked-worktree marker, model and effort, a colored context bar).
+#      linked-worktree marker, model and effort, a colored context bar, usage
+#      windows).
 #   3. Last resort, when that cannot render → bare "Claude Code" label.
 #
 # Whatever the left side is, the right side always renders, and every render
@@ -64,8 +65,8 @@ input=$(cat)
 # six decimals so the writer's validation accepts it; a field that is absent or
 # the wrong type comes out empty. Silent on jq failure: every field then reads
 # empty, nothing is written, and the render continues. Indexing a non-object
-# throws and would fail the whole call, which is why each object is narrowed
-# before it is read.
+# throws and would fail the whole call, so `context_window`, `rate_limits` and
+# its windows are narrowed before they are read.
 session_id=""
 session_directory=""
 context_percentage=""

@@ -274,7 +274,8 @@ expect_usage_color() {
 @test "usage windows: a red window shows the time until it resets, and a yellow one does not" {
   local now
   now=$(date +%s)
-  # Each offset sits mid-minute, so a slow test run cannot cross a rounding edge.
+  # Each offset sits mid-minute, so the run has about 30 seconds before it
+  # crosses a rounding edge.
   render_usage "{\"five_hour\":{\"used_percentage\":92,\"resets_at\":$((now + 3690))}}"
   grep -qF "🕔 92% (1h2m)" <<<"$PLAIN_OUTPUT" || { echo "hours: $PLAIN_OUTPUT"; return 1; }
   render_usage "{\"five_hour\":{\"used_percentage\":92,\"resets_at\":$((now + 690))}}"

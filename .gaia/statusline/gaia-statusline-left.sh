@@ -2,14 +2,14 @@
 #
 # Default left side of the GAIA statusline; gaia-statusline.sh's left-side
 # resolution decides when it renders. Sourced by gaia-statusline.sh as
-# "$GAIA_DIRECTORY/statusline/gaia-statusline-left.sh"; defines functions and runs nothing at
-# source time.
+# "$GAIA_DIRECTORY/statusline/gaia-statusline-left.sh"; defines functions and constants and runs
+# nothing else at source time.
 #
 # Shape: project | branch | model (effort) | context bar | 5-hour usage | 7-day
 # usage. The project is the MAIN checkout's folder name, so a linked worktree
 # shows the main project; the branch carries a tree marker inside a linked
 # worktree. A usage window renders only when Claude Code sends it, so no plan
-# logic lives here: the payload's presence already says which limits apply.
+# logic lives here.
 #
 # The bar is colored from the shared threshold lib's bands (green below yellow,
 # yellow from yellow, red from red, fire and skull markers above), the same
@@ -17,8 +17,8 @@
 # disagree. Those bands are token counts for a context window, so they do not
 # apply to the usage windows, which carry their own percentage bands. Hot path:
 # bash arithmetic and builtins only, plus the one git call for the branch, one
-# date call when a usage window is red, and, when a checkpoint override file
-# exists, one jq call.
+# date call per red usage window, and, when a checkpoint override file exists,
+# one jq call.
 
 # Yellow leaves room to change how the remaining work is run; red is close enough
 # that the reset time decides what happens next, so only red shows the countdown.
@@ -26,8 +26,8 @@ GAIA_USAGE_YELLOW_PERCENTAGE=75
 GAIA_USAGE_RED_PERCENTAGE=90
 
 # gaia_statusline_usage_segment <icon> <rounded_percentage> <resets_at_epoch_seconds>
-# Sets _GAIA_STATUSLINE_USAGE_SEGMENT, or empties it when the window is absent.
-# A global, not stdout, so the hot path forks no subshell for it.
+# Sets _GAIA_STATUSLINE_USAGE_SEGMENT rather than printing, so the hot path forks
+# no subshell for it.
 gaia_statusline_usage_segment() {
   local icon="${1:-}" percentage="${2:-}" resets_at="${3:-}"
   local color=$'\033[01;32m' reset=$'\033[00m' countdown="" now seconds_left minutes_left days hours minutes
