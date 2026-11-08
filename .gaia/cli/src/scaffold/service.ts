@@ -14,8 +14,6 @@
  *     when passed, else the single directory there other than `api`. The
  *     template ships it as `gaia` and adopters rename it, so it is never
  *     hardcoded.
- *   - Each service is self-contained (its own `urls.ts` and `index.ts`); we do
- *     NOT touch the root `<layer>/urls.ts`.
  *   - `queries.ts` is not exported from the service barrel; routes import it
  *     by path so server-only code never pulls in the Query runtime.
  *   - `--queries-only` writes just `queries.ts` into an existing service
