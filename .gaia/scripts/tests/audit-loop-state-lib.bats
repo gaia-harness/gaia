@@ -592,6 +592,26 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   if CLAUDE_CODE_ENTRYPOINT=cli gaia_loop_session_is_interactive ""; then return 1; fi
 }
 
+@test "gaia_loop_session_is_interactive returns 2 only for a cli session with no entrypoint record yet" {
+  local exit_status
+  : >"$BATS_TEST_TMPDIR/empty.jsonl"
+  printf '{"type":"session-owner"}\n' >"$BATS_TEST_TMPDIR/no-entrypoint.jsonl"
+  printf '{"entrypoint":"cli"}\n{"entrypoint":"sdk-cli"}\n' >"$BATS_TEST_TMPDIR/mixed.jsonl"
+  for transcript_name in missing.jsonl empty.jsonl no-entrypoint.jsonl; do
+    exit_status=0
+    CLAUDE_CODE_ENTRYPOINT=cli gaia_loop_session_is_interactive "$BATS_TEST_TMPDIR/$transcript_name" || exit_status=$?
+    [ "$exit_status" -eq 2 ]
+    exit_status=0
+    CLAUDE_CODE_ENTRYPOINT=sdk-cli gaia_loop_session_is_interactive "$BATS_TEST_TMPDIR/$transcript_name" || exit_status=$?
+    [ "$exit_status" -eq 1 ]
+  done
+  for transcript_path in "" "$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR/mixed.jsonl"; do
+    exit_status=0
+    CLAUDE_CODE_ENTRYPOINT=cli gaia_loop_session_is_interactive "$transcript_path" || exit_status=$?
+    [ "$exit_status" -eq 1 ]
+  done
+}
+
 @test "sourcing the lib with PATH empty still succeeds" {
   run env PATH= /bin/bash -c ". '$SCRIPTS/audit-loop-state-lib.sh'; echo ok"
   [ "$status" -eq 0 ]

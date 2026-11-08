@@ -123,6 +123,16 @@ declined() {
   printf '%s' "$output" | grep -qF 'Nothing was recorded' || { printf 'no decline text for %s: %s\n' "$1" "$output" >&2; return 1; }
   printf '%s' "$output" | grep -qF 'audit-grant' || { printf 'fallback unnamed for %s\n' "$1" >&2; return 1; }
   printf '%s' "$output" | grep -qF 'audit-accept' || { printf 'accept fallback unnamed for %s\n' "$1" >&2; return 1; }
+  claude_told_nothing_recorded "$1"
+}
+
+# claude_told_nothing_recorded <why>: the reason is in the one field Claude reads.
+claude_told_nothing_recorded() {
+  printf '%s' "$output" | jq -e '
+    .hookSpecificOutput.hookEventName == "PostToolUse"
+    and (.hookSpecificOutput.additionalContext | contains("no grant or accept was recorded"))
+    and (.systemMessage as $message | .hookSpecificOutput.additionalContext | contains($message))' >/dev/null \
+    || { printf 'Claude not told for %s: %s\n' "$1" "$output" >&2; return 1; }
 }
 
 # --- UAT-011: the record ------------------------------------------------------
@@ -311,6 +321,18 @@ CASES
   declined "sdk-cli transcript"
   TX="$BATS_TEST_TMPDIR/no-such.jsonl" send "$(continue_label)"
   declined "missing transcript"
+  printf '%s' "$output" | grep -qF 'Send any other message first'
+  TX="$BATS_TEST_TMPDIR/no-such.jsonl" CLAUDE_CODE_ENTRYPOINT=sdk-cli send "$(continue_label)"
+  declined "missing transcript under sdk-cli"
+  printf '%s' "$output" | grep -qF 'not interactive'
+}
+
+@test "mutant: a hook ignoring the check's status records" {
+  seed_pinned
+  scratch_hook 's/|| interactive_exit_status=\$?/|| true/'
+  TX="$TX_SDK" send "$(continue_label)"
+  [ "$status" -eq 0 ]
+  [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
 }
 
 @test "UAT-012: a permission mode outside the allowlist, an unmeasured one, or none records nothing" {
@@ -458,6 +480,51 @@ CASES
   unchanged
   printf '%s' "$output" | grep -qF 'jq is missing'
   printf '%s' "$output" | grep -qF 'audit-grant'
+  claude_told_nothing_recorded "jq absent"
+}
+
+@test "a shaped question with no audit state tells Claude nothing was recorded" {
+  seed_pinned
+  local payload_json
+  payload_json="$(mk_payload 0 "$(continue_label)")"
+  rm -rf "$ALF_ROOT/.gaia/local/protected/audit-loop"
+  send_payload "$payload_json"
+  [ "$status" -eq 0 ]
+  claude_told_nothing_recorded "no audit state"
+}
+
+@test "a decline with the libraries missing tells Claude nothing was recorded" {
+  seed_pinned
+  snapshot
+  local payload_json lone_hook="$BATS_TEST_TMPDIR/lone/.claude/hooks/audit-loop-ask-grant.sh"
+  payload_json="$(mk_payload 0 "$(continue_label)")"
+  mkdir -p "$(dirname "$lone_hook")"
+  cp "$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh" "$lone_hook"
+  HOOK="$lone_hook" send_payload "$payload_json"
+  declined "libraries missing"
+}
+
+@test "a failed state read before or under the lock tells Claude nothing was recorded" {
+  seed_pinned
+  snapshot
+  scratch_hook 's/^state="\$(gaia_loop_read_state "\$target" 2>\/dev\/null)" || _ag_decline/false || _ag_decline/'
+  send "$(continue_label)"
+  declined "read failed before the lock"
+  printf '%s' "$output" | grep -qF 'could not be read'
+  rm -rf "$BATS_TEST_TMPDIR/scratch"
+  HOOK="$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh"
+  scratch_hook 's/^state="\$(gaia_loop_read_state "\$target" 2>\/dev\/null)"$/false/'
+  send "$(continue_label)"
+  declined "read failed under the lock"
+  printf '%s' "$output" | grep -qF 'could not be read'
+}
+
+@test "a failed state write tells Claude nothing was recorded" {
+  seed_pinned
+  snapshot
+  scratch_hook 's/! gaia_loop_write_state "\$target" "\$new"/true/'
+  send "$(continue_label)"
+  declined "write failed"
 }
 
 @test "corrupt state: the message names the file and the file is untouched" {

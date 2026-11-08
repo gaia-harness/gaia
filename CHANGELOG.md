@@ -62,6 +62,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **Claude now sees when an audit grant is declined:** both checkpoint hooks showed a decline only to the person, so Claude could report a grant that was never recorded. An `audit-grant <n>` or `audit-accept` typed as a session's first prompt is still refused, but the message now says to send any other message first instead of calling the session not interactive. (#3380)
 - **The Services wiki page no longer names a root `urls.ts`:** it said `/new-service` leaves that file untouched, but the domain layer has none; each domain owns its own `urls.ts`. (#3379)
 - **A plan build no longer stalls on a push the distribution check refuses (maintainer repo only):** the planner now orders phases so a shipped script never references a new shipped file before its manifest answer lands, or plans to keep phase commits local until then. The pre-push refusal for a new runtime-dependency leak now names the ways forward: register a path that should ship with `/distribution-vet`, push once its manifest answer lands, or stop referencing a path that does not ship. (#3370)
 - **A plain `pnpm dev` with MSW now starts with the mock store's baseline records:** with `MSW_ENABLED=true` and no Playwright worker server, the server entry runs `resetTestData` when it first loads, before it renders a page, so records in a `reset*` default seed (such as the users a sign-in form accepts) exist in manual dev instead of the store starting empty. (#3363)
