@@ -575,12 +575,8 @@
     "apps/web/app/components/ui/tests/field.stories.tsx": "owned",
     "apps/web/app/components/ui/tests/input-group.stories.tsx": "owned",
     "apps/web/app/components/ui/tests/input.stories.tsx": "owned",
-    "apps/web/app/components/ui/tests/label.stories.tsx": "owned",
     "apps/web/app/components/ui/tests/native-select.stories.tsx": "owned",
     "apps/web/app/components/ui/tests/radio-group.stories.tsx": "owned",
-    "apps/web/app/components/ui/tests/separator.stories.tsx": "owned",
-    "apps/web/app/components/ui/tests/spinner.stories.tsx": "owned",
-    "apps/web/app/components/ui/tests/textarea.stories.tsx": "owned",
     "apps/web/app/components/ui/tests/toast.stories.tsx": "owned",
     "apps/web/app/components/ui/textarea.tsx": "owned",
     "apps/web/app/components/ui/toast.tsx": "owned",
@@ -635,7 +631,6 @@
     "apps/web/app/utils/tests/notify.stories.tsx": "owned",
     "apps/web/app/utils/tests/object.test.ts": "owned",
     "apps/web/app/utils/tests/stack.ts": "owned",
-    "apps/web/app/utils/tests/theme.test.ts": "owned",
     "apps/web/app/utils/theme.server.ts": "owned",
     "apps/web/app/utils/theme.ts": "owned",
     "apps/web/CLAUDE.md": "shared",
@@ -851,7 +846,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-08T02:16:23.451Z",
+  "generated": "2026-11-08T03:27:42.968Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
