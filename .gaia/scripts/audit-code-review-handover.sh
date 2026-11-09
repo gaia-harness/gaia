@@ -90,6 +90,7 @@ cmd_assign() {
 cmd_delivery() {
   require_single_member
   [ "$(record_state)" = ok ] || exit 5
+  [ "$(field .handover)" = open ] || return 0
   local items handed_file temporary_file
   items="$(jq -c --arg member "$MEMBERS" '[.findings[]
     | select(.member == $member and .state != "kept" and .state != "dropped")
