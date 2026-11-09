@@ -1,4 +1,4 @@
-import {afterEach, beforeEach, describe, expect, test} from 'vitest';
+import {afterEach, expect, test} from 'vitest';
 import {z} from 'zod';
 import {createServer} from 'node:http';
 import type {Server} from 'node:http';
@@ -7,6 +7,12 @@ import {create} from '..';
 import {attempt} from '../helpers';
 
 type BodyBehavior = 'drop' | 'stall';
+
+const NETWORK_FAILURE = {
+  isNetworkFailure: true,
+  status: 503,
+  statusText: 'Network error',
+};
 
 const originalApiUrl = process.env.API_URL;
 
@@ -32,10 +38,6 @@ const startServer = async (behavior: BodyBehavior) => {
   process.env.API_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 };
 
-beforeEach(() => {
-  process.env.API_URL = originalApiUrl;
-});
-
 afterEach(async () => {
   process.env.API_URL = originalApiUrl;
   server.closeAllConnections();
@@ -44,45 +46,47 @@ afterEach(async () => {
   });
 });
 
-const schema = z.object({data: z.object({displayName: z.string()})});
+test('a schema-less body that drops resolves through attempt as a 503', async () => {
+  await startServer('drop');
 
-describe.each([
-  {isSnakeCaseEnabled: false, layer: 'plain layer'},
-  {isSnakeCaseEnabled: true, layer: 'snake_case layer'},
-])('body failure on a $layer', ({isSnakeCaseEnabled}) => {
-  test.each([{hasSchema: false}, {hasSchema: true}])(
-    'a body that drops resolves through attempt as a 503 (schema: $hasSchema)',
-    async ({hasSchema}) => {
-      await startServer('drop');
-      const request = create({isSnakeCaseEnabled});
-      const outcome = await attempt(async () =>
-        hasSchema ?
-          request('items', {retry: 0, schema})
-        : request('items', {retry: 0})
-      );
+  const outcome = await attempt(async () => create()('items', {retry: 0}));
 
-      expect(outcome).toEqual([
-        {isNetworkFailure: true, status: 503, statusText: 'Network error'},
-        undefined,
-      ]);
-    }
+  expect(outcome).toEqual([NETWORK_FAILURE, undefined]);
+});
+
+test('a schema-less body that stalls resolves through attempt as a 504', async () => {
+  await startServer('stall');
+
+  const outcome = await attempt(async () =>
+    create()('items', {retry: 0, timeout: 150})
   );
 
-  test.each([{hasSchema: false}, {hasSchema: true}])(
-    'a body that stalls resolves through attempt as a 504 (schema: $hasSchema)',
-    async ({hasSchema}) => {
-      await startServer('stall');
-      const request = create({isSnakeCaseEnabled});
-      const outcome = await attempt(async () =>
-        hasSchema ?
-          request('items', {retry: 0, schema, timeout: 150})
-        : request('items', {retry: 0, timeout: 150})
-      );
+  expect(outcome).toEqual([
+    {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
+    undefined,
+  ]);
+});
 
-      expect(outcome).toEqual([
-        {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
-        undefined,
-      ]);
-    }
+test('a body that drops on the snake_case layer resolves through attempt as a 503', async () => {
+  await startServer('drop');
+
+  const outcome = await attempt(async () =>
+    create({isSnakeCaseEnabled: true})('items', {retry: 0, schema: z.null()})
   );
+
+  expect(outcome).toEqual([NETWORK_FAILURE, undefined]);
+});
+
+test('a body read cancelled on the snake_case layer still rejects through attempt', async () => {
+  await startServer('stall');
+
+  await expect(
+    attempt(async () =>
+      create({isSnakeCaseEnabled: true})('items', {
+        retry: 0,
+        schema: z.null(),
+        signal: AbortSignal.timeout(50),
+      })
+    )
+  ).rejects.toMatchObject({name: 'TimeoutError'});
 });

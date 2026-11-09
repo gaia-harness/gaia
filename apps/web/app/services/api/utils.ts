@@ -1,3 +1,4 @@
+import {NetworkError} from 'ky';
 import type {AfterResponseState, BeforeRequestState, Hooks, Options} from 'ky';
 import type {StringifyOptions} from 'query-string';
 import queryString from 'query-string';
@@ -23,66 +24,18 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
   }
 };
 
-// Converts while the body streams, so the read stays inside the Ky shortcut
-// that applies the timeout and maps a dropped body to a network error. Only a
-// body that is not valid UTF-8 JSON, or cannot be converted, is replaced: with
-// null on a success, with its original bytes otherwise (decoding and
-// re-encoding would corrupt a non-UTF-8 charset).
-const camelCaseJsonBody = (isOk: boolean) => {
-  const chunks: Uint8Array[] = [];
-
-  return new TransformStream<Uint8Array, Uint8Array>({
-    flush: (controller) => {
-      const encoder = new TextEncoder();
-      const bytes = new Uint8Array(
-        chunks.reduce((total, chunk) => total + chunk.byteLength, 0)
-      );
-      let offset = 0;
-
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
-
-      const [conversionError, converted] = tryCatch(() =>
-        JSON.stringify(
-          toCamelCase(
-            JSON.parse(
-              new TextDecoder(undefined, {fatal: true}).decode(bytes)
-            ) as unknown
-          )
-        )
-      );
-
-      if (conversionError) {
-        controller.enqueue(isOk ? encoder.encode('null') : bytes);
-
-        return;
-      }
-
-      controller.enqueue(encoder.encode(converted));
-    },
-    transform: (chunk) => {
-      chunks.push(chunk);
-    },
+const responseToCamelCase = async ({request, response}: AfterResponseState) => {
+  // A dropped body must reject, not pass as non-JSON, and Ky does not wrap a
+  // hook's read. A cancellation never lands here: Ky's race with the signal
+  // rejects first.
+  const text = await response.text().catch((error: Error) => {
+    throw new NetworkError(request, {cause: error});
   });
-};
+  const [, result] = tryCatch(() =>
+    Response.json(toCamelCase(JSON.parse(text)), response)
+  );
 
-const responseToCamelCase = ({response}: AfterResponseState) => {
-  // A null-body status such as 204 cannot carry a body.
-  if (response.body === null) {
-    return response.ok ? Response.json(null) : undefined;
-  }
-
-  // Response rejects a status outside 200-599; Ky keeps the original response
-  // and raises its HTTPError.
-  if (response.status < 200 || response.status > 599) {
-    return;
-  }
-
-  const body = response.body.pipeThrough(camelCaseJsonBody(response.ok));
-
-  return new Response(body, response);
+  return result ?? (response.ok ? Response.json(null) : undefined);
 };
 
 export const getHooks = (

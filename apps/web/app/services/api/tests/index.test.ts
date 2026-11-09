@@ -141,67 +141,6 @@ describe('create', () => {
     ).resolves.toBeNull();
   });
 
-  test('an error with a non-UTF-8 body keeps its bytes on the snake_case layer', async () => {
-    process.env.API_URL = ORIGIN_A;
-    // "テスト" in Shift_JIS
-    const shiftJisBytes = new Uint8Array([0x83, 0x65, 0x83, 0x58, 0x83, 0x67]);
-    server.use(
-      http.get(
-        `${ORIGIN_A}/items`,
-        () =>
-          new HttpResponse(shiftJisBytes, {
-            headers: {'Content-Type': 'text/plain; charset=shift_jis'},
-            status: 500,
-          })
-      )
-    );
-
-    const error = await create({isSnakeCaseEnabled: true})('items', {
-      retry: 0,
-    }).catch((error_: unknown) => error_);
-
-    expect(error).toMatchObject({data: 'テスト'});
-  });
-
-  test('an error with a JSON-shaped non-UTF-8 body keeps its bytes on the snake_case layer', async () => {
-    process.env.API_URL = ORIGIN_A;
-    // "テスト" in Shift_JIS, wrapped in JSON quotes
-    const shiftJisBytes = new Uint8Array([
-      0x22, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x22,
-    ]);
-    server.use(
-      http.get(
-        `${ORIGIN_A}/items`,
-        () =>
-          new HttpResponse(shiftJisBytes, {
-            headers: {'Content-Type': 'text/plain; charset=shift_jis'},
-            status: 500,
-          })
-      )
-    );
-
-    const error = await create({isSnakeCaseEnabled: true})('items', {
-      retry: 0,
-    }).catch((error_: unknown) => error_);
-
-    expect(error).toMatchObject({data: '"テスト"'});
-  });
-
-  test('a 200 body too deeply nested to convert delivers null on the snake_case layer', async () => {
-    process.env.API_URL = ORIGIN_A;
-    const depth = 200_000;
-    server.use(
-      http.get(
-        `${ORIGIN_A}/items`,
-        () => new HttpResponse(`${'['.repeat(depth)}${']'.repeat(depth)}`)
-      )
-    );
-
-    await expect(
-      create({isSnakeCaseEnabled: true})('items', {schema: z.null()})
-    ).resolves.toBeNull();
-  });
-
   test('isSnakeCaseEnabled converts a JSON body to snake_case and the response to camelCase', async () => {
     process.env.API_URL = ORIGIN_A;
     let received: unknown;

@@ -58,7 +58,7 @@ The call validates the body through Ky's `.json(schema)` over Standard Schema an
 
 `attempt` (from `~/services/api/helpers`) wraps a request into `[ApiError, undefined] | [undefined, T]`; use in loaders/actions when you need to handle errors without throwing. It maps an HTTP error to its status, a Ky `SchemaValidationError` or a `ZodError` to `{status: 500}` with a constant message (the issues are logged on the server only). A Ky `NetworkError` maps to `{status: 503}` and a `TimeoutError` to `{status: 504}`, both with a constant message and `isNetworkFailure: true`. A cancelled request and any other `Error`, such as a programming error, reject.
 
-`isNetworkFailure` means the outcome is unknown, so a non-idempotent caller must not assume the write failed. Like an HTTP error, a network failure is not logged, so a caller that ignores the tuple succeeds silently.
+`isNetworkFailure` means the outcome is unknown, so a non-idempotent caller must not assume the write failed. Like an HTTP error, a network failure is not logged, so a caller that ignores the tuple succeeds silently. With `isSnakeCaseEnabled`, the response hook's body read ignores the request timeout, so a stalled body stays pending instead of returning the 504.
 
 ## API casing
 
