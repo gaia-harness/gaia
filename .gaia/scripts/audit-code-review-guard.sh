@@ -39,8 +39,8 @@ log_denial() {
 # denies a Bash command with any token that:
 #   - contains --con (every abbreviation of --contents, and --contains and --config
 #     with them) or starts with --no-index;
-#   - holds a brace expansion ({ with , or ..), a backtick, ${ or $( anywhere in it, or
-#     a $NAME expansion outside single quotes;
+#   - holds a brace expansion ({ with , or ..) or a backtick anywhere in it, or a $
+#     outside single quotes (${x}, $(cmd), $NAME and $"..." all expand later);
 #   - is, whole or after its first =, a parent-directory path, an absolute path
 #     outside the review root, or starts with ~ or $ (both expand after this check);
 #   - when the command names blame, starts with --ig or -S, or is a short-option
@@ -59,14 +59,14 @@ bash_command_leaves_root() {
   for token in $command_text; do
     stripped="$(printf '%s' "$token" | tr -d "'\"\\\\")"
     case "$stripped" in *--con* | --no-index*) set +f; return 0 ;; esac
-    # Brace expansion, a backtick, and parameter or command expansion mid-token
-    # (--no-ind${x}ex) build their words after this check, which is how a denied
-    # form reaches git unseen. `@{1}` and `@{upstream}` hold none of them.
+    # Brace expansion and a backtick build their words after this check, which is
+    # how a denied form reaches git unseen. `@{1}` and `@{upstream}` hold neither.
     case "$stripped" in *'{'*,* | *'{'*..* | *'`'*) set +f; return 0 ;; esac
-    case "$stripped" in *\$\{* | *\$\(*) set +f; return 0 ;; esac
-    # Single quotes keep a literal $id in a route path from expanding; nothing else does.
+    # Every $ form (${x}, $(cmd), $NAME, $"e" locale quoting) expands after this
+    # check, so any $ left once single-quoted parts are removed is denied. Single
+    # quotes keep a literal $id in a route path from expanding; nothing else does.
     unquoted="$(printf '%s' "$token" | sed "s/'[^']*'//g")"
-    case "$unquoted" in *'$'[A-Za-z_]*) set +f; return 0 ;; esac
+    case "$unquoted" in *'$'*) set +f; return 0 ;; esac
     if [ "$is_blame" = yes ]; then
       case "$stripped" in --ig* | -S* | -[!-]*S*) set +f; return 0 ;; esac
     fi
