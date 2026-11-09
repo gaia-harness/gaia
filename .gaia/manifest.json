@@ -728,6 +728,7 @@
     "wiki/concepts/Claude Integration Conventions.md": "wiki-owned",
     "wiki/concepts/Claude Skills.md": "wiki-owned",
     "wiki/concepts/Code Review Audit Agent.md": "wiki-owned",
+    "wiki/concepts/Code Review In The Audit Loop.md": "wiki-owned",
     "wiki/concepts/Coding Guidelines.md": "wiki-owned",
     "wiki/concepts/Component Testing.md": "wiki-owned",
     "wiki/concepts/Customizing GAIA.md": "wiki-owned",
@@ -853,7 +854,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-09T13:19:17.971Z",
+  "generated": "2026-11-09T15:26:52.276Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
