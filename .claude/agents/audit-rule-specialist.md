@@ -32,7 +32,7 @@ No generic rules of its own: the translation rules arrive in an extension file.
 - `type` not `interface`, flag any `interface` declarations
 - `import type {}` for type-only imports: `import type {ReactNode} from 'react'`
 - Array syntax: `string[]` not `Array<string>`
-- camelCase for all identifiers (Zod fields, form `name`/`id`/`htmlFor`, props, state, params). Exceptions: `types/database.ts` (mirrors DB column names), dynamic template-literal names, env variable names (SCREAMING_SNAKE_CASE)
+- camelCase for object and schema fields (Zod fields, form `name`/`id`/`htmlFor`, props, state, params). Exceptions: generated database types (`types/database.ts`), schemas of an existing snake_case on-disk format, dynamic template-literal names, env variable names (SCREAMING_SNAKE_CASE)
 - **Descriptive and self-documenting names** (from the naming-conventions skill, `.claude/skills/naming-conventions/SKILL.md`, and `.claude/rules/no-abbreviations.md`; Swift API Design Guidelines style, names read like prose at the point of use):
   - Functions/methods: imperative verb phrases describing what they do and what they act on (e.g. `calculateProgressPercentageFromCompletedSets` not `calc`). Exception: React event handlers follow `handle{Action}{Element}` from the react-code skill.
   - Parameters: named for their role, not their type (e.g. `totalSeconds` not `n`, `emailAddress` not `s`)
