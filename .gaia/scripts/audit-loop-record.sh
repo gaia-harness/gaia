@@ -48,12 +48,39 @@
 # or a marker inside a fenced code block (a fence opens on a line starting with
 # three backticks or three tildes, up to three leading spaces allowed).
 #
+# `--list-review-reasons` prints the closed list of review reasons, one per line,
+# and exits before any other requirement. A published review outcome carries only
+# one of these, so free text from a review can never reach a pull request body;
+# audit-code-review-record.sh refuses any reason this flag does not print.
+#
 # Exit: 0 written, 1 refusal / gh or jq failure, 2 usage or invalid input.
 # bash 3.2 and BWK awk safe; never changes directory.
 set -eu
 
 START_MARKER='<!-- gaia:audit-rounds:start -->'
 END_MARKER='<!-- gaia:audit-rounds:end -->'
+
+REVIEW_REASONS='no record
+unreadable record
+audit already under way
+branch predates the review
+below version floor
+fork or unanswered fork check
+base unresolved
+launch failed
+timed out
+nonzero exit
+error result
+not the built-in
+unusable result
+unrecognized clean form
+review moved the tree
+interrupted
+target unproven
+timeout unmeasured
+child isolation unproven
+release branch
+quick review cleared'
 
 die_usage() {
   printf 'audit-loop-record: %s\n' "$1" >&2
@@ -73,6 +100,10 @@ BODY_OUTPUT=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --list-review-reasons)
+      printf '%s\n' "$REVIEW_REASONS"
+      exit 0
+      ;;
     --pr|--repo|--values-json|--body-in|--body-out)
       [ $# -ge 2 ] || die_usage "$1 needs a value"
       case "$1" in
