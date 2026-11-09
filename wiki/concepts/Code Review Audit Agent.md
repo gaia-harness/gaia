@@ -61,6 +61,8 @@ The worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) halts 
 
 The overlap pass (`.claude/skills/gaia/references/overlap-pass.md`) records `Outcome: did not run` and lets the run continue. Nothing depends on the overlap pass, so an absent proposal set loses an optimization and no correctness, and neither a halt nor an inline pass is worth its cost. That page states the departure and its reason.
 
+A plan run's simplify pass (`.claude/skills/gaia/references/simplify-pass.md`) records `Result: not run` and lets the run continue. The main thread edits nothing in a plan run, and nothing depends on this pass. That page states the departure and its reason.
+
 A surface named in none of these places takes the inline ending above.
 
 ### Ad-hoc dispatches: `--shape agent-report-file`

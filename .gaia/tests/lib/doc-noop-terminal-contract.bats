@@ -65,6 +65,9 @@ setup() {
   # The third: nothing depends on the overlap pass, so a double no-op records
   # `did not run` and the run continues.
   OVERLAP_RELATIVE_PATH='.claude/skills/gaia/references/overlap-pass.md'
+  # The fourth: the main thread edits nothing in a plan run, and nothing depends
+  # on the simplify pass, so a double no-op records `not run`.
+  SIMPLIFY_RELATIVE_PATH='.claude/skills/gaia/references/simplify-pass.md'
 
   OWNER="$ROOT/$OWNER_RELATIVE_PATH"
   GATE="$ROOT/$GATE_RELATIVE_PATH"
@@ -77,6 +80,7 @@ setup() {
     '.claude/skills/gaia/references/fitness.md'
     '.claude/skills/gaia/references/overlap-pass.md'
     '.claude/skills/gaia/references/plan/decomposition-audit.md'
+    '.claude/skills/gaia/references/simplify-pass.md'
     '.claude/skills/gaia/references/spec/audit.md'
     '.claude/skills/gaia/references/spec/lens-dispatch.md'
     '.claude/skills/gaia/references/worthiness-step.md'
@@ -214,6 +218,7 @@ terminal_segments() {
     [ "$relative_path" = "$RUNBOOK_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$WORTHINESS_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$OVERLAP_RELATIVE_PATH" ] && continue
+    [ "$relative_path" = "$SIMPLIFY_RELATIVE_PATH" ] && continue
     lines="$(terminal_segments "$ROOT/$relative_path")"
     [ -n "$lines" ] || { echo "no terminal statement read in ${relative_path}" >&2; return 1; }
     # Per statement, not per file: a file whose ending drifted at one of
@@ -304,6 +309,17 @@ terminal_segments() {
   grep -qF -- 'departs from the general inline ending' "$ROOT/$OVERLAP_RELATIVE_PATH"
   grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$OVERLAP_RELATIVE_PATH"
   grep -qF -- 'nothing depends on this pass' "$ROOT/$OVERLAP_RELATIVE_PATH"
+}
+
+@test "the simplify pass admits its departure on the owner page and on its own page" {
+  grep -qF -- "$SIMPLIFY_RELATIVE_PATH" "$OWNER"
+  local lines
+  lines="$(terminal_segments "$ROOT/$SIMPLIFY_RELATIVE_PATH")"
+  [ -n "$lines" ] || { echo "no terminal statement read in $SIMPLIFY_RELATIVE_PATH" >&2; return 1; }
+  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
+  printf '%s\n' "$lines" | grep -qF -- 'not run'
+  grep -qF -- 'departs from the general inline ending' "$ROOT/$SIMPLIFY_RELATIVE_PATH"
+  grep -qF -- 'nothing depends on this pass' "$ROOT/$SIMPLIFY_RELATIVE_PATH"
 }
 
 @test "the owner page no longer asserts a uniform ending across every surface" {

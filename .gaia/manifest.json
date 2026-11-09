@@ -163,6 +163,7 @@
     ".claude/skills/gaia/references/setup/squash-only.md": "owned",
     ".claude/skills/gaia/references/setup/standalone-features.md": "owned",
     ".claude/skills/gaia/references/setup/statusline-left.md": "owned",
+    ".claude/skills/gaia/references/simplify-pass.md": "owned",
     ".claude/skills/gaia/references/spec.md": "owned",
     ".claude/skills/gaia/references/spec/audit.md": "owned",
     ".claude/skills/gaia/references/spec/clarify-loop.md": "owned",
@@ -347,6 +348,7 @@
     ".gaia/scripts/setup-ping.sh": "owned",
     ".gaia/scripts/shell-checks-lint.sh": "owned",
     ".gaia/scripts/shell-checks-select.sh": "owned",
+    ".gaia/scripts/simplify-discard.sh": "owned",
     ".gaia/scripts/spec/flow-coverage.sh": "owned",
     ".gaia/scripts/spec/flows-lib.sh": "owned",
     ".gaia/scripts/spec/handoff-clear.sh": "owned",
@@ -846,7 +848,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-09T06:06:18.993Z",
+  "generated": "2026-11-09T10:41:08.088Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
