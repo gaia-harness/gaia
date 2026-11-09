@@ -129,6 +129,17 @@ denied_by_settings() {
   [ "$(edited_sums)" = "$EDITED_SUMS" ]
 }
 
+@test "a discard under a non-default diff format still saves a patch that applies" {
+  make_edits
+  git -C "$TREE" config diff.noprefix true
+  git -C "$TREE" config color.ui always
+  run "$SCRIPT" --root "$TREE" --patch "$PATCH"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  [ -z "$(git -C "$TREE" status --porcelain)" ]
+  git -C "$TREE" apply --binary "$PATCH"
+  [ "$(edited_sums)" = "$EDITED_SUMS" ]
+}
+
 @test "a patch that cannot be written refuses the reset" {
   make_edits
   printf 'a file, not a folder\n' >"$BATS_TEST_TMPDIR/blocker"

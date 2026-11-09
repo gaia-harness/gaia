@@ -51,7 +51,9 @@ GIT_INDEX_FILE="$saved_index" git -C "$root" add -A || refuse 'could not stage t
 saved_tree="$(GIT_INDEX_FILE="$saved_index" git -C "$root" write-tree)" || refuse 'could not write the edited tree'
 
 mkdir -p "$(dirname "$patch")" || refuse "could not create the folder for $patch"
-GIT_INDEX_FILE="$saved_index" git -C "$root" diff --cached --binary HEAD >"$patch" || refuse "could not save $patch"
+# The format is pinned because diff.noprefix, color.ui=always or diff.external in the
+# ambient config would write a patch that git apply rejects, halting a plan run.
+GIT_INDEX_FILE="$saved_index" git -C "$root" diff --cached --binary --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ HEAD >"$patch" || refuse "could not save $patch"
 [ -s "$patch" ] || refuse "$patch is empty"
 
 proof_index="$work/proof.index"
