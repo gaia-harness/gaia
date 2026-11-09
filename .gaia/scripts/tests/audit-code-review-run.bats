@@ -282,8 +282,15 @@ guard_decides() {
   [ "$(guard_decides 'git show .$"."/outside.txt')" = deny ]
 }
 
-@test "the guard passes a single-quoted path holding a literal dollar name" {
-  [ "$(guard_decides "git log -1 -- 'app/routes/\$id.tsx'")" = pass ]
+@test "the guard denies a dollar sign whatever quotes surround it" {
+  [ "$(guard_decides "git show \"HEAD:x'\$(id)'\"")" = deny ]
+  [ "$(guard_decides "git show HEAD:x\\'\$(id)\\'")" = deny ]
+  [ "$(guard_decides "git log -1 -- 'app/routes/\$id.tsx'")" = deny ]
+}
+
+@test "the guard denies process substitution" {
+  [ "$(guard_decides 'git diff <(cat notes.txt) README')" = deny ]
+  [ "$(guard_decides 'git show HEAD >(tee out)')" = deny ]
 }
 
 @test "the guard passes ordinary review reads, reflog and upstream braces included" {

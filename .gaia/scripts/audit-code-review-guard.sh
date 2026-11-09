@@ -39,17 +39,18 @@ log_denial() {
 # denies a Bash command with any token that:
 #   - contains --con (every abbreviation of --contents, and --contains and --config
 #     with them) or starts with --no-index;
-#   - holds a brace expansion ({ with , or ..) or a backtick anywhere in it, or a $
-#     outside single quotes (${x}, $(cmd), $NAME and $"..." all expand later);
+#   - contains $, a backtick, <( or >( anywhere in its raw text, quoted or not;
+#   - holds a brace expansion ({ with , or ..);
 #   - is, whole or after its first =, a parent-directory path, an absolute path
-#     outside the review root, or starts with ~ or $ (both expand after this check);
+#     outside the review root, or starts with ~ (it expands after this check);
 #   - when the command names blame, starts with --ig or -S, or is a short-option
 #     cluster holding S.
-# Each token is matched with its quotes and backslashes removed, because the shell
-# removes them before git sees it. It is a token deny-list, not a parser: it denies
-# only these forms. Without a root every absolute path is outside it.
+# Every check but the raw-text one matches the token with its quotes and backslashes
+# removed, because the shell removes them before git sees it. It is a token deny-list,
+# not a parser: it denies only these forms. Without a root every absolute path is
+# outside it.
 bash_command_leaves_root() {
-  local command_text token stripped unquoted candidate is_blame=no
+  local command_text token stripped candidate is_blame=no
   command_text="$(printf '%s' "$payload" | jq -r 'if .tool_name == "Bash" then (.tool_input.command // "") else "" end' 2>/dev/null)"
   [ -n "$command_text" ] || return 1
   set -f
@@ -59,21 +60,22 @@ bash_command_leaves_root() {
   for token in $command_text; do
     stripped="$(printf '%s' "$token" | tr -d "'\"\\\\")"
     case "$stripped" in *--con* | --no-index*) set +f; return 0 ;; esac
-    # Brace expansion and a backtick build their words after this check, which is
-    # how a denied form reaches git unseen. `@{1}` and `@{upstream}` hold neither.
-    case "$stripped" in *'{'*,* | *'{'*..* | *'`'*) set +f; return 0 ;; esac
-    # Every $ form (${x}, $(cmd), $NAME, $"e" locale quoting) expands after this
-    # check, so any $ left once single-quoted parts are removed is denied. Single
-    # quotes keep a literal $id in a route path from expanding; nothing else does.
-    unquoted="$(printf '%s' "$token" | sed "s/'[^']*'//g")"
-    case "$unquoted" in *'$'*) set +f; return 0 ;; esac
+    # Expansion, command and process substitution build their words or run a
+    # command after this check, which is how a denied form or a file's contents
+    # reaches git unseen. Which quotes leave a $ literal is shell parsing this check
+    # does not attempt, so the raw token is read: a review cannot name a file with a
+    # $ in its path, such as a route module, though the range diff still shows it.
+    case "$token" in *'$'* | *'`'* | *'<('* | *'>('*) set +f; return 0 ;; esac
+    # Brace expansion builds its words after this check too. `@{1}` and
+    # `@{upstream}` hold no , or .. inside their braces.
+    case "$stripped" in *'{'*,* | *'{'*..*) set +f; return 0 ;; esac
     if [ "$is_blame" = yes ]; then
       case "$stripped" in --ig* | -S* | -[!-]*S*) set +f; return 0 ;; esac
     fi
     for candidate in "$stripped" "${stripped#*=}"; do
       case "$candidate" in
         .. | ../* | */../* | */..) set +f; return 0 ;;
-        '~'* | '$'*) set +f; return 0 ;;
+        '~'*) set +f; return 0 ;;
         /*)
           if [ -z "$review_root" ] || { [ "$candidate" != "$review_root" ] && [ "${candidate#"$review_root"/}" = "$candidate" ]; }; then
             set +f
