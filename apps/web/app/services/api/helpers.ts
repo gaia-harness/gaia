@@ -1,8 +1,33 @@
-import {HTTPError, SchemaValidationError} from 'ky';
+import {
+  HTTPError,
+  isNetworkError,
+  isTimeoutError,
+  SchemaValidationError,
+} from 'ky';
 import {ZodError} from 'zod';
 import {tryCatch} from '~/utils/function';
 
-type ApiError = {status: number; statusText: string};
+type ApiError = {
+  /** No full answer arrived, so whether the API acted on it is unknown. */
+  isNetworkFailure?: true;
+  status: number;
+  statusText: string;
+};
+
+// Callers pass status to `new Response`, which throws a RangeError on 0, so a
+// network failure carries a real status. The text is constant because
+// statusText reaches the client and Ky's own message contains the request URL.
+const NETWORK_FAILURE: ApiError = {
+  isNetworkFailure: true,
+  status: 503,
+  statusText: 'Network error',
+};
+
+const TIMEOUT_FAILURE: ApiError = {
+  isNetworkFailure: true,
+  status: 504,
+  statusText: 'Request timed out',
+};
 
 const isHTTPError = (error: unknown): error is HTTPError =>
   error instanceof HTTPError;
@@ -50,6 +75,15 @@ const handleResponseError = (error: unknown): ApiError => {
     return handleZodError(error);
   }
 
+  if (isNetworkError(error)) {
+    return NETWORK_FAILURE;
+  }
+
+  if (isTimeoutError(error)) {
+    return TIMEOUT_FAILURE;
+  }
+
+  // A cancellation or a programming error is no API failure, so it propagates.
   if (error instanceof Error) {
     throw error;
   }

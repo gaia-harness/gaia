@@ -1,3 +1,4 @@
+import {delay} from 'msw';
 import {http, HttpResponse} from 'msw/http';
 import {afterEach, describe, expect, expectTypeOf, test} from 'vitest';
 import {z} from 'zod';
@@ -49,6 +50,54 @@ describe('create', () => {
       {status: 500, statusText: 'Response failed schema validation'},
       undefined,
     ]);
+  });
+
+  test('a network failure resolves through attempt as a 503', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(http.get(`${ORIGIN_A}/items`, () => HttpResponse.error()));
+
+    const request = create();
+    const attemptOutcome = await attempt(async () =>
+      request('items', {retry: 0})
+    );
+
+    expect(attemptOutcome).toEqual([
+      {isNetworkFailure: true, status: 503, statusText: 'Network error'},
+      undefined,
+    ]);
+  });
+
+  test('a timeout resolves through attempt as a 504', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, async () => {
+        await delay(200);
+
+        return HttpResponse.json({data: {displayName: 'x'}});
+      })
+    );
+
+    const request = create();
+    const attemptOutcome = await attempt(async () =>
+      request('items', {retry: 0, schema: envelopeSchema, timeout: 20})
+    );
+
+    expect(attemptOutcome).toEqual([
+      {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
+      undefined,
+    ]);
+  });
+
+  test('a cancelled request still rejects through attempt', async () => {
+    process.env.API_URL = ORIGIN_A;
+
+    const request = create();
+
+    await expect(
+      attempt(async () =>
+        request('items', {retry: 0, signal: AbortSignal.abort()})
+      )
+    ).rejects.toMatchObject({name: 'AbortError'});
   });
 
   test('a 204 without a schema resolves undefined', async () => {

@@ -39,6 +39,16 @@ describe('attempt', () => {
     ]);
   });
 
+  test('programming error: rejects', async () => {
+    const programmingError = new TypeError('Cannot read properties');
+
+    await expect(
+      attempt(async () => {
+        throw programmingError;
+      })
+    ).rejects.toBe(programmingError);
+  });
+
   test.each(['something unexpected', null])(
     'non-Error throw (%o): resolves to [{status: 500, statusText: "Unknown error"}, undefined]',
     async (thrownValue) => {
