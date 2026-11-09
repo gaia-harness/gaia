@@ -25,8 +25,9 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
 
 // Converts while the body streams, so the read stays inside the Ky shortcut
 // that applies the timeout and maps a dropped body to a network error. Only a
-// body that is not JSON is replaced: with null on a success, with its original
-// bytes otherwise (decoding and re-encoding would corrupt a non-UTF-8 charset).
+// body that is not valid UTF-8 JSON, or cannot be converted, is replaced: with
+// null on a success, with its original bytes otherwise (decoding and
+// re-encoding would corrupt a non-UTF-8 charset).
 const camelCaseJsonBody = (isOk: boolean) => {
   const chunks: Uint8Array[] = [];
 
@@ -43,17 +44,23 @@ const camelCaseJsonBody = (isOk: boolean) => {
         offset += chunk.byteLength;
       }
 
-      const [parseError, original] = tryCatch(
-        () => JSON.parse(new TextDecoder().decode(bytes)) as unknown
+      const [conversionError, converted] = tryCatch(() =>
+        JSON.stringify(
+          toCamelCase(
+            JSON.parse(
+              new TextDecoder(undefined, {fatal: true}).decode(bytes)
+            ) as unknown
+          )
+        )
       );
 
-      if (parseError) {
+      if (conversionError) {
         controller.enqueue(isOk ? encoder.encode('null') : bytes);
 
         return;
       }
 
-      controller.enqueue(encoder.encode(JSON.stringify(toCamelCase(original))));
+      controller.enqueue(encoder.encode(converted));
     },
     transform: (chunk) => {
       chunks.push(chunk);
@@ -65,6 +72,12 @@ const responseToCamelCase = ({response}: AfterResponseState) => {
   // A null-body status such as 204 cannot carry a body.
   if (response.body === null) {
     return response.ok ? Response.json(null) : undefined;
+  }
+
+  // Response rejects a status outside 200-599; Ky keeps the original response
+  // and raises its HTTPError.
+  if (response.status < 200 || response.status > 599) {
+    return;
   }
 
   const body = response.body.pipeThrough(camelCaseJsonBody(response.ok));
