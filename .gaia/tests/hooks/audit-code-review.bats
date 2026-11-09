@@ -210,6 +210,23 @@ fix_and_commit() {
   [ "$(cat "$RECORD")" = 'not json {' ]
 }
 
+@test "review: assign refuses an absent roster and one with no auditors block, assigning nothing" {
+  local roster_state
+  canned_findings tool.sh:1 notes.txt:1
+  review_run
+  alf_add_round "[\"$SHELL_MEMBER\"]"
+  cp "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  for roster_state in absent empty; do
+    if [ "$roster_state" = absent ]; then rm -f "$ALF_ROOT/.gaia/audit-ci.yml"; else printf '# no auditors here\n' >"$ALF_ROOT/.gaia/audit-ci.yml"; fi
+    run --separate-stderr record assign --root "$ALF_ROOT" --run-folder "$RUN"
+    [ "$status" -eq 2 ]
+    [ -z "$output" ]
+    grep -qF 'no auditors: roster' <<<"$stderr" || { printf '%s roster: %s\n' "$roster_state" "$stderr" >&2; return 1; }
+    if grep -qF 'names no default member' <<<"$stderr"; then return 1; fi
+    cmp -s "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  done
+}
+
 @test "reconcile: a kept id keeps its mark and added equals kept plus dropped plus unaccounted" {
   ran_review
   answered
@@ -651,6 +668,49 @@ failing_review() {
   [ "$(jq -r '.attempts[0].closed_at' "$RECORD")" = null ]
 }
 
+@test "failure: a TERM or INT reaching the unit ends it with an exit line and leaves a record that never reads clean" {
+  local signal_name exit_code output_file group_id unit_process unit_status waited
+  alf_add_round "[\"$SHELL_MEMBER\"]"
+  for signal_name in TERM INT; do
+    exit_code=143
+    [ "$signal_name" = TERM ] || exit_code=130
+    rm -rf "$RECORD" "$STAND_IN/calls" "$RUN/code-review-attempt-1"
+    stand_in_behaves 'exec sleep 300'
+    output_file="$BATS_TEST_TMPDIR/unit-$signal_name.out"
+    # perl restores the INT disposition that a background job inherits as ignored.
+    perl -e '$SIG{INT} = "DEFAULT"; exec @ARGV' bash "$SCRIPTS/audit-code-review.sh" run --root "$ALF_ROOT" --pr 7 --run-folder "$RUN" \
+      </dev/null >"$output_file" 2>&1 &
+    unit_process=$!
+    waited=0
+    while [ ! -f "$STAND_IN/calls" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+    [ -f "$STAND_IN/calls" ]
+    kill "-$signal_name" "$unit_process"
+    unit_status=0
+    wait "$unit_process" || unit_status=$?
+    group_id="$(cat "$RUN/code-review-attempt-1/pgid")"
+    kill -KILL -- "-$group_id" 2>/dev/null || true
+    [ "$unit_status" -eq "$exit_code" ] || { printf '%s: status %s\n' "$signal_name" "$unit_status" >&2; return 1; }
+    [ "$(tail -n 1 "$output_file")" = "code-review exit $exit_code" ]
+    [ "$(claude_calls)" -eq 1 ]
+    [ "$(jq -r .outcome "$RECORD")" = pending ]
+    [ "$(jq -r '.attempts[0].closed_at' "$RECORD")" = null ]
+    [ "$(published_clause_through_eval)" = 'not run: interrupted; estimated cost unknown.' ] || { printf 'clause: %s\n' "$(published_clause_through_eval)" >&2; return 1; }
+  done
+}
+
+@test "failure: a unit missing its child library stops with exit 1 and an exit line, spawning nothing and recording nothing" {
+  scratch_scripts audit-code-review.sh 's/^MAXIMUM_ATTEMPTS=2$/MAXIMUM_ATTEMPTS=3/'
+  rm -f "$SCRATCH_SCRIPTS/audit-code-review-child.sh"
+  alf_add_round "[\"$SHELL_MEMBER\"]"
+  run bash "$SCRATCH_SCRIPTS/audit-code-review.sh" run --root "$ALF_ROOT" --pr 7 --run-folder "$RUN" </dev/null
+  [ "$status" -eq 1 ]
+  [ "${lines[$((${#lines[@]} - 1))]}" = 'code-review exit 1' ]
+  grep -qF 'audit-code-review: missing library:' <<<"$output"
+  [ "$(claude_calls)" -eq 0 ]
+  [ ! -e "$RECORD" ]
+  [ "$(published_clause_through_eval)" = 'not run: no record; cost none.' ]
+}
+
 @test "failure: an error result is retried once and published as not run" {
   stand_in_result '{subtype: "success", is_error: true, local_command: "code_review", total_cost_usd: 0.5, result: "boom"}'
   failing_review
@@ -721,6 +781,26 @@ scratch_scripts() {
   grep -qF 'could not open the review record (status 4); no review started' <<<"$output"
   [ "$(claude_calls)" -eq 0 ]
   cmp -s "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+}
+
+@test "failure: a record held by a live attempt is left as found when a decision would rewrite it" {
+  record open --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --base "$(alf_git rev-parse main)" --head "$(alf_git rev-parse HEAD)" --claude-version 2.1.319
+  record attempt-open --run-folder "$RUN" --n 1
+  record attempt-close --run-folder "$RUN" --n 1 --exit 3 --cost 0.5 --reason 'nonzero exit'
+  record attempt-open --run-folder "$RUN" --n 2
+  mkdir -p "$RUN/code-review-attempt-2"
+  sleep 60 &
+  local live_process=$!
+  printf '%s\n' "$live_process" >"$RUN/code-review-attempt-2/script.pid"
+  cp "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  run record decide --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --routes mixed
+  kill -KILL "$live_process"
+  wait "$live_process" 2>/dev/null || true
+  [ "$output" = none ] || { printf 'status %s: %s\n' "$status" "$output" >&2; return 1; }
+  [ "$(claude_calls)" -eq 0 ]
+  cmp -s "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  [ "$(jq -r .outcome "$RECORD")" = pending ]
+  [ "$(jq -r '.attempts[1].closed_at' "$RECORD")" = null ]
 }
 
 @test "failure: attempts exhausted with the last left open publish interrupted and spawn nothing" {
@@ -879,6 +959,21 @@ release_branch() {
   [ ! -e "$RECORD" ]
   [ "$(published_clause_through_eval)" = 'not run: no record; cost none.' ]
   gates_ignore_record
+}
+
+@test "failure: a stale record from a reused branch name publishes no record, never the old outcome" {
+  local orphan stale_field
+  canned_findings tool.sh:1
+  review_run
+  [ "$(jq -r .outcome "$RECORD")" = ran ]
+  alf_add_round "[\"$SHELL_MEMBER\"]"
+  orphan="$(alf_git commit-tree 'HEAD^{tree}' -m unrelated)"
+  cp "$RECORD" "$BATS_TEST_TMPDIR/record-fresh.json"
+  [[ "$(published_clause_through_eval)" == ran* ]]
+  for stale_field in base head; do
+    jq --arg field "$stale_field" --arg sha "$orphan" '.[$field] = $sha' "$BATS_TEST_TMPDIR/record-fresh.json" >"$RECORD"
+    [ "$(published_clause_through_eval)" = 'not run: no record; cost none.' ] || { printf '%s: %s\n' "$stale_field" "$(published_clause_through_eval)" >&2; return 1; }
+  done
 }
 
 @test "failure: a finding count is refused beside not run and not needed, required beside ran, and zero is a count" {
