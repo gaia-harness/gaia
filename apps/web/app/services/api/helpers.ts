@@ -44,7 +44,7 @@ const isSchemaValidationError = (
 // The issues can echo response data, so they are logged on the server only
 // and never placed in statusText, which reaches the client.
 const handleSchemaValidationError = (
-  error: SchemaValidationError
+  error: SchemaValidationError | ZodError
 ): ApiError => {
   if (typeof window === 'undefined') {
     // eslint-disable-next-line no-console -- schema issues are logged on the server only
@@ -57,11 +57,6 @@ const handleSchemaValidationError = (
 const isZodError = (error: unknown): error is ZodError =>
   error instanceof ZodError;
 
-const handleZodError = (error: ZodError): ApiError => ({
-  status: 500,
-  statusText: error.message,
-});
-
 const handleResponseError = (error: unknown): ApiError => {
   if (isHTTPError(error)) {
     return handleHTTPError(error);
@@ -72,7 +67,7 @@ const handleResponseError = (error: unknown): ApiError => {
   }
 
   if (isZodError(error)) {
-    return handleZodError(error);
+    return handleSchemaValidationError(error);
   }
 
   if (isNetworkError(error)) {

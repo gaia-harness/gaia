@@ -20,11 +20,11 @@ describe('attempt', () => {
     ]);
   });
 
-  test('ZodError: resolves to [{status: 500, statusText: error.message}, undefined]', async () => {
+  test('ZodError: resolves to a constant statusText that carries no issue text', async () => {
     let zodError: ZodError;
 
     try {
-      z.string().parse(123);
+      z.literal(['secret-option']).parse(123);
     } catch (error) {
       zodError = error as ZodError;
     }
@@ -34,9 +34,10 @@ describe('attempt', () => {
     });
 
     expect(attemptOutcome).toEqual([
-      {status: 500, statusText: zodError!.message},
+      {status: 500, statusText: 'Response failed schema validation'},
       undefined,
     ]);
+    expect(zodError!.message).toContain('secret-option');
   });
 
   test('programming error: rejects', async () => {

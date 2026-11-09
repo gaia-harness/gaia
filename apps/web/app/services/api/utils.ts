@@ -23,14 +23,45 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
   }
 };
 
-const responseToCamelCase = async ({response}: AfterResponseState) => {
-  const [, result] = await tryCatch(async () => {
-    const original = await response.json();
+// Converts while the body streams, so the read stays inside the Ky shortcut
+// that applies the timeout and maps a dropped body to a network error. Only a
+// body that is not JSON is replaced: with null on a success, untouched otherwise.
+const camelCaseJsonBody = (isOk: boolean) => {
+  const chunks: string[] = [];
 
-    return Response.json(toCamelCase(original), response);
+  return new TransformStream<string, string>({
+    flush: (controller) => {
+      const text = chunks.join('');
+      const [parseError, original] = tryCatch(
+        () => JSON.parse(text) as unknown
+      );
+
+      if (parseError) {
+        controller.enqueue(isOk ? 'null' : text);
+
+        return;
+      }
+
+      controller.enqueue(JSON.stringify(toCamelCase(original)));
+    },
+    transform: (chunk) => {
+      chunks.push(chunk);
+    },
   });
+};
 
-  return result ?? (response.ok ? Response.json(null) : undefined);
+const responseToCamelCase = ({response}: AfterResponseState) => {
+  // A null-body status such as 204 cannot carry a body.
+  if (response.body === null) {
+    return response.ok ? Response.json(null) : undefined;
+  }
+
+  const body = response.body
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(camelCaseJsonBody(response.ok))
+    .pipeThrough(new TextEncoderStream());
+
+  return new Response(body, response);
 };
 
 export const getHooks = (
