@@ -42,12 +42,11 @@ index d91e114..fb622b8 100644
    email: 'Email',
    emailPlaceholder: 'user@domain.com',
 diff --git a/apps/web/app/languages/en/errors.ts b/apps/web/app/languages/en/errors.ts
-index 82109c5..56de21b 100644
+index 61fd0d9..c578c49 100644
 --- a/apps/web/app/languages/en/errors.ts
 +++ b/apps/web/app/languages/en/errors.ts
-@@ -1,4 +1,20 @@
+@@ -1,5 +1,21 @@
  export default {
-   invalidEmail: 'Email is invalid',
 +  network: {
 +    badGateway: 'The network request failed (badGateway)',
 +    certificateExpired: 'The network request failed (certificateExpired)',
@@ -66,7 +65,9 @@ index 82109c5..56de21b 100644
 +  },
 -  unexpectedError: 'An unexpected error occurred',
 +  unexpectedError: 'Something went wrong',
- };
+   validation: {
+     email: 'Email is invalid',
+     required: 'Required',
 diff --git a/apps/web/app/routes/_public.tsx b/apps/web/app/routes/_public.tsx
 index 6dc0fb4..fe079ba 100644
 --- a/apps/web/app/routes/_public.tsx
