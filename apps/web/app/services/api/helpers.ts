@@ -8,14 +8,14 @@ import {ZodError} from 'zod';
 import {tryCatch} from '~/utils/function';
 
 type ApiError = {
-  /** No full answer arrived, so whether the API acted on it is unknown. */
+  /** No full response arrived, so whether the API acted on the request is unknown. */
   isNetworkFailure?: true;
   status: number;
   statusText: string;
 };
 
-// Callers pass status to `new Response`, which throws a RangeError on 0, so a
-// network failure carries a real status. The text is constant because
+// A caller may pass status to `new Response`, which throws a RangeError on 0, so
+// a network failure carries a real status. The text is constant because
 // statusText reaches the client and Ky's own message contains the request URL.
 const NETWORK_FAILURE: ApiError = {
   isNetworkFailure: true,
