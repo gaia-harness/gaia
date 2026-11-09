@@ -229,7 +229,7 @@ check_refuter_is_a_conditional_read() {
   local gate
   gate="$(section_text "$1" '## Finding Proof Gate (holistic reviewer)')"
   grep -qF -- '.claude/hooks/lib/audit-frontend-refuter.md' <<<"$gate" || return 1
-  grep -qF -- 'when none survives, do not Read it' <<<"$gate" || return 1
+  grep -qF -- 'when neither holds, do not Read it' <<<"$gate" || return 1
   grep -qF -- '**Hardened retry prefix**' <<<"$gate" || return 1
   grep -qF -- 'You are an adversarial reviewer' "$1" && return 1
   return 0
