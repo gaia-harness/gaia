@@ -455,3 +455,116 @@ accepted_residual() {
   [ "$(convergence_of clean)" = "accepted with residuals" ]
   [ "$(convergence_of window-end)" = stopped ]
 }
+
+# The unit's and the round procedure's text. An agent's steps cannot be run from a
+# suite, so these assert the executed prose; the behavior is proven in the flow tests.
+
+unit_definition() {
+  printf '%s/.claude/agents/audit-loop-unit.md' "$REPO_ROOT"
+}
+
+round_procedure() {
+  printf '%s/wiki/concepts/Audit Round Procedure.md' "$REPO_ROOT"
+}
+
+# unit_section <heading>: one `##` or `###` section of the unit, heading excluded.
+unit_section() {
+  awk -v heading="$1" '$0 == heading { inside = 1; next } inside && /^##+ / { exit } inside' "$(unit_definition)"
+}
+
+# has <text> <fixed-string>: fails naming what is missing.
+has() {
+  grep -qF -- "$2" <<<"$1" || { printf 'missing: %s\n' "$2" >&2; return 1; }
+}
+
+# line_of <file> <fixed-string>: the first matching line number, or a failure.
+line_of() {
+  local found
+  found="$(grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1)"
+  [ -n "$found" ] || { printf 'missing: %s\n' "$2" >&2; return 1; }
+  printf '%s\n' "$found"
+}
+
+# heading_line <heading>: the unit's heading line, whole-line so a mention in prose
+# never answers for it.
+heading_line() {
+  local found
+  found="$(grep -nxF -- "$1" "$(unit_definition)" | cut -d: -f1)"
+  [ -n "$found" ] || { printf 'missing heading: %s\n' "$1" >&2; return 1; }
+  printf '%s\n' "$found"
+}
+
+@test "unit text: decide before dispatch, a background run, reconcile before dispositions, updates before each publish, a stop on a moved tree" {
+  local section per_round
+  section="$(unit_section '## Code review')"
+  [ "$(heading_line '## Deny classes')" -lt "$(heading_line '## Code review')" ]
+  [ "$(heading_line '## Code review')" -lt "$(heading_line '## Routing each member')" ]
+  has "$(unit_section '## Routing each member')" "Step 2's dispatch waits for \`## Code review\`"
+  has "$section" 'before any reviewer or member of the wave is dispatched'
+  has "$section" 'review-record decide --root <root> --run-folder <run> --pr <N> --routes <all-light|mixed>'
+  has "$section" 'audit-code-review.sh run --root <root> --pr <N> --run-folder <run> < /dev/null > <scratch>/code-review.log 2>&1` with Bash `run_in_background` as one plain command'
+  has "$section" 'Monitor until-loop that exits once the log holds a line starting `code-review exit `'
+  has "$section" 'review-record reconcile --root <root> --run-folder <run> --member <m> [--member <m>...]'
+  has "$section" 'one `--member` for every member `assign` printed'
+  has "$section" 'before writing any disposition'
+  grep -qE 'exit 3`: .*Stop `needs-human`, with `stop_detail` naming the review as the cause, before any member starts' <<<"$section"
+  per_round="$(unit_section '## Per round')"
+  grep -qE 'review-record round-end --root <root> --run-folder <run> --round <r> --commit .*review-record convergence --root <root> --run-folder <run> --stop-reason window-end.*then publish the record' <<<"$per_round"
+  grep -qE 'review-record convergence --root <root> --run-folder <run> --stop-reason <the stop_reason>`, then publish the record once more' <<<"$(unit_section '## When to stop')"
+  has "$(unit_section '## Closing round')" "\`## Per round\`'s record updates with \`--commit none\`, publish the record"
+  has "$(unit_section '### Quick-clear path')" "\`## When to stop\`'s convergence and publication once, with \`clean\`"
+}
+
+@test "unit text: the wait re-arms until the budget is spent, and a refused outcome on a live group stops for a human" {
+  local section
+  section="$(unit_section '## Code review')"
+  has "$section" 'audit-code-review.sh wait-ms'
+  has "$section" '`timeout_ms` the smaller of 1800000'
+  has "$section" 'An expired Monitor with budget left is not a timeout: count what has elapsed and re-arm until the whole budget is spent'
+  has "$section" "The whole budget spent with no exit line: run \`outcome\` with \`--outcome 'not run' --reason 'timed out'\`"
+  has "$section" 'Exit 4 from either means the script or its process group outlived it: stop `needs-human`, with `stop_detail` naming the review'
+}
+
+@test "unit text: a predating branch records its outcome only once the review is owed, never when the root is resolved" {
+  local section
+  section="$(unit_section '## Code review')"
+  grep -qF 'branch predates the review' <<<"$(grep -E '^1\. ' <<<"$section")" && return 1
+  has "$(grep -E '^1\. ' <<<"$section")" 'Nothing is recorded here'
+  has "$(grep -E '^4\. ' <<<"$section")" "--outcome 'not run' --reason 'branch predates the review'"
+  [ "$(grep -cF 'branch predates the review' <<<"$section")" -eq 1 ]
+  has "$(grep -E '^3\. ' <<<"$section")" 'go to step 4 before dispatching that member'
+}
+
+@test "unit text: every quick fallback runs the review, a handed member overrides its route, and the light-cleared line is qualified" {
+  local section per_round
+  section="$(unit_section '## Code review')"
+  has "$section" 'a `full` line, a non-zero mark, a silent reviewer'
+  has "$section" 'This overrides any route step 2 returned for that member: it takes the full route, and no light reviewer is dispatched for it'
+  has "$section" 'Dispatch a member off the wave, or one already light-cleared, the same way'
+  per_round="$(unit_section '## Per round')"
+  has "$per_round" 'never the subject of a fix round, unless it holds handed findings: it is then dispatched full'
+  has "$per_round" 'its kept findings follow the ordinary path'
+}
+
+@test "unit text: a clean stop waits on rechecks, and the re-check line carries ids only" {
+  local section
+  section="$(unit_section '## Code review')"
+  has "$section" 'review-record rechecks --run-folder <run>'
+  has "$section" 'A `clean` stop is not taken while `rechecks` prints anything'
+  has "$section" '`Re-check review ids: <ids>` after the prompt'"'"'s fixed fields, carrying the ids and nothing else'
+  has "$section" 'review-record recheck-close --root <root> --run-folder <run> --member <m> --round <r-1>'
+  has "$(unit_section '## When to stop')" '`## Code review` holds no re-check (`clean`)'
+}
+
+@test "unit and round procedure: the handed line and the re-check line follow the member template's fixed fields" {
+  local fixed_fields_end handed_line recheck_line template_end
+  has "$(unit_section '## Code review')" '`Handed review findings: <path>` after the prompt'"'"'s fixed fields'
+  fixed_fields_end="$(line_of "$(round_procedure)" '    How your run ends: a reply with no tool call')"
+  handed_line="$(line_of "$(round_procedure)" '    Handed review findings: <path>')"
+  recheck_line="$(line_of "$(round_procedure)" '    Re-check review ids: <ids>"')"
+  template_end="$(line_of "$(round_procedure)" '**The last two lines are optional and come after the fixed fields.**')"
+  [ "$fixed_fields_end" -lt "$handed_line" ]
+  [ "$handed_line" -lt "$recheck_line" ]
+  [ "$recheck_line" -lt "$template_end" ]
+  has "$(awk '/^#### Light routing$/ { inside = 1; next } inside && /^#### / { exit } inside' "$(round_procedure)")" '**Hand-over exception.**'
+}
