@@ -6,7 +6,7 @@
  * thin orchestrator; each subcommand owns its acceptance criteria and
  * tests.
  *
- * Object-map dispatch (no `switch`) per the project's typescript skill rules.
+ * Object-map dispatch (no `switch`) per the project's lint rules.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';

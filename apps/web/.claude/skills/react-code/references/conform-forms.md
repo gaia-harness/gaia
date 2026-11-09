@@ -220,4 +220,4 @@ A disabled action renders a disabled `ui/button`, never a disabled link: `<Butto
 
 ## Zod Patterns
 
-This project uses Zod 4, the typescript skill's `references/zod.md` is the full Zod 3 → Zod 4 migration map. Project convention: `z.literal([...])` not `z.enum()` for string unions (sort values alphanumerically).
+This project uses Zod 4, `wiki/dependencies/Zod.md` is the full Zod 3 → Zod 4 migration map. Project convention: `z.literal([...])` not `z.enum()` for string unions (sort values alphanumerically).

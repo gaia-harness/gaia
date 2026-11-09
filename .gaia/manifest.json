@@ -121,6 +121,7 @@
     ".claude/rules/quality-gate.md": "owned",
     ".claude/rules/shell-cwd.md": "owned",
     ".claude/rules/subagent-dispatch.md": "owned",
+    ".claude/rules/typescript.md": "shared",
     ".claude/rules/user-questions.md": "owned",
     ".claude/rules/wiki-style.md": "owned",
     ".claude/rules/working-doc-ids.md": "owned",
@@ -500,8 +501,6 @@
     "apps/web/.claude/skills/tailwind/SKILL.md": "owned",
     "apps/web/.claude/skills/tdd-react/references/tests-react.md": "owned",
     "apps/web/.claude/skills/tdd-react/SKILL.md": "owned",
-    "apps/web/.claude/skills/typescript/references/zod.md": "owned",
-    "apps/web/.claude/skills/typescript/SKILL.md": "owned",
     "apps/web/.env.example": "owned",
     "apps/web/.gitignore": "owned",
     "apps/web/.lintstagedrc.json": "owned",
@@ -847,7 +846,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-08T06:08:38.977Z",
+  "generated": "2026-11-09T06:06:18.993Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

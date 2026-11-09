@@ -287,9 +287,9 @@ describe('skill link resolution', () => {
     },
     git: true,
   });
-  const typescriptSkill = {
-    '.claude/skills/typescript/references/zod.md': 'Zod.\n',
-    '.claude/skills/typescript/SKILL.md': skill('See `references/zod.md`.\n'),
+  const schemasSkill = {
+    '.claude/skills/schemas/references/zod.md': 'Zod.\n',
+    '.claude/skills/schemas/SKILL.md': skill('See `references/zod.md`.\n'),
   };
 
   test('ignores markdown link syntax written as inline code', () => {
@@ -305,8 +305,8 @@ describe('skill link resolution', () => {
     expect(
       findingsOf(
         skillProject(
-          "Read the typescript skill's `references/zod.md`.\n",
-          typescriptSkill
+          "Read the schemas skill's `references/zod.md`.\n",
+          schemasSkill
         ),
         'authoring.reference.link.resolves'
       )
@@ -317,8 +317,8 @@ describe('skill link resolution', () => {
     expect(
       findingsOf(
         skillProject(
-          "Read the typescript skill's `references/gone.md`.\n",
-          typescriptSkill
+          "Read the schemas skill's `references/gone.md`.\n",
+          schemasSkill
         ),
         'authoring.reference.link.resolves'
       )

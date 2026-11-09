@@ -9,7 +9,7 @@
  * injectable units and their CLI surface; it does not touch any slash
  * command or `setup/util/state-file.ts`'s `SETUP_STEPS`.
  *
- * Object-map dispatch (no `switch`) per the project's typescript skill rules.
+ * Object-map dispatch (no `switch`) per the project's lint rules.
  */
 import {execFileSync} from 'node:child_process';
 import {existsSync, mkdirSync, readFileSync} from 'node:fs';

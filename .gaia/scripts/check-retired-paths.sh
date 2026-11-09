@@ -143,6 +143,7 @@ while IFS= read -r -d '' tracked_path; do
       .claude/skills/new-component/* | .claude/skills/new-hook/* | .claude/skills/new-route/* | \
       .claude/skills/new-service/* | .claude/skills/playwright-cli/* | .claude/skills/react-code/* | \
       .claude/skills/skeleton-loaders/* | .claude/skills/tailwind/* | .claude/skills/typescript/* | \
+      apps/web/.claude/skills/typescript/* | \
       .claude/rules/accessibility.md | .claude/rules/api-service.md | .claude/rules/design-baseline.md | \
       .claude/rules/i18n.md | .claude/rules/playwright.md | .claude/rules/react-router-docs.md | \
       .claude/rules/routes.md | .claude/rules/state-pattern.md | .claude/rules/storybook.md | \

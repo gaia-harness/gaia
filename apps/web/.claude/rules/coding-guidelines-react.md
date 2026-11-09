@@ -21,6 +21,14 @@ This section owns the layout rule. Every other rule, skill, agent and wiki page 
 - **Reserved names**: `assets`, `hooks`, `state`, `tests` and `utils` are the only non-component subfolders inside a component or page folder; a page folder never takes one of them as its own name.
 - **Hooks**: a component- or page-local hook is that folder's `hooks/use-<name>.ts` (test in `hooks/tests/use-<name>.test.ts`); lift it to `app/hooks/` when a second consumer appears. Shared hooks are `app/hooks/use-<name>.ts` with camelCase named exports (`use-theme.ts` exports `useOptionalTheme`).
 
+## TypeScript
+
+The React half of `.claude/rules/typescript.md`.
+
+- Route loaders, route actions and React components skip the explicit return type.
+- Form `name`, `id` and `htmlFor` values are camelCase.
+- `null` is the contract in `useRef(null)`, ref-callback parameters and React Router `data(null)`.
+
 ## Testing
 
 - Test each feature-specification behavior at the lowest layer in `wiki/decisions/Test Layering.md` that shows it; Playwright runs only its real-server and browser layers

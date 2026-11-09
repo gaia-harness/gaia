@@ -60,9 +60,9 @@ export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
 //
 // The frontend's token values (`app/styles/theme.css`) and shadcn config
 // (`components.json`) are `shared` because an adopter edits them to rebrand
-// and to add ui components, so /update-gaia merges instead of overwriting.
-// GAIA-shipped `app/components/ui/<name>.tsx` stay `owned` by default.
+// and to add ui components, so /update-gaia merges; `ui/<name>.tsx` stay `owned`.
 const SHARED = new Set([
+  '.claude/rules/typescript.md',
   '.claude/settings.json',
   '.gaia/audit-ci.yml',
   '.github/FUNDING.yml',
