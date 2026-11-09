@@ -108,6 +108,7 @@ sentinels=(
   '<!-- gaia:orchestrator-step resume-detection -->'
   '<!-- gaia:orchestrator-step yield-handling -->'
   '<!-- gaia:orchestrator-step gate-retry -->'
+  '<!-- gaia:orchestrator-step simplify-pass -->'
 )
 if [ -n "$spec_path" ]; then
   sentinels+=('<!-- gaia:orchestrator-step flow-checks -->')
@@ -122,6 +123,7 @@ sentinels+=(
 )
 verbatim_sentinels=(
   '<!-- gaia:orchestrator-step resume-detection -->' '<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step gate-retry -->'
+  '<!-- gaia:orchestrator-step simplify-pass -->'
   '<!-- gaia:orchestrator-step flow-checks -->'
   '<!-- gaia:orchestrator-step worthiness-step -->'
   '<!-- gaia:orchestrator-step overlap-pass -->'
