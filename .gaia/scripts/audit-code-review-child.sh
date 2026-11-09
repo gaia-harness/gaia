@@ -27,8 +27,9 @@
 # also match `git -C <root> commit -m diff`. Deny beats allow: these read-only verbs
 # can write or run through the denied forms, and can read a file outside the tree
 # (`git diff /dev/null .env` turns on --no-index unspelled, `git blame --contents`),
-# which the deny rows catch only in their literal spellings; the guard hook denies
-# every path outside the root. git grep is left out entirely because
+# which the deny rows catch only in their literal spellings. The guard hook's token
+# deny-list denies the further forms named in the comment over its Bash check. git grep
+# is left out entirely because
 # -O runs a pager, and the child has the Grep tool. A bare Read admits the template's
 # own file names, including a `$` route. No Read() deny row: the sensitive-read
 # hook's header records why one is unaffordable; the guard hook carries that job.

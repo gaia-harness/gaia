@@ -226,6 +226,57 @@ EOF
   done
 }
 
+# guard_decides <command>: the guard's decision on one Bash command under the
+# review root, `deny` or `pass`, with a denial required to reach the log.
+guard_decides() {
+  local log="$BATS_TEST_TMPDIR/guard.jsonl" decision
+  : >"$log"
+  run bash "${GUARD_UNDER_TEST:-$SHIPPED/audit-code-review-guard.sh}" "$log" /work/tree \
+    < <(jq -nc --arg command "$1" '{tool_name: "Bash", tool_input: {command: $command}}')
+  [ "$status" -eq 0 ] || return 1
+  decision="$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$output" 2>/dev/null)"
+  if [ "$decision" = deny ] && [ -s "$log" ]; then printf 'deny\n'; else printf 'pass\n'; fi
+}
+
+@test "the guard denies blame's -S revs file, alone and in a short-option cluster" {
+  [ "$(guard_decides 'git blame -S .env README')" = deny ]
+  [ "$(guard_decides 'git blame -wS.env README')" = deny ]
+}
+
+@test "the guard denies blame's --ignore-revs-file family" {
+  [ "$(guard_decides 'git blame --ignore-revs-f=.env README')" = deny ]
+}
+
+@test "the guard denies every abbreviation of --contents" {
+  [ "$(guard_decides 'git blame --cont .env README')" = deny ]
+}
+
+@test "the guard denies --no-index" {
+  [ "$(guard_decides 'git diff --no-index README .env')" = deny ]
+}
+
+@test "the guard reads a token as the shell will, with backslashes removed, in the verb and an argument" {
+  [ "$(guard_decides 'git b\lame -S .env README')" = deny ]
+  [ "$(guard_decides 'git diff \/dev/null .env')" = deny ]
+}
+
+@test "the guard denies a brace expansion that would assemble a denied form" {
+  [ "$(guard_decides 'git blame {-S,.env} README')" = deny ]
+  [ "$(guard_decides 'git diff {/dev/null,.env}')" = deny ]
+}
+
+@test "the guard denies a backtick command substitution" {
+  [ "$(guard_decides 'git show `echo HEAD`')" = deny ]
+}
+
+@test "the guard passes ordinary review reads, reflog and upstream braces included" {
+  [ "$(guard_decides 'git log -S hunter2 -1')" = pass ]
+  [ "$(guard_decides 'git log -p -1 README')" = pass ]
+  [ "$(guard_decides 'git diff HEAD README')" = pass ]
+  [ "$(guard_decides 'git log HEAD@{1} -1')" = pass ]
+  [ "$(guard_decides 'git rev-parse @{upstream}')" = pass ]
+}
+
 @test "the guard lets an in-root git command through without a denial" {
   local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh" root="/work/tree"
   : >"$log"

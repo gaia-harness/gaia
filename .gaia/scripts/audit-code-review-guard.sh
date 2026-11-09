@@ -33,19 +33,37 @@ log_denial() {
     || printf '{"tool":"unknown","path":null}\n' >>"$denial_log"
 }
 
-# git reads outside the working tree by itself: `git diff /dev/null .env` turns on
-# --no-index with no flag spelled, and `git blame --contents <file>` prints any file.
-# The sensitive-read hook judges readers, not git, so a Bash command naming a path
-# outside the review root, a parent-directory path or --contents is denied here.
-# Without a root every absolute path is outside it.
+# git prints a file it was only told to read: `git diff /dev/null .env` turns on
+# --no-index with no flag spelled, and blame prints the file given to --contents, -S
+# or --ignore-revs-file. The sensitive-read hook judges readers, not git, so this
+# denies a Bash command with any token that:
+#   - contains --con (every abbreviation of --contents, and --contains and --config
+#     with them) or starts with --no-index;
+#   - holds a brace expansion ({ with , or ..) or a backtick;
+#   - is, whole or after its first =, a parent-directory path, an absolute path
+#     outside the review root, or starts with ~ or $ (both expand after this check);
+#   - when the command names blame, starts with --ig or -S, or is a short-option
+#     cluster holding S.
+# Each token is matched with its quotes and backslashes removed, because the shell
+# removes them before git sees it. It is a token deny-list, not a parser: it denies
+# only these forms. Without a root every absolute path is outside it.
 bash_command_leaves_root() {
-  local command_text token stripped candidate
+  local command_text token stripped candidate is_blame=no
   command_text="$(printf '%s' "$payload" | jq -r 'if .tool_name == "Bash" then (.tool_input.command // "") else "" end' 2>/dev/null)"
   [ -n "$command_text" ] || return 1
   set -f
   for token in $command_text; do
-    stripped="$(printf '%s' "$token" | tr -d "'\"")"
-    case "$stripped" in *--contents*) set +f; return 0 ;; esac
+    [ "$(printf '%s' "$token" | tr -d "'\"\\\\")" != blame ] || is_blame=yes
+  done
+  for token in $command_text; do
+    stripped="$(printf '%s' "$token" | tr -d "'\"\\\\")"
+    case "$stripped" in *--con* | --no-index*) set +f; return 0 ;; esac
+    # Brace expansion and a backtick build their words after this check, which is
+    # how a denied form reaches git unseen. `@{1}` and `@{upstream}` hold neither.
+    case "$stripped" in *'{'*,* | *'{'*..* | *'`'*) set +f; return 0 ;; esac
+    if [ "$is_blame" = yes ]; then
+      case "$stripped" in --ig* | -S* | -[!-]*S*) set +f; return 0 ;; esac
+    fi
     for candidate in "$stripped" "${stripped#*=}"; do
       case "$candidate" in
         .. | ../* | */../* | */..) set +f; return 0 ;;
