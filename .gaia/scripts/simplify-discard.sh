@@ -12,10 +12,11 @@
 # must match, so a truncated, unwritable or lossy patch refuses the reset. The
 # real index and working tree stay untouched until that proof passes.
 #
-# Honest limit: gitignored files are neither saved nor removed.
+# Limit: gitignored files are neither saved nor removed.
 #
-# Exit 0: patch saved and proven, tree restored. Exit 1: nothing was reset, and
-# the reason is on stderr. Exit 2: usage.
+# Exit 0: patch saved and proven, tree restored. Exit 1: a refusal reset nothing,
+# or the reset itself failed and the patch holds the edits; the reason is on
+# stderr. Exit 2: usage.
 
 set -u
 

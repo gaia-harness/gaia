@@ -177,11 +177,11 @@ Then write the following files directly to `{PLAN_DIR}/`:
       The retry is not a grant: it never widens a task's scope.
       ```
 
-    - **Simplify pass.** Place this block after the phase gate retry block and before the pre-audit flow checks block (a spec-less plan: before the worthiness step block), in a spec-derived and a spec-less plan alike. The reference page owns the step's mechanics:
+    - **Simplify pass.** Place this block after the phase gate retry block and before the pre-audit flow checks block (a spec-less plan: before the worthiness step block). The reference page owns the step's mechanics:
 
       ```
       <!-- gaia:orchestrator-step simplify-pass -->
-      **Simplify pass (every start and every resume, after the last phase commits and before the flow checks and the worthiness step).** Read `.claude/skills/gaia/references/simplify-pass.md` and run it from `RESOLVED_ROOT`. A `## Simplify pass` block already in `{PLAN_DIR}/PROGRESS.md` means a resume does not repeat it. It records its outcome as a `## Simplify pass` block in `{PLAN_DIR}/PROGRESS.md`.
+      **Simplify pass (every start and every resume, after the last phase commits and before the flow checks and the worthiness step).** Read `.claude/skills/gaia/references/simplify-pass.md` and run it from `RESOLVED_ROOT`. It records its outcome as a `## Simplify pass` block in `{PLAN_DIR}/PROGRESS.md`.
       ```
 
     - **Pre-audit flow checks (spec-derived plans only).** Place this block after the simplify pass block and before the worthiness step block:

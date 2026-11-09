@@ -2,8 +2,9 @@
 # Tests for `.gaia/scripts/simplify-discard.sh` in a throwaway repository, and
 # for its reset against the real destructive-git hook and settings deny rows.
 #
-# The refusal cases use a `git` shim on PATH that corrupts the saved patch,
-# because a real `git diff` does not produce a lossy one on demand.
+# The lossy-patch and unappliable-patch cases use a `git` shim on PATH that
+# corrupts the saved patch, because a real `git diff` does not produce one on
+# demand.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
@@ -116,6 +117,16 @@ denied_by_settings() {
   git -C "$TREE" apply --binary "$PATCH"
   [ "$(edited_sums)" = "$EDITED_SUMS" ]
   [ ! -e "$TREE/doomed.txt" ]
+}
+
+@test "a discard of edits the gate step already staged saves and restores them too" {
+  make_edits
+  git -C "$TREE" add -A
+  run "$SCRIPT" --root "$TREE" --patch "$PATCH"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  [ -z "$(git -C "$TREE" status --porcelain)" ]
+  git -C "$TREE" apply --binary "$PATCH"
+  [ "$(edited_sums)" = "$EDITED_SUMS" ]
 }
 
 @test "a patch that cannot be written refuses the reset" {
