@@ -79,7 +79,7 @@ EOF
 make_tool_copy() {
   local tool_root="$BATS_TEST_TMPDIR/tool" script_name
   mkdir -p "$tool_root/.gaia/scripts" "$tool_root/.claude/hooks/lib"
-  for script_name in audit-code-review.sh audit-code-review-child.sh audit-code-review-judge.sh audit-code-review-guard.sh audit-code-review-record.sh audit-code-review-decide.sh audit-loop-record.sh; do
+  for script_name in audit-code-review.sh audit-code-review-child.sh audit-code-review-judge.sh audit-code-review-guard.sh audit-code-review-record.sh audit-code-review-decide.sh audit-code-review-handover.sh audit-loop-record.sh; do
     cp "$SHIPPED/$script_name" "$tool_root/.gaia/scripts/$script_name"
   done
   cp "$REPO_ROOT/.claude/hooks/lib/audit-base-provenance.sh" "$REPO_ROOT/.claude/hooks/lib/cross-repo-refusal.sh" "$tool_root/.claude/hooks/lib/"

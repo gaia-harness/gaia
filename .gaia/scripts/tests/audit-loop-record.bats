@@ -568,3 +568,64 @@ STUBEOF
   grep -q 'pr view' "$STUB/argv.log"
   grep -q 'pr edit' "$STUB/argv.log"
 }
+
+# render_review <review-json>: offline render of values carrying that review
+# object into $TEMPORARY_DIRECTORY/out.md; leaves the exit status in $status.
+render_review() {
+  printf '{"total":1,"members":{},"grants":0,"review":%s}\n' "$1" > "$TEMPORARY_DIRECTORY/values.json"
+  : > "$TEMPORARY_DIRECTORY/in.md"
+  rm -f "$TEMPORARY_DIRECTORY/out.md"
+  run bash "$SCRIPT" --pr 12 --values-json "$TEMPORARY_DIRECTORY/values.json" \
+    --body-in "$TEMPORARY_DIRECTORY/in.md" --body-out "$TEMPORARY_DIRECTORY/out.md"
+}
+
+# review_refused <review-json>: exit 2 and no body written.
+review_refused() {
+  render_review "$1"
+  [ "$status" -eq 2 ] || return 1
+  [ ! -e "$TEMPORARY_DIRECTORY/out.md" ]
+}
+
+@test "review: values with no review key render the line byte-identical to before" {
+  values 1 '{}' 0
+  : > "$TEMPORARY_DIRECTORY/in.md"
+  run bash "$SCRIPT" --pr 12 --values-json "$TEMPORARY_DIRECTORY/values.json" \
+    --body-in "$TEMPORARY_DIRECTORY/in.md" --body-out "$TEMPORARY_DIRECTORY/out.md"
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0.' ]
+}
+
+@test "review: a ran result renders its counts, denials and the estimated session cost" {
+  render_review '{"outcome":"ran","added":12,"kept":9,"dropped":2,"unaccounted":1,"merged":1,"fixed":7,"kept_by_disposition":{"fixed":7,"waived":0,"filed":1,"accepted":0,"diverted":0,"open":1},"denials":2,"denial_tools":["Bash","Read"],"cost":2.08,"level":"high","model":"claude-opus-4-1","claude_version":"2.1.3"}'
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; code review: ran; added 12, kept 9, dropped 2, unaccounted 1, merged 1, fixed 7; denials 2 (Bash, Read); estimated cost $2.08 for the review session only.' ]
+}
+
+@test "review: ran, clean and ran, no findings render without finding counts" {
+  render_review '{"outcome":"ran, clean","cost":1.45}'
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; code review: ran, clean; estimated cost $1.45 for the review session only.' ]
+  render_review '{"outcome":"ran, no findings","denials":3,"denial_tools":["Bash"],"cost":1.02}'
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; code review: ran, no findings, 3 denials (Bash); estimated cost $1.02 for the review session only.' ]
+}
+
+@test "review: not run and not needed render outcome, reason and cost, with no counts" {
+  render_review '{"outcome":"not run","reason":"timed out","cost":"unknown"}'
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; code review: not run: timed out; estimated cost unknown.' ]
+  render_review '{"outcome":"not run","reason":"no record","cost":"none"}'
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; code review: not run: no record; cost none.' ]
+  render_review '{"outcome":"not needed","reason":"release branch","cost":"none"}'
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; code review: not needed: release branch; cost none.' ]
+}
+
+@test "review: an unknown reason, a free-text field, a pending outcome, a bad model and counts on a not run all exit 2" {
+  review_refused '{"outcome":"not run","reason":"the child said hello","cost":"none"}'
+  review_refused '{"outcome":"ran, clean","cost":1,"note":"free text"}'
+  review_refused '{"outcome":"pending","cost":"none"}'
+  review_refused '{"outcome":"ran, clean","cost":1,"model":"two words"}'
+  review_refused '{"outcome":"not run","reason":"timed out","added":2,"cost":"none"}'
+  review_refused '{"outcome":"not run","cost":"none"}'
+  review_refused '{"outcome":"ran, clean","cost":1,"denial_tools":["rm -rf"]}'
+}

@@ -1968,3 +1968,76 @@ tree_snapshot() {
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$output" = "{\"satisfied\":[],\"unsatisfied\":[[\"$MEMBER\",\"rule/x\",\"f.txt\",11]]}" ]
 }
+
+# review_record_setup: the review scripts beside the scratch copy, and the run
+# folder the CLI derives for the fixture branch. Sets REVIEW_RUN_FOLDER.
+review_record_setup() {
+  local script_file
+  cli_copy
+  for script_file in audit-code-review-record.sh audit-code-review-decide.sh audit-code-review-handover.sh; do
+    cp "$SCRIPTS/$script_file" "$CLI/$script_file"
+  done
+  REVIEW_RUN_FOLDER="$(gaia_loop_run_directory "$ALF_ROOT" "$(gaia_loop_key "$ALF_ROOT")")"
+  mkdir -p "$REVIEW_RUN_FOLDER"
+}
+
+# write_review_record <outcome> <reason-or-empty> <cost-json>: a record with no findings.
+write_review_record() {
+  jq -n -c --arg outcome "$1" --arg reason "$2" --argjson cost "$3" '{version: 1, pr: 7, base: null, head: null,
+    outcome: $outcome, reason: (if $reason == "" then null else $reason end), level: "high", model: null,
+    claude_version: null, attempts: [], cost: $cost, denials: {count: 0, tools: [], detail: []}, findings: [],
+    handover: "none", reconcile_passes: 0, rounds: null, members_dispatched: null, convergence: null}' \
+    >"$REVIEW_RUN_FOLDER/code-review.json"
+}
+
+@test "record-values: a recorded round and no review record publishes not run: no record with cost none" {
+  review_record_setup
+  alf_fill f.txt 12 feature
+  alf_commit "round 1"
+  alf_add_round '["code-audit-frontend"]'
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(read_json "$output" '.review | tojson')" = '{"outcome":"not run","reason":"no record","cost":"none"}' ]
+}
+
+@test "record-values: an unreadable review record publishes unreadable record with cost unknown" {
+  review_record_setup
+  alf_fill f.txt 12 feature
+  alf_commit "round 1"
+  alf_add_round '["code-audit-frontend"]'
+  printf 'not json\n' >"$REVIEW_RUN_FOLDER/code-review.json"
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(read_json "$output" '.review | tojson')" = '{"outcome":"not run","reason":"unreadable record","cost":"unknown"}' ]
+}
+
+@test "record-values: no round and no review record prints no review key" {
+  review_record_setup
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"total":0,"members":{},"grants":0}' ]
+}
+
+@test "record-values: no round and a not needed record still publishes it" {
+  review_record_setup
+  write_review_record 'not needed' 'release branch' '"none"'
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(read_json "$output" '.review.outcome')" = 'not needed' ]
+  [ "$(read_json "$output" '.review.reason')" = 'release branch' ]
+  [ "$(read_json "$output" '.review.cost')" = 'none' ]
+}
+
+@test "record-values: a pending review record publishes interrupted with the record's cost and writes nothing" {
+  review_record_setup
+  alf_fill f.txt 12 feature
+  alf_commit "round 1"
+  alf_add_round '["code-audit-frontend"]'
+  write_review_record pending '' '0.5'
+  local before
+  before="$(cat "$REVIEW_RUN_FOLDER/code-review.json")"
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(read_json "$output" '.review | tojson')" = '{"outcome":"not run","reason":"interrupted","cost":0.5}' ]
+  [ "$(cat "$REVIEW_RUN_FOLDER/code-review.json")" = "$before" ]
+}

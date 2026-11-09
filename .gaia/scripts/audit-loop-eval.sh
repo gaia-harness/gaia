@@ -38,7 +38,9 @@
 # per-member counts, read from the branch's light-review ledger; each is left
 # out when it has no positive count, and `total` never includes either. `quick`
 # also omits any member that has a full round in `members`, since that member
-# was not cleared by a quick review alone.
+# was not cleared by a quick review alone. It also adds a `review` object from
+# audit-code-review-record.sh publish-values (a missing record reads `no record`
+# once a round exists), and leaves the key out when that prints nothing.
 # Exit 0 ok, 2 usage or no recorded round (unit-window: no unit;
 # pinned-question: no pending pinned question), 4 detached HEAD, 5 corrupt
 # state, an unreadable vetoes.json, or a branch that is not keyable, 6 jq or
@@ -638,6 +640,22 @@ _gaia_loop_with_review_counts() {
   fi
 }
 
+# _gaia_loop_with_review_object <root> <run-folder> <rounds> <pr-or-empty> <values-json>:
+# adds the additive `review` key from the review record's publish-values. The key
+# is left out when that prints nothing or fails, so the line keeps its old shape.
+_gaia_loop_with_review_object() {
+  local root="$1" run_folder="$2" rounds="$3" pull_request="$4" values_json="$5" review_object
+  local -a pull_request_arguments=()
+  [ -z "$pull_request" ] || pull_request_arguments=(--pr "$pull_request")
+  review_object="$(bash "$_GAIA_LOOP_EVAL_DIRECTORY/audit-code-review-record.sh" publish-values \
+    --root "$root" --run-folder "$run_folder" --rounds "$rounds" ${pull_request_arguments[@]+"${pull_request_arguments[@]}"} 2>/dev/null)" || review_object=""
+  if [ -n "$review_object" ]; then
+    printf '%s' "$values_json" | jq -c --argjson review "$review_object" '. + {review: $review}'
+  else
+    printf '%s\n' "$values_json"
+  fi
+}
+
 _gaia_loop_cli() {
   local subcommand="${1-}" root="" round="" branch_key main file state exit_status used subcommand_output
   [ $# -gt 0 ] && shift
@@ -679,7 +697,11 @@ _gaia_loop_cli() {
         # ledger can hold a clear while no round exists. This branch is reached
         # when no unit was admitted; a quick-only unit normally has state with an
         # admitted unit and no rounds.
-        record-values) _gaia_loop_with_review_counts "$root" '{"total":0,"members":{},"grants":0}'; return 0 ;;
+        record-values)
+          subcommand_output="$(_gaia_loop_with_review_counts "$root" '{"total":0,"members":{},"grants":0}')"
+          _gaia_loop_with_review_object "$root" "$(gaia_loop_run_directory "$main" "$branch_key")" 0 "" "$subcommand_output"
+          return 0
+          ;;
       esac
       printf 'audit-loop-eval: no recorded round for %s\n' "$branch_key" >&2
       return 2
@@ -712,7 +734,9 @@ _gaia_loop_cli() {
         members: (reduce .history.rounds[] as $round_entry ({}; reduce ($round_entry.members[]) as $member (.; .[$member] += [$round_entry.tree]))
                   | map_values(unique | length) | to_entries | sort_by(.key) | from_entries),
         grants: ([.allowance.answers[] | select(.kind == "grant")] | length)}')" || return 1
-      _gaia_loop_with_review_counts "$root" "$subcommand_output"
+      subcommand_output="$(_gaia_loop_with_review_counts "$root" "$subcommand_output")"
+      _gaia_loop_with_review_object "$root" "$(gaia_loop_run_directory "$main" "$branch_key")" "$used" \
+        "$(printf '%s' "$state" | jq -r '(.pr // 0) | if . > 0 then . else empty end')" "$subcommand_output"
       return 0
       ;;
     brief) _gaia_loop_brief "$root" "$main" "$state"; return $? ;;

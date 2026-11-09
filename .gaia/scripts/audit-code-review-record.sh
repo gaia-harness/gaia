@@ -10,12 +10,20 @@
 #   outcome      --run-folder --pr --outcome [--reason] [--findings <file>] [--claude-version]
 #   read         --run-folder
 #   decide       --root --run-folder --pr --routes <all-light|mixed>
+#   assign       --root --run-folder
+#   delivery     --run-folder --member
+#   reconcile    --root --run-folder --member <m> [--member <m>...]
+#   round-end    --root --run-folder --round --commit <sha|none>
+#   rechecks     --run-folder
+#   recheck-close --root --run-folder --member --round
+#   convergence  --root --run-folder --stop-reason
+#   publish-values --root --run-folder --rounds [--pr]
 #
 # Exit: 0 done, 1 no record (read), 2 usage or an unknown reason, 4 an open
 # attempt's process group or script is still alive, 5 the record is unreadable.
 # `open` prints `ended` and writes nothing on a current record that already ended
 # the branch's one review. `decide` prints exactly one of none, quick-first, run,
-# deliver.
+# deliver. The hand-over subcommands live in audit-code-review-handover.sh.
 #
 # HONEST LIMIT. This is a local file under the git-ignored run folder, the same
 # trust position as a findings sidecar: it sits under the audit's documented limit
@@ -28,13 +36,22 @@
 # attempt's pgid and script.pid files, which are not record writes.
 #
 # Bash 3.2 compatible. jq programs are single-quoted so their `$` reach jq.
-# shellcheck disable=SC2016
+# SC2034: ROUND, COMMIT and STOP_REASON are read by the sourced hand-over library.
+# shellcheck disable=SC2016,SC2034
 set -euo pipefail
 
 SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Resolved from this script, so the working directory never picks the library.
 # shellcheck source=/dev/null
 . "$SCRIPT_DIRECTORY/audit-code-review-decide.sh"
+# A failed source under bash 3.2 ends the shell before any `||` runs, so the
+# file test comes first.
+[ -f "$SCRIPT_DIRECTORY/audit-code-review-handover.sh" ] || {
+  printf 'audit-code-review-record: missing library: %s\n' "$SCRIPT_DIRECTORY/audit-code-review-handover.sh" >&2
+  exit 1
+}
+# shellcheck source=/dev/null
+. "$SCRIPT_DIRECTORY/audit-code-review-handover.sh"
 
 die_usage() {
   printf 'audit-code-review-record: %s\n' "$1" >&2
@@ -45,6 +62,7 @@ SUBCOMMAND="${1-}"
 [ $# -gt 0 ] && shift
 ROOT="" RUN_FOLDER="" PR="" BASE="" HEAD="" CLAUDE_VERSION="" WAIT_SECONDS=0 ATTEMPT=""
 EXIT_STATUS="" COST="" REASON="" MODEL="" DENIALS_FILE="" OUTCOME="" FINDINGS_FILE="" ROUTES=""
+MEMBERS="" ROUND="" COMMIT="" STOP_REASON="" ROUNDS=0
 while [ $# -gt 0 ]; do
   [ $# -ge 2 ] || die_usage "$1 needs a value"
   case "$1" in
@@ -64,6 +82,11 @@ while [ $# -gt 0 ]; do
     --outcome) OUTCOME="$2" ;;
     --findings) FINDINGS_FILE="$2" ;;
     --routes) ROUTES="$2" ;;
+    --member) MEMBERS="${MEMBERS:+$MEMBERS$'\n'}$2" ;;
+    --round) ROUND="$2" ;;
+    --commit) COMMIT="$2" ;;
+    --stop-reason) STOP_REASON="$2" ;;
+    --rounds) ROUNDS="$2" ;;
     *) die_usage "unknown argument: $1" ;;
   esac
   shift 2
@@ -296,5 +319,13 @@ case "$SUBCOMMAND" in
     require_root
     cmd_decide "$ROOT" "$PR" "$ROUTES"
     ;;
-  *) die_usage "usage: audit-code-review-record.sh open|attempt-open|attempt-close|outcome|read|decide ..." ;;
+  assign) cmd_assign ;;
+  delivery) cmd_delivery ;;
+  reconcile) cmd_reconcile ;;
+  round-end) cmd_round_end ;;
+  rechecks) cmd_rechecks ;;
+  recheck-close) cmd_recheck_close ;;
+  convergence) cmd_convergence ;;
+  publish-values) cmd_publish_values ;;
+  *) die_usage "usage: audit-code-review-record.sh open|attempt-open|attempt-close|outcome|read|decide|assign|delivery|reconcile|round-end|rechecks|recheck-close|convergence|publish-values ..." ;;
 esac

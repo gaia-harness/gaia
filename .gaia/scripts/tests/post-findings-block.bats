@@ -804,3 +804,38 @@ write_sidecar_with_review_base() {
   grep -qF "withheld" "$SANDBOX/posted_body.txt" && return 1
   return 0
 }
+
+# write_review_record: a ran record whose findings and denial detail carry text
+# that must never reach the posted block, in the run folder the script derives.
+write_review_record() {
+  mkdir -p "$SANDBOX/.gaia/local/runs/main"
+  jq -n -c '{version: 1, pr: 42, base: null, head: null, outcome: "ran", reason: null, level: "high",
+    model: "claude-opus-4-1", claude_version: "2.1.3", attempts: [], cost: 1.5,
+    denials: {count: 1, tools: ["Read"], detail: ["Read /secret/path-in-denial"]},
+    findings: [{id: "cr-1", file: "src/leaky-file.ts", line: 3, summary: "leaky summary text",
+      failure_scenario: "leaky scenario text", member: "m", handed_only: false, state: "kept",
+      drop_reason: null, merged: false, fixed: true, final_disposition: "fixed", recheck: null}],
+    handover: "closed", reconcile_passes: 1, rounds: 1, members_dispatched: 1, convergence: "clean"}' \
+    > "$SANDBOX/.gaia/local/runs/main/code-review.json"
+}
+
+@test "code_review: the block carries the review outcome and counts, and nothing from its findings or denial detail" {
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
+  write_review_record
+  stub_gh '[]'
+  run run_script
+  [ "$status" -eq 0 ]
+  payload="$(extract_payload)"
+  [ "$(jq -c '.code_review' <<<"$payload")" = '{"outcome":"ran","added":1,"kept":1,"dropped":0,"unaccounted":0,"merged":0,"fixed":1}' ]
+  grep -qF "leaky" "$SANDBOX/posted_body.txt" && return 1
+  grep -qF "secret/path-in-denial" "$SANDBOX/posted_body.txt" && return 1
+  true
+}
+
+@test "code_review: the key is absent when the branch has no review record" {
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
+  stub_gh '[]'
+  run run_script
+  [ "$status" -eq 0 ]
+  [ "$(jq 'has("code_review")' <<<"$(extract_payload)")" = "false" ]
+}

@@ -38,6 +38,14 @@
 # Values without `light` or `quick`, or with one empty or all zero, render the
 # line without that clause.
 #
+# `review` (optional, the object `audit-code-review-record.sh publish-values`
+# prints) appends one code-review clause after the grants count and is left out
+# whole when absent. It has no free-text field: outcome and reason come from
+# closed lists, the rest are integers, a decimal cost, or strings matching a
+# fixed pattern, so anything else is exit 2 and no review text can reach the
+# section. A `not run` or `not needed` clause shows its outcome, reason and cost
+# only; counts appear only with `ran`, and `ran, no findings` shows its denials.
+#
 # The body is read with `gh pr view` and written with
 # `gh pr edit --body-file <temp>`; it never travels on a command line. The
 # offline pair `--body-in`/`--body-out` (both or neither) replaces both gh
@@ -158,7 +166,7 @@ fi
 if ! jq -e '
     def uint: type == "number" and . >= 0 and . == floor and . < 1000000000;
     type == "object"
-    and ((keys - ["total", "members", "grants", "light", "quick"]) | length) == 0
+    and ((keys - ["total", "members", "grants", "light", "quick", "review"]) | length) == 0
     and (.total | uint)
     and (.grants | uint)
     and (.members | type) == "object"
@@ -176,6 +184,44 @@ if ! jq -e '
   die_usage "values JSON is invalid: need {total, members, grants} with non-negative integers and code-audit-* member names"
 fi
 
+REVIEW_REASONS_JSON="$(printf '%s\n' "$REVIEW_REASONS" | jq -R . | jq -sc .)"
+if ! jq -e --argjson reasons "$REVIEW_REASONS_JSON" '
+    def uint: type == "number" and . >= 0 and . == floor and . < 1000000000;
+    def counts: ["added", "kept", "dropped", "unaccounted", "merged", "fixed", "kept_by_disposition", "denials", "denial_tools"];
+    def review_ok:
+      . as $review
+      | type == "object"
+      and ((keys - ["outcome", "reason", "added", "kept", "dropped", "unaccounted", "merged", "fixed",
+          "kept_by_disposition", "denials", "denial_tools", "cost", "rounds", "members_dispatched",
+          "convergence", "level", "model", "claude_version"]) | length) == 0
+      and (.outcome | IN("ran", "ran, clean", "ran, no findings", "not run", "not needed"))
+      and (if .outcome | IN("not run", "not needed")
+           then (.reason | type == "string" and IN($reasons[]))
+             and (counts | all(. as $key | $review | has($key) | not))
+           else (has("reason") | not) end)
+      and (if .outcome == "ran" then (counts | all(. as $key | $review | has($key)))
+           elif .outcome == "ran, no findings" then has("denials") else true end)
+      and (["added", "kept", "dropped", "unaccounted", "merged", "fixed", "denials"]
+           | all(. as $key | $review | (has($key) | not) or ($review[$key] | uint)))
+      and ((has("kept_by_disposition") | not)
+        or (.kept_by_disposition | type == "object"
+            and (keys == ["accepted", "diverted", "filed", "fixed", "open", "waived"])
+            and all(.[]; uint)))
+      and ((has("denial_tools") | not)
+        or (.denial_tools | type == "array" and all(type == "string" and test("\\A[A-Za-z]+\\z"))))
+      and (.cost | . == "none" or . == "unknown" or (type == "number" and . >= 0 and . < 1000000))
+      and ((has("rounds") | not) or (.rounds | uint))
+      and ((has("members_dispatched") | not) or (.members_dispatched == null) or (.members_dispatched | uint))
+      and ((has("convergence") | not) or (.convergence == null)
+           or (.convergence | IN("clean", "clean after a grant", "accepted with residuals", "stopped")))
+      and ((has("level") | not) or .level == "high")
+      and ((has("model") | not) or (.model | type == "string" and test("\\A[A-Za-z0-9._\\[\\]-]+\\z")))
+      and ((has("claude_version") | not) or (.claude_version | type == "string" and test("\\A[0-9]+\\.[0-9]+\\.[0-9]+\\z")));
+    (has("review") | not) or (.review | review_ok)
+  ' "$WORK/values.json" >/dev/null 2>&1; then
+  die_usage "values JSON is invalid: review must be an outcome and reason from the closed lists, with counts only on ran"
+fi
+
 TOTAL="$(jq -r '.total' "$WORK/values.json")"
 GRANTS="$(jq -r '.grants' "$WORK/values.json")"
 MEMBERS="$(jq -r '.members | to_entries | sort_by(.key) | map("\(.key) \(.value)") | join(", ")' "$WORK/values.json")"
@@ -187,10 +233,31 @@ QUICK_CLAUSE=""
 QUICK="$(jq -r '(.quick // {}) | to_entries | map(select(.value > 0)) | sort_by(.key) | map(.key) | join(", ")' "$WORK/values.json")"
 [ -z "$QUICK" ] || QUICK_CLAUSE=" quick review, no full member: ${QUICK};"
 
+# The review clause ends the line with its own period.
+GRANTS_END="."
+REVIEW_CLAUSE="$(jq -r '
+  def cost_text:
+    if .cost == "none" then "cost none"
+    elif .cost == "unknown" then "estimated cost unknown"
+    else (.cost * 100 | round) as $cents
+      | "estimated cost $\($cents / 100 | floor).\(($cents % 100) | tostring | if length < 2 then "0" + . else . end) for the review session only"
+    end;
+  def tools_text: if ((.denial_tools // []) | length) > 0 then " (\(.denial_tools | join(", ")))" else "" end;
+  def denials_text: "\(.denials) denial\(if .denials == 1 then "" else "s" end)";
+  if has("review") | not then empty else .review
+  | "code review: " + (
+      if .outcome == "ran" then
+        "ran; added \(.added), kept \(.kept), dropped \(.dropped), unaccounted \(.unaccounted), merged \(.merged), fixed \(.fixed); denials \(.denials)\(tools_text); \(cost_text)."
+      elif .outcome == "ran, clean" then "ran, clean; \(cost_text)."
+      elif .outcome == "ran, no findings" then "ran, no findings, \(denials_text)\(tools_text); \(cost_text)."
+      else "\(.outcome): \(.reason); \(cost_text)." end) end
+' "$WORK/values.json")"
+[ -z "$REVIEW_CLAUSE" ] || GRANTS_END="; ${REVIEW_CLAUSE}"
+
 printf '%s\n%s\n\n%s\n%s\n' \
   "$START_MARKER" \
   '## Audit rounds' \
-  "Total rounds: ${TOTAL}; per member: ${MEMBERS};${LIGHT_CLAUSE}${QUICK_CLAUSE} human grants: ${GRANTS}." \
+  "Total rounds: ${TOTAL}; per member: ${MEMBERS};${LIGHT_CLAUSE}${QUICK_CLAUSE} human grants: ${GRANTS}${GRANTS_END}" \
   "$END_MARKER" > "$WORK/section.md"
 
 # ---------------------------------------------------------------------------

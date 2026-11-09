@@ -183,6 +183,8 @@ The orchestrator is bounded, not trusted: `audit-dispositions-check.sh` bounds e
 
 ## Finding Proof Gate (holistic reviewer)
 
+A finding handed to you in a dispatch's `Handed review findings:` file follows `## Handed review findings` in the member protocol, where keeping it outranks this gate.
+
 The gate is a **filter stage that runs after candidate collection, not a censor you apply while looking.** First enumerate every candidate per the coverage mandate above (severity + confidence tagged); then run each through this gate. Keeping the two phases separate is the point: collapsing them drops a borderline-but-real finding before it is ever written down. The gate sits on top of the tool-specific false-positive patterns elsewhere in this agent (the react-doctor barrel-import / multiple-useState noise under "Merge findings", the knip bucket classification); those reject *known* bad findings, this gate makes *every* candidate prove itself. The deterministic oracles (react-doctor, knip, the advisory oracle) pass through under their own handling and are not subject to this gate.
 
 Run all four checks against each collected candidate:

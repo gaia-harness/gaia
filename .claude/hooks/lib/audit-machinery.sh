@@ -82,6 +82,7 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .gaia/scripts/audit-code-review-guard.sh
 .gaia/scripts/audit-code-review-record.sh
 .gaia/scripts/audit-code-review-decide.sh
+.gaia/scripts/audit-code-review-handover.sh
 # gaia:maintainer-only:start
 .claude/maintainers/**
 .gaia/scripts/release-bookkeeping-check.sh

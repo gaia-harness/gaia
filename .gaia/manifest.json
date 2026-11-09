@@ -252,6 +252,7 @@
     ".gaia/scripts/audit-code-review-child.sh": "owned",
     ".gaia/scripts/audit-code-review-decide.sh": "owned",
     ".gaia/scripts/audit-code-review-guard.sh": "owned",
+    ".gaia/scripts/audit-code-review-handover.sh": "owned",
     ".gaia/scripts/audit-code-review-judge.sh": "owned",
     ".gaia/scripts/audit-code-review-record.sh": "owned",
     ".gaia/scripts/audit-code-review.sh": "owned",
@@ -852,7 +853,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-09T11:42:21.892Z",
+  "generated": "2026-11-09T13:19:17.971Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
