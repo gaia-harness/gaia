@@ -27,7 +27,7 @@ No generic rules of its own: the translation rules arrive in an extension file.
 
 ## Generic rules: typescript
 
-**From the typescript skill (`apps/web/.claude/skills/typescript/SKILL.md`):**
+**From `.claude/rules/typescript.md`, `@gaia-harness/lint` and, for the React lines, `apps/web/.claude/rules/coding-guidelines-react.md`:**
 
 - `type` not `interface`, flag any `interface` declarations
 - `import type {}` for type-only imports: `import type {ReactNode} from 'react'`

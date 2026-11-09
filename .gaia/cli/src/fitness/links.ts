@@ -29,7 +29,7 @@ export type LinkGraph = {
 export type LinkReference = {
   kind: 'backtick' | 'markdown';
   line: number;
-  /** The skill prose names as the target's owner ("the typescript skill's `x`"). */
+  /** The skill prose names as the target's owner ("the tailwind skill's `x`"). */
   skill?: string;
   target: string;
 };

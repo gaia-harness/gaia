@@ -118,6 +118,10 @@ describe('classifyPath', () => {
     expect(classifyPath('.github/FUNDING.yml')).toBe('shared');
   });
 
+  test('the TypeScript rule is shared, since a newly owned path would overwrite an adopter rule already there', () => {
+    expect(classifyPath('.claude/rules/typescript.md')).toBe('shared');
+  });
+
   test('wiki-owned exact and prefix matches', () => {
     expect(classifyPath('wiki/concepts/Foo.md')).toBe('wiki-owned');
     expect(classifyPath('wiki/decisions/Bar.md')).toBe('wiki-owned');

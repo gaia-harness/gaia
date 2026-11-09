@@ -23931,6 +23931,7 @@ var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
   "wiki/log.md"
 ]);
 var SHARED = /* @__PURE__ */ new Set([
+  ".claude/rules/typescript.md",
   ".claude/settings.json",
   ".gaia/audit-ci.yml",
   ".github/FUNDING.yml",

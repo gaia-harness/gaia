@@ -13,7 +13,7 @@ Follow Apple's Swift API Design Guidelines: names should be clear at the point o
 - **No abbreviations**: owned by `.claude/rules/no-abbreviations.md`
 - **No type noise**: `availableExercises` not `exerciseArray`, and never so short it loses clarity
 
-Casing is each language's own convention; for TypeScript, see the typescript skill.
+Casing is each language's own convention; for TypeScript, see `.claude/rules/typescript.md`.
 
 > **Exception, React event handlers** follow `handle{Action}{Element}` from the react-code skill
 > (e.g. `handleClickSave`, `handleChangeInput`), the `{Element}` is required, since a bare

@@ -57,7 +57,7 @@ import {parseWithZod} from '@conform-to/zod';
 import {parseWithZod} from '@conform-to/zod/v4';
 ```
 
-See `references/conform-forms.md` for full Conform + Zod wiring. Beyond the import path, all Zod schemas use Zod 4 syntax, the typescript skill's `references/zod.md` is the canonical Zod 3 → Zod 4 migration map (`z.strictObject`, top-level string formats, etc.).
+See `references/conform-forms.md` for full Conform + Zod wiring. Beyond the import path, all Zod schemas use Zod 4 syntax, `wiki/dependencies/Zod.md` is the canonical Zod 3 → Zod 4 migration map (`z.strictObject`, top-level string formats, etc.).
 
 ### Gate 3: Translation Check
 
@@ -79,7 +79,7 @@ See `references/translation-patterns.md` for edge cases (keyPrefix, Trans compon
 
 Write React 19 idioms. The work here is to not regress to pre-19 habits, and to not pull in React's framework-level form APIs that React Router already owns.
 
-**`forwardRef`:** lint (`@eslint-react/no-forward-ref`) reports it. In React 19 `ref` is an ordinary prop, so destructure it from props. The ref _type_ (`Ref<T>`, or `ComponentProps<'input'>` already carrying `ref`) is the typescript skill's domain.
+**`forwardRef`:** lint (`@eslint-react/no-forward-ref`) reports it. In React 19 `ref` is an ordinary prop, so destructure it from props. Type it as `Ref<T>`, or use `ComponentProps<'input'>`, which already carries `ref`.
 
 **Before writing `&&` in JSX, make the left operand a real boolean.** `&&` returns its left operand when falsy. `false`/`null`/`undefined` render nothing, but a numeric **`0`** is a renderable value and leaks the literal "0" into the DOM. Lint catches both forms in real time: `no-restricted-syntax` reports `.length && <JSX/>`, and the type-aware `sonarjs/jsx-no-leaked-render` reports the general `count && <X/>` case. Coerce as you write: `count > 0`, `count !== 0`, or `!!count`.
 

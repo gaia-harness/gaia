@@ -62,7 +62,7 @@ const options = categoryOptions.map((value) => ({
 }));
 ```
 
-**Where to define the union type:** define it in the module that owns the value set (see the typescript skill's "One Source of Truth" section). Then use it in `LoaderData`, component props, and anywhere else the value flows, the template literal in `t()` will just work.
+**Where to define the union type:** define it in the module that owns the value set (see "One Source of Truth" in `.claude/rules/typescript.md`). Then use it in `LoaderData`, component props, and anywhere else the value flows, the template literal in `t()` will just work.
 
 ## Inline Styled Segments (Trans component)
 
