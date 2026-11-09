@@ -39,7 +39,8 @@ log_denial() {
 # denies a Bash command with any token that:
 #   - contains --con (every abbreviation of --contents, and --contains and --config
 #     with them) or starts with --no-index;
-#   - holds a brace expansion ({ with , or ..) or a backtick;
+#   - holds a brace expansion ({ with , or ..), a backtick, ${ or $( anywhere in it, or
+#     a $NAME expansion outside single quotes;
 #   - is, whole or after its first =, a parent-directory path, an absolute path
 #     outside the review root, or starts with ~ or $ (both expand after this check);
 #   - when the command names blame, starts with --ig or -S, or is a short-option
@@ -48,7 +49,7 @@ log_denial() {
 # removes them before git sees it. It is a token deny-list, not a parser: it denies
 # only these forms. Without a root every absolute path is outside it.
 bash_command_leaves_root() {
-  local command_text token stripped candidate is_blame=no
+  local command_text token stripped unquoted candidate is_blame=no
   command_text="$(printf '%s' "$payload" | jq -r 'if .tool_name == "Bash" then (.tool_input.command // "") else "" end' 2>/dev/null)"
   [ -n "$command_text" ] || return 1
   set -f
@@ -58,9 +59,14 @@ bash_command_leaves_root() {
   for token in $command_text; do
     stripped="$(printf '%s' "$token" | tr -d "'\"\\\\")"
     case "$stripped" in *--con* | --no-index*) set +f; return 0 ;; esac
-    # Brace expansion and a backtick build their words after this check, which is
-    # how a denied form reaches git unseen. `@{1}` and `@{upstream}` hold neither.
+    # Brace expansion, a backtick, and parameter or command expansion mid-token
+    # (--no-ind${x}ex) build their words after this check, which is how a denied
+    # form reaches git unseen. `@{1}` and `@{upstream}` hold none of them.
     case "$stripped" in *'{'*,* | *'{'*..* | *'`'*) set +f; return 0 ;; esac
+    case "$stripped" in *\$\{* | *\$\(*) set +f; return 0 ;; esac
+    # Single quotes keep a literal $id in a route path from expanding; nothing else does.
+    unquoted="$(printf '%s' "$token" | sed "s/'[^']*'//g")"
+    case "$unquoted" in *'$'[A-Za-z_]*) set +f; return 0 ;; esac
     if [ "$is_blame" = yes ]; then
       case "$stripped" in --ig* | -S* | -[!-]*S*) set +f; return 0 ;; esac
     fi

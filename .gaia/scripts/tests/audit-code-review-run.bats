@@ -269,6 +269,17 @@ guard_decides() {
   [ "$(guard_decides 'git show `echo HEAD`')" = deny ]
 }
 
+@test "the guard denies a parameter or command expansion inside a token" {
+  [ "$(guard_decides 'git diff --no-ind${x}ex README .env')" = deny ]
+  [ "$(guard_decides 'git diff --no-$(echo)index README .env')" = deny ]
+  [ "$(guard_decides 'git show HEAD$(cat${IFS}$HOME/.aws/credentials)')" = deny ]
+  [ "$(guard_decides 'git diff --no-ind$x README .env')" = deny ]
+}
+
+@test "the guard passes a single-quoted path holding a literal dollar name" {
+  [ "$(guard_decides "git log -1 -- 'app/routes/\$id.tsx'")" = pass ]
+}
+
 @test "the guard passes ordinary review reads, reflog and upstream braces included" {
   [ "$(guard_decides 'git log -S hunter2 -1')" = pass ]
   [ "$(guard_decides 'git log -p -1 README')" = pass ]
