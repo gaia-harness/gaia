@@ -1,6 +1,10 @@
+import {delay} from 'msw';
 import {http, HttpResponse} from 'msw/http';
 import {afterEach, describe, expect, expectTypeOf, test} from 'vitest';
 import {z} from 'zod';
+import {createServer} from 'node:http';
+import type {Server} from 'node:http';
+import type {AddressInfo} from 'node:net';
 import {create} from '..';
 // eslint-disable-next-line no-restricted-imports -- the service layer's request tests register per-test MSW handlers on the suite's node server
 import {server} from '../../../../test/test.server';
@@ -11,6 +15,10 @@ const ORIGIN_B = 'https://api-b.test';
 
 const itemSchema = z.object({displayName: z.string()});
 const envelopeSchema = z.object({data: itemSchema});
+
+// Ky runs parseJson again on the JSON the hook returns, so this one must parse real JSON too.
+const parseJsonOrPlainText = (text: string): unknown =>
+  text === 'not json' ? {display_name: 'parsed'} : JSON.parse(text);
 
 const originalApiUrl = process.env.API_URL;
 
@@ -51,6 +59,54 @@ describe('create', () => {
     ]);
   });
 
+  test('a network failure resolves through attempt as a 503', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(http.get(`${ORIGIN_A}/items`, () => HttpResponse.error()));
+
+    const request = create();
+    const attemptOutcome = await attempt(async () =>
+      request('items', {retry: 0})
+    );
+
+    expect(attemptOutcome).toEqual([
+      {isNetworkFailure: true, status: 503, statusText: 'Network error'},
+      undefined,
+    ]);
+  });
+
+  test('a timeout resolves through attempt as a 504', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, async () => {
+        await delay(200);
+
+        return HttpResponse.json({data: {displayName: 'x'}});
+      })
+    );
+
+    const request = create();
+    const attemptOutcome = await attempt(async () =>
+      request('items', {retry: 0, schema: envelopeSchema, timeout: 20})
+    );
+
+    expect(attemptOutcome).toEqual([
+      {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
+      undefined,
+    ]);
+  });
+
+  test('a cancelled request still rejects through attempt', async () => {
+    process.env.API_URL = ORIGIN_A;
+
+    const request = create();
+
+    await expect(
+      attempt(async () =>
+        request('items', {retry: 0, signal: AbortSignal.abort()})
+      )
+    ).rejects.toMatchObject({name: 'AbortError'});
+  });
+
   test('a 204 without a schema resolves undefined', async () => {
     process.env.API_URL = ORIGIN_A;
     server.use(
@@ -65,6 +121,45 @@ describe('create', () => {
     await expect(
       request('items/1', {method: 'delete'})
     ).resolves.toBeUndefined();
+  });
+
+  test('a 204 without a schema resolves undefined on the snake_case layer', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.delete(
+        `${ORIGIN_A}/items/1`,
+        () => new HttpResponse(null, {status: 204})
+      )
+    );
+
+    await expect(
+      create({isSnakeCaseEnabled: true})('items/1', {method: 'delete'})
+    ).resolves.toBeUndefined();
+  });
+
+  test('a 200 with a non-JSON body delivers null on the snake_case layer', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, () => HttpResponse.text('not json'))
+    );
+
+    await expect(
+      create({isSnakeCaseEnabled: true})('items', {schema: z.null()})
+    ).resolves.toBeNull();
+  });
+
+  test("a caller's parseJson still parses the body on the snake_case layer", async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, () => HttpResponse.text('not json'))
+    );
+
+    const item = await create({
+      isSnakeCaseEnabled: true,
+      parseJson: parseJsonOrPlainText,
+    })('items', {schema: itemSchema});
+
+    expect(item).toEqual({displayName: 'parsed'});
   });
 
   test('isSnakeCaseEnabled converts a JSON body to snake_case and the response to camelCase', async () => {
@@ -136,5 +231,124 @@ describe('create', () => {
     expect(observed).toHaveLength(2);
     expect(observed[0]).toMatch(new RegExp(`^${ORIGIN_A}`));
     expect(observed[1]).toMatch(new RegExp(`^${ORIGIN_B}`));
+  });
+});
+
+describe('a failure while reading the body', () => {
+  const networkFailure = {
+    isNetworkFailure: true,
+    status: 503,
+    statusText: 'Network error',
+  };
+
+  let socketServer: Server;
+
+  // A real socket: the headers go out, then the body drops, never ends, or runs
+  // over the size limit, so the error comes from a real read, not a mock.
+  const startSocketServer = async (
+    behavior: 'drop' | 'oversized' | 'stall',
+    status = 200
+  ) => {
+    socketServer = createServer((_request, response) => {
+      if (behavior === 'oversized') {
+        response.writeHead(status, {'Content-Type': 'application/json'});
+        response.end(`"${'x'.repeat(100)}"`);
+
+        return;
+      }
+
+      response.writeHead(status, {
+        'Content-Length': '100',
+        'Content-Type': 'application/json',
+      });
+      response.write('{"data"');
+
+      if (behavior === 'drop') {
+        setTimeout(() => response.destroy(), 20);
+      }
+    });
+    await new Promise<void>((resolve) => {
+      socketServer.listen(0, '127.0.0.1', resolve);
+    });
+    process.env.API_URL = `http://127.0.0.1:${(socketServer.address() as AddressInfo).port}`;
+  };
+
+  afterEach(async () => {
+    socketServer.closeAllConnections();
+    await new Promise((resolve) => {
+      socketServer.close(resolve);
+    });
+  });
+
+  test('a schema-less body that drops resolves through attempt as a 503', async () => {
+    await startSocketServer('drop');
+
+    const attemptOutcome = await attempt(async () =>
+      create()('items', {retry: 0})
+    );
+
+    expect(attemptOutcome).toEqual([networkFailure, undefined]);
+  });
+
+  test('a schema-less body that stalls resolves through attempt as a 504', async () => {
+    await startSocketServer('stall');
+
+    const attemptOutcome = await attempt(async () =>
+      create()('items', {retry: 0, timeout: 150})
+    );
+
+    expect(attemptOutcome).toEqual([
+      {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
+      undefined,
+    ]);
+  });
+
+  test('a body that drops on the snake_case layer resolves through attempt as a 503', async () => {
+    await startSocketServer('drop');
+
+    const attemptOutcome = await attempt(async () =>
+      create({isSnakeCaseEnabled: true})('items', {retry: 0, schema: z.null()})
+    );
+
+    expect(attemptOutcome).toEqual([networkFailure, undefined]);
+  });
+
+  test('a 404 whose body drops on the snake_case layer keeps its status through attempt', async () => {
+    await startSocketServer('drop', 404);
+
+    const [error] = await attempt(async () =>
+      create({isSnakeCaseEnabled: true})('items', {retry: 0, schema: z.null()})
+    );
+
+    expect(error).toMatchObject({status: 404});
+    expect(error).not.toHaveProperty('isNetworkFailure');
+  });
+
+  test('a body over maxResponseSize on the snake_case layer still rejects through attempt', async () => {
+    await startSocketServer('oversized');
+
+    await expect(
+      attempt(async () =>
+        create({isSnakeCaseEnabled: true})('items', {
+          maxResponseSize: 10,
+          retry: 0,
+          schema: z.null(),
+        })
+      )
+    ).rejects.toMatchObject({name: 'ResponseSizeError'});
+  });
+
+  test('a body read cancelled on the snake_case layer still rejects through attempt', async () => {
+    await startSocketServer('stall');
+
+    await expect(
+      attempt(async () =>
+        create({isSnakeCaseEnabled: true})('items', {
+          retry: 0,
+          schema: z.null(),
+          signal: AbortSignal.timeout(50),
+        })
+      )
+    ).rejects.toMatchObject({name: 'TimeoutError'});
   });
 });

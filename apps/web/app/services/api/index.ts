@@ -73,8 +73,7 @@ export const create = ({
 
     // Read the body even though it is discarded: on Node, an unread body keeps
     // its connection out of the keep-alive pool until garbage collection.
-    const discardedResponse = await response;
-    await discardedResponse.arrayBuffer();
+    await response.arrayBuffer();
   };
 
   return request as RequestFunction;
