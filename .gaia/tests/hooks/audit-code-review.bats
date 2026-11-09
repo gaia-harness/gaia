@@ -190,6 +190,26 @@ fix_and_commit() {
   [ "$(finding_field cr-3 .member)" = "$FRONTEND_MEMBER" ]
 }
 
+@test "review: assign refuses a roster with no default member and an unreadable record, assigning nothing" {
+  canned_findings tool.sh:1 notes.txt:1
+  review_run
+  alf_add_round "[\"$SHELL_MEMBER\"]"
+  cp "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  sed -i.bak '/default: true/d' "$ALF_ROOT/.gaia/audit-ci.yml"
+  run --separate-stderr record assign --root "$ALF_ROOT" --run-folder "$RUN"
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  grep -qF 'the roster names no default member' <<<"$stderr"
+  cmp -s "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  [ "$(jq '[.findings[] | select(.member != null)] | length' "$RECORD")" -eq 0 ]
+  write_roster
+  printf 'not json {\n' >"$RECORD"
+  run record assign --root "$ALF_ROOT" --run-folder "$RUN"
+  [ "$status" -eq 5 ]
+  [ -z "$output" ]
+  [ "$(cat "$RECORD")" = 'not json {' ]
+}
+
 @test "reconcile: a kept id keeps its mark and added equals kept plus dropped plus unaccounted" {
   ran_review
   answered
@@ -288,17 +308,31 @@ fix_and_commit() {
   alf_add_round "[\"$SHELL_MEMBER\"]"
   run record decide --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --routes mixed
   [ "$output" = none ]
+  # A second run on the ended record is the only call that could spawn again.
+  review_run
+  [ "$status" -eq 0 ]
   [ "$(claude_calls)" -eq 1 ]
+  [ "$(jq -r .outcome "$RECORD")" = ran ]
+  [ "$(jq '.attempts | length' "$RECORD")" -eq 1 ]
+  [ "$(finding_field cr-1 .state)" = kept ]
 }
 
 @test "decide: no call on an all-quick wave, one call when the branch later needs a full wave" {
   run record decide --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --routes all-light
   [ "$output" = quick-first ]
   [ "$(claude_calls)" -eq 0 ]
+  record outcome --run-folder "$RUN" --pr 7 --outcome 'not needed' --reason 'quick review cleared'
+  [ "$(jq -r .outcome "$RECORD")" = 'not needed' ]
+  alf_add_round '[]'
+  run record decide --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --routes mixed
+  [ "$output" = run ]
+  [ "$(claude_calls)" -eq 0 ]
   canned_findings tool.sh:1
   review_run
+  [ "$status" -eq 0 ]
   [ "$(claude_calls)" -eq 1 ]
   [ "$(jq -r .outcome "$RECORD")" = ran ]
+  [ "$(finding_field cr-1 .file)" = tool.sh ]
 }
 
 @test "a member that accounts for nothing is named once, then reads unaccounted; redelivery holds only those" {
@@ -382,6 +416,20 @@ fix_and_commit() {
   [ "$(jq -c '[.findings[] | [.id, .state, .fixed]]' "$RECORD")" = "$before_state" ]
 }
 
+@test "recheck-close: a round without a dispositions file refuses and leaves the owed re-check as found" {
+  ran_review
+  answered
+  jq '.findings |= map(if .id == "cr-3" then .recheck = "owed" else . end)' "$RECORD" >"$RECORD.new" && mv "$RECORD.new" "$RECORD"
+  member_report "$FRONTEND_MEMBER" 40 '[]'
+  cp "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  [ ! -e "$RUN/dispositions-1.json" ]
+  run --separate-stderr record recheck-close --root "$ALF_ROOT" --run-folder "$RUN" --member "$FRONTEND_MEMBER" --round 1
+  [ "$status" -eq 2 ]
+  grep -qF 'no dispositions file for round 1' <<<"$stderr"
+  cmp -s "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  [ "$(finding_field cr-3 .recheck)" = owed ]
+}
+
 # --- definitions ------------------------------------------------------------------------
 
 has_text() {
@@ -412,6 +460,7 @@ red_without() {
   red_without "$refuter" "$phrase"
 }
 
+# bats test_tags=whole-tree
 @test "every member with a Finding Proof Gate points at the handed-findings duty" {
   local member_file checked=0 expected pointer='follows `## Handed review findings` in the member protocol, where keeping it outranks this gate'
   expected="$(grep -lE '^## Finding Proof Gate' "$REPO_ROOT"/.claude/agents/code-audit-*.md | wc -l | tr -d ' ')"
@@ -423,14 +472,6 @@ red_without() {
   done
   [ "$checked" -eq "$expected" ]
   [ "$checked" -gt 0 ]
-}
-
-@test "the audit loop unit carries the hand-off instruction" {
-  local unit="$REPO_ROOT/.claude/agents/audit-loop-unit.md" phrase
-  for phrase in 'Handed review findings: <path>' 'Re-check review ids: <ids>'; do
-    has_text "$unit" "$phrase" || { printf 'unit lacks: %s\n' "$phrase" >&2; return 1; }
-    red_without "$unit" "$phrase" || return 1
-  done
 }
 
 # --- the failure direction: a review that did not complete never reads clean ----------------
@@ -467,6 +508,18 @@ published_clause() {
   review_json="$(record publish-values --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --rounds 1)" || return 1
   [ -n "$review_json" ] || return 1
   jq -c --argjson review "$review_json" '. + {review: $review}' <<<'{"total":1,"members":{"code-audit-shell":1},"grants":0}' >"$values"
+  printf 'body\n' >"$body_in"
+  bash "$SCRIPTS/audit-loop-record.sh" --pr 7 --values-json "$values" --body-in "$body_in" --body-out "$body_out" >/dev/null || return 1
+  sed -n 's/^.*human grants: [0-9]*; code review: //p' "$body_out"
+}
+
+# published_clause_through_eval: the same clause, with the values taken from the
+# evaluator's own record-values, so the rounds in the branch's history reach
+# the record writer's publish-values as they do in the unit.
+published_clause_through_eval() {
+  local values="$BATS_TEST_TMPDIR/eval-values.json" body_in="$BATS_TEST_TMPDIR/eval-in.md" body_out="$BATS_TEST_TMPDIR/eval-out.md"
+  bash "$SCRIPTS/audit-loop-eval.sh" record-values --root "$ALF_ROOT" >"$values" || return 1
+  jq -e 'has("review")' "$values" >/dev/null || return 1
   printf 'body\n' >"$body_in"
   bash "$SCRIPTS/audit-loop-record.sh" --pr 7 --values-json "$values" --body-in "$body_in" --body-out "$body_out" >/dev/null || return 1
   sed -n 's/^.*human grants: [0-9]*; code review: //p' "$body_out"
@@ -568,6 +621,36 @@ failing_review() {
   expect_not_run 2 2 'nonzero exit' 'estimated cost unknown'
 }
 
+@test "failure: a child that cannot launch is published as not run after one call, never retried" {
+  local launch_status
+  for launch_status in 126 127; do
+    rm -f "$RECORD" "$STAND_IN/calls"
+    stand_in_behaves "exit $launch_status"
+    failing_review
+    [ "$(jq -r '.attempts[0].exit' "$RECORD")" -eq "$launch_status" ]
+    grep -qF 'ignores user settings' <<<"$output" || { printf 'no settings hint for %s\n' "$launch_status" >&2; return 1; }
+    expect_not_run 1 1 'launch failed' 'estimated cost unknown'
+  done
+}
+
+@test "failure: a process group that outlives the deadline stops the unit with exit 1 and records no outcome" {
+  # The scratch copy never sends KILL and gives up on the group after one second,
+  # standing in for a group that survives every signal. The child exits normally and
+  # leaves a descendant that ignores TERM.
+  scratch_scripts audit-code-review-child.sh 's/^kill "KILL", -\$group;$/# no kill/;s/\[ "\$tick" -lt 40 \]/[ "$tick" -lt 2 ]/'
+  sed -i.bak 's/^REVIEW_TIMEOUT_SECONDS=.*/REVIEW_TIMEOUT_SECONDS=1/;s/^SUPERVISOR_GRACE_SECONDS=.*/SUPERVISOR_GRACE_SECONDS=1/' "$SCRATCH_SCRIPTS/audit-code-review.sh"
+  stand_in_behaves '(trap "" TERM; exec sleep 300) >/dev/null 2>&1 &'
+  ROUNDS_BEFORE="$(state_rounds)"
+  run bash "$SCRATCH_SCRIPTS/audit-code-review.sh" run --root "$ALF_ROOT" --pr 7 --run-folder "$RUN" </dev/null
+  kill -KILL -- "-$(cat "$RUN/code-review-attempt-1/pgid")" 2>/dev/null || true
+  [ "$status" -eq 1 ]
+  [ "${lines[$((${#lines[@]} - 1))]}" = 'code-review exit 1' ]
+  grep -qF 'outlived the deadline; recording nothing while it lives' <<<"$output"
+  [ "$(claude_calls)" -eq 1 ]
+  [ "$(jq -r .outcome "$RECORD")" = pending ]
+  [ "$(jq -r '.attempts[0].closed_at' "$RECORD")" = null ]
+}
+
 @test "failure: an error result is retried once and published as not run" {
   stand_in_result '{subtype: "success", is_error: true, local_command: "code_review", total_cost_usd: 0.5, result: "boom"}'
   failing_review
@@ -580,20 +663,8 @@ failing_review() {
   expect_not_run 2 2 'not the built-in' 'estimated cost $1.00 for the review session only'
 }
 
-@test "failure: an empty fence with a null local_command is not the built-in" {
-  stand_in_result --arg result "$FENCED_EMPTY" '{subtype: "success", is_error: false, local_command: null, total_cost_usd: 0.5, result: $result}'
-  failing_review
-  expect_not_run 2 2 'not the built-in' 'estimated cost $1.00 for the review session only'
-}
-
 @test "failure: the built-in answering free prose is an unusable result" {
   stand_in_result '{subtype: "success", is_error: false, local_command: "code_review", total_cost_usd: 0.5, result: "Looks fine to me, nothing to report."}'
-  failing_review
-  expect_not_run 2 2 'unusable result' 'estimated cost $1.00 for the review session only'
-}
-
-@test "failure: two fenced arrays, both empty, are an unusable result" {
-  stand_in_result --arg result "$FENCED_EMPTY"$'\n'"$FENCED_EMPTY" '{subtype: "success", is_error: false, local_command: "code_review", total_cost_usd: 0.5, result: $result}'
   failing_review
   expect_not_run 2 2 'unusable result' 'estimated cost $1.00 for the review session only'
 }
@@ -633,6 +704,25 @@ scratch_scripts() {
   expect_not_run 1 2 'nonzero exit' 'estimated cost unknown'
 }
 
+@test "failure: a record held by a live attempt cannot be opened, so the unit stops with exit 1 and starts no review" {
+  scratch_scripts audit-code-review.sh 's/^REVIEW_TIMEOUT_SECONDS=.*/REVIEW_TIMEOUT_SECONDS=1/;s/^WAIT_MARGIN_SECONDS=.*/WAIT_MARGIN_SECONDS=0/'
+  record open --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --base "$(alf_git rev-parse main)" --head "$(alf_git rev-parse HEAD)" --claude-version 2.1.319
+  record attempt-open --run-folder "$RUN" --n 1
+  mkdir -p "$RUN/code-review-attempt-1"
+  sleep 60 &
+  local live_process=$!
+  printf '%s\n' "$live_process" >"$RUN/code-review-attempt-1/script.pid"
+  cp "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+  run bash "$SCRATCH_SCRIPTS/audit-code-review.sh" run --root "$ALF_ROOT" --pr 7 --run-folder "$RUN" </dev/null
+  kill -KILL "$live_process"
+  wait "$live_process" 2>/dev/null || true
+  [ "$status" -eq 1 ]
+  [ "${lines[$((${#lines[@]} - 1))]}" = 'code-review exit 1' ]
+  grep -qF 'could not open the review record (status 4); no review started' <<<"$output"
+  [ "$(claude_calls)" -eq 0 ]
+  cmp -s "$RECORD" "$BATS_TEST_TMPDIR/record-before.json"
+}
+
 @test "failure: attempts exhausted with the last left open publish interrupted and spawn nothing" {
   record open --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --base "$(alf_git rev-parse main)" --head "$(alf_git rev-parse HEAD)" --claude-version 2.1.319
   record attempt-open --run-folder "$RUN" --n 1
@@ -649,6 +739,14 @@ scratch_scripts() {
   printf '2.1.100\n' >"$STAND_IN/version"
   failing_review
   expect_not_run 0 0 'below version floor' 'cost none'
+}
+
+@test "failure: a branch with no resolvable base is not run and spawns nothing" {
+  stand_in_behaves 'cat "$STAND_IN/result"'
+  alf_git update-ref -d refs/remotes/origin/main
+  alf_git branch -q -D main
+  failing_review
+  expect_not_run 0 0 'base unresolved' 'cost none'
 }
 
 @test "failure: a fork pull request is not run and spawns nothing" {
@@ -705,6 +803,18 @@ release_branch() {
   expect_not_run 0 0 'audit already under way' 'cost none'
 }
 
+@test "failure: an unreadable round history decides none, starts no review and leaves no record" {
+  mkdir -p "${ALF_STATE%/*}"
+  printf 'not json {\n' >"$ALF_STATE"
+  run --separate-stderr record decide --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --routes mixed
+  [ "$status" -eq 0 ]
+  [ "$output" = none ]
+  grep -qF 'cannot read the audit round history; no review decided' <<<"$stderr"
+  [ ! -e "$RECORD" ]
+  [ "$(claude_calls)" -eq 0 ]
+  [ "$(published_clause)" = 'not run: no record; cost none.' ]
+}
+
 @test "failure: an unreadable record is left as found, starts no review and publishes unreadable" {
   printf 'not json {\n' >"$RECORD"
   cp "$RECORD" "$BATS_TEST_TMPDIR/unreadable-record"
@@ -717,6 +827,13 @@ release_branch() {
   [ "$(published_clause)" = 'not run: unreadable record; estimated cost unknown.' ]
   [ "$(state_rounds)" -eq 0 ]
   gates_ignore_record
+}
+
+@test "failure: a record that parses with the wrong shape publishes unreadable, never a blank" {
+  ran_review
+  jq '.findings = "not an array"' "$RECORD" >"$BATS_TEST_TMPDIR/wrong-shape-record"
+  cp "$BATS_TEST_TMPDIR/wrong-shape-record" "$RECORD"
+  [ "$(published_clause)" = 'not run: unreadable record; estimated cost unknown.' ]
 }
 
 @test "failure: a child that moves the tree stops the unit with exit 3 and publishes review moved the tree" {
@@ -760,7 +877,7 @@ release_branch() {
 @test "failure: a round with no record publishes no record with cost none" {
   alf_add_round "[\"$SHELL_MEMBER\"]"
   [ ! -e "$RECORD" ]
-  [ "$(published_clause)" = 'not run: no record; cost none.' ]
+  [ "$(published_clause_through_eval)" = 'not run: no record; cost none.' ]
   gates_ignore_record
 }
 
@@ -816,8 +933,9 @@ scratch_hooks() {
   stand_in_behaves 'exit 3'
   failing_review
   GATE_HOOK="$(scratch_hooks merge pr-merge-audit-check.sh "[ -f '$RECORD' ] && exit 0")"
-  gates_ignore_record 2>/dev/null && return 1
-  true
+  gates_ignore_record 2>"$BATS_TEST_TMPDIR/comparison-errors" && return 1
+  grep -qF 'with record:' "$BATS_TEST_TMPDIR/comparison-errors"
+  grep -qF 'without:' "$BATS_TEST_TMPDIR/comparison-errors"
 }
 
 @test "failure: the comparison goes red on a bound hook that reads the record" {

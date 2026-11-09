@@ -297,5 +297,6 @@ cmd_publish_values() {
              denial_tools: [(.denials.tools // [])[] | select(type == "string" and test("\\A[A-Za-z]+\\z"))]}
          else {} end)
       | with_entries(select(.value != null))
-    end' "$RECORD_FILE"
+    end' "$RECORD_FILE" 2>/dev/null \
+    || printf '{"outcome":"not run","reason":"unreadable record","cost":"unknown"}\n'
 }

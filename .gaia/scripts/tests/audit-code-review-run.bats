@@ -577,6 +577,7 @@ outcome_seed() {
 
 # A library left off the list would let a change to it keep every member's marker.
 # An unmatched glob stays a literal path, which is no machinery, so an empty set fails.
+# bats test_tags=whole-tree
 @test "every review script and library is on the audit machinery list" {
   . "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh"
   local script_path
