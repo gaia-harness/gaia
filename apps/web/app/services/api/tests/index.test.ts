@@ -116,6 +116,53 @@ describe('create', () => {
     ).resolves.toBeUndefined();
   });
 
+  test('a 204 without a schema resolves undefined on the snake_case layer', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.delete(
+        `${ORIGIN_A}/items/1`,
+        () => new HttpResponse(null, {status: 204})
+      )
+    );
+
+    await expect(
+      create({isSnakeCaseEnabled: true})('items/1', {method: 'delete'})
+    ).resolves.toBeUndefined();
+  });
+
+  test('a 200 with a non-JSON body delivers null on the snake_case layer', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, () => HttpResponse.text('not json'))
+    );
+
+    await expect(
+      create({isSnakeCaseEnabled: true})('items', {schema: z.null()})
+    ).resolves.toBeNull();
+  });
+
+  test('an error with a non-UTF-8 body keeps its bytes on the snake_case layer', async () => {
+    process.env.API_URL = ORIGIN_A;
+    // "テスト" in Shift_JIS
+    const shiftJisBytes = new Uint8Array([0x83, 0x65, 0x83, 0x58, 0x83, 0x67]);
+    server.use(
+      http.get(
+        `${ORIGIN_A}/items`,
+        () =>
+          new HttpResponse(shiftJisBytes, {
+            headers: {'Content-Type': 'text/plain; charset=shift_jis'},
+            status: 500,
+          })
+      )
+    );
+
+    const error = await create({isSnakeCaseEnabled: true})('items', {
+      retry: 0,
+    }).catch((error_: unknown) => error_);
+
+    expect(error).toMatchObject({data: 'テスト'});
+  });
+
   test('isSnakeCaseEnabled converts a JSON body to snake_case and the response to camelCase', async () => {
     process.env.API_URL = ORIGIN_A;
     let received: unknown;

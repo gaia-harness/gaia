@@ -25,24 +25,35 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
 
 // Converts while the body streams, so the read stays inside the Ky shortcut
 // that applies the timeout and maps a dropped body to a network error. Only a
-// body that is not JSON is replaced: with null on a success, untouched otherwise.
+// body that is not JSON is replaced: with null on a success, with its original
+// bytes otherwise (decoding and re-encoding would corrupt a non-UTF-8 charset).
 const camelCaseJsonBody = (isOk: boolean) => {
-  const chunks: string[] = [];
+  const chunks: Uint8Array[] = [];
 
-  return new TransformStream<string, string>({
+  return new TransformStream<Uint8Array, Uint8Array>({
     flush: (controller) => {
-      const text = chunks.join('');
+      const encoder = new TextEncoder();
+      const bytes = new Uint8Array(
+        chunks.reduce((total, chunk) => total + chunk.byteLength, 0)
+      );
+      let offset = 0;
+
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+
       const [parseError, original] = tryCatch(
-        () => JSON.parse(text) as unknown
+        () => JSON.parse(new TextDecoder().decode(bytes)) as unknown
       );
 
       if (parseError) {
-        controller.enqueue(isOk ? 'null' : text);
+        controller.enqueue(isOk ? encoder.encode('null') : bytes);
 
         return;
       }
 
-      controller.enqueue(JSON.stringify(toCamelCase(original)));
+      controller.enqueue(encoder.encode(JSON.stringify(toCamelCase(original))));
     },
     transform: (chunk) => {
       chunks.push(chunk);
@@ -56,10 +67,7 @@ const responseToCamelCase = ({response}: AfterResponseState) => {
     return response.ok ? Response.json(null) : undefined;
   }
 
-  const body = response.body
-    .pipeThrough(new TextDecoderStream())
-    .pipeThrough(camelCaseJsonBody(response.ok))
-    .pipeThrough(new TextEncoderStream());
+  const body = response.body.pipeThrough(camelCaseJsonBody(response.ok));
 
   return new Response(body, response);
 };
