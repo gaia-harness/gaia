@@ -8,13 +8,13 @@ This page owns a plan run's one whole-branch `simplify` pass, in its closing sta
 
 The orchestrator's main thread runs the step once, after the last phase commits and before the pre-audit flow checks (a spec-less plan: before the worthiness step), so they and the pre-audit verification see the simplified code. It never runs inside the audit loop, where an edit moves HEAD and voids the verification pass.
 
-`<RESOLVED_ROOT>` is the working root. `<RUN_FOLDER>` is the run folder `.claude/doctrine/execution.md` names, at its main-checkout absolute path. Scratch files live in the session's scratchpad directory.
+`<RESOLVED_ROOT>` is the working root. `<RUN_FOLDER>` is the run folder `.claude/doctrine/execution.md` names, at its main-checkout absolute path.
 
 ## The step
 
 ### 1. Skip
 
-An exact `## Simplify pass` heading already in the plan folder's `PROGRESS.md` ends the step. So does a commit with the subject `refactor: simplify the branch as a whole` on the branch, a pass that committed and stopped before its record: record it as `applied` and end the step.
+An exact `## Simplify pass` heading already in the plan folder's `PROGRESS.md` ends the step. So does a commit with the subject `refactor: simplify the branch as a whole` on the branch, a pass that committed and stopped before its record: push, record it as `applied` and end the step. A refused push halts as in step 5.
 
 Otherwise read the base and the tree:
 
@@ -43,7 +43,7 @@ The prompt opens `You are the simplify pass executor for this plan.`, then carri
 bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <result file> --expect-count 1
 ```
 
-On a no-op with a clean tree, re-dispatch once against the re-cleared path. A no-op with a changed tree goes to step 4. A second no-op goes to step 4: with a clean tree it records `Result: not run` and the run continues. This departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the main thread edits nothing in a plan run, and nothing depends on this pass.
+On a no-op with a clean tree, re-dispatch once against the re-cleared path. A no-op with a changed tree goes to step 4. A second no-op goes to step 4, where a clean tree records `Result: not run`. That departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the main thread edits nothing in a plan run, and nothing depends on this pass.
 
 ### 4. Read the tree
 
@@ -58,7 +58,7 @@ Run `git -C <RESOLVED_ROOT> status --porcelain`. The tree decides, not the repor
 
 ### 5. Gate and commit
 
-Stage every changed path, untracked files included, then run the Quality Gate (`wiki/decisions/Quality Gate.md`) without step 1, saving its output to a scratchpad log. On a pass, stage what its autofix changed, commit with the subject `refactor: simplify the branch as a whole` and push. Any step that does not pass, or a commit a hook refuses, goes to step 6 with no repair attempt. A refused push appends `## Simplify pass (HALTED)` with git's stderr line and asks as step 6 does; on a resume, step 1 finds the commit.
+Run `git -C <RESOLVED_ROOT> add -A`, then run the Quality Gate (`wiki/decisions/Quality Gate.md`) without step 1, saving its output to a scratchpad log. On a pass, run `add -A` again for its autofix, commit with the subject `refactor: simplify the branch as a whole` and push. Any step that does not pass, or a commit a hook refuses, goes to step 6 with no repair attempt. A refused push appends `## Simplify pass (HALTED)` with git's stderr line and asks as step 6 does; on a resume, step 1 finds the commit.
 
 <!-- gaia:maintainer-only:start -->
 On the maintainer repo, a new shipped file the pass added owes its answer in that commit, by the wiki promotion's manifest note (`.claude/skills/gaia/references/spec/wiki-promote.md`).
@@ -90,4 +90,4 @@ Gate log: <path to the log, or none>
 
 ## Permissions
 
-A sub-agent cannot prompt, so a tool call that would ask for permission is refused in the executor or its reviewers. A refused `Skill` call records `not run`. A refused edit leaves a partial pass, which the gate commits or step 6 discards. `simplify-discard.sh` has no allow rule on purpose, so a permission mode that asks does so before the reset. Denied, it resets nothing and the run halts as in step 6.
+A sub-agent cannot prompt, so a tool call that would ask for permission is refused in the executor or its reviewers. A refused edit leaves a partial pass, which the gate commits or step 6 discards. `simplify-discard.sh` has no allow rule on purpose, so a permission mode that asks does so before the reset.
