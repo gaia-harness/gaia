@@ -32,8 +32,9 @@ REVIEW_TIMEOUT_SECONDS=1080
 # shellcheck disable=SC2034
 REVIEW_HOOK_DENIALS_VISIBLE=yes
 
-# --max-findings arrived in 2.1.288 and the fix for results ending in raw JSON in
-# 2.1.296; below that the judged result shape does not hold.
+# --max-findings and the tool-registration fix for a restricted launch both shipped by
+# 2.1.296. The result shape was observed only on 2.1.319, and the judge fails
+# closed over any untested range.
 REVIEW_VERSION_FLOOR=2.1.296
 # Claude Code exits promptly on TERM; the grace only has to cover a flush.
 SUPERVISOR_GRACE_SECONDS=5

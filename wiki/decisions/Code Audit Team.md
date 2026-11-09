@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-07-09
 created: 2026-07-09
-updated: 2026-10-29
+updated: 2026-11-09
 tags: [decision, claude, audit]
 ---
 
@@ -206,7 +206,7 @@ The branch-own digest adds two accepted limits, stated here once for every page 
 
 ## Why not Claude Code's built-in review
 
-Claude Code ships its own review commands (`/code-review` at every level, its cloud `ultra` mode, `/security-review`) and a managed pull-request review service. The gate uses none of them, because a merge gate needs four things a review command does not provide.
+Claude Code ships its own review commands (`/code-review` at every level, its cloud `ultra` mode, `/security-review`) and a managed pull-request review service. None of them is the gate, because a merge gate needs four things a review command does not provide.
 
 - **A reviewer the gate can version.** A clearance is believed only when the reviewer that produced it is part of the audit machinery: changing a member's definition rotates every digest and re-opens every clearance it gave (see [[#Ownership classifier]]). A built-in review's prompt and model change with Claude Code releases, outside the repository, so a change in what it checks would leave every earlier clearance standing. Its reply also has no fixed shape for the clearance writer and the no-op classifier to read.
 - **Every owner clears.** A change can belong to several members, and the merge waits until each clears its own part ([[#AND-aggregation at the merge gate]]). A built-in review is one reviewer over the whole diff, with no notion of who owns which file.
@@ -215,7 +215,13 @@ Claude Code ships its own review commands (`/code-review` at every level, its cl
 
 The cheaper tier the built-in levels might seem to offer already exists inside the gate. A small presentational frontend change on its first audit goes to a quick reviewer instead of the full member, chosen by a deterministic classifier ([[Audit Round Procedure#Light routing]]). That reviewer is GAIA's own for the same two reasons as above: its definition is audit machinery, and its reply has a fixed shape the gate reads. Its brief also fits the change: the risks on a copy or class edit are accessibility, translation and design tokens, while `/code-review` hunts correctness bugs.
 
-The built-in commands stay useful as a second opinion a developer runs by hand, before or after the audit. They are advisory: nothing they report clears or blocks a merge.
+## The built-in review feeds the members
+
+The audit loop runs the built-in `/code-review` once per branch at `high` in a headless child session and hands its findings to the members that own the files they name. The review is an input, not a reviewer of record: members alone clear. A member keeps a handed finding unless it cites concrete evidence against it, and a kept Major withholds that member's marker like any Major of its own. Its text reaches a member as a data file, never in a prompt ([[Audit Round Procedure]], [[Audit Gate Reference]]).
+
+The review runs with no opt-out. It costs one `high`-level review session per branch, and it reports `not run` below Claude Code 2.1.296 or when its restricted launch cannot start. A review that does not run is recorded as not run, never as clean, and does not block a merge; only a review that moved the tree stops the loop for a human.
+
+**Accepted cost: the reviewer is unversioned.** The review's prompt and model change with Claude Code releases, outside the repository, and `audit-code-review.sh`'s digest rotation does not see that. A change in what the review finds therefore re-opens no clearance. Members stay the versioned gate and the review only adds findings for them to account for.
 
 ## Pairs with
 

@@ -3,7 +3,7 @@ type: concept
 title: Usage Ledger
 status: active
 created: 2026-09-30
-updated: 2026-10-21
+updated: 2026-11-09
 tags: [concept, cost, usage, data-contract]
 ---
 
@@ -74,6 +74,8 @@ A segment is covered when it carries `act`, or when an `activity` row of the sam
 `.claude/hooks/usage-capture.sh` runs on `Stop` and on `SessionStart` (`startup|resume`). It does a cheap gate, launches the flusher detached, and returns; it reads no transcript itself. A Stop flushes that session; a SessionStart runs a bounded sweep over every candidate transcript whose size has grown past its cursor, which also backfills transcripts from before the hooks existed.
 
 The flusher reads the session's ledger rows once per run and extends them with a tail read from a recorded line boundary, leaving a half-written row for the next read, so its cost does not grow with other sessions' rows. It parses outside the ledger lock, then takes the lock for a short commit that re-checks the cursor before appending (compare-and-swap), so two flushers racing over one file count each message once. A close binding that lands after the flusher prepared is a conflict too: the flusher re-prepares, so no committed segment straddles a close. On a lock timeout it appends nothing and leaves the file due for the next run; there is no unlocked fallback. The trailing, possibly still-growing group of a live transcript is held back until it is quiet, and a finished session is flushed whole.
+
+The audit's headless code review session is the exception to the Stop flush: it has no parent link, and its restricted launch fires no `Stop` hook. Its cost reaches the ledger only at a later session's bounded SessionStart sweep, so a merge's cost box can miss it. The review record's cost field is the source for the review's cost ([[Audit Gate Reference#The code review record]]).
 
 The merge hook and `usage.sh record` each add a capped synchronous flush of their own session (see Recording a run and Readouts). Nothing runs without `jq`.
 

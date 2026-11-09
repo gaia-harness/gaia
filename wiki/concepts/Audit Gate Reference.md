@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-09
-updated: 2026-10-13
+updated: 2026-11-09
 tags: [concept, ci, review]
 ---
 
@@ -75,6 +75,12 @@ bash .gaia/scripts/post-findings-block.sh --pr <N>
 `post-findings-block.sh` reads every dispatched member's own findings sidecar, merges every member's `findings[]` into one array, and posts-or-updates exactly one PR comment carrying the merged block: it locates an existing comment by its sentinel and edits it, creating one only when none exists. The hook posts for every pull request it arms on. Running the snippet above by hand stays harmless (`post-findings-block.sh` is idempotent), but the hook makes it unnecessary.
 
 **It takes no base, and that is the point.** The sidecar key is `<base-sha>.<branch-slug>` and only the branch half is stable across a fix loop: a round whose commit carries a `GAIA-Audit` status lands under a new base once the resolver walks to it, while a round that posts none leaves the base where it was. So the producer globs `*.<branch-slug>.*.findings.json`, every base this branch has written under, and a caller that hands it one base narrows the block to one round. That round is the last one, which is clean by construction, because a clean round is what let the pull request merge: the findings fixed during the loop, the ones the recurrence tally most wants, were exactly the ones dropped. The per-round partitioning of the sidecars themselves stays, deliberately, as the durable record of what each round that advanced the base found; a round that leaves the base where it was overwrites the previous round's sidecar for the same member rather than adding a new one.
+
+### The code review record
+
+The audit loop unit runs the built-in `/code-review` once per branch and leaves `code-review.json` in the branch's run folder, beside the other round artifacts. The record holds the outcome, the findings handed to members and how each was accounted for, the denial count and the review session's estimated cost; its sole writer is `.gaia/scripts/audit-code-review-record.sh`. The merge gate never reads it: no marker, status or hook decision depends on the record, and a branch with no record or a `not run` record merges on its markers alone.
+
+A `not run` outcome carries one reason from a closed list, which `bash .gaia/scripts/audit-loop-record.sh --list-review-reasons` prints. The child runs with a restricted launch that ignores user settings as well as project and local ones, so an adopter whose provider or auth lives in user `env` or `apiKeyHelper` can see `not run` on every branch. That cost is accepted. The review needs Claude Code 2.1.296 or later: `--max-findings` and the restricted launch's tool-registration fix both shipped by then, the result shape was observed on 2.1.319 only, and the parse fails closed over any untested range.
 
 ### Accepted limits of a status-based gate
 
