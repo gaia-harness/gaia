@@ -49,10 +49,6 @@ Version caveat: these hosted docs track the latest published Zod, not the instal
 | `z.string({required_error: 'Required'})` | `z.string({error: 'Required'})`       |
 | `{message}`, `invalid_type_error`, `errorMap` | the one `error` key: `.min(5, {error: 'Too short'})` |
 
-## Strict objects
-
-`.strip()` is the default behavior, so calling it is redundant.
-
 ## Alternatives mentioned in docs
 
 [Yup](https://github.com/jquense/yup), [Superstruct](https://github.com/ianstormtaylor/superstruct)
