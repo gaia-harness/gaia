@@ -60,8 +60,8 @@ The criterion is the model table in [[Workflow Doctrine]]:
 
 The trigger surface decides as much as the content. A skill's `model:`
 overrides the session model for the rest of the turn it loads in. A
-convention skill that fires whenever code is being written (`typescript`,
-`tailwind`, `naming-conventions`) reads like a lookup, yet a pin there would
+convention skill that fires whenever code is being written (`tailwind`,
+`naming-conventions`) reads like a lookup, yet a pin there would
 move the rest of an implementation or review turn onto the pinned model, so
 those skills omit it. `skeleton-loaders` omits it for the same reason: it
 triggers whenever a loading state is added to a component, mid-implementation. The scaffolding skills and the rule-id fix skills keep

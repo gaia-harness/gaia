@@ -240,6 +240,17 @@ run_gate() {
   grep -qxF -- 'TRACKED .claude/skills/tailwind/SKILL.md' <<<"$output"
 }
 
+@test "a tracked file under the retired web typescript skill fails with TRACKED" {
+  local repo
+  repo="$(make_repo tracked-web-skill)"
+  mkdir -p "$repo/apps/web/.claude/skills/typescript"
+  printf 'x\n' >"$repo/apps/web/.claude/skills/typescript/SKILL.md"
+  stage_all "$repo"
+  run_gate "$repo"
+  [ "$status" -eq 1 ]
+  grep -qxF -- 'TRACKED apps/web/.claude/skills/typescript/SKILL.md' <<<"$output"
+}
+
 @test "a tracked file under apps/web/ and an untracked root app/ file do not trip TRACKED" {
   local repo
   repo="$(make_repo tracked-negative)"
