@@ -49,7 +49,7 @@ Stateful custom form components MUST use `useInputControl` to stay in sync with 
 
 ## Reference example
 
-`apps/web/app/components/form/tests/composed-form.tsx`: a Conform form composed from ui `Field` parts, with its stories, whose attached tests are the integration tests.
+`apps/web/app/components/form/tests/composed-form.tsx`: a Conform form built with `ConformField`, with its stories, whose attached tests are the integration tests.
 
 For the current file pattern (where stories and hook tests go), the scaffolders (`/new-component`, `/new-route`) handle it; read an existing component's folder rather than maintaining the layout here.
 

@@ -8,7 +8,6 @@ export default {
     allFieldsAreRequired: 'All fields are required',
     ok: 'OK',
     optional: 'Optional',
-    required: 'Required',
     submit: 'Submit',
     submitting: 'Please wait...',
   },

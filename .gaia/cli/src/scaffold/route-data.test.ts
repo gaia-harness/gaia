@@ -176,9 +176,12 @@ describe.each(CASES)('scaffold route --data: $data $shape', (dataCase) => {
     expect(page).toContain('<title>');
     expect(page).toContain('name="description"');
     expect(page).toContain('parseWithZod(formData, {schema: itemInputSchema})');
-    expect(page).toContain("getInputProps(fields.displayName, {type: 'text'})");
-    expect(page).toContain("getInputProps(fields.count, {type: 'number'})");
+    expect(page).toContain('constraint: getZodConstraint(itemInputSchema)');
+    expect(page).toContain('<ConformField field={fields.displayName}');
+    expect(page).toContain("type: 'text'");
+    expect(page).toContain("type: 'number'");
     expect(page).toContain('<Checkbox');
+    expect(page).not.toContain('<FieldError');
     expect(page).not.toContain('fields.id');
     expect(
       existsSync(path.join(pageDir, 'hydrate-fallback', 'index.tsx'))
