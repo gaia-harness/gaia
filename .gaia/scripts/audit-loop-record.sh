@@ -73,7 +73,6 @@ nonzero exit
 error result
 not the built-in
 unusable result
-unrecognized clean form
 review moved the tree
 interrupted
 target unproven

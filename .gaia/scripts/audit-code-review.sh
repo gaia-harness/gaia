@@ -17,15 +17,20 @@
 set -euo pipefail
 
 # Measured from real runs, never from the environment: an override would be the
-# setting this feature forbids. While UNMEASURED, the first three block a spawn.
-REVIEW_CHILD_PROVEN=UNMEASURED
-REVIEW_TARGET_FORMAT=UNMEASURED
-REVIEW_TIMEOUT_SECONDS=UNMEASURED
-REVIEW_CLEAN_FORM=UNMEASURED
+# setting this feature forbids. A value left UNMEASURED blocks a spawn, except the
+# last, which only documents.
+# The Claude Code version whose read-only probe passed: the tree unmoved, the
+# dotenv read denied.
+REVIEW_CHILD_PROVEN=2.1.319
+REVIEW_TARGET_FORMAT='<base-sha>...<head-sha>'
+# Twice the longer of the 271 second whole-branch capture and the 9 minute
+# whole-tree benchmark, so 18 minutes. The review's cost grows with the diff, and a
+# kill at this bound costs the attempt, not the branch.
+REVIEW_TIMEOUT_SECONDS=1080
 # Documents whether a hook-blocked read reaches the result's denial list. Nothing
 # branches on it: the denial count takes the larger source either way.
 # shellcheck disable=SC2034
-REVIEW_HOOK_DENIALS_VISIBLE=UNMEASURED
+REVIEW_HOOK_DENIALS_VISIBLE=yes
 
 # --max-findings arrived in 2.1.288 and the fix for results ending in raw JSON in
 # 2.1.296; below that the judged result shape does not hold.
@@ -179,7 +184,7 @@ run_attempt() {
   verdict_kind=failed
   case "$child_status" in
     0)
-      verdict="$(gaia_review_judge "$result_file" "$REVIEW_CLEAN_FORM")"
+      verdict="$(gaia_review_judge "$result_file")"
       verdict_kind="$(printf '%s' "$verdict" | jq -r '.verdict')"
       reason="$(printf '%s' "$verdict" | jq -r '.reason // empty')"
       ;;
@@ -310,7 +315,7 @@ cmd_run() {
     run_attempt "$attempt_count"
     if [ "$ATTEMPT_ENDING" = recorded ]; then exit 0; fi
     case "$ATTEMPT_ENDING" in
-      'timed out' | 'nonzero exit' | 'error result' | 'not the built-in' | 'unusable result' | 'unrecognized clean form') ;;
+      'timed out' | 'nonzero exit' | 'error result' | 'not the built-in' | 'unusable result') ;;
       *) break ;;
     esac
   done

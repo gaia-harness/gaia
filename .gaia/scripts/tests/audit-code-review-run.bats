@@ -87,7 +87,6 @@ make_tool_copy() {
   fill_constant REVIEW_CHILD_PROVEN yes
   fill_constant REVIEW_TARGET_FORMAT '<base-sha>...<head-sha>'
   fill_constant REVIEW_TIMEOUT_SECONDS 30
-  fill_constant REVIEW_CLEAN_FORM '(none)'
   fill_constant REVIEW_HOOK_DENIALS_VISIBLE no
 }
 
@@ -126,7 +125,7 @@ EOF
 
 behave_clean() {
   cat >"$BEHAVIOR" <<'EOF'
-jq -n '{subtype: "success", is_error: false, local_command: "code_review", total_cost_usd: 0.25, result: "(none)"}'
+jq -n '{subtype: "success", is_error: false, local_command: "code_review", total_cost_usd: 0.25, result: "```json\n[]\n```"}'
 EOF
 }
 
@@ -414,34 +413,32 @@ EOF
   done
 }
 
-@test "the two recorded-only placeholders still spawn" {
-  fill_constant REVIEW_CLEAN_FORM UNMEASURED
+@test "the recorded-only placeholder still spawns" {
   fill_constant REVIEW_HOOK_DENIALS_VISIBLE UNMEASURED
   behave_clean
   run_review
   [ "$status" -eq 0 ]
-  [ "$(spawn_count)" = 2 ]
-  [ "$(record_field .reason)" = 'unusable result' ]
+  [ "$(spawn_count)" = 1 ]
+  [ "$(record_field .outcome)" = 'ran, clean' ]
+}
 
-  rm -rf "$RECORD" "$STAND_IN/log" "$RUN"/code-review-attempt-*
-  mkdir -p "$STAND_IN/log"
-  cat >"$BEHAVIOR" <<'EOF'
-jq -n '{subtype: "success", is_error: false, local_command: "code_review", result: "```json\n[]\n```"}'
-EOF
-  run_review
-  [ "$(spawn_count)" = 2 ]
-  [ "$(record_field .reason)" = 'unrecognized clean form' ]
+@test "the shipped script has its three blocking constants measured" {
+  local constant
+  for constant in REVIEW_CHILD_PROVEN REVIEW_TARGET_FORMAT REVIEW_TIMEOUT_SECONDS; do
+    grep -q "^$constant=" "$SHIPPED/audit-code-review.sh"
+    grep -q "^$constant=UNMEASURED\$" "$SHIPPED/audit-code-review.sh" && return 1
+  done
+  true
 }
 
 @test "the fill helper replaces a constant already holding a filled value" {
   fill_constant REVIEW_TIMEOUT_SECONDS 1200
   fill_constant REVIEW_TIMEOUT_SECONDS 1500
   grep -Fxq 'REVIEW_TIMEOUT_SECONDS=1500' "$TOOL"
-  fill_constant REVIEW_CLEAN_FORM $'```json\n[]\n```'
-  fill_constant REVIEW_CLEAN_FORM '(none)'
-  [ "$(grep -c '^REVIEW_CLEAN_FORM=' "$TOOL")" = 1 ]
-  run bash -c "$(grep '^REVIEW_CLEAN_FORM=' "$TOOL"); printf '%s' \"\$REVIEW_CLEAN_FORM\""
-  [ "$output" = '(none)' ]
+  fill_constant REVIEW_TARGET_FORMAT '<a>...<b>'
+  [ "$(grep -c '^REVIEW_TARGET_FORMAT=' "$TOOL")" = 1 ]
+  run bash -c "$(grep '^REVIEW_TARGET_FORMAT=' "$TOOL"); printf '%s' \"\$REVIEW_TARGET_FORMAT\""
+  [ "$output" = '<a>...<b>' ]
   run fill_constant REVIEW_NOT_A_CONSTANT 1
   [ "$status" -eq 3 ]
 }

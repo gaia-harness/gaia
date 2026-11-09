@@ -7,14 +7,16 @@
 # result's own structured fields and one exact fenced array do. Every value
 # reaches jq through --arg, never interpolated into a program.
 #
-#   gaia_review_judge <result-json-file> <clean-form>
+#   gaia_review_judge <result-json-file>
 #     Prints one line of JSON and returns 0:
 #       {"verdict":"ran","reason":null,"findings":[{file,line,summary,failure_scenario}...]}
 #       {"verdict":"no findings","reason":null,"findings":[]}
 #       {"verdict":"failed","reason":"<closed reason>","findings":[]}
 #     The caller owns the first check of the order, exit 0, since this function
-#     sees a file and no process. A clean form still holding the UNMEASURED
-#     placeholder matches nothing.
+#     sees a file and no process. A clean review is exactly one closed fenced
+#     empty array. A diff could plant a fenced empty array and read as no
+#     findings; that blocks nothing, since the members still run, so it is an
+#     accepted limit with no defense.
 #
 #   gaia_review_denials <result-json-file> <guard-log-file>
 #     Prints {"count":n,"tools":[...],"detail":[{tool,path}...]}. The count is the
@@ -58,7 +60,7 @@ def judge_text:
   | if $fence.open or ($fence.blocks | length) != 1 then failed("unusable result")
     else (try ($fence.blocks[0] | fromjson) catch null) as $parsed
       | if ($parsed | type) != "array" then failed("unusable result")
-        elif ($parsed | length) == 0 then failed("unrecognized clean form")
+        elif ($parsed | length) == 0 then {verdict: "no findings", reason: null, findings: []}
         elif ($parsed | length) > 500 or (all($parsed[]; valid_item) | not) then failed("unusable result")
         else {verdict: "ran", reason: null,
               findings: ($parsed | map({file, line, summary, failure_scenario}))}
@@ -68,22 +70,20 @@ if type != "object" then failed("unusable result")
 elif .is_error != false or .subtype != "success" then failed("error result")
 elif .local_command != "code_review" then failed("not the built-in")
 elif (.result | type) != "string" then failed("unusable result")
-elif $clean_form != "" and $clean_form != "UNMEASURED" and .result == $clean_form
-  then {verdict: "no findings", reason: null, findings: []}
 else .result | judge_text
 end'
 
 _gaia_review_unusable='{"verdict":"failed","reason":"unusable result","findings":[]}'
 
 gaia_review_judge() {
-  local result_file="$1" clean_form="$2" verdict
+  local result_file="$1" verdict
   # -s and the length check: a file holding two JSON values is not one result,
   # and an empty file parses to nothing at all.
   if ! jq -e -s 'length == 1' "$result_file" >/dev/null 2>&1; then
     printf '%s\n' "$_gaia_review_unusable"
     return 0
   fi
-  verdict="$(jq -c --arg clean_form "$clean_form" "$_GAIA_REVIEW_JUDGE_PROGRAM" "$result_file" 2>/dev/null)" || verdict=""
+  verdict="$(jq -c "$_GAIA_REVIEW_JUDGE_PROGRAM" "$result_file" 2>/dev/null)" || verdict=""
   if [ -z "$verdict" ]; then verdict="$_gaia_review_unusable"; fi
   printf '%s\n' "$verdict"
 }

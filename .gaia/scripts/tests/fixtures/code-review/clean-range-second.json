@@ -1,0 +1,17 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "local_command": "code_review",
+  "duration_ms": 42507,
+  "total_cost_usd": 0.1567046,
+  "permission_denials": [
+    {
+      "tool_name": "Bash"
+    },
+    {
+      "tool_name": "Read"
+    }
+  ],
+  "result": "No findings. The range changes one word, fixing `abbreviaton` to `abbreviation` in the prose of `.claude/rules/no-abbreviations.md:33`.\n\n- **Correctness (A, B, C):** the `paths:` frontmatter and the code examples are untouched, and no behavior or guard was removed. The rule is referenced only by path, in `.gaia/manifest.json`, the `.gaia/tests/claude-probe/expectations.json` load checks, the `naming-conventions` skill and `audit-rule-specialist.md`, plus a `CHANGELOG.md` line and audit-cost fixtures whose long lines Grep omitted. The manifest and probe entries I read don't depend on this sentence.\n- **Leftovers:** the misspelling no longer appears anywhere in the tree, and this sentence has no mirrored copy.\n- **Cleanup and altitude:** nothing to flag, since the change adds no logic and fixes the typo at its only location.\n- **Conventions:** the root `CLAUDE.md` has no rule this breaks. The CHANGELOG gate in `.claude/rules/pr-merge.md:17` only requires deciding whether an entry is needed, and a typo fix reasonably doesn't need one.\n\n**Coverage gaps:**\n- I could not read `~/.claude/CLAUDE.md` because file tools are confined to the worktree, so that file was not checked.\n- Bash was denied after the initial diff, so the searches ran with Grep on the checked-out tree rather than `git grep` at the commit. That tree shows the corrected text.\n\n```json\n[]\n```"
+}
