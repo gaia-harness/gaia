@@ -18,8 +18,8 @@ const originalApiUrl = process.env.API_URL;
 
 let server: Server;
 
-// A real socket: the headers go out, then the body drops or never ends, which
-// a mocked fetch cannot reproduce.
+// A real socket: the headers go out, then the body drops or never ends, so the
+// error is the runtime's own, not a mock's.
 const startServer = async (behavior: BodyBehavior) => {
   server = createServer((_request, response) => {
     response.writeHead(200, {

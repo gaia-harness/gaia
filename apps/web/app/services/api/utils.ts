@@ -26,8 +26,8 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
 
 const responseToCamelCase = async ({request, response}: AfterResponseState) => {
   // A dropped body must reject, not pass as non-JSON, and Ky does not wrap a
-  // hook's read. A cancellation never lands here: Ky's race with the signal
-  // rejects first.
+  // hook's read. A cancellation still rejects as itself: Ky's race with the
+  // signal settles before this read does.
   const text = await response.text().catch((error: Error) => {
     throw new NetworkError(request, {cause: error});
   });
