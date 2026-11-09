@@ -225,11 +225,21 @@ describe('a failure while reading the body', () => {
 
   let socketServer: Server;
 
-  // A real socket: the headers go out, then the body drops or never ends, so the
-  // error is the runtime's own, not a mock's.
-  const startSocketServer = async (behavior: 'drop' | 'stall') => {
+  // A real socket: the headers go out, then the body drops, never ends, or runs
+  // over the size limit, so the error comes from a real read, not a mock.
+  const startSocketServer = async (
+    behavior: 'drop' | 'oversized' | 'stall',
+    status = 200
+  ) => {
     socketServer = createServer((_request, response) => {
-      response.writeHead(200, {
+      if (behavior === 'oversized') {
+        response.writeHead(status, {'Content-Type': 'application/json'});
+        response.end(`"${'x'.repeat(100)}"`);
+
+        return;
+      }
+
+      response.writeHead(status, {
         'Content-Length': '100',
         'Content-Type': 'application/json',
       });
@@ -281,6 +291,31 @@ describe('a failure while reading the body', () => {
     );
 
     expect(outcome).toEqual([networkFailure, undefined]);
+  });
+
+  test('a 404 whose body drops on the snake_case layer keeps its status through attempt', async () => {
+    await startSocketServer('drop', 404);
+
+    const [error] = await attempt(async () =>
+      create({isSnakeCaseEnabled: true})('items', {retry: 0, schema: z.null()})
+    );
+
+    expect(error).toMatchObject({status: 404});
+    expect(error).not.toHaveProperty('isNetworkFailure');
+  });
+
+  test('a body over maxResponseSize on the snake_case layer still rejects through attempt', async () => {
+    await startSocketServer('oversized');
+
+    await expect(
+      attempt(async () =>
+        create({isSnakeCaseEnabled: true})('items', {
+          maxResponseSize: 10,
+          retry: 0,
+          schema: z.null(),
+        })
+      )
+    ).rejects.toMatchObject({name: 'ResponseSizeError'});
   });
 
   test('a body read cancelled on the snake_case layer still rejects through attempt', async () => {

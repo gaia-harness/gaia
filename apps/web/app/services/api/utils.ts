@@ -1,4 +1,4 @@
-import {NetworkError} from 'ky';
+import {isResponseSizeError, NetworkError} from 'ky';
 import type {AfterResponseState, BeforeRequestState, Hooks, Options} from 'ky';
 import type {StringifyOptions} from 'query-string';
 import queryString from 'query-string';
@@ -27,15 +27,24 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
 const responseToCamelCase = async ({request, response}: AfterResponseState) => {
   // A dropped body must reject, not pass as non-JSON, and Ky does not wrap a
   // hook's read. A cancellation still rejects as itself: Ky's race with the
-  // signal settles before this read does.
+  // signal rethrows its reason, whichever settles first. A non-ok response keeps
+  // its status: empty text fails the parse below, so Ky raises its HTTPError.
   const text = await response.text().catch((error: Error) => {
-    throw new NetworkError(request, {cause: error});
+    if (isResponseSizeError(error)) {
+      throw error;
+    }
+
+    if (response.ok) {
+      throw new NetworkError(request, {cause: error});
+    }
+
+    return '';
   });
-  const [, result] = tryCatch(() =>
+  const [, camelCaseResponse] = tryCatch(() =>
     Response.json(toCamelCase(JSON.parse(text)), response)
   );
 
-  return result ?? (response.ok ? Response.json(null) : undefined);
+  return camelCaseResponse ?? (response.ok ? Response.json(null) : undefined);
 };
 
 export const getHooks = (
