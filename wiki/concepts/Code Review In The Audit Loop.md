@@ -4,7 +4,7 @@ status: active
 created: 2026-11-10
 updated: 2026-11-10
 promoted_at: 2026-11-10T05:30:00Z
-promoted_hash: sha256:4f4f226aa8252721590dc8394c5180179cd8aa61784c4bcfafb3efd9e3dc2c0f
+promoted_hash: sha256:0ccd7d60e1cd093c9cdcbe71c55806a3e27aff7b9dd9a20c36328c00ee47ee8e
 pr_number: 3392
 tags: [concept, ci, review]
 ---
@@ -17,7 +17,7 @@ The audit loop unit runs Claude Code's built-in `/code-review` once per branch, 
 
 **When it runs.** Before the first full member wave, over the whole branch. `audit-code-review-record.sh decide` chooses: an all-light wave tries the quick reviewers first, and any fallback to a full member runs the review before that member is dispatched. A branch the quick reviewers clear records `not needed`. Later rounds, resumed sessions and catch-up merges do not repeat a review the record already holds. There is no setting, level override or opt-out.
 
-**The child.** `.gaia/scripts/audit-code-review.sh` starts `claude -p` with `--restricted`, a session tool set of read tools plus Bash, no MCP servers, and `dontAsk` over a generated settings file. The file admits only literal read-only git rows and denies the git options that write or run a program through them. The design is what the effective permission set cannot contain, because an allowlist only adds grants. A guard hook re-registers the sensitive-read check, since `--restricted` drops project hooks. The review level is `high`; the child's own effort stays unpinned ([[Workflow Doctrine]]). A deadline kills the child's whole process group.
+**The child.** `.gaia/scripts/audit-code-review.sh` starts `claude -p` with `--restricted`, a session tool set of read tools plus Bash, no MCP servers, and `dontAsk` over a generated settings file. The file admits only literal read-only git rows and denies the git options that write or run a program through them. The design is what the effective permission set cannot contain, because an allowlist only adds grants. A guard hook re-registers the sensitive-read check, since `--restricted` drops project hooks, and it also denies any Bash command naming a path outside the review root or using `--contents`, because git reads any file through those forms. The review level is `high`; the child's own effort stays unpinned ([[Workflow Doctrine]]). A deadline kills the child's whole process group.
 
 **After each attempt.** The script compares branch, HEAD, tree and `git status` before and after. Any difference records `not run: review moved the tree` and exits 3, which stops the unit for a human before any member starts. A result counts as usable only on a strict positive check, whose first failure wins: exit 0, parsable JSON, a success result, `local_command` exactly `code_review`, then exactly one closed fenced JSON array in the text whose items hold a repo-relative file, a positive line and string summary and failure scenario. An empty array is no findings, and it records `ran, clean` only with no permission denial, otherwise `ran, no findings`. A failed attempt retries once where the failure can pass; `audit-loop-record.sh --list-review-reasons` prints the closed list of reasons.
 

@@ -6,7 +6,7 @@
 # whether a hook-blocked read appears in the result's own denial list is a
 # property of Claude Code, not of this repository.
 #
-#   audit-code-review-guard.sh <denial-log-file>   (hook payload on stdin)
+#   audit-code-review-guard.sh <denial-log-file> [<review-root>]   (hook payload on stdin)
 #
 # The target is found relative to this script, never relative to the reviewed
 # head: a capture reviewing an older commit runs this wrapper from the build
@@ -20,6 +20,7 @@ script_path="${BASH_SOURCE[0]}"
 [ "$script_path" = "${script_path%/*}" ] && script_path="./$script_path"
 target_hook="${script_path%/*}/../../.claude/hooks/block-sensitive-read.sh"
 denial_log="${1:-}"
+review_root="${2:-}"
 payload="$(cat)"
 
 log_denial() {
@@ -31,6 +32,50 @@ log_denial() {
     >>"$denial_log" 2>/dev/null \
     || printf '{"tool":"unknown","path":null}\n' >>"$denial_log"
 }
+
+# git reads outside the working tree by itself: `git diff /dev/null .env` turns on
+# --no-index with no flag spelled, and `git blame --contents <file>` prints any file.
+# The sensitive-read hook judges readers, not git, so a Bash command naming a path
+# outside the review root, a parent-directory path or --contents is denied here.
+# Without a root every absolute path is outside it.
+bash_command_leaves_root() {
+  local command_text token stripped candidate
+  command_text="$(printf '%s' "$payload" | jq -r 'if .tool_name == "Bash" then (.tool_input.command // "") else "" end' 2>/dev/null)"
+  [ -n "$command_text" ] || return 1
+  set -f
+  for token in $command_text; do
+    stripped="$(printf '%s' "$token" | tr -d "'\"")"
+    case "$stripped" in *--contents*) set +f; return 0 ;; esac
+    for candidate in "$stripped" "${stripped#*=}"; do
+      case "$candidate" in
+        .. | ../* | */../* | */..) set +f; return 0 ;;
+        '~'* | '$'*) set +f; return 0 ;;
+        /*)
+          if [ -z "$review_root" ] || { [ "$candidate" != "$review_root" ] && [ "${candidate#"$review_root"/}" = "$candidate" ]; }; then
+            set +f
+            return 0
+          fi
+          ;;
+      esac
+    done
+  done
+  set +f
+  return 1
+}
+
+if bash_command_leaves_root; then
+  log_denial
+  cat <<'DENY_JSON'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "BLOCKED: the review child may not name a path outside the review root or use --contents, because git reads any file through them."
+  }
+}
+DENY_JSON
+  exit 0
+fi
 
 if [ ! -f "$target_hook" ]; then
   log_denial

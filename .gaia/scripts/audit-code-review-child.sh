@@ -25,7 +25,10 @@
 
 # Rows are literal prefixes with the root typed in, so `git -C <root> diff` cannot
 # also match `git -C <root> commit -m diff`. Deny beats allow: these read-only verbs
-# can write or run through the denied forms. git grep is left out entirely because
+# can write or run through the denied forms, and can read a file outside the tree
+# (`git diff /dev/null .env` turns on --no-index unspelled, `git blame --contents`),
+# which the deny rows catch only in their literal spellings; the guard hook denies
+# every path outside the root. git grep is left out entirely because
 # -O runs a pager, and the child has the Grep tool. A bare Read admits the template's
 # own file names, including a `$` route. No Read() deny row: the sensitive-read
 # hook's header records why one is unaffordable; the guard hook carries that job.
@@ -37,9 +40,9 @@ print_child_settings() {
          allow: (["Read", "Grep", "Glob"]
            + ([$verbs[] | "Bash(git \(.):*)", "Bash(git -C \($root) \(.):*)"])
            + ["Bash(git branch --show-current)", "Bash(git -C \($root) branch --show-current)"]),
-         deny: ["Bash(git * --output*)", "Bash(git * --no-index*)", "Bash(git * --ext-diff*)", "Bash(git -c *)"]},
+         deny: ["Bash(git * --output*)", "Bash(git * --no-index*)", "Bash(git * --ext-diff*)", "Bash(git * --contents*)", "Bash(git * /dev/null*)", "Bash(git -c *)"]},
        hooks: {PreToolUse: [{matcher: "Read|Grep|Bash", hooks: [{type: "command",
-         command: "bash \($guard | @sh) \($log | @sh)"}]}]}}'
+         command: "bash \($guard | @sh) \($log | @sh) \($root | @sh)"}]}]}}'
 }
 
 # set_child_argv <target> <settings-file>: one array, never through eval or a shell

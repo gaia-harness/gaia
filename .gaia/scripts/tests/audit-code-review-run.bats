@@ -168,7 +168,7 @@ settings_violations() {
   settings="$(bash "$TOOL" settings --root "$ALF_ROOT" --attempt-dir "$RUN/a" --guard-script "$ALF_ROOT/guard.sh")"
   [ -z "$(settings_violations "$settings")" ]
   [ "$(jq -r '.permissions.allow | length' <<<"$settings")" = 23 ]
-  [ "$(jq -c '.permissions.deny' <<<"$settings")" = '["Bash(git * --output*)","Bash(git * --no-index*)","Bash(git * --ext-diff*)","Bash(git -c *)"]' ]
+  [ "$(jq -c '.permissions.deny' <<<"$settings")" = '["Bash(git * --output*)","Bash(git * --no-index*)","Bash(git * --ext-diff*)","Bash(git * --contents*)","Bash(git * /dev/null*)","Bash(git -c *)"]' ]
 
   local added
   for added in 'Edit(.gaia/**)' Write NotebookEdit Agent Skill 'Bash(*)' Bash 'Bash(git commit:*)' 'Bash(git grep:*)'; do
@@ -184,12 +184,13 @@ settings_violations() {
     --guard-script "$BATS_TEST_TMPDIR/with space/guard.sh")"
   command_line="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' <<<"$settings")"
   cat >"$BATS_TEST_TMPDIR/with space/guard.sh" <<'EOF'
-printf '%s\n' "$#" "$1"
+printf '%s\n' "$#" "$1" "$2"
 EOF
   run bash -c "$command_line"
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = 1 ]
+  [ "${lines[0]}" = 2 ]
   [ "${lines[1]}" = "$BATS_TEST_TMPDIR/with space/attempt/guard-denials.jsonl" ]
+  [ "${lines[2]}" = "$BATS_TEST_TMPDIR/with space" ]
   [ "$(jq -r '.hooks.PreToolUse[0].matcher' <<<"$settings")" = 'Read|Grep|Bash' ]
 }
 
@@ -211,6 +212,27 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
   [ "$(jq -c . "$log")" = '{"tool":"Read","path":".env.local"}' ]
+}
+
+@test "the guard denies and logs a git command that reads outside the review root" {
+  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh" root="/work/tree" command_text
+  for command_text in 'git diff /dev/null .env' "git -C $root diff /dev/null ~/.aws/credentials" 'git blame --contents .env HEAD' \
+    'git diff ../outside.txt HEAD' "git diff --no-index$root /etc/hosts"; do
+    : >"$log"
+    run bash "$guard" "$log" "$root" < <(jq -nc --arg command "$command_text" '{tool_name: "Bash", tool_input: {command: $command}}')
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
+    [ "$(jq -r '.tool' "$log")" = Bash ]
+  done
+}
+
+@test "the guard lets an in-root git command through without a denial" {
+  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh" root="/work/tree"
+  : >"$log"
+  run bash "$guard" "$log" "$root" < <(jq -nc --arg command "git -C $root diff main...HEAD -- src/a.ts" '{tool_name: "Bash", tool_input: {command: $command}}')
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ ! -s "$log" ]
 }
 
 # expect_moved_tree: the shared refusal of every tree-moving stand-in.
