@@ -5,11 +5,11 @@ paths:
 
 # TypeScript
 
-Lint enforces most TypeScript style, so this rule omits it. A member with no `lint` script gets none of that: add `@gaia-harness/lint` and an `eslint.config.mjs` built from its presets.
+Lint enforces most TypeScript style, so this rule omits it. A member with no `lint` script gets none of that: add `@gaia-harness/lint`, an `eslint.config.mjs` built from its presets, and the `lint` script.
 
 ## Names
 
-- camelCase for every identifier, object and schema fields included. Map snake_case at API boundaries, not in schemas or application code. Exceptions: generated database types, dynamic template-literal names, environment variable names.
+- Object and schema fields are camelCase, which lint does not check. Map snake_case at API boundaries, not in schemas or application code. Exceptions: generated database types, schemas of an existing snake_case on-disk format, dynamic template-literal names, environment variable names.
 - Booleans match `^((can|has|hide|is|show)[A-Z]|checked|disabled|required)`.
 
 ## Values

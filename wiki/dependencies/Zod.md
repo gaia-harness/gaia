@@ -14,13 +14,13 @@ Schema validation. Used for form validation ([[Conform]]), API response parsing 
 
 ## Zod 4
 
-This project uses Zod 4 in every schema. Most Zod 3 forms still compile; several fail typecheck, among them single-arg `z.record()`, `.args().returns()`, `.deepPartial()`, `z.string().ip()`, and the `required_error` / `invalid_type_error` / `errorMap` params. `.strict()` compiles and lints clean, so reach for `z.strictObject()` deliberately. The deprecated forms (`.passthrough()`, `z.string().email()` and the other string formats, the `message` param) also compile, but `sonarjs/deprecation` flags them; see [[ESLint Fixes]].
+This project uses Zod 4 in every schema. Most Zod 3 forms still compile; several fail typecheck, among them single-arg `z.record()`, `.args().returns()`, `.deepPartial()`, `z.string().ip()`, and the `required_error` / `invalid_type_error` / `errorMap` params. `.strict()` compiles and lints clean, so reach for `z.strictObject()` deliberately. The deprecated forms `.passthrough()`, `z.string().email()` and the other string formats also compile, but `sonarjs/deprecation` flags them; see [[ESLint Fixes]]. The deprecated `message` param compiles too, and lint reports it only on `.refine()` (`zod/require-error-message`), so write `error` yourself.
 
 Import the Conform integration from `@conform-to/zod/v4`.
 
 ## Authoritative source, consult before judging a schema
 
-Zod 4 reworked the API heavily from v3, and most v3 forms still type-check, so training memory is an unreliable guide here: it is easy to "correct" valid v4 code back into deprecated v3 code, or to reject a valid form as invalid. The array union `z.literal(['a', 'b'])` in the migration map below is real Zod 4, not a mistake. So before writing a schema you are unsure of, and especially before flagging or rewriting an existing Zod form as wrong, verify it against the installed Zod's official docs and treat them as authoritative over memory.
+Training memory is an unreliable guide here: it is easy to "correct" valid v4 code back into deprecated v3 code, or to reject a valid form as invalid. The array union `z.literal(['a', 'b'])` in the migration map below is real Zod 4, not a mistake. So before writing a schema you are unsure of, and especially before flagging or rewriting an existing Zod form as wrong, verify it against the installed Zod's official docs and treat them as authoritative over memory.
 
 The docs are hosted, and the package advertises their URLs through the `package.json` auto-discovery convention. Read the URL from the installed package rather than hardcoding it, with `<member>` the workspace member that depends on Zod, such as `apps/web`:
 
@@ -31,7 +31,7 @@ node -p "require('./<member>/node_modules/zod/package.json').llms"      # https:
 
 WebFetch that URL with a specific question rather than reading it into context, and ask for a verbatim quote of the signature (e.g. "quote the exact `z.literal` signature for multiple values"); WebFetch the smaller index first when the topic is unclear, and fall back to `https://zod.dev/llms-full.txt` if the fields are absent.
 
-Version caveat: these hosted docs track the latest published Zod, not the installed one, so confirm the installed major matches before trusting them with `node -p "require('./<member>/node_modules/zod/package.json').version"`. If the project is ever pinned behind what zod.dev serves, the docs run ahead of the installed API and the memory-versus-reality problem returns.
+Version caveat: these hosted docs track the latest published Zod, not the installed one, so confirm the installed major matches before trusting them with `node -p "require('./<member>/node_modules/zod/package.json').version"`.
 
 ## Migration map
 
@@ -51,15 +51,7 @@ Version caveat: these hosted docs track the latest published Zod, not the instal
 
 ## Strict objects
 
-Use the top-level factories. Of the chained methods only `.passthrough()` is deprecated (use `z.looseObject()`); `.strict()` still works but has the `z.strictObject()` factory, and `.strip()` is the default behavior, so calling it is redundant.
-
-```ts
-// BAD, Zod 3 chained method
-const Payload = z.object({id: z.string(), tags: z.array(z.string())}).strict();
-
-// GOOD, Zod 4 factory
-const Payload = z.strictObject({id: z.string(), tags: z.array(z.string())});
-```
+`.strip()` is the default behavior, so calling it is redundant.
 
 ## Alternatives mentioned in docs
 

@@ -136,7 +136,7 @@ GAIA ships a complete, opinionated Claude Code workflow. Everything is wired in 
 
 ### Rules, Hooks, Skills
 
-- **Path-scoped rules** cover TypeScript, React, Tailwind, testing, i18n, accessibility, and state management. They live in `apps/web/.claude/rules/` (harness rules are in `.claude/rules/`); ask Claude about any of them.
+- **Path-scoped rules** cover React, Tailwind, testing, i18n, accessibility, and state management. They live in `apps/web/.claude/rules/` (TypeScript and harness rules are in `.claude/rules/`); ask Claude about any of them.
 - **Hooks** guard the quality gate and keep the wiki fresh. They live in `.claude/hooks/`.
 - **Bundled skills** (`react-code`, `tailwind`, `tdd`, `playwright-cli`, `skeleton-loaders`, `eslint-fixes`, `a11y-fixes`) autoload for matching tasks. Scaffolding skills (`new-component`, `new-hook`, `new-route`, `new-service`) fire on natural-language asks.
 

@@ -25,7 +25,7 @@ This section owns the layout rule. Every other rule, skill, agent and wiki page 
 
 The React half of `.claude/rules/typescript.md`.
 
-- Route loaders and actions skip the explicit return type for their complex generics; React components skip it because their props are typed inline on the destructured parameter and the return type is inferred.
+- Route loaders, route actions and React components skip the explicit return type.
 - Form `name`, `id` and `htmlFor` values are camelCase.
 - `null` is the contract in `useRef(null)`, ref-callback parameters and React Router `data(null)`.
 
