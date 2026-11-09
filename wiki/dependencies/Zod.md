@@ -14,7 +14,7 @@ Schema validation. Used for form validation ([[Conform]]), API response parsing 
 
 ## Zod 4
 
-This project uses Zod 4 in every schema. Most Zod 3 forms still compile; several fail typecheck, among them single-arg `z.record()`, `.args().returns()`, `.deepPartial()`, `z.string().ip()`, and the `required_error` / `invalid_type_error` / `errorMap` params. `.strict()` compiles and lints clean, so reach for `z.strictObject()` deliberately. The deprecated forms `.passthrough()`, `z.string().email()` and the other string formats also compile, but `sonarjs/deprecation` flags them; see [[ESLint Fixes]]. The deprecated `message` param compiles too. In the web lint preset, lint reports it only on `.refine()` (`zod/require-error-message`); other members carry no zod lint rules, so nothing reports it there. Write `error` yourself.
+This project uses Zod 4 in every schema. Most Zod 3 forms still compile; several fail typecheck, among them single-arg `z.record()`, `.args().returns()`, `.deepPartial()`, `z.string().ip()`, and the `required_error` / `invalid_type_error` / `errorMap` params. `.strict()` compiles and lints clean, so reach for `z.strictObject()` deliberately. The deprecated forms `.passthrough()`, `z.string().email()` and the other string formats also compile, but `sonarjs/deprecation` flags them; see [[ESLint Fixes]]. The deprecated `message` param compiles too. With the `lint.zod` preset, which only `apps/web` enables, lint reports it only on `.refine()` (`zod/require-error-message`); without that preset nothing reports it. Write `error` yourself.
 
 Import the Conform integration from `@conform-to/zod/v4`.
 
