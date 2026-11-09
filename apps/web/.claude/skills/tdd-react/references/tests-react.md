@@ -237,6 +237,7 @@ For components using `@conform-to/react`, create a story that wraps the componen
 export const Default = meta.story({
   render: () => {
     const [form, fields] = useForm({
+      constraint: getZodConstraint(schema),
       onValidate: ({formData}) => parseWithZod(formData, {schema}),
     });
 

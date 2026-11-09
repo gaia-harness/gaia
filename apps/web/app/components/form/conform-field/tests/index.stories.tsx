@@ -107,6 +107,7 @@ const listSchema = z.object({tasks: z.array(z.string())});
 // on the control tells React the value in that position has changed.
 const ListForm = () => {
   const [form, fields] = useForm<z.input<typeof listSchema>>({
+    constraint: getZodConstraint(listSchema),
     defaultValue: {tasks: ['First', 'Second']},
     onValidate: ({formData}) => parseWithZod(formData, {schema: listSchema}),
   });
