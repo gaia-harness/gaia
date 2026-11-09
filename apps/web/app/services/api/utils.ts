@@ -27,21 +27,24 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
 const responseToCamelCase = async ({request, response}: AfterResponseState) => {
   // A dropped body must reject, not pass as non-JSON, and Ky does not wrap a
   // hook's read. A cancellation still rejects as itself: Ky's race with the
-  // signal rethrows its reason, whichever settles first. A non-ok response keeps
-  // its status: empty text fails the parse below, so Ky raises its HTTPError.
-  const text = await response.text().catch((error: Error) => {
-    if (isResponseSizeError(error)) {
-      throw error;
-    }
+  // signal rethrows its reason, whichever settles first. A dropped non-ok body
+  // keeps its status: `response.json()` below rejects too, so Ky raises its
+  // HTTPError. The read is a clone's because only `response.json()` applies a
+  // caller's `parseJson`.
+  await response
+    .clone()
+    .text()
+    .catch((error: Error) => {
+      if (isResponseSizeError(error)) {
+        throw error;
+      }
 
-    if (response.ok) {
-      throw new NetworkError(request, {cause: error});
-    }
-
-    return '';
-  });
-  const [, camelCaseResponse] = tryCatch(() =>
-    Response.json(toCamelCase(JSON.parse(text)), response)
+      if (response.ok) {
+        throw new NetworkError(request, {cause: error});
+      }
+    });
+  const [, camelCaseResponse] = await tryCatch(async () =>
+    Response.json(toCamelCase(await response.json()), response)
   );
 
   return camelCaseResponse ?? (response.ok ? Response.json(null) : undefined);

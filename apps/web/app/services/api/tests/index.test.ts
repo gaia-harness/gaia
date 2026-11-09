@@ -16,6 +16,10 @@ const ORIGIN_B = 'https://api-b.test';
 const itemSchema = z.object({displayName: z.string()});
 const envelopeSchema = z.object({data: itemSchema});
 
+// Ky runs parseJson again on the JSON the hook returns, so this one must parse real JSON too.
+const parseJsonOrPlainText = (text: string): unknown =>
+  text === 'not json' ? {display_name: 'parsed'} : JSON.parse(text);
+
 const originalApiUrl = process.env.API_URL;
 
 afterEach(() => {
@@ -144,6 +148,20 @@ describe('create', () => {
     ).resolves.toBeNull();
   });
 
+  test("a caller's parseJson still parses the body on the snake_case layer", async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, () => HttpResponse.text('not json'))
+    );
+
+    const item = await create({
+      isSnakeCaseEnabled: true,
+      parseJson: parseJsonOrPlainText,
+    })('items', {schema: itemSchema});
+
+    expect(item).toEqual({displayName: 'parsed'});
+  });
+
   test('isSnakeCaseEnabled converts a JSON body to snake_case and the response to camelCase', async () => {
     process.env.API_URL = ORIGIN_A;
     let received: unknown;
@@ -265,19 +283,21 @@ describe('a failure while reading the body', () => {
   test('a schema-less body that drops resolves through attempt as a 503', async () => {
     await startSocketServer('drop');
 
-    const outcome = await attempt(async () => create()('items', {retry: 0}));
+    const attemptOutcome = await attempt(async () =>
+      create()('items', {retry: 0})
+    );
 
-    expect(outcome).toEqual([networkFailure, undefined]);
+    expect(attemptOutcome).toEqual([networkFailure, undefined]);
   });
 
   test('a schema-less body that stalls resolves through attempt as a 504', async () => {
     await startSocketServer('stall');
 
-    const outcome = await attempt(async () =>
+    const attemptOutcome = await attempt(async () =>
       create()('items', {retry: 0, timeout: 150})
     );
 
-    expect(outcome).toEqual([
+    expect(attemptOutcome).toEqual([
       {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
       undefined,
     ]);
@@ -286,11 +306,11 @@ describe('a failure while reading the body', () => {
   test('a body that drops on the snake_case layer resolves through attempt as a 503', async () => {
     await startSocketServer('drop');
 
-    const outcome = await attempt(async () =>
+    const attemptOutcome = await attempt(async () =>
       create({isSnakeCaseEnabled: true})('items', {retry: 0, schema: z.null()})
     );
 
-    expect(outcome).toEqual([networkFailure, undefined]);
+    expect(attemptOutcome).toEqual([networkFailure, undefined]);
   });
 
   test('a 404 whose body drops on the snake_case layer keeps its status through attempt', async () => {
