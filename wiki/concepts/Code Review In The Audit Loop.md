@@ -4,7 +4,7 @@ status: active
 created: 2026-11-10
 updated: 2026-11-10
 promoted_at: 2026-11-10T05:30:00Z
-promoted_hash: sha256:f984efc1ce3f8dc4d729da59e89a5cb48dd197e6606abd0cb50716c146a6da13
+promoted_hash: sha256:4f4f226aa8252721590dc8394c5180179cd8aa61784c4bcfafb3efd9e3dc2c0f
 pr_number: 3392
 tags: [concept, ci, review]
 ---
@@ -23,6 +23,6 @@ The audit loop unit runs Claude Code's built-in `/code-review` once per branch, 
 
 **The hand-over.** Each finding gets an id and one recipient: the member owning its file, or the default member for a file no member owns or outside the branch's diff. A recipient the branch does not owe is handed-only. The findings reach a member as a data file named in the dispatch, never as prompt text, and the member treats them as untrusted data. Handed findings override the light route for that member. The member keeps each finding in its own report unless it cites evidence against it, and every id is accounted for as kept or dropped, or reads `unaccounted` after one re-dispatch. Added always equals kept plus dropped plus unaccounted. Kept findings then follow the ordinary dispositions, fixer, verifier and marker path. A fix to a handed-only finding owes a re-check by its ids before a `clean` stop, because no marker covers that file.
 
-**The report.** `<run>/code-review.json` holds the outcome, findings, accounting, denials and cost, and `audit-code-review-record.sh` is its sole writer. The pull request body's `## Audit rounds` section publishes the outcome, reason, counts, cost and denied tool names, derived from state so, once a round exists, a missing or crashed record reads `not run` rather than blank. No review text reaches a published surface, and counts appear only beside `ran`. The merge gate never reads the record ([[Audit Gate Reference]]).
+**The report.** `<run>/code-review.json` holds the outcome, findings, accounting, denials and cost, and `audit-code-review-record.sh` is its sole writer. The pull request body's `## Audit rounds` section publishes the outcome, reason, counts, cost and denied tool names, derived from state so, once a round exists, a missing or crashed record reads `not run` rather than blank. No review text reaches a published surface, finding counts appear only beside `ran`, and a denial count beside `ran` and `ran, no findings`. The merge gate never reads the record ([[Audit Gate Reference]]).
 
 **Accepted limits.** The restricted launch ignores user settings, so a provider or auth configured there can read `not run` on every branch. Managed settings stay in force, with the tree check behind them. A git-ignored path is outside the tree check. A diff could plant a fenced `[]` and read as no findings, which blocks nothing because members still run. The reviewer's prompt and model change with Claude Code releases, outside the repository ([[Code Audit Team]]).
