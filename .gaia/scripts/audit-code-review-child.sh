@@ -9,8 +9,8 @@
 # adds to it: with --allowedTools Read,Grep,Glob under dontAsk, a child edited a
 # file through the project's own Edit row. So the design is what the effective set
 # cannot contain, and no part of it depends on the model's cooperation: --tools
-# leaves mutating tools nothing to be granted to, --restricted drops every settings
-# file's allow rows and hooks, --strict-mcp-config loads no servers, and under
+# leaves mutating tools nothing to be granted to, --restricted drops the user, project
+# and local settings files' allow rows and hooks, --strict-mcp-config loads no servers, and under
 # dontAsk the generated settings' literal git rows are all Bash can do. Never fall
 # back to an allow list.
 #

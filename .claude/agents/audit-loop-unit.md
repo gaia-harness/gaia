@@ -58,7 +58,7 @@ A nested Agent call that errors with no `BLOCKED:` anywhere is `failure`.
 
 ## Code review
 
-Run on every member wave, after `## Routing each member` steps 1 and 2 choose the routes and before any reviewer or member of the wave is dispatched. A wave with nothing to dispatch, or a branch owing no member, skips steps 2 to 6 and records nothing. `review-record` below means `bash <S>/.gaia/scripts/audit-code-review-record.sh`. The unit passes the review no effort flag and adds no setting for its level, limit or opt-out.
+Run on every member wave, after `## Routing each member` steps 1 and 2 choose the routes and before any reviewer or member of the wave is dispatched. A wave with nothing to dispatch, or a branch owing no member, skips steps 2 to 6 and records nothing. `review-record` below means `bash <S>/.gaia/scripts/audit-code-review-record.sh`.
 
 1. **Scripts root, no write.** Run `test -f <root>/.gaia/scripts/audit-code-review.sh`. On exit 0 `<S>` is `<root>`. Otherwise the branch has no review script and `<S>` is the main checkout, typed as the part of `<run>` before `/.gaia/local/runs/`. Every `review-record` call and every publication this unit makes uses `<S>`'s copy, so the record can show the outcome. Resolve `<S>` before the first of those, whichever section reaches it. Nothing is recorded here.
 2. **Route, then decide.** Run `review-record decide --root <root> --run-folder <run> --pr <N> --routes <all-light|mixed>`: `all-light` when routing step 2 would send every member of the wave to a light reviewer, otherwise `mixed`. It prints `none`, `quick-first`, `run` or `deliver`.

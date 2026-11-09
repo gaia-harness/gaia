@@ -7,8 +7,9 @@
 #   audit-code-review.sh child-argv --target <t> --settings-file <abs>
 #   audit-code-review.sh wait-ms
 #
-# `run` exits 0 on any recorded outcome, 3 on `review moved the tree` (the audit
-# unit stops for a human), 2 on usage. Its last stdout line on every exit it can
+# `run` exits 0 on a recorded outcome or an unreadable record it leaves as found,
+# 3 on `review moved the tree` (the audit unit stops for a human), 1 when it could
+# not start or finish recording, 2 on usage. Its last stdout line on every exit it can
 # trap is `code-review exit <status>`, which is what the unit waits on.
 # `child-argv` prints the child's argv one argument per line, so the hand-run
 # captures measure the shipped flags instead of a copy of them.

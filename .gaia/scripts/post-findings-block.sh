@@ -134,7 +134,7 @@
 #
 #   code_review is an additive top-level key: the code review's outcome, reason
 #   and counts from the branch's review record, never finding text or denial
-#   detail. It is absent when there is no current record.
+#   detail. It is absent when the record script's publish-values prints nothing.
 #
 #   review_bases is ALWAYS present, possibly []. One entry per valid sidecar
 #   carrying a well-formed `review_base` (audit-write-findings.sh), built from
@@ -405,7 +405,7 @@ member_count="$(jq -s '[.[] | (.member // "") ] | unique | length' \
 
 # The code review's outcome, reason and counts, read from the branch's review
 # record in the main checkout's run folder. A rider like review_bases: it is left
-# out whole when there is no current record or any step fails, and it carries no
+# out whole when publish-values prints nothing or any step fails, and it carries no
 # finding text or denial detail.
 code_review=null
 if main_root="$(gaia_resolve_main_root "$repo_root" 2>/dev/null)" \

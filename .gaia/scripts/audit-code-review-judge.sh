@@ -5,7 +5,7 @@
 # This parser is the trust boundary over untrusted text: the review's prose can
 # quote a diff, so it never decides anything and never counts findings. Only the
 # result's own structured fields and one exact fenced array do. Every value
-# reaches jq through --arg, never interpolated into a program.
+# reaches jq as an input file, stdin or --rawfile, never interpolated into a program.
 #
 #   gaia_review_judge <result-json-file>
 #     Prints one line of JSON and returns 0:

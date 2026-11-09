@@ -198,7 +198,7 @@ Run all four checks against each collected candidate:
 
 **Evidence that needs real bytes on disk goes in a scratch directory you own**, never in the tree under review: establishing that a guard is not hollow means breaking the construct it names and watching its check go red. Mint it under `.gaia/local/cache/mutation-scratch/` as `.claude/hooks/lib/audit-member-protocol.md` states under "Scratch directory", which keeps it apart from every other member and every other audit on the machine, and populate and mutate it with Bash, never with `Write`/`Edit`: from a linked worktree that directory resolves into the main checkout through the `.gaia/local` symlink, so a `Write` or `Edit` there is refused by the runtime's own worktree confinement, which is not a finding. Once your findings sidecar is written, remove exactly the directory you minted.
 
-**Adversarially verify every Critical and Major survivor.** When at least one holistic Critical or Major candidate survives the four checks, Read `<root>/.claude/hooks/lib/audit-frontend-refuter.md` and follow it before reporting those findings; when none survives, do not Read it. Minor, oracle and specialist findings never go to a refuter.
+**Adversarially verify every Critical and Major survivor.** When at least one holistic Critical or Major candidate survives the four checks, or you would keep a handed review finding at Critical or Major, Read `<root>/.claude/hooks/lib/audit-frontend-refuter.md` and follow it before reporting those findings; when neither holds, do not Read it. Minor, oracle and specialist findings never go to a refuter.
 
 **Hardened retry prefix**: prepended verbatim on the single retry of a specialist or a refuter, `<target>` substituted with the concrete target:
 
