@@ -13,7 +13,7 @@ Flag, in every other `.tsx` file:
 
 | Pattern                                                              | Use instead                                                                                   |
 | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| native `<input>` (text types), `<textarea>`, `<select>`              | `Input`, `Textarea`, `NativeSelect` from `~/components/ui/...` inside a `ConformField`        |
+| native `<input>` (text types), `<textarea>`, `<select>`              | `Input`, `Textarea`, `NativeSelect` from `~/components/ui/...`, inside a `ConformField` when bound to a Conform field |
 | native `<input type="checkbox">` or `<input type="radio">`           | `Checkbox` or `RadioGroup` with `RadioGroupItem`; a group sits in a `FieldSet` with a `FieldLegend` |
 | a ui control with no `FieldLabel htmlFor`, `Label htmlFor`, `aria-label` or `aria-labelledby` | `ConformField` for a Conform field; a `Label` or `aria-label` outside a form                  |
 | a hand-wired `Field` around a single control bound to a Conform field | `ConformField`; a `Field` per option inside a group is fine                                   |
