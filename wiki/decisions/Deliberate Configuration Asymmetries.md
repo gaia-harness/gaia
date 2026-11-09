@@ -97,8 +97,8 @@ isolated dispatch) launches an agent-team teammate instead of a sub-agent. A
 teammate can spawn its own sub-agents, route permission prompts to the user,
 message its peers, and self-claim shared tasks. That contradicts the depth-1
 star in [[Workflow Doctrine]], where the main thread decides and dispatches,
-and sub-agents return JSON artifacts without prompting the user or spawning
-further agents. GAIA's multi-agent workflows assume that shape.
+and sub-agents return JSON artifacts without prompting the user or, outside
+its named exceptions, spawning further agents. GAIA's multi-agent workflows assume that shape.
 
 No GAIA surface uses a teams-specific API. Every dispatch goes through the
 Agent tool, which needs no flag, so leaving it off breaks no GAIA workflow.

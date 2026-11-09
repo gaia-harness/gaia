@@ -48,6 +48,7 @@ SPEC_DERIVED_STEPS=(
   resume-detection
   yield-handling
   gate-retry
+  simplify-pass
   flow-checks
   worthiness-step
   overlap-pass
@@ -56,7 +57,7 @@ SPEC_DERIVED_STEPS=(
   post-clearance
   post-merge-close
 )
-SPEC_DERIVED_STEP_COUNT=10
+SPEC_DERIVED_STEP_COUNT=11
 SPEC_ONLY_STEP=flow-checks
 UNCOMPARED_STEP=post-merge-close
 
@@ -72,6 +73,7 @@ setup() {
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
+  S_SIMPLIFY='<!-- gaia:orchestrator-step simplify-pass -->'
   S_FLOW='<!-- gaia:orchestrator-step flow-checks -->'
   S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
   S_OVERLAP='<!-- gaia:orchestrator-step overlap-pass -->'
@@ -229,6 +231,7 @@ check_block_contents() {
   local file="$1"
   check_block_has "$file" "$S_YIELD" 'gaia_context_yield_limit' 'Yield handoff:' '(YIELD k)' || return 1
   check_block_has "$file" "$S_RETRY" '(GATE RETRY 1)' 'Yield handoff:' 'Stop conditions' || return 1
+  check_block_has "$file" "$S_SIMPLIFY" 'simplify-pass.md' '## Simplify pass' || return 1
   check_block_has "$file" "$S_FLOW" 'flow-coverage.sh' '--spec {SPEC_PATH}' '--flow-tests-out' 'flow-tests.tsv' '{PLAN_DIR}/PROGRESS.md' 'before the worthiness step' || return 1
   check_block_has "$file" "$S_WORTH" 'worthiness-step.md' 'flow checks' || return 1
   check_block_has "$file" "$S_OVERLAP" 'overlap-pass.md' '## Overlap pass' || return 1
@@ -393,8 +396,8 @@ assembled_sentinels() {
     [ "$status" -ne 0 ] || { echo "dropping $step from the order list did not fail" >&2; return 1; }
   done
   # Swap two neighbours in the order list.
-  sed '/\*\*Verbatim step blocks\.\*\*/s/`gate-retry`, `flow-checks`/`flow-checks`, `gate-retry`/' "$PLANNER_MD" >"$copy"
-  cmp -s "$PLANNER_MD" "$copy" && { echo "gate-retry, flow-checks is not in the order list" >&2; return 1; }
+  sed '/\*\*Verbatim step blocks\.\*\*/s/`simplify-pass`, `flow-checks`/`flow-checks`, `simplify-pass`/' "$PLANNER_MD" >"$copy"
+  cmp -s "$PLANNER_MD" "$copy" && { echo "simplify-pass, flow-checks is not in the order list" >&2; return 1; }
   run check_verbatim_sentence "$copy"
   [ "$status" -ne 0 ]
   awk '/\*\*Verbatim step blocks\.\*\*/ { gsub(/[Ss]pec-less/, "other") } { print }' "$PLANNER_MD" >"$copy"
@@ -419,7 +422,7 @@ assembled_sentinels() {
   check_block_contents "$PLANNER_MD"
   copy="$BATS_TEST_TMPDIR/planner.md"
   local needle
-  for needle in 'flow-coverage.sh' 'flow-tests.tsv' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' 'wiki-promote.md' 'runs only after' 'worthiness-step.md' 'overlap-pass.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
+  for needle in 'flow-coverage.sh' 'flow-tests.tsv' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' 'wiki-promote.md' 'runs only after' 'simplify-pass.md' 'worthiness-step.md' 'overlap-pass.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
     awk -v needle="$needle" '{ gsub(needle, "removed") } { print }' "$PLANNER_MD" >"$copy"
     run check_block_contents "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail the check" >&2; return 1; }
@@ -540,12 +543,19 @@ resume_point() {
   bash "$RESUME_POINT" --plan-dir "$PROGRESS_DIR" --phases 3 --git-dir "$REPO" | sed -n 1p
 }
 
-@test "the flow checks, wiki promotion and gate HALTED blocks leave the resume point unchanged" {
+@test "the simplify pass, flow checks, wiki promotion and gate HALTED blocks leave the resume point unchanged" {
   resume_fixture
   printf '## Phase 1, One\nCommit: %s\n\n_No notes._\n\n## Phase 2, Two\nCommit: %s\n\n_No notes._\n' "$SHA_ONE" "$SHA_TWO" >"$PROGRESS_DIR/PROGRESS.md"
   baseline="$(resume_point)"
   [ "$baseline" = "3" ]
   cat >>"$PROGRESS_DIR/PROGRESS.md" <<'EOF'
+
+## Simplify pass
+Result: discarded
+Reason: the gate failed
+
+## Simplify pass (HALTED)
+Reason: the patch could not be saved
 
 ## Flow checks
 Result: every flow has a test changed on the branch

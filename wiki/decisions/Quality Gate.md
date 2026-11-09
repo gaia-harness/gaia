@@ -16,7 +16,7 @@ Every change must pass the Quality Gate. Pre-commit hooks enforce a subset; Clau
 
 The contract lives at the repo root. Steps 3 to 5 are root scripts that run across every workspace member that defines the script, so a library or a second app is checked with no gate edit. Steps 6 to 8 exercise the web app only; each root `pnpm <script>` there is a proxy that forwards to the `pnpm -C apps/web <script>` shown beside it, and either spelling runs the same command.
 
-1. **Simplify**: run `simplify` skill; apply all endorsed changes.
+1. **Simplify**: run `simplify` skill; apply all endorsed changes. Two commits skip it, and the Simplify row says `skipped: <reason>`: a `/gaia-plan` orchestrator's commits, because the plan run makes one whole-branch pass in its closing stage (`.claude/skills/gaia/references/simplify-pass.md`), and an audit fix round's commit, because only the fixer edits inside the loop.
 2. **Localization check**: no hardcoded user-facing strings or unfilled keys.
 3. `pnpm typecheck`: zero errors in every member. This is the sole enforcer for type-only tests (`expectTypeOf`/`assertType`/`@ts-expect-error`).
 4. `pnpm lint`: zero errors in every member, zero warnings. In the web app it runs `eslint --fix`, so it auto-fixes every fixable lint rule **and** Prettier formatting (Prettier is wired in as an `eslint` rule via `prettier/prettier`); only non-auto-fixable issues need manual attention. Hand-formatting while authoring is wasted effort; this step normalizes it. Outside the `.gaia/cli` member, `pnpm lint` ignores `.gaia/**`.
@@ -35,7 +35,7 @@ The contract lives at the repo root. Steps 3 to 5 are root scripts that run acro
    Unattended, the workflow halts naming the reason. The script's header documents the exit codes.
 8. `pnpm build` (`pnpm -C apps/web build`): confirms production build.
 9. **Fix all warnings before reporting**: never hand off with known warnings.
-10. **Stop and report**: ask for approval with `AskUserQuestion` (`Commit` (Recommended) or `Hold for review`), except inside a workflow whose own instructions commit without stopping: the audit fix round ([[Audit Round Procedure#The fix round: fixer, verifier, gate]]), the worthiness step's fix commit (`.claude/skills/gaia/references/worthiness-step.md`), the overlap pass's fix commit (`.claude/skills/gaia/references/overlap-pass.md`), `/gaia-debt`, a `/gaia-plan` orchestrator's phase commits, and `/gaia-init`'s init commit.
+10. **Stop and report**: ask for approval with `AskUserQuestion` (`Commit` (Recommended) or `Hold for review`), except inside a workflow whose own instructions commit without stopping: the audit fix round ([[Audit Round Procedure#The fix round: fixer, verifier, gate]]), the worthiness step's fix commit (`.claude/skills/gaia/references/worthiness-step.md`), the overlap pass's fix commit (`.claude/skills/gaia/references/overlap-pass.md`), the simplify pass's commit (`.claude/skills/gaia/references/simplify-pass.md`), `/gaia-debt`, a `/gaia-plan` orchestrator's phase commits, and `/gaia-init`'s init commit.
 
 | Step          | Result |
 | ------------- | ------ |
@@ -76,7 +76,7 @@ grep -vE '^\.gaia/(cli|tests|scripts)/'
 
 ## The smaller gate
 
-Inside an audit fix round whose `bash .gaia/scripts/audit-gate-owed.sh choose` prints `smaller`, run every step of this page except steps 6, 7 and 8 (Playwright, the dev smoke test, the production build); the skip logic above still applies. Report each deferred step as owed in the result table, not as not run. Those three steps run once on the final tree before the audit status posts, and that run of step 7 passes and stops exactly as step 7 says. A Major, Critical or security fix, and a fix entry with no sidecar row, takes the full gate. `.gaia/scripts/audit-gate-owed.sh`'s header owns the owed record and the rule that picks the gate; [[PR Merge Workflow]] owns when the owed run happens.
+Inside an audit fix round whose `bash .gaia/scripts/audit-gate-owed.sh choose` prints `smaller`, run every step of this page except step 1, which a fix round skips, and steps 6, 7 and 8 (Playwright, the dev smoke test, the production build); the skip logic above still applies. Report each deferred step as owed in the result table, not as not run. Those three steps run once on the final tree before the audit status posts, and that run of step 7 passes and stops exactly as step 7 says. A Major, Critical or security fix, and a fix entry with no sidecar row, takes the full gate. `.gaia/scripts/audit-gate-owed.sh`'s header owns the owed record and the rule that picks the gate; [[PR Merge Workflow]] owns when the owed run happens.
 
 <!-- gaia:maintainer-only:start -->
 The maintainer `bash .gaia/tests/verify-harness.sh round` step is unchanged: the smaller gate does not shorten it.
