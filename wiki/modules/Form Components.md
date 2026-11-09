@@ -8,19 +8,29 @@ depends_on:
   - '[[Conform]]'
   - '[[Zod]]'
 created: 2026-04-20
-updated: 2026-10-28
+updated: 2026-11-09
 tags: [module, components, forms]
 ---
 
 # Form Components
 
-GAIA has no form wrapper components. A form is composed from the ui `Field` parts and ui controls ([[shadcn Component Layer]]) with [[Conform]] and [[Zod]] supplying the props, ids and validation state. Each control's accessible name, invalid state, required state and keyboard behavior come from the ui component plus Conform's attributes, not from a GAIA abstraction.
+`ConformField` wires one [[Conform]] field to its label, description and errors, and the caller renders the ui control ([[shadcn Component Layer]]) as its child, spreading Conform's props. `ConformFieldError` renders a field's errors. A wrapped control's invalid state, required state and keyboard behavior come from the ui component plus Conform's attributes, its accessible name comes from the label `ConformField` links to it, and [[Zod]] supplies validation.
 
-## The composed pattern
+## The wrapper
 
-For each field: a ui `Field` (with `data-invalid` when the field has errors) holding a `FieldLabel` (`htmlFor` the field id), the control (`Input`, `Textarea`, `NativeSelect`, `Checkbox`, `RadioGroup`) spread with Conform's `getInputProps`, `getSelectProps` or `getTextareaProps`, an optional `FieldDescription`, and a `FieldError` (`id` the field's `errorId`). Groups of checkboxes or radios sit in a `FieldSet` with a `FieldLegend`; checkboxes share one name through `getCollectionProps`. The submit button is a `ui/button` that shows a `ui/spinner` and disables itself while the navigation is submitting.
+`ConformField` takes the field's metadata, a label, an optional description and an orientation. Its child is a function that receives the options for Conform's prop getter and returns the control, which is how the description reaches `aria-describedby` without the wrapper knowing the control. It sets `data-invalid`, the label's `htmlFor`, the description's id and the control's `key`. Conform's list intents reach an uncontrolled control only through that key, and Conform's getters leave it out. Only the `remove` intent has a test; `insert` and `reorder` rest on reading Conform's source.
 
-The step-by-step pattern, the Zod schema and action wiring, and error-message translation are in `apps/web/.claude/skills/react-code/references/conform-forms.md`. The runnable reference is `apps/web/app/components/form/tests/composed-form.tsx` and its story, whose `.test()` behaviors are the tests ([[Stories as Tests]]).
+`ConformFieldError` translates each schema message found in `errors.validation` and shows any other message as written, so a missing translation key appears as its raw key and a translated server error passes through.
+
+## Groups
+
+Groups of checkboxes or radios stay composed: a `FieldSet` with a `FieldLegend`, a ui `Field` per option, and `ConformFieldError`. Checkboxes share one name through `getCollectionProps`.
+
+## Submit button and reference
+
+The submit button is a `ui/button` that shows a `ui/spinner` and disables itself while the navigation is submitting.
+
+The step-by-step pattern and the Zod schema and action wiring are in `apps/web/.claude/skills/react-code/references/conform-forms.md`. The runnable reference is `apps/web/app/components/form/tests/composed-form.tsx` and its story, whose `.test()` behaviors are the tests ([[Stories as Tests]]).
 
 ## Conform + custom components
 
@@ -47,4 +57,4 @@ See [[Component Testing]] for how form components are tested.
 
 ## Accessibility
 
-Label association comes from `FieldLabel htmlFor` pointing at the Conform field id, and error association from `aria-describedby` pointing at `errorId`. For custom inputs, ensure `<label htmlFor>` or `aria-label`. See [[Accessibility]].
+`ConformField` points the label's `htmlFor` at the Conform field id, and Conform's getter points `aria-describedby` at `errorId`. For custom inputs, ensure `<label htmlFor>` or `aria-label`. See [[Accessibility]].

@@ -10,7 +10,7 @@ tags: [flow, forms, conform, zod]
 
 The end-to-end path of a form submission in the app.
 
-1. User fills out a form composed from ui `Field` parts, ui controls and Conform ([[Form Components]]).
+1. User fills out a form built from `ConformField`, ui controls and Conform ([[Form Components]]).
 2. Conform's `useForm({ onValidate })` runs `parseWithZod(formData, {schema})` client-side for instant feedback.
 3. On submit, the form `POST`s to the route's `action`.
 4. The route action runs the **same** `parseWithZod` server-side (source of truth). Import it from `@conform-to/zod/v4`; the package-root `@conform-to/zod` selects Zod-v3 behavior and silently breaks v4 schemas (see [[Conform]]):
@@ -25,7 +25,7 @@ The end-to-end path of a form submission in the app.
    - Returns `dataWithToast(...)` from `remix-toast` for an inline toast
 6. Conform binds errors back to fields automatically.
 
-This is the pattern every scaffolded data route action follows (`gaia scaffold route --data <variant> --action`; see [[Data Loading]]). A `clientAction` (Query variant) runs the same validation in the browser, then awaits `invalidateQueries` before it redirects. The live working form example is the composed form fixture and its story under `apps/web/app/components/form/tests/`. The two small no-UI endpoints (`apps/web/app/routes/actions.set-language.ts`, `apps/web/app/routes/resources.theme-switch.tsx`) take a single field and validate it with a plain Zod schema rather than `parseWithZod`/`submission.reply()`.
+This is the pattern every scaffolded data route action follows (`gaia scaffold route --data <variant> --action`; see [[Data Loading]]). A `clientAction` (Query variant) runs the same validation in the browser, then awaits `invalidateQueries` before it redirects. The live working form example is the form fixture and its story under `apps/web/app/components/form/tests/`. The two small no-UI endpoints (`apps/web/app/routes/actions.set-language.ts`, `apps/web/app/routes/resources.theme-switch.tsx`) take a single field and validate it with a plain Zod schema rather than `parseWithZod`/`submission.reply()`.
 
 ## Stateful custom inputs
 

@@ -41,12 +41,12 @@ Run each gate when its pattern appears in your changes.
 | `<select>`                             | `NativeSelect` and `NativeSelectOption` (`native-select`)                            |
 | `<textarea>`                           | `Textarea` (`textarea`)                                                              |
 | `<label>`                              | `FieldLabel` (`field`), or `Label` (`label`) outside a `Field`                       |
-| Field with label + error + description | `Field`, `FieldLabel`, `FieldDescription`, `FieldError` (`field`)                    |
+| Field with label + error + description | `ConformField` around the ui control; a group uses the `field` parts                 |
 | `<button>`                             | `Button` (`button`)                                                                  |
 
 **Exceptions (native OK):** `<input type="hidden">`, `<input type="file">`, `<input type="range">`.
 
-A raw ui control carries no label or error wiring. Compose it with Conform exactly as `references/conform-forms.md` shows (one pattern per control type, with the `Field` wiring). Render options from an array with `.map`.
+A raw ui control carries no label or error wiring. Put a single form control in `ConformField` and compose a group, as `references/conform-forms.md` shows (one pattern per control type). Render options from an array with `.map`.
 
 **CRITICAL, `@conform-to/zod`:** Always import from `/v4` subpath. The default export targets Zod v3 and causes a runtime error that typecheck and build do NOT catch (lint flags the bare import).
 

@@ -33,17 +33,18 @@ If a token itself fails (the placeholder values are a neutral default), fix the 
 
 ## label
 
-Form inputs need an associated label. Compose the ui `Field` parts around the control rather than a bare `<label>`: `FieldLabel htmlFor` names it, and `FieldError` carries the error. See `apps/web/.claude/skills/react-code/references/conform-forms.md` for the full wiring.
+Form inputs need an associated label. Put the control in `ConformField` rather than a bare `<label>`: it links the label and the errors. See `apps/web/.claude/skills/react-code/references/conform-forms.md` for each control type.
 
 ```tsx
 // BAD, bare input with no label association
 <input type="text" name="email" />
 
-// GOOD, Field and FieldLabel wire the label to the ui control
-<Field>
-  <FieldLabel htmlFor="email">{t('email')}</FieldLabel>
-  <Input id="email" name="email" />
-</Field>
+// GOOD, ConformField wires the label to the ui control
+<ConformField field={fields.email} label={t('email')}>
+  {(controlOptions) => (
+    <Input {...getInputProps(fields.email, {...controlOptions, type: 'email'})} />
+  )}
+</ConformField>
 ```
 
 ## label-title-only

@@ -20,7 +20,7 @@ See [[GAIA Philosophy]] for the long version.
 ## Tech Stack at a Glance
 
 - **Framework**: [[React Router]] (SSR, file-based routing via [[fs-routes]])
-- **Forms**: [[Conform]] + [[Zod]] composed with ui `Field` parts, see [[Form Components]]
+- **Forms**: [[Conform]] + [[Zod]] with `ConformField` around ui controls, see [[Form Components]]
 - **Styling**: [[Tailwind]] v4 with `cn` and role tokens, [[shadcn]] components, and [[lucide-react]] icons
 - **i18n**: [[remix-i18next]] with TypeScript language files (not JSON)
 - **State**: minimal; `apps/web/app/state/index.tsx` is a passthrough; theme is cookie-based (no React state for theme)

@@ -10,7 +10,7 @@ tags: [dependency, forms]
 
 # Conform
 
-Form validation library used by [[Form Components]]. Pairs with [[Zod]] for the schema layer.
+Form validation library that `ConformField` wires to the ui controls ([[Form Components]]). Pairs with [[Zod]] for the schema layer.
 
 - `@conform-to/react`: `useForm`, `useInputControl`, `getFormProps`
 - `@conform-to/zod`: `parseWithZod` for client + server validation

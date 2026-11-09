@@ -40,7 +40,7 @@ export const Default = meta.story({
               placeholder={t('emailPlaceholder')}
             />
             <FieldDescription id="fieldStoryEmailDescription">
-              {t('form.required')}
+              {t('validation.required', {ns: 'errors'})}
             </FieldDescription>
           </Field>
         </FieldGroup>
@@ -88,7 +88,7 @@ export const WithError = meta.story({
           id="fieldStoryError"
         />
         <FieldError id="fieldStoryErrorMessage">
-          {t('form.required')}
+          {t('validation.required', {ns: 'errors'})}
         </FieldError>
       </Field>
     );

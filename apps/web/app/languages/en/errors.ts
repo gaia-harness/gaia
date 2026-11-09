@@ -1,4 +1,7 @@
 export default {
-  invalidEmail: 'Email is invalid',
   unexpectedError: 'An unexpected error occurred',
+  validation: {
+    email: 'Email is invalid',
+    required: 'Required',
+  },
 };
