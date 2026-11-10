@@ -3,18 +3,20 @@
  * domain layer, `app/services/gaia/`, to `app/services/<kebab>/` and rewrites
  * every module specifier that names it.
  *
- * The source folder is `gaia`, or the slug an earlier `rename` recorded in
- * `.gaia/init-state.json`, so re-running `rename` with a new slug (the way
- * `/gaia-init` documents changing it) moves the layer again rather than
- * leaving it under the first slug.
+ * The source folder is discovered from `app/services/` itself (the one
+ * folder other than the `api` wrapper), so re-running `rename` with a new
+ * slug (the way `/gaia-init` documents changing it) moves the layer again,
+ * even after finalize deleted `.gaia/init-state.json`. The slug an earlier
+ * `rename` recorded there breaks a tie when several folders remain.
  */
 import {existsSync, readFileSync, renameSync, statSync} from 'node:fs';
 import path from 'node:path';
+import {listSubdirectories} from '../scaffold/layer.js';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
 import {escapeRegExp} from '../util/escape-regexp.js';
 import {collectTreeFiles} from '../util/tree-walk.js';
 
-const TEMPLATE_LAYER = 'gaia';
+const API_WRAPPER = 'api';
 
 /**
  * The package's source roots. Walking the package root would descend
@@ -52,7 +54,8 @@ const isDirectory = (target: string): boolean =>
  * tree as it was.
  *
  * Nothing to do when the slug is the source name or no source folder exists
- * (already moved, or deleted by the user). A target folder that already
+ * (already moved, or deleted by the user). Several candidate folders are
+ * refused unless the recorded previous slug names one. A target folder that already
  * exists beside the source is refused rather than merged: merging two
  * domain layers is a design decision, not a rename.
  */
@@ -61,12 +64,21 @@ export const planServiceLayerMove = (
   kebab: string,
   previousKebab: string | undefined
 ): ServiceLayerPlan => {
-  const candidates = [previousKebab, TEMPLATE_LAYER].filter(
-    (name): name is string => name !== undefined && name !== kebab
+  const discovered = listSubdirectories(servicesDir(packageDir)).filter(
+    (name) => name !== API_WRAPPER && name !== kebab
   );
-  const from = candidates.find((name) =>
-    isDirectory(path.join(servicesDir(packageDir), name))
-  );
+  const from =
+    discovered.length === 1 ? discovered[0]
+    : previousKebab !== undefined && discovered.includes(previousKebab) ?
+      previousKebab
+    : undefined;
+
+  if (discovered.length > 1 && from === undefined) {
+    return {
+      kind: 'conflict',
+      message: `cannot pick the service layer to move among app/services/ (${discovered.join(', ')}); merge or remove all but one, then re-run`,
+    };
+  }
 
   if (from === undefined) return {kind: 'none'};
 

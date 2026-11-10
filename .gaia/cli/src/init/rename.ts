@@ -122,7 +122,7 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
     return {message: '--kebab is required', ok: false};
   }
 
-  if (!/^[a-z][\d a-z-]*$/u.test(kebab)) {
+  if (!/^[a-z][\da-z-]*$/u.test(kebab)) {
     return {message: '--kebab must be a kebab-case identifier', ok: false};
   }
 

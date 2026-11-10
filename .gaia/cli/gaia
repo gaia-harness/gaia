@@ -34742,7 +34742,7 @@ var renameLanguageFiles = (packageDir, title) => {
 // src/init/rename-service-layer.ts
 import { existsSync as existsSync17, readFileSync as readFileSync26, renameSync as renameSync3, statSync as statSync12 } from "node:fs";
 import path38 from "node:path";
-var TEMPLATE_LAYER = "gaia";
+var API_WRAPPER = "api";
 var SOURCE_ROOTS = ["app", "test", ".storybook", ".playwright"];
 var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
   ".cjs",
@@ -34758,12 +34758,16 @@ var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
 var servicesDir = (packageDir) => path38.join(packageDir, "app", "services");
 var isDirectory3 = (target) => existsSync17(target) && statSync12(target).isDirectory();
 var planServiceLayerMove = (packageDir, kebab, previousKebab) => {
-  const candidates = [previousKebab, TEMPLATE_LAYER].filter(
-    (name) => name !== void 0 && name !== kebab
+  const discovered = listSubdirectories(servicesDir(packageDir)).filter(
+    (name) => name !== API_WRAPPER && name !== kebab
   );
-  const from = candidates.find(
-    (name) => isDirectory3(path38.join(servicesDir(packageDir), name))
-  );
+  const from = discovered.length === 1 ? discovered[0] : previousKebab !== void 0 && discovered.includes(previousKebab) ? previousKebab : void 0;
+  if (discovered.length > 1 && from === void 0) {
+    return {
+      kind: "conflict",
+      message: `cannot pick the service layer to move among app/services/ (${discovered.join(", ")}); merge or remove all but one, then re-run`
+    };
+  }
   if (from === void 0) return { kind: "none" };
   if (existsSync17(path38.join(servicesDir(packageDir), kebab))) {
     return {
@@ -34855,7 +34859,7 @@ var parseFlags4 = (argv) => {
   if (kebab === void 0) {
     return { message: "--kebab is required", ok: false };
   }
-  if (!/^[a-z][\d a-z-]*$/u.test(kebab)) {
+  if (!/^[a-z][\da-z-]*$/u.test(kebab)) {
     return { message: "--kebab must be a kebab-case identifier", ok: false };
   }
   return { flags: { kebab, title }, ok: true };

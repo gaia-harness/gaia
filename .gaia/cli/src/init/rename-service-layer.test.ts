@@ -126,6 +126,17 @@ const servicePath = 'app/services/repair-desk/items';
     expect(read('app/routes/items.tsx')).toContain("'~/services/fix-it/items'");
   });
 
+  test('a rename after finalize deleted init-state still moves the layer', () => {
+    expect(rename('repair-desk')).toBe(0);
+    rmSync(at('.gaia/init-state.json'), {force: true});
+
+    expect(rename('fix-it')).toBe(0);
+
+    expect(existsSync(at('app/services/repair-desk'))).toBe(false);
+    expect(read('app/services/fix-it/api.ts')).toBe(LAYER_API);
+    expect(read('app/routes/items.tsx')).toContain("'~/services/fix-it/items'");
+  });
+
   test('the slug "gaia" leaves the layer where it is', () => {
     expect(rename('gaia')).toBe(0);
 
