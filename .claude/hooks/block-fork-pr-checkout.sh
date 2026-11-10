@@ -133,9 +133,12 @@ if [ "$checkout_armed" -eq 1 ]; then
   # the masked text holds and the raw text does not carried one, and is denied
   # as the trailing flag is.
   checkout_occurrence_pattern='gh[[:space:]]+pr[[:space:]]+checkout([[:space:]]+[^;&|]*)?'
+  # Counted only where a command can start, so quoted prose that cites a
+  # prefixed checkout is not mistaken for one.
+  checkout_command_start_pattern='(^|&&|;|\|\||\||\$\(|`)[[:space:]]*'"$checkout_occurrence_pattern"
   gaia_verb_arm_mask "$command_line"
-  if [ "$(printf '%s\n' "$GAIA_VERB_ARM_MASKED" | grep -oE "$checkout_occurrence_pattern" | wc -l)" -gt \
-    "$(printf '%s\n' "$command_line" | grep -oE "$checkout_occurrence_pattern" | wc -l)" ]; then
+  if [ "$(printf '%s\n' "$GAIA_VERB_ARM_MASKED" | grep -oE "$checkout_command_start_pattern" | wc -l)" -gt \
+    "$(printf '%s\n' "$command_line" | grep -oE "$checkout_command_start_pattern" | wc -l)" ]; then
     deny "Fork pull request checkout guard: this \`gh pr checkout\` names another repository (a repository flag before the subcommand), and this guard can only ask gh about pull requests in the repository of the working directory, so it denies. Check out that pull request from a clone of its own repository."
   fi
   # Each `gh pr checkout` occurrence up to the next separator; its first

@@ -40,7 +40,9 @@
 #
 #   1. The raw match, which is what every consumer paid before there was a
 #      shared decision. Most tool calls miss it and go straight to pass 3, so
-#      they never pay for the walk.
+#      they never pay for the walk. The exception is a text carrying `gh` and
+#      a repository flag: it loads the walker first, to build the mask the
+#      match runs against (the flag blanked, same length).
 #   2. The data proof, only on a raw hit. The walker builds a same-length view
 #      with every heredoc body it can prove is data masked out, and the same
 #      two patterns run again against that. A hit there arms; a miss falls
@@ -56,9 +58,13 @@
 #
 #   GAIA_VERB_ARM_KIND         start | sep | first-command | ""
 #   GAIA_VERB_ARM_MATCH        array copy of BASH_REMATCH from the deciding
-#                              match; empty for first-command and for not armed
-#   GAIA_VERB_ARM_VIEW         the text the deciding match ran against; the
-#                              identity whenever nothing was suppressed
+#                              match, against VIEW with gh's repository flag
+#                              blanked (same length, so offsets agree); empty
+#                              for first-command and for not armed
+#   GAIA_VERB_ARM_VIEW         the text the deciding match ran against, before
+#                              that flag is blanked (a consumer that reads the
+#                              flag still sees it); the identity whenever
+#                              nothing was suppressed
 #   GAIA_VERB_ARM_SUPPRESSED   1 when the view differs from <text>, else 0
 #
 # CALL IT IN A CONDITION CONTEXT, always:
