@@ -319,6 +319,9 @@ CASES
   snapshot
   TX="$TX_SDK" send "$(continue_label)"
   declined "sdk-cli transcript"
+  printf '%s' "$output" | grep -qF "In a new Claude Code terminal session in the audited branch's checkout, send any message"
+  printf '%s' "$output" | grep -qF -- '--continue or --resume'
+  printf '%s' "$output" | grep -qF 'as the whole prompt instead' && return 1
   TX="$BATS_TEST_TMPDIR/no-such.jsonl" send "$(continue_label)"
   declined "missing transcript"
   printf '%s' "$output" | grep -qF 'Send any other message first'
