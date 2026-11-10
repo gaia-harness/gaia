@@ -22,7 +22,8 @@
 #   audit-dispositions-check.sh waiver-table   --root <R> --run-folder <D> --rounds <a>-<b> [--snapshot-dir <S>]
 #   audit-dispositions-check.sh pr-sections    --root <R> --run-folder <D> [--snapshot-dir <S>]
 #   audit-dispositions-check.sh residual-count --root <R> --run-folder <D> [--snapshot-dir <S>]
-#   audit-dispositions-check.sh record-residual --root <R> --run-folder <D> --finding <file>
+#   audit-dispositions-check.sh record-residual --root <R> --run-folder <D> --finding <file> [--decision accept|waive|fix]
+#   audit-dispositions-check.sh undecided      --root <R> --run-folder <D>
 #
 # Dispositions: fix, accept-residual, waive-out-of-scope, file, divert.
 #
@@ -53,6 +54,9 @@
 #                               divert or accept-residual in an earlier round; check-all
 #                               without --snapshot-dir also prints it for an unsatisfied veto
 #                               whose round is past every dispositions file
+#   undecided                   (check-all without --snapshot-dir, and undecided after a unit stop
+#                               that can leave the round without its file) an open-round finding with
+#                               no honored triage mark that no row recorded on that round decides
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
 #                               needs one stops the unit with needs-human)
 #   missing-basis               waive-out-of-scope without basis triage-threshold|cross-remit
@@ -155,11 +159,16 @@
 # every rendered reason passes `file-tech-debt.sh screen-text` first; a reason
 # that fails renders as a withheld count. It also renders <D>/recorded-residuals.jsonl
 # (rows record-residual and the worthiness step append) as accepted residuals,
-# even with no dispositions file. record-residual appends the row for a finding
-# the filer refused on replay, once per key, and prints nothing; such a row is
-# not a dispositions entry, so no eligibility rule grades it. An accept row
+# a human's waive as a triage waiver and a human's fix as nothing, even with no
+# dispositions file.
+# record-residual appends the row for a finding the filer refused on replay,
+# or with --decision a human's decision on a round no dispositions file covers,
+# the latest row per member's key deciding it, and prints nothing; no
+# dispositions eligibility rule grades it, but an accept or waive needs the
+# open round's live read to show it not security-class. An accept row
 # takes the finding's failure mode as its reason when the lookup has one, and
-# drops a key any veto names, whatever its round. residual-count prints
+# drops a key any veto names, whatever its round, or a round after the row's
+# `round` re-reports security-class. residual-count prints
 # {"total","ask"}: total counts the accepted-residual rows pr-sections renders,
 # run-wide, and ask the subset the residual question lists.
 
@@ -169,15 +178,14 @@ case "${BASH_SOURCE[0]}" in
   */*) _GAIA_DISPOSITIONS_DIRECTORY="${BASH_SOURCE[0]%/*}" ;;
   *) _GAIA_DISPOSITIONS_DIRECTORY="." ;;
 esac
-# An accepted residual's reason: the finding's own failure mode from the
-# lookup when it has one, else the entry's reason. Shared by the waiver
-# table and the render library, so both show the same text; defined here so
-# grading never depends on that library loading.
+# jq defs shared with the render library, defined here so grading never depends
+# on it loading; security_class also bounds a human's recorded accept or waive.
 # shellcheck disable=SC2016
 _RESIDUAL_REASON_JQ='
 def residual_reason($lookup_entry):
   if ($lookup_entry.failure_mode | type) == "string" and ($lookup_entry.failure_mode | test("\\S")) then $lookup_entry.failure_mode else .reason end;
 '
+_SECURITY_CLASS_JQ='def security_class: ((.severity | IN("major", "minor")) | not) or (.security | if type == "boolean" then . else true end);'
 
 # shellcheck source=/dev/null
 . "$_GAIA_DISPOSITIONS_DIRECTORY/filing-outcomes-lib.sh"
@@ -189,7 +197,7 @@ def residual_reason($lookup_entry):
   { printf 'audit-dispositions-check: cannot load %s/audit-triage-lib.sh\n' "$_GAIA_DISPOSITIONS_DIRECTORY" >&2; exit 3; }
 
 _usage() {
-  printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections|residual-count|record-residual --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>] [--finding <file>]\n' >&2
+  printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections|residual-count|record-residual|undecided --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>] [--finding <file> [--decision accept|waive|fix]]\n' >&2
   return 2
 }
 
@@ -204,11 +212,10 @@ _cleanup() {
 trap _cleanup EXIT
 
 # shellcheck disable=SC2016
-_GRADE_JQ="$_GAIA_TRIAGE_HONORED_JQ"'
+_GRADE_JQ="$_GAIA_TRIAGE_HONORED_JQ$_SECURITY_CLASS_JQ"'
 def key_array: [.member, .finding_class, .path, .line];
 def key_object: {member, finding_class, path, line};
 def trim: gsub("^\\s+|\\s+$"; "");
-def security_class: ((.severity | IN("major", "minor")) | not) or (.security | if type == "boolean" then . else true end);
 (if $version >= 3 then $stop.satisfied_vetoes else [] end) as $satisfied_vetoes
 | [$vetoes[] | select(.effective_from_round <= $round) | select(key_array as $key | $satisfied_vetoes | any(. == $key) | not)] as $binding_vetoes
 | ($binding_vetoes | map(key_array)) as $vetoed_keys
@@ -588,6 +595,9 @@ _command_check_all() {
     exit_status=0
     _lapsed_vetoes "$last_round" || exit_status=$?
     _fold "$exit_status"
+    exit_status=0
+    _undecided_keys || exit_status=$?
+    _fold "$exit_status"
   fi
   return "$WORST"
 }
@@ -644,7 +654,7 @@ _command_waiver_table() {
 main() {
   local subcommand="${1-}"
   [ $# -gt 0 ] && shift
-  ROOT="" RUN_FOLDER="" ROUND="" ROUNDS="" SNAPSHOT_DIRECTORY="" READ_DIRECTORY="" FINDING_FILE=""
+  ROOT="" RUN_FOLDER="" ROUND="" ROUNDS="" SNAPSHOT_DIRECTORY="" READ_DIRECTORY="" FINDING_FILE="" DECISION=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --root) [ $# -ge 2 ] || { _usage; return 2; }; ROOT="$2"; shift 2 ;;
@@ -653,16 +663,18 @@ main() {
       --rounds) [ $# -ge 2 ] || { _usage; return 2; }; ROUNDS="$2"; shift 2 ;;
       --snapshot-dir) [ $# -ge 2 ] || { _usage; return 2; }; SNAPSHOT_DIRECTORY="$2"; shift 2 ;;
       --finding) [ $# -ge 2 ] || { _usage; return 2; }; FINDING_FILE="$2"; shift 2 ;;
+      --decision) [ $# -ge 2 ] && [[ "$2" =~ ^(accept|waive|fix)$ ]] || { _usage; return 2; }; DECISION="$2"; shift 2 ;;
       *) _usage; return 2 ;;
     esac
   done
   case "$subcommand" in
-    check | check-all | check-outcomes | waiver-table | pr-sections | residual-count | record-residual) ;;
+    check | check-all | check-outcomes | waiver-table | pr-sections | residual-count | record-residual | undecided) ;;
     *) _usage; return 2 ;;
   esac
   [ -n "$RUN_FOLDER" ] || { _usage; return 2; }
   [ -n "$ROOT" ] || { _usage; return 2; }
   [ "$subcommand" != record-residual ] || [ -n "$FINDING_FILE" ] || { _usage; return 2; }
+  [ -z "$DECISION" ] || [ "$subcommand" = record-residual ] || { _usage; return 2; }
   command -v jq >/dev/null 2>&1 || { _error "jq is required and was not found on PATH"; return 3; }
   READ_DIRECTORY="$SNAPSHOT_DIRECTORY"
   [ -n "$READ_DIRECTORY" ] || READ_DIRECTORY="$(_default_snapshot_directory)"
@@ -674,6 +686,7 @@ main() {
     pr-sections) _command_pr_sections ;;
     residual-count) _command_residual_count ;;
     record-residual) _command_record_residual ;;
+    undecided) _command_undecided ;;
   esac
 }
 

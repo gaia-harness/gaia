@@ -412,7 +412,8 @@ tree_state() {
   done
 }
 
-@test "check-all: an empty run folder exits 0" {
+@test "check-all: an empty run folder after a round with no findings exits 0" {
+  alf_sidecar "$MEMBER" '[]' 12
   run_check_all
   green
 }
@@ -548,7 +549,7 @@ tree_state() {
   count="$(find "$SNAPSHOT_DIRECTORY" -name 'dispositions-*.checked.json' | wc -l | tr -d ' ')"
   [ "$count" -eq 9 ] || { echo "snapshots: $count"; return 1; }
   mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$shim/"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d\n", time*1000')"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
@@ -563,7 +564,7 @@ tree_state() {
   local shim="$BATS_TEST_TMPDIR/shim"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
   mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$shim/"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
@@ -1619,6 +1620,110 @@ veto_unsatisfied_red() {
   green || return 1
   run_check_all
   red undisposed "$(key_json c/imp f.txt 3)"
+}
+
+# decide <line> <decision> [extra-json]: record the human's decision on round
+# 1's Minor at f.txt:<line> through record-residual.
+decide() {
+  minor_rows f.txt "$1" "$1" | jq -c --arg member "$MEMBER" --argjson extra "${3:-{\}}" '.[0] + {member: $member} + $extra' >"$BATS_TEST_TMPDIR/decided-$1.json"
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/decided-$1.json" --decision "$2"
+}
+
+@test "needs-human: the open round's findings fail undecided and name record-residual; once a later round closes it they no longer block, and accept and waive are refused" {
+  local undecided
+  stop_rounds "$(minor_rows f.txt 1 3)"
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  run_check_all
+  for undecided in 1 2 3; do
+    red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":$undecided}" || return 1
+  done
+  grep -qF -- "record-residual --root $ALF_ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix" <<<"$output" || { echo "no next step in: $output"; return 1; }
+  # Round 2 overwrites the sidecar with nothing and the hook stores round 1's
+  # keys, so round 1 is closed: its findings fall to the residue drain.
+  alf_set_line other.txt 2 "round 2"
+  alf_commit "round 2" || return 1
+  alf_round 2 "$MEMBER" '[]' || return 1
+  run_check_all
+  green || return 1
+  decide 2 accept '{"reason":"deferred to its own change"}'
+  [ "$status" -eq 3 ] || { echo "an accept on a closed round recorded: $status $output"; return 1; }
+  decide 3 waive '{"reason":"below the threshold"}'
+  [ "$status" -eq 3 ] || { echo "a waive on a closed round recorded: $status $output"; return 1; }
+}
+
+@test "needs-human: on the open round, accept and waive read severity and security live, another member's row decides nothing, and the latest decision wins" {
+  local security_minor critical
+  security_minor="$(alf_entries f.txt 3 3 rule/x | jq -c 'map(. + {severity: "minor", security: true})')"
+  critical="$(alf_entries f.txt 4 4 rule/x | jq -c 'map(. + {severity: "critical", security: false})')"
+  stop_rounds "$(joined "$(minor_rows f.txt 1 2)" "$security_minor" "$critical")"
+  # decide writes severity minor and security false whatever the live read
+  # says, so a refusal below proves the bound ignores the caller's values.
+  decide 3 accept '{"reason":"deferred"}'
+  [ "$status" -eq 3 ] || { echo "a security-class accept recorded: $status $output"; return 1; }
+  decide 3 waive '{"reason":"below the threshold"}'
+  [ "$status" -eq 3 ] || { echo "a security-class waive recorded: $status $output"; return 1; }
+  decide 4 accept '{"reason":"deferred"}'
+  [ "$status" -eq 3 ] || { echo "a Critical accept recorded: $status $output"; return 1; }
+  MEMBER="$SHELL_MAINTAINER" decide 2 fix || return 1
+  run_check_all
+  red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":2}" || { echo "another member's row decided the key"; return 1; }
+  decide 1 accept '{"reason":"deferred to its own change"}' && decide 2 waive '{"reason":"below the threshold"}' && decide 3 fix && decide 4 fix || return 1
+  run_check_all
+  green || return 1
+  run_sections
+  [ "$output" = '## Accepted residuals (recorded, not fixed)
+
+- `f.txt:1` deferred to its own change. <!-- gaia-debt-key: v1 class=rule/x path=f.txt line=1 -->
+
+## Waived below triage threshold (not filed)
+
+- f.txt:2 rule/x: below the threshold' ] || { echo "pr-sections: $output"; return 1; }
+  decide 1 fix || return 1
+  run_residual_count
+  [ "$output" = '{"total":0,"ask":0}' ] || { echo "the corrected decision was dropped: $output"; return 1; }
+}
+
+@test "needs-human: a key an earlier round accepted needs a new decision when the open round re-reports it security-class" {
+  local escalated
+  escalated="$(alf_entries f.txt 1 1 rule/x | jq -c 'map(. + {severity: "minor", security: true})')"
+  stop_rounds "$(minor_rows f.txt 1 1)" "$escalated"
+  jq -n -c --arg member "$MEMBER" '{schema: 1, round: 1, entries: [{member: $member, finding_class: "rule/x", path: "f.txt", line: 1,
+    disposition: "accept-residual", reason: "deferred"}], enforcement_paths_allowed: []}' >"$RUN_FOLDER/dispositions-1.json"
+  run_check_all
+  red undecided "{\"round\":2,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
+}
+
+@test "needs-human: a human's accept decides only its own round, so a later security-class re-report fails undecided and drops the accepted row" {
+  local escalated
+  escalated="$(alf_entries f.txt 1 1 rule/x | jq -c 'map(. + {severity: "minor", security: true})')"
+  stop_rounds "$(minor_rows f.txt 1 1)"
+  decide 1 accept '{"reason":"deferred to its own change"}' || return 1
+  alf_set_line other.txt 2 "round 2"
+  alf_commit "round 2" || return 1
+  alf_round 2 "$MEMBER" "$escalated" || return 1
+  run_check_all
+  red undecided "{\"round\":2,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}" || return 1
+  run_sections
+  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "pr-sections exited $status or still renders the escalated key: $output"; return 1; }
+}
+
+@test "needs-human: an open-round finding with an honored triage mark needs no decision" {
+  local mark='[{"path":"lib/s.sh","line":4,"finding_class":"rule/t","severity":"minor","security":false,"triage":true,"triage_reason":"below the threshold"}]'
+  MEMBER="$SHELL_MAINTAINER"
+  stop_rounds "$(joined "$(minor_rows lib/s.sh 1 1)" "$mark")"
+  run_check_all
+  red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"lib/s.sh\",\"line\":1}" || return 1
+  grep -qF -- '"finding_class":"rule/t"' <<<"$output" && { echo "triage-marked finding flagged: $output"; return 1; }
+  true
+}
+
+@test "record-residual: --decision takes only accept, waive or fix, and only on record-residual" {
+  printf '{"member":"%s","finding_class":"c/sug","path":"f.txt","line":6}\n' "$MEMBER" >"$BATS_TEST_TMPDIR/finding.json"
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/finding.json" --decision defer
+  [ "$status" -eq 2 ] || return 1
+  run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --decision accept
+  [ "$status" -eq 2 ]
 }
 
 @test "check-outcomes: refused-authored passes once the exact key is vetoed; a malformed vetoes.json exits 3 and an absent one runs clean" {

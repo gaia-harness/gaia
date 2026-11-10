@@ -383,14 +383,14 @@ answer_view() {
       else . end' <<<"$1"
 }
 
-# check_dispositions: the dispositions check over every round of the run
-# folder; any non-zero exit denies with its violation lines.
+# check_dispositions: the dispositions check over every round of the run folder, then, unless this is a same-tree
+# member join (mid-wave), `undecided`, which after a unit stop checks the open round; any non-zero exit denies.
 check_dispositions() {
   local dispositions_output check_exit_status=0
   dispositions_output=$(bash "$scripts/audit-dispositions-check.sh" check-all --root "$root" --run-folder "$run_directory" --snapshot-dir "$snapshot_directory" 2>&1 </dev/null) || check_exit_status=$?
+  [ "$check_exit_status" -ne 0 ] || { [ "$kind" = member ] && [ -n "$(tree_index "$state_under_lock")" ]; } || dispositions_output=$(bash "$scripts/audit-dispositions-check.sh" undecided --root "$root" --run-folder "$run_directory" 2>&1 </dev/null) || check_exit_status=$?
   [ "$check_exit_status" -eq 0 ] && return 0
-  [ -n "$dispositions_output" ] || dispositions_output='(the check printed nothing)'
-  dispositions_output=$(printf '%s\n' "$dispositions_output" | head -n 40)
+  dispositions_output=$(printf '%s\n' "${dispositions_output:-(the check printed nothing)}" | head -n 40)
   finish_deny "$(printf 'BLOCKED: audit dispositions on branch %s: the dispositions check failed (exit %s), so no audit dispatch proceeds until every dispositions file in %s passes. Nothing was recorded. Every finding needs a disposition: it is fixed, waived with a reason, filed, or, for a security-class finding the branch did not author, diverted (a security-class finding the branch authored is fixed), and a waiver-vetoed key is fixed. The audit loop unit disposes and audit-dispositions-check.sh bounds it. Inside an audit-loop-unit: stop with stop_reason dispositions-check-failed and return. To see the violations again (read-only): bash %s/audit-dispositions-check.sh check-all --root %s --run-folder %s\n%s' \
     "$BRANCH_KEY" "$check_exit_status" "$run_directory" "$scripts" "$root" "$run_directory" "$dispositions_output")"
 }
