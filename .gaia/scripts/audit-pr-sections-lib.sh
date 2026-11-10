@@ -220,7 +220,7 @@ _command_residual_count() {
 # key, a later round's dispositions file names it, or an earlier one disposed it
 # file, divert or accept-residual (the grader's carry-forward). The round's keys come from
 # the round history, which the bound hook stores at the next dispatch, before
-# that round's members overwrite the sidecars a live read would see; the
+# the next round's members overwrite the sidecars a live read would see; the
 # latest round, stored by nobody yet, is read live. rc 0 none, 1 some, 3 an
 # unreadable input.
 _undecided_keys() {

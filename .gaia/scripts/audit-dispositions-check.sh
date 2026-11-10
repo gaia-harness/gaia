@@ -54,7 +54,7 @@
 #                               without --snapshot-dir also prints it for an unsatisfied veto
 #                               whose round is past every dispositions file
 #   undecided                   (check-all without --snapshot-dir) a finding of a round with
-#                               no dispositions file that no recorded decision, later
+#                               no dispositions file that no recorded row, later
 #                               round's entry, or earlier round's file, divert or
 #                               accept-residual covers; stderr names the record-residual call
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
@@ -164,7 +164,7 @@
 # record-residual appends the row for a finding the filer refused on replay,
 # or with --decision a human's decision on a round no dispositions file covers,
 # once per key, and prints nothing; such a row is not a dispositions entry, so
-# no eligibility rule grades it. An accept row
+# no dispositions eligibility rule grades it (only a waive is bounded). An accept row
 # takes the finding's failure mode as its reason when the lookup has one, and
 # drops a key any veto names, whatever its round. residual-count prints
 # {"total","ask"}: total counts the accepted-residual rows pr-sections renders,
