@@ -234,6 +234,14 @@ EOF
   [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'Read tool'* ]]
 }
 
+@test "the guard's reason for a reflog range names the two-revision form" {
+  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh"
+  run bash "$guard" "$log" /work/tree < <(jq -nc --arg command 'git log HEAD@{1}..HEAD' '{tool_name: "Bash", tool_input: {command: $command}}')
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
+  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'git diff HEAD@{1} HEAD'* ]]
+}
+
 # guard_decides <command>: the guard's decision on one Bash command under the
 # review root, `deny` or `pass`, with a denial required to reach the log.
 guard_decides() {
@@ -307,6 +315,8 @@ guard_decides() {
   [ "$(guard_decides 'git diff HEAD README')" = pass ]
   [ "$(guard_decides 'git log HEAD@{1} -1')" = pass ]
   [ "$(guard_decides 'git rev-parse @{upstream}')" = pass ]
+  [ "$(guard_decides 'git diff HEAD@{1} HEAD')" = pass ]
+  [ "$(guard_decides 'git log HEAD ^HEAD@{1}')" = pass ]
 }
 
 @test "the guard lets an in-root git command through without a denial" {

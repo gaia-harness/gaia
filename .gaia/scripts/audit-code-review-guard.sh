@@ -66,8 +66,9 @@ bash_command_leaves_root() {
     # does not attempt, so the raw token is read: a review cannot name a file with a
     # $ in its path, such as a route module, though the range diff still shows it.
     case "$token" in *'$'* | *'`'* | *'<('* | *'>('*) set +f; return 0 ;; esac
-    # Brace expansion builds its words after this check too. `@{1}` and
-    # `@{upstream}` hold no , or .. inside their braces.
+    # Brace expansion builds its words after this check too. The match is a { with a
+    # , or .. anywhere after it, so `@{1}` or `@{upstream}` passes alone but not
+    # before a .., as in `HEAD@{1}..HEAD`; the deny reason gives the two-revision form.
     case "$stripped" in *'{'*,* | *'{'*..*) set +f; return 0 ;; esac
     if [ "$is_blame" = yes ]; then
       case "$stripped" in --ig* | -S* | -[!-]*S*) set +f; return 0 ;; esac
@@ -96,7 +97,7 @@ if bash_command_leaves_root; then
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "BLOCKED: the review child may not name a path outside the review root, use --contents, or put a $, backtick, <(, >( or a {a,b} or {a..b} brace list in a command, because git reads any file through them or the shell expands them unseen. To read a file whose path holds one of these, such as a route module, open it with the Read tool."
+    "permissionDecisionReason": "BLOCKED: the review child may not name a path outside the review root, use any option containing --con (such as --contents, --contains, --config), or put a $, backtick, <(, >(, or a { followed later by , or .. in any token. For a range that starts at a @{...} revision, such as HEAD@{1}..HEAD, give two revisions instead: git diff HEAD@{1} HEAD or git log HEAD ^HEAD@{1}. To read a file under the review root whose path holds a $, such as a route module, open it with the Read tool."
   }
 }
 DENY_JSON
