@@ -545,6 +545,8 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   local question
   question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:enriching "fresh 123456 400000" accept)"
   [ "$(question_text "$question")" = "Audit checkpoint 0123456789abcdef on feat/x: 6 rounds used (rubric:enriching), context 30% (123k of 400k). A new finding sits on a line changed since the previous round, usually by its fix; accepting keeps that change as written, so review it before answering. How should the audit loop continue?" ]
+  question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false rubric:enriching "fresh 123456 400000" accept)"
+  [ "$(question_text "$question")" = "Audit checkpoint 0123456789abcdef on feat/x: 6 rounds used (rubric:enriching), context 30% (123k of 400k). A new finding sits on a line changed since the previous round, usually by its fix. How should the audit loop continue?" ]
   question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:stalled "fresh 123456 400000" stop)"
   [[ "$(question_text "$question")" != *"A new finding sits on a line"* ]]
 }
