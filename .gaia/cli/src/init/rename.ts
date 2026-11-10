@@ -14,6 +14,8 @@
  *   - `app/languages/en/pages/_index.ts` `title` and `heroTitle` →
  *     `<Title>` (when the keys exist). Its `meta.title` is left alone: it
  *     nests `$t(common:meta.siteName)`, so the title lives in one place.
+ *   - `app/services/gaia/` → `app/services/<kebab>/`, with every specifier
+ *     naming it rewritten (`./rename-service-layer.ts`).
  *
  * A language-file key that is absent is tolerated; one that is present is
  * rewritten wherever its value is a quoted string literal.
@@ -33,15 +35,21 @@ import {
 import {structuredError} from '../stderr.js';
 import {takeValue} from '../util/argv.js';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
-import {escapeJsLiteralValue} from './util/js-literal.js';
-import type {JsLiteralQuote} from './util/js-literal.js';
-import {markStepCompleted} from './util/state.js';
+import {renameLanguageFiles} from './rename-language-files.js';
+import {
+  applyServiceLayerMove,
+  planServiceLayerMove,
+} from './rename-service-layer.js';
+import type {RunnableServiceLayerPlan} from './rename-service-layer.js';
+import {markStepCompleted, readState} from './util/state.js';
 import {titleFlagError} from './util/title-flag.js';
 
 const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
 
   Rename the project across package.json, CLAUDE.md, and seeded language
-  files (Step 3 of /gaia-init). --package <name> picks the web member.
+  files, and move the sample service layer app/services/gaia/ to
+  app/services/<K>/ (Step 3 of /gaia-init). --package <name> picks the web
+  member.
 
   Required flags:
     --title <T>     Project title (Title Case, e.g. "Hello World").
@@ -50,7 +58,8 @@ const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
   Exit codes:
     0  success (no stdout)
     1  user-correctable error (missing flags, invalid kebab, no package.json,
-       no CLAUDE.md heading)
+       no CLAUDE.md heading, app/services/<K>/ already exists beside the
+       layer to move)
     2  unexpected (filesystem failure)
     30 the package registry (.gaia/packages.json) cannot resolve the web app
        package
@@ -113,7 +122,7 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
     return {message: '--kebab is required', ok: false};
   }
 
-  if (!/^[a-z][\d a-z-]*$/u.test(kebab)) {
+  if (!/^[a-z][\da-z-]*$/u.test(kebab)) {
     return {message: '--kebab must be a kebab-case identifier', ok: false};
   }
 
@@ -122,8 +131,6 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
 
 const PACKAGE_JSON = 'package.json';
 const CLAUDE_MD = 'CLAUDE.md';
-const COMMON_TS = 'app/languages/en/common.ts';
-const INDEX_PAGE_TS = 'app/languages/en/pages/_index.ts';
 
 const renamePackageJson = (cwd: string, kebab: string): void => {
   const target = path.join(cwd, PACKAGE_JSON);
@@ -212,132 +219,39 @@ const renameClaudeMd = (cwd: string, title: string): void => {
   atomicWriteFileSync(target, lines.join('\n'));
 };
 
-/**
- * The body of a quoted string literal, for the pattern `literalPattern` builds
- * around it, whose group 2 is the opening quote.
- *
- * `(?!\2)` excludes only the quote the match actually opened with, so a
- * single-quoted literal may hold a bare `"` and a double-quoted one a bare `'`.
- * A class naming both quotes refuses `"Steve's Template"` outright, and a
- * pattern that cannot match is a rewrite that silently does not happen. It
- * cannot re-match this command's own output either: the escaper leaves the
- * non-wrapping quote bare, because it needs no escape, so a title carrying one
- * survives the first rename and then defeats the second.
- *
- * `\n` stays excluded because a JavaScript string literal cannot span a raw
- * line ending. Bounding the body to one line is what keeps a quote further down
- * the file from being read as this literal's closing one, now that the class no
- * longer stops at the other quote character.
- */
-const LITERAL_BODY = String.raw`(?:(?!\2)[^\n\\]|\\.)*`;
+/** The slug an earlier `rename` recorded, which is where its layer now sits. */
+const recordedKebab = (cwd: string): string | undefined => {
+  const args = readState(cwd).step_args[STEP_NAME];
 
-type LanguageFile = {
-  file: string;
-  keys: readonly RewriteKey[];
-};
-
-/**
- * One rewritable identity key.
- *
- * `prefix` is everything up to the opening quote and carries **no capturing
- * group of its own**: `literalPattern` wraps it in group 1 and opens group 2 for
- * the quote, so both indices `LITERAL_BODY` and the replacer depend on are fixed
- * where the pattern is composed rather than by whoever authored the prefix.
- *
- * `global` is whether the key is rewritten everywhere it appears or only at its
- * first match, which is the one regex flag that varies across the table.
- */
-type RewriteKey = {
-  global: boolean;
-  prefix: string;
-};
-
-const flagsFor = (key: RewriteKey): string => (key.global ? 'gmu' : 'mu');
-
-/** The whole property: prefix, opening quote, body, matching close quote. */
-const literalPattern = (key: RewriteKey): RegExp =>
-  new RegExp(String.raw`(${key.prefix})(['"])${LITERAL_BODY}\2`, flagsFor(key));
-
-/**
- * `source` with `newValue` written into every value `key` matches.
- *
- * A **function** replacement, which is what makes the title safe to splice: in
- * a replacement *string* `$1` and `$&` are match references, so a title
- * carrying one injects part of the file into itself. A backslash does not
- * neutralize them, only `$$` does, so the escape this replaced looked like a
- * guard and was inert. A function receives the value verbatim and interprets
- * nothing.
- *
- * The value is then escaped for the quote the match found, so an ordinary
- * `Steve's App` cannot close the literal early. Both halves are needed: the
- * function form fixes `$`, the escape fixes the quote.
- */
-const applyRewrite = (
-  source: string,
-  key: RewriteKey,
-  newValue: string
-): string =>
-  source.replace(
-    literalPattern(key),
-    // `literalPattern` captures the quote as `(['"])`, so group 2 is one of the
-    // two by construction, which is what the narrower type records.
-    (_match: string, prefix: string, quote: JsLiteralQuote) =>
-      `${prefix}${quote}${escapeJsLiteralValue(newValue, quote)}${quote}`
-  );
-
-/** A key whose value is the title wherever in the file it appears. */
-const unscopedKey = (key: string): RewriteKey => ({
-  global: true,
-  prefix: String.raw`\b${key}\s*:\s*`,
-});
-
-/**
- * A key indented at the file's top object level (a single indentation unit).
- * Nested keys with the same name (e.g. a `title` inside a deeper route object)
- * are left untouched so a user-diverged file is preserved.
- */
-const topLevelKey = (key: string): RewriteKey => ({
-  global: true,
-  prefix: String.raw`^\x20\x20${key}\s*:\s*`,
-});
-
-/**
- * Every identity key this step rewrites, grouped by the file carrying it.
- *
- * `common.ts` carries a single identity-bearing key. Other `*Name` properties
- * exist there (form labels) but no second `siteName`, so an unscoped rewrite is
- * safe. `_index.ts` has two, each scoped to the top object level: a global
- * `title` rewrite would clobber `title` keys in extra routes a user may have
- * added, which is data loss on a diverged file.
- *
- * Every key is optional. The shipped `_index.ts` carries neither, so a file
- * missing them is a clean pass.
- */
-const LANGUAGE_FILES: readonly LanguageFile[] = [
-  {file: COMMON_TS, keys: [unscopedKey('siteName')]},
-  {
-    file: INDEX_PAGE_TS,
-    keys: [topLevelKey('heroTitle'), topLevelKey('title')],
-  },
-];
-
-const renameLanguageFile = (
-  cwd: string,
-  {file, keys}: LanguageFile,
-  title: string
-): void => {
-  const target = path.join(cwd, file);
-
-  if (!existsSync(target)) return;
-  const original = readFileSync(target, 'utf8');
-  const next = keys.reduce(
-    (source, key) => applyRewrite(source, key, title),
-    original
-  );
-
-  if (next !== original) {
-    atomicWriteFileSync(target, next);
+  if (typeof args !== 'object' || args === null || !('kebab' in args)) {
+    return undefined;
   }
+
+  return typeof args.kebab === 'string' ? args.kebab : undefined;
+};
+
+/**
+ * The service-layer plan, or the error that refuses the run. Checked ahead of
+ * every write, so a knowable precondition never fails the run with
+ * package.json already renamed.
+ */
+const checkPreconditions = (
+  cwd: string,
+  packageDir: string,
+  kebab: string
+): RunnableServiceLayerPlan | {code: string; message: string} => {
+  if (!claudeMdPreconditionMet(cwd)) {
+    return {
+      code: 'claude_md_heading_missing',
+      message:
+        'CLAUDE.md has no top-level "# " heading to rewrite; add one above any fenced code block and re-run',
+    };
+  }
+  const plan = planServiceLayerMove(packageDir, kebab, recordedKebab(cwd));
+
+  return plan.kind === 'conflict' ?
+      {code: 'service_layer_conflict', message: plan.message}
+    : plan;
 };
 
 type RunOptions = {
@@ -377,24 +291,22 @@ export const run = (
   if (target === undefined) return EXIT_CODES.CONFIG_INVALID;
 
   try {
-    // Ahead of every write: a knowable precondition should not fail the run
-    // with package.json already renamed.
-    if (!claudeMdPreconditionMet(cwd)) {
-      structuredError({
-        code: 'claude_md_heading_missing',
-        message:
-          'CLAUDE.md has no top-level "# " heading to rewrite; add one above any fenced code block and re-run',
-        subcommand: 'init rename',
-      });
+    const checked = checkPreconditions(
+      cwd,
+      target.packageDir,
+      parsed.flags.kebab
+    );
+
+    if ('code' in checked) {
+      structuredError({...checked, subcommand: 'init rename'});
 
       return EXIT_CODES.UNKNOWN_SUBCOMMAND;
     }
     renamePackageJson(cwd, parsed.flags.kebab);
     renameClaudeMd(cwd, parsed.flags.title);
 
-    for (const languageFile of LANGUAGE_FILES) {
-      renameLanguageFile(target.packageDir, languageFile, parsed.flags.title);
-    }
+    renameLanguageFiles(target.packageDir, parsed.flags.title);
+    applyServiceLayerMove(target.packageDir, checked);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 

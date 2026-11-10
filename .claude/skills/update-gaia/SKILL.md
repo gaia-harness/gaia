@@ -414,6 +414,7 @@ Then show the summary, built from `<run dir>/report.json` and this run's own ste
 - every answer, and every item still deferred (this run's Decide later answers and the earlier `DEFERRED` entries no answer replaced);
 - the follow-ups run: the lockfile command, the region regeneration, the settings sync, and any that failed with the command to run;
 - the report's `regions` (awareness off, dropped or malformed declarations, rewritten paths, and each unregenerated path with its command), `settings` and `labels` states, and each `adopterActions` entry with its command and CHANGELOG line, which the adopter runs only if they choose;
+- the `Service layer:` row when any entry has note `service-layer-changed` (`references/merge-report.md`);
 - the Step 9d addendum and the quality gate's result.
 
 When the report is gone (an earlier run's stop, then a prune), say so and build the summary from the diff alone. Then show what the commit would hold, a stat first:
