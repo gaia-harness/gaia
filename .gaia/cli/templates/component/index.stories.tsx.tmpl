@@ -14,8 +14,8 @@ const meta = preview.meta({
 
 // Starting point only: a render check is not complete evidence. A story is a
 // visual state and a behavior is a `.test()` on it; the accessibility check
-// runs on every story. Add a `.test()` per behavior and a story per prop
-// variant as the component grows.
+// runs on every story. Add a `.test()` for a behavior no test covers yet and a
+// story per prop variant as the component grows.
 {{storyRenders}}
 
 Renders.test('renders the {{Name}} region', async ({canvas}) => {

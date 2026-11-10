@@ -28,7 +28,7 @@ setup() {
   LAYERING='wiki/decisions/Test Layering.md'
   AXIOM='the route layer is the default home for behavior'
   LINK='wiki/decisions/Test Layering.md'
-  PLANNER_PIN='Name the behavior the task delivers and the acceptance test that owns it'
+  PLANNER_PIN='Name the behavior the task delivers and, when no flow test already covers it, the one acceptance test that owns it'
   TESTS_REACT='apps/web/.claude/skills/tdd-react/references/tests-react.md'
 
   # file|old phrase (must be absent)|positive pin (must be present)
@@ -90,9 +90,9 @@ setup() {
     "both unit-test conditions"
     "the integration layer cannot cover its cases cheaply"
     "the logic is important or likely to fail"
-    "One test per user-observable behavior"
+    "At most one test per user-observable behavior"
     "a parameterized table is one test"
-    "nothing the type checker or lint already proves"
+    "Nothing the type checker or lint already proves"
     "from the closed list under [[#When a test needs a real browser]]"
   )
 }
