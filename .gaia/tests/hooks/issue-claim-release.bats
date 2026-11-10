@@ -450,6 +450,37 @@ assert_nothing_released() { [ ! -s "$FAKE_GH_STATE/issue_edits" ]; }
   assert_nothing_released
 }
 
+# gh takes its repository flag ahead of the subcommand too. The flag still
+# decides the boundary there, and the last spelling wins, as gh's own does.
+@test "7bc: a home repository flag ahead of the subcommand releases" {
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh -R gaia-react/gaia pr merge 12 --squash'
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "12" ]
+  assert_released_once "12"
+}
+
+@test "7bd: an equals-joined home repository flag ahead of the subcommand releases" {
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh --repo=gaia-react/gaia pr merge 12'
+  [ "$status" -eq 0 ]
+  assert_released_once "12"
+}
+
+@test "7be: a same-named sibling ahead of the subcommand releases nothing" {
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh -R other-org/gaia pr merge 5'
+  [ "$status" -eq 0 ]
+  assert_nothing_released
+}
+
+@test "7bf: a trailing sibling overrides a home repository flag ahead of the subcommand" {
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh -R gaia-react/gaia pr merge 5 -R other-org/gaia'
+  [ "$status" -eq 0 ]
+  assert_nothing_released
+}
+
 # 7p-7r pin the separator handling in both directions. A separator inside a
 # quoted subject or body is ordinary text and must not end the scan, or every
 # token after it, a trailing --repo included, drops out of the set the guard

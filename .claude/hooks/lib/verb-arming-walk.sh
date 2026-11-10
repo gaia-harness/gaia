@@ -2,7 +2,8 @@
 # The data-proof walker behind the shared verb-arming decision, and the
 # liveness scan after it (verb-arming-live-helpers.sh states its contract).
 # Sourced by lib/verb-arming.sh, lazily, only once a raw arming match has
-# already hit; sourced by nothing else. Does no work at source time beyond
+# already hit or the text carries gh and a repository flag; sourced by nothing
+# else. Does no work at source time beyond
 # loading its sibling files.
 #
 #   gaia_verb_arm_view <text>
@@ -282,6 +283,36 @@ _gaia_va_opener_is_data() {
     'tee'*) [[ "$line" =~ $_GAIA_VA_TEE_REGEX ]] && return 0 ;;
   esac
   return 1
+}
+
+# gaia_verb_arm_mask_repository_flag <text>: ASSIGNS GAIA_VERB_ARM_MASKED, <text>
+# with every run of gh's repository flag between `gh` and its subcommand
+# (`-R <v>`, `--repo <v>`, `--repo=<v>`, `-R<v>`) overwritten with spaces.
+# Same length, so offsets stay valid, and the pattern's groups never reach a
+# caller's match. lib/verb-arming.sh matches every fragment against this text
+# and never exports it, so a consumer parsing GAIA_VERB_ARM_VIEW still reads
+# the flag that decides its scope. A value is one unquoted word or a whole
+# quoted word with no space in it; any other value stays unmasked and leaves
+# that spelling un-armed.
+_GAIA_VA_REPOSITORY_VALUE='([^[:space:];&|<>()`"'"'"'\\]+|"[^"[:space:]]*"|'"'"'[^'"'"'[:space:]]*'"'"')'
+_GAIA_VA_REPOSITORY_PREFIX_REGEX='(^|[^[:alnum:]_./-])gh(([[:space:]]+(-R[[:space:]]+|--repo[[:space:]]+|--repo=|-R)'"$_GAIA_VA_REPOSITORY_VALUE"')+)[[:space:]]'
+
+gaia_verb_arm_mask_repository_flag() {
+  local rest="$1" match lead run after offset blanks
+  GAIA_VERB_ARM_MASKED=""
+  while [[ "$rest" =~ $_GAIA_VA_REPOSITORY_PREFIX_REGEX ]]; do
+    match="${BASH_REMATCH[0]}"
+    lead="${BASH_REMATCH[1]}"
+    run="${BASH_REMATCH[2]}"
+    # Where the leftmost match starts: an earlier literal copy of the same
+    # characters would sit in the same context and have matched first.
+    after="${rest#*"$match"}"
+    offset=$(( ${#rest} - ${#match} - ${#after} + ${#lead} + 2 ))
+    printf -v blanks '%*s' "${#run}" ''
+    GAIA_VERB_ARM_MASKED="$GAIA_VERB_ARM_MASKED${rest:0:$offset}$blanks"
+    rest="${rest:$(( offset + ${#run} ))}"
+  done
+  GAIA_VERB_ARM_MASKED="$GAIA_VERB_ARM_MASKED$rest"
 }
 
 # The view and the liveness scan live in sibling files, loaded from this

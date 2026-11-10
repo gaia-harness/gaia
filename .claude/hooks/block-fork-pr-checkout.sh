@@ -128,6 +128,16 @@ unreadable_target=''
 url_repositories=''
 
 if [ "$checkout_armed" -eq 1 ]; then
+  # gh takes `-R`/`--repo` ahead of the subcommand too, where the occurrence
+  # grep below cannot see it. The arming mask blanks that flag, so a checkout
+  # the masked text holds and the raw text does not carried one, and is denied
+  # as the trailing flag is.
+  checkout_occurrence_pattern='gh[[:space:]]+pr[[:space:]]+checkout([[:space:]]+[^;&|]*)?'
+  gaia_verb_arm_mask "$command_line"
+  if [ "$(printf '%s\n' "$GAIA_VERB_ARM_MASKED" | grep -oE "$checkout_occurrence_pattern" | wc -l)" -gt \
+    "$(printf '%s\n' "$command_line" | grep -oE "$checkout_occurrence_pattern" | wc -l)" ]; then
+    deny "Fork pull request checkout guard: this \`gh pr checkout\` names another repository (a repository flag before the subcommand), and this guard can only ask gh about pull requests in the repository of the working directory, so it denies. Check out that pull request from a clone of its own repository."
+  fi
   # Each `gh pr checkout` occurrence up to the next separator; its first
   # positional is the target. The flags that take a separated value are the
   # ones gh documents for this subcommand.

@@ -1004,3 +1004,41 @@ write_conflicted_library() {
   grep -qF "SURVIVED" <<<"$output" || return 1
   true
 }
+
+# ---------------------------------------------------------------------------
+# gh's repository flag ahead of the subcommand
+# ---------------------------------------------------------------------------
+
+@test "the merge fragment arms with the repository flag ahead of the subcommand, in every spelling" {
+  local invocation
+  for invocation in 'gh -R o/r pr merge 12' 'gh --repo o/r pr merge 12' 'gh --repo=o/r pr merge 12' \
+    'gh -Ro/r pr merge 12' 'gh -R "o/r" pr merge 12' 'gh -R o/r --repo a/b pr merge 12'; do
+    parity "$MERGE_FRAGMENT" "$MERGE_WORDS" "$invocation" || return 1
+  done
+}
+
+@test "a repository-flag prefix with a quoted verb arms through the first-command pass" {
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh -R o/r "pr" merge 12'
+  assert_armed
+  assert_kind first-command
+}
+
+@test "a repository-flag prefix arms only its own subcommand" {
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh -R o/r pr view 12'
+  assert_not_armed
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'xgh -R o/r pr merge 12'
+  assert_not_armed
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh -s pr merge 12'
+  assert_not_armed
+}
+
+# Consumers parse the exported view for the repository flag that decides their
+# scope, so the mask the match runs against must not reach it.
+@test "the exported view keeps the repository flag the match ran without" {
+  run bash -c '
+    . "$1" || exit 9
+    gaia_verb_armed "$2" "$3" "$4" || exit 8
+    [ "$GAIA_VERB_ARM_VIEW" = "$4" ] && [ "$GAIA_VERB_ARM_SUPPRESSED" = 0 ]
+  ' _ "$LIBRARY_FILE" "$MERGE_FRAGMENT" "$MERGE_WORDS" 'echo x && gh -R o/r pr merge 12'
+  [ "$status" -eq 0 ]
+}

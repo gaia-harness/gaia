@@ -244,10 +244,28 @@ gaia_scan_gh_merge() {
   # The first command has to BE the merge; a caller's arming match only proved
   # the phrase appears somewhere a command could start, which a comment, a
   # heredoc body line, and a quoted value all satisfy.
-  [ "${#GAIA_FIRST_COMMAND_WORDS[@]}" -ge 3 ] || return 1
+  word_count=${#GAIA_FIRST_COMMAND_WORDS[@]}
   [ "${GAIA_FIRST_COMMAND_WORDS[0]}" = "gh" ] || return 1
-  [ "${GAIA_FIRST_COMMAND_WORDS[1]}" = "pr" ] || return 1
-  [ "${GAIA_FIRST_COMMAND_WORDS[2]}" = "merge" ] || return 1
+  # gh takes the repository flag ahead of the subcommand too
+  # (`gh -R owner/repo pr merge <n>`). Only that flag is read there; any other
+  # word before `pr merge` abstains.
+  i=1
+  while [ "$i" -lt "$word_count" ]; do
+    token="${GAIA_FIRST_COMMAND_WORDS[$i]}"
+    case "$token" in
+      -R | --repo)
+        [ $((i + 1)) -lt "$word_count" ] || return 1
+        GAIA_GH_MERGE_REPO="${GAIA_FIRST_COMMAND_WORDS[$((i + 1))]}"
+        i=$((i + 2))
+        ;;
+      --repo=*) GAIA_GH_MERGE_REPO="${token#*=}"; i=$((i + 1)) ;;
+      -R?*) GAIA_GH_MERGE_REPO="${token#-R}"; i=$((i + 1)) ;;
+      *) break ;;
+    esac
+  done
+  [ $((i + 2)) -le "$word_count" ] || return 1
+  [ "${GAIA_FIRST_COMMAND_WORDS[$i]}" = "pr" ] || return 1
+  [ "${GAIA_FIRST_COMMAND_WORDS[$((i + 1))]}" = "merge" ] || return 1
 
   # Every value-taking flag, and only those. Checked against gh's own help
   # output rather than recalled: -m is --merge, a BOOLEAN, so listing it here
@@ -257,8 +275,7 @@ gaia_scan_gh_merge() {
   value_flags=" -R --repo -A --author-email -b --body -F --body-file -t --subject --match-head-commit "
   skip_next=0
   skip_flag=""
-  word_count=${#GAIA_FIRST_COMMAND_WORDS[@]}
-  i=3
+  i=$((i + 2))
   while [ "$i" -lt "$word_count" ]; do
     token="${GAIA_FIRST_COMMAND_WORDS[$i]}"
     i=$((i + 1))

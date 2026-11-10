@@ -92,6 +92,23 @@ reason() {
   reason | grep -qF -- 'names another repository (-R)'
 }
 
+@test "a repository flag ahead of the subcommand is denied, in every spelling" {
+  local command_text
+  for command_text in 'gh -R other/repo pr checkout 12' 'gh --repo other/repo pr checkout 12' \
+    'gh --repo=other/repo pr checkout 12' 'gh pr checkout 5 && gh -R other/repo pr checkout 12'; do
+    run_guard "$command_text"
+    assert_denied_by_json || return 1
+    reason | grep -qF -- 'a repository flag before the subcommand' || return 1
+  done
+  [ ! -s "$GH_LOG" ]
+}
+
+@test "a repository flag ahead of another gh subcommand does not deny a home checkout" {
+  run_guard 'gh -R other/repo pr view 3 && gh pr checkout 12'
+  reason | grep -qF -- 'a repository flag before the subcommand' && return 1
+  grep -qxF -- 'pr view 12 --json isCrossRepository --jq .isCrossRepository' "$GH_LOG"
+}
+
 @test "a pull-request URL naming another repository is denied" {
   run_guard 'gh pr checkout https://github.com/other/repo/pull/12'
   assert_denied_by_json

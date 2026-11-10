@@ -1250,6 +1250,30 @@ teardown_linked_worktree() {
   true
 }
 
+# gh takes its repository flag ahead of the subcommand too, and that spelling
+# has to reach the gate rather than fail open past it.
+@test "a repository flag ahead of the subcommand naming this repository is still gated" {
+  commit_files "apps/web/app/x.ts" "export const x = 1"
+  git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
+
+  run_merge_hook "gh -R gaia-react/gaia pr merge 30 --squash --delete-branch"
+  [ "$status" -eq 0 ]
+  grep -qF -- '"permissionDecision": "deny"' <<<"$output"
+  run_merge_hook "gh --repo=gaia-react/gaia pr merge 30 --squash"
+  [ "$status" -eq 0 ]
+  grep -qF -- '"permissionDecision": "deny"' <<<"$output"
+}
+
+@test "a repository flag ahead of the subcommand naming another repository exits before the gate" {
+  commit_files "apps/web/app/x.ts" "export const x = 1"
+  git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
+
+  run_merge_hook "gh -R other-org/other-repo pr merge 30 --squash"
+  [ "$status" -eq 0 ]
+  grep -qF -- '"permissionDecision": "deny"' <<<"$output" && return 1
+  true
+}
+
 # The repo-scope verdict covers the whole tool call, so a foreign `gh` ahead of
 # a home merge, even a read-only one, does not carry the merge past the gate
 # (gaia-react/gaia#2081).

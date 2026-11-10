@@ -115,6 +115,8 @@ GAIA_VERB_ARM_VIEW=""
 GAIA_VERB_ARM_SUPPRESSED=0
 # The liveness view, internal: written by the walker file's scan.
 GAIA_VERB_ARM_LIVE=""
+# The match text, written by gaia_verb_arm_mask.
+GAIA_VERB_ARM_MASKED=""
 
 # 0 not tried, 1 loaded, 2 unavailable.
 _gaia_va_walk=0
@@ -280,6 +282,21 @@ _gaia_va_view() {
   fi
 }
 
+# gaia_verb_arm_mask <text>: sets GAIA_VERB_ARM_MASKED to the text every match
+# runs against, <text> with gh's repository flag ahead of the subcommand
+# blanked (the walker file's mask), so `gh -R o/r pr merge` arms like `gh pr
+# merge -R o/r`. A consumer that must see that flag reads it from where the
+# mask and <text> differ. The glob keeps the walker unloaded for every text
+# that cannot hold one; the identity stands when the walker cannot load.
+gaia_verb_arm_mask() {
+  GAIA_VERB_ARM_MASKED="$1"
+  case "$1" in *gh[[:space:]]*-R* | *gh[[:space:]]*--repo*) ;; *) return 0 ;; esac
+  _gaia_va_load_walk
+  if [ "$_gaia_va_walk" = 1 ] && type gaia_verb_arm_mask_repository_flag >/dev/null 2>&1; then
+    gaia_verb_arm_mask_repository_flag "$1"
+  fi
+}
+
 # The liveness view, identity when the walker file or its scan is unavailable,
 # which leaves every opener live: the answer this library gave before the scan
 # existed.
@@ -294,6 +311,7 @@ _gaia_va_live() {
 gaia_verb_armed() {
   local verb_pattern="$1" words_spec="$2" text="$3"
   local start_regex separator_regex list_regex opener_regex raw newline=$'\n'
+  local matched_text matched_view
 
   GAIA_VERB_ARM_KIND=""
   GAIA_VERB_ARM_MATCH=()
@@ -315,10 +333,12 @@ gaia_verb_armed() {
   list_regex=$'(\\&\\&|;|\\|\\||\\||\n)[[:space:]]*'"$verb_pattern"
   opener_regex=$'(\\$\\(|\140|<\\(|>\\()[[:space:]]*'"$verb_pattern"
 
+  gaia_verb_arm_mask "$text"
+  matched_text="$GAIA_VERB_ARM_MASKED"
   raw=0
-  if [[ "$text" =~ $start_regex ]]; then
+  if [[ "$matched_text" =~ $start_regex ]]; then
     raw=1
-  elif [[ "$text" =~ $separator_regex ]]; then
+  elif [[ "$matched_text" =~ $separator_regex ]]; then
     raw=1
   fi
 
@@ -326,12 +346,14 @@ gaia_verb_armed() {
     _gaia_va_view "$text"
     # shellcheck disable=SC2034
     [ "$GAIA_VERB_ARM_VIEW" = "$text" ] || GAIA_VERB_ARM_SUPPRESSED=1
-    if [[ "$GAIA_VERB_ARM_VIEW" =~ $start_regex ]]; then
+    gaia_verb_arm_mask "$GAIA_VERB_ARM_VIEW"
+    matched_view="$GAIA_VERB_ARM_MASKED"
+    if [[ "$matched_view" =~ $start_regex ]]; then
       GAIA_VERB_ARM_KIND=start
       GAIA_VERB_ARM_MATCH=(${BASH_REMATCH[@]+"${BASH_REMATCH[@]}"})
       return 0
     fi
-    if [[ "$GAIA_VERB_ARM_VIEW" =~ $separator_regex ]]; then
+    if [[ "$matched_view" =~ $separator_regex ]]; then
       case "${BASH_REMATCH[1]}" in
         '&&'|';'|'||'|'|'|"$newline")
           GAIA_VERB_ARM_KIND=sep
@@ -344,7 +366,8 @@ gaia_verb_armed() {
       # separately rather than composed, so an opener live in each but at
       # different places arms: that direction over-arms and never under-arms.
       _gaia_va_live "$text"
-      if [[ "$GAIA_VERB_ARM_LIVE" =~ $opener_regex ]]; then
+      gaia_verb_arm_mask "$GAIA_VERB_ARM_LIVE"
+      if [[ "$GAIA_VERB_ARM_MASKED" =~ $opener_regex ]]; then
         GAIA_VERB_ARM_KIND=sep
         GAIA_VERB_ARM_MATCH=(${BASH_REMATCH[@]+"${BASH_REMATCH[@]}"})
         GAIA_VERB_ARM_VIEW="$GAIA_VERB_ARM_LIVE"
@@ -352,7 +375,7 @@ gaia_verb_armed() {
         [ "$GAIA_VERB_ARM_VIEW" = "$text" ] || GAIA_VERB_ARM_SUPPRESSED=1
         return 0
       fi
-      if [[ "$GAIA_VERB_ARM_VIEW" =~ $list_regex ]]; then
+      if [[ "$matched_view" =~ $list_regex ]]; then
         GAIA_VERB_ARM_KIND=sep
         GAIA_VERB_ARM_MATCH=(${BASH_REMATCH[@]+"${BASH_REMATCH[@]}"})
         return 0
@@ -360,7 +383,7 @@ gaia_verb_armed() {
     fi
   fi
 
-  if _gaia_va_first_command "$words_spec" "$text"; then
+  if _gaia_va_first_command "$words_spec" "$matched_text"; then
     # shellcheck disable=SC2034
     GAIA_VERB_ARM_KIND=first-command
     # shellcheck disable=SC2034

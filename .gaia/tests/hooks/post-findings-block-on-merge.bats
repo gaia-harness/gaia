@@ -345,6 +345,22 @@ write_sidecar() {
 # repo-NAME comparison calls home and the whole-slug comparison calls foreign.
 # This hook ACTS on the home repo, so calling it home posts a findings block
 # onto THIS repository's pull request of that number.
+@test "a home repository flag ahead of the subcommand posts the block" {
+  write_sidecar
+  export FAKE_GH_STATE
+  run_merge_hook "gh -R acme/repo pr merge 42 --squash"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
+}
+
+@test "a foreign repository flag ahead of the subcommand posts nothing" {
+  write_sidecar
+  export FAKE_GH_STATE
+  run_merge_hook "gh -R other-org/other-repo pr merge 42 --squash"
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_GH_STATE/post_count" ]
+}
+
 @test "a same-named sibling repo posts nothing" {
   write_sidecar
   export FAKE_GH_STATE
