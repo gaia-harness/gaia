@@ -271,7 +271,7 @@ expect_usage_color() {
   expect_usage_color 90 31
 }
 
-@test "usage windows: a red window shows the time until it resets, and a yellow one does not" {
+@test "usage windows: the 5-hour window shows its reset countdown from yellow, the 7-day window only from red" {
   local now
   now=$(date +%s)
   # Each offset sits mid-minute, so the run has about 30 seconds before it
@@ -283,7 +283,11 @@ expect_usage_color() {
   render_usage "{\"seven_day\":{\"used_percentage\":92,\"resets_at\":$((now + 187230))}}"
   grep -qF "📅 92% (2d4h)" <<<"$PLAIN_OUTPUT" || { echo "days: $PLAIN_OUTPUT"; return 1; }
   render_usage "{\"five_hour\":{\"used_percentage\":80,\"resets_at\":$((now + 3690))}}"
-  grep -qF "(1h" <<<"$PLAIN_OUTPUT" && { echo "yellow countdown: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "🕔 80% (1h2m)" <<<"$PLAIN_OUTPUT" || { echo "5h yellow: $PLAIN_OUTPUT"; return 1; }
+  render_usage "{\"five_hour\":{\"used_percentage\":74,\"resets_at\":$((now + 3690))}}"
+  grep -qF "🕔 74% (" <<<"$PLAIN_OUTPUT" && { echo "5h green countdown: $PLAIN_OUTPUT"; return 1; }
+  render_usage "{\"seven_day\":{\"used_percentage\":80,\"resets_at\":$((now + 187230))}}"
+  grep -qF "📅 80% (" <<<"$PLAIN_OUTPUT" && { echo "7d yellow countdown: $PLAIN_OUTPUT"; return 1; }
   true
 }
 
