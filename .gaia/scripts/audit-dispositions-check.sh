@@ -54,8 +54,8 @@
 #                               without --snapshot-dir also prints it for an unsatisfied veto
 #                               whose round is past every dispositions file
 #   undecided                   (check-all without --snapshot-dir) a finding of a round with
-#                               no dispositions file that no recorded row, later
-#                               round's entry, or the Carry-forward paragraph covers (an
+#                               no dispositions file that no recorded row of that round or later,
+#                               later round's entry, or the Carry-forward paragraph covers (an
 #                               accepted key only in the open round); stderr names record-residual
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
 #                               needs one stops the unit with needs-human)

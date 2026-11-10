@@ -1702,6 +1702,20 @@ decide() {
   red undecided "{\"round\":2,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
 }
 
+@test "needs-human: a human's accept decides only its own round, so a later security-class re-report fails undecided and drops the accepted row" {
+  local escalated
+  escalated="$(alf_entries f.txt 1 1 rule/x | jq -c 'map(. + {severity: "minor", security: true})')"
+  stop_rounds "$(minor_rows f.txt 1 1)"
+  decide 1 accept '{"reason":"deferred to its own change"}' || return 1
+  alf_set_line other.txt 2 "round 2"
+  alf_commit "round 2" || return 1
+  alf_round 2 "$MEMBER" "$escalated" || return 1
+  run_check_all
+  red undecided "{\"round\":2,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}" || return 1
+  run_sections
+  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "the escalated key still renders: $output"; return 1; }
+}
+
 @test "needs-human: a key an earlier round disposed file needs no decision when a round with no dispositions file re-reports it" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"

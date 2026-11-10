@@ -56,7 +56,8 @@ def in_bound: . != null and .security == false and .severity != "critical";
 # waiver and a human's fix renders nothing; every other row is an accept. The
 # latest row for a member's key decides it, so a corrected decision replaces the
 # earlier one. A key some round disposed fix, or a veto names, is dropped: a
-# finding is never both fixed and accepted.
+# finding is never both fixed and accepted. So is a row whose key a round after
+# its own re-reports security-class: that re-report takes a new disposition.
 # shellcheck disable=SC2016
 _RECORDED_JQ="$_ROW_TEXT_JQ"'
 [inputs | fromjson?
@@ -65,6 +66,8 @@ _RECORDED_JQ="$_ROW_TEXT_JQ"'
 | to_entries | group_by(.value | [.member, .finding_class, .path, (.line | line_of)]) | map(max_by(.key) | .value)
 | [.[] | select(.decision != "fix")
   | select([.finding_class, .path, (.line | line_of)] as $key | $dropped | any(. == $key) | not)
+  | select((if (.round | type) == "number" then .round else 0 end) as $round | [.member, .finding_class, .path, (.line | line_of)] as $key
+      | $escalated | any(.[0] > $round and .[1:] == $key) | not)
   | {round: 0, section: (if .decision == "waive" then "triage" else "accept" end), member, path, line: (.line | line_of),
      finding_class, reason: text(.reason), source: (if (.source | type) == "string" then .source else "" end)}]
 '
@@ -138,21 +141,28 @@ _screen_reasons() {
   printf '[%s]\n' "${verdicts#,}"
 }
 
-# _recorded_rows <vetoes> <fixed-keys>: the recorded-residuals file as accept
-# rows, "[]" when it is absent. rc 3 when jq fails.
+# _recorded_rows <vetoes> <fixed-keys> <escalated>: the recorded-residuals file
+# as accept rows, "[]" when it is absent. <escalated> holds [round, member,
+# finding_class, path, line] per security-class finding. rc 3 when jq fails.
 _recorded_rows() {
   local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" dropped
   [ -f "$recorded_file" ] || { printf '[]\n'; return 0; }
   dropped="$(jq -c -n --argjson vetoes "$1" --argjson fixed "$2" "$_ROW_TEXT_JQ"'
     $fixed + [$vetoes[] | [.finding_class, .path, (.line | line_of)]]' 2>/dev/null)" || return 3
-  jq -c -R -n --argjson dropped "$dropped" "$_RECORDED_JQ" <"$recorded_file" 2>/dev/null || return 3
+  jq -c -R -n --argjson dropped "$dropped" --argjson escalated "$3" "$_RECORDED_JQ" <"$recorded_file" 2>/dev/null || return 3
 }
+
+# _ESCALATED_JQ: $escalated plus one round's security-class findings as
+# [round, member, finding_class, path, line], read from a lookup or the open
+# round's live read.
+# shellcheck disable=SC2016
+_ESCALATED_JQ="$_ROW_TEXT_JQ$_SECURITY_CLASS_JQ"'$escalated + [.[] | select(security_class) | [$round, .member, .finding_class, .path, (.line | line_of)]]'
 
 # _section_rows: every round's candidate rows and the recorded ones, one per
 # (section, key) with the latest round winning, sorted for rendering. The
 # caller has loaded VETOES. rc 3 on an unreadable input.
 _section_rows() {
-  local dispositions_file base round chunks="" one lookup fixed="[]" round_fixed recorded
+  local dispositions_file base round chunks="" one lookup fixed="[]" round_fixed recorded escalated="[]" history open_entries
   for dispositions_file in "$RUN_FOLDER"/dispositions-*.json; do
     [ -e "$dispositions_file" ] || continue
     base="${dispositions_file##*/}"
@@ -165,8 +175,14 @@ _section_rows() {
     chunks="$chunks$one"$'\n'
     round_fixed="$(jq -c "$_ROW_TEXT_JQ"'[.entries[] | select(.disposition == "fix") | [.finding_class, .path, (.line | line_of)]]' "$dispositions_file")" || return 3
     fixed="$(jq -c -n --argjson fixed "$fixed" --argjson round_fixed "$round_fixed" '$fixed + $round_fixed')" || return 3
+    escalated="$(printf '%s' "$lookup" | jq -c --argjson round "$round" --argjson escalated "$escalated" "$_ESCALATED_JQ")" || return 3
   done
-  recorded="$(_recorded_rows "$VETOES" "$fixed")" || { _error "unreadable $RUN_FOLDER/recorded-residuals.jsonl"; return 3; }
+  history="$(_evaluator round-history)" || { _error "the evaluator could not read the round history"; return 3; }
+  open_entries="$(_open_round_entries "$history")" || { _error "the evaluator could not read the open round's findings"; return 3; }
+  if [ "$open_entries" != null ]; then
+    escalated="$(printf '%s' "$open_entries" | jq -c --argjson round "$(printf '%s' "$history" | jq 'length')" --argjson escalated "$escalated" "$_ESCALATED_JQ")" || return 3
+  fi
+  recorded="$(_recorded_rows "$VETOES" "$fixed" "$escalated")" || { _error "unreadable $RUN_FOLDER/recorded-residuals.jsonl"; return 3; }
   chunks="$chunks$recorded"$'\n'
   printf '%s' "$chunks" | jq -c -s 'add // [] | sort_by(-.round) | unique_by([.section, .path, .line, .finding_class]) | sort_by(.path, .line, .finding_class)'
 }
@@ -236,8 +252,8 @@ _open_round_entries() {
 }
 
 # _undecided_keys: `violation: undecided` for each finding of a round that has
-# no dispositions file (a needs-human stop), unless a recorded row decides its
-# member's key, a later round's dispositions file names it, or _carried_keys
+# no dispositions file (a needs-human stop), unless a recorded row of that round
+# or a later one decides its member's key, a later round's dispositions file names it, or _carried_keys
 # carries it into that round. An accepted key carries only while its re-report
 # is not security-class, which only the open round's live read shows, so in an
 # older round it needs a decision again. A stored round's keys come from the
@@ -258,7 +274,8 @@ _undecided_keys() {
     carried="$(jq -c -n --argjson carried "$carried" --argjson one "$(_carried_keys "$round" 3)" --arg round "$round" '$carried + {($round): $one}')" || return 3
   done
   if [ -f "$RUN_FOLDER/recorded-residuals.jsonl" ]; then
-    recorded="$(jq -c -R -n "$_ROW_TEXT_JQ"'[inputs | fromjson? | select(type == "object") | [.member, .finding_class, .path, (.line | line_of)]]' \
+    recorded="$(jq -c -R -n "$_ROW_TEXT_JQ"'[inputs | fromjson? | select(type == "object")
+      | [(if (.round | type) == "number" then .round else 0 end), .member, .finding_class, .path, (.line | line_of)]]' \
       <"$RUN_FOLDER/recorded-residuals.jsonl" 2>/dev/null)" || return 3
   fi
   violations="$(printf '%s' "$history" | jq -r --argjson open "$open_entries" --argjson disposed "$disposed" --argjson carried "$carried" \
@@ -268,7 +285,7 @@ _undecided_keys() {
     | .[] | .round as $round | select($disposed | any(.round == $round) | not)
     | $carried[$round | tostring] as $round_carried
     | (if .keys == null and $round == $latest and $open != null then $open | map(key_array) else .keys end) | arrays | .[] | . as $key
-    | select([.[0], .[1], .[2], (.[3] | line_of)] as $full | $recorded | any(. == $full) | not)
+    | select([.[0], .[1], .[2], (.[3] | line_of)] as $full | $recorded | any(.[0] >= $round and .[1:] == $full) | not)
     | select($disposed | any(.round > $round and (.keys | any(. == $key))) | not)
     | select($round_carried.filed | any(. == $key) | not)
     | select(($round_carried.accepted | any(. == $key)) and $round == $latest and $open != null
@@ -287,16 +304,19 @@ _undecided_keys() {
 # finding's own reason when it carries one, else its failure mode. An accept or
 # waive is refused unless the open round's live read reports the key and it is
 # not security-class: severity and security come from that read, never from
-# the caller's file, so once the round is closed only fix is left. The reason
-# is stored as given; pr-sections normalizes it on read. rc 3 on an unreadable
-# or refused finding.
+# the caller's file, so once the round is closed only fix is left. Every row
+# stores `round`, the latest round in the history when it was written, and
+# decides its key in that round and earlier ones only, so a later re-report
+# needs a new decision. The reason is stored as given; pr-sections normalizes
+# it on read. rc 3 on an unreadable or refused finding.
 _command_record_residual() {
-  local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" open_entries="null" history row
+  local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" open_entries="null" history latest row
+  history="$(_evaluator round-history)" || { _error "the evaluator could not read the round history"; return 3; }
+  latest="$(printf '%s' "$history" | jq 'length')" || { _error "the evaluator could not read the round history"; return 3; }
   if [ "$DECISION" = accept ] || [ "$DECISION" = waive ]; then
-    history="$(_evaluator round-history)" || { _error "the evaluator could not read the round history"; return 3; }
     open_entries="$(_open_round_entries "$history")" || { _error "the evaluator could not read the open round's findings"; return 3; }
   fi
-  row="$(jq -c --arg decision "$DECISION" --argjson open "$open_entries" "$_SECURITY_CLASS_JQ"'
+  row="$(jq -c --arg decision "$DECISION" --argjson open "$open_entries" --argjson round "$latest" "$_SECURITY_CLASS_JQ"'
     def text($value): if ($value | type) == "string" and ($value | test("\\S")) then $value else "" end;
     . as $finding
     | if type == "object" and (.member | type) == "string" and (.finding_class | type) == "string"
@@ -304,9 +324,9 @@ _command_record_residual() {
        and ((($decision | IN("accept", "waive")) | not)
             or ($open != null and any($open[]; [.member, .finding_class, .path, .line] == ($finding | [.member, .finding_class, .path, .line])
                 and (security_class | not))))
-    then if $decision == "" then {source: "filing-replay", member, finding_class, path, line,
+    then if $decision == "" then {source: "filing-replay", round: $round, member, finding_class, path, line,
            reason: (if (.failure_mode | type) == "string" then .failure_mode else "" end)}
-         else {source: "human", decision: $decision, member, finding_class, path, line,
+         else {source: "human", decision: $decision, round: $round, member, finding_class, path, line,
                reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)} end
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class; otherwise record --decision fix"; return 3; }
@@ -314,7 +334,7 @@ _command_record_residual() {
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
       def full: [.member, .finding_class, .path, (.line | line_of)];
       [inputs | fromjson? | select(type == "object") | select(full == ($row | full))] | last
-      | . != null and .source == $row.source and .decision == $row.decision' <"$recorded_file" >/dev/null 2>&1; then
+      | . != null and .source == $row.source and .decision == $row.decision and .round == $row.round' <"$recorded_file" >/dev/null 2>&1; then
     return 0
   fi
   mkdir -p "$RUN_FOLDER" 2>/dev/null || { _error "cannot create $RUN_FOLDER"; return 3; }
