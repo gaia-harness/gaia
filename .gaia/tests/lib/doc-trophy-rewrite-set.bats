@@ -28,7 +28,7 @@ setup() {
   LAYERING='wiki/decisions/Test Layering.md'
   AXIOM='the route layer is the default home for behavior'
   LINK='wiki/decisions/Test Layering.md'
-  PLANNER_PIN='Name the behavior the task delivers and, when the flow test does not already cover it, the one acceptance test that owns it'
+  PLANNER_PIN='Name the behavior the task delivers and, when no flow test already covers it, the one acceptance test that owns it'
   TESTS_REACT='apps/web/.claude/skills/tdd-react/references/tests-react.md'
 
   # file|old phrase (must be absent)|positive pin (must be present)
