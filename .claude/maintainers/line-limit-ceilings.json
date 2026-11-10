@@ -19,7 +19,6 @@
     ".gaia/cli/src/fitness/check.ts": 484,
     ".gaia/cli/src/fitness/paths.ts": 463,
     ".gaia/cli/src/init/configure-data-layer.ts": 638,
-    ".gaia/cli/src/init/rename.ts": 435,
     ".gaia/cli/src/labels/sync.ts": 907,
     ".gaia/cli/src/react-perf/reduce.ts": 498,
     ".gaia/cli/src/release/bump.ts": 497,
