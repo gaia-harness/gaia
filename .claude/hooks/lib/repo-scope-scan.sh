@@ -217,32 +217,38 @@ gaia_scan_first_command() {
 # `gh`, sets GAIA_GH_SUBCOMMAND_INDEX to the subcommand's index, past gh's
 # repository flag spelled ahead of it (`gh -R owner/repo pr create`), and
 # GAIA_GH_PREFIX_REPOSITORY_GIVEN / GAIA_GH_PREFIX_REPOSITORY to whether that
-# flag appeared and its last value. Only that flag is skipped there; any other
-# word ends the prefix and is the subcommand. Returns 1 when a bare `-R` or
-# `--repo` is the last word.
+# flag appeared and its last value. gh also takes the flag between the
+# subcommand and its verb (`gh pr -R owner/repo create`); that run is dropped
+# from the words, so every consumer finds the verb right after the subcommand.
+# Any other word ends a run. Returns 1 when a bare `-R` or `--repo` is last.
 GAIA_GH_SUBCOMMAND_INDEX=1
 GAIA_GH_PREFIX_REPOSITORY_GIVEN=0
 GAIA_GH_PREFIX_REPOSITORY=""
 
 gaia_gh_subcommand_index() {
-  local index=1 word_count=${#GAIA_FIRST_COMMAND_WORDS[@]} token
+  local index=1 word_count=${#GAIA_FIRST_COMMAND_WORDS[@]} token drop subcommand=0
   GAIA_GH_PREFIX_REPOSITORY_GIVEN=0
   GAIA_GH_PREFIX_REPOSITORY=""
   while [ "$index" -lt "$word_count" ]; do
-    token="${GAIA_FIRST_COMMAND_WORDS[$index]}"
+    token="${GAIA_FIRST_COMMAND_WORDS[$index]}" drop=1
     case "$token" in
       -R | --repo)
         [ $((index + 1)) -lt "$word_count" ] || return 1
-        GAIA_GH_PREFIX_REPOSITORY="${GAIA_FIRST_COMMAND_WORDS[$((index + 1))]}"
-        index=$((index + 2))
+        token="${GAIA_FIRST_COMMAND_WORDS[$((index + 1))]}" drop=2
         ;;
-      --repo=*) GAIA_GH_PREFIX_REPOSITORY="${token#*=}"; index=$((index + 1)) ;;
-      -R?*) GAIA_GH_PREFIX_REPOSITORY="${token#-R}"; index=$((index + 1)) ;;
-      *) break ;;
+      --repo=*) token="${token#*=}" ;;
+      -R?*) token="${token#-R}" ;;
+      *) [ "$subcommand" = 0 ] || break; subcommand=$index; index=$((index + 1)); continue ;;
     esac
-    GAIA_GH_PREFIX_REPOSITORY_GIVEN=1
+    GAIA_GH_PREFIX_REPOSITORY="$token" GAIA_GH_PREFIX_REPOSITORY_GIVEN=1
+    if [ "$subcommand" = 0 ]; then
+      index=$((index + drop))
+    else
+      GAIA_FIRST_COMMAND_WORDS=("${GAIA_FIRST_COMMAND_WORDS[@]:0:index}" "${GAIA_FIRST_COMMAND_WORDS[@]:$((index + drop))}")
+      word_count=${#GAIA_FIRST_COMMAND_WORDS[@]}
+    fi
   done
-  GAIA_GH_SUBCOMMAND_INDEX=$index
+  [ "$subcommand" = 0 ] && GAIA_GH_SUBCOMMAND_INDEX=$index || GAIA_GH_SUBCOMMAND_INDEX=$subcommand
 }
 
 # `gh pr merge` form of the scan above, for the two consumers that act on the
@@ -276,9 +282,9 @@ gaia_scan_gh_merge() {
   # The first command has to BE the merge; a caller's arming match only proved
   # the phrase appears somewhere a command could start, which a comment, a
   # heredoc body line, and a quoted value all satisfy.
-  word_count=${#GAIA_FIRST_COMMAND_WORDS[@]}
   [ "${GAIA_FIRST_COMMAND_WORDS[0]}" = "gh" ] || return 1
   gaia_gh_subcommand_index || return 1
+  word_count=${#GAIA_FIRST_COMMAND_WORDS[@]}
   i=$GAIA_GH_SUBCOMMAND_INDEX
   GAIA_GH_MERGE_REPO="$GAIA_GH_PREFIX_REPOSITORY"
   [ $((i + 2)) -le "$word_count" ] || return 1

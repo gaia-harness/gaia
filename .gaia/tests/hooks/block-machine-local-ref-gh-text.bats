@@ -200,6 +200,10 @@ assert_allowed() {
   assert_blocked
   run_hook 'gh --repo=acme/widgets issue create --title "SPEC-123" --body "x"'
   assert_blocked
+  run_hook 'gh pr -R acme/widgets create --title "SPEC-123" --body "x"'
+  assert_blocked
+  run_hook 'gh -R other/repo issue --repo acme/widgets create --title "SPEC-123" --body "x"'
+  assert_blocked
   run_hook 'gh -R acme/widgets pr create --title "feat: clean" --body "x"'
   assert_allowed
 }

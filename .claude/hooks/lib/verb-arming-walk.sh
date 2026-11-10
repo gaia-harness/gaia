@@ -300,6 +300,17 @@ _GAIA_VA_REPOSITORY_VALUE='([^[:space:];&|<>()`"'"'"'\\]+|"[^"[:space:]]*"|'"'"'
 _GAIA_VA_REPOSITORY_PREFIX_REGEX='(^|[^[:alnum:]_./-])(gh([[:space:]]+[[:alpha:]][[:alnum:]-]*)?)(([[:space:]]+(-R[[:space:]]+|--repo[[:space:]]+|--repo=|-R)'"$_GAIA_VA_REPOSITORY_VALUE"')+)[[:space:]]'
 
 gaia_verb_arm_mask_repository_flag() {
+  # One pass resumes after each run it blanks, so a second run behind the
+  # group word (`gh -R a pr -R b merge`) still follows a `gh` only once the
+  # first is blank. Repeat until a pass changes nothing; each pass that does
+  # blanks at least one character, so the loop ends.
+  local text="$1"
+  while _gaia_va_mask_repository_flag_pass "$text" && [ "$GAIA_VERB_ARM_MASKED" != "$text" ]; do
+    text="$GAIA_VERB_ARM_MASKED"
+  done
+}
+
+_gaia_va_mask_repository_flag_pass() {
   local rest="$1" match lead head run after offset blanks
   GAIA_VERB_ARM_MASKED=""
   while [[ "$rest" =~ $_GAIA_VA_REPOSITORY_PREFIX_REGEX ]]; do

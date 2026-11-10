@@ -1039,7 +1039,8 @@ write_conflicted_library() {
   local invocation
   for invocation in 'gh -R o/r pr merge 12' 'gh --repo o/r pr merge 12' 'gh --repo=o/r pr merge 12' \
     'gh -Ro/r pr merge 12' 'gh -R "o/r" pr merge 12' 'gh -R o/r --repo a/b pr merge 12' \
-    'gh pr -R o/r merge 12' 'gh pr --repo o/r merge 12' 'gh pr --repo=o/r merge 12' 'gh pr -Ro/r merge 12'; do
+    'gh pr -R o/r merge 12' 'gh pr --repo o/r merge 12' 'gh pr --repo=o/r merge 12' 'gh pr -Ro/r merge 12' \
+    'gh -R a/b pr -R o/r merge 12' 'gh --repo=a/b pr --repo o/r merge 12'; do
     parity "$MERGE_FRAGMENT" "$MERGE_WORDS" "$invocation" || return 1
   done
 }
