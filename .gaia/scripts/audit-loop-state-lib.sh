@@ -437,7 +437,7 @@ gaia_loop_pinned_question() {
         above: " is at or above the checkpoint line: ",
         none: ", so a new session is the safe choice: "}[$band]) as $fresh
     | [
-        {key: "grant_here", label: "Continue audit in this session", description: ($option_context + $here + "records " + $unit_rounds + " more rounds and keeps working here." + $typed_grant_note)},
+        {key: "grant_here", label: "Continue audit in this session", description: ($option_context + $here + "records up to " + $unit_rounds + " more rounds and keeps working here." + $typed_grant_note)},
         {key: "grant_new_session", label: "Continue audit in a new session", description: ($option_context + $fresh + "records the same " + $unit_rounds + "-round grant, then prints a continuation prompt for a fresh session." + $typed_grant_note)},
         (if $eligible then
           {key: "accept", label: "Accept the remainder", description: ("One closing round, then the remainder is recorded as accepted residuals." + $typed_accept_note)}
