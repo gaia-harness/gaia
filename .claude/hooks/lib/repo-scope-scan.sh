@@ -218,8 +218,8 @@ gaia_scan_first_command() {
 # repository flag spelled ahead of it (`gh -R owner/repo pr create`), and
 # GAIA_GH_PREFIX_REPOSITORY_GIVEN / GAIA_GH_PREFIX_REPOSITORY to whether that
 # flag appeared and its last value. Only that flag is skipped there; any other
-# word ends the prefix and is the subcommand. Returns 1 when the flag has no
-# value.
+# word ends the prefix and is the subcommand. Returns 1 when a bare `-R` or
+# `--repo` is the last word.
 GAIA_GH_SUBCOMMAND_INDEX=1
 GAIA_GH_PREFIX_REPOSITORY_GIVEN=0
 GAIA_GH_PREFIX_REPOSITORY=""

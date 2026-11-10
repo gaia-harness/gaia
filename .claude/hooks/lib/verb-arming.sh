@@ -285,8 +285,8 @@ _gaia_va_view() {
 # gaia_verb_arm_mask <text>: sets GAIA_VERB_ARM_MASKED to the text every match
 # runs against, <text> with gh's repository flag ahead of the subcommand
 # blanked (the walker file's mask), so `gh -R o/r pr merge` arms like `gh pr
-# merge -R o/r`. A consumer that must see that flag reads it from where the
-# mask and <text> differ. The glob keeps the walker unloaded for every text
+# merge -R o/r`. <text> and GAIA_VERB_ARM_VIEW keep the flag for a consumer
+# that must read it. The glob keeps the walker unloaded for every text
 # that cannot hold one; the identity stands when the walker cannot load.
 gaia_verb_arm_mask() {
   GAIA_VERB_ARM_MASKED="$1"

@@ -23,7 +23,7 @@ merge_commands() {
   jq -r '[.hooks.PostToolUse // [] | .[] | .hooks[]? | select((.if // "") == "Bash(gh *)") | .command] | .[]' "$1"
 }
 
-@test "every merge-reading hook is registered behind Bash(gh *), in either settings file" {
+@test "every merge-reading hook is registered behind Bash(gh *), in both settings files" {
   local settings_file hook gh_commands
   for settings_file in "${SETTINGS_FILES[@]}"; do
     gh_commands="$(jq -r '[.hooks[] | .[] | .hooks[]? | select((.if // "") == "Bash(gh *)") | .command] | .[]' "$settings_file")"
@@ -33,7 +33,7 @@ merge_commands() {
   done
 }
 
-@test "the gh PostToolUse registration names pr-merge-cost.sh, in either settings file" {
+@test "the gh PostToolUse registration names pr-merge-cost.sh, in both settings files" {
   local settings_file
   for settings_file in "${SETTINGS_FILES[@]}"; do
     [ "$(merge_commands "$settings_file" | grep -c 'pr-merge-cost\.sh')" -eq 1 ]
