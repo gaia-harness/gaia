@@ -135,7 +135,7 @@ if [ "$checkout_armed" -eq 1 ]; then
   checkout_occurrence_pattern='gh[[:space:]]+pr[[:space:]]+checkout'
   # Heads only, no argument tail: a tail would swallow a following substitution
   # checkout in the masked text and tie the counts. Counted only at line start
-  # or after a list operator or substitution opener, so quoted prose that cites
+  # or after &&, ||, ;, | or a substitution opener, so quoted prose that cites
   # a prefixed checkout is not mistaken for one.
   checkout_command_start_pattern='(^|&&|;|\|\||\||\$\(|`|<\(|>\()[[:space:]]*'"$checkout_occurrence_pattern"
   gaia_verb_arm_mask "$command_line"

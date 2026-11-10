@@ -59,8 +59,9 @@ if [ "$usage_merge_exit_code" -ne 0 ]; then
   merge_number_pattern='gh[[:space:]]+pr[[:space:]]+merge[[:space:]]+([1-9][0-9]{0,9})([[:space:]]|$)'
   # Read from the arming-masked text, which blanks a repository flag ahead of
   # the subcommand, so the prefix spelling still yields a number. usage.sh
-  # reads that number in this repository, and a foreign merge reaches this line
-  # only when usage-merge.sh fails before parsing the command: it exits 0 on one.
+  # reads that number in this repository. usage-merge.sh exits 0 on a foreign
+  # merge and fails only before it parses the command, so a foreign number
+  # reaches this line only then.
   gaia_verb_arm_mask "$GAIA_HOOK_COMMAND"
   if [[ $GAIA_VERB_ARM_MASKED =~ $merge_number_pattern ]]; then
     rerun_target="${BASH_REMATCH[1]}"
