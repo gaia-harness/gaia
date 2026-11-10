@@ -120,15 +120,19 @@ _gaia_loop_stop_override_set() {
 }
 
 # _gaia_loop_denying_signal <state-json> <snapshot-json> <used>: the first denying
-# signal on the snapshot that no checkpoint at round >= used has answered, or
-# nothing. A snapshot without `signals` (legacy) denies on its verdict alone.
+# signal on the snapshot that no checkpoint at round >= used has answered and
+# no grant window lifts, or nothing. A snapshot without `signals` (legacy) denies on its verdict alone.
 # rc 5 when the state cannot be read.
 _gaia_loop_denying_signal() {
   printf '%s' "$1" | jq -r --argjson snapshot "${2:-null}" --argjson used "$3" '
     ($snapshot | if type == "object" then . else {} end) as $snapshot
     | (if ($snapshot.signals | type) == "object" then $snapshot.signals
        else {enriching: ($snapshot.verdict == "enriching"), stalled: ($snapshot.verdict == "stalled")} end) as $signals
-    | (if $snapshot.stop_override == true then ["reintroduced", "waiver-drift"]
+    | ((.history.units // []) | last) as $latest_unit
+    | ($latest_unit != null and $latest_unit.admitted_on == "grant"
+       and $latest_unit.after_checkpoint == (.history.checkpoints | length)
+       and $latest_unit.through_round >= $used + 1) as $in_grant_window
+    | (if $snapshot.stop_override == true or $in_grant_window then ["reintroduced", "waiver-drift"]
        else ["enriching", "stalled", "nitpicky", "reintroduced", "small-tail", "waiver-drift"] end) as $names
     | [$names[] | select($signals[.] == true)] as $denying
     | [.history.checkpoints[] | select(.at_round >= $used) | .index] as $indexes

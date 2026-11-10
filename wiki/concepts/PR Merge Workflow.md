@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-11-09
+updated: 2026-11-10
 tags: [concept, ci, review]
 ---
 
@@ -172,7 +172,7 @@ The state is per branch, never per session. History, written only by that hook, 
 
 **The context gate.** Before each unit dispatch the hook reads the main session's context reading, the file the statusline writes for that session under the main checkout's `.gaia/local/cache/shared/context/`, and asks only when the reading is at or above the effective line. The line is the lower of a token count and a share of the reading's own context window. A human may lower it for a machine by hand in `.gaia/local/protected/checkpoint-override.json`; a raised or invalid value reads as the default, and Claude's writes to that file are denied. The hook freezes the line's configuration into the branch history at the first unit or round and afterwards applies only a lowering. A reading that is missing, stale, future-dated or unparseable falls back to the round-count checkpoint and never allows past it. The reading changes only when the statusline renders on a main-thread turn, so a unit's off-thread spend stays invisible to it until the unit returns: the rubric signals and the hard round cap are independent backstops. A denying rubric signal denies whatever the reading says, a dispatch that would open a round past the hard cap is denied whatever was granted, unless a human answered the checkpoint the cap pins: past the cap each unit needs its own answer, a grant buying a whole unit and an accept its one closing round.
 
-**One grant admits one unit.** An allowed unit records a window, the rounds it may open. A grant answering the latest checkpoint admits exactly one unit of K rounds; the next unit dispatch evaluates every trigger afresh and is denied again while the reading stays over the line. The grant-size fold of the round-count checkpoint applies only on the round-count fallback.
+**One grant admits one unit.** An allowed unit records a window, the rounds it may open. A grant answering the latest checkpoint admits exactly one unit of K rounds, and inside its window the `enriching`, `stalled`, `nitpicky` and `small-tail` signals do not deny, so the grant buys up to K rounds; `reintroduced`, `waiver-drift` and the hard cap still deny there. The next unit dispatch evaluates every trigger afresh and is denied again while the reading stays over the line. The grant-size fold of the round-count checkpoint applies only on the round-count fallback.
 
 Each evaluated round gets one verdict, built on `A(r)`, the round's count of findings this branch authored that no earlier round disposed non-fix:
 
