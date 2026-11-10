@@ -162,6 +162,55 @@ retired_or_asking_lines() {
   done
 }
 
+# --- Service-layer sentinel: a renamed sample layer is never re-created -------
+
+SERVICE_LAYER_HEADING='**Service-layer sentinel (runs first).**'
+SERVICE_LAYER='apps/web/app/services'
+
+# A project, a baseline release and a latest release. The latest changes the
+# sample layer's api.ts and adds a file beside it, the two upstream changes
+# that would otherwise fire a `removed` row and re-create the folder.
+service_layer_setup() {
+  PROJECT="$BATS_TEST_TMPDIR/project"
+  BASELINE_RELEASE="$BATS_TEST_TMPDIR/baseline"
+  LATEST_RELEASE="$BATS_TEST_TMPDIR/latest"
+  mkdir -p "$PROJECT/.gaia/scripts" "$BASELINE_RELEASE/.gaia" "$LATEST_RELEASE/.gaia"
+  cp "$REPO_ROOT/.gaia/scripts/update-gaia-report.sh" "$PROJECT/.gaia/scripts/"
+  printf '{"files":{"%s":"owned","README.md":"owned"}}\n' "$SERVICE_LAYER/gaia/api.ts" \
+    > "$BASELINE_RELEASE/.gaia/manifest.json"
+  printf '{"files":{"%s":"owned","%s":"owned","README.md":"owned"}}\n' \
+    "$SERVICE_LAYER/gaia/api.ts" "$SERVICE_LAYER/gaia/client.ts" > "$LATEST_RELEASE/.gaia/manifest.json"
+}
+
+# Prints the SERVICE_LAYER_SKIPS the sentinel block of file `$1` computes for
+# the project.
+run_service_layer_sentinel() {
+  local block
+  block="$(block_after_heading "$1" "$SERVICE_LAYER_HEADING")"
+  [ -n "$block" ] || { echo "no service-layer sentinel block in $1" >&2; return 1; }
+  run_block_in "$PROJECT" "$block"'; printf "%s\n" "$SERVICE_LAYER_SKIPS"' \
+    BASELINE_DIR="$BASELINE_RELEASE" LATEST_DIR="$LATEST_RELEASE" DECISIONS=''
+}
+
+@test "service-layer sentinel: a renamed layer skips every sample-layer path, a kept layer skips none" {
+  service_layer_setup
+  mkdir -p "$PROJECT/$SERVICE_LAYER/acme"
+  run_service_layer_sentinel "$MERGE_EXECUTION"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf '%s\n' "$SERVICE_LAYER/gaia/api.ts" "$SERVICE_LAYER/gaia/client.ts")" ]
+  mkdir -p "$PROJECT/$SERVICE_LAYER/gaia"
+  run_service_layer_sentinel "$MERGE_EXECUTION"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "service-layer sentinel: an unreadable manifest stops the walk instead of skipping nothing" {
+  service_layer_setup
+  rm "$LATEST_RELEASE/.gaia/manifest.json"
+  run_service_layer_sentinel "$MERGE_EXECUTION"
+  [ "$status" -ne 0 ]
+}
+
 # --- The contract calls merge-execution.md owes the orchestrator ---------------
 
 # shellcheck disable=SC2016  # literal prose needles, nothing expands

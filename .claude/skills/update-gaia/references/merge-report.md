@@ -81,7 +81,7 @@ The orchestrator classifies the file with `audit-noop-detect.sh --shape agent-re
   "class": "owned" | "shared" | "wiki-owned" | null,   // null: in neither latest manifest class (an upstream removal)
   "baselineTag": "v2.0.4",                              // the tag whose copy was B (a deferred entry's baselineTag when deferred)
   "status": "...",                                      // one of the statuses below
-  "note": "no-upstream-change" | "already-latest" | "design-system" | "...",   // optional, for skip
+  "note": "no-upstream-change" | "already-latest" | "design-system" | "service-layer-absent" | "...",   // optional, for skip
   "backedUp": true,                                     // optional
   "autoCandidate": "candidates/<path>.auto",            // auto-merged entries from a judgment-only chunk agent only
   "fieldMerge": {                                       // field-aware entries only: the CLI buckets, minus conflicts
@@ -94,7 +94,7 @@ The orchestrator classifies the file with `audit-noop-detect.sh --shape agent-re
 
 Here A is the adopter's file in the acting tree, B the baseline copy (a deferred entry's baseline copy when the decision log defers the path) and L the latest copy.
 
-- `skip`: nothing to write. `note` says why: `no-upstream-change` (B equals L), `already-latest` (A equals L), `design-system` (the adopter's committed design system owns the path).
+- `skip`: nothing to write. `note` says why: `no-upstream-change` (B equals L), `already-latest` (A equals L), `design-system` (the adopter's committed design system owns the path), `service-layer-absent` (the project has no `apps/web/app/services/gaia/`, so the sample service layer is the adopter's).
 - `overwrite`: an owned file replaced with L, A backed up first.
 - `merge`: a shared or wiki-owned file the adopter never edited, replaced with L, A backed up first.
 - `add`: a file new in the latest release, copied in.

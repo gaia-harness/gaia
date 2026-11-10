@@ -80,6 +80,18 @@ fi
 
 If `design_established=true`, the adopter has committed their design system, and both `wiki/concepts/Design System.md` and `apps/web/.claude/rules/design-baseline.md` are adopter-owned from then on: record each as `skip` with note `design-system` and leave it out of the rest of the walk (no overwrite, no merge, no question, no backup). Otherwise both take the table below as their manifest class dictates.
 
+**Service-layer sentinel (runs first).** `/gaia-init` renames the template's sample domain layer, `apps/web/app/services/gaia/`, to the project slug. When the acting tree has no such folder, renamed or deleted, the layer is the adopter's:
+
+```bash
+SERVICE_LAYER_SKIPS=''
+if [ ! -d apps/web/app/services/gaia ]; then
+  expected_paths="$(bash .gaia/scripts/update-gaia-report.sh expected-paths --baseline-dir "$BASELINE_DIR" --latest-dir "$LATEST_DIR" --decisions "$DECISIONS")" || exit 1
+  SERVICE_LAYER_SKIPS="$(printf '%s\n' "$expected_paths" | grep '^apps/web/app/services/gaia/' || true)"
+fi
+```
+
+Record each path in `SERVICE_LAYER_SKIPS` as `skip` with note `service-layer-absent` and leave it out of the rest of the walk, Step 7f included: no add, no removed, no delete, no question, no backup, so the folder is never re-created. When any of those paths is new in L or has B differing from L, add this line to the digest: "Upstream changes to `apps/web/app/services/gaia/` are not applied to your renamed service layer; port them by hand if you want them." When the folder exists, its paths take the table below.
+
 **Field-aware files are walked separately.** Every `package.json` (the root and each registered package), `pnpm-workspace.yaml` and `.gaia/audit-ci.yml` takes Step 7a to 7c instead of the table below, because a whole-file comparison cannot separate the adopter's identity fields and intentional removals from the real upstream delta. The package directories:
 
 ```bash
