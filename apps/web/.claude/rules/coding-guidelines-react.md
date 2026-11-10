@@ -31,5 +31,5 @@ The React half of `.claude/rules/typescript.md`.
 
 ## Testing
 
-- Test each feature-specification behavior at the lowest layer in `wiki/decisions/Test Layering.md` that shows it; Playwright runs only its real-server and browser layers
+- Test a feature-specification behavior at most once, at the layer `wiki/decisions/Test Layering.md` picks; Playwright runs only its real-server and browser layers
 - Every test, story and mock builds its dates with `date()` from `test/utils.ts`, never `new Date()` or `Date.now()`, so the result does not depend on the time of day (the year follows the current year)

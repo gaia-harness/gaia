@@ -10,7 +10,7 @@ tags: [concept, testing]
 
 ## A behavior is a `.test()` on a story
 
-A story is a visual state and a behavior is a `.test()` attached to it; a play only drives the UI into the state and asserts nothing ([[Stories as Tests]] owns the doctrine and the harness rules). Vitest runs each test in headless Chromium through `@storybook/addon-vitest`, so the story's decorators, stubs, mocked context and i18n are the test's setup and nothing re-derives them in a second file. There is no `.test.tsx` beside a component's stories and no standalone `render()`. Assertions use `expect` and `fn` from `storybook/test`, and the test receives `canvas`, `args` and `userEvent` from its context. One test covers one behavior, named for it. `apps/web/.claude/rules/storybook.md` owns authoring.
+A story is a visual state and a behavior is a `.test()` attached to it; a play only drives the UI into the state and asserts nothing ([[Stories as Tests]] owns the doctrine and the harness rules). Vitest runs each test in headless Chromium through `@storybook/addon-vitest`, so the story's decorators, stubs, mocked context and i18n are the test's setup and nothing re-derives them in a second file. There is no `.test.tsx` beside a component's stories and no standalone `render()`. Assertions use `expect` and `fn` from `storybook/test`, and the test receives `canvas`, `args` and `userEvent` from its context. A test is named for the behavior it covers, and no behavior gets two. `apps/web/.claude/rules/storybook.md` owns authoring.
 
 ```tsx
 Default.test('shows the required error', async ({canvas}) => {

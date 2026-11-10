@@ -50,7 +50,7 @@ Before writing any code:
 
 - [ ] Confirm which layer owns this test (see stack reference for layer breakdown)
 - [ ] Confirm which behaviors to test (prioritize)
-- [ ] Name the user-observable behaviors and the acceptance test that owns each (not implementation steps, not one test per function)
+- [ ] Name the user-observable behaviors and the one acceptance test that owns each; one test may own several (not implementation steps, not one test per function)
 - [ ] Get user approval on the plan with `AskUserQuestion`: `Approve the plan` (Recommended) or `Revise`
 
 Ask: "What should the public interface look like? Which behaviors are most important to test?"
@@ -63,7 +63,7 @@ Write ONE test that confirms ONE thing end-to-end for this layer. `RED → GREEN
 
 ### 3. Incremental Loop
 
-For each behavior your task names (a plan's task doc, or the plan approved in step 1): `RED → GREEN`. Write a new test only for those behaviors and their acceptance tests, plus a unit test for logic meeting both unit-test conditions (`wiki/decisions/Test Layering.md`): the integration layer cannot cover its cases cheaply, and the logic is important or likely to fail. Only enough code to pass the current test. Don't anticipate future tests.
+For each behavior your task names (a plan's task doc, or the plan approved in step 1): `RED → GREEN`, extending the test that already owns it, if one does, rather than writing a second. Write a new test only for those behaviors and their acceptance tests, plus a unit test for logic meeting both unit-test conditions (`wiki/decisions/Test Layering.md`): the integration layer cannot cover its cases cheaply, and the logic is important or likely to fail. Only enough code to pass the current test. Don't anticipate future tests.
 
 **Bound the green chase.** If a test won't pass after a few focused attempts, stop and reassess instead of thrashing the implementation: the test, the interface, or an assumption may be wrong. Surface the blocker rather than looping indefinitely to force green.
 
