@@ -123,15 +123,17 @@ _um_origin_slug() {
 # Sets UM_PR (a PR number), UM_GH_ARGUMENT (what to hand `gh pr view`), UM_NAMED
 # (1 when the statement carried a positional argument, readable or not, or the
 # scan was cut inside a quoted value), and UM_FOREIGN (1 when the merge is aimed
-# at another repository: a repo flag anywhere in the text after the verb, or a
-# URL for a repository other than origin). A foreign merge is terminal for the
+# at another repository: a repo flag ahead of a subcommand anywhere in the
+# command or anywhere in the text after the verb, or a URL for a repository
+# other than origin). A foreign merge is terminal for the
 # caller, which exits before reading anything.
 _um_parse_command() {
   local merge_command_regex='gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)' rest token skip=0 open_quote="" last slug origin full masked_command
   UM_PR="" UM_GH_ARGUMENT="" UM_NAMED=0 UM_FOREIGN=0
-  # gh's repository flag ahead of the subcommand is blanked first, so the
-  # prefix spelling reads as a merge; it names another repository, so it is
-  # foreign like the after-verb spelling.
+  # gh's repository flag ahead of a subcommand is blanked first, so the prefix
+  # spelling reads as a merge. Any such flag anywhere in the command marks the
+  # merge foreign, as the after-verb spelling does: over-marking skips the cost
+  # line, never attributes it to the wrong pull request.
   gaia_verb_arm_mask "$tool_command"
   masked_command="$GAIA_VERB_ARM_MASKED"
   [[ $masked_command =~ $merge_command_regex ]] || return 0

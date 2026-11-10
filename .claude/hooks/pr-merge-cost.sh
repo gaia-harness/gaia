@@ -57,8 +57,10 @@ if [ "$usage_merge_exit_code" -ne 0 ]; then
   # The rerun line is a runnable command: a PR number straight from the merge
   # command, else the current branch only when its name is shell-inert.
   merge_number_pattern='gh[[:space:]]+pr[[:space:]]+merge[[:space:]]+([1-9][0-9]{0,9})([[:space:]]|$)'
-  # The arming mask blanks a repository flag ahead of the subcommand, so the
-  # number is read from the masked text and the prefix spelling names its PR.
+  # Read from the arming-masked text, which blanks a repository flag ahead of
+  # the subcommand, so the prefix spelling still yields a number. usage.sh
+  # reads that number in this repository, and a foreign merge reaches this line
+  # only when usage-merge.sh fails before parsing the command: it exits 0 on one.
   gaia_verb_arm_mask "$GAIA_HOOK_COMMAND"
   if [[ $GAIA_VERB_ARM_MASKED =~ $merge_number_pattern ]]; then
     rerun_target="${BASH_REMATCH[1]}"
