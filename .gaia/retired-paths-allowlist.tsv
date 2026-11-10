@@ -31,7 +31,9 @@
 .gaia/cli/src/util/seed-environment-file.ts	.env.example	Resolved against the package directory from the registry.
 .gaia/cli/src/init/configure-i18n.ts	app/languages	Package-relative constants joined to the package directory from the registry.
 .gaia/cli/src/init/configure-i18n.ts	app/i18n.ts	Package-relative constants joined to the package directory from the registry.
-.gaia/cli/src/init/rename.ts	app/languages	Package-relative constants joined to the package directory from the registry.
+.gaia/cli/src/init/rename-language-files.ts	app/languages	Package-relative constants joined to the package directory from the registry.
+.gaia/cli/src/init/rename-service-layer.ts	app/services/	Package-relative paths joined to the package directory from the registry.
+.gaia/cli/src/init/rename.ts	app/services/	Help text naming package-relative paths joined to the package directory from the registry.
 .gaia/cli/src/init/strip-branding.ts	.storybook/preview.ts	Package-relative constant joined to the package directory from the registry.
 .gaia/cli/src/scaffold/component.ts	app/components	Package-relative default parent and a tsconfig-path import specifier written into generated files.
 .gaia/cli/src/scaffold/service.ts	app/services/	Package-relative paths resolved against the package directory from the registry.
