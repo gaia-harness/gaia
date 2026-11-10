@@ -271,7 +271,7 @@ expect_usage_color() {
   expect_usage_color 90 31
 }
 
-@test "usage windows: the 5-hour window shows the time until it resets from yellow, the 7-day window from red" {
+@test "usage windows: the 5-hour window shows its reset countdown from yellow, the 7-day window only from red" {
   local now
   now=$(date +%s)
   # Each offset sits mid-minute, so the run has about 30 seconds before it
