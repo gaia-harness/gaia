@@ -1262,6 +1262,12 @@ teardown_linked_worktree() {
   run_merge_hook "gh --repo=gaia-react/gaia pr merge 30 --squash"
   [ "$status" -eq 0 ]
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
+  run_merge_hook "gh pr -R gaia-react/gaia merge 30 --squash"
+  [ "$status" -eq 0 ]
+  grep -qF -- '"permissionDecision": "deny"' <<<"$output"
+  run_merge_hook "gh pr --repo gaia-react/gaia merge 30 --squash"
+  [ "$status" -eq 0 ]
+  grep -qF -- '"permissionDecision": "deny"' <<<"$output"
 }
 
 @test "a repository flag ahead of the subcommand naming another repository exits before the gate" {
