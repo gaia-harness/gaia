@@ -1074,7 +1074,7 @@ scratch_copy() {
   rm -rf "$scratch_directory"
   mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
   for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
-    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-dispositions-check.sh audit-member-digest.sh; do
+    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-dispositions-check.sh audit-pr-sections-lib.sh audit-member-digest.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$scratch_directory/.gaia/scripts/$script_name"
   done
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
@@ -1323,6 +1323,33 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   deny_prefix "BLOCKED: audit dispositions"
   reason | grep -qF -- "violation: security-not-fix"
   cmp "$ALF_STATE" "$BATS_TEST_TMPDIR/before"
+}
+
+@test "an undecided open round: with no stopped unit the next unit passes; after a needs-human stop a same-tree join passes and the unit is denied until the decision is recorded" {
+  local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  alf_fill f.txt 12 feature
+  alf_commit "round 1"
+  dispatch
+  assert_allowed || return 1
+  alf_stamp 1 10
+  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"severity":"minor","security":false}]' 11
+  below
+  cp "$ALF_STATE" "$BATS_TEST_TMPDIR/before"
+  unit_dispatch
+  assert_allowed || return 1
+  cp "$BATS_TEST_TMPDIR/before" "$ALF_STATE"
+  mkdir -p "$run_folder"
+  printf '{"version":1,"unit":1,"stop_reason":"needs-human"}\n' >"$run_folder/unit-1.json"
+  dispatch
+  assert_allowed || return 1
+  unit_dispatch
+  deny_prefix "BLOCKED: audit dispositions" || return 1
+  reason | grep -qF -- 'violation: undecided {"round":1,"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1}' || return 1
+  reason | grep -qF -- 'record-residual' || return 1
+  printf '{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"reason":"fix it next"}\n' >"$BATS_TEST_TMPDIR/decided.json"
+  bash "$REPO_ROOT/.gaia/scripts/audit-dispositions-check.sh" record-residual --root "$ALF_ROOT" --run-folder "$run_folder" --finding "$BATS_TEST_TMPDIR/decided.json" --decision fix || return 1
+  unit_dispatch
+  assert_allowed
 }
 
 # veto_rounds: round 1 reports finding X (security false) and waives it on the
