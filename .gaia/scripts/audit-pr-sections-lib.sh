@@ -250,9 +250,10 @@ _open_round_entries() {
 }
 
 # _undecided_keys: `violation: undecided` for each finding of the open round
-# (a needs-human stop's) that carries no honored triage mark and no row
-# recorded on that round decides. A closed round's findings never block: the
-# bound hook refuses the dispatch that would close a round with any left. rc 0
+# that carries no honored triage mark and that no row recorded on that round
+# decides. A closed round's findings never block: after a unit stop that can
+# leave the round without its file, the bound hook refuses any dispatch but a
+# same-tree member join while one is left. rc 0
 # none, 1 some, 3 an unreadable input.
 _undecided_keys() {
   local history open_entries recorded="[]" violations
@@ -276,8 +277,8 @@ _undecided_keys() {
 
 # _command_undecided: _undecided_keys, but only after the run folder's latest
 # unit report stopped on a reason that can leave the open round without
-# dispositions-<r>.json. needs-human and member-wave-dirty stop before the unit
-# writes it; failure can stop anywhere; dispositions-check-failed can come from
+# dispositions-<r>.json. needs-human can stop before the unit writes it, and
+# member-wave-dirty does on a closing round; failure can stop anywhere; dispositions-check-failed can come from
 # the bound hook denying a mid-wave join, before the file. The unit's other
 # stops cannot: clean and window-end end on disposed rounds, and checkpoint-deny
 # and window-end come only from a dispatch that would open a new round, after
