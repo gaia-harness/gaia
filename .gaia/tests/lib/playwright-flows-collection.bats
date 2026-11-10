@@ -70,7 +70,10 @@ export default {
 };
 SCRATCH
 
-  run pnpm -C "$WEB_DIRECTORY" exec playwright test --config "$scratch_config" "$SPEC_PATH"
+  # Playwright reads a file filter as a regex, and a GAIA worktree path holds
+  # `+`, so the absolute path would not match itself. SPEC_NAME's only regex
+  # metacharacters are the dots of `.spec.ts`, which still match themselves.
+  run pnpm -C "$WEB_DIRECTORY" exec playwright test --config "$scratch_config" "flows/$SPEC_NAME"
   [ "$status" -eq 0 ]
   grep -qE '1 passed' <<<"$output"
 }
