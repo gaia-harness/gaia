@@ -14,7 +14,7 @@ Related: [[Services]], [[MSW Handlers]]
 
 ## Folder structure
 
-Each domain lives under `apps/web/app/services/<layer>/{domain}/`, where `<layer>` is the domain layer `/gaia-init` named after the project:
+Each domain lives under `apps/web/app/services/<layer>/{domain}/`, where `<layer>` is the project's domain-layer folder ([[Services]]):
 
 | File                 | Role                                                                                                               |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
