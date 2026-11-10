@@ -94,7 +94,7 @@ green() {
 check_acceptance_text() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'Name the behavior the task delivers and the acceptance test that owns it' || return 1
+  need "$text" 'Name the behavior the task delivers and, when the flow test does not already cover it, the one acceptance test that owns it' || return 1
   need "$text" 'not a list of tests per function' || return 1
   need "$text" 'at the layer where the user sees the refusal' || return 1
   need "$text" '.claude/rules/guards-must-fail.md' || return 1
