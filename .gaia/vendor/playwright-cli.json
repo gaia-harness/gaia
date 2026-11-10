@@ -1,7 +1,7 @@
 {
   "package": "@playwright/cli",
-  "version": "0.1.23",
-  "integrity": "sha512-+TuHfVgpK1SIlwyV7bcZ9SRRhnVOAIwJwxZCgEh5LWkZuyGfSYnHNx8J7H78dhCwMyLkJtGb/j5XICjzEKzrfg==",
+  "version": "0.1.24",
+  "integrity": "sha512-AIO0AiPHh1ZB9e+i+ZiRwSTfqlkJtWcojgtPnW/BbBCgr96OojlL15dc1jWWclfbjdwPv5900qxuDyEHghjSqw==",
   "source": "skills/playwright-cli",
   "target": "apps/web/.claude/skills/playwright-cli",
   "files": {
@@ -10,7 +10,7 @@
     "references/playwright-tests.md": "c5b0719fef2cfdff50bd744051b2f9afc119775db4b48e9b2882c1cf3886797c",
     "references/pr-attachments.md": "24b118e74598be72e73e24fe223d295b9099c85b1860a7c8f6e5690c9038fa2a",
     "references/request-mocking.md": "54e801c9663fc2b6d68ceb058cb1c360724c2499f42acc7852a68e83e5b5f37c",
-    "references/running-code.md": "3029569ed6ddaeffc0b87badde967efdc2973b1677f078830098146eb3b78ebe",
+    "references/running-code.md": "eac97e0b77e723f8b1d7b64f276f92efa72f74453f45a805352d27ea1853a495",
     "references/session-management.md": "a4f16271f95d3eec7bc56e659d8adbb8f6ad7d603a6fa15efdcdd071a50c6ce3",
     "references/storage-state.md": "71e90f774b5a7d61367f2336940f30be7c5693d43197b63d1154634b99ae5045",
     "references/test-generation.md": "b9c5dda349a469b9abf9f10f3787135e6521f433f5743de399a164e14e76f7ce",

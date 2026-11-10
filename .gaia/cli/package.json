@@ -18,7 +18,7 @@
   "dependencies": {
     "js-yaml": "5.5.0",
     "picomatch": "4.0.7",
-    "semver": "7.8.5",
+    "semver": "7.8.6",
     "zod": "4.6.7"
   },
   "devDependencies": {
@@ -32,7 +32,7 @@
     "prettier-plugin-tailwindcss": "0.8.1",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "vite": "8.3.5",
-    "vitest": "5.0.5"
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
   }
 }
