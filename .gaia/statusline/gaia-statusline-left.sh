@@ -17,24 +17,29 @@
 # disagree. Those bands are token counts for a context window, so they do not
 # apply to the usage windows, which carry their own percentage bands. Hot path:
 # bash arithmetic and builtins only, plus the one git call for the branch, one
-# date call per red usage window, and, when a checkpoint override file exists,
-# one jq call.
+# date call per usage window that shows a countdown, and, when a checkpoint
+# override file exists, one jq call.
 
-# Yellow leaves room to change how the remaining work is run; red is close enough
-# that the reset time decides what happens next, so only red shows the countdown.
+# The countdown shows once the reset time decides what happens next: from yellow
+# for the 5-hour window, whose reset is near enough to plan around, and from red
+# for the 7-day window, whose reset at yellow is still days away.
 GAIA_USAGE_YELLOW_PERCENTAGE=75
 GAIA_USAGE_RED_PERCENTAGE=90
 
-# gaia_statusline_usage_segment <icon> <rounded_percentage> <resets_at_epoch_seconds>
+# gaia_statusline_usage_segment <icon> <rounded_percentage> <resets_at_epoch_seconds> <countdown_from_percentage>
 # Sets _GAIA_STATUSLINE_USAGE_SEGMENT rather than printing, so the hot path forks
 # no subshell for it.
 gaia_statusline_usage_segment() {
-  local icon="${1:-}" percentage="${2:-}" resets_at="${3:-}"
+  local icon="${1:-}" percentage="${2:-}" resets_at="${3:-}" countdown_from="${4:-$GAIA_USAGE_RED_PERCENTAGE}"
   local color=$'\033[01;32m' reset=$'\033[00m' countdown="" now seconds_left minutes_left days hours minutes
   _GAIA_STATUSLINE_USAGE_SEGMENT=""
   [ -n "$percentage" ] || return 0
   if [ "$percentage" -ge "$GAIA_USAGE_RED_PERCENTAGE" ]; then
     color=$'\033[01;31m'
+  elif [ "$percentage" -ge "$GAIA_USAGE_YELLOW_PERCENTAGE" ]; then
+    color=$'\033[01;33m'
+  fi
+  if [ "$percentage" -ge "$countdown_from" ]; then
     now=$(date +%s 2>/dev/null) || now=""
     if [ -n "$resets_at" ] && [ -n "$now" ]; then
       seconds_left=$((resets_at - now))
@@ -53,8 +58,6 @@ gaia_statusline_usage_segment() {
         fi
       fi
     fi
-  elif [ "$percentage" -ge "$GAIA_USAGE_YELLOW_PERCENTAGE" ]; then
-    color=$'\033[01;33m'
   fi
   _GAIA_STATUSLINE_USAGE_SEGMENT="${icon} ${color}${percentage}%${reset}${countdown}"
 }
@@ -132,9 +135,9 @@ gaia_statusline_left() {
     rendered="${rendered:+$rendered$separator}${color}${bar}${reset} ${used_percentage_rounded}%${marker}"
   fi
 
-  gaia_statusline_usage_segment "🕔" "$five_hour_percentage" "$five_hour_resets_at"
+  gaia_statusline_usage_segment "🕔" "$five_hour_percentage" "$five_hour_resets_at" "$GAIA_USAGE_YELLOW_PERCENTAGE"
   [ -n "$_GAIA_STATUSLINE_USAGE_SEGMENT" ] && rendered="${rendered:+$rendered$separator}${_GAIA_STATUSLINE_USAGE_SEGMENT}"
-  gaia_statusline_usage_segment "📅" "$seven_day_percentage" "$seven_day_resets_at"
+  gaia_statusline_usage_segment "📅" "$seven_day_percentage" "$seven_day_resets_at" "$GAIA_USAGE_RED_PERCENTAGE"
   [ -n "$_GAIA_STATUSLINE_USAGE_SEGMENT" ] && rendered="${rendered:+$rendered$separator}${_GAIA_STATUSLINE_USAGE_SEGMENT}"
 
   [ -n "$rendered" ] || return 1
