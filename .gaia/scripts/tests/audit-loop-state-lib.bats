@@ -441,7 +441,7 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   [ "$(first_label "$question")" = "Continue audit in this session (Recommended)" ]
   [ "$(recommended_count "$question")" -eq 1 ]
   [ "$(ask_labels "$question" | sed -n 2p)" = "Continue audit in a new session" ]
-  [ "$(option_description "$question" "Continue audit in this session")" = "Context 26% (260k of 1000k) is below the checkpoint line, so this session has room: records 3 more rounds and keeps working here." ]
+  [ "$(option_description "$question" "Continue audit in this session")" = "Context 26% (260k of 1000k) is below the checkpoint line, so this session has room: records up to 3 more rounds and keeps working here." ]
   [[ "$(option_description "$question" "Continue audit in a new session")" == "Context 26% (260k of 1000k) is below the checkpoint line: records the same 3-round grant, then prints a continuation prompt for a fresh session."* ]]
 }
 

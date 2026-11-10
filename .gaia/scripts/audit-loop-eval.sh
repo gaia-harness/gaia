@@ -82,10 +82,12 @@
 # DECISION. No decision function reads a file: the bound hook passes the
 # context reading (exactly what gaia_context_read printed) and the effective line
 # config. s = used + 1; k = K; <eligible> is the snapshot's accept_eligible (false
-# with no snapshot). The order of the steps is the security property. The hook
-# adds stop_override in memory (see DEFAULT STOP); with it true, enriching,
-# stalled, nitpicky and small-tail deny nowhere, gaia_loop_decide skips its
-# allowance and verdict steps, and step 6 allows `fallback s min(s+k-1, 10)`.
+# with no snapshot). The order of the steps is the security property. Enriching,
+# stalled, nitpicky and small-tail deny nowhere with stop_override true (the hook
+# adds it in memory, see DEFAULT STOP), nor in the unit and member decisions in a
+# grant window (latest unit admitted on a grant, no checkpoint since, through_round
+# >= s): a grant of K buys up to K rounds. stop_override also makes gaia_loop_decide
+# skip its allowance and verdict steps, and step 6 allow `fallback s min(s+k-1, 10)`.
 #   gaia_loop_decide (a new-tree dispatch outside the unit protocol): deny
 #   `cap` when used >= 10; deny `allowance` when used >= allowed; else deny
 #   `stalled` or `enriching` when that is round r = used's verdict and no
@@ -94,14 +96,12 @@
 #     1. used >= 10: the latest checkpoint's unconsumed answer (as in step 3)
 #        admits one unit, a grant `allow grant s s+k-1` and an accept `allow
 #        accept s s`; with none, `deny cap <eligible> true`.
-#     2. a denying signal on the snapshot, none of whose checkpoints at round
-#        >= used is answered: `deny rubric:<signal> <eligible> false`, the first in
-#        SIGNALS order.
+#     2. a denying signal not lifted above, with no checkpoint at round >= used
+#        answered: `deny rubric:<signal> <eligible> false`, first in SIGNALS order.
 #     3. the latest checkpoint is answered and its index is greater than the
 #        latest unit's after_checkpoint (or no unit exists): a grant gives
-#        `allow grant s min(s+k-1, 10)`, an accept `allow accept s s`. An
-#        answer admits one unit; the next unit dispatch evaluates every
-#        trigger afresh.
+#        `allow grant s min(s+k-1, 10)`, an accept `allow accept s s`; else a
+#        grant window gives `allow grant s min(s+k-1, through_round)`.
 #     4. the latest answer is an accept and a round is recorded after the
 #        checkpoint it answers (its closing round is spent): `deny fallback
 #        <eligible> false`, whatever the reading. An accept never re-arms the loop.

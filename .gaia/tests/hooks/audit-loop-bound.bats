@@ -1253,8 +1253,8 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   [[ "$(state_field '.history.checkpoints | last | .question.questions[0].options[0].description')" == "Context "*" is at or above the checkpoint line: "* ]]
 }
 
-@test "an ask grant admits one K-round unit over the line; the next unit asks again; a new session below the line continues" {
-  local unit_rounds="$GAIA_CONTEXT_UNIT_ROUNDS" checkpoint_index nonce
+@test "an ask grant admits a K-round window over the line, resumed by the next unit until spent; then the next unit asks again; a new session below the line continues" {
+  local unit_rounds="$GAIA_CONTEXT_UNIT_ROUNDS" checkpoint_index nonce through
   alf_sequence 6 5
   above
   unit_dispatch
@@ -1263,9 +1263,17 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   nonce="$(state_field '.history.checkpoints[-1].nonce')"
   alf_state_edit '.allowance.answers += [{checkpoint: $checkpoint_index, kind: "grant", n: $unit_rounds, source: "ask", option: "Continue audit in this session",
     nonce: $nonce, at: "2026-01-01T00:00:00Z", session_id: $session_id}]' --argjson checkpoint_index "$checkpoint_index" --argjson unit_rounds "$unit_rounds" --arg nonce "$nonce" --arg session_id "$SIDU"
+  through="$(minimum_of $((2 + unit_rounds)) "$_GAIA_LOOP_HARD_CAP")"
   unit_dispatch
   assert_allowed
-  [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round, .after_checkpoint] | map(tostring) | join(" ")')" = "grant 3 $(minimum_of $((2 + unit_rounds)) "$_GAIA_LOOP_HARD_CAP") $checkpoint_index" ]
+  [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round, .after_checkpoint] | map(tostring) | join(" ")')" = "grant 3 $through $checkpoint_index" ]
+  # A unit that stopped before spending the window leaves the rest to the next unit, on the same grant.
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round, .after_checkpoint] | map(tostring) | join(" ")')" = "grant 3 $through $checkpoint_index" ]
+  # Once the window's rounds are recorded, the next unit asks again.
+  alf_state_edit '.history.rounds += [range(3; $through + 1) as $round | .history.rounds[-1] | .round = $round
+    | .tree = ("c" * 39 + ($round | tostring)) | .commit = .tree | .snapshot = {verdict: "continue", A: 1}]' --argjson through "$through"
   unit_dispatch
   assert_pinned context
   [ "$(state_field '.history.checkpoints[-1].nonce')" != "$nonce" ]
