@@ -226,6 +226,14 @@ EOF
   done
 }
 
+@test "the guard's reason for a dollar-sign token names the Read alternative" {
+  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh"
+  run bash "$guard" "$log" /work/tree < <(jq -nc --arg command "git log -1 -- 'app/routes/\$id.tsx'" '{tool_name: "Bash", tool_input: {command: $command}}')
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
+  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'Read tool'* ]]
+}
+
 # guard_decides <command>: the guard's decision on one Bash command under the
 # review root, `deny` or `pass`, with a denial required to reach the log.
 guard_decides() {

@@ -96,7 +96,7 @@ if bash_command_leaves_root; then
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "BLOCKED: the review child may not name a path outside the review root or use --contents, because git reads any file through them."
+    "permissionDecisionReason": "BLOCKED: the review child may not name a path outside the review root, use --contents, or put a $, backtick, <(, >( or a {a,b} or {a..b} brace list in a command, because git reads any file through them or the shell expands them unseen. To read a file whose path holds one of these, such as a route module, open it with the Read tool."
   }
 }
 DENY_JSON
