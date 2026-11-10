@@ -162,7 +162,7 @@ case "$interactive_exit_status" in
     ;;
   *)
     printf 'audit-loop-grant: session is not interactive; nothing recorded\n' >&2
-    _gl_say "Not recorded: this session is not interactive (a person must type the line in a Claude Code terminal session)."
+    _gl_say "Not recorded: this session is not interactive, and --continue or --resume of it stays that way. In a new Claude Code terminal session in the audited branch's checkout, send any message, then type the line."
     exit 0
     ;;
 esac
