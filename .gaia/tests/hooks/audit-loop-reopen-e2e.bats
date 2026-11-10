@@ -325,6 +325,8 @@ accepted_keys() {
   alf_stamp 5 50
   alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false},
     {"path":"base.txt","line":3,"finding_class":"rule/q","severity":"minor","security":false}]' 51
+  # The unit closes round 5 with its dispositions file; both re-reports carry as accepted.
+  alf_dispositions 5 '[]'
   unit_dispatch
   assert_allowed || return 1
   [ -f "$STATE_DIRECTORY/dispositions-4.checked.json" ] || return 1

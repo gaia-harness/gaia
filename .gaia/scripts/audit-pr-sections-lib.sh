@@ -4,7 +4,7 @@
 # audit-dispositions-check.sh, split out to keep that script small. Sourced by
 # it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions,
 # _round_lookup, _has_snapshot, _snapshot_path, _evaluator, _divert_line, _carried_keys,
-# _RESIDUAL_REASON_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS,
+# _RESIDUAL_REASON_JQ, _SECURITY_CLASS_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS,
 # _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Runs nothing at source time. Never `cd`s.
 
 # The text normalization every rendered reason goes through. A `-->` would end
@@ -16,13 +16,6 @@ def trim: gsub("^\\s+|\\s+$"; "");
 def one: gsub("<!--|-->"; "") | gsub("\\s+"; " ") | trim | if . == "" then "no reason recorded" else . end;
 def text($value): (if ($value | type) == "string" then $value else "" end) | one;
 def line_of: if type == "number" and . >= 1 then . else 1 end;
-'
-
-# The grader's security-class test, shared so the recorder bounds a human's
-# accept or waive exactly where the grader bounds a disposition.
-# shellcheck disable=SC2016
-_SECURITY_CLASS_JQ='
-def security_class: ((.severity | IN("major", "minor")) | not) or (.security | if type == "boolean" then . else true end);
 '
 
 # _ROWS_JQ: one round's PR-body candidate rows. A waiver or triage row exists

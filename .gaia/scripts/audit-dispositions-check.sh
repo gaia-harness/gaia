@@ -177,15 +177,16 @@ case "${BASH_SOURCE[0]}" in
   */*) _GAIA_DISPOSITIONS_DIRECTORY="${BASH_SOURCE[0]%/*}" ;;
   *) _GAIA_DISPOSITIONS_DIRECTORY="." ;;
 esac
-# An accepted residual's reason: the finding's own failure mode from the
-# lookup when it has one, else the entry's reason. Shared by the waiver
-# table and the render library, so both show the same text; defined here so
-# grading never depends on that library loading.
+# jq defs shared with the render library, defined here so grading never
+# depends on that library loading. residual_reason: the finding's own failure
+# mode from the lookup when it has one, else the entry's reason. security_class:
+# the grader's test, which also bounds a human's recorded accept or waive.
 # shellcheck disable=SC2016
 _RESIDUAL_REASON_JQ='
 def residual_reason($lookup_entry):
   if ($lookup_entry.failure_mode | type) == "string" and ($lookup_entry.failure_mode | test("\\S")) then $lookup_entry.failure_mode else .reason end;
 '
+_SECURITY_CLASS_JQ='def security_class: ((.severity | IN("major", "minor")) | not) or (.security | if type == "boolean" then . else true end);'
 
 # shellcheck source=/dev/null
 . "$_GAIA_DISPOSITIONS_DIRECTORY/filing-outcomes-lib.sh"
