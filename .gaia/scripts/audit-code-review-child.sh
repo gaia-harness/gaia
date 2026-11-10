@@ -49,6 +49,8 @@ print_child_settings() {
 # set_child_argv <target> <settings-file>: one array, never through eval or a shell
 # string, since the target and paths are data. --model is the doctrine's review row.
 # No effort flag: the level is review depth, and the session's effort stays unpinned.
+# No --max-budget-usd: the forked review takes it as a soft budget and returns a partial
+# review as success. The deadline is the spend bound; --tools also withholds Agent from the session.
 set_child_argv() {
   # The commas are one --tools value, not array separators; the caller reads CHILD_ARGV.
   # shellcheck disable=SC2034,SC2054
