@@ -1339,6 +1339,22 @@ grant_window_state() {
   done
 }
 
+@test "grant override: a unit dispatched inside an open grant window is admitted on the grant for the rest of it" {
+  local unit_rounds through enriching state
+  unit_rounds="$(UNIT_ROUNDS)"
+  through=$((3 + unit_rounds))
+  enriching='{"round":4,"verdict":"enriching","signals":{"enriching":true}}'
+  # The granted unit stopped after round 4; the next unit takes rounds 5..through, over the line too.
+  [ "$(gaia_loop_decide_unit "$(grant_window_state 4)" "$enriching" "$HIGH" 300000 50)" = "allow grant 5 $through" ] || return 1
+  # Inline, the same window admits one round.
+  [ "$(gaia_loop_decide_member "$(grant_window_state 4)" "$enriching" false "$HIGH" 300000 50)" = "allow grant 5 5" ] || return 1
+  # The unit that resumption records keeps the override for its members.
+  state="$(grant_window_state 5 ".history.units += [$(unit_entry 2 5 "$through" 1) | .admitted_on = \"grant\"]")"
+  [ "$(gaia_loop_decide_member "$state" '{"round":5,"verdict":"enriching","signals":{"enriching":true}}' true "$LOW" 300000 50)" = allow ] || return 1
+  # red: a checkpoint pinned since the grant's unit ends the resumption.
+  [ "$(gaia_loop_decide_unit "$(grant_window_state 4 ".history.checkpoints += [$(checkpoint_entry 2 4 context)]")" "$enriching" "$HIGH" 300000 50)" = "deny rubric:enriching false false" ]
+}
+
 @test "grant override: reintroduced and waiver-drift still deny inside a grant, the cap ends a window admitted below it, and a later checkpoint or a non-grant unit ends the override" {
   local enriching
   enriching='{"round":4,"verdict":"enriching","signals":{"enriching":true}}'

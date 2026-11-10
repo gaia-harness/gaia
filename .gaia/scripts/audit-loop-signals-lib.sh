@@ -119,20 +119,29 @@ _gaia_loop_stop_override_set() {
   [ "$override" = true ] && printf 'true\n' || printf 'false\n'
 }
 
+# _gaia_loop_grant_window_through <state-json> <used>: the open grant window's
+# through_round, or nothing. rc 5 when the state cannot be read.
+_gaia_loop_grant_window_through() {
+  printf '%s' "$1" | jq -r --argjson used "$2" '
+    ((.history.units // []) | last) as $latest_unit
+    | if $latest_unit != null and $latest_unit.admitted_on == "grant"
+         and $latest_unit.after_checkpoint == (.history.checkpoints | length)
+         and $latest_unit.through_round >= $used + 1
+      then $latest_unit.through_round else empty end' 2>/dev/null || return 5
+}
+
 # _gaia_loop_denying_signal <state-json> <snapshot-json> <used>: the first denying
 # signal on the snapshot that no checkpoint at round >= used has answered and
-# no grant window lifts, or nothing. A snapshot without `signals` (legacy)
+# no open grant window lifts, or nothing. A snapshot without `signals` (legacy)
 # denies on its verdict alone.
 # rc 5 when the state cannot be read.
 _gaia_loop_denying_signal() {
-  printf '%s' "$1" | jq -r --argjson snapshot "${2:-null}" --argjson used "$3" '
+  local window_through
+  window_through="$(_gaia_loop_grant_window_through "$1" "$3")" || return 5
+  printf '%s' "$1" | jq -r --argjson snapshot "${2:-null}" --argjson used "$3" --argjson in_grant_window "$([ -n "$window_through" ] && echo true || echo false)" '
     ($snapshot | if type == "object" then . else {} end) as $snapshot
     | (if ($snapshot.signals | type) == "object" then $snapshot.signals
        else {enriching: ($snapshot.verdict == "enriching"), stalled: ($snapshot.verdict == "stalled")} end) as $signals
-    | ((.history.units // []) | last) as $latest_unit
-    | ($latest_unit != null and $latest_unit.admitted_on == "grant"
-       and $latest_unit.after_checkpoint == (.history.checkpoints | length)
-       and $latest_unit.through_round >= $used + 1) as $in_grant_window
     | (if $snapshot.stop_override == true or $in_grant_window then ["reintroduced", "waiver-drift"]
        else ["enriching", "stalled", "nitpicky", "reintroduced", "small-tail", "waiver-drift"] end) as $names
     | [$names[] | select($signals[.] == true)] as $denying
@@ -164,7 +173,7 @@ _gaia_loop_used() {
 _gaia_loop_decide_unit_with_unit_rounds() {
   local state="$1" snapshot="${2:-null}" reading="$3" tokens="$4" percent="$5" unit_rounds="$6"
   local integer_pattern='^[0-9]{1,12}$' fresh='^fresh (0|[1-9][0-9]{0,11}) (0|[1-9][0-9]{0,11})$'
-  local used eligible denying_signal start_round answer spent line allowed reading_tokens reading_window stop_override
+  local used eligible denying_signal start_round answer spent line allowed reading_tokens reading_window stop_override window_through
   [[ $tokens =~ $integer_pattern && $percent =~ $integer_pattern && $unit_rounds =~ $integer_pattern ]] && [ "$unit_rounds" -ge 1 ] || return 2
   used="$(_gaia_loop_used "$state")" || return 5
   eligible="$(_gaia_loop_snapshot_eligible "$snapshot")"
@@ -207,6 +216,13 @@ _gaia_loop_decide_unit_with_unit_rounds() {
       return 0
       ;;
   esac
+  # A unit that stopped early inside its grant's window leaves the rest of the
+  # window to the next dispatch, admitted on the same grant.
+  window_through="$(_gaia_loop_grant_window_through "$state" "$used")" || return 5
+  if [ -n "$window_through" ]; then
+    printf 'allow grant %s %s\n' "$start_round" "$(_gaia_loop_minimum "$window_through" $((start_round + unit_rounds - 1)))"
+    return 0
+  fi
   # The inverse of gaia_loop_next_closing: the accepted closing round is
   # already recorded.
   spent="$(printf '%s' "$state" | jq -r '
