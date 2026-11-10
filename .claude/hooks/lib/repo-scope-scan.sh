@@ -215,11 +215,11 @@ gaia_scan_first_command() {
 
 # gaia_gh_subcommand_index: for a GAIA_FIRST_COMMAND_WORDS whose word 0 is
 # `gh`, sets GAIA_GH_SUBCOMMAND_INDEX to the subcommand's index, past gh's
-# repository flag spelled ahead of it (`gh -R owner/repo pr create`), and
-# GAIA_GH_PREFIX_REPOSITORY_GIVEN / GAIA_GH_PREFIX_REPOSITORY to whether that
-# flag appeared and its last value. gh also takes the flag between the
-# subcommand and its verb (`gh pr -R owner/repo create`); that run is dropped
-# from the words, so every consumer finds the verb right after the subcommand.
+# repository flag spelled ahead of it (`gh -R owner/repo pr create`) or
+# between it and its verb (`gh pr -R owner/repo create`), and
+# GAIA_GH_PREFIX_REPOSITORY_GIVEN / GAIA_GH_PREFIX_REPOSITORY to whether the
+# flag appeared in either run and its last value. The between run is removed
+# from GAIA_FIRST_COMMAND_WORDS, so every consumer finds the verb next.
 # Any other word ends a run. Returns 1 when a bare `-R` or `--repo` is last.
 GAIA_GH_SUBCOMMAND_INDEX=1
 GAIA_GH_PREFIX_REPOSITORY_GIVEN=0
