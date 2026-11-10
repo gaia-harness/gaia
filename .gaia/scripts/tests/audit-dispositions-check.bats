@@ -1263,10 +1263,6 @@ run_residual_count() {
   local snapshot_file
   stop_base
   accept_all 3 "$(minor_rows f.txt 1 2)"
-  # Rounds 1 and 2 have no dispositions file, so round 1's third key, gone by
-  # round 2, needs a recorded decision for the read-only check-all below.
-  minor_rows f.txt 3 3 | jq -c '.[0] + {member: "'"$MEMBER"'"}' >"$BATS_TEST_TMPDIR/fixed.json"
-  bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/fixed.json" --decision fix || return 1
   run_check 3 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
   snapshot_file="$SNAPSHOT_DIRECTORY/dispositions-3.checked.json"
@@ -1633,13 +1629,9 @@ decide() {
   run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/decided-$1.json" --decision "$2"
 }
 
-@test "needs-human: a round whose sidecar a later round overwrote fails undecided, refuses accept and waive, and clears on fix" {
+@test "needs-human: the open round's findings fail undecided and name record-residual; once a later round closes it they no longer block, and accept and waive are refused" {
   local undecided
-  # Round 1 stops needs-human with three Minors and no dispositions file;
-  # round 2 overwrites the sidecar with nothing, so their severity and
-  # security are no longer readable.
-  stop_rounds "$(minor_rows f.txt 1 3)" '[]'
-  [ "$(bash "$SCRIPTS/audit-loop-eval.sh" findings --root "$ALF_ROOT" --round 1 | jq -c '.entries')" = '[]' ] || return 1
+  stop_rounds "$(minor_rows f.txt 1 3)"
   run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
   run_check_all
@@ -1647,17 +1639,17 @@ decide() {
     red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":$undecided}" || return 1
   done
   grep -qF -- "record-residual --root $ALF_ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix" <<<"$output" || { echo "no next step in: $output"; return 1; }
+  # Round 2 overwrites the sidecar with nothing and the hook stores round 1's
+  # keys, so round 1 is closed: its findings fall to the residue drain.
+  alf_set_line other.txt 2 "round 2"
+  alf_commit "round 2" || return 1
+  alf_round 2 "$MEMBER" '[]' || return 1
+  run_check_all
+  green || return 1
   decide 2 accept '{"reason":"deferred to its own change"}'
   [ "$status" -eq 3 ] || { echo "an accept on a closed round recorded: $status $output"; return 1; }
   decide 3 waive '{"reason":"below the threshold"}'
   [ "$status" -eq 3 ] || { echo "a waive on a closed round recorded: $status $output"; return 1; }
-  decide 1 fix && decide 2 fix && decide 3 fix || return 1
-  run_check_all
-  green || return 1
-  run_residual_count
-  [ "$output" = '{"total":0,"ask":0}' ] || { echo "residual-count: $output"; return 1; }
-  run_sections
-  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "pr-sections: $output"; return 1; }
 }
 
 @test "needs-human: on the open round, accept and waive read severity and security live, another member's row decides nothing, and the latest decision wins" {
@@ -1716,16 +1708,13 @@ decide() {
   [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "pr-sections exited $status or still renders the escalated key: $output"; return 1; }
 }
 
-@test "needs-human: a key an earlier round disposed file needs no decision when a round with no dispositions file re-reports it" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
-  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  green || return 1
-  outcome_line c/oosimp base.txt 6 file filed >"$RUN_FOLDER/filing-outcomes-1.jsonl"
-  open_round 2 '[{"path":"base.txt","line":6,"finding_class":"c/oosimp","severity":"major","security":false},
-    {"path":"f.txt","line":6,"finding_class":"c/sug","severity":"minor","security":false}]'
+@test "needs-human: an open-round finding with an honored triage mark needs no decision" {
+  local mark='[{"path":"lib/s.sh","line":4,"finding_class":"rule/t","severity":"minor","security":false,"triage":true,"triage_reason":"below the threshold"}]'
+  MEMBER="$SHELL_MAINTAINER"
+  stop_rounds "$(joined "$(minor_rows lib/s.sh 1 1)" "$mark")"
   run_check_all
-  red undecided "{\"round\":2,\"member\":\"$MEMBER\",\"finding_class\":\"c/sug\",\"path\":\"f.txt\",\"line\":6}" || return 1
-  grep -qF -- '"path":"base.txt","line":6' <<<"$output" && { echo "carried key flagged: $output"; return 1; }
+  red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"lib/s.sh\",\"line\":1}" || return 1
+  grep -qF -- '"finding_class":"rule/t"' <<<"$output" && { echo "triage-marked finding flagged: $output"; return 1; }
   true
 }
 

@@ -23,6 +23,7 @@
 #   audit-dispositions-check.sh pr-sections    --root <R> --run-folder <D> [--snapshot-dir <S>]
 #   audit-dispositions-check.sh residual-count --root <R> --run-folder <D> [--snapshot-dir <S>]
 #   audit-dispositions-check.sh record-residual --root <R> --run-folder <D> --finding <file> [--decision accept|waive|fix]
+#   audit-dispositions-check.sh undecided      --root <R> --run-folder <D>
 #
 # Dispositions: fix, accept-residual, waive-out-of-scope, file, divert.
 #
@@ -53,10 +54,9 @@
 #                               divert or accept-residual in an earlier round; check-all
 #                               without --snapshot-dir also prints it for an unsatisfied veto
 #                               whose round is past every dispositions file
-#   undecided                   (check-all without --snapshot-dir) a finding of a round with
-#                               no dispositions file that no recorded row written in that round or
-#                               later, no later round's entry, and not the Carry-forward paragraph covers (an
-#                               accepted key only in the open round); stderr names record-residual
+#   undecided                   (check-all without --snapshot-dir, and undecided after a unit stop
+#                               that can leave the round without its file) an open-round finding with
+#                               no honored triage mark no row recorded on that round decides
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
 #                               needs one stops the unit with needs-human)
 #   missing-basis               waive-out-of-scope without basis triage-threshold|cross-remit
@@ -178,9 +178,8 @@ case "${BASH_SOURCE[0]}" in
   */*) _GAIA_DISPOSITIONS_DIRECTORY="${BASH_SOURCE[0]%/*}" ;;
   *) _GAIA_DISPOSITIONS_DIRECTORY="." ;;
 esac
-# jq defs shared with the render library, defined here so grading never
-# depends on that library loading. security_class is the grader's test, which
-# also bounds a human's recorded accept or waive.
+# jq defs shared with the render library, defined here so grading never depends
+# on it loading; security_class also bounds a human's recorded accept or waive.
 # shellcheck disable=SC2016
 _RESIDUAL_REASON_JQ='
 def residual_reason($lookup_entry):
@@ -198,7 +197,7 @@ _SECURITY_CLASS_JQ='def security_class: ((.severity | IN("major", "minor")) | no
   { printf 'audit-dispositions-check: cannot load %s/audit-triage-lib.sh\n' "$_GAIA_DISPOSITIONS_DIRECTORY" >&2; exit 3; }
 
 _usage() {
-  printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections|residual-count|record-residual --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>] [--finding <file> [--decision accept|waive|fix]]\n' >&2
+  printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections|residual-count|record-residual|undecided --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>] [--finding <file> [--decision accept|waive|fix]]\n' >&2
   return 2
 }
 
@@ -669,7 +668,7 @@ main() {
     esac
   done
   case "$subcommand" in
-    check | check-all | check-outcomes | waiver-table | pr-sections | residual-count | record-residual) ;;
+    check | check-all | check-outcomes | waiver-table | pr-sections | residual-count | record-residual | undecided) ;;
     *) _usage; return 2 ;;
   esac
   [ -n "$RUN_FOLDER" ] || { _usage; return 2; }
@@ -687,6 +686,7 @@ main() {
     pr-sections) _command_pr_sections ;;
     residual-count) _command_residual_count ;;
     record-residual) _command_record_residual ;;
+    undecided) _command_undecided ;;
   esac
 }
 

@@ -3,7 +3,7 @@
 # The PR-body renderer, the residual counter and the residual recorder of
 # audit-dispositions-check.sh, split out to keep that script small. Sourced by
 # it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions,
-# _round_lookup, _has_snapshot, _snapshot_path, _evaluator, _divert_line, _carried_keys,
+# _round_lookup, _live_lookup, _has_snapshot, _snapshot_path, _evaluator, _divert_line,
 # _RESIDUAL_REASON_JQ, _SECURITY_CLASS_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS,
 # _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Runs nothing at source time. Never `cd`s.
 
@@ -234,67 +234,62 @@ _command_residual_count() {
              else [$accepted[] | select((.round == 0 and .source == "filing-replay") or (.round as $round | $asking | any(. == $round)))] | length end)}'
 }
 
-# _open_round_entries <round-history>: the latest round's findings read live,
-# with severity and security, while that round is still open (no dispositions
+# _open_round_entries <round-history>: the latest round's live lookup (severity,
+# security, honored triage) while that round is still open (no dispositions
 # file, and the bound hook has not stored its keys, which it does at the next
 # dispatch, before the next round's members overwrite the sidecars); "null"
 # once it is not. rc 3 on an unreadable input.
 _open_round_entries() {
-  local latest entries
+  local latest
   latest="$(printf '%s' "$1" | jq 'length')" || return 3
   if [ "$latest" -ge 1 ] && [ ! -f "$RUN_FOLDER/dispositions-$latest.json" ] && printf '%s' "$1" | jq -e 'last | .keys == null' >/dev/null; then
-    entries="$(_evaluator findings --round "$latest" | jq -c '.entries | map({member, finding_class, path, line, severity, security})')" || return 3
-    [ -n "$entries" ] || return 3
-    printf '%s\n' "$entries"
+    _live_lookup "$latest" || return 3
   else
     printf 'null\n'
   fi
 }
 
-# _undecided_keys: `violation: undecided` for each finding of a round that has
-# no dispositions file (a needs-human stop), unless a recorded row written in that
-# round or later decides its member's key, a later round's dispositions file names it, or _carried_keys
-# carries it into that round. An accepted key carries only while its re-report
-# is not security-class, which only the open round's live read shows, so in an
-# older round it needs a decision again. A stored round's keys come from the
-# round history; the open round's are read live. rc 0 none, 1 some, 3 an
-# unreadable input.
+# _undecided_keys: `violation: undecided` for each finding of the open round
+# (a needs-human stop's) that carries no honored triage mark and no row
+# recorded on that round decides. A closed round's findings never block: the
+# bound hook refuses the dispatch that would close a round with any left. rc 0
+# none, 1 some, 3 an unreadable input.
 _undecided_keys() {
-  local history open_entries recorded="[]" disposed="[]" carried="{}" dispositions_file base round violations
+  local history open_entries recorded="[]" violations
   history="$(_evaluator round-history)" || return 3
   open_entries="$(_open_round_entries "$history")" || return 3
-  for dispositions_file in "$RUN_FOLDER"/dispositions-*.json; do
-    base="${dispositions_file##*/}"
-    [[ "$base" =~ ^dispositions-([0-9]+)\.json$ ]] && [ -f "$dispositions_file" ] || continue
-    round=$((10#${BASH_REMATCH[1]}))
-    disposed="$(jq -c --argjson disposed "$disposed" --argjson round "$round" \
-      '$disposed + [{round: $round, keys: [.entries[]? | [.member, .finding_class, .path, .line]]}]' "$dispositions_file" 2>/dev/null)" || return 3
-  done
-  for round in $(printf '%s' "$history" | jq -r --argjson disposed "$disposed" '.[].round | select(. as $round | $disposed | any(.round == $round) | not)'); do
-    carried="$(jq -c -n --argjson carried "$carried" --argjson one "$(_carried_keys "$round" 3)" --arg round "$round" '$carried + {($round): $one}')" || return 3
-  done
+  [ "$open_entries" != null ] || return 0
   if [ -f "$RUN_FOLDER/recorded-residuals.jsonl" ]; then
     recorded="$(jq -c -R -n "$_ROW_TEXT_JQ"'[inputs | fromjson? | select(type == "object")
       | [(if (.round | type) == "number" then .round else 0 end), .member, .finding_class, .path, (.line | line_of)]]' \
       <"$RUN_FOLDER/recorded-residuals.jsonl" 2>/dev/null)" || return 3
   fi
-  violations="$(printf '%s' "$history" | jq -r --argjson open "$open_entries" --argjson disposed "$disposed" --argjson carried "$carried" \
-    --argjson recorded "$recorded" "$_ROW_TEXT_JQ$_SECURITY_CLASS_JQ"'
-    def key_array: [.member, .finding_class, .path, .line];
-    length as $latest
-    | .[] | .round as $round | select($disposed | any(.round == $round) | not)
-    | $carried[$round | tostring] as $round_carried
-    | (if .keys == null and $round == $latest and $open != null then $open | map(key_array) else .keys end) | arrays | .[] | . as $key
-    | select([.[0], .[1], .[2], (.[3] | line_of)] as $full | $recorded | any(.[0] >= $round and .[1:] == $full) | not)
-    | select($disposed | any(.round > $round and (.keys | any(. == $key))) | not)
-    | select($round_carried.filed | any(. == $key) | not)
-    | select(($round_carried.accepted | any(. == $key)) and $round == $latest and $open != null
-        and any($open[]; key_array == $key and (security_class | not)) | not)
-    | "violation: undecided \({round: $round, member: .[0], finding_class: .[1], path: .[2], line: .[3]} | tojson)"')" || return 3
+  violations="$(printf '%s' "$open_entries" | jq -r --argjson round "$(printf '%s' "$history" | jq 'length')" --argjson recorded "$recorded" "$_ROW_TEXT_JQ"'
+    .[] | select(.triage != true)
+    | select([$round, .member, .finding_class, .path, (.line | line_of)] as $full | $recorded | any(. == $full) | not)
+    | "violation: undecided \({round: $round, member, finding_class, path, line} | tojson)"')" || return 3
   [ -z "$violations" ] && return 0
   printf '%s\n' "$violations"
   _error "record the human's decision for each undecided finding: write its {member, finding_class, path, line} plus a reason to a JSON file, then run: bash $_GAIA_DISPOSITIONS_DIRECTORY/audit-dispositions-check.sh record-residual --root $ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix (accept and waive only while the round is open and the finding is not security-class)"
   return 1
+}
+
+# _command_undecided: _undecided_keys, but only after the run folder's latest
+# unit report stopped on a reason that can leave the open round without
+# dispositions-<r>.json. needs-human and member-wave-dirty stop before the unit
+# writes it; failure can stop anywhere; dispositions-check-failed can come from
+# the bound hook denying a mid-wave join, before the file. The unit's other
+# stops cannot: clean and window-end end on disposed rounds, and checkpoint-deny
+# and window-end come only from a dispatch that would open a new round, after
+# the last one's file. With no such report it prints nothing: fixtures and runs
+# without a stopped unit hold no open round awaiting a human.
+_command_undecided() {
+  local unit_reports=("$RUN_FOLDER"/unit-*.json) stop_reason
+  [ -e "${unit_reports[0]}" ] || return 0
+  stop_reason="$(jq -r -s 'max_by(.unit) | .stop_reason // ""' "${unit_reports[@]}" 2>/dev/null)" || return 3
+  case "$stop_reason" in
+    needs-human | member-wave-dirty | failure | dispositions-check-failed) _undecided_keys ;;
+  esac
 }
 
 # _command_record_residual: append one row for the finding in FINDING_FILE to
