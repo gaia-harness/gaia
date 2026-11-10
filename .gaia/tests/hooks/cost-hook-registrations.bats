@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 #
-# Bats suite for which hooks the cost path registers. The `gh pr merge`
-# PostToolUse registration in .claude/settings.json and
-# apps/web/.claude/settings.json names pr-merge-cost.sh, and that hook invokes
-# no script beyond the libraries it loads and usage-merge.sh.
+# Bats suite for which hooks the cost path registers. The `gh` PostToolUse
+# registration in .claude/settings.json and apps/web/.claude/settings.json
+# names pr-merge-cost.sh, and that hook invokes no script beyond the libraries
+# it loads and usage-merge.sh.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/tests/hooks/cost-hook-registrations.bats
@@ -16,12 +16,24 @@ setup() {
 }
 
 # merge_commands <settings-file>: the commands of the PostToolUse registrations
-# guarded by `if: Bash(gh pr merge *)`.
+# guarded by `if: Bash(gh *)`. The filter stops at `gh` because the merge
+# hooks read the `gh -R <repo> pr merge` spelling too, which
+# `Bash(gh pr merge *)` never spawns them for.
 merge_commands() {
-  jq -r '[.hooks.PostToolUse // [] | .[] | .hooks[]? | select((.if // "") == "Bash(gh pr merge *)") | .command] | .[]' "$1"
+  jq -r '[.hooks.PostToolUse // [] | .[] | .hooks[]? | select((.if // "") == "Bash(gh *)") | .command] | .[]' "$1"
 }
 
-@test "the gh pr merge PostToolUse registration names pr-merge-cost.sh, in either settings file" {
+@test "every merge-reading hook is registered behind Bash(gh *), in either settings file" {
+  local settings_file hook gh_commands
+  for settings_file in "${SETTINGS_FILES[@]}"; do
+    gh_commands="$(jq -r '[.hooks[] | .[] | .hooks[]? | select((.if // "") == "Bash(gh *)") | .command] | .[]' "$settings_file")"
+    for hook in issue-claim-release.sh post-findings-block-on-merge.sh pr-merge-cost.sh; do
+      [ "$(grep -c "/$hook" <<<"$gh_commands")" -eq 1 ]
+    done
+  done
+}
+
+@test "the gh PostToolUse registration names pr-merge-cost.sh, in either settings file" {
   local settings_file
   for settings_file in "${SETTINGS_FILES[@]}"; do
     [ "$(merge_commands "$settings_file" | grep -c 'pr-merge-cost\.sh')" -eq 1 ]
