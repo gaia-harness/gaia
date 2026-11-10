@@ -178,9 +178,8 @@ case "${BASH_SOURCE[0]}" in
   *) _GAIA_DISPOSITIONS_DIRECTORY="." ;;
 esac
 # jq defs shared with the render library, defined here so grading never
-# depends on that library loading. residual_reason: the finding's own failure
-# mode from the lookup when it has one, else the entry's reason. security_class:
-# the grader's test, which also bounds a human's recorded accept or waive.
+# depends on that library loading. security_class is the grader's test, which
+# also bounds a human's recorded accept or waive.
 # shellcheck disable=SC2016
 _RESIDUAL_REASON_JQ='
 def residual_reason($lookup_entry):
