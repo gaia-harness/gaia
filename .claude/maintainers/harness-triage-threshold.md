@@ -17,7 +17,7 @@
 
 Otherwise **workable**: the close names Claude's signal and recovery. No signal: criterion 5.
 
-**Order:** natural-vs-exotic first: an exotic-spelling miss is no finding under any criterion, 0 and 1 included, nor makes a guard's header or docs false (4) or silently narrow (5). Then 0 to 5. Other premises only rule out findings meeting none.
+**Order:** natural-vs-exotic first, except as **Untrusted input** says: an exotic-spelling miss is no finding under any criterion, 0 and 1 included, nor makes a guard's header or docs false (4) or silently narrow (5). Then 0 to 5. Other premises only rule out findings meeting none.
 
 ## Premises
 
