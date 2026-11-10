@@ -90,6 +90,23 @@ assert_allowed() {
   assert_blocked
 }
 
+@test "the repository flag ahead of the subcommand is read: origin blocks, another repository or --draft allows" {
+  run_hook 'gh -R acme/widgets pr create --title "feat: x"'
+  assert_blocked
+  run_hook 'gh --repo=Acme/Widgets pr create --title "feat: x"'
+  assert_blocked
+  run_hook 'gh -R other/repo pr create --title "feat: x"'
+  assert_allowed
+  run_hook 'gh -R acme/widgets pr create --draft --title "feat: x"'
+  assert_allowed
+  run_hook 'gh pr -R acme/widgets create --title "feat: x"'
+  assert_blocked
+  run_hook 'gh -R other/repo pr --repo acme/widgets create --title "feat: x"'
+  assert_blocked
+  run_hook 'gh pr -R other/repo create --title "feat: x"'
+  assert_allowed
+}
+
 @test "a URL spelling of the origin repository is still the own repository" {
   run_hook 'gh pr create --repo https://github.com/acme/widgets.git --title "feat: x"'
   assert_blocked

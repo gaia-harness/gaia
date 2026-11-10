@@ -680,6 +680,32 @@ opener_pair() {
   assert_armed
 }
 
+@test "every command start the shell grammar has arms, and a dead opener's paren is not one" {
+  local text
+  for text in \
+    "($MERGE_INVOCATION)" \
+    "true && ( $MERGE_INVOCATION )" \
+    "{ $MERGE_INVOCATION; }" \
+    "! $MERGE_INVOCATION" \
+    "if $MERGE_INVOCATION; then :; fi" \
+    "if true; then $MERGE_INVOCATION; fi" \
+    "if false; then :; else $MERGE_INVOCATION; fi" \
+    "if false; then :; elif $MERGE_INVOCATION; then :; fi" \
+    "for i in 1; do $MERGE_INVOCATION; done" \
+    "while $MERGE_INVOCATION; do :; done" \
+    "until $MERGE_INVOCATION; do :; done" \
+    "sleep 1 & $MERGE_INVOCATION" \
+    "true |& $MERGE_INVOCATION" \
+    "case x in x) $MERGE_INVOCATION;; esac" \
+    "time $MERGE_INVOCATION" \
+    "coproc $MERGE_INVOCATION"; do
+    arm "$MERGE_FRAGMENT" '' "$text"
+    assert_armed || { echo "not armed: $text"; return 1; }
+  done
+  arm "$MERGE_FRAGMENT" '' "echo '\$($MERGE_INVOCATION)'"
+  assert_not_armed
+}
+
 @test "a mid-word hash still arms and a verb after a word-initial hash on its own line does not" {
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "git checkout fix#12 && $MERGE_INVOCATION"
   assert_armed || return 1
@@ -1003,4 +1029,44 @@ write_conflicted_library() {
   grep -qF "errexit=OFF" <<<"$output" || return 1
   grep -qF "SURVIVED" <<<"$output" || return 1
   true
+}
+
+# ---------------------------------------------------------------------------
+# gh's repository flag ahead of the subcommand
+# ---------------------------------------------------------------------------
+
+@test "the merge fragment arms with the repository flag ahead of the subcommand, in every spelling" {
+  local invocation
+  for invocation in 'gh -R o/r pr merge 12' 'gh --repo o/r pr merge 12' 'gh --repo=o/r pr merge 12' \
+    'gh -Ro/r pr merge 12' 'gh -R "o/r" pr merge 12' 'gh -R o/r --repo a/b pr merge 12' \
+    'gh pr -R o/r merge 12' 'gh pr --repo o/r merge 12' 'gh pr --repo=o/r merge 12' 'gh pr -Ro/r merge 12' \
+    'gh -R a/b pr -R o/r merge 12' 'gh --repo=a/b pr --repo o/r merge 12'; do
+    parity "$MERGE_FRAGMENT" "$MERGE_WORDS" "$invocation" || return 1
+  done
+}
+
+@test "a repository-flag prefix with a quoted verb arms through the first-command pass" {
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh -R o/r "pr" merge 12'
+  assert_armed
+  assert_kind first-command
+}
+
+@test "a repository-flag prefix arms only its own subcommand" {
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh -R o/r pr view 12'
+  assert_not_armed
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'xgh -R o/r pr merge 12'
+  assert_not_armed
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh -s pr merge 12'
+  assert_not_armed
+}
+
+# Consumers parse the exported view for the repository flag that decides their
+# scope, so the mask the match runs against must not reach it.
+@test "the exported view keeps the repository flag the match ran without" {
+  run bash -c '
+    . "$1" || exit 9
+    gaia_verb_armed "$2" "$3" "$4" || exit 8
+    [ "$GAIA_VERB_ARM_VIEW" = "$4" ] && [ "$GAIA_VERB_ARM_SUPPRESSED" = 0 ]
+  ' _ "$LIBRARY_FILE" "$MERGE_FRAGMENT" "$MERGE_WORDS" 'echo x && gh -R o/r pr merge 12'
+  [ "$status" -eq 0 ]
 }

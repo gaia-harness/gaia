@@ -319,7 +319,7 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(gh pr merge *)",
+            "if": "Bash(gh *)",
             "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/post-findings-block-on-merge.sh\"",
             "statusMessage": "Posting local audit findings block…"
           }
@@ -367,7 +367,7 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(gh pr merge *)",
+            "if": "Bash(gh *)",
             "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/pr-merge-cost.sh\""
           },
           {
@@ -377,7 +377,7 @@
           },
           {
             "type": "command",
-            "if": "Bash(gh pr merge *)",
+            "if": "Bash(gh *)",
             "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/issue-claim-release.sh\""
           },
           {

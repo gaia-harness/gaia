@@ -2,7 +2,8 @@
 # The data-proof walker behind the shared verb-arming decision, and the
 # liveness scan after it (verb-arming-live-helpers.sh states its contract).
 # Sourced by lib/verb-arming.sh, lazily, only once a raw arming match has
-# already hit; sourced by nothing else. Does no work at source time beyond
+# already hit or the text carries gh and a repository flag; sourced by nothing
+# else. Does no work at source time beyond
 # loading its sibling files.
 #
 #   gaia_verb_arm_view <text>
@@ -282,6 +283,50 @@ _gaia_va_opener_is_data() {
     'tee'*) [[ "$line" =~ $_GAIA_VA_TEE_REGEX ]] && return 0 ;;
   esac
   return 1
+}
+
+# gaia_verb_arm_mask_repository_flag <text>: ASSIGNS GAIA_VERB_ARM_MASKED, <text>
+# with every run of gh's repository flag ahead of the subcommand, either right
+# after `gh` (`gh -R o/r pr merge`) or right after the command-group word
+# (`gh pr -R o/r merge`), overwritten with spaces. The flag spellings are
+# `-R <v>`, `--repo <v>`, `--repo=<v>`, `-R<v>`.
+# Same length, so offsets stay valid, and the pattern's groups never reach a
+# caller's match. lib/verb-arming.sh matches every fragment against this text
+# and never exports it, so a consumer parsing GAIA_VERB_ARM_VIEW still reads
+# the flag that decides its scope. A value is one unquoted word or a whole
+# quoted word with no space in it; any other value stays unmasked and leaves
+# that spelling un-armed.
+_GAIA_VA_REPOSITORY_VALUE='([^[:space:];&|<>()`"'"'"'\\]+|"[^"[:space:]]*"|'"'"'[^'"'"'[:space:]]*'"'"')'
+_GAIA_VA_REPOSITORY_PREFIX_REGEX='(^|[^[:alnum:]_./-])(gh([[:space:]]+[[:alpha:]][[:alnum:]-]*)?)(([[:space:]]+(-R[[:space:]]+|--repo[[:space:]]+|--repo=|-R)'"$_GAIA_VA_REPOSITORY_VALUE"')+)[[:space:]]'
+
+gaia_verb_arm_mask_repository_flag() {
+  # Repeats the pass until it changes nothing: a pass resumes after each run it
+  # blanks, so a second run behind the command-group word (`gh -R a pr -R b
+  # merge`) follows a `gh` only once the first is blank. Each changing pass
+  # blanks at least one character, so the loop ends.
+  local text="$1"
+  while _gaia_va_mask_repository_flag_pass "$text" && [ "$GAIA_VERB_ARM_MASKED" != "$text" ]; do
+    text="$GAIA_VERB_ARM_MASKED"
+  done
+}
+
+_gaia_va_mask_repository_flag_pass() {
+  local rest="$1" match lead head run after offset blanks
+  GAIA_VERB_ARM_MASKED=""
+  while [[ "$rest" =~ $_GAIA_VA_REPOSITORY_PREFIX_REGEX ]]; do
+    match="${BASH_REMATCH[0]}"
+    lead="${BASH_REMATCH[1]}"
+    head="${BASH_REMATCH[2]}"
+    run="${BASH_REMATCH[4]}"
+    # Where the leftmost match starts: an earlier literal copy of the same
+    # characters would sit in the same context and have matched first.
+    after="${rest#*"$match"}"
+    offset=$(( ${#rest} - ${#match} - ${#after} + ${#lead} + ${#head} ))
+    printf -v blanks '%*s' "${#run}" ''
+    GAIA_VERB_ARM_MASKED="$GAIA_VERB_ARM_MASKED${rest:0:$offset}$blanks"
+    rest="${rest:$(( offset + ${#run} ))}"
+  done
+  GAIA_VERB_ARM_MASKED="$GAIA_VERB_ARM_MASKED$rest"
 }
 
 # The view and the liveness scan live in sibling files, loaded from this

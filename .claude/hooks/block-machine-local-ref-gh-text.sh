@@ -29,7 +29,9 @@
 #   - text a substitution produces rather than text written inside it: a
 #     `"$(cat <file>)"` body is not read (and a concrete run-folder path in
 #     that `cat` is refused as written text; pass the file as --body-file);
-#   - `--repo` / `-R`, a pull request or issue in another repository;
+#   - `--repo` / `-R` (after the subcommand or ahead of it) naming another
+#     repository, a value the shell expands, or any value when
+#     `gh repo view` cannot name the home repository;
 #   - `gh pr comment`, `gh issue comment`, `gh api`, and a `gh` nested in a
 #     subshell or compound-command body, which the top-level read does not
 #     enter.
@@ -123,8 +125,9 @@ scan_value() {
 
 # Reads GAIA_FIRST_COMMAND_WORDS for one `gh pr|issue create|edit` command.
 read_gh_command() {
-  local index=3 word_count="${#GAIA_FIRST_COMMAND_WORDS[@]}" word
+  local index=$((GAIA_GH_SUBCOMMAND_INDEX + 2)) word_count="${#GAIA_FIRST_COMMAND_WORDS[@]}" word
   local flags=() values=() entry
+  local repository_given="$GAIA_GH_PREFIX_REPOSITORY_GIVEN" repository_value="$GAIA_GH_PREFIX_REPOSITORY"
   while [ "$index" -lt "$word_count" ]; do
     word="${GAIA_FIRST_COMMAND_WORDS[$index]}"
     case "$word" in
@@ -137,10 +140,22 @@ read_gh_command() {
         flags+=("${word%%=*}")
         values+=("${word#*=}")
         ;;
-      --repo | -R | --repo=* | -R?*) return 0 ;;
+      --repo | -R)
+        index=$((index + 1))
+        repository_given=1
+        repository_value="${GAIA_FIRST_COMMAND_WORDS[$index]:-}"
+        ;;
+      --repo=*) repository_given=1; repository_value="${word#--repo=}" ;;
+      -R?*) repository_given=1; repository_value="${word#-R}" ;;
     esac
     index=$((index + 1))
   done
+  if [ "$repository_given" = 1 ]; then
+    case "$repository_value" in
+      *'$'* | *'`'*) return 0 ;;
+    esac
+    repo_slug_is_foreign "$repository_value" && return 0
+  fi
   for entry in "${!flags[@]}"; do
     scan_value "${flags[$entry]}" "${values[$entry]}"
   done
@@ -158,8 +173,9 @@ while [ "$scan_guard" -lt 64 ] && [ "$offset" -lt "${#scan_text}" ]; do
   gaia_scan_first_command "$scan_text" "$offset" || true
   next_offset="$GAIA_FIRST_COMMAND_END"
   if [ "${#GAIA_FIRST_COMMAND_WORDS[@]}" -ge 3 ] &&
-    [ "${GAIA_FIRST_COMMAND_WORDS[0]}" = gh ]; then
-    case "${GAIA_FIRST_COMMAND_WORDS[1]} ${GAIA_FIRST_COMMAND_WORDS[2]}" in
+    [ "${GAIA_FIRST_COMMAND_WORDS[0]}" = gh ] &&
+    gaia_gh_subcommand_index; then
+    case "${GAIA_FIRST_COMMAND_WORDS[$GAIA_GH_SUBCOMMAND_INDEX]} ${GAIA_FIRST_COMMAND_WORDS[$((GAIA_GH_SUBCOMMAND_INDEX + 1))]:-}" in
       'pr create' | 'pr edit' | 'issue create' | 'issue edit') read_gh_command ;;
     esac
   fi

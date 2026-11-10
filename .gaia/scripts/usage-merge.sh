@@ -88,6 +88,8 @@ _um_missing() { printf 'usage-merge.sh: cannot load %s\n' "$1" >&2; UM_EXIT_CODE
 [ -f "$UM_SCRIPT_DIRECTORY/usage.sh" ] || _um_missing "$UM_SCRIPT_DIRECTORY/usage.sh"
 # shellcheck source=/dev/null
 . "$UM_SCRIPT_DIRECTORY/../../.claude/hooks/lib/audit-scope.sh" || _um_missing "$UM_SCRIPT_DIRECTORY/../../.claude/hooks/lib/audit-scope.sh"
+# shellcheck source=/dev/null
+. "$UM_SCRIPT_DIRECTORY/../../.claude/hooks/lib/verb-arming.sh" || _um_missing "$UM_SCRIPT_DIRECTORY/../../.claude/hooks/lib/verb-arming.sh"
 UM_ROOT="$(cd "$UM_SCRIPT_DIRECTORY/../.." 2>/dev/null && pwd)" || UM_ROOT=""
 UM_ROSTER="$(audit_roster_member_names "$UM_ROOT/.gaia/audit-ci.yml" 2>/dev/null | paste -sd, -)" || UM_ROSTER=""
 UM_MAIN="$(gaia_usage_main_root)" || exit 0
@@ -121,14 +123,21 @@ _um_origin_slug() {
 # Sets UM_PR (a PR number), UM_GH_ARGUMENT (what to hand `gh pr view`), UM_NAMED
 # (1 when the statement carried a positional argument, readable or not, or the
 # scan was cut inside a quoted value), and UM_FOREIGN (1 when the merge is aimed
-# at another repository: a repo flag anywhere in the text after the verb, or a
-# URL for a repository other than origin). A foreign merge is terminal for the
-# caller, which exits before reading anything.
+# at another repository: a repo flag ahead of any gh subcommand in the command
+# or anywhere after the verb, or a URL for a repository other than origin). A
+# foreign merge is terminal for the caller, which exits before reading anything.
 _um_parse_command() {
-  local merge_command_regex='gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)' rest token skip=0 open_quote="" last slug origin full
+  local merge_command_regex='gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)' rest token skip=0 open_quote="" last slug origin full masked_command
   UM_PR="" UM_GH_ARGUMENT="" UM_NAMED=0 UM_FOREIGN=0
-  [[ $tool_command =~ $merge_command_regex ]] || return 0
-  full="${tool_command#*"${BASH_REMATCH[0]}"}"
+  # gh's repository flag ahead of a subcommand is blanked first, so the prefix
+  # spelling reads as a merge. Marking it foreign errs safe: over-marking skips
+  # the cost block and its merge row, never attributes them to the wrong pull
+  # request.
+  gaia_verb_arm_mask "$tool_command"
+  masked_command="$GAIA_VERB_ARM_MASKED"
+  [[ $masked_command =~ $merge_command_regex ]] || return 0
+  [ "$masked_command" = "$tool_command" ] || UM_FOREIGN=1
+  full="${masked_command#*"${BASH_REMATCH[0]}"}"
   rest="${full%%[;&|]*}"
   rest="${rest%%$'\n'*}"
   set -f
