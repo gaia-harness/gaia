@@ -218,6 +218,8 @@ recorded_one() {
   [ "$status" -eq 0 ]
   unchanged
   printf '%s' "$output" | grep -qF 'not interactive'
+  printf '%s' "$output" | grep -qF 'Start a new interactive Claude Code session on this branch'
+  printf '%s' "$output" | grep -qF -- '--continue or --resume'
 }
 
 @test "a cli transcript whose first records lack entrypoint still records when every entrypoint is cli" {
