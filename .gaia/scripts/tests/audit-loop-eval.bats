@@ -1310,6 +1310,64 @@ drift_fixture() {
   [ "$(gaia_loop_decide_member "$(make_state 5)" null false missing 300000 50)" = "allow fallback 6 6" ]
 }
 
+# grant_window_state <used> [<jq-filter>]: an enriching checkpoint at round 3
+# answered by a grant of K, and the unit that grant admitted (rounds 4..3+K).
+grant_window_state() {
+  local unit_rounds
+  unit_rounds="$(UNIT_ROUNDS)"
+  make_state "$1" ".history.checkpoints = [$(checkpoint_entry 1 3 rubric:enriching)]
+    | .allowance.answers = [{checkpoint: 1, kind: \"grant\", n: $unit_rounds, at: \"x\", session_id: \"s1\"}]
+    | .history.units = [$(unit_entry 1 4 $((3 + unit_rounds)) 1) | .admitted_on = \"grant\"]
+    | ${2:-.}"
+}
+
+@test "grant override: a grant of K admits K rounds through enriching, stalled, nitpicky and small-tail, and the next unit is denied" {
+  local unit_rounds used signal snapshot through
+  unit_rounds="$(UNIT_ROUNDS)"
+  through=$((3 + unit_rounds))
+  [ "$(gaia_loop_decide_unit "$(grant_window_state 3 '.history.units = []')" '{"round":3,"verdict":"enriching","signals":{"enriching":true}}' "$HIGH" 300000 50)" = "allow grant 4 $through" ] || return 1
+  for signal in enriching stalled nitpicky small-tail; do
+    used=4
+    while [ "$used" -lt "$through" ]; do
+      snapshot="$(jq -n -c --argjson round "$used" --arg signal "$signal" '{round: $round, verdict: "continue", signals: {($signal): true}}')"
+      [ "$(gaia_loop_decide_member "$(grant_window_state "$used")" "$snapshot" true "$HIGH" 300000 50)" = allow ] || { echo "$signal, used $used"; return 1; }
+      used=$((used + 1))
+    done
+    snapshot="$(jq -n -c --argjson round "$through" --arg signal "$signal" '{round: $round, verdict: "continue", signals: {($signal): true}}')"
+    [ "$(gaia_loop_decide_member "$(grant_window_state "$through")" "$snapshot" true "$LOW" 300000 50)" = "deny window false false" ] || { echo "$signal, window end"; return 1; }
+    [ "$(gaia_loop_decide_unit "$(grant_window_state "$through")" "$snapshot" "$LOW" 300000 50)" = "deny rubric:$signal false false" ] || { echo "$signal, next unit"; return 1; }
+  done
+}
+
+@test "grant override: a unit dispatched inside an open grant window is admitted on the grant for the rest of it" {
+  local unit_rounds through enriching state
+  unit_rounds="$(UNIT_ROUNDS)"
+  through=$((3 + unit_rounds))
+  enriching='{"round":4,"verdict":"enriching","signals":{"enriching":true}}'
+  # The granted unit stopped after round 4; the next unit takes rounds 5..through, over the line too.
+  [ "$(gaia_loop_decide_unit "$(grant_window_state 4)" "$enriching" "$HIGH" 300000 50)" = "allow grant 5 $through" ] || return 1
+  # Inline, the same window admits one round.
+  [ "$(gaia_loop_decide_member "$(grant_window_state 4)" "$enriching" false "$HIGH" 300000 50)" = "allow grant 5 5" ] || return 1
+  # The unit that resumption records keeps the override for its members.
+  state="$(grant_window_state 5 ".history.units += [$(unit_entry 2 5 "$through" 1) | .admitted_on = \"grant\"]")"
+  [ "$(gaia_loop_decide_member "$state" '{"round":5,"verdict":"enriching","signals":{"enriching":true}}' true "$LOW" 300000 50)" = allow ] || return 1
+  # red: a checkpoint pinned since the grant's unit ends the resumption.
+  [ "$(gaia_loop_decide_unit "$(grant_window_state 4 ".history.checkpoints += [$(checkpoint_entry 2 4 context)]")" "$enriching" "$HIGH" 300000 50)" = "deny rubric:enriching false false" ]
+}
+
+@test "grant override: reintroduced and waiver-drift still deny inside a grant, the cap ends a window admitted below it, and a later checkpoint or a non-grant unit ends the override" {
+  local enriching
+  enriching='{"round":4,"verdict":"enriching","signals":{"enriching":true}}'
+  [ "$(gaia_loop_decide_member "$(grant_window_state 4)" '{"round":4,"verdict":"continue","signals":{"reintroduced":true,"enriching":true}}' true "$LOW" 300000 50)" = "deny rubric:reintroduced false false" ] || return 1
+  [ "$(gaia_loop_decide_member "$(grant_window_state 4)" '{"round":4,"verdict":"continue","signals":{"waiver-drift":true}}' true "$LOW" 300000 50)" = "deny rubric:waiver-drift false false" ] || return 1
+  # red: a checkpoint pinned after the grant's unit was admitted ends the override.
+  [ "$(gaia_loop_decide_member "$(grant_window_state 4 ".history.checkpoints += [$(checkpoint_entry 2 4 context)]")" "$enriching" true "$LOW" 300000 50)" = "deny rubric:enriching false false" ] || return 1
+  # red: a unit admitted on anything but a grant gets no override.
+  [ "$(gaia_loop_decide_member "$(grant_window_state 4 '.history.units[0].admitted_on = "context"')" "$enriching" true "$LOW" 300000 50)" = "deny rubric:enriching false false" ] || return 1
+  # The cap still ends a grant's window admitted below it.
+  [ "$(gaia_loop_decide_member "$(grant_window_state 10 '.history.units[0].start_round = 9 | .history.units[0].through_round = 10')" '{"round":10,"verdict":"enriching","signals":{"cap":true,"enriching":true}}' true "$LOW" 300000 50)" = "deny cap false true" ]
+}
+
 @test "vetoes: a vetoed key re-enters A from its effective round, whatever was disposed" {
   local vetoes="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json" key
   authored_count_sequence major 3 3 3
