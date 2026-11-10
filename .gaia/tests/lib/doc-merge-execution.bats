@@ -167,9 +167,9 @@ retired_or_asking_lines() {
 SERVICE_LAYER_HEADING='**Service-layer sentinel (runs first).**'
 SERVICE_LAYER='apps/web/app/services'
 
-# A project, a baseline release and a latest release. The latest changes the
-# sample layer's api.ts and adds a file beside it, the two upstream changes
-# that would otherwise fire a `removed` row and re-create the folder.
+# A project, a baseline release and a latest release, manifests only. Both list
+# the sample layer's api.ts and the latest adds client.ts: paths that would
+# otherwise take a `removed` row and an `add` that re-creates the folder.
 service_layer_setup() {
   PROJECT="$BATS_TEST_TMPDIR/project"
   BASELINE_RELEASE="$BATS_TEST_TMPDIR/baseline"

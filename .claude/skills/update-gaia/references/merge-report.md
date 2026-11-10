@@ -81,7 +81,7 @@ The orchestrator classifies the file with `audit-noop-detect.sh --shape agent-re
   "class": "owned" | "shared" | "wiki-owned" | null,   // null: in neither latest manifest class (an upstream removal)
   "baselineTag": "v2.0.4",                              // the tag whose copy was B (a deferred entry's baselineTag when deferred)
   "status": "...",                                      // one of the statuses below
-  "note": "no-upstream-change" | "already-latest" | "design-system" | "service-layer-absent" | "...",   // optional, for skip
+  "note": "no-upstream-change" | "already-latest" | "design-system" | "service-layer-absent" | "service-layer-changed" | "...",   // optional, for skip
   "backedUp": true,                                     // optional
   "autoCandidate": "candidates/<path>.auto",            // auto-merged entries from a judgment-only chunk agent only
   "fieldMerge": {                                       // field-aware entries only: the CLI buckets, minus conflicts
@@ -94,7 +94,7 @@ The orchestrator classifies the file with `audit-noop-detect.sh --shape agent-re
 
 Here A is the adopter's file in the acting tree, B the baseline copy (a deferred entry's baseline copy when the decision log defers the path) and L the latest copy.
 
-- `skip`: nothing to write. `note` says why: `no-upstream-change` (B equals L), `already-latest` (A equals L), `design-system` (the adopter's committed design system owns the path), `service-layer-absent` (the project has no `apps/web/app/services/gaia/`, so the sample service layer is the adopter's).
+- `skip`: nothing to write. `note` says why: `no-upstream-change` (B equals L), `already-latest` (A equals L), `design-system` (the adopter's committed design system owns the path), `service-layer-absent` and `service-layer-changed` (the project has no `apps/web/app/services/gaia/`, so the sample service layer is the adopter's; `service-layer-changed` marks a path the release changed or added there).
 - `overwrite`: an owned file replaced with L, A backed up first.
 - `merge`: a shared or wiki-owned file the adopter never edited, replaced with L, A backed up first.
 - `add`: a file new in the latest release, copied in.
@@ -197,7 +197,7 @@ When the both-changed files are many, the orchestrator splits them with `update-
 
 ## How the orchestrator renders the report's sections
 
-The review summary carries four sections the adopter cannot see any other way. Each backticked row below is the whole literal to print.
+The review summary carries these sections, which the adopter cannot see any other way. Each backticked row below is the whole literal to print.
 
 **Package settings.** `regenerated` → `Package settings: regenerated and drift-clean`. `stale` → `Package settings: stale (<detail>); run ./.gaia/cli/gaia packages sync-settings by hand`. `pending-resolution` is resolved by the orchestrator's own sync re-run after the answer; render the outcome of that re-run the same two ways. Never render a clean row for a sync that did not run.
 
@@ -234,3 +234,5 @@ Then, whenever each applies:
 9. **Confined writes.** Each `regen.confined` entry with its action. `restored` and `removed` are writes outside the region's declared paths that the runner undid; `reported` is one it left alone (a write outside the region's directories, or a restore it could not complete), and that is the one the adopter has to look at.
 
 **Adopter actions.** When `adopterActions` is non-empty, print each as an opt-in suggestion naming its subject and its literal command (for example: GAIA removed `react-router-dom` this release, run `pnpm remove react-router-dom`? It is still in your `package.json`), and say they are advisory. When the saved CHANGELOG range file does not exist, print `Adopter-action suggestions skipped: the release CHANGELOG could not be fetched.` instead, so an empty list never reads as "this release documents nothing to do".
+
+**Service layer.** When any `files` entry has note `service-layer-changed` → `Service layer: this release changed <paths>, which your project no longer has; port any of those changes you want by hand`, with `<paths>` the comma-separated entry paths.

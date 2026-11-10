@@ -90,7 +90,7 @@ if [ ! -d apps/web/app/services/gaia ]; then
 fi
 ```
 
-Record each path in `SERVICE_LAYER_SKIPS` as `skip` with note `service-layer-absent` and leave it out of the rest of the walk, Step 7f included: no add, no removed, no delete, no question, no backup, so the folder is never re-created. When any of those paths is new in L or has B differing from L, add this line to the digest: "Upstream changes to `apps/web/app/services/gaia/` are not applied to your renamed service layer; port them by hand if you want them." When the folder exists, its paths take the table below.
+Record each path in `SERVICE_LAYER_SKIPS` as `skip` and leave it out of the rest of the walk, Step 7f included: no add, no removed, no delete, no question, no backup, so the folder is never re-created. Its note is `service-layer-changed` when L exists and B is missing or differs from L (an upstream change the adopter does not get), else `service-layer-absent`. When the folder exists, its paths take the table below.
 
 **Field-aware files are walked separately.** Every `package.json` (the root and each registered package), `pnpm-workspace.yaml` and `.gaia/audit-ci.yml` takes Step 7a to 7c instead of the table below, because a whole-file comparison cannot separate the adopter's identity fields and intentional removals from the real upstream delta. The package directories:
 
