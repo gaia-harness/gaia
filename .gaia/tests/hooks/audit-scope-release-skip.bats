@@ -393,9 +393,13 @@ DIGEST_ONLY_CALLERS='.claude/hooks/post-audit-status.sh
 .github/audit/resolve-audit-base-context.sh'
 # By design: verify-audit-roster-coverage.sh classifies the whole tree with no diff, and
 # audit-triage-lib.sh asks ownership only for triage marks, which only the
-# maintainer members write.
+# maintainer members write. audit-code-review-handover.sh classifies only a review's
+# findings, and decide opens no new review on a branch already changing .gaia/VERSION. A
+# review first assigned after a later bump classifies unarmed, which can only over-review
+# a shipped file; that effect is read from the code, not run.
 EXEMPT_CONSUMERS='.gaia/scripts/verify-audit-roster-coverage.sh
-.gaia/scripts/audit-triage-lib.sh'
+.gaia/scripts/audit-triage-lib.sh
+.gaia/scripts/audit-code-review-handover.sh'
 
 # _non_comment_mentions <file> <extended-regex>: exit 0 when a non-comment line
 # names the pattern.

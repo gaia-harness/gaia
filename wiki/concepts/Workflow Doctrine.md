@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-11-08
+updated: 2026-11-09
 tags: [concept, claude, workflow, doctrine]
 ---
 
@@ -37,7 +37,7 @@ Models are ranked by fit to the task class. Fit has two halves: the reasoning de
 | synthesis | Opus (Fable when the session is on it or the user picks it) | Wording, positioning, architecture, and design decisions where one weak choice propagates into everything after it. | Top-model rates; Fable's input and output rates are two and a half times Opus's. Fit selects it. |
 | lookup, scaffold, mechanical | Haiku | The answer is fixed by a template, a rule id, or a written convention: scaffolding from a pattern, a fix keyed to a lint or accessibility rule id, a rule-based check. Reasoning depth adds nothing the template does not already carry. | Fit selects it and the lower price follows. A pin is a ceiling: an inline skill's pin holds for the rest of the turn it loads in, so a skill that triggers in the middle of general implementation work is not this class. |
 
-GAIA never pins effort. Every subagent, named, general-purpose or fork, runs at the session's effort level, the same as work the main thread does inline: no agent frontmatter carries `effort:`, and no dispatch passes the `Agent` tool's `effort` parameter. Effort is the user's lever. A low session is low by choice and a high one is high by choice, and a level GAIA chose would raise or lower spend behind the user's back. `CLAUDE_CODE_EFFORT_LEVEL`, when set, overrides the session level machine-wide. The cost of this rule is accepted: the Code Audit Team members and the `/gaia-spec` and `/gaia-plan` audit pipelines grade at the session's level, not a constant one.
+GAIA pins no effort on any agent or dispatch, with one exception. Every subagent, named, general-purpose or fork, runs at the session's effort level, the same as work the main thread does inline: no agent frontmatter carries `effort:`, and no dispatch passes the `Agent` tool's `effort` parameter. Effort is the user's lever. A low session is low by choice and a high one is high by choice, and a level GAIA chose would raise or lower spend behind the user's back. `CLAUDE_CODE_EFFORT_LEVEL`, when set, overrides the session level machine-wide. The one exception is the audit's code review, which runs `/code-review` as a separate headless session and always passes it the review level `high`. That level is review depth, not session effort; the child session's own effort stays unpinned. The cost of this rule is accepted: the Code Audit Team members and the `/gaia-spec` and `/gaia-plan` audit pipelines grade at the session's level, not a constant one.
 
 The cost ratios come from the published price card, not from measurement. `.gaia/scripts/token-rates.json` carries the same rates for GAIA's cost readouts, with Haiku at its short-prompt rate, so a Haiku cost readout is a lower bound.
 
@@ -50,6 +50,7 @@ Among the doctrine sources (the rule, `.claude/doctrine/execution.md`, and this 
 
 - Frontmatter `model:` in skills and agents: `.claude/skills/*/SKILL.md`, `apps/web/.claude/skills/*/SKILL.md`, `.claude/agents/*.md`. A skill pins only for the lookup, scaffold, mechanical row; [[Deliberate Configuration Asymmetries]] records which skills pin and why.
 - Dispatch pins in playbooks: `.claude/skills/gaia/references/plan.md` (the planner picker), `.claude/skills/gaia/references/plan/planner.md` (the executor pin), `.claude/skills/gaia/references/spec.md` (the model gate), `.claude/skills/gaia/references/cleanse.md`, `.claude/skills/gaia/references/fitness.md`, `.claude/skills/gaia/references/worthiness-step.md` (the test fixer), `.claude/skills/gaia/references/overlap-pass.md` (the overlap test fixer), `.claude/skills/gaia/references/simplify-pass.md` (the simplify pass executor), `.claude/skills/gaia/references/wiki.md` and its stage files `.claude/skills/gaia/references/wiki/*.md`, the update-deps wave and override-audit agents in `.claude/skills/update-deps/SKILL.md`, and the bump agents in `.claude/skills/update-gaia/references/conflict-flow.md`.
+- The review child's model pin: `.gaia/scripts/audit-code-review.sh`, whose `audit-code-review-child.sh` library passes `--model opus` (the review and adversarial check row).
 - Executed wiki pages: `wiki/concepts/Audit Round Procedure.md` (the fixer dispatch).
 - Descriptive wiki pages that restate a pin: `wiki/concepts/GAIA Plan.md`, `wiki/concepts/GAIA Spec.md`, `wiki/concepts/Task Orchestration.md`, `wiki/concepts/Wiki Sync.md`, `wiki/concepts/Wiki Consolidate.md`, `wiki/decisions/Deliberate Configuration Asymmetries.md`.
 

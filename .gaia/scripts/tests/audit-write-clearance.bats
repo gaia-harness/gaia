@@ -931,6 +931,25 @@ resolve_all_open() {
   [ "$(jq '.remaining | length' "$LEDGER")" = "1" ]
 }
 
+@test "ledger: review ids on a finding reach its entry and survive a re-report that omits them" {
+  ledger_setup
+  member="code-audit-maintainer-shell"
+  write_findings_sidecar "$member" "[$(finding_json 113 | jq -c '. + {review_ids: ["cr-1","cr-4"]}')]"
+  bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
+  [ "$(jq -c '.remaining[0].review_ids' "$LEDGER")" = '["cr-1","cr-4"]' ]
+  rereport_all_open "$member"
+  bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
+  [ "$(jq -c '.remaining[0].review_ids' "$LEDGER")" = '["cr-1","cr-4"]' ]
+}
+
+@test "ledger: an entry whose finding carries no review ids has no review_ids key" {
+  ledger_setup
+  member="code-audit-maintainer-shell"
+  write_sidecar_for "$member" 113
+  bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
+  [ "$(jq -r '.remaining[0] | has("review_ids")' "$LEDGER")" = false ]
+}
+
 @test "ledger: every actionable field reaches remaining[], so the refusal briefs its own repair" {
   ledger_setup
   member="code-audit-maintainer-shell"

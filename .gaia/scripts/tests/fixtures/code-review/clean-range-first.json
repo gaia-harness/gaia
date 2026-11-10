@@ -1,0 +1,17 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "local_command": "code_review",
+  "duration_ms": 30827,
+  "total_cost_usd": 0.1558046,
+  "permission_denials": [
+    {
+      "tool_name": "Bash"
+    },
+    {
+      "tool_name": "Read"
+    }
+  ],
+  "result": "No findings. The diff only changes `abbreviaton` to `abbreviation` on line 33 of `.claude/rules/no-abbreviations.md`, and the rule's meaning is the same.\n\n- **Correctness and removed behavior:** the YAML frontmatter and `paths` globs are untouched, and the fix removes no guard or instruction.\n- **Cross-file:** the misspelling no longer appears anywhere in the repo. The manifest and `claude-probe/expectations.json` reference this rule by path only, so the content change doesn't affect them.\n- **Cleanup and altitude:** a one-word prose fix adds no code, duplication or runtime cost, and fixes the typo at its source.\n- **Conventions:** I found no violations in the root `CLAUDE.md`. `apps/web/CLAUDE.md` doesn't apply because it's outside the changed path. The changelog gate in `.claude/rules/pr-merge.md` only requires deciding whether an entry is needed, so a missing entry for a typo fix isn't a violation.\n\n**Not checked:** I couldn't read `~/.claude/CLAUDE.md` because the file tools are restricted to the worktree, so the user-level rules weren't applied. A separate Bash call to re-show the base commit and list the rule directories was also denied, but it doesn't affect the result because the diff had already been retrieved.\n\n```json\n[]\n```"
+}

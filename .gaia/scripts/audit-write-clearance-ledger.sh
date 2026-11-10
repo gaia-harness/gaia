@@ -145,7 +145,9 @@ _write_clearance_write_ledger() {
                                       verified_by: $finding.verified_by,
                                       suggested_fix: $finding.suggested_fix,
                                       first_seen_round: $first_seen,
-                                      escalated: false}])))).entries)          as $mine
+                                      escalated: false}
+                                     + (($finding.review_ids // ($pair.was // {}).review_ids) as $review_ids
+                                        | if ($review_ids | type) == "array" then {review_ids: $review_ids} else {} end)])))).entries)          as $mine
             | ($matched.claimed)                                              as $rereported
             | ([$open[]
                 | . as $entry

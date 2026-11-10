@@ -132,6 +132,10 @@
 #   <!-- gaia-codify:findings:end -->
 #   <n> finding(s) withheld (security-class or Critical)     (only when n > 0)
 #
+#   code_review is an additive top-level key: the code review's outcome, reason
+#   and counts from the branch's review record, never finding text or denial
+#   detail. It is absent when the record script's publish-values prints nothing.
+#
 #   review_bases is ALWAYS present, possibly []. One entry per valid sidecar
 #   carrying a well-formed `review_base` (audit-write-findings.sh), built from
 #   that sidecar's .member, .review_base.sha, .review_base.reason, and
@@ -181,6 +185,8 @@ set -uo pipefail
 
 # shellcheck source=/dev/null
 . "$(dirname "${BASH_SOURCE[0]}")/audit-key-lib.sh"
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/audit-loop-state-lib.sh"
 
 usage() {
   cat <<'EOF' >&2
@@ -397,12 +403,31 @@ member_count="$(jq -s '[.[] | (.member // "") ] | unique | length' \
   ${valid_files[@]+"${valid_files[@]}"} 2>/dev/null || printf '%s' "${#valid_files[@]}")"
 [ -n "$member_count" ] || member_count="${#valid_files[@]}"
 
+# The code review's outcome, reason and counts, read from the branch's review
+# record in the main checkout's run folder. A rider like review_bases: it is left
+# out whole when publish-values prints nothing or any step fails, and it carries no
+# finding text or denial detail.
+code_review=null
+if main_root="$(gaia_resolve_main_root "$repo_root" 2>/dev/null)" \
+  && branch_key="$(gaia_loop_key "$repo_root" 2>/dev/null)" \
+  && code_review="$(bash "$(dirname "${BASH_SOURCE[0]}")/audit-code-review-record.sh" publish-values \
+    --root "$repo_root" --run-folder "$(gaia_loop_run_directory "$main_root" "$branch_key")" --rounds 0 --pr "$PR" 2>/dev/null \
+    | jq -c 'select(type == "object") | {outcome, reason, added, kept, dropped, unaccounted, merged, fixed}
+      | with_entries(select(.value != null))' 2>/dev/null)" \
+  && [ -n "$code_review" ]; then
+  :
+else
+  code_review=null
+fi
+
 payload="$(jq -nc \
   --argjson pr "$PR" \
   --argjson findings "$merged_findings" \
   --argjson review_bases "$review_bases" \
+  --argjson code_review "$code_review" \
   '{schema: 1, pr_number: $pr, auditor: "local", findings: $findings,
-    review_bases: $review_bases}' 2>/dev/null || true)"
+    review_bases: $review_bases}
+    + (if $code_review == null then {} else {code_review: $code_review} end)' 2>/dev/null || true)"
 if [ -z "$payload" ]; then
   emit_error "could not render the findings payload"
   emit_decline "post failed"

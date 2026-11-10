@@ -1,0 +1,17 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "local_command": "code_review",
+  "duration_ms": 270649,
+  "total_cost_usd": 0.981842,
+  "permission_denials": [
+    {
+      "tool_name": "Bash"
+    },
+    {
+      "tool_name": "Read"
+    }
+  ],
+  "result": "Reviewed all 14 files. Most findings are pre-existing bugs in functions the diff touches or cleanup, and I found no clear functional regression from the commit itself.\n\n**Limits:**\n- `node_modules` and `.react-router` are absent, so typegen and `tsc` weren't run.\n- Library behavior (remix-auth, remix-toast, RR types) comes from memory and is unverified.\n- `~/.claude/CLAUDE.md` was not readable. The repo `CLAUDE.md` has no rule the diff breaks.\n\n```json\n[{\"file\":\"app/routes/_auth+/login.tsx\",\"line\":13,\"summary\":\"authenticator.authenticate is not wrapped in error handling, so a failed login throws, and the `if (!user)` invalidCredentials branch at line 16 is dead code (its eslint-disable comment hints at this).\",\"failure_scenario\":\"Wrong password -> API returns 401 (as test/mocks/auth/login.ts does) -> ky throws HTTPError inside FormStrategy -> action throws -> user sees the root ErrorBoundary page instead of the FormError 'invalid credentials' message. Same for a Zod parse failure in the login response.\"},{\"file\":\"app/routes/actions+/set-language.ts\",\"line\":22,\"summary\":\"Open redirect: redirectUrl comes straight from the form body and goes to replace() with no same-origin or relative-path check.\",\"failure_scenario\":\"Third-party page auto-submits a POST to /actions/set-language with language=en&redirectUrl=https://evil.example -> server responds with a redirect to the attacker site from the trusted origin, usable for phishing.\"},{\"file\":\"app/routes/_public+/things+/$id.tsx\",\"line\":38,\"summary\":\"The loader calls getThingById with no attempt() or 404 mapping, so a missing thing surfaces as an unhandled server error.\",\"failure_scenario\":\"GET /things/does-not-exist -> API 404 -> ky HTTPError thrown from loader -> RR treats it as a 500 and renders the generic Error boundary, instead of a 404 status and page. This gives wrong SEO status and error UX.\"}]\n```"
+}

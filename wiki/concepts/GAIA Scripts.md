@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-09-20
-updated: 2026-11-08
+updated: 2026-11-09
 tags: [concept, gaia, scripts]
 ---
 
@@ -24,7 +24,7 @@ A `*-lib` file is sourced for its functions; some also run as commands when exec
 
 | Family | What it does | Invoked from | Ships |
 |---|---|---|---|
-| `audit-` | The Code Audit Team's machinery: scope resolution, digests, the single writers for clearance markers and findings sidecars, the audit loop's state, evaluation and records, the dispositions check, the no-op detector, and the Light-route helpers. See [[Code Review Audit Agent]] and [[PR Merge Workflow]]. | Agent definitions, audit hooks, CI, the merge workflow | Mostly ships |
+| `audit-` | The Code Audit Team's machinery: scope resolution, digests, the single writers for clearance markers and findings sidecars, the audit loop's state, evaluation and records, the dispositions check, the no-op detector, the Light-route helpers, and the code review run (`audit-code-review*.sh`, see [[Audit Gate Reference#The code review record]]). See [[Code Review Audit Agent]] and [[PR Merge Workflow]]. | Agent definitions, audit hooks, CI, the merge workflow | Mostly ships |
 | `check-` | Deterministic checks of a repository invariant: hook command rooting, settings drift, tech-debt filing metadata, the update refresher the statusline starts, and maintainer-side invariant checks over the harness itself. | Hooks, skills, the statusline, GAIA's own invariant harness | Mixed |
 | `lint-` | Guard lints over GAIA's own shell and workflow YAML for classes shellcheck cannot model. | The shell lint runner and CI | Maintainer-only |
 | `debt-` | The tech-debt backlog: ordering and clustering, batch budgeting, dedup, argument parsing, path probing, stale-claim detection, and the statusline count. | `/gaia-debt`, the file-tech-debt skill, the statusline | Ships |

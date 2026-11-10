@@ -18,7 +18,7 @@
 # Usage
 #   audit-write-findings.sh --root <path> --member <name> --base <sha>
 #                           --findings <file>|-
-#                           [--resolutions <file>|-]
+#                           [--resolutions <file>|-] [--review-drops <file>]
 #                           [--review-base <sha> --base-reason <token>]
 #                           [--anchor-tree <tree>] [--review light] [--help|-h]
 #
@@ -38,6 +38,10 @@
 #                 operator-acknowledged. entry_id must be a non-empty string and
 #                 rationale non-empty after trimming. `--findings -` and
 #                 `--resolutions -` cannot both read stdin (exit 2).
+#     --review-drops OPTIONAL. Path to a JSON array of {"id": "cr-<n>",
+#                 "reason": "<evidence>"} records: the handed review findings the
+#                 member drops, each with the concrete evidence it cites. id must
+#                 match cr-<n> and reason must be non-empty after trimming.
 #     --review-base OPTIONAL. The PER-MEMBER review base sha
 #                 (.github/audit/resolve-audit-base.sh --member), distinct from
 #                 --base above (the SHARED artifact key). Must be paired with
@@ -107,6 +111,11 @@
 #                  dispositions check owns that bound.
 #   triage_reason  string, REQUIRED and non-empty when triage is true; when
 #                  present otherwise it must still be a string.
+#   review_ids     OPTIONAL non-empty array of ids matching cr-<n>: the handed
+#                  review findings this finding keeps. Absent means the finding
+#                  is the member's own.
+#   review_merged  OPTIONAL boolean. true when this finding merges a handed
+#                  finding with one the member raised itself.
 #   grade          OPTIONAL, one of easy | medium | hard: the member's
 #                  difficulty grade of the fix. The audit loop unit copies it
 #                  into the finding file-tech-debt.sh files, which labels it
@@ -126,6 +135,8 @@
 #   the given array is empty):
 #   {"schema":1,"member":"<name>","findings":[...],
 #    "resolutions":[{"entry_id":"<id>","rationale":"<why>"}]}
+#   With --review-drops, one more additive top-level key, `review_drops`, holding
+#   the validated array; without it the key is absent.
 #   Without --resolutions the key is absent. Neither `entry_id` nor
 #   `resolutions` is projected into the PR-comment findings block.
 #   With --review-base and --base-reason both present and non-empty, one
@@ -165,7 +176,7 @@ usage() {
   cat <<'EOF' >&2
 usage: audit-write-findings.sh --root <path> --member <name> --base <sha>
                                --findings <file>|-
-                               [--resolutions <file>|-]
+                               [--resolutions <file>|-] [--review-drops <file>]
                                [--review-base <sha> --base-reason <token>]
                                [--anchor-tree <tree>] [--review light]
                                [--help|-h]
@@ -176,6 +187,8 @@ usage: audit-write-findings.sh --root <path> --member <name> --base <sha>
   --findings    a JSON array of finding objects, or `-` for stdin. `[]` is valid.
   --resolutions a JSON array of {entry_id, rationale} records, or `-` for
                 stdin (not together with `--findings -`).
+  --review-drops a JSON array of {id, reason} records for handed review
+                findings the member drops; reason is the cited evidence.
   --review-base the per-member review base sha. Must be paired with
                 --base-reason: exactly one present is a usage error.
   --base-reason the resolver's reason token for --review-base.
@@ -201,6 +214,8 @@ BASE=""
 FINDINGS_INPUT=""
 RESOLUTIONS_INPUT=""
 RESOLUTIONS_SET=0
+REVIEW_DROPS_INPUT=""
+REVIEW_DROPS_SET=0
 REVIEW_BASE=""
 REVIEW_BASE_SET=0
 BASE_REASON=""
@@ -233,6 +248,11 @@ while [ "$#" -gt 0 ]; do
     --resolutions)
       RESOLUTIONS_INPUT="${2:-}"
       RESOLUTIONS_SET=1
+      shift 2 2>/dev/null || shift
+      ;;
+    --review-drops)
+      REVIEW_DROPS_INPUT="${2:-}"
+      REVIEW_DROPS_SET=1
       shift 2 2>/dev/null || shift
       ;;
     --review-base)
@@ -298,6 +318,12 @@ fi
 
 if [ "$RESOLUTIONS_SET" -eq 1 ] && [ -z "$RESOLUTIONS_INPUT" ]; then
   error "--resolutions requires a file or -"
+  usage
+  exit 2
+fi
+
+if [ "$REVIEW_DROPS_SET" -eq 1 ] && [ -z "$REVIEW_DROPS_INPUT" ]; then
+  error "--review-drops requires a file"
   usage
   exit 2
 fi
@@ -385,6 +411,12 @@ if ! violation="$(printf '%s' "$raw" | jq -r '
         then "grade, when present, must be one of easy|medium|hard"
       elif ($finding | has("difficulty"))
         then "difficulty is not a field; write the grade as grade"
+      elif ($finding | has("review_ids"))
+           and ((($finding.review_ids | type) != "array") or (($finding.review_ids | length) == 0)
+                or any($finding.review_ids[]; (type != "string") or (test("^cr-[0-9]+$") | not)))
+        then "review_ids, when present, must be a non-empty array of cr-<n> ids"
+      elif ($finding | has("review_merged")) and (($finding.review_merged | type) != "boolean")
+        then "review_merged, when present, must be a boolean"
 # gaia:maintainer-only:start
       elif ($finding | has("audience")) and ((($finding.audience | type) != "string") or ((["adopter","maintainer"] | index($finding.audience)) == null))
         then "audience, when present, must be one of adopter|maintainer"
@@ -439,6 +471,40 @@ if [ "$RESOLUTIONS_SET" -eq 1 ]; then
   fi
   if [ -n "$resolution_violation" ]; then
     error "resolutions[${resolution_violation%%$'\t'*}]: ${resolution_violation#*$'\t'}"
+    exit 2
+  fi
+fi
+
+# The handed review findings a member drops are validated in the same window.
+review_drops_raw=""
+if [ "$REVIEW_DROPS_SET" -eq 1 ]; then
+  if [ ! -f "$REVIEW_DROPS_INPUT" ]; then
+    error "--review-drops file does not exist: $REVIEW_DROPS_INPUT"
+    exit 2
+  fi
+  review_drops_raw="$(cat "$REVIEW_DROPS_INPUT")"
+  if ! printf '%s' "$review_drops_raw" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    error "--review-drops must hold a JSON array of {id, reason} objects"
+    exit 2
+  fi
+  if ! drop_violation="$(printf '%s' "$review_drops_raw" | jq -r '
+    def reason:
+      . as $drop
+      | if ($drop | type) != "object" then "not a JSON object"
+        elif (($drop.id | type) != "string") or (($drop.id | test("^cr-[0-9]+$")) | not)
+          then "id must match cr-<n>"
+        elif (($drop.reason | type) != "string")
+          or ($drop.reason | gsub("^\\s+|\\s+$"; "") | length) == 0
+          then "reason must be a non-empty string"
+        else empty
+        end;
+    first(to_entries[] | select((.value | [reason] | length) > 0) | "\(.key)\t\(.value | reason)") // empty
+  ' 2>&1)"; then
+    error "cannot validate the review drops input: $drop_violation"
+    exit 2
+  fi
+  if [ -n "$drop_violation" ]; then
+    error "review drops[${drop_violation%%$'\t'*}]: ${drop_violation#*$'\t'}"
     exit 2
   fi
 fi
@@ -507,12 +573,15 @@ if ! printf '%s' "$raw" | jq -c \
   --arg review "$REVIEW" \
   --argjson has_resolutions "$([ "$RESOLUTIONS_SET" -eq 1 ] && echo true || echo false)" \
   --argjson resolutions "${resolutions_raw:-[]}" \
+  --argjson has_review_drops "$([ "$REVIEW_DROPS_SET" -eq 1 ] && echo true || echo false)" \
+  --argjson review_drops "${review_drops_raw:-[]}" \
   '{schema: 1, member: $member}
    + (if $review == "light" then {review: "light"} else {} end)
    + {findings: [.[]
       | . + {area_tags: (.area_tags
              // [(if (.path | test("/")) then (.path | sub("/[^/]*$"; "")) else "." end)])}]}
    + (if $has_resolutions then {resolutions: $resolutions} else {} end)
+   + (if $has_review_drops then {review_drops: $review_drops} else {} end)
    + (if $has_review_base
       then {review_base: ({sha: $review_base, reason: $base_reason}
             + (if $has_anchor_tree then {anchor_tree: $anchor_tree} else {} end))}

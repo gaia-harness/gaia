@@ -695,3 +695,88 @@ no_findings_sidecar_written() {
   [ "$(jq -r '.review_base.reason' "$EXPECTED")" = "member-refusal" ]
   [ "$(jq -r '.review_base.anchor_tree' "$EXPECTED")" = "treesha" ]
 }
+
+# review_ids, review_merged and --review-drops: the keys a member uses to account
+# for handed review findings. Absent, the writer's output is unchanged.
+
+@test "review ids: a finding with neither key writes the same body as before" {
+  write "[$(complete_finding)]" >/dev/null
+  [ "$(jq -r 'has("review_drops")' "$EXPECTED")" = "false" ]
+  [ "$(jq -r '.findings[0] | has("review_ids") or has("review_merged")' "$EXPECTED")" = "false" ]
+}
+
+@test "review ids: valid ids and a merged mark are written on the finding" {
+  local finding
+  finding="$(complete_finding | jq -c '. + {review_ids: ["cr-1","cr-12"], review_merged: true}')"
+  write "[$finding]" >/dev/null
+  [ "$(jq -c '.findings[0].review_ids' "$EXPECTED")" = '["cr-1","cr-12"]' ]
+  [ "$(jq -r '.findings[0].review_merged' "$EXPECTED")" = "true" ]
+}
+
+@test "review ids: a non-array value exits 2 and writes no sidecar" {
+  run write "[$(complete_finding | jq -c '. + {review_ids: "cr-1"}')]"
+  [ "$status" -eq 2 ]
+  grep -qF "review_ids" <<<"$output"
+  no_findings_sidecar_written
+}
+
+@test "review ids: an empty array exits 2 and writes no sidecar" {
+  run write "[$(complete_finding | jq -c '. + {review_ids: []}')]"
+  [ "$status" -eq 2 ]
+  grep -qF "review_ids" <<<"$output"
+  no_findings_sidecar_written
+}
+
+@test "review ids: a malformed id exits 2 and writes no sidecar" {
+  run write "[$(complete_finding | jq -c '. + {review_ids: ["cr-1","finding-2"]}')]"
+  [ "$status" -eq 2 ]
+  grep -qF "review_ids" <<<"$output"
+  no_findings_sidecar_written
+}
+
+@test "review ids: a non-boolean review_merged exits 2 and writes no sidecar" {
+  run write "[$(complete_finding | jq -c '. + {review_ids: ["cr-1"], review_merged: "yes"}')]"
+  [ "$status" -eq 2 ]
+  grep -qF "review_merged" <<<"$output"
+  no_findings_sidecar_written
+}
+
+write_with_review_drops() {
+  printf '%s' "$2" >"$BATS_TEST_TMPDIR/review-drops.json"
+  printf '%s' "$1" | bash "$WRITER" --root "$ROOT" --member "$MEMBER" --base "$BASE" \
+    --findings - --review-drops "$BATS_TEST_TMPDIR/review-drops.json"
+}
+
+@test "review drops: a valid list is written under review_drops" {
+  local drops='[{"id":"cr-2","reason":"guard at a.sh:4 prevents it"}]'
+  run write_with_review_drops "[]" "$drops"
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '.review_drops' "$EXPECTED")" = "$drops" ]
+}
+
+@test "review drops: an empty or blank reason exits 2 and writes no sidecar" {
+  run write_with_review_drops "[]" '[{"id":"cr-2","reason":"   "}]'
+  [ "$status" -eq 2 ]
+  grep -qF "reason must be a non-empty string" <<<"$output"
+  no_findings_sidecar_written
+}
+
+@test "review drops: a non-array input exits 2 and writes no sidecar" {
+  run write_with_review_drops "[]" '{"id":"cr-2","reason":"x"}'
+  [ "$status" -eq 2 ]
+  grep -qF "must hold a JSON array" <<<"$output"
+  no_findings_sidecar_written
+}
+
+@test "review drops: an entry that is not an object exits 2 and writes no sidecar" {
+  run write_with_review_drops "[]" '["cr-2"]'
+  [ "$status" -eq 2 ]
+  grep -qF "not a JSON object" <<<"$output"
+  no_findings_sidecar_written
+}
+
+@test "review drops: a malformed id exits 2 and writes no sidecar" {
+  run write_with_review_drops "[]" '[{"id":"2","reason":"x"}]'
+  [ "$status" -eq 2 ]
+  no_findings_sidecar_written
+}

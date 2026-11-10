@@ -183,6 +183,8 @@ The orchestrator is bounded, not trusted: `audit-dispositions-check.sh` bounds e
 
 ## Finding Proof Gate (holistic reviewer)
 
+A finding handed to you in a dispatch's `Handed review findings:` file follows `## Handed review findings` in the member protocol, where keeping it outranks this gate.
+
 The gate is a **filter stage that runs after candidate collection, not a censor you apply while looking.** First enumerate every candidate per the coverage mandate above (severity + confidence tagged); then run each through this gate. Keeping the two phases separate is the point: collapsing them drops a borderline-but-real finding before it is ever written down. The gate sits on top of the tool-specific false-positive patterns elsewhere in this agent (the react-doctor barrel-import / multiple-useState noise under "Merge findings", the knip bucket classification); those reject *known* bad findings, this gate makes *every* candidate prove itself. The deterministic oracles (react-doctor, knip, the advisory oracle) pass through under their own handling and are not subject to this gate.
 
 Run all four checks against each collected candidate:
@@ -196,7 +198,7 @@ Run all four checks against each collected candidate:
 
 **Evidence that needs real bytes on disk goes in a scratch directory you own**, never in the tree under review: establishing that a guard is not hollow means breaking the construct it names and watching its check go red. Mint it under `.gaia/local/cache/mutation-scratch/` as `.claude/hooks/lib/audit-member-protocol.md` states under "Scratch directory", which keeps it apart from every other member and every other audit on the machine, and populate and mutate it with Bash, never with `Write`/`Edit`: from a linked worktree that directory resolves into the main checkout through the `.gaia/local` symlink, so a `Write` or `Edit` there is refused by the runtime's own worktree confinement, which is not a finding. Once your findings sidecar is written, remove exactly the directory you minted.
 
-**Adversarially verify every Critical and Major survivor.** When at least one holistic Critical or Major candidate survives the four checks, Read `<root>/.claude/hooks/lib/audit-frontend-refuter.md` and follow it before reporting those findings; when none survives, do not Read it. Minor, oracle and specialist findings never go to a refuter.
+**Adversarially verify every Critical and Major survivor.** When at least one holistic Critical or Major candidate survives the four checks, or you would keep a handed review finding at Critical or Major, Read `<root>/.claude/hooks/lib/audit-frontend-refuter.md` and follow it before reporting those findings; when neither holds, do not Read it. Minor, oracle and specialist findings never go to a refuter.
 
 **Hardened retry prefix**: prepended verbatim on the single retry of a specialist or a refuter, `<target>` substituted with the concrete target:
 

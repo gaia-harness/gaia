@@ -72,6 +72,17 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .claude/agents/audit-rule-specialist.md
 .claude/agents/audit-refuter.md
 .gaia/scripts/audit-frontend-oracles.sh
+# Findings from the headless review reach members as part of what they receive, so
+# these change what a member reviews: the runner, the permissions and bounds of
+# the child, the judge of its result, the read guard of the child, the record the
+# findings are saved in and the decisions read from that record.
+.gaia/scripts/audit-code-review.sh
+.gaia/scripts/audit-code-review-child.sh
+.gaia/scripts/audit-code-review-judge.sh
+.gaia/scripts/audit-code-review-guard.sh
+.gaia/scripts/audit-code-review-record.sh
+.gaia/scripts/audit-code-review-decide.sh
+.gaia/scripts/audit-code-review-handover.sh
 # gaia:maintainer-only:start
 .claude/maintainers/**
 .gaia/scripts/release-bookkeeping-check.sh

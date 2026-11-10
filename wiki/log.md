@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-10 PROMOTED: wiki/concepts/Code Review In The Audit Loop.md (PR #3392)
 - 2026-11-09 REVERSED: wiki/decisions/shadcn Component Layer.md, narrowly: one form-field wrapper handles the wiring, while per-control wrappers and wrappers that own the control stay banned (#3381)
 - 2026-11-08 PROMOTED: wiki/decisions/Flow-based Test-after Pipeline.md (PR #3364)
 - 2026-11-07 PROMOTED: wiki/decisions/Flow Machinery For A Test-after Testing Layer.md (PR #3361)

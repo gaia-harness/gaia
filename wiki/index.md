@@ -152,6 +152,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Task Orchestration]]
 - [[Workflow Doctrine]]: the one execution doctrine (roles, git ownership, checkpoint and resume, model choice) and the hook that injects it on a branch.
 - [[Code Review Audit Agent]]
+- [[Code Review In The Audit Loop]]: the once-per-branch built-in review in a child that cannot move the tree, its hand-over to members and its report.
 - [[Registering a Code Audit Team Member]]: how-to for adding a new roster member: agent def, roster entry, machinery wiring, finding_class bucket, recurrence-tally integration, and the local-gate checklist.
 - [[Audit Disposition and Debt Fix]]: forced disposition of out-of-scope audit findings as deduped tech-debt issues; security-class divert; the /gaia-debt fix loop (single issue, recommended related batch, optional budget batch, or operator-named batch, isolated per the team's git isolation policy) and statusline nudge; /gaia-residue drains the accepted-residual record the same audit leaves unfiled.
 - [[Issue Writing]]: how Claude writes any GitHub issue body, for a fresh-context agent first and a skimming human second; principles and per-kind prompts, not a form.

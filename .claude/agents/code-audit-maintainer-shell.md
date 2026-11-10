@@ -148,6 +148,8 @@ Cross-remit and out-of-scope are **not the same axis**: out-of-scope means outsi
 
 ## Finding Proof Gate
 
+A finding handed to you in a dispatch's `Handed review findings:` file follows `## Handed review findings` in the member protocol, where keeping it outranks this gate.
+
 Every candidate finding must clear these before it reaches the report at Critical or Major:
 
 1. **Cites an exact `file:line`.** No line, no finding.
