@@ -154,12 +154,11 @@ PINNED_HOOKS=(local-janitor.bats audit-loop-bound.bats)
 # The scripts group's anchors: suites given a bucket of their own before the
 # byte walk fills the rest, because where the walk would put them decides the
 # slowest leg. audit-light-route.bats runs the light-route script against a
-# fixture repository in every test, about three minutes on CI, the heaviest
-# suite in the group by far. Left to the byte walk it can share a leg with
-# audit-light-mark.bats, the next heaviest, and that leg runs past the
-# per-shard cap. Replayed against two CI runs' per-file timings of one tree,
-# anchoring it alone takes the slowest leg from about 720 seconds to about 565,
-# and no longer list does better on either run.
+# fixture repository in every test, about three minutes on CI, one of the two
+# heaviest suites in the group. Left to the byte walk it can share a leg with
+# another heavy suite. Over seven legs, replayed against three CI
+# runs' per-file timings of one tree, anchoring it alone puts the slowest leg at
+# about 476 seconds against about 500 for the plain walk.
 #
 # What a bad draw breaks is the partition, not the estimate: a leg that stacks
 # the heavy suites gates the whole workflow, and past its cap a hung leg fails
@@ -207,7 +206,7 @@ HOOKS_COST_OUTLIERS=(pr-merge-audit-check.bats githooks-pre-push-e2e.bats)
 # four put the slowest leg past 70% of its step cap in most draws, five in few.
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
 HOOKS_GREEDY_IDS=(hooks-2 hooks-3 hooks-4 hooks-5 hooks-6)
-SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4 scripts-5)
+SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4 scripts-5 scripts-6 scripts-7)
 LIBRARY_IDS=(lib-1 lib-2 lib-3)
 
 SHARD_IDS=(
