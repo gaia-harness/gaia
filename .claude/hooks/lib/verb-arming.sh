@@ -15,10 +15,10 @@
 #              + '[[:space:](]*' + <verb_fragment>
 #
 # The openers are the substitutions whose contents the shell runs: `$(` and a
-# backtick, live in double quotes too, and `<(` and `>(`, which are not but arm
-# in quotes as well (fail-closed). The command starts are the list operators,
-# `&`, a newline, a case pattern's `)`, a brace group, `!` and the reserved words
-# a command follows (`gaia_verb_armed` spells them); a subshell `(` may follow.
+# backtick, live in double quotes too, and `<(` and `>(`, dead in double quotes
+# but armed there too (fail-closed). The command starts are the list and pipe
+# operators, a newline, any `)` (for a case pattern; others over-arm), a brace
+# group, `!` and the reserved words a command follows; a subshell `(` may follow.
 #
 # Composition is literal concatenation in that order, which is what preserves
 # capture-group numbering: under `start` the fragment's own groups begin at 1,
