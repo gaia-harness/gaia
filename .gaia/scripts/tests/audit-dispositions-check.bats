@@ -412,7 +412,8 @@ tree_state() {
   done
 }
 
-@test "check-all: an empty run folder exits 0" {
+@test "check-all: an empty run folder after a round with no findings exits 0" {
+  alf_sidecar "$MEMBER" '[]' 12
   run_check_all
   green
 }
@@ -1262,6 +1263,10 @@ run_residual_count() {
   local snapshot_file
   stop_base
   accept_all 3 "$(minor_rows f.txt 1 2)"
+  # Rounds 1 and 2 have no dispositions file, so round 1's third key, gone by
+  # round 2, needs a recorded decision for the read-only check-all below.
+  minor_rows f.txt 3 3 | jq -c '.[0] + {member: "'"$MEMBER"'"}' >"$BATS_TEST_TMPDIR/fixed.json"
+  bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/fixed.json" --decision fix || return 1
   run_check 3 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
   snapshot_file="$SNAPSHOT_DIRECTORY/dispositions-3.checked.json"
@@ -1619,6 +1624,65 @@ veto_unsatisfied_red() {
   green || return 1
   run_check_all
   red undisposed "$(key_json c/imp f.txt 3)"
+}
+
+# decide <line> <decision> [extra-json]: record the human's decision on round
+# 1's Minor at f.txt:<line> through record-residual.
+decide() {
+  minor_rows f.txt "$1" "$1" | jq -c --arg member "$MEMBER" --argjson extra "${3:-{\}}" '.[0] + {member: $member} + $extra' >"$BATS_TEST_TMPDIR/decided-$1.json"
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/decided-$1.json" --decision "$2"
+}
+
+@test "needs-human: a round with no dispositions file whose sidecar a later round overwrote fails undecided until each decision is recorded, then renders them" {
+  local undecided
+  # Round 1 stops needs-human with three Minors and no dispositions file;
+  # round 2 overwrites the sidecar with nothing.
+  stop_rounds "$(minor_rows f.txt 1 3)" '[]'
+  [ "$(bash "$SCRIPTS/audit-loop-eval.sh" findings --root "$ALF_ROOT" --round 1 | jq -c '.entries')" = '[]' ] || return 1
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  run_check_all
+  for undecided in 1 2 3; do
+    red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":$undecided}" || return 1
+  done
+  grep -qF -- "record-residual --root $ALF_ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix" <<<"$output" || { echo "no next step in: $output"; return 1; }
+  decide 3 waive '{"security":true}'
+  [ "$status" -eq 3 ] || { echo "a security waive recorded: $status $output"; return 1; }
+  decide 1 fix && decide 2 accept '{"reason":"deferred to its own change"}' && decide 3 waive '{"reason":"below the threshold"}' || return 1
+  run_check_all
+  green || return 1
+  run_residual_count
+  [ "$output" = '{"total":1,"ask":0}' ] || { echo "residual-count: $output"; return 1; }
+  run_sections
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = '## Accepted residuals (recorded, not fixed)
+
+- `f.txt:2` deferred to its own change. <!-- gaia-debt-key: v1 class=rule/x path=f.txt line=2 -->
+
+## Waived below triage threshold (not filed)
+
+- f.txt:3 rule/x: below the threshold' ] || { echo "pr-sections: $output"; return 1; }
+}
+
+@test "needs-human: a key an earlier round disposed file needs no decision when a round with no dispositions file re-reports it" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  outcome_line c/oosimp base.txt 6 file filed >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  open_round 2 '[{"path":"base.txt","line":6,"finding_class":"c/oosimp","severity":"major","security":false},
+    {"path":"f.txt","line":6,"finding_class":"c/sug","severity":"minor","security":false}]'
+  run_check_all
+  red undecided "{\"round\":2,\"member\":\"$MEMBER\",\"finding_class\":\"c/sug\",\"path\":\"f.txt\",\"line\":6}" || return 1
+  grep -qF -- '"path":"base.txt","line":6' <<<"$output" && { echo "carried key flagged: $output"; return 1; }
+  true
+}
+
+@test "record-residual: --decision takes only accept, waive or fix, and only on record-residual" {
+  printf '{"member":"%s","finding_class":"c/sug","path":"f.txt","line":6}\n' "$MEMBER" >"$BATS_TEST_TMPDIR/finding.json"
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/finding.json" --decision defer
+  [ "$status" -eq 2 ] || return 1
+  run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --decision accept
+  [ "$status" -eq 2 ]
 }
 
 @test "check-outcomes: refused-authored passes once the exact key is vetoed; a malformed vetoes.json exits 3 and an absent one runs clean" {

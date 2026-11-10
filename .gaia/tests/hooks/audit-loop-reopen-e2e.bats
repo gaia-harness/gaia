@@ -389,6 +389,9 @@ accepted_keys() {
 # reports the findings given as $1; its dispositions are the caller's.
 closing_flow() {
   veto_flow one || return 1
+  # The unit finishes round 5, dispositions included, before the stall stops it.
+  alf_dispositions 5 "$(jq -n -c --arg member "$FRONTEND_MEMBER" '[{member: $member, finding_class: "rule/x", path: "f.txt", line: 2, disposition: "fix", reason: ""},
+    {member: $member, finding_class: "rule/q", path: "base.txt", line: 3, disposition: "fix", reason: ""}]')"
   alf_add_checkpoint 5 stalled
   alf_add_answer 1 accept
   alf_set_line other.txt 60 "closing"

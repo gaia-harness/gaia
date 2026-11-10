@@ -5,7 +5,7 @@
 # it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions,
 # _round_lookup, _has_snapshot, _snapshot_path, _evaluator, _divert_line,
 # _RESIDUAL_REASON_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS,
-# _GAIA_DISPOSITIONS_DIRECTORY, RUN_FOLDER, VETOES and FINDING_FILE. Runs nothing at source time. Never `cd`s.
+# _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Runs nothing at source time. Never `cd`s.
 
 # The text normalization every rendered reason goes through. A `-->` would end
 # the keyed comment the residue tally parses, and a line break would shift the
@@ -51,17 +51,19 @@ def in_bound: . != null and .security == false and .severity != "critical";
       | {round: $round, section: "triage", member, path, line, finding_class, reason: text(.triage_reason)}) ]
 '
 
-# _RECORDED_JQ: the recorded residuals as accept rows, read as raw lines so a
-# line that does not parse is skipped. A key some round disposed fix, or a veto
-# names, is dropped: a finding is never both fixed and accepted.
+# _RECORDED_JQ: the recorded residuals as PR-body rows, read as raw lines so a
+# line that does not parse is skipped. A human's waive renders as a triage
+# waiver and a human's fix renders nothing; every other row is an accept. A key
+# some round disposed fix, or a veto names, is dropped: a finding is never both
+# fixed and accepted.
 # shellcheck disable=SC2016
 _RECORDED_JQ="$_ROW_TEXT_JQ"'
 [inputs | fromjson?
   | select(type == "object" and (.member | type) == "string" and (.finding_class | type) == "string"
-      and (.path | type) == "string" and (.line | type) == "number")
+      and (.path | type) == "string" and (.line | type) == "number" and .decision != "fix")
   | select([.finding_class, .path, (.line | line_of)] as $key | $dropped | any(. == $key) | not)
-  | {round: 0, section: "accept", member, path, line: (.line | line_of), finding_class, reason: text(.reason),
-     source: (if (.source | type) == "string" then .source else "" end)}]
+  | {round: 0, section: (if .decision == "waive" then "triage" else "accept" end), member, path, line: (.line | line_of),
+     finding_class, reason: text(.reason), source: (if (.source | type) == "string" then .source else "" end)}]
 '
 
 # shellcheck disable=SC2016
@@ -213,17 +215,71 @@ _command_residual_count() {
              else [$accepted[] | select((.round == 0 and .source == "filing-replay") or (.round as $round | $asking | any(. == $round)))] | length end)}'
 }
 
-# _command_record_residual: append one filing-replay row for the finding in
-# FINDING_FILE to the run's recorded residuals, once per key. The reason is
-# stored as given; pr-sections normalizes it on read. rc 3 on an unreadable
-# finding.
+# _undecided_keys: `violation: undecided` for each finding of a round that has
+# no dispositions file (a needs-human stop), unless a recorded row decides its
+# key, a later round's dispositions file names it, or an earlier one disposed it
+# file, divert or accept-residual (the grader's carry-forward). The round's keys come from
+# the round history, which the bound hook stores at the next dispatch, before
+# that round's members overwrite the sidecars a live read would see; the
+# latest round, stored by nobody yet, is read live. Without this a stopped
+# round whose sidecars were overwritten reads as having had no findings, and
+# pr-sections renders nothing for the decisions a human made on it. rc 0
+# none, 1 some, 3 an unreadable input.
+_undecided_keys() {
+  local history latest live_keys="null" recorded="[]" disposed="[]" dispositions_file base round violations
+  history="$(_evaluator round-history)" || return 3
+  latest="$(printf '%s' "$history" | jq 'length')" || return 3
+  if [ "$latest" -ge 1 ] && [ ! -f "$RUN_FOLDER/dispositions-$latest.json" ] && printf '%s' "$history" | jq -e 'last | .keys == null' >/dev/null; then
+    live_keys="$(_evaluator findings --round "$latest" | jq -c '.entries | map([.member, .finding_class, .path, .line]) | unique')" || return 3
+    [ -n "$live_keys" ] || return 3
+  fi
+  for dispositions_file in "$RUN_FOLDER"/dispositions-*.json; do
+    base="${dispositions_file##*/}"
+    [[ "$base" =~ ^dispositions-([0-9]+)\.json$ ]] && [ -f "$dispositions_file" ] || continue
+    round=$((10#${BASH_REMATCH[1]}))
+    disposed="$(jq -c --argjson disposed "$disposed" --argjson round "$round" '$disposed + [{round: $round,
+      keys: [.entries[]? | [.member, .finding_class, .path, .line]],
+      carried: [.entries[]? | select(.disposition | IN("file", "divert", "accept-residual")) | [.member, .finding_class, .path, .line]]}]' \
+      "$dispositions_file" 2>/dev/null)" || return 3
+  done
+  if [ -f "$RUN_FOLDER/recorded-residuals.jsonl" ]; then
+    recorded="$(jq -c -R -n "$_ROW_TEXT_JQ"'[inputs | fromjson? | select(type == "object") | [.finding_class, .path, (.line | line_of)]]' \
+      <"$RUN_FOLDER/recorded-residuals.jsonl" 2>/dev/null)" || return 3
+  fi
+  violations="$(printf '%s' "$history" | jq -r --argjson live "$live_keys" --argjson disposed "$disposed" --argjson recorded "$recorded" "$_ROW_TEXT_JQ"'
+    length as $latest
+    | .[] | .round as $round | select($disposed | any(.round == $round) | not)
+    | (if .keys == null and $round == $latest then $live else .keys end) | arrays | .[] | . as $key
+    | select([.[1], .[2], (.[3] | line_of)] as $short | $recorded | any(. == $short) | not)
+    | select($disposed | any((.round > $round and (.keys | any(. == $key))) or (.round < $round and (.carried | any(. == $key)))) | not)
+    | "violation: undecided \({round: $round, member: .[0], finding_class: .[1], path: .[2], line: .[3]} | tojson)"')" || return 3
+  [ -z "$violations" ] && return 0
+  printf '%s\n' "$violations"
+  _error "record the human's decision for each undecided finding: write its {member, finding_class, path, line} plus a reason (and severity and security for a waive) to a JSON file, then run: bash $_GAIA_DISPOSITIONS_DIRECTORY/audit-dispositions-check.sh record-residual --root $ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix"
+  return 1
+}
+
+# _command_record_residual: append one row for the finding in FINDING_FILE to
+# the run's recorded residuals, once per key. Without DECISION it is a
+# filing-replay row. With it, it is a human's decision on a round no
+# dispositions file covers: the finding's own reason when it carries one, else
+# its failure mode. A waive outside the render bound (security not exactly
+# false, or severity not major or minor) is refused, since the triage
+# threshold never waives it. The reason is stored as given; pr-sections
+# normalizes it on read. rc 3 on an unreadable or refused finding.
 _command_record_residual() {
   local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" row
-  row="$(jq -c '
-    if type == "object" and (.member | type) == "string" and (.finding_class | type) == "string"
+  row="$(jq -c --arg decision "$DECISION" '
+    def text($value): if ($value | type) == "string" and ($value | test("\\S")) then $value else "" end;
+    . as $finding
+    | if type == "object" and (.member | type) == "string" and (.finding_class | type) == "string"
        and (.path | type) == "string" and (.line | type) == "number"
-    then {source: "filing-replay", member, finding_class, path, line, reason: (if (.failure_mode | type) == "string" then .failure_mode else "" end)}
-    else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" || { _error "unreadable finding $FINDING_FILE"; return 3; }
+       and ($decision != "waive" or (.security == false and (.severity | IN("major", "minor"))))
+    then if $decision == "" then {source: "filing-replay", member, finding_class, path, line,
+           reason: (if (.failure_mode | type) == "string" then .failure_mode else "" end)}
+         else {source: "human", decision: $decision, member, finding_class, path, line,
+               reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)} end
+    else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" || { _error "unreadable or refused finding $FINDING_FILE"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
       [inputs | fromjson? | select(type == "object") | [.finding_class, .path, (.line | line_of)]]
