@@ -8,7 +8,7 @@ import {loadStory} from '../.playwright/storybook';
 // navigates to the empty story server and times out with no cause named, which
 // reads as a flake under load.
 
-const MISSING_BUILD_MESSAGE = /run `pnpm build-storybook` before `pnpm pw`/;
+const MISSING_BUILD_MESSAGE = /run `pnpm build-storybook` first/;
 
 const createPageStub = () => {
   const goto = vi.fn();
@@ -40,5 +40,14 @@ describe('Storybook build guard', () => {
       loadStory(page, 'components-themeswitch--default', 'light')
     ).rejects.toThrow(MISSING_BUILD_MESSAGE);
     expect(goto).not.toHaveBeenCalled();
+  });
+
+  // storybook-static is gitignored, so a fresh worktree has none.
+  test('pnpm pw builds Storybook before Playwright runs', () => {
+    const {scripts} = JSON.parse(
+      fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+    ) as {scripts: Record<string, string>};
+
+    expect(scripts.pw).toMatch(/build-storybook && .*playwright test/);
   });
 });

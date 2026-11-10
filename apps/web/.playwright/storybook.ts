@@ -107,7 +107,7 @@ export const getStoryIdentity = (story: StoryEntry): string =>
 const requireStorybookBuild = (): void => {
   if (!fs.existsSync(indexPath)) {
     throw new Error(
-      'storybook-static/index.json is missing: run `pnpm build-storybook` before `pnpm pw` so the Storybook specs have stories to load'
+      'storybook-static/index.json is missing: run `pnpm build-storybook` first (`pnpm pw` does) so the Storybook specs have stories to load'
     );
   }
 };
