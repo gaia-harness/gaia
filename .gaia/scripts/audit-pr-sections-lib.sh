@@ -278,8 +278,9 @@ _undecided_keys() {
 # _command_undecided: _undecided_keys, but only after the run folder's latest
 # unit report stopped on a reason that can leave the open round without
 # dispositions-<r>.json. needs-human can stop before the unit writes it, and
-# member-wave-dirty does on a closing round; failure can stop anywhere; dispositions-check-failed can come from
-# the bound hook denying a mid-wave join, before the file. The unit's other
+# member-wave-dirty does so on a closing round; failure can stop anywhere;
+# dispositions-check-failed can come from the bound hook denying a mid-wave
+# join, before the file. The unit's other
 # stops cannot: clean and window-end end on disposed rounds, and checkpoint-deny
 # and window-end come only from a dispatch that would open a new round, after
 # the last one's file. With no such report it prints nothing: fixtures and runs
