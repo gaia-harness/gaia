@@ -123,8 +123,7 @@ export default defineConfig({
       timeout: WEB_SERVER_START_TIMEOUT_MILLISECONDS,
       url: devUrl,
     },
-    // Serves the built Storybook for the Storybook specs. `pnpm pw` does not
-    // build it: run `pnpm build-storybook` first (CI does). The server starts
+    // Serves the built Storybook for the Storybook specs. The server starts
     // without a build so the other specs run; every Storybook spec fails, never
     // skips, naming the build command. It shares the Storybook port with
     // `pnpm storybook`: if that is running, this server exits with a message
