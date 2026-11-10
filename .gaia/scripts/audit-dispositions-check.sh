@@ -54,8 +54,9 @@
 #                               without --snapshot-dir also prints it for an unsatisfied veto
 #                               whose round is past every dispositions file
 #   undecided                   (check-all without --snapshot-dir) a finding of a round with
-#                               no dispositions file that no recorded decision or later
-#                               round's entry covers; stderr names the record-residual call
+#                               no dispositions file that no recorded decision, later
+#                               round's entry, or earlier round's file, divert or
+#                               accept-residual covers; stderr names the record-residual call
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
 #                               needs one stops the unit with needs-human)
 #   missing-basis               waive-out-of-scope without basis triage-threshold|cross-remit
@@ -158,7 +159,8 @@
 # every rendered reason passes `file-tech-debt.sh screen-text` first; a reason
 # that fails renders as a withheld count. It also renders <D>/recorded-residuals.jsonl
 # (rows record-residual and the worthiness step append) as accepted residuals,
-# or a human's waive as a triage waiver, even with no dispositions file.
+# a human's waive as a triage waiver and a human's fix as nothing, even with no
+# dispositions file.
 # record-residual appends the row for a finding the filer refused on replay,
 # or with --decision a human's decision on a round no dispositions file covers,
 # once per key, and prints nothing; such a row is not a dispositions entry, so

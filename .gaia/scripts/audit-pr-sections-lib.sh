@@ -221,10 +221,8 @@ _command_residual_count() {
 # file, divert or accept-residual (the grader's carry-forward). The round's keys come from
 # the round history, which the bound hook stores at the next dispatch, before
 # that round's members overwrite the sidecars a live read would see; the
-# latest round, stored by nobody yet, is read live. Without this a stopped
-# round whose sidecars were overwritten reads as having had no findings, and
-# pr-sections renders nothing for the decisions a human made on it. rc 0
-# none, 1 some, 3 an unreadable input.
+# latest round, stored by nobody yet, is read live. rc 0 none, 1 some, 3 an
+# unreadable input.
 _undecided_keys() {
   local history latest live_keys="null" recorded="[]" disposed="[]" dispositions_file base round violations
   history="$(_evaluator round-history)" || return 3
@@ -262,10 +260,10 @@ _undecided_keys() {
 # _command_record_residual: append one row for the finding in FINDING_FILE to
 # the run's recorded residuals, once per key. Without DECISION it is a
 # filing-replay row. With it, it is a human's decision on a round no
-# dispositions file covers: the finding's own reason when it carries one, else
-# its failure mode. A waive outside the render bound (security not exactly
-# false, or severity not major or minor) is refused, since the triage
-# threshold never waives it. The reason is stored as given; pr-sections
+# dispositions file covers, its reason the finding's own reason when it carries
+# one, else its failure mode. A waive is refused unless security is exactly
+# false and severity is major or minor, since the triage threshold waives
+# nothing else. The reason is stored as given; pr-sections
 # normalizes it on read. rc 3 on an unreadable or refused finding.
 _command_record_residual() {
   local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" row
