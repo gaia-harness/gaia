@@ -693,7 +693,12 @@ opener_pair() {
     "if false; then :; elif $MERGE_INVOCATION; then :; fi" \
     "for i in 1; do $MERGE_INVOCATION; done" \
     "while $MERGE_INVOCATION; do :; done" \
-    "until $MERGE_INVOCATION; do :; done"; do
+    "until $MERGE_INVOCATION; do :; done" \
+    "sleep 1 & $MERGE_INVOCATION" \
+    "true |& $MERGE_INVOCATION" \
+    "case x in x) $MERGE_INVOCATION;; esac" \
+    "time $MERGE_INVOCATION" \
+    "coproc $MERGE_INVOCATION"; do
     arm "$MERGE_FRAGMENT" '' "$text"
     assert_armed || { echo "not armed: $text"; return 1; }
   done

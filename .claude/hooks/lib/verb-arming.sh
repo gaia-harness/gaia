@@ -14,11 +14,11 @@
 #   separator_regex   = '(' + <openers> + '|' + <command starts> + ')'
 #              + '[[:space:](]*' + <verb_fragment>
 #
-# The openers are those a verb after which the shell runs: `$(` and a backtick
-# (live in double quotes too), `<(` and `>(` (armed on in either, fail-closed).
-# The command starts are the list operators, a newline, a brace group, `!` and
-# the reserved words a command follows; `gaia_verb_armed` spells both sets. A
-# subshell `(` may sit between any start and the verb, never mid-arguments.
+# The openers are the substitutions whose contents the shell runs: `$(` and a
+# backtick, live in double quotes too, and `<(` and `>(`, which are not but arm
+# in quotes as well (fail-closed). The command starts are the list operators,
+# `&`, a newline, a case pattern's `)`, a brace group, `!` and the reserved words
+# a command follows (`gaia_verb_armed` spells them); a subshell `(` may follow.
 #
 # Composition is literal concatenation in that order, which is what preserves
 # capture-group numbering: under `start` the fragment's own groups begin at 1,
@@ -333,8 +333,8 @@ gaia_verb_armed() {
   # needles, and its liveness scan carries every opener's first character; an
   # opener added here needs both there too.
   # The starts may add no group, so a reserved word is spelled per boundary.
-  printf -v keyword_starts '|^%s[[:space:]]|[[:space:];&|(]%s[[:space:]]' 'if' 'if' 'then' 'then' 'do' 'do' 'else' 'else' 'elif' 'elif' 'while' 'while' 'until' 'until'
-  command_starts=$'\\&\\&|;|\\|\\||\\||\n''|\{[[:space:]]|![[:space:]]'"$keyword_starts"
+  printf -v keyword_starts '|^%s[[:space:]]|[[:space:];&|(]%s[[:space:]]' 'if' 'if' 'then' 'then' 'do' 'do' 'else' 'else' 'elif' 'elif' 'while' 'while' 'until' 'until' 'time' 'time' 'coproc' 'coproc'
+  command_starts=$'\\&\\&|;|\\|\\||\\||\n''|&|\)|\{[[:space:]]|![[:space:]]'"$keyword_starts"
   separator_regex=$'(\\$\\(|\140|<\\(|>\\(|'"${command_starts})[[:space:](]*${verb_pattern}"
   # The same group split in two for the view stage, each keeping group 1 as its
   # separator so numbering is the same whichever decides.

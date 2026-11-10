@@ -109,7 +109,8 @@ reason() {
   local command_text checkout
   for checkout in 'gh -R other/repo pr checkout 12' 'gh pr checkout 12 -R other/repo'; do
     for command_text in "($checkout)" "{ $checkout; }" "! $checkout" "if true; then $checkout; fi" \
-      "for i in 1; do $checkout; done" "while $checkout; do :; done"; do
+      "for i in 1; do $checkout; done" "while $checkout; do :; done" "sleep 1 & $checkout" \
+      "case x in x) $checkout;; esac" "time $checkout"; do
       run_guard "$command_text"
       assert_denied_by_json || { echo "not denied: $command_text"; return 1; }
     done
