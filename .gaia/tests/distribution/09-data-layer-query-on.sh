@@ -16,6 +16,8 @@
 #   2. A non-frozen `pnpm install` (the lockfile gains Query), then two reruns
 #      (`--query true`, `--query false`) change nothing: every file under
 #      `apps/web/` and the root lockfile stays byte-identical (UAT-003).
+#      `gaia init rename` then moves the layer to `app/services/test-project/`
+#      with its snake_case flag, as `/gaia-init` does after this step.
 #   3. `scaffold service items --mocks` writes `queries.ts`, and four routes
 #      bound to it cover every wiring variant with an action: the Query list
 #      and detail pair, plus a server-loader list and a clientLoader list that
@@ -90,6 +92,16 @@ for rerun_query in true false; do
   assert_frontend_unchanged "configure-data-layer rerun with --query $rerun_query" "$WORK/after-query-on.sha256"
 done
 
+# --- 2b. Rename moves the snake_case layer to the slug ------------------------
+
+# `/gaia-init` runs rename after configure-data-layer, so the layer the
+# scaffolders and fixtures below use is the slug-named one.
+gaia_json "rename" init rename --title "Test Project" --kebab test-project >/dev/null
+[ ! -e "$FRONTEND/app/services/gaia" ] \
+  || { fail "init rename left app/services/gaia/ in place"; exit 1; }
+grep -q 'isSnakeCaseEnabled: true' "$FRONTEND/app/services/test-project/api.ts" \
+  || { fail "init rename did not carry isSnakeCaseEnabled: true to app/services/test-project/api.ts"; exit 1; }
+
 # --- 3. Scaffold the service and the four routes -----------------------------
 
 log "playwright install chromium"
@@ -97,7 +109,7 @@ run_logged "playwright install chromium" "$WORK/chromium.log" install_chromium "
 
 gaia_json "scaffold service" scaffold service items \
   --endpoints get,post,put,delete --schema "id:string,displayName:string" --mocks >/dev/null
-[ -f "$FRONTEND/app/services/gaia/items/queries.ts" ] \
+[ -f "$FRONTEND/app/services/test-project/items/queries.ts" ] \
   || { fail "scaffold service with Query installed wrote no queries.ts"; exit 1; }
 
 gaia_json "route items list" scaffold route items --group _public \
@@ -156,7 +168,7 @@ assert_contains "$PAGES/items/id/page.tsx" 'useSuspenseQuery\(itemQuery\(' "quer
 assert_contains "$PAGES/items/page.tsx" 'to=\{`/items/\$\{item\.id\}`\}' "list page links each item to its detail route"
 
 # The server loader and the clientLoader import one request function.
-SHARED_IMPORT="^import \\{([^}]*[ ,])?getAllItems([ ,][^}]*)?\\} from '~/services/gaia/items/requests';$"
+SHARED_IMPORT="^import \\{([^}]*[ ,])?getAllItems([ ,][^}]*)?\\} from '~/services/test-project/items/requests';$"
 assert_contains "$ROUTES/_public.items-server.tsx" "$SHARED_IMPORT" "server loader imports getAllItems from the service"
 assert_contains "$ROUTES/_public.items-client.tsx" "$SHARED_IMPORT" "clientLoader imports getAllItems from the service"
 

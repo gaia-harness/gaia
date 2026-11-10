@@ -884,7 +884,7 @@ check_directive_routing() {
 
 # A directive written as a test demand, or a flow's paths split across files,
 # let a plan name tests beyond the one flow test per flow and both-condition
-# unit tests, which breaks the trophy's one test per behavior.
+# unit tests, which breaks the trophy's cap of one test per behavior.
 DIRECTIVE_NEW_TEST_NEEDLE='It never asks for a new test, a test file, or a rule proven on its own'
 UNCOVERED_RULE_NEEDLE='Any other finding that a rule has no flow or success criterion stating it is `spec_defect`, never `plan_directive`'
 FOLD_INTO_UAT_NEEDLE='folds into the intent or a success criterion, never into the flow as a branch or case list; a new flow is added only for a critical path no flow names'

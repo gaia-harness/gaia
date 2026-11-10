@@ -46,7 +46,7 @@ Vitest's browser projects need Chromium, and `pnpm install` installs no browsers
 
 ## Component test pattern
 
-Test a component or page with a story that carries a `.test()` for each behavior. Never manually mock framework deps (`react-router`, `react-i18next`, etc.); use the stubs. Mock only external services or utilities the component imports directly. See [[Stories as Tests]] and [[Component Testing]] for the canonical pattern.
+Test a component or page with a story that carries `.test()` blocks for its behaviors, at most one per behavior. Never manually mock framework deps (`react-router`, `react-i18next`, etc.); use the stubs. Mock only external services or utilities the component imports directly. See [[Stories as Tests]] and [[Component Testing]] for the canonical pattern.
 
 ## Playwright
 

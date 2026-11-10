@@ -39,8 +39,8 @@ export const isSnakeCaseLayer = (
 
 /**
  * The folder under `app/services/` holding the domain layer. The template
- * ships it as `gaia` and adopters rename it to their company or API name, so
- * it is discovered: `--layer` when passed, else the single directory there
+ * ships it as `gaia`, `gaia init rename` moves it to the project slug, and
+ * adopters may rename it again, so it is discovered: `--layer` when passed, else the single directory there
  * other than the `api` wrapper. Zero or several candidates is an error naming
  * them, never a guess.
  */

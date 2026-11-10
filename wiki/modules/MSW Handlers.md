@@ -6,7 +6,7 @@ language: typescript
 purpose: API mocking layer shared across Vitest, Storybook, and dev
 depends_on: [[MSW]]
 created: 2026-04-20
-updated: 2026-11-07
+updated: 2026-11-10
 tags: [module, msw, testing, mocking]
 ---
 
@@ -33,7 +33,7 @@ A request URL is built by joining `API_URL` (env, e.g. `http://localhost:3001/ap
 
 ```ts
 import {http} from 'msw/http';
-import {RESOURCES_URLS} from '~/services/gaia/resources/urls';
+import {RESOURCES_URLS} from '~/services/<layer>/resources/urls';
 import {url} from '../url';
 
 http.get(url(RESOURCES_URLS.resources), () => { ... });
@@ -42,7 +42,7 @@ http.get(url(RESOURCES_URLS.resources), () => { ... });
 > [!warning] URL drift = escaped requests
 > If a handler URL doesn't match the ky-constructed URL, MSW passes the request through (`onUnhandledFrame: 'bypass'`). The request goes to the real network, fails silently in tests, and appears as a flaky fetch error rather than a mock miss.
 
-The fix: both the service request functions and the handlers import the same per-domain `{NAME}_URLS` from `apps/web/app/services/gaia/{domain}/urls.ts`. **Never hardcode paths in handler files.** When a URL constant changes, both sides update together.
+The fix: both the service request functions and the handlers import the same per-domain `{NAME}_URLS` from `apps/web/app/services/<layer>/{domain}/urls.ts`. **Never hardcode paths in handler files.** When a URL constant changes, both sides update together.
 
 ## Three runtime modes
 

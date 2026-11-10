@@ -50,7 +50,7 @@ Discounted.test('strikes through the original price', async ({canvas}) => {
 
 Import `expect`, `fn`, `waitFor` and (when a native event has no `userEvent` equivalent) `fireEvent` from `storybook/test`, which re-exports the jest-dom matchers and user-event; a `.test()` and a `play` receive `canvas`, `canvasElement`, `args` and `userEvent` in their context. Use ARIA roles and accessible names as selectors, `getByRole('button', {name: 'Save'})`, `getByText('$49.99')`, not class selectors or test ids, and `await` every `userEvent` call and every `expect`.
 
-One story per visual state and a `.test()` for each user-observable behavior (a parameterized table is one test), named for the behavior. The story export name is the story's display name (`Discounted` is "Discounted"); a string `name` overrides it. A story that carries any `.test()` runs its own render and play as `base story`, and the play runs again before every attached test, so put a step in `play` only when it builds the state every test and the snapshot need. A `play` on the meta is inherited by every story in the file, so put a shared play on the meta only when every story should run it. Write every story as a direct `meta.story({...})` export: the indexer cannot attach `.test()` to an export built by a factory function.
+One story per visual state and at most one `.test()` per user-observable behavior (a parameterized table is one test), named for the behavior. The story export name is the story's display name (`Discounted` is "Discounted"); a string `name` overrides it. A story that carries any `.test()` runs its own render and play as `base story`, and the play runs again before every attached test, so put a step in `play` only when it builds the state every test and the snapshot need. A `play` on the meta is inherited by every story in the file, so put a shared play on the meta only when every story should run it. Write every story as a direct `meta.story({...})` export: the indexer cannot attach `.test()` to an export built by a factory function.
 
 ### Driving input
 
@@ -139,7 +139,7 @@ Assert on `result.current`, the observable hook surface. A `*.test.tsx` file als
 MSW handlers run inside the `node` Vitest project against the MSW node server, so a service test exercises the real `api()` wrapper, real schema validation, and real URL resolution. No `vi.mock('fetch')`. A page's rendered states are page stories with MSW handlers installed in the meta's `beforeEach` (`beforeEach: ({msw}) => { msw.use(...) }`), never through a story parameter; a route module's status, redirect, data or side effect is a route test (see Route Tests).
 
 ```tsx
-// app/services/gaia/things/tests/requests.test.ts
+// app/services/<layer>/things/tests/requests.test.ts
 import {afterEach, describe, expect, test} from 'vitest';
 import database, {resetTestData} from 'test/mocks/database';
 import {attempt} from '~/services/api/helpers';
