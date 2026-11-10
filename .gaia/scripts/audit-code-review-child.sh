@@ -49,9 +49,9 @@ print_child_settings() {
 # set_child_argv <target> <settings-file>: one array, never through eval or a shell
 # string, since the target and paths are data. --model is the doctrine's review row.
 # No effort flag: the level is review depth, and the session's effort stays unpinned.
-# No --max-budget-usd: the forked review takes it as a soft budget and returns a partial
-# review as success. The deadline is the spend bound. --tools withholds Agent from the
-# top-level child session; it says nothing about the forked review's own tool set.
+# No --max-budget-usd: /code-review runs as a forked subagent that treats it as a soft cap
+# and returns a partial review as success. The deadline bounds spend instead. Withholding
+# Agent in --tools does not stop that fork; the fork's own tool set is unverified.
 set_child_argv() {
   # The commas are one --tools value, not array separators; the caller reads CHILD_ARGV.
   # shellcheck disable=SC2034,SC2054
