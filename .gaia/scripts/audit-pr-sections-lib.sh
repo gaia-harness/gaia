@@ -56,8 +56,8 @@ def in_bound: . != null and .security == false and .severity != "critical";
 # waiver and a human's fix renders nothing; every other row is an accept. The
 # latest row for a member's key decides it, so a corrected decision replaces the
 # earlier one. A key some round disposed fix, or a veto names, is dropped: a
-# finding is never both fixed and accepted. So is a row whose key a round after
-# its own re-reports security-class: that re-report takes a new disposition.
+# finding is never both fixed and accepted. So is a row whose key a later
+# round re-reports security-class, which needs its own disposition.
 # shellcheck disable=SC2016
 _RECORDED_JQ="$_ROW_TEXT_JQ"'
 [inputs | fromjson?
@@ -252,8 +252,8 @@ _open_round_entries() {
 }
 
 # _undecided_keys: `violation: undecided` for each finding of a round that has
-# no dispositions file (a needs-human stop), unless a recorded row of that round
-# or a later one decides its member's key, a later round's dispositions file names it, or _carried_keys
+# no dispositions file (a needs-human stop), unless a recorded row written in that
+# round or later decides its member's key, a later round's dispositions file names it, or _carried_keys
 # carries it into that round. An accepted key carries only while its re-report
 # is not security-class, which only the open round's live read shows, so in an
 # older round it needs a decision again. A stored round's keys come from the

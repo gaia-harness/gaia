@@ -54,8 +54,8 @@
 #                               without --snapshot-dir also prints it for an unsatisfied veto
 #                               whose round is past every dispositions file
 #   undecided                   (check-all without --snapshot-dir) a finding of a round with
-#                               no dispositions file that no recorded row of that round or later,
-#                               later round's entry, or the Carry-forward paragraph covers (an
+#                               no dispositions file that no recorded row written in that round or
+#                               later, no later round's entry, and not the Carry-forward paragraph covers (an
 #                               accepted key only in the open round); stderr names record-residual
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
 #                               needs one stops the unit with needs-human)
@@ -167,7 +167,8 @@
 # dispositions eligibility rule grades it, but an accept or waive needs the
 # open round's live read to show it not security-class. An accept row
 # takes the finding's failure mode as its reason when the lookup has one, and
-# drops a key any veto names, whatever its round. residual-count prints
+# drops a key any veto names, whatever its round, or a round after the row's
+# `round` re-reports security-class. residual-count prints
 # {"total","ask"}: total counts the accepted-residual rows pr-sections renders,
 # run-wide, and ask the subset the residual question lists.
 

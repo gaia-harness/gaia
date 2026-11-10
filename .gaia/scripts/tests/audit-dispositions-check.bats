@@ -1713,7 +1713,7 @@ decide() {
   run_check_all
   red undecided "{\"round\":2,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}" || return 1
   run_sections
-  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "the escalated key still renders: $output"; return 1; }
+  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "pr-sections exited $status or still renders the escalated key: $output"; return 1; }
 }
 
 @test "needs-human: a key an earlier round disposed file needs no decision when a round with no dispositions file re-reports it" {
