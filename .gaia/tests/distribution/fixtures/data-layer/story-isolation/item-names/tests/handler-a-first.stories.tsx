@@ -2,7 +2,7 @@ import {http, HttpResponse} from 'msw/http';
 import {expect} from 'storybook/test';
 import {url} from 'test/mocks/url';
 import preview from '#.storybook/preview';
-import {ITEMS_URLS} from '~/services/gaia/items';
+import {ITEMS_URLS} from '~/services/test-project/items';
 import ItemNames from '..';
 
 // Both stories read the same query key from different handlers. Run in this

@@ -41,7 +41,10 @@
 #                   first H1 line == "# Test Project";
 #                   apps/web/app/languages/en/common.ts has siteName: 'Test
 #                   Project'; apps/web/app/languages/en/pages/_index.ts keeps
-#                   title: '$t(common:meta.siteName)'.
+#                   title: '$t(common:meta.siteName)'; the sample service
+#                   layer apps/web/app/services/gaia/ is now
+#                   apps/web/app/services/test-project/, and no source under
+#                   app/, test/ or .storybook/ still names services/gaia.
 #
 #   wire-statusline .claude/settings.json contains the canonical GAIA
 #                   statusline command.
@@ -239,8 +242,8 @@ if grep -q '@tanstack/react-query' "$SCAFFOLD/apps/web/package.json"; then
   exit 1
 fi
 
-# Step 4; rename. Touches package.json, CLAUDE.md H1, and two seeded
-# language files.
+# Step 4; rename. Touches package.json, CLAUDE.md H1, two seeded language
+# files, and moves the sample service layer to the slug.
 run_step "rename" \
   init rename --title "$TITLE" --kebab "$KEBAB"
 
@@ -260,6 +263,15 @@ grep -qE "siteName:\s*['\"]Test Project['\"]" "$SCAFFOLD/apps/web/app/languages/
 # and rename leaves the reference untouched.
 grep -qF "title: '\$t(common:meta.siteName)'" "$SCAFFOLD/apps/web/app/languages/en/pages/_index.ts" \
   || { fail "rename altered the \$t(common:meta.siteName) title reference in en/pages/_index.ts"; exit 1; }
+# The sample service layer moves to the slug, and no source still names it
+# under its template name.
+[ ! -e "$SCAFFOLD/apps/web/app/services/gaia" ] \
+  || { fail "rename left apps/web/app/services/gaia/ in place"; exit 1; }
+[ -f "$SCAFFOLD/apps/web/app/services/$KEBAB/api.ts" ] \
+  || { fail "rename did not move the service layer to apps/web/app/services/$KEBAB/api.ts"; exit 1; }
+stale_service_specifiers="$(grep -rlE "services/gaia(/|['\"])" "$SCAFFOLD/apps/web/app" "$SCAFFOLD/apps/web/test" "$SCAFFOLD/apps/web/.storybook" 2>/dev/null || true)"
+[ -z "$stale_service_specifiers" ] \
+  || { fail "rename left specifiers naming services/gaia in: $stale_service_specifiers"; exit 1; }
 
 # Step 5; wire-statusline merges into the scaffold's .claude/settings.json.
 run_step "wire-statusline" \

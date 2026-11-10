@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-21
+updated: 2026-11-10
 tags: [concept, services, api]
 ---
 
@@ -14,7 +14,7 @@ Related: [[Services]], [[MSW Handlers]]
 
 ## Folder structure
 
-Each domain lives under `apps/web/app/services/gaia/{domain}/`:
+Each domain lives under `apps/web/app/services/<layer>/{domain}/`, where `<layer>` is the domain layer `/gaia-init` named after the project:
 
 | File                 | Role                                                                                                               |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |

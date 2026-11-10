@@ -139,7 +139,7 @@ Assert on `result.current`, the observable hook surface. A `*.test.tsx` file als
 MSW handlers run inside the `node` Vitest project against the MSW node server, so a service test exercises the real `api()` wrapper, real schema validation, and real URL resolution. No `vi.mock('fetch')`. A page's rendered states are page stories with MSW handlers installed in the meta's `beforeEach` (`beforeEach: ({msw}) => { msw.use(...) }`), never through a story parameter; a route module's status, redirect, data or side effect is a route test (see Route Tests).
 
 ```tsx
-// app/services/gaia/things/tests/requests.test.ts
+// app/services/<layer>/things/tests/requests.test.ts
 import {afterEach, describe, expect, test} from 'vitest';
 import database, {resetTestData} from 'test/mocks/database';
 import {attempt} from '~/services/api/helpers';

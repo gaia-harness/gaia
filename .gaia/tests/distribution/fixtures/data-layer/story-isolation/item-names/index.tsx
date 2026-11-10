@@ -1,6 +1,6 @@
 import {useQuery} from '@tanstack/react-query';
 import {useTranslation} from 'react-i18next';
-import {itemsQuery} from '~/services/gaia/items/queries';
+import {itemsQuery} from '~/services/test-project/items/queries';
 
 const ItemNames = () => {
   const {t} = useTranslation();
