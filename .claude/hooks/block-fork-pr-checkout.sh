@@ -132,8 +132,9 @@ if [ "$checkout_armed" -eq 1 ]; then
   # grep below cannot see it. The arming mask blanks that flag, so a checkout
   # the masked text holds and the raw text does not carried one, and is denied
   # as the trailing flag is.
-  checkout_occurrence_pattern='gh[[:space:]]+pr[[:space:]]+checkout([[:space:]]+[^;&|]*)?'
-  # Counted only where a command can start, so quoted prose that cites a
+  checkout_occurrence_pattern='gh[[:space:]]+pr[[:space:]]+checkout'
+  # Heads only, no argument tail: a tail would swallow a following substitution
+  # checkout in the masked text and tie the counts. Counted only where a command can start, so quoted prose that cites a
   # prefixed checkout is not mistaken for one.
   checkout_command_start_pattern='(^|&&|;|\|\||\||\$\(|`|<\(|>\()[[:space:]]*'"$checkout_occurrence_pattern"
   gaia_verb_arm_mask "$command_line"
