@@ -1,7 +1,7 @@
 import type {SetupWorker} from 'msw/browser';
 import {http, HttpResponse} from 'msw/http';
 import {afterAll, beforeAll, describe, expect, test} from 'vitest';
-import {getAllItems} from '~/services/gaia/items/requests';
+import {getAllItems} from '~/services/test-project/items/requests';
 
 // The origin the root loader would inject on window.process in the browser.
 const INJECTED_ORIGIN = 'https://items-injected-api.test';

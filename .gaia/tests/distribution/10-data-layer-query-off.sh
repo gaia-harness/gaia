@@ -8,13 +8,13 @@
 # no TanStack Query) in a staged release tree:
 #
 #   1. Runs `/gaia-init` Step 3's CLI sequence as `.claude/commands/gaia-init.md`
-#      writes it, through `configure-data-layer`, with the placeholders filled
-#      from that page's Automatic defaults. `configure-data-layer` reports no
-#      change and leaves every file under `apps/web/` byte-identical; the domain
-#      layer's `create()` keeps no `isSnakeCaseEnabled`; no Query dependency appears
-#      (UAT-003, UAT-017).
+#      writes it, with the placeholders filled from that page's Automatic
+#      defaults. `configure-data-layer` reports no change and leaves every file
+#      under `apps/web/` byte-identical; `rename` moves the domain layer to
+#      `app/services/test-project/`, whose `create()` keeps no
+#      `isSnakeCaseEnabled`; no Query dependency appears (UAT-003, UAT-017).
 #   2. A frozen install, then typecheck, lint, test:ci, and build on the
-#      untouched Automatic tree (UAT-017).
+#      Automatic tree (UAT-017).
 #   3. `scaffold service items --mocks` writes no `queries.ts` (UAT-009), and a
 #      clientLoader list route bound to it scaffolds cleanly.
 #   4. `scaffold route --data query` is refused, writes nothing, and names the
@@ -95,15 +95,20 @@ while IFS= read -r command_line; do
   if [ "$2" = "configure-data-layer" ]; then
     hash_frontend "$SCAFFOLD" > "$WORK/before-data-layer.sha256"
     DATA_LAYER_JSON="$(gaia_json "configure-data-layer" "$@")"
-    break
+    # Checked here, before rename changes the frontend.
+    [ "$(json_get "$DATA_LAYER_JSON" "parsed.changed.length")" = "0" ] \
+      || { fail "configure-data-layer with the Automatic defaults changed files (got: $DATA_LAYER_JSON)"; exit 1; }
+    assert_frontend_unchanged "configure-data-layer with the Automatic defaults" "$WORK/before-data-layer.sha256"
+    continue
   fi
   gaia_json "$2" "$@" > /dev/null
 done < "$WORK/step3-filled.txt"
 
-[ "$(json_get "$DATA_LAYER_JSON" "parsed.changed.length")" = "0" ] \
-  || { fail "configure-data-layer with the Automatic defaults changed files (got: $DATA_LAYER_JSON)"; exit 1; }
-assert_frontend_unchanged "configure-data-layer with the Automatic defaults" "$WORK/before-data-layer.sha256"
-if grep -q 'isSnakeCaseEnabled' "$FRONTEND/app/services/gaia/api.ts"; then
+[ -n "$DATA_LAYER_JSON" ] \
+  || { fail "the Step 3 loop never reached init configure-data-layer"; exit 1; }
+[ ! -e "$FRONTEND/app/services/gaia" ] \
+  || { fail "Step 3's rename left app/services/gaia/ in place"; exit 1; }
+if grep -q 'isSnakeCaseEnabled' "$FRONTEND/app/services/test-project/api.ts"; then
   fail "the Automatic tree's create() call carries an isSnakeCaseEnabled argument"
   exit 1
 fi
@@ -125,7 +130,7 @@ run_pnpm_steps automatic- "Automatic tree" typecheck lint test:ci build
 
 gaia_json "scaffold service" scaffold service items \
   --endpoints get,post,put,delete --schema "id:string,displayName:string" --mocks >/dev/null
-if [ -e "$FRONTEND/app/services/gaia/items/queries.ts" ]; then
+if [ -e "$FRONTEND/app/services/test-project/items/queries.ts" ]; then
   fail "scaffold service wrote queries.ts with no TanStack Query installed"
   exit 1
 fi

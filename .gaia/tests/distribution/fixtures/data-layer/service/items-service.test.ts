@@ -3,13 +3,13 @@ import {delay} from 'msw/utils/delay';
 import {describe, expect, test} from 'vitest';
 import {createQueryClient} from '~/query-client';
 import {attempt} from '~/services/api/helpers';
-import {ITEMS_URLS} from '~/services/gaia/items';
-import {itemKeys, itemQuery} from '~/services/gaia/items/queries';
+import {ITEMS_URLS} from '~/services/test-project/items';
+import {itemKeys, itemQuery} from '~/services/test-project/items/queries';
 import {
   createItem,
   getAllItems,
   getItemById,
-} from '~/services/gaia/items/requests';
+} from '~/services/test-project/items/requests';
 import {url} from './mocks/url';
 // eslint-disable-next-line no-restricted-imports -- these tests register per-test MSW handlers on the suite's node server
 import {server} from './test.server';

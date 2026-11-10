@@ -344,6 +344,15 @@ describe('init rename', () => {
     expect(stdio.errors.join('')).toContain('--kebab must be');
   });
 
+  test('exit 1 on a kebab containing a space', () => {
+    sandbox = setupSandbox();
+    const exit = run(['--title', 'X', '--kebab', 'my app'], {
+      cwd: sandbox.root,
+    });
+    expect(exit).toBe(1);
+    expect(stdio.errors.join('')).toContain('--kebab must be');
+  });
+
   test('exit 1 on missing flags', () => {
     sandbox = setupSandbox();
     expect(run(['--title', 'X'], {cwd: sandbox.root})).toBe(1);
