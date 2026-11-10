@@ -135,7 +135,7 @@ if [ "$checkout_armed" -eq 1 ]; then
   checkout_occurrence_pattern='gh[[:space:]]+pr[[:space:]]+checkout([[:space:]]+[^;&|]*)?'
   # Counted only where a command can start, so quoted prose that cites a
   # prefixed checkout is not mistaken for one.
-  checkout_command_start_pattern='(^|&&|;|\|\||\||\$\(|`)[[:space:]]*'"$checkout_occurrence_pattern"
+  checkout_command_start_pattern='(^|&&|;|\|\||\||\$\(|`|<\(|>\()[[:space:]]*'"$checkout_occurrence_pattern"
   gaia_verb_arm_mask "$command_line"
   if [ "$(printf '%s\n' "$GAIA_VERB_ARM_MASKED" | grep -oE "$checkout_command_start_pattern" | wc -l)" -gt \
     "$(printf '%s\n' "$command_line" | grep -oE "$checkout_command_start_pattern" | wc -l)" ]; then

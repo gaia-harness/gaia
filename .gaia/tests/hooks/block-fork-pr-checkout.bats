@@ -95,7 +95,8 @@ reason() {
 @test "a repository flag ahead of the subcommand is denied, in every spelling" {
   local command_text
   for command_text in 'gh -R other/repo pr checkout 12' 'gh --repo other/repo pr checkout 12' \
-    'gh --repo=other/repo pr checkout 12' 'gh pr checkout 5 && gh -R other/repo pr checkout 12'; do
+    'gh --repo=other/repo pr checkout 12' 'gh pr checkout 5 && gh -R other/repo pr checkout 12' \
+    'cat <(gh -R other/repo pr checkout 12)' 'cat >(gh -R other/repo pr checkout 12)'; do
     run_guard "$command_text"
     assert_denied_by_json || return 1
     reason | grep -qF -- 'a repository flag before the subcommand' || return 1
