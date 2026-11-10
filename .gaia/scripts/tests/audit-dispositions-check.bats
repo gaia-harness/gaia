@@ -549,7 +549,7 @@ tree_state() {
   count="$(find "$SNAPSHOT_DIRECTORY" -name 'dispositions-*.checked.json' | wc -l | tr -d ' ')"
   [ "$count" -eq 9 ] || { echo "snapshots: $count"; return 1; }
   mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$shim/"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d\n", time*1000')"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
@@ -564,7 +564,7 @@ tree_state() {
   local shim="$BATS_TEST_TMPDIR/shim"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
   mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$shim/"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
@@ -1633,10 +1633,11 @@ decide() {
   run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/decided-$1.json" --decision "$2"
 }
 
-@test "needs-human: a round with no dispositions file whose sidecar a later round overwrote fails undecided until each decision is recorded, then renders them" {
+@test "needs-human: a round whose sidecar a later round overwrote fails undecided, refuses accept and waive, and clears on fix" {
   local undecided
   # Round 1 stops needs-human with three Minors and no dispositions file;
-  # round 2 overwrites the sidecar with nothing.
+  # round 2 overwrites the sidecar with nothing, so their severity and
+  # security are no longer readable.
   stop_rounds "$(minor_rows f.txt 1 3)" '[]'
   [ "$(bash "$SCRIPTS/audit-loop-eval.sh" findings --root "$ALF_ROOT" --round 1 | jq -c '.entries')" = '[]' ] || return 1
   run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
@@ -1646,22 +1647,59 @@ decide() {
     red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":$undecided}" || return 1
   done
   grep -qF -- "record-residual --root $ALF_ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix" <<<"$output" || { echo "no next step in: $output"; return 1; }
-  decide 3 waive '{"security":true}'
-  [ "$status" -eq 3 ] || { echo "a security waive recorded: $status $output"; return 1; }
-  decide 1 fix && decide 2 accept '{"reason":"deferred to its own change"}' && decide 3 waive '{"reason":"below the threshold"}' || return 1
+  decide 2 accept '{"reason":"deferred to its own change"}'
+  [ "$status" -eq 3 ] || { echo "an accept on a closed round recorded: $status $output"; return 1; }
+  decide 3 waive '{"reason":"below the threshold"}'
+  [ "$status" -eq 3 ] || { echo "a waive on a closed round recorded: $status $output"; return 1; }
+  decide 1 fix && decide 2 fix && decide 3 fix || return 1
   run_check_all
   green || return 1
   run_residual_count
-  [ "$output" = '{"total":1,"ask":0}' ] || { echo "residual-count: $output"; return 1; }
+  [ "$output" = '{"total":0,"ask":0}' ] || { echo "residual-count: $output"; return 1; }
   run_sections
-  [ "$status" -eq 0 ] || return 1
+  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "pr-sections: $output"; return 1; }
+}
+
+@test "needs-human: on the open round, accept and waive read severity and security live, another member's row decides nothing, and the latest decision wins" {
+  local security_minor critical
+  security_minor="$(alf_entries f.txt 3 3 rule/x | jq -c 'map(. + {severity: "minor", security: true})')"
+  critical="$(alf_entries f.txt 4 4 rule/x | jq -c 'map(. + {severity: "critical", security: false})')"
+  stop_rounds "$(joined "$(minor_rows f.txt 1 2)" "$security_minor" "$critical")"
+  # decide writes severity minor and security false whatever the live read
+  # says, so a refusal below proves the bound ignores the caller's values.
+  decide 3 accept '{"reason":"deferred"}'
+  [ "$status" -eq 3 ] || { echo "a security-class accept recorded: $status $output"; return 1; }
+  decide 3 waive '{"reason":"below the threshold"}'
+  [ "$status" -eq 3 ] || { echo "a security-class waive recorded: $status $output"; return 1; }
+  decide 4 accept '{"reason":"deferred"}'
+  [ "$status" -eq 3 ] || { echo "a Critical accept recorded: $status $output"; return 1; }
+  MEMBER="$SHELL_MAINTAINER" decide 2 fix || return 1
+  run_check_all
+  red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":2}" || { echo "another member's row decided the key"; return 1; }
+  decide 1 accept '{"reason":"deferred to its own change"}' && decide 2 waive '{"reason":"below the threshold"}' && decide 3 fix && decide 4 fix || return 1
+  run_check_all
+  green || return 1
+  run_sections
   [ "$output" = '## Accepted residuals (recorded, not fixed)
 
-- `f.txt:2` deferred to its own change. <!-- gaia-debt-key: v1 class=rule/x path=f.txt line=2 -->
+- `f.txt:1` deferred to its own change. <!-- gaia-debt-key: v1 class=rule/x path=f.txt line=1 -->
 
 ## Waived below triage threshold (not filed)
 
-- f.txt:3 rule/x: below the threshold' ] || { echo "pr-sections: $output"; return 1; }
+- f.txt:2 rule/x: below the threshold' ] || { echo "pr-sections: $output"; return 1; }
+  decide 1 fix || return 1
+  run_residual_count
+  [ "$output" = '{"total":0,"ask":0}' ] || { echo "the corrected decision was dropped: $output"; return 1; }
+}
+
+@test "needs-human: a key an earlier round accepted needs a new decision when the open round re-reports it security-class" {
+  local escalated
+  escalated="$(alf_entries f.txt 1 1 rule/x | jq -c 'map(. + {severity: "minor", security: true})')"
+  stop_rounds "$(minor_rows f.txt 1 1)" "$escalated"
+  jq -n -c --arg member "$MEMBER" '{schema: 1, round: 1, entries: [{member: $member, finding_class: "rule/x", path: "f.txt", line: 1,
+    disposition: "accept-residual", reason: "deferred"}], enforcement_paths_allowed: []}' >"$RUN_FOLDER/dispositions-1.json"
+  run_check_all
+  red undecided "{\"round\":2,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
 }
 
 @test "needs-human: a key an earlier round disposed file needs no decision when a round with no dispositions file re-reports it" {

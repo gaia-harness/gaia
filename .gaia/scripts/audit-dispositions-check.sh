@@ -55,8 +55,8 @@
 #                               whose round is past every dispositions file
 #   undecided                   (check-all without --snapshot-dir) a finding of a round with
 #                               no dispositions file that no recorded row, later
-#                               round's entry, or earlier round's file, divert or
-#                               accept-residual covers; stderr names the record-residual call
+#                               round's entry, or carry-forward (below, an accepted
+#                               key only in the open round) covers; stderr names record-residual
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
 #                               needs one stops the unit with needs-human)
 #   missing-basis               waive-out-of-scope without basis triage-threshold|cross-remit
@@ -163,8 +163,9 @@
 # dispositions file.
 # record-residual appends the row for a finding the filer refused on replay,
 # or with --decision a human's decision on a round no dispositions file covers,
-# once per key, and prints nothing; such a row is not a dispositions entry, so
-# no dispositions eligibility rule grades it (only a waive is bounded). An accept row
+# the latest row per member's key deciding it, and prints nothing; no
+# dispositions eligibility rule grades it, but an accept or waive needs the
+# open round's live read to show it not security-class. An accept row
 # takes the finding's failure mode as its reason when the lookup has one, and
 # drops a key any veto names, whatever its round. residual-count prints
 # {"total","ask"}: total counts the accepted-residual rows pr-sections renders,
@@ -211,11 +212,10 @@ _cleanup() {
 trap _cleanup EXIT
 
 # shellcheck disable=SC2016
-_GRADE_JQ="$_GAIA_TRIAGE_HONORED_JQ"'
+_GRADE_JQ="$_GAIA_TRIAGE_HONORED_JQ$_SECURITY_CLASS_JQ"'
 def key_array: [.member, .finding_class, .path, .line];
 def key_object: {member, finding_class, path, line};
 def trim: gsub("^\\s+|\\s+$"; "");
-def security_class: ((.severity | IN("major", "minor")) | not) or (.security | if type == "boolean" then . else true end);
 (if $version >= 3 then $stop.satisfied_vetoes else [] end) as $satisfied_vetoes
 | [$vetoes[] | select(.effective_from_round <= $round) | select(key_array as $key | $satisfied_vetoes | any(. == $key) | not)] as $binding_vetoes
 | ($binding_vetoes | map(key_array)) as $vetoed_keys
