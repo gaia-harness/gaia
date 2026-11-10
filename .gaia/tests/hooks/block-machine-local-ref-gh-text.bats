@@ -21,6 +21,18 @@ setup() {
   REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   HOOK="$REPO_ROOT/.claude/hooks/block-machine-local-ref-gh-text.sh"
   SCRATCH=$(mktemp -d)
+  # A gh stub names the home repository for the --repo comparison, so no test
+  # reaches the network; it fails while $SCRATCH/no-home exists.
+  mkdir -p "$SCRATCH/bin"
+  cat >"$SCRATCH/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+[ "$1 $2" = "repo view" ] || exit 1
+[ -e "${GH_STUB_DIRECTORY}/no-home" ] && exit 1
+printf '{"nameWithOwner":"Acme/Widgets","url":"https://github.com/Acme/Widgets"}\n'
+STUB
+  chmod +x "$SCRATCH/bin/gh"
+  export GH_STUB_DIRECTORY="$SCRATCH"
+  PATH="$SCRATCH/bin:$PATH"
 }
 
 teardown() {
@@ -174,6 +186,27 @@ assert_allowed() {
 
 @test "a pull request in another repository is not read" {
   run_hook 'gh pr create --repo other/repo --title "SPEC-123" --body "x"'
+  assert_allowed
+  run_hook 'gh -R other/repo pr create --title "SPEC-123" --body "x"'
+  assert_allowed
+}
+
+@test "a --repo naming the home repository is read, after the subcommand or ahead of it" {
+  run_hook 'gh pr create --repo acme/widgets --title "SPEC-123" --body "x"'
+  assert_blocked
+  run_hook 'gh issue edit 7 -R github.com/ACME/widgets --body "see .gaia/local/runs/feat/12-x/STATE.md"'
+  assert_blocked
+  run_hook 'gh -R Acme/Widgets pr create --title "SPEC-123" --body "x"'
+  assert_blocked
+  run_hook 'gh --repo=acme/widgets issue create --title "SPEC-123" --body "x"'
+  assert_blocked
+  run_hook 'gh -R acme/widgets pr create --title "feat: clean" --body "x"'
+  assert_allowed
+}
+
+@test "a --repo is not read when gh cannot name the home repository" {
+  : >"$SCRATCH/no-home"
+  run_hook 'gh -R acme/widgets pr create --title "SPEC-123" --body "x"'
   assert_allowed
 }
 

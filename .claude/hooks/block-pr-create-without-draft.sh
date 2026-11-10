@@ -18,7 +18,7 @@
 # and a `;` or a quote inside a title stays title text. Heredoc bodies the
 # arming walk proves are data are masked first. Draft spellings: `--draft`,
 # `--draft=true`, `-d`. Repository spellings: `--repo <v>`, `--repo=<v>`,
-# `-R <v>`, `-R<v>`.
+# `-R <v>`, `-R<v>`, after the subcommand or ahead of it (`gh -R <v> pr create`).
 #
 # OWN REPOSITORY. No `--repo`/`-R`, or one whose `owner/name` equals the
 # `origin` remote's (URL forms, a `.git` suffix and case are normalized on both
@@ -125,10 +125,10 @@ read_origin_repository() {
 # Reads GAIA_FIRST_COMMAND_WORDS for one `gh pr create` and sets draft_used,
 # repository_given and repository_value.
 read_create_command() {
-  local index=3 word_count="${#GAIA_FIRST_COMMAND_WORDS[@]}" word
+  local index=$((GAIA_GH_SUBCOMMAND_INDEX + 2)) word_count="${#GAIA_FIRST_COMMAND_WORDS[@]}" word
   draft_used=0
-  repository_given=0
-  repository_value=""
+  repository_given="$GAIA_GH_PREFIX_REPOSITORY_GIVEN"
+  repository_value="$GAIA_GH_PREFIX_REPOSITORY"
   while [ "$index" -lt "$word_count" ]; do
     word="${GAIA_FIRST_COMMAND_WORDS[$index]}"
     case "$word" in
@@ -187,8 +187,9 @@ while [ "$scan_guard" -lt 64 ] && [ "$offset" -lt "${#scan_text}" ]; do
   next_offset="$GAIA_FIRST_COMMAND_END"
   if [ "${#GAIA_FIRST_COMMAND_WORDS[@]}" -ge 3 ] &&
     [ "${GAIA_FIRST_COMMAND_WORDS[0]}" = gh ] &&
-    [ "${GAIA_FIRST_COMMAND_WORDS[1]}" = pr ] &&
-    [ "${GAIA_FIRST_COMMAND_WORDS[2]}" = create ]; then
+    gaia_gh_subcommand_index &&
+    [ "${GAIA_FIRST_COMMAND_WORDS[$GAIA_GH_SUBCOMMAND_INDEX]}" = pr ] &&
+    [ "${GAIA_FIRST_COMMAND_WORDS[$((GAIA_GH_SUBCOMMAND_INDEX + 1))]:-}" = create ]; then
     read_create_command
     if [ "$draft_used" = 0 ]; then
       if [ "$repository_given" = 0 ]; then
