@@ -1321,7 +1321,7 @@ grant_window_state() {
     | ${2:-.}"
 }
 
-@test "grant window: a grant of K admits K rounds through every quality signal and the next unit is denied" {
+@test "grant override: a grant of K admits K rounds through enriching, stalled, nitpicky and small-tail, and the next unit is denied" {
   local unit_rounds used signal snapshot through
   unit_rounds="$(UNIT_ROUNDS)"
   through=$((3 + unit_rounds))
@@ -1339,7 +1339,7 @@ grant_window_state() {
   done
 }
 
-@test "grant window: reintroduced, waiver-drift and the cap still deny inside a grant; a later checkpoint or a non-grant unit ends the override" {
+@test "grant override: reintroduced and waiver-drift still deny inside a grant, the cap ends a window admitted below it, and a later checkpoint or a non-grant unit ends the override" {
   local enriching
   enriching='{"round":4,"verdict":"enriching","signals":{"enriching":true}}'
   [ "$(gaia_loop_decide_member "$(grant_window_state 4)" '{"round":4,"verdict":"continue","signals":{"reintroduced":true,"enriching":true}}' true "$LOW" 300000 50)" = "deny rubric:reintroduced false false" ] || return 1

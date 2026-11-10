@@ -84,10 +84,10 @@
 # config. s = used + 1; k = K; <eligible> is the snapshot's accept_eligible (false
 # with no snapshot). The order of the steps is the security property. Enriching,
 # stalled, nitpicky and small-tail deny nowhere with stop_override true (the hook
-# adds it in memory, see DEFAULT STOP) or inside a grant window (the latest unit
-# was admitted on a grant, no checkpoint since, through_round >= s), so a grant
-# of K buys up to K rounds. With stop_override, gaia_loop_decide skips its
-# allowance and verdict steps, and step 6 allows `fallback s min(s+k-1, 10)`.
+# adds it in memory, see DEFAULT STOP), nor in the unit and member decisions in a
+# grant window (latest unit admitted on a grant, no checkpoint since, through_round
+# >= s): a grant of K buys up to K rounds. stop_override also makes gaia_loop_decide
+# skip its allowance and verdict steps, and step 6 allow `fallback s min(s+k-1, 10)`.
 #   gaia_loop_decide (a new-tree dispatch outside the unit protocol): deny
 #   `cap` when used >= 10; deny `allowance` when used >= allowed; else deny
 #   `stalled` or `enriching` when that is round r = used's verdict and no

@@ -121,7 +121,8 @@ _gaia_loop_stop_override_set() {
 
 # _gaia_loop_denying_signal <state-json> <snapshot-json> <used>: the first denying
 # signal on the snapshot that no checkpoint at round >= used has answered and
-# no grant window lifts, or nothing. A snapshot without `signals` (legacy) denies on its verdict alone.
+# no grant window lifts, or nothing. A snapshot without `signals` (legacy)
+# denies on its verdict alone.
 # rc 5 when the state cannot be read.
 _gaia_loop_denying_signal() {
   printf '%s' "$1" | jq -r --argjson snapshot "${2:-null}" --argjson used "$3" '
