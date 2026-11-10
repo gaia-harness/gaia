@@ -280,11 +280,11 @@ _undecided_keys() {
 # dispositions-<r>.json. needs-human can stop before the unit writes it, and
 # member-wave-dirty does so on a closing round; failure can stop anywhere;
 # dispositions-check-failed can come from the bound hook denying a mid-wave
-# join, before the file. The unit's other
-# stops cannot: clean and window-end end on disposed rounds, and checkpoint-deny
-# and window-end come only from a dispatch that would open a new round, after
-# the last one's file. With no such report it prints nothing: fixtures and runs
-# without a stopped unit hold no open round awaiting a human.
+# join, before the file. The unit's other stops cannot: clean and window-end
+# end on disposed rounds, and checkpoint-deny and window-end come only from a
+# dispatch that would open a new round, after the last one's file. With no such
+# report it prints nothing: fixtures and runs without a stopped unit hold no
+# open round awaiting a human.
 _command_undecided() {
   local unit_reports=("$RUN_FOLDER"/unit-*.json) stop_reason
   [ -e "${unit_reports[0]}" ] || return 0
