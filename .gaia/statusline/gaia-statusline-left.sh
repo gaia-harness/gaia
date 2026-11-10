@@ -17,12 +17,12 @@
 # disagree. Those bands are token counts for a context window, so they do not
 # apply to the usage windows, which carry their own percentage bands. Hot path:
 # bash arithmetic and builtins only, plus the one git call for the branch, one
-# date call per usage window that shows a countdown, and, when a checkpoint
+# date call per usage window at or past its countdown band, and, when a checkpoint
 # override file exists, one jq call.
 
 # The countdown shows once the reset time decides what happens next: from yellow
 # for the 5-hour window, whose reset is near enough to plan around, and from red
-# for the 7-day window, whose reset at yellow is still days away.
+# for the 7-day window, whose reset at yellow can still be days off.
 GAIA_USAGE_YELLOW_PERCENTAGE=75
 GAIA_USAGE_RED_PERCENTAGE=90
 
