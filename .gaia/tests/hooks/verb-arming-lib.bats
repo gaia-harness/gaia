@@ -680,6 +680,27 @@ opener_pair() {
   assert_armed
 }
 
+@test "every command start the shell grammar has arms, and a dead opener's paren is not one" {
+  local text
+  for text in \
+    "($MERGE_INVOCATION)" \
+    "true && ( $MERGE_INVOCATION )" \
+    "{ $MERGE_INVOCATION; }" \
+    "! $MERGE_INVOCATION" \
+    "if $MERGE_INVOCATION; then :; fi" \
+    "if true; then $MERGE_INVOCATION; fi" \
+    "if false; then :; else $MERGE_INVOCATION; fi" \
+    "if false; then :; elif $MERGE_INVOCATION; then :; fi" \
+    "for i in 1; do $MERGE_INVOCATION; done" \
+    "while $MERGE_INVOCATION; do :; done" \
+    "until $MERGE_INVOCATION; do :; done"; do
+    arm "$MERGE_FRAGMENT" '' "$text"
+    assert_armed || { echo "not armed: $text"; return 1; }
+  done
+  arm "$MERGE_FRAGMENT" '' "echo '\$($MERGE_INVOCATION)'"
+  assert_not_armed
+}
+
 @test "a mid-word hash still arms and a verb after a word-initial hash on its own line does not" {
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "git checkout fix#12 && $MERGE_INVOCATION"
   assert_armed || return 1

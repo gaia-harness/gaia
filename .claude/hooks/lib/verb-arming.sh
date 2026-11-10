@@ -10,15 +10,15 @@
 # boundary group, plus any further capture groups the caller wants. It is
 # composed, byte for byte, into this pattern pair:
 #
-#   start_regex = '^[[:space:]]*'                       + <verb_fragment>
-#   separator_regex   = $'(\\&\\&|;|\\|\\||\\||\n|\\$\\(|\140|<\\(|>\\()'
-#              + '[[:space:]]*' + <verb_fragment>
+#   start_regex = '^[[:space:](]*'                      + <verb_fragment>
+#   separator_regex   = '(' + <openers> + '|' + <command starts> + ')'
+#              + '[[:space:](]*' + <verb_fragment>
 #
-# The separator group holds the list operators, a newline, and every
-# substitution opener a verb after which the shell runs: `$(` and a backtick,
-# `<(` and `>(`. `$(` and a backtick also run inside double quotes; `<(` and
-# `>(` do not, and the group arms on either in either position, the
-# fail-closed direction.
+# The openers are those a verb after which the shell runs: `$(` and a backtick
+# (live in double quotes too), `<(` and `>(` (armed on in either, fail-closed).
+# The command starts are the list operators, a newline, a brace group, `!` and
+# the reserved words a command follows; `gaia_verb_armed` spells both sets. A
+# subshell `(` may sit between any start and the verb, never mid-arguments.
 #
 # Composition is literal concatenation in that order, which is what preserves
 # capture-group numbering: under `start` the fragment's own groups begin at 1,
@@ -86,8 +86,8 @@
 # consumer denies, naming the missing file, unless its own published contract
 # is fail-open, in which case it exits 0.
 #
-# WHAT THIS DOES NOT CLOSE. Quoted prose carrying a list operator or a newline
-# before the verb still over-arms, fail-closed, and there is no safe
+# WHAT THIS DOES NOT CLOSE. Quoted prose carrying a command start before the
+# verb still over-arms, fail-closed, and there is no safe
 # narrowing. So does an opener the liveness scan abstains on or does not
 # model; its own header names both, and the nested-interpreter case it
 # under-arms. A verb whose characters are quoted
@@ -316,7 +316,7 @@ _gaia_va_live() {
 
 gaia_verb_armed() {
   local verb_pattern="$1" words_spec="$2" text="$3"
-  local start_regex separator_regex list_regex opener_regex raw newline=$'\n'
+  local start_regex separator_regex list_regex opener_regex raw command_starts keyword_starts
   local matched_text matched_view
 
   GAIA_VERB_ARM_KIND=""
@@ -324,7 +324,7 @@ gaia_verb_armed() {
   GAIA_VERB_ARM_VIEW="$text"
   GAIA_VERB_ARM_SUPPRESSED=0
 
-  start_regex='^[[:space:]]*'"$verb_pattern"
+  start_regex='^[[:space:](]*'"$verb_pattern"
   # The substitution openers ride the separator group rather than a pass of
   # their own: the shell runs what follows each one, and group 1 stays the one
   # group this pattern adds, which is what keeps the fragment's own numbering.
@@ -332,12 +332,14 @@ gaia_verb_armed() {
   # The walker's condition 7 carries the command-substitution openers as glob
   # needles, and its liveness scan carries every opener's first character; an
   # opener added here needs both there too.
-  separator_regex=$'(\\&\\&|;|\\|\\||\\||\n|\\$\\(|\140|<\\(|>\\()[[:space:]]*'"$verb_pattern"
-  # The same group split in two, for the view stage: a list operator arms as
-  # it stands, an opener only where the liveness view leaves it live. Each
-  # keeps group 1 as its separator, so numbering is the same whichever decides.
-  list_regex=$'(\\&\\&|;|\\|\\||\\||\n)[[:space:]]*'"$verb_pattern"
-  opener_regex=$'(\\$\\(|\140|<\\(|>\\()[[:space:]]*'"$verb_pattern"
+  # The starts may add no group, so a reserved word is spelled per boundary.
+  printf -v keyword_starts '|^%s[[:space:]]|[[:space:];&|(]%s[[:space:]]' 'if' 'if' 'then' 'then' 'do' 'do' 'else' 'else' 'elif' 'elif' 'while' 'while' 'until' 'until'
+  command_starts=$'\\&\\&|;|\\|\\||\\||\n''|\{[[:space:]]|![[:space:]]'"$keyword_starts"
+  separator_regex=$'(\\$\\(|\140|<\\(|>\\(|'"${command_starts})[[:space:](]*${verb_pattern}"
+  # The same group split in two for the view stage, each keeping group 1 as its
+  # separator so numbering is the same whichever decides.
+  list_regex="(${command_starts})[[:space:](]*${verb_pattern}"
+  opener_regex=$'(\\$\\(|\140|<\\(|>\\()[[:space:](]*'"$verb_pattern"
 
   gaia_verb_arm_mask "$text"
   matched_text="$GAIA_VERB_ARM_MASKED"
@@ -360,27 +362,25 @@ gaia_verb_armed() {
       return 0
     fi
     if [[ "$matched_view" =~ $separator_regex ]]; then
+      # A leftmost command start is the leftmost list match too, so only an
+      # opener needs the liveness view, which arms where it still carries a
+      # live one. The two views are asked separately rather than composed, so
+      # an opener live in each but at different places arms: that direction
+      # over-arms and never under-arms.
       case "${BASH_REMATCH[1]}" in
-        '&&'|';'|'||'|'|'|"$newline")
-          GAIA_VERB_ARM_KIND=sep
-          GAIA_VERB_ARM_MATCH=(${BASH_REMATCH[@]+"${BASH_REMATCH[@]}"})
-          return 0
+        "\$(" | $'\140' | '<(' | '>(')
+          _gaia_va_live "$text"
+          gaia_verb_arm_mask "$GAIA_VERB_ARM_LIVE"
+          if [[ "$GAIA_VERB_ARM_MASKED" =~ $opener_regex ]]; then
+            GAIA_VERB_ARM_KIND=sep
+            GAIA_VERB_ARM_MATCH=(${BASH_REMATCH[@]+"${BASH_REMATCH[@]}"})
+            GAIA_VERB_ARM_VIEW="$GAIA_VERB_ARM_LIVE"
+            # shellcheck disable=SC2034
+            [ "$GAIA_VERB_ARM_VIEW" = "$text" ] || GAIA_VERB_ARM_SUPPRESSED=1
+            return 0
+          fi
           ;;
       esac
-      # The leftmost separator is an opener, which arms only where the
-      # liveness view still carries a live one. The two views are asked
-      # separately rather than composed, so an opener live in each but at
-      # different places arms: that direction over-arms and never under-arms.
-      _gaia_va_live "$text"
-      gaia_verb_arm_mask "$GAIA_VERB_ARM_LIVE"
-      if [[ "$GAIA_VERB_ARM_MASKED" =~ $opener_regex ]]; then
-        GAIA_VERB_ARM_KIND=sep
-        GAIA_VERB_ARM_MATCH=(${BASH_REMATCH[@]+"${BASH_REMATCH[@]}"})
-        GAIA_VERB_ARM_VIEW="$GAIA_VERB_ARM_LIVE"
-        # shellcheck disable=SC2034
-        [ "$GAIA_VERB_ARM_VIEW" = "$text" ] || GAIA_VERB_ARM_SUPPRESSED=1
-        return 0
-      fi
       if [[ "$matched_view" =~ $list_regex ]]; then
         GAIA_VERB_ARM_KIND=sep
         GAIA_VERB_ARM_MATCH=(${BASH_REMATCH[@]+"${BASH_REMATCH[@]}"})

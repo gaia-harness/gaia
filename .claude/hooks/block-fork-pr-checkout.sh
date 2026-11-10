@@ -134,10 +134,10 @@ if [ "$checkout_armed" -eq 1 ]; then
   # as the trailing flag is.
   checkout_occurrence_pattern='gh[[:space:]]+pr[[:space:]]+checkout'
   # Heads only, no argument tail: a tail would swallow a following substitution
-  # checkout in the masked text and tie the counts. Counted only at line start
-  # or after &&, ||, ;, | or a substitution opener, so quoted prose that cites
-  # a prefixed checkout is not mistaken for one.
-  checkout_command_start_pattern='(^|&&|;|\|\||\||\$\(|`|<\(|>\()[[:space:]]*'"$checkout_occurrence_pattern"
+  # checkout in the masked text and tie the counts. Counted only where the
+  # arming library starts a command, so quoted prose that cites a prefixed
+  # checkout mid-sentence is not mistaken for one.
+  checkout_command_start_pattern='(^|&&|;|\|\||\||\$\(|`|<\(|>\(|\{[[:space:]]|![[:space:]]|(^|[[:space:];&|(])(if|then|do|else|elif|while|until)[[:space:]])[[:space:](]*'"$checkout_occurrence_pattern"
   gaia_verb_arm_mask "$command_line"
   if [ "$(printf '%s\n' "$GAIA_VERB_ARM_MASKED" | grep -oE "$checkout_command_start_pattern" | wc -l)" -gt \
     "$(printf '%s\n' "$command_line" | grep -oE "$checkout_command_start_pattern" | wc -l)" ]; then

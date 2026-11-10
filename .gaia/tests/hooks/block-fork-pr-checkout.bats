@@ -105,6 +105,18 @@ reason() {
   [ ! -s "$GH_LOG" ]
 }
 
+@test "a checkout started by a subshell, brace group, negation or keyword is denied with either flag spelling" {
+  local command_text checkout
+  for checkout in 'gh -R other/repo pr checkout 12' 'gh pr checkout 12 -R other/repo'; do
+    for command_text in "($checkout)" "{ $checkout; }" "! $checkout" "if true; then $checkout; fi" \
+      "for i in 1; do $checkout; done" "while $checkout; do :; done"; do
+      run_guard "$command_text"
+      assert_denied_by_json || { echo "not denied: $command_text"; return 1; }
+    done
+  done
+  [ ! -s "$GH_LOG" ]
+}
+
 @test "a repository flag ahead of another gh subcommand does not deny a home checkout" {
   run_guard 'gh -R other/repo pr view 3 && gh pr checkout 12'
   reason | grep -qF -- 'a repository flag before the subcommand' && return 1
