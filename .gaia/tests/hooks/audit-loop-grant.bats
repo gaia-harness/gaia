@@ -218,7 +218,7 @@ recorded_one() {
   [ "$status" -eq 0 ]
   unchanged
   printf '%s' "$output" | grep -qF 'not interactive'
-  printf '%s' "$output" | grep -qF 'Start a new interactive Claude Code session on this branch'
+  printf '%s' "$output" | grep -qF "In a new Claude Code terminal session in the audited branch's checkout, send any message"
   printf '%s' "$output" | grep -qF -- '--continue or --resume'
 }
 

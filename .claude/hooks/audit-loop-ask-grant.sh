@@ -246,7 +246,8 @@ gaia_loop_session_is_interactive "$transcript" || interactive_exit_status=$?
 case "$interactive_exit_status" in
   0) ;;
   2) _ag_decline "this session has no transcript record yet to show it is interactive. Send any other message first, then have Claude ask again." ;;
-  *) _ag_decline "this session is not interactive, and --continue or --resume of it stays that way. Start a new interactive Claude Code session on this branch and answer there." ;;
+  # Not _ag_decline: its typed fallback fails the same check in this session.
+  *) _ag_say "Nothing was recorded from this AskUserQuestion: this session is not interactive, and --continue or --resume of it stays that way. In a new Claude Code terminal session in the audited branch's checkout, send any message, then type audit-grant <n> or audit-accept as the whole prompt."; exit 0 ;;
 esac
 
 # 3. Permission mode.
