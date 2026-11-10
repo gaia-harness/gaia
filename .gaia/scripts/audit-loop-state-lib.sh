@@ -361,6 +361,8 @@ gaia_loop_recommended() {
 # "context unavailable". The reading's text and its side of the line come from
 # gaia_context_summary and gaia_context_band, so the caller sources
 # context-checkpoint-lib.sh first; rc 6 when it has not.
+# A `rubric:enriching` trigger adds one sentence to the question: a new finding
+# sits on a line changed since the previous round, and accepting keeps that change.
 # Exactly one option leads and ends in " (Recommended)". A `context` trigger
 # means the session is at or over the line, so "Continue audit in a new session" always leads and
 # "Continue audit in this session" stays offered right after it as the opt-out. For any other
@@ -447,7 +449,9 @@ gaia_loop_pinned_question() {
     | ([$all_options[] | select(.key == $lead) | .label = .label + " (Recommended)"]
        + [$all_options[] | select(.key != $lead)] | map(del(.key))) as $options
     | {questions: [{
-        question: ("Audit checkpoint " + $nonce + " on " + $branch + ": " + $used + " rounds used (" + $trigger + ")" + $question_context + ". How should the audit loop continue?"),
+        question: ("Audit checkpoint " + $nonce + " on " + $branch + ": " + $used + " rounds used (" + $trigger + ")" + $question_context + "."
+          + (if $trigger == "rubric:enriching" then " A new finding sits on a line changed since the previous round, usually by its fix; accepting keeps that change as written, so review it before answering." else "" end)
+          + " How should the audit loop continue?"),
         header: "Audit loop",
         multiSelect: false,
         options: $options}]}'

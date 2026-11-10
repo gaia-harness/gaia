@@ -15,13 +15,14 @@ setup() {
   LIBRARY_NAMES="context-checkpoint-lib.sh audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh"
 }
 
-# emit_questions <library-directory>: the three fixture questions, one line each.
+# emit_questions <library-directory>: the four fixture questions, one line each.
 emit_questions() {
   . "$1/context-checkpoint-lib.sh"
   . "$1/audit-loop-state-lib.sh"
   gaia_loop_pinned_question feat/sample 0123456789abcdef 3 3 false false context "fresh 320000 1000000" grant 300000
   gaia_loop_pinned_question feat/sample 0123456789abcdef 3 3 true false rubric:stall "fresh 250000 1000000" grant 300000
   gaia_loop_pinned_question feat/sample 0123456789abcdef 6 3 false true cap "fresh 450000 1000000" stop 300000
+  gaia_loop_pinned_question feat/sample 0123456789abcdef 4 3 true false rubric:enriching "fresh 250000 1000000" accept 300000
 }
 
 # copy_libraries <destination>: a scratch copy of every library the builder sources.
@@ -33,9 +34,9 @@ copy_libraries() {
   done
 }
 
-@test "the fixture holds three non-empty question lines" {
-  [ "$(wc -l <"$FIXTURE" | tr -d ' ')" = "3" ]
-  [ "$(grep -c '^{"questions":' "$FIXTURE")" = "3" ]
+@test "the fixture holds four non-empty question lines" {
+  [ "$(wc -l <"$FIXTURE" | tr -d ' ')" = "4" ]
+  [ "$(grep -c '^{"questions":' "$FIXTURE")" = "4" ]
 }
 
 @test "the pinned question lines match the fixture byte for byte" {

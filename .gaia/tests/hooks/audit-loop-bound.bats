@@ -1244,6 +1244,7 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   unit_dispatch
   assert_pinned rubric:enriching
   [ "$(first_pinned_label)" = "Accept the remainder (Recommended)" ]
+  [[ "$(state_field '.history.checkpoints | last | .question.questions[0].question')" == *"A new finding sits on a line changed since the previous round, usually by its fix; accepting keeps that change as written, so review it before answering. How should"* ]]
   above
   seed_rounds 6 "$(sig_snap quiet true)"
   unit_dispatch
