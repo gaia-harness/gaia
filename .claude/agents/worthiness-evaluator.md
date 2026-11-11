@@ -73,7 +73,8 @@ Axis 2 to a strict test, with the worth criteria below as its Axis 2.
 A test is honest when all three hold:
 
 - **It can fail.** A tautology (`expect(true).toBe(true)`, asserting a literal
-  you just wrote) can never fail and proves nothing.
+  you just wrote, checking a static constant against its own value) can never
+  fail and proves nothing.
 - **It asserts through the public interface.** It drives the component the way a
   user does (ARIA roles, accessible names, visible text; in a play, `userEvent`
   and `within(canvasElement)` queries) and asserts on observable
@@ -82,8 +83,9 @@ A test is honest when all three hold:
   warning sign is a test that breaks when structure changes but behavior does
   not: a `vi.fn()` spy on a function the component uses internally, a
   `vi.mock('~/hooks/...')` / `vi.mock('~/components/...')` / `vi.mock('~/services/...')`
-  of an internal collaborator, `toHaveBeenCalled` as the sole assertion (that
-  tests call-through, not behavior), or an import from `../internals` /
+  of an internal collaborator, `toHaveBeenCalled` or a count of requests to a
+  boundary (how many times `GET /me` ran) as the sole assertion (that tests
+  call-through, not behavior), or an import from `../internals` /
   `.server.ts` a public consumer would never touch.
 
 Both axes apply to the assertions in a `.test()` body exactly as to any other
@@ -118,6 +120,12 @@ An honest test can still be worthless. Apply these sub-rules:
   you, and breaks on a Node/ICU upgrade with no bug in your code → `fix` (assert
   the logic you own: the null guard, the unit conversion, the locale SELECTION
   with a tolerant matcher) or `delete` when there is no owned logic to assert.
+
+- **One test per shared mapping.** When several loaders or actions map an
+  upstream failure through one shared helper, one test of that mapping covers
+  it. A test that pins the same mapping again for another caller is redundant
+  → `delete` (human-gated, citing the test that already pins it), unless that
+  caller maps differently.
 
 - **Non-triviality.** See the dedicated rule below.
 
@@ -174,7 +182,9 @@ permission denials). A flow test may be a Playwright spec, a bats suite or a
 
 - List every error path the build has that neither that flow file nor a
   lower-layer test exercises, in `untestedErrorPaths`, each with a `file:line`
-  in the source. A single-request refusal or validation error names the lower
+  in the source. Error paths that share one mapping helper are one entry,
+  cited at the helper, unless a caller maps differently. A single-request
+  refusal or validation error names the lower
   layer that owns it (a route test, or a real-server check where
   `wiki/decisions/Test Layering.md` calls for one), and its fix is a new test
   there, never an edit to the flow spec. Every entry names in `test` the

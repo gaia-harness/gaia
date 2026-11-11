@@ -10,7 +10,10 @@
 # settlement at an unchanged signal routes it residual, so the step judges it
 # again instead. The audit round's fixer can add a guard, refusal or validation, and
 # unless its prompt says to drive that guard into its failing state, the guard
-# merges untested. A model executes all three passages, so an edit that drops
+# merges untested. The evaluator's lenses also name three tests that cost
+# without catching anything: a static constant checked against its own value,
+# a boundary call count as the sole assertion, and one shared error mapping
+# pinned again per caller. A model executes these passages, so an edit that drops
 # one clause would ship silently. This suite pins each clause.
 #
 # Method: every check takes a root directory and reads one region; each red
@@ -141,6 +144,26 @@ check_round_fixer_guard_test() {
     'when no layer can reach the guard, keep the repair and say so in that entry'"'"'s reason.' || return 1
 }
 
+check_evaluator_lenses() {
+  local honesty worthiness gaps
+  honesty="$(joined "$(range_of "$1/$EVALUATOR_REL" '### Axis 1: HONESTY' '### Axis 2: WORTHINESS')")"
+  need_text 'honesty axis' "$honesty" || return 1
+  in_order "$honesty" \
+    'checking a static constant against its own value) can never fail' \
+    '`toHaveBeenCalled` or a count of requests to a boundary (how many times `GET /me` ran) as the sole assertion' || return 1
+  worthiness="$(joined "$(range_of "$1/$EVALUATOR_REL" '### Axis 2: WORTHINESS' '### Worth criteria for a strict test')")"
+  need_text 'worthiness axis' "$worthiness" || return 1
+  in_order "$worthiness" \
+    '**One test per shared mapping.**' \
+    'one test of that mapping covers it.' \
+    'A test that pins the same mapping again for another caller is redundant' \
+    'unless that caller maps differently.' || return 1
+  gaps="$(joined "$(range_of "$1/$EVALUATOR_REL" '- List every error path the build has' '- When the test asserts something real')")"
+  need_text 'evaluator untestedErrorPaths bullet' "$gaps" || return 1
+  in_order "$gaps" \
+    'Error paths that share one mapping helper are one entry, cited at the helper, unless a caller maps differently.' || return 1
+}
+
 # ---------- tests ----------
 
 @test "the evaluator names the owning lower-layer test file for each untested error path" {
@@ -171,6 +194,18 @@ check_round_fixer_guard_test() {
 @test "the judge-again check goes red without the unsettled flow test or its residual ending" {
   red check_step_judges_flow_again "$STEP_REL" 'plus each flow test step 3 left unsettled' 'and nothing else'
   red check_step_judges_flow_again "$STEP_REL" 'as does an unsettled flow test judged `fix` again.' 'and nothing more.'
+}
+
+@test "the evaluator flags constant checks, boundary call counts and a shared mapping pinned per caller" {
+  green check_evaluator_lenses
+}
+
+@test "the evaluator-lens check goes red without any one lens" {
+  red check_evaluator_lenses "$EVALUATOR_REL" ', checking a static constant against its own value)' ')'
+  red check_evaluator_lenses "$EVALUATOR_REL" ' or a count of requests to a
+  boundary (how many times `GET /me` ran)' ''
+  red check_evaluator_lenses "$EVALUATOR_REL" '**One test per shared mapping.**' '**Shared mappings.**'
+  red check_evaluator_lenses "$EVALUATOR_REL" 'Error paths that share one mapping helper are one entry,' 'Error paths are listed per caller,'
 }
 
 @test "the audit fixer must test a guard its repair adds" {
