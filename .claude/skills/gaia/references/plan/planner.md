@@ -332,7 +332,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       After every dispatched member's clean-pass marker is written and before the merge, the orchestrator prints the whole implementation's cost with `bash .gaia/scripts/usage.sh initiative <root> --box`, where `<root>` is `spec:SPEC-NNN` (from the `## Source SPEC` section of `README.md`) for a spec-derived plan or `plan:PLAN-NNN` for a spec-less one. The output lists the spec (when there is one), the plan and the execution, with a total, and is relayed verbatim inside a bare fenced block (an unfenced box is reflowed by the Markdown renderer and loses its alignment). Never compute or restate a figure; on a non-zero exit, relay the command's one stderr line in its place.
 
       **The merge question.** After the cost line, ask one `AskUserQuestion` with `Merge it` and `Hold the merge`, the recommended option first. Recommend `Merge it` when the merge is ready. Recommend `Hold the merge` only when one of these holds, and name it in that option's description:
-      - a required check is not passing (`gh pr checks <N> --required`);
+      - a required check failed or was cancelled (`gh pr checks <N> --required`);
       - a phase committed after a `(HALTED)` block in `{PLAN_DIR}/PROGRESS.md` whose answer was not `I did it` with `Rerun: passed`;
       - a deviation the summary surfaced needs a decision the human has not given;
       - the residual count read's `.ask` is non-zero and no human answered the residual question;
