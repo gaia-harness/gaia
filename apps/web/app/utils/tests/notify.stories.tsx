@@ -25,7 +25,7 @@ const readDestructiveColor = (): string => {
 };
 
 // Toasts live in a module-level manager, so one story's toasts reach the next.
-// Closing them and waiting for the exit animation keeps each story's toast
+// Closing them and waiting for them to unmount keeps each story's toast
 // count, and the axe scan after its play, to that story alone.
 const clearToasts = async (): Promise<void> => {
   toast.close();
@@ -36,8 +36,23 @@ const clearToasts = async (): Promise<void> => {
   });
 };
 
+// The vendored toast ignores reduced motion, so under load its 500ms exit can
+// outlast clearToasts' wait. Vitest emulates reduced motion and Chromatic does
+// not, so this unmounts a closed toast at once without changing a snapshot.
+const toastReducedMotionStyle =
+  '@media (prefers-reduced-motion: reduce) { [data-slot="toast"] { transition: none; } }';
+
 const meta = preview.meta({
-  beforeEach: clearToasts,
+  beforeEach: async () => {
+    const style = document.createElement('style');
+    style.textContent = toastReducedMotionStyle;
+    document.head.append(style);
+    await clearToasts();
+
+    return () => {
+      style.remove();
+    };
+  },
   // The toast renders in a portal outside the canvas, so the canvas carries a
   // caption of its own: the story scan requires content in the story root.
   component: () => (
