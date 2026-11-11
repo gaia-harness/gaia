@@ -5,9 +5,10 @@
 # This parser is the trust boundary over untrusted text: the review's prose can
 # quote a diff, so it never decides anything and never counts findings. Only the
 # result's own structured fields and one exact fenced array do. One exception: a
-# string result that begins with Not logged in AND carries total_cost_usd of 0
-# reads as not logged in, because a child with no credentials did no billed work. Every value
-# reaches jq as an input file, stdin or --rawfile, never interpolated into a program.
+# result that begins with "Not logged in" and has total_cost_usd 0 reads as the
+# reason "not logged in", because a child with no credentials did no billed
+# work. Every value reaches jq as an input file, stdin or --rawfile, never
+# interpolated into a program.
 #
 #   gaia_review_judge <result-json-file>
 #     Prints one line of JSON and returns 0:
