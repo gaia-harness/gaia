@@ -579,7 +579,7 @@ check_human_only_halt() {
     '`Stay halted (Recommended)` first, which ends the run with the phase' \
     '`Answered: <label>`' \
     'A failure only the human can clear' \
-    '`I did it (Recommended)` first, which reruns the failed gate step and continues only on a pass' \
+    '`I did it (Recommended)` first, which reruns the whole phase gate from its first step (for a sub-agent failure, it re-dispatches that sub-agent first) and continues only on a pass' \
     'then `Stay halted`' \
     'A failed rerun appends `Rerun: failed` and its error under the `Answered:` line, then ends the run and asks no new question.' || return 1
 }
@@ -589,7 +589,7 @@ check_human_only_halt() {
 }
 
 @test "red twin: a human-done option that continues without a passing rerun fails" {
-  red check_human_only_halt 'which reruns the failed gate step and continues only on a pass' 'which continues the run'
+  red check_human_only_halt 'which reruns the whole phase gate from its first step (for a sub-agent failure, it re-dispatches that sub-agent first) and continues only on a pass' 'which continues the run'
 }
 
 @test "red twin: a failed rerun that asks again fails" {

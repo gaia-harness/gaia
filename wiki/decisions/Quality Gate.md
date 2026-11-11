@@ -32,7 +32,7 @@ The contract lives at the repo root. Steps 3 to 5 are root scripts that run acro
    - **No resolvable port**: `ports.sh` prints its own reason on stderr. Next step: act on that message, then rerun the step.
    - **No process backend**: neither `lsof` nor `ss` with `/proc` can tell who holds the port. Next step: install `lsof`, or `ss` with `/proc`, then rerun the step.
 
-   An exit 1 whose server error names a variable `apps/web/.env` lacks is a missing environment variable: never read or edit `.env`. Attended, name the line to add, its value taken from `apps/web/.env.example`, and ask with `AskUserQuestion`: `I added the line` (Recommended), which reruns the step, or `Hold the commit`. Only exit 0 passes; a second failure holds the commit with no new question.
+   An exit 1 whose server error names a variable `apps/web/.env` lacks, or holds an invalid value, is a missing or invalid environment variable: never read or edit `.env`. Attended, name the line to add or correct and the value form taken from `apps/web/.env.example`, so the human corrects an existing line rather than adding a duplicate, and ask with `AskUserQuestion`: `I added the line` (Recommended), which reruns the step that failed (step 6's `pnpm pw` when it handed off here, else this dev smoke test), or `Hold the commit`. Only that step's own pass (exit 0 for the dev smoke test) passes; a second failure holds the commit with no new question, and a plan orchestrator's halt after it asks no second `I did it`.
 
    Unattended, the workflow halts naming the reason. The script's header documents the exit codes.
 8. `pnpm build` (`pnpm -C apps/web build`): confirms production build.
