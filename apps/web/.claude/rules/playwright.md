@@ -111,7 +111,7 @@ With `MSW_SEED=true`, which only the worker server sets (alongside `MSW_ENABLED=
 Every worker seeds and reads the MSW store of its own server. A serial project is not an accepted way to share one store: it runs the suite on one core. The worker-scoped server fixture and the typed `GivenBuilder` pattern are in `.playwright/fixtures.ts`; read its comment before adding any project that holds state. The stock suite does not request `workerServer`; only `.playwright/e2e/msw-seed/seeded-record-reaches-the-page.spec.ts` starts a server of its own, logging to `seed-fixture-<parallelIndex>-server.log`.
 
 - Setup goes through Given builders, which seed the worker's own store with unique identities; a form's own submission is checked over HTTP with a body `serializeForm` builds from the served page.
-- A request-fixture refusal check sets `maxRedirects: 0` and asserts the status and the `Location` header, and states the actor: the request fixture follows redirects by default, is a separate context from `page` and inherits `storageState`.
+- A request-fixture refusal check sets `maxRedirects: 0` and asserts the status and any `Location` header, never page content a route test shows, and states the actor: the request fixture follows redirects by default, is a separate context from `page` and inherits `storageState`.
 - A harness self-check that opens no page runs in the Vitest node project, not under Playwright.
 - This rule governs new setup. An existing suite moves to it only by decision.
 
