@@ -216,16 +216,33 @@ leak_server_from_session() {
   assert_server_stopped
 }
 
-@test "own-tree holder another session launched: refused, and the holder survives" {
-  leak_server_from_session session-other
+# Each row rewrites one field of the leak's launch record (column number,
+# then value), so the record no longer names this session, tree, port, or a
+# dev server.
+@test "own-tree holder whose record names another session, tree, port or kind: refused, and the holder survives" {
+  local row column value record attempt
   export CLAUDE_CODE_SESSION_ID=session-gate
   export GAIA_DEV_SMOKE_SERVER_COMMAND="echo started >$SCRATCH/started; exec sleep 300"
-  run bash "$SCRIPT" --tree "$TREE" --timeout 5
-  [ "$status" -eq 3 ]
-  [[ "$output" == *"already in use by PID $LISTENER_PID in $TREE"* ]]
-  [ ! -e "$SCRATCH/started" ]
-  process_running "$LISTENER_PID"
-  [ -f "$STATE/launches/$LISTENER_PID.tsv" ]
+  for row in "7 session-other" "10 $SCRATCH/elsewhere" "5 $((DEV_PORT + 1))" "6 storybook"; do
+    column="${row%% *}"
+    value="${row#* }"
+    leak_server_from_session session-gate
+    record="$STATE/launches/$LISTENER_PID.tsv"
+    awk -F '\t' -v OFS='\t' -v column="$column" -v value="$value" '{ $column = value; print }' "$record" >"$record.new"
+    mv "$record.new" "$record"
+    run bash "$SCRIPT" --tree "$TREE" --timeout 5
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"already in use by PID $LISTENER_PID in $TREE"* ]]
+    [ ! -e "$SCRATCH/started" ]
+    process_running "$LISTENER_PID"
+    [ -f "$record" ]
+    kill -KILL "$LISTENER_PID"
+    attempt=0
+    while port_listening "$DEV_PORT" && [ "$attempt" -lt 50 ]; do
+      sleep 0.1
+      attempt=$((attempt + 1))
+    done
+  done
 }
 
 @test "server exits early: exit 1 says so and prints its output" {
