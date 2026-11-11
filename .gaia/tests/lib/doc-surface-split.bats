@@ -127,7 +127,7 @@ check_rule_points_at_ladder() {
 check_page_points_at_ladder() {
   grep -qxF '## When a test needs a real browser' "$1" || { echo "page lacks the capability list heading" >&2; return 1; }
   grep -qF 'recommended fix' "$1" || { echo "page lacks the fold as recommended fix" >&2; return 1; }
-  grep -qF 'Every transition, status or role rule is tested exactly once' "$1" || { echo "page lacks the per-rule wording" >&2; return 1; }
+  grep -qF 'Every transition, status or role rule has exactly one case table' "$1" || { echo "page lacks the per-rule wording" >&2; return 1; }
   check_realserver_routing_wording "$1"
 }
 
@@ -299,7 +299,7 @@ check_page_surfaces() {
   copy=$(copy_with "$PAGE" nofold.md 's/the fold is the recommended fix/the fold is an option/')
   run check_page_points_at_ladder "$copy"
   [ "$status" -ne 0 ]
-  copy=$(copy_with "$PAGE" norule.md 's/Every transition, status or role rule is tested exactly once/each rule folds/')
+  copy=$(copy_with "$PAGE" norule.md 's/Every transition, status or role rule has exactly one case table/each rule folds/')
   run check_page_points_at_ladder "$copy"
   [ "$status" -ne 0 ]
   copy=$(copy_with "$PAGE" nojs.md 's/JavaScript-disabled/scripted/g')

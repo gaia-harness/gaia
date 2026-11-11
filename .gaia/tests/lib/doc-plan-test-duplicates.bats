@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# Doc-conformance suite for the four rules that keep a plan from naming a
+# Doc-conformance suite for the rules that keep a plan from naming a
 # test another test already proves.
 #
 # A model plans from planner.md, the SPEC audit's directive rule, Test
@@ -24,13 +24,13 @@ setup() {
   LAYERING_REL="wiki/decisions/Test Layering.md"
   PLAYWRIGHT_REL="apps/web/.claude/rules/playwright.md"
 
-  MARKUP_PLANNER='A page-markup or accessibility directive constrains the code, or a story, and adds a real-server assertion only when the rendered HTML is itself the requirement'
+  MARKUP_PLANNER='A page-markup or accessibility directive constrains the code, and adds a real-server assertion only when the rendered HTML is itself the requirement'
   MARKUP_AUDIT='naming the page or component it applies to, written as the constraint the code meets'
-  REFUSAL_LAYERING='asserting only the served status and `Location`, never page content a route test shows'
-  REFUSAL_PLAYWRIGHT='asserts the status and the `Location` header, never a heading or other page content a route test shows'
-  TABLE_LAYERING='its case table lives at one layer, the one this page picks, and a test at any other layer keeps one row per outcome'
+  REFUSAL_LAYERING='asserting only the served status and any `Location` header, never page content a route test shows'
+  REFUSAL_PLAYWRIGHT='asserts the status and any `Location` header, never page content a route test shows'
+  TABLE_LAYERING='has exactly one case table, at the layer this page picks; a test of that rule at any other layer keeps one row per outcome'
   TABLE_PLANNER="when that unit test carries a rule's case table, each route test of that rule keeps one row per outcome"
-  TWIN_PLANNER='a happy path the closing flow test walks names that flow test instead, with no route test of its own, even one asserting the write in mock state'
+  TWIN_PLANNER='a happy path the closing flow test walks names that flow test instead, with no success-path route test of its own, even one asserting the write in the MSW store; a guard on that path still gets the failing-state test below'
   GUARD_DUTY='must be driven into its failing state by a named acceptance test in this task that asserts it refuses'
 }
 
@@ -55,7 +55,7 @@ directive_para() { line_with "$1/$PLANNER_REL" 'Its `## Plan-time directives` se
 criteria_bullet() { line_with "$1/$PLANNER_REL" '- Acceptance criteria (concrete and testable).'; }
 naming_para() { line_with "$1/$PLANNER_REL" 'A task doc names a test only for the flow test it owns'; }
 audit_directive() { line_with "$1/$AUDIT_REL" '- **Plan-time directive** ('; }
-layering_rule() { line_with "$1/$LAYERING_REL" 'Every transition, status or role rule is tested exactly once'; }
+layering_rule() { line_with "$1/$LAYERING_REL" 'Every transition, status or role rule has'; }
 layering_refusal() { line_with "$1/$LAYERING_REL" 'A plan carries one real-server check per guarded route module'; }
 playwright_refusal() { line_with "$1/$PLAYWRIGHT_REL" '- A request-fixture refusal check'; }
 

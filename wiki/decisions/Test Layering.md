@@ -27,7 +27,7 @@ From lowest to highest:
 3. **Real server.** The live stack, driven by Playwright's request fixture: it opens no page and makes no browser round trip. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, cookies and the session across the server, and the server's rendered HTML, read through the request fixture and a parsed response body. A forged request belongs here only when its guard is one a direct route call skips, and rendered HTML only when that HTML is itself the requirement; a heading whose text is data the loader returns is a route check, and so is a refusal or error outcome a direct `loader` or `action` call returns, even when a page or error boundary renders it.
 4. **Browser.** A real page, used only for a capability no lower layer shows, from the closed list under [[#When a test needs a real browser]], one test per user flow, plus one Playwright spec per critical web flow (see that section). A JavaScript-disabled Given or a native form post rules out the browser and nothing else: it routes by the route and real-server layers, and a then-clause that needs the served form or a multi-page workflow over native forms is a real-server check, with the form body built by `serializeForm` (`apps/web/.playwright/html.ts`) from the served page.
 
-Sibling browser tests that walk one flow fold into one journey, and the fold is the recommended fix. Every transition, status or role rule is tested exactly once: its case table lives at one layer, the one this page picks, and a test at any other layer keeps one row per outcome to prove the wiring. Rules of one kind may share one parameterized table.
+Sibling browser tests that walk one flow fold into one journey, and the fold is the recommended fix. Every transition, status or role rule has exactly one case table, at the layer this page picks; a test of that rule at any other layer keeps one row per outcome to prove the wiring. Rules of one kind may share one parameterized table.
 
 A live-stack test goes to the real-server or browser surface, never to the legacy end-to-end surface.
 
@@ -68,7 +68,7 @@ Each class of authorization bug has one layer that fails for it, and a test that
 | A route module omits its guard               | Route       | The `action` or `loader` called with an anonymous `Request` returns data or performs the write   |
 | A guarded route module's refusal is served with the wrong HTTP status | Real server | A request with redirects off asserts the status and the `Location` header the framework serves   |
 
-A route test does not observe the status the framework serves, so only the third class needs the real server. A plan carries one real-server check per guarded route module, asserting only the served status and `Location`, never page content a route test shows; every other refusal a direct `loader` or `action` call shows is a route check.
+A route test does not observe the status the framework serves, so only the third class needs the real server. A plan carries one real-server check per guarded route module, asserting only the served status and any `Location` header, never page content a route test shows; every other refusal a direct `loader` or `action` call shows is a route check.
 
 ### What a route test cannot prove
 
