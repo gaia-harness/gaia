@@ -50,6 +50,8 @@ Read ONLY:
    `@covers` line or test path names, and the real-server checks under
    `apps/web/.playwright/e2e/`, read only to check which error paths
    they exercise.
+4. For a test that pins a shared mapping helper, the tests of that helper's
+   other callers, read only to find the one that already pins the mapping.
 
 Do NOT review the whole codebase. Read
 production source only as needed to judge whether a test asserts through the
@@ -85,7 +87,8 @@ A test is honest when all three hold:
   `vi.mock('~/hooks/...')` / `vi.mock('~/components/...')` / `vi.mock('~/services/...')`
   of an internal collaborator, `toHaveBeenCalled` or a count of requests to a
   boundary (how many times `GET /me` ran) as the sole assertion (that tests
-  call-through, not behavior), or an import from `../internals` /
+  call-through, not behavior, unless the count is the behavior: a cache, dedupe
+  or retry), or an import from `../internals` /
   `.server.ts` a public consumer would never touch.
 
 Both axes apply to the assertions in a `.test()` body exactly as to any other
@@ -124,8 +127,8 @@ An honest test can still be worthless. Apply these sub-rules:
 - **One test per shared mapping.** When several loaders or actions map an
   upstream failure through one shared helper, one test of that mapping covers
   it. A test that pins the same mapping again for another caller is redundant
-  → `delete` (human-gated, citing the test that already pins it), unless that
-  caller maps differently.
+  → `delete` (human-gated, citing the test that already pins it, machine-verified
+  as for a composition delete, else `keep`), unless that caller maps differently.
 
 - **Non-triviality.** See the dedicated rule below.
 
@@ -183,7 +186,8 @@ permission denials). A flow test may be a Playwright spec, a bats suite or a
 - List every error path the build has that neither that flow file nor a
   lower-layer test exercises, in `untestedErrorPaths`, each with a `file:line`
   in the source. Error paths that share one mapping helper are one entry,
-  cited at the helper, unless a caller maps differently. A single-request
+  cited at the helper, whose `test` is a route test of any one caller, unless a
+  caller maps differently. A single-request
   refusal or validation error names the lower
   layer that owns it (a route test, or a real-server check where
   `wiki/decisions/Test Layering.md` calls for one), and its fix is a new test

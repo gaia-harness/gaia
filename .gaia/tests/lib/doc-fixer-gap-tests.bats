@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 #
-# Doc-conformance suite for the two fixers that must write the test a gap needs.
+# Doc-conformance suite for the two fixers that must write the test a gap
+# needs, and for the evaluator lenses that flag tests catching nothing.
 #
 # The worthiness fixer may edit only the files on its editable list. A flow
 # verdict's single-request untested error path belongs to a lower layer (a route test or a
@@ -13,7 +14,7 @@
 # merges untested. The evaluator's lenses also name three tests that cost
 # without catching anything: a static constant checked against its own value,
 # a boundary call count as the sole assertion, and one shared error mapping
-# pinned again per caller. A model executes these passages, so an edit that drops
+# pinned again per caller or listed as a gap per caller. A model executes these passages, so an edit that drops
 # one clause would ship silently. This suite pins each clause.
 #
 # Method: every check takes a root directory and reads one region; each red
@@ -161,7 +162,7 @@ check_evaluator_lenses() {
   gaps="$(joined "$(range_of "$1/$EVALUATOR_REL" '- List every error path the build has' '- When the test asserts something real')")"
   need_text 'evaluator untestedErrorPaths bullet' "$gaps" || return 1
   in_order "$gaps" \
-    'Error paths that share one mapping helper are one entry, cited at the helper, unless a caller maps differently.' || return 1
+    'Error paths that share one mapping helper are one entry, cited at the helper, whose `test` is a route test of any one caller, unless a caller maps differently.' || return 1
 }
 
 # ---------- tests ----------
