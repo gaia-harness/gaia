@@ -336,7 +336,7 @@ check_page_surfaces() {
   copy=$(copy_with "$PW_RULE" ui.md "s/a form's own submission is checked/one spec per form stays on the UI path; a form submission is checked/")
   run check_no_browser_overrouting "$copy"
   [ "$status" -ne 0 ]
-  copy=$(copy_with "$PAGE" surface.md 's/rules of one kind may share one parameterized table\./A route-surface UAT per rule./')
+  copy=$(copy_with "$PAGE" surface.md 's/Rules of one kind may share one parameterized table\./A route-surface UAT per rule./')
   run check_no_browser_overrouting "$copy"
   [ "$status" -ne 0 ]
 }
