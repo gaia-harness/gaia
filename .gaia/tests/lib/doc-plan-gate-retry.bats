@@ -232,8 +232,31 @@ check_outside_arm() {
     'Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan.' \
     'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings.' \
     'A candidate that also owns a failing flow test gets one executor whose prompt carries both arms'"'"' lines.' \
-    'When no candidate edits a file, the phase halts under Stop conditions with no re-run' \
+    'When no candidate edits a file, the phase halts under Stop conditions with no re-run, `Reason: a Playwright test outside this phase fails in this phase'"'"'s gate`, naming each `file › test name`.' \
     '- **Re-run the gate.**' || return 1
+}
+
+# A failing Playwright test in a spec one task of this phase declares has one
+# owner, so it goes to that task's fresh executor inside the phase's one retry.
+# A spec two tasks declare, or an environment failure, still halts.
+check_in_phase_arm() {
+  local block
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    'When a failing Playwright test is in a file exactly one task of this phase declares and passes check 2 below, send it to that task (the in-phase arm below).' \
+    'Never fix it on the main thread.' \
+    'Any other gate failure halts under Stop conditions with no retry.' \
+    'each `file › test name` of a failing in-phase Playwright test' \
+    '- **In-phase arm.**' \
+    'For a failing Playwright test in a file a task of this phase declares, other than a flow test the flow-test arm takes, in place of **Attribute**, the spec file alone decides the owner:' \
+    'the failure goes to the task that declares it when exactly one task declares it and check 2 under **Playwright test outside this phase** holds;' \
+    'otherwise it halts under Stop conditions with no retry.' \
+    'Record the retry as above, then dispatch a fresh executor for that task:' \
+    'the original task prompt, without its `Yield handoff:` line, then the line `A Playwright test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' \
+    'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
+    'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a Playwright test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
+    '- **Outside arm.**' || return 1
 }
 
 # The planner never writes a gate's retry or halt rule into a step of its own:
@@ -423,6 +446,10 @@ resume_point() {
   red check_outside_arm 'record the retry as above with each candidate on its Tasks line, then ' ''
 }
 
+@test "red twin: an outside arm whose no-edit halt points at the Reason above fails" {
+  red check_outside_arm 'with no re-run, `Reason: a Playwright test outside this phase fails in this phase'"'"'s gate`, naming each `file › test name`.' 'with no re-run, under the Reason above.'
+}
+
 @test "red twin: an outside arm whose candidates all edit nothing and re-run the gate fails" {
   red check_outside_arm 'When no candidate edits a file, the phase halts under Stop conditions with no re-run' 'When no candidate edits a file, re-run the gate'
 }
@@ -433,6 +460,46 @@ resume_point() {
 
 @test "red twin: a retry record whose outside failures carry no known-green source fails" {
   red check_outside_arm ' followed by its `known-green: phase <k> gate` or `known-green: merge-base`' ''
+}
+
+@test "an in-phase Playwright test goes to the one task that declares it, once, else halts" {
+  green check_in_phase_arm
+}
+
+@test "red twin: an in-phase arm that accepts a spec several tasks declare fails" {
+  red check_in_phase_arm 'when exactly one task declares it and check 2' 'when some task declares it and check 2'
+}
+
+@test "red twin: an in-phase arm that retries an environment failure fails" {
+  red check_in_phase_arm ' and check 2 under **Playwright test outside this phase** holds;' ';'
+}
+
+@test "red twin: an in-phase arm that runs Attribute over the whole Playwright output fails" {
+  red check_in_phase_arm ' in place of **Attribute**, the spec file alone decides the owner:' ''
+}
+
+@test "red twin: an in-phase arm that records no retry fails" {
+  red check_in_phase_arm 'Record the retry as above, then dispatch a fresh executor for that task:' 'Dispatch a fresh executor for that task:'
+}
+
+@test "red twin: an in-phase arm that sends one task two parallel executors fails" {
+  red check_in_phase_arm 'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' ''
+}
+
+@test "red twin: an in-phase arm with no guard against weakening a test for another task's regression fails" {
+  red check_in_phase_arm 'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' 'The failing tests:`'
+}
+
+@test "red twin: an in-phase arm that re-runs the gate after an executor edits no file fails" {
+  red check_in_phase_arm 'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run' ''
+}
+
+@test "red twin: an in-phase arm whose no-edit halt cites the outside arm's Reason fails" {
+  red check_in_phase_arm ', `Reason: a Playwright test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' ', under the Reason above.'
+}
+
+@test "red twin: an in-phase arm whose lines do not apply only to their own failures fails" {
+  red check_in_phase_arm ', each line followed by its own failures and applying only to them' ''
 }
 
 @test "a plan step never states its own retry or halt rule for a gate failure" {
