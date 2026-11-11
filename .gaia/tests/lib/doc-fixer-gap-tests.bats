@@ -3,7 +3,7 @@
 # Doc-conformance suite for the two fixers that must write the test a gap needs.
 #
 # The worthiness fixer may edit only the files on its editable list. A flow
-# verdict's untested error path belongs to a lower layer (a route test or a
+# verdict's single-request untested error path belongs to a lower layer (a route test or a
 # real-server check), so unless the evaluator names that test file and the fix
 # step puts it on the list, the fix always ends cannot_fix and the gap ships as
 # a residual. A flow test fixed that way keeps its signal, and a `fixed`
@@ -99,7 +99,7 @@ check_evaluator_names_test() {
   in_order "$region" \
     'its fix is a new test there, never an edit to the flow spec.' \
     'Every entry names in `test` the repo-relative test file that owns its gap:' \
-    'the test file of that lower layer that already drives the source'"'"'s module, else a new one of that layer beside it;' \
+    'the test file of that lower layer that already drives the source'"'"'s module, else a new one where that layer'"'"'s tests live;' \
     'for a path only the flow can stage, the flow file.' \
     '`test` never names a source file.' || return 1
   schema="$(grep -F '"untestedErrorPaths":[{' "$1/$EVALUATOR_REL")"
@@ -127,7 +127,7 @@ check_step_judges_flow_again() {
   in_order "$region" \
     'plus each flow test step 3 left unsettled' \
     'the latest verdict at a signal wins, so the new one replaces the stored `fix`.' \
-    'as does an unsettled flow test judged anything but `keep`.' || return 1
+    'as does an unsettled flow test judged `fix` again.' || return 1
 }
 
 check_round_fixer_guard_test() {
@@ -170,7 +170,7 @@ check_round_fixer_guard_test() {
 
 @test "the judge-again check goes red without the unsettled flow test or its residual ending" {
   red check_step_judges_flow_again "$STEP_REL" 'plus each flow test step 3 left unsettled' 'and nothing else'
-  red check_step_judges_flow_again "$STEP_REL" 'as does an unsettled flow test judged anything but `keep`.' 'and nothing more.'
+  red check_step_judges_flow_again "$STEP_REL" 'as does an unsettled flow test judged `fix` again.' 'and nothing more.'
 }
 
 @test "the audit fixer must test a guard its repair adds" {

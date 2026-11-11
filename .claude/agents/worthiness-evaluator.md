@@ -180,7 +180,7 @@ permission denials). A flow test may be a Playwright spec, a bats suite or a
   there, never an edit to the flow spec. Every entry names in `test` the
   repo-relative test file that owns its gap: for a single-request refusal or
   validation error, the test file of that lower layer that already drives the
-  source's module, else a new one of that layer beside it; for a path only the
+  source's module, else a new one where that layer's tests live; for a path only the
   flow can stage, the flow file. `test` never names a source file.
 - When the test asserts something real but not the flow's outcome (a heading
   after submit, but never that the write took effect), name the outcome it fails

@@ -52,7 +52,7 @@ The caller then confirms every changed path is in the list, runs the Quality Gat
 
 ### 4. Judge again once
 
-Return to route and evaluate what it now names, plus each flow test step 3 left unsettled, so the changed tests are judged a second time after the fix commit; the latest verdict at a signal wins, so the new one replaces the stored `fix`. A `residual` route calls `settle --as residual`, as does an unsettled flow test judged anything but `keep`. A `delete` from this judgment takes the Delete step.
+Return to route and evaluate what it now names, plus each flow test step 3 left unsettled, so the changed tests are judged a second time after the fix commit; the latest verdict at a signal wins, so the new one replaces the stored `fix`. A `residual` route calls `settle --as residual`, as does an unsettled flow test judged `fix` again. A `delete` from this judgment takes the Delete step.
 
 ### 5. Delete
 
