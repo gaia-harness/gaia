@@ -510,11 +510,11 @@ check_human_only_halt() {
   need_text 'Stop conditions' "$range" || return 1
   in_order "$range" \
     '`Stay halted (Recommended)` first, which ends the run with the phase' \
+    '`Answered: <label>`' \
     'A failure only the human can clear' \
     '`I did it (Recommended)` first, which reruns the failed gate step and continues only on a pass' \
     'then `Stay halted`' \
-    'A failed rerun appends `Rerun: failed` and its error under the `Answered:` line, then ends the run and asks no new question.' \
-    '`Answered: <label>`' || return 1
+    'A failed rerun appends `Rerun: failed` and its error under the `Answered:` line, then ends the run and asks no new question.' || return 1
 }
 
 @test "a failure only the human can clear recommends the verified rerun, bounded to one" {
