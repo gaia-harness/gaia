@@ -12,6 +12,12 @@ import {
   reactCompiler,
 } from './react-compiler.config.ts';
 
+// A file's first test or story pays its cold import (transform and module
+// graph), well under a second on an idle machine but past the 5s and 15s
+// defaults when a pre-commit run shares the CPU. The cost is fixed, so
+// headroom fits; a hung test still fails within this bound.
+const coldImportTestTimeout = 30_000;
+
 const ignoreWarnings = ['React DevTools', 'React Router Future Flag Warning'];
 
 // The viewport matches the `Desktop Chrome` device the Playwright story specs
@@ -64,6 +70,7 @@ const createStorybookProject = (
     browser: createBrowserOptions(name),
     name,
     setupFiles,
+    testTimeout: coldImportTestTimeout,
   },
 });
 
@@ -125,11 +132,7 @@ export default defineConfig({
           include: ['app/**/*.test.ts', 'test/**/*.test.ts'],
           name: 'node',
           setupFiles: ['./test/setup.ts'],
-          // A file's first test pays its cold import (transform and module
-          // graph), well under a second on an idle machine but past the 5s
-          // default when a pre-commit run shares the CPU. The cost is fixed,
-          // so headroom fits; a hung test still fails within this bound.
-          testTimeout: 30_000,
+          testTimeout: coldImportTestTimeout,
         },
       },
       {
@@ -147,6 +150,7 @@ export default defineConfig({
           ],
           name: 'browser',
           setupFiles: ['./test/setup.browser.ts'],
+          testTimeout: coldImportTestTimeout,
         },
       },
       createStorybookProject('storybook'),

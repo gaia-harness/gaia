@@ -118,3 +118,9 @@
     }
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='toast'] {
+    transition: none;
+  }
+}
