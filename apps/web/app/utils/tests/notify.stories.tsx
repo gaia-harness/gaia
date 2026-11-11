@@ -25,7 +25,7 @@ const readDestructiveColor = (): string => {
 };
 
 // Toasts live in a module-level manager, so one story's toasts reach the next.
-// Closing them and waiting for the exit animation keeps each story's toast
+// Closing them and waiting for them to unmount keeps each story's toast
 // count, and the axe scan after its play, to that story alone.
 const clearToasts = async (): Promise<void> => {
   toast.close();
