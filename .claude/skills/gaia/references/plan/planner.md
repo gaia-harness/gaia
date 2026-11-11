@@ -332,7 +332,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       After every dispatched member's clean-pass marker is written and before the merge, the orchestrator prints the whole implementation's cost with `bash .gaia/scripts/usage.sh initiative <root> --box`, where `<root>` is `spec:SPEC-NNN` (from the `## Source SPEC` section of `README.md`) for a spec-derived plan or `plan:PLAN-NNN` for a spec-less one. The output lists the spec (when there is one), the plan and the execution, with a total, and is relayed verbatim inside a bare fenced block (an unfenced box is reflowed by the Markdown renderer and loses its alignment). Never compute or restate a figure; on a non-zero exit, relay the command's one stderr line in its place.
 
       **The merge question.** After the cost line, ask one `AskUserQuestion` with `Merge it` and `Hold the merge`, the recommended option first. Recommend `Merge it` when the merge is ready. Recommend `Hold the merge` only when one of these holds, and name it in that option's description:
-      - a required check failed or was cancelled (`gh pr checks <N> --required`);
+      - a required check failed, was cancelled or is still pending (`gh pr checks <N> --required`); a repository with no required checks has none to hold on;
       - a phase committed after a `(HALTED)` block in `{PLAN_DIR}/PROGRESS.md` whose answer was not `I did it` with `Rerun: passed`;
       - a deviation the summary surfaced needs a decision the human has not given;
       - the residual count read's `.ask` is non-zero and no human answered the residual question;
@@ -342,11 +342,11 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
 
 
-    - **Post-clearance (after audit clearance and the ready-to-merge confirmation, before the merge).** The orchestrator runs this step warm. Place this block after the cost line and the human's ready-to-merge confirmation:
+    - **Post-clearance (after audit clearance and the `Merge it` answer, before the merge).** The orchestrator runs this step warm. Place this block after the cost line and the merge question's `Merge it` answer:
 
       ```
       <!-- gaia:orchestrator-step post-clearance -->
-      **Post-clearance.** Runs after every dispatched Code Audit Team member has cleared and the human has confirmed the PR is ready to merge, and before the merge.
+      **Post-clearance.** Runs after every dispatched Code Audit Team member has cleared and the merge question was answered `Merge it`, and before the merge.
 
       1. Consolidate again into `SUMMARY.md` per `.claude/skills/gaia/references/spec/lifecycle.md` `## Consolidation`; it is untracked, so it stays uncommitted.
       2. Read each page in `promoted-pages.txt` against the audited code. A falsified page gets a wiki-only commit and push, which keeps every member's marker and restarts CI.
@@ -357,7 +357,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       4. A verify failure here, or a refresh with nothing to retry, appends a `## Consolidation refresh` block to `{PLAN_DIR}/PROGRESS.md`, and the run continues to the merge, the close keeping the layers.
       5. A pass that reached `wiki-promote.md`'s Step 2 appends a `## Wiki promotion` block with `Pass: refresh` first, in the same shape as the pre-audit record. The last `## Wiki promotion` block is the outcome, so a refresh verify failure never overwrites a promoted record. A block recording `promoted` is never promoted again.
       6. Confirm every dispatched member's marker is current, per `wiki/concepts/PR Merge Workflow.md` `#### Skipping already-cleared members`, and re-spawn any member whose marker rotated; never hand-write one.
-      7. Post the `GAIA-Audit` status with `bash .claude/hooks/post-audit-status.sh <path to a current member marker>` per `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last`, which writes the residual sections first, immediately before `gh pr merge`, on the head the audit cleared, including after a catch-up merge. Then merge.
+      7. Post the `GAIA-Audit` status with `bash .claude/hooks/post-audit-status.sh <path to a current member marker>` per `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last`, which writes the residual sections first, immediately before `gh pr merge`, on the head the audit cleared, including after a catch-up merge. Then print the merge report per `wiki/concepts/PR Merge Workflow.md` `**The merge report.**`, and merge.
       ```
 
     - **Post-merge close.** Place this block after the merge, ahead of the post-merge cleanup bullet below:
@@ -373,7 +373,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
     - **Post-merge cleanup.** The generated `ORCHESTRATOR.md` carries a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, run only after the post-merge close has confirmed `MERGED` through `pr-wait-merge.sh` and reconciled the ledger; if the merge is not confirmed, the orchestrator surfaces to the user and stops. The pointer has an arm for each isolation mode, and carries no snapshot of the reference:
       - **Feature-branch run:** `### Feature branch`, with `<branch-name>` = the plan's branch. Without it, a feature-branch run ends on the merged branch with no checkout, pull, branch delete or prune.
-      - **Worktree run:** `### Worktree entered by name in this session` when the orchestrator entered its worktree in this session, and `### Worktree entered by path or in an earlier session` for a resumed run. The user merging the PR is the consent to discard the worktree, so the orchestrator discards it without prompting (the orchestrator tells the user "after merge, the worktree will be discarded" before opening the PR).
+      - **Worktree run:** `### Worktree entered by name in this session` when the orchestrator entered its worktree in this session, and `### Worktree entered by path or in an earlier session` for a resumed run. The `Merge it` answer is the consent to discard the worktree, so the orchestrator discards it without prompting (the orchestrator tells the user "after merge, the worktree will be discarded" before opening the PR).
       - **Isolated sub-agent context** (the orchestrator was dispatched with `isolation: "worktree"` or a `cwd` override and cannot call `ExitWorktree`): that reference's `### Sub-agent context: continuation prompt`, with these two lines appended to its command list (the first for a spec-colocated plan only):
 
         ```text

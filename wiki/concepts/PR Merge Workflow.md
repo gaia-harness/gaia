@@ -126,7 +126,7 @@ The audit of a branch runs through the `audit-loop-unit` agent (`.claude/agents/
 5. Classify the file with `bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <RUN_FOLDER>/unit-<u>.json --report-key rounds --min-count 1`. A unit that opened no round still writes one `rounds[]` element, so a real unit always passes. On a no-op, recompute `next-unit`, pre-clear, and re-dispatch once; a second consecutive no-op stops the main thread for the human; it never runs the round procedure itself.
 6. Read the file and branch on its `stop_reason`.
 
-**A plan build closes through its plan.** A branch is a plan build when a plan's `RUNNING` sentinel names it: `grep -rlx --include=RUNNING 'branch: <branch>' .notebook/` prints the sentinel's path (the trailing slash follows a worktree's `.notebook` link). The `ORCHESTRATOR.md` beside that sentinel then orders what follows a `clean` unit: after the `clean` row's residual question come its final summary, cost line and merge question, and its post-clearance block then runs the rest of the row, so the merge question comes before the status posts and the merge. A session that reached this page without that file reads it and follows it from its resume detection.
+**A plan build closes through its plan.** A branch is a plan build when a plan's `RUNNING` sentinel names it: `grep -rlx --include=RUNNING 'branch: <branch>' .notebook/` prints the sentinel's path (the trailing slash follows a worktree's `.notebook` link). The `ORCHESTRATOR.md` beside that sentinel then orders what follows a `clean` unit: after the `clean` row's residual question come its final summary, cost line and merge question, and its post-clearance block then runs the owed steps, the status, the merge report and the merge, so the merge question comes before the status posts and the merge. A session that reached this page without that file reads it and follows it from its pre-merge audit step.
 
 **The brief.** Exactly six fields: `Working root` (the bare absolute path of the checkout under review), `PR`, `Run folder`, `Start round` (the `<s>` from step 1), `Unit` (the `<u>` from step 1) and `Vetoes` (the path of `vetoes.json` in the run folder). K is never in the brief.
 
@@ -208,7 +208,7 @@ Resume the PR merge workflow for PR #<N> on branch <branch>, working root <RESOL
 On a plan build ([[#Dispatch the audit loop unit]]), the prompt resumes the plan instead, with `<PLAN_DIR>` the folder holding the sentinel:
 
 ```text
-Resume the plan for PR #<N> on branch <branch>: read <PLAN_DIR>/ORCHESTRATOR.md and follow it from its resume detection. A grant is already recorded for the latest checkpoint.
+Resume the plan for PR #<N> on branch <branch>: read <PLAN_DIR>/ORCHESTRATOR.md and continue from its pre-merge Code Audit Team audit step by dispatching the next audit unit, skipping the resume confirmation gate and every step before the audit. A grant is already recorded for the latest checkpoint.
 ```
 
 Before printing it, the main thread runs `bash .gaia/scripts/usage.sh handoff`. When the merge is part of a recorded run, such as a `/gaia-debt` drain, that prints a join line, and the prompt opens with an instruction to run it verbatim first, so the run's cost record covers both sessions ([[Usage Ledger#Recording a run]]).

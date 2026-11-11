@@ -114,7 +114,7 @@ check_rule_merge() {
   never="$(grep -F -- '- **Never recommend widening your own authority.**' "$1/$RULE_REL")"
   need_text 'never-Recommended bullet' "$never" || return 1
   lacks "$never" "merging a plan build's pull request" || return 1
-  has "$never" 'merging over audit residuals' || return 1
+  has "$never" 'merging over audit residuals no human accepted' || return 1
   has "$(cat "$1/$RULE_REL")" 'A merge-or-hold question recommends merging when the merge is ready, and holding only for a reason it names in that option'"'"'s description' || return 1
 }
 
@@ -128,7 +128,7 @@ check_workflow_plan_route() {
   has "$dispatch" 'so the merge question comes before the status posts and the merge' || return 1
   checkpoint="$(range_of "$1/$WORKFLOW_REL" '#### The branch checkpoint' '**An accept buys exactly one closing round**')"
   need_text 'checkpoint section' "$checkpoint" || return 1
-  has "$checkpoint" 'Resume the plan for PR #<N> on branch <branch>: read <PLAN_DIR>/ORCHESTRATOR.md and follow it from its resume detection.' || return 1
+  has "$checkpoint" 'Resume the plan for PR #<N> on branch <branch>: read <PLAN_DIR>/ORCHESTRATOR.md and continue from its pre-merge Code Audit Team audit step by dispatching the next audit unit, skipping the resume confirmation gate and every step before the audit.' || return 1
 }
 
 # Part B: the grant hook tells the main thread to print the plan's prompt on a
@@ -156,7 +156,7 @@ check_hook_plan_prompt() {
 }
 
 @test "red twin: a rule that still never recommends a plan build's merge fails" {
-  red check_rule_merge "$RULE_REL" 'merging over audit residuals' "merging a plan build's pull request or merging over audit residuals"
+  red check_rule_merge "$RULE_REL" 'merging over audit residuals no human accepted' "merging a plan build's pull request or merging over audit residuals"
 }
 
 @test "a plan build resumed into the merge workflow returns to its ORCHESTRATOR.md" {
