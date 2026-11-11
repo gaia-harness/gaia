@@ -232,7 +232,7 @@ check_outside_arm() {
     'Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan.' \
     'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings.' \
     'A candidate that also owns a failing flow test gets one executor whose prompt carries both arms'"'"' lines.' \
-    'When no candidate edits a file, the phase halts under Stop conditions with no re-run' \
+    'When no candidate edits a file, the phase halts under Stop conditions with no re-run, `Reason: a Playwright test outside this phase fails in this phase'"'"'s gate`, naming each `file › test name`.' \
     '- **Re-run the gate.**' || return 1
 }
 
@@ -444,6 +444,10 @@ resume_point() {
 
 @test "red twin: an outside arm that records no retry fails" {
   red check_outside_arm 'record the retry as above with each candidate on its Tasks line, then ' ''
+}
+
+@test "red twin: an outside arm whose no-edit halt points at the Reason above fails" {
+  red check_outside_arm 'with no re-run, `Reason: a Playwright test outside this phase fails in this phase'"'"'s gate`, naming each `file › test name`.' 'with no re-run, under the Reason above.'
 }
 
 @test "red twin: an outside arm whose candidates all edit nothing and re-run the gate fails" {
