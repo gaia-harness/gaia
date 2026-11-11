@@ -140,7 +140,7 @@ log_user_settings_hint() {
 # hands a command, so a session authenticated by that token alone spawns a child
 # with no credentials. Observed on Claude Code 2.1.316, not documented.
 log_login_hint() {
-  printf 'audit-code-review: not logged in: log in with claude to store credentials; CLAUDE_CODE_OAUTH_TOKEN alone does not reach the review child\n' >&2
+  printf 'audit-code-review: not logged in: log in with claude, so a keychain entry or credentials file exists; an env token alone may not reach the review child\n' >&2
 }
 
 # run_attempt <n>: sets ATTEMPT_ENDING to recorded (the outcome is written) or to
