@@ -489,3 +489,71 @@ copy_tree_into_scratch() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+# ---------- verified human-done option (halt questions) ----------
+
+# A halt that only the human can clear may recommend the human-done option,
+# because the next step reruns what failed; a failed rerun ends the run with no
+# new continuing option, so a picker that takes the recommendation without
+# acting stops one rerun later. One pin per row: file|start ERE|end ERE|phrase,
+# matched like PRINT_PINS.
+HALT_PINS=(
+  ".claude/rules/user-questions.md|^- \*\*Never recommend widening|^- \*\*At most 4 options|A statement the next step does verify may lead"
+  ".claude/rules/user-questions.md|^- \*\*Never recommend widening|^- \*\*At most 4 options|A failed rerun ends the run and offers no new continuing option"
+  "wiki/decisions/Quality Gate.md|^7\. \*\*Dev smoke test|^8\. |never read or edit \`.env\`"
+  "wiki/decisions/Quality Gate.md|^7\. \*\*Dev smoke test|^8\. |\`I added the line\` (Recommended)"
+  "wiki/decisions/Quality Gate.md|^7\. \*\*Dev smoke test|^8\. |a second failure holds the commit"
+)
+
+# halt_pins_ok <root>: prints each missing pin on stderr; returns 1 on any.
+halt_pins_ok() {
+  local root="$1" row file start end phrase text failed=0
+  for row in "${HALT_PINS[@]}"; do
+    IFS='|' read -r file start end phrase <<<"$row"
+    text="$(site_text "$root/$file" "$start" "$end" | tr '\n' ' ' | tr -s ' ')"
+    if [ -z "$text" ]; then
+      echo "site not found: $file /$start/" >&2
+      failed=1
+    elif ! grep -qiF -- "$phrase" <<<"$text"; then
+      echo "halt pin missing: $file /$start/: $phrase" >&2
+      failed=1
+    fi
+  done
+  return "$failed"
+}
+
+copy_halt_pin_files_into_scratch() {
+  local row file
+  for row in "${HALT_PINS[@]}"; do
+    file="${row%%|*}"
+    mkdir -p "$(dirname "$SCRATCH_ROOT/$file")"
+    cp "$REPO_ROOT/$file" "$SCRATCH_ROOT/$file"
+  done
+}
+
+@test "real tree: a verified human-done option may lead, bounded to one rerun" {
+  run halt_pins_ok "$REPO_ROOT"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+}
+
+@test "red twin: a rule that drops the failed-rerun bound fails" {
+  copy_halt_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/.claude/rules/user-questions.md"
+  sed 's/A failed rerun ends the run and offers no new continuing option/A failed rerun asks again/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  ! cmp -s "$REPO_ROOT/.claude/rules/user-questions.md" "$file" || return 1
+  run halt_pins_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"halt pin missing: .claude/rules/user-questions.md"* ]]
+}
+
+@test "red twin: a dev smoke env branch that may edit .env fails" {
+  copy_halt_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/wiki/decisions/Quality Gate.md"
+  sed 's/never read or edit `\.env`/add the line to `.env`/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  ! cmp -s "$REPO_ROOT/wiki/decisions/Quality Gate.md" "$file" || return 1
+  run halt_pins_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"halt pin missing: wiki/decisions/Quality Gate.md"* ]]
+}
