@@ -531,11 +531,13 @@ copy_halt_pin_files_into_scratch() {
   done
 }
 
+# bats test_tags=whole-tree
 @test "real tree: a verified human-done option may lead, bounded to one rerun" {
   run halt_pins_ok "$REPO_ROOT"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a rule that drops the failed-rerun bound fails" {
   copy_halt_pin_files_into_scratch
   local file="$SCRATCH_ROOT/.claude/rules/user-questions.md"
@@ -547,6 +549,7 @@ copy_halt_pin_files_into_scratch() {
   [[ "$output" == *"halt pin missing: .claude/rules/user-questions.md"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a dev smoke env branch that may edit .env fails" {
   copy_halt_pin_files_into_scratch
   local file="$SCRATCH_ROOT/wiki/decisions/Quality Gate.md"
