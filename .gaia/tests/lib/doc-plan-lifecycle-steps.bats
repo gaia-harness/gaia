@@ -891,7 +891,7 @@ FOLD_INTO_UAT_NEEDLE='folds into the intent or a success criterion, never into t
 HONOR_INSIDE_NEEDLE='or an assertion inside a test the plan names'
 DIRECTIVE_OTHER_TEST_NEEDLE='any other test'
 DIRECTIVE_FOLLOW_UP_NEEDLE='`## Follow-ups`'
-FLOW_TEST_PATHS_NEEDLE='Each flow test is one test file: the journey through the happy path, plus only what no route or other lower-layer test can show'
+FLOW_TEST_PATHS_NEEDLE='Each flow test is one test file: the journey through the happy path, plus only the effects that take several requests or sessions to stage'
 
 # check_directive_test_scope <planner> <audit>
 check_directive_test_scope() {
