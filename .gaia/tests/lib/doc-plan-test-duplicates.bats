@@ -30,7 +30,7 @@ setup() {
   REFUSAL_PLAYWRIGHT='asserts the status and any `Location` header, never page content a route test shows'
   TABLE_LAYERING='has exactly one case table, at the layer this page picks, holding every case of the rule; a test of that rule at any other layer keeps one row per outcome'
   TABLE_PLANNER="when that unit test carries a rule's case table, each route test of that rule keeps one row per outcome"
-  TWIN_PLANNER='a happy path the closing flow test walks names that flow test instead when that flow asserts the effect, with no success-path route test of its own, even one asserting the write in the MSW store; an effect the flow cannot observe keeps its route test, and a guard on that path still gets the failing-state test below'
+  TWIN_PLANNER='a happy path the closing flow test walks names that flow test instead when that flow asserts the effect, with no success-path route test of its own; an effect the flow cannot observe keeps its route test, and a guard on that path still gets the failing-state test below'
   GUARD_DUTY='must be driven into its failing state by a named acceptance test in this task that asserts it refuses'
 }
 
@@ -149,7 +149,7 @@ green() {
   red check_one_case_table "$PLANNER_REL" "$TABLE_PLANNER" 'removed'
 }
 
-@test "a happy path the flow test walks names that flow test, and every guard keeps its failing-state test" {
+@test "a happy path the flow test walks and asserts names that flow test, and every guard keeps its failing-state test" {
   green check_happy_path_twin
 }
 
