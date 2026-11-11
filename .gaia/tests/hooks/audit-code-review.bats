@@ -729,7 +729,7 @@ failing_review() {
   expect_not_run 2 2 'unusable result' 'estimated cost $1.00 for the review session only'
 }
 
-@test "failure: a child that is not logged in is published as not run after one call, with a login hint" {
+@test "failure: a child that is not logged in is not retried and is published as not run, with a login hint" {
   stand_in_result '{subtype: "success", is_error: false, local_command: "code_review", total_cost_usd: 0, result: "Not logged in · Please run /login"}'
   failing_review
   grep -qF 'log in with claude' <<<"$output"
