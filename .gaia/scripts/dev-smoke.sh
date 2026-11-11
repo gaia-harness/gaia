@@ -12,9 +12,10 @@
 # human's server, and a smoke test that answered from it would prove nothing
 # about this tree anyway. The one exception is a dev server whose launch record
 # names this Claude session, this tree and this port: that one is stopped
-# first. The stop goes through gaia_server_stop_verified, and
-# only to a listener descended from the process this script launched, so no
-# pattern kill and no port-wide kill ever runs. An exit or interrupt at any
+# first, by its recorded identity. Every stop goes through
+# gaia_server_stop_verified, to that recorded server or to a listener
+# descended from the process this script launched, so no pattern kill and no
+# port-wide kill ever runs. An exit or interrupt at any
 # point still stops what was started.
 #
 # Exit codes: 0 the route answered HTTP 200, directly or after at most five
