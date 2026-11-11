@@ -9,13 +9,14 @@
 # step puts it on the list, the fix always ends cannot_fix and the gap ships as
 # a residual. A flow test fixed that way keeps its signal, and a `fixed`
 # settlement at an unchanged signal routes it residual, so the step judges it
-# again instead. The audit round's fixer can add a guard, refusal or validation, and
-# unless its prompt says to drive that guard into its failing state, the guard
-# merges untested. The evaluator's lenses also name three tests that cost
-# without catching anything: a static constant checked against its own value,
-# a boundary call count as the sole assertion, and one shared error mapping
-# pinned again per caller or listed as a gap per caller. A model executes these passages, so an edit that drops
-# one clause would ship silently. This suite pins each clause.
+# again instead. The audit round's fixer can add a guard, refusal or
+# validation, and unless its prompt says to drive that guard into its failing
+# state, the guard merges untested. The evaluator's lenses also name three
+# tests that cost without catching anything: a static constant checked against
+# its own value, a boundary call count as the sole assertion, and one shared
+# error mapping pinned again per caller or listed as a gap per caller. A model
+# executes these passages, so an edit that drops one clause would ship
+# silently. This suite pins each clause.
 #
 # Method: every check takes a root directory and reads one region; each red
 # twin mutates one clause of a scratch copy, proves the copy changed, and runs
