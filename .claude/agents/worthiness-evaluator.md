@@ -177,10 +177,11 @@ permission denials). A flow test may be a Playwright spec, a bats suite or a
   in the source. A single-request refusal or validation error names the lower
   layer that owns it (a route test, or a real-server check where
   `wiki/decisions/Test Layering.md` calls for one), and its fix is a new test
-  there, never an edit to the flow spec. Name that test file in the entry's
-  `test`: the repo-relative test file of that layer that already drives the
-  source's module, else a new test file beside it. The fixer may edit only
-  test files, so `test` never names a source file.
+  there, never an edit to the flow spec. Every entry names in `test` the
+  repo-relative test file that owns its gap: for a single-request refusal or
+  validation error, the test file of that lower layer that already drives the
+  source's module, else a new one of that layer beside it; for a path only the
+  flow can stage, the flow file. `test` never names a source file.
 - When the test asserts something real but not the flow's outcome (a heading
   after submit, but never that the write took effect), name the outcome it fails
   to assert in `missingOutcome`.

@@ -3,10 +3,12 @@
 # Doc-conformance suite for the two fixers that must write the test a gap needs.
 #
 # The worthiness fixer may edit only the files on its editable list. A flow
-# verdict's untested error path belongs to a lower layer (a route, real-server
-# or unit test), so unless the evaluator names that test file and the fix step
-# puts it on the list, the fix always ends cannot_fix and the gap ships as a
-# residual. The audit round's fixer can add a guard, refusal or validation, and
+# verdict's untested error path belongs to a lower layer (a route test or a
+# real-server check), so unless the evaluator names that test file and the fix
+# step puts it on the list, the fix always ends cannot_fix and the gap ships as
+# a residual. A flow test fixed that way keeps its signal, and a `fixed`
+# settlement at an unchanged signal routes it residual, so the step judges it
+# again instead. The audit round's fixer can add a guard, refusal or validation, and
 # unless its prompt says to drive that guard into its failing state, the guard
 # merges untested. A model executes all three passages, so an edit that drops
 # one clause would ship silently. This suite pins each clause.
@@ -96,8 +98,9 @@ check_evaluator_names_test() {
   need_text 'evaluator untestedErrorPaths bullet' "$region" || return 1
   in_order "$region" \
     'its fix is a new test there, never an edit to the flow spec.' \
-    'Name that test file in the entry'"'"'s `test`:' \
-    'the repo-relative test file of that layer that already drives the source'"'"'s module, else a new test file beside it.' \
+    'Every entry names in `test` the repo-relative test file that owns its gap:' \
+    'the test file of that lower layer that already drives the source'"'"'s module, else a new one of that layer beside it;' \
+    'for a path only the flow can stage, the flow file.' \
     '`test` never names a source file.' || return 1
   schema="$(grep -F '"untestedErrorPaths":[{' "$1/$EVALUATOR_REL")"
   need_text 'evaluator flow schema' "$schema" || return 1
@@ -109,11 +112,22 @@ check_step_editable_list() {
   region="$(joined "$(range_of "$1/$STEP_REL" '### 3. Fix' '### 4. Judge again once')")"
   need_text 'worthiness Fix step' "$region" || return 1
   in_order "$region" \
-    'for a flow test, its verdict'"'"'s `flow` member' \
+    'for a flow test, the `flow` member of its entry in the Evaluate step'"'"'s verdict file' \
     'no edit outside the list.' \
-    'The editable list is the listed test files plus each `test` an `untestedErrorPaths` entry names' \
+    'The editable list is the listed test files plus each `test` an `untestedErrorPaths` entry names;' \
     'a named path that is not a test file stays off the list.' \
-    'confirms every changed path is in the list' || return 1
+    'confirms every changed path is in the list' \
+    'A flow test fixed only through `test` paths keeps its signal, where `fixed` would route it `residual`, so it is left unsettled for the next step.' || return 1
+}
+
+check_step_judges_flow_again() {
+  local region
+  region="$(joined "$(range_of "$1/$STEP_REL" '### 4. Judge again once' '### 5. Delete')")"
+  need_text 'worthiness Judge again step' "$region" || return 1
+  in_order "$region" \
+    'plus each flow test step 3 left unsettled' \
+    'the latest verdict at a signal wins, so the new one replaces the stored `fix`.' \
+    'as does an unsettled flow test judged anything but `keep`.' || return 1
 }
 
 check_round_fixer_guard_test() {
@@ -123,7 +137,7 @@ check_round_fixer_guard_test() {
   in_order "$region" \
     'rather than widening the repair.' \
     'A repair that adds a guard, refusal or validation also adds a test that drives it into its failing state' \
-    'at the lowest layer wiki/decisions/Test Layering.md picks, and declares that test file;' \
+    'at the layer wiki/decisions/Test Layering.md picks (a new test file is not a new abstraction);' \
     'when no layer can reach the guard, keep the repair and say so in that entry'"'"'s reason.' || return 1
 }
 
@@ -133,20 +147,30 @@ check_round_fixer_guard_test() {
   green check_evaluator_names_test
 }
 
-@test "the evaluator check goes red without the test member or its schema field" {
-  red check_evaluator_names_test "$EVALUATOR_REL" 'Name that test file in the entry'"'"'s' 'Name the layer in the entry'"'"'s'
+@test "the evaluator check goes red without the test member, its schema field or its source-file ban" {
+  red check_evaluator_names_test "$EVALUATOR_REL" 'Every entry names in `test` the' 'Every entry names in `layer` the'
   red check_evaluator_names_test "$EVALUATOR_REL" ',"test":"<test file>"' ''
-  red check_evaluator_names_test "$EVALUATOR_REL" 'so `test` never names a source file.' 'so name any file.'
+  red check_evaluator_names_test "$EVALUATOR_REL" '`test` never names a source file.' 'name any file.'
 }
 
 @test "the worthiness fixer's editable list takes each test a flow verdict names" {
   green check_step_editable_list
 }
 
-@test "the editable-list check goes red when the list shrinks back to the listed tests" {
+@test "the editable-list check goes red without the named tests, the source-file exclusion, the flow member or the unsettled flow test" {
   red check_step_editable_list "$STEP_REL" 'plus each `test` an `untestedErrorPaths` entry names' 'only'
   red check_step_editable_list "$STEP_REL" 'a named path that is not a test file stays off the list' 'any named path joins the list'
-  red check_step_editable_list "$STEP_REL" 'for a flow test, its verdict'"'"'s `flow` member' 'nothing else'
+  red check_step_editable_list "$STEP_REL" 'the `flow` member of its entry in the Evaluate step'"'"'s verdict file' 'nothing else'
+  red check_step_editable_list "$STEP_REL" 'so it is left unsettled for the next step.' 'so it settles fixed.'
+}
+
+@test "a flow test fixed only through a lower-layer test is judged again" {
+  green check_step_judges_flow_again
+}
+
+@test "the judge-again check goes red without the unsettled flow test or its residual ending" {
+  red check_step_judges_flow_again "$STEP_REL" 'plus each flow test step 3 left unsettled' 'and nothing else'
+  red check_step_judges_flow_again "$STEP_REL" 'as does an unsettled flow test judged anything but `keep`.' 'and nothing more.'
 }
 
 @test "the audit fixer must test a guard its repair adds" {
