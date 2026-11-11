@@ -2,7 +2,7 @@
 type: decision
 status: active
 created: 2026-11-05
-updated: 2026-11-08
+updated: 2026-11-11
 promoted_at: 2026-11-05T08:13:38Z
 promoted_hash: sha256:d968ece072393056766679702fd83484f2573f8467f1801d9623460b4b17de29
 pr_number: 3316
@@ -27,4 +27,4 @@ Five mechanisms carry the decision:
 ## Divergence
 
 - A fold-up's post-fix check reads only the baseline files it recorded, so a fixer that wrote the folded property into a new test file elsewhere would pass the checker. The fixer's editable paths, limited to the subject files, are what forbid that today.
-- The planner's gate-retry block covers typecheck and lint failures and a failing flow test in the closing phase. A shell-lint failure halts the run even when it is mechanical and attributable to one task.
+- The planner's gate-retry block (`.claude/skills/gaia/references/plan/planner.md`) has no arm for a shell-lint failure, so one halts the run even when it is mechanical and attributable to one task.

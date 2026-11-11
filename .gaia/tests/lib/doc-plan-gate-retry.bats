@@ -236,6 +236,28 @@ check_outside_arm() {
     '- **Re-run the gate.**' || return 1
 }
 
+# A failing Playwright test in a spec one task of this phase declares has one
+# owner, so it goes to that task's fresh executor inside the phase's one retry.
+# A spec two tasks declare, or an environment failure, still halts.
+check_in_phase_arm() {
+  local block
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    'When a failing Playwright test is in a file exactly one task of this phase declares and passes check 2 below, send it to that task (the in-phase arm below).' \
+    'Never fix it on the main thread.' \
+    'Any other gate failure halts under Stop conditions with no retry.' \
+    'each `file › test name` of a failing in-phase Playwright test' \
+    '- **In-phase arm.**' \
+    'For a failing Playwright test in a file a task of this phase declares, other than a flow test the flow-test arm takes, in place of **Attribute**, the spec file alone decides the owner:' \
+    'the failure goes to the task that declares it when exactly one task declares it and check 2 under **Playwright test outside this phase** holds;' \
+    'otherwise it halts under Stop conditions with no retry.' \
+    'Record the retry as above, then dispatch a fresh executor for that task:' \
+    'the original task prompt, without its `Yield handoff:` line, then the line `A Playwright test in a file this task declares fails in this phase'"'"'s gate. Fix the cause in the code or in the test, whichever is wrong, and say which under ### Deviations from plan. The failing tests:`' \
+    'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines; its edit limit is then the files the task declares.' \
+    '- **Outside arm.**' || return 1
+}
+
 # The planner never writes a gate's retry or halt rule into a step of its own:
 # an improvised "not retryable" sentence contradicts the gate-retry block.
 check_step_owns_no_retry() {
@@ -433,6 +455,30 @@ resume_point() {
 
 @test "red twin: a retry record whose outside failures carry no known-green source fails" {
   red check_outside_arm ' followed by its `known-green: phase <k> gate` or `known-green: merge-base`' ''
+}
+
+@test "an in-phase Playwright test goes to the one task that declares it, once, else halts" {
+  green check_in_phase_arm
+}
+
+@test "red twin: an in-phase arm that accepts a spec several tasks declare fails" {
+  red check_in_phase_arm 'when exactly one task declares it and check 2' 'when some task declares it and check 2'
+}
+
+@test "red twin: an in-phase arm that retries an environment failure fails" {
+  red check_in_phase_arm ' and check 2 under **Playwright test outside this phase** holds;' ';'
+}
+
+@test "red twin: an in-phase arm that runs Attribute over the whole Playwright output fails" {
+  red check_in_phase_arm ' in place of **Attribute**, the spec file alone decides the owner:' ''
+}
+
+@test "red twin: an in-phase arm that records no retry fails" {
+  red check_in_phase_arm 'Record the retry as above, then dispatch a fresh executor for that task:' 'Dispatch a fresh executor for that task:'
+}
+
+@test "red twin: an in-phase arm that sends one task two parallel executors fails" {
+  red check_in_phase_arm 'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines; its edit limit is then the files the task declares.' ''
 }
 
 @test "a plan step never states its own retry or halt rule for a gate failure" {
