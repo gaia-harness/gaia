@@ -11,7 +11,8 @@
 # the ask-first message, never freed: the holder may be another session's or a
 # human's server, and a smoke test that answered from it would prove nothing
 # about this tree anyway. The one exception is a dev server whose launch record
-# names this Claude session, this tree and this port (a subagent's leak): that
+# names this Claude process (this session's id, or its host, which /clear and
+# /resume keep), this tree and this port (a subagent's leak): that
 # one is stopped first. Every stop goes through gaia_server_stop_verified, to
 # that recorded server or to a listener descended from the process this
 # script launched, so no pattern kill and no port-wide kill ever runs. An exit

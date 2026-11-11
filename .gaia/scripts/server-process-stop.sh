@@ -268,21 +268,32 @@ gaia_server_reap_dead_sessions() {
 }
 
 # gaia_server_stop_session_launches <state-directory> <session-id> <tree-root>
-# <port>: stops the dev servers whose launch record names this session, this
-# tree and this port, after verifying identity, and drops each record it
-# stopped or found gone. A subagent's shell carries its parent session's id,
-# so a server a subagent left running matches the session whose gate finds it.
+# <port>: stops the dev servers whose launch record names this session's
+# Claude process (the session id, or the host pid and start time registered
+# for it, since /clear and /resume give one process several ids), this tree
+# and this port, after verifying identity, and drops each record it stopped or
+# found gone. A subagent's shell carries its parent session's id, so a server
+# a subagent left running matches the session whose gate finds it.
 # Prints one line per stop. rc 0 when it stopped at least one, else 1.
 gaia_server_stop_session_launches() {
   local state_directory="$1" session_id="$2" tree_root="$3" port="$4" record_file stop_status stopped=1
+  local session_host="" session_host_pid="" session_host_start=""
   [ -n "$state_directory" ] && [ -d "$state_directory/launches" ] || return 1
   _gaia_server_is_session_id "$session_id" || return 1
+  if session_host="$(_gaia_server_read_session_host "$state_directory/sessions/$session_id.tsv")"; then
+    session_host_pid="${session_host%%"$_gaia_server_tab"*}"
+    session_host_start="${session_host#*"$_gaia_server_tab"}"
+  fi
   tree_root="$(_gaia_server_physical_or_literal "$tree_root")"
   for record_file in "$state_directory"/launches/*.tsv; do
     [ -f "$record_file" ] || continue
     _gaia_server_read_launch_record "$record_file" || continue
     [ "$_gaia_server_record_kind" = dev ] || continue
-    [ "$_gaia_server_record_session" = "$session_id" ] || continue
+    if [ "$_gaia_server_record_session" != "$session_id" ]; then
+      [ -n "$session_host_pid" ] || continue
+      [ "$_gaia_server_record_host_pid" = "$session_host_pid" ] || continue
+      [ "$_gaia_server_record_host_start" = "$session_host_start" ] || continue
+    fi
     [ "$_gaia_server_record_port" = "$port" ] || continue
     [ "$(_gaia_server_physical_or_literal "$_gaia_server_record_tree")" = "$tree_root" ] || continue
     gaia_server_stop_verified "$_gaia_server_record_pid" "$_gaia_server_record_start" "$_gaia_server_record_command" \
