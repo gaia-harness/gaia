@@ -102,7 +102,8 @@ check_plan_merge_question() {
   need_text 'merge question' "$question" || return 1
   has "$question" 'Recommend `Merge it` when the merge is ready' || return 1
   has "$question" 'Recommend `Hold the merge` only when one of these holds, and name it in that option'"'"'s description' || return 1
-  has "$question" '`bash .gaia/scripts/pr-wait-merge.sh --pr <N> --until-green`' || return 1
+  has "$question" '`bash .gaia/scripts/pr-wait-merge.sh --pr <N> --until-green --attempts 20`' || return 1
+  has "$question" 'names `no required check is declared`, which has none to hold on' || return 1
   has "$question" '`TIMEOUT` (required checks still pending after the wait)' || return 1
   lacks "$question" 'is still pending (`gh pr checks' || return 1
   has "$question" '`I did it` with `Rerun: passed`' || return 1
