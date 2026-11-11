@@ -71,9 +71,11 @@ expect_reason() {
   expect_reason 'unusable result'
 }
 
-@test "the built-in's not-logged-in answer names that reason, and only at the start" {
-  write_result 'Not logged in · Please run /login'
+@test "the built-in's not-logged-in answer names that reason, only at the start and only at zero cost" {
+  write_result 'Not logged in · Please run /login' '.total_cost_usd = 0'
   expect_reason 'not logged in'
+  write_result 'Not logged in · Please run /login' '.total_cost_usd = 0.5'
+  expect_reason 'unusable result'
   write_result 'The diff mentions Not logged in once.'
   expect_reason 'unusable result'
 }

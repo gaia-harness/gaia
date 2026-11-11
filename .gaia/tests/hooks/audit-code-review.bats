@@ -733,6 +733,7 @@ failing_review() {
   stand_in_result '{subtype: "success", is_error: false, local_command: "code_review", total_cost_usd: 0, result: "Not logged in · Please run /login"}'
   failing_review
   grep -qF 'run claude and /login' <<<"$output"
+  grep -qF 'ignores user settings' <<<"$output"
   expect_not_run 1 1 'not logged in' 'estimated cost $0.00 for the review session only'
 }
 

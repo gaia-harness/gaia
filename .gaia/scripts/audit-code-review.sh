@@ -222,7 +222,7 @@ run_attempt() {
     *)
       case "$reason" in
         'launch failed' | 'nonzero exit' | 'error result') log_user_settings_hint "$reason" ;;
-        'not logged in') log_login_hint ;;
+        'not logged in') log_login_hint; log_user_settings_hint "$reason" ;;
       esac
       ATTEMPT_ENDING="$reason"
       ;;
