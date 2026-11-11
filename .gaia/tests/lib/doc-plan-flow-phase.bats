@@ -92,7 +92,7 @@ FLOW_LINE_NEEDLE='- Flow test (<flow_id>): <repo-relative test path>'
 WEB_FLOW_PATH_NEEDLE='.playwright/flows/<slug>.spec.ts'
 FIXTURES_NEEDLE='apps/web/.playwright/fixtures.ts'
 COMMAND_FLOW_NEEDLE='at the flow'"'"'s `test_path`'
-BUILD_PHASE_NEEDLE='No render step, RED gate, assertion routing or real-server floor'
+BUILD_PHASE_NEEDLE='No render step, RED gate or assertion routing'
 
 check_closing_phase() {
   local file="$1" text

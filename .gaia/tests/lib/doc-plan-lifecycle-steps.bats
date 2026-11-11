@@ -888,10 +888,10 @@ check_directive_routing() {
 DIRECTIVE_NEW_TEST_NEEDLE='It never asks for a new test, a test file, or a rule proven on its own'
 UNCOVERED_RULE_NEEDLE='Any other finding that a rule has no flow or success criterion stating it is `spec_defect`, never `plan_directive`'
 FOLD_INTO_UAT_NEEDLE='folds into the intent or a success criterion, never into the flow as a branch or case list; a new flow is added only for a critical path no flow names'
-HONOR_INSIDE_NEEDLE='or an assertion inside a flow test the plan names'
+HONOR_INSIDE_NEEDLE='or an assertion inside a test the plan names'
 DIRECTIVE_OTHER_TEST_NEEDLE='any other test'
 DIRECTIVE_FOLLOW_UP_NEEDLE='`## Follow-ups`'
-FLOW_TEST_PATHS_NEEDLE='covering the happy path and each error path the build has'
+FLOW_TEST_PATHS_NEEDLE='Each flow test is one test file: the journey through the happy path, plus only the effects that take several requests or sessions to stage'
 
 # check_directive_test_scope <planner> <audit>
 check_directive_test_scope() {

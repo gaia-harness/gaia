@@ -28,7 +28,7 @@ setup() {
   LAYERING='wiki/decisions/Test Layering.md'
   AXIOM='the route layer is the default home for behavior'
   LINK='wiki/decisions/Test Layering.md'
-  PLANNER_PIN='Name the behavior the task delivers and, when no flow test already covers it, the one acceptance test that owns it'
+  PLANNER_PIN='Name the behavior the task delivers and the one acceptance test that owns it'
   TESTS_REACT='apps/web/.claude/skills/tdd-react/references/tests-react.md'
 
   # file|old phrase (must be absent)|positive pin (must be present)
@@ -49,6 +49,8 @@ setup() {
     ".claude/agents/overlap-evaluator.md|Four kinds|$LINK"
     ".claude/skills/gaia/references/overlap-pass.md|so the pass also moves a test down to that layer|$LINK"
     ".claude/skills/gaia/references/plan/planner.md|One criterion per guard, refusal, or gate|$PLANNER_PIN"
+    ".claude/skills/gaia/references/plan/planner.md|when no flow test already covers it|$PLANNER_PIN"
+    ".claude/skills/gaia/references/plan/planner.md|covering the happy path and each error path the build has|$PLANNER_PIN"
     ".claude/skills/gaia/references/spec/spec-template.md|case tables belong to the lowest layer|$LINK"
     ".claude/skills/gaia/references/spec/self-review.md|case tables belong to the lowest layer|$LINK"
     ".claude/skills/gaia/references/spec/self-review.md|leaving the cases to the lowest layer|$LINK"

@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-11-01
 created: 2026-11-01
-updated: 2026-11-08
+updated: 2026-11-11
 tags: [decision, testing, tdd, layering, authorization]
 ---
 
@@ -43,7 +43,7 @@ A browser test is written only for a capability no lower layer shows. The closed
 - `rendered-DOM accessibility scan`: an automated accessibility check of the DOM the browser renders.
 - `browser-only navigation`: history, back and forward, or a client-side transition no request shows.
 
-One exception: one Playwright spec per critical web flow, written after the build in `<frontend package>/.playwright/flows/`, is admitted on the browser layer whatever a cheaper layer could prove. The list governs every other browser test.
+One exception: one Playwright spec per critical web flow, written after the build in `<frontend package>/.playwright/flows/`, is admitted on the browser layer whatever a cheaper layer could prove. It carries the journey, the effects that take several requests or sessions to stage, and, where the SPEC requires the flow to work without JavaScript, a real-server check of its native form posts; a refusal or validation one request shows sits at the route or real-server layer this page picks. The list governs every other browser test.
 
 ## Stack mapping
 

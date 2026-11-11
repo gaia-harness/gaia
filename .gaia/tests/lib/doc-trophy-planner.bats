@@ -4,7 +4,7 @@
 #
 # .claude/skills/gaia/references/plan/planner.md tells a planner to name
 # behaviors and the acceptance tests that own them, to drive a guard red at the
-# layer where the user sees the refusal, to cut build phases as vertical slices, and
+# lowest layer that shows the refusal, to cut build phases as vertical slices, and
 # to bound the tests a task executor writes. The tdd skill's loop carries the
 # matching limit. This suite pins that text and the ORCHESTRATOR phase-entry
 # form the phase-ownership check reads.
@@ -94,9 +94,10 @@ green() {
 check_acceptance_text() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'Name the behavior the task delivers and, when no flow test already covers it, the one acceptance test that owns it' || return 1
+  need "$text" 'Name the behavior the task delivers and the one acceptance test that owns it' || return 1
+  need "$text" 'never left to a closing-phase flow test' || return 1
   need "$text" 'not a list of tests per function' || return 1
-  need "$text" 'at the layer where the user sees the refusal' || return 1
+  need "$text" 'at the lowest layer that shows the refusal' || return 1
   need "$text" '.claude/rules/guards-must-fail.md' || return 1
   lacks "$text" 'One criterion per guard, refusal, or gate' || return 1
 }
@@ -147,6 +148,10 @@ check_task_doc_test_naming() {
 
 @test "red twin: restoring the per-guard criterion line fails" {
   red check_acceptance_text "$PLANNER_REL" 'not a list of tests per function' 'not a list of tests per function. One criterion per guard, refusal, or gate'
+}
+
+@test "red twin: leaving a refusal to the closing-phase flow test fails" {
+  red check_acceptance_text "$PLANNER_REL" 'never left to a closing-phase flow test' 'or left to a closing-phase flow test'
 }
 
 @test "the executor template limits the tests a sub-agent writes" {
