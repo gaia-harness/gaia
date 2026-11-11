@@ -209,7 +209,8 @@ leak_server_from_session() {
 @test "own-tree holder this session launched: stopped, then the smoke test runs" {
   leak_server_from_session session-gate
   export CLAUDE_CODE_SESSION_ID=session-gate
-  export GAIA_DEV_SMOKE_SERVER_COMMAND="$(server_command 200)"
+  GAIA_DEV_SMOKE_SERVER_COMMAND="$(server_command 200)"
+  export GAIA_DEV_SMOKE_SERVER_COMMAND
   run bash "$SCRIPT" --tree "$TREE" --timeout 20
   [ "$status" -eq 0 ]
   [[ "$output" == *"this Claude session launched in $TREE"* ]]
