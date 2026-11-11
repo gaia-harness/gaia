@@ -222,7 +222,7 @@ leak_server_from_session() {
 # Each row rewrites fields of the leak's launch record (column=value pairs),
 # so the record no longer names this session's Claude process, this tree, or a
 # dev server. A session id alone is not enough: the same host keeps the record
-# this session's, so the first row also moves the host to a dead pid.
+# this session's, so the first row also moves the host to another pid.
 @test "own-tree holder whose record names another session, tree or kind: refused, and the holder survives" {
   local row pair record attempt
   export CLAUDE_CODE_SESSION_ID=session-gate
