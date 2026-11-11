@@ -10,7 +10,9 @@
 # The port comes from ports.sh. A port something already holds is refused with
 # the ask-first message, never freed: the holder may be another session's or a
 # human's server, and a smoke test that answered from it would prove nothing
-# about this tree anyway. The stop goes through gaia_server_stop_verified, and
+# about this tree anyway. The one exception is a dev server whose launch record
+# names this Claude session, this tree and this port: that one is stopped
+# first. The stop goes through gaia_server_stop_verified, and
 # only to a listener descended from the process this script launched, so no
 # pattern kill and no port-wide kill ever runs. An exit or interrupt at any
 # point still stops what was started.
@@ -82,6 +84,17 @@ package_directory="$(gaia_ports_package_directory "$tree_root")" || {
 dev_port="$(bash "$script_directory/ports.sh" --tree "$tree_root" --field dev)" || exit 3
 
 holder="$(gaia_server_listener_owner "$dev_port" "$tree_root")"
+# How this session's own leak arises: a subagent backgrounds `pnpm dev` and a
+# pattern kill misses it, so it outlives the subagent and holds the port.
+case "$holder" in
+  own*)
+    if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] &&
+      gaia_server_stop_session_launches "$(_gaia_server_state_directory "$tree_root")" \
+        "$CLAUDE_CODE_SESSION_ID" "$tree_root" "$dev_port"; then
+      holder="$(gaia_server_listener_owner "$dev_port" "$tree_root")"
+    fi
+    ;;
+esac
 case "$holder" in
   free) ;;
   unknown)

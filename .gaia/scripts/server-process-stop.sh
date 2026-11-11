@@ -267,6 +267,37 @@ gaia_server_reap_dead_sessions() {
   return 0
 }
 
+# gaia_server_stop_session_launches <state-directory> <session-id> <tree-root>
+# <port>: stops the dev servers whose launch record names this session, this
+# tree and this port, after verifying identity, and drops each record it
+# stopped or found gone. A subagent's shell carries its parent session's id,
+# so a server a subagent left running matches the session whose gate finds it.
+# Prints one line per stop. rc 0 when it stopped at least one, else 1.
+gaia_server_stop_session_launches() {
+  local state_directory="$1" session_id="$2" tree_root="$3" port="$4" record_file stop_status stopped=1
+  [ -n "$state_directory" ] && [ -d "$state_directory/launches" ] || return 1
+  _gaia_server_is_session_id "$session_id" || return 1
+  tree_root="$(_gaia_server_physical_or_literal "$tree_root")"
+  for record_file in "$state_directory"/launches/*.tsv; do
+    [ -f "$record_file" ] || continue
+    _gaia_server_read_launch_record "$record_file" || continue
+    [ "$_gaia_server_record_kind" = dev ] || continue
+    [ "$_gaia_server_record_session" = "$session_id" ] || continue
+    [ "$_gaia_server_record_port" = "$port" ] || continue
+    [ "$(_gaia_server_physical_or_literal "$_gaia_server_record_tree")" = "$tree_root" ] || continue
+    gaia_server_stop_verified "$_gaia_server_record_pid" "$_gaia_server_record_start" "$_gaia_server_record_command" \
+      "$_gaia_server_record_cwd" "$_gaia_server_record_port"
+    stop_status=$?
+    if [ "$stop_status" -eq 0 ]; then
+      printf 'GAIA stopped the dev server on port %s (PID %s) that this Claude session launched in %s and left running.\n' \
+        "$_gaia_server_record_port" "$_gaia_server_record_pid" "$_gaia_server_record_tree"
+      stopped=0
+    fi
+    [ "$stop_status" -eq 1 ] || rm -f "$record_file"
+  done
+  return "$stopped"
+}
+
 _gaia_server_base_port() {
   local value="$1" default="$2"
   if _gaia_server_is_port "$value"; then
