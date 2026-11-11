@@ -26,7 +26,7 @@ The fixer, the retry bound of one and the `## Flow checks (HALTED)` record are t
 The one consolidation recipe. Four callers run it:
 
 - **The pre-audit pass.** The orchestrator, after the worthiness step and before the first member dispatch. It always attempts promotion.
-- **The post-clearance refresh.** The orchestrator, after audit clearance and the human's ready-to-merge confirmation. It rewrites `SUMMARY.md` against the audited code, uncommitted, and attempts promotion only when it reaches `wiki-promote.md`'s Step 2.
+- **The post-clearance refresh.** The orchestrator, after audit clearance and the merge question's `Merge it` answer. It rewrites `SUMMARY.md` against the audited code, uncommitted, and attempts promotion only when it reaches `wiki-promote.md`'s Step 2.
 - **The cold sweep.** The pre-flight sweep's cold consolidation, against a folder whose PR already merged. It accepts an interrupted run's pre-audit `SUMMARY.md` as the last complete summary: a verified one is no candidate, and an unverified one is rewritten from the layers.
 - **A plan generated before this order.** Its own orchestrator block consolidates after clearance and keeps that block's continuation. It may omit `Pass:` from its record, so a plan running its old block needs no new reading of this page.
 
