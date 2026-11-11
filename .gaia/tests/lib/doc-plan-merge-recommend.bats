@@ -102,7 +102,9 @@ check_plan_merge_question() {
   need_text 'merge question' "$question" || return 1
   has "$question" 'Recommend `Merge it` when the merge is ready' || return 1
   has "$question" 'Recommend `Hold the merge` only when one of these holds, and name it in that option'"'"'s description' || return 1
-  has "$question" '`gh pr checks <N> --required`' || return 1
+  has "$question" '`bash .gaia/scripts/pr-wait-merge.sh --pr <N> --until-green`' || return 1
+  has "$question" '`TIMEOUT` (required checks still pending after the wait)' || return 1
+  lacks "$question" 'is still pending (`gh pr checks' || return 1
   has "$question" '`I did it` with `Rerun: passed`' || return 1
   has "$question" 'Residuals the human accepted at the audit checkpoint are no hold reason' || return 1
 }
@@ -128,7 +130,7 @@ check_workflow_plan_route() {
   has "$dispatch" 'so the merge question comes before the status posts and the merge' || return 1
   checkpoint="$(range_of "$1/$WORKFLOW_REL" '#### The branch checkpoint' '**An accept buys exactly one closing round**')"
   need_text 'checkpoint section' "$checkpoint" || return 1
-  has "$checkpoint" 'Resume the plan for PR #<N> on branch <branch>: read <PLAN_DIR>/ORCHESTRATOR.md and continue from its pre-merge Code Audit Team audit step by dispatching the next audit unit, skipping the resume confirmation gate and every step before the audit.' || return 1
+  has "$checkpoint" 'Resume the plan for PR #<N> on branch <branch>, working root <RESOLVED_ROOT>, run folder <RUN_FOLDER>: read <PLAN_DIR>/ORCHESTRATOR.md, reconnect per its resume detection without asking its confirmation gate, then continue from its `gaia:orchestrator-step code-audit` block by dispatching the next audit unit.' || return 1
 }
 
 # Part B: the grant hook tells the main thread to print the plan's prompt on a
