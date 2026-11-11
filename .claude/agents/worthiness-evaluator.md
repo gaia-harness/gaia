@@ -48,7 +48,7 @@ Read ONLY:
    assertion has to actually exist.
 3. For a flow test only, the route and unit tests under the folders its
    `@covers` line or test path names, and the real-server checks under
-   `<frontend package>/.playwright/e2e/`, read only to check which error paths
+   `apps/web/.playwright/e2e/`, read only to check which error paths
    they exercise.
 
 Do NOT review the whole codebase. Read
