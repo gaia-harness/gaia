@@ -3,17 +3,19 @@
 #
 # The Quality Gate's dev smoke test: starts this tree's dev server on this
 # tree's dev port, requests one route until it answers, follows same-origin
-# redirects, and stops only the server it started.
+# redirects, and stops the server it started.
 #
 #   bash .gaia/scripts/dev-smoke.sh [--tree <directory>] [--path <route>] [--timeout <seconds>]
 #
 # The port comes from ports.sh. A port something already holds is refused with
 # the ask-first message, never freed: the holder may be another session's or a
 # human's server, and a smoke test that answered from it would prove nothing
-# about this tree anyway. The stop goes through gaia_server_stop_verified, and
-# only to a listener descended from the process this script launched, so no
-# pattern kill and no port-wide kill ever runs. An exit or interrupt at any
-# point still stops what was started.
+# about this tree anyway. The one exception is a dev server whose launch record
+# names this Claude process (this session's id, or its host, which /clear and
+# /resume keep), this tree and this port: that one is stopped first. Every stop goes through gaia_server_stop_verified, to
+# that recorded server or to a listener descended from the process this
+# script launched, so no pattern kill and no port-wide kill ever runs. An exit
+# or interrupt at any point still stops what was started.
 #
 # Exit codes: 0 the route answered HTTP 200, directly or after at most five
 # redirects within the dev server's own origin, and the server stopped; 1 the
@@ -82,6 +84,15 @@ package_directory="$(gaia_ports_package_directory "$tree_root")" || {
 dev_port="$(bash "$script_directory/ports.sh" --tree "$tree_root" --field dev)" || exit 3
 
 holder="$(gaia_server_listener_owner "$dev_port" "$tree_root")"
+case "$holder" in
+  own*)
+    if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] &&
+      gaia_server_stop_session_launches "$(_gaia_server_state_directory "$tree_root")" \
+        "$CLAUDE_CODE_SESSION_ID" "$tree_root" "$dev_port"; then
+      holder="$(gaia_server_listener_owner "$dev_port" "$tree_root")"
+    fi
+    ;;
+esac
 case "$holder" in
   free) ;;
   unknown)

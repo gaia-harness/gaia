@@ -69,11 +69,11 @@ port_listening() {
   fi
 }
 
-# start_listener <directory>: a detached TCP listener on DEV_PORT with cwd
-# <directory>. Sets LISTENER_PID.
+# start_listener <directory> [<port>]: a detached TCP listener on <port>,
+# default DEV_PORT, with cwd <directory>. Sets LISTENER_PID.
 start_listener() {
   local log="$SCRATCH/listener-$RANDOM.log" attempt=0
-  (cd "$1" && nohup node "$LISTENER_FIXTURE" "$DEV_PORT" 127.0.0.1 >"$log" 2>&1 </dev/null 3>&- &)
+  (cd "$1" && nohup node "$LISTENER_FIXTURE" "${2:-$DEV_PORT}" 127.0.0.1 >"$log" 2>&1 </dev/null 3>&- &)
   while [ "$attempt" -lt 100 ]; do
     grep -q '^listening ' "$log" 2>/dev/null && break
     sleep 0.1
@@ -186,6 +186,99 @@ assert_server_stopped() {
   [[ "$output" == *"already in use by PID $LISTENER_PID in $TREE"* ]]
   [ ! -e "$SCRATCH/started" ]
   process_running "$LISTENER_PID"
+}
+
+# leak_server_from_session <session-id> [<port>]: the leak a subagent leaves.
+# A detached, reparented listener in this tree on <port>, default DEV_PORT,
+# recorded the way the dev-ports Vite plugin records it: through
+# --record-launch with the session id in the environment and that session's
+# host registered and alive.
+leak_server_from_session() {
+  local port="${2:-$DEV_PORT}"
+  STATE="$SCRATCH/ports-state"
+  export GAIA_PORTS_STATE_DIRECTORY="$STATE"
+  mkdir -p "$STATE/sessions"
+  bash -c '. "$1"; gaia_server_session_register "$2" "$3" "$4"' _ \
+    "$REPO_ROOT/.gaia/scripts/server-process-lib.sh" "$STATE" "$1" "$$"
+  start_listener "$TREE/apps/web" "$port"
+  CLAUDE_CODE_SESSION_ID="$1" bash "$REPO_ROOT/.gaia/scripts/server-process-lib.sh" \
+    --record-launch --pid "$LISTENER_PID" --port "$port" --kind dev --tree "$TREE"
+  [ -f "$STATE/launches/$LISTENER_PID.tsv" ]
+}
+
+@test "own-tree holder this session launched: stopped, then the smoke test runs" {
+  leak_server_from_session session-gate
+  export CLAUDE_CODE_SESSION_ID=session-gate
+  GAIA_DEV_SMOKE_SERVER_COMMAND="$(server_command 200)"
+  export GAIA_DEV_SMOKE_SERVER_COMMAND
+  run bash "$SCRIPT" --tree "$TREE" --timeout 20
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"this Claude session launched in $TREE"* ]]
+  process_running "$LISTENER_PID" && return 1
+  [ ! -e "$STATE/launches/$LISTENER_PID.tsv" ]
+  assert_server_stopped
+}
+
+# Each row rewrites fields of the leak's launch record (column=value pairs),
+# so the record no longer names this session's Claude process, this tree, or a
+# dev server. A session id alone is not enough: the same host keeps the record
+# this session's, so the first row also moves the host to another pid.
+@test "own-tree holder whose record names another session, tree or kind: refused, and the holder survives" {
+  local row pair record attempt
+  export CLAUDE_CODE_SESSION_ID=session-gate
+  export GAIA_DEV_SMOKE_SERVER_COMMAND="echo started >$SCRATCH/started; exec sleep 300"
+  for row in "7=session-other 8=999999" "10=$SCRATCH/elsewhere" "6=storybook"; do
+    leak_server_from_session session-gate
+    record="$STATE/launches/$LISTENER_PID.tsv"
+    for pair in $row; do
+      awk -F '\t' -v OFS='\t' -v column="${pair%%=*}" -v value="${pair#*=}" '{ $column = value; print }' "$record" >"$record.new"
+      mv "$record.new" "$record"
+    done
+    run bash "$SCRIPT" --tree "$TREE" --timeout 5
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"already in use by PID $LISTENER_PID in $TREE"* ]]
+    [ ! -e "$SCRATCH/started" ]
+    process_running "$LISTENER_PID"
+    [ -f "$record" ]
+    kill -KILL "$LISTENER_PID"
+    attempt=0
+    while port_listening "$DEV_PORT" && [ "$attempt" -lt 50 ]; do
+      sleep 0.1
+      attempt=$((attempt + 1))
+    done
+  done
+}
+
+# /clear or /resume registers a new session id on the same live host, and an
+# ancestry-attributed record can name the older id.
+@test "own-tree holder whose record names an older session id of this session's host: stopped" {
+  leak_server_from_session aaa-session-old
+  bash -c '. "$1"; gaia_server_session_register "$2" "$3" "$4"' _ \
+    "$REPO_ROOT/.gaia/scripts/server-process-lib.sh" "$STATE" zzz-session-new "$$"
+  export CLAUDE_CODE_SESSION_ID=zzz-session-new
+  GAIA_DEV_SMOKE_SERVER_COMMAND="$(server_command 200)"
+  export GAIA_DEV_SMOKE_SERVER_COMMAND
+  run bash "$SCRIPT" --tree "$TREE" --timeout 20
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"this Claude session launched in $TREE"* ]]
+  process_running "$LISTENER_PID" && return 1
+  [ ! -e "$STATE/launches/$LISTENER_PID.tsv" ]
+  assert_server_stopped
+}
+
+@test "this session's dev server on another port: left running while the held port is refused" {
+  local other_port_pid
+  leak_server_from_session session-gate $((DEV_PORT + 1))
+  other_port_pid="$LISTENER_PID"
+  start_listener "$TREE/apps/web"
+  export CLAUDE_CODE_SESSION_ID=session-gate
+  export GAIA_DEV_SMOKE_SERVER_COMMAND="echo started >$SCRATCH/started; exec sleep 300"
+  run bash "$SCRIPT" --tree "$TREE" --timeout 5
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"already in use by PID $LISTENER_PID in $TREE"* ]]
+  [ ! -e "$SCRATCH/started" ]
+  process_running "$other_port_pid"
+  [ -f "$STATE/launches/$other_port_pid.tsv" ]
 }
 
 @test "server exits early: exit 1 says so and prints its output" {
