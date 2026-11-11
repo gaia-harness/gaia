@@ -206,6 +206,33 @@ describe('create', () => {
     expect(parsedEnvelope.data.displayName).toBe('x');
   });
 
+  test.each([
+    {
+      expected: '?item_ids=1,2',
+      name: 'snake_cases keys when enabled and comma-joins arrays by default',
+      options: {isSnakeCaseEnabled: true},
+    },
+    {
+      expected: '?itemIds=1&itemIds=2',
+      name: 'honors an explicit arrayFormat',
+      options: {arrayFormat: 'none'},
+    },
+  ] as const)('search params $name', async ({expected, options}) => {
+    process.env.API_URL = ORIGIN_A;
+    let observedSearch: string | undefined;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, ({request}) => {
+        observedSearch = new URL(request.url).search;
+
+        return HttpResponse.json({});
+      })
+    );
+
+    await create(options)('items', {searchParams: {itemIds: [1, 2]}});
+
+    expect(decodeURIComponent(observedSearch ?? '')).toBe(expected);
+  });
+
   test('resolves the base URL on every request', async () => {
     const observed: string[] = [];
     server.use(
