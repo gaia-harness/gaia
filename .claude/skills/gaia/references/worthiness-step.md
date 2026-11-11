@@ -46,13 +46,13 @@ bash .gaia/scripts/worthiness-step.sh record --root <RESOLVED_ROOT> --verdicts <
 
 ### 3. Fix
 
-Tests routed `fix` go to one fresh `general-purpose` fixer on `model: "sonnet"`. Its prompt carries the working root, the expected-tree check, the listed test files as its only editable paths, each test's `artifact`, and the audit fixer's prohibitions: no state-changing git, no edit outside the list. It writes a JSON result array to a scratchpad file and returns a short summary. `audit-fix-verify.sh` does not apply, because no dispositions file exists.
+Tests routed `fix` go to one fresh `general-purpose` fixer on `model: "sonnet"`. Its prompt carries the working root, the expected-tree check, the editable list, each test's `artifact` and, for a flow test, the `flow` member of its entry in the Evaluate step's verdict file, and the audit fixer's prohibitions: no state-changing git, no edit outside the list. The editable list is the listed test files plus each `test` an `untestedErrorPaths` entry names; a named path that is not a test file stays off the list. It writes a JSON result array to a scratchpad file and returns a short summary. `audit-fix-verify.sh` does not apply, because no dispositions file exists.
 
-The caller then confirms every changed path is in the list, runs the Quality Gate, commits with a `test(<scope>):` subject, pushes, and runs `settle --as fixed` for each fixed test at its new signal. A fixer entry of `cannot_fix` or `disputed` settles as a residual. A second fixer no-op, a second Quality Gate failure or an edit outside the list stops the step with no commit.
+The caller then confirms every changed path is in the list, runs the Quality Gate, commits with a `test(<scope>):` subject, pushes, and runs `settle --as fixed` for each fixed test at its new signal. A flow test fixed only through `test` paths keeps its signal, where `fixed` would route it `residual`, so it is left unsettled for the next step. A fixer entry of `cannot_fix` or `disputed` settles as a residual. A second fixer no-op, a second Quality Gate failure or an edit outside the list stops the step with no commit.
 
 ### 4. Judge again once
 
-Return to route and evaluate what it now names, so the changed tests are judged a second time after the fix commit. A `residual` route calls `settle --as residual`. A `delete` from this judgment takes the Delete step.
+Return to route and evaluate what it now names, plus each flow test step 3 left unsettled, so the changed tests are judged a second time after the fix commit; the latest verdict at a signal wins, so the new one replaces the stored `fix`. A `residual` route calls `settle --as residual`, as does an unsettled flow test judged `fix` again. A `delete` from this judgment takes the Delete step.
 
 ### 5. Delete
 
