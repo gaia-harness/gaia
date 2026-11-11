@@ -255,7 +255,7 @@ check_in_phase_arm() {
     'Record the retry as above, then dispatch a fresh executor for that task:' \
     'the original task prompt, without its `Yield handoff:` line, then the line `A Playwright test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' \
     'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
-    'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run' \
+    'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a Playwright test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
     '- **Outside arm.**' || return 1
 }
 
@@ -488,6 +488,10 @@ resume_point() {
 
 @test "red twin: an in-phase arm that re-runs the gate after an executor edits no file fails" {
   red check_in_phase_arm 'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run' ''
+}
+
+@test "red twin: an in-phase arm whose no-edit halt cites the outside arm's Reason fails" {
+  red check_in_phase_arm ', `Reason: a Playwright test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' ', under the Reason above.'
 }
 
 @test "red twin: an in-phase arm whose lines do not apply only to their own failures fails" {
