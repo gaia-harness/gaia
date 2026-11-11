@@ -64,7 +64,7 @@ const createStorybookProject = (
     browser: createBrowserOptions(name),
     name,
     setupFiles,
-    // A file's first story pays its cold import, as the node project explains.
+    // A file's first story pays its cold import, past the 15s default under load.
     testTimeout: 30_000,
   },
 });
