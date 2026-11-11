@@ -66,7 +66,7 @@ Each class of authorization bug has one layer that fails for it, and a test that
 | -------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
 | A rule function returns the wrong answer     | Unit        | The rule function called with an actor it must refuse                                            |
 | A route module omits its guard               | Route       | The `action` or `loader` called with an anonymous `Request` returns data or performs the write   |
-| A guarded route module's refusal is served with the wrong HTTP status | Real server | A request with redirects off asserts the status and the `Location` header the framework serves   |
+| A guarded route module's refusal is served with the wrong HTTP status | Real server | A request with redirects off asserts the status and any `Location` header the framework serves   |
 
 A route test does not observe the status the framework serves, so only the third class needs the real server. A plan carries one real-server check per guarded route module, asserting only the served status and any `Location` header, never page content a route test shows; every other refusal a direct `loader` or `action` call shows is a route check.
 

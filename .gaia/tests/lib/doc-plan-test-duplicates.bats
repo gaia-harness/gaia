@@ -11,8 +11,8 @@
 # test. Each clause is pinned in the paragraph that carries it, and the
 # guard's failing-state duty those clauses must never weaken is pinned too.
 #
-# Method: every check takes a root directory; each red twin removes one
-# clause from a scratch copy, proves the copy changed, and runs the same
+# Method: every check takes a root directory; each red twin removes or
+# reverts one clause in a scratch copy, proves the copy changed, and runs the same
 # check against it.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
