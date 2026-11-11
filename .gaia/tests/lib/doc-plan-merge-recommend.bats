@@ -114,7 +114,7 @@ check_rule_merge() {
   never="$(grep -F -- '- **Never recommend widening your own authority.**' "$1/$RULE_REL")"
   need_text 'never-Recommended bullet' "$never" || return 1
   lacks "$never" "merging a plan build's pull request" || return 1
-  has "$never" 'merging over audit residuals no human accepted' || return 1
+  has "$never" 'merging over audit residuals the residual question asks about while no human has answered it' || return 1
   has "$(cat "$1/$RULE_REL")" 'A merge-or-hold question recommends merging when the merge is ready, and holding only for a reason it names in that option'"'"'s description' || return 1
 }
 
@@ -156,7 +156,7 @@ check_hook_plan_prompt() {
 }
 
 @test "red twin: a rule that still never recommends a plan build's merge fails" {
-  red check_rule_merge "$RULE_REL" 'merging over audit residuals no human accepted' "merging a plan build's pull request or merging over audit residuals"
+  red check_rule_merge "$RULE_REL" 'merging over audit residuals the residual question asks about while no human has answered it' "merging a plan build's pull request or merging over audit residuals"
 }
 
 @test "a plan build resumed into the merge workflow returns to its ORCHESTRATOR.md" {
