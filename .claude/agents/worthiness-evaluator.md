@@ -46,9 +46,10 @@ Read ONLY:
    renders. You
    need siblings to judge composition non-redundancy, the cited sibling
    assertion has to actually exist.
-3. For a flow test only, the lower-layer tests (route, real-server, unit) under
-   the folders its `@covers` line or test path names, read only to check which
-   error paths they exercise.
+3. For a flow test only, the route and unit tests under the folders its
+   `@covers` line or test path names, and the real-server checks under
+   `<frontend package>/.playwright/e2e/`, read only to check which error paths
+   they exercise.
 
 Do NOT review the whole codebase. Read
 production source only as needed to judge whether a test asserts through the
