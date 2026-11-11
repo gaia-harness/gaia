@@ -565,3 +565,33 @@ resume_point() {
   printf '## Phase 1, One\nCommit: %s\n\n_No notes._\n\n## Phase 2, Two (GATE RETRY 1)\nRetry: 1\nTasks: task-db.md\nFailures: app/db.ts:26 TS2578\n\n## Phase 2, Two\nCommit: %s\n\n_No notes._\n' "$SHA_ONE" "$SHA_TWO" >"$PROGRESS_DIR/PROGRESS.md"
   [ "$(resume_point)" = "3" ]
 }
+
+# ---------- human-only halt (kept apart from the gate-retry arm cases) ----------
+
+# check_human_only_halt <root>: a failure only the human can clear may lead with
+# a verified continuing option, and a failed rerun ends the run with no new
+# question, so a picker taking the recommendation stops one rerun later.
+check_human_only_halt() {
+  local range
+  range="$(stop_range "$1")"
+  need_text 'Stop conditions' "$range" || return 1
+  in_order "$range" \
+    '`Stay halted (Recommended)` first, which ends the run with the phase' \
+    '`Answered: <label>`' \
+    'A failure only the human can clear' \
+    '`I did it (Recommended)` first, which reruns the whole phase gate from its first step (for a sub-agent failure, it re-dispatches that sub-agent first) and continues only on a pass' \
+    'then `Stay halted`' \
+    'A failed rerun appends `Rerun: failed` and its error under the `Answered:` line, then ends the run and asks no new question.' || return 1
+}
+
+@test "a failure only the human can clear recommends the verified rerun, bounded to one" {
+  green check_human_only_halt
+}
+
+@test "red twin: a human-done option that continues without a passing rerun fails" {
+  red check_human_only_halt 'which reruns the whole phase gate from its first step (for a sub-agent failure, it re-dispatches that sub-agent first) and continues only on a pass' 'which continues the run'
+}
+
+@test "red twin: a failed rerun that asks again fails" {
+  red check_human_only_halt 'then ends the run and asks no new question.' 'then asks the same question again.'
+}
