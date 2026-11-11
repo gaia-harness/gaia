@@ -1,7 +1,7 @@
 import ky from 'ky';
 import type {Options, StandardSchemaV1, StandardSchemaV1InferOutput} from 'ky';
-import type {StringifyOptions} from 'query-string';
 import {buildRequestHeaders, getBaseUrl, getHooks, getUri} from './utils';
+import type {SearchParamsOptions, UriOptions} from './utils';
 
 export type RequestFunction = {
   <S extends StandardSchemaV1>(
@@ -11,28 +11,26 @@ export type RequestFunction = {
   (uri: string, options?: RequestOptions & {schema?: undefined}): Promise<void>;
 };
 
-type CreateOptions = Omit<Options, 'prefix'> & {
-  arrayFormat?: NonNullable<StringifyOptions['arrayFormat']>;
-  /**
-   * Converts incoming response keys to camelCase and outgoing JSON bodies and
-   * search params to snake_case, for an API that speaks snake_case.
-   */
-  isSnakeCaseEnabled?: boolean;
-  /** Base URL; resolved per request from getBaseUrl() when omitted. */
-  prefix?: string;
-};
+// A Pick, not Omit<SearchParamsOptions, 'searchParams'>: a new key would
+// otherwise type-check here yet land in ky.create's options and never reach
+// getUri.
+type CreateOptions = Omit<Options, 'prefix'> &
+  Pick<SearchParamsOptions, 'arrayFormat' | 'isSnakeCaseEnabled'> & {
+    /** Base URL; resolved per request from getBaseUrl() when omitted. */
+    prefix?: string;
+  };
 
-type RequestOptions = Options & {
-  language?: string;
-  pathParams?: Record<string, number | string>;
-  searchParams?: Record<string, unknown>;
-  token?: string;
-};
+type RequestOptions = Options &
+  Pick<UriOptions, 'pathParams' | 'searchParams'> & {
+    language?: string;
+    token?: string;
+  };
 
+// arrayFormat and isSnakeCaseEnabled take their defaults in appendSearchParams.
 export const create = ({
-  arrayFormat = 'comma',
+  arrayFormat,
   hooks,
-  isSnakeCaseEnabled = false,
+  isSnakeCaseEnabled,
   prefix,
   ...apiOptions
 }: CreateOptions = {}): RequestFunction => {
@@ -53,12 +51,7 @@ export const create = ({
     }: RequestOptions & {schema?: StandardSchemaV1} = {}
   ): Promise<unknown> => {
     const response = kyInstance(
-      getUri(uri, {
-        arrayFormat,
-        isSnakeCaseEnabled,
-        pathParams,
-        searchParams,
-      }),
+      getUri(uri, {arrayFormat, isSnakeCaseEnabled, pathParams, searchParams}),
       {
         ...options,
         headers: buildRequestHeaders(options.headers, token, language),
