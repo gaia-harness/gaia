@@ -31,7 +31,8 @@ The contract lives at the repo root. Steps 3 to 5 are root scripts that run acro
    - **No `react-router.config.*` package**: the tree has no dev server to smoke test. Next step: run the gate from a tree that has the frontend package, or report the step as not run and hold the commit.
    - **No resolvable port**: `ports.sh` prints its own reason on stderr. Next step: act on that message, then rerun the step.
    - **No process backend**: neither `lsof` nor `ss` with `/proc` can tell who holds the port. Next step: install `lsof`, or `ss` with `/proc`, then rerun the step.
-   - **Missing environment variable** (exit 1, the server's error names a variable `apps/web/.env` lacks, such as one a change renamed): never read or edit `.env`. Attended, name the line to add, its value taken from `apps/web/.env.example`, and ask with `AskUserQuestion`: `I added the line` (Recommended), which reruns the step, or `Hold the commit`. Only exit 0 passes; a second failure holds the commit with no new question.
+
+   An exit 1 whose server error names a variable `apps/web/.env` lacks is a missing environment variable: never read or edit `.env`. Attended, name the line to add, its value taken from `apps/web/.env.example`, and ask with `AskUserQuestion`: `I added the line` (Recommended), which reruns the step, or `Hold the commit`. Only exit 0 passes; a second failure holds the commit with no new question.
 
    Unattended, the workflow halts naming the reason. The script's header documents the exit codes.
 8. `pnpm build` (`pnpm -C apps/web build`): confirms production build.

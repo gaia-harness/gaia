@@ -513,7 +513,7 @@ check_human_only_halt() {
     'A failure only the human can clear' \
     '`I did it (Recommended)` first, which reruns the failed gate step and continues only on a pass' \
     'then `Stay halted`' \
-    'A failed rerun ends the run and asks no new question.' \
+    'A failed rerun appends `Rerun: failed` and its error under the `Answered:` line, then ends the run and asks no new question.' \
     '`Answered: <label>`' || return 1
 }
 
@@ -526,5 +526,5 @@ check_human_only_halt() {
 }
 
 @test "red twin: a failed rerun that asks again fails" {
-  red check_human_only_halt 'A failed rerun ends the run and asks no new question.' 'A failed rerun asks the same question again.'
+  red check_human_only_halt 'then ends the run and asks no new question.' 'then asks the same question again.'
 }

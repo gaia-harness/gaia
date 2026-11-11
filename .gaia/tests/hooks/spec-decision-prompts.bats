@@ -499,7 +499,7 @@ copy_tree_into_scratch() {
 # matched like PRINT_PINS.
 HALT_PINS=(
   ".claude/rules/user-questions.md|^- \*\*Never recommend widening|^- \*\*At most 4 options|A statement the next step does verify may lead"
-  ".claude/rules/user-questions.md|^- \*\*Never recommend widening|^- \*\*At most 4 options|A failed rerun ends the run and offers no new continuing option"
+  ".claude/rules/user-questions.md|^- \*\*Never recommend widening|^- \*\*At most 4 options|A failed rerun stops the work and offers no new continuing option"
   "wiki/decisions/Quality Gate.md|^7\. \*\*Dev smoke test|^8\. |never read or edit \`.env\`"
   "wiki/decisions/Quality Gate.md|^7\. \*\*Dev smoke test|^8\. |\`I added the line\` (Recommended)"
   "wiki/decisions/Quality Gate.md|^7\. \*\*Dev smoke test|^8\. |a second failure holds the commit"
@@ -539,7 +539,7 @@ copy_halt_pin_files_into_scratch() {
 @test "red twin: a rule that drops the failed-rerun bound fails" {
   copy_halt_pin_files_into_scratch
   local file="$SCRATCH_ROOT/.claude/rules/user-questions.md"
-  sed 's/A failed rerun ends the run and offers no new continuing option/A failed rerun asks again/' "$file" >"$file.new"
+  sed 's/A failed rerun stops the work and offers no new continuing option/A failed rerun asks again/' "$file" >"$file.new"
   mv "$file.new" "$file"
   ! cmp -s "$REPO_ROOT/.claude/rules/user-questions.md" "$file" || return 1
   run halt_pins_ok "$SCRATCH_ROOT"
