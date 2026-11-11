@@ -115,7 +115,7 @@ check_rule_merge() {
   need_text 'never-Recommended bullet' "$never" || return 1
   lacks "$never" "merging a plan build's pull request" || return 1
   has "$never" 'merging over audit residuals' || return 1
-  has "$(cat "$1/$RULE_REL")" 'A merge question recommends merging when the merge is ready, and holding only for a reason it names in that option'"'"'s description' || return 1
+  has "$(cat "$1/$RULE_REL")" 'A merge-or-hold question recommends merging when the merge is ready, and holding only for a reason it names in that option'"'"'s description' || return 1
 }
 
 # Part B: the workflow hands a plan build back to its ORCHESTRATOR.md, and the
@@ -125,7 +125,7 @@ check_workflow_plan_route() {
   dispatch="$(range_of "$1/$WORKFLOW_REL" '## Dispatch the audit loop unit' '**The brief.**')"
   need_text 'dispatch section' "$dispatch" || return 1
   has "$dispatch" "grep -rlx --include=RUNNING 'branch: <branch>' .notebook/" || return 1
-  has "$dispatch" 'its final summary, merge question and post-clearance block come before the status posts and the merge' || return 1
+  has "$dispatch" 'so the merge question comes before the status posts and the merge' || return 1
   checkpoint="$(range_of "$1/$WORKFLOW_REL" '#### The branch checkpoint' '**An accept buys exactly one closing round**')"
   need_text 'checkpoint section' "$checkpoint" || return 1
   has "$checkpoint" 'Resume the plan for PR #<N> on branch <branch>: read <PLAN_DIR>/ORCHESTRATOR.md and follow it from its resume detection.' || return 1

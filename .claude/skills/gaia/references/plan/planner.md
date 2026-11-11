@@ -333,9 +333,10 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
       **The merge question.** After the cost line, ask one `AskUserQuestion` with `Merge it` and `Hold the merge`, the recommended option first. Recommend `Merge it` when the merge is ready. Recommend `Hold the merge` only when one of these holds, and name it in that option's description:
       - a required check is not passing (`gh pr checks <N> --required`);
-      - a phase committed after a `(HALTED)` block in `{PLAN_DIR}/PROGRESS.md` whose answer was not `I did it` with `Rerun: passed`, so the human reviews a steered run before it lands;
-      - a deviation or follow-up the summary surfaced needs a decision the human has not given;
-      - the late pass settled a `fix` verdict as a residual with no human answer, or refused a delete.
+      - a phase committed after a `(HALTED)` block in `{PLAN_DIR}/PROGRESS.md` whose answer was not `I did it` with `Rerun: passed`;
+      - a deviation the summary surfaced needs a decision the human has not given;
+      - the residual count read's `.ask` is non-zero and no human answered the residual question;
+      - the late pass settled a `fix` or `delete` verdict as a residual with no human answer.
 
       Residuals the human accepted at the audit checkpoint are no hold reason. `Merge it` runs the post-clearance block; `Hold the merge` leaves the PR open and stops.
 

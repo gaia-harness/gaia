@@ -382,7 +382,7 @@ if [ "$kind" = grant ]; then
   case "$base" in
     *"in a new session")
       claude_context="$claude_context Print one instruction line, then the fenced continuation prompt for a fresh session with the branch, PR and run folder, and stop: do not start another round in this session."
-      claude_context="$claude_context On a plan build (a plan's RUNNING sentinel names this branch), print the plan's prompt from wiki/concepts/PR Merge Workflow.md instead, which returns the new session to that plan's ORCHESTRATOR.md so its merge question and post-clearance block run before the merge."
+      claude_context="$claude_context On a plan build (a plan's RUNNING sentinel names this branch), print the plan's prompt from wiki/concepts/PR Merge Workflow.md instead, which resumes that plan's ORCHESTRATOR.md."
       claude_context="$claude_context Before printing it, run the usage ledger's handoff subcommand (\`.gaia/scripts/usage.sh handoff\`); when it prints a line, the prompt's first step is to run that line verbatim, so the run's cost record covers both sessions."
       claude_context="$claude_context The line is 'Run \`/clear\`, then paste the prompt below.' by default."
       claude_context="$claude_context Use 'Press Ctrl+C, run \`claude\` (with any needed environment variable), then paste the prompt below.' instead only when the next audit unit would run stale without a fresh launch: it needs an environment variable this session lacks, or the branch changed, since this session started, an agent definition the unit dispatches (.claude/agents/) or hook wiring in .claude/settings.json that the audit loop or merge gate runs through."
