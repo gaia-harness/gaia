@@ -168,8 +168,9 @@ the build actually has (refusals, validation failures, failed writes,
 permission denials). A flow test may be a Playwright spec, a bats suite or a
 `.gaia/cli` Vitest file; the same judgment applies. For each flow test:
 
-- List every error path the build has that no test in that flow file exercises,
-  in `untestedErrorPaths`, each with a `file:line` in the source.
+- List every error path the build has that neither that flow file nor a route
+  or other lower-layer test exercises, in `untestedErrorPaths`, each with a
+  `file:line` in the source.
 - When the test asserts something real but not the flow's outcome (a heading
   after submit, but never that the write took effect), name the outcome it fails
   to assert in `missingOutcome`.

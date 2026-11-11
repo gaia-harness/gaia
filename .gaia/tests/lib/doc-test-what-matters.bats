@@ -45,7 +45,7 @@ check_section_three() {
   expected=$(cat <<'BLOCK'
 ## 3. Test What Matters
 
-Test critical flows at the seams, after the code exists: one test per critical user flow at its real entry point, covering its happy path and the error paths the build has. A seam worth pinning gets a route test; tricky pure logic gets a unit test; a bug fix gets a test that reproduces the bug. Test-first with `/tdd` is a tool for logic where it helps, not a rule.
+Test critical flows at the seams, after the code exists: one test per critical user flow at its real entry point, covering its happy path and only the error paths no lower layer can show. A refusal, a validation error or another seam worth pinning gets a route test; tricky pure logic gets a unit test; a bug fix gets a test that reproduces the bug. Test-first with `/tdd` is a tool for logic where it helps, not a rule.
 
 - Write tests, not too many, mostly integration (the testing trophy); at most one test per user-observable behavior, and a parameterized table is one test. Full rule: `wiki/decisions/Test Layering.md`
 - The frontend stack (Vitest, Storybook, Playwright) is in `apps/web/CLAUDE.md` (`## Tests and prerequisites`) and the `tdd-react` skill
