@@ -62,13 +62,25 @@ export const getHooks = (
     }
   : hooks;
 
+/** A request's search params and how appendSearchParams serializes them. */
+export type SearchParamsOptions = {
+  arrayFormat?: NonNullable<StringifyOptions['arrayFormat']>;
+  /**
+   * Sends search params as snake_case. On create(), also converts outgoing
+   * JSON bodies to snake_case and incoming response keys to camelCase.
+   */
+  isSnakeCaseEnabled?: boolean;
+  searchParams?: Record<string, unknown>;
+};
+
+/** SearchParamsOptions plus the values getUri substitutes into `:name` placeholders. */
+export type UriOptions = SearchParamsOptions & {
+  pathParams?: Record<string, number | string>;
+};
+
 export const appendSearchParams = (
   uri: string,
-  options?: {
-    arrayFormat?: NonNullable<StringifyOptions['arrayFormat']>;
-    isSnakeCaseEnabled?: boolean;
-    searchParams?: Record<string, unknown>;
-  }
+  options?: SearchParamsOptions
 ): string => {
   const {
     arrayFormat = 'comma',
@@ -125,15 +137,7 @@ export const setPathParams = (
 
 export const getUri = (
   uri: string,
-  {
-    pathParams,
-    ...options
-  }: {
-    arrayFormat?: NonNullable<StringifyOptions['arrayFormat']>;
-    isSnakeCaseEnabled?: boolean;
-    pathParams?: Record<string, number | string>;
-    searchParams?: Record<string, unknown>;
-  } = {}
+  {pathParams, ...options}: UriOptions = {}
 ): string => appendSearchParams(setPathParams(uri, pathParams), options);
 
 export const getBaseUrl = (): string => {
