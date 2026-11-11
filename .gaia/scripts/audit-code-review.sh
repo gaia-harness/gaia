@@ -136,6 +136,13 @@ log_user_settings_hint() {
   printf 'audit-code-review: %s: the review child ignores user settings under its restricted launch, so a provider or auth set in user env or apiKeyHelper does not reach it\n' "$1" >&2
 }
 
+# Claude Code's Bash tool leaves CLAUDE_CODE_OAUTH_TOKEN out of the environment it
+# hands a command, so a session authenticated by that token alone spawns a child
+# with no credentials. Observed on Claude Code 2.1.316, not documented.
+log_login_hint() {
+  printf 'audit-code-review: not logged in: run claude and /login, so a keychain entry or credentials file exists; an env token alone may not reach the review child\n' >&2
+}
+
 # run_attempt <n>: sets ATTEMPT_ENDING to recorded (the outcome is written) or to
 # the closed reason of a failed attempt. Exits 3 itself on a moved tree.
 run_attempt() {
@@ -215,6 +222,7 @@ run_attempt() {
     *)
       case "$reason" in
         'launch failed' | 'nonzero exit' | 'error result') log_user_settings_hint "$reason" ;;
+        'not logged in') log_login_hint; log_user_settings_hint "$reason" ;;
       esac
       ATTEMPT_ENDING="$reason"
       ;;

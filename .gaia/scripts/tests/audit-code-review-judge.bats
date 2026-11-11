@@ -71,6 +71,15 @@ expect_reason() {
   expect_reason 'unusable result'
 }
 
+@test "the built-in's not-logged-in answer names that reason, only at the start and only at zero cost" {
+  write_result 'Not logged in · Please run /login' '.total_cost_usd = 0'
+  expect_reason 'not logged in'
+  write_result 'Not logged in · Please run /login' '.total_cost_usd = 0.5'
+  expect_reason 'unusable result'
+  write_result 'The diff mentions Not logged in once.'
+  expect_reason 'unusable result'
+}
+
 @test "one closed fenced empty array is no findings, and prose around it decides nothing" {
   write_result "$CLEAN_RESULT"
   [ "$(gaia_review_judge "$RESULT" | jq -r .verdict)" = 'no findings' ]

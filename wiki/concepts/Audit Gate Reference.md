@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-09
-updated: 2026-11-09
+updated: 2026-11-11
 tags: [concept, ci, review]
 ---
 
@@ -80,7 +80,7 @@ bash .gaia/scripts/post-findings-block.sh --pr <N>
 
 The audit loop unit runs the built-in `/code-review` once per branch and leaves `code-review.json` in the branch's run folder, beside the other round artifacts. The record holds the outcome, the findings handed to members and how each was accounted for, the denial count and the review session's estimated cost; its sole writer is `.gaia/scripts/audit-code-review-record.sh`. The merge gate never reads it: no marker, status or hook decision depends on the record, and a branch with no record or a `not run` record merges on its markers alone.
 
-A `not run` outcome carries one reason from a closed list, which `bash .gaia/scripts/audit-loop-record.sh --list-review-reasons` prints. The child runs with a restricted launch that ignores user settings as well as project and local ones, so an adopter whose provider or auth lives in user `env` or `apiKeyHelper` can see `not run` on every branch. That cost is accepted. The review needs Claude Code 2.1.296 or later: `--max-findings` and the restricted launch's tool-registration fix both shipped by then, the result shape was observed on 2.1.319 only, and the parse fails closed over any untested range.
+A `not run` outcome carries one reason from a closed list, which `bash .gaia/scripts/audit-loop-record.sh --list-review-reasons` prints. The child runs with a restricted launch that ignores user settings as well as project and local ones, so an adopter whose provider or auth lives in user `env` or `apiKeyHelper` can see `not run` on every branch. That cost is accepted. A session authenticated only by `CLAUDE_CODE_OAUTH_TOKEN` reads `not run: not logged in`, because the token does not reach a command Claude Code's Bash tool runs (observed on Claude Code 2.1.316, not documented): running `/login` in `claude` stores credentials the child can read. The review needs Claude Code 2.1.296 or later: `--max-findings` and the restricted launch's tool-registration fix both shipped by then, the result shape was observed on 2.1.319 only, and the parse fails closed over any untested range.
 
 ### Accepted limits of a status-based gate
 
