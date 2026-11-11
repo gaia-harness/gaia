@@ -13,8 +13,9 @@ export type RequestFunction = {
 
 // A Pick, not Omit<SearchParamsOptions, 'searchParams'>: a new key would
 // otherwise type-check here yet land in ky.create's options and never reach
-// getUri. Add a new key to the create() destructure below as well, and keep
-// ky's own searchParams out: they would reach every request uncased.
+// getUri. A key added to this Pick must also be destructured in create(), and
+// keep ky's own searchParams out: they would reach every request without
+// snake_case conversion.
 type CreateOptions = Omit<Options, 'prefix' | 'searchParams'> &
   Pick<SearchParamsOptions, 'arrayFormat' | 'isSnakeCaseEnabled'> & {
     /** Base URL; resolved per request from getBaseUrl() when omitted. */

@@ -209,7 +209,7 @@ describe('create', () => {
   test.each([
     {
       expected: '?item_ids=1,2',
-      name: 'snake_cases keys and comma-joins arrays by default',
+      name: 'snake_cases keys when enabled and comma-joins arrays by default',
       options: {isSnakeCaseEnabled: true},
     },
     {
