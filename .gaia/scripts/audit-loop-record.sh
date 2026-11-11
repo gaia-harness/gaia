@@ -81,6 +81,7 @@ nonzero exit
 error result
 not the built-in
 unusable result
+not logged in
 review moved the tree
 interrupted
 target unproven

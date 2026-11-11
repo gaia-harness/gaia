@@ -729,6 +729,13 @@ failing_review() {
   expect_not_run 2 2 'unusable result' 'estimated cost $1.00 for the review session only'
 }
 
+@test "failure: a child that is not logged in is published as not run after one call, with a login hint" {
+  stand_in_result '{subtype: "success", is_error: false, local_command: "code_review", total_cost_usd: 0, result: "Not logged in · Please run /login"}'
+  failing_review
+  grep -qF 'log in with claude' <<<"$output"
+  expect_not_run 1 1 'not logged in' 'estimated cost $0.00 for the review session only'
+}
+
 # scratch_scripts <script> <sed-expression>: a copy of the scripts tree (real files, never
 # links) with one edit applied to <script>; sets SCRATCH_SCRIPTS. Fails when the edit
 # changed nothing, so a mutation that no longer matches cannot pass unnoticed.
