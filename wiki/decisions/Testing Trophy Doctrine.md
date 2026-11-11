@@ -4,7 +4,7 @@ status: active
 created: 2026-11-05
 updated: 2026-11-08
 promoted_at: 2026-11-05T08:13:38Z
-promoted_hash: sha256:f352c0e433cf0fd66665695839a35c3234e4439e91e494e6b7734ba684a5195a
+promoted_hash: sha256:a906aa6f933c22eac6080eab71ebeec0c4885946f8e38886828aedb24f589cac
 pr_number: 3316
 tags: [promoted, decisions]
 ---
@@ -19,8 +19,8 @@ The doctrine replaces "every check lives at the lowest layer that can prove it".
 Five mechanisms carry the decision:
 
 - **Placement rule.** The route layer is the default home for behavior. A unit test is written only when both unit-test conditions hold: the integration layer cannot cover its cases cheaply, and the logic is important or likely to fail. At most one test covers a user-observable behavior, and a parameterized table counts as one test. [[Test Layering]] defines each term, and the tdd skill, the React testing reference, the Storybook rule, the planner, the SPEC template and self-review point at that page rather than restating it.
-- **Vertical slices.** The planner cuts each build phase as a vertical slice that delivers a behavior end to end. A spec-derived plan then closes with one phase of flow tests, one per critical flow, written by the implementer after the build. Task docs name no test per function, and a guard is driven to its failing state at the layer where its caller sees the refusal.
-- **Named tests only.** A task doc names a test only for the flow test it owns, a seam test its behavior needs, or a unit test meeting both conditions. Any other test worth having goes into the plan's follow-ups, not the tree. Test-first with the tdd skill is an opt-in tool, not a rule.
+- **Vertical slices.** The planner cuts each build phase as a vertical slice that delivers a behavior end to end. A spec-derived plan then closes with one phase of flow tests, one per critical flow, written by the implementer after the build. Task docs name no test per function, and a guard is driven to its failing state by the build task's own test at the lowest layer that shows the refusal, never by the closing flow test.
+- **Named tests only.** A task doc names a test only for the flow test it owns, a seam test its behavior needs (a route test, or the real-server check [[Test Layering]] calls for), the guard test for a refusal it delivers, or a unit test meeting both conditions. Any other test worth having goes into the plan's follow-ups, not the tree. Test-first with the tdd skill is an opt-in tool, not a rule.
 - **A worth check on every new test.** The worthiness selection covers the package descriptor's `emergentTests` and `tddUnitTests` globs together, and the shipped descriptor's `emergentTests` includes the app's test helper folder. A test the determinism classifier labels strict is judged on honesty and worth like any changed test; the worthiness audit judges whether it can fail. The merge-time presence gate shares the selection, so a pull request adding such a test is denied at merge until the worthiness step has recorded a verdict for it ([[Worthiness Audit]], [[Worthiness Presence Gate]]).
 - **Overlap fold-up and a reason-gated unit demote.** The overlap pass runs whenever a branch changed a test on any layer. It can fold two or more tests into an existing route, story or real-server test that already asserts their property: the fixer deletes the subjects and writes nothing, and a post-fix check refuses the fold if a baseline file gained a test. Any proposal that leaves a unit test (not a story) covering a route-or-higher subject needs a reason stating both unit-test conditions. A fold-up or demote that would need a new test is report-only: it is listed for the human and never written.
 

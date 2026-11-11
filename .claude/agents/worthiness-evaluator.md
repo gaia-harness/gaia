@@ -46,6 +46,9 @@ Read ONLY:
    renders. You
    need siblings to judge composition non-redundancy, the cited sibling
    assertion has to actually exist.
+3. For a flow test only, the lower-layer tests (route, real-server, unit) under
+   the folders its `@covers` line or test path names, read only to check which
+   error paths they exercise.
 
 Do NOT review the whole codebase. Read
 production source only as needed to judge whether a test asserts through the
@@ -170,7 +173,10 @@ permission denials). A flow test may be a Playwright spec, a bats suite or a
 
 - List every error path the build has that neither that flow file nor a
   lower-layer test exercises, in `untestedErrorPaths`, each with a `file:line`
-  in the source.
+  in the source. A single-request refusal or validation error names the lower
+  layer that owns it (a route test, or a real-server check where
+  `wiki/decisions/Test Layering.md` calls for one), and its fix is a new test
+  there, never an edit to the flow spec.
 - When the test asserts something real but not the flow's outcome (a heading
   after submit, but never that the write took effect), name the outcome it fails
   to assert in `missingOutcome`.
