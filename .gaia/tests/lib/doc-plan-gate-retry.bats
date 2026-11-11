@@ -253,8 +253,9 @@ check_in_phase_arm() {
     'the failure goes to the task that declares it when exactly one task declares it and check 2 under **Playwright test outside this phase** holds;' \
     'otherwise it halts under Stop conditions with no retry.' \
     'Record the retry as above, then dispatch a fresh executor for that task:' \
-    'the original task prompt, without its `Yield handoff:` line, then the line `A Playwright test in a file this task declares fails in this phase'"'"'s gate. Fix the cause in the code or in the test, whichever is wrong, and say which under ### Deviations from plan. The failing tests:`' \
-    'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines; its edit limit is then the files the task declares.' \
+    'the original task prompt, without its `Yield handoff:` line, then the line `A Playwright test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' \
+    'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
+    'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run' \
     '- **Outside arm.**' || return 1
 }
 
@@ -478,7 +479,19 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm that sends one task two parallel executors fails" {
-  red check_in_phase_arm 'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines; its edit limit is then the files the task declares.' ''
+  red check_in_phase_arm 'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' ''
+}
+
+@test "red twin: an in-phase arm with no guard against weakening a test for another task's regression fails" {
+  red check_in_phase_arm 'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' 'The failing tests:`'
+}
+
+@test "red twin: an in-phase arm that re-runs the gate after an executor edits no file fails" {
+  red check_in_phase_arm 'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run' ''
+}
+
+@test "red twin: an in-phase arm whose lines do not apply only to their own failures fails" {
+  red check_in_phase_arm ', each line followed by its own failures and applying only to them' ''
 }
 
 @test "a plan step never states its own retry or halt rule for a gate failure" {

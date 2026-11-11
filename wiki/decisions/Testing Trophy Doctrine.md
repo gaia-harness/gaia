@@ -4,7 +4,7 @@ status: active
 created: 2026-11-05
 updated: 2026-11-11
 promoted_at: 2026-11-05T08:13:38Z
-promoted_hash: sha256:d968ece072393056766679702fd83484f2573f8467f1801d9623460b4b17de29
+promoted_hash: sha256:cf8eb56c3735344b9960e004fee01598fec3ef8368da70e944859d1461fbbb2f
 pr_number: 3316
 tags: [promoted, decisions]
 ---
