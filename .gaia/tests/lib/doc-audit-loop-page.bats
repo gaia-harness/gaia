@@ -140,6 +140,13 @@ hand_edit_sentences() {
   sentences <<<"$section_text" | grep -qF -- 'Publish it at every round end, not only after a push: a committed round, a clean or zero-fix round that makes no commit, the closing round, and any stop' || return 1
 }
 
+@test "a round whose staging stages nothing runs no gate and makes no commit" {
+  local section_text
+  section_text="$(section "$FIXROUND")" || return 1
+  sentences <<<"$section_text" | grep -qF -- 'When the staging block stages nothing (`git -C <RESOLVED_ROOT> diff --cached --quiet` exits 0) and no fixer result is `fixed`, skip the gate and the commit, run the **Round check** below, and end the round as **Zero `fix` entries** above does.' || return 1
+  sentences <<<"$section_text" | grep -qF -- 'A `fixed` result with nothing staged stops the round for a human, since the fixer claimed a repair the tree does not show.' || return 1
+}
+
 @test "DP-003 and DP-004: the fix round states the attempt rule and reads the round index from current-round" {
   local section_text
   section_text="$(section "$FIXROUND")" || return 1
@@ -389,12 +396,16 @@ fixer_template_passes() {
   section "$FIXROUND" "$1" | grep -qF -- 'promoted-pages.txt exists it lists the wiki pages this PR promoted'
 }
 
-# digest_statement_passes <page>: rc 0 when the late worthiness fix statement
-# says its re-dispatch is Full and never says Light.
+# digest_statement_passes <page>: rc 0 when the late worthiness statement
+# folds nothing in, settling the test as a residual because its re-dispatch
+# would be Full, and never says Light.
 digest_statement_passes() {
   local statement
-  statement="$(section '^#### Applying the audit.s own Minor findings' "$1" | grep -F -- 'A late worthiness fix')" || return 1
-  grep -qF -- 'Its re-dispatch is Full' <<<"$statement" || return 1
+  statement="$(section '^#### Applying the audit.s own Minor findings' "$1" | grep -F -- 'A late worthiness verdict')" || return 1
+  grep -qF -- 'folds nothing in' <<<"$statement" || return 1
+  grep -qF -- 'recommends settling a branch test it would repair or delete as a residual' <<<"$statement" || return 1
+  grep -qF -- 'recommends the repair' <<<"$statement" && return 1
+  grep -qF -- 'Full under the Hard-Full floor' <<<"$statement" || return 1
   grep -qF -- 'Light' <<<"$statement" && return 1
   true
 }
@@ -420,10 +431,12 @@ reconcile_passes() {
   true
 }
 
-@test "a late worthiness fix re-dispatches Full: the statement passes, and a seeded Light fails" {
+@test "a late worthiness verdict folds nothing in by default and recommends a residual: the statement passes, and a seeded fold or Light fails" {
   digest_statement_passes "$PAGE" || return 1
-  digest_statement_passes "$(page_with 's/Its re-dispatch is Full/Its re-dispatch is Light/')" && return 1
-  digest_statement_passes "$(page_with 's/Its re-dispatch is Full, since/Its re-dispatch is Full on Light, since/')" && return 1
+  digest_statement_passes "$(page_with 's/folds nothing in/is recommended/')" && return 1
+  digest_statement_passes "$(page_with 's/recommends settling a branch test it would repair or delete as a residual/recommends the repair/')" && return 1
+  digest_statement_passes "$(page_with 's/recommends settling a branch test it would repair or delete as a residual/recommends the repair, and a human may settle it as a residual/')" && return 1
+  digest_statement_passes "$(page_with 's/Full under the Hard-Full floor/Light under the Hard-Full floor/')" && return 1
   true
 }
 

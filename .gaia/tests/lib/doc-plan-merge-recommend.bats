@@ -101,12 +101,17 @@ check_plan_merge_question() {
   question="$(range_of "$1/$PLANNER_REL" '**The merge question.**' '- **Post-clearance')"
   need_text 'merge question' "$question" || return 1
   has "$question" 'Recommend `Merge it` when the merge is ready' || return 1
-  has "$question" 'Recommend `Hold the merge` only when one of these holds, and name it in that option'"'"'s description' || return 1
+  has "$question" 'Recommend `Hold the merge` only when one of these holds, and its description then says' || return 1
   has "$question" '`bash .gaia/scripts/pr-wait-merge.sh --pr <N> --until-green --attempts 20`' || return 1
   has "$question" 'names `no required check is declared`, which has none to hold on' || return 1
   has "$question" '`TIMEOUT` (required checks still pending after the wait)' || return 1
   lacks "$question" 'is still pending (`gh pr checks' || return 1
-  has "$question" '`I did it` with `Rerun: passed`' || return 1
+  lacks "$question" '`I did it`' || return 1
+  lacks "$question" '(HALTED)' || return 1
+  has "$question" 'nor is a phase halt, however it was answered: a halted phase commits only after its gate passes' || return 1
+  has "$question" 'it needs no stated reason' || return 1
+  has "$question" 'says in plain words what is blocking the merge and what the user can do about it' || return 1
+  has "$question" 'never quoting this list'"'"'s wording, a verdict token such as `CHECK_FAILED`, or a `PROGRESS.md` label' || return 1
   has "$question" 'Residuals the human accepted at the audit checkpoint are no hold reason' || return 1
 }
 
@@ -152,6 +157,15 @@ check_hook_plan_prompt() {
 
 @test "red twin: a fixed hold-first merge question fails" {
   red check_plan_merge_question "$PLANNER_REL" 'Recommend `Merge it` when the merge is ready' 'Recommend `Hold the merge` always'
+}
+
+@test "red twin: a halt hold keyed on how the halt was answered fails" {
+  red check_plan_merge_question "$PLANNER_REL" '      - a deviation the summary surfaced' '      - a phase committed after a `(HALTED)` block in `{PLAN_DIR}/PROGRESS.md` whose answer was not `I did it` with `Rerun: passed`;
+      - a deviation the summary surfaced'
+}
+
+@test "red twin: a hold description free to quote internal labels fails" {
+  red check_plan_merge_question "$PLANNER_REL" ', never quoting this list'"'"'s wording, a verdict token such as `CHECK_FAILED`, or a `PROGRESS.md` label' ''
 }
 
 @test "the rule drops a plan build's merge from the never-Recommended list and states the merge rule" {
