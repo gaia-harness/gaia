@@ -50,6 +50,8 @@ and is **always human-gated**.
 
 ### Delete constraints
 
+The full set is `## Hard delete constraints` in `.claude/agents/worthiness-evaluator.md`; the main ones:
+
 - **Propose-only.** The reviewer never deletes; a human confirms every delete.
 - **Composition deletes cite both sides and the sibling is machine-verified.** A
   child-redundancy delete cites the redundant sibling assertion AND the subsuming

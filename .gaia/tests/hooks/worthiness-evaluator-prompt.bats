@@ -183,8 +183,9 @@ flow_judgment_needles() {
 # shellcheck disable=SC2016
 sole_driver_needles() {
   SOLE_DRIVER_NEEDLES=(
-    'only test below the browser layer driving a guard, refusal or validation into its failing state is `keep` or `fix`, never `delete`'
-    'A browser test, flow or not, never counts as the covering sibling'
+    'only test below the browser layer (`wiki/decisions/Test Layering.md`) driving a guard, refusal or validation into its failing state is `keep` or `fix`, never `delete`'
+    'A browser test or a flow test never counts as the covering sibling'
+    'neither does a sibling also proposed for `delete`'
   )
 }
 

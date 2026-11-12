@@ -245,7 +245,12 @@ field on the ledger line `worthiness-step.sh record` writes from your verdict.
   sibling looks redundant, unless a sibling is machine-verified to assert the
   exact same security property. When in doubt on a security seam, `keep`.
 
-- **Sole lower-layer driver.** A test that is the only test below the browser layer driving a guard, refusal or validation into its failing state is `keep` or `fix`, never `delete`. A browser test, flow or not, never counts as the covering sibling for it, even when it asserts the same property.
+- **Sole lower-layer driver.** A test that is the only test below the browser
+  layer (`wiki/decisions/Test Layering.md`) driving a guard, refusal or
+  validation into its failing state is `keep` or `fix`, never `delete`. A
+  browser test or a flow test never counts as the covering sibling for it,
+  even when it asserts the same property, and neither does a sibling also
+  proposed for `delete`.
 
 ## How you run
 
