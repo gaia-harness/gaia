@@ -43,6 +43,7 @@ Send this to every lens, interpolating the slots. The caller appends a `LENS: <n
 > - Cite evidence: <evidence form> for any ground-truth check.
 > - Severity: `critical` = <critical meaning>; `major` = <major meaning>; `minor` = <minor meaning>. A finding between major and minor is graded by those definitions, major when unsure.
 > - Give each finding a stable id prefixed with your lens code.
+> - Where the SPEC or a document its Required reading names conflicts with a check the scaffold ships (a security refusal or validation), propose only the narrowest repair that satisfies what they state, keeping the rest of the check: when the start command those documents give supplies no session secret, an unset one may fall back to a strong per-process random value the app logs at startup (sessions then reset on restart and are not shared across instances), while a set value under 32 characters is still refused. A check they are silent on is never removed.
 > - Be concrete and falsifiable. A finding a verifier can refute by reading one file is a good finding; vague "could be clearer" is not.
 > - **Write** your full findings to `<FINDINGS_DIR><LENS>.json` (the fully qualified path) under the file schema, using <write tool>. Write the file even if your findings array is empty.
 > - **Return** only the short summary, no finding bodies.
