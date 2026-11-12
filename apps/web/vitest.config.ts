@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react';
 import {playwright} from '@vitest/browser-playwright';
 import {defineConfig} from 'vitest/config';
 import type {BrowserConfigOptions} from 'vitest/node';
+import {availableParallelism} from 'node:os';
 import {
   isReactCompilerEnabled,
   reactCompiler,
@@ -17,6 +18,17 @@ import {
 // defaults when a pre-commit run shares the CPU. The cost is fixed, so
 // headroom fits; a hung test still fails within this bound.
 const coldImportTestTimeout = 30_000;
+
+// The node and browser pools run at the same time and each takes the whole
+// worker budget, so the run-mode default (cores minus one) runs about twice
+// as many workers as cores and stalls stories past their timeout on slower
+// cores, even with the machine otherwise idle. Half the cores each keeps the
+// total at or under the core count. The 12 keeps the browser page ceiling
+// Vitest applies on its own only when maxWorkers is unset.
+const workersPerPool = Math.min(
+  12,
+  Math.max(1, Math.floor(availableParallelism() / 2))
+);
 
 const ignoreWarnings = ['React DevTools', 'React Router Future Flag Warning'];
 
@@ -118,12 +130,7 @@ export default defineConfig({
       '**/.storybook/**',
       '**/test/setup{,.browser,.story-dark}.ts',
     ],
-    // The node and browser pools run at the same time and each takes the
-    // whole worker budget, so the run-mode default (cores minus one) doubles
-    // the load and stalls stories past their timeout on slower cores, even
-    // when the machine is otherwise idle. Half each keeps the total near the
-    // core count.
-    maxWorkers: '50%',
+    maxWorkers: workersPerPool,
     onConsoleLog: (message) => {
       if (ignoreWarnings.some((warning) => message.includes(warning))) {
         return false;
