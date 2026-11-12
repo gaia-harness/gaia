@@ -111,7 +111,7 @@ check_plan_merge_question() {
   has "$question" 'nor is a phase halt, however it was answered: a halted phase commits only after its gate passes' || return 1
   has "$question" 'it needs no stated reason' || return 1
   has "$question" 'says in plain words what is blocking the merge and what the user can do about it' || return 1
-  has "$question" 'never quoting the condition or a `PROGRESS.md` label' || return 1
+  has "$question" 'never quoting this list'"'"'s wording, a verdict token such as `CHECK_FAILED`, or a `PROGRESS.md` label' || return 1
   has "$question" 'Residuals the human accepted at the audit checkpoint are no hold reason' || return 1
 }
 
@@ -165,7 +165,7 @@ check_hook_plan_prompt() {
 }
 
 @test "red twin: a hold description free to quote internal labels fails" {
-  red check_plan_merge_question "$PLANNER_REL" ', never quoting the condition or a `PROGRESS.md` label' ''
+  red check_plan_merge_question "$PLANNER_REL" ', never quoting this list'"'"'s wording, a verdict token such as `CHECK_FAILED`, or a `PROGRESS.md` label' ''
 }
 
 @test "the rule drops a plan build's merge from the never-Recommended list and states the merge rule" {
