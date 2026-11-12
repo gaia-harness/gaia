@@ -80,13 +80,13 @@ Residuals, refused deletes and filings go in the caller's summary. A plan run ap
 
 ## The late pass
 
-After a `clean` audit unit and before the `GAIA-Audit` status, the main thread runs `route` again, because an audit fixer can have added or edited a test. A repair made now lands after the clean round: it re-dispatches the member owning the test Full, so it costs another audit unit and CI cycle on a branch the audit already cleared. The late pass therefore recommends a residual, keeping the clean round the last word. Each route value has one arm:
+After a `clean` audit unit and before the `GAIA-Audit` status, the main thread runs `route` again, because an audit fixer can have added or edited a test. The late pass recommends a residual, so the clean round stays the last word. Each route value has one arm:
 
 - `keep`, `settled`: nothing.
 - `evaluate`: the Evaluate step. It moves no HEAD. Route again afterwards.
 - `file`: the File step.
 - `residual`: `settle --as residual --first-line <firstLine> --reason <artifact>`, from the element.
-- `fix`, `delete`: with a human, print the tests as one review list (`.claude/rules/user-questions.md`), each with its evidence and the recommendation to record it as a residual, then ask `Accept all as recommended (Recommended)` or `Revise`. The `Revise` description states that a repair reopens the audit: a Full re-dispatch of the owning member, one more audit unit and one CI cycle. The question never offers tech debt. A test left as recommended, or any test in an unattended run, takes `settle --as residual` as above. A test the human picks to repair takes the Fix step (the Delete step for a `delete`), then the Judge again step, then a unit dispatch per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`.
+- `fix`, `delete`: with a human, print the tests as one review list (`.claude/rules/user-questions.md`), each with its evidence and the recommendation to record it as a residual, then ask `Accept all as recommended (Recommended)` or `Revise`. The `Revise` description states that a repair reopens the audit: a Full re-dispatch of the owning member, one more audit unit and one CI cycle. The question never offers tech debt. A test left as recommended, or any test in an unattended run, takes `settle --as residual` as above. A test the human picks to repair takes the Fix step, then the Judge again step; a picked delete goes straight to the Delete step's fixer, Quality Gate, commit and push. Either then takes a unit dispatch per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`.
 
 A residual decided here reaches the PR body through the status post's rewrite (`wiki/concepts/PR Merge Workflow.md` `#### Posting the status last`).
 

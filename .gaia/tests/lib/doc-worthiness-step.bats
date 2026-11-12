@@ -363,7 +363,7 @@ markers_balanced() {
   sed 's/the recommendation to record it as a residual/the recommendation to repair it/' "$REF" > "$copy"
   run late_repairs_recommend_residual "$copy"
   [ "$status" -ne 0 ] || return 1
-  sed 's/then a unit dispatch per/then the status per/' "$REF" > "$copy"
+  sed 's/takes a unit dispatch per/takes the status per/' "$REF" > "$copy"
   run late_repairs_recommend_residual "$copy"
   [ "$status" -ne 0 ]
 }
