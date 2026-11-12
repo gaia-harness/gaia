@@ -8,7 +8,10 @@
 # code, so a label, role or message the brief states ships changed; the merge
 # question reads a known conflict with the SPEC as a follow-up and recommends
 # merging; and the spec audit resolves a conflict with a scaffold check by
-# removing the whole check when the brief is merely silent on it. A model
+# removing the whole check when the brief is merely silent on it. And once the
+# audit fixer disputes a guard for lack of a requirement, the main thread may
+# put its own question recommending that guard and add it outside the fix
+# round, so the fixer's requirement rule never applies. A model
 # executes these passages, so an edit that drops one clause would ship
 # silently. This suite pins each clause.
 #
@@ -22,6 +25,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   ROUND_REL="wiki/concepts/Audit Round Procedure.md"
+  MERGE_REL="wiki/concepts/PR Merge Workflow.md"
   LENS_PREAMBLE_REL=".claude/skills/gaia/references/spec/lens-dispatch.md"
   FIXER_RULE='The task doc and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code.'
 }
@@ -146,6 +150,27 @@ check_spec_audit_keeps_scaffold_checks() {
     'A check they are silent on is never removed.' || return 1
 }
 
+# A guard the fixer disputed reaches the human only through the checkpoint,
+# and only the fix round edits a file a finding names.
+check_disputes_stay_with_the_fixer() {
+  local disputes veto hands_off
+  disputes="$(joined "$(range_of "$1/$MERGE_REL" '**Disputed fix entries.**' '**The merge report.**')")"
+  need_text 'disputed fix entries paragraph' "$disputes" || return 1
+  in_order "$disputes" \
+    'goes to the human only through the branch checkpoint' \
+    'the main thread asks no question of its own about it.' \
+    'recommends adding it only when it quotes the SPEC row or Required-reading line that requires it.' || return 1
+  veto="$(joined "$(range_of "$1/$MERGE_REL" '**The waiver table and the veto.**' 'After a veto, rewrite')")"
+  need_text 'veto paragraph' "$veto" || return 1
+  in_order "$veto" \
+    'Only the loop'"'"'s fixer or a human writes that fix:' \
+    'the main thread may commit the fixer'"'"'s own uncommitted edits on a human'"'"'s answer at a `needs-human` stop,' \
+    'but never writes a new edit to satisfy a veto, by hand or through an agent outside the fix round.' || return 1
+  hands_off="$(grep -F -- '- **During the loop the main thread never hand-edits a file a finding names.**' "$1/$ROUND_REL")"
+  need_text 'hands-off bullet' "$hands_off" || return 1
+  in_order "$hands_off" 'Nor does the unit, and neither dispatches any agent but the round'"'"'s fixer to edit one.' || return 1
+}
+
 # ---------- tests ----------
 
 @test "plan fixers let the requirement sources decide whether code or test is wrong" {
@@ -188,4 +213,19 @@ check_spec_audit_keeps_scaffold_checks() {
   red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" 'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' 'propose removing the check'
   red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" ' A check they are silent on is never removed.' ''
   red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" 'while a set value under 32 characters is still refused.' 'and a set value of any length is accepted.'
+}
+
+@test "a disputed guard reaches the human only through the checkpoint and only the fix round edits" {
+  green check_disputes_stay_with_the_fixer
+}
+
+@test "red twin: a main thread free to ask about or recommend a disputed guard fails" {
+  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'the main thread asks no question of its own about it.' 'the main thread may ask its own question about it.'
+  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'recommends adding it only when it quotes the SPEC row' 'recommends adding it whenever it names the SPEC row'
+}
+
+@test "red twin: a veto satisfied by a one-off agent's edit, or one that bars committing the fixer's edits, fails" {
+  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'but never writes a new edit to satisfy a veto, by hand or through an agent outside the fix round.' 'or dispatches a one-off agent to make the fix.'
+  red check_disputes_stay_with_the_fixer "$MERGE_REL" "the main thread may commit the fixer's own uncommitted edits on a human's answer at a \`needs-human\` stop, but never writes" "the main thread never commits the fixer's edits and never writes"
+  red check_disputes_stay_with_the_fixer "$ROUND_REL" ", and neither dispatches any agent but the round's fixer to edit one." '.'
 }
