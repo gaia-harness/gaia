@@ -4,8 +4,9 @@
 #
 # .claude/skills/gaia/references/plan/planner.md tells a planner to name
 # behaviors and the acceptance tests that own them, to drive a guard red at the
-# lowest layer that shows the refusal, to cut build phases as vertical slices, and
-# to bound the tests a task executor writes. The tdd skill's loop carries the
+# lowest layer that shows the refusal (an absence requirement included), to
+# assert every case of a multi-case SPEC row but a non-guard flow case, to cut
+# build phases as vertical slices, and to bound the tests a task executor writes. The tdd skill's loop carries the
 # matching limit. This suite pins that text and the ORCHESTRATOR phase-entry
 # form the phase-ownership check reads.
 #
@@ -140,6 +141,14 @@ check_task_doc_test_naming() {
   need "$text" 'Any other test worth having goes under `## Follow-ups` in `README.md`, never into a task doc.' || return 1
 }
 
+check_absence_and_cases() {
+  local text
+  text="$(flat "$1/$PLANNER_REL")"
+  need "$text" 'An absence requirement (a value never exposed, sent, stored or rendered) counts as a guard' || return 1
+  need "$text" 'names a test asserting the absence while the value is present upstream' || return 1
+  need "$text" 'Every case a multi-case SPEC row lists is asserted by a test this task names unless it is no guard and the closing flow asserts it' || return 1
+}
+
 # ---------- tests ----------
 
 @test "planner names behaviors and acceptance tests and drops the per-guard criterion line" {
@@ -196,4 +205,24 @@ check_task_doc_test_naming() {
 
 @test "red twin: dropping how each unit-test condition holds fails" {
   red check_task_doc_test_naming "$PLANNER_REL" ', stating how each condition holds' ''
+}
+
+@test "an absence requirement counts as a guard and every case of a multi-case row but a non-guard flow case is asserted in the task's named test" {
+  green check_absence_and_cases
+}
+
+@test "red twin: making the absence requirement optional fails" {
+  red check_absence_and_cases "$PLANNER_REL" 'counts as a guard' 'is optional'
+}
+
+@test "red twin: an absence test with the value never present fails" {
+  red check_absence_and_cases "$PLANNER_REL" ' while the value is present upstream' ''
+}
+
+@test "red twin: asserting only one case of a multi-case row fails" {
+  red check_absence_and_cases "$PLANNER_REL" 'Every case a multi-case SPEC row lists is' 'One case a multi-case SPEC row lists is'
+}
+
+@test "red twin: leaving a guard case of a multi-case row to the closing flow fails" {
+  red check_absence_and_cases "$PLANNER_REL" 'unless it is no guard and the closing flow asserts it' 'unless the closing flow asserts it'
 }
