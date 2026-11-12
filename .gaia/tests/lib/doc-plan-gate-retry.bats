@@ -276,7 +276,7 @@ check_in_phase_arm() {
     'Record the retry as above, then dispatch a fresh executor for that task:' \
     'the original task prompt, without its `Yield handoff:` line, then the line `A test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
     'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
-    'When the in-phase executor edits no file and its `Cause file:` names a file exactly one other task of this phase declares, the same retry goes on to that task:' \
+    'When the in-phase executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and that task is not the in-phase task, the same retry goes on to that task:' \
     'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then, once any executor this retry already sent that task has returned, dispatch a fresh executor for it:' \
     'Fix the cause within this task'"'"'s files, edit no other file, and say what you changed under ### Deviations from plan.' \
     'then the in-phase executor'"'"'s ### Findings, then the failing test lines and their output.' \
@@ -541,11 +541,11 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm that halts instead of sending a sibling-owned cause to its owner fails" {
-  red check_in_phase_arm 'When the in-phase executor edits no file and its `Cause file:` names a file exactly one other task of this phase declares, the same retry goes on to that task:' ''
+  red check_in_phase_arm 'When the in-phase executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and that task is not the in-phase task, the same retry goes on to that task:' ''
 }
 
 @test "red twin: an in-phase arm that forwards a cause file several tasks or another phase declare fails" {
-  red check_in_phase_arm 'names a file exactly one other task of this phase declares' 'names a file some task declares'
+  red check_in_phase_arm 'names a file exactly one task of this phase declares and that task is not the in-phase task' 'names a file some task declares'
 }
 
 @test "red twin: an in-phase executor not asked to name the cause file fails" {
