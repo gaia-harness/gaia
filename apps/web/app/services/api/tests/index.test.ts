@@ -1,6 +1,6 @@
 import {delay} from 'msw';
 import {http, HttpResponse} from 'msw/http';
-import {afterEach, describe, expect, expectTypeOf, test} from 'vitest';
+import {afterEach, describe, expect, expectTypeOf, test, vi} from 'vitest';
 import {z} from 'zod';
 import {createServer} from 'node:http';
 import type {Server} from 'node:http';
@@ -181,6 +181,39 @@ describe('create', () => {
 
     expect(received).toEqual({display_name: 'x'});
     expect(parsedEnvelope.data.displayName).toBe('x');
+  });
+
+  test('a snake_case layer runs the caller hooks and still snake_cases the JSON body', async () => {
+    process.env.API_URL = ORIGIN_A;
+    let receivedBody: unknown;
+    let receivedHeader: null | string = null;
+    server.use(
+      http.post(`${ORIGIN_A}/items`, async ({request}) => {
+        receivedBody = await request.json();
+        receivedHeader = request.headers.get('X-Caller-Hook');
+
+        return HttpResponse.json({});
+      })
+    );
+    const customAfter = vi.fn();
+
+    await create({
+      hooks: {
+        afterResponse: [customAfter],
+        beforeRequest: [
+          ({request}) => {
+            request.headers.set('X-Caller-Hook', 'ran');
+          },
+        ],
+      },
+      isSnakeCaseEnabled: true,
+    })('items', {json: {displayName: 'x'}, method: 'post'});
+
+    expect(receivedHeader).toBe('ran');
+    expect(receivedBody).toEqual({display_name: 'x'});
+    expect(customAfter).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({response: expect.any(Response)})
+    );
   });
 
   test('leaves the body and response keys unchanged by default', async () => {

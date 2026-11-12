@@ -31,10 +31,10 @@ type ParseJson = NonNullable<Options['parseJson']>;
  */
 // Converting in parseJson, not an afterResponse hook, keeps the body read
 // inside Ky's own body-read race, which applies `timeout`: Ky bounds an
-// afterResponse hook by `totalTimeout` only, so a hook's read of a stalled
-// body never settled. A body that fails to parse delivers null on a 2xx, as
-// the schema's input; on an error status the rethrow leaves Ky's HTTPError
-// without data.
+// afterResponse hook only by `totalTimeout` and a caller's `signal`, so a
+// hook's read of a stalled body would ignore `timeout`. A body that fails to
+// parse delivers null on a 2xx, as the schema's input; on an error status the
+// rethrow leaves Ky's HTTPError without data.
 export const getParseJson = (
   isSnakeCaseEnabled?: boolean,
   parseJson?: ParseJson

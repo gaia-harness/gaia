@@ -1,5 +1,5 @@
 import type {BeforeRequestState} from 'ky';
-import {describe, expect, test, vi} from 'vitest';
+import {describe, expect, test} from 'vitest';
 import {
   buildRequestHeaders,
   getHooks,
@@ -100,18 +100,5 @@ describe('api utils', () => {
     expect(headers.get('X-Custom')).toBe('keep');
     expect(headers.get('Authorization')).toBeNull();
     expect(headers.get('Accept-Language')).toBeNull();
-  });
-
-  test('getHooks preserves core interceptors when caller passes custom hooks', () => {
-    const customAfter = vi.fn();
-    const customBefore = vi.fn();
-    const hooks = getHooks(true, {
-      afterResponse: [customAfter],
-      beforeRequest: [customBefore],
-    });
-    expect(hooks?.afterResponse).toEqual([customAfter]);
-    // core interceptor is index 0, caller hook is appended after
-    expect(hooks?.beforeRequest).toHaveLength(2);
-    expect(hooks?.beforeRequest?.[1]).toBe(customBefore);
   });
 });
