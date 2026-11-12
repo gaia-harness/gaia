@@ -188,7 +188,7 @@ sole_driver_needles() {
   )
 }
 
-@test "the evaluator prompt never deletes the only lower-layer test driving a guard, and never counts a browser test as its sibling" {
+@test "the evaluator prompt never proposes deleting the only lower-layer test driving a guard, and never counts a browser test as its sibling" {
   sole_driver_needles
   prompt_carries_every "$PROMPT" "${SOLE_DRIVER_NEEDLES[@]}"
 }
