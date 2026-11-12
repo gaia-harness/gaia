@@ -396,7 +396,7 @@ digest_statement_passes() {
   local statement
   statement="$(section '^#### Applying the audit.s own Minor findings' "$1" | grep -F -- 'A late worthiness verdict')" || return 1
   grep -qF -- 'folds nothing in' <<<"$statement" || return 1
-  grep -qF -- 'recommends settling a test it would repair or delete as a residual' <<<"$statement" || return 1
+  grep -qF -- 'recommends settling a branch test it would repair or delete as a residual' <<<"$statement" || return 1
   grep -qF -- 'recommends the repair' <<<"$statement" && return 1
   grep -qF -- 'Full under the Hard-Full floor' <<<"$statement" || return 1
   grep -qF -- 'Light' <<<"$statement" && return 1
@@ -427,8 +427,8 @@ reconcile_passes() {
 @test "a late worthiness verdict folds nothing in by default and recommends a residual: the statement passes, and a seeded fold or Light fails" {
   digest_statement_passes "$PAGE" || return 1
   digest_statement_passes "$(page_with 's/folds nothing in/is recommended/')" && return 1
-  digest_statement_passes "$(page_with 's/recommends settling a test it would repair or delete as a residual/recommends the repair/')" && return 1
-  digest_statement_passes "$(page_with 's/recommends settling a test it would repair or delete as a residual/recommends the repair, and a human may settle it as a residual/')" && return 1
+  digest_statement_passes "$(page_with 's/recommends settling a branch test it would repair or delete as a residual/recommends the repair/')" && return 1
+  digest_statement_passes "$(page_with 's/recommends settling a branch test it would repair or delete as a residual/recommends the repair, and a human may settle it as a residual/')" && return 1
   digest_statement_passes "$(page_with 's/Full under the Hard-Full floor/Light under the Hard-Full floor/')" && return 1
   true
 }
