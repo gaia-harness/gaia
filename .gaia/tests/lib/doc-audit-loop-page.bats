@@ -140,6 +140,13 @@ hand_edit_sentences() {
   sentences <<<"$section_text" | grep -qF -- 'Publish it at every round end, not only after a push: a committed round, a clean or zero-fix round that makes no commit, the closing round, and any stop' || return 1
 }
 
+@test "a round whose staging stages nothing runs no gate and makes no commit" {
+  local section_text
+  section_text="$(section "$FIXROUND")" || return 1
+  sentences <<<"$section_text" | grep -qF -- 'When the staging block stages nothing (`git -C <RESOLVED_ROOT> diff --cached --quiet` exits 0) and no fixer result is `fixed`, skip the gate and the commit, run the **Round check** below, and end the round as **Zero `fix` entries** above does.' || return 1
+  sentences <<<"$section_text" | grep -qF -- 'A `fixed` result with nothing staged stops the round for a human, since the fixer claimed a repair the tree does not show.' || return 1
+}
+
 @test "DP-003 and DP-004: the fix round states the attempt rule and reads the round index from current-round" {
   local section_text
   section_text="$(section "$FIXROUND")" || return 1
