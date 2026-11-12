@@ -118,6 +118,12 @@ export default defineConfig({
       '**/.storybook/**',
       '**/test/setup{,.browser,.story-dark}.ts',
     ],
+    // The node and browser pools run at the same time and each takes the
+    // whole worker budget, so the run-mode default (cores minus one) doubles
+    // the load and stalls stories past their timeout on slower cores, even
+    // when the machine is otherwise idle. Half each keeps the total near the
+    // core count.
+    maxWorkers: '50%',
     onConsoleLog: (message) => {
       if (ignoreWarnings.some((warning) => message.includes(warning))) {
         return false;
