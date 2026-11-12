@@ -5,9 +5,8 @@
 # .claude/doctrine/context-checkpoint.md verbatim) the first time the fresh
 # reading is at or past red, and once more at each of fire and skull; silent for
 # sub-agents, stale or missing readings, marked bands, an oversize or missing
-# doctrine file, and a session its branch's audit-loop state file shows the
-# loop is about to ask (a live unit, or an answered checkpoint with no later
-# unit).
+# doctrine file, and a session its branch's audit-loop state file shows
+# mid-loop (a live unit, or an answered checkpoint with no later unit).
 #
 # Every fixture repo carries its own copy of the hook, the libraries it loads
 # and the real doctrine file. HOOK_SOURCE_PATH points the suite at another copy

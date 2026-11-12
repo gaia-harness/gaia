@@ -12,7 +12,7 @@
 #
 # Silent for: a sub-agent payload (an `agent_id` key), any event other than
 # PostToolUse, a reading that is not fresh, a band already marked, a missing or
-# oversize doctrine file, and a session the audit loop is about to ask. That
+# oversize doctrine file, and a session the audit loop holds right now. That
 # is read from the non-closed state file for the payload cwd's branch key, in
 # two states: the latest history.units[] entry carrying this session id has no
 # unit-<u>.json in the branch's run folder (a unit is live, and an injection
