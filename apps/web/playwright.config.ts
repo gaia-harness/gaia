@@ -35,10 +35,11 @@ const devUrl = `http://localhost:${ports.devPort}`;
 const WEB_SERVER_START_TIMEOUT_MILLISECONDS = 45_000;
 
 // A critical flow drives several users through many full page loads, each a
-// dev-mode module waterfall, plus a cold first load on each worker's own
-// `workerServer`, so a flow runs close to Playwright's 30-second default and
-// overruns it on a loaded runner. Three times the default, the factor
-// `test.slow()` applies, fits a flow on a loaded runner without hiding a hang.
+// dev-mode module waterfall, plus a cold first load per worker when the flow
+// runs on `workerServer`, so a flow runs close to Playwright's 30-second
+// default and overruns it on a loaded runner. Three times the default, the
+// factor `test.slow()` applies, fits a flow on a loaded runner without hiding
+// a hang.
 const FLOW_TEST_TIMEOUT_MILLISECONDS = 90_000;
 
 /**
