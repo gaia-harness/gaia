@@ -75,6 +75,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **An audit round that repairs nothing no longer stops on an empty commit:** when the fixer returns every finding it was asked to fix as disputed or cannot-fix, the round now ends without a gate or commit, publishes its record and leaves those findings open, instead of stopping the audit on a failed `git commit` that needed a human (#3398)
 - **A test verdict after a clean audit no longer reopens the audit by default:** when the late worthiness pass flags a test after the audit's last fix round, it now recommends recording it as an accepted residual instead of repairing it, since a repair on a cleared branch costs another audit round and CI run. You can still pick the repair (#3472)
 - **A plan's merge question no longer holds a merge over a phase halt:** a halted phase commits only after its gate passes, so the halt is no hold reason, however it was answered. When the question does recommend holding, it says in plain words what is blocking the merge and what you can do, instead of quoting the plan's internal labels (#3470)
 - **A plan's test retry reaches the task that owns the cause:** when a phase gate test fails because of a file another task in the same phase owns, the retry executor now names that file and the same retry goes on to its owner, instead of halting the phase with the fix one task away. A cause outside the phase, or in a file no single task owns, still halts (#3468)
