@@ -30,7 +30,10 @@
 #
 # WHAT IT LEAVES TO CI, allowing rather than guessing:
 #   - a title carrying `$` or a backtick, whose value only the shell knows;
-#   - `--repo` / `-R`, a PR in another repository, under that repository's rules;
+#   - a tool call lib/repo-scope.sh resolves as acting only on another
+#     repository (a `gh -R` / `--repo` naming it, or a `cd` into its checkout),
+#     under that repository's rules; a call with any command on this
+#     repository, or a value it cannot resolve, is checked;
 #   - a `gh pr create|edit` nested inside a command or process substitution, a
 #     subshell, or a compound-command body (`if`, `while`, `{ }`), which the
 #     top-level read does not enter;
@@ -113,14 +116,13 @@ estimate_next_pr_number() {
   fi
 }
 
-# Reads GAIA_FIRST_COMMAND_WORDS for one `gh pr create|edit` command and sets
-# title, title_found, fill_used, foreign_repository, pr_number.
+# Reads GAIA_FIRST_COMMAND_WORDS from index $1, the first word after
+# `create|edit`, and sets title, title_found, fill_used, pr_number.
 read_pr_command() {
-  local index=3 word_count="${#GAIA_FIRST_COMMAND_WORDS[@]}" word
+  local index="$1" word_count="${#GAIA_FIRST_COMMAND_WORDS[@]}" word
   title=""
   title_found=0
   fill_used=0
-  foreign_repository=0
   pr_number=""
   while [ "$index" -lt "$word_count" ]; do
     word="${GAIA_FIRST_COMMAND_WORDS[$index]}"
@@ -135,7 +137,7 @@ read_pr_command() {
         title_found=1
         ;;
       --fill | --fill-first | --fill-verbose | -f) fill_used=1 ;;
-      --repo | -R | --repo=* | -R?*) foreign_repository=1 ;;
+      --repo | -R) index=$((index + 1)) ;;
       *)
         if [ -z "$pr_number" ] && [ "$operation" = edit ]; then
           case "$word" in
@@ -170,6 +172,15 @@ deny_title() {
   exit 2
 }
 
+# The shared verdict for blocking guards: foreign only when some command in
+# the call positively resolves to another repository and none acts on this
+# one, so a `--repo` naming this one, or any value it cannot resolve, still
+# gets the check.
+if type command_targets_foreign_repo >/dev/null 2>&1 &&
+  command_targets_foreign_repo "$command_text"; then
+  exit 0
+fi
+
 newline=$'\n'
 offset=0
 scan_guard=0
@@ -181,31 +192,31 @@ while [ "$scan_guard" -lt 64 ] && [ "$offset" -lt "${#scan_text}" ]; do
   GAIA_FIRST_COMMAND_WORDS=()
   gaia_scan_first_command "$scan_text" "$offset" || true
   next_offset="$GAIA_FIRST_COMMAND_END"
-  if [ "${#GAIA_FIRST_COMMAND_WORDS[@]}" -ge 3 ] &&
-    [ "${GAIA_FIRST_COMMAND_WORDS[0]}" = gh ] &&
-    [ "${GAIA_FIRST_COMMAND_WORDS[1]}" = pr ]; then
-    operation="${GAIA_FIRST_COMMAND_WORDS[2]}"
+  # `gaia_gh_subcommand_index` steps over a `gh -R <repo>` prefix, so
+  # `gh -R <repo> pr create` is read like `gh pr create -R <repo>`.
+  if [ "${GAIA_FIRST_COMMAND_WORDS[0]:-}" = gh ] &&
+    gaia_gh_subcommand_index &&
+    [ "${GAIA_FIRST_COMMAND_WORDS[$GAIA_GH_SUBCOMMAND_INDEX]:-}" = pr ]; then
+    operation="${GAIA_FIRST_COMMAND_WORDS[$((GAIA_GH_SUBCOMMAND_INDEX + 1))]:-}"
     if [ "$operation" = create ] || [ "$operation" = edit ]; then
-      read_pr_command
-      if [ "$foreign_repository" = 0 ]; then
-        if [ "$title_found" = 0 ]; then
-          [ "$operation" = create ] && [ "$fill_used" = 1 ] && deny_fill
-        else
-          case "$title" in
-            *'$'* | *'`'*) ;;
-            *)
-              [ -n "$pr_number" ] || pr_number="$(estimate_next_pr_number)"
-              subject="$title (#$pr_number)"
-              if ! lint_output=$(printf '%s\n' "$subject" | "$commitlint_binary" --cwd "$repository_root" --color false 2>&1); then
-                # Only commitlint's problem report proves the title failed; a
-                # crash or config-load error prints none and is left to CI.
-                if grep -Eq 'found [0-9]+ problems' <<<"$lint_output"; then
-                  deny_title "$subject" "$lint_output"
-                fi
+      read_pr_command "$((GAIA_GH_SUBCOMMAND_INDEX + 2))"
+      if [ "$title_found" = 0 ]; then
+        [ "$operation" = create ] && [ "$fill_used" = 1 ] && deny_fill
+      else
+        case "$title" in
+          *'$'* | *'`'*) ;;
+          *)
+            [ -n "$pr_number" ] || pr_number="$(estimate_next_pr_number)"
+            subject="$title (#$pr_number)"
+            if ! lint_output=$(printf '%s\n' "$subject" | "$commitlint_binary" --cwd "$repository_root" --color false 2>&1); then
+              # Only commitlint's problem report proves the title failed; a
+              # crash or config-load error prints none and is left to CI.
+              if grep -Eq 'found [0-9]+ problems' <<<"$lint_output"; then
+                deny_title "$subject" "$lint_output"
               fi
-              ;;
-          esac
-        fi
+            fi
+            ;;
+        esac
       fi
     fi
   fi

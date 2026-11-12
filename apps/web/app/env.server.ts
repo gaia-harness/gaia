@@ -1,6 +1,12 @@
 import {z} from 'zod';
 
-const schema = z.object({
+// The secret signs every session cookie, so a short one is guessable: 32
+// random hex or base64 characters carry at least 128 bits. Production only:
+// `pnpm dev` runs as development, so the short value in `.env.example` works
+// there, while `pnpm start` runs as production and needs a longer one.
+const minimumProductionSessionSecretLength = 32;
+
+const baseSchema = z.object({
   API_URL: z.string(),
   COMMIT_SHA: z
     .string()
@@ -13,15 +19,29 @@ const schema = z.object({
   SITE_URL: z.string(),
 });
 
-// An allowlist, so a variable added to `schema` stays server-only until it is
+// An allowlist, so a variable added to `baseSchema` stays server-only until it is
 // exposed here on purpose: `envClient` is serialized into every page's HTML.
-const clientSchema = schema.pick({
+const clientSchema = baseSchema.pick({
   API_URL: true,
   COMMIT_SHA: true,
   MSW_ENABLED: true,
   NODE_ENV: true,
   npm_package_version: true,
 });
+
+// Refined after `clientSchema` is picked, because `pick` refuses a refined
+// schema. `when` keeps the rule running beside another invalid variable, so one
+// parse reports every error; Zod skips a refinement after an earlier issue otherwise.
+const schema = baseSchema.refine(
+  ({NODE_ENV, SESSION_SECRET}: {NODE_ENV?: string; SESSION_SECRET?: string}) =>
+    NODE_ENV !== 'production' ||
+    (SESSION_SECRET?.length ?? 0) >= minimumProductionSessionSecretLength,
+  {
+    error: `SESSION_SECRET must be at least ${minimumProductionSessionSecretLength} characters in production`,
+    path: ['SESSION_SECRET'],
+    when: () => true,
+  }
+);
 
 export const env = schema.parse(process.env);
 

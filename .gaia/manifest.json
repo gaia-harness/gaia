@@ -624,6 +624,7 @@
     "apps/web/app/styles/tailwind.css": "owned",
     "apps/web/app/styles/tests/inline-link.stories.tsx": "owned",
     "apps/web/app/styles/theme.css": "shared",
+    "apps/web/app/tests/env.server.test.ts": "owned",
     "apps/web/app/types/i18n/i18next.d.ts": "owned",
     "apps/web/app/types/index.ts": "owned",
     "apps/web/app/utils/dom.ts": "owned",
@@ -856,7 +857,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-09T15:39:05.405Z",
+  "generated": "2026-11-12T02:41:02.400Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
