@@ -436,9 +436,11 @@ check_evaluator_keeps_sole_driver() {
   has_all "$1" \
     'is the only test below the browser layer (`wiki/decisions/Test Layering.md`)' \
     'driving a guard, refusal or validation into its failing state is never' \
-    'proposed for `drop`, `merge` or `demote` on the strength of a browser test or' \
-    'a flow test, even when it asserts the same property, nor on a sibling also' \
-    'proposed for removal; propose `keep-both` with its `bug`, or nothing.'
+    'proposed for `drop`, `merge`, `demote` or `fold-up` on the strength of a browser' \
+    'test or a flow test, even when it asserts the same property, nor on a sibling' \
+    'also proposed for removal, a fold-up target included; propose `keep-both` with' \
+    'its `bug`, or nothing. This overrides the drop default under `keep-both`: with' \
+    'no bug that fails the subject and passes the sibling, propose nothing.'
 }
 
 @test "the evaluator never proposes removing the only lower-layer test driving a guard on a browser or flow sibling" {
@@ -452,7 +454,7 @@ check_evaluator_keeps_sole_driver() {
   cmp -s "$EVALUATOR" "$copy" && return 1
   run check_evaluator_keeps_sole_driver "$copy"
   [ "$status" -ne 0 ]
-  mutate "$EVALUATOR" 'proposed for `drop`, `merge` or `demote`' 'proposed for `merge` or `demote`' "$copy"
+  mutate "$EVALUATOR" 'proposed for `drop`, `merge`, `demote` or `fold-up`' 'proposed for `merge`, `demote` or `fold-up`' "$copy"
   run check_evaluator_keeps_sole_driver "$copy"
   [ "$status" -ne 0 ]
 }
