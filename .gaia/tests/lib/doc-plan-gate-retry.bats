@@ -173,7 +173,7 @@ check_retry_kinds() {
     '- **Record the retry.**' \
     '`k` being 1 for the phase'"'"'s first retry and 2 for its second' \
     '- **Flow-test arm.**' \
-    'using the phase'"'"'s test retry; a second failure halts under Stop conditions.' || return 1
+    'using the phase'"'"'s test retry; a second test failure halts under Stop conditions.' || return 1
 }
 
 check_retry_record() {
