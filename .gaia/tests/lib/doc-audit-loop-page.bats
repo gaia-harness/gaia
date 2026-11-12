@@ -143,7 +143,7 @@ hand_edit_sentences() {
 @test "a round whose staging stages nothing runs no gate and makes no commit" {
   local section_text
   section_text="$(section "$FIXROUND")" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'When the staging block stages nothing (`git -C <RESOLVED_ROOT> diff --cached --quiet` exits 0), the fixer changed nothing, most often because every `fix` entry came back `disputed` or `cannot_fix`: skip the gate and the commit, run the **Round check** below, and end the round as **Zero `fix` entries** above does.' || return 1
+  sentences <<<"$section_text" | grep -qF -- 'When the staging block stages nothing (`git -C <RESOLVED_ROOT> diff --cached --quiet` exits 0), skip the gate and the commit, run the **Round check** below, and end the round as **Zero `fix` entries** above does.' || return 1
 }
 
 @test "DP-003 and DP-004: the fix round states the attempt rule and reads the round index from current-round" {
