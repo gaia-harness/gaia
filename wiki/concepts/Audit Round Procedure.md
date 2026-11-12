@@ -294,7 +294,7 @@ A `refused-authored` outcome is a named violation. Where `check` allows `accept-
 
 **Worthiness.** After every round that committed, the window's last included, and before the next member wave or the unit's stop, the round's orchestrator runs `.claude/skills/gaia/references/worthiness-step.md` `## The step` with its own `<RESOLVED_ROOT>` and `<RUN_FOLDER>`, so a test the round's fixer added or edited is judged while a later round still reviews any repair. The unit is unattended, so a `delete` settles as a residual. The step's Quality Gate is the round's per-round verification, its log kept in the scratchpad and never copied to `<RUN_FOLDER>/gate-<r>-*`, which `round-check` reads. The step's `test(<scope>):` commit lands before the next member wave, so for a test in a file whose member the round's commit rotated it rides the re-dispatch the round's commit already bought, and a test in a file owned by another member costs that member a re-dispatch. A round that stops at `check-outcomes` (`dispositions-check-failed` or `needs-human`) never reaches the step, and the main thread's late pass in `.claude/skills/gaia/references/worthiness-step.md` judges those tests. When `<RUN_FOLDER>/flow-tests.tsv` exists, the step's `route` call needs the plan's SPEC path: read it from the plan folder under `.notebook/` whose `RUNNING` sentinel reads `branch: <the branch>`, whose `README.md` `## Source SPEC` names the path, the same source the fixer template names. A `route` usage error (exit 2) is a stop the unit reports `needs-human`. The step's `diverted` filings append to `<RUN_FOLDER>/worthiness-filing-outcome.jsonl`, so the unit counts that file's `diverted` lines into `diverted_count` and their `record` paths into `diverted_records`, and lists the file in `filing_outcomes` when it exists. Any stop the step names stops the unit `needs-human`, naming it.
 
-**STATE.md and resume.** The loop keeps the execution doctrine's STATE.md current, one Status line per step above, each naming its expected artifact, plus the `NEXT:` line:
+**STATE.md and resume.** The loop keeps the execution doctrine's STATE.md current, one Status line per step above, each naming its expected artifact where the step writes one, plus the `NEXT:` line. The worthiness step can end with none: an empty route writes nothing, so a unit that dies before it leaves the round's tests to the main thread's late pass in `.claude/skills/gaia/references/worthiness-step.md` (`## The late pass`):
 
 ```text
 - [ ] round <r> dispositions: dispositions-<r>.json
@@ -306,7 +306,7 @@ A `refused-authored` outcome is a named violation. Where `check` allows `accept-
 - [ ] round <r> commit: <sha>, pushed
 - [ ] round <r> record: published
 - [ ] round <r> filing: filing-outcomes-<r>.jsonl, retry pass done, check-outcomes exit 0
-- [ ] round <r> worthiness: worthiness-filing-outcome.jsonl when the step filed, commit <sha> or none
+- [ ] round <r> worthiness: route empty, or worthiness-filing-outcome.jsonl when the step filed; commit <sha> or none
 NEXT: <the next step above, by name>
 ```
 
