@@ -167,13 +167,13 @@ check_unrequired_guard_escalates() {
   need_text 'architectural escalation bullet' "$bullet" || return 1
   in_order "$bullet" \
     'it is escalated with documented rationale rather than marked `fix`' \
-    'A finding whose suggested_fix adds a guard, refusal or validation no requirement names, or one the previous round'"'"'s fixer returned disputed with a reason starting `needs a requirement:`, escalates the same way, at any severity and on every round:' \
-    'the human drops it with `accept`, or states the rule where the fixer can cite it and decides `fix`.' || return 1
+    'A finding whose suggested_fix adds a guard, refusal or validation no requirement names, or one the previous round'"'"'s fixer returned disputed with a reason starting `needs a requirement:`, escalates the same way, at any severity and on every round but the closing round:' \
+    'the human drops it with `accept` (a Critical or security-class finding cannot be dropped and takes `fix`), or states the rule where the fixer can cite it and decides `fix`.' || return 1
   unit="$(grep -F -- '- The unit decides no accept-and-note:' "$1/$UNIT_REL")"
   need_text 'unit accept-and-note bullet' "$unit" || return 1
   in_order "$unit" \
     'An architectural Minor on another round stops `needs-human`,' \
-    'and so, on any round, does a finding whose suggested_fix adds a guard, refusal or validation no requirement names, or one the previous round'"'"'s fixer returned disputed with a reason starting `needs a requirement:`.' || return 1
+    'and so, on any round but the closing round, does a finding whose suggested_fix adds a guard, refusal or validation no requirement names, or one the previous round'"'"'s fixer returned disputed with a reason starting `needs a requirement:`.' || return 1
 }
 
 check_evaluator_lenses() {
@@ -266,5 +266,5 @@ check_evaluator_lenses() {
 @test "the escalation check goes red without the page clause, the human's two answers or the unit clause" {
   red check_unrequired_guard_escalates "$ROUND_REL" 'or one the previous round'"'"'s fixer returned disputed' 'or one the fixer fixed'
   red check_unrequired_guard_escalates "$ROUND_REL" 'or states the rule where the fixer can cite it and decides `fix`.' 'or decides `fix`.'
-  red check_unrequired_guard_escalates "$UNIT_REL" 'and so, on any round, does a finding whose suggested_fix adds a guard' 'and nothing else stops it'
+  red check_unrequired_guard_escalates "$UNIT_REL" 'and so, on any round but the closing round, does a finding whose suggested_fix adds a guard' 'and nothing else stops it'
 }
