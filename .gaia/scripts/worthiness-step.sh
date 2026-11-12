@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The deterministic half of the pre-audit worthiness step: what each test in
+# The deterministic half of the worthiness step: what each test in
 # scope's stored state means (route), recording verdicts (record), settling a
 # test the step finished with (settle), building the filer's finding (finding)
 # and dropping stale recorded residuals (prune). Dispatching the evaluator and

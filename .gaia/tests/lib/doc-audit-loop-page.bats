@@ -440,6 +440,27 @@ reconcile_passes() {
   true
 }
 
+# in_round_worthiness_passes <page>: rc 0 when the fix round runs the
+# worthiness step after a committing round, before returning to step 1, as an
+# unattended caller whose step stop stops the unit.
+in_round_worthiness_passes() {
+  local fix_round
+  fix_round="$(section "$FIXROUND" "$1" | sentences)" || return 1
+  grep -qF -- 'On a round that committed, run the worthiness step below.' <<<"$fix_round" || return 1
+  grep -qF -- 'Then return to step 1 on the new HEAD.' <<<"$fix_round" || return 1
+  grep -qF -- 'After every round that committed, the window'"'"'s last included, and before the next member wave or the unit'"'"'s stop, the round'"'"'s orchestrator runs `.claude/skills/gaia/references/worthiness-step.md` `## The step`' <<<"$fix_round" || return 1
+  grep -qF -- 'a `delete` settles as a residual' <<<"$fix_round" || return 1
+  grep -qF -- 'stops the unit `needs-human`, naming it' <<<"$fix_round"
+}
+
+@test "the fix round judges a committing round's tests before the next member wave, with red twins" {
+  in_round_worthiness_passes "$PAGE" || return 1
+  in_round_worthiness_passes "$(page_with 's/On a round that committed, run the worthiness step below\. //')" && return 1
+  in_round_worthiness_passes "$(page_with 's/the window'"'"'s last included, //')" && return 1
+  in_round_worthiness_passes "$(page_with 's/a `delete` settles as a residual/a `delete` asks the human/')" && return 1
+  true
+}
+
 @test "the reconcile text re-disposes a refused-authored key only where accept-residual is allowed, with red twins" {
   reconcile_passes "$PAGE" || return 1
   reconcile_passes "$(page_with 's/is a named violation\. Where/is a named violation the unit re-disposes, not a stop. Where/')" && return 1
