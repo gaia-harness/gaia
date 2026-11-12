@@ -23,7 +23,7 @@ setup() {
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   ROUND_REL="wiki/concepts/Audit Round Procedure.md"
   SPEC_AUDIT_REL=".claude/skills/gaia/references/spec/audit.md"
-  FIXER_RULE='The task doc, the SPEC and its Required reading decide which is wrong: never change an asserted label, role, message or URL they state to match the code.'
+  FIXER_RULE='The task doc and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code.'
 }
 
 # ---------- helpers ----------
