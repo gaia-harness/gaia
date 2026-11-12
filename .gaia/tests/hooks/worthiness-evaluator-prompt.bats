@@ -179,3 +179,26 @@ flow_judgment_needles() {
     }
   done
 }
+
+# shellcheck disable=SC2016
+sole_driver_needles() {
+  SOLE_DRIVER_NEEDLES=(
+    'only test below the browser layer driving a guard, refusal or validation into its failing state is `keep` or `fix`, never `delete`'
+    'A browser test, flow or not, never counts as the covering sibling'
+  )
+}
+
+@test "the evaluator prompt never deletes the only lower-layer test driving a guard, and never counts a browser test as its sibling" {
+  sole_driver_needles
+  prompt_carries_every "$PROMPT" "${SOLE_DRIVER_NEEDLES[@]}"
+}
+
+@test "the sole-driver check rejects a carve-out that any verified sibling satisfies" {
+  local old_prompt="$BATS_TEST_TMPDIR/old-prompt.md"
+  printf '%s\n' \
+    'It stays even when a sibling looks redundant, unless a sibling is machine-verified' \
+    'to assert the exact same security property.' > "$old_prompt"
+  sole_driver_needles
+  run prompt_carries_every "$old_prompt" "${SOLE_DRIVER_NEEDLES[@]}"
+  [ "$status" -ne 0 ]
+}
