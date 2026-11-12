@@ -11,10 +11,12 @@
 # settlement at an unchanged signal routes it residual, so the step judges it
 # again instead. The audit round's fixer can add a guard, refusal or
 # validation, and unless its prompt says to drive that guard into its failing
-# state, the guard merges untested. The evaluator's lenses also name three
-# tests that cost without catching anything: a static constant checked against
-# its own value, a boundary call count as the sole assertion, and one shared
-# error mapping pinned again per caller or listed as a gap per caller. A model
+# state, the guard merges untested; unless it says a finding's suggested_fix
+# is no requirement, the fixer ships a product rule nobody asked for. The
+# evaluator's lenses also name three tests that cost without catching
+# anything: a static constant checked against its own value, a boundary call
+# count as the sole assertion, and one shared error mapping pinned again per
+# caller or listed as a gap per caller. A model
 # executes these passages, so an edit that drops one clause would ship
 # silently. This suite pins each clause.
 #
@@ -146,6 +148,28 @@ check_round_fixer_guard_test() {
     'when no layer can reach the guard, keep the repair and say so in that entry'"'"'s reason.' || return 1
 }
 
+check_round_fixer_guard_requirement() {
+  local region
+  region="$(joined "$(range_of "$1/$ROUND_REL" '**Fixer dispatch.**' '**Classify the fixer from its file**')")"
+  need_text 'audit fixer dispatch prompt' "$region" || return 1
+  in_order "$region" \
+    'A guard, refusal or validation enforces a requirement:' \
+    'name it in that entry'"'"'s reason.' \
+    'A finding'"'"'s suggested_fix is a proposal, not a requirement:' \
+    'is not added, and the entry returns disputed with a reason that starts `needs a requirement:`' \
+    'A repair that adds a guard, refusal or validation also adds a test' || return 1
+}
+
+check_unrequired_guard_dispute_stays_open() {
+  local bullet
+  bullet="$(grep -F -- '- If a Minor finding involves an architectural tradeoff' "$1/$ROUND_REL")"
+  need_text 'architectural escalation bullet' "$bullet" || return 1
+  in_order "$bullet" \
+    'it is escalated with documented rationale rather than marked `fix`' \
+    'A fix entry the fixer returns disputed with a reason starting `needs a requirement:` stays open: a member that still finds it reports it again next round,' \
+    'and the branch checkpoint puts it to the human ([[PR Merge Workflow#The branch checkpoint]]), who files the remainder, accepts it where the checkpoint offers that, or states the rule where the fixer can cite it.' || return 1
+}
+
 check_evaluator_lenses() {
   local honesty worthiness gaps
   honesty="$(joined "$(range_of "$1/$EVALUATOR_REL" '### Axis 1: HONESTY' '### Axis 2: WORTHINESS')")"
@@ -217,4 +241,24 @@ check_evaluator_lenses() {
 @test "the guard-test check goes red without the duty or its escape" {
   red check_round_fixer_guard_test "$ROUND_REL" 'also adds a test that drives it into its failing state' 'needs no test'
   red check_round_fixer_guard_test "$ROUND_REL" 'keep the repair and say so in that entry'"'"'s reason.' 'return it cannot_fix.'
+}
+
+@test "the audit fixer adds a guard only for a requirement it names" {
+  green check_round_fixer_guard_requirement
+}
+
+@test "the guard-requirement check goes red without the requirement, the proposal rule or the dispute" {
+  red check_round_fixer_guard_requirement "$ROUND_REL" 'A guard, refusal or validation enforces a requirement:' 'A guard may come from anywhere:'
+  red check_round_fixer_guard_requirement "$ROUND_REL" 'suggested_fix is a proposal, not a requirement:' 'suggested_fix is a requirement:'
+  red check_round_fixer_guard_requirement "$ROUND_REL" 'the entry returns disputed with a reason that starts `needs a requirement:`' 'the entry is fixed anyway'
+}
+
+@test "an unrequired-guard dispute stays open until the checkpoint puts it to the human" {
+  green check_unrequired_guard_dispute_stays_open
+}
+
+@test "the dispute check goes red without the open entry, the checkpoint or the human's answers" {
+  red check_unrequired_guard_dispute_stays_open "$ROUND_REL" 'stays open: a member that still finds it reports it again next round,' 'is dropped,'
+  red check_unrequired_guard_dispute_stays_open "$ROUND_REL" 'and the branch checkpoint puts it to the human' 'and the fixer adds it anyway'
+  red check_unrequired_guard_dispute_stays_open "$ROUND_REL" 'or states the rule where the fixer can cite it.' 'and nothing else.'
 }
