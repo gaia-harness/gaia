@@ -282,7 +282,7 @@ check_in_phase_arm() {
     'then the in-phase executor'"'"'s ### Findings, then the failing test lines and their output.' \
     'When the in-phase executor edits no file and names no such file, or the cause owner'"'"'s executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
     '- **Outside arm.**' \
-    '- **Re-run the gate.** Once every re-dispatched executor returns, a cause owner'"'"'s included,' || return 1
+    '- **Re-run the gate.** Once every re-dispatched executor returns, including a cause owner'"'"'s,' || return 1
 }
 
 # The planner never writes a gate's retry or halt rule into a step of its own:
@@ -561,7 +561,7 @@ resume_point() {
 }
 
 @test "red twin: a gate re-run that does not wait for a forwarded cause owner fails" {
-  red check_in_phase_arm ' a cause owner'"'"'s included,' ''
+  red check_in_phase_arm ' including a cause owner'"'"'s,' ''
 }
 
 @test "red twin: a forwarded retry that records no cause owner fails" {
