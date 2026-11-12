@@ -229,7 +229,7 @@ record_flags_accepted() {
   assert_pinned 'With no `fix` entry, run no fixer and make no commit: follow the page'"'"'s zero-fix rule and stop as it says.'
   assert_pinned 'which ends the stop for the round: no key is then disposed `accept-residual`, every other in-scope finding defaults to `fix`'
   assert_pinned 'A threshold `waive-out-of-scope` may sit beside the residuals.'
-  assert_pinned 'the check refuses `accept-residual` outside the stop or a recorded human accept (`accept-residual-not-eligible`). An architectural Minor on another round stops `needs-human`,'
+  assert_pinned 'the check refuses `accept-residual` outside the stop or a recorded human accept (`accept-residual-not-eligible`). An architectural Minor on another round stops `needs-human`.'
 }
 
 # unit_command_lines <file>...: every inline code span naming a script (`.sh`)

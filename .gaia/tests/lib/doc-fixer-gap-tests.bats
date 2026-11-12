@@ -31,7 +31,6 @@ setup() {
   EVALUATOR_REL=".claude/agents/worthiness-evaluator.md"
   STEP_REL=".claude/skills/gaia/references/worthiness-step.md"
   ROUND_REL="wiki/concepts/Audit Round Procedure.md"
-  UNIT_REL=".claude/agents/audit-loop-unit.md"
 }
 
 # ---------- helpers ----------
@@ -161,23 +160,14 @@ check_round_fixer_guard_requirement() {
     'A repair that adds a guard, refusal or validation also adds a test' || return 1
 }
 
-check_unrequired_guard_escalates() {
+check_unrequired_guard_dispute_stays_open() {
   local bullet
   bullet="$(grep -F -- '- If a Minor finding involves an architectural tradeoff' "$1/$ROUND_REL")"
   need_text 'architectural escalation bullet' "$bullet" || return 1
   in_order "$bullet" \
     'it is escalated with documented rationale rather than marked `fix`' \
-    'A finding whose suggested_fix adds a guard, refusal or validation no requirement names, or one the previous round'"'"'s fixer returned disputed with a reason starting `needs a requirement:`, escalates the same way, at any severity and on every round but the closing round:' \
-    'the human drops it with `accept` (a Critical or security-class finding cannot be dropped and takes `fix`), or states the rule where the fixer can cite it and decides `fix`.' || return 1
-}
-
-check_unit_unrequired_guard_stops() {
-  local unit
-  unit="$(grep -F -- '- The unit decides no accept-and-note:' "$1/$UNIT_REL")"
-  need_text 'unit accept-and-note bullet' "$unit" || return 1
-  in_order "$unit" \
-    'An architectural Minor on another round stops `needs-human`,' \
-    'and so, on any round but the closing round, does a finding whose suggested_fix adds a guard, refusal or validation no requirement names, or one the previous round'"'"'s fixer returned disputed with a reason starting `needs a requirement:`.' || return 1
+    'A fix entry the fixer returns disputed with a reason starting `needs a requirement:` stays open: a member that still finds it reports it again next round,' \
+    'and the branch checkpoint puts it to the human ([[PR Merge Workflow#The branch checkpoint]]), who files the remainder, accepts it where the checkpoint offers that, or states the rule where the fixer can cite it.' || return 1
 }
 
 check_evaluator_lenses() {
@@ -263,13 +253,12 @@ check_evaluator_lenses() {
   red check_round_fixer_guard_requirement "$ROUND_REL" 'the entry returns disputed with a reason that starts `needs a requirement:`' 'the entry is fixed anyway'
 }
 
-@test "an unrequired guard escalates to the human at disposition, in the page and the unit" {
-  green check_unrequired_guard_escalates
-  green check_unit_unrequired_guard_stops
+@test "an unrequired-guard dispute stays open until the checkpoint puts it to the human" {
+  green check_unrequired_guard_dispute_stays_open
 }
 
-@test "the escalation check goes red without the page clause, the human's two answers or the unit clause" {
-  red check_unrequired_guard_escalates "$ROUND_REL" 'or one the previous round'"'"'s fixer returned disputed' 'or one the fixer fixed'
-  red check_unrequired_guard_escalates "$ROUND_REL" 'or states the rule where the fixer can cite it and decides `fix`.' 'or decides `fix`.'
-  red check_unit_unrequired_guard_stops "$UNIT_REL" 'and so, on any round but the closing round, does a finding whose suggested_fix adds a guard' 'and nothing else stops it'
+@test "the dispute check goes red without the open entry, the checkpoint or the human's answers" {
+  red check_unrequired_guard_dispute_stays_open "$ROUND_REL" 'stays open: a member that still finds it reports it again next round,' 'is dropped,'
+  red check_unrequired_guard_dispute_stays_open "$ROUND_REL" 'and the branch checkpoint puts it to the human' 'and the fixer adds it anyway'
+  red check_unrequired_guard_dispute_stays_open "$ROUND_REL" 'or states the rule where the fixer can cite it.' 'and nothing else.'
 }
