@@ -337,7 +337,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       - the wait's verdict is `CHECK_FAILED`, `CONFLICTING` or `CLOSED`, or `TIMEOUT` (required checks still pending after the wait), except a `TIMEOUT` whose `GREEN was not proved` line names `no required check is declared`, which has none to hold on;
       - a deviation the summary surfaced needs a decision the human has not given;
       - the residual count read's `.ask` is non-zero and no human answered the residual question;
-      - the late pass settled a `fix` or `delete` verdict as a residual with no human answer.
+      - the late pass settled a `fix` or `delete` verdict as a residual, in an unattended run or by `Accept all as recommended`: a picker that takes the recommendation cannot be told from a human who accepted it, so that settle never clears the merge on its own.
 
       Residuals the human accepted at the audit checkpoint are no hold reason, nor is a phase halt, however it was answered: a halted phase commits only after its gate passes. `Merge it` runs the post-clearance block; `Hold the merge` leaves the PR open and stops.
 

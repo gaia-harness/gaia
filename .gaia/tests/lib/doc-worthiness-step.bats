@@ -156,9 +156,13 @@ late_repairs_recommend_residual() {
   grep -qF -- '`Accept all as recommended (Recommended)` or `Revise`' <<<"$bullet" || return 1
   grep -qF -- 'the recommendation to record it as a residual' <<<"$bullet" || return 1
   grep -qF -- 'any test in an unattended run, takes `settle --as residual`' <<<"$bullet" || return 1
-  grep -qF -- 'A test the human picks to repair takes the Fix step' <<<"$bullet" || return 1
+  grep -qF -- 'the Fix step takes only the tests the human picked to repair' <<<"$bullet" || return 1
   grep -qF -- 'unit dispatch' <<<"$bullet" || return 1
-  grep -qiE '(Revise|Fix|repair)[^`]*\(Recommended\)' <<<"$bullet" && return 1
+  grep -qF -- 'and those settles run first' <<<"$bullet" || return 1
+  grep -qF -- 'takes the File step like a `file` element, never a residual' <<<"$bullet" || return 1
+  # Only the accept option may carry the label: strip it, then refuse any other.
+  bullet=${bullet//'`Accept all as recommended (Recommended)`'/}
+  grep -qF -- '(Recommended)' <<<"$bullet" && return 1
   true
 }
 
@@ -358,6 +362,15 @@ markers_balanced() {
     [ "$status" -ne 0 ] || return 1
   done
   sed 's/`Accept all as recommended (Recommended)` or `Revise`/`Revise (Recommended)` or `Accept all as recommended`/' "$REF" > "$copy"
+  run late_repairs_recommend_residual "$copy"
+  [ "$status" -ne 0 ] || return 1
+  sed 's/or `Revise`\. The `Revise` description/or `Revise` (Recommended). The `Revise` description/' "$REF" > "$copy"
+  run late_repairs_recommend_residual "$copy"
+  [ "$status" -ne 0 ] || return 1
+  sed 's/`Accept all as recommended (Recommended)` or `Revise`/`Accept all as recommended (Recommended)` or `Revise (Recommended)`/' "$REF" > "$copy"
+  run late_repairs_recommend_residual "$copy"
+  [ "$status" -ne 0 ] || return 1
+  sed 's/and those settles run first/and the Fix step runs first/' "$REF" > "$copy"
   run late_repairs_recommend_residual "$copy"
   [ "$status" -ne 0 ] || return 1
   sed 's/the recommendation to record it as a residual/the recommendation to repair it/' "$REF" > "$copy"
