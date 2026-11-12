@@ -120,14 +120,14 @@ the sibling asserts the same property for the same actor and action, so write
 `property`, `actor` and `action` precisely: the human reads them beside the
 sibling to decide.
 
-**Sole lower-layer driver.** The check does not enforce this one. A test that
-is the only test below the browser layer (`wiki/decisions/Test Layering.md`)
-driving a guard, refusal or validation into its failing state is never
-proposed for `drop`, `merge`, `demote` or `fold-up` on the strength of a browser
-test or a flow test, even when it asserts the same property, nor on a sibling
-also proposed for removal, a fold-up target included; propose `keep-both` with
-its `bug`, or nothing. This overrides the drop default under `keep-both`: with
-no bug that fails the subject and passes the sibling, propose nothing.
+**Sole lower-layer driver.** The check does not enforce the browser and
+flow-test half. A test that is the only test below the browser layer
+(`wiki/decisions/Test Layering.md`) driving a guard, refusal or validation
+into its failing state is never proposed for `drop`, `merge`, `demote` or
+`fold-up` on the strength of a browser test or a flow test, even when it
+asserts the same property, nor on a `sibling` or fold-up `into` test that is
+itself proposed for removal; propose `keep-both` with its `bug`, or nothing,
+never the drop `keep-both` otherwise defaults to.
 
 ## How you run
 
