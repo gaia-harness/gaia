@@ -166,7 +166,7 @@ check_unrequired_guard_dispute_stays_open() {
   need_text 'architectural escalation bullet' "$bullet" || return 1
   in_order "$bullet" \
     'it is escalated with documented rationale rather than marked `fix`' \
-    'A fix entry the fixer returns disputed with a reason starting `needs a requirement:` stays open: a member that still finds it reports it again next round,' \
+    'A fix entry the fixer returns disputed with a reason starting `needs a requirement:` or `conflicts with requirement:` stays open: a member that still finds it reports it again next round,' \
     'and the branch checkpoint puts it to the human ([[PR Merge Workflow#The branch checkpoint]]), who files the remainder, accepts it where the checkpoint offers that, or states the rule where the fixer can cite it.' || return 1
 }
 
