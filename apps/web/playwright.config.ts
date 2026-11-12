@@ -38,9 +38,9 @@ const WEB_SERVER_START_TIMEOUT_MILLISECONDS = 45_000;
 // dev-mode module waterfall, plus a cold first load per worker when the flow
 // runs on `workerServer`, so a flow runs close to Playwright's 30-second
 // default and overruns it on a loaded runner. Three times the default, the
-// factor `test.slow()` applies, fits a flow on a loaded runner without hiding
-// a hang.
-const FLOW_TEST_TIMEOUT_MILLISECONDS = 90_000;
+// factor `test.slow()` applies, fits it. The ceiling covers every spec, so a
+// hung test reports after 90 seconds, and `test.slow()` triples it again.
+const TEST_TIMEOUT_MILLISECONDS = 90_000;
 
 /**
  * You can change this to "true" this to test in multiple browsers if you prefer.
@@ -90,13 +90,6 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testMatch: ['e2e/**/*.spec.ts'],
-      use: {...devices['Desktop Chrome']},
-    },
-    {
-      name: 'chromium-flows',
-      testMatch: ['flows/**/*.spec.ts'],
-      timeout: FLOW_TEST_TIMEOUT_MILLISECONDS,
       use: {...devices['Desktop Chrome']},
     },
     ...otherBrowsers,
@@ -120,6 +113,7 @@ export default defineConfig({
   testIgnore:
     languageCount < 2 ? ['**/language-switch-a11y.spec.ts'] : undefined,
   testMatch: ['e2e/**/*.spec.ts', 'flows/**/*.spec.ts'],
+  timeout: TEST_TIMEOUT_MILLISECONDS,
 
   use: {
     baseURL: devUrl,
