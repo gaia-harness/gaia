@@ -122,7 +122,7 @@ check_closing_gate() {
 
 FLOW_ARM_NEEDLE='goes once to a fresh executor for the task whose `Flow test` line names it'
 FLOW_ARM_FREE_NEEDLE='free to edit code or test'
-FLOW_ARM_HALT_NEEDLE='a second failure halts'
+FLOW_ARM_HALT_NEEDLE='a second test failure halts'
 
 check_gate_retry_flow_arm() {
   local block
