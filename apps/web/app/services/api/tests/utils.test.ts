@@ -1,21 +1,5 @@
-import type {BeforeRequestState} from 'ky';
 import {describe, expect, test} from 'vitest';
-import {
-  buildRequestHeaders,
-  getHooks,
-  getParseJson,
-  setPathParams,
-} from '../utils';
-
-const runRequestToSnakeCase = async (body: string) => {
-  const hook = getHooks(true)?.beforeRequest?.[0];
-  const state = {
-    options: {body},
-    request: new Request('https://example.test', {method: 'POST'}),
-  } as unknown as BeforeRequestState;
-
-  return hook?.(state);
-};
+import {buildRequestHeaders, getParseJson, setPathParams} from '../utils';
 
 describe('api utils', () => {
   test('setPathParams should replace path params', () => {
@@ -69,12 +53,6 @@ describe('api utils', () => {
   test('setPathParams keeps a dot inside a longer segment', () => {
     expect(setPathParams('items/:id', {id: 'a.b'})).toBe('items/a.b');
     expect(setPathParams('items/:id', {id: '...'})).toBe('items/...');
-  });
-
-  test('requestToSnakeCase forwards a non-JSON body unchanged', async () => {
-    const convertedRequest = await runRequestToSnakeCase('plain text body');
-
-    expect(convertedRequest).toBeUndefined();
   });
 
   test('the snake_case parseJson delivers a JSON body of false as false', async () => {

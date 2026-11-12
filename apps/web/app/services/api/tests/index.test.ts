@@ -183,6 +183,25 @@ describe('create', () => {
     expect(parsedEnvelope.data.displayName).toBe('x');
   });
 
+  test('a snake_case layer sends a non-JSON body unchanged', async () => {
+    process.env.API_URL = ORIGIN_A;
+    let receivedBody: string | undefined;
+    server.use(
+      http.post(`${ORIGIN_A}/items`, async ({request}) => {
+        receivedBody = await request.text();
+
+        return new HttpResponse(null, {status: 204});
+      })
+    );
+
+    await create({isSnakeCaseEnabled: true})('items', {
+      body: 'plain text body',
+      method: 'post',
+    });
+
+    expect(receivedBody).toBe('plain text body');
+  });
+
   test('a snake_case layer runs the caller hooks and still snake_cases the JSON body', async () => {
     process.env.API_URL = ORIGIN_A;
     let receivedBody: unknown;
