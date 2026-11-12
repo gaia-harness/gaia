@@ -231,7 +231,7 @@ After a gate repair, add `--extra-declared <RUN_FOLDER>/gate-<r>-<j>.paths` once
 } | sort -u | while IFS= read -r p; do git -C <RESOLVED_ROOT> add -A -- "$p"; done
 ```
 
-When the staging block stages nothing (`git -C <RESOLVED_ROOT> diff --cached --quiet` exits 0), skip the gate and the commit, run the **Round check** below, and end the round as **Zero `fix` entries** above does.
+When the staging block stages nothing (`git -C <RESOLVED_ROOT> diff --cached --quiet` exits 0) and no fixer result is `fixed`, skip the gate and the commit, run the **Round check** below, and end the round as **Zero `fix` entries** above does. A `fixed` result with nothing staged stops the round for a human, since the fixer claimed a repair the tree does not show.
 
 Otherwise run the per-round verification, at the placeholder line of the snapshot block below: the [[Quality Gate]] when its skip logic says it applies, saving each attempt's output to `gate-<r>-<k>.log`. `bash .gaia/scripts/audit-gate-owed.sh choose --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --round <r>` picks the gate, `smaller` or `full`; [[Quality Gate]] is the smaller gate's home. A `smaller` round leaves the steps it skipped owed in `gate-owed.json`, and they run at the status post.
 
