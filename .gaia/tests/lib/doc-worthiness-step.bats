@@ -138,14 +138,28 @@ file_step_has() {
 
 LATE_ARMS=(delete file residual evaluate fix)
 
-# late_arm_present <file> <arm>: the late pass has a bullet for the route value.
+# late_arm_present <file> <arm>: a late-pass bullet's leading code-span list
+# names the route value.
 late_arm_present() {
-  section_text "$1" "$H_LATE" | grep -qE "^- \`$2\`"
+  section_text "$1" "$H_LATE" | grep -qE "^- (\`[a-z]+\`, )*\`$2\`[,:]"
 }
 
-# accepted_fix_arm_names_dispatch <file>
-accepted_fix_arm_names_dispatch() {
-  section_text "$1" "$H_LATE" | grep -E '^- `fix`' | grep -qF 'unit dispatch'
+# late_repairs_recommend_residual <file>: the late pass's fix and delete arm
+# recommends a residual, so a picker that takes the recommendation keeps the
+# clean round the last word; only a repair the human picks reaches the unit
+# dispatch, and an unattended run settles a residual.
+late_repairs_recommend_residual() {
+  local late bullet
+  late=$(section_text "$1" "$H_LATE")
+  [ -n "$late" ] || return 1
+  bullet=$(grep -E '^- `fix`, `delete`:' <<<"$late") || return 1
+  grep -qF -- '`Accept all as recommended (Recommended)` or `Revise`' <<<"$bullet" || return 1
+  grep -qF -- 'the recommendation to record it as a residual' <<<"$bullet" || return 1
+  grep -qF -- 'any test in an unattended run, takes `settle --as residual`' <<<"$bullet" || return 1
+  grep -qF -- 'A test the human picks to repair takes the Fix step' <<<"$bullet" || return 1
+  grep -qF -- 'unit dispatch' <<<"$bullet" || return 1
+  grep -qiE '(Revise|Fix|repair)[^`]*\(Recommended\)' <<<"$bullet" && return 1
+  true
 }
 
 # tdd_arm_is_dispatch_and_record_only <file>
@@ -328,23 +342,29 @@ markers_balanced() {
 
 # ---------- late pass ----------
 
-@test "the late pass has one arm per route value and the accepted fix names the unit dispatch" {
+@test "the late pass has one arm per route value and recommends a residual for a fix or delete" {
   local arm
   for arm in "${LATE_ARMS[@]}"; do
-    late_arm_present "$REF" "$arm"
+    late_arm_present "$REF" "$arm" || return 1
   done
-  accepted_fix_arm_names_dispatch "$REF"
+  late_repairs_recommend_residual "$REF"
 }
 
-@test "red twin: a missing late-pass arm, or an accepted fix without the dispatch, fails" {
+@test "red twin: a missing late-pass arm, a recommended repair, or a repair with no unit dispatch fails" {
   local arm copy="$BATS_TEST_TMPDIR/ref.md"
   for arm in "${LATE_ARMS[@]}"; do
-    grep -v -E "^- \`$arm\`" "$REF" > "$copy"
+    sed "s/\`$arm\`/\`zz\`/g" "$REF" > "$copy"
     run late_arm_present "$copy" "$arm"
-    [ "$status" -ne 0 ]
+    [ "$status" -ne 0 ] || return 1
   done
-  sed 's/unit dispatch/x/g' "$REF" > "$copy"
-  run accepted_fix_arm_names_dispatch "$copy"
+  sed 's/`Accept all as recommended (Recommended)` or `Revise`/`Revise (Recommended)` or `Accept all as recommended`/' "$REF" > "$copy"
+  run late_repairs_recommend_residual "$copy"
+  [ "$status" -ne 0 ] || return 1
+  sed 's/the recommendation to record it as a residual/the recommendation to repair it/' "$REF" > "$copy"
+  run late_repairs_recommend_residual "$copy"
+  [ "$status" -ne 0 ] || return 1
+  sed 's/then a unit dispatch per/then the status per/' "$REF" > "$copy"
+  run late_repairs_recommend_residual "$copy"
   [ "$status" -ne 0 ]
 }
 
