@@ -12,10 +12,11 @@
 # again instead. The audit round's fixer can add a guard, refusal or
 # validation, and unless its prompt says to drive that guard into its failing
 # state, the guard merges untested; unless it says a finding's suggested_fix
-# is no requirement, the fixer ships a product rule nobody asked for. The evaluator's lenses also name three
-# tests that cost without catching anything: a static constant checked against
-# its own value, a boundary call count as the sole assertion, and one shared
-# error mapping pinned again per caller or listed as a gap per caller. A model
+# is no requirement, the fixer ships a product rule nobody asked for. The
+# evaluator's lenses also name three tests that cost without catching
+# anything: a static constant checked against its own value, a boundary call
+# count as the sole assertion, and one shared error mapping pinned again per
+# caller or listed as a gap per caller. A model
 # executes these passages, so an edit that drops one clause would ship
 # silently. This suite pins each clause.
 #
@@ -30,6 +31,7 @@ setup() {
   EVALUATOR_REL=".claude/agents/worthiness-evaluator.md"
   STEP_REL=".claude/skills/gaia/references/worthiness-step.md"
   ROUND_REL="wiki/concepts/Audit Round Procedure.md"
+  UNIT_REL=".claude/agents/audit-loop-unit.md"
 }
 
 # ---------- helpers ----------
@@ -159,6 +161,21 @@ check_round_fixer_guard_requirement() {
     'A repair that adds a guard, refusal or validation also adds a test' || return 1
 }
 
+check_unrequired_guard_escalates() {
+  local bullet unit
+  bullet="$(grep -F -- '- If a Minor finding involves an architectural tradeoff' "$1/$ROUND_REL")"
+  need_text 'architectural escalation bullet' "$bullet" || return 1
+  in_order "$bullet" \
+    'it is escalated with documented rationale rather than marked `fix`' \
+    'A finding whose suggested_fix adds a guard, refusal or validation no requirement names, or one the previous round'"'"'s fixer returned disputed with a reason starting `needs a requirement:`, escalates the same way, at any severity and on every round:' \
+    'the human drops it with `accept`, or states the rule where the fixer can cite it and decides `fix`.' || return 1
+  unit="$(grep -F -- '- The unit decides no accept-and-note:' "$1/$UNIT_REL")"
+  need_text 'unit accept-and-note bullet' "$unit" || return 1
+  in_order "$unit" \
+    'An architectural Minor on another round stops `needs-human`,' \
+    'and so, on any round, does a finding whose suggested_fix adds a guard, refusal or validation no requirement names, or one the previous round'"'"'s fixer returned disputed with a reason starting `needs a requirement:`.' || return 1
+}
+
 check_evaluator_lenses() {
   local honesty worthiness gaps
   honesty="$(joined "$(range_of "$1/$EVALUATOR_REL" '### Axis 1: HONESTY' '### Axis 2: WORTHINESS')")"
@@ -240,4 +257,14 @@ check_evaluator_lenses() {
   red check_round_fixer_guard_requirement "$ROUND_REL" 'A guard, refusal or validation enforces a requirement:' 'A guard may come from anywhere:'
   red check_round_fixer_guard_requirement "$ROUND_REL" 'suggested_fix is a proposal, not a requirement:' 'suggested_fix is a requirement:'
   red check_round_fixer_guard_requirement "$ROUND_REL" 'the entry returns disputed with a reason that starts `needs a requirement:`' 'the entry is fixed anyway'
+}
+
+@test "an unrequired guard escalates to the human at disposition, in the page and the unit" {
+  green check_unrequired_guard_escalates
+}
+
+@test "the escalation check goes red without the page clause, the human's two answers or the unit clause" {
+  red check_unrequired_guard_escalates "$ROUND_REL" 'or one the previous round'"'"'s fixer returned disputed' 'or one the fixer fixed'
+  red check_unrequired_guard_escalates "$ROUND_REL" 'or states the rule where the fixer can cite it and decides `fix`.' 'or decides `fix`.'
+  red check_unrequired_guard_escalates "$UNIT_REL" 'and so, on any round, does a finding whose suggested_fix adds a guard' 'and nothing else stops it'
 }
