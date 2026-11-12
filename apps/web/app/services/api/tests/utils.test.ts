@@ -1,6 +1,11 @@
-import type {AfterResponseState, BeforeRequestState} from 'ky';
+import type {BeforeRequestState} from 'ky';
 import {describe, expect, test, vi} from 'vitest';
-import {buildRequestHeaders, getHooks, setPathParams} from '../utils';
+import {
+  buildRequestHeaders,
+  getHooks,
+  getParseJson,
+  setPathParams,
+} from '../utils';
 
 const runRequestToSnakeCase = async (body: string) => {
   const hook = getHooks(true)?.beforeRequest?.[0];
@@ -8,13 +13,6 @@ const runRequestToSnakeCase = async (body: string) => {
     options: {body},
     request: new Request('https://example.test', {method: 'POST'}),
   } as unknown as BeforeRequestState;
-
-  return hook?.(state);
-};
-
-const runResponseToCamelCase = async (response: Response) => {
-  const hook = getHooks(true)?.afterResponse?.[0];
-  const state = {response} as unknown as AfterResponseState;
 
   return hook?.(state);
 };
@@ -79,10 +77,14 @@ describe('api utils', () => {
     expect(convertedRequest).toBeUndefined();
   });
 
-  test('responseToCamelCase delivers a JSON body of false as false', async () => {
-    const converted = await runResponseToCamelCase(Response.json(false));
+  test('the snake_case parseJson delivers a JSON body of false as false', async () => {
+    const parseJson = getParseJson(true);
+    const context = {
+      request: new Request('https://example.test'),
+      response: new Response('false'),
+    };
 
-    expect(await (converted as Response).json()).toBe(false);
+    expect(await parseJson?.('false', context)).toBe(false);
   });
 
   test('buildRequestHeaders applies per-request token and language', () => {
@@ -107,10 +109,9 @@ describe('api utils', () => {
       afterResponse: [customAfter],
       beforeRequest: [customBefore],
     });
+    expect(hooks?.afterResponse).toEqual([customAfter]);
     // core interceptor is index 0, caller hook is appended after
-    expect(hooks?.afterResponse).toHaveLength(2);
     expect(hooks?.beforeRequest).toHaveLength(2);
-    expect(hooks?.afterResponse?.[1]).toBe(customAfter);
     expect(hooks?.beforeRequest?.[1]).toBe(customBefore);
   });
 });

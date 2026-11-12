@@ -16,7 +16,6 @@ const ORIGIN_B = 'https://api-b.test';
 const itemSchema = z.object({displayName: z.string()});
 const envelopeSchema = z.object({data: itemSchema});
 
-// Ky runs parseJson again on the JSON the hook returns, so this one must parse real JSON too.
 const parseJsonOrPlainText = (text: string): unknown =>
   text === 'not json' ? {display_name: 'parsed'} : JSON.parse(text);
 
@@ -317,18 +316,24 @@ describe('a failure while reading the body', () => {
     expect(attemptOutcome).toEqual([networkFailure, undefined]);
   });
 
-  test('a schema-less body that stalls resolves through attempt as a 504', async () => {
-    await startSocketServer('stall');
+  test.each([
+    ['the default layer', false],
+    ['the snake_case layer', true],
+  ])(
+    'a schema-less body that stalls on %s resolves through attempt as a 504',
+    async (_layer, isSnakeCaseEnabled) => {
+      await startSocketServer('stall');
 
-    const attemptOutcome = await attempt(async () =>
-      create()('items', {retry: 0, timeout: 150})
-    );
+      const attemptOutcome = await attempt(async () =>
+        create({isSnakeCaseEnabled})('items', {retry: 0, timeout: 150})
+      );
 
-    expect(attemptOutcome).toEqual([
-      {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
-      undefined,
-    ]);
-  });
+      expect(attemptOutcome).toEqual([
+        {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
+        undefined,
+      ]);
+    }
+  );
 
   test('a body that drops on the snake_case layer resolves through attempt as a 503', async () => {
     await startSocketServer('drop');

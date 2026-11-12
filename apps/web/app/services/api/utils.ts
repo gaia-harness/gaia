@@ -1,5 +1,4 @@
-import {isResponseSizeError, NetworkError} from 'ky';
-import type {AfterResponseState, BeforeRequestState, Hooks, Options} from 'ky';
+import type {BeforeRequestState, Hooks, Options} from 'ky';
 import type {StringifyOptions} from 'query-string';
 import queryString from 'query-string';
 import {tryCatch} from '~/utils/function';
@@ -24,31 +23,39 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
   }
 };
 
-const responseToCamelCase = async ({request, response}: AfterResponseState) => {
-  // A dropped body must reject, not pass as non-JSON, and Ky does not wrap a
-  // hook's read. A cancellation still rejects as itself: Ky's race with the
-  // signal rethrows its reason, whichever settles first. A dropped non-ok body
-  // keeps its status: `response.json()` below rejects too, so Ky raises its
-  // HTTPError. The read is a clone's because only `response.json()` applies a
-  // caller's `parseJson`.
-  await response
-    .clone()
-    .text()
-    .catch((error: Error) => {
-      if (isResponseSizeError(error)) {
+type ParseJson = NonNullable<Options['parseJson']>;
+
+/**
+ * Wraps a layer's JSON parsing in the camelCase conversion when snake_case is
+ * enabled.
+ */
+// Converting in parseJson, not an afterResponse hook, keeps the body read
+// inside Ky's own body-read race, which applies `timeout`: Ky bounds an
+// afterResponse hook by `totalTimeout` only, so a hook's read of a stalled
+// body never settled. A body that fails to parse delivers null on a 2xx, as
+// the schema's input; on an error status the rethrow leaves Ky's HTTPError
+// without data.
+export const getParseJson = (
+  isSnakeCaseEnabled?: boolean,
+  parseJson?: ParseJson
+): ParseJson | undefined =>
+  isSnakeCaseEnabled ?
+    async (text, context) => {
+      const [error, parsed] = await tryCatch(async () =>
+        toCamelCase(
+          await (parseJson ? parseJson(text, context) : JSON.parse(text))
+        )
+      );
+
+      if (error) {
+        if (context.response.ok) return null;
+
         throw error;
       }
 
-      if (response.ok) {
-        throw new NetworkError(request, {cause: error});
-      }
-    });
-  const [, camelCaseResponse] = await tryCatch(async () =>
-    Response.json(toCamelCase(await response.json()), response)
-  );
-
-  return camelCaseResponse ?? (response.ok ? Response.json(null) : undefined);
-};
+      return parsed;
+    }
+  : parseJson;
 
 export const getHooks = (
   isSnakeCaseEnabled?: boolean,
@@ -57,7 +64,6 @@ export const getHooks = (
   isSnakeCaseEnabled ?
     {
       ...hooks,
-      afterResponse: [responseToCamelCase, ...(hooks?.afterResponse ?? [])],
       beforeRequest: [requestToSnakeCase, ...(hooks?.beforeRequest ?? [])],
     }
   : hooks;
