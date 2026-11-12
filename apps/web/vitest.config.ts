@@ -24,11 +24,13 @@ const coldImportTestTimeout = 30_000;
 // as many workers as cores and stalls stories past their timeout on slower
 // cores, even with the machine otherwise idle. Half the cores each keeps the
 // total at or under the core count. The 12 keeps the browser page ceiling
-// Vitest applies on its own only when maxWorkers is unset.
-const workersPerPool = Math.min(
-  12,
-  Math.max(1, Math.floor(availableParallelism() / 2))
-);
+// Vitest applies on its own only when maxWorkers is unset. At four cores or
+// fewer, as on a CI runner, halving leaves too few workers and runs slower
+// than the default, which passes there, so the default stays.
+const maxUncappedCores = 4;
+const cores = availableParallelism();
+const workersPerPool =
+  cores > maxUncappedCores ? Math.min(12, Math.floor(cores / 2)) : undefined;
 
 const ignoreWarnings = ['React DevTools', 'React Router Future Flag Warning'];
 
