@@ -3,7 +3,7 @@
 # Doc-conformance suite for the shared worthiness step reference.
 #
 # .claude/skills/gaia/references/worthiness-step.md owns the dispatch and
-# verdict routing of the pre-audit worthiness step. This suite pins:
+# verdict routing of the worthiness step. This suite pins:
 #
 #   - each caller (the work lifecycle, /gaia-debt) holds an imperative line
 #     naming the reference before its audit step, and the merge workflow's
