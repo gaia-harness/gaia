@@ -111,13 +111,17 @@ check_plan_fixers_keep_requirements() {
 }
 
 check_merge_hold_on_requirement_conflict() {
-  local question
+  local question summary
   question="$(joined "$(range_of "$1/$PLANNER_REL" '**The merge question.**' '- **Post-clearance')")"
   need_text 'merge question' "$question" || return 1
   in_order "$question" \
     '- a deviation the summary surfaced needs a decision the human has not given;' \
-    'a finding or deviation saying the shipped app differs from the SPEC or its Required reading needs that decision unless the human already accepted it at the audit checkpoint,' \
-    'never as a follow-up;' || return 1
+    'a finding or deviation saying the shipped app differs from the SPEC or its Required reading needs that decision unless the human already accepted it at the audit checkpoint;' || return 1
+  summary="$(joined "$(range_of "$1/$PLANNER_REL" '- **Final summary.**' '**The merge question.**')")"
+  need_text 'final summary' "$summary" || return 1
+  in_order "$summary" \
+    'a finding or deviation saying the shipped app differs from the SPEC or its Required reading is listed as a decision to make, never as a follow-up,' \
+    'unless the human accepted it at the audit checkpoint.' || return 1
 }
 
 check_audit_fixer_keeps_requirements() {
@@ -126,8 +130,8 @@ check_audit_fixer_keeps_requirements() {
   need_text 'audit fixer dispatch prompt' "$region" || return 1
   in_order "$region" \
     'A repair never moves a label, role, message or URL away from what that SPEC or a document its Required reading names states, nor changes a test'"'"'s assertion of one to match the code;' \
-    'repair the code to the stated value instead,' \
-    'return the entry disputed with a reason that starts `conflicts with requirement:` and quotes the requirement line only when the code cannot be brought to it.' || return 1
+    'repair the code to the stated value instead;' \
+    'only when the code cannot be brought to it, return the entry disputed with a reason that starts `conflicts with requirement:` and quotes the requirement line.' || return 1
 }
 
 check_spec_audit_keeps_scaffold_checks() {
@@ -163,7 +167,8 @@ check_spec_audit_keeps_scaffold_checks() {
 }
 
 @test "red twin: a merge question that reads a SPEC conflict as a follow-up fails" {
-  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" ' a finding or deviation saying the shipped app differs from the SPEC or its Required reading needs that decision unless the human already accepted it at the audit checkpoint, and the summary lists it as a decision to make, never as a follow-up;' ''
+  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" ' a finding or deviation saying the shipped app differs from the SPEC or its Required reading needs that decision unless the human already accepted it at the audit checkpoint;' ''
+  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" '; a finding or deviation saying the shipped app differs from the SPEC or its Required reading is listed as a decision to make, never as a follow-up, unless the human accepted it at the audit checkpoint.' '.'
 }
 
 @test "the audit fixer disputes a repair that changes stated wording or its test" {
