@@ -106,10 +106,11 @@ check_plan_merge_question() {
   has "$question" 'names `no required check is declared`, which has none to hold on' || return 1
   has "$question" '`TIMEOUT` (required checks still pending after the wait)' || return 1
   lacks "$question" 'is still pending (`gh pr checks' || return 1
-  has "$question" 'has no later `Commit:` block for that phase, so no passing phase gate cleared the halt, whatever its answer was' || return 1
   lacks "$question" '`I did it`' || return 1
+  lacks "$question" '(HALTED)' || return 1
+  has "$question" 'nor is a phase halt, however it was answered: a halted phase commits only after its gate passes' || return 1
   has "$question" 'it needs no stated reason' || return 1
-  has "$question" 'says in plain words what went wrong on the pull request and what the user can do about it' || return 1
+  has "$question" 'says in plain words what is blocking the merge and what the user can do about it' || return 1
   has "$question" 'never quoting the condition or a `PROGRESS.md` label' || return 1
   has "$question" 'Residuals the human accepted at the audit checkpoint are no hold reason' || return 1
 }
@@ -159,7 +160,8 @@ check_hook_plan_prompt() {
 }
 
 @test "red twin: a halt hold keyed on how the halt was answered fails" {
-  red check_plan_merge_question "$PLANNER_REL" 'a `## Phase N, <title> (HALTED)` block in `{PLAN_DIR}/PROGRESS.md` has no later `Commit:` block for that phase, so no passing phase gate cleared the halt, whatever its answer was' 'a phase committed after a `(HALTED)` block in `{PLAN_DIR}/PROGRESS.md` whose answer was not `I did it` with `Rerun: passed`'
+  red check_plan_merge_question "$PLANNER_REL" '      - a deviation the summary surfaced' '      - a phase committed after a `(HALTED)` block in `{PLAN_DIR}/PROGRESS.md` whose answer was not `I did it` with `Rerun: passed`;
+      - a deviation the summary surfaced'
 }
 
 @test "red twin: a hold description free to quote internal labels fails" {
