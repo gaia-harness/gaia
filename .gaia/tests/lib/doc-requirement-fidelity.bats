@@ -137,8 +137,9 @@ check_spec_audit_keeps_scaffold_checks() {
   in_order "$lens" \
     'Where the SPEC or a document its Required reading names conflicts with a check the scaffold ships' \
     'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' \
-    'a check they are silent on is never removed,' \
-    'a security refusal is never narrowed to admit an absent secret in production.' || return 1
+    'an unset one may fall back to a strong per-process random value the app logs at startup' \
+    'while a set value under 32 characters is still refused.' \
+    'A check they are silent on is never removed.' || return 1
 }
 
 # ---------- tests ----------
@@ -180,5 +181,6 @@ check_spec_audit_keeps_scaffold_checks() {
 
 @test "red twin: a spec audit free to drop a whole scaffold check fails" {
   red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" 'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' 'propose removing the check'
-  red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" '; a check they are silent on is never removed,' '.'
+  red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" ' A check they are silent on is never removed.' ''
+  red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" 'while a set value under 32 characters is still refused.' 'and a set value of any length is accepted.'
 }
