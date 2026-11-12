@@ -440,7 +440,7 @@ in_round_worthiness_passes() {
   local fix_round
   fix_round="$(section "$FIXROUND" "$1" | sentences)" || return 1
   grep -qF -- 'Then run the worthiness step below, and return to step 1 on the new HEAD.' <<<"$fix_round" || return 1
-  grep -qF -- 'After a round that committed, and before the next member wave, the round'"'"'s orchestrator runs `.claude/skills/gaia/references/worthiness-step.md` `## The step`' <<<"$fix_round" || return 1
+  grep -qF -- 'After every round that committed, the window'"'"'s last included, and before the next member wave or the unit'"'"'s stop, the round'"'"'s orchestrator runs `.claude/skills/gaia/references/worthiness-step.md` `## The step`' <<<"$fix_round" || return 1
   grep -qF -- 'a `delete` settles as a residual' <<<"$fix_round" || return 1
   grep -qF -- 'stops the unit `needs-human`, naming it' <<<"$fix_round"
 }
@@ -448,7 +448,7 @@ in_round_worthiness_passes() {
 @test "the fix round judges a committing round's tests before the next member wave, with red twins" {
   in_round_worthiness_passes "$PAGE" || return 1
   in_round_worthiness_passes "$(page_with 's/Then run the worthiness step below, and return/Then return/')" && return 1
-  in_round_worthiness_passes "$(page_with 's/and before the next member wave/and after the closing round/')" && return 1
+  in_round_worthiness_passes "$(page_with 's/the window'"'"'s last included, //')" && return 1
   in_round_worthiness_passes "$(page_with 's/a `delete` settles as a residual/a `delete` asks the human/')" && return 1
   true
 }

@@ -2,7 +2,7 @@
 
 Contents: When it runs; The step (route, evaluate, fix, judge again, delete, file, report); The late pass; The tdd arm.
 
-This page owns the worthiness audit's dispatch and verdict routing. The work lifecycle, `/gaia-debt` and a plan run's orchestrator follow it, and the tdd skill follows its own arm. The evaluator's judgment is `.claude/agents/worthiness-evaluator.md`; the merge-time presence check that backs this step up is `wiki/decisions/Worthiness Presence Gate.md`.
+This page owns the worthiness audit's dispatch and verdict routing. The work lifecycle, `/gaia-debt`, a plan run's orchestrator and the audit loop unit follow it, and the tdd skill follows its own arm. The evaluator's judgment is `.claude/agents/worthiness-evaluator.md`; the merge-time presence check that backs this step up is `wiki/decisions/Worthiness Presence Gate.md`.
 
 ## When it runs
 
