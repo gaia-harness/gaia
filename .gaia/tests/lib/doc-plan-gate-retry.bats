@@ -274,9 +274,13 @@ check_in_phase_arm() {
     'the failure goes to the task that declares it when exactly one task declares it and check 2 under **Playwright test outside this phase** holds;' \
     'otherwise it halts under Stop conditions with no retry.' \
     'Record the retry as above, then dispatch a fresh executor for that task:' \
-    'the original task prompt, without its `Yield handoff:` line, then the line `A test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' \
+    'the original task prompt, without its `Yield handoff:` line, then the line `A test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
     'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
-    'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
+    'When the in-phase executor edits no file and its `Cause file:` names a file exactly one other task of this phase declares, the same retry goes on to that task:' \
+    'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then dispatch a fresh executor for it:' \
+    'Fix the cause within this task'"'"'s files, edit no other file, and say what you changed under ### Deviations from plan.' \
+    'then that executor'"'"'s ### Findings, then the failing test lines and their output.' \
+    'When the in-phase executor edits no file and names no such file, or the cause owner'"'"'s executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
     '- **Outside arm.**' || return 1
 }
 
@@ -324,7 +328,7 @@ check_ledger_documents_retry_block() {
   need_text 'phase findings ledger bullet' "$range" || return 1
   in_order "$range" \
     'A gate retry block is headed exactly `## Phase N, <title> (GATE RETRY k)`, its first content line is `Retry: k`, its second is `Kind: static` or `Kind: test`' \
-    'and it has no `Commit:` line. The gate-retry step writes it.' || return 1
+    'then a `Cause owner:` line when the in-phase arm sent the failure on, and it has no `Commit:` line. The gate-retry step writes it.' || return 1
 }
 
 check_summary_retries_line() {
@@ -528,11 +532,31 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm with no guard against weakening a test for another task's regression fails" {
-  red check_in_phase_arm 'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' 'The failing tests:`'
+  red check_in_phase_arm 'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' 'The failing tests:`'
 }
 
 @test "red twin: an in-phase arm that re-runs the gate after an executor edits no file fails" {
-  red check_in_phase_arm 'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run' ''
+  red check_in_phase_arm 'or the cause owner'"'"'s executor edits no file, the phase halts under Stop conditions with no re-run' ''
+}
+
+@test "red twin: an in-phase arm that halts instead of sending a sibling-owned cause to its owner fails" {
+  red check_in_phase_arm 'When the in-phase executor edits no file and its `Cause file:` names a file exactly one other task of this phase declares, the same retry goes on to that task:' ''
+}
+
+@test "red twin: an in-phase arm that forwards a cause file several tasks or another phase declare fails" {
+  red check_in_phase_arm 'names a file exactly one other task of this phase declares' 'names a file some task declares'
+}
+
+@test "red twin: an in-phase executor not asked to name the cause file fails" {
+  red check_in_phase_arm ', on a line Cause file: <repo-relative path> naming the file that holds it.' '.'
+}
+
+@test "red twin: a cause owner executor free to edit outside its files fails" {
+  red check_in_phase_arm 'Fix the cause within this task'"'"'s files, edit no other file,' 'Fix the cause,'
+}
+
+@test "red twin: a forwarded retry that records no cause owner fails" {
+  red check_in_phase_arm 'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then dispatch' 'dispatch'
 }
 
 @test "red twin: an in-phase arm whose no-edit halt cites the outside arm's Reason fails" {
@@ -573,6 +597,10 @@ resume_point() {
 
 @test "red twin: a ledger retry block carrying a Commit line fails" {
   red check_ledger_documents_retry_block 'and it has no `Commit:` line. The gate-retry step' 'and it has a `Commit:` line. The gate-retry step'
+}
+
+@test "red twin: a ledger retry block that does not document the cause owner line fails" {
+  red check_ledger_documents_retry_block ', then a `Cause owner:` line when the in-phase arm sent the failure on,' ','
 }
 
 @test "the final summary prints a gate retries line" {
