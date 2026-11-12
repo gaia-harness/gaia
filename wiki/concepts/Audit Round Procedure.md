@@ -231,7 +231,9 @@ After a gate repair, add `--extra-declared <RUN_FOLDER>/gate-<r>-<j>.paths` once
 } | sort -u | while IFS= read -r p; do git -C <RESOLVED_ROOT> add -A -- "$p"; done
 ```
 
-Then run the per-round verification, at the placeholder line of the snapshot block below: the [[Quality Gate]] when its skip logic says it applies, saving each attempt's output to `gate-<r>-<k>.log`. `bash .gaia/scripts/audit-gate-owed.sh choose --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --round <r>` picks the gate, `smaller` or `full`; [[Quality Gate]] is the smaller gate's home. A `smaller` round leaves the steps it skipped owed in `gate-owed.json`, and they run at the status post.
+When the staging block stages nothing (`git -C <RESOLVED_ROOT> diff --cached --quiet` exits 0), the fixer changed nothing, most often because every `fix` entry came back `disputed` or `cannot_fix`: skip the gate and the commit, run the **Round check** below, and end the round as **Zero `fix` entries** above does.
+
+Otherwise run the per-round verification, at the placeholder line of the snapshot block below: the [[Quality Gate]] when its skip logic says it applies, saving each attempt's output to `gate-<r>-<k>.log`. `bash .gaia/scripts/audit-gate-owed.sh choose --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --round <r>` picks the gate, `smaller` or `full`; [[Quality Gate]] is the smaller gate's home. A `smaller` round leaves the steps it skipped owed in `gate-owed.json`, and they run at the status post.
 
 **The reopened round.** A veto after a default stop, and a gate failure at the status post, each reopen a round: the bound hook records it when it admits the next unit, and the unit runs it fix-first, from step 1 with the fixer, never as a member wave. A veto reopens it from `vetoes.json`; a gate failure reopens it from `gate-failure.json`, which `audit-gate-owed.sh` writes into the run folder beside `gate-owed.json` (the steps still owed) and `gate-owed-<n>.log` (each run's output). `.gaia/scripts/audit-loop-eval.sh`'s `reopened-round` subcommand and `.gaia/scripts/audit-veto-lib.sh` own the conditions.
 <!-- gaia:maintainer-only:start -->

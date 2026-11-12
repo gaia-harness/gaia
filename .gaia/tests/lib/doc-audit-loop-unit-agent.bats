@@ -227,6 +227,8 @@ record_flags_accepted() {
   assert_pinned 'run `bash <root>/.gaia/scripts/audit-loop-eval.sh evaluate-round --root <root> --round <r>`. When `default_stop` is true, dispose every key in `default_stop_keys` `accept-residual`'
   assert_pinned 'each entry'"'"'s reason carrying that finding'"'"'s `failure_mode` from `audit-loop-eval.sh findings --root <root> --round <r>`'
   assert_pinned 'With no `fix` entry, run no fixer and make no commit: follow the page'"'"'s zero-fix rule and stop as it says.'
+  assert_pinned 'When the page'"'"'s staging block stages nothing (`git -C <root> diff --cached --quiet` exits 0), the fixer changed nothing: skip the gate and the commit, run round-check, and end the round as the page'"'"'s zero-fix rule does.'
+  assert_pinned 'or with `--commit none` on a round that makes no commit,'
   assert_pinned 'which ends the stop for the round: no key is then disposed `accept-residual`, every other in-scope finding defaults to `fix`'
   assert_pinned 'A threshold `waive-out-of-scope` may sit beside the residuals.'
   assert_pinned 'the check refuses `accept-residual` outside the stop or a recorded human accept (`accept-residual-not-eligible`). An architectural Minor on another round stops `needs-human`.'
