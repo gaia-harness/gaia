@@ -145,7 +145,7 @@ check_absence_and_cases() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
   need "$text" 'An absence requirement (a value never exposed, sent, stored or rendered) counts as a guard' || return 1
-  need "$text" 'the task that delivers its data path names a test asserting the absence at the lowest layer that shows it' || return 1
+  need "$text" 'the task that delivers its data path names a test asserting the absence while the value is present upstream' || return 1
   need "$text" 'A SPEC row listing several cases gets each case the closing flow does not assert asserted in this task'"'"'s named test; one test may hold them all.' || return 1
 }
 
@@ -211,8 +211,12 @@ check_absence_and_cases() {
   green check_absence_and_cases
 }
 
-@test "red twin: dropping the absence requirement fails" {
+@test "red twin: making the absence requirement optional fails" {
   red check_absence_and_cases "$PLANNER_REL" 'counts as a guard' 'is optional'
+}
+
+@test "red twin: an absence test with the value never present fails" {
+  red check_absence_and_cases "$PLANNER_REL" ' while the value is present upstream' ''
 }
 
 @test "red twin: asserting only one case of a multi-case row fails" {
