@@ -19,7 +19,7 @@ const baseSchema = z.object({
   SITE_URL: z.string(),
 });
 
-// An allowlist, so a variable added to `schema` stays server-only until it is
+// An allowlist, so a variable added to `baseSchema` stays server-only until it is
 // exposed here on purpose: `envClient` is serialized into every page's HTML.
 const clientSchema = baseSchema.pick({
   API_URL: true,
