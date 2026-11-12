@@ -22,7 +22,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   ROUND_REL="wiki/concepts/Audit Round Procedure.md"
-  SPEC_AUDIT_REL=".claude/skills/gaia/references/spec/audit.md"
+  LENS_PREAMBLE_REL=".claude/skills/gaia/references/spec/lens-dispatch.md"
   FIXER_RULE='The task doc and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code.'
 }
 
@@ -92,10 +92,16 @@ green() {
 
 # ---------- checks ----------
 
-# Both plan fixers free to edit code or test are told the requirement sources
+# Every plan fixer free to edit code or test is told the requirement sources
 # decide which side is wrong.
 check_plan_fixers_keep_requirements() {
-  local flow_arm named_fixer
+  local flow_arm named_fixer in_phase_arm outside_arm
+  in_phase_arm="$(joined "$(range_of "$1/$PLANNER_REL" '- **In-phase arm.**' '- **Outside arm.**')")"
+  need_text 'in-phase arm' "$in_phase_arm" || return 1
+  in_order "$in_phase_arm" 'update the test when this phase changed the asserted behavior on purpose,' "$FIXER_RULE" 'The failing tests:' || return 1
+  outside_arm="$(joined "$(range_of "$1/$PLANNER_REL" '- **Outside arm.**' '- **Re-run the gate.**')")"
+  need_text 'outside arm' "$outside_arm" || return 1
+  in_order "$outside_arm" 'update the test when this phase changed the asserted behavior on purpose,' "$FIXER_RULE" 'The failing tests:' || return 1
   flow_arm="$(joined "$(range_of "$1/$PLANNER_REL" '- **Flow-test arm.**' '- **In-phase arm.**')")"
   need_text 'flow-test arm' "$flow_arm" || return 1
   in_order "$flow_arm" 'Fix the cause in the code or in the test, whichever is wrong,' "$FIXER_RULE" 'The failing tests:' || return 1
@@ -110,7 +116,7 @@ check_merge_hold_on_requirement_conflict() {
   need_text 'merge question' "$question" || return 1
   in_order "$question" \
     '- a deviation the summary surfaced needs a decision the human has not given;' \
-    'a finding or deviation saying the shipped app differs from the SPEC or its Required reading always does,' \
+    'a finding or deviation saying the shipped app differs from the SPEC or its Required reading needs that decision unless the human already accepted it at the audit checkpoint,' \
     'never as a follow-up;' || return 1
 }
 
@@ -119,24 +125,31 @@ check_audit_fixer_keeps_requirements() {
   region="$(joined "$(range_of "$1/$ROUND_REL" '**Fixer dispatch.**' '**Classify the fixer from its file**')")"
   need_text 'audit fixer dispatch prompt' "$region" || return 1
   in_order "$region" \
-    'A repair never changes a label, role, message or URL that SPEC or a document its Required reading names states, nor a test'"'"'s assertion of one:' \
-    'that entry returns disputed with a reason that starts `conflicts with requirement:` and quotes the requirement line.' || return 1
+    'A repair never moves a label, role, message or URL away from what that SPEC or a document its Required reading names states, nor changes a test'"'"'s assertion of one to match the code;' \
+    'repair the code to the stated value instead,' \
+    'return the entry disputed with a reason that starts `conflicts with requirement:` and quotes the requirement line only when the code cannot be brought to it.' || return 1
 }
 
 check_spec_audit_keeps_scaffold_checks() {
   local lens
-  lens="$(grep -F -- '- **Factual grounding (id prefix `FG`).**' "$1/$SPEC_AUDIT_REL")"
-  need_text 'factual grounding lens' "$lens" || return 1
+  lens="$(grep -F -- 'conflicts with a check the scaffold ships' "$1/$LENS_PREAMBLE_REL")"
+  need_text 'shared lens preamble scaffold clause' "$lens" || return 1
   in_order "$lens" \
     'Where the SPEC or a document its Required reading names conflicts with a check the scaffold ships' \
     'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' \
-    'a check they are silent on is never removed.' || return 1
+    'a check they are silent on is never removed,' \
+    'a security refusal is never narrowed to admit an absent secret in production.' || return 1
 }
 
 # ---------- tests ----------
 
 @test "plan fixers let the requirement sources decide whether code or test is wrong" {
   green check_plan_fixers_keep_requirements
+}
+
+@test "red twin: an in-phase or outside arm free to rewrite a stated label fails" {
+  red check_plan_fixers_keep_requirements "$PLANNER_REL" "$FIXER_RULE If the cause is not in this task's files, edit nothing and say so under ### Findings. The failing tests:" "If the cause is not in this task's files, edit nothing and say so under ### Findings. The failing tests:"
+  red check_plan_fixers_keep_requirements "$PLANNER_REL" "$FIXER_RULE If the cause is not in this task's files, edit nothing and say so under ### Findings, on a line" "If the cause is not in this task's files, edit nothing and say so under ### Findings, on a line"
 }
 
 @test "red twin: a flow-test arm or named fixer free to rewrite a stated label fails" {
@@ -149,7 +162,7 @@ check_spec_audit_keeps_scaffold_checks() {
 }
 
 @test "red twin: a merge question that reads a SPEC conflict as a follow-up fails" {
-  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" ' a finding or deviation saying the shipped app differs from the SPEC or its Required reading always does, and the summary lists it as a decision to make, never as a follow-up;' ''
+  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" ' a finding or deviation saying the shipped app differs from the SPEC or its Required reading needs that decision unless the human already accepted it at the audit checkpoint, and the summary lists it as a decision to make, never as a follow-up;' ''
 }
 
 @test "the audit fixer disputes a repair that changes stated wording or its test" {
@@ -157,8 +170,8 @@ check_spec_audit_keeps_scaffold_checks() {
 }
 
 @test "red twin: an audit fixer free to change stated wording fails" {
-  red check_audit_fixer_keeps_requirements "$ROUND_REL" 'A repair never changes a label, role, message or URL' 'A repair may change a label, role, message or URL'
-  red check_audit_fixer_keeps_requirements "$ROUND_REL" 'that entry returns disputed with a reason that starts `conflicts with requirement:`' 'that entry is fixed anyway'
+  red check_audit_fixer_keeps_requirements "$ROUND_REL" 'A repair never moves a label, role, message or URL' 'A repair may move a label, role, message or URL'
+  red check_audit_fixer_keeps_requirements "$ROUND_REL" 'return the entry disputed with a reason that starts `conflicts with requirement:`' 'return the entry fixed anyway'
 }
 
 @test "the spec audit keeps a scaffold check a brief is silent on" {
@@ -166,6 +179,6 @@ check_spec_audit_keeps_scaffold_checks() {
 }
 
 @test "red twin: a spec audit free to drop a whole scaffold check fails" {
-  red check_spec_audit_keeps_scaffold_checks "$SPEC_AUDIT_REL" 'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' 'propose removing the check'
-  red check_spec_audit_keeps_scaffold_checks "$SPEC_AUDIT_REL" '; a check they are silent on is never removed.' '.'
+  red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" 'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' 'propose removing the check'
+  red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" '; a check they are silent on is never removed,' '.'
 }
