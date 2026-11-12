@@ -169,6 +169,9 @@ check_disputes_stay_with_the_fixer() {
   hands_off="$(grep -F -- '- **During the loop the main thread never hand-edits a file a finding names.**' "$1/$ROUND_REL")"
   need_text 'hands-off bullet' "$hands_off" || return 1
   in_order "$hands_off" 'Nor does the unit, and neither dispatches any agent but the round'"'"'s fixer to edit one.' || return 1
+  in_order "$(joined "$(cat "$1/$ROUND_REL")")" \
+    'or states the rule where the fixer can cite it: in the SPEC, in a `wiki/decisions/` page, or in the code or docs,' \
+    'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the SPEC row or Required-reading line that requires it' || return 1
 }
 
 # ---------- tests ----------
@@ -222,6 +225,8 @@ check_disputes_stay_with_the_fixer() {
 @test "red twin: a main thread free to ask about or recommend a disputed guard fails" {
   red check_disputes_stay_with_the_fixer "$MERGE_REL" 'the main thread asks no question of its own about it.' 'the main thread may ask its own question about it.'
   red check_disputes_stay_with_the_fixer "$MERGE_REL" 'recommends adding it only when it quotes the SPEC row' 'recommends adding it whenever it names the SPEC row'
+  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the SPEC row or Required-reading line that requires it' 'A question may recommend the guard'
+  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'cite it: in the SPEC, in a `wiki/decisions/` page, or in the code or docs,' 'cite it,'
 }
 
 @test "red twin: a veto satisfied by a one-off agent's edit, or one that bars committing the fixer's edits, fails" {
