@@ -230,7 +230,7 @@ check_block_has() {
 check_block_contents() {
   local file="$1"
   check_block_has "$file" "$S_YIELD" 'gaia_context_yield_limit' 'Yield handoff:' '(YIELD k)' || return 1
-  check_block_has "$file" "$S_RETRY" '(GATE RETRY 1)' 'Yield handoff:' 'Stop conditions' || return 1
+  check_block_has "$file" "$S_RETRY" '(GATE RETRY k)' 'Yield handoff:' 'Stop conditions' || return 1
   check_block_has "$file" "$S_SIMPLIFY" 'simplify-pass.md' '## Simplify pass' || return 1
   check_block_has "$file" "$S_FLOW" 'flow-coverage.sh' '--spec {SPEC_PATH}' '--flow-tests-out' 'flow-tests.tsv' '{PLAN_DIR}/PROGRESS.md' 'before the worthiness step' || return 1
   check_block_has "$file" "$S_WORTH" 'worthiness-step.md' 'flow checks' || return 1

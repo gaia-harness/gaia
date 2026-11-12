@@ -7,7 +7,7 @@
 # self-check in the task prompt template, the Stop conditions halt question,
 # the resume detection's dirty-tree question and the ledger record the retry
 # writes. A model executes that text, so an
-# edit that drops one clause (the attribution rule, the once-per-phase cap,
+# edit that drops one clause (the attribution rule, the per-kind cap,
 # the conservative first option, the resume-time dirty-tree question) would
 # ship silently. This suite pins each clause, and drives plan-resume-point.sh
 # over a ledger holding a retry record.
@@ -131,7 +131,7 @@ check_retry_scope() {
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
-    '**Phase gate retry (at most once per phase).**' \
+    '**Phase gate retry (one static retry and one test retry per phase).**' \
     'When the phase'"'"'s `pnpm typecheck` or `pnpm lint` fails, send each owning task'"'"'s errors to a fresh executor' \
     'Never fix it on the main thread.' \
     'Any other gate failure halts under Stop conditions with no retry.' || return 1
@@ -153,19 +153,40 @@ check_retry_cap() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '- **Halt instead.**' \
-    'An unattributable failure, or a gate failure in a phase that already has a `(GATE RETRY 1)` block in `{PLAN_DIR}/PROGRESS.md`, halts under Stop conditions.' || return 1
+    'An unattributable failure, or a gate failure of a kind this phase already retried (a `(GATE RETRY k)` block for this phase in `{PLAN_DIR}/PROGRESS.md` with that `Kind:` line), halts under Stop conditions.' || return 1
+}
+
+# A static fix (typecheck, lint) and a test fix each get their own retry, so a
+# lint fix never spends the retry a later test failure needs; two is the bound.
+check_retry_kinds() {
+  local block
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    '**Phase gate retry (one static retry and one test retry per phase).**' \
+    '- **Kind.**' \
+    'A retry whose failure set holds only typecheck and lint errors is a static retry; one whose failure set holds any failing test is a test retry.' \
+    'A phase runs each kind at most once, so a static fix never spends the retry a later test failure needs, and a phase retries at most twice.' \
+    '- **Attribute.**' \
+    '- **Halt instead.**' \
+    'a gate failure of a kind this phase already retried' \
+    '- **Record the retry.**' \
+    '`k` being 1 for the phase'"'"'s first retry and 2 for its second' \
+    '- **Flow-test arm.**' \
+    'using the phase'"'"'s test retry; a second failure halts under Stop conditions.' || return 1
 }
 
 check_retry_record() {
   local block record
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
-  record="$(record_lines "$block" '## Phase N, <title> (GATE RETRY 1)')"
+  record="$(record_lines "$block" '## Phase N, <title> (GATE RETRY k)')"
   need_text 'gate retry record' "$record" || return 1
-  [ "$(printf '%s\n' "$record" | wc -l | tr -d ' ')" -eq 4 ] || { printf 'the retry record is not four lines\n' >&2; return 1; }
-  [ "$(printf '%s\n' "$record" | sed -n 2p)" = 'Retry: 1' ] || { printf 'record line 2 is not "Retry: 1"\n' >&2; return 1; }
-  [ "$(printf '%s\n' "$record" | sed -n 3p | cut -c1-7)" = 'Tasks: ' ] || { printf 'record line 3 does not name Tasks:\n' >&2; return 1; }
-  [ "$(printf '%s\n' "$record" | sed -n 4p | cut -c1-10)" = 'Failures: ' ] || { printf 'record line 4 does not name Failures:\n' >&2; return 1; }
+  [ "$(printf '%s\n' "$record" | wc -l | tr -d ' ')" -eq 5 ] || { printf 'the retry record is not five lines\n' >&2; return 1; }
+  [ "$(printf '%s\n' "$record" | sed -n 2p)" = 'Retry: k' ] || { printf 'record line 2 is not "Retry: k"\n' >&2; return 1; }
+  [ "$(printf '%s\n' "$record" | sed -n 3p)" = 'Kind: <static or test>' ] || { printf 'record line 3 is not the Kind line\n' >&2; return 1; }
+  [ "$(printf '%s\n' "$record" | sed -n 4p | cut -c1-7)" = 'Tasks: ' ] || { printf 'record line 4 does not name Tasks:\n' >&2; return 1; }
+  [ "$(printf '%s\n' "$record" | sed -n 5p | cut -c1-10)" = 'Failures: ' ] || { printf 'record line 5 does not name Failures:\n' >&2; return 1; }
   lacks "$record" 'Commit:' || return 1
 }
 
@@ -221,7 +242,7 @@ check_outside_arm() {
     'naming each `file › test name`' \
     '(`known-green: phase <k> gate`)' \
     '(`known-green: merge-base`)' \
-    'at least one test in the same Playwright run passed, and the failure is raised inside a test body' \
+    'at least one test in the same run passed, and the failure is raised inside a test body' \
     'not by the web server start, global setup or a missing build.' \
     'declares a non-test file the phase changed' \
     '- **Halt instead.**' \
@@ -244,18 +265,18 @@ check_in_phase_arm() {
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
-    'When a failing Playwright test is in a file exactly one task of this phase declares and passes check 2 below, send it to that task (the in-phase arm below).' \
+    'When a failing test of any runner (unit, route, story or Playwright) is in a file exactly one task of this phase declares and passes check 2 below, send it to that task (the in-phase arm below).' \
     'Never fix it on the main thread.' \
     'Any other gate failure halts under Stop conditions with no retry.' \
-    'each `file › test name` of a failing in-phase Playwright test' \
+    'each `file › test name` of a failing in-phase test' \
     '- **In-phase arm.**' \
-    'For a failing Playwright test in a file a task of this phase declares, other than a flow test the flow-test arm takes, in place of **Attribute**, the spec file alone decides the owner:' \
+    'For a failing test in a file a task of this phase declares, other than a flow test the flow-test arm takes, in place of **Attribute**, the test file alone decides the owner:' \
     'the failure goes to the task that declares it when exactly one task declares it and check 2 under **Playwright test outside this phase** holds;' \
     'otherwise it halts under Stop conditions with no retry.' \
     'Record the retry as above, then dispatch a fresh executor for that task:' \
-    'the original task prompt, without its `Yield handoff:` line, then the line `A Playwright test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' \
+    'the original task prompt, without its `Yield handoff:` line, then the line `A test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings. The failing tests:`' \
     'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
-    'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a Playwright test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
+    'When the in-phase executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
     '- **Outside arm.**' || return 1
 }
 
@@ -290,7 +311,7 @@ check_stop_question() {
   in_order "$range" \
     'On any sub-agent failure, or a quality-gate failure the phase gate retry does not settle: STOP and surface to the user.' \
     '`## Phase N, <title> (HALTED)`' \
-    '`Gate retries: <0 or 1>`' \
+    '`Gate retries: <0, 1 or 2>`' \
     'then ask one `AskUserQuestion`' \
     '`Stay halted (Recommended)` first, which ends the run with the phase' \
     '`Discuss this`' \
@@ -302,7 +323,7 @@ check_ledger_documents_retry_block() {
   range="$(ledger_range "$1")"
   need_text 'phase findings ledger bullet' "$range" || return 1
   in_order "$range" \
-    'A gate retry block is headed exactly `## Phase N, <title> (GATE RETRY 1)`, its first content line is `Retry: 1`' \
+    'A gate retry block is headed exactly `## Phase N, <title> (GATE RETRY k)`, its first content line is `Retry: k`, its second is `Kind: static` or `Kind: test`' \
     'and it has no `Commit:` line. The gate-retry step writes it.' || return 1
 }
 
@@ -366,12 +387,24 @@ resume_point() {
   red check_retry_attribution 'names a file exactly one task declares.' 'names a file some task declares.'
 }
 
-@test "the retry runs at most once per phase and an unattributable failure halts" {
+@test "each retry kind runs at most once per phase and an unattributable failure halts" {
   green check_retry_cap
 }
 
-@test "red twin: a second retry in the same phase fails" {
-  red check_retry_cap 'already has a `(GATE RETRY 1)` block in' 'already has two `(GATE RETRY 1)` blocks in'
+@test "red twin: a second retry of the same kind in the same phase fails" {
+  red check_retry_cap 'a gate failure of a kind this phase already retried' 'a gate failure of a kind this phase already retried twice'
+}
+
+@test "a static retry and a test retry each run once per phase, so a static fix never spends the test retry" {
+  green check_retry_kinds
+}
+
+@test "red twin: one retry shared by static and test failures fails" {
+  red check_retry_kinds 'A phase runs each kind at most once, so a static fix never spends the retry a later test failure needs, and a phase retries at most twice.' 'A phase runs one retry, whatever its kind.'
+}
+
+@test "red twin: a flow-test arm that spends a shared retry fails" {
+  red check_retry_kinds 'using the phase'"'"'s test retry;' 'using the phase'"'"'s one retry;'
 }
 
 @test "the retry record carries no Commit line" {
@@ -379,7 +412,11 @@ resume_point() {
 }
 
 @test "red twin: a retry record carrying a Commit line fails" {
-  red check_retry_record $'Retry: 1\n            Tasks: <task-<T>.md' $'Retry: 1\n            Commit: abc1234'
+  red check_retry_record $'Kind: <static or test>\n            Tasks: <task-<T>.md' $'Kind: <static or test>\n            Commit: abc1234'
+}
+
+@test "red twin: a retry record that does not say which kind ran fails" {
+  red check_retry_record $'Retry: k\n            Kind: <static or test>\n' $'Retry: k\n'
 }
 
 @test "the retry re-dispatches only owning tasks, fresh, with the original prompt then the gate output" {
@@ -427,7 +464,7 @@ resume_point() {
 }
 
 @test "red twin: an outside arm that retries a harness or environment failure fails" {
-  red check_outside_arm 'at least one test in the same Playwright run passed, and ' ''
+  red check_outside_arm 'at least one test in the same run passed, and ' ''
 }
 
 @test "red twin: an outside arm sent to a test author fails" {
@@ -462,8 +499,12 @@ resume_point() {
   red check_outside_arm ' followed by its `known-green: phase <k> gate` or `known-green: merge-base`' ''
 }
 
-@test "an in-phase Playwright test goes to the one task that declares it, once, else halts" {
+@test "an in-phase test of any runner goes to the one task that declares it, once, else halts" {
   green check_in_phase_arm
+}
+
+@test "red twin: an in-phase arm limited to Playwright tests fails" {
+  red check_in_phase_arm 'When a failing test of any runner (unit, route, story or Playwright) is in a file' 'When a failing Playwright test is in a file'
 }
 
 @test "red twin: an in-phase arm that accepts a spec several tasks declare fails" {
@@ -475,7 +516,7 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm that runs Attribute over the whole Playwright output fails" {
-  red check_in_phase_arm ' in place of **Attribute**, the spec file alone decides the owner:' ''
+  red check_in_phase_arm ' in place of **Attribute**, the test file alone decides the owner:' ''
 }
 
 @test "red twin: an in-phase arm that records no retry fails" {
@@ -495,7 +536,7 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm whose no-edit halt cites the outside arm's Reason fails" {
-  red check_in_phase_arm ', `Reason: a Playwright test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' ', under the Reason above.'
+  red check_in_phase_arm ', `Reason: a test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' ', under the Reason above.'
 }
 
 @test "red twin: an in-phase arm whose lines do not apply only to their own failures fails" {
