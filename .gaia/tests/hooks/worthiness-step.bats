@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Suite for .gaia/scripts/worthiness-step.sh: routing, recording, settling,
-# the filer finding and pruning for the pre-audit worthiness step.
+# the filer finding and pruning for the worthiness step.
 #
 # Every case builds a fixture repo with a real merge base. The script under
 # test is copied into the fixture's own .gaia/scripts, so the tree holding the
