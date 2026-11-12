@@ -120,7 +120,7 @@ check_audit_fixer_keeps_requirements() {
   need_text 'audit fixer dispatch prompt' "$region" || return 1
   in_order "$region" \
     'A repair never changes a label, role, message or URL that SPEC or a document its Required reading names states, nor a test'"'"'s assertion of one:' \
-    'that entry returns disputed with a reason that starts `conflicts with requirement:` and quotes the line.' || return 1
+    'that entry returns disputed with a reason that starts `conflicts with requirement:` and quotes the requirement line.' || return 1
 }
 
 check_spec_audit_keeps_scaffold_checks() {
@@ -128,9 +128,9 @@ check_spec_audit_keeps_scaffold_checks() {
   lens="$(grep -F -- '- **Factual grounding (id prefix `FG`).**' "$1/$SPEC_AUDIT_REL")"
   need_text 'factual grounding lens' "$lens" || return 1
   in_order "$lens" \
-    'Where the SPEC or brief conflicts with a check the scaffold ships' \
-    'propose only the narrowest repair that satisfies what the brief states, keeping the rest of the check' \
-    'a brief silent on a check never removes it.' || return 1
+    'Where the SPEC or a document its Required reading names conflicts with a check the scaffold ships' \
+    'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' \
+    'a check they are silent on is never removed.' || return 1
 }
 
 # ---------- tests ----------
@@ -149,7 +149,7 @@ check_spec_audit_keeps_scaffold_checks() {
 }
 
 @test "red twin: a merge question that reads a SPEC conflict as a follow-up fails" {
-  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" ' a finding or deviation saying the shipped app differs from the SPEC or its Required reading always does, and the summary lists it as such, never as a follow-up;' ''
+  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" ' a finding or deviation saying the shipped app differs from the SPEC or its Required reading always does, and the summary lists it as a decision to make, never as a follow-up;' ''
 }
 
 @test "the audit fixer disputes a repair that changes stated wording or its test" {
@@ -166,6 +166,6 @@ check_spec_audit_keeps_scaffold_checks() {
 }
 
 @test "red twin: a spec audit free to drop a whole scaffold check fails" {
-  red check_spec_audit_keeps_scaffold_checks "$SPEC_AUDIT_REL" 'propose only the narrowest repair that satisfies what the brief states, keeping the rest of the check' 'propose removing the check'
-  red check_spec_audit_keeps_scaffold_checks "$SPEC_AUDIT_REL" '; a brief silent on a check never removes it.' '.'
+  red check_spec_audit_keeps_scaffold_checks "$SPEC_AUDIT_REL" 'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' 'propose removing the check'
+  red check_spec_audit_keeps_scaffold_checks "$SPEC_AUDIT_REL" '; a check they are silent on is never removed.' '.'
 }

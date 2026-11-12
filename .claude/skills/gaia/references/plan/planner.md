@@ -335,7 +335,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
       **The merge question.** After the cost line, wait on the required checks with `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --until-green --attempts 20`; exit 2 is a refusal, not a verdict, so stop and say so. Then ask one `AskUserQuestion` with `Merge it` and `Hold the merge`, the recommended option first. Recommend `Merge it` when the merge is ready; it needs no stated reason. Recommend `Hold the merge` only when one of these holds, and its description then says in plain words what is blocking the merge and what the user can do about it (`The required check "lint" failed. Fix it, push, then resume the plan run to merge.`), never quoting this list's wording, a verdict token such as `CHECK_FAILED`, or a `PROGRESS.md` label:
       - the wait's verdict is `CHECK_FAILED`, `CONFLICTING` or `CLOSED`, or `TIMEOUT` (required checks still pending after the wait), except a `TIMEOUT` whose `GREEN was not proved` line names `no required check is declared`, which has none to hold on;
-      - a deviation the summary surfaced needs a decision the human has not given; a finding or deviation saying the shipped app differs from the SPEC or its Required reading always does, and the summary lists it as such, never as a follow-up;
+      - a deviation the summary surfaced needs a decision the human has not given; a finding or deviation saying the shipped app differs from the SPEC or its Required reading always does, and the summary lists it as a decision to make, never as a follow-up;
       - the residual count read's `.ask` is non-zero and no human answered the residual question;
       - the late pass settled a `fix` or `delete` verdict as a residual with no human answer.
 
