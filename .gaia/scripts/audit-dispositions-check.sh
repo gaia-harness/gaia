@@ -54,9 +54,9 @@
 #                               divert or accept-residual in an earlier round; check-all
 #                               without --snapshot-dir also prints it for an unsatisfied veto
 #                               whose round is past every dispositions file
-#   undecided                   (check-all without --snapshot-dir, and undecided after a unit stop that can
-#                               leave the round without its file) an open-round finding with no honored triage
-#                               mark, same-round row, earlier file|divert, or earlier non-security accept-residual
+#   undecided                   (check-all without --snapshot-dir; undecided after a stop that can skip
+#                               the file) an open-round finding with no honored triage mark, same-round row,
+#                               earlier file|divert, or earlier accept-residual (void once security-class)
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
 #                               needs one stops the unit with needs-human)
 #   missing-basis               waive-out-of-scope without basis triage-threshold|cross-remit
