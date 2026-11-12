@@ -277,11 +277,12 @@ check_in_phase_arm() {
     'the original task prompt, without its `Yield handoff:` line, then the line `A test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
     'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
     'When the in-phase executor edits no file and its `Cause file:` names a file exactly one other task of this phase declares, the same retry goes on to that task:' \
-    'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then dispatch a fresh executor for it:' \
+    'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then, once any executor this retry already sent that task has returned, dispatch a fresh executor for it:' \
     'Fix the cause within this task'"'"'s files, edit no other file, and say what you changed under ### Deviations from plan.' \
-    'then that executor'"'"'s ### Findings, then the failing test lines and their output.' \
+    'then the in-phase executor'"'"'s ### Findings, then the failing test lines and their output.' \
     'When the in-phase executor edits no file and names no such file, or the cause owner'"'"'s executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
-    '- **Outside arm.**' || return 1
+    '- **Outside arm.**' \
+    '- **Re-run the gate.** Once every re-dispatched executor returns, a cause owner'"'"'s included,' || return 1
 }
 
 # The planner never writes a gate's retry or halt rule into a step of its own:
@@ -555,8 +556,16 @@ resume_point() {
   red check_in_phase_arm 'Fix the cause within this task'"'"'s files, edit no other file,' 'Fix the cause,'
 }
 
+@test "red twin: a forward that runs beside the owner's own executor in the same retry fails" {
+  red check_in_phase_arm ' once any executor this retry already sent that task has returned,' ''
+}
+
+@test "red twin: a gate re-run that does not wait for a forwarded cause owner fails" {
+  red check_in_phase_arm ' a cause owner'"'"'s included,' ''
+}
+
 @test "red twin: a forwarded retry that records no cause owner fails" {
-  red check_in_phase_arm 'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then dispatch' 'dispatch'
+  red check_in_phase_arm 'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then,' 'then,'
 }
 
 @test "red twin: an in-phase arm whose no-edit halt cites the outside arm's Reason fails" {
