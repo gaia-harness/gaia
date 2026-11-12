@@ -25,6 +25,20 @@ const clientSchema = schema.pick({
 
 export const env = schema.parse(process.env);
 
+// The secret signs every session cookie, so a short one is guessable: 32
+// random hex or base64 characters carry at least 128 bits. Production only,
+// so the dev value in `.env.example` keeps working.
+const minimumProductionSessionSecretLength = 32;
+
+if (
+  env.NODE_ENV === 'production' &&
+  env.SESSION_SECRET.length < minimumProductionSessionSecretLength
+) {
+  throw new Error(
+    `SESSION_SECRET must be at least ${minimumProductionSessionSecretLength} characters in production`
+  );
+}
+
 export const envClient = clientSchema.parse(process.env);
 
 type Environment = z.infer<typeof clientSchema>;

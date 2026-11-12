@@ -80,7 +80,7 @@ if (!existsSync(serverBuildPath)) {
 const environmentDefaults = {
   API_URL: 'http://localhost:1',
   NODE_ENV: 'production',
-  SESSION_SECRET: 'ssr-isolation-check-secret',
+  SESSION_SECRET: 'ssr-isolation-check-session-secret-value',
   SITE_URL: 'http://localhost',
   npm_package_version: '0.0.0',
 };

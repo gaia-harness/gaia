@@ -75,6 +75,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **The PR title check runs when `--repo` names your own repository:** `gh pr create` or `gh pr edit` with `-R`/`--repo` skipped the title lint whatever repository it named, and the prefix spelling `gh -R <repo> pr create` was never read; now only a value naming another repository leaves the title to that repository's CI (#3419)
 - **A plan build recommends merging when it is ready, and always asks first:** the plan's merge question recommended `Hold the merge` every time, which read as "not safe to merge" on a ready build; it now waits for the required checks, then recommends `Merge it` unless a stated reason, such as a failed required check, calls for holding. A plan whose audit continued in a new session skipped the plan's closing steps and merged without asking; the continuation prompt now returns it to the plan, so the merge question and the pre-merge summary and wiki refresh run first (#3442)
 - **Known test gaps now get their tests:** when the worthiness step finds a flow error path whose test belongs in a route test or real-server check, its fixer may now write that test, and the flow test is judged again. Before, every such gap ended unfixed as a residual. A guard, refusal or validation the audit fixer adds now comes with a test that drives it into its failing state (#3444).
 - **The worthiness review flags more tests that catch nothing:** a test that can never fail or only counts requests, and the same shared error mapping tested again for each route that uses it (#3444).
@@ -133,6 +134,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Security
 
+- **A production start refuses a short `SESSION_SECRET`:** the web template's server now throws at startup when `NODE_ENV` is `production` and the secret that signs session cookies is under 32 characters, so an empty or short placeholder value can no longer boot. Development keeps `.env.example`'s value. If your production secret is shorter, replace it before deploying, for example with `openssl rand -hex 32` (#3445)
 - **glob:** Storybook's docgen plugin now resolves glob 14.0.3 through a security floor, closing GHSA-3g3m-2fjr-6pw4 (medium). It is a development-time dependency and never reaches the built app (#3204)
 - **GAIA ships its own React Doctor skill, and react-doctor is pinned:** the skill no longer answers `/doctor` (Claude Code's built-in) or fetches instructions from react-doctor's website at run time, and every react-doctor run, from the skill or the frontend audit, uses the version in `.gaia/react-doctor-version` (0.9.22) instead of `@latest`. The install no longer runs react-doctor's installer, so it touches no tracked file. Merging the update through Claude replaces the installed skill; after a merge made elsewhere, run `bash .gaia/scripts/install-react-doctor.sh --refresh` (#3285)
 

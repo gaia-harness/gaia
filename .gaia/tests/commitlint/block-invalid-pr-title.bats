@@ -153,6 +153,33 @@ assert_allowed() {
   assert_allowed
 }
 
+# run_hook_in_home <command>: runs the hook from a sandbox repository whose
+# only remote is acme/widget, so the home repository name does not depend on the runner's
+# own checkout.
+run_hook_in_home() {
+  local payload home_repository="$BATS_TEST_TMPDIR/home"
+  if [ ! -d "$home_repository/.git" ]; then
+    git init -q "$home_repository"
+    git -C "$home_repository" remote add origin https://github.com/acme/widget.git
+  fi
+  payload=$(jq -nc --arg command "$1" '{tool_name: "Bash", tool_input: {command: $command}}')
+  run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$home_repository" "$payload" "$HOOK"
+}
+
+@test "--repo naming the home repository is checked, another repository is not" {
+  run_hook_in_home "gh pr create --repo acme/widget --title \"bogus: x\" --body x"
+  assert_blocked
+  run_hook_in_home "gh pr create --repo other/repo --title \"bogus: x\" --body x"
+  assert_allowed
+}
+
+@test "the prefix form gh -R <repo> pr create is read" {
+  run_hook_in_home "gh -R acme/widget pr create --title \"bogus: x\" --body x"
+  assert_blocked
+  run_hook_in_home "gh -R other/repo pr create --title \"bogus: x\" --body x"
+  assert_allowed
+}
+
 @test "other gh pr verbs are allowed" {
   run_hook 'gh pr view 12 --json title'
   assert_allowed
