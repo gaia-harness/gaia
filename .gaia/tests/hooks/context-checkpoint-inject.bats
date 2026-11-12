@@ -5,7 +5,9 @@
 # .claude/doctrine/context-checkpoint.md verbatim) the first time the fresh
 # reading is at or past red, and once more at each of fire and skull; silent for
 # sub-agents, stale or missing readings, marked bands, an oversize or missing
-# doctrine file, and a session its branch's audit-loop state file records.
+# doctrine file, and a session its branch's audit-loop state file shows the
+# loop is about to ask (a live unit, or an answered checkpoint with no later
+# unit).
 #
 # Every fixture repo carries its own copy of the hook, the libraries it loads
 # and the real doctrine file. HOOK_SOURCE_PATH points the suite at another copy
@@ -260,26 +262,25 @@ seed_loop_entry() {
   fires_ok red "$RED"
 }
 
-@test "a units entry carrying this session in the cwd branch's state file silences; another session id emits" {
+@test "this session's latest unit silences while its unit file is absent; once the unit returns the hook emits" {
+  local run_directory
   alf_branch feat/loop-units
+  run_directory="$(gaia_loop_run_directory "$MAIN_ROOT" feat/loop-units)"
   seed_loop_entry units "$SID"
   write_reading "$RED"
   invoke "$(payload)"
   silent_unmarked_ok
 
-  alf_state_edit '.history.units[0].session_id = "other-session"'
+  mkdir -p "$run_directory"
+  printf '{}\n' >"$run_directory/unit-1.json"
   invoke "$(payload)"
-  fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/loop-units/STATE.md"
+  fires_ok red "$RED" "$run_directory/STATE.md"
 }
 
-@test "a checkpoints entry carrying this session in the cwd branch's state file silences; another session id emits" {
+@test "an unanswered checkpoint carrying this session in the cwd branch's state file emits" {
   alf_branch feat/loop-checkpoints
   seed_loop_entry checkpoints "$SID"
   write_reading "$RED"
-  invoke "$(payload)"
-  silent_unmarked_ok
-
-  alf_state_edit '.history.checkpoints[0].session_id = "other-session"'
   invoke "$(payload)"
   fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/loop-checkpoints/STATE.md"
 }
@@ -416,6 +417,22 @@ seed_loop_entry() {
   fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/answered/STATE.md"
 }
 
+@test "an answered checkpoint carrying this session with a later unit that returned emits" {
+  local run_directory
+  alf_branch feat/answered-then-unit
+  run_directory="$(gaia_loop_run_directory "$MAIN_ROOT" feat/answered-then-unit)"
+  alf_seed_state '{}'
+  alf_state_edit '.history.checkpoints = [{index: 1, at_round: 3, reason: "context", session_id: $session_id}]
+    | .allowance.answers = [{checkpoint: 1, kind: "grant", n: 3, at: "2026-01-01T00:00:00Z", session_id: $session_id}]
+    | .history.units = [{unit: 2, start_round: 4, k: 3, through_round: 6, after_checkpoint: 1,
+        admitted_on: "grant", session_id: $session_id}]' --arg session_id "$SID"
+  mkdir -p "$run_directory"
+  printf '{}\n' >"$run_directory/unit-2.json"
+  write_reading "$RED"
+  invoke "$(payload)"
+  fires_ok red "$RED" "$run_directory/STATE.md"
+}
+
 @test "a jump from below red to fire emits fire once and marks red too" {
   write_reading $((RED - 1))
   invoke "$(payload)"
@@ -538,13 +555,18 @@ seed_loop_entry() {
   invoke_shimmed "$(payload)"
   silent_unmarked_ok
   fork_budget_ok
+
+  mkdir -p "$(gaia_loop_run_directory "$MAIN_ROOT" feat/budget)"
+  printf '{}\n' >"$(gaia_loop_run_directory "$MAIN_ROOT" feat/budget)/unit-1.json"
+  invoke_shimmed "$(payload)"
+  fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/budget/STATE.md"
+  fork_budget_ok
 }
 
 @test "fork budget red twin: a hook that calls gaia_loop_key on the firing path logs git" {
   make_shim
   alf_branch feat/budget-twin
-  make_mutant '[ "$verdict" = emit ] || exit 0' '[ "$verdict" = emit ] || exit 0
-gaia_loop_key "$cwd" >/dev/null || true' "$MUTANT"
+  make_mutant '  emit) ;;' '  emit) gaia_loop_key "$cwd" >/dev/null || true ;;' "$MUTANT"
   write_reading "$RED"
   invoke_shimmed "$(payload)" "$MUTANT"
   fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/budget-twin/STATE.md"

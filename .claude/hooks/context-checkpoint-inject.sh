@@ -12,11 +12,17 @@
 #
 # Silent for: a sub-agent payload (an `agent_id` key), any event other than
 # PostToolUse, a reading that is not fresh, a band already marked, a missing or
-# oversize doctrine file, and a session the audit loop records. The audit loop
-# owns its own checkpoint: a session is in it when the non-closed state file for
-# the payload cwd's branch key has a history.units[] or history.checkpoints[]
-# entry carrying this session id. Only that one file is read; a state file on
-# another branch never silences.
+# oversize doctrine file, and a session the audit loop is about to ask. That
+# is read from the non-closed state file for the payload cwd's branch key, in
+# two states: the latest history.units[] entry carrying this session id has no
+# unit-<u>.json in the branch's run folder (a unit is live, and an injection
+# mid-unit would spend the band where Claude cannot act on it), or the latest
+# history.checkpoints[] entry carries this session id, is answered, and no unit
+# was admitted after it (the human just answered and a dispatch is next). A
+# returned unit or an unanswered checkpoint does not silence. Only that one
+# file is read; a state file on another branch never silences. A unit that
+# dies without writing its file reads as live until the next dispatch; the
+# dead unit already stops the main thread for the human.
 #
 # Exit ladder, cheapest first, because every tool call pays it: raw pattern
 # checks on the payload (event, agent_id, session id, cwd) with bash only; the
@@ -263,7 +269,9 @@ fi
 
 # One jq: confirm the raw checks against a real parse of the payload, and run
 # the audit-loop predicate over the cwd branch's non-closed state file. Any
-# mismatch, parse failure, or in-loop answer emits nothing.
+# mismatch, parse failure, or in-loop answer emits nothing. `unit <u>` names
+# this session's latest unit, live until its unit-<u>.json exists; the file
+# test is a bash builtin, so the predicate costs no process beyond this jq.
 state_arguments=(--argjson state '[]')
 run_directory=""
 if [ -n "$key" ]; then
@@ -274,14 +282,29 @@ if [ -n "$key" ]; then
 fi
 # shellcheck disable=SC2016 # jq variables, not shell expansions
 verdict=$(jq -r --arg session_id "$session_id" --arg working_directory "$cwd" ${state_arguments[@]+"${state_arguments[@]}"} '
-  def recorded:
-    [$state[] | (.history.units[]?, .history.checkpoints[]?)
-      | select(type == "object" and .session_id == $session_id)] | length > 0;
+  def loop_verdict:
+    ($state[0] // {}) as $loop
+    | [($loop.history.units? // [])[]? | select(type == "object")] as $units
+    | ([($loop.history.checkpoints? // [])[]? | select(type == "object")] | last) as $checkpoint
+    | if $checkpoint != null and $checkpoint.session_id == $session_id
+         and any(($loop.allowance.answers? // [])[]?; type == "object" and .checkpoint == $checkpoint.index)
+         and all($units[]; (.after_checkpoint | type) == "number" and .after_checkpoint < $checkpoint.index)
+      then "in-loop"
+      else ([$units[] | select(.session_id == $session_id)] | last) as $unit
+        | if $unit == null then "emit"
+          elif ($unit.unit | type) == "number" and $unit.unit >= 1 and $unit.unit == ($unit.unit | floor)
+          then "unit \($unit.unit)"
+          else "in-loop" end
+      end;
   if type == "object" and .hook_event_name == "PostToolUse" and (has("agent_id") | not)
      and .session_id == $session_id and .cwd == $working_directory
-  then (if recorded then "in-loop" else "emit" end)
+  then loop_verdict
   else "mismatch" end' <<<"$payload") || exit 0
-[ "$verdict" = emit ] || exit 0
+case "$verdict" in
+  "unit "?*) [ -n "$run_directory" ] && [ -f "$run_directory/unit-${verdict#unit }.json" ] || exit 0 ;;
+  emit) ;;
+  *) exit 0 ;;
+esac
 
 if [ -n "$key" ] && [ -n "$run_directory" ] && [ "$key" != "$default_branch" ]; then
   save_path="$run_directory/STATE.md"
