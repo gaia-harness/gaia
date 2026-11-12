@@ -426,6 +426,37 @@ check_pass_orders_uncertain_and_reports_skips() {
   [ "$status" -ne 0 ]
 }
 
+# ---------- sole lower-layer driver ----------
+
+# check_evaluator_keeps_sole_driver <file>: the evaluator never proposes removing
+# the only test below the browser layer that drives a guard into its failing
+# state on the strength of a browser or flow test, or of a sibling also proposed
+# for removal.
+check_evaluator_keeps_sole_driver() {
+  has_all "$1" \
+    'is the only test below the browser layer (`wiki/decisions/Test Layering.md`)' \
+    'driving a guard, refusal or validation into its failing state is never' \
+    'proposed for `drop`, `merge` or `demote` on the strength of a browser test or' \
+    'a flow test, even when it asserts the same property, nor on a sibling also' \
+    'proposed for removal; propose `keep-both` with its `bug`, or nothing.'
+}
+
+@test "the evaluator never proposes removing the only lower-layer test driving a guard on a browser or flow sibling" {
+  check_evaluator_keeps_sole_driver "$EVALUATOR"
+}
+
+@test "red twin: a prompt without the sole-driver rule, or one that allows a drop, fails" {
+  local copy="$BATS_TEST_TMPDIR/evaluator.md"
+  local section='**Sole lower-layer driver.**'
+  awk -v marker="$section" 'index($0, marker) { skip = 1 } skip && /^$/ { skip = 0; next } !skip' "$EVALUATOR" >"$copy"
+  cmp -s "$EVALUATOR" "$copy" && return 1
+  run check_evaluator_keeps_sole_driver "$copy"
+  [ "$status" -ne 0 ]
+  mutate "$EVALUATOR" 'proposed for `drop`, `merge` or `demote`' 'proposed for `merge` or `demote`' "$copy"
+  run check_evaluator_keeps_sole_driver "$copy"
+  [ "$status" -ne 0 ]
+}
+
 @test "the page names no working-document id" {
   run grep -nE 'SPEC-[0-9]+|UAT-[0-9]+|PLAN-[0-9]+' "$REF"
   [ "$status" -eq 1 ]

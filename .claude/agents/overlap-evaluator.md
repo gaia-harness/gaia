@@ -120,6 +120,13 @@ the sibling asserts the same property for the same actor and action, so write
 `property`, `actor` and `action` precisely: the human reads them beside the
 sibling to decide.
 
+**Sole lower-layer driver.** The check does not enforce this one. A test that
+is the only test below the browser layer (`wiki/decisions/Test Layering.md`)
+driving a guard, refusal or validation into its failing state is never
+proposed for `drop`, `merge` or `demote` on the strength of a browser test or
+a flow test, even when it asserts the same property, nor on a sibling also
+proposed for removal; propose `keep-both` with its `bug`, or nothing.
+
 ## How you run
 
 1. Get the changed list and read the changed tests.
