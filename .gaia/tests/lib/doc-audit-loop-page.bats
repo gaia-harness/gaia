@@ -396,12 +396,16 @@ fixer_template_passes() {
   section "$FIXROUND" "$1" | grep -qF -- 'promoted-pages.txt exists it lists the wiki pages this PR promoted'
 }
 
-# digest_statement_passes <page>: rc 0 when the late worthiness fix statement
-# says its re-dispatch is Full and never says Light.
+# digest_statement_passes <page>: rc 0 when the late worthiness statement
+# folds nothing in, settling the test as a residual because its re-dispatch
+# would be Full, and never says Light.
 digest_statement_passes() {
   local statement
-  statement="$(section '^#### Applying the audit.s own Minor findings' "$1" | grep -F -- 'A late worthiness fix')" || return 1
-  grep -qF -- 'Its re-dispatch is Full' <<<"$statement" || return 1
+  statement="$(section '^#### Applying the audit.s own Minor findings' "$1" | grep -F -- 'A late worthiness verdict')" || return 1
+  grep -qF -- 'folds nothing in' <<<"$statement" || return 1
+  grep -qF -- 'recommends settling a branch test it would repair or delete as a residual' <<<"$statement" || return 1
+  grep -qF -- 'recommends the repair' <<<"$statement" && return 1
+  grep -qF -- 'Full under the Hard-Full floor' <<<"$statement" || return 1
   grep -qF -- 'Light' <<<"$statement" && return 1
   true
 }
@@ -427,10 +431,12 @@ reconcile_passes() {
   true
 }
 
-@test "a late worthiness fix re-dispatches Full: the statement passes, and a seeded Light fails" {
+@test "a late worthiness verdict folds nothing in by default and recommends a residual: the statement passes, and a seeded fold or Light fails" {
   digest_statement_passes "$PAGE" || return 1
-  digest_statement_passes "$(page_with 's/Its re-dispatch is Full/Its re-dispatch is Light/')" && return 1
-  digest_statement_passes "$(page_with 's/Its re-dispatch is Full, since/Its re-dispatch is Full on Light, since/')" && return 1
+  digest_statement_passes "$(page_with 's/folds nothing in/is recommended/')" && return 1
+  digest_statement_passes "$(page_with 's/recommends settling a branch test it would repair or delete as a residual/recommends the repair/')" && return 1
+  digest_statement_passes "$(page_with 's/recommends settling a branch test it would repair or delete as a residual/recommends the repair, and a human may settle it as a residual/')" && return 1
+  digest_statement_passes "$(page_with 's/Full under the Hard-Full floor/Light under the Hard-Full floor/')" && return 1
   true
 }
 
