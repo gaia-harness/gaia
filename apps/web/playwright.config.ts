@@ -34,6 +34,13 @@ const devUrl = `http://localhost:${ports.devPort}`;
 // Storybook server, a cold `tsx` launch under the same load, shares the budget.
 const WEB_SERVER_START_TIMEOUT_MILLISECONDS = 45_000;
 
+// A critical flow drives several users through many full page loads, each a
+// dev-mode module waterfall, plus a cold first load on each worker's own
+// `workerServer`, so a flow runs close to Playwright's 30-second default and
+// overruns it on a loaded runner. Three times the default, the factor
+// `test.slow()` applies, fits a flow on a loaded runner without hiding a hang.
+const FLOW_TEST_TIMEOUT_MILLISECONDS = 90_000;
+
 /**
  * You can change this to "true" this to test in multiple browsers if you prefer.
  * Testing multiple browsers can significantly increase test time on CI.
@@ -82,6 +89,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testMatch: ['e2e/**/*.spec.ts'],
+      use: {...devices['Desktop Chrome']},
+    },
+    {
+      name: 'chromium-flows',
+      testMatch: ['flows/**/*.spec.ts'],
+      timeout: FLOW_TEST_TIMEOUT_MILLISECONDS,
       use: {...devices['Desktop Chrome']},
     },
     ...otherBrowsers,
