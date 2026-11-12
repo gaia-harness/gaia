@@ -165,7 +165,7 @@ check_retry_kinds() {
   in_order "$block" \
     '**Phase gate retry (one static retry and one test retry per phase).**' \
     '- **Kind.**' \
-    'A retry whose failure set holds only typecheck and lint errors is a static retry; one whose failure set holds any failing test is a test retry.' \
+    'A gate failure holding only typecheck and lint errors is static; one holding any failing test is a test failure, even with static errors beside it. Its retry takes the same kind.' \
     'A phase runs each kind at most once, so a static fix never spends the retry a later test failure needs, and a phase retries at most twice.' \
     '- **Attribute.**' \
     '- **Halt instead.**' \
@@ -243,7 +243,7 @@ check_outside_arm() {
     '(`known-green: phase <k> gate`)' \
     '(`known-green: merge-base`)' \
     'at least one test in the same run passed, and the failure is raised inside a test body' \
-    'not by the web server start, global setup or a missing build.' \
+    'not by the web server start, global setup, a setup file, a module import or a missing build.' \
     'declares a non-test file the phase changed' \
     '- **Halt instead.**' \
     'or each `file › test name` of an outside Playwright failure followed by its `known-green: phase <k> gate` or `known-green: merge-base`' \
@@ -265,7 +265,7 @@ check_in_phase_arm() {
   block="$(retry_block "$1")"
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
-    'When a failing test of any runner (unit, route, story or Playwright) is in a file exactly one task of this phase declares and passes check 2 below, send it to that task (the in-phase arm below).' \
+    'When a failing test of any runner is in a file exactly one task of this phase declares and passes check 2 below, send it to that task (the in-phase arm below).' \
     'Never fix it on the main thread.' \
     'Any other gate failure halts under Stop conditions with no retry.' \
     'each `file › test name` of a failing in-phase test' \
@@ -504,7 +504,7 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm limited to Playwright tests fails" {
-  red check_in_phase_arm 'When a failing test of any runner (unit, route, story or Playwright) is in a file' 'When a failing Playwright test is in a file'
+  red check_in_phase_arm 'When a failing test of any runner is in a file' 'When a failing Playwright test is in a file'
 }
 
 @test "red twin: an in-phase arm that accepts a spec several tasks declare fails" {
