@@ -56,8 +56,7 @@
 #                               whose round is past every dispositions file
 #   undecided                   (check-all without --snapshot-dir, and undecided after a unit stop
 #                               that can leave the round without its file) an open-round finding with
-#                               no honored triage mark, same-round recorded row, or file, divert
-#                               or accept-residual disposition in an earlier round
+#                               no honored triage mark that neither a row recorded on that round nor an earlier round's file, divert or accept-residual decides
 #   enforcement-paths-set       enforcement_paths_allowed is non-empty (a finding that
 #                               needs one stops the unit with needs-human)
 #   missing-basis               waive-out-of-scope without basis triage-threshold|cross-remit
