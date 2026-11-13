@@ -3,9 +3,17 @@
 # The PR-body renderer, the residual counter and the residual recorder of
 # audit-dispositions-check.sh, split out to keep that script small. Sourced by
 # it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions, _carried_keys,
-# _round_lookup, _live_lookup, _has_snapshot, _snapshot_path, _evaluator, _divert_line,
+# _round_lookup, _live_lookup, _has_snapshot, _snapshot_path, _divert_line,
 # _RESIDUAL_REASON_JQ, _SECURITY_CLASS_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS,
 # _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Runs nothing at source time. Never `cd`s.
+
+# _evaluator <subcommand> [args...]: audit-loop-eval.sh on ROOT, stderr dropped.
+# The dispositions check calls it too.
+_evaluator() {
+  local subcommand="$1"
+  shift
+  bash "$_GAIA_DISPOSITIONS_DIRECTORY/audit-loop-eval.sh" "$subcommand" --root "$ROOT" "$@" 2>/dev/null
+}
 
 # The text normalization every rendered reason goes through. A `-->` would end
 # the keyed comment the residue tally parses, and a line break would shift the

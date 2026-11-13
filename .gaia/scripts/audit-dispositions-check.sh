@@ -315,13 +315,6 @@ _live_lookup() {
   printf '%s' "$lookup" | jq -c --argjson owned "$owned" 'to_entries | map(.value + {triage: (.value.triage and (.key | IN($owned[])))})' 2>/dev/null || return 3
 }
 
-# _evaluator <subcommand> [args...]: audit-loop-eval.sh on ROOT, stderr dropped.
-_evaluator() {
-  local subcommand="$1"
-  shift
-  bash "$_GAIA_DISPOSITIONS_DIRECTORY/audit-loop-eval.sh" "$subcommand" --root "$ROOT" "$@" 2>/dev/null
-}
-
 # _live_stop_inputs <round> <dispositions-file>: the round's stop inputs, in
 # _NO_STOP's shape. The evaluator is asked only what the file can use: the
 # stop and the human accept when it holds an accept-residual entry, the veto
