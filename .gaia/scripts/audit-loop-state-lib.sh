@@ -372,9 +372,16 @@ gaia_loop_recommended() {
 # <checkpoint_line> (gaia_context_line) puts "Continue audit in this session" first and a reading at
 # or above it, or no usable reading or line, puts "Continue audit in a new session" first. The rest
 # keep their order.
+# <disputes> is a JSON array, one object per fix the round's fixer refused for
+# want of a stated rule: {path, line, severity, reason, repeated}, `repeated`
+# true when the fixer refused the same key the round before. An empty argument
+# or `[]` changes nothing. A non-empty list names each entry in the question,
+# relabels the in-session grant "State the rule, then continue", and, on a
+# repeat under any trigger but `context`, makes that option lead unless Accept
+# leads: another round without the rule cannot change the fixer's answer.
 gaia_loop_pinned_question() {
   local branch="${1-}" nonce="${2-}" used="${3-}" unit_rounds="${4-}" eligible="${5-}" cap="${6-}" trigger="${7-}" reading="${8-}"
-  local recommended="${9-}" line="${10-}"
+  local recommended="${9-}" line="${10-}" disputes="${11-}"
   local LC_ALL=C typed_grant_note typed_accept_note context_tokens context_window question_context=", context unavailable" option_context="Context unavailable" band=none lead
   command -v jq >/dev/null 2>&1 || return 6
   declare -F gaia_context_summary >/dev/null && declare -F gaia_context_band >/dev/null || return 6
@@ -388,6 +395,10 @@ gaia_loop_pinned_question() {
   [[ "$trigger" =~ ^(context|cap|fallback|rubric:[A-Za-z0-9_.-]+)$ ]] || return 2
   case "$recommended" in '' | grant | accept | stop) ;; *) return 2 ;; esac
   case "$line" in '') ;; *) gaia_loop_is_uint "$line" || return 2 ;; esac
+  [ -n "$disputes" ] || disputes='[]'
+  printf '%s' "$disputes" | jq -e 'type == "array" and all(.[];
+      type == "object" and (.path | type == "string" and length > 0) and (.line | type == "number" and . >= 0 and floor == .)
+      and (.severity | . == null or IN("critical", "major", "minor")) and (.reason | type == "string") and (.repeated | type == "boolean"))' >/dev/null 2>&1 || return 2
   case "$reading" in
     '' | missing | stale | future | unparseable) ;;
     *)
@@ -414,6 +425,10 @@ gaia_loop_pinned_question() {
       stop) lead=stop ;;
     esac
   fi
+  if [ "$trigger" != context ] && [ "${lead-}" != accept ] &&
+    printf '%s' "$disputes" | jq -e 'any(.[]; .repeated)' >/dev/null 2>&1; then
+    lead=grant_here
+  fi
   if [ -z "${lead-}" ]; then
     if [ "$band" = below ]; then
       lead=grant_here
@@ -429,15 +444,19 @@ gaia_loop_pinned_question() {
   fi
   jq -n -c --arg branch "$branch" --arg nonce "$nonce" --arg used "$used" --arg unit_rounds "$unit_rounds" \
     --arg trigger "$trigger" --arg question_context "$question_context" --arg option_context "$option_context" --arg band "$band" --arg lead "$lead" \
-    --argjson eligible "$eligible" --argjson cap "$cap" --arg typed_grant_note "$typed_grant_note" --arg typed_accept_note "$typed_accept_note" '
-    ({below: " is below the checkpoint line, so this session has room: ",
+    --argjson eligible "$eligible" --argjson cap "$cap" --arg typed_grant_note "$typed_grant_note" --arg typed_accept_note "$typed_accept_note" \
+    --argjson disputes "$disputes" '
+    ($disputes | length > 0) as $disputed
+    | (if $disputed then "State the rule, then continue" else "Continue audit in this session" end) as $here_label
+    | (if $disputed then "First write the rule each listed fix needs in the SPEC, a wiki/decisions page, or the code or docs, or tell Claude the rule to write there, so the fixer can cite it. " else "" end) as $here_first
+    | ({below: " is below the checkpoint line, so this session has room: ",
       above: " is at or above the checkpoint line, so this session is short on room: ",
       none: ", so this session may be short on room: "}[$band]) as $here
     | ({below: " is below the checkpoint line: ",
         above: " is at or above the checkpoint line: ",
         none: ", so a new session is the safe choice: "}[$band]) as $fresh
     | [
-        {key: "grant_here", label: "Continue audit in this session", description: ($option_context + $here + "records up to " + $unit_rounds + " more rounds and keeps working here." + $typed_grant_note)},
+        {key: "grant_here", label: $here_label, description: ($here_first + $option_context + $here + "records up to " + $unit_rounds + " more rounds and keeps working here." + $typed_grant_note)},
         {key: "grant_new_session", label: "Continue audit in a new session", description: ($option_context + $fresh + "records the same " + $unit_rounds + "-round grant, then prints a continuation prompt for a fresh session." + $typed_grant_note)},
         (if $eligible then
           {key: "accept", label: "Accept the remainder", description: ("One closing round, then the remainder is recorded as accepted residuals." + $typed_accept_note)}
@@ -453,6 +472,13 @@ gaia_loop_pinned_question() {
         question: ("Audit checkpoint " + $nonce + " on " + $branch + ": " + $used + " rounds used (" + $trigger + ")" + $question_context + "."
           + (if $trigger == "rubric:enriching" then " A new finding sits on a line changed since the previous round, usually by its fix"
               + (if $eligible then "; accepting keeps that change as written, so review it before answering." else "." end)
+            else "" end)
+          + (if $disputed then
+              (if ($disputes | length) == 1 then {fix: "this fix", it: "it"} else {fix: "these fixes", it: "them"} end) as $word
+              | " The fixer will not make " + $word.fix + " until a rule requires " + $word.it + ": "
+              + ([$disputes[] | .path + ":" + (.line | tostring) + (if .severity == null then "" else " (" + .severity + ")" end) + " \""
+                  + (.reason | sub("[.;\\s]+$"; "") | if length > 160 then .[0:157] + "..." else . end) + "\""] | join("; "))
+              + ". If no rule should require " + $word.it + ", pick Stop and file the remainder."
             else "" end)
           + " How should the audit loop continue?"),
         header: "Audit loop",

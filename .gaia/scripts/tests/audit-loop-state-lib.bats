@@ -17,6 +17,9 @@ setup() {
   . "$SCRIPTS/context-checkpoint-lib.sh"
   # shellcheck source=/dev/null
   . "$SCRIPTS/audit-loop-state-lib.sh"
+  # The checkpoint's disputed-entry reader, which the bound hook loads through audit-loop-eval.sh.
+  # shellcheck source=/dev/null
+  . "$SCRIPTS/audit-loop-signals-lib.sh"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/tests/helpers/audit-loop-fixture.sh"
   # shellcheck source=/dev/null
@@ -620,6 +623,73 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
     CLAUDE_CODE_ENTRYPOINT=cli gaia_loop_session_is_interactive "$transcript_path" || exit_status=$?
     [ "$exit_status" -eq 1 ]
   done
+}
+
+# disputes_run_folder: a scratch run folder holding the checkpoint fixture, a
+# round-6 checkpoint where the fixer refused two fixes in rounds 5 and 6.
+disputes_run_folder() {
+  local run_folder="$BATS_TEST_TMPDIR/run-folder"
+  mkdir -p "$run_folder"
+  cp "$BATS_TEST_DIRNAME"/fixtures/audit-loop-disputes/*.json "$run_folder/"
+  printf '%s\n' "$run_folder"
+}
+
+@test "disputed entries: only rule disputes, severity from the round's dispositions, repeated when the round before disputed the same key" {
+  local run_folder entries
+  run_folder="$(disputes_run_folder)"
+  entries="$(gaia_loop_disputed_entries "$run_folder" 6)"
+  [ "$(printf '%s' "$entries" | jq -c '[.[] | [.path, .line, .severity, .repeated]]')" = '[["apps/web/app/utils/http.server.ts",7,"major",true],["apps/web/app/routes/_session.requests._index.tsx",25,"minor",true],["apps/web/app/sessions.server/auth.ts",84,null,false]]' ]
+  [[ "$(printf '%s' "$entries" | jq -r '.[0].reason')" == "needs a requirement: honour X-Forwarded-Proto"* ]]
+  [ "$(gaia_loop_disputed_entries "$run_folder" 7)" = '[]' ]
+  printf '{broken' >"$run_folder/fixer-5-audit.json"
+  run gaia_loop_disputed_entries "$run_folder" 6
+  [ "$status" -eq 5 ]
+  [ -z "$output" ]
+  run gaia_loop_disputed_entries "$run_folder" six
+  [ "$status" -eq 2 ]
+}
+
+@test "pinned question: listed disputes are named, relabel the in-session grant, point a not-wanted rule at Stop, and keep four options at most" {
+  local entries question question_text eligible cap
+  entries="$(gaia_loop_disputed_entries "$(disputes_run_folder)" 6)"
+  [ "$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "" "")" = "$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "")" ]
+  [ "$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "" "[]")" = "$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "")" ]
+  question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "" "$entries")"
+  question_text="$(printf '%s' "$question" | jq -r '.questions[0].question')"
+  [[ "$question_text" == *"The fixer will not make these fixes until a rule requires them: apps/web/app/utils/http.server.ts:7 (major) \"needs a requirement: honour X-Forwarded-Proto"* ]]
+  [[ "$question_text" == *"; apps/web/app/sessions.server/auth.ts:84 \"conflicts with requirement: the plan keeps the session TTL in one place\". If no rule should require them, pick Stop and file the remainder. How should the audit loop continue?" ]]
+  [[ "$question_text" == *'..."; '* ]]
+  [ "$(labels "$question")" = "State the rule, then continue (Recommended)|Continue audit in a new session|Stop and file the remainder" ]
+  [[ "$(option_description "$question" "State the rule")" == "First write the rule each listed fix needs in the SPEC, a wiki/decisions page, or the code or docs, or tell Claude the rule to write there, so the fixer can cite it. "*"records up to 3 more rounds"* ]]
+  for eligible in true false; do
+    for cap in true false; do
+      question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 10 3 "$eligible" "$cap" cap "" grant "" "$entries")"
+      [ "$(printf '%s' "$question" | jq '.questions[0].options | length')" -le 4 ]
+    done
+  done
+  run gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "" '[{"path":"a","line":1,"severity":"major","reason":"r"}]'
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+}
+
+@test "pinned question: a repeated dispute leads with State the rule unless the trigger is context or Accept leads" {
+  local repeated single row trigger eligible recommended disputes expected question
+  repeated='[{"path":"a.ts","line":1,"severity":"major","reason":"needs a requirement: r","repeated":true}]'
+  single='[{"path":"a.ts","line":1,"severity":"major","reason":"needs a requirement: r","repeated":false}]'
+  while IFS='|' read -r trigger eligible recommended disputes expected; do
+    [ -n "$trigger" ] || continue
+    case "$disputes" in repeated) disputes="$repeated" ;; single) disputes="$single" ;; esac
+    question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 "$eligible" false "$trigger" "fresh 500000 1000000" "$recommended" 400000 "$disputes")"
+    [ "$(first_label "$question")" = "$expected (Recommended)" ] || { printf 'row %s %s %s %s: %s\n' "$trigger" "$eligible" "$recommended" "${disputes:0:30}" "$(first_label "$question")" >&2; return 1; }
+    [ "$(recommended_count "$question")" -eq 1 ]
+  done <<'ROWS'
+fallback|false|grant|repeated|State the rule, then continue
+rubric:stall|false|stop|repeated|State the rule, then continue
+fallback|true|accept|repeated|Accept the remainder
+context|false|grant|repeated|Continue audit in a new session
+fallback|false|grant|single|Continue audit in a new session
+fallback|false|stop|single|Stop and file the remainder
+ROWS
 }
 
 @test "sourcing the lib with PATH empty still succeeds" {

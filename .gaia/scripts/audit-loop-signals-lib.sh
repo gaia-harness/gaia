@@ -295,3 +295,46 @@ gaia_loop_decide_member() {
   fi
   printf 'allow\n'
 }
+
+# gaia_loop_disputed_entries <run-directory> <round>: the <disputes> argument
+# of gaia_loop_pinned_question, compact JSON. It reads the fix entries the
+# round's fixer returned disputed with a reason starting `needs a requirement:`
+# or `conflicts with requirement:` (fixer-<r>-audit.json, shape in
+# audit-fix-verify.sh's header), takes each one's severity from the round's
+# dispositions-<r>.json entry for the same identity key (null when none), and
+# marks it repeated when round r-1's fixer disputed the same key that way.
+# Display only: the severity comes from the orchestrator's file, which nothing
+# grades from, so it never feeds a gate. A round with no fixer file prints [].
+# rc 2 on a bad argument, 5 on an unparseable file, 6 without jq.
+gaia_loop_disputed_entries() {
+  local run_directory="${1-}" round="${2-}" fixer_file dispositions_file previous_file current previous='[]' dispositions='[]'
+  command -v jq >/dev/null 2>&1 || return 6
+  [ -n "$run_directory" ] || return 2
+  gaia_loop_is_uint "$round" || return 2
+  fixer_file="$run_directory/fixer-$round-audit.json"
+  dispositions_file="$run_directory/dispositions-$round.json"
+  previous_file="$run_directory/fixer-$((round - 1))-audit.json"
+  if [ ! -e "$fixer_file" ]; then
+    printf '[]\n'
+    return 0
+  fi
+  # shellcheck disable=SC2016
+  local select_disputed='[(.results // [])[]? | select(type == "object" and .disposition == "disputed"
+      and (.reason | type == "string" and test("^(needs a requirement|conflicts with requirement):")))
+    | {member, finding_class, path, line, reason}]'
+  current=$(jq -c "$select_disputed" "$fixer_file" 2>/dev/null) || return 5
+  if [ "$round" -gt 1 ] && [ -e "$previous_file" ]; then
+    previous=$(jq -c "$select_disputed" "$previous_file" 2>/dev/null) || return 5
+  fi
+  if [ -e "$dispositions_file" ]; then
+    dispositions=$(jq -c '[(.entries // [])[]? | select(type == "object")]' "$dispositions_file" 2>/dev/null) || return 5
+  fi
+  jq -n -c --argjson current "$current" --argjson previous "$previous" --argjson dispositions "$dispositions" '
+    def key: [.member, .finding_class, .path, .line];
+    [$current[] | select((.path | type == "string" and length > 0) and (.line | type == "number" and . >= 0 and floor == .))
+      | key as $k
+      | {path, line,
+         severity: ([$dispositions[] | select(key == $k) | .severity | select(IN("critical", "major", "minor"))] | first),
+         reason,
+         repeated: any($previous[]; key == $k)}]'
+}
