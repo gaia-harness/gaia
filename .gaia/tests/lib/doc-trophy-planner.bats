@@ -121,8 +121,8 @@ check_executor_lint() {
   range="$(range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | tr '\n' ' ' | tr -s ' ')"
   [ -n "$range" ] || { printf 'executor template range not found\n' >&2; return 1; }
   need "$range" "**The prompt template MUST also require linting the sub-agent's own files before it returns**, with \`pnpm -C <package dir> exec eslint <its own files>\`, the paths relative to the package and no fix flag" || return 1
-  need "$range" 'acting only on problems in files its task owns: it rewrites its edit until lint reports no problem, error or warning, but `prettier/prettier`' || return 1
-  need "$range" 'A lint problem in an owned file that its edit did not cause, such as an unresolved import of a file a sibling task has not written yet, goes under `### Findings`, not chased.' || return 1
+  need "$range" 'it rewrites its edit until lint reports no problem its edit caused, error or warning, but `prettier/prettier`' || return 1
+  need "$range" 'and a problem its edit did not cause, such as an unresolved import of a file a sibling task has not written yet, goes under `### Findings`, not chased.' || return 1
 }
 
 check_vertical_slicing() {
@@ -193,12 +193,12 @@ check_absence_and_cases() {
   red check_executor_lint "$PLANNER_REL" '**The prompt template MUST also require linting the sub-agent'"'"'s own files before it returns**, with' '**The prompt template MUST also name the command that lints a sub-agent'"'"'s own files**:'
 }
 
-@test "red twin: dropping the act-only-on-owned-files limit from the lint clause fails" {
-  red check_executor_lint "$PLANNER_REL" 'acting only on problems in files its task owns: it rewrites its edit' 'it rewrites its edit'
+@test "red twin: making the lint pass condition absolute fails" {
+  red check_executor_lint "$PLANNER_REL" 'until lint reports no problem its edit caused, error or warning' 'until lint reports no problem, error or warning'
 }
 
 @test "red twin: dropping the lint clause's exit for problems its edit did not cause fails" {
-  red check_executor_lint "$PLANNER_REL" 'A lint problem in an owned file that its edit did not cause, such as an unresolved import of a file a sibling task has not written yet, goes under `### Findings`, not chased.' ''
+  red check_executor_lint "$PLANNER_REL" ', and a problem its edit did not cause, such as an unresolved import of a file a sibling task has not written yet, goes under `### Findings`, not chased.' '.'
 }
 
 @test "planner cuts build phases as vertical slices" {
