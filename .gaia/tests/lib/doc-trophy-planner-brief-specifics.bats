@@ -75,7 +75,7 @@ check_acceptance_clause() {
   need "$text" 'An existing or planned test at any layer, a flow test included, that asserts the stated literal satisfies it' || return 1
   need "$text" 'one story or route test may hold all of a page'"'"'s stated specifics; never add a flow for one' || return 1
   need "$text" 'The test asserts the stated literal, never an import of the app'"'"'s own string' || return 1
-  need "$text" 'Read the documents its `## Required reading` names too, for any role, accessible name or exact wording they state.' || return 1
+  need "$text" 'Read the documents its `## Required reading` names too, for any role, accessible name or exact wording they state;' || return 1
 }
 
 check_directive_clause() {
