@@ -1998,12 +1998,13 @@ tree_snapshot() {
   alf_sequence 2 1
   alf_add_checkpoint 2 stalled
   alf_add_answer 1 accept
-  alf_state_edit '.history.rounds[1].reopened = true'
+  alf_state_edit '.history.rounds[1].reopened = true | .allowance.accepted_keys = [{checkpoint: 1, key: ["m", "c", "a.ts", 4], source: "typed", at: "t", session_id: "s1"}]'
   before="$(tree_snapshot)"
   expected="$(jq -c --arg member "$MEMBER" '[.history.rounds[0], .history.rounds[1]] as [$first, $second]
     | [{round: 1, tree: $first.tree, members: [$member], keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]],
-        counted_keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]], closing: false, reopened: false, human_accept: false},
-       {round: 2, tree: $second.tree, members: [$member], keys: null, counted_keys: null, closing: false, reopened: true, human_accept: true}]' "$ALF_STATE")"
+        counted_keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]], closing: false, reopened: false, human_accept: false, human_accepted_keys: []},
+       {round: 2, tree: $second.tree, members: [$member], keys: null, counted_keys: null, closing: false, reopened: true, human_accept: true,
+        human_accepted_keys: [["m", "c", "a.ts", 4]]}]' "$ALF_STATE")"
   run bash "$SCRIPTS/audit-loop-eval.sh" round-history --root "$ALF_ROOT"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$output" = "$expected" ] || { printf 'got  %s\nwant %s\n' "$output" "$expected"; return 1; }

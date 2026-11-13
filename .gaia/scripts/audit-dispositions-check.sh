@@ -44,10 +44,10 @@
 #                               (effective_from_round <= r) that is not fix, unless the
 #                               evaluator's veto state calls the veto satisfied; a synthetic
 #                               fix entry for a waiver-vetoed key no member re-reported passes
-#   accept-residual-not-eligible  (version 3) accept-residual on a round with no human accept where
-#                               the default stop does not hold, or where the file disposes
-#                               fix a key in default_stop_keys (the stop's formula:
-#                               audit-loop-eval.sh, DEFAULT STOP)
+#   accept-residual-not-eligible  (version 3) accept-residual on a key no human accepted for the round
+#                               (audit-accept-finding), on a round with no human accept where the default
+#                               stop does not hold or where the file disposes fix a key in
+#                               default_stop_keys (the stop's formula: audit-loop-eval.sh, DEFAULT STOP)
 #   undisposed                  a finding of any authorship, or an unsatisfied waiver-vetoed
 #                               key for this round, with no entry in the file, unless the
 #                               finding carries an honored triage mark or was disposed file,
@@ -110,7 +110,7 @@
 # passing live `check` writes <S>/dispositions-<r>.checked.json (version 3: the
 # file's sha256, the per-key lookup it graded, triage mark and failure mode
 # included, and the stop inputs default_stop, default_stop_keys, review_bases,
-# human_accept and satisfied_vetoes), and `check-all` re-grades from that
+# human_accept, accepted_keys and satisfied_vetoes), and `check-all` re-grades from that
 # snapshot, never from live sidecars and never through the evaluator. The
 # snapshot directory is in the guarded loop state directory; only the bound
 # hook's invocation passes --snapshot-dir, and only that invocation writes. Without --snapshot-dir, every subcommand that grades
@@ -242,7 +242,7 @@ def trim: gsub("^\\s+|\\s+$"; "");
            (if .disposition != "fix" and ((if (.reason | type) == "string" then .reason else "" end) | trim) == ""
             then "empty-reason" else empty end),
            (if $is_vetoed and .disposition != "fix" then "vetoed-not-fix" else empty end),
-           (if .disposition == "accept-residual" and $version >= 3 and ($accept_allowed | not)
+           (if .disposition == "accept-residual" and $version >= 3 and ($accept_allowed or ($stop.accepted_keys // [] | any(. == $key)) | not)
             then "accept-residual-not-eligible" else empty end),
            (if .disposition == "waive-out-of-scope" and ((.basis | IN("triage-threshold", "cross-remit")) | not)
             then "missing-basis" else empty end),
@@ -266,7 +266,7 @@ _NO_CARRIED='{"filed":[],"accepted":[]}'
 
 # The stop inputs of a round graded before version 3, or whose live check had
 # no accept-residual entry and no binding veto to ask the evaluator about.
-_NO_STOP='{"default_stop":false,"default_stop_keys":[],"review_bases":{},"human_accept":false,"satisfied_vetoes":[]}'
+_NO_STOP='{"default_stop":false,"default_stop_keys":[],"review_bases":{},"human_accept":false,"accepted_keys":[],"satisfied_vetoes":[]}'
 
 # _sha256 <file>: the hex digest.
 _sha256() {
@@ -326,9 +326,10 @@ _live_stop_inputs() {
       | {default_stop: (.default_stop == true), default_stop_keys: (.default_stop_keys // []), review_bases: (.review_bases // {})}')" || return 3
     [ -n "$answer" ] || return 3
     stop="$(jq -n -c --argjson stop "$stop" --argjson answer "$answer" '$stop + $answer')" || return 3
-    answer="$(_evaluator round-history | jq -c --argjson round "$round" 'any(.[]; .round == $round and .human_accept == true)')" || return 3
+    answer="$(_evaluator round-history | jq -c --argjson round "$round" '[.[] | select(.round == $round)]
+      | {human_accept: any(.[]; .human_accept == true), accepted_keys: [.[] | .human_accepted_keys // [] | .[]]}')" || return 3
     [ -n "$answer" ] || return 3
-    stop="$(jq -n -c --argjson stop "$stop" --argjson human_accept "$answer" '$stop + {human_accept: $human_accept}')" || return 3
+    stop="$(jq -n -c --argjson stop "$stop" --argjson answer "$answer" '$stop + $answer')" || return 3
   fi
   if jq -e -n --argjson vetoes "$VETOES" --argjson round "$round" 'any($vetoes[]; .effective_from_round <= $round)' >/dev/null; then
     answer="$(_evaluator veto-state --round "$round" | jq -c '.satisfied | arrays')" || return 3
@@ -467,7 +468,7 @@ _check_snapshot() {
       and (.version < 3 or ((.default_stop | type) == "boolean" and (.default_stop_keys | type) == "array"
         and (.human_accept | type) == "boolean" and (.satisfied_vetoes | type) == "array"))
       then .version, .dispositions_sha256, (.lookup | tojson),
-        (if .version >= 3 then $no_stop + {default_stop, default_stop_keys, human_accept, satisfied_vetoes} else $no_stop end | tojson)
+        (if .version >= 3 then $no_stop + {default_stop, default_stop_keys, human_accept, satisfied_vetoes, accepted_keys: (.accepted_keys // [])} else $no_stop end | tojson)
       else error("bad") end' <"$snapshot_file" 2>/dev/null)" \
     || { _error "unreadable snapshot $snapshot_file"; return 3; }
   { IFS= read -r version; IFS= read -r have; IFS= read -r lookup; IFS= read -r stop; } <<<"$snapshot_fields"

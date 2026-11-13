@@ -142,7 +142,10 @@ def ok:
           type == "object" and (.index | type == "number") and (.at_round | type == "number")
           and optional("nonce"; hex16) and optional("trigger"; type == "string")
           and optional("accept_eligible"; type == "boolean")
-          and optional("question"; type == "object" and (.questions | type == "array" and length == 1)))
+          and optional("question"; type == "object" and (.questions | type == "array" and length == 1))
+          and optional("disputes"; type == "array" and all(.[]; type == "object")))
+  and (.allowance | optional("accepted_keys"; type == "array" and all(.[]; type == "object" and (.checkpoint | type == "number")
+          and (.key | type == "array" and length == 4 and (.[3] | type == "number")))))
   and all(.allowance.answers[];
           type == "object" and (.checkpoint | type == "number")
           and (.kind == "accept" or (.kind == "grant" and (.n | type == "number" and . == floor and . >= 1 and . <= 10)))
@@ -275,8 +278,8 @@ gaia_loop_accept_line() {
   printf 'audit-accept\n'
 }
 
-# gaia_loop_parse_line <text>: prints `grant <n>`, `accept`, `malformed` or
-# `none`. The whole prompt, trimmed of spaces, tabs, CR and LF, must be the
+# gaia_loop_parse_line <text>: prints `grant <n>`, `accept`, `accept-finding <n>`,
+# `malformed` or `none`. The whole prompt, trimmed of spaces, tabs, CR and LF, must be the
 # line; a line inside longer text mentions the keyword and is `malformed`,
 # so pasted text never grants. Builtins only.
 gaia_loop_parse_line() {
@@ -288,6 +291,7 @@ gaia_loop_parse_line() {
   case "$text" in
     audit-accept) printf 'accept\n' ;;
     "audit-grant "[1-9] | "audit-grant 10") printf 'grant %s\n' "${text#audit-grant }" ;;
+    "audit-accept-finding "[1-9] | "audit-accept-finding "[1-9][0-9]) printf 'accept-finding %s\n' "${text#audit-accept-finding }" ;;
     *audit-grant* | *audit-accept*) printf 'malformed\n' ;;
     *) printf 'none\n' ;;
   esac
@@ -373,9 +377,10 @@ gaia_loop_recommended() {
 # or above it, or no usable reading or line, puts "Continue audit in a new session" first. The rest
 # keep their order.
 # <disputes> is a JSON array, one object per fix the round's fixer refused for
-# want of a stated rule: {path, line, severity, reason, repeated}, `repeated`
+# want of a stated rule: {member, finding_class, path, line, severity, reason, repeated}, `repeated`
 # true when the fixer refused the same key the round before. An empty argument
 # or `[]` changes nothing. A non-empty list names each entry in the question,
+# numbered as the typed `audit-accept-finding <n>` (audit-loop-grant.sh) counts them,
 # relabels the in-session grant "State the rule, then continue", and, on a
 # repeat under any trigger but `context`, makes that option lead unless Accept
 # leads: another round without the rule cannot change the fixer's answer.
@@ -476,9 +481,11 @@ gaia_loop_pinned_question() {
           + (if $disputed then
               (if ($disputes | length) == 1 then {fix: "this fix", it: "it"} else {fix: "these fixes", it: "them"} end) as $word
               | " The fixer will not make " + $word.fix + " until a rule requires " + $word.it + ": "
-              + ([$disputes[] | .path + ":" + (.line | tostring) + (if .severity == null then "" else " (" + .severity + ")" end) + " \""
-                  + (.reason | sub("[.;\\s]+$"; "") | if length > 160 then .[0:157] + "..." else . end) + "\""] | join("; "))
-              + ". If no rule should require " + $word.it + ", pick Stop and file the remainder."
+              + ([$disputes | to_entries[] | "(" + (.key + 1 | tostring) + ") " + .value.path + ":" + (.value.line | tostring)
+                  + (if .value.severity == null then "" else " (" + .value.severity + ")" end) + " \""
+                  + (.value.reason | sub("[.;\\s]+$"; "") | if length > 160 then .[0:157] + "..." else . end) + "\""] | join("; "))
+              + ". To keep one as an accepted residual (never a critical or security finding), dismiss this question and type"
+              + " audit-accept-finding <number> as your whole prompt. If no rule should require " + $word.it + ", pick Stop and file the remainder."
             else "" end)
           + " How should the audit loop continue?"),
         header: "Audit loop",

@@ -337,7 +337,7 @@ gaia_loop_disputed_entries() {
     [$current[] | select((.path | type == "string" and length > 0) and (.line | type == "number" and . >= 0 and floor == .))
       | key as $k
       | select(any($dispositions[]; .disposition == "fix" and key == $k))
-      | {path: (.path | if length > 160 then .[0:157] + "..." else . end), line,
+      | {member, finding_class, path: (.path | if length > 160 then .[0:157] + "..." else . end), line,
          severity: ([$dispositions[] | select(key == $k) | .severity | select(IN("critical", "major", "minor"))] | first),
          reason,
          repeated: any($previous[]; key == $k)}]'
@@ -356,9 +356,12 @@ gaia_loop_round_history() {
   printf '%s' "$1" | jq -c '. as $state
     | [$state.allowance.answers[] | select(.kind == "accept") | .checkpoint as $index
        | $state.history.checkpoints[] | select(.index == $index) | .at_round] as $accepted_at
+    | [($state.allowance.accepted_keys // [])[] | .checkpoint as $index
+       | {key, at_round: ([$state.history.checkpoints[] | select(.index == $index) | .at_round] | first)}] as $accepted_keys
     | [$state.history.rounds | to_entries[] | (.key + 1) as $round | .value
        | {round: $round, tree, members: (.members // []), keys: (.snapshot.keys? // null),
           counted_keys: (if (.snapshot.counted_keys? | type) == "array" then .snapshot.counted_keys | map([.member, .finding_class, .path, .line]) else null end),
           closing: (.closing == true), reopened: (.reopened == true),
-          human_accept: (.closing == true or any($accepted_at[]; . == $round - 1 or . == $round))}]'
+          human_accept: (.closing == true or any($accepted_at[]; . == $round - 1 or . == $round)),
+          human_accepted_keys: [$accepted_keys[] | select(.at_round == $round - 1 or .at_round == $round) | .key]}]'
 }

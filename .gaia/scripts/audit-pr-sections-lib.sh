@@ -31,7 +31,8 @@ def line_of: if type == "number" and . >= 1 then . else 1 end;
 # not critical); divert rows carry no reason, since only their count is rendered.
 # An accept row drops a key any veto names, whatever its round: the veto
 # repairs it, so it is no longer a residual. Waiver rows drop a key only for
-# the rounds its veto binds.
+# the rounds its veto binds. An accept row for a key the round history lists in
+# that round's human_accepted_keys (audit-accept-finding) leads with "Human decision: ".
 # shellcheck disable=SC2016
 _ROWS_JQ="$_ROW_TEXT_JQ$_RESIDUAL_REASON_JQ"'
 def key_array: [.member, .finding_class, .path, .line];
@@ -40,6 +41,7 @@ def in_bound: . != null and .security == false and .severity != "critical";
 | ($vetoes | map([.member, .finding_class, .path, .line])) as $ever_vetoed_keys
 | ($lookup | map({key: (key_array | tojson), value: .}) | from_entries) as $lookup_by_key
 | [.entries[] | key_array] as $disposed_keys
+| [$history[] | select(.round == $round) | .human_accepted_keys // [] | .[]] as $human_accepted_keys
 | [ (.entries[] | select(.disposition != "fix")
       | select(key_array as $key | ($vetoed_keys | any(. == $key))
           or (.disposition == "accept-residual" and ($ever_vetoed_keys | any(. == $key))) | not)
@@ -53,7 +55,7 @@ def in_bound: . != null and .security == false and .severity != "critical";
          else "" end) as $section
       | select($section != "")
       | {round: $round, section: $section, member, path, line, finding_class,
-         reason: (if $section == "divert" then "" elif $section == "accept" then text(residual_reason($lookup_entry)) else text(.reason) end)}),
+         reason: (if $section == "divert" then "" elif $section == "accept" then (if key_array as $key | $human_accepted_keys | any(. == $key) then "Human decision: " else "" end) + text(residual_reason($lookup_entry)) else text(.reason) end)}),
     ($lookup[] | select(.triage == true and (.member | IN($triage_members[])) and in_bound)
       | select(key_array as $key | ($disposed_keys | any(. == $key)) or ($vetoed_keys | any(. == $key)) | not)
       | {round: $round, section: "triage", member, path, line, finding_class, reason: text(.triage_reason)}) ]
@@ -171,6 +173,7 @@ _ESCALATED_JQ="$_ROW_TEXT_JQ$_SECURITY_CLASS_JQ"'$escalated + [.[] | select(secu
 # caller has loaded VETOES. rc 3 on an unreadable input.
 _section_rows() {
   local dispositions_file base round chunks="" one lookup fixed="[]" round_fixed recorded escalated="[]" history open_entries
+  history="$(_evaluator round-history)" || { _error "the evaluator could not read the round history"; return 3; }
   for dispositions_file in "$RUN_FOLDER"/dispositions-*.json; do
     [ -e "$dispositions_file" ] || continue
     base="${dispositions_file##*/}"
@@ -178,14 +181,13 @@ _section_rows() {
     round=$((10#${BASH_REMATCH[1]}))
     _valid_dispositions "$dispositions_file" || { _error "unreadable dispositions file $dispositions_file"; return 3; }
     lookup="$(_round_lookup "$round")"
-    one="$(jq -c --argjson round "$round" --argjson vetoes "$VETOES" --argjson lookup "$lookup" \
+    one="$(jq -c --argjson round "$round" --argjson vetoes "$VETOES" --argjson lookup "$lookup" --argjson history "$history" \
       --argjson triage_members "$_TRIAGE_MEMBERS" "$_ROWS_JQ" "$dispositions_file")" || return 3
     chunks="$chunks$one"$'\n'
     round_fixed="$(jq -c "$_ROW_TEXT_JQ"'[.entries[] | select(.disposition == "fix") | [.finding_class, .path, (.line | line_of)]]' "$dispositions_file")" || return 3
     fixed="$(jq -c -n --argjson fixed "$fixed" --argjson round_fixed "$round_fixed" '$fixed + $round_fixed')" || return 3
     escalated="$(printf '%s' "$lookup" | jq -c --argjson round "$round" --argjson escalated "$escalated" "$_ESCALATED_JQ")" || return 3
   done
-  history="$(_evaluator round-history)" || { _error "the evaluator could not read the round history"; return 3; }
   open_entries="$(_open_round_entries "$history")" || { _error "the evaluator could not read the open round's findings"; return 3; }
   if [ "$open_entries" != null ]; then
     escalated="$(printf '%s' "$open_entries" | jq -c --argjson round "$(printf '%s' "$history" | jq 'length')" --argjson escalated "$escalated" "$_ESCALATED_JQ")" || return 3

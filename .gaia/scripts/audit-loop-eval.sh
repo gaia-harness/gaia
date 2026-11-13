@@ -24,10 +24,10 @@
 #   audit-loop-eval.sh findings|evaluate-round|brief|record-values|state-path|current-round
 #                      |next-unit|unit-window|pinned-question|round-history
 #                      |veto-state|reopened-round --root <audited-root> [--round <r>]
-# round-history prints one {round, tree, members, keys, counted_keys, closing,
-# reopened, human_accept} per recorded round (keys and counted_keys as identity
-# keys, null when not stored; human_accept: closing, or an accept answering a
-# checkpoint at round r-1 or r). veto-state prints audit-veto-lib.sh's
+# round-history prints one {round, tree, members, keys, counted_keys, closing, reopened,
+# human_accept, human_accepted_keys} per recorded round (keys and counted_keys as identity
+# keys, null when not stored; human_accept: closing, or an accept answering a checkpoint at
+# round r-1 or r; human_accepted_keys: audit-accept-finding keys of such a checkpoint). veto-state prints audit-veto-lib.sh's
 # {satisfied, unsatisfied} for round r. reopened-round prints the latest
 # round's number when it is reopened on HEAD's tree, else 0.
 # unit-window prints `<unit> <start_round> <through_round> <closing>` for the

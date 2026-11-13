@@ -614,3 +614,30 @@ seed_capped() {
   [ "$status" -eq 0 ]
   jq -e '.allowance.answers | length == 1 and .[0].kind == "accept" and .[0].source == "typed"' "$ALF_STATE"
 }
+
+@test "audit-accept-finding records the listed key from the checkpoint and leaves it pending; an unlisted or critical entry, or a non-interactive session, records nothing" {
+  seed_pending
+  alf_state_edit '.history.checkpoints[0].disputes = [
+    {member: "code-audit-shell", finding_class: "rule/x", path: "a.sh", line: 3, severity: "major", reason: "needs a requirement: r", repeated: false},
+    {member: "code-audit-shell", finding_class: "rule/y", path: "b.sh", line: 9, severity: "critical", reason: "needs a requirement: r", repeated: false}]'
+  snapshot
+  send 'audit-accept-finding 1' "$ALF_ROOT" s1 "$TX_SDK"
+  unchanged
+  send 'audit-accept-finding 2'
+  [ "$status" -eq 0 ]
+  unchanged
+  printf '%s' "$output" | grep -qF 'critical'
+  send 'audit-accept-finding 3'
+  [ "$status" -eq 0 ]
+  unchanged
+  printf '%s' "$output" | grep -qF 'no refused fix numbered 3'
+  send 'audit-accept-finding 1'
+  [ "$status" -eq 0 ]
+  jq -e '.allowance.accepted_keys == [{checkpoint: 1, key: ["code-audit-shell", "rule/x", "a.sh", 3], source: "typed", at: .allowance.accepted_keys[0].at, session_id: "s1"}]
+    and (.allowance.answers | length) == 0' "$ALF_STATE"
+  printf '%s' "$output" | grep -qF 'a.sh:3'
+  printf '%s' "$output" | grep -qF 'Ask the pinned checkpoint question again'
+  send 'audit-grant 2'
+  [ "$status" -eq 0 ]
+  [ "$(allowed)" = 7 ]
+}
