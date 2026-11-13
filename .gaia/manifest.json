@@ -514,6 +514,7 @@
     "apps/web/.gitignore": "owned",
     "apps/web/.lintstagedrc.json": "owned",
     "apps/web/.playwright/a11y.ts": "owned",
+    "apps/web/.playwright/e2e/a11y-scan-settles.spec.ts": "owned",
     "apps/web/.playwright/e2e/csp-header.spec.ts": "owned",
     "apps/web/.playwright/e2e/home-a11y.spec.ts": "owned",
     "apps/web/.playwright/e2e/hydration.spec.ts": "owned",
@@ -857,7 +858,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-12T02:41:02.400Z",
+  "generated": "2026-11-13T13:14:47.998Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
