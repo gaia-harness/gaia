@@ -21,6 +21,20 @@ export const expectNoSeriousA11yViolations = async (
     options?.builder ?? new AxeBuilder({page}).withTags(AXE_WCAG_TAGS);
   const suffix = options?.label === undefined ? '' : `-${options.label}`;
 
+  // Scan the settled page: right after a theme switch, a control easing its
+  // colors would otherwise be judged on a frame between two themes.
+  await page.evaluate(async () => {
+    await Promise.allSettled(
+      document
+        .getAnimations()
+        .filter(
+          (animation) =>
+            animation.effect?.getComputedTiming().endTime !== Infinity
+        )
+        .map(async (animation) => animation.finished)
+    );
+  });
+
   const {incomplete, violations} = await axe.analyze();
   const blocking = violations.filter((violation) =>
     SEVERITY_FAIL.has(violation.impact ?? 'minor')
