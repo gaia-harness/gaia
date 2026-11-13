@@ -72,7 +72,8 @@ check_acceptance_clause() {
   text="$(flat "$1/$PLANNER_REL")"
   need "$text" '**A role, accessible name or exact wording the task delivers is asserted by a test this task names**' || return 1
   need "$text" 'the SPEC, an audit directive or a document the SPEC'"'"'s Required reading names states it' || return 1
-  need "$text" 'it never gets a flow of its own' || return 1
+  need "$text" 'An existing or planned test at any layer, a flow test included, that asserts the stated literal satisfies it' || return 1
+  need "$text" 'one story or route test may hold all of a page'"'"'s stated specifics; never add a flow for one' || return 1
   need "$text" 'The test asserts the stated literal, never an import of the app'"'"'s own string' || return 1
   need "$text" 'Read the documents its `## Required reading` names too, for any role, accessible name or exact wording they state.' || return 1
 }
@@ -87,9 +88,11 @@ check_coverage_lens() {
   local text
   text="$(flat "$1/$AUDIT_REL")"
   need "$text" 'a role, accessible name or exact wording a task delivers, stated by the SPEC, an entry under `## Plan-time directives` in its `AUDIT.md`' || return 1
-  need "$text" 'with no test a task names asserting it, including one the brief or audit states that the SPEC omits' || return 1
+  need "$text" 'that no existing or planned test at any layer, a flow test included, asserts as the stated literal' || return 1
   need "$text" 'also `AUDIT.md` beside it and the documents its `## Required reading` names' || return 1
-  need "$text" 'a test that asserts stated wording through an import of the app'"'"'s own string counts as no test' || return 1
+  need "$text" 'an assertion through an import of the app'"'"'s own string counts as none' || return 1
+  need "$text" 'one story or route test may hold all of a page'"'"'s specifics' || return 1
+  need "$text" '`minor` unless it is a role or accessible name stated for a control, then `major`' || return 1
 }
 
 # ---------- tests ----------
@@ -97,7 +100,9 @@ check_coverage_lens() {
 @test "planner: a stated role, name or wording gets a test a task names" {
   green check_acceptance_clause
   red check_acceptance_clause "$PLANNER_REL" 'is asserted by a test this task names**' 'is noted in the contract**'
-  red check_acceptance_clause "$PLANNER_REL" 'it never gets a flow of its own' 'it gets a flow of its own'
+  red check_acceptance_clause "$PLANNER_REL" 'a flow test included, that asserts' 'a flow test excluded, that asserts'
+  red check_acceptance_clause "$PLANNER_REL" 'one story or route test may hold all' 'each specific needs its own test, not all'
+  red check_acceptance_clause "$PLANNER_REL" 'never add a flow for one' 'add a flow for each'
   red check_acceptance_clause "$PLANNER_REL" 'asserts the stated literal, never an import' 'asserts the stated literal or an import'
   red check_acceptance_clause "$PLANNER_REL" 'Read the documents its `## Required reading` names too' 'Skip the documents its `## Required reading` names'
 }
@@ -107,9 +112,11 @@ check_coverage_lens() {
   red check_directive_clause "$PLANNER_REL" 'still gets the test the acceptance-criteria bullet' 'constrains only the code the acceptance-criteria bullet'
 }
 
-@test "coverage lens: flags a stated specific with no test, reading the audit and Required reading" {
+@test "coverage lens: flags a stated specific no test asserts, bounded and graded, reading the audit and Required reading" {
   green check_coverage_lens
-  red check_coverage_lens "$AUDIT_REL" 'including one the brief or audit states that the SPEC omits' 'when the SPEC carries it'
+  red check_coverage_lens "$AUDIT_REL" 'that no existing or planned test at any layer, a flow test included, asserts' 'that no test a task names in a build phase asserts'
+  red check_coverage_lens "$AUDIT_REL" 'one story or route test may hold all' 'each specific needs its own test, not all'
+  red check_coverage_lens "$AUDIT_REL" '`minor` unless it is a role' '`major` whether or not it is a role'
   red check_coverage_lens "$AUDIT_REL" 'also `AUDIT.md` beside it and the documents its `## Required reading` names' 'nothing else'
-  red check_coverage_lens "$AUDIT_REL" 'counts as no test' 'counts as a test'
+  red check_coverage_lens "$AUDIT_REL" 'counts as none' 'counts as a test'
 }
