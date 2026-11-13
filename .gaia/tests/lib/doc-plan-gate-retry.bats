@@ -200,7 +200,7 @@ check_retry_redispatch() {
     'Dispatch a fresh executor for each owning task' \
     'A task with no attributed error is not re-dispatched.' \
     'carries the original task prompt first, without its `Yield handoff:` line' \
-    'then the line `The phase quality gate failed on files this task owns. Fix only these errors, within this task'"'"'s scope, and edit no other file:`' \
+    'then the line `The phase quality gate failed on files this task owns. Fix only these errors, within this task'"'"'s scope, and edit no other file; still run the typecheck and lint your task prompt requires before you return:`' \
     'then the gate output lines for its files.' \
     'It carries no `Yield handoff:` line, so a retry executor never yields' \
     'Never continue an executor with SendMessage.' \
@@ -438,6 +438,10 @@ resume_point() {
 
 @test "red twin: a retry that continues the executor with SendMessage fails" {
   red check_retry_redispatch 'Never continue an executor with SendMessage.' 'Continue the executor with SendMessage.'
+}
+
+@test "red twin: a static retry line that drops the typecheck and lint before return fails" {
+  red check_retry_redispatch 'edit no other file; still run the typecheck and lint your task prompt requires before you return:`' 'edit no other file:`'
 }
 
 @test "the yield-handling block exempts a gate retry from the yield opt-in" {

@@ -759,7 +759,7 @@ run_decision() {
       if [[ $reading =~ ^fresh\ [0-9]+\ ([0-9]+)$ ]]; then
         context_line=$(gaia_context_line "${BASH_REMATCH[1]}" "$ask_tokens" "$ask_percent") || context_line=''
       fi
-      question=$(gaia_loop_pinned_question "$BRANCH_KEY" "$nonce" "$used" "$GAIA_CONTEXT_UNIT_ROUNDS" "$accept_is_eligible" "$cap" "$trigger" "$reading" "$recommended" "$context_line") && [ -n "$question" ] ||
+      disputes=$(gaia_loop_checkpoint_disputes "$run_directory" "$used") && question=$(gaia_loop_pinned_question "$BRANCH_KEY" "$nonce" "$used" "$GAIA_CONTEXT_UNIT_ROUNDS" "$accept_is_eligible" "$cap" "$trigger" "$reading" "$recommended" "$context_line" "$disputes") && [ -n "$question" ] ||
         finish_deny "BLOCKED: the audit loop checkpoint could not build its pinned question (trigger $trigger). Fail-loud, not fail-open: retry the dispatch."
       # Every checkpoint deny appends a new checkpoint; the latest is the one
       # pending, so this supersedes any earlier one, legacy ones included.
