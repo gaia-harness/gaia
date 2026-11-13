@@ -344,9 +344,8 @@ gaia_loop_disputed_entries() {
 }
 
 # gaia_loop_checkpoint_disputes <run-directory> <round>: gaia_loop_disputed_entries
-# for the checkpoint hook, [] on any failure. The refused-fix list is display
-# only, so an unreadable fixer or dispositions file drops the list rather than
-# the checkpoint.
+# for the checkpoint hook, [] on any failure: the refused-fix list is display
+# only, so a failure drops the list rather than the checkpoint.
 gaia_loop_checkpoint_disputes() {
   gaia_loop_disputed_entries "$@" || printf '[]\n'
 }
