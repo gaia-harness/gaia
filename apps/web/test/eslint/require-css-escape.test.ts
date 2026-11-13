@@ -28,6 +28,8 @@ describe('unicorn/require-css-escape in the resolved project config', () => {
     ['.playwright/e2e/a11y-scan-settles.spec.ts', 0],
     ['test/playwright-html.test.ts', 0],
     ['app/utils/example.server.ts', 0],
+    ['app/utils/tests/example.test.ts', 0],
+    ['app/hooks/tests/use-example.test.ts', 2],
     ['app/root.tsx', 2],
   ])(
     'resolves %s to severity %s',
