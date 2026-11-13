@@ -2,7 +2,7 @@
 #
 # The PR-body renderer, the residual counter and the residual recorder of
 # audit-dispositions-check.sh, split out to keep that script small. Sourced by
-# it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions,
+# it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions, _carried_keys,
 # _round_lookup, _live_lookup, _has_snapshot, _snapshot_path, _evaluator, _divert_line,
 # _RESIDUAL_REASON_JQ, _SECURITY_CLASS_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS,
 # _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Runs nothing at source time. Never `cd`s.
@@ -250,23 +250,30 @@ _open_round_entries() {
 }
 
 # _undecided_keys: `violation: undecided` for each finding of the open round
-# that carries no honored triage mark and that no row recorded on that round
-# decides. A closed round's findings never block: after a unit stop that can
+# that carries no honored triage mark, that no row recorded on that round
+# decides, and that no earlier round carries forward: the same _carried_keys
+# set the undisposed rule reads, so a key an earlier round filed, diverted or
+# accepted is not asked again, and an accepted key re-reported security-class
+# is. A closed round's findings never block: after a unit stop that can
 # leave the round without its file, the bound hook refuses any dispatch but a
 # same-tree member join while one is left. rc 0
 # none, 1 some, 3 an unreadable input.
 _undecided_keys() {
-  local history open_entries recorded="[]" violations
+  local history open_entries recorded="[]" round carried violations
   history="$(_evaluator round-history)" || return 3
   open_entries="$(_open_round_entries "$history")" || return 3
   [ "$open_entries" != null ] || return 0
+  round="$(printf '%s' "$history" | jq 'length')" || return 3
+  carried="$(_carried_keys "$round" 3)"
   if [ -f "$RUN_FOLDER/recorded-residuals.jsonl" ]; then
     recorded="$(jq -c -R -n "$_ROW_TEXT_JQ"'[inputs | fromjson? | select(type == "object")
       | [(if (.round | type) == "number" then .round else 0 end), .member, .finding_class, .path, (.line | line_of)]]' \
       <"$RUN_FOLDER/recorded-residuals.jsonl" 2>/dev/null)" || return 3
   fi
-  violations="$(printf '%s' "$open_entries" | jq -r --argjson round "$(printf '%s' "$history" | jq 'length')" --argjson recorded "$recorded" "$_ROW_TEXT_JQ"'
+  violations="$(printf '%s' "$open_entries" | jq -r --argjson round "$round" --argjson recorded "$recorded" --argjson carried "$carried" "$_ROW_TEXT_JQ$_SECURITY_CLASS_JQ"'
     .[] | select(.triage != true)
+    | select([.member, .finding_class, .path, .line] as $key | ($carried.filed | any(. == $key))
+        or (($carried.accepted | any(. == $key)) and (security_class | not)) | not)
     | select([$round, .member, .finding_class, .path, (.line | line_of)] as $full | $recorded | any(. == $full) | not)
     | "violation: undecided \({round: $round, member, finding_class, path, line} | tojson)"')" || return 3
   [ -z "$violations" ] && return 0

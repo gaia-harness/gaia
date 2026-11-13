@@ -156,7 +156,7 @@ write_state() {
   jq -n --arg key "branch:$state_key" --arg branch "$state_key" --arg session_id "$1" \
     '{schema:1,key:$key,branch:$branch,pr:null,created_at:"2026-01-01T00:00:00Z",
       history:{rounds:[],units:[],checkpoints:[{index:1,at_round:1,reason:"timing",recorded_at:"2026-01-01T00:00:00Z",session_id:$session_id,audited_root:"/x"}]},
-      allowance:{answers:[]}}' >"$state_file"
+      allowance:{answers:[{checkpoint:1}]}}' >"$state_file"
 }
 
 # build_payload <session id> <extra jq object> [large]: PostToolUse payload.
