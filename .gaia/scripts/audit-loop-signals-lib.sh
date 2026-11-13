@@ -300,8 +300,8 @@ gaia_loop_decide_member() {
 # of gaia_loop_pinned_question, compact JSON. It reads the fix entries the
 # round's fixer returned disputed with a reason starting `needs a requirement:`
 # or `conflicts with requirement:` (fixer-<r>-audit.json, shape in
-# audit-fix-verify.sh's header), drops one with no path or a non-integer line
-# (the builder would refuse it), takes each one's severity from the round's
+# audit-fix-verify.sh's header), drops one with no path or a line that is not
+# a non-negative integer (the builder would refuse it), takes each one's severity from the round's
 # dispositions-<r>.json entry for the same identity key (null when none), and
 # marks it repeated when round r-1's fixer disputed the same key that way.
 # Display only: the severity comes from the orchestrator's file, which nothing

@@ -1246,7 +1246,7 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   printf '{broken' >"$run_folder/fixer-5-audit.json"
   dispatch "$FRONTEND_MEMBER" session-b
   deny_prefix "BLOCKED: the audit loop checkpoint could not build its pinned question (trigger fallback)"
-  reason | grep -qF -- "fixer-5-audit.json"
+  reason | grep -qF -- "fixer-<round>-audit.json files of rounds 5 and 4"
 }
 
 @test "the pinned question leads with the evaluator's recommendation, and the band picks the grant when it is a grant" {
