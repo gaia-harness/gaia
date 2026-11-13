@@ -1,0 +1,4 @@
+{"schema":1,"round":5,"attempt":1,"results":[
+{"member":"code-audit-frontend","finding_class":"holistic/unclassified","path":"apps/web/app/utils/http.server.ts","line":7,"disposition":"disputed","reason":"needs a requirement: honour X-Forwarded-Proto in isHttpsRequest behind an opt-in TRUST_PROXY env flag. No SPEC, wiki/decisions page or rule states it.","changed_paths":[]},
+{"member":"code-audit-frontend","finding_class":"holistic/unbounded-invocation","path":"apps/web/app/routes/_session.requests._index.tsx","line":25,"disposition":"disputed","reason":"needs a requirement: cap the request list fetch with a page size. No requirement states a bound.","changed_paths":[]}
+],"changed_paths":[],"reverted_paths":[]}

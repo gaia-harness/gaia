@@ -51,11 +51,11 @@
 # the kind is read from that label with the suffix stripped, and the recorded
 # `option` keeps the label as selected.
 #
-# What each label records. `Continue audit in this session` and `Continue
-# audit in a new session` record the same `{kind: "grant", n: k}` answer; k is
-# GAIA_CONTEXT_UNIT_ROUNDS from the shared lib, never a count read from a label.
-# The new-session label also tells the main thread to print a fenced
-# continuation prompt. `Accept the remainder`
+# What each label records. Each grant label (`Continue audit in this session`,
+# `Continue audit in a new session`, `State the rule, then continue`) records
+# `{kind: "grant", n: k}`; k is GAIA_CONTEXT_UNIT_ROUNDS from the shared lib,
+# never a count read from a label. The new-session label also tells the main
+# thread to print a fenced continuation prompt. `Accept the remainder`
 # records `{kind: "accept"}`. `Stop and file the remainder` and `Type
 # audit-accept instead` record nothing: the loop stays stopped and the message
 # names the next step. Every recorded answer carries source, option, the pin's
@@ -320,7 +320,7 @@ unit_rounds="$GAIA_CONTEXT_UNIT_ROUNDS"
 kind=""
 base="${label% (Recommended)}"
 case "$base" in
-  "Continue audit in this session" | "Continue audit in a new session") kind=grant ;;
+  "Continue audit in this session" | "Continue audit in a new session" | "State the rule, then continue") kind=grant ;;
   "Accept the remainder") kind=accept ;;
   "Stop and file the remainder")
     _ag_say "Nothing was recorded: Stop and file the remainder was selected, so the loop stays stopped. Claude: do not dispatch another audit round; file the remainder as tech debt, leave the PR open, and report to the human." \
@@ -380,6 +380,7 @@ if [ "$kind" = grant ]; then
   recorded_message="Recorded: $base on branch $branch_name (checkpoint $checkpoint_index), $unit_rounds more rounds."
   claude_context="$recorded_message Claude: the human selected this pinned option; continue the loop within that allowance."
   case "$base" in
+    "State the rule, then continue") claude_context="$claude_context Before the next unit, wait for the human to state the rule each fix the question listed needs. Write it only in their words, where they say (the SPEC, a wiki/decisions page, or the code or docs), and commit it; never word the rule yourself. If they decide no rule should require a fix, file the remainder as tech debt, leave the PR open, and report, as for Stop and file the remainder." ;;
     *"in a new session")
       claude_context="$claude_context Print one instruction line, then the fenced continuation prompt for a fresh session with the branch, PR and run folder, and stop: do not start another round in this session."
       claude_context="$claude_context On a plan build (a plan's RUNNING sentinel names this branch), print the plan's prompt from wiki/concepts/PR Merge Workflow.md (#### The branch checkpoint) instead, which resumes that plan's ORCHESTRATOR.md."

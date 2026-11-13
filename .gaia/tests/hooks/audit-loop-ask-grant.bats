@@ -164,6 +164,18 @@ claude_told_nothing_recorded() {
   printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("Run `/clear`, then paste the prompt below.") and contains("Press Ctrl+C, run `claude`") and contains("fenced continuation prompt") and contains("and stop")'
 }
 
+@test "State the rule, then continue records the same grant and tells the main thread to wait for the human's rule" {
+  local disputed_pin
+  seed_pinned
+  disputed_pin="$(gaia_loop_pinned_question "$ALF_NORMALIZED_BRANCH" "$NONCE" 5 "$UNIT_ROUNDS" false false fallback "" grant "" \
+    '[{"path":"a.ts","line":1,"severity":"major","reason":"needs a requirement: r","repeated":true}]')"
+  alf_state_edit '.history.checkpoints[-1] += {trigger: "fallback", question: $question}' --argjson question "$disputed_pin"
+  send "$(stored_label "State the rule, then continue")"
+  [ "$status" -eq 0 ]
+  jq -e --argjson unit_rounds "$UNIT_ROUNDS" '.allowance.answers[0] | .kind == "grant" and .n == $unit_rounds and .option == "State the rule, then continue (Recommended)"' "$ALF_STATE"
+  printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("wait for the human to state the rule") and contains("never word the rule yourself") and contains("as for Stop and file the remainder")'
+}
+
 @test "the recommended label records the grant, with and without the suffix the pin carries, and the option keeps what was selected" {
   seed_pinned
   [ "$(session_label)" = "Continue audit in a new session (Recommended)" ]
