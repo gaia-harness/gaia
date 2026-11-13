@@ -116,6 +116,14 @@ check_executor_limit() {
   need "$range" 'a new test only for a behavior or acceptance test its task doc names' || return 1
 }
 
+check_executor_lint() {
+  local range
+  range="$(range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | tr '\n' ' ' | tr -s ' ')"
+  [ -n "$range" ] || { printf 'executor template range not found\n' >&2; return 1; }
+  need "$range" "**The prompt template MUST also require linting the sub-agent's own files before it returns**, with \`pnpm -C <package dir> exec eslint <its own files>\`, the paths relative to the package and no fix flag" || return 1
+  need "$range" 'acting only on errors in files its task owns: it rewrites its edit until lint passes' || return 1
+}
+
 check_vertical_slicing() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
@@ -174,6 +182,18 @@ check_absence_and_cases() {
 
 @test "red twin: deleting the executor limit clause fails" {
   red check_executor_limit "$PLANNER_REL" 'the tests a sub-agent writes**' 'the tests a sub-agent writes (removed)'
+}
+
+@test "the executor template requires linting the sub-agent's own files before it returns" {
+  green check_executor_lint
+}
+
+@test "red twin: naming the lint command without requiring it fails" {
+  red check_executor_lint "$PLANNER_REL" '**The prompt template MUST also require linting the sub-agent'"'"'s own files before it returns**, with' '**The prompt template MUST also name the command that lints a sub-agent'"'"'s own files**:'
+}
+
+@test "red twin: dropping the act-only-on-owned-files limit from the lint clause fails" {
+  red check_executor_lint "$PLANNER_REL" 'acting only on errors in files its task owns: it rewrites its edit until lint passes' 'it rewrites its edit until lint passes'
 }
 
 @test "planner cuts build phases as vertical slices" {
