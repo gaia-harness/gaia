@@ -1,23 +1,5 @@
-import type {AfterResponseState, BeforeRequestState} from 'ky';
-import {describe, expect, test, vi} from 'vitest';
-import {buildRequestHeaders, getHooks, setPathParams} from '../utils';
-
-const runRequestToSnakeCase = async (body: string) => {
-  const hook = getHooks(true)?.beforeRequest?.[0];
-  const state = {
-    options: {body},
-    request: new Request('https://example.test', {method: 'POST'}),
-  } as unknown as BeforeRequestState;
-
-  return hook?.(state);
-};
-
-const runResponseToCamelCase = async (response: Response) => {
-  const hook = getHooks(true)?.afterResponse?.[0];
-  const state = {response} as unknown as AfterResponseState;
-
-  return hook?.(state);
-};
+import {describe, expect, test} from 'vitest';
+import {buildRequestHeaders, getParseJson, setPathParams} from '../utils';
 
 describe('api utils', () => {
   test('setPathParams should replace path params', () => {
@@ -73,16 +55,14 @@ describe('api utils', () => {
     expect(setPathParams('items/:id', {id: '...'})).toBe('items/...');
   });
 
-  test('requestToSnakeCase forwards a non-JSON body unchanged', async () => {
-    const convertedRequest = await runRequestToSnakeCase('plain text body');
+  test('the snake_case parseJson delivers a JSON body of false as false', async () => {
+    const parseJson = getParseJson(true);
+    const context = {
+      request: new Request('https://example.test'),
+      response: new Response('false'),
+    };
 
-    expect(convertedRequest).toBeUndefined();
-  });
-
-  test('responseToCamelCase delivers a JSON body of false as false', async () => {
-    const converted = await runResponseToCamelCase(Response.json(false));
-
-    expect(await (converted as Response).json()).toBe(false);
+    expect(await parseJson?.('false', context)).toBe(false);
   });
 
   test('buildRequestHeaders applies per-request token and language', () => {
@@ -98,19 +78,5 @@ describe('api utils', () => {
     expect(headers.get('X-Custom')).toBe('keep');
     expect(headers.get('Authorization')).toBeNull();
     expect(headers.get('Accept-Language')).toBeNull();
-  });
-
-  test('getHooks preserves core interceptors when caller passes custom hooks', () => {
-    const customAfter = vi.fn();
-    const customBefore = vi.fn();
-    const hooks = getHooks(true, {
-      afterResponse: [customAfter],
-      beforeRequest: [customBefore],
-    });
-    // core interceptor is index 0, caller hook is appended after
-    expect(hooks?.afterResponse).toHaveLength(2);
-    expect(hooks?.beforeRequest).toHaveLength(2);
-    expect(hooks?.afterResponse?.[1]).toBe(customAfter);
-    expect(hooks?.beforeRequest?.[1]).toBe(customBefore);
   });
 });
