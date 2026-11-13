@@ -5,9 +5,12 @@
 # .claude/skills/gaia/references/plan/planner.md tells a planner to name
 # behaviors and the acceptance tests that own them, to drive a guard red at the
 # lowest layer that shows the refusal (an absence requirement included), to
-# assert every case of a multi-case SPEC row but a non-guard flow case, to cut
+# assert every case of a multi-case SPEC row but a non-guard flow case (a
+# compound condition one case per part, an order-of-checks row one per adjacent
+# pair), to cut
 # build phases as vertical slices, and to bound the tests a task executor writes. The tdd skill's loop carries the
-# matching limit. This suite pins that text and the ORCHESTRATOR phase-entry
+# matching limit. This suite pins that text, the decomposition audit's SPEC
+# coverage lens that checks the plan per case, and the ORCHESTRATOR phase-entry
 # form the phase-ownership check reads.
 #
 # Method: every check takes a root directory and reads the planner reference or
@@ -21,6 +24,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   TDD_REL=".claude/skills/tdd/SKILL.md"
+  AUDIT_REL=".claude/skills/gaia/references/plan/decomposition-audit.md"
   LIMIT_CLAUSE='**The prompt template MUST also limit the tests a sub-agent writes**'
 }
 
@@ -55,14 +59,15 @@ range_of() {
     inside { print }' "$1"
 }
 
-# mutated_tree <relpath> <old> <new>: copy planner.md and the tdd skill into a
+# mutated_tree <relpath> <old> <new>: copy planner.md, the decomposition audit
+# and the tdd skill into a
 # scratch tree (TREE), replace the first fixed-string <old> in <relpath> with
 # <new>, and prove the copy changed.
 mutated_tree() {
   local rel="$1" old="$2" new="$3" file content mutated
   TREE="$BATS_TEST_TMPDIR/tree"
   rm -rf "$TREE"
-  for file in "$PLANNER_REL" "$TDD_REL"; do
+  for file in "$PLANNER_REL" "$AUDIT_REL" "$TDD_REL"; do
     mkdir -p "$TREE/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$TREE/$file"
   done
@@ -212,11 +217,86 @@ check_absence_and_cases() {
 }
 
 @test "red twin: making the absence requirement optional fails" {
-  red check_absence_and_cases "$PLANNER_REL" 'counts as a guard' 'is optional'
+  red check_absence_and_cases "$PLANNER_REL" 'rendered) counts as a guard' 'rendered) is optional'
 }
 
 @test "red twin: an absence test with the value never present fails" {
   red check_absence_and_cases "$PLANNER_REL" ' while the value is present upstream' ''
+}
+
+# check_case_split <root>: the planner and the SPEC coverage lens both split a
+# compound condition per part and an order-of-checks row per adjacent pair, and
+# the lens reads every SPEC section a guard case lives in.
+check_case_split() {
+  local plan lens
+  plan="$(flat "$1/$PLANNER_REL")"
+  lens="$(range_of "$1/$AUDIT_REL" '- **SPEC coverage' '- **' | tr '\n' ' ' | tr -s ' ')"
+  need "$plan" 'A compound condition is one case per part' || return 1
+  need "$plan" 'an order-of-checks row is one case per adjacent pair of checks, asserted by a test whose input passes every earlier check, fails both, and asserts the earlier of the pair refused' || return 1
+  need "$lens" '`success_criteria` + `scope_boundaries` + `clarifications.answered`' || return 1
+  need "$lens" 'one row per case' || return 1
+  need "$lens" 'a compound condition one per part' || return 1
+  need "$lens" 'an order-of-checks row one per adjacent pair of checks' || return 1
+  need "$lens" 'a guard case with no test a task names below the closing flow' || return 1
+  need "$lens" 'an order-of-checks pair with no test that passes every earlier check, fails both, and asserts the earlier of the pair refused' || return 1
+  need "$lens" 'a signed or encrypted value (a cookie, a session, a token) with no test sending a forged or edited one' || return 1
+}
+
+# check_forged_value <root>: the planner counts refusing a value the app did not
+# issue as a guard whose test sends a forged or edited value.
+check_forged_value() {
+  local text
+  text="$(flat "$1/$PLANNER_REL")"
+  need "$text" 'A property that makes the app refuse a value it did not issue (a signed or encrypted cookie or session, a signed token) counts as a guard too' || return 1
+  need "$text" 'its test sends a forged or edited value and asserts the refusal' || return 1
+}
+
+@test "planner counts refusing a forged signed value as a guard with a forged-value test" {
+  green check_forged_value
+}
+
+@test "red twin: dropping the forged signed value guard fails" {
+  red check_forged_value "$PLANNER_REL" 'counts as a guard too: its test sends a forged or edited value and asserts the refusal. ' ''
+}
+
+@test "red twin: a signed value test that never forges one fails" {
+  red check_forged_value "$PLANNER_REL" 'sends a forged or edited value' 'sends the issued value'
+}
+
+@test "red twin: the coverage lens dropping the forged signed value hole fails" {
+  red check_case_split "$AUDIT_REL" ' a signed or encrypted value (a cookie, a session, a token) with no test sending a forged or edited one;' ''
+}
+
+@test "planner and the SPEC coverage lens split compound conditions and check order into cases" {
+  green check_case_split
+}
+
+@test "red twin: the coverage lens checking rows instead of cases fails" {
+  red check_case_split "$AUDIT_REL" 'one row per case' 'one row per SPEC row'
+}
+
+@test "red twin: the planner order-of-checks case not asserting the earlier check refused fails" {
+  red check_case_split "$PLANNER_REL" ', fails both, and asserts the earlier of the pair refused' ', fails both'
+}
+
+@test "red twin: the coverage lens order-of-checks hole not asserting the earlier check refused fails" {
+  red check_case_split "$AUDIT_REL" ', fails both, and asserts the earlier of the pair refused' ', fails both'
+}
+
+@test "red twin: the coverage lens skipping scope_boundaries and clarifications.answered fails" {
+  red check_case_split "$AUDIT_REL" ' + `scope_boundaries` + `clarifications.answered`' ''
+}
+
+@test "red twin: the coverage lens dropping the uncovered guard case hole fails" {
+  red check_case_split "$AUDIT_REL" 'a guard case with no test a task names below the closing flow, and ' ''
+}
+
+@test "red twin: the planner dropping the compound condition split fails" {
+  red check_case_split "$PLANNER_REL" 'A compound condition is one case per part' 'A compound condition is one case'
+}
+
+@test "red twin: the planner pinning check order without a both-failing test fails" {
+  red check_case_split "$PLANNER_REL" ', asserted by a test whose input passes every earlier check, fails both, and asserts the earlier of the pair refused' ''
 }
 
 @test "red twin: asserting only one case of a multi-case row fails" {
