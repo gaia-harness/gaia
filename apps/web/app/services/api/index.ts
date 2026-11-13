@@ -1,6 +1,12 @@
 import ky from 'ky';
 import type {Options, StandardSchemaV1, StandardSchemaV1InferOutput} from 'ky';
-import {buildRequestHeaders, getBaseUrl, getHooks, getUri} from './utils';
+import {
+  buildRequestHeaders,
+  getBaseUrl,
+  getHooks,
+  getParseJson,
+  getUri,
+} from './utils';
 import type {SearchParamsOptions, UriOptions} from './utils';
 
 export type RequestFunction = {
@@ -29,7 +35,8 @@ type RequestOptions = Omit<Options, 'searchParams'> &
   };
 
 // arrayFormat takes its default in appendSearchParams; an omitted
-// isSnakeCaseEnabled is off for both search params and the casing hooks.
+// isSnakeCaseEnabled is off for search params, the request hook and the
+// response parser.
 export const create = ({
   arrayFormat,
   hooks,
@@ -37,9 +44,11 @@ export const create = ({
   prefix,
   ...apiOptions
 }: CreateOptions = {}): RequestFunction => {
+  const layerParseJson = getParseJson(isSnakeCaseEnabled, apiOptions.parseJson);
   const kyInstance = ky.create({
     hooks: getHooks(isSnakeCaseEnabled, hooks),
     ...apiOptions,
+    parseJson: layerParseJson,
   });
 
   const request = async (
@@ -58,6 +67,12 @@ export const create = ({
       {
         ...options,
         headers: buildRequestHeaders(options.headers, token, language),
+        // A request's own parseJson is wrapped too, rather than replacing the
+        // layer's conversion.
+        parseJson:
+          options.parseJson ?
+            getParseJson(isSnakeCaseEnabled, options.parseJson)
+          : layerParseJson,
         // Resolved per request: the base URL is unknown at module import.
         prefix: options.prefix ?? prefix ?? (getBaseUrl() || '/'),
       }

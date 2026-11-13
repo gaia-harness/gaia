@@ -1,6 +1,6 @@
 import {delay} from 'msw';
 import {http, HttpResponse} from 'msw/http';
-import {afterEach, describe, expect, expectTypeOf, test} from 'vitest';
+import {afterEach, describe, expect, expectTypeOf, test, vi} from 'vitest';
 import {z} from 'zod';
 import {createServer} from 'node:http';
 import type {Server} from 'node:http';
@@ -16,7 +16,6 @@ const ORIGIN_B = 'https://api-b.test';
 const itemSchema = z.object({displayName: z.string()});
 const envelopeSchema = z.object({data: itemSchema});
 
-// Ky runs parseJson again on the JSON the hook returns, so this one must parse real JSON too.
 const parseJsonOrPlainText = (text: string): unknown =>
   text === 'not json' ? {display_name: 'parsed'} : JSON.parse(text);
 
@@ -154,12 +153,37 @@ describe('create', () => {
       http.get(`${ORIGIN_A}/items`, () => HttpResponse.text('not json'))
     );
 
-    const item = await create({
+    const parsedItem = await create({
       isSnakeCaseEnabled: true,
       parseJson: parseJsonOrPlainText,
     })('items', {schema: itemSchema});
 
-    expect(item).toEqual({displayName: 'parsed'});
+    expect(parsedItem).toEqual({displayName: 'parsed'});
+  });
+
+  test("a caller's parseJson error propagates on the snake_case layer", async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(http.get(`${ORIGIN_A}/items`, () => HttpResponse.json({})));
+
+    await expect(
+      create({
+        isSnakeCaseEnabled: true,
+        parseJson: () => {
+          throw new Error('bad data');
+        },
+      })('items', {schema: z.null()})
+    ).rejects.toThrow('bad data');
+  });
+
+  test('an empty 2xx body parses to undefined on the snake_case layer', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, () => new HttpResponse(null, {status: 200}))
+    );
+
+    await expect(
+      create({isSnakeCaseEnabled: true})('items', {schema: z.undefined()})
+    ).resolves.toBeUndefined();
   });
 
   test('isSnakeCaseEnabled converts a JSON body to snake_case and the response to camelCase', async () => {
@@ -182,6 +206,58 @@ describe('create', () => {
 
     expect(received).toEqual({display_name: 'x'});
     expect(parsedEnvelope.data.displayName).toBe('x');
+  });
+
+  test('a snake_case layer sends a non-JSON body unchanged', async () => {
+    process.env.API_URL = ORIGIN_A;
+    let receivedBody: string | undefined;
+    server.use(
+      http.post(`${ORIGIN_A}/items`, async ({request}) => {
+        receivedBody = await request.text();
+
+        return new HttpResponse(null, {status: 204});
+      })
+    );
+
+    await create({isSnakeCaseEnabled: true})('items', {
+      body: 'plain text body',
+      method: 'post',
+    });
+
+    expect(receivedBody).toBe('plain text body');
+  });
+
+  test('a snake_case layer runs the caller hooks and still snake_cases the JSON body', async () => {
+    process.env.API_URL = ORIGIN_A;
+    let receivedBody: unknown;
+    let receivedHeader: null | string = null;
+    server.use(
+      http.post(`${ORIGIN_A}/items`, async ({request}) => {
+        receivedBody = await request.json();
+        receivedHeader = request.headers.get('X-Caller-Hook');
+
+        return HttpResponse.json({});
+      })
+    );
+    const customAfter = vi.fn();
+
+    await create({
+      hooks: {
+        afterResponse: [customAfter],
+        beforeRequest: [
+          ({request}) => {
+            request.headers.set('X-Caller-Hook', 'ran');
+          },
+        ],
+      },
+      isSnakeCaseEnabled: true,
+    })('items', {json: {displayName: 'x'}, method: 'post'});
+
+    expect(receivedHeader).toBe('ran');
+    expect(receivedBody).toEqual({display_name: 'x'});
+    expect(customAfter).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({response: expect.any(Response)})
+    );
   });
 
   test('leaves the body and response keys unchanged by default', async () => {
@@ -317,11 +393,34 @@ describe('a failure while reading the body', () => {
     expect(attemptOutcome).toEqual([networkFailure, undefined]);
   });
 
-  test('a schema-less body that stalls resolves through attempt as a 504', async () => {
+  test.each([
+    ['the default layer', false],
+    ['the snake_case layer', true],
+  ])(
+    'a schema-less body that stalls on %s resolves through attempt as a 504',
+    async (_layer, isSnakeCaseEnabled) => {
+      await startSocketServer('stall');
+
+      const attemptOutcome = await attempt(async () =>
+        create({isSnakeCaseEnabled})('items', {retry: 0, timeout: 150})
+      );
+
+      expect(attemptOutcome).toEqual([
+        {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
+        undefined,
+      ]);
+    }
+  );
+
+  test('a body that stalls on the snake_case layer with a schema resolves through attempt as a 504', async () => {
     await startSocketServer('stall');
 
     const attemptOutcome = await attempt(async () =>
-      create()('items', {retry: 0, timeout: 150})
+      create({isSnakeCaseEnabled: true})('items', {
+        retry: 0,
+        schema: z.null(),
+        timeout: 150,
+      })
     );
 
     expect(attemptOutcome).toEqual([
