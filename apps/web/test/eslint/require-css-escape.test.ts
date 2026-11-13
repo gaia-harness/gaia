@@ -9,9 +9,10 @@ import path from 'node:path';
 
 const frontendDirectory = path.resolve(import.meta.dirname, '../..');
 
-// Resolving the config reads no source; loading its plugins takes several
-// seconds, which the default 10s timeout does not cover.
-const severityFor = async (relativePath: string) => {
+// Each case builds a fresh ESLint instance and loads the config's plugins,
+// which can outlast the node project's test timeout (coldImportTestTimeout in
+// vitest.config.ts) under a full-suite run.
+const resolveRuleSeverityForFile = async (relativePath: string) => {
   const config = (await new ESLint({
     cwd: frontendDirectory,
   }).calculateConfigForFile(
@@ -31,7 +32,7 @@ describe('unicorn/require-css-escape in the resolved project config', () => {
   ])(
     'resolves %s to severity %s',
     async (relativePath, severity) => {
-      expect(await severityFor(relativePath)).toBe(severity);
+      expect(await resolveRuleSeverityForFile(relativePath)).toBe(severity);
     },
     60_000
   );

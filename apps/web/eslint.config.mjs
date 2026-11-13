@@ -1,5 +1,6 @@
 import gaiaLint from '@gaia-harness/lint';
 import {defineConfig} from 'eslint/config';
+import {nodeTestExclude, nodeTestInclude} from './node-test-globs.mjs';
 
 const lint = gaiaLint();
 
@@ -24,8 +25,8 @@ export default defineConfig([
   // These files run in Node (server modules and the vitest node project),
   // where CSS is undefined, so the rule's CSS.escape autofix would crash them.
   {
-    files: ['app/**/*.server.ts?(x)', 'app/**/*.test.ts', 'test/**/*.test.ts'],
-    ignores: ['app/**/hooks/**'],
+    files: ['app/**/*.server.ts?(x)', ...nodeTestInclude],
+    ignores: nodeTestExclude,
     rules: {'unicorn/require-css-escape': 'off'},
   },
 ]);
