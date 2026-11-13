@@ -52,6 +52,14 @@ setup() {
     ".claude/skills/gaia/references/plan/planner.md|when no flow test already covers it|$PLANNER_PIN"
     ".claude/skills/gaia/references/plan/planner.md|covering the happy path and each error path the build has|$PLANNER_PIN"
     ".claude/skills/gaia/references/spec/spec-template.md|case tables belong to the lowest layer|$LINK"
+    # #3484: the keyboard and focus mandate covers only code that handles keys
+    # or moves focus; native controls in DOM order are the browser's.
+    '.claude/agents/worthiness-evaluator.md|For an **interactive** component, the `.test()` units together|whose own code handles keys or moves focus'
+    ".claude/agents/worthiness-evaluator.md|A suite of tests for an interactive component|Native controls in DOM order (inputs, selects and buttons in a plain form)"
+    '.claude/agents/worthiness-evaluator.md|For an **interactive** component, the `.test()` units together|`required` attribute the form library derives can fail only when the browser or library changes: `delete`'
+    "apps/web/.claude/rules/storybook.md|For an interactive component the tests cover a keyboard path|Native controls in DOM order need no keyboard or focus test"
+    "$TESTS_REACT|For an interactive component, the tests assert a keyboard path|Native controls in DOM order need no keyboard or focus test"
+    "apps/web/.claude/skills/new-component/SKILL.md|for an interactive component assert a keyboard path|whose own code handles keys or moves focus"
     ".claude/skills/gaia/references/spec/self-review.md|case tables belong to the lowest layer|$LINK"
     ".claude/skills/gaia/references/spec/self-review.md|leaving the cases to the lowest layer|$LINK"
     "wiki/index.md|each check sits at the lowest layer that proves it|both unit-test conditions"
@@ -70,8 +78,8 @@ setup() {
     ".claude/skills/tdd/SKILL.md|Every proposed DELETE requires human confirmation and renders its evidence INLINE."
     'wiki/decisions/Worthiness Audit.md|**proposes** verdicts and **edits no files**; a human acts on every proposal.'
     ".claude/agents/overlap-evaluator.md|The journey floor: never propose demoting or dropping a flow's only browser journey."
-    ".claude/agents/worthiness-evaluator.md|state of the controls a user drives. A suite of tests for an interactive"
-    "$TESTS_REACT|For an interactive component, the tests assert a keyboard path"
+    ".claude/agents/worthiness-evaluator.md|An axe pass on a render does not supply that signal"
+    "$TESTS_REACT|An axe pass says nothing about focus order, keyboard operation"
     ".claude/skills/gaia/references/spec/clarify-prompts.md|One flow per critical user path."
     "apps/web/.claude/rules/playwright.md|One journey per user flow"
     '.claude/skills/tdd/references/tests-shell.md|one `.bats` file per script under test'
