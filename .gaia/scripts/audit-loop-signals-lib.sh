@@ -342,3 +342,11 @@ gaia_loop_disputed_entries() {
          reason,
          repeated: any($previous[]; key == $k)}]'
 }
+
+# gaia_loop_checkpoint_disputes <run-directory> <round>: gaia_loop_disputed_entries
+# for the checkpoint hook, [] on any failure. The refused-fix list is display
+# only, so an unreadable fixer or dispositions file drops the list rather than
+# the checkpoint.
+gaia_loop_checkpoint_disputes() {
+  gaia_loop_disputed_entries "$@" || printf '[]\n'
+}
