@@ -172,7 +172,7 @@ scans of fully-rendered pages. The fixture in `.playwright/fixtures.ts`
 exposes `makeAxeBuilder` for tests that need to customize tags, includes, or
 disabled rules. Failure threshold is frozen: critical + serious violations
 fail the test; moderate + minor violations attach as `axe-advisory.json` and
-emit `console.warn`.
+emit `console.warn`. The helper first waits, up to 10 seconds, for every running finite CSS or Web animation to finish, so a theme switch is judged on its settled colors; a page with a longer finite animation is scanned mid-animation.
 
 ```ts
 import {test} from '../fixtures';

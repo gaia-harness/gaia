@@ -9,6 +9,9 @@ const SEVERITY_FAIL = new Set(['critical', 'serious']);
  * violations. Moderate/minor violations are attached to the test info
  * and surfaced via console.warn.
  *
+ * Waits for every running finite CSS or Web animation to finish (capped at
+ * 10 seconds) before scanning, so a theme switch is judged on its settled colors.
+ *
  * `options.label` is folded into the attachment names so a test that scans
  * more than once produces distinct attachments instead of overwriting one.
  */
@@ -23,16 +26,23 @@ export const expectNoSeriousA11yViolations = async (
 
   // Scan the settled page: right after a theme switch, a control easing its
   // colors would otherwise be judged on a frame between two themes.
+  // The cap keeps an animation that never finishes (paused, scroll-driven)
+  // from hanging the scan until the test timeout.
   await page.evaluate(async () => {
-    await Promise.allSettled(
-      document
-        .getAnimations()
-        .filter(
-          (animation) =>
-            animation.effect?.getComputedTiming().endTime !== Infinity
-        )
-        .map(async (animation) => animation.finished)
-    );
+    await Promise.race([
+      Promise.allSettled(
+        document
+          .getAnimations()
+          .filter(
+            (animation) =>
+              animation.effect?.getComputedTiming().endTime !== Infinity
+          )
+          .map(async (animation) => animation.finished)
+      ),
+      new Promise((resolve) => {
+        setTimeout(resolve, 10_000);
+      }),
+    ]);
   });
 
   const {incomplete, violations} = await axe.analyze();
