@@ -121,7 +121,7 @@ check_executor_lint() {
   range="$(range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | tr '\n' ' ' | tr -s ' ')"
   [ -n "$range" ] || { printf 'executor template range not found\n' >&2; return 1; }
   need "$range" "**The prompt template MUST also require linting the sub-agent's own files before it returns**, with \`pnpm -C <package dir> exec eslint <its own files>\`, the paths relative to the package and no fix flag" || return 1
-  need "$range" 'acting only on errors in files its task owns: it rewrites its edit until lint reports no error but `prettier/prettier`' || return 1
+  need "$range" 'acting only on errors in files its task owns: it rewrites its edit until lint reports no problem, error or warning, but `prettier/prettier`' || return 1
 }
 
 check_vertical_slicing() {
