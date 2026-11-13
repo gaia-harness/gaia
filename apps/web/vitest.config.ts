@@ -26,7 +26,7 @@ const coldImportTestTimeout = 30_000;
 // total at or under the core count. The 12 keeps the browser page ceiling
 // Vitest applies on its own only when maxWorkers is unset. On a standard
 // GitHub-hosted 4-vCPU Linux runner, the default was measured not to stall
-// stories and halving gained nothing there; other machines at four cores or
+// stories and halving gained nothing; other machines at four cores or
 // fewer were not measured.
 const maxUncappedCores = 4;
 const cores = availableParallelism();
