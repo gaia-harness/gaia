@@ -74,6 +74,7 @@ check_acceptance_clause() {
   need "$text" 'the SPEC, an audit directive or a document the SPEC'"'"'s Required reading names states it' || return 1
   need "$text" 'it never gets a flow of its own' || return 1
   need "$text" 'The test asserts the stated literal, never an import of the app'"'"'s own string' || return 1
+  need "$text" 'Read the documents its `## Required reading` names too, for any role, accessible name or exact wording they state.' || return 1
 }
 
 check_directive_clause() {
@@ -85,9 +86,9 @@ check_directive_clause() {
 check_coverage_lens() {
   local text
   text="$(flat "$1/$AUDIT_REL")"
-  need "$text" 'a role, accessible name or exact wording a task delivers, stated by the SPEC, a `## Plan-time directives` entry of the SPEC'"'"'s audit' || return 1
-  need "$text" 'with no test a task names asserting it, including one the SPEC itself dropped' || return 1
-  need "$text" 'also its `AUDIT.md` and the documents its Required reading names' || return 1
+  need "$text" 'a role, accessible name or exact wording a task delivers, stated by the SPEC, an entry under `## Plan-time directives` in its `AUDIT.md`' || return 1
+  need "$text" 'with no test a task names asserting it, including one the brief or audit states that the SPEC omits' || return 1
+  need "$text" 'also `AUDIT.md` beside it and the documents its `## Required reading` names' || return 1
   need "$text" 'a test that asserts stated wording through an import of the app'"'"'s own string counts as no test' || return 1
 }
 
@@ -98,6 +99,7 @@ check_coverage_lens() {
   red check_acceptance_clause "$PLANNER_REL" 'is asserted by a test this task names**' 'is noted in the contract**'
   red check_acceptance_clause "$PLANNER_REL" 'it never gets a flow of its own' 'it gets a flow of its own'
   red check_acceptance_clause "$PLANNER_REL" 'asserts the stated literal, never an import' 'asserts the stated literal or an import'
+  red check_acceptance_clause "$PLANNER_REL" 'Read the documents its `## Required reading` names too' 'Skip the documents its `## Required reading` names'
 }
 
 @test "planner: a markup directive's stated role or name is never code-only" {
@@ -107,7 +109,7 @@ check_coverage_lens() {
 
 @test "coverage lens: flags a stated specific with no test, reading the audit and Required reading" {
   green check_coverage_lens
-  red check_coverage_lens "$AUDIT_REL" 'including one the SPEC itself dropped' 'when the SPEC carries it'
-  red check_coverage_lens "$AUDIT_REL" 'also its `AUDIT.md` and the documents its Required reading names' 'nothing else'
+  red check_coverage_lens "$AUDIT_REL" 'including one the brief or audit states that the SPEC omits' 'when the SPEC carries it'
+  red check_coverage_lens "$AUDIT_REL" 'also `AUDIT.md` beside it and the documents its `## Required reading` names' 'nothing else'
   red check_coverage_lens "$AUDIT_REL" 'counts as no test' 'counts as a test'
 }
