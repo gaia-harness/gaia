@@ -760,7 +760,7 @@ run_decision() {
         context_line=$(gaia_context_line "${BASH_REMATCH[1]}" "$ask_tokens" "$ask_percent") || context_line=''
       fi
       disputes=$(gaia_loop_disputed_entries "$run_directory" "$used") && question=$(gaia_loop_pinned_question "$BRANCH_KEY" "$nonce" "$used" "$GAIA_CONTEXT_UNIT_ROUNDS" "$accept_is_eligible" "$cap" "$trigger" "$reading" "$recommended" "$context_line" "$disputes") && [ -n "$question" ] ||
-        finish_deny "BLOCKED: the audit loop checkpoint could not build its pinned question (trigger $trigger). Fail-loud, not fail-open: check that fixer-$used-audit.json and dispositions-$used.json in $run_directory parse, then retry the dispatch."
+        finish_deny "BLOCKED: the audit loop checkpoint could not build its pinned question (trigger $trigger). Fail-loud, not fail-open: check that fixer-$used-audit.json, fixer-$((used - 1))-audit.json and dispositions-$used.json in $run_directory parse, then retry the dispatch."
       # Every checkpoint deny appends a new checkpoint; the latest is the one
       # pending, so this supersedes any earlier one, legacy ones included.
       WORKING_STATE=$(jq -c --argjson rounds_used "$used" --arg why "$trigger" --arg session_id "$session" --arg r "$root" \
