@@ -44,9 +44,11 @@ export const create = ({
   prefix,
   ...apiOptions
 }: CreateOptions = {}): RequestFunction => {
+  const layerParseJson = getParseJson(isSnakeCaseEnabled, apiOptions.parseJson);
   const kyInstance = ky.create({
     hooks: getHooks(isSnakeCaseEnabled, hooks),
     ...apiOptions,
+    parseJson: layerParseJson,
   });
 
   const request = async (
@@ -65,12 +67,12 @@ export const create = ({
       {
         ...options,
         headers: buildRequestHeaders(options.headers, token, language),
-        // Per request, so a request's own parseJson is wrapped too rather than
-        // replacing the layer's conversion.
-        parseJson: getParseJson(
-          isSnakeCaseEnabled,
-          options.parseJson ?? apiOptions.parseJson
-        ),
+        // A request's own parseJson is wrapped too, rather than replacing the
+        // layer's conversion.
+        parseJson:
+          options.parseJson ?
+            getParseJson(isSnakeCaseEnabled, options.parseJson)
+          : layerParseJson,
         // Resolved per request: the base URL is unknown at module import.
         prefix: options.prefix ?? prefix ?? (getBaseUrl() || '/'),
       }

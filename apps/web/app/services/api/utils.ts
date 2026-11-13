@@ -32,21 +32,23 @@ type ParseJson = NonNullable<Options['parseJson']>;
 // Converting in parseJson, not an afterResponse hook, keeps the body read
 // inside Ky's own body-read race, which applies `timeout`: Ky bounds an
 // afterResponse hook only by `totalTimeout` and a caller's `signal`, so a
-// hook's read of a stalled body would ignore `timeout`. A body that fails to
-// parse resolves to null on a 2xx, so the schema validates null instead of the
-// parse error escaping; on an error status the rethrow leaves Ky's HTTPError
-// without data.
+// hook's read of a stalled body would ignore `timeout`. Only the default
+// JSON.parse path is lenient: a body that fails to parse resolves to null on a
+// 2xx, so the schema validates null instead of the parse error escaping; on an
+// error status the rethrow leaves Ky's HTTPError without data. An empty body
+// resolves to undefined, as Ky does when it has no parseJson. A caller's
+// parseJson keeps its own errors.
 export const getParseJson = (
   isSnakeCaseEnabled?: boolean,
   parseJson?: ParseJson
 ): ParseJson | undefined =>
   isSnakeCaseEnabled ?
     async (text, context) => {
-      const [error, parsed] = await tryCatch(async () =>
-        toCamelCase(
-          await (parseJson ? parseJson(text, context) : JSON.parse(text))
-        )
-      );
+      if (parseJson) return toCamelCase(await parseJson(text, context));
+
+      if (text === '') return undefined;
+
+      const [error, parsed] = tryCatch(() => JSON.parse(text) as unknown);
 
       if (error) {
         if (context.response.ok) return null;
@@ -54,7 +56,7 @@ export const getParseJson = (
         throw error;
       }
 
-      return parsed;
+      return toCamelCase(parsed);
     }
   : parseJson;
 

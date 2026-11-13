@@ -153,12 +153,37 @@ describe('create', () => {
       http.get(`${ORIGIN_A}/items`, () => HttpResponse.text('not json'))
     );
 
-    const item = await create({
+    const parsedItem = await create({
       isSnakeCaseEnabled: true,
       parseJson: parseJsonOrPlainText,
     })('items', {schema: itemSchema});
 
-    expect(item).toEqual({displayName: 'parsed'});
+    expect(parsedItem).toEqual({displayName: 'parsed'});
+  });
+
+  test("a caller's parseJson error propagates on the snake_case layer", async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(http.get(`${ORIGIN_A}/items`, () => HttpResponse.json({})));
+
+    await expect(
+      create({
+        isSnakeCaseEnabled: true,
+        parseJson: () => {
+          throw new Error('bad data');
+        },
+      })('items', {schema: z.null()})
+    ).rejects.toThrow('bad data');
+  });
+
+  test('an empty 2xx body parses to undefined on the snake_case layer', async () => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(
+      http.get(`${ORIGIN_A}/items`, () => new HttpResponse(null, {status: 200}))
+    );
+
+    await expect(
+      create({isSnakeCaseEnabled: true})('items', {schema: z.undefined()})
+    ).resolves.toBeUndefined();
   });
 
   test('isSnakeCaseEnabled converts a JSON body to snake_case and the response to camelCase', async () => {
@@ -386,6 +411,23 @@ describe('a failure while reading the body', () => {
       ]);
     }
   );
+
+  test('a body that stalls on the snake_case layer through a schema resolves through attempt as a 504', async () => {
+    await startSocketServer('stall');
+
+    const attemptOutcome = await attempt(async () =>
+      create({isSnakeCaseEnabled: true})('items', {
+        retry: 0,
+        schema: z.null(),
+        timeout: 150,
+      })
+    );
+
+    expect(attemptOutcome).toEqual([
+      {isNetworkFailure: true, status: 504, statusText: 'Request timed out'},
+      undefined,
+    ]);
+  });
 
   test('a body that drops on the snake_case layer resolves through attempt as a 503', async () => {
     await startSocketServer('drop');
