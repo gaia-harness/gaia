@@ -9,6 +9,9 @@ const SEVERITY_FAIL = new Set(['critical', 'serious']);
  * violations. Moderate/minor violations are attached to the test info
  * and surfaced via console.warn.
  *
+ * Waits up to 10 seconds for every finite `document.getAnimations()` entry
+ * (transitions included) to finish before scanning.
+ *
  * `options.label` is folded into the attachment names so a test that scans
  * more than once produces distinct attachments instead of overwriting one.
  */
@@ -20,6 +23,27 @@ export const expectNoSeriousA11yViolations = async (
   const axe =
     options?.builder ?? new AxeBuilder({page}).withTags(AXE_WCAG_TAGS);
   const suffix = options?.label === undefined ? '' : `-${options.label}`;
+
+  // Scan the settled page: right after a theme switch, a control easing its
+  // colors would otherwise be judged on a frame between two themes.
+  // The cap keeps an animation that never finishes (paused, scroll-driven)
+  // from hanging the scan until the test timeout.
+  await page.evaluate(async () => {
+    await Promise.race([
+      Promise.allSettled(
+        document
+          .getAnimations()
+          .filter(
+            (animation) =>
+              animation.effect?.getComputedTiming().endTime !== Infinity
+          )
+          .map(async (animation) => animation.finished)
+      ),
+      new Promise((resolve) => {
+        setTimeout(resolve, 10_000);
+      }),
+    ]);
+  });
 
   const {incomplete, violations} = await axe.analyze();
   const blocking = violations.filter((violation) =>
