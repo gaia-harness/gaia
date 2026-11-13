@@ -1352,6 +1352,27 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   assert_allowed
 }
 
+@test "a key an earlier round disposed file is not undecided when the open round re-reports it after a needs-human stop" {
+  local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  alf_fill f.txt 12 feature
+  alf_commit "round 1"
+  dispatch
+  assert_allowed || return 1
+  alf_stamp 1 10
+  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"severity":"minor","security":false}]' 11
+  alf_dispositions 1 '[{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"disposition":"file","reason":"out of scope"}]'
+  printf '{"key":{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1},"outcome":"filed"}\n' >"$run_folder/filing-outcomes-1.jsonl"
+  new_tree
+  dispatch
+  assert_allowed || return 1
+  alf_stamp 2 20
+  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"severity":"minor","security":false}]' 21
+  printf '{"version":1,"unit":1,"stop_reason":"needs-human"}\n' >"$run_folder/unit-1.json"
+  run bash "$REPO_ROOT/.gaia/scripts/audit-dispositions-check.sh" undecided --root "$ALF_ROOT" --run-folder "$run_folder"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  [ -z "$output" ]
+}
+
 # veto_rounds: round 1 reports finding X (security false) and waives it on the
 # triage threshold, the waiver a later veto overrides; round 2 is recorded by
 # a member dispatch, which snapshots round 1's dispositions.
