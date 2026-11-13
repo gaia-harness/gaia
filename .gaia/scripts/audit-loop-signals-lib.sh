@@ -301,9 +301,11 @@ gaia_loop_decide_member() {
 # round's fixer returned disputed with a reason starting `needs a requirement:`
 # or `conflicts with requirement:` (fixer-<r>-audit.json, shape in
 # audit-fix-verify.sh's header), drops one with no path or a line that is not
-# a non-negative integer (the builder would refuse it), takes each one's severity from the round's
-# dispositions-<r>.json entry for the same identity key (null when none), and
-# marks it repeated when round r-1's fixer disputed the same key that way.
+# a non-negative integer (the builder would refuse it), drops one whose
+# identity key matches no disposition fix entry of the round's
+# dispositions-<r>.json (the fixer's text is untrusted and only a fix entry can
+# be refused), caps each path at 160 characters like the reason, takes each one's severity from that entry (null when it
+# carries none), and marks it repeated when round r-1's fixer disputed the same key that way.
 # Display only: the severity comes from the orchestrator's file, which nothing
 # grades from, so it never feeds a gate. A round with no fixer file prints [].
 # rc 2 on a bad argument, 5 on an unparseable file, 6 without jq.
@@ -334,7 +336,8 @@ gaia_loop_disputed_entries() {
     def key: [.member, .finding_class, .path, .line];
     [$current[] | select((.path | type == "string" and length > 0) and (.line | type == "number" and . >= 0 and floor == .))
       | key as $k
-      | {path, line,
+      | select(any($dispositions[]; .disposition == "fix" and key == $k))
+      | {path: (.path | if length > 160 then .[0:157] + "..." else . end), line,
          severity: ([$dispositions[] | select(key == $k) | .severity | select(IN("critical", "major", "minor"))] | first),
          reason,
          repeated: any($previous[]; key == $k)}]'

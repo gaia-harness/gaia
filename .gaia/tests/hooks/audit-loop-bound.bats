@@ -1232,21 +1232,33 @@ settings() {
 # first_pinned_label: the leading option of the latest checkpoint's pinned question.
 first_pinned_label() { state_field '.history.checkpoints | last | .question.questions[0].options[0].label'; }
 
-@test "a checkpoint after the fixer refused the same fix two rounds running names it and leads with State the rule; an unreadable fixer file denies" {
+@test "a checkpoint after the fixer refused the same fix two rounds running names it and leads with State the rule" {
   local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH" fixtures="$REPO_ROOT/.gaia/scripts/tests/fixtures/audit-loop-disputes"
   alf_sequence 6 5 4 3 2
   mkdir -p "$run_folder"
   cp "$fixtures/fixer-5-audit.json" "$run_folder/fixer-4-audit.json"
   cp "$fixtures/fixer-6-audit.json" "$run_folder/fixer-5-audit.json"
+  # Round 5's own sidecar findings (f.txt lines 1 and 2) need entries too, or the dispositions check denies first.
+  jq '.round = 5 | .entries += [1, 2 | {member: "code-audit-frontend", finding_class: "rule/x", path: "f.txt", line: ., disposition: "fix", reason: "fixed"}]' \
+    "$fixtures/dispositions-6.json" >"$run_folder/dispositions-5.json"
   new_tree
   dispatch "$FRONTEND_MEMBER" session-b
   assert_denied
   [ "$(first_pinned_label)" = "State the rule, then continue (Recommended)" ]
-  [[ "$(state_field '.history.checkpoints | last | .question.questions[0].question')" == *"until a rule requires them: apps/web/app/utils/http.server.ts:7 \"needs a requirement: honour X-Forwarded-Proto"*"If no rule should require them, pick Stop and file the remainder."* ]]
+  [[ "$(state_field '.history.checkpoints | last | .question.questions[0].question')" == *"until a rule requires them: apps/web/app/utils/http.server.ts:7 (major) \"needs a requirement: honour X-Forwarded-Proto"*"If no rule should require them, pick Stop and file the remainder."* ]]
+}
+
+@test "a checkpoint still records when a past round's fixer file is unreadable, because the refused-fix list is display only" {
+  local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  alf_sequence 6 5 4 3 2
+  mkdir -p "$run_folder"
   printf '{broken' >"$run_folder/fixer-5-audit.json"
+  new_tree
   dispatch "$FRONTEND_MEMBER" session-b
-  deny_prefix "BLOCKED: the audit loop checkpoint could not build its pinned question (trigger fallback)"
-  reason | grep -qF -- "fixer-<round>-audit.json files of rounds 5 and 4"
+  assert_denied
+  [ "$(state_field '.history.checkpoints | last | .question.questions[0].options | length')" -ge 2 ]
+  [[ "$(state_field '.history.checkpoints | last | .question.questions[0].question')" == *"until a rule requires"* ]] && return 1
+  true
 }
 
 @test "the pinned question leads with the evaluator's recommendation, and the band picks the grant when it is a grant" {

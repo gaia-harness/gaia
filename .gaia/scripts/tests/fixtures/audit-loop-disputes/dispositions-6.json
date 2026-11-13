@@ -1,5 +1,6 @@
 {"schema":1,"round":6,"enforcement_paths_allowed":[],"entries":[
 {"member":"code-audit-frontend","finding_class":"holistic/unclassified","path":"apps/web/app/utils/http.server.ts","line":7,"severity":"major","disposition":"fix","reason":"In-scope finding on code this branch authored."},
 {"member":"code-audit-frontend","finding_class":"holistic/unbounded-invocation","path":"apps/web/app/routes/_session.requests._index.tsx","line":25,"severity":"minor","disposition":"fix","reason":"In-scope finding on code this branch authored."},
-{"member":"code-audit-frontend","finding_class":"holistic/unclassified","path":"apps/web/app/route-tests/requests/tests/request-detail-session.ts","line":53,"severity":"minor","disposition":"fix","reason":"In-scope finding on code this branch authored."}
+{"member":"code-audit-frontend","finding_class":"holistic/unclassified","path":"apps/web/app/route-tests/requests/tests/request-detail-session.ts","line":53,"severity":"minor","disposition":"fix","reason":"In-scope finding on code this branch authored."},
+{"member":"code-audit-frontend","finding_class":"holistic/unclassified","path":"apps/web/app/sessions.server/auth.ts","line":84,"disposition":"fix","reason":"In-scope finding on code this branch authored."}
 ]}

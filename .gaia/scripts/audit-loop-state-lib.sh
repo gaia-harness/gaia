@@ -350,7 +350,7 @@ gaia_loop_recommended() {
 
 # gaia_loop_pinned_question <branch> <nonce> <rounds_used> <unit_rounds>
 # <accept_eligible:true|false> <cap:true|false> <trigger> [<context_reading>
-# [<recommended> [<checkpoint_line>]]]: the whole pinned AskUserQuestion
+# [<recommended> [<checkpoint_line> [<disputes>]]]]: the whole pinned AskUserQuestion
 # tool_input, compact JSON, one question. The only builder of these strings (the
 # bound hook stores the result, and the recorder compares a payload against that
 # stored copy). rc 2 and nothing printed on a bad input. The optional reading is

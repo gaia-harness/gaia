@@ -635,12 +635,19 @@ disputes_run_folder() {
 }
 
 @test "disputed entries: only rule disputes, severity from the round's dispositions, repeated when the round before disputed the same key" {
-  local run_folder entries
+  local run_folder entries long_path
   run_folder="$(disputes_run_folder)"
   entries="$(gaia_loop_disputed_entries "$run_folder" 6)"
   [ "$(printf '%s' "$entries" | jq -c '[.[] | [.path, .line, .severity, .repeated]]')" = '[["apps/web/app/utils/http.server.ts",7,"major",true],["apps/web/app/routes/_session.requests._index.tsx",25,"minor",true],["apps/web/app/sessions.server/auth.ts",84,null,false]]' ]
   [[ "$(printf '%s' "$entries" | jq -r '.[0].reason')" == "needs a requirement: honour X-Forwarded-Proto"* ]]
   [ "$(gaia_loop_disputed_entries "$run_folder" 7)" = '[]' ]
+  long_path="apps/$(printf 'd%.0s' $(seq 1 200)).ts"
+  jq --arg p "$long_path" '.results[0].path = $p' "$run_folder/fixer-6-audit.json" >"$run_folder/long.json"
+  jq --arg p "$long_path" '.entries[0].path = $p' "$run_folder/dispositions-6.json" >"$run_folder/long-d.json"
+  mv "$run_folder/long.json" "$run_folder/fixer-6-audit.json"
+  mv "$run_folder/long-d.json" "$run_folder/dispositions-6.json"
+  [ "$(gaia_loop_disputed_entries "$run_folder" 6 | jq -r '.[0].path | length')" -eq 160 ]
+  cp "$BATS_TEST_DIRNAME"/fixtures/audit-loop-disputes/*.json "$run_folder/"
   printf '{broken' >"$run_folder/fixer-5-audit.json"
   run gaia_loop_disputed_entries "$run_folder" 6
   [ "$status" -eq 5 ]
