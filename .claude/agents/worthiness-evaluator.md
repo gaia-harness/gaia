@@ -161,17 +161,26 @@ or whose only `.test()` asserts that something rendered, is the START of a test,
 not the whole of it: the interactions, state transitions, and error paths still
 need `.test()` coverage of the behavior a user sees
 (`wiki/decisions/Test Layering.md`). For such a file the non-triviality axis returns **`fix`
-(needs interaction assertions), NOT `keep`.** For an **interactive** component,
-the `.test()` units together must assert a keyboard path (Tab, Enter, Escape or
-arrows, whichever the widget requires) and a focus outcome (where focus lands, or
-that it returns to the trigger). An axe pass on a render does not supply that
-signal: it says nothing about focus order, keyboard operation, or the accessible
-state of the controls a user drives. A suite of tests for an interactive
-component with no keyboard path or no focus outcome is a `fix` (artifact:
-`no-keyboard-or-focus-assertion`).
+(needs interaction assertions), NOT `keep`.** For a component whose own code
+handles keys or moves focus (a key handler, roving tabindex, or focus moved on
+open, returned to the trigger on close, or moved to an error), the `.test()` units together must assert that keyboard path (Tab,
+Enter, Escape or arrows, whichever the widget requires) and its focus outcome.
+An axe pass on a render does not supply that signal: it says nothing about focus
+order, keyboard operation, or the accessible state of the controls a user
+drives. A suite for such a component with no keyboard path or no focus outcome
+is a `fix` (artifact: `no-keyboard-or-focus-assertion`).
 
 No static check produces this signal, so a missing keyboard path or focus
 outcome is caught here or not at all.
+
+Native controls in DOM order (inputs, selects and buttons in a plain form) give
+the app no keyboard behavior to own, so they need no keyboard or focus test. A
+test whose only assertions are their tab order (it restates the JSX the story
+already renders) or a `required` attribute the browser renders from a literal prop
+is a `delete` proposal: the tab-order case as trivial, the literal `required` case
+by the discriminator. The schema-to-`required` wiring (Conform `useForm`'s
+`constraint` option and any hand-forwarded `required` prop) is the app's and
+stays testable.
 
 ## Flow inputs
 
