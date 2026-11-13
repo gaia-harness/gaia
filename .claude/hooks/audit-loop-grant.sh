@@ -13,9 +13,9 @@
 # grant):
 #
 #   1. The whole submitted prompt is exactly the line `audit-grant <n>`,
-#      `audit-accept` or `audit-accept-finding <n>`. A line pasted inside longer text, quoted in a question
-#      or mentioned in passing is rejected, so no copied, quoted or generated
-#      text ever grants. The grammar and its parser live in
+#      `audit-accept` or `audit-accept-finding <n>`. A line pasted inside
+#      longer text, quoted in a question or mentioned in passing is rejected,
+#      so no copied, quoted or generated text ever grants. The grammar and its parser live in
 #      audit-loop-state-lib.sh (gaia_loop_parse_line); this hook never
 #      restates it.
 #   2. A checkpoint is pending on the branch the session resolves to: the

@@ -45,8 +45,8 @@
 #                               evaluator's veto state calls the veto satisfied; a synthetic
 #                               fix entry for a waiver-vetoed key no member re-reported passes
 #   accept-residual-not-eligible  (version 3) accept-residual on a key no human accepted for the round
-#                               (audit-accept-finding), on a round with no human accept where the default
-#                               stop does not hold or where the file disposes fix a key in
+#                               (audit-accept-finding), when the round has no human accept and either the
+#                               default stop does not hold or the file disposes fix a key in
 #                               default_stop_keys (the stop's formula: audit-loop-eval.sh, DEFAULT STOP)
 #   undisposed                  a finding of any authorship, or an unsatisfied waiver-vetoed
 #                               key for this round, with no entry in the file, unless the
