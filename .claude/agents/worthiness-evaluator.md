@@ -171,14 +171,14 @@ order, keyboard operation, or the accessible state of the controls a user
 drives. A suite for such a component with no keyboard path or no focus outcome
 is a `fix` (artifact: `no-keyboard-or-focus-assertion`).
 
+No static check produces this signal, so a missing keyboard path or focus
+outcome is caught here or not at all.
+
 Native controls in DOM order (inputs, selects and buttons in a plain form) give
 the app no keyboard behavior to own, so they need no keyboard or focus test. A
 test whose only assertions are their tab order or a `required` attribute the form
 library derives can fail only when the browser or library changes: `delete`, by
 the discriminator.
-
-No static check produces this signal, so a missing keyboard path or focus
-outcome is caught here or not at all.
 
 ## Flow inputs
 
