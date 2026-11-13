@@ -128,23 +128,39 @@ assert_unsatisfied() {
   assert_unsatisfied
 }
 
-# inline_trees: a repository at MAIN with three commits, carried as
-# TREE_WAIVED (f.txt and g.txt), TREE_UNRELATED (only g.txt changed) and
-# TREE_FIXED (f.txt changed too). The run folder under MAIN stays untracked.
+# inline_commit <message>: commits f.txt and g.txt at MAIN and prints the commit's tree.
+inline_commit() {
+  git -C "$MAIN" add f.txt g.txt && git -C "$MAIN" -c user.name=t -c user.email=t@t commit -q -m "$1" &&
+    git -C "$MAIN" rev-parse 'HEAD^{tree}'
+}
+
+# inline_trees: a repository at MAIN whose f.txt holds lines l1..l40 when the
+# waiver is held, and the trees a main-thread fix can leave. Each tree after
+# TREE_WAIVED is diffed against TREE_WAIVED, so their order does not matter:
+#   TREE_UNRELATED: only g.txt changed.
+#   TREE_FIXED: f.txt line 2 rewritten in place.
+#   TREE_MOVED: five lines inserted at the top, shifting every line by five.
+#   TREE_RELOCATED: line 2 deleted and a line added at 29, where the fix
+#     moved the code the finding was about.
+# The run folder under MAIN stays untracked.
 inline_trees() {
   [ -n "${TREE_FIXED-}" ] && return 0
   git init -q "$MAIN" || return 1
-  printf 'a\n' >"$MAIN/f.txt"
+  seq -f 'l%g' 1 40 >"$MAIN/f.txt"
   printf 'a\n' >"$MAIN/g.txt"
-  git -C "$MAIN" add f.txt g.txt && git -C "$MAIN" -c user.name=t -c user.email=t@t commit -q -m waived || return 1
-  TREE_WAIVED="$(git -C "$MAIN" rev-parse 'HEAD^{tree}')"
+  TREE_WAIVED="$(inline_commit waived)" || return 1
   printf 'b\n' >"$MAIN/g.txt"
-  git -C "$MAIN" -c user.name=t -c user.email=t@t commit -q -am unrelated || return 1
   # shellcheck disable=SC2034 # inline_base reads it by name
-  TREE_UNRELATED="$(git -C "$MAIN" rev-parse 'HEAD^{tree}')"
-  printf 'b\n' >"$MAIN/f.txt"
-  git -C "$MAIN" -c user.name=t -c user.email=t@t commit -q -am fixed || return 1
-  TREE_FIXED="$(git -C "$MAIN" rev-parse 'HEAD^{tree}')"
+  TREE_UNRELATED="$(inline_commit unrelated)" || return 1
+  seq -f 'l%g' 1 40 | sed '2s/.*/fixed/' >"$MAIN/f.txt"
+  TREE_FIXED="$(inline_commit fixed)" || return 1
+  { seq -f 'n%g' 1 5; seq -f 'l%g' 1 40; } >"$MAIN/f.txt"
+  # shellcheck disable=SC2034 # inline_base reads it by name
+  TREE_MOVED="$(inline_commit moved)" || return 1
+  seq -f 'l%g' 1 40 | sed -e '2d' -e '29a\
+relocated' >"$MAIN/f.txt"
+  # shellcheck disable=SC2034 # inline_base reads it by name
+  TREE_RELOCATED="$(inline_commit relocated)" || return 1
 }
 
 # inline_base <round-2-tree-variable>: the main-thread fix sequence at round
@@ -181,12 +197,33 @@ inline_veto_state() {
 }
 
 @test "veto-state inline: an edit that only moves the finding to another line of the file leaves the veto unsatisfied" {
-  inline_base TREE_FIXED || return 1
-  ROUND_KEYS='[["code-audit-frontend","rule/x","f.txt",7]]'
+  # Line 20 lands at 25, far from the five lines the edit wrote at the top.
+  VETOED_IDENTITY='["code-audit-frontend","rule/x","f.txt",20]'
+  inline_base TREE_MOVED || return 1
+  ROUND_KEYS='[["code-audit-frontend","rule/x","f.txt",25]]'
   [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ] || return 1
   # Another class on the same path, or the same class on another path, is not the vetoed finding.
-  ROUND_KEYS="[[\"code-audit-frontend\",\"rule/y\",\"f.txt\",7],[\"code-audit-frontend\",\"rule/x\",\"g.txt\",2]]"
+  ROUND_KEYS="[[\"code-audit-frontend\",\"rule/y\",\"f.txt\",25],[\"code-audit-frontend\",\"rule/x\",\"g.txt\",20]]"
   [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
+}
+
+# The tolerance is 3 lines: the vetoed line maps to [2,2] in TREE_FIXED, so 5
+# is inside it and 6 is past it; TREE_RELOCATED's fix wrote line 29 and
+# deleted line 2, mapping the vetoed line to the gap [1,2], so 20 is on code
+# it left alone.
+@test "veto-state inline: a same-class finding on the path re-reports the veto only near the vetoed line's new place or near a line the fix wrote" {
+  local tree line expected
+  while read -r tree line expected; do
+    inline_base "$tree" || return 1
+    ROUND_KEYS="[[\"code-audit-frontend\",\"rule/x\",\"f.txt\",$line]]"
+    [ "$(inline_veto_state | jq -c '.satisfied | length')" = "$expected" ] || { echo "$tree line $line"; return 1; }
+  done <<'CASES'
+TREE_FIXED 40 1
+TREE_FIXED 5 0
+TREE_FIXED 6 1
+TREE_RELOCATED 29 0
+TREE_RELOCATED 20 1
+CASES
 }
 
 @test "veto-state inline: unsatisfied when no round after the fix dispatched the key's member, or a tree cannot be read" {
