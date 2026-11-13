@@ -176,9 +176,11 @@ outcome is caught here or not at all.
 
 Native controls in DOM order (inputs, selects and buttons in a plain form) give
 the app no keyboard behavior to own, so they need no keyboard or focus test. A
-test whose only assertions are their tab order or a `required` attribute the form
-library derives can fail only when the browser or library changes: `delete`, by
-the discriminator.
+test whose only assertions are their tab order (it restates the JSX the story
+already renders) or a `required` attribute the browser renders from a literal prop
+is a `delete` proposal, by the discriminator. The app's own schema-to-`required`
+wiring (the `constraint` option and any hand-forwarded `required` prop) is
+app-owned and stays testable.
 
 ## Flow inputs
 

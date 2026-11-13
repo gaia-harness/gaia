@@ -56,7 +56,7 @@ setup() {
     # or moves focus; native controls in DOM order are the browser's.
     '.claude/agents/worthiness-evaluator.md|For an **interactive** component, the `.test()` units together|whose own code handles keys or moves focus'
     ".claude/agents/worthiness-evaluator.md|A suite of tests for an interactive component|Native controls in DOM order (inputs, selects and buttons in a plain form)"
-    '.claude/agents/worthiness-evaluator.md|For an **interactive** component, the `.test()` units together|`required` attribute the form library derives can fail only when the browser or library changes: `delete`'
+    '.claude/agents/worthiness-evaluator.md|For an **interactive** component, the `.test()` units together|`required` attribute the browser renders from a literal prop'
     "apps/web/.claude/rules/storybook.md|For an interactive component the tests cover a keyboard path|Native controls in DOM order need no keyboard or focus test"
     "$TESTS_REACT|For an interactive component, the tests assert a keyboard path|Native controls in DOM order need no keyboard or focus test"
     "apps/web/.claude/skills/new-component/SKILL.md|for an interactive component assert a keyboard path|whose own code handles keys or moves focus"
