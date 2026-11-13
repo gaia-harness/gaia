@@ -741,14 +741,7 @@ _gaia_loop_cli() {
       ;;
     brief) _gaia_loop_brief "$root" "$main" "$state"; return $? ;;
     round-history)
-      printf '%s' "$state" | jq -c '. as $state
-        | [$state.allowance.answers[] | select(.kind == "accept") | .checkpoint as $index
-           | $state.history.checkpoints[] | select(.index == $index) | .at_round] as $accepted_at
-        | [$state.history.rounds | to_entries[] | (.key + 1) as $round | .value
-           | {round: $round, tree, members: (.members // []), keys: (.snapshot.keys? // null),
-              counted_keys: (if (.snapshot.counted_keys? | type) == "array" then .snapshot.counted_keys | map([.member, .finding_class, .path, .line]) else null end),
-              closing: (.closing == true), reopened: (.reopened == true),
-              human_accept: (.closing == true or any($accepted_at[]; . == $round - 1 or . == $round))}]'
+      gaia_loop_round_history "$state"
       return $?
       ;;
     reopened-round)

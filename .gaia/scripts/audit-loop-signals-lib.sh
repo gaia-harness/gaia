@@ -349,3 +349,16 @@ gaia_loop_disputed_entries() {
 gaia_loop_checkpoint_disputes() {
   gaia_loop_disputed_entries "$@" || printf '[]\n'
 }
+
+# gaia_loop_round_history <state-json>: audit-loop-eval.sh round-history's
+# output (shape in that file's header).
+gaia_loop_round_history() {
+  printf '%s' "$1" | jq -c '. as $state
+    | [$state.allowance.answers[] | select(.kind == "accept") | .checkpoint as $index
+       | $state.history.checkpoints[] | select(.index == $index) | .at_round] as $accepted_at
+    | [$state.history.rounds | to_entries[] | (.key + 1) as $round | .value
+       | {round: $round, tree, members: (.members // []), keys: (.snapshot.keys? // null),
+          counted_keys: (if (.snapshot.counted_keys? | type) == "array" then .snapshot.counted_keys | map([.member, .finding_class, .path, .line]) else null end),
+          closing: (.closing == true), reopened: (.reopened == true),
+          human_accept: (.closing == true or any($accepted_at[]; . == $round - 1 or . == $round))}]'
+}
