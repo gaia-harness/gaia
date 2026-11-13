@@ -232,13 +232,13 @@ check_case_split() {
   plan="$(flat "$1/$PLANNER_REL")"
   lens="$(range_of "$1/$AUDIT_REL" '- **SPEC coverage' '- **' | tr '\n' ' ' | tr -s ' ')"
   need "$plan" 'A compound condition is one case per part' || return 1
-  need "$plan" 'an order-of-checks row is one case per adjacent pair of checks, asserted by a test whose input passes every earlier check, fails both, and asserts which one refused' || return 1
+  need "$plan" 'an order-of-checks row is one case per adjacent pair of checks, asserted by a test whose input passes every earlier check, fails both, and asserts the earlier of the pair refused' || return 1
   need "$lens" '`success_criteria` + `scope_boundaries` + `clarifications.answered`' || return 1
   need "$lens" 'one row per case' || return 1
   need "$lens" 'a compound condition one per part' || return 1
   need "$lens" 'an order-of-checks row one per adjacent pair of checks' || return 1
   need "$lens" 'a guard case with no test a task names below the closing flow' || return 1
-  need "$lens" 'an order-of-checks pair with no test that passes every earlier check, fails both, and asserts which one refused' || return 1
+  need "$lens" 'an order-of-checks pair with no test that passes every earlier check, fails both, and asserts the earlier of the pair refused' || return 1
   need "$lens" 'a signed or encrypted value (a cookie, a session, a token) with no test sending a forged or edited one' || return 1
 }
 
@@ -275,12 +275,12 @@ check_forged_value() {
   red check_case_split "$AUDIT_REL" 'one row per case' 'one row per SPEC row'
 }
 
-@test "red twin: the planner order-of-checks case not asserting which check refused fails" {
-  red check_case_split "$PLANNER_REL" ', fails both, and asserts which one refused' ', fails both'
+@test "red twin: the planner order-of-checks case not asserting the earlier check refused fails" {
+  red check_case_split "$PLANNER_REL" ', fails both, and asserts the earlier of the pair refused' ', fails both'
 }
 
-@test "red twin: the coverage lens order-of-checks hole not asserting which check refused fails" {
-  red check_case_split "$AUDIT_REL" ', fails both, and asserts which one refused' ', fails both'
+@test "red twin: the coverage lens order-of-checks hole not asserting the earlier check refused fails" {
+  red check_case_split "$AUDIT_REL" ', fails both, and asserts the earlier of the pair refused' ', fails both'
 }
 
 @test "red twin: the coverage lens skipping scope_boundaries and clarifications.answered fails" {
@@ -296,7 +296,7 @@ check_forged_value() {
 }
 
 @test "red twin: the planner pinning check order without a both-failing test fails" {
-  red check_case_split "$PLANNER_REL" ', asserted by a test whose input passes every earlier check, fails both, and asserts which one refused' ''
+  red check_case_split "$PLANNER_REL" ', asserted by a test whose input passes every earlier check, fails both, and asserts the earlier of the pair refused' ''
 }
 
 @test "red twin: asserting only one case of a multi-case row fails" {
