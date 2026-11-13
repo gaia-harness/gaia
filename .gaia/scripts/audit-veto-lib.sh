@@ -58,11 +58,9 @@ _gaia_veto_changed_paths() {
 }
 
 # How far, in lines, a member's re-report may sit from where the fix left the
-# vetoed finding and still be read as that finding. Measured over this repo's
-# audit-loop round snapshots: a finding of one (member, class, path) reported
-# once in each of two consecutive rounds sat at most 1 line from the vetoed
-# line's mapped place or a line the fix wrote, except where the later finding
-# was a different one; 3 adds margin for a statement spanning several lines.
+# vetoed finding and still be read as that finding. A re-reported finding
+# lands on or next to the vetoed line's mapped place or a line the fix wrote;
+# 3 adds margin for a statement spanning several lines.
 _GAIA_VETO_REREPORT_TOLERANCE_LINES=3
 
 # Reads `git diff -U0` of one path on stdin and prints, space-separated, the

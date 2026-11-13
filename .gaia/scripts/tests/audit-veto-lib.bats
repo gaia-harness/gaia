@@ -128,7 +128,7 @@ assert_unsatisfied() {
   assert_unsatisfied
 }
 
-# inline_commit <message>: commits every change at MAIN and prints its tree.
+# inline_commit <message>: commits f.txt and g.txt at MAIN and prints the commit's tree.
 inline_commit() {
   git -C "$MAIN" add f.txt g.txt && git -C "$MAIN" -c user.name=t -c user.email=t@t commit -q -m "$1" &&
     git -C "$MAIN" rev-parse 'HEAD^{tree}'
@@ -210,7 +210,7 @@ inline_veto_state() {
 # The tolerance is 3 lines: the vetoed line maps to [2,2] in TREE_FIXED, so 5
 # is inside it and 6 is past it; TREE_RELOCATED's fix wrote line 29 and
 # deleted around [1,2], so 20 is on code it left alone.
-@test "veto-state inline: a same-class finding on the path re-reports the veto only near the vetoed line's new place or on lines the fix wrote" {
+@test "veto-state inline: a same-class finding on the path re-reports the veto only near the vetoed line's new place or near a line the fix wrote" {
   local tree line expected
   while read -r tree line expected; do
     inline_base "$tree" || return 1
