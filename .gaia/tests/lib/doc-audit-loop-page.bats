@@ -338,6 +338,8 @@ pinned_labels() {
     unit_round_count="$GAIA_CONTEXT_UNIT_ROUNDS"
     { gaia_loop_pinned_question feat/x 0123456789abcdef 6 "$unit_round_count" true false context
       gaia_loop_pinned_question feat/x 0123456789abcdef 10 "$unit_round_count" false true cap
+      gaia_loop_pinned_question feat/x 0123456789abcdef 6 "$unit_round_count" false false fallback "" grant "" \
+        "[{\"path\":\"a.ts\",\"line\":1,\"severity\":\"major\",\"reason\":\"needs a requirement: r\",\"repeated\":true}]"
     } | jq -r ".questions[0].options[].label" | sed "s/ (Recommended)$//" | sort -u
   ' _ "$ROOT"
 }
@@ -351,7 +353,7 @@ pinned_labels() {
     label_count=$((label_count + 1))
     grep -qF -- "\`$label\`" <<<"$section_text" || { echo "label not quoted: $label" >&2; return 1; }
   done <<<"$labels"
-  [ "$label_count" -eq 5 ] || { echo "expected 5 distinct labels, derived $label_count" >&2; return 1; }
+  [ "$label_count" -eq 6 ] || { echo "expected 6 distinct labels, derived $label_count" >&2; return 1; }
   grep -qF -- '(Recommended)' <<<"$section_text" || return 1
   grep -qF -- 'leads' <<<"$section_text" || return 1
   grep -qF -- 'context-checkpoint-lib.sh' <<<"$section_text" || return 1
