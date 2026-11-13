@@ -209,7 +209,8 @@ inline_veto_state() {
 
 # The tolerance is 3 lines: the vetoed line maps to [2,2] in TREE_FIXED, so 5
 # is inside it and 6 is past it; TREE_RELOCATED's fix wrote line 29 and
-# deleted around [1,2], so 20 is on code it left alone.
+# deleted line 2, mapping the vetoed line to the gap [1,2], so 20 is on code
+# it left alone.
 @test "veto-state inline: a same-class finding on the path re-reports the veto only near the vetoed line's new place or near a line the fix wrote" {
   local tree line expected
   while read -r tree line expected; do

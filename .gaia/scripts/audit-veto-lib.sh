@@ -96,8 +96,8 @@ END {
 }'
 
 # _gaia_veto_rereport_spans <main-root> <state-json> <r> <vetoes-file>: for
-# every veto effective by round r and each round tree from its
-# effective_from_round through r, the line spans of its path where a re-report
+# every veto effective from round 2 through r with an integer line, and each
+# round tree from its effective_from_round through r, the line spans of its path where a re-report
 # reads as the vetoed finding, from the diff of the waiver round's tree to that
 # round tree, as {"<waiver-tree>..<round-tree>": {"<path>\n<line>": [[low,
 # high], ...]}}. A pair whose diff cannot be read or holds no hunk is left
