@@ -673,7 +673,7 @@ disputes_run_folder() {
 }
 
 @test "pinned question: a repeated dispute leads with State the rule unless the trigger is context or Accept leads" {
-  local repeated single row trigger eligible recommended disputes expected question
+  local repeated single trigger eligible recommended disputes expected question
   repeated='[{"path":"a.ts","line":1,"severity":"major","reason":"needs a requirement: r","repeated":true}]'
   single='[{"path":"a.ts","line":1,"severity":"major","reason":"needs a requirement: r","repeated":false}]'
   while IFS='|' read -r trigger eligible recommended disputes expected; do
