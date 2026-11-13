@@ -36,8 +36,7 @@ type ParseJson = NonNullable<Options['parseJson']>;
 // JSON.parse path is lenient: a body that fails to parse resolves to null on a
 // 2xx, so the schema validates null instead of the parse error escaping; on an
 // error status the rethrow leaves Ky's HTTPError without data. An empty body
-// resolves to undefined, as Ky does when it has no parseJson. A caller's
-// parseJson keeps its own errors.
+// resolves to undefined, as Ky does for a schema read without a parseJson.
 export const getParseJson = (
   isSnakeCaseEnabled?: boolean,
   parseJson?: ParseJson

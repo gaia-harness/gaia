@@ -412,7 +412,7 @@ describe('a failure while reading the body', () => {
     }
   );
 
-  test('a body that stalls on the snake_case layer through a schema resolves through attempt as a 504', async () => {
+  test('a body that stalls on the snake_case layer with a schema resolves through attempt as a 504', async () => {
     await startSocketServer('stall');
 
     const attemptOutcome = await attempt(async () =>
