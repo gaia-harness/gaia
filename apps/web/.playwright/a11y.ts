@@ -9,8 +9,8 @@ const SEVERITY_FAIL = new Set(['critical', 'serious']);
  * violations. Moderate/minor violations are attached to the test info
  * and surfaced via console.warn.
  *
- * Waits for every running finite CSS or Web animation to finish (capped at
- * 10 seconds) before scanning, so a theme switch is judged on its settled colors.
+ * Waits up to 10 seconds for every finite `document.getAnimations()` entry
+ * (transitions included) to finish before scanning.
  *
  * `options.label` is folded into the attachment names so a test that scans
  * more than once produces distinct attachments instead of overwriting one.
