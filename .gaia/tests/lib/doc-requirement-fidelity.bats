@@ -71,6 +71,13 @@ mutated_tree() {
   TREE="$BATS_TEST_TMPDIR/tree"
   rm -rf "$TREE"
   mkdir -p "$TREE/$(dirname "$rel")"
+  # Both audit pages ride along unmutated, so a check that reads both fails
+  # only on the clause the twin mutated, never on a missing page.
+  local page
+  for page in "$MERGE_REL" "$ROUND_REL"; do
+    mkdir -p "$TREE/$(dirname "$page")"
+    cp "$REPO_ROOT/$page" "$TREE/$page"
+  done
   content="$(cat "$REPO_ROOT/$rel"; printf x)"
   mutated="${content/"$2"/"$3"}"
   printf '%s' "${mutated%x}" >"$TREE/$rel"
@@ -157,9 +164,8 @@ check_disputes_stay_with_the_fixer() {
   disputes="$(joined "$(range_of "$1/$MERGE_REL" '**Disputed fix entries.**' '**The merge report.**')")"
   need_text 'disputed fix entries paragraph' "$disputes" || return 1
   in_order "$disputes" \
-    'goes to the human only through the branch checkpoint' \
-    'the main thread asks no question of its own about it.' \
-    'recommends adding it only when it quotes the SPEC row or Required-reading line that requires it.' || return 1
+    'goes to the human only through the branch checkpoint ([[#The branch checkpoint]]) or a question a `stop_reason` row asks; the main thread asks no question of its own about it.' \
+    'recommends adding it only when it quotes the line that requires it, from the SPEC, a `wiki/decisions/` page, or the code or docs.' || return 1
   veto="$(joined "$(range_of "$1/$MERGE_REL" '**The waiver table and the veto.**' 'After a veto, rewrite')")"
   need_text 'veto paragraph' "$veto" || return 1
   in_order "$veto" \
@@ -168,10 +174,10 @@ check_disputes_stay_with_the_fixer() {
     'but never writes a new edit to satisfy a veto, by hand or through an agent outside the fix round.' || return 1
   hands_off="$(grep -F -- '- **During the loop the main thread never hand-edits a file a finding names.**' "$1/$ROUND_REL")"
   need_text 'hands-off bullet' "$hands_off" || return 1
-  in_order "$hands_off" 'Nor does the unit, and neither dispatches any agent but the round'"'"'s fixer to edit one.' || return 1
+  in_order "$hands_off" 'Nor does the unit, and neither dispatches any agent to edit one but the round'"'"'s fixer and the worthiness step'"'"'s fixer, which edits only the tests that step routes to it' || return 1
   in_order "$(joined "$(cat "$1/$ROUND_REL")")" \
-    'or states the rule where the fixer can cite it: in the SPEC, in a `wiki/decisions/` page, or in the code or docs,' \
-    'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the SPEC row or Required-reading line that requires it' || return 1
+    'or states the rule where the fixer can cite it: in the SPEC on a plan build (the fixer reads it through the plan'"'"'s RUNNING sentinel), in a `wiki/decisions/` page, or in the code or docs,' \
+    'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the line that requires it, from the SPEC, a `wiki/decisions/` page, or the code or docs' || return 1
 }
 
 # ---------- tests ----------
@@ -224,13 +230,17 @@ check_disputes_stay_with_the_fixer() {
 
 @test "red twin: a main thread free to ask about or recommend a disputed guard fails" {
   red check_disputes_stay_with_the_fixer "$MERGE_REL" 'the main thread asks no question of its own about it.' 'the main thread may ask its own question about it.'
-  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'recommends adding it only when it quotes the SPEC row' 'recommends adding it whenever it names the SPEC row'
-  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the SPEC row or Required-reading line that requires it' 'A question may recommend the guard'
-  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'cite it: in the SPEC, in a `wiki/decisions/` page, or in the code or docs,' 'cite it,'
+  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'recommends adding it only when it quotes the line that requires it' 'recommends adding it whenever it names the line that requires it'
+  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the line that requires it' 'A question may recommend the guard'
+  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'cite it: in the SPEC on a plan build (the fixer reads it through the plan'"'"'s RUNNING sentinel), in a `wiki/decisions/` page, or in the code or docs,' 'cite it,'
+}
+
+@test "red twin: a channel for a disputed entry widened past the checkpoint or a stop_reason question fails" {
+  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'or a question a `stop_reason` row asks; the main thread' 'or any question the main thread chooses to ask; the main thread'
 }
 
 @test "red twin: a veto satisfied by a one-off agent's edit, or one that bars committing the fixer's edits, fails" {
   red check_disputes_stay_with_the_fixer "$MERGE_REL" 'but never writes a new edit to satisfy a veto, by hand or through an agent outside the fix round.' 'or dispatches a one-off agent to make the fix.'
   red check_disputes_stay_with_the_fixer "$MERGE_REL" "the main thread may commit the fixer's own uncommitted edits on a human's answer at a \`needs-human\` stop, but never writes" "the main thread never commits the fixer's edits and never writes"
-  red check_disputes_stay_with_the_fixer "$ROUND_REL" ", and neither dispatches any agent but the round's fixer to edit one." '.'
+  red check_disputes_stay_with_the_fixer "$ROUND_REL" ", and neither dispatches any agent to edit one but the round's fixer and the worthiness step's fixer, which edits only the tests that step routes to it" '.'
 }
