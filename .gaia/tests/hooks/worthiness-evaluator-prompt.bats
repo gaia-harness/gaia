@@ -121,7 +121,6 @@ flow_input_needles() {
 # shellcheck disable=SC2016
 flow_verdict_needles() {
   FLOW_VERDICT_NEEDLES=(
-    'untestedErrorPaths'
     'missingOutcome'
     'undeclaredFolders'
     'any non-empty member makes the verdict `fix`, never `keep`'
@@ -183,7 +182,7 @@ flow_judgment_needles() {
 # shellcheck disable=SC2016
 sole_driver_needles() {
   SOLE_DRIVER_NEEDLES=(
-    'only test below the browser layer (`wiki/decisions/Test Layering.md`) driving a guard, refusal or validation into its failing state is `keep` or `fix`, never `delete`'
+    'only test below the browser layer (`.claude/doctrine/testing.md`, `## Guards and security rows`) driving a guard, refusal or validation into its failing state is `keep` or `fix`, never `delete`'
     'A browser test or a flow test never counts as the covering sibling'
     'neither does a sibling also proposed for `delete`'
   )

@@ -237,11 +237,9 @@ cmd_record() {
   # shellcheck disable=SC2016
   bad_flow="$(jq -r 'def well_formed: type == "object"
         and (.flowId | type == "string" and test("^FLOW-[0-9]{3,}$"))
-        and (.untestedErrorPaths | type == "array"
-          and all(.[]; type == "object" and (.source | type == "string") and (.description | type == "string")))
         and (.missingOutcome | type == "string" or . == null)
         and (.undeclaredFolders | type == "array" and all(.[]; type == "string"));
-      def non_empty: (.untestedErrorPaths | length > 0) or .missingOutcome != null or (.undeclaredFolders | length > 0);
+      def non_empty: .missingOutcome != null or (.undeclaredFolders | length > 0);
       .[] | select(has("flow")) | select((.flow | well_formed | not) or (.verdict == "keep" and (.flow | non_empty)))
       | "\(.file) > \(.fullName)"' "$verdicts" 2>/dev/null)" || die_input "cannot read the flow keys in $verdicts"
   if [ -n "$bad_flow" ]; then

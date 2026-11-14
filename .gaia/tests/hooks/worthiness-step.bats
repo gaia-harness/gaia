@@ -613,28 +613,30 @@ flow_verdicts() {
 
 @test "record keeps a well-formed flow key on a bats flow test's ledger line" {
   commit_flow_tests
-  flow_verdicts '{"flowId":"FLOW-002","untestedErrorPaths":[{"source":"a.sh:3","description":"no test for the timeout"}],"missingOutcome":null,"undeclaredFolders":[]}' fix
+  flow_verdicts '{"flowId":"FLOW-002","missingOutcome":"never asserts the write took effect","undeclaredFolders":[]}' fix
   run bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.flow.flowId' "$LEDGER")" = FLOW-002 ]
-  [ "$(jq -r '.flow.untestedErrorPaths[0].source' "$LEDGER")" = "a.sh:3" ]
+  [ "$(jq -r '.flow.missingOutcome' "$LEDGER")" = "never asserts the write took effect" ]
   [ "$(jq -r '.signal' "$LEDGER")" = "$(signal_of "$FLOW_BATS" 'refuses bad input')" ]
 }
 
 @test "record refuses a flow key missing undeclaredFolders and appends nothing" {
   commit_flow_tests
-  flow_verdicts '{"flowId":"FLOW-002","untestedErrorPaths":[],"missingOutcome":null}' fix
+  flow_verdicts '{"flowId":"FLOW-002","missingOutcome":null}' fix
   run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
   [ "$status" -eq 3 ]
   grep -qF -- "refuses bad input" <<<"$stderr"
   [ ! -s "$LEDGER" ]
 }
 
-@test "record refuses a keep verdict whose flow lists an untested error path" {
+@test "record neither requires nor routes untestedErrorPaths on a flow key" {
   commit_flow_tests
   flow_verdicts '{"flowId":"FLOW-002","untestedErrorPaths":[{"source":"a.sh:3","description":"d"}],"missingOutcome":null,"undeclaredFolders":[]}' keep
   run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
-  [ "$status" -eq 3 ]
-  grep -qF -- "refuses bad input" <<<"$stderr"
-  [ ! -s "$LEDGER" ]
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.verdict' "$LEDGER")" = keep ]
+  flow_verdicts '{"flowId":"FLOW-002","missingOutcome":null,"undeclaredFolders":[]}' keep
+  run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
+  [ "$status" -eq 0 ]
 }

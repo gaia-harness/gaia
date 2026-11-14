@@ -12,6 +12,8 @@
 // Invocation:
 //   node .gaia/scripts/test-signals/extract-test-signals.mjs <repo-relative-test-path>
 //   ... --stdin   (read source bytes from stdin instead of disk)
+//   ... --report-unmatchable   (also emit {"unmatchable":true,"firstLine":N} for a
+//       test whose own or an enclosing describe title is not a literal)
 //
 // Output (stdout): one JSON object per discovered test(...)/it(...) call,
 // newline-delimited:
@@ -90,6 +92,7 @@ const require = createRequire(import.meta.url);
 
 const args = process.argv.slice(2);
 const useStdin = args.includes('--stdin');
+const reportUnmatchable = args.includes('--report-unmatchable');
 const filePath = args.find((a) => !a.startsWith('--'));
 
 if (!filePath) {
@@ -459,7 +462,13 @@ function visit(node, ancestors, unmatchable) {
       const segments = [...ancestors, {title, expands}];
       const anyExpands = segments.some((segment) => segment.expands);
       const rowPattern = title !== null && anyExpands ? rowPatternFor(segments) : null;
-      if (title !== null && (!anyExpands || rowPattern !== null)) {
+      // Only a call declaring a test (a callback after its first argument) is
+      // unmatchable: test.skip(), a hook, a step or test.use(...) declares none.
+      const declares = node.arguments.slice(1).some((argument) => ts.isFunctionLike(argument)) &&
+        !ts.isFunctionLike(node.arguments[0]) && !calleeChainHasProperty(node, new Set(['step']));
+      if (title === null && reportUnmatchable && declares) {
+        lines.push(JSON.stringify({unmatchable: true, firstLine: rangeOf(node)[0]}));
+      } else if (title !== null && (!anyExpands || rowPattern !== null)) {
         const hashed = [...ancestors.flatMap(({table}) => table ?? []), node];
         lines.push(
           JSON.stringify({
