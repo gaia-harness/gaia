@@ -325,3 +325,45 @@ check_forged_value() {
 @test "red twin: leaving a guard case of a multi-case row to the closing flow fails" {
   red check_absence_and_cases "$DOCTRINE_REL" "A flow test never stands in for a guard's lower-layer test" "A flow test may stand in for a guard's lower-layer test"
 }
+
+# check_lens_doctrine_rows <root>: the test design lens names each doctrine-barred
+# row kind and flags by the doctrine's security kinds, sign-in included, and the
+# apply step holds a row another lens's fix adds to the same checks, since the
+# lens ran before that row existed.
+check_lens_doctrine_rows() {
+  local doctrine lens apply
+  doctrine="$(flat "$1/$DOCTRINE_REL")"
+  lens="$(range_of "$1/$AUDIT_REL" '- **Test design' '## 4.6a-ii' | tr '\n' ' ' | tr -s ' ')"
+  apply="$(range_of "$1/$AUDIT_REL" '## 4.6b. Apply findings' '**Interactive:**' | tr '\n' ' ' | tr -s ' ')"
+  need "$doctrine" 'with no success-path route test of its own' || return 1
+  need "$doctrine" '**Security row.**' || return 1
+  need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
+  need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
+  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included)" || return 1
+  need "$lens" 'where the fix keeps the lower-layer row unless the other asserts what only its layer shows' || return 1
+  need "$apply" "row another lens's fix adds or changes**: hold it to the Test design lens's checks above before applying it" || return 1
+}
+
+@test "the test design lens checks the doctrine's barred rows and security kinds" {
+  green check_lens_doctrine_rows
+}
+
+@test "red twin: the test design lens dropping the success-path route test check fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'a success-path route test for a happy path the closing flow test walks' 'a route test for a happy path the closing flow test walks'
+}
+
+@test "red twin: the test design lens flagging authorization refusals only fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals included),' ' an authorization refusal,'
+}
+
+@test "red twin: the test design lens duplicate check naming no surviving row fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ', where the fix keeps the lower-layer row unless the other asserts what only its layer shows' ''
+}
+
+@test "red twin: the apply step skipping rows another lens's fix adds fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" "hold it to the Test design lens's checks above before applying it" 'apply it'
+}
+
+@test "red twin: the doctrine dropping sign-in from access fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" '**Access**: who may act or see. Sign-in,' '**Access**: who may act or see.'
+}
