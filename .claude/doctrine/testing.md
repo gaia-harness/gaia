@@ -148,7 +148,7 @@ Ordinary validation and status rules are not security rows. A retire or change r
 **Table rules.**
 
 - Read the existing tests that drive the routes, modules and components a plan touches before writing its rows; a case an existing test asserts is `reuse` or `extend`, never `new`.
-- Approving the plan approves its retire rows. A security test's retire row follows the **Security row** rule above; in an interactive plan the maintainer rules on a retire row for a test of code the plan keeps as its own item on the plan audit's review list. Retiring an existing test no approved row retires, or deleting a test outside the table, needs the maintainer; the default is keep.
+- Approving the plan approves its retire rows. A security test's retire row follows the **Security row** rule above. Retiring an existing test no approved row retires, or deleting a test outside the table, needs the maintainer; the default is keep.
 - Executors write their own rows' tests, using the planned titles verbatim, and never edit the table.
 - Only the security writer writes a security row's test.
 - A test outside the table is unplanned drift.
