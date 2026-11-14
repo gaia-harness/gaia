@@ -62,7 +62,7 @@ Formatting helpers, small array, string and object utilities, and thin wrappers 
 
 Fold sibling browser tests that walk one flow into one journey.
 
-**Flow test.** Write one flow test per critical flow, in the closing phase only, never in a build phase. It holds the journey through the happy path, plus only the effects that take several requests or sessions to stage, plus, when the flow must work without JavaScript, a page-less check of its native form posts (or a separate real-server file holds them). A web flow test is admitted on the browser layer whatever a cheaper layer could prove. It asserts no markup structure or ARIA attribute beyond a stated role or accessible name, and repeats no refusal a build task's test or another flow owns.
+**Flow test.** Write one flow test per critical flow, in the closing phase only, never in a build phase. It holds the journey through the happy path, plus only the effects that take several requests or sessions to stage, plus, when the flow must work without JavaScript, a page-less check of its native form posts (a separate real-server file holding them is also accepted). A web flow test is admitted on the browser layer whatever a cheaper layer could prove. It asserts no markup structure or ARIA attribute beyond a stated role or accessible name, and repeats no refusal a build task's test or another flow owns.
 
 **Path to layer.** In the web package:
 
