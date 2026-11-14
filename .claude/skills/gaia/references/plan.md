@@ -17,7 +17,7 @@ A first word of `auto` is always the mode token, so a description that starts wi
 
 Steps 1 and 1a read the remainder as `$ARGUMENTS`, so `auto SPEC-NNN` takes step 1a's bare-id form exactly as `SPEC-NNN` does. `/gaia-spec` step 11 invokes this skill in the same session with `SPEC-NNN`, or `auto SPEC-NNN` in auto mode.
 
-`auto_mode` selects two branches: step 2 defaults the planner to Opus with no model prompt, and step 4.6b surfaces no question (it auto-applies or records under the README's `## Audit notes`). Every other step runs identically, and none of them prompts.
+`auto_mode` selects two branches: step 2 defaults the planner to Opus with no model prompt, and step 4.6b surfaces no question (it auto-applies or records under the README's `## Audit notes`). A non-interactive run (step 2), with or without `auto_mode`, also takes step 2's Opus default and runs step 4.6c's `approve` with `--auto`. Every other step runs identically, and none of them prompts.
 
 ## Steps
 
@@ -224,7 +224,7 @@ After 4.6b applies the findings, freeze the table. Approving the plan approves t
 node .gaia/scripts/test-design/test-table.mjs approve --plan-dir "$PLAN_DIR"
 ```
 
-With `auto_mode` true, run it with `--auto`: it holds every security-flagged `retire` row and prints each held row id. Append each printed id with its case to the README's `## Audit notes` section, saying the row waits for the merge checkpoint. A non-zero exit stops exactly like a step 4.5 failure.
+With `auto_mode` true, or when running non-interactively as step 2 defines it, run it with `--auto`: it holds every security-flagged `retire` row and prints each held row id. Append each printed id with its case to the README's `## Audit notes` section, saying the row waits for the merge checkpoint. A non-zero exit stops exactly like a step 4.5 failure.
 
 ### 4.7. Record the run
 
