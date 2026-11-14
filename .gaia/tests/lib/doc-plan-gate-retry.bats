@@ -280,7 +280,7 @@ check_in_phase_arm() {
     'For several declaring tasks, record the retry as above with every declaring task on its Tasks line, then dispatch one fresh executor per such test file, separate from any executor this retry sends a declaring task:' \
     'the original task prompt of its first declaring task, without its `Yield handoff:` line, then the line `Read these task docs for context; they do not widen what you may edit:`, then each other declaring task'"'"'s `task-*.md` path,' \
     'then the line `A test in a file several tasks of this phase declare fails in this phase'"'"'s gate. Edit only that test file and only its failing tests, updating them when this phase changed the asserted behavior on purpose, and say what you changed under ### Deviations from plan. The task docs and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code. If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
-    'Any other executor in the same retry leaves that test file to it.' \
+    'Every other executor this retry sends a declaring task ends its prompt with the line `Leave <test file> alone: another executor owns it in this retry.`' \
     'When the in-phase or shared-file executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and, for a single declaring task, that task is not the in-phase task, the same retry goes on to that task:' \
     'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then, once any executor this retry already sent that task has returned, dispatch a fresh executor for it:' \
     'Fix the cause within this task'"'"'s files, edit no other file, and say what you changed under ### Deviations from plan.' \
@@ -550,7 +550,7 @@ resume_point() {
 }
 
 @test "red twin: a shared test file another executor in the retry may also edit fails" {
-  red check_in_phase_arm 'Any other executor in the same retry leaves that test file to it. ' ''
+  red check_in_phase_arm 'Every other executor this retry sends a declaring task ends its prompt with the line `Leave <test file> alone: another executor owns it in this retry.` ' ''
 }
 
 @test "red twin: a shared-file executor whose named cause is not forwarded fails" {
