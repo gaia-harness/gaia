@@ -329,12 +329,14 @@ check_forged_value() {
 # check_lens_doctrine_rows <root>: the test design lens names each doctrine-barred
 # row kind and flags by the doctrine's security kinds, sign-in included, and the
 # apply step holds a row another lens's fix adds to the same checks, since the
-# lens ran before that row existed.
+# lens ran before that row existed. The review list's security retire items come
+# from the table after fixes apply, since minor fixes apply after the list.
 check_lens_doctrine_rows() {
-  local doctrine lens apply
+  local doctrine lens apply interactive
   doctrine="$(flat "$1/$DOCTRINE_REL")"
   lens="$(range_of "$1/$AUDIT_REL" '- **Test design' '## 4.6a-ii' | tr '\n' ' ' | tr -s ' ')"
   apply="$(range_of "$1/$AUDIT_REL" '## 4.6b. Apply findings' '**Interactive:**' | tr '\n' ' ' | tr -s ' ')"
+  interactive="$(range_of "$1/$AUDIT_REL" '**Interactive:**' 'Then return to' | tr '\n' ' ' | tr -s ' ')"
   need "$doctrine" 'with no success-path route test of its own' || return 1
   need "$doctrine" '**Security row.**' || return 1
   need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
@@ -344,6 +346,7 @@ check_lens_doctrine_rows() {
   need "$apply" "**Other-lens rows** (a \`tests.json\` row another lens's fix adds or changes): hold it to the Test design lens's checks above before applying it" || return 1
   need "$apply" "A fix applied on this thread, from any lens or check, that would remove a security row (a row of the doctrine's kinds, or any row flagged) or clear a row's flag is not applied to that row unless the user rules it wrong on the review list" || return 1
   need "$apply" 'The row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' || return 1
+  need "$interactive" "one item per security-flagged \`retire\` row (\`security\` not \`none\`) in the table as it will stand once every fix applies, \`minor\` ones included" || return 1
 }
 
 @test "the test design lens checks the doctrine's barred rows and security kinds" {
@@ -372,6 +375,10 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the apply step skipping rows another lens's fix adds fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" "hold it to the Test design lens's checks above before applying it" 'apply it'
+}
+
+@test "red twin: security retire items taken from the table before minor fixes apply fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ' in the table as it will stand once every fix applies, `minor` ones included,' ''
 }
 
 @test "red twin: the doctrine dropping sign-in from access fails" {
