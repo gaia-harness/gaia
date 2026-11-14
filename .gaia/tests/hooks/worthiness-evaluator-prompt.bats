@@ -130,7 +130,7 @@ flow_verdict_needles() {
 
 flow_judgment_needles() {
   FLOW_JUDGMENT_NEEDLES=(
-    'name the error paths the build actually has'
+    'only far enough to judge the flow'\''s outcome and the folders it changed'
     'the SPEC does not list'
     'honesty axis applies to every test it judges, strict included'
   )
@@ -158,6 +158,11 @@ flow_judgment_needles() {
   for needle in "${FLOW_JUDGMENT_NEEDLES[@]}"; do
     prompt_carries_every "$PROMPT" "$needle"
   done
+}
+
+@test "the evaluator prompt no longer tells the evaluator to name error paths" {
+  run prompt_carries_every "$PROMPT" 'name the error paths the build actually has'
+  [ "$status" -ne 0 ]
 }
 
 @test "the flow pin check rejects a prompt that lacks any one flow needle" {

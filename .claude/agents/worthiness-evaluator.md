@@ -194,9 +194,8 @@ artifact `assertion-in-play`.
 When the dispatch prompt carries a `Flows spec: <path>` line and one
 `Flow: <file> › <flowId> <slug>` line beside a `Test:` line, that test is a flow
 test. Read the SPEC's flow (its name, why, and its covers or test path), then
-read the source the flow's code path touches far enough to name the error paths
-the build actually has (refusals, validation failures, failed writes,
-permission denials). A flow test may be a Playwright spec, a bats suite or a
+read the source the flow's code path touches only far enough to judge the flow's
+outcome and the folders it changed. A flow test may be a Playwright spec, a bats suite or a
 `.gaia/cli` Vitest file; the same judgment applies. For each flow test:
 
 - Never list an error path no stated requirement names and never write a test
