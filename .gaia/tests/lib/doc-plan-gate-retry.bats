@@ -277,14 +277,15 @@ check_in_phase_arm() {
     'For one declaring task, record the retry as above, then dispatch a fresh executor for that task:' \
     'the original task prompt, without its `Yield handoff:` line, then the line `A test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. The task doc and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
     'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
-    'For several declaring tasks, record the retry as above with every declaring task on its Tasks line, then dispatch one fresh executor per such test file:' \
-    'the line `Read these task docs for context; they do not widen what you may edit:`, then each declaring task'"'"'s `task-*.md` path,' \
+    'For several declaring tasks, record the retry as above with every declaring task on its Tasks line, then dispatch one fresh executor per such test file, separate from any executor this retry sends a declaring task:' \
+    'the original task prompt of its first declaring task, without its `Yield handoff:` line, then the line `Read these task docs for context; they do not widen what you may edit:`, then each other declaring task'"'"'s `task-*.md` path,' \
     'then the line `A test in a file several tasks of this phase declare fails in this phase'"'"'s gate. Edit only that test file and only its failing tests, updating them when this phase changed the asserted behavior on purpose, and say what you changed under ### Deviations from plan. The task docs and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code. If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
-    'When the in-phase or shared-file executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and that task is not the in-phase task, the same retry goes on to that task:' \
+    'Any other executor in the same retry leaves that test file to it.' \
+    'When the in-phase or shared-file executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and, for a single declaring task, that task is not the in-phase task, the same retry goes on to that task:' \
     'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then, once any executor this retry already sent that task has returned, dispatch a fresh executor for it:' \
     'Fix the cause within this task'"'"'s files, edit no other file, and say what you changed under ### Deviations from plan.' \
     'then that executor'"'"'s ### Findings, then the failing test lines and their output.' \
-    'When the in-phase or shared-file executor edits no file and names no such file, or the cause owner'"'"'s executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
+    'When the in-phase or shared-file executor edits no file and names no such file, or the cause owner'"'"'s executor edits no file, the phase halts under Stop conditions with no re-run, `Reason: a test in a file this phase declares fails in this phase'"'"'s gate`, naming each `file › test name`.' \
     '- **Outside arm.**' \
     '- **Re-run the gate.** Once every re-dispatched executor returns, including a cause owner'"'"'s,' || return 1
 }
@@ -529,7 +530,7 @@ resume_point() {
 }
 
 @test "red twin: a shared-file retry that records no retry fails" {
-  red check_in_phase_arm 'record the retry as above with every declaring task on its Tasks line, then dispatch one fresh executor per such test file:' 'dispatch one fresh executor per such test file:'
+  red check_in_phase_arm 'record the retry as above with every declaring task on its Tasks line, then dispatch one fresh executor per such test file,' 'dispatch one fresh executor per such test file,'
 }
 
 @test "red twin: a shared-file executor free to edit beyond the failing tests fails" {
@@ -542,6 +543,14 @@ resume_point() {
 
 @test "red twin: a shared-file executor that edits the test when the cause is elsewhere fails" {
   red check_in_phase_arm 'If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' 'The failing tests:`'
+}
+
+@test "red twin: a shared-file executor that drops the task executor's template parts fails" {
+  red check_in_phase_arm 'the original task prompt of its first declaring task, without its `Yield handoff:` line, then the line `Read these' 'the line `Read these'
+}
+
+@test "red twin: a shared test file another executor in the retry may also edit fails" {
+  red check_in_phase_arm 'Any other executor in the same retry leaves that test file to it. ' ''
 }
 
 @test "red twin: a shared-file executor whose named cause is not forwarded fails" {
@@ -573,11 +582,11 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm that halts instead of sending a sibling-owned cause to its owner fails" {
-  red check_in_phase_arm 'When the in-phase or shared-file executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and that task is not the in-phase task, the same retry goes on to that task:' ''
+  red check_in_phase_arm 'When the in-phase or shared-file executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and, for a single declaring task, that task is not the in-phase task, the same retry goes on to that task:' ''
 }
 
 @test "red twin: an in-phase arm that forwards a cause file several tasks or another phase declare fails" {
-  red check_in_phase_arm 'names a file exactly one task of this phase declares and that task is not the in-phase task' 'names a file some task declares'
+  red check_in_phase_arm 'names a file exactly one task of this phase declares and, for a single declaring task, that task is not the in-phase task' 'names a file some task declares'
 }
 
 @test "red twin: an in-phase executor not asked to name the cause file fails" {
@@ -601,7 +610,7 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm whose no-edit halt cites the outside arm's Reason fails" {
-  red check_in_phase_arm ', `Reason: a test in a file this task declares fails in this phase'"'"'s gate`, naming each `file › test name`.' ', under the Reason above.'
+  red check_in_phase_arm ', `Reason: a test in a file this phase declares fails in this phase'"'"'s gate`, naming each `file › test name`.' ', under the Reason above.'
 }
 
 @test "red twin: an in-phase arm whose lines do not apply only to their own failures fails" {
