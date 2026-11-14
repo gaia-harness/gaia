@@ -131,11 +131,11 @@ check_rule_points_at_ladder() {
   grep -qF 'serializeForm' "$1" || { echo "rule lacks serializeForm" >&2; return 1; }
 }
 
-# The doctrine routes the native checks to real-server.
+# The doctrine routes a flow's native checks page-less into its flow test.
 check_doctrine_routing_wording() {
   grep -qiF 'native form posts' "$1" || { echo "no native form post routing: $1" >&2; return 1; }
   grep -qiF 'without JavaScript' "$1" || { echo "no without-JavaScript routing: $1" >&2; return 1; }
-  grep -qiE 'real-server check' "$1" || { echo "no real-server routing: $1" >&2; return 1; }
+  grep -qiF 'page-less in its flow test' "$1" || { echo "no flow-test routing: $1" >&2; return 1; }
 }
 
 check_doctrine_case_table() {
@@ -278,7 +278,7 @@ check_doctrine_surfaces() {
 
 # ---------- the docs point at the ladder ----------
 
-@test "the rule and the page point at the Test Layering ladder and route the native checks to real-server" {
+@test "the rule points at the testing doctrine and serializeForm, and the doctrine routes a flow's native checks into its flow test and keeps one case table per rule" {
   check_rule_points_at_ladder "$PW_RULE"
   check_doctrine_routing_wording "$DOCTRINE"
   check_doctrine_case_table "$DOCTRINE"
@@ -296,6 +296,9 @@ check_doctrine_surfaces() {
   run check_doctrine_routing_wording "$copy"
   [ "$status" -ne 0 ]
   copy=$(copy_with "$DOCTRINE" nopost.md 's/native form posts/form posts/g')
+  run check_doctrine_routing_wording "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(copy_with "$DOCTRINE" noflow.md 's/page-less in its flow test/as a real-server check/g')
   run check_doctrine_routing_wording "$copy"
   [ "$status" -ne 0 ]
 }
