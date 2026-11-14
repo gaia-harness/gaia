@@ -340,8 +340,9 @@ check_lens_doctrine_rows() {
   need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included)" || return 1
-  need "$lens" 'where the fix keeps the lower-layer row unless the other asserts what only its layer shows' || return 1
+  need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$apply" "row another lens's fix adds or changes**: hold it to the Test design lens's checks above before applying it" || return 1
+  need "$apply" 'a security-flagged row is never dropped or unflagged here' || return 1
 }
 
 @test "the test design lens checks the doctrine's barred rows and security kinds" {
@@ -357,7 +358,11 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens duplicate check naming no surviving row fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" ', where the fix keeps the lower-layer row unless the other asserts what only its layer shows' ''
+  red check_lens_doctrine_rows "$AUDIT_REL" ", where the fix keeps the row on the layer the doctrine's layer rule picks" ''
+}
+
+@test "red twin: the apply step dropping a security-flagged row fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" '; a security-flagged row is never dropped or unflagged here, only reported there' ''
 }
 
 @test "red twin: the apply step skipping rows another lens's fix adds fails" {
