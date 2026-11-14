@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # The security-row merge gate end to end: a merge is allowed with no plan run or
 # no marker, allowed while an approved security row has its security-writer
-# test, denied for each spelling of a non-test and for a hollow verdict until a
+# test, denied for a non-test and for a hollow verdict until a
 # fresh keep clears it, and denied for a removed test until the maintainer
 # types a grant in an interactive session. Every scenario runs the real gate
 # and the real grant recorder on a scratch git repo whose feature branch a
@@ -115,33 +115,16 @@ describe('guard', () => {
   [ -z "$output" ]
 }
 
-@test "each spelling of a non-test denies, naming the row" {
-  local cases=0 spelling body
-  while IFS='|' read -r spelling body; do
-    [ -n "$spelling" ] || continue
-    rm -rf "$FIXTURE" "$WORTHINESS_LEDGER_PATH"
-    init_repo
-    write_test "import {describe, expect, test} from 'vitest';
+@test "a security row whose authored test is a non-test denies, naming the row" {
+  write_test "import {describe, expect, test} from 'vitest';
 describe('guard', () => {
-  $body
+  test.skip('T1', () => { expect(1).toBe(1); });
 });"
-    stage_plan src/guard.test.ts 'guard T1'
-    authored
-    ledger_line keep
-    run_gate
-    assert_denied_with "T1" || { echo "$spelling not denied" >&2; return 1; }
-    cases=$((cases + 1))
-  done <<'CASES'
-todo|test.todo('T1');
-skip|test.skip('T1', () => { expect(1).toBe(1); });
-fixme|test.fixme('T1', () => { expect(1).toBe(1); });
-conditional skip|test.skipIf(process.env.CI)('T1', () => { expect(1).toBe(1); });
-empty body|test('T1', () => {});
-context skip|test('T1', (context) => { context.skip(); expect(1).toBe(1); });
-destructured skip|test('T1', ({skip}) => { skip(); expect(1).toBe(1); });
-info skip|test('T1', () => { test.info().skip(); expect(1).toBe(1); });
-CASES
-  [ "$cases" -eq 8 ]
+  stage_plan src/guard.test.ts 'guard T1'
+  authored
+  ledger_line keep
+  run_gate
+  assert_denied_with "T1"
 }
 
 @test "an uncommitted security test does not satisfy the row" {

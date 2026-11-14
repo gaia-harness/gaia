@@ -163,12 +163,13 @@ build_fresh() {
 # a test that removes one of them.
 build_harness() {
   HARNESS="$BATS_TEST_TMPDIR/harness"
+  rm -rf "$HARNESS"
   mkdir -p "$HARNESS/.claude/hooks" "$HARNESS/.gaia/scripts"
   cp "$GATE" "$HARNESS/.claude/hooks/"
   cp -R "$REPO_ROOT/.claude/hooks/lib" "$HARNESS/.claude/hooks/lib"
   cp "$REPO_ROOT"/.gaia/scripts/*.sh "$HARNESS/.gaia/scripts/"
   local folder
-  for folder in test-design notebook spec; do
+  for folder in test-design test-signals notebook spec; do
     cp -R "$REPO_ROOT/.gaia/scripts/$folder" "$HARNESS/.gaia/scripts/$folder"
   done
 }
@@ -203,4 +204,81 @@ test-row-grant T99|cli|has no row T99
 test-row-grant T2|cli|row T2 is not a security row
 CASES
   [ "$cases" -eq 4 ]
+}
+
+# link_tools_without_node <dir>: a bin folder holding every tool the gate runs
+# except node, for a PATH on which node is absent.
+link_tools_without_node() {
+  mkdir -p "$1"
+  local tool path
+  for tool in bash env git jq sh cat dirname basename mktemp rm mkdir cut tr sort head tail wc date grep sed awk shasum sha256sum uname ls pwd printf stat readlink find xargs tee mv cp sleep; do
+    path="$(command -v "$tool" 2>/dev/null)" || continue
+    case "$path" in /*) ln -sf "$path" "$1/$tool" ;; esac
+  done
+}
+
+# run_gate_from <payload cwd> <process cwd> [gate]: a merge payload naming the
+# first as its cwd, delivered from the second.
+run_gate_from() {
+  local payload
+  payload="$(jq -n --arg c "gh pr merge 7 --squash" --arg d "$1" \
+    '{session_id: "s", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}')"
+  invoke_hook_in "$2" "$payload" "${3:-$GATE}"
+}
+
+@test "a gate that cannot load, resolve or read what it checks with denies instead of allowing" {
+  local cases=0 broken expected harness_gate
+  while IFS='|' read -r broken expected; do
+    [ -n "$broken" ] || continue
+    build_fresh
+    build_harness
+    harness_gate="$HARNESS/.claude/hooks/test-design-merge-gate.sh"
+    # Cases that reach the security check run the real gate, which finds the
+    # extractor's dependencies; the harness copy holds none.
+    case "$broken" in unreadable-grants | node-missing) harness_gate="$GATE" ;; esac
+    case "$broken" in
+      unreadable-grants)
+        set_current_table 'del(.rows[] | select(.id == "T1"))'
+        mkdir -p "$(dirname "$GRANTS_FILE")"
+        printf '{not json' >"$GRANTS_FILE"
+        run_gate "$harness_gate"
+        ;;
+      node-missing)
+        link_tools_without_node "$BATS_TEST_TMPDIR/no-node-bin"
+        PATH="$BATS_TEST_TMPDIR/no-node-bin" run_gate "$harness_gate"
+        ;;
+      no-branch-key)
+        rm "$HARNESS/.gaia/scripts/audit-loop-state-lib.sh"
+        run_gate "$harness_gate"
+        ;;
+      no-main-root)
+        git_fixture worktree add -q --detach "$BATS_TEST_TMPDIR/linked"
+        git_fixture config core.worktree "$BATS_TEST_TMPDIR/absent"
+        run_gate_from "$BATS_TEST_TMPDIR/linked" "$BATS_TEST_TMPDIR" "$harness_gate"
+        ;;
+      no-plan-locate-lib)
+        rm "$HARNESS/.gaia/scripts/test-design/plan-locate-lib.sh"
+        run_gate "$harness_gate"
+        ;;
+      no-verb-arming)
+        rm "$HARNESS/.claude/hooks/lib/verb-arming.sh"
+        run_gate "$harness_gate"
+        ;;
+      outside-checkout)
+        mkdir -p "$BATS_TEST_TMPDIR/not-a-checkout"
+        run_gate_from "$BATS_TEST_TMPDIR/not-a-checkout" "$BATS_TEST_TMPDIR/not-a-checkout" "$harness_gate"
+        ;;
+    esac
+    assert_denied_with "$expected" || { echo "$broken: wrong deny" >&2; return 1; }
+    cases=$((cases + 1))
+  done <<'CASES'
+unreadable-grants|is unreadable
+node-missing|node is not on PATH
+no-branch-key|cannot derive the branch key
+no-main-root|cannot resolve the main checkout
+no-plan-locate-lib|cannot load .gaia/scripts/test-design/plan-locate-lib.sh
+no-verb-arming|cannot load the shared verb-arming decision
+outside-checkout|is not inside a git checkout
+CASES
+  [ "$cases" -eq 7 ]
 }
