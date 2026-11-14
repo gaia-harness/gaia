@@ -2,6 +2,8 @@
 # Refusal guards of the test-design table library: verify, approve,
 # record-security, amend and the requirement-key enumerator.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   TABLE_CLI="$REPO_ROOT/.gaia/scripts/test-design/test-table.mjs"
@@ -173,6 +175,8 @@ run_amend() {
 }
 
 @test "record-security refuses an absent test and records the signal of a present one" {
+  . "$REPO_ROOT/.gaia/tests/hooks/helpers/require-node-typescript.sh"
+  require_node_typescript "$REPO_ROOT"
   write_verify_fixture
   local tree="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$tree/src"
