@@ -30,7 +30,7 @@ setup() {
   PAGE_PIN='Route is the default home for behavior because'
   DOCTRINE='.claude/doctrine/testing.md'
   LINK='wiki/decisions/Test Layering.md'
-  PLANNER_PIN='Name the behavior the task delivers and the one acceptance test that owns it'
+  PLANNER_PIN='Name the behavior the task delivers and its `- Test:` lines'
   TESTS_REACT='apps/web/.claude/skills/tdd-react/references/tests-react.md'
 
   # file|old phrase (must be absent)|positive pin (must be present)

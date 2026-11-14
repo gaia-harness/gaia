@@ -6,8 +6,8 @@
 #
 # Usage: plan-verify.sh <plan-dir> [--spec <spec-path>]
 #
-# Always checked: README.md, ORCHESTRATOR.md, KICKOFF.md and at least one
-# task-*.md exist; task file names match task-[a-z0-9][a-z0-9-]*.md and none
+# Always checked: README.md, ORCHESTRATOR.md, KICKOFF.md, the TEST-DESIGN
+# marker and at least one task-*.md exist; task file names match task-[a-z0-9][a-z0-9-]*.md and none
 # ends in -tests; ORCHESTRATOR.md carries the verbatim step sentinels the plan
 # needs, each on a line of its own (leading and trailing whitespace allowed,
 # nothing else), in the order the template places them (flow-checks only with
@@ -19,6 +19,14 @@
 # so a plan matches the planner.md it was generated from, marked or stripped.
 # README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no literal
 # {PLAN_DIR}, {SPEC_PATH} or {AUDIT_PATH}; one failure line per hit.
+#
+# The plan's test table is verified too: the requirement keys are built
+# (requirement-keys.sh: the SPEC plus its sibling AUDIT.md when one exists, or
+# --description for a spec-less plan) and test-table.mjs verify relays each of
+# its failures as one line; a missing node or an exit 2 is one failure line,
+# never a silent pass. Each row of tests.json whose security is not none owns
+# its task's phase: that phase's ORCHESTRATOR.md entry must hold a line
+# starting '- Security writer:'.
 #
 # With --spec (a spec-derived plan) additionally, after the SPEC's flows are
 # read (a uats: key or a malformed flow fails the plan with the reader's
@@ -46,6 +54,8 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "$script_directory/../../.." && pwd)"
 # shellcheck source=.gaia/scripts/spec/flows-lib.sh
 . "$script_directory/flows-lib.sh"
+# shellcheck source=.gaia/scripts/spec/plan-verify-lib.sh
+. "$script_directory/plan-verify-lib.sh"
 
 usage() {
   printf 'usage: plan-verify.sh <plan-dir> [--spec <spec-path>]\n' >&2
@@ -108,14 +118,14 @@ sentinels=(
   '<!-- gaia:orchestrator-step resume-detection -->'
   '<!-- gaia:orchestrator-step yield-handling -->'
   '<!-- gaia:orchestrator-step gate-retry -->'
+  '<!-- gaia:orchestrator-step security-writer -->'
   '<!-- gaia:orchestrator-step simplify-pass -->'
 )
 if [ -n "$spec_path" ]; then
   sentinels+=('<!-- gaia:orchestrator-step flow-checks -->')
 fi
 sentinels+=(
-  '<!-- gaia:orchestrator-step worthiness-step -->'
-  '<!-- gaia:orchestrator-step overlap-pass -->'
+  '<!-- gaia:orchestrator-step drift-check -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
   '<!-- gaia:orchestrator-step code-audit -->'
   '<!-- gaia:orchestrator-step post-clearance -->'
@@ -123,10 +133,10 @@ sentinels+=(
 )
 verbatim_sentinels=(
   '<!-- gaia:orchestrator-step resume-detection -->' '<!-- gaia:orchestrator-step yield-handling -->' '<!-- gaia:orchestrator-step gate-retry -->'
+  '<!-- gaia:orchestrator-step security-writer -->'
   '<!-- gaia:orchestrator-step simplify-pass -->'
   '<!-- gaia:orchestrator-step flow-checks -->'
-  '<!-- gaia:orchestrator-step worthiness-step -->'
-  '<!-- gaia:orchestrator-step overlap-pass -->'
+  '<!-- gaia:orchestrator-step drift-check -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
   '<!-- gaia:orchestrator-step code-audit -->'
   '<!-- gaia:orchestrator-step post-clearance -->'
@@ -261,30 +271,6 @@ for generated_file in "$readme" "$orchestrator" "$plan_directory/KICKOFF.md" ${t
   done
 done
 
-# Prints `<phase><TAB><stem>` for each backticked task-<name> stem in the tasks
-# cell of a README `| Phase <N> |` row.
-readme_phase_stems() {
-  awk -F'|' '
-    { phase = $2; gsub(/^[ \t]+|[ \t]+$/, "", phase) }
-    phase ~ /^Phase [0-9]+$/ {
-      sub(/^Phase /, "", phase)
-      cell = $3
-      while (match(cell, /`task-[a-z0-9][a-z0-9-]*`/)) {
-        print phase "\t" substr(cell, RSTART + 1, RLENGTH - 2)
-        cell = substr(cell, RSTART + RLENGTH)
-      }
-    }' "$1"
-}
-
-# Prints the entry of ORCHESTRATOR.md for phase $2: ENTRY, then its lines.
-phase_entry() {
-  awk -v phase="$2" '
-    { trimmed = $0; sub(/^[ \t]+/, "", trimmed); sub(/[ \t\r]+$/, "", trimmed) }
-    trimmed ~ /^```/ { in_fence = !in_fence; if (inside) print; next }
-    !in_fence && inside && (trimmed ~ /^\*\*Phase / || trimmed ~ /^## /) { exit }
-    !in_fence && !inside && index(trimmed, "**Phase " phase ", ") == 1 { inside = 1; print "ENTRY"; print; next }
-    inside { print }' "$1"
-}
 
 flow_checks() {
   local flow_output flow_status=0 web_directory='' flow_id slug kind target
@@ -395,6 +381,11 @@ flow_checks() {
 if [ -n "$spec_path" ]; then
   flow_checks
 fi
+
+[ -f "$plan_directory/TEST-DESIGN" ] || fail "TEST-DESIGN is missing from $plan_directory"
+
+security_writer_check
+table_check
 
 [ "$failures" -eq 0 ] || exit 1
 exit 0
