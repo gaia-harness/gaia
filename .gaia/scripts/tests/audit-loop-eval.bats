@@ -1993,7 +1993,7 @@ tree_snapshot() {
   find "$ALF_ROOT/.gaia" -type f | sort | while IFS= read -r file_path; do printf '%s %s\n' "$(shasum <"$file_path")" "$file_path"; done
 }
 
-@test "cli round-history and reopened-round: pinned output, and neither writes a file" {
+@test "cli round-history and reopened-round: pinned output, an accepted key holds every later round, and neither writes a file" {
   local before expected head_tree
   alf_sequence 2 1
   alf_add_checkpoint 2 stalled
@@ -2017,7 +2017,10 @@ tree_snapshot() {
   [ "$output" = 0 ] || return 1
   alf_state_edit '.history.rounds[1].tree = $tree | .history.rounds[1].reopened = false' --arg tree "$head_tree"
   run bash "$SCRIPTS/audit-loop-eval.sh" reopened-round --root "$ALF_ROOT"
-  [ "$output" = 0 ]
+  [ "$output" = 0 ] || return 1
+  alf_state_edit '.history.rounds += [.history.rounds[1], .history.rounds[1]]'
+  run bash "$SCRIPTS/audit-loop-eval.sh" round-history --root "$ALF_ROOT"
+  [ "$(jq -c '.[3].human_accepted_keys' <<<"$output")" = '[["m","c","a.ts",4]]' ] || { echo "accept lost two rounds after its checkpoint: $output"; return 1; }
 }
 
 @test "cli veto-state: a vetoed key no member reported is unsatisfied for the round" {

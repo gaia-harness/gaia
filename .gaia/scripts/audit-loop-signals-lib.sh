@@ -306,8 +306,8 @@ gaia_loop_decide_member() {
 # dispositions-<r>.json (the fixer's text is untrusted and only a fix entry can
 # be refused), caps each path at 160 characters like the reason, takes each one's severity from that entry (null when it
 # carries none), and marks it repeated when round r-1's fixer disputed the same key that way.
-# Display only: the severity comes from the orchestrator's file, which nothing
-# grades from, so it never feeds a gate. A round with no fixer file prints [].
+# The bound hook stores this list on the checkpoint; audit-accept-finding <n>
+# takes entry n's key and refuses it when its severity is critical. A round with no fixer file prints [].
 # rc 2 on a bad argument, 5 on an unparseable file, 6 without jq.
 gaia_loop_disputed_entries() {
   local run_directory="${1-}" round="${2-}" fixer_file dispositions_file previous_file current previous='[]' dispositions='[]'
@@ -344,8 +344,8 @@ gaia_loop_disputed_entries() {
 }
 
 # gaia_loop_checkpoint_disputes <run-directory> <round>: gaia_loop_disputed_entries
-# for the checkpoint hook, [] on any failure: the refused-fix list is display
-# only, so a failure drops the list rather than the checkpoint.
+# for the checkpoint hook, [] on any failure: a failure drops the refused-fix
+# list, and with it audit-accept-finding, rather than the checkpoint.
 gaia_loop_checkpoint_disputes() {
   gaia_loop_disputed_entries "$@" || printf '[]\n'
 }
@@ -363,5 +363,5 @@ gaia_loop_round_history() {
           counted_keys: (if (.snapshot.counted_keys? | type) == "array" then .snapshot.counted_keys | map([.member, .finding_class, .path, .line]) else null end),
           closing: (.closing == true), reopened: (.reopened == true),
           human_accept: (.closing == true or any($accepted_at[]; . == $round - 1 or . == $round)),
-          human_accepted_keys: [$accepted_keys[] | select(.at_round == $round - 1 or .at_round == $round) | .key]}]'
+          human_accepted_keys: [$accepted_keys[] | select(.at_round <= $round) | .key]}]'
 }

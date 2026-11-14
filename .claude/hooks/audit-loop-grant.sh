@@ -52,8 +52,8 @@
 #
 # `audit-accept-finding <n>` accepts one fix the pending checkpoint's fixer
 # refused, entry n of the `disputes` list the bound hook stored on that
-# checkpoint, so the key comes from guarded state and never from the prompt or
-# the run folder. It appends to `allowance.accepted_keys`, not `answers`, so the
+# checkpoint, so it is the fix the pinned question showed as (n) and its key
+# never comes from the prompt. It appends to `allowance.accepted_keys`, not `answers`, so the
 # checkpoint stays unanswered and the grant fold never sees it. A critical
 # entry is refused; a security-class one is recorded, and the dispositions
 # check still keeps it on fix.
@@ -300,7 +300,7 @@ allowed="$(gaia_loop_allowed "$new")"
 branch_name="$(printf '%s' "$new" | jq -r '.branch')"
 case "$parsed" in
   "accept-finding "*)
-    recorded_message="Recorded: audit-accept-finding $finding_number ($(printf '%s' "$finding" | jq -r '.path + ":" + (.line | tostring)')) on branch $branch_name (checkpoint $checkpoint_index). The round after this checkpoint may keep it as an accepted residual unless it is security-class. The checkpoint itself is still unanswered."
+    recorded_message="Recorded: audit-accept-finding $finding_number ($(printf '%s' "$finding" | jq -r '.path + ":" + (.line | tostring)')) on branch $branch_name (checkpoint $checkpoint_index). Any later round may keep it as an accepted residual unless it is security-class. The checkpoint itself is still unanswered."
     _gl_say "$recorded_message" "$recorded_message Claude: the human typed this line. Ask the pinned checkpoint question again for its answer."
     exit 0
     ;;

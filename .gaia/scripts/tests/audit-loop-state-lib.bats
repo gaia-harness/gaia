@@ -648,7 +648,7 @@ disputes_run_folder() {
   run_folder="$(disputes_run_folder)"
   entries="$(gaia_loop_disputed_entries "$run_folder" 6)"
   [ "$(printf '%s' "$entries" | jq -c '[.[] | [.path, .line, .severity, .repeated]]')" = '[["apps/web/app/utils/http.server.ts",7,"major",true],["apps/web/app/routes/_session.requests._index.tsx",25,"minor",true],["apps/web/app/sessions.server/auth.ts",84,null,false]]' ]
-  [[ "$(printf '%s' "$entries" | jq -r '.[0].reason')" == "needs a requirement: honour X-Forwarded-Proto"* ]]
+  [[ "$(printf '%s' "$entries" | jq -r '.[0].reason')" == "needs a requirement: honour X-Forwarded-Proto"* ]] || return 1
   [ "$(printf '%s' "$entries" | jq -r '.[0] | .member + " " + .finding_class')" = "code-audit-frontend holistic/unclassified" ]
   [ "$(gaia_loop_disputed_entries "$run_folder" 7)" = '[]' ]
   long_path="apps/$(printf 'd%.0s' $(seq 1 200)).ts"
@@ -673,11 +673,11 @@ disputes_run_folder() {
   [ "$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "" "[]")" = "$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "")" ]
   question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "" "$entries")"
   question_text="$(printf '%s' "$question" | jq -r '.questions[0].question')"
-  [[ "$question_text" == *"The fixer will not make these fixes until a rule requires them: (1) apps/web/app/utils/http.server.ts:7 (major) \"needs a requirement: honour X-Forwarded-Proto"* ]]
-  [[ "$question_text" == *"; (3) apps/web/app/sessions.server/auth.ts:84 \"conflicts with requirement: the plan keeps the session TTL in one place\". To keep one as an accepted residual (never a critical or security finding), dismiss this question and type audit-accept-finding <number> as your whole prompt. If no rule should require them, pick Stop and file the remainder. How should the audit loop continue?" ]]
-  [[ "$question_text" == *'..."; '* ]]
+  [[ "$question_text" == *"The fixer will not make these fixes until a rule requires them: (1) apps/web/app/utils/http.server.ts:7 (major) \"needs a requirement: honour X-Forwarded-Proto"* ]] || return 1
+  [[ "$question_text" == *"; (3) apps/web/app/sessions.server/auth.ts:84 \"conflicts with requirement: the plan keeps the session TTL in one place\". To keep one as an accepted residual (never a critical or security finding), dismiss this question and type audit-accept-finding <number> as your whole prompt. If no rule should require them, pick Stop and file the remainder. How should the audit loop continue?" ]] || return 1
+  [[ "$question_text" == *'..."; '* ]] || return 1
   [ "$(labels "$question")" = "State the rule, then continue (Recommended)|Continue audit in a new session|Stop and file the remainder" ]
-  [[ "$(option_description "$question" "State the rule")" == "First write the rule each listed fix needs in the SPEC, a wiki/decisions page, or the code or docs, or tell Claude the rule to write there, so the fixer can cite it. "*"records up to 3 more rounds"* ]]
+  [[ "$(option_description "$question" "State the rule")" == "First write the rule each listed fix needs in the SPEC, a wiki/decisions page, or the code or docs, or tell Claude the rule to write there, so the fixer can cite it. "*"records up to 3 more rounds"* ]] || return 1
   for eligible in true false; do
     for cap in true false; do
       question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 10 3 "$eligible" "$cap" cap "" grant "" "$entries")"
