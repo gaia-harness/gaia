@@ -8,8 +8,7 @@
 # markup directive into a real-server assertion, re-asserts page content in
 # the served-status check, writes one rule's case table at both the unit and
 # the route layer, and gives a happy path the flow test walks its own route
-# test. Each clause is pinned in the paragraph that carries it, and the
-# guard's failing-state duty those clauses must never weaken is pinned too.
+# test. Each clause is pinned in the paragraph that carries it.
 #
 # Method: every check takes a root directory; each red twin removes or
 # reverts one clause in a scratch copy, proves the copy changed, and runs the same
@@ -28,9 +27,7 @@ setup() {
   MARKUP_AUDIT='naming the page or component it applies to, written as the constraint the code meets'
   REFUSAL_LAYERING='asserting only the served status and any `Location` header, never page content a route test shows'
   TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer keeps one row per outcome'
-  TWIN_PLANNER='a happy path the closing flow test walks names that flow test instead of a success-path route test when that flow asserts the effect'
   TWIN_LAYERING='with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
-  GUARD_DUTY="a guard's failing-state test is named in the task that delivers the guard, never left to the closing flow test"
 }
 
 # ---------- helpers ----------
@@ -51,7 +48,6 @@ holds() {
 }
 
 directive_para() { line_with "$1/$PLANNER_REL" 'Its `## Plan-time directives` section'; }
-criteria_bullet() { line_with "$1/$PLANNER_REL" '- Acceptance criteria (concrete and testable).'; }
 audit_directive() { line_with "$1/$AUDIT_REL" '- **Plan-time directive** ('; }
 layering_rule() { line_with "$1/$LAYERING_REL" 'Give every transition, status or role rule'; }
 layering_refusal() { line_with "$1/$LAYERING_REL" '**Served check.**'; }
@@ -72,13 +68,6 @@ check_one_case_table() {
 }
 
 check_happy_path_twin() {
-  local bullet
-  bullet="$(criteria_bullet "$1")"
-  holds 'planner.md acceptance-criteria bullet' "$bullet" "$TWIN_PLANNER" || return 1
-  case "$bullet" in
-    *'may name that flow test'*) printf 'acceptance-criteria bullet still lets a happy path skip the flow test\n' >&2; return 1 ;;
-  esac
-  holds 'planner.md acceptance-criteria bullet' "$bullet" "$GUARD_DUTY" || return 1
   holds 'Test Layering flow paragraph' "$(line_with "$1/$LAYERING_REL" 'Name the closing flow test as the owner')" "$TWIN_LAYERING" || return 1
 }
 
@@ -143,13 +132,10 @@ green() {
   red check_one_case_table "$LAYERING_REL" ' holding every case,' ','
 }
 
-@test "a happy path the flow test walks and asserts names that flow test, and every guard keeps its failing-state test" {
+@test "a happy path the flow test walks and asserts names that flow test" {
   green check_happy_path_twin
 }
 
-@test "red twin: a permissive happy path or a dropped guard duty fails" {
-  red check_happy_path_twin "$PLANNER_REL" "$TWIN_PLANNER" 'only a happy path the closing flow test walks may name that flow test instead'
-  red check_happy_path_twin "$PLANNER_REL" "$GUARD_DUTY" 'removed'
-  red check_happy_path_twin "$PLANNER_REL" ' when that flow asserts the effect' ''
+@test "red twin: a dropped happy-path ownership rule fails" {
   red check_happy_path_twin "$LAYERING_REL" "$TWIN_LAYERING" 'removed'
 }

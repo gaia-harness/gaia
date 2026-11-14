@@ -128,7 +128,7 @@ gaia_test_design_merge_verdict() {
     0) return 0 ;;
     1) ;;
     *)
-      printf 'Security-row merge gate: the security check refused the test-design table in %s (exit %s): %s\nNext step: restore the plan folder files (TEST-DESIGN, tests.json, tests.approved.json) so the approved copy matches the marker, then retry.\n' "$plan" "$drift_status" "$output"
+      printf 'Security-row merge gate: the security check refused the test-design table in %s (exit %s): %s\nNext step: fix what the reason names (for a table or marker refusal, restore TEST-DESIGN, tests.json and tests.approved.json so the approved copy matches the marker), then retry.\n' "$plan" "$drift_status" "$output"
       return 1
       ;;
   esac
@@ -165,7 +165,7 @@ $row
 "
   done <<<"$output"
   [ -n "$ungranted" ] || return 0
-  printf 'Security-row merge gate: an approved security row of %s has no matching test on this branch:\n%s%s\n' "$plan" "$ungranted" "$next_step"
+  printf 'Security-row merge gate: approved security rows of %s are uncovered on this branch:\n%s%s\n' "$plan" "$ungranted" "$next_step"
   return 1
 }
 

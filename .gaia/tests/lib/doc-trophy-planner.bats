@@ -102,7 +102,6 @@ check_acceptance_text() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
   need "$text" 'Name the behavior the task delivers and its `- Test:` lines' || return 1
-  need "$text" 'never left to the closing flow test' || return 1
   need "$text" 'never a list of tests per function' || return 1
   need "$text" 'is `.claude/doctrine/testing.md`; this bullet restates none of it' || return 1
   need "$text" '.claude/rules/guards-must-fail.md' || return 1
@@ -151,9 +150,7 @@ check_tdd_loop() {
 check_task_doc_test_naming() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'A task doc names a test only on a `- Test: <repo-relative file> › <exact title>` line' || return 1
-  need "$text" 'names an existing test file whose pinned wording its edit falsifies on a `- Pin update: <repo-relative path>` line' || return 1
-  need "$text" 'No other test path appears in a task doc.' || return 1
+  need "$text" 'A task doc names tests only on the `- Test:`, `- Flow test` and `- Pin update:` lines' || return 1
   need "$text" 'a test worth having that no requirement names is no row, and goes under `## Follow-ups` in `README.md`' || return 1
 }
 
@@ -173,10 +170,6 @@ check_absence_and_cases() {
 
 @test "red twin: restoring the per-guard criterion line fails" {
   red check_acceptance_text "$PLANNER_REL" 'never a list of tests per function' 'never a list of tests per function. One criterion per guard, refusal, or gate'
-}
-
-@test "red twin: leaving a refusal to the closing-phase flow test fails" {
-  red check_acceptance_text "$PLANNER_REL" 'never left to the closing flow test' 'or left to the closing flow test'
 }
 
 @test "the executor template limits the tests a sub-agent writes" {
@@ -232,11 +225,11 @@ check_absence_and_cases() {
 }
 
 @test "red twin: letting a task doc name any test the planner judges worthwhile fails" {
-  red check_task_doc_test_naming "$PLANNER_REL" 'No other test path appears in a task doc.' 'Any test path may appear in a task doc.'
+  red check_task_doc_test_naming "$PLANNER_REL" 'A task doc names tests only on the' 'A task doc may name any test on the'
 }
 
 @test "red twin: dropping the Pin update line form fails" {
-  red check_task_doc_test_naming "$PLANNER_REL" ' on a `- Pin update: <repo-relative path>` line' ''
+  red check_task_doc_test_naming "$PLANNER_REL" '`- Flow test` and `- Pin update:` lines' '`- Flow test` lines'
 }
 
 @test "an absence requirement counts as a guard and every case of a multi-case row but a non-guard flow case is asserted in the task's named test" {

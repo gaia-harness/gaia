@@ -13,7 +13,7 @@
 //
 // Exit codes: 0 ok, 2 usage, 3 unreadable input or no TypeScript.
 //
-// Importable: layerOf(file, {root, flowTests}) for the drift check, and
+// Importable: layerOf(file, {root, flowTests}) for existing-tests.mjs, and
 // webPackageDirs(root) for modules that need the web package's folder.
 
 import {createRequire} from 'node:module';

@@ -13,8 +13,9 @@
 #   requirement-keys.sh --spec <SPEC.md> [--audit <AUDIT.md>]
 #   requirement-keys.sh --description
 #
-# Exit 0 ok, 2 usage, an unreadable file, or a SPEC with no frontmatter (or no
-# parseable flows). Bash 3.2 compatible; BSD and GNU tools.
+# Exit 0 ok, 2 usage, an unreadable file, or a SPEC with no closed frontmatter
+# or whose flows block the flows reader rejects (any malformed or missing
+# flow). Bash 3.2 compatible; BSD and GNU tools.
 
 set -uo pipefail
 

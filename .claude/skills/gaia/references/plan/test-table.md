@@ -13,7 +13,7 @@ All four live in the plan directory.
 - `tests.approved.json`: the byte copy of `tests.json` taken at approval. Nobody edits it afterwards.
 - `security-tests.jsonl`: the append-only ledger of the security-row tests the security writer wrote. Only `node .gaia/scripts/test-design/test-table.mjs record-security` writes it.
 
-A write to any of these from a worktree session goes through the scratchpad-plus-`cp` route (`.claude/skills/gaia/references/plan/planner.md` tool-choice contract; `.claude/doctrine/execution.md`, `## Run folder`).
+The planner's own write of `tests.json` from a worktree session goes through the scratchpad-plus-`cp` route (`.claude/skills/gaia/references/plan/planner.md` tool-choice contract; `.claude/doctrine/execution.md`, `## Run folder`); the `test-table.mjs` subcommands write the approved copy, the marker's `approved_sha256:` line and the ledger themselves.
 
 ## Row
 
@@ -58,12 +58,11 @@ No other test path appears in a task doc: a path ending `.test.ts`, `.test.tsx`,
 3. List the source paths the plan touches and run `node .gaia/scripts/test-design/existing-tests.mjs --root <tree> --touched <file>` over them: the existing tests that drive what the plan changes.
 4. Map every key, and every case and stated literal (SPEC rows, success criteria, scope boundaries, clarifications, directives, and the documents the SPEC's Required reading names), to rows. Every key is some row's `source`, and every row's `source` is a key.
 5. Pick each row's layer by the doctrine's `## Layers`, and confirm a path's layer with `node .gaia/scripts/test-design/layer-map.mjs --root <tree>` (NUL-separated repo-relative paths on stdin).
-6. Give each row its action against the existing tests: `reuse`, `extend`, `change` or `retire`, else `new`. A case an existing test asserts is never `new`.
+6. Give each row its action against the existing tests: `reuse`, `extend`, `change` or `retire`, else `new`.
 7. Flag access, forgery and secret rows per the doctrine's `## Guards and security rows`; a `retire` or `change` row on an existing test meeting that definition carries the flag. Set each security row's `task` to the latest task whose code its test needs.
 8. Give rows that share one test distinct `caseKey`s, and a security row that shares a test a `caseKey` too.
 9. Write titles as string literals, story titles in the three-space form.
-10. Never write a row for a corner case no stated requirement names, or a self-test of a test double.
-11. Write `tests.json`, then each task doc's `- Test:` lines from the rows whose `task` is that doc.
+10. Write `tests.json`, then each task doc's `- Test:` lines from the rows whose `task` is that doc.
 
 ## README rendering
 

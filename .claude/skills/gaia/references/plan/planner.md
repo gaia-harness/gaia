@@ -39,11 +39,11 @@ Then write the following files directly to `{PLAN_DIR}/`:
     - Context and motivation
     - Interface contracts (types, function signatures, file exports)
     - Files to touch (with line-range hints where possible), plus the behavior the task delivers and its `- Test:` lines (`.claude/skills/gaia/references/plan/test-table.md`, `## Task-doc lines`)
-    - Acceptance criteria (concrete and testable). **Name the behavior the task delivers and its `- Test:` lines**, the rows of the table the task owns, never a list of tests per function. Which test a requirement needs, at which layer, and what a guard, an absence requirement, a forged value, a multi-case row, a compound condition, an order-of-checks row or a stated role, accessible name or wording each call for is `.claude/doctrine/testing.md`; this bullet restates none of it. The mechanics stay here: a guard's failing-state test is named in the task that delivers the guard, never left to the closing flow test, and one test may cover several guards; a happy path the closing flow test walks names that flow test instead of a success-path route test when that flow asserts the effect; a planned flow test counts toward a stated role, name or wording only when its task doc names the literal for it to assert. This binds a verification task the same way it binds the task that builds the guard (`.claude/rules/guards-must-fail.md`). In a phase that runs two or more tasks in parallel, every criterion's check is scoped to the files that task owns, under the same rule the Sub-agent invocation bullet below gives the prompt template; a repo-wide check (the project's lint script, typecheck, Playwright) belongs to the phase's quality gate, never to one task's criteria.
+    - Acceptance criteria (concrete and testable). **Name the behavior the task delivers and its `- Test:` lines**, the rows of the table the task owns, never a list of tests per function. Which test a requirement needs, at which layer, and what a guard, an absence requirement, a forged value, a multi-case row, a compound condition, an order-of-checks row or a stated role, accessible name or wording each call for is `.claude/doctrine/testing.md`; this bullet restates none of it. The mechanics stay here: a planned flow test counts toward a stated role, name or wording only when its task doc names the literal for it to assert. This binds a verification task the same way it binds the task that builds the guard (`.claude/rules/guards-must-fail.md`). In a phase that runs two or more tasks in parallel, every criterion's check is scoped to the files that task owns, under the same rule the Sub-agent invocation bullet below gives the prompt template; a repo-wide check (the project's lint script, typecheck, Playwright) belongs to the phase's quality gate, never to one task's criteria.
     - Dependencies on other tasks in this plan
     - In a spec-derived plan's last phase (the closing flow-test phase, step 2), a line of its own, `- Flow test (<flow_id>): <repo-relative test path>`, exactly one per last-phase task doc, naming the one flow the task owns. No earlier phase's task doc carries a `Flow test` line.
 
-    A task doc names a test only on a `- Test: <repo-relative file> › <exact title>` line, one per table row the task owns (plus the closing phase's `- Flow test` line), and names an existing test file whose pinned wording its edit falsifies on a `- Pin update: <repo-relative path>` line, which needs no table row. No other test path appears in a task doc. `.claude/skills/gaia/references/plan/test-table.md` (`## Task-doc lines`) owns the line forms. Every test named is a row of `tests.json`; a test worth having that no requirement names is no row, and goes under `## Follow-ups` in `README.md`.
+    A task doc names tests only on the `- Test:`, `- Flow test` and `- Pin update:` lines that `.claude/skills/gaia/references/plan/test-table.md` (`## Task-doc lines`) defines. Every test named is a row of `tests.json`; a test worth having that no requirement names is no row, and goes under `## Follow-ups` in `README.md`.
 
     A plan that deletes a page route and points a spec that loaded it at another route gives the deleted page's document head to the task that owns the new target: its acceptance criteria name a `<title>` and a meta description, rendered the way the deleted route rendered them (`apps/web/.claude/rules/i18n.md`), so the moved spec's accessibility scan still passes.
 
@@ -92,7 +92,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
         - `Abandon`: stop cleanly without re-running, committing, merging, or deleting anything; the sentinel, `PROGRESS.md`, branch, and prior commits stay intact.
 
         When `K` equals `M+1` (every phase a verified-complete ancestor), resume re-enters with no phase re-run at the simplify pass, then continues through the pre-audit flow checks in a spec-derived plan, the drift check, the wiki promotion and the pre-merge Code Audit Team audit; each of those steps skips what its own `PROGRESS.md` record or its route already settled.
-      - **A phase with a security-writer step.** A phase whose entry carries a `- Security writer:` line and whose security-writer pass `PROGRESS.md` does not record (no `{PLAN_DIR}/security-tests.jsonl` line for its rows and no HALTED block for it) re-runs the security-writer step for that phase before its quality gate.
+      - **A phase with a security-writer step.** A phase whose entry carries a `- Security writer:` line and whose security rows have no `{PLAN_DIR}/security-tests.jsonl` line and whose phase has no HALTED block in `PROGRESS.md` (the security-writer step writes no `PROGRESS.md` record on a pass) re-runs the security-writer step for that phase before its quality gate.
       - **Resumed-run git flow.** A resumed run reuses the already-open PR, it does NOT re-issue `gh pr create`; it updates the existing PR with subsequent commits exactly like an uninterrupted run. The branch edge recorded at the first cut still keys the run's cost to the same feature after reconnect, so no second `usage.sh link` runs; the pre-merge marker handshake and the post-merge close behave unchanged.
       ```
 
@@ -187,7 +187,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
       ```
       <!-- gaia:orchestrator-step security-writer -->
-      **Security writer (each build phase whose entry carries a `- Security writer:` line).** At the end of the phase, after its task executors return and before its quality gate, dispatch one fresh `Agent(subagent_type: "security-test-writer")` with that phase's security rows from `{PLAN_DIR}/tests.json`, the frozen interfaces from `{PLAN_DIR}/README.md`, `RESOLVED_ROOT` and `{PLAN_DIR}`. Read `.claude/skills/gaia/references/security-writer.md` and run it: it owns the record, the failing-test route back to the owning executor, the one retry, the HALT block and its reason, and auto mode. Never have a task executor write a security row's test.
+      **Security writer (each build phase whose entry carries a `- Security writer:` line).** At the end of the phase, after its task executors return and before its quality gate, read `.claude/skills/gaia/references/security-writer.md` and run it from `RESOLVED_ROOT`: it owns the dispatch of the `security-test-writer` agent over that phase's security rows in `{PLAN_DIR}/tests.json`, the record, the failing-test route back to the owning executor, the one retry, the HALT block and its reason, and auto mode. Never have a task executor write a security row's test.
       ```
 
     - **Simplify pass.** Place this block after the security writer block and before the pre-audit flow checks block (a spec-less plan: before the drift check block). The reference page owns the step's mechanics:
@@ -205,7 +205,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
           bash .gaia/scripts/spec/flow-coverage.sh --spec {SPEC_PATH} --root <RESOLVED_ROOT> --flow-tests-out <RUN_FOLDER>/flow-tests.tsv
 
-      `<RUN_FOLDER>` is this branch's run folder (`.claude/doctrine/execution.md`, `## Run folder`); the drift check and the merge-time presence gate read the file it writes. What each exit means: `.claude/skills/gaia/references/spec/lifecycle.md` `## Pre-audit flow checks`.
+      `<RUN_FOLDER>` is this branch's run folder (`.claude/doctrine/execution.md`, `## Run folder`); the merge-time presence gate reads the file it writes. What each exit means: `.claude/skills/gaia/references/spec/lifecycle.md` `## Pre-audit flow checks`.
 
       - **Exit 0.** Append this block to `{PLAN_DIR}/PROGRESS.md` and go on to the drift check:
 
@@ -220,7 +220,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
             Reason: <flow checks failed after one fixer round | flow-coverage.sh exit <2 | 3> | a failure no closing-phase task owns | the fixer edited nothing>
             Failures: <each stdout failure line, or the stderr line>
 
-      The retry bound is one. Drift-check flow findings are not this block's: the drift check's own rounds bound them. A failure here is a HALT, never an audit finding to fix in a fix round.
+      The retry bound is one. A flow test's honesty or worth judgment is not this block's: the drift check bounds it. A failure here is a HALT, never an audit finding to fix in a fix round.
       ```
 
     - **Drift check.** Place this block after the pre-audit flow checks block (a spec-less plan: after the simplify pass block) and before the wiki promotion block. The reference page owns the step's mechanics:

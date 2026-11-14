@@ -18,7 +18,7 @@ Contents: File locations; Spec file naming; Real-server HTML check; Selectors, p
 ## Spec file naming
 
 Match the feature or route: `language-switch.spec.ts`, `things.spec.ts`.
-One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`, or `.playwright/flows/<slug>.spec.ts` for a critical flow); one `test.describe` block per scenario group. Which behavior gets a test, at which layer, and which capabilities earn a browser spec, including the flow-test and native-form-post rules: `.claude/doctrine/testing.md`. Committed tests follow that file; the vendored test-generation guide in `playwright-cli` does not apply to them.
+One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`, or `.playwright/flows/<slug>.spec.ts` for a critical flow); one `test.describe` block per scenario group. Which behavior gets a test, at which layer, and which capabilities earn a browser spec, including the flow-test and native-form-post rules: `.claude/doctrine/testing.md`. Committed tests follow that file, including its `## Committed tests and generators` on the vendored `playwright-cli` test-generation guide.
 
 ## Real-server HTML check
 

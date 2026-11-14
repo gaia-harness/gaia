@@ -56,7 +56,7 @@ A security row other than `retire` matches only when its current signal is in `{
 
 ### 1. Classify
 
-Run the classify command above into a scratchpad file. Lists that are all empty end the step at 6.
+Run the classify command above into a scratchpad file. When `honesty`, `fixer`, `evaluator`, `unplannedDeletes` and `likelyRenames` are all empty, go to step 6.
 
 ### 2. Honesty
 
@@ -86,7 +86,7 @@ For the `evaluator` tests: dispatch `Agent(subagent_type: "worthiness-evaluator"
 - `fix`: the step 2 fixer, then one fresh evaluation, recorded.
 - `delete`: with a human, ask `Confirm the delete` (Recommended) or `Keep the test`; a confirmed delete goes to the fixer. With no human, keep the test and name it as a residual in the report.
 
-A likely rename whose signals are equal is the row's own test under a new title: replace the row with the new `title` through `amend`.
+A likely rename with a non-null `row` whose signals are equal is that row's test under a new title: replace the row with the new `title` through `amend`. One with `row: null` needs no `amend`.
 
 Each `unplannedDeletes` entry asks the maintainer `Keep the test (Recommended)`, which restores it from base, or `Confirm the delete`, which adds a `retire` row with a `reason` through `amend`. Auto mode and an unattended run take the recommended keep. These never go to the evaluator.
 

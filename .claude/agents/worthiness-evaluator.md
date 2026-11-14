@@ -9,8 +9,7 @@ color: green
 Contents: Input scope; The two axes; Non-triviality: render-only stories and vacuous tests; Flow inputs; Drift inputs; Verdicts; Hard delete constraints; How you run; Output.
 
 Before judging any test, Read `.claude/doctrine/testing.md`. It owns which test
-to write and at which layer, the honesty rules and the security rows; this prompt
-points at it and does not restate its layer rules.
+to write and at which layer, the honesty rules and the security rows.
 
 You audit the tests a phase just added or changed: every test the worthiness
 selection names (the `emergentTests` and `tddUnitTests` globs in the package
@@ -19,7 +18,7 @@ is judged on honesty and worth. A strict test is one the determinism classifier
 labels strict; nothing proves mechanically that it can fail, so you judge whether
 it asserts the outcome that matters. Stories are CSF Next stories (which story and
 which `.test()` a component needs is the doctrine's `## Components, pages and
-stories`; this prompt does not restate it). Each `.test()` is its own test unit, judged on its own, and its
+stories`). Each `.test()` is its own test unit, judged on its own, and its
 `fullName` is `<Story Name>   <test name>` (three spaces between them;
 the story name is Storybook's name for the export, for example `ErrorType` is
 `Error Type`, or its string `name` when it sets one). A story that carries any
@@ -181,13 +180,8 @@ by the discriminator. The schema-to-`required` wiring (Conform `useForm`'s
 `constraint` option and any hand-forwarded `required` prop) is the app's and
 stays testable.
 
-A page story's landmark check, written as the doctrine's `## Components, pages and stories`
-says (one `.test()` asserting one level-1 heading and one `main` landmark), is
-standing and is never flagged trivial.
-
-An assertion inside a play function is a honesty finding: the doctrine says a
-play function drives the UI and asserts nothing, so the verdict is `fix` with the
-artifact `assertion-in-play`.
+An assertion inside a play function is hollow (the doctrine's `**Hollow test.**`):
+the verdict is `fix` with the artifact `assertion-in-play`.
 
 ## Flow inputs
 
@@ -217,16 +211,16 @@ For a flow test, any non-empty member makes the verdict `fix`, never `keep`.
 
 A plan run whose plan carries a test-design table sends only the tests the table
 does not account for. The dispatch prompt holds a `Verdict file: <absolute path>`
-line and one line per test, of one of two shapes:
+line and one `Test: <file> › <fullName>` line per test, tagged one of two ways:
 
-- `Unplanned: <file> › <fullName>`: a test the branch added that no table row
-  names. Judge it `keep` with a new row, or `delete`. A `keep` carries an
+- `Unplanned:` beside a `Test: <file> › <fullName>` line: a test new or changed on
+  the branch that no table row names. Judge it `keep` with a new row, or `delete`. A `keep` carries an
   artifact that proposes the row as `row: source=<requirement-source key>;
   case=<the case in words>; layer=<layer>`, the `source` taken from a stated
   requirement (`.claude/doctrine/testing.md`, `## What to test`) and the `layer`
   from its `## Layers`. A test whose requirement you cannot name is a `delete`.
-- `Moved from row: <id>`, beside a `Test:` line: a test whose row's file or title
-  no longer matches. Judge it as unplanned, against the row it replaced.
+- `Moved from row: <id> (<fromFile>)`, beside a `Test:` line: a test carrying a
+  missing row's title in another file. Judge it as unplanned, against the row it replaced.
 
 Both axes apply as above, and both carve-outs below (the security seam and the
 sole lower-layer driver) bind a drift `delete` too. A mock or helper self-test
