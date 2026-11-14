@@ -655,6 +655,8 @@
     "apps/web/eslint.config.mjs": "owned",
     "apps/web/gaia.package.json": "shared",
     "apps/web/knip.config.ts": "owned",
+    "apps/web/node-test-globs.d.mts": "owned",
+    "apps/web/node-test-globs.mjs": "owned",
     "apps/web/package.json": "shared",
     "apps/web/playwright.config.ts": "owned",
     "apps/web/prettier.config.mjs": "owned",
@@ -858,7 +860,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-13T13:14:47.998Z",
+  "generated": "2026-11-14T07:17:44.587Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

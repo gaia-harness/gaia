@@ -8,6 +8,7 @@ import {playwright} from '@vitest/browser-playwright';
 import {defineConfig} from 'vitest/config';
 import type {BrowserConfigOptions} from 'vitest/node';
 import {availableParallelism} from 'node:os';
+import {nodeTestExclude, nodeTestInclude} from './node-test-globs.mjs';
 import {
   isReactCompilerEnabled,
   reactCompiler,
@@ -143,9 +144,9 @@ export default defineConfig({
       {
         test: {
           environment: 'node',
-          exclude: ['app/**/hooks/**'],
+          exclude: nodeTestExclude,
           globals: true,
-          include: ['app/**/*.test.ts', 'test/**/*.test.ts'],
+          include: nodeTestInclude,
           name: 'node',
           setupFiles: ['./test/setup.ts'],
           testTimeout: coldImportTestTimeout,
