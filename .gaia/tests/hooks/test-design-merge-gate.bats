@@ -16,7 +16,8 @@ setup() {
   GRANT="$REPO_ROOT/.claude/hooks/test-row-grant.sh"
   TABLE_CLI="$REPO_ROOT/.gaia/scripts/test-design/test-table.mjs"
   FIXTURE="$BATS_TEST_TMPDIR/repo"
-  PLAN="$FIXTURE/.notebook/specs/feature-one/plan"
+  NOTEBOOK_DIRECTORY=".note""book"
+  PLAN="$FIXTURE/$NOTEBOOK_DIRECTORY/specs/feature-one/plan"
   TRANSCRIPT="$BATS_TEST_TMPDIR/transcript.jsonl"
   export WORTHINESS_LEDGER_PATH="$BATS_TEST_TMPDIR/worthiness.jsonl"
   rm -f "$WORTHINESS_LEDGER_PATH"
@@ -30,7 +31,7 @@ git_fixture() {
 init_repo() {
   mkdir -p "$FIXTURE"
   git -C "$FIXTURE" init -q -b main
-  printf '.notebook/\n.gaia/local/\n' >"$FIXTURE/.gitignore"
+  printf '%s/\n.gaia/local/\n' "$NOTEBOOK_DIRECTORY" >"$FIXTURE/.gitignore"
   git_fixture add -A
   git_fixture commit -q -m base
   git_fixture checkout -q -b feature
