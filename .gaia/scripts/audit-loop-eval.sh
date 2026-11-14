@@ -101,9 +101,9 @@
 #     2. a denying signal not lifted above, with no checkpoint at round >= used
 #        answered: `deny rubric:<signal> <eligible> false`, first in SIGNALS order.
 #     3. the latest checkpoint is answered and its index is greater than the
-#        latest unit's after_checkpoint (or no unit exists): a grant gives
-#        `allow grant s min(s+k-1, 10)`, an accept `allow accept s s`; else a
-#        grant window gives `allow grant s min(s+k-1, through_round)`.
+#        latest unit's after_checkpoint (or no unit exists), or an accept's closing round
+#        is unrecorded (gaia_loop_next_closing): a grant gives `allow grant s min(s+k-1, 10)`,
+#        an accept `allow accept s s`; else a grant window gives `allow grant s min(s+k-1, through_round)`.
 #     4. the latest answer is an accept and a round is recorded after the
 #        checkpoint it answers (its closing round is spent): `deny fallback
 #        <eligible> false`, whatever the reading. An accept never re-arms the loop.

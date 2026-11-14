@@ -98,11 +98,11 @@
 # dispatch read as the main thread's, which is the stricter judgement.
 #
 # AN ANSWER IS SPENT BY THE ROUND AFTER IT. The decision functions admit on
-# an answered checkpoint until a unit consumes it. A main-thread member
-# dispatch appends no unit, so on its own it would spend the same answer every
-# round. This hook therefore treats the latest checkpoint's answer as spent
-# once a round has been recorded after that checkpoint (decision input only;
-# nothing is written), and the next dispatch is judged afresh.
+# an answered checkpoint until a unit consumes it, and on an accept until its
+# closing round is recorded. A main-thread member dispatch appends no unit, so
+# on its own it would spend the same answer every round. This hook therefore
+# treats the latest checkpoint's answer as spent once a round has been recorded
+# after that checkpoint (decision input only; nothing is written).
 #
 # THE CONTEXT READING. gaia_context_read for this payload's session_id at the main
 # checkout. Anything but a fresh reading (missing, stale, future-dated,

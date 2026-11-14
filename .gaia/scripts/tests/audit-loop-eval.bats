@@ -609,7 +609,7 @@ brief_check() {
     {unit: 2, start_round: 4, k: 3, through_round: 4, admitted_on: "accept",
     after_checkpoint: 1, recorded_at: "2026-01-01T00:00:00Z", session_id: "s1"}]'
   [ "$(jq '.history.rounds | length' "$ALF_STATE")" = 3 ]
-  # After the tree moves, the next unit is admitted on a reading below the line.
+  # After the tree moves, the next unit is judged with a reading below the line.
   decision="$(gaia_loop_decide_unit "$(cat "$ALF_STATE")" null "$LOW" 300000 50)"
   [ "$decision" = "allow accept 4 4" ] || { echo "decision: $decision"; return 1; }
   read -r _ admitted_on start_round through_round <<<"$decision"

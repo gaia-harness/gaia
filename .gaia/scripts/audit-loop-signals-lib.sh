@@ -181,7 +181,8 @@ _gaia_loop_decide_unit_with_unit_rounds() {
   # Grant admission comes before the line check: it is how a human lets a unit
   # run while the reading is over the line. Only the LATEST checkpoint counts,
   # and only once: after_checkpoint is the checkpoint count when the last unit
-  # was admitted, so a unit admitted on this answer has consumed it.
+  # was admitted, so a unit admitted on this answer has consumed it (an accept
+  # stays live below until its closing round is recorded).
   answer="$(printf '%s' "$state" | jq -r '
     (.history.checkpoints | last) as $latest_checkpoint
     | ((.history.units // []) | last) as $latest_unit
