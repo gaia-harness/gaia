@@ -356,8 +356,8 @@ gaia_loop_checkpoint_disputes() {
 # accept, plus each audit-accept-finding key. Only the audit loop hooks write
 # these fields (the grant hooks the answers and accepted keys, the bound hook
 # the checkpoints and round snapshots), so a member can trust this list where a
-# run-folder file could be forged. A round whose keys were not stored contributes none, which fails
-# toward a refusal.
+# run-folder file could be forged. A round whose keys were not stored
+# contributes none, which fails toward a refusal.
 gaia_loop_accepted_keys() {
   printf '%s' "$1" | jq -c '. as $state
     | [$state.allowance.answers[] | select(.kind == "accept") | .checkpoint as $index
