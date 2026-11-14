@@ -218,9 +218,11 @@ gaia_loop_stop_override() {
 
 # gaia_loop_reopen_due <main-root> <B> <state-json> <tree>: prints true when
 # the bound hook must record a reopened round before it admits a unit on HEAD
-# tree <tree> (its header, THE REOPENED ROUND), else false. rc 1 on an
-# unreadable or malformed vetoes.json or gate-failure.json: reading either as
-# absent would leave its repair no round.
+# tree <tree> (its header, THE REOPENED ROUND), else false. A new veto reopens
+# on a moved tree too: commits outside its member's scope leave that member's
+# clearance standing, so no member wave would open the round its fix needs.
+# rc 1 on an unreadable or malformed vetoes.json or gate-failure.json: reading
+# either as absent would leave its repair no round.
 gaia_loop_reopen_due() {
   local run vetoes="[]" failure="{}"
   run="$(gaia_loop_run_directory "$1" "$2")"
@@ -234,7 +236,7 @@ gaia_loop_reopen_due() {
     (.history.rounds | length) as $used | (.history.rounds | last) as $latest | ($latest.tree == $tree) as $unmoved
     | $used > 0
       and (($latest.reopened == true and $unmoved) | not)
-      and ((any($vetoes[]; .effective_from_round == $used + 1) and $unmoved)
+      and (any($vetoes[]; .effective_from_round == $used + 1)
            or ($failure.after_round == $used and $failure.tree == $tree))' 2>/dev/null
 }
 
