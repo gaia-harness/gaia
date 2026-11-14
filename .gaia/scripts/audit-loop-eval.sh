@@ -23,8 +23,9 @@
 # takes the state lock, never calls gaia_loop_write_state.
 #   audit-loop-eval.sh findings|evaluate-round|brief|record-values|state-path|current-round
 #                      |next-unit|unit-window|pinned-question|round-history
-#                      |veto-state|reopened-round --root <audited-root> [--round <r>]
-# round-history prints one {round, tree, members, keys, counted_keys, closing, reopened,
+#                      |veto-state|reopened-round|accepted-keys --root <audited-root> [--round <r>]
+# accepted-keys prints the identity keys a human accepted, [] with no round
+# (gaia_loop_accepted_keys in audit-loop-signals-lib.sh). round-history prints one {round, tree, members, keys, counted_keys, closing, reopened,
 # human_accept, human_accepted_keys} per recorded round (keys and counted_keys as identity
 # keys, null when not stored; human_accept: closing, or an accept answering a checkpoint at
 # round r-1 or r; human_accepted_keys: audit-accept-finding keys of a checkpoint at round r or earlier). veto-state prints audit-veto-lib.sh's
@@ -612,7 +613,7 @@ _gaia_loop_brief() {
 }
 
 _gaia_loop_usage() {
-  printf 'usage: audit-loop-eval.sh findings|evaluate-round|brief|record-values|state-path|current-round|next-unit|unit-window|pinned-question|round-history|veto-state|reopened-round --root <audited-root> [--round <r>]\n' >&2
+  printf 'usage: audit-loop-eval.sh findings|evaluate-round|brief|record-values|state-path|current-round|next-unit|unit-window|pinned-question|round-history|veto-state|reopened-round|accepted-keys --root <audited-root> [--round <r>]\n' >&2
   return 2
 }
 
@@ -667,7 +668,7 @@ _gaia_loop_cli() {
     esac
   done
   case "$subcommand" in
-    findings | evaluate-round | brief | record-values | state-path | current-round | next-unit | unit-window | pinned-question | round-history | veto-state | reopened-round) ;;
+    findings | evaluate-round | brief | record-values | state-path | current-round | next-unit | unit-window | pinned-question | round-history | veto-state | reopened-round | accepted-keys) ;;
     *) _gaia_loop_usage; return 2 ;;
   esac
   case "$root" in /*) ;; *) printf 'audit-loop-eval: --root must be an absolute path\n' >&2; return 2 ;; esac
@@ -691,7 +692,7 @@ _gaia_loop_cli() {
     1)
       case "$subcommand" in
         current-round | reopened-round) printf '0\n'; return 0 ;;
-        round-history) printf '[]\n'; return 0 ;;
+        round-history | accepted-keys) printf '[]\n'; return 0 ;;
         next-unit) printf '1 1\n'; return 0 ;;
         # A first-dispatch quick review needs no earlier full clearance, so the
         # ledger can hold a clear while no round exists. This branch is reached
@@ -740,10 +741,8 @@ _gaia_loop_cli() {
       return 0
       ;;
     brief) _gaia_loop_brief "$root" "$main" "$state"; return $? ;;
-    round-history)
-      gaia_loop_round_history "$state"
-      return $?
-      ;;
+    round-history) gaia_loop_round_history "$state"; return $? ;;
+    accepted-keys) gaia_loop_accepted_keys "$state"; return $? ;;
     reopened-round)
       subcommand_output="$(_gaia_loop_git -C "$root" rev-parse 'HEAD^{tree}' 2>/dev/null)" || subcommand_output=""
       printf '%s' "$state" | jq -r --arg head_tree "$subcommand_output" \
