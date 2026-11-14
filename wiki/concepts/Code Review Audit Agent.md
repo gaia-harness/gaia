@@ -63,6 +63,10 @@ The overlap pass (`.claude/skills/gaia/references/overlap-pass.md`) records `Out
 
 A plan run's simplify pass (`.claude/skills/gaia/references/simplify-pass.md`) records `Result: not run` and lets the run continue. The main thread edits nothing in a plan run, and nothing depends on this pass. That page states the departure and its reason.
 
+The security-test writer step (`.claude/skills/gaia/references/security-writer.md`) ends without an inline fallback, because a security test is never written by the code's own author. When its dispatch returns nothing twice, the phase halts with `security writer: no report`.
+
+The drift check (`.claude/skills/gaia/references/drift-check.md`) ends without an inline fallback, because an absent verdict is not a keep. When its dispatch returns nothing twice, the step halts.
+
 A surface named in none of these places takes the inline ending above.
 
 ### Ad-hoc dispatches: `--shape agent-report-file`

@@ -27,23 +27,25 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   LAYERING='wiki/decisions/Test Layering.md'
   AXIOM='the route layer is the default home for behavior'
+  PAGE_PIN='Route is the default home for behavior because'
+  DOCTRINE='.claude/doctrine/testing.md'
   LINK='wiki/decisions/Test Layering.md'
-  PLANNER_PIN='Name the behavior the task delivers and the one acceptance test that owns it'
+  PLANNER_PIN='Name the behavior the task delivers and its `- Test:` lines'
   TESTS_REACT='apps/web/.claude/skills/tdd-react/references/tests-react.md'
 
   # file|old phrase (must be absent)|positive pin (must be present)
   REWRITE_ROWS=(
-    "$LAYERING|Every check lives at the lowest layer that can prove it|$AXIOM"
-    "$LAYERING|demoting a test to the lowest layer that shows its property|$AXIOM"
-    "$LAYERING|the emergent tests|$AXIOM"
-    "$TESTS_REACT|lowest layer that can verify the behavior|$LINK"
-    "$TESTS_REACT"'|one `.test()` per behavior|'"$LINK"
-    "$TESTS_REACT|renders nothing for a null amount|$LINK"
-    "$TESTS_REACT"'|still need a `.test()`|'"$LINK"
-    ".claude/skills/tdd/SKILL.md|List the behaviors to test|$LINK"
-    ".claude/skills/tdd/SKILL.md|For each remaining behavior|$LINK"
-    ".claude/skills/tdd/SKILL.md|One test at a time|$LINK"
-    'apps/web/.claude/rules/storybook.md|a `.test()` per GAIA behavior|'"$LINK"
+    "$LAYERING|Every check lives at the lowest layer that can prove it|$PAGE_PIN"
+    "$LAYERING|demoting a test to the lowest layer that shows its property|$PAGE_PIN"
+    "$LAYERING|the emergent tests|$PAGE_PIN"
+    "$TESTS_REACT|lowest layer that can verify the behavior|$DOCTRINE"
+    "$TESTS_REACT"'|one `.test()` per behavior|'"$DOCTRINE"
+    "$TESTS_REACT|renders nothing for a null amount|$DOCTRINE"
+    "$TESTS_REACT"'|still need a `.test()`|'"$DOCTRINE"
+    ".claude/skills/tdd/SKILL.md|List the behaviors to test|$DOCTRINE"
+    ".claude/skills/tdd/SKILL.md|For each remaining behavior|$DOCTRINE"
+    ".claude/skills/tdd/SKILL.md|One test at a time|$DOCTRINE"
+    'apps/web/.claude/rules/storybook.md|a `.test()` per GAIA behavior|'"$DOCTRINE"
     '.claude/agents/worthiness-evaluator.md|need a `.test()` each|'"$LINK"
     ".claude/agents/overlap-evaluator.md|route test or a unit test already asserts|$LINK"
     ".claude/agents/overlap-evaluator.md|Four kinds|$LINK"
@@ -51,31 +53,32 @@ setup() {
     ".claude/skills/gaia/references/plan/planner.md|One criterion per guard, refusal, or gate|$PLANNER_PIN"
     ".claude/skills/gaia/references/plan/planner.md|when no flow test already covers it|$PLANNER_PIN"
     ".claude/skills/gaia/references/plan/planner.md|covering the happy path and each error path the build has|$PLANNER_PIN"
-    ".claude/skills/gaia/references/spec/spec-template.md|case tables belong to the lowest layer|$LINK"
+    ".claude/skills/gaia/references/spec/spec-template.md|case tables belong to the lowest layer|$DOCTRINE"
     # #3484: the keyboard and focus mandate covers only code that handles keys
     # or moves focus; native controls in DOM order are the browser's.
     '.claude/agents/worthiness-evaluator.md|For an **interactive** component, the `.test()` units together|whose own code handles keys or moves focus'
     ".claude/agents/worthiness-evaluator.md|A suite of tests for an interactive component|Native controls in DOM order (inputs, selects and buttons in a plain form)"
     '.claude/agents/worthiness-evaluator.md|For an **interactive** component, the `.test()` units together|`required` attribute the browser renders from a literal prop'
-    "apps/web/.claude/rules/storybook.md|For an interactive component the tests cover a keyboard path|Native controls in DOM order need no keyboard or focus test"
-    "$TESTS_REACT|For an interactive component, the tests assert a keyboard path|Native controls in DOM order need no keyboard or focus test"
-    "apps/web/.claude/skills/new-component/SKILL.md|for an interactive component assert a keyboard path|whose own code handles keys or moves focus"
-    ".claude/skills/gaia/references/spec/self-review.md|case tables belong to the lowest layer|$LINK"
-    ".claude/skills/gaia/references/spec/self-review.md|leaving the cases to the lowest layer|$LINK"
-    "wiki/index.md|each check sits at the lowest layer that proves it|both unit-test conditions"
+    "apps/web/.claude/rules/storybook.md|For an interactive component the tests cover a keyboard path|$DOCTRINE"
+    "$TESTS_REACT|For an interactive component, the tests assert a keyboard path|$DOCTRINE"
+    "apps/web/.claude/skills/new-component/SKILL.md|for an interactive component assert a keyboard path|$DOCTRINE"
+    "$DOCTRINE|For an interactive component the tests cover a keyboard path|Native controls in DOM order get no keyboard or focus test"
+    "$DOCTRINE|For an interactive component the tests cover a keyboard path|Code in the app's tree that handles keys or moves focus"
+    ".claude/skills/gaia/references/spec/self-review.md|case tables belong to the lowest layer|$DOCTRINE"
+    ".claude/skills/gaia/references/spec/self-review.md|leaving the cases to the lowest layer|$DOCTRINE"
+    "wiki/index.md|each check sits at the lowest layer that proves it|the reasons behind the testing trophy"
   )
 
   # file|needle (must stay present)
   KEPT_ROWS=(
     "$LAYERING|Browser time is the expensive layer in three ways"
-    "$LAYERING|The route surface is the lowest layer that takes a request in process"
-    "$LAYERING|one test per user flow"
+    "$LAYERING|the route surface is the lowest layer that takes a request in process"
+    "$DOCTRINE|Write one flow test per critical flow"
     "$LAYERING|A rule function returns the wrong answer"
-    "$LAYERING|A plan carries one real-server check per guarded route module"
+    "$DOCTRINE|Give each guarded route module one real-server check"
     ".claude/skills/tdd/SKILL.md|Good tests are integration-style"
     ".claude/skills/tdd/SKILL.md|You can't test everything."
     ".claude/skills/tdd/SKILL.md|Author the test against a stub of the implementation symbol."
-    ".claude/skills/tdd/SKILL.md|Every proposed DELETE requires human confirmation and renders its evidence INLINE."
     'wiki/decisions/Worthiness Audit.md|**proposes** verdicts and **edits no files**; a human acts on every proposal.'
     ".claude/agents/overlap-evaluator.md|The journey floor: never propose demoting or dropping a flow's only browser journey."
     ".claude/agents/worthiness-evaluator.md|An axe pass on a render does not supply that signal"
@@ -89,21 +92,20 @@ setup() {
 
   # Pages that point at the layering page and must not copy its axiom.
   POINTING_REFS=(
-    ".claude/skills/tdd/SKILL.md"
-    "$TESTS_REACT"
-    "apps/web/.claude/rules/storybook.md"
+    ".claude/skills/tdd/SKILL.md|$DOCTRINE"
+    "$TESTS_REACT|$DOCTRINE"
+    "apps/web/.claude/rules/storybook.md|$DOCTRINE"
   )
 
-  # Needles the layering page itself must carry.
+  # Needles the doctrine file must carry: it owns the rules the layering page keeps only the reasons for.
   RULE_NEEDLES=(
-    "$AXIOM"
-    "both unit-test conditions"
-    "the integration layer cannot cover its cases cheaply"
-    "the logic is important or likely to fail"
-    "At most one test per user-observable behavior"
-    "a parameterized table is one test"
-    "Nothing the type checker or lint already proves"
-    "from the closed list under [[#When a test needs a real browser]]"
+    'route layer is the default home for behavior'
+    'Unit-test conditions'
+    'The integration layer cannot cover its cases cheaply'
+    'The logic is important'
+    'at most one test per user-observable behavior'
+    'a case table is one test'
+    'what the type checker or lint already proves'
   )
 }
 
@@ -142,7 +144,7 @@ check_kept_row() {
   return 0
 }
 
-# check_rule_page <file>: the layering page holds the whole rule.
+# check_rule_page <file>: the doctrine file holds the whole rule.
 check_rule_page() {
   local file="$1" needle
   for needle in "${RULE_NEEDLES[@]}"; do
@@ -155,8 +157,8 @@ check_rule_page() {
 
 # check_pointing_reference <file>: links the page, never copies its axiom.
 check_pointing_reference() {
-  local file="$1"
-  has "$file" "$LINK" || { echo "link missing"; return 1; }
+  local file="$1" link="${2:-$LINK}"
+  has "$file" "$link" || { echo "link missing"; return 1; }
   has "$file" "$AXIOM" && { echo "copies the axiom"; return 1; }
   return 0
 }
@@ -184,11 +186,12 @@ each_row() {
   each_row check_kept_row "${KEPT_ROWS[@]}"
 }
 
-@test "the layering page holds the trophy rule and the pointing references link it without copying it" {
-  check_rule_page "$REPO_ROOT/$LAYERING"
-  local ref
-  for ref in "${POINTING_REFS[@]}"; do
-    check_pointing_reference "$REPO_ROOT/$ref" || { echo "$ref"; return 1; }
+@test "the doctrine holds the trophy rule and the pointing references link the layering page without copying it" {
+  check_rule_page "$REPO_ROOT/$DOCTRINE"
+  local row ref link
+  for row in "${POINTING_REFS[@]}"; do
+    IFS='|' read -r ref link <<<"$row"
+    check_pointing_reference "$REPO_ROOT/$ref" "$link" || { echo "$ref"; return 1; }
   done
 }
 
@@ -227,19 +230,19 @@ each_row() {
   true
 }
 
-@test "red twin: a layering page missing any rule needle fails" {
+@test "red twin: a doctrine missing any rule needle fails" {
   local needle copy="$BATS_TEST_TMPDIR/copy.md"
   for needle in "${RULE_NEEDLES[@]}"; do
-    drop_needle "$REPO_ROOT/$LAYERING" "$copy" "$needle"
+    drop_needle "$REPO_ROOT/$DOCTRINE" "$copy" "$needle"
     check_rule_page "$copy" >/dev/null &&
       { echo "did not go red: $needle"; return 1; }
   done
   true
 }
 
-@test "red twin: a layering page that regains the pyramid axiom fails" {
+@test "red twin: a doctrine that regains the pyramid axiom fails" {
   local copy="$BATS_TEST_TMPDIR/copy.md"
-  append_line "$REPO_ROOT/$LAYERING" "$copy" 'Every check lives at the lowest layer that can prove it'
+  append_line "$REPO_ROOT/$DOCTRINE" "$copy" 'Every check lives at the lowest layer that can prove it'
   check_rule_page "$copy" >/dev/null && return 1
   true
 }
@@ -252,10 +255,11 @@ each_row() {
 }
 
 @test "red twin: a pointing reference without the link fails" {
-  local ref copy="$BATS_TEST_TMPDIR/copy.md"
-  for ref in "${POINTING_REFS[@]}"; do
-    drop_needle "$REPO_ROOT/$ref" "$copy" "$LINK"
-    check_pointing_reference "$copy" >/dev/null &&
+  local row ref link copy="$BATS_TEST_TMPDIR/copy.md"
+  for row in "${POINTING_REFS[@]}"; do
+    IFS='|' read -r ref link <<<"$row"
+    drop_needle "$REPO_ROOT/$ref" "$copy" "$link"
+    check_pointing_reference "$copy" "$link" >/dev/null &&
       { echo "did not go red: $ref"; return 1; }
   done
   true

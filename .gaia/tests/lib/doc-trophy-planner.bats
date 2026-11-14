@@ -9,8 +9,8 @@
 # compound condition one case per part, an order-of-checks row one per adjacent
 # pair), to cut
 # build phases as vertical slices, and to bound the tests a task executor writes. The tdd skill's loop carries the
-# matching limit. This suite pins that text, the decomposition audit's SPEC
-# coverage lens that checks the plan per case, and the ORCHESTRATOR phase-entry
+# matching limit. This suite pins that text, the decomposition audit's test
+# design lens that checks the plan per case, and the ORCHESTRATOR phase-entry
 # form the phase-ownership check reads.
 #
 # Method: every check takes a root directory and reads the planner reference or
@@ -24,6 +24,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   TDD_REL=".claude/skills/tdd/SKILL.md"
+  DOCTRINE_REL=".claude/doctrine/testing.md"
   AUDIT_REL=".claude/skills/gaia/references/plan/decomposition-audit.md"
   LIMIT_CLAUSE='**The prompt template MUST also limit the tests a sub-agent writes**'
 }
@@ -59,15 +60,15 @@ range_of() {
     inside { print }' "$1"
 }
 
-# mutated_tree <relpath> <old> <new>: copy planner.md, the decomposition audit
-# and the tdd skill into a
+# mutated_tree <relpath> <old> <new>: copy planner.md, the decomposition audit,
+# the tdd skill and the testing doctrine into a
 # scratch tree (TREE), replace the first fixed-string <old> in <relpath> with
 # <new>, and prove the copy changed.
 mutated_tree() {
   local rel="$1" old="$2" new="$3" file content mutated
   TREE="$BATS_TEST_TMPDIR/tree"
   rm -rf "$TREE"
-  for file in "$PLANNER_REL" "$AUDIT_REL" "$TDD_REL"; do
+  for file in "$PLANNER_REL" "$AUDIT_REL" "$TDD_REL" "$DOCTRINE_REL"; do
     mkdir -p "$TREE/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$TREE/$file"
   done
@@ -100,10 +101,10 @@ green() {
 check_acceptance_text() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'Name the behavior the task delivers and the one acceptance test that owns it' || return 1
-  need "$text" 'never left to a closing-phase flow test' || return 1
-  need "$text" 'not a list of tests per function' || return 1
-  need "$text" 'at the lowest layer that shows the refusal' || return 1
+  need "$text" 'Name the behavior the task delivers and its `- Test:` lines' || return 1
+  need "$text" 'never left to the closing flow test' || return 1
+  need "$text" 'never a list of tests per function' || return 1
+  need "$text" 'is `.claude/doctrine/testing.md`; this bullet restates none of it' || return 1
   need "$text" '.claude/rules/guards-must-fail.md' || return 1
   lacks "$text" 'One criterion per guard, refusal, or gate' || return 1
 }
@@ -113,7 +114,7 @@ check_executor_limit() {
   range="$(range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | tr '\n' ' ' | tr -s ' ')"
   [ -n "$range" ] || { printf 'executor template range not found\n' >&2; return 1; }
   need "$range" "$LIMIT_CLAUSE" || return 1
-  need "$range" 'a new test only for a behavior or acceptance test its task doc names' || return 1
+  need "$range" 'it writes the test of each of its task'"'"'s rows under the planned title verbatim and no other new test' || return 1
 }
 
 check_executor_lint() {
@@ -133,7 +134,7 @@ check_vertical_slicing() {
 
 check_phase_entry_form() {
   local bullet
-  bullet="$(range_of "$1/$PLANNER_REL" '- **Phase order**' '- **Worthiness step.**' | tr '\n' ' ' | tr -s ' ')"
+  bullet="$(range_of "$1/$PLANNER_REL" '- **Phase order**' '- **Sub-agent yield handling.**' | tr '\n' ' ' | tr -s ' ')"
   [ -n "$bullet" ] || { printf 'Phase order bullet not found\n' >&2; return 1; }
   need "$bullet" '**Phase <N>, <title>' || return 1
 }
@@ -142,7 +143,7 @@ check_tdd_loop() {
   local text
   text="$(flat "$1/$TDD_REL")"
   need "$text" 'Write a new test only for those behaviors and their acceptance tests' || return 1
-  need "$text" 'both unit-test conditions' || return 1
+  need "$text" 'plus a unit test where `.claude/doctrine/testing.md` allows one' || return 1
   lacks "$text" 'For each remaining behavior' || return 1
   lacks "$text" 'One test at a time' || return 1
 }
@@ -150,17 +151,18 @@ check_tdd_loop() {
 check_task_doc_test_naming() {
   local text
   text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'A task doc names a test only for the flow test it owns in the closing phase' || return 1
-  need "$text" 'a unit test for logic meeting both unit-test conditions (`wiki/decisions/Test Layering.md`), stating how each condition holds' || return 1
-  need "$text" 'Any other test worth having goes under `## Follow-ups` in `README.md`, never into a task doc.' || return 1
+  need "$text" 'A task doc names a test only on a `- Test: <repo-relative file> › <exact title>` line' || return 1
+  need "$text" 'names an existing test file whose pinned wording its edit falsifies on a `- Pin update: <repo-relative path>` line' || return 1
+  need "$text" 'No other test path appears in a task doc.' || return 1
+  need "$text" 'a test worth having that no requirement names is no row, and goes under `## Follow-ups` in `README.md`' || return 1
 }
 
 check_absence_and_cases() {
   local text
-  text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'An absence requirement (a value never exposed, sent, stored or rendered) counts as a guard' || return 1
-  need "$text" 'names a test asserting the absence while the value is present upstream' || return 1
-  need "$text" 'Every case a multi-case SPEC row lists is asserted by a test this task names unless it is no guard and the closing flow asserts it' || return 1
+  text="$(flat "$1/$DOCTRINE_REL")"
+  need "$text" 'every task that adds a way for it to reach the forbidden surface tests its absence on that surface while the value is present upstream' || return 1
+  need "$text" 'Assert every case a multi-case requirement lists.' || return 1
+  need "$text" "A flow test never stands in for a guard's lower-layer test" || return 1
 }
 
 # ---------- tests ----------
@@ -170,11 +172,11 @@ check_absence_and_cases() {
 }
 
 @test "red twin: restoring the per-guard criterion line fails" {
-  red check_acceptance_text "$PLANNER_REL" 'not a list of tests per function' 'not a list of tests per function. One criterion per guard, refusal, or gate'
+  red check_acceptance_text "$PLANNER_REL" 'never a list of tests per function' 'never a list of tests per function. One criterion per guard, refusal, or gate'
 }
 
 @test "red twin: leaving a refusal to the closing-phase flow test fails" {
-  red check_acceptance_text "$PLANNER_REL" 'never left to a closing-phase flow test' 'or left to a closing-phase flow test'
+  red check_acceptance_text "$PLANNER_REL" 'never left to the closing flow test' 'or left to the closing flow test'
 }
 
 @test "the executor template limits the tests a sub-agent writes" {
@@ -225,16 +227,16 @@ check_absence_and_cases() {
   red check_tdd_loop "$TDD_REL" 'Don'"'"'t anticipate future tests.' 'Don'"'"'t anticipate future tests. One test at a time.'
 }
 
-@test "a task doc names only its own flow test, seam tests and both-condition unit tests; other tests go to README follow-ups" {
+@test "a task doc names a test only on a Test line, a Pin update line names a falsified pin, and an unrequired test goes to README follow-ups" {
   green check_task_doc_test_naming
 }
 
 @test "red twin: letting a task doc name any test the planner judges worthwhile fails" {
-  red check_task_doc_test_naming "$PLANNER_REL" 'goes under `## Follow-ups` in `README.md`, never into a task doc.' 'may go into a task doc.'
+  red check_task_doc_test_naming "$PLANNER_REL" 'No other test path appears in a task doc.' 'Any test path may appear in a task doc.'
 }
 
-@test "red twin: dropping how each unit-test condition holds fails" {
-  red check_task_doc_test_naming "$PLANNER_REL" ', stating how each condition holds' ''
+@test "red twin: dropping the Pin update line form fails" {
+  red check_task_doc_test_naming "$PLANNER_REL" ' on a `- Pin update: <repo-relative path>` line' ''
 }
 
 @test "an absence requirement counts as a guard and every case of a multi-case row but a non-guard flow case is asserted in the task's named test" {
@@ -242,22 +244,22 @@ check_absence_and_cases() {
 }
 
 @test "red twin: making the absence requirement optional fails" {
-  red check_absence_and_cases "$PLANNER_REL" 'rendered) counts as a guard' 'rendered) is optional'
+  red check_absence_and_cases "$DOCTRINE_REL" 'every task that adds a way for it to reach the forbidden surface tests its absence' 'a task may add a way for it to reach the forbidden surface'
 }
 
 @test "red twin: an absence test with the value never present fails" {
-  red check_absence_and_cases "$PLANNER_REL" ' while the value is present upstream' ''
+  red check_absence_and_cases "$DOCTRINE_REL" ' while the value is present upstream' ''
 }
 
-# check_case_split <root>: the planner and the SPEC coverage lens both split a
+# check_case_split <root>: the testing doctrine and the test design lens both split a
 # compound condition per part and an order-of-checks row per adjacent pair, and
 # the lens reads every SPEC section a guard case lives in.
 check_case_split() {
   local plan lens
-  plan="$(flat "$1/$PLANNER_REL")"
-  lens="$(range_of "$1/$AUDIT_REL" '- **SPEC coverage' '- **' | tr '\n' ' ' | tr -s ' ')"
-  need "$plan" 'A compound condition is one case per part' || return 1
-  need "$plan" 'an order-of-checks row is one case per adjacent pair of checks, asserted by a test whose input passes every earlier check, fails both, and asserts the earlier of the pair refused' || return 1
+  plan="$(flat "$1/$DOCTRINE_REL")"
+  lens="$(range_of "$1/$AUDIT_REL" '- **Test design' '## 4.6a-ii' | tr '\n' ' ' | tr -s ' ')"
+  need "$plan" 'Split a compound condition into one case per part' || return 1
+  need "$plan" 'Split an order-of-checks requirement into one case per adjacent pair of checks, with an input that passes every earlier check, fails both checks of the pair, and asserts the earlier one refused' || return 1
   need "$lens" '`success_criteria` + `scope_boundaries` + `clarifications.answered`' || return 1
   need "$lens" 'one row per case' || return 1
   need "$lens" 'a compound condition one per part' || return 1
@@ -267,67 +269,66 @@ check_case_split() {
   need "$lens" 'a signed or encrypted value (a cookie, a session, a token) with no test sending a forged or edited one' || return 1
 }
 
-# check_forged_value <root>: the planner counts refusing a value the app did not
-# issue as a guard whose test sends a forged or edited value.
+# check_forged_value <root>: the testing doctrine requires a test that sends a
+# forged or edited value for a value the app issued.
 check_forged_value() {
   local text
-  text="$(flat "$1/$PLANNER_REL")"
-  need "$text" 'A property that makes the app refuse a value it did not issue (a signed or encrypted cookie or session, a signed token) counts as a guard too' || return 1
-  need "$text" 'its test sends a forged or edited value and asserts the refusal' || return 1
+  text="$(flat "$1/$DOCTRINE_REL")"
+  need "$text" 'For a signed or encrypted value the app issues (a cookie, a session, a token), send a forged or edited one and assert the refusal' || return 1
 }
 
-@test "planner counts refusing a forged signed value as a guard with a forged-value test" {
+@test "the doctrine requires a forged-value test for a value the app issued" {
   green check_forged_value
 }
 
 @test "red twin: dropping the forged signed value guard fails" {
-  red check_forged_value "$PLANNER_REL" 'counts as a guard too: its test sends a forged or edited value and asserts the refusal. ' ''
+  red check_forged_value "$DOCTRINE_REL" ', send a forged or edited one and assert the refusal' ''
 }
 
 @test "red twin: a signed value test that never forges one fails" {
-  red check_forged_value "$PLANNER_REL" 'sends a forged or edited value' 'sends the issued value'
+  red check_forged_value "$DOCTRINE_REL" 'send a forged or edited one' 'send the issued one'
 }
 
-@test "red twin: the coverage lens dropping the forged signed value hole fails" {
-  red check_case_split "$AUDIT_REL" ' a signed or encrypted value (a cookie, a session, a token) with no test sending a forged or edited one;' ''
+@test "red twin: the test design lens dropping the forged signed value hole fails" {
+  red check_case_split "$AUDIT_REL" ' a signed or encrypted value (a cookie, a session, a token) with no test sending a forged or edited one,' ''
 }
 
-@test "planner and the SPEC coverage lens split compound conditions and check order into cases" {
+@test "the doctrine and the test design lens split compound conditions and check order into cases" {
   green check_case_split
 }
 
-@test "red twin: the coverage lens checking rows instead of cases fails" {
+@test "red twin: the test design lens checking rows instead of cases fails" {
   red check_case_split "$AUDIT_REL" 'one row per case' 'one row per SPEC row'
 }
 
-@test "red twin: the planner order-of-checks case not asserting the earlier check refused fails" {
-  red check_case_split "$PLANNER_REL" ', fails both, and asserts the earlier of the pair refused' ', fails both'
+@test "red twin: the doctrine order-of-checks case not asserting the earlier check refused fails" {
+  red check_case_split "$DOCTRINE_REL" ', fails both checks of the pair, and asserts the earlier one refused' ', fails both checks of the pair'
 }
 
-@test "red twin: the coverage lens order-of-checks hole not asserting the earlier check refused fails" {
+@test "red twin: the test design lens order-of-checks hole not asserting the earlier check refused fails" {
   red check_case_split "$AUDIT_REL" ', fails both, and asserts the earlier of the pair refused' ', fails both'
 }
 
-@test "red twin: the coverage lens skipping scope_boundaries and clarifications.answered fails" {
-  red check_case_split "$AUDIT_REL" ' + `scope_boundaries` + `clarifications.answered`' ''
+@test "red twin: the test design lens skipping scope_boundaries and clarifications.answered fails" {
+  red check_case_split "$AUDIT_REL" ' + `scope_boundaries` + `clarifications.answered` ↔ rows' ' ↔ rows'
 }
 
-@test "red twin: the coverage lens dropping the uncovered guard case hole fails" {
-  red check_case_split "$AUDIT_REL" 'a guard case with no test a task names below the closing flow, and ' ''
+@test "red twin: the test design lens dropping the uncovered guard case hole fails" {
+  red check_case_split "$AUDIT_REL" 'a guard case with no test a task names below the closing flow, ' ''
 }
 
-@test "red twin: the planner dropping the compound condition split fails" {
-  red check_case_split "$PLANNER_REL" 'A compound condition is one case per part' 'A compound condition is one case'
+@test "red twin: the doctrine dropping the compound condition split fails" {
+  red check_case_split "$DOCTRINE_REL" 'Split a compound condition into one case per part' 'Split a compound condition into one case'
 }
 
-@test "red twin: the planner pinning check order without a both-failing test fails" {
-  red check_case_split "$PLANNER_REL" ', asserted by a test whose input passes every earlier check, fails both, and asserts the earlier of the pair refused' ''
+@test "red twin: the doctrine pinning check order without a both-failing test fails" {
+  red check_case_split "$DOCTRINE_REL" ', with an input that passes every earlier check, fails both checks of the pair, and asserts the earlier one refused' ''
 }
 
 @test "red twin: asserting only one case of a multi-case row fails" {
-  red check_absence_and_cases "$PLANNER_REL" 'Every case a multi-case SPEC row lists is' 'One case a multi-case SPEC row lists is'
+  red check_absence_and_cases "$DOCTRINE_REL" 'Assert every case a multi-case requirement lists.' 'Assert one case a multi-case requirement lists.'
 }
 
 @test "red twin: leaving a guard case of a multi-case row to the closing flow fails" {
-  red check_absence_and_cases "$PLANNER_REL" 'unless it is no guard and the closing flow asserts it' 'unless the closing flow asserts it'
+  red check_absence_and_cases "$DOCTRINE_REL" "A flow test never stands in for a guard's lower-layer test" "A flow test may stand in for a guard's lower-layer test"
 }

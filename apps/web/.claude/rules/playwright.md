@@ -18,21 +18,22 @@ Contents: File locations; Spec file naming; Real-server HTML check; Selectors, p
 ## Spec file naming
 
 Match the feature or route: `language-switch.spec.ts`, `things.spec.ts`.
-One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`, or `.playwright/flows/<slug>.spec.ts` for a critical flow); one `test.describe` block per scenario group. A transition, status or role rule is one test, at the layer `wiki/decisions/Test Layering.md` picks (`## When a test needs a real browser`), not more browser files. A browser spec exists only for a capability that section names, except a critical flow's spec, which carries its journey even when a cheaper layer could prove it, while a refusal or validation one request shows stays at the route or real-server layer; a JavaScript-disabled flow or a native form post is never a browser spec: it routes by that page's route and real-server steps, and a check that needs the served form or a multi-page workflow over native forms is a real-server spec, except that a critical flow whose SPEC requires it to work without JavaScript carries it as a real-server check inside its flow spec.
+One journey per user flow: one browser journey file per flow, inside its feature folder and named for the behavior (`.playwright/e2e/<feature>/<flow>.spec.ts`, or `.playwright/flows/<slug>.spec.ts` for a critical flow); one `test.describe` block per scenario group. Which behavior gets a test, at which layer, and which capabilities earn a browser spec, including the flow-test and native-form-post rules: `.claude/doctrine/testing.md`. Committed tests follow that file; the vendored test-generation guide in `playwright-cli` does not apply to them.
 
 ## Real-server HTML check
 
-A real-server test reads the server's rendered HTML through the request fixture and parses the body with the helper in `.playwright/html.ts`. It opens no page and makes no browser round trip. The helper returns nodes; the test file holds every `expect(`.
+A real-server test, for a requirement that the served HTML itself carries (`.claude/doctrine/testing.md`, `## Served HTML`), reads the server's rendered HTML through the request fixture and parses the body with the helper in `.playwright/html.ts`. It opens no page and makes no browser round trip. The helper returns nodes; the test file holds every `expect(`.
 
 ```ts
 import {expect, test} from '@playwright/test';
 import {parseHtml} from '../../html';
 
-test('home page serves its heading', async ({request}) => {
+test('home page serves its title and description', async ({request}) => {
   const response = await request.get('/');
   expect(response.status()).toBe(200);
   const root = parseHtml(await response.text());
-  expect(root.querySelector('h1')?.text).toBe('Welcome');
+  expect(root.querySelector('title')?.text).toBe('Welcome');
+  expect(root.querySelector('meta[name="description"]')).not.toBeNull();
 });
 ```
 
@@ -111,8 +112,7 @@ With `MSW_SEED=true`, which only the worker server sets (alongside `MSW_ENABLED=
 Every worker seeds and reads the MSW store of its own server. A serial project is not an accepted way to share one store: it runs the suite on one core. The worker-scoped server fixture and the typed `GivenBuilder` pattern are in `.playwright/fixtures.ts`; read its comment before adding any project that holds state. The stock suite does not request `workerServer`; only `.playwright/e2e/msw-seed/seeded-record-reaches-the-page.spec.ts` starts a server of its own, logging to `seed-fixture-<parallelIndex>-server.log`.
 
 - Setup goes through Given builders, which seed the worker's own store with unique identities; a form's own submission is checked over HTTP with a body `serializeForm` builds from the served page.
-- A request-fixture refusal check sets `maxRedirects: 0` and asserts the status and any `Location` header, never page content a route test shows, and states the actor: the request fixture follows redirects by default, is a separate context from `page` and inherits `storageState`.
-- A harness self-check that opens no page runs in the Vitest node project, not under Playwright.
+- A request-fixture refusal check (what it asserts: `.claude/doctrine/testing.md`, `## Guards and security rows`) sets `maxRedirects: 0` and states the actor: the request fixture follows redirects by default, is a separate context from `page` and inherits `storageState`.
 - This rule governs new setup. An existing suite moves to it only by decision.
 
 ## Auth / session setup

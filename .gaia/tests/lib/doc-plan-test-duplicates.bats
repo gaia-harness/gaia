@@ -21,17 +21,16 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   AUDIT_REL=".claude/skills/gaia/references/spec/audit.md"
-  LAYERING_REL="wiki/decisions/Test Layering.md"
+  LAYERING_REL=".claude/doctrine/testing.md"
   PLAYWRIGHT_REL="apps/web/.claude/rules/playwright.md"
 
   MARKUP_PLANNER='A page-markup or accessibility directive constrains the code, and adds a real-server assertion only when the rendered HTML is itself the requirement'
   MARKUP_AUDIT='naming the page or component it applies to, written as the constraint the code meets'
   REFUSAL_LAYERING='asserting only the served status and any `Location` header, never page content a route test shows'
-  REFUSAL_PLAYWRIGHT='asserts the status and any `Location` header, never page content a route test shows'
-  TABLE_LAYERING='has exactly one case table, at the layer this page picks, holding every case of the rule; a test of that rule at any other layer keeps one row per outcome'
-  TABLE_PLANNER="when that unit test carries a rule's case table, each route test of that rule keeps one row per outcome"
-  TWIN_PLANNER='a happy path the closing flow test walks names that flow test instead when that flow asserts the effect, with no success-path route test of its own; an effect the flow cannot observe keeps its route test, and a guard on that path still gets the failing-state test below'
-  GUARD_DUTY='must be driven into its failing state by a named acceptance test in this task that asserts it refuses'
+  TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer keeps one row per outcome'
+  TWIN_PLANNER='a happy path the closing flow test walks names that flow test instead of a success-path route test when that flow asserts the effect'
+  TWIN_LAYERING='with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
+  GUARD_DUTY="a guard's failing-state test is named in the task that delivers the guard, never left to the closing flow test"
 }
 
 # ---------- helpers ----------
@@ -53,11 +52,9 @@ holds() {
 
 directive_para() { line_with "$1/$PLANNER_REL" 'Its `## Plan-time directives` section'; }
 criteria_bullet() { line_with "$1/$PLANNER_REL" '- Acceptance criteria (concrete and testable).'; }
-naming_para() { line_with "$1/$PLANNER_REL" 'A task doc names a test only for the flow test it owns'; }
 audit_directive() { line_with "$1/$AUDIT_REL" '- **Plan-time directive** ('; }
-layering_rule() { line_with "$1/$LAYERING_REL" 'Every transition, status or role rule has'; }
-layering_refusal() { line_with "$1/$LAYERING_REL" 'A plan carries one real-server check per guarded route module'; }
-playwright_refusal() { line_with "$1/$PLAYWRIGHT_REL" '- A request-fixture refusal check'; }
+layering_rule() { line_with "$1/$LAYERING_REL" 'Give every transition, status or role rule'; }
+layering_refusal() { line_with "$1/$LAYERING_REL" '**Served check.**'; }
 
 # ---------- checks ----------
 
@@ -68,12 +65,10 @@ check_markup_directive() {
 
 check_refusal_status_only() {
   holds 'Test Layering refusal paragraph' "$(layering_refusal "$1")" "$REFUSAL_LAYERING" || return 1
-  holds 'playwright.md refusal bullet' "$(playwright_refusal "$1")" "$REFUSAL_PLAYWRIGHT" || return 1
 }
 
 check_one_case_table() {
   holds 'Test Layering rule paragraph' "$(layering_rule "$1")" "$TABLE_LAYERING" || return 1
-  holds 'planner.md test-naming paragraph' "$(naming_para "$1")" "$TABLE_PLANNER" || return 1
 }
 
 check_happy_path_twin() {
@@ -84,6 +79,7 @@ check_happy_path_twin() {
     *'may name that flow test'*) printf 'acceptance-criteria bullet still lets a happy path skip the flow test\n' >&2; return 1 ;;
   esac
   holds 'planner.md acceptance-criteria bullet' "$bullet" "$GUARD_DUTY" || return 1
+  holds 'Test Layering flow paragraph' "$(line_with "$1/$LAYERING_REL" 'Name the closing flow test as the owner')" "$TWIN_LAYERING" || return 1
 }
 
 # mutated_tree <file rel> <old> <new>: a scratch tree (TREE) holding every
@@ -136,17 +132,15 @@ green() {
 
 @test "red twin: dropping either status-only clause fails" {
   red check_refusal_status_only "$LAYERING_REL" "$REFUSAL_LAYERING" 'removed'
-  red check_refusal_status_only "$PLAYWRIGHT_REL" "$REFUSAL_PLAYWRIGHT" 'removed'
 }
 
-@test "a rule's case table lives at one layer, in Test Layering and planner.md" {
+@test "a rule's case table lives at one layer, in the doctrine" {
   green check_one_case_table
 }
 
 @test "red twin: dropping either one-table clause fails" {
   red check_one_case_table "$LAYERING_REL" "$TABLE_LAYERING" 'removed'
-  red check_one_case_table "$LAYERING_REL" ', holding every case of the rule;' ';'
-  red check_one_case_table "$PLANNER_REL" "$TABLE_PLANNER" 'removed'
+  red check_one_case_table "$LAYERING_REL" ' holding every case,' ','
 }
 
 @test "a happy path the flow test walks and asserts names that flow test, and every guard keeps its failing-state test" {
@@ -156,6 +150,6 @@ green() {
 @test "red twin: a permissive happy path or a dropped guard duty fails" {
   red check_happy_path_twin "$PLANNER_REL" "$TWIN_PLANNER" 'only a happy path the closing flow test walks may name that flow test instead'
   red check_happy_path_twin "$PLANNER_REL" "$GUARD_DUTY" 'removed'
-  red check_happy_path_twin "$PLANNER_REL" ' when that flow asserts the effect,' ','
-  red check_happy_path_twin "$PLANNER_REL" ' an effect the flow cannot observe keeps its route test, and' ''
+  red check_happy_path_twin "$PLANNER_REL" ' when that flow asserts the effect' ''
+  red check_happy_path_twin "$LAYERING_REL" "$TWIN_LAYERING" 'removed'
 }

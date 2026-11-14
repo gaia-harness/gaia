@@ -468,6 +468,8 @@ unowned:
   # member has a lens for instruction prose: the same footing as the skills.
   - ".gaia/migrations/**"
   - ".claude/agents/worthiness-evaluator.md"
+  - ".claude/agents/test-honesty-checker.md"
+  - ".claude/agents/security-test-writer.md"
   - ".claude/agents/overlap-evaluator.md"
   - ".claude/commands/**/*.md"
   - ".gaia/cli/health/**/*.md"

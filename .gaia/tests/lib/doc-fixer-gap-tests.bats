@@ -3,20 +3,16 @@
 # Doc-conformance suite for the two fixers that must write the test a gap
 # needs, and for the evaluator lenses that flag tests catching nothing.
 #
-# The worthiness fixer may edit only the files on its editable list. A flow
-# verdict's single-request untested error path belongs to a lower layer (a route test or a
-# real-server check), so unless the evaluator names that test file and the fix
-# step puts it on the list, the fix always ends cannot_fix and the gap ships as
-# a residual. A flow test fixed that way keeps its signal, and a `fixed`
-# settlement at an unchanged signal routes it residual, so the step judges it
-# again instead. The audit round's fixer can add a guard, refusal or
-# validation, and unless its prompt says to drive that guard into its failing
-# state, the guard merges untested; unless it says a finding's suggested_fix
-# is no requirement, the fixer ships a product rule nobody asked for. The
-# evaluator's lenses also name three tests that cost without catching
-# anything: a static constant checked against its own value, a boundary call
-# count as the sole assertion, and one shared error mapping pinned again per
-# caller or listed as a gap per caller. A model
+# The worthiness fixer may edit only the files on its editable list, which is
+# the listed test files and nothing else: the evaluator keeps no list of
+# untested error paths, so no verdict widens it. The audit round's fixer can
+# add a guard, refusal or validation, and unless its prompt says to drive that
+# guard into its failing state, the guard merges untested; unless it says a
+# finding's suggested_fix is no requirement, the fixer ships a product rule
+# nobody asked for. The evaluator's lenses also name three tests that cost
+# without catching anything: a static constant checked against its own value, a
+# boundary call count as the sole assertion, and one shared error mapping
+# pinned again per caller. A model
 # executes these passages, so an edit that drops one clause would ship
 # silently. This suite pins each clause.
 #
@@ -99,19 +95,14 @@ green() {
 
 # ---------- checks ----------
 
-check_evaluator_names_test() {
-  local region schema
-  region="$(joined "$(range_of "$1/$EVALUATOR_REL" '- List every error path the build has' '- When the test asserts something real')")"
-  need_text 'evaluator untestedErrorPaths bullet' "$region" || return 1
+check_evaluator_lists_no_error_paths() {
+  local region
+  region="$(joined "$(range_of "$1/$EVALUATOR_REL" '- Never list an error path no stated requirement names' '- When the test asserts something real')")"
+  need_text 'evaluator error-path bullet' "$region" || return 1
   in_order "$region" \
-    'its fix is a new test there, never an edit to the flow spec.' \
-    'Every entry names in `test` the repo-relative test file that owns its gap:' \
-    'the test file of that lower layer that already drives the source'"'"'s module, else a new one where that layer'"'"'s tests live;' \
-    'for a path only the flow can stage, the flow file.' \
-    '`test` never names a source file.' || return 1
-  schema="$(grep -F '"untestedErrorPaths":[{' "$1/$EVALUATOR_REL")"
-  need_text 'evaluator flow schema' "$schema" || return 1
-  in_order "$schema" '"source":"<file:line>"' '"test":"<test file>"' || return 1
+    'and never write a test for one;' \
+    'the evaluator keeps no list of untested error paths.' \
+    '`.claude/doctrine/testing.md` `## Layers` assigns' || return 1
 }
 
 check_step_editable_list() {
@@ -121,20 +112,8 @@ check_step_editable_list() {
   in_order "$region" \
     'for a flow test, the `flow` member of its entry in the Evaluate step'"'"'s verdict file' \
     'no edit outside the list.' \
-    'The editable list is the listed test files plus each `test` an `untestedErrorPaths` entry names;' \
-    'a named path that is not a test file stays off the list.' \
-    'confirms every changed path is in the list' \
-    'A flow test fixed only through `test` paths keeps its signal, where `fixed` would route it `residual`, so it is left unsettled for the next step.' || return 1
-}
-
-check_step_judges_flow_again() {
-  local region
-  region="$(joined "$(range_of "$1/$STEP_REL" '### 4. Judge again once' '### 5. Delete')")"
-  need_text 'worthiness Judge again step' "$region" || return 1
-  in_order "$region" \
-    'plus each flow test step 3 left unsettled' \
-    'the latest verdict at a signal wins, so the new one replaces the stored `fix`.' \
-    'as does an unsettled flow test judged `fix` again.' || return 1
+    'The editable list is the listed test files.' \
+    'confirms every changed path is in the list' || return 1
 }
 
 check_round_fixer_guard_test() {
@@ -171,7 +150,7 @@ check_unrequired_guard_dispute_stays_open() {
 }
 
 check_evaluator_lenses() {
-  local honesty worthiness gaps
+  local honesty worthiness
   honesty="$(joined "$(range_of "$1/$EVALUATOR_REL" '### Axis 1: HONESTY' '### Axis 2: WORTHINESS')")"
   need_text 'honesty axis' "$honesty" || return 1
   in_order "$honesty" \
@@ -184,42 +163,26 @@ check_evaluator_lenses() {
     'one test of that mapping covers it.' \
     'A test that pins the same mapping again for another caller is redundant' \
     'unless that caller maps differently.' || return 1
-  gaps="$(joined "$(range_of "$1/$EVALUATOR_REL" '- List every error path the build has' '- When the test asserts something real')")"
-  need_text 'evaluator untestedErrorPaths bullet' "$gaps" || return 1
-  in_order "$gaps" \
-    'Error paths that share one mapping helper are one entry, cited at the helper, whose `test` is a route test of any one caller, unless a caller maps differently.' || return 1
 }
 
 # ---------- tests ----------
 
-@test "the evaluator names the owning lower-layer test file for each untested error path" {
-  green check_evaluator_names_test
+@test "the evaluator keeps no list of untested error paths" {
+  green check_evaluator_lists_no_error_paths
 }
 
-@test "the evaluator check goes red without the test member, its schema field or its source-file ban" {
-  red check_evaluator_names_test "$EVALUATOR_REL" 'Every entry names in `test` the' 'Every entry names in `layer` the'
-  red check_evaluator_names_test "$EVALUATOR_REL" ',"test":"<test file>"' ''
-  red check_evaluator_names_test "$EVALUATOR_REL" '`test` never names a source file.' 'name any file.'
+@test "the no-error-path-list check goes red without the ban or the layer pointer" {
+  red check_evaluator_lists_no_error_paths "$EVALUATOR_REL" 'the evaluator keeps no list of untested error paths.' 'the evaluator lists them.'
+  red check_evaluator_lists_no_error_paths "$EVALUATOR_REL" '`.claude/doctrine/testing.md` `## Layers` assigns' 'the lowest layer assigns'
 }
 
-@test "the worthiness fixer's editable list takes each test a flow verdict names" {
+@test "the worthiness fixer's editable list is the listed test files only" {
   green check_step_editable_list
 }
 
-@test "the editable-list check goes red without the named tests, the source-file exclusion, the flow member or the unsettled flow test" {
-  red check_step_editable_list "$STEP_REL" 'plus each `test` an `untestedErrorPaths` entry names' 'only'
-  red check_step_editable_list "$STEP_REL" 'a named path that is not a test file stays off the list' 'any named path joins the list'
+@test "the editable-list check goes red without the list rule or the flow member" {
+  red check_step_editable_list "$STEP_REL" 'The editable list is the listed test files.' 'The editable list is any file.'
   red check_step_editable_list "$STEP_REL" 'the `flow` member of its entry in the Evaluate step'"'"'s verdict file' 'nothing else'
-  red check_step_editable_list "$STEP_REL" 'so it is left unsettled for the next step.' 'so it settles fixed.'
-}
-
-@test "a flow test fixed only through a lower-layer test is judged again" {
-  green check_step_judges_flow_again
-}
-
-@test "the judge-again check goes red without the unsettled flow test or its residual ending" {
-  red check_step_judges_flow_again "$STEP_REL" 'plus each flow test step 3 left unsettled' 'and nothing else'
-  red check_step_judges_flow_again "$STEP_REL" 'as does an unsettled flow test judged `fix` again.' 'and nothing more.'
 }
 
 @test "the evaluator flags constant checks, boundary call counts and a shared mapping pinned per caller" {
@@ -231,7 +194,6 @@ check_evaluator_lenses() {
   red check_evaluator_lenses "$EVALUATOR_REL" ' or a count of requests to a
   boundary (how many times `GET /me` ran)' ''
   red check_evaluator_lenses "$EVALUATOR_REL" '**One test per shared mapping.**' '**Shared mappings.**'
-  red check_evaluator_lenses "$EVALUATOR_REL" 'Error paths that share one mapping helper are one entry,' 'Error paths are listed per caller,'
 }
 
 @test "the audit fixer must test a guard its repair adds" {

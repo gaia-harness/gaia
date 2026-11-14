@@ -327,7 +327,7 @@ A `CLOSED` verdict is not one of them: it is read from GitHub and it is terminal
 
 Resolve the PR to completion through `wiki/concepts/PR Merge Workflow.md`, read it, don't merge from memory. Follow its marker handshake; do **not** substitute a bare `gh pr merge`:
 
-- **Run the worthiness step first.** Read `.claude/skills/gaia/references/worthiness-step.md` and run it in the same `RESOLVED_ROOT`, after the draft PR opens and before the audit's pre-dispatch verification and the first member dispatch. A fix commit it makes lands before the marker is earned, so no clearance rotates.
+- **Run the worthiness step first.** Read `.claude/skills/gaia/references/worthiness-step.md` and run it in the same `RESOLVED_ROOT` (a debt fix has no planner, so it keeps the full worthiness review: the selection covers strict, route and emergent tests), after the draft PR opens and before the audit's pre-dispatch verification and the first member dispatch. A fix commit it makes lands before the marker is earned, so no clearance rotates.
   <!-- gaia:maintainer-only:start -->
 - **Clear the CHANGELOG gate's first moment beside it.** The workflow's maintainer-only CHANGELOG gate applies to debt PRs too: decide whether the fix needs an `## [Unreleased]` entry and land any entry before the pre-dispatch verification; at merge, run the gate's verify-only check. Scrubbed from adopter bundles, so adopters never run this step.
   <!-- gaia:maintainer-only:end -->

@@ -4,9 +4,7 @@ Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHoo
 
 ## Testing Layers
 
-Six layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the layer the trophy rule in `wiki/decisions/Test Layering.md` picks, mostly route tests: a button's disabled state is a story `.test()`, not a browser test; a route's redirect is a route test; a loader's parsing gets a unit test only when it meets both unit-test conditions. The principle and its rationale are in `wiki/decisions/Test Layering.md`.
-
-The story-versus-route boundary: rendered output on one component is a story. A status, a redirect, returned data, a validation error, an authorization outcome or a side effect is a route test.
+Six layers share one mocking foundation (`msw` + `@msw/data`). Which test to write and at which layer, including the story-versus-route boundary and the unit-test conditions, is owned by `.claude/doctrine/testing.md` (`## Layers`); this file is how to write a test at each layer.
 
 | Layer             | Tool                                  | Vitest project | File location                           | What to assert                                      |
 | ----------------- | ------------------------------------- | -------------- | --------------------------------------- | --------------------------------------------------- |
@@ -14,8 +12,8 @@ The story-versus-route boundary: rendered output on one component is a story. A 
 | Hook              | `renderHook` from `vitest-browser-react` | `browser`   | `app/hooks/tests/`                      | hook return values, state transitions, callbacks    |
 | Pure / service    | MSW handlers + Zod                    | `node`         | `app/services/<name>/tests/`, `app/utils/tests/` | parsed response shape, request payload, error cases |
 | Route             | `loader` / `action` called with a `Request` | `node`      | `app/route-tests/<feature>/tests/*.test.ts` | status, redirect, returned data, validation errors, authorization outcome, side effect |
-| Real server       | Playwright request fixture + dev-server MSW | Playwright  | `.playwright/e2e/<feature>/<flow>.spec.ts` or `.playwright/flows/<slug>.spec.ts` | what the live server serves, with no page: middleware, refusal status, forged requests, rendered HTML, native form posts with the body from `serializeForm`; see `wiki/decisions/Test Layering.md` |
-| Browser           | Playwright page + dev-server MSW         | Playwright     | `.playwright/e2e/<feature>/<flow>.spec.ts` or `.playwright/flows/<slug>.spec.ts` | a capability from the closed list under `## When a test needs a real browser` in `wiki/decisions/Test Layering.md`, one journey per user flow; a critical web flow's spec under `.playwright/flows/` is allowed whatever a cheaper layer could prove |
+| Real server       | Playwright request fixture + dev-server MSW | Playwright  | `.playwright/e2e/<feature>/<flow>.spec.ts` or `.playwright/flows/<slug>.spec.ts` | what the live server serves, with no page: middleware, refusal status, forged requests, rendered HTML, native form posts with the body from `serializeForm` |
+| Browser           | Playwright page + dev-server MSW         | Playwright     | `.playwright/e2e/<feature>/<flow>.spec.ts` or `.playwright/flows/<slug>.spec.ts` | a capability from the closed list in `.claude/doctrine/testing.md` (`## Layers`) |
 
 One Vitest config (`vitest.config.ts`) holds the projects. `node` runs `*.test.ts` outside any `hooks/` folder; `browser` runs `*.test.tsx` and `hooks/**/*.test.ts` in headless Chromium; `storybook` runs every `*.stories.tsx` through `@storybook/addon-vitest`; `storybook-dark` runs the same stories in the dark theme with any-impact axe plus console, content and dark-class checks. There is no DOM emulation: component and hook code runs in a real browser, so install Chromium once with `pnpm install:browsers`. Run a subset with `pnpm test --run --project storybook <story-file>`.
 
@@ -132,7 +130,7 @@ describe('useToggle', () => {
 });
 ```
 
-Assert on `result.current`, the observable hook surface. A `*.test.tsx` file also runs in the `browser` project; use `vitest-browser-react`'s `render` and `expect.element` there for a component that has no story.
+Assert on `result.current`, the observable hook surface.
 
 ## Service Tests via MSW
 
@@ -172,9 +170,9 @@ The tracer bullet for services: the happy-path request returns a Zod-parsed resu
 
 ## Route Tests
 
-A route test calls a route module's `loader` or `action` with a `Request` in the `node` project. HTTP boundaries are mocked through MSW; the app's own store is real, and each Vitest worker holds its own store. A case table lives in `test.each`. The principle and the limits of each layer are in `wiki/decisions/Test Layering.md`.
+A route test calls a route module's `loader` or `action` with a `Request` in the `node` project. HTTP boundaries are mocked through MSW; the app's own store is real, and each Vitest worker holds its own store. A case table lives in `test.each`. Which behavior gets a route test, and what a route test cannot prove, is in `.claude/doctrine/testing.md` (`## Layers`, `## Guards and security rows`).
 
-Pass full route args (`context`, `params`, `pattern`, `request`, `url`) and run any context-providing middleware by hand, since stock loaders read what middleware populated. `apps/web/test/root-toast.server.test.ts` is the shape:
+Pass full route args (`context`, `params`, `pattern`, `request`, `url`) and run any context-providing middleware by hand, since stock loaders read what middleware populated; that hand-run provider does not prove a middleware guard. `apps/web/test/root-toast.server.test.ts` is the shape:
 
 ```ts
 import {RouterContextProvider} from 'react-router';
@@ -199,13 +197,6 @@ test('returns the loader data for an anonymous request', async () => {
   expect(result?.data.toast).toBeUndefined();
 });
 ```
-
-What a route test cannot prove:
-
-- A direct call skips middleware, so a middleware guard is proven by a real-server check.
-- A parent loader guards no action. A write action guards itself, and a direct anonymous call to it is the proof.
-- A parent-loader guard on a read is proven by a real-server `.data` request naming only the child route.
-- An authorization outcome owned by an upstream API cannot be proven by a route test, since an MSW handler answers as the test wrote it.
 
 ## When to Mock
 
@@ -345,7 +336,7 @@ Default.test('price renders with two decimals', async ({canvas}) => {
 });
 ```
 
-The composition rule compares a story's tests with its own children's stories and stays on that surface. Comparing a test with one at another layer (a story against a route test, a route test against an end-to-end test) is the overlap pass, which reads every layer (`wiki/decisions/Test Layering.md`).
+The composition rule compares a story's tests with its own children's stories and stays on that surface.
 
 This is a judgment call, not a lint rule: applied bluntly it strips real integration regressions. An agent applies it **PROPOSE-only and NEVER auto-deletes a child-redundant test.** Any proposed delete must cite both the specific redundant sibling assertion AND the seam assertion that subsumes it, and the cited sibling assertion is machine-verified to contain a matching assertion before the proposal reaches a human. Security, escaping, and data-integrity seam tests (for example a Toast XSS-escaping test) carry a never-delete-without-a-verified-sibling carve-out: they stay even when a sibling looks redundant.
 
@@ -379,9 +370,9 @@ The null-amount guard and the cents-to-major conversion and the currency-to-loca
 
 ## Render-only stories and a11y
 
-A story with no `.test()` renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off); the check runs for the base story and again for each attached test. That is **complete evidence ONLY for a component with no interactive behavior** (a Spinner, a static badge). For a behavior-rich component a render-only story is the start of a test, not the whole of it: the behavior it owns still needs `.test()` coverage of the behavior a user sees (interactions, state transitions and error paths), not one test per interaction.
+A story with no `.test()` renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off); the check runs for the base story and again for each attached test. Whether a render-only story is enough is owned by `.claude/doctrine/testing.md` (`## Components, pages and stories`).
 
-An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. For a component whose own code handles keys or moves focus (a key handler, roving tabindex, or focus moved on open, close or error), the tests assert that keyboard path (Tab, Enter, Escape, arrows as the widget requires) and its focus outcome (where focus lands, or that it returns to the trigger). Native controls in DOM order need no keyboard or focus test: their tab order only restates the JSX the story already renders, and a `required` attribute the browser renders from a literal prop is the browser's, so a test of either is proposed for deletion (the `required` case by `### The discriminator`). The schema-to-`required` wiring (`useForm`'s `constraint: getZodConstraint(schema)` and any hand-forwarded `required` prop) is the app's and stays testable. Page stories also carry a `.test()` for the landmark structure (one `main`, one level-1 heading), which the story-level axe run does not check. Opting a story out of addon-a11y needs its story id and a reason recorded in `A11Y_OPT_OUT_REASONS` in `test/story-a11y-opt-out.test.tsx`.
+An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. Which components owe a keyboard or focus test (own key and focus code, vendored included; library-supplied behavior and native controls get none), and the page landmark check, are owned by `.claude/doctrine/testing.md` (`## Components, pages and stories`). When a test is owed, assert the keyboard path (Tab, Enter, Escape, arrows as the widget requires) and the focus outcome (where focus lands, or that it returns to the trigger). Opting a story out of addon-a11y needs its story id and a reason recorded in `A11Y_OPT_OUT_REASONS` in `test/story-a11y-opt-out.test.tsx`.
 
 ## Red Flags
 

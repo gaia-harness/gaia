@@ -37,6 +37,8 @@ code-audit-maintainer-shell tools: Bash, Monitor, Read, WebFetch
 code-audit-shell tools: Bash, Read
 audit-loop-unit tools: Agent, Bash, Monitor, Read, SendMessage, Write
 worthiness-evaluator tools: Bash, Read, Write
+test-honesty-checker tools: Bash, Read, Write
+security-test-writer tools: Bash, Edit, Read, Write
 overlap-evaluator tools: Bash, Read, Write
 audit-rule-specialist tools: Bash, Read
 audit-refuter tools: Bash, Read
@@ -114,9 +116,9 @@ assert_named_tools_are_prohibitions() {
 
 # --- the table ----------------------------------------------------------------
 
-@test "the tools table has exactly the ten agents, each once" {
-  [ "$(tools_rows | grep -c '')" -eq 10 ]
-  [ "$(tools_rows | cut -d' ' -f1 | sort -u | grep -c '')" -eq 10 ]
+@test "the tools table has exactly the twelve agents, each once" {
+  [ "$(tools_rows | grep -c '')" -eq 12 ]
+  [ "$(tools_rows | cut -d' ' -f1 | sort -u | grep -c '')" -eq 12 ]
 }
 
 # bats test_tags=whole-tree
@@ -162,6 +164,16 @@ assert_named_tools_are_prohibitions() {
 }
 
 # bats test_tags=whole-tree
+@test "test-honesty-checker carries its pinned tools line" {
+  assert_row test-honesty-checker "$AGENTS_DIRECTORY/test-honesty-checker.md"
+}
+
+# bats test_tags=whole-tree
+@test "security-test-writer carries its pinned tools line" {
+  assert_row security-test-writer "$AGENTS_DIRECTORY/security-test-writer.md"
+}
+
+# bats test_tags=whole-tree
 @test "overlap-evaluator carries its pinned tools line" {
   assert_row overlap-evaluator "$AGENTS_DIRECTORY/overlap-evaluator.md"
 }
@@ -186,7 +198,7 @@ assert_named_tools_are_prohibitions() {
 # bats test_tags=whole-tree
 @test "the other definitions name no tool outside their allowlist except as a prohibition" {
   local agent
-  for agent in code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell code-audit-shell audit-loop-unit worthiness-evaluator overlap-evaluator audit-rule-specialist audit-refuter; do
+  for agent in code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell code-audit-shell audit-loop-unit worthiness-evaluator test-honesty-checker security-test-writer overlap-evaluator audit-rule-specialist audit-refuter; do
     assert_named_tools_are_prohibitions "$agent" "$AGENTS_DIRECTORY/$agent.md" || return 1
   done
 }

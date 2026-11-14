@@ -11,7 +11,7 @@ Contents: Selecting a Stack Reference; Philosophy; Anti-Pattern: Horizontal Slic
 
 ## Selecting a Stack Reference
 
-Before writing the first red test, consult the reference for your stack:
+Before choosing a test, Read `.claude/doctrine/testing.md`: it owns which test to write and at which layer. Then, before writing the first red test, consult the reference for your stack:
 
 - **React / Vitest / MSW / Storybook** → the `tdd-react` skill (`apps/web/.claude/skills/tdd-react/SKILL.md`)
 - **Shell / bats** → `.claude/skills/tdd/references/tests-shell.md`
@@ -48,7 +48,7 @@ RIGHT (vertical):
 
 Before writing any code:
 
-- [ ] Confirm which layer owns this test (see stack reference for layer breakdown)
+- [ ] Confirm which layer owns this test (`.claude/doctrine/testing.md`; the stack reference says how to write it)
 - [ ] Confirm which behaviors to test (prioritize)
 - [ ] Name the user-observable behaviors and the one acceptance test that owns each; one test may own several (not implementation steps, not one test per function)
 - [ ] Get user approval on the plan with `AskUserQuestion`: `Approve the plan` (Recommended) or `Revise`
@@ -63,7 +63,7 @@ Write ONE test that confirms ONE thing end-to-end for this layer. `RED → GREEN
 
 ### 3. Incremental Loop
 
-For each behavior your task names (a plan's task doc, or the plan approved in step 1): `RED → GREEN`, extending the test that already owns it, if one does, rather than writing a second. Write a new test only for those behaviors and their acceptance tests, plus a unit test for logic meeting both unit-test conditions (`wiki/decisions/Test Layering.md`): the integration layer cannot cover its cases cheaply, and the logic is important or likely to fail. Only enough code to pass the current test. Don't anticipate future tests.
+For each behavior your task names (a plan's task doc, or the plan approved in step 1): `RED → GREEN`, extending the test that already owns it, if one does, rather than writing a second. Write a new test only for those behaviors and their acceptance tests, plus a unit test where `.claude/doctrine/testing.md` allows one. Only enough code to pass the current test. Don't anticipate future tests.
 
 **Bound the green chase.** If a test won't pass after a few focused attempts, stop and reassess instead of thrashing the implementation: the test, the interface, or an assumption may be wrong. Surface the blocker rather than looping indefinitely to force green.
 
@@ -127,26 +127,21 @@ Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` 
 
 The guarantee this audit provides is scoped to **the subset a same-model fresh-context reviewer reliably flags**, not a proof of test worthiness. State the surviving guarantees by path:
 
-- **No-orchestrator path (this skill alone), surviving guarantees:** static honesty lint on every test; the red step you ran and saw fail; the fresh-subagent worthiness audit **if it was dispatched**. On this path the audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only the static lint, your own red step and the merge presence check.
+- **No-orchestrator path (this skill alone), surviving guarantees:** the red step you ran and saw fail; the fresh-subagent worthiness audit **if it was dispatched**, which is where the honesty check (`.claude/doctrine/testing.md`, `## Honesty`) runs, as the evaluator's judgment. No lint enforces honesty on every test. On this path the audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only your own red step and the merge presence check.
 - **Orchestrated path, additional guarantees (NOT available here):** leaf isolation enforced by the orchestrator. That is orchestrator-owned; the no-orchestrator path does not provide it. The merge presence gate (which recomputes signals and refuses a merge whose audit ledger is absent or mismatched) is a repo-wide hook that fires on every `gh pr merge`: see `wiki/concepts/PR Merge Workflow.md`, "Second merge gate: the worthiness presence gate".
 
 ### 7. Surfacing the advisory findings
 
 Advisory findings (the worthiness verdicts) never interrupt mid-implementation. They surface only in the one end-of-task summary the determinism roll-up also renders into, before commit (no-orchestrator path), or in the orchestrator's `SUMMARY.md` plus the pre-merge summary (orchestrated path). A fix verdict is advisory only here: the pre-audit worthiness step of a plan run, the work lifecycle or `/gaia-debt` (`.claude/skills/gaia/references/worthiness-step.md`) acts on it before the audit.
 
-#### Two tiers, capped
+#### Capped
 
-The summary presents advisory findings in two tiers:
-
-- **HONESTY findings auto-fix.** A test that fails the honesty axis (couples to implementation, asserts a tautology, asserts platform bytes) is rewritten in place and left in the working tree for normal review. No confirmation prompt: the fix is a normal code edit the human reviews like any other.
-- **Every proposed DELETE requires human confirmation and renders its evidence INLINE.** A delete is never acted on. Each proposed delete renders, in the summary, the cited redundant sibling assertion AND the subsuming seam assertion that makes it redundant, so the human confirms against the evidence without opening files. Ask each confirmation with `AskUserQuestion`, one delete per question and up to 4 questions per call: `Confirm the delete` (Recommended) or `Keep the test`. A delete whose cited sibling cannot be machine-verified is downgraded, never shown as a delete.
-
-Cap the list: show the **top-N by severity with a count** (`delete` proposals before `fix` findings; "3 of 11 findings shown"), never a wall of every line.
+The summary lists the verdicts, `delete` proposals before `fix` findings, as the top-N by severity with a count ("3 of 11 findings shown"), never a wall of every line. This skill repairs and deletes nothing: each verdict, a delete's cited redundant sibling and subsuming assertion included, is shown inline for the pre-audit worthiness step to act on.
 
 #### Where it renders
 
 - **No-orchestrator path (main loop):** one end-of-task summary before commit, sharing the surface with the determinism roll-up and the worthiness verdicts.
-- **Orchestrated path:** the same two-tier content goes into the leaf's `SUMMARY.md` ledger entry and the pre-merge summary, so the merge presence gate and the human reviewer see the deletes and their inline evidence before a merge.
+- **Orchestrated path:** the same content goes into the leaf's `SUMMARY.md` ledger entry and the pre-merge summary, so the merge presence gate and the human reviewer see the verdicts and their inline evidence before a merge.
 
 ## Checklist Per Cycle
 
