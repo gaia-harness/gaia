@@ -107,7 +107,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 Ordinary validation and status rules are not security rows. A retire or change row on an existing test of one of these kinds carries the flag too.
 
 - When a security test fails, fix the code, never weaken the test.
-- Only the maintainer rules a security row wrong, removes its flag, or retires an existing security test.
+- Only the maintainer rules a security row wrong, removes its flag, or retires an existing security test, except a retire row for a security test whose code the plan deletes, which is approved along with the plan.
 - Retire or fold a test asserting escaping, sanitization, injection resistance or data integrity only into a test on its own layer or higher that asserts the same property.
 
 ## Components, pages and stories
@@ -148,7 +148,7 @@ Ordinary validation and status rules are not security rows. A retire or change r
 **Table rules.**
 
 - Read the existing tests that drive the routes, modules and components a plan touches before writing its rows; a case an existing test asserts is `reuse` or `extend`, never `new`.
-- Approving the plan approves its retire rows. Retiring an existing test no approved row retires, or deleting a test outside the table, needs the maintainer; the default is keep.
+- Approving the plan approves its retire rows. An approval an automated run picks for itself is not the maintainer's. Retiring an existing test no approved row retires, or deleting a test outside the table, needs the maintainer; the default is keep.
 - Executors write their own rows' tests, using the planned titles verbatim, and never edit the table.
 - Only the security writer writes a security row's test.
 - A test outside the table is unplanned drift.
