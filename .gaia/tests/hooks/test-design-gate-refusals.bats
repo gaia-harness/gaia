@@ -88,6 +88,11 @@ grant_prompt() {
   [ -z "$output" ]
 }
 
+build_fresh() {
+  rm -rf "$FIXTURE"
+  build_fixture
+}
+
 @test "each uncovered security row denies, naming the row and why" {
   set_current_table 'del(.rows[] | select(.id == "T1"))'
   run_gate
@@ -102,11 +107,6 @@ grant_prompt() {
   git_fixture rm -q src/guard.test.ts
   run_gate
   assert_denied_with "T1: no-matching-test"
-}
-
-build_fresh() {
-  rm -rf "$FIXTURE"
-  build_fixture
 }
 
 @test "a broken approved copy or table denies with the integrity reason" {
@@ -149,16 +149,32 @@ build_fresh() {
   assert_denied_with "more than one plan run claims branch feature"
 }
 
+# build_harness: a copy of the gate and the scripts it loads, in $HARNESS, for
+# a test that removes one of them.
+build_harness() {
+  HARNESS="$BATS_TEST_TMPDIR/harness"
+  mkdir -p "$HARNESS/.claude/hooks" "$HARNESS/.gaia/scripts"
+  cp "$GATE" "$HARNESS/.claude/hooks/"
+  cp -R "$REPO_ROOT/.claude/hooks/lib" "$HARNESS/.claude/hooks/lib"
+  cp "$REPO_ROOT"/.gaia/scripts/*.sh "$HARNESS/.gaia/scripts/"
+  local folder
+  for folder in test-design notebook spec; do
+    cp -R "$REPO_ROOT/.gaia/scripts/$folder" "$HARNESS/.gaia/scripts/$folder"
+  done
+}
+
 @test "a gate whose test-drift-check.sh is absent denies" {
-  local harness="$BATS_TEST_TMPDIR/harness"
-  mkdir -p "$harness/.claude/hooks" "$harness/.gaia/scripts"
-  cp "$GATE" "$harness/.claude/hooks/"
-  cp -R "$REPO_ROOT/.claude/hooks/lib" "$harness/.claude/hooks/lib"
-  cp "$REPO_ROOT"/.gaia/scripts/*.sh "$harness/.gaia/scripts/"
-  cp -R "$REPO_ROOT/.gaia/scripts/test-design" "$harness/.gaia/scripts/test-design"
-  rm "$harness/.gaia/scripts/test-drift-check.sh"
-  run_gate "$harness/.claude/hooks/test-design-merge-gate.sh"
+  build_harness
+  rm "$HARNESS/.gaia/scripts/test-drift-check.sh"
+  run_gate "$HARNESS/.claude/hooks/test-design-merge-gate.sh"
   assert_denied_with "test-drift-check.sh is missing"
+}
+
+@test "a gate whose notebook library cannot load denies rather than finding no plan" {
+  build_harness
+  rm "$HARNESS/.gaia/scripts/notebook/notebook-lib.sh"
+  run_gate "$HARNESS/.claude/hooks/test-design-merge-gate.sh"
+  assert_denied_with "the notebook library"
 }
 
 @test "the grant recorder refuses and records nothing outside an exact grant of an approved security row" {

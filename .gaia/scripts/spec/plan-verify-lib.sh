@@ -29,7 +29,7 @@ phase_entry() {
 }
 # The security writer owes a line in the entry of each phase that owns a security row.
 security_writer_check() {
-  local table="$plan_directory/tests.json" rows_text stems_text row_id row_task phase
+  local table="$plan_directory/tests.json" rows_text stems_text row_id row_task phase entry_text
   [ -f "$table" ] || return 0
   command -v node >/dev/null 2>&1 || return 0
   rows_text=$(node -e '
@@ -45,7 +45,8 @@ security_writer_check() {
     [ -n "$row_id" ] || continue
     phase=$(awk -F'\t' -v stem="$row_task" '$2 == stem { print $1; exit }' <<<"$stems_text")
     [ -n "$phase" ] || continue
-    phase_entry "$orchestrator" "$phase" | grep -qE '^[[:space:]]*- Security writer:' \
+    entry_text=$(phase_entry "$orchestrator" "$phase")
+    grep -qE '^[[:space:]]*- Security writer:' <<<"$entry_text" \
       || fail "ORCHESTRATOR.md: Phase $phase owns security row $row_id but its entry has no '- Security writer:' line"
   done <<<"$rows_text"
 }

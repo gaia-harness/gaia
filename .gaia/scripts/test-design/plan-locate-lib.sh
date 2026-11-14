@@ -6,9 +6,11 @@
 #
 #   gaia_plan_folder_for_branch <main root> <branch>
 #     Prints the plan folder whose RUNNING sentinel holds the line
-#     `branch: <branch>`, searching <main>/.notebook/specs/*/plan*/RUNNING and
-#     <main>/.notebook/plans/*/RUNNING. rc 0 found, 1 none, 2 more than one
-#     (each claimant printed, one per line).
+#     `branch: <branch>`, searching every spec's plan folders and every
+#     spec-less plan folder in <main>'s notebook, whose kind folders come from
+#     the notebook library. rc 0 found, 1 none, 2 more than one (each claimant
+#     printed, one per line), 3 the library did not load or could not resolve
+#     a kind folder, so no answer is known.
 #
 #   gaia_test_row_grants_file <main root> <branch key>
 #     The maintainer's typed security-row grants for the branch, beside the
@@ -18,8 +20,9 @@
 #     rc 0 when the merge may go ahead: the branch has no plan run, its plan
 #     has no TEST-DESIGN marker, or every approved security row is covered or
 #     granted. rc 1 otherwise, with the reason and the next step on stdout. It
-#     fails closed: two plan runs claiming the branch, an unresolvable branch
-#     key, a missing node or test-drift-check.sh, a refusal from the check, or
+#     fails closed: two plan runs claiming the branch, an unresolvable
+#     notebook, an unresolvable branch key, a missing node or
+#     test-drift-check.sh, a refusal from the check, or
 #     an unreadable grant file all answer rc 1.
 #
 #   gaia_test_design_status_verdict <tree root>
@@ -39,10 +42,21 @@ unset _gaia_plan_locate_directory
 # shellcheck source=/dev/null
 . "$_GAIA_PLAN_LOCATE_SCRIPTS/main-root-lib.sh"
 
+# _gaia_plan_locate_kind_directory <main root> <kind>: the kind folder, from
+# the notebook library loaded in a subshell so its globals never reach the
+# hook that sourced this file. Non-zero when the library or the folder fails.
+_gaia_plan_locate_kind_directory() {
+  # shellcheck source=/dev/null
+  (. "$_GAIA_PLAN_LOCATE_SCRIPTS/notebook/notebook-lib.sh" 2>/dev/null &&
+    GAIA_NOTEBOOK_TREE="$1" gaia_notebook_kind_directory "$2" 2>/dev/null)
+}
+
 gaia_plan_folder_for_branch() {
-  local main="${1-}" branch="${2-}" sentinel line found='' count=0
+  local main="${1-}" branch="${2-}" specs plans sentinel line found='' count=0
   [ -n "$main" ] && [ -n "$branch" ] || return 1
-  for sentinel in "$main"/.notebook/specs/*/plan*/RUNNING "$main"/.notebook/plans/*/RUNNING; do
+  specs="$(_gaia_plan_locate_kind_directory "$main" spec)" && [ -n "$specs" ] || return 3
+  plans="$(_gaia_plan_locate_kind_directory "$main" plan)" && [ -n "$plans" ] || return 3
+  for sentinel in "$specs"/*/plan*/RUNNING "$plans"/*/RUNNING; do
     [ -f "$sentinel" ] || continue
     while IFS= read -r line || [ -n "$line" ]; do
       line="${line%$'\r'}"
@@ -99,6 +113,10 @@ gaia_test_design_merge_verdict() {
   case "$locate_status" in
     0) ;;
     1) return 0 ;;
+    3)
+      printf 'Security-row merge gate: the notebook library (.gaia/scripts/notebook/notebook-lib.sh) did not load or could not resolve the plan folders of %s, so the plan run of branch %s is unknown. Next step: restore the GAIA scripts from the release and retry.\n' "$main" "$branch"
+      return 1
+      ;;
     *)
       printf 'Security-row merge gate: more than one plan run claims branch %s, so its test-design table is ambiguous:\n%s\nNext step: remove the RUNNING sentinel from every plan folder but the one that owns this branch.\n' "$branch" "$plan"
       return 1

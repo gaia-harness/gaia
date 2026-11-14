@@ -9,6 +9,8 @@
 #
 # Maintainer-only: `.gaia/tests` is release-excluded.
 
+# bats file_tags=installed-dependencies
+
 bats_require_minimum_version 1.5.0
 
 setup() {

@@ -97,7 +97,7 @@ setup() {
   )
 
   SOURCE_LIST="$BATS_TEST_TMPDIR/sources.txt"
-  git -C "$REPO_ROOT" ls-files -- '.claude/*.md' 'apps/web/.claude/*.md' 'wiki/*.md' 'apps/web/CLAUDE.md' >"$SOURCE_LIST"
+  git -C "$REPO_ROOT" ls-files -z -- '.claude/*.md' 'apps/web/.claude/*.md' 'wiki/*.md' 'apps/web/CLAUDE.md' | tr '\0' '\n' >"$SOURCE_LIST"
   printf '%s\n' "${CODE_SOURCES[@]}" >>"$SOURCE_LIST"
 }
 

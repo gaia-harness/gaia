@@ -105,6 +105,18 @@ teardown() {
   return 0
 }
 
+# Helper: copy plan-locate-lib.sh and the notebook library it loads (with that
+# library's own loads) from tree $1 into tree $2, so a scratch hook copy finds
+# the plan run the real checkout would.
+copy_plan_locate_libraries() {
+  local from_scripts="$1/.gaia/scripts" to_scripts="$2/.gaia/scripts"
+  mkdir -p "$to_scripts/test-design" "$to_scripts/spec"
+  cp "$from_scripts/test-design/plan-locate-lib.sh" "$to_scripts/test-design/"
+  cp -R "$from_scripts/notebook" "$to_scripts/notebook"
+  cp "$from_scripts/spec/with-ledger-lock.sh" "$to_scripts/spec/"
+  cp "$from_scripts/exclusive-lock-lib.sh" "$from_scripts/main-root-lib.sh" "$to_scripts/"
+}
+
 # Helper: run the hook from a scratch copy of its tree, so a stub owed-gate
 # script sits at the path the hook calls. The other cases here reach the real
 # script, which reads no record in this checkout and reports clear.
@@ -116,8 +128,7 @@ use_hook_copy() {
   cp "$real_root/.claude/hooks/post-audit-status.sh" "$HOOK_TREE/.claude/hooks/"
   cp -R "$real_root/.claude/hooks/lib" "$HOOK_TREE/.claude/hooks/lib"
   cp "$real_root/.gaia/scripts/main-root-lib.sh" "$real_root/.gaia/scripts/audit-key-lib.sh" "$HOOK_TREE/.gaia/scripts/"
-  mkdir -p "$HOOK_TREE/.gaia/scripts/test-design"
-  cp "$real_root/.gaia/scripts/test-design/plan-locate-lib.sh" "$HOOK_TREE/.gaia/scripts/test-design/"
+  copy_plan_locate_libraries "$real_root" "$HOOK_TREE"
   HOOK_ABSOLUTE_PATH="$HOOK_TREE/.claude/hooks/post-audit-status.sh"
   set_gate_owed_status "${1:-0}"
 }
@@ -642,8 +653,7 @@ assert_no_post() {
   # The digest library locates the key library relative to its own location.
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/audit-key-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-key-lib.sh"
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/main-root-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/main-root-lib.sh"
-  mkdir -p "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/test-design"
-  cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/test-design/plan-locate-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/test-design/"
+  copy_plan_locate_libraries "$(dirname "$HOOK_ABSOLUTE_PATH")/../.." "$BATS_TEST_TMPDIR/mirror"
   # Rename the function out of the lib copy; every other reader stays intact.
   sed -i.bak 's/^clearance_member_refused()/_disabled_clearance_member_refused()/' \
     "$mirror/lib/audit-clearance.sh"
@@ -819,8 +829,7 @@ mutated_hook_mirror() {
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")"/lib/*.sh "$mirror/lib/"
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/audit-key-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-key-lib.sh"
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/main-root-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/main-root-lib.sh"
-  mkdir -p "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/test-design"
-  cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/test-design/plan-locate-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/test-design/"
+  copy_plan_locate_libraries "$(dirname "$HOOK_ABSOLUTE_PATH")/../.." "$BATS_TEST_TMPDIR/mirror"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-gate-owed.sh"
   sed -i.bak "s|merge_base=\"\$(audit_branch_patch_merge_base \"\$repo_root\" \"\$base_tip\" HEAD 2>/dev/null)\"|merge_base=\"$substitute\"|" "$mirror/post-audit-status.sh"
   rm -f "$mirror/post-audit-status.sh.bak"

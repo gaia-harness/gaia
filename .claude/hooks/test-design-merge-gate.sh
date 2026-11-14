@@ -117,5 +117,5 @@ fi
 verdict_status=0
 verdict="$(gaia_test_design_merge_verdict "$tree_root")" || verdict_status=$?
 [ "$verdict_status" -eq 0 ] && exit 0
-[ -n "$verdict" ] || verdict="Security-row merge gate: the check failed without a reason (exit $verdict_status). Next step: run bash .gaia/scripts/test-drift-check.sh security --root <checkout> --plan-dir <plan folder> and read its output."
+[ -n "$verdict" ] || verdict="Security-row merge gate: the check failed without a reason (exit $verdict_status). Next step: from the checkout root, run the security mode of test-drift-check.sh in .gaia/scripts with --root <checkout> --plan-dir <plan folder> and read its output."
 deny_with_reason "$verdict"
