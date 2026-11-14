@@ -185,7 +185,7 @@ $row
   done <<<"$output"
   # Exit 1 with no uncovered line is a crash of the check, not an uncovered row.
   if [ "$parsed_uncovered" -eq 0 ]; then
-    printf 'Security-row merge gate: the security check of %s failed without naming an uncovered row, so it crashed rather than finished: %s\nNext step: run the security mode of .gaia/scripts/test-drift-check.sh with --root %s --plan-dir %s and read its output.\n' "$plan" "$output" "$tree" "$plan"
+    printf 'Security-row merge gate: the security check of %s failed without naming an uncovered row: %s\nNext step: run the security mode of .gaia/scripts/test-drift-check.sh with --root %s --plan-dir %s and read its output.\n' "$plan" "$output" "$tree" "$plan"
     return 1
   fi
   [ -n "$ungranted" ] || return 0
