@@ -60,8 +60,8 @@
 # dispositions check below. A unit dispatch records a round only when it
 # reopens one (THE REOPENED ROUND).
 #
-# THE REOPENED ROUND. Only this hook writes rounds, and a fix needs one: a
-# veto after a default stop, or an owed gate step failing after the latest
+# THE REOPENED ROUND. Only this hook writes rounds, and a fix needs one: a new
+# veto, on a moved tree too, or an owed gate step failing after the latest
 # round, would otherwise leave the next wave joining round r, or HEAD on a
 # tree no round recorded (a quick clear, a light clear, a late pass). So an
 # allowed unit not admitted on accept (a closing round runs no fixer) records
