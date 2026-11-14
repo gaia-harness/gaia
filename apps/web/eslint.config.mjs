@@ -2,7 +2,14 @@ import gaiaLint from '@gaia-harness/lint';
 import {defineConfig} from 'eslint/config';
 import {nodeTestExclude, nodeTestInclude} from './node-test-globs.mjs';
 
-const lint = gaiaLint();
+// The preset already exempts **/*.server.ts?(x) files; a React Router
+// .server directory (app/sessions.server/) needs its own glob.
+const lint = gaiaLint({
+  nodeFiles: {
+    exclude: nodeTestExclude,
+    include: [...nodeTestInclude, 'app/**/*.server/**/*.ts?(x)'],
+  },
+});
 
 export default defineConfig([
   ...lint.ignores({extra: ['.gaia/**']}),
@@ -22,11 +29,4 @@ export default defineConfig([
   ...lint.zod,
   ...lint.prettier,
   ...lint.shadcn({ui: '~/components/ui'}),
-  // These files run in Node (server modules and the vitest node project),
-  // where CSS is undefined, so the rule's CSS.escape autofix would crash them.
-  {
-    files: ['app/**/*.server.ts?(x)', ...nodeTestInclude],
-    ignores: nodeTestExclude,
-    rules: {'unicorn/require-css-escape': 'off'},
-  },
 ]);
