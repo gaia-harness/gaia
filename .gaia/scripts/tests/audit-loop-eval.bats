@@ -419,7 +419,7 @@ sequence_case() {
   alf_sequence 4 3
   alf_store_snapshot 2
   state_copy="$(snapshot_file "$ALF_STATE")"
-  for subcommand in findings evaluate-round brief record-values state-path current-round round-history veto-state reopened-round; do
+  for subcommand in findings evaluate-round brief record-values state-path current-round round-history veto-state reopened-round accepted-keys; do
     run "$CLI/audit-loop-eval.sh" "$subcommand" --root "$ALF_ROOT"
     [ "$status" -eq 0 ] || { echo "$subcommand exited $status: $output"; return 1; }
     assert_files_identical "$state_copy" "$ALF_STATE" || { echo "$subcommand changed the state"; return 1; }
@@ -2021,6 +2021,53 @@ tree_snapshot() {
   alf_state_edit '.history.rounds += [.history.rounds[1], .history.rounds[1]]'
   run bash "$SCRIPTS/audit-loop-eval.sh" round-history --root "$ALF_ROOT"
   [ "$(jq -c '.[3].human_accepted_keys' <<<"$output")" = '[["m","c","a.ts",4]]' ] || { echo "accept lost two rounds after its checkpoint: $output"; return 1; }
+}
+
+# Round r's stored counted_keys rewritten so line 1 is a non-security Major,
+# line 2 a security Major and line 3 a non-security Critical.
+grade_round_keys() {
+  alf_state_edit '.history.rounds[$round - 1].snapshot.counted_keys |= map(
+    .security = (.line == 2) | .severity = (if .line == 3 then "critical" else "major" end))' --argjson round "$1"
+}
+
+@test "cli accepted-keys: only a human accept lists a key, and only a non-security Major or Minor of a round >= 1" {
+  local accepted
+  alf_sequence 3 1
+  alf_store_snapshot 2
+  grade_round_keys 1
+  grade_round_keys 2
+  accepted="[{\"key\":[\"$MEMBER\",\"rule/x\",\"f.txt\",1],\"lines\":[1,4]}]"
+  alf_add_checkpoint 0 stalled
+  alf_add_answer 1 accept
+  run bash "$SCRIPTS/audit-loop-eval.sh" accepted-keys --root "$ALF_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$output" = '[]' ] || { echo "a round-0 accept listed the newest round's keys: $output"; return 1; }
+  alf_add_checkpoint 1 stalled
+  alf_add_answer 2 grant 3
+  run bash "$SCRIPTS/audit-loop-eval.sh" accepted-keys --root "$ALF_ROOT"
+  [ "$output" = '[]' ] || { echo "a grant accepted keys: $output"; return 1; }
+  alf_add_answer 2 accept
+  run bash "$SCRIPTS/audit-loop-eval.sh" accepted-keys --root "$ALF_ROOT"
+  [ "$output" = "$accepted" ] || { printf 'a security or Critical key leaked\ngot  %s\nwant %s\n' "$output" "$accepted"; return 1; }
+  alf_add_checkpoint 1 stalled
+  alf_state_edit '.allowance.accepted_keys = [{checkpoint: 3, key: ["m", "c", "a.ts", 4], source: "typed", at: "t", session_id: "s1"},
+    {checkpoint: 3, key: [$member, "rule/x", "f.txt", 2], source: "typed", at: "t", session_id: "s1"},
+    {checkpoint: 3, key: [$member, "rule/x", "f.txt", 1], source: "typed", at: "t", session_id: "s1"}]' --arg member "$MEMBER"
+  run bash "$SCRIPTS/audit-loop-eval.sh" accepted-keys --root "$ALF_ROOT"
+  [ "$output" = "$accepted" ] || { echo "an ungraded or security accepted finding, or a duplicate, leaked: $output"; return 1; }
+}
+
+@test "cli accepted-keys: an accepted key's lines follow a later commit that moved it" {
+  alf_sequence 1
+  alf_store_snapshot 1
+  grade_round_keys 1
+  alf_add_checkpoint 1 stalled
+  alf_add_answer 1 accept
+  { printf 'inserted %s\n' 1 2 3 4 5; cat "$ALF_ROOT/f.txt"; } >"$ALF_ROOT/f.txt.new" && mv "$ALF_ROOT/f.txt.new" "$ALF_ROOT/f.txt"
+  alf_commit fixer
+  run bash "$SCRIPTS/audit-loop-eval.sh" accepted-keys --root "$ALF_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$output" = "[{\"key\":[\"$MEMBER\",\"rule/x\",\"f.txt\",1],\"lines\":[3,9]}]" ] || { echo "the accepted line did not follow the commit: $output"; return 1; }
 }
 
 @test "cli veto-state: a vetoed key no member reported is unsatisfied for the round" {
