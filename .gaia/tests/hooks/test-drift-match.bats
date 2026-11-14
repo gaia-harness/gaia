@@ -124,6 +124,7 @@ runIf|src/a.test.ts|new|none||missing|  test.runIf(false)('target', () => { expe
 in-body-skip|src/a.spec.ts|new|none||missing|  test('target', () => { test.skip(); expect(1).toBe(1); });
 context-skip|src/a.test.ts|new|none||missing|  test('target', (context) => { context.skip(); expect(1).toBe(1); });
 destructured-skip|src/a.test.ts|new|none||missing|  test('target', ({skip}) => { skip(); expect(1).toBe(1); });
+testinfo-skip|src/a.spec.ts|new|none||missing|  test('target', async ({page}, testInfo) => { testInfo.skip(true); expect(1).toBe(1); });
 info-skip|src/a.spec.ts|new|none||missing|  test('target', () => { test.info().skip(); expect(1).toBe(1); });
 bats-skip|tests/a.bats|new|none||missing|  skip "not yet"
 empty-body|src/a.test.ts|new|none||missing|  test('target', () => {});
@@ -131,7 +132,7 @@ each-missing-case|src/a.test.ts|new|none||missing|
 executor-security|src/a.test.ts|new|access||unplanned|  test('target', () => { expect(1).toBe(1); });
 reuse-changed|src/a.test.ts|reuse|none||missing|
 CASES
-  [ "$cases_run" -eq 14 ] || { echo "ran $cases_run of 14 cases" >&2; return 1; }
+  [ "$cases_run" -eq 15 ] || { echo "ran $cases_run of 15 cases" >&2; return 1; }
 }
 
 # A row whose caseKey is absent from its test's case table is missing.

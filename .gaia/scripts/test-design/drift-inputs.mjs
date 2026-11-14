@@ -1,5 +1,6 @@
 // The drift check's inputs: the plan folder's table files, and each test file
-// read at the branch's head (the working tree) and at the merge base, through
+// read at the branch's head (the working tree, or with `committed` HEAD, which
+// the security check uses) and at the merge base, through
 // the one test-identity extractor. Every unusable input throws a DriftRefusal
 // whose code is the exit code test-drift-check.sh documents.
 

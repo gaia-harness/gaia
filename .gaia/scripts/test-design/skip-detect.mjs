@@ -79,17 +79,20 @@ export function isSkipped(entry, test) {
     if (STRUCTURAL_ROOTS.has(shape.root) && shape.properties.some((name) => SKIP_PROPERTIES.has(name))) return true;
   }
   // A test.skip(...) or test.fixme(...) in the body skips the test, with or
-  // without a condition argument; so does a Vitest `<context>.skip()` on the
-  // callback's first parameter (or a destructured `skip`) and Playwright's
-  // `test.info().skip()`.
+  // without a condition argument; so does `<context>.skip()` on any parameter
+  // of the callback (Vitest's context, Playwright's testInfo as the second
+  // parameter), a destructured `skip`, and Playwright's `test.info().skip()`.
   const callback = [...call.arguments].reverse().find((argument) => ts.isFunctionLike(argument));
-  const first = callback?.parameters?.[0]?.name;
-  const contextName = first && ts.isIdentifier(first) ? first.text : null;
-  const destructuresSkip =
-    !!first && ts.isObjectBindingPattern(first) && first.elements.some((element) => (element.propertyName ?? element.name).text === 'skip');
-  const skipBinding = destructuresSkip
-    ? first.elements.find((element) => (element.propertyName ?? element.name).text === 'skip').name.text
-    : null;
+  const contextNames = new Set();
+  const skipBindings = new Set();
+  for (const parameter of callback?.parameters ?? []) {
+    if (ts.isIdentifier(parameter.name)) contextNames.add(parameter.name.text);
+    else if (ts.isObjectBindingPattern(parameter.name)) {
+      for (const element of parameter.name.elements) {
+        if ((element.propertyName ?? element.name).text === 'skip' && ts.isIdentifier(element.name)) skipBindings.add(element.name.text);
+      }
+    }
+  }
   let bodySkips = false;
   const scan = (node) => {
     if (ts.isCallExpression(node) && node !== call) {
@@ -100,13 +103,13 @@ export function isSkipped(entry, test) {
       const callee = node.expression;
       if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'skip') {
         const target = callee.expression;
-        if (contextName !== null && ts.isIdentifier(target) && target.text === contextName) bodySkips = true;
+        if (ts.isIdentifier(target) && contextNames.has(target.text)) bodySkips = true;
         if (ts.isCallExpression(target)) {
           const inner = calleeShape(target);
           if (inner.root === 'test' && inner.properties.length === 1 && inner.properties[0] === 'info') bodySkips = true;
         }
       }
-      if (skipBinding !== null && ts.isIdentifier(callee) && callee.text === skipBinding) bodySkips = true;
+      if (ts.isIdentifier(callee) && skipBindings.has(callee.text)) bodySkips = true;
     }
     ts.forEachChild(node, scan);
   };

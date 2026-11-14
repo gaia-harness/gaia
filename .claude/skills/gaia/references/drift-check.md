@@ -40,7 +40,7 @@ Exit 2 is a usage error or a plan folder with no marker; exit 3 is a refusal wit
 
 ## Matching
 
-A row is matched when a test at its `file` with full name `title` exists, its `caseKey` (if any) is a string literal in the test's `.each` or `.for` case table, it is not a todo, skip, fixme or conditional skip (`.skip`, `.todo`, `.fixme`, `.skipIf`, `.runIf`, `test.skip(...)`, `test.fixme(...)`, `test.info().skip()` or a Vitest context `skip()` in the body, a bats `skip`), its body is not empty, and its action holds:
+A row is matched when a test at its `file` with full name `title` exists, its `caseKey` (if any) is a string literal in the test's `.each` or `.for` case table, it is not a todo, skip, fixme or conditional skip (`.skip`, `.todo`, `.fixme`, `.skipIf`, `.runIf`, `test.skip(...)`, `test.fixme(...)`, `test.info().skip()`, a `testInfo.skip()` on any callback parameter or a Vitest context `skip()` in the body, a bats `skip`), its body is not empty, and its action holds:
 
 - `new`: present.
 - `reuse`: present with a signal equal to base.
