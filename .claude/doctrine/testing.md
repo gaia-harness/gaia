@@ -131,7 +131,7 @@ Ordinary validation and status rules are not security rows. A retire or change r
 
 - A heading whose text is data the loader returns is a route test.
 - A refusal or error a direct `loader` or `action` call returns is a route test, even when a page or error boundary renders it.
-- A flow that must work without JavaScript checks its native form posts page-less in its flow test, with the body built from the served form, never as a page with JavaScript disabled.
+- A flow that must work without JavaScript checks its native form posts page-less in its flow test, with the body built from the served form, never as a page with JavaScript disabled. A separate real-server file holding them is also accepted; a native post that belongs to no flow is a real-server check.
 
 ## Test-design table
 
