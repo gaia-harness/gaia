@@ -301,3 +301,53 @@ _gaia_loop_stop_inputs() {
   jq -n -c --argjson honored_keys "$honored" --argjson marker_gaps "$gaps" --argjson unsatisfied_vetoes "${unsatisfied:-[\"unreadable vetoes\"]}" \
     '{honored_keys: $honored_keys, marker_gaps: $marker_gaps, unsatisfied_vetoes: $unsatisfied_vetoes}'
 }
+
+# gaia_loop_accepted_keys <main-root> <state-json> <head-tree>:
+# audit-loop-eval.sh accepted-keys's output, sorted unique
+# {key: [member, finding_class, path, line], lines: [low, high]} for each key a
+# human accepted: every key of a round whose checkpoint a human answered with an
+# accept, plus each audit-accept-finding key. Only the audit loop hooks write
+# these fields (the grant hooks the answers and accepted keys, the bound hook
+# the checkpoints and round snapshots), so a member can trust this list where a
+# run-folder file could be forged. A key is listed only when its round's
+# stored counted_keys grade it major or minor with security false, so a
+# Critical, a security-class finding, a checkpoint at round 0 (no round's
+# findings were before the human) and a round whose keys were not stored all
+# contribute none, which fails toward a refusal. lines is where the key's line
+# sits at <head-tree>, mapped from its round's tree through the diff the way
+# _gaia_veto_rereport_spans maps a vetoed line and widened by the same
+# tolerance, because a fix after the accepted round can move the line; an
+# unreadable diff keeps the recorded line.
+gaia_loop_accepted_keys() {
+  local main="$1" head_tree="$3" candidates rows index from_tree line path mapped spans='{}'
+  candidates="$(printf '%s' "$2" | jq -c '. as $state
+    | ($state.history.rounds // []) as $rounds
+    | def accepted_round($index): [$state.history.checkpoints[]? | select(.index == $index) | .at_round
+        | select(type == "number" and . >= 1 and . == floor and . <= ($rounds | length))] | first;
+    [($state.allowance.answers[]? | select(.kind == "accept") | accepted_round(.checkpoint) | select(. != null)
+       | . as $round | ($rounds[$round - 1].snapshot.keys? // [])[] | {key: ., round: $round}),
+     (($state.allowance.accepted_keys // [])[] | accepted_round(.checkpoint) as $round | select($round != null)
+       | {key, round: $round})]
+    | map(. as $candidate | $rounds[$candidate.round - 1] as $accepted
+        | select(any(($accepted.snapshot.counted_keys? // [])[]?; [.member, .finding_class, .path, .line] == $candidate.key
+            and (.severity == "major" or .severity == "minor") and .security == false))
+        | {key, tree: $accepted.tree})
+    | unique')" || return 5
+  rows="$(printf '%s' "$candidates" | jq -r 'to_entries[] | select(.value.key[3] | type == "number" and . >= 1 and . == floor)
+    | [.key, .value.tree, .value.key[3], .value.key[2]] | @tsv')" || return 5
+  while IFS=$'\t' read -r index from_tree line path; do
+    [ -n "$path" ] || continue
+    mapped=""
+    if gaia_loop_is_oid "$from_tree" && gaia_loop_is_oid "$head_tree"; then
+      # A path is data, never a pathspec pattern.
+      mapped="$(GIT_LITERAL_PATHSPECS=1 _gaia_loop_git -C "$main" diff -U0 --no-color --no-ext-diff --no-renames "$from_tree" "$head_tree" -- "$path" 2>/dev/null |
+        awk -v vetoed_line="$line" "$_GAIA_VETO_SPANS_AWK")" || mapped=""
+    fi
+    spans="$(jq -n -c --argjson spans "$spans" --arg index "$index" --arg mapped "$mapped" --argjson line "$line" \
+      --argjson tolerance "$_GAIA_VETO_REREPORT_TOLERANCE_LINES" '
+      (if $mapped == "" then [$line, $line] else $mapped | split(" ") | map(tonumber) | .[0:2] end) as $span
+      | $spans + {($index): [([$span[0] - $tolerance, 1] | max), $span[1] + $tolerance]}')" || return 5
+  done <<<"$rows"
+  printf '%s' "$candidates" | jq -c --argjson spans "$spans" \
+    '[to_entries[] | {key: .value.key, lines: ($spans[.key | tostring] // [.value.key[3], .value.key[3]])}] | unique'
+}
