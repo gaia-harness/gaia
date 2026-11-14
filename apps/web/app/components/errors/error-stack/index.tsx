@@ -11,6 +11,7 @@ type ErrorStackProps = {
   statusText?: string;
 };
 
+// Renders a copyable error stack with its optional HTTP status.
 const ErrorStack = ({
   className,
   stack,
