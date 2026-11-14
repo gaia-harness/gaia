@@ -350,22 +350,6 @@ gaia_loop_checkpoint_disputes() {
   gaia_loop_disputed_entries "$@" || printf '[]\n'
 }
 
-# gaia_loop_accepted_keys <state-json>: audit-loop-eval.sh accepted-keys's
-# output, the sorted unique identity keys [member, finding_class, path, line] a
-# human accepted: every key of a round whose checkpoint a human answered with an
-# accept, plus each audit-accept-finding key. Only the audit loop hooks write
-# these fields (the grant hooks the answers and accepted keys, the bound hook
-# the checkpoints and round snapshots), so a member can trust this list where a
-# run-folder file could be forged. A round whose keys were not stored
-# contributes none, which fails toward a refusal.
-gaia_loop_accepted_keys() {
-  printf '%s' "$1" | jq -c '. as $state
-    | [$state.allowance.answers[] | select(.kind == "accept") | .checkpoint as $index
-       | $state.history.checkpoints[] | select(.index == $index) | .at_round] as $accepted_at
-    | [($accepted_at[] | ($state.history.rounds[. - 1].snapshot.keys? // []) | .[]),
-       (($state.allowance.accepted_keys // [])[] | .key)] | unique'
-}
-
 # gaia_loop_round_history <state-json>: audit-loop-eval.sh round-history's
 # output (shape in that file's header).
 gaia_loop_round_history() {

@@ -24,8 +24,9 @@
 #   audit-loop-eval.sh findings|evaluate-round|brief|record-values|state-path|current-round
 #                      |next-unit|unit-window|pinned-question|round-history
 #                      |veto-state|reopened-round|accepted-keys --root <audited-root> [--round <r>]
-# accepted-keys prints the identity keys a human accepted, [] with no round
-# (gaia_loop_accepted_keys in audit-loop-signals-lib.sh). round-history prints one {round, tree, members, keys, counted_keys, closing, reopened,
+# accepted-keys prints {key, lines} for each identity key a human accepted, [] with
+# no loop state (gaia_loop_accepted_keys in audit-veto-lib.sh).
+# round-history prints one {round, tree, members, keys, counted_keys, closing, reopened,
 # human_accept, human_accepted_keys} per recorded round (keys and counted_keys as identity
 # keys, null when not stored; human_accept: closing, or an accept answering a checkpoint at
 # round r-1 or r; human_accepted_keys: audit-accept-finding keys of a checkpoint at round r or earlier). veto-state prints audit-veto-lib.sh's
@@ -742,7 +743,7 @@ _gaia_loop_cli() {
       ;;
     brief) _gaia_loop_brief "$root" "$main" "$state"; return $? ;;
     round-history) gaia_loop_round_history "$state"; return $? ;;
-    accepted-keys) gaia_loop_accepted_keys "$state"; return $? ;;
+    accepted-keys) gaia_loop_accepted_keys "$main" "$state" "$(_gaia_loop_git -C "$root" rev-parse 'HEAD^{tree}' 2>/dev/null)"; return $? ;;
     reopened-round)
       subcommand_output="$(_gaia_loop_git -C "$root" rev-parse 'HEAD^{tree}' 2>/dev/null)" || subcommand_output=""
       printf '%s' "$state" | jq -r --arg head_tree "$subcommand_output" \
