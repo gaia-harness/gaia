@@ -9,6 +9,7 @@
     ".claude/agents/code-audit-shell.md": "owned",
     ".claude/agents/fitness-judge.md": "owned",
     ".claude/agents/overlap-evaluator.md": "owned",
+    ".claude/agents/security-test-writer.md": "owned",
     ".claude/agents/worthiness-evaluator.md": "owned",
     ".claude/commands/gaia-cleanse.md": "owned",
     ".claude/commands/gaia-codify.md": "owned",
@@ -152,6 +153,7 @@
     ".claude/skills/gaia/references/plan/planner.md": "owned",
     ".claude/skills/gaia/references/plan/test-table.md": "owned",
     ".claude/skills/gaia/references/residue.md": "owned",
+    ".claude/skills/gaia/references/security-writer.md": "owned",
     ".claude/skills/gaia/references/setup/auto-merge.md": "owned",
     ".claude/skills/gaia/references/setup/github-repo.md": "owned",
     ".claude/skills/gaia/references/setup/isolation-question.md": "owned",
@@ -868,7 +870,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-14T10:37:54.314Z",
+  "generated": "2026-11-14T10:49:41.637Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
