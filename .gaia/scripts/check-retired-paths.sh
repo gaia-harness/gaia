@@ -78,6 +78,10 @@
 #     (`$root/.claude/skills/tailwind`) is caught while
 #     `apps/web/.claude/skills/tailwind` is not.
 #
+#   - The retired overlap-pass paths (`.gaia/scripts/overlap-check.sh`,
+#     `.gaia/scripts/overlap/`, `.claude/agents/overlap-evaluator.md`) are exact
+#     tokens in the full tier, so the word "overlap" elsewhere never trips.
+#
 # Bash 3.2 compatible; BSD and GNU tools.
 set -u
 
@@ -188,6 +192,7 @@ function hit_kind(line,    rest, offset, before, lead) {
   if (line ~ /(^|[^A-Za-z0-9_.\\\/-])(app|test|public)\//) return 1
   if (line ~ /(^|[^A-Za-z0-9_#\\\/-])\.(playwright|storybook)\//) return 1
   if (line ~ /(^|[^A-Za-z0-9_.\\\/-])((vite|vitest|playwright|react-router|knip|stylelint|doctor)\.config\.[a-z]+|tsconfig\.json|\.lintstagedrc\.json|eslint\.config\.mjs|Dockerfile|\.dockerignore|\.env\.example)([^A-Za-z0-9_-]|$)/) return 1
+  if (line ~ /(^|[^A-Za-z0-9_\/-])(\.gaia\/scripts\/overlap-check\.sh|\.gaia\/scripts\/overlap\/|\.claude\/agents\/overlap-evaluator\.md)/) return 1
   rest = line
   offset = 0
   while (match(rest, /\.claude\/(skills\/(a11y-fixes|eslint-fixes|gaia-react-perf|new-component|new-hook|new-route|new-service|playwright-cli|react-code|skeleton-loaders|tailwind|typescript)|rules\/(accessibility|api-service|design-baseline|i18n|playwright|react-router-docs|routes|state-pattern|storybook|tailwind)\.md|instructions\/(add-locale|remove-i18n)\.md|agents\/code-audit-frontend\/)/)) {

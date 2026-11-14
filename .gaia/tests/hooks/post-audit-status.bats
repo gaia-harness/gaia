@@ -116,6 +116,8 @@ use_hook_copy() {
   cp "$real_root/.claude/hooks/post-audit-status.sh" "$HOOK_TREE/.claude/hooks/"
   cp -R "$real_root/.claude/hooks/lib" "$HOOK_TREE/.claude/hooks/lib"
   cp "$real_root/.gaia/scripts/main-root-lib.sh" "$real_root/.gaia/scripts/audit-key-lib.sh" "$HOOK_TREE/.gaia/scripts/"
+  mkdir -p "$HOOK_TREE/.gaia/scripts/test-design"
+  cp "$real_root/.gaia/scripts/test-design/plan-locate-lib.sh" "$HOOK_TREE/.gaia/scripts/test-design/"
   HOOK_ABSOLUTE_PATH="$HOOK_TREE/.claude/hooks/post-audit-status.sh"
   set_gate_owed_status "${1:-0}"
 }
@@ -639,6 +641,9 @@ assert_no_post() {
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")"/lib/*.sh "$mirror/lib/"
   # The digest library locates the key library relative to its own location.
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/audit-key-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-key-lib.sh"
+  cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/main-root-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/main-root-lib.sh"
+  mkdir -p "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/test-design"
+  cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/test-design/plan-locate-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/test-design/"
   # Rename the function out of the lib copy; every other reader stays intact.
   sed -i.bak 's/^clearance_member_refused()/_disabled_clearance_member_refused()/' \
     "$mirror/lib/audit-clearance.sh"
@@ -813,6 +818,9 @@ mutated_hook_mirror() {
   cp "$HOOK_ABSOLUTE_PATH" "$mirror/post-audit-status.sh"
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")"/lib/*.sh "$mirror/lib/"
   cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/audit-key-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-key-lib.sh"
+  cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/main-root-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/main-root-lib.sh"
+  mkdir -p "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/test-design"
+  cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/test-design/plan-locate-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/test-design/"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-gate-owed.sh"
   sed -i.bak "s|merge_base=\"\$(audit_branch_patch_merge_base \"\$repo_root\" \"\$base_tip\" HEAD 2>/dev/null)\"|merge_base=\"$substitute\"|" "$mirror/post-audit-status.sh"
   rm -f "$mirror/post-audit-status.sh.bak"
@@ -971,4 +979,25 @@ mutated_hook_mirror() {
   run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
   [[ "$output" == *"posted GAIA-Audit failure"* ]] || return 1
   [ -s "$API_CALLS" ]
+}
+
+# -----------------------------------------------------------------------------
+# Security rows of the branch's test-design table
+# -----------------------------------------------------------------------------
+
+@test "success declines and posts nothing while an approved security row has no matching test" {
+  local plan="$REPO/.notebook/plans/feature-one"
+  mkdir -p "$plan"
+  printf 'branch: main\n' >"$plan/RUNNING"
+  printf '{"schema": 1, "rows": [{"id":"T1","source":"flow:alpha","case":"c","file":"src/guard.test.ts","title":"guard refuses","layer":"unit","task":"task-one","action":"new","security":"access"}]}\n' >"$plan/tests.json"
+  printf 'schema: 1\n' >"$plan/TEST-DESIGN"
+  node "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/scripts/test-design/test-table.mjs" approve --plan-dir "$plan" >/dev/null
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_marker)
+  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
+  [ "$status" -eq 0 ]
+  grep -qF -- "status: declined: Security-row merge gate" <<<"$output" || return 1
+  grep -qF -- "T1: no-matching-test" <<<"$output" || return 1
+  assert_no_post
 }

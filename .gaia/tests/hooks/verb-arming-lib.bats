@@ -1010,7 +1010,8 @@ write_conflicted_library() {
 # The load guard suspends errexit across the source and must put back exactly
 # what it found. Several of this library's consumers deliberately run
 # WITHOUT errexit -- pr-merge-audit-check.sh, worthiness-presence-check.sh,
-# debt-sentinel-touch.sh and issue-claim-release.sh -- and several are
+# test-design-merge-gate.sh, debt-sentinel-touch.sh and issue-claim-release.sh
+# -- and several are
 # PreToolUse deny gates where a stray
 # non-zero exit becomes a verdict. An unconditional `set -e` restore would arm
 # errexit in every one of them, so this case pins the restore as conditional.

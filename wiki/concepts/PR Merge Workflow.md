@@ -264,6 +264,8 @@ bash .claude/hooks/post-audit-status.sh <current-member-marker>
 
 Any one dispatched member's own current marker path is sufficient; `post-audit-status.sh` already refuses while any dispatched member is pending and posts on the pushed PR head, so it resolves the rest itself (see [[Audit Gate Reference#Signals]]). Run `gh pr merge` only after this call reports a posted status.
 
+On a plan run with a test-design table, the success post also runs the security-row check ([[#Third merge gate: the security-row merge gate]]) and declines while an approved security row is uncovered and ungranted, or the check cannot answer, because GitHub's auto-merge completes on the `GAIA-Audit` status alone and never runs the merge hooks.
+
 The hook answers for the checkout its working directory is in, so run it with the session's working directory in the checkout that holds the PR branch. When the branch lives in a linked worktree and the session sits in the main checkout, as a resumed session does, re-enter the worktree first with `EnterWorktree({path: "<worktree path>"})` (`git worktree list` names the path) rather than wrapping the call in `cd`. Run from a checkout on the default branch or a detached HEAD, the hook declines naming the wrong tree.
 
 Any later HEAD move needs a re-post, the manifest-answer commit above, a CHANGELOG fixup, or a conflict found mid-wait ([[#Conflict found mid-wait]] step 3 already does this for that case). If the orchestrator forgets this step, no `GAIA-Audit` status exists for the head; where `GAIA-Audit` is a required check, branch protection blocks the merge, so the omission fails closed and visibly rather than merging over a status nobody posted.
@@ -427,6 +429,12 @@ keep/fix/delete verdict, and scopes to the in-scope tests this PR changed (a no-
 when none changed). It is a separate denial
 from the Code Audit Team markers above; both must clear.
 See [[Worthiness Presence Gate]] for the full contract.
+
+## Third merge gate: the security-row merge gate
+
+`gh pr merge` also passes through `.claude/hooks/test-design-merge-gate.sh`. It finds the branch's plan run through the `RUNNING` sentinel naming the branch, and on a plan with a `TEST-DESIGN` marker it runs `bash .gaia/scripts/test-drift-check.sh security`. It denies while any security row of the approved table (`tests.approved.json`) is missing from the current table, has lost its security flag, or has no matching test on the branch; whether that test passes is CI's job. No plan run, or a plan with no marker, allows. It fails closed: every path where the check cannot answer, such as an approved copy whose hash is not the marker's, denies with its reason and next step (the hook's header names them).
+
+The only way past an uncovered row, short of writing its test, is the maintainer typing the whole prompt `test-row-grant <row id>` in an interactive session in the branch's checkout. `.claude/hooks/test-row-grant.sh` records it in the branch's protected audit-loop folder, which Claude cannot write, only when the row is in the approved table with a security flag; a grant counts only against the approved table it was typed for, so it never excuses a tampered one. `post-audit-status.sh` runs the same check before it posts success ([[#Posting the status last]]), so the gate holds on the auto-merge path too.
 
 ## No exceptions
 

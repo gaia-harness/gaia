@@ -374,6 +374,20 @@ state_listing() {
   assert_allowed_by_exit
 }
 
+@test "jq absent: test-design-merge-gate refuses a merge attempt" {
+  local json
+  json=$(bash_payload "gh pr merge 42 --squash")
+  without_jq test-design-merge-gate.sh "$json"
+  assert_blocked_by_exit
+}
+
+@test "jq absent: test-design-merge-gate allows the jq install" {
+  local json
+  json=$(bash_payload "$INSTALL_COMMAND")
+  without_jq test-design-merge-gate.sh "$json"
+  assert_allowed_by_exit
+}
+
 # --- the arm's own library is unreachable ------------------------------------
 
 @test "a mis-arity call refuses rather than dying at a non-blocking status" {

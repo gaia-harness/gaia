@@ -283,6 +283,8 @@ auditors:
     light_hard_full:
       - ".claude/hooks/pr-merge-audit-check.sh"
       - ".claude/hooks/post-audit-status.sh"
+      - ".claude/hooks/test-design-merge-gate.sh"
+      - ".claude/hooks/test-row-grant.sh"
       - ".claude/hooks/audit-loop-bound.sh"
       - ".gaia/scripts/audit-write-clearance.sh"
       - ".gaia/scripts/audit-write-clearance-args.sh"
@@ -470,7 +472,6 @@ unowned:
   - ".claude/agents/worthiness-evaluator.md"
   - ".claude/agents/test-honesty-checker.md"
   - ".claude/agents/security-test-writer.md"
-  - ".claude/agents/overlap-evaluator.md"
   - ".claude/commands/**/*.md"
   - ".gaia/cli/health/**/*.md"
   - ".github/forensics/prompt.md"

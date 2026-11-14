@@ -47,9 +47,6 @@ setup() {
     ".claude/skills/tdd/SKILL.md|One test at a time|$DOCTRINE"
     'apps/web/.claude/rules/storybook.md|a `.test()` per GAIA behavior|'"$DOCTRINE"
     '.claude/agents/worthiness-evaluator.md|need a `.test()` each|'"$LINK"
-    ".claude/agents/overlap-evaluator.md|route test or a unit test already asserts|$LINK"
-    ".claude/agents/overlap-evaluator.md|Four kinds|$LINK"
-    ".claude/skills/gaia/references/overlap-pass.md|so the pass also moves a test down to that layer|$LINK"
     ".claude/skills/gaia/references/plan/planner.md|One criterion per guard, refusal, or gate|$PLANNER_PIN"
     ".claude/skills/gaia/references/plan/planner.md|when no flow test already covers it|$PLANNER_PIN"
     ".claude/skills/gaia/references/plan/planner.md|covering the happy path and each error path the build has|$PLANNER_PIN"
@@ -80,7 +77,6 @@ setup() {
     ".claude/skills/tdd/SKILL.md|You can't test everything."
     ".claude/skills/tdd/SKILL.md|Author the test against a stub of the implementation symbol."
     'wiki/decisions/Worthiness Audit.md|**proposes** verdicts and **edits no files**; a human acts on every proposal.'
-    ".claude/agents/overlap-evaluator.md|The journey floor: never propose demoting or dropping a flow's only browser journey."
     ".claude/agents/worthiness-evaluator.md|An axe pass on a render does not supply that signal"
     "$TESTS_REACT|An axe pass says nothing about focus order, keyboard operation"
     ".claude/skills/gaia/references/spec/clarify-prompts.md|One flow per critical user path."

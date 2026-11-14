@@ -38,7 +38,7 @@
 // must grow when the template adds one. An import that does not resolve to a
 // readable file adds nothing.
 //
-// Caller: overlap/check-proposals.mjs (the pageUsesOf export).
+// Caller: test-design/layer-map.mjs (the pageUsesOf export).
 //
 // Usage: node page-use.mjs <file>...
 // Output: one line per use, `<file>\t<line>\t<test title or ->\t<reason>`.
