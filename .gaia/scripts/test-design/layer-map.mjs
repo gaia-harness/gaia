@@ -13,8 +13,9 @@
 //
 // Exit codes: 0 ok, 2 usage, 3 unreadable input or no TypeScript.
 //
-// Importable: layerOf(file, {root, flowTests}) for existing-tests.mjs, and
-// webPackageDirs(root) for modules that need the web package's folder.
+// Importable: layerOf(file, {root, flowTests}), readFlowTests(file) and
+// webPackageDirs(root) for existing-tests.mjs, and typescriptModule() for the
+// test-design modules that parse TypeScript.
 
 import {createRequire} from 'node:module';
 import {readFileSync, realpathSync} from 'node:fs';

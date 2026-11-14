@@ -103,7 +103,7 @@ check_acceptance_text() {
   text="$(flat "$1/$PLANNER_REL")"
   need "$text" 'Name the behavior the task delivers and its `- Test:` lines' || return 1
   need "$text" 'never a list of tests per function' || return 1
-  need "$text" 'is `.claude/doctrine/testing.md`; this bullet restates none of it' || return 1
+  need "$text" 'or wording each call for is `.claude/doctrine/testing.md`.' || return 1
   need "$text" '.claude/rules/guards-must-fail.md' || return 1
   lacks "$text" 'One criterion per guard, refusal, or gate' || return 1
 }
