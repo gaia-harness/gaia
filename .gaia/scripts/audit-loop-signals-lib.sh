@@ -181,7 +181,8 @@ _gaia_loop_decide_unit_with_unit_rounds() {
   # Grant admission comes before the line check: it is how a human lets a unit
   # run while the reading is over the line. Only the LATEST checkpoint counts,
   # and only once: after_checkpoint is the checkpoint count when the last unit
-  # was admitted, so a unit admitted on this answer has consumed it.
+  # was admitted, so a unit admitted on this answer has consumed it (an accept
+  # stays live below until its closing round is recorded).
   answer="$(printf '%s' "$state" | jq -r '
     (.history.checkpoints | last) as $latest_checkpoint
     | ((.history.units // []) | last) as $latest_unit
@@ -189,6 +190,12 @@ _gaia_loop_decide_unit_with_unit_rounds() {
       else ([.allowance.answers[] | select(.checkpoint == $latest_checkpoint.index)] | last) as $latest_answer
       | if $latest_answer != null and ($latest_unit == null or $latest_unit.after_checkpoint < $latest_checkpoint.index) then $latest_answer.kind else empty end
       end' 2>/dev/null)" || return 5
+  # An accept unit that only joined the open round recorded no round, so the
+  # accept is not spent: the next unit is the closing round, on the same
+  # predicate the bound hook records the round's closing flag from.
+  if [ -z "$answer" ] && [ "$(gaia_loop_next_closing "$state")" = true ]; then
+    answer=accept
+  fi
   if [ "$used" -ge "$_GAIA_LOOP_HARD_CAP" ]; then
     # Past the cap neither the context line nor the fallback fold admits a
     # unit: each one needs a human answer to the checkpoint the cap pins. A
