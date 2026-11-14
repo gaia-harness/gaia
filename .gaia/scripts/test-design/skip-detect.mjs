@@ -8,16 +8,11 @@
 // (its `ranges` locate the call). `entry` is one parsed file:
 // {sourceFile, isStories, calls: null} for TypeScript, {lines} for bats.
 
-import {createRequire} from 'node:module';
+import {typescriptModule} from './layer-map.mjs';
 
-let ts = null;
-try {
-  ts = createRequire(import.meta.url)('typescript');
-} catch {
-  ts = null;
-}
+export {typescriptModule};
 
-export const typescriptModule = () => ts;
+const ts = typescriptModule();
 
 // skipIf and runIf are conditional skips: a test that may not run proves
 // nothing about the run that skipped it.

@@ -29,13 +29,13 @@ import {
   DriftRefusal,
   hasMarker,
   isTestPath,
-  latestVerdict,
+  latestVerdicts,
   loadPlan,
   mergeBaseOf,
   readFiles,
 } from './drift-inputs.mjs';
+import {isSecurity} from './table.mjs';
 
-const isSecurity = (row) => row.security !== 'none';
 const testKey = (file, title) => `${file}\u0000${title}`;
 
 function counts(side, test, row) {
@@ -206,6 +206,7 @@ export function classify({root, planDir, base, changedPaths}) {
 export function securityCheck({root, planDir, base, ledgerPath}) {
   if (!hasMarker(planDir)) return [];
   const {plan, sides} = readPlanAndFiles({root, planDir, base, files: []});
+  const latestVerdict = latestVerdicts(ledgerPath);
   const uncovered = [];
   for (const approved of plan.approvedRows.filter(isSecurity)) {
     const current = plan.rows.find((row) => row.id === approved.id);
@@ -215,7 +216,7 @@ export function securityCheck({root, planDir, base, ledgerPath}) {
     else {
       const {matched, head} = evaluateRow(current, sides, plan.ledger);
       if (!matched) reason = 'no-matching-test';
-      else if (head && latestVerdict(ledgerPath, {file: current.file, title: current.title, signal: head.signal}) === 'fix') {
+      else if (head && latestVerdict({file: current.file, title: current.title, signal: head.signal}) === 'fix') {
         reason = 'hollow';
       }
     }

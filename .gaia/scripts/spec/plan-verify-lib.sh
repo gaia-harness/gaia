@@ -64,16 +64,13 @@ table_check() {
   fi
   keys_file=$(mktemp "${TMPDIR:-/tmp}/plan-verify-keys.XXXXXX") || { fail "test table not verified: cannot create a temporary keys file"; return 0; }
   keys_errors=$(mktemp "${TMPDIR:-/tmp}/plan-verify-keys-errors.XXXXXX") || { rm -f "$keys_file"; fail "test table not verified: cannot create a temporary file"; return 0; }
+  local -a keys_arguments=(--description)
   if [ -n "$spec_path" ]; then
+    keys_arguments=(--spec "$spec_path")
     audit_path="$(dirname "$spec_path")/AUDIT.md"
-    if [ -f "$audit_path" ]; then
-      bash "$keys_script" --spec "$spec_path" --audit "$audit_path" >"$keys_file" 2>"$keys_errors" || verify_status=$?
-    else
-      bash "$keys_script" --spec "$spec_path" >"$keys_file" 2>"$keys_errors" || verify_status=$?
-    fi
-  else
-    bash "$keys_script" --description >"$keys_file" 2>"$keys_errors" || verify_status=$?
+    [ -f "$audit_path" ] && keys_arguments+=(--audit "$audit_path")
   fi
+  bash "$keys_script" "${keys_arguments[@]}" >"$keys_file" 2>"$keys_errors" || verify_status=$?
   if [ "$verify_status" -ne 0 ]; then
     fail "test table not verified: requirement-keys.sh exited $verify_status: $(head -n 1 "$keys_errors")"
     rm -f "$keys_file" "$keys_errors"

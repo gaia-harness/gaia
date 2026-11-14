@@ -112,7 +112,14 @@ fi
 # shellcheck source=/dev/null
 . "$_tg_scripts/test-design/plan-locate-lib.sh"
 
-transcript="$(printf '%s' "$payload" | jq -r '.transcript_path // "" | strings' 2>/dev/null)" || transcript=""
+# One jq read for the three remaining fields, NUL-separated so a path keeps
+# any byte; a field that is absent or not a string reads as empty.
+transcript=""
+session_id=""
+cwd=""
+{ IFS= read -r -d '' transcript && IFS= read -r -d '' session_id && IFS= read -r -d '' cwd; } < <(
+  printf '%s' "$payload" | jq -j '[.transcript_path, .session_id, .cwd] | map(if type == "string" then . else "" end) | .[] + "\u0000"' 2>/dev/null
+) || true
 interactive_status=0
 gaia_loop_session_is_interactive "$transcript" || interactive_status=$?
 case "$interactive_status" in
@@ -127,8 +134,6 @@ case "$interactive_status" in
     ;;
 esac
 
-session_id="$(printf '%s' "$payload" | jq -r '.session_id // "" | strings' 2>/dev/null)" || session_id=""
-cwd="$(printf '%s' "$payload" | jq -r '.cwd // "" | strings' 2>/dev/null)" || cwd=""
 case "$cwd" in /*) ;; *) cwd="" ;; esac
 tree=""
 main=""

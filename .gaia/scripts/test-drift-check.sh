@@ -57,15 +57,9 @@ plan_directory=''
 base_argument=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --root | --plan-dir | --base)
-      [ "$#" -ge 2 ] || usage
-      case "$1" in
-        --root) root="$2" ;;
-        --plan-dir) plan_directory="$2" ;;
-        --base) base_argument="$2" ;;
-      esac
-      shift 2
-      ;;
+    --root) [ "$#" -ge 2 ] || usage; root="$2"; shift 2 ;;
+    --plan-dir) [ "$#" -ge 2 ] || usage; plan_directory="$2"; shift 2 ;;
+    --base) [ "$#" -ge 2 ] || usage; base_argument="$2"; shift 2 ;;
     *) usage ;;
   esac
 done

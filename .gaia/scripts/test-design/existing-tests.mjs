@@ -28,6 +28,7 @@ import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {layerOf, readFlowTests, typescriptModule, webPackageDirs} from './layer-map.mjs';
+import {isTestPath} from './table.mjs';
 
 const extractorPath = fileURLToPath(
   new URL('../test-signals/extract-test-signals.mjs', import.meta.url),
@@ -110,9 +111,7 @@ const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const routeOf = (id, file) => {
   const urlSegments = [];
-  const keys = [];
   for (const segment of id.split('.')) {
-    keys.push(segment);
     if (segment === '_index') continue;
     if (segment.startsWith('_')) continue;
     urlSegments.push(segmentPattern(segment.replace(/_$/, '')));
@@ -120,7 +119,7 @@ const routeOf = (id, file) => {
   return {
     display: `/${urlSegments.map((entry) => entry.display).join('/')}`,
     file,
-    key: keys.join('.'),
+    key: id,
     regex: new RegExp(`^${urlSegments.map((entry) => entry.source).join('')}/?$`),
   };
 };
@@ -252,7 +251,6 @@ const tsReasonOf = (file, source) => {
 const SKIPPED_FOLDERS = new Set([
   'node_modules', '.git', '.notebook', 'dist', 'build', 'coverage', '.react-router', 'worktrees',
 ]);
-const TEST_FILE = /\.(test\.tsx?|spec\.ts|stories\.tsx?|bats)$/;
 
 const candidates = [];
 const collect = (folder) => {
@@ -265,7 +263,7 @@ const collect = (folder) => {
   for (const entry of entries) {
     if (entry.isDirectory()) {
       if (!SKIPPED_FOLDERS.has(entry.name)) collect(folder === '' ? entry.name : `${folder}/${entry.name}`);
-    } else if (TEST_FILE.test(entry.name)) {
+    } else if (isTestPath(entry.name)) {
       candidates.push(folder === '' ? entry.name : `${folder}/${entry.name}`);
     }
   }

@@ -88,7 +88,7 @@ gaia_test_design_merge_verdict() {
     printf 'Security-row merge gate: cannot resolve the main checkout of %s, so its plan run is unknown. Next step: run the merge from the checkout that holds the branch.\n' "$tree"
     return 1
   }
-  branch="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$tree" branch --show-current 2>/dev/null)" || {
+  branch="$(_gaia_git -C "$tree" branch --show-current 2>/dev/null)" || {
     printf 'Security-row merge gate: git cannot read the branch of %s. Next step: confirm the checkout is a working git repository and retry.\n' "$tree"
     return 1
   }

@@ -19,14 +19,12 @@ import {
 } from './skip-detect.mjs';
 import {readTable, validateRow} from './table.mjs';
 
+export {isTestPath} from './table.mjs';
+
 const EXTRACTOR = fileURLToPath(
   new URL('../test-signals/extract-test-signals.mjs', import.meta.url),
 );
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
-
-// The test-file suffixes the plan's task-doc lines admit (test-table.mjs).
-const TEST_FILE = /\.(?:test\.tsx?|spec\.ts|stories\.tsx?|bats)$/;
-export const isTestPath = (file) => TEST_FILE.test(file);
 
 export class DriftRefusal extends Error {
   constructor(code, message) {
@@ -104,25 +102,25 @@ function readSecurityLedger(planDir) {
     });
 }
 
-// The latest worthiness-ledger verdict recorded for one test at one signal,
-// or undefined. An unreadable line is skipped: the ledger is append-only and
-// a torn line names no test.
-export function latestVerdict(ledgerPath, {file, title, signal}) {
-  if (!ledgerPath || !existsSync(ledgerPath)) return undefined;
-  let verdict;
-  for (const line of readFileSync(ledgerPath, 'utf8').split('\n')) {
-    if (line.trim() === '') continue;
-    let record;
-    try {
-      record = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (record.file === file && record.fullName === title && record.signal === signal) {
-      verdict = record.verdict;
+// A lookup of the latest worthiness-ledger verdict recorded for one test at
+// one signal, or undefined, built from one read of the ledger. An unreadable
+// line is skipped: the ledger is append-only and a torn line names no test.
+export function latestVerdicts(ledgerPath) {
+  const verdicts = new Map();
+  const keyOf = (file, title, signal) => `${file}\0${title}\0${signal}`;
+  if (ledgerPath && existsSync(ledgerPath)) {
+    for (const line of readFileSync(ledgerPath, 'utf8').split('\n')) {
+      if (line.trim() === '') continue;
+      let record;
+      try {
+        record = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      verdicts.set(keyOf(record.file, record.fullName, record.signal), record.verdict);
     }
   }
-  return verdict;
+  return ({file, title, signal}) => verdicts.get(keyOf(file, title, signal));
 }
 
 const git = (root, args) =>

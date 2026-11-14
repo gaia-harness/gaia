@@ -16,6 +16,14 @@ export const LAYERS = [
 export const ACTIONS = ['new', 'reuse', 'extend', 'change', 'retire'];
 export const SECURITY_VALUES = ['none', 'access', 'forgery', 'secret'];
 
+// The test-file suffixes a plan's task-doc lines admit, as a regex source.
+export const TEST_FILE_SUFFIX = String.raw`(?:test\.tsx?|spec\.ts|stories\.tsx?|bats)`;
+const TEST_FILE = new RegExp(String.raw`\.${TEST_FILE_SUFFIX}$`);
+export const isTestPath = (file) => TEST_FILE.test(file);
+
+export const isSecurity = (row) =>
+  row.security !== undefined && row.security !== 'none';
+
 export const REQUIRED_FIELDS = [
   'id',
   'source',

@@ -102,15 +102,17 @@ fi
 # The tree the merge acts on: a leading `cd <checkout> &&` in the command
 # first, then the payload cwd, then this process's cwd only when the payload
 # names nothing usable (payload cwd is measured, not contracted).
-source_directory="$PWD"
-if [[ "$GAIA_HOOK_CWD" == /* ]] && gaia_resolve_tree_root "$GAIA_HOOK_CWD" >/dev/null 2>&1; then
-  source_directory="$GAIA_HOOK_CWD"
+tree_root=""
+if [[ "$GAIA_HOOK_CWD" == /* ]]; then
+  tree_root="$(gaia_resolve_tree_root "$GAIA_HOOK_CWD" 2>/dev/null)" || tree_root=""
 fi
-if [ -n "${GAIA_REPO_SCOPE_LEAD_CD:-}" ] && gaia_resolve_tree_root "$GAIA_REPO_SCOPE_LEAD_CD" >/dev/null 2>&1; then
-  source_directory="$GAIA_REPO_SCOPE_LEAD_CD"
+if [ -n "${GAIA_REPO_SCOPE_LEAD_CD:-}" ] && candidate_root="$(gaia_resolve_tree_root "$GAIA_REPO_SCOPE_LEAD_CD" 2>/dev/null)"; then
+  tree_root="$candidate_root"
 fi
-tree_root="$(gaia_resolve_tree_root "$source_directory" 2>/dev/null)" ||
-  deny_with_reason "Security-row merge gate: $source_directory is not inside a git checkout, so the branch being merged is unknown. Next step: run gh pr merge from the checkout that holds the pull request branch."
+if [ -z "$tree_root" ]; then
+  tree_root="$(gaia_resolve_tree_root "$PWD" 2>/dev/null)" ||
+    deny_with_reason "Security-row merge gate: $PWD is not inside a git checkout, so the branch being merged is unknown. Next step: run gh pr merge from the checkout that holds the pull request branch."
+fi
 
 verdict_status=0
 verdict="$(gaia_test_design_merge_verdict "$tree_root")" || verdict_status=$?

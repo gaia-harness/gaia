@@ -26,7 +26,7 @@ import {
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {readTable, validateRow} from './table.mjs';
+import {isSecurity, readTable, TEST_FILE_SUFFIX, validateRow} from './table.mjs';
 
 const SIGNAL_HELPER = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -37,7 +37,7 @@ const SIGNAL_HELPER = path.join(
 
 const TEST_LINE = /^\s*[-*]\s+Test:\s+(.+?) › (.+?)\s*$/;
 const EXEMPT_LINE = /^\s*[-*]\s+(Test:|Flow test\b|Pin update:)/;
-const TEST_PATH = /[^\s`'"()<>]+\.(?:test\.tsx?|spec\.ts|stories\.tsx?|bats)\b/;
+const TEST_PATH = new RegExp(String.raw`[^\s\x60'"()<>]+\.${TEST_FILE_SUFFIX}\b`);
 
 const usage = () => {
   process.stderr.write(
@@ -46,10 +46,14 @@ const usage = () => {
   process.exit(2);
 };
 
-const refuse = (message) => {
-  process.stderr.write(`test-table: ${message}\n`);
+const refuseAll = (messages) => {
+  for (const message of messages) {
+    process.stderr.write(`test-table: ${message}\n`);
+  }
   process.exit(1);
 };
+
+const refuse = (message) => refuseAll([message]);
 
 const parseOptions = (args, valueFlags, booleanFlags = []) => {
   const options = {};
@@ -72,8 +76,6 @@ const parseOptions = (args, valueFlags, booleanFlags = []) => {
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 const serialize = (table) => `${JSON.stringify(table, null, 2)}\n`;
-
-const isSecurity = (row) => row.security !== undefined && row.security !== 'none';
 
 const planPaths = (planDirectory) => ({
   table: path.join(planDirectory, 'tests.json'),
@@ -204,12 +206,7 @@ const verify = (args) => {
     }
   }
 
-  if (failures.length > 0) {
-    for (const failure of failures) {
-      process.stderr.write(`test-table: ${failure}\n`);
-    }
-    process.exit(1);
-  }
+  if (failures.length > 0) refuseAll(failures);
 };
 
 const approve = (args) => {
@@ -218,7 +215,6 @@ const approve = (args) => {
   if (existsSync(files.approved)) refuse('tests.approved.json already exists');
   if (!existsSync(files.table)) refuse('tests.json is missing');
   const table = loadTable(files.table);
-  let bytes;
   if (options.auto) {
     const held = [];
     for (const row of table.rows) {
@@ -228,12 +224,14 @@ const approve = (args) => {
       }
     }
     if (held.length > 0) {
-      bytes = serialize({...JSON.parse(readFileSync(files.table, 'utf8')), rows: table.rows});
-      writeFileSync(files.table, bytes);
+      writeFileSync(
+        files.table,
+        serialize({...JSON.parse(readFileSync(files.table, 'utf8')), rows: table.rows}),
+      );
       for (const id of held) process.stdout.write(`held ${id}\n`);
     }
   }
-  bytes = readFileSync(files.table);
+  const bytes = readFileSync(files.table);
   writeFileSync(files.approved, bytes);
   appendFileSync(files.marker, `approved_sha256: ${sha256(bytes)}\n`);
 };
@@ -297,12 +295,7 @@ const amend = (args) => {
   next.push(...(changes.add ?? []));
 
   const problems = tableProblems(next);
-  if (problems.length > 0) {
-    for (const problem of problems) {
-      process.stderr.write(`test-table: ${problem}\n`);
-    }
-    process.exit(1);
-  }
+  if (problems.length > 0) refuseAll(problems);
 
   const approvedSecurity = approved.rows.filter(isSecurity);
   const droppedFlags = approvedSecurity.filter((approvedRow) =>
