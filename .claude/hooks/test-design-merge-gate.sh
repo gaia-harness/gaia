@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # PreToolUse Bash hook: DENY `gh pr merge` while an approved security row of the
 # branch's test-design table is missing from the current table, has lost its
-# flag, or has no matching test on the branch, unless the maintainer typed a
+# flag, has no matching test on the branch, or has a matching test whose latest
+# worthiness-ledger verdict is `fix` (hollow), unless the maintainer typed a
 # grant naming that row (test-row-grant.sh records it). Whether the tests pass
 # is CI's job; this gate checks only that each approved security row is still
-# planned, still flagged, and still has its security-writer-authored test.
+# planned, still flagged, and still has a security-writer-authored test that is
+# not hollow.
 #
 # The branch's table is found through its plan run's RUNNING sentinel
 # (.gaia/scripts/test-design/plan-locate-lib.sh, which also holds the check, so

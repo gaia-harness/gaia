@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Extract per-test (fullName, content signal) pairs from a vitest/jest test
 // file: the one test-identity extractor the worthiness ledger and presence
-// gate, and the overlap check share.
+// gate, the test-design drift check and the existing-tests listing share.
 //
 // A test is identified by (file, fullName, signal). The signal changes
 // whenever the test body changes, so a verdict or observation recorded
@@ -23,7 +23,7 @@
 // hashes, comments above a region excluded; a story entry lists several.
 // A test under a .each/.for table is named by its templates and adds "rowPattern"
 // (./row-pattern.mjs) for the capture hook; each enclosing describe table is
-// hashed too, listed in ranges after the test's own call (read first by overlap).
+// hashed too, listed in ranges after the test's own call, which stays first.
 //
 // Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF4
 // story file; its fullName and signal rules and refusal list live in the

@@ -18,20 +18,15 @@ setup() {
   PAGE="$REPO_ROOT/wiki/decisions/Test Layering.md"
   DOCTRINE="$REPO_ROOT/.claude/doctrine/testing.md"
   DOCTRINE_SENTENCE='A harness self-check that opens no page is a Vitest `node` test, never a Playwright spec.'
-  ROUTING_SENTENCE='A harness self-check that opens no page runs in the Vitest node project, not under Playwright.'
-  WIRING_SENTENCE='A self-test of the Playwright fixture wiring itself is dropped: the specs that use the fixture prove it.'
-  GIVEN_SENTENCE="A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them."
+  # The plan audit's test-design lens owns the layer and test-double checks,
+  # against the doctrine; the other lenses carry no copy of them.
+  LAYER_CHECK="a wrong layer for what the row asserts, per the doctrine's layer rule"
+  WIRING_CHECK='the Playwright fixture wiring'
+  GIVEN_CHECK="the plan's own Given builders"
+  DOUBLE_CHECK='- a test of a test double ('
 }
 
 # ---------- helpers ----------
-
-# bullet_of <file> <lead>: the one line starting with "- **<lead>".
-bullet_of() {
-  local text
-  text=$(grep -F -- "- **$2" "$1") || return 1
-  [ "$(printf '%s\n' "$text" | wc -l)" -eq 1 ] || return 1
-  printf '%s\n' "$text"
-}
 
 # copy_with <source> <name> <sed expression>: a mutated copy that must differ.
 copy_with() {
@@ -47,29 +42,38 @@ check_playwright_rule_sentence() {
   grep -qF -- "$DOCTRINE_SENTENCE" "$2" || { echo "doctrine lacks the sentence" >&2; return 1; }
 }
 
+# The test-design lens: its bullet line and the check lines under it, up to
+# the next heading.
+td_lens_of() {
+  local text
+  text=$(awk '
+    index($0, "- **Test design") == 1 { inside = 1 }
+    inside && /^## / { exit }
+    inside { print }
+  ' "$1")
+  [ -n "$text" ] || return 1
+  printf '%s\n' "$text"
+}
+
+# The test-design lens checks layer against the doctrine's layer rule.
 check_audit_bullet_sentence() {
-  local lead bullet
-  for lead in 'Decomposition & dependency soundness' 'SPEC coverage'; do
-    bullet=$(bullet_of "$1" "$lead") || { echo "no bullet: $lead" >&2; return 1; }
-    printf '%s' "$bullet" | grep -qF -- "$ROUTING_SENTENCE" || { echo "no sentence in: $lead" >&2; return 1; }
-  done
+  local lens
+  lens=$(td_lens_of "$1") || { echo "no test-design lens" >&2; return 1; }
+  printf '%s' "$lens" | grep -qF -- '.claude/doctrine/testing.md' || { echo "test-design lens lacks the doctrine pointer" >&2; return 1; }
+  printf '%s' "$lens" | grep -qF -- "$LAYER_CHECK" || { echo "test-design lens lacks the layer check" >&2; return 1; }
 }
 
-check_wiring_sentence() {
-  local lead bullet
-  for lead in 'Decomposition & dependency soundness' 'SPEC coverage'; do
-    bullet=$(bullet_of "$1" "$lead") || { echo "no bullet: $lead" >&2; return 1; }
-    printf '%s' "$bullet" | grep -qF -- "$WIRING_SENTENCE" || { echo "no wiring sentence in: $lead" >&2; return 1; }
-  done
+# check_double_named <file> <name>: the lens's test-double check names <name>.
+check_double_named() {
+  local lens line
+  lens=$(td_lens_of "$1") || { echo "no test-design lens" >&2; return 1; }
+  line=$(printf '%s\n' "$lens" | grep -F -- "$DOUBLE_CHECK") || { echo "no test-double check" >&2; return 1; }
+  printf '%s' "$line" | grep -qF -- "$2" || { echo "test-double check lacks: $2" >&2; return 1; }
 }
 
-check_given_sentence() {
-  local lead bullet
-  for lead in 'Decomposition & dependency soundness' 'SPEC coverage'; do
-    bullet=$(bullet_of "$1" "$lead") || { echo "no bullet: $lead" >&2; return 1; }
-    printf '%s' "$bullet" | grep -qF -- "$GIVEN_SENTENCE" || { echo "no Given sentence in: $lead" >&2; return 1; }
-  done
-}
+check_wiring_sentence() { check_double_named "$1" "$WIRING_CHECK"; }
+
+check_given_sentence() { check_double_named "$1" "$GIVEN_CHECK"; }
 
 # The closed capability tokens, one per line: the name leading each bullet of the
 # doctrine's browser-only capability list.
@@ -173,7 +177,7 @@ check_doctrine_surfaces() {
 
 # ---------- routing sentence ----------
 
-@test "the doctrine holds the self-check routing sentence the playwright rule points at, and both audit bullets carry theirs" {
+@test "the doctrine holds the self-check routing sentence the playwright rule points at, and the test-design lens checks layer against it" {
   check_playwright_rule_sentence "$PW_RULE" "$DOCTRINE"
   check_audit_bullet_sentence "$AUDIT"
 }
@@ -192,32 +196,32 @@ check_doctrine_surfaces() {
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: the sentence removed from the DP bullet only, or the COV bullet only, fails" {
+@test "red twin: the test-design lens without its layer check, or without the doctrine pointer, fails" {
   local copy
-  copy=$(copy_with "$AUDIT" dp.md '/^- \*\*Decomposition & dependency soundness/s/A harness self-check that opens no page runs in the Vitest node project, not under Playwright\.//')
+  copy=$(copy_with "$AUDIT" layer.md "s/a wrong layer for what the row asserts, per the doctrine's layer rule/a wrong layer/")
   run check_audit_bullet_sentence "$copy"
   [ "$status" -ne 0 ]
-  copy=$(copy_with "$AUDIT" cov.md '/^- \*\*SPEC coverage/s/A harness self-check that opens no page runs in the Vitest node project, not under Playwright\.//')
+  copy=$(copy_with "$AUDIT" pointer.md '/^- \*\*Test design/s#\.claude/doctrine/testing\.md#nowhere#g')
   run check_audit_bullet_sentence "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: a sentence rewritten to run under Playwright fails the routing check" {
+@test "red twin: a sentence routing a self-check to Playwright fails the routing check" {
   local copy
-  copy=$(copy_with "$AUDIT" rewritten.md 's/runs in the Vitest node project, not under Playwright\./runs under Playwright./')
+  copy=$(copy_with "$AUDIT" rewritten.md 's/^- \*\*Contract grounding/A harness self-check runs under Playwright. &/')
   run check_no_playwright_routing "$copy"
   [ "$status" -ne 0 ]
 }
 
 # ---------- fixture-wiring sentence ----------
 
-@test "both audit bullets drop a self-test of the fixture wiring" {
+@test "the test-design lens flags a self-test of the fixture wiring" {
   check_wiring_sentence "$AUDIT"
 }
 
-@test "red twin: the wiring sentence missing from one bullet fails" {
+@test "red twin: the test-double check without the fixture wiring fails" {
   local copy
-  copy=$(copy_with "$AUDIT" wiring.md '/^- \*\*SPEC coverage/s/A self-test of the Playwright fixture wiring itself is dropped: the specs that use the fixture prove it\.//')
+  copy=$(copy_with "$AUDIT" wiring.md 's/, the Playwright fixture wiring//')
   run check_wiring_sentence "$copy"
   [ "$status" -ne 0 ]
 }
@@ -261,16 +265,13 @@ check_doctrine_surfaces() {
 
 # ---------- Given-builder sentence ----------
 
-@test "both audit bullets drop a self-test of the plan's own Given builders" {
+@test "the test-design lens flags a self-test of the plan's own Given builders" {
   check_given_sentence "$AUDIT"
 }
 
-@test "red twin: the Given-builder sentence missing from one bullet fails" {
+@test "red twin: the test-double check without the Given builders fails" {
   local copy
-  copy=$(copy_with "$AUDIT" given-dp.md "/^- \\*\\*Decomposition & dependency soundness/s/ A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them\\.//")
-  run check_given_sentence "$copy"
-  [ "$status" -ne 0 ]
-  copy=$(copy_with "$AUDIT" given-cov.md "/^- \\*\\*SPEC coverage/s/ A self-test of the plan's own Given builders is dropped the same way: the specs that use the builders prove them\\.//")
+  copy=$(copy_with "$AUDIT" given.md "s/, the plan's own Given builders//")
   run check_given_sentence "$copy"
   [ "$status" -ne 0 ]
 }

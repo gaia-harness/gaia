@@ -17,9 +17,9 @@ selection names (the `emergentTests` and `tddUnitTests` globs in the package
 descriptor `apps/web/gaia.package.json`). The rule is that every changed test, strict included,
 is judged on honesty and worth. A strict test is one the determinism classifier
 labels strict; nothing proves mechanically that it can fail, so you judge whether
-it asserts the outcome that matters. Stories are CSF Next stories (the doctrine is owned by
-`wiki/decisions/Stories as Tests.md`; this prompt points at it and does not
-restate it). Each `.test()` is its own test unit, judged on its own, and its
+it asserts the outcome that matters. Stories are CSF Next stories (which story and
+which `.test()` a component needs is the doctrine's `## Components, pages and
+stories`; this prompt does not restate it). Each `.test()` is its own test unit, judged on its own, and its
 `fullName` is `<Story Name>   <test name>` (three spaces between them;
 the story name is Storybook's name for the export, for example `ErrorType` is
 `Error Type`, or its string `name` when it sets one). A story that carries any
@@ -36,7 +36,7 @@ This contract is the human-facing authoring guidance in
 `apps/web/.claude/skills/tdd-react/references/tests-react.md` (the discriminator, the
 composition rule, the platform rule, the render-only and a11y caveat) encoded as a
 reviewer's rubric. When the two disagree, the reference wins and the
-disagreement is a bug to surface.
+disagreement is a bug to surface; the doctrine wins over both.
 
 ## Input scope
 
@@ -50,11 +50,7 @@ Read ONLY:
    renders. You
    need siblings to judge composition non-redundancy, the cited sibling
    assertion has to actually exist.
-3. For a flow test only, the route and unit tests under the folders its
-   `@covers` line or test path names, and the real-server checks under
-   `apps/web/.playwright/e2e/`, read only to check which error paths
-   they exercise.
-4. For a test that pins a shared mapping helper, the tests of that helper's
+3. For a test that pins a shared mapping helper, the tests of that helper's
    other callers, read only to find the one that already pins the mapping.
 
 Do NOT review the whole codebase. Read
@@ -162,9 +158,9 @@ no interactive behavior** (a Spinner, a static badge).
 
 For a **behavior-rich** component, a story file whose stories carry no `.test()`,
 or whose only `.test()` asserts that something rendered, is the START of a test,
-not the whole of it: the interactions, state transitions, and error paths still
-need `.test()` coverage of the behavior a user sees
-(`wiki/decisions/Test Layering.md`). For such a file the non-triviality axis returns **`fix`
+not the whole of it: the interactions and state transitions a stated requirement
+names still need `.test()` coverage of the behavior a user sees
+(`.claude/doctrine/testing.md`, `## Components, pages and stories`). For such a file the non-triviality axis returns **`fix`
 (needs interaction assertions), NOT `keep`.** For a component whose own code
 handles keys or moves focus (the doctrine's `Own key and focus code`), the `.test()` units together must assert that keyboard path (Tab,
 Enter, Escape or arrows, whichever the widget requires) and its focus outcome.

@@ -456,9 +456,9 @@ unowned:
   # `.gaia/**/*.bats`), and a whole-subtree entry would reach it and fail as
   # overbroad.
   #
-  # GAIA's own instruction prose -- skills, commands, the worthiness
-  # evaluator, the taxonomy page, the spec workflow's runbooks, rules and
-  # templates, and the two forensics prompts -- has no reviewing
+  # GAIA's own instruction prose -- skills, commands, the test-judging and
+  # test-writing agents named below, the taxonomy page, the spec workflow's
+  # runbooks, rules and templates, and the two forensics prompts -- has no reviewing
   # member, so it is declared here by name and the coverage invariant holds.
   #
   # The distinction to apply when adding an entry: not "is this Markdown" but

@@ -115,7 +115,7 @@ Determinism roll-up:
 
 ### 6. Worthiness Audit
 
-A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/Stories as Tests.md`); a story file is emergent, so a behavior added as a `.test()` goes through the audit below.
+A story file is emergent (a behavior is a `.test()` on a story: `.claude/doctrine/testing.md`, `## Components, pages and stories`), so a behavior added as a `.test()` goes through the audit below.
 
 On every surface the honesty proof is this skill's own red step plus the audit. The emergent surface (the `emergentTests` globs in the package descriptor `apps/web/gaia.package.json`) has no stable failing-then-passing run to show, so its honesty and worthiness come from an **advisory audit**. The audit judges every test the task changed that the worthiness selection names: emergent, route and strict tests on honesty and worth. Run it after green (the classifier roll-up above tells you which touched files are `strict`, `emergent` or `route`).
 
@@ -132,11 +132,11 @@ The guarantee this audit provides is scoped to **the subset a same-model fresh-c
 
 ### 7. Surfacing the advisory findings
 
-Advisory findings (the worthiness verdicts) never interrupt mid-implementation. They surface only in the one end-of-task summary the determinism roll-up also renders into, before commit (no-orchestrator path), or in the orchestrator's `SUMMARY.md` plus the pre-merge summary (orchestrated path). A fix verdict is advisory only here: the pre-audit worthiness step of a plan run, the work lifecycle or `/gaia-debt` (`.claude/skills/gaia/references/worthiness-step.md`) acts on it before the audit.
+Advisory findings (the worthiness verdicts) never interrupt mid-implementation. They surface only in the one end-of-task summary the determinism roll-up also renders into, before commit (no-orchestrator path), or in the orchestrator's `SUMMARY.md` plus the pre-merge summary (orchestrated path). A fix verdict is advisory only here: the pre-audit step of the workflow the work runs in decides the repair before the audit, the worthiness step for the work lifecycle, `/gaia-debt` or an older plan (`.claude/skills/gaia/references/worthiness-step.md`), and the drift check for a plan with a test-design table (`.claude/skills/gaia/references/drift-check.md`).
 
 #### Capped
 
-The summary lists the verdicts, `delete` proposals before `fix` findings, as the top-N by severity with a count ("3 of 11 findings shown"), never a wall of every line. This skill repairs and deletes nothing: each verdict, a delete's cited redundant sibling and subsuming assertion included, is shown inline for the pre-audit worthiness step to act on.
+The summary lists the verdicts, `delete` proposals before `fix` findings, as the top-N by severity with a count ("3 of 11 findings shown"), never a wall of every line. This skill repairs and deletes nothing: each verdict, a delete's cited redundant sibling and subsuming assertion included, is shown inline for the pre-audit step to act on.
 
 #### Where it renders
 

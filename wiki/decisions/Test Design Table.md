@@ -22,7 +22,7 @@ A second reason is independence. A test written by the author of the code under 
 
 The plan folder carries a marker file, the table, and an approved copy of the table. `/gaia-plan` writes the marker right after it creates the folder; the planner writes the table and never the marker. At approval the approved copy is taken byte for byte and the marker records its hash. Nothing edits the approved copy afterwards, so it is the fixed reference the drift check and the merge gate compare against, and a changed approved copy no longer matches the marker. A plan with the marker is a marked plan; `plan-verify.sh` requires the marker on every new plan.
 
-The marker's presence is what routes the later steps. A marked plan takes the drift check where the older shape took the worthiness step and the overlap pass.
+The marker's presence is what routes the later steps: a marked plan takes the drift check, and an unmarked plan takes the worthiness step.
 
 ## The test-design lens and its refuter
 

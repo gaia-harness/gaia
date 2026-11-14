@@ -4,7 +4,7 @@ Contents: When it runs; The drift JSON; Matching; The step (classify, honesty, m
 
 This page owns the post-build test check of a plan whose plan folder carries a `TEST-DESIGN` marker. A deterministic diff against the plan's test-design table replaces the full worthiness review there: a test that matches its row gets only an honesty read, a missing planned test is written from its row, and only an unplanned or moved test gets a worth judgment. An unchanged test no row names is not drift. Which test and which layer is `.claude/doctrine/testing.md`; the table's files and row fields are `.claude/skills/gaia/references/plan/test-table.md`.
 
-An unmarked plan, work with no planner (the work lifecycle, `/gaia-debt`) and an older in-flight plan use `.claude/skills/gaia/references/worthiness-step.md` instead.
+Work with no planner (the work lifecycle, `/gaia-debt`) and an older in-flight plan with no marker use `.claude/skills/gaia/references/worthiness-step.md` instead.
 
 ## When it runs
 

@@ -63,7 +63,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
     No hook, gate, rule or kept prompt refuses or bars an implementer's edit to its own tests.
 
-    A behavior only a real backend can show (data surviving a restart, a database reset, a production start against a real store) gets no test in the plan. Test the part an MSW handler can show and name the rest under `## Follow-ups` in `README.md` as adopter-owned end-to-end; no task builds harness for it. A test that needs data seeds it through a Given builder on the worker's MSW store (`apps/web/.claude/rules/playwright.md`), never a database.
+    A behavior only a real backend can show gets no row (`.claude/doctrine/testing.md`, `## What to test`): test the part an MSW handler can show, name the rest under `## Follow-ups` in `README.md` as adopter-owned end-to-end, and build no harness for it. A test that needs data seeds it through a Given builder on the worker's MSW store (`apps/web/.claude/rules/playwright.md`), never a database.
 
 3.  **`{PLAN_DIR}/ORCHESTRATOR.md`**: instructions for running the plan. Must cover:
     - **Resume detection.** Place this block first, before the pre-flight isolation pointer below:

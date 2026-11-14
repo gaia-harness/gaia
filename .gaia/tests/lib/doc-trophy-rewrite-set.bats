@@ -46,7 +46,7 @@ setup() {
     ".claude/skills/tdd/SKILL.md|For each remaining behavior|$DOCTRINE"
     ".claude/skills/tdd/SKILL.md|One test at a time|$DOCTRINE"
     'apps/web/.claude/rules/storybook.md|a `.test()` per GAIA behavior|'"$DOCTRINE"
-    '.claude/agents/worthiness-evaluator.md|need a `.test()` each|'"$LINK"
+    '.claude/agents/worthiness-evaluator.md|need a `.test()` each|'"$DOCTRINE"
     ".claude/skills/gaia/references/plan/planner.md|One criterion per guard, refusal, or gate|$PLANNER_PIN"
     ".claude/skills/gaia/references/plan/planner.md|when no flow test already covers it|$PLANNER_PIN"
     ".claude/skills/gaia/references/plan/planner.md|covering the happy path and each error path the build has|$PLANNER_PIN"

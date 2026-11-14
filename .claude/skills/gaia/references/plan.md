@@ -4,7 +4,7 @@ Plan a complex feature using the task orchestration pattern. Do not implement an
 
 This command is the plan-specific case of the Workflow Doctrine (`wiki/concepts/Workflow Doctrine.md`), which defines roles, git ownership, checkpoint and resume, and model choice. For plan runs, the plan contract in `.claude/skills/gaia/references/plan/planner.md` (per-phase commits and gates, `PROGRESS.md`, the orchestrator's executor pins) governs where the two differ.
 
-Contents: `## Argument parsing`; `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 decomposition audit; 4.6c approve the test table; 4.7 record the run; 5 report and kickoff prompt).
+Contents: `## Argument parsing`; `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 decomposition audit; 4.6c approve the test-design table; 4.7 record the run; 5 report and kickoff prompt).
 
 ## Argument parsing
 
@@ -128,8 +128,9 @@ else
   PLAN_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path plan "$PLAN_ID")"
   mkdir -p "$PLAN_DIR"
 fi
-# Test-design marker, written here and never by the planner: it makes the plan
-# a test-table plan for every later reader. A step 4 Correction re-spawn keeps it.
+# Test-design marker, written here and never by the planner: it tells every
+# later reader the plan carries a test-design table. A step 4 Correction
+# re-spawn keeps it.
 printf 'schema: 1\n' > "$PLAN_DIR/TEST-DESIGN"
 ```
 
@@ -189,7 +190,7 @@ test -f "$PLAN_DIR/README.md" \
 
 If any required file is missing, surface the failure to the user with the planner's return payload. Do not retry silently, the user decides through `AskUserQuestion`: `Investigate first` (Recommended) or `Re-spawn the planner`. Never proceed to step 4.6 with an incomplete plan folder.
 
-Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, and for a spec-derived plan that every SPEC flow has exactly one `Flow test` line, in a task doc of the closing phase, at the flow's expected path, that every closing-phase task doc carries exactly one such line, that each task doc maps to one README phase row, and that the closing phase's `ORCHESTRATOR.md` entry runs each flow test. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
+Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, and for a spec-derived plan that every SPEC flow has exactly one `Flow test` line, in a task doc of the closing phase, at the flow's expected path, that every closing-phase task doc carries exactly one such line, that each task doc maps to one README phase row, and that the closing phase's `ORCHESTRATOR.md` entry runs each flow test. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`). It requires the `TEST-DESIGN` marker, relays each `node .gaia/scripts/test-design/test-table.mjs verify` failure on the test-design table, and refuses a phase that owns a security row with no `- Security writer:` line:
 
 ```bash
 if [[ -n "${SPEC_PATH:-}" ]]; then

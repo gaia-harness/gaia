@@ -23,12 +23,7 @@ The dispatch gives you the working root, a `Verdict file: <absolute path>` line 
 
 ## What you judge
 
-Read the test, then read the row's `case`. The test is honest when it asserts that case. It is hollow, and gets `fix`, when it has any of:
-
-- an assertion that cannot fail, including a guard test that never drives the guard into its failing state;
-- an assertion through an import of the app's own string;
-- a test of a test double instead of the app;
-- an assertion inside a play function.
+Read the test, then read the row's `case`. The test is honest when it asserts that case. It gets `fix` when it is a hollow test by the doctrine's `**Hollow test.**` list.
 
 Read production source only as far as needed to tell whether an assertion can fail. A test that asserts something real but not its row's case is hollow for that row.
 
@@ -38,8 +33,8 @@ Write a JSON array to the verdict file with the Write tool, one element per test
 
 ```
 [
-  {"file":"apps/web/app/routes/tests/users.test.ts","fullName":"refuses an anonymous create","verdict":"keep"},
-  {"file":"apps/web/app/routes/tests/users.test.ts","fullName":"refuses a forged owner","verdict":"fix","artifact":"honesty: asserts the response status of a mock, never the action's refusal"}
+  {"file":"apps/web/app/route-tests/users.test.ts","fullName":"refuses an anonymous create","verdict":"keep"},
+  {"file":"apps/web/app/route-tests/users.test.ts","fullName":"refuses a forged owner","verdict":"fix","artifact":"honesty: asserts the response status of a mock, never the action's refusal"}
 ]
 ```
 

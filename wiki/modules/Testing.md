@@ -20,9 +20,9 @@ tags: [module, testing]
 Testing has **five layers**, all sharing a common [[MSW Handlers|MSW]] mocking layer:
 
 - Unit: [[Vitest]] in `apps/web/app/utils/tests/` (pure and server code), and `vitest-browser-react` tests for hooks
-- Component and page: Storybook stories with `.test()` behaviors in `apps/web/app/components/*/tests/`, `apps/web/app/pages/*/tests/`, run by Vitest through `@storybook/addon-vitest`
+- Story (component and page): Storybook stories with `.test()` behaviors in `apps/web/app/components/*/tests/`, `apps/web/app/pages/*/tests/`, run by Vitest through `@storybook/addon-vitest`
 - Route: Vitest `node` tests in `apps/web/app/route-tests/<feature>/tests/` that call a route module's `loader` or `action` with a `Request`
-- Playwright: [[Playwright]] in `apps/web/.playwright/e2e/` and `apps/web/.playwright/flows/`, on two surfaces, real-server (request fixture, no page) and browser (a real page)
+- Playwright: [[Playwright]] in `apps/web/.playwright/e2e/` and `apps/web/.playwright/flows/`, for real-server checks (request fixture, no page), browser tests (a real page) and flow tests
 - Visual regression: [[Chromatic]] (CI only), driven by the same stories
 
 A story is the component test and the visual-regression input, so both share one source of truth. A page's rendered states are page stories, which mount the route's exports through `stubs.reactRouter` and drive MSW handlers. Which test to write and at which layer is owned by [`.claude/doctrine/testing.md`](../../.claude/doctrine/testing.md), with the reasons in [[Test Layering]]. See [[Stories as Tests]] and [[Component Testing]].

@@ -62,7 +62,7 @@ A path ending `.stories.tsx` or `.stories.ts` classifies EMERGENT before any pat
 
 ## Route tests
 
-A path matching `app/route-tests/<feature>/tests/<file>.test.ts` classifies `route`, a third verdict, before any path scoping or AST check. A route test calls a route module's `loader` or `action` in process, so it is deterministic; the `route` verdict keeps it apart from a strict unit test. [[Test Layering]] places the route surface among the layers.
+A path matching `app/route-tests/<feature>/tests/<file>.test.ts` classifies `route`, a third verdict, before any path scoping or AST check. A route test calls a route module's `loader` or `action` in process, so it is deterministic; the `route` verdict keeps it apart from a strict unit test. `.claude/doctrine/testing.md` (`## Layers`) places the route surface among the layers, and [[Test Layering]] keeps the reasons.
 
 ## File-granularity limitation
 

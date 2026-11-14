@@ -20,7 +20,7 @@
 # README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no literal
 # {PLAN_DIR}, {SPEC_PATH} or {AUDIT_PATH}; one failure line per hit.
 #
-# The plan's test table is verified too: the requirement keys are built
+# The plan's test-design table is verified too: the requirement keys are built
 # (requirement-keys.sh: the SPEC plus its sibling AUDIT.md when one exists, or
 # --description for a spec-less plan) and test-table.mjs verify relays each of
 # its failures as one line; a missing node or an exit 2 is one failure line,

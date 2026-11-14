@@ -42,22 +42,16 @@ The presence decision reads **presence and signal match only**; it never reads
 the keep/fix/delete verdict. That keeps the verdict advisory and avoids
 gating the merge on a judgement call.
 
-## Honesty lint is not re-checked here
+## Honesty is not re-checked here
 
-The gate reads no verdict and re-runs no lint. Static test-honesty (the
-`vi.mock`-internal, literal-tautology, call-through-only, and
-server/internals-import patterns) is owned, once, by its own gate: the
-[[Quality Gate]] at commit (`eslint --max-warnings=0`) and CI lint at PR. A file
-carrying a honesty-lint error cannot be committed or merged, so re-checking it at
-merge would double-gate an invariant another system already enforces. GAIA gates
-each invariant once, at its owning gate: this gate owns presence, lint owns
-honesty.
-
-The call-through-only and server/internals-import patterns ship as stock ESLint
-ids (`vitest/prefer-called-with`, `no-restricted-imports`). The same-module-mock
-and literal-tautology patterns have no stock-tool equivalent and are not
-currently enforced; if they become custom `gaia-test-honesty/*` rules, they too
-enforce at lint-time, not here.
+The gate reads no verdict and re-runs no lint. What makes a test hollow is
+`.claude/doctrine/testing.md` (`## Honesty`), and a fresh-context reader judges
+it: the worthiness evaluator, or the drift check's honesty checker. Two
+mechanical patterns also fail lint, at the [[Quality Gate]] and in CI: a
+call-through-only assertion (`vitest/prefer-called-with`) and a server or
+internals import (`no-restricted-imports`). No lint enforces the same-module-mock
+or literal-tautology patterns; only the reader's judgment covers them. GAIA gates
+each invariant once, at its owning gate: this gate owns presence.
 
 ## Per-verdict artifact
 
@@ -113,5 +107,8 @@ The `Fail-open vs fail-closed` block in `.claude/hooks/worthiness-presence-check
 - This gate requires a current ledger line for each changed test the worthiness
   selection names, strict included; it does not judge verdicts (see
   [[Worthiness Audit]]).
+- The security-row merge gate ([[Test Design Table]]) denies while an approved
+  security row of a plan's test-design table lacks its test. It is a third
+  independent denial on the same event.
 
 See [[Worthiness Audit]], [[PR Merge Workflow]], [[Determinism Classifier]].

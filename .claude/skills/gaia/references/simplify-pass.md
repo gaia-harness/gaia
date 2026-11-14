@@ -6,7 +6,7 @@ This page owns a plan run's one whole-branch `simplify` pass, in its closing sta
 
 ## When it runs
 
-The orchestrator's main thread runs the step once, after the last phase commits and before the pre-audit flow checks (a spec-less plan: before the worthiness step), so they and the pre-audit verification see the simplified code. It never runs inside the audit loop, where an edit moves HEAD and voids the verification pass.
+The orchestrator's main thread runs the step once, after the last phase commits and before the pre-audit flow checks (a spec-less plan: before the drift check), so they and the pre-audit verification see the simplified code. It never runs inside the audit loop, where an edit moves HEAD and voids the verification pass.
 
 `<RESOLVED_ROOT>` is the working root. `<RUN_FOLDER>` is the run folder `.claude/doctrine/execution.md` names, at its main-checkout absolute path.
 

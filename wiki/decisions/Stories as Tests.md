@@ -63,9 +63,8 @@ Each export is a direct `meta.story({...})` or `.extend({...})` call; a story bu
 
 ## Classification and gates
 
-- A `*.stories.tsx` classifies **emergent** wherever it sits, before any path or AST check ([[Determinism Classifier]]). Stories carry no failing-first proof; the [[Worthiness Audit]] judges each test, and the presence gate requires a ledger line per identity the PR changes.
+- A `*.stories.tsx` classifies **emergent** wherever it sits, before any path or AST check ([[Determinism Classifier]]). Stories carry no failing-first proof, so a fresh-context reader judges each test (the [[Worthiness Audit]], or on a plan with a test-design table the drift check's honesty read, [[Test Design Table]]), and the presence gate requires a ledger line per identity the PR changes.
 - Hooks stay `*.test.ts` under a `hooks/` folder. They classify by the normal rules, so a deterministic hook is labelled strict and a hook that reads the clock or real I/O emergent; the [[Worthiness Audit]] judges each hook test on its arm.
-- When Chromium is missing, the RED capture hook says so and names `pnpm install:browsers` rather than recording nothing silently.
 
 ## The Vitest projects
 

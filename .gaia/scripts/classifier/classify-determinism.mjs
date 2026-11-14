@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Determinism classifier: label one touched source file STRICT (deterministic)
-// or EMERGENT (clock-/entropy-/I-O-bound or tree-dependent). The label picks
-// the worthiness judgment arm and evidence.
+// or EMERGENT (clock-/entropy-/I-O-bound or tree-dependent), or a route test
+// ROUTE. The label picks the worthiness judgment arm and evidence.
 //
 // Path scopes the candidate set; content decides. A file classifies STRICT only
 // when ALL of conditions 1-4 hold. Failing any of 2-4 -> EMERGENT regardless of
@@ -529,8 +529,8 @@ const checkAsyncIoExport = () => {
 // write happens once at the tail. Each arm's checks run for their addReason
 // side effects, so `reasons` is only complete once this returns.
 const classify = () => {
-  // A route test is neither strict nor emergent, so the worthiness selection
-  // (which takes emergent and route) reads it as its own.
+  // A route test is neither strict nor emergent: the tdd skill gives it both
+  // the red step and the worthiness review, so it carries its own label.
   if (ROUTE_TEST_PATTERN.test(filePath)) {
     addReason('route test: a test under app/route-tests/<route>/tests/ is owed the worthiness review on both axes');
     return 'route';

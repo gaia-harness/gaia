@@ -2,11 +2,11 @@
 
 Contents: When it runs; The step (route, evaluate, fix, judge again, delete, file, report); The late pass; The tdd arm.
 
-This page owns the worthiness audit's dispatch and verdict routing. The work lifecycle, `/gaia-debt`, a plan run's orchestrator and the audit loop unit follow it, and the tdd skill follows its own arm. The evaluator's judgment is `.claude/agents/worthiness-evaluator.md`; the merge-time presence check that backs this step up is `wiki/decisions/Worthiness Presence Gate.md`.
+This page owns the worthiness audit's dispatch and verdict routing. The work lifecycle, `/gaia-debt`, a plan run's orchestrator and the audit loop unit follow it, and the tdd skill follows its own arm. Which test to write and at which layer is `.claude/doctrine/testing.md`. The evaluator's judgment is `.claude/agents/worthiness-evaluator.md`; the merge-time presence check that backs this step up is `wiki/decisions/Worthiness Presence Gate.md`.
 
 ## When it runs
 
-A plan run whose plan folder carries a `TEST-DESIGN` marker runs `.claude/skills/gaia/references/drift-check.md` instead of this step. The work lifecycle, `/gaia-debt`, an unmarked plan and an older in-flight plan keep this step.
+A plan run whose plan folder carries a `TEST-DESIGN` marker runs `.claude/skills/gaia/references/drift-check.md` instead of this step. The work lifecycle, `/gaia-debt` and an older in-flight plan with no marker keep this step.
 
 The caller's main thread runs the step once the draft PR is open, before the audit's pre-dispatch verification and before the first member dispatch, so a fix the step makes never rotates a clearance a member already earned. The audit loop unit runs it again after each round that commits, before the next member wave or the unit's stop (`wiki/concepts/Audit Round Procedure.md`, `#### The fix round: fixer, verifier, gate`).
 

@@ -1,0 +1,207 @@
+#!/usr/bin/env bats
+#
+# Doc-conformance suite for the testing doctrine's single ownership.
+#
+# `.claude/doctrine/testing.md` owns which test to write and at which layer.
+# Every other instruction source states only how to write a test at its layer,
+# plus a pointer to the doctrine. A rule copied into a second file drifts from
+# the first on the next edit, and the two copies then disagree about what a
+# plan, executor or reviewer must do. This suite pins that ownership two ways:
+#
+#   - each pinned rule sentence (one load-bearing sentence per doctrine
+#     section, plus the sentences of the conflict resolutions most likely to be
+#     restated) appears in the doctrine and in no other tracked Markdown file
+#     under .claude/, apps/web/.claude/ or wiki/, and in none of the listed
+#     non-Markdown instruction sources;
+#   - every Markdown source that once stated a conflicting test rule, and still
+#     states one, carries the pointer `.claude/doctrine/testing.md`.
+#
+# Excluded from the sentence search: the vendored playwright-cli skill (not
+# GAIA's to edit), wiki/log.md (a history ledger) and CHANGELOG.md (outside the
+# searched folders).
+#
+# Every check takes a root and a file list, so each red twin runs the same
+# check against a scratch copy holding one mutation.
+#
+# Assertion style: .claude/rules/bats-assertions.md.
+
+# bats file_tags=whole-tree
+
+# The pinned sentences carry backticks as literal Markdown.
+# shellcheck disable=SC2016
+
+setup() {
+  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  DOCTRINE_REL='.claude/doctrine/testing.md'
+  POINTER='.claude/doctrine/testing.md'
+
+  # One sentence per doctrine section, then the resolution sentences: the
+  # anonymous write, the shared guard, the middleware guard, the hooks-only
+  # fresh render, the layer rule that replaces "lowest layer that can prove
+  # it", library key and focus behavior, and the later-request rule.
+  PINNED_SENTENCES=(
+    'This file owns which test to write and at which layer.'
+    'Never plan, list or write a test for a corner case or an error path no stated requirement names.'
+    'A test that only watches a guard pass cannot tell a working guard from an inert one.'
+    'A play function drives the UI into the state the snapshot shows and asserts nothing.'
+    'Rendered HTML is a real-server check only when the HTML itself is the requirement.'
+    'Approving the plan approves its retire rows.'
+    'A hollow test is an untested requirement.'
+    'Every committed test follows this file.'
+    'Prove that an authenticated write action refuses an anonymous request, with no side effect, by a route test calling the action with an anonymous `Request`.'
+    'Give a module its own refusal test only when its own code wires the guard, so removing that wiring leaves the module unguarded.'
+    'A route test that runs the real middleware chain proves a middleware guard; a route test that hand-calls a context provider does not'
+    'A fresh render in a separate test file is for hooks only.'
+    'Place each test on the layer this section assigns to what it asserts'
+    'Library-supplied key and focus behavior gets no test.'
+    "with a before-and-after read in one session, at the row's layer."
+  )
+
+  # The conflict sources that still state a test rule: each points at the
+  # doctrine.
+  POINTER_SOURCES=(
+    '.claude/agents/worthiness-evaluator.md'
+    '.claude/rules/coding-guidelines.md'
+    '.claude/skills/gaia/references/plan/planner.md'
+    '.claude/skills/gaia/references/spec/audit.md'
+    '.claude/skills/gaia/references/work-lifecycle.md'
+    '.claude/skills/gaia/references/worthiness-step.md'
+    '.claude/skills/tdd/SKILL.md'
+    'apps/web/.claude/rules/coding-guidelines-react.md'
+    'apps/web/.claude/rules/playwright.md'
+    'apps/web/.claude/rules/routes.md'
+    'apps/web/.claude/rules/storybook.md'
+    'apps/web/.claude/skills/tdd-react/references/tests-react.md'
+    'apps/web/CLAUDE.md'
+    'wiki/concepts/Component Testing.md'
+    'wiki/decisions/Stories as Tests.md'
+    'wiki/decisions/Test Layering.md'
+    'wiki/decisions/Testing Trophy Doctrine.md'
+    'wiki/decisions/Worthiness Presence Gate.md'
+    'wiki/dependencies/playwright-cli.md'
+    'wiki/modules/Testing.md'
+  )
+
+  # Instruction sources outside the searched Markdown that carry test rules.
+  CODE_SOURCES=(
+    '.claude/hooks/lib/worthiness-selection.sh'
+    '.claude/hooks/worthiness-presence-check.sh'
+    '.gaia/scripts/worthiness-step.sh'
+    '.gaia/scripts/spec/page-use.mjs'
+    '.gaia/scripts/spec/flow-coverage.sh'
+    '.gaia/scripts/spec/flows-lib.sh'
+    '.gaia/scripts/spec/plan-verify.sh'
+    '.gaia/scripts/classifier/classify-determinism.mjs'
+    '.gaia/scripts/test-signals/extract-test-signals.mjs'
+    'apps/web/gaia.package.json'
+  )
+
+  SOURCE_LIST="$BATS_TEST_TMPDIR/sources.txt"
+  git -C "$REPO_ROOT" ls-files -- '.claude/*.md' 'apps/web/.claude/*.md' 'wiki/*.md' 'apps/web/CLAUDE.md' >"$SOURCE_LIST"
+  printf '%s\n' "${CODE_SOURCES[@]}" >>"$SOURCE_LIST"
+}
+
+# ---------- helpers ----------
+
+# Whitespace-normalized text of file $1: several sources are hard-wrapped.
+normalized() { tr '\n' ' ' <"$1" | tr -s ' '; }
+
+# check_sentences_owned <root> <source list>: every pinned sentence is in the
+# doctrine and in no listed source but the doctrine and the exclusions.
+check_sentences_owned() {
+  local root="$1" list="$2" sentence file
+  for sentence in "${PINNED_SENTENCES[@]}"; do
+    normalized "$root/$DOCTRINE_REL" | grep -qF -- "$sentence" || {
+      printf 'doctrine lacks: %s\n' "$sentence" >&2
+      return 1
+    }
+    while IFS= read -r file; do
+      case "$file" in
+        "$DOCTRINE_REL" | wiki/log.md | apps/web/.claude/skills/playwright-cli/*) continue ;;
+      esac
+      normalized "$root/$file" | grep -qF -- "$sentence" && {
+        printf '%s restates: %s\n' "$file" "$sentence" >&2
+        return 1
+      }
+    done <"$list"
+  done
+  return 0
+}
+
+# check_pointers <root>: every pointer source exists and names the doctrine.
+check_pointers() {
+  local root="$1" file
+  for file in "${POINTER_SOURCES[@]}"; do
+    [ -f "$root/$file" ] || { printf 'missing source: %s\n' "$file" >&2; return 1; }
+    grep -qF -- "$POINTER" "$root/$file" || { printf '%s lacks the doctrine pointer\n' "$file" >&2; return 1; }
+  done
+  return 0
+}
+
+# copy_into <scratch root> <relative path>: copy one tracked file into scratch.
+copy_into() {
+  mkdir -p "$1/$(dirname "$2")"
+  cp "$REPO_ROOT/$2" "$1/$2"
+}
+
+# ---------- arming ----------
+
+@test "the pinned sentences, the pointer sources and the searched sources are non-empty and exist" {
+  [ "${#PINNED_SENTENCES[@]}" -gt 0 ] || return 1
+  [ "${#POINTER_SOURCES[@]}" -gt 0 ] || return 1
+  [ "${#CODE_SOURCES[@]}" -gt 0 ] || return 1
+  local file
+  for file in "${POINTER_SOURCES[@]}" "${CODE_SOURCES[@]}"; do
+    [ -f "$REPO_ROOT/$file" ] || { printf 'missing: %s\n' "$file" >&2; return 1; }
+  done
+  # The derived list reached the doctrine and every Markdown pointer source.
+  grep -qxF -- "$DOCTRINE_REL" "$SOURCE_LIST" || { echo 'source list lacks the doctrine' >&2; return 1; }
+  for file in "${POINTER_SOURCES[@]}"; do
+    grep -qxF -- "$file" "$SOURCE_LIST" || { printf 'source list lacks: %s\n' "$file" >&2; return 1; }
+  done
+}
+
+# ---------- current tree ----------
+
+@test "every pinned rule sentence lives in the doctrine alone" {
+  check_sentences_owned "$REPO_ROOT" "$SOURCE_LIST"
+}
+
+@test "every conflict source that states a test rule points at the doctrine" {
+  check_pointers "$REPO_ROOT"
+}
+
+# ---------- red twins ----------
+
+@test "red twin: a pinned sentence pasted into another source fails" {
+  local scratch="$BATS_TEST_TMPDIR/pasted" source='.claude/skills/tdd/SKILL.md'
+  copy_into "$scratch" "$DOCTRINE_REL"
+  copy_into "$scratch" "$source"
+  printf '%s\n' "$source" >"$BATS_TEST_TMPDIR/one.txt"
+  check_sentences_owned "$scratch" "$BATS_TEST_TMPDIR/one.txt"
+  printf '\n%s\n' "${PINNED_SENTENCES[0]}" >>"$scratch/$source"
+  run check_sentences_owned "$scratch" "$BATS_TEST_TMPDIR/one.txt"
+  [ "$status" -ne 0 ]
+}
+
+@test "red twin: a pinned sentence missing from the doctrine fails" {
+  local scratch="$BATS_TEST_TMPDIR/dropped"
+  copy_into "$scratch" "$DOCTRINE_REL"
+  : >"$BATS_TEST_TMPDIR/none.txt"
+  check_sentences_owned "$scratch" "$BATS_TEST_TMPDIR/none.txt"
+  sed 's/A hollow test is an untested requirement\.//' "$REPO_ROOT/$DOCTRINE_REL" >"$scratch/$DOCTRINE_REL"
+  run check_sentences_owned "$scratch" "$BATS_TEST_TMPDIR/none.txt"
+  [ "$status" -ne 0 ]
+}
+
+@test "red twin: a source with its doctrine pointer deleted fails" {
+  local scratch="$BATS_TEST_TMPDIR/pointer" file target='.claude/skills/gaia/references/worthiness-step.md'
+  for file in "${POINTER_SOURCES[@]}"; do
+    copy_into "$scratch" "$file"
+  done
+  check_pointers "$scratch"
+  sed 's#\.claude/doctrine/testing\.md##g' "$REPO_ROOT/$target" >"$scratch/$target"
+  cmp -s "$REPO_ROOT/$target" "$scratch/$target" && { echo 'mutation changed nothing' >&2; return 1; }
+  run check_pointers "$scratch"
+  [ "$status" -ne 0 ]
+}

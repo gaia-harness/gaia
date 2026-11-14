@@ -28,7 +28,7 @@ Only the frontend package renders route rows today. [[Testing]] describes the fr
 
 ## Why the browser list is closed
 
-A browser is the most expensive layer, so it is reserved for what no lower layer shows: behavior that runs in the page, layout, focus and keyboard movement, a rendered-DOM accessibility scan, and browser-only navigation. Each is something the browser alone computes. A request, a status or a rendered value is shown cheaper below, so a closed list keeps one more browser test from eroding that cost. The closing flow test is admitted to the browser layer whatever a cheaper layer could prove, because the journey walked end to end is itself the requirement. Sibling browser tests that walk one flow fold into one journey because each repeats the same boot and sign-in cost for no new capability.
+A browser is the most expensive layer, so it is reserved for the closed list of capabilities in the doctrine's `## Layers`, each something only the browser computes. A request, a status or a rendered value is shown cheaper below, so a closed list keeps one more browser test from eroding that cost. The closing flow test is admitted to the browser layer whatever a cheaper layer could prove, because the journey walked end to end is itself the requirement. Sibling browser tests that walk one flow fold into one journey because each repeats the same boot and sign-in cost for no new capability.
 
 A JavaScript-disabled Given or a native form post rules out the browser and nothing else: it is a real-server check, with the form body built by `serializeForm` (`apps/web/.playwright/html.ts`) from the served page, because only the framework serves that form.
 
@@ -63,8 +63,8 @@ A route test does not observe the status the framework serves, so only the third
 
 ### What a route test cannot prove
 
-- A direct call to a `loader` or `action` skips middleware, so a guard that lives in middleware is proven by a real-server check.
-- A parent loader guards neither a child's action nor a child's loader on a single-fetch request, so a write action guards itself and a parent-loader guard on a read needs its own served check.
+- A direct call to a `loader` or `action` runs no middleware. Hand-calling a context provider supplies the context the middleware would set without running its check, so only the real middleware chain, in process or served, shows a middleware guard refusing.
+- A parent loader guards neither a child's action nor a child's loader on a single-fetch request, so a parent's guard never reaches a child's write, and only a served `.data` request naming the child route shows that a parent-loader guard withholds the child's data.
 - An authorization outcome owned by an upstream API cannot be proven by a route test, since an MSW handler answers as the test wrote it.
 
 ### What a real-server check cannot prove

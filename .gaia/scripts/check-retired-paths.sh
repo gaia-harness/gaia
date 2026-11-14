@@ -7,7 +7,8 @@
 # one of those at the root is a coupling the move missed: it resolves to
 # nothing, and a guard that resolves to nothing fails silently. This gate fails
 # on any such citation unless the line is named in the committed allowlist with
-# a reason.
+# a reason. The deleted overlap pass's script, script folder and agent are
+# retired the same way (the last tuning bullet below).
 #
 # Usage: check-retired-paths.sh [--root <dir>] [--allowlist <file>]
 #
@@ -77,7 +78,6 @@
 #     `apps/web/` or a `<path>/` placeholder, so an absolute or variable-prefixed root citation
 #     (`$root/.claude/skills/tailwind`) is caught while
 #     `apps/web/.claude/skills/tailwind` is not.
-#
 #   - The retired overlap-pass paths (`.gaia/scripts/overlap-check.sh`,
 #     `.gaia/scripts/overlap/`, `.claude/agents/overlap-evaluator.md`) are exact
 #     tokens in the full tier, so the word "overlap" elsewhere never trips.

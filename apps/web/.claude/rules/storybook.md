@@ -12,7 +12,7 @@ The `new-component` skill scaffolds the canonical story shape. This rule covers 
 
 ## Stories are the tests
 
-How to write a story and its `.test()`s; which stories and tests a component or page needs is `.claude/doctrine/testing.md` (`## Components, pages and stories`), and the reasoning is in `wiki/decisions/Stories as Tests.md`. `@storybook/addon-vitest` runs every story in headless Chromium (run `pnpm install:browsers` once), and addon-a11y axe-checks each render, so a violation fails with no extra test. Import `expect`, `fn`, `userEvent`, `waitFor`, `within` (and `fireEvent` when a native event has no `userEvent` equivalent) from `storybook/test`; it re-exports the jest-dom matchers and user-event. Inside a `.test()` the context also hands you `canvas`, `args` and `userEvent`.
+This section covers how to write a story and its `.test()`s; the reasoning is in `wiki/decisions/Stories as Tests.md`. `@storybook/addon-vitest` runs every story in headless Chromium (run `pnpm install:browsers` once), and addon-a11y axe-checks each render, so a violation fails with no extra test. Import `expect`, `fn`, `userEvent`, `waitFor`, `within` (and `fireEvent` when a native event has no `userEvent` equivalent) from `storybook/test`; it re-exports the jest-dom matchers and user-event. Inside a `.test()` the context also hands you `canvas`, `args` and `userEvent`.
 
 ```tsx
 import {expect, fn} from 'storybook/test';
@@ -40,7 +40,7 @@ Configure a story through props and args (for example `LanguageSelect`'s `langua
 
 ## Accessibility
 
-addon-a11y runs on every story with the WCAG 2.0/2.1 A and AA tags and fails on a violation of any impact; only the `region` rule is off, because a story renders a fragment outside the page landmarks. The config is `.storybook/a11y.ts`, which `.storybook/preview.ts` sets as `parameters.a11y`. The check runs for the base story and again for each attached `.test()`, in the current light theme in the `storybook` project and again in dark in the `storybook-dark` project. Do not opt a story out (`parameters.a11y.test: 'todo'` or `'off'`, `parameters.a11y.disable`, the `a11y.manual` global, the `!test` tag, or any per-story `parameters.a11y.context`, `config` or `options` that differs from the shared config); fix the markup instead. `test/story-a11y-opt-out.test.tsx` fails on any story carrying one of those opt-outs, unless its id and a reason are recorded there. Page landmark and heading checks are `.test()` assertions (one `main`, one level-1 heading).
+addon-a11y runs on every story with the WCAG 2.0/2.1 A and AA tags and fails on a violation of any impact; only the `region` rule is off, because a story renders a fragment outside the page landmarks. The config is `.storybook/a11y.ts`, which `.storybook/preview.ts` sets as `parameters.a11y`. The check runs for the base story and again for each attached `.test()`, in the current light theme in the `storybook` project and again in dark in the `storybook-dark` project. Do not opt a story out (`parameters.a11y.test: 'todo'` or `'off'`, `parameters.a11y.disable`, the `a11y.manual` global, the `!test` tag, or any per-story `parameters.a11y.context`, `config` or `options` that differs from the shared config); fix the markup instead. `test/story-a11y-opt-out.test.tsx` fails on any story carrying one of those opt-outs, unless its id and a reason are recorded there.
 
 ## Vitest and Chromatic
 

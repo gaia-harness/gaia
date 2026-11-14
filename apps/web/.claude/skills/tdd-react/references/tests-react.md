@@ -4,7 +4,7 @@ Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHoo
 
 ## Testing Layers
 
-Six layers share one mocking foundation (`msw` + `@msw/data`). Which test to write and at which layer, including the story-versus-route boundary and the unit-test conditions, is owned by `.claude/doctrine/testing.md` (`## Layers`); this file is how to write a test at each layer.
+The layers below share one mocking foundation (`msw` + `@msw/data`). Which test to write and at which layer, including the story-versus-route boundary and the unit-test conditions, is owned by `.claude/doctrine/testing.md` (`## Layers`); this file is how to write a test at each layer.
 
 | Layer             | Tool                                  | Vitest project | File location                           | What to assert                                      |
 | ----------------- | ------------------------------------- | -------------- | --------------------------------------- | --------------------------------------------------- |
@@ -19,7 +19,7 @@ One Vitest config (`vitest.config.ts`) holds the projects. `node` runs `*.test.t
 
 ## Component Tests via Stories
 
-The story is the test. A story is a visual state, a behavior is a `.test()` attached to it, and a `play` only drives the UI into the state the snapshot must show; the doctrine is owned by `wiki/decisions/Stories as Tests.md`. Each story renders the component in a real browser through the same decorators Storybook shows (i18n, router, state via `test/stubs`). A story with no `.test()` is a render check that still runs and is axe-checked. Never write a separate `.test.tsx` that renders the component fresh: it bypasses the story's stubs and duplicates what the story already covers.
+The story is the test. A story is a visual state, a behavior is a `.test()` attached to it, and a `play` only drives the UI into the state the snapshot must show; the reasoning is in `wiki/decisions/Stories as Tests.md`. Each story renders the component in a real browser through the same decorators Storybook shows (i18n, router, state via `test/stubs`); a fresh render in a separate file would bypass those stubs.
 
 ```tsx
 // app/components/price-tag/tests/index.stories.tsx
@@ -48,7 +48,7 @@ Discounted.test('strikes through the original price', async ({canvas}) => {
 
 Import `expect`, `fn`, `waitFor` and (when a native event has no `userEvent` equivalent) `fireEvent` from `storybook/test`, which re-exports the jest-dom matchers and user-event; a `.test()` and a `play` receive `canvas`, `canvasElement`, `args` and `userEvent` in their context. Use ARIA roles and accessible names as selectors, `getByRole('button', {name: 'Save'})`, `getByText('$49.99')`, not class selectors or test ids, and `await` every `userEvent` call and every `expect`.
 
-One story per visual state and at most one `.test()` per user-observable behavior (a parameterized table is one test), named for the behavior. The story export name is the story's display name (`Discounted` is "Discounted"); a string `name` overrides it. A story that carries any `.test()` runs its own render and play as `base story`, and the play runs again before every attached test, so put a step in `play` only when it builds the state every test and the snapshot need. A `play` on the meta is inherited by every story in the file, so put a shared play on the meta only when every story should run it. Write every story as a direct `meta.story({...})` export: the indexer cannot attach `.test()` to an export built by a factory function.
+Name each `.test()` for the behavior it asserts. The story export name is the story's display name (`Discounted` is "Discounted"); a string `name` overrides it. A story that carries any `.test()` runs its own render and play as `base story`, and the play runs again before every attached test, so put a step in `play` only when it builds the state every test and the snapshot need. A `play` on the meta is inherited by every story in the file, so put a shared play on the meta only when every story should run it. Write every story as a direct `meta.story({...})` export: the indexer cannot attach `.test()` to an export built by a factory function.
 
 ### Driving input
 
@@ -134,7 +134,7 @@ Assert on `result.current`, the observable hook surface.
 
 ## Service Tests via MSW
 
-MSW handlers run inside the `node` Vitest project against the MSW node server, so a service test exercises the real `api()` wrapper, real schema validation, and real URL resolution. No `vi.mock('fetch')`. A page's rendered states are page stories with MSW handlers installed in the meta's `beforeEach` (`beforeEach: ({msw}) => { msw.use(...) }`), never through a story parameter; a route module's status, redirect, data or side effect is a route test (see Route Tests).
+MSW handlers run inside the `node` Vitest project against the MSW node server, so a service test exercises the real `api()` wrapper, real schema validation, and real URL resolution. No `vi.mock('fetch')`. A page story installs its MSW handlers in the meta's `beforeEach` (`beforeEach: ({msw}) => { msw.use(...) }`), never through a story parameter.
 
 ```tsx
 // app/services/<layer>/things/tests/requests.test.ts
@@ -338,7 +338,7 @@ Default.test('price renders with two decimals', async ({canvas}) => {
 
 The composition rule compares a story's tests with its own children's stories and stays on that surface.
 
-This is a judgment call, not a lint rule: applied bluntly it strips real integration regressions. An agent applies it **PROPOSE-only and NEVER auto-deletes a child-redundant test.** Any proposed delete must cite both the specific redundant sibling assertion AND the seam assertion that subsumes it, and the cited sibling assertion is machine-verified to contain a matching assertion before the proposal reaches a human. Security, escaping, and data-integrity seam tests (for example a Toast XSS-escaping test) carry a never-delete-without-a-verified-sibling carve-out: they stay even when a sibling looks redundant.
+This is a judgment call, not a lint rule: applied bluntly it strips real integration regressions. An agent applies it **PROPOSE-only and NEVER auto-deletes a child-redundant test.** Any proposed delete must cite both the specific redundant sibling assertion AND the seam assertion that subsumes it, and the cited sibling assertion is machine-verified to contain a matching assertion before the proposal reaches a human. A security, escaping or data-integrity seam test is retired or folded only as `.claude/doctrine/testing.md` (`## Guards and security rows`) allows.
 
 ### The platform rule
 
@@ -370,9 +370,9 @@ The null-amount guard and the cents-to-major conversion and the currency-to-loca
 
 ## Render-only stories and a11y
 
-A story with no `.test()` renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off); the check runs for the base story and again for each attached test. Whether a render-only story is enough is owned by `.claude/doctrine/testing.md` (`## Components, pages and stories`).
+A story with no `.test()` renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off); the check runs for the base story and again for each attached test.
 
-An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. Which components owe a keyboard or focus test (own key and focus code, vendored included; library-supplied behavior and native controls get none), and the page landmark check, are owned by `.claude/doctrine/testing.md` (`## Components, pages and stories`). When a test is owed, assert the keyboard path (Tab, Enter, Escape, arrows as the widget requires) and the focus outcome (where focus lands, or that it returns to the trigger). Opting a story out of addon-a11y needs its story id and a reason recorded in `A11Y_OPT_OUT_REASONS` in `test/story-a11y-opt-out.test.tsx`.
+An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. Whether a render-only story is enough, which components owe a keyboard or focus test, and the page landmark check are owned by `.claude/doctrine/testing.md` (`## Components, pages and stories`). When a test is owed, assert the keyboard path (Tab, Enter, Escape, arrows as the widget requires) and the focus outcome (where focus lands, or that it returns to the trigger). Opting a story out of addon-a11y needs its story id and a reason recorded in `A11Y_OPT_OUT_REASONS` in `test/story-a11y-opt-out.test.tsx`.
 
 ## Red Flags
 

@@ -20,7 +20,7 @@ Per-worker MSW stores, the Given builders that seed them and the session rules a
 
 ## Relationship to the story tests
 
-Component and page behavior is tested by story `.test()` behaviors under Vitest ([[Stories as Tests]]). Playwright keeps user flows against the running app and the Storybook specs, which check that the built story index matches source and focus visibility. Axe over every story, light and dark, is the `storybook` and `storybook-dark` Vitest projects.
+Component and page behavior is tested by story `.test()` behaviors under Vitest ([[Stories as Tests]]). Playwright keeps the real-server checks, browser tests and flow tests against the running app, plus the Storybook specs, which check that the built story index matches source and focus visibility. Axe over every story, light and dark, is the `storybook` and `storybook-dark` Vitest projects.
 
 ## Hydration helper
 
