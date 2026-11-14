@@ -171,7 +171,8 @@ check_retry_kinds() {
     '- **Halt instead.**' \
     'a gate failure of a kind this phase already retried' \
     '- **Record the retry.**' \
-    '`k` being 1 for the phase'"'"'s first retry and 2 for its second' \
+    '`k` being 1 for the phase'"'"'s first retry and 2 for its second.' \
+    'One retry writes one block, however many arms fire: its Tasks line lists every task any arm of the retry re-dispatches and every declaring task of a shared test file, and no arm writes another:' \
     '- **Flow-test arm.**' \
     'using the phase'"'"'s test retry; a second test failure halts under Stop conditions.' || return 1
 }
@@ -272,7 +273,7 @@ check_in_phase_arm() {
     'each `file › test name` of a failing in-phase test' \
     '- **In-phase arm.**' \
     'For a failing test in a file a task of this phase declares, other than a flow test the flow-test arm takes, in place of **Attribute**, the test file alone decides the owner.' \
-    'Record the retry once: one `(GATE RETRY k)` block whose Tasks line lists every task any arm of this retry re-dispatches and every declaring task of a shared test file.' \
+    'Record the retry as above, adding each declaring task of a shared test file to the Tasks line.' \
     '- **Who owns the failure.** When check 2 under **Playwright test outside this phase** holds, the failure goes to the task that declares it when exactly one task declares it, and to a shared-file executor when several tasks of this phase declare it;' \
     'otherwise it halts under Stop conditions with no retry.' \
     '- **Single-owner executor.** For one declaring task, dispatch a fresh executor for that task:' \
@@ -533,7 +534,7 @@ resume_point() {
 }
 
 @test "red twin: a shared-file retry that records no retry fails" {
-  red check_in_phase_arm 'Record the retry once: one `(GATE RETRY k)` block whose Tasks line lists every task any arm of this retry re-dispatches and every declaring task of a shared test file.' ''
+  red check_in_phase_arm 'Record the retry as above, adding each declaring task of a shared test file to the Tasks line.' ''
 }
 
 @test "red twin: a shared-file executor free to edit beyond the failing tests fails" {
@@ -569,7 +570,7 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm that records no retry fails" {
-  red check_in_phase_arm 'Record the retry once: one `(GATE RETRY k)` block whose Tasks line lists every task any arm of this retry re-dispatches' 'Record the retry:'
+  red check_in_phase_arm 'Record the retry as above, adding each declaring task of a shared test file to the Tasks line.' 'Record the retry:'
 }
 
 @test "red twin: an in-phase arm that sends one task two parallel executors fails" {
@@ -597,7 +598,7 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm that records one retry per branch fails" {
-  red check_in_phase_arm 'Record the retry once: one `(GATE RETRY k)` block' 'Record the retry as above'
+  red check_retry_kinds 'One retry writes one block, however many arms fire:' 'Each arm writes its own block:'
 }
 
 @test "red twin: an in-phase arm that halts instead of sending a sibling-owned cause to its owner fails" {
