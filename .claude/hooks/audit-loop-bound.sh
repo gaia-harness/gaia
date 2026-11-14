@@ -764,10 +764,10 @@ run_decision() {
       # Every checkpoint deny appends a new checkpoint; the latest is the one
       # pending, so this supersedes any earlier one, legacy ones included.
       WORKING_STATE=$(jq -c --argjson rounds_used "$used" --arg why "$trigger" --arg session_id "$session" --arg r "$root" \
-        --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg nonce "$nonce" --argjson accept_is_eligible "$accept_is_eligible" --argjson pinned_question "$question" \
+        --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg nonce "$nonce" --argjson accept_is_eligible "$accept_is_eligible" --argjson pinned_question "$question" --argjson disputes "$disputes" \
         '.history.checkpoints += [{index: ((.history.checkpoints | length) + 1), at_round: $rounds_used, reason: $why,
           recorded_at: $now, session_id: $session_id, audited_root: $r, nonce: $nonce, trigger: $why,
-          accept_eligible: $accept_is_eligible, question: $pinned_question}]' <<<"$WORKING_STATE") ||
+          accept_eligible: $accept_is_eligible, question: $pinned_question, disputes: $disputes}]' <<<"$WORKING_STATE") ||
         finish_deny 'BLOCKED: the audit loop checkpoint could not build the checkpoint record. Fail-loud, not fail-open: retry the dispatch.'
       gaia_loop_write_state "$file" "$WORKING_STATE" ||
         finish_deny "BLOCKED: the audit loop checkpoint could not write $file. Fail-loud, not fail-open: check the directory and retry."

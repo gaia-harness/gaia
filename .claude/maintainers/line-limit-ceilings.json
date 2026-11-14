@@ -41,7 +41,7 @@
     ".gaia/scripts/audit-fix-verify.sh": 775,
     ".gaia/scripts/audit-light-route.sh": 663,
     ".gaia/scripts/audit-light-telemetry.sh": 574,
-    ".gaia/scripts/audit-loop-eval.sh": 782,
+    ".gaia/scripts/audit-loop-eval.sh": 775,
     ".gaia/scripts/audit-loop-state-lib.sh": 554,
     ".gaia/scripts/audit-noop-detect.sh": 702,
     ".gaia/scripts/audit-resolve-scope.sh": 656,

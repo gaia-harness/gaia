@@ -1296,6 +1296,25 @@ run_residual_count() {
   red accept-residual-not-eligible "$(minor_key f.txt 1)"
 }
 
+@test "eligibility: a key typed with audit-accept-finding at the round-1 checkpoint passes accept-residual on round 2, and no other key does (mutant dropping the key arm goes red)" {
+  stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)"
+  alf_add_checkpoint 1 fallback
+  alf_state_edit '.allowance.accepted_keys = [{checkpoint: 1, key: [$member, "rule/x", "f.txt", 1], source: "typed", at: "t", session_id: "s1"}]' --arg member "$MEMBER"
+  accept_all 2 "$(minor_rows f.txt 1 2)"
+  run_check 2
+  red accept-residual-not-eligible "$(minor_key f.txt 2)" || return 1
+  grep -qF -- "$(minor_key f.txt 1)" <<<"$output" && { echo "accepted key refused: $output"; return 1; }
+  accept_all 2 "$(minor_rows f.txt 1 2)" "[{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":2,\"disposition\":\"fix\",\"reason\":\"\"}]"
+  run_check 2
+  green || return 1
+  run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
+  green || return 1
+  grep -F -- 'f.txt:1' <<<"$output" | grep -qF -- 'Human decision: ' || { echo "$output"; return 1; }
+  mutant_check_tree audit-dispositions-check.sh -e 's/(\$accept_allowed or (\$stop.accepted_keys \/\/ \[\] | any(. == \$key)) | not)/($accept_allowed | not)/' || return 1
+  run_check 2
+  red accept-residual-not-eligible "$(minor_key f.txt 1)"
+}
+
 # stop_false_case <name>: a branch whose last round fails the default stop
 # for that one reason, with dispositions accepting its Minors and fixing
 # anything else. Sets LAST_ROUND.
@@ -1396,7 +1415,7 @@ stop_false_case() {
   run_check 2
   red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
   mutant_check_tree audit-dispositions-check.sh \
-    -e 's/and (\$accept_allowed | not)/and ((.eligible == true or $accept_allowed) | not)/' || return 1
+    -e 's/and (\$accept_allowed or/and (.eligible == true or $accept_allowed or/' || return 1
   run_check 2
   green
 }

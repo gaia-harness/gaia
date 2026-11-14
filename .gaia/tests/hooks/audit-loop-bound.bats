@@ -1245,7 +1245,8 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   dispatch "$FRONTEND_MEMBER" session-b
   assert_denied
   [ "$(first_pinned_label)" = "State the rule, then continue (Recommended)" ]
-  [[ "$(state_field '.history.checkpoints | last | .question.questions[0].question')" == *"until a rule requires them: apps/web/app/utils/http.server.ts:7 (major) \"needs a requirement: honour X-Forwarded-Proto"*"If no rule should require them, pick Stop and file the remainder."* ]]
+  [[ "$(state_field '.history.checkpoints | last | .question.questions[0].question')" == *"until a rule requires them: (1) apps/web/app/utils/http.server.ts:7 (major) \"needs a requirement: honour X-Forwarded-Proto"*"If no rule should require them, pick Stop and file the remainder."* ]]
+  [ "$(state_field '.history.checkpoints | last | .disputes[0] | [.member, .finding_class, .path, .line] | tostring')" = '["code-audit-frontend","holistic/unclassified","apps/web/app/utils/http.server.ts",7]' ]
 }
 
 @test "a checkpoint still records when a past round's fixer file is unreadable, because the refused-fix list is display only" {

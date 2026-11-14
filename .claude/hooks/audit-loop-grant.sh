@@ -12,10 +12,10 @@
 # and says so out loud when it declines (a silent decline reads as a recorded
 # grant):
 #
-#   1. The whole submitted prompt is exactly the line `audit-grant <n>` or
-#      `audit-accept`. A line pasted inside longer text, quoted in a question
-#      or mentioned in passing is rejected, so no copied, quoted or generated
-#      text ever grants. The grammar and its parser live in
+#   1. The whole submitted prompt is exactly the line `audit-grant <n>`,
+#      `audit-accept` or `audit-accept-finding <n>`. A line pasted inside
+#      longer text, quoted in a question or mentioned in passing is rejected,
+#      so no copied, quoted or generated text ever grants. The grammar and its parser live in
 #      audit-loop-state-lib.sh (gaia_loop_parse_line); this hook never
 #      restates it.
 #   2. A checkpoint is pending on the branch the session resolves to: the
@@ -49,6 +49,14 @@
 # an accept option (it overrides the eligibility gate). A typed
 # `audit-grant <n>` keeps its meaning (n more rounds) and the answer it
 # writes carries `source: "typed"`.
+#
+# `audit-accept-finding <n>` accepts one fix the pending checkpoint's fixer
+# refused, entry n of the `disputes` list the bound hook stored on that
+# checkpoint, so it is the fix the pinned question showed as (n) and its key
+# never comes from the prompt. It appends to `allowance.accepted_keys`, not `answers`, so the
+# checkpoint stays unanswered and the grant fold never sees it. A critical
+# entry is refused; a security-class one is recorded, and the dispositions
+# check still keeps it on fix.
 #
 # Invoked with arguments, with no payload on stdin, or with a payload that
 # mentions a keyword but is for an event other than UserPromptSubmit, the hook
@@ -143,7 +151,7 @@ case "$parsed" in
   malformed)
     gline="$(gaia_loop_grant_line 1)"
     gline="${gline% 1} <n>"
-    malformed_message="Not recorded: the whole prompt must be exactly $gline (n from 1 to 10) or exactly $(gaia_loop_accept_line), with nothing else in the message."
+    malformed_message="Not recorded: the whole prompt must be exactly $gline (n from 1 to 10), exactly $(gaia_loop_accept_line), or exactly audit-accept-finding <n> (n from the checkpoint's list), with nothing else in the message."
     _gl_say "$malformed_message" "$malformed_message $_GL_NOTHING_RECORDED_FOR_CLAUDE If the person was only mentioning the line, answer them normally; otherwise tell them this."
     exit 0
     ;;
@@ -252,6 +260,25 @@ fi
 checkpoint_index="$(printf '%s' "$pending" | jq -r '.index')"
 at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 case "$parsed" in
+  "accept-finding "*)
+    finding_number="${parsed#accept-finding }"
+    finding="$(printf '%s' "$pending" | jq -c --argjson finding_number "$finding_number" '(.disputes // [])[$finding_number - 1] // empty
+      | select((.member | type) == "string" and (.finding_class | type) == "string" and (.path | type) == "string" and (.line | type) == "number")' 2>/dev/null)" || finding=""
+    refusal=""
+    if [ -z "$finding" ]; then
+      refusal="Not recorded: checkpoint $checkpoint_index lists no refused fix numbered $finding_number."
+    elif [ "$(printf '%s' "$finding" | jq -r '.severity // ""')" = critical ]; then
+      refusal="Not recorded: refused fix $finding_number is critical, and a critical finding is always fixed."
+    fi
+    if [ -n "$refusal" ]; then
+      gaia_loop_unlock "$target"
+      _gl_say "$refusal"
+      exit 0
+    fi
+    new="$(printf '%s' "$state" | jq -c --argjson checkpoint_number "$checkpoint_index" --argjson finding "$finding" --arg at "$at" --arg session_id "$session_id" \
+      '.allowance.accepted_keys = ((.allowance.accepted_keys // []) + [{checkpoint: $checkpoint_number, key: ($finding | [.member, .finding_class, .path, .line]),
+        source: "typed", at: $at, session_id: $session_id}])' 2>/dev/null)" || new=""
+    ;;
   "grant "*)
     granted_round_count="${parsed#grant }"
     new="$(printf '%s' "$state" | jq -c --argjson checkpoint_number "$checkpoint_index" --argjson granted_round_count "$granted_round_count" --arg at "$at" --arg session_id "$session_id" \
@@ -272,6 +299,11 @@ gaia_loop_unlock "$target"
 allowed="$(gaia_loop_allowed "$new")"
 branch_name="$(printf '%s' "$new" | jq -r '.branch')"
 case "$parsed" in
+  "accept-finding "*)
+    recorded_message="Recorded: audit-accept-finding $finding_number ($(printf '%s' "$finding" | jq -r '.path + ":" + (.line | tostring)')) on branch $branch_name (checkpoint $checkpoint_index). Any later round may keep it as an accepted residual unless it is security-class. The checkpoint itself is still unanswered."
+    _gl_say "$recorded_message" "$recorded_message Claude: the human typed this line. Ask the pinned checkpoint question again for its answer."
+    exit 0
+    ;;
   "grant "*)
     recorded_message="Recorded: $(gaia_loop_grant_line "$granted_round_count") on branch $branch_name (checkpoint $checkpoint_index). Rounds allowed through round $allowed."
     ;;
