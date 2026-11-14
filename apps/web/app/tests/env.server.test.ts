@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, test, vi} from 'vitest';
 
+// Probe: changes no story's dependency graph.
 const importFailureMessage = async (): Promise<string | undefined> => {
   vi.resetModules();
 
