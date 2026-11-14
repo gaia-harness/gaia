@@ -16,13 +16,20 @@ Read `.claude/doctrine/testing.md` first, `## Guards and security rows` above al
 
 The dispatch gives you the working root, the frozen-interface excerpt, the report path (a JSON file) and one line per row:
 
-    Row: <id> › <file> › <title> › <layer> › <security kind> › <case>
+    Row: <id> › <file> › <title> › <layer> › <security kind> › <action> › <caseKey or -> › <case>
 
 `›` is U+203A with one space each side.
 
 ## How you write
 
-For each row, write one test under its exact `<title>` in its `<file>`, at its `<layer>`. Create the file, or add the test to it when it exists. Drive the guard into its failing state:
+For each row, act by its `<action>`, under its exact `<title>` in its `<file>`, at its `<layer>`:
+
+- `new`: write one test. Create the file, or add the test to it when it exists.
+- `change`: edit the existing test of that title so it drives the row's case.
+- `extend`: add the row's case to the existing test's `.each` or `.for` case table, as an entry whose string literal is the `<caseKey>`.
+- `reuse`: write nothing. Confirm the existing test of that title already drives the row's case and report it `written`; when it does not, report `cannot_write`.
+
+Drive the guard into its failing state:
 
 - Forgery: send a forged or edited value (a tampered cookie, session or token, or a forged server-owned field) and assert the refusal, or that the server ignored the value.
 - Secret: assert the value's absence on the forbidden surface (served HTML, a cookie, the session, returned data, an outgoing request) while the value is present upstream.

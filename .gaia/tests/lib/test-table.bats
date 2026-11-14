@@ -136,6 +136,14 @@ run_amend() {
   [ "$(cat "$PLAN/tests.json")" = "$AMEND_BEFORE" ]
 }
 
+@test "amend refuses a changed security kind and leaves the file unchanged" {
+  write_amend_fixture
+  run_amend '{"replace":[{"id":"T1","source":"flow:alpha","case":"a","file":"a.test.ts","title":"a","layer":"route","task":"task-one","action":"new","security":"secret"}]}'
+  [ "$status" -eq 1 ]
+  grep -qF -- 'security kind changed on T1' <<<"$output"
+  [ "$(cat "$PLAN/tests.json")" = "$AMEND_BEFORE" ]
+}
+
 @test "amend accepts a non-security fold and a security fold that keeps every key" {
   write_amend_fixture
   run_amend '{"remove":["T3"],"add":[{"id":"T4","source":"success_criteria:1","case":"c2","file":"c2.test.ts","title":"c2","layer":"unit","task":"task-one","action":"new","security":"none"}]}'

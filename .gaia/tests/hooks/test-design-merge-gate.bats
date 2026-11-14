@@ -137,8 +137,25 @@ skip|test.skip('T1', () => { expect(1).toBe(1); });
 fixme|test.fixme('T1', () => { expect(1).toBe(1); });
 conditional skip|test.skipIf(process.env.CI)('T1', () => { expect(1).toBe(1); });
 empty body|test('T1', () => {});
+context skip|test('T1', (context) => { context.skip(); expect(1).toBe(1); });
+destructured skip|test('T1', ({skip}) => { skip(); expect(1).toBe(1); });
+info skip|test('T1', () => { test.info().skip(); expect(1).toBe(1); });
 CASES
-  [ "$cases" -eq 5 ]
+  [ "$cases" -eq 8 ]
+}
+
+@test "an uncommitted security test does not satisfy the row" {
+  mkdir -p "$FIXTURE/src"
+  printf '%s\n' "$REAL_TEST" >"$FIXTURE/src/guard.test.ts"
+  stage_plan src/guard.test.ts 'guard T1'
+  authored
+  ledger_line keep
+  run_gate
+  assert_denied_with "T1: no-matching-test" || return 1
+  git_fixture add -A
+  git_fixture commit -q -m feature
+  run_gate
+  assert_allowed_by_json
 }
 
 @test "a bats skip denies the row" {

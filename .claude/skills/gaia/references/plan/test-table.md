@@ -11,7 +11,7 @@ All four live in the plan directory.
 - `TEST-DESIGN`: the marker, one line `schema: 1`. `/gaia-plan` writes it right after it creates the plan folder; the planner never writes it. The approve step appends an `approved_sha256:` line.
 - `tests.json`: the table, `{"schema": 1, "rows": [<row>, ...]}`. The planner writes it.
 - `tests.approved.json`: the byte copy of `tests.json` taken at approval. Nobody edits it afterwards.
-- `security-tests.jsonl`: the append-only ledger of the security-row tests the security writer wrote. Only `node .gaia/scripts/test-design/test-table.mjs record-security` writes it.
+- `security-tests.jsonl`: the append-only ledger of the security-row tests the security writer step registered (a registration, not a check of who wrote the test). Only `node .gaia/scripts/test-design/test-table.mjs record-security` writes it.
 
 The planner's own write of `tests.json` from a worktree session goes through the scratchpad-plus-`cp` route (`.claude/skills/gaia/references/plan/planner.md` tool-choice contract; `.claude/doctrine/execution.md`, `## Run folder`); the `test-table.mjs` subcommands write the approved copy, the marker's `approved_sha256:` line and the ledger themselves.
 

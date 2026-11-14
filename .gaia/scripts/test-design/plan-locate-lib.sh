@@ -96,7 +96,7 @@ gaia_marker_approved_sha256() {
 
 gaia_test_design_merge_verdict() {
   local tree="${1-}" main branch plan locate_status key drift output drift_status
-  local grants_file approved_sha granted='' ungranted='' row reason line
+  local grants_file approved_sha granted='' ungranted='' parsed_uncovered=0 row reason line
   local next_step="Next step: have the security writer write the missing test, or, when the maintainer rules the row satisfied, the maintainer types the whole prompt test-row-grant <row id> in an interactive session in this branch's checkout."
   main="$(gaia_resolve_main_root "$tree" 2>/dev/null)" || {
     printf 'Security-row merge gate: cannot resolve the main checkout of %s, so its plan run is unknown. Next step: run the merge from the checkout that holds the branch.\n' "$tree"
@@ -168,6 +168,7 @@ gaia_test_design_merge_verdict() {
       'uncovered '*) ;;
       *) continue ;;
     esac
+    parsed_uncovered=1
     line="${line#uncovered }"
     row="${line%% *}"
     reason="${line#"$row"}"
@@ -182,6 +183,11 @@ $row
     ungranted="${ungranted}  ${row}: ${reason}
 "
   done <<<"$output"
+  # Exit 1 with no uncovered line is a crash of the check, not an uncovered row.
+  if [ "$parsed_uncovered" -eq 0 ]; then
+    printf 'Security-row merge gate: the security check of %s failed without naming an uncovered row, so it crashed rather than finished: %s\nNext step: run the security mode of .gaia/scripts/test-drift-check.sh with --root %s --plan-dir %s and read its output.\n' "$plan" "$output" "$tree" "$plan"
+    return 1
+  fi
   [ -n "$ungranted" ] || return 0
   printf 'Security-row merge gate: approved security rows of %s are uncovered on this branch:\n%s%s\n' "$plan" "$ungranted" "$next_step"
   return 1

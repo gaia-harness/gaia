@@ -136,7 +136,15 @@ export function mergeBaseOf(root, base) {
   return result.stdout.trim();
 }
 
-const headText = (root, file) => {
+// The head version of a file: the working tree's, or with `committed` the one
+// in HEAD, which is what a merge acts on.
+const headText = (root, file, committed) => {
+  if (committed) {
+    if (git(root, ['cat-file', '-e', `HEAD:${file}`]).status !== 0) return null;
+    const shown = git(root, ['show', `HEAD:${file}`]);
+    if (shown.status !== 0) refuse(`cannot read ${file} at HEAD`);
+    return shown.stdout;
+  }
   const absolute = path.join(root, file);
   if (!existsSync(absolute)) return null;
   try {
@@ -218,13 +226,14 @@ function readSide(file, text, where) {
   return {list, byName, duplicates, inspect: inspectorFor(file, text)};
 }
 
-// Map of file -> {head, base} for every file named. A file absent on a side
+// Map of file -> {head, base} for every file named; `committed` reads the head
+// from HEAD instead of the working tree. A file absent on a side
 // reads as having no tests there. A planned file holding a repeated full name
 // is refused: a row could not tell which test it names.
-export function readFiles(root, mergeBase, files, plannedFiles) {
+export function readFiles(root, mergeBase, files, plannedFiles, committed = false) {
   const sides = new Map();
   for (const file of files) {
-    const head = readSide(file, headText(root, file), 'head');
+    const head = readSide(file, headText(root, file, committed), 'head');
     if (plannedFiles.has(file) && head.duplicates.length > 0) {
       refuse(`duplicate full name "${head.duplicates[0]}" in planned file ${file}`);
     }

@@ -105,6 +105,7 @@ build_fresh() {
 
   build_fresh
   git_fixture rm -q src/guard.test.ts
+  git_fixture commit -q -m remove
   run_gate
   assert_denied_with "T1: no-matching-test"
 }
@@ -147,6 +148,15 @@ build_fresh() {
   cp "$PLAN/RUNNING" "$FIXTURE/.notebook/plans/other/RUNNING"
   run_gate
   assert_denied_with "more than one plan run claims branch feature"
+}
+
+@test "a crash in the security check denies rather than reading as nothing uncovered" {
+  local stub="$BATS_TEST_TMPDIR/stub"
+  mkdir -p "$stub"
+  printf '#!/bin/sh\nprintf "boom\\n" >&2\nexit 1\n' >"$stub/node"
+  chmod +x "$stub/node"
+  PATH="$stub:$PATH" run_gate
+  assert_denied_with "failed without naming an uncovered row"
 }
 
 # build_harness: a copy of the gate and the scripts it loads, in $HARNESS, for

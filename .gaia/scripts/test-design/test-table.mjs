@@ -306,6 +306,21 @@ const amend = (args) => {
       `security flag dropped on ${droppedFlags.map((row) => row.id).join(', ')}`,
     );
   }
+  // drift.mjs reports any change of an approved row's security value as
+  // flag-lost, so amend refuses the same predicate.
+  const changedKinds = approvedSecurity.filter((approvedRow) =>
+    next.some(
+      (row) =>
+        row.id === approvedRow.id &&
+        isSecurity(row) &&
+        row.security !== approvedRow.security,
+    ),
+  );
+  if (changedKinds.length > 0) {
+    refuse(
+      `security kind changed on ${changedKinds.map((row) => row.id).join(', ')}`,
+    );
+  }
   const keptKeys = new Set(next.filter(isSecurity).map((row) => row.source));
   const lostKeys = [
     ...new Set(approvedSecurity.map((row) => row.source)),

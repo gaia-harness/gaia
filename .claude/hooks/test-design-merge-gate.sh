@@ -5,8 +5,8 @@
 # worthiness-ledger verdict is `fix` (hollow), unless the maintainer typed a
 # grant naming that row (test-row-grant.sh records it). Whether the tests pass
 # is CI's job; this gate checks only that each approved security row is still
-# planned, still flagged, and still has a security-writer-authored test that is
-# not hollow.
+# planned, still flagged, and still has a test the security writer step
+# registered in the plan's ledger that is not hollow.
 #
 # The branch's table is found through its plan run's RUNNING sentinel
 # (.gaia/scripts/test-design/plan-locate-lib.sh, which also holds the check, so
@@ -15,8 +15,8 @@
 # with no TEST-DESIGN marker, allows: an older plan has no approved security
 # rows.
 #
-# Fail-closed, unlike worthiness-presence-check.sh beside it: this is the one
-# backstop no fixer or evaluator can route around, so every error path denies
+# Fail-closed, unlike worthiness-presence-check.sh beside it: this is the
+# backstop for a security row's test, so every error path denies
 # with its reason and the next step. That covers an unloadable library, an
 # unresolvable checkout or branch key, a missing node or test-drift-check.sh,
 # two plan runs claiming the branch, a missing or unreadable table, and an
@@ -24,7 +24,15 @@
 # check is a merge aimed at another repository (`-R`, or a leading `cd` into
 # one), which has no bearing on this repository's plan runs.
 #
-# Honest limit: the branch is the checkout's, not the pull request's. A
+# Honest limits: the gate trusts the plan folder's own files (RUNNING,
+# TEST-DESIGN, tests.json, tests.approved.json, security-tests.jsonl). They sit
+# in the notebook, which no write-guard hook covers, so a Claude write that
+# removes RUNNING or TEST-DESIGN makes the gate allow (no plan run, or no
+# marker), and one that rewrites the ledger is believed. The ledger records
+# that the security writer step registered a test, an instruction-level
+# separation from the task executor, not an enforced authorship check.
+#
+# The branch is the checkout's, not the pull request's. A
 # `gh pr merge <n>` run from the default branch's checkout finds no plan run
 # and allows; the status post's check is what holds that path.
 

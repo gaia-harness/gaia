@@ -10,10 +10,10 @@ At the end of each build phase whose entry carries a `- Security writer:` line, 
 
 ## The step
 
-1. **Dispatch.** The phase's security rows are the rows of `{PLAN_DIR}/tests.json` whose `security` is not `none` and whose `task` is a task of this phase. Pre-clear the report path in the scratchpad with `rm -f`, then dispatch one `Agent(subagent_type: "security-test-writer")`. The prompt names the report path and says the file is JSON, carries `RESOLVED_ROOT`, the frozen interfaces from `{PLAN_DIR}/README.md`, and one line per row: `Row: <id> › <file> › <title> › <layer> › <security kind> › <case>`. Wait for the agent to finish, then classify the report:
+1. **Dispatch.** The phase's security rows are the rows of `{PLAN_DIR}/tests.json` whose `security` is not `none`, whose `action` is not `retire` and whose `task` is a task of this phase. A `retire` row is never dispatched: only the maintainer retires a security test, and the drift check does not ask the ledger for it. Pre-clear the report path in the scratchpad with `rm -f`, then dispatch one `Agent(subagent_type: "security-test-writer")`. The prompt names the report path and says the file is JSON, carries `RESOLVED_ROOT`, the frozen interfaces from `{PLAN_DIR}/README.md`, and one line per row: `Row: <id> › <file> › <title> › <layer> › <security kind> › <action> › <caseKey or -> › <case>`. Wait for the agent to finish, then classify the report:
 
    ```bash
-   bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <report> --expect-count <rows>
+   bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <report> --expect-count <dispatched rows>
    ```
 
    On a no-op, re-dispatch exactly once against the re-cleared path. A second no-op goes to step 5.
@@ -41,4 +41,4 @@ When an audit fixer adds or replaces a security row, the loop unit runs the same
 ## What it never does
 
 - The writer never edits code, `tests.json` or `tests.approved.json`.
-- Nobody weakens a security test, and a task executor never writes a security row's test: an executor-written test under a security row's title does not satisfy the merge gate.
+- Nobody weakens a security test, and a task executor never writes a security row's test: an executor-written test under a security row's title has no ledger line unless record-security registers it, so it does not satisfy the merge gate.

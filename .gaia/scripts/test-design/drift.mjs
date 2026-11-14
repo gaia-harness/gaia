@@ -81,11 +81,11 @@ function evaluateRow(row, sides, ledger) {
   return {matched, head: headTest, base: baseTest};
 }
 
-function readPlanAndFiles({root, planDir, base, files}) {
+function readPlanAndFiles({root, planDir, base, files, committed = false}) {
   const plan = loadPlan(planDir);
   const mergeBase = mergeBaseOf(root, base);
   const plannedFiles = new Set(plan.rows.map((row) => row.file));
-  const sides = readFiles(root, mergeBase, new Set([...files, ...plannedFiles]), plannedFiles);
+  const sides = readFiles(root, mergeBase, new Set([...files, ...plannedFiles]), plannedFiles, committed);
   return {plan, sides};
 }
 
@@ -201,11 +201,12 @@ export function classify({root, planDir, base, changedPaths}) {
   };
 }
 
-// One {row, reason} per approved security row the branch leaves uncovered;
+// One {row, reason} per approved security row the branch leaves uncovered, read
+// from committed HEAD (a merge acts on the commit, never the working tree);
 // an empty list for a plan with no TEST-DESIGN marker.
 export function securityCheck({root, planDir, base, ledgerPath}) {
   if (!hasMarker(planDir)) return [];
-  const {plan, sides} = readPlanAndFiles({root, planDir, base, files: []});
+  const {plan, sides} = readPlanAndFiles({root, planDir, base, files: [], committed: true});
   const latestVerdict = latestVerdicts(ledgerPath);
   const uncovered = [];
   for (const approved of plan.approvedRows.filter(isSecurity)) {
