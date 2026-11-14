@@ -4,7 +4,10 @@
 # Playwright collects the spec, that it carries a resolvable `// @covers`
 # declaration naming every folder the SPEC lists for the flow which the branch
 # changed; and that no flow test carries a working-document id. Whether the
-# tests are any good is the worthiness review's judgment, not this script's.
+# tests are any good is not this script's judgment: for a plan whose folder
+# carries a TEST-DESIGN marker it is the drift check plus its honesty pass
+# (.claude/skills/gaia/references/drift-check.md), otherwise the worthiness
+# review.
 #
 #   flow-coverage.sh --spec <SPEC.md> --root <tree> [--base <ref>]
 #                    [--listing <playwright-list.json>] [--flow-tests-out <file>]

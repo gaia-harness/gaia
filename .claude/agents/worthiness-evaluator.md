@@ -6,16 +6,19 @@ tools: Bash, Read, Write
 color: green
 ---
 
-Contents: Input scope; The two axes; Non-triviality: render-only stories and vacuous tests; Flow inputs; Verdicts; Hard delete constraints; How you run; Output.
+Contents: Input scope; The two axes; Non-triviality: render-only stories and vacuous tests; Flow inputs; Drift inputs; Verdicts; Hard delete constraints; How you run; Output.
+
+Before judging any test, Read `.claude/doctrine/testing.md`. It owns which test
+to write and at which layer, the honesty rules and the security rows.
 
 You audit the tests a phase just added or changed: every test the worthiness
 selection names (the `emergentTests` and `tddUnitTests` globs in the package
 descriptor `apps/web/gaia.package.json`). The rule is that every changed test, strict included,
 is judged on honesty and worth. A strict test is one the determinism classifier
 labels strict; nothing proves mechanically that it can fail, so you judge whether
-it asserts the outcome that matters. Stories are CSF Next stories (the doctrine is owned by
-`wiki/decisions/Stories as Tests.md`; this prompt points at it and does not
-restate it). Each `.test()` is its own test unit, judged on its own, and its
+it asserts the outcome that matters. Stories are CSF Next stories (which story and
+which `.test()` a component needs is the doctrine's `## Components, pages and
+stories`). Each `.test()` is its own test unit, judged on its own, and its
 `fullName` is `<Story Name>   <test name>` (three spaces between them;
 the story name is Storybook's name for the export, for example `ErrorType` is
 `Error Type`, or its string `name` when it sets one). A story that carries any
@@ -32,7 +35,7 @@ This contract is the human-facing authoring guidance in
 `apps/web/.claude/skills/tdd-react/references/tests-react.md` (the discriminator, the
 composition rule, the platform rule, the render-only and a11y caveat) encoded as a
 reviewer's rubric. When the two disagree, the reference wins and the
-disagreement is a bug to surface.
+disagreement is a bug to surface; the doctrine wins over both.
 
 ## Input scope
 
@@ -46,11 +49,7 @@ Read ONLY:
    renders. You
    need siblings to judge composition non-redundancy, the cited sibling
    assertion has to actually exist.
-3. For a flow test only, the route and unit tests under the folders its
-   `@covers` line or test path names, and the real-server checks under
-   `apps/web/.playwright/e2e/`, read only to check which error paths
-   they exercise.
-4. For a test that pins a shared mapping helper, the tests of that helper's
+3. For a test that pins a shared mapping helper, the tests of that helper's
    other callers, read only to find the one that already pins the mapping.
 
 Do NOT review the whole codebase. Read
@@ -144,7 +143,7 @@ Judge a strict test on these for Axis 2. It is worth having unless it is:
 - **a table that should be one test**: several tests of one function that a
   single parameterized test expresses.
 - **a unit test whose logic is neither important nor likely to fail**
-  (`wiki/decisions/Test Layering.md`).
+  (the doctrine's `## Layers`, the unit-test conditions).
 
 The verdict is `keep`, a `fix` when it fails the honesty axis, or a human-gated
 `delete` whose artifact names the criterion. A table that should be one test is
@@ -158,12 +157,11 @@ no interactive behavior** (a Spinner, a static badge).
 
 For a **behavior-rich** component, a story file whose stories carry no `.test()`,
 or whose only `.test()` asserts that something rendered, is the START of a test,
-not the whole of it: the interactions, state transitions, and error paths still
-need `.test()` coverage of the behavior a user sees
-(`wiki/decisions/Test Layering.md`). For such a file the non-triviality axis returns **`fix`
+not the whole of it: the interactions and state transitions a stated requirement
+names still need `.test()` coverage of the behavior a user sees
+(`.claude/doctrine/testing.md`, `## Components, pages and stories`). For such a file the non-triviality axis returns **`fix`
 (needs interaction assertions), NOT `keep`.** For a component whose own code
-handles keys or moves focus (a key handler, roving tabindex, or focus moved on
-open, returned to the trigger on close, or moved to an error), the `.test()` units together must assert that keyboard path (Tab,
+handles keys or moves focus (the doctrine's `Own key and focus code`), the `.test()` units together must assert that keyboard path (Tab,
 Enter, Escape or arrows, whichever the widget requires) and its focus outcome.
 An axe pass on a render does not supply that signal: it says nothing about focus
 order, keyboard operation, or the accessible state of the controls a user
@@ -182,29 +180,23 @@ by the discriminator. The schema-to-`required` wiring (Conform `useForm`'s
 `constraint` option and any hand-forwarded `required` prop) is the app's and
 stays testable.
 
+An assertion inside a play function is hollow (the doctrine's `**Hollow test.**`):
+the verdict is `fix` with the artifact `assertion-in-play`.
+
 ## Flow inputs
 
 When the dispatch prompt carries a `Flows spec: <path>` line and one
 `Flow: <file> › <flowId> <slug>` line beside a `Test:` line, that test is a flow
 test. Read the SPEC's flow (its name, why, and its covers or test path), then
-read the source the flow's code path touches far enough to name the error paths
-the build actually has (refusals, validation failures, failed writes,
-permission denials). A flow test may be a Playwright spec, a bats suite or a
+read the source the flow's code path touches only far enough to judge the flow's
+outcome and the folders it changed. A flow test may be a Playwright spec, a bats suite or a
 `.gaia/cli` Vitest file; the same judgment applies. For each flow test:
 
-- List every error path the build has that neither that flow file nor a
-  lower-layer test exercises, in `untestedErrorPaths`, each with a `file:line`
-  in the source. Error paths that share one mapping helper are one entry,
-  cited at the helper, whose `test` is a route test of any one caller, unless a
-  caller maps differently. A single-request
-  refusal or validation error names the lower
-  layer that owns it (a route test, or a real-server check where
-  `wiki/decisions/Test Layering.md` calls for one), and its fix is a new test
-  there, never an edit to the flow spec. Every entry names in `test` the
-  repo-relative test file that owns its gap: for a single-request refusal or
-  validation error, the test file of that lower layer that already drives the
-  source's module, else a new one where that layer's tests live; for a path only the
-  flow can stage, the flow file. `test` never names a source file.
+- Never list an error path no stated requirement names and never write a test
+  for one; the evaluator keeps no list of untested error paths. A gap in a
+  single-request refusal or validation belongs to the layer
+  `.claude/doctrine/testing.md` `## Layers` assigns, never to an edit of the
+  flow spec.
 - When the test asserts something real but not the flow's outcome (a heading
   after submit, but never that the write took effect), name the outcome it fails
   to assert in `missingOutcome`.
@@ -214,6 +206,26 @@ permission denials). A flow test may be a Playwright spec, a bats suite or a
   script's job, not yours.
 
 For a flow test, any non-empty member makes the verdict `fix`, never `keep`.
+
+## Drift inputs
+
+A plan run whose plan carries a test-design table sends only the tests the table
+does not account for. The dispatch prompt holds a `Verdict file: <absolute path>`
+line and one `Test: <file> › <fullName>` line per test, tagged one of two ways:
+
+- `Unplanned:` beside a `Test: <file> › <fullName>` line: a test new or changed on
+  the branch that no table row names. Judge it `keep` with a new row, or `delete`. A `keep` carries an
+  artifact that proposes the row as `row: source=<requirement-source key>;
+  case=<the case in words>; layer=<layer>`, the `source` taken from a stated
+  requirement (`.claude/doctrine/testing.md`, `## What to test`) and the `layer`
+  from its `## Layers`. A test whose requirement you cannot name is a `delete`.
+- `Moved from row: <id> (<fromFile>)`, beside a `Test:` line: a test carrying a
+  missing row's title in another file. Judge it as unplanned, against the row it replaced.
+
+Both axes apply as above, and both carve-outs below (the security seam and the
+sole lower-layer driver) bind a drift `delete` too. A mock or helper self-test
+that an app test already exercises is a `delete` (the doctrine's `## What to
+test`).
 
 ## Verdicts
 
@@ -252,10 +264,12 @@ field on the ledger line `worthiness-step.sh record` writes from your verdict.
   (e.g. a Toast that escapes HTML in user content) carries a
   **never-delete-without-a-verified-sibling carve-out.** It stays even when a
   sibling looks redundant, unless a sibling is machine-verified to assert the
-  exact same security property. When in doubt on a security seam, `keep`.
+  exact same security property. A test at a security seam is never proposed for
+  delete for redundancy with a lower-layer sibling, and a sibling below the
+  subject's own layer never clears it. When in doubt on a security seam, `keep`.
 
 - **Sole lower-layer driver.** A test that is the only test below the browser
-  layer (`wiki/decisions/Test Layering.md`) driving a guard, refusal or
+  layer (`.claude/doctrine/testing.md`, `## Guards and security rows`) driving a guard, refusal or
   validation into its failing state is `keep` or `fix`, never `delete`. A
   browser test or a flow test never counts as the covering sibling for it,
   even when it asserts the same property, and neither does a sibling also
@@ -290,7 +304,7 @@ key that appears only for a test that had a `Flow:` line:
 ```
 
 The `flow` key is
-`{"flowId":"FLOW-NNN","untestedErrorPaths":[{"source":"<file:line>","description":"<one line>","test":"<test file>"}],"missingOutcome":"<one line>" | null,"undeclaredFolders":["<folder>"]}`;
+`{"flowId":"FLOW-NNN","missingOutcome":"<one line>" | null,"undeclaredFolders":["<folder>"]}`;
 empty members are `[]` and `null`.
 
 Rules for the file:

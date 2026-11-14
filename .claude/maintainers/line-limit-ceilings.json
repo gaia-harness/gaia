@@ -68,7 +68,7 @@
     ".gaia/scripts/state-reaper-lib.sh": 680,
     ".gaia/scripts/state-registry-lib.sh": 708,
     ".gaia/scripts/test-signals/extract-story-signals.mjs": 721,
-    ".gaia/scripts/test-signals/extract-test-signals.mjs": 546,
+    ".gaia/scripts/test-signals/extract-test-signals.mjs": 555,
     ".gaia/scripts/update-claim.sh": 442,
     ".gaia/scripts/update-gaia-report.sh": 561,
     ".gaia/scripts/usage-flush.sh": 564,

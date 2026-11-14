@@ -16,7 +16,7 @@
 #     gate-retry block's one-shot flow-test arm;
 #   - the flow-checks block's command, fixer, single re-run, HALTED block and
 #     question, and lifecycle.md's matching section;
-#   - the spec-less rule, with the worthiness and overlap blocks kept;
+#   - the spec-less rule, with the drift check block kept;
 #   - the ledger HALTED form and its two options, unchanged;
 #   - the absence of every test-first phrase, and of every phrase barring an
 #     executor from editing its own tests.
@@ -138,7 +138,7 @@ check_flow_checks_block() {
   local block
   block="$(fence_with "$1" "$S_FLOW")"
   [ -n "$block" ] || { printf 'no fenced flow-checks block\n' >&2; return 1; }
-  has_all "$block" "$FLOW_COMMAND_NEEDLE" 'before the worthiness step' \
+  has_all "$block" "$FLOW_COMMAND_NEEDLE" 'before the drift check' \
     'general-purpose' 'model: "sonnet"' 'free to fix code or test' \
     '{PLAN_DIR}/PROGRESS.md' '## Flow checks' '## Flow checks (HALTED)' 'Reason:' \
     'Stay halted (Recommended)' 'Discuss this' 'The retry bound is one' || return 1
@@ -171,7 +171,7 @@ check_lifecycle_flow_section() {
 
 SPEC_LESS_NEEDLE='A spec-less plan follows the Test What Matters principle'
 NO_CLOSING_NEEDLE='has no closing phase'
-SPEC_LESS_KEEPS_NEEDLE='still carries the worthiness and overlap blocks'
+SPEC_LESS_KEEPS_NEEDLE='it still carries the drift check block'
 NO_BAR_NEEDLE='No hook, gate, rule or kept prompt refuses or bars an implementer'
 
 check_spec_less_rule() {
@@ -297,7 +297,7 @@ check_no_banned_phrase() {
 
 # ---------- spec-less plans and the ledger halt ----------
 
-@test "a spec-less plan follows Test What Matters, has no closing phase and keeps the worthiness and overlap blocks" {
+@test "a spec-less plan follows Test What Matters, has no closing phase and keeps the drift check block" {
   check_spec_less_rule "$PLANNER_MD"
 }
 

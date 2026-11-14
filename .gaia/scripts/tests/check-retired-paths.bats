@@ -89,6 +89,23 @@ run_gate() {
   grep -qF -- 'RETIRED .claude/commands/x.md:3:' <<<"$output"
 }
 
+@test "each retired overlap-pass path planted in a scanned file is reported, and the bare word is not" {
+  local repo
+  repo="$(make_repo overlap)"
+  mkdir -p "$repo/.claude/commands"
+  printf 'run .gaia/scripts/overlap-check.sh now\n' >"$repo/.claude/hooks/a.sh"
+  printf 'see .gaia/scripts/overlap/citations.mjs\n' >"$repo/.claude/hooks/b.sh"
+  printf 'dispatch .claude/agents/overlap-evaluator.md\n' >"$repo/.claude/commands/c.md"
+  printf 'an overlap of two tests, see .gaia/scripts/test-design/layer-map.mjs\n' >"$repo/.claude/commands/d.md"
+  stage_all "$repo"
+  run_gate "$repo"
+  [ "$status" -eq 1 ]
+  grep -qF -- 'RETIRED .claude/hooks/a.sh:1:' <<<"$output"
+  grep -qF -- 'RETIRED .claude/hooks/b.sh:1:' <<<"$output"
+  grep -qF -- 'RETIRED .claude/commands/c.md:1:' <<<"$output"
+  ! grep -qF -- '.claude/commands/d.md' <<<"$output"
+}
+
 @test "the same citation under apps/web/ does not trip the gate" {
   local repo
   repo="$(make_repo negative)"

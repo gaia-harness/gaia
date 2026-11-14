@@ -10,7 +10,7 @@ tags: [concept, testing]
 
 ## A behavior is a `.test()` on a story
 
-A story is a visual state and a behavior is a `.test()` attached to it; a play only drives the UI into the state and asserts nothing ([[Stories as Tests]] owns the doctrine and the harness rules). Vitest runs each test in headless Chromium through `@storybook/addon-vitest`, so the story's decorators, stubs, mocked context and i18n are the test's setup and nothing re-derives them in a second file. There is no `.test.tsx` beside a component's stories and no standalone `render()`. Assertions use `expect` and `fn` from `storybook/test`, and the test receives `canvas`, `args` and `userEvent` from its context. A test is named for the behavior it covers, and no behavior gets two. `apps/web/.claude/rules/storybook.md` owns authoring.
+A story is a visual state and a behavior is a `.test()` attached to it ([[Stories as Tests]] owns how a story is a test and the harness rules; `## Components, pages and stories` of [`.claude/doctrine/testing.md`](../../.claude/doctrine/testing.md) owns which components and pages get which tests). Vitest runs each test in headless Chromium through `@storybook/addon-vitest`, so the story's decorators, stubs, mocked context and i18n are the test's setup and nothing re-derives them in a second file. Assertions use `expect` and `fn` from `storybook/test`, and the test receives `canvas`, `args` and `userEvent` from its context. A test is named for the behavior it covers. `apps/web/.claude/rules/storybook.md` owns authoring.
 
 ```tsx
 Default.test('shows the required error', async ({canvas}) => {
@@ -55,4 +55,4 @@ For the current file pattern (where stories and hook tests go), the scaffolders 
 
 ## Accessibility assertions
 
-`@storybook/addon-a11y` axe-checks every story with no assertion written, so a render-only story is already an accessibility test. A page story adds a `.test()` asserting one level-1 heading and a `main` landmark, because addon-a11y scopes axe to the body. See [[Accessibility]].
+`@storybook/addon-a11y` axe-checks every story with no assertion written, so a render-only story is already an accessibility test. addon-a11y scopes axe to the body, which is why a page story carries a landmark check of its own. See [[Accessibility]].

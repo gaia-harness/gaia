@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Extract per-test (fullName, content signal) pairs from a vitest/jest test
 // file: the one test-identity extractor the worthiness ledger and presence
-// gate, and the overlap check share.
+// gate, the test-design drift check and the existing-tests listing share.
 //
 // A test is identified by (file, fullName, signal). The signal changes
 // whenever the test body changes, so a verdict or observation recorded
@@ -12,6 +12,8 @@
 // Invocation:
 //   node .gaia/scripts/test-signals/extract-test-signals.mjs <repo-relative-test-path>
 //   ... --stdin   (read source bytes from stdin instead of disk)
+//   ... --report-unmatchable   (also emit {"unmatchable":true,"firstLine":N} for a
+//       test whose own or an enclosing describe title is not a literal)
 //
 // Output (stdout): one JSON object per discovered test(...)/it(...) call,
 // newline-delimited:
@@ -21,7 +23,7 @@
 // hashes, comments above a region excluded; a story entry lists several.
 // A test under a .each/.for table is named by its templates and adds "rowPattern"
 // (./row-pattern.mjs) for the capture hook; each enclosing describe table is
-// hashed too, listed in ranges after the test's own call (read first by overlap).
+// hashed too, listed in ranges after the test's own call, which stays first.
 //
 // Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF4
 // story file; its fullName and signal rules and refusal list live in the
@@ -90,6 +92,7 @@ const require = createRequire(import.meta.url);
 
 const args = process.argv.slice(2);
 const useStdin = args.includes('--stdin');
+const reportUnmatchable = args.includes('--report-unmatchable');
 const filePath = args.find((a) => !a.startsWith('--'));
 
 if (!filePath) {
@@ -459,7 +462,13 @@ function visit(node, ancestors, unmatchable) {
       const segments = [...ancestors, {title, expands}];
       const anyExpands = segments.some((segment) => segment.expands);
       const rowPattern = title !== null && anyExpands ? rowPatternFor(segments) : null;
-      if (title !== null && (!anyExpands || rowPattern !== null)) {
+      // Only a call declaring a test (a callback after its first argument) is
+      // unmatchable: test.skip(), a hook, a step or test.use(...) declares none.
+      const declares = node.arguments.slice(1).some((argument) => ts.isFunctionLike(argument)) &&
+        !ts.isFunctionLike(node.arguments[0]) && !calleeChainHasProperty(node, new Set(['step']));
+      if (title === null && reportUnmatchable && declares) {
+        lines.push(JSON.stringify({unmatchable: true, firstLine: rangeOf(node)[0]}));
+      } else if (title !== null && (!anyExpands || rowPattern !== null)) {
         const hashed = [...ancestors.flatMap(({table}) => table ?? []), node];
         lines.push(
           JSON.stringify({

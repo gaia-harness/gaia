@@ -4,7 +4,7 @@
 # or exact wording the SPEC, an audit directive or the SPEC's Required reading
 # states gets a test a task names, so a later edit cannot change it unseen.
 # Pins the planner's acceptance-criteria clause, its markup-directive clause,
-# and the decomposition audit's SPEC coverage lens hole and sources.
+# and the decomposition audit's test design lens hole and sources.
 #
 # Method: every check takes a root directory and reads the files from it; each
 # red twin mutates one substring of a scratch copy, proves the copy changed,
@@ -16,6 +16,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   AUDIT_REL=".claude/skills/gaia/references/plan/decomposition-audit.md"
+  DOCTRINE_REL=".claude/doctrine/testing.md"
 }
 
 # ---------- helpers ----------
@@ -30,14 +31,14 @@ need() {
   return 1
 }
 
-# mutated_tree <relpath> <old> <new>: copy both files into a scratch tree
+# mutated_tree <relpath> <old> <new>: copy the three files into a scratch tree
 # (TREE), replace the first fixed-string <old> in <relpath> with <new>, and
 # prove the copy changed.
 mutated_tree() {
   local rel="$1" old="$2" new="$3" file content mutated
   TREE="$BATS_TEST_TMPDIR/tree"
   rm -rf "$TREE"
-  for file in "$PLANNER_REL" "$AUDIT_REL"; do
+  for file in "$PLANNER_REL" "$AUDIT_REL" "$DOCTRINE_REL"; do
     mkdir -p "$TREE/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$TREE/$file"
   done
@@ -68,13 +69,13 @@ green() {
 # ---------- checks ----------
 
 check_acceptance_clause() {
-  local text
+  local text doctrine
   text="$(flat "$1/$PLANNER_REL")"
-  need "$text" '**A role, accessible name or exact wording the task delivers is asserted by a test this task names**' || return 1
-  need "$text" 'the SPEC, an audit directive or a document the SPEC'"'"'s Required reading names states it' || return 1
-  need "$text" 'An existing or planned test at any layer, a flow test included, that asserts the stated literal satisfies it' || return 1
-  need "$text" 'one story or route test may hold all of a page'"'"'s stated specifics; never add a flow for one' || return 1
-  need "$text" 'The test asserts the stated literal, never an import of the app'"'"'s own string' || return 1
+  doctrine="$(flat "$1/$DOCTRINE_REL")"
+  need "$doctrine" 'Assert a role, accessible name or exact wording a stated requirement gives as that stated literal' || return 1
+  need "$doctrine" 'One existing or planned test at any layer satisfies it, and one story or route test may hold all of a page'"'"'s stated literals; never add a flow for one.' || return 1
+  need "$doctrine" 'Never assert through an import of the app'"'"'s own string' || return 1
+  need "$text" 'a planned flow test counts toward a stated role, name or wording only when its task doc names the literal for it to assert' || return 1
   need "$text" 'Read the documents its `## Required reading` names too, for any role, accessible name or exact wording they state;' || return 1
 }
 
@@ -97,13 +98,13 @@ check_coverage_lens() {
 
 # ---------- tests ----------
 
-@test "planner: a stated role, name or wording gets a test a task names" {
+@test "the doctrine and planner: a stated role, name or wording gets a test, and a planned flow counts only when its task doc names the literal" {
   green check_acceptance_clause
-  red check_acceptance_clause "$PLANNER_REL" 'is asserted by a test this task names**' 'is noted in the contract**'
-  red check_acceptance_clause "$PLANNER_REL" 'a flow test included, that asserts' 'a flow test excluded, that asserts'
-  red check_acceptance_clause "$PLANNER_REL" 'one story or route test may hold all' 'each specific needs its own test, not all'
-  red check_acceptance_clause "$PLANNER_REL" 'never add a flow for one' 'add a flow for each'
-  red check_acceptance_clause "$PLANNER_REL" 'asserts the stated literal, never an import' 'asserts the stated literal or an import'
+  red check_acceptance_clause "$DOCTRINE_REL" 'Assert a role, accessible name or exact wording a stated requirement gives' 'Note a role, accessible name or exact wording a stated requirement gives'
+  red check_acceptance_clause "$PLANNER_REL" 'only when its task doc names the literal for it to assert' 'whenever it is planned'
+  red check_acceptance_clause "$DOCTRINE_REL" 'one story or route test may hold all' 'each specific needs its own test, not all'
+  red check_acceptance_clause "$DOCTRINE_REL" 'never add a flow for one' 'add a flow for each'
+  red check_acceptance_clause "$DOCTRINE_REL" 'Never assert through an import of the app' 'Assert through an import of the app'
   red check_acceptance_clause "$PLANNER_REL" 'Read the documents its `## Required reading` names too' 'Skip the documents its `## Required reading` names'
 }
 
@@ -112,7 +113,7 @@ check_coverage_lens() {
   red check_directive_clause "$PLANNER_REL" 'still gets the test the acceptance-criteria bullet' 'constrains only the code the acceptance-criteria bullet'
 }
 
-@test "coverage lens: flags a stated specific no test asserts, bounded and graded, reading the audit and Required reading" {
+@test "test design lens: flags a stated specific no test asserts, bounded and graded, reading the audit and Required reading" {
   green check_coverage_lens
   red check_coverage_lens "$AUDIT_REL" 'that no existing or planned test at any layer, a flow test included, asserts' 'that no test a task names in a build phase asserts'
   red check_coverage_lens "$AUDIT_REL" 'one story or route test may hold all' 'each specific needs its own test, not all'

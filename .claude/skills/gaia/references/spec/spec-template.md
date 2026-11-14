@@ -17,7 +17,7 @@ success_criteria:
 flows:
   # A flow is a critical user path: breaking it blocks a user's main task or
   # risks data, money or security. No quota and no pinned count. A flow has no
-  # branch list and no Given/When/Then. A flow names one critical user path; case tables belong to one parameterized test at the layer the trophy rule picks (wiki/decisions/Test Layering.md), so list no inputs, branches or outcomes here.
+  # branch list and no Given/When/Then. A flow names one critical user path; case tables belong to one parameterized test (.claude/doctrine/testing.md), so list no inputs, branches or outcomes here.
   # A slug may repeat an earlier SPEC's slug on purpose: that flow is covered
   # by extending the existing test file.
   # A page-markup or accessibility structure rule (an element's whole text, a

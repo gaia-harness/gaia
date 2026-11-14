@@ -4,7 +4,7 @@ Plan a complex feature using the task orchestration pattern. Do not implement an
 
 This command is the plan-specific case of the Workflow Doctrine (`wiki/concepts/Workflow Doctrine.md`), which defines roles, git ownership, checkpoint and resume, and model choice. For plan runs, the plan contract in `.claude/skills/gaia/references/plan/planner.md` (per-phase commits and gates, `PROGRESS.md`, the orchestrator's executor pins) governs where the two differ.
 
-Contents: `## Argument parsing`; `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 decomposition audit; 4.7 record the run; 5 report and kickoff prompt).
+Contents: `## Argument parsing`; `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 decomposition audit; 4.6c approve the test-design table; 4.7 record the run; 5 report and kickoff prompt).
 
 ## Argument parsing
 
@@ -128,13 +128,17 @@ else
   PLAN_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path plan "$PLAN_ID")"
   mkdir -p "$PLAN_DIR"
 fi
+# Test-design marker, written here and never by the planner: it tells every
+# later reader the plan carries a test-design table. A step 4 Correction
+# re-spawn keeps it.
+printf 'schema: 1\n' > "$PLAN_DIR/TEST-DESIGN"
 ```
 
 Cache the resolved absolute `PLAN_DIR`; pass it in step 4's dispatch and the kickoff prompt in step 5.
 
 ### 4. Spawn planning agent
 
-The planner reads its own instructions from `.claude/skills/gaia/references/plan/planner.md`. Do not Read that file on this thread and do not paste it into the prompt: the dispatch carries only this plan's inputs. A planner that skipped the file writes a plan without the step sentinels, which step 4.5 rejects.
+The planner reads its own instructions from `.claude/skills/gaia/references/plan/planner.md`. Do not Read that file on this thread and do not paste it into the prompt: the dispatch carries only this plan's inputs. A planner that skipped the file writes a plan without the step sentinels, which step 4.5 rejects. The planner's test-design table procedure lives in `.claude/skills/gaia/references/plan/test-table.md`, which `planner.md` routes it to; do not Read it here either.
 
 Every fresh step-4 dispatch, the first one and a step 4.6b `Correction` re-spawn alike, first runs `bash .gaia/scripts/spec/handoff-clear.sh "$PLAN_DIR" planner`, which creates `<PLAN_DIR>/handoffs` and removes every `planner-yield-*.md` there, and starts a new dispatch chain with a yield count of zero; a non-zero exit stops and reports its stderr line to the user. A Correction re-spawn therefore never coexists with a handoff.
 
@@ -186,7 +190,7 @@ test -f "$PLAN_DIR/README.md" \
 
 If any required file is missing, surface the failure to the user with the planner's return payload. Do not retry silently, the user decides through `AskUserQuestion`: `Investigate first` (Recommended) or `Re-spawn the planner`. Never proceed to step 4.6 with an incomplete plan folder.
 
-Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, and for a spec-derived plan that every SPEC flow has exactly one `Flow test` line, in a task doc of the closing phase, at the flow's expected path, that every closing-phase task doc carries exactly one such line, that each task doc maps to one README phase row, and that the closing phase's `ORCHESTRATOR.md` entry runs each flow test. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
+Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, and for a spec-derived plan that every SPEC flow has exactly one `Flow test` line, in a task doc of the closing phase, at the flow's expected path, that every closing-phase task doc carries exactly one such line, that each task doc maps to one README phase row, and that the closing phase's `ORCHESTRATOR.md` entry runs each flow test. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`). It requires the `TEST-DESIGN` marker, relays each `node .gaia/scripts/test-design/test-table.mjs verify` failure on the test-design table, and refuses a phase that owns a security row with no `- Security writer:` line:
 
 ```bash
 if [[ -n "${SPEC_PATH:-}" ]]; then
@@ -202,15 +206,25 @@ A non-zero exit is handled exactly like a missing file. This check runs even whe
 
 Audits the **decomposition itself** (task graph, frozen interface contracts, SPEC coverage) before a cold orchestrator builds against it; `plan/decomposition-audit.md` owns what it checks.
 
-**The audit runs automatically on a non-trivial plan; the gauge decides.** After step 4.5 confirms the artifacts exist, gauge the plan (below) and act on the gauge with no prompt: run the audit when the plan is non-trivial, skip it when the plan is trivial.
+**The audit runs automatically on a non-trivial plan; the gauge decides which lenses run.** After step 4.5 confirms the artifacts exist, gauge the plan (below) and act on the gauge with no prompt. The gauge decides the decomposition, contract and SPEC coverage lenses. The test-design lens and its refuter run on every plan with a table, whatever the gauge says.
 
-**Gauge the plan (this is the decision).** Read `README.md` and the `task-*.md` files once. A trivial plan (one or two tasks, a single phase, no cross-task interface contract) → **skip the audit** and proceed to step 4.7. Anything with parallel tasks in a phase, multiple phases, or a shared frozen contract → **run the audit**.
+**Gauge the plan (this is the decision).** Read `README.md` and the `task-*.md` files once. A trivial plan (one or two tasks, a single phase, no cross-task interface contract) → **skip the decomposition, contract and SPEC coverage lenses**. Anything with parallel tasks in a phase, multiple phases, or a shared frozen contract → **run them**.
 
 **Auto-mode.** `auto_mode` does not change whether the audit runs, only how 4.6b surfaces findings.
 
-**Fallback (never block).** If the parallel `general-purpose` Agent fan-out is unavailable (a restricted context that cannot spawn subagents), do NOT block the handoff: note the skip (`decomposition audit unavailable`) and proceed to step 4.7. The orchestrator's per-phase quality gates and the non-skippable pre-merge Code Audit Team audit remain the safety net.
+**Fallback (never block).** If the parallel `general-purpose` Agent fan-out is unavailable (a restricted context that cannot spawn subagents), do NOT block the handoff: note the skip of the other lenses (`decomposition audit unavailable`) and run the test-design lens and its refuter inline on this thread instead of skipping them. The orchestrator's per-phase quality gates and the non-skippable pre-merge Code Audit Team audit remain the safety net.
 
-To run the audit, read `.claude/skills/gaia/references/plan/decomposition-audit.md` and `.claude/skills/gaia/references/spec/lens-dispatch.md` now, each whole, and run the audit. A skipped or unavailable audit goes straight to step 4.7.
+To run the audit, read `.claude/skills/gaia/references/plan/decomposition-audit.md` and `.claude/skills/gaia/references/spec/lens-dispatch.md` now, each whole, and run the audit. Step 4.6c follows 4.6b.
+
+### 4.6c. Approve the table
+
+After 4.6b applies the findings, freeze the table. Approving the plan approves the table, retire rows included, so execution does not ask again:
+
+```bash
+node .gaia/scripts/test-design/test-table.mjs approve --plan-dir "$PLAN_DIR"
+```
+
+With `auto_mode` true, run it with `--auto`: it holds every security-flagged `retire` row and prints each held row id. Append each printed id with its case to the README's `## Audit notes` section, saying the row waits for the merge checkpoint. A non-zero exit stops exactly like a step 4.5 failure.
 
 ### 4.7. Record the run
 

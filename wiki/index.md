@@ -89,8 +89,8 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[shadcn Component Layer]]: GAIA's component layer, the vendored-ui policy.
 - [[React Compiler]]: React Compiler runs by default in build, dev, Vitest and Storybook from one shared module; thresholds, adopter steps and rollback.
 - [[TypeScript Language Files]]
-- [[Test Layering]]: the testing trophy (mostly route tests, a unit test only when both unit-test conditions hold); the route surface, the stack mapping and which layer fails for which authorization bug.
-- [[Testing Trophy Doctrine|Testing Trophy Doctrine]]
+- [[Test Layering]]: the reasons behind the testing trophy's layering (rationale page; the rules live in `.claude/doctrine/testing.md`); the route surface, the stack mapping and which layer fails for which authorization bug.
+- [[Testing Trophy Doctrine|Testing Trophy Doctrine]]: the reasons for placing tests by the testing trophy (rationale page; the rules live in `.claude/doctrine/testing.md`).
 - [[TypeScript 7 Readiness]]: tsconfig pre-adopts the TS7 strict baseline; the 7.1 upgrade is a dep swap gated on typescript-eslint's programmatic API.
 - [[Thin Routes]]
 - [[Co-located Tests Folder]]
@@ -123,8 +123,9 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Claude Integration Fitness]]: why `/gaia-fitness` is a deterministic linter, what it grades, and its ownership-checked heal protocol.
 - [[Determinism Classifier]]: per-file AST signal labelling a source file strict, emergent or route; it picks the worthiness judgment arm and evidence; versioned DOM-API allowlist, file-granular.
 - [[Workspace Standard For Apps And Packages]]
-- [[Worthiness And Wiki Before The Audit]]: the worthiness step and wiki promotion run before the first audit round; `file-tech-debt.sh file` refuses a non-security finding on branch-authored code.
-- [[Worthiness Audit]]: advisory review of every changed test the worthiness selection names (honesty + worth for every changed test, strict included); fresh-context reviewer proposes keep/fix/delete, deletes human-gated, per-tree audit ledger; stories audited as emergent tests; two-tier end-of-task surfacing.
+- [[Test Design Table]]: a plan decides its tests once in a table; the security writer, the drift check that replaces the worthiness review for a marked plan, and the merge gate that denies the merge while an approved security row lacks its test.
+- [[Worthiness And Wiki Before The Audit]]: the worthiness step (a plan with a test-design table: the drift check) and wiki promotion run before the first audit round; `file-tech-debt.sh file` refuses a non-security finding on branch-authored code.
+- [[Worthiness Audit]]: advisory review of every changed test the worthiness selection names (honesty + worth for every changed test, strict included); fresh-context reviewer proposes keep/fix/delete, deletes human-gated, per-tree audit ledger; stories audited as emergent tests; capped end-of-task surfacing on the tdd path.
 - [[Worthiness Presence Gate]]: merge-time `gh pr merge` hook requiring each changed test the worthiness selection names to carry a worthiness-ledger line matching its current content; presence + signal match only (never the verdict), scoped to the PR's changed in-scope tests, fail-open.
 <!-- gaia:maintainer-only:start -->
 - [[Dependabot as a Data Source]]: Dependabot alerts feed `/update-deps`, which resolves advisories through the local quality gate; GAIA renders no Dependabot config and keeps automated security fixes off.

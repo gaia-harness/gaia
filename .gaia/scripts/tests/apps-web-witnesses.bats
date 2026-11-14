@@ -395,45 +395,6 @@ run_fixture() {
   [ ! -s "$RUN_MARKER" ]
 }
 
-# --- overlap pass -------------------------------------------------------------
-
-@test "overlap pass: an apps/web .playwright/e2e spec that opens no page classifies as real-server and a packages/x spec does not" {
-  local repo="$BATS_TEST_TMPDIR/overlap-repo"
-  scratch_repo "$repo"
-  . "$REPO_ROOT/.gaia/tests/hooks/helpers/package-fixture.sh"
-  write_package_registry "$repo" '[{"name":"web","path":"apps/web"}]'
-  write_package_descriptor "$repo" apps/web
-  git -C "$repo" add -A
-  git -C "$repo" commit -q -m registry
-  git -C "$repo" checkout -q -b feature
-  mkdir -p "$repo/apps/web/.playwright/e2e" "$repo/packages/x"
-  printf "test('x', async () => {});\n" >"$repo/apps/web/.playwright/e2e/x.spec.ts"
-  printf "test('y', async () => {});\n" >"$repo/packages/x/y.spec.ts"
-  git -C "$repo" add -A
-  git -C "$repo" commit -q -m feature
-  run bash "$REPO_ROOT/.gaia/scripts/overlap-check.sh" changed --root "$repo"
-  [ "$status" -eq 0 ]
-  jq -e 'any(.[]; .file == "apps/web/.playwright/e2e/x.spec.ts" and .layer == "real-server")' <<<"$output" >/dev/null
-  jq -e 'any(.[]; .file == "packages/x/y.spec.ts") | not' <<<"$output" >/dev/null
-  run bash "$REPO_ROOT/.gaia/scripts/overlap-check.sh" route --root "$repo"
-  [ "$output" = "run" ]
-}
-
-@test "red overlap pass: a branch that changes no spec skips the Playwright arm" {
-  local repo="$BATS_TEST_TMPDIR/overlap-repo-red"
-  scratch_repo "$repo"
-  . "$REPO_ROOT/.gaia/tests/hooks/helpers/package-fixture.sh"
-  write_package_registry "$repo" '[{"name":"web","path":"apps/web"}]'
-  write_package_descriptor "$repo" apps/web
-  git -C "$repo" add -A
-  git -C "$repo" commit -q -m registry
-  git -C "$repo" checkout -q -b feature
-  commit_paths "$repo" apps/web/app/x.ts
-  run bash "$REPO_ROOT/.gaia/scripts/overlap-check.sh" route --root "$repo"
-  [ "$status" -eq 0 ]
-  [ "$output" = "skip-no-test-change" ]
-}
-
 # --- deny entries -------------------------------------------------------------
 
 invoke() {

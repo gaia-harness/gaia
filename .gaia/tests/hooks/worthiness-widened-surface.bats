@@ -9,11 +9,10 @@
 #   - worthiness-step.sh route lists all three tests for review.
 #   - the merge-time presence gate denies until each has a recorded verdict.
 #   - an unattended delete verdict is recorded and leaves the test file as it was.
-#   - the overlap pass runs instead of skipping.
 #
 # Every case builds one fixture repo with a real merge base: the harness is
 # linked in, a base commit holds a readme, and the feature branch adds the three
-# tests. The two scripts a case may mutate are
+# tests. The step script a case may mutate is
 # copied into the fixture's own .gaia/scripts, so a mutant runs against a
 # scratch copy and never touches the real file.
 #
@@ -55,13 +54,12 @@ setup() {
   git -C "$REPO" commit -q -m base
   git -C "$REPO" checkout -q -b feature
   STEP="$REPO/.gaia/scripts/worthiness-step.sh"
-  CHECK="$REPO/.gaia/scripts/overlap-check.sh"
   PRESENCE_HOOK="$HOME_ROOT/.claude/hooks/worthiness-presence-check.sh"
 }
 
 # The fixture mirrors the repo-relative layout every script resolves from its
-# own root. Libraries and helper trees are links to the checkout; the two
-# scripts a case may mutate are copies.
+# own root. Libraries and helper trees are links to the checkout; the one
+# script a case may mutate is a copy.
 install_harness() {
   mkdir -p "$REPO/.claude/hooks" "$REPO/.gaia/scripts"
   ln -sfn "$HOME_ROOT/.claude/hooks/lib" "$REPO/.claude/hooks/lib"
@@ -69,11 +67,10 @@ install_harness() {
   for entry in "$HOME_ROOT/.gaia/scripts/"*; do
     name="$(basename "$entry")"
     case "$name" in
-      overlap-check.sh | worthiness-step.sh) ;;
+      worthiness-step.sh) ;;
       *) ln -sfn "$entry" "$REPO/.gaia/scripts/$name" ;;
     esac
   done
-  cp "$HOME_ROOT/.gaia/scripts/overlap-check.sh" "$REPO/.gaia/scripts/overlap-check.sh"
   cp "$HOME_ROOT/.gaia/scripts/worthiness-step.sh" "$REPO/.gaia/scripts/worthiness-step.sh"
 }
 
@@ -202,20 +199,4 @@ mutate() {
   grep -qF -- "$NEEDLE" "$HOME_ROOT/.claude/skills/gaia/references/worthiness-step.md"
   mutate "$NEEDLE" 'With no human, ask again.' "$HOME_ROOT/.claude/skills/gaia/references/worthiness-step.md" "$BATS_TEST_TMPDIR/worthiness-step.md"
   if grep -qF -- "$NEEDLE" "$BATS_TEST_TMPDIR/worthiness-step.md"; then return 1; fi
-}
-
-@test "the overlap route runs on a branch that changed only unit and helper folder tests" {
-  commit_branch_tests
-  run bash "$CHECK" route --root "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = run ]
-}
-
-@test "red twin: a route that only counts browser and real-server tests skips this branch" {
-  commit_branch_tests
-  mutate '.layer != null' '.layer == "real-server" or .layer == "browser"' "$HOME_ROOT/.gaia/scripts/overlap-check.sh" "$BATS_TEST_TMPDIR/overlap-check-mutant.sh"
-  cp "$BATS_TEST_TMPDIR/overlap-check-mutant.sh" "$CHECK"
-  run bash "$CHECK" route --root "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = skip-no-test-change ]
 }

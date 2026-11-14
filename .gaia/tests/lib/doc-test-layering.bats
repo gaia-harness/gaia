@@ -27,6 +27,7 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PAGE="$REPO_ROOT/wiki/decisions/Test Layering.md"
+  DOCTRINE="$REPO_ROOT/.claude/doctrine/testing.md"
   TESTS_REACT="$REPO_ROOT/apps/web/.claude/skills/tdd-react/references/tests-react.md"
   CODING_GUIDELINES_REACT="$REPO_ROOT/apps/web/.claude/rules/coding-guidelines-react.md"
   ROUTES_RULE="$REPO_ROOT/apps/web/.claude/rules/routes.md"
@@ -55,6 +56,15 @@ setup() {
     "$REPO_ROOT/README.md"
   )
   RATIONALE='the route layer is the default home for behavior'
+  RULE_NEEDLES=(
+    'route layer is the default home for behavior'
+    'Unit-test conditions'
+    'The integration layer cannot cover its cases cheaply'
+    'The logic is important'
+    'at most one test per user-observable behavior'
+    'a case table is one test'
+    'what the type checker or lint already proves'
+  )
 }
 
 # ---------- helpers ----------
@@ -67,11 +77,7 @@ line_of() { grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1; }
 check_page() {
   local file="$1" needle
   for needle in \
-    "$RATIONALE" \
-    'both unit-test conditions' \
-    'the integration layer cannot cover its cases cheaply' \
-    'the logic is important or likely to fail' \
-    'a parameterized table is one test' \
+    'Route is the default home for behavior because' \
     'Rails request specs' 'Django test client' 'supertest' 'httptest' \
     'one Postgres schema per worker' 'Rails `parallelize`' 'pytest-xdist' \
     'one SQLite file and server per worker' \
@@ -79,14 +85,22 @@ check_page() {
     'A rule function returns the wrong answer' \
     'A route module omits its guard' \
     'A guarded route module'"'"'s refusal is served with the wrong HTTP status' \
-    '`pnpm dev` with MSW' \
-    "the server's rendered HTML"; do
+    '`pnpm dev` with MSW'; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
   has "$file" 'Every check lives at the lowest layer that can prove it' && { echo "present: old axiom"; return 1; }
+  has "$file" '.claude/doctrine/testing.md' || { echo "missing doctrine pointer"; return 1; }
   grep -E '^\| A rule function.*\| Unit ' "$file" >/dev/null || return 1
   grep -E '^\| A route module omits.*\| Route ' "$file" >/dev/null || return 1
   grep -E '^\| A guarded route module.s refusal is served.*\| Real server ' "$file" >/dev/null || return 1
+}
+
+# The doctrine file owns the rules the page used to carry.
+check_doctrine_rules() {
+  local file="$1" needle
+  for needle in "${RULE_NEEDLES[@]}"; do
+    has "$file" "$needle" || { echo "missing: $needle"; return 1; }
+  done
 }
 
 check_tests_react() {
@@ -99,18 +113,14 @@ check_tests_react() {
   [ "$service" -lt "$route" ] && [ "$route" -lt "$real_server" ] && [ "$real_server" -lt "$browser" ] || return 1
   has "$file" '| E2E ' && return 1
   for needle in \
-    'skips middleware, so a middleware guard is proven by a real-server check' \
-    'A parent loader guards no action' \
-    'a direct anonymous call to it is the proof' \
-    'proven by a real-server `.data` request naming only the child route' \
-    'cannot be proven by a route test' \
-    'wiki/decisions/Test Layering.md' \
+    'that hand-run provider does not prove a middleware guard' \
+    '.claude/doctrine/testing.md' \
     'serializeForm'; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
   has "$file" 'client-submitted' && return 1
   local token tokens
-  tokens=$(capability_names_of "$PAGE")
+  tokens=$(capability_names_of "$DOCTRINE")
   [ "$(printf '%s\n' "$tokens" | wc -l)" -eq 5 ] || { echo "expected five capability tokens"; return 1; }
   while IFS= read -r token; do
     has "$file" "$token" && { echo "copied token: $token"; return 1; }
@@ -124,8 +134,20 @@ check_routes_rule() {
   local file="$1" needle
   for needle in \
     "app/route-tests/**/*" \
-    'an anonymous request is refused with no side effect' \
-    'an anonymous request receives none of it'; do
+    '.claude/doctrine/testing.md'; do
+    has "$file" "$needle" || { echo "missing: $needle"; return 1; }
+  done
+}
+
+# The route limits and both anonymous conventions live in the testing doctrine.
+check_doctrine_route_rules() {
+  local file="$1" needle
+  for needle in \
+    'a route test that hand-calls a context provider does not' \
+    'refuses an anonymous request, with no side effect' \
+    'gives an anonymous request none of it' \
+    'real-server `.data` request naming only the child route' \
+    'proven by no GAIA layer'; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
 }
@@ -166,7 +188,7 @@ check_no_working_doc_ids() {
   return 0
 }
 
-LAYERING_HEADING='## When a test needs a real browser'
+CAPABILITY_LEAD='**Browser-only capabilities.**'
 
 # The five browser capabilities, as the page's list names them.
 CAPABILITY_NAMES=(
@@ -177,25 +199,26 @@ CAPABILITY_NAMES=(
   'browser-only navigation'
 )
 
-# Prints the leading backticked or bold name of each bullet between the list
-# heading and the next `## ` heading, one per line.
+# Prints the name leading each bullet of the doctrine's browser-only capability
+# list (the text before its colon), one per line.
 capability_names_of() {
-  awk -v heading="$LAYERING_HEADING" '
-    $0 == heading { inside = 1; next }
-    inside && /^## / { inside = 0 }
+  awk -v lead="$CAPABILITY_LEAD" '
+    index($0, lead) == 1 { inside = 1; next }
     inside && /^- / {
       line = $0
-      sub(/^- (`|\*\*)/, "", line)
-      sub(/(`|\*\*).*$/, "", line)
+      sub(/^- /, "", line)
+      sub(/[:;].*$/, "", line)
       print line
+      next
     }
+    inside && NF { inside = 0 }
   ' "$1"
 }
 
 # The page's list names exactly the five capabilities, each one under the heading.
 check_capability_list() {
   local file="$1" names count name
-  has "$file" "$LAYERING_HEADING" || { echo "missing heading"; return 1; }
+  has "$file" "$CAPABILITY_LEAD" || { echo "missing heading"; return 1; }
   names=$(capability_names_of "$file")
   count=$(printf '%s\n' "$names" | grep -c .)
   [ "$count" -eq 5 ] || { echo "expected five capability names, read $count"; return 1; }
@@ -208,7 +231,7 @@ check_flow_spec_admission() {
   local file="$1" needle
   for needle in \
     '.playwright/flows/' \
-    'one Playwright spec per critical web flow' \
+    'Write one flow test per critical flow' \
     'whatever a cheaper layer could prove'; do
     has "$file" "$needle" || { echo "missing: $needle"; return 1; }
   done
@@ -216,7 +239,7 @@ check_flow_spec_admission() {
 
 check_points_at_layering() {
   local file="$1"
-  has "$file" 'wiki/decisions/Test Layering.md' || { echo "missing Test Layering pointer"; return 1; }
+  has "$file" '.claude/doctrine/testing.md' || { echo "missing doctrine pointer"; return 1; }
   has "$file" 'planner.md' && { echo "present: planner.md pointer"; return 1; }
   return 0
 }
@@ -256,31 +279,35 @@ mutate_copy() {
   copy=$(mutate_copy "$PAGE" 's/`pnpm dev` with MSW/a server/')
   run check_page "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$PAGE" "s/the server's rendered HTML/something/")
-  run check_page "$copy"
-  [ "$status" -ne 0 ]
 }
 
-@test "red twin: the page without the trophy axiom or a unit-test needle, or with the old axiom restored, fails" {
+@test "red twin: the page without the route-default reason, the doctrine pointer, or with the old axiom restored, fails" {
   local copy
-  copy=$(mutate_copy "$PAGE" 's/the route layer is the default home for behavior/the route layer is one home/')
+  copy=$(mutate_copy "$PAGE" 's/Route is the default home for behavior because/Route is one home because/')
   run check_page "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$PAGE" 's/both unit-test conditions/the unit-test conditions/g')
-  run check_page "$copy"
-  [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$PAGE" 's/the integration layer cannot cover its cases cheaply/the integration layer is slow/')
-  run check_page "$copy"
-  [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$PAGE" 's/the logic is important or likely to fail/the logic is complex/')
-  run check_page "$copy"
-  [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$PAGE" 's/a parameterized table is one test/a table is a test/')
+  copy=$(mutate_copy "$PAGE" 's#\.claude/doctrine/testing\.md#nowhere#g')
   run check_page "$copy"
   [ "$status" -ne 0 ]
   copy=$(mutate_copy "$PAGE" 's/^Write tests, not too many/Every check lives at the lowest layer that can prove it. Write tests, not too many/')
   run check_page "$copy"
   [ "$status" -ne 0 ]
+}
+
+@test "the doctrine holds the trophy rules the page no longer carries" {
+  run check_doctrine_rules "$DOCTRINE"
+  [ "$status" -eq 0 ]
+}
+
+@test "red twin: a doctrine copy missing any trophy rule fails" {
+  local copy needle
+  for needle in "${RULE_NEEDLES[@]}"; do
+    copy="$BATS_TEST_TMPDIR/dropped-rule.md"
+    grep -vF -- "$needle" "$DOCTRINE" >"$copy"
+    cmp -s "$DOCTRINE" "$copy" && { echo "needle matched no line: $needle"; return 1; }
+    run check_doctrine_rules "$copy"
+    [ "$status" -ne 0 ]
+  done
 }
 
 # ---------- tests-react.md ----------
@@ -295,12 +322,12 @@ mutate_copy() {
   copy=$(mutate_copy "$TESTS_REACT" 's/serializeForm/serializeBody/')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$TESTS_REACT" 's/one journey per user flow/client-submitted forms, one journey per user flow/')
+  copy=$(mutate_copy "$TESTS_REACT" 's/serializeForm/client-submitted serializeForm/')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
-  token=$(capability_names_of "$PAGE" | head -n 1)
+  token=$(capability_names_of "$DOCTRINE" | head -n 1)
   [ -n "$token" ]
-  copy=$(mutate_copy "$TESTS_REACT" "s/one journey per user flow/$token, one journey per user flow/")
+  copy=$(mutate_copy "$TESTS_REACT" "s/serializeForm/$token serializeForm/")
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
 }
@@ -310,16 +337,13 @@ mutate_copy() {
   copy=$(mutate_copy "$TESTS_REACT" 's/| Route  /| Rout3  /')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$TESTS_REACT" 's/A parent loader guards no action/A parent loader guards/')
+  copy=$(mutate_copy "$TESTS_REACT" 's/does not prove a middleware guard/proves it/')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$TESTS_REACT" 's/Write tests at the/Write tests at the route layer is the default home for behavior, the/')
+  copy=$(mutate_copy "$TESTS_REACT" 's/Which test to write and at which layer/the route layer is the default home for behavior, which test to write and at which layer/')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$TESTS_REACT" "s/a route's redirect is a route test/a route's redirect is E2E/")
-  run check_tests_react "$copy"
-  [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$TESTS_REACT" 's#wiki/decisions/Test Layering.md#nowhere#g')
+  copy=$(mutate_copy "$TESTS_REACT" 's#\.claude/doctrine/testing\.md#nowhere#g')
   run check_tests_react "$copy"
   [ "$status" -ne 0 ]
 }
@@ -350,11 +374,23 @@ mutate_copy() {
   copy=$(mutate_copy "$ROUTES_RULE" "s#app/route-tests/\*\*/\*#app/other#")
   run check_routes_rule "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$ROUTES_RULE" 's/receives none of it/is fine/')
+  copy=$(mutate_copy "$ROUTES_RULE" 's#\.claude/doctrine/testing\.md#nowhere#g')
   run check_routes_rule "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$ROUTES_RULE" 's/is refused with no side effect/is refused/')
-  run check_routes_rule "$copy"
+}
+
+@test "the doctrine holds the route limits and both anonymous conventions" {
+  run check_doctrine_route_rules "$REPO_ROOT/.claude/doctrine/testing.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "red twin: a doctrine without a route limit or an anonymous convention fails" {
+  local copy
+  copy=$(mutate_copy "$REPO_ROOT/.claude/doctrine/testing.md" 's/gives an anonymous request none of it/is fine/')
+  run check_doctrine_route_rules "$copy"
+  [ "$status" -ne 0 ]
+  copy=$(mutate_copy "$REPO_ROOT/.claude/doctrine/testing.md" 's/proven by no GAIA layer/proven/')
+  run check_doctrine_route_rules "$copy"
   [ "$status" -ne 0 ]
 }
 
@@ -426,38 +462,38 @@ mutate_copy() {
 
 # ---------- the browser capability list ----------
 
-@test "the page lists each browser capability under the real-browser heading" {
-  run check_capability_list "$PAGE"
+@test "the doctrine lists each browser capability" {
+  run check_capability_list "$DOCTRINE"
   [ "$status" -eq 0 ]
 }
 
-@test "red twin: a page missing a capability, the heading or a bullet fails" {
+@test "red twin: a doctrine copy missing a capability or the list lead fails" {
   local copy name
   for name in "${CAPABILITY_NAMES[@]}"; do
     copy="$BATS_TEST_TMPDIR/dropped.md"
-    grep -vF -- "$name" "$PAGE" >"$copy"
+    grep -vF -- "- $name" "$DOCTRINE" >"$copy"
     run check_capability_list "$copy"
     [ "$status" -ne 0 ]
   done
-  copy=$(mutate_copy "$PAGE" 's/^## When a test needs a real browser$/## Browsers/')
+  copy=$(mutate_copy "$DOCTRINE" 's/^\*\*Browser-only capabilities\.\*\*/**Browsers.**/')
   run check_capability_list "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "the page admits one browser spec per critical web flow whatever a cheaper layer could prove" {
-  run check_flow_spec_admission "$PAGE"
+@test "the doctrine admits one flow test per critical flow whatever a cheaper layer could prove" {
+  run check_flow_spec_admission "$DOCTRINE"
   [ "$status" -eq 0 ]
 }
 
-@test "red twin: a page without the flows folder, the admission or the override fails" {
+@test "red twin: a doctrine without the flows folder, the admission or the override fails" {
   local copy
-  copy=$(mutate_copy "$PAGE" 's#\.playwright/flows/#.playwright/other/#g')
+  copy=$(mutate_copy "$DOCTRINE" 's#\.playwright/flows/#.playwright/other/#g')
   run check_flow_spec_admission "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$PAGE" 's/one Playwright spec per critical web flow/one spec/g')
+  copy=$(mutate_copy "$DOCTRINE" 's/Write one flow test per critical flow/Write one test/g')
   run check_flow_spec_admission "$copy"
   [ "$status" -ne 0 ]
-  copy=$(mutate_copy "$PAGE" 's/whatever a cheaper layer could prove/when nothing cheaper proves it/g')
+  copy=$(mutate_copy "$DOCTRINE" 's/whatever a cheaper layer could prove/when nothing cheaper proves it/g')
   run check_flow_spec_admission "$copy"
   [ "$status" -ne 0 ]
 }
@@ -472,10 +508,10 @@ mutate_copy() {
 
 @test "red twin: a React rule or reference that points at the planner or loses the page pointer fails" {
   local copy
-  copy=$(mutate_copy "$CODING_GUIDELINES_REACT" 's#wiki/decisions/Test Layering\.md#nowhere#g')
+  copy=$(mutate_copy "$CODING_GUIDELINES_REACT" 's#\.claude/doctrine/testing\.md#nowhere#g')
   run check_points_at_layering "$copy"
   [ "$status" -ne 0 ]
-  printf 'wiki/decisions/Test Layering.md and .claude/skills/gaia/references/plan/planner.md\n' >"$BATS_TEST_TMPDIR/pointer.md"
+  printf '.claude/doctrine/testing.md and .claude/skills/gaia/references/plan/planner.md\n' >"$BATS_TEST_TMPDIR/pointer.md"
   run check_points_at_layering "$BATS_TEST_TMPDIR/pointer.md"
   [ "$status" -ne 0 ]
 }

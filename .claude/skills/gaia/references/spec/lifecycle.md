@@ -6,13 +6,13 @@ Contents: Pre-audit flow checks; Consolidation; Post-merge close; Pre-flight swe
 
 ## Pre-audit flow checks
 
-For a spec-derived plan written with a closing flow-test phase, the orchestrator's `flow-checks` block runs after the last phase commits and before the worthiness step, from `<RESOLVED_ROOT>`:
+For a spec-derived plan written with a closing flow-test phase, the orchestrator's `flow-checks` block runs after the last phase commits and before the drift check (a plan whose folder carries a `TEST-DESIGN` marker) or the worthiness step (an older plan), from `<RESOLVED_ROOT>`:
 
 ```bash
 bash .gaia/scripts/spec/flow-coverage.sh --spec <SPEC_PATH> --root <RESOLVED_ROOT> --flow-tests-out <RUN_FOLDER>/flow-tests.tsv
 ```
 
-`<RUN_FOLDER>` is the branch's run folder (`.claude/doctrine/execution.md`, `## Run folder`). The script checks that each SPEC flow has its test file and that the branch changed it, and for a web flow that the spec is in the Playwright listing and its `@covers` header names every SPEC folder the branch changed; it also scans each flow test for a working-document id. It writes `<RUN_FOLDER>/flow-tests.tsv`, one row per flow whose test exists, which the worthiness step reads as its flow inputs and the merge-time presence gate reads so that a changed test in a listed flow file with no recorded worthiness verdict denies the merge.
+`<RUN_FOLDER>` is the branch's run folder (`.claude/doctrine/execution.md`, `## Run folder`). The script checks that each SPEC flow has its test file and that the branch changed it, and for a web flow that the spec is in the Playwright listing and its `@covers` header names every SPEC folder the branch changed; it also scans each flow test for a working-document id. It writes `<RUN_FOLDER>/flow-tests.tsv`, one row per flow whose test exists, which the merge-time presence gate reads so that a changed test in a listed flow file with no recorded worthiness verdict denies the merge. Whether the tests are any good is the next step's judgment: for a marked plan the drift check plus its honesty pass (`.claude/skills/gaia/references/drift-check.md`), whose honesty and evaluator verdicts record those ledger lines; for an older plan the worthiness step, which reads the file as its flow inputs.
 
 - Exit 0: every flow passed; the block records a `## Flow checks` block and goes on.
 - Exit 1: one or more findings, one stdout line each; the block's one fixer round runs, then the script runs once more.
@@ -25,7 +25,7 @@ The fixer, the retry bound of one and the `## Flow checks (HALTED)` record are t
 
 The one consolidation recipe. Four callers run it:
 
-- **The pre-audit pass.** The orchestrator, after the worthiness step and before the first member dispatch. It always attempts promotion.
+- **The pre-audit pass.** The orchestrator, after the drift check (an older plan: the worthiness step) and before the first member dispatch. It always attempts promotion.
 - **The post-clearance refresh.** The orchestrator, after audit clearance and the merge question's `Merge it` answer. It rewrites `SUMMARY.md` against the audited code, uncommitted, and attempts promotion only when it reaches `wiki-promote.md`'s Step 2.
 - **The cold sweep.** The pre-flight sweep's cold consolidation, against a folder whose PR already merged. It accepts an interrupted run's pre-audit `SUMMARY.md` as the last complete summary: a verified one is no candidate, and an unverified one is rewritten from the layers.
 - **A plan generated before this order.** Its own orchestrator block consolidates after clearance and keeps that block's continuation. It may omit `Pass:` from its record, so a plan running its old block needs no new reading of this page.

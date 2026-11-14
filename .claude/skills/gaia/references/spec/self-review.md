@@ -48,7 +48,7 @@ Each flow names one critical user path and says why it is critical. Flag flows t
 
 ### 5. Missing flows
 
-Compare the intent's critical paths with the flows: a path whose breakage would block a user's main task, or risk data, money or security, with no flow, is a `missing_flow` finding. Flow shape: each flow has an id, slug, name, why, and exactly one of covers or test path. A flow lists no branches, inputs or outcomes; case tables belong to one parameterized test at the layer the trophy rule picks (`wiki/decisions/Test Layering.md`), so flag a flow that enumerates cases.
+Compare the intent's critical paths with the flows: a path whose breakage would block a user's main task, or risk data, money or security, with no flow, is a `missing_flow` finding. Flow shape: each flow has an id, slug, name, why, and exactly one of covers or test path. A flow lists no branches, inputs or outcomes; case tables belong to one parameterized test (`.claude/doctrine/testing.md`), so flag a flow that enumerates cases.
 
 ### 6. Pending clarifications
 

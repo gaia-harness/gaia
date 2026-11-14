@@ -121,7 +121,6 @@ flow_input_needles() {
 # shellcheck disable=SC2016
 flow_verdict_needles() {
   FLOW_VERDICT_NEEDLES=(
-    'untestedErrorPaths'
     'missingOutcome'
     'undeclaredFolders'
     'any non-empty member makes the verdict `fix`, never `keep`'
@@ -131,7 +130,7 @@ flow_verdict_needles() {
 
 flow_judgment_needles() {
   FLOW_JUDGMENT_NEEDLES=(
-    'name the error paths the build actually has'
+    'only far enough to judge the flow'\''s outcome and the folders it changed'
     'the SPEC does not list'
     'honesty axis applies to every test it judges, strict included'
   )
@@ -161,6 +160,11 @@ flow_judgment_needles() {
   done
 }
 
+@test "the evaluator prompt no longer tells the evaluator to name error paths" {
+  run prompt_carries_every "$PROMPT" 'name the error paths the build actually has'
+  [ "$status" -ne 0 ]
+}
+
 @test "the flow pin check rejects a prompt that lacks any one flow needle" {
   flow_input_needles
   flow_verdict_needles
@@ -183,7 +187,7 @@ flow_judgment_needles() {
 # shellcheck disable=SC2016
 sole_driver_needles() {
   SOLE_DRIVER_NEEDLES=(
-    'only test below the browser layer (`wiki/decisions/Test Layering.md`) driving a guard, refusal or validation into its failing state is `keep` or `fix`, never `delete`'
+    'only test below the browser layer (`.claude/doctrine/testing.md`, `## Guards and security rows`) driving a guard, refusal or validation into its failing state is `keep` or `fix`, never `delete`'
     'A browser test or a flow test never counts as the covering sibling'
     'neither does a sibling also proposed for `delete`'
   )

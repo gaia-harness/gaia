@@ -34,7 +34,7 @@ The usual way one gets written is copying: a plan task doc cites the directive i
 
 `.gaia/scripts/machine-local-ref-lib.sh` is the detector; its header owns the exact patterns. The `commit-msg` hook runs it on every commit message, the `pre-commit` hook on the lines a commit adds (prose whole, code in full-line comments only), a PreToolUse hook on the title and body a `gh pr create|edit` or `gh issue create|edit` writes, and `flow-coverage.sh`'s strict scan (through `working-doc-id-scan.sh`) of each flow test file. It refuses SPEC, FLOW and plan ids and machine-local paths in history ledgers and commit messages too: a ledger records history, and a document only one machine has is not part of it.
 
-Advisory only, never enforced: directive ids and issue or pull request references (too close to ordinary prose for a pattern), and test files and fixtures (data).
+Advisory only, never enforced: directive ids and issue or pull request references (too close to ordinary prose for a pattern), and test files other than flow tests (the strict scan above covers those) and fixtures (data).
 
 ## Not covered
 
