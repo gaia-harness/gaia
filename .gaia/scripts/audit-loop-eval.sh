@@ -33,8 +33,8 @@
 # {satisfied, unsatisfied} for round r. reopened-round prints the latest
 # round's number when it is reopened on HEAD's tree, else 0.
 # unit-window prints `<unit> <start_round> <through_round> <closing>` for the
-# latest unit; closing is `true` when an accept admitted it, so its one round
-# is the closing round and audit-loop-unit runs no fixer in it.
+# latest unit; closing is `true` when an accept admitted it: the human stopped
+# fixing, so audit-loop-unit runs no fixer in it.
 # record-values adds optional `light` (post-clearance light reviews) and `quick`
 # (merge-base clears, so a quick clear never also counts as light) objects of
 # per-member counts, read from the branch's light-review ledger; each is left
@@ -101,9 +101,9 @@
 #     2. a denying signal not lifted above, with no checkpoint at round >= used
 #        answered: `deny rubric:<signal> <eligible> false`, first in SIGNALS order.
 #     3. the latest checkpoint is answered and its index is greater than the
-#        latest unit's after_checkpoint (or no unit exists): a grant gives
-#        `allow grant s min(s+k-1, 10)`, an accept `allow accept s s`; else a
-#        grant window gives `allow grant s min(s+k-1, through_round)`.
+#        latest unit's after_checkpoint (or no unit exists), or the latest answer is an
+#        accept whose closing round is unrecorded (gaia_loop_next_closing): a grant gives `allow grant s min(s+k-1, 10)`,
+#        an accept `allow accept s s`; else a grant window gives `allow grant s min(s+k-1, through_round)`.
 #     4. the latest answer is an accept and a round is recorded after the
 #        checkpoint it answers (its closing round is spent): `deny fallback
 #        <eligible> false`, whatever the reading. An accept never re-arms the loop.
