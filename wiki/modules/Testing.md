@@ -50,7 +50,7 @@ Test a component or page with a story that carries `.test()` blocks for its beha
 
 ## Playwright
 
-- Real-server and browser tests in `apps/web/.playwright/e2e/` and `apps/web/.playwright/flows/<slug>.spec.ts`, config in `apps/web/playwright.config.ts`
+- Real-server and browser tests in `apps/web/.playwright/e2e/`, flow tests in `apps/web/.playwright/flows/<slug>.spec.ts`, config in `apps/web/playwright.config.ts`
 - Use the bundled `hydration(page)` helper after `page.goto()` to wait for React Router hydration before interacting
 
 ### a11y scanning
