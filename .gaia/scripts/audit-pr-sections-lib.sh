@@ -385,7 +385,7 @@ _command_record_residual() {
          else {source: "human", decision: $decision, round: $round, member, finding_class, path, line,
                reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)} end
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
-    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class, and a fix is refused for a finding the open round reports cross_remit (its fixer is outside the reporting member remit, so the veto could never be satisfied: record --decision waive instead); otherwise record --decision fix"; return 3; }
+    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix), and a fix needs it not cross_remit (its file is outside the reporting member's remit, so no review ever satisfies the veto: record --decision waive)"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
