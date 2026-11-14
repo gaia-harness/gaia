@@ -145,7 +145,7 @@ check_retry_attribution() {
     '- **Attribute.**' \
     'A failure is attributable only when every error names a file exactly one task declares or a test file several tasks declare.' \
     'An error with no file path, on a file no task declares, or on a non-test file more than one task declares makes the failure unattributable.' \
-    'An error in a test file several tasks declare goes to that file'"'"'s shared-file executor (**In-phase arm**).' || return 1
+    'A typecheck or lint error in a test file several tasks declare goes straight to that file'"'"'s **Shared-file executor** under **In-phase arm**, with no check 2.' || return 1
 }
 
 check_retry_cap() {
@@ -282,8 +282,9 @@ check_in_phase_arm() {
     '- **Shared-file executor.** For several declaring tasks, record the retry as above, then dispatch one fresh executor per such test file, separate from any executor this retry sends a declaring task:' \
     'the original task prompt of the declaring task with the lowest task number, without its `Yield handoff:` line, then the line `Read these task docs for context; they do not widen what you may edit:`, then each other declaring task'"'"'s `task-*.md` path,' \
     'then the line `A test in a file several tasks of this phase declare fails in this phase'"'"'s gate. Edit only that test file, and in it only its failing tests and the shared setup they use, such as mocks and beforeEach, updating them when this phase changed the asserted behavior on purpose, and say what you changed under ### Deviations from plan. The task docs and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code. If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
-    'A typecheck or lint error in that test file goes to the same executor, in the retry of the failure'"'"'s kind:' \
-    'its prompt carries the `A test in a file several tasks` line and the failing tests only when a test there fails, and the line `The phase quality gate failed on this test file. Fix these errors in it when this phase changed the code they use on purpose, edit no other file, and still run the typecheck and lint your task prompt requires before you return. If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The errors:`, then the gate output lines for that file.' \
+    'A typecheck or lint error in that test file goes to the same executor:' \
+    'its prompt carries the `A test in a file several tasks` line and the failing tests only when a test there fails, and the line `The phase quality gate failed on this test file. Fix these errors in it when their cause is in this test file, such as a call to code this phase changed on purpose, edit no other file, and still run the typecheck and lint your task prompt requires before you return. If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The errors:`, then the gate output lines for that file.' \
+    'Each line applies only to the failures that follow it.' \
     'Every other executor this retry sends a declaring task ends its prompt with the line `Leave <test file> alone: another executor owns it in this retry.`' \
     '- **Cause forwarding.** When the single-owner or shared-file executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and, for a single-owner executor, that task is not its own task, the same retry goes on to that task:' \
     'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then, once any executor this retry already sent that task has returned, dispatch a fresh executor for it:' \
@@ -407,7 +408,7 @@ resume_point() {
 }
 
 @test "red twin: attribution that halts on an error in a shared test file fails" {
-  red check_retry_attribution ' An error in a test file several tasks declare goes to that file'"'"'s shared-file executor (**In-phase arm**).' ''
+  red check_retry_attribution ' A typecheck or lint error in a test file several tasks declare goes straight to that file'"'"'s **Shared-file executor** under **In-phase arm**, with no check 2.' ''
 }
 
 @test "red twin: a static retry that skips the shared-file executor fails" {
@@ -579,7 +580,11 @@ resume_point() {
 }
 
 @test "red twin: a shared-file static fix that spends the test retry fails" {
-  red check_in_phase_arm ', in the retry of the failure'"'"'s kind:' ', in the test retry:'
+  red check_in_phase_arm 'goes to the same executor: its prompt' 'goes to the same executor in the test retry: its prompt'
+}
+
+@test "red twin: a shared-file prompt whose test and static lines bleed into each other fails" {
+  red check_in_phase_arm ' Each line applies only to the failures that follow it.' ''
 }
 
 @test "red twin: a shared-file executor whose named cause is not forwarded fails" {
