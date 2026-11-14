@@ -255,8 +255,9 @@ for the same digest, and an ordinary re-spawn does not clear it (a plain
 earned write leaves the refusal on disk). Resolve the finding with an edit to
 the branch's own patch on that member's paths, which rotates its digest and
 retires the refusal with it (a fix that arrives only through a catch-up merge of
-the base branch does not rotate it unless the base edited within three lines of a branch hunk); or, when the operator acknowledges a
-Major with a stated reason and the digest does not move,
+the base branch does not rotate it unless the base edited within three lines of a branch hunk); or, when a human accepted the
+Major at the branch checkpoint (audit-loop-eval.sh accepted-keys lists it) and
+the digest does not move,
 re-spawn the member so it writes its earned marker with
 --supersede-refusal \"<reason>\", removing its own refusal as an explicit,
 recorded act.

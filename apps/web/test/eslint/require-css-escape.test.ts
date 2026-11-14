@@ -1,6 +1,7 @@
 // Runs in the node project.
-// The rule itself is tested in @gaia-harness/lint; this asserts the app passes
-// the preset its nodeFiles globs, so the rule is off where code runs in Node
+// The rule itself is tested in @gaia-harness/lint; this pins the app's resolved
+// lint config (the app's nodeFiles wiring plus the preset's own .server
+// exemption the app relies on), so the rule is off where code runs in Node
 // (CSS is undefined and its CSS.escape autofix would crash) and on in browser
 // code.
 import type {Linter} from 'eslint';

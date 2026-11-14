@@ -30,9 +30,9 @@
 #                  exists, the earned body records a `supersedes` block naming
 #                  the reason, and the writer removes that sibling refusal AFTER
 #                  the earned .ok is atomically published. This is the only
-#                  legitimate refused->earned path on identical content (an
-#                  operator acknowledges an unaddressed Major with a stated
-#                  reason, so the digest does not move). Absent the flag, an
+#                  legitimate refused->earned path on identical content (a
+#                  human accepted an unaddressed Major at the branch
+#                  checkpoint, so the digest does not move). Absent the flag, an
 #                  earned write NEVER touches a sibling refusal, that strict
 #                  precedence is the anti-gaming control (a bare re-run must not
 #                  clear a refusal; only an authored, reasoned supersede may).
