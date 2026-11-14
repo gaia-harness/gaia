@@ -46,7 +46,7 @@ import {
  * its real backend and points `baseURL` at a server running without MSW;
  * GAIA ships none.
  *
- * A form's own submission is a real-server post whose body `serializeForm`
+ * A form's own submission is a page-less post whose body `serializeForm`
  * (`./html.ts`) builds from the served form.
  */
 export type GivenBuilder<Input, Created> = (input: Input) => Promise<Created>;
