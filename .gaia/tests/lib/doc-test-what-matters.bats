@@ -45,9 +45,8 @@ check_section_three() {
   expected=$(cat <<'BLOCK'
 ## 3. Test What Matters
 
-Test critical flows at the seams, after the code exists: one test per critical user flow at its real entry point, covering its happy path and only the error paths that take several requests or sessions to stage. A refusal, a validation error or another seam worth pinning gets a test at the lowest layer that shows it, usually a route test; tricky pure logic gets a unit test; a bug fix gets a test that reproduces the bug. Test-first with `/tdd` is a tool for logic where it helps, not a rule.
+Write tests, not too many, mostly integration (the testing trophy). Which test to write and at which layer: `.claude/doctrine/testing.md`. Test-first with `/tdd` is a tool for logic where it helps, not a rule.
 
-- Write tests, not too many, mostly integration (the testing trophy); at most one test per user-observable behavior, and a parameterized table is one test. Full rule: `wiki/decisions/Test Layering.md`
 - The frontend stack (Vitest, Storybook, Playwright) is in `apps/web/CLAUDE.md` (`## Tests and prerequisites`) and the `tdd-react` skill
 BLOCK
 )
@@ -106,8 +105,7 @@ check_audit_routing() {
 
 # check_playwright_pointer <file>
 check_playwright_pointer() {
-  grep -qF -- 'wiki/decisions/Test Layering.md' "$1" || return 1
-  grep -qF -- 'When a test needs a real browser' "$1" || return 1
+  grep -qF -- '.claude/doctrine/testing.md' "$1" || return 1
   grep -qwE 'UATs?' "$1" && return 1
   grep -qF -- 'planner.md' "$1" && return 1
   return 0
@@ -136,7 +134,7 @@ check_debt() {
 @test "red twin: a section 3 with one word changed fails the verbatim comparison" {
   local copy
   check_section_three "$GUIDELINES" || return 1
-  copy=$(copy_with "$GUIDELINES" guidelines-mutated.md 's/after the code exists/before the code exists/') || return 1
+  copy=$(copy_with "$GUIDELINES" guidelines-mutated.md 's/mostly integration/mostly unit/') || return 1
   check_section_three "$copy" && return 1
   true
 }
@@ -212,14 +210,14 @@ check_debt() {
 
 # ---------- Playwright rule ----------
 
-@test "playwright rule points at the Test Layering browser rung and carries no UAT or planner pointer" {
+@test "playwright rule points at the testing doctrine and carries no UAT or planner pointer" {
   check_playwright_pointer "$PW_RULE"
 }
 
-@test "red twin: a playwright rule without the Test Layering pointer fails" {
+@test "red twin: a playwright rule without the doctrine pointer fails" {
   local copy
   check_playwright_pointer "$PW_RULE" || return 1
-  copy=$(copy_with "$PW_RULE" pw-nopointer.md 's/wiki\/decisions\/Test Layering\.md/gone/g') || return 1
+  copy=$(copy_with "$PW_RULE" pw-nopointer.md 's/\.claude\/doctrine\/testing\.md/gone/g') || return 1
   check_playwright_pointer "$copy" && return 1
   true
 }

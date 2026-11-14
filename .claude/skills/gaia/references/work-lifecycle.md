@@ -103,7 +103,7 @@ In worktree mode, every command runs from inside the worktree.
 
 ## 5b. Worthiness step
 
-Read `.claude/skills/gaia/references/worthiness-step.md` and run it, with the draft PR open and before the audit's pre-dispatch verification and the first member dispatch. When the branch changes no emergent test it routes to nothing and ends with no commit.
+Read `.claude/skills/gaia/references/worthiness-step.md` and run it, with the draft PR open and before the audit's pre-dispatch verification and the first member dispatch. This work has no planner, so it keeps the full worthiness review: the selection covers strict, route and emergent tests, and a branch that changes none of them routes to nothing and ends with no commit.
 
 ## 6. Audit
 

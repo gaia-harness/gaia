@@ -142,7 +142,7 @@ check_tdd_loop() {
   local text
   text="$(flat "$1/$TDD_REL")"
   need "$text" 'Write a new test only for those behaviors and their acceptance tests' || return 1
-  need "$text" 'both unit-test conditions' || return 1
+  need "$text" 'plus a unit test where `.claude/doctrine/testing.md` allows one' || return 1
   lacks "$text" 'For each remaining behavior' || return 1
   lacks "$text" 'One test at a time' || return 1
 }

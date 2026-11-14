@@ -4,76 +4,67 @@ status: active
 priority: 2
 date: 2026-11-01
 created: 2026-11-01
-updated: 2026-11-11
+updated: 2026-11-14
 tags: [decision, testing, tdd, layering, authorization]
 ---
 
 # Test Layering
 
-Write tests, not too many, mostly integration: the route layer is the default home for behavior. Story interaction tests carry component behavior and real-server checks carry what the framework serves; unit and browser tests stay thin. A unit test is written only when both unit-test conditions hold: the integration layer cannot cover its cases cheaply, and the logic is important or likely to fail. Important means a wrong result corrupts data, breaks auth or a security or trust boundary, mishandles untrusted input, or computes money, dates or other values users rely on. Likely to fail means non-obvious logic: parsing, normalization, edge-heavy rules, concurrency. Branchy but low-stakes helpers do not qualify: formatting, small array, string and object utilities, and thin wrappers get their coverage from the integration tests that use them, or none if nothing uses them. At most one test per user-observable behavior, and a parameterized table is one test: a cap, not a quota; the tests the rules require (a critical flow, a guard's failing state, a bug fix) still apply. Nothing the type checker or lint already proves is tested. Browser tests stay few and focused on critical flows, and a simple project needs less than the full shape: a tiny app gets few tests, not a scaled-down copy of a big app's suite. A browser is the most expensive layer, so a check that a cheaper layer proves does not get a browser test. This page owns that principle, its rationale and the stack mapping. The React testing reference is `apps/web/.claude/skills/tdd-react/references/tests-react.md`; it links here rather than restating it.
+Write tests, not too many, mostly integration. The rules that say which test to write and at which layer live in [`.claude/doctrine/testing.md`](../../.claude/doctrine/testing.md), which every plan, executor, reviewer and fixer follows; this page keeps the reasons behind them. The React testing reference is `apps/web/.claude/skills/tdd-react/references/tests-react.md`; it links here for the reasons rather than restating them.
 
 ## Rationale
 
 Browser time is the expensive layer in three ways. A browser test boots the server and Chromium, so each one costs seconds where a unit or route test costs milliseconds. Browser tests share a live stack, so parallel workers contend for one store and a test needs per-worker isolation (see [[#Worker isolation]]). And a failing browser test names a flow, not a cause, so finding the broken rule costs more than the test saved.
 
-A check that duplicates one another test already proves adds cost and no coverage. The overlap pass reads every layer and proposes dropping or merging a duplicate, folding two or more tests into an existing integration test that already asserts their property, moving a browser test to the real-server or route layer, moving component behavior to a story, and moving a test to the unit layer only with a reason stating both unit-test conditions. The worthiness review judges each new test on its own worth and may cite an integration test that covers a unit test; proposals across layers are the overlap pass's ([[Worthiness Audit]]).
+A check that duplicates one another test already proves adds cost and no coverage. A tiny app needs few tests, not a scaled-down copy of a big app's suite, and a test earns its place by failing when the behavior breaks.
 
-## The layers
+## Why route is the default
 
-From lowest to highest:
+Route is the default home for behavior because the route surface is the lowest layer that takes a request in process. A request through a route module's `loader` or `action` shows a status, a redirect, returned data, a validation error, an authorization outcome or a side effect, with no server and no browser, in the Vitest `node` project. Most behavior a user relies on crosses that surface, so one route test proves what a unit test of each helper behind it would only approximate, and it keeps passing when the helpers are refactored.
 
-1. **Unit and story.** A function, a hook, or one component given props; a unit test needs both unit-test conditions above. Vitest `node` and `browser` projects and Storybook stories ([[Stories as Tests]]).
-2. **Route.** A request taken in process by a route module's `loader` or `action`, with no browser and no server. The route surface is the lowest layer that takes a request in process: it shows a status, a redirect, returned data, a validation error, an authorization outcome or a side effect. It runs in the Vitest `node` project.
-3. **Real server.** The live stack, driven by Playwright's request fixture: it opens no page and makes no browser round trip. Only this layer shows what the framework serves: middleware, the HTTP status of a refusal, cookies and the session across the server, and the server's rendered HTML, read through the request fixture and a parsed response body. A forged request belongs here only when its guard is one a direct route call skips, and rendered HTML only when that HTML is itself the requirement; a heading whose text is data the loader returns is a route check, and so is a refusal or error outcome a direct `loader` or `action` call returns, even when a page or error boundary renders it.
-4. **Browser.** A real page, used only for a capability no lower layer shows, from the closed list under [[#When a test needs a real browser]], one test per user flow, plus one Playwright spec per critical web flow (see that section). A JavaScript-disabled Given or a native form post rules out the browser and nothing else: it routes by the route and real-server layers, and a then-clause that needs the served form or a multi-page workflow over native forms is a real-server check, with the form body built by `serializeForm` (`apps/web/.playwright/html.ts`) from the served page.
-
-Sibling browser tests that walk one flow fold into one journey, and the fold is the recommended fix. Every transition, status or role rule has exactly one case table, at the layer this page picks, holding every case of the rule; a test of that rule at any other layer keeps one row per outcome to prove the wiring, except an allowed outcome the closing flow test walks and asserts, which that flow test proves. The real-server check of a guarded route module is not a test of the rule and keeps its single refusal row. Rules of one kind may share one parameterized table.
-
-A live-stack test goes to the real-server or browser surface, never to the legacy end-to-end surface.
+A unit test sits below the default and earns its place only for logic the integration layer cannot cover cheaply and whose wrong answer is costly or likely. Formatting helpers and thin wrappers get their coverage from the tests that use them, since a test of each would pin the implementation and fail on a refactor that changes no behavior.
 
 Only the frontend package renders route rows today. [[Testing]] describes the frontend's layers in place.
 
-## When a test needs a real browser
+## Why the browser list is closed
 
-A browser test is written only for a capability no lower layer shows. The closed list:
+A browser is the most expensive layer, so it is reserved for what no lower layer shows: behavior that runs in the page, layout, focus and keyboard movement, a rendered-DOM accessibility scan, and browser-only navigation. Each is something the browser alone computes. A request, a status or a rendered value is shown cheaper below, so a closed list keeps one more browser test from eroding that cost. The closing flow test is admitted to the browser layer whatever a cheaper layer could prove, because the journey walked end to end is itself the requirement. Sibling browser tests that walk one flow fold into one journey because each repeats the same boot and sign-in cost for no new capability.
 
-- `client JavaScript`: behavior that runs in the page, such as an update without a reload or an optimistic change.
-- `layout or visual position`: where an element sits relative to another, or whether it fits the viewport.
-- `focus or keyboard`: where focus lands and how keys move it.
-- `rendered-DOM accessibility scan`: an automated accessibility check of the DOM the browser renders.
-- `browser-only navigation`: history, back and forward, or a client-side transition no request shows.
+A JavaScript-disabled Given or a native form post rules out the browser and nothing else: it is a real-server check, with the form body built by `serializeForm` (`apps/web/.playwright/html.ts`) from the served page, because only the framework serves that form.
 
-One exception: one Playwright spec per critical web flow, written after the build in `<frontend package>/.playwright/flows/`, is admitted on the browser layer whatever a cheaper layer could prove. It carries the journey, the effects that take several requests or sessions to stage, and, where the SPEC requires the flow to work without JavaScript, a real-server check of its native form posts; a refusal or validation one request shows sits at the route or real-server layer this page picks. The list governs every other browser test.
+## Why a case table is one test
 
-## Stack mapping
-
-The layers are not React-specific. Each has an equivalent in other server stacks:
-
-| Concept          | Other stacks                                                                                                                                              |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Route surface    | Rails request specs, the Django test client, supertest on Express, Go `httptest`                                                                          |
-| Worker isolation | one Postgres schema per worker, Rails `parallelize`, pytest-xdist with a database per worker, one SQLite file and server per worker |
+A rule with many cases is one behavior with many inputs. A parameterized table asserts every case in one place, so a new case is a new row rather than a new test, and the rule has one home a reader can find instead of the same cases restated at several layers. Another layer keeps one row per outcome only to prove the wiring reaches the rule, since the rule's own cases were already driven where it lives.
 
 ## Worker isolation
 
 Parallel workers that share one store cannot hold independent state. Each worker seeds and reads the MSW store of its own dev server, keyed on its worker index. A serial project is not an accepted way to share one. The shipped pattern is in `apps/web/.playwright/fixtures.ts` and its rule is in `apps/web/.claude/rules/playwright.md`.
 
+## Stack mapping
+
+The layers are not React-specific. Each has an equivalent in other server stacks:
+
+| Concept          | Other stacks                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Route surface    | Rails request specs, the Django test client, supertest on Express, Go `httptest`                                                     |
+| Worker isolation | one Postgres schema per worker, Rails `parallelize`, pytest-xdist with a database per worker, one SQLite file and server per worker |
+
 ## Authorization bug classes
 
 Each class of authorization bug has one layer that fails for it, and a test that fails when the bug is present:
 
-| Bug class                                    | Layer       | The test that fails                                                                              |
-| -------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
-| A rule function returns the wrong answer     | Unit        | The rule function called with an actor it must refuse                                            |
-| A route module omits its guard               | Route       | The `action` or `loader` called with an anonymous `Request` returns data or performs the write   |
-| A guarded route module's refusal is served with the wrong HTTP status | Real server | A request with redirects off asserts the status and any `Location` header the framework serves   |
+| Bug class                                                             | Layer       | The test that fails                                                                            |
+| --------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
+| A rule function returns the wrong answer                              | Unit        | The rule function called with an actor it must refuse                                          |
+| A route module omits its guard                                        | Route       | The `action` or `loader` called with an anonymous `Request` returns data or performs the write |
+| A guarded route module's refusal is served with the wrong HTTP status | Real server | A request with redirects off asserts the status and any `Location` header the framework serves |
 
-A route test does not observe the status the framework serves, so only the third class needs the real server. A plan carries one real-server check per guarded route module, asserting only the served status and any `Location` header, never page content a route test shows; every other refusal a direct `loader` or `action` call shows is a route check. The one exception to the status-only assertion is the parent-loader `.data` check below: it asserts the child's data is absent from the response body, since a status alone does not show that refusal.
+A route test does not observe the status the framework serves, so only the third class needs the real server. The served check asserts only the status and any `Location` header because page content is what the route test already shows, and repeating it at the served layer adds cost and no coverage. The parent-loader `.data` check is the exception, since a status alone does not show that a refused read returned none of the child's data.
 
 ### What a route test cannot prove
 
 - A direct call to a `loader` or `action` skips middleware, so a guard that lives in middleware is proven by a real-server check.
-- A parent loader guards neither a child's action nor a child's loader on a single-fetch request. A write action guards itself, and a direct anonymous call to it is the proof. A parent-loader guard on a read is proven by a real-server `.data` request naming only the child route.
+- A parent loader guards neither a child's action nor a child's loader on a single-fetch request, so a write action guards itself and a parent-loader guard on a read needs its own served check.
 - An authorization outcome owned by an upstream API cannot be proven by a route test, since an MSW handler answers as the test wrote it.
 
 ### What a real-server check cannot prove

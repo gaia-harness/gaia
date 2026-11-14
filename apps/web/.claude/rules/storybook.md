@@ -12,7 +12,7 @@ The `new-component` skill scaffolds the canonical story shape. This rule covers 
 
 ## Stories are the tests
 
-A story is a visual state and a behavior is a `.test()` attached to that story; a play function only drives the UI into the state the snapshot must show. The doctrine and its reasoning live in `wiki/decisions/Stories as Tests.md`. `@storybook/addon-vitest` runs every story in headless Chromium (run `pnpm install:browsers` once), and addon-a11y axe-checks each render, so a violation fails with no extra test. Components and pages have no `.test.tsx` beside their stories. Import `expect`, `fn`, `userEvent`, `waitFor`, `within` (and `fireEvent` when a native event has no `userEvent` equivalent) from `storybook/test`; it re-exports the jest-dom matchers and user-event. Inside a `.test()` the context also hands you `canvas`, `args` and `userEvent`.
+How to write a story and its `.test()`s; which stories and tests a component or page needs is `.claude/doctrine/testing.md` (`## Components, pages and stories`), and the reasoning is in `wiki/decisions/Stories as Tests.md`. `@storybook/addon-vitest` runs every story in headless Chromium (run `pnpm install:browsers` once), and addon-a11y axe-checks each render, so a violation fails with no extra test. Import `expect`, `fn`, `userEvent`, `waitFor`, `within` (and `fireEvent` when a native event has no `userEvent` equivalent) from `storybook/test`; it re-exports the jest-dom matchers and user-event. Inside a `.test()` the context also hands you `canvas`, `args` and `userEvent`.
 
 ```tsx
 import {expect, fn} from 'storybook/test';
@@ -34,7 +34,7 @@ Every story is a direct `meta.story({...})` export; never build exports with a f
 
 ## When to write a story
 
-Write a story per visual state and `.test()` blocks for the behavior a component or page owns that a user can observe: at most one test per behavior, with a parameterized table counting as one (`wiki/decisions/Test Layering.md`), named for the behavior (`'submits on Enter'`, not `'test 1'`). A render-only story still runs and passes axe, and is complete only for a component with no interactive behavior. For a component whose own code handles keys or moves focus (a key handler, roving tabindex, or focus moved on open, close or error), the tests cover that keyboard path and its focus outcome. Native controls in DOM order need no keyboard or focus test: their tab order only restates the JSX the story already renders, and a `required` attribute the browser renders from a literal prop is the browser's. The schema-to-`required` wiring (Conform `useForm`'s `constraint` option and any hand-forwarded `required` prop) is the app's and stays testable. Skip stories only for pure-utility components with no visual output (e.g. context providers, HOCs with no markup); those get a `node` or `browser` Vitest test instead.
+Which stories and `.test()`s a component or page needs, including keyboard and focus code, render-only stories and the page landmark check: `.claude/doctrine/testing.md` (`## Components, pages and stories`). Name each `.test()` for the behavior (`'submits on Enter'`, not `'test 1'`). A render-only story still runs and passes axe.
 
 Configure a story through props and args (for example `LanguageSelect`'s `languages` prop), not by mutating shared constants.
 

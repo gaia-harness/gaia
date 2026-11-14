@@ -10,9 +10,9 @@ tags: [decision, testing, storybook, vitest, a11y, csf4]
 
 # Decision: Stories Are the Component Tests
 
-A story is a visual state. A behavior is a `.test()` attached to that story. A play function only drives the UI into the state the snapshot must show, and asserts nothing. Components and pages are tested this way, run by `@storybook/addon-vitest` in headless Chromium. No test file re-composes a story, and no DOM is emulated anywhere in the frontend: the browser projects run real Chromium and the `node` project has no DOM at all.
+A story is a visual state. A behavior is a `.test()` attached to that story. A play function only drives the UI into the state the snapshot must show. Components and pages are tested this way, run by `@storybook/addon-vitest` in headless Chromium. No test file re-composes a story, and no DOM is emulated anywhere in the frontend: the browser projects run real Chromium and the `node` project has no DOM at all.
 
-This page owns the doctrine. Every other page that teaches stories states it in one sentence and links here.
+This page owns how a story is a test and the reasons for it. The rules for which components and pages get a story, and that a play never calls `expect`, live in `## Components, pages and stories` of [`.claude/doctrine/testing.md`](../../.claude/doctrine/testing.md). Every other page that teaches stories states the shape in one sentence and links here.
 
 ## Rationale
 
@@ -41,7 +41,7 @@ Default.test('calls onClick when pressed', async ({canvas, args, userEvent}) => 
 });
 ```
 
-Each export is a direct `meta.story({...})` or `.extend({...})` call; a story built by a factory function is not supported, because Storybook's indexer cannot attach `.test()` to it. A `play` may click, type or open, to reach a state; it never calls `expect`. msw handlers install in the story's `beforeEach`, never `parameters.msw`. `apps/web/.claude/rules/storybook.md` owns the authoring rules.
+Each export is a direct `meta.story({...})` or `.extend({...})` call; a story built by a factory function is not supported, because Storybook's indexer cannot attach `.test()` to it. A `play` may click, type or open, to reach a state. msw handlers install in the story's `beforeEach`, never `parameters.msw`. `apps/web/.claude/rules/storybook.md` owns the authoring rules.
 
 ## How `.test()` runs
 
@@ -72,7 +72,7 @@ Each export is a direct `meta.story({...})` or `.extend({...})` call; a story bu
 `apps/web/vitest.config.ts` defines the projects; read it for the exact membership instead of a copy here.
 
 - `node`: pure and server code (`*.test.ts` outside hook folders), no DOM, with the MSW node server and the test-data reset in `test/setup.ts`.
-- `browser`: hooks (`vitest-browser-react`) and any `*.test.tsx`, in Chromium, with `test/setup.browser.ts`. GAIA supplies no React Testing Library setup, so a test file that imports it brings its own render wrapper and dependencies; converting it to a story is the supported path.
+- `browser`: hooks (`vitest-browser-react`) and any `*.test.tsx`, in Chromium, with `test/setup.browser.ts`. GAIA supplies no React Testing Library setup, so a test file that imports it brings its own render wrapper and dependencies.
 - `storybook`: every story, through `storybookTest` from `@storybook/addon-vitest`. The preview annotations, addon presets included, apply automatically; no setup file in `.storybook/` calls `setProjectAnnotations`, because a file that does switches that automatic provisioning off.
 - `storybook-dark`: the same stories with the `theme` global pinned to `dark`, plus `test/setup.story-dark.ts`, which fails a story that logs a console or page error, renders no content, or lacks the dark class.
 

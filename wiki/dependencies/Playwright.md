@@ -4,13 +4,13 @@ status: active
 package: '@playwright/test'
 role: e2e-testing
 created: 2026-04-20
-updated: 2026-11-07
+updated: 2026-11-14
 tags: [dependency, testing, e2e]
 ---
 
 # Playwright
 
-Live-stack testing on two surfaces: real-server tests drive the server through the request fixture and open no page, browser tests drive a real page. [[Test Layering]] owns which proves what. Tests live in `apps/web/.playwright/e2e/`, and one spec per critical user flow lives in `apps/web/.playwright/flows/<slug>.spec.ts`; Playwright collects both folders. Config in `apps/web/playwright.config.ts`.
+Live-stack testing on two surfaces: real-server tests drive the server through the request fixture and open no page, browser tests drive a real page. Which test goes on which layer is owned by `.claude/doctrine/testing.md`. Tests live in `apps/web/.playwright/e2e/`, and one spec per critical user flow lives in `apps/web/.playwright/flows/<slug>.spec.ts`; Playwright collects both folders. Config in `apps/web/playwright.config.ts`.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ Per-worker MSW stores, the Given builders that seed them and the session rules a
 
 ## Relationship to the story tests
 
-Component and page behavior is tested by story `.test()` behaviors under Vitest ([[Stories as Tests]]), not by Playwright. Playwright keeps user flows against the running app and the Storybook specs, which check that the built story index matches source and focus visibility. Axe over every story, light and dark, is the `storybook` and `storybook-dark` Vitest projects.
+Component and page behavior is tested by story `.test()` behaviors under Vitest ([[Stories as Tests]]). Playwright keeps user flows against the running app and the Storybook specs, which check that the built story index matches source and focus visibility. Axe over every story, light and dark, is the `storybook` and `storybook-dark` Vitest projects.
 
 ## Hydration helper
 
