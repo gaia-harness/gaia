@@ -1095,16 +1095,20 @@ recorded_row() {
 
 @test "pr-sections: a recorded key a round disposed fix, or a veto names, does not render" {
   recorded_row c/imp f.txt 3 "recorded"
-  recorded_row c/sug f.txt 6 "recorded too"
+  recorded_row c/veto f.txt 9 "recorded too"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
-  vetoes 1 c/sug f.txt 6
+  vetoes 1 c/veto f.txt 9
+  jq -c '.keys[0].member = "worthiness-evaluator"' "$RUN_FOLDER/vetoes.json" >"$BATS_TEST_TMPDIR/vetoes.json"
+  mv "$BATS_TEST_TMPDIR/vetoes.json" "$RUN_FOLDER/vetoes.json"
   run_sections
   green || return 1
   grep -qF -- 'Accepted residuals' <<<"$output" && return 1
-  mutant_script audit-pr-sections-lib.sh -e 's/| \$dropped | any(. == \$key) | not)/| true)/' || return 1
-  run_sections
-  green || return 1
-  grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "twin did not fail the case: $output"; return 1; }
+  for drop in fixed vetoed; do
+    mutant_script audit-pr-sections-lib.sh -e "s/| \\\$dropped\\.$drop | any(. == \\\$key) | not)/| true)/" || return 1
+    run_sections
+    green || return 1
+    grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "the $drop twin did not fail the case: $output"; return 1; }
+  done
 }
 
 @test "record-residual: twice on one key leaves one row; a missing --finding is usage; an unreadable finding is exit 3" {
@@ -1687,6 +1691,7 @@ decide() {
   MEMBER="$SHELL_MAINTAINER" decide 3 fix || return 1
   run_check_all
   red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":3}" || { echo "another member's row decided the key"; return 1; }
+  MEMBER="$SHELL_MAINTAINER" decide 2 fix || return 1
   decide 1 accept '{"reason":"deferred to its own change"}' && decide 2 waive '{"reason":"below the threshold"}' && decide 3 fix && decide 4 fix || return 1
   run_check_all
   for vetoed in 3 4; do
@@ -1717,6 +1722,21 @@ decide() {
   [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 2 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
   run_check_all
   red undisposed "{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
+}
+
+@test "needs-human: a fix decision is refused for a cross-remit finding and concurrent fix decisions each keep their veto" {
+  local cross line
+  cross="$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true})')"
+  stop_rounds "$(joined "$cross" "$(minor_rows f.txt 2 3)")"
+  decide 1 fix
+  [ "$status" -eq 3 ] || { echo "a cross-remit fix recorded: $status $output"; return 1; }
+  [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  for line in 2 3; do
+    minor_rows f.txt "$line" "$line" | jq -c --arg member "$MEMBER" '.[0] + {member: $member}' >"$BATS_TEST_TMPDIR/decided-$line.json"
+    bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/decided-$line.json" --decision fix >/dev/null 2>&1 &
+  done
+  wait
+  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 2 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
 }
 
 @test "needs-human: a key an earlier round accepted needs a new decision when the open round re-reports it security-class" {

@@ -65,8 +65,8 @@ def in_bound: . != null and .security == false and .severity != "critical";
 # line that does not parse is skipped. A human's waive renders as a triage
 # waiver and a human's fix renders nothing; every other row is an accept. The
 # latest row for a member's key decides it, so a corrected decision replaces the
-# earlier one. A key some round disposed fix, or a veto names, is dropped: a
-# finding is never both fixed and accepted. So is a row whose key a later
+# earlier one. A key some round disposed fix, or a veto names for that member,
+# is dropped: a finding is never both fixed and accepted. So is a row whose key a later
 # round re-reports security-class, which needs its own disposition.
 # shellcheck disable=SC2016
 _RECORDED_JQ="$_ROW_TEXT_JQ"'
@@ -75,7 +75,8 @@ _RECORDED_JQ="$_ROW_TEXT_JQ"'
       and (.path | type) == "string" and (.line | type) == "number")]
 | to_entries | group_by(.value | [.member, .finding_class, .path, (.line | line_of)]) | map(max_by(.key) | .value)
 | [.[] | select(.decision != "fix")
-  | select([.finding_class, .path, (.line | line_of)] as $key | $dropped | any(. == $key) | not)
+  | select([.finding_class, .path, (.line | line_of)] as $key | $dropped.fixed | any(. == $key) | not)
+  | select([.member, .finding_class, .path, (.line | line_of)] as $key | $dropped.vetoed | any(. == $key) | not)
   | select((if (.round | type) == "number" then .round else 0 end) as $round | [.member, .finding_class, .path, (.line | line_of)] as $key
       | $escalated | any(.[0] > $round and .[1:] == $key) | not)
   | {round: 0, section: (if .decision == "waive" then "triage" else "accept" end), member, path, line: (.line | line_of),
@@ -158,7 +159,7 @@ _recorded_rows() {
   local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" dropped
   [ -f "$recorded_file" ] || { printf '[]\n'; return 0; }
   dropped="$(jq -c -n --argjson vetoes "$1" --argjson fixed "$2" "$_ROW_TEXT_JQ"'
-    $fixed + [$vetoes[] | [.finding_class, .path, (.line | line_of)]]' 2>/dev/null)" || return 3
+    {fixed: $fixed, vetoed: [$vetoes[] | [.member, .finding_class, .path, (.line | line_of)]]}' 2>/dev/null)" || return 3
   jq -c -R -n --argjson dropped "$dropped" --argjson escalated "$3" "$_RECORDED_JQ" <"$recorded_file" 2>/dev/null || return 3
 }
 
@@ -311,29 +312,42 @@ _command_undecided() {
   esac
 }
 
+# _veto_lock <directory>: a mkdir lock, so parallel record-residual calls never
+# drop each other's veto; a dead holder's lock is taken over. rc 1 after ~5s.
+_veto_lock() {
+  local attempt=0 holder
+  until mkdir "$1" 2>/dev/null; do
+    holder="$(cat "$1/pid" 2>/dev/null)"
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$1"; continue; fi
+    attempt=$((attempt + 1)); [ "$attempt" -le 50 ] || return 1; sleep 0.1
+  done
+  printf '%s\n' "$$" >"$1/pid"
+}
+
 # _veto_recorded_fix <row>: a human's fix decision binds the next unit as a
 # veto (vetoes.json, shape in audit-fix-verify.sh's header). A row alone binds
 # nothing: a member whose clearance survives the commits after its round is
 # never re-dispatched, so the next unit could stop clean with the fix unmade.
-# The veto reopens a round and keeps the key on fix until a member reviews the
-# fix. Writing it before the row lets a retry finish a failed call. rc 3 when
-# next-unit fails, vetoes.json is unreadable or malformed, or the write fails.
+# Writing the veto before the row lets a retry finish a failed call. rc 3 when
+# next-unit fails, the lock stays held, vetoes.json is unreadable or malformed,
+# or the write fails. A hung live call's lock is cleared by removing vetoes.json.lock.
 _veto_recorded_fix() {
-  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file
+  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file="$RUN_FOLDER/vetoes.json.$$"
   next_unit="$(_evaluator next-unit)" && [[ "$next_unit" =~ ^([0-9]+)\ ([0-9]+)$ ]] ||
     { _error "the evaluator could not print the next unit, so the fix decision was not recorded"; return 3; }
+  _veto_lock "$vetoes_file.lock" || { _error "cannot lock $vetoes_file"; return 3; }
   if [ -e "$vetoes_file" ]; then
     veto_document="$(jq -c 'if type == "object" and .version == 1 and (.keys | type) == "array" then . else error("malformed") end' <"$vetoes_file" 2>/dev/null)" ||
-      { _error "unparseable $vetoes_file"; return 3; }
+      { rm -rf "$vetoes_file.lock"; _error "unparseable $vetoes_file"; return 3; }
   fi
-  temporary_file="$vetoes_file.$$"
   if ! jq -n --argjson vetoes "$veto_document" --argjson row "$1" --argjson unit "${BASH_REMATCH[1]}" --argjson from "${BASH_REMATCH[2]}" \
     --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '($row | [.member, .finding_class, .path, .line]) as $key
     | if any($vetoes.keys[]; [.member, .finding_class, .path, .line] == $key and .effective_from_round == $from) then $vetoes
       else $vetoes | .keys += [$row | {member, finding_class, path, line, vetoed_at: $now, unit: $unit, effective_from_round: $from}] end' \
     >"$temporary_file" 2>/dev/null || ! mv "$temporary_file" "$vetoes_file"; then
-    rm -f "$temporary_file"; _error "cannot write $vetoes_file"; return 3
+    rm -f "$temporary_file"; rm -rf "$vetoes_file.lock"; _error "cannot write $vetoes_file"; return 3
   fi
+  rm -rf "$vetoes_file.lock"
 }
 
 # _command_record_residual: append one row for the finding in FINDING_FILE to
@@ -353,7 +367,7 @@ _command_record_residual() {
   local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" open_entries="null" history latest row
   history="$(_evaluator round-history)" || { _error "the evaluator could not read the round history"; return 3; }
   latest="$(printf '%s' "$history" | jq 'length')" || { _error "the evaluator could not read the round history"; return 3; }
-  if [ "$DECISION" = accept ] || [ "$DECISION" = waive ]; then
+  if [ -n "$DECISION" ]; then
     open_entries="$(_open_round_entries "$history")" || { _error "the evaluator could not read the open round's findings"; return 3; }
   fi
   row="$(jq -c --arg decision "$DECISION" --argjson open "$open_entries" --argjson round "$latest" "$_SECURITY_CLASS_JQ"'
@@ -364,12 +378,14 @@ _command_record_residual() {
        and ((($decision | IN("accept", "waive")) | not)
             or ($open != null and any($open[]; [.member, .finding_class, .path, .line] == ($finding | [.member, .finding_class, .path, .line])
                 and (security_class | not))))
+       and (($decision == "fix" and $open != null and any($open[]; [.member, .finding_class, .path, .line] == ($finding | [.member, .finding_class, .path, .line])
+                and .cross_remit == true)) | not)
     then if $decision == "" then {source: "filing-replay", round: $round, member, finding_class, path, line,
            reason: (if (.failure_mode | type) == "string" then .failure_mode else "" end)}
          else {source: "human", decision: $decision, round: $round, member, finding_class, path, line,
                reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)} end
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
-    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class; otherwise record --decision fix"; return 3; }
+    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class, and a fix is refused for a finding the open round reports cross_remit (its fixer is outside the reporting member remit, so the veto could never be satisfied: record --decision waive instead); otherwise record --decision fix"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
