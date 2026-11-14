@@ -223,8 +223,6 @@ apps/web/test/storybook-default-locale.test.tsx
 .githooks/pre-push
 # Generated-bundle diff attributes for the maintainer's committed CLI bundles. An adopter's own root .gitattributes would collide with a shipped one, and their bundle diffs arrive once per release.
 .gitattributes
-# Guards the template lint config's interim unicorn/require-css-escape override, not adopter app behavior; GAIA CI catches a preset regression before release.
-apps/web/test/eslint/require-css-escape.test.ts
 
 # --- 4. CLI maintainer source + maintainer binary ---
 # Adopters receive only the bundled adopter binary at .gaia/cli/gaia (and
