@@ -1705,7 +1705,7 @@ decide() {
   [ "$output" = '{"total":0,"ask":0}' ] || { echo "the corrected decision was dropped: $output"; return 1; }
 }
 
-@test "needs-human: a fix decision vetoes its key from the next unit's start round, keeps other vetoes, adds none on a repeat, and check-all refuses it until reviewed" {
+@test "needs-human: a fix decision vetoes its key from the next unit's start round, keeps other vetoes, adds none on a repeat, and check-all refuses it unreviewed" {
   local next_unit
   stop_rounds "$(minor_rows f.txt 1 1)"
   vetoes 9 c/imp other.txt 3

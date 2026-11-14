@@ -316,23 +316,24 @@ _command_undecided() {
 # nothing: a member whose clearance survives the commits after its round is
 # never re-dispatched, so the next unit could stop clean with the fix unmade.
 # The veto reopens a round and keeps the key on fix until a member reviews the
-# fix. Writing it before the row lets a retry finish a failed call. rc 3 on an
-# unreadable input or a failed write.
+# fix. Writing it before the row lets a retry finish a failed call. rc 3 when
+# next-unit fails, vetoes.json is unreadable, or the write fails.
 _veto_recorded_fix() {
-  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit vetoes='{"version":1,"keys":[]}' temporary_file
+  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file
   next_unit="$(_evaluator next-unit)" && [[ "$next_unit" =~ ^([0-9]+)\ ([0-9]+)$ ]] ||
     { _error "the evaluator could not print the next unit, so the fix decision was not recorded"; return 3; }
   if [ -e "$vetoes_file" ]; then
-    vetoes="$(jq -c 'if type == "object" and .version == 1 and (.keys | type) == "array" then . else error("malformed") end' <"$vetoes_file" 2>/dev/null)" ||
+    veto_document="$(jq -c 'if type == "object" and .version == 1 and (.keys | type) == "array" then . else error("malformed") end' <"$vetoes_file" 2>/dev/null)" ||
       { _error "unparseable $vetoes_file"; return 3; }
   fi
   temporary_file="$vetoes_file.$$"
-  jq -n --argjson vetoes "$vetoes" --argjson row "$1" --argjson unit "${BASH_REMATCH[1]}" --argjson from "${BASH_REMATCH[2]}" \
+  if ! jq -n --argjson vetoes "$veto_document" --argjson row "$1" --argjson unit "${BASH_REMATCH[1]}" --argjson from "${BASH_REMATCH[2]}" \
     --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '($row | [.member, .finding_class, .path, .line]) as $key
     | if any($vetoes.keys[]; [.member, .finding_class, .path, .line] == $key and .effective_from_round == $from) then $vetoes
       else $vetoes | .keys += [$row | {member, finding_class, path, line, vetoed_at: $now, unit: $unit, effective_from_round: $from}] end' \
-    >"$temporary_file" 2>/dev/null && mv "$temporary_file" "$vetoes_file" ||
-    { rm -f "$temporary_file"; _error "cannot write $vetoes_file"; return 3; }
+    >"$temporary_file" 2>/dev/null || ! mv "$temporary_file" "$vetoes_file"; then
+    rm -f "$temporary_file"; _error "cannot write $vetoes_file"; return 3
+  fi
 }
 
 # _command_record_residual: append one row for the finding in FINDING_FILE to

@@ -70,7 +70,7 @@
 #     marked fix names that path. basis is required on waive-out-of-scope
 #     entries; this verifier does not read it, the dispositions check does.
 #
-#   vetoes.json (the main thread, written with Bash at the main-checkout path):
+#   vetoes.json (Bash at the main-checkout path, or record-residual --decision fix):
 #     {"version":1,"keys":[{"member","finding_class","path","line","vetoed_at",
 #       "unit","effective_from_round"}]}
 #     effective_from_round is the <s> that audit-loop-eval.sh next-unit prints
