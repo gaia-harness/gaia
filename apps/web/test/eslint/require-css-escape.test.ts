@@ -11,7 +11,8 @@ import path from 'node:path';
 const frontendDirectory = path.resolve(import.meta.dirname, '../..');
 
 // Building an ESLint instance loads the config's plugins, which can outlast
-// the node project's default test timeout under a full-suite run.
+// the node project's testTimeout (coldImportTestTimeout in vitest.config.ts)
+// under a full-suite run, hence each case's own timeout below.
 const resolveRuleSeverityForFile = async (relativePath: string) => {
   const config = (await new ESLint({
     cwd: frontendDirectory,
