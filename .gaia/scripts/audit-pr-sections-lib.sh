@@ -311,6 +311,30 @@ _command_undecided() {
   esac
 }
 
+# _veto_recorded_fix <row>: a human's fix decision binds the next unit as a
+# veto (vetoes.json, shape in audit-fix-verify.sh's header). A row alone binds
+# nothing: a member whose clearance survives the commits after its round is
+# never re-dispatched, so the next unit could stop clean with the fix unmade.
+# The veto reopens a round and keeps the key on fix until a member reviews the
+# fix. Writing it before the row lets a retry finish a failed call. rc 3 on an
+# unreadable input or a failed write.
+_veto_recorded_fix() {
+  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit vetoes='{"version":1,"keys":[]}' temporary_file
+  next_unit="$(_evaluator next-unit)" && [[ "$next_unit" =~ ^([0-9]+)\ ([0-9]+)$ ]] ||
+    { _error "the evaluator could not print the next unit, so the fix decision was not recorded"; return 3; }
+  if [ -e "$vetoes_file" ]; then
+    vetoes="$(jq -c 'if type == "object" and .version == 1 and (.keys | type) == "array" then . else error("malformed") end' <"$vetoes_file" 2>/dev/null)" ||
+      { _error "unparseable $vetoes_file"; return 3; }
+  fi
+  temporary_file="$vetoes_file.$$"
+  jq -n --argjson vetoes "$vetoes" --argjson row "$1" --argjson unit "${BASH_REMATCH[1]}" --argjson from "${BASH_REMATCH[2]}" \
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '($row | [.member, .finding_class, .path, .line]) as $key
+    | if any($vetoes.keys[]; [.member, .finding_class, .path, .line] == $key and .effective_from_round == $from) then $vetoes
+      else $vetoes | .keys += [$row | {member, finding_class, path, line, vetoed_at: $now, unit: $unit, effective_from_round: $from}] end' \
+    >"$temporary_file" 2>/dev/null && mv "$temporary_file" "$vetoes_file" ||
+    { rm -f "$temporary_file"; _error "cannot write $vetoes_file"; return 3; }
+}
+
 # _command_record_residual: append one row for the finding in FINDING_FILE to
 # the run's recorded residuals, unless its member's key already has a latest
 # row saying the same. Without DECISION it is a filing-replay row. With it, it
@@ -318,7 +342,8 @@ _command_undecided() {
 # finding's own reason when it carries one, else its failure mode. An accept or
 # waive is refused unless the open round's live read reports the key and it is
 # not security-class: severity and security come from that read, never from
-# the caller's file, so once the round is closed only fix is left. Every row
+# the caller's file, so once the round is closed only fix is left. A fix also
+# vetoes the key from the next unit's start round (_veto_recorded_fix). Every row
 # stores `round`, the latest round in the history when it was written, and
 # decides its key in that round and earlier ones only, so a later re-report
 # needs a new decision. The reason is stored as given; pr-sections normalizes
@@ -345,6 +370,7 @@ _command_record_residual() {
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class; otherwise record --decision fix"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
+  if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
       def full: [.member, .finding_class, .path, (.line | line_of)];
       [inputs | fromjson? | select(type == "object") | select(full == ($row | full))] | last

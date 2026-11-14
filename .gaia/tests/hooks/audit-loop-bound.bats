@@ -1839,7 +1839,7 @@ earn_markers() {
   [ "$(state_field '[.history.rounds[2,3] | .snapshot | [.verdict, .A]] | tojson')" = '[["quiet",0],["quiet",0]]' ]
 }
 
-@test "reopen: no cause, a later veto, a stale failure tree or round, a checkpoint deny and a veto on a moved tree each record no round" {
+@test "reopen: no cause, a later veto, a stale failure tree or round and a checkpoint deny each record no round, and a veto on a moved tree reopens" {
   local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
   reopen_base
   below
@@ -1869,7 +1869,7 @@ earn_markers() {
   new_tree
   unit_dispatch
   assert_allowed
-  [ "$(nrounds)" -eq 2 ]
+  [ "$(nrounds)" -eq 3 ]
 }
 
 @test "reopen: an accept admission runs no fixer, so a pending veto on the unmoved tree records no round" {
@@ -1991,15 +1991,15 @@ fresh_branch() {
   alf_init && alf_branch feat/loop
 }
 
-@test "reopen: mutants dropping the veto's tree test, adding it to the gate failure, dropping the reopened test or the accept test each go red" {
+@test "reopen: mutants adding a tree test to the veto or the gate failure, dropping the reopened test or the accept test each go red" {
   reopen_base
   below
-  reopen_mutant 's/== \$used + 1) and \$unmoved)/== $used + 1))/' audit-veto-lib.sh || return 1
+  reopen_mutant 's/(\$vetoes\[\]; .effective_from_round == \$used + 1)$/($vetoes[]; .effective_from_round == $used + 1) and $unmoved/' audit-veto-lib.sh || return 1
   veto_at 3
   new_tree
   unit_dispatch
   assert_allowed
-  [ "$(nrounds)" -eq 3 ] || return 1
+  [ "$(nrounds)" -eq 2 ] || return 1
 
   fresh_branch
   reopen_base

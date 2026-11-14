@@ -1672,7 +1672,7 @@ decide() {
 }
 
 @test "needs-human: on the open round, accept and waive read severity and security live, another member's row decides nothing, and the latest decision wins" {
-  local security_minor critical
+  local security_minor critical vetoed
   security_minor="$(alf_entries f.txt 3 3 rule/x | jq -c 'map(. + {severity: "minor", security: true})')"
   critical="$(alf_entries f.txt 4 4 rule/x | jq -c 'map(. + {severity: "critical", security: false})')"
   stop_rounds "$(joined "$(minor_rows f.txt 1 2)" "$security_minor" "$critical")"
@@ -1684,12 +1684,14 @@ decide() {
   [ "$status" -eq 3 ] || { echo "a security-class waive recorded: $status $output"; return 1; }
   decide 4 accept '{"reason":"deferred"}'
   [ "$status" -eq 3 ] || { echo "a Critical accept recorded: $status $output"; return 1; }
-  MEMBER="$SHELL_MAINTAINER" decide 2 fix || return 1
+  MEMBER="$SHELL_MAINTAINER" decide 3 fix || return 1
   run_check_all
-  red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":2}" || { echo "another member's row decided the key"; return 1; }
+  red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":3}" || { echo "another member's row decided the key"; return 1; }
   decide 1 accept '{"reason":"deferred to its own change"}' && decide 2 waive '{"reason":"below the threshold"}' && decide 3 fix && decide 4 fix || return 1
   run_check_all
-  green || return 1
+  for vetoed in 3 4; do
+    red undisposed "{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":$vetoed}" || return 1
+  done
   run_sections
   [ "$output" = '## Accepted residuals (recorded, not fixed)
 
@@ -1701,6 +1703,20 @@ decide() {
   decide 1 fix || return 1
   run_residual_count
   [ "$output" = '{"total":0,"ask":0}' ] || { echo "the corrected decision was dropped: $output"; return 1; }
+}
+
+@test "needs-human: a fix decision vetoes its key from the next unit's start round, keeps other vetoes, adds none on a repeat, and check-all refuses it until reviewed" {
+  local next_unit
+  stop_rounds "$(minor_rows f.txt 1 1)"
+  vetoes 9 c/imp other.txt 3
+  decide 1 fix || return 1
+  next_unit="$(bash "$SCRIPTS/audit-loop-eval.sh" next-unit --root "$ALF_ROOT" | tr ' ' ',')"
+  [ "$(jq -c '[.keys[] | [.member, .finding_class, .path, .line, .unit, .effective_from_round]]' "$RUN_FOLDER/vetoes.json")" = \
+    "[[\"code-audit-frontend\",\"c/imp\",\"other.txt\",3,1,9],[\"$MEMBER\",\"rule/x\",\"f.txt\",1,$next_unit]]" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  decide 1 fix || return 1
+  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 2 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  run_check_all
+  red undisposed "{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
 }
 
 @test "needs-human: a key an earlier round accepted needs a new decision when the open round re-reports it security-class" {
