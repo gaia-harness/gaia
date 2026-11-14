@@ -342,7 +342,8 @@ check_lens_doctrine_rows() {
   need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included)" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$apply" "row another lens's fix adds or changes**: hold it to the Test design lens's checks above before applying it" || return 1
-  need "$apply" "A security row (a row of the doctrine's kinds, or any row flagged) that fails one is never dropped or unflagged here: it is applied as the fix gives it, its \`security\` set to its kind if it is \`none\`, and goes on the review list as its own item, recommending it be kept" || return 1
+  need "$apply" "No fix applied on this thread, from any lens or check, removes a security row (a row of the doctrine's kinds, or any row flagged) or clears a row's flag" || return 1
+  need "$apply" 'the row is kept, and goes on the review list as its own item, a minor one included, recommending it be kept' || return 1
 }
 
 @test "the test design lens checks the doctrine's barred rows and security kinds" {
@@ -362,7 +363,11 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the apply step dropping a security-flagged row fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" ' it is applied as the fix gives it, its `security` set to its kind if it is `none`, and goes on the review list as its own item, recommending it be kept' ' it is reported'
+  red check_lens_doctrine_rows "$AUDIT_REL" ' the row is kept, and goes on the review list as its own item, a minor one included, recommending it be kept' ' the row is dropped'
+}
+
+@test "red twin: the security-row rule scoped to one lens fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'No fix applied on this thread, from any lens or check, removes' 'No Test design fix removes'
 }
 
 @test "red twin: the apply step skipping rows another lens's fix adds fails" {
