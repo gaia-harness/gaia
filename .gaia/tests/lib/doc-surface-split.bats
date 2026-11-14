@@ -278,7 +278,7 @@ check_doctrine_surfaces() {
 
 # ---------- the docs point at the ladder ----------
 
-@test "the rule and the page point at the Test Layering ladder and route a flow's native checks into its flow test" {
+@test "the rule and the doctrine point at the Test Layering ladder and the doctrine routes a flow's native checks into its flow test" {
   check_rule_points_at_ladder "$PW_RULE"
   check_doctrine_routing_wording "$DOCTRINE"
   check_doctrine_case_table "$DOCTRINE"
