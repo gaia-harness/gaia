@@ -107,7 +107,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 Ordinary validation and status rules are not security rows. A retire or change row on an existing test of one of these kinds carries the flag too.
 
 - When a security test fails, fix the code, never weaken the test.
-- Only the maintainer rules a security row wrong, removes its flag, or retires an existing security test, except a retire row for the security test of code the plan deletes, which a human's approval of the plan covers. An approval no human gave (`/gaia-plan auto`, or an option a headless run picks) is not the maintainer's, so `/gaia-plan auto` holds every security retire row, deleted code included.
+- Only the maintainer rules a security row wrong, removes its flag, or retires an existing security test, except a retire row for the security test of code the plan deletes, which a human's approval of the plan covers. An approval no human gave (`/gaia-plan auto`, or an option a headless run picks) is not the maintainer's, so `/gaia-plan auto` and a headless run hold every security retire row, deleted code included.
 - Retire or fold a test asserting escaping, sanitization, injection resistance or data integrity only into a test on its own layer or higher that asserts the same property.
 
 ## Components, pages and stories
