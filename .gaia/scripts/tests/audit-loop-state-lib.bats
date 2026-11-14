@@ -260,10 +260,15 @@ audit-grant 2 please|malformed
 what does audit-grant 3 do?|malformed
 audit-accept now|malformed
 audit-grant\t2|malformed
+audit-accept-finding 1|accept-finding 1
+audit-accept-finding 12|accept-finding 12
+audit-accept-finding 0|malformed
+audit-accept-finding 100|malformed
+audit-accept-finding|malformed
 hello|none
 |none
 EOF
-  [ "$row_count" -eq 15 ]
+  [ "$row_count" -eq 20 ]
 }
 
 @test "parse line: the library's own lines parse back" {
@@ -293,7 +298,8 @@ full_state() {
     .history.context_config = {ask_tokens: 300000, ask_window_pct: 50}
     | .history.units = [{unit: 1, start_round: 1, k: 3, through_round: 3, admitted_on: "context", after_checkpoint: 0, recorded_at: "2026-10-02T00:00:00Z", session_id: "s"}]
     | .history.checkpoints = [{index: 1, at_round: 3, nonce: "0123456789abcdef", trigger: "context", accept_eligible: false,
-        question: {questions: [{question: "q"}]}}]
+        question: {questions: [{question: "q"}]}, disputes: [{member: "m", finding_class: "c", path: "a.ts", line: 1}]}]
+    | .allowance.accepted_keys = [{checkpoint: 1, key: ["m", "c", "a.ts", 1], source: "typed", at: "t", session_id: "s"}]
     | .allowance.answers = [{checkpoint: 1, kind: "grant", n: 3, source: "ask", option: "Continue audit in this session", nonce: "0123456789abcdef", at: "t", session_id: "s"}]'
 }
 
@@ -355,6 +361,9 @@ assert_refused() {
   assert_refused forged "$(full_state | jq -c '.allowance.answers[0].source = "forged"')"
   assert_refused n11 "$(full_state | jq -c '.allowance.answers[0].n = 11')"
   assert_refused ansnonce "$(full_state | jq -c '.allowance.answers[0].nonce = "nope"')"
+  assert_refused disputes "$(full_state | jq -c '.history.checkpoints[0].disputes = ["a.ts:1"]')"
+  assert_refused shortkey "$(full_state | jq -c '.allowance.accepted_keys[0].key = ["m", "c", "a.ts"]')"
+  assert_refused stringline "$(full_state | jq -c '.allowance.accepted_keys[0].key[3] = "1"')"
 }
 
 # option_count <json>: number of options in the first question.
@@ -639,7 +648,8 @@ disputes_run_folder() {
   run_folder="$(disputes_run_folder)"
   entries="$(gaia_loop_disputed_entries "$run_folder" 6)"
   [ "$(printf '%s' "$entries" | jq -c '[.[] | [.path, .line, .severity, .repeated]]')" = '[["apps/web/app/utils/http.server.ts",7,"major",true],["apps/web/app/routes/_session.requests._index.tsx",25,"minor",true],["apps/web/app/sessions.server/auth.ts",84,null,false]]' ]
-  [[ "$(printf '%s' "$entries" | jq -r '.[0].reason')" == "needs a requirement: honour X-Forwarded-Proto"* ]]
+  [[ "$(printf '%s' "$entries" | jq -r '.[0].reason')" == "needs a requirement: honour X-Forwarded-Proto"* ]] || return 1
+  [ "$(printf '%s' "$entries" | jq -r '.[0] | .member + " " + .finding_class')" = "code-audit-frontend holistic/unclassified" ]
   [ "$(gaia_loop_disputed_entries "$run_folder" 7)" = '[]' ]
   long_path="apps/$(printf 'd%.0s' $(seq 1 200)).ts"
   jq --arg p "$long_path" '.results[0].path = $p' "$run_folder/fixer-6-audit.json" >"$run_folder/long.json"
@@ -663,11 +673,11 @@ disputes_run_folder() {
   [ "$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "" "[]")" = "$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "")" ]
   question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 false false fallback "" grant "" "$entries")"
   question_text="$(printf '%s' "$question" | jq -r '.questions[0].question')"
-  [[ "$question_text" == *"The fixer will not make these fixes until a rule requires them: apps/web/app/utils/http.server.ts:7 (major) \"needs a requirement: honour X-Forwarded-Proto"* ]]
-  [[ "$question_text" == *"; apps/web/app/sessions.server/auth.ts:84 \"conflicts with requirement: the plan keeps the session TTL in one place\". If no rule should require them, pick Stop and file the remainder. How should the audit loop continue?" ]]
-  [[ "$question_text" == *'..."; '* ]]
+  [[ "$question_text" == *"The fixer will not make these fixes until a rule requires them: (1) apps/web/app/utils/http.server.ts:7 (major) \"needs a requirement: honour X-Forwarded-Proto"* ]] || return 1
+  [[ "$question_text" == *"; (3) apps/web/app/sessions.server/auth.ts:84 \"conflicts with requirement: the plan keeps the session TTL in one place\". To keep one as an accepted residual (never a critical or security finding), dismiss this question and type audit-accept-finding <number> as your whole prompt. If no rule should require them, pick Stop and file the remainder. How should the audit loop continue?" ]] || return 1
+  [[ "$question_text" == *'..."; '* ]] || return 1
   [ "$(labels "$question")" = "State the rule, then continue (Recommended)|Continue audit in a new session|Stop and file the remainder" ]
-  [[ "$(option_description "$question" "State the rule")" == "First write the rule each listed fix needs in the SPEC, a wiki/decisions page, or the code or docs, or tell Claude the rule to write there, so the fixer can cite it. "*"records up to 3 more rounds"* ]]
+  [[ "$(option_description "$question" "State the rule")" == "First write the rule each listed fix needs in the SPEC, a wiki/decisions page, or the code or docs, or tell Claude the rule to write there, so the fixer can cite it. "*"records up to 3 more rounds"* ]] || return 1
   for eligible in true false; do
     for cap in true false; do
       question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 10 3 "$eligible" "$cap" cap "" grant "" "$entries")"

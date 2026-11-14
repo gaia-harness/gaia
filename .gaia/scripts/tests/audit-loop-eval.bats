@@ -1993,17 +1993,18 @@ tree_snapshot() {
   find "$ALF_ROOT/.gaia" -type f | sort | while IFS= read -r file_path; do printf '%s %s\n' "$(shasum <"$file_path")" "$file_path"; done
 }
 
-@test "cli round-history and reopened-round: pinned output, and neither writes a file" {
+@test "cli round-history and reopened-round: pinned output, an accepted key holds every later round, and neither writes a file" {
   local before expected head_tree
   alf_sequence 2 1
   alf_add_checkpoint 2 stalled
   alf_add_answer 1 accept
-  alf_state_edit '.history.rounds[1].reopened = true'
+  alf_state_edit '.history.rounds[1].reopened = true | .allowance.accepted_keys = [{checkpoint: 1, key: ["m", "c", "a.ts", 4], source: "typed", at: "t", session_id: "s1"}]'
   before="$(tree_snapshot)"
   expected="$(jq -c --arg member "$MEMBER" '[.history.rounds[0], .history.rounds[1]] as [$first, $second]
     | [{round: 1, tree: $first.tree, members: [$member], keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]],
-        counted_keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]], closing: false, reopened: false, human_accept: false},
-       {round: 2, tree: $second.tree, members: [$member], keys: null, counted_keys: null, closing: false, reopened: true, human_accept: true}]' "$ALF_STATE")"
+        counted_keys: [[$member, "rule/x", "f.txt", 1], [$member, "rule/x", "f.txt", 2]], closing: false, reopened: false, human_accept: false, human_accepted_keys: []},
+       {round: 2, tree: $second.tree, members: [$member], keys: null, counted_keys: null, closing: false, reopened: true, human_accept: true,
+        human_accepted_keys: [["m", "c", "a.ts", 4]]}]' "$ALF_STATE")"
   run bash "$SCRIPTS/audit-loop-eval.sh" round-history --root "$ALF_ROOT"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$output" = "$expected" ] || { printf 'got  %s\nwant %s\n' "$output" "$expected"; return 1; }
@@ -2016,7 +2017,10 @@ tree_snapshot() {
   [ "$output" = 0 ] || return 1
   alf_state_edit '.history.rounds[1].tree = $tree | .history.rounds[1].reopened = false' --arg tree "$head_tree"
   run bash "$SCRIPTS/audit-loop-eval.sh" reopened-round --root "$ALF_ROOT"
-  [ "$output" = 0 ]
+  [ "$output" = 0 ] || return 1
+  alf_state_edit '.history.rounds += [.history.rounds[1], .history.rounds[1]]'
+  run bash "$SCRIPTS/audit-loop-eval.sh" round-history --root "$ALF_ROOT"
+  [ "$(jq -c '.[3].human_accepted_keys' <<<"$output")" = '[["m","c","a.ts",4]]' ] || { echo "accept lost two rounds after its checkpoint: $output"; return 1; }
 }
 
 @test "cli veto-state: a vetoed key no member reported is unsatisfied for the round" {
