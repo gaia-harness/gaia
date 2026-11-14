@@ -317,7 +317,7 @@ _command_undecided() {
 # never re-dispatched, so the next unit could stop clean with the fix unmade.
 # The veto reopens a round and keeps the key on fix until a member reviews the
 # fix. Writing it before the row lets a retry finish a failed call. rc 3 when
-# next-unit fails, vetoes.json is unreadable, or the write fails.
+# next-unit fails, vetoes.json is unreadable or malformed, or the write fails.
 _veto_recorded_fix() {
   local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file
   next_unit="$(_evaluator next-unit)" && [[ "$next_unit" =~ ^([0-9]+)\ ([0-9]+)$ ]] ||
