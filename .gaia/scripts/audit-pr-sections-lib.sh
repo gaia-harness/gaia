@@ -379,13 +379,13 @@ _command_record_residual() {
             or ($open != null and any($open[]; [.member, .finding_class, .path, .line] == ($finding | [.member, .finding_class, .path, .line])
                 and (security_class | not))))
        and (($decision == "fix" and $open != null and any($open[]; [.member, .finding_class, .path, .line] == ($finding | [.member, .finding_class, .path, .line])
-                and .cross_remit == true)) | not)
+                and .cross_remit == true and (security_class | not))) | not)
     then if $decision == "" then {source: "filing-replay", round: $round, member, finding_class, path, line,
            reason: (if (.failure_mode | type) == "string" then .failure_mode else "" end)}
          else {source: "human", decision: $decision, round: $round, member, finding_class, path, line,
                reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)} end
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
-    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix), and a fix needs it not cross_remit (its file is outside the reporting member's remit, so no review ever satisfies the veto: record --decision waive)"; return 3; }
+    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix), and a fix is refused on a cross_remit one that is not security-class (its file is outside the reporting member's remit, so no review ever satisfies the veto: record --decision waive)"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'

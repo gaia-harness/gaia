@@ -1724,10 +1724,11 @@ decide() {
   red undisposed "{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
 }
 
-@test "needs-human: a fix decision is refused for a cross-remit finding and concurrent fix decisions each keep their veto" {
-  local cross line
+@test "needs-human: a fix decision is refused for a cross-remit finding unless it is security-class, and concurrent fix decisions each keep their veto" {
+  local cross cross_security line
   cross="$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true})')"
-  stop_rounds "$(joined "$cross" "$(minor_rows f.txt 2 3)")"
+  cross_security="$(minor_rows f.txt 4 4 | jq -c 'map(. + {cross_remit: true, security: true})')"
+  stop_rounds "$(joined "$cross" "$(minor_rows f.txt 2 3)" "$cross_security")"
   decide 1 fix
   [ "$status" -eq 3 ] || { echo "a cross-remit fix recorded: $status $output"; return 1; }
   [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
@@ -1737,6 +1738,9 @@ decide() {
   done
   wait
   [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 2 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  decide 4 fix
+  [ "$status" -eq 0 ] || { echo "a security-class cross-remit fix was refused: $status $output"; return 1; }
+  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 3 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
 }
 
 @test "needs-human: a key an earlier round accepted needs a new decision when the open round re-reports it security-class" {
