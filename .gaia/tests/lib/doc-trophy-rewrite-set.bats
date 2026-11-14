@@ -83,7 +83,6 @@ setup() {
     "apps/web/.claude/rules/playwright.md|One journey per user flow"
     '.claude/skills/tdd/references/tests-shell.md|one `.bats` file per script under test'
     ".claude/skills/tdd/references/tests-shell.md|One test, one change, repeat."
-    'wiki/concepts/Code Review Audit Agent.md|records `Outcome: did not run` and lets the run continue'
   )
 
   # Pages that point at the layering page and must not copy its axiom.

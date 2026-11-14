@@ -68,7 +68,7 @@ A story is a visual state and a behavior is a `.test()` attached to it ([[Storie
 
 ### Layers
 
-The composition rule compares a story's tests with its own children's stories. The review judges each test on its own worth and does not propose moves across layers; [[Test Layering]] states the division of work between the review and the overlap pass.
+The composition rule compares a story's tests with its own children's stories. The review judges each test on its own worth and does not propose moves across layers; [[Test Layering]] states the layer rules the review does not re-decide; a plan's table fixes each test's layer at plan time ([[Test Design Table]]).
 
 ### Strict tests: honesty and worth
 
@@ -78,7 +78,7 @@ Every changed test, strict included, is judged on honesty. The classifier picks 
 
 On the tdd path, advisory findings never interrupt mid-implementation; they
 surface only at end-of-task, in two tiers. A plan run, the work lifecycle and
-`/gaia-debt` run the pre-audit worthiness step instead, which acts on a `fix`
+`/gaia-debt` (and an unmarked or older plan) run the pre-audit worthiness step instead, where a marked plan runs the drift check, which acts on a `fix`
 verdict before the audit (`.claude/skills/gaia/references/worthiness-step.md`). Honesty findings auto-fix in place and are left in the
 working tree for normal review. Every proposed delete requires human
 confirmation and renders its cited redundant sibling AND the subsuming seam
