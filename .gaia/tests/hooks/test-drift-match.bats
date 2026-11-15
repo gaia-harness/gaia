@@ -209,10 +209,32 @@ security_check() {
   WORTHINESS_LEDGER_PATH="$BATS_TEST_TMPDIR/no-ledger.jsonl" run "$DRIFT_CHECK" security --root "$FIXTURE" --plan-dir "$PLAN" --base main
 }
 
-@test "the security check reads held and deletes from the approved row, so an amend replace cannot lift the hold" {
-  security_retire_commit src/missing.ts keep
-  # The approved row is held kept-code; a replace row now drops held and names
-  # a path that looks deleted, but the approved copy still decides.
+@test "the security check reads deletes from the approved row, so an amend replace cannot point it at gone code" {
+  security_retire_commit src/missing.ts delete
+  # The approved row deletes src/missing.ts, which never existed at the merge
+  # base (kept code); a replace row now names src/a.ts, which is really gone.
+  node -e '
+    const fs = require("node:fs");
+    const file = process.argv[1];
+    const table = JSON.parse(fs.readFileSync(file, "utf8"));
+    for (const row of table.rows) row.deletes = ["src/a.ts"];
+    fs.writeFileSync(file, JSON.stringify(table));
+  ' "$PLAN/tests.json"
+  security_check
+  [ "$status" -eq 1 ]
+  grep -qF 'uncovered T1 no-matching-test' <<<"$output"
+}
+
+@test "the security check reads held from the approved row, so an amend replace cannot lift the hold" {
+  write_file src/a.ts 'export const a = 1;'
+  write_file src/a.test.ts "$(suite_file "$PLAIN_TEST")"
+  start_fixture
+  rm "$FIXTURE/src/a.test.ts" "$FIXTURE/src/a.ts"
+  mkdir -p "$PLAN"
+  printf -- '- Delete: src/a.ts\n' >"$PLAN/task-one.md"
+  run approve_rows "[$(row T1 src/a.test.ts 'suite target' retire access ',"held":"kept-code"')]"
+  [ "$status" -eq 0 ] || { echo "approve failed: $output" >&2; return 1; }
+  # The approved row is held; a replace drops held and names the deleted code.
   node -e '
     const fs = require("node:fs");
     const file = process.argv[1];
@@ -220,6 +242,8 @@ security_check() {
     for (const row of table.rows) { delete row.held; row.deletes = ["src/a.ts"]; }
     fs.writeFileSync(file, JSON.stringify(table));
   ' "$PLAN/tests.json"
+  git_fixture add -A
+  git_fixture commit -q -m branch
   security_check
   [ "$status" -eq 1 ]
   grep -qF 'uncovered T1 no-matching-test' <<<"$output"

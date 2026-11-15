@@ -242,8 +242,9 @@ export function securityCheck({root, planDir, base, ledgerPath}) {
     if (!current) reason = 'missing-from-table';
     else if (current.security !== approved.security) reason = 'flag-lost';
     else {
-      // held comes from the approved row: an amend replace cannot turn it off.
-      const judged = {...current, held: approved.held};
+      // action and held come from the approved row: an amend replace cannot
+      // turn a retire into a covered row or lift the hold.
+      const judged = {...current, action: approved.action, held: approved.held};
       const {matched, head} = evaluateRow(judged, sides, plan.ledger, keptCode);
       if (!matched) reason = 'no-matching-test';
       else if (head && latestVerdict({file: current.file, title: current.title, signal: head.signal}) === 'fix') {

@@ -356,19 +356,20 @@ const amend = (args) => {
     );
   }
   // drift.mjs reports any change of an approved row's security value as
-  // flag-lost, so amend refuses the same predicate.
-  const changedKinds = approvedSecurity.filter((approvedRow) =>
-    next.some(
-      (row) =>
-        row.id === approvedRow.id &&
-        isSecurity(row) &&
-        row.security !== approvedRow.security,
-    ),
-  );
-  if (changedKinds.length > 0) {
-    refuse(
-      `security kind changed on ${changedKinds.map((row) => row.id).join(', ')}`,
+  // flag-lost, and securityCheck judges by the approved action, so amend
+  // refuses a change of either.
+  for (const [field, label] of [['security', 'kind'], ['action', 'action']]) {
+    const changed = approvedSecurity.filter((approvedRow) =>
+      next.some(
+        (row) =>
+          row.id === approvedRow.id &&
+          isSecurity(row) &&
+          row[field] !== approvedRow[field],
+      ),
     );
+    if (changed.length > 0) {
+      refuse(`security ${label} changed on ${changed.map((row) => row.id).join(', ')}`);
+    }
   }
   const keptKeys = new Set(next.filter(isSecurity).map((row) => row.source));
   const lostKeys = [
