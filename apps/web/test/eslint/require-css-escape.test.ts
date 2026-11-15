@@ -1,9 +1,10 @@
 // Runs in the node project.
 // The rule itself is tested in @gaia-harness/lint; this pins the app's resolved
-// lint config (the app's nodeFiles wiring plus the preset's own .server
-// exemption the app relies on), so the rule is off where code runs in Node
-// (CSS is undefined and its CSS.escape autofix would crash) and on in browser
-// code.
+// lint config (the app's nodeFiles wiring, the preset's own .server
+// exemption the app relies on, and the preset's Playwright override that turns
+// the unicorn rule off for specs and swaps in a rule scoped to browser
+// callbacks), so the rule is off where code runs in Node (CSS is undefined and
+// its CSS.escape autofix would crash) and on in browser code.
 import type {Linter} from 'eslint';
 import {ESLint} from 'eslint';
 import {describe, expect, test} from 'vitest';
