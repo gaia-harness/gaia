@@ -6,7 +6,7 @@ Contents: Pre-audit flow checks; Consolidation; Post-merge close; Pre-flight swe
 
 ## Pre-audit flow checks
 
-For a spec-derived plan written with a closing flow-test phase, the orchestrator's `flow-checks` block runs after the last phase commits and before the drift check (a plan whose folder carries a `TEST-DESIGN` marker) or the worthiness step (an older plan), from `<RESOLVED_ROOT>`:
+For a spec-derived plan, the orchestrator's `flow-checks` block runs after the last phase commits (the last build phase when the plan has no closing flow-test phase) and before the drift check (a plan whose folder carries a `TEST-DESIGN` marker) or the worthiness step (an older plan), from `<RESOLVED_ROOT>`:
 
 ```bash
 bash .gaia/scripts/spec/flow-coverage.sh --spec <SPEC_PATH> --root <RESOLVED_ROOT> --plan-dir <PLAN_DIR> --flow-tests-out <RUN_FOLDER>/flow-tests.tsv

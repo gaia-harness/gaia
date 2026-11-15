@@ -138,6 +138,8 @@ export const coveredFlows = ({rows, coveredFlows: entries}) => {
         problems.push(`coveredFlows ${source} names row ${id}, which the table lacks`);
       } else if (row.layer === 'flow') {
         problems.push(`coveredFlows ${source} names flow-layer row ${id}; a covered flow has no flow test`);
+      } else if (row.action === 'retire' || row.held !== undefined) {
+        problems.push(`coveredFlows ${source} names row ${id}, which is ${row.action === 'retire' ? 'retired' : 'held'} and so runs no test`);
       }
     }
     if (flowRowBySource.has(source)) {

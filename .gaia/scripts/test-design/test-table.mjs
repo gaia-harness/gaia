@@ -2,6 +2,7 @@
 // CLI over the test-design table in a plan folder.
 //
 //   test-table.mjs verify --plan-dir <dir> --keys <file>
+//   test-table.mjs covered-flows --plan-dir <dir>
 //   test-table.mjs approve --plan-dir <dir> [--auto]
 //   test-table.mjs record-security --plan-dir <dir> --root <tree> --row <id>
 //   test-table.mjs amend --plan-dir <dir> --root <tree> --changes <file>
@@ -47,7 +48,7 @@ const TEST_PATH = new RegExp(String.raw`[^\s\x60'"()<>]+\.${TEST_FILE_SUFFIX}\b`
 
 const usage = () => {
   process.stderr.write(
-    'usage: test-table.mjs verify --plan-dir <dir> --keys <file> | approve --plan-dir <dir> [--auto] | record-security --plan-dir <dir> --root <tree> --row <id> | amend --plan-dir <dir> --root <tree> --changes <file>\n',
+    'usage: test-table.mjs verify --plan-dir <dir> --keys <file> | covered-flows --plan-dir <dir> | approve --plan-dir <dir> [--auto] | record-security --plan-dir <dir> --root <tree> --row <id> | amend --plan-dir <dir> --root <tree> --changes <file>\n',
   );
   process.exit(2);
 };
@@ -229,7 +230,10 @@ const coveredFlowsCommand = (args) => {
   const options = parseOptions(args, ['--plan-dir']);
   const files = planPaths(options['plan-dir']);
   if (!existsSync(files.table)) return;
-  const {sources, problems} = coveredFlows(loadTable(files.table));
+  // Once approved, the approved copy decides, so a later edit of tests.json
+  // cannot record a flow the approved plan still owes a test.
+  const source = existsSync(files.approved) ? files.approved : files.table;
+  const {sources, problems} = coveredFlows(loadTable(source));
   for (const source of sources) process.stdout.write(`${source}\n`);
   if (problems.length > 0) refuseAll(problems);
 };

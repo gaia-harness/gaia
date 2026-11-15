@@ -133,6 +133,29 @@ expect_verify_refusal() {
   [ -z "$output" ]
 }
 
+@test "covered-flows refuses a retired or held row as the covering row" {
+  write_verify_fixture
+  mutate_table 't.rows[1].action = "retire"; t.coveredFlows = [{source: "flow:gamma", rows: ["T2"]}]'
+  run node "$TABLE_CLI" covered-flows --plan-dir "$PLAN"
+  [ "$status" -eq 1 ]
+  grep -qF 'names row T2, which is retired' <<<"$output"
+  grep -qxF 'flow:gamma' <<<"$output" && return 1
+  mutate_table 't.rows[1].action = "new"; t.rows[1].held = "auto-mode"'
+  run node "$TABLE_CLI" covered-flows --plan-dir "$PLAN"
+  [ "$status" -eq 1 ]
+  grep -qF 'names row T2, which is held' <<<"$output"
+  true
+}
+
+@test "covered-flows reads the approved copy once it exists, so a later tests.json edit records nothing" {
+  write_verify_fixture
+  node "$TABLE_CLI" approve --plan-dir "$PLAN"
+  mutate_table 't.coveredFlows = [{source: "flow:alpha", rows: ["T2"]}]'
+  run node "$TABLE_CLI" covered-flows --plan-dir "$PLAN"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "verify refuses task-doc and table disagreements" {
   expect_verify_refusal 'printf -- "- Test: src/ghost.test.ts \xe2\x80\xba ghost\n" >>"$PLAN/task-one.md"' 'Test line has no row'
   expect_verify_refusal 'printf "# one\n" >"$PLAN/task-one.md"' 'has no Test line'
