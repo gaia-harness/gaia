@@ -144,6 +144,37 @@ mutated_tree() {
   [ -z "$output" ]
 }
 
+@test "a dropped case swapped for another case of the same source and kind is lost" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "signed-out-redirect"}'
+  write_table "$AFTER" \
+    '{"id": "T9", "source": "success_criteria:0", "security": "access", "caseKey": "wrong-role-403"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
+}
+
+@test "a keyed security row kept under a new id is not lost" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "signed-out-redirect"}'
+  write_table "$AFTER" \
+    '{"id": "T9", "source": "success_criteria:0", "security": "access", "caseKey": "signed-out-redirect"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "red twin: matching by source and kind alone misses a swapped case" {
+  mutated_tree "$SCRIPTS_REL/security-rows-lost.mjs" 'candidate.caseKey === row.caseKey' 'true'
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "signed-out-redirect"}'
+  write_table "$AFTER" \
+    '{"id": "T9", "source": "success_criteria:0", "security": "access", "caseKey": "wrong-role-403"}'
+  compare "$TREE"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 # ---------- the apply step's text ----------
 
 flat_range() {
@@ -168,15 +199,21 @@ check_replan_security() {
   local structural rule
   structural="$(flat_range "$1/$AUDIT_REL" '- **Structural findings**' '**Security rows.**')"
   rule="$(flat_range "$1/$AUDIT_REL" '**Security rows.**' '**Interactive:**')"
-  need "$structural" 'Copy `<PLAN_DIR>/tests.json` to `<PLAN_DIR>/tests.before-correction.json`, then re-run `plan.md` step 4' || return 1
+  need "$structural" 'Copy `<PLAN_DIR>/tests.json` to `<PLAN_DIR>/tests.before-correction.json` only when that file does not already exist' || return 1
   need "$structural" 'Then run `node .gaia/scripts/test-design/security-rows-lost.mjs --before <PLAN_DIR>/tests.before-correction.json --after <PLAN_DIR>/tests.json`' || return 1
   need "$structural" 'is held by the rule below. A non-zero exit is handled like a step 4.5 failure.' || return 1
   need "$rule" "A Structural re-plan's \`lost:\` line is held the same way: its item recommends restoring each missing row" || return 1
   need "$rule" 'any other is added under an id the regenerated table does not use,' || return 1
   need "$rule" 'by `test-table.md` `## Procedure` steps 7 to 10 against the regenerated plan' || return 1
-  need "$rule" 'A regenerated row on the same `file`, `title` and `caseKey` gets the snapshot'"'"'s `security` back' || return 1
+  need "$rule" 'whose `security` is `none` gets the snapshot'"'"'s `security` back' || return 1
   need "$rule" 'Either way, the owning task'"'"'s phase entry in `ORCHESTRATOR.md` lists it on its `- Security writer:` line, adding the line when the phase has none.' || return 1
-  need "$rule" 'Every restore re-runs step 4.5; when 4.5 fails, undo the restore and, after the first list'"'"'s fixes apply, print a second review list holding only such rows, each as its own item, not restored, recommending the user restore it by hand, and step 4.6c waits until the user has restored it or ruled it wrong, and step 4.5 passes (in auto-mode, record it in `## Audit notes` as a held security row).' || return 1
+  need "$rule" 'Every restore re-runs step 4.5, and the compare runs again after the restores; when 4.5 fails, undo the restore and, after the first list'"'"'s fixes apply, print a second review list holding only such rows, each as its own item, not restored, recommending the user restore it by hand, and step 4.6c waits until the user has restored it or ruled it wrong, and step 4.5 passes (in auto-mode, stop like a step 4.5 failure, naming the row, rather than finishing on a prose note, since no mechanical hold carries a row absent from the table).' || return 1
+  need "$rule" 'they print on a follow-up review list' || return 1
+  need "$rule" 'a regenerated row that carries a different non-none kind keeps its kind, and the snapshot row is added beside it under a new id' || return 1
+  need "$rule" 'the pick is ambiguous' || return 1
+  need "$rule" 'A lost row whose code the regenerated plan deletes is a security retire of deleted code: its item recommends dropping it' || return 1
+  need "$structural" 'only when that file does not already exist' || return 1
+  need "$structural" 'delete `<PLAN_DIR>/tests.before-correction.json` before step 4.6c' || return 1
   need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`.' || return 1
 }
 
@@ -190,7 +227,7 @@ green() {
 }
 
 @test "red twin: a re-plan with no snapshot fails" {
-  mutated_tree "$AUDIT_REL" 'Copy `<PLAN_DIR>/tests.json` to `<PLAN_DIR>/tests.before-correction.json`, then re-run' 'Re-run'
+  mutated_tree "$AUDIT_REL" 'Copy `<PLAN_DIR>/tests.json` to `<PLAN_DIR>/tests.before-correction.json` only' 'Skip'
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
@@ -211,14 +248,21 @@ green() {
 }
 
 @test "red twin: a restore with no step 4.5 rerun fails" {
-  mutated_tree "$AUDIT_REL" 'Every restore re-runs step 4.5; when 4.5 fails, undo the restore and' 'Every restore is applied, then'
+  mutated_tree "$AUDIT_REL" 'Every restore re-runs step 4.5, and the compare runs again after the restores; when 4.5 fails, undo the restore and' 'Every restore is applied, then'
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
 }
 
 @test "red twin: an undone restore dropped instead of returned to the review list fails" {
-  mutated_tree "$AUDIT_REL" 'undo the restore and, after the first list'"'"'s fixes apply, print a second review list holding only such rows, each as its own item, not restored, recommending the user restore it by hand, and step 4.6c waits until the user has restored it or ruled it wrong, and step 4.5 passes (in auto-mode, record it in `## Audit notes` as a held security row).' 'undo the restore.'
+  mutated_tree "$AUDIT_REL" 'undo the restore and, after the first list'"'"'s fixes apply, print a second review list holding only such rows, each as its own item, not restored, recommending the user restore it by hand, and step 4.6c waits until the user has restored it or ruled it wrong, and step 4.5 passes (in auto-mode, stop like a step 4.5 failure, naming the row, rather than finishing on a prose note, since no mechanical hold carries a row absent from the table).' 'undo the restore.'
+  run check_replan_security "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+}
+
+@test "red twin: a re-spawn that overwrites the first snapshot fails" {
+  mutated_tree "$AUDIT_REL" ' only when that file does not already exist' ''
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
@@ -246,7 +290,7 @@ green() {
 }
 
 @test "red twin: re-adding an unflagged row beside its regenerated copy fails" {
-  mutated_tree "$AUDIT_REL" "A regenerated row on the same \`file\`, \`title\` and \`caseKey\` gets the snapshot's \`security\` back, in \`tests.json\` and its README row; any other is added" 'Each is added'
+  mutated_tree "$AUDIT_REL" " whose \`security\` is \`none\` gets the snapshot's \`security\` back, in \`tests.json\` and its README row; a regenerated row that carries a different non-none kind keeps its kind, and the snapshot row is added beside it under a new id like any other; any other is added" ' Each is added'
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]

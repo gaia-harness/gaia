@@ -4,12 +4,17 @@
 //   security-rows-lost.mjs --before <tests.json snapshot> --after <tests.json>
 //
 // A regeneration can renumber ids, so a security row (security not `none`) is
-// matched on its `source` plus its `security` kind, counted: the after
-// table must hold at least as many security rows of that source and kind as the
-// snapshot did. A dropped row, a row set to `none` and a row moved to another
-// kind all read as lost. Prints one line per source and kind left short,
+// matched on its `source`, its `security` kind and, when the snapshot row
+// carries one, its `caseKey`. A snapshot row with a caseKey is lost unless the
+// after table holds a security row of the same source, kind and caseKey, so a
+// dropped case swapped for another case of the same source and kind reads as
+// lost. Snapshot rows without a caseKey are counted per source and kind against
+// the after rows that no keyed snapshot row matched. A dropped row, a row set
+// to `none` and a row moved to another kind all read as lost. Prints one line
+// per source and kind left short,
 // `lost: <kind> <source> (<missing> of <snapshot ids>)`, and nothing when none
-// is lost.
+// is lost. The ids are the lost keyed rows, plus every keyless snapshot id of
+// the pair when a keyless row is left short.
 //
 // Exit 0 compared (stdout says what was lost), 1 a table is unusable (one
 // `security-rows-lost: ...` stderr line), 2 usage.
@@ -53,9 +58,22 @@ const snapshotPairs = securityPairs(options.before);
 const afterPairs = securityPairs(options.after);
 
 for (const [key, rows] of snapshotPairs) {
-  const missing = rows.length - (afterPairs.get(key)?.length ?? 0);
+  const available = [...(afterPairs.get(key) ?? [])];
+  const lostIds = [];
+  for (const row of rows.filter((candidate) => candidate.caseKey)) {
+    const match = available.findIndex(
+      (candidate) => candidate.caseKey === row.caseKey,
+    );
+    if (match === -1) lostIds.push(row.id);
+    else available.splice(match, 1);
+  }
+  const keyless = rows.filter((candidate) => !candidate.caseKey);
+  // Keyless snapshot rows take the after rows no keyed snapshot row matched.
+  const keylessMissing = Math.max(0, keyless.length - available.length);
+  const missing = lostIds.length + keylessMissing;
   if (missing > 0) {
-    const ids = rows.map((row) => row.id).join(', ');
+    const keylessIds = keylessMissing > 0 ? keyless.map((row) => row.id) : [];
+    const ids = [...lostIds, ...keylessIds].join(', ');
     process.stdout.write(
       `lost: ${rows[0].security} ${rows[0].source} (${missing} of ${ids})\n`,
     );
