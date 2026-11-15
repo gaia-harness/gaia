@@ -1,25 +1,25 @@
 ---
 type: meta
-title: 'Lint Report 2026-10-30'
-created: 2026-10-30
-updated: 2026-10-30
+title: 'Lint Report 2026-11-15'
+created: 2026-11-15
+updated: 2026-11-15
 tags: [meta, lint]
 status: developing
 ---
 
-# Lint Report: 2026-10-30
+# Lint Report: 2026-11-15
 
 ## #11: Wiki drift check
 
-✓ Wiki in sync with HEAD (efad62d).
+✓ Wiki in sync with HEAD (f4ad2cb).
 
 ## #12: Dead repo-relative paths
 
 ✓ No dead repo-relative paths detected in wiki body prose.
 
-## #13: UAT/SPEC narrative-ref drift
+## #13: FLOW/SPEC narrative-ref drift
 
-✓ No narrative `UAT-NNN` or concrete maintainer `SPEC-NNN` references detected outside the structural exemptions in `.claude/rules/working-doc-ids.md`.
+✓ No narrative `FLOW-NNN` or concrete maintainer `SPEC-NNN` references detected outside the structural exemptions in `.claude/rules/working-doc-ids.md`.
 
 ## #14: Orphan pages
 

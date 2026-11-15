@@ -5,7 +5,7 @@ status: active
 language: typescript
 purpose: Server-only signed cookie for the language preference
 created: 2026-04-20
-updated: 2026-10-03
+updated: 2026-11-15
 tags: [module, sessions, cookies]
 ---
 
@@ -13,7 +13,7 @@ tags: [module, sessions, cookies]
 
 `apps/web/app/sessions.server/` holds server-only cookie code that needs `SESSION_SECRET` for signing. The `.server` suffix excludes it from the client bundle; secrets never reach the browser.
 
-The shipped file, `language.ts`, defines a signed `lng` cookie via React Router's `createCookie` to persist the language preference. The secret comes from `env.SESSION_SECRET` (Zod-validated). For full session storage (auth, flash messages), swap in `createCookieSessionStorage`.
+The shipped file, `language.ts`, defines a signed `lng` cookie via React Router's `createCookie` to persist the language preference. The secret comes from `env.SESSION_SECRET` (Zod-validated; in production it must be at least 32 characters, or startup fails). For full session storage (auth, flash messages), swap in `createCookieSessionStorage`.
 
 ## Theme cookie is **not** a session
 
