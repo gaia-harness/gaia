@@ -4,7 +4,7 @@
 # audit-dispositions-check.sh, split out to keep that script small. Sourced by
 # it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions, _carried_keys,
 # _round_lookup, _live_lookup, _has_snapshot, _snapshot_path, _divert_line,
-# _RESIDUAL_REASON_JQ, _SECURITY_CLASS_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS,
+# _RESIDUAL_REASON_JQ, _SECURITY_CLASS_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS, gaia_exclusive_lock_take,
 # _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Runs nothing at source time. Never `cd`s.
 
 # _evaluator <subcommand> [args...]: audit-loop-eval.sh on ROOT, stderr dropped.
@@ -312,16 +312,15 @@ _command_undecided() {
   esac
 }
 
-# _veto_lock <directory>: a mkdir lock, so parallel record-residual calls never
-# drop each other's veto; a dead holder's lock is taken over. rc 1 after ~5s.
+# _veto_lock <directory>: gaia_exclusive_lock_take, so parallel record-residual
+# calls never drop each other's veto; a dead holder's lock is taken over. rc 1 after ~5s.
 _veto_lock() {
   local attempt=0 holder
-  until mkdir "$1" 2>/dev/null; do
-    holder="$(cat "$1/pid" 2>/dev/null)"
+  until gaia_exclusive_lock_take "$1"; do
+    holder="$(cat "$1/owner" 2>/dev/null)"
     if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$1"; continue; fi
     attempt=$((attempt + 1)); [ "$attempt" -le 50 ] || return 1; sleep 0.1
   done
-  printf '%s\n' "$$" >"$1/pid"
 }
 
 # _veto_recorded_fix <row>: a human's fix decision binds the next unit as a

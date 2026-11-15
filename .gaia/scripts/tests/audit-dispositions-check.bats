@@ -1724,6 +1724,36 @@ decide() {
   red undisposed "{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
 }
 
+# race_shims <directory>: a forced interleave of two fix decisions. Its mkdir
+# exits 0 even when the directory exists, as uutils mkdir does for two racing
+# creators, and counts attempts on the veto lock. Its date holds the first
+# writer inside the lock until the second writer reaches the same point (both
+# read the old vetoes.json) or has tried the lock twice more (it is blocked).
+race_shims() {
+  mkdir -p "$1"
+  cat >"$1/mkdir" <<'SHIM'
+#!/bin/bash
+[ "${1-}" = "$HOLD_LOCK" ] && printf 'x\n' >>"$HOLD_DIRECTORY/attempts"
+/bin/mkdir "$@" 2>/dev/null
+exit 0
+SHIM
+  cat >"$1/date" <<'SHIM'
+#!/bin/bash
+if [ "${1-}" = -u ] && [ -d "$HOLD_LOCK" ]; then
+  if ( set -C; : >"$HOLD_DIRECTORY/first" ) 2>/dev/null; then
+    waited=0
+    until [ -e "$HOLD_DIRECTORY/second" ] || [ "$(($(wc -l <"$HOLD_DIRECTORY/attempts")))" -ge 3 ] || [ "$waited" -ge 100 ]; do
+      sleep 0.1; waited=$((waited + 1))
+    done
+  else
+    : >"$HOLD_DIRECTORY/second"
+  fi
+fi
+exec /bin/date "$@"
+SHIM
+  chmod +x "$1/mkdir" "$1/date"
+}
+
 @test "needs-human: a fix decision is refused for a cross-remit finding unless it is security-class, and concurrent fix decisions each keep their veto" {
   local cross cross_security line
   cross="$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true})')"
@@ -1732,11 +1762,14 @@ decide() {
   decide 1 fix
   [ "$status" -eq 3 ] || { echo "a cross-remit fix recorded: $status $output"; return 1; }
   [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  race_shims "$BATS_TEST_TMPDIR/race"
   for line in 2 3; do
     minor_rows f.txt "$line" "$line" | jq -c --arg member "$MEMBER" '.[0] + {member: $member}' >"$BATS_TEST_TMPDIR/decided-$line.json"
-    bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/decided-$line.json" --decision fix >/dev/null 2>&1 &
+    HOLD_LOCK="$RUN_FOLDER/vetoes.json.lock" HOLD_DIRECTORY="$BATS_TEST_TMPDIR" PATH="$BATS_TEST_TMPDIR/race:$PATH" \
+      bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/decided-$line.json" --decision fix >/dev/null 2>&1 &
   done
   wait
+  [ -e "$BATS_TEST_TMPDIR/first" ] || { echo "no writer reached the hold, so nothing was interleaved"; return 1; }
   [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 2 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
   decide 4 fix
   [ "$status" -eq 0 ] || { echo "a security-class cross-remit fix was refused: $status $output"; return 1; }
