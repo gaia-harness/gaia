@@ -5,7 +5,10 @@
 # it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions, _carried_keys,
 # _round_lookup, _live_lookup, _has_snapshot, _snapshot_path, _divert_line,
 # _RESIDUAL_REASON_JQ, _SECURITY_CLASS_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS, gaia_exclusive_lock_take,
-# _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Runs nothing at source time. Never `cd`s.
+# _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Sources audit-recorded-decision-lib.sh and runs nothing else at source time. Never `cd`s.
+
+# shellcheck source=/dev/null
+. "$_GAIA_DISPOSITIONS_DIRECTORY/audit-recorded-decision-lib.sh"
 
 # _evaluator <subcommand> [args...]: audit-loop-eval.sh on ROOT, stderr dropped.
 # The dispositions check calls it too.
@@ -63,7 +66,8 @@ def in_bound: . != null and .security == false and .severity != "critical";
 
 # _RECORDED_JQ: the recorded residuals as PR-body rows, read as raw lines so a
 # line that does not parse is skipped. A human's waive renders as a triage
-# waiver and a human's fix renders nothing; every other row is an accept. The
+# waiver, a human's fixed as a fixed row and a human's fix as nothing; every
+# other row is an accept. The
 # latest row for a member's key decides it, so a corrected decision replaces the
 # earlier one. A key some round disposed fix, or a veto names for that member,
 # is dropped: a finding is never both fixed and accepted. So is a row whose key a later
@@ -79,8 +83,8 @@ _RECORDED_JQ="$_ROW_TEXT_JQ"'
   | select([.member, .finding_class, .path, (.line | line_of)] as $key | $dropped.vetoed | any(. == $key) | not)
   | select((if (.round | type) == "number" then .round else 0 end) as $round | [.member, .finding_class, .path, (.line | line_of)] as $key
       | $escalated | any(.[0] > $round and .[1:] == $key) | not)
-  | {round: 0, section: (if .decision == "waive" then "triage" else "accept" end), member, path, line: (.line | line_of),
-     finding_class, reason: text(.reason), source: (if (.source | type) == "string" then .source else "" end)}]
+  | {round: 0, section: (if .decision == "waive" then "triage" elif .decision == "fixed" then "fixed" else "accept" end), member, path, line: (.line | line_of),
+     finding_class, reason: text(.reason), source: (if (.source | type) == "string" then .source else "" end), commit: (if (.commit | type) == "string" then .commit else "" end)}]
 '
 
 # shellcheck disable=SC2016
@@ -88,6 +92,7 @@ _SECTIONS_JQ='
 def line_number: if (.line | type) == "number" and .line >= 1 then .line else 1 end;
 def keyed: "- `\(.path):\(line_number)` \(.reason). <!-- gaia-debt-key: v1 class=\(.finding_class) path=\(.path) line=\(line_number) -->";
 def triage: "- \(.path):\(line_number) \(.finding_class): \(.reason)";
+def fixed: "- \(.path):\(line_number) \(.finding_class): fixed in \(.commit[0:12]): \(.reason)";
 def withheld($count; $noun): "- \($count) \($noun) withheld: reason failed the secret screen";
 def section($head; $rows; fmt; $noun):
   if ($rows | length) == 0 then empty
@@ -98,6 +103,7 @@ def section($head; $rows; fmt; $noun):
 | [ section("## Accepted residuals (recorded, not fixed)"; ($screened | map(select(.section == "accept"))); keyed; "accepted residual(s)"),
     section("## Out-of-scope machinery findings (recorded, not filed)"; ($screened | map(select(.section == "cross"))); keyed; "waived finding(s)"),
     section("## Waived below triage threshold (not filed)"; ($screened | map(select(.section == "triage"))); triage; "waived finding(s)"),
+    section("## Cross-remit findings fixed after their round"; ($screened | map(select(.section == "fixed"))); fixed; "fixed finding(s)"),
     (if $divert_line == "" then empty else $divert_line end),
     (if ($absent | length) == 0 and $pending == 0 then empty
      else (["## Not filed (no issue backend)", ""]
@@ -289,7 +295,7 @@ _undecided_keys() {
     | "violation: undecided \({round: $round, member, finding_class, path, line} | tojson)"')" || return 3
   [ -z "$violations" ] && return 0
   printf '%s\n' "$violations"
-  _error "record the human's decision for each undecided finding: write its {member, finding_class, path, line} plus a reason to a JSON file, then run: bash $_GAIA_DISPOSITIONS_DIRECTORY/audit-dispositions-check.sh record-residual --root $ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix (accept and waive only while the round is open and the finding is not security-class)"
+  _error "record the human's decision for each undecided finding: write its {member, finding_class, path, line} plus a reason to a JSON file, then run: bash $_GAIA_DISPOSITIONS_DIRECTORY/audit-dispositions-check.sh record-residual --root $ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix|fixed (accept and waive only while the round is open and the finding is not security-class; fixed for a cross_remit one a commit changed)"
   return 1
 }
 
@@ -312,43 +318,6 @@ _command_undecided() {
   esac
 }
 
-# _veto_lock <directory>: gaia_exclusive_lock_take, so parallel record-residual
-# calls never drop each other's veto; a dead holder's lock is taken over. rc 1 after ~5s.
-_veto_lock() {
-  local attempt=0 holder
-  until gaia_exclusive_lock_take "$1"; do
-    holder="$(cat "$1/owner" 2>/dev/null)"
-    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$1"; continue; fi
-    attempt=$((attempt + 1)); [ "$attempt" -le 50 ] || return 1; sleep 0.1
-  done
-}
-
-# _veto_recorded_fix <row>: a human's fix decision binds the next unit as a
-# veto (vetoes.json, shape in audit-fix-verify.sh's header). A row alone binds
-# nothing: a member whose clearance survives the commits after its round is
-# never re-dispatched, so the next unit could stop clean with the fix unmade.
-# Writing the veto before the row lets a retry finish a failed call. rc 3 when
-# next-unit fails, the lock stays held, vetoes.json is unreadable or malformed,
-# or the write fails. A hung live call's lock is cleared by removing vetoes.json.lock.
-_veto_recorded_fix() {
-  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file="$RUN_FOLDER/vetoes.json.$$"
-  next_unit="$(_evaluator next-unit)" && [[ "$next_unit" =~ ^([0-9]+)\ ([0-9]+)$ ]] ||
-    { _error "the evaluator could not print the next unit, so the fix decision was not recorded"; return 3; }
-  _veto_lock "$vetoes_file.lock" || { _error "cannot lock $vetoes_file"; return 3; }
-  if [ -e "$vetoes_file" ]; then
-    veto_document="$(jq -c 'if type == "object" and .version == 1 and (.keys | type) == "array" then . else error("malformed") end' <"$vetoes_file" 2>/dev/null)" ||
-      { rm -rf "$vetoes_file.lock"; _error "unparseable $vetoes_file"; return 3; }
-  fi
-  if ! jq -n --argjson vetoes "$veto_document" --argjson row "$1" --argjson unit "${BASH_REMATCH[1]}" --argjson from "${BASH_REMATCH[2]}" \
-    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '($row | [.member, .finding_class, .path, .line]) as $key
-    | if any($vetoes.keys[]; [.member, .finding_class, .path, .line] == $key and .effective_from_round == $from) then $vetoes
-      else $vetoes | .keys += [$row | {member, finding_class, path, line, vetoed_at: $now, unit: $unit, effective_from_round: $from}] end' \
-    >"$temporary_file" 2>/dev/null || ! mv "$temporary_file" "$vetoes_file"; then
-    rm -f "$temporary_file"; rm -rf "$vetoes_file.lock"; _error "cannot write $vetoes_file"; return 3
-  fi
-  rm -rf "$vetoes_file.lock"
-}
-
 # _command_record_residual: append one row for the finding in FINDING_FILE to
 # the run's recorded residuals, unless its member's key already has a latest
 # row saying the same. Without DECISION it is a filing-replay row. With it, it
@@ -357,34 +326,40 @@ _veto_recorded_fix() {
 # waive is refused unless the open round's live read reports the key and it is
 # not security-class: severity and security come from that read, never from
 # the caller's file, so once the round is closed only fix is left. A fix also
-# vetoes the key from the next unit's start round (_veto_recorded_fix). Every row
+# vetoes the key from the next unit's start round (_veto_recorded_fix). A fixed
+# records a cross_remit, not security-class finding of the open round that the
+# main thread fixed, with no veto, since its member never reviews that file: it
+# is refused unless the finding's path differs between the open round's tree
+# (round-history) and HEAD's, and it stores the latest commit on HEAD touching
+# that path. A merge from main that touches the path also passes. Every row
 # stores `round`, the latest round in the history when it was written, and
 # decides its key in that round and earlier ones only, so a later re-report
 # needs a new decision. The reason is stored as given; pr-sections normalizes
 # it on read. rc 3 on an unreadable or refused finding.
 _command_record_residual() {
-  local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" open_entries="null" history latest row
+  local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" open_entries="null" history latest row fixing_commit=""
   history="$(_evaluator round-history)" || { _error "the evaluator could not read the round history"; return 3; }
   latest="$(printf '%s' "$history" | jq 'length')" || { _error "the evaluator could not read the round history"; return 3; }
   if [ -n "$DECISION" ]; then
     open_entries="$(_open_round_entries "$history")" || { _error "the evaluator could not read the open round's findings"; return 3; }
   fi
-  row="$(jq -c --arg decision "$DECISION" --argjson open "$open_entries" --argjson round "$latest" "$_SECURITY_CLASS_JQ"'
+  [ "$DECISION" != fixed ] || fixing_commit="$(_fixed_commit "$history")"
+  row="$(jq -c --arg decision "$DECISION" --argjson open "$open_entries" --argjson round "$latest" --arg commit "$fixing_commit" "$_SECURITY_CLASS_JQ"'
     def text($value): if ($value | type) == "string" and ($value | test("\\S")) then $value else "" end;
     . as $finding
-    | if type == "object" and (.member | type) == "string" and (.finding_class | type) == "string"
+    | def open_key(condition): $open != null and any($open[]; [.member, .finding_class, .path, .line] == ($finding | [.member, .finding_class, .path, .line]) and condition);
+    if type == "object" and (.member | type) == "string" and (.finding_class | type) == "string"
        and (.path | type) == "string" and (.line | type) == "number"
-       and ((($decision | IN("accept", "waive")) | not)
-            or ($open != null and any($open[]; [.member, .finding_class, .path, .line] == ($finding | [.member, .finding_class, .path, .line])
-                and (security_class | not))))
-       and (($decision == "fix" and $open != null and any($open[]; [.member, .finding_class, .path, .line] == ($finding | [.member, .finding_class, .path, .line])
-                and .cross_remit == true and (security_class | not))) | not)
+       and ((($decision | IN("accept", "waive")) | not) or open_key(security_class | not))
+       and (($decision == "fix" and open_key(.cross_remit == true and (security_class | not))) | not)
+       and ($decision != "fixed" or ($commit != "" and open_key(.cross_remit == true and (security_class | not))))
     then if $decision == "" then {source: "filing-replay", round: $round, member, finding_class, path, line,
            reason: (if (.failure_mode | type) == "string" then .failure_mode else "" end)}
          else {source: "human", decision: $decision, round: $round, member, finding_class, path, line,
-               reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)} end
+               reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)}
+           + (if $decision == "fixed" then {commit: $commit} else {} end) end
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
-    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix), and a fix is refused on a cross_remit one that is not security-class (its file is outside the reporting member's remit, so no review ever satisfies the veto: record --decision waive)"; return 3; }
+    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix); a fix is refused on a cross_remit one that is not security-class (its file is outside the reporting member's remit, so no review ever satisfies the veto): once a commit changes its path, record --decision fixed, else --decision waive; and a fixed needs that cross_remit finding's path changed since the open round's tree"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
