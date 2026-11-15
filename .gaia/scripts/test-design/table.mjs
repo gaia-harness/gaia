@@ -102,9 +102,9 @@ export const validateRow = (row) => {
   return reasons;
 };
 
-// A SPEC flow made only of refusals that build-task rows already own gets no
-// flow test: a `coveredFlows` entry, {source: "flow:<slug>", rows: [ids]},
-// names those rows in its place. Returns the sources of the valid entries and
+// A SPEC flow left with no step a flow test keeps, every step owned by a
+// lower-layer row, gets no flow test: a `coveredFlows` entry,
+// {source: "flow:<slug>", rows: [ids]}, names those rows in its place. Returns the sources of the valid entries and
 // every problem with them that the rows alone can show.
 export const coveredFlows = ({rows, coveredFlows: entries}) => {
   if (entries === undefined) return {sources: [], problems: []};
