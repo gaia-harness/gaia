@@ -976,3 +976,71 @@ add_readme_task() {
   verify_spec_less
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
+
+# ---------- a flow tests.json's coveredFlows records ----------
+
+BUILD_TEST_LINE='- Test: .gaia/tests/lib/plan-check.bats › the plan check refuses a uats SPEC'
+
+# record_covered <json array>: set tests.json's coveredFlows.
+record_covered() {
+  node -e 'const fs=require("fs");const [f,v]=process.argv.slice(1);const t=JSON.parse(fs.readFileSync(f,"utf8"));t.coveredFlows=JSON.parse(v);fs.writeFileSync(f,JSON.stringify(t)+"\n")' "$PLAN/tests.json" "$1"
+}
+
+# covered_command_fixture: the spec fixture plus one success criterion, with
+# the command flow recorded in coveredFlows (build row T3 owns it), so it has
+# no closing-phase task.
+covered_command_fixture() {
+  spec_fixture
+  write_flow_spec $'success_criteria:\n  - the plan check refuses a uats SPEC'
+  sed -i.bak 's/, `task-flow-command`//' "$PLAN/README.md"
+  rm -f "$PLAN/README.md.bak" "$PLAN/task-flow-command.md"
+  printf '# Build\n\n%s\n' "$BUILD_TEST_LINE" >"$PLAN/task-build.md"
+  FLOW_RUN_LINES="$WEB_RUN_LINE"
+  write_orchestrator "${SPEC_ORDER[@]}"
+  write_table "$(table_row T1 flow:guest-checkout "$WEB_TEST_PATH" 'a guest checks out and sees the order number' task-flow-web),$(table_row T3 success_criteria:0 .gaia/tests/lib/plan-check.bats 'the plan check refuses a uats SPEC' task-build)"
+  record_covered '[{"source":"flow:refuse-uats-spec","rows":["T3"]}]'
+}
+
+@test "covered flows: a recorded flow needs no Flow test line; without the record it fails" {
+  covered_command_fixture
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  record_covered '[]'
+  verify_spec
+  [ "$status" -eq 1 ]
+  refusal_line "FLOW-902 has no '- Flow test (FLOW-902)"
+}
+
+@test "covered flows: a recorded flow that still carries a Flow test line fails naming the flow" {
+  covered_command_fixture
+  add_readme_task 2 task-flow-command
+  printf '# Command flow\n\n- Flow test (FLOW-902): %s\n' "$COMMAND_TEST_PATH" >"$PLAN/task-flow-command.md"
+  verify_spec
+  [ "$status" -eq 1 ]
+  refusal_line 'FLOW-902 is recorded in tests.json coveredFlows' 'task-flow-command.md'
+}
+
+@test "covered flows: every flow recorded leaves the last phase owing no Flow test line; one unrecorded flow restores it" {
+  covered_command_fixture
+  rm -f "$PLAN/task-flow-web.md"
+  printf '# Plan\n\n| Phase | Tasks | Model | Split |\n|---|---|---|---|\n| Phase 1 | `task-build` | sonnet | none |\n' >"$PLAN/README.md"
+  FLOW_RUN_LINES=''
+  write_orchestrator "${SPEC_ORDER[@]}"
+  write_table "$(table_row T3 success_criteria:0 .gaia/tests/lib/plan-check.bats 'the plan check refuses a uats SPEC' task-build)"
+  record_covered '[{"source":"flow:guest-checkout","rows":["T3"]},{"source":"flow:refuse-uats-spec","rows":["T3"]}]'
+  verify_spec
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  record_covered '[{"source":"flow:guest-checkout","rows":["T3"]}]'
+  verify_spec
+  [ "$status" -eq 1 ]
+  refusal_line "task-build.md: the last-phase (Phase 1) task doc has no '- Flow test"
+}
+
+@test "covered flows: an entry naming a row the table lacks is relayed and leaves its flow unrecorded" {
+  covered_command_fixture
+  record_covered '[{"source":"flow:refuse-uats-spec","rows":["T9"]}]'
+  verify_spec
+  [ "$status" -eq 1 ]
+  refusal_line 'coveredFlows flow:refuse-uats-spec names row T9, which the table lacks'
+  refusal_line "FLOW-902 has no '- Flow test (FLOW-902)"
+}

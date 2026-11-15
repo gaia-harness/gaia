@@ -95,6 +95,67 @@ expect_verify_refusal() {
   expect_verify_refusal "mutate_table 't.rows[0].source = \"flow:stray\"'" 'unknown source flow:stray'
 }
 
+@test "verify counts a coveredFlows entry as citing its flow key; without it the key has no row" {
+  write_verify_fixture
+  printf 'flow:gamma\n' >>"$KEYS"
+  mutate_table 't.coveredFlows = [{source: "flow:gamma", rows: ["T2"]}]'
+  run_verify
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  mutate_table 'delete t.coveredFlows'
+  run_verify
+  [ "$status" -eq 1 ]
+  grep -qF 'requirement key flow:gamma has no row' <<<"$output"
+}
+
+@test "verify refuses each malformed coveredFlows entry" {
+  local record='printf "flow:gamma\n" >>"$KEYS"; mutate_table'
+  expect_verify_refusal "$record 't.coveredFlows = {}'" 'coveredFlows is not an array'
+  expect_verify_refusal "$record 't.coveredFlows = [{source: \"success_criteria:0\", rows: [\"T2\"]}]'" 'source is not a flow:<slug> key'
+  expect_verify_refusal "$record 't.coveredFlows = [{source: \"flow:stray\", rows: [\"T2\"]}]'" 'coveredFlows cites unknown source flow:stray'
+  expect_verify_refusal "$record 't.coveredFlows = [{source: \"flow:gamma\", rows: [\"T2\"]}, {source: \"flow:gamma\", rows: [\"T2\"]}]'" 'coveredFlows names flow:gamma twice'
+  expect_verify_refusal "$record 't.coveredFlows = [{source: \"flow:gamma\", rows: []}]'" 'coveredFlows flow:gamma names no rows'
+  expect_verify_refusal "$record 't.coveredFlows = [{source: \"flow:gamma\", rows: [\"T9\"]}]'" 'names row T9, which the table lacks'
+  expect_verify_refusal "$record 't.rows[1].layer = \"flow\"; t.coveredFlows = [{source: \"flow:gamma\", rows: [\"T2\"]}]'" 'names flow-layer row T2'
+  expect_verify_refusal "$record 't.rows[0].layer = \"flow\"; t.coveredFlows = [{source: \"flow:alpha\", rows: [\"T2\"]}]'" 'row T1 is a flow-layer row for flow:alpha'
+}
+
+@test "covered-flows prints each valid entry, prints nothing for a plan with no table, and exits 1 on a broken entry" {
+  write_verify_fixture
+  mutate_table 't.coveredFlows = [{source: "flow:gamma", rows: ["T1", "T2"]}, {source: "flow:delta", rows: ["T9"]}]'
+  run node "$TABLE_CLI" covered-flows --plan-dir "$PLAN"
+  [ "$status" -eq 1 ]
+  grep -qxF 'flow:gamma' <<<"$output"
+  grep -qF 'flow:delta' <<<"$(grep -vF 'test-table:' <<<"$output")" && return 1
+  grep -qF 'test-table: coveredFlows flow:delta names row T9' <<<"$output"
+  rm "$PLAN/tests.json"
+  run node "$TABLE_CLI" covered-flows --plan-dir "$PLAN"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "covered-flows refuses a retired or held row as the covering row" {
+  write_verify_fixture
+  mutate_table 't.rows[1].action = "retire"; t.coveredFlows = [{source: "flow:gamma", rows: ["T2"]}]'
+  run node "$TABLE_CLI" covered-flows --plan-dir "$PLAN"
+  [ "$status" -eq 1 ]
+  grep -qF 'names row T2, which is retired' <<<"$output"
+  grep -qxF 'flow:gamma' <<<"$output" && return 1
+  mutate_table 't.rows[1].action = "new"; t.rows[1].held = "auto-mode"'
+  run node "$TABLE_CLI" covered-flows --plan-dir "$PLAN"
+  [ "$status" -eq 1 ]
+  grep -qF 'names row T2, which is held' <<<"$output"
+  true
+}
+
+@test "covered-flows reads the approved copy once it exists, so a later tests.json edit records nothing" {
+  write_verify_fixture
+  node "$TABLE_CLI" approve --plan-dir "$PLAN"
+  mutate_table 't.coveredFlows = [{source: "flow:alpha", rows: ["T2"]}]'
+  run node "$TABLE_CLI" covered-flows --plan-dir "$PLAN"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "verify refuses task-doc and table disagreements" {
   expect_verify_refusal 'printf -- "- Test: src/ghost.test.ts \xe2\x80\xba ghost\n" >>"$PLAN/task-one.md"' 'Test line has no row'
   expect_verify_refusal 'printf "# one\n" >"$PLAN/task-one.md"' 'has no Test line'

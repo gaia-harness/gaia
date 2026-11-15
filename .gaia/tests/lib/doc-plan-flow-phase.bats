@@ -132,7 +132,7 @@ check_gate_retry_flow_arm() {
     { printf 'gate-retry block has no one-shot flow-test arm (%s; %s; %s)\n' "$FLOW_ARM_NEEDLE" "$FLOW_ARM_FREE_NEEDLE" "$FLOW_ARM_HALT_NEEDLE" >&2; return 1; }
 }
 
-FLOW_COMMAND_NEEDLE='bash .gaia/scripts/spec/flow-coverage.sh --spec {SPEC_PATH} --root <RESOLVED_ROOT> --flow-tests-out <RUN_FOLDER>/flow-tests.tsv'
+FLOW_COMMAND_NEEDLE='bash .gaia/scripts/spec/flow-coverage.sh --spec {SPEC_PATH} --root <RESOLVED_ROOT> --plan-dir {PLAN_DIR} --flow-tests-out <RUN_FOLDER>/flow-tests.tsv'
 
 check_flow_checks_block() {
   local block
@@ -275,7 +275,7 @@ check_no_banned_phrase() {
 @test "red twin: dropping the flow-checks command, its bound or its halt question fails" {
   check_flow_checks_block "$PLANNER_MD"
   local copy="$BATS_TEST_TMPDIR/planner.md" needle
-  for needle in '--flow-tests-out <RUN_FOLDER>/flow-tests.tsv' 'model: "sonnet"' 'free to fix code or test' \
+  for needle in '--flow-tests-out <RUN_FOLDER>/flow-tests.tsv' '--plan-dir {PLAN_DIR} ' 'model: "sonnet"' 'free to fix code or test' \
     'The retry bound is one' '## Flow checks (HALTED)' 'Stay halted (Recommended)'; do
     without "$PLANNER_MD" "$needle" "$copy"
     run check_flow_checks_block "$copy"

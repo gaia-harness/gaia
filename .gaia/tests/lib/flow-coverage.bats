@@ -39,6 +39,8 @@ build_scratch_repo() {
   copy_in .gaia/scripts/spec/flows-lib.sh
   copy_in .gaia/scripts/spec/flow-coverage.sh
   copy_in .gaia/scripts/spec/working-doc-id-scan.sh
+  copy_in .gaia/scripts/test-design/test-table.mjs
+  copy_in .gaia/scripts/test-design/table.mjs
   copy_in .gaia/scripts/machine-local-ref-lib.sh
   copy_in .claude/hooks/lib/gaia-packages.sh
   copy_in .claude/hooks/lib/audit-base-provenance.sh
@@ -147,6 +149,62 @@ script_exists() {
   [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
   printf '%s\n' "$output" | grep -qxF "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts"
   printf '%s\n' "$output" | grep -qxF "flow-coverage: FLOW-002: missing .gaia/tests/lib/refuse-check.bats"
+}
+
+# write_plan <coveredFlows json array>: a plan folder whose tests.json holds
+# build row T1 and these coveredFlows entries.
+write_plan() {
+  PLAN="$BATS_TEST_TMPDIR/plan"
+  mkdir -p "$PLAN"
+  printf '{"schema":1,"rows":[{"id":"T1","source":"success_criteria:0","case":"c","file":"apps/web/app/a/a.test.ts","title":"refuses","layer":"route","task":"task-build","action":"new","security":"access"}],"coveredFlows":%s}\n' "$1" >"$PLAN/tests.json"
+}
+
+@test "a web flow coveredFlows records needs no spec under --plan-dir; without the flag it is missing" {
+  write_spec flows: \
+    "$(web_flow FLOW-001 sign-in app/a)" \
+    "$(command_flow FLOW-002 refuse-check .gaia/tests/lib/refuse-check.bats)"
+  add_file apps/web/app/a/index.ts 'export {};'
+  mark_base
+  printf '{"config":{"rootDir":"/nowhere"}' >"$LISTING"
+  add_file .gaia/tests/lib/refuse-check.bats '@test "refuses" { true; }'
+  commit_all branch
+  write_plan '[{"source":"flow:sign-in","rows":["T1"]}]'
+
+  script_exists
+  run coverage --plan-dir "$PLAN" --flow-tests-out "$TESTS_OUT"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; cat "$STDERR_FILE" >&2; return 1; }
+  [ -z "$output" ]
+  [ "$(cat "$TESTS_OUT")" = "FLOW-002${TAB}refuse-check${TAB}command${TAB}.gaia/tests/lib/refuse-check.bats" ]
+  write_listing
+  run coverage
+  [ "$status" -eq 1 ]
+  [ "$output" = "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts" ]
+}
+
+@test "a coveredFlows entry naming a row tests.json lacks is a finding and leaves its flow unrecorded" {
+  write_spec flows: "$(web_flow FLOW-001 sign-in app/a)"
+  add_file apps/web/app/a/index.ts 'export {};'
+  mark_base
+  write_listing
+  add_file apps/web/app/a/more.ts 'export {};'
+  commit_all branch
+  write_plan '[{"source":"flow:sign-in","rows":["T7"]}]'
+
+  script_exists
+  run coverage --plan-dir "$PLAN"
+  [ "$status" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
+  printf '%s\n' "$output" | grep -qxF 'flow-coverage: coveredFlows flow:sign-in names row T7, which the table lacks'
+  printf '%s\n' "$output" | grep -qxF "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts"
+}
+
+@test "a --plan-dir that is not a directory exits 2" {
+  write_spec flows: "$(web_flow FLOW-001 sign-in app/a)"
+  mark_base
+  write_listing
+  script_exists
+  run coverage --plan-dir "$BATS_TEST_TMPDIR/absent"
+  [ "$status" -eq 2 ]
 }
 
 @test "a changed command flow test passes inside a run that reports only the web flow with no spec" {

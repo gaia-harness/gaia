@@ -511,8 +511,8 @@ check_lens_doctrine_rows() {
 # SPEC flow named around a refusal or a stated literal copied it into the flow
 # row and no lens check caught it. A stated no-JavaScript error path stays on
 # the route layer, since the native-post check read a stated error path as a
-# post the flow owns. A SPEC flow's only row is trimmed, never dropped, since
-# the flow's requirement key and its Flow test line still need a row.
+# post the flow owns. A SPEC flow trimmed to no row is recorded in
+# coveredFlows rather than kept as a journey-only row that proves nothing new.
 check_flow_row_allow_list() {
   local doctrine lens table
   doctrine="$(flat "$1/$DOCTRINE_REL")"
@@ -524,7 +524,8 @@ check_flow_row_allow_list() {
   need "$doctrine" "checks its happy path's native form posts page-less in its flow test, never an error post" || return 1
   need "$lens" "a flow row step outside the doctrine's \`**Flow test.**\` allow-list" || return 1
   need "$lens" "such as a refusal a build task's row or another flow owns, a native error post, or a stated literal or state a lower-layer row owns" || return 1
-  need "$lens" "drops it when nothing is left, unless it is its SPEC flow's only row, which keeps the navigation the journey needs" || return 1
+  need "$lens" "drops it when nothing is left, recording a SPEC flow left with no row in \`coveredFlows\`" || return 1
+  lacks "$lens" "unless it is its SPEC flow's only row" || return 1
   need "$table" "each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row" || return 1
 }
 
@@ -556,8 +557,42 @@ check_flow_row_allow_list() {
   red check_flow_row_allow_list "$AUDIT_REL" ', a native error post, or a stated literal or state a lower-layer row owns' ''
 }
 
-@test "red twin: the test design lens dropping a SPEC flow's only row fails" {
-  red check_flow_row_allow_list "$AUDIT_REL" ", unless it is its SPEC flow's only row, which keeps the navigation the journey needs" ''
+@test "red twin: the test design lens keeping a SPEC flow's only row again fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" "recording a SPEC flow left with no row in \`coveredFlows\`" "unless it is its SPEC flow's only row, which keeps the navigation the journey needs"
+}
+
+# check_covered_flows <root>: a flow whose every step is a refusal a build
+# task's test owns gets no flow test, and the plan records the owning rows in
+# tests.json coveredFlows. No gate can tell a refusal-only flow from a
+# happy-path one, so the SPEC coverage lens is what stops a planner recording
+# a happy-path flow to skip its flow test.
+check_covered_flows() {
+  local doctrine table planner coverage
+  doctrine="$(flat "$1/$DOCTRINE_REL")"
+  table="$(flat "$1/$TABLE_REL")"
+  planner="$(flat "$1/$PLANNER_REL")"
+  coverage="$(range_of "$1/$AUDIT_REL" '- **SPEC coverage' '- **Test design' | tr '\n' ' ' | tr -s ' ')"
+  need "$doctrine" "A flow whose every step is a refusal a build task's test owns gets no flow test: the plan records the rows that own its steps instead." || return 1
+  need "$table" '`"coveredFlows": [{"source": "flow:<slug>", "rows": ["<id>", ...]}]`, naming the rows that own its steps, and that entry cites the key' || return 1
+  need "$planner" 'gets no closing-phase task and no `Flow test` line' || return 1
+  need "$coverage" 'nor a `coveredFlows` entry in `tests.json`' || return 1
+  need "$coverage" "a \`coveredFlows\` entry whose SPEC flow has a step that is not a refusal, or a step none of the entry's rows owns" || return 1
+}
+
+@test "a refusal-only flow is recorded in coveredFlows in the doctrine, the table page, the planner and the SPEC coverage lens" {
+  green check_covered_flows
+}
+
+@test "red twin: the SPEC coverage lens accepting a coveredFlows entry for a flow with a non-refusal step fails" {
+  red check_covered_flows "$AUDIT_REL" 'whose SPEC flow has a step that is not a refusal, or ' 'whose SPEC flow has '
+}
+
+@test "red twin: the SPEC coverage lens accepting a coveredFlows entry whose rows miss a step fails" {
+  red check_covered_flows "$AUDIT_REL" ", or a step none of the entry's rows owns" ''
+}
+
+@test "red twin: the doctrine dropping the refusal-only flow rule fails" {
+  red check_covered_flows "$DOCTRINE_REL" " A flow whose every step is a refusal a build task's test owns gets no flow test: the plan records the rows that own its steps instead." ''
 }
 
 @test "red twin: the planner mapping refusals to the flow row fails" {
