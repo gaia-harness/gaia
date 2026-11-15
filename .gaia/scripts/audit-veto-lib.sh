@@ -179,7 +179,6 @@ gaia_veto_keys_state() {
     then .[0] else error("malformed vetoes.json") end
     | $state.history.rounds as $rounds
     | def keys_of($j): if $j == $round then $round_keys else ($rounds[$j - 1].snapshot | if type == "object" then .keys else null end) end;
-    # rereports reads [round, reported key] and is true when that key is the vetoed finding.
     def owner_of($key): ($owners[$key[2]] // null) | if . == $key[0] then null else . end;
     def reviewers($key): [$key[0], owner_of($key)] | map(select(. != null));
     # spans_at($from; $key) reads a reviewed round: the spans the diff from the
@@ -195,6 +194,7 @@ gaia_veto_keys_state() {
         and (($reported[3] | type) != "number"
           or (if $spans != null then any($spans[]; $reported[3] >= .[0] - $tolerance and $reported[3] <= .[1] + $tolerance)
               else ($key[3] | type) != "number" or ($reported[3] - $key[3] | if . < 0 then -. else . end) <= $tolerance end));
+    # rereports reads [round, reported key] and is true when that key is the vetoed finding.
     def reviewed_from($first; $key; rereports):
       reviewers($key) as $reviewers
       | [range($first; $round + 1) | select(any(($rounds[. - 1].members // [])[]; IN($reviewers[])))] as $dispatched
