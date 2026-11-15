@@ -373,7 +373,7 @@ check_lens_doctrine_rows() {
   need "$lens" "or whose \`source\` is a security requirement (then that requirement's kind, whatever the existing test asserted)" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$lens" 'A stated literal or state stays on its story or route test even when a real-server row asserts the same one' || return 1
-  need "$lens" "that row is trimmed to asserting the element is in the served HTML when the doctrine's \`## Served HTML\` admits it, and dropped otherwise" || return 1
+  need "$lens" "that row is trimmed to asserting the element carrying the literal is in the served HTML when the doctrine's \`## Served HTML\` makes that HTML the requirement, and dropped otherwise. A literal that \`## Served HTML\` makes itself a served-HTML requirement (a \`<title>\`, a meta description) stays on its real-server row, and a \`**Served check.**\` row the doctrine requires (served status and \`Location\`) is never a duplicate of a route test" || return 1
   need "$apply" "**Applied rows** (a \`tests.json\` row any lens's fix adds, changes or trims, the Test design lens's own included, and a row another finding is folded into): hold it to the Test design lens's checks above, in its new form, before applying it" || return 1
   need "$apply" "A fold never changes the target row's \`source\`" || return 1
   need "$doctrine" 'once another app test, existing or planned in any phase, exercises that path. Judge by what the test can catch, not the code it calls' || return 1
@@ -417,7 +417,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the duplicate check keeping a real-server row's literal fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" 'that row is trimmed to asserting the element is in the served HTML' 'that row is kept whole'
+  red check_lens_doctrine_rows "$AUDIT_REL" 'that row is trimmed to asserting the element carrying the literal is in the served HTML' 'that row is kept whole'
 }
 
 @test "red twin: the apply step dropping a security-flagged row fails" {
