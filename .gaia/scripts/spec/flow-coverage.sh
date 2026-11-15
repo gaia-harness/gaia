@@ -19,9 +19,9 @@
 # script runs Playwright for it, once, and only when the SPEC has a web flow.
 # --flow-tests-out writes one `flow_id<TAB>slug<TAB>kind<TAB>path` row per flow
 # whose test file exists. --plan-dir reads the plan's tests.json coveredFlows: a
-# recorded flow has no test file, so it is skipped, and every problem the
-# covered-flows reader reports (an unreadable tests.json, a malformed entry, a
-# row the table lacks) is a finding. Without --plan-dir every flow needs its file.
+# recorded flow has no test file, so it is skipped, and every problem
+# `test-table.mjs covered-flows` reports is a finding. Without --plan-dir every
+# flow needs its file.
 #
 # Every finding is one stdout line `flow-coverage: ...`, all of them in one run.
 # The web flow test lives in <frontend package>/.playwright/flows/<slug>.spec.ts.
