@@ -11,6 +11,168 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-15 f4ad2cb WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 94ded42 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 94fec30 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 6251c17 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 80e4948 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 9978ac8 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 d5049e4 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 916495e WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 6ac41de WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 18e2c2e WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 d773704 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 f400316 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 a57d4e7 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 f607874 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 0144621 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 a1e9a8c WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 5abb7f4 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 76427bd WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 2a550dc WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 7c9ab24 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 3b0b69f WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 77c9864 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 8981ad1 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 c4a509b WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 61188e8 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 02c2635 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 f5dd5f2 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 4de848b WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 79766b4 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 6b09f42 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 b162a38 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 f7a1292 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 8569531 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 2b0858e WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 a784889 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 eaf513e WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 4d91c3b WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 bb000c6 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 2247561 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 f609f3e WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 7c9ae71 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 b05cf73 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 ee23a45 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 aeca743 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 b030548 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 3a28f29 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 84b05b0 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 d8e09af WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 9d62167 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 a872f36 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 57f364a WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 1874663 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 222abfd WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 d421910 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 7c9ac52 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 d9bbdad WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 ee07f12 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 21f1f0b WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 d35c7c2 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 6ca764a WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 cae81ff WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 360fd9b WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 97decae WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 03d17a7 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 e2288fc WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 dd0fe39 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 f982a31 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 9894276 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 74fb904 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 b5a35de WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 88786e5 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 5261fa6 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 1eaefb2 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 a997075 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 0a30a61 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 4e3e944 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 ebbc9a7 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 5998d36 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 0528a38 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 18098da WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 d36e867 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 c55b7ce WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 052bd37 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 6c8b963 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 db82a61 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 f2cc291 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 d387d52 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 5f13b49 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 bddf2fa WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 9d20bee WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 156788d WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 4217bf9 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 706bb57 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 aba8b13 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 81ee9d6 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 165b468 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 4bc2cb2 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 bfa9fb5 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 482c07e WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 285d133 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 a3516ba WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 341fed7 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 48bb08b WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 2c99aa9 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 eed40c8 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 e8833c5 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 db13949 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 59d8884 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 205dd78 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 92934ab WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 2143934 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 4c04d92 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 cd07128 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 39c470b WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 4219d7e WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 d6b04b7 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 4922b63 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 0e15c24 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 106bc6b WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 e40c06a WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 5de725e WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 6e3c2da WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 ec97798 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 206d8d7 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 28a3e91 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 b3bc7ce WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 b9a41f0 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 9a6847b WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 b6c62de WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 b541d39 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 e4cb04d WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 137eab9 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 4e65bd2 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 d735f72 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 9e5ee6e WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 a8074b4 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 32af899 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 5f9721d WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 e3d8cdb WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 bcad379 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 ecdfb3d WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 44482b7 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 d9ba7b1 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 ec71ae4 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 65f04fe WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 9c844b4 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 cb266c4 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 17d7147 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 3895bbc WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 f7018c3 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 405ef36 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 b4fd359 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 0591a98 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 16cfaed WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 620e520 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 e918343 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 fd1c1ae WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 084dbd2 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 afea114 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 61a4b21 WORTHY - harness-internal refinement, no wiki page states the changed detail
+- 2026-11-15 d4858d9 WORTHY - wiki pages updated in the commit itself, no further edit needed
+- 2026-11-15 8ab59a7 WORTHY - production SESSION_SECRET minimum length → wiki/modules/Sessions.md
 - 2026-11-14 PROMOTED: wiki/decisions/Test Design Table.md
 - 2026-11-10 PROMOTED: wiki/concepts/Code Review In The Audit Loop.md (PR #3392)
 - 2026-11-09 REVERSED: wiki/decisions/shadcn Component Layer.md, narrowly: one form-field wrapper handles the wiring, while per-control wrappers and wrappers that own the control stay banned (#3381)
