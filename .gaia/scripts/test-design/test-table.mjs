@@ -208,7 +208,7 @@ const verify = (args) => {
   for (const {stem, index, file} of deleteLines(documents)) {
     if (isTestPath(file)) {
       failures.push(
-        `${stem} line ${index + 1}: Delete line names a test path; it names the code under test`,
+        `${stem} line ${index + 1}: Delete line names a test path; name the code under test instead`,
       );
     }
   }
