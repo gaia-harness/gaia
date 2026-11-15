@@ -88,7 +88,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 
 **Served check.** Give each guarded route module one real-server check, with redirects off, asserting only the served status and any `Location` header, never page content a route test shows. The parent-loader `.data` request is the one served check that asserts on the body.
 
-**Shared guard.** Test a guard written once (middleware, a shared guard applied above the route) once at the guard, plus one served check. Give a module its own refusal test only when its own code wires the guard, so removing that wiring leaves the module unguarded.
+**Shared guard.** Test a guard written once (middleware, a shared guard applied above the route) once at the guard, plus one served check. For middleware, the test at the guard is a route test that runs the real middleware chain, and without one the served check alone; never a unit test that hand-calls the middleware function. Give a module its own refusal test only when its own code wires the guard, so removing that wiring leaves the module unguarded.
 
 **Middleware guard.** A route test that runs the real middleware chain proves a middleware guard; a route test that hand-calls a context provider does not, and without the chain the guard needs a real-server check. An authorization outcome an upstream API owns is proven by no GAIA layer, since a mock handler answers as the test wrote it.
 
