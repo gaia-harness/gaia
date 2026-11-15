@@ -26,7 +26,7 @@ How to write a test at a layer lives in the stack references:
 - Name the closing flow test as the owner of a happy path it walks and asserts, with no success-path route test of its own; an effect the flow cannot observe keeps its route test.
 - Test several callers that map an upstream failure through one shared helper once, at the mapping, unless a caller maps differently. This never applies to a guard (`## Guards and security rows`).
 - Never test what the type checker or lint already proves.
-- Never plan a test of a test double (a mock, fixture, Given builder or test-fixture wiring) once an existing app test, or a planned one in any phase, exercises that path. Judge by what the test can catch, not the code it calls: a test whose assertions can fail only on app code disagreeing with a double (a client against its mock handlers, the mocks' base URL, a seed's contents) tests that double.
+- Never plan a test of a test double (a mock, fixture, Given builder or test-fixture wiring) once an existing app test, or a planned one in any phase, exercises that path. Judge by what the test can catch, not the code it calls: a test whose assertions can fail only on app code disagreeing with a double (that a client reaches its mock handlers, that the mocks share the app's base URL, what a seed holds) tests that double.
 - Give a behavior only a real backend shows (data surviving a restart, a database reset, a production start against a real store) no test; name it as adopter-owned end-to-end work in the plan's follow-ups.
 
 ## Layers
