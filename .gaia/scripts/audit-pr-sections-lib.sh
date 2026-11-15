@@ -295,7 +295,7 @@ _undecided_keys() {
     | "violation: undecided \({round: $round, member, finding_class, path, line} | tojson)"')" || return 3
   [ -z "$violations" ] && return 0
   printf '%s\n' "$violations"
-  _error "record the human's decision for each undecided finding: write its {member, finding_class, path, line} plus a reason to a JSON file, then run: bash $_GAIA_DISPOSITIONS_DIRECTORY/audit-dispositions-check.sh record-residual --root $ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix|fixed (accept and waive only while the round is open and the finding is not security-class; fixed for a cross_remit one a commit changed)"
+  _error "record the human's decision for each undecided finding: write its {member, finding_class, path, line} plus a reason to a JSON file, then run: bash $_GAIA_DISPOSITIONS_DIRECTORY/audit-dispositions-check.sh record-residual --root $ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix|fixed (accept and waive only while the round is open and the finding is not security-class; fixed only while the round is open, for a cross_remit, not security-class one whose path changed since the round's tree)"
   return 1
 }
 
@@ -359,7 +359,7 @@ _command_record_residual() {
                reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)}
            + (if $decision == "fixed" then {commit: $commit} else {} end) end
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
-    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix); a fix is refused on a cross_remit one that is not security-class (its file is outside the reporting member's remit, so no review ever satisfies the veto): once a commit changes its path, record --decision fixed, else --decision waive; and a fixed needs that cross_remit finding's path changed since the open round's tree"; return 3; }
+    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix); a fix is refused on a cross_remit one that is not security-class (its file is outside the reporting member's remit, so no review ever satisfies the veto): record --decision fixed once its path has changed since the open round's tree, else --decision waive; a fixed is refused on any other finding"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'

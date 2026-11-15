@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 #
-# The writes behind a human's recorded fix or fixed decision, split out of
-# audit-pr-sections-lib.sh, which sources this file. Relies on the caller's
+# The veto write behind a human's recorded fix decision and the commit lookup
+# behind a fixed one. Sourced by audit-pr-sections-lib.sh. Relies on the caller's
 # _error, _evaluator, gaia_exclusive_lock_take, ROOT, RUN_FOLDER and
 # FINDING_FILE. Runs nothing at source time. Never `cd`s.
 
