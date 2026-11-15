@@ -349,7 +349,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" "Judge each case, not each row: a row is judged by its \`caseKey\` when it has one, by its title otherwise" || return 1
   need "$doctrine" "Two cases that share a test and carry different kinds" || return 1
   need "$doctrine" "each get their own row, keyed by \`caseKey\`" || return 1
-  need "$doctrine" "the row narrows to the security case and keeps its flag, and the other cases move to a new unflagged row" || return 1
+  need "$doctrine" "keeps its flag on the row narrowed to its own kind's cases, and each moved case takes its own kind" || return 1
   need "$lens" "Judge each case by the doctrine's \`**One kind per case.**\`" || return 1
   need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
@@ -416,5 +416,5 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the doctrine clearing the flag on a split fails" {
-  red check_lens_doctrine_rows "$DOCTRINE_REL" 'the row narrows to the security case and keeps its flag, and the other cases move to a new unflagged row' 'the row is unflagged'
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "keeps its flag on the row narrowed to its own kind's cases" 'clears its flag'
 }
