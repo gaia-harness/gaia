@@ -94,14 +94,14 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 
 **Later-request rule.** Test a rule that takes effect on a later request (a role change, a deactivation, a sign-out ending a token) with a before-and-after read in one session, at the row's layer.
 
-**Forged value.** For a signed or encrypted value the app issues (a cookie, a session, a token), send a forged or edited one and assert the refusal. For a server-owned field the server must ignore (an owner or author), submit a forged value and assert the server ignored it. For a destination the server sends the user or a request to (a redirect target, a callback URL), send one outside its allowed destinations and assert it is refused or replaced.
+**Forged value.** For a signed or encrypted value the app issues (a cookie, a session, a token), send a forged or edited one and assert the refusal. For a server-owned field the server must ignore (an owner or author), submit a forged value and assert the server ignored it. For a destination the server sends the user or a request to (a redirect target, a callback URL), send one outside its allowed destinations and assert it is refused or replaced with an allowed destination.
 
 **Absence requirement.** For a value that must never be exposed, sent, stored or rendered, every task that adds a way for it to reach the forbidden surface tests its absence on that surface while the value is present upstream. Served HTML, a cookie or the session is a real-server check; returned data, an outgoing request or any other write is a route test.
 
 **Security row.** A security row's test proves one of three kinds:
 
 - **Access**: who may act or see. Sign-in, role, ownership and visibility, account state that decides whether an actor may act (deactivated, suspended, a role change on the next request), and authorization checked before validation or data access. A status rule that decides whether an actor may act is access.
-- **Forgery**: refusal of forged, tampered or server-owned values, and refusal or replacement of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL).
+- **Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.
 - **Secrets**: values that must never be exposed.
 
 Ordinary validation and status rules are not security rows. A retire or change row on an existing test of one of these kinds carries the flag too.

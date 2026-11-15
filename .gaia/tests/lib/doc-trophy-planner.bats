@@ -351,7 +351,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" 'with no success-path route test of its own' || return 1
   need "$doctrine" '**Security row.**' || return 1
   need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
-  need "$doctrine" '**Forgery**: refusal of forged, tampered or server-owned values, and refusal or replacement of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL).' || return 1
+  need "$doctrine" '**Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" 'a flow observes an effect whose consequence a flow step asserts' || return 1
   need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included), a forgery row (a redirect or callback target included)," || return 1
@@ -434,7 +434,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the doctrine dropping redirect targets from forgery fails" {
-  red check_lens_doctrine_rows "$DOCTRINE_REL" ', and refusal or replacement of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL).' '.'
+  red check_lens_doctrine_rows "$DOCTRINE_REL" ', and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' '.'
 }
 
 @test "red twin: the test design lens dropping redirect targets from forgery rows fails" {
