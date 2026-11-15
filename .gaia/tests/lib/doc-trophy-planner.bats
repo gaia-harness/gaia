@@ -344,7 +344,9 @@ check_forged_value() {
 # after the list. A retire or change row whose source is a security requirement
 # takes that requirement's kind in the doctrine, the table step and the lens,
 # since keying only on the retired test's own kind left a retire made for a
-# secret requirement flagged none.
+# secret requirement flagged none. A requirement that keeps a value server-only
+# is a secrets requirement whatever the value, since judging the value harmless
+# left its retire and change rows flagged none.
 check_lens_doctrine_rows() {
   local doctrine lens apply interactive table decomposition
   doctrine="$(flat "$1/$DOCTRINE_REL")"
@@ -368,6 +370,7 @@ check_lens_doctrine_rows() {
   need "$lens" "Judge each case by the doctrine's \`**One kind per case.**\`" || return 1
   need "$lens" 'its fix trims the row to the kind its flag names and adds a row for each other kind' || return 1
   need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
+  need "$doctrine" 'A requirement (a SPEC line or a plan-time directive) that keeps a value server-only is a secrets requirement, whatever the value.' || return 1
   need "$doctrine" "So does a retire or change row whose \`source\` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it), whatever the existing test asserted: it carries that requirement's kind, and such a retire is a security retire." || return 1
   need "$table" "and one whose \`source\` is a security requirement carries that requirement's kind, whatever the existing test asserted" || return 1
   need "$lens" "or whose \`source\` is a security requirement (then that requirement's kind, whatever the existing test asserted)" || return 1
@@ -482,6 +485,10 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the doctrine keying a retire's flag only on the retired test's kind fails" {
   red check_lens_doctrine_rows "$DOCTRINE_REL" " So does a retire or change row whose \`source\` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it), whatever the existing test asserted: it carries that requirement's kind, and such a retire is a security retire." ''
+}
+
+@test "red twin: the doctrine judging a server-only value's secrecy by the value fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" ' A requirement (a SPEC line or a plan-time directive) that keeps a value server-only is a secrets requirement, whatever the value.' ''
 }
 
 @test "red twin: the doctrine's source-kind retire not counted as a security retire fails" {
