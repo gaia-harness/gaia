@@ -492,7 +492,7 @@ check_flow_row_allow_list() {
   need "$lens" "a flow row step outside the doctrine's \`**Flow test.**\` allow-list" || return 1
   need "$lens" "such as a refusal a build task's row or another flow owns, a native error post, or a stated literal or state a lower-layer row owns" || return 1
   need "$lens" "drops it when nothing is left, unless it is its SPEC flow's only row, which keeps the navigation the journey needs" || return 1
-  need "$table" "each refusal, stated literal or state the flow names maps to the delivering task's lower-layer row" || return 1
+  need "$table" "each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row" || return 1
 }
 
 @test "a flow row holds only the doctrine's allow-list in the doctrine, the test design lens and the planner" {

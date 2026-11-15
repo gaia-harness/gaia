@@ -36,7 +36,7 @@ Every field is required unless marked.
 
 `bash .gaia/scripts/spec/requirement-keys.sh --spec <SPEC.md> [--audit <AUDIT.md>]` prints one key per line, sorted; for a spec-less plan `requirement-keys.sh --description` prints `description`.
 
-- `flow:<slug>`: each SPEC flow. Its flow row holds only what the doctrine's `**Flow test.**` allows; each refusal, stated literal or state the flow names maps to the delivering task's lower-layer row.
+- `flow:<slug>`: each SPEC flow. Its flow row holds only what the doctrine's `**Flow test.**` allows; each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row.
 - `success_criteria:<i>`: 0-based.
 - `scope_boundaries:<always|ask_first|never>:<i>`: 0-based.
 - `clarifications:<i>`: 0-based index into `answered`.
