@@ -301,6 +301,76 @@ SUITE
   [ "$status" -eq 0 ]
 }
 
+@test "node on a script that hands a resolving script to a child node makes the suite a user" {
+  write_helper .gaia/scripts/needs/uses-package.mjs <<'SCRIPT'
+import {createRequire} from 'node:module';
+const require = createRequire(import.meta.url);
+require('typescript');
+SCRIPT
+  write_helper .gaia/scripts/needs/calls-child.mjs <<'SCRIPT'
+import {execFileSync} from 'node:child_process';
+import path from 'node:path';
+execFileSync('node', [path.join(import.meta.dirname, 'uses-package.mjs')]);
+SCRIPT
+  write_suite runs-two-hop <<'SUITE'
+TEST "runs the outer script" {
+  run node "$BATS_TEST_DIRNAME/../../scripts/needs/calls-child.mjs"
+  [ "$status" -eq 0 ]
+}
+SUITE
+  run_guard
+  [ "$status" -eq 1 ]
+  case "$output" in
+    *"lib/runs-two-hop.bats"*) ;;
+    *) printf 'the finding does not name the suite:\n%s\n' "$output" >&2; return 1 ;;
+  esac
+}
+
+@test "a node file stub for one test does not hide the suite's real node call on a resolving script" {
+  write_helper .gaia/scripts/needs/uses-package.mjs <<'SCRIPT'
+import {createRequire} from 'node:module';
+const require = createRequire(import.meta.url);
+require('typescript');
+SCRIPT
+  write_suite stub-file-and-real-node <<'SUITE'
+setup() {
+  node "$BATS_TEST_DIRNAME/../../scripts/needs/uses-package.mjs"
+}
+
+TEST "a failing node on PATH" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/node"
+  chmod +x "$BATS_TEST_TMPDIR/bin/node"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run some-hook
+  [ "$status" -eq 1 ]
+}
+SUITE
+  run_guard
+  [ "$status" -eq 1 ]
+  case "$output" in
+    *"lib/stub-file-and-real-node.bats"*) ;;
+    *) printf 'the finding does not name the suite:\n%s\n' "$output" >&2; return 1 ;;
+  esac
+}
+
+@test "a node function cancels node on a resolving script" {
+  write_helper .gaia/scripts/needs/uses-package.mjs <<'SCRIPT'
+import {createRequire} from 'node:module';
+const require = createRequire(import.meta.url);
+require('typescript');
+SCRIPT
+  write_suite stub-function-node <<'SUITE'
+node() { echo stubbed; }
+
+TEST "calls the stub" {
+  run node "$BATS_TEST_DIRNAME/../../scripts/needs/uses-package.mjs"
+  [ "$status" -eq 0 ]
+}
+SUITE
+  run_guard
+  [ "$status" -eq 0 ]
+}
+
 @test "node -e text that requires a bare package makes the suite a user" {
   write_suite eval-bare <<'SUITE'
 TEST "resolves a package" {
