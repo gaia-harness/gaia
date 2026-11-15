@@ -328,7 +328,9 @@ check_forged_value() {
 }
 
 # check_lens_doctrine_rows <root>: the test design lens names each doctrine-barred
-# row kind and flags by the doctrine's security kinds, sign-in included, judged
+# row kind and flags by the doctrine's security kinds, sign-in and its refusals
+# included (the app's response to an upstream refusal too, since a refuter read
+# the upstream-verdict line as clearing it), judged
 # per case in the lens and the planner's table step alike, since a per-row
 # judgment reads a refusal case sharing a test with an allowed case as unflagged;
 # and the apply step holds every row a fix adds, changes or trims, the lens's own
@@ -350,7 +352,8 @@ check_lens_doctrine_rows() {
   interactive="$(range_of "$1/$AUDIT_REL" '**Interactive:**' 'Then return to' | tr '\n' ' ' | tr -s ' ')"
   need "$doctrine" 'with no success-path route test of its own' || return 1
   need "$doctrine" '**Security row.**' || return 1
-  need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
+  need "$doctrine" '**Access**: who may act or see. Sign-in and its refusals,' || return 1
+  need "$doctrine" "The app's own response to an upstream refusal (no session created, the error shown) is still an access row; only the upstream's verdict itself is unprovable." || return 1
   need "$doctrine" '**Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" 'a flow observes an effect whose consequence a flow step asserts' || return 1
@@ -442,7 +445,15 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the doctrine dropping sign-in from access fails" {
-  red check_lens_doctrine_rows "$DOCTRINE_REL" '**Access**: who may act or see. Sign-in,' '**Access**: who may act or see.'
+  red check_lens_doctrine_rows "$DOCTRINE_REL" '**Access**: who may act or see. Sign-in and its refusals,' '**Access**: who may act or see.'
+}
+
+@test "red twin: the doctrine dropping sign-in refusals from access fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'Sign-in and its refusals,' 'Sign-in,'
+}
+
+@test "red twin: the doctrine dropping the app's response to an upstream refusal from access fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " The app's own response to an upstream refusal (no session created, the error shown) is still an access row; only the upstream's verdict itself is unprovable." ''
 }
 
 @test "red twin: the test design lens judging the flag per row fails" {
