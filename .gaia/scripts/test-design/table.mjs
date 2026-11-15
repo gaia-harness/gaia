@@ -39,7 +39,7 @@ export const REQUIRED_FIELDS = [
 const isNonEmptyString = (value) =>
   typeof value === 'string' && value.trim() !== '';
 
-// Returns {rows}, or throws an Error whose message is one line naming why the
+// Returns {rows, coveredFlows}, or throws an Error whose message is one line naming why the
 // table is unusable.
 export const readTable = (path) => {
   let text;
@@ -61,7 +61,7 @@ export const readTable = (path) => {
   ) {
     throw new Error(`${path} has no "rows" array`);
   }
-  return {rows: parsed.rows};
+  return {rows: parsed.rows, coveredFlows: parsed.coveredFlows};
 };
 
 // Returns a list of reasons the row is invalid; empty when it is valid.
@@ -100,4 +100,52 @@ export const validateRow = (row) => {
     reasons.push(`illegal held "${row.held}"`);
   }
   return reasons;
+};
+
+// A SPEC flow made only of refusals that build-task rows already own gets no
+// flow test: a `coveredFlows` entry, {source: "flow:<slug>", rows: [ids]},
+// names those rows in its place. Returns the sources of the valid entries and
+// every problem with them that the rows alone can show.
+export const coveredFlows = ({rows, coveredFlows: entries}) => {
+  if (entries === undefined) return {sources: [], problems: []};
+  if (!Array.isArray(entries)) {
+    return {sources: [], problems: ['coveredFlows is not an array']};
+  }
+  const objectRows = rows.filter((row) => row && typeof row === 'object');
+  const rowsById = new Map(objectRows.map((row) => [row.id, row]));
+  const flowRowBySource = new Map(
+    objectRows.filter((row) => row.layer === 'flow').map((row) => [row.source, row.id]),
+  );
+  const problems = [];
+  const seen = new Set();
+  const sources = [];
+  entries.forEach((entry, index) => {
+    const source = entry && typeof entry === 'object' ? entry.source : undefined;
+    if (typeof source !== 'string' || !/^flow:\S+$/.test(source)) {
+      problems.push(`coveredFlows entry #${index + 1}: source is not a flow:<slug> key`);
+      return;
+    }
+    if (seen.has(source)) problems.push(`coveredFlows names ${source} twice`);
+    seen.add(source);
+    if (!Array.isArray(entry.rows) || entry.rows.length === 0) {
+      problems.push(`coveredFlows ${source} names no rows`);
+      return;
+    }
+    const before = problems.length;
+    for (const id of entry.rows) {
+      const row = rowsById.get(id);
+      if (!row) {
+        problems.push(`coveredFlows ${source} names row ${id}, which the table lacks`);
+      } else if (row.layer === 'flow') {
+        problems.push(`coveredFlows ${source} names flow-layer row ${id}; a covered flow has no flow test`);
+      } else if (row.action === 'retire' || row.held !== undefined) {
+        problems.push(`coveredFlows ${source} names row ${id}, which is ${row.action === 'retire' ? 'retired' : 'held'} and so runs no test`);
+      }
+    }
+    if (flowRowBySource.has(source)) {
+      problems.push(`row ${flowRowBySource.get(source)} is a flow-layer row for ${source}, which coveredFlows records as having no flow test`);
+    }
+    if (problems.length === before) sources.push(source);
+  });
+  return {sources, problems};
 };
