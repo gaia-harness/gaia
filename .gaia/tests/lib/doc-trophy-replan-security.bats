@@ -175,8 +175,8 @@ check_replan_security() {
   need "$rule" 'by `test-table.md` `## Procedure` steps 7 to 10 against the regenerated plan' || return 1
   need "$rule" 'A regenerated row on the same `file`, `title` and `caseKey` gets the snapshot'"'"'s `security` back' || return 1
   need "$rule" 'Either way, the owning task'"'"'s phase entry in `ORCHESTRATOR.md` lists it on its `- Security writer:` line, adding the line when the phase has none.' || return 1
-  need "$rule" 'Every restore re-runs step 4.5; when 4.5 fails, undo the restore and report the row as not restored.' || return 1
-  need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`, a failed restore included.' || return 1
+  need "$rule" 'Every restore re-runs step 4.5; when 4.5 fails, undo the restore and put the row back on the review list as its own item, not restored, recommending a restore by hand (in auto-mode, record it in `## Audit notes` as a held security row).' || return 1
+  need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`.' || return 1
 }
 
 @test "the Structural re-plan routes a lost security row to the review list" {
@@ -206,7 +206,14 @@ check_replan_security() {
 }
 
 @test "red twin: a restore with no step 4.5 rerun fails" {
-  mutated_tree "$AUDIT_REL" 'Every restore re-runs step 4.5; when 4.5 fails, undo the restore and report the row as not restored.' 'Restore the row.'
+  mutated_tree "$AUDIT_REL" 'Every restore re-runs step 4.5; when 4.5 fails, undo the restore and' 'Every restore is applied, then'
+  run check_replan_security "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+}
+
+@test "red twin: an undone restore dropped instead of returned to the review list fails" {
+  mutated_tree "$AUDIT_REL" 'undo the restore and put the row back on the review list as its own item, not restored, recommending a restore by hand (in auto-mode, record it in `## Audit notes` as a held security row).' 'undo the restore.'
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
