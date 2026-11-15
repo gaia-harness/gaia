@@ -30,7 +30,8 @@ Every field is required unless marked.
 - `security`: one of `none`, `access`, `forgery`, `secret`.
 - `caseKey`: required when two or more rows name one `file` plus `title`, and on every `extend` row. A string literal that appears in that test's `.each` or `.for` case table for this row's case. Rows sharing one test carry distinct `caseKey`s; a security row never shares a test without one.
 - `reason`: optional; required on a row the drift step adds for a kept unplanned test.
-- `held`: optional, written only by `approve --auto`: `"auto-mode"` on a `retire` row whose `security` is not `none`. Such a row is not executed.
+- `deletes`: optional, on a `retire` row whose `security` is not `none`: the repo-relative source paths of the code under test that the plan deletes, each named on a task doc's `- Delete:` line.
+- `held`: optional, written only by `approve` on a `retire` row whose `security` is not `none`: `"auto-mode"` on every such row under `--auto`, else `"kept-code"` on one whose `deletes` is missing, invalid or names a path no `- Delete:` line names. Such a row is not executed.
 
 ## Requirement-source keys
 
@@ -49,6 +50,8 @@ A task doc names a test only on a line `- Test: <repo-relative file> › <exact 
 
 An existing test file whose pinned wording the task's edit falsifies is named on a line `- Pin update: <repo-relative path>`, one line per file. It needs no table row, since a pin repair is not a requirement-sourced test.
 
+A source file the task deletes is named on a line `- Delete: <repo-relative path>`, one line per file. `verify` refuses a `- Delete:` line naming a test path and a `deletes` path no `- Delete:` line names.
+
 No other test path appears in a task doc: a path ending `.test.ts`, `.test.tsx`, `.spec.ts`, `.stories.tsx`, `.stories.ts` or `.bats` outside a `- Test:`, `- Flow test` or `- Pin update:` line fails `node .gaia/scripts/test-design/test-table.mjs verify`. Each `- Test:` line matches a row whose `task` is that doc's stem, and every row's task doc carries a `- Test:` line for it.
 
 ## Procedure
@@ -59,10 +62,10 @@ No other test path appears in a task doc: a path ending `.test.ts`, `.test.tsx`,
 4. Map every key, and every case and stated literal (SPEC rows, success criteria, scope boundaries, clarifications, directives, and the documents the SPEC's Required reading names), to rows. Every key is some row's `source`, and every row's `source` is a key.
 5. Pick each row's layer by the doctrine's `## Layers`, and confirm a path's layer with `node .gaia/scripts/test-design/layer-map.mjs --root <tree>` (NUL-separated repo-relative paths on stdin).
 6. Give each row its action against the existing tests: `reuse`, `extend`, `change` or `retire`, else `new`.
-7. Flag access, forgery and secret rows per the doctrine's `## Guards and security rows`; a `retire` or `change` row on an existing test meeting that definition carries the flag, and one whose `source` is a security requirement carries that requirement's kind, whatever the existing test asserted. Split a test whose cases carry different kinds per the doctrine's `**One kind per case.**`. Set each security row's `task` to the latest task whose code its test needs.
+7. Flag access, forgery and secret rows per the doctrine's `## Guards and security rows`; a `retire` or `change` row on an existing test meeting that definition carries the flag, and one whose `source` is a security requirement carries that requirement's kind, whatever the existing test asserted. Split a test whose cases carry different kinds per the doctrine's `**One kind per case.**`. Set each security row's `task` to the latest task whose code its test needs. On a security `retire` row whose code under test the plan deletes, set `deletes`; a security `retire` row of code the plan keeps gets none, and approval holds it for the maintainer.
 8. Give rows that share one test distinct `caseKey`s, and a security row that shares a test a `caseKey` too.
 9. Write titles as string literals, story titles in the three-space form.
-10. Write `tests.json`, then each task doc's `- Test:` lines from the rows whose `task` is that doc.
+10. Write `tests.json`, then each task doc's `- Test:` lines from the rows whose `task` is that doc, and a `- Delete:` line in the deleting task's doc for each `deletes` path.
 
 ## README rendering
 

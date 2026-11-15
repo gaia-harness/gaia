@@ -233,14 +233,51 @@ run_amend() {
   grep -qF 'already exists' <<<"$output"
 }
 
-@test "approve --auto holds a security retire row and not a non-security one" {
+approved_held() {
+  node -e 'const t=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(t.rows.map((r)=>r.held??"-").join(","))' "$PLAN/tests.approved.json"
+}
+
+@test "approve --auto holds every security retire row, deleted code included, and not a non-security one" {
   write_verify_fixture
-  mutate_table 't.rows[0].action = "retire"; t.rows[1].action = "retire"'
+  mutate_table 't.rows[0].action = "retire"; t.rows[1].action = "retire"; t.rows[1].deletes = ["src/beta.ts"]'
+  printf -- '- Delete: src/beta.ts\n' >>"$PLAN/task-two.md"
   run node "$TABLE_CLI" approve --plan-dir "$PLAN" --auto
   [ "$status" -eq 0 ]
-  grep -qF 'held T2' <<<"$output"
-  [ "$(node -e 'const t=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(t.rows.map((r)=>r.held??"-").join(","))' "$PLAN/tests.approved.json")" = "-,auto-mode" ]
+  [ "$output" = "held T2" ]
+  [ "$(approved_held)" = "-,auto-mode" ]
   cmp -s "$PLAN/tests.json" "$PLAN/tests.approved.json"
+}
+
+@test "approve approves a security retire row whose deleted code a Delete line names and holds every other as kept code" {
+  write_verify_fixture
+  # T2 deletes its code; T3 names no deletes; T4 names a path no Delete line
+  # names; T5's deletes is empty; T6's deletes names a test path.
+  mutate_table 't.rows[0].action = "retire"; t.rows[1].action = "retire"; t.rows[1].deletes = ["src/beta.ts"];
+    const kept = ({deletes, ...row}, id, title, extra) => ({...row, id, title, ...extra});
+    t.rows.push(kept(t.rows[1], "T3", "beta kept", {}));
+    t.rows.push(kept(t.rows[1], "T4", "beta unnamed", {deletes: ["src/gamma.ts"]}));
+    t.rows.push(kept(t.rows[1], "T5", "beta empty", {deletes: []}));
+    t.rows.push(kept(t.rows[1], "T6", "beta test path", {deletes: ["src/beta.test.ts"]}))'
+  printf -- '- Delete: src/beta.ts\n- Delete: src/beta.test.ts\n' >>"$PLAN/task-two.md"
+  run node "$TABLE_CLI" approve --plan-dir "$PLAN"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'held T3\nheld T4\nheld T5\nheld T6')" ]
+  [ "$(approved_held)" = "-,-,kept-code,kept-code,kept-code,kept-code" ]
+}
+
+@test "verify refuses a misplaced deletes, a deletes path no Delete line names, and a Delete line naming a test" {
+  expect_verify_refusal "mutate_table 't.rows[0].deletes = [\"src/alpha.ts\"]'; printf -- '- Delete: src/alpha.ts\n' >>\"\$PLAN/task-one.md\"" 'deletes is only for a security retire row'
+  expect_verify_refusal "mutate_table 't.rows[1].action = \"retire\"; t.rows[1].deletes = [\"src/beta.ts\"]'" "deletes src/beta.ts, which no task doc's Delete line names"
+  expect_verify_refusal "printf -- '- Delete: src/beta.test.ts\n' >>\"\$PLAN/task-two.md\"" 'Delete line names a test path'
+  expect_verify_refusal "mutate_table 't.rows[1].action = \"retire\"; t.rows[1].deletes = [\"src/beta.test.ts\"]'" 'deletes names a test path'
+}
+
+@test "verify passes a security retire row whose deletes path a Delete line names" {
+  write_verify_fixture
+  mutate_table 't.rows[1].action = "retire"; t.rows[1].deletes = ["src/beta.ts"]'
+  printf -- '- Delete: src/beta.ts\n' >>"$PLAN/task-two.md"
+  run_verify
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
 
 @test "record-security refuses an absent test and records the signal of a present one" {

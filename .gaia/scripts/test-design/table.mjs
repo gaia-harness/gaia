@@ -15,6 +15,7 @@ export const LAYERS = [
 ];
 export const ACTIONS = ['new', 'reuse', 'extend', 'change', 'retire'];
 export const SECURITY_VALUES = ['none', 'access', 'forgery', 'secret'];
+export const HELD_VALUES = ['auto-mode', 'kept-code'];
 
 // The test-file suffixes a plan's task-doc lines admit, as a regex source.
 export const TEST_FILE_SUFFIX = String.raw`(?:test\.tsx?|spec\.ts|stories\.tsx?|bats)`;
@@ -96,8 +97,22 @@ export const validateRow = (row) => {
   if (row.action === 'extend' && !isNonEmptyString(row.caseKey)) {
     reasons.push('an extend row needs a caseKey');
   }
-  if (row.held !== undefined && row.held !== 'auto-mode') {
+  if (row.held !== undefined && !HELD_VALUES.includes(row.held)) {
     reasons.push(`illegal held "${row.held}"`);
+  }
+  if (row.deletes !== undefined) {
+    if (row.action !== 'retire' || !isSecurity(row)) {
+      reasons.push('deletes is only for a security retire row');
+    }
+    if (
+      !Array.isArray(row.deletes) ||
+      row.deletes.length === 0 ||
+      !row.deletes.every(isNonEmptyString)
+    ) {
+      reasons.push('deletes is not a non-empty array of paths');
+    } else if (row.deletes.some(isTestPath)) {
+      reasons.push('deletes names a test path, not the code under test');
+    }
   }
   return reasons;
 };

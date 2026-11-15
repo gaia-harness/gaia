@@ -159,6 +159,35 @@ expect_each_missing() {
   jq -e '[.matched[].row] == ["T1"] and .fixer == [] and .missing == []' <<<"$output" >/dev/null
 }
 
+# retire_deleted_code_fixture <keep|delete>: a security retire row whose
+# deletes path a Delete line names, approved unheld; the branch deletes the
+# test and, with delete, the code.
+retire_deleted_code_fixture() {
+  write_file src/a.ts 'export const a = 1;'
+  write_file src/a.test.ts "$(suite_file "$PLAIN_TEST")"
+  start_fixture
+  rm "$FIXTURE/src/a.test.ts"
+  [ "$1" = keep ] || rm "$FIXTURE/src/a.ts"
+  mkdir -p "$PLAN"
+  printf -- '- Delete: src/a.ts\n' >"$PLAN/task-one.md"
+  run approve_rows "[$(row T1 src/a.test.ts 'suite target' retire access ',"deletes":["src/a.ts"]')]"
+  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "approve held or failed: $output" >&2; return 1; }
+}
+
+@test "a retire row whose deletes path is still at head is held, so deleting its test leaves it missing" {
+  retire_deleted_code_fixture keep
+  classify
+  [ "$status" -eq 0 ]
+  jq -e '[.missing[].row] == ["T1"] and .matched == []' <<<"$output" >/dev/null || { echo "$output"; return 1; }
+}
+
+@test "a retire row whose deletes path is gone at head matches once its test is deleted" {
+  retire_deleted_code_fixture delete
+  classify
+  [ "$status" -eq 0 ]
+  jq -e '[.matched[].row] == ["T1"] and .missing == []' <<<"$output" >/dev/null || { echo "$output"; return 1; }
+}
+
 @test "a base test the branch deletes with no retire row is an unplanned delete, not evaluator work" {
   write_file src/a.test.ts "$(suite_file "$PLAIN_TEST
   test('gone', () => {
