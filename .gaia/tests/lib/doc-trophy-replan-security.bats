@@ -161,8 +161,8 @@ need() {
 
 # check_replan_security <root>: the Structural bullet snapshots tests.json
 # before the re-spawn and runs the compare after step 4.5, and the security-row
-# rule holds each lost row, restoring it in auto-mode only behind a passing
-# step 4.5, since a restored row can point at a task the re-plan moved.
+# rule holds each lost row and keeps a restore only behind a passing step 4.5,
+# since a restored row can point at a task the re-plan moved.
 check_replan_security() {
   local structural rule
   structural="$(flat_range "$1/$AUDIT_REL" '- **Structural findings**' '**Security rows.**')"
@@ -171,7 +171,8 @@ check_replan_security() {
   need "$structural" 'Then run `node .gaia/scripts/test-design/security-rows-lost.mjs --before <PLAN_DIR>/tests.before-correction.json --after <PLAN_DIR>/tests.json`' || return 1
   need "$structural" 'is held by the rule below. A non-zero exit is handled like a step 4.5 failure.' || return 1
   need "$rule" "A Structural re-plan's \`lost:\` row is held the same way, its item recommending the snapshot row be restored" || return 1
-  need "$rule" 'In auto-mode, restore it, re-run step 4.5, and record it in `## Audit notes`; when 4.5 fails, undo the restore' || return 1
+  need "$rule" 'Every restore, accepted or in auto-mode, re-runs step 4.5; when 4.5 fails, undo the restore and report the row as not restored.' || return 1
+  need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`, a failed restore included.' || return 1
 }
 
 @test "the Structural re-plan routes a lost security row to the review list" {
@@ -200,8 +201,8 @@ check_replan_security() {
   [[ "$output" == 'missing: '* ]]
 }
 
-@test "red twin: an auto-mode restore with no step 4.5 rerun fails" {
-  mutated_tree "$AUDIT_REL" 'restore it, re-run step 4.5, and record it' 'restore it and record it'
+@test "red twin: a restore with no step 4.5 rerun fails" {
+  mutated_tree "$AUDIT_REL" 'Every restore, accepted or in auto-mode, re-runs step 4.5; when 4.5 fails, undo the restore and report the row as not restored.' 'Restore the row.'
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]

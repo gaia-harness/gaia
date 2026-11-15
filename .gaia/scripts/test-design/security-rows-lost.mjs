@@ -7,7 +7,7 @@
 // matched on its requirement-source key plus its kind, counted: the after
 // table must hold at least as many security rows of that key and kind as the
 // snapshot did. A dropped row, a row set to `none` and a row moved to another
-// kind all read as lost. Prints one line per short pair,
+// kind all read as lost. Prints one line per source and kind left short,
 // `lost: <kind> <source> (<missing> of <snapshot ids>)`, and nothing when none
 // is lost.
 //
