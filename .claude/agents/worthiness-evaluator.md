@@ -225,8 +225,8 @@ line and one `Test: <file> › <fullName>` line per test, tagged one of two ways
 Both axes apply as above, and both carve-outs below (the security seam and the
 sole lower-layer driver) bind a drift `delete` too. A test whose only catch
 beyond another app test of the same path is app code disagreeing with a test
-double (a mock, fixture or seed), whatever code it calls, tests that double and
-is a `delete` (the doctrine's `## What to test`).
+double (a mock, fixture, Given builder or test-fixture wiring), whatever code it
+calls, tests that double and is a `delete` (the doctrine's `## What to test`).
 
 ## Verdicts
 
