@@ -270,6 +270,8 @@ approved_held() {
   expect_verify_refusal "mutate_table 't.rows[1].action = \"retire\"; t.rows[1].deletes = [\"src/beta.ts\"]'" "deletes src/beta.ts, which no task doc's Delete line names"
   expect_verify_refusal "printf -- '- Delete: src/beta.test.ts\n' >>\"\$PLAN/task-two.md\"" 'Delete line names a test path'
   expect_verify_refusal "mutate_table 't.rows[1].action = \"retire\"; t.rows[1].deletes = [\"src/beta.test.ts\"]'" 'deletes names a test path'
+  expect_verify_refusal "mutate_table 't.rows[1].action = \"retire\"; t.rows[1].deletes = [\"../beta.ts\"]'" 'deletes is not a plain repo-relative path'
+  expect_verify_refusal "mutate_table 't.rows[1].action = \"retire\"; t.rows[1].deletes = [\"/abs/beta.ts\"]'" 'deletes is not a plain repo-relative path'
 }
 
 @test "verify passes a security retire row whose deletes path a Delete line names" {

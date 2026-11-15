@@ -27,6 +27,7 @@ import {fileURLToPath} from 'node:url';
 
 import {
   DriftRefusal,
+  existsAtBase,
   existsAtHead,
   hasMarker,
   isTestPath,
@@ -83,18 +84,25 @@ function evaluateRow(row, sides, ledger, keptCode) {
   return {matched, head: headTest, base: baseTest};
 }
 
-function readPlanAndFiles({root, planDir, base, files, committed = false}) {
+// `keptCodeRows` are the rows whose `deletes` decide kept code: the current
+// table's for classify, the approved copy's for the merge-gate security check
+// so an amend cannot rewrite `deletes` or `held` away.
+function readPlanAndFiles({root, planDir, base, files, committed = false, approvedKeptCode = false}) {
   const plan = loadPlan(planDir);
   const mergeBase = mergeBaseOf(root, base);
   const plannedFiles = new Set(plan.rows.map((row) => row.file));
   const sides = readFiles(root, mergeBase, new Set([...files, ...plannedFiles]), plannedFiles, committed);
+  // A deletes path is deleted code only when it existed at the merge base and
+  // is gone at head; a path absent at base never held code, so it reads as kept.
   const keptCode = new Set(
-    plan.rows
+    (approvedKeptCode ? plan.approvedRows : plan.rows)
       .filter(
         (row) =>
           row.action === 'retire' &&
           Array.isArray(row.deletes) &&
-          row.deletes.some((file) => existsAtHead(root, file, committed)),
+          row.deletes.some(
+            (file) => existsAtHead(root, file, committed) || !existsAtBase(root, mergeBase, file),
+          ),
       )
       .map((row) => row.id),
   );
@@ -218,7 +226,14 @@ export function classify({root, planDir, base, changedPaths}) {
 // an empty list for a plan with no TEST-DESIGN marker.
 export function securityCheck({root, planDir, base, ledgerPath}) {
   if (!hasMarker(planDir)) return [];
-  const {plan, sides, keptCode} = readPlanAndFiles({root, planDir, base, files: [], committed: true});
+  const {plan, sides, keptCode} = readPlanAndFiles({
+    root,
+    planDir,
+    base,
+    files: [],
+    committed: true,
+    approvedKeptCode: true,
+  });
   const latestVerdict = latestVerdicts(ledgerPath);
   const uncovered = [];
   for (const approved of plan.approvedRows.filter(isSecurity)) {
@@ -227,7 +242,9 @@ export function securityCheck({root, planDir, base, ledgerPath}) {
     if (!current) reason = 'missing-from-table';
     else if (current.security !== approved.security) reason = 'flag-lost';
     else {
-      const {matched, head} = evaluateRow(current, sides, plan.ledger, keptCode);
+      // held comes from the approved row: an amend replace cannot turn it off.
+      const judged = {...current, held: approved.held};
+      const {matched, head} = evaluateRow(judged, sides, plan.ledger, keptCode);
       if (!matched) reason = 'no-matching-test';
       else if (head && latestVerdict({file: current.file, title: current.title, signal: head.signal}) === 'fix') {
         reason = 'hollow';

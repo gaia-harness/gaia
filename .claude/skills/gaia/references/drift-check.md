@@ -46,7 +46,7 @@ A row is matched when a test at its `file` with full name `title` exists, its `c
 - `reuse`: present with a signal equal to base.
 - `extend`: the `caseKey` absent at base and present at head.
 - `change`: present at base, and at head with a different signal.
-- `retire`: absent; a `held` retire row, or one whose `deletes` names a path still present at head: present.
+- `retire`: absent; a `held` retire row, or one whose `deletes` names a path still present at head or absent at the merge base: present. The security check takes `held` and `deletes` from the approved copy.
 
 A security row other than `retire` matches only when its current signal is in `{PLAN_DIR}/security-tests.jsonl` for that row. A test under a security row's title that the security writer did not write is unplanned drift.
 

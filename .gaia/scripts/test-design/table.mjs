@@ -112,6 +112,8 @@ export const validateRow = (row) => {
       reasons.push('deletes is not a non-empty array of paths');
     } else if (row.deletes.some(isTestPath)) {
       reasons.push('deletes names a test path, not the code under test');
+    } else if (row.deletes.some((file) => /^\/|^\.\.?\/|(^|\/)\.\.(\/|$)/.test(file) || file.includes('\\'))) {
+      reasons.push('deletes is not a plain repo-relative path');
     }
   }
   return reasons;
