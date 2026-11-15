@@ -191,6 +191,8 @@ _SECURITY_CLASS_JQ='def security_class: ((.severity | IN("major", "minor")) | no
 . "$_GAIA_DISPOSITIONS_DIRECTORY/filing-outcomes-lib.sh"
 # shellcheck source=/dev/null
 . "$_GAIA_DISPOSITIONS_DIRECTORY/audit-pr-sections-lib.sh"
+# shellcheck source=/dev/null
+. "$_GAIA_DISPOSITIONS_DIRECTORY/exclusive-lock-lib.sh"
 # Fail loud: grading on with _TRIAGE_MEMBERS unbound would honor nothing.
 # shellcheck source=/dev/null
 . "$_GAIA_DISPOSITIONS_DIRECTORY/audit-triage-lib.sh" 2>/dev/null ||
