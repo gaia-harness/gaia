@@ -549,7 +549,7 @@ tree_state() {
   count="$(find "$SNAPSHOT_DIRECTORY" -name 'dispositions-*.checked.json' | wc -l | tr -d ' ')"
   [ "$count" -eq 9 ] || { echo "snapshots: $count"; return 1; }
   mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$shim/"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d\n", time*1000')"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
@@ -564,7 +564,7 @@ tree_state() {
   local shim="$BATS_TEST_TMPDIR/shim"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
   mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$shim/"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
@@ -1138,7 +1138,7 @@ recorded_row() {
   local copy="$BATS_TEST_TMPDIR/no-triage-library"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
   mkdir -p "$copy"
-  cp "$SCRIPTS/audit-dispositions-check.sh" "$SCRIPTS/filing-outcomes-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$copy/"
+  cp "$SCRIPTS/audit-dispositions-check.sh" "$SCRIPTS/filing-outcomes-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$copy/"
   run bash "$copy/audit-dispositions-check.sh" check --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --round 1
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
   grep -qF -- 'audit-triage-lib.sh' <<<"$output" || { echo "$output"; return 1; }
@@ -1661,7 +1661,7 @@ decide() {
   for undecided in 1 2 3; do
     red undecided "{\"round\":1,\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":$undecided}" || return 1
   done
-  grep -qF -- "record-residual --root $ALF_ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix" <<<"$output" || { echo "no next step in: $output"; return 1; }
+  grep -qF -- "record-residual --root $ALF_ROOT --run-folder $RUN_FOLDER --finding <file> --decision accept|waive|fix|fixed" <<<"$output" || { echo "no next step in: $output"; return 1; }
   # Round 2 overwrites the sidecar with nothing and the hook stores round 1's
   # keys, so round 1 is closed: its findings fall to the residue drain.
   alf_set_line other.txt 2 "round 2"
@@ -1776,6 +1776,43 @@ SHIM
   [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 3 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
 }
 
+@test "needs-human: a fixed decision records a cross-remit finding a commit changed after its round, naming that commit, with no veto; an unchanged path or a finding not cross-remit is refused" {
+  local fixing_commit
+  stop_rounds "$(joined "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true})')" "$(minor_rows f.txt 2 2)")"
+  decide 1 fixed '{"reason":"reworded"}'
+  [ "$status" -eq 3 ] || { echo "a fixed on an unchanged path recorded: $status $output"; return 1; }
+  alf_set_line f.txt 1 "reworded"
+  alf_commit "reword f.txt" || return 1
+  fixing_commit="$(git -C "$ALF_ROOT" rev-parse HEAD)"
+  decide 2 fixed '{"reason":"reworded"}'
+  [ "$status" -eq 3 ] || { echo "a fixed on a finding not cross-remit recorded: $status $output"; return 1; }
+  decide 1 fix
+  [ "$status" -eq 3 ] || { echo "a cross-remit fix recorded: $status $output"; return 1; }
+  grep -qF -- 'record --decision fixed' <<<"$output" || { echo "the fix refusal names no fixed route: $output"; return 1; }
+  decide 1 fixed '{"reason":"reworded"}' || return 1
+  [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  decide 2 accept '{"reason":"deferred to its own change"}' || return 1
+  run_check_all
+  green || return 1
+  run_sections
+  [ "$output" = "## Accepted residuals (recorded, not fixed)
+
+- \`f.txt:2\` deferred to its own change. <!-- gaia-debt-key: v1 class=rule/x path=f.txt line=2 -->
+
+## Cross-remit findings fixed after their round
+
+- f.txt:1 rule/x: fixed in ${fixing_commit:0:12}: reworded" ] || { echo "pr-sections: $output"; return 1; }
+}
+
+@test "needs-human: a fixed decision is refused for a security-class cross-remit finding even after a commit changed its path" {
+  stop_rounds "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true, security: true})')"
+  alf_set_line f.txt 1 "reworded"
+  alf_commit "reword f.txt" || return 1
+  decide 1 fixed '{"reason":"reworded"}'
+  [ "$status" -eq 3 ] || { echo "a security-class fixed recorded: $status $output"; return 1; }
+  [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ]
+}
+
 @test "needs-human: a key an earlier round accepted needs a new decision when the open round re-reports it security-class" {
   local escalated
   escalated="$(alf_entries f.txt 1 1 rule/x | jq -c 'map(. + {severity: "minor", security: true})')"
@@ -1810,7 +1847,7 @@ SHIM
   true
 }
 
-@test "record-residual: --decision takes only accept, waive or fix, and only on record-residual" {
+@test "record-residual: --decision takes only accept, waive, fix or fixed, and only on record-residual" {
   printf '{"member":"%s","finding_class":"c/sug","path":"f.txt","line":6}\n' "$MEMBER" >"$BATS_TEST_TMPDIR/finding.json"
   run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/finding.json" --decision defer
   [ "$status" -eq 2 ] || return 1

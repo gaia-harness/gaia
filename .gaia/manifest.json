@@ -279,6 +279,7 @@
     ".gaia/scripts/audit-member-digest.sh": "owned",
     ".gaia/scripts/audit-noop-detect.sh": "owned",
     ".gaia/scripts/audit-pr-sections-lib.sh": "owned",
+    ".gaia/scripts/audit-recorded-decision-lib.sh": "owned",
     ".gaia/scripts/audit-resolve-scope.sh": "owned",
     ".gaia/scripts/audit-scope-digest.sh": "owned",
     ".gaia/scripts/audit-triage-lib.sh": "owned",

@@ -155,6 +155,7 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/audit-dispositions-check.sh' # deterministic dispositions check
   '.gaia/scripts/branch-authorship-lib.sh'    # the authorship predicate the audit and filer share
   '.gaia/scripts/audit-pr-sections-lib.sh'    # renders the PR-body records and the recorded residuals
+  '.gaia/scripts/audit-recorded-decision-lib.sh' # writes a recorded fix decision's veto
   '.gaia/scripts/filing-outcomes-lib.sh'      # reads which keys the filer refused as branch-authored
   '.gaia/scripts/audit-loop-signals-lib.sh'   # rubric signals and unit/member decisions
   '.gaia/scripts/audit-veto-lib.sh'           # decides veto satisfaction and the reopened round
