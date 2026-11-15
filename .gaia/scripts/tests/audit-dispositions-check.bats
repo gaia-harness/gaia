@@ -1754,13 +1754,25 @@ SHIM
   chmod +x "$1/mkdir" "$1/date"
 }
 
-@test "needs-human: a fix decision is refused for a cross-remit finding unless it is security-class, and concurrent fix decisions each keep their veto" {
+# with_f_txt_ownerless <command...>: run the command under a roster that gives
+# f.txt to no member, then restore stop_rounds' roster.
+with_f_txt_ownerless() {
+  local roster="$ALF_ROOT/.gaia/audit-ci.yml" command_status=0
+  cp "$roster" "$BATS_TEST_TMPDIR/audit-ci.yml.kept"
+  printf 'auditors:\n  - name: %s\n    globs:\n      - "lib/**"\n    audience: adopter\n  - name: code-audit-frontend\n    globs:\n      - "other.txt"\n    audience: adopter\n    default: true\n' \
+    "$SHELL_MAINTAINER" >"$roster"
+  "$@" || command_status=$?
+  cp "$BATS_TEST_TMPDIR/audit-ci.yml.kept" "$roster"
+  return "$command_status"
+}
+
+@test "needs-human: a fix decision is refused for a cross-remit finding no member owns unless it is security-class, recorded where one owns it, and concurrent fix decisions each keep their veto" {
   local cross cross_security line
   cross="$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true})')"
   cross_security="$(minor_rows f.txt 4 4 | jq -c 'map(. + {cross_remit: true, security: true})')"
   stop_rounds "$(joined "$cross" "$(minor_rows f.txt 2 3)" "$cross_security")"
-  decide 1 fix
-  [ "$status" -eq 3 ] || { echo "a cross-remit fix recorded: $status $output"; return 1; }
+  with_f_txt_ownerless decide 1 fix
+  [ "$status" -eq 3 ] || { echo "a cross-remit fix no member can review recorded: $status $output"; return 1; }
   [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
   race_shims "$BATS_TEST_TMPDIR/race"
   for line in 2 3; do
@@ -1771,9 +1783,50 @@ SHIM
   wait
   [ -e "$BATS_TEST_TMPDIR/first" ] || { echo "no writer reached the hold, so nothing was interleaved"; return 1; }
   [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 2 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
-  decide 4 fix
+  with_f_txt_ownerless decide 4 fix
   [ "$status" -eq 0 ] || { echo "a security-class cross-remit fix was refused: $status $output"; return 1; }
   [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 3 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  decide 1 fix
+  [ "$status" -eq 0 ] || { echo "a cross-remit fix on an owned path was refused: $status $output"; return 1; }
+  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 4 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+}
+
+# member_digest <member> <tree>: the member's audit digest at that tree.
+member_digest() {
+  bash "$SCRIPTS/audit-member-digest.sh" --root "$ALF_ROOT" --member "$1" --ref "$2"
+}
+
+# cross_remit_critical_fixed <round-2-entries-json>: round 1's member reports
+# a cross-remit Critical on lib/s.sh:1, which the roster gives to the shell
+# maintainer; the human records fix, the main thread commits the repair, and
+# round 2 dispatches the path owner alone with the given entries.
+cross_remit_critical_fixed() {
+  local tree_before
+  stop_rounds "$(alf_entries lib/s.sh 1 1 rule/x | jq -c 'map(. + {severity: "critical", security: false, cross_remit: true})')" || return 1
+  alf_entries lib/s.sh 1 1 rule/x | jq -c --arg member "$MEMBER" '.[0] + {member: $member, reason: "repair it here"}' >"$BATS_TEST_TMPDIR/critical.json"
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/critical.json" --decision fix
+  [ "$status" -eq 0 ] || { echo "the cross-remit Critical fix was refused: $output"; return 1; }
+  tree_before="$ALF_TREE"
+  alf_set_line lib/s.sh 1 "repaired"
+  alf_commit "repair lib/s.sh" || return 1
+  # The repair moves the owner's digest, so its clearance lapses and it is
+  # owed again; the reporting member's digest stays put.
+  [ "$(member_digest "$SHELL_MAINTAINER" "$tree_before")" != "$(member_digest "$SHELL_MAINTAINER" "$ALF_TREE")" ] || { echo "the owner is not owed again"; return 1; }
+  [ "$(member_digest "$MEMBER" "$tree_before")" = "$(member_digest "$MEMBER" "$ALF_TREE")" ] || { echo "the reporting member is owed again"; return 1; }
+  alf_round 2 "$SHELL_MAINTAINER" "$1" || return 1
+  write_dispositions 2 "$(fill "$1" '[]')"
+}
+
+@test "needs-human: a cross-remit Critical decided fix is satisfied by its path owner's clean review of the repair, so check-all allows the stop" {
+  cross_remit_critical_fixed '[]' || return 1
+  run_check_all
+  green
+}
+
+@test "needs-human: a cross-remit Critical decided fix stays unsatisfied when its path owner re-reports the repaired line" {
+  cross_remit_critical_fixed "$(alf_entries lib/s.sh 2 2 rule/owner | jq -c 'map(. + {severity: "major", security: false})')" || return 1
+  run_check_all
+  red undisposed "$(key_json rule/x lib/s.sh 1)"
 }
 
 @test "needs-human: a fixed decision records a cross-remit finding a commit changed after its round, naming that commit, with no veto; an unchanged path or a finding not cross-remit is refused" {
@@ -1786,8 +1839,8 @@ SHIM
   fixing_commit="$(git -C "$ALF_ROOT" rev-parse HEAD)"
   decide 2 fixed '{"reason":"reworded"}'
   [ "$status" -eq 3 ] || { echo "a fixed on a finding not cross-remit recorded: $status $output"; return 1; }
-  decide 1 fix
-  [ "$status" -eq 3 ] || { echo "a cross-remit fix recorded: $status $output"; return 1; }
+  with_f_txt_ownerless decide 1 fix
+  [ "$status" -eq 3 ] || { echo "a cross-remit fix no member can review recorded: $status $output"; return 1; }
   grep -qF -- 'record --decision fixed' <<<"$output" || { echo "the fix refusal names no fixed route: $output"; return 1; }
   decide 1 fixed '{"reason":"reworded"}' || return 1
   [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }

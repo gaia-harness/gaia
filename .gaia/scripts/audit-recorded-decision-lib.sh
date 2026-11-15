@@ -1,9 +1,19 @@
 # shellcheck shell=bash
 #
-# The veto write behind a human's recorded fix decision and the commit lookup
-# behind a fixed one. Sourced by audit-pr-sections-lib.sh. Relies on the caller's
-# _error, _evaluator, gaia_exclusive_lock_take, ROOT, RUN_FOLDER and
-# FINDING_FILE. Runs nothing at source time. Never `cd`s.
+# The veto write behind a human's recorded fix decision, the owner lookup that
+# gates a cross-remit one, and the commit lookup behind a fixed one. Sourced
+# by audit-pr-sections-lib.sh. Relies on the caller's _error, _evaluator,
+# gaia_exclusive_lock_take, _roster_owners, _GAIA_DISPOSITIONS_DIRECTORY, ROOT,
+# RUN_FOLDER and FINDING_FILE. Runs nothing at source time. Never `cd`s.
+
+# _finding_path_owned: true when the roster at ROOT gives FINDING_FILE's path
+# to a member (_roster_owners), whose review is what satisfies a cross-remit
+# fix's veto. Any unreadable input prints false, which keeps the refusal.
+_finding_path_owned() {
+  local owners
+  owners="$(_roster_owners "$ROOT" "$_GAIA_DISPOSITIONS_DIRECTORY" "$(jq -c '[.path]' "$FINDING_FILE" 2>/dev/null)")"
+  printf '%s' "$owners" | jq 'length > 0' 2>/dev/null || printf 'false\n'
+}
 
 # _veto_lock <directory>: gaia_exclusive_lock_take, so parallel record-residual
 # calls never drop each other's veto; a dead holder's lock is taken over. rc 1 after ~5s.

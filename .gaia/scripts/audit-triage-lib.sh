@@ -2,8 +2,9 @@
 #
 # The one definition of an honored triage mark, shared by the dispositions
 # check (which grades against it) and the audit loop evaluator (whose default
-# stop exempts it). Sourced, never executed; defines variables and one
-# function and runs nothing at source time. Bash 3.2 compatible.
+# stop exempts it), and the roster owner lookup both also use for cross-remit
+# vetoes. Sourced, never executed; defines variables and functions and runs
+# nothing at source time. Bash 3.2 compatible.
 #
 # A mark is honored when the member that wrote it is a triage member, the
 # roster gives that member the entry's path, the entry is security false and
@@ -48,4 +49,28 @@ _roster_owned_indexes() {
     fi
   fi
   printf '%s\n' "$owned"
+}
+
+# _roster_owners <audited-root> <scripts-directory> <paths-json-array>:
+# {"<path>": "<member>"} for each path the roster gives to a member, by
+# audit_owner_for_path, which shares its classifier with the batch
+# resolve-audit-members.sh dispatches by. No release context is armed: a
+# release-skipped owner still answers and is never dispatched, which fails
+# toward an unsatisfied veto. An absent library or unreadable roster owns
+# nothing. Call it in a command substitution, as _roster_owned_indexes.
+_roster_owners() {
+  local library="$2/../../.claude/hooks/lib/audit-scope.sh" paths path owner answer="{}"
+  paths="$(printf '%s' "$3" | jq -r '.[]? | strings' 2>/dev/null)" || paths=""
+  if [ -n "$paths" ] && [ -f "$library" ]; then
+    # shellcheck source=/dev/null
+    . "$library" 2>/dev/null
+    if type audit_owner_for_path >/dev/null 2>&1 && audit_scope_init "$1" 2>/dev/null; then
+      while IFS= read -r path; do
+        owner="$(audit_owner_for_path "$path")"
+        [ -n "$path" ] && [ -n "$owner" ] || continue
+        answer="$(jq -n -c --argjson answer "$answer" --arg path "$path" --arg owner "$owner" '$answer + {($path): $owner}')" || { printf '{}\n'; return 0; }
+      done <<<"$paths"
+    fi
+  fi
+  printf '%s\n' "$answer"
 }

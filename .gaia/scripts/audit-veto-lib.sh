@@ -126,7 +126,10 @@ _gaia_veto_rereport_spans() {
   printf '%s\n' "$answer"
 }
 
-# gaia_veto_keys_state <main-root> <B> <state-json> <r> <round-r-keys-json>:
+# _gaia_veto_owners <audited-root> <vetoes-file>: _roster_owners over the vetoed paths.
+_gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c '[.keys[]? | .path]' <"$2" 2>/dev/null)"; }
+
+# gaia_veto_keys_state <main-root> <B> <state-json> <r> <round-r-keys-json> [<audited-root>]:
 # prints {"satisfied":[keys],"unsatisfied":[keys]} over the vetoes effective
 # by round r. A key is satisfied by a fix made after the round that held the
 # waiver that a member then reviewed, by either of two routes:
@@ -146,52 +149,94 @@ _gaia_veto_rereport_spans() {
 #     fixed; any other finding of that class on the path is a different one.
 #     A diff that cannot be read ignores the line. A veto effective from round
 #     1 has no waiver round and only the fixer route.
-# Reviewed: at least one round in the span dispatched the key's member, with
-# the key not re-reported in any such round's keys (round r's from the
+# Reviewed: at least one round in the span dispatched a reviewer of the key,
+# with the key not re-reported in any such round's keys (round r's from the
 # argument, earlier ones from the stored snapshot, where null keys prove
-# nothing). rc 1 on an unreadable or malformed vetoes.json.
+# nothing). The reviewers are the key's member and, for a cross-remit key
+# (the roster in <audited-root>, default <main-root>, gives its path to another
+# member, so its own member is never re-dispatched on that file), the path's
+# owner. The owner reports under its own class, so any finding of the owner's
+# on the path re-reports the key within the tolerance of the spans the
+# waiver-round diff maps the vetoed line to, else of the vetoed line itself.
+# rc 1 on an unreadable or malformed vetoes.json.
 gaia_veto_keys_state() {
-  local run vetoes_file records changed_paths rereport_spans answer
+  local run vetoes_file records changed_paths rereport_spans owners answer
   run="$(gaia_loop_run_directory "$1" "$2")"
   vetoes_file="$run/vetoes.json"
   [ -e "$vetoes_file" ] || { printf '{"satisfied":[],"unsatisfied":[]}\n'; return 0; }
   records="$(_gaia_veto_fix_records "$run" "$4")" || return 1
+  owners="$(_gaia_veto_owners "${6:-$1}" "$vetoes_file")"
+  [ -n "$owners" ] || owners="{}"
   changed_paths="$(_gaia_veto_changed_paths "$1" "$3" "$4" "$vetoes_file")"
   [ -n "$changed_paths" ] || changed_paths="{}"
   rereport_spans="$(_gaia_veto_rereport_spans "$1" "$3" "$4" "$vetoes_file")"
   [ -n "$rereport_spans" ] || rereport_spans="{}"
   answer="$(jq -c -s --argjson state "$3" --argjson round "$4" --argjson round_keys "$5" --argjson records "$records" \
-    --argjson changed_paths "$changed_paths" --argjson rereport_spans "$rereport_spans" --argjson tolerance "$_GAIA_VETO_REREPORT_TOLERANCE_LINES" '
+    --argjson changed_paths "$changed_paths" --argjson rereport_spans "$rereport_spans" --argjson owners "$owners" \
+    --argjson tolerance "$_GAIA_VETO_REREPORT_TOLERANCE_LINES" '
     if length == 1 and (.[0] | type == "object" and .version == 1 and (.keys | type) == "array"
         and all(.keys[]; type == "object" and (.effective_from_round | type == "number" and . == floor)))
     then .[0] else error("malformed vetoes.json") end
     | $state.history.rounds as $rounds
     | def keys_of($j): if $j == $round then $round_keys else ($rounds[$j - 1].snapshot | if type == "object" then .keys else null end) end;
     # rereports reads [round, reported key] and is true when that key is the vetoed finding.
+    def owner_of($key): ($owners[$key[2]] // null) | if . == $key[0] then null else . end;
+    def reviewers($key): [$key[0], owner_of($key)] | map(select(. != null));
+    # spans_at($from; $key) reads a reviewed round: the spans the diff from the
+    # waiver round maps the vetoed line to there, or null with no such diff.
+    def spans_at($from; $key):
+      if $from >= 2 then $rereport_spans["\($rounds[$from - 2].tree)..\($rounds[. - 1].tree)"]["\($key[2])\n\($key[3])"] // null else null end;
+    # owner_rereports($from; $key) reads [round, reported key]: the path
+    # owner reporting any class near the vetoed line on the path of the key.
+    def owner_rereports($from; $key):
+      .[0] as $reviewed_round | .[1] as $reported | owner_of($key) as $owner
+      | ($reviewed_round | spans_at($from; $key)) as $spans
+      | $owner != null and $reported[0] == $owner and $reported[2] == $key[2]
+        and (($reported[3] | type) != "number"
+          or (if $spans != null then any($spans[]; $reported[3] >= .[0] - $tolerance and $reported[3] <= .[1] + $tolerance)
+              else ($key[3] | type) != "number" or ($reported[3] - $key[3] | if . < 0 then -. else . end) <= $tolerance end));
     def reviewed_from($first; $key; rereports):
-      [range($first; $round + 1) | select(any(($rounds[. - 1].members // [])[]; . == $key[0]))] as $dispatched
+      reviewers($key) as $reviewers
+      | [range($first; $round + 1) | select(any(($rounds[. - 1].members // [])[]; IN($reviewers[])))] as $dispatched
       | ($dispatched | length) > 0
         and all($dispatched[]; . as $reviewed_round | keys_of($reviewed_round) as $keys
           | ($keys | type) == "array" and (any($keys[]; [$reviewed_round, .] | rereports) | not));
-    def fixed_in($k; $key):
+    def fixed_in($k; $from; $key):
       any($records.fixes[]; .round == $k and .key == $key) and any($records.fixed[]; .round == $k and .key == $key)
       and ($rounds[$k - 1].tree as $tree | any($rounds[$k:][]; .tree != $tree))
-      and reviewed_from($k + 1; $key; .[1][0:4] == $key);
+      and reviewed_from($k + 1; $key; .[1][0:4] == $key or owner_rereports($from; $key));
     def rereported_after_commit($from; $key):
       .[0] as $reviewed_round | .[1] as $reported
-      | $reported[0:3] == $key[0:3]
-        and (($rereport_spans["\($rounds[$from - 2].tree)..\($rounds[$reviewed_round - 1].tree)"]["\($key[2])\n\($key[3])"] // null) as $spans
-          | $spans == null or ($reported[3] | type) != "number"
-            or any($spans[]; $reported[3] >= .[0] - $tolerance and $reported[3] <= .[1] + $tolerance));
+      | ($reported[0:3] == $key[0:3]
+          and (($reviewed_round | spans_at($from; $key)) as $spans
+            | $spans == null or ($reported[3] | type) != "number"
+              or any($spans[]; $reported[3] >= .[0] - $tolerance and $reported[3] <= .[1] + $tolerance)))
+        or owner_rereports($from; $key);
     def committed_by($j; $from; $key):
       ($changed_paths["\($rounds[$from - 2].tree)..\($rounds[$j - 1].tree)"] // []) as $paths
       | any($paths[]; . == $key[2]) and reviewed_from($j; $key; rereported_after_commit($from; $key));
     [.keys[] | select(.effective_from_round <= $round) | .effective_from_round as $from | [.member, .finding_class, .path, .line] as $key
-      | {key: $key, satisfied: (any(range([$from, 1] | max; $round); fixed_in(.; $key))
+      | {key: $key, satisfied: (any(range([$from, 1] | max; $round); fixed_in(.; $from; $key))
           or ($from >= 2 and any(range($from; $round + 1); committed_by(.; $from; $key))))}]
     | {satisfied: map(select(.satisfied) | .key), unsatisfied: map(select(.satisfied | not) | .key)}' <"$vetoes_file" 2>/dev/null)" || return 1
   [ -n "$answer" ] || return 1
   printf '%s\n' "$answer"
+}
+
+# gaia_veto_reviewers <main-root> <B> <audited-root> <veto-state-json>: the
+# veto state with `reviewers` added, the sorted members whose review can
+# satisfy an unsatisfied key: each key's member and a cross-remit key's path
+# owner, as gaia_veto_keys_state reads them. The audit loop unit dispatches
+# them full, since a light clear reviews nothing. rc 1 when the veto state is
+# not an object.
+gaia_veto_reviewers() {
+  local vetoes_file owners='{}'
+  vetoes_file="$(gaia_loop_run_directory "$1" "$2")/vetoes.json"
+  [ -e "$vetoes_file" ] && owners="$(_gaia_veto_owners "$3" "$vetoes_file")"
+  [ -n "$owners" ] || owners="{}"
+  printf '%s' "$4" | jq -c --argjson owners "$owners" 'if type != "object" then error("not a veto state") else . end
+    | . + {reviewers: ([(.unsatisfied // [])[] | ., ($owners[.[2]] // null)] | map(if type == "array" then .[0] else . end)
+        | map(select(type == "string")) | unique)}' 2>/dev/null || return 1
 }
 
 # gaia_loop_stop_override <main-root> <B> <r> <snapshot-json>: the snapshot
@@ -298,7 +343,7 @@ _gaia_loop_stop_inputs() {
   done < <(printf '%s' "$members" | jq -r '.[]')
   unsatisfied='["unreadable vetoes"]'
   veto_state="$(gaia_veto_keys_state "$main" "$(printf '%s' "$state" | jq -r '.branch')" "$state" "$round" \
-    "$(printf '%s' "$findings" | jq -c '.entries | map([.member, .finding_class, .path, .line]) | unique')")" &&
+    "$(printf '%s' "$findings" | jq -c '.entries | map([.member, .finding_class, .path, .line]) | unique')" "$root")" &&
     unsatisfied="$(printf '%s' "$veto_state" | jq -c '.unsatisfied')"
   jq -n -c --argjson honored_keys "$honored" --argjson marker_gaps "$gaps" --argjson unsatisfied_vetoes "${unsatisfied:-[\"unreadable vetoes\"]}" \
     '{honored_keys: $honored_keys, marker_gaps: $marker_gaps, unsatisfied_vetoes: $unsatisfied_vetoes}'

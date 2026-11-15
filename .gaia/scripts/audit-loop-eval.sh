@@ -30,7 +30,7 @@
 # human_accept, human_accepted_keys} per recorded round (keys and counted_keys as identity
 # keys, null when not stored; human_accept: closing, or an accept answering a checkpoint at
 # round r-1 or r; human_accepted_keys: audit-accept-finding keys of a checkpoint at round r or earlier). veto-state prints audit-veto-lib.sh's
-# {satisfied, unsatisfied} for round r. reopened-round prints the latest
+# {satisfied, unsatisfied, reviewers} for round r. reopened-round prints the latest
 # round's number when it is reopened on HEAD's tree, else 0.
 # unit-window prints `<unit> <start_round> <through_round> <closing>` for the
 # latest unit; closing is `true` when an accept admitted it: the human stopped
@@ -761,7 +761,7 @@ _gaia_loop_cli() {
     # Round r's keys: the stored snapshot's, else F(r) read afresh.
     subcommand_output="$(printf '%s' "$state" | jq -c --argjson round "$round" '.history.rounds[$round - 1].snapshot.keys? // empty')"
     [ -n "$subcommand_output" ] || subcommand_output="$(_gaia_loop_raw_findings "$main" "$state" "$round" | jq -c '.entries | map([.member, .finding_class, .path, .line]) | unique')" || return 2
-    gaia_veto_keys_state "$main" "$branch_key" "$state" "$round" "$subcommand_output" ||
+    subcommand_output="$(gaia_veto_keys_state "$main" "$branch_key" "$state" "$round" "$subcommand_output" "$root")" && gaia_veto_reviewers "$main" "$branch_key" "$root" "$subcommand_output" ||
       { printf 'audit-loop-eval: %s/vetoes.json is unreadable or malformed\n' "$(gaia_loop_run_directory "$main" "$branch_key")" >&2; return 5; }
     return 0
   fi

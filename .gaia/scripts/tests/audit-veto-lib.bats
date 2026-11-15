@@ -245,6 +245,56 @@ CASES
   [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ]
 }
 
+# roster_owning_vetoed_path <member>: a roster at MAIN giving f.txt to the
+# member, so the vetoed key is cross-remit unless it is the key's own member.
+roster_owning_vetoed_path() {
+  mkdir -p "$MAIN/.gaia"
+  printf 'auditors:\n  - name: %s\n    globs:\n      - "f.txt"\n    audience: adopter\n  - name: code-audit-frontend\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' \
+    "$1" >"$MAIN/.gaia/audit-ci.yml"
+}
+
+# owner_reviews <state-json>: the state with every round after the first
+# dispatching only code-audit-shell.
+owner_reviews() {
+  jq -c '.history.rounds |= (.[0:1] + (.[1:] | map(.members = ["code-audit-shell"])))' <<<"$1"
+}
+
+@test "veto-state cross-remit: a clean review by the path's roster owner satisfies a key its reporting member never reviews, on the fixer and the commit route" {
+  roster_owning_vetoed_path code-audit-shell
+  satisfied_base
+  STATE="$(owner_reviews "$STATE")"
+  [ "$(veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ] || { echo "fixer route"; return 1; }
+  inline_base TREE_FIXED || return 1
+  STATE="$(owner_reviews "$STATE")"
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ] || { echo "commit route"; return 1; }
+}
+
+@test "veto-state cross-remit: the owner reporting any class at the fixed line leaves the key unsatisfied; a finding elsewhere on the path does not" {
+  roster_owning_vetoed_path code-audit-shell
+  satisfied_base
+  STATE="$(owner_reviews "$STATE")"
+  ROUND_KEYS='[["code-audit-shell","rule/other","f.txt",3]]'
+  assert_unsatisfied || { echo "fixer route, round r"; return 1; }
+  STATE="$(jq -c '.history.rounds[1].snapshot.keys = [["code-audit-shell","rule/other","f.txt",2]]' <<<"$STATE")"
+  ROUND_KEYS='[]'
+  assert_unsatisfied || { echo "fixer route, earlier round"; return 1; }
+  STATE="$(jq -c '.history.rounds[1].snapshot.keys = [["code-audit-shell","rule/other","f.txt",30]]' <<<"$STATE")"
+  [ "$(veto_state | jq -c '.satisfied | length')" = 1 ] || { echo "a finding far from the fixed line"; return 1; }
+  inline_base TREE_FIXED || return 1
+  STATE="$(owner_reviews "$STATE")"
+  ROUND_KEYS='[["code-audit-shell","rule/other","f.txt",4]]'
+  [ "$(inline_veto_state | jq -c '.satisfied | length')" = 0 ] || { echo "commit route"; return 1; }
+}
+
+@test "veto-state cross-remit: another member's review satisfies nothing when the key's member owns the path or no roster is readable" {
+  roster_owning_vetoed_path code-audit-frontend
+  satisfied_base
+  STATE="$(owner_reviews "$STATE")"
+  assert_unsatisfied || { echo "the reporting member owns the path"; return 1; }
+  rm -f "$MAIN/.gaia/audit-ci.yml"
+  assert_unsatisfied || { echo "no roster"; return 1; }
+}
+
 @test "veto-state: a malformed vetoes file fails" {
   satisfied_base
   printf '{"version":1,"keys":"no"}\n' >"$RUN/vetoes.json"
