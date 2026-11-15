@@ -347,6 +347,9 @@ check_lens_doctrine_rows() {
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$apply" "**Applied rows** (a \`tests.json\` row any lens's fix adds, changes or trims, the Test design lens's own included): hold it to the Test design lens's checks above before applying it" || return 1
   need "$apply" "reshaped when one change passes every check (a fix's offered trim counts as that change), else dropped" || return 1
+  need "$apply" "Dropping an add leaves it out; dropping a change or trim leaves the row in its prior form, unless a Test design check bars that prior form too, and then the row is removed" || return 1
+  need "$apply" 'record it as an uncovered requirement (a missing-row item on the review list, or in auto-mode in `## Audit notes`), not only as a dropped row' || return 1
+  need "$apply" 'a trim narrows an existing row to a subset of its cases and is a kind of change' || return 1
   need "$apply" "A fix applied on this thread, from any lens or check, that would remove a security row (a row of the doctrine's kinds, or any row flagged) or clear a row's flag is not applied to that row unless the user rules it wrong on the review list" || return 1
   need "$apply" 'The row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' || return 1
   need "$interactive" "one item per security-flagged \`retire\` row (\`security\` not \`none\`) in the table as it will stand once every fix applies, \`minor\` ones included" || return 1
@@ -390,6 +393,14 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the apply step taking a trim that fails a check fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" "(a fix's offered trim counts as that change), else dropped" ', else trimmed'
+}
+
+@test "red twin: a drop that leaves a requirement without a row going unrecorded fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'record it as an uncovered requirement' 'record it as a dropped row'
+}
+
+@test "red twin: a dropped change deleting the row without a bar fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'dropping a change or trim leaves the row in its prior form' 'dropping a change or trim deletes the row'
 }
 
 @test "red twin: security retire items taken from the table before minor fixes apply fails" {
