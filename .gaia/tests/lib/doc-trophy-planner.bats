@@ -523,7 +523,7 @@ check_flow_row_allow_list() {
   need "$doctrine" 'and asserts no stated literal or state a lower-layer test owns' || return 1
   need "$doctrine" "checks its happy path's native form posts page-less in its flow test, never an error post" || return 1
   need "$lens" "a flow row step outside the doctrine's \`**Flow test.**\` allow-list" || return 1
-  need "$lens" "such as a refusal a build task's row or another flow owns, a native error post, or a stated literal or state a lower-layer row owns" || return 1
+  need "$lens" "such as a refusal a build task's row or another flow owns, a native error post, a stated literal or state a lower-layer row owns, or a step that only reaches a page to see one, except a happy-path effect a flow step asserts" || return 1
   need "$lens" "drops it when nothing is left, recording a SPEC flow left with no row in \`coveredFlows\`" || return 1
   lacks "$lens" "unless it is its SPEC flow's only row" || return 1
   need "$table" "each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row" || return 1
@@ -553,8 +553,12 @@ check_flow_row_allow_list() {
   red check_flow_row_allow_list "$AUDIT_REL" "a flow row step outside the doctrine's" "a flow row repeating a step outside the doctrine's"
 }
 
+@test "red twin: the test design lens keeping a step that only reaches a page to see a lower-layer literal fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" ", or a step that only reaches a page to see one" ''
+}
+
 @test "red twin: the test design lens flagging refusals only fails" {
-  red check_flow_row_allow_list "$AUDIT_REL" ', a native error post, or a stated literal or state a lower-layer row owns' ''
+  red check_flow_row_allow_list "$AUDIT_REL" ', a native error post, a stated literal or state a lower-layer row owns, or a step that only reaches a page to see one' ''
 }
 
 @test "red twin: the test design lens keeping a SPEC flow's only row again fails" {
@@ -572,7 +576,7 @@ check_covered_flows() {
   table="$(flat "$1/$TABLE_REL")"
   planner="$(flat "$1/$PLANNER_REL")"
   coverage="$(range_of "$1/$AUDIT_REL" '- **SPEC coverage' '- **Test design' | tr '\n' ' ' | tr -s ' ')"
-  need "$doctrine" "A flow left with no step this paragraph keeps gets no flow test: the plan records the rows that own its steps instead." || return 1
+  need "$doctrine" "A flow whose only steps reach a page to see a stated literal or state a lower-layer test owns has no journey through the happy path. A flow left with no step this paragraph keeps gets no flow test: the plan records the rows that own its steps instead." || return 1
   need "$table" "and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row. A flow left with no row this way gets no flow test" || return 1
   need "$table" '`"coveredFlows": [{"source": "flow:<slug>", "rows": ["<id>", ...]}]`, naming the rows that own its steps, and that entry cites the key' || return 1
   need "$planner" 'gets no closing-phase task and no `Flow test` line' || return 1
@@ -590,6 +594,10 @@ check_covered_flows() {
 
 @test "red twin: the SPEC coverage lens refusing a coveredFlows entry for a literal step fails" {
   red check_covered_flows "$AUDIT_REL" "a step the doctrine's \`**Flow test.**\` allow-list keeps on the flow" 'a step that is not a refusal'
+}
+
+@test "red twin: the doctrine counting navigation to a lower-layer literal as a journey fails" {
+  red check_covered_flows "$DOCTRINE_REL" " A flow whose only steps reach a page to see a stated literal or state a lower-layer test owns has no journey through the happy path." ''
 }
 
 @test "red twin: the doctrine covering only refusal flows fails" {
