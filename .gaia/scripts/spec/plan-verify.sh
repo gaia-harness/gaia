@@ -36,11 +36,12 @@
 #   or in two rows fails. The last phase is the highest <N>.
 # - Every task doc in the last phase carries exactly one line
 #     - Flow test (<flow_id>): <repo-relative test path>
-#   and every SPEC flow has exactly one such line. A line naming a flow the SPEC
-#   lacks, a line in an earlier phase's task doc, or a path other than the
-#   flow's expected path fails. The expected path is a web flow's
-#   <web package>/.playwright/flows/<slug>.spec.ts, or a command flow's
-#   test_path.
+#   and every SPEC flow has exactly one such line, except a flow tests.json's
+#   coveredFlows records, which has none (so does a last phase all of whose
+#   flows it records). A line naming a flow the SPEC lacks, a line in an earlier
+#   phase's task doc, or a path other than the flow's expected path fails. The
+#   expected path is a web flow's <web package>/.playwright/flows/<slug>.spec.ts,
+#   or a command flow's test_path.
 # - ORCHESTRATOR.md's last-phase entry (from the **Phase <N>, line outside every
 #   fenced block to the next **Phase or ## line outside one) holds, for each
 #   Flow test line, a line with the test path's basename and a runner
@@ -276,7 +277,7 @@ flow_checks() {
   local flow_output flow_status=0 web_directory='' flow_id slug kind target
   local stems_text phase last_phase=0 task_file task_name task_stem task_phase matches
   local line_text path_text expected_path flow_lines='' entry_text entry_line base_name
-  local line_count line_files line_task line_phase line_flow_id run_found
+  local line_count line_files line_task line_phase line_flow_id run_found covered_sources unrecorded_count
   flow_output=$(flows_lib_parse_spec "$spec_path" 2>&1) || flow_status=$?
   if [ "$flow_status" -ne 0 ]; then
     while IFS= read -r line_text; do
@@ -294,6 +295,8 @@ flow_checks() {
   while IFS=$'\t' read -r phase _; do
     [ "$phase" -le "$last_phase" ] || last_phase="$phase"
   done <<<"$stems_text"
+
+  read_covered_flows "$flow_output"
 
   # flow_lines holds <task doc>, <phase>, <flow id>, <path> per Flow test line; '-' marks a task doc with no single README phase (tab-split reads collapse an empty field).
   for task_file in ${task_files[@]+"${task_files[@]}"}; do
@@ -316,7 +319,7 @@ flow_checks() {
       flow_lines="${flow_lines}${task_name}"$'\t'"${task_phase:--}"$'\t'"${BASH_REMATCH[1]}"$'\t'"$path_text"$'\n'
       line_count=$((line_count + 1))
     done <"$task_file"
-    if [ "$task_phase" = "$last_phase" ]; then
+    if [ "$task_phase" = "$last_phase" ] && [ "$unrecorded_count" -gt 0 ]; then
       if [ "$line_count" -eq 0 ]; then
         fail "$task_name: the last-phase (Phase $last_phase) task doc has no '- Flow test (<flow_id>): <path>' line"
       elif [ "$line_count" -gt 1 ]; then
@@ -339,6 +342,12 @@ flow_checks() {
     fi
     line_files=$(awk -F'\t' -v id="$flow_id" '$3 == id { print $1 }' <<<"$flow_lines" | paste -sd, - | sed 's/,/, /g')
     line_count=$(awk -F'\t' -v id="$flow_id" '$3 == id' <<<"$flow_lines" | grep -c .)
+    case "$covered_sources" in
+      *$'\n'"flow:$slug"$'\n'*)
+        [ "$line_count" -eq 0 ] || fail "$flow_id is recorded in tests.json coveredFlows, so it has no flow test; drop its Flow test line ($line_files)"
+        continue
+        ;;
+    esac
     if [ "$line_count" -eq 0 ]; then
       fail "$flow_id has no '- Flow test ($flow_id): $expected_path' line in any task doc"
     elif [ "$line_count" -gt 1 ]; then

@@ -26,7 +26,13 @@ import {
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {isSecurity, readTable, TEST_FILE_SUFFIX, validateRow} from './table.mjs';
+import {
+  coveredFlows,
+  isSecurity,
+  readTable,
+  TEST_FILE_SUFFIX,
+  validateRow,
+} from './table.mjs';
 
 const SIGNAL_HELPER = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -142,7 +148,8 @@ const verify = (args) => {
   const planDirectory = options['plan-dir'];
   const files = planPaths(planDirectory);
   if (!existsSync(files.table)) refuse('tests.json is missing');
-  const {rows} = loadTable(files.table);
+  const table = loadTable(files.table);
+  const {rows} = table;
   const failures = tableProblems(rows);
 
   let keys;
@@ -158,6 +165,12 @@ const verify = (args) => {
   const citedKeys = new Set(
     rows.filter((row) => row && typeof row === 'object').map((row) => row.source),
   );
+  const covered = coveredFlows(table);
+  failures.push(...covered.problems);
+  for (const source of covered.sources) {
+    if (keySet.has(source)) citedKeys.add(source);
+    else failures.push(`coveredFlows cites unknown source ${source}`);
+  }
   for (const key of keys) {
     if (!citedKeys.has(key)) failures.push(`requirement key ${key} has no row`);
   }
@@ -207,6 +220,18 @@ const verify = (args) => {
   }
 
   if (failures.length > 0) refuseAll(failures);
+};
+
+// Prints the source of each valid coveredFlows entry for the shell gates; a
+// plan with no tests.json records none. Any problem exits 1 after the valid
+// sources print, so a caller treats the broken entry as unrecorded.
+const coveredFlowsCommand = (args) => {
+  const options = parseOptions(args, ['--plan-dir']);
+  const files = planPaths(options['plan-dir']);
+  if (!existsSync(files.table)) return;
+  const {sources, problems} = coveredFlows(loadTable(files.table));
+  for (const source of sources) process.stdout.write(`${source}\n`);
+  if (problems.length > 0) refuseAll(problems);
 };
 
 const approve = (args) => {
@@ -336,6 +361,7 @@ const amend = (args) => {
 const [command, ...rest] = process.argv.slice(2);
 const commands = {
   verify,
+  'covered-flows': coveredFlowsCommand,
   approve,
   'record-security': recordSecurity,
   amend,

@@ -11,13 +11,16 @@
 #
 #   flow-coverage.sh --spec <SPEC.md> --root <tree> [--base <ref>]
 #                    [--listing <playwright-list.json>] [--flow-tests-out <file>]
+#                    [--plan-dir <plan folder>]
 #
 # --root is the tree under check and every git call runs against it. The diff
 # base is --base, else the one audit-base-provenance.sh resolves. The listing is
 # a `playwright test --list --reporter=json` document; without --listing the
 # script runs Playwright for it, once, and only when the SPEC has a web flow.
 # --flow-tests-out writes one `flow_id<TAB>slug<TAB>kind<TAB>path` row per flow
-# whose test file exists.
+# whose test file exists. --plan-dir reads the plan's tests.json coveredFlows: a
+# recorded flow has no test file, so it is skipped, and an entry naming a row
+# the table lacks is a finding. Without --plan-dir every flow needs its file.
 #
 # Every finding is one stdout line `flow-coverage: ...`, all of them in one run.
 # The web flow test lives in <frontend package>/.playwright/flows/<slug>.spec.ts.
@@ -31,7 +34,7 @@ set -uo pipefail
 
 usage() {
   cat <<'USAGE' >&2
-usage: flow-coverage.sh --spec <SPEC.md> --root <tree> [--base <ref>] [--listing <file>] [--flow-tests-out <file>]
+usage: flow-coverage.sh --spec <SPEC.md> --root <tree> [--base <ref>] [--listing <file>] [--flow-tests-out <file>] [--plan-dir <dir>]
 USAGE
 }
 
@@ -47,9 +50,10 @@ root=''
 base_argument=''
 listing_file=''
 flow_tests_out=''
+plan_directory=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --spec | --root | --base | --listing | --flow-tests-out)
+    --spec | --root | --base | --listing | --flow-tests-out | --plan-dir)
       if [ "$#" -lt 2 ]; then
         printf 'flow-coverage.sh: %s needs a value\n' "$1" >&2
         usage
@@ -61,6 +65,7 @@ while [ "$#" -gt 0 ]; do
         --base) base_argument="$2" ;;
         --listing) listing_file="$2" ;;
         --flow-tests-out) flow_tests_out="$2" ;;
+        --plan-dir) plan_directory="$2" ;;
       esac
       shift 2
       ;;
@@ -84,6 +89,10 @@ if [ ! -d "$root" ]; then
   exit 2
 fi
 root="${root%/}"
+if [ -n "$plan_directory" ] && [ ! -d "$plan_directory" ]; then
+  printf 'flow-coverage.sh: not a directory: %s\n' "$plan_directory" >&2
+  exit 2
+fi
 
 flow_rows=$(flows_lib_parse_spec "$spec_file")
 parse_status=$?
@@ -112,6 +121,37 @@ while IFS= read -r -d '' untracked_path; do
   untracked_paths="$untracked_paths$untracked_path"$'\n'
 done < <(git -C "$root" ls-files -z --others --exclude-standard 2>/dev/null) || untracked_paths=''
 changed_paths=$(printf '%s\n%s\n%s\n' "$committed_paths" "$uncommitted_paths" "$untracked_paths" | grep . | LC_ALL=C sort -u)
+
+covered_problems=''
+if [ -n "$plan_directory" ]; then
+  if ! command -v node >/dev/null 2>&1; then
+    printf 'flow-coverage.sh: node is required to read coveredFlows in %s/tests.json\n' "$plan_directory" >&2
+    exit 3
+  fi
+  covered_status=0
+  covered_output=$(node "$repository_directory/.gaia/scripts/test-design/test-table.mjs" covered-flows --plan-dir "$plan_directory" 2>&1) || covered_status=$?
+  # Exit 1 is a refused entry, reported as a finding below; anything else is
+  # the reader failing, so no recorded flow can be trusted.
+  case "$covered_status" in
+    0 | 1) ;;
+    *)
+      printf 'flow-coverage.sh: cannot read coveredFlows in %s/tests.json: %s\n' "$plan_directory" "$(head -n 1 <<<"$covered_output")" >&2
+      exit 3
+      ;;
+  esac
+  covered_problems=$(grep '^test-table: ' <<<"$covered_output")
+  # A recorded flow has no test file, so it leaves every check below.
+  uncovered_rows=''
+  while IFS= read -r flow_row; do
+    [ -n "$flow_row" ] || continue
+    slug="${flow_row#*$'\t'}"
+    case $'\n'"$covered_output"$'\n' in
+      *$'\n'"flow:${slug%%$'\t'*}"$'\n'*) continue ;;
+    esac
+    uncovered_rows="$uncovered_rows$flow_row"$'\n'
+  done <<<"$flow_rows"
+  flow_rows="$uncovered_rows"
+fi
 
 has_web_flow=0
 while IFS=$'\t' read -r _ _ _ _ kind _; do
@@ -238,6 +278,10 @@ check_web_spec() {
 }
 
 [ -z "$flow_tests_out" ] || : >"$flow_tests_out" || exit 3
+
+while IFS= read -r covered_problem; do
+  [ -z "$covered_problem" ] || finding "${covered_problem#test-table: }"
+done <<<"$covered_problems"
 
 existing_tests=''
 while IFS=$'\t' read -r flow_id slug _ _ kind target; do

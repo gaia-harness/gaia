@@ -94,3 +94,20 @@ table_check() {
     *) fail "test table not verified: test-table.mjs verify exited $verify_status: $(head -n 1 <<<"$verify_errors")" ;;
   esac
 }
+
+# Sets covered_sources to the sources tests.json's coveredFlows records, each
+# on a newline-wrapped line for a case match, and unrecorded_count to the SPEC
+# flows in $1 it leaves unrecorded. A broken entry prints nothing here
+# (table_check reports it), so its flow stays unrecorded.
+read_covered_flows() {
+  local flow_id slug
+  covered_sources=''
+  if command -v node >/dev/null 2>&1; then
+    covered_sources=$'\n'$(node "$repository_root/.gaia/scripts/test-design/test-table.mjs" covered-flows --plan-dir "$plan_directory" 2>/dev/null)$'\n'
+  fi
+  unrecorded_count=0
+  while IFS=$'\t' read -r flow_id slug _; do
+    [ -n "$flow_id" ] || continue
+    case "$covered_sources" in *$'\n'"flow:$slug"$'\n'*) ;; *) unrecorded_count=$((unrecorded_count + 1)) ;; esac
+  done <<<"$1"
+}
