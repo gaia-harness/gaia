@@ -1,0 +1,8 @@
+{
+  "format_version": 1,
+  "finding_class": "holistic/incomplete-enumeration",
+  "declined_at": "2026-11-15T06:20:33.438Z",
+  "declined_at_pr_count": 10,
+  "declined_at_audited_pr_count": 461,
+  "tally_schema_version": 4
+}
