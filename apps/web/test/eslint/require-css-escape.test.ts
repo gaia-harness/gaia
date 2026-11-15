@@ -1,10 +1,9 @@
 // Runs in the node project.
 // The rule itself is tested in @gaia-harness/lint; this pins the app's resolved
-// lint config (the app's nodeFiles wiring, the preset's own .server
-// exemption the app relies on, and the preset's Playwright override that turns
-// the unicorn rule off for specs and swaps in a rule scoped to browser
-// callbacks), so the rule is off where code runs in Node (CSS is undefined and
-// its CSS.escape autofix would crash) and on in browser code.
+// lint config (the app's nodeFiles wiring, plus the preset's Node exemption for
+// Playwright specs and .server code and its browser-callback rule for specs),
+// so the rule is off where code runs in Node (CSS is undefined and its
+// CSS.escape autofix would crash) and on in browser code.
 import type {Linter} from 'eslint';
 import {ESLint} from 'eslint';
 import {describe, expect, test} from 'vitest';
@@ -47,7 +46,7 @@ describe('unicorn/require-css-escape in the resolved project config', () => {
 });
 
 describe('browser-callback-css-escape/require-css-escape in the resolved project config', () => {
-  test('stays on for evaluate callbacks in a Playwright spec', async () => {
+  test('is an error in a Playwright spec', async () => {
     expect(
       await resolveRuleSeverityForFile(
         '.playwright/e2e/example.spec.ts',
