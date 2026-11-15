@@ -171,8 +171,9 @@ check_replan_security() {
   need "$structural" 'Then run `node .gaia/scripts/test-design/security-rows-lost.mjs --before <PLAN_DIR>/tests.before-correction.json --after <PLAN_DIR>/tests.json`' || return 1
   need "$structural" 'is held by the rule below. A non-zero exit is handled like a step 4.5 failure.' || return 1
   need "$rule" "A Structural re-plan's \`lost:\` line is held the same way: its item recommends restoring each missing row" || return 1
-  need "$rule" 'under an id that table does not use' || return 1
-  need "$rule" 'with its `task` re-set to the latest regenerated task whose code its test needs' || return 1
+  need "$rule" 'as the planner would add it: an id the regenerated table does not use,' || return 1
+  need "$rule" 'its `task` re-set to the latest regenerated task whose code its test needs' || return 1
+  need "$rule" 'and that task'"'"'s phase `- Security writer:` line in `ORCHESTRATOR.md`.' || return 1
   need "$rule" 'Every restore re-runs step 4.5; when 4.5 fails, undo the restore and report the row as not restored.' || return 1
   need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`, a failed restore included.' || return 1
 }
@@ -211,14 +212,21 @@ check_replan_security() {
 }
 
 @test "red twin: a restore under the snapshot id fails" {
-  mutated_tree "$AUDIT_REL" ', under an id that table does not use and' ', and'
+  mutated_tree "$AUDIT_REL" ' an id the regenerated table does not use,' ''
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
 }
 
 @test "red twin: a restore keeping a task the re-plan removed fails" {
-  mutated_tree "$AUDIT_REL" 'with its `task` re-set to the latest regenerated task whose code its test needs' 'with its snapshot `task`'
+  mutated_tree "$AUDIT_REL" 'its `task` re-set to the latest regenerated task whose code its test needs' 'its snapshot `task`'
+  run check_replan_security "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+}
+
+@test "red twin: a restore leaving the phase's security writer line unchanged fails" {
+  mutated_tree "$AUDIT_REL" ", and that task's phase \`- Security writer:\` line in \`ORCHESTRATOR.md\`." ' and that task doc'"'"'s `- Test:` line.'
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
