@@ -36,7 +36,7 @@ Every field is required unless marked.
 
 `bash .gaia/scripts/spec/requirement-keys.sh --spec <SPEC.md> [--audit <AUDIT.md>]` prints one key per line, sorted; for a spec-less plan `requirement-keys.sh --description` prints `description`.
 
-- `flow:<slug>`: each SPEC flow. Its flow row holds only what the doctrine's `**Flow test.**` allows; each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row. A flow left with no row this way gets no flow test: `tests.json` records it beside `rows` as `"coveredFlows": [{"source": "flow:<slug>", "rows": ["<id>", ...]}]`, naming the rows that own its steps, and that entry cites the key.
+- `flow:<slug>`: each SPEC flow. Its flow row holds only what the doctrine's `**Flow test.**` allows, so a step that only reaches a page to see an owned literal or state is dropped from it; each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row. A flow left with no row this way gets no flow test: `tests.json` records it beside `rows` as `"coveredFlows": [{"source": "flow:<slug>", "rows": ["<id>", ...]}]`, naming the rows that own its steps, and that entry cites the key.
 - `success_criteria:<i>`: 0-based.
 - `scope_boundaries:<always|ask_first|never>:<i>`: 0-based.
 - `clarifications:<i>`: 0-based index into `answered`.
