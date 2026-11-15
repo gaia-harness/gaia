@@ -372,8 +372,8 @@ check_lens_doctrine_rows() {
   need "$table" "and one whose \`source\` is a security requirement carries that requirement's kind, whatever the existing test asserted" || return 1
   need "$lens" "or whose \`source\` is a security requirement (then that requirement's kind, whatever the existing test asserted)" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
-  need "$lens" 'A stated literal or state stays on the lowest layer that owns it, its story or route test, and is never dropped for a real-server row asserting the same literal' || return 1
-  need "$lens" 'that row is trimmed to the document-level fact (the element is in the served HTML, without JavaScript) when a stated requirement asks for that fact, and dropped otherwise' || return 1
+  need "$lens" 'A stated literal or state stays on its story or route test and is never dropped for a real-server row asserting the same literal' || return 1
+  need "$lens" 'that row is trimmed to the document-level fact (the element is in the served HTML) when a stated requirement asks for that fact, and dropped otherwise' || return 1
   need "$apply" "**Applied rows** (a \`tests.json\` row any lens's fix adds, changes or trims, the Test design lens's own included, and a row another finding is folded into): hold it to the Test design lens's checks above, in its new form, before applying it" || return 1
   need "$apply" "A fold never changes the target row's \`source\`" || return 1
   need "$doctrine" 'once another app test, existing or planned in any phase, exercises that path. Judge by what the test can catch, not the code it calls' || return 1
