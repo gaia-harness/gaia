@@ -761,8 +761,11 @@ _gaia_loop_cli() {
     # Round r's keys: the stored snapshot's, else F(r) read afresh.
     subcommand_output="$(printf '%s' "$state" | jq -c --argjson round "$round" '.history.rounds[$round - 1].snapshot.keys? // empty')"
     [ -n "$subcommand_output" ] || subcommand_output="$(_gaia_loop_raw_findings "$main" "$state" "$round" | jq -c '.entries | map([.member, .finding_class, .path, .line]) | unique')" || return 2
-    subcommand_output="$(gaia_veto_keys_state "$main" "$branch_key" "$state" "$round" "$subcommand_output" "$root")" && gaia_veto_reviewers "$main" "$branch_key" "$root" "$subcommand_output" ||
-      { printf 'audit-loop-eval: %s/vetoes.json is unreadable or malformed\n' "$(gaia_loop_run_directory "$main" "$branch_key")" >&2; return 5; }
+    if ! subcommand_output="$(gaia_veto_keys_state "$main" "$branch_key" "$state" "$round" "$subcommand_output" "$root")" ||
+      ! gaia_veto_reviewers "$main" "$branch_key" "$root" "$subcommand_output"; then
+      printf 'audit-loop-eval: %s/vetoes.json is unreadable or malformed\n' "$(gaia_loop_run_directory "$main" "$branch_key")" >&2
+      return 5
+    fi
     return 0
   fi
   gaia_loop_evaluate_round "$main" "$state" "$round" "$root"
