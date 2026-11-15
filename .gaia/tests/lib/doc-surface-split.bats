@@ -327,7 +327,7 @@ check_doctrine_surfaces() {
   copy=$(copy_with "$PW_RULE" token.md "s/^# Playwright Conventions.*/&\n\nA browser spec for $token./")
   run check_no_copied_tokens "$copy"
   [ "$status" -ne 0 ]
-  copy=$(copy_with "$DOCTRINE" submitted.md 's/its native form posts/client-submitted forms/')
+  copy=$(copy_with "$DOCTRINE" submitted.md 's/native form posts/client-submitted forms/')
   run check_no_browser_overrouting "$copy"
   [ "$status" -ne 0 ]
   copy=$(copy_with "$DOCTRINE" routetests.md 's/exactly one case table holding every case, at the layer the layer rule picks\./exactly one case table holding every case, and these are route tests, not more browser files./')
