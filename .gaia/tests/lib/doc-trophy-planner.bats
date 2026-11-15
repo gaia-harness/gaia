@@ -578,6 +578,7 @@ check_covered_flows() {
   coverage="$(range_of "$1/$AUDIT_REL" '- **SPEC coverage' '- **Test design' | tr '\n' ' ' | tr -s ' ')"
   need "$doctrine" "A flow whose only steps reach a page to see a stated literal or state a lower-layer test owns has no journey through the happy path. A flow left with no step this paragraph keeps gets no flow test: the plan records the rows that own its steps instead." || return 1
   need "$table" "and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row. A flow left with no row this way gets no flow test" || return 1
+  need "$table" "is dropped from it, except a happy-path effect a flow step asserts, which stays on the flow" || return 1
   need "$table" '`"coveredFlows": [{"source": "flow:<slug>", "rows": ["<id>", ...]}]`, naming the rows that own its steps, and that entry cites the key' || return 1
   need "$planner" 'gets no closing-phase task and no `Flow test` line' || return 1
   need "$coverage" 'nor a `coveredFlows` entry in `tests.json`' || return 1
@@ -602,6 +603,10 @@ check_covered_flows() {
 
 @test "red twin: the doctrine covering only refusal flows fails" {
   red check_covered_flows "$DOCTRINE_REL" 'A flow left with no step this paragraph keeps gets' "A flow whose every step is a refusal a build task's test owns gets"
+}
+
+@test "red twin: the table page dropping a happy-path effect's navigation from the flow row fails" {
+  red check_covered_flows "$TABLE_REL" ', except a happy-path effect a flow step asserts, which stays on the flow' ''
 }
 
 @test "red twin: the table page covering only refusal flows fails" {
