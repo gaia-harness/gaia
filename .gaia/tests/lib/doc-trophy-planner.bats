@@ -353,7 +353,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" "each get their own row, keyed by \`caseKey\`" || return 1
   need "$doctrine" "keeps its flag on the row narrowed to its own kind's cases, and each moved case takes its own kind" || return 1
   need "$lens" "Judge each case by the doctrine's \`**One kind per case.**\`" || return 1
-  need "$lens" 'its fix trims the row to one kind and adds a row for each other kind' || return 1
+  need "$lens" 'its fix trims the row to the kind its flag names and adds a row for each other kind' || return 1
   need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$apply" "**Applied rows** (a \`tests.json\` row any lens's fix adds, changes or trims, the Test design lens's own included): hold it to the Test design lens's checks above before applying it" || return 1
@@ -447,5 +447,5 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens fixing a mixed row by deleting it fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" 'its fix trims the row to one kind and adds a row for each other kind' 'its fix removes the row'
+  red check_lens_doctrine_rows "$AUDIT_REL" 'its fix trims the row to the kind its flag names and adds a row for each other kind' 'its fix removes the row'
 }
