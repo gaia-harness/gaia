@@ -27,9 +27,8 @@
 #   - node running a script that resolves workspace packages, named literally
 #     or through a variable the file assigns from it. Such a script is one
 #     under .gaia/scripts or .gaia/cli that createRequires or imports a bare
-#     (non-relative, non-built-in) specifier, or that names another such
-#     script by its basename in quotes or after a `/` (a relative import, or a
-#     path it hands to a child node), to a fixpoint;
+#     (non-relative, non-built-in) specifier, or whose text quotes another
+#     such script's basename or a path ending in it, to a fixpoint;
 #   - node with -e, -p or --eval text holding a bare require, import or from
 #     specifier;
 #   - require_node_typescript;
@@ -50,8 +49,8 @@
 # that passes the name. The rule is about the command word, so it names no suite.
 # One exception: node running a workspace-resolving script is cancelled only by
 # a node function. A node file takes effect only on a PATH a test sets for its
-# own call, and a fake node cannot run the script it is handed, so a file stub
-# for one failure case leaves the suite's real calls in place.
+# own call, so a file stub for one failure case leaves the suite's real calls in
+# place.
 #
 # Provisioning: a marked suite that skips, rather than fails, when its
 # dependency is absent on a CI runner is a green that asserts nothing. A skip
@@ -68,7 +67,9 @@
 # Residual limits, each failing toward a missed user rather than a false one:
 # a command word built from a variable, a helper reached through a variable or
 # a second hop, a node script path assembled at run time, and a script reached
-# from another by a basename spelled other than in full are not seen.
+# from another other than by a quoted basename or path are not seen. The
+# closure also fails the other way: a quoted basename in a comment or message
+# makes a script a resolver, costing only a needless Node install.
 #
 # Maintainer-only: .gaia/tests is release-excluded wholesale.
 #
@@ -216,8 +217,9 @@ if [ -f "$work_directory/script-paths" ]; then
     [ -n "$resolves" ] && printf '%s\n' "${script_path##*/}" >>"$work_directory/script-names"
   done <"$work_directory/script-paths"
 fi
-# Close the set: a script that names a resolving script, as a relative import
-# or as a path it hands to a child node, needs the workspace too.
+# Close the set: a script that quotes a resolving script's basename or a path
+# ending in it (a relative import, a path handed to a child node) needs the
+# workspace too.
 while [ -s "$work_directory/script-names" ] && [ -f "$work_directory/script-paths" ]; do
   name_alternation="$(LC_ALL=C sort -u "$work_directory/script-names" | sed 's/[.]/\\./g' | paste -sd '|' -)"
   added=""
