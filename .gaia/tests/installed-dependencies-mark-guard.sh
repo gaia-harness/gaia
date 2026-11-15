@@ -27,8 +27,9 @@
 #   - node running a script that resolves workspace packages, named literally
 #     or through a variable the file assigns from it. Such a script is one
 #     under .gaia/scripts or .gaia/cli that createRequires or imports a bare
-#     (non-relative, non-built-in) specifier, or whose text quotes another
-#     such script's basename or a path ending in it, to a fixpoint;
+#     (non-relative, non-built-in) specifier, or whose text names another
+#     such script's basename, or a path ending in it, in single or double
+#     quotes, to a fixpoint;
 #   - node with -e, -p or --eval text holding a bare require, import or from
 #     specifier;
 #   - require_node_typescript;
@@ -67,7 +68,7 @@
 # Residual limits, each failing toward a missed user rather than a false one:
 # a command word built from a variable, a helper reached through a variable or
 # a second hop, a node script path assembled at run time, and a script reached
-# from another other than by a quoted basename or path are not seen. The
+# from another except by a quoted basename or path are not seen. The
 # closure also fails the other way: a quoted basename in a comment or message
 # makes a script a resolver, costing only a needless Node install.
 #
