@@ -4,7 +4,7 @@
 //   security-rows-lost.mjs --before <tests.json snapshot> --after <tests.json>
 //
 // A regeneration can renumber ids, so a security row (security not `none`) is
-// matched on its requirement-source key plus its kind, counted: the after
+// matched on its `source` plus its `security` kind, counted: the after
 // table must hold at least as many security rows of that key and kind as the
 // snapshot did. A dropped row, a row set to `none` and a row moved to another
 // kind all read as lost. Prints one line per source and kind left short,
