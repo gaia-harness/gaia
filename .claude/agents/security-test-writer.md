@@ -24,7 +24,7 @@ The dispatch gives you the working root, the frozen-interface excerpt, the repor
 
 For each row, act by its `<action>`, under its exact `<title>` in its `<file>`, at its `<layer>`:
 
-- `new`: write one test. Create the file, or add the test to it when it exists.
+- `new`: write one test. Create the file, or add the test to it when it exists. When the row has a `caseKey` and the file already holds the `.each` or `.for` table it belongs to, add the case as an entry in that table (its string literal the `<caseKey>`) rather than writing a second test of the same title.
 - `change`: edit the existing test of that title so it drives the row's case.
 - `extend`: add the row's case to the existing test's `.each` or `.for` case table, as an entry whose string literal is the `<caseKey>`.
 - `reuse`: write nothing. Confirm the existing test of that title already drives the row's case and report it `written`; when it does not, report `cannot_write`.

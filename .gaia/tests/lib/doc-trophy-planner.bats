@@ -346,9 +346,12 @@ check_lens_doctrine_rows() {
   need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included)" || return 1
-  need "$lens" "Judge each case: a row whose case or title covers a case of these kinds beside a case of none of them is a finding whatever its flag, and the fix gives that case its own flagged row" || return 1
-  need "$table" "Judge each case, not each row: a case of one of those kinds that shares a test with a case of none of them" || return 1
-  need "$table" "gets its own flagged row, on that test when the test is an \`.each\` or \`.for\` table, else in a test of its own" || return 1
+  need "$doctrine" "Judge each case, not each row: a row is judged by its \`caseKey\` when it has one, by its title otherwise" || return 1
+  need "$doctrine" "Two cases that share a test and carry different kinds" || return 1
+  need "$doctrine" "each get their own row, keyed by \`caseKey\`" || return 1
+  need "$doctrine" "the row narrows to the security case and keeps its flag, and the other cases move to a new unflagged row" || return 1
+  need "$lens" "Judge each case by the doctrine's \`**One kind per case.**\`" || return 1
+  need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$apply" "**Other-lens rows** (a \`tests.json\` row another lens's fix adds or changes): hold it to the Test design lens's checks above before applying it" || return 1
   need "$apply" "A fix applied on this thread, from any lens or check, that would remove a security row (a row of the doctrine's kinds, or any row flagged) or clear a row's flag is not applied to that row unless the user rules it wrong on the review list" || return 1
@@ -393,17 +396,25 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens judging the flag per row fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" ' Judge each case: a row whose case or title covers a case of these kinds' ' Judge each row: a row whose case or title covers a case of these kinds'
+  red check_lens_doctrine_rows "$AUDIT_REL" "Judge each case by the doctrine's \`**One kind per case.**\`" "Judge each row by the doctrine's \`**One kind per case.**\`"
 }
 
-@test "red twin: the planner's table step judging the flag per row fails" {
-  red check_lens_doctrine_rows "$TABLE_REL" 'Judge each case, not each row: a case of one of those kinds' 'Judge each row: a case of one of those kinds'
+@test "red twin: the planner's table step dropping the pointer to the split rule fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" "Split a test whose cases carry different kinds per the doctrine's" 'Split a test per the'
 }
 
-@test "red twin: the planner's table step splitting a test that holds only security cases fails" {
-  red check_lens_doctrine_rows "$TABLE_REL" 'shares a test with a case of none of them (a signed-out' 'shares a test with other cases (a signed-out'
+@test "red twin: the doctrine judging the flag per row fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'Judge each case, not each row: a row is judged by' 'Judge each row: a row is judged by'
 }
 
-@test "red twin: the planner's table step flagging a shared refusal case without its own row fails" {
-  red check_lens_doctrine_rows "$TABLE_REL" 'gets its own flagged row, on that test when the test is an `.each` or `.for` table, else in a test of its own' 'gets its flag'
+@test "red twin: the doctrine splitting only a security case beside none fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'Two cases that share a test and carry different kinds' 'Two cases that share a test and carry a security kind and none'
+}
+
+@test "red twin: the doctrine dropping the own row for a shared case fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'each get their own row, keyed by' 'each get a flag, keyed by'
+}
+
+@test "red twin: the doctrine clearing the flag on a split fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'the row narrows to the security case and keeps its flag, and the other cases move to a new unflagged row' 'the row is unflagged'
 }
