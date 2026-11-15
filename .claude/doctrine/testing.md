@@ -62,7 +62,7 @@ Formatting helpers, small array, string and object utilities, and thin wrappers 
 
 Fold sibling browser tests that walk one flow into one journey.
 
-**Flow test.** Write one flow test per critical flow, in the closing phase only, never in a build phase. It holds the journey through the happy path, plus only the effects that take several requests or sessions to stage, plus, when the flow must work without JavaScript, a page-less check of its native form posts (a separate real-server file holding them is also accepted). A web flow test is admitted on the browser layer whatever a cheaper layer could prove. It asserts no markup structure or ARIA attribute beyond a stated role or accessible name, and repeats no refusal a build task's test or another flow owns.
+**Flow test.** Write one flow test per critical flow, in the closing phase only, never in a build phase. It holds only the journey through the happy path, the effects that take several requests or sessions to stage, and, when the flow must work without JavaScript, a page-less check that posts the happy path's native forms (a separate real-server file holding them is also accepted). A stated no-JavaScript error path gets no native post: the action's route test and the page's story cover it. A web flow test is admitted on the browser layer whatever a cheaper layer could prove. It asserts no markup structure or ARIA attribute beyond a stated role or accessible name, repeats no refusal a build task's test or another flow owns, and asserts no stated literal or state a lower-layer test owns.
 
 **Path to layer.** In the web package:
 
@@ -133,7 +133,7 @@ Ordinary validation and status rules are not security rows. A retire or change r
 
 - A heading whose text is data the loader returns is a route test.
 - A refusal or error a direct `loader` or `action` call returns is a route test, even when a page or error boundary renders it.
-- A flow that must work without JavaScript checks its native form posts page-less in its flow test, with the body built from the served form, never as a page with JavaScript disabled. A separate real-server file holding them is also accepted; a native post that belongs to no flow is a real-server check.
+- A flow that must work without JavaScript checks its happy path's native form posts page-less in its flow test, never an error post, with the body built from the served form, never as a page with JavaScript disabled. A native post that belongs to no flow is a real-server check.
 
 ## Test-design table
 

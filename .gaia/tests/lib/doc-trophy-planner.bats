@@ -472,3 +472,61 @@ check_lens_doctrine_rows() {
 @test "red twin: the test design lens fixing a mixed row by deleting it fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" 'its fix trims the row to the kind its flag names and adds a row for each other kind' 'its fix removes the row'
 }
+
+# check_flow_row_allow_list <root>: a flow row holds only the doctrine's
+# allow-list, and the lens and the planner say so, since a planner writing a
+# SPEC flow named around a refusal or a stated literal copied it into the flow
+# row and no lens check caught it. A stated no-JavaScript error path stays on
+# the route layer, since the native-post check read a stated error path as a
+# post the flow owns. A SPEC flow's only row is trimmed, never dropped, since
+# the flow's requirement key and its Flow test line still need a row.
+check_flow_row_allow_list() {
+  local doctrine lens table
+  doctrine="$(flat "$1/$DOCTRINE_REL")"
+  table="$(flat "$1/$TABLE_REL")"
+  lens="$(range_of "$1/$AUDIT_REL" '- **Test design' '## 4.6a-ii' | tr '\n' ' ' | tr -s ' ')"
+  need "$doctrine" 'It holds only the journey through the happy path, the effects that take several requests or sessions to stage' || return 1
+  need "$doctrine" "A stated no-JavaScript error path gets no native post: the action's route test and the page's story cover it" || return 1
+  need "$doctrine" 'and asserts no stated literal or state a lower-layer test owns' || return 1
+  need "$doctrine" "checks its happy path's native form posts page-less in its flow test, never an error post" || return 1
+  need "$lens" "a flow row step outside the doctrine's \`**Flow test.**\` allow-list" || return 1
+  need "$lens" "such as a refusal a build task's row or another flow owns, a native error post, or a stated literal or state a lower-layer row owns" || return 1
+  need "$lens" "drops it when nothing is left, unless it is its SPEC flow's only row, which keeps the navigation the journey needs" || return 1
+  need "$table" "each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row" || return 1
+}
+
+@test "a flow row holds only the doctrine's allow-list in the doctrine, the test design lens and the planner" {
+  green check_flow_row_allow_list
+}
+
+@test "red twin: the doctrine letting a flow hold any step fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" 'It holds only the journey' 'It holds the journey'
+}
+
+@test "red twin: the doctrine giving a stated error path a native post fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" 'A stated no-JavaScript error path gets no native post' 'A stated no-JavaScript error path gets a native post'
+}
+
+@test "red twin: the served HTML rule letting a flow post an error fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" ', never an error post' ''
+}
+
+@test "red twin: the doctrine letting a flow assert a lower-layer literal fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" ', and asserts no stated literal or state a lower-layer test owns' ''
+}
+
+@test "red twin: the test design lens dropping the flow allow-list check fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" "a flow row step outside the doctrine's" "a flow row repeating a step outside the doctrine's"
+}
+
+@test "red twin: the test design lens flagging refusals only fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" ', a native error post, or a stated literal or state a lower-layer row owns' ''
+}
+
+@test "red twin: the test design lens dropping a SPEC flow's only row fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" ", unless it is its SPEC flow's only row, which keeps the navigation the journey needs" ''
+}
+
+@test "red twin: the planner mapping refusals to the flow row fails" {
+  red check_flow_row_allow_list "$TABLE_REL" "maps to the delivering task's lower-layer row" "maps to the flow row"
+}
