@@ -396,6 +396,7 @@
     ".gaia/scripts/test-design/existing-tests.mjs": "owned",
     ".gaia/scripts/test-design/layer-map.mjs": "owned",
     ".gaia/scripts/test-design/plan-locate-lib.sh": "owned",
+    ".gaia/scripts/test-design/security-rows-lost.mjs": "owned",
     ".gaia/scripts/test-design/skip-detect.mjs": "owned",
     ".gaia/scripts/test-design/table.mjs": "owned",
     ".gaia/scripts/test-design/test-table.mjs": "owned",
@@ -874,7 +875,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-14T13:15:19.885Z",
+  "generated": "2026-11-15T07:43:25.951Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
