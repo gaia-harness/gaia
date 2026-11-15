@@ -223,9 +223,10 @@ line and one `Test: <file> › <fullName>` line per test, tagged one of two ways
   missing row's title in another file. Judge it as unplanned, against the row it replaced.
 
 Both axes apply as above, and both carve-outs below (the security seam and the
-sole lower-layer driver) bind a drift `delete` too. A mock or helper self-test
-that an app test already exercises is a `delete` (the doctrine's `## What to
-test`).
+sole lower-layer driver) bind a drift `delete` too. A test whose only catch
+beyond another app test of the same path is app code disagreeing with a test
+double (a mock, fixture, Given builder or test-fixture wiring), whatever code it
+calls, tests that double and is a `delete` (the doctrine's `## What to test`).
 
 ## Verdicts
 
