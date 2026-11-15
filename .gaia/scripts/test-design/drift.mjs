@@ -84,7 +84,7 @@ function evaluateRow(row, sides, ledger, keptCode) {
   return {matched, head: headTest, base: baseTest};
 }
 
-// `keptCodeRows` are the rows whose `deletes` decide kept code: the current
+// `approvedKeptCode` picks the rows whose `deletes` decide kept code: the current
 // table's for classify, the approved copy's for the merge-gate security check
 // so an amend cannot rewrite `deletes` or `held` away.
 function readPlanAndFiles({root, planDir, base, files, committed = false, approvedKeptCode = false}) {
