@@ -341,7 +341,10 @@ check_forged_value() {
 # route tests cover. A test of a double is judged by what it can catch beyond
 # that app test, and a wiring gap takes no new row. The review list's security
 # retire items come from the table after fixes apply, since minor fixes apply
-# after the list.
+# after the list. A retire or change row whose source is a security requirement
+# takes that requirement's kind in the doctrine, the table step and the lens,
+# since keying only on the retired test's own kind left a retire made for a
+# secret requirement flagged none.
 check_lens_doctrine_rows() {
   local doctrine lens apply interactive table decomposition
   doctrine="$(flat "$1/$DOCTRINE_REL")"
@@ -365,6 +368,9 @@ check_lens_doctrine_rows() {
   need "$lens" "Judge each case by the doctrine's \`**One kind per case.**\`" || return 1
   need "$lens" 'its fix trims the row to the kind its flag names and adds a row for each other kind' || return 1
   need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
+  need "$doctrine" "So does a retire or change row whose \`source\` is a security requirement (one another flagged row cites), whatever the existing test asserted: it carries that requirement's kind, and such a retire is a security retire." || return 1
+  need "$table" "and one whose \`source\` is a security requirement carries that requirement's kind, whatever the existing test asserted" || return 1
+  need "$lens" "or whose \`source\` is a security requirement (then that requirement's kind, whatever the existing test asserted)" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$apply" "**Applied rows** (a \`tests.json\` row any lens's fix adds, changes or trims, the Test design lens's own included, and a row another finding is folded into): hold it to the Test design lens's checks above, in its new form, before applying it" || return 1
   need "$apply" "A fold never changes the target row's \`source\`" || return 1
@@ -462,6 +468,22 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the planner's table step dropping the pointer to the split rule fails" {
   red check_lens_doctrine_rows "$TABLE_REL" "Split a test whose cases carry different kinds per the doctrine's" 'Split a test per the'
+}
+
+@test "red twin: the doctrine keying a retire's flag only on the retired test's kind fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " So does a retire or change row whose \`source\` is a security requirement (one another flagged row cites), whatever the existing test asserted: it carries that requirement's kind, and such a retire is a security retire." ''
+}
+
+@test "red twin: the doctrine's source-kind retire not counted as a security retire fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" ', and such a retire is a security retire.' '.'
+}
+
+@test "red twin: the planner's table step dropping the source-kind retire flag fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" ", and one whose \`source\` is a security requirement carries that requirement's kind, whatever the existing test asserted" ''
+}
+
+@test "red twin: the test design lens dropping the source-kind retire flag fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" " or whose \`source\` is a security requirement (then that requirement's kind, whatever the existing test asserted)" ''
 }
 
 @test "red twin: the doctrine judging the flag per row fails" {
