@@ -33,14 +33,15 @@ write_table() {
   printf '{"schema": 1, "rows": [%s]}\n' "$rows" > "$file"
 }
 
-# compare <root>: run the compare from <root> over BEFORE and AFTER.
+# compare [root]: run the compare from root (the repo by default) over BEFORE
+# and AFTER.
 compare() {
-  run node "$1/$SCRIPTS_REL/security-rows-lost.mjs" --before "$BEFORE" --after "$AFTER"
+  run node "${1:-$REPO_ROOT}/$SCRIPTS_REL/security-rows-lost.mjs" --before "$BEFORE" --after "$AFTER"
 }
 
 @test "an unchanged security set reports nothing" {
   cp "$BEFORE" "$AFTER"
-  compare "$REPO_ROOT"
+  compare
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
@@ -49,7 +50,7 @@ compare() {
   write_table "$AFTER" \
     '{"id": "T7", "source": "success_criteria:0", "security": "access"}' \
     '{"id": "T8", "source": "success_criteria:1", "security": "forgery"}'
-  compare "$REPO_ROOT"
+  compare
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
@@ -57,7 +58,7 @@ compare() {
 @test "a dropped security row is lost" {
   write_table "$AFTER" \
     '{"id": "T2", "source": "success_criteria:1", "security": "forgery"}'
-  compare "$REPO_ROOT"
+  compare
   [ "$status" -eq 0 ]
   [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
 }
@@ -66,7 +67,7 @@ compare() {
   write_table "$AFTER" \
     '{"id": "T1", "source": "success_criteria:0", "security": "none"}' \
     '{"id": "T2", "source": "success_criteria:1", "security": "forgery"}'
-  compare "$REPO_ROOT"
+  compare
   [ "$status" -eq 0 ]
   [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
 }
@@ -75,7 +76,7 @@ compare() {
   write_table "$AFTER" \
     '{"id": "T1", "source": "success_criteria:0", "security": "secret"}' \
     '{"id": "T2", "source": "success_criteria:1", "security": "forgery"}'
-  compare "$REPO_ROOT"
+  compare
   [ "$status" -eq 0 ]
   [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
 }
@@ -84,7 +85,7 @@ compare() {
   write_table "$AFTER" \
     '{"id": "T1", "source": "success_criteria:9", "security": "access"}' \
     '{"id": "T2", "source": "success_criteria:1", "security": "forgery"}'
-  compare "$REPO_ROOT"
+  compare
   [ "$status" -eq 0 ]
   [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
 }
@@ -95,14 +96,14 @@ compare() {
     '{"id": "T4", "source": "success_criteria:0", "security": "access"}'
   write_table "$AFTER" \
     '{"id": "T1", "source": "success_criteria:0", "security": "access"}'
-  compare "$REPO_ROOT"
+  compare
   [ "$status" -eq 0 ]
   [ "$output" = 'lost: access success_criteria:0 (1 of T1, T4)' ]
 }
 
 @test "an unreadable table exits 1 with a reason, never an empty report" {
   printf 'not json\n' > "$AFTER"
-  compare "$REPO_ROOT"
+  compare
   [ "$status" -eq 1 ]
   [[ "$output" == *'security-rows-lost: '*'is not valid JSON'* ]]
 }
@@ -179,9 +180,13 @@ check_replan_security() {
   need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`.' || return 1
 }
 
+green() {
+  run "$1" "$REPO_ROOT"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+}
+
 @test "the Structural re-plan routes a lost security row to the review list" {
-  run check_replan_security "$REPO_ROOT"
-  [ "$status" -eq 0 ]
+  green check_replan_security
 }
 
 @test "red twin: a re-plan with no snapshot fails" {
