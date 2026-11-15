@@ -26,6 +26,7 @@ setup() {
   TDD_REL=".claude/skills/tdd/SKILL.md"
   DOCTRINE_REL=".claude/doctrine/testing.md"
   AUDIT_REL=".claude/skills/gaia/references/plan/decomposition-audit.md"
+  TABLE_REL=".claude/skills/gaia/references/plan/test-table.md"
   LIMIT_CLAUSE='**The prompt template MUST also limit the tests a sub-agent writes**'
 }
 
@@ -61,14 +62,14 @@ range_of() {
 }
 
 # mutated_tree <relpath> <old> <new>: copy planner.md, the decomposition audit,
-# the tdd skill and the testing doctrine into a
+# the test-design table reference, the tdd skill and the testing doctrine into a
 # scratch tree (TREE), replace the first fixed-string <old> in <relpath> with
 # <new>, and prove the copy changed.
 mutated_tree() {
   local rel="$1" old="$2" new="$3" file content mutated
   TREE="$BATS_TEST_TMPDIR/tree"
   rm -rf "$TREE"
-  for file in "$PLANNER_REL" "$AUDIT_REL" "$TDD_REL" "$DOCTRINE_REL"; do
+  for file in "$PLANNER_REL" "$AUDIT_REL" "$TABLE_REL" "$TDD_REL" "$DOCTRINE_REL"; do
     mkdir -p "$TREE/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$TREE/$file"
   done
@@ -327,13 +328,16 @@ check_forged_value() {
 }
 
 # check_lens_doctrine_rows <root>: the test design lens names each doctrine-barred
-# row kind and flags by the doctrine's security kinds, sign-in included, and the
-# apply step holds a row another lens's fix adds to the same checks, since the
+# row kind and flags by the doctrine's security kinds, sign-in included, judged
+# per case in the lens and the planner's table step alike, since a per-row
+# judgment reads a refusal case sharing a test with an allowed case as unflagged;
+# and the apply step holds a row another lens's fix adds to the same checks, since the
 # lens ran before that row existed. The review list's security retire items come
 # from the table after fixes apply, since minor fixes apply after the list.
 check_lens_doctrine_rows() {
-  local doctrine lens apply interactive
+  local doctrine lens apply interactive table
   doctrine="$(flat "$1/$DOCTRINE_REL")"
+  table="$(flat "$1/$TABLE_REL")"
   lens="$(range_of "$1/$AUDIT_REL" '- **Test design' '## 4.6a-ii' | tr '\n' ' ' | tr -s ' ')"
   apply="$(range_of "$1/$AUDIT_REL" '## 4.6b. Apply findings' '**Interactive:**' | tr '\n' ' ' | tr -s ' ')"
   interactive="$(range_of "$1/$AUDIT_REL" '**Interactive:**' 'Then return to' | tr '\n' ' ' | tr -s ' ')"
@@ -342,6 +346,9 @@ check_lens_doctrine_rows() {
   need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included)" || return 1
+  need "$lens" "Judge each case: a row whose case or title covers several cases, one of them of these kinds, is missing its flag, and the fix gives that case its own flagged row with a \`caseKey\`" || return 1
+  need "$table" "Judge each case, not each row: a case of one of those kinds that shares a test with other cases" || return 1
+  need "$table" "gets its own row with a \`caseKey\` and its flag" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$apply" "**Other-lens rows** (a \`tests.json\` row another lens's fix adds or changes): hold it to the Test design lens's checks above before applying it" || return 1
   need "$apply" "A fix applied on this thread, from any lens or check, that would remove a security row (a row of the doctrine's kinds, or any row flagged) or clear a row's flag is not applied to that row unless the user rules it wrong on the review list" || return 1
@@ -383,4 +390,16 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the doctrine dropping sign-in from access fails" {
   red check_lens_doctrine_rows "$DOCTRINE_REL" '**Access**: who may act or see. Sign-in,' '**Access**: who may act or see.'
+}
+
+@test "red twin: the test design lens judging the flag per row fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ' Judge each case: a row whose case or title covers several cases,' ' Judge each row: a row whose case or title covers several cases,'
+}
+
+@test "red twin: the planner's table step judging the flag per row fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" 'Judge each case, not each row: a case of one of those kinds' 'Judge each row: a case of one of those kinds'
+}
+
+@test "red twin: the planner's table step flagging a shared refusal case without its own row fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" 'gets its own row with a `caseKey` and its flag' 'gets its flag'
 }
