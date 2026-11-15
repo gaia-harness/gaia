@@ -79,7 +79,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 **Guard.** A guard is code that refuses: an access check, a refusal, a validation or a gate.
 
 - Drive every guard into its failing state with a test that asserts the refusal. A test that only watches a guard pass cannot tell a working guard from an inert one.
-- Name a guard's test in the task that delivers the guard, never leave it to the closing flow test. One test may cover several guards.
+- Name a guard's test in the task that delivers the guard, never leave it to the closing flow test. One test may cover several guards of one kind.
 - A flow test never stands in for a guard's lower-layer test, and a browser test or flow test never counts as the covering sibling of the only lower-layer test driving a guard.
 
 **Anonymous write.** Prove that an authenticated write action refuses an anonymous request, with no side effect, by a route test calling the action with an anonymous `Request`.
@@ -106,7 +106,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 
 Ordinary validation and status rules are not security rows. A retire or change row on an existing test of one of these kinds carries the flag too.
 
-**One kind per case.** Judge each case, not each row: a row is judged by its `caseKey` when it has one, by its title otherwise. Two cases that share a test and carry different kinds, `none` included (a signed-out redirect beside a signed-in render, or a refusal beside a forged cookie), each get their own row, keyed by `caseKey`, and every row on one shared `.each` or `.for` test sits in the security row's task. With no case table, each kind's cases go in a test of their own. Splitting an existing security test or a flagged row keeps its flag on the row narrowed to its own kind's cases, and each moved case takes its own kind: no split clears a flag.
+**One kind per case.** Judge each case, not each row: a row is judged by its `caseKey` when it has one, by its title otherwise. Two cases that share a test and carry different kinds, `none` included (a signed-out redirect beside a signed-in render, or a refusal beside a forged cookie), each get their own row, keyed by `caseKey`, and every row on one shared `.each` or `.for` test sits in the latest task its security rows need. With no case table, each kind's cases go in a test of their own. Splitting an existing security test or a flagged row keeps its flag on the row narrowed to its own kind's cases, and each moved case takes its own kind: no split clears a flag.
 
 - When a security test fails, fix the code, never weaken the test.
 - Only the maintainer rules a security row wrong, removes its flag, or retires an existing security test, except a retire row for the security test of code the plan deletes, which a human's approval of the plan covers. An approval no human gave (`/gaia-plan auto`, or an option a headless run picks) is not the maintainer's, so `/gaia-plan auto` and a headless run hold every security retire row, deleted code included.
