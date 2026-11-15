@@ -3,6 +3,8 @@
 # confirmed by its own rule, an unnamed unchanged test left alone, and each
 # class of drift routed to the list that owns it.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DRIFT_CHECK="$REPO_ROOT/.gaia/scripts/test-drift-check.sh"

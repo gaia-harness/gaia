@@ -6,6 +6,8 @@
 # GAIA_TEST_DRIFT_CHECK overrides the entry point so a scratch copy with a
 # broken skip detector can prove the skip cases go red.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DRIFT_CHECK="${GAIA_TEST_DRIFT_CHECK:-$REPO_ROOT/.gaia/scripts/test-drift-check.sh}"
