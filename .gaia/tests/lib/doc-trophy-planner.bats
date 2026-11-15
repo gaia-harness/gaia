@@ -452,7 +452,7 @@ check_lens_doctrine_rows() {
   red check_lens_doctrine_rows "$DOCTRINE_REL" 'Sign-in and its refusals,' 'Sign-in,'
 }
 
-@test "red twin: the doctrine dropping the app's response to an upstream refusal from access fails" {
+@test "red twin: the doctrine dropping the app's response to an upstream refusal from the middleware guard fails" {
   red check_lens_doctrine_rows "$DOCTRINE_REL" " The app's own response to an upstream refusal (no session created, the error shown) is still an access row; only the upstream's verdict itself is unprovable." ''
 }
 
