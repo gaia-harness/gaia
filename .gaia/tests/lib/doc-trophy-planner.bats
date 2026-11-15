@@ -334,7 +334,9 @@ check_forged_value() {
 # and the apply step holds every row a fix adds, changes or trims, the lens's own
 # included, to the same checks, since no check ran on that row as applied, and a
 # row a finding folds into is such a change, since a fold let a mock self-test
-# serve as the app test cited to decline later findings. A test double is judged by
+# serve as the app test cited to decline later findings. The bar counts another app
+# test in any phase, since a per-phase reading admitted a mock test that later-phase
+# route tests cover. A test double is judged by
 # what the test can catch, and a wiring gap takes no new row. The
 # review list's security retire items come from the table after fixes apply,
 # since minor fixes apply after the list.
@@ -362,9 +364,9 @@ check_lens_doctrine_rows() {
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$apply" "**Applied rows** (a \`tests.json\` row any lens's fix adds, changes or trims, the Test design lens's own included, and a row another finding is folded into): hold it to the Test design lens's checks above, in its new form, before applying it" || return 1
   need "$apply" "A fold never changes the target row's \`source\`" || return 1
-  need "$doctrine" 'once an existing app test, or a planned one in any phase, exercises that path. Judge by what the test can catch, not the code it calls' || return 1
-  need "$lens" "judged by the doctrine's rule on what its assertions can fail on" || return 1
-  need "$decomposition" 'in the task that owns the setup, by its acceptance criteria or by task order, never with a new test row' || return 1
+  need "$doctrine" 'once another app test, existing or planned in any phase, exercises that path. Judge by what the test can catch, not the code it calls' || return 1
+  need "$lens" "judged by the doctrine's rule on what it can catch beyond that app test" || return 1
+  need "$decomposition" 'fix the setup in the task that owns it, through its acceptance criteria, or as a structural finding when the setup lands after the test that needs it, never with a new test row' || return 1
   need "$apply" "reshaped when one change passes every check (a fix's offered trim counts as that change), else dropped" || return 1
   need "$apply" "Dropping an add leaves it out; dropping a change or trim leaves the row in its prior form, unless a Test design check bars that prior form too, and then the row is removed" || return 1
   need "$apply" 'record it as an uncovered requirement (a missing-row finding at the severity the missing-row check gives it, recommending a row every check passes, or in auto-mode in `## Audit notes`), not only as a dropped row' || return 1
