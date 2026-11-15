@@ -11,6 +11,8 @@
 #
 # Run under bash 5: `bash .gaia/scripts/bats5.sh .gaia/tests/hooks/test-design-gate-refusals.bats`.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
