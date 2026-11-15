@@ -34,7 +34,7 @@ A security row is a test of access, forgery or secret handling. A separate agent
 
 ## The audit fixer's row amendment
 
-An audit fixer can add or replace a test, which changes what the table describes. The fixer reports its row changes in a file and the loop applies them through the table tool's amend command. Amend refuses a change that removes a security row's key coverage, drops a security flag, or changes a security row's kind (the merge gate reads a dropped flag and a changed kind alike as a lost flag), and it names a checkpoint for a security fold that loses a key, so a fixer cannot shrink the security surface by rewriting the table. The approved copy stays untouched, which keeps the merge gate's reference intact. A security row the fixer adds or replaces goes to the security writer before the round's gate.
+An audit fixer can add or replace a test, which changes what the table describes. The fixer reports its row changes in a file and the loop applies them through the table tool's amend command. Amend refuses a change that removes a security row's key coverage, drops a security flag, changes a security row's kind (the merge gate reads a dropped flag and a changed kind alike as a lost flag), or changes an approved security row's action (the merge gate judges by the approved action), and it names a checkpoint for a security fold that loses a key, so a fixer cannot shrink the security surface by rewriting the table. The approved copy stays untouched, which keeps the merge gate's reference intact. A security row the fixer adds or replaces goes to the security writer before the round's gate.
 
 ## The drift check's routes
 
