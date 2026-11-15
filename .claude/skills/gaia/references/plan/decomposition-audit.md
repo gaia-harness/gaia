@@ -31,7 +31,7 @@ The lenses:
   - a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe;
   - a test of a test double (a mock, a fixture, the Playwright fixture wiring, the plan's own Given builders) once an app test exercises that path;
   - a planned test that duplicates or supersedes an existing test in the touched areas, which should be reuse, extend, change or retire;
-  - a wrong or missing security flag, by the doctrine's `**Security row.**` kinds: an access row (sign-in and its refusals included), a forgery row, a secret row, or a retire or change row on an existing test of one of these kinds, flagged `none` or with another kind, or a flag on a row that is none of these. Judge each case: a row whose case or title covers several cases, one of them of these kinds, is a finding whatever its flag, and the fix gives that case its own flagged row, on that test when it is an `.each` or `.for` table, else in a test of its own;
+  - a wrong or missing security flag, by the doctrine's `**Security row.**` kinds: an access row (sign-in and its refusals included), a forgery row, a secret row, or a retire or change row on an existing test of one of these kinds, flagged `none` or with another kind, or a flag on a row that is none of these. Judge each case: a row whose case or title covers a case of these kinds beside a case of none of them is a finding whatever its flag, and the fix gives that case its own flagged row, on that test when it is an `.each` or `.for` table, else in a test of its own;
   - a security row whose owning task is not the latest task its test needs.
 
 ## 4.6a-ii. Refute the test-design findings
