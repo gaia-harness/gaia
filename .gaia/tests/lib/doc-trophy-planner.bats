@@ -336,10 +336,10 @@ check_forged_value() {
 # row a finding folds into is such a change, since a fold let a mock self-test
 # serve as the app test cited to decline later findings. The bar counts another app
 # test in any phase, since a per-phase reading admitted a mock test that later-phase
-# route tests cover. A test double is judged by
-# what the test can catch, and a wiring gap takes no new row. The
-# review list's security retire items come from the table after fixes apply,
-# since minor fixes apply after the list.
+# route tests cover. A test of a double is judged by what it can catch beyond
+# that app test, and a wiring gap takes no new row. The review list's security
+# retire items come from the table after fixes apply, since minor fixes apply
+# after the list.
 check_lens_doctrine_rows() {
   local doctrine lens apply interactive table decomposition
   doctrine="$(flat "$1/$DOCTRINE_REL")"
