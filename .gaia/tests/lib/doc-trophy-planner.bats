@@ -351,9 +351,10 @@ check_lens_doctrine_rows() {
   need "$doctrine" 'with no success-path route test of its own' || return 1
   need "$doctrine" '**Security row.**' || return 1
   need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
+  need "$doctrine" '**Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" 'a flow observes an effect whose consequence a flow step asserts' || return 1
-  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included)" || return 1
+  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included), a forgery row (a redirect or callback target included)," || return 1
   need "$doctrine" "Judge each case, not each row: a row is judged by its \`caseKey\` when it has one, by its title otherwise" || return 1
   need "$doctrine" "Two cases that share a test and carry different kinds" || return 1
   need "$doctrine" "each get their own row, keyed by \`caseKey\`" || return 1
@@ -430,6 +431,14 @@ check_lens_doctrine_rows() {
 
 @test "red twin: security retire items taken from the table before minor fixes apply fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" ' in the table as it will stand once every fix applies, `minor` ones included,' ''
+}
+
+@test "red twin: the doctrine dropping redirect targets from forgery fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" ', and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' '.'
+}
+
+@test "red twin: the test design lens dropping redirect targets from forgery rows fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'a forgery row (a redirect or callback target included),' 'a forgery row,'
 }
 
 @test "red twin: the doctrine dropping sign-in from access fails" {
