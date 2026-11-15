@@ -79,7 +79,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 **Guard.** A guard is code that refuses: an access check, a refusal, a validation or a gate.
 
 - Drive every guard into its failing state with a test that asserts the refusal. A test that only watches a guard pass cannot tell a working guard from an inert one.
-- Name a guard's test in the task that delivers the guard, never leave it to the closing flow test. One test may cover several guards of one kind.
+- Name a guard's test in the task that delivers the guard, never leave it to the closing flow test. One test may cover several guards of one security kind (`**Security row.**`).
 - A flow test never stands in for a guard's lower-layer test, and a browser test or flow test never counts as the covering sibling of the only lower-layer test driving a guard.
 
 **Anonymous write.** Prove that an authenticated write action refuses an anonymous request, with no side effect, by a route test calling the action with an anonymous `Request`.
