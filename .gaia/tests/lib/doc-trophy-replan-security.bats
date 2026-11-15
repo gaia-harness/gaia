@@ -173,7 +173,8 @@ check_replan_security() {
   need "$rule" "A Structural re-plan's \`lost:\` line is held the same way: its item recommends restoring each missing row" || return 1
   need "$rule" 'as the planner would add it: an id the regenerated table does not use,' || return 1
   need "$rule" 'its `task` re-set to the latest regenerated task whose code its test needs' || return 1
-  need "$rule" 'and that task'"'"'s phase `- Security writer:` line in `ORCHESTRATOR.md`.' || return 1
+  need "$rule" 'A regenerated row on the same `file`, `title` and `caseKey` gets the snapshot'"'"'s `security` back' || return 1
+  need "$rule" 'Either way, that task'"'"'s phase `- Security writer:` line in `ORCHESTRATOR.md` counts it.' || return 1
   need "$rule" 'Every restore re-runs step 4.5; when 4.5 fails, undo the restore and report the row as not restored.' || return 1
   need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`, a failed restore included.' || return 1
 }
@@ -226,7 +227,14 @@ check_replan_security() {
 }
 
 @test "red twin: a restore leaving the phase's security writer line unchanged fails" {
-  mutated_tree "$AUDIT_REL" ", and that task's phase \`- Security writer:\` line in \`ORCHESTRATOR.md\`." ' and that task doc'"'"'s `- Test:` line.'
+  mutated_tree "$AUDIT_REL" " Either way, that task's phase \`- Security writer:\` line in \`ORCHESTRATOR.md\` counts it." ''
+  run check_replan_security "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+}
+
+@test "red twin: re-adding an unflagged row beside its regenerated copy fails" {
+  mutated_tree "$AUDIT_REL" "A regenerated row on the same \`file\`, \`title\` and \`caseKey\` gets the snapshot's \`security\` back, in \`tests.json\` and its README row; any other is added" 'Each is added'
   run check_replan_security "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
