@@ -328,9 +328,10 @@ check_forged_value() {
 
 # check_lens_doctrine_rows <root>: the test design lens names each doctrine-barred
 # row kind and flags by the doctrine's security kinds, sign-in included, and the
-# apply step holds a row another lens's fix adds to the same checks, since the
-# lens ran before that row existed. The review list's security retire items come
-# from the table after fixes apply, since minor fixes apply after the list.
+# apply step holds every row a fix adds, changes or trims, the lens's own
+# included, to the same checks, since no check ran on that row as applied. The
+# review list's security retire items come from the table after fixes apply,
+# since minor fixes apply after the list.
 check_lens_doctrine_rows() {
   local doctrine lens apply interactive
   doctrine="$(flat "$1/$DOCTRINE_REL")"
@@ -341,9 +342,14 @@ check_lens_doctrine_rows() {
   need "$doctrine" '**Security row.**' || return 1
   need "$doctrine" '**Access**: who may act or see. Sign-in,' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
+  need "$lens" 'a flow observes an effect whose consequence a flow step asserts' || return 1
   need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included)" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
-  need "$apply" "**Other-lens rows** (a \`tests.json\` row another lens's fix adds or changes): hold it to the Test design lens's checks above before applying it" || return 1
+  need "$apply" "**Applied rows** (a \`tests.json\` row any lens's fix adds, changes or trims, the Test design lens's own included): hold it to the Test design lens's checks above before applying it" || return 1
+  need "$apply" "reshaped when one change passes every check (a fix's offered trim counts as that change), else dropped" || return 1
+  need "$apply" "Dropping an add leaves it out; dropping a change or trim leaves the row in its prior form, unless a Test design check bars that prior form too, and then the row is removed" || return 1
+  need "$apply" 'record it as an uncovered requirement (a missing-row finding at the severity the missing-row check gives it, recommending a row every check passes, or in auto-mode in `## Audit notes`), not only as a dropped row' || return 1
+  need "$apply" 'a trim narrows an existing row to a subset of its cases and is a kind of change' || return 1
   need "$apply" "A fix applied on this thread, from any lens or check, that would remove a security row (a row of the doctrine's kinds, or any row flagged) or clear a row's flag is not applied to that row unless the user rules it wrong on the review list" || return 1
   need "$apply" 'The row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' || return 1
   need "$interactive" "one item per security-flagged \`retire\` row (\`security\` not \`none\`) in the table as it will stand once every fix applies, \`minor\` ones included" || return 1
@@ -355,6 +361,10 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the test design lens dropping the success-path route test check fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" 'a success-path route test for a happy path the closing flow test walks' 'a route test for a happy path the closing flow test walks'
+}
+
+@test "red twin: an effect the flow observes through its consequence keeping its route test fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'a flow observes an effect whose consequence a flow step asserts' 'a flow observes only an effect a flow step asserts'
 }
 
 @test "red twin: the test design lens flagging authorization refusals only fails" {
@@ -375,6 +385,22 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the apply step skipping rows another lens's fix adds fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" "hold it to the Test design lens's checks above before applying it" 'apply it'
+}
+
+@test "red twin: the apply step skipping rows the test design lens's own fix adds fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ", the Test design lens's own included)" ')'
+}
+
+@test "red twin: the apply step taking a trim that fails a check fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" "(a fix's offered trim counts as that change), else dropped" ', else trimmed'
+}
+
+@test "red twin: a drop that leaves a requirement without a row recorded only as a dropped row fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'record it as an uncovered requirement' 'record it as a dropped row'
+}
+
+@test "red twin: a dropped change deleting the row without a bar fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'dropping a change or trim leaves the row in its prior form' 'dropping a change or trim deletes the row'
 }
 
 @test "red twin: security retire items taken from the table before minor fixes apply fails" {
