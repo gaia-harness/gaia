@@ -5,13 +5,13 @@
 //
 // A regeneration can renumber ids, so a security row (security not `none`) is
 // matched on its `source` plus its `security` kind, counted: the after
-// table must hold at least as many security rows of that key and kind as the
+// table must hold at least as many security rows of that source and kind as the
 // snapshot did. A dropped row, a row set to `none` and a row moved to another
 // kind all read as lost. Prints one line per source and kind left short,
 // `lost: <kind> <source> (<missing> of <snapshot ids>)`, and nothing when none
 // is lost.
 //
-// Exit 0 compared (stdout says what was lost), 1 a table is unreadable (one
+// Exit 0 compared (stdout says what was lost), 1 a table is unusable (one
 // `security-rows-lost: ...` stderr line), 2 usage.
 
 import {isSecurity, readTable} from './table.mjs';
