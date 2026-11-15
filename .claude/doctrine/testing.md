@@ -90,7 +90,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 
 **Shared guard.** Test a guard written once (middleware, a shared guard applied above the route) once at the guard, plus one served check. For middleware, the test at the guard is a route test that runs the real middleware chain, and without one the served check alone; never a unit test that hand-calls the middleware function. Give a module its own refusal test only when its own code wires the guard, so removing that wiring leaves the module unguarded.
 
-**Middleware guard.** A route test that runs the real middleware chain proves a middleware guard; a route test that hand-calls a context provider does not, and without the chain the guard needs a real-server check. An authorization outcome an upstream API owns is proven by no GAIA layer, since a mock handler answers as the test wrote it.
+**Middleware guard.** A route test that runs the real middleware chain proves a middleware guard; a route test that hand-calls a context provider does not, and without the chain the guard needs a real-server check. An authorization outcome an upstream API owns is proven by no GAIA layer, since a mock handler answers as the test wrote it. The app's own response to an upstream refusal (no session created, the error shown) is still an access row; only the upstream's verdict itself is unprovable.
 
 **Later-request rule.** Test a rule that takes effect on a later request (a role change, a deactivation, a sign-out ending a token) with a before-and-after read in one session, at the row's layer.
 
@@ -100,7 +100,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 
 **Security row.** A security row's test proves one of three kinds:
 
-- **Access**: who may act or see. Sign-in, role, ownership and visibility, account state that decides whether an actor may act (deactivated, suspended, a role change on the next request), and authorization checked before validation or data access. A status rule that decides whether an actor may act is access.
+- **Access**: who may act or see. Sign-in and its refusals, role, ownership and visibility, account state that decides whether an actor may act (deactivated, suspended, a role change on the next request), and authorization checked before validation or data access. A status rule that decides whether an actor may act is access.
 - **Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.
 - **Secrets**: values that must never be exposed.
 
