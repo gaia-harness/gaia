@@ -37,8 +37,8 @@
 # - Every task doc in the last phase carries exactly one line
 #     - Flow test (<flow_id>): <repo-relative test path>
 #   and every SPEC flow has exactly one such line, except a flow tests.json's
-#   coveredFlows records, which has none (so does a last phase all of whose
-#   flows it records). A line naming a flow the SPEC lacks, a line in an earlier
+#   coveredFlows records, which has none; when it records every SPEC flow, no
+#   last-phase task doc owes one. A line naming a flow the SPEC lacks, a line in an earlier
 #   phase's task doc, or a path other than the flow's expected path fails. The
 #   expected path is a web flow's <web package>/.playwright/flows/<slug>.spec.ts,
 #   or a command flow's test_path.

@@ -19,8 +19,9 @@
 # script runs Playwright for it, once, and only when the SPEC has a web flow.
 # --flow-tests-out writes one `flow_id<TAB>slug<TAB>kind<TAB>path` row per flow
 # whose test file exists. --plan-dir reads the plan's tests.json coveredFlows: a
-# recorded flow has no test file, so it is skipped, and an entry naming a row
-# the table lacks is a finding. Without --plan-dir every flow needs its file.
+# recorded flow has no test file, so it is skipped, and every problem the
+# covered-flows reader reports (an unreadable tests.json, a malformed entry, a
+# row the table lacks) is a finding. Without --plan-dir every flow needs its file.
 #
 # Every finding is one stdout line `flow-coverage: ...`, all of them in one run.
 # The web flow test lives in <frontend package>/.playwright/flows/<slug>.spec.ts.
@@ -130,8 +131,9 @@ if [ -n "$plan_directory" ]; then
   fi
   covered_status=0
   covered_output=$(node "$repository_directory/.gaia/scripts/test-design/test-table.mjs" covered-flows --plan-dir "$plan_directory" 2>&1) || covered_status=$?
-  # Exit 1 is a refused entry, reported as a finding below; anything else is
-  # the reader failing, so no recorded flow can be trusted.
+  # Exit 1 is a refused entry or an unreadable tests.json, reported as a
+  # finding below; anything else is the reader failing, so no recorded flow
+  # can be trusted.
   case "$covered_status" in
     0 | 1) ;;
     *)
