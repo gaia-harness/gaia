@@ -400,6 +400,7 @@
     ".gaia/scripts/test-design/security-rows-lost.mjs": "owned",
     ".gaia/scripts/test-design/skip-detect.mjs": "owned",
     ".gaia/scripts/test-design/table.mjs": "owned",
+    ".gaia/scripts/test-design/task-docs.mjs": "owned",
     ".gaia/scripts/test-design/test-table.mjs": "owned",
     ".gaia/scripts/test-drift-check.sh": "owned",
     ".gaia/scripts/test-shell.sh": "owned",
@@ -876,7 +877,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-15T07:43:25.951Z",
+  "generated": "2026-11-15T15:59:34.609Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

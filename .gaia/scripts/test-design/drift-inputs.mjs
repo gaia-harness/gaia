@@ -227,6 +227,14 @@ function readSide(file, text, where) {
   return {list, byName, duplicates, inspect: inspectorFor(file, text)};
 }
 
+export const existsAtHead = (root, file, committed = false) =>
+  committed
+    ? git(root, ['cat-file', '-e', `HEAD:${file}`]).status === 0
+    : existsSync(path.join(root, file));
+
+export const existsAtBase = (root, mergeBase, file) =>
+  git(root, ['cat-file', '-e', `${mergeBase}:${file}`]).status === 0;
+
 // Map of file -> {head, base} for every file named; `committed` reads the head
 // from HEAD instead of the working tree. A file absent on a side
 // reads as having no tests there. A planned file holding a repeated full name
