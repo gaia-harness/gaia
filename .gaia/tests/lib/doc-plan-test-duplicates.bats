@@ -4,11 +4,15 @@
 # test another test already proves.
 #
 # A model plans from planner.md, the SPEC audit's directive rule, Test
-# Layering and the Playwright rule. Without these clauses a plan turns a
-# markup directive into a real-server assertion, re-asserts page content in
-# the served-status check, writes one rule's case table at both the unit and
-# the route layer, and gives a happy path the flow test walks its own route
-# test. Each clause is pinned in the paragraph that carries it.
+# Layering, the test-table procedure and the Playwright rule, and the plan
+# audit's Test design lens checks the result. Without these clauses a plan
+# turns a markup directive into a real-server assertion, re-asserts page
+# content in the served-status check, writes one rule's case table at both
+# the unit and the route layer, leaves one of a rule's cases out of its table
+# (on a page's story or route test, or with the rule function's contract
+# unable to take the input that case varies), and gives a happy path the
+# flow test walks its own route test. Each clause is pinned in the paragraph
+# that carries it.
 #
 # Method: every check takes a root directory; each red twin removes or
 # reverts one clause in a scratch copy, proves the copy changed, and runs the same
@@ -22,12 +26,18 @@ setup() {
   AUDIT_REL=".claude/skills/gaia/references/spec/audit.md"
   LAYERING_REL=".claude/doctrine/testing.md"
   PLAYWRIGHT_REL="apps/web/.claude/rules/playwright.md"
+  TEST_TABLE_REL=".claude/skills/gaia/references/plan/test-table.md"
+  DECOMPOSITION_REL=".claude/skills/gaia/references/plan/decomposition-audit.md"
 
   MARKUP_PLANNER='A page-markup or accessibility directive constrains the code, and adds a real-server assertion only when the rendered HTML is itself the requirement'
   MARKUP_AUDIT='naming the page or component it applies to, written as the constraint the code meets'
   REFUSAL_LAYERING='asserting only the served status and any `Location` header, never page content a route test shows'
   TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer keeps one row per outcome'
   TWIN_LAYERING='with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
+  RULE_TABLE_PLANNER="Put every case of one transition, status or role rule in that rule's one case table"
+  RULE_INPUT_PLANNER="the rule function's frozen contract takes every input a case varies, never leaving one to the caller"
+  RULE_TABLE_LENS="whose one case table lacks a case its requirement states, the case sitting only on another layer's row"
+  RULE_INPUT_LENS="the rule function's contract not taking the input that case varies"
 }
 
 # ---------- helpers ----------
@@ -50,6 +60,8 @@ holds() {
 directive_para() { line_with "$1/$PLANNER_REL" 'Its `## Plan-time directives` section'; }
 audit_directive() { line_with "$1/$AUDIT_REL" '- **Plan-time directive** ('; }
 layering_rule() { line_with "$1/$LAYERING_REL" 'Give every transition, status or role rule'; }
+table_step() { line_with "$1/$TEST_TABLE_REL" "5. Pick each row's layer"; }
+lens_rule_table() { line_with "$1/$DECOMPOSITION_REL" '  - a transition, status or role rule whose one case table'; }
 layering_refusal() { line_with "$1/$LAYERING_REL" '**Served check.**'; }
 
 # ---------- checks ----------
@@ -67,6 +79,13 @@ check_one_case_table() {
   holds 'Test Layering rule paragraph' "$(layering_rule "$1")" "$TABLE_LAYERING" || return 1
 }
 
+check_rule_cases_in_one_table() {
+  holds 'test-table.md layer step' "$(table_step "$1")" "$RULE_TABLE_PLANNER" || return 1
+  holds 'test-table.md layer step' "$(table_step "$1")" "$RULE_INPUT_PLANNER" || return 1
+  holds 'Test design lens rule-table bullet' "$(lens_rule_table "$1")" "$RULE_TABLE_LENS" || return 1
+  holds 'Test design lens rule-table bullet' "$(lens_rule_table "$1")" "$RULE_INPUT_LENS" || return 1
+}
+
 check_happy_path_twin() {
   holds 'Test Layering flow paragraph' "$(line_with "$1/$LAYERING_REL" 'Name the closing flow test as the owner')" "$TWIN_LAYERING" || return 1
 }
@@ -77,7 +96,7 @@ mutated_tree() {
   local rel content mutated
   TREE="$BATS_TEST_TMPDIR/tree"
   rm -rf "$TREE"
-  for rel in "$PLANNER_REL" "$AUDIT_REL" "$LAYERING_REL" "$PLAYWRIGHT_REL"; do
+  for rel in "$PLANNER_REL" "$AUDIT_REL" "$LAYERING_REL" "$PLAYWRIGHT_REL" "$TEST_TABLE_REL" "$DECOMPOSITION_REL"; do
     mkdir -p "$TREE/$(dirname "$rel")"
     cp "$REPO_ROOT/$rel" "$TREE/$rel"
   done
@@ -130,6 +149,18 @@ green() {
 @test "red twin: dropping either one-table clause fails" {
   red check_one_case_table "$LAYERING_REL" "$TABLE_LAYERING" 'removed'
   red check_one_case_table "$LAYERING_REL" ' holding every case,' ','
+}
+
+@test "a plan keeps every case of a rule in its one table, and the plan audit flags a case left out" {
+  green check_rule_cases_in_one_table
+}
+
+@test "red twin: dropping any rule-table clause, or the lens bullet, fails" {
+  red check_rule_cases_in_one_table "$TEST_TABLE_REL" "$RULE_TABLE_PLANNER" 'removed'
+  red check_rule_cases_in_one_table "$TEST_TABLE_REL" "$RULE_INPUT_PLANNER" 'removed'
+  red check_rule_cases_in_one_table "$DECOMPOSITION_REL" "$RULE_TABLE_LENS" 'removed'
+  red check_rule_cases_in_one_table "$DECOMPOSITION_REL" "$RULE_INPUT_LENS" 'removed'
+  red check_rule_cases_in_one_table "$DECOMPOSITION_REL" '  - a transition, status or role rule whose one case table' '  - removed'
 }
 
 @test "a happy path the flow test walks and asserts names that flow test" {
