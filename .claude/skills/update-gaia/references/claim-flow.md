@@ -75,7 +75,7 @@ printf '%s\n' '<summary line>' '<summary line>' > <main checkout path>/.gaia/loc
 gh pr edit <CLAIM_PR> --body-file <main checkout path>/.gaia/local/cache/shared/update-gaia/run/pr-body.md
 ```
 
-When the edit succeeds, re-stamp the rewritten body, because the rewrite dropped the stamp:
+When the edit succeeds, stamp the rewritten body:
 
 ```bash
 bash .gaia/scripts/pr-body-stamp.sh write --pr <CLAIM_PR>

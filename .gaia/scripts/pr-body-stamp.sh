@@ -14,7 +14,8 @@
 # runs.
 #
 # Exit codes: 0 written or current; 1 check found the stamp stale (one reason
-# line on stdout); 2 usage; 3 gh could not read or edit the pull request.
+# line on stdout); 2 usage, or the stamp library could not be loaded; 3 gh
+# could not read or edit the pull request.
 #
 # Bash 3.2 compatible.
 set -u
