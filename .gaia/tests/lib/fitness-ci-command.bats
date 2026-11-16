@@ -31,7 +31,8 @@ setup_file() {
   # missing root, which would pass every red case vacuously). The line walks the
   # filesystem, so nothing else is read. The root CLAUDE.md names
   # `.claude/rules/`, and the line enforces dead paths, so that directory exists
-  # too, empty; the red twin would otherwise fail on it rather than pass.
+  # too, empty; the frontmatter red twin would otherwise fail on it rather than
+  # pass.
   minimal="$BATS_FILE_TMPDIR/minimal"
   mkdir -p "$minimal/.claude/rules"
   git -C "$repo_root" archive "$(git -C "$repo_root" write-tree)" -- CLAUDE.md .claude/skills/tdd/SKILL.md .claude/gaia-fitness.json | tar -x -C "$minimal"
