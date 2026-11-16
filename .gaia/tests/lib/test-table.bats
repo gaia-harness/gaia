@@ -107,6 +107,59 @@ expect_verify_refusal() {
   grep -qF 'requirement key flow:gamma has no row' <<<"$output"
 }
 
+@test "sole-rows lists exactly the rows whose removal verify refuses for a key with no row, coveredFlows included" {
+  write_verify_fixture
+  # T3 shares T2's key, so neither is alone on it, and T3 alone covers flow:gamma.
+  printf 'flow:gamma\n' >>"$KEYS"
+  mutate_table 't.rows.push({id: "T3", source: "success_criteria:0", case: "beta also refuses", file: "src/beta.test.ts", title: "beta also refuses", layer: "route", task: "task-two", action: "new", security: "none"}); t.coveredFlows = [{source: "flow:gamma", rows: ["T3"]}]'
+  printf -- '- Test: src/beta.test.ts \xe2\x80\xba beta also refuses\n' >>"$PLAN/task-two.md"
+  run_verify
+  [ "$status" -eq 0 ] || { echo "baseline: $output" >&2; return 1; }
+
+  run node "$TABLE_CLI" sole-rows --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$status" -eq 0 ] || { echo "sole-rows: $output" >&2; return 1; }
+  sole="$output"
+  [ "$sole" = "$(printf 'T1 flow:alpha\nT3 flow:gamma')" ] || { echo "sole-rows printed: $sole" >&2; return 1; }
+
+  cp -R "$PLAN" "$BATS_TEST_TMPDIR/pristine"
+  for pair in 'T1:alpha works' 'T2:beta refuses' 'T3:beta also refuses'; do
+    id="${pair%%:*}" title="${pair#*:}"
+    rm -rf "$PLAN" && cp -R "$BATS_TEST_TMPDIR/pristine" "$PLAN"
+    mutate_table "t.rows = t.rows.filter((row) => row.id !== '$id')"
+    for doc in "$PLAN"/task-*.md; do
+      grep -vF -- "› $title" "$doc" >"$doc.next" || true
+      mv "$doc.next" "$doc"
+    done
+    run_verify
+    if grep -q "^$id " <<<"$sole"; then
+      [ "$status" -eq 1 ] && grep -qF 'has no row' <<<"$output" ||
+        { echo "$id is sole but its removal gave $status: $output" >&2; return 1; }
+    else
+      [ "$status" -eq 0 ] || { echo "$id is not sole but its removal gave $status: $output" >&2; return 1; }
+    fi
+  done
+}
+
+@test "sole-rows run again after one of a key's two rows is removed lists the other" {
+  write_verify_fixture
+  mutate_table 't.rows.push({id: "T3", source: "success_criteria:0", case: "beta also refuses", file: "src/beta.test.ts", title: "beta also refuses", layer: "route", task: "task-two", action: "new", security: "none"})'
+  run node "$TABLE_CLI" sole-rows --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$output" = 'T1 flow:alpha' ] || { echo "before: $output" >&2; return 1; }
+  mutate_table "t.rows = t.rows.filter((row) => row.id !== 'T3')"
+  run node "$TABLE_CLI" sole-rows --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$output" = "$(printf 'T1 flow:alpha\nT2 success_criteria:0')" ] || { echo "after: $output" >&2; return 1; }
+}
+
+@test "sole-rows refuses a missing table or keys file" {
+  run node "$TABLE_CLI" sole-rows --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$status" -eq 1 ]
+  grep -qF 'tests.json is missing' <<<"$output"
+  write_verify_fixture
+  run node "$TABLE_CLI" sole-rows --plan-dir "$PLAN" --keys "$BATS_TEST_TMPDIR/absent.txt"
+  [ "$status" -eq 1 ]
+  grep -qF 'cannot read keys file' <<<"$output"
+}
+
 @test "verify refuses each malformed coveredFlows entry" {
   local record='printf "flow:gamma\n" >>"$KEYS"; mutate_table'
   expect_verify_refusal "$record 't.coveredFlows = {}'" 'coveredFlows is not an array'
