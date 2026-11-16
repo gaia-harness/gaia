@@ -327,10 +327,11 @@ _command_undecided() {
 # not security-class: severity and security come from that read, never from
 # the caller's file, so once the round is closed only fix is left. A fix also
 # vetoes the key from the next unit's start round (_veto_recorded_fix), and is
-# refused on a cross_remit, not security-class finding whose path the roster
-# gives to no member, since no review could satisfy that veto. A fixed
-# records a cross_remit, not security-class finding of the open round that the
-# main thread fixed, with no veto, since its member never reviews that file: it
+# refused on a cross_remit finding whose path the roster gives to no member,
+# since no review could satisfy that veto. A fixed records a cross_remit finding
+# of the open round that the main thread fixed, with no veto, since its member
+# never reviews that file; a security-class one only on such an unowned path,
+# where fixed is its one exit. It
 # is refused unless the finding's path differs between the open round's tree
 # (round-history) and HEAD's, and it stores the latest commit on HEAD touching
 # that path. A merge from main that touches the path also passes. Every row
@@ -346,7 +347,7 @@ _command_record_residual() {
     open_entries="$(_open_round_entries "$history")" || { _error "the evaluator could not read the open round's findings"; return 3; }
   fi
   [ "$DECISION" != fixed ] || fixing_commit="$(_fixed_commit "$history")"
-  [ "$DECISION" != fix ] || path_owned="$(_finding_path_owned)"
+  case "$DECISION" in fix | fixed) path_owned="$(_finding_path_owned)" ;; esac
   row="$(jq -c --arg decision "$DECISION" --argjson open "$open_entries" --argjson round "$latest" --arg commit "$fixing_commit" \
     --argjson path_owned "$path_owned" "$_SECURITY_CLASS_JQ"'
     def text($value): if ($value | type) == "string" and ($value | test("\\S")) then $value else "" end;
@@ -355,15 +356,15 @@ _command_record_residual() {
     if type == "object" and (.member | type) == "string" and (.finding_class | type) == "string"
        and (.path | type) == "string" and (.line | type) == "number"
        and ((($decision | IN("accept", "waive")) | not) or open_key(security_class | not))
-       and (($decision == "fix" and ($path_owned | not) and open_key(.cross_remit == true and (security_class | not))) | not)
-       and ($decision != "fixed" or ($commit != "" and open_key(.cross_remit == true and (security_class | not))))
+       and (($decision == "fix" and ($path_owned | not) and open_key(.cross_remit == true)) | not)
+       and ($decision != "fixed" or ($commit != "" and open_key(.cross_remit == true and ((security_class | not) or ($path_owned | not)))))
     then if $decision == "" then {source: "filing-replay", round: $round, member, finding_class, path, line,
            reason: (if (.failure_mode | type) == "string" then .failure_mode else "" end)}
          else {source: "human", decision: $decision, round: $round, member, finding_class, path, line,
                reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)}
            + (if $decision == "fixed" then {commit: $commit} else {} end) end
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
-    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix); a fix is refused on a cross_remit one that is not security-class when the roster gives its path to no member (no review could satisfy the veto): record --decision fixed once its path has changed since the open round's tree, else --decision waive; a fixed is refused on any other finding"; return 3; }
+    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix); a fix is refused on a cross_remit one when the roster gives its path to no member (no review could satisfy the veto): record --decision fixed once its path has changed since the open round's tree, else --decision waive (a security-class one has no waive: change its path first); a fixed is refused on any other finding, and on a security-class one whose path a member owns"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'

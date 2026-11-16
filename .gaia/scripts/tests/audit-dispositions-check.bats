@@ -1766,7 +1766,7 @@ with_f_txt_ownerless() {
   return "$command_status"
 }
 
-@test "needs-human: a fix decision is refused for a cross-remit finding no member owns unless it is security-class, recorded where one owns it, and concurrent fix decisions each keep their veto" {
+@test "needs-human: a fix decision is refused for a cross-remit finding no member owns, security-class included, recorded where one owns it, and concurrent fix decisions each keep their veto" {
   local cross cross_security line
   cross="$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true})')"
   cross_security="$(minor_rows f.txt 4 4 | jq -c 'map(. + {cross_remit: true, security: true})')"
@@ -1784,11 +1784,11 @@ with_f_txt_ownerless() {
   [ -e "$BATS_TEST_TMPDIR/first" ] || { echo "no writer reached the hold, so nothing was interleaved"; return 1; }
   [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 2 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
   with_f_txt_ownerless decide 4 fix
-  [ "$status" -eq 0 ] || { echo "a security-class cross-remit fix was refused: $status $output"; return 1; }
-  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 3 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  [ "$status" -eq 3 ] || { echo "a security-class cross-remit fix no member can review recorded: $status $output"; return 1; }
+  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 2 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
   decide 1 fix
   [ "$status" -eq 0 ] || { echo "a cross-remit fix on an owned path was refused: $status $output"; return 1; }
-  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 4 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 3 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
 }
 
 # member_digest <member> <tree>: the member's audit digest at that tree.
@@ -1864,6 +1864,18 @@ cross_remit_critical_fixed() {
   decide 1 fixed '{"reason":"reworded"}'
   [ "$status" -eq 3 ] || { echo "a security-class fixed recorded: $status $output"; return 1; }
   [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ]
+}
+
+@test "needs-human: a security-class cross-remit finding no member owns takes fixed, with no veto, once a commit changed its path" {
+  stop_rounds "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true, security: true})')"
+  with_f_txt_ownerless decide 1 fixed '{"reason":"reworded"}'
+  [ "$status" -eq 3 ] || { echo "a fixed on an unchanged path recorded: $status $output"; return 1; }
+  alf_set_line f.txt 1 "reworded"
+  alf_commit "reword f.txt" || return 1
+  with_f_txt_ownerless decide 1 fixed '{"reason":"reworded"}'
+  [ "$status" -eq 0 ] || { echo "a security-class fixed on an unowned path was refused: $status $output"; return 1; }
+  [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  jq -e -s 'length == 1 and .[0].decision == "fixed"' "$RUN_FOLDER/recorded-residuals.jsonl" >/dev/null
 }
 
 @test "needs-human: a key an earlier round accepted needs a new decision when the open round re-reports it security-class" {
