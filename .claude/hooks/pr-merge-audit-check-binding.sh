@@ -141,9 +141,12 @@ gate_command_names_the_record_pr() {
 # WHAT IT COSTS, since the comment this replaces treated the cost as decisive.
 # The predicate reaches the network through resolve_pr_record, which the
 # clearance path otherwise never does. That read is now lazy to the point of
-# first need, so a merge naming no pull request still decides entirely from
+# first need, so a merge naming no pull request decides this predicate from
 # local files; the prescribed `gh pr merge <N>` spelling does name one and pays
-# one memoized `gh pr view`. The reason that is affordable is that the command
+# one memoized `gh pr view`. An audited allow also reads the pull-request
+# record for the body stamp check (gate_require_body_stamp), so a bare merge
+# with every marker cleared pays that read too and is denied when the record
+# cannot be read. The reason that is affordable is that the command
 # being gated is itself an unbounded network round-trip: a permit issued
 # network-free is a permit for an operation that immediately makes its own
 # network calls, so keeping this path local moves a stall a few milliseconds

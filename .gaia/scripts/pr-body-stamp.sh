@@ -21,7 +21,10 @@ set -u
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../.claude/hooks/lib/pr-body-stamp.sh
-. "$script_directory/../../.claude/hooks/lib/pr-body-stamp.sh"
+. "$script_directory/../../.claude/hooks/lib/pr-body-stamp.sh" || {
+  printf 'pr-body-stamp.sh: cannot load the stamp library .claude/hooks/lib/pr-body-stamp.sh\n' >&2
+  exit 2
+}
 
 usage() {
   printf 'usage: pr-body-stamp.sh write|check [--pr <n>]\n' >&2

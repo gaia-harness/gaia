@@ -186,6 +186,18 @@ $(stamp_of "$HEAD_SHA")"
   [ "$status" -eq 2 ]
 }
 
+@test "a missing stamp library exits 2 and never edits the pull request" {
+  install_script_gh_stub "Summary.
+$(stamp_of "$OLD_SHA")"
+  local scratch="$BATS_TEST_TMPDIR/scratch-copy"
+  mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib"
+  cp "$STAMP_SCRIPT" "$scratch/.gaia/scripts/pr-body-stamp.sh"
+  run bash "$scratch/.gaia/scripts/pr-body-stamp.sh" write --pr 7
+  [ "$status" -eq 2 ]
+  grep -qF -- 'cannot load the stamp library' <<<"$output"
+  [ ! -e "$STUB_DIRECTORY/gh.log" ]
+}
+
 # --- the merge gate ----------------------------------------------------------
 
 gate_setup() {
