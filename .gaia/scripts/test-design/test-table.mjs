@@ -29,6 +29,7 @@ import {fileURLToPath} from 'node:url';
 
 import {
   coveredFlows,
+  instructionKeys,
   isSecurity,
   isTestPath,
   keysWithNoRow,
@@ -133,6 +134,11 @@ const verify = (args) => {
   failures.push(...covered.problems);
   for (const source of covered.sources) {
     if (!keySet.has(source)) failures.push(`coveredFlows cites unknown source ${source}`);
+  }
+  const recorded = instructionKeys(table);
+  failures.push(...recorded.problems);
+  for (const source of recorded.sources) {
+    if (!keySet.has(source)) failures.push(`instructionKeys cites unknown source ${source}`);
   }
   for (const key of keysWithNoRow(keys, table)) {
     failures.push(`requirement key ${key} has no row`);

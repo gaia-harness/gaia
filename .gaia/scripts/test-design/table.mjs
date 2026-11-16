@@ -40,8 +40,8 @@ export const REQUIRED_FIELDS = [
 const isNonEmptyString = (value) =>
   typeof value === 'string' && value.trim() !== '';
 
-// Returns {rows, coveredFlows}, or throws an Error whose message is one line naming why the
-// table is unusable.
+// Returns {rows, coveredFlows, instructionKeys}, or throws an Error whose
+// message is one line naming why the table is unusable.
 export const readTable = (path) => {
   let text;
   try {
@@ -62,7 +62,11 @@ export const readTable = (path) => {
   ) {
     throw new Error(`${path} has no "rows" array`);
   }
-  return {rows: parsed.rows, coveredFlows: parsed.coveredFlows};
+  return {
+    rows: parsed.rows,
+    coveredFlows: parsed.coveredFlows,
+    instructionKeys: parsed.instructionKeys,
+  };
 };
 
 // Returns a list of reasons the row is invalid; empty when it is valid.
@@ -167,6 +171,41 @@ export const coveredFlows = ({rows, coveredFlows: entries}) => {
   return {sources, problems};
 };
 
+// A scope boundary key that directs the builder rather than stating app
+// behavior has no test: an `instructionKeys` entry, {source: "<key>", reason:
+// "<what it directs>"}, records it in place of a row. Returns the sources of
+// the valid entries and every problem with them that the rows alone can show.
+export const instructionKeys = ({rows, instructionKeys: entries}) => {
+  if (entries === undefined) return {sources: [], problems: []};
+  if (!Array.isArray(entries)) {
+    return {sources: [], problems: ['instructionKeys is not an array']};
+  }
+  const problems = [];
+  const seen = new Set();
+  const sources = [];
+  entries.forEach((entry, index) => {
+    const source = entry && typeof entry === 'object' ? entry.source : undefined;
+    if (!isNonEmptyString(source)) {
+      problems.push(`instructionKeys entry #${index + 1}: source is not a key`);
+      return;
+    }
+    const before = problems.length;
+    if (seen.has(source)) problems.push(`instructionKeys names ${source} twice`);
+    seen.add(source);
+    if (!source.startsWith('scope_boundaries:')) {
+      problems.push(`instructionKeys ${source} is not a scope boundary key`);
+    }
+    if (!isNonEmptyString(entry.reason)) {
+      problems.push(`instructionKeys ${source} has no reason`);
+    }
+    for (const row of rows.filter((row) => row?.source === source)) {
+      problems.push(`row ${row.id} cites ${source}, which instructionKeys records as naming no behavior`);
+    }
+    if (problems.length === before) sources.push(source);
+  });
+  return {sources, problems};
+};
+
 // Every row problem a table can have on its own: invalid rows, duplicate ids,
 // and rows sharing one test without distinct caseKeys.
 export const tableProblems = (rows) => {
@@ -203,13 +242,14 @@ export const tableProblems = (rows) => {
   return problems;
 };
 
-// The requirement keys neither a row's source nor a valid coveredFlows entry
-// cites: verify refuses each one as a key with no row.
+// The requirement keys no row's source, valid coveredFlows entry or valid
+// instructionKeys entry cites: verify refuses each one as a key with no row.
 export const keysWithNoRow = (keys, table) => {
   const cited = new Set(
     table.rows.filter((row) => row && typeof row === 'object').map((row) => row.source),
   );
   for (const source of coveredFlows(table).sources) cited.add(source);
+  for (const source of instructionKeys(table).sources) cited.add(source);
   return keys.filter((key) => !cited.has(key));
 };
 
