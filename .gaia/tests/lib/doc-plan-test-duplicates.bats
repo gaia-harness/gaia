@@ -35,7 +35,7 @@ setup() {
   TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer keeps one row per outcome'
   TWIN_LAYERING='with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
   RULE_TABLE_PLANNER="Put every case of one transition, status or role rule in that rule's one case table"
-  RULE_INPUT_PLANNER="the rule function's frozen contract takes every input a case varies, never leaving one to the caller"
+  RULE_INPUT_PLANNER="the rule function's frozen contract takes every input a case varies"
   RULE_TABLE_LENS="whose one case table lacks a case its requirement states, the case sitting only on another layer's row"
   RULE_INPUT_LENS="the rule function's contract not taking the input that case varies"
 }
