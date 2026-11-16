@@ -140,6 +140,16 @@ expect_verify_refusal() {
   done
 }
 
+@test "sole-rows run again after one of a key's two rows is removed lists the other" {
+  write_verify_fixture
+  mutate_table 't.rows.push({id: "T3", source: "success_criteria:0", case: "beta also refuses", file: "src/beta.test.ts", title: "beta also refuses", layer: "route", task: "task-two", action: "new", security: "none"})'
+  run node "$TABLE_CLI" sole-rows --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$output" = 'T1 flow:alpha' ] || { echo "before: $output" >&2; return 1; }
+  mutate_table "t.rows = t.rows.filter((row) => row.id !== 'T3')"
+  run node "$TABLE_CLI" sole-rows --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$output" = "$(printf 'T1 flow:alpha\nT2 success_criteria:0')" ] || { echo "after: $output" >&2; return 1; }
+}
+
 @test "sole-rows refuses a missing table or keys file" {
   run node "$TABLE_CLI" sole-rows --plan-dir "$PLAN" --keys "$KEYS"
   [ "$status" -eq 1 ]
