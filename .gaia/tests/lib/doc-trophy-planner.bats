@@ -364,7 +364,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" '**Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" 'a flow observes an effect whose consequence a flow step asserts' || return 1
-  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals, and an offer an access rule gates, a link included), a forgery row (a redirect or callback target included)," || return 1
+  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals, and an offer an access rule gates, a link included, whatever requirement the row cites), a forgery row (a redirect or callback target included)," || return 1
   need "$doctrine" "Judge each case, not each row: a row is judged by its \`caseKey\` when it has one, by its title otherwise" || return 1
   need "$doctrine" "Two cases that share a test and carry different kinds" || return 1
   need "$doctrine" "each get their own row, keyed by \`caseKey\`" || return 1
@@ -379,7 +379,19 @@ check_lens_doctrine_rows() {
   need "$doctrine" "Judge such a row by what the existing test asserted, never by its changed form: once an access requirement sends signed-out visitors to sign-in, an existing check that a path answers 200 signed out is forbidden by it, so the change row moving that check to a public path is access." || return 1
   need "$table" "Judge that by what the existing test asserted, never by the changed test (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." || return 1
   need "$lens" "A change row is judged by what the existing test asserted, not its changed form (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." || return 1
-  need "$doctrine" "So is what a page offers an actor by an access rule (an action, form, link or navigation item shown only to those who may use it), at every layer that holds its cases." || return 1
+  need "$doctrine" "So is what a page offers an actor by an access rule (an action, form, link or navigation item shown only to those who may use it), at every layer that holds its cases, whatever requirement its row cites: a story of the actions one role sees in one status is access even when the row cites only a requirement stating their names." || return 1
+  need "$table" "A row asserting what a page offers or withholds by an access rule is access whatever requirement it cites." || return 1
+  need "$doctrine" "A plan row for a case table names each case it holds by its values (each role or relationship and status, each input), never by class (\`every role\`) or by sample (\`including an unknown tool\`): the plan audit and the security writer read the row, not the test." || return 1
+  need "$table" "- \`case\`: the case in words; a case-table row names each case by its values, never by class or sample (the doctrine's \`## What to test\`)." || return 1
+  need "$lens" "a case-table row whose \`case\` names its cases by class or sample (\`every role\`, \`including an unknown tool\`) instead of by value, the doctrine's \`## What to test\`: the fix lists each case's values from the requirements and the README contract;" || return 1
+  need "$doctrine" "- Test a stated mapping from a value the app reads (an API field, a stored or query value) to what the user sees (a stored \`status: 2\` shown as \`Shipped\`) with one case per value, at the layer the layer rule picks for the code that maps it: the route test of a loader or action that maps it, the unit test of a helper that meets the unit-test conditions, or, when a component maps it, itself or through a small helper it calls, one story per value given the raw value. A story given the mapped props never runs the mapping." || return 1
+  need "$lens" "a stated mapping from a value the app reads to what the user sees with a value that has no case at the layer the doctrine's \`## What to test\` picks for the code that maps it, such as a mapping only a story given the mapped props asserts: the fix adds the missing cases there;" || return 1
+  need "$table" "Give a stated value-to-display mapping one case per value at the layer the doctrine's \`## What to test\` picks for the code that maps it." || return 1
+  need "$lens" "(a test asserting the default API origin when none is planted, retired because a secret row proves the browser never takes the API origin, is secret)" || return 1
+  local planted_secret="A test that puts a value a secrets requirement keeps off a surface onto that surface and asserts code there uses it tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret (a browser test that reads a planted server-only API origin)."
+  need "$doctrine" "$planted_secret" || return 1
+  need "$table" "$planted_secret" || return 1
+  need "$lens" "$planted_secret" || return 1
   need "$doctrine" "has one case per action and each role or relationship, inside its set or out, and one per action and each status, inside its from-statuses or out" || return 1
   need "$doctrine" "Citing a requirement is not forbidding: a row that cites a security requirement only because that requirement's work deletes or rewrites the tested code (the home page's stories, retired when signed-out \`/\` redirects) keeps its existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
   need "$table" "A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
@@ -419,7 +431,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens flagging authorization refusals only fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals, and an offer an access rule gates, a link included),' ' an authorization refusal,'
+  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals, and an offer an access rule gates, a link included, whatever requirement the row cites),' ' an authorization refusal,'
 }
 
 @test "red twin: the test design lens duplicate check naming no surviving row fails" {
@@ -520,6 +532,58 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the doctrine leaving a role-gated link offer out of access fails" {
   red check_lens_doctrine_rows "$DOCTRINE_REL" 'by an access rule (an action, form, link or navigation item' 'by such a rule (an action, form, link or navigation item'
+}
+
+@test "red twin: the doctrine flagging an offer only when its row cites an access requirement fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" ', whatever requirement its row cites: a story' '. A story'
+}
+
+@test "red twin: the planner's table step leaving a literal-cited offer row unflagged fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" ' A row asserting what a page offers or withholds by an access rule is access whatever requirement it cites.' ''
+}
+
+@test "red twin: the test design lens flagging an offer only by the requirement it cites fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ', whatever requirement the row cites),' '),'
+}
+
+@test "red twin: the doctrine letting a case-table row name its cases by class fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'names each case it holds by its values' 'names the cases it holds'
+}
+
+@test "red twin: the planner's table step letting a case-table row name its cases by class fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" "; a case-table row names each case by its values, never by class or sample (the doctrine's \`## What to test\`)." '.'
+}
+
+@test "red twin: the test design lens dropping the class-or-sample case row check fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" "a case-table row whose \`case\` names its cases by class or sample" "a case-table row whose \`case\` names too few cases"
+}
+
+@test "red twin: the doctrine testing a value mapping only in a story fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'with one case per value, at the layer the layer rule picks for the code that maps it' 'in a story'
+}
+
+@test "red twin: the planner step dropping the value mapping layer fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" 'Give a stated value-to-display mapping one case per value at the layer the doctrine' 'Give a stated mapping one case'
+}
+
+@test "red twin: the test design lens losing the planted-origin gloss fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'a test asserting the default API origin when none is planted' 'a fallback test'
+}
+
+@test "red twin: the test design lens dropping the value mapping check fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" '  - a stated mapping from a value the app reads to what the user sees with a value' '  - a stated value'
+}
+
+@test "red twin: the doctrine reading a planted secret's retire as the rewrite carve-out fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret' 'tests code its work rewrites, so its retire or change row keeps its own kind'
+}
+
+@test "red twin: the planner's table step reading a planted secret's retire as the rewrite carve-out fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret' 'tests code its work rewrites, so its retire or change row keeps its own kind'
+}
+
+@test "red twin: the test design lens reading a planted secret's retire as the rewrite carve-out fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret' 'tests code its work rewrites, so its retire or change row keeps its own kind'
 }
 
 @test "red twin: the doctrine counting a set-stated rule's roles by their refusals only fails" {
