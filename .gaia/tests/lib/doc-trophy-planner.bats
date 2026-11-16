@@ -376,6 +376,9 @@ check_lens_doctrine_rows() {
   need "$doctrine" "So does a retire or change row made because a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it) forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." || return 1
   need "$table" "and one made because a security requirement in its \`source\` forbids what the existing test asserted carries that requirement's kind, whatever the test's own kind." || return 1
   need "$lens" "or made because a security requirement in its \`source\` forbids what the existing test asserted (then that requirement's kind, whatever the test's own kind)" || return 1
+  need "$doctrine" "Judge such a row by what the existing test asserted, never by its changed form: once an access requirement sends signed-out visitors to sign-in, an existing check that a path answers 200 signed out is forbidden by it, so the change row moving that check to a public path is access." || return 1
+  need "$table" "Judge that by what the existing test asserted, never by the changed test (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." || return 1
+  need "$lens" "A change row is judged by what the existing test asserted, not its changed form (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$lens" 'A stated literal or state stays on its story or route test even when a real-server row asserts the same one' || return 1
   need "$lens" "that row is trimmed to asserting the element carrying it is in the served HTML when the doctrine's \`## Served HTML\` makes that HTML the requirement, and dropped otherwise. A literal that is itself the served-HTML requirement by the doctrine's \`## Served HTML\` (a \`<title>\`, a meta description) stays on its real-server row, and a \`**Served check.**\` row the doctrine requires (served status and any \`Location\`) is never a duplicate of a route test" || return 1
@@ -495,6 +498,18 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the doctrine judging a server-only value's secrecy by the value fails" {
   red check_lens_doctrine_rows "$DOCTRINE_REL" ' A requirement that keeps a value server-only is a secrets requirement, whatever the value.' ''
+}
+
+@test "red twin: the doctrine judging a source-kind change row by its changed form fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " Judge such a row by what the existing test asserted, never by its changed form:" " Judge such a row by what the changed test asserts:"
+}
+
+@test "red twin: the planner's table step judging a source-kind row by the changed test fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" " Judge that by what the existing test asserted, never by the changed test (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." ''
+}
+
+@test "red twin: the test design lens judging a change row by its changed form fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" "A change row is judged by what the existing test asserted, not its changed form" "A change row is judged by its changed form"
 }
 
 @test "red twin: the doctrine's source-kind retire not counted as a security retire fails" {
