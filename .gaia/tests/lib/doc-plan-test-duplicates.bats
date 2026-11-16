@@ -34,14 +34,14 @@ setup() {
   REFUSAL_LAYERING='asserting only the served status and any `Location` header, never page content a route test shows'
   TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer keeps one row per outcome'
   TWIN_LAYERING='with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
-  WIRING_INPUT_LAYERING='the closing flow test walks and asserts, each row with an input clear of every boundary and exception the table cases.'
+  WIRING_INPUT_LAYERING='Each such row takes an input clear of every boundary and exception the table cases, unless only that case produces its outcome.'
   CASE_OWNER_LAYERING='A case belongs to the rule whose input it varies, whichever requirement states it and whatever effect it names'
   PAGE_EFFECT_PLANNER='a case another key states as a page effect included'
-  WIRING_INPUT_PLANNER='each row of that rule at another layer, one per outcome, takes an input clear of every boundary and exception the table cases'
+  WIRING_INPUT_PLANNER='Whatever layer holds the table, each row of that rule at another layer, one per outcome, takes an input clear of every boundary and exception the table cases, unless only that case produces its outcome'
   PAGE_EFFECT_LENS='(a case another requirement states as a page effect, such as an alert shown, included)'
-  REPEAT_LENS="or whose table's boundary or exception case another layer's row of that rule repeats"
+  REPEAT_LENS="or whose table's boundary or exception case another layer's row of that rule repeats though another case produces the same outcome"
   SERVED_ERROR_LAYERING='A real-server row for a served error status (a 404 for an unknown path or a missing record) asserts only the status and any `Location`'
-  SERVED_ERROR_ROUTE_LAYERING="Which route answers a path is shown by that route's own served check and route test (a signed-out request its guard redirects), never by a served heading."
+  SERVED_ERROR_ROUTE_LAYERING="Which route answers a path is shown by its route test and, for a guarded route, its served check (a signed-out request its guard redirects), never by a served heading."
   SERVED_ERROR_LENS="A real-server row for a served error status that also asserts its page's heading or other content is trimmed to the status and any \`Location\`, never dropped for it"
   RULE_TABLE_PLANNER="Put every case of one transition, status or role rule in that rule's one case table"
   RULE_INPUT_PLANNER="the rule function's frozen contract takes every input a case varies"
@@ -172,7 +172,7 @@ green() {
 @test "red twin: dropping either one-table clause fails" {
   red check_one_case_table "$LAYERING_REL" "$TABLE_LAYERING" 'removed'
   red check_one_case_table "$LAYERING_REL" ' holding every case,' ','
-  red check_one_case_table "$LAYERING_REL" "$WIRING_INPUT_LAYERING" 'the closing flow test walks and asserts.'
+  red check_one_case_table "$LAYERING_REL" " $WIRING_INPUT_LAYERING" ''
   red check_one_case_table "$LAYERING_REL" "$CASE_OWNER_LAYERING" 'removed'
 }
 
@@ -187,7 +187,7 @@ green() {
   red check_rule_cases_in_one_table "$DECOMPOSITION_REL" "$RULE_INPUT_LENS" 'removed'
   red check_rule_cases_in_one_table "$DECOMPOSITION_REL" '  - a transition, status or role rule whose one case table' '  - removed'
   red check_rule_cases_in_one_table "$TEST_TABLE_REL" ", $PAGE_EFFECT_PLANNER" ''
-  red check_rule_cases_in_one_table "$TEST_TABLE_REL" ", and $WIRING_INPUT_PLANNER" ''
+  red check_rule_cases_in_one_table "$TEST_TABLE_REL" " $WIRING_INPUT_PLANNER." ''
   red check_rule_cases_in_one_table "$DECOMPOSITION_REL" " $PAGE_EFFECT_LENS" ''
   red check_rule_cases_in_one_table "$DECOMPOSITION_REL" ", $REPEAT_LENS" ''
 }
