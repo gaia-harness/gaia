@@ -20,7 +20,6 @@ import {
   appendFileSync,
   existsSync,
   readFileSync,
-  readdirSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -30,10 +29,19 @@ import {fileURLToPath} from 'node:url';
 import {
   coveredFlows,
   isSecurity,
+  isTestPath,
   readTable,
-  TEST_FILE_SUFFIX,
   validateRow,
 } from './table.mjs';
+import {
+  DELETE_LINE,
+  deleteLines,
+  deletedPaths,
+  EXEMPT_LINE,
+  taskDocuments,
+  TEST_LINE,
+  TEST_PATH,
+} from './task-docs.mjs';
 
 const SIGNAL_HELPER = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -41,10 +49,6 @@ const SIGNAL_HELPER = path.join(
   'test-signals',
   'extract-test-signals.mjs',
 );
-
-const TEST_LINE = /^\s*[-*]\s+Test:\s+(.+?) › (.+?)\s*$/;
-const EXEMPT_LINE = /^\s*[-*]\s+(Test:|Flow test\b|Pin update:)/;
-const TEST_PATH = new RegExp(String.raw`[^\s\x60'"()<>]+\.${TEST_FILE_SUFFIX}\b`);
 
 const usage = () => {
   process.stderr.write(
@@ -135,15 +139,6 @@ const tableProblems = (rows) => {
   return problems;
 };
 
-const taskDocuments = (planDirectory) =>
-  readdirSync(planDirectory)
-    .filter((name) => /^task-.+\.md$/.test(name))
-    .sort()
-    .map((name) => ({
-      stem: name.replace(/\.md$/, ''),
-      lines: readFileSync(path.join(planDirectory, name), 'utf8').split('\n'),
-    }));
-
 const verify = (args) => {
   const options = parseOptions(args, ['--plan-dir', '--keys']);
   const planDirectory = options['plan-dir'];
@@ -189,6 +184,7 @@ const verify = (args) => {
   const declared = new Set();
   for (const document of documents) {
     document.lines.forEach((line, index) => {
+      if (DELETE_LINE.test(line)) return;
       const match = TEST_LINE.exec(line);
       if (match) {
         const [, file, title] = match;
@@ -208,6 +204,20 @@ const verify = (args) => {
         );
       }
     });
+  }
+  for (const {stem, index, file} of deleteLines(documents)) {
+    if (isTestPath(file)) {
+      failures.push(
+        `${stem} line ${index + 1}: Delete line names a test path; name the code under test instead`,
+      );
+    }
+  }
+  const deleted = deletedPaths(documents);
+  for (const row of usableRows) {
+    if (!Array.isArray(row.deletes)) continue;
+    for (const file of row.deletes.filter((path) => !deleted.has(path))) {
+      failures.push(`row ${row.id}: deletes ${file}, which no task doc's Delete line names`);
+    }
   }
   for (const row of usableRows) {
     if (typeof row.task !== 'string') continue;
@@ -238,27 +248,37 @@ const coveredFlowsCommand = (args) => {
   if (problems.length > 0) refuseAll(problems);
 };
 
+// A security retire row deletes its code only when the row is valid and every
+// `deletes` path is on a task doc's Delete line; anything less reads as kept
+// code, which only the maintainer retires.
+const deletesItsCode = (row, deleted) =>
+  validateRow(row).length === 0 &&
+  Array.isArray(row.deletes) &&
+  row.deletes.every((file) => deleted.has(file));
+
+// Holds each security retire row a plan approval does not cover: every one
+// under --auto, else each one whose code the plan keeps.
 const approve = (args) => {
   const options = parseOptions(args, ['--plan-dir'], ['--auto']);
   const files = planPaths(options['plan-dir']);
   if (existsSync(files.approved)) refuse('tests.approved.json already exists');
   if (!existsSync(files.table)) refuse('tests.json is missing');
   const table = loadTable(files.table);
-  if (options.auto) {
-    const held = [];
-    for (const row of table.rows) {
-      if (row.action === 'retire' && isSecurity(row)) {
-        row.held = 'auto-mode';
-        held.push(row.id);
-      }
-    }
-    if (held.length > 0) {
-      writeFileSync(
-        files.table,
-        serialize({...JSON.parse(readFileSync(files.table, 'utf8')), rows: table.rows}),
-      );
-      for (const id of held) process.stdout.write(`held ${id}\n`);
-    }
+  const deleted = deletedPaths(taskDocuments(options['plan-dir']));
+  const held = [];
+  for (const row of table.rows) {
+    if (row.action !== 'retire' || !isSecurity(row)) continue;
+    if (options.auto) row.held = 'auto-mode';
+    else if (!deletesItsCode(row, deleted)) row.held = 'kept-code';
+    else continue;
+    held.push(row.id);
+  }
+  if (held.length > 0) {
+    writeFileSync(
+      files.table,
+      serialize({...JSON.parse(readFileSync(files.table, 'utf8')), rows: table.rows}),
+    );
+    for (const id of held) process.stdout.write(`held ${id}\n`);
   }
   const bytes = readFileSync(files.table);
   writeFileSync(files.approved, bytes);
@@ -336,19 +356,20 @@ const amend = (args) => {
     );
   }
   // drift.mjs reports any change of an approved row's security value as
-  // flag-lost, so amend refuses the same predicate.
-  const changedKinds = approvedSecurity.filter((approvedRow) =>
-    next.some(
-      (row) =>
-        row.id === approvedRow.id &&
-        isSecurity(row) &&
-        row.security !== approvedRow.security,
-    ),
-  );
-  if (changedKinds.length > 0) {
-    refuse(
-      `security kind changed on ${changedKinds.map((row) => row.id).join(', ')}`,
+  // flag-lost, and securityCheck judges by the approved action, so amend
+  // refuses a change of either.
+  for (const [field, label] of [['security', 'kind'], ['action', 'action']]) {
+    const changed = approvedSecurity.filter((approvedRow) =>
+      next.some(
+        (row) =>
+          row.id === approvedRow.id &&
+          isSecurity(row) &&
+          row[field] !== approvedRow[field],
+      ),
     );
+    if (changed.length > 0) {
+      refuse(`security ${label} changed on ${changed.map((row) => row.id).join(', ')}`);
+    }
   }
   const keptKeys = new Set(next.filter(isSecurity).map((row) => row.source));
   const lostKeys = [

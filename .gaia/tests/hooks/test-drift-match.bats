@@ -159,6 +159,109 @@ expect_each_missing() {
   jq -e '[.matched[].row] == ["T1"] and .fixer == [] and .missing == []' <<<"$output" >/dev/null
 }
 
+# retire_deleted_code_fixture <keep|delete>: a security retire row whose
+# deletes path a Delete line names, approved unheld; the branch deletes the
+# test and, with delete, the code.
+retire_deleted_code_fixture() {
+  write_file src/a.ts 'export const a = 1;'
+  write_file src/a.test.ts "$(suite_file "$PLAIN_TEST")"
+  start_fixture
+  rm "$FIXTURE/src/a.test.ts"
+  [ "$1" = keep ] || rm "$FIXTURE/src/a.ts"
+  mkdir -p "$PLAN"
+  printf -- '- Delete: src/a.ts\n' >"$PLAN/task-one.md"
+  run approve_rows "[$(row T1 src/a.test.ts 'suite target' retire access ',"deletes":["src/a.ts"]')]"
+  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "approve held or failed: $output" >&2; return 1; }
+}
+
+@test "a retire row whose deletes path is still at head is held, so deleting its test leaves it missing" {
+  retire_deleted_code_fixture keep
+  classify
+  [ "$status" -eq 0 ]
+  jq -e '[.missing[].row] == ["T1"] and .matched == []' <<<"$output" >/dev/null || { echo "$output"; return 1; }
+}
+
+@test "a retire row whose deletes path is gone at head matches once its test is deleted" {
+  retire_deleted_code_fixture delete
+  classify
+  [ "$status" -eq 0 ]
+  jq -e '[.matched[].row] == ["T1"] and .missing == []' <<<"$output" >/dev/null || { echo "$output"; return 1; }
+}
+
+# security_retire_commit <deletes path> <keep|delete>: a security retire row
+# whose deletes path a Delete line names, approved; the branch deletes the test
+# (and with delete, src/a.ts) and commits. src/a.ts exists at the merge base.
+security_retire_commit() {
+  write_file src/a.ts 'export const a = 1;'
+  write_file src/a.test.ts "$(suite_file "$PLAIN_TEST")"
+  start_fixture
+  rm "$FIXTURE/src/a.test.ts"
+  [ "$2" = keep ] || rm "$FIXTURE/src/a.ts"
+  mkdir -p "$PLAN"
+  printf -- '- Delete: %s\n' "$1" >"$PLAN/task-one.md"
+  run approve_rows "[$(row T1 src/a.test.ts 'suite target' retire access ",\"deletes\":[\"$1\"]")]"
+  [ "$status" -eq 0 ] || { echo "approve failed: $output" >&2; return 1; }
+  git_fixture add -A
+  git_fixture commit -q -m branch
+}
+
+security_check() {
+  WORTHINESS_LEDGER_PATH="$BATS_TEST_TMPDIR/no-ledger.jsonl" run "$DRIFT_CHECK" security --root "$FIXTURE" --plan-dir "$PLAN" --base main
+}
+
+@test "the security check reads deletes from the approved row, so an amend replace cannot point it at gone code" {
+  security_retire_commit src/missing.ts delete
+  # The approved row deletes src/missing.ts, which never existed at the merge
+  # base (kept code); a replace row now names src/a.ts, which is really gone.
+  node -e '
+    const fs = require("node:fs");
+    const file = process.argv[1];
+    const table = JSON.parse(fs.readFileSync(file, "utf8"));
+    for (const row of table.rows) row.deletes = ["src/a.ts"];
+    fs.writeFileSync(file, JSON.stringify(table));
+  ' "$PLAN/tests.json"
+  security_check
+  [ "$status" -eq 1 ]
+  grep -qF 'uncovered T1 no-matching-test' <<<"$output"
+}
+
+@test "the security check reads held from the approved row, so an amend replace cannot lift the hold" {
+  write_file src/a.ts 'export const a = 1;'
+  write_file src/a.test.ts "$(suite_file "$PLAIN_TEST")"
+  start_fixture
+  rm "$FIXTURE/src/a.test.ts" "$FIXTURE/src/a.ts"
+  mkdir -p "$PLAN"
+  printf -- '- Delete: src/a.ts\n' >"$PLAN/task-one.md"
+  run approve_rows "[$(row T1 src/a.test.ts 'suite target' retire access ',"held":"kept-code"')]"
+  [ "$status" -eq 0 ] || { echo "approve failed: $output" >&2; return 1; }
+  # The approved row is held; a replace drops held and names the deleted code.
+  node -e '
+    const fs = require("node:fs");
+    const file = process.argv[1];
+    const table = JSON.parse(fs.readFileSync(file, "utf8"));
+    for (const row of table.rows) { delete row.held; row.deletes = ["src/a.ts"]; }
+    fs.writeFileSync(file, JSON.stringify(table));
+  ' "$PLAN/tests.json"
+  git_fixture add -A
+  git_fixture commit -q -m branch
+  security_check
+  [ "$status" -eq 1 ]
+  grep -qF 'uncovered T1 no-matching-test' <<<"$output"
+}
+
+@test "the security check counts a deletes path absent at the merge base as kept code" {
+  security_retire_commit src/typo.ts delete
+  security_check
+  [ "$status" -eq 1 ]
+  grep -qF 'uncovered T1 no-matching-test' <<<"$output"
+}
+
+@test "the security check passes a retire whose deletes path existed at the merge base and is gone at head" {
+  security_retire_commit src/a.ts delete
+  security_check
+  [ "$status" -eq 0 ] && [ -z "$output" ]
+}
+
 @test "a base test the branch deletes with no retire row is an unplanned delete, not evaluator work" {
   write_file src/a.test.ts "$(suite_file "$PLAIN_TEST
   test('gone', () => {
