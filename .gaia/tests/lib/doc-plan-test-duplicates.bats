@@ -37,7 +37,7 @@ setup() {
   WIRING_INPUT_LAYERING='the closing flow test walks and asserts, each row with an input clear of every boundary and exception the table cases.'
   CASE_OWNER_LAYERING='A case belongs to the rule whose input it varies, whichever requirement states it and whatever effect it names'
   PAGE_EFFECT_PLANNER='a case another key states as a page effect included'
-  WIRING_INPUT_PLANNER='a row of that rule at another layer takes one input per outcome, clear of every boundary and exception the table cases'
+  WIRING_INPUT_PLANNER='each row of that rule at another layer, one per outcome, takes an input clear of every boundary and exception the table cases'
   PAGE_EFFECT_LENS='(a case another requirement states as a page effect, such as an alert shown, included)'
   REPEAT_LENS="or whose table's boundary or exception case another layer's row of that rule repeats"
   SERVED_ERROR_LAYERING='A real-server row for a served error status (a 404 for an unknown path or a missing record) asserts only the status and any `Location`'
