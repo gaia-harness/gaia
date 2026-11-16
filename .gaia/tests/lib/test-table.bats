@@ -189,6 +189,7 @@ expect_verify_refusal() {
   expect_verify_refusal "$record 't.instructionKeys = {}'" 'instructionKeys is not an array'
   expect_verify_refusal "$record 't.instructionKeys = [{reason: \"x\"}]'" 'instructionKeys entry #1: source is not a key'
   expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:9\", reason: \"x\"}]'" 'instructionKeys cites unknown source scope_boundaries:never:9'
+  expect_verify_refusal "$record 't.instructionKeys = [{source: \"success_criteria:0\", reason: \"x\"}]; t.rows = t.rows.filter((row) => row.source !== \"success_criteria:0\")'" 'instructionKeys success_criteria:0 is not a scope boundary key'
   expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:0\", reason: \"x\"}, {source: \"scope_boundaries:never:0\", reason: \"y\"}]'" 'instructionKeys names scope_boundaries:never:0 twice'
   expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:0\", reason: \" \"}]'" 'instructionKeys scope_boundaries:never:0 has no reason'
   expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:0\"}]'" 'instructionKeys scope_boundaries:never:0 has no reason'
