@@ -13,7 +13,7 @@ export type Outcome = {exit: number; lines: string[]};
 
 export const LEGACY_PACKAGE_ROOT = 'frontend';
 
-export const LEGACY_PACKAGE_NAME = LEGACY_PACKAGE_ROOT;
+export const LEGACY_PACKAGE_NAME = 'frontend';
 
 export const NEW_PACKAGE_NAME = 'web';
 

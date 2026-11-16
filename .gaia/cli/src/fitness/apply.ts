@@ -47,10 +47,10 @@ export type ApplyResult =
   | {kind: 'usage'; reason: string};
 
 /** Returns the reason a target path may not be written, or undefined when it may. */
-export type SymlinkCheck = (root: string, target: string) => string | undefined;
+type SymlinkCheck = (root: string, target: string) => string | undefined;
 
 /** Repo-relative, forward-slash, normalized; undefined for an absolute, empty or climbing path. */
-export const normalizeTarget = (target: string): string | undefined => {
+const normalizeTarget = (target: string): string | undefined => {
   if (target === '' || target.includes('\\') || path.isAbsolute(target)) {
     return undefined;
   }
@@ -110,7 +110,7 @@ const vendorTargets = (root: string): string[] => {
  * component that is itself a symlink is refused, because the write replaces
  * the path rather than writing through it.
  */
-export const findSymlinkProblem: SymlinkCheck = (root, target) => {
+const findSymlinkProblem: SymlinkCheck = (root, target) => {
   const realRoot = realpathSync(root);
   const vendored = vendorTargets(root);
 

@@ -63,7 +63,7 @@
     "@axe-core/playwright": "4.14.0",
     "@babel/core": "8.1.0",
     "@faker-js/faker": "10.6.0",
-    "@gaia-harness/lint": "3.1.5",
+    "@gaia-harness/lint": "3.2.0",
     "@msw/data": "1.1.8",
     "@playwright/test": "1.65.0",
     "@react-router/dev": "8.5.1",
@@ -99,7 +99,7 @@
     "shadcn": "4.23.0",
     "storybook": "10.6.6",
     "storybook-react-i18next": "10.1.4",
-    "stylelint": "17.16.0",
+    "stylelint": "18.0.0",
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
@@ -111,6 +111,6 @@
     "workerDirectory": "public"
   },
   "engines": {
-    "node": ">=22.22.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   }
 }

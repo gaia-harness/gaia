@@ -27,7 +27,7 @@ export type Platform = 'darwin' | 'linux' | 'win32';
 
 export type WslKind = 'none' | 'wsl1' | 'wsl2';
 
-export const APT_INSTALL_COMMAND = 'sudo apt-get install bubblewrap socat';
+const APT_INSTALL_COMMAND = 'sudo apt-get install bubblewrap socat';
 const DNF_INSTALL_COMMAND = 'sudo dnf install bubblewrap socat';
 
 export const classifyCapability = (input: DetectionInput): DetectionResult => {

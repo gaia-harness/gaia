@@ -35,12 +35,7 @@ import {
 } from '../schemas/finding-class.js';
 import type {FindingClassVocabulary} from '../schemas/finding-class.js';
 
-export const RECURRENCE_THRESHOLD = 3;
-
-export type ClassInventoryEntry = {
-  distinct_pr_count: number;
-  finding_class: string;
-};
+const RECURRENCE_THRESHOLD = 3;
 
 export type ComputeTallyArgs = {
   /** True when a promoted rule already covers the class (drop it). */
@@ -61,24 +56,6 @@ export type ComputeTallyArgs = {
   windowDays: number;
 };
 
-// Severity ordering for the running max: critical > major > minor.
-export type Severity = 'critical' | 'major' | 'minor';
-
-export type TallyCandidate = {
-  area_tags: string[];
-  distinct_pr_count: number;
-  finding_class: string;
-  is_oracle: boolean;
-  pr_numbers: number[];
-  severity_max: Severity;
-};
-
-export type TallyFinding = {
-  area_tags: readonly string[];
-  finding_class: string;
-  severity: Severity;
-};
-
 export type TallyPrRecord = {
   findings: readonly TallyFinding[];
   pr_number: number;
@@ -96,10 +73,33 @@ export type TallyResult = {
   window_days: number;
 };
 
+type ClassInventoryEntry = {
+  distinct_pr_count: number;
+  finding_class: string;
+};
+
+// Severity ordering for the running max: critical > major > minor.
+type Severity = 'critical' | 'major' | 'minor';
+
+type TallyCandidate = {
+  area_tags: string[];
+  distinct_pr_count: number;
+  finding_class: string;
+  is_oracle: boolean;
+  pr_numbers: number[];
+  severity_max: Severity;
+};
+
+type TallyFinding = {
+  area_tags: readonly string[];
+  finding_class: string;
+  severity: Severity;
+};
+
 // The single classless recurrence signal (one stable key, cardinality one):
 // every `holistic/unclassified` finding in a PR collapses under this one
 // bucket regardless of how many there are.
-export type UnclassifiedSignal = {
+type UnclassifiedSignal = {
   area_tags: string[];
   distinct_pr_count: number;
   pr_numbers: number[];

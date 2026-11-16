@@ -43,11 +43,11 @@ const WIKILINK_PATTERN = /\[\[([^[\]]+)\]\]/gu;
 // a page linking to one has lost its target.
 const ARCHIVE_PREFIX = 'wiki/_archived/';
 
-/** One wikilink whose target matches no live wiki page. */
-export type BrokenLink = {line: number; path: string; target: string};
-
 /** The scan's result: the broken links plus how many cross-page links it examined. */
 export type BrokenLinkScan = {broken: BrokenLink[]; scannedLinkCount: number};
+
+/** One wikilink whose target matches no live wiki page. */
+type BrokenLink = {line: number; path: string; target: string};
 
 type RunOptions = {
   cwd?: string;

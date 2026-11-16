@@ -156,7 +156,7 @@ const PATH_PREFIXES = ['.gaia/', '.claude/', '.github/'] as const;
  *     This module has no inline-ignore channel, so the allowlist is the
  *     documented one.
  */
-export const PROSE_PATH_ALLOWLIST: ReadonlySet<string> = new Set([
+const PROSE_PATH_ALLOWLIST: ReadonlySet<string> = new Set([
   '.claude/agents/code-audit-frontend/cn.md',
   '.claude/agents/code-audit-frontend/conform.md',
   '.claude/agents/code-audit-frontend/form-components.md',

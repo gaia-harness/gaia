@@ -152,7 +152,7 @@ export const extractImports = (text: string): ImportReference[] => {
   return imports;
 };
 
-export type ReferenceBase = 'file-dir' | 'package' | 'root';
+type ReferenceBase = 'file-dir' | 'package' | 'root';
 
 const PACKAGE_FOLDER = /^(.+?)\/\.claude\/|^(.+)\/CLAUDE(?:\.local)?\.md$/;
 

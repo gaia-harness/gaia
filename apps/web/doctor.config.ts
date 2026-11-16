@@ -10,9 +10,8 @@
 
 export default {
   // Dead-code analysis (deslop: unused files/exports/deps) is owned by knip,
-  // which runs in CI alongside react-doctor and carries a curated
-  // `ignoreDependencies` list plus app/services|hooks|utils + test as entry
-  // points (see knip.config.ts). react-doctor's deslop pass re-flags that same
+  // with a curated `ignoreDependencies` list and the entry points in
+  // knip.config.ts. react-doctor's deslop pass re-flags that same
   // intentional template surface: scaffolding entry points the new-service
   // skill extends, documented public helpers, and template-only deps. Disable
   // the duplicate pass; knip remains the single dead-code authority.

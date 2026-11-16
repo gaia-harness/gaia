@@ -174,7 +174,7 @@ export const insertPropertiesEdit = (
 };
 
 /** The static name of an object literal property, when it has one. */
-export const propertyName = (
+const propertyName = (
   ts: Ts,
   property: ObjectLiteralElementLike
 ): string | undefined => {

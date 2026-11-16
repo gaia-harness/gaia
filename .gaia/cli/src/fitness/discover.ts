@@ -7,17 +7,17 @@ import {isInsideRoot} from './context.js';
 import {compareBytes, splitFrontmatter} from './markdown.js';
 import type {FileKind} from './types.js';
 
-export type DiscoveredFile = {
-  kinds: readonly FileKind[];
-  path: string;
-  text: string;
-};
-
 export type Discovery = {
   /** Every path found through git, or the walk outside git; excludes on-disk local files. */
   allTrackedPaths: ReadonlySet<string>;
   files: readonly DiscoveredFile[];
   inGit: boolean;
+};
+
+type DiscoveredFile = {
+  kinds: readonly FileKind[];
+  path: string;
+  text: string;
 };
 
 /** The depth a CLAUDE.md or CLAUDE.local.md is discovered at, counted in path segments. */
@@ -81,7 +81,7 @@ export const kindsOfPath = (relative: string): FileKind[] => {
  * agents. Broken frontmatter stays an agent, because Claude Code drops it
  * silently and the author meant one.
  */
-export const isAgentDocumentation = (text: string): boolean => {
+const isAgentDocumentation = (text: string): boolean => {
   const frontmatter = splitFrontmatter(text);
 
   if (frontmatter.error === 'no frontmatter') return true;

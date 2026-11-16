@@ -38,7 +38,7 @@ import path from 'node:path';
 
 export const STORE_RELATIVE_PATH = '.gaia/audit-residual-dismissals.jsonl';
 
-export const STORE_SCHEMA_VERSION = 'v1';
+const STORE_SCHEMA_VERSION = 'v1';
 
 export const DEFAULT_KEEP_WINDOW_DAYS = 14;
 

@@ -293,6 +293,9 @@ jobs:
         name: Lint
         run: pnpm -C .gaia/cli lint
       - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+        name: Knip
+        run: pnpm -C .gaia/cli knip
+      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
         name: Run Vitest tests
         run: pnpm -C .gaia/cli test --run
       # The region-marker conformance suite drives the real TypeScript parser

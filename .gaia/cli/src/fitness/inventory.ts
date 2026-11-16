@@ -11,7 +11,7 @@ import {INVENTORY_ONLY_RULES} from './rules/index.js';
 import {redactDeep} from './secrets.js';
 import type {Severity} from './types.js';
 
-export const STORE_NAMES = [
+const STORE_NAMES = [
   'memory',
   'user_agent_memory',
   'project_agent_memory',
@@ -20,14 +20,21 @@ export const STORE_NAMES = [
   'claude_md',
 ] as const;
 
-export type InventoryFile = {
+export type InventoryReport = {
+  findings: readonly InventoryFinding[];
+  stores: Readonly<
+    Record<StoreName, {count: number; files: readonly InventoryFile[]}>
+  >;
+};
+
+type InventoryFile = {
   lines: number;
   mtime: number;
   path: string;
   words: number;
 };
 
-export type InventoryFinding = {
+type InventoryFinding = {
   category: 'memory';
   file: string;
   line: number;
@@ -37,14 +44,7 @@ export type InventoryFinding = {
   severity: Severity;
 };
 
-export type InventoryReport = {
-  findings: readonly InventoryFinding[];
-  stores: Readonly<
-    Record<StoreName, {count: number; files: readonly InventoryFile[]}>
-  >;
-};
-
-export type StoreName = (typeof STORE_NAMES)[number];
+type StoreName = (typeof STORE_NAMES)[number];
 
 /** `CLAUDE.md` is looked for at most this many path segments below the root. */
 const CLAUDE_MD_MAX_DEPTH = 3;
@@ -302,7 +302,7 @@ const deadPathFindings = (
   );
 
 /** The six knowledge stores under `root`, plus the dead paths the memory store cites. */
-export const buildInventory = (root: string, home: string): InventoryReport => {
+const buildInventory = (root: string, home: string): InventoryReport => {
   const locations = locateStores(root, home);
   const describedByStore = Object.fromEntries(
     STORE_NAMES.map((name) => {

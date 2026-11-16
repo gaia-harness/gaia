@@ -47,7 +47,7 @@ export type AttributionCache = {
   schema: 'v3';
 };
 
-export type CachedPrAttribution = {
+type CachedPrAttribution = {
   attribution: AttributionResult;
   bodyDigest: string;
   headRefOid: string;
@@ -60,7 +60,7 @@ export type CachedPrAttribution = {
 export const attributionBodyDigest = (body: string): string =>
   createHash('sha256').update(body, 'utf8').digest('hex');
 
-export type CachedResolution = {
+type CachedResolution = {
   resolution: ResolutionKind;
   resolved_line_text: string;
 };

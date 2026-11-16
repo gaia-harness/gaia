@@ -38,15 +38,14 @@ export type GlobalToolRow = {
   tool: 'playwright-cli';
 };
 
-export type GlobalToolStatus =
-  'current' | 'not-installed' | 'outdated' | 'unknown';
-
 export type PlaywrightCliRowInput = {
   /** `null` means the binary is absent. */
   installedVersion: null | string;
   /** `null` means the npm lookup failed. */
   latestVersion: null | string;
 };
+
+type GlobalToolStatus = 'current' | 'not-installed' | 'outdated' | 'unknown';
 
 const STRICT_SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 

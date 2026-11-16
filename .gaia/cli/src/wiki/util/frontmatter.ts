@@ -21,7 +21,7 @@ const SCALAR_PATTERN = /^([\w-]+):(.*)$/u;
 
 export type Frontmatter = Record<string, FrontmatterValue>;
 
-export type FrontmatterValue = boolean | null | number | string | string[];
+type FrontmatterValue = boolean | null | number | string | string[];
 
 const stripQuotes = (raw: string): string => {
   if (raw.length < 2) return raw;

@@ -249,6 +249,7 @@ apps/web/test/eslint/require-css-escape.test.ts
 .gaia/cli/vitest.config.ts
 .gaia/cli/eslint.config.mjs
 .gaia/cli/prettier.config.mjs
+.gaia/cli/knip.config.ts
 .gaia/cli/.gitignore
 .gaia/cli/node_modules
 .gaia/cli/dist

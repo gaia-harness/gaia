@@ -4,18 +4,6 @@ import {stripFencedCode, stripInlineCode} from './markdown.js';
 import {isRuntimeArtifact} from './paths.js';
 import type {FileKind, ProjectFile} from './types.js';
 
-export type DepthViolation = {
-  file: string;
-  line: number;
-  target: string;
-};
-
-export type LinkEdge = {
-  from: string;
-  line: number;
-  to: string;
-};
-
 export type LinkGraph = {
   /** Level 1: files an entry links, plus siblings of a level 1 file that it links. */
   levelOne: ReadonlySet<string>;
@@ -32,6 +20,18 @@ export type LinkReference = {
   /** The skill prose names as the target's owner ("the tailwind skill's `x`"). */
   skill?: string;
   target: string;
+};
+
+type DepthViolation = {
+  file: string;
+  line: number;
+  target: string;
+};
+
+type LinkEdge = {
+  from: string;
+  line: number;
+  to: string;
 };
 
 const MARKDOWN_LINK = /\]\(<?([^)\s>]+)/g;
@@ -182,7 +182,7 @@ export const resolveLink = (
   return {status: outside ? 'outside' : 'dead'};
 };
 
-export const resolveLinkTarget = (
+const resolveLinkTarget = (
   context: RuleContext,
   fromFile: string,
   reference: LinkReference

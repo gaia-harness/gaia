@@ -161,7 +161,7 @@ export const validateExcludeText = (text: string): void => {
  * `validateExcludeText` below, which is the loud-rejection half of the same
  * fix: this escaping is defense-in-depth for any direct caller.
  */
-export const compileExcludeRegexStrings = (text: string): string[] =>
+const compileExcludeRegexStrings = (text: string): string[] =>
   parseExcludeLines(text).map((line) => `^${escapeRegExp(line)}(/|$)`);
 
 /**
@@ -280,9 +280,7 @@ export const listGitFiles = (cwd: string): string[] =>
     })
   );
 
-export const assertNoLocalBuildRecordTracked = (
-  tracked: readonly string[]
-): void => {
+const assertNoLocalBuildRecordTracked = (tracked: readonly string[]): void => {
   if (tracked.includes('.gaia/VERSION-dev')) {
     throw new Error(
       '.gaia/VERSION-dev is tracked: it records a local build in an adopter project, so the GAIA source must never track it (the release tarball is staged from tracked files)'

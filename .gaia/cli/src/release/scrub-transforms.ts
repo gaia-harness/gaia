@@ -33,7 +33,7 @@ import {runDerivedTitleCheck} from './scrub-title-check.js';
 
 // Marker strip
 
-export type MarkerStripResult = {
+type MarkerStripResult = {
   blocksStripped: number;
   filesTouched: readonly string[];
   unbalanced: readonly {

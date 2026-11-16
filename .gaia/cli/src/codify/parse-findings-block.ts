@@ -21,12 +21,6 @@
 const START_SENTINEL = '<!-- gaia-codify:findings:start -->';
 const END_SENTINEL = '<!-- gaia-codify:findings:end -->';
 
-export type ParsedFinding = {
-  area_tags: string[];
-  finding_class: string;
-  severity: 'critical' | 'major' | 'minor';
-};
-
 /**
  * A parsed block: the findings plus the producer that posted them. `auditor`
  * is read verbatim from the payload's `auditor` field when it is a non-empty
@@ -39,11 +33,17 @@ export type ParsedFindingsBlock = {
   findings: ParsedFinding[];
 };
 
+type ParsedFinding = {
+  area_tags: string[];
+  finding_class: string;
+  severity: 'critical' | 'major' | 'minor';
+};
+
 /**
  * The one accepted severity set. It is the one source and no test may
  * re-declare it.
  */
-export const SEVERITIES = new Set(['critical', 'major', 'minor']);
+const SEVERITIES = new Set(['critical', 'major', 'minor']);
 
 export type OnReject = (reason: RejectReason, detail: string) => void;
 

@@ -43,7 +43,7 @@ const isLostRace = (error: unknown): boolean =>
  * symlink to the main checkout's, and a move from there would rename state
  * concurrent sessions still read.
  */
-export const isMainCheckout = (cwd: string): boolean => {
+const isMainCheckout = (cwd: string): boolean => {
   try {
     return sameRealPath(resolveRepoRoot(cwd), resolveMainWorktreeRoot(cwd));
   } catch {

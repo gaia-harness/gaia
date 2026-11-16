@@ -12,7 +12,7 @@ import {parseRekeyArguments, runRekey} from './crossing-rekey.js';
 import {runRoster} from './crossing-roster.js';
 import type {Outcome} from './crossing-shared.js';
 
-export const HELP_TEXT = `Usage: gaia update crossing <verb>
+const HELP_TEXT = `Usage: gaia update crossing <verb>
 
   preflight                                   Checks the tree may cross; changes nothing.
   move                                        Moves the app and finishes the registry, descriptor, name and workspace edits.

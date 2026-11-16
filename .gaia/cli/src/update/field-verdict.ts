@@ -320,7 +320,7 @@ export const triplesWithDeferred = <TRoot>(
   return triples;
 };
 
-export const itemLabel = (item: VerdictItem): string => tripleId(item);
+const itemLabel = (item: VerdictItem): string => tripleId(item);
 
 const BUCKET_HEADINGS: readonly [keyof FieldMergeReport, string][] = [
   ['applied', 'Applied'],

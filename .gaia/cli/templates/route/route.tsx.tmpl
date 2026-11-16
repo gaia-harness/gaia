@@ -19,7 +19,7 @@
 });
 
 {{/hasLoaderNoI18n}}{{#hasAction}}export const action = async ({request}: Route.ActionArgs) => {
-  // TODO: implement action
+  // Read and act on the submitted form fields here.
   await request.formData();
 
   return {result: 'success'} as const;
