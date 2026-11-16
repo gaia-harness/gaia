@@ -257,7 +257,7 @@ The orchestrator posts the success status itself, last, once every one of these 
 <!-- gaia:maintainer-only:end -->
 - The last push has landed on the pull request's remote head.
 - When `<RUN_FOLDER>/recorded-residuals.jsonl` exists, the PR body carries the sections `bash .gaia/scripts/audit-dispositions-check.sh pr-sections --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` prints, written before the status posts, because a quick-clear unit or a bypass writes none. The rewrite is idempotent and is the one a veto uses.
-- The PR body's summary is still true. Read it against `git log <base>..HEAD` and the final diff; when a claim is false or a material change is missing, rewrite the summary with `gh pr edit <N> --body-file`, keeping the `Closes` lines and the sections the audit loop writes. Then run `bash .gaia/scripts/pr-body-stamp.sh write --pr <N>`, which records the head the body was checked against. `post-audit-status.sh` and the merge gate refuse a body whose stamp names another head, so every later HEAD move re-verifies and re-stamps along with the status re-post.
+- The PR body's summary is still true. Read it against `git log <base>..HEAD` and the final diff; when a claim is false or a material change is missing, rewrite the summary with `gh pr edit <N> --body-file`, keeping the `Closes` lines and the sections the audit loop writes. Then run `bash .gaia/scripts/pr-body-stamp.sh write --pr <N>`, which records the head the body was checked against. `post-audit-status.sh` and the merge gate refuse a body whose stamp names another head.
 
 ```bash
 bash .claude/hooks/post-audit-status.sh <current-member-marker>
