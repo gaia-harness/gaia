@@ -393,6 +393,7 @@ git add -A && git commit -F <commit-message-file> && git push -u origin <CODIFY_
 
 ```bash
 gh pr create --draft --title "<commit subject>" --body-file <pr-body-file>
+bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
 ```
 
 <!-- gaia:maintainer-only:start -->

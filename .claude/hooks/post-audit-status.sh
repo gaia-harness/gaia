@@ -579,6 +579,25 @@ elif [ "$post_state" = "success" ] && ! security_verdict="$(bash -u -o pipefail 
   exit 0
 fi
 
+# The PR body's head stamp, for the same auto-merge reason, fail-closed. With
+# no pull request resolved there is no body, and nothing for a merge to land.
+if [ "$post_state" = "success" ] && [ -n "$pr_view" ]; then
+  stamp_library="$_repository_root_directory/.claude/hooks/lib/pr-body-stamp.sh"
+  # shellcheck source=lib/pr-body-stamp.sh
+  if [ -z "$_repository_root_directory" ] || [ ! -f "$stamp_library" ] || ! . "$stamp_library"; then
+    emit_decline "PR body stamp check unavailable (.claude/hooks/lib/pr-body-stamp.sh)"
+    exit 0
+  fi
+  if ! pr_body="$( cd "$repo_root" && gh pr view --json body --jq .body 2>/dev/null )"; then
+    emit_decline "PR body unreadable; next step: gh auth status"
+    exit 0
+  fi
+  if ! stamp_reason="$(pr_body_stamp_verdict "$pr_body" "$head_sha")"; then
+    emit_decline "${stamp_reason}; next step: re-check the PR summary against the branch's commits and diff, then run .gaia/scripts/pr-body-stamp.sh write"
+    exit 0
+  fi
+fi
+
 # Description: three positional fields "<version> <frontend-digest>
 # <tree>". Every dispatched member's clearance is earned (there is no
 # carried provenance), so the shape is fixed: no branch, no CLI flag.

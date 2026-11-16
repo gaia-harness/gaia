@@ -248,6 +248,17 @@ case "$1" in
         exit 0
         ;;
     esac
+    # The body read: the body a case plants, else one stamped for the PR head.
+    case " $* " in
+      *" body "*)
+        if [ -f "$stub_directory/pr-body" ]; then
+          cat "$stub_directory/pr-body"
+        else
+          printf '<!-- gaia-pr-body-head: %s -->\n' "$(cat "$stub_directory/pr-head")"
+        fi
+        exit 0
+        ;;
+    esac
     pr_head="$(cat "$stub_directory/pr-head")"
     [ -n "$pr_head" ] || exit 1
     printf '%s\n' "$pr_head"
@@ -1010,5 +1021,28 @@ mutated_hook_mirror() {
   [ "$status" -eq 0 ]
   grep -qF -- "status: declined: Security-row merge gate" <<<"$output" || return 1
   grep -qF -- "T1: no-matching-test" <<<"$output" || return 1
+  assert_no_post
+}
+
+@test "success declines on a PR body whose stamp names an older head, naming the write command" {
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  printf 'Summary.\n<!-- gaia-pr-body-head: %040d -->\n' 0 > "$BATS_TEST_TMPDIR/pr-body"
+  marker=$(write_marker)
+  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
+  [ "$status" -eq 0 ]
+  grep -qF -- "status: declined: the PR body stamp is not for head" <<<"$output" || return 1
+  grep -qF -- "run .gaia/scripts/pr-body-stamp.sh write" <<<"$output" || return 1
+  assert_no_post
+}
+
+@test "success declines on a PR body with no stamp" {
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  printf 'Summary.\n' > "$BATS_TEST_TMPDIR/pr-body"
+  marker=$(write_marker)
+  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
+  [ "$status" -eq 0 ]
+  grep -qF -- "status: declined: the PR body carries no head stamp" <<<"$output" || return 1
   assert_no_post
 }

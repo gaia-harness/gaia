@@ -123,7 +123,7 @@ gh_environment_arguments() {
     "GH_STUB_BASE_TIP=$tip" \
     "GH_STUB_REPOSITORY=gaia-react/gaia" \
     "GH_STUB_STATUSES_JSON=${STATUSES_JSON:-[]}" \
-    "GH_STUB_PR_JSON=$(jq -n -c --arg head "$head" --argjson files "${files:-[]}" '{title: "feat: catch-up", number: 12, headRefOid: $head, files: $files}')"
+    "GH_STUB_PR_JSON=$(jq -n -c --arg head "$head" --argjson files "${files:-[]}" '{title: "feat: catch-up", number: 12, headRefOid: $head, files: $files, body: ("<!-- gaia-pr-body-head: " + $head + " -->")}')"
 }
 
 # run_gate [<hook path>] [<base tip>]: the merge gate on a `gh pr merge`

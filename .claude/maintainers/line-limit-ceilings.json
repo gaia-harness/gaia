@@ -9,7 +9,7 @@
     ".claude/hooks/lib/audit-scope.sh": 528,
     ".claude/hooks/lib/gaia-packages.sh": 469,
     ".claude/hooks/local-janitor.sh": 528,
-    ".claude/hooks/post-audit-status.sh": 663,
+    ".claude/hooks/post-audit-status.sh": 682,
     ".claude/hooks/provision-worktree.sh": 615,
     ".claude/hooks/workflow-doctrine-inject.sh": 586,
     ".gaia/cli/src/codify/compute-tally.ts": 427,
@@ -81,7 +81,7 @@
     ".gaia/statusline/gaia-statusline-right.sh": 637,
     ".github/forensics/parse-issue-body.sh": 404,
     ".github/workflows/audit-ci-tests.yml": 996,
-    ".github/workflows/cli-tests.yml": 489,
+    ".github/workflows/cli-tests.yml": 507,
     ".github/workflows/forensics-triage.yml": 891
   },
   "version": 1
