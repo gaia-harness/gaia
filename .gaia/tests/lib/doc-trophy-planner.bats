@@ -383,7 +383,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" "has one case per action and each role or relationship, inside its set or out, and one per action and each status, inside its from-statuses or out" || return 1
   need "$doctrine" "Citing a requirement is not forbidding: a row that cites a security requirement only because that requirement's work deletes or rewrites the tested code (the home page's stories, retired when signed-out \`/\` redirects) keeps its existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
   need "$table" "A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
-  need "$lens" "A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes" || return 1
+  need "$lens" "A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind (the home page's stories, when \`/\` stops being public), unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
   need "$doctrine" "Each role or relationship case takes a status inside the action's from-statuses, and each status case a role or relationship inside its set, so each case refuses or allows on its own dimension alone." || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$lens" 'A stated literal or state stays on its story or route test even when a real-server row asserts the same one' || return 1
@@ -535,7 +535,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens omitting the subsumed-retire exception fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" ", unless it is a retire that a flagged row from the same \`source\` subsumes (the home page's stories" " (the home page's stories"
+  red check_lens_doctrine_rows "$AUDIT_REL" ", unless it is a retire that a flagged row from the same \`source\` subsumes." "."
 }
 
 @test "red twin: the doctrine flagging a retire by the requirement it cites fails" {
@@ -547,7 +547,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens flagging a retire that only follows deleted code fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" " A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes (the home page's stories, when \`/\` stops being public)." ''
+  red check_lens_doctrine_rows "$AUDIT_REL" " A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind (the home page's stories, when \`/\` stops being public), unless it is a retire that a flagged row from the same \`source\` subsumes." ''
 }
 
 @test "red twin: the doctrine's source-kind retire not counted as a security retire fails" {
