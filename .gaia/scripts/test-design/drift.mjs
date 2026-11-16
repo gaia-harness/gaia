@@ -27,6 +27,8 @@ import {fileURLToPath} from 'node:url';
 
 import {
   DriftRefusal,
+  existsAtBase,
+  existsAtHead,
   hasMarker,
   isTestPath,
   latestVerdicts,
@@ -52,8 +54,9 @@ const authoredBySecurityWriter = (ledger, row, test) =>
   );
 
 // {matched, head, base}: the row's test at head and at base, and whether the
-// row holds by its action.
-function evaluateRow(row, sides, ledger) {
+// row holds by its action. A retire row in `keptCode` is held: it claimed to
+// delete code that head still has, so its test must stay.
+function evaluateRow(row, sides, ledger, keptCode) {
   const {head, base} = sides.get(row.file);
   const headTest = head.byName.get(row.title);
   const baseTest = base.byName.get(row.title);
@@ -73,7 +76,7 @@ function evaluateRow(row, sides, ledger) {
       matched = counts(head, headTest, row) && !!baseTest && headTest.signal !== baseTest.signal;
       break;
     default:
-      matched = row.held ? !!headTest : !headTest;
+      matched = row.held || keptCode.has(row.id) ? !!headTest : !headTest;
   }
   if (matched && isSecurity(row) && row.action !== 'retire') {
     matched = authoredBySecurityWriter(ledger, row, headTest);
@@ -81,21 +84,38 @@ function evaluateRow(row, sides, ledger) {
   return {matched, head: headTest, base: baseTest};
 }
 
-function readPlanAndFiles({root, planDir, base, files, committed = false}) {
+// `approvedKeptCode` picks the rows whose `deletes` decide kept code: the current
+// table's for classify, the approved copy's for the merge-gate security check
+// so an amend cannot rewrite `deletes` or `held` away.
+function readPlanAndFiles({root, planDir, base, files, committed = false, approvedKeptCode = false}) {
   const plan = loadPlan(planDir);
   const mergeBase = mergeBaseOf(root, base);
   const plannedFiles = new Set(plan.rows.map((row) => row.file));
   const sides = readFiles(root, mergeBase, new Set([...files, ...plannedFiles]), plannedFiles, committed);
-  return {plan, sides};
+  // A deletes path is deleted code only when it existed at the merge base and
+  // is gone at head; a path absent at base never held code, so it reads as kept.
+  const keptCode = new Set(
+    (approvedKeptCode ? plan.approvedRows : plan.rows)
+      .filter(
+        (row) =>
+          row.action === 'retire' &&
+          Array.isArray(row.deletes) &&
+          row.deletes.some(
+            (file) => existsAtHead(root, file, committed) || !existsAtBase(root, mergeBase, file),
+          ),
+      )
+      .map((row) => row.id),
+  );
+  return {plan, sides, keptCode};
 }
 
 // The drift JSON for a marked plan.
 export function classify({root, planDir, base, changedPaths}) {
   const touched = [...new Set(changedPaths.filter(isTestPath))].sort();
-  const {plan, sides} = readPlanAndFiles({root, planDir, base, files: touched});
+  const {plan, sides, keptCode} = readPlanAndFiles({root, planDir, base, files: touched});
   const {rows, approvedRows, ledger} = plan;
 
-  const results = new Map(rows.map((row) => [row.id, evaluateRow(row, sides, ledger)]));
+  const results = new Map(rows.map((row) => [row.id, evaluateRow(row, sides, ledger, keptCode)]));
   const matchedRows = rows.filter((row) => results.get(row.id).matched);
   let missingRows = rows.filter((row) => !results.get(row.id).matched);
 
@@ -206,7 +226,14 @@ export function classify({root, planDir, base, changedPaths}) {
 // an empty list for a plan with no TEST-DESIGN marker.
 export function securityCheck({root, planDir, base, ledgerPath}) {
   if (!hasMarker(planDir)) return [];
-  const {plan, sides} = readPlanAndFiles({root, planDir, base, files: [], committed: true});
+  const {plan, sides, keptCode} = readPlanAndFiles({
+    root,
+    planDir,
+    base,
+    files: [],
+    committed: true,
+    approvedKeptCode: true,
+  });
   const latestVerdict = latestVerdicts(ledgerPath);
   const uncovered = [];
   for (const approved of plan.approvedRows.filter(isSecurity)) {
@@ -215,7 +242,10 @@ export function securityCheck({root, planDir, base, ledgerPath}) {
     if (!current) reason = 'missing-from-table';
     else if (current.security !== approved.security) reason = 'flag-lost';
     else {
-      const {matched, head} = evaluateRow(current, sides, plan.ledger);
+      // action and held come from the approved row: an amend replace cannot
+      // turn a retire into a covered row or lift the hold.
+      const judged = {...current, action: approved.action, held: approved.held};
+      const {matched, head} = evaluateRow(judged, sides, plan.ledger, keptCode);
       if (!matched) reason = 'no-matching-test';
       else if (head && latestVerdict({file: current.file, title: current.title, signal: head.signal}) === 'fix') {
         reason = 'hollow';
