@@ -141,7 +141,7 @@ resolve_pr_record() {
 
 # gate_require_body_stamp: deny unless the PR body's head stamp names the head
 # GitHub records (.claude/hooks/lib/pr-body-stamp.sh). Called on the audited
-# allows only: a bypass allow merges a body its run wrote at the end. Loaded
+# allows only; a bypass allow is not held to it. Loaded
 # here rather than with the libraries the parent loads because only those
 # allows read it; a missing copy denies all the same.
 gate_require_body_stamp() {
