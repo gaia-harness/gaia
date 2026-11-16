@@ -4,6 +4,7 @@
 //   test-table.mjs verify --plan-dir <dir> --keys <file>
 //   test-table.mjs covered-flows --plan-dir <dir>
 //   test-table.mjs sole-rows --plan-dir <dir> --keys <file>
+//   test-table.mjs flag-candidates --plan-dir <dir>
 //   test-table.mjs approve --plan-dir <dir> [--auto]
 //   test-table.mjs record-security --plan-dir <dir> --root <tree> --row <id>
 //   test-table.mjs amend --plan-dir <dir> --root <tree> --changes <file>
@@ -29,6 +30,7 @@ import {fileURLToPath} from 'node:url';
 
 import {
   coveredFlows,
+  flagCandidates,
   instructionKeys,
   isSecurity,
   isTestPath,
@@ -57,7 +59,7 @@ const SIGNAL_HELPER = path.join(
 
 const usage = () => {
   process.stderr.write(
-    'usage: test-table.mjs verify --plan-dir <dir> --keys <file> | covered-flows --plan-dir <dir> | sole-rows --plan-dir <dir> --keys <file> | approve --plan-dir <dir> [--auto] | record-security --plan-dir <dir> --root <tree> --row <id> | amend --plan-dir <dir> --root <tree> --changes <file>\n',
+    'usage: test-table.mjs verify --plan-dir <dir> --keys <file> | covered-flows --plan-dir <dir> | sole-rows --plan-dir <dir> --keys <file> | flag-candidates --plan-dir <dir> | approve --plan-dir <dir> [--auto] | record-security --plan-dir <dir> --root <tree> --row <id> | amend --plan-dir <dir> --root <tree> --changes <file>\n',
   );
   process.exit(2);
 };
@@ -217,6 +219,17 @@ const soleRows = (args) => {
   }
 };
 
+// Prints `<id> <kind>...` for each row flagCandidates reports, so the plan
+// audit's Applied rows check judges each one's flag.
+const flagCandidatesCommand = (args) => {
+  const options = parseOptions(args, ['--plan-dir']);
+  const files = planPaths(options['plan-dir']);
+  if (!existsSync(files.table)) refuse('tests.json is missing');
+  for (const {id, kinds} of flagCandidates(loadTable(files.table))) {
+    process.stdout.write(`${id} ${kinds.join(' ')}\n`);
+  }
+};
+
 // Prints the source of each valid coveredFlows entry for the shell gates; a
 // plan with no tests.json records none. Any problem exits 1 after the valid
 // sources print, so a caller treats the broken entry as unrecorded.
@@ -372,6 +385,7 @@ const commands = {
   verify,
   'covered-flows': coveredFlowsCommand,
   'sole-rows': soleRows,
+  'flag-candidates': flagCandidatesCommand,
   approve,
   'record-security': recordSecurity,
   amend,

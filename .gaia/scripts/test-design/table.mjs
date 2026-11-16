@@ -253,6 +253,31 @@ export const keysWithNoRow = (keys, table) => {
   return keys.filter((key) => !cited.has(key));
 };
 
+// Each unflagged retire or change row sharing `file` and `source` with a
+// flagged row, with the kinds those rows carry. A candidate, not a verdict:
+// one requirement can hold security and non-security parts in one file, so the
+// plan audit judges each one.
+export const flagCandidates = ({rows}) => {
+  const objectRows = rows.filter((row) => row && typeof row === 'object');
+  const flagged = objectRows.filter(isSecurity);
+  return objectRows
+    .filter(
+      (row) =>
+        (row.action === 'retire' || row.action === 'change') && !isSecurity(row),
+    )
+    .map((row) => ({
+      id: row.id,
+      kinds: [
+        ...new Set(
+          flagged
+            .filter((other) => other.file === row.file && other.source === row.source)
+            .map((other) => other.security),
+        ),
+      ].sort(),
+    }))
+    .filter((entry) => entry.kinds.length > 0);
+};
+
 // Each row whose removal alone would add a key to keysWithNoRow, with those
 // keys: verify would refuse the plan without it.
 export const soleRowKeys = (keys, table) => {

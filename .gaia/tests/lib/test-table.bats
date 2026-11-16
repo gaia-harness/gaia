@@ -160,6 +160,35 @@ expect_verify_refusal() {
   grep -qF 'cannot read keys file' <<<"$output"
 }
 
+@test "flag-candidates lists an unflagged retire or change row that shares file and source with a flagged row" {
+  write_verify_fixture
+  # T2 is access on src/beta.test.ts for success_criteria:0. Listed: T3 retire
+  # and T4 change, unflagged, same file and source. Not listed: T5 another
+  # source, T6 already flagged, T7 a new row, T8 another file.
+  mutate_table '
+    const row = (id, extra) => ({id, source: "success_criteria:0", case: id, file: "src/beta.test.ts", title: id, layer: "route", task: "task-two", action: "retire", security: "none", ...extra});
+    t.rows.push(
+      row("T3"),
+      row("T4", {action: "change"}),
+      row("T5", {source: "flow:alpha"}),
+      row("T6", {security: "secret"}),
+      row("T7", {action: "new"}),
+      row("T8", {file: "src/other.test.ts"}),
+    )'
+  run node "$TABLE_CLI" flag-candidates --plan-dir "$PLAN"
+  [ "$status" -eq 0 ] || { echo "flag-candidates: $output" >&2; return 1; }
+  [ "$output" = "$(printf 'T3 access secret\nT4 access secret')" ] || { echo "printed: $output" >&2; return 1; }
+}
+
+@test "flag-candidates prints nothing for a table with no such row and refuses a missing table" {
+  run node "$TABLE_CLI" flag-candidates --plan-dir "$PLAN"
+  [ "$status" -eq 1 ]
+  grep -qF 'tests.json is missing' <<<"$output"
+  write_verify_fixture
+  run node "$TABLE_CLI" flag-candidates --plan-dir "$PLAN"
+  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "$status: $output" >&2; return 1; }
+}
+
 @test "verify refuses each malformed coveredFlows entry" {
   local record='printf "flow:gamma\n" >>"$KEYS"; mutate_table'
   expect_verify_refusal "$record 't.coveredFlows = {}'" 'coveredFlows is not an array'
