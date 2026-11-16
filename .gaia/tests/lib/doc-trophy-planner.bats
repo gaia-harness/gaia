@@ -490,7 +490,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the doctrine flagging a retire by source citation alone fails" {
-  red check_lens_doctrine_rows "$DOCTRINE_REL" " made because a security requirement in its \`source\`" " whose \`source\` is a security requirement"
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " made because a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it) forbids what the existing test asserted," " with a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it),"
 }
 
 @test "red twin: the doctrine judging a server-only value's secrecy by the value fails" {
