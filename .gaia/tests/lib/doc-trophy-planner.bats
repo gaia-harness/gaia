@@ -364,7 +364,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" '**Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" 'a flow observes an effect whose consequence a flow step asserts' || return 1
-  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals included), a forgery row (a redirect or callback target included)," || return 1
+  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals, and an offer an access rule gates, a link included), a forgery row (a redirect or callback target included)," || return 1
   need "$doctrine" "Judge each case, not each row: a row is judged by its \`caseKey\` when it has one, by its title otherwise" || return 1
   need "$doctrine" "Two cases that share a test and carry different kinds" || return 1
   need "$doctrine" "each get their own row, keyed by \`caseKey\`" || return 1
@@ -379,6 +379,12 @@ check_lens_doctrine_rows() {
   need "$doctrine" "Judge such a row by what the existing test asserted, never by its changed form: once an access requirement sends signed-out visitors to sign-in, an existing check that a path answers 200 signed out is forbidden by it, so the change row moving that check to a public path is access." || return 1
   need "$table" "Judge that by what the existing test asserted, never by the changed test (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." || return 1
   need "$lens" "A change row is judged by what the existing test asserted, not its changed form (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." || return 1
+  need "$doctrine" "So is what a page offers an actor by an access rule (an action, form, link or navigation item shown only to those who may use it), at every layer that holds its cases." || return 1
+  need "$doctrine" "has one case per action and each role or relationship, inside its set or out, and one per action and each status, inside its from-statuses or out" || return 1
+  need "$doctrine" "Citing a requirement is not forbidding: a row that cites a security requirement only because that requirement's work deletes or rewrites the tested code (the home page's stories, retired when signed-out \`/\` redirects) keeps its existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
+  need "$table" "A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
+  need "$lens" "A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind (the home page's stories, when \`/\` stops being public), unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
+  need "$doctrine" "Each role or relationship case takes a status inside the action's from-statuses, and each status case a role or relationship inside its set, so each case refuses or allows on its own dimension alone." || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$lens" 'A stated literal or state stays on its story or route test even when a real-server row asserts the same one' || return 1
   need "$lens" "that row is trimmed to asserting the element carrying it is in the served HTML when the doctrine's \`## Served HTML\` makes that HTML the requirement, and dropped otherwise. A literal that is itself the served-HTML requirement by the doctrine's \`## Served HTML\` (a \`<title>\`, a meta description) stays on its real-server row, and a \`**Served check.**\` row the doctrine requires (served status and any \`Location\`) is never a duplicate of a route test" || return 1
@@ -413,7 +419,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens flagging authorization refusals only fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals included),' ' an authorization refusal,'
+  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals, and an offer an access rule gates, a link included),' ' an authorization refusal,'
 }
 
 @test "red twin: the test design lens duplicate check naming no surviving row fails" {
@@ -510,6 +516,38 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the test design lens judging a change row by its changed form fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" "A change row is judged by what the existing test asserted, not its changed form" "A change row is judged by its changed form"
+}
+
+@test "red twin: the doctrine leaving a role-gated link offer out of access fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'by an access rule (an action, form, link or navigation item' 'by such a rule (an action, form, link or navigation item'
+}
+
+@test "red twin: the doctrine counting a set-stated rule's roles by their refusals only fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'each role or relationship, inside its set or out,' 'each role or relationship outside its set,'
+}
+
+@test "red twin: the doctrine counting a set-stated rule's statuses by their refusals only fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'each status, inside its from-statuses or out,' 'each status outside its from-statuses,'
+}
+
+@test "red twin: the doctrine leaving set-stated cases free to vary the other dimension fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " Each role or relationship case takes a status inside the action's from-statuses, and each status case a role or relationship inside its set, so each case refuses or allows on its own dimension alone." ''
+}
+
+@test "red twin: the test design lens omitting the subsumed-retire exception fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ", unless it is a retire that a flagged row from the same \`source\` subsumes." "."
+}
+
+@test "red twin: the doctrine flagging a retire by the requirement it cites fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "(the home page's stories, retired when signed-out \`/\` redirects) keeps its existing test's own kind" "(the home page's stories, retired when signed-out \`/\` redirects) carries that requirement's kind"
+}
+
+@test "red twin: the planner's table step flagging a retire by the requirement it cites fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" " A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." ''
+}
+
+@test "red twin: the test design lens flagging a retire that only follows deleted code fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" " A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind (the home page's stories, when \`/\` stops being public), unless it is a retire that a flagged row from the same \`source\` subsumes." ''
 }
 
 @test "red twin: the doctrine's source-kind retire not counted as a security retire fails" {
