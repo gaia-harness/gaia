@@ -78,10 +78,8 @@ for (const [key, rows] of snapshotPairs) {
   const keylessCount = rows.filter((candidate) => !candidate.caseKey).length;
   const lostIds = [];
   for (const row of unmatched) {
-    // An id is planner-assigned and a regeneration renumbers it, so a same-id
-    // row is a reword only when it keeps the snapshot row's file and title and
-    // still carries a caseKey, and only while each keyless snapshot row keeps
-    // an after row of its own.
+    // An id is planner-assigned and a regeneration renumbers it, so a shared id
+    // alone does not prove the same test.
     const match =
       available.length > keylessCount
         ? available.findIndex(
