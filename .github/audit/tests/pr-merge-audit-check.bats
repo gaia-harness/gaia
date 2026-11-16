@@ -132,8 +132,10 @@ case "$args" in
     # The hook reads the record once, both fields in one call. The title is
     # always empty, so the chore(deps) bypass never fires; the base ref is
     # empty unless a test declared one, which makes the hook fall back to the
-    # remote's advertised default exactly as it does with no PR at all.
-    jq -n --arg base_reference "$(cat "$base_reference_file")" '{title:"", baseRefName:$base_reference, number:12}'
+    # remote's advertised default exactly as it does with no PR at all. The
+    # head is the sandbox HEAD the hook runs in, with a body stamped for it.
+    jq -n --arg base_reference "$(cat "$base_reference_file")" --arg head "$(git rev-parse HEAD)" \
+      '{title:"", baseRefName:$base_reference, number:12, headRefOid:$head, body:"<!-- gaia-pr-body-head: \($head) -->"}'
     ;;
   "repo view"*)
     printf 'gaia-react/gaia\n'
