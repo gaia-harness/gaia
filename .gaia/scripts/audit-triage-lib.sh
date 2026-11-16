@@ -57,9 +57,9 @@ _roster_owned_indexes() {
 # resolve-audit-members.sh dispatches by. The release context is armed against
 # the same default-branch base that resolver reads, so a release-skipped owner
 # is never named on an update branch where it is never dispatched; a base that
-# cannot be resolved leaves it disarmed. An absent library or unreadable roster
-# owns nothing and returns 1. Call it in a command substitution, as
-# _roster_owned_indexes.
+# cannot be resolved leaves it disarmed. Given any path, an absent library or
+# unreadable roster prints {} and returns 1. Call it in a command substitution,
+# as _roster_owned_indexes.
 _roster_owners() {
   local library="$2/../../.claude/hooks/lib/audit-scope.sh" provenance_library="$2/../../.claude/hooks/lib/audit-base-provenance.sh"
   local paths path owner answer="{}" provenance release_base

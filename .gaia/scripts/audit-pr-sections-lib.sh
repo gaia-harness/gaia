@@ -363,7 +363,7 @@ _command_record_residual() {
                reason: (text(.reason) | if . == "" then text($finding.failure_mode) else . end)}
            + (if $decision == "fixed" then {commit: $commit} else {} end) end
     else error("unreadable finding") end' "$FINDING_FILE" 2>/dev/null)" ||
-    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix); a fix is refused on a cross_remit one when the roster gives its path to no member (no review could satisfy the veto): record --decision fixed once its path has changed since the open round's tree, else --decision waive (a security-class one has no waive: change its path first); a fixed is refused on any other finding, and on a security-class one whose path a member owns or whose roster cannot be read"; return 3; }
+    { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix); a fix is refused on a cross_remit one when the roster gives its path to no member (no review could satisfy the veto): record --decision fixed once its path has changed since the open round's tree, else --decision waive (a security-class one has no waive: change its path first); a fixed is refused on any other finding, and on a security-class one whose path a member owns, or any security-class one while the .gaia/audit-ci.yml roster cannot be read"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
   if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
