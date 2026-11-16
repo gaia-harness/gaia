@@ -218,6 +218,47 @@ mutated_tree() {
   [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
 }
 
+@test "an id reused by a row of another file is lost, not reworded" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a GET", "file": "a.test.ts", "title": "gets"}'
+  write_table "$AFTER" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a POST", "file": "b.test.ts", "title": "gets"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
+}
+
+@test "an id reused by a row of another title is lost, not reworded" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a GET", "file": "a.test.ts", "title": "gets"}'
+  write_table "$AFTER" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a POST", "file": "a.test.ts", "title": "posts"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
+}
+
+@test "an after row with no caseKey under the same id is lost, not reworded to null" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a GET"}'
+  write_table "$AFTER" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
+}
+
+@test "the id pass leaves the after row a keyless snapshot row needs" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a GET"}' \
+    '{"id": "T2", "source": "success_criteria:0", "security": "access"}'
+  write_table "$AFTER" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a POST"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
+}
+
 # ---------- the apply step's text ----------
 
 flat_range() {
@@ -259,7 +300,8 @@ check_replan_security() {
   need "$structural" 'delete `<PLAN_DIR>/tests.before-correction.json` before step 4.6c' || return 1
   need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`.' || return 1
   need "$rule" 'A `reworded:` line is not a loss: its item, on the follow-up review list the `lost:` items print on, quotes the old and new case and recommends keeping the row as regenerated' || return 1
-  need "$rule" 'in auto-mode the row is kept.' || return 1
+  need "$rule" 'in auto-mode the row is kept and the old and new case are recorded in `## Audit notes`.' || return 1
+  need "$structural" 'with the same `file` and `title` and a different non-empty `caseKey`' || return 1
   need "$structural" 'Once every `lost:` and `reworded:` item is resolved' || return 1
 }
 

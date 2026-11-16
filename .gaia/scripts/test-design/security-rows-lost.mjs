@@ -7,12 +7,15 @@
 // matched on its `source`, its `security` kind and, when the snapshot row
 // carries one, its `caseKey`. A snapshot row with a caseKey is lost unless the
 // after table holds a security row of the same source, kind and caseKey, or
-// of the same source, kind and id, so a dropped case swapped for another case
-// of the same source and kind under a new id reads as lost. A same-id match
+// of the same source, kind and id that keeps the snapshot row's file and title
+// and carries a caseKey, so a dropped case swapped for another case of the same
+// source and kind under a new id reads as lost, and so does an id reused by a
+// row of another file or title or by a row with no caseKey. A same-id match
 // whose caseKey differs is not lost: it prints
 // `reworded: <kind> <source> <id> (<old caseKey> -> <new caseKey>)`, each
-// caseKey JSON-encoded (`null` when the after row has none). Snapshot rows without a caseKey are counted per source
-// and kind against the after rows that no keyed snapshot row matched. A
+// caseKey JSON-encoded. Snapshot rows without a caseKey are counted per source
+// and kind against the after rows that no keyed snapshot row matched, and the
+// id pass never takes an after row those keyless rows need. A
 // dropped row, a row set to `none` and a row moved to another kind all read
 // as lost. Prints one line per source and kind left short,
 // `lost: <kind> <source> (<missing> of <snapshot ids>)`, and nothing when none
@@ -72,16 +75,30 @@ for (const [key, rows] of snapshotPairs) {
   }
   // Runs after every exact caseKey match, so a renumbered case keeps its
   // after row and a reused id cannot claim it.
+  const keylessCount = rows.filter((candidate) => !candidate.caseKey).length;
   const lostIds = [];
   for (const row of unmatched) {
-    const match = available.findIndex((candidate) => candidate.id === row.id);
+    // An id is planner-assigned and a regeneration renumbers it, so a same-id
+    // row is a reword only when it keeps the snapshot row's file and title and
+    // still carries a caseKey, and only while each keyless snapshot row keeps
+    // an after row of its own.
+    const match =
+      available.length > keylessCount
+        ? available.findIndex(
+            (candidate) =>
+              candidate.id === row.id &&
+              candidate.caseKey &&
+              candidate.file === row.file &&
+              candidate.title === row.title,
+          )
+        : -1;
     if (match === -1) {
       lostIds.push(row.id);
       continue;
     }
     const [after] = available.splice(match, 1);
     process.stdout.write(
-      `reworded: ${row.security} ${row.source} ${row.id} (${JSON.stringify(row.caseKey)} -> ${JSON.stringify(after.caseKey ?? null)})\n`,
+      `reworded: ${row.security} ${row.source} ${row.id} (${JSON.stringify(row.caseKey)} -> ${JSON.stringify(after.caseKey)})\n`,
     );
   }
   const keyless = rows.filter((candidate) => !candidate.caseKey);
