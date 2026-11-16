@@ -386,7 +386,7 @@ check_lens_doctrine_rows() {
   need "$lens" "a case-table row whose \`case\` names its cases by class or sample (\`every role\`, \`including an unknown tool\`) instead of by value, the doctrine's \`## What to test\`: the fix lists each case's values from the requirements and the README contract;" || return 1
   need "$doctrine" "- Test a stated mapping from a value the app reads (an API field, a stored or query value) to what the user sees (a stored \`status: 2\` shown as \`Shipped\`) with one case per value, at the unit or route test of the code that maps it. A story given the mapped props never runs the mapping." || return 1
   need "$lens" "a stated mapping from a value the app reads to what the user sees with a value that has no case at the unit or route test of the code that maps it, such as a mapping only a story given the mapped props asserts (the doctrine's \`## What to test\`): the fix adds the missing cases there;" || return 1
-  local planted_secret="A test that puts a value a secrets requirement keeps off a surface onto that surface and asserts code there uses it tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secrets (a browser test that reads a planted server-only API origin)."
+  local planted_secret="A test that puts a value a secrets requirement keeps off a surface onto that surface and asserts code there uses it tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret (a browser test that reads a planted server-only API origin)."
   need "$doctrine" "$planted_secret" || return 1
   need "$table" "$planted_secret" || return 1
   need "$lens" "$planted_secret" || return 1
@@ -565,15 +565,15 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the doctrine reading a planted secret's retire as the rewrite carve-out fails" {
-  red check_lens_doctrine_rows "$DOCTRINE_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secrets' 'tests code its work rewrites, so its retire or change row keeps its own kind'
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret' 'tests code its work rewrites, so its retire or change row keeps its own kind'
 }
 
 @test "red twin: the planner's table step reading a planted secret's retire as the rewrite carve-out fails" {
-  red check_lens_doctrine_rows "$TABLE_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secrets' 'tests code its work rewrites, so its retire or change row keeps its own kind'
+  red check_lens_doctrine_rows "$TABLE_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret' 'tests code its work rewrites, so its retire or change row keeps its own kind'
 }
 
 @test "red twin: the test design lens reading a planted secret's retire as the rewrite carve-out fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secrets' 'tests code its work rewrites, so its retire or change row keeps its own kind'
+  red check_lens_doctrine_rows "$AUDIT_REL" 'tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret' 'tests code its work rewrites, so its retire or change row keeps its own kind'
 }
 
 @test "red twin: the doctrine counting a set-stated rule's roles by their refusals only fails" {
