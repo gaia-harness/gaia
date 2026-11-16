@@ -34,7 +34,8 @@ _gaia_veto_fix_records() {
 }
 
 # A veto key's base rounds, the trees its fix is diffed from: the round that
-# held the waiver (effective_from_round - 1, from round 2), and each round k,
+# held the waiver (effective_from_round - 1, for a veto effective from round 2
+# or later), and each round k,
 # effective_from_round <= k < r, whose dispositions dispose the exact key `fix`
 # and whose fixer reports it `fixed`. base_pairs runs on a vetoes.json key with
 # $state, $round and $records (_gaia_veto_fix_records) bound as jq arguments,
@@ -51,8 +52,9 @@ def base_pairs:
 
 # _gaia_veto_changed_paths <main-root> <state-json> <r> <vetoes-file> <records-json>:
 # for every veto effective by round r, the paths that differ between each of
-# its base trees and each later round tree through r, and between each round
-# tree and the one before it, as {"<from-tree>..<round-tree>": [paths]}. A
+# its base trees and each later round tree through r, plus, for every round
+# 2..r whether or not a veto exists, the paths that differ from the round
+# before, as {"<from-tree>..<round-tree>": [paths]}. A
 # pair whose diff cannot be read is left out, which can only leave a veto
 # unsatisfied.
 _gaia_veto_changed_paths() {

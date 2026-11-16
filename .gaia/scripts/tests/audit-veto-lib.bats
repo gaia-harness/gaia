@@ -157,7 +157,8 @@ inline_commit() {
 
 # inline_trees: a repository at MAIN whose f.txt holds lines l1..l40 when the
 # waiver is held, and the trees a main-thread fix can leave. Each tree after
-# TREE_WAIVED is diffed against TREE_WAIVED, so their order does not matter:
+# TREE_WAIVED is diffed against TREE_WAIVED, and a case that puts two of them
+# in successive rounds also diffs them against each other:
 #   TREE_UNRELATED: only g.txt changed.
 #   TREE_FIXED: f.txt line 2 rewritten in place.
 #   TREE_MOVED: five lines inserted at the top, shifting every line by five.
