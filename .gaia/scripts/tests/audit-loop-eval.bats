@@ -2099,7 +2099,17 @@ grade_round_keys() {
   write_veto 11
   run bash "$SCRIPTS/audit-loop-eval.sh" veto-state --root "$ALF_ROOT" --round 3
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$output" = "{\"satisfied\":[],\"unsatisfied\":[[\"$MEMBER\",\"rule/x\",\"f.txt\",11]]}" ]
+  [ "$output" = "{\"satisfied\":[],\"unsatisfied\":[[\"$MEMBER\",\"rule/x\",\"f.txt\",11]],\"reviewers\":[\"$MEMBER\"]}" ]
+}
+
+@test "cli veto-state: an unsatisfied cross-remit key lists its path's roster owner among the reviewers" {
+  stop_base
+  write_veto 11
+  jq -c '.keys[0].path = "lib/s.sh"' "$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json" >"$BATS_TEST_TMPDIR/vetoes.json"
+  mv "$BATS_TEST_TMPDIR/vetoes.json" "$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json"
+  run bash "$SCRIPTS/audit-loop-eval.sh" veto-state --root "$ALF_ROOT" --round 3
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(jq -c '.reviewers' <<<"$output")" = "[\"$MEMBER\",\"$SHELL_MAINTAINER\"]" ] || { echo "$output"; return 1; }
 }
 
 # review_record_setup: the review scripts beside the scratch copy, and the run
