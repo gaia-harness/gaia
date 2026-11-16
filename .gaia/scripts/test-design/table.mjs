@@ -1,4 +1,4 @@
-// Reader, row validator and key-coverage checks for the test-design table
+// Reader, row and table validators and key-coverage checks for the test-design table
 // (`tests.json`). The CLI (test-table.mjs) and the drift check import these so
 // the table is parsed in one place.
 
