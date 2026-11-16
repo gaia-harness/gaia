@@ -364,7 +364,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" '**Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" 'a flow observes an effect whose consequence a flow step asserts' || return 1
-  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals, and an offer shown only to some roles, owners or statuses, a link included), a forgery row (a redirect or callback target included)," || return 1
+  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals, and an offer an access rule gates (role, ownership, visibility or status), a link included), a forgery row (a redirect or callback target included)," || return 1
   need "$doctrine" "Judge each case, not each row: a row is judged by its \`caseKey\` when it has one, by its title otherwise" || return 1
   need "$doctrine" "Two cases that share a test and carry different kinds" || return 1
   need "$doctrine" "each get their own row, keyed by \`caseKey\`" || return 1
@@ -381,8 +381,8 @@ check_lens_doctrine_rows() {
   need "$lens" "A change row is judged by what the existing test asserted, not its changed form (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." || return 1
   need "$doctrine" "So is what a page offers an actor by an access rule (an action, form, link or navigation item shown only to those who may use it), at every layer that holds its cases." || return 1
   need "$doctrine" "has one case per action and each role or relationship, inside its set or out, and one per action and each status, inside its from-statuses or out" || return 1
-  need "$doctrine" "Citing a requirement is not forbidding: a row that cites a security requirement only because that requirement's work deletes or rewrites the tested code (the home page's stories, retired when signed-out \`/\` redirects) keeps its existing test's own kind, unless a flagged row from the same \`source\` subsumes it." || return 1
-  need "$table" "A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless a flagged row from the same \`source\` subsumes it." || return 1
+  need "$doctrine" "Citing a requirement is not forbidding: a row that cites a security requirement only because that requirement's work deletes or rewrites the tested code (the home page's stories, retired when signed-out \`/\` redirects) keeps its existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
+  need "$table" "A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
   need "$lens" "A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$lens" 'A stated literal or state stays on its story or route test even when a real-server row asserts the same one' || return 1
@@ -418,7 +418,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens flagging authorization refusals only fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals, and an offer shown only to some roles, owners or statuses, a link included),' ' an authorization refusal,'
+  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals, and an offer an access rule gates (role, ownership, visibility or status), a link included),' ' an authorization refusal,'
 }
 
 @test "red twin: the test design lens duplicate check naming no surviving row fails" {
@@ -534,7 +534,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the planner's table step flagging a retire by the requirement it cites fails" {
-  red check_lens_doctrine_rows "$TABLE_REL" " A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless a flagged row from the same \`source\` subsumes it." ''
+  red check_lens_doctrine_rows "$TABLE_REL" " A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." ''
 }
 
 @test "red twin: the test design lens flagging a retire that only follows deleted code fails" {
