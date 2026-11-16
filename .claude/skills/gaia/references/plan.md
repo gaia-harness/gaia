@@ -218,13 +218,13 @@ To run the audit, read `.claude/skills/gaia/references/plan/decomposition-audit.
 
 ### 4.6c. Approve the table
 
-After 4.6b applies the findings, freeze the table. Approving the plan approves the table, retire rows included, so execution does not ask again:
+After 4.6b applies the findings, freeze the table. Approving the plan approves the table, retire rows included, so execution does not ask again, except for each security-flagged `retire` row of code the plan keeps (no valid `deletes`), which `approve` holds and prints:
 
 ```bash
 node .gaia/scripts/test-design/test-table.mjs approve --plan-dir "$PLAN_DIR"
 ```
 
-With `auto_mode` true, or when running non-interactively as step 2 defines it, run it with `--auto`: it holds every security-flagged `retire` row and prints each held row id. Append each printed id with its case to the README's `## Audit notes` section, saying the row waits for the merge checkpoint. A non-zero exit stops exactly like a step 4.5 failure.
+With `auto_mode` true, or when running non-interactively as step 2 defines it, run it with `--auto`: it holds every security-flagged `retire` row, deleted code included. On every run, append each printed held id with its case to the README's `## Audit notes` section, saying the row waits for the merge checkpoint. A non-zero exit stops exactly like a step 4.5 failure.
 
 ### 4.7. Record the run
 
