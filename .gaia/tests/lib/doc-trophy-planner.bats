@@ -383,7 +383,8 @@ check_lens_doctrine_rows() {
   need "$doctrine" "has one case per action and each role or relationship, inside its set or out, and one per action and each status, inside its from-statuses or out" || return 1
   need "$doctrine" "Citing a requirement is not forbidding: a row that cites a security requirement only because that requirement's work deletes or rewrites the tested code (the home page's stories, retired when signed-out \`/\` redirects) keeps its existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
   need "$table" "A row that cites a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes." || return 1
-  need "$lens" "A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind" || return 1
+  need "$lens" "A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes" || return 1
+  need "$doctrine" "Each role or relationship case takes a status inside the action's from-statuses, and each status case a role or relationship inside its set, so each case refuses or allows on its own dimension alone." || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$lens" 'A stated literal or state stays on its story or route test even when a real-server row asserts the same one' || return 1
   need "$lens" "that row is trimmed to asserting the element carrying it is in the served HTML when the doctrine's \`## Served HTML\` makes that HTML the requirement, and dropped otherwise. A literal that is itself the served-HTML requirement by the doctrine's \`## Served HTML\` (a \`<title>\`, a meta description) stays on its real-server row, and a \`**Served check.**\` row the doctrine requires (served status and any \`Location\`) is never a duplicate of a route test" || return 1
@@ -529,6 +530,14 @@ check_lens_doctrine_rows() {
   red check_lens_doctrine_rows "$DOCTRINE_REL" 'each status, inside its from-statuses or out,' 'each status outside its from-statuses,'
 }
 
+@test "red twin: the doctrine leaving set-stated cases free to vary the other dimension fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " Each role or relationship case takes a status inside the action's from-statuses, and each status case a role or relationship inside its set, so each case refuses or allows on its own dimension alone." ''
+}
+
+@test "red twin: the test design lens omitting the subsumed-retire exception fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ", unless it is a retire that a flagged row from the same \`source\` subsumes (the home page's stories" " (the home page's stories"
+}
+
 @test "red twin: the doctrine flagging a retire by the requirement it cites fails" {
   red check_lens_doctrine_rows "$DOCTRINE_REL" "(the home page's stories, retired when signed-out \`/\` redirects) keeps its existing test's own kind" "(the home page's stories, retired when signed-out \`/\` redirects) carries that requirement's kind"
 }
@@ -538,7 +547,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens flagging a retire that only follows deleted code fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" " A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind (the home page's stories, when \`/\` stops being public)." ''
+  red check_lens_doctrine_rows "$AUDIT_REL" " A retire or change row citing a security requirement only because that requirement's work deletes or rewrites the tested code keeps the existing test's own kind, unless it is a retire that a flagged row from the same \`source\` subsumes (the home page's stories, when \`/\` stops being public)." ''
 }
 
 @test "red twin: the doctrine's source-kind retire not counted as a security retire fails" {
