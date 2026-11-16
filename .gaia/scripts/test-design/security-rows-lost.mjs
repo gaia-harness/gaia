@@ -6,18 +6,24 @@
 // A regeneration can renumber ids, so a security row (security not `none`) is
 // matched on its `source`, its `security` kind and, when the snapshot row
 // carries one, its `caseKey`. A snapshot row with a caseKey is lost unless the
-// after table holds a security row of the same source, kind and caseKey, so a
-// dropped case swapped for another case of the same source and kind reads as
-// lost. Snapshot rows without a caseKey are counted per source and kind against
-// the after rows that no keyed snapshot row matched. A dropped row, a row set
-// to `none` and a row moved to another kind all read as lost. Prints one line
-// per source and kind left short,
+// after table holds a security row of the same source, kind and caseKey, or
+// of the same source, kind and id that keeps the snapshot row's file and title
+// and carries a caseKey, so a dropped case swapped for another case of the same
+// source and kind under a new id reads as lost, and so does an id reused by a
+// row of another file or title or by a row with no caseKey. A same-id match
+// whose caseKey differs is not lost: it prints
+// `reworded: <kind> <source> <id> (<old caseKey> -> <new caseKey>)`, each
+// caseKey JSON-encoded. Snapshot rows without a caseKey are counted per source
+// and kind against the after rows that no keyed snapshot row matched, and the
+// id pass never takes an after row those keyless rows need. A
+// dropped row, a row set to `none` and a row moved to another kind all read
+// as lost. Prints one line per source and kind left short,
 // `lost: <kind> <source> (<missing> of <snapshot ids>)`, and nothing when none
-// is lost. The ids are the lost keyed rows, plus every keyless snapshot id of
-// the pair when a keyless row is left short.
+// is lost or reworded. The ids are the lost keyed rows, plus every keyless
+// snapshot id of the pair when a keyless row is left short.
 //
-// Exit 0 compared (stdout says what was lost), 1 a table is unusable (one
-// `security-rows-lost: ...` stderr line), 2 usage.
+// Exit 0 compared (stdout says what was lost or reworded), 1 a table is
+// unusable (one `security-rows-lost: ...` stderr line), 2 usage.
 
 import {isSecurity, readTable} from './table.mjs';
 
@@ -59,13 +65,39 @@ const afterPairs = securityPairs(options.after);
 
 for (const [key, rows] of snapshotPairs) {
   const available = [...(afterPairs.get(key) ?? [])];
-  const lostIds = [];
+  const unmatched = [];
   for (const row of rows.filter((candidate) => candidate.caseKey)) {
     const match = available.findIndex(
       (candidate) => candidate.caseKey === row.caseKey,
     );
-    if (match === -1) lostIds.push(row.id);
+    if (match === -1) unmatched.push(row);
     else available.splice(match, 1);
+  }
+  // Runs after every exact caseKey match, so a renumbered case keeps its
+  // after row and a reused id cannot claim it.
+  const keylessCount = rows.filter((candidate) => !candidate.caseKey).length;
+  const lostIds = [];
+  for (const row of unmatched) {
+    // An id is planner-assigned and a regeneration renumbers it, so a shared id
+    // alone does not prove the same test.
+    const match =
+      available.length > keylessCount
+        ? available.findIndex(
+            (candidate) =>
+              candidate.id === row.id &&
+              candidate.caseKey &&
+              candidate.file === row.file &&
+              candidate.title === row.title,
+          )
+        : -1;
+    if (match === -1) {
+      lostIds.push(row.id);
+      continue;
+    }
+    const [after] = available.splice(match, 1);
+    process.stdout.write(
+      `reworded: ${row.security} ${row.source} ${row.id} (${JSON.stringify(row.caseKey)} -> ${JSON.stringify(after.caseKey)})\n`,
+    );
   }
   const keyless = rows.filter((candidate) => !candidate.caseKey);
   // Keyless snapshot rows take the after rows no keyed snapshot row matched.
