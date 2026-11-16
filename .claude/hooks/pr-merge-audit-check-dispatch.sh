@@ -94,6 +94,8 @@ if [ -z "$members" ]; then
     gate_permit_binds_to_named_pr || exit 0
     if [ "$frontend_cleared_by" = chore-deps ]; then
       gate_post_bypass_stamp 'skipped: chore(deps) manifest-only'
+    else
+      gate_require_body_stamp
     fi
     exit 0
   fi
@@ -227,7 +229,11 @@ done <<< "$members"
 
 if [ "$all_cleared" -eq 1 ]; then
   gate_permit_binds_to_named_pr || exit 0
-  [ "$frontend_chore_deps_waived" -eq 0 ] || gate_post_bypass_stamp 'skipped: chore(deps) manifest-only'
+  if [ "$frontend_chore_deps_waived" -eq 0 ]; then
+    gate_require_body_stamp
+  else
+    gate_post_bypass_stamp 'skipped: chore(deps) manifest-only'
+  fi
   exit 0
 fi
 

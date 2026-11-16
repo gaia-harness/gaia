@@ -221,7 +221,7 @@ Step 6 already isolated the heal on `<BRANCH>`; do not create a second branch. W
 bash .gaia/scripts/fitness-publish.sh open --root <RESOLVED_ROOT> --branch <BRANCH> --message-file <SCRATCH>/commit-message.txt --title "<commit subject>" --body-file <SCRATCH>/pr-body.md
 ```
 
-It commits everything, pushes, opens the PR as a draft and prints the PR number alone: that line, read from this run's own Bash result, is `<N>`. A non-zero exit means the printed `fitness-publish: failed: <command>` line names the step that stopped it: record cost, print that line and STOP. Pass `--pr <N>` only if the PR had already been opened before the failure, which the script's stdout shows. Do not retry, force-push or amend: a rejected push is the user's call to resolve.
+It commits everything, pushes, opens the PR as a draft and prints the PR number alone: that line, read from this run's own Bash result, is `<N>`. A non-zero exit means the printed `fitness-publish: failed: <command>` line names the step that stopped it: record cost, print that line and STOP. Pass `--pr <N>` only if the PR had already been opened before the failure, which the script's stdout shows. Do not retry, force-push or amend: a rejected push is the user's call to resolve. On success, stamp the body with `bash .gaia/scripts/pr-body-stamp.sh write --pr <N>`.
 
 - **Open PR only** → record cost (pass-through with `<N>`), print the PR number and that the PR is a draft with no merge attempted, STOP.
 - **Publish** → continue below.

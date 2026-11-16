@@ -1,6 +1,6 @@
-// Reader and row validator for the test-design table (`tests.json`). The CLI
-// (test-table.mjs) and the drift check import these so the table is parsed in
-// one place.
+// Reader, row and table validators and key-coverage checks for the test-design table
+// (`tests.json`). The CLI (test-table.mjs) and the drift check import these so
+// the table is parsed in one place.
 
 import {readFileSync} from 'node:fs';
 
@@ -165,4 +165,66 @@ export const coveredFlows = ({rows, coveredFlows: entries}) => {
     if (problems.length === before) sources.push(source);
   });
   return {sources, problems};
+};
+
+// Every row problem a table can have on its own: invalid rows, duplicate ids,
+// and rows sharing one test without distinct caseKeys.
+export const tableProblems = (rows) => {
+  const problems = [];
+  const seenIds = new Set();
+  rows.forEach((row, index) => {
+    const label = row && row.id ? `row ${row.id}` : `row #${index + 1}`;
+    for (const reason of validateRow(row)) {
+      problems.push(`${label}: ${reason}`);
+    }
+    if (row && typeof row.id === 'string') {
+      if (seenIds.has(row.id)) problems.push(`duplicate id ${row.id}`);
+      seenIds.add(row.id);
+    }
+  });
+  const byTest = new Map();
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const key = `${row.file}\u0000${row.title}`;
+    byTest.set(key, [...(byTest.get(key) ?? []), row]);
+  }
+  for (const group of byTest.values()) {
+    if (group.length < 2) continue;
+    const caseKeys = group.map((row) => row.caseKey);
+    const distinct =
+      caseKeys.every((caseKey) => typeof caseKey === 'string' && caseKey) &&
+      new Set(caseKeys).size === caseKeys.length;
+    if (!distinct) {
+      problems.push(
+        `rows ${group.map((row) => row.id).join(', ')} share ${group[0].file} "${group[0].title}" without distinct caseKeys`,
+      );
+    }
+  }
+  return problems;
+};
+
+// The requirement keys neither a row's source nor a valid coveredFlows entry
+// cites: verify refuses each one as a key with no row.
+export const keysWithNoRow = (keys, table) => {
+  const cited = new Set(
+    table.rows.filter((row) => row && typeof row === 'object').map((row) => row.source),
+  );
+  for (const source of coveredFlows(table).sources) cited.add(source);
+  return keys.filter((key) => !cited.has(key));
+};
+
+// Each row whose removal alone would add a key to keysWithNoRow, with those
+// keys: verify would refuse the plan without it.
+export const soleRowKeys = (keys, table) => {
+  const alreadyUncovered = new Set(keysWithNoRow(keys, table));
+  return table.rows
+    .filter((row) => row && typeof row === 'object')
+    .map((row) => ({
+      id: row.id,
+      keys: keysWithNoRow(keys, {
+        ...table,
+        rows: table.rows.filter((other) => other !== row),
+      }).filter((key) => !alreadyUncovered.has(key)),
+    }))
+    .filter((entry) => entry.keys.length > 0);
 };

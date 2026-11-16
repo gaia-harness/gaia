@@ -150,14 +150,16 @@ earn_markers() {
 # stop_case <all|one>: rounds 1 to 3 of one member, round 3 enriching (a new
 # Minor on a line the round's commit repaired) with an incremental review base
 # and an earned marker at round 3's tree, so the hook evaluates a real default
-# stop over the Minors on f.txt:1, f.txt:2 and f.txt:8 (the Minor on
+# stop over the Minors on f.txt:1, f.txt:5 and f.txt:8 (the Minor on
 # base.txt:3 sits outside the branch and is uncounted). `all` accepts all four
-# as residuals; `one` accepts only f.txt:1, waives f.txt:2 and f.txt:8 on the
+# as residuals; `one` accepts only f.txt:1, waives f.txt:5 and f.txt:8 on the
 # triage threshold, and fixes the uncounted one, which leaves a single residual.
+# f.txt:5 sits past the veto's re-report tolerance from f.txt:1, so a review
+# of the vetoed key's fix does not read that same-class Minor as the key.
 stop_case() {
   local round entries
   entries='[{"path":"f.txt","line":1,"finding_class":"rule/x","severity":"minor","security":false},
-    {"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false},
+    {"path":"f.txt","line":5,"finding_class":"rule/x","severity":"minor","security":false},
     {"path":"base.txt","line":3,"finding_class":"rule/q","severity":"minor","security":false}]'
   printf 'auditors:\n  - name: code-audit-frontend\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' >"$ALF_ROOT/.gaia/audit-ci.yml"
   alf_fill f.txt 12 feature
@@ -174,13 +176,13 @@ stop_case() {
   if [ "$1" = all ]; then
     alf_dispositions 3 "$(jq -n -c --arg member "$FRONTEND_MEMBER" \
       'def entry($class; $path; $line): {member: $member, finding_class: $class, path: $path, line: $line, disposition: "accept-residual", reason: "minor tail"};
-       [entry("rule/x"; "f.txt"; 1), entry("rule/x"; "f.txt"; 2), entry("rule/y"; "f.txt"; 8), entry("rule/q"; "base.txt"; 3)]')"
+       [entry("rule/x"; "f.txt"; 1), entry("rule/x"; "f.txt"; 5), entry("rule/y"; "f.txt"; 8), entry("rule/q"; "base.txt"; 3)]')"
   else
     alf_dispositions 3 "$(jq -n -c --arg member "$FRONTEND_MEMBER" --arg stop_key "$([ "$1" = fixed ] && echo fix || echo accept-residual)" \
       --arg uncounted "$([ "$1" = fixed ] && echo waive-out-of-scope || echo fix)" \
       'def entry($class; $path; $line; $disposition): {member: $member, finding_class: $class, path: $path, line: $line, disposition: $disposition, reason: "minor tail"}
          + (if $disposition == "waive-out-of-scope" then {basis: "triage-threshold"} else {} end);
-       [entry("rule/x"; "f.txt"; 1; $stop_key), entry("rule/x"; "f.txt"; 2; "waive-out-of-scope"),
+       [entry("rule/x"; "f.txt"; 1; $stop_key), entry("rule/x"; "f.txt"; 5; "waive-out-of-scope"),
         entry("rule/y"; "f.txt"; 8; "waive-out-of-scope"), entry("rule/q"; "base.txt"; 3; $uncounted)]')"
   fi
 }
@@ -277,7 +279,7 @@ veto_flow() {
   assert_allowed || return 1
   [ "$(nrounds)" -eq 5 ] || return 1
   alf_stamp 5 50
-  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false},
+  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":5,"finding_class":"rule/x","severity":"minor","security":false},
     {"path":"base.txt","line":3,"finding_class":"rule/q","severity":"minor","security":false}]' 51
   unit_dispatch
   assert_allowed
@@ -323,7 +325,7 @@ accepted_keys() {
   [ "$(nrounds)" -eq 5 ] || return 1
   [ "$(state_field '.history.rounds[3].snapshot.verdict')" = quiet ] || return 1
   alf_stamp 5 50
-  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false},
+  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":5,"finding_class":"rule/x","severity":"minor","security":false},
     {"path":"base.txt","line":3,"finding_class":"rule/q","severity":"minor","security":false}]' 51
   # The unit closes round 5 with its dispositions file; both re-reports carry as accepted.
   alf_dispositions 5 '[]'
@@ -335,7 +337,7 @@ accepted_keys() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
   accepted_before="$(accepted_keys)"
   grep -qF -- 'f.txt:1' <<<"$accepted_before" && return 1
-  for key in f.txt:2 f.txt:8 base.txt:3; do
+  for key in f.txt:5 f.txt:8 base.txt:3; do
     grep -qF -- "$key" <<<"$accepted_before" || { printf 'missing %s in: %s\n' "$key" "$accepted_before" >&2; return 1; }
   done
   [ "$(residual_count | cut -d' ' -f1)" -eq 3 ] || return 1
@@ -392,7 +394,7 @@ accepted_keys() {
 closing_flow() {
   veto_flow one || return 1
   # The unit finishes round 5, dispositions included, before the stall stops it.
-  alf_dispositions 5 "$(jq -n -c --arg member "$FRONTEND_MEMBER" '[{member: $member, finding_class: "rule/x", path: "f.txt", line: 2, disposition: "fix", reason: ""},
+  alf_dispositions 5 "$(jq -n -c --arg member "$FRONTEND_MEMBER" '[{member: $member, finding_class: "rule/x", path: "f.txt", line: 5, disposition: "fix", reason: ""},
     {member: $member, finding_class: "rule/q", path: "base.txt", line: 3, disposition: "fix", reason: ""}]')"
   alf_add_checkpoint 5 stalled
   alf_add_answer 1 accept
@@ -406,10 +408,10 @@ closing_flow() {
 }
 
 X1_ROW='{"path":"f.txt","line":1,"finding_class":"rule/x","severity":"minor","security":false}'
-X2_ROW='{"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false}'
+X2_ROW='{"path":"f.txt","line":5,"finding_class":"rule/x","severity":"minor","security":false}'
 
 accept_x2() {
-  alf_dispositions 6 '[{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":2,"disposition":"accept-residual","reason":"left for later"}]'
+  alf_dispositions 6 '[{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":5,"disposition":"accept-residual","reason":"left for later"}]'
 }
 
 run_check() {
@@ -455,7 +457,7 @@ run_check_all_snapshot() {
   [ "$status" -eq 1 ] || return 1
   grep -qxF -- "$key_line" <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
   alf_dispositions 6 '[{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"disposition":"accept-residual","reason":"left for later"},
-    {"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":2,"disposition":"accept-residual","reason":"left for later"}]'
+    {"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":5,"disposition":"accept-residual","reason":"left for later"}]'
   run_check 6
   [ "$status" -eq 1 ] || return 1
   grep -qxF -- "${key_line/undisposed/vetoed-not-fix}" <<<"$output"
@@ -487,7 +489,7 @@ fail_owed_gate() {
   [ "$(state_field '.history.rounds[4].members | join(",")')" = "$FRONTEND_MEMBER" ] || return 1
   alf_stamp 5 50
   alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"finding_class":"rule/x","severity":"minor","security":false},
-    {"path":"f.txt","line":2,"finding_class":"rule/x","severity":"minor","security":false},
+    {"path":"f.txt","line":5,"finding_class":"rule/x","severity":"minor","security":false},
     {"path":"f.txt","line":6,"finding_class":"rule/x","severity":"minor","security":false}]' 51
   earn_markers "$FRONTEND_MEMBER"
   unit_dispatch

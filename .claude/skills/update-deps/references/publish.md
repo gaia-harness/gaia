@@ -29,7 +29,7 @@ Then publish from the worktree. Every run that reaches this point is a worktree 
    ```bash
    gh pr list --head <branch-name> --state open --json number,url
    ```
-   When one exists, reuse it: a re-run after a `TIMEOUT`, a `CHECK_FAILED` or a refused wait left it open, and its number is `<N>`. Otherwise open a draft PR against `main` (`gh pr create --draft`). Title: the commit subject. Body: the migration report rendered as markdown, via `--body-file` on a temp file (same false-positive reason). Capture the PR number `<N>` and its URL.
+   When one exists, reuse it: a re-run after a `TIMEOUT`, a `CHECK_FAILED` or a refused wait left it open, and its number is `<N>`. Otherwise open a draft PR against `main` (`gh pr create --draft`). Title: the commit subject. Body: the migration report rendered as markdown, via `--body-file` on a temp file (same false-positive reason). Capture the PR number `<N>` and its URL. Reused or new, stamp its body with `bash .gaia/scripts/pr-body-stamp.sh write --pr <N>`.
 3. Print the worktree notice from `.claude/skills/update-deps/references/worktree.md` (`## The worktree notice`) with `<worktree path>`, `<branch-name>` and `<main checkout path>` filled in.
 4. **Merge when green, then clean up locally.** This step runs only on a worktree run, it is what "completes the flow." Merge per `wiki/concepts/PR Merge Workflow.md`: when the PR's diff is manifest-only, the `chore(deps)` title clears its audit-marker gate via the dep-bump bypass; otherwise run the full audit handshake in that page (the `audit-loop-unit` agent, per its `## Dispatch the audit loop unit`, for every member `resolve-audit-members.sh` names, `code-audit-frontend` included) before the merge call below.
 

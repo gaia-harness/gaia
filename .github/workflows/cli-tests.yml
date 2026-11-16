@@ -227,6 +227,11 @@ jobs:
               # workflow must still run the lint.
               - '.gaia/**'
               - '.github/**'
+              # The dead-path and broken-wikilink checks read the wiki.
+              - 'wiki/**'
+              # Those checks also read paths the wiki and rules cite anywhere
+              # in the tree, so deleting or renaming any file must run them.
+              - deleted|renamed: '**'
       - if: steps.filter.outputs.code == 'true' || steps.filter.outputs.fitness == 'true' || github.event_name == 'workflow_dispatch'
         name: Setup Node and install the CLI member
         uses: ./.github/actions/gaia-setup-node
@@ -331,8 +336,9 @@ jobs:
         name: Check the labels page is current with the registry
         run: ./.gaia/cli/gaia-maintainer labels docs --check
       # GAIA's own harness held to the lint adopters are graded on, over the
-      # whole tree (`--scope all`). Only the frontmatter category and the two
-      # 500-line caps fail the job; every other finding stays advisory.
+      # whole tree (`--scope all`). Only the frontmatter category, the two
+      # 500-line caps and the three dead-path rules fail the job; every other
+      # finding stays advisory.
       #
       # The suppressions come from the base branch, never from the head: a pull
       # request that could edit its own suppression file would silence its own
@@ -365,11 +371,23 @@ jobs:
             cp .claude/gaia-fitness.json "$suppressions"
           fi
           status=0
-          .gaia/cli/gaia fitness check --json --scope all --fail-on error --enforce frontmatter --enforce authoring.skill.body.max-lines --enforce authoring.playbook.max-lines --config "$suppressions" > "$report" || status=$?
+          .gaia/cli/gaia fitness check --json --scope all --fail-on error --enforce frontmatter --enforce authoring.skill.body.max-lines --enforce authoring.playbook.max-lines --enforce claudemd.dead-path --enforce wiki.dead-paths --enforce rules.dead-path --config "$suppressions" > "$report" || status=$?
           if [ "$status" -ne 0 ]; then
-            jq -r '.findings[]? | select(.severity == "error" or (.rule_id | startswith("frontmatter")) or (.rule_id | test("max-lines"))) | "\(.file):\(.line) \(.rule_id)"' "$report" || cat "$report"
+            jq -r '.findings[]? | select(.severity == "error" or (.rule_id | startswith("frontmatter")) or (.rule_id | test("max-lines|dead-path"))) | "\(.file):\(.line) \(.rule_id)"' "$report" || cat "$report"
           fi
           exit "$status"
+      # The wiki CLI exits 0 whatever it finds, so the count decides.
+      - if: steps.filter.outputs.fitness == 'true' || github.event_name == 'workflow_dispatch'
+        name: Fail on broken wikilinks
+        run: |
+          set -eu
+          report="$RUNNER_TEMP/broken-links.json"
+          .gaia/cli/gaia wiki broken-links --json > "$report"
+          broken_count="$(jq '.broken | length' "$report")"
+          if [ "$broken_count" -ne 0 ]; then
+            jq -r '.broken[] | "\(.path):\(.line) [[\(.target)]]"' "$report"
+            exit 1
+          fi
       # Offline byte-identity check over the vendored third-party skill folders
       # against the hashes their markers under .gaia/vendor record. It needs jq,
       # which ubuntu-latest carries, and never touches the network.

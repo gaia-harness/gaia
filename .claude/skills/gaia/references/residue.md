@@ -251,6 +251,7 @@ git add -A && git commit -F <commit-message-file> && git push -u origin <RESIDUE
 
 ```bash
 gh pr create --draft --title "<commit subject>" --body-file <pr-body-file>
+bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
 ```
 
 Before any `gh pr merge`, resolve the members per `wiki/concepts/PR Merge Workflow.md` `## Who audits: the dispatched member set` and run whatever audit it owes. Where the out-of-scope bypass applies, the merge hook posts the status itself only for a `gh pr merge <N>` run as its own command: a merge sharing its tool call with anything else (a `cd` before it, a pipe into `tail`) denies until it is respelled.

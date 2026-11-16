@@ -75,6 +75,12 @@ printf '%s\n' '<summary line>' '<summary line>' > <main checkout path>/.gaia/loc
 gh pr edit <CLAIM_PR> --body-file <main checkout path>/.gaia/local/cache/shared/update-gaia/run/pr-body.md
 ```
 
+When the edit succeeds, stamp the rewritten body:
+
+```bash
+bash .gaia/scripts/pr-body-stamp.sh write --pr <CLAIM_PR>
+```
+
 A failed `gh pr edit` prints the summary for the user to paste into the PR and continues; the push has landed. Then clear the claim from the cache so the statusline stops offering resume:
 
 ```bash

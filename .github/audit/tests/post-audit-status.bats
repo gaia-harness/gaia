@@ -140,6 +140,7 @@ push_branch() {
 #            unpushed target sha gets), so a regression to the local unpushed
 #            sha fails the test.
 #   pr view --json baseRefName → `main`.
+#   pr view --json body → a body stamped for the pushed head.
 install_gh_mock() {
   local auth_ok="$1"
   GH_BIN="$BATS_TEST_TMPDIR/bin"
@@ -165,6 +166,11 @@ case "$1" in
     case " $* " in
       *" baseRefName "*)
         printf 'main\n'
+        exit 0
+        ;;
+      *" body "*)
+        [ -f "$pushed_head_file" ] || exit 1
+        printf '<!-- gaia-pr-body-head: %s -->\n' "$(cat "$pushed_head_file")"
         exit 0
         ;;
     esac
@@ -839,7 +845,7 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
 # $1 (default: the sandbox's origin/main). Call again after HEAD or the base moves.
 refresh_stub() {
   GH_STUB_BASE_TIP="${1:-$(git -C "$SANDBOX" rev-parse refs/remotes/origin/main)}"
-  GH_STUB_PR_JSON="$(jq -n --arg head "$(git -C "$SANDBOX" rev-parse HEAD)" '{headRefOid: $head, title: "", files: []}')"
+  GH_STUB_PR_JSON="$(jq -n --arg head "$(git -C "$SANDBOX" rev-parse HEAD)" '{headRefOid: $head, title: "", files: [], body: "<!-- gaia-pr-body-head: \($head) -->"}')"
   export GH_STUB_BASE_TIP GH_STUB_PR_JSON
 }
 

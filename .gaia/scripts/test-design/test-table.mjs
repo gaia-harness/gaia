@@ -3,6 +3,7 @@
 //
 //   test-table.mjs verify --plan-dir <dir> --keys <file>
 //   test-table.mjs covered-flows --plan-dir <dir>
+//   test-table.mjs sole-rows --plan-dir <dir> --keys <file>
 //   test-table.mjs approve --plan-dir <dir> [--auto]
 //   test-table.mjs record-security --plan-dir <dir> --root <tree> --row <id>
 //   test-table.mjs amend --plan-dir <dir> --root <tree> --changes <file>
@@ -30,7 +31,10 @@ import {
   coveredFlows,
   isSecurity,
   isTestPath,
+  keysWithNoRow,
   readTable,
+  soleRowKeys,
+  tableProblems,
   validateRow,
 } from './table.mjs';
 import {
@@ -52,7 +56,7 @@ const SIGNAL_HELPER = path.join(
 
 const usage = () => {
   process.stderr.write(
-    'usage: test-table.mjs verify --plan-dir <dir> --keys <file> | covered-flows --plan-dir <dir> | approve --plan-dir <dir> [--auto] | record-security --plan-dir <dir> --root <tree> --row <id> | amend --plan-dir <dir> --root <tree> --changes <file>\n',
+    'usage: test-table.mjs verify --plan-dir <dir> --keys <file> | covered-flows --plan-dir <dir> | sole-rows --plan-dir <dir> --keys <file> | approve --plan-dir <dir> [--auto] | record-security --plan-dir <dir> --root <tree> --row <id> | amend --plan-dir <dir> --root <tree> --changes <file>\n',
   );
   process.exit(2);
 };
@@ -103,40 +107,15 @@ const loadTable = (file) => {
   }
 };
 
-// Every row problem a table can have on its own: invalid rows, duplicate ids,
-// and rows sharing one test without distinct caseKeys.
-const tableProblems = (rows) => {
-  const problems = [];
-  const seenIds = new Set();
-  rows.forEach((row, index) => {
-    const label = row && row.id ? `row ${row.id}` : `row #${index + 1}`;
-    for (const reason of validateRow(row)) {
-      problems.push(`${label}: ${reason}`);
-    }
-    if (row && typeof row.id === 'string') {
-      if (seenIds.has(row.id)) problems.push(`duplicate id ${row.id}`);
-      seenIds.add(row.id);
-    }
-  });
-  const byTest = new Map();
-  for (const row of rows) {
-    if (!row || typeof row !== 'object') continue;
-    const key = `${row.file}\u0000${row.title}`;
-    byTest.set(key, [...(byTest.get(key) ?? []), row]);
+const readKeys = (file) => {
+  try {
+    return readFileSync(file, 'utf8')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return refuse(`cannot read keys file ${file}`);
   }
-  for (const group of byTest.values()) {
-    if (group.length < 2) continue;
-    const caseKeys = group.map((row) => row.caseKey);
-    const distinct =
-      caseKeys.every((caseKey) => typeof caseKey === 'string' && caseKey) &&
-      new Set(caseKeys).size === caseKeys.length;
-    if (!distinct) {
-      problems.push(
-        `rows ${group.map((row) => row.id).join(', ')} share ${group[0].file} "${group[0].title}" without distinct caseKeys`,
-      );
-    }
-  }
-  return problems;
 };
 
 const verify = (args) => {
@@ -148,27 +127,15 @@ const verify = (args) => {
   const {rows} = table;
   const failures = tableProblems(rows);
 
-  let keys;
-  try {
-    keys = readFileSync(options.keys, 'utf8')
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
-  } catch {
-    return refuse(`cannot read keys file ${options.keys}`);
-  }
+  const keys = readKeys(options.keys);
   const keySet = new Set(keys);
-  const citedKeys = new Set(
-    rows.filter((row) => row && typeof row === 'object').map((row) => row.source),
-  );
   const covered = coveredFlows(table);
   failures.push(...covered.problems);
   for (const source of covered.sources) {
-    if (keySet.has(source)) citedKeys.add(source);
-    else failures.push(`coveredFlows cites unknown source ${source}`);
+    if (!keySet.has(source)) failures.push(`coveredFlows cites unknown source ${source}`);
   }
-  for (const key of keys) {
-    if (!citedKeys.has(key)) failures.push(`requirement key ${key} has no row`);
+  for (const key of keysWithNoRow(keys, table)) {
+    failures.push(`requirement key ${key} has no row`);
   }
   for (const row of rows) {
     if (row && typeof row.source === 'string' && !keySet.has(row.source)) {
@@ -231,6 +198,17 @@ const verify = (args) => {
   }
 
   if (failures.length > 0) refuseAll(failures);
+};
+
+// Prints `<id> <key>...` for each row soleRowKeys reports, so the plan audit's
+// apply step knows which rows it cannot remove.
+const soleRows = (args) => {
+  const options = parseOptions(args, ['--plan-dir', '--keys']);
+  const files = planPaths(options['plan-dir']);
+  if (!existsSync(files.table)) refuse('tests.json is missing');
+  for (const {id, keys} of soleRowKeys(readKeys(options.keys), loadTable(files.table))) {
+    process.stdout.write(`${id} ${keys.join(' ')}\n`);
+  }
 };
 
 // Prints the source of each valid coveredFlows entry for the shell gates; a
@@ -387,6 +365,7 @@ const [command, ...rest] = process.argv.slice(2);
 const commands = {
   verify,
   'covered-flows': coveredFlowsCommand,
+  'sole-rows': soleRows,
   approve,
   'record-security': recordSecurity,
   amend,
