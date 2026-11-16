@@ -278,7 +278,8 @@ has_bare_shell_eval() {
   assert_pinned 'a third failure stops `needs-human`, naming the step'
   assert_pinned 'The commit subject is `fix(audit): repair the owed gate steps at round <r>`.'
   assert_pinned '`audit-gate-owed.sh choose` prints `full` for them'
-  assert_pinned 'A member that `audit-loop-eval.sh veto-state --root <root> --round <r>` lists in `reviewers` skips this router and is dispatched full'
+  assert_pinned 'A member that `audit-loop-eval.sh veto-state --root <root>` lists in `reviewers` skips this router and is dispatched full'
+  assert_pinned 'any other non-zero exit routes every member full'
   local reopened
   reopened="$(awk '/^## Reopened round$/ {inside_section=1; next} /^## / {inside_section=0} inside_section' "$AGENT")"
   [ -n "$reopened" ]

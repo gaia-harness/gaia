@@ -149,13 +149,14 @@ _gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c 
 #     fixed; any other finding of that class on the path is a different one.
 #     A diff that cannot be read ignores the line. A veto effective from round
 #     1 has no waiver round and only the fixer route.
-# Reviewed: at least one round in the span dispatched a reviewer of the key,
+# Reviewed: at least one round in the span dispatched the key's reviewer,
 # with the key not re-reported in any such round's keys (round r's from the
 # argument, earlier ones from the stored snapshot, where null keys prove
-# nothing). The reviewers are the key's member and, for a cross-remit key
-# (the roster in <audited-root>, default <main-root>, gives its path to another
+# nothing). The reviewer is the key's member or, for a cross-remit key (the
+# roster in <audited-root>, default <main-root>, gives its path to another
 # member, so its own member is never re-dispatched on that file), the path's
-# owner. The owner reports under its own class, so any finding of the owner's
+# owner alone: the reporting member never reviews that file, so its dispatch
+# proves nothing about the repair. The owner reports under its own class, so any finding of the owner's
 # on the path re-reports the key within the tolerance of the spans the
 # waiver-round diff maps the vetoed line to, else of the vetoed line itself.
 # rc 1 on an unreadable or malformed vetoes.json.
@@ -180,7 +181,7 @@ gaia_veto_keys_state() {
     | $state.history.rounds as $rounds
     | def keys_of($j): if $j == $round then $round_keys else ($rounds[$j - 1].snapshot | if type == "object" then .keys else null end) end;
     def owner_of($key): ($owners[$key[2]] // null) | if . == $key[0] then null else . end;
-    def reviewers($key): [$key[0], owner_of($key)] | map(select(. != null));
+    def reviewers($key): [owner_of($key) // $key[0]];
     # spans_at($from; $key) reads a reviewed round: the spans the diff from the
     # waiver round maps the vetoed line to there, or null with no such diff.
     def spans_at($from; $key):
@@ -224,9 +225,9 @@ gaia_veto_keys_state() {
 }
 
 # gaia_veto_reviewers <main-root> <B> <audited-root> <veto-state-json>: the
-# veto state with `reviewers` added, the sorted members whose review can
-# satisfy an unsatisfied key: each key's member and a cross-remit key's path
-# owner, as gaia_veto_keys_state reads them. The audit loop unit dispatches
+# veto state with `reviewers` added, the sorted members the unit dispatches full
+# for an unsatisfied key: each key's member and its path's owner, the superset
+# of who can satisfy it (the path owner alone for a cross-remit key). The audit loop unit dispatches
 # them full, since a light clear reviews nothing. rc 1 when the veto state is
 # not an object.
 gaia_veto_reviewers() {

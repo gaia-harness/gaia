@@ -295,6 +295,23 @@ owner_reviews() {
   assert_unsatisfied || { echo "no roster"; return 1; }
 }
 
+@test "veto-state cross-remit: a round dispatching only the reporting member leaves the key unsatisfied until the path's owner is dispatched" {
+  roster_owning_vetoed_path code-audit-shell
+  satisfied_base
+  assert_unsatisfied || { echo "reporting member only"; return 1; }
+  STATE="$(owner_reviews "$STATE")"
+  [ "$(veto_state | jq -c '.satisfied | length')" = 1 ] || { echo "owner dispatched"; return 1; }
+}
+
+@test "roster owners: a release-skipped owner is not named on a release branch, where the resolver never dispatches it" {
+  . "$REPO_ROOT/.gaia/tests/helpers/release-skip-fixture.sh"
+  release_skip_init "$BATS_TEST_TMPDIR/release"
+  release_skip_branch "$BATS_TEST_TMPDIR/release" release
+  [ "$(_roster_owners "$BATS_TEST_TMPDIR/release" "$REPO_ROOT/.gaia/scripts" '[".claude/hooks/gaia-guard.sh"]' | jq -r '.[".claude/hooks/gaia-guard.sh"]')" = fixture-default ]
+  release_skip_branch "$BATS_TEST_TMPDIR/release" hand-edit
+  [ "$(_roster_owners "$BATS_TEST_TMPDIR/release" "$REPO_ROOT/.gaia/scripts" '[".claude/hooks/gaia-guard.sh"]' | jq -r '.[".claude/hooks/gaia-guard.sh"]')" = fixture-shell ]
+}
+
 @test "veto-state: a malformed vetoes file fails" {
   satisfied_base
   printf '{"version":1,"keys":"no"}\n' >"$RUN/vetoes.json"

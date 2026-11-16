@@ -54,17 +54,26 @@ _roster_owned_indexes() {
 # _roster_owners <audited-root> <scripts-directory> <paths-json-array>:
 # {"<path>": "<member>"} for each path the roster gives to a member, by
 # audit_owner_for_path, which shares its classifier with the batch
-# resolve-audit-members.sh dispatches by. No release context is armed: a
-# release-skipped owner still answers and is never dispatched, which fails
-# toward an unsatisfied veto. An absent library or unreadable roster owns
-# nothing. Call it in a command substitution, as _roster_owned_indexes.
+# resolve-audit-members.sh dispatches by. The release context is armed against
+# the same default-branch base that resolver reads, so a release-skipped owner
+# is never named on an update branch where it is never dispatched; a base that
+# cannot be resolved leaves it disarmed. An absent library or unreadable roster
+# owns nothing. Call it in a command substitution, as _roster_owned_indexes.
 _roster_owners() {
-  local library="$2/../../.claude/hooks/lib/audit-scope.sh" paths path owner answer="{}"
+  local library="$2/../../.claude/hooks/lib/audit-scope.sh" provenance_library="$2/../../.claude/hooks/lib/audit-base-provenance.sh"
+  local paths path owner answer="{}" provenance release_base
   paths="$(printf '%s' "$3" | jq -r '.[]? | strings' 2>/dev/null)" || paths=""
   if [ -n "$paths" ] && [ -f "$library" ]; then
     # shellcheck source=/dev/null
     . "$library" 2>/dev/null
     if type audit_owner_for_path >/dev/null 2>&1 && audit_scope_init "$1" 2>/dev/null; then
+      if [ -f "$provenance_library" ]; then
+        # shellcheck source=/dev/null
+        . "$provenance_library" 2>/dev/null
+        provenance="$(audit_resolve_base_provenance "$1" default-branch "" 2>/dev/null)" || provenance=""
+        release_base="${provenance##*$'\t'}"
+        [ -z "$release_base" ] || audit_scope_release_context "$1" "$release_base"
+      fi
       while IFS= read -r path; do
         owner="$(audit_owner_for_path "$path")"
         [ -n "$path" ] && [ -n "$owner" ] || continue
