@@ -10,7 +10,7 @@ At the end of each build phase whose entry carries a `- Security writer:` line, 
 
 ## The step
 
-1. **Dispatch.** The phase's security rows are the rows of `{PLAN_DIR}/tests.json` whose `security` is not `none`, whose `action` is not `retire` and whose `task` is a task of this phase. A `retire` row is never dispatched: only the maintainer retires a security test, and the drift check does not ask the ledger for it. Pre-clear the report path in the scratchpad with `rm -f`, then dispatch one `Agent(subagent_type: "security-test-writer")`. The prompt names the report path and says the file is JSON, carries `RESOLVED_ROOT`, the frozen interfaces from `{PLAN_DIR}/README.md`, and one line per row: `Row: <id> › <file> › <title> › <layer> › <security kind> › <action> › <caseKey or -> › <case>`. Wait for the agent to finish, then classify the report:
+1. **Dispatch.** The phase's security rows are the rows of `{PLAN_DIR}/tests.json` whose `security` is not `none`, whose `action` is not `retire` and whose `task` is a task of this phase. A `retire` row is never dispatched: only the maintainer retires a security test, and the drift check does not ask the ledger for it. Pre-clear the report path in the scratchpad with `rm -f`, then dispatch one `Agent(subagent_type: "security-test-writer")`. The prompt names the report path and says the file is JSON, carries `RESOLVED_ROOT`, the frozen interfaces from `{PLAN_DIR}/README.md`, and one line per row: `Row: <id> › <file> › <title> › <layer> › <security kind> › <action> › <caseKey or -> › <case>`. After the `Row:` line of a forgery `change` row whose layer is a story, add `Sibling: <row id> › <sibling row id>` when a route or real-server forgery row with the same `source` exists anywhere in `{PLAN_DIR}/tests.json`, whatever its phase or whether it is dispatched; add none when no such row exists. Wait for the agent to finish, then classify the report:
 
    ```bash
    bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <report> --expect-count <dispatched rows>
@@ -36,7 +36,7 @@ At the end of each build phase whose entry carries a `- Security writer:` line, 
 
 ## The audit-loop arm
 
-When an audit fixer adds or replaces a security row, the loop unit runs the same dispatch for those rows only, before the round's gate. The round's fixer is the code owner for step 4. A second failure stops the unit `needs-human`.
+When an audit fixer adds or replaces a security row, the loop unit runs the same dispatch (the `Sibling:` lookup included, over the whole of `tests.json`) for those rows only, before the round's gate. The round's fixer is the code owner for step 4. A second failure stops the unit `needs-human`.
 
 ## What it never does
 

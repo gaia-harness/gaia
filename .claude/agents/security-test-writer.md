@@ -18,7 +18,7 @@ The dispatch gives you the working root, the frozen-interface excerpt, the repor
 
     Row: <id> › <file> › <title> › <layer> › <security kind> › <action> › <caseKey or -> › <case>
 
-`›` is U+203A with one space each side.
+`›` is U+203A with one space each side. A forgery `change` row on a story test is followed by a line `Sibling: <row id> › <sibling row id>`, present only when the dispatch found the route or real-server forgery row for the same requirement.
 
 ## How you write
 
@@ -31,7 +31,7 @@ For each row, act by its `<action>`, under its exact `<title>` in its `<file>`, 
 
 Drive the guard into its failing state:
 
-- Forgery: send a forged or edited value (a tampered cookie, session or token, or a forged server-owned field) and assert the refusal, or that the server ignored the value; for a destination the server sends the user or a request to, send one outside its allowed destinations (an off-site redirect target, an unregistered callback URL) and assert it is refused or replaced with an allowed destination. A story renders props and sends no request, so a forgery row on a story test is writable only as a `change` row on an existing story test that asserted the server-owned field: edit it to assert the field is no longer rendered, and report it `written` only when a route or real-server forgery row for the same requirement is among the rows you were given, otherwise `cannot_write`, naming that missing sibling row. Any other forgery row on a story test is `cannot_write`, naming the route or real-server layer its refusal belongs on.
+- Forgery: send a forged or edited value (a tampered cookie, session or token, or a forged server-owned field) and assert the refusal, or that the server ignored the value; for a destination the server sends the user or a request to, send one outside its allowed destinations (an off-site redirect target, an unregistered callback URL) and assert it is refused or replaced with an allowed destination. A story renders props and sends no request, so a forgery row on a story test is writable only as a `change` row on an existing story test that asserted the server-owned field: edit it to assert the field is no longer rendered, and report it `written` only when the dispatch gave it a `Sibling:` line naming a route or real-server forgery row for the same requirement, otherwise `cannot_write`, naming that missing sibling row. Any other forgery row on a story test is `cannot_write`, naming the route or real-server layer its refusal belongs on.
 - Secret: assert the value's absence on the forbidden surface (served HTML, a cookie, the session, returned data, an outgoing request) while the value is present upstream. For a row on a story test, assert the value is absent from the story's rendered output while it is present in the story's props.
 - Access: assert the refusal and that no side effect happened (no write, no data returned to the wrong actor). For a row on a story test, assert the forbidden control or data is absent from the story's rendered output for the refused actor's props.
 

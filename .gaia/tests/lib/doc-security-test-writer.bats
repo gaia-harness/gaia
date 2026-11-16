@@ -10,7 +10,7 @@
 # story-layer instruction leaves the writer to report the row `cannot_write`,
 # which stops the plan's security-writer step. So: the Access and Secret
 # bullets each say what a story row asserts, the Forgery bullet reports a story
-# forgery row written only beside a route or real-server sibling, the
+# forgery row written only when the dispatch names a route or real-server sibling, the
 # entry-point line names the story's entry point, and the Test design lens
 # flags a story security row with no such sibling, so the plan audit adds it
 # before the writer sees it.
@@ -46,7 +46,7 @@ line_carries() {
 
 ACCESS_STORY="For a row on a story test, assert the forbidden control or data is absent from the story's rendered output for the refused actor's props."
 SECRET_STORY="For a row on a story test, assert the value is absent from the story's rendered output while it is present in the story's props."
-FORGERY_STORY='report it `written` only when a route or real-server forgery row for the same requirement is among the rows you were given, otherwise `cannot_write`, naming that missing sibling row.'
+FORGERY_STORY='report it `written` only when the dispatch gave it a `Sibling:` line naming a route or real-server forgery row for the same requirement, otherwise `cannot_write`, naming that missing sibling row.'
 STORY_ENTRY_POINT='a story test is a `.test()` on the story that renders the row'"'"'s state'
 LENS_FORGERY_STORY='or a story row flagged forgery with no route or real-server row for the same requirement, whose refusal is a request outcome, or a story access or secrets row with no sibling route or real-server row'
 
