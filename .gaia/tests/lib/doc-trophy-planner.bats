@@ -535,12 +535,16 @@ check_flow_row_allow_list() {
   doctrine="$(flat "$1/$DOCTRINE_REL")"
   table="$(flat "$1/$TABLE_REL")"
   lens="$(range_of "$1/$AUDIT_REL" '- **Test design' '## 4.6a-ii' | tr '\n' ' ' | tr -s ' ')"
-  need "$doctrine" 'It holds only the journey through the happy path, the effects that take several requests or sessions to stage' || return 1
+  need "$doctrine" "It holds only the journey through the happy path, the happy path's effects that take several requests or sessions to stage" || return 1
+  need "$doctrine" "repeats no refusal a build task's test or another flow owns, however many requests or sessions the refusal takes to stage," || return 1
   need "$doctrine" "A stated no-JavaScript error path gets no native post: the action's route test and the page's story cover it" || return 1
   need "$doctrine" 'and asserts no stated literal or state a lower-layer test owns' || return 1
   need "$doctrine" "checks its happy path's native form posts page-less in its flow test, never an error post" || return 1
   need "$lens" "a flow row step outside the doctrine's \`**Flow test.**\` allow-list" || return 1
-  need "$lens" "such as a refusal a build task's row or another flow owns, a native error post, a stated literal or state a lower-layer row owns, or a step that only reaches a page to see one, except a happy-path effect a flow step asserts" || return 1
+  need "$lens" "a happy-path effect that takes several requests or sessions to stage" || return 1
+  need "$lens" "such as a refusal a build task's row or another flow owns, however many requests or sessions it takes to stage, a native error post, a stated literal or state a lower-layer row owns, or a step that only reaches a page to see one, except a happy-path effect a flow step asserts" || return 1
+  need "$doctrine" "A happy-path step's own result that the user sees as a refusal (after sign-out the protected page redirects to sign-in) is a happy-path effect and stays." || return 1
+  need "$lens" "such as the sign-in redirect after sign-out, which stays on the flow even when the user sees it as a refusal" || return 1
   need "$lens" "drops it when nothing is left, recording a SPEC flow left with no row in \`coveredFlows\`" || return 1
   lacks "$lens" "unless it is its SPEC flow's only row" || return 1
   need "$table" "each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row" || return 1
@@ -552,6 +556,30 @@ check_flow_row_allow_list() {
 
 @test "red twin: the doctrine letting a flow hold any step fails" {
   red check_flow_row_allow_list "$DOCTRINE_REL" 'It holds only the journey' 'It holds the journey'
+}
+
+@test "red twin: the doctrine keeping any multi-session effect on a flow fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" "the happy path's effects that take several" 'the effects that take several'
+}
+
+@test "red twin: the doctrine keeping a refusal staged across sessions on a flow fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" ', however many requests or sessions the refusal takes to stage,' ','
+}
+
+@test "red twin: the test design lens keeping any multi-session effect on a flow fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" 'a happy-path effect that takes several' 'an effect that takes several'
+}
+
+@test "red twin: the test design lens keeping a refusal staged across sessions on a flow fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" ', however many requests or sessions it takes to stage' ''
+}
+
+@test "red twin: the doctrine no longer saying a refusal-shaped happy-path effect stays fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" " A happy-path step's own result that the user sees as a refusal (after sign-out the protected page redirects to sign-in) is a happy-path effect and stays." ''
+}
+
+@test "red twin: the test design lens no longer saying a refusal-shaped happy-path effect stays on the flow fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" ', such as the sign-in redirect after sign-out, which stays on the flow even when the user sees it as a refusal' ', which stays on the flow'
 }
 
 @test "red twin: the doctrine giving a stated error path a native post fails" {
