@@ -44,6 +44,8 @@ Every field is required unless marked.
 - `directive:<n>`: the number of an item under the audit heading that starts with `## Plan-time directives`, matched by that prefix: a real audit writes `## Plan-time directives (no SPEC change)`.
 - `description`: a spec-less plan's one key.
 
+A key whose requirement directs the builder rather than stating what the app does (the doctrine's `**Stated requirement.**`) gets no row: `tests.json` records it beside `rows` as `"instructionKeys": [{"source": "<key>", "reason": "<what it directs>"}]`. `verify` refuses an entry whose source is no key, a source named twice, an empty reason, and a recorded key that is also a row's `source`.
+
 ## Task-doc lines
 
 A task doc names a test only on a line `- Test: <repo-relative file> › <exact title>`, one line per distinct file plus title the task owns, plus the closing phase's `- Flow test (<flow_id>): <path>` line. The `›` is U+203A with one space each side.
@@ -59,7 +61,7 @@ No other test path appears in a task doc: a path ending `.test.ts`, `.test.tsx`,
 1. Read `.claude/doctrine/testing.md`.
 2. Enumerate the requirement keys with `requirement-keys.sh`.
 3. List the source paths the plan touches and run `node .gaia/scripts/test-design/existing-tests.mjs --root <tree> --touched <file>` over them: the existing tests that drive what the plan changes.
-4. Map every key, and every case and stated literal (SPEC rows, success criteria, scope boundaries, clarifications, directives, and the documents the SPEC's Required reading names), to rows. Every key is some row's `source`, and every row's `source` is a key.
+4. Map every key, and every case and stated literal (SPEC rows, success criteria, scope boundaries, clarifications, directives, and the documents the SPEC's Required reading names), to rows. Every key is some row's `source` or, when its requirement directs the builder, an `instructionKeys` entry, and every row's `source` is a key.
 5. Pick each row's layer by the doctrine's `## Layers`, and confirm a path's layer with `node .gaia/scripts/test-design/layer-map.mjs --root <tree>` (NUL-separated repo-relative paths on stdin). Put every case of one transition, status or role rule in that rule's one case table (the doctrine's `## What to test`); when that table is a unit test, the rule function's frozen contract takes every input a case varies.
 6. Give each row its action against the existing tests: `reuse`, `extend`, `change` or `retire`, else `new`.
 7. Flag access, forgery and secret rows per the doctrine's `## Guards and security rows`; a `retire` or `change` row on an existing test meeting that definition carries the flag, and one made because a security requirement in its `source` forbids what the existing test asserted carries that requirement's kind, whatever the test's own kind. Split a test whose cases carry different kinds per the doctrine's `**One kind per case.**`. Set each security row's `task` to the latest task whose code its test needs. On a security `retire` row whose code under test the plan deletes, set `deletes`; a security `retire` row of code the plan keeps gets none, and approval holds it for the maintainer.
@@ -69,4 +71,4 @@ No other test path appears in a task doc: a path ending `.test.ts`, `.test.tsx`,
 
 ## README rendering
 
-`README.md` carries a `## Test design` section with one table row per `tests.json` row, columns: id, source, case, file, title, layer, task, action, security. The README is the human's view; `tests.json` is the source.
+`README.md` carries a `## Test design` section with one table row per `tests.json` row, columns: id, source, case, file, title, layer, task, action, security. The README is the human's view; `tests.json` is the source. Below that table, one line per `instructionKeys` entry gives its source and reason.

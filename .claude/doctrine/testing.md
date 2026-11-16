@@ -13,7 +13,7 @@ How to write a test at a layer lives in the stack references:
 
 ## What to test
 
-**Stated requirement.** A stated requirement is a SPEC flow, a success criterion, a scope boundary, an answered clarification, an audit directive, or a statement in a document the SPEC's Required reading names. A spec-less plan's stated requirement is its description; work with no plan states its requirement in its issue or request.
+**Stated requirement.** A stated requirement is a SPEC flow, a success criterion, a scope boundary, an answered clarification, an audit directive, or a statement in a document the SPEC's Required reading names. A spec-less plan's stated requirement is its description; work with no plan states its requirement in its issue or request. A scope boundary that directs the builder rather than stating what the app does (ask before adding a dependency, never add a database, never ship a feature) names no behavior to test.
 
 - Test stated requirements only.
 - Never plan, list or write a test for a corner case or an error path no stated requirement names.
