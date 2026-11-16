@@ -155,8 +155,7 @@ _gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c 
 # nothing). The reviewer is the key's member or, for a cross-remit key (the
 # roster in <audited-root>, default <main-root>, gives its path to another
 # member, so its own member is never re-dispatched on that file), the path's
-# owner alone: the reporting member never reviews that file, so its dispatch
-# proves nothing about the repair. The owner reports under its own class, so any finding of the owner's
+# owner alone. The owner reports under its own class, so any finding of the owner's
 # on the path re-reports the key within the tolerance of the spans the
 # waiver-round diff maps the vetoed line to, else of the vetoed line itself.
 # rc 1 on an unreadable or malformed vetoes.json.
@@ -226,10 +225,9 @@ gaia_veto_keys_state() {
 
 # gaia_veto_reviewers <main-root> <B> <audited-root> <veto-state-json>: the
 # veto state with `reviewers` added, the sorted members the unit dispatches full
-# for an unsatisfied key: each key's member and its path's owner, the superset
-# of who can satisfy it (the path owner alone for a cross-remit key). The audit loop unit dispatches
-# them full, since a light clear reviews nothing. rc 1 when the veto state is
-# not an object.
+# (a light clear reviews nothing) for an unsatisfied key: each key's member and
+# its path's owner, the superset of who can satisfy it (the path owner alone for
+# a cross-remit key). rc 1 when the veto state is not an object.
 gaia_veto_reviewers() {
   local vetoes_file owners='{}'
   vetoes_file="$(gaia_loop_run_directory "$1" "$2")/vetoes.json"
