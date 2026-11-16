@@ -60,14 +60,14 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
-    "@gaia-harness/lint": "3.1.5",
+    "@gaia-harness/lint": "3.2.0",
     "bats": "1.13.0",
     "lint-staged": "17.6.0",
     "prettier": "3.9.10",
     "typescript": "6.0.3"
   },
   "engines": {
-    "node": ">=22.22.0"
+    "node": ">=22.22.2"
   },
   "packageManager": "pnpm@12.11.2+sha512.25a51652a196785af5f28bda6dfe8dc582ebefa4ac1d180221ce1390231c5fb76637822ea4b6e4633ce74acdcb0a77f725af11bad38177fdeddaee818a955cb9"
 }
