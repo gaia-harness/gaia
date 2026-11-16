@@ -34,6 +34,10 @@ The wiki is critical infrastructure; it decays when drift between code and docum
 
 **`gaia wiki broken-links`**: Lists wikilinks whose target page does not exist, with file and line (`--json` for a machine-readable list). A target resolves by slug or H1 title against every page outside `wiki/_archived/`. Used by the lint stage of `/gaia-wiki` for check #17.
 
+<!-- gaia:maintainer-only:start -->
+In this repo, CI's `cli-tests` job also fails a pull request on a dead path (the fitness lint's three dead-path rules) or a broken wikilink.
+<!-- gaia:maintainer-only:end -->
+
 **`gaia wiki chain <begin|commit|finish|refresh-nudge>`**: Manages the branch lifecycle for `/gaia-wiki` so every stage (sync, consolidate, lint) lands in one commit and one PR. The stages commit nothing themselves.
 
 - `begin` (before sync): refuses `main` and `master`. `/gaia-wiki` isolates the run on its own `wiki/<YYYY-MM-DD-HHMM>` branch (UTC) through `.claude/skills/gaia/references/isolation.md` first, a feature branch in place or a linked worktree, so `begin` never cuts one.

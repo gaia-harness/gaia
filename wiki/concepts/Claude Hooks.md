@@ -56,9 +56,9 @@ The sourced libraries under `.claude/hooks/lib/` are deliberately absent. They a
 | `debt-session-reconcile.sh` | SessionStart (startup\|resume) | Reconciles a shown `🐛 /gaia-debt` nudge against the live backlog. |
 | `issue-claim-release.sh` | PostToolUse (Bash) | Strips the `in-progress` claim from every issue a merged pull request closes. |
 | `local-janitor.sh` | Invoked by path from `wiki-session-start.sh`; also runnable on its own | Reaps a merged-and-gone local wiki landing branch and fast-forwards base to catch up a wiki landing. |
-| `post-audit-status.sh` | Invoked by path by the orchestrating session, after every member is dispositioned | Posts the `GAIA-Audit` commit status on HEAD, then marks the draft pull request ready (a refusal posts `failure` and converts it back to draft). |
+| `post-audit-status.sh` | Invoked by path by the orchestrating session, after every member is dispositioned | Posts the `GAIA-Audit` commit status on HEAD, then marks the draft pull request ready (a refusal posts `failure` and converts it back to draft). Declines a success while the PR body's head stamp is stale (`.claude/hooks/lib/pr-body-stamp.sh`). |
 | `post-findings-block-on-merge.sh` | PreToolUse (Bash) | Posts the machine-readable findings block on a local-mode merge, so it counts toward the recurrence tally. Never blocks. |
-| `pr-merge-audit-check.sh` | PreToolUse (Bash, Monitor) | Blocks `gh pr merge` until every dispatched Code Audit Team member has written its clearance marker. |
+| `pr-merge-audit-check.sh` | PreToolUse (Bash, Monitor) | Blocks `gh pr merge` until every dispatched Code Audit Team member has written its clearance marker, and blocks an audited merge while the PR body's head stamp is stale. |
 | `pr-merge-cost.sh` | PostToolUse (Bash) | Renders the per-PR usage-ledger block, its cost split into Execute and Code Audit Team rows, once a pull request merges. |
 | `ports-session-start.sh` | SessionStart (startup\|resume\|clear\|compact) | Registers the session host so its servers stay attributable; stops dead sessions' and removed trees' servers on a real start only. |
 | `provision-worktree.sh` | PostToolUse (EnterWorktree), SessionStart (startup\|resume\|clear\|compact) | Re-links a linked worktree's shared state, records which session is in it, assigns its port slot and port file, and regenerates what it needs generated. |
