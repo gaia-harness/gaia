@@ -46,9 +46,9 @@ line_carries() {
 
 ACCESS_STORY="For a row on a story test, assert the forbidden control or data is absent from the story's rendered output for the refused actor's props."
 SECRET_STORY="For a row on a story test, assert the value is absent from the story's rendered output while it is present in the story's props."
-FORGERY_STORY='report it `written` only when the dispatch gave it a `Sibling:` line naming a route or real-server forgery row for the same requirement, otherwise `cannot_write`, naming that missing sibling row.'
+FORGERY_STORY='with a `Sibling:` line, edit it to assert the field is no longer rendered and report it `written`; without one, edit nothing and report it `cannot_write`'
 STORY_ENTRY_POINT='a story test is a `.test()` on the story that renders the row'"'"'s state'
-LENS_FORGERY_STORY='or a story row flagged forgery with no route or real-server row for the same requirement, whose refusal is a request outcome, or a story access or secrets row with no sibling route or real-server row'
+LENS_FORGERY_STORY='or a story row flagged forgery that is not a `change` row on an existing story test or has no route or real-server forgery row for the same requirement, or a story access or secrets row with no route or real-server row for a guard the server enforces'
 
 @test "the Access bullet tells the writer what an access row on a story test asserts" {
   line_carries "$WRITER_AGENT" '- Access:' "$ACCESS_STORY"
