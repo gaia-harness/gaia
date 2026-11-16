@@ -225,7 +225,7 @@ $(stamp_of "$OLD_SHA")"
   mgf_run_merge "gh pr merge 12 --squash"
   assert_denied_by_json
   grep -qF -- 'not for head' <<<"$output" || return 1
-  grep -qF -- 'bash .gaia/scripts/pr-body-stamp.sh write' <<<"$output" || return 1
+  grep -qF -- '.gaia/scripts/pr-body-stamp.sh write' <<<"$output" || return 1
 }
 
 @test "gate: a body with no stamp denies the marker-cleared merge" {

@@ -593,7 +593,7 @@ if [ "$post_state" = "success" ] && [ -n "$pr_view" ]; then
     exit 0
   fi
   if ! stamp_reason="$(pr_body_stamp_verdict "$pr_body" "$head_sha")"; then
-    emit_decline "${stamp_reason}; next step: re-check the PR summary against the branch's commits and diff, then bash .gaia/scripts/pr-body-stamp.sh write"
+    emit_decline "${stamp_reason}; next step: re-check the PR summary against the branch's commits and diff, then run .gaia/scripts/pr-body-stamp.sh write"
     exit 0
   fi
 fi

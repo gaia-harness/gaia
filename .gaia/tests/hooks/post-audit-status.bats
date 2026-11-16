@@ -1032,7 +1032,7 @@ mutated_hook_mirror() {
   run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
   [ "$status" -eq 0 ]
   grep -qF -- "status: declined: the PR body stamp is not for head" <<<"$output" || return 1
-  grep -qF -- "bash .gaia/scripts/pr-body-stamp.sh write" <<<"$output" || return 1
+  grep -qF -- "run .gaia/scripts/pr-body-stamp.sh write" <<<"$output" || return 1
   assert_no_post
 }
 

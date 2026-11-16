@@ -154,7 +154,7 @@ gate_require_body_stamp() {
     gate_emit_deny "PR merge gate: cannot load .claude/hooks/lib/pr-body-stamp.sh, so it cannot check the PR body's head stamp. Restore it (it ships with the framework) and retry."
   fi
   if [ -z "$pr_record_head" ] || ! stamp_reason="$(pr_body_stamp_verdict "$pr_record_body" "$pr_record_head")"; then
-    gate_emit_deny "PR merge gate: ${stamp_reason}. Re-check the PR summary against the branch's commits and diff (wiki/concepts/PR Merge Workflow.md, #### Posting the status last), run \`bash .gaia/scripts/pr-body-stamp.sh write\`, then retry gh pr merge."
+    gate_emit_deny "PR merge gate: ${stamp_reason}. Re-check the PR summary against the branch's commits and diff (wiki/concepts/PR Merge Workflow.md, #### Posting the status last), run \`.gaia/scripts/pr-body-stamp.sh write\`, then retry gh pr merge."
   fi
 }
 
