@@ -45,7 +45,7 @@ setup() {
   SERVED_ERROR_LENS="A real-server row for a served error status that also asserts its page's heading or other content is trimmed to the status and any \`Location\`, never dropped for it"
   RULE_TABLE_PLANNER="Put every case of one transition, status or role rule in that rule's one case table"
   RULE_INPUT_PLANNER="the rule function's frozen contract takes every input a case varies"
-  RULE_TABLE_LENS="whose one case table lacks a case its requirement states, the case sitting only on another layer's row"
+  RULE_TABLE_LENS="whose one case table lacks a case its requirement states (for a rule stated as sets, each case the doctrine's \`## What to test\` derives from them; one row per stating requirement is a sample), the case sitting only on another layer's row"
   RULE_INPUT_LENS="the rule function's contract not taking the input that case varies"
 }
 
