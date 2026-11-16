@@ -1923,7 +1923,68 @@ cross_remit_critical_fixed() {
   true
 }
 
-@test "record-residual: --decision takes only accept, waive, fix or fixed, and only on record-residual" {
+# draft_stop <rows-json> [draft-flag]: two rounds reporting <rows>, round 1
+# waiving f.txt:1, a veto on it from round 2, and round 2 disposing it fix
+# with enforcement_draft set to [draft-flag] (default true): the
+# enforcement-draft stop.
+draft_stop() {
+  local fix_entry
+  stop_rounds "$1" "$1" || return 1
+  write_dispositions 1 "[$(disposition_entry f.txt 1 rule/x waive-out-of-scope "below the threshold" triage-threshold)]"
+  vetoes 2 rule/x f.txt 1
+  fix_entry="$(disposition_entry f.txt 1 rule/x fix "drafted" | jq -c --argjson draft "${2:-true}" '. + {enforcement_draft: $draft}')"
+  write_dispositions 2 "[$fix_entry]"
+}
+
+# discard_refused: the last run refused the discard and left the veto and the recorded residuals alone.
+discard_refused() {
+  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
+  [ "$(jq '.keys | length' "$RUN_FOLDER/vetoes.json")" -eq 1 ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ] || { cat "$RUN_FOLDER/recorded-residuals.jsonl"; return 1; }
+}
+
+@test "needs-human: a discard on an enforcement-draft key withdraws its veto and renders it an accepted residual; a repeat is refused" {
+  draft_stop "$(minor_rows f.txt 1 1)" || return 1
+  decide 1 discard '{"reason":"the human discarded the drafted repair"}' || return 1
+  [ "$status" -eq 0 ] || { echo "status $status: $output"; return 1; }
+  [ "$(jq -c '.keys' "$RUN_FOLDER/vetoes.json")" = '[]' ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  [ "$(jq -r '.decision' "$RUN_FOLDER/recorded-residuals.jsonl")" = discard ] || { cat "$RUN_FOLDER/recorded-residuals.jsonl"; return 1; }
+  run_sections
+  grep -qF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "pr-sections: $output"; return 1; }
+  grep -qF -- '- `f.txt:1` the human discarded the drafted repair.' <<<"$output" || { echo "pr-sections: $output"; return 1; }
+  mutant_check_tree audit-pr-sections-lib.sh -e 's/select(\.decision == "discard" or (/select((/' || return 1
+  run_sections
+  grep -qF -- '- `f.txt:1` the human discarded the drafted repair.' <<<"$output" && { echo "the renderer mutant still rendered the row"; return 1; }
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  decide 1 discard || return 1
+  [ "$status" -eq 3 ]
+}
+
+@test "needs-human: a discard is refused with no enforcement_draft fix entry, on an unvetoed key, and on a Critical or security-class key; each guard's mutant goes red" {
+  draft_stop "$(minor_rows f.txt 1 1)" false || return 1
+  decide 1 discard; discard_refused || return 1
+  mutant_check_tree audit-recorded-decision-lib.sh -e 's/ and \.enforcement_draft == true//' || return 1
+  decide 1 discard
+  [ "$status" -eq 0 ] || { echo "the draft-entry mutant still refused: $output"; return 1; }
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  draft_stop "$(minor_rows f.txt 1 1)" || return 1
+  printf '{"version":1,"keys":[]}\n' >"$RUN_FOLDER/vetoes.json"
+  decide 1 discard
+  [ "$status" -eq 3 ] || { echo "an unvetoed key was discarded: $output"; return 1; }
+  mutant_check_tree audit-recorded-decision-lib.sh -e 's/any(\.keys\[\]?; \[\.member, \.finding_class, \.path, \.line\] == \$key)/true/' || return 1
+  decide 1 discard
+  [ "$status" -eq 0 ] || { echo "the veto-presence mutant still refused: $output"; return 1; }
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  draft_stop "$(minor_rows f.txt 1 1 | jq -c 'map(. + {severity: "critical"})')" || return 1
+  decide 1 discard; discard_refused || return 1
+  draft_stop "$(minor_rows f.txt 1 1 | jq -c 'map(. + {security: true})')" || return 1
+  decide 1 discard; discard_refused || return 1
+  mutant_check_tree audit-recorded-decision-lib.sh -e 's/ and all(\.\[\]; security_class | not)//' || return 1
+  decide 1 discard
+  [ "$status" -eq 0 ] || { echo "the security-class mutant still refused: $output"; return 1; }
+}
+
+@test "record-residual: --decision takes only accept, waive, fix, fixed or discard, and only on record-residual" {
   printf '{"member":"%s","finding_class":"c/sug","path":"f.txt","line":6}\n' "$MEMBER" >"$BATS_TEST_TMPDIR/finding.json"
   run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/finding.json" --decision defer
   [ "$status" -eq 2 ] || return 1
