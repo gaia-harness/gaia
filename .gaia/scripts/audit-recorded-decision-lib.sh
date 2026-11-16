@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 #
 # The veto write behind a human's recorded fix decision, the owner lookup that
-# gates a cross-remit one, and the commit lookup behind a fixed one. Sourced
-# by audit-pr-sections-lib.sh. Relies on the caller's _error, _evaluator,
+# gates a cross-remit one, the commit lookup behind a fixed one, and the gate
+# and veto removal behind a discard one. Sourced by audit-pr-sections-lib.sh.
+# Relies on the caller's _error, _evaluator, _round_lookup, _SECURITY_CLASS_JQ,
 # gaia_exclusive_lock_take, _roster_owners, _GAIA_DISPOSITIONS_DIRECTORY, ROOT,
 # RUN_FOLDER and FINDING_FILE. Runs nothing at source time. Never `cd`s.
 
@@ -66,4 +67,45 @@ _fixed_commit() {
   git -C "$ROOT" diff --quiet "$round_tree" "$head_tree" -- ":(literal)$finding_path" 2>/dev/null || diff_status=$?
   [ "$diff_status" -eq 1 ] || return 0
   git -C "$ROOT" log -1 --format=%H HEAD -- ":(literal)$finding_path" 2>/dev/null
+}
+
+# _discard_allowed <round-history>: rc 0 when a human may discard the drafted
+# repair of FINDING_FILE's key: vetoes.json names the key, the latest round's
+# dispositions file holds it as a fix entry carrying enforcement_draft (the
+# enforcement-draft stop), and some round's lookup reports it while none
+# reports it Critical or security-class. Severity comes from the lookups,
+# never from the caller's file or the dispositions entry, which Claude writes.
+# A key no lookup reports is refused, since its severity is unknown. rc 3 on a
+# refusal, after naming it.
+_discard_allowed() {
+  local key latest round lookups="" round_lookup
+  key="$(jq -c 'if (.line | type) == "number" then [.member, .finding_class, .path, .line] else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
+    { _error "unreadable finding $FINDING_FILE"; return 3; }
+  latest="$(printf '%s' "$1" | jq 'length')" || { _error "the evaluator could not read the round history"; return 3; }
+  jq -e --argjson key "$key" 'any(.keys[]?; [.member, .finding_class, .path, .line] == $key)' "$RUN_FOLDER/vetoes.json" >/dev/null 2>&1 ||
+    { _error "discard refused: vetoes.json does not name this key"; return 3; }
+  jq -e --argjson key "$key" 'any(.entries[]?; [.member, .finding_class, .path, .line] == $key and .disposition == "fix" and .enforcement_draft == true)' \
+    "$RUN_FOLDER/dispositions-$latest.json" >/dev/null 2>&1 ||
+    { _error "discard refused: dispositions-$latest.json holds no enforcement_draft fix entry for this key"; return 3; }
+  for ((round = 1; round <= latest; round++)); do
+    round_lookup="$(_round_lookup "$round")" || round_lookup="[]"
+    lookups="$lookups$round_lookup"$'\n'
+  done
+  printf '%s' "$lookups" | jq -e -s --argjson key "$key" "$_SECURITY_CLASS_JQ"'
+    [.[][]? | select([.member, .finding_class, .path, .line] == $key)] | length > 0 and all(.[]; security_class | not)' >/dev/null 2>&1 ||
+    { _error "discard refused: no round reports this key as a Major or Minor non-security finding; a Critical or security-class key takes Hold or Commit"; return 3; }
+}
+
+# _veto_withdraw <row>: removes every vetoes.json entry for the row's key under
+# the same lock as _veto_recorded_fix. rc 3 when the lock stays held,
+# vetoes.json is unreadable or malformed, or the write fails.
+_veto_withdraw() {
+  local vetoes_file="$RUN_FOLDER/vetoes.json" temporary_file="$RUN_FOLDER/vetoes.json.$$"
+  _veto_lock "$vetoes_file.lock" || { _error "cannot lock $vetoes_file"; return 3; }
+  if ! jq --argjson row "$1" 'if type == "object" and .version == 1 and (.keys | type) == "array" then . else error("malformed") end
+    | ($row | [.member, .finding_class, .path, .line]) as $key | .keys |= map(select([.member, .finding_class, .path, .line] != $key))' \
+    "$vetoes_file" >"$temporary_file" 2>/dev/null || ! mv "$temporary_file" "$vetoes_file"; then
+    rm -f "$temporary_file"; rm -rf "$vetoes_file.lock"; _error "cannot write $vetoes_file"; return 3
+  fi
+  rm -rf "$vetoes_file.lock"
 }

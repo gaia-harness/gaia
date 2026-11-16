@@ -329,6 +329,12 @@ has_bare_shell_eval() {
   assert_pinned 'A finding that needs an ENFORCEMENT_PATHS edit means no commit for the round: stop `needs-human` and name the path.'
 }
 
+@test "agent drafts a vetoed enforcement-path repair and stops for the human with it uncommitted" {
+  assert_pinned 'A `fix` entry for a key in `Vetoes:` whose path is in the `ENFORCEMENT_PATHS` list of `.gaia/scripts/audit-fix-verify.sh` gets `"enforcement_draft": true` and goes to the fixer first'
+  assert_pinned 'every error it lists is `enforcement-path` on an `enforcement_draft` entry'"'"'s path, send no continuation, run no gate and make no commit: leave the fixer'"'"'s edits in the tree and stop `needs-human`'
+  assert_pinned '`enforcement-draft <member> <finding_class> <path>:<line>`'
+}
+
 @test "agent forbids merging, posting a status, CHANGELOG edits and vetoes.json" {
   assert_pinned 'Never run `gh pr merge`'
   assert_pinned 'Never run `post-audit-status.sh`'

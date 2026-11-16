@@ -22,7 +22,7 @@
 #   audit-dispositions-check.sh waiver-table   --root <R> --run-folder <D> --rounds <a>-<b> [--snapshot-dir <S>]
 #   audit-dispositions-check.sh pr-sections    --root <R> --run-folder <D> [--snapshot-dir <S>]
 #   audit-dispositions-check.sh residual-count --root <R> --run-folder <D> [--snapshot-dir <S>]
-#   audit-dispositions-check.sh record-residual --root <R> --run-folder <D> --finding <file> [--decision accept|waive|fix|fixed]
+#   audit-dispositions-check.sh record-residual --root <R> --run-folder <D> --finding <file> [--decision accept|waive|fix|fixed|discard]
 #   audit-dispositions-check.sh undecided      --root <R> --run-folder <D>
 #
 # Dispositions: fix, accept-residual, waive-out-of-scope, file, divert.
@@ -166,7 +166,8 @@
 # the latest row per member's key deciding it, and prints nothing; no
 # dispositions eligibility rule grades it, but an accept or waive needs the
 # open round's live read to show it not security-class, and a fixed needs that
-# read to show it cross_remit too, with its path changed since the round's tree. An accept row
+# read to show it cross_remit too, with its path changed since the round's tree. A discard,
+# on an enforcement-draft key, withdraws its veto (audit-recorded-decision-lib.sh). An accept row
 # takes the finding's failure mode as its reason when the lookup has one, and
 # drops a key any veto names, whatever its round, or a round after the row's
 # `round` re-reports security-class. residual-count prints
@@ -200,7 +201,7 @@ _SECURITY_CLASS_JQ='def security_class: ((.severity | IN("major", "minor")) | no
   { printf 'audit-dispositions-check: cannot load %s/audit-triage-lib.sh\n' "$_GAIA_DISPOSITIONS_DIRECTORY" >&2; exit 3; }
 
 _usage() {
-  printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections|residual-count|record-residual|undecided --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>] [--finding <file> [--decision accept|waive|fix|fixed]]\n' >&2
+  printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections|residual-count|record-residual|undecided --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>] [--finding <file> [--decision accept|waive|fix|fixed|discard]]\n' >&2
   return 2
 }
 
@@ -660,7 +661,7 @@ main() {
       --rounds) [ $# -ge 2 ] || { _usage; return 2; }; ROUNDS="$2"; shift 2 ;;
       --snapshot-dir) [ $# -ge 2 ] || { _usage; return 2; }; SNAPSHOT_DIRECTORY="$2"; shift 2 ;;
       --finding) [ $# -ge 2 ] || { _usage; return 2; }; FINDING_FILE="$2"; shift 2 ;;
-      --decision) [ $# -ge 2 ] && [[ "$2" =~ ^(accept|waive|fix|fixed)$ ]] || { _usage; return 2; }; DECISION="$2"; shift 2 ;;
+      --decision) [ $# -ge 2 ] && [[ "$2" =~ ^(accept|waive|fix|fixed|discard)$ ]] || { _usage; return 2; }; DECISION="$2"; shift 2 ;;
       *) _usage; return 2 ;;
     esac
   done

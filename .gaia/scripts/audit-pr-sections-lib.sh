@@ -71,7 +71,8 @@ def in_bound: . != null and .security == false and .severity != "critical";
 # latest row for a member's key decides it, so a corrected decision replaces the
 # earlier one. A key some round disposed fix, or a veto names for that member,
 # is dropped: a finding is never both fixed and accepted. So is a row whose key a later
-# round re-reports security-class, which needs its own disposition.
+# round re-reports security-class, which needs its own disposition. A discard
+# row is kept whatever round disposed its key fix: that fix was the draft the human threw away.
 # shellcheck disable=SC2016
 _RECORDED_JQ="$_ROW_TEXT_JQ"'
 [inputs | fromjson?
@@ -79,7 +80,7 @@ _RECORDED_JQ="$_ROW_TEXT_JQ"'
       and (.path | type) == "string" and (.line | type) == "number")]
 | to_entries | group_by(.value | [.member, .finding_class, .path, (.line | line_of)]) | map(max_by(.key) | .value)
 | [.[] | select(.decision != "fix")
-  | select([.finding_class, .path, (.line | line_of)] as $key | $dropped.fixed | any(. == $key) | not)
+  | select(.decision == "discard" or ([.finding_class, .path, (.line | line_of)] as $key | $dropped.fixed | any(. == $key) | not))
   | select([.member, .finding_class, .path, (.line | line_of)] as $key | $dropped.vetoed | any(. == $key) | not)
   | select((if (.round | type) == "number" then .round else 0 end) as $round | [.member, .finding_class, .path, (.line | line_of)] as $key
       | $escalated | any(.[0] > $round and .[1:] == $key) | not)
@@ -334,7 +335,10 @@ _command_undecided() {
 # where fixed is its one exit. It is refused unless the finding's path differs
 # between the open round's tree (round-history) and HEAD's, and it stores the
 # latest commit on HEAD touching that path. A merge from main that touches the
-# path also passes. Every row stores `round`, the latest round in the history
+# path also passes. A discard withdraws the veto on a key whose drafted
+# enforcement-path repair the human threw away and records it as accepted
+# (_discard_allowed gates it, _veto_withdraw removes it after the row, so a
+# retry finishes). Every row stores `round`, the latest round in the history
 # when it was written, and decides its key in that round and earlier ones only,
 # so a later re-report needs a new decision. The reason is stored as given; pr-sections normalizes
 # it on read. rc 3 on an unreadable or refused finding.
@@ -346,6 +350,7 @@ _command_record_residual() {
     open_entries="$(_open_round_entries "$history")" || { _error "the evaluator could not read the open round's findings"; return 3; }
   fi
   [ "$DECISION" != fixed ] || fixing_commit="$(_fixed_commit "$history")"
+  [ "$DECISION" != discard ] || _discard_allowed "$history" || return 3
   case "$DECISION" in fix | fixed) path_owned="$(_finding_path_owned)" ;; esac
   row="$(jq -c --arg decision "$DECISION" --argjson open "$open_entries" --argjson round "$latest" --arg commit "$fixing_commit" \
     --argjson path_owned "$path_owned" "$_SECURITY_CLASS_JQ"'
@@ -366,12 +371,12 @@ _command_record_residual() {
     { _error "unreadable or refused finding $FINDING_FILE: an accept or waive needs the open round to report it as not security-class (else record --decision fix); a fix is refused on a cross_remit one when the roster gives its path to no member (no review could satisfy the veto): record --decision fixed once its path has changed since the open round's tree, else --decision waive (a security-class one has no waive: change its path first); a fixed is refused on any other finding, and on a security-class one whose path a member owns, or any security-class one while the .gaia/audit-ci.yml roster cannot be read"; return 3; }
   [ -n "$row" ] || { _error "unreadable finding $FINDING_FILE"; return 3; }
   if [ "$DECISION" = fix ]; then _veto_recorded_fix "$row" || return 3; fi
-  if [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
+  if ! { [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
       def full: [.member, .finding_class, .path, (.line | line_of)];
       [inputs | fromjson? | select(type == "object") | select(full == ($row | full))] | last
-      | . != null and .source == $row.source and .decision == $row.decision and .round == $row.round' <"$recorded_file" >/dev/null 2>&1; then
-    return 0
+      | . != null and .source == $row.source and .decision == $row.decision and .round == $row.round' <"$recorded_file" >/dev/null 2>&1; }; then
+    mkdir -p "$RUN_FOLDER" 2>/dev/null || { _error "cannot create $RUN_FOLDER"; return 3; }
+    printf '%s\n' "$row" >>"$recorded_file" || { _error "cannot write $recorded_file"; return 3; }
   fi
-  mkdir -p "$RUN_FOLDER" 2>/dev/null || { _error "cannot create $RUN_FOLDER"; return 3; }
-  printf '%s\n' "$row" >>"$recorded_file" || { _error "cannot write $recorded_file"; return 3; }
+  if [ "$DECISION" = discard ]; then _veto_withdraw "$row" || return 3; fi
 }
