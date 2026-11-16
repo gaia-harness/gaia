@@ -39,7 +39,11 @@ takes at most four options and adds its own free-text `Other` to
 every question, with the following option ordering:
 
 1. **Recommended option first.** The PO names the option it would
-   choose given the discovery so far, with a short reason.
+   choose given the discovery so far, with a short reason. When the
+   description states a rule the question touches, the recommendation
+   is the reading its words support: a limit ("only those who can see
+   a request can comment") grants nothing, and a permission the
+   description withholds is never the recommendation.
 2. **Up to two ranked alternatives.** The next most plausible options,
    ordered by how close they are to the recommendation. When more are
    viable, the PO lists the strongest two and names the rest in the

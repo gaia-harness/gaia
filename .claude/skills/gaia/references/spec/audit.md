@@ -40,7 +40,7 @@ The four core lenses (always dispatched; the set is chosen for low overlap, each
 
 | ID | Fires when the spec touches | Hunts for |
 | --- | --- | --- |
-| `SEC` | auth, tokens or secrets, CSRF, redirects, uploads, permissions, PII, raw user input, headers, cookies | injection, SSRF, open redirect, token or secret leakage, missing authorization, unsafe deserialization; whether the SPEC's security claim holds and its acceptance gate is adversarial |
+| `SEC` | auth, tokens or secrets, CSRF, redirects, uploads, permissions, PII, raw user input, headers, cookies | injection, SSRF, open redirect, token or secret leakage, missing authorization, unsafe deserialization; a credential the app holds for another service (an API or session token, even the user's own) with no SPEC rule keeping it unreadable in the browser (a signed-only cookie is readable); whether the SPEC's security claim holds and its acceptance gate is adversarial |
 | `MIG` | schema, format, or ledger changes; renamed, removed, or added fields; breaking API or serialization changes; config-vocabulary changes | existing-data handling, reversibility and rollback, dual-read or dual-write windows, version skew, what breaks for legacy or in-flight records |
 | `A11Y` | UI components, routes, pages, anything that renders DOM | flows and criteria that pass an axe rule yet fail real assistive tech; missing keyboard, focus-order, label, contrast, or landmark criteria; aria misuse |
 | `DOC` | wiki or docs deliverables, "points to X" pointer criteria, README or section-title citations | duplication of an authoritative source, rot-resistance, dead cross-references, pointer criteria satisfiable by a bare path drop |
