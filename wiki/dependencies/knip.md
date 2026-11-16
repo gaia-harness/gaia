@@ -20,7 +20,7 @@ Reports unused files, exports, types, and dependencies across the codebase. Devt
 - Runs automatically pre-merge inside the [[Code Review Audit Agent]] (alongside `react-doctor`) too, where its findings are sorted into the buckets below.
 - Not part of the [[Quality Gate]] (pre-commit): in-progress work routinely flags exports that haven't been wired up yet, which drowns the signal.
 <!-- gaia:maintainer-only:start -->
-- The CLI has its own config, `.gaia/cli/knip.config.ts`, run by `pnpm -C .gaia/cli knip` and as a blocking step in the CLI Tests workflow.
+- The CLI has its own config, `.gaia/cli/knip.config.ts`, run by `pnpm -C .gaia/cli knip` and as a blocking step in the `GAIA: CLI Tests` workflow.
 <!-- gaia:maintainer-only:end -->
 
 ## Template-aware config
