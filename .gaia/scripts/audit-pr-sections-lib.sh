@@ -331,13 +331,12 @@ _command_undecided() {
 # since no review could satisfy that veto. A fixed records a cross_remit finding
 # of the open round that the main thread fixed, with no veto, since its member
 # never reviews that file; a security-class one only on such an unowned path,
-# where fixed is its one exit. It
-# is refused unless the finding's path differs between the open round's tree
-# (round-history) and HEAD's, and it stores the latest commit on HEAD touching
-# that path. A merge from main that touches the path also passes. Every row
-# stores `round`, the latest round in the history when it was written, and
-# decides its key in that round and earlier ones only, so a later re-report
-# needs a new decision. The reason is stored as given; pr-sections normalizes
+# where fixed is its one exit. It is refused unless the finding's path differs
+# between the open round's tree (round-history) and HEAD's, and it stores the
+# latest commit on HEAD touching that path. A merge from main that touches the
+# path also passes. Every row stores `round`, the latest round in the history
+# when it was written, and decides its key in that round and earlier ones only,
+# so a later re-report needs a new decision. The reason is stored as given; pr-sections normalizes
 # it on read. rc 3 on an unreadable or refused finding.
 _command_record_residual() {
   local recorded_file="$RUN_FOLDER/recorded-residuals.jsonl" open_entries="null" history latest row fixing_commit="" path_owned=false
