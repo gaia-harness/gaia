@@ -102,7 +102,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 
 - **Access**: who may act or see. Sign-in and its refusals, role, ownership and visibility, account state that decides whether an actor may act (deactivated, suspended, a role change on the next request), and authorization checked before validation or data access. A status rule that decides whether an actor may act is access.
 - **Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.
-- **Secrets**: values that must never be exposed. A requirement (a SPEC line or a plan-time directive) that keeps a value server-only is a secrets requirement, whatever the value.
+- **Secrets**: values that must never be exposed. A requirement that keeps a value server-only is a secrets requirement, whatever the value.
 
 Ordinary validation and status rules are not security rows. A retire or change row on an existing test of one of these kinds carries the flag too. So does a retire or change row whose `source` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it), whatever the existing test asserted: it carries that requirement's kind, and such a retire is a security retire.
 
