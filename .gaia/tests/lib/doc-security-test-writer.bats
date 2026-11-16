@@ -5,8 +5,8 @@
 # example that backs them (.claude/skills/gaia/references/plan/decomposition-audit.md).
 #
 # A plan can hand the writer an access, forgery or secrets row on a story test,
-# since a change row whose source is a security requirement carries that
-# requirement's kind whatever the existing test asserted. A kind bullet with no
+# since a change row made because a security requirement forbids what the
+# existing test asserted carries that requirement's kind. A kind bullet with no
 # story-layer instruction leaves the writer to report the row `cannot_write`,
 # which stops the plan's security-writer step. So: the Access and Secret
 # bullets each say what a story row asserts, the Forgery bullet reports a story

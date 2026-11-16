@@ -341,10 +341,12 @@ check_forged_value() {
 # route tests cover. A test of a double is judged by what it can catch beyond
 # that app test, and a wiring gap takes no new row. The review list's security
 # retire items come from the table after fixes apply, since minor fixes apply
-# after the list. A retire or change row whose source is a security requirement
-# takes that requirement's kind in the doctrine, the table step and the lens,
-# since keying only on the retired test's own kind left a retire made for a
-# secret requirement flagged none. A requirement that keeps a value server-only
+# after the list. A retire or change row made because a security requirement in
+# its source forbids what the existing test asserted takes that requirement's
+# kind in the doctrine, the table step and the lens, since keying only on the
+# retired test's own kind left a retire made for a secret requirement flagged
+# none, and keying on the source citation alone flagged a retire made because
+# the plan deletes the code under test. A requirement that keeps a value server-only
 # is a secrets requirement whatever the value, since judging the value harmless
 # left its retire and change rows flagged none.
 check_lens_doctrine_rows() {
@@ -371,9 +373,9 @@ check_lens_doctrine_rows() {
   need "$lens" 'its fix trims the row to the kind its flag names and adds a row for each other kind' || return 1
   need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
   need "$doctrine" 'A requirement that keeps a value server-only is a secrets requirement, whatever the value.' || return 1
-  need "$doctrine" "So does a retire or change row whose \`source\` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it), whatever the existing test asserted: it carries that requirement's kind, and such a retire is a security retire." || return 1
-  need "$table" "and one whose \`source\` is a security requirement carries that requirement's kind, whatever the existing test asserted" || return 1
-  need "$lens" "or whose \`source\` is a security requirement (then that requirement's kind, whatever the existing test asserted)" || return 1
+  need "$doctrine" "So does a retire or change row whose \`source\` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it) and that is made because that requirement forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." || return 1
+  need "$table" "and one made because a security requirement in its \`source\` forbids what the existing test asserted carries that requirement's kind" || return 1
+  need "$lens" "or made because a security requirement in its \`source\` forbids what the existing test asserted (then that requirement's kind)" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
   need "$lens" 'A stated literal or state stays on its story or route test even when a real-server row asserts the same one' || return 1
   need "$lens" "that row is trimmed to asserting the element carrying it is in the served HTML when the doctrine's \`## Served HTML\` makes that HTML the requirement, and dropped otherwise. A literal that is itself the served-HTML requirement by the doctrine's \`## Served HTML\` (a \`<title>\`, a meta description) stays on its real-server row, and a \`**Served check.**\` row the doctrine requires (served status and any \`Location\`) is never a duplicate of a route test" || return 1
@@ -484,7 +486,11 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the doctrine keying a retire's flag only on the retired test's kind fails" {
-  red check_lens_doctrine_rows "$DOCTRINE_REL" " So does a retire or change row whose \`source\` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it), whatever the existing test asserted: it carries that requirement's kind, and such a retire is a security retire." ''
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " So does a retire or change row whose \`source\` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it) and that is made because that requirement forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." ''
+}
+
+@test "red twin: the doctrine flagging a retire by source citation alone fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " and that is made because that requirement forbids what the existing test asserted, whatever that test's own kind" ", whatever the existing test asserted"
 }
 
 @test "red twin: the doctrine judging a server-only value's secrecy by the value fails" {
@@ -496,11 +502,15 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the planner's table step dropping the source-kind retire flag fails" {
-  red check_lens_doctrine_rows "$TABLE_REL" ", and one whose \`source\` is a security requirement carries that requirement's kind, whatever the existing test asserted" ''
+  red check_lens_doctrine_rows "$TABLE_REL" ", and one made because a security requirement in its \`source\` forbids what the existing test asserted carries that requirement's kind" ''
 }
 
 @test "red twin: the test design lens dropping the source-kind retire flag fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" " or whose \`source\` is a security requirement (then that requirement's kind, whatever the existing test asserted)" ''
+  red check_lens_doctrine_rows "$AUDIT_REL" " or made because a security requirement in its \`source\` forbids what the existing test asserted (then that requirement's kind)" ''
+}
+
+@test "red twin: the test design lens flagging a retire by source citation alone fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" "or made because a security requirement in its \`source\` forbids what the existing test asserted (then that requirement's kind)" "or whose \`source\` is a security requirement (then that requirement's kind, whatever the existing test asserted)"
 }
 
 @test "red twin: the doctrine judging the flag per row fails" {
