@@ -685,3 +685,29 @@ unattended_veto_passes() {
   grep -qF -- '`gate-owed.json`' <<<"$section_text" || return 1
   grep -qF -- '`gate-owed-<n>.log`' <<<"$section_text"
 }
+
+# enforcement_draft_passes <page> <runbook>: rc 0 when the fixer may draft a
+# vetoed enforcement-path repair, the verifier failure on it stops with no
+# continuation, and the runbook asks the human with no recommendation and
+# the conservative option first.
+enforcement_draft_passes() {
+  local fix_round row
+  fix_round="$(section "$FIXROUND" "$1" | sentences)" || return 1
+  grep -qF -- 'unless the dispositions file names it in enforcement_paths_allowed or a fix entry on that path carries enforcement_draft: true' <<<"$fix_round" || return 1
+  grep -qF -- 'a failure whose every error is `enforcement-path` on such an entry'"'"'s path gets no continuation: the edits stay uncommitted and the round stops `needs-human` with `enforcement-draft`' <<<"$fix_round" || return 1
+  row="$(grep -F -- '| `dispositions-check-failed`, `needs-human`, `failure` |' "$2")" || return 1
+  grep -qF -- 'ask one `AskUserQuestion` that recommends nothing, its options in this order: `Hold` (leave the tree as it is and stop), `Commit`' <<<"$row" || return 1
+  grep -qF -- 'and `Discard` (restore those paths and stop; the veto stands)' <<<"$row"
+}
+
+@test "a vetoed enforcement-path repair is drafted, stops uncommitted, and the human picks with Hold first; each mutation goes red" {
+  local mutated
+  enforcement_draft_passes "$PAGE" "$RUNBOOK" || return 1
+  mutated="$(replace_in "$PAGE" ' or a fix entry on that path carries enforcement_draft: true' '')" || return 1
+  enforcement_draft_passes "$mutated" "$RUNBOOK" && return 1
+  mutated="$(replace_in "$PAGE" 'gets no continuation: the edits stay uncommitted' 'gets one continuation')" || return 1
+  enforcement_draft_passes "$mutated" "$RUNBOOK" && return 1
+  mutated="$(replace_in "$RUNBOOK" 'its options in this order: `Hold` (leave the tree as it is and stop), `Commit`' 'its options in this order: `Commit`')" || return 1
+  enforcement_draft_passes "$PAGE" "$mutated" && return 1
+  true
+}
