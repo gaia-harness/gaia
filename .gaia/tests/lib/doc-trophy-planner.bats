@@ -536,6 +536,8 @@ check_flow_row_allow_list() {
   need "$lens" "a flow row step outside the doctrine's \`**Flow test.**\` allow-list" || return 1
   need "$lens" "a happy-path effect that takes several requests or sessions to stage" || return 1
   need "$lens" "such as a refusal a build task's row or another flow owns, however many requests or sessions it takes to stage, a native error post, a stated literal or state a lower-layer row owns, or a step that only reaches a page to see one, except a happy-path effect a flow step asserts" || return 1
+  need "$doctrine" "A happy-path step's own result that the user sees as a refusal (after sign-out the protected page redirects to sign-in) is a happy-path effect and stays." || return 1
+  need "$lens" "which stays on the flow even when the user sees it as a refusal, such as the sign-in redirect after sign-out" || return 1
   need "$lens" "drops it when nothing is left, recording a SPEC flow left with no row in \`coveredFlows\`" || return 1
   lacks "$lens" "unless it is its SPEC flow's only row" || return 1
   need "$table" "each refusal it names, and each stated literal or state a lower-layer row already owns, maps to the delivering task's lower-layer row" || return 1
@@ -563,6 +565,14 @@ check_flow_row_allow_list() {
 
 @test "red twin: the test design lens keeping a refusal staged across sessions on a flow fails" {
   red check_flow_row_allow_list "$AUDIT_REL" ', however many requests or sessions it takes to stage' ''
+}
+
+@test "red twin: the doctrine dropping a refusal-shaped happy-path effect from the flow fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" " A happy-path step's own result that the user sees as a refusal (after sign-out the protected page redirects to sign-in) is a happy-path effect and stays." ''
+}
+
+@test "red twin: the test design lens dropping a refusal-shaped happy-path effect from the flow fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" ' even when the user sees it as a refusal, such as the sign-in redirect after sign-out' ''
 }
 
 @test "red twin: the doctrine giving a stated error path a native post fails" {
