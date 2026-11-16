@@ -9,10 +9,11 @@
 # requirement's kind whatever the existing test asserted. A kind bullet with no
 # story-layer instruction leaves the writer to report the row `cannot_write`,
 # which stops the plan's security-writer step. So: the Access and Secret
-# bullets each say what a story row asserts, the Forgery bullet says a forgery
-# row never sits on a story test, the entry-point line names the story's
-# entry point, and the Test design lens names a story row flagged forgery as a
-# wrong layer, so the plan audit moves it before the writer sees it.
+# bullets each say what a story row asserts, the Forgery bullet reports a story
+# forgery row written only beside a route or real-server sibling, the
+# entry-point line names the story's entry point, and the Test design lens
+# flags a story security row with no such sibling, so the plan audit adds it
+# before the writer sees it.
 #
 # Each check reads one line, found by its own prefix, so a phrase surviving on
 # another line cannot green a line that dropped it. Each helper takes the file
@@ -45,9 +46,9 @@ line_carries() {
 
 ACCESS_STORY="For a row on a story test, assert the forbidden control or data is absent from the story's rendered output for the refused actor's props."
 SECRET_STORY="For a row on a story test, assert the value is absent from the story's rendered output while it is present in the story's props."
-FORGERY_STORY='A forgery row never sits on a story test: a story renders props and sends no request, so report it `cannot_write`, naming the route or real-server layer its refusal belongs on.'
+FORGERY_STORY='report it `written` only when a route or real-server forgery row for the same requirement is among the rows you were given, otherwise `cannot_write`, naming that missing sibling row.'
 STORY_ENTRY_POINT='a story test is a `.test()` on the story that renders the row'"'"'s state'
-LENS_FORGERY_STORY='or a story row flagged forgery, whose refusal is a request outcome'
+LENS_FORGERY_STORY='or a story row flagged forgery with no route or real-server row for the same requirement, whose refusal is a request outcome, or a story access or secrets row with no sibling route or real-server row'
 
 @test "the Access bullet tells the writer what an access row on a story test asserts" {
   line_carries "$WRITER_AGENT" '- Access:' "$ACCESS_STORY"
@@ -65,7 +66,7 @@ LENS_FORGERY_STORY='or a story row flagged forgery, whose refusal is a request o
   line_carries "$WRITER_AGENT" '- Secret:' "$SECRET_STORY"
 }
 
-@test "the Forgery bullet says a forgery row never sits on a story test" {
+@test "the Forgery bullet makes a story forgery row written only beside a route or real-server sibling" {
   line_carries "$WRITER_AGENT" '- Forgery:' "$FORGERY_STORY"
 }
 
@@ -73,6 +74,6 @@ LENS_FORGERY_STORY='or a story row flagged forgery, whose refusal is a request o
   line_carries "$WRITER_AGENT" "Use the layer's real entry point:" "$STORY_ENTRY_POINT"
 }
 
-@test "the Test design lens names a story row flagged forgery as a wrong layer" {
+@test "the Test design lens flags a story security row with no sibling route or real-server row" {
   line_carries "$DECOMPOSITION_AUDIT" '  - a wrong layer for what the row asserts,' "$LENS_FORGERY_STORY"
 }

@@ -106,6 +106,8 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 
 Ordinary validation and status rules are not security rows. A retire or change row on an existing test of one of these kinds carries the flag too. So does a retire or change row whose `source` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it), whatever the existing test asserted: it carries that requirement's kind, and such a retire is a security retire.
 
+**Story security row.** A story security row proves only what one component renders for given props, so it is additive: it never replaces the route or real-server test the guard needs. An access or secrets requirement the app enforces on the server has its own route or real-server row besides the story row. A forgery row has no story-only form; its story form is a `change` row on an existing story test that asserted the server-owned field, kept only beside the route or real-server forgery row for the same requirement.
+
 **One kind per case.** Judge each case, not each row: a row is judged by its `caseKey` when it has one, by its title otherwise. Two cases that share a test and carry different kinds, `none` included (a signed-out redirect beside a signed-in render, or a refusal beside a forged cookie), each get their own row, keyed by `caseKey`, and every row on one shared `.each` or `.for` test sits in the latest task its security rows need. With no case table, each kind's cases go in a test of their own. Splitting an existing security test or a flagged row keeps its flag on the row narrowed to its own kind's cases, and each moved case takes its own kind: no split clears a flag.
 
 - When a security test fails, fix the code, never weaken the test.
