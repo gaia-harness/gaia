@@ -572,7 +572,7 @@ check_flow_row_allow_list() {
 }
 
 @test "red twin: the test design lens no longer saying a refusal-shaped happy-path effect stays on the flow fails" {
-  red check_flow_row_allow_list "$AUDIT_REL" ' even when the user sees it as a refusal' ''
+  red check_flow_row_allow_list "$AUDIT_REL" ', such as the sign-in redirect after sign-out, which stays on the flow even when the user sees it as a refusal' ', which stays on the flow'
 }
 
 @test "red twin: the doctrine giving a stated error path a native post fails" {
