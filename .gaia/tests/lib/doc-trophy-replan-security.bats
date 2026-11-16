@@ -175,6 +175,49 @@ mutated_tree() {
   [ -z "$output" ]
 }
 
+@test "a keyed security row kept under its id with a reworded case is reworded, not lost" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a POST of the form"}'
+  write_table "$AFTER" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a signed-out POST of the form"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ "$output" = 'reworded: access success_criteria:0 T1 ("a POST of the form" -> "a signed-out POST of the form")' ]
+}
+
+@test "red twin: with no id pass a reworded case reads as lost" {
+  mutated_tree "$SCRIPTS_REL/security-rows-lost.mjs" 'candidate.id === row.id' 'false'
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a POST of the form"}'
+  write_table "$AFTER" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a signed-out POST of the form"}'
+  compare "$TREE"
+  [ "$status" -eq 0 ]
+  [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
+}
+
+@test "a keyed security row dropped with no row under its id is lost" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a GET"}' \
+    '{"id": "T2", "source": "success_criteria:0", "security": "access", "caseKey": "a POST"}'
+  write_table "$AFTER" \
+    '{"id": "T2", "source": "success_criteria:0", "security": "access", "caseKey": "a POST"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
+}
+
+@test "an id whose row another snapshot case claimed is not a reword" {
+  write_table "$BEFORE" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a GET"}' \
+    '{"id": "T2", "source": "success_criteria:0", "security": "access", "caseKey": "a POST"}'
+  write_table "$AFTER" \
+    '{"id": "T1", "source": "success_criteria:0", "security": "access", "caseKey": "a POST"}'
+  compare
+  [ "$status" -eq 0 ]
+  [ "$output" = 'lost: access success_criteria:0 (1 of T1)' ]
+}
+
 # ---------- the apply step's text ----------
 
 flat_range() {
@@ -215,6 +258,9 @@ check_replan_security() {
   need "$structural" 'only when that file does not already exist' || return 1
   need "$structural" 'delete `<PLAN_DIR>/tests.before-correction.json` before step 4.6c' || return 1
   need "$rule" 'In auto-mode, restore it and record it in `## Audit notes`.' || return 1
+  need "$rule" 'A `reworded:` line is not a loss: its item, on the follow-up review list the `lost:` items print on, quotes the old and new case and recommends keeping the row as regenerated' || return 1
+  need "$rule" 'in auto-mode the row is kept.' || return 1
+  need "$structural" 'Once every `lost:` and `reworded:` item is resolved' || return 1
 }
 
 green() {
@@ -224,6 +270,13 @@ green() {
 
 @test "the Structural re-plan routes a lost security row to the review list" {
   green check_replan_security
+}
+
+@test "red twin: a reworded row left off the review list fails" {
+  mutated_tree "$AUDIT_REL" 'its item, on the follow-up review list the `lost:` items print on, quotes the old and new case and recommends keeping the row as regenerated' 'it is kept'
+  run check_replan_security "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
 }
 
 @test "red twin: a re-plan with no snapshot fails" {
