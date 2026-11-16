@@ -373,7 +373,7 @@ check_lens_doctrine_rows() {
   need "$lens" 'its fix trims the row to the kind its flag names and adds a row for each other kind' || return 1
   need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
   need "$doctrine" 'A requirement that keeps a value server-only is a secrets requirement, whatever the value.' || return 1
-  need "$doctrine" "So does a retire or change row whose \`source\` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it) and that is made because that requirement forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." || return 1
+  need "$doctrine" "So does a retire or change row with a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it) and that is made because that requirement forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." || return 1
   need "$table" "and one made because a security requirement in its \`source\` forbids what the existing test asserted carries that requirement's kind, whatever the test's own kind." || return 1
   need "$lens" "or made because a security requirement in its \`source\` forbids what the existing test asserted (then that requirement's kind, whatever the test's own kind)" || return 1
   need "$lens" "where the fix keeps the row on the layer the doctrine's layer rule picks" || return 1
@@ -486,7 +486,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the doctrine keying a retire's flag only on the retired test's kind fails" {
-  red check_lens_doctrine_rows "$DOCTRINE_REL" " So does a retire or change row whose \`source\` is a security requirement (an access, forgery or secrets requirement, whether or not another flagged row cites it) and that is made because that requirement forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." ''
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " So does a retire or change row with a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it) and that is made because that requirement forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." ''
 }
 
 @test "red twin: the doctrine flagging a retire by source citation alone fails" {
