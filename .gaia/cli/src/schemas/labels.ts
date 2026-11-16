@@ -10,7 +10,7 @@
  */
 import {z} from 'zod';
 
-export const LABEL_AXES = [
+const LABEL_AXES = [
   'type',
   'urgency',
   'effort',
@@ -31,15 +31,15 @@ export const LABEL_AUDIENCES = ['adopter', 'maintainer'] as const;
 /** Characters banned from a description by the house rule: em dash and en dash. */
 export const BANNED_DESCRIPTION_CHARACTERS: readonly string[] = ['—', '–'];
 
-export const LabelAxisSchema = z.literal(LABEL_AXES);
+const LabelAxisSchema = z.literal(LABEL_AXES);
 
 export type LabelAxis = z.infer<typeof LabelAxisSchema>;
 
-export const LabelFeatureSchema = z.literal(LABEL_FEATURES);
+const LabelFeatureSchema = z.literal(LABEL_FEATURES);
 
 export type LabelFeature = z.infer<typeof LabelFeatureSchema>;
 
-export const LabelAudienceSchema = z.literal(LABEL_AUDIENCES);
+const LabelAudienceSchema = z.literal(LABEL_AUDIENCES);
 
 export type LabelAudience = z.infer<typeof LabelAudienceSchema>;
 

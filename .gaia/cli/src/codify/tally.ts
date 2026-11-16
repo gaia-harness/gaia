@@ -47,8 +47,6 @@ import {evaluateTriggers} from './triggers.js';
 import type {CodifyTrigger} from './triggers.js';
 import {WINDOW_DAYS} from './window.js';
 
-export {WINDOW_DAYS} from './window.js';
-
 const HELP_TEXT = `Usage: gaia codify-tally
 
   Tallies recurring Code Audit Team findings across the rolling 90-day

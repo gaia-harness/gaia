@@ -10,17 +10,17 @@ export type ClassifiedStories = {
   unknown: string[];
 };
 
-export type ConfigEdit = {
-  /** Package-relative. */
-  relative: string;
-  text: string;
-};
-
 export type WritePlan = {
   configEdits: ConfigEdit[];
   /** Package-relative story files to convert. */
   stories: string[];
   unknownAddons: string[];
+};
+
+type ConfigEdit = {
+  /** Package-relative. */
+  relative: string;
+  text: string;
 };
 
 export const classifyStories = ({

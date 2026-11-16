@@ -33,7 +33,7 @@ const ClassSummarySchema = z.object({
 // `version` is declared first so JSON serialization emits it first, matching
 // the ledger schemas' frozen shape convention.
 /* eslint-disable perfectionist/sort-objects -- serialization order load-bearing, version-first */
-export const ReviewSnapshotSchema = z.object({
+const ReviewSnapshotSchema = z.object({
   version: z.literal(1),
   audited_pr_count: z.number().int().nonnegative(),
   classes: z.record(z.string().min(1), ClassSummarySchema),

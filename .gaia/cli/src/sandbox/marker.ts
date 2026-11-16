@@ -13,7 +13,7 @@ import path from 'node:path';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
 import type {Capability} from './capability.js';
 
-export const MARKER_FILENAME = 'sandbox.json';
+const MARKER_FILENAME = 'sandbox.json';
 
 export type SandboxMarker = {
   capability: Capability;

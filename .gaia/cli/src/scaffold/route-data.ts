@@ -106,7 +106,7 @@ export type DataRouteContext = {
 
 // The frontend's Prettier print width. Emitting within it leaves the adopter's
 // `pnpm lint` (which runs Prettier through ESLint) nothing to reflow.
-export const MAX_LINE_LENGTH = 80;
+const MAX_LINE_LENGTH = 80;
 
 /** Joins source lines, each terminated by a newline. */
 export const block = (...lines: readonly string[]): string =>

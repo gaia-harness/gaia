@@ -108,7 +108,7 @@ const collectDomainSlugs = (wikiRoot: string): DomainSlugs[] =>
     return slugs.length >= 2 ? [{domain, slugs}] : [];
   });
 
-export type Collision = {
+type Collision = {
   distance: number;
   domain: string;
   slugA: string;
@@ -142,7 +142,7 @@ const collectDomainPairs = (
   return pairs;
 };
 
-export const findCollisions = (
+const findCollisions = (
   domainGroups: readonly DomainSlugs[],
   maxDistance: number
 ): Collision[] => {

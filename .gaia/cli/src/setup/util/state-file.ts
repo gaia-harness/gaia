@@ -19,9 +19,9 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
-export const STATE_FILENAME = 'setup-state.json';
+const STATE_FILENAME = 'setup-state.json';
 
-export const STATE_DIRECTORY_RELATIVE = path.join('.gaia', 'local');
+const STATE_DIRECTORY_RELATIVE = path.join('.gaia', 'local');
 
 /**
  * Canonical step identifiers. The slash command decides which steps it

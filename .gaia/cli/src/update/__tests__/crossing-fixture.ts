@@ -80,7 +80,7 @@ unowned:
   - "packages/shared/**"
 `;
 
-export const MANIFEST = `${JSON.stringify(
+const MANIFEST = `${JSON.stringify(
   {
     files: {
       '.claude/agents/code-audit-frontend.md': 'owned',
@@ -95,7 +95,7 @@ export const MANIFEST = `${JSON.stringify(
   2
 )}\n`;
 
-export const DECISIONS = `${JSON.stringify(
+const DECISIONS = `${JSON.stringify(
   {
     decisions: [
       {

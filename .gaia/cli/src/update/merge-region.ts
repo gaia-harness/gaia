@@ -72,15 +72,6 @@ export type RegionMergeReport = {
     'already-latest' | 'conflict' | 'no-adopter-drift' | 'no-upstream-change';
 };
 
-export type RegionSideState = {
-  /** Present only when `scan` is 'malformed'. */
-  detail?: RegionMalformation;
-  /** Whether this side's content was actually masked in `normalized`. */
-  masked: boolean;
-  /** What the parser saw on this side. */
-  scan: 'absent' | 'malformed' | 'region';
-};
-
 type Flags = {
   baseline: string;
   current: string;
@@ -92,6 +83,15 @@ type Flags = {
 
 type ParsedFlagsResult =
   {flags: Flags; ok: true} | {message: string; ok: false};
+
+type RegionSideState = {
+  /** Present only when `scan` is 'malformed'. */
+  detail?: RegionMalformation;
+  /** Whether this side's content was actually masked in `normalized`. */
+  masked: boolean;
+  /** What the parser saw on this side. */
+  scan: 'absent' | 'malformed' | 'region';
+};
 
 const VALUE_FLAGS: ValueFlagMap<keyof Flags> = {
   '--baseline': 'baseline',

@@ -27,7 +27,7 @@ export const MAX_CAPTURE_BYTES = 256 * 1024;
  * letting a hung child stall the run. `GAIA_FITNESS_BUILTIN_TIMEOUT_MS`
  * overrides it.
  */
-export const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 export const TIMEOUT_ENV = 'GAIA_FITNESS_BUILTIN_TIMEOUT_MS';
 
@@ -271,7 +271,7 @@ const runDoctor = async (context: Context): Promise<BuiltinEntry> => {
 };
 
 /** Every directory holding skills, agents or commands, repo-relative and sorted. */
-export const findTargetDirectories = (root: string): string[] => {
+const findTargetDirectories = (root: string): string[] => {
   const directories = new Set<string>();
 
   for (const file of discoverFiles(root).files) {
@@ -423,7 +423,7 @@ const runValidate = async (context: Context): Promise<BuiltinEntry> => {
   return {name, results, status: 'ran', targets};
 };
 
-export const runBuiltins = async ({
+const runBuiltins = async ({
   environment,
   root,
 }: {

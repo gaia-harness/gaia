@@ -113,8 +113,6 @@ export type Behavior = {
   typecheckOutput?: string;
 };
 
-export type Calls = {args: readonly string[]; command: string; cwd: string}[];
-
 export type Harness = {
   calls: Calls;
   deps: MigrateDeps;
@@ -123,6 +121,8 @@ export type Harness = {
   packageDir: string;
   root: string;
 };
+
+type Calls = {args: readonly string[]; command: string; cwd: string}[];
 
 const exec = (
   command: string,

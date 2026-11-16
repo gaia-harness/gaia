@@ -92,7 +92,7 @@ export const ProjectConfigSchema = z.object({
   version: withFallback(ProjectConfigStrictShape.version, 1),
 });
 
-export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
+type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 
 export const projectConfigPath = (repoRoot: string): string =>
   path.join(repoRoot, '.gaia', 'project.json');

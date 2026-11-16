@@ -4,7 +4,7 @@ status: active
 package: knip
 role: dead-code-detection
 created: 2026-05-04
-updated: 2026-10-03
+updated: 2026-11-16
 tags: [dependency, quality]
 ---
 
@@ -16,8 +16,12 @@ Reports unused files, exports, types, and dependencies across the codebase. Devt
 
 - Config: `apps/web/knip.config.ts`
 - Run: `pnpm knip` (manual) or `pnpm knip --reporter json` (machine-readable, used by the audit agent)
-- Runs automatically pre-merge inside the [[Code Review Audit Agent]] (alongside `react-doctor`): pre-merge is post-task by design, so the in-progress noise concern doesn't apply.
+- Blocks merge: the Tests workflow runs `pnpm knip` after lint on every pull request that changes app code, and any finding fails the check. A pull request is the finished state, so the in-progress noise concern below doesn't apply.
+- Runs automatically pre-merge inside the [[Code Review Audit Agent]] (alongside `react-doctor`) too, where its findings are sorted into the buckets below.
 - Not part of the [[Quality Gate]] (pre-commit): in-progress work routinely flags exports that haven't been wired up yet, which drowns the signal.
+<!-- gaia:maintainer-only:start -->
+- The CLI has its own config, `.gaia/cli/knip.config.ts`, run by `pnpm -C .gaia/cli knip` and as a blocking step in the CLI Tests workflow.
+<!-- gaia:maintainer-only:end -->
 
 ## Template-aware config
 

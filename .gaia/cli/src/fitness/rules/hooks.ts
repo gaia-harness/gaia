@@ -10,7 +10,7 @@ import {readScriptReference} from './hook-command.js';
  * warning rather than an error: a newer Claude Code release may add an event
  * before this list does, and a typo should still surface.
  */
-export const KNOWN_HOOK_EVENTS: ReadonlySet<string> = new Set([
+const KNOWN_HOOK_EVENTS: ReadonlySet<string> = new Set([
   'ConfigChange',
   'CwdChanged',
   'Elicitation',

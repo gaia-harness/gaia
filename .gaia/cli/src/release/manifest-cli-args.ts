@@ -60,17 +60,6 @@ export const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
 export type FlagParseResult = FlagParseFailure | FlagParseSuccess;
 
-export type Flags = {
-  allowUndecided: boolean;
-  check: boolean;
-  json: boolean;
-  outPath: string | undefined;
-  ships: string[];
-  stdout: boolean;
-  withdraws: WithholdAnswer[];
-  withholds: WithholdAnswer[];
-};
-
 type FlagParseFailure = {
   message: string;
   ok: false;
@@ -79,6 +68,17 @@ type FlagParseFailure = {
 type FlagParseSuccess = {
   flags: Flags;
   ok: true;
+};
+
+type Flags = {
+  allowUndecided: boolean;
+  check: boolean;
+  json: boolean;
+  outPath: string | undefined;
+  ships: string[];
+  stdout: boolean;
+  withdraws: WithholdAnswer[];
+  withholds: WithholdAnswer[];
 };
 
 /**

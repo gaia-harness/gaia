@@ -111,7 +111,7 @@ export const expectNoRouteImports = (pageDir: string): void => {
   }
 };
 
-export const ITEMS_PARSERS = `import {z} from 'zod';
+const ITEMS_PARSERS = `import {z} from 'zod';
 
 export const itemSchema = z.object({
   id: z.string(),

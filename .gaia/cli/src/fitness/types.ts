@@ -91,16 +91,6 @@ export type Grade =
   | 'F'
   | 'n/a';
 
-export type InventoryEntry = {
-  kinds: readonly FileKind[];
-  lines: number;
-  model: ModelFamily;
-  ownership: Ownership;
-  path: string;
-  path_scoped: boolean;
-  words: number;
-};
-
 export type ModelFamily = 'fable' | 'haiku' | 'opus' | 'sonnet' | 'unresolved';
 
 export type Ownership =
@@ -151,3 +141,13 @@ export type RuleDefinition = {
 };
 
 export type SuppressedFinding = Finding & {reason: string};
+
+type InventoryEntry = {
+  kinds: readonly FileKind[];
+  lines: number;
+  model: ModelFamily;
+  ownership: Ownership;
+  path: string;
+  path_scoped: boolean;
+  words: number;
+};

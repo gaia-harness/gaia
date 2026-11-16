@@ -34,7 +34,11 @@ const HELP_TEXT = `Usage: gaia wiki page-index [--json]
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
-export type PageEntry = {
+export type PageIndex = {
+  pages: PageEntry[];
+};
+
+type PageEntry = {
   domain: string;
   inbound_links: number;
   outbound_links: number;
@@ -43,10 +47,6 @@ export type PageEntry = {
   tags: string[];
   title: string;
   type: null | string;
-};
-
-export type PageIndex = {
-  pages: PageEntry[];
 };
 
 const DOMAIN_DIRS = [

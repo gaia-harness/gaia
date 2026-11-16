@@ -36,7 +36,7 @@ import {
   renderHumanReport,
   triplesWithDeferred,
 } from './field-verdict.js';
-import type {FieldMergeReport, Triple, VerdictItem} from './field-verdict.js';
+import type {FieldMergeReport, Triple} from './field-verdict.js';
 
 const HELP_TEXT = `Usage: gaia update merge-workspace --baseline <file> --latest <file> --current <file> [--deferred-baseline <key>=<file>]... [--json]
 
@@ -84,8 +84,6 @@ const MANAGED_WHOLE_VALUE_KEYS: readonly string[] = [
 const SHARED_MAP_SECTIONS: readonly string[] = ['overrides', 'allowBuilds'];
 
 export type WorkspaceMergeReport = FieldMergeReport;
-
-export type WorkspaceVerdictItem = VerdictItem;
 
 type DeferredPaths = ReadonlyMap<string, string>;
 

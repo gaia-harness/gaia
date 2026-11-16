@@ -172,6 +172,12 @@ jobs:
         env:
           CHECK_BASE: ${{ steps.base.outputs.base }}
         run: bash .gaia/scripts/frontend-lint-delta.sh --root . --base "$CHECK_BASE"
+      # Unused files, exports and dependencies. It runs here rather than in
+      # pre-commit because work in progress has exports nothing imports yet,
+      # while a pull request is the finished state.
+      - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
+        name: Knip
+        run: pnpm knip
       # Only the engine the suites run. Vitest's browser, storybook and
       # storybook-dark projects and the Playwright specs all launch Chromium, so
       # this one install serves the Vitest and Playwright steps and must precede

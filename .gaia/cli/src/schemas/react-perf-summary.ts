@@ -38,7 +38,7 @@ const ChangeEntrySchema = z.object({
 
 export type ChangeEntry = z.infer<typeof ChangeEntrySchema>;
 
-export const RenderRecordSchema = z.object({
+const RenderRecordSchema = z.object({
   changedTotal: z.number(),
   componentName: z.string(),
   contextChanged: z.array(ChangeEntrySchema),
@@ -84,7 +84,7 @@ export type RawDump = z.infer<typeof RawDumpSchema>;
 
 // --- Contract B: reduced summary (output) ---
 
-export const ReactDoctorRuleSchema = z.literal([
+const ReactDoctorRuleSchema = z.literal([
   'jsx-no-constructed-context-values',
   'jsx-no-new-object-as-prop',
   'no-unstable-nested-components',
@@ -92,7 +92,7 @@ export const ReactDoctorRuleSchema = z.literal([
 
 export type ReactDoctorRule = z.infer<typeof ReactDoctorRuleSchema>;
 
-export const ReducedFindingSchema = z.strictObject({
+const ReducedFindingSchema = z.strictObject({
   componentName: z.string(),
   exceedsFrameBudget: z.boolean(),
   isMemo: z.boolean(),

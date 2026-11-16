@@ -16,7 +16,7 @@ type RuleListing = {
 };
 
 /** The catalog plus the inventory-only rules, sorted by id. */
-export const listRules = (): RuleListing[] => {
+const listRules = (): RuleListing[] => {
   /* eslint-disable perfectionist/sort-objects -- the printed key order is part of the listing contract */
   const graded: RuleListing[] = RULE_CATALOG.map((rule) => ({
     rule_id: rule.ruleId,
