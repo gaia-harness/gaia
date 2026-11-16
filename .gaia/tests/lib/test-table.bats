@@ -172,6 +172,30 @@ expect_verify_refusal() {
   expect_verify_refusal "$record 't.rows[0].layer = \"flow\"; t.coveredFlows = [{source: \"flow:alpha\", rows: [\"T2\"]}]'" 'row T1 is a flow-layer row for flow:alpha'
 }
 
+@test "verify counts an instructionKeys entry as covering a builder-directing key; without it the key has no row" {
+  write_verify_fixture
+  printf 'scope_boundaries:ask_first:0\n' >>"$KEYS"
+  mutate_table 't.instructionKeys = [{source: "scope_boundaries:ask_first:0", reason: "asks the builder before adding a dependency"}]'
+  run_verify
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  mutate_table 'delete t.instructionKeys'
+  run_verify
+  [ "$status" -eq 1 ]
+  grep -qF 'requirement key scope_boundaries:ask_first:0 has no row' <<<"$output"
+}
+
+@test "verify refuses each malformed instructionKeys entry and a key both recorded and a row's source" {
+  local record='printf "scope_boundaries:never:0\n" >>"$KEYS"; mutate_table'
+  expect_verify_refusal "$record 't.instructionKeys = {}'" 'instructionKeys is not an array'
+  expect_verify_refusal "$record 't.instructionKeys = [{reason: \"x\"}]'" 'instructionKeys entry #1: source is not a key'
+  expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:9\", reason: \"x\"}]'" 'instructionKeys cites unknown source scope_boundaries:never:9'
+  expect_verify_refusal "$record 't.instructionKeys = [{source: \"success_criteria:0\", reason: \"x\"}]; t.rows = t.rows.filter((row) => row.source !== \"success_criteria:0\")'" 'instructionKeys success_criteria:0 is not a scope boundary key'
+  expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:0\", reason: \"x\"}, {source: \"scope_boundaries:never:0\", reason: \"y\"}]'" 'instructionKeys names scope_boundaries:never:0 twice'
+  expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:0\", reason: \" \"}]'" 'instructionKeys scope_boundaries:never:0 has no reason'
+  expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:0\"}]'" 'instructionKeys scope_boundaries:never:0 has no reason'
+  expect_verify_refusal "$record 't.instructionKeys = [{source: \"scope_boundaries:never:0\", reason: \"x\"}]; t.rows[1].source = \"scope_boundaries:never:0\"'" 'row T2 cites scope_boundaries:never:0, which instructionKeys records as naming no behavior'
+}
+
 @test "covered-flows prints each valid entry, prints nothing for a plan with no table, and exits 1 on a broken entry" {
   write_verify_fixture
   mutate_table 't.coveredFlows = [{source: "flow:gamma", rows: ["T1", "T2"]}, {source: "flow:delta", rows: ["T9"]}]'
