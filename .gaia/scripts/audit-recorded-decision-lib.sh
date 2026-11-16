@@ -8,11 +8,12 @@
 
 # _finding_path_owned: true when the roster at ROOT gives FINDING_FILE's path
 # to a member (_roster_owners), whose review is what satisfies a cross-remit
-# fix's veto. Any unreadable input prints false, which keeps the refusal.
+# fix's veto. Prints null when the roster cannot be read, which refuses a fix
+# and a security-class fixed alike.
 _finding_path_owned() {
   local owners
-  owners="$(_roster_owners "$ROOT" "$_GAIA_DISPOSITIONS_DIRECTORY" "$(jq -c '[.path]' "$FINDING_FILE" 2>/dev/null)")"
-  printf '%s' "$owners" | jq 'length > 0' 2>/dev/null || printf 'false\n'
+  owners="$(_roster_owners "$ROOT" "$_GAIA_DISPOSITIONS_DIRECTORY" "$(jq -c '[.path]' "$FINDING_FILE" 2>/dev/null)")" || owners=null
+  printf '%s' "$owners" | jq 'if type == "object" then length > 0 else null end' 2>/dev/null || printf 'null\n'
 }
 
 # _veto_lock <directory>: gaia_exclusive_lock_take, so parallel record-residual

@@ -1766,6 +1766,17 @@ with_f_txt_ownerless() {
   return "$command_status"
 }
 
+# with_roster_unreadable <command...>: run the command under a roster with no
+# auditors: block, then restore stop_rounds' roster.
+with_roster_unreadable() {
+  local roster="$ALF_ROOT/.gaia/audit-ci.yml" command_status=0
+  cp "$roster" "$BATS_TEST_TMPDIR/audit-ci.yml.kept"
+  printf 'version: 1\n' >"$roster"
+  "$@" || command_status=$?
+  cp "$BATS_TEST_TMPDIR/audit-ci.yml.kept" "$roster"
+  return "$command_status"
+}
+
 @test "needs-human: a fix decision is refused for a cross-remit finding no member owns, security-class included, recorded where one owns it, and concurrent fix decisions each keep their veto" {
   local cross cross_security line
   cross="$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true})')"
@@ -2012,4 +2023,15 @@ cross_remit_critical_fixed() {
   green || return 1
   run_residual_count
   [ "$output" = '{"total":1,"ask":1}' ] || { echo "$output"; return 1; }
+}
+
+@test "needs-human: a security-class cross-remit finding takes no fixed, and no fix, while the roster cannot be read" {
+  stop_rounds "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true, security: true})')"
+  alf_set_line f.txt 1 "reworded"
+  alf_commit "reword f.txt" || return 1
+  with_roster_unreadable decide 1 fixed '{"reason":"reworded"}'
+  [ "$status" -eq 3 ] || { echo "a security-class fixed under an unreadable roster recorded: $status $output"; return 1; }
+  with_roster_unreadable decide 1 fix
+  [ "$status" -eq 3 ] || { echo "a cross-remit fix under an unreadable roster recorded: $status $output"; return 1; }
+  [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ] && [ ! -e "$RUN_FOLDER/vetoes.json" ]
 }
