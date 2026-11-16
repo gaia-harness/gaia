@@ -117,12 +117,13 @@ pr_record_base=""
 pr_record_head=""
 pr_record_number=""
 pr_record_files=""
+pr_record_body=""
 resolve_pr_record() {
   [ -z "$pr_record_read" ] || return 0
   pr_record_read=yes
 
   command -v gh >/dev/null 2>&1 || return 0
-  pr_record=$(gh pr view --json title,baseRefName,headRefOid,number,files 2>/dev/null || true)
+  pr_record=$(gh pr view --json title,baseRefName,headRefOid,number,files,body 2>/dev/null || true)
   [ -n "$pr_record" ] || return 0
 
   # `// ""` so a JSON null reaches the callers as the same empty string an
@@ -135,6 +136,26 @@ resolve_pr_record() {
   pr_record_head=$(printf '%s' "$pr_record" | jq -r '.headRefOid // ""' 2>/dev/null || true)
   pr_record_number=$(printf '%s' "$pr_record" | jq -r '.number // ""' 2>/dev/null || true)
   pr_record_files=$(printf '%s' "$pr_record" | jq -r '(.files // [])[] | .path // empty' 2>/dev/null || true)
+  pr_record_body=$(printf '%s' "$pr_record" | jq -r '.body // ""' 2>/dev/null || true)
+}
+
+# gate_require_body_stamp: deny unless the PR body's head stamp names the head
+# GitHub records (.claude/hooks/lib/pr-body-stamp.sh). Called on the audited
+# allows only; a bypass allow is not held to it. Loaded
+# here rather than with the libraries the parent loads because only those
+# allows read it; a missing copy denies all the same.
+gate_require_body_stamp() {
+  # The default is assigned rather than written as a ${:-} word: bash 3.2
+  # misreads an apostrophe inside one that sits in double quotes.
+  local stamp_reason="the pull request record could not be read, so the PR body's head stamp cannot be checked"
+  resolve_pr_record
+  # shellcheck source=lib/pr-body-stamp.sh
+  if [ ! -f "$_library_directory/pr-body-stamp.sh" ] || ! . "$_library_directory/pr-body-stamp.sh"; then
+    gate_emit_deny "PR merge gate: cannot load .claude/hooks/lib/pr-body-stamp.sh, so it cannot check the PR body's head stamp. Restore it (it ships with the framework) and retry."
+  fi
+  if [ -z "$pr_record_head" ] || ! stamp_reason="$(pr_body_stamp_verdict "$pr_record_body" "$pr_record_head")"; then
+    gate_emit_deny "PR merge gate: ${stamp_reason}. Re-check the PR summary against the branch's commits and diff (wiki/concepts/PR Merge Workflow.md, #### Posting the status last), run \`.gaia/scripts/pr-body-stamp.sh write\`, then retry gh pr merge."
+  fi
 }
 
 # chore(deps) bypass: PRs whose title matches `^chore\(deps(-dev)?\):` AND

@@ -211,7 +211,7 @@ setup() {
            jq-availability.sh hook-payload.sh verb-arming.sh verb-arming-walk.sh \
            verb-arming-view.sh verb-arming-live-helpers.sh verb-arming-live-view.sh repo-scope.sh \
            repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh \
-           cross-repo-refusal.sh audit-bypass-stamp.sh; do
+           cross-repo-refusal.sh audit-bypass-stamp.sh pr-body-stamp.sh; do
     cp "$REPO_ROOT/.claude/hooks/lib/$script_name" "$MAIN/.claude/hooks/lib/$script_name"
   done
   # Every member's shared handshake, which stage 8b reads through each
@@ -483,7 +483,8 @@ case "\$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 case "\$1" in
   auth) exit 0 ;;
   repo) printf 'test-owner/test-repo\n'; exit 0 ;;
-  pr) printf '{"title":"","baseRefName":"main","number":"30"}\n'; exit 0 ;;
+  pr) head="\$(git rev-parse HEAD 2>/dev/null)"
+      jq -n --arg head "\$head" '{title:"", baseRefName:"main", number:"30", headRefOid:\$head, body:("<!-- gaia-pr-body-head: " + \$head + " -->")}'; exit 0 ;;
   api)
     case "\$*" in
       *repos/*/branches/*) git -C "$CATCHUP_ORIGIN" rev-parse refs/heads/main; exit \$? ;;

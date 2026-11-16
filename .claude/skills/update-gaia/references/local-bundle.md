@@ -260,6 +260,12 @@ When no PR is open and there is no claim, Step 11's create call becomes:
 gh pr create --draft --base <default branch> --head <branch> --title "chore(gaia): update to <LOCAL_TAG>" --body "Syncs a local, unverified GAIA build <LOCAL_TAG> (commit <LOCAL_COMMIT>) into the project. Per-file outcomes are in the update summary above."
 ```
 
+Then stamp its body, `<N>` being the number at the end of the URL `gh pr create` prints:
+
+```bash
+bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
+```
+
 ## Rollback
 
 A broken local sync is undone with `git revert` of the update PR's merge commit, merged like any other change, then `/update-gaia` again (with or without `--local`). The revert restores both `.gaia/VERSION` and `.gaia/VERSION-dev`, so the next run merges against the build the project held before.

@@ -151,6 +151,12 @@ gh pr create --draft --base main --head "<RELEASE_BRANCH>" \
   --body "<release summary, link CHANGELOG entry, list highlights>"
 ```
 
+Then stamp the body, `<N>` being the number at the end of the URL `gh pr create` prints:
+
+```bash
+bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
+```
+
 ### 10. Code Audit Team + marker handshake
 
 Resolve the members first (`bash .gaia/scripts/resolve-audit-members.sh`). Empty output on a bookkeeping-only release is the fast path: the audit scope reads the same predicate as CI, every changed path is out of audit scope, and the merge gate's out-of-scope bypass clears Step 11's merge and posts the stamp itself, so no unit is dispatched and no marker is owed. Go to Step 11.

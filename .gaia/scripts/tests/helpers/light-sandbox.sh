@@ -384,16 +384,18 @@ lsb_seed_loop_state() {
 # from the sandbox root, with a gh stub on PATH for this one run, through
 # bats' `run`.
 lsb_run_merge_hook() {
-  local stub_directory="$BATS_TEST_TMPDIR/lsb-gh-bin" base_tip
+  local stub_directory="$BATS_TEST_TMPDIR/lsb-gh-bin" base_tip head
   # shellcheck source=.gaia/tests/helpers/gh-base-stub.sh
   . "$LSB_REPO_ROOT/.gaia/tests/helpers/gh-base-stub.sh" || return 1
   gh_base_stub_install "$stub_directory" || return 1
   # The gate takes the PR's base branch name and tip from GitHub, so the stub
-  # answers both from the sandbox's own remote-tracking base.
+  # answers both from the sandbox's own remote-tracking base. The PR head is
+  # the sandbox HEAD, with a body stamped for it, as GitHub records them.
   base_tip="$(lsb_git rev-parse refs/remotes/origin/main)" || return 1
+  head="$(lsb_git rev-parse HEAD)" || return 1
   run env PATH="$stub_directory:$PATH" GH_STUB_BASE_BRANCH=main GH_STUB_BASE_TIP="$base_tip" \
     GH_STUB_REPOSITORY=gaia-react/gaia GH_STUB_STATUSES_JSON='[]' \
-    GH_STUB_PR_JSON="$(jq -n -c --arg number "$1" '{title: "", number: $number}')" \
+    GH_STUB_PR_JSON="$(jq -n -c --arg number "$1" --arg head "$head" '{title: "", number: $number, headRefOid: $head, body: "<!-- gaia-pr-body-head: \($head) -->"}')" \
     bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ \
     "$LSB_ROOT" "$(lsb_merge_payload "$1")" "$LSB_ROOT/.claude/hooks/pr-merge-audit-check.sh"
 }

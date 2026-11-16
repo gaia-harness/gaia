@@ -93,7 +93,7 @@ Feature-branch mode skips this step.
 
 ## 5. Commit and open the draft PR
 
-Commit through the Quality Gate (`.claude/rules/quality-gate.md`). Push the branch with `git push -u origin <branch-name>`, then open the PR with `gh pr create --draft` and a Conventional Commits title per `wiki/decisions/Naming Conventions.md`. `.claude/hooks/block-invalid-pr-title.sh` and `.claude/hooks/block-pr-create-without-draft.sh` enforce the title and the draft; their headers own the rules.
+Commit through the Quality Gate (`.claude/rules/quality-gate.md`). Push the branch with `git push -u origin <branch-name>`, then open the PR with `gh pr create --draft` and a Conventional Commits title per `wiki/decisions/Naming Conventions.md`. `.claude/hooks/block-invalid-pr-title.sh` and `.claude/hooks/block-pr-create-without-draft.sh` enforce the title and the draft; their headers own the rules. Then stamp the body with `bash .gaia/scripts/pr-body-stamp.sh write --pr <N>`: the merge gate refuses a body whose stamp does not name the PR's head.
 
 When the work closes an issue, the PR body carries `Closes #<n>`, and no commit message on the branch carries a closing keyword against it. A squash merge concatenates the branch's commit bodies into the merge commit, and GitHub reads closing keywords from that message, so a keyword in a commit closes the issue whatever the PR body says. The PR body is the sole carrier.
 

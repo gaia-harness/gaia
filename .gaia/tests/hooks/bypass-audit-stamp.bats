@@ -261,7 +261,7 @@ chore_deps_pull_request() {
 
 @test "UAT-011 mutation: posting on every member-aware allow turns the marker-cleared case red" {
   local mutant
-  mutant="$(mgf_scratch_hook 's/\[ "\$frontend_chore_deps_waived" -eq 0 \] \|\| gate_post_bypass_stamp/gate_post_bypass_stamp/')"
+  mutant="$(mgf_scratch_hook 's/if \[ "\$frontend_chore_deps_waived" -eq 0 \]; then/if false; then/')"
   mgf_commit "apps/web/app/x.ts" "export const x = 1"
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_marker code-audit-frontend >/dev/null
