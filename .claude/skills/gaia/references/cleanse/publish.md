@@ -34,6 +34,7 @@ Every command below runs from `RESOLVED_ROOT`, on `<CLEANSE_BRANCH>`, whichever 
    ```bash
    git push -u origin <CLEANSE_BRANCH>
    gh pr create --draft --title "<commit subject>" --body-file <report-summary-file>
+   bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
    gh pr merge <N> --squash --delete-branch --auto
    ```
 

@@ -258,6 +258,7 @@ When no PR is open and there is no claim, Step 11's create call becomes:
 
 ```bash
 gh pr create --draft --base <default branch> --head <branch> --title "chore(gaia): update to <LOCAL_TAG>" --body "Syncs a local, unverified GAIA build <LOCAL_TAG> (commit <LOCAL_COMMIT>) into the project. Per-file outcomes are in the update summary above."
+bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
 ```
 
 ## Rollback

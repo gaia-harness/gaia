@@ -156,7 +156,8 @@ mgf_commit() {
 
 # mgf_record <number> <is-cross-repository> <title> [<changed-path>...]: the
 # pull request every `gh pr view` answers with, its head at the CURRENT local
-# HEAD, so call it after the commits that make up the pull request.
+# HEAD, so call it after the commits that make up the pull request. Its body
+# carries the head stamp for that HEAD, which every audited allow requires.
 mgf_record() {
   local number="$1" cross="$2" title="$3" head base_branch="${CATCHUP_BASE_BRANCH:-main}"
   shift 3
@@ -164,6 +165,7 @@ mgf_record() {
   printf '%s\n' "$@" | jq -R -s -c \
     --argjson number "$number" --argjson is_cross_repository "$cross" --arg title "$title" --arg head_object_id "$head" --arg base_branch "$base_branch" \
     '{number: $number, isCrossRepository: $is_cross_repository, title: $title, baseRefName: $base_branch, headRefOid: $head_object_id,
+      body: ("Summary.\n\n<!-- gaia-pr-body-head: " + $head_object_id + " -->"),
       files: (split("\n") | map(select(length > 0)) | map({path: .}))}' \
     > "$MGF_STUB_DIRECTORY/record.json"
 }

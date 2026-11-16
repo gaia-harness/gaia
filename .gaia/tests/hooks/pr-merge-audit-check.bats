@@ -331,7 +331,9 @@ BASE_LOOKUP_ARM
 # GET statuses return null (so the frontend is NOT cleared via a CI status),
 # `gh pr view` returns the PR record the hook reads once: an empty title (no
 # chore(deps) bypass), an empty base ref (so the base derivation falls back
-# to the remote's advertised default), and number 30.
+# to the remote's advertised default), and number 30. Its head is REPO's live
+# HEAD, or the sha a case writes to pr-head-override, and its body carries the
+# head stamp for that head.
 #
 # The number is what run_merge_hook's default command names. Every arm that can
 # clear a merge binds its clearance to the pull request the COMMAND names, and
@@ -346,13 +348,16 @@ install_gh_stub() {
   cat > "$STUB_BINARY_DIRECTORY/gh" <<EOF
 #!/usr/bin/env bash
 issues_file="$BATS_TEST_TMPDIR/issues.json"
+repo_directory="$REPO"
+head_override_file="$BATS_TEST_TMPDIR/pr-head-override"
 EOF
   cat >> "$STUB_BINARY_DIRECTORY/gh" <<'EOF'
 case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
-  pr) printf '{"title":"","baseRefName":"main","number":"30"}\n'; exit 0 ;;
+  pr) head="$(cat "$head_override_file" 2>/dev/null || git -C "$repo_directory" rev-parse HEAD 2>/dev/null)"
+      jq -n --arg head "$head" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, body:("<!-- gaia-pr-body-head: " + $head + " -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) printf 'null\n'; exit 0 ;;
   *) exit 0 ;;
@@ -383,14 +388,15 @@ install_gh_stub_with_title() {
 issues_file="$BATS_TEST_TMPDIR/issues.json"
 title_file="$BATS_TEST_TMPDIR/pr-title.txt"
 files_file="$BATS_TEST_TMPDIR/pr-files.json"
+repo_directory="$REPO"
 EOF
   cat >> "$STUB_BINARY_DIRECTORY/gh" <<'EOF'
 case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
-  pr) jq -n --arg title "$(cat "$title_file")" --slurpfile files "$files_file" \
-        '{title:$title, baseRefName:"main", number:"30", files: $files[0]}'
+  pr) jq -n --arg title "$(cat "$title_file")" --slurpfile files "$files_file" --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" \
+        '{title:$title, baseRefName:"main", number:"30", files: $files[0], headRefOid:$head, body:("<!-- gaia-pr-body-head: " + $head + " -->")}'
       exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) printf 'null\n'; exit 0 ;;
@@ -419,13 +425,14 @@ install_gh_stub_with_status() {
 #!/usr/bin/env bash
 issues_file="$BATS_TEST_TMPDIR/issues.json"
 status_file="$BATS_TEST_TMPDIR/status-desc.txt"
+repo_directory="$REPO"
 EOF
   cat >> "$STUB_BINARY_DIRECTORY/gh" <<'EOF'
 case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
-  pr) printf '{"title":"","baseRefName":"main","number":"30"}\n'; exit 0 ;;
+  pr) jq -n --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, body:("<!-- gaia-pr-body-head: " + $head + " -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) cat "$status_file"; exit 0 ;;
   *) exit 0 ;;
@@ -1483,7 +1490,7 @@ case "$1" in
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
   pr) jq -n --arg base "$(cat "$base_file")" --arg head "$(cat "$head_file")" \
         --arg number "$(cat "$number_file")" \
-        '{title:"", baseRefName:$base, headRefOid:$head, number:$number}'; exit 0 ;;
+        '{title:"", baseRefName:$base, headRefOid:$head, number:$number, body:("<!-- gaia-pr-body-head: " + $head + " -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) printf 'null\n'; exit 0 ;;
   *) exit 0 ;;
@@ -1620,6 +1627,9 @@ run_recording_hook() {
 
 @test "a cached audit base that differs from the record's base denies, naming the git config --unset recovery" {
   install_gh_stub
+  # A recorded head other than local HEAD keeps the empty-range permit from
+  # clearing the merge ahead of the stale-cache check.
+  printf '%040d' 0 > "$BATS_TEST_TMPDIR/pr-head-override"
   git -C "$REPO" config branch.feature.gaia-audit-base release
 
   run_merge_hook

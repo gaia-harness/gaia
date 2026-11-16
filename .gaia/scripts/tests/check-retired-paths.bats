@@ -97,12 +97,14 @@ run_gate() {
   printf 'see .gaia/scripts/overlap/citations.mjs\n' >"$repo/.claude/hooks/b.sh"
   printf 'dispatch .claude/agents/overlap-evaluator.md\n' >"$repo/.claude/commands/c.md"
   printf 'an overlap of two tests, see .gaia/scripts/test-design/layer-map.mjs\n' >"$repo/.claude/commands/d.md"
+  printf 'read .claude/skills/gaia/references/overlap-pass.md first\n' >"$repo/.claude/commands/e.md"
   stage_all "$repo"
   run_gate "$repo"
   [ "$status" -eq 1 ]
   grep -qF -- 'RETIRED .claude/hooks/a.sh:1:' <<<"$output"
   grep -qF -- 'RETIRED .claude/hooks/b.sh:1:' <<<"$output"
   grep -qF -- 'RETIRED .claude/commands/c.md:1:' <<<"$output"
+  grep -qF -- 'RETIRED .claude/commands/e.md:1:' <<<"$output"
   ! grep -qF -- '.claude/commands/d.md' <<<"$output"
 }
 

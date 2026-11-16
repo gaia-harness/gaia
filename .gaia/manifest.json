@@ -77,6 +77,7 @@
     ".claude/hooks/lib/jq-availability.sh": "owned",
     ".claude/hooks/lib/main-checkout-hop-guard.sh": "owned",
     ".claude/hooks/lib/main-git-guard-parse.sh": "owned",
+    ".claude/hooks/lib/pr-body-stamp.sh": "owned",
     ".claude/hooks/lib/reader-operands.sh": "owned",
     ".claude/hooks/lib/repo-scope-home.sh": "owned",
     ".claude/hooks/lib/repo-scope-scan.sh": "owned",
@@ -150,7 +151,6 @@
     ".claude/skills/gaia/references/forensics/redaction.md": "owned",
     ".claude/skills/gaia/references/forensics/taxonomy.md": "owned",
     ".claude/skills/gaia/references/isolation.md": "owned",
-    ".claude/skills/gaia/references/overlap-pass.md": "owned",
     ".claude/skills/gaia/references/plan.md": "owned",
     ".claude/skills/gaia/references/plan/decomposition-audit.md": "owned",
     ".claude/skills/gaia/references/plan/planner.md": "owned",
@@ -343,6 +343,7 @@
     ".gaia/scripts/plan-resume-point.sh": "owned",
     ".gaia/scripts/ports.sh": "owned",
     ".gaia/scripts/post-findings-block.sh": "owned",
+    ".gaia/scripts/pr-body-stamp.sh": "owned",
     ".gaia/scripts/pr-wait-merge-green-lib.sh": "owned",
     ".gaia/scripts/pr-wait-merge.sh": "owned",
     ".gaia/scripts/precommit-packages.sh": "owned",
@@ -877,7 +878,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-15T15:59:34.609Z",
+  "generated": "2026-11-16T08:24:24.026Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
