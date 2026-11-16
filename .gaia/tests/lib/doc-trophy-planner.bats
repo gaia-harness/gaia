@@ -364,7 +364,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" '**Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.' || return 1
   need "$lens" 'a success-path route test for a happy path the closing flow test walks and asserts, unless the row asserts an effect the flow cannot observe' || return 1
   need "$lens" 'a flow observes an effect whose consequence a flow step asserts' || return 1
-  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals, and an offer an access rule gates (role, ownership, visibility or status), a link included), a forgery row (a redirect or callback target included)," || return 1
+  need "$lens" "by the doctrine's \`**Security row.**\` kinds: an access row (sign-in and its refusals, and an offer an access rule gates, a link included), a forgery row (a redirect or callback target included)," || return 1
   need "$doctrine" "Judge each case, not each row: a row is judged by its \`caseKey\` when it has one, by its title otherwise" || return 1
   need "$doctrine" "Two cases that share a test and carry different kinds" || return 1
   need "$doctrine" "each get their own row, keyed by \`caseKey\`" || return 1
@@ -418,7 +418,7 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the test design lens flagging authorization refusals only fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals, and an offer an access rule gates (role, ownership, visibility or status), a link included),' ' an authorization refusal,'
+  red check_lens_doctrine_rows "$AUDIT_REL" ' an access row (sign-in and its refusals, and an offer an access rule gates, a link included),' ' an authorization refusal,'
 }
 
 @test "red twin: the test design lens duplicate check naming no surviving row fails" {
