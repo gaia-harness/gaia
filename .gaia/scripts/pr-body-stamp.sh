@@ -5,8 +5,8 @@
 #   pr-body-stamp.sh check [--pr <n>]   exit 0 when the stamp names the head
 #
 # Without --pr, gh resolves the pull request of the current branch. The head is
-# the one GitHub reports, so push before writing: a stamp naming an unpushed
-# commit is stale the moment it lands.
+# the one GitHub reports, so push before writing: a stamp written before the
+# push names the old head and is stale once the push lands.
 #
 # `write` replaces every stamp line and appends one current stamp, leaving the
 # rest of the body as it was; a body already current is left untouched. The

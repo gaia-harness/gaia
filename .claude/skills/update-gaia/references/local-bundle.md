@@ -261,6 +261,8 @@ gh pr create --draft --base <default branch> --head <branch> --title "chore(gaia
 bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
 ```
 
+`<N>` is the number at the end of the URL `gh pr create` prints.
+
 ## Rollback
 
 A broken local sync is undone with `git revert` of the update PR's merge commit, merged like any other change, then `/update-gaia` again (with or without `--local`). The revert restores both `.gaia/VERSION` and `.gaia/VERSION-dev`, so the next run merges against the build the project held before.
