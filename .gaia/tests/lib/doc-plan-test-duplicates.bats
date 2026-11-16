@@ -34,6 +34,15 @@ setup() {
   REFUSAL_LAYERING='asserting only the served status and any `Location` header, never page content a route test shows'
   TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer keeps one row per outcome'
   TWIN_LAYERING='with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
+  WIRING_INPUT_LAYERING='to prove the wiring, with an input clear of every boundary and exception the table cases,'
+  CASE_OWNER_LAYERING='A case belongs to the rule whose input it varies, whichever requirement states it and whatever effect it names'
+  PAGE_EFFECT_PLANNER='a case another key states as a page effect included'
+  WIRING_INPUT_PLANNER='a row of that rule at another layer takes one input per outcome, clear of every boundary and exception the table cases'
+  PAGE_EFFECT_LENS='(a case another key states as a page effect, such as an alert shown, included)'
+  REPEAT_LENS="or another layer's row of that rule repeating a boundary or exception case the table holds"
+  SERVED_ERROR_LAYERING='A real-server row for a served error status (a 404 for an unknown path or a missing record) asserts only the status and any `Location`'
+  SERVED_ERROR_ROUTE_LAYERING="Which route answers a path is shown by that route's own served check and route test (a signed-out request its guard redirects), never by a served heading."
+  SERVED_ERROR_LENS="A real-server row for a served error status that also asserts its page's heading or other content is trimmed to the status and any \`Location\`, never dropped for it"
   RULE_TABLE_PLANNER="Put every case of one transition, status or role rule in that rule's one case table"
   RULE_INPUT_PLANNER="the rule function's frozen contract takes every input a case varies"
   RULE_TABLE_LENS="whose one case table lacks a case its requirement states, the case sitting only on another layer's row"
@@ -63,6 +72,8 @@ layering_rule() { line_with "$1/$LAYERING_REL" 'Give every transition, status or
 table_step() { line_with "$1/$TEST_TABLE_REL" "5. Pick each row's layer"; }
 lens_rule_table() { line_with "$1/$DECOMPOSITION_REL" '  - a transition, status or role rule whose one case table'; }
 layering_refusal() { line_with "$1/$LAYERING_REL" '**Served check.**'; }
+layering_served_error() { line_with "$1/$LAYERING_REL" '- A real-server row for a served error status'; }
+lens_duplicate() { line_with "$1/$DECOMPOSITION_REL" '  - a duplicate within the plan:'; }
 
 # ---------- checks ----------
 
@@ -77,6 +88,8 @@ check_refusal_status_only() {
 
 check_one_case_table() {
   holds 'Test Layering rule paragraph' "$(layering_rule "$1")" "$TABLE_LAYERING" || return 1
+  holds 'Test Layering rule paragraph' "$(layering_rule "$1")" "$WIRING_INPUT_LAYERING" || return 1
+  holds 'Test Layering rule paragraph' "$(layering_rule "$1")" "$CASE_OWNER_LAYERING" || return 1
 }
 
 check_rule_cases_in_one_table() {
@@ -84,6 +97,16 @@ check_rule_cases_in_one_table() {
   holds 'test-table.md layer step' "$(table_step "$1")" "$RULE_INPUT_PLANNER" || return 1
   holds 'Test design lens rule-table bullet' "$(lens_rule_table "$1")" "$RULE_TABLE_LENS" || return 1
   holds 'Test design lens rule-table bullet' "$(lens_rule_table "$1")" "$RULE_INPUT_LENS" || return 1
+  holds 'test-table.md layer step' "$(table_step "$1")" "$PAGE_EFFECT_PLANNER" || return 1
+  holds 'test-table.md layer step' "$(table_step "$1")" "$WIRING_INPUT_PLANNER" || return 1
+  holds 'Test design lens rule-table bullet' "$(lens_rule_table "$1")" "$PAGE_EFFECT_LENS" || return 1
+  holds 'Test design lens rule-table bullet' "$(lens_rule_table "$1")" "$REPEAT_LENS" || return 1
+}
+
+check_served_error_status_only() {
+  holds 'Test Layering served-error bullet' "$(layering_served_error "$1")" "$SERVED_ERROR_LAYERING" || return 1
+  holds 'Test Layering served-error bullet' "$(layering_served_error "$1")" "$SERVED_ERROR_ROUTE_LAYERING" || return 1
+  holds 'Test design lens duplicate bullet' "$(lens_duplicate "$1")" "$SERVED_ERROR_LENS" || return 1
 }
 
 check_happy_path_twin() {
@@ -149,6 +172,8 @@ green() {
 @test "red twin: dropping either one-table clause fails" {
   red check_one_case_table "$LAYERING_REL" "$TABLE_LAYERING" 'removed'
   red check_one_case_table "$LAYERING_REL" ' holding every case,' ','
+  red check_one_case_table "$LAYERING_REL" "$WIRING_INPUT_LAYERING" 'to prove the wiring,'
+  red check_one_case_table "$LAYERING_REL" "$CASE_OWNER_LAYERING" 'removed'
 }
 
 @test "a plan keeps every case of a rule in its one table, and the plan audit flags a case left out" {
@@ -161,6 +186,20 @@ green() {
   red check_rule_cases_in_one_table "$DECOMPOSITION_REL" "$RULE_TABLE_LENS" 'removed'
   red check_rule_cases_in_one_table "$DECOMPOSITION_REL" "$RULE_INPUT_LENS" 'removed'
   red check_rule_cases_in_one_table "$DECOMPOSITION_REL" '  - a transition, status or role rule whose one case table' '  - removed'
+  red check_rule_cases_in_one_table "$TEST_TABLE_REL" ", $PAGE_EFFECT_PLANNER" ''
+  red check_rule_cases_in_one_table "$TEST_TABLE_REL" ", and $WIRING_INPUT_PLANNER" ''
+  red check_rule_cases_in_one_table "$DECOMPOSITION_REL" " $PAGE_EFFECT_LENS" ''
+  red check_rule_cases_in_one_table "$DECOMPOSITION_REL" ", $REPEAT_LENS" ''
+}
+
+@test "a served error status's real-server row asserts the status, and its page content stays on its story" {
+  green check_served_error_status_only
+}
+
+@test "red twin: dropping either served-error clause, or the lens trim, fails" {
+  red check_served_error_status_only "$LAYERING_REL" "$SERVED_ERROR_LAYERING" 'removed'
+  red check_served_error_status_only "$LAYERING_REL" " $SERVED_ERROR_ROUTE_LAYERING" ''
+  red check_served_error_status_only "$DECOMPOSITION_REL" " $SERVED_ERROR_LENS" ''
 }
 
 @test "a happy path the flow test walks and asserts names that flow test" {
