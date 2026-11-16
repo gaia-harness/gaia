@@ -1525,6 +1525,16 @@ next_tree_round() {
   open_round "$1" "$2"
 }
 
+# fixed_tree_round <r> <findings-json>: commit a rewrite of the vetoed line
+# f.txt:3, the fix landing, then record round r on it. A veto counts a fix
+# only from a tree that changed its path, so a round on next_tree_round's
+# tree satisfies no veto.
+fixed_tree_round() {
+  alf_set_line f.txt 3 "fixed in round $1"
+  alf_commit "fix before round $1"
+  open_round "$1" "$2"
+}
+
 # veto_unsatisfied_red <r> <findings-json>: on round r, an accept-residual on
 # the vetoed key fails vetoed-not-fix and no entry fails undisposed.
 veto_unsatisfied_red() {
@@ -1540,7 +1550,7 @@ veto_unsatisfied_red() {
   local fixer_disposition
   vetoes 1 c/imp f.txt 3
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
-  next_tree_round 2 "$(without_veto_key)"
+  fixed_tree_round 2 "$(without_veto_key)"
   veto_unsatisfied_red 2 "$(without_veto_key)" || { echo "never fixed"; return 1; }
   veto_fixed_in 1 fixed
   alf_sidecar "$MEMBER" "$FINDINGS_JSON" 21
@@ -1552,10 +1562,12 @@ veto_unsatisfied_red() {
   done
 }
 
-@test "vetoes: unsatisfied when the member was not dispatched after the fix, or the fix came before the veto's round, closing and later" {
+# The gate cases bind the veto from round 3: its waiver round 2 already sits
+# on the fixed tree, so only counting round 1's fix could satisfy it.
+@test "vetoes: unsatisfied when the member was not dispatched after the fix, or the fix came before the veto's round, at the round it binds and later" {
   vetoes 1 c/imp f.txt 3
   veto_fixed_in 1 fixed
-  next_tree_round 2 "$(without_veto_key)"
+  fixed_tree_round 2 "$(without_veto_key)"
   alf_state_edit '.history.rounds[1].members = ["code-audit-shell"]'
   write_dispositions 2 "[$(disposition_entry f.txt 3 c/imp accept-residual because)]"
   run_check 2
@@ -1564,10 +1576,11 @@ veto_unsatisfied_red() {
   run_check 2
   red undisposed "$(key_json c/imp f.txt 3)" || return 1
   alf_state_edit '.history.rounds[1].members = ["code-audit-frontend"]'
-  vetoes 2 c/imp f.txt 3
-  veto_unsatisfied_red 2 "$(without_veto_key)" || { echo "fix before the veto, closing round"; return 1; }
+  vetoes 3 c/imp f.txt 3
   next_tree_round 3 "$(without_veto_key)"
-  veto_unsatisfied_red 3 "$(without_veto_key)" || { echo "fix before the veto, later round"; return 1; }
+  veto_unsatisfied_red 3 "$(without_veto_key)" || { echo "fix before the veto, the round it binds"; return 1; }
+  next_tree_round 4 "$(without_veto_key)"
+  veto_unsatisfied_red 4 "$(without_veto_key)" || { echo "fix before the veto, later round"; return 1; }
 }
 
 @test "vetoes: a shifted-line re-report is a new key, undisposed on its own, while the satisfied veto needs nothing" {
@@ -1575,7 +1588,7 @@ veto_unsatisfied_red() {
   vetoes 1 c/imp f.txt 3
   veto_fixed_in 1 fixed
   shifted="$(jq -c '. + [{"path":"f.txt","line":8,"finding_class":"c/imp","severity":"major","security":false}]' <<<"$(without_veto_key)")"
-  next_tree_round 2 "$shifted"
+  fixed_tree_round 2 "$shifted"
   write_dispositions 2 "$(fill "$shifted" '[]' 'select(.path != "f.txt" or .line != 8)')"
   run_check 2
   red undisposed "$(key_json c/imp f.txt 8)" || return 1
@@ -1592,7 +1605,7 @@ veto_unsatisfied_red() {
   veto_fixed_in 2 fixed
   run_check 2 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
-  next_tree_round 3 "$(without_veto_key)"
+  fixed_tree_round 3 "$(without_veto_key)"
   alf_state_edit '.history.rounds[2].closing = true'
   write_dispositions 3 "$(fill "$(without_veto_key)" '[]')"
   run_check 3 --snapshot-dir "$SNAPSHOT_DIRECTORY"
