@@ -384,8 +384,10 @@ check_lens_doctrine_rows() {
   need "$doctrine" "A plan row for a case table names each case it holds by its values (each role or relationship and status, each input), never by class (\`every role\`) or by sample (\`including an unknown tool\`): the plan audit and the security writer read the row, not the test." || return 1
   need "$table" "- \`case\`: the case in words; a case-table row names each case by its values, never by class or sample (the doctrine's \`## What to test\`)." || return 1
   need "$lens" "a case-table row whose \`case\` names its cases by class or sample (\`every role\`, \`including an unknown tool\`) instead of by value, the doctrine's \`## What to test\`: the fix lists each case's values from the requirements and the README contract;" || return 1
-  need "$doctrine" "- Test a stated mapping from a value the app reads (an API field, a stored or query value) to what the user sees (a stored \`status: 2\` shown as \`Shipped\`) with one case per value, at the unit or route test of the code that maps it. A story given the mapped props never runs the mapping." || return 1
-  need "$lens" "a stated mapping from a value the app reads to what the user sees with a value that has no case at the unit or route test of the code that maps it, such as a mapping only a story given the mapped props asserts (the doctrine's \`## What to test\`): the fix adds the missing cases there;" || return 1
+  need "$doctrine" "- Test a stated mapping from a value the app reads (an API field, a stored or query value) to what the user sees (a stored \`status: 2\` shown as \`Shipped\`) with one case per value, at the layer the layer rule picks for the code that maps it: the route test of a loader or action that maps it, the unit test of a helper that meets the unit-test conditions, or, when a component or a small helper maps it, one story per value given the raw value. A story given the mapped props never runs the mapping." || return 1
+  need "$lens" "a stated mapping from a value the app reads to what the user sees with a value that has no case at the layer the doctrine's \`## What to test\` picks for the code that maps it (a route test, the unit test of a helper that meets the unit-test conditions, or a story given the raw value when a component or small helper maps it), such as a mapping only a story given the mapped props asserts: the fix adds the missing cases there;" || return 1
+  need "$table" "Give a stated value-to-display mapping one case per value at the layer that doctrine picks for the code that maps it: a route test, the unit test of a helper that meets the unit-test conditions, or a story given the raw value when a component or small helper maps it, never a story given already-mapped props" || return 1
+  need "$lens" "(a test asserting the default API origin when none is planted, retired because a secret row proves the browser never takes the API origin, is secret)" || return 1
   local planted_secret="A test that puts a value a secrets requirement keeps off a surface onto that surface and asserts code there uses it tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret (a browser test that reads a planted server-only API origin)."
   need "$doctrine" "$planted_secret" || return 1
   need "$table" "$planted_secret" || return 1
@@ -557,7 +559,15 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the doctrine testing a value mapping only in a story fails" {
-  red check_lens_doctrine_rows "$DOCTRINE_REL" 'with one case per value, at the unit or route test of the code that maps it' 'in a story'
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'with one case per value, at the layer the layer rule picks for the code that maps it' 'in a story'
+}
+
+@test "red twin: the planner step dropping the value mapping layer fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" 'Give a stated value-to-display mapping one case per value at the layer that doctrine picks' 'Give a stated mapping one case'
+}
+
+@test "red twin: the test design lens losing the planted-origin gloss fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'a test asserting the default API origin when none is planted' 'a fallback test'
 }
 
 @test "red twin: the test design lens dropping the value mapping check fails" {
