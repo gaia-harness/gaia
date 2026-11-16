@@ -149,7 +149,7 @@ const emitFiles = (options: EmitOptions): ScaffoldResult => {
   const returnsAnnotation = `: ${returns ?? 'void'}`;
 
   const hookContents = renderTemplate(resolveTemplateFile(HOOK_TEMPLATE_FILE), {
-    // The default body (`// TODO: implement`) references no React hooks,
+    // The default body is a placeholder comment that references no React hooks,
     // so the import block is empty.
     imports: '',
     name,

@@ -84,7 +84,12 @@ const HELP_TEXT = `Usage: gaia wiki commit-classify --since <sha> [--json]
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
-export type ClassificationHealth = {
+export type CommitClassification = {
+  commits: ClassifiedCommit[];
+  health: ClassificationHealth;
+};
+
+type ClassificationHealth = {
   /** `deferred / evaluated`, or 0 when nothing was evaluated. */
   deferral_rate: number;
   /** Commits whose decision came from a fail-open default. */
@@ -98,7 +103,7 @@ export type ClassificationHealth = {
   worthy_rate: number;
 };
 
-export type ClassifiedCommit = {
+type ClassifiedCommit = {
   body: string;
   deletions: number;
   files_changed: number;
@@ -109,12 +114,7 @@ export type ClassifiedCommit = {
   suggestion_reason: string;
 };
 
-export type CommitClassification = {
-  commits: ClassifiedCommit[];
-  health: ClassificationHealth;
-};
-
-export type CommitSuggestion = 'SKIP' | 'WORTHY';
+type CommitSuggestion = 'SKIP' | 'WORTHY';
 
 type FlagParseFailure = {
   message: string;

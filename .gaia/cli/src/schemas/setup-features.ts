@@ -11,7 +11,7 @@
 import {z} from 'zod';
 import {BANNED_DESCRIPTION_CHARACTERS} from './labels.js';
 
-export const SETUP_SCOPES = ['machine', 'project'] as const;
+const SETUP_SCOPES = ['machine', 'project'] as const;
 
 export const SETUP_DECISIONS = [
   'applied',
@@ -20,8 +20,6 @@ export const SETUP_DECISIONS = [
 ] as const;
 
 export type SetupDecision = (typeof SETUP_DECISIONS)[number];
-
-export type SetupScope = (typeof SETUP_SCOPES)[number];
 
 export const isSetupDecision = (value: unknown): value is SetupDecision =>
   typeof value === 'string' &&

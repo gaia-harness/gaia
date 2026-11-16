@@ -5,7 +5,7 @@
 [![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](https://claude.com/claude-code)
 [![Tests](https://img.shields.io/github/actions/workflow/status/gaia-harness/gaia/tests.yml?event=pull_request&label=tests)](https://github.com/gaia-harness/gaia/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/github/license/gaia-harness/gaia)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D22.22.0-brightgreen)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-22.22.2%2B%20%7C%2024.15%2B%20%7C%2026%2B-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 **Claude is raw power. [GAIA](https://gaiaharness.com/) is order and focus.**
@@ -32,7 +32,7 @@ One command. GAIA handles the rest, then `/gaia-init` finishes the last-mile set
 > [!NOTE]
 > Start projects with `npx create-gaia@latest my-app` rather than cloning or forking. The CLI sets up your project for you, strips the GAIA branding and release tooling, etc. A clone leaves all of that in place and pointed at the wrong repo.
 
-**Requirements:** [Node.js](https://nodejs.org/) >= 22.22.0 ([nvm](https://github.com/nvm-sh/nvm) recommended). macOS or Linux; on Windows, run inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (the hooks and CLI need bash and POSIX file paths, and native Windows isn't exercised in CI).
+**Requirements:** [Node.js](https://nodejs.org/) ^22.22.2, ^24.15.0, or >= 26.0.0 ([nvm](https://github.com/nvm-sh/nvm) recommended). macOS or Linux; on Windows, run inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (the hooks and CLI need bash and POSIX file paths, and native Windows isn't exercised in CI).
 
 [Learn more about GAIA →](https://gaiaharness.com/)
 

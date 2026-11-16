@@ -42225,7 +42225,7 @@ var emitFiles = (options) => {
   const paramsString = formatParamsString(params);
   const returnsAnnotation = `: ${returns ?? "void"}`;
   const hookContents = renderTemplate(resolveTemplateFile(HOOK_TEMPLATE_FILE), {
-    // The default body (`// TODO: implement`) references no React hooks,
+    // The default body is a placeholder comment that references no React hooks,
     // so the import block is empty.
     imports: "",
     name,
@@ -47820,7 +47820,7 @@ import path85 from "node:path";
 import { existsSync as existsSync43, lstatSync as lstatSync4, readFileSync as readFileSync63, realpathSync as realpathSync8 } from "node:fs";
 import path83 from "node:path";
 var LEGACY_PACKAGE_ROOT = "frontend";
-var LEGACY_PACKAGE_NAME = LEGACY_PACKAGE_ROOT;
+var LEGACY_PACKAGE_NAME = "frontend";
 var NEW_PACKAGE_NAME = "web";
 var APPS_DIRECTORY = "apps";
 var PACKAGES_DIRECTORY = "packages";

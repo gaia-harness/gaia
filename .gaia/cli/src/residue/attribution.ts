@@ -58,11 +58,6 @@ export type AttributionResult = {
   malformed: MalformedKey[];
 };
 
-export type KeylessUnit = {
-  disposition: ResidueDisposition;
-  unit_start_line: number;
-};
-
 export type MalformedKey = {
   disposition: ResidueDisposition;
   raw_key: string;
@@ -71,6 +66,11 @@ export type MalformedKey = {
 };
 
 export type ResidueDisposition = 'accept' | 'waive';
+
+type KeylessUnit = {
+  disposition: ResidueDisposition;
+  unit_start_line: number;
+};
 
 export const DEFAULT_PREDICATES: AttributionPredicates = {
   canonAccept: CANON_ACCEPT,

@@ -108,7 +108,7 @@ describe('gaia scaffold hook', () => {
     expect(read(hookPath)).toBe(
       [
         'export const useFoo = (): void => {',
-        '  // TODO: implement useFoo',
+        '  // Write the body of useFoo here.',
         '};',
         '',
       ].join('\n')

@@ -42,8 +42,6 @@ const ALL_ZERO_SHA = '0'.repeat(40);
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
-export type DriftSeverity = 'high' | 'low' | 'medium' | 'none';
-
 export type WikiState = {
   commits_ahead: number;
   /** Bookkeeping-excluded commits behind HEAD; always a number. */
@@ -64,6 +62,8 @@ export type WikiState = {
    */
   suggested_base: string;
 };
+
+type DriftSeverity = 'high' | 'low' | 'medium' | 'none';
 
 const classifySeverity = (commitCount: number): DriftSeverity => {
   if (commitCount <= 0) return 'none';

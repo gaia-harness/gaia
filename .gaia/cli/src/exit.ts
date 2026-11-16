@@ -20,5 +20,3 @@ export const EXIT_CODES = {
   STORAGE_INACCESSIBLE: 20,
   UNKNOWN_SUBCOMMAND: 1,
 } as const;
-
-export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];

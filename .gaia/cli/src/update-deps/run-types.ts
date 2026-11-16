@@ -64,7 +64,7 @@ export type WaveBGroup = {
   packages: readonly WaveBPackage[];
 };
 
-export type WaveBPackage = {
+type WaveBPackage = {
   bucket: Bucket;
   current: string;
   is_pinned: boolean;

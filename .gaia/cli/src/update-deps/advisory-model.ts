@@ -75,17 +75,6 @@ export type Advisory = {
   vulnerableRange: null | string;
 };
 
-export type AdvisoryAlertReference = {manifestPath: string; number: number};
-
-export type AdvisoryCandidate =
-  | 'chain-head-in-run'
-  | 'chain-head-major'
-  | 'chain-head-minor'
-  | 'in-range-refresh'
-  | 'override';
-
-export type AdvisorySource = 'dependabot' | 'pnpm-audit' | 'unavailable';
-
 /** A validated Dependabot alert, reduced to the allowlisted fields. */
 export type AlertRecord = {
   epssPercentage: null | number;
@@ -100,8 +89,6 @@ export type AlertRecord = {
   vulnerableRange: null | string;
 };
 
-export type AuditFinding = {paths: string[]; version: string};
-
 /** A validated `pnpm audit` advisory, reduced to the allowlisted fields. */
 export type AuditRecord = {
   findings: AuditFinding[];
@@ -113,8 +100,6 @@ export type AuditRecord = {
   vulnerableRange: null | string;
 };
 
-export type BlockedReason = 'no-patch' | 'release-age' | 'split-patch';
-
 export type NormalizeResult<TRecord> = {
   records: TRecord[];
   rejectedCount: number;
@@ -125,6 +110,21 @@ export type UpdateOffers = {
   waveA: ReadonlySet<string>;
   waveB: ReadonlySet<string>;
 };
+
+type AdvisoryAlertReference = {manifestPath: string; number: number};
+
+type AdvisoryCandidate =
+  | 'chain-head-in-run'
+  | 'chain-head-major'
+  | 'chain-head-minor'
+  | 'in-range-refresh'
+  | 'override';
+
+type AdvisorySource = 'dependabot' | 'pnpm-audit' | 'unavailable';
+
+type AuditFinding = {paths: string[]; version: string};
+
+type BlockedReason = 'no-patch' | 'release-age' | 'split-patch';
 
 const MAXIMUM_CHAINS = 5;
 

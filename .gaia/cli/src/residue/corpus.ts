@@ -35,15 +35,15 @@ export type IssueRecord = {
 export type MergedPrsResult =
   {ok: false} | {ok: true; prs: PrRecord[]; truncated: boolean};
 
-export type PrRecord = {
+export type TechDebtIssuesResult =
+  {issues: IssueRecord[]; ok: true} | {ok: false};
+
+type PrRecord = {
   body: string;
   headRefOid: string;
   mergedAt: string;
   number: number;
 };
-
-export type TechDebtIssuesResult =
-  {issues: IssueRecord[]; ok: true} | {ok: false};
 
 // --- fixture provider -------------------------------------------------------
 

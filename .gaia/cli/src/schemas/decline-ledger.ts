@@ -18,7 +18,7 @@ import {summarizeZodError} from './zod-error.js';
 export const declineLedgerPath = (repoRoot: string): string =>
   path.join(repoRoot, '.gaia', 'local', 'codify', 'declines.json');
 
-export const DeclineEntrySchema = z.object({
+const DeclineEntrySchema = z.object({
   declined_at: z.iso.datetime(),
   declined_at_audited_pr_count: z.number().int().nonnegative(),
   declined_at_pr_count: z.number().int().nonnegative(),
@@ -26,22 +26,20 @@ export const DeclineEntrySchema = z.object({
   tally_schema_version: z.number().int().nonnegative(),
 });
 
-export type DeclineEntry = z.infer<typeof DeclineEntrySchema>;
-
 // `version` is declared first so JSON serialization emits it first, matching
 // the frozen ledger shape (`{"version":2,"declines":[]}`).
-export const DeclineLedgerSchema = z.object({
+const DeclineLedgerSchema = z.object({
   version: z.literal(2),
   // eslint-disable-next-line perfectionist/sort-objects -- serialization order load-bearing, version-first
   declines: z.array(DeclineEntrySchema),
 });
 
-export type DeclineLedger = z.infer<typeof DeclineLedgerSchema>;
-
 export type ReadDeclineLedgerResult =
   | {error: string; status: 'malformed'}
   | {ledger: DeclineLedger; status: 'ok'}
   | {status: 'missing'};
+
+type DeclineLedger = z.infer<typeof DeclineLedgerSchema>;
 
 export const readDeclineLedger = (
   repoRoot: string

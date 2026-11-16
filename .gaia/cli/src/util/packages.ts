@@ -32,7 +32,7 @@ const PATH_PATTERN = /^(\.|[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*)$/;
 const CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
 
 /** The `globs` keys every descriptor must carry, in validation order. */
-export const GLOB_KEYS = [
+const GLOB_KEYS = [
   'tddUnitTests',
   'tddStrictCandidates',
   'emergentTests',
@@ -50,7 +50,7 @@ const cleanString = z
 const globList = z.array(cleanString);
 const wikiList = z.array(z.string().refine((v) => !CONTROL_CHARACTER.test(v)));
 
-export const registryEntrySchema = z.object({
+const registryEntrySchema = z.object({
   name: z.string().regex(NAME_PATTERN),
   path: z.string().regex(PATH_PATTERN),
 });
@@ -59,9 +59,9 @@ export const registryEntrySchema = z.object({
 export const isRegistrablePath = (candidate: string): boolean =>
   registryEntrySchema.shape.path.safeParse(candidate).success;
 
-export const registrySchema = z.array(registryEntrySchema);
+const registrySchema = z.array(registryEntrySchema);
 
-export const descriptorSchema = (expectedName: string) =>
+const descriptorSchema = (expectedName: string) =>
   z.object({
     generatedSettings: z.boolean().optional(),
     globs: z.object({
@@ -97,8 +97,6 @@ export type PackageDescriptor = z.infer<ReturnType<typeof descriptorSchema>>;
 export type RegistryEntry = z.infer<typeof registryEntrySchema>;
 
 type RegistrySource = 'builtin' | 'registry';
-
-export {globToBody} from './glob-regexp.js';
 
 export {globToRegExp} from './glob-regexp.js';
 

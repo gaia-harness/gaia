@@ -8,7 +8,7 @@ export const FITNESS_CONFIG_PATH = '.claude/gaia-fitness.json';
 /** The `file` of a finding about a `--config` file, which may live outside the root. */
 export const CONFIG_PLACEHOLDER = '<config>';
 
-export const CONFIG_RULE_PREFIX = 'settings.fitness-config.';
+const CONFIG_RULE_PREFIX = 'settings.fitness-config.';
 
 export const CONFIG_PARSE_RULE_ID = 'settings.fitness-config.parse';
 

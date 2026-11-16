@@ -23,7 +23,7 @@ import path from 'node:path';
 import {structuredError} from '../stderr.js';
 import {summarizeZodError} from './zod-error.js';
 
-export const FINDING_CLASS_PREFIXES = [
+const FINDING_CLASS_PREFIXES = [
   'react-doctor',
   'axe',
   'knip',
@@ -33,7 +33,7 @@ export const FINDING_CLASS_PREFIXES = [
   'workflow',
 ] as const;
 
-export type FindingClassPrefix = (typeof FINDING_CLASS_PREFIXES)[number];
+type FindingClassPrefix = (typeof FINDING_CLASS_PREFIXES)[number];
 
 // Open oracle buckets: the deterministic tool owns the id space after the
 // prefix, so any slug of the safe id shape below is valid.
@@ -129,8 +129,6 @@ export const RULE_FINDING_CLASSES = [
   'rule/thin-route-violation',
 ] as const;
 
-export type RuleFindingClass = (typeof RULE_FINDING_CLASSES)[number];
-
 /**
  * Closed-vocabulary members for the workflow bucket. Seeded from the
  * workflow-security surface the `code-audit-github-workflows` member owns
@@ -142,8 +140,6 @@ export const WORKFLOW_FINDING_CLASSES = [
   'workflow/unpinned-action',
   'workflow/broad-permissions',
 ] as const;
-
-export type WorkflowFindingClass = (typeof WORKFLOW_FINDING_CLASSES)[number];
 
 const CLOSED_VOCABULARY: ReadonlySet<string> = new Set([
   ...HOLISTIC_FINDING_CLASSES,

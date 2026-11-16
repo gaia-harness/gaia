@@ -5,20 +5,6 @@ import {run as runHook} from './hook.js';
 import {run as runRoute} from './route.js';
 import {run as runService} from './service.js';
 
-export {insertIntoBarrel} from './barrel.js';
-
-export {ensureDir} from './fs.js';
-
-export {writeFileIfAbsent} from './fs.js';
-
-export {loadTemplate} from './template.js';
-
-export {renderTemplate} from './template.js';
-
-export type {TemplateVars} from './template.js';
-
-export type {ScaffoldResult} from './types.js';
-
 const HELP_TEXT = `Usage: gaia scaffold <subcommand> [args]
 
   component <name>         Scaffold a new React component (kebab or PascalCase).

@@ -35,8 +35,7 @@ export const KEY_PATTERN =
   /<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=\d+) -->/;
 
 /** The lenient grammar, applied to a whole issue body; group 1 is the path. */
-export const LENIENT_KEY_PATTERN =
-  /<!-- gaia-debt-key:[^>]*?path=([^>\n]+) line=/;
+const LENIENT_KEY_PATTERN = /<!-- gaia-debt-key:[^>]*?path=([^>\n]+) line=/;
 
 /**
  * Upper bound on a cited line number. Well above any file this repo or an

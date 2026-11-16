@@ -40,12 +40,7 @@ import {
   renderHumanReport,
   triplesWithDeferred,
 } from './field-verdict.js';
-import type {
-  FieldMergeReport,
-  Presence,
-  Triple,
-  VerdictItem,
-} from './field-verdict.js';
+import type {FieldMergeReport, Presence, Triple} from './field-verdict.js';
 
 const HELP_TEXT = `Usage: gaia update merge-audit-ci --baseline <file> --latest <file> --current <file> [--deferred-baseline <key>=<file>]... [--json]
 
@@ -72,8 +67,6 @@ const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const ROSTER_SECTION = 'auditors';
 
 export type AuditCiMergeReport = FieldMergeReport;
-
-export type AuditCiVerdictItem = VerdictItem;
 
 type Flags = {
   baseline: string;

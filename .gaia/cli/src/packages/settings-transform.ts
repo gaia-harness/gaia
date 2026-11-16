@@ -153,7 +153,7 @@ const parseOverlayPermissions = (
 };
 
 /** Validate the union-only overlay and return its additions. */
-export const parseOverlay = (overlay: unknown): Overlay => {
+const parseOverlay = (overlay: unknown): Overlay => {
   if (!isObject(overlay)) {
     throw new SettingsGenerationError(
       'the overlay must be a JSON object. Next step: fix the overlay file.'

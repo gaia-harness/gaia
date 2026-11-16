@@ -58,7 +58,7 @@ export type PnpmStripRefusal =
 export type PrunePolicy = (view: PruneView) => ReadonlySet<string>;
 
 /** The reachability sets a prune policy chooses dropped snapshot ids from. */
-export type PruneView = {
+type PruneView = {
   memberDependencyNames: ReadonlySet<string>;
   memberReach: ReadonlySet<string>;
   restReach: ReadonlySet<string>;

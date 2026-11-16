@@ -24,14 +24,6 @@ export type CommandRunner = (
   options: {cwd: string}
 ) => SpawnSyncReturns<string>;
 
-export type GhFailure = {
-  exitCode: number;
-  ok: false;
-  stderr: string;
-  /** Set only when `timeoutMs` elapsed and the child was killed. */
-  timedOut?: true;
-};
-
 export type GhOptions = {
   args: readonly string[];
   cwd?: string;
@@ -42,14 +34,22 @@ export type GhOptions = {
 
 export type GhResult = GhFailure | GhSuccess;
 
-export type GhSuccess = {
-  ok: true;
-  stdout: string;
-};
-
 export type ProcessResult = {
   exitCode: number;
   stderr: string;
+  stdout: string;
+};
+
+type GhFailure = {
+  exitCode: number;
+  ok: false;
+  stderr: string;
+  /** Set only when `timeoutMs` elapsed and the child was killed. */
+  timedOut?: true;
+};
+
+type GhSuccess = {
+  ok: true;
   stdout: string;
 };
 

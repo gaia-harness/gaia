@@ -3,7 +3,7 @@
  * zero-or-more-directories form, \u0002 for `**`, \u0003 for `*`, \u0004 for
  * `?`, \u0005 and \u0006 for a brace group's parentheses, \u0007 for its bar.
  */
-export const globToBody = (glob: string): string =>
+const globToBody = (glob: string): string =>
   glob
     .replaceAll(/[\\.+^$()[\]|]/g, String.raw`\$&`)
     .replaceAll('**/', '\u0001')

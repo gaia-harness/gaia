@@ -12,7 +12,7 @@ import type {FitnessRun, ScratchProject} from './test-support.js';
 import {createScratchProject, runFitness} from './test-support.js';
 import type {CheckReport, Finding, FixtureProject} from './types.js';
 
-export const GOOD_DESCRIPTION =
+const GOOD_DESCRIPTION =
   'Summarizes the example status. Use when a status summary is requested.';
 
 /**
