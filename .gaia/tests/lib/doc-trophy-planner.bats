@@ -682,10 +682,11 @@ check_flow_row_allow_list() {
   need "$doctrine" "repeats no refusal a build task's test or another flow owns, however many requests or sessions the refusal takes to stage," || return 1
   need "$doctrine" "A stated no-JavaScript error path gets no native post: the action's route test and the page's story cover it" || return 1
   need "$doctrine" 'and asserts no stated literal or state a lower-layer test owns' || return 1
+  need "$doctrine" "even one the SPEC flow's own statement names: a flow that sees a placed order with its total lands on the order's page, and the total stays on its route and story tests." || return 1
   need "$doctrine" "checks its happy path's native form posts page-less in its flow test, never an error post" || return 1
   need "$lens" "a flow row step outside the doctrine's \`**Flow test.**\` allow-list" || return 1
   need "$lens" "a happy-path effect that takes several requests or sessions to stage" || return 1
-  need "$lens" "such as a refusal a build task's row or another flow owns, however many requests or sessions it takes to stage, a native error post, a stated literal or state a lower-layer row owns, or a step that only reaches a page to see one, except a happy-path effect a flow step asserts" || return 1
+  need "$lens" "such as a refusal a build task's row or another flow owns, however many requests or sessions it takes to stage, a native error post, a stated literal or state a lower-layer row owns, the SPEC flow's own statement naming it included, or a step that only reaches a page to see one, except a happy-path effect a flow step asserts" || return 1
   need "$doctrine" "A happy-path step's own result that the user sees as a refusal (after sign-out the protected page redirects to sign-in) is a happy-path effect and stays." || return 1
   need "$lens" "such as the sign-in redirect after sign-out, which stays on the flow even when the user sees it as a refusal" || return 1
   need "$lens" "drops it when nothing is left, recording a SPEC flow left with no row in \`coveredFlows\`" || return 1
@@ -746,7 +747,15 @@ check_flow_row_allow_list() {
 }
 
 @test "red twin: the test design lens flagging refusals only fails" {
-  red check_flow_row_allow_list "$AUDIT_REL" ', a native error post, a stated literal or state a lower-layer row owns, or a step that only reaches a page to see one' ''
+  red check_flow_row_allow_list "$AUDIT_REL" ", a native error post, a stated literal or state a lower-layer row owns, the SPEC flow's own statement naming it included, or a step that only reaches a page to see one" ''
+}
+
+@test "red twin: the doctrine keeping a value the SPEC flow's statement names on the flow fails" {
+  red check_flow_row_allow_list "$DOCTRINE_REL" ", even one the SPEC flow's own statement names: a flow that sees a placed order with its total lands on the order's page, and the total stays on its route and story tests." '.'
+}
+
+@test "red twin: the test design lens keeping a literal the SPEC flow's statement names on the flow fails" {
+  red check_flow_row_allow_list "$AUDIT_REL" ", the SPEC flow's own statement naming it included," ','
 }
 
 @test "red twin: the test design lens keeping a SPEC flow's only row again fails" {
@@ -811,4 +820,44 @@ check_covered_flows() {
 
 @test "red twin: the planner mapping refusals to the flow row fails" {
   red check_flow_row_allow_list "$TABLE_REL" "maps to the delivering task's lower-layer row" "maps to the flow row"
+}
+
+# check_page_heading_rows <root>: a heading whose text is loader data gets a
+# route test that the loader returns it, and every page story, an error page's
+# included, carries both halves of the landmark check. Planners read the
+# loader-data heading line as "not a real-server check" and left the heading
+# in a story given props, and read an error boundary's page as no page story,
+# so a stated-only-h1 row stood in for the landmark check without `main`.
+check_page_heading_rows() {
+  local doctrine lens
+  doctrine="$(flat "$1/$DOCTRINE_REL")"
+  lens="$(range_of "$1/$AUDIT_REL" '- **Test design' '## 4.6a-ii' | tr '\n' ' ' | tr -s ' ')"
+  need "$doctrine" "A heading whose text is data the loader returns is a route test asserting the loader returns that text, beside the page story that renders it; a story given that text as a prop never shows the loader supplies it." || return 1
+  need "$lens" "or a heading whose text is loader data asserted only in a story given props (the doctrine's \`## Served HTML\`)" || return 1
+  need "$doctrine" "Every page story, an error page an error boundary renders included, carries the landmark check, one \`.test()\` asserting one level-1 heading and one \`main\` landmark; a row asserting a stated heading is that check only when it asserts the \`main\` landmark too." || return 1
+  need "$lens" "a page story, an error page's included, with no row holding the doctrine's landmark check (\`## Components, pages and stories\`), \`minor\`: the fix adds the missing half to the page's heading row or adds the landmark row" || return 1
+}
+
+@test "a loader-data heading has a route row and every page story, an error page's included, has the whole landmark check, in the doctrine and the test design lens" {
+  green check_page_heading_rows
+}
+
+@test "red twin: the doctrine accepting a story alone for a loader-data heading fails" {
+  red check_page_heading_rows "$DOCTRINE_REL" ' asserting the loader returns that text, beside the page story that renders it; a story given that text as a prop never shows the loader supplies it.' '.'
+}
+
+@test "red twin: the test design lens dropping the loader-data heading check fails" {
+  red check_page_heading_rows "$AUDIT_REL" ", or a heading whose text is loader data asserted only in a story given props (the doctrine's \`## Served HTML\`)" ''
+}
+
+@test "red twin: the doctrine leaving error pages out of the landmark check fails" {
+  red check_page_heading_rows "$DOCTRINE_REL" 'Every page story, an error page an error boundary renders included, carries' 'Every page story carries'
+}
+
+@test "red twin: the doctrine letting a heading-only row stand in for the landmark check fails" {
+  red check_page_heading_rows "$DOCTRINE_REL" '; a row asserting a stated heading is that check only when it asserts the `main` landmark too.' '.'
+}
+
+@test "red twin: the test design lens dropping the landmark check fails" {
+  red check_page_heading_rows "$AUDIT_REL" "  - a page story, an error page's included, with no row holding the doctrine's landmark check" "  - a page story with a landmark check"
 }
