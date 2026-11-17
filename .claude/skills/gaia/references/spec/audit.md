@@ -38,13 +38,13 @@ The four core lenses (always dispatched; the set is chosen for low overlap, each
 
 **Specialist lenses** (dispatch only the ones the gauge selected; build each agent's prompt from the shared preamble in `spec/lens-dispatch.md` plus a `LENS: <name> (id prefix <ID>)` line and the "hunts for" focus from its row):
 
-| ID | Fires when the spec touches | Hunts for |
-| --- | --- | --- |
-| `SEC` | auth, tokens or secrets, CSRF, redirects, uploads, permissions, PII, raw user input, headers, cookies | injection, SSRF, open redirect, token or secret leakage, missing authorization, unsafe deserialization; a credential the app holds for another service (an API or session token, even the user's own) with no SPEC rule keeping it unreadable in the browser (a signed-only cookie is readable); whether the SPEC's security claim holds and its acceptance gate is adversarial |
-| `MIG` | schema, format, or ledger changes; renamed, removed, or added fields; breaking API or serialization changes; config-vocabulary changes | existing-data handling, reversibility and rollback, dual-read or dual-write windows, version skew, what breaks for legacy or in-flight records |
-| `A11Y` | UI components, routes, pages, anything that renders DOM | flows and criteria that pass an axe rule yet fail real assistive tech; missing keyboard, focus-order, label, contrast, or landmark criteria; aria misuse |
-| `DOC` | wiki or docs deliverables, "points to X" pointer criteria, README or section-title citations | duplication of an authoritative source, rot-resistance, dead cross-references, pointer criteria satisfiable by a bare path drop |
-| `PERF` | data volume, loops over collections, network fan-out, caching, render or hydration paths | speculative-versus-real cost, N+1, unbounded growth, flaky warm/cold performance gates |
+| ID | Name | Fires when the spec touches | Hunts for |
+| --- | --- | --- | --- |
+| `SEC` | Security | auth, tokens or secrets, CSRF, redirects, uploads, permissions, PII, raw user input, headers, cookies | injection, SSRF, open redirect, token or secret leakage, missing authorization, unsafe deserialization; a credential the app holds for another service (an API or session token, even the user's own) with no SPEC rule keeping it unreadable in the browser (a signed-only cookie is readable); whether the SPEC's security claim holds and its acceptance gate is adversarial |
+| `MIG` | Migration | schema, format, or ledger changes; renamed, removed, or added fields; breaking API or serialization changes; config-vocabulary changes | existing-data handling, reversibility and rollback, dual-read or dual-write windows, version skew, what breaks for legacy or in-flight records |
+| `A11Y` | Accessibility | UI components, routes, pages, anything that renders DOM | flows and criteria that pass an axe rule yet fail real assistive tech; missing keyboard, focus-order, label, contrast, or landmark criteria; aria misuse |
+| `DOC` | Documentation | wiki or docs deliverables, "points to X" pointer criteria, README or section-title citations | duplication of an authoritative source, rot-resistance, dead cross-references, pointer criteria satisfiable by a bare path drop |
+| `PERF` | Performance | data volume, loops over collections, network fan-out, caching, render or hydration paths | speculative-versus-real cost, N+1, unbounded growth, flaky warm/cold performance gates |
 
 Before dispatching the fan-out, pre-clear each `findings/<LENS>.json` (`rm -f`) for every lens about to be dispatched. After each lens finishes, never at the moment its dispatch call returns, classify its file per `## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`: a no-op lens is re-cleared and re-dispatched once, and a second consecutive no-op runs that lens inline on the main thread. A specialist lens the gauge did not select for this dispatch is never issued and is recorded `not_applicable`. Append one `coverage.jsonl` record (`phase: "lens"`, `lens: "<LENS>"`, `disposition: "first_pass"|"not_applicable"`) per in-scope lens.
 

@@ -12,11 +12,16 @@ Savings were probed on Claude Code 2.1.304. A client at 2.1.287 or later still r
 | `lib/session-checks.mjs` | Two checks the drivers share: whether the round-1 frontend member wave has returned, and whether a listed tool was called without ToolSearch and without an error result. |
 | `measure-dispatch.mjs` | One main session transcript in, schema-1 measure JSON out. |
 | `summarize-runs.mjs` | Round-1 medians over a fixed number of measure files. |
+| `compare-arms.mjs` | Turns the per-run measure files of a paired audit replay into the equal-grade and shorter verdicts, refusing a set that does not compare like with like. |
 | `prepare-scratch-clone.sh` | The one way a run gets a maintainer tree. |
 | `probe-first-call.sh` | One fresh `claude -p` session per agent type, then `measure-dispatch.mjs` over each; optional callability probes. |
 | `run-replay.sh` | One round-1 audit replay in a throwaway adopter checkout. |
 | `replays/*.patch` | The two replay changes, authored against the tracked `apps/web/app` files a scaffold ships as-is. |
 | `fixtures/` | A trimmed real session (`rc3-trimmed/`, with the rates file it is priced from and `expected.json`) and small synthetic sessions for the cases the real slice lacks. |
+
+## Arm comparison
+
+`compare-arms.mjs --kind plan-audit|spec-audit --specs <label>,<label> <measure json>...` decides whether a changed harness reaches equal grade against the current harness and runs shorter, from two runs per arm on each of two frozen SPECs. Equal grade follows the pair rule in the script header, shorter compares medians with no threshold, and every metric is reported beside the baseline arm at one grader version. The eval ladder supplies the measure files; the script refuses a set with a SPEC missing, a short or long arm, differing starting inputs or differing grader versions.
 
 ## Cost method
 

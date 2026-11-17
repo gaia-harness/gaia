@@ -22,7 +22,7 @@ There is no tier below Minor: what is worth reporting is Minor, what is not is n
 | Evidence form | SPEC section or flow id, plus `file:line` | task doc plus `file:line` |
 | `location` meaning | SPEC section or flow id | task doc or README section |
 | Findings directory (`<FINDINGS_DIR>`) | `.gaia/local/cache/audit-<spec_id>/findings/` | `<PLAN_DIR>/audit/` |
-| Write tool | the ordinary write tools | `Bash`, see below |
+| Write tool | the ordinary write tools | `Bash` at the main-checkout path when the session runs in a linked worktree, reading the file back to confirm its content and location before it is classified, the edit tools otherwise |
 | `critical` | the SPEC is wrong or will produce broken or misleading work; fix before gate 2 | the plan is wrong or will produce broken or conflicting work; fix before execution |
 | `major` | a significant gap or ambiguity a planner is forced to guess on; fix, or the human decides | a significant gap or hidden dependency the orchestrator is forced to guess on; fix, or the human decides |
 | `minor` | real but small; fixed by default | real but small; fixed by default |
@@ -48,6 +48,24 @@ Send this to every lens, interpolating the slots. The caller appends a `LENS: <n
 > - **Write** your full findings to `<FINDINGS_DIR><LENS>.json` (the fully qualified path) under the file schema, using <write tool>. Write the file even if your findings array is empty.
 > - **Return** only the short summary, no finding bodies.
 
+The preamble, the `LENS:` line and the focus text are rendered to a brief file by `node .gaia/scripts/spec/lens-brief.mjs lens ...` (with the output-format clause of `## Findings file schema` appended), never pasted into the Agent call: each Agent call carries only the short prompt that command prints. A refuter brief is rendered by `lens-brief.mjs refuter ...` from the caller's refuter prompt. The command reads the templates below and fills `<name>`, `<ID>`, `<audit>` (`SPEC` or `plan`) and `<brief path>`.
+
+Lens short prompt:
+
+> You are the <name> (<ID>) lens of the <audit> audit. Your first action is a Read of <brief path>; follow it. Where it says your first action, it means your first action after that Read.
+
+Refuter short prompt:
+
+> You are a refuter in the <audit> audit. Your first action is a Read of <brief path>; follow it. Where it says your first action, it means your first action after that Read.
+
+Verification lens line, one per verification lens a Deep refuter works through (in the order `correctness`, `security/safety`, `reproduces-as-described`), prepended to that refuter's prompt:
+
+> Verification lens: <verification lens>
+
+Batched refuter instruction, appended to a batched refuter's prompt:
+
+> Verify every listed finding id, write one verdict file per id at the listed paths, and return a JSON array of thin verdict lines, one per id.
+
 ## Write and return
 
 The agent, or the main thread running a lens inline, writes `<FINDINGS_DIR><LENS>.json` at its fully qualified path, even when the array is empty. The file on disk is what the caller trusts; the reply is a short summary of it.
@@ -61,10 +79,11 @@ Whether the main thread later reads a finding body is the caller's rule: the spe
 
 ## Findings file schema
 
-What each agent writes to `<LENS>.json`. This is not a return contract; the short summary above is what flows back.
+What each agent writes to `<LENS>.json`. This is not a return contract; the short summary above is what flows back. `brief_token` is required on the file of a briefed lens (a missing or wrong token classifies as a no-op); every other added field is optional, and a lens that writes none of them writes the base file plus its token.
 
     {
       "dimension": "<lens name>",
+      "brief_token": "<the 32-hex token from the lens's brief>",
       "findings": [
         {
           "id": "<lens-prefix>-NNN",
@@ -73,25 +92,52 @@ What each agent writes to `<LENS>.json`. This is not a return contract; the shor
           "location": "<per the caller's location slot>",
           "issue": "<one sentence: what is wrong>",
           "evidence": "<file:line or artifact quote actually checked>",
-          "recommendation": "<one sentence: the fix>"
+          "recommendation": "<one sentence: the fix>",
+          "proposed_disposition": "plan_directive" | "spec_defect"      (SPEC lenses)
+                               | "apply" | "structural",                (plan lenses)
+          "directive": "<final plan-time directive wording, one line>", (SPEC lens, only with plan_directive)
+          "row_patches": [ <row patch> ],                                (plan lens, only on a fix it recommends applying)
+          "replacements": [ { "file": "<task-<name>.md | README.md | ORCHESTRATOR.md>", "old": "<exact text>", "new": "<text>" } ]
         }
       ]
     }
+
+A row patch is a field delta keyed by row id:
+
+    { "op": "add",    "row": { <full tests.json row, id included> } }
+    { "op": "change", "id": "T7", "set": { "<field>": <new value>, ... }, "expect": { "<same fields>": <prior value>, ... } }
+    { "op": "remove", "id": "T7", "expect": { "file": "...", "title": "...", "security": "..." } }
+
+`expect` names every field `set` changes; a `change` with no `expect`, or whose `expect` misses a `set` field, is malformed.
+
+The output-format clause is appended to every lens brief in the part for its kind, with `<BRIEF_TOKEN>` filled by a fresh token and, in the SPEC part, `<DIRECTIVE_RULES>` filled at render time from the Plan-time directive bullet of `spec/audit.md` `## 7c` (from `Write it as the property a test proves` to the end of the bullet).
+
+Output-format clause, SPEC part:
+
+> After your first Read, read the `## Findings file schema` section of `.claude/skills/gaia/references/spec/lens-dispatch.md` for the file's shape. Set `proposed_disposition` on each finding: `plan_directive` when the SPEC's binding contract (its flows, success criteria and intent) is already correct and only the implementation needs steering, `spec_defect` when a flow, a success criterion or the intent itself is wrong, gameable, or missing. Write `directive` only on a finding you propose as `plan_directive`, in its final wording, on one line. <DIRECTIVE_RULES>
+>
+> Write `"brief_token": "<BRIEF_TOKEN>"` at the top level of your findings file, beside `dimension`.
+
+Output-format clause, plan part:
+
+> After your first Read, read the `## Findings file schema` section of `.claude/skills/gaia/references/spec/lens-dispatch.md` for the file's shape and the row patch and replacement shapes. Set `proposed_disposition` on each finding: `apply` when its fix is a concrete edit to the plan's files, `structural` when it needs a decision or a rework no exact edit states. Write `row_patches` and `replacements` only on a fix you recommend applying; leave them off otherwise.
+>
+> Write `"brief_token": "<BRIEF_TOKEN>"` at the top level of your findings file, beside `dimension`.
 
 ## Pre-clear, classify, re-dispatch
 
 An absent report reads as "the lens found nothing", the conclusion a silent lens must not earn. The rule is `.claude/rules/subagent-dispatch.md`; the steps for a lens:
 
-1. Before dispatch, clear the file of every lens about to be dispatched. Spell the commands repo-relative so the existing allow patterns match, never with the absolute `<PLAN_DIR>` spelling:
+1. Before dispatch, clear the file of every lens about to be dispatched; rendering a lens's brief pre-clears that brief. Spell the commands repo-relative so the existing allow patterns match, never with the absolute `<PLAN_DIR>` spelling:
    - Spec: `rm -f .gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`
    - Plan: `rm -rf .notebook/plans/<PLAN-NNN>/audit`, then `mkdir -p .notebook/plans/<PLAN-NNN>/audit` (a spec-derived plan: `rm -rf .notebook/specs/<SPEC-ID>/plan[-N]/audit`, then `mkdir -p .notebook/specs/<SPEC-ID>/plan[-N]/audit`)
-2. Dispatch every lens in one message, one Agent call per lens, each a `general-purpose` Agent.
+2. Dispatch every lens in one message, one Agent call per lens, each a `general-purpose` Agent whose prompt is the short prompt `lens-brief.mjs lens` printed for it.
 3. After each agent's completion notification, never at the moment the dispatch call returns (that call reports dispatch metadata before the agent has run), classify its file:
 
    ```bash
-   bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <findings file> --report-key findings
+   node .gaia/scripts/spec/lens-brief.mjs classify --findings <findings file> --brief <brief file>
    ```
 
-   Exit 0 is real (an empty `findings` array is real), 1 is a no-op, 2 is a usage error: a caller bug, so stop and surface it.
-4. On a no-op, re-clear that lens's file and re-dispatch that lens exactly once.
-5. On a second consecutive no-op, run that lens inline on the main thread and write its file yourself, then continue. Say in one line which lens ran inline.
+   Exit 0 is real (an empty `findings` array is real), 1 is a no-op (a missing file, a missing `findings` key, or a missing or wrong `brief_token`), 2 is a usage error: a caller bug, so stop and surface it.
+4. On a no-op, re-clear that lens's file and re-dispatch that lens exactly once; re-rendering its brief issues a fresh token.
+5. On a second consecutive no-op, run that lens inline on the main thread and write its file yourself, reading the brief and writing its token too, then continue. Say in one line which lens ran inline.

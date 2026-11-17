@@ -21,24 +21,30 @@ setup() {
   CONTRACT="$REPO_ROOT/.claude/skills/gaia/references/spec/lens-dispatch.md"
 }
 
-# Print the classify command from the file's fenced bash block, with the script
-# path made absolute and the findings-file placeholder replaced by $2.
+# Print the classify command from the file's fenced block, with the script
+# path made absolute, the findings-file placeholder replaced by $2 and the
+# brief-file placeholder by $3.
 classify_command() {
-  local file="$1" findings="$2" line
-  line="$(grep -E '^[[:space:]]*bash \.gaia/scripts/audit-noop-detect\.sh ' "$file" | head -n 1)"
+  local file="$1" findings="$2" brief="$3" line
+  line="$(grep -E '^[[:space:]]*node \.gaia/scripts/spec/lens-brief\.mjs classify ' "$file" | head -n 1)"
   [ -n "$line" ] || return 1
   line="${line#"${line%%[![:space:]]*}"}"
-  line="${line/bash .gaia\/scripts\//bash $REPO_ROOT/.gaia/scripts/}"
-  printf '%s\n' "${line/<findings file>/$findings}"
+  line="${line/node .gaia\/scripts\//node $REPO_ROOT/.gaia/scripts/}"
+  line="${line/<findings file>/$findings}"
+  printf '%s\n' "${line/<brief file>/$brief}"
 }
 
+BRIEF_TOKEN_FIXTURE="0123456789abcdef0123456789abcdef"
+
 # Run the extracted command against a fixture body ($2); "-" means no file.
-# Prints the exit code.
+# The brief carries BRIEF_TOKEN_FIXTURE; a body naming another token is the
+# caller's to write. Prints the exit code.
 classify_exit() {
-  local file="$1" body="$2" fixture="$BATS_TEST_TMPDIR/fixture.json" cmd
+  local file="$1" body="$2" fixture="$BATS_TEST_TMPDIR/fixture.json" brief="$BATS_TEST_TMPDIR/brief.md" cmd
   rm -f "$fixture"
+  printf 'Write "brief_token": "%s" at the top level.\n' "$BRIEF_TOKEN_FIXTURE" >"$brief"
   if [ "$body" != "-" ]; then printf '%s' "$body" >"$fixture"; fi
-  cmd="$(classify_command "$file" "$fixture")" || { echo "no-command"; return 0; }
+  cmd="$(classify_command "$file" "$fixture" "$brief")" || { echo "no-command"; return 0; }
   local rc=0
   (cd "$REPO_ROOT" && bash -c "$cmd" >/dev/null 2>&1) || rc=$?
   echo "$rc"
@@ -107,7 +113,7 @@ mutate_replace() {
 }
 
 @test "classify command: an empty findings array is real (exit 0)" {
-  [ "$(classify_exit "$CONTRACT" '{"dimension":"FG","findings":[]}')" = "0" ]
+  [ "$(classify_exit "$CONTRACT" '{"dimension":"FG","brief_token":"0123456789abcdef0123456789abcdef","findings":[]}')" = "0" ]
 }
 
 @test "classify command: a missing file is a no-op (exit 1)" {
@@ -115,13 +121,14 @@ mutate_replace() {
 }
 
 @test "classify command: a file with no findings key is a no-op (exit 1)" {
-  [ "$(classify_exit "$CONTRACT" '{"dimension":"FG"}')" = "1" ]
+  [ "$(classify_exit "$CONTRACT" '{"dimension":"FG","brief_token":"0123456789abcdef0123456789abcdef"}')" = "1" ]
 }
 
-@test "red twin: a fence that lost --report-key reads the empty-array fixture as a no-op" {
-  local mutated
-  mutated="$(mutate_delete ' --report-key findings')"
-  [ "$(classify_exit "$mutated" '{"dimension":"FG","findings":[]}')" = "1" ]
+@test "red twin: a fence that lost --brief reads a wrong-token empty array as real" {
+  local mutated body='{"dimension":"FG","brief_token":"ffffffffffffffffffffffffffffffff","findings":[]}'
+  [ "$(classify_exit "$CONTRACT" "$body")" = "1" ] || return 1
+  mutated="$(mutate_delete ' --brief <brief file>')"
+  [ "$(classify_exit "$mutated" "$body")" = "0" ]
 }
 
 @test "contract states the once-only re-dispatch" {
@@ -176,5 +183,47 @@ mutate_replace() {
   local mutated
   mutated="$(mutate_delete 'read it back to confirm both its content and its location')"
   check_plan_bash_write_note "$mutated" && return 1
+  true
+}
+
+# defined_once <dispatch> <audit> <decomposition>: each optional findings field
+# is a JSON key exactly once, in the schema block of the findings file schema
+# section, and a JSON key nowhere else in the three audit docs.
+FINDINGS_FIELDS="brief_token proposed_disposition directive row_patches replacements"
+
+defined_once() {
+  local dispatch="$1" audit="$2" decomposition="$3" field block count
+  block="$(awk '
+    /^## Findings file schema/ { inside = 1; next }
+    inside && /^## / { exit }
+    inside && /"dimension":/ { grab = 1 }
+    inside && grab && /^$/ { exit }
+    inside && grab { print }
+  ' "$dispatch")"
+  [ -n "$block" ] || return 1
+  for field in $FINDINGS_FIELDS; do
+    count="$(printf '%s\n' "$block" | grep -oF "\"$field\":" | wc -l | tr -d " ")"
+    [ "$count" -eq 1 ] || { printf '%s appears %s times in the schema block\n' "$field" "$count" >&2; return 1; }
+    count="$(awk -v key="\"$field\":" '
+      /^## / { inside = ($0 ~ /^## Findings file schema/) }
+      !inside && index($0, key) { n++ }
+      END { print n + 0 }
+    ' "$dispatch")"
+    [ "$count" -eq 0 ] || { printf '%s is a key outside the schema section of the dispatch doc\n' "$field" >&2; return 1; }
+    grep -qF "\"$field\":" "$audit" "$decomposition" && { printf '%s is a key in another doc\n' "$field" >&2; return 1; }
+  done
+  true
+}
+
+@test "optional findings fields are defined once in the findings file schema section" {
+  local audit="$REPO_ROOT/.claude/skills/gaia/references/spec/audit.md"
+  local decomposition="$REPO_ROOT/.claude/skills/gaia/references/plan/decomposition-audit.md"
+  local mutated="$BATS_TEST_TMPDIR/twice.md" extra="$BATS_TEST_TMPDIR/other.md"
+  defined_once "$CONTRACT" "$audit" "$decomposition" || return 1
+
+  sed 's|^          "directive": |          "directive": "x", "directive": |' "$CONTRACT" >"$mutated"
+  defined_once "$mutated" "$audit" "$decomposition" && return 1
+  { cat "$decomposition"; printf '    "row_patches": []\n'; } >"$extra"
+  defined_once "$CONTRACT" "$audit" "$extra" && return 1
   true
 }
