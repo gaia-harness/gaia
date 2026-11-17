@@ -363,3 +363,39 @@ JSON
     [ "$output" = "applied 1 fixup 0 review 0 replacements-script 0 replacements-fixup 0" ] || return 1
   done
 }
+
+# Prints tests.json's schema and sets keys as one JSON line.
+schema_and_sets() {
+  node -e '
+    const table = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(JSON.stringify({schema: table.schema, sets: table.sets}));
+  ' "$PLAN/tests.json"
+}
+
+@test "apply and flag keep the table's sets entries" {
+  node -e '
+    const fs = require("fs");
+    const table = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    table.sets = [{"source": "success_criteria:0", "marker": "plot booking roles"}];
+    fs.writeFileSync(process.argv[1], JSON.stringify(table, null, 2));
+  ' "$PLAN/tests.json"
+  expected='{"schema":1,"sets":[{"source":"success_criteria:0","marker":"plot booking roles"}]}'
+  [ "$(schema_and_sets)" = "$expected" ] || return 1
+  cat >"$PLAN/audit/TD.json" <<'JSON'
+{"dimension": "Test design", "findings": [
+  {"id": "TD-001", "row_patches": [{"op": "change", "id": "T3", "set": {"title": "plot list sorts by area"}, "expect": {"title": "plot list sorts by size"}}]}
+]}
+JSON
+  printf '%s\n' '{"structural": false, "findings": [{"id": "TD-001", "decision": "apply"}], "security_ruled_wrong": []}' >"$DECISIONS"
+  run node "$CLI" prepare --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$status" -eq 0 ] || return 1
+  run node "$CLI" apply --plan-dir "$PLAN" --keys "$KEYS" --decisions "$DECISIONS"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(row_field T3:title)" = "plot list sorts by area" ] || return 1
+  [ "$(schema_and_sets)" = "$expected" ] || return 1
+
+  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access
+  [ "$status" -eq 0 ] || return 1
+  [ "$(row_field T4:security)" = "access" ] || return 1
+  [ "$(schema_and_sets)" = "$expected" ]
+}

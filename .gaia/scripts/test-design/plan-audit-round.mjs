@@ -28,6 +28,10 @@ import {readTable} from './table.mjs';
 
 const pretty = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
+// readTable returns only the keys it validates; a write built from it alone
+// would drop every other top-level key of tests.json, such as `sets`.
+const readWholeTable = (tablePath) => ({...readJson(tablePath, {}), ...readTable(tablePath)});
+
 // A patch two accepted findings both aim at one row field goes to review;
 // any other patch is routed by checkPatch against the table as it stands.
 const routePatch = (conflicts, findingId, index, patch, table, context) =>
@@ -173,7 +177,7 @@ export const apply = ({planDir, keysFile, decisions}) => {
       persist(decision.id);
       continue;
     }
-    const before = readTable(file.table);
+    const before = readWholeTable(file.table);
     let table = before;
     patches.forEach((patch, index) => {
       const outcome = routePatch(conflicts, decision.id, index, patch, table, context);
@@ -224,7 +228,7 @@ export const apply = ({planDir, keysFile, decisions}) => {
 // its owning phase's Security writer line. Throws before writing anything.
 export const flagRow = ({planDir, row: rowId, kind}) => {
   const file = paths(planDir);
-  const table = readTable(file.table);
+  const table = readWholeTable(file.table);
   const row = table.rows.find((candidate) => candidate.id === rowId);
   if (!row) throw new Error(`row ${rowId} is not in the table`);
   const readme = readFileSync(file.readme, 'utf8');
