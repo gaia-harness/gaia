@@ -373,6 +373,10 @@ check_lens_doctrine_rows() {
   need "$lens" 'its fix trims the row to the kind its flag names and adds a row for each other kind' || return 1
   need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
   need "$doctrine" 'A requirement that keeps a value server-only is a secrets requirement, whatever the value.' || return 1
+  need "$doctrine" "Judge a cookie attribute by what it protects on a cookie that holds a session or a server-only value: \`HttpOnly\` (off script) and \`Secure\` (off plaintext transport) are secrets, \`SameSite\` (no cross-site forged request carries it) is forgery; any other attribute, and every attribute of a cookie holding neither, is \`none\`." || return 1
+  need "$doctrine" "Ordinary validation and status rules are not security rows, and a new row's kind comes from what its own case asserts, never from the flags of other rows citing its requirement: a read that answers an unrecognised filter value with the default it shows anyway refuses nothing and is \`none\`." || return 1
+  need "$lens" "or a flag on a row that is none of these, a new row judged by its own case and never by the flags of other rows from its \`source\`." || return 1
+  need "$doctrine" "A story given every action, asserting each form's wiring rather than what one role sees, is \`none\`; the stories of what each role sees carry the flag." || return 1
   need "$doctrine" "So does a retire or change row made because a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it) forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." || return 1
   need "$table" "and one made because a security requirement in its \`source\` forbids what the existing test asserted carries that requirement's kind, whatever the test's own kind." || return 1
   need "$lens" "or made because a security requirement in its \`source\` forbids what the existing test asserted (then that requirement's kind, whatever the test's own kind)" || return 1
@@ -512,6 +516,34 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the doctrine flagging a retire by source citation alone fails" {
   red check_lens_doctrine_rows "$DOCTRINE_REL" " made because a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it) forbids what the existing test asserted," " with a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it),"
+}
+
+@test "red twin: the doctrine naming no kind for a cookie attribute fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" " Judge a cookie attribute by what it protects on a cookie that holds a session or a server-only value:" ''
+}
+
+@test "red twin: the doctrine making Secure a cookie attribute of no kind fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "\`HttpOnly\` (off script) and \`Secure\` (off plaintext transport) are secrets" "\`HttpOnly\` (off script) is secrets"
+}
+
+@test "red twin: the doctrine making SameSite a secrets attribute fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "\`SameSite\` (no cross-site forged request carries it) is forgery" "\`SameSite\` (no cross-site forged request carries it) is secrets"
+}
+
+@test "red twin: the doctrine taking a new row's kind from its requirement's other rows fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "never from the flags of other rows citing its requirement" "or from the flags of other rows citing its requirement"
+}
+
+@test "red twin: the doctrine flagging a read's filter fallback fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "the default it shows anyway refuses nothing and is \`none\`" "the default it shows anyway is forgery"
+}
+
+@test "red twin: the test design lens matching a new row's flag to its source's rows fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ", a new row judged by its own case and never by the flags of other rows from its \`source\`." "."
+}
+
+@test "red twin: the doctrine flagging a story given every action fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "rather than what one role sees, is \`none\`" "rather than what one role sees, is access"
 }
 
 @test "red twin: the doctrine judging a server-only value's secrecy by the value fails" {
