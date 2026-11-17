@@ -14,7 +14,10 @@
 #   d. every closed-set menu fits AskUserQuestion: no Other label, no save
 #      escape, and no more than four entries;
 #   e. the SPEC audit's coverage and consistency lens flags a UAT the SPEC's
-#      own behavior rules make impossible, citing both lines.
+#      own behavior rules make impossible, citing both lines;
+#   f. the SPEC audit refuter refutes a finding only when every gap it names
+#      fails, and never drops a held credential's server-only rule on
+#      ownership or a cookie attribute.
 #
 # DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
 # playbook files; each invariant has a red twin that breaks such a copy and
@@ -354,4 +357,41 @@ remove_text() {
   grep -qF -- "$IMPOSSIBLE_UAT_CLAUSE" "$audit"
   run cov_flags_impossible_uat "$copy"
   [ "$status" -ne 0 ]
+}
+
+# --- f. the refuter keeps a sound gap and a held credential's server-only rule --
+
+REFUTER_LINE='> Open the cited SPEC section and any cited file yourself and try to REFUTE it'
+REFUTER_NEEDLES=(
+  'Refute a finding only when every gap it names fails, not just the harm it argues'
+  'a sound gap behind an overstated harm is `partial`'
+  'never refuted by who owns the credential or by a cookie attribute'
+  '`HttpOnly` keeps a value off page scripts only, never off loader data, served HTML, responses or logs'
+)
+
+# refuter_keeps_sound_gaps <root>: audit.md has exactly one refuter prompt
+# line, and that line carries every needle.
+refuter_keeps_sound_gaps() {
+  local audit="$1/$REFERENCES/spec/audit.md" line count needle
+  count="$(awk -v want="$REFUTER_LINE" 'index($0, want) == 1 { n++ } END { print n + 0 }' "$audit")"
+  [ "$count" -eq 1 ] || { printf 'expected one refuter prompt line, found %s\n' "$count" >&2; return 1; }
+  line="$(awk -v want="$REFUTER_LINE" 'index($0, want) == 1' "$audit")"
+  for needle in "${REFUTER_NEEDLES[@]}"; do
+    grep -qF -- "$needle" <<<"$line" || { printf 'refuter prompt lacks: %s\n' "$needle" >&2; return 1; }
+  done
+}
+
+# bats test_tags=whole-tree
+@test "f. the refuter keeps a sound gap and a held credential's server-only rule" {
+  refuter_keeps_sound_gaps "$PLAYBOOK_ROOT"
+}
+
+@test "f. the refuter check goes red when any needle is dropped" {
+  local needle copy
+  for needle in "${REFUTER_NEEDLES[@]}"; do
+    copy="$(scratch_copy)"
+    remove_text "$copy/$REFERENCES/spec/audit.md" "$needle"
+    run refuter_keeps_sound_gaps "$copy"
+    [ "$status" -ne 0 ] || { printf 'dropping "%s" stayed green\n' "$needle" >&2; return 1; }
+  done
 }
