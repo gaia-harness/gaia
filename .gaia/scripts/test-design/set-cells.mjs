@@ -118,12 +118,12 @@ const partnersOf = (entry, sets) =>
   );
 
 // A status entry beside a partner covers a rule over both, so it owes actors,
-// even when the status gates only some of the partner's actions.
+// even when the two share only some actions.
 const missingActorsProblems = (label, entry, partners) => {
   if (!Object.hasOwn(entry.axes, 'status') || partners.length === 0) return [];
   const partnerAxis = Object.keys(partners[0].axes).find((name) => name !== 'action');
   return [
-    `${label} pairs the actions with status while another entry pairs them with ${partnerAxis}, but has no actors naming the ${partnerAxis} inside each action's set`,
+    `${label} pairs the actions with status while another entry pairs a shared action with ${partnerAxis}, but has no actors naming the ${partnerAxis} inside each action's set`,
   ];
 };
 

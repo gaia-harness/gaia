@@ -100,7 +100,7 @@ expect_refusal() {
   write_spread_table
   mutate_table "$owner_only"' delete t.sets[1].actors;
     for (const row of t.rows.slice(3)) row.cells = row.cells.map(({action, status}) => ({action, status}));'
-  expect_refusal 'sets entry success_criteria:1 pairs the actions with status while another entry pairs them with role, but has no actors naming the role inside each action'"'"'s set'
+  expect_refusal 'sets entry success_criteria:1 pairs the actions with status while another entry pairs a shared action with role, but has no actors naming the role inside each action'"'"'s set'
 }
 
 @test "verify refuses a status entry with no actors when it gates only some of the role entry's actions" {
@@ -108,7 +108,7 @@ expect_refusal() {
   mutate_table 'delete t.sets[1].actors; t.sets[1].axes.action = ["edit", "close"];
     for (const row of t.rows.slice(3)) row.cells = row.cells.filter((c) => c.action !== "view").map(({action, status}) => ({action, status}));
     for (const row of t.rows.slice(3)) row.case = row.case.replace("member view, ", "");'
-  expect_refusal 'sets entry success_criteria:1 pairs the actions with status while another entry pairs them with role, but has no actors naming the role inside each action'"'"'s set'
+  expect_refusal 'sets entry success_criteria:1 pairs the actions with status while another entry pairs a shared action with role, but has no actors naming the role inside each action'"'"'s set'
 }
 
 @test "verify passes a status entry with no actors when no entry pairs its actions with a role" {
