@@ -18,6 +18,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
+import {caseKindProblems} from './case-kinds.mjs';
 import {isSecurity, soleRowKeys, tableProblems, validateRow} from './table.mjs';
 
 const isRecord = (value) =>
@@ -61,7 +62,7 @@ export const checkPatch = (patch, table, context) => {
   const review = (text) => ({route: 'review', reason: text});
   const {rows} = table;
   if (patch.op === 'add') {
-    const problems = validateRow(patch.row);
+    const problems = [...validateRow(patch.row), ...caseKindProblems([patch.row])];
     if (problems.length > 0) return review(`added row is invalid: ${problems[0]}`);
     if (rows.some((row) => row.id === patch.row.id)) {
       return review(`row id ${patch.row.id} already exists`);
@@ -75,7 +76,7 @@ export const checkPatch = (patch, table, context) => {
   const row = rows.find((candidate) => candidate.id === patch.id);
   if (!row) return review(`row ${patch.id} is not in the table`);
   const stale = Object.keys(patch.expect ?? {}).filter(
-    (field) => !same(row[field], patch.expect[field]),
+    (field) => !same(row[field] ?? null, patch.expect[field]),
   );
   if (stale.length > 0) {
     return review(`expected prior value of ${stale.join(', ')} no longer holds on ${patch.id}`);
@@ -101,7 +102,13 @@ export const checkPatch = (patch, table, context) => {
     }
   }
   const next = {...row, ...patch.set};
-  const problems = validateRow(next);
+  // caseKinds problems the row already had are not the patch's; step 4.5
+  // reports those against the whole table.
+  const priorCaseKinds = new Set(caseKindProblems([row]));
+  const problems = [
+    ...validateRow(next),
+    ...caseKindProblems([next]).filter((problem) => !priorCaseKinds.has(problem)),
+  ];
   if (problems.length > 0) return review(`changed row is invalid: ${problems[0]}`);
   const created = newProblems(rows, rows.map((candidate) => (candidate === row ? next : candidate)));
   return created.length > 0 ? review(created[0]) : {route: 'script', reason: ''};

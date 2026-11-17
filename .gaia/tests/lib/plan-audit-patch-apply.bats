@@ -137,7 +137,7 @@ row_field() {
     process.stdout.write(set.map((entry) => entry.id + ":" + entry.change).sort().join(","));
   ' "$JUDGE")" = "T2:changed,T4:added" ] || return 1
 
-  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access
+  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access --cases '["a pottery class page shows the cancel action only to its instructor"]'
   [ "$status" -eq 0 ] || return 1
   [ "$(row_field T4:security)" = "access" ] || return 1
   grep -qF 'Security writer: 1 rows (T4)' "$PLAN/ORCHESTRATOR.md" || return 1

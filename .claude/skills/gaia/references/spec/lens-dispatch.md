@@ -108,7 +108,7 @@ A row patch is a field delta keyed by row id:
     { "op": "change", "id": "T7", "set": { "<field>": <new value>, ... }, "expect": { "<same fields>": <prior value>, ... } }
     { "op": "remove", "id": "T7", "expect": { "file": "...", "title": "...", "security": "..." } }
 
-`expect` names every field `set` changes; a `change` with no `expect`, or whose `expect` misses a `set` field, is malformed.
+`expect` names every field `set` changes, `null` for a field the row does not have yet (the `caseKinds` a flagged keyless row needs); a `change` with no `expect`, or whose `expect` misses a `set` field, is malformed.
 
 The output-format clause is appended to every lens brief in the part for its kind, with `<BRIEF_TOKEN>` filled by a fresh token and, in the SPEC part, `<DIRECTIVE_RULES>` filled at render time from the Plan-time directive bullet of `spec/audit.md` `## 7c` (from `Write it as the property a test proves` to the end of the bullet).
 

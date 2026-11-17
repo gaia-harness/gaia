@@ -20,7 +20,7 @@ setup() {
   "schema": 1,
   "rows": [
     {"id": "T1", "source": "flow:garden-booking", "case": "a member books a plot", "file": "plots.bats", "title": "plot booking succeeds", "layer": "shell", "task": "task-plots", "action": "new", "security": "none"},
-    {"id": "T2", "source": "success_criteria:0", "case": "a non-member booking is refused", "file": "plots.bats", "title": "non-member booking is refused", "layer": "shell", "task": "task-plots", "action": "new", "security": "access"},
+    {"id": "T2", "source": "success_criteria:0", "case": "a non-member booking is refused", "file": "plots.bats", "title": "non-member booking is refused", "layer": "shell", "task": "task-plots", "action": "new", "security": "access", "caseKinds": [{"case": "a non-member booking is refused", "kind": "access"}]},
     {"id": "T3", "source": "success_criteria:1", "case": "plots sort by size", "file": "plots.bats", "title": "plot list sorts by size", "layer": "shell", "task": "task-plots", "action": "new", "security": "none"},
     {"id": "T4", "source": "success_criteria:2", "case": "a class page lists its schedule", "file": "classes.bats", "title": "class page lists the schedule", "layer": "shell", "task": "task-classes", "action": "new", "security": "none"},
     {"id": "T5", "source": "success_criteria:2", "case": "a class page shows cancel", "file": "classes.bats", "title": "class page shows the cancel action", "layer": "shell", "task": "task-classes", "action": "new", "security": "none"}
@@ -275,18 +275,31 @@ JSON
 }
 
 @test "flag sets a judged kind on the row, its README row and its phase Security writer line" {
-  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access
+  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access --cases '["a class page lists its schedule"]'
   [ "$status" -eq 0 ] || return 1
   [ "$(row_field T4:security)" = "access" ] || return 1
   grep -qF '| T4 | success_criteria:2 | a class page lists its schedule | classes.bats | class page lists the schedule | shell | task-classes | new | access |' "$PLAN/README.md" || return 1
   grep -qF -- '- Security writer: 1 rows (T4)' "$PLAN/ORCHESTRATOR.md" || return 1
   [ "$(grep -n 'Security writer' "$PLAN/ORCHESTRATOR.md" | tail -1 | cut -d: -f1)" = "12" ] || return 1
 
-  run node "$CLI" flag --plan-dir "$PLAN" --row T3 --kind secret
+  run node "$CLI" flag --plan-dir "$PLAN" --row T3 --kind secret --cases '["plots sort by size"]'
   [ "$status" -eq 0 ] || return 1
   grep -qF -- '- Security writer: 2 rows (T2, T3)' "$PLAN/ORCHESTRATOR.md" || return 1
   grep -qF -- '- Security writer: 1 rows (T4)' "$PLAN/ORCHESTRATOR.md" || return 1
   [ "$(row_field T3:security)" = "secret" ] || return 1
+  [ "$(case_kinds T4)" = "a class page lists its schedule:access" ] || return 1
+  [ "$(case_kinds T3)" = "plots sort by size:secret" ] || return 1
+  # Re-flagging a row with entries re-kinds them; a keyless row with neither
+  # entries nor --cases is refused before anything is written.
+  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind forgery
+  [ "$status" -eq 0 ] || return 1
+  [ "$(case_kinds T4)" = "a class page lists its schedule:forgery" ] || return 1
+  local before
+  before="$(plan_sums)"
+  run node "$CLI" flag --plan-dir "$PLAN" --row T5 --kind access
+  [ "$status" -eq 1 ] || return 1
+  grep -qF 'no caseKey and no caseKinds' <<<"$output" || return 1
+  [ "$(plan_sums)" = "$before" ] || return 1
   run node "$CLI" flag --plan-dir "$PLAN" --row T9 --kind access
   [ "$status" -eq 1 ] || return 1
   node "$TABLE_CLI" verify --plan-dir "$PLAN" --keys "$KEYS"
@@ -323,13 +336,13 @@ JSON
 }
 
 @test "apply refuses a patch that removes or weakens a flagged row unless the review list ruled it wrong" {
-  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access
+  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access --cases '["a class page lists its schedule"]'
   [ "$status" -eq 0 ] || return 1
   cp -R "$PLAN" "$BATS_TEST_TMPDIR/flagged"
   local patches=(
     '{"op": "remove", "id": "T4", "expect": {"file": "classes.bats", "title": "class page lists the schedule", "security": "access"}}'
-    '{"op": "change", "id": "T4", "set": {"security": "none"}, "expect": {"security": "access"}}'
-    '{"op": "change", "id": "T4", "set": {"security": "forgery"}, "expect": {"security": "access"}}'
+    '{"op": "change", "id": "T4", "set": {"security": "none", "caseKinds": [{"case": "a class page lists its schedule", "kind": "none"}]}, "expect": {"security": "access", "caseKinds": [{"case": "a class page lists its schedule", "kind": "access"}]}}'
+    '{"op": "change", "id": "T4", "set": {"security": "forgery", "caseKinds": [{"case": "a class page lists its schedule", "kind": "forgery"}]}, "expect": {"security": "access", "caseKinds": [{"case": "a class page lists its schedule", "kind": "access"}]}}'
     '{"op": "change", "id": "T4", "set": {"action": "retire"}, "expect": {"action": "new"}}'
   )
   local patch
@@ -366,6 +379,15 @@ JSON
   done
 }
 
+# Prints a row's caseKinds as `<case>:<kind>` lines.
+case_kinds() {
+  node -e '
+    const table = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const row = table.rows.find((candidate) => candidate.id === process.argv[2]);
+    process.stdout.write((row.caseKinds ?? []).map((entry) => entry.case + ":" + entry.kind).join("\n"));
+  ' "$PLAN/tests.json" "$1"
+}
+
 # Prints tests.json's schema and sets keys as one JSON line.
 schema_and_sets() {
   node -e '
@@ -396,14 +418,14 @@ JSON
   [ "$(row_field T3:title)" = "plot list sorts by area" ] || return 1
   [ "$(schema_and_sets)" = "$expected" ] || return 1
 
-  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access
+  run node "$CLI" flag --plan-dir "$PLAN" --row T4 --kind access --cases '["a class page lists its schedule"]'
   [ "$status" -eq 0 ] || return 1
   [ "$(row_field T4:security)" = "access" ] || return 1
   [ "$(schema_and_sets)" = "$expected" ]
 }
 
 @test "apply writes the phase Security writer line for a row a patch flags" {
-  printf '%s\n' '{"dimension": "Test design", "findings": [{"id": "TD-001", "row_patches": [{"op": "change", "id": "T4", "set": {"security": "access"}, "expect": {"security": "none"}}]}]}' >"$PLAN/audit/TD.json"
+  printf '%s\n' '{"dimension": "Test design", "findings": [{"id": "TD-001", "row_patches": [{"op": "change", "id": "T4", "set": {"security": "access", "caseKinds": [{"case": "a class page lists its schedule", "kind": "access"}]}, "expect": {"security": "none", "caseKinds": null}}]}]}' >"$PLAN/audit/TD.json"
   printf '%s\n' '{"structural": false, "findings": [{"id": "TD-001", "decision": "apply"}], "security_ruled_wrong": []}' >"$DECISIONS"
   run node "$CLI" prepare --plan-dir "$PLAN" --keys "$KEYS"
   [ "$status" -eq 0 ] || return 1
@@ -411,4 +433,25 @@ JSON
   [ "$status" -eq 0 ] || return 1
   [ "$(row_field T4:security)" = "access" ] || return 1
   grep -qF -- '- Security writer: 1 rows (T4)' "$PLAN/ORCHESTRATOR.md" || return 1
+  node "$TABLE_CLI" verify --plan-dir "$PLAN" --keys "$KEYS"
+}
+
+@test "a patch that flags or adds a keyless row without caseKinds goes to review, unapplied" {
+  cat >"$PLAN/audit/TD.json" <<'JSON'
+{"dimension": "Test design", "findings": [
+  {"id": "TD-001", "row_patches": [{"op": "change", "id": "T4", "set": {"security": "access"}, "expect": {"security": "none"}}]},
+  {"id": "TD-002", "row_patches": [{"op": "add", "row": {"id": "T6", "source": "success_criteria:0", "case": "a lapsed member booking is refused", "file": "plots.bats", "title": "lapsed booking is refused", "layer": "shell", "task": "task-plots", "action": "new", "security": "access"}}]}
+]}
+JSON
+  printf '%s\n' '{"structural": false, "findings": [{"id": "TD-001", "decision": "apply"}, {"id": "TD-002", "decision": "apply"}], "security_ruled_wrong": []}' >"$DECISIONS"
+  run node "$CLI" prepare --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF 'review TD-001 patch 0 changed row is invalid: row T4: a flagged row with no caseKey needs caseKinds' <<<"$output" || return 1
+  grep -qF 'review TD-002 patch 0 added row is invalid: row T6: a flagged row with no caseKey needs caseKinds' <<<"$output" || return 1
+  run node "$CLI" apply --plan-dir "$PLAN" --keys "$KEYS" --decisions "$DECISIONS"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "applied 0 fixup 0 review 2 replacements-script 0 replacements-fixup 0" ] || return 1
+  [ "$(row_field T4:security)" = "none" ] || return 1
+  [ "$(row_field T6:id)" = "<absent>" ] || return 1
+  node "$TABLE_CLI" verify --plan-dir "$PLAN" --keys "$KEYS"
 }

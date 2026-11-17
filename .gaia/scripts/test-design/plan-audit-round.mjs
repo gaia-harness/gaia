@@ -24,7 +24,7 @@ import {
   readJson,
   takeSnapshot,
 } from './row-patch.mjs';
-import {isSecurity, readTable} from './table.mjs';
+import {isNonEmptyString, isSecurity, readTable} from './table.mjs';
 
 const pretty = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
@@ -239,9 +239,26 @@ export const apply = ({planDir, keysFile, decisions}) => {
   return counts;
 };
 
+// The row with `caseKinds` set to its kind when it needs them (flagged, no
+// `caseKey`, not `retire`): one entry per given case, else its own entries
+// re-kinded. Throws when it needs them and has neither.
+const withCaseKinds = (row, cases) => {
+  if (row.action === 'retire' || row.caseKey !== undefined) return row;
+  if (cases !== undefined) {
+    if (!Array.isArray(cases) || cases.length === 0 || !cases.every(isNonEmptyString)) {
+      throw new Error('--cases is not a non-empty JSON array of strings');
+    }
+    return {...row, caseKinds: cases.map((text) => ({case: text, kind: row.security}))};
+  }
+  if (Array.isArray(row.caseKinds) && row.caseKinds.length > 0) {
+    return {...row, caseKinds: row.caseKinds.map((entry) => ({...entry, kind: row.security}))};
+  }
+  throw new Error(`row ${row.id} has no caseKey and no caseKinds: pass --cases with each case its case names`);
+};
+
 // Sets a row's security kind in tests.json and its README row, and lists it on
 // its owning phase's Security writer line. Throws before writing anything.
-export const flagRow = ({planDir, row: rowId, kind}) => {
+export const flagRow = ({planDir, row: rowId, kind, cases}) => {
   const file = paths(planDir);
   const table = readWholeTable(file.table);
   const row = table.rows.find((candidate) => candidate.id === rowId);
@@ -251,7 +268,8 @@ export const flagRow = ({planDir, row: rowId, kind}) => {
   if (phase === null) throw new Error(`no README Phase row names ${row.task}`);
   const orchestrator = addSecurityWriterRow(readFileSync(file.orchestrator, 'utf8'), phase, rowId);
   if (orchestrator === null) throw new Error(`ORCHESTRATOR.md has no Phase ${phase} entry`);
-  const next = {...table, rows: table.rows.map((candidate) => (candidate === row ? {...row, security: kind} : candidate))};
+  const flagged = withCaseKinds({...row, security: kind}, cases);
+  const next = {...table, rows: table.rows.map((candidate) => (candidate === row ? flagged : candidate))};
   writeAtomic(file.table, pretty(next));
   writeAtomic(file.readme, renderReadme(readme, next));
   writeAtomic(file.orchestrator, orchestrator);

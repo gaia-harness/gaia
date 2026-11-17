@@ -6,6 +6,7 @@
 //   plan-audit-apply.mjs apply     --plan-dir <dir> --keys <file> --decisions <file>
 //   plan-audit-apply.mjs judge-set --plan-dir <dir> --out <file>
 //   plan-audit-apply.mjs flag      --plan-dir <dir> --row <id> --kind access|forgery|secret
+//                                  [--cases <JSON array of the row's cases>]
 //
 // Working folder `<dir>/audit/apply/`: the first `prepare` snapshots the plan
 // documents and later runs keep that snapshot; `prepared.json`, `applied.json`,
@@ -17,6 +18,10 @@
 //
 // Exit 0 ok, 1 refusal (one `plan-audit-apply: <reason>` stderr line), 2
 // usage, 3 `apply` with `structural: true` in the decisions (nothing written).
+// `flag` on a row that needs `caseKinds` (flagged, no `caseKey`, not
+// `retire`) re-kinds the entries the row has, or writes one per `--cases`
+// entry; with neither it refuses, writing nothing, so step 4.5 never meets a
+// flagged row the script left without them.
 
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
@@ -30,7 +35,7 @@ const COMMANDS = {
   prepare: ['--plan-dir', '--keys', '--exclude?'],
   apply: ['--plan-dir', '--keys', '--decisions'],
   'judge-set': ['--plan-dir', '--out'],
-  flag: ['--plan-dir', '--row', '--kind'],
+  flag: ['--plan-dir', '--row', '--kind', '--cases?'],
 };
 
 const usage = () => {
@@ -85,7 +90,8 @@ const main = () => {
       writeAtomic(options.out, `${JSON.stringify(set, null, 2)}\n`);
     } else {
       if (!['access', 'forgery', 'secret'].includes(options.kind)) usage();
-      flagRow({planDir, row: options.row, kind: options.kind});
+      const cases = options.cases === undefined ? undefined : JSON.parse(options.cases);
+      flagRow({planDir, row: options.row, kind: options.kind, cases});
     }
   } catch (error) {
     refuse(error.message);
