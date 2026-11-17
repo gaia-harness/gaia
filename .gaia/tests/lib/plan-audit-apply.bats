@@ -3,6 +3,8 @@
 # lists added and changed rows for judgment, and keeps README, task docs and
 # the phase plan in step. Fixtures use a community garden and a pottery studio.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   CLI="$REPO_ROOT/.gaia/scripts/test-design/plan-audit-apply.mjs"

@@ -4,6 +4,8 @@
 # for judgment, one row flagged, and the test table verifying. Fixtures use a
 # community garden and a pottery studio.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   CLI="$REPO_ROOT/.gaia/scripts/test-design/plan-audit-apply.mjs"
