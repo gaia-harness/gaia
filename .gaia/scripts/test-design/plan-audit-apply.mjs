@@ -19,8 +19,8 @@
 // Exit 0 ok, 1 refusal (one `plan-audit-apply: <reason>` stderr line), 2
 // usage, 3 `apply` with `structural: true` in the decisions (nothing written).
 // `flag` on a row that needs `caseKinds` (flagged, no `caseKey`, not
-// `retire`) re-kinds the entries the row has, or writes one per `--cases`
-// entry; with neither it refuses, writing nothing, so step 4.5 never meets a
+// `retire`) writes one per `--cases` entry, else re-kinds the entries the
+// row has; with neither it refuses, writing nothing, so step 4.5 never meets a
 // flagged row the script left without them.
 
 import {readFileSync} from 'node:fs';
