@@ -42,6 +42,8 @@ build_scratch_repo() {
   copy_in .gaia/scripts/test-design/test-table.mjs
   copy_in .gaia/scripts/test-design/table.mjs
   copy_in .gaia/scripts/test-design/set-cells.mjs
+  copy_in .gaia/scripts/test-design/case-kinds.mjs
+  copy_in .gaia/scripts/test-design/row-fields.mjs
   copy_in .gaia/scripts/test-design/task-docs.mjs
   copy_in .gaia/scripts/machine-local-ref-lib.sh
   copy_in .claude/hooks/lib/gaia-packages.sh
@@ -158,7 +160,7 @@ script_exists() {
 write_plan() {
   PLAN="$BATS_TEST_TMPDIR/plan"
   mkdir -p "$PLAN"
-  printf '{"schema":1,"rows":[{"id":"T1","source":"success_criteria:0","case":"c","file":"apps/web/app/a/a.test.ts","title":"refuses","layer":"route","task":"task-build","action":"new","security":"access"}],"coveredFlows":%s}\n' "$1" >"$PLAN/tests.json"
+  printf '{"schema":1,"rows":[{"id":"T1","source":"success_criteria:0","case":"c","file":"apps/web/app/a/a.test.ts","title":"refuses","layer":"route","task":"task-build","action":"new","security":"access","caseKinds":[{"case":"c","kind":"access"}]}],"coveredFlows":%s}\n' "$1" >"$PLAN/tests.json"
 }
 
 @test "a web flow coveredFlows records needs no spec under --plan-dir; without the flag it is missing" {

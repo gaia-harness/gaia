@@ -169,8 +169,11 @@ write_table() {
 }
 
 # table_row <id> <source> <file> <title> <task> [<security>]: one valid row.
+# A flagged row gets the caseKinds verify requires of a keyless one.
 table_row() {
-  printf '{"id":"%s","source":"%s","case":"c","file":"%s","title":"%s","layer":"unit","task":"%s","action":"new","security":"%s"}' "$1" "$2" "$3" "$4" "$5" "${6:-none}"
+  local case_kinds=''
+  [ "${6:-none}" = none ] || case_kinds=",\"caseKinds\":[{\"case\":\"c\",\"kind\":\"$6\"}]"
+  printf '{"id":"%s","source":"%s","case":"c","file":"%s","title":"%s","layer":"unit","task":"%s","action":"new","security":"%s"%s}' "$1" "$2" "$3" "$4" "$5" "${6:-none}" "$case_kinds"
 }
 
 spec_less_table() {
