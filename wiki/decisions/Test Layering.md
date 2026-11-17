@@ -34,7 +34,7 @@ A JavaScript-disabled Given or a native form post rules out the browser and noth
 
 ## Why a case table is one test
 
-A rule with many cases is one behavior with many inputs. A parameterized table asserts every case in one place, so a new case is a new row rather than a new test, and the rule has one home a reader can find instead of the same cases restated at several layers. Another layer keeps one row per outcome only to prove the wiring reaches the rule, since the rule's own cases were already driven where it lives.
+A rule with many cases is one behavior with many inputs. A parameterized table asserts every case in one place, so a new case is a new row rather than a new test, and the rule has one home a reader can find instead of the same cases restated at several layers. Another layer holds one case per outcome only to prove the wiring reaches the rule, since the rule's own cases were already driven where it lives.
 
 ## Worker isolation
 
