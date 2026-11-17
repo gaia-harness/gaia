@@ -411,7 +411,7 @@ check_lens_doctrine_rows() {
   need "$apply" 'a trim narrows an existing row to a subset of its cases and is a kind of change' || return 1
   need "$apply" "A fix applied on this thread, from any lens or check, that would remove a security row (a row of the doctrine's kinds, or any row flagged) or clear a row's flag is not applied to that row unless the user rules it wrong on the review list" || return 1
   need "$apply" 'Any other such row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' || return 1
-  need "$apply" "A \`new\` row whose every case, once the fix applies, sits on another flagged row of the same kind, one whose action is not \`retire\` and which the same pass keeps, removes no security coverage: its item recommends removing it, and in auto-mode it is removed" || return 1
+  need "$apply" "A \`new\` row whose every case, once the fix applies, sits on another flagged row of the same kind, one whose \`action\` is not \`retire\` and which no fix on this thread removes, removes no security coverage: its item recommends removing it, and in auto-mode it is removed" || return 1
   need "$interactive" "one item per security-flagged \`retire\` row (\`security\` not \`none\`) in the table as it will stand once every fix applies, \`minor\` ones included" || return 1
   need "$doctrine" 'A test of that rule at another layer holds one case per outcome to prove the wiring' || return 1
   need "$doctrine" 'a case another requirement states goes into the table as a keyed row citing that requirement, never into a second wiring case of the same outcome' || return 1
