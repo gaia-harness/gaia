@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-11-14
 created: 2026-11-14
-updated: 2026-11-14
+updated: 2026-11-17
 tags: [decision, testing, plan, audit, merge, security]
 ---
 
@@ -26,7 +26,7 @@ The marker's presence is what routes the later steps: a marked plan takes the dr
 
 ## The test-design lens and its refuter
 
-The plan's decomposition audit always runs a test-design lens over a plan with a table, whatever the plan's size, because the table is the one artifact the later checks trust. The lens reviews rows against the doctrine, the requirements and the existing tests that drive the touched code. Its findings are judgment calls (a layer, a duplicate, a flag), so each material one goes to a refuter that tries to disprove it before it is applied. Applying a finding edits the table and the owning task docs, and plan verification then re-checks that the table and the task docs still agree. Step 4.6c of `/gaia-plan` then approves the table; approving the plan approves its retire rows (a security test's retire row follows the testing doctrine's **Security row** rule), so execution does not ask again. A security-flagged retire row is held for the merge checkpoint unless its `deletes` field names code the plan deletes, each path on a task doc's Delete line; the drift check holds it again when that code is still present at head or never existed at the merge base, and its merge-gate security check reads `held` and `deletes` from the approved copy. An auto-mode or non-interactive plan holds every security-flagged retire row.
+The plan's decomposition audit always runs a test-design lens over a plan with a table, whatever the plan's size, because the table is the one artifact the later checks trust. The lens reviews rows against the doctrine, the requirements and the existing tests that drive the touched code. Its findings are judgment calls (a layer, a duplicate, a flag), so each material one goes to a refuter that tries to disprove it before it is applied; the refuters start as soon as the lens finishes. A script applies a finding's row patches to the table and keeps the owning task docs in step, a fix-up agent takes what the script cannot apply, and an agent judges the security flag of every row the apply added or changed, never applying a lowered flag, which stays the maintainer's ruling. Plan verification then re-checks that the table and the task docs still agree. Step 4.6c of `/gaia-plan` then approves the table; approving the plan approves its retire rows (a security test's retire row follows the testing doctrine's **Security row** rule), so execution does not ask again. A security-flagged retire row is held for the merge checkpoint unless its `deletes` field names code the plan deletes, each path on a task doc's Delete line; the drift check holds it again when that code is still present at head or never existed at the merge base, and its merge-gate security check reads `held` and `deletes` from the approved copy. An auto-mode or non-interactive plan holds every security-flagged retire row.
 
 ## The security writer
 

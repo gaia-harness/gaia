@@ -432,3 +432,48 @@ check_replanned_rows() {
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
 }
+
+# check_security_judgment <root>: the apply sequence runs judge-set only after
+# the apply and the fix-up agent, an agent judges the security flag of every
+# row it lists (never a pattern match), each kind it assigns is handled like a
+# flag-candidates line with the step 4.5 rerun, and a none judgment on a
+# flagged row is never applied, since only the maintainer lowers a flag.
+check_security_judgment() {
+  local apply before_judge judge
+  apply="$(flat_range "$1/$AUDIT_REL" '## 4.6b. Apply findings' '**Interactive:**')"
+  before_judge="${apply%%plan-audit-apply.mjs judge-set*}"
+  judge="${apply#*plan-audit-apply.mjs judge-set}"
+  need "$apply" 'plan-audit-apply.mjs judge-set --plan-dir <PLAN_DIR> --out <file>' || return 1
+  need "$before_judge" 'plan-audit-apply.mjs apply --plan-dir <PLAN_DIR>' || return 1
+  need "$before_judge" 'one `general-purpose` Agent with `model: "sonnet"`' || return 1
+  need "$judge" 'One `general-purpose` Agent with no `model` override judges the security flag of each' || return 1
+  need "$judge" 'It is a judgment of each case, never a keyword or pattern match on row text.' || return 1
+  need "$judge" 'Each kind it assigns that differs from the row'"'"'s is handled as a `flag-candidates` line is below' || return 1
+  need "$judge" 'then the `plan.md` step 4.5 check re-runs' || return 1
+  need "$judge" 'A judgment of `none` on a row that carries a kind is never applied' || return 1
+}
+
+@test "plan audit apply sends every added or changed row to an agent security-flag judgment" {
+  green check_security_judgment
+  # judge-set before the apply: the apply command no longer precedes it
+  mutated_tree "$AUDIT_REL" 'plan-audit-apply.mjs apply --plan-dir <PLAN_DIR>' 'plan-audit-apply.mjs prepare --plan-dir <PLAN_DIR>'
+  run check_security_judgment "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+  # the judge is not an agent
+  mutated_tree "$AUDIT_REL" 'One `general-purpose` Agent with no `model` override judges the security flag of each' 'A keyword match judges the security flag of each'
+  run check_security_judgment "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+  # a kind it assigns is not handled like a flag-candidates line with the step 4.5 rerun
+  mutated_tree "$AUDIT_REL" 'then the `plan.md` step 4.5 check re-runs' 'then nothing re-runs'
+  run check_security_judgment "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+  # a none judgment on a flagged row may be applied
+  mutated_tree "$AUDIT_REL" 'A judgment of `none` on a row that carries a kind is never applied' 'A judgment of `none` on a row that carries a kind is applied'
+  run check_security_judgment "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+}
+

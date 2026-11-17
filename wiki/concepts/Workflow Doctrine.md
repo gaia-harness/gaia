@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-11-09
+updated: 2026-11-17
 tags: [concept, claude, workflow, doctrine]
 ---
 
@@ -49,7 +49,7 @@ Among the doctrine sources (the rule, `.claude/doctrine/execution.md`, and this 
 ### Pin sites
 
 - Frontmatter `model:` in skills and agents: `.claude/skills/*/SKILL.md`, `apps/web/.claude/skills/*/SKILL.md`, `.claude/agents/*.md`. A skill pins only for the lookup, scaffold, mechanical row; [[Deliberate Configuration Asymmetries]] records which skills pin and why.
-- Dispatch pins in playbooks: `.claude/skills/gaia/references/plan.md` (the planner picker), `.claude/skills/gaia/references/plan/planner.md` (the executor pin), `.claude/skills/gaia/references/spec.md` (the model gate), `.claude/skills/gaia/references/cleanse.md`, `.claude/skills/gaia/references/fitness.md`, `.claude/skills/gaia/references/worthiness-step.md` (the test fixer), `.claude/skills/gaia/references/drift-check.md` (the missing-test and honesty fixers), `.claude/skills/gaia/references/simplify-pass.md` (the simplify pass executor), `.claude/skills/gaia/references/wiki.md` and its stage files `.claude/skills/gaia/references/wiki/*.md`, the update-deps wave and override-audit agents in `.claude/skills/update-deps/SKILL.md`, and the bump agents in `.claude/skills/update-gaia/references/conflict-flow.md`.
+- Dispatch pins in playbooks: `.claude/skills/gaia/references/plan.md` (the planner picker), `.claude/skills/gaia/references/plan/planner.md` (the executor pin), `.claude/skills/gaia/references/plan/decomposition-audit.md` (the plan audit fix-up agent), `.claude/skills/gaia/references/spec.md` (the model gate), `.claude/skills/gaia/references/cleanse.md`, `.claude/skills/gaia/references/fitness.md`, `.claude/skills/gaia/references/worthiness-step.md` (the test fixer), `.claude/skills/gaia/references/drift-check.md` (the missing-test and honesty fixers), `.claude/skills/gaia/references/simplify-pass.md` (the simplify pass executor), `.claude/skills/gaia/references/wiki.md` and its stage files `.claude/skills/gaia/references/wiki/*.md`, the update-deps wave and override-audit agents in `.claude/skills/update-deps/SKILL.md`, and the bump agents in `.claude/skills/update-gaia/references/conflict-flow.md`.
 - The review child's model pin: `.gaia/scripts/audit-code-review.sh`, whose `audit-code-review-child.sh` library passes `--model opus` (the review and adversarial check row).
 - Executed wiki pages: `wiki/concepts/Audit Round Procedure.md` (the fixer dispatch).
 - Descriptive wiki pages that restate a pin: `wiki/concepts/GAIA Plan.md`, `wiki/concepts/GAIA Spec.md`, `wiki/concepts/Task Orchestration.md`, `wiki/concepts/Wiki Sync.md`, `wiki/concepts/Wiki Consolidate.md`, `wiki/decisions/Deliberate Configuration Asymmetries.md`.

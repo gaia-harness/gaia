@@ -23,6 +23,7 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
+  PLAN_REL=".claude/skills/gaia/references/plan.md"
   TDD_REL=".claude/skills/tdd/SKILL.md"
   DOCTRINE_REL=".claude/doctrine/testing.md"
   AUDIT_REL=".claude/skills/gaia/references/plan/decomposition-audit.md"
@@ -69,7 +70,7 @@ mutated_tree() {
   local rel="$1" old="$2" new="$3" file content mutated
   TREE="$BATS_TEST_TMPDIR/tree"
   rm -rf "$TREE"
-  for file in "$PLANNER_REL" "$AUDIT_REL" "$TABLE_REL" "$TDD_REL" "$DOCTRINE_REL"; do
+  for file in "$PLANNER_REL" "$PLAN_REL" "$AUDIT_REL" "$TABLE_REL" "$TDD_REL" "$DOCTRINE_REL"; do
     mkdir -p "$TREE/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$TREE/$file"
   done
@@ -939,4 +940,21 @@ check_page_heading_rows() {
 
 @test "red twin: the test design lens dropping the landmark check fails" {
   red check_page_heading_rows "$AUDIT_REL" "  - a page story, an error page's included, with no existing or planned test holding the doctrine's landmark check" "  - a page story with a landmark check"
+}
+
+# check_planner_leaf <root>: the planner reference says the planner is a leaf
+# subagent that dispatches no subagents, and step 4 of the plan playbook launches
+# one planner Agent, so the planner is never split into several.
+check_planner_leaf() {
+  local planner plan
+  planner="$(flat "$1/$PLANNER_REL")"
+  plan="$(flat "$1/$PLAN_REL")"
+  need "$planner" 'You are a leaf subagent: do not dispatch subagents' || return 1
+  need "$plan" 'Then launch one `general-purpose` Agent with the step-2 model' || return 1
+}
+
+@test "the planner stays one leaf that dispatches no subagents" {
+  green check_planner_leaf
+  red check_planner_leaf "$PLANNER_REL" 'You are a leaf subagent: do not dispatch subagents' 'You may dispatch subagents'
+  red check_planner_leaf "$PLAN_REL" 'Then launch one `general-purpose` Agent with the step-2 model' 'Then launch a planner Agent per area with the step-2 model'
 }
