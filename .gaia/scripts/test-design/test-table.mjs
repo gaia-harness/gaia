@@ -40,6 +40,7 @@ import {
   tableProblems,
   validateRow,
 } from './table.mjs';
+import {readSets, setCellProblems} from './set-cells.mjs';
 import {
   DELETE_LINE,
   deleteLines,
@@ -142,6 +143,7 @@ const verify = (args) => {
   for (const source of recorded.sources) {
     if (!keySet.has(source)) failures.push(`instructionKeys cites unknown source ${source}`);
   }
+  failures.push(...setCellProblems({rows, sets: readSets(files.table)}, keySet));
   for (const key of keysWithNoRow(keys, table)) {
     failures.push(`requirement key ${key} has no row`);
   }

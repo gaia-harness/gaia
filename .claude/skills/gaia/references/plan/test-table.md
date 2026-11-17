@@ -32,6 +32,9 @@ Every field is required unless marked.
 - `reason`: optional; required on a row the drift step adds for a kept unplanned test.
 - `deletes`: optional, on a `retire` row whose `security` is not `none`: the repo-relative source paths of the code under test that the plan deletes, each named on a task doc's `- Delete:` line, none absolute, starting `./` or `../`, holding a `..` segment, or containing a backslash (`verify` refuses one). The drift check counts a path as deleted only when it existed at the merge base and is gone at head; its merge-gate security check reads `deletes`, `held` and `action` from the approved copy, so an amend cannot lift the hold.
 - `held`: optional, written only by `approve` on a `retire` row whose `security` is not `none`: `"auto-mode"` on every such row under `--auto`, else `"kept-code"` on one whose `deletes` is missing, invalid or names a path no `- Delete:` line names. Such a row is not executed.
+- `cells`: required on each row a `sets` entry lists: the combinations of the entry's axes the row's case tests, one object per combination naming one member of every axis (`{"action": "list", "role": "editor"}`). The row's `case` names each member its cells name.
+
+A rule stated as sets (the doctrine's `## What to test`) records its case table beside `rows` as `"sets": [{"source": "<key>", "rows": ["<id>", ...], "axes": {"action": [...], "role": [...]}}]`. Each entry pairs the actions with one other dimension: the roles or relationships, or the statuses, so a rule over both has two entries. Each axis lists every member the requirements name, inside the set or out. `verify` refuses an entry whose rows leave any combination of its axes without a cell.
 
 ## Requirement-source keys
 
