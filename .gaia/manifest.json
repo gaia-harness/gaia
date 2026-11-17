@@ -409,6 +409,7 @@
     ".gaia/scripts/test-design/replanned-rows.mjs": "owned",
     ".gaia/scripts/test-design/row-patch.mjs": "owned",
     ".gaia/scripts/test-design/security-rows-lost.mjs": "owned",
+    ".gaia/scripts/test-design/set-cells.mjs": "owned",
     ".gaia/scripts/test-design/skip-detect.mjs": "owned",
     ".gaia/scripts/test-design/table.mjs": "owned",
     ".gaia/scripts/test-design/task-docs.mjs": "owned",
@@ -889,7 +890,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-17T10:22:02.313Z",
+  "generated": "2026-11-17T10:23:46.818Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

@@ -37,7 +37,7 @@ export const REQUIRED_FIELDS = [
   'security',
 ];
 
-const isNonEmptyString = (value) =>
+export const isNonEmptyString = (value) =>
   typeof value === 'string' && value.trim() !== '';
 
 // Returns {rows, coveredFlows, instructionKeys}, or throws an Error whose
@@ -290,6 +290,7 @@ const REPLAN_FIELDS = [
   'caseKey',
   'held',
   'deletes',
+  'cells',
 ];
 
 // Each regenerated row no unconsumed snapshot row equals on REPLAN_FIELDS (a
