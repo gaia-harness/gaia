@@ -34,7 +34,7 @@ setup() {
   REFUSAL_LAYERING='asserting only the served status and any `Location` header, never page content a route test shows'
   TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer holds one case per outcome'
   TWIN_LAYERING='with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
-  WIRING_INPUT_LAYERING="Each such case takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces its outcome."
+  WIRING_INPUT_LAYERING="Each wiring case takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces its outcome."
   CASE_OWNER_LAYERING='A case belongs to the rule whose input it varies, whichever requirement states it and whatever effect it names'
   PAGE_EFFECT_PLANNER='a case another key states as a page effect included'
   WIRING_INPUT_PLANNER="Whatever layer holds the table, each case of that rule at another layer, one per outcome, takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces its outcome"
