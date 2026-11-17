@@ -68,7 +68,7 @@ const isActionPair = (axes) => {
   return names.length === 2 && names.includes('action');
 };
 
-const actionKey = (axes) => [...axes.action].sort().join('\n');
+const sharesAction = (a, b) => a.action.some((action) => b.action.includes(action));
 
 // A status entry's `actors`, {<axis>: {<action>: [members]}}: the roles or
 // relationships inside each action's set. Without it a status table run by
@@ -104,7 +104,7 @@ const actorsShape = (label, {actors, axes}) => {
   return problems.length > 0 ? {problems} : {problems, actor: {axis, map}};
 };
 
-// The other entries pairing the same actions with a role or relationship. They
+// The other entries pairing a shared action with a role or relationship. They
 // are read before their own shape check runs, so each is guarded here.
 const partnersOf = (entry, sets) =>
   sets.filter(
@@ -114,10 +114,11 @@ const partnersOf = (entry, sets) =>
       Array.isArray(other.axes.action) &&
       isActionPair(other.axes) &&
       !Object.hasOwn(other.axes, 'status') &&
-      actionKey(other.axes) === actionKey(entry.axes),
+      sharesAction(other.axes, entry.axes),
   );
 
-// A status entry beside a partner covers a rule over both, so it owes actors.
+// A status entry beside a partner covers a rule over both, so it owes actors,
+// even when the status gates only some of the partner's actions.
 const missingActorsProblems = (label, entry, partners) => {
   if (!Object.hasOwn(entry.axes, 'status') || partners.length === 0) return [];
   const partnerAxis = Object.keys(partners[0].axes).find((name) => name !== 'action');

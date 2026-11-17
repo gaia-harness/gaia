@@ -103,6 +103,14 @@ expect_refusal() {
   expect_refusal 'sets entry success_criteria:1 pairs the actions with status while another entry pairs them with role, but has no actors naming the role inside each action'"'"'s set'
 }
 
+@test "verify refuses a status entry with no actors when it gates only some of the role entry's actions" {
+  write_spread_table
+  mutate_table 'delete t.sets[1].actors; t.sets[1].axes.action = ["edit", "close"];
+    for (const row of t.rows.slice(3)) row.cells = row.cells.filter((c) => c.action !== "view").map(({action, status}) => ({action, status}));
+    for (const row of t.rows.slice(3)) row.case = row.case.replace("member view, ", "");'
+  expect_refusal 'sets entry success_criteria:1 pairs the actions with status while another entry pairs them with role, but has no actors naming the role inside each action'"'"'s set'
+}
+
 @test "verify passes a status entry with no actors when no entry pairs its actions with a role" {
   write_spread_table
   mutate_table 'delete t.sets[1].actors; t.sets.shift(); t.rows = t.rows.slice(3);
