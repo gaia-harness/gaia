@@ -7,7 +7,8 @@
 // {source, rows: [ids], axes: {<axis>: [members]}}, and each listed row names
 // the combinations it tests in `cells`, [{<axis>: <member>, ...}]. A table
 // that samples the set leaves a combination with no cell, which a scan of the
-// `case` text alone cannot see.
+// `case` text alone cannot see. A status entry beside a role entry also
+// carries `actors`, and its cells name who acts (see actorsShape).
 
 import {readFileSync} from 'node:fs';
 
@@ -39,6 +40,11 @@ const namesMember = (caseText, member) =>
     String.raw`(?<![\w-])${member.toLowerCase().replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)}(?![\w-])`,
   ).test(caseText);
 
+const isMemberList = (members) =>
+  Array.isArray(members) && members.length > 0 && members.every(isNonEmptyString);
+
+const hasDuplicate = (members) => new Set(members).size !== members.length;
+
 const axesProblems = (label, axes) => {
   if (!isPlainObject(axes)) {
     return [`${label} has no axes object`];
@@ -48,22 +54,101 @@ const axesProblems = (label, axes) => {
   const problems = [];
   for (const name of names) {
     const members = axes[name];
-    if (!Array.isArray(members) || members.length === 0 || !members.every(isNonEmptyString)) {
+    if (!isMemberList(members)) {
       problems.push(`${label} axis ${name} is not a non-empty list of members`);
-    } else if (new Set(members).size !== members.length) {
+    } else if (hasDuplicate(members)) {
       problems.push(`${label} axis ${name} lists a member twice`);
     }
   }
   return problems;
 };
 
-// Each problem with one row's cells against its entry's axes.
-const rowCellProblems = (label, row, axes) => {
+const isActionPair = (axes) => {
+  const names = Object.keys(axes);
+  return names.length === 2 && names.includes('action');
+};
+
+const actionKey = (axes) => [...axes.action].sort().join('\n');
+
+// A status entry's `actors`, {<axis>: {<action>: [members]}}: the roles or
+// relationships inside each action's set. Without it a status table run by
+// one role passes, so a status guard on that role's path alone passes every
+// test. On no problems, also returns the actor {axis, map}.
+const actorsShape = (label, {actors, axes}) => {
+  if (actors === undefined) return {problems: []};
+  if (!isActionPair(axes)) {
+    return {problems: [`${label} has actors but its axes are not action and one other`]};
+  }
+  if (!isPlainObject(actors) || Object.keys(actors).length !== 1) {
+    return {problems: [`${label} actors does not name exactly one axis`]};
+  }
+  const [axis] = Object.keys(actors);
+  const map = actors[axis];
+  if (Object.hasOwn(axes, axis)) {
+    return {problems: [`${label} actors names ${axis}, which is already one of its axes`]};
+  }
+  if (!isPlainObject(map)) return {problems: [`${label} actors ${axis} is not an object`]};
+  const problems = [];
+  for (const action of axes.action) {
+    if (!isMemberList(map[action])) {
+      problems.push(`${label} actors ${axis} gives action ${action} no non-empty list of members`);
+    } else if (hasDuplicate(map[action])) {
+      problems.push(`${label} actors ${axis} lists a member twice for action ${action}`);
+    }
+  }
+  for (const action of Object.keys(map)) {
+    if (!axes.action.includes(action)) {
+      problems.push(`${label} actors ${axis} names action ${action}, which its axes do not list`);
+    }
+  }
+  return problems.length > 0 ? {problems} : {problems, actor: {axis, map}};
+};
+
+// The other entries pairing the same actions with a role or relationship. They
+// are read before their own shape check runs, so each is guarded here.
+const partnersOf = (entry, sets) =>
+  sets.filter(
+    (other) =>
+      other !== entry &&
+      isPlainObject(other?.axes) &&
+      Array.isArray(other.axes.action) &&
+      isActionPair(other.axes) &&
+      !Object.hasOwn(other.axes, 'status') &&
+      actionKey(other.axes) === actionKey(entry.axes),
+  );
+
+// A status entry beside a partner covers a rule over both, so it owes actors.
+const missingActorsProblems = (label, entry, partners) => {
+  if (!Object.hasOwn(entry.axes, 'status') || partners.length === 0) return [];
+  const partnerAxis = Object.keys(partners[0].axes).find((name) => name !== 'action');
+  return [
+    `${label} pairs the actions with status while another entry pairs them with ${partnerAxis}, but has no actors naming the ${partnerAxis} inside each action's set`,
+  ];
+};
+
+const actorMembershipProblems = (label, actor, partners) => {
+  const listed = partners.find((other) => Object.hasOwn(other.axes, actor.axis))?.axes[actor.axis];
+  if (!Array.isArray(listed)) return [];
+  return Object.entries(actor.map).flatMap(([action, members]) =>
+    members
+      .filter((member) => !listed.includes(member))
+      .map((member) => `${label} actors ${actor.axis} names ${member} for action ${action}, which no entry's ${actor.axis} axis lists`),
+  );
+};
+
+// Each problem with one row's cells against its entry's axes and, for a
+// status entry with actors, the actor each cell names.
+const rowCellProblems = (label, row, axes, actor) => {
   if (!Array.isArray(row.cells) || row.cells.length === 0) {
     return [`${label} lists row ${row.id}, which has no cells`];
   }
   const caseText = typeof row.case === 'string' ? row.case.toLowerCase() : '';
-  const names = Object.keys(axes);
+  const names = actor ? [...Object.keys(axes), actor.axis] : Object.keys(axes);
+  const kind = actor ? 'axes and actor' : 'axes';
+  // The actor's allowed members depend on the cell's action; an unknown
+  // action is refused on its own axis, so its actor is not judged again.
+  const allowed = (name, cell) =>
+    name === actor?.axis ? actor.map[cell.action] : axes[name];
   const problems = [];
   row.cells.forEach((cell, index) => {
     const where = `row ${row.id} cell #${index + 1}`;
@@ -73,12 +158,18 @@ const rowCellProblems = (label, row, axes) => {
     }
     const keys = Object.keys(cell);
     if (keys.length !== names.length || !names.every((name) => keys.includes(name))) {
-      problems.push(`${where} does not name exactly the axes ${names.join(', ')} of ${label}`);
+      problems.push(`${where} does not name exactly the ${kind} ${names.join(', ')} of ${label}`);
       return;
     }
     for (const name of names) {
-      if (!axes[name].includes(cell[name])) {
-        problems.push(`${where} names ${name} ${cell[name]}, which ${label} does not list`);
+      const members = allowed(name, cell);
+      if (members === undefined) continue;
+      if (!members.includes(cell[name])) {
+        problems.push(
+          name === actor?.axis
+            ? `${where} names ${name} ${cell[name]}, which ${label} actors does not list for action ${cell.action}`
+            : `${where} names ${name} ${cell[name]}, which ${label} does not list`,
+        );
       } else if (!namesMember(caseText, cell[name])) {
         problems.push(`${where} names ${name} ${cell[name]}, which the row's case does not`);
       }
@@ -119,6 +210,30 @@ export const setCellProblems = ({rows, sets}, keySet) => {
       problems.push(...shape);
       return;
     }
+    const {problems: actorProblems, actor} = actorsShape(label, entry);
+    if (actorProblems.length > 0) {
+      problems.push(...actorProblems);
+      return;
+    }
+    const partners = isActionPair(entry.axes) ? partnersOf(entry, sets) : [];
+    problems.push(
+      ...(actor
+        ? actorMembershipProblems(label, actor, partners)
+        : missingActorsProblems(label, entry, partners)),
+    );
+    // Each projection's every combination needs a cell. With actors, the
+    // second asks for each actor once at each status: the cheapest table that
+    // sends every role or relationship past the status guard. It cannot see a
+    // guard that differs per (actor, action) pair; that needs every actor of
+    // every action at every status, which multiplies the rows.
+    const projections = [entry.axes];
+    if (actor) {
+      const otherAxis = Object.keys(entry.axes).find((name) => name !== 'action');
+      projections.push({
+        [otherAxis]: entry.axes[otherAxis],
+        [actor.axis]: [...new Set(Object.values(actor.map).flat())],
+      });
+    }
     const held = new Set();
     for (const id of entry.rows) {
       const row = rowsById.get(id);
@@ -127,17 +242,21 @@ export const setCellProblems = ({rows, sets}, keySet) => {
       } else if (row.action === 'retire' || row.held !== undefined) {
         problems.push(`${label} names row ${id}, which is ${row.action === 'retire' ? 'retired' : 'held'} and so runs no test`);
       } else {
-        const rowProblems = rowCellProblems(label, row, entry.axes);
+        const rowProblems = rowCellProblems(label, row, entry.axes, actor);
         problems.push(...rowProblems);
         if (rowProblems.length === 0) {
-          for (const cell of row.cells) held.add(cellLabel(Object.keys(entry.axes), cell));
+          for (const cell of row.cells) {
+            for (const projection of projections) held.add(cellLabel(Object.keys(projection), cell));
+          }
         }
       }
     }
-    const axisNames = Object.keys(entry.axes);
-    for (const cell of combinations(entry.axes)) {
-      if (!held.has(cellLabel(axisNames, cell))) {
-        problems.push(`${label} has no row for ${cellLabel(axisNames, cell)}`);
+    for (const projection of projections) {
+      const names = Object.keys(projection);
+      for (const cell of combinations(projection)) {
+        if (!held.has(cellLabel(names, cell))) {
+          problems.push(`${label} has no row for ${cellLabel(names, cell)}`);
+        }
       }
     }
   });
