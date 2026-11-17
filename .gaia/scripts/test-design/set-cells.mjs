@@ -27,10 +27,17 @@ const combinations = (axes) =>
     [{}],
   );
 
-const cellLabel = (cell) =>
-  Object.entries(cell)
-    .map(([axis, member]) => `${axis} ${member}`)
-    .join(', ');
+// Labelled in the axes' order, so a cell written in any key order matches its
+// combination.
+const cellLabel = (names, cell) =>
+  names.map((name) => `${name} ${cell[name]}`).join(', ');
+
+// Whether the case text holds the member as a whole word, so `view` is not
+// found inside `viewer`.
+const namesMember = (caseText, member) =>
+  new RegExp(
+    String.raw`(?<![\w-])${member.toLowerCase().replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)}(?![\w-])`,
+  ).test(caseText);
 
 const axesProblems = (label, axes) => {
   if (!isPlainObject(axes)) {
@@ -72,7 +79,7 @@ const rowCellProblems = (label, row, axes) => {
     for (const name of names) {
       if (!axes[name].includes(cell[name])) {
         problems.push(`${where} names ${name} ${cell[name]}, which ${label} does not list`);
-      } else if (!caseText.includes(cell[name].toLowerCase())) {
+      } else if (!namesMember(caseText, cell[name])) {
         problems.push(`${where} names ${name} ${cell[name]}, which the row's case does not`);
       }
     }
@@ -83,7 +90,8 @@ const rowCellProblems = (label, row, axes) => {
 // Every problem the table's `sets` entries have against its rows and keys: a
 // malformed entry, a listed row the table lacks, retires or holds, a cell its
 // entry does not allow or its row's case does not name, and each combination
-// of an entry's axes no listed row holds.
+// of an entry's axes no listed row holds. Without a keySet the source check is
+// skipped, for a caller that holds no keys file.
 export const setCellProblems = ({rows, sets}, keySet) => {
   if (sets === undefined) return [];
   if (!Array.isArray(sets)) return ['sets is not an array'];
@@ -100,7 +108,7 @@ export const setCellProblems = ({rows, sets}, keySet) => {
     const label = hasSource ? `sets entry ${entry.source}` : `sets entry #${index + 1}`;
     if (!hasSource) {
       problems.push(`${label} has no source`);
-    } else if (!keySet.has(entry.source)) {
+    } else if (keySet && !keySet.has(entry.source)) {
       problems.push(`${label} cites unknown source ${entry.source}`);
     }
     const shape = axesProblems(label, entry.axes);
@@ -122,13 +130,14 @@ export const setCellProblems = ({rows, sets}, keySet) => {
         const rowProblems = rowCellProblems(label, row, entry.axes);
         problems.push(...rowProblems);
         if (rowProblems.length === 0) {
-          for (const cell of row.cells) held.add(cellLabel(cell));
+          for (const cell of row.cells) held.add(cellLabel(Object.keys(entry.axes), cell));
         }
       }
     }
+    const axisNames = Object.keys(entry.axes);
     for (const cell of combinations(entry.axes)) {
-      if (!held.has(cellLabel(cell))) {
-        problems.push(`${label} has no row for ${cellLabel(cell)}`);
+      if (!held.has(cellLabel(axisNames, cell))) {
+        problems.push(`${label} has no row for ${cellLabel(axisNames, cell)}`);
       }
     }
   });

@@ -343,6 +343,7 @@ const amend = (args) => {
   next.push(...(changes.add ?? []));
 
   const problems = tableProblems(next);
+  problems.push(...setCellProblems({rows: next, sets: readSets(files.table)}));
   if (problems.length > 0) refuseAll(problems);
 
   const approvedSecurity = approved.rows.filter(isSecurity);

@@ -137,3 +137,27 @@ expect_refusal() {
   mutate_table 't.sets = {}'
   expect_refusal 'sets is not an array'
 }
+
+@test "verify accepts a cell written in a different key order than the axes" {
+  write_full_table
+  mutate_table 't.rows[0].cells = t.rows[0].cells.map((c) => ({role: c.role, action: c.action}))'
+  run_verify
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "verify refuses a cell whose member the case names only inside a longer word" {
+  write_full_table
+  mutate_table 't.rows[0].case = "admin: list, viewer, create each allowed"'
+  expect_refusal 'row T1 cell #2 names action view, which the row'"'"'s case does not'
+}
+
+@test "amend refuses a removal that leaves a sets entry uncovered and leaves the file unchanged" {
+  write_full_table
+  cp "$PLAN/tests.json" "$PLAN/tests.approved.json"
+  before="$(cat "$PLAN/tests.json")"
+  printf '%s' '{"remove":["T4"]}' >"$BATS_TEST_TMPDIR/changes.json"
+  run node "$TABLE_CLI" amend --plan-dir "$PLAN" --root "$BATS_TEST_TMPDIR" --changes "$BATS_TEST_TMPDIR/changes.json"
+  [ "$status" -eq 1 ]
+  grep -qF -- 'names row T4, which the table lacks' <<<"$output"
+  [ "$(cat "$PLAN/tests.json")" = "$before" ]
+}
