@@ -410,8 +410,18 @@ check_lens_doctrine_rows() {
   need "$apply" 'record it as an uncovered requirement (a missing-row finding at the severity the missing-row check gives it, recommending a row every check passes, or in auto-mode in `## Audit notes`), not only as a dropped row' || return 1
   need "$apply" 'a trim narrows an existing row to a subset of its cases and is a kind of change' || return 1
   need "$apply" "A fix applied on this thread, from any lens or check, that would remove a security row (a row of the doctrine's kinds, or any row flagged) or clear a row's flag is not applied to that row unless the user rules it wrong on the review list" || return 1
-  need "$apply" 'The row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' || return 1
+  need "$apply" 'Any other such row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' || return 1
+  need "$apply" "A \`new\` row whose every case, once the fix applies, sits on another flagged row of the same kind removes no security coverage: its item recommends removing it, and in auto-mode it is removed" || return 1
   need "$interactive" "one item per security-flagged \`retire\` row (\`security\` not \`none\`) in the table as it will stand once every fix applies, \`minor\` ones included" || return 1
+  need "$doctrine" 'A test of that rule at another layer holds one case per outcome to prove the wiring' || return 1
+  need "$doctrine" 'a case another requirement states goes into the table as a keyed row citing that requirement, never into a second wiring case of the same outcome' || return 1
+  need "$lens" "Two wiring cases of one rule's outcome at a layer other than its table's, on one row or several and whichever requirement each cites, are a duplicate: the fix moves each extra case into the table as a keyed row citing its own \`source\`" || return 1
+  need "$lens" "So is a second case table for one rule at one layer, a table of a helper the rule's function derives (the actions a role is offered) included" || return 1
+  need "$doctrine" 'A scope boundary or audit directive that directs the builder rather than stating what the app does' || return 1
+  need "$table" "A \`scope_boundaries:\` or \`directive:\` key that directs the builder rather than stating what the app does" || return 1
+  need "$table" 'when it is a scope boundary or audit directive that directs the builder, an `instructionKeys` entry' || return 1
+  need "$lens" 'a row whose source is a scope boundary or audit directive that directs the builder' || return 1
+  need "$doctrine" 'never a test, at any layer, that hand-calls the middleware function; a new case for that guard extends the row that runs the real chain' || return 1
 }
 
 @test "the test design lens checks the doctrine's barred rows and security kinds" {
@@ -447,7 +457,39 @@ check_lens_doctrine_rows() {
 }
 
 @test "red twin: the apply step dropping a security-flagged row fails" {
-  red check_lens_doctrine_rows "$AUDIT_REL" 'The row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' 'The row is dropped'
+  red check_lens_doctrine_rows "$AUDIT_REL" 'Any other such row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' 'Any other such row is dropped'
+}
+
+@test "red twin: the apply step keeping a planned duplicate security row fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'its item recommends removing it, and in auto-mode it is removed' 'its item recommends keeping it, and in auto-mode it is kept'
+}
+
+@test "red twin: other-layer wiring as a floor rather than one case per outcome fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'holds one case per outcome to prove the wiring' 'keeps one row per outcome to prove the wiring'
+}
+
+@test "red twin: a stated case left as a second wiring case fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'goes into the table as a keyed row citing that requirement, never into a second wiring case' 'gets its own wiring row'
+}
+
+@test "red twin: the duplicate check missing extra wiring cases fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" "Two wiring cases of one rule's outcome" "Two rows of one rule's outcome"
+}
+
+@test "red twin: the duplicate check missing a second case table fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" 'So is a second case table for one rule at one layer' 'A second case table for one rule at one layer is fine'
+}
+
+@test "red twin: the builder-directing exemption limited to scope boundaries fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'A scope boundary or audit directive that directs the builder' 'A scope boundary that directs the builder'
+}
+
+@test "red twin: instructionKeys limited to scope boundary keys fails" {
+  red check_lens_doctrine_rows "$TABLE_REL" 'A `scope_boundaries:` or `directive:` key that directs' 'A `scope_boundaries:` key that directs'
+}
+
+@test "red twin: the shared-guard ban limited to unit tests fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" 'never a test, at any layer, that hand-calls the middleware function' 'never a unit test that hand-calls the middleware function'
 }
 
 @test "red twin: the security-row rule scoped to one lens fails" {

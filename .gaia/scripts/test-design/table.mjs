@@ -171,7 +171,7 @@ export const coveredFlows = ({rows, coveredFlows: entries}) => {
   return {sources, problems};
 };
 
-// A scope boundary key that directs the builder rather than stating app
+// A scope boundary or directive key that directs the builder rather than stating app
 // behavior has no test: an `instructionKeys` entry, {source: "<key>", reason:
 // "<what it directs>"}, records it in place of a row. Returns the sources of
 // the valid entries and every problem with them that the rows alone can show.
@@ -192,8 +192,8 @@ export const instructionKeys = ({rows, instructionKeys: entries}) => {
     const before = problems.length;
     if (seen.has(source)) problems.push(`instructionKeys names ${source} twice`);
     seen.add(source);
-    if (!source.startsWith('scope_boundaries:')) {
-      problems.push(`instructionKeys ${source} is not a scope boundary key`);
+    if (!source.startsWith('scope_boundaries:') && !source.startsWith('directive:')) {
+      problems.push(`instructionKeys ${source} is not a scope boundary or directive key`);
     }
     if (!isNonEmptyString(entry.reason)) {
       problems.push(`instructionKeys ${source} has no reason`);
