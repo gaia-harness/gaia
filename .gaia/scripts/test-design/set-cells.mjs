@@ -7,8 +7,8 @@
 // {source, rows: [ids], axes: {<axis>: [members]}}, and each listed row names
 // the combinations it tests in `cells`, [{<axis>: <member>, ...}]. A table
 // that samples the set leaves a combination with no cell, which a scan of the
-// `case` text alone cannot see. A status entry beside a role entry also
-// carries `actors`, and its cells name who acts (see actorsShape).
+// `case` text alone cannot see. A status entry beside a role or relationship
+// entry also carries `actors`, and its cells name who acts (see actorsShape).
 
 import {readFileSync} from 'node:fs';
 
@@ -221,11 +221,11 @@ export const setCellProblems = ({rows, sets}, keySet) => {
         ? actorMembershipProblems(label, actor, partners)
         : missingActorsProblems(label, entry, partners)),
     );
-    // Each projection's every combination needs a cell. With actors, the
-    // second asks for each actor once at each status: the cheapest table that
-    // sends every role or relationship past the status guard. It cannot see a
-    // guard that differs per (actor, action) pair; that needs every actor of
-    // every action at every status, which multiplies the rows.
+    // Every combination of each projection needs a cell. With actors, the
+    // second asks for each actor at least once at each status: the cheapest
+    // table that sends every role or relationship past the status guard. It
+    // cannot see a guard that differs per (actor, action) pair; that needs
+    // every actor of every action at every status, which multiplies the rows.
     const projections = [entry.axes];
     if (actor) {
       const otherAxis = Object.keys(entry.axes).find((name) => name !== 'action');
