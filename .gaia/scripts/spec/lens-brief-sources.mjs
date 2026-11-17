@@ -205,7 +205,7 @@ export const refuterPrompt = (root, kind) => {
 
 // The verdict schema paragraph and its JSON block from 7b-i, which the refuter
 // prompt points at ("the verdict schema below"). A plan refuter's schema is the
-// same minus the `disposition` field.
+// same minus the `disposition` field and the label's sentence about it.
 export const verdictSchema = (root, kind) => {
   const lines = section(readLines(root, DOCS.audit), '### 7b-i.');
   const start = lines.findIndex((line) => line.startsWith('Verdict schema:'));
