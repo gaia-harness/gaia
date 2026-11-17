@@ -32,12 +32,12 @@ setup() {
   MARKUP_PLANNER='A page-markup or accessibility directive constrains the code, and adds a real-server assertion only when the rendered HTML is itself the requirement'
   MARKUP_AUDIT='naming the page or component it applies to, written as the constraint the code meets'
   REFUSAL_LAYERING='asserting only the served status and any `Location` header, never page content a route test shows'
-  TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer keeps one row per outcome'
+  TABLE_LAYERING='exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer holds one case per outcome'
   TWIN_LAYERING='with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
-  WIRING_INPUT_LAYERING="Each such row takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces the row's outcome."
+  WIRING_INPUT_LAYERING="Each wiring case takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces its outcome."
   CASE_OWNER_LAYERING='A case belongs to the rule whose input it varies, whichever requirement states it and whatever effect it names'
   PAGE_EFFECT_PLANNER='a case another key states as a page effect included'
-  WIRING_INPUT_PLANNER="Whatever layer holds the table, each row of that rule at another layer, one per outcome, takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces the row's outcome"
+  WIRING_INPUT_PLANNER="Whatever layer holds the table, each case of that rule at another layer, one per outcome, takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces its outcome"
   PAGE_EFFECT_LENS='(a case another requirement states as a page effect, such as an alert shown, included)'
   REPEAT_LENS="or whose table's boundary or exception case another layer's row of that rule repeats though another case produces the same outcome"
   SERVED_ERROR_LAYERING='A real-server row for a served error status (a 404 for an unknown path or a missing record) asserts only the status and any `Location`'
