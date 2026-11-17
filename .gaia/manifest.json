@@ -814,6 +814,7 @@
     "wiki/decisions/Dark Mode Modernization.md": "wiki-owned",
     "wiki/decisions/Deliberate Configuration Asymmetries.md": "wiki-owned",
     "wiki/decisions/Determinism Classifier.md": "wiki-owned",
+    "wiki/decisions/Faster Spec And Plan Audits That Keep Every Check.md": "wiki-owned",
     "wiki/decisions/Flow Machinery For A Test-after Testing Layer.md": "wiki-owned",
     "wiki/decisions/Flow-based Test-after Pipeline.md": "wiki-owned",
     "wiki/decisions/Local Bundle Sync (Decision).md": "wiki-owned",
@@ -888,7 +889,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-17T09:51:06.318Z",
+  "generated": "2026-11-17T10:22:02.313Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-17 PROMOTED: wiki/decisions/Faster Spec And Plan Audits That Keep Every Check.md (PR #3644)
 - 2026-11-15 f4ad2cb WORTHY - harness-internal refinement, no wiki page states the changed detail
 - 2026-11-15 94ded42 WORTHY - harness-internal refinement, no wiki page states the changed detail
 - 2026-11-15 94fec30 WORTHY - harness-internal refinement, no wiki page states the changed detail
