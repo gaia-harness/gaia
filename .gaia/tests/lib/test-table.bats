@@ -30,7 +30,7 @@ write_verify_fixture() {
   cat >"$PLAN/tests.json" <<'EOF'
 {"schema": 1, "rows": [
   {"id": "T1", "source": "flow:alpha", "case": "alpha works", "file": "src/alpha.test.ts", "title": "alpha works", "layer": "unit", "task": "task-one", "action": "new", "security": "none"},
-  {"id": "T2", "source": "success_criteria:0", "case": "beta refuses", "file": "src/beta.test.ts", "title": "beta refuses", "layer": "route", "task": "task-two", "action": "new", "security": "access"}
+  {"id": "T2", "source": "success_criteria:0", "case": "beta refuses", "file": "src/beta.test.ts", "title": "beta refuses", "layer": "route", "task": "task-two", "action": "new", "security": "access", "caseKinds": [{"case": "beta refuses", "kind": "access"}]}
 ]}
 EOF
   printf 'flow:alpha\nsuccess_criteria:0\n' >"$KEYS"
@@ -327,8 +327,8 @@ expect_verify_refusal() {
 write_amend_fixture() {
   cat >"$PLAN/tests.json" <<'EOF'
 {"schema": 1, "rows": [
-  {"id": "T1", "source": "flow:alpha", "case": "a", "file": "a.test.ts", "title": "a", "layer": "route", "task": "task-one", "action": "new", "security": "access"},
-  {"id": "T2", "source": "success_criteria:0", "case": "b", "file": "b.test.ts", "title": "b", "layer": "route", "task": "task-one", "action": "new", "security": "forgery"},
+  {"id": "T1", "source": "flow:alpha", "case": "a", "file": "a.test.ts", "title": "a", "layer": "route", "task": "task-one", "action": "new", "security": "access", "caseKinds": [{"case": "a", "kind": "access"}]},
+  {"id": "T2", "source": "success_criteria:0", "case": "b", "file": "b.test.ts", "title": "b", "layer": "route", "task": "task-one", "action": "new", "security": "forgery", "caseKinds": [{"case": "b", "kind": "forgery"}]},
   {"id": "T3", "source": "success_criteria:1", "case": "c", "file": "c.test.ts", "title": "c", "layer": "unit", "task": "task-one", "action": "new", "security": "none"}
 ]}
 EOF
@@ -359,7 +359,7 @@ run_amend() {
 
 @test "amend refuses a changed security kind and leaves the file unchanged" {
   write_amend_fixture
-  run_amend '{"replace":[{"id":"T1","source":"flow:alpha","case":"a","file":"a.test.ts","title":"a","layer":"route","task":"task-one","action":"new","security":"secret"}]}'
+  run_amend '{"replace":[{"id":"T1","source":"flow:alpha","case":"a","file":"a.test.ts","title":"a","layer":"route","task":"task-one","action":"new","security":"secret","caseKinds":[{"case":"a","kind":"secret"}]}]}'
   [ "$status" -eq 1 ]
   grep -qF -- 'security kind changed on T1' <<<"$output"
   [ "$(cat "$PLAN/tests.json")" = "$AMEND_BEFORE" ]
@@ -381,7 +381,7 @@ run_amend() {
   grep -qF '"T3"' "$PLAN/tests.json" && return 1
 
   write_amend_fixture
-  run_amend '{"remove":["T1","T2"],"add":[{"id":"T5","source":"flow:alpha","case":"a2","file":"a2.test.ts","title":"a2","layer":"route","task":"task-one","action":"new","security":"access"},{"id":"T6","source":"success_criteria:0","case":"b2","file":"b2.test.ts","title":"b2","layer":"route","task":"task-one","action":"new","security":"forgery"}]}'
+  run_amend '{"remove":["T1","T2"],"add":[{"id":"T5","source":"flow:alpha","case":"a2","file":"a2.test.ts","title":"a2","layer":"route","task":"task-one","action":"new","security":"access","caseKinds":[{"case":"a2","kind":"access"}]},{"id":"T6","source":"success_criteria:0","case":"b2","file":"b2.test.ts","title":"b2","layer":"route","task":"task-one","action":"new","security":"forgery","caseKinds":[{"case":"b2","kind":"forgery"}]}]}'
   [ "$status" -eq 0 ]
   grep -qF '"T5"' "$PLAN/tests.json"
   grep -qF '"T6"' "$PLAN/tests.json"

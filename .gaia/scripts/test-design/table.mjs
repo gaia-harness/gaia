@@ -291,6 +291,7 @@ const REPLAN_FIELDS = [
   'held',
   'deletes',
   'cells',
+  'caseKinds',
 ];
 
 // Each regenerated row no unconsumed snapshot row equals on REPLAN_FIELDS (a
