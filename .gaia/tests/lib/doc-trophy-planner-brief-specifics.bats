@@ -2,10 +2,11 @@
 #
 # Doc-conformance suite for stated specifics in a plan: a role, accessible name,
 # exact wording or attribute the SPEC, an audit directive or the SPEC's Required
-# reading states gets a test a task names, one a task doc names for its builder
-# included, so a later edit cannot change it unseen. Pins the planner's acceptance-criteria
-# clause, its markup-directive clause, the test table's literal mapping step, and
-# the decomposition audit's test design lens hole and sources.
+# reading states, one a task doc names for its builder included, gets an
+# existing or planned test asserting it, so a later edit cannot change it unseen.
+# Pins the planner's acceptance-criteria clause, its markup-directive clause,
+# the test table's literal mapping step, and the decomposition audit's test
+# design lens hole and sources.
 #
 # Method: every check takes a root directory and reads the files from it; each
 # red twin mutates one substring of a scratch copy, proves the copy changed,

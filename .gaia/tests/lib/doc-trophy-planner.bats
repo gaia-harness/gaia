@@ -827,7 +827,7 @@ check_page_heading_rows() {
   need "$doctrine" "A heading whose text is data the loader returns is a route test asserting the loader returns that text, beside the page story that renders it; a story given that text as a prop never shows the loader supplies it." || return 1
   need "$lens" "or a heading whose text is loader data asserted only in a story given props (the doctrine's \`## Served HTML\`), its fix adding a route row asserting the loader returns that text and keeping the story row" || return 1
   need "$doctrine" "Every page story, an error page an error boundary renders included, carries the landmark check, one \`.test()\` asserting one level-1 heading and one \`main\` landmark; a row asserting a stated heading is that check only when it asserts the \`main\` landmark too." || return 1
-  need "$lens" "a page story, an error page's included, with no existing or planned test holding the doctrine's landmark check (\`## Components, pages and stories\`), \`minor\`: the fix adds the missing half to the page's heading row or adds the landmark row" || return 1
+  need "$lens" "a page story, an error page's included, with no existing or planned test holding the doctrine's landmark check (\`## Components, pages and stories\`), \`minor\`: the fix adds the missing half to the test holding the page's heading, through its row or an \`extend\` row, or adds the landmark row" || return 1
 }
 
 @test "a loader-data heading has a route row and every page story, an error page's included, has the whole landmark check, in the doctrine and the test design lens" {
