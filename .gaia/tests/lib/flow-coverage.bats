@@ -41,6 +41,7 @@ build_scratch_repo() {
   copy_in .gaia/scripts/spec/working-doc-id-scan.sh
   copy_in .gaia/scripts/test-design/test-table.mjs
   copy_in .gaia/scripts/test-design/table.mjs
+  copy_in .gaia/scripts/test-design/set-cells.mjs
   copy_in .gaia/scripts/test-design/task-docs.mjs
   copy_in .gaia/scripts/machine-local-ref-lib.sh
   copy_in .claude/hooks/lib/gaia-packages.sh
