@@ -373,6 +373,10 @@ check_lens_doctrine_rows() {
   need "$lens" 'its fix trims the row to the kind its flag names and adds a row for each other kind' || return 1
   need "$table" "Split a test whose cases carry different kinds per the doctrine's \`**One kind per case.**\`" || return 1
   need "$doctrine" 'A requirement that keeps a value server-only is a secrets requirement, whatever the value.' || return 1
+  need "$doctrine" "Judge a cookie attribute by what it protects on a cookie that holds a session, a credential or auth-flow secret (a remember-me, refresh-token, OAuth state or PKCE verifier cookie) or a server-only value: \`HttpOnly\` (off script) and \`Secure\` (off plaintext transport) are secret, \`SameSite\` (no cross-site forged request carries it) is forgery; any other attribute, and every attribute of a cookie holding none of these, is \`none\`, except that a row asserting a session, credential or auth-flow cookie is cleared or expired on sign-out is access, as a sign-out ending a token is." || return 1
+  need "$doctrine" "Ordinary validation and status rules are not security rows, and a \`new\`, \`extend\` or \`reuse\` row's kind comes from what its own case asserts, never from other rows' flags: a read that answers an unrecognized filter value with its default view refuses nothing and is \`none\`, even beside forgery rows refusing that value on a write." || return 1
+  need "$lens" "or a flag on a row that is none of these. A \`new\`, \`extend\` or \`reuse\` row is judged by its own case, never by other rows' flags." || return 1
+  need "$doctrine" "A story given every action, asserting each form's wiring rather than what one role sees, is \`none\`." || return 1
   need "$doctrine" "So does a retire or change row made because a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it) forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire." || return 1
   need "$table" "and one made because a security requirement in its \`source\` forbids what the existing test asserted carries that requirement's kind, whatever the test's own kind." || return 1
   need "$lens" "or made because a security requirement in its \`source\` forbids what the existing test asserted (then that requirement's kind, whatever the test's own kind)" || return 1
@@ -381,6 +385,7 @@ check_lens_doctrine_rows() {
   need "$lens" "A change row is judged by what the existing test asserted, not its changed form (a served \`/\` 200 check moved to \`/login\` once signed-out \`/\` redirects is access)." || return 1
   need "$doctrine" "So is what a page offers an actor by an access rule (an action, form, link or navigation item shown only to those who may use it), at every layer that holds its cases, whatever requirement its row cites: a story of the actions one role sees in one status is access even when the row cites only a requirement stating their names." || return 1
   need "$table" "A row asserting what a page offers or withholds by an access rule is access whatever requirement it cites." || return 1
+  need "$doctrine" "A retire or change row on an existing access, forgery or secrets test carries the flag too." || return 1
   need "$doctrine" "A plan row for a case table names each case it holds by its values (each role or relationship and status, each input), never by class (\`every role\`) or by sample (\`including an unknown tool\`): the plan audit and the security writer read the row, not the test." || return 1
   need "$table" "- \`case\`: the case in words; a case-table row names each case by its values, never by class or sample (the doctrine's \`## What to test\`)." || return 1
   need "$lens" "a case-table row whose \`case\` names its cases by class or sample (\`every role\`, \`including an unknown tool\`) instead of by value, the doctrine's \`## What to test\`: the fix lists each case's values from the requirements and the README contract;" || return 1
@@ -558,6 +563,34 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the doctrine flagging a retire by source citation alone fails" {
   red check_lens_doctrine_rows "$DOCTRINE_REL" " made because a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it) forbids what the existing test asserted," " with a security requirement in its \`source\` (an access, forgery or secrets requirement, whether or not another flagged row cites it),"
+}
+
+@test "red twin: the doctrine naming no kind for a cookie attribute fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "Judge a cookie attribute by what it protects on a cookie that holds a session, a credential or auth-flow secret" "Judge a cookie attribute:"
+}
+
+@test "red twin: the doctrine making Secure a cookie attribute of no kind fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "\`HttpOnly\` (off script) and \`Secure\` (off plaintext transport) are secret" "\`HttpOnly\` (off script) is secret"
+}
+
+@test "red twin: the doctrine making SameSite a secrets attribute fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "\`SameSite\` (no cross-site forged request carries it) is forgery" "\`SameSite\` (no cross-site forged request carries it) is secret"
+}
+
+@test "red twin: the doctrine taking a new row's kind from its requirement's other rows fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "never from other rows' flags:" "or from other rows' flags:"
+}
+
+@test "red twin: the doctrine flagging a read's filter fallback fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "its default view refuses nothing and is \`none\`" "its default view is forgery"
+}
+
+@test "red twin: the test design lens matching a new row's flag to its source's rows fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" " A \`new\`, \`extend\` or \`reuse\` row is judged by its own case, never by other rows' flags." ""
+}
+
+@test "red twin: the doctrine flagging a story given every action fails" {
+  red check_lens_doctrine_rows "$DOCTRINE_REL" "rather than what one role sees, is \`none\`" "rather than what one role sees, is access"
 }
 
 @test "red twin: the doctrine judging a server-only value's secrecy by the value fails" {
