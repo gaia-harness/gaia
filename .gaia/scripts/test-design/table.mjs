@@ -282,8 +282,8 @@ const REPLAN_FIELDS = ['file', 'title', 'layer', 'action', 'security', 'source',
 
 // Each regenerated row no snapshot row equals on REPLAN_FIELDS, with `prior`,
 // the snapshot row's id, when that row kept its id, file and title. A
-// regeneration can renumber ids, so a row moved under another id reads as an
-// add with no prior form: the plan audit judges it whole rather than against
+// regeneration can renumber ids, so a changed row moved under another id reads
+// as an add with no prior form: the plan audit judges it whole rather than against
 // a stranger's old form.
 export const replannedRows = (before, after) => {
   const objectRows = (table) =>
