@@ -449,7 +449,7 @@ check_security_judgment() {
   need "$judge" 'One `general-purpose` Agent with no `model` override judges the security flag of each' || return 1
   need "$judge" 'It is a judgment of each case, never a keyword or pattern match on row text.' || return 1
   need "$judge" 'Each kind it assigns that differs from the row'"'"'s is handled as a `flag-candidates` line is below' || return 1
-  need "$judge" 'then the `plan.md` step 4.5 check re-runs' || return 1
+  need "$judge" '`- Security writer:` line; then re-run the `plan.md` step 4.5 check' || return 1
   need "$judge" 'A judgment of `none` on a row that carries a kind is never applied' || return 1
 }
 
@@ -466,7 +466,7 @@ check_security_judgment() {
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
   # a kind it assigns is not handled like a flag-candidates line with the step 4.5 rerun
-  mutated_tree "$AUDIT_REL" 'then the `plan.md` step 4.5 check re-runs' 'then nothing re-runs'
+  mutated_tree "$AUDIT_REL" '`- Security writer:` line; then re-run the `plan.md` step 4.5 check' 'then nothing re-runs'
   run check_security_judgment "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]

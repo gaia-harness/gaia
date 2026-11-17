@@ -79,7 +79,7 @@ Whether the main thread later reads a finding body is the caller's rule: the spe
 
 ## Findings file schema
 
-What each agent writes to `<LENS>.json`. This is not a return contract; the short summary above is what flows back. `brief_token` is required on the file of a briefed lens (a missing or wrong token classifies as a no-op); every other added field is optional, and a lens that writes none of them writes the base file plus its token.
+What each agent writes to `<LENS>.json`. This is not a return contract; the short summary above is what flows back. `brief_token` is required on the file of a briefed lens (a missing or wrong token classifies as a no-op); every other added field is optional.
 
     {
       "dimension": "<lens name>",
