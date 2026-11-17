@@ -16,8 +16,8 @@
 #   e. the SPEC audit's coverage and consistency lens flags a UAT the SPEC's
 #      own behavior rules make impossible, citing both lines;
 #   f. the SPEC audit refuter refutes a finding only when every gap it names
-#      fails, and never drops a held credential's server-only rule on
-#      ownership or a cookie attribute.
+#      fails, and never drops a held value's server-only rule, or lowers its
+#      severity below major, on ownership or a cookie or transport attribute.
 #
 # DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
 # playbook files; each invariant has a red twin that breaks such a copy and
@@ -365,7 +365,9 @@ REFUTER_LINE='> Open the cited SPEC section and any cited file yourself and try 
 REFUTER_NEEDLES=(
   'Refute a finding only when every gap it names fails, not just the harm it argues'
   'a sound gap behind an overstated harm is `partial`'
-  'never refuted by who owns the credential or by a cookie attribute'
+  'never refuted by who owns the value or by a cookie or transport attribute'
+  'its `corrected_severity` is never lowered below `major` on those grounds'
+  'overstate severity (`partial` with a corrected severity, never refuted)'
   '`HttpOnly` keeps a value off page scripts only, never off loader data, served HTML, responses or logs'
 )
 
