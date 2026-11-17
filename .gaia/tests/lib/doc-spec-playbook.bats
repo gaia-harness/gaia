@@ -15,9 +15,10 @@
 #      escape, and no more than four entries;
 #   e. the SPEC audit's coverage and consistency lens flags a UAT the SPEC's
 #      own behavior rules make impossible, citing both lines;
-#   f. the SPEC audit refuter refutes a finding only when every gap it names
-#      fails, and never drops a held value's server-only rule, or lowers its
-#      severity below major, on ownership or a cookie or transport attribute.
+#   f. the SPEC audit refuter marks an overstated severity `partial`, refutes
+#      a finding only when every gap it names fails, and never refutes a
+#      missing server-only rule for a held value, or lowers it below major, on
+#      ownership or a cookie or transport attribute (`HttpOnly` included).
 #
 # DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
 # playbook files; each invariant has a red twin that breaks such a copy and
