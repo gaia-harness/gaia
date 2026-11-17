@@ -22,6 +22,7 @@ import {
   conflictingPatches,
   lensFindings,
   readJson,
+  setCellRegressions,
   takeSnapshot,
 } from './row-patch.mjs';
 import {isNonEmptyString, isSecurity, readTable} from './table.mjs';
@@ -34,6 +35,11 @@ const readWholeTable = (tablePath) => ({...readJson(tablePath, {}), ...readTable
 
 // A patch two accepted findings both aim at one row field goes to review;
 // any other patch is routed by checkPatch against the table as it stands.
+// A finding whose applied patches leave the `sets` entries failing the set-cell
+// check is held whole: its entry and the cells its rows gain only verify
+// together, so each patch the script would have applied goes to fix-up.
+const setCellsReason = (problems) => `set cells: ${problems[0]}`;
+
 const routePatch = (conflicts, findingId, index, patch, table, context) =>
   conflicts.has(`${findingId}\u0000${index}`)
     ? {route: 'review', reason: 'two accepted patches set the same field of one row'}
@@ -77,7 +83,7 @@ export const prepare = ({planDir, keysFile, exclude = []}) => {
   mkdirSync(file.applyDir, {recursive: true});
   takeSnapshot(planDir, file.applyDir);
   const context = {keys: readKeys(keysFile), ruledWrong: new Set()};
-  let scratch = readTable(file.table);
+  let scratch = readWholeTable(file.table);
   const findings = lensFindings(planDir).filter((finding) => !exclude.includes(finding.id));
   const conflicts = conflictingPatches(
     findings.flatMap((finding) =>
@@ -99,14 +105,25 @@ export const prepare = ({planDir, keysFile, exclude = []}) => {
   const lines = [];
   const prepared = {findings: [], rows_to_judge: []};
   for (const finding of findings) {
-    const patches = patchesOf(finding).map((patch, index) => {
+    const beforeFinding = scratch;
+    const judged = [];
+    let patches = patchesOf(finding).map((patch, index) => {
       const outcome = routePatch(conflicts, finding.id, index, patch, scratch, context);
       if (outcome.route === 'script') {
         scratch = applyPatch(scratch, patch);
-        prepared.rows_to_judge.push({finding: finding.id, row: patch.op === 'add' ? patch.row.id : patch.id});
+        if (patch.op !== 'sets') judged.push({finding: finding.id, row: patch.op === 'add' ? patch.row.id : patch.id});
       }
       return {index, ...outcome};
     });
+    const regressions = setCellRegressions(beforeFinding, scratch, context.keys);
+    if (regressions.length > 0) {
+      scratch = beforeFinding;
+      patches = patches.map((entry) =>
+        entry.route === 'script' ? {...entry, route: 'fixup', reason: setCellsReason(regressions)} : entry,
+      );
+    } else {
+      prepared.rows_to_judge.push(...judged);
+    }
     const replacements = replacementsOf(finding).map((_replacement, index) => ({
       index,
       ...(routeOf.get(`${finding.id}\u0000${index}`) ?? {
@@ -179,12 +196,13 @@ export const apply = ({planDir, keysFile, decisions}) => {
     }
     const before = readWholeTable(file.table);
     let table = before;
+    const scripted = [];
     patches.forEach((patch, index) => {
       const outcome = routePatch(conflicts, decision.id, index, patch, table, context);
       const entry = {finding: decision.id, kind: 'patch', index, reason: outcome.reason, item: patch};
       if (outcome.route === 'script') {
         table = applyPatch(table, patch);
-        counts.applied += 1;
+        scripted.push(entry);
       } else if (outcome.route === 'fixup') {
         fixup.push(entry);
         counts.fixup += 1;
@@ -193,6 +211,14 @@ export const apply = ({planDir, keysFile, decisions}) => {
         counts.review += 1;
       }
     });
+    const regressions = setCellRegressions(before, table, context.keys);
+    if (regressions.length > 0) {
+      table = before;
+      fixup.push(...scripted.map((entry) => ({...entry, reason: setCellsReason(regressions)})));
+      counts.fixup += scripted.length;
+    } else {
+      counts.applied += scripted.length;
+    }
     if (table !== before) {
       commitTable(planDir, file, before, table);
       // A patch that flags a row never reaches the judge's flag step when the

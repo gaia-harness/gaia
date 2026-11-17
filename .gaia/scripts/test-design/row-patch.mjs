@@ -1,8 +1,9 @@
 // Row patch checks and application, the snapshot, the applied record and the
 // judge set for plan-audit-apply.mjs. Library only, no CLI.
 //
-// A row patch is `{op:"add",row}`, `{op:"change",id,set,expect}` or
-// `{op:"remove",id,expect}`. `checkPatch` routes one against a table:
+// A row patch is `{op:"add",row}`, `{op:"change",id,set,expect}`,
+// `{op:"remove",id,expect}` or `{op:"sets",entry,expect}`, which adds a `sets`
+// entry (`expect` null) or replaces the entry equal to `expect`. `checkPatch` routes one against a table:
 // `fixup` (malformed, left for an agent), `review` (a script check failed, the
 // maintainer decides) or `script` (apply it). Nothing here judges a security
 // kind from row text.
@@ -19,6 +20,7 @@ import {
 import path from 'node:path';
 
 import {caseKindProblems} from './case-kinds.mjs';
+import {setCellProblems} from './set-cells.mjs';
 import {isSecurity, soleRowKeys, tableProblems, validateRow} from './table.mjs';
 
 const isRecord = (value) =>
@@ -31,6 +33,12 @@ const malformed = (patch) => {
   if (patch.op === undefined) return 'patch has no op';
   if (patch.op === 'add') {
     return isRecord(patch.row) ? null : 'add has no row object';
+  }
+  if (patch.op === 'sets') {
+    if (!isRecord(patch.entry)) return 'sets has no entry object';
+    return patch.expect === null || isRecord(patch.expect)
+      ? null
+      : 'sets expect is not the prior entry or null';
   }
   if (patch.op !== 'change' && patch.op !== 'remove') {
     return `unknown op ${JSON.stringify(patch.op)}`;
@@ -61,6 +69,13 @@ export const checkPatch = (patch, table, context) => {
   if (reason !== null) return {route: 'fixup', reason};
   const review = (text) => ({route: 'review', reason: text});
   const {rows} = table;
+  if (patch.op === 'sets') {
+    if (patch.expect === null) return {route: 'script', reason: ''};
+    const entries = Array.isArray(table.sets) ? table.sets : [];
+    return entries.some((entry) => same(entry, patch.expect))
+      ? {route: 'script', reason: ''}
+      : review('expected prior sets entry no longer holds');
+  }
   if (patch.op === 'add') {
     const problems = [...validateRow(patch.row), ...caseKindProblems([patch.row])];
     if (problems.length > 0) return review(`added row is invalid: ${problems[0]}`);
@@ -115,6 +130,12 @@ export const checkPatch = (patch, table, context) => {
 };
 
 export const applyPatch = (table, patch) => {
+  if (patch.op === 'sets') {
+    const entries = Array.isArray(table.sets) ? table.sets : [];
+    if (patch.expect === null) return {...table, sets: [...entries, patch.entry]};
+    const at = entries.findIndex((entry) => same(entry, patch.expect));
+    return {...table, sets: entries.map((entry, index) => (index === at ? patch.entry : entry))};
+  }
   if (patch.op === 'add') return {...table, rows: [...table.rows, patch.row]};
   if (patch.op === 'remove') {
     return {...table, rows: table.rows.filter((row) => row.id !== patch.id)};
@@ -123,6 +144,15 @@ export const applyPatch = (table, patch) => {
     ...table,
     rows: table.rows.map((row) => (row.id === patch.id ? {...row, ...patch.set} : row)),
   };
+};
+
+// The set-cell problems `after` has that `before` lacked. Run once per finding,
+// after all its patches: a new entry fails until the patches giving its rows
+// cells have applied too.
+export const setCellRegressions = (before, after, keys) => {
+  const keySet = new Set(keys);
+  const known = new Set(setCellProblems(before, keySet));
+  return setCellProblems(after, keySet).filter((problem) => !known.has(problem));
 };
 
 // `${finding}\0${index}` of every change patch that sets a field another
