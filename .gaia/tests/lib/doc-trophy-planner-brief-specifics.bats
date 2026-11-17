@@ -2,8 +2,8 @@
 #
 # Doc-conformance suite for stated specifics in a plan: a role, accessible name,
 # exact wording or attribute the SPEC, an audit directive or the SPEC's Required
-# reading states, or a task doc names for its builder, gets a test a task names,
-# so a later edit cannot change it unseen. Pins the planner's acceptance-criteria
+# reading states gets a test a task names, one a task doc names for its builder
+# included, so a later edit cannot change it unseen. Pins the planner's acceptance-criteria
 # clause, its markup-directive clause, the test table's literal mapping step, and
 # the decomposition audit's test design lens hole and sources.
 #
@@ -78,7 +78,7 @@ check_acceptance_clause() {
   need "$doctrine" 'One existing or planned test satisfies it at any layer, a flow test only for a role or accessible name; one story or route test may hold all of a page'"'"'s stated literals, a loader-data heading'"'"'s route test aside (`## Served HTML`); never add a flow for one.' || return 1
   need "$doctrine" 'A stated literal a task doc names for its builder counts as asserted only once a test, or a flow task doc'"'"'s list of the literals it asserts, names it.' || return 1
   need "$doctrine" 'Never assert through an import of the app'"'"'s own string' || return 1
-  need "$text" 'a planned flow test counts toward a stated role, name or wording only when its task doc names the literal for it to assert' || return 1
+  need "$text" 'a planned flow test counts toward a stated role or accessible name only when its task doc names the literal for it to assert' || return 1
   need "$text" 'Read the documents its `## Required reading` names too, for any role, accessible name or exact wording they state;' || return 1
 }
 
@@ -91,15 +91,15 @@ check_directive_clause() {
 check_table_literal_step() {
   local text
   text="$(flat "$1/$TABLE_REL")"
-  need "$text" 'A stated literal a task doc names for its builder maps to a row, or, for a role or accessible name the closing flow'"'"'s journey locates a control by, to that flow task doc'"'"'s list of asserted literals.' || return 1
+  need "$text" 'A stated role or accessible name the closing flow'"'"'s journey locates a control by may map to that flow task doc'"'"'s list of asserted literals instead.' || return 1
 }
 
 check_coverage_lens() {
   local text
   text="$(flat "$1/$AUDIT_REL")"
   need "$text" 'a role, accessible name, exact wording or attribute a task delivers, stated by the SPEC, an entry under `## Plan-time directives` in its `AUDIT.md`' || return 1
-  need "$text" 'walk every stated literal each task doc names for its builder too' || return 1
-  need "$text" 'that no existing or planned test at any layer, a flow test included, asserts as the stated literal' || return 1
+  need "$text" 'walk the stated literals each task doc names for its builder, since a task doc naming one is no test' || return 1
+  need "$text" 'a flow test included for a role or accessible name, asserts as the stated literal' || return 1
   need "$text" 'also `AUDIT.md` beside it and the documents its `## Required reading` names' || return 1
   need "$text" 'an assertion through an import of the app'"'"'s own string counts as none' || return 1
   need "$text" 'one story or route test may hold all of a page'"'"'s specifics' || return 1
@@ -126,20 +126,20 @@ check_coverage_lens() {
   red check_directive_clause "$PLANNER_REL" 'still gets the test the acceptance-criteria bullet' 'constrains only the code the acceptance-criteria bullet'
 }
 
-@test "test table: a stated literal a task doc names for its builder maps to a row or a flow's asserted literals" {
+@test "test table: only a stated role or accessible name may map to a flow's asserted literals" {
   green check_table_literal_step
-  red check_table_literal_step "$TABLE_REL" 'A stated literal a task doc names for its builder maps to a row' 'A stated literal a task doc names for its builder needs no row'
-  red check_table_literal_step "$TABLE_REL" 'for a role or accessible name the closing flow' 'for any literal the closing flow'
+  red check_table_literal_step "$TABLE_REL" 'A stated role or accessible name the closing flow' 'Any stated literal the closing flow'
 }
 
 @test "test design lens: flags a stated specific no test asserts, bounded and graded, reading the audit and Required reading" {
   green check_coverage_lens
-  red check_coverage_lens "$AUDIT_REL" 'that no existing or planned test at any layer, a flow test included, asserts' 'that no test a task names in a build phase asserts'
+  red check_coverage_lens "$AUDIT_REL" 'that no existing or planned test at any layer, a flow test included for a role or accessible name, asserts' 'that no test a task names in a build phase asserts'
   red check_coverage_lens "$AUDIT_REL" 'one story or route test may hold all' 'each specific needs its own test, not all'
   red check_coverage_lens "$AUDIT_REL" '`minor` unless it is a role' '`major` whether or not it is a role'
   red check_coverage_lens "$AUDIT_REL" 'also `AUDIT.md` beside it and the documents its `## Required reading` names' 'nothing else'
   red check_coverage_lens "$AUDIT_REL" 'counts as none' 'counts as a test'
   red check_coverage_lens "$AUDIT_REL" 'exact wording or attribute a task delivers' 'exact wording a task delivers'
-  red check_coverage_lens "$AUDIT_REL" 'walk every stated literal each task doc names for its builder too' 'read the literals the SPEC states'
+  red check_coverage_lens "$AUDIT_REL" 'walk the stated literals each task doc names for its builder' 'read the literals the SPEC states'
+  red check_coverage_lens "$AUDIT_REL" 'a flow test included for a role or accessible name,' 'a flow test included,'
   red check_coverage_lens "$AUDIT_REL" ', or a field name or form target a native post sends, then' ', then'
 }
