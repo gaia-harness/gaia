@@ -214,6 +214,22 @@ expect_verify_refusal() {
   [ "$output" = "$(printf 'T3 T3\nT4 T4\nT6\nT7')" ] || { echo "printed: $output" >&2; return 1; }
 }
 
+@test "replanned-rows lists a row moved to another task and a duplicate of an existing row" {
+  write_verify_fixture
+  cp "$PLAN/tests.json" "$BATS_TEST_TMPDIR/before.json"
+  mutate_table '
+    t.rows[1].task = "task-one";
+    t.rows.push({...t.rows[0], id: "T3", caseKey: "second"})'
+  run node "$REPLANNED_CLI" --before "$BATS_TEST_TMPDIR/before.json" --after "$PLAN/tests.json"
+  [ "$status" -eq 0 ] || { echo "replanned-rows: $output" >&2; return 1; }
+  [ "$output" = "$(printf 'T2 T2\nT3')" ] || { echo "printed: $output" >&2; return 1; }
+  cp "$PLAN/tests.json" "$BATS_TEST_TMPDIR/before.json"
+  mutate_table 't.rows.push({...t.rows[0], id: "T4"})'
+  run node "$REPLANNED_CLI" --before "$BATS_TEST_TMPDIR/before.json" --after "$PLAN/tests.json"
+  [ "$status" -eq 0 ] || { echo "replanned-rows: $output" >&2; return 1; }
+  [ "$output" = "T4" ] || { echo "printed: $output" >&2; return 1; }
+}
+
 @test "replanned-rows prints nothing for an unchanged table and refuses a missing table or flag" {
   write_verify_fixture
   run node "$REPLANNED_CLI" --before "$BATS_TEST_TMPDIR/before.json" --after "$PLAN/tests.json"

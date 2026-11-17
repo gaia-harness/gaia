@@ -4,8 +4,9 @@
 //
 //   replanned-rows.mjs --before <tests.json snapshot> --after <tests.json>
 //
-// Prints `<id>` for each after row no snapshot row equals on file, title,
-// layer, action, security, source and case, followed by ` <id>` when the
+// Prints `<id>` for each after row no unmatched snapshot row equals on file,
+// title, layer, action, security, source, case, task, caseKey, held and
+// deletes (each snapshot row matches one after row), followed by ` <id>` when the
 // snapshot row under the same id keeps its file and title (its prior form).
 // Prints nothing when the re-plan changed no row.
 //

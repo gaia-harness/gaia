@@ -278,9 +278,23 @@ export const flagCandidates = ({rows}) => {
     .filter((entry) => entry.kinds.length > 0);
 };
 
-const REPLAN_FIELDS = ['file', 'title', 'layer', 'action', 'security', 'source', 'case'];
+const REPLAN_FIELDS = [
+  'file',
+  'title',
+  'layer',
+  'action',
+  'security',
+  'source',
+  'case',
+  'task',
+  'caseKey',
+  'held',
+  'deletes',
+];
 
-// Each regenerated row no snapshot row equals on REPLAN_FIELDS, with `prior`,
+// Each regenerated row no unconsumed snapshot row equals on REPLAN_FIELDS (a
+// snapshot row matches at most one regenerated row, so a duplicate is listed),
+// with `prior`,
 // the snapshot row's id, when that row kept its id, file and title. A
 // regeneration can renumber ids, so a changed row moved under another id reads
 // as an add with no prior form: the plan audit judges it whole rather than against
@@ -291,10 +305,18 @@ export const replannedRows = (before, after) => {
   const signature = (row) =>
     JSON.stringify(REPLAN_FIELDS.map((field) => row[field]));
   const snapshotRows = objectRows(before);
-  const snapshotSignatures = new Set(snapshotRows.map(signature));
+  const unconsumed = new Map();
+  for (const row of snapshotRows) {
+    unconsumed.set(signature(row), (unconsumed.get(signature(row)) ?? 0) + 1);
+  }
   const snapshotById = new Map(snapshotRows.map((row) => [row.id, row]));
   return objectRows(after)
-    .filter((row) => !snapshotSignatures.has(signature(row)))
+    .filter((row) => {
+      const left = unconsumed.get(signature(row)) ?? 0;
+      if (left === 0) return true;
+      unconsumed.set(signature(row), left - 1);
+      return false;
+    })
     .map((row) => {
       const snapshot = snapshotById.get(row.id);
       const kept = snapshot?.file === row.file && snapshot?.title === row.title;
