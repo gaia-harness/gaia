@@ -37,15 +37,11 @@
 // `{applied, fixup, refused}`; `targetProblem(planDir, file, old)` returns the
 // reason a target is refused, or null.
 
-import {
-  lstatSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import {lstatSync, readFileSync, realpathSync} from 'node:fs';
 import {basename, dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+
+import {writeAtomic} from './plan-docs.mjs';
 
 const ALLOWED_NAME = /^(task-.+\.md|README\.md|ORCHESTRATOR\.md)$/;
 const SECURITY_WRITER = /^- Security writer:/m;
@@ -225,15 +221,15 @@ export function applyReplacements({planDir, items, dryRun = false}) {
       fixup.push({...id, reason: `${item.file} is absent or not a file`});
       continue;
     }
-    const found = occurrences(current, item.old).length;
-    if (found !== 1) {
+    const starts = occurrences(current, item.old);
+    if (starts.length !== 1) {
       fixup.push({
         ...id,
-        reason: `old text matched ${found} times, not exactly once`,
+        reason: `old text matched ${starts.length} times, not exactly once`,
       });
       continue;
     }
-    const at = current.indexOf(item.old);
+    const [at] = starts;
     contents.set(
       path,
       current.slice(0, at) + item.new + current.slice(at + item.old.length),
@@ -243,11 +239,7 @@ export function applyReplacements({planDir, items, dryRun = false}) {
   }
 
   if (!dryRun) {
-    for (const path of changed) {
-      const temp = join(dirname(path), `.${basename(path)}.doc-replace.tmp`);
-      writeFileSync(temp, contents.get(path));
-      renameSync(temp, path);
-    }
+    for (const path of changed) writeAtomic(path, contents.get(path));
   }
   return {applied, fixup, refused};
 }

@@ -132,7 +132,7 @@ export const conflictingPatches = (entries) => {
   return new Set([...owners.values()].filter((list) => list.length > 1).flat());
 };
 
-export const SNAPSHOT_NAMES = (planDir) => [
+const snapshotNames = (planDir) => [
   'tests.json',
   'README.md',
   'ORCHESTRATOR.md',
@@ -142,17 +142,16 @@ export const SNAPSHOT_NAMES = (planDir) => [
 // Copies the plan documents once; a later call leaves the first snapshot.
 export const takeSnapshot = (planDir, applyDir) => {
   const snapshot = path.join(applyDir, 'snapshot');
-  if (existsSync(snapshot)) return false;
+  if (existsSync(snapshot)) return;
   const partial = path.join(applyDir, 'snapshot.partial');
   rmSync(partial, {recursive: true, force: true});
   mkdirSync(partial, {recursive: true});
-  for (const name of SNAPSHOT_NAMES(planDir)) {
+  for (const name of snapshotNames(planDir)) {
     if (existsSync(path.join(planDir, name))) {
       copyFileSync(path.join(planDir, name), path.join(partial, name));
     }
   }
   renameSync(partial, snapshot);
-  return true;
 };
 
 const canonical = (value) =>

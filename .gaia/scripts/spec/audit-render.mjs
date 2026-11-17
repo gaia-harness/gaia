@@ -213,12 +213,7 @@ const main = () => {
 
     if (status === 'refuted') {
       refuted += 1;
-      refutedLines.push({
-        id,
-        entry,
-        finding,
-        lowered: true,
-      });
+      refutedLines.push({id, entry});
       continue;
     }
 
@@ -242,7 +237,7 @@ const main = () => {
       entry.corrected_severity != null &&
       (SEVERITY_RANK[entry.corrected_severity] ?? 99) <
         (SEVERITY_RANK[finding.severity] ?? 0);
-    if (lowered) refutedLines.push({id, entry, finding, lowered});
+    if (lowered) refutedLines.push({id, entry});
 
     if (disposition === 'plan_directive') {
       const text = entry.directive_text ?? finding.directive;
@@ -277,7 +272,7 @@ const main = () => {
     }
   }
 
-  const refutedRendered = refutedLines.map(({id, entry, finding}) => {
+  const refutedRendered = refutedLines.map(({id, entry}) => {
     const verdict = entry.verdict ?? 'refuted';
     const reason = reasonFor(cache, id, verdict);
     return `- ${id}: ${verdict} (${entry.corrected_severity ?? 'none'}): ${oneLine(reason ?? '(unreadable verdict)')}`;

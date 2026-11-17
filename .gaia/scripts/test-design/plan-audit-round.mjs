@@ -26,8 +26,14 @@ import {
 } from './row-patch.mjs';
 import {readTable} from './table.mjs';
 
-const serialize = (table) => `${JSON.stringify(table, null, 2)}\n`;
 const pretty = (value) => `${JSON.stringify(value, null, 2)}\n`;
+
+// A patch two accepted findings both aim at one row field goes to review;
+// any other patch is routed by checkPatch against the table as it stands.
+const routePatch = (conflicts, findingId, index, patch, table, context) =>
+  conflicts.has(`${findingId}\u0000${index}`)
+    ? {route: 'review', reason: 'two accepted patches set the same field of one row'}
+    : checkPatch(patch, table, context);
 
 export const readKeys = (file) =>
   readFileSync(file, 'utf8')
@@ -57,7 +63,7 @@ const asItem = (finding, replacement, index) =>
 
 // Writes tests.json and keeps task docs and README in step with `next`.
 const commitTable = (planDir, file, before, next) => {
-  writeAtomic(file.table, serialize(next));
+  writeAtomic(file.table, pretty(next));
   syncTestLines(planDir, before.rows, next.rows);
   writeAtomic(file.readme, renderReadme(readFileSync(file.readme, 'utf8'), next));
 };
@@ -90,16 +96,14 @@ export const prepare = ({planDir, keysFile, exclude = []}) => {
   const prepared = {findings: [], rows_to_judge: []};
   for (const finding of findings) {
     const patches = patchesOf(finding).map((patch, index) => {
-      const outcome = conflicts.has(`${finding.id}\u0000${index}`)
-        ? {route: 'review', reason: 'two accepted patches set the same field of one row'}
-        : checkPatch(patch, scratch, context);
+      const outcome = routePatch(conflicts, finding.id, index, patch, scratch, context);
       if (outcome.route === 'script') {
         scratch = applyPatch(scratch, patch);
         prepared.rows_to_judge.push({finding: finding.id, row: patch.op === 'add' ? patch.row.id : patch.id});
       }
       return {index, ...outcome};
     });
-    const replacements = replacementsOf(finding).map((replacement, index) => ({
+    const replacements = replacementsOf(finding).map((_replacement, index) => ({
       index,
       ...(routeOf.get(`${finding.id}\u0000${index}`) ?? {
         route: 'fixup',
@@ -172,9 +176,7 @@ export const apply = ({planDir, keysFile, decisions}) => {
     const before = readTable(file.table);
     let table = before;
     patches.forEach((patch, index) => {
-      const outcome = conflicts.has(`${decision.id}\u0000${index}`)
-        ? {route: 'review', reason: 'two accepted patches set the same field of one row'}
-        : checkPatch(patch, table, context);
+      const outcome = routePatch(conflicts, decision.id, index, patch, table, context);
       const entry = {finding: decision.id, kind: 'patch', index, reason: outcome.reason, item: patch};
       if (outcome.route === 'script') {
         table = applyPatch(table, patch);
@@ -231,7 +233,7 @@ export const flagRow = ({planDir, row: rowId, kind}) => {
   const orchestrator = addSecurityWriterRow(readFileSync(file.orchestrator, 'utf8'), phase, rowId);
   if (orchestrator === null) throw new Error(`ORCHESTRATOR.md has no Phase ${phase} entry`);
   const next = {...table, rows: table.rows.map((candidate) => (candidate === row ? {...row, security: kind} : candidate))};
-  writeAtomic(file.table, serialize(next));
+  writeAtomic(file.table, pretty(next));
   writeAtomic(file.readme, renderReadme(readme, next));
   writeAtomic(file.orchestrator, orchestrator);
 };

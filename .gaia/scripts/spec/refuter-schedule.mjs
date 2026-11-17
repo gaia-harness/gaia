@@ -62,8 +62,9 @@ class Refusal extends Error {
 
 // Pure: which dispatches start now.
 // `finished` is an array of {lens, ids}; `dispatched` the lenses already
-// dispatched; returns {shape, groups} where groups are the lenses to dispatch
-// now (each with its material ids), or null groups when nothing starts yet.
+// dispatched; returns {batched, groups, everyLensFinished, deep} where groups
+// are the lenses to dispatch now (each with its material ids), empty when
+// nothing starts yet.
 export function decide({kind, tier, lenses, finished, dispatched}) {
   const refutedLens = kind === 'plan' ? ['TD'] : lenses;
   const relevant = finished.filter(({lens}) => refutedLens.includes(lens));
@@ -71,7 +72,8 @@ export function decide({kind, tier, lenses, finished, dispatched}) {
   const everyLensFinished = lenses.every((lens) =>
     finished.some((entry) => entry.lens === lens)
   );
-  const cap = kind === 'spec' && tier === 'deep' ? DEEP_CAP : STANDARD_CAP;
+  const deep = kind === 'spec' && tier === 'deep';
+  const cap = deep ? DEEP_CAP : STANDARD_CAP;
   const batched = total > cap;
   const decided =
     kind === 'plan'
@@ -82,13 +84,7 @@ export function decide({kind, tier, lenses, finished, dispatched}) {
         ({lens, ids}) => ids.length > 0 && !dispatched.includes(lens)
       )
     : [];
-  return {
-    batched,
-    groups,
-    total,
-    everyLensFinished,
-    deep: kind === 'spec' && tier === 'deep',
-  };
+  return {batched, groups, everyLensFinished, deep};
 }
 
 function dispatchRows({batched, deep}, {lens, ids}, verdictsDir) {

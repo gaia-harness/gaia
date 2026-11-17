@@ -53,14 +53,13 @@ if (specs.length !== 2 || specs.some((label) => label === '') || specs[0] === sp
 
 const END_FIELD = kind === 'plan-audit' ? 'table_applied_utc' : 'audit_written_utc';
 
+const rounded = (value) => (value === null ? null : Number(value.toFixed(6)));
 const median = (values) => {
   const numbers = values.filter((value) => typeof value === 'number').sort((left, right) => left - right);
   if (numbers.length === 0) return null;
   const middle = Math.floor(numbers.length / 2);
-  const value = numbers.length % 2 === 1 ? numbers[middle] : (numbers[middle - 1] + numbers[middle]) / 2;
-  return Number(value.toFixed(6));
+  return rounded(numbers.length % 2 === 1 ? numbers[middle] : (numbers[middle - 1] + numbers[middle]) / 2);
 };
-const rounded = (value) => (value === null ? null : Number(value.toFixed(6)));
 
 const runs = files.map((file) => {
   let measure;
@@ -150,9 +149,8 @@ const slowestLens = (run) => {
   return { lens: slowest.lens, wall_s: slowest.wall_s };
 };
 
-const perRun = (group, pick) => group.map((run) => pick(run));
 const metric = (group, pick) => {
-  const values = perRun(group, pick);
+  const values = group.map(pick);
   return { median: median(values), runs: values };
 };
 

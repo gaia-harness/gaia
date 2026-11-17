@@ -60,7 +60,8 @@ ids_of() {
 
 @test "dispatched refuter pairs and coverage records match the barrier run for every completion order" {
   local fixture tier first second third permutation records covered
-  local -a orders=("FG TST COV" "FG COV TST" "TST FG COV" "TST COV FG" "COV FG TST" "COV TST FG")
+  # The barrier run is the FG TST COV order; these are the other five.
+  local -a orders=("FG COV TST" "TST FG COV" "TST COV FG" "COV FG TST" "COV TST FG")
   for fixture in "standard 2 2 2" "standard 9 8 8" "deep 3 3 2"; do
     read -r tier first second third <<<"$fixture"
     make_lens FG "$first" 1
