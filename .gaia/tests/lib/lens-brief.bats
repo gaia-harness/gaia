@@ -328,6 +328,15 @@ scratch_root() {
     --shape single --ids FG-001 --verdicts "$AUDIT_DIR/verdicts/FG-001.json"
   [ "$status" -eq 0 ] || return 1
   grep -qF 'DERIVED-REFUTER' "$AUDIT_DIR/briefs/refuter-spec-FG-FG-001.md" || return 1
+  # A specialist table row's `Hunts for` cell and a plan lens bullet derive the same way.
+  sed -i.bak 's/unsafe deserialization;/DERIVED-ROW deserialization;/' "$root/$REFERENCES/spec/audit.md"
+  sed -i.bak 's/Name each check that fails:/Name each DERIVED-PLAN check that fails:/' "$root/$REFERENCES/plan/decomposition-audit.md"
+  render_lens spec SEC "$root"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  grep -qF 'DERIVED-ROW' "$AUDIT_DIR/briefs/spec-SEC.md" || return 1
+  render_lens plan TD "$root"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  grep -qF 'DERIVED-PLAN' "$AUDIT_DIR/briefs/plan-TD.md" || return 1
   # The real docs are untouched by the scratch edits.
   grep -qF 'DERIVED' "$DISPATCH" && return 1
   true
