@@ -38,10 +38,12 @@ import {
   appendFileSync,
   existsSync,
   readFileSync,
+  realpathSync,
   renameSync,
   writeFileSync,
 } from 'node:fs';
 import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 const SCRIPT = 'refuter-schedule';
 const STANDARD_CAP = 24;
@@ -256,7 +258,7 @@ function run(argv) {
   if (lines.length > 0) process.stdout.write(`${lines.join('\n')}\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   try {
     run(process.argv.slice(2));
   } catch (error) {

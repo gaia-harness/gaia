@@ -157,6 +157,19 @@ reference_lens() {
   printf '%s\n\nLENS: %s (id prefix %s)\n%s' "$text" "$name" "$id" "$focus"
 }
 
+# reference_verdict_schema <kind>: the 7b-i verdict schema paragraph and block;
+# a plan's drops the disposition field and the sentence about it.
+reference_verdict_schema() {
+  local label block
+  label="$(grep -m1 '^Verdict schema:' "$AUDIT")"
+  block="$(awk '/^Verdict schema:/ { seen = 1; next } seen && /^    / { print; started = 1; next } seen && started { exit }' "$AUDIT")"
+  if [ "$1" = "spec" ]; then
+    printf '%s\n\n%s' "$label" "$block"
+  else
+    printf '%s\n\n%s' "${label%% \`disposition\`*}" "$(printf '%s\n' "$block" | grep -v '"disposition"')"
+  fi
+}
+
 # reference_refuter <kind> <shape> <ids> <verdicts> <findings> [refuter lens]
 reference_refuter() {
   local kind="$1" shape="$2" ids="$3" verdicts="$4" findings="$5" lens="$6"
@@ -182,7 +195,7 @@ reference_refuter() {
       out="$out"$'\n'
       ;;
   esac
-  out="$out$prompt"
+  out="$out$prompt"$'\n\n'"$(reference_verdict_schema "$kind")"
   case "$shape" in
     batched | deep-batched) out="$out"$'\n\n'"$(labelled_quote "$DISPATCH" 'Batched refuter instruction')" ;;
   esac
@@ -278,6 +291,31 @@ scratch_root() {
       [ "$actual" = "$expected" ] || { printf 'refuter %s %s differs\n' "$kind" "$shape" >&2; diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") >&2; return 1; }
     done
   done
+}
+
+@test "refuter brief carries the verdict schema, the plan one without disposition" {
+  local kind id findings token brief
+  for kind in spec plan; do
+    id="$([ "$kind" = spec ] && echo FG || echo TD)"
+    render_lens "$kind" "$id"
+    [ "$status" -eq 0 ] || return 1
+    token="$(token_of "$AUDIT_DIR/briefs/$kind-$id.md")"
+    findings="$(write_findings "$kind" "$id" "$token")"
+    run node "$SCRIPT" refuter --kind "$kind" --lens "$id" --findings "$findings" \
+      --brief "$AUDIT_DIR/briefs/$kind-$id.md" --audit-dir "$AUDIT_DIR" \
+      --artifact "$([ "$kind" = spec ] && echo "$SPEC_ARTIFACT" || echo "$PLAN_ARTIFACT")" \
+      --repo-root "$REPO_ROOT" --shape single --ids "$id-001" --verdicts "$AUDIT_DIR/verdicts/$id-001.json"
+    [ "$status" -eq 0 ] || return 1
+    brief="$AUDIT_DIR/briefs/refuter-$kind-$id-$id-001.md"
+    grep -qF '"reasoning"' "$brief" || return 1
+    grep -qF '"corrected_severity"' "$brief" || return 1
+    if [ "$kind" = plan ]; then
+      grep -qF '"disposition"' "$brief" && return 1
+    else
+      grep -qF '"disposition"' "$brief" || return 1
+    fi
+  done
+  true
 }
 
 @test "refuter brief is refused with no file when the lens findings file is not real" {

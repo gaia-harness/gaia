@@ -24,7 +24,7 @@ import {
   readJson,
   takeSnapshot,
 } from './row-patch.mjs';
-import {readTable} from './table.mjs';
+import {isSecurity, readTable} from './table.mjs';
 
 const pretty = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
@@ -193,7 +193,22 @@ export const apply = ({planDir, keysFile, decisions}) => {
         counts.review += 1;
       }
     });
-    if (table !== before) commitTable(planDir, file, before, table);
+    if (table !== before) {
+      commitTable(planDir, file, before, table);
+      // A patch that flags a row never reaches the judge's flag step when the
+      // judge agrees with the kind it set, so its phase's Security writer line
+      // is written here.
+      const priorKinds = new Map(before.rows.map((row) => [row.id, row.security]));
+      for (const row of table.rows) {
+        if (!isSecurity(row) || priorKinds.get(row.id) === row.security) continue;
+        try {
+          flagRow({planDir, row: row.id, kind: row.security});
+        } catch (error) {
+          review.push({finding: decision.id, kind: 'patch', index: 0, reason: `${row.id} is flagged but its Security writer line was not written: ${error.message}`, item: null});
+          counts.review += 1;
+        }
+      }
+    }
     const items = replacements.flatMap((replacement, index) => {
       const item = asItem(decision.id, replacement, index);
       if (!item) {

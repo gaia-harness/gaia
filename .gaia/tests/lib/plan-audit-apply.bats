@@ -401,3 +401,14 @@ JSON
   [ "$(row_field T4:security)" = "access" ] || return 1
   [ "$(schema_and_sets)" = "$expected" ]
 }
+
+@test "apply writes the phase Security writer line for a row a patch flags" {
+  printf '%s\n' '{"dimension": "Test design", "findings": [{"id": "TD-001", "row_patches": [{"op": "change", "id": "T4", "set": {"security": "access"}, "expect": {"security": "none"}}]}]}' >"$PLAN/audit/TD.json"
+  printf '%s\n' '{"structural": false, "findings": [{"id": "TD-001", "decision": "apply"}], "security_ruled_wrong": []}' >"$DECISIONS"
+  run node "$CLI" prepare --plan-dir "$PLAN" --keys "$KEYS"
+  [ "$status" -eq 0 ] || return 1
+  run node "$CLI" apply --plan-dir "$PLAN" --keys "$KEYS" --decisions "$DECISIONS"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(row_field T4:security)" = "access" ] || return 1
+  grep -qF -- '- Security writer: 1 rows (T4)' "$PLAN/ORCHESTRATOR.md" || return 1
+}

@@ -35,6 +35,7 @@ import {
   readLines,
   refuterPrompt,
   section,
+  verdictSchema,
 } from './lens-brief-sources.mjs';
 
 const NOOP_DETECT = path.join(
@@ -190,7 +191,7 @@ const renderRefuter = (options) => {
   const lensLines = (shape === 'deep' ? [refuterLens] : shape === 'deep-batched' ? REFUTER_LENSES : []).map(
     (name) => shortPrompt(dispatchLines, 'Verification lens line', {'<verification lens>': name}),
   );
-  const parts = [...lensLines, ...(lensLines.length ? [''] : []), prompt];
+  const parts = [...lensLines, ...(lensLines.length ? [''] : []), prompt, '', verdictSchema(root, kind)];
   if (shape.endsWith('batched')) {
     parts.push('', shortPrompt(dispatchLines, 'Batched refuter instruction', {}));
   }

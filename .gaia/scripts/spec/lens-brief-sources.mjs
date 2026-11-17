@@ -202,3 +202,21 @@ export const refuterPrompt = (root, kind) => {
   if (!block) throw new Refusal(`no refuter prompt for kind ${kind}`);
   return block.text;
 };
+
+// The verdict schema paragraph and its JSON block from 7b-i, which the refuter
+// prompt points at ("the verdict schema below"). A plan refuter's schema is the
+// same minus the `disposition` field.
+export const verdictSchema = (root, kind) => {
+  const lines = section(readLines(root, DOCS.audit), '### 7b-i.');
+  const start = lines.findIndex((line) => line.startsWith('Verdict schema:'));
+  if (start < 0) throw new Refusal('no verdict schema in 7b-i');
+  const block = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith('    ')) block.push(line);
+    else if (block.length) break;
+  }
+  if (!block.length) throw new Refusal('no verdict schema block in 7b-i');
+  if (kind === 'spec') return `${lines[start]}\n\n${block.join('\n')}`;
+  const label = lines[start].split(' `disposition`')[0];
+  return `${label}\n\n${block.filter((line) => !line.includes('"disposition"')).join('\n')}`;
+};

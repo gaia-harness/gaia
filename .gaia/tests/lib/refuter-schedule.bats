@@ -196,3 +196,20 @@ ids_of() {
   [ "$(grep -c '^refuter' "$dir/out.txt")" -eq 2 ] || return 1
   [ "$(wc -l <"$dir/coverage.jsonl" | tr -d ' ')" -eq 2 ]
 }
+
+@test "the scheduler runs when reached through a symlink or a path with a space" {
+  local spaced="$BATS_TEST_TMPDIR/with space" linked="$BATS_TEST_TMPDIR/linked.mjs" path_used
+  mkdir -p "$spaced"
+  cp "$SCRIPT" "$spaced/refuter-schedule.mjs"
+  ln -s "$SCRIPT" "$linked"
+  make_lens FG 1
+  for path_used in "$spaced/refuter-schedule.mjs" "$linked"; do
+    rm -f "$BATS_TEST_TMPDIR/state.json"
+    touch "$BATS_TEST_TMPDIR/coverage.jsonl"
+    run node "$path_used" finished --state "$BATS_TEST_TMPDIR/state.json" --kind spec --tier standard \
+      --lenses FG --findings-dir "$FINDINGS" --verdicts-dir "$VERDICTS" \
+      --coverage "$BATS_TEST_TMPDIR/coverage.jsonl" --lens FG
+    [ "$status" -eq 0 ] || return 1
+    [ -f "$BATS_TEST_TMPDIR/state.json" ] || { printf 'no state file via %s\n' "$path_used" >&2; return 1; }
+  done
+}
