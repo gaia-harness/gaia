@@ -393,12 +393,14 @@
     ".gaia/scripts/state-registry-lint.sh": "owned",
     ".gaia/scripts/storybook-launch.sh": "owned",
     ".gaia/scripts/summary-verify.sh": "owned",
+    ".gaia/scripts/test-design/case-kinds.mjs": "owned",
     ".gaia/scripts/test-design/drift-inputs.mjs": "owned",
     ".gaia/scripts/test-design/drift.mjs": "owned",
     ".gaia/scripts/test-design/existing-tests.mjs": "owned",
     ".gaia/scripts/test-design/layer-map.mjs": "owned",
     ".gaia/scripts/test-design/plan-locate-lib.sh": "owned",
     ".gaia/scripts/test-design/replanned-rows.mjs": "owned",
+    ".gaia/scripts/test-design/row-fields.mjs": "owned",
     ".gaia/scripts/test-design/security-rows-lost.mjs": "owned",
     ".gaia/scripts/test-design/set-cells.mjs": "owned",
     ".gaia/scripts/test-design/skip-detect.mjs": "owned",
@@ -880,7 +882,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-17T09:02:58.865Z",
+  "generated": "2026-11-17T11:01:18.949Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

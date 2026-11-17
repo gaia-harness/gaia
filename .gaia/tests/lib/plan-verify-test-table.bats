@@ -96,9 +96,11 @@ block_of() {
 }
 
 # table_row <id> <source> <file> <title> <task> <action> <security> [<caseKey>]
+# A flagged keyless row that runs a test gets the caseKinds verify requires.
 table_row() {
   local case_key=''
   [ -z "${8:-}" ] || case_key=",\"caseKey\":\"$8\""
+  [ -n "${8:-}" ] || [ "$7" = none ] || [ "$6" = retire ] || case_key=",\"caseKinds\":[{\"case\":\"c\",\"kind\":\"$7\"}]"
   printf '{"id":"%s","source":"%s","case":"c","file":"%s","title":"%s","layer":"unit","task":"%s","action":"%s","security":"%s"%s}' "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$case_key"
 }
 
