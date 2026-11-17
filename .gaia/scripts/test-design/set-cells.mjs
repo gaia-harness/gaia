@@ -32,8 +32,8 @@ const combinations = (axes) =>
 const cellLabel = (names, cell) =>
   names.map((name) => `${name} ${cell[name]}`).join(', ');
 
-// Whether the case text holds the member as a whole word, so `view` is not
-// found inside `viewer`.
+// Whether the case text holds the member bounded by neither a word character
+// nor `-`, so `view` is not found inside `viewer` or `view-only`.
 const namesMember = (caseText, member) =>
   new RegExp(
     String.raw`(?<![\w-])${member.toLowerCase().replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)}(?![\w-])`,
