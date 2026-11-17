@@ -402,8 +402,12 @@
     ".gaia/scripts/test-design/drift.mjs": "owned",
     ".gaia/scripts/test-design/existing-tests.mjs": "owned",
     ".gaia/scripts/test-design/layer-map.mjs": "owned",
+    ".gaia/scripts/test-design/plan-audit-apply.mjs": "owned",
+    ".gaia/scripts/test-design/plan-audit-round.mjs": "owned",
+    ".gaia/scripts/test-design/plan-docs.mjs": "owned",
     ".gaia/scripts/test-design/plan-locate-lib.sh": "owned",
     ".gaia/scripts/test-design/replanned-rows.mjs": "owned",
+    ".gaia/scripts/test-design/row-patch.mjs": "owned",
     ".gaia/scripts/test-design/security-rows-lost.mjs": "owned",
     ".gaia/scripts/test-design/skip-detect.mjs": "owned",
     ".gaia/scripts/test-design/table.mjs": "owned",
@@ -884,7 +888,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-17T09:08:40.685Z",
+  "generated": "2026-11-17T09:51:06.318Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

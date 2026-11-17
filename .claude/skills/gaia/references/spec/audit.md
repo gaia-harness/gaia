@@ -27,7 +27,15 @@ Announce once, verbatim, naming each lens in full with its id code in parenthese
 
 > Dispatching adversarial SPEC-audit (<audit_intensity>): lenses <selected lens names, each with its id in parentheses>, then refutation (typically a dozen-plus agents, several minutes).
 
-Spawn **one `general-purpose` Agent per selected lens, all in parallel** (one message, one Agent tool call per lens): the four core lenses always, plus each specialist the gauge selected. Each agent audits the working-draft cache (`.gaia/local/cache/draft-<spec_id>.md`, the post-self-review working draft) and is dispatched per `spec/lens-dispatch.md` with the spec column of its caller slots (`<DRAFT_PATH>` = the working-draft cache, `<spec_id>`, `<repo_root>` = `$PWD`, `<LENS>` = the lens id prefix): the shared preamble, then a `LENS: <name> (id prefix <ID>)` line and the lens's focus text below. It **writes its findings to `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`** under the findings file schema in `spec/lens-dispatch.md` (writing the file even when its findings array is empty), then returns only the contract's short summary, no finding bodies.
+Before the fan-out, render each selected lens's brief, one command per lens (audit dir `.gaia/local/cache/audit-<spec_id>`; `--spec-id` is required for the spec kind):
+
+```bash
+node .gaia/scripts/spec/lens-brief.mjs lens --kind spec --lens <ID> --artifact .gaia/local/cache/draft-<spec_id>.md --audit-dir .gaia/local/cache/audit-<spec_id> --repo-root "$PWD" --spec-id <spec_id>
+```
+
+The brief is the shared preamble of `spec/lens-dispatch.md` (the spec column of its caller slots) plus a `LENS: <name> (id prefix <ID>)` line, the lens's focus text below and the output-format clause, read from these docs at render time; the command prints the short prompt for that lens.
+
+Spawn **one `general-purpose` Agent per selected lens, all in parallel** (one message, one Agent tool call per lens): the four core lenses always, plus each specialist the gauge selected, each Agent call carrying only the short prompt its render printed. Each agent audits the working-draft cache (`.gaia/local/cache/draft-<spec_id>.md`, the post-self-review working draft). It **writes its findings to `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`** under the findings file schema in `spec/lens-dispatch.md` (writing the file even when its findings array is empty), then returns only the contract's short summary, no finding bodies.
 
 The four core lenses (always dispatched; the set is chosen for low overlap, each reliably finds defects the others miss):
 
@@ -46,7 +54,7 @@ The four core lenses (always dispatched; the set is chosen for low overlap, each
 | `DOC` | Documentation | wiki or docs deliverables, "points to X" pointer criteria, README or section-title citations | duplication of an authoritative source, rot-resistance, dead cross-references, pointer criteria satisfiable by a bare path drop |
 | `PERF` | Performance | data volume, loops over collections, network fan-out, caching, render or hydration paths | speculative-versus-real cost, N+1, unbounded growth, flaky warm/cold performance gates |
 
-Before dispatching the fan-out, pre-clear each `findings/<LENS>.json` (`rm -f`) for every lens about to be dispatched. After each lens finishes, never at the moment its dispatch call returns, classify its file per `## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`: a no-op lens is re-cleared and re-dispatched once, and a second consecutive no-op runs that lens inline on the main thread. A specialist lens the gauge did not select for this dispatch is never issued and is recorded `not_applicable`. Append one `coverage.jsonl` record (`phase: "lens"`, `lens: "<LENS>"`, `disposition: "first_pass"|"not_applicable"`) per in-scope lens.
+Before dispatching the fan-out, pre-clear each `findings/<LENS>.json` (`rm -f`) for every lens about to be dispatched. After each lens finishes, never at the moment its dispatch call returns, classify its file per `## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`, with `node .gaia/scripts/spec/lens-brief.mjs classify --findings .gaia/local/cache/audit-<spec_id>/findings/<LENS>.json --brief .gaia/local/cache/audit-<spec_id>/briefs/spec-<LENS>.md` (a missing or wrong `brief_token` is a no-op): a no-op lens is re-cleared and re-dispatched once, and a second consecutive no-op runs that lens inline on the main thread. A specialist lens the gauge did not select for this dispatch is never issued and is recorded `not_applicable`. Append one `coverage.jsonl` record (`phase: "lens"`, `lens: "<LENS>"`, `disposition: "first_pass"|"not_applicable"`) per in-scope lens.
 
 **The inline-lens exception.** A lens that hit a second no-op ran inline, so it produced its finding bodies on the main thread, auto mode included. It is the one place a finding body reaches main outside the two interactive carve-outs (6b, 7c); write that lens's file and carry on with only its ids, severities, and titles, exactly as for a dispatched lens.
 
@@ -63,6 +71,14 @@ From the 7a short summaries, main selects every **material** finding id (severit
 - **Batched (either tier, above the cap):** when the shape above would dispatch more than **24** refuters (Standard: more than 24 material findings; Deep: more than 8), dispatch instead **one refuter per lens** that raised a material finding, all in parallel, each covering every material finding in that lens's findings file. On Deep, prepend all three verification lenses to that one refuter's prompt; its single verdict decides each finding, with no majority.
 
 The cap bounds the dispatch count by the lens count however many findings the lenses raise; high volume is also where per-finding refutation buys least, since a defect several lenses raised independently is already cross-checked.
+
+After each lens classifies real, main runs the refuter scheduler once for that lens:
+
+```bash
+node .gaia/scripts/spec/refuter-schedule.mjs finished --state .gaia/local/cache/audit-<spec_id>/refuter-schedule.json --kind spec --tier <audit_intensity> --lenses <selected lens ids, comma-joined> --findings-dir .gaia/local/cache/audit-<spec_id>/findings --verdicts-dir .gaia/local/cache/audit-<spec_id>/verdicts --coverage .gaia/local/cache/audit-<spec_id>/coverage.jsonl --lens <LENS>
+```
+
+It prints one line per refuter to start now. A refuter starts before the last lens finishes only when the batched shape is already certain (the finished lenses' material findings already exceed the batching threshold, Standard more than 24, Deep more than 8); below it nothing starts until the last lens finishes, so the refuter set is the one this section states. The scheduler appends the refuter coverage records itself, with their `finding_ids`: one per material finding (on Deep covering its three dispatches) or, batched, one per lens batch. Main dispatches, in one message, each refuter it prints, rendering each one's brief first with `node .gaia/scripts/spec/lens-brief.mjs refuter --kind spec --lens <LENS> --findings <that lens's findings file> --brief <that lens's brief> --audit-dir .gaia/local/cache/audit-<spec_id> --artifact .gaia/local/cache/draft-<spec_id>.md --repo-root "$PWD" --shape <shape> --ids <ids> --verdicts <verdict paths> [--refuter-lens <lens>]` from the printed fields; a refused render is a no-op lens, so re-classify and re-dispatch that lens per `spec/lens-dispatch.md`. Each Agent call carries only the printed short prompt, and the brief renders from the refuter prompt below with the substitutions this section states.
 
 Main dispatches each refuter as a `general-purpose` Agent, keyed by `{ finding_id, findings_file, refuter_lens? }`, **no finding fields interpolated**, where `findings_file` is the lens's `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json` and `verdict_file` is the refuter's output path (`verdicts/<finding-id>.json` for Standard, `verdicts/<finding-id>-<slug-lens>.json` for Deep, slug per the frozen mapping). The refuter reads the finding body from the file itself. Before dispatch, pre-clear `<verdict_file>` (`rm -f`) so its presence is a fresh-write signal.
 
@@ -90,11 +106,11 @@ Verdict schema: the **file** the refuter writes to `verdicts/<finding-id>.json` 
 
 Main computes the Deep ≥2/3 majority and the median severity **from the returned thin verdict lines only** and **never opens the per-refuter verdict files**, so verdict reasoning bodies never reach main. Surviving findings = the `minor` findings (carried forward) plus every material finding not refuted (Standard and batched: a single `refuted` verdict kills it; Deep: a ≥2-of-3 majority kills it), each stamped with its `corrected_severity` and `disposition`.
 
-Append one `coverage.jsonl` record (`phase: "refuter"`, `disposition: "first_pass"|"not_applicable"`) per material finding refuted, or, batched, one per lens batch carrying `lens: "<LENS>"`, so the report's `## Coverage` shows which shape ran.
+The scheduler appends one `coverage.jsonl` record (`phase: "refuter"`, `disposition: "first_pass"|"not_applicable"`, `finding_ids`) per material finding refuted, or, batched, one per lens batch carrying `lens: "<LENS>"`, so the report's `## Coverage` shows which shape ran.
 
 ### 7b-ii. Completeness critic
 
-**Deep only, and skipped when 7b-i ran batched.** The cap fires on finding volume, and that much volume across low-overlap lenses already supplies the gap-hunting the critic adds; when skipped, append its coverage record with `disposition: "not_applicable"` and do not run 7b-iii. Otherwise, after the refutation pass, dispatch one more `general-purpose` Agent over the draft plus the surviving findings, and ask what the lenses missed: an unverified load-bearing claim, an untestable flow, a `success_criteria` with no covering flow, a consumer or blast-radius site the SPEC overlooked. Before dispatch, pre-clear `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`.
+**Deep only, and skipped when 7b-i ran batched.** The critic runs on the scheduler's `critic run` line; on `critic skip` the scheduler has already appended its `not_applicable` record. The cap fires on finding volume, and that much volume across low-overlap lenses already supplies the gap-hunting the critic adds; when skipped, append its coverage record with `disposition: "not_applicable"` and do not run 7b-iii. Otherwise, after the refutation pass, dispatch one more `general-purpose` Agent over the draft plus the surviving findings, and ask what the lenses missed: an unverified load-bearing claim, an untestable flow, a `success_criteria` with no covering flow, a consumer or blast-radius site the SPEC overlooked. Before dispatch, pre-clear `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`.
 
 Dispatch prompt (interpolate `<DRAFT_PATH>`, `<spec_id>`, `<surviving_findings>` = the 7b-i survivor ids/severities/titles, no bodies):
 
@@ -108,7 +124,7 @@ Dispatch prompt (interpolate `<DRAFT_PATH>`, `<spec_id>`, `<surviving_findings>`
 
 It **writes its fresh findings to `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`** (the findings file schema in `spec/lens-dispatch.md`) and returns the short summary above; its bodies never flow into main. After it finishes, classify `findings/completeness.json` the same way as a lens file (`## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`): re-dispatch once on a no-op, and run the critic inline on a second.
 
-Append one `coverage.jsonl` record (`phase: "completeness"`, `disposition: "first_pass"|"not_applicable"`).
+Append one `coverage.jsonl` record (`phase: "completeness"`, `disposition: "first_pass"`) when the critic ran; a skip's record is the scheduler's. The critic's file classifies with plain `node .gaia/scripts/spec/lens-brief.mjs classify --findings .gaia/local/cache/audit-<spec_id>/findings/completeness.json`, no brief.
 
 ### 7b-iii. Completeness-critic refuter
 
@@ -120,7 +136,7 @@ Append one `coverage.jsonl` record (`phase: "refuter"`, `disposition: "first_pas
 
 ## 7c. Disposition routing + apply
 
-Resolve the main-anchored SPEC folder (stored in the main checkout: the clone's primary working directory, on any branch) first, before any dispatch below consumes it. The SPEC folder is main-anchored state (state registry `specs-main`), so the report lands beside the artifact the catalog row indexes rather than in a second specs tree inside a linked worktree. The `mkdir -p` keeps this step self-sufficient however it is reached (step 3 already created the folder). Whoever writes `AUDIT.md` there, the delegated applier or main's inline fallback, does so per the tool-choice contract in `spec.md`'s Operational primitives.
+Resolve the main-anchored SPEC folder (stored in the main checkout: the clone's primary working directory, on any branch) first, before any dispatch below consumes it. The SPEC folder is main-anchored state (state registry `specs-main`), so the report lands beside the artifact the catalog row indexes rather than in a second specs tree inside a linked worktree. The `mkdir -p` keeps this step self-sufficient however it is reached (step 3 already created the folder). The render script (7c) writes `AUDIT.md` there through its `--out` path.
 
 ```bash
 SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_DIR=""
@@ -137,19 +153,25 @@ Route each surviving finding by its `disposition`, read from the **thin verdict 
 - **Plan-time directive** (the SPEC's contract is already satisfied; the fix is an implementation instruction). No change folds into the draft (it stays byte-identical), but the finding gains a plan-time-directive entry in `AUDIT.md` (7d) so `/gaia-plan` and the implementer honor it. Write it as the property a test proves or the constraint the code meets, never the test layer, fixture or helper that proves it: `.claude/doctrine/testing.md`, `## Layers`, picks the layer. It never asks for a new test, a test file, or a rule proven on its own. Write `a forged deactivate post from a non-admin, carrying every field the admin's form sends, is refused with 403 and changes nothing`, not `build the forged body from serializeForm of the served form`. A page-markup or accessibility structure rule is one directive naming the page or component it applies to, written as the constraint the code meets: `on the request page each field line (Status, Assigned to, Priority) is one element whose whole text is exactly "<Label>: <value>"`.
 - **SPEC contract defect** (a flow, a success criterion or the intent is itself wrong, gameable, or missing). The draft is not yet saved, so the fix folds straight into the draft cache with NO reopen ceremony. A rule an existing flow already covers folds into the intent or a success criterion, never into the flow as a branch or case list; a new flow is added only for a critical path no flow names.
 
-**Interactive.** Main reads only the handful of **material** (`critical` or `major`) spec-defect survivors from the findings files to surface them to the user, mirroring step 6b's gated-finding prompt: print every finding as text in the review-list format of `.claude/rules/user-questions.md` (`How a review list prints`), headed `SPEC audit`, with its `Evidence` and its recommendation (apply the suggested fix, or keep the current draft when the finding itself recommends keeping), never its finding id, never a count, a summary, or a pointer to a findings file, and response-length or terseness preferences do not shorten the list; then ask one `AskUserQuestion` for the whole list (header `SPEC audit`), per `.claude/rules/user-questions.md`'s review-list rule: `Accept all as recommended (Recommended)` or `Revise`. `Revise` asks which findings to change and what to change, unless a typed answer through `Other` already says, then follows up only on those; every finding not named keeps its recommendation. No numeric cap or paging. This is the second bounded interactive carve-out where a finding body legitimately reaches main. Record one delegated-fold decision-list entry per finding: `apply` or `keep` from its recommendation or the user's change, `revise` with the user's text for a different fold. **Minor** spec-defect fixes are never read into main; the applier folds them directly from the on-disk findings files (it reads the full cache), and refuter verdict text is never read into main. (Minor findings skip refutation and carry no verdict line, so the sourcing of a minor finding's `disposition` is a pre-existing question the audit's logic leaves unchanged here; the applier folds only the minor spec-defects an inline fold would fold.)
+**Interactive.** Main reads only the handful of **material** (`critical` or `major`) spec-defect survivors from the findings files to surface them to the user, mirroring step 6b's gated-finding prompt: print every finding as text in the review-list format of `.claude/rules/user-questions.md` (`How a review list prints`), headed `SPEC audit`, with its `Evidence` and its recommendation (apply the suggested fix, or keep the current draft when the finding itself recommends keeping), never its finding id, never a count, a summary, or a pointer to a findings file, and response-length or terseness preferences do not shorten the list; then ask one `AskUserQuestion` for the whole list (header `SPEC audit`), per `.claude/rules/user-questions.md`'s review-list rule: `Accept all as recommended (Recommended)` or `Revise`. `Revise` asks which findings to change and what to change, unless a typed answer through `Other` already says, then follows up only on those; every finding not named keeps its recommendation. No numeric cap or paging. This is the second bounded interactive carve-out where a finding body legitimately reaches main. Record one delegated-fold decision-list entry per finding: `apply` or `keep` from its recommendation or the user's change, `revise` with the user's text for a different fold. **Minor** spec-defect fixes are never read into main; the applier folds them directly from the on-disk findings files (it reads the full cache), and refuter verdict text is never read into main. (Minor findings skip refutation and carry no verdict line, so a minor finding's disposition is its lens's `proposed_disposition`, which the applier reads from the findings file; it folds only the minor spec-defects an inline fold would fold.)
 
 **Auto-mode per rule 12.** No reads; **no finding body reaches main**. The transcript carries ids, severities, titles, verdicts, and dispositions only. Unambiguous spec-defect ids apply (added to the decision list as `apply`); a defect with more than one defensible repair becomes a deferred-clarification note in `clarifications.deferred[]` with rationale `"Auto-mode audit, defer for human review."` and is not applied. Never revert intentional clarify-loop evolution.
 
-**Fold through the delegated applier.** Dispatch the applier, a `general-purpose` Agent (see "Audit cache + delegated fold" in `spec.md`) with the inputs that primitive enumerates, taking `${SPEC_DIR}` from 7c above. It reads the draft plus every findings and verdict file plus the decision list, folds every spec-defect fix in **one Write**, and **writes `AUDIT.md` itself** (7d) at the folder path it was handed, from the on-disk findings and verdicts; main never loads a finding body to produce `AUDIT.md`. **Fallback:** if subagent dispatch is unavailable, main folds inline itself, writing `AUDIT.md` at that same resolved path.
+**Fold through the delegated applier.** Dispatch the applier, a `general-purpose` Agent (see "Audit cache + delegated fold" in `spec.md`) with the inputs that primitive enumerates, taking `${SPEC_DIR}` from 7c above. It reads the draft plus every findings and verdict file plus the decision list, folds every spec-defect fix in **one Write**, and **writes the routing record** `.gaia/local/cache/audit-<spec_id>/routing.json` (the schema is in 7d) instead of `AUDIT.md`: one entry per routed finding, with `directive_text` for every surviving `plan_directive` whose finding has no `directive` field (a lens proposed `spec_defect` and the refuter classified `plan_directive`), the rewording of a partial verdict's directive, the folded text of each fold, a minor finding's disposition from its lens `proposed_disposition`, and the short Verdict field. It supplies a `decision` for every `spec_defect` and `folded_text` for every `apply` or `revise`, so the render never refuses a correct fold. Then main renders the report:
 
-Before dispatching, finalize `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`, one thin JSON-Lines record per in-scope dispatch resolved so far, `{ "phase": ..., "lens": ..., "disposition": "first_pass"|"not_applicable" }`, carrying no finding body (this is the applier's data source for `## Coverage` in 7d; the findings/verdict files cannot encode a disposition).
+```bash
+node .gaia/scripts/spec/audit-render.mjs --cache .gaia/local/cache/audit-<spec_id> --routing .gaia/local/cache/audit-<spec_id>/routing.json --spec-id <spec_id> --out "$AUDIT_MD"
+```
+
+A non-zero exit relays its stderr lines to the fold agent once for a corrected routing record, then stops the step and surfaces them. Main never loads a finding body to produce `AUDIT.md`. **Fallback:** if subagent dispatch is unavailable, main folds inline itself, writes the routing record the same way and runs the same render.
+
+Before dispatching, finalize `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`, one thin JSON-Lines record per in-scope dispatch resolved so far, `{ "phase": ..., "lens": ..., "disposition": "first_pass"|"not_applicable" }`, carrying no finding body (this is the render's data source for `## Coverage` in 7d; the findings/verdict files cannot encode a disposition). Refuter records also carry `finding_ids`.
 
 ## 7d. Persist AUDIT.md
 
 `${SPEC_DIR}` and `${AUDIT_MD}` are already resolved at the top of 7c, which is where the applier dispatch consumes them; this step writes the report, it resolves no path of its own.
 
-The **applier** writes a sibling report at `${AUDIT_MD}`, the report path main hands it, from the on-disk findings and verdicts. `${SPEC_DIR}` sits inside the `.notebook/specs/**` write-surface allowlist entry. Keep it lean:
+The **render script** writes a sibling report at `${AUDIT_MD}` from the on-disk findings, verdicts and coverage plus the fold agent's routing record, through a temp file and a rename; no agent hand-writes it. `${SPEC_DIR}` sits inside the `.notebook/specs/**` write-surface allowlist entry. The template below is what it emits, headings in order. Keep it lean:
 
 ```markdown
 # <spec_id> Adversarial Audit
@@ -164,7 +186,7 @@ The **applier** writes a sibling report at `${AUDIT_MD}`, the report path main h
 
 These satisfy the SPEC's binding contracts; the plan and implementation must honor them.
 
-1. <the property a test proves or the constraint the code meets, naming no test layer, fixture or helper and asking for no new test; finding id and file:line evidence>
+1. <the property a test proves or the constraint the code meets, naming no test layer, fixture or helper and asking for no new test> (<finding id>; <file:line evidence>)
 
 ## SPEC contract fixes (folded into the draft pre-save)
 
@@ -181,6 +203,24 @@ These satisfy the SPEC's binding contracts; the plan and implementation must hon
 - **<phase>** (`<lens>`): `<disposition>`
 ```
 
-The `## Coverage` section is sourced from `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`, one thin phase/lens/disposition record main appends per in-scope dispatch as it resolves, not from the findings/verdict files (which cannot encode a disposition). Each line's `<disposition>` is one of `first_pass` / `not_applicable`.
+The `## Coverage` section is sourced from `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`, one thin phase/lens/disposition record per in-scope dispatch as it resolves (main appends the lens and critic records, the scheduler the refuter ones), not from the findings/verdict files (which cannot encode a disposition). A refuter record carries `finding_ids`, the ids it covers, and a refuter line is one per material finding refuted or, batched, one per lens batch, so a Deep finding's three dispatches make one refuter line, not three. Each line's `<disposition>` is one of `first_pass` / `not_applicable`.
+
+**Routing record.** The fold agent writes it to `.gaia/local/cache/audit-<spec_id>/routing.json`:
+
+    {
+      "tier": "standard" | "deep",
+      "verdict": "<the Verdict paragraph>",
+      "findings": [
+        { "id": "SEC-001", "status": "survived" | "refuted" | "unrouted",
+          "corrected_severity": "critical" | "major" | "minor" | "none" | null,
+          "verdict": "confirmed" | "partial" | "refuted" | null,
+          "disposition": "plan_directive" | "spec_defect" | null,
+          "decision": "apply" | "keep" | "revise" | "deferred" | null,
+          "folded_text": "<what was wrong -> fix folded>" | null,
+          "directive_text": "<fold agent's directive wording>" | null }
+      ]
+    }
+
+A surviving `plan_directive` renders as `N. <text> (<finding id>; <evidence>)`, with `<text>` the entry's `directive_text` when set and otherwise the finding's `directive` field; a survivor with neither is refused. An `apply` or `revise` decision renders `- <id>: <folded_text>`, a `keep` renders `- <id>: not folded (kept): <title>` and a `deferred` renders `- <id>: deferred for human review: <title>`. A refuted finding, or a partial verdict with a lowered severity, lands under `## Refuted / downgraded` as `- <id>: <verdict> (<corrected_severity>): <reason>`, the reason the first line of its verdict file's `reasoning`; minors with no verdict and no disposition list on one `Not routed (minor, no verdict or disposition): <ids>` line. A minor finding with no routing disposition takes its lens's `proposed_disposition`. The render exits non-zero with one line per problem, writing nothing, for a directive text holding a newline, starting with `#` or starting with `<number>. `, for a surviving `plan_directive` with no text, a surviving non-minor finding with no routing disposition, a `spec_defect` with no `decision`, and an `apply` or `revise` decision with no `folded_text`.
 
 After the report is written and any folds are cached, proceed to gate 2 (`spec.md` step 8), which renders the hardened draft.
