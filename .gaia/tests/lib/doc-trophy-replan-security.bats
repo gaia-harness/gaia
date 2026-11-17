@@ -4,7 +4,8 @@
 # security row it drops, unflags or moves to another kind must still reach the
 # review list. This suite runs security-rows-lost.mjs, the compare the apply
 # step calls, against fixture tables, and pins the apply step's text that
-# snapshots the table, runs the compare and holds each lost row.
+# snapshots the table, runs the compare and holds each lost row, and the text
+# that holds every row the re-plan added or changed to the Applied rows check.
 #
 # Method: behavior cases build a before and an after table; red twins mutate
 # one substring of a scratch copy (the compare's match key, or the apply
@@ -387,6 +388,47 @@ green() {
 @test "red twin: re-adding an unflagged row beside its regenerated copy fails" {
   mutated_tree "$AUDIT_REL" " whose \`security\` is \`none\` gets the snapshot's \`security\` back, in \`tests.json\` and its README row; a regenerated row that carries a different non-none kind keeps its kind, and the snapshot row is added beside it under a new id like any other; any other is added" ' Each is added'
   run check_replan_security "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+}
+
+# check_replanned_rows <root>: the Structural bullet lists every row the re-plan
+# added or changed and holds each to the Applied rows check, since a lens fix
+# the planner applies skips that check otherwise, and step 4.6c waits on the
+# items.
+check_replanned_rows() {
+  local structural interactive
+  structural="$(flat_range "$1/$AUDIT_REL" '- **Structural findings**' '**Security rows.**')"
+  interactive="$(flat_range "$1/$AUDIT_REL" '**Interactive:**' '**Outcome record.**')"
+  need "$structural" 'Then run `node .gaia/scripts/test-design/replanned-rows.mjs --before <PLAN_DIR>/tests.before-correction.json --after <PLAN_DIR>/tests.json`' || return 1
+  need "$structural" 'Hold each to the **Applied rows** check, as a change from that prior form or, with none, an add' || return 1
+  need "$structural" 're-run step 4.5 after any reshape, drop or return to the prior form' || return 1
+  need "$structural" 'its items join the follow-up review list that carries the `lost:` and `reworded:` items' || return 1
+  need "$structural" 'and every `replanned-rows` item, and step 4.5 passes' || return 1
+  need "$interactive" 'except a re-plan'"'"'s `lost:`, `reworded:` and `replanned-rows` items' || return 1
+}
+
+@test "the Structural re-plan holds every re-planned row to the Applied rows check" {
+  green check_replanned_rows
+}
+
+@test "red twin: a re-plan that never lists its changed rows fails" {
+  mutated_tree "$AUDIT_REL" 'Then run `node .gaia/scripts/test-design/replanned-rows.mjs' 'Then read'
+  run check_replanned_rows "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+}
+
+@test "red twin: re-planned rows listed but not held to the Applied rows check fails" {
+  mutated_tree "$AUDIT_REL" 'Hold each to the **Applied rows** check' 'Note each'
+  run check_replanned_rows "$TREE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == 'missing: '* ]]
+}
+
+@test "red twin: step 4.6c not waiting on the re-planned row items fails" {
+  mutated_tree "$AUDIT_REL" ', and every `replanned-rows` item,' ','
+  run check_replanned_rows "$TREE"
   [ "$status" -ne 0 ]
   [[ "$output" == 'missing: '* ]]
 }

@@ -385,7 +385,7 @@ check_lens_doctrine_rows() {
   need "$table" "- \`case\`: the case in words; a case-table row names each case by its values, never by class or sample (the doctrine's \`## What to test\`)." || return 1
   need "$lens" "a case-table row whose \`case\` names its cases by class or sample (\`every role\`, \`including an unknown tool\`) instead of by value, the doctrine's \`## What to test\`: the fix lists each case's values from the requirements and the README contract;" || return 1
   need "$doctrine" "- Test a stated mapping from a value the app reads (an API field, a stored or query value) to what the user sees (a stored \`status: 2\` shown as \`Shipped\`) with one case per value, at the layer the layer rule picks for the code that maps it: the route test of a loader or action that maps it, the unit test of a helper that meets the unit-test conditions, or, when a component maps it, itself or through a small helper it calls, one story per value given the raw value. A story given the mapped props never runs the mapping." || return 1
-  need "$lens" "a stated mapping from a value the app reads to what the user sees with a value that has no case at the layer the doctrine's \`## What to test\` picks for the code that maps it, such as a mapping only a story given the mapped props asserts: the fix adds the missing cases there;" || return 1
+  need "$lens" "a stated mapping from a value the app reads to what the user sees with a value that has no case at the layer the doctrine's \`## What to test\` picks for the code that maps it, such as a mapping only a story given the mapped props asserts: the fix adds the missing cases there, and at a story that means one story row per value given the raw value, never a case table on one story row;" || return 1
   need "$table" "Give a stated value-to-display mapping one case per value at the layer the doctrine's \`## What to test\` picks for the code that maps it." || return 1
   need "$lens" "(a test asserting the default API origin when none is planted, retired because a secret row proves the browser never takes the API origin, is secret)" || return 1
   local planted_secret="A test that puts a value a secrets requirement keeps off a surface onto that surface and asserts code there uses it tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret (a browser test that reads a planted server-only API origin)."
@@ -407,7 +407,7 @@ check_lens_doctrine_rows() {
   need "$decomposition" 'fix the setup in the task that owns it, through its acceptance criteria, or as a structural finding when the setup lands after the test that needs it, never with a new test row' || return 1
   need "$apply" "reshaped when one change passes every check (a fix's offered trim counts as that change), else dropped" || return 1
   need "$apply" "Dropping an add leaves it out; dropping a change or trim leaves the row in its prior form, unless a Test design check bars that prior form too, and then the row is removed" || return 1
-  need "$apply" 'record it as an uncovered requirement (a missing-row finding at the severity the missing-row check gives it, recommending a row every check passes, or in auto-mode in `## Audit notes`), not only as a dropped row' || return 1
+  need "$apply" 'record it as an uncovered requirement (a missing-row finding at the severity the missing-row check gives it, recommending a row every check passes and applied like any finding of that severity, or in auto-mode in `## Audit notes`), not only as a dropped row' || return 1
   need "$apply" 'a trim narrows an existing row to a subset of its cases and is a kind of change' || return 1
   need "$apply" "A fix applied on this thread, from any lens or check, that would remove a security row (a row of the doctrine's kinds, or any row flagged) or clear a row's flag is not applied to that row unless the user rules it wrong on the review list" || return 1
   need "$apply" 'The row is kept and goes on the review list as its own item, even from a minor finding, recommending it be kept' || return 1
@@ -468,6 +468,10 @@ check_lens_doctrine_rows() {
 
 @test "red twin: a drop that leaves a requirement without a row recorded only as a dropped row fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" 'record it as an uncovered requirement' 'record it as a dropped row'
+}
+
+@test "red twin: an uncovered requirement recorded but never applied fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ' and applied like any finding of that severity,' ','
 }
 
 @test "red twin: a dropped change deleting the row without a bar fails" {
@@ -572,6 +576,10 @@ check_lens_doctrine_rows() {
 
 @test "red twin: the test design lens dropping the value mapping check fails" {
   red check_lens_doctrine_rows "$AUDIT_REL" '  - a stated mapping from a value the app reads to what the user sees with a value' '  - a stated value'
+}
+
+@test "red twin: the test design lens fixing a story mapping with a case table on one story row fails" {
+  red check_lens_doctrine_rows "$AUDIT_REL" ', and at a story that means one story row per value given the raw value, never a case table on one story row;' ';'
 }
 
 @test "red twin: the doctrine reading a planted secret's retire as the rewrite carve-out fails" {
