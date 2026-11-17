@@ -278,6 +278,30 @@ export const flagCandidates = ({rows}) => {
     .filter((entry) => entry.kinds.length > 0);
 };
 
+const REPLAN_FIELDS = ['file', 'title', 'layer', 'action', 'security', 'source', 'case'];
+
+// Each regenerated row no snapshot row equals on REPLAN_FIELDS, with `prior`,
+// the snapshot row's id, when that row kept its id, file and title. A
+// regeneration can renumber ids, so a row moved under another id reads as an
+// add with no prior form: the plan audit judges it whole rather than against
+// a stranger's old form.
+export const replannedRows = (before, after) => {
+  const objectRows = (table) =>
+    table.rows.filter((row) => row && typeof row === 'object');
+  const signature = (row) =>
+    JSON.stringify(REPLAN_FIELDS.map((field) => row[field]));
+  const snapshotRows = objectRows(before);
+  const snapshotSignatures = new Set(snapshotRows.map(signature));
+  const snapshotById = new Map(snapshotRows.map((row) => [row.id, row]));
+  return objectRows(after)
+    .filter((row) => !snapshotSignatures.has(signature(row)))
+    .map((row) => {
+      const snapshot = snapshotById.get(row.id);
+      const kept = snapshot?.file === row.file && snapshot?.title === row.title;
+      return {id: row.id, prior: kept ? row.id : null};
+    });
+};
+
 // Each row whose removal alone would add a key to keysWithNoRow, with those
 // keys: verify would refuse the plan without it.
 export const soleRowKeys = (keys, table) => {

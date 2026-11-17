@@ -7,6 +7,7 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   TABLE_CLI="$REPO_ROOT/.gaia/scripts/test-design/test-table.mjs"
+  REPLANNED_CLI="$REPO_ROOT/.gaia/scripts/test-design/replanned-rows.mjs"
   KEYS_SCRIPT="$REPO_ROOT/.gaia/scripts/spec/requirement-keys.sh"
   PLAN="$BATS_TEST_TMPDIR/plan"
   KEYS="$BATS_TEST_TMPDIR/keys.txt"
@@ -187,6 +188,42 @@ expect_verify_refusal() {
   write_verify_fixture
   run node "$TABLE_CLI" flag-candidates --plan-dir "$PLAN"
   [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "$status: $output" >&2; return 1; }
+}
+
+@test "replanned-rows lists each regenerated row no snapshot row matches, with its prior form's id when it kept id, file and title" {
+  write_verify_fixture
+  mutate_table '
+    t.rows.push(
+      {id: "T3", source: "directive:1", case: "low, normal, urgent -> Low, Normal, Urgent", file: "src/page.test.ts", title: "maps priority", layer: "route", task: "task-two", action: "new", security: "none"},
+      {id: "T4", source: "directive:2", case: "unknown status -> every row", file: "src/list.test.ts", title: "unknown filter", layer: "route", task: "task-two", action: "new", security: "none"},
+      {id: "T5", source: "directive:3", case: "old case", file: "src/gone.test.ts", title: "gone", layer: "route", task: "task-two", action: "new", security: "none"},
+    )'
+  cp "$PLAN/tests.json" "$BATS_TEST_TMPDIR/before.json"
+  # Unchanged: T1, T2. Changed: T3 case cut to a sample, T4 flagged. New: T6.
+  # T5 renumbered as T7 under another title reads as new, not as T5 changed.
+  mutate_table '
+    t.rows[2].case = "urgent -> Urgent";
+    t.rows[3].security = "forgery";
+    t.rows.splice(4, 1);
+    t.rows.push(
+      {id: "T6", source: "success_criteria:0", case: "urgent -> Urgent", file: "src/display.test.ts", title: "display helper", layer: "unit", task: "task-two", action: "new", security: "none"},
+      {id: "T7", source: "directive:3", case: "old case", file: "src/gone.test.ts", title: "renamed", layer: "route", task: "task-two", action: "new", security: "none"},
+    )'
+  run node "$REPLANNED_CLI" --before "$BATS_TEST_TMPDIR/before.json" --after "$PLAN/tests.json"
+  [ "$status" -eq 0 ] || { echo "replanned-rows: $output" >&2; return 1; }
+  [ "$output" = "$(printf 'T3 T3\nT4 T4\nT6\nT7')" ] || { echo "printed: $output" >&2; return 1; }
+}
+
+@test "replanned-rows prints nothing for an unchanged table and refuses a missing table or flag" {
+  write_verify_fixture
+  run node "$REPLANNED_CLI" --before "$BATS_TEST_TMPDIR/before.json" --after "$PLAN/tests.json"
+  [ "$status" -eq 1 ]
+  grep -qF 'replanned-rows: cannot read' <<<"$output"
+  cp "$PLAN/tests.json" "$BATS_TEST_TMPDIR/before.json"
+  run node "$REPLANNED_CLI" --before "$BATS_TEST_TMPDIR/before.json" --after "$PLAN/tests.json"
+  [ "$status" -eq 0 ] && [ -z "$output" ] || { echo "$status: $output" >&2; return 1; }
+  run node "$REPLANNED_CLI" --before "$BATS_TEST_TMPDIR/before.json"
+  [ "$status" -eq 2 ]
 }
 
 @test "verify refuses each malformed coveredFlows entry" {
