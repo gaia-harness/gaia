@@ -298,7 +298,7 @@ The protocol's "Scope resolution" section says what each printed line means. Wha
 - `AUDIT_KEY` is `KEY_BASE` plus the branch, empty when either is undeterminable.
 - `ELIG_BASE` and the `ELIG_CHANGED=` lines are the whole pull request's eligibility set, unfiltered. They decide nothing you do: never review against them.
 - `SPECIALIST=` lines, printed last, name each specialist that runs and the paths that triggered it. `react-patterns` and `translation` appear only for paths under a web-stack member; `typescript` is stack-independent.
-- `LENSES=<path><TAB><lens,lens>` lines, printed just before the `SPECIALIST=` lines, cover every path of the incremental diff (`.sh`, `.tf`, `.css` and deleted paths included, not only `CHANGED=`). A path whose line lists `accessibility`, `project-specific-rules`, `react-patterns` and `translation` is a web path and takes those lenses; `security` is on for every path.
+- `LENSES=<path><TAB><lens,lens>` lines, printed just before the `SPECIALIST=` lines, cover every path of the incremental diff (`.sh`, `.tf`, `.css` and deleted paths included, not only `CHANGED=`).
 
 **The branch's own patch, at HEAD, is the whole point.** `CHANGED` and `REVIEW_DIFF` are the branch's own patch against the PR's base at HEAD, which your marker attests to; never compare the base to the working tree, and a clean catch-up merge of the base changes none of it.
 

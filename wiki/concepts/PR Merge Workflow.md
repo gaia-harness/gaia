@@ -144,7 +144,7 @@ Agent(
 
 Write the `Working root:` value as the bare absolute path with nothing after it: a trailing character can stop the hook's resolver from reading the path, and the hook strips wrapping quotes, backticks, and trailing sentence punctuation before resolving, and a named root that still does not resolve is denied with the token named rather than falling back to the session's working directory.
 
-**Reading `unit-<u>.json`.** Branch on `stop_reason`; `stop_detail` carries the reason in words. The file also carries `rounds[]` and, for filing, counts and paths only: `diverted_count`, `diverted_records` (the local record paths), `filing_outcomes` (the outcome files) and `filing_pending` (files left in `<RUN_FOLDER>/filing-retry/`). It carries no finding detail.
+**Reading `unit-<u>.json`.** Branch on `stop_reason`; `stop_detail` carries the reason in words. See `.claude/agents/audit-loop-unit.md` (When to stop).
 
 | `stop_reason` | The main thread |
 | --- | --- |

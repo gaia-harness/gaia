@@ -12,7 +12,7 @@ Cut a new GAIA release. Thin orchestrator over the `.gaia/cli/gaia-maintainer re
 This command is **maintainer-only**: it and the `gaia-maintainer` binary are release-excluded.
 
 > [!important] `main` is protected
-> Direct pushes to `main` are blocked. The release commit lands on a release branch, goes through a PR, and the tag is created on the squash commit _after_ it lands on `main`. The release PR is subject to the same CI gate and the same Code Audit Team merge handshake as any other PR, with one narrowing. When its whole change is release bookkeeping (Steps 2 and 5 to 8, nothing else) and it was cut from main's green head, it takes the release fast path: each required job runs `release manifest --check` in place of its suite and reports green in about a minute, and the audit resolver names no member (Step 10). `.gaia/scripts/release-bookkeeping-check.sh` is the one predicate both read; its header owns what counts as bookkeeping. Any other change, including bundles Step 7b rebuilt, a base main has since moved past, or a main that is not green, runs every gate in full: expect `Vitest and Playwright`, `Run Chromatic`, and `Vitest (.gaia/cli)`, the last on its full typecheck, lint, vitest, and bundle-freshness path, since a release PR bumps root `package.json`, which that job's paths filter lists. `gh pr merge --squash --auto` is the normal path: the repository allows squash merges only, and base-branch protection rejects a merge without `--auto`, so `--auto` is required to queue the merge until checks pass. See `wiki/concepts/PR Merge Workflow.md`.
+> Direct pushes to `main` are blocked. The release commit lands on a release branch, goes through a PR, and the tag is created on the squash commit _after_ it lands on `main`. When the release PR's whole change is release bookkeeping (Steps 2 and 5 to 8, nothing else) and it was cut from main's green head, it takes the release fast path: each required job runs `release manifest --check` in place of its suite and reports green in about a minute, and the audit resolver names no member (Step 10). Any other change, including bundles Step 7b rebuilt, a base main has since moved past, or a main that is not green, runs every gate in full: expect `Vitest and Playwright`, `Run Chromatic`, and `Vitest (.gaia/cli)`, the last on its full typecheck, lint, vitest, and bundle-freshness path, since a release PR bumps root `package.json`, which that job's paths filter lists. See `wiki/concepts/Release Workflow.md` (Cutting a release).
 
 ## Required argument
 
@@ -203,7 +203,7 @@ bash .gaia/scripts/verify-main-green.sh --sha "$(git rev-parse HEAD)"
 
 Run the tag only when the check exits 0. The squash commit's own push run starts at merge, so the check usually exits 3 here: wait with the `gh run watch <id> --exit-status` it names, then run the check again. Any other non-zero, STOP and relay the refusal as in Step 1; never tag a red main.
 
-`commit-and-tag --tag` refuses (`REFUSED:`) a tag whose major is below the highest existing `vX.Y.Z` release tag's major, read from local tags and origin's, because a 1.x `/update-gaia` resolves the newest-created release.
+A `REFUSED:` from `commit-and-tag --tag` is the major-version floor: see `wiki/concepts/Release Workflow.md` (Cutting a release).
 
 `--tag` also pushes the tag to origin, which kicks the GitHub Release workflow (`release.yml`) to build the scrubbed tarball.
 

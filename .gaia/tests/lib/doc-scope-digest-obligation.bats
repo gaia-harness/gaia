@@ -15,11 +15,11 @@
 #     definition sends its member to before the scope resolver runs. Nothing
 #     else pins the literal's own wording against silent rewrite, and a
 #     second copy in a definition is the drift the shared section removed.
-#   Group 2: the same sentence in wiki/concepts/Registering a Code Audit
-#     Team Member.md step 1 -- the reason it needs its own pin is that the
-#     next member registered reads that page, not the five existing
-#     definitions, so a drift there is invisible to every existing member's
-#     own conformance.
+#   Group 2: wiki/concepts/Registering a Code Audit Team Member.md step 1
+#     sends the next member author to that protocol section and carries no
+#     copy of the sentence. The next member registered reads that page, not
+#     the existing definitions, so a pointer that goes missing there is
+#     invisible to every existing member's own conformance.
 # Honest limit: presence and byte-identity, not meaning and not behavior.
 # This suite cannot tell whether a member that carries the literal actually
 # captures anything at runtime; it only proves the instruction survives
@@ -50,6 +50,7 @@ setup() {
   REGISTRATION="$ROOT/wiki/concepts/Registering a Code Audit Team Member.md"
   PROTOCOL="$ROOT/.claude/hooks/lib/audit-member-protocol.md"
   SCOPE_POINTER='Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path and follow its "Scope resolution" section'
+  REGISTRATION_POINTER='sends the member to the `## Scope resolution` section of `.claude/hooks/lib/audit-member-protocol.md`'
 
   # FC-2a, verbatim.
   OBLIGATION_LITERAL='Capture your own branch-own digest at scope resolution with `.gaia/scripts/audit-scope-digest.sh --capture`, and at marker-write time read that captured value back with `--read` and pass it as `--scope-digest`; never re-derive it in the writing call, and a rotation between the two means the review was superseded and you must be re-dispatched on the new HEAD.'
@@ -93,30 +94,56 @@ scope_section() {
   done
 }
 
-# --- Group 2: the same sentence reaches the registration page --------------
+# --- Group 2: the registration page points at the protocol section ---------
 
-@test "Group 2: the obligation literal is present in the registration page's step 1" {
-  grep -qF -- "$OBLIGATION_LITERAL" "$REGISTRATION" || {
-    echo "obligation literal missing from $REGISTRATION" >&2
-    return 1
-  }
-}
-
-@test "Group 2: the registration page's mention sits under its step-1 heading" {
-  # extract_section_or_fail's shape (doc-machinery-waive-prose.bats): fail
-  # loudly rather than pass vacuously when the heading itself is gone.
+# registration_step_one_points_to_protocol <page>: the page's step-1 section
+# sends the next member author to the protocol's Scope resolution section and
+# carries no copy of the obligation literal, which would drift from the
+# protocol's one copy. Fails loudly when the step-1 heading matches nothing,
+# so a renamed heading never passes vacuously.
+registration_step_one_points_to_protocol() {
   local section
   section="$(awk '
     /^### 1\. / { found=1; print; next }
     found && /^### / { exit }
     found { print }
-  ' "$REGISTRATION")"
+  ' "$1")"
   [ -n "$section" ] || {
-    echo "step-1 heading matched nothing in $REGISTRATION" >&2
+    echo "step-1 heading matched nothing in $1" >&2
     return 1
   }
-  printf '%s\n' "$section" | grep -qF -- "$OBLIGATION_LITERAL" || {
-    echo "obligation literal is present in $REGISTRATION but outside its step-1 section" >&2
+  printf '%s\n' "$section" | grep -qF -- "$REGISTRATION_POINTER" || {
+    echo "$1 step 1 does not send the member to the protocol's Scope resolution section" >&2
     return 1
   }
+  printf '%s\n' "$section" | grep -qF -- "$OBLIGATION_LITERAL" && {
+    echo "$1 step 1 carries its own copy of the obligation literal" >&2
+    return 1
+  }
+  true
+}
+
+@test "Group 2: the registration page's step 1 points at the protocol section and carries no copy" {
+  registration_step_one_points_to_protocol "$REGISTRATION"
+}
+
+@test "red twin: a step 1 that carries its own copy of the obligation is refused" {
+  local scratch="$BATS_TEST_TMPDIR/registration.md"
+  printf '### 1. Write the definition\n\n%s\n\n%s\n' "$REGISTRATION_POINTER" "$OBLIGATION_LITERAL" >"$scratch"
+  run registration_step_one_points_to_protocol "$scratch"
+  [ "$status" -eq 1 ]
+}
+
+@test "red twin: a step 1 without the pointer is refused" {
+  local scratch="$BATS_TEST_TMPDIR/registration.md"
+  printf '### 1. Write the definition\n\nThe member resolves its own scope.\n' >"$scratch"
+  run registration_step_one_points_to_protocol "$scratch"
+  [ "$status" -eq 1 ]
+}
+
+@test "red twin: a page whose step-1 heading is gone is refused" {
+  local scratch="$BATS_TEST_TMPDIR/registration.md"
+  printf '### Write the definition\n\n%s\n' "$REGISTRATION_POINTER" >"$scratch"
+  run registration_step_one_points_to_protocol "$scratch"
+  [ "$status" -eq 1 ]
 }
