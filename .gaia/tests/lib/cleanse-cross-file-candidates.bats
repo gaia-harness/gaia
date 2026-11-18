@@ -56,6 +56,10 @@ member_paths() {
   jq -c '[.clusters[].members[].path]' <<<"$output"
 }
 
+cluster_count() {
+  jq '.clusters | length' <<<"$output"
+}
+
 @test "two files restating one procedure's literals form one cluster, and a block repeated inside one file forms none" {
   write_file .claude/rules/a.md "# A" "" "$(procedure alpha)"
   write_file .claude/rules/b.md "# B" "" "Another file says it again:" "" "$(procedure alpha)"
@@ -64,7 +68,7 @@ member_paths() {
   write_file .claude/rules/solo.md "# Solo" "" "$(procedure solo)" "" "Later in the same file:" "" "$(procedure solo)"
   run node "$SCRIPT" --root "$REPO"
   [ "$status" -eq 0 ] || return 1
-  [ "$(jq '.clusters | length' <<<"$output")" = 1 ] || return 1
+  [ "$(cluster_count)" = 1 ] || return 1
   [ "$(member_paths)" = '[".claude/rules/a.md",".claude/rules/b.md"]' ] || return 1
   [ "$(jq -r '.clusters[0].id' <<<"$output")" = C001 ] || return 1
 }
@@ -75,10 +79,10 @@ member_paths() {
   write_file .claude/rules/c.md "$(procedure alpha)"
   run node "$SCRIPT" --root "$REPO" --max-df 2
   [ "$status" -eq 0 ] || return 1
-  [ "$(jq '.clusters | length' <<<"$output")" = 0 ] || return 1
+  [ "$(cluster_count)" = 0 ] || return 1
   run node "$SCRIPT" --root "$REPO" --max-df 3
   [ "$status" -eq 0 ] || return 1
-  [ "$(jq '.clusters | length' <<<"$output")" = 1 ] || return 1
+  [ "$(cluster_count)" = 1 ] || return 1
   [ "$(jq '.clusters[0].members | length' <<<"$output")" = 3 ] || return 1
 }
 
@@ -95,7 +99,7 @@ member_paths() {
   run node "$SCRIPT" --root "$REPO"
   [ "$status" -eq 0 ] || return 1
   [ "$(jq '.files_scanned' <<<"$output")" = 2 ] || return 1
-  [ "$(jq '.clusters | length' <<<"$output")" = 1 ] || return 1
+  [ "$(cluster_count)" = 1 ] || return 1
   [ "$(member_paths)" = '[".claude/rules/a.md","wiki/concepts/B.md"]' ] || return 1
 }
 
@@ -116,14 +120,14 @@ member_paths() {
 
   run node "$SCRIPT" --root "$REPO" --all
   [ "$status" -eq 0 ] || return 1
-  [ "$(jq '.clusters | length' <<<"$output")" = 2 ] || return 1
+  [ "$(cluster_count)" = 2 ] || return 1
 
   mkdir -p "$REPO/.claude/rules/maintainers"
   : >"$REPO/.claude/rules/maintainers/harness-triage-threshold.md"
   run node "$SCRIPT" --root "$REPO"
   [ "$status" -eq 0 ] || return 1
   [ "$(jq '.maintainer_repo' <<<"$output")" = true ] || return 1
-  [ "$(jq '.clusters | length' <<<"$output")" = 2 ] || return 1
+  [ "$(cluster_count)" = 2 ] || return 1
   [ "$(member_paths)" = '[".claude/rules/w.md",".claude/rules/z.md",".claude/rules/x.md",".claude/rules/y.md"]' ] || return 1
 }
 
@@ -146,7 +150,7 @@ member_paths() {
   write_file .claude/rules/b.md "# B" "" "$(procedure alpha)"
   run node "$SCRIPT" --root "$REPO"
   [ "$status" -eq 0 ] || return 1
-  [ "$(jq '.clusters | length' <<<"$output")" = 1 ] || return 1
+  [ "$(cluster_count)" = 1 ] || return 1
   [ "$(jq -c '[.clusters[0].members[] | [.path, .maintainer_only]]' <<<"$output")" = '[[".claude/rules/a.md",true],[".claude/rules/b.md",false]]' ] || return 1
   [ "$(jq '[.clusters[0].members[].text | contains("gaia:maintainer-only")] | any' <<<"$output")" = false ] || return 1
 }
@@ -167,7 +171,7 @@ member_paths() {
 
   run node "$SCRIPT" --root "$REPO" --focus .claude/rules --focus wiki
   [ "$status" -eq 0 ] || return 1
-  [ "$(jq '.clusters | length' <<<"$output")" = 2 ] || return 1
+  [ "$(cluster_count)" = 2 ] || return 1
 
   run bash -c 'node "$1" --root "$2" --bogus 2>/dev/null' _ "$SCRIPT" "$REPO"
   [ "$status" -eq 2 ] || return 1

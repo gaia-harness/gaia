@@ -93,14 +93,17 @@ const parseArgs = (argv) => {
     }
     return Number(value);
   };
+  const required = (flag, value, what) => {
+    if (value === undefined || value === '') usage(`${flag} needs ${what}`);
+    return value;
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--all') {
       opts.all = true;
     } else if (arg === '--root') {
       i += 1;
-      if (argv[i] === undefined || argv[i] === '') usage('--root needs a directory');
-      opts.root = argv[i];
+      opts.root = required(arg, argv[i], 'a directory');
     } else if (arg === '--min-shared') {
       i += 1;
       opts.minShared = positive(arg, argv[i]);
@@ -109,8 +112,7 @@ const parseArgs = (argv) => {
       opts.maxDf = positive(arg, argv[i]);
     } else if (arg === '--focus') {
       i += 1;
-      if (argv[i] === undefined || argv[i] === '') usage('--focus needs a path');
-      opts.focus.push(argv[i]);
+      opts.focus.push(required(arg, argv[i], 'a path'));
     } else {
       usage(`unknown argument: ${arg}`);
     }
@@ -169,6 +171,7 @@ const DISTINCTIVE = /[\d\s/.\-_=$:]/;
 const isLiteral = (text) => text.length >= 3 && DISTINCTIVE.test(text);
 
 const FENCE = /^\s*(```+|~~~+)/;
+const fenceChar = (line) => FENCE.exec(line)?.[1][0];
 const HEADING = /^\s{0,3}#{1,6}(\s|$)/;
 const TOP_LIST_ITEM = /^ {0,1}([-*+]|\d+[.)])\s/;
 const TABLE_ROW = /^\s*\|/;
@@ -185,9 +188,7 @@ const NUMBER_UNIT = new RegExp(
 
 const normalizeUnit = (unit) => {
   const lower = unit.toLowerCase();
-  if (lower === 's' || lower === 'ms' || lower === 'h' || lower === 'kb' || lower === 'mb') {
-    return lower;
-  }
+  if (lower === 's' || lower === 'ms') return lower;
   if (lower === 'entries') return 'entry';
   return lower.replace(/s$/, '');
 };
@@ -201,10 +202,10 @@ const literalsOf = (lines) => {
   const prose = [];
   let fence = null;
   for (const line of lines) {
-    const match = FENCE.exec(line);
-    if (fence === null && match) {
-      fence = match[1][0];
-    } else if (fence !== null && match && match[1][0] === fence) {
+    const char = fenceChar(line);
+    if (fence === null && char) {
+      fence = char;
+    } else if (fence !== null && char === fence) {
       fence = null;
     } else if (fence !== null) {
       add(line);
@@ -258,19 +259,19 @@ const parseBlocks = (content) => {
   while (i < lines.length) {
     const line = lines[i];
     const trimmed = line.trim();
+    const kind = trimmed === '' ? undefined : markerKind(trimmed);
+    const opener = fenceChar(line);
     if (trimmed === '') {
       i += 1;
-    } else if (markerKind(trimmed)) {
-      maintainerOnly = markerKind(trimmed) === 'start';
+    } else if (kind) {
+      maintainerOnly = kind === 'start';
       i += 1;
     } else if (HEADING.test(line)) {
       i += 1;
-    } else if (FENCE.test(line)) {
-      const marker = FENCE.exec(line)[1][0];
+    } else if (opener) {
       let j = i + 1;
       while (j < lines.length) {
-        const closing = FENCE.exec(lines[j]);
-        if (closing && closing[1][0] === marker) break;
+        if (fenceChar(lines[j]) === opener) break;
         j += 1;
       }
       push(i, Math.min(j, lines.length - 1));
@@ -284,15 +285,15 @@ const parseBlocks = (content) => {
       let last = i;
       while (j < lines.length) {
         const next = lines[j];
-        const match = FENCE.exec(next);
+        const char = fenceChar(next);
         if (fence !== null) {
-          if (match && match[1][0] === fence) fence = null;
+          if (char === fence) fence = null;
           last = j;
         } else if (next.trim() === '') {
           const following = lines.slice(j + 1).findIndex((x) => x.trim() !== '');
           if (following < 0 || !/^\s+\S/.test(lines[j + 1 + following])) break;
         } else if (/^\s+\S/.test(next)) {
-          if (match) fence = match[1][0];
+          if (char) fence = char;
           last = j;
         } else if (isBoundary(next)) {
           break;
@@ -379,16 +380,14 @@ const main = () => {
   }
 
   const parent = blocks.map((_, index) => index);
-  const paired = new Set();
   for (const [key, count] of pairCounts) {
     if (count < opts.minShared) continue;
     const [a, b] = key.split(':').map(Number);
-    paired.add(a).add(b);
     parent[find(parent, a)] = find(parent, b);
   }
 
   const groups = new Map();
-  for (const index of paired) {
+  for (let index = 0; index < blocks.length; index += 1) {
     const rootIndex = find(parent, index);
     if (!groups.has(rootIndex)) groups.set(rootIndex, []);
     groups.get(rootIndex).push(index);
@@ -404,6 +403,7 @@ const main = () => {
 
   const clusters = [];
   for (const indexes of groups.values()) {
+    if (indexes.length < 2) continue;
     const members = indexes
       .map((index) => blocks[index])
       .sort((a, b) => compare(a.path, b.path) || a.startLine - b.startLine);

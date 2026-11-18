@@ -239,9 +239,6 @@ Within a promote, `source_action` is the only field that touches `source_path`, 
   ```
 
 `grounds:` and `owner_path:` are written on cross-file actions only (`.claude/skills/gaia/references/cleanse/cross-file.md`, `## Assemble`); every other action omits both.
-<!-- gaia:maintainer-only:start -->
-In the GAIA source repo a cross-file action's owner line can also read `owner: maintainer` (the Ownership step's cross-file arm).
-<!-- gaia:maintainer-only:end -->
 
 ## Out-of-scope findings
 

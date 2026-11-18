@@ -63,7 +63,7 @@ Every path below referenced as `$PROJECT_ROOT/...`, `$MEMORY_DIR/...`, or `$AGEN
 
 **`/gaia-cleanse --cross-file [hint]`** → candidates, judges and the `Stage 1 (cross-file)` assembler take Stage 1's place; everything after it is the default path.
 
-1. Read `.claude/skills/gaia/references/cleanse/cross-file.md` now and run its `## Run the candidates`, passing each repo path the hint names as `--focus`. On its could-not-run stop (the script exits 2 or 3), relay the error and stop. (Run ends here; see `## Cost record (run end)`.)
+1. Read `.claude/skills/gaia/references/cleanse/cross-file.md` now and run its `## Run the candidates`, passing each repo path the hint names as `--focus`; its could-not-run stop ends the run (`## Cost record (run end)`).
 2. Shard the clusters and dispatch the Cross-file judge subagents below, per its `## Shard and dispatch`.
 3. Spawn the Stage 1 (cross-file) subagent below with the candidates file, every REAL verdict file, the shard count and the hint. Wait for it to return.
 4. Continue at step 2 of the default path. Its step 3 `verify` refuses a scoped report, so even a 0-action cross-file report falls through to the decision gate, which is intended: a cross-file report always gates.
@@ -121,7 +121,7 @@ Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `
 
 ### Cross-file judge subagents
 
-One per shard, in waves of at most 8 (`cleanse/cross-file.md`, `## Shard and dispatch`).
+One per shard, dispatched per `cleanse/cross-file.md` (`## Shard and dispatch`).
 
 - `subagent_type`: `"general-purpose"`
 - `model`: `"sonnet"`

@@ -27,7 +27,6 @@ setup() {
 check_disagree_is_report_only() {
   local routing
   routing="$(grep -hE -- "$DISAGREE_ANCHOR" "$@")" || return 1
-  [ -n "$routing" ] || return 1
   grep -qF -- '## Out-of-scope findings' <<<"$routing" || return 1
   grep -qiE -- '\b(replace|edit|delete|shrink|promote|rewrite)\b' <<<"$routing" && return 1
   true
