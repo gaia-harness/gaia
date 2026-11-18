@@ -2,13 +2,15 @@
 #
 # .gaia/scripts/spec/plan-verify.sh behavior: existence checks, the orchestrator
 # step sentinels (match rule, order rule, per-arm requirements), the verbatim
-# blocks (resume detection, yield handling, gate retry, security writer, flow
-# checks, drift check, wiki promotion, code audit and post-clearance), failure
-# aggregation, placeholder scanning, the flow checks of a spec-derived plan
-# (the flow-test task line, the task-stem-to-phase rule, the closing-phase
-# entry that runs each flow test), and the test-design checks (the marker, the
-# table relayed from test-table.mjs verify, the security-writer line of a phase
-# that owns a security row). Shell level only.
+# blocks (resume detection, yield handling, gate retry, security writer, simplify
+# pass, flow checks, wiki promotion, code audit and post-clearance), failure
+# aggregation, placeholder scanning, the flow checks of a spec-derived plan (the
+# flow-test task line, the task-stem-to-phase rule, the closing-phase entry that
+# runs each flow test), and the test-stage record's reading: a running or ran
+# record owes the closing phase its Flow test lines and a phase with a
+# security-kind Test line its Security writer line, a skipped or absent record
+# refuses a Flow test line and owes nothing, and a malformed record fails
+# naming the file. Shell level only.
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
 
@@ -25,14 +27,12 @@ setup() {
   S_SECWRITER='<!-- gaia:orchestrator-step security-writer -->'
   S_SIMPLIFY='<!-- gaia:orchestrator-step simplify-pass -->'
   S_FLOW='<!-- gaia:orchestrator-step flow-checks -->'
-  S_DRIFT='<!-- gaia:orchestrator-step drift-check -->'
-  S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
   S_WIKI='<!-- gaia:orchestrator-step wiki-promotion -->'
   S_AUDIT='<!-- gaia:orchestrator-step code-audit -->'
   S_CLEAR='<!-- gaia:orchestrator-step post-clearance -->'
   S_CLOSE='<!-- gaia:orchestrator-step post-merge-close -->'
-  SPEC_ORDER=("$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
-  SPEC_LESS_ORDER=("$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
+  SPEC_ORDER=("$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
+  SPEC_LESS_ORDER=("$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
   WEB_TEST_PATH='apps/web/.playwright/flows/guest-checkout.spec.ts'
   COMMAND_TEST_PATH='.gaia/tests/lib/refuse-uats-spec.bats'
   WEB_RUN_LINE='pnpm -C apps/web exec playwright test .playwright/flows/guest-checkout.spec.ts'
@@ -118,7 +118,7 @@ yield_block() {
 # is_verbatim <sentinel>: the sentinels whose whole block is copied.
 is_verbatim() {
   case "$1" in
-    "$S_RESUME" | "$S_YIELD" | "$S_RETRY" | "$S_SECWRITER" | "$S_SIMPLIFY" | "$S_FLOW" | "$S_DRIFT" | "$S_WIKI" | "$S_AUDIT" | "$S_CLEAR") return 0 ;;
+    "$S_RESUME" | "$S_YIELD" | "$S_RETRY" | "$S_SECWRITER" | "$S_SIMPLIFY" | "$S_FLOW" | "$S_WIKI" | "$S_AUDIT" | "$S_CLEAR") return 0 ;;
   esac
   return 1
 }
@@ -154,34 +154,13 @@ write_orchestrator() {
   } >"$PLAN/ORCHESTRATOR.md"
 }
 
-SPEC_LESS_TEST_LINE='- Test: apps/web/app/utils/format.test.ts › formats a price'
-WEB_TEST_LINE='- Test: apps/web/.playwright/flows/guest-checkout.spec.ts › a guest checks out and sees the order number'
-COMMAND_TEST_LINE='- Test: .gaia/tests/lib/refuse-uats-spec.bats › the plan check refuses a SPEC that still carries uats'
-
 write_task() {
-  printf '# Task\n\n%s\n%s\n' "$1" "$SPEC_LESS_TEST_LINE" >"$PLAN/task-one.md"
+  printf '# Task\n\n%s\n' "$1" >"$PLAN/task-one.md"
 }
 
-# write_table <json rows>: the plan's tests.json and a TEST-DESIGN marker.
-write_table() {
-  printf 'schema: 1\n' >"$PLAN/TEST-DESIGN"
-  printf '{"schema":1,"rows":[%s]}\n' "$1" >"$PLAN/tests.json"
-}
-
-# table_row <id> <source> <file> <title> <task> [<security>]: one valid row.
-# A flagged row gets the caseKinds verify requires of a keyless one.
-table_row() {
-  local case_kinds=''
-  [ "${6:-none}" = none ] || case_kinds=",\"caseKinds\":[{\"case\":\"c\",\"kind\":\"$6\"}]"
-  printf '{"id":"%s","source":"%s","case":"c","file":"%s","title":"%s","layer":"unit","task":"%s","action":"new","security":"%s"%s}' "$1" "$2" "$3" "$4" "$5" "${6:-none}" "$case_kinds"
-}
-
-spec_less_table() {
-  write_table "$(table_row T1 description apps/web/app/utils/format.test.ts 'formats a price' task-one "${1:-none}")"
-}
-
-spec_table() {
-  write_table "$(table_row T1 flow:guest-checkout apps/web/.playwright/flows/guest-checkout.spec.ts 'a guest checks out and sees the order number' task-flow-web),$(table_row T2 flow:refuse-uats-spec .gaia/tests/lib/refuse-uats-spec.bats 'the plan check refuses a SPEC that still carries uats' task-flow-command)"
+# write_test_stage <status>: the plan's TEST-STAGE record.
+write_test_stage() {
+  printf 'status: %s\ndate: 2026-01-01T00:00:00Z\n' "$1" >"$PLAN/TEST-STAGE"
 }
 
 # spec_fixture: a passing spec-derived plan folder with two flows.
@@ -193,9 +172,9 @@ spec_fixture() {
   write_orchestrator "${SPEC_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   printf '# Build\n\n- builds the pages\n' >"$PLAN/task-build.md"
-  printf '# Web flow\n\n- Flow test (FLOW-901): %s\n%s\n' "$WEB_TEST_PATH" "$WEB_TEST_LINE" >"$PLAN/task-flow-web.md"
-  printf '# Command flow\n\n- Flow test (FLOW-902): %s\n%s\n' "$COMMAND_TEST_PATH" "$COMMAND_TEST_LINE" >"$PLAN/task-flow-command.md"
-  spec_table
+  printf '# Web flow\n\n- Flow test (FLOW-901): %s\n' "$WEB_TEST_PATH" >"$PLAN/task-flow-web.md"
+  printf '# Command flow\n\n- Flow test (FLOW-902): %s\n' "$COMMAND_TEST_PATH" >"$PLAN/task-flow-command.md"
+  write_test_stage ran
 }
 
 # spec_less_fixture: a passing spec-less plan folder.
@@ -206,7 +185,6 @@ spec_less_fixture() {
   write_orchestrator "${SPEC_LESS_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task '- nothing'
-  spec_less_table
 }
 
 # same_set <expected-newline-list> <name>...: the names form exactly the set.
@@ -266,7 +244,6 @@ copy_script_tree() {
   local relative
   mkdir -p "$1/.gaia/scripts" "$1/.claude/skills/gaia/references/plan" "$1/.claude/hooks/lib" "$1/apps/web"
   cp -R "$REPO_ROOT_REAL/.gaia/scripts/spec" "$1/.gaia/scripts/spec"
-  cp -R "$REPO_ROOT_REAL/.gaia/scripts/test-design" "$1/.gaia/scripts/test-design"
   for relative in .gaia/scripts/machine-local-ref-lib.sh .claude/hooks/lib/gaia-packages.sh .gaia/packages.json apps/web/gaia.package.json; do
     cp "$REPO_ROOT_REAL/$relative" "$1/$relative"
   done
@@ -359,7 +336,7 @@ copy_script_tree() {
 
 @test "flow-checks placed before gate-retry is out of order and named" {
   spec_fixture
-  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_FLOW" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_FLOW" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
   [ "$status" -eq 1 ]
   refusal_line 'out of order' "$S_RETRY"
@@ -418,7 +395,7 @@ build_indented_orchestrator() {
 
 @test "a sentinel line carrying trailing prose does not match" {
   spec_fixture
-  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE see below"
+  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE see below"
   verify_spec
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF -- "$S_CLOSE"
@@ -426,7 +403,7 @@ build_indented_orchestrator() {
 
 @test "a spec-less plan with the close sentinel above the promotion sentinel fails" {
   spec_less_fixture
-  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_DRIFT" "$S_CLOSE" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"
+  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_CLOSE" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"
   verify_spec_less
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF 'out of order'
@@ -549,7 +526,7 @@ mutate_orchestrator() {
 
 @test "red twin: the yield-handling block above the resume block is out of order" {
   spec_less_fixture
-  write_orchestrator "$S_YIELD" "$S_RESUME" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_YIELD" "$S_RESUME" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec_less
   [ "$status" -eq 1 ]
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_RESUME"
@@ -572,10 +549,10 @@ mutate_orchestrator() {
 # ---------- the other verbatim blocks and the order of the late sentinels ----------
 
 @test "red twin: each adjacent swap among the late sentinels is out of order and named" {
-  local order=("$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE") index swapped
-  [ "${#order[@]}" -eq 8 ]
+  local order=("$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE") index swapped
+  [ "${#order[@]}" -eq 7 ]
   index=0
-  while [ "$index" -lt 7 ]; do
+  while [ "$index" -lt 6 ]; do
     swapped=("${order[@]}")
     swapped[index]="${order[$((index + 1))]}"
     swapped[$((index + 1))]="${order[$index]}"
@@ -671,77 +648,28 @@ append_after_sentinel() {
   mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
 }
 
-@test "red twin: security-writer or drift-check missing, out of order or paraphrased fails naming it, in both arms" {
-  local arm sentinel name
+@test "red twin: security-writer missing, out of order or paraphrased fails naming it, in both arms" {
+  local arm name sentinel="$S_SECWRITER"
   for arm in spec spec_less; do
-    for sentinel in "$S_SECWRITER" "$S_DRIFT"; do
-      name="${sentinel#<!-- gaia:orchestrator-step }"
-      name="${name% -->}"
-      "${arm}_fixture"
-      grep -vxF -- "$sentinel" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
-      mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
-      if [ "$arm" = spec ]; then verify_spec; else verify_spec_less; fi
-      [ "$status" -eq 1 ] || return 1
-      echo "$output" | grep -F 'missing the sentinel line' | grep -qF -- "$sentinel" || return 1
-      "${arm}_fixture"
-      append_after_sentinel "$sentinel"
-      if [ "$arm" = spec ]; then verify_spec; else verify_spec_less; fi
-      [ "$status" -eq 1 ] || return 1
-      echo "$output" | grep -qF "the $name block does not match planner.md" || { echo "$arm $name: $output" >&2; return 1; }
-    done
-  done
-  spec_fixture
-  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SIMPLIFY" "$S_SECWRITER" "$S_FLOW" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
-  verify_spec
-  [ "$status" -eq 1 ] || return 1
-  echo "$output" | grep -F 'out of order' | grep -qF -- "$S_SECWRITER" || return 1
-}
-
-@test "red twin: an ORCHESTRATOR carrying the retired worthiness-step sentinel instead of drift-check fails the missing-sentinel check" {
-  local arm
-  for arm in spec spec_less; do
+    name="${sentinel#<!-- gaia:orchestrator-step }"
+    name="${name% -->}"
     "${arm}_fixture"
-    grep -vxF -- "$S_DRIFT" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
-    printf '%s\n' "$S_WORTH" >>"$PLAN/ORCHESTRATOR.md.new"
+    grep -vxF -- "$sentinel" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
     mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
     if [ "$arm" = spec ]; then verify_spec; else verify_spec_less; fi
     [ "$status" -eq 1 ] || return 1
-    echo "$output" | grep -F 'missing the sentinel line' | grep -qF -- "$S_DRIFT" || { echo "$arm: $output" >&2; return 1; }
-  done
-}
-
-# ---------- the test-design checks ----------
-
-@test "test design: a plan with no TEST-DESIGN marker and no tests.json fails naming the marker and the table, spec-derived and spec-less" {
-  local arm
-  for arm in spec spec_less; do
+    echo "$output" | grep -F 'missing the sentinel line' | grep -qF -- "$sentinel" || return 1
     "${arm}_fixture"
-    rm -f "$PLAN/TEST-DESIGN" "$PLAN/tests.json"
+    append_after_sentinel "$sentinel"
     if [ "$arm" = spec ]; then verify_spec; else verify_spec_less; fi
     [ "$status" -eq 1 ] || return 1
-    echo "$output" | grep -qxF "plan-verify: TEST-DESIGN is missing from $PLAN" || { echo "$arm: $output" >&2; return 1; }
-    echo "$output" | grep -F 'tests.json' | grep -qF 'test-table:' || { echo "$arm: $output" >&2; return 1; }
+    echo "$output" | grep -qF "the $name block does not match planner.md" || { echo "$arm $name: $output" >&2; return 1; }
   done
-}
-
-@test "test design: a requirement key no row cites is relayed as one plan-verify failure" {
   spec_fixture
-  write_table "$(table_row T1 flow:guest-checkout apps/web/.playwright/flows/guest-checkout.spec.ts 'a guest checks out and sees the order number' task-flow-web)"
+  write_orchestrator "$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SIMPLIFY" "$S_SECWRITER" "$S_FLOW" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
-  [ "$status" -eq 1 ]
-  refusal_line 'plan-verify: test-table:' 'flow:refuse-uats-spec'
-}
-
-@test "test design: a security row whose phase entry lacks the Security writer line fails naming the phase and row" {
-  spec_less_fixture
-  spec_less_table access
-  verify_spec_less
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qxF "plan-verify: ORCHESTRATOR.md: Phase 1 owns security row T1 but its entry has no '- Security writer:' line" || { echo "$output" >&2; return 1; }
-  SECURITY_WRITER_PHASES=1
-  write_orchestrator "${SPEC_LESS_ORDER[@]}"
-  verify_spec_less
-  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  [ "$status" -eq 1 ] || return 1
+  echo "$output" | grep -F 'out of order' | grep -qF -- "$S_SECWRITER" || return 1
 }
 
 @test "red twin: gate-retry missing or above yield-handling fails naming it, in both arms" {
@@ -755,7 +683,7 @@ append_after_sentinel() {
     echo "$output" | grep -F 'missing the sentinel line' | grep -qF -- "$S_RETRY" || return 1
   done
   spec_less_fixture
-  write_orchestrator "$S_RESUME" "$S_RETRY" "$S_YIELD" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_RESUME" "$S_RETRY" "$S_YIELD" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec_less
   [ "$status" -eq 1 ] || return 1
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_YIELD" || return 1
@@ -809,12 +737,12 @@ append_after_sentinel() {
 
 @test "red twin: resume-detection after the first later step is out of order and named, in both arms" {
   spec_fixture
-  write_orchestrator "$S_YIELD" "$S_RESUME" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_YIELD" "$S_RESUME" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
   [ "$status" -eq 1 ] || return 1
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_RESUME" || return 1
   spec_less_fixture
-  write_orchestrator "$S_YIELD" "$S_RESUME" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_DRIFT" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
+  write_orchestrator "$S_YIELD" "$S_RESUME" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec_less
   [ "$status" -eq 1 ] || return 1
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_RESUME" || return 1
@@ -976,74 +904,117 @@ add_readme_task() {
 @test "flows: a spec-less plan is not asked for flow lines or a last-phase run entry" {
   spec_less_fixture
   write_task '- Flow test (FLOW-999): nowhere.spec.ts'
+  write_test_stage ran
   verify_spec_less
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
-# ---------- a flow tests.json's coveredFlows records ----------
+# ---------- the sentinel set without the drift check, and the test stage's record ----------
 
-BUILD_TEST_LINE='- Test: .gaia/tests/lib/plan-check.bats › the plan check refuses a uats SPEC'
-
-# record_covered <json array>: set tests.json's coveredFlows.
-record_covered() {
-  node -e 'const fs=require("fs");const [f,v]=process.argv.slice(1);const t=JSON.parse(fs.readFileSync(f,"utf8"));t.coveredFlows=JSON.parse(v);fs.writeFileSync(f,JSON.stringify(t)+"\n")' "$PLAN/tests.json" "$1"
+@test "a skipped or absent test stage refuses a Flow test line in a spec-less plan" {
+  local state
+  for state in skipped absent; do
+    spec_less_fixture
+    write_task '- Flow test (FLOW-999): nowhere.spec.ts'
+    if [ "$state" = skipped ]; then write_test_stage skipped; else rm -f "$PLAN/TEST-STAGE"; fi
+    verify_spec_less
+    [ "$status" -eq 1 ] || { echo "$state: a flow line exited $status: $output" >&2; return 1; }
+    refusal_line 'task-one.md' 'Flow test line'
+    write_task '- nothing'
+    verify_spec_less
+    [ "$status" -eq 0 ] || { echo "$state: no flow line: $output" >&2; return 1; }
+  done
 }
 
-# covered_command_fixture: the spec fixture plus one success criterion, with
-# the command flow recorded in coveredFlows (build row T3 owns it), so it has
-# no closing-phase task.
-covered_command_fixture() {
+@test "a plan with no test table, marker or flow phase passes" {
+  local arm
+  for arm in spec spec_less; do
+    "${arm}_fixture"
+    rm -f "$PLAN/TEST-STAGE"
+    if [ "$arm" = spec ]; then
+      printf '# Web flow\n\n- nothing\n' >"$PLAN/task-flow-web.md"
+      printf '# Command flow\n\n- nothing\n' >"$PLAN/task-flow-command.md"
+      verify_spec
+    else
+      verify_spec_less
+    fi
+    [ "$status" -eq 0 ] || { echo "$arm: $output" >&2; return 1; }
+  done
+}
+
+@test "the kept sentinel set passes without the drift check" {
+  local literal name arm
   spec_fixture
-  write_flow_spec $'success_criteria:\n  - the plan check refuses a uats SPEC'
-  sed -i.bak 's/, `task-flow-command`//' "$PLAN/README.md"
-  rm -f "$PLAN/README.md.bak" "$PLAN/task-flow-command.md"
-  printf '# Build\n\n%s\n' "$BUILD_TEST_LINE" >"$PLAN/task-build.md"
-  FLOW_RUN_LINES="$WEB_RUN_LINE"
-  write_orchestrator "${SPEC_ORDER[@]}"
-  write_table "$(table_row T1 flow:guest-checkout "$WEB_TEST_PATH" 'a guest checks out and sees the order number' task-flow-web),$(table_row T3 success_criteria:0 .gaia/tests/lib/plan-check.bats 'the plan check refuses a uats SPEC' task-build)"
-  record_covered '[{"source":"flow:refuse-uats-spec","rows":["T3"]}]'
-}
-
-@test "covered flows: a recorded flow needs no Flow test line; without the record it fails" {
-  covered_command_fixture
+  grep -qF 'orchestrator-step drift-check' "$PLAN/ORCHESTRATOR.md" && return 1
   verify_spec
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-  record_covered '[]'
-  verify_spec
-  [ "$status" -eq 1 ]
-  refusal_line "FLOW-902 has no '- Flow test (FLOW-902)"
+  for literal in "${SPEC_ORDER[@]}"; do
+    spec_fixture
+    grep -vxF -- "$literal" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
+    mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
+    verify_spec
+    [ "$status" -eq 1 ] || { echo "$literal removed exited $status" >&2; return 1; }
+    name="${literal#<!-- gaia:orchestrator-step }"
+    name="${name% -->}"
+    echo "$output" | grep -F 'missing the sentinel line' | grep -qF -- "$name" || { echo "$name: $output" >&2; return 1; }
+  done
+  spec_less_fixture
+  grep -qF -- "$S_FLOW" "$PLAN/ORCHESTRATOR.md" && return 1
+  verify_spec_less
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  arm=spec_less
+  [ "${#SPEC_LESS_ORDER[@]}" -eq "$((${#SPEC_ORDER[@]} - 1))" ] || { echo "$arm order differs by more than flow-checks" >&2; return 1; }
 }
 
-@test "covered flows: a recorded flow that still carries a Flow test line fails naming the flow" {
-  covered_command_fixture
-  add_readme_task 2 task-flow-command
-  printf '# Command flow\n\n- Flow test (FLOW-902): %s\n' "$COMMAND_TEST_PATH" >"$PLAN/task-flow-command.md"
-  verify_spec
-  [ "$status" -eq 1 ]
-  refusal_line 'FLOW-902 is recorded in tests.json coveredFlows' 'task-flow-command.md'
-}
+SECURITY_TEST_LINE='- Test (task-one:AC1, unit, access): apps/web/app/utils/guard.test.ts › refuses a stranger'
 
-@test "covered flows: every flow recorded leaves the last phase owing no Flow test line; one unrecorded flow restores it" {
-  covered_command_fixture
-  rm -f "$PLAN/task-flow-web.md"
-  printf '# Plan\n\n| Phase | Tasks | Model | Split |\n|---|---|---|---|\n| Phase 1 | `task-build` | sonnet | none |\n' >"$PLAN/README.md"
-  FLOW_RUN_LINES=''
-  write_orchestrator "${SPEC_ORDER[@]}"
-  write_table "$(table_row T3 success_criteria:0 .gaia/tests/lib/plan-check.bats 'the plan check refuses a uats SPEC' task-build)"
-  record_covered '[{"source":"flow:guest-checkout","rows":["T3"]},{"source":"flow:refuse-uats-spec","rows":["T3"]}]'
+@test "a running or ran test stage owes flow and security writer lines, and a skipped or absent one refuses a flow line" {
+  local state
+  for state in running ran; do
+    # the flow line, absent: refused naming the flow
+    spec_fixture
+    write_test_stage "$state"
+    printf '# Web flow\n\n- nothing\n' >"$PLAN/task-flow-web.md"
+    verify_spec
+    [ "$status" -eq 1 ] || { echo "$state: missing flow line exited $status" >&2; return 1; }
+    refusal_line 'FLOW-901'
+    # a security-kind Test line: refused naming the phase, passes with the writer line
+    spec_fixture
+    write_test_stage "$state"
+    printf '# Build\n\n%s\n' "$SECURITY_TEST_LINE" >"$PLAN/task-build.md"
+    verify_spec
+    [ "$status" -eq 1 ] || { echo "$state: missing writer line exited $status" >&2; return 1; }
+    refusal_line 'Phase 1' "'- Security writer:'"
+    SECURITY_WRITER_PHASES=1
+    write_orchestrator "${SPEC_ORDER[@]}"
+    SECURITY_WRITER_PHASES=''
+    verify_spec
+    [ "$status" -eq 0 ] || { echo "$state: both lines present: $output" >&2; return 1; }
+  done
+  # a none-kind Test line owes no writer line
+  spec_fixture
+  printf '# Build\n\n- Test (task-build:AC1, unit, none): apps/web/app/utils/a.test.ts › a\n' >"$PLAN/task-build.md"
   verify_spec
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-  record_covered '[{"source":"flow:guest-checkout","rows":["T3"]}]'
+  # skipped and absent: a task doc carrying a Flow test line fails naming the file
+  for state in skipped absent; do
+    spec_fixture
+    if [ "$state" = skipped ]; then write_test_stage skipped; else rm -f "$PLAN/TEST-STAGE"; fi
+    verify_spec
+    [ "$status" -eq 1 ] || { echo "$state: a flow line exited $status" >&2; return 1; }
+    refusal_line 'task-flow-web.md' 'Flow test line'
+    refusal_line 'task-flow-command.md' 'Flow test line'
+    printf '# Web flow\n\n- nothing\n' >"$PLAN/task-flow-web.md"
+    printf '# Command flow\n\n- nothing\n' >"$PLAN/task-flow-command.md"
+    printf '# Build\n\n%s\n' "$SECURITY_TEST_LINE" >"$PLAN/task-build.md"
+    verify_spec
+    [ "$status" -eq 0 ] || { echo "$state: no lines owed: $output" >&2; return 1; }
+  done
+  # a malformed record fails naming the file and refuses nothing else
+  spec_fixture
+  printf 'status: done\ndate: 2026-01-01T00:00:00Z\n' >"$PLAN/TEST-STAGE"
   verify_spec
-  [ "$status" -eq 1 ]
-  refusal_line "task-build.md: the last-phase (Phase 1) task doc has no '- Flow test"
-}
-
-@test "covered flows: an entry naming a row the table lacks is relayed and leaves its flow unrecorded" {
-  covered_command_fixture
-  record_covered '[{"source":"flow:refuse-uats-spec","rows":["T9"]}]'
-  verify_spec
-  [ "$status" -eq 1 ]
-  refusal_line 'coveredFlows flow:refuse-uats-spec names row T9, which the table lacks'
-  refusal_line "FLOW-902 has no '- Flow test (FLOW-902)"
+  [ "$status" -eq 1 ] || return 1
+  refusal_line 'TEST-STAGE is malformed' "$PLAN/TEST-STAGE"
+  [ "$(echo "$output" | grep -c .)" -eq 1 ] || { echo "$output" >&2; return 1; }
 }

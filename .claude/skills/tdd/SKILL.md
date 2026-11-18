@@ -127,12 +127,12 @@ Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` 
 
 The guarantee this audit provides is scoped to **the subset a same-model fresh-context reviewer reliably flags**, not a proof of test worthiness. State the surviving guarantees by path:
 
-- **No-orchestrator path (this skill alone), surviving guarantees:** the red step you ran and saw fail; the fresh-subagent worthiness audit **if it was dispatched**, which is where the honesty check (`.claude/doctrine/testing.md`, `## Honesty`) runs, as the evaluator's judgment. No lint enforces honesty on every test. On this path the audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only your own red step and the merge presence check.
+- **No-orchestrator path (this skill alone), surviving guarantees:** the red step you ran and saw fail; the fresh-subagent worthiness audit **if it was dispatched**, which is where the honesty check (`.claude/doctrine/testing.md`, `**Hollow test.**`) runs, as the evaluator's judgment. No lint enforces honesty on every test. On this path the audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only your own red step and the merge presence check.
 - **Orchestrated path, additional guarantees (NOT available here):** leaf isolation enforced by the orchestrator. That is orchestrator-owned; the no-orchestrator path does not provide it. The merge presence gate (which recomputes signals and refuses a merge whose audit ledger is absent or mismatched) is a repo-wide hook that fires on every `gh pr merge`: see `wiki/concepts/PR Merge Workflow.md`, "Second merge gate: the worthiness presence gate".
 
 ### 7. Surfacing the advisory findings
 
-Advisory findings (the worthiness verdicts) never interrupt mid-implementation. They surface only in the one end-of-task summary the determinism roll-up also renders into, before commit (no-orchestrator path), or in the orchestrator's `SUMMARY.md` plus the pre-merge summary (orchestrated path). A fix verdict is advisory only here: the pre-audit step of the workflow the work runs in decides the repair before the audit, the worthiness step for the work lifecycle, `/gaia-debt` or an older plan (`.claude/skills/gaia/references/worthiness-step.md`), and the drift check for a plan with a test-design table (`.claude/skills/gaia/references/drift-check.md`).
+Advisory findings (the worthiness verdicts) never interrupt mid-implementation. They surface only in the one end-of-task summary the determinism roll-up also renders into, before commit (no-orchestrator path), or in the orchestrator's `SUMMARY.md` plus the pre-merge summary (orchestrated path). A fix verdict is advisory only here: the pre-audit step of the workflow the work runs in decides the repair before the audit, the worthiness step for the work lifecycle, `/gaia-debt` or a plan (`.claude/skills/gaia/references/worthiness-step.md`).
 
 #### Capped
 

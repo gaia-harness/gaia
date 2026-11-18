@@ -67,6 +67,6 @@
 .gaia/scripts/spec/working-doc-id-scan.sh	app/route-tests	Package-relative route-test directory name joined to the package path from the registry, not a root path.
 .gaia/scripts/spec/flow-coverage.sh	.playwright/flows	Package-relative flow test directory name joined to the package path from the registry, not a root path.
 .gaia/scripts/spec/plan-verify.sh	.playwright/flows	Package-relative flow test directory name joined to the web package path from the registry, not a root path.
-.claude/skills/gaia/references/plan/planner.md	.playwright/flows/	Package-relative flow test path run from or joined to the frontend package the line names, not a root path.
+.claude/skills/gaia/references/test-stage.md	.playwright/flows/	Package-relative flow test path run from or joined to the frontend package the line names, not a root path.
 .gaia/scripts/test-design/existing-tests.mjs	'app/routes'	Package-relative route folder joined onto the package directory from the registry, not a root file path.
 .gaia/scripts/test-design/existing-tests.mjs	'tsconfig.json'	Package-relative config file joined onto the package directory from the registry, not a root file path.

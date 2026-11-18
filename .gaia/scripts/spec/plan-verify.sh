@@ -6,8 +6,8 @@
 #
 # Usage: plan-verify.sh <plan-dir> [--spec <spec-path>]
 #
-# Always checked: README.md, ORCHESTRATOR.md, KICKOFF.md, the TEST-DESIGN
-# marker and at least one task-*.md exist; task file names match task-[a-z0-9][a-z0-9-]*.md and none
+# Always checked: README.md, ORCHESTRATOR.md, KICKOFF.md and at least one
+# task-*.md exist; task file names match task-[a-z0-9][a-z0-9-]*.md and none
 # ends in -tests; ORCHESTRATOR.md carries the verbatim step sentinels the plan
 # needs, each on a line of its own (leading and trailing whitespace allowed,
 # nothing else), in the order the template places them (flow-checks only with
@@ -20,13 +20,15 @@
 # README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no literal
 # {PLAN_DIR}, {SPEC_PATH} or {AUDIT_PATH}; one failure line per hit.
 #
-# The plan's test-design table is verified too: the requirement keys are built
-# (requirement-keys.sh: the SPEC plus its sibling AUDIT.md when one exists, or
-# --description for a spec-less plan) and test-table.mjs verify relays each of
-# its failures as one line; a missing node or an exit 2 is one failure line,
-# never a silent pass. Each row of tests.json whose security is not none owns
-# its task's phase: that phase's ORCHESTRATOR.md entry must hold a line
-# starting '- Security writer:'.
+# The test stage's record, <plan dir>/TEST-STAGE, decides what the test lines
+# owe (its first line reads status: running, ran or skipped; the test stage
+# owns the rule). Under running or ran, each phase whose task docs carry a
+#     - Test (<behavior id>, <layer>, <security kind>): <file> › <title>
+# line with a security kind other than none must hold, in its ORCHESTRATOR.md
+# entry, a line starting '- Security writer:', and a spec-derived plan owes the
+# Flow test lines below. Under skipped, or with no record, no test line is owed
+# and any task doc carrying a Flow test line fails naming the file. A first line that is none of the three fails naming the file and owes
+# or refuses nothing.
 #
 # With --spec (a spec-derived plan) additionally, after the SPEC's flows are
 # read (a uats: key or a malformed flow fails the plan with the reader's
@@ -36,10 +38,8 @@
 #   or in two rows fails. The last phase is the highest <N>.
 # - Every task doc in the last phase carries exactly one line
 #     - Flow test (<flow_id>): <repo-relative test path>
-#   and every SPEC flow has exactly one such line, except a flow tests.json's
-#   coveredFlows records, which has none; when it records every SPEC flow, no
-#   last-phase task doc owes one. A line naming a flow the SPEC lacks, a line in an earlier
-#   phase's task doc, or a path other than the flow's expected path fails. The
+#   and every SPEC flow has exactly one such line (under running or ran). A
+#   line naming a flow the SPEC lacks, a line in an earlier phase's task doc, or a path other than the flow's expected path fails. The
 #   expected path is a web flow's <web package>/.playwright/flows/<slug>.spec.ts,
 #   or a command flow's test_path.
 # - ORCHESTRATOR.md's last-phase entry (from the **Phase <N>, line outside every
@@ -126,7 +126,6 @@ if [ -n "$spec_path" ]; then
   sentinels+=('<!-- gaia:orchestrator-step flow-checks -->')
 fi
 sentinels+=(
-  '<!-- gaia:orchestrator-step drift-check -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
   '<!-- gaia:orchestrator-step code-audit -->'
   '<!-- gaia:orchestrator-step post-clearance -->'
@@ -137,7 +136,6 @@ verbatim_sentinels=(
   '<!-- gaia:orchestrator-step security-writer -->'
   '<!-- gaia:orchestrator-step simplify-pass -->'
   '<!-- gaia:orchestrator-step flow-checks -->'
-  '<!-- gaia:orchestrator-step drift-check -->'
   '<!-- gaia:orchestrator-step wiki-promotion -->'
   '<!-- gaia:orchestrator-step code-audit -->'
   '<!-- gaia:orchestrator-step post-clearance -->'
@@ -260,24 +258,14 @@ if [ -f "$orchestrator" ]; then
   done
 fi
 
-# The planner substitutes absolute values for these tokens in every file it
-# writes; one left behind sends a cold orchestrator to a literal brace path.
-for generated_file in "$readme" "$orchestrator" "$plan_directory/KICKOFF.md" ${task_files[@]+"${task_files[@]}"}; do
-  [ -f "$generated_file" ] || continue
-  for placeholder in '{PLAN_DIR}' '{SPEC_PATH}' '{AUDIT_PATH}'; do
-    while IFS=: read -r hit_line _; do
-      [ -n "$hit_line" ] || continue
-      fail "$(basename "$generated_file"):$hit_line holds the unsubstituted placeholder $placeholder"
-    done < <(grep -nF -- "$placeholder" "$generated_file" 2>/dev/null)
-  done
-done
+placeholder_check
 
 
 flow_checks() {
   local flow_output flow_status=0 web_directory='' flow_id slug kind target
   local stems_text phase last_phase=0 task_file task_name task_stem task_phase matches
   local line_text path_text expected_path flow_lines='' entry_text entry_line base_name
-  local line_count line_files line_task line_phase line_flow_id run_found covered_sources unrecorded_count
+  local line_count line_files line_task line_phase line_flow_id run_found
   flow_output=$(flows_lib_parse_spec "$spec_path" 2>&1) || flow_status=$?
   if [ "$flow_status" -ne 0 ]; then
     while IFS= read -r line_text; do
@@ -295,8 +283,6 @@ flow_checks() {
   while IFS=$'\t' read -r phase _; do
     [ "$phase" -le "$last_phase" ] || last_phase="$phase"
   done <<<"$stems_text"
-
-  read_covered_flows "$flow_output"
 
   # flow_lines holds <task doc>, <phase>, <flow id>, <path> per Flow test line; '-' marks a task doc with no single README phase (tab-split reads collapse an empty field).
   for task_file in ${task_files[@]+"${task_files[@]}"}; do
@@ -319,7 +305,7 @@ flow_checks() {
       flow_lines="${flow_lines}${task_name}"$'\t'"${task_phase:--}"$'\t'"${BASH_REMATCH[1]}"$'\t'"$path_text"$'\n'
       line_count=$((line_count + 1))
     done <"$task_file"
-    if [ "$task_phase" = "$last_phase" ] && [ "$unrecorded_count" -gt 0 ]; then
+    if [ "$test_stage_owed" -eq 1 ] && [ "$task_phase" = "$last_phase" ]; then
       if [ "$line_count" -eq 0 ]; then
         fail "$task_name: the last-phase (Phase $last_phase) task doc has no '- Flow test (<flow_id>): <path>' line"
       elif [ "$line_count" -gt 1 ]; then
@@ -327,6 +313,8 @@ flow_checks() {
       fi
     fi
   done
+
+  [ "$test_stage_owed" -eq 1 ] || return 0 # malformed record reported, or no test stage: Flow lines handled by flow_test_refusal
 
   while IFS=$'\t' read -r flow_id slug _ _ kind target; do
     [ -n "$flow_id" ] || continue
@@ -342,12 +330,6 @@ flow_checks() {
     fi
     line_files=$(awk -F'\t' -v id="$flow_id" '$3 == id { print $1 }' <<<"$flow_lines" | paste -sd, - | sed 's/,/, /g')
     line_count=$(awk -F'\t' -v id="$flow_id" '$3 == id' <<<"$flow_lines" | grep -c .)
-    case "$covered_sources" in
-      *$'\n'"flow:$slug"$'\n'*)
-        [ "$line_count" -eq 0 ] || fail "$flow_id is recorded in tests.json coveredFlows, so it has no flow test; drop its Flow test line ($line_files)"
-        continue
-        ;;
-    esac
     if [ "$line_count" -eq 0 ]; then
       fail "$flow_id has no '- Flow test ($flow_id): $expected_path' line in any task doc"
     elif [ "$line_count" -gt 1 ]; then
@@ -387,14 +369,13 @@ flow_checks() {
   done <<<"$flow_lines"
 }
 
+read_test_stage
+flow_test_refusal
 if [ -n "$spec_path" ]; then
   flow_checks
 fi
 
-[ -f "$plan_directory/TEST-DESIGN" ] || fail "TEST-DESIGN is missing from $plan_directory"
-
 security_writer_check
-table_check
 
 [ "$failures" -eq 0 ] || exit 1
 exit 0

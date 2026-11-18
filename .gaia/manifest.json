@@ -20,6 +20,7 @@
     ".claude/commands/gaia-plan.md": "owned",
     ".claude/commands/gaia-residue.md": "owned",
     ".claude/commands/gaia-spec.md": "owned",
+    ".claude/commands/gaia-test.md": "owned",
     ".claude/commands/setup-gaia.md": "owned",
     ".claude/doctrine/context-checkpoint.md": "owned",
     ".claude/doctrine/context-yield.md": "owned",
@@ -183,6 +184,7 @@
     ".claude/skills/gaia/references/spec/spec-template.md": "owned",
     ".claude/skills/gaia/references/spec/system-prompt.md": "owned",
     ".claude/skills/gaia/references/spec/wiki-promote.md": "owned",
+    ".claude/skills/gaia/references/test-stage.md": "owned",
     ".claude/skills/gaia/references/toolchain.md": "owned",
     ".claude/skills/gaia/references/wiki.md": "owned",
     ".claude/skills/gaia/references/wiki/consolidate.md": "owned",
@@ -889,7 +891,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T08:43:38.784Z",
+  "generated": "2026-11-18T09:08:34.069Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
