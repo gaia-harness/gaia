@@ -65,8 +65,8 @@
 #   respect to the roster even though there is now exactly one caller (the
 #   orchestrator) rather than one call per member.
 #
-#   The SUCCESS arm also declines while audit-gate-owed.sh or the security-row
-#   check reports owed work or cannot answer; the REFUSAL arm reads neither.
+#   The SUCCESS arm also declines while audit-gate-owed.sh reports owed work or
+#   cannot answer; the REFUSAL arm reads neither.
 #
 #   The REFUSAL arm skips the member-aware gate by design (see Purpose above),
 #   so none of the roster conditions above bound it. Re-arming that gate here

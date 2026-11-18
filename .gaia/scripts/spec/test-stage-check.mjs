@@ -8,7 +8,10 @@
 // stdout when every list is accepted.
 // Exit: 0 accepted, 1 refused, 2 usage error or an unreadable file.
 //
-// Reads every `task-*.md` of the plan directory, under its `## Tests` heading:
+// Reads every `task-*.md` of the plan directory. Test lines are read under its
+// `## Tests` heading; a Flow test line is read anywhere in the doc, as the plan
+// check reads it, since the closing phase's task doc carries it under no named
+// heading:
 //
 //   - Test (<behavior id>, <layer>, <security kind>): <file> › <title>
 //   - Flow test (<flow_id>): <repo-relative test path>
@@ -49,7 +52,7 @@ const TESTS_HEADING = /^## Tests\s*$/;
 const CRITERIA_HEADING = /^## Acceptance criteria\s*$/;
 const ANY_HEADING = /^## /;
 const TEST_LINE = /^- Test \(([^)]*)\): (.*)$/;
-const FLOW_TEST_LINE = /^- Flow test \(([^)]*)\): (.*)$/;
+const FLOW_TEST_LINE = /^\s*- Flow test \(([^)]*)\): (.*)$/;
 const FILE_TITLE = /^(\S+) › (\S.*)$/;
 const CRITERION_ID = /^(.+):AC([1-9][0-9]*)$/;
 
@@ -208,14 +211,16 @@ function main() {
   };
   for (const name of taskFiles) {
     const taskText = taskTexts.get(name.replace(/\.md$/, ''));
-    for (const line of sectionLines(taskText, TESTS_HEADING)) {
+    for (const rawLine of taskText.split('\n')) {
+      const line = rawLine.replace(/\r$/, '');
       const flowMatch = FLOW_TEST_LINE.exec(line);
-      if (flowMatch) {
-        if (flowMatch[1].trim() && /^\S+$/.test(flowMatch[2].trim())) {
-          flowsWithTests.add(flowMatch[1].trim());
-        } else refusals.push(`${name}: malformed Flow test line: ${line}`);
-        continue;
-      }
+      if (!flowMatch) continue;
+      if (flowMatch[1].trim() && /^\S+$/.test(flowMatch[2].trim())) {
+        flowsWithTests.add(flowMatch[1].trim());
+      } else refusals.push(`${name}: malformed Flow test line: ${line}`);
+    }
+    for (const line of sectionLines(taskText, TESTS_HEADING)) {
+      if (FLOW_TEST_LINE.test(line)) continue;
       if (!/^- (Flow )?[Tt]est\b/.test(line)) continue;
       const refusal = checkTestLine(line, context);
       if (refusal) refusals.push(`${name}: ${refusal}`);

@@ -25,7 +25,8 @@
 #   - spec_id matches SPEC-NNN
 #   - flows validate through flows-lib.sh: a uats: key, a missing flows: key, or a
 #     malformed flow is refused, each under the finding code flows-lib reports
-#   - a ## Behaviors section is present (finding code missing_behaviors) and
+#   - a ## Behaviors section holds at least one behavior outside a code fence
+#     (finding code missing_behaviors) and
 #     parses through behaviors.mjs (finding code invalid_behavior, one per problem)
 #   - when REQUIREMENTS.md sits beside the SPEC, every clarifications.answered
 #     answer appears in it after whitespace normalization (finding code
@@ -240,20 +241,24 @@ while IFS=$'\t' read -r flow_code flow_message flow_location; do
 done <<<"$flow_lines"
 
 # --- Behaviors check: behaviors.mjs owns the section's shape ---
-if ! grep -qE '^## Behaviors[[:space:]]*$' "$spec_file"; then
-  add_finding "missing_behaviors" "SPEC has no '## Behaviors' section." "body"
-else
-  behavior_status=0
-  behavior_problems=$(node "$script_directory/behaviors.mjs" "$spec_file" 2>/dev/null) || behavior_status=$?
-  if [ "$behavior_status" -ne 0 ]; then
-    echo "lint.sh: cannot read behaviors: $spec_file" >&2
-    exit 2
-  fi
-  while IFS= read -r behavior_problem; do
-    [ -n "$behavior_problem" ] || continue
-    add_finding "invalid_behavior" "$behavior_problem" "body.behaviors"
-  done <<<"$behavior_problems"
+behavior_status=0
+behavior_count=$(node "$script_directory/behaviors.mjs" --count "$spec_file" 2>/dev/null) || behavior_status=$?
+if [ "$behavior_status" -ne 0 ]; then
+  echo "lint.sh: cannot read behaviors: $spec_file" >&2
+  exit 2
 fi
+if [ "$behavior_count" -eq 0 ]; then
+  add_finding "missing_behaviors" "SPEC has no behaviors under a '## Behaviors' section." "body"
+fi
+behavior_problems=$(node "$script_directory/behaviors.mjs" "$spec_file" 2>/dev/null) || behavior_status=$?
+if [ "$behavior_status" -ne 0 ]; then
+  echo "lint.sh: cannot read behaviors: $spec_file" >&2
+  exit 2
+fi
+while IFS= read -r behavior_problem; do
+  [ -n "$behavior_problem" ] || continue
+  add_finding "invalid_behavior" "$behavior_problem" "body.behaviors"
+done <<<"$behavior_problems"
 
 # --- Requirements check: each answered clarification is in the sibling file ---
 requirements_file="$(dirname "$spec_file")/REQUIREMENTS.md"
@@ -268,8 +273,7 @@ if [ -f "$requirements_file" ]; then
     /^clarifications:/ { in_clarifications = 1; next }
     in_clarifications && /^[A-Za-z_][A-Za-z0-9_]*:/ { flush(); in_clarifications = 0 }
     !in_clarifications { next }
-    /^  pending:/ { flush(); in_answered = 0; next }
-    /^  answered:/ { in_answered = 1; next }
+    /^  [A-Za-z_][A-Za-z0-9_]*:/ { flush(); in_answered = ($1 == "answered:"); next }
     !in_answered { next }
     /^[[:space:]]*- q:/ { flush(); item++; next }
     /^[[:space:]]+a:/ && !in_answer {

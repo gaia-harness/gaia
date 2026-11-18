@@ -112,6 +112,20 @@ check() {
   grep -qF -- usage <<<"$output"
 }
 
+@test "a Flow test line outside the Tests heading counts, as the plan check reads it" {
+  write_spec
+  write_full
+  grep -vF -- 'Flow test' "$PLAN/task-one.md" >"$BATS_TEST_TMPDIR/trimmed.md"
+  cp "$BATS_TEST_TMPDIR/trimmed.md" "$PLAN/task-one.md"
+  check --spec "$SPEC"
+  [ "$status" -eq 1 ]
+  has_output "FLOW-001 has no Flow test line" || return 1
+
+  printf '\n## Flow\n\n- Flow test (FLOW-001): flow.test.ts\n' >>"$PLAN/task-one.md"
+  check --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
 @test "two tests of one behavior at one layer are refused" {
   write_spec
   write_task task-one \

@@ -171,14 +171,16 @@ write_stage() {
   commit_all branch
   script_exists
 
-  local stage_line
+  local stage_line gap_cause
   for stage_line in 'status: skipped' none; do
     write_stage "$stage_line"
+    gap_cause='test stage skipped'
+    [ "$stage_line" = none ] && gap_cause='no TEST-STAGE record, test stage never ran'
     run coverage --plan-dir "$PLAN" --flow-tests-out "$TESTS_OUT"
     [ "$status" -eq 0 ] || { echo "$stage_line: $output" >&2; cat "$STDERR_FILE" >&2; return 1; }
     [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
-    printf '%s\n' "$output" | grep -qxF 'flow-coverage: gap: FLOW-001 has no flow test (test stage skipped)'
-    printf '%s\n' "$output" | grep -qxF 'flow-coverage: gap: FLOW-002 has no flow test (test stage skipped)'
+    printf '%s\n' "$output" | grep -qxF 'flow-coverage: gap: FLOW-001 has no flow test ('"$gap_cause"')'
+    printf '%s\n' "$output" | grep -qxF 'flow-coverage: gap: FLOW-002 has no flow test ('"$gap_cause"')'
     [ ! -s "$TESTS_OUT" ]
   done
 

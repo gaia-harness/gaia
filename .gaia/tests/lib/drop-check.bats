@@ -138,7 +138,7 @@ setup_removed_other_case() {
   [ "$status" -eq 1 ]
   has_output "a guest opens the list with no items" || return 1
 
-  write_fixes "$(quote_json "$OTHER_QUOTE")" '[]'
+  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "$OTHER_FRAGMENT")"
   check_spec
   [ "$status" -eq 0 ]
 
@@ -226,6 +226,51 @@ setup_removed_other_case() {
   [ "$status" -eq 0 ]
 }
 
+# One drop per behavior of the six-behavior SPEC: $1 takes destination $2,
+# file $3 and fragment $4; every other behavior is still-stated.
+drops_for_all() {
+  local entries="" id
+  for id in B1 B2 B3 B4 B5 B6; do
+    if [ "$id" = "$1" ]; then
+      entries="$entries{\"behavior\":\"$id\",\"case\":\"old case\",\"destination\":\"$2\",\"file\":\"$3\",\"fragment\":\"$4\"},"
+    else
+      entries="$entries{\"behavior\":\"$id\",\"case\":\"old case\",\"destination\":\"still-stated\",\"file\":\"SPEC.md\",\"fragment\":\"still refused with 403 Forbidden by the server\"},"
+    fi
+  done
+  printf '[%s]' "${entries%,}"
+}
+
+@test "a removed case with no drops entry for its behavior is refused whatever the edit says" {
+  setup_removed_other_case
+  write_fixes "$(quote_json "$OTHER_QUOTE")" '[]'
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "untraced drop: B3 lost 1 case(s)" || return 1
+
+  # A drop labeled with another behavior does not account for B3.
+  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B1 still-stated SPEC.md "$OTHER_FRAGMENT")"
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "untraced drop: B3" || return 1
+
+  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "$OTHER_FRAGMENT")"
+  check_spec
+  [ "$status" -eq 0 ]
+}
+
+@test "SPEC.md names the post-fix draft whatever the draft file is called" {
+  setup_removed_other_case
+  mv "$POST" "$WORK/post/draft-SPEC-001.md"
+  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "$OTHER_FRAGMENT")"
+  run node "$CLI" --fixes "$FIXES" --findings "$FINDINGS" --pre "$PRE" --post "$WORK/post/draft-SPEC-001.md"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+
+  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated OTHER.md "$OTHER_FRAGMENT")"
+  run node "$CLI" --fixes "$FIXES" --findings "$FINDINGS" --pre "$PRE" --post "$WORK/post/draft-SPEC-001.md"
+  [ "$status" -eq 1 ]
+  has_output "not a valid destination file" || return 1
+}
+
 @test "a security or refusal case resolves only to still stated, restored, a narrower refusal or deferred" {
   cat >"$PRE" <<'SPEC'
 ---
@@ -274,28 +319,28 @@ SPEC
 
   for behavior in B1 B4 B5 B6; do
     for destination in out-of-scope corrected-value; do
-      write_fixes "$edits" "$(drop_json "$behavior" "$destination" SPEC.md "$fragment")"
+      write_fixes "$edits" "$(drops_for_all "$behavior" "$destination" SPEC.md "$fragment")"
       check_spec
       [ "$status" -eq 1 ]
       has_output "drop-check: TST-001: $behavior" || return 1
     done
     for destination in still-stated restored refusal; do
-      write_fixes "$edits" "$(drop_json "$behavior" "$destination" SPEC.md "$fragment")"
+      write_fixes "$edits" "$(drops_for_all "$behavior" "$destination" SPEC.md "$fragment")"
       check_spec
       [ "$status" -eq 0 ] || { echo "$behavior $destination: $output"; return 1; }
     done
-    write_fixes "$edits" "$(drop_json "$behavior" deferred SPEC.md "$deferred")"
+    write_fixes "$edits" "$(drops_for_all "$behavior" deferred SPEC.md "$deferred")"
     check_spec
     [ "$status" -eq 0 ] || { echo "$behavior deferred: $output"; return 1; }
     # A deferred fragment that sits outside clarifications.deferred is refused.
-    write_fixes "$edits" "$(drop_json "$behavior" deferred SPEC.md "$fragment")"
+    write_fixes "$edits" "$(drops_for_all "$behavior" deferred SPEC.md "$fragment")"
     check_spec
     [ "$status" -eq 1 ]
     has_output "clarifications.deferred" || return 1
   done
 
   for behavior in B2 B3; do
-    write_fixes "$edits" "$(drop_json "$behavior" out-of-scope SPEC.md "$fragment")"
+    write_fixes "$edits" "$(drops_for_all "$behavior" out-of-scope SPEC.md "$fragment")"
     check_spec
     [ "$status" -eq 0 ] || { echo "$behavior out-of-scope: $output"; return 1; }
   done
@@ -398,4 +443,21 @@ check_plan() {
   check_plan
   [ "$status" -eq 1 ]
   has_output "The page shows Settings to the owner" || return 1
+}
+
+@test "plan mode refuses a removed acceptance bullet no drops entry accounts for" {
+  make_plan_dirs
+  write_findings DP-001
+  grep -vF "The page shows Settings to the owner" "$PLAN_PRE/task-a.md" >"$PLAN_POST/task-a.md"
+  printf '{"fixes":[{"finding":"DP-001","route":"plan","edits":%s}]}\n' \
+    "$(quote_json "The page shows Settings to the owner")" >"$FIXES"
+  check_plan
+  [ "$status" -eq 1 ]
+  has_output "untraced drop: 1 acceptance criteria were removed" || return 1
+
+  printf '{"fixes":[{"finding":"DP-001","route":"plan","edits":%s,"drops":%s}]}\n' \
+    "$(quote_json "The page shows Settings to the owner")" \
+    "$(drop_json AC2 still-stated README.md "answers 403 with the text Forbidden everywhere")" >"$FIXES"
+  check_plan
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }

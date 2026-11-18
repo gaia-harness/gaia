@@ -55,6 +55,25 @@ lint_codes() {
   [ "$(lint_codes)" = '["missing_behaviors"]' ]
 }
 
+@test "lint refuses a Behaviors heading with no behaviors or only inside a code fence" {
+  make_spec "$BATS_TEST_TMPDIR/SPEC.md" '## Behaviors
+
+Nothing yet.'
+  run bash "$LINT" "$BATS_TEST_TMPDIR/SPEC.md"
+  [ "$status" -eq 1 ]
+  [ "$(lint_codes)" = '["missing_behaviors"]' ]
+
+  make_spec "$BATS_TEST_TMPDIR/SPEC.md" '```
+## Behaviors
+
+- **B1** (access): Fenced example.
+  - Case: a -> b.
+```'
+  run bash "$LINT" "$BATS_TEST_TMPDIR/SPEC.md"
+  [ "$status" -eq 1 ]
+  [ "$(lint_codes)" = '["missing_behaviors"]' ]
+}
+
 @test "lint refuses a behavior with no id, a duplicate id, an unknown kind or no case" {
   local body
   body='## Behaviors
@@ -92,4 +111,15 @@ lint_codes() {
   printf '%s\n' '# Requirements' '' 'Use   the hosted' 'provider.' >"$BATS_TEST_TMPDIR/REQUIREMENTS.md"
   run bash "$LINT" "$BATS_TEST_TMPDIR/SPEC.md"
   [ "$status" -eq 0 ]
+}
+
+@test "a clarifications.deferred list between answered and pending is not part of the last answer" {
+  make_spec "$BATS_TEST_TMPDIR/SPEC.md" "$GOOD_BEHAVIORS" 'Use the hosted provider.'
+  sed 's/^  pending: \[\]$/  deferred:\n    - "Deferred: export limit undecided"\n  pending: []/' \
+    "$BATS_TEST_TMPDIR/SPEC.md" >"$BATS_TEST_TMPDIR/SPEC.deferred.md"
+  grep -qF 'deferred:' "$BATS_TEST_TMPDIR/SPEC.deferred.md" || return 1
+  mv "$BATS_TEST_TMPDIR/SPEC.deferred.md" "$BATS_TEST_TMPDIR/SPEC.md"
+  printf '%s\n' '# Requirements' '' 'Use the hosted provider.' >"$BATS_TEST_TMPDIR/REQUIREMENTS.md"
+  run bash "$LINT" "$BATS_TEST_TMPDIR/SPEC.md"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }

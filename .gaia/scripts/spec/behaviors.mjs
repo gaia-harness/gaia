@@ -23,7 +23,9 @@
 //
 // Run directly, `node behaviors.mjs <spec file>` prints each problem on its own
 // stdout line (nothing when there is none) and exits 0; an unreadable file is
-// exit 2 with a stderr line.
+// exit 2 with a stderr line. `node behaviors.mjs --count <spec file>` prints
+// only the number of parsed behaviors, so a caller can require a non-empty
+// section that is not inside a fenced block.
 
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
@@ -119,12 +121,18 @@ export function parseBehaviors(markdownText) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const countOnly = process.argv[2] === '--count';
+  const specFile = countOnly ? process.argv[3] : process.argv[2];
   let markdownText;
   try {
-    markdownText = readFileSync(process.argv[2], 'utf8');
+    markdownText = readFileSync(specFile, 'utf8');
   } catch (error) {
-    process.stderr.write(`behaviors: cannot read ${process.argv[2]}: ${error.message}\n`);
+    process.stderr.write(`behaviors: cannot read ${specFile}: ${error.message}\n`);
     process.exit(2);
+  }
+  if (countOnly) {
+    process.stdout.write(`${parseBehaviors(markdownText).behaviors.length}\n`);
+    process.exit(0);
   }
   for (const problem of parseBehaviors(markdownText).problems) {
     process.stdout.write(`${problem}\n`);

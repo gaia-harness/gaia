@@ -30,7 +30,8 @@
 // `## Behaviors` section); plan mode, every bullet under a `## Acceptance
 // criteria` heading of a task doc. Lines compare after whitespace is collapsed.
 // --dest: the valid destination files, matched by basename against a drop's
-// `file`. Spec mode: the --dest files, else the --post file. Plan mode: the
+// `file`. Spec mode: the --dest files, else the --post file; the name SPEC.md
+// always reaches the --post file too, since the draft is a cache copy. Plan mode: the
 // post-fix README.md and every task-*.md, plus any --dest file (the caller
 // passes the post-fix SPEC). REQUIREMENTS.md is never a destination.
 // --mode defaults to spec.
@@ -49,7 +50,11 @@
 //     destination is not still-stated, restored, refusal or deferred (deferred:
 //     the fragment sits in the post-fix SPEC's clarifications.deferred[] text);
 //   - a compared line removed or changed between pre and post that no
-//     edits[].quote matches (six or more words found in the pre-fix line).
+//     edits[].quote matches (six or more words found in the pre-fix line);
+//   - a case removed beyond any it replaced with fewer `drops` entries than
+//     removed cases: spec mode counts per behavior id (the drop's `behavior`),
+//     plan mode counts acceptance bullets across all files, since a bullet has
+//     no id. Plan mode applies no strict-kind rule for the same reason.
 //
 // Plan mode: a structural finding (one the main thread does not fix in place)
 // is listed with route `plan` and no edits or drops, so every finding id stays
@@ -69,6 +74,7 @@ import {
   destinationFiles,
   findingIdsIn,
   readText,
+  removedCounts,
   requirementsHold,
   UsageError,
   wordCount,
@@ -204,6 +210,31 @@ function editRefusals(fixes, lines) {
   return refusals;
 }
 
+function untracedDropRefusals(fixes, settings) {
+  const drops = fixes.flatMap((fix) => fix.drops ?? []);
+  const counts = removedCounts(settings);
+  const refusals = [];
+  if (settings.mode === 'spec') {
+    for (const [id, removed] of counts) {
+      const declared = drops.filter((drop) => drop.behavior === id).length;
+      if (declared < removed) {
+        refusals.push(
+          `drop-check: untraced drop: ${id} lost ${removed} case(s) and ${declared} drops entries name it`,
+        );
+      }
+    }
+    return refusals;
+  }
+  let removed = 0;
+  for (const count of counts.values()) removed += count;
+  if (drops.length < removed) {
+    refusals.push(
+      `drop-check: untraced drop: ${removed} acceptance criteria were removed and ${drops.length} drops entries account for them`,
+    );
+  }
+  return refusals;
+}
+
 export function checkFixes(settings) {
   let parsed;
   try {
@@ -236,6 +267,7 @@ export function checkFixes(settings) {
     ...idRefusals(fixes, findingIdsIn(settings.findings)),
     ...fixes.flatMap((fix) => dropRefusals(fix, context)),
     ...editRefusals(fixes, comparedLines(settings)),
+    ...untracedDropRefusals(fixes, settings),
   ];
   return {refusals};
 }

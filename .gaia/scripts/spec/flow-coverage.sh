@@ -19,8 +19,9 @@
 # whose test file exists. --plan-dir reads <plan folder>/TEST-STAGE: `running`
 # or `ran` means every flow needs its test file, as without --plan-dir;
 # `skipped`, or no TEST-STAGE at all, means a flow with no test file prints one
-# line `flow-coverage: gap: <flow_id> has no flow test (test stage skipped)`
-# and is not a finding, while a flow whose file exists is checked as usual.
+# line `flow-coverage: gap: <flow_id> has no flow test (<cause>)`, the cause
+# `test stage skipped` for a skipped record and `no TEST-STAGE record, test
+# stage never ran` for an absent one, and is not a finding, while a flow whose file exists is checked as usual.
 # A first line that is none of those three statuses is exit 3.
 #
 # Every finding is one stdout line `flow-coverage: ...`, all of them in one run.
@@ -130,10 +131,12 @@ changed_paths=$(printf '%s\n%s\n%s\n' "$committed_paths" "$uncommitted_paths" "$
 # ran). A first line that is none of the three statuses is an operational
 # failure, never read as `skipped`.
 stage_skipped=0
+stage_gap_cause='test stage skipped'
 if [ -n "$plan_directory" ]; then
   stage_file="$plan_directory/TEST-STAGE"
   if [ ! -e "$stage_file" ]; then
     stage_skipped=1
+    stage_gap_cause='no TEST-STAGE record, test stage never ran'
   else
     stage_first_line=''
     IFS= read -r stage_first_line <"$stage_file" || true
@@ -168,7 +171,7 @@ if [ "$stage_skipped" -eq 1 ]; then
       gap_path="$gap_target"
     fi
     if [ ! -f "$root/$gap_path" ]; then
-      printf 'flow-coverage: gap: %s has no flow test (test stage skipped)\n' "$gap_flow_id"
+      printf 'flow-coverage: gap: %s has no flow test (%s)\n' "$gap_flow_id" "$stage_gap_cause"
       continue
     fi
     present_rows="$present_rows$flow_row"$'\n'

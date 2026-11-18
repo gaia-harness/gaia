@@ -123,7 +123,55 @@ export function destinationFiles(options) {
       byBasename.set(name, file);
     }
   }
+  // The review fixer writes a SPEC's destination as SPEC.md whatever the
+  // draft file is called, so that name always reaches the --post file.
+  if (options.mode === 'spec' && !byBasename.has('SPEC.md')) {
+    byBasename.set('SPEC.md', options.post);
+  }
   return byBasename;
+}
+
+// How many cases (spec mode, keyed by behavior id) or acceptance bullets
+// (plan mode, keyed by file name) the fix removed beyond any it replaced. A
+// reworded case is a removal plus an addition and nets to zero.
+export function removedCounts(options) {
+  const counts = new Map();
+  const add = (key, removed, added) => {
+    const net = removed - added;
+    if (net > 0) counts.set(key, net);
+  };
+  if (options.mode === 'spec') {
+    const post = new Map(
+      parseBehaviors(readText(options.post)).behaviors.map((behavior) => [
+        behavior.id,
+        behavior.cases,
+      ]),
+    );
+    for (const behavior of parseBehaviors(readText(options.pre)).behaviors) {
+      const after = post.get(behavior.id) ?? [];
+      add(
+        behavior.id,
+        behavior.cases.filter((text) => !after.includes(text)).length,
+        after.filter((text) => !behavior.cases.includes(text)).length,
+      );
+    }
+    return counts;
+  }
+  for (const name of markdownFilesIn(options.pre)) {
+    const before = acceptanceBullets(readText(join(options.pre, name)));
+    let after = [];
+    try {
+      after = acceptanceBullets(readText(join(options.post, name)));
+    } catch (error) {
+      if (!(error instanceof UsageError)) throw error;
+    }
+    add(
+      name,
+      before.filter((text) => !after.includes(text)).length,
+      after.filter((text) => !before.includes(text)).length,
+    );
+  }
+  return counts;
 }
 
 // The sections of a REQUIREMENTS.md: each heading's pointer key and the
