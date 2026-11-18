@@ -8,14 +8,16 @@
 #     advances that plan's catalog row to status "merged" with a merged_at
 #     timestamp, through ledger-update.sh, before the disposition decision,
 #     which is gated on the usage ledger holding a gaia-plan close for
-#     plan:PLAN-NNN (usage.sh represented); a folder that fails the gate, or
+#     plan:PLAN-NNN (usage.sh represented), plus a gaia-test close on the same
+#     ref when the folder's TEST-STAGE reads running or ran; a folder that fails the gate, or
 #     carries no consolidated SUMMARY.md yet, is left in place untouched. A
 #     kept folder survives for later age-reap (plan-archive-merged.sh) instead
 #     of being deleted outright.
 #   - Spec-colocated plan at plan[-N] inside a SPEC folder of the notebook's
 #     specs folder: the same gate applies, keyed on the parent SPEC (a
 #     gaia-plan close for spec:SPEC-NNN clears every plan subfolder of that
-#     spec); the SPEC folder is the archival unit for everything else and is
+#     spec, and a gaia-test close on spec:SPEC-NNN is also required when a
+#     plan subfolder's TEST-STAGE reads running or ran); the SPEC folder is the archival unit for everything else and is
 #     untouched here.
 #
 # Encapsulating the delete in a subprocess keeps the destructive rm out of
@@ -43,7 +45,8 @@
 #     fails this script.
 #   - The usage-ledger gate is fail-closed: any error resolving the main
 #     checkout, a missing or unreadable usage ledger, or a run with no
-#     recorded close leaves the folder in place and prints a keep line on
+#     recorded close (gaia-plan, and gaia-test when TEST-STAGE reads running or
+#     ran) leaves the folder in place and prints a keep line on
 #     stdout naming the recovery command.
 #   - stdout carries at most one human summary line describing what
 #     happened; diagnostics and refusals go to stderr only.

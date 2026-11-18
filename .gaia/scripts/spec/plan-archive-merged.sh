@@ -52,7 +52,8 @@
 #
 # Usage-ledger gate: once a candidate clears the age gate, this asks
 # `usage.sh represented` (against the main checkout's usage ledger) whether a
-# gaia-plan close is recorded for plan:<id>. Any non-zero verdict blocks that
+# gaia-plan close is recorded for plan:<id>, and a gaia-test close on plan:<id>
+# when the folder's TEST-STAGE reads running or ran. Any non-zero verdict blocks that
 # one id: the folder is left in place, one stdout keep line names the missing
 # run and the `usage.sh record` recovery command, and the sweep moves on to
 # the next candidate.
