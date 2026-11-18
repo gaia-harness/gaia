@@ -132,7 +132,7 @@ check_retry_scope() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '**Phase gate retry (one static retry and one test retry per phase).**' \
-    'When the phase'"'"'s `pnpm typecheck` or `pnpm lint` fails, send each owning task'"'"'s errors to a fresh executor for that task, and errors in a test file several tasks of this phase declare to that file'"'"'s shared-file executor (the in-phase arm below), instead of halting at once.' \
+    'When the phase'"'"'s `pnpm typecheck`, `pnpm lint` or file-length check (a lint `max-lines` rule, the fitness lint'"'"'s line limit) fails, send each owning task'"'"'s errors to a fresh executor for that task, and errors in a test file several tasks of this phase declare to that file'"'"'s shared-file executor (the in-phase arm below), instead of halting at once.' \
     'Never fix it on the main thread.' \
     'Any other gate failure halts under Stop conditions with no retry.' || return 1
 }
@@ -166,7 +166,7 @@ check_retry_kinds() {
   in_order "$block" \
     '**Phase gate retry (one static retry and one test retry per phase).**' \
     '- **Kind.**' \
-    'A gate failure holding only typecheck and lint errors is static; one holding any failing test is a test failure, even with static errors beside it. Its retry takes the same kind.' \
+    'A gate failure holding only typecheck, lint and file-length errors is static; one holding any failing test is a test failure, even with static errors beside it. Its retry takes the same kind.' \
     'A phase runs each kind at most once, so a static fix never spends the retry a later test failure needs, and a phase retries at most twice.' \
     '- **Attribute.**' \
     '- **Halt instead.**' \
@@ -204,6 +204,7 @@ check_retry_redispatch() {
     'carries the original task prompt first, without its `Yield handoff:` line' \
     'then the line `The phase quality gate failed on files this task owns. Fix only these errors, within this task'"'"'s scope, and edit no other file; still run the typecheck and lint your task prompt requires before you return:`' \
     'then the gate output lines for its files.' \
+    'A task with a file-length error gets, before that line, the line `A file over its length limit is split: move whole functions or sections into a new lib file beside it, or an existing one no other task of this phase declares, which you may create or edit despite the line below, and name it under ### Deviations from plan. Never trim wording and never raise a limit or ceiling. Re-run the failed file-length check on your files before you return.`' \
     'It carries no `Yield handoff:` line, so a retry executor never yields' \
     'Never continue an executor with SendMessage.' \
     '- **Re-run the gate.**' \
@@ -278,7 +279,7 @@ check_in_phase_arm() {
     'otherwise it halts under Stop conditions with no retry.' \
     '- **Single-owner executor.** For one declaring task, record the retry as above, then dispatch a fresh executor for that task:' \
     'the original task prompt, without its `Yield handoff:` line, then the line `A test in a file this task declares fails in this phase'"'"'s gate. Fix the code, or update the test when this phase changed the asserted behavior on purpose, and say which under ### Deviations from plan. The task doc and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code. If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
-    'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' \
+    'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares, plus the lib file of a file-length split when the task carries a file-length error.' \
     '- **Shared-file executor.** For several declaring tasks, record the retry as above, then dispatch one fresh executor per such test file, separate from any executor this retry sends a declaring task:' \
     'the original task prompt of the declaring task with the lowest task number, without its `Yield handoff:` line, then the line `Read these task docs for context; they do not widen what you may edit:`, then each other declaring task'"'"'s `task-*.md` path,' \
     'then the line `A test in a file several tasks of this phase declare fails in this phase'"'"'s gate. Edit only that test file, and in it only its failing tests and the shared setup they use, such as mocks and beforeEach, updating them when this phase changed the asserted behavior on purpose, and say what you changed under ### Deviations from plan. The task docs and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide which is wrong: never change an asserted label, role, message or URL they state to match the code. If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' \
@@ -463,6 +464,14 @@ resume_point() {
   red check_retry_redispatch 'Never continue an executor with SendMessage.' 'Continue the executor with SendMessage.'
 }
 
+@test "red twin: a file-length failure that halts instead of retrying as static fails" {
+  red check_retry_kinds 'holding only typecheck, lint and file-length errors is static' 'holding only typecheck and lint errors is static'
+}
+
+@test "red twin: a file-length retry that lets the executor trim wording fails" {
+  red check_retry_redispatch 'Never trim wording and never raise a limit or ceiling. ' ''
+}
+
 @test "red twin: a static retry line that drops the typecheck and lint before return fails" {
   red check_retry_redispatch 'edit no other file; still run the typecheck and lint your task prompt requires before you return:`' 'edit no other file:`'
 }
@@ -608,7 +617,7 @@ resume_point() {
 }
 
 @test "red twin: an in-phase arm that sends one task two parallel executors fails" {
-  red check_in_phase_arm 'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares.' ''
+  red check_in_phase_arm 'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares, plus the lib file of a file-length split when the task carries a file-length error.' ''
 }
 
 @test "red twin: an in-phase arm with no guard against weakening a test for another task's regression fails" {
