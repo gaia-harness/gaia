@@ -138,13 +138,15 @@ spec_rows="$(bash .gaia/scripts/notebook/notebook-lib.sh list spec --status merg
 plan_rows="$(bash .gaia/scripts/notebook/notebook-lib.sh list plan --status merged 2>/dev/null)" || plan_rows="[]"
 spec_ids="$(printf '%s' "$spec_rows" | jq -r '.[].id')"
 plan_ids="$(printf '%s' "$plan_rows" | jq -r '.[] | select((.pr_number // null) != null) | .id')"
-for id in $spec_ids; do
+printf '%s\n' "$spec_ids" | while IFS= read -r id; do
+  [ -n "$id" ] || continue
   folder="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$id")" || continue
   { [ -f "${folder}/SPEC.md" ] || [ -f "${folder}/AUDIT.md" ]; } || continue
   bash .gaia/scripts/summary-verify.sh "${folder}/SUMMARY.md" >/dev/null 2>&1 && continue
   echo "$folder"
 done
-for id in $plan_ids; do
+printf '%s\n' "$plan_ids" | while IFS= read -r id; do
+  [ -n "$id" ] || continue
   folder="$(bash .gaia/scripts/notebook/notebook-lib.sh path plan "$id")" || continue
   [ -f "${folder}/PROGRESS.md" ] || continue
   bash .gaia/scripts/summary-verify.sh "${folder}/SUMMARY.md" >/dev/null 2>&1 && continue
