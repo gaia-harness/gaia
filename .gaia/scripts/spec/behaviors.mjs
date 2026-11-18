@@ -27,8 +27,8 @@
 // only the number of parsed behaviors, so a caller can require a non-empty
 // section that is not inside a fenced block.
 
-import {readFileSync} from 'node:fs';
-import {pathToFileURL} from 'node:url';
+import {readFileSync, realpathSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 
 export const BEHAVIOR_KINDS = [
   'access',
@@ -120,7 +120,17 @@ export function parseBehaviors(markdownText) {
   return {behaviors, problems};
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+const isEntryPoint = () => {
+  try {
+    return (
+      realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+};
+
+if (isEntryPoint()) {
   const countOnly = process.argv[2] === '--count';
   const specFile = countOnly ? process.argv[3] : process.argv[2];
   let markdownText;

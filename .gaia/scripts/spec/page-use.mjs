@@ -2,9 +2,9 @@
 // The one definition of "this Playwright file opens a browser page".
 //
 // A real-server test drives the running server through the `request` fixture
-// and opens no page; a browser test opens one. The doctrine's layer choice
-// (a spec that opens no page is on the real-server layer) draws that line
-// through this module. It reads the file's AST with the TypeScript compiler API, so
+// and opens no page; a browser test opens one. The doctrine states the layer
+// choice (a spec that opens no page is on the real-server layer) in prose; this
+// standalone detector is run by no workflow step. It reads the file's AST with the TypeScript compiler API, so
 // words in a title, a string or a comment are never a use.
 //
 // A use is one of these reasons:

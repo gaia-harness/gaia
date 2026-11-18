@@ -63,7 +63,7 @@
 // re-spawned plan, never the pre-correction one), so a re-spawn's rewrites are
 // not read as untraced edits.
 
-import {existsSync, statSync} from 'node:fs';
+import {existsSync, realpathSync, statSync} from 'node:fs';
 import {basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {normalizeWhitespace, SECURITY_KINDS} from './behaviors.mjs';
@@ -321,6 +321,16 @@ function main(argv) {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+const isEntryPoint = () => {
+  try {
+    return (
+      realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+};
+
+if (isEntryPoint()) {
   process.exitCode = main(process.argv.slice(2));
 }

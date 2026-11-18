@@ -45,7 +45,7 @@ fi
 
 spec_file="$1"
 
-script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=.gaia/scripts/spec/flows-lib.sh
 source "$script_directory/flows-lib.sh"
 
@@ -247,6 +247,12 @@ if [ "$behavior_status" -ne 0 ]; then
   echo "lint.sh: cannot read behaviors: $spec_file" >&2
   exit 2
 fi
+case "$behavior_count" in
+"" | *[!0-9]*)
+  echo "lint.sh: cannot read behaviors: $spec_file" >&2
+  exit 2
+  ;;
+esac
 if [ "$behavior_count" -eq 0 ]; then
   add_finding "missing_behaviors" "SPEC has no behaviors under a '## Behaviors' section." "body"
 fi

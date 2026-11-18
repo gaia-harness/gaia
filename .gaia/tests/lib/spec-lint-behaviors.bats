@@ -123,3 +123,25 @@ Nothing yet.'
   run bash "$LINT" "$BATS_TEST_TMPDIR/SPEC.md"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
+
+# The CLIs' entry guard compared an unresolved argv path with the module's
+# realpath, so through a symlinked directory the main block never ran and the
+# CLI printed nothing and exited 0.
+@test "the behaviors and drop-check CLIs run when invoked through a symlinked directory" {
+  ln -s "$REPO_ROOT/.gaia/scripts/spec" "$BATS_TEST_TMPDIR/linked"
+  make_spec "$BATS_TEST_TMPDIR/SPEC.md" 'Nothing else.'
+  run node "$BATS_TEST_TMPDIR/linked/behaviors.mjs" --count "$BATS_TEST_TMPDIR/SPEC.md"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
+  run node "$BATS_TEST_TMPDIR/linked/drop-check.mjs"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'drop-check:'* ]]
+}
+
+@test "lint refuses a SPEC with no behaviors section when run through a symlinked directory" {
+  ln -s "$REPO_ROOT/.gaia/scripts/spec" "$BATS_TEST_TMPDIR/linked"
+  make_spec "$BATS_TEST_TMPDIR/SPEC.md" 'Nothing else.'
+  run bash "$BATS_TEST_TMPDIR/linked/lint.sh" "$BATS_TEST_TMPDIR/SPEC.md"
+  [ "$status" -eq 1 ]
+  [ "$(lint_codes)" = '["missing_behaviors"]' ]
+}
