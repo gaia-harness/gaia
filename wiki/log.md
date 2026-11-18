@@ -11,6 +11,12 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-18 ADDED: wiki/concepts/Test Stage.md
+- 2026-11-18 RETIRED: wiki/decisions/Test Design Table.md (deleted, every link repointed to the Test Stage page)
+- 2026-11-18 REWRITTEN: wiki/concepts/GAIA Spec.md, wiki/concepts/GAIA Plan.md (the clarify, requirements file, behaviors draft, review wave and fixer flow; the three-lens plan review and the test-stage offer)
+- 2026-11-18 REWRITTEN: wiki/concepts/Task Orchestration.md, wiki/concepts/Workflow Doctrine.md (no drift check, table or marker; the worthiness step runs in the code-audit block; the closing flow phase comes from the test stage)
+- 2026-11-18 REWRITTEN: wiki/concepts/PR Merge Workflow.md, wiki/concepts/Audit Round Procedure.md, wiki/concepts/Claude Hooks.md, wiki/concepts/Code Review Audit Agent.md, wiki/decisions/Quality Gate.md, wiki/modules/Claude Integration.md, wiki/decisions/Worthiness Presence Gate.md (the test-design merge gate, grant hook, honesty checker and drift check are gone)
+- 2026-11-18 REWRITTEN: wiki/concepts/Usage Ledger.md (`gaia-test` recorded as its own workflow line)
 - 2026-11-18 PROMOTED: wiki/decisions/Cross-file Instruction Duplication In Gaia-cleanse.md (PR #3654)
 - 2026-11-15 f4ad2cb WORTHY - harness-internal refinement, no wiki page states the changed detail
 - 2026-11-15 94ded42 WORTHY - harness-internal refinement, no wiki page states the changed detail

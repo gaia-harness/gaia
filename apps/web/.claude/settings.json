@@ -190,10 +190,6 @@
           {
             "type": "command",
             "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/audit-loop-grant.sh\""
-          },
-          {
-            "type": "command",
-            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/test-row-grant.sh\""
           }
         ]
       }
@@ -260,11 +256,6 @@
             "type": "command",
             "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/worthiness-presence-check.sh\"",
             "statusMessage": "Checking worthiness presence gate…"
-          },
-          {
-            "type": "command",
-            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/test-design-merge-gate.sh\"",
-            "statusMessage": "Checking security-row merge gate…"
           },
           {
             "type": "command",

@@ -569,13 +569,10 @@ if [ "$post_state" = "success" ] && [ -x "$resolver" ]; then
 fi
 
 # Any non-zero exit (a missing script's 127 too) reads as owed; auto-merge acts
-# on this status alone, so the security-row check repeats here, fail-closed.
+# on this status alone.
 if [ "$post_state" = "success" ] \
    && ! bash "$_repository_root_directory/.gaia/scripts/audit-gate-owed.sh" status --root "$repo_root" >/dev/null 2>&1; then
   emit_decline "gate steps owed (Playwright, dev smoke test, build); next step: run .gaia/scripts/audit-gate-owed.sh run --root <root> --run-folder <run folder>"
-  exit 0
-elif [ "$post_state" = "success" ] && ! security_verdict="$(bash -u -o pipefail -c '. "$1" 2>/dev/null && gaia_test_design_status_verdict "$2"' _ "$_repository_root_directory/.gaia/scripts/test-design/plan-locate-lib.sh" "$repo_root")"; then
-  emit_decline "${security_verdict:-security-row check unavailable (.gaia/scripts/test-design/plan-locate-lib.sh)}"
   exit 0
 fi
 

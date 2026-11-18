@@ -45,7 +45,7 @@ The root holds the shell layer; each subdirectory holds one family that is not r
 | `audit-ledger/` | The Node writer that appends a worthiness verdict to the audit ledger. |
 | `classifier/` | The Node helper that classifies a test as deterministic or not. |
 | `notebook/` | The notebook library (catalog, paths, research), the one-time move, the catalog reconcile and the research reaper. |
-| `test-signals/` | The Node extractors that read test, story and bats signals, used by the worthiness step and the drift check. |
+| `test-signals/` | The Node extractors that read test, story and bats signals, used by the worthiness step. |
 | `lib/` | Helpers sourced or imported by a root script rather than run on their own. |
 
 Lock directories are taken through one helper, `exclusive-lock-lib.sh`, never by trusting `mkdir`'s exit status: some `mkdir` implementations let two racing calls both succeed. Ownership is the exclusive creation of an owner file inside the lock, and each caller keeps its own deadline and stale-reclaim rules.

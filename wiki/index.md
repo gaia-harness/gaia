@@ -124,8 +124,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Claude Integration Fitness]]: why `/gaia-fitness` is a deterministic linter, what it grades, and its ownership-checked heal protocol.
 - [[Determinism Classifier]]: per-file AST signal labelling a source file strict, emergent or route; it picks the worthiness judgment arm and evidence; versioned DOM-API allowlist, file-granular.
 - [[Workspace Standard For Apps And Packages]]
-- [[Test Design Table]]: a plan decides its tests once in a table; the security writer, the drift check that replaces the worthiness review for a marked plan, and the merge gate that denies the merge while an approved security row lacks its test.
-- [[Worthiness And Wiki Before The Audit]]: the worthiness step (a plan with a test-design table: the drift check) and wiki promotion run before the first audit round; `file-tech-debt.sh file` refuses a non-security finding on branch-authored code.
+- [[Worthiness And Wiki Before The Audit]]: wiki promotion and the worthiness step run before the first audit round; `file-tech-debt.sh file` refuses a non-security finding on branch-authored code.
 - [[Worthiness Audit]]: advisory review of every changed test the worthiness selection names (honesty + worth for every changed test, strict included); fresh-context reviewer proposes keep/fix/delete, deletes human-gated, per-tree audit ledger; stories audited as emergent tests; capped end-of-task surfacing on the tdd path.
 - [[Worthiness Presence Gate]]: merge-time `gh pr merge` hook requiring each changed test the worthiness selection names to carry a worthiness-ledger line matching its current content; presence + signal match only (never the verdict), scoped to the PR's changed in-scope tests, fail-open.
 <!-- gaia:maintainer-only:start -->
@@ -184,7 +183,8 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Release-Notes]]
 <!-- gaia:maintainer-only:end -->
 - [[GAIA Spec]]: `/gaia-spec`: GAIA's script-driven Socratic discovery workflow; produces an immutable SPEC artifact and then plans it in the same session and stops at the plan's KICKOFF prompt.
-- [[GAIA Plan]]: `/gaia-plan`: feature plan + orchestrator scaffolding, clipboard handoff to a fresh session.
+- [[GAIA Plan]]: `/gaia-plan`: feature plan + orchestrator scaffolding, a three-lens plan review, an offered test stage, clipboard handoff to a fresh session.
+- [[Test Stage]]: the default-on step after the plan that lists each task's tests, adds the closing flow-test phase and checks both against the SPEC's behaviors; why test design is separate from the plan.
 - [[GAIA Cleanse]]: `/gaia-cleanse`: two-stage knowledge-store hygiene sweep.
 - [[Wiki Sync]]: the sync stage of `/gaia-wiki` and the statusline drift nudge: keep the wiki convergent with code without spawned sub-Claudes.
 - [[Wiki Consolidate]]: the consolidate stage of `/gaia-wiki`: cross-SPEC redundancy and contradiction audit; surfaces supersession candidates, reversed decisions, near-collision slugs, and subject-orphans.
