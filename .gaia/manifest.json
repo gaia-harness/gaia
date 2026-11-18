@@ -808,6 +808,7 @@
     "wiki/decisions/Code Audit Team.md": "wiki-owned",
     "wiki/decisions/Composite Action Step Timeouts.md": "wiki-owned",
     "wiki/decisions/Content Security Policy.md": "wiki-owned",
+    "wiki/decisions/Cross-file Instruction Duplication In Gaia-cleanse.md": "wiki-owned",
     "wiki/decisions/Dark Mode Modernization.md": "wiki-owned",
     "wiki/decisions/Deliberate Configuration Asymmetries.md": "wiki-owned",
     "wiki/decisions/Determinism Classifier.md": "wiki-owned",
@@ -885,7 +886,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T05:28:02.193Z",
+  "generated": "2026-11-18T05:38:27.016Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
