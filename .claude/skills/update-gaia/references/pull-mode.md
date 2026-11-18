@@ -54,7 +54,7 @@ Offer it in the main checkout:
 bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep
 ```
 
-A non-zero exit names its cause on stderr: relay it and continue. See `.claude/skills/gaia/references/work-lifecycle.md` (Leftover-file cleanup after an update merge).
+Show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the leftover files listed above?`, header `Leftovers`, options `Delete them` (Recommended) and `Keep them`), and on `Delete them` run the same command with `--apply`. Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and continue. Only this sweep applies here: the precondition and the later refresh and drift steps of `.claude/skills/gaia/references/work-lifecycle.md` (Leftover-file cleanup after an update merge) do not.
 
 ## Step 6: Refresh the update-check cache
 

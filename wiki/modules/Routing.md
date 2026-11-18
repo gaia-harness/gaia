@@ -56,7 +56,7 @@ Use `getInstance()` from the i18next middleware to translate meta tags. See [[i1
 
 ## Actions
 
-Route modules export `loader`, `clientLoader`, `action`, `clientAction`, and `HydrateFallback` as the route needs them, plus a one-line default render; hooks live in the page. Which loader to export is the decision in [[Data Loading]]. See `wiki/decisions/Thin Routes.md` (Actions).
+Route modules export `loader`, `clientLoader`, `action`, `clientAction`, and `HydrateFallback` as the route needs them, plus a one-line default render; hooks live in the page. Which loader to export is the decision in [[Data Loading]]. See [[Thin Routes#Actions]].
 
 ## Where to look up the inventory
 

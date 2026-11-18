@@ -50,12 +50,12 @@ Test a component or page with a story that carries `.test()` blocks for its beha
 
 ## Playwright
 
-- Test locations and config: see `wiki/dependencies/Playwright.md`.
+- Test locations and config: see [[Playwright]].
 - Use the bundled `hydration(page)` helper after `page.goto()` to wait for React Router hydration before interacting
 
 ### a11y scanning
 
-The shipped specs live in `apps/web/.playwright/e2e/`; critical-flow specs go in `apps/web/.playwright/flows/`. `apps/web/.playwright/fixtures.ts` exposes the `makeAxeBuilder` fixture (WCAG 2.0/2.1 A and AA tags) for custom scans. See `wiki/concepts/Accessibility.md` (Runtime testing).
+`apps/web/.playwright/fixtures.ts` exposes the `makeAxeBuilder` fixture (WCAG 2.0/2.1 A and AA tags) for custom scans. See [[Accessibility#Runtime testing]].
 
 ### Cold-start hydration self-heal
 

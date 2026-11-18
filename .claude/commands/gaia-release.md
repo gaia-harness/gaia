@@ -203,7 +203,7 @@ bash .gaia/scripts/verify-main-green.sh --sha "$(git rev-parse HEAD)"
 
 Run the tag only when the check exits 0. The squash commit's own push run starts at merge, so the check usually exits 3 here: wait with the `gh run watch <id> --exit-status` it names, then run the check again. Any other non-zero, STOP and relay the refusal as in Step 1; never tag a red main.
 
-A `REFUSED:` from `commit-and-tag --tag` is the major-version floor: see `wiki/concepts/Release Workflow.md` (Cutting a release).
+`commit-and-tag --tag` prints `REFUSED:` for a tag below the major-version floor (see `wiki/concepts/Release Workflow.md`, Cutting a release), and also when it cannot read origin's tags or parse the `package.json` major; the message names which. Fix the network or the version string for the latter two instead of re-bumping.
 
 `--tag` also pushes the tag to origin, which kicks the GitHub Release workflow (`release.yml`) to build the scrubbed tarball.
 
