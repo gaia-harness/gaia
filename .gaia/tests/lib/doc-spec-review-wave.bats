@@ -72,7 +72,7 @@ h2_text() {
   slots="$(h2_text "$DISPATCH" "Caller slots")"
   preamble="$(h2_text "$DISPATCH" "Shared preamble")"
   grep -qF '| Slot | Spec audit | Plan audit | Test stage |' <<<"$slots" || return 1
-  grep -qF '`<PLAN_DIR>/test-stage/`' <<<"$slots" || return 1
+  grep -qF '`<PLAN_DIR>/test-stage-findings/`' <<<"$slots" || return 1
   grep -qF "the SPEC's \`## Behaviors\`" <<<"$slots" || return 1
   grep -qF 'Severity: `critical` = <critical meaning>' <<<"$preamble" || return 1
   [ "$(grep -c '^## Shared preamble$' "$DISPATCH")" -eq 1 ] || return 1
