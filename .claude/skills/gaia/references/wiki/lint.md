@@ -128,27 +128,11 @@ List every dead reference (one per line). Do not truncate: the count is small en
 
 ## Step 4: GAIA check #13: FLOW/SPEC narrative-ref drift
 
-Detects narrative `FLOW-NNN` and concrete maintainer `SPEC-NNN` references that crept into instruction files (`.claude/skills/`, `.claude/commands/`, `.claude/agents/`, `.claude/rules/`, `.claude/hooks/`) and the spec-lifecycle scripts (`.gaia/scripts/spec/`). The rule rationale + structural-vs-narrative triage lives in `.claude/rules/working-doc-ids.md`.
-
-<!-- gaia:maintainer-only:start -->
-Both scans deliberately exclude `.gaia/tests/`: it is release-excluded maintainer-only test infrastructure that never reaches an adopter, so its UAT/SEC/TST test labels are legitimate SPEC-conformance traceability, not shipped-surface drift. Do not re-add `.gaia/tests/` to either grep.
-<!-- gaia:maintainer-only:end -->
+Detects narrative `FLOW-NNN` and concrete maintainer `SPEC-NNN` references that crept into instruction files and the spec-lifecycle scripts. The rule rationale + structural-vs-narrative triage lives in `.claude/rules/working-doc-ids.md`.
 
 ### 4a. Run the greps
 
-Two scans, run from the repo root:
-
-```bash
-# FLOW-NNN narrative-ref candidates
-grep -rEn "FLOW-[0-9]{3}" \
-  .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ \
-  .gaia/scripts/spec/
-
-# Concrete maintainer SPEC IDs
-grep -rEn "\bSPEC-[0-9]{3,}\b" \
-  .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ \
-  .gaia/scripts/spec/
-```
+From the repo root, run the two instruction-file scans in `.claude/rules/wiki-style.md` (`## Audit`) exactly as written there.
 
 ### 4b. Triage and append
 
