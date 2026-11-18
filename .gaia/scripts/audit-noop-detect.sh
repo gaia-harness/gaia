@@ -34,8 +34,8 @@
 #                 audit-team-member. The lost-report gate: this script finds the
 #                 member's findings sidecar
 #                 (.gaia/local/audit/<audit-key>.<member>.findings.json --
-#                 audit-key is the incremental base sha plus the acting tree's
-#                 branch, .gaia/scripts/audit-key-lib.sh) rather than being
+#                 audit-key keyed per wiki/concepts/Code Review Audit Agent.md,
+#                 "Re-run carry-forward ledger") rather than being
 #                 handed its path. Omit both to keep the marker-only
 #                 short-circuit; the text-alone arm classifies independently
 #                 either way. --findings-root is the audited working root, whose OWN branch supplies

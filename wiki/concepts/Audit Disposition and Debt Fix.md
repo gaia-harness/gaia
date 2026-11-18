@@ -137,7 +137,7 @@ The filing script probes the issue backend before any non-security filing:
 
 ### Sibling: the re-run carry-forward ledger
 
-The local re-run carry-forward ledger (`.gaia/local/audit/<audit-key>.rerun.json`, `<audit-key>` the shared pull-request-wide base sha plus the acting tree's own branch, `.gaia/scripts/audit-key-lib.sh`) is a distinct, non-overlapping concern from the out-of-scope disposition process above: the ledger holds a member's remaining findings, keyed to the shared base plus branch (the same base every dispatched member's artifacts key to, not the frontend member's own narrower per-member review base), so two worktrees sharing a base sha never collide on it. No merge-gate hook reads the ledger, and it does not read or feed the disposition process; the clearance writer reads it to hold each member to accounting for its own open entries, and the resolver reads it to link a member's refusal anchor. See [[Code Review Audit Agent]] for the ledger's role in the local fix → re-audit loop.
+The local re-run carry-forward ledger (`.gaia/local/audit/<audit-key>.rerun.json`, keyed per [[Code Review Audit Agent#Re-run carry-forward ledger]]) is a distinct, non-overlapping concern from the out-of-scope disposition process above: the ledger holds a member's remaining findings. No merge-gate hook reads the ledger, and it does not read or feed the disposition process; the clearance writer reads it to hold each member to accounting for its own open entries, and the resolver reads it to link a member's refusal anchor.
 
 ## /gaia-debt: fixing the backlog
 
