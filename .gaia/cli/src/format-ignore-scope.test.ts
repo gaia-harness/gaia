@@ -38,8 +38,9 @@
  * is not "reported", and the two edits are made by different people for
  * different reasons.
  *
- * Fires on the pull request that causes the drift: `package.json` and
- * `.gitignore` are both in the `code` paths filter of `cli-tests.yml`, whose
+ * Fires on the pull request that causes the drift: `package.json`,
+ * `apps/web/package.json` and `.gitignore` are all in the `code` paths filter
+ * of `cli-tests.yml`, whose
  * `Vitest (.gaia/cli)` job is a declared-required context.
  *
  * Maintainer-only by construction: `.gaia/cli/src` is release-excluded, so an
@@ -72,8 +73,8 @@ const IGNORE_PATH_PATTERN =
 const WORKTREE_IGNORE_PATTERN = /^(?:\/|\*\*\/)?\.claude\/worktrees\/?$/;
 
 // The root script and the `apps/web` script it chains to are both held: the
-// app's `.prettierignore` no longer lists generated folders, so only its
-// script's ignore set keeps `pnpm -C apps/web format` off them.
+// app's `.prettierignore` lists no generated folders, so only its script's
+// ignore set keeps `pnpm -C apps/web format` off them.
 const FORMAT_SCRIPT_PACKAGES = ['package.json', 'apps/web/package.json'];
 
 const readPackageScripts = (packageFile: string): Record<string, string> => {

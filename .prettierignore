@@ -1,5 +1,6 @@
 # Prettier already skips node_modules and everything .gitignore covers; list
-# only tracked paths that must not be formatted.
+# only tracked paths this script must not format. GAIA is pnpm-only, so no
+# package-lock.json entry: an npm lockfile never belongs in the tree.
 
 # The app owns its own Prettier config and ignore file; `pnpm -C apps/web format`
 # formats it.
