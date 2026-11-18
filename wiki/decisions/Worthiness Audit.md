@@ -26,8 +26,7 @@ adds maintenance cost while catching none of its own component's bugs.
 ## Decision
 
 A committed reviewer prompt returns one verdict per test, and
-every changed test, strict included, is judged on honesty and worth. On a plan with a test-design table the drift check
-sends it only unplanned or moved tests ([[Test Design Table]]). A fresh-context reviewer is the cheapest way to
+every changed test, strict included, is judged on honesty and worth. A fresh-context reviewer is the cheapest way to
 recover the honesty signal a failing run cannot supply here, because the author
 who wrote the tests shares their blind spots.
 
@@ -69,7 +68,7 @@ A story is a visual state and a behavior is a `.test()` attached to it ([[Storie
 
 ### Layers
 
-The composition rule compares a story's tests with its own children's stories. The review judges each test on its own worth and does not propose moves across layers; `.claude/doctrine/testing.md` states the layer rules the review does not re-decide; a plan's table fixes each test's layer at plan time ([[Test Design Table]]).
+The composition rule compares a story's tests with its own children's stories. The review judges each test on its own worth and does not propose moves across layers; `.claude/doctrine/testing.md` states the layer rules the review does not re-decide; the [[Test Stage]] picks each test's layer by those rules.
 
 ### Strict tests: honesty and worth
 
@@ -84,7 +83,7 @@ work lifecycle, `/gaia-debt` and an unmarked plan run the pre-audit worthiness
 step (`.claude/skills/gaia/references/worthiness-step.md`), which sends a `fix`
 to a fresh fixer before the audit and asks a human to confirm each delete
 against its cited redundant sibling and subsuming seam assertion, rendered
-inline; a marked plan runs the drift check instead. A plan run's step writes its
+inline. A plan run's step writes its
 block into `PROGRESS.md`, which the final summary surfaces.
 
 ## Audit ledger
@@ -127,9 +126,9 @@ Each verdict appends one line to an append-only ledger, per tree:
 ## Consumers
 
 - The shared worthiness step (`.claude/skills/gaia/references/worthiness-step.md`)
-  owns dispatch and verdict routing for an unmarked plan run, the work
+  owns dispatch and verdict routing for a plan run, the work
   lifecycle and `/gaia-debt`; its `worthiness-step.sh record` is the only
-  caller of the ledger writer, and the drift check records through it too. The
+  caller of the ledger writer. The
   tdd skill dispatches the reviewer through that page's tdd arm, which
   dispatches and records only, so on the tdd path the review runs only when
   that dispatch runs.

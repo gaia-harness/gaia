@@ -7,18 +7,17 @@
 # The invariants:
 #   b. a sub-reference read is a step a model can skip, so every spec/<name>.md
 #      that spec.md names exists and is listed in the command's sub-reference
-#      index (.claude/commands/gaia-spec.md), each sub-reference moved out of
-#      spec.md has a `Read` line there, and the self-review checklist carries
-#      its marked bullet (read by the sub-agent, never the main thread);
+#      index (.claude/commands/gaia-spec.md), and each sub-reference moved out
+#      of spec.md has a `Read` line there;
 #   c. each moved section lives in exactly one file of the playbook set;
 #   d. every closed-set menu fits AskUserQuestion: no Other label, no save
 #      escape, and no more than four entries;
-#   e. the SPEC audit's coverage and consistency lens flags a UAT the SPEC's
+#   e. the SPEC audit's coverage and consistency lens flags a flow the SPEC's
 #      own behavior rules make impossible, citing both lines;
 #   f. the SPEC audit refuter marks an overstated severity `partial`, refutes
 #      a finding only when every gap it names fails, and never refutes a
 #      missing server-only rule for a held value, or lowers it below major, on
-#      ownership or a cookie or transport attribute (`HttpOnly` included).
+#      ownership or a cookie or transport attribute.
 #
 # DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
 # playbook files; each invariant has a red twin that breaks such a copy and
@@ -35,7 +34,7 @@ REFERENCES='.claude/skills/gaia/references'
 COMMAND='.claude/commands/gaia-spec.md'
 
 # The sub-references the split moved out of spec.md; each needs a Read line.
-MOVED_SUB_REFERENCES=(resume.md clarify-loop.md self-review-dispatch.md audit.md)
+MOVED_SUB_REFERENCES=(resume.md clarify-loop.md audit.md)
 
 # scratch_copy: copies spec.md, spec/ and the command file into the test's
 # tmpdir under the same relative layout and prints the copy's root.
@@ -92,10 +91,6 @@ sub_references_routed_and_listed() {
     fi
   done
   [ "$listed" -ge 1 ] || return 1
-  if ! grep -F -- "\`$REFERENCES/spec/self-review.md\`" "$root/$COMMAND" | grep -qF -- 'read by the self-review sub-agent, never this thread'; then
-    printf 'spec/self-review.md has no marked bullet in %s\n' "$COMMAND" >&2
-    return 1
-  fi
   return 0
 }
 
@@ -114,7 +109,7 @@ sub_references_routed_and_listed() {
 
 @test "b. the routing check goes red when one Read line is deleted" {
   copy="$(scratch_copy)"
-  grep -vF -- "Read \`$REFERENCES/spec/self-review-dispatch.md\`" "$copy/$REFERENCES/spec.md" >"$copy/$REFERENCES/spec.md.new"
+  grep -vF -- "Read \`$REFERENCES/spec/audit.md\`" "$copy/$REFERENCES/spec.md" >"$copy/$REFERENCES/spec.md.new"
   mv "$copy/$REFERENCES/spec.md.new" "$copy/$REFERENCES/spec.md"
   run sub_references_routed_and_listed "$copy"
   [ "$status" -ne 0 ]
@@ -123,14 +118,6 @@ sub_references_routed_and_listed() {
 @test "b. the routing check goes red when spec.md names a missing sub-reference" {
   copy="$(scratch_copy)"
   rm "$copy/$REFERENCES/spec/audit.md"
-  run sub_references_routed_and_listed "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "b. the routing check goes red when the self-review bullet loses its mark" {
-  copy="$(scratch_copy)"
-  sed 's/read by the self-review sub-agent, never this thread/the self-review checklist/' "$copy/$COMMAND" >"$copy/$COMMAND.new"
-  mv "$copy/$COMMAND.new" "$copy/$COMMAND"
   run sub_references_routed_and_listed "$copy"
   [ "$status" -ne 0 ]
 }
@@ -148,11 +135,10 @@ sub_references_routed_and_listed() {
 # owner<TAB>needle<TAB>kind: kind `heading` matches a line starting with the
 # needle, kind `literal` matches the needle anywhere.
 OWNED=(
-  "audit.md	## 7a.	heading"
-  "audit.md	### 7b-i.	heading"
-  "audit.md	## 7c.	heading"
+  "audit.md	## The critical refuter	heading"
+  "audit.md	## The fixer	heading"
+  "audit.md	## The drop check	heading"
   "clarify-loop.md	## 5d.	heading"
-  "self-review-dispatch.md	## 6b.	heading"
   "clarify-loop.md	## The question ceiling	heading"
   "resume.md	LOCK_STATUS=	literal"
 )
@@ -306,9 +292,7 @@ menus_fit() {
 
 # --- e. the coverage lens checks flows against the SPEC's own rules ------------
 
-COV_BULLET='- **Coverage & consistency (id prefix `COV`).**'
-RT_BULLET='- **Red-team & feasibility (id prefix `RT`).**'
-IMPOSSIBLE_UAT_CLAUSE="flows the SPEC's own behavior rules make impossible, such as a control, transition or value the SPEC allows only in another state (cite the flow line and the rule line); "
+COV_HEADING='#### COV: Coverage and consistency (id prefix `COV`)'
 IMPOSSIBLE_UAT_NEEDLES=(
   "the SPEC's own behavior rules make impossible"
   'allows only in another state'
@@ -316,14 +300,15 @@ IMPOSSIBLE_UAT_NEEDLES=(
 )
 
 # cov_flags_impossible_uat <root>: audit.md has exactly one coverage lens
-# bullet, and that bullet carries every needle of the impossible-UAT clause.
+# heading, and the section under it carries every needle of the impossible-flow
+# clause.
 cov_flags_impossible_uat() {
-  local audit="$1/$REFERENCES/spec/audit.md" bullet count needle
-  count="$(awk -v want="$COV_BULLET" 'index($0, want) == 1 { n++ } END { print n + 0 }' "$audit")"
-  [ "$count" -eq 1 ] || { printf 'expected one coverage lens bullet, found %s\n' "$count" >&2; return 1; }
-  bullet="$(awk -v want="$COV_BULLET" 'index($0, want) == 1' "$audit")"
+  local audit="$1/$REFERENCES/spec/audit.md" section count needle
+  count="$(awk -v want="$COV_HEADING" 'index($0, want) == 1 { n++ } END { print n + 0 }' "$audit")"
+  [ "$count" -eq 1 ] || { printf 'expected one coverage lens heading, found %s\n' "$count" >&2; return 1; }
+  section="$(awk -v want="$COV_HEADING" 'index($0, want) == 1 { in_section = 1; next } in_section && /^#### / { exit } in_section' "$audit")"
   for needle in "${IMPOSSIBLE_UAT_NEEDLES[@]}"; do
-    grep -qF -- "$needle" <<<"$bullet" || { printf 'coverage lens lacks: %s\n' "$needle" >&2; return 1; }
+    grep -qF -- "$needle" <<<"$section" || { printf 'coverage lens lacks: %s\n' "$needle" >&2; return 1; }
   done
 }
 
@@ -348,28 +333,15 @@ remove_text() {
   done
 }
 
-@test "e. the impossible-flow check goes red when the clause moves to the red-team lens" {
-  copy="$(scratch_copy)"
-  audit="$copy/$REFERENCES/spec/audit.md"
-  grep -qF -- "$IMPOSSIBLE_UAT_CLAUSE" "$audit"
-  remove_text "$audit" "$IMPOSSIBLE_UAT_CLAUSE"
-  awk -v want="$RT_BULLET" -v clause="$IMPOSSIBLE_UAT_CLAUSE" 'index($0, want) == 1 { $0 = $0 " " clause } { print }' "$audit" >"$audit.new"
-  mv "$audit.new" "$audit"
-  grep -qF -- "$IMPOSSIBLE_UAT_CLAUSE" "$audit"
-  run cov_flags_impossible_uat "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # --- f. the refuter keeps a sound gap and a held credential's server-only rule --
 
-REFUTER_LINE='> Open the cited SPEC section and any cited file yourself and try to REFUTE it'
+REFUTER_LINE='> For each id, open the cited SPEC section and any cited file yourself and try to REFUTE it'
 REFUTER_NEEDLES=(
   'Refute a finding only when every gap it names fails, not just the harm it argues'
   'a sound gap behind an overstated harm is `partial`'
   'never refuted by who owns the value or by a cookie or transport attribute'
   'its `corrected_severity` is never lowered below `major` on those grounds'
   'overstate severity (`partial` with a corrected severity, never refuted)'
-  '`HttpOnly` keeps a value off page scripts only, never off loader data, served HTML, responses or logs'
 )
 
 # refuter_keeps_sound_gaps <root>: audit.md has exactly one refuter prompt

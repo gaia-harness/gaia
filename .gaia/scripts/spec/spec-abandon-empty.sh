@@ -6,8 +6,8 @@
 # pass gives it a terminal home once it is unambiguously never-authored.
 #
 # Double guard, BOTH required:
-#   - Emptiness (primary): no SPEC.md, no draft-<id>.md cache, no
-#     gate1-<id>.json snapshot. Any one of these present means authored
+#   - Emptiness (primary): no SPEC.md, no REQUIREMENTS.md (a finished clarify
+#     is authored work), no draft-<id>.md cache, no gate1-<id>.json snapshot. Any one of these present means authored
 #     content exists; never sweep it, this is what keeps a paused-but-authored
 #     session safe (SPEC never-boundary).
 #   - Age (secondary): the row's created_at is older than the guard age (~1
@@ -92,9 +92,10 @@ while IFS= read -r id; do
     continue
   fi
 
-  # Emptiness guard: no SPEC.md, no draft cache, no gate-1 snapshot. Any one
+  # Emptiness guard: no SPEC.md, no REQUIREMENTS.md, no draft cache, no gate-1 snapshot. Any one
   # present means authored content exists; leave the row alone.
   [ -f "${folder}/SPEC.md" ] && continue
+  [ -f "${folder}/REQUIREMENTS.md" ] && continue
   [ -f "${cache_directory}/draft-${id}.md" ] && continue
   [ -f "${cache_directory}/gate1-${id}.json" ] && continue
 

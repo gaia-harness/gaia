@@ -283,8 +283,6 @@ auditors:
     light_hard_full:
       - ".claude/hooks/pr-merge-audit-check.sh"
       - ".claude/hooks/post-audit-status.sh"
-      - ".claude/hooks/test-design-merge-gate.sh"
-      - ".claude/hooks/test-row-grant.sh"
       - ".claude/hooks/audit-loop-bound.sh"
       - ".gaia/scripts/audit-write-clearance.sh"
       - ".gaia/scripts/audit-write-clearance-args.sh"
@@ -471,7 +469,6 @@ unowned:
   # member has a lens for instruction prose: the same footing as the skills.
   - ".gaia/migrations/**"
   - ".claude/agents/worthiness-evaluator.md"
-  - ".claude/agents/test-honesty-checker.md"
   - ".claude/agents/security-test-writer.md"
   - ".claude/commands/**/*.md"
   - ".gaia/cli/health/**/*.md"

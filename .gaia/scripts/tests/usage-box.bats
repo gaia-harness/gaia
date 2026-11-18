@@ -109,6 +109,19 @@ row_figures() {
   true
 }
 
+@test "a spec initiative box lists the spec, plan and test stage runs as separate lines" {
+  spec_and_plan_rows
+  start s5 2026-10-02T12:00:00Z gaia-test
+  segment session:s5 s5 2026-10-02T12:10:00Z 2026-10-02T12:20:00Z 300000 3000
+  close s5 2026-10-02T12:50:00Z spec:SPEC-402 gaia-test
+  run run_usage initiative spec:SPEC-402 --box
+  [ "$status" -eq 0 ]
+  grep -qE '^\|  Spec: 0\.1M tokens, \$0\.21, 30m0s +\|$' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
+  grep -qE '^\|  Plan: 0\.2M tokens, \$0\.42, 40m0s +\|$' <<<"$output"
+  grep -qE '^\|  Test: 0\.3M tokens, \$0\.63, 50m0s +\|$' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
+  grep -qE '^\| Total: 0\.6M tokens, \$1\.26, ' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
+}
+
 @test "the box is plain ASCII, so its width counted in bytes is its width on screen" {
   full_cycle_rows
   run run_usage initiative spec:SPEC-402 --box

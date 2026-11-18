@@ -37,7 +37,9 @@ make_spec() {
     if [ -n "$flows_block" ]; then printf 'flows:\n%s\n' "$flows_block"; fi
     printf '%s\n' 'scope_boundaries:' '  always:' '    - Keep sessions private.' \
       'clarifications:' '  answered: []' '  pending: []' \
-      'research_summary: |' '  None.' 'created: 2026-01-01' 'updated: 2026-01-01' '---' '' '# Sign in' ''
+      'research_summary: |' '  None.' 'created: 2026-01-01' 'updated: 2026-01-01' '---' '' '# Sign in' '' \
+      '## Behaviors' '' '- **B1** (access): A signed-out visitor cannot open the dashboard.' \
+      '  - Case: signed-out visitor requests the dashboard -> redirected to sign-in.' ''
     if [ -n "$body" ]; then printf '%s\n' "$body"; fi
   } >"$output_path"
 }

@@ -2,9 +2,8 @@
 # PreToolUse Bash hook: DENY `gh pr merge` when a test in scope the PR changed
 # has no worthiness-ledger line matching its CURRENT content. This is the
 # merge-time half of the worthiness audit: a fresh-context judge (the worthiness
-# evaluator, or the drift check's honesty checker on a plan with a test-design
-# table) judges each test in scope, and the tdd skill's arm, the worthiness step
-# and the drift check each append one ledger line per judged test
+# evaluator) judges each test in scope, and the tdd skill's arm and the
+# worthiness step each append one ledger line per judged test
 # (.gaia/scripts/audit-ledger/append-worthiness.mjs); this hook enforces at merge
 # that such a line exists for the content being merged. It sits ALONGSIDE
 # pr-merge-audit-check.sh: both gate `gh pr merge` and deny independently.

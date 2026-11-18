@@ -507,7 +507,7 @@ check_yield_limit_is_positive_integer() {
 }
 
 @test "UAT-009 red: a run-ends paragraph added to plan.md fails" {
-  red check_plan_has_no_run_ends "$PLAN_REL" '### 5. Report to user' $'### 5. Report to user\n\nHow your run ends: stop.'
+  red check_plan_has_no_run_ends "$PLAN_REL" '### 6. Report to user' $'### 6. Report to user\n\nHow your run ends: stop.'
 }
 
 @test "UAT-010: the block reads the YIELDED reply, checks the path, and records the yield block" {

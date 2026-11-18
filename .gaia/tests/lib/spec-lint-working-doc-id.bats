@@ -28,7 +28,9 @@ make_spec() {
     printf '%s\n' '    covers: [app/pages/sign-in]' \
       'scope_boundaries:' '  always:' '    - Keep sessions private.' \
       'clarifications:' '  answered: []' '  pending: []' \
-      'research_summary: |' '  None.' 'created: 2026-01-01' 'updated: 2026-01-01' '---' '' '# Sign in'
+      'research_summary: |' '  None.' 'created: 2026-01-01' 'updated: 2026-01-01' '---' '' '# Sign in' '' \
+      '## Behaviors' '' '- **B1** (access): A signed-out visitor cannot open the dashboard.' \
+      '  - Case: signed-out visitor requests the dashboard -> redirected to sign-in.'
   } >"$output_path"
 }
 

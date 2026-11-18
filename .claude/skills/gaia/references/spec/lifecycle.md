@@ -6,15 +6,15 @@ Contents: Pre-audit flow checks; Consolidation; Post-merge close; Pre-flight swe
 
 ## Pre-audit flow checks
 
-For a spec-derived plan, the orchestrator's `flow-checks` block runs after the last phase commits and before the drift check (a plan whose folder carries a `TEST-DESIGN` marker) or the worthiness step (an older plan), from `<RESOLVED_ROOT>`:
+For a spec-derived plan, the orchestrator's `flow-checks` block runs after the last phase commits and before the worthiness step, from `<RESOLVED_ROOT>`:
 
 ```bash
 bash .gaia/scripts/spec/flow-coverage.sh --spec <SPEC_PATH> --root <RESOLVED_ROOT> --plan-dir <PLAN_DIR> --flow-tests-out <RUN_FOLDER>/flow-tests.tsv
 ```
 
-`<RUN_FOLDER>` is the branch's run folder (`.claude/doctrine/execution.md`, `## Run folder`). The script checks that each SPEC flow has its test file and that the branch changed it, except a flow the plan's test table (`tests.approved.json` once approved, else `tests.json`) records in `coveredFlows`, whose entry `test-table.mjs covered-flows` must accept, and for a web flow that the spec is in the Playwright listing and its `@covers` header names every SPEC folder the branch changed; it also scans each flow test for a working-document id. It writes `<RUN_FOLDER>/flow-tests.tsv`, one row per flow whose test exists, which the merge-time presence gate reads so that a changed test in a listed flow file with no recorded worthiness verdict denies the merge. Whether the tests are any good is the next step's judgment: for a marked plan the drift check plus its honesty pass (`.claude/skills/gaia/references/drift-check.md`), whose honesty and evaluator verdicts record those ledger lines; for an older plan the worthiness step, which reads the file as its flow inputs.
+`<RUN_FOLDER>` is the branch's run folder (`.claude/doctrine/execution.md`, `## Run folder`). The script reads the plan folder's `TEST-STAGE` record: one reading `running` or `ran` owes every SPEC flow its test file, changed by the branch; one reading `skipped`, or a folder holding none, passes with each flow lacking a test reported as a gap line on stdout, never a finding. A first line that is none of the three statuses is an operational failure. For a web flow that the spec is in the Playwright listing and its `@covers` header names every SPEC folder the branch changed; it also scans each flow test for a working-document id. It writes `<RUN_FOLDER>/flow-tests.tsv`, one row per flow whose test exists, which the merge-time presence gate reads so that a changed test in a listed flow file with no recorded worthiness verdict denies the merge. Whether the tests are any good is the next step's judgment: the worthiness step, which reads the file as its flow inputs and records those ledger lines.
 
-- Exit 0: every flow passed; the block records a `## Flow checks` block and goes on.
+- Exit 0: every flow passed or was reported as a gap; the block records a `## Flow checks` block and goes on.
 - Exit 1: one or more findings, one stdout line each; the block's one fixer round runs, then the script runs once more.
 - Exit 2: a usage error or a refused SPEC (a `uats:` key, or no `flows:`); the block halts.
 - Exit 3: an operational failure, such as a Playwright listing that could not run; the block halts.
@@ -25,12 +25,12 @@ The fixer, the retry bound of one and the `## Flow checks (HALTED)` record are t
 
 The one consolidation recipe. Four callers run it:
 
-- **The pre-audit pass.** The orchestrator, after the drift check (an older plan: the worthiness step) and before the first member dispatch. It always attempts promotion.
+- **The pre-audit pass.** The orchestrator, after the flow checks (a spec-less plan: after the simplify pass) and before the code audit's worthiness step and the first member dispatch. It always attempts promotion.
 - **The post-clearance refresh.** The orchestrator, after audit clearance and the merge question's `Merge it` answer. It rewrites `SUMMARY.md` against the audited code, uncommitted, and attempts promotion only when it reaches `wiki-promote.md`'s Step 2.
 - **The cold sweep.** The pre-flight sweep's cold consolidation, against a folder whose PR already merged. It accepts an interrupted run's pre-audit `SUMMARY.md` as the last complete summary: a verified one is no candidate, and an unverified one is rewritten from the layers.
 - **A plan generated before this order.** Its own orchestrator block consolidates after clearance and keeps that block's continuation. It may omit `Pass:` from its record, so a plan running its old block needs no new reading of this page.
 
-**Synthesis.** The caller (the warm orchestrator, or the session running the sweep; never a task sub-agent) writes `SUMMARY.md` by layered override-resolution: read the layers in precedence `SPEC.md`, then `AUDIT.md`, then the plan's `PROGRESS.md`; the top layer wins on conflict. A spec-less plan has no `SPEC.md` or `AUDIT.md`, so its `PROGRESS.md` is the only layer; a cold consolidation reads the plan's `PROGRESS.md` when one is present. Ground the result in the merged code and passing tests, write it present-tense as final-state prose, and surface any material narrowing between the stated intent and the shipped scope under an optional `## Divergence` section. Yield blocks in `PROGRESS.md` are resumption records, not findings, so consolidation ignores them.
+**Synthesis.** The caller (the warm orchestrator, or the session running the sweep; never a task sub-agent) writes `SUMMARY.md` by layered override-resolution: read the layers in precedence `SPEC.md`, then `AUDIT.md` (written by the spec audit's fixer), then the plan's `PROGRESS.md`; the top layer wins on conflict. `REQUIREMENTS.md` is not a layer: consolidation never reads it. A spec-less plan has no `SPEC.md` or `AUDIT.md`, so its `PROGRESS.md` is the only layer; a cold consolidation reads the plan's `PROGRESS.md` when one is present. Ground the result in the merged code and passing tests, write it present-tense as final-state prose, and surface any material narrowing between the stated intent and the shipped scope under an optional `## Divergence` section. Yield blocks in `PROGRESS.md` are resumption records, not findings, so consolidation ignores them.
 
 **Location.** A spec-colocated plan's `SUMMARY.md` sits beside `SPEC.md`, in the SPEC folder one level above the plan subfolder; a spec-less plan's sits in `<PLAN_DIR>`. Both folders are main-anchored. From a linked worktree, the write follows the tool-choice contract in `.claude/skills/gaia/references/spec.md` Operational primitives, which applies the same way to a spec-less plan folder.
 
@@ -100,11 +100,13 @@ Runs after `gh pr merge`, in this order. Each step runs only after the one befor
 
    A spec-colocated plan subfolder is deleted; a spec-less plan folder is reduced to `SUMMARY.md`, with its `RUNNING` sentinel cleared. The helper leaves the folder untouched until the usage ledger holds a `gaia-plan` close for the run and a consolidated `SUMMARY.md` exists (the parent SPEC's, passing its verifier, for a spec-colocated plan). It always exits 0.
 
-**Retention.** The SPEC folder's `SUMMARY.md` and a reduced spec-less plan folder, stay for `GAIA_SPEC_RETENTION_DAYS` (default 30). Nothing reaps them early; the pre-flight sweep reaps them once past the window.
+`REQUIREMENTS.md`, when the SPEC folder holds one, is left in place beside `SUMMARY.md`: it is not a consolidation layer and nothing removes it here. Only the retention window below reaps it, with the folder.
+
+**Retention.** The SPEC folder's `SUMMARY.md` (and `REQUIREMENTS.md` beside it) and a reduced spec-less plan folder, stay for `GAIA_SPEC_RETENTION_DAYS` (default 30). Nothing reaps them early; the pre-flight sweep reaps them once past the window.
 
 ## Pre-flight sweep
 
-The shared backstop for merges that happened outside an orchestrator, or a close that never finished. `/gaia-spec` step 2 and `/gaia-plan` step 0 both run it, each naming its caller (`/gaia-spec` or `/gaia-plan`) so pass 6 knows whether it may ask. Pass 0 is the one blocking pass; passes 1-6 are best-effort and never block the command that runs the sweep. The order is load-bearing: pass 1's scan stamps the `pr_number` that pass 3's plan candidates and pass 4's confirmed reap read.
+The shared backstop for merges that happened outside an orchestrator, or a close that never finished. `/gaia-spec` step 2 and `/gaia-plan` step 0 both run it, each naming its caller (`/gaia-spec` or `/gaia-plan`) so pass 6 knows whether it may ask. Pass 0 is the one blocking pass; passes 1-6 are best-effort and never block the command that runs the sweep. A SPEC folder holding `REQUIREMENTS.md` is authored (its clarify finished), so the ghost sweep never abandons it. The order is load-bearing: pass 1's scan stamps the `pr_number` that pass 3's plan candidates and pass 4's confirmed reap read.
 
 **0. Notebook readiness (blocking).**
 

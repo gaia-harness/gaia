@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Extract per-test (fullName, content signal) pairs from a vitest/jest test
 // file: the one test-identity extractor the worthiness ledger and presence
-// gate, the test-design drift check and the existing-tests listing share.
+// gate share.
 //
 // A test is identified by (file, fullName, signal). The signal changes
 // whenever the test body changes, so a verdict or observation recorded

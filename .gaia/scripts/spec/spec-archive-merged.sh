@@ -38,7 +38,8 @@
 # Usage-ledger gate: once a candidate clears the age gate, this asks
 # `usage.sh represented` (against the main checkout's usage ledger) whether a
 # close is recorded for spec:<id> under gaia-spec, and also under gaia-plan
-# when the folder holds a plan or plan-<N> subfolder. Any non-zero verdict
+# when the folder holds a plan or plan-<N> subfolder, and under gaia-test when
+# any plan subfolder's TEST-STAGE reads running or ran. Any non-zero verdict
 # blocks that one id: the folder is left in place, one stdout keep line names
 # the missing run and the `usage.sh record` recovery command, and the sweep
 # moves on to the next candidate.
@@ -112,6 +113,11 @@ _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../notebook/notebook-lib.sh
 . "${_library_directory}/../notebook/notebook-lib.sh" 2>/dev/null || {
   echo "spec-archive-merged: cannot load the notebook library; nothing swept" >&2
+  exit 0
+}
+# shellcheck source=plan-verify-lib.sh
+. "${_library_directory}/plan-verify-lib.sh" 2>/dev/null || {
+  echo "spec-archive-merged: cannot load plan-verify-lib.sh; nothing swept" >&2
   exit 0
 }
 # shellcheck source=../main-root-lib.sh
@@ -239,6 +245,15 @@ while IFS= read -r spec_id; do
     [ -d "$plan_subfolder" ] && holds_plan=1
   done
   if [ "$holds_plan" -eq 1 ] && ! _usage_gate "$relative_folder" "spec:${spec_id}" gaia-plan; then
+    continue
+  fi
+  # A plan subfolder whose TEST-STAGE reads running or ran also owes a
+  # gaia-test close on the SPEC ref (.claude/skills/gaia/references/test-stage.md).
+  owes_test=0
+  for plan_subfolder in "$folder"/plan "$folder"/plan-[0-9]*; do
+    if [ -d "$plan_subfolder" ] && test_stage_close_owed "$plan_subfolder"; then owes_test=1; fi
+  done
+  if [ "$owes_test" -eq 1 ] && ! _usage_gate "$relative_folder" "spec:${spec_id}" gaia-test; then
     continue
   fi
 

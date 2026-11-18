@@ -8,14 +8,16 @@
 #     advances that plan's catalog row to status "merged" with a merged_at
 #     timestamp, through ledger-update.sh, before the disposition decision,
 #     which is gated on the usage ledger holding a gaia-plan close for
-#     plan:PLAN-NNN (usage.sh represented); a folder that fails the gate, or
-#     carries no consolidated SUMMARY.md yet, is left in place untouched. A
-#     kept folder survives for later age-reap (plan-archive-merged.sh) instead
-#     of being deleted outright.
+#     plan:PLAN-NNN (usage.sh represented), plus a gaia-test close on the same
+#     ref when the folder's TEST-STAGE reads running or ran; a folder that
+#     fails the gate, or carries no consolidated SUMMARY.md yet, is left in
+#     place untouched. A kept folder survives for later age-reap
+#     (plan-archive-merged.sh) instead of being deleted outright.
 #   - Spec-colocated plan at plan[-N] inside a SPEC folder of the notebook's
 #     specs folder: the same gate applies, keyed on the parent SPEC (a
 #     gaia-plan close for spec:SPEC-NNN clears every plan subfolder of that
-#     spec); the SPEC folder is the archival unit for everything else and is
+#     spec, and a gaia-test close on spec:SPEC-NNN is also required when a
+#     plan folder's own TEST-STAGE reads running or ran); the SPEC folder is the archival unit for everything else and is
 #     untouched here.
 #
 # Encapsulating the delete in a subprocess keeps the destructive rm out of
@@ -43,7 +45,8 @@
 #     fails this script.
 #   - The usage-ledger gate is fail-closed: any error resolving the main
 #     checkout, a missing or unreadable usage ledger, or a run with no
-#     recorded close leaves the folder in place and prints a keep line on
+#     recorded close (gaia-plan, and gaia-test when TEST-STAGE reads running or
+#     ran) leaves the folder in place and prints a keep line on
 #     stdout naming the recovery command.
 #   - stdout carries at most one human summary line describing what
 #     happened; diagnostics and refusals go to stderr only.
@@ -79,6 +82,11 @@ root="${root%/}"
 # shellcheck source=.gaia/scripts/notebook/notebook-lib.sh
 . "$root/.gaia/scripts/notebook/notebook-lib.sh" 2>/dev/null || {
   echo "plan-archive: cannot load $root/.gaia/scripts/notebook/notebook-lib.sh; nothing archived" >&2
+  exit 0
+}
+# shellcheck source=.gaia/scripts/spec/plan-verify-lib.sh
+. "$root/.gaia/scripts/spec/plan-verify-lib.sh" 2>/dev/null || {
+  echo "plan-archive: cannot load $root/.gaia/scripts/spec/plan-verify-lib.sh; nothing archived" >&2
   exit 0
 }
 export GAIA_NOTEBOOK_TREE="$root"
@@ -189,6 +197,28 @@ if [ "$gate_status" -ne 0 ]; then
   printf 'Kept %s: no %s run recorded for %s; %s\n' \
     "$relative_path" "$usage_workflow" "$usage_ref" "$recovery_command"
   exit 0
+fi
+
+# A running or ran TEST-STAGE also owes a gaia-test close on the same ref.
+if test_stage_close_owed "$absolute_source_path"; then
+  usage_workflow="gaia-test"
+  recovery_command="outside a live $usage_workflow run, record it: bash .gaia/scripts/usage.sh record $usage_ref --workflow $usage_workflow --start <iso>"
+  gate_status=2
+  if [ -n "$main_root" ]; then
+    gate_status=0
+    bash "$root/.gaia/scripts/usage.sh" represented "$usage_ref" --workflow "$usage_workflow" \
+      --main-root "$main_root" </dev/null >/dev/null 2>&1 || gate_status=$?
+  fi
+  if [ "$gate_status" -eq 2 ]; then
+    printf 'Kept %s: usage ledger missing or unreadable (.gaia/local/telemetry/usage.jsonl) for %s; once it reads, %s\n' \
+      "$relative_path" "$usage_ref" "$recovery_command"
+    exit 0
+  fi
+  if [ "$gate_status" -ne 0 ]; then
+    printf 'Kept %s: no %s run recorded for %s; %s\n' \
+      "$relative_path" "$usage_workflow" "$usage_ref" "$recovery_command"
+    exit 0
+  fi
 fi
 
 # ---------- disposition ----------

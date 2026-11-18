@@ -2,7 +2,7 @@
 
 ## Scope
 
-This file owns which test to write and at which layer. Every plan, executor, reviewer, evaluator, fixer and the tdd skills follow it, and every other source states only how to write a test at a layer, plus a pointer here. The reasons behind these rules live in `wiki/decisions/Test Layering.md`, `wiki/decisions/Testing Trophy Doctrine.md` and `wiki/decisions/Stories as Tests.md`.
+This file owns which test to write and at which layer. Every test stage, executor, reviewer, evaluator, fixer and the tdd skills follow it, and every other source states only how to write a test at a layer, plus a pointer here. The reasons behind these rules live in `wiki/decisions/Test Layering.md`, `wiki/decisions/Testing Trophy Doctrine.md` and `wiki/decisions/Stories as Tests.md`.
 
 How to write a test at a layer lives in the stack references:
 
@@ -20,15 +20,24 @@ How to write a test at a layer lives in the stack references:
 - Give a bug fix one test that reproduces the bug.
 - Write at most one test per user-observable behavior; a case table is one test. This is a cap, not a quota: the tests the rules below require still apply.
 - Assert every case a multi-case requirement lists. Split a compound condition into one case per part (`an open, unlocked account`: a closed account, a locked account). Split an order-of-checks requirement into one case per adjacent pair of checks, with an input that passes every earlier check, fails both checks of the pair, and asserts the earlier one refused.
-- Give every transition, status or role rule exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer holds one case per outcome to prove the wiring, except an allowed outcome the closing flow test walks and asserts; a case another requirement states goes into the table as a keyed row citing that requirement, never into a second wiring case of the same outcome. Each wiring case takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces its outcome. A case belongs to the rule whose input it varies, whichever requirement states it and whatever effect it names (an alert shown, a button hidden). A rule stated as sets (the roles or relationships that take each action, the statuses each action leaves from) has one case per action and each role or relationship, inside its set or out, and one per action and each status, inside its from-statuses or out, so a status no action leaves (a final one) is a case for every action. Each role or relationship case takes a status inside the action's from-statuses, and each status case a role or relationship inside its set, so each case refuses or allows on its own dimension alone. Every role or relationship that takes an action runs at least one case at each status. A table holding one example per requirement that states the rule samples it. A plan row for a case table names each case it holds by its values (each role or relationship and status, each input), never by class (`every role`) or by sample (`including an unknown tool`): the plan audit and the security writer read the row, not the test.
+- Give every transition, status or role rule exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer holds one case per outcome to prove the wiring, except an allowed outcome the closing flow test walks and asserts; a case another requirement states goes into the table as a case citing that requirement, never into a second wiring case of the same outcome. Each wiring case takes an input clear of every boundary and exception the table cases, unless only a boundary or exception case produces its outcome. A case belongs to the rule whose input it varies, whichever requirement states it and whatever effect it names (an alert shown, a button hidden). A rule stated as sets (the roles or relationships that take each action, the statuses each action leaves from) has one case per action and each role or relationship, inside its set or out, and one per action and each status, inside its from-statuses or out, so a status no action leaves (a final one) is a case for every action. Each role or relationship case takes a status inside the action's from-statuses, and each status case a role or relationship inside its set, so each case refuses or allows on its own dimension alone. Every role or relationship that takes an action runs at least one case at each status. A table holding one example per requirement that states the rule samples it. A case table names each case it holds by its values (each role or relationship and status, each input), never by class (`every role`) or by sample (`including an unknown tool`).
 - Assert a role, accessible name, exact wording or attribute a stated requirement gives as that stated literal (`A New user link`: role link, name `New user`; `a Quantity field named qty`: an input named `qty`). One existing or planned test satisfies it at any layer, a flow test only for a role or accessible name; one story or route test may hold all of a page's stated literals, a loader-data heading's route test aside (`## Served HTML`); never add a flow for one. A stated literal a task doc names for its builder counts as asserted only once a test, or a flow task doc's list of the literals it asserts, names it.
 - Never assert through an import of the app's own string: it proves only that the app agrees with itself.
-- Name the closing flow test as the owner of a happy path it walks and asserts, with no success-path route test of its own; an effect the flow cannot observe keeps its route test.
+- The closing flow test owns a happy path it walks and asserts, with no success-path route test of its own; an effect the flow cannot observe keeps its route test.
 - Test several callers that map an upstream failure through one shared helper once, at the mapping, unless a caller maps differently. This never applies to a guard (`## Guards and security rows`).
 - Test a stated mapping from a value the app reads (an API field, a stored or query value) to what the user sees (a stored `status: 2` shown as `Shipped`) with one case per value, at the layer the layer rule picks for the code that maps it: the route test of a loader or action that maps it, the unit test of a helper that meets the unit-test conditions, or, when a component maps it, itself or through a small helper it calls, one story per value given the raw value. A story given the mapped props never runs the mapping.
 - Never test what the type checker or lint already proves.
 - Never plan a test of a test double (a mock, fixture, Given builder or test-fixture wiring) once another app test, existing or planned in any phase, exercises that path. Judge by what the test can catch, not the code it calls: a test whose only catch beyond that app test is app code disagreeing with a double (that a client reaches its mock handlers, that the mocks share the app's base URL, what a seed holds) tests that double.
 - Give a behavior only a real backend shows (data surviving a restart, a database reset, a production start against a real store) no test; name it as adopter-owned end-to-end work in the plan's follow-ups.
+
+**Hollow test.** A hollow test is an untested requirement. A test is hollow when it has:
+
+- an assertion that cannot fail, including a guard test that never drives the guard into its failing state;
+- an assertion through an import of the app's own string;
+- a test of a test double instead of the app;
+- an assertion inside a play function.
+
+A skipped, todo, fixme or conditionally skipped test, or one with an empty body, is no test.
 
 ## Layers
 
@@ -63,7 +72,7 @@ Formatting helpers, small array, string and object utilities, and thin wrappers 
 
 Fold sibling browser tests that walk one flow into one journey.
 
-**Flow test.** Write one flow test per critical flow, in the closing phase only, never in a build phase. It holds only the journey through the happy path, the happy path's effects that take several requests or sessions to stage, and, when the flow must work without JavaScript, a page-less check that posts the happy path's native forms (a separate real-server file holding them is also accepted). A stated no-JavaScript error path gets no native post: the action's route test and the page's story cover it. A web flow test is admitted on the browser layer whatever a cheaper layer could prove. It asserts no markup structure or ARIA attribute beyond a stated role or accessible name, repeats no refusal a build task's test or another flow owns, however many requests or sessions the refusal takes to stage, and asserts no stated literal or state a lower-layer test owns, even one the SPEC flow's own statement names: a flow that sees a placed order with its total lands on the order's page, and the total stays on its route and story tests. A happy-path step's own result that the user sees as a refusal (after sign-out the protected page redirects to sign-in) is a happy-path effect and stays. A flow whose only steps reach a page to see a stated literal or state a lower-layer test owns has no journey through the happy path. A flow left with no step this paragraph keeps gets no flow test: the plan records the rows that own its steps instead.
+**Flow test.** Write one flow test per critical flow, in the closing phase only, never in a build phase. It holds only the journey through the happy path, the happy path's effects that take several requests or sessions to stage, and, when the flow must work without JavaScript, a page-less check that posts the happy path's native forms (a separate real-server file holding them is also accepted). A stated no-JavaScript error path gets no native post: the action's route test and the page's story cover it. A web flow test is admitted on the browser layer whatever a cheaper layer could prove. It asserts no markup structure or ARIA attribute beyond a stated role or accessible name, repeats no refusal a build task's test or another flow owns, however many requests or sessions the refusal takes to stage, and asserts no stated literal or state a lower-layer test owns, even one the SPEC flow's own statement names: a flow that sees a placed order with its total lands on the order's page, and the total stays on its route and story tests. A happy-path step's own result that the user sees as a refusal (after sign-out the protected page redirects to sign-in) is a happy-path effect and stays. A flow whose only steps reach a page to see a stated literal or state a lower-layer test owns has no journey through the happy path.
 
 **Path to layer.** In the web package:
 
@@ -80,7 +89,7 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 **Guard.** A guard is code that refuses: an access check, a refusal, a validation or a gate.
 
 - Drive every guard into its failing state with a test that asserts the refusal. A test that only watches a guard pass cannot tell a working guard from an inert one.
-- Name a guard's test in the task that delivers the guard, never leave it to the closing flow test. One test may cover several guards of one security kind (`**Security row.**`).
+- Name a guard's test in the task that delivers the guard, never leave it to the closing flow test. One test may cover several guards of one security kind.
 - A flow test never stands in for a guard's lower-layer test, and a browser test or flow test never counts as the covering sibling of the only lower-layer test driving a guard.
 
 **Anonymous write.** Prove that an authenticated write action refuses an anonymous request, with no side effect, by a route test calling the action with an anonymous `Request`.
@@ -93,27 +102,13 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 
 **Middleware guard.** A route test that runs the real middleware chain proves a middleware guard; a route test that hand-calls a context provider does not, and without the chain the guard needs a real-server check. An authorization outcome an upstream API owns is proven by no GAIA layer, since a mock handler answers as the test wrote it. The app's own response to an upstream refusal (no session created, the error shown) is still an access row; only the upstream's verdict itself is unprovable.
 
-**Later-request rule.** Test a rule that takes effect on a later request (a role change, a deactivation, a sign-out ending a token) with a before-and-after read in one session, at the row's layer.
+**Later-request rule.** Test a rule that takes effect on a later request (a role change, a deactivation, a sign-out ending a token) with a before-and-after read in one session, at the layer the layer rule picks for the rule.
 
 **Forged value.** For a signed or encrypted value the app issues (a cookie, a session, a token), send a forged or edited one and assert the refusal. For a server-owned field the server must ignore (an owner or author), submit a forged value and assert the server ignored it. For a destination the server sends the user or a request to (a redirect target, a callback URL), send one outside its allowed destinations and assert it is refused or replaced with an allowed destination.
 
 **Absence requirement.** For a value that must never be exposed, sent, stored or rendered, every task that adds a way for it to reach the forbidden surface tests its absence on that surface while the value is present upstream. Served HTML, a cookie or the session is a real-server check; returned data, an outgoing request or any other write is a route test.
 
-**Security row.** A security row's test proves one of three kinds:
-
-- **Access**: who may act or see. Sign-in and its refusals, role, ownership and visibility, account state that decides whether an actor may act (deactivated, suspended, a role change on the next request), and authorization checked before validation or data access. A status rule that decides whether an actor may act is access. So is what a page offers an actor by an access rule (an action, form, link or navigation item shown only to those who may use it), at every layer that holds its cases, whatever requirement its row cites: a story of the actions one role sees in one status is access even when the row cites only a requirement stating their names. A story given every action, asserting each form's wiring rather than what one role sees, is `none`.
-- **Forgery**: refusal of forged, tampered or server-owned values, and refusal of an untrusted destination the server would send the user or a request to (an off-site redirect target, an unregistered callback URL), or its replacement with an allowed one.
-- **Secrets**: values that must never be exposed. A requirement that keeps a value server-only is a secrets requirement, whatever the value.
-
-Judge a cookie attribute by what it protects on a cookie that holds a session, a credential or auth-flow secret (a remember-me, refresh-token, OAuth state or PKCE verifier cookie) or a server-only value: `HttpOnly` (off script) and `Secure` (off plaintext transport) are secret, `SameSite` (no cross-site forged request carries it) is forgery; any other attribute, and every attribute of a cookie holding none of these, is `none`, except that a row asserting a session, credential or auth-flow cookie is cleared or expired on sign-out is access, as a sign-out ending a token is. Ordinary validation and status rules are not security rows, and a `new`, `extend` or `reuse` row's kind comes from what its own case asserts, never from other rows' flags: a read that answers an unrecognized filter value with its default view refuses nothing and is `none`, even beside forgery rows refusing that value on a write. A retire or change row on an existing access, forgery or secrets test carries the flag too. So does a retire or change row made because a security requirement in its `source` (an access, forgery or secrets requirement, whether or not another flagged row cites it) forbids what the existing test asserted, whatever that test's own kind: it carries that requirement's kind, and such a retire is a security retire. Judge such a row by what the existing test asserted, never by its changed form: once an access requirement sends signed-out visitors to sign-in, an existing check that a path answers 200 signed out is forbidden by it, so the change row moving that check to a public path is access. Citing a requirement is not forbidding: a row that cites a security requirement only because that requirement's work deletes or rewrites the tested code (the home page's stories, retired when signed-out `/` redirects) keeps its existing test's own kind, unless it is a retire that a flagged row from the same `source` subsumes. A test that puts a value a secrets requirement keeps off a surface onto that surface and asserts code there uses it tests what that requirement forbids, not code its work merely rewrites, so its retire or change row is secret (a browser test that reads a planted server-only API origin). A retire row for an existing test that a flagged row from the same `source` subsumes carries that row's kind.
-
-**Story security row.** A story security row proves only what one component renders for given props, so it is additive: it never replaces the route or real-server test the guard needs. An access or secrets requirement the app enforces on the server has its own route or real-server row besides the story row. A forgery row has no story-only form; its story form is a `change` row on an existing story test that asserted the server-owned field, kept only beside the route or real-server forgery row for the same requirement.
-
-**One kind per case.** Judge each case, not each row: a row is judged by its `caseKey` when it has one, by its title otherwise. Two cases that share a test and carry different kinds, `none` included (a signed-out redirect beside a signed-in render, or a refusal beside a forged cookie), each get their own row, keyed by `caseKey`, and every row on one shared `.each` or `.for` test sits in the latest task its security rows need. With no case table, each kind's cases go in a test of their own. Splitting an existing security test or a flagged row keeps its flag on the row narrowed to its own kind's cases, and each moved case takes its own kind: no split clears a flag.
-
-- When a security test fails, fix the code, never weaken the test.
-- Only the maintainer rules a security row wrong, removes its flag, or retires an existing security test, except a retire row for the security test of code the plan deletes, which a human's approval of the plan covers. An approval no human gave (`/gaia-plan auto`, or an option a headless run picks) is not the maintainer's, so `/gaia-plan auto` and a headless run hold every security retire row, deleted code included.
-- Retire or fold a test asserting escaping, sanitization, injection resistance or data integrity only into a test on its own layer or higher that asserts the same property.
+A failing security test is fixed in the code, never weakened; the security kinds and the rest of the security rules live in the security section of `.claude/skills/gaia/references/test-stage.md`.
 
 ## Components, pages and stories
 
@@ -138,38 +133,6 @@ Judge a cookie attribute by what it protects on a cookie that holds a session, a
 - A real-server row for a served error status (a 404 for an unknown path or a missing record) asserts only the status and any `Location`, like a `**Served check.**`; the heading and other page content served with it stay on its story or route test. Which route answers a path is shown by its route test and, for a guarded route, its served check (a signed-out request its guard redirects), never by a served heading.
 - A refusal or error a direct `loader` or `action` call returns is a route test, even when a page or error boundary renders it.
 - A flow that must work without JavaScript checks its happy path's native form posts page-less in its flow test, never an error post, with the body built from the served form, never as a page with JavaScript disabled. A native post that belongs to no flow is a real-server check.
-
-## Test-design table
-
-**Test-design table.** Every plan decides each test, its layer and its action in its test-design table, before any code is written. `.claude/skills/gaia/references/plan/test-table.md` owns the row fields.
-
-**Actions.** Every row carries one:
-
-- `new`: write a test no existing test holds.
-- `reuse`: an existing test already asserts the case; leave it unchanged.
-- `extend`: add the case to an existing test's case table.
-- `change`: the plan changes the behavior an existing test asserts; change that test.
-- `retire`: the new work supersedes an existing test; delete it.
-
-**Table rules.**
-
-- Read the existing tests that drive the routes, modules and components a plan touches before writing its rows; a case an existing test asserts is `reuse` or `extend`, never `new`.
-- Approving the plan approves its retire rows. A security test's retire row follows the **Security row** rule above. Retiring an existing test no approved row retires, or deleting a test outside the table, needs the maintainer; the default is keep.
-- Executors write their own rows' tests, using the planned titles verbatim, and never edit the table.
-- Only the security writer writes a security row's test.
-- A test outside the table is unplanned drift.
-- An audit fix that changes what a test must cover amends the rows it touches before that round's gate runs, and never drops a security row's requirement coverage without the maintainer.
-
-## Honesty
-
-**Hollow test.** A hollow test is an untested requirement. A test is hollow when it has:
-
-- an assertion that cannot fail, including a guard test that never drives the guard into its failing state;
-- an assertion through an import of the app's own string;
-- a test of a test double instead of the app;
-- an assertion inside a play function.
-
-A skipped, todo, fixme or conditionally skipped test, or one with an empty body, is no test.
 
 ## Committed tests and generators
 

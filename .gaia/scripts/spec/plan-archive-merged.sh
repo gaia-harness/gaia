@@ -52,7 +52,8 @@
 #
 # Usage-ledger gate: once a candidate clears the age gate, this asks
 # `usage.sh represented` (against the main checkout's usage ledger) whether a
-# gaia-plan close is recorded for plan:<id>. Any non-zero verdict blocks that
+# gaia-plan close is recorded for plan:<id>, and a gaia-test close on plan:<id>
+# when the folder's TEST-STAGE reads running or ran. Any non-zero verdict blocks that
 # one id: the folder is left in place, one stdout keep line names the missing
 # run and the `usage.sh record` recovery command, and the sweep moves on to
 # the next candidate.
@@ -103,6 +104,11 @@ _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=SCRIPTDIR/../notebook/notebook-lib.sh
 . "${_library_directory}/../notebook/notebook-lib.sh" 2>/dev/null || {
   echo "plan-archive-merged: cannot load ${_library_directory}/../notebook/notebook-lib.sh; skipping sweep" >&2
+  exit 0
+}
+# shellcheck source=SCRIPTDIR/plan-verify-lib.sh
+. "${_library_directory}/plan-verify-lib.sh" 2>/dev/null || {
+  echo "plan-archive-merged: cannot load ${_library_directory}/plan-verify-lib.sh; skipping sweep" >&2
   exit 0
 }
 # shellcheck source=SCRIPTDIR/../main-root-lib.sh
@@ -225,6 +231,10 @@ while IFS='	' read -r plan_id merged_at; do
   # ledger does not record. Any non-zero verdict, including an unresolved main
   # checkout, blocks this id and leaves the folder untouched.
   if ! _usage_gate "$relative_folder" "plan:${plan_id}" gaia-plan; then
+    continue
+  fi
+  # A running or ran TEST-STAGE also owes a gaia-test close on the same ref.
+  if test_stage_close_owed "$folder" && ! _usage_gate "$relative_folder" "plan:${plan_id}" gaia-test; then
     continue
   fi
 

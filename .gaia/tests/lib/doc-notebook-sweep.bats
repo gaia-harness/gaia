@@ -7,7 +7,7 @@
 #   - lifecycle.md's `## Pre-flight sweep` runs the merged-spec, merged-plan
 #     and abandoned-spec reapers, and spec.md step 2 no longer runs the
 #     abandoned reaper itself (the sweep owns it).
-#   - spec.md step 9 saves the SPEC through the notebook library's path verb,
+#   - spec.md step 10 saves the SPEC through the notebook library's path verb,
 #     under the notebook's specs folder.
 #
 # Each check is a function of the file it reads, and each has a red twin that
@@ -74,7 +74,7 @@ check_sweep_runs_reapers() {
 
 check_step_two_leaves_abandoned_reap_to_the_sweep() {
   local step_two
-  step_two="$(range_between "$1" '### 2. Resume-vs-start-new prompt' '### 3. Initial draft')" || return 1
+  step_two="$(range_between "$1" '### 2. Resume-vs-start-new prompt' '### 3. Allocate, anchor, stamp')" || return 1
   [ -n "$step_two" ] || { printf 'spec.md step 2 is empty\n' >&2; return 1; }
   if printf '%s\n' "$step_two" | grep -qF 'spec-archive-abandoned.sh'; then
     printf 'spec.md step 2 still runs the abandoned reaper the sweep owns\n' >&2
@@ -102,16 +102,16 @@ check_step_two_leaves_abandoned_reap_to_the_sweep() {
 }
 
 check_save_step_uses_the_library() {
-  local file="$1" step_nine
-  step_nine="$(range_between "$file" '### 9. Save to' '### 10. Immutability lint')" || return 1
-  [ -n "$step_nine" ] || { printf 'spec.md step 9 is empty\n' >&2; return 1; }
-  if ! grep -qF -- '### 9. Save to .notebook/specs/SPEC-NNN/SPEC.md' "$file"; then
-    printf 'spec.md step 9 does not save under .notebook/specs/\n' >&2
+  local file="$1" step_ten
+  step_ten="$(range_between "$file" '### 10. Save to' '### 11. Immutability lint')" || return 1
+  [ -n "$step_ten" ] || { printf 'spec.md step 10 is empty\n' >&2; return 1; }
+  if ! grep -qF -- '### 10. Save to .notebook/specs/SPEC-NNN/SPEC.md' "$file"; then
+    printf 'spec.md step 10 does not save under .notebook/specs/\n' >&2
     return 1
   fi
   # Step 9 hands the save to one script, so the library call lives there.
-  if ! printf '%s\n' "$step_nine" | grep -qF 'bash .gaia/scripts/spec/spec-save.sh "$PWD"'; then
-    printf 'spec.md step 9 does not save through spec-save.sh\n' >&2
+  if ! printf '%s\n' "$step_ten" | grep -qF 'bash .gaia/scripts/spec/spec-save.sh "$PWD"'; then
+    printf 'spec.md step 10 does not save through spec-save.sh\n' >&2
     return 1
   fi
   if ! grep -qF 'notebook-lib.sh" path spec "$spec_id"' "$SAVE_SCRIPT"; then
@@ -121,16 +121,16 @@ check_save_step_uses_the_library() {
   true
 }
 
-@test "spec.md step 9 saves the SPEC through the notebook library under .notebook/specs/" {
+@test "spec.md step 10 saves the SPEC through the notebook library under .notebook/specs/" {
   check_save_step_uses_the_library "$SPEC_MD"
 }
 
-@test "red twin: a step 9 that builds its own folder path fails the save check" {
+@test "red twin: a step 10 that builds its own folder path fails the save check" {
   local mutated="$BATS_TEST_TMPDIR/spec-save-relative.md"
-  # Replace the save call only inside step 9.
+  # Replace the save call only inside step 10.
   awk '
-    index($0, "### 9. Save to") { in_step_nine = 1 }
-    in_step_nine && index($0, "bash .gaia/scripts/spec/spec-save.sh \"$PWD\"") && !done {
+    index($0, "### 10. Save to") { in_step_ten = 1 }
+    in_step_ten && index($0, "bash .gaia/scripts/spec/spec-save.sh \"$PWD\"") && !done {
       print "SPEC_FOLDER=\".notebook/specs/${SPEC_ID}\""
       done = 1
       next

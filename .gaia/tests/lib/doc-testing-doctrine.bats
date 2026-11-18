@@ -45,7 +45,6 @@ setup() {
     'A test that only watches a guard pass cannot tell a working guard from an inert one.'
     'A play function drives the UI into the state the snapshot shows and asserts nothing.'
     'Rendered HTML is a real-server check only when the HTML itself is the requirement.'
-    'Approving the plan approves its retire rows.'
     'A hollow test is an untested requirement.'
     'Every committed test follows this file.'
     'Prove that an authenticated write action refuses an anonymous request, with no side effect, by a route test calling the action with an anonymous `Request`.'
@@ -54,7 +53,12 @@ setup() {
     'A fresh render in a separate test file is for hooks only.'
     'Place each test on the layer this section assigns to what it asserts'
     'Library-supplied key and focus behavior gets no test.'
-    "with a before-and-after read in one session, at the row's layer."
+    'with a before-and-after read in one session, at the layer the layer rule picks for the rule.'
+    'asserting only the served status and any `Location` header, never page content a route test shows'
+    'exactly one case table holding every case, at the layer the layer rule picks. A test of that rule at another layer holds one case per outcome'
+    'A real-server row for a served error status (a 404 for an unknown path or a missing record) asserts only the status and any `Location`'
+    'Which route answers a path is shown by its route test and, for a guarded route, its served check (a signed-out request its guard redirects), never by a served heading.'
+    'with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
   )
 
   # The conflict sources that still state a test rule: each points at the
@@ -169,6 +173,31 @@ copy_into() {
 
 @test "every conflict source that states a test rule points at the doctrine" {
   check_pointers "$REPO_ROOT"
+}
+
+@test "doctrine carries no table sections and nothing points to one" {
+  local doctrine="$REPO_ROOT/$DOCTRINE_REL" heading term hits
+  for heading in '## Test-design table' '## Honesty'; do
+    if grep -qxF -- "$heading" "$doctrine"; then
+      printf 'doctrine still has: %s\n' "$heading" >&2
+      return 1
+    fi
+  done
+  for term in '**Security row.**' '**Story security row.**' '**One kind per case.**' 'tests.json' 'caseKinds' 'caseKey'; do
+    if grep -qF -- "$term" "$doctrine"; then
+      printf 'doctrine still names: %s\n' "$term" >&2
+      return 1
+    fi
+  done
+  # The heading other files cite by name stays.
+  grep -qxF -- '## Guards and security rows' "$doctrine"
+  # No loaded instruction points to a removed section: a pointer names the
+  # doctrine and a removed heading or paragraph in one line.
+  hits="$(git -C "$REPO_ROOT" grep -nE 'doctrine/testing\.md.*(Test-design table|## Honesty|Security row|One kind per case)' -- '.claude/skills/tdd' '.claude/rules' 'apps/web/.claude' || true)"
+  if [ -n "$hits" ]; then
+    printf 'pointer to a removed section:\n%s\n' "$hits" >&2
+    return 1
+  fi
 }
 
 # ---------- red twins ----------

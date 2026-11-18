@@ -12,8 +12,6 @@ Read `.claude/skills/gaia/references/spec.md` from the project root and follow i
 
 - `.claude/skills/gaia/references/spec/lifecycle.md`: step 2's pre-flight sweep.
 - `.claude/skills/gaia/references/spec/resume.md`: step 2, only when the allocator reports a draft and the run is interactive.
-- `.claude/skills/gaia/references/spec/spec-template.md`: step 3's initial draft.
-- `.claude/skills/gaia/references/spec/clarify-loop.md`, `.claude/skills/gaia/references/spec/clarify-prompts.md` and `.claude/skills/gaia/references/spec/system-prompt.md`: step 5's Socratic loop.
-- `.claude/skills/gaia/references/spec/self-review-dispatch.md`: step 6, and step 10's loop back to 6c.
-- `.claude/skills/gaia/references/spec/audit.md` and `.claude/skills/gaia/references/spec/lens-dispatch.md`: step 7's adversarial audit.
-- `.claude/skills/gaia/references/spec/self-review.md`: read by the self-review sub-agent, never this thread.
+- `.claude/skills/gaia/references/spec/spec-template.md`: step 3's skeleton and step 7's draft.
+- `.claude/skills/gaia/references/spec/clarify-loop.md`, `.claude/skills/gaia/references/spec/clarify-prompts.md` and `.claude/skills/gaia/references/spec/system-prompt.md`: step 5's Socratic loop; `clarify-loop.md` also owns step 6's requirements file.
+- `.claude/skills/gaia/references/spec/audit.md` and `.claude/skills/gaia/references/spec/lens-dispatch.md`: step 8's review.

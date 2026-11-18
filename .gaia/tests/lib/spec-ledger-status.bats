@@ -170,6 +170,11 @@ updated: 2026-01-01
 ---
 
 # Test SPEC
+
+## Behaviors
+
+- **B1** (access): A signed-out visitor cannot open the dashboard.
+  - Case: signed-out visitor requests the dashboard -> redirected to sign-in.
 EOF
 }
 

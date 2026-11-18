@@ -92,16 +92,12 @@ rules for the Socratic loop:
      for explicit confirmation through `AskUserQuestion` before save.
    - Response-length or terseness preferences do not shorten either
      gate's print.
-6. **Self-review before gate 2.** Audit the draft for placeholder
-   text, scope drift relative to gate 1, internal inconsistency
-   between fields, and ambiguous flow names. Fix before you show
-   the human.
-7. **Block save while `clarifications.pending` is non-empty.** Do not
+6. **Block save while `clarifications.pending` is non-empty.** Do not
    write the SPEC artifact while any item remains pending. For each
    pending item, surface it via `AskUserQuestion` (resolve it, or defer
    it with a recorded rationale); proceed to save only once every
    pending item is resolved or explicitly deferred with rationale.
-8. **No machine-local memory for project decisions.** Spec-relevant
+7. **No machine-local memory for project decisions.** Spec-relevant
    decisions live in the SPEC artifact. Do not stash them in
    `~/.claude/projects/.../memory/`. The only exception is a literal
    formatting preference (e.g. "no em dashes", "terse over

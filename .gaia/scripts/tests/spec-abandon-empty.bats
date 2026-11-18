@@ -94,6 +94,16 @@ status_of() {
   [ -z "$output" ]
 }
 
+@test "a draft folder holding a requirements file is not swept as a ghost" {
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-003", created_at: $timestamp, status: "draft"}]')"
+  mkdir -p "$SANDBOX/.notebook/specs/SPEC-003"
+  echo "# Requirements" > "$SANDBOX/.notebook/specs/SPEC-003/REQUIREMENTS.md"
+  run bash "$SCRIPT" "$SANDBOX"
+  [ "$status" -eq 0 ]
+  [ "$(status_of SPEC-003)" = "draft" ]
+  [ -z "$output" ]
+}
+
 # --- 4. Leaves a draft with a gate-1 snapshot untouched ----------------------
 
 @test "leaves a draft with a gate1-<id>.json snapshot untouched" {

@@ -37,6 +37,7 @@ build_repo() {
   cp "$E2E_SOURCE_ROOT"/.claude/hooks/lib/*.sh "$REPO/.claude/hooks/lib/"
   cp "$E2E_SOURCE_ROOT"/.gaia/scripts/*.sh "$REPO/.gaia/scripts/"
   cp "$E2E_SOURCE_ROOT"/.gaia/scripts/spec/*.sh "$REPO/.gaia/scripts/spec/"
+  cp "$E2E_SOURCE_ROOT"/.gaia/scripts/spec/*.mjs "$REPO/.gaia/scripts/spec/"
   mkdir -p "$REPO/.gaia/scripts/notebook"
   cp "$E2E_SOURCE_ROOT"/.gaia/scripts/notebook/*.sh "$REPO/.gaia/scripts/notebook/"
   cp "$E2E_SOURCE_ROOT/.claude/skills/gaia/references/spec/spec-template.md" "$REPO/.claude/skills/gaia/references/spec/"

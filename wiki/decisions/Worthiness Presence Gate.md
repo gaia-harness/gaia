@@ -13,7 +13,7 @@ tags: [decision, tdd, testing, audit, merge, quality]
 A merge-time `gh pr merge` gate that requires each test in the worthiness selection a PR changes to
 carry a worthiness-ledger line matching its current content. It is the
 merge-time half of the [[Worthiness Audit]]: the evaluator judges each changed
-test and the shared worthiness step, the drift check's honesty read or the tdd skill's arm appends one ledger
+test and the shared worthiness step or the tdd skill's arm appends one ledger
 line per judged test; this gate
 enforces at merge that such a line exists for the content being merged. It sits
 alongside the [[PR Merge Workflow]]'s Code Audit Team gate, both deny
@@ -46,7 +46,7 @@ gating the merge on a judgement call.
 
 The gate reads no verdict and re-runs no lint. What makes a test hollow is
 `.claude/doctrine/testing.md` (`## Honesty`), and a fresh-context reader judges
-it: the worthiness evaluator, or the drift check's honesty checker. Two
+it: the worthiness evaluator. Two
 mechanical patterns also fail lint, at the [[Quality Gate]] and in CI: a
 call-through-only assertion (`vitest/prefer-called-with`) and a server or
 internals import (`no-restricted-imports`). No lint enforces the same-module-mock
@@ -107,8 +107,5 @@ The `Fail-open vs fail-closed` block in `.claude/hooks/worthiness-presence-check
 - This gate requires a current ledger line for each changed test the worthiness
   selection names, strict included; it does not judge verdicts (see
   [[Worthiness Audit]]).
-- The security-row merge gate ([[Test Design Table]]) denies while an approved
-  security row of a plan's test-design table lacks its test. It is a third
-  independent denial on the same event.
 
 See [[Worthiness Audit]], [[PR Merge Workflow]], [[Determinism Classifier]].

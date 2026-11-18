@@ -340,7 +340,6 @@ adopting_hooks() {
   printf '%s\n' \
     pr-merge-audit-check.sh \
     worthiness-presence-check.sh \
-    test-design-merge-gate.sh \
     post-findings-block-on-merge.sh \
     pr-merge-cost.sh \
     issue-claim-release.sh \

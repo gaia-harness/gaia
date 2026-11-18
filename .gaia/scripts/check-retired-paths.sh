@@ -7,8 +7,9 @@
 # one of those at the root is a coupling the move missed: it resolves to
 # nothing, and a guard that resolves to nothing fails silently. This gate fails
 # on any such citation unless the line is named in the committed allowlist with
-# a reason. The deleted overlap pass's script, script folder and agent are
-# retired the same way (the last tuning bullet below).
+# a reason. The deleted overlap pass's script, script folder and agent and the
+# deleted test-design machinery are retired the same way (the last two tuning
+# bullets below).
 #
 # Usage: check-retired-paths.sh [--root <dir>] [--allowlist <file>]
 #
@@ -27,7 +28,9 @@
 #     .claude/hooks/**, .gaia/scripts/** (not tests/ or fixtures/ directories),
 #     .github/workflows/**, .github/actions/**, .github/**/*.sh,
 #     .gaia/cli/src/** (not *.test.ts or __tests__/), .gaia/cli/templates/**,
-#     .claude/agents/*.md, .claude/skills/**/*.md, .claude/commands/*.md, and
+#     .claude/agents/*.md, .claude/skills/**/*.md, .claude/commands/*.md, both
+#     `settings.json` files (`.claude/settings.json` and
+#     `apps/web/.claude/settings.json`, their hook registrations), and
 #     the frontmatter of .claude/rules/*.md and .claude/rules/maintainers/*.md
 #     (the `paths:` globs).
 #   `frontend/` tier, the retired package root only: the bodies of those rule
@@ -82,6 +85,15 @@
 #     `.gaia/scripts/overlap/`, `.claude/agents/overlap-evaluator.md`,
 #     `.claude/skills/gaia/references/overlap-pass.md`) are exact tokens in the
 #     full tier, so the word "overlap" elsewhere never trips.
+#   - The retired test-design pieces are full-tier tokens too: the drift-check
+#     and test-table references, the `test-honesty-checker` agent (by bare name,
+#     which also covers its path), the merge-gate and row-grant hooks, the drift
+#     script, `requirement-keys.sh`, the whole `.gaia/scripts/test-design/`
+#     folder, the two spec self-review references and the table's own
+#     artifacts. A path token must not follow a letter, digit, `_` or `-`.
+#     The bare `tests.json` and `tests.approved.json` match only where not
+#     preceded by `-`, a letter, a digit, `_` or `.` and not followed by a word
+#     character, so the kept record name `security-tests.jsonl` never trips.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
 set -u
@@ -163,7 +175,8 @@ while IFS= read -r -d '' tracked_path; do
   esac
   case "$tracked_path" in
     .claude/hooks/* | .gaia/scripts/* | .github/workflows/* | .github/actions/* | .github/*.sh | \
-      .gaia/cli/src/* | .gaia/cli/templates/* | .claude/rules/*.md | .claude/agents/*.md | .claude/skills/*.md | .claude/commands/*.md)
+      .gaia/cli/src/* | .gaia/cli/templates/* | .claude/rules/*.md | .claude/agents/*.md | .claude/skills/*.md | .claude/commands/*.md | \
+      .claude/settings.json | apps/web/.claude/settings.json)
       printf '%s\n' "$tracked_path" >>"$scan_list"
       continue
       ;;
@@ -194,6 +207,9 @@ function hit_kind(line,    rest, offset, before, lead) {
   if (line ~ /(^|[^A-Za-z0-9_#\\\/-])\.(playwright|storybook)\//) return 1
   if (line ~ /(^|[^A-Za-z0-9_.\\\/-])((vite|vitest|playwright|react-router|knip|stylelint|doctor)\.config\.[a-z]+|tsconfig\.json|\.lintstagedrc\.json|eslint\.config\.mjs|Dockerfile|\.dockerignore|\.env\.example)([^A-Za-z0-9_-]|$)/) return 1
   if (line ~ /(^|[^A-Za-z0-9_\/-])(\.gaia\/scripts\/overlap-check\.sh|\.gaia\/scripts\/overlap\/|\.claude\/agents\/overlap-evaluator\.md|\.claude\/skills\/gaia\/references\/overlap-pass\.md)/) return 1
+  if (line ~ /(^|[^A-Za-z0-9_-])(\.claude\/skills\/gaia\/references\/(drift-check\.md|plan\/test-table\.md|spec\/self-review(-dispatch)?\.md)|\.claude\/hooks\/(test-design-merge-gate|test-row-grant)\.sh|\.gaia\/scripts\/(test-drift-check\.sh|spec\/requirement-keys\.sh|test-design\/))/) return 1
+  if (line ~ /(^|[^A-Za-z0-9_-])test-honesty-checker/) return 1
+  if (line ~ /(^|[^A-Za-z0-9_.-])tests(\.approved)?\.json([^A-Za-z0-9_]|$)/) return 1
   rest = line
   offset = 0
   while (match(rest, /\.claude\/(skills\/(a11y-fixes|eslint-fixes|gaia-react-perf|new-component|new-hook|new-route|new-service|playwright-cli|react-code|skeleton-loaders|tailwind|typescript)|rules\/(accessibility|api-service|design-baseline|i18n|playwright|react-router-docs|routes|state-pattern|storybook|tailwind)\.md|instructions\/(add-locale|remove-i18n)\.md|agents\/code-audit-frontend\/)/)) {

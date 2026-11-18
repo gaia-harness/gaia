@@ -230,7 +230,7 @@ check_caller_routes_through_sweep() {
 }
 
 @test "spec.md step 2 and plan.md step 0 both route through the pre-flight sweep" {
-  check_caller_routes_through_sweep "$SPEC_MD" '### 2. Resume-vs-start-new prompt' '### 3. Initial draft'
+  check_caller_routes_through_sweep "$SPEC_MD" '### 2. Resume-vs-start-new prompt' '### 3. Allocate, anchor, stamp'
   check_caller_routes_through_sweep "$PLAN_MD" '### 0. Pre-flight sweep' '### 1. Get description'
 }
 

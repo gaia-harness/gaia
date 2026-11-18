@@ -96,7 +96,7 @@ run_gate() {
   printf 'run .gaia/scripts/overlap-check.sh now\n' >"$repo/.claude/hooks/a.sh"
   printf 'see .gaia/scripts/overlap/citations.mjs\n' >"$repo/.claude/hooks/b.sh"
   printf 'dispatch .claude/agents/overlap-evaluator.md\n' >"$repo/.claude/commands/c.md"
-  printf 'an overlap of two tests, see .gaia/scripts/test-design/layer-map.mjs\n' >"$repo/.claude/commands/d.md"
+  printf 'an overlap of two tests, see .gaia/scripts/spec/page-use.mjs\n' >"$repo/.claude/commands/d.md"
   printf 'read .claude/skills/gaia/references/overlap-pass.md first\n' >"$repo/.claude/commands/e.md"
   stage_all "$repo"
   run_gate "$repo"
@@ -106,6 +106,49 @@ run_gate() {
   grep -qF -- 'RETIRED .claude/commands/c.md:1:' <<<"$output"
   grep -qF -- 'RETIRED .claude/commands/e.md:1:' <<<"$output"
   ! grep -qF -- '.claude/commands/d.md' <<<"$output"
+}
+
+@test "a citation of a retired test-design file fails the gate" {
+  local repo
+  repo="$(make_repo test-design)"
+  mkdir -p "$repo/.claude/skills/demo" "$repo/.claude/commands"
+  printf '%s\n' '# Demo' 'Read .claude/skills/gaia/references/plan/test-table.md first.' >"$repo/.claude/skills/demo/SKILL.md"
+  stage_all "$repo"
+  run_gate "$repo"
+  [ "$status" -eq 1 ]
+  grep -qF -- 'RETIRED .claude/skills/demo/SKILL.md:2:' <<<"$output"
+  printf '%s\n' '# Demo' 'Read .claude/skills/gaia/references/spec/lens-dispatch.md first.' >"$repo/.claude/skills/demo/SKILL.md"
+  printf '%s\n' 'run .claude/skills/gaia/references/drift-check.md' >"$repo/.claude/commands/a.md"
+  printf '%s\n' 'dispatch the test-honesty-checker agent' >"$repo/.claude/commands/b.md"
+  printf '%s\n' 'run .gaia/scripts/test-design/existing-tests.mjs' >"$repo/.claude/commands/c.md"
+  printf '%s\n' 'run .gaia/scripts/spec/requirement-keys.sh' >"$repo/.claude/commands/d.md"
+  printf '%s\n' 'read .claude/skills/gaia/references/spec/self-review-dispatch.md' >"$repo/.claude/commands/e.md"
+  printf '%s\n' 'run .claude/hooks/test-row-grant.sh and .claude/hooks/test-design-merge-gate.sh and .gaia/scripts/test-drift-check.sh' >"$repo/.claude/commands/f.md"
+  stage_all "$repo"
+  run_gate "$repo"
+  [ "$status" -eq 1 ]
+  grep -qF -- 'SKILL.md' <<<"$output" && return 1
+  local name
+  for name in a b c d e f; do
+    grep -qF -- "RETIRED .claude/commands/$name.md:1:" <<<"$output"
+  done
+}
+
+@test "a kept script reading the retired test table fails the gate" {
+  local repo
+  repo="$(make_repo test-table)"
+  printf '%s\n' '#!/usr/bin/env bash' 'rows="$(jq . "$plan_directory/tests.json")"' >"$repo/.claude/hooks/x.sh"
+  printf '%s\n' '#!/usr/bin/env bash' 'cmp "$plan_directory/tests.approved.json" "$other"' >"$repo/.claude/hooks/y.sh"
+  printf '%s\n' '#!/usr/bin/env bash' 'tail "$plan_directory/security-tests.jsonl"' >"$repo/.claude/hooks/z.sh"
+  printf '%s\n' '{"hooks":[{"command":"$CLAUDE_PROJECT_DIR/.claude/hooks/test-row-grant.sh"}]}' >"$repo/.claude/settings.json"
+  stage_all "$repo"
+  run_gate "$repo"
+  [ "$status" -eq 1 ]
+  grep -qF -- 'RETIRED .claude/hooks/x.sh:2:' <<<"$output"
+  grep -qF -- 'RETIRED .claude/hooks/y.sh:2:' <<<"$output"
+  grep -qF -- 'RETIRED .claude/settings.json:1:' <<<"$output"
+  grep -qF -- '.claude/hooks/z.sh' <<<"$output" && return 1
+  true
 }
 
 @test "the same citation under apps/web/ does not trip the gate" {

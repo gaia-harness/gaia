@@ -746,3 +746,20 @@ _days_ago() {
   real_after="$(directory_listing_checksum "$REPO_ROOT/.notebook")"
   [ "$real_after" = "$real_before" ]
 }
+
+@test "a ran TEST-STAGE keeps the folder until the gaia-test close is recorded" {
+  _seed_merged_plan PLAN-001
+  printf 'status: ran\ndate: 2026-01-01T00:00:00Z\n' > "$PLANS/PLAN-001/TEST-STAGE"
+
+  run _archive "$SANDBOX"
+  [ "$status" -eq 0 ]
+  refute_contains "Deleted"
+  assert_contains "no gaia-test run recorded for plan:PLAN-001; outside a live gaia-test run, record it: bash .gaia/scripts/usage.sh record plan:PLAN-001 --workflow gaia-test --start <iso>"
+  [ -d "$PLANS/PLAN-001" ]
+
+  seed_close_row "$TELEMETRY" plan:PLAN-001 gaia-test
+  run _archive "$SANDBOX"
+  [ "$status" -eq 0 ]
+  assert_contains "Deleted 1 merged plan folder(s): PLAN-001"
+  [ ! -e "$PLANS/PLAN-001" ]
+}

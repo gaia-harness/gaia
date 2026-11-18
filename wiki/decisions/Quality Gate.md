@@ -37,7 +37,7 @@ The contract lives at the repo root. Steps 3 to 5 are root scripts that run acro
    Unattended, the workflow halts naming the reason. The script's header documents the exit codes.
 8. `pnpm build` (`pnpm -C apps/web build`): confirms production build.
 9. **Fix all warnings before reporting**: never hand off with known warnings.
-10. **Stop and report**: ask for approval with `AskUserQuestion` (`Commit` (Recommended) or `Hold for review`), except inside a workflow whose own instructions commit without stopping: the audit fix round ([[Audit Round Procedure#The fix round: fixer, verifier, gate]]), the worthiness step's fix commit (`.claude/skills/gaia/references/worthiness-step.md`), the drift check's fix commit (`.claude/skills/gaia/references/drift-check.md`), the simplify pass's commit (`.claude/skills/gaia/references/simplify-pass.md`), `/gaia-debt`, a `/gaia-plan` orchestrator's phase commits, and `/gaia-init`'s init commit.
+10. **Stop and report**: ask for approval with `AskUserQuestion` (`Commit` (Recommended) or `Hold for review`), except inside a workflow whose own instructions commit without stopping: the audit fix round ([[Audit Round Procedure#The fix round: fixer, verifier, gate]]), the worthiness step's fix commit (`.claude/skills/gaia/references/worthiness-step.md`), the simplify pass's commit (`.claude/skills/gaia/references/simplify-pass.md`), `/gaia-debt`, a `/gaia-plan` orchestrator's phase commits, and `/gaia-init`'s init commit.
 
 | Step          | Result |
 | ------------- | ------ |

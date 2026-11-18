@@ -74,9 +74,6 @@ setup() {
   # The fifth: a security test is never written by the code's own author, so a
   # double no-op halts the phase and the main thread does not write the tests.
   SECURITY_WRITER_RELATIVE_PATH='.claude/skills/gaia/references/security-writer.md'
-  # The sixth: an absent drift verdict is not a keep, so a double no-op halts
-  # the step and the main thread does not judge the drift itself.
-  DRIFT_CHECK_RELATIVE_PATH='.claude/skills/gaia/references/drift-check.md'
 
   OWNER="$ROOT/$OWNER_RELATIVE_PATH"
   GATE="$ROOT/$GATE_RELATIVE_PATH"
@@ -86,7 +83,7 @@ setup() {
   ROSTER=(
     '.claude/agents/code-audit-frontend.md'
     '.claude/hooks/lib/audit-frontend-refuter.md'
-    '.claude/skills/gaia/references/drift-check.md'
+    '.claude/skills/gaia/references/plan/decomposition-audit.md'
     '.claude/skills/gaia/references/security-writer.md'
     '.claude/skills/gaia/references/simplify-pass.md'
     '.claude/skills/gaia/references/spec/audit.md'
@@ -225,7 +222,6 @@ terminal_segments() {
     [ "$relative_path" = "$WORTHINESS_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$SIMPLIFY_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$SECURITY_WRITER_RELATIVE_PATH" ] && continue
-    [ "$relative_path" = "$DRIFT_CHECK_RELATIVE_PATH" ] && continue
     lines="$(terminal_segments "$ROOT/$relative_path")"
     [ -n "$lines" ] || { echo "no terminal statement read in ${relative_path}" >&2; return 1; }
     # Per statement, not per file: a file whose ending drifted at one of
@@ -318,16 +314,6 @@ terminal_segments() {
   [ -n "$lines" ] || { echo "no terminal statement read in $SECURITY_WRITER_RELATIVE_PATH" >&2; return 1; }
   printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
   printf '%s\n' "$lines" | grep -qF -- 'HALTED'
-}
-
-@test "the drift check admits its departure on the owner page and halts instead of falling back inline" {
-  grep -qF -- "$DRIFT_CHECK_RELATIVE_PATH" "$OWNER"
-  grep -qF -- 'an absent verdict is not a keep' "$OWNER"
-  local lines
-  lines="$(terminal_segments "$ROOT/$DRIFT_CHECK_RELATIVE_PATH")"
-  [ -n "$lines" ] || { echo "no terminal statement read in $DRIFT_CHECK_RELATIVE_PATH" >&2; return 1; }
-  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
-  printf '%s\n' "$lines" | grep -qF -- 'HALT'
 }
 
 @test "the owner page no longer asserts a uniform ending across every surface" {

@@ -4,7 +4,7 @@ Plan a complex feature using the task orchestration pattern. Do not implement an
 
 This command is the plan-specific case of the Workflow Doctrine (`wiki/concepts/Workflow Doctrine.md`), which defines roles, git ownership, checkpoint and resume, and model choice. For plan runs, the plan contract in `.claude/skills/gaia/references/plan/planner.md` (per-phase commits and gates, `PROGRESS.md`, the orchestrator's executor pins) governs where the two differ.
 
-Contents: `## Argument parsing`; `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 decomposition audit; 4.6c approve the test-design table; 4.7 record the run; 5 report and kickoff prompt).
+Contents: `## Argument parsing`; `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 plan review; 4.7 record the run; 5 test stage; 6 report and kickoff prompt).
 
 ## Argument parsing
 
@@ -17,7 +17,7 @@ A first word of `auto` is always the mode token, so a description that starts wi
 
 Steps 1 and 1a read the remainder as `$ARGUMENTS`, so `auto SPEC-NNN` takes step 1a's bare-id form exactly as `SPEC-NNN` does. `/gaia-spec` step 11 invokes this skill in the same session with `SPEC-NNN`, or `auto SPEC-NNN` in auto mode.
 
-`auto_mode` selects two branches: step 2 defaults the planner to Opus with no model prompt, and step 4.6b surfaces no question (it auto-applies or records under the README's `## Audit notes`). A non-interactive run (step 2), with or without `auto_mode`, also takes step 2's Opus default and runs step 4.6c's `approve` with `--auto`. Every other step runs identically, and none of them prompts.
+`auto_mode` selects three branches: step 2 defaults the planner to Opus with no model prompt, step 4.6b surfaces no question (it auto-applies or records under the README's `## Audit notes`), and step 5 takes Run. A non-interactive run (step 2), with or without `auto_mode`, also takes step 2's Opus default. Every other step runs identically, and none of them prompts.
 
 ## Steps
 
@@ -128,21 +128,17 @@ else
   PLAN_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path plan "$PLAN_ID")"
   mkdir -p "$PLAN_DIR"
 fi
-# Test-design marker, written here and never by the planner: it tells every
-# later reader the plan carries a test-design table. A step 4 Correction
-# re-spawn keeps it.
-printf 'schema: 1\n' > "$PLAN_DIR/TEST-DESIGN"
 ```
 
-Cache the resolved absolute `PLAN_DIR`; pass it in step 4's dispatch and the kickoff prompt in step 5.
+Cache the resolved absolute `PLAN_DIR`; pass it in step 4's dispatch and the kickoff prompt in step 6.
 
 ### 4. Spawn planning agent
 
-The planner reads its own instructions from `.claude/skills/gaia/references/plan/planner.md`. Do not Read that file on this thread and do not paste it into the prompt: the dispatch carries only this plan's inputs. A planner that skipped the file writes a plan without the step sentinels, which step 4.5 rejects. The planner's test-design table procedure lives in `.claude/skills/gaia/references/plan/test-table.md`, which `planner.md` routes it to; do not Read it here either.
+The planner reads its own instructions from `.claude/skills/gaia/references/plan/planner.md`. Do not Read that file on this thread and do not paste it into the prompt: the dispatch carries only this plan's inputs. A planner that skipped the file writes a plan without the step sentinels, which step 4.5 rejects.
 
 Every fresh step-4 dispatch, the first one and a step 4.6b `Correction` re-spawn alike, first runs `bash .gaia/scripts/spec/handoff-clear.sh "$PLAN_DIR" planner`, which creates `<PLAN_DIR>/handoffs` and removes every `planner-yield-*.md` there, and starts a new dispatch chain with a yield count of zero; a non-zero exit stops and reports its stderr line to the user. A Correction re-spawn therefore never coexists with a handoff.
 
-Read the checkout root with one plain `git rev-parse --show-toplevel` (a command substitution around `git` is refused inside a worktree). Then launch one `general-purpose` Agent with the step-2 model and no `effort` parameter (the planner runs at the session effort, per step 2), and this prompt, filling each `<...>`:
+Read the checkout root with one plain `git rev-parse --show-toplevel` (a command substitution around `git` is refused inside a worktree). Then launch one `general-purpose` planner Agent, pinned to the step-2 top-tier model, and no `effort` parameter (the planner runs at the session effort, per step 2), and this prompt, filling each `<...>`:
 
 ```
 Your first action, before writing anything: Read <checkout root>/.claude/skills/gaia/references/plan/planner.md to its last line, paging with offset if one Read does not reach the end. Then follow it exactly, with these inputs:
@@ -190,7 +186,7 @@ test -f "$PLAN_DIR/README.md" \
 
 If any required file is missing, surface the failure to the user with the planner's return payload. Do not retry silently, the user decides through `AskUserQuestion`: `Investigate first` (Recommended) or `Re-spawn the planner`. Never proceed to step 4.6 with an incomplete plan folder.
 
-Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, and for a spec-derived plan that every SPEC flow has exactly one `Flow test` line, in a task doc of the closing phase, at the flow's expected path, that every closing-phase task doc carries exactly one such line, that each task doc maps to one README phase row, and that the closing phase's `ORCHESTRATOR.md` entry runs each flow test. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`). It requires the `TEST-DESIGN` marker, relays each `node .gaia/scripts/test-design/test-table.mjs verify` failure on the test-design table, and refuses a phase that owns a security row with no `- Security writer:` line:
+Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, that each task doc maps to one README phase row, and, per the `TEST-STAGE` record `test-stage.md` owns, that no Flow test line appears before the test stage has run. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
 
 ```bash
 if [[ -n "${SPEC_PATH:-}" ]]; then
@@ -202,42 +198,47 @@ fi
 
 A non-zero exit is handled exactly like a missing file. This check runs even when step 4.6 skips the decomposition audit.
 
-### 4.6. Adversarial decomposition audit
+### 4.6. Plan review
 
-Audits the **decomposition itself** (task graph, frozen interface contracts, SPEC coverage) before a cold orchestrator builds against it; `plan/decomposition-audit.md` owns what it checks.
+Reviews the **decomposition itself** (task graph, frozen interface contracts, SPEC coverage) before a cold orchestrator builds against it; `plan/decomposition-audit.md` owns what it checks.
 
-**The audit runs automatically on a non-trivial plan; the gauge decides which lenses run.** After step 4.5 confirms the artifacts exist, gauge the plan (below) and act on the gauge with no prompt. The gauge decides the decomposition, contract and SPEC coverage lenses. The test-design lens and its refuter run on every plan with a table, whatever the gauge says.
+**Skip a trivial plan.** After step 4.5 confirms the artifacts exist, read `README.md` and the `task-*.md` files once. A trivial plan (one or two tasks, a single phase, no cross-task interface contract) skips the review and goes to step 4.7. Anything with parallel tasks in a phase, multiple phases, or a shared frozen contract runs it, with no prompt.
 
-**Gauge the plan (this is the decision).** Read `README.md` and the `task-*.md` files once. A trivial plan (one or two tasks, a single phase, no cross-task interface contract) → **skip the decomposition, contract and SPEC coverage lenses**. Anything with parallel tasks in a phase, multiple phases, or a shared frozen contract → **run them**.
+**Auto-mode.** `auto_mode` does not change whether the review runs, only how 4.6b surfaces findings.
 
-**Auto-mode.** `auto_mode` does not change whether the audit runs, only how 4.6b surfaces findings.
+**Fallback (never block).** If the parallel `general-purpose` Agent fan-out is unavailable (a restricted context that cannot spawn subagents), do NOT block the handoff: note `plan review unavailable` and continue. The orchestrator's per-phase quality gates and the non-skippable pre-merge Code Audit Team audit remain the safety net.
 
-**Fallback (never block).** If the parallel `general-purpose` Agent fan-out is unavailable (a restricted context that cannot spawn subagents), do NOT block the handoff: note the skip of the other lenses (`decomposition audit unavailable`) and run the test-design lens and its refuter inline on this thread instead of skipping them. The orchestrator's per-phase quality gates and the non-skippable pre-merge Code Audit Team audit remain the safety net.
-
-To run the audit, read `.claude/skills/gaia/references/plan/decomposition-audit.md` and `.claude/skills/gaia/references/spec/lens-dispatch.md` now, each whole, and run the audit. Step 4.6c follows 4.6b.
-
-### 4.6c. Approve the table
-
-After 4.6b applies the findings, freeze the table. Approving the plan approves the table, retire rows included, so execution does not ask again, except for each security-flagged `retire` row of code the plan keeps (no valid `deletes`), which `approve` holds and prints:
-
-```bash
-node .gaia/scripts/test-design/test-table.mjs approve --plan-dir "$PLAN_DIR"
-```
-
-With `auto_mode` true, or when running non-interactively as step 2 defines it, run it with `--auto`: it holds every security-flagged `retire` row, deleted code included. On every run, append each printed held id with its case to the README's `## Audit notes` section, saying the row waits for the merge checkpoint. A non-zero exit stops exactly like a step 4.5 failure.
+To run the review, read `.claude/skills/gaia/references/plan/decomposition-audit.md` and `.claude/skills/gaia/references/spec/lens-dispatch.md` now, each whole, and run it.
 
 ### 4.7. Record the run
 
 The plan folder is written and verified, so every planner and auditor sub-agent this action spawned has flushed its sidecar to disk. Close the `/gaia-plan` run in the usage ledger before the handoff, with the ref that matches the plan's origin:
 
-- **Spec-derived** (`SPEC_PATH` set): `bash .gaia/scripts/usage.sh record spec:<SPEC-NNN> --workflow gaia-plan --quiet`, where `<SPEC-NNN>` is the name of `SPEC_PATH`'s parent folder. `--quiet` prints no Cost line on success: the run's cost is shown once, as the box in step 5.
-- **Spec-less**: `bash .gaia/scripts/usage.sh record plan:<PLAN-NNN> --workflow gaia-plan`, where `<PLAN-NNN>` is the basename of `$PLAN_DIR`, the id allocated in step 3. It prints the Cost line (and any `Note:` lines under it) that step 5 relays.
+- **Spec-derived** (`SPEC_PATH` set): `bash .gaia/scripts/usage.sh record spec:<SPEC-NNN> --workflow gaia-plan --quiet`, where `<SPEC-NNN>` is the name of `SPEC_PATH`'s parent folder. `--quiet` prints no Cost line on success: the run's cost is shown once, as the box in step 6.
+- **Spec-less**: `bash .gaia/scripts/usage.sh record plan:<PLAN-NNN> --workflow gaia-plan`, where `<PLAN-NNN>` is the basename of `$PLAN_DIR`, the id allocated in step 3. It prints the Cost line (and any `Note:` lines under it) that step 6 relays.
 
-The command flushes the session's token usage into the ledger. It **never blocks the handoff**: on a non-zero exit, keep the one stderr line it prints for the step-5 report and continue. A `/clear` or a resumed session has a new session id, so a plan authored across one is refused with "no unclaimed start"; the stderr line then names the `--start <iso>` recovery, which runs outside a live `gaia-plan` run.
+The command flushes the session's token usage into the ledger. It **never blocks the handoff**: on a non-zero exit, keep the one stderr line it prints for the step-6 report and continue. A `/clear` or a resumed session has a new session id, so a plan authored across one is refused with "no unclaimed start"; the stderr line then names the `--start <iso>` recovery, which runs outside a live `gaia-plan` run.
 
-### 5. Report to user
+### 5. Offer the test stage
 
-Output a short summary of what's in `$PLAN_DIR/`, then report the cost, then emit the copy-paste prompt the user drops into a fresh Claude Code session to start the orchestrator cold.
+The `gaia-plan` run is closed (step 4.7), so the test stage opens its own run. Ask one `AskUserQuestion` (a spec-less plan is offered it too):
+
+- question: `"Run the test stage now?"`
+- header: `"Test stage"`
+- options:
+  - `{ label: "Run the test stage (Recommended)", description: "Writes each task's tests from the plan, then the flow-test phase." }`
+  - `{ label: "Skip", description: "No tests are planned. The rule-written security tests are skipped with it." }`
+
+With `auto_mode` true, or when running non-interactively as step 2 defines it, take Run with no question.
+
+- **Run:** invoke the `gaia-test` skill through the `Skill` tool with the plan folder `$PLAN_DIR` as its argument, and follow it through its own end. Read `.claude/skills/gaia/references/test-stage.md` only through that skill.
+- **Skip:** write the skip record, `printf 'status: skipped\ndate: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$PLAN_DIR/TEST-STAGE"`.
+
+Step 5 always ends with one of the two: never continue to step 6 with the stage neither run nor its skip written.
+
+### 6. Report to user
+
+Output a short summary of what's in `$PLAN_DIR/`, then, when step 5 skipped the stage, say so and that the security tests were skipped with it, then report the cost, then emit the copy-paste prompt the user drops into a fresh Claude Code session to start the orchestrator cold.
 
 Cost: never compute or restate a figure yourself.
 

@@ -1,15 +1,15 @@
 #!/usr/bin/env bats
 #
-# Doc-conformance suite for the spec-to-plan chain. `/gaia-spec` step 11 plans
+# Doc-conformance suite for the spec-to-plan chain. `/gaia-spec` step 12 plans
 # the SPEC in the same session through the `Skill` tool and stops at the plan's
 # KICKOFF report, and `/gaia-plan` reads a leading `auto` token.
 #
 # The invariants:
-#   s. the spec playbook's step 11 carries the heading, the Skill call (bare id
+#   s. the spec playbook's step 12 carries the heading, the Skill call (bare id
 #      and `auto` form), no direct planning, the recovery command as its only
 #      handoff text, a hard constraint 6 that allows the chain and keeps the
 #      execution stop, none of the retired terminal-handoff literals, and the
-#      auto-mode rule that makes step 11 chain;
+#      auto-mode rule that makes step 12 chain;
 #   c. the /gaia-spec command description says it plans in the same session;
 #   p. the plan playbook parses the `auto` token (argument section, step 2,
 #      step 4.6, step 4.6b) and the /gaia-plan command advertises it;
@@ -70,9 +70,9 @@ nonempty_section() {
   fi
 }
 
-# step11 <root>: from the step 11 heading to end of file.
-step11() {
-  awk '/^### 11\. /{f=1} f' "$1/$SPEC_MD"
+# step12 <root>: from the step 12 heading to end of file.
+step12() {
+  awk '/^### 12\. /{f=1} f' "$1/$SPEC_MD"
 }
 
 # constraint6 <root>: the hard constraint 6 item line.
@@ -141,39 +141,39 @@ replace_in_section() {
   mv "$out" "$file"
 }
 
-# --- s. spec playbook step 11 ------------------------------------------------
+# --- s. spec playbook step 12 ------------------------------------------------
 
 check_s1() {
   local root="$1"
-  grep -qxF -- '### 11. Plan the SPEC in this session' "$root/$SPEC_MD" || { printf 'step 11 heading is not exact\n' >&2; return 1; }
+  grep -qxF -- '### 12. Plan the SPEC in this session' "$root/$SPEC_MD" || { printf 'step 12 heading is not exact\n' >&2; return 1; }
   [ "$(grep -c '^### ' "$root/$SPEC_MD")" -ge 1 ] || return 1
-  [ "$(grep '^### ' "$root/$SPEC_MD" | tail -n 1)" = '### 11. Plan the SPEC in this session' ] || { printf 'step 11 is not the last section\n' >&2; return 1; }
+  [ "$(grep '^### ' "$root/$SPEC_MD" | tail -n 1)" = '### 12. Plan the SPEC in this session' ] || { printf 'step 12 is not the last section\n' >&2; return 1; }
 }
 
 check_s2() {
   local text
-  text="$(step11 "$1")"
-  nonempty_section 'step 11' "$text" || return 1
-  require_all 'step 11' "$text" 'the `Skill` tool' '`skill: "gaia-plan"`' '`args: "SPEC-NNN"`' '`args: "auto SPEC-NNN"`'
+  text="$(step12 "$1")"
+  nonempty_section 'step 12' "$text" || return 1
+  require_all 'step 12' "$text" 'the `Skill` tool' '`skill: "gaia-plan"`' '`args: "SPEC-NNN"`' '`args: "auto SPEC-NNN"`'
 }
 
 check_s3() {
   local text
-  text="$(step11 "$1")"
-  nonempty_section 'step 11' "$text" || return 1
-  forbid_all 'step 11' "$text" 'plan.md' 'planner.md' 'general-purpose' '/clear' || return 1
+  text="$(step12 "$1")"
+  nonempty_section 'step 12' "$text" || return 1
+  forbid_all 'step 12' "$text" 'plan.md' 'planner.md' 'general-purpose' '/clear' || return 1
   if printf '%s\n' "$text" | grep -qwF -- Agent; then
-    printf 'step 11 still holds the word: Agent\n' >&2
+    printf 'step 12 still holds the word: Agent\n' >&2
     return 1
   fi
 }
 
 check_s4() {
   local text count verdict
-  text="$(step11 "$1")"
-  nonempty_section 'step 11' "$text" || return 1
+  text="$(step12 "$1")"
+  nonempty_section 'step 12' "$text" || return 1
   count="$(printf '%s\n' "$text" | grep -cF -- '/gaia-plan SPEC-NNN' || true)"
-  [ "$count" -eq 1 ] || { printf 'step 11 holds %s recovery lines, want 1\n' "$count" >&2; return 1; }
+  [ "$count" -eq 1 ] || { printf 'step 12 holds %s recovery lines, want 1\n' "$count" >&2; return 1; }
   verdict="$(printf '%s\n' "$text" | awk '
     index($0, "**If the plan run stops before its report.**") == 1 { label = 1 }
     /^```/ {
@@ -212,7 +212,7 @@ check_s7() {
   local region line
   region="$(auto_region "$1")"
   nonempty_section 'auto mode region' "$region" || return 1
-  line="$(printf '%s\n' "$region" | grep -E '^13\. \*\*Step 11 chains in auto mode\.\*\*' || true)"
+  line="$(printf '%s\n' "$region" | grep -E '^13\. \*\*Step 12 chains in auto mode\.\*\*' || true)"
   nonempty_section 'auto-mode rule 13' "$line" || return 1
   require_all 'rule 13' "$line" '`auto SPEC-NNN`'
 }
@@ -313,13 +313,13 @@ check_w_plan() {
 
 # --- green tests on the real tree --------------------------------------------
 
-@test "step 11 heading is exact and step 11 is the last section" { check_s1 "$CHAIN_ROOT"; }
-@test "step 11 invokes the gaia-plan skill with the bare and the auto args" { check_s2 "$CHAIN_ROOT"; }
-@test "step 11 never plans directly" { check_s3 "$CHAIN_ROOT"; }
-@test "step 11 holds the recovery command once, in a text fence after the recovery label" { check_s4 "$CHAIN_ROOT"; }
+@test "step 12 heading is exact and step 12 is the last section" { check_s1 "$CHAIN_ROOT"; }
+@test "step 12 invokes the gaia-plan skill with the bare and the auto args" { check_s2 "$CHAIN_ROOT"; }
+@test "step 12 never plans directly" { check_s3 "$CHAIN_ROOT"; }
+@test "step 12 holds the recovery command once, in a text fence after the recovery label" { check_s4 "$CHAIN_ROOT"; }
 @test "hard constraint 6 allows the chain and keeps the execution stop" { check_s5 "$CHAIN_ROOT"; }
 @test "the spec playbook holds none of the retired terminal-handoff literals" { check_s6 "$CHAIN_ROOT"; }
-@test "auto mode carries the rule that makes step 11 chain" { check_s7 "$CHAIN_ROOT"; }
+@test "auto mode carries the rule that makes step 12 chain" { check_s7 "$CHAIN_ROOT"; }
 @test "the gaia-spec command description says it plans in the same session" { check_c1 "$CHAIN_ROOT"; }
 @test "the plan playbook has an argument section before its steps" { check_p1 "$CHAIN_ROOT"; }
 @test "the argument section sets both auto_mode values and the abort literal" { check_p2 "$CHAIN_ROOT"; }
@@ -335,9 +335,9 @@ check_w_plan() {
 
 # --- red twins ---------------------------------------------------------------
 
-@test "red twin: renaming the step 11 heading fails the heading check" {
+@test "red twin: renaming the step 12 heading fails the heading check" {
   copy="$(scratch_copy)"
-  edit_literal "$copy/$SPEC_MD" '### 11. Plan the SPEC in this session' '### 11. Hand off'
+  edit_literal "$copy/$SPEC_MD" '### 12. Plan the SPEC in this session' '### 12. Hand off'
   run check_s1 "$copy"
   [ "$status" -ne 0 ]
 }
@@ -349,14 +349,14 @@ check_w_plan() {
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: reading plan.md inside step 11 fails the no-direct-planning check" {
+@test "red twin: reading plan.md inside step 12 fails the no-direct-planning check" {
   copy="$(scratch_copy)"
   printf 'Read the plan.md reference now.\n' >>"$copy/$SPEC_MD"
   run check_s3 "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: the word Agent inside step 11 fails the no-direct-planning check" {
+@test "red twin: the word Agent inside step 12 fails the no-direct-planning check" {
   copy="$(scratch_copy)"
   printf 'Dispatch an Agent to plan.\n' >>"$copy/$SPEC_MD"
   run check_s3 "$copy"
@@ -427,30 +427,30 @@ check_w_plan() {
 
 @test "red twin: deleting auto-mode rule 13 fails the auto rule check" {
   copy="$(scratch_copy)"
-  grep -vE '^13\. \*\*Step 11 chains in auto mode\.\*\*' "$copy/$SPEC_MD" >"$copy/spec.new"
+  grep -vE '^13\. \*\*Step 12 chains in auto mode\.\*\*' "$copy/$SPEC_MD" >"$copy/spec.new"
   mv "$copy/spec.new" "$copy/$SPEC_MD"
   run check_s7 "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: moving rule 13 into step 11 fails the auto rule check" {
+@test "red twin: moving rule 13 into step 12 fails the auto rule check" {
   copy="$(scratch_copy)"
-  line="$(grep -E '^13\. \*\*Step 11 chains in auto mode\.\*\*' "$copy/$SPEC_MD")"
-  grep -vE '^13\. \*\*Step 11 chains in auto mode\.\*\*' "$copy/$SPEC_MD" >"$copy/spec.new"
+  line="$(grep -E '^13\. \*\*Step 12 chains in auto mode\.\*\*' "$copy/$SPEC_MD")"
+  grep -vE '^13\. \*\*Step 12 chains in auto mode\.\*\*' "$copy/$SPEC_MD" >"$copy/spec.new"
   printf '%s\n' "$line" >>"$copy/spec.new"
   mv "$copy/spec.new" "$copy/$SPEC_MD"
   run check_s7 "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: deleting step 11 entirely fails every step 11 check instead of passing" {
+@test "red twin: deleting step 12 entirely fails every step 12 check instead of passing" {
   copy="$(scratch_copy)"
-  awk '/^### 11\. /{exit} {print}' "$copy/$SPEC_MD" >"$copy/spec.new"
+  awk '/^### 12\. /{exit} {print}' "$copy/$SPEC_MD" >"$copy/spec.new"
   mv "$copy/spec.new" "$copy/$SPEC_MD"
   local name
   for name in check_s1 check_s2 check_s3 check_s4; do
     run "$name" "$copy"
-    [ "$status" -ne 0 ] || { printf '%s passed on an empty step 11\n' "$name" >&2; return 1; }
+    [ "$status" -ne 0 ] || { printf '%s passed on an empty step 12\n' "$name" >&2; return 1; }
   done
 }
 

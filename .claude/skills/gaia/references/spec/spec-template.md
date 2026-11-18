@@ -83,6 +83,30 @@ section is the cognitive scaffold for the autonomous downstream
 pipeline that consumes this SPEC, the clearer this is, the cleaner
 the resulting plan and tasks.>
 
+## Behaviors
+
+<Every behavior the feature has, error cases, refusals and security rules
+included, one bullet each, with its cases. This SPEC plans no tests: it states
+behavior, and the plan decides how each is proven. The bullet below is the
+worked example of the shape; replace it with the feature's own.>
+
+- **B1** (access): Only the order's owner can open its receipt page.
+  - Case: a signed-in user who owns order 7, opening /orders/7/receipt -> the page shows "Receipt for order 7".
+  - Case: a signed-in user who does not own order 7, opening /orders/7/receipt -> 403 and the text "You cannot view this order".
+
+<Rules for this section. Each behavior line is `**B<n>** (<kind>): <sentence>`
+as a top-level bullet, with the kind one of `access`, `forgery`, `secret` (the
+security kinds), `refusal`, `data-loss` or `other`; `.gaia/scripts/spec/behaviors.mjs`
+is the code owner of that list and of the line shapes, and this prose is its one
+explanation. Each case line is a two-space-indented bullet `Case: <input> ->
+<outcome>` stating the actor, the state, the input and the outcome by value: a
+status, a message, a redirect or the literal text shown, never "an error" or
+"the usual page". Every behavior has at least one case. Ids and kinds are per
+behavior, never per case; ids stay stable across fixes, and a removed id is
+never reused. Where the brief already lists values (an action table, labels),
+point to it with `REQUIREMENTS.md § <heading>` instead of copying them. Write
+no other top-level bullet in this section.>
+
 ## Preconditions
 
 <Anything that must be true about the project, environment, or other
