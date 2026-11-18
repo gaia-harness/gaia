@@ -302,6 +302,7 @@
     ".gaia/scripts/check-updates.sh": "owned",
     ".gaia/scripts/chore-deps-skip.sh": "owned",
     ".gaia/scripts/classifier/classify-determinism.mjs": "owned",
+    ".gaia/scripts/cleanse/cross-file-candidates.mjs": "owned",
     ".gaia/scripts/context-checkpoint-lib.sh": "owned",
     ".gaia/scripts/debt-backlog.sh": "owned",
     ".gaia/scripts/debt-batch-budget-offer-lib.sh": "owned",
@@ -883,7 +884,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T03:25:06.107Z",
+  "generated": "2026-11-18T05:09:49.130Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
