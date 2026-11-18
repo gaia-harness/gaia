@@ -1,6 +1,6 @@
 # /gaia-spec: resume a draft
 
-The resume branch of `/gaia-spec` step 2: the liveness check on an existing draft, and the Resume / Start new / Discard choice. `spec.md` routes here only when the allocator reported an unfinalized draft id and the run is interactive; auto mode always starts new. Control returns to `spec.md` at step 3 on Start new or a confirmed discard, or at the step the Resume branch picks (4, 6 or 8).
+The resume branch of `/gaia-spec` step 2: the liveness check on an existing draft, and the Resume / Start new / Discard choice. `spec.md` routes here only when the allocator reported an unfinalized draft id and the run is interactive; auto mode always starts new. Control returns to `spec.md` at step 3 on Start new or a confirmed discard, or at the step the Resume branch picks (4, 5 or 7).
 
 Contents: Session-lock; Resume point; Live-session check; Resume, start new, or discard.
 
@@ -10,7 +10,7 @@ A per-draft liveness marker at `.gaia/local/cache/spec-session-<spec_id>.lock`, 
 
 **Acquire points (two).** Fresh allocation (step 3) and resume of a dormant draft (step 2 Resume branch). Both interactive and auto mode acquire at fresh allocation, step 3 has no auto-mode exception for its cache-init block, so a concurrent same-machine session detects an auto run as live from the moment it allocates, and releases it at exit the same as an interactive session.
 
-**Release (two categories).** The holder drops its own lock on its own graceful exits: the canonical save (step 9), the `Save partial and resume later` escape, and the general abandoned-exit primitive, so an aborted-but-surviving-host session drops its lock rather than leaving a false-live marker behind. Separately, a later session releases a dormant-or-ghost lock it does not own: the step-2 discard of a surfaced dormant draft, and the abandoned-empty sweep retiring a genuine ghost row. Each of these two default paths stays off a live lock: the sweep only ever retires a genuine ghost, whose lock is by definition dead, and the default discard path is reached only for a dormant draft (the step-2 branch below covers the unreadable-lock and explicit-override exceptions to that default).
+**Release (two categories).** The holder drops its own lock on its own graceful exits: the canonical save (step 10), the `Save partial and resume later` escape, and the general abandoned-exit primitive, so an aborted-but-surviving-host session drops its lock rather than leaving a false-live marker behind. Separately, a later session releases a dormant-or-ghost lock it does not own: the step-2 discard of a surfaced dormant draft, and the abandoned-empty sweep retiring a genuine ghost row. Each of these two default paths stays off a live lock: the sweep only ever retires a genuine ghost, whose lock is by definition dead, and the default discard path is reached only for a dormant draft (the step-2 branch below covers the unreadable-lock and explicit-override exceptions to that default).
 
 **Save-partial asymmetry.** The `Save partial and resume later` escape releases the lock, so the paused draft reads dormant and stays resumable by a later session, while it retains the session-shape `.json` cache, so that later session keeps counting questions against the same `start_at`.
 
@@ -77,16 +77,16 @@ Read `$WORKING` and extract: intent first line, flow count, frontmatter `updated
 - options:
   - `{ label: "Resume SPEC-NNN (Recommended)", description: "Continue from the latest draft (working cache preferred over canonical if newer)." }`
   - `{ label: "Start new", description: "Begin a fresh SPEC; SPEC-NNN remains open." }`
-  - `{ label: "Discard SPEC-NNN draft cache", description: "Remove the working-draft cache (before step 9 this draft cache is the only authored copy, so discarding it removes the draft). Confirm before deleting." }`
+  - `{ label: "Discard SPEC-NNN draft cache", description: "Remove the working-draft cache (before step 10 this draft cache is the only authored copy, so discarding it removes the draft). Confirm before deleting." }`
 
 Honor the user's choice. Never silently overwrite, never silently start new.
 
 - **Resume:** load `$WORKING` into the working draft, initialize the session-shape cache per its operational primitive in `spec.md` (write only if absent, the original `start_at` survives across resumes), and pick up at the right step (skip earlier steps that are already done):
-  - If `.gaia/local/cache/gate1-<spec_id>.json` does NOT exist → resume at step 4 (gate 1).
-  - If gate-1 cache exists AND the draft has any `clarifications.pending[]` entries → resume at step 6.
-  - If gate-1 cache exists AND no pending clarifications → resume at step 8 (gate 2).
-  - Step 3 (initial draft) is always skipped on resume.
-  - Never re-snapshot the gate-1 cache; its purpose is immutable drift detection.
+  - If `$SPEC_FOLDER/REQUIREMENTS.md` exists → clarify is complete: resume at step 7 (the draft). Never rewrite the file.
+  - Else if `.gaia/local/cache/gate1-<spec_id>.json` does NOT exist → resume at step 4 (gate 1).
+  - Else (gate 1 done, clarify not complete) → resume at step 5 (the clarify loop), with the folded `clarifications` from the draft cache.
+  - Step 3 (allocate, anchor, stamp) is always skipped on resume.
+  - Never re-snapshot the gate-1 cache.
 
   Before continuing, re-verify the lock: a live foreign lock may have appeared in the window between the pre-flight `status` check above and this Resume selection.
 

@@ -12,7 +12,8 @@
 # Findings JSON shape (one element per issue):
 #   { "code": "<symbolic>", "message": "<human>", "where": "<field/line>" }
 #
-# Pure: reads the file under audit only. No writes. No side effects.
+# Pure: reads the file under audit, plus a REQUIREMENTS.md beside it when one
+# exists. No writes. No side effects. Needs node (exit 2 without it).
 #
 # Checks performed:
 #   - frontmatter present (--- ... ---)
@@ -24,6 +25,11 @@
 #   - spec_id matches SPEC-NNN
 #   - flows validate through flows-lib.sh: a uats: key, a missing flows: key, or a
 #     malformed flow is refused, each under the finding code flows-lib reports
+#   - a ## Behaviors section is present (finding code missing_behaviors) and
+#     parses through behaviors.mjs (finding code invalid_behavior, one per problem)
+#   - when REQUIREMENTS.md sits beside the SPEC, every clarifications.answered
+#     answer appears in it after whitespace normalization (finding code
+#     answer_not_in_requirements, naming the 0-based index)
 #   - optional lineage: list; every entry is a research:/issue:/init:/spec:/plan: ref
 #     (finding code invalid_lineage)
 #   - no placeholder text ([PLACEHOLDER], <TODO>, TBD, FIXME, <TBD>)
@@ -44,6 +50,11 @@ source "$script_directory/flows-lib.sh"
 
 if [ ! -f "$spec_file" ]; then
   echo "lint.sh: file not found: $spec_file" >&2
+  exit 2
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "lint.sh: node is required and was not found" >&2
   exit 2
 fi
 
@@ -227,6 +238,61 @@ while IFS=$'\t' read -r flow_code flow_message flow_location; do
   [ -n "$flow_code" ] || continue
   add_finding "$flow_code" "$flow_message" "$flow_location"
 done <<<"$flow_lines"
+
+# --- Behaviors check: behaviors.mjs owns the section's shape ---
+if ! grep -qE '^## Behaviors[[:space:]]*$' "$spec_file"; then
+  add_finding "missing_behaviors" "SPEC has no '## Behaviors' section." "body"
+else
+  behavior_status=0
+  behavior_problems=$(node "$script_directory/behaviors.mjs" "$spec_file" 2>/dev/null) || behavior_status=$?
+  if [ "$behavior_status" -ne 0 ]; then
+    echo "lint.sh: cannot read behaviors: $spec_file" >&2
+    exit 2
+  fi
+  while IFS= read -r behavior_problem; do
+    [ -n "$behavior_problem" ] || continue
+    add_finding "invalid_behavior" "$behavior_problem" "body.behaviors"
+  done <<<"$behavior_problems"
+fi
+
+# --- Requirements check: each answered clarification is in the sibling file ---
+requirements_file="$(dirname "$spec_file")/REQUIREMENTS.md"
+if [ -f "$requirements_file" ]; then
+  requirements_text="$(flows_lib_whitespace_text <"$requirements_file")"
+  # One line per answer: index, a tab, the answer's lines joined by spaces.
+  answered_lines=$(printf '%s' "$frontmatter_block" | awk '
+    function flush() {
+      if (in_answer) { print (item - 1) "\t" answer }
+      in_answer = 0; answer = ""
+    }
+    /^clarifications:/ { in_clarifications = 1; next }
+    in_clarifications && /^[A-Za-z_][A-Za-z0-9_]*:/ { flush(); in_clarifications = 0 }
+    !in_clarifications { next }
+    /^  pending:/ { flush(); in_answered = 0; next }
+    /^  answered:/ { in_answered = 1; next }
+    !in_answered { next }
+    /^[[:space:]]*- q:/ { flush(); item++; next }
+    /^[[:space:]]+a:/ && !in_answer {
+      value = $0
+      sub(/^[[:space:]]+a:[[:space:]]*/, "", value)
+      if (value ~ /^[|>][+-]?$/) value = ""
+      answer = value; in_answer = 1; next
+    }
+    in_answer && /[^[:space:]]/ {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      answer = (answer == "" ? line : answer " " line)
+    }
+    END { flush() }
+  ')
+  while IFS=$'\t' read -r answer_index answer_text; do
+    [ -n "$answer_index" ] || continue
+    answer_text="$(printf '%s\n' "$answer_text" | flows_lib_canonical_text | flows_lib_whitespace_text)"
+    if [ -z "$answer_text" ] || [[ "$requirements_text" != *"$answer_text"* ]]; then
+      add_finding "answer_not_in_requirements" "clarifications.answered[$answer_index].a does not appear in REQUIREMENTS.md" "frontmatter.clarifications.answered[$answer_index]"
+    fi
+  done <<<"$answered_lines"
+fi
 
 # --- Placeholder text scan over the whole file ---
 # Patterns: [PLACEHOLDER], <TODO>, <TBD>, FIXME, bare TBD as standalone token.

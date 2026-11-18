@@ -20,6 +20,13 @@
 // problems: [string]}. `problems` names a malformed behavior or case line, a
 // duplicate id, an unknown kind, and a behavior with no case.
 // normalizeWhitespace(text) collapses runs of whitespace to one space and trims.
+//
+// Run directly, `node behaviors.mjs <spec file>` prints each problem on its own
+// stdout line (nothing when there is none) and exits 0; an unreadable file is
+// exit 2 with a stderr line.
+
+import {readFileSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
 
 export const BEHAVIOR_KINDS = [
   'access',
@@ -109,4 +116,17 @@ export function parseBehaviors(markdownText) {
   }
   closeCurrent();
   return {behaviors, problems};
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  let markdownText;
+  try {
+    markdownText = readFileSync(process.argv[2], 'utf8');
+  } catch (error) {
+    process.stderr.write(`behaviors: cannot read ${process.argv[2]}: ${error.message}\n`);
+    process.exit(2);
+  }
+  for (const problem of parseBehaviors(markdownText).problems) {
+    process.stdout.write(`${problem}\n`);
+  }
 }

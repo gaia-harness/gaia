@@ -180,8 +180,6 @@
     ".claude/skills/gaia/references/spec/lens-dispatch.md": "owned",
     ".claude/skills/gaia/references/spec/lifecycle.md": "owned",
     ".claude/skills/gaia/references/spec/resume.md": "owned",
-    ".claude/skills/gaia/references/spec/self-review-dispatch.md": "owned",
-    ".claude/skills/gaia/references/spec/self-review.md": "owned",
     ".claude/skills/gaia/references/spec/spec-template.md": "owned",
     ".claude/skills/gaia/references/spec/system-prompt.md": "owned",
     ".claude/skills/gaia/references/spec/wiki-promote.md": "owned",
@@ -389,6 +387,7 @@
     ".gaia/scripts/spec/spec-renumber.sh": "owned",
     ".gaia/scripts/spec/spec-save.sh": "owned",
     ".gaia/scripts/spec/spec-session-lock.sh": "owned",
+    ".gaia/scripts/spec/test-stage-check.mjs": "owned",
     ".gaia/scripts/spec/title-normalize.sh": "owned",
     ".gaia/scripts/spec/with-ledger-lock.sh": "owned",
     ".gaia/scripts/spec/working-doc-id-scan.sh": "owned",
@@ -890,7 +889,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T08:32:07.278Z",
+  "generated": "2026-11-18T08:43:38.784Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
