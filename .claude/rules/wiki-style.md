@@ -53,12 +53,12 @@ grep -rEn "FLOW-[0-9]+|SPEC-[0-9]+" wiki/ --include="*.md" --exclude="log.md" --
 # (functional fixture values are kept; the maintainer triages each match per
 # the structural-vs-narrative distinction of the working-doc-ids rule)
 grep -rEn "FLOW-[0-9]{3}" \
-  .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ apps/web/.claude/ \
+  .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ .claude/doctrine/ apps/web/.claude/ \
   .gaia/scripts/spec/
 
 # Concrete maintainer SPEC IDs in instruction files and spec-lifecycle scripts
 grep -rEn "\bSPEC-[0-9]{3,}\b" \
-  .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ apps/web/.claude/ \
+  .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ .claude/doctrine/ apps/web/.claude/ \
   .gaia/scripts/spec/
 
 # Historical-style phrasing in wiki body prose
