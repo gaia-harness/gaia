@@ -1,6 +1,7 @@
 # Prettier already skips node_modules and everything this package's .gitignore
-# covers; list only tracked paths that must not be formatted. eslint-plugin-prettier
-# reads this file alone, so these entries also keep `pnpm lint` off them.
+# covers; list only paths Prettier would otherwise format. eslint-plugin-prettier
+# reads this file alone, not .gitignore, so these entries also skip the
+# `prettier/prettier` rule in `pnpm lint`.
 
 # Byte-identical vendored upstream copy; its version and per-file hashes are
 # recorded in .gaia/vendor/playwright-cli.json, so formatting would break it.
@@ -9,3 +10,7 @@
 # Vendored shadcn add output kept byte-identical (one level only, so ui/tests/
 # stays formatted).
 app/components/ui/*.tsx
+
+# React Doctor's per-machine skill install. Only the root .gitignore ignores it,
+# and `pnpm -C apps/web format` runs here, where Prettier never reads that file.
+.claude/skills/react-doctor/
