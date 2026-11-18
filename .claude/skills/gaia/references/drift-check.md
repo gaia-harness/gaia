@@ -66,7 +66,7 @@ For the `honesty` tests: pre-clear a scratchpad verdict file with `rm -f`, then 
 bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <verdict file> --expect-count <n>
 ```
 
-A no-op re-dispatches once against the re-cleared path; a second no-op is a HALT, because an absent verdict is not a keep. Record every verdict, so the merge-time presence gate finds a ledger line for each judged test:
+A second consecutive no-op is a HALT, because an absent verdict is not a keep. Record every verdict, so the merge-time presence gate finds a ledger line for each judged test:
 
 ```bash
 bash .gaia/scripts/worthiness-step.sh record --root <RESOLVED_ROOT> --verdicts <verdict file>

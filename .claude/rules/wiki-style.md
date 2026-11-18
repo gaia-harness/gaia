@@ -11,13 +11,14 @@ paths:
 
 # Wiki Prose Style
 
+The wiki's only reader is Claude, in a session that already has every always-loaded rule in context; write for that reader, never for a human browsing the pages.
+
 Body prose describes **what is** in present tense. The historical record lives in git (`git log`, `git blame`), `wiki/log.md`, and `CHANGELOG.md`, body prose is not the place for it.
 
 ## Rules
 
 - **Present tense only.** State the current behavior directly; `git log` answers when and why it changed, so body prose carries no PR, commit or date-of-change reference.
-- **No working-document ids.** SPEC, FLOW, plan, and directive ids, issue or pull request references, and paths to machine-local artifacts under `.gaia/local/`: `.claude/rules/working-doc-ids.md` owns what is banned and what is exempt.
-- **No conventions and no enumerations on a descriptive page, only a pointer to what owns them.** A page describing how something works does not restate the naming rule, the file list, the matcher set, the roster, the glob list, or the version. Name the rule file, the config file, or the command that holds it, and stop. Corollary, which is where the reflex goes wrong: when an enumeration is found stale, **delete it and point**, do not complete it. A corrected list restarts the same decay from a fresher number, and the enumeration that was wrong twice is the one most likely to be wrong again.
+- **No conventions and no enumerations on a descriptive page, only a pointer to what owns them.** A page describing how something works does not restate the naming rule, the file list, the matcher set, the roster, the glob list, or the version. Name the rule file, the config file, or the command that holds it, and stop.
 - **No unreleased or speculative roadmap as current behavior.** Body prose describes what ships today. Do not document a planned, deferred, or not-yet-built feature as if it already exists, a reader cannot tell aspiration from shipped fact. State current behavior; keep forward-looking notes out of the page, or label them plainly as deferred and not yet built.
   <!-- gaia:maintainer-only:start -->
   GAIA maintainers: two kinds of content go inside the HTML-comment maintainer-only markers, the same pair wrapping this note. First, roadmap or forward-looking content that must live in the source repo but not reach adopter scaffolds. Second, any statement specific to the maintainer repo itself, how `gaia-harness/gaia` is configured or operated (its branch-protection / ruleset setup, per-author audit mode, secrets, in-tree-only workflows): on an adopter clone that reads as a claim about the reader's own repo and is false there, so wrap it. Keep the general behavior in the visible body and confine the maintainer-repo specifics to the wrapped block. The bundle-time scrub strips marker-delimited blocks from markdown under `wiki/` and `.claude/` before tar, so the source repo stays a superset of the adopter bundle; unbalanced markers fail the release build. See [[Bundle-time Scrub]].
@@ -32,7 +33,7 @@ Body prose describes **what is** in present tense. The historical record lives i
 
 ## Exceptions
 
-- **`wiki/log.md`**: append-only change ledger, exempt by design from the present-tense rule, never from the machine-local reference ban (`.claude/rules/working-doc-ids.md`, `## Enforced`).
+- **`wiki/log.md`**: append-only change ledger, exempt by design from the present-tense rule, never from the machine-local reference ban.
 - **`wiki/meta/`**: audit artifacts (lint reports, consolidate reports). Their purpose is referencing specific commits / SHAs / dates, so the present-tense rule's ban on PR, commit and date-of-change references does not apply; the machine-local reference ban still does.
 - **Frontmatter (`created`, `updated`, `status`, etc.)**: metadata, not prose.
 <!-- gaia:maintainer-only:start -->
@@ -50,7 +51,7 @@ grep -rEn "FLOW-[0-9]+|SPEC-[0-9]+" wiki/ --include="*.md" --exclude="log.md" --
 
 # FLOW-NNN narrative refs in instruction files and spec-lifecycle scripts
 # (functional fixture values are kept; the maintainer triages each match per
-# the structural-vs-narrative distinction in `.claude/rules/working-doc-ids.md`)
+# the structural-vs-narrative distinction of the working-doc-ids rule)
 grep -rEn "FLOW-[0-9]{3}" \
   .claude/skills/ .claude/commands/ .claude/agents/ .claude/rules/ .claude/hooks/ apps/web/.claude/ \
   .gaia/scripts/spec/
@@ -64,4 +65,4 @@ grep -rEn "\bSPEC-[0-9]{3,}\b" \
 grep -rEn "\bchanged from|was changed|previously (did|was|stated|had|used)|previously set|as of [0-9]{4}|in PR #?[0-9]+|in commit [a-f0-9]{6,}" wiki/ --include="*.md" --exclude="log.md" --exclude-dir="meta"
 ```
 
-Any non-empty match outside this rule's prose is a candidate for rewrite. The narrative-vs-structural triage for the `.claude/` / `.gaia/scripts/spec/` greps is a human read, the regex flags candidates; `.claude/rules/working-doc-ids.md` codifies what stays.
+Any non-empty match outside this rule's prose is a candidate for rewrite. The narrative-vs-structural triage for the `.claude/` / `.gaia/scripts/spec/` greps is a human read, the regex flags candidates.

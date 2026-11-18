@@ -15,6 +15,12 @@
 # the odd one is stale, and acting on that turns a fail-closed merge gate into
 # an orchestrator that reviews on a member's behalf and merges.
 #
+# The general ending lives in the always-loaded subagent dispatch rule and the
+# owner page, so a surface that agrees with it does not restate it (the single
+# source of truth rule). A surface states an ending only to depart from it, or
+# to add a consequence specific to that surface (what the inline work records,
+# what it reads); the roster below is those surfaces plus the two owners.
+#
 # So the assertions come in two halves. The roster half derives the set of
 # surfaces stating a terminal action FROM THE TREE rather than restating it, so
 # a further surface added with a third ending stops the suite instead of being
@@ -81,15 +87,11 @@ setup() {
     '.claude/agents/code-audit-frontend.md'
     '.claude/hooks/lib/audit-frontend-refuter.md'
     '.claude/skills/gaia/references/drift-check.md'
-    '.claude/skills/gaia/references/fitness.md'
-    '.claude/skills/gaia/references/plan/decomposition-audit.md'
     '.claude/skills/gaia/references/security-writer.md'
     '.claude/skills/gaia/references/simplify-pass.md'
     '.claude/skills/gaia/references/spec/audit.md'
-    '.claude/skills/gaia/references/spec/lens-dispatch.md'
     '.claude/skills/gaia/references/worthiness-step.md'
     '.claude/rules/subagent-dispatch.md'
-    '.claude/skills/update-gaia/references/conflict-flow.md'
     'wiki/concepts/Code Review Audit Agent.md'
     'wiki/concepts/Audit Round Procedure.md'
     'wiki/concepts/PR Merge Workflow.md'

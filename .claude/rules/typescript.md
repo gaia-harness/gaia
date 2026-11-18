@@ -18,12 +18,9 @@ Lint enforces most TypeScript style, so this rule omits it. A member with no `li
 - Inline boolean coercion is `!!x`, never `Boolean(x)`, which is for point-free use such as `array.filter(Boolean)`. Coerce per operand in a nullable `||` chain: `!!a || !!b`.
 - `undefined` for absence you control; `null` only where an external contract requires it, such as Zod `.nullable()` or a library API.
 
-## One Source of Truth
+## Deriving from a value set
 
-A set of values (statuses, roles, locales, route paths, config keys) or a shared helper has exactly one definition.
-
-- Before writing a constant list, union type, schema, lookup map or helper, search the member's source and tests for one and import it. Search by its values: a duplicate usually has a different name.
-- Derive every other shape from the source, so a new member of the set reaches all of them:
+Declare the set once with `as const` and derive the type, schema and maps from it:
 
 ```ts
 export const orderStatuses = ['cancelled', 'pending', 'shipped'] as const;
@@ -36,8 +33,7 @@ export const orderStatusLabels = {
 } satisfies Record<OrderStatus, string>;
 ```
 
-- Key maps with `satisfies Record<Union, ...>`, so a new member of the set is a type error at every map missing it.
-- Tests and mocks import the source rather than retyping its values.
+Key maps with `satisfies Record<Union, ...>`, so a new member of the set is a type error at every map missing it.
 
 ## Zod
 

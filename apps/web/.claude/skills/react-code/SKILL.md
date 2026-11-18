@@ -11,7 +11,7 @@ Contents: Reach for the Platform First; Pre-Flight Gates; Memoization: compiler-
 
 ## Reach for the Platform First
 
-Before installing a package or hand-rolling a primitive, follow the reuse order in Simplicity First (`.claude/rules/coding-guidelines.md`). On the frontend:
+Before installing a package or hand-rolling a primitive, follow the reuse order in Simplicity First. On the frontend:
 
 - **Existing project code** covers form inputs (Gate 2); a project component wins over a native element, since a wrapper exists for a reason.
 - **Web platform** means a browser API or native element (`Intl`, `URL`, `structuredClone()`, `<dialog>`, modern CSS).

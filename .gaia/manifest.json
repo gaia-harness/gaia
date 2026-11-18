@@ -125,6 +125,7 @@
     ".claude/rules/pr-merge.md": "owned",
     ".claude/rules/quality-gate.md": "owned",
     ".claude/rules/shell-cwd.md": "owned",
+    ".claude/rules/single-source-of-truth.md": "owned",
     ".claude/rules/subagent-dispatch.md": "owned",
     ".claude/rules/typescript.md": "shared",
     ".claude/rules/user-questions.md": "owned",
@@ -882,7 +883,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-17T13:46:01.608Z",
+  "generated": "2026-11-18T03:25:06.107Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

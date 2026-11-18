@@ -235,5 +235,5 @@ After a new GAIA release is announced (watch releases on `gaia-harness/gaia`). C
 <!-- gaia:maintainer-only:start -->
 ## Communications Guidance (User-Facing Docs)
 
-How release notes and `CHANGELOG.md` present `/update-gaia`: the CHANGELOG gate in `.claude/rules/pr-merge.md` and rule 11 of `.claude/skills/release-notes/SKILL.md`.
+How release notes and `CHANGELOG.md` present `/update-gaia`: the CHANGELOG gate in [[PR Merge Workflow#CHANGELOG gate (maintainer-only)]] and rule 11 of `.claude/skills/release-notes/SKILL.md`.
 <!-- gaia:maintainer-only:end -->

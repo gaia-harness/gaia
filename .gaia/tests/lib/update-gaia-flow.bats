@@ -1490,34 +1490,33 @@ count_and_chunk_hold() {
 }
 
 # 0 when SKILL.md copy `$1` classifies the report with its key and derived
-# count, clears only the report on a no-op, re-dispatches once and then runs
-# the merge inline, and prepares the run directory exactly once, before that.
+# count, clears only the report on a no-op, re-dispatches with the same prompt,
+# names what the inline fallback reads, and prepares the run directory exactly
+# once, before that. The retry count and the inline ending are the subagent
+# dispatch rule's, always loaded, so the section does not restate them.
 classify_holds() {
   local section
   section="$(section_file "$1" '### Classify the report')" || return 1
   grep -qxF -- "$CLASSIFY_CALL" "$section" || return 1
   grep -qxF 'rm -f <run dir>/report.json' "$section" || return 1
   grep -qF 'update-gaia-report.sh prepare' "$section" && return 1
-  in_order "$section" "$CLASSIFY_CALL" 'rm -f <run dir>/report.json' 're-dispatch exactly once' || return 1
-  grep -qE 're-dispatch exactly once.* second consecutive no-op means the orchestrator runs the merge inline itself' "$section" || return 1
-  grep -qF 'never classify at the moment the Agent call returns' "$section" || return 1
+  in_order "$section" "$CLASSIFY_CALL" 'rm -f <run dir>/report.json' 're-dispatch with the same prompt' || return 1
+  grep -qF 'On the inline fallback the orchestrator reads the three snapshot files' "$section" || return 1
   [ "$(grep -cF 'update-gaia-report.sh prepare' "$1")" -eq 1 ] || return 1
   in_order "$1" "$PREPARE_CALL" "$CLASSIFY_CALL" || return 1
   return 0
 }
 
-@test "classify: the report key and derived count, clear only the report, re-dispatch once, then inline" {
+@test "classify: the report key and derived count, clear only the report, re-dispatch, inline fallback reads the snapshots" {
   classify_holds "$CONFLICT_FLOW"
   # Failing state: the no-op branch re-prepares, deleting the snapshot and candidates.
   sed 's|^rm -f <run dir>/report.json$|bash <main checkout path>/.gaia/scripts/update-gaia-report.sh prepare --run-dir <run dir>|' "$CONFLICT_FLOW" > "$COPY"
   classify_holds "$COPY" && return 1
   sed 's|--report-key files --expect-count <n>|--expect-count <n>|' "$CONFLICT_FLOW" > "$COPY"
   classify_holds "$COPY" && return 1
-  sed 's|re-dispatch exactly once with the same prompt|re-dispatch with the same prompt|' "$CONFLICT_FLOW" > "$COPY"
+  sed 's|then re-dispatch with the same prompt|then stop|' "$CONFLICT_FLOW" > "$COPY"
   classify_holds "$COPY" && return 1
-  sed 's|never classify at the moment the Agent call returns|classify when the Agent call returns|' "$CONFLICT_FLOW" > "$COPY"
-  classify_holds "$COPY" && return 1
-  sed 's|means the orchestrator runs the merge inline itself|means the run stops|' "$CONFLICT_FLOW" > "$COPY"
+  sed 's|On the inline fallback the orchestrator reads the three snapshot files|On a second no-op the run stops|' "$CONFLICT_FLOW" > "$COPY"
   classify_holds "$COPY" && return 1
   true
 }

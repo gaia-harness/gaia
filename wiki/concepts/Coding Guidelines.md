@@ -8,7 +8,7 @@ tags: [concept, coding-rules]
 
 # Coding Guidelines
 
-GAIA coding guidelines live in `.claude/rules/coding-guidelines.md` and the per-domain rule files under `.claude/rules/` and `apps/web/.claude/rules/`. The rule file owns the principles and their wording.
+GAIA's coding guidelines are the rule files; this page keeps only the rationale for what belongs in them.
 
 ## What belongs in the rule
 

@@ -16,7 +16,7 @@ At the end of each build phase whose entry carries a `- Security writer:` line, 
    bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <report> --expect-count <dispatched rows>
    ```
 
-   On a no-op, re-dispatch exactly once against the re-cleared path. A second no-op goes to step 5.
+   A second consecutive no-op goes to step 5.
 
 2. **Record.** For each `written` row, run from the main checkout (the plan folder is main-anchored and the record step writes through Node):
 
