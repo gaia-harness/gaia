@@ -204,7 +204,7 @@ check_retry_redispatch() {
     'carries the original task prompt first, without its `Yield handoff:` line' \
     'then the line `The phase quality gate failed on files this task owns. Fix only these errors, within this task'"'"'s scope, and edit no other file; still run the typecheck and lint your task prompt requires before you return:`' \
     'then the gate output lines for its files.' \
-    'A task with a file-length error gets, before those lines, the line `A file over its length limit is split: move whole functions or sections into an existing or new lib file beside it, which you may create, and name it under ### Deviations from plan. Never trim wording and never raise a limit or ceiling. Re-run the failed file-length check on your files before you return.`' \
+    'A task with a file-length error gets, before that line, the line `A file over its length limit is split: move whole functions or sections into an existing or new lib file beside it, which you may create or edit despite the line below, and name it under ### Deviations from plan. Never trim wording and never raise a limit or ceiling. Re-run the failed file-length check on your files before you return.`' \
     'It carries no `Yield handoff:` line, so a retry executor never yields' \
     'Never continue an executor with SendMessage.' \
     '- **Re-run the gate.**' \
