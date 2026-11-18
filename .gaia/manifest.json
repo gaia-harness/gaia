@@ -807,6 +807,7 @@
     "wiki/decisions/React Compiler.md": "wiki-owned",
     "wiki/decisions/shadcn Component Layer.md": "wiki-owned",
     "wiki/decisions/Shared Codify Declines.md": "wiki-owned",
+    "wiki/decisions/Spec And Plan Without Test Design.md": "wiki-owned",
     "wiki/decisions/Stories as Tests.md": "wiki-owned",
     "wiki/decisions/Test Layering.md": "wiki-owned",
     "wiki/decisions/Testing Trophy Doctrine.md": "wiki-owned",
@@ -870,7 +871,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T10:09:22.661Z",
+  "generated": "2026-11-18T13:34:32.939Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
