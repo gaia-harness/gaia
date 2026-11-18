@@ -56,7 +56,7 @@ Lock directories are taken through one helper, `exclusive-lock-lib.sh`, never by
 
 ## Adding a script
 
-A new root file takes the family prefix that matches what it does, and `*-lib` for a file that is sourced rather than run. A script that fits no family takes a plain descriptive name. Its header comment is its documentation; this page needs no edit unless the script opens a new family. The naming rule is `.claude/rules/coding-guidelines.md`.
+A new root file takes the family prefix that matches what it does, and `*-lib` for a file that is sourced rather than run. A script that fits no family takes a plain descriptive name. Its header comment is its documentation; this page needs no edit unless the script opens a new family.
 
 **Do not reorganize the directory into subfolders.** The single-level layout is not a hazard to be tidied away: each member of a family is named across dozens of files, so relocating one family is a several-hundred-file rename for no functional gain.
 

@@ -8,7 +8,7 @@ tags: [concept, claude, workflow, doctrine]
 
 # Workflow Doctrine
 
-The workflow doctrine is one set of working rules for GAIA sessions, split into two halves by the moment each applies. [`.claude/rules/context-discipline.md`](../../.claude/rules/context-discipline.md) is the always-loaded half: a short, mode-neutral rule about keeping the main thread lean, fanning reads out, choosing models by fit, and keeping research output small. [`.claude/doctrine/execution.md`](../../.claude/doctrine/execution.md) is the execution half: it is never auto-loaded, and a hook injects it verbatim the moment a session is on a working branch or in a linked worktree. This page holds the reasoning and the depth behind both.
+The workflow doctrine is one set of working rules for GAIA sessions, split into two halves by the moment each applies. [`.claude/rules/context-discipline.md`](../../.claude/rules/context-discipline.md) is the always-loaded half. [`.claude/doctrine/execution.md`](../../.claude/doctrine/execution.md) is the execution half: it is never auto-loaded, and a hook injects it verbatim the moment a session is on a working branch or in a linked worktree. This page holds the reasoning and the depth behind both.
 
 The halves are split because guidance about executing biases a session toward action. In a discussion that bias is the reactivity failure the project CLAUDE.md names under "Before responding": a stimulus becomes a response before the stimulus is characterized. So a discussion session carries only context discipline, and execution doctrine arrives only when a branch exists, which is the signal that the work has moved from deciding to doing.
 
