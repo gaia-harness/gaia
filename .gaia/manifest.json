@@ -364,6 +364,9 @@
     ".gaia/scripts/shell-checks-lint.sh": "owned",
     ".gaia/scripts/shell-checks-select.sh": "owned",
     ".gaia/scripts/simplify-discard.sh": "owned",
+    ".gaia/scripts/spec/behaviors.mjs": "owned",
+    ".gaia/scripts/spec/drop-check-lib.mjs": "owned",
+    ".gaia/scripts/spec/drop-check.mjs": "owned",
     ".gaia/scripts/spec/flow-coverage.sh": "owned",
     ".gaia/scripts/spec/flows-lib.sh": "owned",
     ".gaia/scripts/spec/handoff-clear.sh": "owned",
@@ -887,7 +890,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T05:54:44.533Z",
+  "generated": "2026-11-18T08:32:07.278Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

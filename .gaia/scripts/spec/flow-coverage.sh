@@ -4,10 +4,8 @@
 # Playwright collects the spec, that it carries a resolvable `// @covers`
 # declaration naming every folder the SPEC lists for the flow which the branch
 # changed; and that no flow test carries a working-document id. Whether the
-# tests are any good is not this script's judgment: for a plan whose folder
-# carries a TEST-DESIGN marker it is the drift check plus its honesty pass
-# (.claude/skills/gaia/references/drift-check.md), otherwise the worthiness
-# review.
+# tests are any good is not this script's judgment: that is the worthiness
+# review's.
 #
 #   flow-coverage.sh --spec <SPEC.md> --root <tree> [--base <ref>]
 #                    [--listing <playwright-list.json>] [--flow-tests-out <file>]
@@ -18,19 +16,22 @@
 # a `playwright test --list --reporter=json` document; without --listing the
 # script runs Playwright for it, once, and only when the SPEC has a web flow.
 # --flow-tests-out writes one `flow_id<TAB>slug<TAB>kind<TAB>path` row per flow
-# whose test file exists. --plan-dir reads the plan's tests.json coveredFlows: a
-# recorded flow has no test file, so it is skipped, and every problem
-# `test-table.mjs covered-flows` reports is a finding. Without --plan-dir every
-# flow needs its file.
+# whose test file exists. --plan-dir reads <plan folder>/TEST-STAGE: `running`
+# or `ran` means every flow needs its test file, as without --plan-dir;
+# `skipped`, or no TEST-STAGE at all, means a flow with no test file prints one
+# line `flow-coverage: gap: <flow_id> has no flow test (test stage skipped)`
+# and is not a finding, while a flow whose file exists is checked as usual.
+# A first line that is none of those three statuses is exit 3.
 #
 # Every finding is one stdout line `flow-coverage: ...`, all of them in one run.
 # The web flow test lives in <frontend package>/.playwright/flows/<slug>.spec.ts.
 #
 # Exit codes the caller branches on:
-#   0  clean, nothing printed
+#   0  clean; may print `flow-coverage: gap:` lines under a skipped or absent
+#      test stage
 #   1  one or more findings
 #   2  usage error, or a SPEC the flows reader refuses (reason on stderr)
-#   3  operational failure (reason on stderr)
+#   3  operational failure, including a malformed TEST-STAGE (reason on stderr)
 set -uo pipefail
 
 usage() {
@@ -123,36 +124,56 @@ while IFS= read -r -d '' untracked_path; do
 done < <(git -C "$root" ls-files -z --others --exclude-standard 2>/dev/null) || untracked_paths=''
 changed_paths=$(printf '%s\n%s\n%s\n' "$committed_paths" "$uncommitted_paths" "$untracked_paths" | grep . | LC_ALL=C sort -u)
 
-covered_problems=''
+# Under --plan-dir the plan's TEST-STAGE record decides whether a missing flow
+# test is a finding. `running` reads as `ran` (the stage has written lines, so
+# its flow tests are owed) and an absent record reads as `skipped` (no stage
+# ran). A first line that is none of the three statuses is an operational
+# failure, never read as `skipped`.
+stage_skipped=0
 if [ -n "$plan_directory" ]; then
-  if ! command -v node >/dev/null 2>&1; then
-    printf 'flow-coverage.sh: node is required to read coveredFlows in %s/tests.json\n' "$plan_directory" >&2
-    exit 3
+  stage_file="$plan_directory/TEST-STAGE"
+  if [ ! -e "$stage_file" ]; then
+    stage_skipped=1
+  else
+    stage_first_line=''
+    IFS= read -r stage_first_line <"$stage_file" || true
+    stage_first_line="${stage_first_line%$'\r'}"
+    case "$stage_first_line" in
+      'status: running' | 'status: ran') ;;
+      'status: skipped') stage_skipped=1 ;;
+      *)
+        printf 'flow-coverage.sh: %s is unreadable or its first line is not status: running, ran or skipped\n' "$stage_file" >&2
+        exit 3
+        ;;
+    esac
   fi
-  covered_status=0
-  covered_output=$(node "$repository_directory/.gaia/scripts/test-design/test-table.mjs" covered-flows --plan-dir "$plan_directory" 2>&1) || covered_status=$?
-  # Exit 1 is a refused entry or an unreadable tests.json, reported as a
-  # finding below; anything else is the reader failing, so no recorded flow
-  # can be trusted.
-  case "$covered_status" in
-    0 | 1) ;;
-    *)
-      printf 'flow-coverage.sh: cannot read coveredFlows in %s/tests.json: %s\n' "$plan_directory" "$(head -n 1 <<<"$covered_output")" >&2
-      exit 3
-      ;;
-  esac
-  covered_problems=$(grep '^test-table: ' <<<"$covered_output")
-  # A recorded flow has no test file, so it leaves every check below.
-  uncovered_rows=''
+fi
+
+# A skipped stage owes no flow test: a flow whose file is absent is a visible,
+# non-blocking gap and leaves every check below.
+if [ "$stage_skipped" -eq 1 ]; then
+  gap_flows_directory=''
+  while IFS=$'\t' read -r _ _ _ _ kind _; do
+    if [ "$kind" = "web" ] && [ -z "$gap_flows_directory" ]; then
+      gap_flows_directory=$(flows_lib_web_subdirectory "$root" .playwright/flows) || exit 3
+    fi
+  done <<<"$flow_rows"
+  present_rows=''
   while IFS= read -r flow_row; do
     [ -n "$flow_row" ] || continue
-    slug="${flow_row#*$'\t'}"
-    case $'\n'"$covered_output"$'\n' in
-      *$'\n'"flow:${slug%%$'\t'*}"$'\n'*) continue ;;
-    esac
-    uncovered_rows="$uncovered_rows$flow_row"$'\n'
+    IFS=$'\t' read -r gap_flow_id gap_slug _ _ gap_kind gap_target <<<"$flow_row"
+    if [ "$gap_kind" = "web" ]; then
+      gap_path="$gap_flows_directory/$gap_slug.spec.ts"
+    else
+      gap_path="$gap_target"
+    fi
+    if [ ! -f "$root/$gap_path" ]; then
+      printf 'flow-coverage: gap: %s has no flow test (test stage skipped)\n' "$gap_flow_id"
+      continue
+    fi
+    present_rows="$present_rows$flow_row"$'\n'
   done <<<"$flow_rows"
-  flow_rows="$uncovered_rows"
+  flow_rows="$present_rows"
 fi
 
 has_web_flow=0
@@ -280,10 +301,6 @@ check_web_spec() {
 }
 
 [ -z "$flow_tests_out" ] || : >"$flow_tests_out" || exit 3
-
-while IFS= read -r covered_problem; do
-  [ -z "$covered_problem" ] || finding "${covered_problem#test-table: }"
-done <<<"$covered_problems"
 
 existing_tests=''
 while IFS=$'\t' read -r flow_id slug _ _ kind target; do

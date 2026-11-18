@@ -306,7 +306,7 @@ def usage_view_box_of($usage_records; $links; $reference; $keys):
           | ($workflow_intervals | map(.t0) | min) as $workflow_from
           | ($workflow_intervals | map(.t1) | max) as $workflow_to
           | {t0: ([$workflow_intervals[].t0] | min),
-             row: row(({"gaia-spec": "Spec", "gaia-plan": "Plan"}[$workflow] // $workflow); $group;
+             row: row(({"gaia-spec": "Spec", "gaia-plan": "Plan", "gaia-test": "Test"}[$workflow] // $workflow); $group;
                       ([($workflow_intervals | map(.t1) | max) - ($workflow_intervals | map(.t0) | min), 0] | max | floor);
                       usage_active_figure($active_index; $group; $workflow_from; $workflow_to))})
       | sort_by(.t0) | map(.row)) as $workflow_rows

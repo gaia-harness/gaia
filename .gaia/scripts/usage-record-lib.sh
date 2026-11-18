@@ -76,12 +76,12 @@ _record_check_workflow() {
   esac
   case "$ref" in
     spec:*)
-      [ "$WORKFLOW" = gaia-spec ] || [ "$WORKFLOW" = gaia-plan ] || { _error "a spec: ref records gaia-spec or gaia-plan"; return 2; } ;;
+      [[ "$WORKFLOW" =~ ^gaia-(spec|plan|test)$ ]] || { _error "a spec: ref records gaia-spec, gaia-plan or gaia-test"; return 2; } ;;
     plan:*)
-      [ "$WORKFLOW" = gaia-plan ] || { _error "a plan: ref records gaia-plan"; return 2; } ;;
+      [[ "$WORKFLOW" =~ ^gaia-(plan|test)$ ]] || { _error "a plan: ref records gaia-plan or gaia-test"; return 2; } ;;
     command:*)
       slug="${ref#command:}"
-      if [ "$slug" != "$WORKFLOW" ] || [ "$WORKFLOW" = gaia-spec ] || [ "$WORKFLOW" = gaia-plan ]; then
+      if [ "$slug" != "$WORKFLOW" ] || [[ "$WORKFLOW" =~ ^gaia-(spec|plan|test)$ ]]; then
         _error "a command: ref is command:<workflow> for a maintenance command"
         return 2
       fi ;;

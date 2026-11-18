@@ -205,6 +205,32 @@ scratch_scripts() {
   [[ "$output" == *"$second_ref"* ]]
 }
 
+@test "record accepts the test stage workflow on a spec or plan ref and refuses it on a command ref" {
+  mkdir -p "$(dirname "$(main_file)")"
+  main_start p1 10:00 gaia-plan
+  main_usage m1 10:10 1000 0
+  run record spec:SPEC-901 --workflow gaia-plan
+  [ "$status" -eq 0 ]
+  main_start t1 "$(after_last_close 1)" gaia-test
+  main_usage m2 "$(after_last_close 2)" 4000 0
+  GAIA_USAGE_TEST_NOW="$(after_last_close 3)" run record spec:SPEC-901 --workflow gaia-test --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 4000 ]
+  main_start t2 "$(after_last_close 1)" gaia-test
+  main_usage m3 "$(after_last_close 2)" 6000 0
+  GAIA_USAGE_TEST_NOW="$(after_last_close 3)" run record plan:PLAN-901 --workflow gaia-test --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 6000 ]
+  [ "$(close_count)" -eq 3 ]
+  [ "$(jq -rs '[.[] | select(.kind == "binding" and .type == "close" and .workflow == "gaia-test")] | length' "$(ledger)")" -eq 2 ]
+  main_start t3 "$(after_last_close 1)" gaia-test
+  run --separate-stderr record command:gaia-test --workflow gaia-test
+  [ "$status" -eq 2 ]
+  [ "${#stderr_lines[@]}" -eq 1 ]
+  [ -z "$output" ]
+  [ "$(close_count)" -eq 3 ]
+}
+
 # ---------- refusals ----------
 
 @test "no unclaimed start: exit 1, no close row, one stderr line naming the reason and the recovery command" {

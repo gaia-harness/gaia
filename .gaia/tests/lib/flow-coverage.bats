@@ -39,12 +39,6 @@ build_scratch_repo() {
   copy_in .gaia/scripts/spec/flows-lib.sh
   copy_in .gaia/scripts/spec/flow-coverage.sh
   copy_in .gaia/scripts/spec/working-doc-id-scan.sh
-  copy_in .gaia/scripts/test-design/test-table.mjs
-  copy_in .gaia/scripts/test-design/table.mjs
-  copy_in .gaia/scripts/test-design/set-cells.mjs
-  copy_in .gaia/scripts/test-design/case-kinds.mjs
-  copy_in .gaia/scripts/test-design/row-fields.mjs
-  copy_in .gaia/scripts/test-design/task-docs.mjs
   copy_in .gaia/scripts/machine-local-ref-lib.sh
   copy_in .claude/hooks/lib/gaia-packages.sh
   copy_in .claude/hooks/lib/audit-base-provenance.sh
@@ -155,51 +149,66 @@ script_exists() {
   printf '%s\n' "$output" | grep -qxF "flow-coverage: FLOW-002: missing .gaia/tests/lib/refuse-check.bats"
 }
 
-# write_plan <coveredFlows json array>: a plan folder whose tests.json holds
-# build row T1 and these coveredFlows entries.
-write_plan() {
+# write_stage <first line|none>: a plan folder whose TEST-STAGE record starts
+# with that line, or holds no TEST-STAGE for none.
+write_stage() {
   PLAN="$BATS_TEST_TMPDIR/plan"
+  rm -rf "$PLAN"
   mkdir -p "$PLAN"
-  printf '{"schema":1,"rows":[{"id":"T1","source":"success_criteria:0","case":"c","file":"apps/web/app/a/a.test.ts","title":"refuses","layer":"route","task":"task-build","action":"new","security":"access","caseKinds":[{"case":"c","kind":"access"}]}],"coveredFlows":%s}\n' "$1" >"$PLAN/tests.json"
+  if [ "$1" != none ]; then
+    printf '%s\ndate: 2026-01-01T00:00:00Z\n' "$1" >"$PLAN/TEST-STAGE"
+  fi
 }
 
-@test "a web flow coveredFlows records needs no spec under --plan-dir; without the flag it is missing" {
+@test "a skipped or absent test stage reports each flow as a gap and passes" {
   write_spec flows: \
     "$(web_flow FLOW-001 sign-in app/a)" \
     "$(command_flow FLOW-002 refuse-check .gaia/tests/lib/refuse-check.bats)"
   add_file apps/web/app/a/index.ts 'export {};'
   mark_base
   printf '{"config":{"rootDir":"/nowhere"}' >"$LISTING"
-  add_file .gaia/tests/lib/refuse-check.bats '@test "refuses" { true; }'
-  commit_all branch
-  write_plan '[{"source":"flow:sign-in","rows":["T1"]}]'
-
-  script_exists
-  run coverage --plan-dir "$PLAN" --flow-tests-out "$TESTS_OUT"
-  [ "$status" -eq 0 ] || { echo "$output" >&2; cat "$STDERR_FILE" >&2; return 1; }
-  [ -z "$output" ]
-  [ "$(cat "$TESTS_OUT")" = "FLOW-002${TAB}refuse-check${TAB}command${TAB}.gaia/tests/lib/refuse-check.bats" ]
-  write_listing
-  run coverage
-  [ "$status" -eq 1 ]
-  [ "$output" = "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts" ]
-}
-
-@test "a coveredFlows entry naming a row tests.json lacks is a finding and leaves its flow unrecorded" {
-  write_spec flows: "$(web_flow FLOW-001 sign-in app/a)"
-  add_file apps/web/app/a/index.ts 'export {};'
-  mark_base
-  write_listing
   add_file apps/web/app/a/more.ts 'export {};'
   commit_all branch
-  write_plan '[{"source":"flow:sign-in","rows":["T7"]}]'
-
   script_exists
-  run coverage --plan-dir "$PLAN"
-  [ "$status" -eq 1 ]
-  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
-  printf '%s\n' "$output" | grep -qxF 'flow-coverage: coveredFlows flow:sign-in names row T7, which the table lacks'
-  printf '%s\n' "$output" | grep -qxF "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts"
+
+  local stage_line
+  for stage_line in 'status: skipped' none; do
+    write_stage "$stage_line"
+    run coverage --plan-dir "$PLAN" --flow-tests-out "$TESTS_OUT"
+    [ "$status" -eq 0 ] || { echo "$stage_line: $output" >&2; cat "$STDERR_FILE" >&2; return 1; }
+    [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
+    printf '%s\n' "$output" | grep -qxF 'flow-coverage: gap: FLOW-001 has no flow test (test stage skipped)'
+    printf '%s\n' "$output" | grep -qxF 'flow-coverage: gap: FLOW-002 has no flow test (test stage skipped)'
+    [ ! -s "$TESTS_OUT" ]
+  done
+
+  # A flow whose file exists is still recorded and checked while skipped.
+  add_file .gaia/tests/lib/refuse-check.bats '@test "refuses" { true; }'
+  commit_all second
+  write_stage 'status: skipped'
+  run coverage --plan-dir "$PLAN" --flow-tests-out "$TESTS_OUT"
+  [ "$status" -eq 0 ]
+  [ "$output" = 'flow-coverage: gap: FLOW-001 has no flow test (test stage skipped)' ]
+  [ "$(cat "$TESTS_OUT")" = "FLOW-002${TAB}refuse-check${TAB}command${TAB}.gaia/tests/lib/refuse-check.bats" ]
+
+  # The same missing tests are findings once the stage ran or is running.
+  write_listing
+  for stage_line in 'status: ran' 'status: running'; do
+    write_stage "$stage_line"
+    run coverage --plan-dir "$PLAN"
+    [ "$status" -eq 1 ]
+    [ "$output" = "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts" ]
+  done
+
+  # A first line that is none of the three statuses is an operational failure.
+  for stage_line in 'status: done' '' 'ran'; do
+    write_stage "$stage_line"
+    run coverage --plan-dir "$PLAN"
+    [ "$status" -eq 3 ]
+    [ -z "$output" ]
+    [ "$(grep -c . "$STDERR_FILE")" -eq 1 ]
+    grep -qF "$PLAN/TEST-STAGE" "$STDERR_FILE"
+  done
 }
 
 @test "a --plan-dir that is not a directory exits 2" {
