@@ -258,13 +258,28 @@ anchors_resolve() {
   sentences <<<"$section_text" | grep -qF -- 'a dirty tree after the closing wave stops the unit the same way.' || return 1
 }
 
+# names_unit_file_filing_fields: stdin names the unit file's filing fields.
+# The list lives once, on the round procedure's unit section; the runbook
+# points there rather than restating it.
+names_unit_file_filing_fields() {
+  grep -qF -- '`diverted_count`, `diverted_records` (the local record paths), `filing_outcomes` (the outcome files'
+}
+
 @test "UAT-038: the unit file carries the filing fields and no finding detail, and the main thread surfaces the count then merges" {
   local section_text
   section_text="$(unit_halves)" || return 1
-  grep -qF -- '`diverted_count`, `diverted_records` (the local record paths), `filing_outcomes` (the outcome files) and `filing_pending`' <<<"$section_text" || return 1
+  section "$UNIT" | names_unit_file_filing_fields || return 1
   sentences <<<"$section_text" | grep -qF -- 'The file carries counts and paths only and no finding detail' || return 1
   grep -qF -- 'which surfaces a non-zero `diverted_count` first' <<<"$section_text" || return 1
   sentences <<<"$section_text" | grep -qF -- 'Before posting the status the main thread surfaces a non-zero `diverted_count` to the human ([[PR Merge Workflow#Posting the status last]]) and then merges without stopping.' || return 1
+}
+
+@test "red twin: a unit section that drops the filing field list is refused" {
+  local scratch="$BATS_TEST_TMPDIR/round-procedure.md"
+  sed 's/`diverted_records` (the local record paths), //' "$PAGE" >"$scratch"
+  PAGE="$scratch"
+  run names_unit_file_filing_fields < <(section "$UNIT")
+  [ "$status" -eq 1 ]
 }
 
 @test "UAT-005 and UAT-040: the fix round files through the filing script, runs the retry pass and reconciles with check-outcomes" {

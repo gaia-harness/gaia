@@ -9,7 +9,7 @@ Contents: Colors; cn; Conditional classes; Variants with cva; Custom Values; Whe
 
 ## Colors
 
-Every color is a theme role token (`bg-background`, `text-foreground`, `text-muted-foreground`, `bg-primary`, `text-primary-foreground`, `border-input`, `text-destructive`), never a raw palette class or an arbitrary color. The contract and where the token list lives: `apps/web/.claude/rules/tailwind.md`. The light and dark values live in the token, so write one utility, not a `dark:` pair.
+Every color is a theme role token, never a raw palette class or an arbitrary color: see `apps/web/.claude/rules/tailwind.md`.
 
 ```tsx
 // BAD, raw palette classes and a dark: pair

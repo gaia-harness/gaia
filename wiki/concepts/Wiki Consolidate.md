@@ -24,10 +24,10 @@ The wiki promotion step writes correctly for its SPEC or plan. Consolidate is th
 
 ## What it detects
 
-1. **Supersession candidates.** Two pages in the same domain whose titles are near-identical (Jaccard ≥ 0.7) and whose `pr_number` provenance differs and whose `promoted_at` differs by ≥ 30 days. Newer is canonical; older is the candidate.
-2. **Reversed decisions.** A newer decision page whose body references the older page's title with negation phrases (`"no longer use"`, `"supersedes"`, `"replaces"`, etc.). Older page is flagged for retirement.
-3. **Near-collision slugs.** Pairs of slugs in the same domain with Levenshtein distance ≤ 2 (`gaia wiki near-collisions`). Editorial disambiguation prompt. Distance 2 is the floor; distance 3 produces excessive false positives in dense domains with short slugs.
-4. **Subject-orphaned pages.** Pages with zero inbound wikilinks whose title is also unmentioned in `wiki/concepts/` and `wiki/modules/`, untouched for 90+ days.
+1. **Supersession candidates.** See `.claude/skills/gaia/references/wiki/consolidate.md` (2a. Same-subject across SPECs (supersession)).
+2. **Reversed decisions.** See `.claude/skills/gaia/references/wiki/consolidate.md` (2b. Reversed decisions).
+3. **Near-collision slugs.** See `.claude/skills/gaia/references/wiki/consolidate.md` (2c. Near-collision slugs).
+4. **Subject-orphaned pages.** See `.claude/skills/gaia/references/wiki/consolidate.md` (2d. Subject-orphaned pages).
 
 Findings where the user previously selected "Keep both" are suppressed via `consolidation_ack` frontmatter on the canonical page.
 
