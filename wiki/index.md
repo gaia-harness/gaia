@@ -97,6 +97,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Stories as Tests]]: the story doctrine owner: a story is a visual state, a behavior is a `.test()` on it, and a play only reaches the state; the CSF4 shape, how `.test()` runs, where the format is enforced, the Vitest projects, and the `languages` prop and router stub conventions.
 - [[Dark Mode Modernization]]
 - [[Content Security Policy]]: per-request nonce CSP, enforced; documents the `unsafe-inline` and no-`report-uri` trade-offs.
+- [[Cross-file Instruction Duplication In Gaia-cleanse|Cross-file instruction duplication in /gaia-cleanse]]
 <!-- gaia:maintainer-only:start -->
 <!-- gaia:maintainer-only:end -->
 - [[Workflow Naming Convention]]: how to name a workflow file, its `name:` and its jobs, including any workflow you add: Title Case workflow names, sentence-case `Tool (scope)` job names, `(advisory)` on non-blocking pull request jobs.

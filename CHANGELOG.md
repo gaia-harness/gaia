@@ -16,6 +16,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Added
 
+- **`/gaia-cleanse --cross-file` finds duplicated instructions:** it finds procedures, lists, thresholds and conventions restated across instruction files and proposes replacing each copy with a pointer to one owner, gated by the usual Apply / Discuss / Decline. The shell audit members now also flag an array, case list, regex, path list or function that duplicates an existing definition.
 - **Knip fails CI on the dead code it can see:** the Tests workflow now runs `pnpm knip` after lint on `apps/web`, so an unused dependency, or an unused file or export under `apps/web/app` outside the entry folders `apps/web/knip.config.ts` lists, fails the check. **Action required:** if your project has knip findings, the check goes red after `/update-gaia`; run `pnpm knip` to list them, then delete or un-export each one (#3588)
 - **Unreachable code is a type error:** `apps/web/tsconfig.json` sets `allowUnreachableCode: false`, so a statement after `return` or `throw` fails `pnpm typecheck` instead of passing both typecheck and lint (#3588)
 - **Commented-out code and TODO/FIXME comments fail lint:** `@gaia-harness/lint` 3.2.0 bans commented-out code and any comment that opens with TODO or FIXME; track unfinished work in an issue instead. It also moves to stylelint 18, which needs Node 22.22.2+, 24.15.0+ or 26+. **Action required:** upgrade Node if yours is older, then run `pnpm lint` and remove each flagged comment (#3588)

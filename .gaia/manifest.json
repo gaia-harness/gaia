@@ -136,6 +136,7 @@
     ".claude/skills/gaia-wiki/SKILL.md": "owned",
     ".claude/skills/gaia/references/cleanse.md": "owned",
     ".claude/skills/gaia/references/cleanse/apply.md": "owned",
+    ".claude/skills/gaia/references/cleanse/cross-file.md": "owned",
     ".claude/skills/gaia/references/cleanse/publish.md": "owned",
     ".claude/skills/gaia/references/cleanse/research.md": "owned",
     ".claude/skills/gaia/references/cleanse/verification-round.md": "owned",
@@ -302,6 +303,8 @@
     ".gaia/scripts/check-updates.sh": "owned",
     ".gaia/scripts/chore-deps-skip.sh": "owned",
     ".gaia/scripts/classifier/classify-determinism.mjs": "owned",
+    ".gaia/scripts/cleanse/cross-file-blocks.mjs": "owned",
+    ".gaia/scripts/cleanse/cross-file-candidates.mjs": "owned",
     ".gaia/scripts/context-checkpoint-lib.sh": "owned",
     ".gaia/scripts/debt-backlog.sh": "owned",
     ".gaia/scripts/debt-batch-budget-offer-lib.sh": "owned",
@@ -806,6 +809,7 @@
     "wiki/decisions/Code Audit Team.md": "wiki-owned",
     "wiki/decisions/Composite Action Step Timeouts.md": "wiki-owned",
     "wiki/decisions/Content Security Policy.md": "wiki-owned",
+    "wiki/decisions/Cross-file Instruction Duplication In Gaia-cleanse.md": "wiki-owned",
     "wiki/decisions/Dark Mode Modernization.md": "wiki-owned",
     "wiki/decisions/Deliberate Configuration Asymmetries.md": "wiki-owned",
     "wiki/decisions/Determinism Classifier.md": "wiki-owned",
@@ -883,7 +887,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T03:25:06.107Z",
+  "generated": "2026-11-18T05:54:44.533Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

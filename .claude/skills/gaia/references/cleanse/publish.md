@@ -27,6 +27,8 @@ Every command below runs from `RESOLVED_ROOT`, on `<CLEANSE_BRANCH>`, whichever 
    <!-- gaia:maintainer-only:start -->
 
    Then clear the **CHANGELOG gate** per `wiki/concepts/PR Merge Workflow.md`: decide whether the change warrants a `## [Unreleased]` entry (pure pruning / consolidation is usually an internal, no-entry change; a rule or concept-page behavior change is worthy) and, if so, land it on the branch before merging (HEAD moves, so any bypass/marker must still cover the new HEAD). Scrubbed from adopter bundles.
+
+   A doc-contract bats suite that fails because it pinned a passage the apply replaced is reworked on `<CLEANSE_BRANCH>` before the first audit dispatch: pin what the owner file still owns, one red twin per check, and never re-add the removed copy to satisfy the pin. `.gaia/tests/lib/doc-noop-terminal-contract.bats` is the model.
    <!-- gaia:maintainer-only:end -->
 
 2. **Open the PR and drive it to merge** through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory):

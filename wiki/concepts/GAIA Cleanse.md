@@ -3,13 +3,13 @@ type: concept
 title: GAIA Cleanse
 status: active
 created: 2026-04-20
-updated: 2026-10-14
+updated: 2026-11-18
 tags: [concept, claude, skill, knowledge, hygiene]
 ---
 
 # GAIA Cleanse
 
-`/gaia-cleanse` runs a two-stage cleanse over every knowledge store in the project (wiki, auto-loaded `CLAUDE.md` files, `.claude/rules/`, machine-local memory) checking for duplication, stale entries, and auto-load token bloat. **Wiki is the source of truth.** It curates memory and the wiki; it does not judge whether two committed instruction files contradict each other (`/doctor prompt-audit` owns that). The playbook is an entry file at `.claude/skills/gaia/references/cleanse.md` (dispatched by the `/gaia-cleanse` command, which reads this reference and follows it) plus one-level sub-references under `.claude/skills/gaia/references/cleanse/`: research (the Stage 1 procedure and report schema), the classification-verification round, apply (Stage 2), and publish. The entry file names when each is read.
+`/gaia-cleanse` runs a two-stage cleanse over every knowledge store in the project (wiki, auto-loaded `CLAUDE.md` files, `.claude/rules/`, machine-local memory) checking for duplication, stale entries, and auto-load token bloat. **Wiki is the source of truth.** It curates memory and the wiki; it does not judge whether two committed instruction files contradict each other (`/doctor prompt-audit` owns that). The opt-in `--cross-file` mode compares instruction files against each other for duplication. The playbook is an entry file at `.claude/skills/gaia/references/cleanse.md` (dispatched by the `/gaia-cleanse` command, which reads this reference and follows it) plus one-level sub-references under `.claude/skills/gaia/references/cleanse/`: research (the Stage 1 procedure and report schema), the classification-verification round, apply (Stage 2), and publish. The entry file names when each is read.
 
 The deterministic inputs come from the `gaia fitness` CLI rather than from the model: the store listing and counts from `gaia fitness inventory --json`, over-budget files and in-repo dead-path candidates from `gaia fitness check --json` findings, and memory dead-path candidates from the inventory's findings. The playbook holds no budget numbers.
 
@@ -43,6 +43,10 @@ GAIA is a foundation: a project mixes files GAIA ships, files a third party inst
 
 The project's own committed files are edited only on a yes per file: after **Apply**, the gate lists every such file an action would edit and asks which may change, none selected by default. `--apply` asks again and never inherits an earlier answer, and a run with no one to answer approves nothing. Stage 2 re-runs the classifier before each write and skips any action whose owner no longer matches, the same shape as its verbatim drift check.
 
+<!-- gaia:maintainer-only:start -->
+In the GAIA source repo a GAIA-shipped file is editable, approved by Apply, since there is no upstream.
+<!-- gaia:maintainer-only:end -->
+
 ### Classification-verification round
 
 When Stage 1 proposes at least one action, a recommended-but-optional **classification-verification round** runs in the main conversation between the report and the decision gate. Low-overlap lenses verify Stage 1's single-pass classifications against ground truth: the cited fact actually lives in the wiki page it names, a STALE entry is genuinely gone rather than renamed, a cross-store CONFLICT is a real contradiction rather than a sanctioned path-scoped rule, and a memory delete's reason citation resolves. The round is biased toward dropping a delete it cannot confirm, because memory deletes are machine-local and have no git undo, so a wrongly-kept entry is cheap clutter while a wrongly-executed delete is permanent. A mis-classified action is dropped or corrected in the report directly; a whole miscalibrated lens re-spawns Stage 1 once with the findings as a correction directive.
@@ -53,6 +57,7 @@ The hardened report carries an `audit_hardened` stamp that the decision gate and
 | ---------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `/gaia-cleanse`          | Stage 1 → gate → Stage 2 on Apply | Default. Research, review at the gate, then apply                                                                 |
 | `/gaia-cleanse "<hint>"` | Same, scoped to the hint          | Narrow Stage 1 to named stores or files; a scoped run always gates, and never advances the statusline's last-cleanse anchor |
+| `/gaia-cleanse --cross-file ["<hint>"]` | Cross-file stage 1 → gate → Stage 2 on Apply | Opt-in. Find an instruction restated across files and replace each copy with a pointer to one owner; always gates |
 | `/gaia-cleanse --apply`  | Stage 2 only                      | Retry against the most recent draft or partial report (after drift fix or interrupted apply), within a 72h grace |
 
 Stage 1 (Sonnet) proposes actions (`delete`, `delete-entry`, `promote`, `shrink`), each carrying the drift signals its own schema names, written to `.gaia/local/cleanse/KNOWLEDGE-{timestamp}.md`. Stage 2 (Sonnet) reads the report, verifies drift signals still match, and applies changes verbatim; on mismatch it skips and reports rather than improvising. Drift checks (sha256 + verbatim before/after) carry the safety, so the research stage doesn't need a heavier model. A memory entry that contradicts a wiki page (the CONFLICT research category) emits a `replace` or `delete` action type in the report, not a separate action type.
@@ -65,12 +70,23 @@ Only conflicts across stores are judged. A memory entry against the wiki is reso
 
 Each report carries a `status:` field. Stage 1 writes it as `draft`; Stage 2 flips it to `applied` when every action lands cleanly, or `applied-partial` when some actions are skipped or fail (kept so `/gaia-cleanse --apply` can retry the remainder). A scoped run ends `scoped-applied` or `scoped-partial` instead, which the statusline nudge does not read, so a narrow run never counts as the last full cleanse. A `draft` survives an interrupted run and is resumable. The Step 0 prune keeps the newest few `applied` reports and never deletes a `draft`; declining at the gate deletes the report immediately. The report itself stays gitignored under `.gaia/local/cleanse/`; 1.x reports under `.gaia/local/audit/` move to `.gaia/local/cleanse/` once, through `knowledge-inventory.sh relocate-reports`, which runs only from the main checkout and never deletes (the newest applied report's mtime is the nudge's 30-day anchor). The applied in-repo edits are what the publish step commits and merges. Recovery before publish is git (`git restore` / `git checkout --` / `git clean`); after a main-branch merge, recovery is a revert of the merged PR.
 
+## Cross-file duplication
+
+`/gaia-cleanse --cross-file [hint]` is opt-in; the default path is unchanged. It finds a procedure, list, threshold or convention stated in two or more instruction files and replaces each copy with a pointer to one owner. Its report is scoped (`scope: cross-file`), so it always gates and never advances the statusline's last-cleanse anchor. It stays opt-in because the cost of a full run is not yet measured.
+
+- **Candidates are deterministic.** `.gaia/scripts/cleanse/cross-file-candidates.mjs` clusters blocks from different files by shared distinctive literals, never by titles, and emits each member block's text, so judges read excerpts, not whole files. Its header owns the file set and thresholds.
+- **Judges, then an assembler, on Sonnet.** The main conversation shards the clusters and dispatches one judge per shard, then one assembler turns the verdict files into the report. The dispatches live in `.claude/skills/gaia/references/cleanse.md`.
+- **Agreeing copies become `replace` actions** that keep the copy's case-specific detail beside a pointer to the owner. A copy that disagrees with the owner on substance is report-only: it is an out-of-scope finding naming the contradiction, never an edit, so no action picks a winner by rewording.
+- **Exceptions are named, not listed here.** The GAIA-specific cases the pass keeps are in `.claude/skills/gaia/references/cleanse/cross-file.md`.
+- **The verification round has a cross-file lens** that checks each cross-file action against its owner before the gate.
+
 ## What it catches
 
 - **Cross-store duplication**: fact lives in both memory and wiki → wiki wins; the memory entry is deleted
 - **Contradictions with the wiki**: a memory entry that asserts the opposite of a wiki page → resolved toward the wiki; an instruction file that contradicts a wiki page → reported, never edited (see Conflict scope).
 - **Promotable memory**: durable knowledge stuck in machine-local memory → moves to a specific wiki page
 - **Auto-load bloat**: flags `CLAUDE.md` and rules over budget, from the CLI's `claudemd.budget` findings
+- **Cross-file instruction duplication** (opt-in `--cross-file`): a procedure, list, threshold or convention restated across instruction files → each copy replaced by a pointer to one owner
 - **Stale entries** referencing removed code, branches, or features
 - Wiki-internal redundancy and broken links are not fixed here (that is [[Wiki Management]], consolidate / lint), but they are no longer dropped: each is filed as a `tech-debt` issue whose suggested fix names the right `/gaia-wiki` command, or, for a broken wikilink, which `/gaia-wiki` detects and fixes through its lint stage's check #17.
 

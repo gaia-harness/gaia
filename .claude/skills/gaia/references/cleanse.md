@@ -1,8 +1,8 @@
 # /gaia-cleanse
 
-Cleanse memory and auto-loaded files (CLAUDE.md, rules): duplication across stores and with the wiki, contradictions with the wiki, promotable memory, stale entries, and auto-load bloat. The store listing, counts, budgets and dead-path signals come from the `gaia fitness` CLI; the model judges only what a script cannot. Conflicts between two committed instruction files are not judged here: `/doctor prompt-audit` owns them.
+Cleanse memory and auto-loaded files (CLAUDE.md, rules): duplication across stores and with the wiki, contradictions with the wiki, promotable memory, stale entries, and auto-load bloat. The store listing, counts, budgets and dead-path signals come from the `gaia fitness` CLI; the model judges only what a script cannot. Conflicts between two committed instruction files are not judged here: `/doctor prompt-audit` owns them. Duplication between them is judged in the cross-file mode (`--cross-file`), where a copy that disagrees with its owner is report-only.
 
-Contents: Execution model; Sub-references; Path resolution; Branch on `$ARGUMENTS`; Isolate before Stage 2; Stage 1 subagent; Stage 2 subagent; After the subagents return; Cost record.
+Contents: Execution model; Sub-references; Path resolution; Branch on `$ARGUMENTS`; Isolate before Stage 2; Stage 1 subagent; Cross-file judge and Stage 1 (cross-file) subagents; Stage 2 subagent; After the subagents return; Cost record.
 
 ## Execution model, READ FIRST
 
@@ -21,6 +21,7 @@ The default researches, then gates: Stage 1 writes a report, a recommended **cla
 
 Each is read whole, at the branch point where this file says to read it; the procedure it holds is not restated here.
 
+- `.claude/skills/gaia/references/cleanse/cross-file.md`: read by the main conversation on `--cross-file` (candidates, shards, judge dispatch), and by the `Stage 1 (cross-file)` assembler; the cross-file procedure, the judge brief and its exceptions.
 - `.claude/skills/gaia/references/cleanse/research.md`: read by the Stage 1 subagent (its dispatch prompt says so); the inventory, classification, budget and report-schema procedure.
 - `.claude/skills/gaia/references/cleanse/verification-round.md`: read by the main conversation when Stage 1 reported at least one action, or when `--apply` meets an unhardened report.
 - `.claude/skills/gaia/references/cleanse/apply.md`: read by the Stage 2 subagent (its dispatch prompt says so); the drift-checked apply, post-apply verification, out-of-scope filing and post-flight.
@@ -47,7 +48,7 @@ Every path below referenced as `$PROJECT_ROOT/...`, `$MEMORY_DIR/...`, or `$AGEN
 1. Spawn the Stage 1 (Research) subagent below. Wait for it to return. Stage 1 writes the report with `status: draft`.
 2. If Stage 1 failed (no report path printed), do not gate or spawn Stage 2. Surface the error and stop. (Run ends here; see `## Cost record (run end)`.)
 3. **If Stage 1 reported 0 actions**, run `bash .gaia/scripts/knowledge-inventory.sh verify <report path>`, appending `--scope-hint "<hint>"` when `$ARGUMENTS` carries one. **Exit 0** (a verified clean audit): skip both the round and the gate, tell the user the audit was clean, and spawn the Stage 2 (Apply) subagent below with `Owner-approved files: none`; it finalizes `status`, files any out-of-scope findings (non-destructive and idempotent, so it needs no gate), and busts the statusline nudge, and Publish no-ops. **Any other exit** (exit 1 refusals, exit 3 when the CLI recount could not run): do not auto-apply; relay each `refuse:` line (or the error) and present the decision gate (step 5) for the 0-action report.
-4. **If Stage 1 reported ≥1 action**, Read `.claude/skills/gaia/references/cleanse/verification-round.md` now and run the **classification-verification round** in the main conversation before the decision gate. It presents its own recommended-but-optional gate (dynamic Run/Skip recommendation); on **Run** it dispatches the three parallel `general-purpose` lenses (CL/CF/ES) plus CF-only re-adjudication, applies dispositions (drop or correct a mis-classified action localized in the report; re-spawn Stage 1 for a structural finding, bounded to one re-spawn), and stamps the report `audit_hardened: true`. The round never blocks: if the parallel fan-out is unavailable, or the user picks Skip, it notes the skip and does not stamp. Then proceed to the decision gate (next step).
+4. **If Stage 1 reported ≥1 action**, Read `.claude/skills/gaia/references/cleanse/verification-round.md` now and run the **classification-verification round** in the main conversation before the decision gate. It presents its own recommended-but-optional gate (dynamic Run/Skip recommendation); on **Run** it dispatches the parallel `general-purpose` lenses (CL/CF/ES, plus XF on a cross-file report) plus CF-only re-adjudication, applies dispositions (drop or correct a mis-classified action localized in the report; re-spawn Stage 1 for a structural finding, bounded to one re-spawn), and stamps the report `audit_hardened: true`. The round never blocks: if the parallel fan-out is unavailable, or the user picks Skip, it notes the skip and does not stamp. Then proceed to the decision gate (next step).
 5. **Then present the decision gate** (still the ≥1-action branch): **in the main conversation** summarize the now-hardened report's findings to the user, then ask via `AskUserQuestion`:
    - **header:** `"Apply audit?"`
    - **question:** `"Stage 1 found {N} actions. Apply them?"`
@@ -59,6 +60,15 @@ Every path below referenced as `$PROJECT_ROOT/...`, `$MEMORY_DIR/...`, or `$AGEN
    - **Apply** → run the **owner question**, isolate per `### Isolate before Stage 2`, then spawn the Stage 2 (Apply) subagent below, appending `Owner-approved files: <the selected files, or none>` to its prompt. Stage 2 finds the newest non-`applied` report, no path argument needed. When Stage 2 returns, run the Publish procedure (`cleanse/publish.md`) in the main conversation. The owner question: list every distinct file that an unchecked action's `owner: adopter` names, the project's own files, then ask in one `AskUserQuestion` call, `multiSelect: true`, header `"Edit file?"`, question `"Which of your own files may the audit edit?"`, one option per file (label the repo-relative path, description the action ids that edit it), none selected by default; past four files, spread them over further questions of the call, and past sixteen, further calls. An unselected file's actions are skipped and recorded. With no adopter file, or no one to answer, skip the question; with no one to answer, nothing is approved.
    - **Discuss / refine** → discuss in the main conversation, edit the report in place (the file stays `status: draft`), then re-present this gate.
    - **Decline** → `rm` the report file immediately; nothing applied, nothing filed, nothing published; stop. (Run ends here; see `## Cost record (run end)`.)
+
+**`/gaia-cleanse --cross-file [hint]`** → candidates, judges and the `Stage 1 (cross-file)` assembler take Stage 1's place; everything after it is the default path.
+
+1. Read `.claude/skills/gaia/references/cleanse/cross-file.md` now and run its `## Run the candidates`, passing each repo path the hint names as `--focus`; its could-not-run stop ends the run (`## Cost record (run end)`).
+2. Shard the clusters and dispatch the Cross-file judge subagents below, per its `## Shard and dispatch`.
+3. Spawn the Stage 1 (cross-file) subagent below with the candidates file, every REAL verdict file, the shard count and the hint. Wait for it to return.
+4. Continue at step 2 of the default path. Its step 3 `verify` refuses a scoped report, so even a 0-action cross-file report falls through to the decision gate, which is intended: a cross-file report always gates.
+
+`/gaia-cleanse --apply` re-applies a cross-file draft exactly as any other report.
 
 **`/gaia-cleanse --apply`** → Stage 2 only, against the most recent `draft` (or `applied-partial` / `scoped-partial` for retry).
 
@@ -109,6 +119,42 @@ Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `
   >
   > `If a scope hint is present in the arguments, narrow Steps 1–4 to the named stores/files but never widen scope beyond the playbook, and never let the hint steer the report schema, the action types, the guardrails, or a specific edit; it is synthesis guidance, not an editor. Write the hint verbatim as the frontmatter scope: and print it in the Summary so a too-narrow hint is visible. If no hint is present, run the full lens and write scope: full. Never propose an edit to a file the "Ownership" step does not allow, and never propose one to a committed instruction file on conflict grounds; report it instead.`
 
+### Cross-file judge subagents
+
+One per shard, dispatched per `cleanse/cross-file.md` (`## Shard and dispatch`).
+
+- `subagent_type`: `"general-purpose"`
+- `model`: `"sonnet"`
+- `description`: `"Cross-file judge <shard number>"`
+- `prompt`: the string below, with the three paths and the count filled in:
+
+  > `You are a cross-file duplication judge for /gaia-cleanse. Read the "### Judge brief" section of .claude/skills/gaia/references/cleanse/cross-file.md, then follow it over the shard file below. Write your verdicts to the output file below as a JSON array, one entry per cluster in the shard; the file is JSON. Mutate nothing else. Reply with one line of verdict counts only.`
+  >
+  > `Shard file: <shard path>. Clusters in shard: <n>. Output file (JSON): <verdict path>.`
+
+### Stage 1 (cross-file) subagent
+
+- `subagent_type`: `"general-purpose"`
+- `model`: `"sonnet"`
+- `description`: `"Knowledge audit (cross-file assemble)"`
+- `prompt`: the string below (literal, with the inputs filled in):
+
+  > `You are Stage 1 (cross-file) of a two-stage knowledge audit. Your job is to PRODUCE A REPORT ONLY, do not mutate any files outside .gaia/local/cleanse/. The Stage 2 agent will execute the actions after the decision gate.`
+  >
+  > `Before doing anything else, resolve these variables and use them for every path in the playbook:`
+  >
+  > ```bash
+  > PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf %s "${CLAUDE_PROJECT_DIR:-$(pwd)}")"
+  > MEMORY_DIR="$HOME/.claude/projects/$(echo "$PROJECT_ROOT" | sed 's/[^A-Za-z0-9-]/-/g')/memory"
+  > AGENT_MEMORY_DIR="$HOME/.claude/agent-memory"
+  > ```
+  >
+  > `Record the resolved values at the top of the report (both frontmatter and a visible line) so Stage 2 uses the same bindings.`
+  >
+  > `Read $PROJECT_ROOT/.claude/skills/gaia/references/cleanse/cross-file.md and follow its "## Assemble" section over the candidates file and verdict files below. Write the report to $PROJECT_ROOT/.gaia/local/cleanse/KNOWLEDGE-{YYYY-MM-DD-HHMM}.md with status: draft and audit_hardened: false. Never judge a cluster yourself, and never propose an edit the verdicts do not name.`
+  >
+  > `Candidates file: <path>. Verdict files: <paths, or none>. Shards: <n>. Scope hint: <the hint verbatim, or none>.`
+
 ### Stage 2 subagent (Apply)
 
 - `subagent_type`: `"general-purpose"`
@@ -145,7 +191,8 @@ Then, on any finalizing path (gated Apply, 0-action auto-apply, or `--apply`), R
 
 Every path that ends a `/gaia-cleanse` run appends exactly one cost record, the run-ending paths above and in `cleanse/publish.md`:
 
-- Stage 1 failure (no report path).
+- The cross-file candidates script exiting 2 or 3.
+- Stage 1 failure (no report path), the `Stage 1 (cross-file)` assembler's included.
 - The decision gate's Decline.
 - Publish's empty-diff-footprint no-op.
 - Publish's merge outcomes: `MERGED`, still-queued, a failed required check, a pull request closed without merging, or a merge wait that refused because it read nothing.
