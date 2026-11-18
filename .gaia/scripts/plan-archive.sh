@@ -81,6 +81,11 @@ root="${root%/}"
   echo "plan-archive: cannot load $root/.gaia/scripts/notebook/notebook-lib.sh; nothing archived" >&2
   exit 0
 }
+# shellcheck source=.gaia/scripts/spec/plan-verify-lib.sh
+. "$root/.gaia/scripts/spec/plan-verify-lib.sh" 2>/dev/null || {
+  echo "plan-archive: cannot load $root/.gaia/scripts/spec/plan-verify-lib.sh; nothing archived" >&2
+  exit 0
+}
 export GAIA_NOTEBOOK_TREE="$root"
 
 gaia_notebook_require_ready || exit 0
@@ -189,6 +194,28 @@ if [ "$gate_status" -ne 0 ]; then
   printf 'Kept %s: no %s run recorded for %s; %s\n' \
     "$relative_path" "$usage_workflow" "$usage_ref" "$recovery_command"
   exit 0
+fi
+
+# A running or ran TEST-STAGE also owes a gaia-test close on the same ref.
+if test_stage_close_owed "$absolute_source_path"; then
+  usage_workflow="gaia-test"
+  recovery_command="outside a live $usage_workflow run, record it: bash .gaia/scripts/usage.sh record $usage_ref --workflow $usage_workflow --start <iso>"
+  gate_status=2
+  if [ -n "$main_root" ]; then
+    gate_status=0
+    bash "$root/.gaia/scripts/usage.sh" represented "$usage_ref" --workflow "$usage_workflow" \
+      --main-root "$main_root" </dev/null >/dev/null 2>&1 || gate_status=$?
+  fi
+  if [ "$gate_status" -eq 2 ]; then
+    printf 'Kept %s: usage ledger missing or unreadable (.gaia/local/telemetry/usage.jsonl) for %s; once it reads, %s\n' \
+      "$relative_path" "$usage_ref" "$recovery_command"
+    exit 0
+  fi
+  if [ "$gate_status" -ne 0 ]; then
+    printf 'Kept %s: no %s run recorded for %s; %s\n' \
+      "$relative_path" "$usage_workflow" "$usage_ref" "$recovery_command"
+    exit 0
+  fi
 fi
 
 # ---------- disposition ----------

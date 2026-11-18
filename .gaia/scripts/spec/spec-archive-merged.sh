@@ -114,6 +114,11 @@ _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   echo "spec-archive-merged: cannot load the notebook library; nothing swept" >&2
   exit 0
 }
+# shellcheck source=plan-verify-lib.sh
+. "${_library_directory}/plan-verify-lib.sh" 2>/dev/null || {
+  echo "spec-archive-merged: cannot load plan-verify-lib.sh; nothing swept" >&2
+  exit 0
+}
 # shellcheck source=../main-root-lib.sh
 . "${_library_directory}/../main-root-lib.sh" 2>/dev/null || {
   echo "spec-archive-merged: cannot load ${_library_directory}/../main-root-lib.sh; nothing swept" >&2
@@ -239,6 +244,15 @@ while IFS= read -r spec_id; do
     [ -d "$plan_subfolder" ] && holds_plan=1
   done
   if [ "$holds_plan" -eq 1 ] && ! _usage_gate "$relative_folder" "spec:${spec_id}" gaia-plan; then
+    continue
+  fi
+  # A plan subfolder whose TEST-STAGE reads running or ran also owes a
+  # gaia-test close on the SPEC ref (.claude/skills/gaia/references/test-stage.md).
+  owes_test=0
+  for plan_subfolder in "$folder"/plan "$folder"/plan-[0-9]*; do
+    if [ -d "$plan_subfolder" ] && test_stage_close_owed "$plan_subfolder"; then owes_test=1; fi
+  done
+  if [ "$owes_test" -eq 1 ] && ! _usage_gate "$relative_folder" "spec:${spec_id}" gaia-test; then
     continue
   fi
 

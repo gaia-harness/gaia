@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by plan-verify.sh: the README and ORCHESTRATOR.md readers, the
+# Sourced by plan-verify.sh and the archive scripts: the README and ORCHESTRATOR.md readers, the
 # test-stage record reader and the security-writer check. Relies on the
 # globals of the caller (plan_directory, readme, orchestrator, spec_path,
 # repository_root, script_directory) and its fail().
@@ -47,6 +47,19 @@ read_test_stage() {
       fail "TEST-STAGE is malformed: its first line is not status: running, status: ran or status: skipped ($record)"
       ;;
   esac
+}
+
+# test_stage_close_owed <plan_folder>: 0 when that folder's TEST-STAGE first
+# line reads running or ran, so a gaia-test close is owed on the usage ledger;
+# 1 when it reads skipped, is absent or is malformed. Reuses read_test_stage in
+# a subshell with a silent fail(), so the archive scripts that source this
+# library keep their own globals and report nothing here.
+test_stage_close_owed() {
+  (
+    fail() { :; }
+    plan_directory="$1" read_test_stage
+    [ "$test_stage_owed" -eq 1 ]
+  )
 }
 
 # Under a running or ran test stage, the entry of each phase whose task docs

@@ -695,3 +695,20 @@ EOF
   [ "$(listing)" = "$before" ]
   [ "$(plan_row_field PLAN-001 status)" = "ready" ]
 }
+
+@test "a ran TEST-STAGE keeps the plan until the gaia-test close is recorded" {
+  seed_plan ".notebook/plans/PLAN-005"
+  printf 'status: ran\ndate: 2026-01-01T00:00:00Z\n' > "$SANDBOX/.notebook/plans/PLAN-005/TEST-STAGE"
+  seed_close plan:PLAN-005 gaia-plan
+  seed_plan_row PLAN-005
+  run run_in_sandbox ".notebook/plans/PLAN-005"
+  [ "$status" -eq 0 ]
+  [ -f "$SANDBOX/.notebook/plans/PLAN-005/TEST-STAGE" ]
+  grep -qF "Kept .notebook/plans/PLAN-005: no gaia-test run recorded for plan:PLAN-005" <<<"$output"
+
+  seed_close plan:PLAN-005 gaia-test
+  run run_in_sandbox ".notebook/plans/PLAN-005"
+  [ "$status" -eq 0 ]
+  [ ! -e "$SANDBOX/.notebook/plans/PLAN-005/TEST-STAGE" ]
+  grep -qF "Reduced plan folder to SUMMARY.md" <<<"$output"
+}

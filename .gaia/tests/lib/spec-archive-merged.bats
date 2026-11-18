@@ -569,3 +569,35 @@ _clear_merged_at() {
   assert_contains "no gaia-plan run recorded for spec:SPEC-001"
   [ -d "$REPO/$SPECS/SPEC-001/plan-2" ]
 }
+
+@test "34: a plan subfolder whose TEST-STAGE ran also needs the gaia-test close" {
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+  mkdir -p "$REPO/$SPECS/SPEC-001/plan"
+  printf 'status: ran\ndate: 2026-01-01T00:00:00Z\n' > "$REPO/$SPECS/SPEC-001/plan/TEST-STAGE"
+  _seed_close spec:SPEC-001 gaia-spec
+  _seed_close spec:SPEC-001 gaia-plan
+
+  run _archive "$REPO"
+  [ "$status" -eq 0 ]
+  refute_contains "Deleted"
+  assert_contains "Kept specs/SPEC-001: no gaia-test run recorded for spec:SPEC-001; outside a live gaia-test run, record it: bash .gaia/scripts/usage.sh record spec:SPEC-001 --workflow gaia-test --start <iso>"
+  [ -d "$REPO/$SPECS/SPEC-001/plan" ]
+
+  _seed_close spec:SPEC-001 gaia-test
+  run _archive "$REPO"
+  [ "$status" -eq 0 ]
+  assert_contains "Deleted 1 merged SPEC folder(s): SPEC-001"
+  [ ! -e "$REPO/$SPECS/SPEC-001" ]
+}
+
+@test "35: a skipped TEST-STAGE owes no gaia-test close" {
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+  mkdir -p "$REPO/$SPECS/SPEC-001/plan"
+  printf 'status: skipped\n' > "$REPO/$SPECS/SPEC-001/plan/TEST-STAGE"
+  _seed_close spec:SPEC-001 gaia-spec
+  _seed_close spec:SPEC-001 gaia-plan
+
+  run _archive "$REPO"
+  [ "$status" -eq 0 ]
+  assert_contains "Deleted 1 merged SPEC folder(s): SPEC-001"
+}
