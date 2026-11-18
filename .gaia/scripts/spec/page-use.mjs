@@ -2,7 +2,7 @@
 // The one definition of "this Playwright file opens a browser page".
 //
 // A real-server test drives the running server through the `request` fixture
-// and opens no page; a browser test opens one. The test-design layer map
+// and opens no page; a browser test opens one. The doctrine's layer choice
 // (a spec that opens no page is on the real-server layer) draws that line
 // through this module. It reads the file's AST with the TypeScript compiler API, so
 // words in a title, a string or a comment are never a use.

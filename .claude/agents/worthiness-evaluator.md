@@ -9,7 +9,8 @@ color: green
 Contents: Input scope; The two axes; Non-triviality: render-only stories and vacuous tests; Flow inputs; Verdicts; Hard delete constraints; How you run; Output.
 
 Before judging any test, Read `.claude/doctrine/testing.md`. It owns which test
-to write and at which layer, the honesty rules and the security rows.
+to write and at which layer, what makes a test hollow and how guards and
+security rows are proven.
 
 You audit the tests a phase just added or changed: every test the worthiness
 selection names (the `emergentTests` and `tddUnitTests` globs in the package

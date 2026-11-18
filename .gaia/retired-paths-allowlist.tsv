@@ -68,3 +68,4 @@
 .gaia/scripts/spec/flow-coverage.sh	.playwright/flows	Package-relative flow test directory name joined to the package path from the registry, not a root path.
 .gaia/scripts/spec/plan-verify.sh	.playwright/flows	Package-relative flow test directory name joined to the web package path from the registry, not a root path.
 .claude/skills/gaia/references/test-stage.md	.playwright/flows/	Package-relative flow test path run from or joined to the frontend package the line names, not a root path.
+.claude/settings.json	".env.example"	Basename match on the committed placeholder file name at any depth; not a root path.
