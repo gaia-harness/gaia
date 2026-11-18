@@ -81,6 +81,15 @@ function acceptanceBullets(markdownText) {
   return bullets.map(normalizeWhitespace);
 }
 
+// Each `<file name>: <bullet>` of the acceptance criteria of a plan directory.
+function planBullets(directory) {
+  return markdownFilesIn(directory).flatMap((name) =>
+    acceptanceBullets(readText(join(directory, name))).map(
+      (bullet) => `${name}: ${bullet}`,
+    ),
+  );
+}
+
 export function comparedLines(options) {
   if (options.mode === 'spec') {
     return {
@@ -88,19 +97,10 @@ export function comparedLines(options) {
       post: new Set(behaviorSentences(readText(options.post))),
     };
   }
-  const pre = [];
-  const post = new Set();
-  for (const name of markdownFilesIn(options.pre)) {
-    for (const bullet of acceptanceBullets(readText(join(options.pre, name)))) {
-      pre.push(`${name}: ${bullet}`);
-    }
-  }
-  for (const name of markdownFilesIn(options.post)) {
-    for (const bullet of acceptanceBullets(readText(join(options.post, name)))) {
-      post.add(`${name}: ${bullet}`);
-    }
-  }
-  return {pre, post};
+  return {
+    pre: planBullets(options.pre),
+    post: new Set(planBullets(options.post)),
+  };
 }
 
 export function destinationFiles(options) {

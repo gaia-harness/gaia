@@ -204,8 +204,7 @@ function editRefusals(fixes, lines) {
   return refusals;
 }
 
-export function checkFixes(options) {
-  const settings = {dest: [], mode: 'spec', ...options};
+export function checkFixes(settings) {
   let parsed;
   try {
     parsed = JSON.parse(readText(settings.fixes));

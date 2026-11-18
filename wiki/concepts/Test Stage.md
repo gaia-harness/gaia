@@ -21,7 +21,7 @@ The SPEC owns the requirements. Its `## Behaviors` section states each behavior 
 
 - A `## Tests` section in each task doc, one line per test naming the behavior, the layer, the security kind and the test's file and title.
 - For a spec-derived plan, a closing phase with one task per SPEC flow, each carrying one flow test line.
-- A `TEST-STAGE` record in the plan folder: `running` before any line is written, `ran` only after the checks pass, `skipped` when the user skips. Readers treat `running` as `ran`, an absent record as `skipped`, and any other first line as an operational failure. `.gaia/scripts/spec/flow-coverage.sh` and `.gaia/scripts/spec/plan-verify.sh` read it, and a skipped or absent stage reports each flow as a gap instead of a finding.
+- A `TEST-STAGE` record in the plan folder: `running` before any line is written, `ran` only after the checks pass, `skipped` when the user skips. `.gaia/scripts/spec/flow-coverage.sh` and `.gaia/scripts/spec/plan-verify.sh` read it, and a skipped or absent stage reports each flow as a gap instead of a finding.
 
 ## Checks
 
