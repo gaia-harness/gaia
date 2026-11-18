@@ -1,8 +1,5 @@
 # Prettier already skips node_modules and everything .gitignore covers; list
-# only tracked paths that must not be formatted. package-lock.json is listed
-# because no .gitignore covers it.
-
-package-lock.json
+# only tracked paths that must not be formatted.
 
 # The app owns its own Prettier config and ignore file; `pnpm -C apps/web format`
 # formats it.

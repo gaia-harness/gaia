@@ -1,9 +1,6 @@
-# The `pnpm format` run skips node_modules and everything this package's and the
-# repository root's .gitignore cover (the format script names both); list only
-# paths it would otherwise format. package-lock.json is listed because no
-# .gitignore covers it.
-
-package-lock.json
+# The `format` script skips node_modules and everything this package's and the
+# repository root's .gitignore cover (it names both); list only paths it would
+# otherwise format.
 
 # Byte-identical vendored upstream copy; its version and per-file hashes are
 # recorded in .gaia/vendor/playwright-cli.json, so formatting would break it.
