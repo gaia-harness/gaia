@@ -30,7 +30,7 @@ setup() {
   PAGE_PIN='Route is the default home for behavior because'
   DOCTRINE='.claude/doctrine/testing.md'
   LINK='wiki/decisions/Test Layering.md'
-  PLANNER_PIN='Name the behavior the task delivers and its `- Test:` lines'
+  PLANNER_PIN='each stated as a behavior the task delivers, never as a list of tests'
   TESTS_REACT='apps/web/.claude/skills/tdd-react/references/tests-react.md'
 
   # file|old phrase (must be absent)|positive pin (must be present)
@@ -61,8 +61,6 @@ setup() {
     "apps/web/.claude/skills/new-component/SKILL.md|for an interactive component assert a keyboard path|$DOCTRINE"
     "$DOCTRINE|For an interactive component the tests cover a keyboard path|Native controls in DOM order get no keyboard or focus test"
     "$DOCTRINE|For an interactive component the tests cover a keyboard path|Code in the app's tree that handles keys or moves focus"
-    ".claude/skills/gaia/references/spec/self-review.md|case tables belong to the lowest layer|$DOCTRINE"
-    ".claude/skills/gaia/references/spec/self-review.md|leaving the cases to the lowest layer|$DOCTRINE"
     "wiki/index.md|each check sits at the lowest layer that proves it|the reasons behind the testing trophy"
   )
 

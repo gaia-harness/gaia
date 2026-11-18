@@ -18,14 +18,10 @@ PER_FINDING_ERE='question per finding|up to 4 questions per `AskUserQuestion` ca
 # its start line through the line before the next end match. A converted site
 # asks through AskUserQuestion and never says "plain prompt"; a review site, a
 # list of findings each carrying its own recommendation, offers the accept-all
-# option and never asks one question per finding. Hard constraint 3 reviews but
-# is not converted: it still sends open-ended clarify questions to a plain prompt.
+# option and never asks one question per finding.
 SITES=(
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|yes|no"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|yes|no"
-  "$REFERENCES/spec.md|^3\. \*\*One question at a time|^4\. \*\*Two-gate|no|yes"
-  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|yes|yes"
-  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|yes|yes"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|yes|no"
   "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|yes|yes"
   "$REFERENCES/spec/clarify-loop.md|^- \*\*Error|^- \*\*Contradictory|yes|no"
 )
@@ -40,46 +36,42 @@ PRINT_PINS=(
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never summarize the flows as a count or a theme list"
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never point the user at the draft file"
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|terseness preferences do not shorten gate content"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|a synthesis of the draft and its AUDIT.md"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|never print the whole rendered artifact"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|every flow in the draft, one line each, with its covered folders or test path"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**Plan will"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**You are signing off on:**"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**Not settled"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|the draft path and the AUDIT.md path"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|at most 50 lines"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|never drops or merges a flow, a sign-off item, or a not-settled item"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|terseness preferences do not shorten gate content"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|a synthesis of the draft and its AUDIT.md"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|never print the whole rendered artifact"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|every flow in the draft, one line each, with its covered folders or test path"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|**Plan will"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|**You are signing off on:**"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|**Not settled"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|the draft path and the AUDIT.md path"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|at most 50 lines"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|never drops or merges a flow, a sign-off item, or a not-settled item"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|terseness preferences do not shorten gate content"
   "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|the proposed critical flows, one line each"
   "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|print the gate 2 brief"
   "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|never the whole rendered artifact"
   "$REFERENCES/spec/system-prompt.md|^- \*\*Plain language|^- \*\*Concision|never cite an id or label the human has not read"
   "$REFERENCES/spec/clarify-loop.md|^## 5a\.|^## 5b\.|never cite an id or label from them"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|no finding, lens, directive or section id"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|no finding, lens, directive or section id"
   ".claude/rules/user-questions.md|^\*\*How a review list prints|^This covers|never a blockquote or a code fence"
   ".claude/rules/user-questions.md|^\*\*How a review list prints|^This covers|\`**Recommendation:**\` as its own paragraph"
   ".claude/rules/user-questions.md|^\*\*How a review list prints|^This covers|Internal finding ids stay in the decision list and are never printed"
-  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|How a review list prints"
-  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|How a review list prints"
   "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|How a review list prints"
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never in a blockquote or a code fence"
-  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|never a count, a summary, or a pointer to a findings file"
-  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|never a count, a summary, or a pointer to a findings file"
   "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|never a count, a summary, or a pointer to a findings file"
 )
 FORBIDDEN_PRINT_PHRASE='Suggested text'
 GATE_SITES=(
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\."
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\."
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\."
 )
 
 # Gate 2 approves a brief, not the artifact: a SPEC printed whole is too long to
 # read in a session. Each phrase is a spelling of the whole-artifact print, so
 # none may appear in the gate 2 site. One row per phrase: file|start|end|phrase.
 WHOLE_ARTIFACT_PINS=(
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|<full rendered artifact>"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|full draft artifact in markdown form"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|Here is the rendered SPEC"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|<full rendered artifact>"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|full draft artifact in markdown form"
+  "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|Here is the rendered SPEC"
 )
 
 # A print template written as a blockquote renders with a bar down its left
@@ -87,8 +79,6 @@ WHOLE_ARTIFACT_PINS=(
 # One row per site: file|start ERE|end ERE.
 BLOCKQUOTE_FREE_SITES=(
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\."
-  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\."
-  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$"
   "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$"
 )
 
@@ -328,7 +318,7 @@ copy_tree_into_scratch() {
 @test "red twin: a gate 2 that goes back to printing the whole artifact fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  awk '{ print } /^### 8\. Gate 2/ { print "> <full rendered artifact>" }' "$file" >"$file.new"
+  awk '{ print } /^### 9\. Gate 2/ { print "> <full rendered artifact>" }' "$file" >"$file.new"
   mv "$file.new" "$file"
   run prints_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
@@ -382,12 +372,12 @@ copy_tree_into_scratch() {
 # bats test_tags=whole-tree
 @test "red twin: a review-list template that goes back to a blockquote fails" {
   copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec/self-review-dispatch.md"
-  awk '{ print } /^## 6b\./ { print "  > Self-review flagged a concern in `<location>`:" }' "$file" >"$file.new"
+  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
+  awk '{ print } /^\*\*Interactive:\*\*/ { print "  > Plan review flagged a concern in `<location>`:" }' "$file" >"$file.new"
   mv "$file.new" "$file"
   run prints_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"print template is a blockquote: $REFERENCES/spec/self-review-dispatch.md"* ]]
+  [[ "$output" == *"print template is a blockquote: $REFERENCES/plan/decomposition-audit.md"* ]]
 }
 
 # bats test_tags=whole-tree
@@ -420,7 +410,7 @@ copy_tree_into_scratch() {
 @test "red twin: a gate that says plain prompt again fails" {
   copy_tree_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  awk '{ print } /^### 8\. Gate 2/ { print "Use a plain prompt, not `AskUserQuestion`." }' \
+  awk '{ print } /^### 9\. Gate 2/ { print "Use a plain prompt, not `AskUserQuestion`." }' \
     "$file" >"$file.new"
   mv "$file.new" "$file"
   run sites_ok "$SCRATCH_ROOT"
@@ -430,7 +420,7 @@ copy_tree_into_scratch() {
 
 @test "red twin: a review list that loses its accept-all option fails" {
   copy_tree_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec/audit.md"
+  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
   sed 's/Accept all as recommended (Recommended)/Apply the fix (Recommended)/' "$file" >"$file.new"
   mv "$file.new" "$file"
   run sites_ok "$SCRATCH_ROOT"
@@ -440,8 +430,8 @@ copy_tree_into_scratch() {
 
 @test "red twin: a review list that goes back to one question per finding fails" {
   copy_tree_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec/self-review-dispatch.md"
-  awk '{ print } /^## 6b\./ { print "Ask one question per finding." }' "$file" >"$file.new"
+  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
+  awk '{ print } /^\*\*Interactive:\*\*/ { print "Ask one question per finding." }' "$file" >"$file.new"
   mv "$file.new" "$file"
   run sites_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]

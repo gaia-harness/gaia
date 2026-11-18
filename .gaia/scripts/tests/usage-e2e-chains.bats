@@ -117,11 +117,11 @@ parity() {
 
 @test "guards-must-fail (grammar parity): a lint.sh copy that loosens the SPEC digits is reported with the offending ref" {
   local mutant_script="$TEMPORARY_DIRECTORY/spec/lint-mutant.sh"
-  # lint.sh sources flows-lib.sh from its own directory, and flows-lib.sh sources
-  # machine-local-ref-lib.sh one directory above it.
+  # lint.sh sources flows-lib.sh and runs behaviors.mjs from its own directory,
+  # and flows-lib.sh sources machine-local-ref-lib.sh one directory above it.
   mkdir -p "$TEMPORARY_DIRECTORY/spec"
   cp "$REPO/.gaia/scripts/machine-local-ref-lib.sh" "$TEMPORARY_DIRECTORY/"
-  cp "$REPO/.gaia/scripts/spec/flows-lib.sh" "$TEMPORARY_DIRECTORY/spec/"
+  cp "$REPO/.gaia/scripts/spec/flows-lib.sh" "$REPO/.gaia/scripts/spec/behaviors.mjs" "$TEMPORARY_DIRECTORY/spec/"
   sed 's/\^spec:SPEC-\[0-9\]{3,}\$/^spec:SPEC-[0-9]{2,}$/' "$REPO/.gaia/scripts/spec/lint.sh" >"$mutant_script"
   if cmp -s "$mutant_script" "$REPO/.gaia/scripts/spec/lint.sh"; then echo "mutation did not apply" >&2; return 1; fi
   # A mutant that crashes prints nothing, which parity reads as accepting every

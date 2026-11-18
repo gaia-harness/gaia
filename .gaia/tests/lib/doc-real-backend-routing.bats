@@ -34,7 +34,7 @@ check_template() {
 }
 
 check_spec_audit() {
-  grep -E '^- \*\*Flow and criteria testability' "$1" \
+  awk '/^#### TST: Flow and criteria testability/ { inside = 1; next } inside && /^#### / { exit } inside' "$1" \
     | grep -Fq 'A flow or success criterion that needs a real backend (persistence across a restart, a database reset, a production start against a real store) is a finding: move it to Out of scope as adopter-owned end-to-end.' \
     || { echo "testability lens lacks the real-backend finding" >&2; return 1; }
 }

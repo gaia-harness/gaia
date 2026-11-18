@@ -28,7 +28,7 @@ setup() {
   REFUSAL='gaia_refuse_if_worktree "'
   # file|command|the earlier step the gate follows|the first creation marker it precedes|exit phrase
   GATED=(
-    "$REFERENCES/spec.md|/gaia-spec|### 3. Initial draft|spec-allocator.sh next|exit code"
+    "$REFERENCES/spec.md|/gaia-spec|### 3. Allocate, anchor, stamp|spec-allocator.sh next|exit code"
     "$REFERENCES/plan.md|/gaia-plan|### 0. Pre-flight sweep|plan-allocator.sh next|exit code"
     "$REFERENCES/plan/planner.md|/gaia-plan|**Resume detection (cold-start|**Pre-flight isolation.** The generated|non-zero exit"
     ".claude/commands/gaia-debt.md|/gaia-debt|$REFUSAL|$DISPATCH|exit code"

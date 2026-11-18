@@ -1,22 +1,20 @@
 #!/usr/bin/env bats
 #
-# Doc-conformance suite for the planner's test-after plan shape.
+# Doc-conformance suite for the test-after plan shape.
 #
-# .claude/skills/gaia/references/plan/planner.md writes plans whose build
-# phases implement the feature with no test author, render step, RED gate or
-# assertion routing; a spec-derived plan ends with one closing flow-test
-# phase, one task per flow, whose quality gate runs every flow test before the
-# commit; and pre-audit flow checks run flow-coverage.sh with one named fixer
-# and a halt. This suite pins:
+# .claude/skills/gaia/references/plan/planner.md writes plans that name no test,
+# and the test stage reference adds, to a spec-derived plan, one closing
+# flow-test phase, one task per flow, whose quality gate runs every flow test
+# before the commit; pre-audit flow checks run flow-coverage.sh with one named
+# fixer and a halt. This suite pins:
 #
-#   - the closing phase rule, the `Flow test` task line and its "exactly one"
-#     bound, the web and command flow paths, and build phases with no test
-#     author;
+#   - the planner naming no test and no closing phase, and the test stage's
+#     closing phase rule, `Flow test` task line, web and command flow paths;
 #   - the closing-phase flow-test gate's run commands and its refusal, and the
 #     gate-retry block's one-shot flow-test arm;
 #   - the flow-checks block's command, fixer, single re-run, HALTED block and
 #     question, and lifecycle.md's matching section;
-#   - the spec-less rule, with the drift check block kept;
+#   - the spec-less rule: no closing phase and no flow-checks block;
 #   - the ledger HALTED form and its two options, unchanged;
 #   - the absence of every test-first phrase, and of every phrase barring an
 #     executor from editing its own tests.
@@ -29,6 +27,7 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_MD="$REPO_ROOT/.claude/skills/gaia/references/plan/planner.md"
+  TEST_STAGE_MD="$REPO_ROOT/.claude/skills/gaia/references/test-stage.md"
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
   S_FLOW='<!-- gaia:orchestrator-step flow-checks -->'
@@ -86,26 +85,30 @@ has_all() {
 # ---------- checks (each returns non-zero with a reason) ----------
 
 CLOSING_PHASE_NEEDLE='ends with one closing flow-test phase after every build phase'
-ONE_TASK_PER_FLOW_NEEDLE='one task per flow'
+ONE_TASK_PER_FLOW_NEEDLE='one task per SPEC flow'
 NO_SEPARATE_AUTHOR_NEEDLE='written by the implementer'
 FLOW_LINE_NEEDLE='- Flow test (<flow_id>): <repo-relative test path>'
 WEB_FLOW_PATH_NEEDLE='.playwright/flows/<slug>.spec.ts'
 FIXTURES_NEEDLE='apps/web/.playwright/fixtures.ts'
 COMMAND_FLOW_NEEDLE='at the flow'"'"'s `test_path`'
-BUILD_PHASE_NEEDLE='No render step, RED gate or assertion routing'
+PLANNER_NO_TEST_NEEDLE='The planner writes no test list, no test line in a task doc and no closing flow-test phase'
 
 check_closing_phase() {
   local file="$1" text
   text="$(cat "$file")"
   has_all "$text" "$CLOSING_PHASE_NEEDLE" "$ONE_TASK_PER_FLOW_NEEDLE" "$NO_SEPARATE_AUTHOR_NEEDLE" \
     "$FLOW_LINE_NEEDLE" "$WEB_FLOW_PATH_NEEDLE" '@covers' "$FIXTURES_NEEDLE" 'worker-scoped' \
-    "$COMMAND_FLOW_NEEDLE" "$BUILD_PHASE_NEEDLE" || return 1
-  # "Exactly one" binds the Flow test line: both sit on one paragraph line.
-  grep -F 'Flow test' "$file" | grep -qF 'exactly one' ||
-    { printf 'no line binds the Flow test line to exactly one per last-phase task doc\n' >&2; return 1; }
+    "$COMMAND_FLOW_NEEDLE" || return 1
+  # "The one line" binds the Flow test line: both sit on one paragraph line.
+  grep -F 'Flow test' "$file" | grep -qF 'the one line' ||
+    { printf 'no line binds the Flow test line to one line per last-phase task doc\n' >&2; return 1; }
   # The @covers header and the worker-scoped fixtures belong to the web flow.
   grep -F "$WEB_FLOW_PATH_NEEDLE" "$file" | grep -F '@covers' | grep -qF "$FIXTURES_NEEDLE" ||
     { printf 'no line gives the web flow path its @covers header and the worker-scoped fixtures\n' >&2; return 1; }
+}
+
+check_planner_names_no_test() {
+  grep -qF -- "$PLANNER_NO_TEST_NEEDLE" "$1" || { printf 'planner.md lacks: %s\n' "$PLANNER_NO_TEST_NEEDLE" >&2; return 1; }
 }
 
 WEB_GATE_NEEDLE='pnpm -C <frontend package> exec playwright test .playwright/flows/<slug>.spec.ts'
@@ -138,7 +141,7 @@ check_flow_checks_block() {
   local block
   block="$(fence_with "$1" "$S_FLOW")"
   [ -n "$block" ] || { printf 'no fenced flow-checks block\n' >&2; return 1; }
-  has_all "$block" "$FLOW_COMMAND_NEEDLE" 'before the drift check' \
+  has_all "$block" "$FLOW_COMMAND_NEEDLE" 'before the wiki promotion' \
     'general-purpose' 'model: "sonnet"' 'free to fix code or test' \
     '{PLAN_DIR}/PROGRESS.md' '## Flow checks' '## Flow checks (HALTED)' 'Reason:' \
     'Stay halted (Recommended)' 'Discuss this' 'The retry bound is one' || return 1
@@ -169,17 +172,14 @@ check_lifecycle_flow_section() {
   [ "$contents" = "$headings" ] || { printf 'Contents line does not list the sections in order:\n%s\nvs\n%s\n' "$contents" "$headings" >&2; return 1; }
 }
 
-SPEC_LESS_NEEDLE='A spec-less plan follows the Test What Matters principle'
-NO_CLOSING_NEEDLE='has no closing phase'
-SPEC_LESS_KEEPS_NEEDLE='it still carries the drift check block'
-NO_BAR_NEEDLE='No hook, gate, rule or kept prompt refuses or bars an implementer'
+NO_CLOSING_NEEDLE='Write no closing flow-test phase'
+SPEC_LESS_OMITS_NEEDLE='a spec-less plan omits `flow-checks` and carries the rest'
 
+# check_spec_less_rule <test stage> <planner>: a spec-less plan gets no closing
+# phase from the test stage, and the planner omits its flow-checks block.
 check_spec_less_rule() {
-  local file="$1" line
-  line="$(grep -F "$SPEC_LESS_NEEDLE" "$file" || true)"
-  [ -n "$line" ] || { printf 'planner.md lacks: %s\n' "$SPEC_LESS_NEEDLE" >&2; return 1; }
-  has_all "$line" "$NO_CLOSING_NEEDLE" "$SPEC_LESS_KEEPS_NEEDLE" || return 1
-  grep -qF -- "$NO_BAR_NEEDLE" "$file" || { printf 'planner.md lacks: %s\n' "$NO_BAR_NEEDLE" >&2; return 1; }
+  grep -qF -- "$NO_CLOSING_NEEDLE" "$1" || { printf 'test stage lacks: %s\n' "$NO_CLOSING_NEEDLE" >&2; return 1; }
+  grep -qF -- "$SPEC_LESS_OMITS_NEEDLE" "$2" || { printf 'planner.md lacks: %s\n' "$SPEC_LESS_OMITS_NEEDLE" >&2; return 1; }
 }
 
 check_halted_form() {
@@ -216,25 +216,29 @@ check_no_banned_phrase() {
 
 # ---------- closing phase and build phases ----------
 
-@test "planner.md ends a spec-derived plan with one closing flow-test phase, one task per flow, and build phases with no test author" {
-  check_closing_phase "$PLANNER_MD"
+@test "the test stage ends a spec-derived plan with one closing flow-test phase, one task per flow, and planner.md names no test" {
+  check_closing_phase "$TEST_STAGE_MD"
+  check_planner_names_no_test "$PLANNER_MD"
 }
 
-@test "red twin: dropping the closing-phase, flow-line or build-phase text fails" {
-  check_closing_phase "$PLANNER_MD"
-  local copy="$BATS_TEST_TMPDIR/planner.md" needle
-  for needle in "$CLOSING_PHASE_NEEDLE" "$ONE_TASK_PER_FLOW_NEEDLE" "$FLOW_LINE_NEEDLE" 'exactly one' \
-    "$FIXTURES_NEEDLE" '@covers' "$COMMAND_FLOW_NEEDLE" "$BUILD_PHASE_NEEDLE"; do
-    without "$PLANNER_MD" "$needle" "$copy"
+@test "red twin: dropping the closing-phase, flow-line or planner no-test text fails" {
+  check_closing_phase "$TEST_STAGE_MD"
+  local copy="$BATS_TEST_TMPDIR/test-stage.md" needle
+  for needle in "$CLOSING_PHASE_NEEDLE" "$ONE_TASK_PER_FLOW_NEEDLE" "$FLOW_LINE_NEEDLE" 'the one line' \
+    "$FIXTURES_NEEDLE" '@covers' "$COMMAND_FLOW_NEEDLE"; do
+    without "$TEST_STAGE_MD" "$needle" "$copy"
     run check_closing_phase "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
   done
+  without "$PLANNER_MD" "$PLANNER_NO_TEST_NEEDLE" "$copy"
+  run check_planner_names_no_test "$copy"
+  [ "$status" -ne 0 ]
 }
 
 # ---------- closing-phase gate and the gate-retry flow-test arm ----------
 
 @test "the closing phase's gate runs each flow test by its runner and a failing run refuses the commit" {
-  check_closing_gate "$PLANNER_MD"
+  check_closing_gate "$TEST_STAGE_MD"
 }
 
 @test "the gate-retry block sends a failing flow test once to a fresh executor free to edit code or test, and halts on a second failure" {
@@ -242,11 +246,11 @@ check_no_banned_phrase() {
 }
 
 @test "red twin: dropping a gate runner, the refusal or the one-retry sentence fails" {
-  check_closing_gate "$PLANNER_MD"
+  check_closing_gate "$TEST_STAGE_MD"
   check_gate_retry_flow_arm "$PLANNER_MD"
   local copy="$BATS_TEST_TMPDIR/planner.md" needle
   for needle in "$BATS_GATE_NEEDLE" "$VITEST_GATE_NEEDLE" "$GATE_REFUSAL_NEEDLE"; do
-    without "$PLANNER_MD" "$needle" "$copy"
+    without "$TEST_STAGE_MD" "$needle" "$copy"
     run check_closing_gate "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
   done
@@ -297,8 +301,8 @@ check_no_banned_phrase() {
 
 # ---------- spec-less plans and the ledger halt ----------
 
-@test "a spec-less plan follows Test What Matters, has no closing phase and keeps the drift check block" {
-  check_spec_less_rule "$PLANNER_MD"
+@test "a spec-less plan has no closing phase and no flow-checks block" {
+  check_spec_less_rule "$TEST_STAGE_MD" "$PLANNER_MD"
 }
 
 @test "the ledger HALTED form and its Stay halted and Discuss this options are unchanged" {
@@ -306,14 +310,15 @@ check_no_banned_phrase() {
 }
 
 @test "red twin: dropping the spec-less rule or a HALTED option fails" {
-  check_spec_less_rule "$PLANNER_MD"
+  check_spec_less_rule "$TEST_STAGE_MD" "$PLANNER_MD"
   check_halted_form "$PLANNER_MD"
   local copy="$BATS_TEST_TMPDIR/planner.md" needle
-  for needle in "$NO_CLOSING_NEEDLE" "$SPEC_LESS_KEEPS_NEEDLE" "$NO_BAR_NEEDLE"; do
-    without "$PLANNER_MD" "$needle" "$copy"
-    run check_spec_less_rule "$copy"
-    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
-  done
+  without "$TEST_STAGE_MD" "$NO_CLOSING_NEEDLE" "$copy"
+  run check_spec_less_rule "$copy" "$PLANNER_MD"
+  [ "$status" -ne 0 ]
+  without "$PLANNER_MD" "$SPEC_LESS_OMITS_NEEDLE" "$copy"
+  run check_spec_less_rule "$TEST_STAGE_MD" "$copy"
+  [ "$status" -ne 0 ]
   for needle in '(HALTED)`' 'Stay halted (Recommended)' 'Discuss this'; do
     without "$PLANNER_MD" "$needle" "$copy"
     run check_halted_form "$copy"

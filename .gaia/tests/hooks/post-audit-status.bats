@@ -71,7 +71,6 @@
 # deliberately covered by the sibling suite instead, and no resolver stub belongs
 # here.
 
-# bats file_tags=installed-dependencies
 
 setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"

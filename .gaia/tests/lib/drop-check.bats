@@ -8,7 +8,6 @@
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
 
-# bats file_tags=installed-dependencies
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"

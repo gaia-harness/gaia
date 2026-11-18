@@ -8,8 +8,9 @@
 # a `## Cost record (run end)` section) or with a literal
 # `usage.sh record command:<workflow>` call.
 #
-# gaia-spec and gaia-plan close a `spec:` or `plan:` ref from their own save
-# and archive steps, which their own suites pin, so they are left out here.
+# gaia-spec, gaia-plan and gaia-test close a `spec:` or `plan:` ref from their
+# own save, archive and stage-record steps, which their own suites pin, so they
+# are left out here.
 #
 # The check is a function over a file list, so the test that proves the real
 # tree passes has twins that run it over scratch copies and assert it fails.
@@ -24,7 +25,7 @@ setup_file() {
 
 # Prints the command workflows of the start set, one per line.
 command_workflows() {
-  jq -r '.[] | select(. != "gaia-spec" and . != "gaia-plan")' <<<"$START_SET"
+  jq -r '.[] | select(. != "gaia-spec" and . != "gaia-plan" and . != "gaia-test")' <<<"$START_SET"
 }
 
 # Prints the run-end section of every file named: from its heading to the

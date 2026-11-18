@@ -201,7 +201,7 @@ plant_line_after() {
 
 check_s1() {
   local spec_md="$1" block fence script broken
-  block="$(range_between "$spec_md" '### 3. Initial draft' '### 4. Gate 1')" || return 1
+  block="$(range_between "$spec_md" '### 3. Allocate, anchor, stamp' '### 4. Gate 1')" || return 1
 
   # Select ONLY the bash fence that creates the folder (the one carrying
   # `mkdir -p`), so the allocator fence beside it is never executed here.
@@ -282,11 +282,11 @@ check_s1() {
 
 check_s2() {
   local audit_md="$1" block bash_fence audit_variable_name script
-  # The AUDIT.md path is built at the top of 7c, where the applier dispatch
-  # that consumes ${SPEC_DIR}/${AUDIT_MD} first needs it; 7d writes the report
+  # The AUDIT.md path is built in the wave section, before the fixer dispatch
+  # that consumes ${SPEC_DIR}/${AUDIT_MD} needs it; the persist section writes the report
   # and resolves no path of its own. Anchor on the step that does the
   # resolving, not the step that does the writing.
-  block="$(range_between "$audit_md" '## 7c. Disposition routing + apply' '## 7d. Persist AUDIT.md')" || return 1
+  block="$(range_between "$audit_md" '## The wave' '## The lenses')" || return 1
 
   # The range can carry more than one ```bash fence. Select ONLY the fence
   # that constructs the AUDIT.md path, so this test runs the block it measures
@@ -301,13 +301,13 @@ check_s2() {
   # inline prose only, with no shell block to extract. Fail with a clear
   # reason here rather than an opaque bash error further down.
   if ! printf '%s\n' "$bash_fence" | grep -qF 'AUDIT.md'; then
-    printf '7d has no shell block that constructs the AUDIT.md path; only inline prose names it.\n' >&2
+    printf 'the review has no shell block that constructs the AUDIT.md path; only inline prose names it.\n' >&2
     return 1
   fi
 
   audit_variable_name="$(printf '%s\n' "$bash_fence" | grep -m1 -E '^[A-Za-z_][A-Za-z0-9_]*=.*AUDIT\.md' | sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/')"
   if [ -z "$audit_variable_name" ]; then
-    printf 'found "AUDIT.md" text in the 7d shell block but no assignment line to read the resolved path from\n' >&2
+    printf 'found "AUDIT.md" text in the review shell block but no assignment line to read the resolved path from\n' >&2
     return 1
   fi
 
@@ -320,7 +320,7 @@ check_s2() {
   } > "$script"
 
   run bash -c "cd '$WORKTREE' && bash '$script'"
-  [ "$status" -eq 0 ] || { printf 'the 7c fence failed (status %s): %s\n' "$status" "$output" >&2; return 1; }
+  [ "$status" -eq 0 ] || { printf 'the review fence failed (status %s): %s\n' "$status" "$output" >&2; return 1; }
 
   case "$output" in
     "$MAIN_PHYSICAL_PATH"/*) : ;;
@@ -339,11 +339,11 @@ check_s2() {
   true
 }
 
-@test "S2: 7c's AUDIT.md path resolves into main, not the worktree" {
+@test "S2: the review's AUDIT.md path resolves into main, not the worktree" {
   check_s2 "$AUDIT_MD"
 }
 
-@test "red twin S2: a 7c fence that builds a relative notebook path fails the check" {
+@test "red twin S2: a review fence that builds a relative notebook path fails the check" {
   local mutated="$BATS_TEST_TMPDIR/audit-relative.md"
   plant_into_copy "$AUDIT_MD" "$mutated" \
     'SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_DIR=""' \
@@ -489,7 +489,7 @@ read_site_ranges() {
   local spec_md="$1" lifecycle_md="$2" resume_md="$3" sweep_range resume_range session_helper_range
   sweep_range="$(range_between "$lifecycle_md" '**3. Cold consolidation.**' '**4. Reap merged past retention.**')" || return 1
   resume_range="$(range_between "$resume_md" 'Before prompting, gather context' 'Before presenting the resume choice')" || return 1
-  session_helper_range="$(range_between "$spec_md" 'The confirmed draft is already in the working-draft checkpoint' '### 10. Immutability lint')" || return 1
+  session_helper_range="$(range_between "$spec_md" 'The confirmed draft is already in the working-draft checkpoint' '### 11. Immutability lint')" || return 1
 
   # The range is the save step's body. It must hold the save call itself,
   # so a prose reflow that moves an anchor cannot leave the range measuring
@@ -542,17 +542,17 @@ check_read_sites() {
 # The three write-site ranges of the given files, concatenated.
 write_site_ranges() {
   local spec_md="$1" audit_md="$2" step3_range persist_range routing_range
-  step3_range="$(range_between "$spec_md" '### 3. Initial draft' '### 4. Gate 1')" || return 1
-  # routing_range (7c) is where the AUDIT.md path is actually constructed, so it is the
+  step3_range="$(range_between "$spec_md" '### 3. Allocate, anchor, stamp' '### 4. Gate 1')" || return 1
+  # routing_range (the wave) is where the AUDIT.md path is actually constructed, so it is the
   # range this negative check earns its keep on; the positive assertion in S2
-  # anchors there too. persist_range (7d) is retained as a genuine no-regression range:
-  # 7d writes the report at the path it was handed and must never grow a path
+  # anchors there too. persist_range (persist) is retained as a genuine no-regression range:
+  # the persist section writes the report at the path it was handed and must never grow a path
   # construct of its own, relative or otherwise. Do not read persist_range passing as
   # evidence the write site is covered -- routing_range and S2 are what cover it.
-  # persist_range runs from 7d to the end of spec/audit.md, which closes with
+  # persist_range runs from its heading to the end of spec/audit.md, which closes with
   # the return to gate 2.
-  persist_range="$(range_to_end "$audit_md" '## 7d. Persist AUDIT.md')" || return 1
-  routing_range="$(range_between "$audit_md" '## 7c. Disposition routing + apply' '## 7d. Persist AUDIT.md')" || return 1
+  persist_range="$(range_to_end "$audit_md" '## Persist AUDIT.md')" || return 1
+  routing_range="$(range_between "$audit_md" '## The wave' '## The lenses')" || return 1
   printf '%s\n%s\n%s\n' "$step3_range" "$persist_range" "$routing_range"
 }
 
@@ -581,13 +581,13 @@ check_write_sites() {
   mutated_spec="$BATS_TEST_TMPDIR/spec-write-plant.md"
   mutated_audit="$BATS_TEST_TMPDIR/audit-write-plant.md"
 
-  plant_line_after "$SPEC_MD" "$mutated_spec" '### 3. Initial draft' 'mkdir -p .notebook/specs/${SPEC_ID}'
+  plant_line_after "$SPEC_MD" "$mutated_spec" '### 3. Allocate, anchor, stamp' 'mkdir -p .notebook/specs/${SPEC_ID}'
   check_write_sites "$mutated_spec" "$AUDIT_MD" && return 1
 
-  plant_line_after "$AUDIT_MD" "$mutated_audit" '## 7c. Disposition routing + apply' 'mkdir -p .notebook/specs/${SPEC_ID}'
+  plant_line_after "$AUDIT_MD" "$mutated_audit" '## The wave' 'mkdir -p .notebook/specs/${SPEC_ID}'
   check_write_sites "$SPEC_MD" "$mutated_audit" && return 1
 
-  plant_line_after "$AUDIT_MD" "$mutated_audit" '## 7d. Persist AUDIT.md' 'printf x > .notebook/specs/${SPEC_ID}/AUDIT.md'
+  plant_line_after "$AUDIT_MD" "$mutated_audit" '## Persist AUDIT.md' 'printf x > .notebook/specs/${SPEC_ID}/AUDIT.md'
   check_write_sites "$SPEC_MD" "$mutated_audit" && return 1
   true
 }

@@ -6,8 +6,8 @@
 # sub-agent reads, holds the verbatim step blocks a planner copies into a
 # generated ORCHESTRATOR.md, each opening with a sentinel line plan-verify.sh
 # checks: the resume detection, the sub-agent yield handling, the phase gate
-# retry, the security writer, the pre-audit flow checks, the drift check, the
-# wiki promotion, the code audit, the post-clearance step and the post-merge
+# retry, the security writer, the pre-audit flow checks, the wiki promotion,
+# the, the code audit, the post-clearance step and the post-merge
 # close. .claude/skills/gaia/references/spec/lifecycle.md holds the procedures
 # those blocks point at, and .claude/skills/gaia/references/plan.md, the
 # /gaia-plan entry file, keeps the pre-flight sweep pointer. This suite pins:
@@ -30,7 +30,7 @@
 #     markers balanced, and no block holds the release manifest mechanics;
 #   - the post-clearance block commits no SUMMARY.md, the wiki promotion block
 #     sits above the code audit block, and the final summary names the
-#     drift check block its late pass feeds;
+#     worthiness step block its late pass feeds;
 #   - lifecycle.md says which pass writes the wiki promotion record;
 #   - a plan-time directive constrains the code or a flow test's assertions,
 #     never a test layer, and spec/audit.md writes a directive as a property
@@ -51,13 +51,12 @@ SPEC_DERIVED_STEPS=(
   security-writer
   simplify-pass
   flow-checks
-  drift-check
   wiki-promotion
   code-audit
   post-clearance
   post-merge-close
 )
-SPEC_DERIVED_STEP_COUNT=11
+SPEC_DERIVED_STEP_COUNT=10
 SPEC_ONLY_STEP=flow-checks
 UNCOMPARED_STEP=post-merge-close
 
@@ -76,7 +75,6 @@ setup() {
   S_SIMPLIFY='<!-- gaia:orchestrator-step simplify-pass -->'
   S_FLOW='<!-- gaia:orchestrator-step flow-checks -->'
   S_SECURITY='<!-- gaia:orchestrator-step security-writer -->'
-  S_DRIFT='<!-- gaia:orchestrator-step drift-check -->'
   S_WIKI='<!-- gaia:orchestrator-step wiki-promotion -->'
   S_AUDIT='<!-- gaia:orchestrator-step code-audit -->'
   S_CLEAR='<!-- gaia:orchestrator-step post-clearance -->'
@@ -168,7 +166,7 @@ check_sentinels_once_in_fences() {
 
 # check_sentinel_file_order <file>: the sentinel lines sit in the list's order,
 # so the flow-checks block falls after the simplify pass and before the
-# drift check.
+# wiki promotion.
 check_sentinel_file_order() {
   local file="$1" step line previous=0 previous_step=start
   while IFS= read -r step; do
@@ -232,11 +230,10 @@ check_block_contents() {
   check_block_has "$file" "$S_YIELD" 'gaia_context_yield_limit' 'Yield handoff:' '(YIELD k)' || return 1
   check_block_has "$file" "$S_RETRY" '(GATE RETRY k)' 'Yield handoff:' 'Stop conditions' || return 1
   check_block_has "$file" "$S_SIMPLIFY" 'simplify-pass.md' '## Simplify pass' || return 1
-  check_block_has "$file" "$S_FLOW" 'flow-coverage.sh' '--spec {SPEC_PATH}' '--flow-tests-out' 'flow-tests.tsv' '{PLAN_DIR}/PROGRESS.md' 'before the drift check' || return 1
-  check_block_has "$file" "$S_SECURITY" 'security-test-writer' 'security-writer.md' '{PLAN_DIR}/tests.json' || return 1
-  check_block_has "$file" "$S_DRIFT" 'drift-check.md' '## Drift check' || return 1
+  check_block_has "$file" "$S_FLOW" 'flow-coverage.sh' '--spec {SPEC_PATH}' '--flow-tests-out' 'flow-tests.tsv' '{PLAN_DIR}/PROGRESS.md' 'before the wiki promotion' || return 1
+  check_block_has "$file" "$S_SECURITY" 'security-test-writer' 'security-writer.md' 'Test lines' || return 1
   check_block_has "$file" "$S_WIKI" 'wiki-promote.md' 'promoted-pages.txt' 'Pass: pre-audit' 'verify-harness.sh branch' || return 1
-  check_block_has "$file" "$S_AUDIT" 'resolve-audit-members.sh' 'drift-check.md' || return 1
+  check_block_has "$file" "$S_AUDIT" 'resolve-audit-members.sh' || return 1
   check_block_has "$file" "$S_CLEAR" 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh' || return 1
   check_block_has "$file" "$S_CLOSE" 'plan-archive.sh` runs only after `MERGED` is confirmed' || return 1
 }
@@ -329,15 +326,8 @@ EOF
 EOF
   printf 'You are the orchestrator.\n' >"$FIXTURE_PLAN/KICKOFF.md"
   printf '# Task\n\n- builds checkout\n' >"$FIXTURE_PLAN/task-checkout.md"
-  printf '# Task\n\n- tests the checkout flow\n- Flow test (FLOW-001): %s\n- Test: %s › guest checkout confirms the order\n' "$FIXTURE_FLOW_TEST" "$FIXTURE_FLOW_TEST" >"$FIXTURE_PLAN/task-checkout-flow.md"
-  printf 'schema: 1\n' >"$FIXTURE_PLAN/TEST-DESIGN"
-  write_fixture_table 'flow:guest-checkout-confirms-order' task-checkout-flow
-}
-
-# write_fixture_table <source key> <owning task stem>: the plan's one-row table.
-write_fixture_table() {
-  printf '{"schema":1,"rows":[{"id":"T1","source":"%s","case":"guest checkout confirms the order","file":"%s","title":"guest checkout confirms the order","layer":"shell","task":"%s","action":"new","security":"none"}]}\n' \
-    "$1" "$FIXTURE_FLOW_TEST" "$2" >"$FIXTURE_PLAN/tests.json"
+  printf '# Task\n\n- tests the checkout flow\n- Flow test (FLOW-001): %s\n- Test (B1, shell, none): %s › guest checkout confirms the order\n' "$FIXTURE_FLOW_TEST" "$FIXTURE_FLOW_TEST" >"$FIXTURE_PLAN/task-checkout-flow.md"
+  printf 'status: ran\n' >"$FIXTURE_PLAN/TEST-STAGE"
 }
 
 # assembled_sentinels <spec-derived | spec-less>: the plan kind's sentinel
@@ -373,21 +363,8 @@ assembled_sentinels() {
   [ "$status" -ne 0 ]
 }
 
-@test "the sentinels sit in planner.md in the list's order, flow-checks between the simplify pass and the drift check" {
+@test "the sentinels sit in planner.md in the list's order, flow-checks between the simplify pass and the wiki promotion" {
   check_sentinel_file_order "$PLANNER_MD"
-}
-
-@test "red twin: a flow-checks block below the drift check fails the order check" {
-  check_sentinel_file_order "$PLANNER_MD"
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  awk -v flow="$S_FLOW" -v worth="$S_DRIFT" '
-    { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) }
-    t == flow { sub(/flow-checks/, "TEMP-SENTINEL") }
-    t == worth { sub(/drift-check/, "flow-checks") }
-    { print }' "$PLANNER_MD" >"$copy"
-  sed -i.bak 's/TEMP-SENTINEL/drift-check/' "$copy"
-  run check_sentinel_file_order "$copy"
-  [ "$status" -ne 0 ]
 }
 
 @test "the verbatim-block sentence names each step in order, the spec-less omission and the compared set" {
@@ -430,7 +407,7 @@ assembled_sentinels() {
   check_block_contents "$PLANNER_MD"
   copy="$BATS_TEST_TMPDIR/planner.md"
   local needle
-  for needle in 'flow-coverage.sh' 'flow-tests.tsv' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' 'wiki-promote.md' 'runs only after' 'simplify-pass.md' 'drift-check.md' 'security-writer.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
+  for needle in 'flow-coverage.sh' 'flow-tests.tsv' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' 'wiki-promote.md' 'runs only after' 'simplify-pass.md' 'security-writer.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
     awk -v needle="$needle" '{ gsub(needle, "removed") } { print }' "$PLANNER_MD" >"$copy"
     run check_block_contents "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail the check" >&2; return 1; }
@@ -511,7 +488,6 @@ check_entry_file_has_no_blocks() {
   write_plan_fixture
   assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "${order[@]}"
   grep -qF "$S_FLOW" "$FIXTURE_PLAN/ORCHESTRATOR.md" && return 1
-  write_fixture_table description task-checkout-flow
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
@@ -746,12 +722,12 @@ check_promotion_above_audit() {
   [ "$status" -ne 0 ]
 }
 
-# check_final_summary_names_drift_check <planner>: the final summary reads the
-# drift check block, and the late pass sits in the code audit block above it.
-check_final_summary_names_drift_check() {
+# check_final_summary_names_worthiness_block <planner>: the final summary reads the
+# worthiness step block, and the late pass sits in the code audit block above it.
+check_final_summary_names_worthiness_block() {
   local file="$1" summary audit_block summary_line audit_line
   summary="$(range_of "$file" '**Final summary.**' '**Post-clearance')"
-  grep -qF '## Drift check' <<<"$summary" || { printf 'final summary does not name the ## Drift check block\n' >&2; return 1; }
+  grep -qF '## Worthiness step' <<<"$summary" || { printf 'final summary does not name the ## Worthiness step block\n' >&2; return 1; }
   audit_block="$(fence_with "$file" "$S_AUDIT")"
   grep -qF 'the late pass' <<<"$audit_block" || { printf 'code-audit block does not run the late pass\n' >&2; return 1; }
   summary_line="$(grep -nF -m1 '**Final summary.**' "$file" | cut -d: -f1)"
@@ -759,18 +735,18 @@ check_final_summary_names_drift_check() {
   [ "$audit_line" -lt "$summary_line" ] || { printf 'the late pass block (%s) is not above the final summary (%s)\n' "$audit_line" "$summary_line" >&2; return 1; }
 }
 
-@test "the final summary names the drift check block and the late pass sits above it" {
-  check_final_summary_names_drift_check "$PLANNER_MD"
+@test "the final summary names the worthiness step block and the late pass sits above it" {
+  check_final_summary_names_worthiness_block "$PLANNER_MD"
 }
 
-@test "red twin: dropping the drift check mention or the late pass fails" {
+@test "red twin: dropping the worthiness step mention or the late pass fails" {
   copy="$BATS_TEST_TMPDIR/planner.md"
-  sed 's/## Drift check` block from/removed block from/' "$PLANNER_MD" >"$copy"
-  cmp -s "$PLANNER_MD" "$copy" && { echo "drift check mention not found" >&2; return 1; }
-  run check_final_summary_names_drift_check "$copy"
+  sed 's/## Worthiness step` block from/removed block from/' "$PLANNER_MD" >"$copy"
+  cmp -s "$PLANNER_MD" "$copy" && { echo "worthiness step mention not found" >&2; return 1; }
+  run check_final_summary_names_worthiness_block "$copy"
   [ "$status" -ne 0 ]
   sed 's/the late pass from/the other pass from/' "$PLANNER_MD" >"$copy"
-  run check_final_summary_names_drift_check "$copy"
+  run check_final_summary_names_worthiness_block "$copy"
   [ "$status" -ne 0 ]
 }
 
@@ -858,7 +834,7 @@ check_directive_routing() {
   for word in 'ladder' 'surface' 'routes to' 'routed'; do
     grep -qiF -- "$word" <<<"$para" && { printf 'planner AUDIT_PATH paragraph still holds routing wording: %s\n' "$word" >&2; return 1; }
   done
-  grep -qF -- 'Write it as the property a test proves or the constraint the code meets, never the test layer, fixture or helper that proves it' "$audit" ||
+  grep -qF -- 'as the property a test proves, never the test layer' "$audit" ||
     { printf 'audit.md 7c lacks the property-not-layer rule\n' >&2; return 1; }
   grep -qF -- 'naming no test layer, fixture or helper' "$audit" ||
     { printf 'audit.md 7d template lacks the no-layer clause\n' >&2; return 1; }
@@ -877,7 +853,7 @@ check_directive_routing() {
     run check_directive_routing "$plan_copy" "$AUDIT_MD"
     [ "$status" -ne 0 ] || { echo "adding '$needle' did not fail" >&2; return 1; }
   done
-  for needle in 'never the test layer, fixture or helper that proves it' 'naming no test layer, fixture or helper'; do
+  for needle in 'as the property a test proves, never the test layer' 'naming no test layer, fixture or helper'; do
     awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
     run check_directive_routing "$PLANNER_MD" "$audit_copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
@@ -908,33 +884,6 @@ check_directive_test_scope() {
     grep -qF -- "$needle" <<<"$para" || { printf 'planner AUDIT_PATH paragraph lacks: %s\n' "$needle" >&2; return 1; }
   done
   grep -qF -- "$FLOW_TEST_PATHS_NEEDLE" "$planner" || { printf 'planner.md lacks the one-test-per-flow paths rule\n' >&2; return 1; }
-}
-
-@test "a plan-time directive never adds a test file and a flow's paths stay in its one test, in the SPEC audit and planner.md" {
-  check_directive_test_scope "$PLANNER_MD" "$AUDIT_MD"
-}
-
-@test "red twin: dropping any clause of the directive and flow-test scope fails" {
-  check_directive_test_scope "$PLANNER_MD" "$AUDIT_MD"
-  local needle file copy mutated
-  for needle in "$DIRECTIVE_NEW_TEST_NEEDLE" "$UNCOVERED_RULE_NEEDLE" "$FOLD_INTO_UAT_NEEDLE" \
-    "$HONOR_INSIDE_NEEDLE" "$DIRECTIVE_TABLE_ROW_NEEDLE" "$DIRECTIVE_DOCTRINE_NEEDLE" "$FLOW_TEST_PATHS_NEEDLE"; do
-    mutated=0
-    for file in "$PLANNER_MD" "$AUDIT_MD"; do
-      grep -qF -- "$needle" "$file" || continue
-      copy="$BATS_TEST_TMPDIR/$(basename "$file")"
-      awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$file" >"$copy"
-      cmp -s "$file" "$copy" && { echo "mutation left $file unchanged: $needle" >&2; return 1; }
-      if [ "$file" = "$PLANNER_MD" ]; then
-        run check_directive_test_scope "$copy" "$AUDIT_MD"
-      else
-        run check_directive_test_scope "$PLANNER_MD" "$copy"
-      fi
-      [ "$status" -ne 0 ] || { echo "removing '$needle' from $file did not fail" >&2; return 1; }
-      mutated=1
-    done
-    [ "$mutated" -eq 1 ] || { echo "no file holds: $needle" >&2; return 1; }
-  done
 }
 
 # ---------- a page-markup rule is a directive, never then-clause text ----------

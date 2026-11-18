@@ -2,7 +2,7 @@
 #
 # Doc-conformance suite: /gaia-spec runs as one explicit, script-driven
 # workflow with no dependency on a spec-kit core install. Step 3 carries the
-# allocate, anchor, and stamp duties itself, step 10 runs the lint script
+# allocate, anchor, and stamp duties itself, step 11 runs the lint script
 # directly.
 #
 # Tokens the removed-automation guard forbids anywhere in the tree are built at
@@ -34,7 +34,7 @@ range_between() {
 }
 
 step3_range() {
-  range_between "$SPEC_MD" '### 3. Initial draft (allocate, anchor, stamp)' '### 4. Gate 1'
+  range_between "$SPEC_MD" '### 3. Allocate, anchor, stamp' '### 4. Gate 1'
 }
 
 @test "a filled template lints clean" {
@@ -67,11 +67,11 @@ step3_range() {
   true
 }
 
-@test "step 10 runs the lint script directly" {
-  range="$(range_between "$SPEC_MD" '### 10. Immutability lint' '### 11.')"
+@test "step 11 runs the lint script directly" {
+  range="$(range_between "$SPEC_MD" '### 11. Immutability lint' '### 12.')"
   [ -n "$range" ]
   if ! printf '%s\n' "$range" | grep -qF -- 'bash .gaia/scripts/spec/lint.sh'; then
-    printf 'step 10 does not run lib/lint.sh directly\n' >&2
+    printf 'step 11 does not run lib/lint.sh directly\n' >&2
     return 1
   fi
   true

@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 #
 # Doc-conformance suite for the real-server and browser surface split in the
-# Playwright rule, the Test Layering page and the plan decomposition audit.
+# Playwright rule, the Test Layering page, the test stage and the plan
+# decomposition audit.
 #
 # Every check is a function taking the file it reads, so each red twin runs the
 # same function against a mutated copy and proves it can fail.
@@ -18,12 +19,9 @@ setup() {
   PAGE="$REPO_ROOT/wiki/decisions/Test Layering.md"
   DOCTRINE="$REPO_ROOT/.claude/doctrine/testing.md"
   DOCTRINE_SENTENCE='A harness self-check that opens no page is a Vitest `node` test, never a Playwright spec.'
-  # The plan audit's test-design lens owns the layer and test-double checks,
-  # against the doctrine; the other lenses carry no copy of them.
-  LAYER_CHECK="a wrong layer for what the row asserts, per the doctrine's layer rule"
-  WIRING_CHECK='the Playwright fixture wiring'
-  GIVEN_CHECK="the plan's own Given builders"
-  DOUBLE_CHECK='- a test of a test double ('
+  TEST_STAGE="$REPO_ROOT/.claude/skills/gaia/references/test-stage.md"
+  # The test stage picks each row's layer by the doctrine's layer rule.
+  LAYER_CHECK="picking the layer by the doctrine's \`## Layers\`"
 }
 
 # ---------- helpers ----------
@@ -42,38 +40,10 @@ check_playwright_rule_sentence() {
   grep -qF -- "$DOCTRINE_SENTENCE" "$2" || { echo "doctrine lacks the sentence" >&2; return 1; }
 }
 
-# The test-design lens: its bullet line and the check lines under it, up to
-# the next heading.
-td_lens_of() {
-  local text
-  text=$(awk '
-    index($0, "- **Test design") == 1 { inside = 1 }
-    inside && /^## / { exit }
-    inside { print }
-  ' "$1")
-  [ -n "$text" ] || return 1
-  printf '%s\n' "$text"
+# The test stage picks each test's layer by the doctrine's layer rule.
+check_test_stage_layer() {
+  grep -qF -- "$LAYER_CHECK" "$1" || { echo "test stage lacks the layer rule pointer" >&2; return 1; }
 }
-
-# The test-design lens checks layer against the doctrine's layer rule.
-check_audit_bullet_sentence() {
-  local lens
-  lens=$(td_lens_of "$1") || { echo "no test-design lens" >&2; return 1; }
-  printf '%s' "$lens" | grep -qF -- '.claude/doctrine/testing.md' || { echo "test-design lens lacks the doctrine pointer" >&2; return 1; }
-  printf '%s' "$lens" | grep -qF -- "$LAYER_CHECK" || { echo "test-design lens lacks the layer check" >&2; return 1; }
-}
-
-# check_double_named <file> <name>: the lens's test-double check names <name>.
-check_double_named() {
-  local lens line
-  lens=$(td_lens_of "$1") || { echo "no test-design lens" >&2; return 1; }
-  line=$(printf '%s\n' "$lens" | grep -F -- "$DOUBLE_CHECK") || { echo "no test-double check" >&2; return 1; }
-  printf '%s' "$line" | grep -qF -- "$2" || { echo "test-double check lacks: $2" >&2; return 1; }
-}
-
-check_wiring_sentence() { check_double_named "$1" "$WIRING_CHECK"; }
-
-check_given_sentence() { check_double_named "$1" "$GIVEN_CHECK"; }
 
 # The closed capability tokens, one per line: the name leading each bullet of the
 # doctrine's browser-only capability list.
@@ -177,9 +147,9 @@ check_doctrine_surfaces() {
 
 # ---------- routing sentence ----------
 
-@test "the doctrine holds the self-check routing sentence the playwright rule points at, and the test-design lens checks layer against it" {
+@test "the doctrine holds the self-check routing sentence the playwright rule points at, and the test stage picks layers by the doctrine" {
   check_playwright_rule_sentence "$PW_RULE" "$DOCTRINE"
-  check_audit_bullet_sentence "$AUDIT"
+  check_test_stage_layer "$TEST_STAGE"
 }
 
 @test "no self-check routes to Playwright in the rule or the audit" {
@@ -196,33 +166,10 @@ check_doctrine_surfaces() {
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: the test-design lens without its layer check, or without the doctrine pointer, fails" {
-  local copy
-  copy=$(copy_with "$AUDIT" layer.md "s/a wrong layer for what the row asserts, per the doctrine's layer rule/a wrong layer/")
-  run check_audit_bullet_sentence "$copy"
-  [ "$status" -ne 0 ]
-  copy=$(copy_with "$AUDIT" pointer.md '/^- \*\*Test design/s#\.claude/doctrine/testing\.md#nowhere#g')
-  run check_audit_bullet_sentence "$copy"
-  [ "$status" -ne 0 ]
-}
-
 @test "red twin: a sentence routing a self-check to Playwright fails the routing check" {
   local copy
   copy=$(copy_with "$AUDIT" rewritten.md 's/^- \*\*Contract grounding/A harness self-check runs under Playwright. &/')
   run check_no_playwright_routing "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# ---------- fixture-wiring sentence ----------
-
-@test "the test-design lens flags a self-test of the fixture wiring" {
-  check_wiring_sentence "$AUDIT"
-}
-
-@test "red twin: the test-double check without the fixture wiring fails" {
-  local copy
-  copy=$(copy_with "$AUDIT" wiring.md 's/, the Playwright fixture wiring//')
-  run check_wiring_sentence "$copy"
   [ "$status" -ne 0 ]
 }
 
@@ -260,19 +207,6 @@ check_doctrine_surfaces() {
   [ "$status" -ne 0 ]
   copy=$(copy_with "$DOCTRINE" e2e.md 's/^- \*\*Unit test\*\*/- `e2e` row/')
   run check_doctrine_surfaces "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# ---------- Given-builder sentence ----------
-
-@test "the test-design lens flags a self-test of the plan's own Given builders" {
-  check_given_sentence "$AUDIT"
-}
-
-@test "red twin: the test-double check without the Given builders fails" {
-  local copy
-  copy=$(copy_with "$AUDIT" given.md "s/, the plan's own Given builders//")
-  run check_given_sentence "$copy"
   [ "$status" -ne 0 ]
 }
 
