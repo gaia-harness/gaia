@@ -54,6 +54,37 @@
       }
     },
     {
+      "id": "rate-limits-reading",
+      "path": "cache/shared/rate-limits.json",
+      "match": "exact",
+      "kind": "file",
+      "scope": "shared",
+      "keyed_by": "singleton per checkout; every session's statusline render merges its rate-limit windows into the one file",
+      "why": "The shared rate-limit reading: each statusline render merges its payload's rate-limit windows into this one file (tmp + mv), and the statusline, the rate-limit reader and the dispatch checkpoint read it, so parallel sessions show the freshest figure any of them has seen. Anchored to the main root so every worktree's render lands in one place. Must precede cache-shared, whose prefix would otherwise claim it first.",
+      "writer": "code",
+      "retention": {
+        "class": "owned",
+        "owner": "gaia_rate_limits_write in .gaia/scripts/rate-limits-lib.sh overwrites it in place; never reaped"
+      }
+    },
+    {
+      "id": "rate-limits-orphan-temps",
+      "path": "cache/shared/rate-limits.json.tmp.*",
+      "match": "glob",
+      "kind": "file",
+      "scope": "shared",
+      "keyed_by": "one temporary file per write, named by the writing process id",
+      "why": "Orphaned temporary files of the shared rate-limit reading's writer (rate-limits.json.tmp.<pid>), left behind when a writer dies between creation and rename. Inert: nothing reads them. Must precede cache-shared, whose prefix would otherwise claim them.",
+      "writer": "code",
+      "retention": {
+        "class": "age",
+        "days": 7,
+        "types": [
+          "file"
+        ]
+      }
+    },
+    {
       "id": "cache-shared",
       "path": "cache/shared/",
       "match": "prefix",

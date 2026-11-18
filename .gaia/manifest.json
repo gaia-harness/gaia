@@ -347,6 +347,8 @@
     ".gaia/scripts/pr-wait-merge.sh": "owned",
     ".gaia/scripts/precommit-packages.sh": "owned",
     ".gaia/scripts/provision-wait.sh": "owned",
+    ".gaia/scripts/rate-limits-lib.sh": "owned",
+    ".gaia/scripts/rate-limits.sh": "owned",
     ".gaia/scripts/react-doctor-version-lib.sh": "owned",
     ".gaia/scripts/resolve-audit-members.sh": "owned",
     ".gaia/scripts/roster-prune-overbroad.sh": "owned",
@@ -871,7 +873,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T13:34:32.939Z",
+  "generated": "2026-11-18T18:47:06.661Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
