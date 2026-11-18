@@ -1,7 +1,7 @@
 ---
 name: gaia-cleanse
-description: Cleanses memory and auto-loaded files (CLAUDE.md, rules) of duplication with the wiki, contradictions with the wiki, and stale content, then asks one Apply / Discuss / Decline question; on Apply it applies the report, files any out-of-scope problem as a tech-debt issue, then commits, opens a PR, and merges it on a main-branch run like /update-deps. Pass --apply to re-run the apply-and-publish stage against the most recent report. Use when the user asks to cleanse or clean up memory, CLAUDE.md, or rules for duplication, contradictions with the wiki, or stale instructions. For duplication or broken links inside the wiki itself, use /gaia-wiki instead.
-argument-hint: "[--apply] [scope-hint]"
+description: Cleanses memory and auto-loaded files (CLAUDE.md, rules) of duplication with the wiki, contradictions with the wiki, and stale content, then asks one Apply / Discuss / Decline question; on Apply it applies the report, files any out-of-scope problem as a tech-debt issue, then commits, opens a PR, and merges it on a main-branch run like /update-deps. Pass --apply to re-run the apply-and-publish stage against the most recent report. Pass --cross-file to find instead a procedure, list or threshold stated in two or more instruction files and replace each copy with a pointer to its owning file, reporting a copy that disagrees with its owner. Use when the user asks to cleanse or clean up memory, CLAUDE.md, or rules for duplication, contradictions with the wiki, or stale instructions. For duplication or broken links inside the wiki itself, use /gaia-wiki instead.
+argument-hint: "[--apply] [--cross-file] [scope-hint]"
 ---
 
 Run the GAIA **cleanse** workflow with these arguments: `$ARGUMENTS`

@@ -136,6 +136,7 @@
     ".claude/skills/gaia-wiki/SKILL.md": "owned",
     ".claude/skills/gaia/references/cleanse.md": "owned",
     ".claude/skills/gaia/references/cleanse/apply.md": "owned",
+    ".claude/skills/gaia/references/cleanse/cross-file.md": "owned",
     ".claude/skills/gaia/references/cleanse/publish.md": "owned",
     ".claude/skills/gaia/references/cleanse/research.md": "owned",
     ".claude/skills/gaia/references/cleanse/verification-round.md": "owned",
@@ -884,7 +885,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T05:09:49.130Z",
+  "generated": "2026-11-18T05:28:02.193Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

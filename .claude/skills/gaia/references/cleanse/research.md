@@ -100,6 +100,7 @@ A project mixes files GAIA ships, files a third party installed, and the project
 No action may write a committed instruction file (a CLAUDE.md file, rule, skill, command or agent) on CONFLICT grounds, whatever its class: a conflict that involves one is report-only.
 <!-- gaia:maintainer-only:start -->
 In the GAIA source repo there is no upstream: report a `gaia-shipped` finding with the remediation "fix it in an ordinary pull request". Scrubbed from adopter bundles.
+The cross-file arm sits beside that sentence and never replaces it: in the GAIA source repo, while `.claude/rules/maintainers/harness-triage-threshold.md` exists, a cross-file action (`grounds: cross-file-duplicate`) whose files classify `gaia-shipped` is written with `owner: maintainer`, and the Apply answer approves it (the owner question asks about `adopter` files only). With the marker absent, or on any default action, a `gaia-shipped` file stays report-only.
 <!-- gaia:maintainer-only:end -->
 
 ## Step 3, Auto-load budget
@@ -130,7 +131,7 @@ generated: {YYYY-MM-DD HH:MM}
 generator: audit-knowledge stage-1 sonnet
 status: draft
 audit_hardened: false
-scope: {the scope hint verbatim, or full}
+scope: {the scope hint verbatim, or full; a cross-file run writes cross-file, or cross-file: <hint>}
 store_counts: {verbatim output of the Step 1 jq command}
 project_root: {resolved PROJECT_ROOT}
 memory_dir: {resolved MEMORY_DIR}
@@ -226,6 +227,9 @@ Within a promote, `source_action` is the only field that touches `source_path`, 
 - [ ] `shrink-{nnn}`
   ```yaml
   type: replace
+  owner: {adopter | project-memory}
+  grounds: cross-file-duplicate
+  owner_path: {absolute path of the owning file}
   path: {absolute path}
   before: |
     {verbatim current block, must match byte-for-byte}
@@ -233,6 +237,11 @@ Within a promote, `source_action` is the only field that touches `source_path`, 
     {verbatim replacement, typically a wikilink line}
   reason: {…}
   ```
+
+`grounds:` and `owner_path:` are written on cross-file actions only (`.claude/skills/gaia/references/cleanse/cross-file.md`, `## Assemble`); every other action omits both.
+<!-- gaia:maintainer-only:start -->
+In the GAIA source repo a cross-file action's owner line can also read `owner: maintainer` (the Ownership step's cross-file arm).
+<!-- gaia:maintainer-only:end -->
 
 ## Out-of-scope findings
 
