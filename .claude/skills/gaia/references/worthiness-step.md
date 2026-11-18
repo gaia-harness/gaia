@@ -40,7 +40,7 @@ For the tests whose route is `evaluate`: pre-clear a scratchpad verdict file wit
 bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <verdict file> --expect-count <n>
 ```
 
-A no-op re-dispatches once against the re-cleared path. A second no-op is a HALT: stop and say why, because the caller wrote the code under judgment and an absent verdict is not a keep. This departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the caller cannot legitimately do the work itself. Then record against the route file and route again:
+A second consecutive no-op is a HALT: stop and say why, because the caller wrote the code under judgment and an absent verdict is not a keep. This departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the caller cannot legitimately do the work itself. Then record against the route file and route again:
 
 ```bash
 bash .gaia/scripts/worthiness-step.sh record --root <RESOLVED_ROOT> --verdicts <verdict file> --expect <route file>

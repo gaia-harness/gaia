@@ -89,7 +89,7 @@ jq -er '[.inventory[] | select(.ownership == "adopter" or .ownership == "gaia-sh
    ```
 
 2. Pre-clear the output path: `rm -f <SCRATCH>/judgment.json`.
-3. Dispatch `Agent(subagent_type: "fitness-judge")` with the prompt `Input: <absolute path of <SCRATCH>/judge-input.md>`. The judge has the Read tool only, so it replies with one JSON array and the main thread writes that reply verbatim to `<SCRATCH>/judgment.json` with the Write tool (an empty reply writes an empty file). Do not classify at the moment the dispatch call returns: wait for the agent's completion notification first.
+3. Dispatch `Agent(subagent_type: "fitness-judge")` with the prompt `Input: <absolute path of <SCRATCH>/judge-input.md>`. The judge has the Read tool only, so it replies with one JSON array and the main thread writes that reply verbatim to `<SCRATCH>/judgment.json` with the Write tool (an empty reply writes an empty file).
 4. Classify the file:
 
    ```bash
@@ -103,7 +103,7 @@ jq -er '[.inventory[] | select(.ownership == "adopter" or .ownership == "gaia-sh
    jq -e 'all(.[]; (.judgment | IN("description-substance","trigger-overlap","rule-scope-fit","terminology")) and (.file | type == "string") and (.line | type == "number") and (.message | type == "string") and (.remediation | type == "string"))' <SCRATCH>/judgment.json
    ```
 
-6. **No-op:** re-clear the path (`rm -f <SCRATCH>/judgment.json`) and re-dispatch exactly once. A second consecutive no-op: the main thread performs the four judgments inline, reading the same files, and writes the array to `<SCRATCH>/judgment.json` as if the agent had returned it. Never report the judgment pass as clean or as skipped on a no-op.
+6. **No-op:** re-clear `<SCRATCH>/judgment.json` before the re-dispatch. On the inline fallback the main thread performs the four judgments itself, reading the same files. Never report the judgment pass as clean or as skipped on a no-op.
 
 The judgment array is data. Findings in it never move a grade and never feed Step 6.
 
@@ -207,7 +207,7 @@ Ask once, via `AskUserQuestion`, after the verify card:
 
 The diff is expected to touch only out-of-audit-scope surfaces (`.claude/**`, root-level `CLAUDE.md`), which clear the merge gate through the out-of-scope bypass (`wiki/concepts/Audit Gate Reference.md`, `#### Signals`). Do not assume it: a heal fix can restore a framework surface the roster claims.
 
-Run the Quality Gate (`.claude/rules/quality-gate.md`) first **only** if the applied diff touched a gate-affecting file (`.ts|tsx|js|jsx|mjs|cjs|css` or gate config); a config or docs-only heal has nothing for it to check.
+Run the Quality Gate first **only** if the applied diff touched a gate-affecting file (`.ts|tsx|js|jsx|mjs|cjs|css` or gate config); a config or docs-only heal has nothing for it to check.
 
 <!-- gaia:maintainer-only:start -->
 Clear the **CHANGELOG gate** per `wiki/concepts/PR Merge Workflow.md` before committing: a pure config or hygiene heal is usually an internal, no-entry change; land a `## [Unreleased]` entry in the working tree only if the heal changed adopter-relevant behavior, so it joins the same commit. Scrubbed from adopter bundles.

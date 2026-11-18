@@ -5,7 +5,7 @@ description: Runs test-driven development with a red-green-refactor loop, an opt
 
 # Test-Driven Development
 
-An opt-in tool for logic where test-first helps, not a rule: the principle is Test What Matters (`.claude/rules/coding-guidelines.md`, section 3). The skill verifies its own red step: run the new test, see it fail for the right reason, then implement. No hook or ledger records it.
+An opt-in tool for logic where test-first helps, not a rule: the principle is Test What Matters. The skill verifies its own red step: run the new test, see it fail for the right reason, then implement. No hook or ledger records it.
 
 Contents: Selecting a Stack Reference; Philosophy; Anti-Pattern: Horizontal Slices; Workflow; Checklist Per Cycle.
 

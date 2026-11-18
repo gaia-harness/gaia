@@ -43,7 +43,7 @@ The prompt opens `You are the simplify pass executor for this plan.`, then carri
 bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <result file> --expect-count 1
 ```
 
-On a no-op with a clean tree, re-dispatch once against the re-cleared path. A no-op with a changed tree goes to step 4. A second no-op goes to step 4, where a clean tree records `Result: not run`. That departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the main thread edits nothing in a plan run, and nothing depends on this pass.
+On a no-op with a clean tree, re-dispatch. A no-op with a changed tree goes to step 4. A second no-op goes to step 4, where a clean tree records `Result: not run`. That departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the main thread edits nothing in a plan run, and nothing depends on this pass.
 
 ### 4. Read the tree
 

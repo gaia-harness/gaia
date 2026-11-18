@@ -72,7 +72,7 @@ Spawn the agent for Steps 6 to 9. Its prompt passes `BASELINE`, `LATEST`, `LATES
 
 ### Classify the report
 
-Poll the report file rather than the agent's reply, and never classify at the moment the Agent call returns: the call returns dispatch metadata before the agent has done anything. Once the agent has finished:
+Once the agent has finished:
 
 ```bash
 bash <main checkout path>/.gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <run dir>/report.json --report-key files --expect-count <n>
@@ -84,7 +84,7 @@ Exit 0 is a real report. Exit 2 is a usage error in the call itself: fix the cal
 rm -f <run dir>/report.json
 ```
 
-then re-dispatch exactly once with the same prompt and classify the same way. A second consecutive no-op means the orchestrator runs the merge inline itself, reading the three snapshot files and following them as the agent would, writing the same report, and continues as if the agent had returned it. Neither the re-dispatch nor the inline merge resets the acting tree: the walk converges on a partially walked tree, since each write reads as already applied on a re-run.
+then re-dispatch with the same prompt and classify the same way. On the inline fallback the orchestrator reads the three snapshot files and follows them as the agent would, writing the same report. Neither the re-dispatch nor the inline merge resets the acting tree: the walk converges on a partially walked tree, since each write reads as already applied on a re-run.
 
 ### Judgment chunks
 
@@ -100,7 +100,7 @@ Then dispatch a judgment-only agent, same model, the chunk agents in parallel wi
 bash <main checkout path>/.gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <run dir>/judgment-<c>.json --expect-count <m>
 ```
 
-The same rule applies: exit 1 clears only that file with `rm -f <run dir>/judgment-<c>.json` and re-dispatches exactly once; a second consecutive no-op means the orchestrator judges that chunk inline. Then fold every chunk's judgments into the report, naming each `judgment-<c>.json` after `--judgment`:
+The same rule applies: exit 1 clears only that file with `rm -f <run dir>/judgment-<c>.json` before the re-dispatch. Then fold every chunk's judgments into the report, naming each `judgment-<c>.json` after `--judgment`:
 
 ```bash
 bash <main checkout path>/.gaia/scripts/update-gaia-report.sh merge-judgments --report <run dir>/report.json --judgment <run dir>/judgment-2.json

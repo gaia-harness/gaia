@@ -80,18 +80,17 @@ What each agent writes to `<LENS>.json`. This is not a return contract; the shor
 
 ## Pre-clear, classify, re-dispatch
 
-An absent report reads as "the lens found nothing", the conclusion a silent lens must not earn. The rule is `.claude/rules/subagent-dispatch.md`; the steps for a lens:
+The steps for a lens:
 
 1. Before dispatch, clear the file of every lens about to be dispatched. Spell the commands repo-relative so the existing allow patterns match, never with the absolute `<PLAN_DIR>` spelling:
    - Spec: `rm -f .gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`
    - Plan: `rm -rf .notebook/plans/<PLAN-NNN>/audit`, then `mkdir -p .notebook/plans/<PLAN-NNN>/audit` (a spec-derived plan: `rm -rf .notebook/specs/<SPEC-ID>/plan[-N]/audit`, then `mkdir -p .notebook/specs/<SPEC-ID>/plan[-N]/audit`)
 2. Dispatch every lens in one message, one Agent call per lens, each a `general-purpose` Agent.
-3. After each agent's completion notification, never at the moment the dispatch call returns (that call reports dispatch metadata before the agent has run), classify its file:
+3. Classify its file:
 
    ```bash
    bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <findings file> --report-key findings
    ```
 
    Exit 0 is real (an empty `findings` array is real), 1 is a no-op, 2 is a usage error: a caller bug, so stop and surface it.
-4. On a no-op, re-clear that lens's file and re-dispatch that lens exactly once.
-5. On a second consecutive no-op, run that lens inline on the main thread and write its file yourself, then continue. Say in one line which lens ran inline.
+4. On a no-op, re-clear that lens's file before the re-dispatch. On the inline fallback, say in one line which lens ran inline.

@@ -41,7 +41,7 @@ Ask once per task; `Just do it` holds for the rest of it. Skip the check inside 
 
 ## 1. Claim
 
-Work that closes a GitHub issue claims it per `.claude/rules/issue-claim.md` before step 3. That rule owns the label read and the claim command.
+Work that closes a GitHub issue claims it before step 3.
 
 A fresh start runs the pull gate before the claim, with `ad-hoc work` as the command name. Work whose branch already exists locally or as a worktree is a resume and skips the gate.
 
@@ -93,7 +93,7 @@ Feature-branch mode skips this step.
 
 ## 5. Commit and open the draft PR
 
-Commit through the Quality Gate (`.claude/rules/quality-gate.md`). Push the branch with `git push -u origin <branch-name>`, then open the PR with `gh pr create --draft` and a Conventional Commits title per `wiki/decisions/Naming Conventions.md`. `.claude/hooks/block-invalid-pr-title.sh` and `.claude/hooks/block-pr-create-without-draft.sh` enforce the title and the draft; their headers own the rules. Then stamp the body with `bash .gaia/scripts/pr-body-stamp.sh write --pr <N>`: the merge gate refuses a body whose stamp does not name the PR's head.
+Commit through the Quality Gate. Push the branch with `git push -u origin <branch-name>`, then open the PR with `gh pr create --draft` and a Conventional Commits title per `wiki/decisions/Naming Conventions.md`. `.claude/hooks/block-invalid-pr-title.sh` and `.claude/hooks/block-pr-create-without-draft.sh` enforce the title and the draft; their headers own the rules. Then stamp the body with `bash .gaia/scripts/pr-body-stamp.sh write --pr <N>`: the merge gate refuses a body whose stamp does not name the PR's head.
 
 When the work closes an issue, the PR body carries `Closes #<n>`, and no commit message on the branch carries a closing keyword against it. A squash merge concatenates the branch's commit bodies into the merge commit, and GitHub reads closing keywords from that message, so a keyword in a commit closes the issue whatever the PR body says. The PR body is the sole carrier.
 
@@ -196,7 +196,7 @@ When the session is inside the tree, leave it with `ExitWorktree({action: "keep"
 git -C <main checkout path> worktree list --porcelain
 ```
 
-Every git and pnpm command in the first and third fences takes the `-C <main checkout path>` form, with `<main checkout path>` a typed literal, so the arm works when the session was launched inside the tree it removes (a re-run of an update command inside its own worktree reaches cleanup this way, with no `EnterWorktree` entry to exit and `cd` banned by `.claude/rules/shell-cwd.md`).
+Every git and pnpm command in the first and third fences takes the `-C <main checkout path>` form, with `<main checkout path>` a typed literal, so the arm works when the session was launched inside the tree it removes (a re-run of an update command inside its own worktree reaches cleanup this way, with no `EnterWorktree` entry to exit and `cd` banned).
 
 Take the tree's path from its `worktree <path>` line as `<worktree path>`, and the branch from the same record's `branch refs/heads/<branch>` line as `<branch-name>`. Address the tree by that path and the branch by that name; never derive one from the other, because the directory name and the branch name can differ. Then run the pre-removal check; a non-zero exit stops here, so run nothing below and relay its output:
 
@@ -324,7 +324,7 @@ When the pull was skipped or failed, run nothing and add `ask Claude to run the 
 
 ## Releasing the claim on an unmerged ending
 
-`.claude/hooks/issue-claim-release.sh` releases an `in-progress` claim only on a `gh pr merge`. Claude releases it on every other ending of work that claimed an issue (`.claude/rules/issue-claim.md`): when it closes the pull request unmerged (`gh pr close`), and when the user says the work is dropped, with or without a pull request. For each issue the work claimed, the issues its PR body closes by keyword:
+`.claude/hooks/issue-claim-release.sh` releases an `in-progress` claim only on a `gh pr merge`. Claude releases it on every other ending of work that claimed an issue: when it closes the pull request unmerged (`gh pr close`), and when the user says the work is dropped, with or without a pull request. For each issue the work claimed, the issues its PR body closes by keyword:
 
 ```bash
 gh issue edit <n> --remove-label in-progress

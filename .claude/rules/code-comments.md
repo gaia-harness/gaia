@@ -32,7 +32,7 @@ A test of subject, not length. A thirty-line comment about a platform quirk earn
 - A header re-narrating the implementation sites below, or the same paragraph repeated at each site.
 - A banner over a single item, and ASCII section rules (`// ─── Types ───`). A banner over a group is navigation and stays.
 - The ceremonial opener: a first line assembled from the filename's own tokens and saying nothing else.
-- Historical narration: "used to do X, now does Y", "added in PR #123", "as of <date>". Git carries this. Issue numbers and other working-document ids: `.claude/rules/working-doc-ids.md`.
+- Historical narration: "used to do X, now does Y", "added in PR #123", "as of <date>". Git carries this.
 - A planned or unbuilt behavior described as current. Describe what the code does today.
 - A number used as justification that nothing in the repo can reproduce.
 
