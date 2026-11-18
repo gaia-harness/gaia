@@ -100,7 +100,7 @@ Then dispatch a judgment-only agent, same model, the chunk agents in parallel wi
 bash <main checkout path>/.gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <run dir>/judgment-<c>.json --expect-count <m>
 ```
 
-The same rule applies: exit 1 clears only that file with `rm -f <run dir>/judgment-<c>.json` before the re-dispatch. Then fold every chunk's judgments into the report, naming each `judgment-<c>.json` after `--judgment`:
+The same rule applies: exit 1 clears only that file with `rm -f <run dir>/judgment-<c>.json` before the re-dispatch. On the inline fallback the orchestrator writes `<run dir>/judgment-<c>.json` itself, one entry per path in the chunk, as the agent would. Then fold every chunk's judgments into the report, naming each `judgment-<c>.json` after `--judgment`:
 
 ```bash
 bash <main checkout path>/.gaia/scripts/update-gaia-report.sh merge-judgments --report <run dir>/report.json --judgment <run dir>/judgment-2.json

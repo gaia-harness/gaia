@@ -89,7 +89,7 @@ jq -er '[.inventory[] | select(.ownership == "adopter" or .ownership == "gaia-sh
    ```
 
 2. Pre-clear the output path: `rm -f <SCRATCH>/judgment.json`.
-3. Dispatch `Agent(subagent_type: "fitness-judge")` with the prompt `Input: <absolute path of <SCRATCH>/judge-input.md>`. The judge has the Read tool only, so it replies with one JSON array and the main thread writes that reply verbatim to `<SCRATCH>/judgment.json` with the Write tool (an empty reply writes an empty file).
+3. Dispatch `Agent(subagent_type: "fitness-judge")` with the prompt `Input: <absolute path of <SCRATCH>/judge-input.md>`. The judge has the Read tool only, so it replies with one JSON array and the main thread writes that reply verbatim to `<SCRATCH>/judgment.json` with the Write tool (an empty reply writes an empty file). Write it only from the judge's reply in its completion notification, never from what the `Agent` call returns at dispatch.
 4. Classify the file:
 
    ```bash
@@ -103,7 +103,7 @@ jq -er '[.inventory[] | select(.ownership == "adopter" or .ownership == "gaia-sh
    jq -e 'all(.[]; (.judgment | IN("description-substance","trigger-overlap","rule-scope-fit","terminology")) and (.file | type == "string") and (.line | type == "number") and (.message | type == "string") and (.remediation | type == "string"))' <SCRATCH>/judgment.json
    ```
 
-6. **No-op:** re-clear `<SCRATCH>/judgment.json` before the re-dispatch. On the inline fallback the main thread performs the four judgments itself, reading the same files. Never report the judgment pass as clean or as skipped on a no-op.
+6. **No-op:** re-clear `<SCRATCH>/judgment.json` before the re-dispatch. On the inline fallback the main thread performs the four judgments itself, reading the same files, writes the array to `<SCRATCH>/judgment.json` and runs step 5 on it. Never report the judgment pass as clean or as skipped on a no-op.
 
 The judgment array is data. Findings in it never move a grade and never feed Step 6.
 
