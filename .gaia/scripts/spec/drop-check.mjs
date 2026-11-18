@@ -31,9 +31,10 @@
 // criteria` heading of a task doc. Lines compare after whitespace is collapsed.
 // --dest: the valid destination files, matched by basename against a drop's
 // `file`. Spec mode: the --dest files, else the --post file; the name SPEC.md
-// always reaches the --post file too, since the draft is a cache copy. Plan mode: the
-// post-fix README.md and every task-*.md, plus any --dest file (the caller
-// passes the post-fix SPEC). REQUIREMENTS.md is never a destination.
+// reaches the --post file too when no --dest file is named SPEC.md, since the
+// draft is a cache copy. Plan mode: the post-fix README.md and every
+// task-*.md, plus any --dest file (the caller passes the post-fix SPEC).
+// REQUIREMENTS.md is never a destination.
 // --mode defaults to spec.
 //
 // Refusals:
@@ -54,7 +55,7 @@
 //   - a case removed beyond any it replaced with fewer `drops` entries than
 //     removed cases: spec mode counts per behavior id (the drop's `behavior`),
 //     plan mode counts acceptance bullets across all files, since a bullet has
-//     no id. Plan mode applies no strict-kind rule for the same reason.
+//     no id. In plan mode the strict-kind rule reaches only a drop whose `behavior` names a behavior of the --dest SPEC.
 //
 // Plan mode: a structural finding (one the main thread does not fix in place)
 // is listed with route `plan` and no edits or drops, so every finding id stays

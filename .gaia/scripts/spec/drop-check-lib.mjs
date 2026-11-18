@@ -124,7 +124,7 @@ export function destinationFiles(options) {
     }
   }
   // The review fixer writes a SPEC's destination as SPEC.md whatever the
-  // draft file is called, so that name always reaches the --post file.
+  // draft file is called, so that name reaches the --post file unless a --dest file already claims it.
   if (options.mode === 'spec' && !byBasename.has('SPEC.md')) {
     byBasename.set('SPEC.md', options.post);
   }

@@ -4,7 +4,7 @@ status: active
 created: 2026-11-18
 updated: 2026-11-18
 promoted_at: 2026-11-18T13:33:20Z
-promoted_hash: sha256:6465279ade7394b38a2546ad4380995feda9605af207c9817d668013470ed58d
+promoted_hash: sha256:b1488143ce2b3605398066063999534f86c0465da3439494251dccdc1f1706b2
 pr_number: 3661
 tags: [promoted, decisions]
 ---
@@ -40,7 +40,7 @@ GAIA's spec and plan stages state behaviors and plan tasks; neither designs test
 
 - Skipping the test stage also skips the rule-written security tests, and each SPEC flow then reports as a visible, non-blocking gap at merge.
 - The worthiness step runs on every plan, test stage run or skipped, and costs almost nothing when no test file changed ([[Worthiness Audit]], [[Worthiness Presence Gate]]).
-- The merge-time backstop that failed the `GAIA-Audit` status post on an unfinished security-test table went with the table. Nothing at merge now rereads the record of written security tests to confirm each still exists unweakened: the test stage and the security writer record them, and a later fixer or executor that deletes or hollows one is caught only by the worthiness presence gate (which needs a ledger line for a changed test, not a keep verdict) and by the audit members reading the diff.
+- The merge-time backstop that failed the `GAIA-Audit` status post on an unfinished security-test table went with the table. Nothing at merge now rereads the record of written security tests to confirm each still exists unweakened: the test stage and the security writer record them, and a later fixer or executor that hollows one is caught only by the worthiness presence gate (which needs a ledger line for a changed test, not a keep verdict) and by the audit members reading the diff, and one that deletes it only by the audit members, since the presence gate skips deletions.
 - Every spec, plan and test-stage lens reads one shared preamble and severity rubric, owned by `.claude/skills/gaia/references/spec/lens-dispatch.md`, so a later project-wide input reaches every review through one seam.
 - `.claude/doctrine/testing.md` stays the owner of what to test; the test stage applies it.
 
