@@ -37,8 +37,8 @@
 #                  precedence is the anti-gaming control (a bare re-run must not
 #                  clear a refusal; only an authored, reasoned supersede may).
 #   --base <sha>   OPTIONAL. The audit-key base sha (wiki/concepts/Code Review
-#                  Audit Agent.md, "## Re-run carry-forward ledger"). When given, the
-#                  write also maintains the re-run CARRY-FORWARD LEDGER
+#                  Audit Agent.md, "## Re-run carry-forward ledger"). When
+#                  given, the write also maintains the re-run CARRY-FORWARD LEDGER
 #                  (.gaia/local/audit/<audit-key>.rerun.json, at the derived
 #                  key described under "Audit key" in the accounting sibling; this value is the
 #                  key's fallback, and its presence is what arms the ledger
@@ -154,9 +154,9 @@ usage: audit-write-clearance.sh --root <path> --member <name>
                                 [--route-record <path>]
                                 [--help|-h]
 
-  --base <sha>                  the shared audit-key base sha, KEY_BASE; arms the re-run
-                                carry-forward ledger write so a refusal briefs
-                                its own repair. The ledger write is best-effort;
+  --base <sha>                  the shared audit-key base sha, KEY_BASE; arms
+                                the re-run carry-forward ledger write so a
+                                refusal briefs its own repair. The ledger write is best-effort;
                                 the open-finding accounting read gates every
                                 write and does not need --base.
   --scope-digest <64-hex>       gated on a plain earned write; refuses when it

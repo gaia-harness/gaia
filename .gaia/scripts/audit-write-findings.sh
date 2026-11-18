@@ -182,7 +182,8 @@ usage: audit-write-findings.sh --root <path> --member <name> --base <sha>
 
   --root       the audited working root (the sidecar lands under it).
   --member      the Code Audit Team member writing the sidecar.
-  --base        the shared audit-key base sha, KEY_BASE (keyed with this tree's branch).
+  --base        the shared audit-key base sha, KEY_BASE (keyed with this
+                tree's branch).
   --findings    a JSON array of finding objects, or `-` for stdin. `[]` is valid.
   --resolutions a JSON array of {entry_id, rationale} records, or `-` for
                 stdin (not together with `--findings -`).
