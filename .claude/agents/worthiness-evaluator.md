@@ -6,7 +6,7 @@ tools: Bash, Read, Write
 color: green
 ---
 
-Contents: Input scope; The two axes; Non-triviality: render-only stories and vacuous tests; Flow inputs; Drift inputs; Verdicts; Hard delete constraints; How you run; Output.
+Contents: Input scope; The two axes; Non-triviality: render-only stories and vacuous tests; Flow inputs; Verdicts; Hard delete constraints; How you run; Output.
 
 Before judging any test, Read `.claude/doctrine/testing.md`. It owns which test
 to write and at which layer, the honesty rules and the security rows.
@@ -180,7 +180,7 @@ by the discriminator. The schema-to-`required` wiring (Conform `useForm`'s
 `constraint` option and any hand-forwarded `required` prop) is the app's and
 stays testable.
 
-An assertion inside a play function is hollow (the doctrine's `**Hollow test.**`):
+An assertion inside a play function is hollow (the doctrine's `**Hollow test.**` rule in `## What to test`):
 the verdict is `fix` with the artifact `assertion-in-play`.
 
 ## Flow inputs
@@ -207,26 +207,10 @@ outcome and the folders it changed. A flow test may be a Playwright spec, a bats
 
 For a flow test, any non-empty member makes the verdict `fix`, never `keep`.
 
-## Drift inputs
-
-A plan run whose plan carries a test-design table sends only the tests the table
-does not account for. The dispatch prompt holds a `Verdict file: <absolute path>`
-line and one `Test: <file> › <fullName>` line per test, tagged one of two ways:
-
-- `Unplanned:` beside a `Test: <file> › <fullName>` line: a test new or changed on
-  the branch that no table row names. Judge it `keep` with a new row, or `delete`. A `keep` carries an
-  artifact that proposes the row as `row: source=<requirement-source key>;
-  case=<the case in words>; layer=<layer>`, the `source` taken from a stated
-  requirement (`.claude/doctrine/testing.md`, `## What to test`) and the `layer`
-  from its `## Layers`. A test whose requirement you cannot name is a `delete`.
-- `Moved from row: <id> (<fromFile>)`, beside a `Test:` line: a test carrying a
-  missing row's title in another file. Judge it as unplanned, against the row it replaced.
-
-Both axes apply as above, and both carve-outs below (the security seam and the
-sole lower-layer driver) bind a drift `delete` too. A test whose only catch
-beyond another app test of the same path is app code disagreeing with a test
-double (a mock, fixture, Given builder or test-fixture wiring), whatever code it
-calls, tests that double and is a `delete` (the doctrine's `## What to test`).
+A test whose only catch beyond another app test of the same path is app code
+disagreeing with a test double (a mock, fixture, Given builder or test-fixture
+wiring), whatever code it calls, tests that double and is a `delete` (the
+doctrine's `## What to test`).
 
 ## Verdicts
 
