@@ -1,21 +1,13 @@
-node_modules
-package-lock.json
-
-.gitignore
-.prettierignore
-.react-router
-
-/build
-/coverage
-/storybook-static
+# The `format` script skips node_modules and everything this package's and the
+# repository root's .gitignore cover (it names both); list only paths it would
+# otherwise format. GAIA is pnpm-only, so no package-lock.json entry: an npm
+# lockfile never belongs in the tree.
 
 # Byte-identical vendored upstream copy; its version and per-file hashes are
 # recorded in .gaia/vendor/playwright-cli.json, so formatting would break it.
 .claude/skills/playwright-cli/
-/public/build
-.env.example
-.env
 
 # Vendored shadcn add output kept byte-identical (one level only, so ui/tests/
-# stays formatted).
+# stays formatted). eslint-plugin-prettier reads this file, so this entry also
+# keeps the `prettier/prettier` lint rule off those files.
 app/components/ui/*.tsx
