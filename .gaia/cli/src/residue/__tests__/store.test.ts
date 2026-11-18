@@ -182,83 +182,98 @@ describe('residue/store', () => {
   });
 
   describe('refusals', () => {
-    test(// eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-    'a record whose reason carries \\n is refused, and the store file is left unchanged', () => {
-      const sandbox = setupSandbox();
+    test(
+      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
+      'a record whose reason carries \\n is refused, and the store file is left unchanged',
+      () => {
+        const sandbox = setupSandbox();
 
-      try {
-        expectRefusalLeavesStoreUnchanged(
-          sandbox.root,
-          baseRecord({line: 2, reason: 'line one\nline two'}),
-          /reason/
-        );
-      } finally {
-        sandbox.cleanup();
+        try {
+          expectRefusalLeavesStoreUnchanged(
+            sandbox.root,
+            baseRecord({line: 2, reason: 'line one\nline two'}),
+            /reason/
+          );
+        } finally {
+          sandbox.cleanup();
+        }
       }
-    });
+    );
 
-    test(// eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-    'a record whose cited_line_text carries \\n is refused, and the store file is left unchanged', () => {
-      const sandbox = setupSandbox();
+    test(
+      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
+      'a record whose cited_line_text carries \\n is refused, and the store file is left unchanged',
+      () => {
+        const sandbox = setupSandbox();
 
-      try {
-        expectRefusalLeavesStoreUnchanged(
-          sandbox.root,
-          baseRecord({
-            cited_line_text: 'const a = 1;\nconst b = 2;',
-            line: 2,
-          }),
-          /cited_line_text/
-        );
-      } finally {
-        sandbox.cleanup();
+        try {
+          expectRefusalLeavesStoreUnchanged(
+            sandbox.root,
+            baseRecord({
+              cited_line_text: 'const a = 1;\nconst b = 2;',
+              line: 2,
+            }),
+            /cited_line_text/
+          );
+        } finally {
+          sandbox.cleanup();
+        }
       }
-    });
+    );
 
-    test(// eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-    'a record whose class carries \\n is refused, and the store file is left unchanged', () => {
-      const sandbox = setupSandbox();
+    test(
+      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
+      'a record whose class carries \\n is refused, and the store file is left unchanged',
+      () => {
+        const sandbox = setupSandbox();
 
-      try {
-        expectRefusalLeavesStoreUnchanged(
-          sandbox.root,
-          baseRecord({class: 'holistic/foo\nbar', line: 2}),
-          /class/
-        );
-      } finally {
-        sandbox.cleanup();
+        try {
+          expectRefusalLeavesStoreUnchanged(
+            sandbox.root,
+            baseRecord({class: 'holistic/foo\nbar', line: 2}),
+            /class/
+          );
+        } finally {
+          sandbox.cleanup();
+        }
       }
-    });
+    );
 
-    test(// eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-    'a record whose path carries \\n is refused, and the store file is left unchanged', () => {
-      const sandbox = setupSandbox();
+    test(
+      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
+      'a record whose path carries \\n is refused, and the store file is left unchanged',
+      () => {
+        const sandbox = setupSandbox();
 
-      try {
-        expectRefusalLeavesStoreUnchanged(
-          sandbox.root,
-          baseRecord({line: 2, path: 'app/foo.ts\napp/bar.ts'}),
-          /path/
-        );
-      } finally {
-        sandbox.cleanup();
+        try {
+          expectRefusalLeavesStoreUnchanged(
+            sandbox.root,
+            baseRecord({line: 2, path: 'app/foo.ts\napp/bar.ts'}),
+            /path/
+          );
+        } finally {
+          sandbox.cleanup();
+        }
       }
-    });
+    );
 
-    test(// eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-    'a record carrying \\r is refused the same way', () => {
-      const sandbox = setupSandbox();
+    test(
+      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
+      'a record carrying \\r is refused the same way',
+      () => {
+        const sandbox = setupSandbox();
 
-      try {
-        expectRefusalLeavesStoreUnchanged(
-          sandbox.root,
-          baseRecord({line: 2, reason: 'line one\rline two'}),
-          /reason/
-        );
-      } finally {
-        sandbox.cleanup();
+        try {
+          expectRefusalLeavesStoreUnchanged(
+            sandbox.root,
+            baseRecord({line: 2, reason: 'line one\rline two'}),
+            /reason/
+          );
+        } finally {
+          sandbox.cleanup();
+        }
       }
-    });
+    );
 
     test('a reason with a quote, a backslash, and a tab is accepted and round-trips byte-identically', () => {
       const sandbox = setupSandbox();
