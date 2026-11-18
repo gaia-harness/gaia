@@ -11,6 +11,8 @@ paths:
 
 # Wiki Prose Style
 
+The wiki's only reader is Claude, in a session that already has every always-loaded rule in context; write for that reader, never for a human browsing the pages.
+
 Body prose describes **what is** in present tense. The historical record lives in git (`git log`, `git blame`), `wiki/log.md`, and `CHANGELOG.md`, body prose is not the place for it.
 
 ## Rules
