@@ -21,7 +21,7 @@ There is no tier below Minor: what is worth reporting is Minor, what is not is n
 | Defect target | a flawed plan or implementation downstream | a broken or conflicting orchestrator result | a test list that misses a stated behavior or tests one the SPEC does not state |
 | Evidence form | SPEC section or flow id, plus `file:line` | task doc plus `file:line` | behavior id or task doc plus `file:line` |
 | `location` meaning | SPEC section or flow id | task doc or README section | behavior id or task doc |
-| Findings directory (`<FINDINGS_DIR>`) | `.gaia/local/cache/audit-<spec_id>/findings/` | `<PLAN_DIR>/audit/` | `<PLAN_DIR>/test-stage/` |
+| Findings directory (`<FINDINGS_DIR>`) | `.gaia/local/cache/audit-<spec_id>/findings/` | `<PLAN_DIR>/audit/` | `<PLAN_DIR>/test-stage-findings/` |
 | Write tool | the ordinary write tools | `Bash`, see below | `Bash`, see below |
 | `critical` | the SPEC is wrong or will produce broken or misleading work; fix before gate 2 | the plan is wrong or will produce broken or conflicting work; fix before execution | a stated behavior has no test, or a test proves nothing the SPEC states; fix before the stage records `ran` |
 | `major` | a significant gap or ambiguity a planner is forced to guess on; fix, or the human decides | a significant gap or hidden dependency the orchestrator is forced to guess on; fix, or the human decides | a significant gap or an extra test beyond the cap an executor is forced to guess on; fix, or the human decides |
@@ -85,7 +85,7 @@ The steps for a lens:
 
 1. Before dispatch, clear the file of every lens about to be dispatched. Spell the commands repo-relative so the existing allow patterns match, never with the absolute `<PLAN_DIR>` spelling:
    - Spec: `rm -f .gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`
-   - Test stage: `rm -rf <PLAN_DIR>/test-stage`, then `mkdir -p <PLAN_DIR>/test-stage`, with `<PLAN_DIR>` spelled as the plan folder's repo-relative path
+   - Test stage: `rm -rf <PLAN_DIR>/test-stage-findings`, then `mkdir -p <PLAN_DIR>/test-stage-findings`, with `<PLAN_DIR>` spelled as the plan folder's repo-relative path. The folder's name must differ from the stage's `TEST-STAGE` record ignoring case: a case-insensitive filesystem treats the two as one path, and this `rm -rf` would delete the record.
    - Plan: `rm -rf .notebook/plans/<PLAN-NNN>/audit`, then `mkdir -p .notebook/plans/<PLAN-NNN>/audit` (a spec-derived plan: `rm -rf .notebook/specs/<SPEC-ID>/plan[-N]/audit`, then `mkdir -p .notebook/specs/<SPEC-ID>/plan[-N]/audit`)
 2. Dispatch every lens in one message, one Agent call per lens, each a `general-purpose` Agent.
 3. Classify its file:
