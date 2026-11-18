@@ -443,6 +443,7 @@
     ".gaia/statusline/gaia-statusline-left.sh": "owned",
     ".gaia/statusline/gaia-statusline-right.sh": "owned",
     ".gaia/statusline/gaia-statusline.sh": "owned",
+    ".gaia/statusline/rate-limits-reading.sh": "owned",
     ".gaia/statusline/setup-owed.sh": "owned",
     ".gaia/templates/react-doctor/references/explain.md": "owned",
     ".gaia/templates/react-doctor/SKILL.md": "owned",
@@ -873,7 +874,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T18:47:06.661Z",
+  "generated": "2026-11-18T19:19:16.674Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

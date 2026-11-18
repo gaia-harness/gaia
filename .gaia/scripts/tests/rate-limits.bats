@@ -270,3 +270,46 @@ no rise within the hour|$((MONDAY + 64800))|[{"used_percentage":70,"observed_at"
 projection past the reset|$((MONDAY + 48600))|[{"used_percentage":60,"observed_at":$((now - 1800)),"producer":"statusline"},{"used_percentage":70,"observed_at":$now,"producer":"statusline"}]|projected 100% at 14:00 after reset as of
 EOF
 }
+
+# writer_records <now> <input-json>: the library writer's display records on
+# stdout, then its return code as `rc=<n>`; the writer's stderr is dropped.
+writer_records() {
+  GAIA_RATE_LIMITS_NOW="$1" bash -c '
+    . "$1/.gaia/scripts/rate-limits-lib.sh"
+    gaia_rate_limits_write "$2" "$3" "$4" 2>/dev/null
+    printf "rc=%s\n" "$?"
+  ' _ "$REPO_ROOT" "$MAIN" "$1" "$2"
+}
+
+@test "a reading outside its bounds is refused and a refused render still shows the higher figure" {
+  local now=1795440000 before label input
+  put_file '{"version":1,"windows":{"five_hour":{"used_percentage":50,"resets_at":1795449600,"observed_at":1795439000,"producer":"statusline","history":[]},"seven_day":{"used_percentage":80,"resets_at":1795449600,"observed_at":1795439000,"producer":"statusline","history":[]}}}'
+  before="$(cat "$FILE")"
+
+  # Each reading is out of bounds: refused with the exact stderr, file byte-identical.
+  while IFS='|' read -r label input; do
+    [ -n "$label" ] || continue
+    run --separate-stderr rate_limits "$now" write "$input"
+    [ "$status" -eq 2 ] || { echo "case $label: status $status"; return 1; }
+    [ "$stderr" = "rate-limits: invalid reading" ] || { echo "case $label: stderr '$stderr'"; return 1; }
+    [ "$(cat "$FILE")" = "$before" ] || { echo "case $label: file changed"; return 1; }
+  done <<'CASES'
+percentage 1000|{"producer":"statusline","windows":{"five_hour":{"used_percentage":1000,"resets_at":1795449600}}}
+percentage -5|{"producer":"statusline","windows":{"five_hour":{"used_percentage":-5,"resets_at":1795449600}}}
+milliseconds resets_at|{"producer":"statusline","windows":{"five_hour":{"used_percentage":60,"resets_at":1795449600000}}}
+past the five_hour future bound|{"producer":"statusline","windows":{"five_hour":{"used_percentage":60,"resets_at":1795458601}}}
+past the seven_day future bound|{"producer":"statusline","windows":{"seven_day":{"used_percentage":60,"resets_at":1796045401}}}
+past the future bound of another name|{"producer":"statusline","windows":{"other":{"used_percentage":60,"resets_at":1796045401}}}
+CASES
+
+  # The refused write's display: the stored seven_day is raised to the well-formed
+  # same-window figure, the out-of-bounds five_hour changes nothing stored, and a
+  # well-formed window the file lacks is shown.
+  run writer_records "$now" '{"producer":"statusline","windows":{"five_hour":{"used_percentage":1000,"resets_at":1795449600},"seven_day":{"used_percentage":90,"resets_at":1795449600},"extra":{"used_percentage":30,"resets_at":1795449600}}}'
+  [ "$status" -eq 0 ] || return 1
+  [ "${lines[0]}" = "$(printf 'extra\t30\t1795449600\tlive')" ] || { echo "records: $output"; return 1; }
+  [ "${lines[1]}" = "$(printf 'five_hour\t50\t1795449600\tlive')" ] || { echo "records: $output"; return 1; }
+  [ "${lines[2]}" = "$(printf 'seven_day\t90\t1795449600\tlive')" ] || { echo "records: $output"; return 1; }
+  [ "${lines[3]}" = "rc=2" ] || { echo "records: $output"; return 1; }
+  [ "$(cat "$FILE")" = "$before" ] || return 1
+}
