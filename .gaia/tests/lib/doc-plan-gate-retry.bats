@@ -132,7 +132,7 @@ check_retry_scope() {
   need_text 'gate-retry block' "$block" || return 1
   in_order "$block" \
     '**Phase gate retry (one static retry and one test retry per phase).**' \
-    'When the phase'"'"'s `pnpm typecheck` or `pnpm lint` fails, send each owning task'"'"'s errors to a fresh executor for that task, and errors in a test file several tasks of this phase declare to that file'"'"'s shared-file executor (the in-phase arm below), instead of halting at once.' \
+    'When the phase'"'"'s `pnpm typecheck`, `pnpm lint` or file-length check (a lint `max-lines` rule, the fitness lint'"'"'s line limit) fails, send each owning task'"'"'s errors to a fresh executor for that task, and errors in a test file several tasks of this phase declare to that file'"'"'s shared-file executor (the in-phase arm below), instead of halting at once.' \
     'Never fix it on the main thread.' \
     'Any other gate failure halts under Stop conditions with no retry.' || return 1
 }
@@ -166,7 +166,7 @@ check_retry_kinds() {
   in_order "$block" \
     '**Phase gate retry (one static retry and one test retry per phase).**' \
     '- **Kind.**' \
-    'A gate failure holding only typecheck and lint errors is static; one holding any failing test is a test failure, even with static errors beside it. Its retry takes the same kind.' \
+    'A gate failure holding only typecheck, lint and file-length errors is static; one holding any failing test is a test failure, even with static errors beside it. Its retry takes the same kind.' \
     'A phase runs each kind at most once, so a static fix never spends the retry a later test failure needs, and a phase retries at most twice.' \
     '- **Attribute.**' \
     '- **Halt instead.**' \
@@ -204,6 +204,7 @@ check_retry_redispatch() {
     'carries the original task prompt first, without its `Yield handoff:` line' \
     'then the line `The phase quality gate failed on files this task owns. Fix only these errors, within this task'"'"'s scope, and edit no other file; still run the typecheck and lint your task prompt requires before you return:`' \
     'then the gate output lines for its files.' \
+    'A task with a file-length error gets, before those lines, the line `A file over its length limit is split: move whole functions or sections into an existing or new lib file beside it, which you may create, and name it under ### Deviations from plan. Never trim wording and never raise a limit or ceiling. Re-run the failed file-length check on your files before you return.`' \
     'It carries no `Yield handoff:` line, so a retry executor never yields' \
     'Never continue an executor with SendMessage.' \
     '- **Re-run the gate.**' \
@@ -461,6 +462,14 @@ resume_point() {
 
 @test "red twin: a retry that continues the executor with SendMessage fails" {
   red check_retry_redispatch 'Never continue an executor with SendMessage.' 'Continue the executor with SendMessage.'
+}
+
+@test "red twin: a file-length failure that halts instead of retrying as static fails" {
+  red check_retry_kinds 'holding only typecheck, lint and file-length errors is static' 'holding only typecheck and lint errors is static'
+}
+
+@test "red twin: a file-length retry that lets the executor trim wording fails" {
+  red check_retry_redispatch 'Never trim wording and never raise a limit or ceiling. ' ''
 }
 
 @test "red twin: a static retry line that drops the typecheck and lint before return fails" {
