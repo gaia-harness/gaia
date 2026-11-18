@@ -1,20 +1,10 @@
-node_modules
-package-lock.json
-
-.gitignore
-.prettierignore
-.react-router
-
-/build
-/coverage
-/storybook-static
+# Prettier already skips node_modules and everything this package's .gitignore
+# covers; list only tracked paths that must not be formatted. eslint-plugin-prettier
+# reads this file alone, so these entries also keep `pnpm lint` off them.
 
 # Byte-identical vendored upstream copy; its version and per-file hashes are
 # recorded in .gaia/vendor/playwright-cli.json, so formatting would break it.
 .claude/skills/playwright-cli/
-/public/build
-.env.example
-.env
 
 # Vendored shadcn add output kept byte-identical (one level only, so ui/tests/
 # stays formatted).
