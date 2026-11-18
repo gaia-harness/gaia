@@ -6,8 +6,8 @@
 # sub-agent reads, holds the verbatim step blocks a planner copies into a
 # generated ORCHESTRATOR.md, each opening with a sentinel line plan-verify.sh
 # checks: the resume detection, the sub-agent yield handling, the phase gate
-# retry, the security writer, the pre-audit flow checks, the wiki promotion,
-# the, the code audit, the post-clearance step and the post-merge
+# retry, the security writer, the simplify pass, the pre-audit flow checks, the wiki promotion,
+# the code audit, the post-clearance step and the post-merge
 # close. .claude/skills/gaia/references/spec/lifecycle.md holds the procedures
 # those blocks point at, and .claude/skills/gaia/references/plan.md, the
 # /gaia-plan entry file, keeps the pre-flight sweep pointer. This suite pins:

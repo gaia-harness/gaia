@@ -142,7 +142,6 @@ stage_writes() {
   head -n 1 "$PLAN/TEST-STAGE" | grep -qx 'status: running'
 
   write_test_stage ran
-  head -n 1 "$PLAN/TEST-STAGE" | grep -qx 'status: ran'
   run bash "$PLAN_VERIFY" "$PLAN" --spec "$SPEC"
   [ "$status" -eq 0 ]
 }

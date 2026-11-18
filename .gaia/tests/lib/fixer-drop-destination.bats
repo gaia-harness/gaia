@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Flow test: a review fix that drops a stated case without a verifiable SPEC
-# destination, or changes a behavior sentence no fix line quotes, is refused;
+# destination is refused;
 # the re-dispatched fixes file that quotes the edit and names where the dropped
 # case still lives is accepted, and the post-fix SPEC lints. Drives the
 # deterministic seams (drop-check.mjs, lint.sh) over one fixture, happy path

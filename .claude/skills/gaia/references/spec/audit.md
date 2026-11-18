@@ -51,7 +51,7 @@ Specialists join the same wave only when the draft touches their area, chosen by
 
 Attack each behavior, flow and success criterion for falsifiability and GAMEABILITY. For each weak one, describe the concrete scenario where it passes while the feature is still broken or useless (e.g. a "points to X" criterion that passes on a bare path drop), and propose a tighter, doc-grep- or test-checkable statement. A behavior states its cases (each actor, state, input and refusal it covers, and the outcome by value: the status, message, redirect or literal text the user observes) concretely enough that a test could be written from the text alone; one stated by example, by "etc." or over a set the draft never lists does not. Name the property a test must prove, never the layer, fixture or helper that proves it. A tighter statement says what the user observes (`the page shows Status: Open`); when the gap is page markup or accessibility structure (an element's whole text, a heading level, a landmark, a label association), propose a plan-time directive stating that rule for the page or component it applies to, never flow or success-criterion text. Flag any flow or success criterion with no obvious verification method. A flow or success criterion that needs a real backend (persistence across a restart, a database reset, a production start against a real store) is a finding: move it to Out of scope as adopter-owned end-to-end.
 
-Four miss classes recur; hunt each one for every behavior:
+Three miss classes recur; hunt each one for every behavior:
 
 - **Forged or edited input.** For every field, id or value a client submits, the draft states the outcome when it is forged or edited (another actor's id, a status the actor may not set, a field the form never sends): the refusal or the unchanged state, by value.
 - **Displayed form.** For every stored or wire value (a date, an amount, a status, an enum, an id), the draft states the form the user sees (the label, format and literal text), never the raw stored value.
@@ -68,7 +68,7 @@ Two of the miss classes recur here; hunt each one for every behavior:
 
 #### SEC: Security (id prefix `SEC`)
 
-Hunts for: injection, SSRF, open redirect, token or secret leakage, missing authorization, unsafe deserialization; a credential the app holds for another service (an API or session token, even the user's own) with no SPEC rule keeping it unreadable in the browser (a signed-only cookie is readable); whether the SPEC's security claim holds and its acceptance gate is adversarial. Fires on every run, since a SPEC that touches none of these still gets one pass for the unstated ones.
+Hunts for: injection, SSRF, open redirect, token or secret leakage, missing authorization, unsafe deserialization; a credential the app holds for another service (an API or session token, even the user's own) with no SPEC rule keeping it unreadable in the browser (a signed-only cookie is readable); whether the SPEC's security claim holds and its acceptance gate is adversarial.
 
 Two of the miss classes recur here; hunt each one for every behavior:
 
@@ -168,7 +168,7 @@ node .gaia/scripts/spec/drop-check.mjs --fixes "<FINDINGS_DIR>fixes.json" --find
   --pre "<PRE_FIX>" --post "<DRAFT_PATH>" --requirements "<REQUIREMENTS_PATH>"
 ```
 
-The script's header owns the fixes-file format, the refusal list and the exit codes; do not restate them. Exit 0 accepted, 1 refused, 2 a usage error (stop and surface it).
+The script's header owns the fixes-file format and the refusal list. Exit 0 accepted, 1 refused, 2 a usage error or unreadable file (stop and surface it).
 
 - **Refusal.** Re-dispatch the fixer once with the script's output, pre-clearing `fixes.json` and restoring `<DRAFT_PATH>` from `<PRE_FIX>` first so it re-applies against the pre-fix text. Run the check again.
 - **A second refusal.** Keep the fixer's output: every valid fix stays, security ones included. For each refused line, put its declared dropped cases into `clarifications.deferred[]` as quoted superseded text awaiting a decision, never as live behavior; the SPEC body wins.

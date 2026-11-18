@@ -283,7 +283,7 @@ check_s1() {
 check_s2() {
   local audit_md="$1" block bash_fence audit_variable_name script
   # The AUDIT.md path is built in the wave section, before the fixer dispatch
-  # that consumes ${SPEC_DIR}/${AUDIT_MD} needs it; the persist section writes the report
+  # that consumes ${AUDIT_MD} needs it; the persist section writes the report
   # and resolves no path of its own. Anchor on the step that does the
   # resolving, not the step that does the writing.
   block="$(range_between "$audit_md" '## The wave' '## The lenses')" || return 1

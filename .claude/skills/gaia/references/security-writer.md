@@ -35,4 +35,4 @@ When an audit fix adds or changes a security behavior, the fixer names it in its
 ## What it never does
 
 - The writer never edits code.
-- Nobody weakens a security test, and a task executor never writes a security test: an executor-written test under a security Test line's title has no line in `security-tests.jsonl`, so it does not satisfy the merge gate.
+- Nobody weakens a security test, and a task executor never writes a security test: an executor-written test under a security Test line's title has no line in `security-tests.jsonl`, so a resume re-runs the phase's security-writer step over it.
