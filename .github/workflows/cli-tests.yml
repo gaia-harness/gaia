@@ -87,6 +87,8 @@ jobs:
               # reads the root `format` script off this file; see the fuller
               # rationale below, beside `.gitignore`.
               - 'package.json'
+              # The same guard reads the `apps/web` format script off this file.
+              - 'apps/web/package.json'
               # The composite action the Node setup step below `uses:`. It lives
               # outside .github/workflows/, so it matches nothing else here, and
               # without this line a pull request changing only the action -- its

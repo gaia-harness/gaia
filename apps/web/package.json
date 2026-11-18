@@ -16,7 +16,7 @@
     "msw:init": "msw init",
     "lint": "pnpm exec eslint --fix --max-warnings=0 --ext js,jsx,ts,tsx app --cache --cache-location ./node_modules/.cache/eslint .",
     "lint-dry": "pnpm exec eslint --fix-dry-run --max-warnings=0 --ext js,jsx,ts,tsx app --cache --cache-location ./node_modules/.cache/eslint .",
-    "format": "prettier --write \"**/*.{ts,tsx,html,md,mdx,css,json}\"",
+    "format": "prettier --ignore-path ../../.gitignore --ignore-path .gitignore --ignore-path .prettierignore --write \"**/*.{ts,tsx,html,md,mdx,css,json}\"",
     "knip": "knip",
     "stylelint": "stylelint --fix app/**/*.css",
     "typecheck": "react-router typegen && tsc",

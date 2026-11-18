@@ -1,5 +1,5 @@
 /**
- * Maintainer drift-guard for the ignore scope of the root `format` script.
+ * Maintainer drift-guard for the ignore scope of the root and `apps/web` `format` scripts.
  *
  * `pnpm format` runs Prettier with `--write` over a glob anchored at the
  * repository root. Prettier 3 defaults `--ignore-path` to
@@ -71,8 +71,13 @@ const IGNORE_PATH_PATTERN =
 // (`.claude/worktrees/foo`) does not cover the directory as a whole.
 const WORKTREE_IGNORE_PATTERN = /^(?:\/|\*\*\/)?\.claude\/worktrees\/?$/;
 
-const readPackageScripts = (): Record<string, string> => {
-  const raw = readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8');
+// The root script and the `apps/web` script it chains to are both held: the
+// app's `.prettierignore` no longer lists generated folders, so only its
+// script's ignore set keeps `pnpm -C apps/web format` off them.
+const FORMAT_SCRIPT_PACKAGES = ['package.json', 'apps/web/package.json'];
+
+const readPackageScripts = (packageFile: string): Record<string, string> => {
+  const raw = readFileSync(path.join(REPO_ROOT, packageFile), 'utf8');
   const parsed: unknown = JSON.parse(raw);
 
   if (
@@ -82,7 +87,7 @@ const readPackageScripts = (): Record<string, string> => {
     typeof parsed.scripts !== 'object' ||
     parsed.scripts === null
   ) {
-    throw new Error('package.json declares no scripts object');
+    throw new Error(`${packageFile} declares no scripts object`);
   }
 
   return parsed.scripts as Record<string, string>;
@@ -126,25 +131,32 @@ const narrowedIgnorePathsIn = (script: string): null | string[] => {
 // a guard that cannot find what it guards has failed, not passed. It is also
 // what keeps the assertions below typed, since the CLI tsconfig sets
 // `noUncheckedIndexedAccess`.
-const readFormatScript = (): string => {
-  const {format} = readPackageScripts();
+const readFormatScript = (packageFile: string): string => {
+  const {format} = readPackageScripts(packageFile);
 
   if (typeof format !== 'string') {
-    throw new TypeError('package.json declares no `format` script');
+    throw new TypeError(`${packageFile} declares no \`format\` script`);
   }
 
   return format;
 };
 
-describe('root format script ignore scope', () => {
-  test('the format script exists and runs prettier', () => {
-    expect(readFormatScript()).toMatch(PRETTIER_INVOCATION_PATTERN);
-  });
+describe.each(FORMAT_SCRIPT_PACKAGES)(
+  '%s format script ignore scope',
+  (packageFile) => {
+    test('the format script exists and runs prettier', () => {
+      expect(readFormatScript(packageFile)).toMatch(
+        PRETTIER_INVOCATION_PATTERN
+      );
+    });
 
-  test('does not narrow prettier below its default ignore set', () => {
-    expect(narrowedIgnorePathsIn(readFormatScript())).toBeNull();
-  });
+    test('does not narrow prettier below its default ignore set', () => {
+      expect(narrowedIgnorePathsIn(readFormatScript(packageFile))).toBeNull();
+    });
+  }
+);
 
+describe('worktree root ignore', () => {
   test('gitignore still covers the worktree root the guard leans on', () => {
     const gitignore = readFileSync(path.join(REPO_ROOT, '.gitignore'), 'utf8');
     const entries = gitignore
