@@ -50,12 +50,13 @@ CASE_REWRITTEN_AFTER="a signed-out visitor requests the account page -> the serv
 CASE_DROPPED="a signed-out visitor requests the account export -> the server answers 401."
 NOTES_LINE="Every signed-out request for the account export always gets the 401 answer."
 DROP_FRAGMENT="signed-out request for the account export always gets"
+UNVERIFIABLE_FRAGMENT="every signed-out export request is answered somewhere else entirely"
 EDIT_QUOTE="a signed-out visitor requests the account page"
 DROPPED_QUOTE="a signed-out visitor requests the account export"
 
-write_fixes() { # edits-json
+write_fixes() { # edits-json fragment
   printf '{"fixes":[{"finding":"SEC-001","route":"spec","edits":%s,"drops":[{"behavior":"B1","case":"%s","destination":"still-stated","file":"SPEC.md","fragment":"%s"}]},{"finding":"TST-001","route":"rejected"}]}\n' \
-    "$1" "$CASE_DROPPED" "$DROP_FRAGMENT" >"$FIXES"
+    "$1" "$CASE_DROPPED" "$2" >"$FIXES"
 }
 
 check_drops() {
@@ -68,16 +69,20 @@ check_drops() {
   printf '{"findings":[{"id":"SEC-001"}]}\n' >"$FINDINGS/security.json"
   printf '{"findings":[{"id":"TST-001"}]}\n' >"$FINDINGS/tests.json"
 
-  # First dispatch: both findings listed, no edit quoted for the rewritten line.
-  write_fixes '[]'
+  # First dispatch: every edit is quoted, but the dropped case names a
+  # fragment that appears nowhere in the post-fix SPEC, so no destination
+  # can be verified.
+  EDITS="$(printf '[{"change":"edited","quote":"%s"},{"change":"dropped","quote":"%s"}]' "$EDIT_QUOTE" "$DROPPED_QUOTE")"
+  write_fixes "$EDITS" "$UNVERIFIABLE_FRAGMENT"
   check_drops
   [ "$status" -eq 1 ]
-  grep -qF -- "drop-check:" <<<"$output" || return 1
-  grep -qF -- "a signed-out visitor requests the account page" <<<"$output" || return 1
+  grep -qF -- "drop-check: SEC-001: B1 case" <<<"$output" || return 1
+  grep -qF -- "fragment is not in SPEC.md: \"$UNVERIFIABLE_FRAGMENT\"" <<<"$output" || return 1
+  [ "$(wc -l <<<"$output")" -eq 1 ]
 
-  # Re-dispatch: edits quote six words of the rewritten and the removed line,
-  # and the dropped case names a still-stated fragment in the post-fix SPEC.
-  write_fixes "$(printf '[{"change":"edited","quote":"%s"},{"change":"dropped","quote":"%s"}]' "$EDIT_QUOTE" "$DROPPED_QUOTE")"
+  # Re-dispatch: the dropped case names a still-stated fragment that is in
+  # the post-fix SPEC.
+  write_fixes "$EDITS" "$DROP_FRAGMENT"
   check_drops
   [ "$status" -eq 0 ]
   [ -z "$output" ]
