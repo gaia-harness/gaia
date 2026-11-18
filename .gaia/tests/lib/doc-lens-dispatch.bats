@@ -55,16 +55,13 @@ check_under_500_lines() {
   [ "$(wc -l <"$1")" -lt 500 ]
 }
 
-check_redispatch_once() {
-  grep -qF 're-dispatch that lens exactly once' "$1"
-}
-
-check_inline_fallback() {
-  grep -qF 'run that lens inline on the main thread' "$1"
-}
-
-check_completion_notification() {
-  grep -qF "completion notification, never at the moment the dispatch call returns" "$1"
+# The retry count, the inline ending and when to classify are the subagent
+# dispatch rule's, always loaded, so the contract does not restate them; it
+# owns only what is specific to a lens.
+check_lens_noop_specifics() {
+  local file="$1"
+  grep -qF "re-clear that lens's file before the re-dispatch" "$file" || return 1
+  grep -qF 'say in one line which lens ran inline' "$file"
 }
 
 check_repo_relative_preclear() {
@@ -124,36 +121,21 @@ mutate_replace() {
   [ "$(classify_exit "$mutated" '{"dimension":"FG","findings":[]}')" = "1" ]
 }
 
-@test "contract states the once-only re-dispatch" {
-  check_redispatch_once "$CONTRACT"
+@test "contract states the lens-specific no-op steps: re-clear the lens's file, announce an inline lens" {
+  check_lens_noop_specifics "$CONTRACT"
 }
 
-@test "red twin: a copy without the re-dispatch sentence fails" {
+@test "red twin: a copy that drops the re-clear fails" {
   local mutated
-  mutated="$(mutate_replace 'exactly once' 'twice')"
-  check_redispatch_once "$mutated" && return 1
+  mutated="$(mutate_replace "re-clear that lens's file before the re-dispatch" 're-dispatch')"
+  check_lens_noop_specifics "$mutated" && return 1
   true
 }
 
-@test "contract states the inline fallback after a second no-op" {
-  check_inline_fallback "$CONTRACT"
-}
-
-@test "red twin: a copy without the inline fallback fails" {
+@test "red twin: a copy that drops the inline announcement fails" {
   local mutated
-  mutated="$(mutate_replace 'inline on the main thread' 'in a fresh subagent')"
-  check_inline_fallback "$mutated" && return 1
-  true
-}
-
-@test "contract names the completion notification as the classification point" {
-  check_completion_notification "$CONTRACT"
-}
-
-@test "red twin: a copy that classifies at dispatch return fails" {
-  local mutated
-  mutated="$(mutate_replace ', never at the moment' ', or at the moment')"
-  check_completion_notification "$mutated" && return 1
+  mutated="$(mutate_replace 'say in one line which lens ran inline' 'continue')"
+  check_lens_noop_specifics "$mutated" && return 1
   true
 }
 
