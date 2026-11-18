@@ -155,6 +155,26 @@ cluster_count() {
   [ "$(jq '[.clusters[0].members[].text | contains("gaia:maintainer-only")] | any' <<<"$output")" = false ] || return 1
 }
 
+@test "a maintainer-only marker indented under a list item still toggles maintainer_only" {
+  write_file .claude/rules/a.md "# A" "" "- Intro item" "  <!-- gaia:maintainer-only:start -->" "  $(procedure alpha)" "  <!-- gaia:maintainer-only:end -->"
+  write_file .claude/rules/b.md "# B" "" "$(procedure alpha)"
+  run node "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(cluster_count)" = 1 ] || return 1
+  [ "$(jq -c '[.clusters[0].members[] | [.path, .maintainer_only]]' <<<"$output")" = '[[".claude/rules/a.md",true],[".claude/rules/b.md",false]]' ] || return 1
+  [ "$(jq '[.clusters[0].members[].text | contains("gaia:maintainer-only")] | any' <<<"$output")" = false ] || return 1
+}
+
+@test "a longer fence holds a shorter fence, so the block runs to the outer closing fence" {
+  local fence='````'
+  write_file .claude/rules/a.md "# A" "" "$fence" "key: alpha/one.sh" "mid: alpha/zero.sh" '```' "tail: alpha/two.sh" "$fence"
+  write_file .claude/rules/b.md "# B" "" "$fence" "key: alpha/one.sh" "mid: alpha/zero.sh" '```' "tail: alpha/two.sh" "$fence"
+  run node "$SCRIPT" --root "$REPO"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(cluster_count)" = 1 ] || return 1
+  [ "$(jq '[.clusters[0].members[].text | contains("tail: alpha/two.sh")] | all' <<<"$output")" = true ] || return 1
+}
+
 @test "a focus path drops clusters outside it, and a usage error exits 2 with no output" {
   write_file .claude/rules/a.md "$(procedure alpha)"
   write_file .claude/rules/b.md "$(procedure alpha)"

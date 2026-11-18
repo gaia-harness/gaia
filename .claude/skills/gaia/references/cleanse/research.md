@@ -228,8 +228,6 @@ Within a promote, `source_action` is the only field that touches `source_path`, 
   ```yaml
   type: replace
   owner: {adopter | project-memory}
-  grounds: cross-file-duplicate
-  owner_path: {absolute path of the owning file}
   path: {absolute path}
   before: |
     {verbatim current block, must match byte-for-byte}

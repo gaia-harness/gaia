@@ -26,8 +26,19 @@ const collapse = (text) => text.replace(/\s+/g, ' ').trim();
 const DISTINCTIVE = /[\d\s/.\-_=$:]/;
 const isLiteral = (text) => text.length >= 3 && DISTINCTIVE.test(text);
 
-const FENCE = /^\s*(```+|~~~+)/;
-const fenceChar = (line) => FENCE.exec(line)?.[1][0];
+const FENCE = /^\s*(`{3,}|~{3,})(.*)$/;
+const fenceRun = (line) => {
+  const match = FENCE.exec(line);
+  return match && { char: match[1][0], length: match[1].length, rest: match[2] };
+};
+// A fence closes only on a run of the same character, at least as long as the
+// opener, with nothing after it: a longer outer fence holds shorter ones.
+const closesFence = (line, opener) => {
+  const run = fenceRun(line);
+  return Boolean(
+    run && run.char === opener.char && run.length >= opener.length && run.rest.trim() === '',
+  );
+};
 const HEADING = /^\s{0,3}#{1,6}(\s|$)/;
 const TOP_LIST_ITEM = /^ {0,1}([-*+]|\d+[.)])\s/;
 const TABLE_ROW = /^\s*\|/;
@@ -58,10 +69,9 @@ const literalsOf = (lines) => {
   const prose = [];
   let fence = null;
   for (const line of lines) {
-    const char = fenceChar(line);
-    if (fence === null && char) {
-      fence = char;
-    } else if (fence !== null && char === fence) {
+    if (fence === null && fenceRun(line)) {
+      fence = fenceRun(line);
+    } else if (fence !== null && closesFence(line, fence)) {
       fence = null;
     } else if (fence !== null) {
       add(line);
@@ -116,7 +126,7 @@ export const parseBlocks = (content) => {
     const line = lines[i];
     const trimmed = line.trim();
     const kind = trimmed === '' ? undefined : markerKind(trimmed);
-    const opener = fenceChar(line);
+    const opener = fenceRun(line);
     if (trimmed === '') {
       i += 1;
     } else if (kind) {
@@ -127,7 +137,7 @@ export const parseBlocks = (content) => {
     } else if (opener) {
       let j = i + 1;
       while (j < lines.length) {
-        if (fenceChar(lines[j]) === opener) break;
+        if (closesFence(lines[j], opener)) break;
         j += 1;
       }
       push(i, Math.min(j, lines.length - 1));
@@ -141,15 +151,17 @@ export const parseBlocks = (content) => {
       let last = i;
       while (j < lines.length) {
         const next = lines[j];
-        const char = fenceChar(next);
+        const run = fenceRun(next);
         if (fence !== null) {
-          if (char === fence) fence = null;
+          if (closesFence(next, fence)) fence = null;
           last = j;
         } else if (next.trim() === '') {
           const following = lines.slice(j + 1).findIndex((x) => x.trim() !== '');
           if (following < 0 || !/^\s+\S/.test(lines[j + 1 + following])) break;
+        } else if (markerKind(next.trim())) {
+          break;
         } else if (/^\s+\S/.test(next)) {
-          if (char) fence = char;
+          if (run) fence = run;
           last = j;
         } else if (isBoundary(next)) {
           break;
