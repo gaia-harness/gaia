@@ -99,11 +99,7 @@ tracked_sh() {
     fi
     last="$tracked_path"
   # gaia-lint-ignore whole-tree-mark-guard: the callers, the first-chunk and
-  # last-chunk fail-closed tests, each carry the per-test whole-tree mark. The
-  # clean-tree run test is left unmarked because branch mode's shell-lint step
-  # runs the same gate over the real tree. On a host with no shellcheck that
-  # step still runs the folded guards alone, so only the shellcheck passes fall
-  # to the full CI run.
+  # last-chunk fail-closed tests, each carry the per-test whole-tree mark.
   done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh')
   if [ "$which_end" = "first" ]; then
     printf '%s\n' "$first"
@@ -326,8 +322,9 @@ STUB
   grep -qF -- "shell-lint FAILED" <<<"$output"
 }
 
-# `--only guards` is how branch verify keeps the folded guards running on a
-# host with no shellcheck, so it has to need no binary and run no linter pass.
+# `--only guards` is how verify-harness.sh keeps the folded guards running on a
+# host with no shellcheck, so it has to need no shellcheck binary and run no
+# linter pass.
 # bats test_tags=whole-tree
 @test "--only guards runs every folded guard, no linter pass, and no shellcheck binary" {
   if PATH="/usr/bin:/bin" command -v shellcheck >/dev/null 2>&1; then

@@ -163,7 +163,7 @@ REPO_ROOT="$(git -C "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" rev-parse --
 echo "==> .gaia/tests/shell-lint.sh"
 
 # Both are preconditions of the shellcheck passes below and of nothing else,
-# so `--only bash32-parse` skips them. Demanding the binary unconditionally
+# so either `--only` mode skips them. Demanding the binary unconditionally
 # would red the macOS leg, whose whole cost argument is that it installs no
 # linter at all. (That last line deliberately does not begin with the bare word
 # a directive is spelled with, per the trap this file's header records.)
@@ -379,7 +379,7 @@ report_verdict() {
   exit 0
 }
 
-# The three shellcheck passes, skipped under `--only bash32-parse` along with
+# The three shellcheck passes, skipped under either `--only` mode along with
 # the binary they need.
 if [ -z "$ONLY_PASS" ]; then
   echo "--> shellcheck *.sh (severity=$SH_SEVERITY, jobs=$JOBS): ${#sh_scripts[@]} tracked scripts"
