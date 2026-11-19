@@ -89,15 +89,19 @@
 # splits command text on its character set with no regard for shell quoting, so
 # a bare `env` sitting inside a quoted regex becomes a segment whose only word
 # is `env`. check_dump_tokens reads that as a bare process dump carrying no
-# command operand and denies the whole tool call, naming an environment dump the
-# operator never wrote: an ordinary search such as a grep whose alternation
-# happens to contain the word is refused, with reason text that misdescribes the
-# cause. The direction is fail-closed and no secret escapes, so it is recorded
-# rather than repaired here; the repair is either a split that does not start a
-# segment from inside a quoted string, or a dump word that must sit in a real
-# command position before check_dump_tokens rules on it. Both are the same
-# tokenizer work the spelling above defers, and rewriting the alternation with
-# repeated `-e` operands is the workaround in the meantime.
+# command operand and denies the whole tool call: an ordinary search such as a
+# grep whose alternation happens to contain the word is refused. The direction
+# is fail-closed and no secret escapes, so it is recorded rather than repaired
+# here; the repair is either a split that does not start a segment from inside a
+# quoted string, or a dump word that must sit in a real command position before
+# check_dump_tokens rules on it. Both are the same tokenizer work the spelling
+# above defers. The dump reason names the split it trips on and the spellings
+# that avoid it, so the denial does not claim a dump the operator never wrote.
+#
+# One case needs no tokenizer and is repaired: a heredoc body that is plain data
+# for cat or tee is dropped before the split, so the text a command writes to a
+# file is never judged as commands. lib/reader-operands.sh owns which heredocs
+# qualify; a body that a shell or interpreter reads is still judged.
 #
 # THE PERMISSION RULES SHARED ALL OF THOSE LIMITS AT THE TOOL TIER, and they had
 # one this hook cannot have. A Read() deny merges into the OS sandbox boundary,
@@ -125,7 +129,8 @@ set +e
 set -e
 if ! type gaia_reader_operands >/dev/null 2>&1 \
   || ! type gaia_reader_strip_env_prefix >/dev/null 2>&1 \
-  || ! type gaia_reader_strip_quotes >/dev/null 2>&1; then
+  || ! type gaia_reader_strip_quotes >/dev/null 2>&1 \
+  || ! type gaia_reader_drop_data_heredoc_bodies >/dev/null 2>&1; then
   # A guard that cannot load its own grammar must not report clean, and only a
   # structured deny achieves that. A non-zero exit other than 2 is a NON-BLOCKING
   # error in the PreToolUse contract (`wiki/concepts/Claude Hooks.md`): the tool
@@ -187,7 +192,7 @@ gaia_hook_payload_read "$payload" || exit 0
 tool_name="$GAIA_HOOK_TOOL_NAME"
 
 DENY_DOTENV_TOOL="BLOCKED: reading '.env' / '.env.*' files is denied to protect local secrets. Only '.env.example' is readable. Next step: refer to the variable by its name, never its value; read '.env.example' for the list of keys; and ask the user for any value that is not secret. Never copy, grep or re-encode the file to get around this guard. This guard is heuristic defense-in-depth, not a sandbox."
-DENY_DUMP="BLOCKED: a bare environment dump (env/printenv) is denied so exported secrets cannot be printed into the transcript. Use 'env NAME=value <cmd>' to set a variable for a command. Heuristic defense-in-depth, not a sandbox."
+DENY_DUMP="BLOCKED: a segment of this command begins with env or printenv and names no command to run, which reads as an environment dump that would print exported secrets into the transcript. Segments are split on | & ; ( ) and newlines without regard for quotes, so the word inside a quoted pattern, or inside a heredoc body that is not plain data for cat or tee, trips this too. Next step: to write text containing the word, use the Write tool or cat with a quoted heredoc delimiter (cat > file <<'EOF'); to search for it, give each word as its own -e operand instead of an (a|b) alternation; to set a variable for a command, use 'env NAME=value <cmd>'. Heuristic defense-in-depth, not a sandbox."
 DENY_DOTENV_READER="BLOCKED: reading a .env / .env.* file (a reader, sourcing, or redirection) is denied to protect local secrets. '.env.example' is exempt. Next step: refer to the variable by its name, never its value; read '.env.example' for the list of keys; and ask the user for any value that is not secret. Never copy, grep or re-encode the file to get around this guard. Heuristic defense-in-depth, not a sandbox."
 DENY_SECRET_TOOL="BLOCKED: reading key, certificate, and credential files is denied to protect local secrets. This covers '*.key', '*.pem', any name containing 'credential' except a .ts, .tsx, .mts or .cts file, and anything under a 'secrets/' directory. Next step: if this file holds no secret, ask the user to read it or rename it; never copy, move or re-encode it to get around this guard. Heuristic defense-in-depth, not a sandbox."
 DENY_SECRET_READER="BLOCKED: a command here reads a key, certificate, or credential path ('*.key', '*.pem', a name containing 'credential' other than a .ts, .tsx, .mts or .cts file, or anything under a 'secrets/' directory). Denied to protect local secrets. Next step: if this file holds no secret, ask the user to read it or rename it; never copy, move or re-encode it to get around this guard. Heuristic defense-in-depth, not a sandbox."
@@ -369,7 +374,7 @@ case "$tool_name" in
 
     while IFS= read -r segment; do
       process_segment "$segment"
-    done < <(printf '%s\n' "$command_line" | tr '|&;()' '\n')
+    done < <(gaia_reader_drop_data_heredoc_bodies "$command_line" | tr '|&;()' '\n')
 
     [ "$secret_reader_hit" -eq 0 ] || deny "$DENY_SECRET_READER"
     exit 0

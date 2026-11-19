@@ -252,6 +252,80 @@ gaia_reader_strip_env_prefix() {
   printf '%s' "$1" | sed -E 's/^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*//'
 }
 
+# Prints the full command text with the body of each data-only heredoc removed,
+# for the caller to split into segments afterwards. A data-only heredoc has a
+# quoted delimiter (<<'EOF', <<"EOF", <<-'EOF'), so its body is never expanded,
+# and its consumer is cat or tee with no pipe later on the opener line, so no
+# shell or interpreter reads the body either. Every other heredoc keeps its body
+# for the caller to judge: `bash <<'EOF'` and `cat <<'EOF' | sh` run theirs, and
+# an unquoted body expands command substitutions.
+#
+# The closing delimiter line goes too, since it is a word and not a command. A
+# heredoc with no closing line keeps its body, the direction that fails closed.
+#
+# HONEST LIMIT. The opener is matched in raw text, so an opener spelled inside
+# a quoted string (`echo "cat <<'X'"`) is read as a real one and hides the
+# lines down to a matching X line. That takes a deliberate spelling, the
+# obfuscation class this guard already does not claim to stop.
+gaia_reader_drop_data_heredoc_bodies() {
+  local command_text="$1"
+  local quote="'" tab=$'\t'
+  local opener_pattern="(^|[^<])<<(-?)[[:space:]]*(${quote}([^${quote}]*)${quote}|\"([^\"]*)\")"
+  local line rest before after consumer delimiter closing_line drop
+  local pending_delimiters=() pending_tab_flags=() pending_drop_flags=()
+  local held_body='' output=''
+
+  while IFS= read -r line; do
+    if [ "${#pending_delimiters[@]}" -gt 0 ]; then
+      closing_line=$line
+      if [ "${pending_tab_flags[0]}" = "-" ]; then
+        closing_line=${closing_line#"${closing_line%%[!"$tab"]*}"}
+      fi
+      if [ "$closing_line" = "${pending_delimiters[0]}" ]; then
+        [ "${pending_drop_flags[0]}" = 1 ] || output+="$line"$'\n'
+        held_body=''
+        pending_delimiters=("${pending_delimiters[@]:1}")
+        pending_tab_flags=("${pending_tab_flags[@]:1}")
+        pending_drop_flags=("${pending_drop_flags[@]:1}")
+      elif [ "${pending_drop_flags[0]}" = 1 ]; then
+        held_body+="$line"$'\n'
+      else
+        output+="$line"$'\n'
+      fi
+      continue
+    fi
+
+    output+="$line"$'\n'
+    rest=$line
+    while [[ "$rest" =~ $opener_pattern ]]; do
+      before="${rest%%"${BASH_REMATCH[0]}"*}${BASH_REMATCH[1]}"
+      after=${rest#*"${BASH_REMATCH[0]}"}
+      case "${BASH_REMATCH[3]}" in
+        "$quote"*) delimiter=${BASH_REMATCH[4]} ;;
+        *) delimiter=${BASH_REMATCH[5]} ;;
+      esac
+      read -r consumer _ <<<"${before##*[|&;(]}" || consumer=''
+      drop=0
+      if [ -n "$delimiter" ]; then
+        case "$consumer" in
+          cat | tee)
+            case "$after" in
+              *'|'*) ;;
+              *) drop=1 ;;
+            esac
+            ;;
+        esac
+      fi
+      pending_delimiters+=("$delimiter")
+      pending_tab_flags+=("${BASH_REMATCH[2]}")
+      pending_drop_flags+=("$drop")
+      rest=$after
+    done
+  done <<<"$command_text"
+
+  printf '%s%s' "$output" "$held_body"
+}
+
 # Dispatch on a token list whose first element is the command word.
 _gaia_ro_dispatch() {
   local tokens=("$@")

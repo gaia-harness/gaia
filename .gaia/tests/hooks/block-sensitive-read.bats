@@ -155,6 +155,61 @@ run_hook_without_library() {
   assert_denied_by_json
 }
 
+# --- Bash: heredoc bodies and the dump reason ---
+
+# Built with printf so each payload carries real newlines and tabs.
+@test "a cat heredoc with a quoted delimiter writing the word env is allowed" {
+  run_hook_bash "$(printf "cat > notes.md <<'EOF'\n(env) plus the transcript\nEOF")"
+  assert_allowed_by_json
+}
+
+@test "a tee heredoc with a double-quoted dash delimiter writing printenv is allowed" {
+  run_hook_bash "$(printf 'tee notes.md <<-"END"\n\tprintenv\n\tEND')"
+  assert_allowed_by_json
+}
+
+@test "a commit message heredoc carrying a line that is only env is allowed" {
+  run_hook_bash "$(printf "git commit -m \"\$(cat <<'EOF'\nenv\nEOF\n)\"")"
+  assert_allowed_by_json
+}
+
+@test "a printenv after a closed data heredoc is still denied" {
+  run_hook_bash "$(printf "cat > notes.md <<'EOF'\nx\nEOF\nprintenv")"
+  assert_denied_by_json
+}
+
+@test "a quoted heredoc fed to bash keeps its body judged" {
+  run_hook_bash "$(printf "bash <<'EOF'\ncat .env\nEOF")"
+  assert_denied_by_json
+}
+
+@test "a cat heredoc piped onward to a shell keeps its body judged" {
+  run_hook_bash "$(printf "cat <<'EOF' | sh\nprintenv\nEOF")"
+  assert_denied_by_json
+}
+
+@test "an unquoted heredoc keeps its body judged" {
+  run_hook_bash "$(printf 'cat > notes.md <<EOF\nenv\nEOF')"
+  assert_denied_by_json
+}
+
+@test "a data heredoc with no closing line keeps its body judged" {
+  run_hook_bash "$(printf "cat > notes.md <<'EOF'\nprintenv")"
+  assert_denied_by_json
+}
+
+@test "a here-string is not read as a heredoc opener" {
+  run_hook_bash "$(printf "cat <<<'EOF'\nprintenv\nEOF")"
+  assert_denied_by_json
+}
+
+@test "a regex alternation naming env is denied with a reason naming the split and the -e spelling" {
+  run_hook_bash "grep -n -E '(env|printenv)' notes.md"
+  assert_denied_by_json
+  grep -qF -- "without regard for quotes" <<<"$output"
+  grep -qF -- "own -e operand" <<<"$output"
+}
+
 # --- Bash allows: env as a runner ---
 
 @test "env NODE_ENV=production node app.js is allowed" {
@@ -894,7 +949,7 @@ run_hook_monitor() {
 @test "bare env is denied with the dump reason, not a secret-path reason" {
   run_hook_bash "env"
   assert_denied_by_json
-  grep -qF -- 'a bare environment dump' <<<"$output"
+  grep -qF -- 'reads as an environment dump' <<<"$output"
   grep -qF -- 'key, certificate, or credential' <<<"$output" && return 1
   return 0
 }
@@ -1058,7 +1113,7 @@ run_hook_monitor() {
 @test "printenv is denied with the dump reason" {
   run_hook_bash "printenv"
   assert_denied_by_json
-  grep -qF -- "a bare environment dump (env/printenv) is denied" <<<"$output"
+  grep -qF -- "begins with env or printenv and names no command to run" <<<"$output"
 }
 
 @test "Grep with path secrets/ is denied with the secret-path tool reason" {
