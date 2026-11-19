@@ -42,7 +42,7 @@ This section owns the guard rule for the security writer; the doctrine and the `
 ## Checks
 
 1. Run `node .gaia/scripts/spec/test-stage-check.mjs --plan-dir <PLAN_DIR> [--spec <SPEC>]` and `bash .gaia/scripts/spec/plan-verify.sh <PLAN_DIR> [--spec <SPEC>]`, which owes the lines under `running`. Their refusals are listed in the script headers; this page lists none. A failure is fixed in the lists and both are re-run once, then the stage halts with the reason.
-2. Dispatch one review lens through `.claude/skills/gaia/references/spec/lens-dispatch.md`: read it whole, fill its shared preamble from the test-stage column, and write findings to `<PLAN_DIR>/test-stage/`, pre-cleared and classified as that file says. The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states and that the cap above holds. Apply its findings to the lists and re-run both checks.
+2. Dispatch one review lens through `.claude/skills/gaia/references/spec/lens-dispatch.md`: read it whole, fill its shared preamble from the test-stage column, and write findings to `<PLAN_DIR>/test-stage-findings/`, pre-cleared and classified as that file says. The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states and that the cap above holds. Apply its findings to the lists and re-run both checks.
 3. Only after both checks pass, write `TEST-STAGE` with `status: ran` and the date.
 
 ## Recording

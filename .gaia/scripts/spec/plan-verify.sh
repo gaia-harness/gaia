@@ -189,10 +189,7 @@ if [ -f "$orchestrator" ]; then
   esac
   absolute_spec_path=''
   if [ -n "$spec_path" ]; then
-    case "$spec_path" in
-      /*) absolute_spec_path="$spec_path" ;;
-      *) absolute_spec_path="$(cd "$(dirname "$spec_path")" && pwd)/$(basename "$spec_path")" ;;
-    esac
+    absolute_spec_path="$(cd "$(dirname "$spec_path")" && pwd)/$(basename "$spec_path")"
   fi
   for verbatim_sentinel in ${verbatim_sentinels[@]+"${verbatim_sentinels[@]}"}; do
     block_found=0
@@ -261,6 +258,7 @@ fi
 placeholder_check
 
 
+# shellcheck disable=SC2154  # test_stage_owed comes from read_test_stage in plan-verify-lib.sh
 flow_checks() {
   local flow_output flow_status=0 web_directory='' flow_id slug kind target
   local stems_text phase last_phase=0 task_file task_name task_stem task_phase matches

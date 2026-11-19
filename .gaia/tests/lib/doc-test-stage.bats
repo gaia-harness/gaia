@@ -16,6 +16,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   STAGE_MD="$REPO_ROOT/.claude/skills/gaia/references/test-stage.md"
   COMMAND_MD="$REPO_ROOT/.claude/commands/gaia-test.md"
+  DISPATCH_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lens-dispatch.md"
 }
 
 # has <file> <literal>: the file holds the literal.
@@ -61,6 +62,22 @@ line_of() {
   has "$STAGE_MD" 'confirms every listed test proves a behavior the SPEC states' || return 1
   has "$STAGE_MD" 'At most one test per stated behavior, at the cheapest layer that proves it' || return 1
   has "$STAGE_MD" 'Flow tests sit outside the cap and every SPEC flow gets one' || return 1
+}
+
+# A case-insensitive filesystem (the macOS default) treats two names that differ
+# only in case as one path, so a findings folder named like the record makes the
+# lens pre-clear's rm -rf delete the record.
+@test "the review findings folder never shares the TEST-STAGE record's name ignoring case" {
+  local record='TEST-STAGE' row folder
+  has "$STAGE_MD" "write \`<PLAN_DIR>/$record\`" || return 1
+  row="$(grep -F '| Findings directory (`<FINDINGS_DIR>`) |' "$DISPATCH_MD")"
+  folder="$(awk -F'|' '{ print $(NF - 1) }' <<<"$row" | tr -d ' `')"
+  folder="${folder#<PLAN_DIR>/}"
+  folder="${folder%/}"
+  [ -n "$folder" ] || return 1
+  [ "$(tr '[:upper:]' '[:lower:]' <<<"$folder")" != "$(tr '[:upper:]' '[:lower:]' <<<"$record")" ] || return 1
+  has "$STAGE_MD" "\`<PLAN_DIR>/$folder/\`" || return 1
+  has "$DISPATCH_MD" "\`rm -rf <PLAN_DIR>/$folder\`, then \`mkdir -p <PLAN_DIR>/$folder\`" || return 1
 }
 
 @test "the gaia-test command routes to the test stage and runs on a saved plan" {

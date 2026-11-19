@@ -26,9 +26,8 @@
 #                 <root>/.gaia/local/audit/, and the audit key's branch half is
 #                 read from THIS tree (never the caller's CWD).
 #     --member    REQUIRED. The Code Audit Team member writing the sidecar.
-#     --base      REQUIRED. The incremental audit base sha. Combined with the
-#                 acting tree's own branch into the key
-#                 (gaia_audit_key, .gaia/scripts/audit-key-lib.sh).
+#     --base      REQUIRED. The audit-key base sha (wiki/concepts/Code Review
+#                 Audit Agent.md, "## Re-run carry-forward ledger").
 #     --findings  REQUIRED. Path to a JSON array of finding objects, or `-` to
 #                 read that array from stdin. `[]` is valid and meaningful: the
 #                 member ran and found nothing countable.
@@ -183,7 +182,8 @@ usage: audit-write-findings.sh --root <path> --member <name> --base <sha>
 
   --root       the audited working root (the sidecar lands under it).
   --member      the Code Audit Team member writing the sidecar.
-  --base        the incremental audit base sha (keyed with this tree's branch).
+  --base        the shared audit-key base sha, KEY_BASE (keyed with this
+                tree's branch).
   --findings    a JSON array of finding objects, or `-` for stdin. `[]` is valid.
   --resolutions a JSON array of {entry_id, rationale} records, or `-` for
                 stdin (not together with `--findings -`).
