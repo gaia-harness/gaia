@@ -258,6 +258,7 @@ fi
 placeholder_check
 
 
+# shellcheck disable=SC2154  # test_stage_owed comes from read_test_stage in plan-verify-lib.sh
 flow_checks() {
   local flow_output flow_status=0 web_directory='' flow_id slug kind target
   local stems_text phase last_phase=0 task_file task_name task_stem task_phase matches
