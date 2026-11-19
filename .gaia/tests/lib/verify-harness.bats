@@ -170,6 +170,24 @@ missing_manifest_diagnostic() {
   [ "$(vhf_log_entries 02-marker-strip)" = "$VHF_ROOT" ]
 }
 
+@test "round mode hands shell-lint the round's delta as its path list" {
+  fixture
+  cat >.gaia/tests/shell-lint.sh <<'STUB'
+#!/usr/bin/env bash
+# Carries the `--paths-from)` literal the runner probes for before passing it.
+case "$1" in
+  --paths-from) tr '\0' '\n' <"$2" | sed 's/^/shell-lint-path|/' >>"$VERIFY_FIXTURE_LOG" ;;
+  *) printf 'shell-lint-path|whole tree\n' >>"$VERIFY_FIXTURE_LOG" ;;
+esac
+STUB
+  vhf_commit "a shell-lint stub that logs its path list"
+  printf 's1 two\n' >src/s1-input.txt
+  vhf_commit "a HEAD commit touching one file"
+  run_runner round
+  [ "$status" -eq 0 ]
+  [ "$(vhf_log_entries shell-lint-path)" = "src/s1-input.txt" ] || { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
+}
+
 @test "round mode runs the HEAD commit's selection and leaves the marked suites to branch mode" {
   fixture
   printf 's1 two\n' >src/s1-input.txt

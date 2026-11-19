@@ -182,7 +182,13 @@ verify_execute_check() {
   local kind="$1" tree="$2" output_file="$3" staging_directory line_limit_status
   case "$kind" in
     shell-lint)
-      (cd "$tree" && bash .gaia/tests/shell-lint.sh) >"$output_file" 2>&1 </dev/null
+      # A merge base whose gate predates --paths-from would exit 2 on it, and
+      # an unreadable base reads as "main is red"; it lints the whole tree.
+      if [ -n "${verify_round_delta_file:-}" ] && grep -qF -- '--paths-from)' "$tree/.gaia/tests/shell-lint.sh"; then
+        (cd "$tree" && bash .gaia/tests/shell-lint.sh --paths-from "$verify_round_delta_file") >"$output_file" 2>&1 </dev/null
+      else
+        (cd "$tree" && bash .gaia/tests/shell-lint.sh) >"$output_file" 2>&1 </dev/null
+      fi
       ;;
     line-limit)
       # shellcheck disable=SC2086

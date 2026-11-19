@@ -67,4 +67,10 @@ The change selector picks a suite only when the suite names a changed file. A te
 **How the runner uses the marks.** The verification runner (`.gaia/tests/verify-harness.sh`) runs every marked test in branch mode (`--filter-tags whole-tree`), runs a suite the change selector picks in full under bats selected, and leaves marks out of round mode; the why is the maintainer block in `wiki/concepts/Audit Round Procedure.md`. Pre-merge CI runs every marked test, so it catches a round fix that breaks a whole-tree invariant, and the full suite runs on every push to main. The patterns in `.gaia/tests/helpers/verify-harness-bats-lib.sh` define the marked set.
 
 `.gaia/tests/whole-tree-mark-guard.sh` flags an unmarked test or suite that enumerates the real tracked tree through an idiom it recognizes; its header lists the idioms. It also sees a test that reaches the tree through a script or helper it calls; its header owns the hops it follows and the idioms it recognizes. What it cannot see (a path built at run time) needs a hand mark, and an unmarked one is caught only by the push-to-main full run. A suite that writes fixture suites carrying either tag assembles the line at run time (`printf '# bats %s\n' 'test_tags=whole-tree'`) so it never holds the line at column 0 itself.
+
+## Mark a guard's real deny case with `# bats test_tags=protected`
+
+Tag the one test that drives a security, permission, enforcement-hook or data-loss guard to its real deny, on its own line above the `@test`, joining a comma list as `whole-tree` does (`# bats test_tags=whole-tree,protected`). Tag the real case, never a mutant or red twin of the checker.
+
+`.gaia/scripts/check-protected-tests.sh`, run by shell-lint, fails when a test tagged at the merge base is gone from the tree or untagged, a rename included. To remove one on purpose, add a trailer to a commit on the branch: `Protected-Test-Removed: <suite path> :: <test name> -- <reason>`.
 <!-- gaia:maintainer-only:end -->

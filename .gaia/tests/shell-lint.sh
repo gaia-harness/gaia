@@ -17,7 +17,14 @@
 # a usage error, a bad argument, and no pass ran at all.
 # Run it directly from anywhere: `bash .gaia/tests/shell-lint.sh`.
 #
-# Usage: shell-lint.sh [--only bash32-parse]
+# Usage: shell-lint.sh [--only bash32-parse] [--paths-from <file>]
+#
+# `--paths-from` narrows the shellcheck passes and the bash-3.2 parse pass to
+# the tracked files the given NUL-delimited list names; a pass whose set comes
+# back empty is skipped, not failed. The folded guards still scan the whole
+# tree: each treats an empty surface as a hard error, so a delta holding none
+# of a guard's file types would red it. `verify-harness.sh round` passes the
+# round's delta here; branch mode and CI lint the whole tree.
 #
 # `--only bash32-parse` runs the bash-3.2 parse pass and nothing else. That is
 # how .github/workflows/shell-lint.yml arms that pass on a macOS runner, which
@@ -83,6 +90,7 @@ set -euo pipefail
 # runs every pass below, unchanged. One value is selectable, for the reason the
 # header gives.
 ONLY_PASS=
+PATHS_FROM=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --only)
@@ -95,9 +103,17 @@ while [ "$#" -gt 0 ]; do
       ONLY_PASS="$2"
       shift 2
       ;;
+    --paths-from)
+      if [ "$#" -lt 2 ] || [ ! -r "$2" ]; then
+        echo "ERROR: --paths-from needs a readable file of NUL-delimited repo-relative paths" >&2
+        exit 2
+      fi
+      PATHS_FROM="$2"
+      shift 2
+      ;;
     *)
       echo "ERROR: unknown argument: $1" >&2
-      echo "usage: shell-lint.sh [--only bash32-parse]" >&2
+      echo "usage: shell-lint.sh [--only bash32-parse] [--paths-from <file>]" >&2
       exit 2
       ;;
   esac
@@ -174,29 +190,53 @@ fi
 # below cannot catch that: the other files match normally, so the set is not
 # empty. `.gaia/scripts/lint-git-path-quoting.sh` is the check that keeps this
 # whole family quoted.
+# narrow_to_paths_from: pass through, NUL-delimited, the paths on stdin that the
+# --paths-from list names; with no list, every path. A case match on the joined
+# list rather than an associative array, which bash 3.2 lacks.
+paths_from_joined=""
+if [ -n "$PATHS_FROM" ]; then
+  paths_from_joined="$(tr '\0' '\n' < "$PATHS_FROM")"
+fi
+narrow_to_paths_from() {
+  local candidate_path
+  while IFS= read -r -d '' candidate_path; do
+    if [ -z "$PATHS_FROM" ]; then
+      printf '%s\0' "$candidate_path"
+      continue
+    fi
+    case $'\n'"$paths_from_joined"$'\n' in
+      *$'\n'"$candidate_path"$'\n'*) printf '%s\0' "$candidate_path" ;;
+    esac
+  done
+}
+
 sh_scripts=()
 while IFS= read -r -d '' tracked_path; do
   sh_scripts+=("$tracked_path")
-done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh')
+done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh' | narrow_to_paths_from)
 
 bats_scripts=()
 while IFS= read -r -d '' tracked_path; do
   bats_scripts+=("$tracked_path")
-done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.bats')
+done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.bats' | narrow_to_paths_from)
 
 githook_hooks=()
 while IFS= read -r -d '' tracked_path; do
   githook_hooks+=("$tracked_path")
-done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '.githooks/*')
+done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '.githooks/*' | narrow_to_paths_from)
 
 # Guard the expansion below: on bash 3.2 a bare "${sh_scripts[@]}" over an EMPTY
 # array aborts with `unbound variable` under `set -u`. An empty *.sh result also
 # means the glob or the repo root resolved wrong, which should fail loudly, not
 # lint nothing and report success. The *.bats set is allowed to be empty and is
-# simply skipped; only the always-present *.sh set is a hard precondition.
-if [ "${#sh_scripts[@]}" -eq 0 ]; then
+# simply skipped; only the always-present *.sh set is a hard precondition. A
+# --paths-from list legitimately names no script, so there it is skipped too.
+if [ "${#sh_scripts[@]}" -eq 0 ] && [ -z "$PATHS_FROM" ]; then
   echo "ERROR: no tracked *.sh files found under $REPO_ROOT" >&2
   exit 1
+fi
+if [ -n "$PATHS_FROM" ]; then
+  echo "    scope: shellcheck and the bash-3.2 parse cover only the files $PATHS_FROM lists; the folded guards scan the whole tree"
 fi
 
 # Concurrent shellcheck workers. One shellcheck invocation is single-threaded and
@@ -338,7 +378,9 @@ report_verdict() {
 # the binary they need.
 if [ -z "$ONLY_PASS" ]; then
   echo "--> shellcheck *.sh (severity=$SH_SEVERITY, jobs=$JOBS): ${#sh_scripts[@]} tracked scripts"
-  if ! run_shellcheck_pass sh "$SH_SEVERITY" ${sh_scripts[@]+"${sh_scripts[@]}"}; then
+  # Only a --paths-from list reaches here with none; an empty list would
+  # divide by zero workers.
+  if [ "${#sh_scripts[@]}" -gt 0 ] && ! run_shellcheck_pass sh "$SH_SEVERITY" ${sh_scripts[@]+"${sh_scripts[@]}"}; then
     status=1
   fi
 
@@ -606,6 +648,14 @@ fi
 # rides the same override seam under its own slug.
 echo "--> check-retired-paths (a harness citation of a root path that moved under apps/web/)"
 if ! run_guard check-retired-paths; then
+  status=1
+fi
+
+# Fold in the protected-test gate: deleting the only test of a security or
+# enforcement behavior is otherwise caught by review alone. Not named lint-*,
+# for the same reason as the drift check above.
+echo "--> check-protected-tests (a protected bats test removed or untagged since the merge base)"
+if ! run_guard check-protected-tests; then
   status=1
 fi
 
