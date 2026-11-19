@@ -96,8 +96,9 @@ run_gate() {
   [ "$status" -eq 0 ] || { printf '%s\n%s\n' "$output" "$stderr" >&2; return 1; }
 }
 
-# A verbatim commit keeps the trailing space git's default cleanup would strip,
-# so the blank reason reaches the gate as written.
+# --cleanup=verbatim keeps the trailer's trailing space: git's default cleanup
+# strips it, the line then lacks the key's " -- ", and this case passes even
+# against the bug it guards.
 @test "a blank reason after a protected test name that carries ' -- ' does not waive it" {
   local dashed_name='denies a token -- forged signature'
   write_guard_suite "$dashed_name"
