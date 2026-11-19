@@ -39,7 +39,7 @@ diagnose_branch() {
   fi
 
   # Wrong Node version (simplified: check if version string contains "14." or "16.")
-  # Production logic compares against .nvmrc / engines.node range
+  # Production logic compares against the engines.node range
   if printf '%s' "$node_version" | grep -qE '^v(14|16)\.'; then
     printf 'user-config'
     return 0

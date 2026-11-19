@@ -7,6 +7,7 @@
 #     protected/audit-loop/                             state: history + allowance
 #     protected/checkpoint-override.json                the per-machine override
 #   <main>/.gaia/local/cache/shared/context/            per-session context readings
+#   <main>/.gaia/local/cache/shared/rate-limits.json    the shared rate-limit reading
 # The protected folder is guarded as a whole, so a file added to it later is
 # protected by its placement, with no edit to this guard.
 #
@@ -20,6 +21,10 @@
 # checkpoint is answered by the pinned AskUserQuestion or by a human typing
 # `audit-grant <n>` or `audit-accept`; both reach the state through a hook,
 # never a tool call.
+# The dispatch checkpoint trusts the shared rate-limit reading (the statusline
+# writes it through the CLI's library), so Claude writing it, or running the
+# CLI's write verb, would forge the figure every session acts on. That arm lives
+# in lib/rate-limits-guard.sh, sourced below.
 # The recorders read a hook payload on stdin, so a forged payload piped to one
 # from Bash would mint an answer: this guard denies executing them. The writer
 # hooks and the statusline run as their own processes, so they are not subject
@@ -35,7 +40,8 @@
 #     re-appended), so a linked worktree's `.gaia/local` symlink to the main
 #     checkout resolves to the real directory. Denied when the result is
 #     <main>/.gaia/local/protected or lies inside it, or lies inside
-#     <main>/.gaia/local/cache/shared/context/ (<main> from
+#     <main>/.gaia/local/cache/shared/context/, or is
+#     <main>/.gaia/local/cache/shared/rate-limits.json (<main> from
 #     gaia_resolve_main_root of the payload cwd), or when the literal path
 #     contains or ends in one of those spellings (catches a worktree spelling
 #     whose symlink target cannot be resolved). A sibling inside the folder
@@ -46,7 +52,9 @@
 #     remit.
 #   Bash / Monitor: .tool_input.command. Cheap pre-filter first: allowed unless
 #     the payload contains `audit-loop`, `local/protected` or
-#     `cache/shared/context`. For the protected folder the command must name
+#     `cache/shared/context`, `cache/shared/rate-limits.json`,
+#     `rate-limits-lib.sh`, or `rate-limits.sh` with `write` after it (never a
+#     bare `rate-limits`, so a read arms nothing). For the protected folder the command must name
 #     `.gaia/local/protected` followed by a slash, a delimiter or the end of
 #     the command: a path segment that merely starts with `protected` (a
 #     sibling such as `.gaia/local/protected-notes.md`) does not arm it. The
@@ -85,6 +93,14 @@
 #     state-reaper-session-start.sh. Naming them stays allowed, and so does
 #     running a bats suite whose path merely contains `state-reaper`, since the
 #     suite path is not one of those four file names.
+#   Shared rate-limit reading: the same quote-aware reading and unsound-reading
+#     fallback denies a command that redirects into the file or runs a write,
+#     move or delete verb over it (`>`, `rm`, `mv`, `cp`, `tee`, `ln`, `sed -i`
+#     and the like), and a command that EXECUTES `rate-limits.sh` with `write`
+#     as its first argument (command word, or the script argument of bash, sh,
+#     zsh, dash, ksh, `source`, `.` or `exec`; quoted or not). `rate-limits.sh
+#     read`, `cat` and `jq .` of the file, and `git add`, `git diff`,
+#     `shellcheck` or `bash -n` naming either script stay allowed.
 #
 # WHAT IS NOT COVERED (exotic spellings, outside the guarantee): a `cd` into a
 # guarded directory followed by relative names; `eval`, `bash -c`, `env`,
@@ -113,7 +129,14 @@
 # .gaia/scripts/context-checkpoint-lib.sh and calling gaia_context_write, directly or
 # through a wrapper such as .gaia/statusline/context-reading.sh's
 # gaia_statusline_write_context (such a reading stands until the next real
-# statusline render overwrites it).
+# statusline render overwrites it). The shared rate-limit reading has the same
+# residuals: a crafted payload piped into .gaia/statusline/gaia-statusline.sh,
+# sourcing .gaia/scripts/rate-limits-lib.sh and calling its writer (directly or
+# through .gaia/statusline/rate-limits-reading.sh), and a write spelled through
+# the wrappers above, a path in a variable or a `cd` followed by a relative
+# name; such a reading stands until a higher real reading or the window's reset.
+# With jq absent, a quoted `'write'` or a doubled space before it passes the
+# jq-absent refusal, which matches the unquoted single-space literal only.
 #
 # THE PARENT. Deleting the parent `.gaia/local` (which would take the state with
 # it) is block-rm-rf.sh's remit, not this guard's, and is not widened here.
@@ -144,7 +167,7 @@ fi
 # a payload without any is outside the remit with no
 # jq read at all. This is the path every ordinary Bash call takes.
 case "$payload" in
-  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context*) ;;
+  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits.json* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
   *) exit 0 ;;
 esac
 
@@ -157,7 +180,7 @@ if ! type gaia_require_jq >/dev/null 2>&1; then
   printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/jq-availability.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
-gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context'
+gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits.json' 'rate-limits-lib.sh' 'rate-limits.sh write'
 
 set +e
 # shellcheck source=lib/hook-payload.sh
@@ -178,9 +201,10 @@ DENY_OVERRIDE_MESSAGE="BLOCKED: block-audit-loop-write.sh: <main>/.gaia/local/pr
 DENY_FOLDER_MESSAGE="BLOCKED: block-audit-loop-write.sh: <main>/.gaia/local/protected/ holds state the audit checkpoint trusts, and only hooks or a human write <main>/.gaia/local/protected/, by hand from a terminal outside Claude Code. Claude never creates, writes, edits, moves or deletes anything in it. A human answers a checkpoint through the pinned AskUserQuestion, or by typing a whole prompt that is exactly the audit-grant <n> or audit-accept line (see wiki/concepts/PR Merge Workflow.md, #### The branch checkpoint)."
 DENY_RECORDER_MESSAGE="BLOCKED: block-audit-loop-write.sh: audit-loop-grant.sh and audit-loop-ask-grant.sh run only as hooks. Claude never executes them from Bash or Monitor, because a piped payload would forge a checkpoint answer. A human answers a checkpoint through the pinned AskUserQuestion, or by typing a whole prompt that is exactly the audit-grant <n> or audit-accept line (see wiki/concepts/PR Merge Workflow.md, #### The branch checkpoint). Naming the files (git add, git diff, git grep -l, shellcheck, cat, bash -n) is allowed."
 DENY_REAPER_MESSAGE="BLOCKED: block-audit-loop-write.sh: the local-state reaper scripts (state-reaper.sh, state-reaper-lib.sh, state-reaper-classes.sh and state-reaper-session-start.sh) execute only as hooks. The reaper prunes <main>/.gaia/local/protected/, which Claude never writes or deletes, so Claude never executes them from Bash or Monitor. Naming the files (git add, git diff, git grep -l, shellcheck, cat, bash -n) and running a bats suite for them is allowed."
+DENY_RATE_LIMITS_MESSAGE="BLOCKED: block-audit-loop-write.sh: the shared rate-limit reading (<main>/.gaia/local/cache/shared/rate-limits.json) is written by the statusline on each render, and the dispatch checkpoint trusts it. Claude never writes, edits, moves or deletes it, and never runs rate-limits.sh with the write verb. A human clears a wrong reading by deleting the file in their own shell outside Claude Code. Reading it (rate-limits.sh read, cat, jq) is allowed."
 DENY_BASH_TRIGGER="Trigger: the command names that path and either redirects into it or carries a write, move or delete verb (rm, mv, cp, tee, ln, touch, sed -i, an interpreter given -c or -e, and the like) outside quotes; in a command holding a heredoc, an unclosed quote, a command substitution inside double quotes, or a redirect target built from a variable or a glob, any redirect or such verb anywhere counts. A command that names the path only as quoted text and redirects elsewhere is allowed, so stage a note that mentions it with printf and a quoted string, no heredoc, or leave the literal path out of the command."
 
-# deny <state|override|folder|context|recorder|reaper> [bash]
+# deny <state|override|folder|context|recorder|reaper|rate-limits> [bash]
 deny() {
   local message
   case "$1" in
@@ -189,6 +213,7 @@ deny() {
     folder) message="$DENY_FOLDER_MESSAGE" ;;
     recorder) message="$DENY_RECORDER_MESSAGE" ;;
     reaper) message="$DENY_REAPER_MESSAGE" ;;
+    rate-limits) message="$DENY_RATE_LIMITS_MESSAGE" ;;
     *) message="$DENY_STATE_MESSAGE" ;;
   esac
   [ "${2-}" != bash ] || message="$message $DENY_BASH_TRIGGER"
@@ -460,7 +485,8 @@ writes_named() {
 
 # guarded_script_kind <word>: rc 0 when the word's file name is one of the two
 # recorders or one of the four reaper scripts; sets SCRIPT_KIND to the deny
-# class (recorder or reaper).
+# class (recorder or reaper). The default matcher of words_run_guarded_script.
+# shellcheck disable=SC2329
 guarded_script_kind() {
   case "$1" in
     audit-loop-grant.sh | */audit-loop-grant.sh | audit-loop-ask-grant.sh | */audit-loop-ask-grant.sh)
@@ -475,11 +501,13 @@ guarded_script_kind() {
   return 1
 }
 
-# words_run_guarded_script: rc 0 when the simple command held in the `words`
-# array executes a recorder or a reaper script (command word, or script
-# argument of a shell or `source`/`.`/`exec`).
+# words_run_guarded_script [matcher]: rc 0 when the simple command held in the
+# `words` array executes a script the matcher accepts (command word, or script
+# argument of a shell or `source`/`.`/`exec`). The matcher is called as
+# `<matcher> <script-word> <next-word>`; the default, guarded_script_kind,
+# accepts a recorder or a reaper script.
 words_run_guarded_script() {
-  local count=${#words[@]} word_index=0 word base syntax_check
+  local matcher="${1:-guarded_script_kind}" count=${#words[@]} word_index=0 word base syntax_check
 
   # Skip leading NAME=value words, `!`, and `exec`.
   while [ "$word_index" -lt "$count" ]; do
@@ -491,7 +519,7 @@ words_run_guarded_script() {
   [ "$word_index" -lt "$count" ] || return 1
 
   word="${words[$word_index]}"
-  guarded_script_kind "$word" && return 0
+  "$matcher" "$word" "${words[$((word_index + 1))]-}" && return 0
   base="${word##*/}"
   case "$base" in
     bash | sh | zsh | dash | ksh | source | .)
@@ -504,7 +532,7 @@ words_run_guarded_script() {
           -o | +o) word_index=$((word_index + 1)) ;;
           -* | +*) ;;
           *)
-            if guarded_script_kind "$word" && [ "$syntax_check" -eq 0 ]; then
+            if "$matcher" "$word" "${words[$((word_index + 1))]-}" && [ "$syntax_check" -eq 0 ]; then
               return 0
             fi
             break
@@ -517,18 +545,21 @@ words_run_guarded_script() {
   return 1
 }
 
-# runs_guarded_script <command>: rc 0 when a simple command in the line
-# executes a recorder or a reaper script, with SCRIPT_KIND naming which. Each
+# runs_guarded_script <command> [matcher]: rc 0 when a simple command in the
+# line executes a script the matcher accepts (default guarded_script_kind: a
+# recorder or a reaper script, with SCRIPT_KIND naming which). Each
 # segment is read twice, as the shell groups its quotes (a
 # quoted path with a space stays one word) and as blank-separated words with
 # their quotes stripped (a quote the segment split cut in half), and either
 # reading executing a recorder counts.
 runs_guarded_script() {
-  local command_line="$1" segments segment words word_index count word
-  case "$command_line" in
-    *audit-loop-grant.sh* | *audit-loop-ask-grant.sh* | *state-reaper*) ;;
-    *) return 1 ;;
-  esac
+  local command_line="$1" matcher="${2:-guarded_script_kind}" segments segment words word_index count word
+  if [ "$matcher" = guarded_script_kind ]; then
+    case "$command_line" in
+      *audit-loop-grant.sh* | *audit-loop-ask-grant.sh* | *state-reaper*) ;;
+      *) return 1 ;;
+    esac
+  fi
   segments="${command_line//\$\(/$'\n'}"
   segments=$(printf '%s' "$segments" | tr ';&|`()' '\n')
   while IFS= read -r segment; do
@@ -543,7 +574,7 @@ runs_guarded_script() {
       words[word_index]="$word"
       word_index=$((word_index + 1))
     done
-    words_run_guarded_script && return 0
+    words_run_guarded_script "$matcher" && return 0
 
     shell_scan "$segment"
     words=()
@@ -554,10 +585,19 @@ runs_guarded_script() {
       word_index=$((word_index + 1))
     done
     [ "$count" -gt 0 ] || continue
-    words_run_guarded_script && return 0
+    words_run_guarded_script "$matcher" && return 0
   done <<<"$segments"
   return 1
 }
+
+set +e
+# shellcheck source=lib/rate-limits-guard.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/rate-limits-guard.sh" ] && . "$_jq_library_directory/rate-limits-guard.sh" 2>/dev/null
+set -e
+if ! type gaia_rate_limits_guard_path >/dev/null 2>&1; then
+  printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/rate-limits-guard.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
+  exit 2
+fi
 
 case "$tool_name" in
   Edit | Write | MultiEdit)
@@ -592,6 +632,7 @@ case "$tool_name" in
     # whose main root could not be resolved).
     class=$(guarded_class "$resolved")
     [ -z "$class" ] || deny "$class"
+    ! gaia_rate_limits_guard_path "$file_path" "$resolved" || deny rate-limits
     exit 0
     ;;
 
@@ -619,6 +660,9 @@ case "$tool_name" in
     fi
     if [[ "$command_line" =~ $context_names_re ]] && writes_named "$command_line" "$context_names_re"; then
       deny context bash
+    fi
+    if gaia_rate_limits_guard_runs_write "$command_line" || gaia_rate_limits_guard_writes_file "$command_line"; then
+      deny rate-limits bash
     fi
     exit 0
     ;;

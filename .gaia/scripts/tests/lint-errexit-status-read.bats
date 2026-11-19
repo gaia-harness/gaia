@@ -1871,15 +1871,6 @@ FIXTURE
   [ "$( grep -cF -- 'suite.bats: ERROR: the scan lost track' <<<"$output" )" -eq 1 ]
 }
 
-# --- the real tree ---------------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "the repository's own scanned surface is clean" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER' 2>&1"
-  [ "$status" -eq 0 ]
-  grep -qF -- 'lint-errexit-status-read: clean' <<<"$output"
-}
-
 # --- the bare `(( ))` arithmetic command ------------------------------------
 
 # `<<` inside arithmetic is a left shift, not a redirection. Read as a

@@ -692,6 +692,8 @@ expected_retention_table() {
 setup-state keep - - - - -
 context-readings age 7 - - file *.json,*.json.tmp.*
 cache-shared-orphan-temps age 7 - - file -
+rate-limits-reading owned - - - - -
+rate-limits-orphan-temps age 7 - - file -
 cache-shared owned - - - - -
 state-reaper-state owned - - - - -
 checkpoint-override keep - - - - -
@@ -747,6 +749,7 @@ ports-launch-records owned - - - - -
 ports-session-registry owned - - - - -
 doctrine-injected-marker age 7 - - - -
 context-checkpoint-markers age 7 - - file [!.]*,.*.*
+rate-limit-checkpoint-markers age 7 - - file [!.]*,.*.*
 context-checkpoint-agent-markers age 7 - - file [!.]*,.*.*
 TABLE
 }

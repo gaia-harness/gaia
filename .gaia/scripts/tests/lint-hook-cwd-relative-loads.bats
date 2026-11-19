@@ -397,10 +397,3 @@ true  # Usage: [ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/
   grep -qF -- "ERROR:" <<<"$output" || return 1
   grep -qF -- "fewer than the floor" <<<"$output"
 }
-
-# bats test_tags=whole-tree
-@test "the real hook tree is clean" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER' 2>&1"
-  [ "$status" -eq 0 ]
-  grep -qF -- "lint-hook-cwd-relative-loads: clean" <<<"$output"
-}

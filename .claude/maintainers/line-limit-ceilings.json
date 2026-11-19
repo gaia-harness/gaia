@@ -1,7 +1,7 @@
 {
   "ceilings": {
     ".claude/hooks/audit-loop-bound.sh": 855,
-    ".claude/hooks/block-audit-loop-write.sh": 629,
+    ".claude/hooks/block-audit-loop-write.sh": 673,
     ".claude/hooks/block-main-destructive-git.sh": 497,
     ".claude/hooks/block-rm-rf.sh": 820,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
@@ -80,7 +80,7 @@
     ".gaia/scripts/worktree-ports-lib.sh": 491,
     ".gaia/statusline/gaia-statusline-right.sh": 637,
     ".github/forensics/parse-issue-body.sh": 404,
-    ".github/workflows/audit-ci-tests.yml": 996,
+    ".github/workflows/audit-ci-tests.yml": 1019,
     ".github/workflows/cli-tests.yml": 512,
     ".github/workflows/forensics-triage.yml": 891
   },

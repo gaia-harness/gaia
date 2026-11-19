@@ -331,6 +331,16 @@
             "statusMessage": "Checking audit loop checkpoint…"
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task|Workflow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/rate-limit-checkpoint-inject.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [

@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-11-10
+updated: 2026-11-19
 tags: [concept, ci, review]
 ---
 
@@ -120,7 +120,7 @@ The audit of a branch runs through the `audit-loop-unit` agent (`.claude/agents/
 
 1. Run `bash .gaia/scripts/audit-loop-eval.sh next-unit --root <RESOLVED_ROOT>`. It prints `<u> <s>`: the unit number and the round the unit opens. Copy both into the brief; `<s>` is also what a veto records as `effective_from_round`.
 2. Pre-clear the unit's artifact: `rm -f <RUN_FOLDER>/unit-<u>.json`.
-3. Dispatch the unit with the brief below. The bound hook gates this dispatch ([[#The branch checkpoint]]). K is never in the brief.
+3. Dispatch the unit with the brief below. The bound hook gates this dispatch ([[#The branch checkpoint]]). K is never in the brief. Before each dispatch run `bash .gaia/scripts/rate-limits.sh read`, whatever the rate-limit hook's once-per-band marker says, and open `.claude/doctrine/rate-limit-checkpoint.md` only when a window prints at or above its warning band (`GAIA_RATE_LIMIT_WARNING_PERCENTAGE` in `.gaia/scripts/rate-limits-lib.sh`).
 4. Wait with one blocking Monitor until-loop on `<RUN_FOLDER>/unit-<u>.json`, not turn by turn. The file does not exist while the unit runs, so its appearance marks the unit's return; classify only once the file exists.
 5. Classify the file with `bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <RUN_FOLDER>/unit-<u>.json --report-key rounds --min-count 1`. A unit that opened no round still writes one `rounds[]` element, so a real unit always passes. On a no-op, recompute `next-unit`, pre-clear, and re-dispatch once; a second consecutive no-op stops the main thread for the human; it never runs the round procedure itself.
 6. Read the file and branch on its `stop_reason`.

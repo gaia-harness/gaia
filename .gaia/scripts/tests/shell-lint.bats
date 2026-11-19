@@ -23,8 +23,8 @@
 # is a smaller unit for the sharder to place, not a cheaper one. Lowering the
 # number here means
 # reducing how many times the tests below re-drive the whole-tree gate, which
-# is why only the first test runs the real folded guards and the chunk tests
-# stub them.
+# is why every test here but the single real-tree guard run stubs the folded
+# guards.
 #
 # The shellcheck binary is stubbed with an always-clean, pinned-version fake on
 # PATH so the suite runs on the audit-ci-tests box (bats installed, no linter
@@ -100,10 +100,7 @@ tracked_sh() {
     fi
     last="$tracked_path"
   # gaia-lint-ignore whole-tree-mark-guard: the callers, the first-chunk and
-  # last-chunk fail-closed tests, each carry the per-test whole-tree mark. The
-  # clean-tree run test is left unmarked because branch mode's shell-lint step
-  # runs the same gate over the real tree, and is skipped on a host that
-  # has no shellcheck, where only the full CI run covers it.
+  # last-chunk fail-closed tests, each carry the per-test whole-tree mark.
   done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh')
   if [ "$which_end" = "first" ]; then
     printf '%s\n' "$first"
@@ -136,15 +133,10 @@ gate_pass_headers() {
 # .claude/rules/bats-assertions.md: a cardinal in the prose rots the next time
 # the gate gains a guard, and the rotted number reads as a checked assertion.
 #
-# ONE gate run covers the whole set, not one run per guard. A clean-tree run is the
-# same execution whichever proof line is grepped afterwards, and it is the
-# suite's most expensive single operation -- the folded guards each walk every
-# tracked script, and together they cost most of it. The
-# seven separate tests this replaced paid that seven times over for seven greps
-# against byte-identical output, which is most of why this file could hold a
-# scripts-N shard at the 13-minute cap in .github/workflows/audit-ci-tests.yml
-# (#1619). Splitting one execution across seven @test bodies bought no isolation
-# either: a run that fails reds every one of them together.
+# ONE gate run covers the whole set, not one run per guard: a run is the same
+# execution whichever proof line is grepped afterwards, so splitting it across
+# @test bodies buys no isolation, and a run that fails reds every one of them
+# together.
 #
 # The set is derived from the gate rather than listed here, for the reason the
 # --only absence loop below records: a hand-written list falls behind the gate
@@ -158,13 +150,17 @@ gate_pass_headers() {
 
 # bats test_tags=whole-tree
 @test "the gate invokes every folded guard pass and stays green on a clean tree" {
-  run env PATH="$STUB_DIRECTORY:$PATH" SHELLCHECK_LOG="$STUB_DIRECTORY/argv.log" bash "$GATE"
+  local overrides=() line
+  while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
+  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} SHELLCHECK_LOG="$STUB_DIRECTORY/argv.log" bash "$GATE"
   [ "$status" -eq 0 ]
   grep -qF -- "shell-lint passed" <<<"$output"
 
   # Each folded guard is asserted twice: the gate's own header, which says the
-  # gate reached the pass, and the guard's OWN clean line, which is printed by
-  # the guard script itself and so appears only if the invocation actually ran.
+  # gate reached the pass, and the guard's OWN clean line, which only the
+  # invoked script (here its stub) prints, so it appears only if the invocation
+  # actually ran. The real guards' verdict over the tree is the real-tree test
+  # below, so this run checks the wiring alone.
   # The header alone would survive exactly the edit this test exists to catch.
   local pass_name folded=0
   while IFS= read -r pass_name; do
@@ -190,6 +186,32 @@ gate_pass_headers() {
   grep -qE -- '(^| )-s sh( |$).*\.githooks/pre-push' "$STUB_DIRECTORY/argv.log"
 }
 
+# The one run of the real folded guards over the real tree in this suite, and
+# the reason it exists: shell-lint.yml is advisory and runs on pull requests
+# only, so without this test no required check and no push to main would give
+# the guards' verdict. `--only guards` keeps it free of the shellcheck binary
+# the CI bats legs do not install.
+# bats test_tags=whole-tree
+@test "the real folded guards pass over the real tree" {
+  run bash "$GATE" --only guards
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  grep -qF -- "GUARD OVERRIDE" <<<"$output" && return 1
+  grep -qF -- "shell-lint passed" <<<"$output"
+}
+
+
+@test "--paths-from narrows the shellcheck passes to the tracked files it lists" {
+  local overrides=() line listed_script="$THIS_DIRECTORY/../bats-suites-for-change.sh"
+  while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
+  printf '%s\0' .gaia/scripts/bats-suites-for-change.sh README.md > "$STUB_DIRECTORY/paths"
+  [ -f "$listed_script" ]
+  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} SHELLCHECK_LOG="$STUB_DIRECTORY/argv.log" \
+    bash "$GATE" --paths-from "$STUB_DIRECTORY/paths"
+  [ "$status" -eq 0 ]
+  grep -qF -- "1 tracked scripts" <<<"$output"
+  [ "$(grep -c . "$STUB_DIRECTORY/argv.log")" -eq 1 ]
+  grep -qE -- ' \.gaia/scripts/bats-suites-for-change\.sh$' "$STUB_DIRECTORY/argv.log"
+}
 
 # The *.sh and *.bats passes split their file list across concurrent shellcheck
 # workers, one buffered log each. Two ways that aggregation goes green over a
@@ -238,7 +260,7 @@ gate_pass_headers() {
 # a bare `printf`, no `>&2`) rather than derived live -- a stub rig is
 # allowed to assume the shape it stands in for. No count here: the list goes
 # stale by gaining a member, and a cardinal beside it would only go stale
-# twice. Re-derive it with `grep -n ': clean' .gaia/scripts/lint-*.sh` when a
+# twice. Re-derive it with `grep -n ': clean' .gaia/scripts/lint-*.sh .gaia/scripts/check-*.sh` when a
 # guard is folded in.
 #
 # Prints one `SHELL_LINT_GUARD_OVERRIDE_<slug>=<path>` line per folded guard,
@@ -249,9 +271,9 @@ gate_pass_headers() {
 # Args: <directory to write stub scripts into>
 stub_all_guards() {
   local directory="$1" stdout_guards pass_name script stream_redirect variable_name
-  stdout_guards="lint-hook-jq-availability"
+  stdout_guards="lint-hook-jq-availability check-retired-paths"
   while IFS= read -r pass_name; do
-    case "$pass_name" in lint-*) ;; *) continue ;; esac
+    case "$pass_name" in lint-* | check-*) ;; *) continue ;; esac
     script="$directory/$pass_name.stub.sh"
     case " $stdout_guards " in
       *" $pass_name "*) stream_redirect="" ;;
@@ -311,6 +333,39 @@ STUB
   [ "$status" -eq 1 ]
   grep -qF -- "--> check-retired-paths" <<<"$output"
   grep -qF -- "stub failure: retired" <<<"$output"
+  grep -qF -- "shell-lint FAILED" <<<"$output"
+}
+
+# `--only guards` is how verify-harness.sh keeps the folded guards running on a
+# host with no shellcheck, so it has to need no shellcheck binary and run no
+# linter pass.
+# bats test_tags=whole-tree
+@test "--only guards runs every folded guard, no linter pass, and no shellcheck binary" {
+  if PATH="/usr/bin:/bin" command -v shellcheck >/dev/null 2>&1; then
+    skip "this host carries shellcheck in /usr/bin or /bin"
+  fi
+  local overrides=() line pass_name guard_count=0
+  while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
+  run env PATH="/usr/bin:/bin" ${overrides[@]+"${overrides[@]}"} bash "$GATE" --only guards
+  [ "$status" -eq 0 ]
+  grep -qF -- "shell-lint passed" <<<"$output"
+  while IFS= read -r pass_name; do
+    case "$pass_name" in
+      lint-* | check-*)
+        guard_count=$(( guard_count + 1 ))
+        grep -qF -- "$pass_name: clean" <<<"$output" || return 1
+        ;;
+      *) grep -qF -- "--> $pass_name" <<<"$output" && return 1 ;;
+    esac
+  done < <(gate_pass_headers)
+  [ "$guard_count" -gt 1 ]
+
+  local failing_stub="$STUB_DIRECTORY/fail.sh"
+  printf '#!/usr/bin/env bash\necho "stub failure" >&2\nexit 1\n' > "$failing_stub"
+  chmod +x "$failing_stub"
+  run env PATH="/usr/bin:/bin" ${overrides[@]+"${overrides[@]}"} \
+    SHELL_LINT_GUARD_OVERRIDE_check_protected_tests="$failing_stub" bash "$GATE" --only guards
+  [ "$status" -eq 1 ]
   grep -qF -- "shell-lint FAILED" <<<"$output"
 }
 

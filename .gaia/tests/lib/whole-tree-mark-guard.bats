@@ -608,8 +608,6 @@ HOPS="root-argument working-directory no-argument helper suffix-path"
 # whole-tree mark is stripped from a copy of it. An empty test name means the
 # suite carries the file-level mark, so any finding naming the copy counts.
 GAP_TESTS='.gaia/scripts/tests/shell-lint.bats|the gate invokes every folded guard pass and stays green on a clean tree
-.gaia/scripts/tests/check-retired-paths.bats|the real working tree is clean
-.gaia/scripts/tests/lint-hook-array-guard.bats|the real scanned tree (.claude/hooks + .gaia/scripts + .gaia/tests) passes the lint
 .gaia/scripts/tests/check-main-root-derivation.bats|real repo: all three scans are clean against tracked source
 .gaia/scripts/tests/branch-name-lib.bats|no instruction surface spells a GAIA branch literal for git to create
 .gaia/tests/hooks/usage-capture.bats|registration: the rooting, scope-manifest, and cwd-relative-load gates pass
@@ -644,7 +642,7 @@ GAP_TESTS='.gaia/scripts/tests/shell-lint.bats|the gate invokes every folded gua
     fi
     checked=$((checked + 1))
   done <<<"$GAP_TESTS"
-  [ "$checked" -eq 8 ]
+  [ "$checked" -eq 6 ]
 }
 
 @test "the guard source names none of the historical gap suites or tests" {
@@ -658,7 +656,7 @@ GAP_TESTS='.gaia/scripts/tests/shell-lint.bats|the gate invokes every folded gua
     fi
     checked=$((checked + 1))
   done <<<"$GAP_TESTS"
-  [ "$checked" -eq 8 ]
+  [ "$checked" -eq 6 ]
 }
 
 # The source suite enumerates the tracked tree inside a test body. Whichever
