@@ -157,6 +157,19 @@ source_pass_record_helper() {
   [ "$(jq -c .preexisting "$VHF_RECORD")" = '["bats whole-tree"]' ]
 }
 
+@test "a protected-test removal is not absorbed as pre-existing when main's shell-lint is red" {
+  fixture --no-branch
+  vhf_control shell-lint "In scripts/a.sh line 3:"
+  vhf_commit "main breaks shell-lint"
+  vhf_branch
+  vhf_control shell-lint "$(printf 'In scripts/a.sh line 3:\nREMOVED suites/x.bats :: denies a forged token')"
+  vhf_commit "the branch removes a protected test"
+  run_runner branch
+  [ "$status" -eq 1 ]
+  has_line '^FAIL  shell-lint '
+  block_after 'FAIL  shell-lint' | grep -qF 'REMOVED suites/x.bats :: denies a forged token'
+}
+
 # write_flaky_suite: a suite whose one test, marked for the whole-tree step,
 # fails on its first attempt in a run and passes on any later one, the shape of
 # a wall-clock budget test that fails under parallel load and passes alone.

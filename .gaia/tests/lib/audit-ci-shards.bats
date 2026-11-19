@@ -1535,16 +1535,19 @@ w5_step_caps() {
 }
 
 # W6. The matrix and bats-shards.sh agree: the matrix is exactly the sharder's
-# own shard ids plus sandbox, concurrency and commitlint, no extras in either direction.
+# own shard ids plus the workflow-level legs below, no extras in either
+# direction.
+WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
 
 @test "W6: the matrix and the sharder agree" {
   require_yaml_parser
   local matrix_list expected
   matrix_list="$(read_workflow matrix "$WORKFLOW" shards | LC_ALL=C sort)"
-  expected="$(printf '%s\nsandbox\nconcurrency\ncommitlint\n' "$(bash "$BATS_SHARDS" shards)" | LC_ALL=C sort)"
+  # shellcheck disable=SC2086 # the leg list splits on purpose
+  expected="$(printf '%s\n' "$(bash "$BATS_SHARDS" shards)" $WORKFLOW_LEVEL_LEGS | LC_ALL=C sort)"
 
   [ "$matrix_list" = "$expected" ] || {
-    echo "matrix shard list does not equal bats-shards.sh shards plus sandbox/concurrency/commitlint" >&2
+    echo "matrix shard list does not equal bats-shards.sh shards plus $WORKFLOW_LEVEL_LEGS" >&2
     echo "matrix:   $(printf '%s' "$matrix_list" | tr '\n' ' ')" >&2
     echo "expected: $(printf '%s' "$expected" | tr '\n' ' ')" >&2
     return 1
@@ -1561,7 +1564,8 @@ w5_step_caps() {
 
   local matrix_list expected
   matrix_list="$(read_workflow matrix "$doctored" shards | LC_ALL=C sort)"
-  expected="$(printf '%s\nsandbox\nconcurrency\ncommitlint\n' "$(bash "$BATS_SHARDS" shards)" | LC_ALL=C sort)"
+  # shellcheck disable=SC2086 # the leg list splits on purpose
+  expected="$(printf '%s\n' "$(bash "$BATS_SHARDS" shards)" $WORKFLOW_LEVEL_LEGS | LC_ALL=C sort)"
   [ "$matrix_list" != "$expected" ] || { echo "adding a bogus shard id did not desync the matrix from the sharder" >&2; return 1; }
 }
 
@@ -1580,7 +1584,8 @@ w5_step_caps() {
 
   local matrix_list expected
   matrix_list="$(read_workflow matrix "$doctored" shards | LC_ALL=C sort)"
-  expected="$(printf '%s\nsandbox\nconcurrency\ncommitlint\n' "$(bash "$BATS_SHARDS" shards)" | LC_ALL=C sort)"
+  # shellcheck disable=SC2086 # the leg list splits on purpose
+  expected="$(printf '%s\n' "$(bash "$BATS_SHARDS" shards)" $WORKFLOW_LEVEL_LEGS | LC_ALL=C sort)"
   [ "$matrix_list" != "$expected" ] || { echo "dropping lib-1 from the matrix did not desync it from the sharder" >&2; return 1; }
 }
 
@@ -3059,7 +3064,7 @@ fixture_provision_legs() {
 # needing Node and Chromium) also runs, the selection step plans `--full`,
 # and each bats leg reaches exactly one step that runs its whole shard.
 
-W27_WIDEST='event=pull_request filter.code=true filter.scoped=true filter.sandbox=true filter.commitlint=true selection.mode=full selection.needs_node=1 selection.needs_chromium=1'
+W27_WIDEST='event=pull_request filter.code=true filter.scoped=true filter.sandbox=true filter.commitlint=true filter.protected-tests=true selection.mode=full selection.needs_node=1 selection.needs_chromium=1'
 
 # w27_check <workflow>
 w27_check() {
@@ -3127,15 +3132,15 @@ w27_check() {
   [ "$status" -ne 0 ] || { echo "a selection step skipped on push passed W27" >&2; return 1; }
 }
 
-# W28. The sandbox and commitlint legs arm on their own filter outputs (and
-# push and dispatch) only: a harness change runs every bats leg and the
-# concurrency meter whole, and those two legs run whole only when their own
-# filter matches.
+# W28. The sandbox, commitlint and protected-test legs arm on their own filter
+# outputs (and push and dispatch) only: a harness change runs every bats leg
+# and the concurrency meter whole, and these legs run whole only when their
+# own filter matches.
 
 # w28_check <workflow>
 w28_check() {
   local workflow="$1" leg ran gaps=""
-  for leg in sandbox commitlint; do
+  for leg in sandbox commitlint protected-tests; do
     ran="$(read_workflow evalgates "$workflow" shards "$leg" event=pull_request filter.code=true filter.scoped=true | awk -F'\t' '$2 == "run" && $1 !~ /^(actions\/checkout|dorny\/paths-filter)@/ { print $1 }')"
     [ -z "$ran" ] || gaps="${gaps}${leg}: runs [$(printf '%s' "$ran" | tr '\n' ',')] on code and scoped alone"$'\n'
     ran="$(read_workflow evalgates "$workflow" shards "$leg" event=pull_request "filter.${leg}=true" | awk -F'\t' '$2 == "run" && $1 ~ /^Run / { print $1 }')"
@@ -3144,7 +3149,7 @@ w28_check() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "W28: the sandbox and commitlint legs run on their own filter output, not on code or scoped" {
+@test "W28: the sandbox, commitlint and protected-test legs run on their own filter output, not on code or scoped" {
   require_yaml_parser
   w28_check "$WORKFLOW"
 }

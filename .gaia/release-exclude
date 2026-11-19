@@ -121,6 +121,8 @@
 # The retired-path gate fails on a harness citation of a root path that moved under apps/web, or of the retired frontend package root, and its allowlist names the surviving ones. Both describe GAIA's own harness layout, and its runner (shell-lint.sh) and sibling suites (.gaia/scripts/tests/check-retired-paths.bats, .gaia/scripts/tests/retired-frontend-root.bats) are release-excluded, so an adopter clone would carry a check nothing invokes.
 .gaia/scripts/check-retired-paths.sh
 .gaia/retired-paths-allowlist.tsv
+# The protected-test gate guards GAIA's own bats suites, which are release-excluded, and its runner (shell-lint.sh) is too, so an adopter clone would carry a check nothing invokes.
+.gaia/scripts/check-protected-tests.sh
 # Derives the bats suites a change must re-run before an audit dispatch and in each audit round. Every caller sits inside a maintainer-only block the bundle-time scrub removes, and the suites it selects are release-excluded, so an adopter clone would carry a helper nothing invokes.
 .gaia/scripts/bats-suites-for-change.sh
 # Appends light-review routing events to a local log and tallies it. Adopters record nothing, and the tally reads a log only the maintainer repo ever writes, so an adopter clone would carry a script nothing invokes. Its shipped callers sit inside maintainer-only blocks the bundle-time scrub removes.

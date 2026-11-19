@@ -80,7 +80,7 @@
     ".gaia/scripts/worktree-ports-lib.sh": 491,
     ".gaia/statusline/gaia-statusline-right.sh": 637,
     ".github/forensics/parse-issue-body.sh": 404,
-    ".github/workflows/audit-ci-tests.yml": 996,
+    ".github/workflows/audit-ci-tests.yml": 1019,
     ".github/workflows/cli-tests.yml": 512,
     ".github/workflows/forensics-triage.yml": 891
   },

@@ -86,14 +86,6 @@ run_linter() {
   run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
 }
 
-# 1. The real scanned tree is clean (regression gate)
-
-# bats test_tags=whole-tree
-@test "the real scanned tree passes the lint" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
 # 2. The detector fires, once per scanned file type
 
 @test "flags an unquoted diff --name-only in a shell script" {
@@ -1039,18 +1031,6 @@ EOF
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- "probe.bats: ERROR: the scan lost track of shell state" <<<"$output"
-}
-
-# 5e. The real tree, and the pragma Phase 1 wrote with no reader to prove it
-#
-# .gaia/tests/lib/bats-shards.bats:662 carries a diagnostic message string that
-# contains the literal text "git ls-files". This pins the substantive claim:
-# the armed guard does not misread that string as an executed call.
-# bats test_tags=whole-tree
-@test "the diagnostic message string in bats-shards.bats is not misread as a call" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
-  grep -qF -- "ls-files without -z" <<<"$output" && return 1
-  true
 }
 
 # The class-remedy footer names the -z repair, which fixes a class hit and

@@ -1415,18 +1415,27 @@ mutate_guard_copy() {
     "$BATS_TEST_FILENAME"
   [ "$status" -ne 0 ]
 
-  # A production guard's suite: lint-errexit-status-read.sh's own suite
-  # carries real fixture literals of its class, so its "the repository's own
-  # scanned surface is clean" verdict depends on the library's region-skip
-  # telling those fixtures apart from executed shell. Tracking the copied
-  # suite as the only *.bats file in a throwaway git repo reproduces that
-  # verdict without touching the real tree.
-  mutate_guard_copy "$program" lint-errexit-status-read lint-errexit-status-read.bats
+  # A production guard: lint-git-path-quoting.sh's own suite carries real
+  # fixture literals of its class, so the guard's clean verdict over it
+  # depends on the library's region-skip telling those fixtures apart from
+  # executed shell. Tracking the copied suite beside a minimal workflow in a
+  # throwaway repository reproduces that verdict without touching the real
+  # tree. The workflow keeps the scan surface non-empty, and a control run of
+  # the unmutated library must exit 0 first, so the mutated run's red can only
+  # come from the mutation.
+  mutate_guard_copy "$program" lint-git-path-quoting lint-git-path-quoting.bats
+  mkdir -p "$CROSS_GUARD_ROOT/.github/workflows"
+  printf 'on: push\njobs:\n  x:\n    steps:\n      - run: echo hi\n' > "$CROSS_GUARD_ROOT/.github/workflows/ci.yml"
   git -C "$CROSS_GUARD_ROOT" init -q .
   git -C "$CROSS_GUARD_ROOT" add -A
-  GAIA_GUARD_MUTATION_CHILD=1 run bash "$REPO_ROOT/.gaia/scripts/bats5.sh" \
-    --filter "the repository's own scanned surface is clean" "$CROSS_GUARD_SUITE"
+  mv "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh" "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh.keep"
+  cp "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh"
+  run bash -c "cd '$CROSS_GUARD_ROOT' && bash .gaia/scripts/lint-git-path-quoting.sh 2>&1"
+  [ "$status" -eq 0 ]
+  mv "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh.keep" "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh"
+  run bash -c "cd '$CROSS_GUARD_ROOT' && bash .gaia/scripts/lint-git-path-quoting.sh 2>&1"
   [ "$status" -ne 0 ]
+  grep -qF -- ".gaia/scripts/tests/lint-git-path-quoting.bats:" <<<"$output"
 }
 
 # ============================================================================
