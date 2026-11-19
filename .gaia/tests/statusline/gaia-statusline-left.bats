@@ -21,7 +21,7 @@ setup() {
   git -C "$MAIN" config commit.gpgsign false
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/scripts" "$MAIN/.gaia/local/protected"
   cp "$STATUSLINE_SOURCE"/*.sh "$MAIN/.gaia/statusline/"
-  cp "$SCRIPTS_SOURCE/main-root-lib.sh" "$SCRIPTS_SOURCE/context-checkpoint-lib.sh" "$MAIN/.gaia/scripts/"
+  cp "$SCRIPTS_SOURCE/main-root-lib.sh" "$SCRIPTS_SOURCE/context-checkpoint-lib.sh" "$SCRIPTS_SOURCE/rate-limits-lib.sh" "$MAIN/.gaia/scripts/"
   echo x >"$MAIN/README.md"
   git -C "$MAIN" add -A
   git -C "$MAIN" commit --quiet -m init
@@ -200,6 +200,8 @@ assert_user_left() {
 # rate_limits value, printed with its ANSI escapes stripped into PLAIN_OUTPUT.
 render_usage() {
   local rate_limits="$1" json
+  # Each call stands for one session: start from no shared reading.
+  rm -f "$MAIN/.gaia/local/cache/shared/rate-limits.json"
   json=$(jq -n --arg current_directory "$MAIN" \
     '{workspace: {current_dir: $current_directory}, model: {display_name: "Claude Opus"}, effort: {level: "xhigh"},
       context_window: {used_percentage: 21, context_window_size: 1000000}}')
@@ -295,8 +297,9 @@ expect_usage_color() {
   local now
   now=$(date +%s)
   render_usage "{\"five_hour\":{\"used_percentage\":92,\"resets_at\":$((now - 60))}}"
-  grep -qF "🕔 92%" <<<"$PLAIN_OUTPUT" || { echo "past: $PLAIN_OUTPUT"; return 1; }
-  grep -qF "🕔 92% (" <<<"$PLAIN_OUTPUT" && { echo "past countdown: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "🕔 reset" <<<"$PLAIN_OUTPUT" || { echo "past: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "🕔 reset (" <<<"$PLAIN_OUTPUT" && { echo "past countdown: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "🕔 92%" <<<"$PLAIN_OUTPUT" && { echo "past percentage: $PLAIN_OUTPUT"; return 1; }
   render_usage '{"five_hour":{"used_percentage":92}}'
   grep -qF "🕔 92%" <<<"$PLAIN_OUTPUT" || { echo "missing: $PLAIN_OUTPUT"; return 1; }
   grep -qF "🕔 92% (" <<<"$PLAIN_OUTPUT" && { echo "missing countdown: $PLAIN_OUTPUT"; return 1; }
