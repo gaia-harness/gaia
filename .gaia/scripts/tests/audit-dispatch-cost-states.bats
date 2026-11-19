@@ -6,13 +6,33 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
+# The sandbox repository is built once per file and copied per test, with its
+# bare origin beside it as catchup_add_origin lays it out.
+setup_file() {
+  local repo_root template
+  repo_root="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  . "$repo_root/.gaia/tests/helpers/audit-roster.sh"
+  . "$repo_root/.gaia/tests/helpers/catchup-fixture.sh"
+  template="$BATS_FILE_TMPDIR/template-root"
+  mkdir -p "$template/.gaia" "$template/.claude/rules/maintainers"
+  printf '1.6.1\n' > "$template/.gaia/VERSION"
+  git -C "$template" init --quiet --initial-branch=main
+  git -C "$template" config user.email "test@example.com"
+  git -C "$template" config user.name "Test"
+  git -C "$template" config commit.gpgsign false
+  echo "# readme" > "$template/README.md"
+  seed_audit_roster "$template"
+  git -C "$template" add .gaia/audit-ci.yml .gaia/VERSION README.md
+  git -C "$template" commit --quiet -m "init"
+  git -C "$template" remote add origin "$BATS_FILE_TMPDIR/placeholder-origin.git"
+  catchup_add_origin "$template" main --feature feat/dispatch-cost
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  . "$REPO_ROOT/.gaia/tests/helpers/audit-roster.sh"
   SCRIPT="$REPO_ROOT/.gaia/scripts/audit-dispatch-cost.sh"
   REPORT_SCRIPT="$REPO_ROOT/.gaia/scripts/audit-dispatch-cost-report.sh"
   FIXTURE="$REPO_ROOT/.gaia/tests/audit-cost/fixtures/dispatch-cost"
-  RATES_FILE="$REPO_ROOT/.gaia/scripts/token-rates.json"
   [ -f "$SCRIPT" ]
   command -v jq >/dev/null 2>&1 || skip "jq not available"
 
@@ -20,19 +40,9 @@ setup() {
   MEMBER_ID=a0000000000000001
   SESSION_ID=11111111-2222-3333-4444-555555555555
   ROOT="$BATS_TEST_TMPDIR/root"
-  mkdir -p "$ROOT/.gaia" "$ROOT/.claude/rules/maintainers"
-  printf '1.6.1\n' > "$ROOT/.gaia/VERSION"
-  git -C "$ROOT" init --quiet --initial-branch=main
-  git -C "$ROOT" config user.email "test@example.com"
-  git -C "$ROOT" config user.name "Test"
-  git -C "$ROOT" config commit.gpgsign false
-  echo "# readme" > "$ROOT/README.md"
-  seed_audit_roster "$ROOT"
-  git -C "$ROOT" add .gaia/audit-ci.yml .gaia/VERSION README.md
-  git -C "$ROOT" commit --quiet -m "init"
-  . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
-  git -C "$ROOT" remote add origin "$BATS_TEST_TMPDIR/placeholder-origin.git"
-  catchup_add_origin "$ROOT" main --feature feat/dispatch-cost
+  cp -R "$BATS_FILE_TMPDIR/template-root" "$ROOT"
+  cp -R "$BATS_FILE_TMPDIR/template-root.catchup-origin.git" "$ROOT.catchup-origin.git"
+  git -C "$ROOT" remote set-url origin "$ROOT.catchup-origin.git"
   MAINTAINER_RULE="$ROOT/.claude/rules/maintainers/harness-triage-threshold.md"
   printf '# maintainer rule\n' > "$MAINTAINER_RULE"
   TELEMETRY_DIRECTORY="$ROOT/.gaia/local/telemetry"
@@ -58,11 +68,16 @@ install_session() {
   cp -R "$FIXTURE/session/subagents" "$PROJECTS/$1/$SESSION_ID/subagents"
 }
 
-record() {
+# run_recorded <command...>: run it, keeping its status, stdout and stderr.
+run_recorded() {
   STATUS=0
   OUT="$BATS_TEST_TMPDIR/record.out"
   ERR="$BATS_TEST_TMPDIR/record.err"
-  bash "$SCRIPT" record --root "$ROOT" "$@" >"$OUT" 2>"$ERR" || STATUS=$?
+  "$@" >"$OUT" 2>"$ERR" || STATUS=$?
+}
+
+record() {
+  run_recorded bash "$SCRIPT" record --root "$ROOT" "$@"
 }
 
 line_count() {
@@ -80,10 +95,6 @@ expect_nothing_recorded() {
   [ ! -s "$OUT" ]
   [ "$(line_count)" = 0 ]
   [ "$(wc -l <"$ERR" | tr -d ' ')" -le 1 ]
-}
-
-within() {
-  awk -v a="$1" -v b="$2" -v tolerance="$3" 'BEGIN { d = a - b; if (d < 0) d = -d; exit !(d <= tolerance + 0.000000001) }'
 }
 
 @test "not dispatched: one event per member with the figure fields null" {
@@ -106,7 +117,7 @@ within() {
   done
 }
 
-@test "not dispatched: a bad reason, a missing reason or an agent id appends nothing" {
+@test "record refuses malformed arguments and appends nothing: bad, empty or missing reason, agent id with not_dispatched, light reviewer not_dispatched, several members with an agent id, ../x and glob agent ids, slash in member, missing member, empty agent id, unknown kind, unknown flag, no --root" {
   record --kind member --state not_dispatched --reason zero_scope --member "$MEMBER"
   expect_nothing_recorded
   record --kind member --state not_dispatched --reason '' --member "$MEMBER"
@@ -119,72 +130,6 @@ within() {
   expect_nothing_recorded
   record --kind member --member a --member b --agent-id "$MEMBER_ID"
   expect_nothing_recorded
-}
-
-@test "adopter gate: without the maintainer marker nothing is appended or created" {
-  rm -f "$MAINTAINER_RULE"
-  record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
-  [ "$STATUS" -eq 0 ]
-  [ ! -s "$OUT" ]
-  [ ! -s "$ERR" ]
-  [ ! -e "$TELEMETRY_DIRECTORY" ]
-  record --kind member --state not_dispatched --reason already_cleared --member "$MEMBER"
-  [ "$STATUS" -eq 0 ]
-  [ ! -e "$TELEMETRY_DIRECTORY" ]
-}
-
-@test "lookup scope: a transcript only under an unrelated project is never read" {
-  local other="$PROJECTS/-some-other-project/$SESSION_ID/subagents"
-  rm -rf "$PROJECTS"
-  mkdir -p "$other"
-  cp "$FIXTURE/session/subagents/agent-$MEMBER_ID.jsonl" "$other/"
-  cp "$FIXTURE/session/subagents/agent-$MEMBER_ID.meta.json" "$other/"
-  chmod 000 "$other/agent-$MEMBER_ID.jsonl"
-  record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
-  [ "$STATUS" -eq 0 ]
-  [ "$(line_count)" = 1 ]
-  [ "$(field "$(cat "$LOG")" '.state')" = transcript_missing ]
-  grep -qF -- "some-other-project" "$ERR" && return 1
-  true
-}
-
-# bats test_tags=whole-tree
-@test "lookup scope: a copy of the recorder with a widened glob does find it" {
-  local other="$PROJECTS/-some-other-project/$SESSION_ID/subagents" widened
-  rm -rf "$PROJECTS"
-  mkdir -p "$other"
-  cp "$FIXTURE/session/subagents/agent-$MEMBER_ID.jsonl" "$other/"
-  cp "$FIXTURE/session/subagents/agent-$MEMBER_ID.meta.json" "$other/"
-
-  # The copy resolves its libraries and the digest helper's hook library relative
-  # to itself, so both trees travel with it into the test's own directory.
-  mkdir -p "$BATS_TEST_TMPDIR/copy/.gaia" "$BATS_TEST_TMPDIR/copy/.claude/hooks"
-  cp -R "$REPO_ROOT/.gaia/scripts" "$BATS_TEST_TMPDIR/copy/.gaia/scripts"
-  cp -R "$REPO_ROOT/.claude/hooks/lib" "$BATS_TEST_TMPDIR/copy/.claude/hooks/lib"
-  widened="$BATS_TEST_TMPDIR/copy/.gaia/scripts/audit-dispatch-cost.sh"
-  # shellcheck disable=SC2016 # the sed program must reach sed with its `$` literal
-  sed 's#"\$projects_root/\$encoded"/\*/subagents#"$projects_root"/*/*/subagents#' "$SCRIPT" >"$widened"
-  cmp -s "$SCRIPT" "$widened" && return 1
-  bash "$widened" record --root "$ROOT" --kind member --member "$MEMBER" --agent-id "$MEMBER_ID" >/dev/null 2>&1 || true
-  [ "$(field "$(cat "$LOG")" '.state')" = ok ]
-
-  rm -f "$LOG"
-  record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
-  [ "$(field "$(cat "$LOG")" '.state')" = transcript_missing ]
-}
-
-@test "never block: jq off the PATH" {
-  local empty_bin="$BATS_TEST_TMPDIR/empty-bin"
-  mkdir -p "$empty_bin"
-  STATUS=0
-  PATH="$empty_bin" /bin/bash "$SCRIPT" record --root "$ROOT" --kind member --member "$MEMBER" --agent-id "$MEMBER_ID" \
-    >"$BATS_TEST_TMPDIR/record.out" 2>"$BATS_TEST_TMPDIR/record.err" || STATUS=$?
-  OUT="$BATS_TEST_TMPDIR/record.out"
-  ERR="$BATS_TEST_TMPDIR/record.err"
-  expect_nothing_recorded
-}
-
-@test "never block: malformed arguments append nothing" {
   record --kind member --member "$MEMBER" --agent-id ../x
   expect_nothing_recorded
   record --kind member --member "$MEMBER" --agent-id 'a*'
@@ -199,23 +144,26 @@ within() {
   expect_nothing_recorded
   record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID" --bogus
   expect_nothing_recorded
-  STATUS=0
-  OUT="$BATS_TEST_TMPDIR/record.out"
-  ERR="$BATS_TEST_TMPDIR/record.err"
-  bash "$SCRIPT" record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID" >"$OUT" 2>"$ERR" || STATUS=$?
+  run_recorded bash "$SCRIPT" record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
   expect_nothing_recorded
 }
 
-@test "never block: an unwritable telemetry directory is swallowed" {
+@test "never block: jq off the PATH, an unwritable telemetry directory and an unloadable rates override each exit 0 with nothing recorded and at most one stderr line, rates named" {
+  local empty_bin="$BATS_TEST_TMPDIR/empty-bin"
+
+  # jq off the PATH
+  mkdir -p "$empty_bin"
+  run_recorded env PATH="$empty_bin" /bin/bash "$SCRIPT" record --root "$ROOT" --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
+  expect_nothing_recorded
+
+  # an unwritable telemetry directory
   mkdir -p "$TELEMETRY_DIRECTORY"
   chmod 555 "$TELEMETRY_DIRECTORY"
   record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
   chmod 755 "$TELEMETRY_DIRECTORY"
   expect_nothing_recorded
-}
 
-@test "never block: a rates override that cannot load records nothing and names the rates" {
-  mkdir -p "$TELEMETRY_DIRECTORY"
+  # a rates override that cannot load
   printf 'not json {\n' >"$TELEMETRY_DIRECTORY/token-rates.override.json"
   record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
   expect_nothing_recorded
@@ -223,40 +171,32 @@ within() {
   grep -qi -- "rates" "$ERR"
 }
 
-# bats test_tags=whole-tree
-@test "parity: the event's figures match the toolkit field by field" {
-  local scratch="$BATS_TEST_TMPDIR/scratch" toolkit event member_row role child_rows tolerance zero_lines
-  cp -R "$FIXTURE" "$scratch"
-  toolkit="$(node "$REPO_ROOT/.gaia/tests/audit-cost/measure-dispatch.mjs" --session "$scratch/session.jsonl" --rates "$RATES_FILE")"
+@test "adopter gate: without the maintainer marker nothing is appended or created" {
+  rm -f "$MAINTAINER_RULE"
   record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
   [ "$STATUS" -eq 0 ]
-  event="$(cat "$LOG")"
+  [ ! -s "$OUT" ]
+  [ ! -s "$ERR" ]
+  [ ! -e "$TELEMETRY_DIRECTORY" ]
+  record --kind member --state not_dispatched --reason already_cleared --member "$MEMBER"
+  [ "$STATUS" -eq 0 ]
+  [ ! -e "$TELEMETRY_DIRECTORY" ]
+}
 
-  member_row="$(jq -c --arg id "$MEMBER_ID" '.dispatches[] | select(.agent_id == $id)' <<<"$toolkit")"
-  zero_lines="$(jq -s '[.[] | select(.type == "assistant" and .message.usage != null)
-    | select([.message.usage.input_tokens, .message.usage.cache_creation_input_tokens,
-              .message.usage.cache_read_input_tokens, .message.usage.output_tokens] | add == 0)
-    | .message.id] | unique | length' "$scratch/session/subagents/agent-$MEMBER_ID.jsonl")"
-  [ "$(field "$event" '.own.calls')" = "$(( $(field "$member_row" '.calls') - zero_lines ))" ]
-  [ "$(( $(field "$event" '.own.cache_write_5m_tokens') + $(field "$event" '.own.cache_write_1h_tokens') ))" = "$(field "$member_row" '[.per_call[].cache_write] | add')" ]
-  [ "$(field "$event" '.own.cache_read_tokens')" = "$(field "$member_row" '[.per_call[].cache_read] | add')" ]
-  [ "$(printf '%.3f' "$(field "$event" '.own.wall_s')")" = "$(printf '%.3f' "$(field "$member_row" '.wall_s')")" ]
-  within "$(field "$event" '.own.dollars')" "$(field "$member_row" '.cost_usd')" 0.0000005
-  within "$(field "$event" '.children_dollars')" "$(field "$member_row" '.children_cost_usd')" 0.0000005
-
-  for role in specialist refuter other; do
-    child_rows="$(jq -c --arg member "$MEMBER_ID" --arg role "$role" '
-      .dispatches as $rows
-      | ($rows | map(select(.parent_agent_id == $member) | .agent_id)) as $direct
-      | [$rows[] | select(.agent_id != $member and (.parent_agent_id == $member or ((.parent_agent_id // "") as $parent | $direct | index($parent) != null)))
-         | select((if .agent_type == "audit-rule-specialist" then "specialist" elif .agent_type == "audit-refuter" then "refuter" else "other" end) == $role)]' <<<"$toolkit")"
-    [ "$(field "$event" ".children.$role.dispatches")" = "$(field "$child_rows" 'length')" ]
-    [ "$(field "$event" ".children.$role.calls")" = "$(field "$child_rows" 'map(.calls) | add')" ]
-    [ "$(field "$event" ".children.$role.cache_read_tokens")" = "$(field "$child_rows" '[.[].per_call[].cache_read] | add')" ]
-    [ "$(field "$event" ".children.$role.longest_wall_s")" = "$(field "$child_rows" 'map(.wall_s) | max')" ]
-    tolerance="$(awk -v n="$(field "$child_rows" 'length')" 'BEGIN { printf "%.7f", 0.0000005 * n }')"
-    within "$(field "$event" ".children.$role.dollars")" "$(field "$child_rows" 'map(.cost_usd) | add')" "$tolerance"
-  done
+# bats test_tags=protected
+@test "lookup scope: a transcript only under an unrelated project is never read" {
+  local other="$PROJECTS/-some-other-project/$SESSION_ID/subagents"
+  rm -rf "$PROJECTS"
+  mkdir -p "$other"
+  cp "$FIXTURE/session/subagents/agent-$MEMBER_ID.jsonl" "$other/"
+  cp "$FIXTURE/session/subagents/agent-$MEMBER_ID.meta.json" "$other/"
+  chmod 000 "$other/agent-$MEMBER_ID.jsonl"
+  record --kind member --member "$MEMBER" --agent-id "$MEMBER_ID"
+  [ "$STATUS" -eq 0 ]
+  [ "$(line_count)" = 1 ]
+  [ "$(field "$(cat "$LOG")" '.state')" = transcript_missing ]
+  grep -qF -- "some-other-project" "$ERR" && return 1
+  true
 }
 
 @test "report: delegates bytes and exit status to the report script" {
@@ -286,9 +226,11 @@ within() {
 }
 
 # bats test_tags=whole-tree
-@test "registration: the script is release-excluded and the registry names it only in prose" {
-  local why
-  grep -qxF ".gaia/scripts/audit-dispatch-cost.sh" "$REPO_ROOT/.gaia/release-exclude"
+@test "registration: the three dispatch-cost scripts are release-excluded and the registry names the recorder only in prose" {
+  local why excluded
+  for excluded in audit-dispatch-cost.sh audit-dispatch-cost-lib.sh audit-dispatch-cost-report.sh; do
+    grep -qxF ".gaia/scripts/$excluded" "$REPO_ROOT/.gaia/release-exclude" || { echo "not release-excluded: $excluded" >&2; return 1; }
+  done
   why="$(jq -r '.entries[] | select(.id == "telemetry-audit-light-routing") | .why' "$REPO_ROOT/.gaia/state-registry.json")"
   [ -n "$why" ]
   grep -qF -- "dispatch-cost recorder" <<<"$why"

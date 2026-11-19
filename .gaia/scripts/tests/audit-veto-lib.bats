@@ -72,15 +72,17 @@ veto_state() {
   gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 3 "$ROUND_KEYS"
 }
 
+# reset_run: put the run folder, roster and vetoed identity back to a fresh
+# state between the cases of one test, so no case reads another's leftovers.
+reset_run() {
+  rm -f "$RUN"/vetoes.json "$RUN"/dispositions-*.json "$RUN"/fixer-*-audit.json "$MAIN/.gaia/audit-ci.yml"
+  VETOED_IDENTITY='["code-audit-frontend","rule/x","f.txt",2]'
+}
+
 assert_unsatisfied() {
   local answer
   answer="$(veto_state)" || { echo "rc $?"; return 1; }
   [ "$(jq -c . <<<"$answer")" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ] || { echo "$answer"; return 1; }
-}
-
-@test "veto-state: a key whose fix landed, was committed and the member did not re-report is satisfied" {
-  satisfied_base
-  [ "$(veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
 }
 
 @test "veto-state: no vetoes file means nothing is vetoed" {
@@ -89,46 +91,41 @@ assert_unsatisfied() {
   [ "$(veto_state | jq -c .)" = '{"satisfied":[],"unsatisfied":[]}' ]
 }
 
-# The veto binds from round 3, so its waiver round 2 already sits on
-# TREE_FIXED and the commit route sees no change; only counting round 1's fix
-# could satisfy it.
-@test "veto-state: a fix entry before effective_from_round does not count" {
+@test "veto-state fixer route: a fix satisfies a key only when it landed, was committed and the member, dispatched after it, did not re-report" {
+  local tree line expected unsatisfied
+  # veto-state: a key whose fix landed, was committed and the member did not re-report is satisfied
+  satisfied_base
+  [ "$(veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
+  reset_run # veto-state: a fix entry before effective_from_round does not count
+  # The veto binds from round 3, so its waiver round 2 already sits on
+  # TREE_FIXED and the commit route sees no change; only counting round 1's fix
+  # could satisfy it.
   satisfied_base || return 1
   veto 3
   assert_unsatisfied
-}
-
-@test "veto-state: a fixer result of disputed or cannot_fix is not a fix" {
+  reset_run # veto-state: a fixer result of disputed or cannot_fix is not a fix
   local result
   for result in disputed cannot_fix; do
     satisfied_base
     fixer_result 1 "$result"
     assert_unsatisfied || { echo "fixer $result"; return 1; }
   done
-}
-
-@test "veto-state: a fix that no later round committed is not a fix" {
+  reset_run # veto-state: a fix that no later round committed is not a fix
   satisfied_base
   STATE="$(jq -c --arg tree "$TREE_WAIVED" '.history.rounds |= map(.tree = $tree | .commit = $tree)' <<<"$STATE")"
   assert_unsatisfied
-}
-
-@test "veto-state: the member must be dispatched after the fix" {
+  reset_run # veto-state: the member must be dispatched after the fix
   satisfied_base
   STATE="$(jq -c '.history.rounds[1].members = [] | .history.rounds[2].members = ["code-audit-shell"]' <<<"$STATE")"
   assert_unsatisfied
-}
-
-@test "veto-state: the exact key re-reported in round r, or in an earlier dispatched round, is unsatisfied" {
+  reset_run # veto-state: the exact key re-reported in round r, or in an earlier dispatched round, is unsatisfied
   satisfied_base
   ROUND_KEYS="[$VETOED_IDENTITY]"
   assert_unsatisfied || return 1
   satisfied_base
   STATE="$(jq -c --argjson identity "$VETOED_IDENTITY" '.history.rounds[1].snapshot.keys = [$identity]' <<<"$STATE")"
   assert_unsatisfied
-}
-
-@test "veto-state: after a re-report, only a later round whose tree changed the key's path again can satisfy the key" {
+  reset_run # veto-state: after a re-report, only a later round whose tree changed the key's path again can satisfy the key
   local tree expected
   while read -r tree expected; do
     satisfied_base || return 1
@@ -141,12 +138,26 @@ TREE_FIXED 0
 TREE_UNRELATED 0
 TREE_MOVED 1
 CASES
-}
-
-@test "veto-state: an earlier dispatched round with no stored keys proves nothing" {
+  reset_run # veto-state: an earlier dispatched round with no stored keys proves nothing
   satisfied_base
   STATE="$(jq -c '.history.rounds[1].snapshot = null' <<<"$STATE")"
   assert_unsatisfied
+  reset_run # veto-state fixer: satisfied only when a later round's tree changed the key's path, not when an unrelated commit moved the tree
+  fixer_base TREE_FIXED || return 1
+  [ "$(inline_veto_state | jq -c '.satisfied | length')" = 1 ] || { echo "repair committed"; return 1; }
+  fixer_base TREE_UNRELATED || return 1
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ] || { echo "repair never committed"; return 1; }
+  reset_run # veto-state fixer: a same-class re-report within the tolerance of the fixed line leaves the key unsatisfied, as on the commit route
+  local line expected
+  while read -r line expected; do
+    fixer_base TREE_FIXED || return 1
+    ROUND_KEYS="[[\"code-audit-frontend\",\"rule/x\",\"f.txt\",$line]]"
+    [ "$(inline_veto_state | jq -c '.satisfied | length')" = "$expected" ] || { echo "line $line"; return 1; }
+  done <<'CASES'
+3 0
+5 0
+6 1
+CASES
 }
 
 # inline_commit <message>: commits f.txt and g.txt at MAIN and prints the commit's tree.
@@ -202,12 +213,12 @@ inline_veto_state() {
   gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 2 "$ROUND_KEYS"
 }
 
-@test "veto-state inline: a main-thread commit touching the key's path after the waiver round, then a clean review, satisfies the veto with no fixer result" {
+@test "veto-state inline route: a main-thread commit satisfies a key only when it touched the key's path and a clean review followed, unmoved, moved-aside, re-reported, relocated, unreadable-tree and round-1 cases stay unsatisfied" {
+  local tree line expected unsatisfied
+  # veto-state inline: a main-thread commit touching the key's path after the waiver round, then a clean review, satisfies the veto with no fixer result
   inline_base TREE_FIXED || return 1
   [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
-}
-
-@test "veto-state inline: unsatisfied when the tree is unmoved, moved without touching the key's path, or the member re-reports the key" {
+  reset_run # veto-state inline: unsatisfied when the tree is unmoved, moved without touching the key's path, or the member re-reports the key
   local unsatisfied="{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}"
   inline_base TREE_WAIVED || return 1
   [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "unmoved"; return 1; }
@@ -216,9 +227,7 @@ inline_veto_state() {
   inline_base TREE_FIXED || return 1
   ROUND_KEYS="[$VETOED_IDENTITY]"
   [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "re-reported"; return 1; }
-}
-
-@test "veto-state inline: an edit that only moves the finding to another line of the file leaves the veto unsatisfied" {
+  reset_run # veto-state inline: an edit that only moves the finding to another line of the file leaves the veto unsatisfied
   # Line 20 lands at 25, far from the five lines the edit wrote at the top.
   VETOED_IDENTITY='["code-audit-frontend","rule/x","f.txt",20]'
   inline_base TREE_MOVED || return 1
@@ -227,13 +236,11 @@ inline_veto_state() {
   # Another class on the same path, or the same class on another path, is not the vetoed finding.
   ROUND_KEYS="[[\"code-audit-frontend\",\"rule/y\",\"f.txt\",25],[\"code-audit-frontend\",\"rule/x\",\"g.txt\",20]]"
   [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
-}
-
-# The tolerance is 3 lines: the vetoed line maps to [2,2] in TREE_FIXED, so 5
-# is inside it and 6 is past it; TREE_RELOCATED's fix wrote line 29 and
-# deleted line 2, mapping the vetoed line to the gap [1,2], so 20 is on code
-# it left alone.
-@test "veto-state inline: a same-class finding on the path re-reports the veto only near the vetoed line's new place or near a line the fix wrote" {
+  reset_run # veto-state inline: a same-class finding on the path re-reports the veto only near the vetoed line's new place or near a line the fix wrote
+  # The tolerance is 3 lines: the vetoed line maps to [2,2] in TREE_FIXED, so 5
+  # is inside it and 6 is past it; TREE_RELOCATED's fix wrote line 29 and
+  # deleted line 2, mapping the vetoed line to the gap [1,2], so 20 is on code
+  # it left alone.
   local tree line expected
   while read -r tree line expected; do
     inline_base "$tree" || return 1
@@ -246,17 +253,13 @@ TREE_FIXED 6 1
 TREE_RELOCATED 29 0
 TREE_RELOCATED 20 1
 CASES
-}
-
-@test "veto-state inline: a re-report after the fix is not passed over by a later round on the same tree" {
+  reset_run # veto-state inline: a re-report after the fix is not passed over by a later round on the same tree
   inline_base TREE_FIXED || return 1
   STATE="$(jq -c --argjson identity "$VETOED_IDENTITY" '.history.rounds[1].snapshot = {keys: [$identity]}
     | .history.rounds += [.history.rounds[1] | .round = 3 | .snapshot = null]' <<<"$STATE")"
   ROUND_KEYS='[]'
   [ "$(gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 3 "$ROUND_KEYS" | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ]
-}
-
-@test "veto-state inline: unsatisfied when no round after the fix dispatched the key's member, or a tree cannot be read" {
+  reset_run # veto-state inline: unsatisfied when no round after the fix dispatched the key's member, or a tree cannot be read
   local unsatisfied="{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}"
   inline_base TREE_FIXED || return 1
   STATE="$(jq -c '.history.rounds[1].members = ["code-audit-shell"]' <<<"$STATE")"
@@ -264,9 +267,7 @@ CASES
   inline_base TREE_FIXED || return 1
   STATE="$(jq -c --arg tree "$TREE_TWO" '.history.rounds[1].tree = $tree' <<<"$STATE")"
   [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "unreadable tree"; return 1; }
-}
-
-@test "veto-state inline: a veto binding from round 1 has no waiver round to diff against, so only the fixer path satisfies it" {
+  reset_run # veto-state inline: a veto binding from round 1 has no waiver round to diff against, so only the fixer path satisfies it
   inline_base TREE_FIXED || return 1
   veto 1
   # Round 1 left the key out too, so only the missing waiver round keeps the
@@ -285,26 +286,6 @@ fixer_base() {
   fixer_result 1 fixed
 }
 
-@test "veto-state fixer: satisfied only when a later round's tree changed the key's path, not when an unrelated commit moved the tree" {
-  fixer_base TREE_FIXED || return 1
-  [ "$(inline_veto_state | jq -c '.satisfied | length')" = 1 ] || { echo "repair committed"; return 1; }
-  fixer_base TREE_UNRELATED || return 1
-  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}" ] || { echo "repair never committed"; return 1; }
-}
-
-@test "veto-state fixer: a same-class re-report within the tolerance of the fixed line leaves the key unsatisfied, as on the commit route" {
-  local line expected
-  while read -r line expected; do
-    fixer_base TREE_FIXED || return 1
-    ROUND_KEYS="[[\"code-audit-frontend\",\"rule/x\",\"f.txt\",$line]]"
-    [ "$(inline_veto_state | jq -c '.satisfied | length')" = "$expected" ] || { echo "line $line"; return 1; }
-  done <<'CASES'
-3 0
-5 0
-6 1
-CASES
-}
-
 # roster_owning_vetoed_path <member>: a roster at MAIN giving f.txt to the
 # member, so the vetoed key is cross-remit unless it is the key's own member.
 roster_owning_vetoed_path() {
@@ -319,7 +300,9 @@ owner_reviews() {
   jq -c '.history.rounds |= (.[0:1] + (.[1:] | map(.members = ["code-audit-shell"])))' <<<"$1"
 }
 
-@test "veto-state cross-remit: a clean review by the path's roster owner satisfies a key its reporting member never reviews, on the fixer and the commit route" {
+@test "veto-state cross-remit: a clean review by the path's roster owner satisfies a key its reporting member never reviews, unless the owner reports at the fixed line, the reporting member owns the path, no roster is readable or only the reporting member is dispatched" {
+  local tree line expected unsatisfied
+  # veto-state cross-remit: a clean review by the path's roster owner satisfies a key its reporting member never reviews, on the fixer and the commit route
   roster_owning_vetoed_path code-audit-shell
   satisfied_base
   STATE="$(owner_reviews "$STATE")"
@@ -327,9 +310,7 @@ owner_reviews() {
   inline_base TREE_FIXED || return 1
   STATE="$(owner_reviews "$STATE")"
   [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ] || { echo "commit route"; return 1; }
-}
-
-@test "veto-state cross-remit: the owner reporting any class at the fixed line leaves the key unsatisfied; a finding elsewhere on the path does not" {
+  reset_run # veto-state cross-remit: the owner reporting any class at the fixed line leaves the key unsatisfied; a finding elsewhere on the path does not
   roster_owning_vetoed_path code-audit-shell
   satisfied_base
   STATE="$(owner_reviews "$STATE")"
@@ -344,18 +325,14 @@ owner_reviews() {
   STATE="$(owner_reviews "$STATE")"
   ROUND_KEYS='[["code-audit-shell","rule/other","f.txt",4]]'
   [ "$(inline_veto_state | jq -c '.satisfied | length')" = 0 ] || { echo "commit route"; return 1; }
-}
-
-@test "veto-state cross-remit: another member's review satisfies nothing when the key's member owns the path or no roster is readable" {
+  reset_run # veto-state cross-remit: another member's review satisfies nothing when the key's member owns the path or no roster is readable
   roster_owning_vetoed_path code-audit-frontend
   satisfied_base
   STATE="$(owner_reviews "$STATE")"
   assert_unsatisfied || { echo "the reporting member owns the path"; return 1; }
   rm -f "$MAIN/.gaia/audit-ci.yml"
   assert_unsatisfied || { echo "no roster"; return 1; }
-}
-
-@test "veto-state cross-remit: a round dispatching only the reporting member leaves the key unsatisfied until the path's owner is dispatched" {
+  reset_run # veto-state cross-remit: a round dispatching only the reporting member leaves the key unsatisfied until the path's owner is dispatched
   roster_owning_vetoed_path code-audit-shell
   satisfied_base
   assert_unsatisfied || { echo "reporting member only"; return 1; }
