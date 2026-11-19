@@ -93,7 +93,8 @@ record_offline() {
 # Offline splice
 # ---------------------------------------------------------------------------
 
-@test "offline: a body with no section gets one appended after a blank line" {
+@test "offline: a body with no section or an empty or unterminated body gets the section appended" {
+  printf 'case: %s\n' 'a body with no section gets one appended after a blank line' >&2
   values 3 '{"code-audit-frontend":3}' 0
   printf 'Summary line\n\nMore text\n' > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
@@ -104,18 +105,14 @@ record_offline() {
   [ "$(sed -n 5p "$TEMPORARY_DIRECTORY/out.md")" = "$START" ]
   parse_section "$TEMPORARY_DIRECTORY/out.md" > "$TEMPORARY_DIRECTORY/parsed"
   [ "$(cat "$TEMPORARY_DIRECTORY/parsed")" = "3 0 code-audit-frontend=3" ]
-}
-
-@test "offline: an empty body gets the section alone" {
+  printf 'case: %s\n' 'an empty body gets the section alone' >&2
   values 1 '{"code-audit-frontend":1}' 0
   : > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 0 ]
   [ "$(sed -n 1p "$TEMPORARY_DIRECTORY/out.md")" = "$START" ]
   parse_section "$TEMPORARY_DIRECTORY/out.md" >/dev/null
-}
-
-@test "offline: an unterminated last line still gets one blank line before the section" {
+  printf 'case: %s\n' 'an unterminated last line still gets one blank line before the section' >&2
   values 1 '{"code-audit-frontend":1}' 0
   printf 'no trailing newline' > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
@@ -126,6 +123,7 @@ record_offline() {
 }
 
 @test "offline: an existing section is replaced in place, outside bytes identical" {
+  printf 'case: %s\n' 'an existing section is replaced in place, outside bytes identical' >&2
   values 4 '{"code-audit-frontend":4,"code-audit-maintainer-shell":2}' 1
   printf 'before line\r\nsecond before\n\n%s\n## Audit rounds\n\nTotal rounds: 9; per member: x; human grants: 9.\n%s\n\nafter line\r\nlast after\n' \
     "$START" "$END" > "$TEMPORARY_DIRECTORY/in.md"
@@ -135,15 +133,22 @@ record_offline() {
   parse_section "$TEMPORARY_DIRECTORY/out.md" > "$TEMPORARY_DIRECTORY/parsed"
   [ "$(cat "$TEMPORARY_DIRECTORY/parsed")" = "4 1 code-audit-frontend=4;code-audit-maintainer-shell=2" ]
   [ "$(grep -cF "$START" "$TEMPORARY_DIRECTORY/out.md")" -eq 1 ]
-}
-
-@test "offline: a section that was the last line without a newline is replaced" {
+  printf 'case: %s\n' 'a section that was the last line without a newline is replaced' >&2
   values 2 '{"code-audit-frontend":2}' 0
   printf 'text\n%s\nold\n%s' "$START" "$END" > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 0 ]
   [ "$(sed -n 1p "$TEMPORARY_DIRECTORY/out.md")" = text ]
   parse_section "$TEMPORARY_DIRECTORY/out.md" >/dev/null
+  printf 'case: %s\n' 'a section starting on line 1 is replaced, the trailing bytes kept' >&2
+  values 2 '{"code-audit-frontend":2}' 0
+  printf '%s\nold\n%s\n\nafter line\n' "$START" "$END" > "$TEMPORARY_DIRECTORY/in.md"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 1p "$TEMPORARY_DIRECTORY/out.md")" = "$START" ]
+  outside_equal "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
+  parse_section "$TEMPORARY_DIRECTORY/out.md" > "$TEMPORARY_DIRECTORY/parsed"
+  [ "$(cat "$TEMPORARY_DIRECTORY/parsed")" = "2 0 code-audit-frontend=2" ]
 }
 
 @test "offline: running twice is idempotent" {
@@ -154,17 +159,6 @@ record_offline() {
   record_offline "$TEMPORARY_DIRECTORY/once.md" "$TEMPORARY_DIRECTORY/twice.md"
   [ "$status" -eq 0 ]
   cmp -s "$TEMPORARY_DIRECTORY/once.md" "$TEMPORARY_DIRECTORY/twice.md"
-}
-
-@test "offline: a section starting on line 1 is replaced, the trailing bytes kept" {
-  values 2 '{"code-audit-frontend":2}' 0
-  printf '%s\nold\n%s\n\nafter line\n' "$START" "$END" > "$TEMPORARY_DIRECTORY/in.md"
-  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
-  [ "$status" -eq 0 ]
-  [ "$(sed -n 1p "$TEMPORARY_DIRECTORY/out.md")" = "$START" ]
-  outside_equal "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
-  parse_section "$TEMPORARY_DIRECTORY/out.md" > "$TEMPORARY_DIRECTORY/parsed"
-  [ "$(cat "$TEMPORARY_DIRECTORY/parsed")" = "2 0 code-audit-frontend=2" ]
 }
 
 @test "offline: a hand-edited higher count or garbage text is replaced by the computed one" {
@@ -224,47 +218,28 @@ assert_refused() {
   [ -n "$output" ]
 }
 
-@test "refuses: two start markers" {
+@test "refuses: a malformed marker body exits 1 with no output file" {
+  printf 'case: %s\n' 'two start markers' >&2
   assert_refused '%s\nold\n%s\n%s\n' "$START" "$END" "$START"
-}
-
-@test "refuses: two end markers" {
+  printf 'case: %s\n' 'two end markers' >&2
   assert_refused '%s\nold\n%s\n%s\n' "$START" "$END" "$END"
-}
-
-@test "refuses: two balanced sections, so only the duplicate check can stop it" {
+  printf 'case: %s\n' 'two balanced sections, so only the duplicate check can stop it' >&2
   assert_refused '%s\nold\n%s\nmid\n%s\nold2\n%s\n' "$START" "$END" "$START" "$END"
-}
-
-@test "refuses: a start marker with no end" {
+  printf 'case: %s\n' 'a start marker with no end' >&2
   assert_refused 'text\n%s\nmore\n' "$START"
-}
-
-@test "refuses: an end marker with no start" {
+  printf 'case: %s\n' 'an end marker with no start' >&2
   assert_refused 'text\n%s\nmore\n' "$END"
-}
-
-@test "refuses: the end marker before the start" {
+  printf 'case: %s\n' 'the end marker before the start' >&2
   assert_refused '%s\nmid\n%s\n' "$END" "$START"
-}
-
-@test "refuses: a marker inside a backtick fence" {
+  printf 'case: %s\n' 'a marker inside a backtick fence' >&2
   assert_refused 'intro\n```\n%s\nold\n%s\n```\n' "$START" "$END"
-}
-
-@test "refuses: a marker inside a tilde fence" {
+  printf 'case: %s\n' 'a marker inside a tilde fence' >&2
   assert_refused 'intro\n~~~\n%s\nold\n%s\n~~~\n' "$START" "$END"
-}
-
-@test "refuses: a marker inside an unterminated fence" {
+  printf 'case: %s\n' 'a marker inside an unterminated fence' >&2
   assert_refused 'intro\n```md\n%s\nold\n%s\n' "$START" "$END"
-}
-
-@test "refuses: one marker fenced even when the other is not" {
+  printf 'case: %s\n' 'one marker fenced even when the other is not' >&2
   assert_refused '%s\nold\n```\n%s\n```\n' "$START" "$END"
-}
-
-@test "refuses: a marker that shares its line with other text" {
+  printf 'case: %s\n' 'a marker that shares its line with other text' >&2
   assert_refused 'see %s\nold\n%s\n' "$START" "$END"
 }
 
@@ -293,7 +268,8 @@ values_with_light() {
   grep -qxF 'Total rounds: 3; per member: code-audit-frontend 3; light reviews: code-audit-frontend 2, code-audit-maintainer-shell 1; human grants: 1.' "$TEMPORARY_DIRECTORY/out.md"
 }
 
-@test "light: an empty object and all-zero counts render exactly the line without the key" {
+@test "light and quick: an empty object or all-zero counts render the line without the clause" {
+  printf 'case: %s\n' 'light: an empty object and all-zero counts render exactly the line without the key' >&2
   values 3 '{"code-audit-frontend":3}' 1
   : > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/without.md"
@@ -308,6 +284,21 @@ values_with_light() {
   cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/zeros.md"
   grep -qF 'light reviews' "$TEMPORARY_DIRECTORY/without.md" && return 1
   grep -qxF 'Total rounds: 3; per member: code-audit-frontend 3; human grants: 1.' "$TEMPORARY_DIRECTORY/without.md"
+  printf 'case: %s\n' 'quick: an empty object and all-zero counts render exactly the line without the key' >&2
+  values 0 '{}' 0
+  : > "$TEMPORARY_DIRECTORY/in.md"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/without.md"
+  [ "$status" -eq 0 ]
+  values_with_quick '"quick":{}'
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/empty.md"
+  [ "$status" -eq 0 ]
+  values_with_quick '"quick":{"code-audit-frontend":0}'
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/zeros.md"
+  [ "$status" -eq 0 ]
+  cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/empty.md"
+  cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/zeros.md"
+  grep -qF 'quick review' "$TEMPORARY_DIRECTORY/without.md" && return 1
+  true
 }
 
 @test "light: a body without the clause round-trips unchanged when the new values carry no light key" {
@@ -359,23 +350,6 @@ values_with_quick() {
   grep -qxF 'Total rounds: 0; per member: none; light reviews: code-audit-frontend 2; quick review, no full member: code-audit-frontend, code-audit-maintainer-shell; human grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
 }
 
-@test "quick: an empty object and all-zero counts render exactly the line without the key" {
-  values 0 '{}' 0
-  : > "$TEMPORARY_DIRECTORY/in.md"
-  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/without.md"
-  [ "$status" -eq 0 ]
-  values_with_quick '"quick":{}'
-  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/empty.md"
-  [ "$status" -eq 0 ]
-  values_with_quick '"quick":{"code-audit-frontend":0}'
-  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/zeros.md"
-  [ "$status" -eq 0 ]
-  cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/empty.md"
-  cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/zeros.md"
-  grep -qF 'quick review' "$TEMPORARY_DIRECTORY/without.md" && return 1
-  true
-}
-
 # ---------------------------------------------------------------------------
 # Input validation: exit 2
 # ---------------------------------------------------------------------------
@@ -392,36 +366,23 @@ assert_usage() {
   [ ! -e "$TEMPORARY_DIRECTORY/out.md" ]
 }
 
-@test "invalid: a negative total" {
+@test "invalid: values and arguments are refused" {
+  printf 'case: %s\n' 'a negative total' >&2
   assert_usage '{"total":-1,"members":{"code-audit-frontend":1},"grants":0}'
-}
-
-@test "invalid: a non-integer grant" {
+  printf 'case: %s\n' 'a non-integer grant' >&2
   assert_usage '{"total":1,"members":{"code-audit-frontend":1},"grants":1.5}'
-}
-
-@test "invalid: a string where an integer belongs" {
+  printf 'case: %s\n' 'a string where an integer belongs' >&2
   assert_usage '{"total":"3","members":{"code-audit-frontend":1},"grants":0}'
-}
-
-@test "invalid: a member name that is a command" {
+  printf 'case: %s\n' 'a member name that is a command' >&2
   assert_usage '{"total":1,"members":{"rm -rf":1},"grants":0}'
-}
-
-@test "invalid: a member name carrying an embedded newline" {
+  printf 'case: %s\n' 'a member name carrying an embedded newline' >&2
   assert_usage '{"total":1,"members":{"code-audit-a\nrm":1},"grants":0}'
-}
-
-@test "invalid: a negative member count" {
+  printf 'case: %s\n' 'a negative member count' >&2
   assert_usage '{"total":1,"members":{"code-audit-frontend":-2},"grants":0}'
-}
-
-@test "invalid: a missing key and an extra key" {
+  printf 'case: %s\n' 'a missing key and an extra key' >&2
   assert_usage '{"total":1,"members":{"code-audit-frontend":1}}'
   assert_usage '{"total":1,"members":{},"grants":0,"extra":1}'
-}
-
-@test "invalid: a light key that is not a code-audit member, a negative count, a non-object, or a non-integer" {
+  printf 'case: %s\n' 'a light key that is not a code-audit member, a negative count, a non-object, or a non-integer' >&2
   assert_usage '{"total":1,"members":{},"grants":0,"light":{"rm -rf":1}}'
   assert_usage '{"total":1,"members":{},"grants":0,"light":{"audit-light-reviewer":1}}'
   assert_usage '{"total":1,"members":{},"grants":0,"light":{"code-audit-frontend":-1}}'
@@ -429,9 +390,7 @@ assert_usage() {
   assert_usage '{"total":1,"members":{},"grants":0,"light":{"code-audit-a\nrm":1}}'
   assert_usage '{"total":1,"members":{},"grants":0,"light":[1]}'
   assert_usage '{"total":1,"members":{},"grants":0,"light":null}'
-}
-
-@test "invalid: a quick key that is not a code-audit member, a negative count, a non-object, or a non-integer" {
+  printf 'case: %s\n' 'a quick key that is not a code-audit member, a negative count, a non-object, or a non-integer' >&2
   assert_usage '{"total":0,"members":{},"grants":0,"quick":{"rm -rf":1}}'
   assert_usage '{"total":0,"members":{},"grants":0,"quick":{"audit-light-reviewer":1}}'
   assert_usage '{"total":0,"members":{},"grants":0,"quick":{"code-audit-frontend":-1}}'
@@ -440,38 +399,28 @@ assert_usage() {
   assert_usage '{"total":0,"members":{},"grants":0,"quick":{"code-audit-a\nrm":1}}'
   assert_usage '{"total":0,"members":{},"grants":0,"quick":[1]}'
   assert_usage '{"total":0,"members":{},"grants":0,"quick":null}'
-}
-
-@test "invalid: not JSON at all" {
+  printf 'case: %s\n' 'not JSON at all' >&2
   assert_usage 'not json'
-}
-
-@test "invalid: --pr 12a" {
+  printf 'case: %s\n' '--pr 12a' >&2
   values 1 '{"code-audit-frontend":1}' 0
   : > "$TEMPORARY_DIRECTORY/in.md"
   run bash "$SCRIPT" --pr 12a --values-json "$TEMPORARY_DIRECTORY/values.json" --body-in "$TEMPORARY_DIRECTORY/in.md" --body-out "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 2 ]
   [ ! -e "$TEMPORARY_DIRECTORY/out.md" ]
-}
-
-@test "invalid: --repo a/b;c" {
+  printf 'case: %s\n' '--repo a/b;c' >&2
   values 1 '{"code-audit-frontend":1}' 0
   : > "$TEMPORARY_DIRECTORY/in.md"
   run bash "$SCRIPT" --pr 12 --repo 'a/b;c' --values-json "$TEMPORARY_DIRECTORY/values.json" --body-in "$TEMPORARY_DIRECTORY/in.md" --body-out "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 2 ]
   [ ! -e "$TEMPORARY_DIRECTORY/out.md" ]
-}
-
-@test "invalid: flag combinations that name no single source of values" {
+  printf 'case: %s\n' 'flag combinations that name no single source of values' >&2
   values 1 '{"code-audit-frontend":1}' 0
   : > "$TEMPORARY_DIRECTORY/in.md"
   run bash "$SCRIPT" --pr 12 --body-in "$TEMPORARY_DIRECTORY/in.md" --body-out "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 2 ]
   run bash "$SCRIPT" --pr 12 --values-json "$TEMPORARY_DIRECTORY/values.json" --body-in "$TEMPORARY_DIRECTORY/in.md"
   [ "$status" -eq 2 ]
-}
-
-@test "invalid: the removed CI-computed flags are unknown arguments" {
+  printf 'case: %s\n' 'the removed CI-computed flags are unknown arguments' >&2
   values 1 '{"code-audit-frontend":1}' 0
   : > "$TEMPORARY_DIRECTORY/in.md"
   run bash "$SCRIPT" --pr 12 --from-ci --body-in "$TEMPORARY_DIRECTORY/in.md" --body-out "$TEMPORARY_DIRECTORY/out.md"
