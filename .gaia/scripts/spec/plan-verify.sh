@@ -189,10 +189,7 @@ if [ -f "$orchestrator" ]; then
   esac
   absolute_spec_path=''
   if [ -n "$spec_path" ]; then
-    case "$spec_path" in
-      /*) absolute_spec_path="$spec_path" ;;
-      *) absolute_spec_path="$(cd "$(dirname "$spec_path")" && pwd)/$(basename "$spec_path")" ;;
-    esac
+    absolute_spec_path="$(cd "$(dirname "$spec_path")" && pwd)/$(basename "$spec_path")"
   fi
   for verbatim_sentinel in ${verbatim_sentinels[@]+"${verbatim_sentinels[@]}"}; do
     block_found=0
