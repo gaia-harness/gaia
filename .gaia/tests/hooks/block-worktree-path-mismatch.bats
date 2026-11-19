@@ -302,7 +302,7 @@ expect_verdict() {
   done
 }
 
-# link-worktree.sh symlinks the worktree's whole .gaia/local wholesale to main's
+# link-worktree.sh symlinks the worktree's whole .gaia/local to main's
 # own .gaia/local, so a write into ANY subpath of it -- forensics/ included --
 # physically resolves to main and would otherwise look like the #841
 # silent-wrong-write. forensics/ is per-tree scope, so its protection is "does
@@ -561,7 +561,7 @@ use_real_registry() {
 # one, so only 3.2 tells the parse check apart from the form it replaced.
 # Measured both ways on this machine: 3.2.57 exits 1 (missing) and 2
 # (unparseable) on the old form and 0 on the new, 5.3.15 exits 0 on both forms.
-# On a bash-5 /bin/bash (Linux CI) all four pass either way. A /bin/bash row is
+# On a bash-5 /bin/bash (Linux CI) the degrade rows pass either way. A /bin/bash row is
 # passed over when /bin/bash is absent.
 stage_hook_repo() {
   make_repo

@@ -482,7 +482,7 @@ window_case() {
 # Every row starts from a fresh session with the fixture's 1000000 main
 # reading, the shipped lib in the fixture and no override, so a row's reading,
 # lib edit or override never reaches the next.
-@test "UAT-006, UAT-020, UAT-026: the window is the main window or the default, a 200000 window over the default, a stale main reading, the lib's default and an override line" {
+@test "UAT-006, UAT-020, UAT-026: the window is the main window or the default: a 200000 main window, a reading past it taking the default, a stale main reading, the lib's default and an override line" {
   local label default_red override_file="$MAIN_ROOT/.gaia/local/protected/checkpoint-override.json"
   local overridden_line overridden_red overridden_fire reading
   for label in main-window-or-silent over-the-window lib-default stale-main-reading override-line; do

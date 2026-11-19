@@ -154,7 +154,7 @@ assert_no_branches_call() {
   return 0
 }
 
-@test "an out-of-scope or chore(deps) pull request is allowed with a lookup failing and the base never asked" {
+@test "an out-of-scope or chore(deps) pull request is allowed with the branches lookup failing or the base tip absent locally, and the base never asked" {
   local row label kind lookup description
   for row in \
     "out-of-scope|branches-fail" \
@@ -240,7 +240,7 @@ moved_head_after_record() {
 
 # --- the draft flip and a rejected POST -------------------------------------------
 
-@test "a failed ready flip or rejected POST still allows the bypass and names the manual command" {
+@test "a failed ready flip, a non-draft, an unreadable draft state or a rejected POST still allows the bypass" {
   local label
   for label in ready-flip-fails not-a-draft unreadable-draft-state rejected-post; do
     row_fixture "$label" || { echo "case $label: fixture failed"; return 1; }
@@ -299,7 +299,7 @@ uat_004_fixture() {
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
 }
 
-@test "UAT-004: a stale workflow fixture A or B: the marker allows the merge and the status posts" {
+@test "UAT-004: a stale audit workflow, with or without default_mode: ci: the marker allows the merge and post-audit-status.sh posts" {
   local row label default_mode marker
   # A: stale workflow, no default_mode. B: stale workflow, default_mode: ci.
   for row in "A|" "B|ci"; do

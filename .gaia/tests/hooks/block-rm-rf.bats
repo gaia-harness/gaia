@@ -138,7 +138,7 @@ expect_helper_result() {
   assert_denied_by_json
 }
 
-@test "each denial names its own arm and states its reason" {
+@test "denials name their own arm and state their reason" {
   local failed=0
   stage_main_checkout_fixture
   # `pnpm store prune` cleans pnpm's global store, not a project's node_modules,
@@ -154,8 +154,7 @@ expect_helper_result() {
   expect_rm_verdict ".git denies via the .git arm" deny 'rm -rf ".git"' 'BLOCKED: rm -rf of .git is forbidden.' || failed=1
   expect_rm_verdict "node_modules denies via the node_modules arm" deny 'rm -rf "node_modules"' 'BLOCKED: rm -rf of node_modules is forbidden' || failed=1
   expect_rm_verdict "--no-preserve-root denies via its own arm" deny 'rm --no-preserve-root -rf /' 'BLOCKED: rm with --no-preserve-root is forbidden.' || failed=1
-  # Every gate explains itself: each arm's denial says what the removal would
-  # destroy, not only that it is forbidden.
+  # These arms' denials state a reason, not only that the removal is forbidden.
   expect_rm_verdict "the --no-preserve-root denial states its reason" deny 'rm --no-preserve-root -rf /' "It switches off rm's own refusal to remove the filesystem root." || failed=1
   expect_rm_verdict "the absolute-path denial states its reason" deny 'rm -rf /etc' 'An absolute path can reach anywhere on this machine, outside the repository this session works in.' || failed=1
   expect_rm_verdict "the absolute-path traversal denial states its reason" deny 'rm -rf /tmp/../etc' "Its '..' segment makes it resolve somewhere its spelling does not name." || failed=1
@@ -208,7 +207,7 @@ expect_helper_result() {
   local failed=0
   # denied: a dangerous target in a non-first rm segment:
   #
-  # `rm -rf node_modules && rm -rf dist` is an ordinary cleanup chain, so a guard
+  # `rm -rf dist && rm -rf build` is an ordinary cleanup chain, so a guard
   # that inspects only the first rm segment lets a dangerous target ride behind a
   # harmless one.
   expect_rm_verdict "a dangerous target in the second rm segment (&&) is denied" deny 'rm -rf dist && rm -rf /' || failed=1
@@ -354,7 +353,7 @@ t' || failed=1
   [ "$failed" -eq 0 ]
 }
 
-@test ".claude deletions are denied except flagless removal of one marker file" {
+@test ".claude deletions are denied except one exact file removed by flagless rm or git rm -q --" {
   local failed=0
   # denied: .claude, the framework config:
   #
@@ -441,11 +440,9 @@ t' || failed=1
   expect_rm_verdict "/bin/RM -rf dist (path-qualified, uppercase word) is allowed" allow '/bin/RM -rf dist' || failed=1
   expect_rm_verdict "/bin/rm -rf build/output (path-qualified word) is allowed" allow '/bin/rm -rf build/output' || failed=1
   expect_rm_verdict "echo hi && /bin/rm -rf dist (path-qualified word in a later segment) is allowed" allow 'echo hi && /bin/rm -rf dist' || failed=1
-  # The dangerous shapes must still deny, and must deny via the TARGET's own arm.
-  # They deny today as well, but for the wrong reason: the `/rm` token is what trips
-  # the absolute-path arm, not the operand. So a fix that merely stops `/rm` being
-  # read as a target could silently turn these into allows. The reason needle is
-  # what pins the right reason, and therefore the real fix.
+  # The dangerous shapes must still deny, via the TARGET's own arm. A bare deny
+  # verdict would also pass if the `/rm` token tripped the absolute-path arm, so the
+  # reason needle pins the target's arm.
   expect_rm_verdict "/bin/rm -rf / denies via the target's own absolute-path arm" deny '/bin/rm -rf /' "BLOCKED: rm -rf of absolute path '/' is forbidden." || failed=1
   expect_rm_verdict "/bin/rm -rf \$HOME denies via the \$HOME arm" deny '/bin/rm -rf $HOME' 'BLOCKED: rm -rf of $HOME / ~ is forbidden.' || failed=1
   expect_rm_verdict "/bin/rm -rf .git denies via the .git arm" deny '/bin/rm -rf .git' 'BLOCKED: rm -rf of .git is forbidden.' || failed=1
@@ -550,7 +547,7 @@ t' || failed=1
   expect_rm_verdict "rm -rf of the claude-<uid> directory is denied" deny "rm -rf /private/tmp/claude-$CURRENT_USER_ID" 'rm -rf of absolute path' || failed=1
   expect_rm_verdict "rm -rf of a claude-<uid> path outside any scratchpad is denied" deny "rm -rf /private/tmp/claude-$CURRENT_USER_ID/-Users-you-projects-my-app/0b7c9e2a/tasks" 'rm -rf of absolute path' || failed=1
   expect_rm_verdict "rm -rf of the system temp dir is denied" deny 'rm -rf /tmp' 'rm -rf of absolute path' || failed=1
-  expect_rm_verdict "rm -rf of a file directly under the system temp dir is denied" deny 'rm -f /tmp/probe.txt' 'rm -f of absolute path' || failed=1
+  expect_rm_verdict "rm -f of a file directly under the system temp dir is denied" deny 'rm -f /tmp/probe.txt' 'rm -f of absolute path' || failed=1
   expect_rm_verdict "rm -rf of another user's session scratchpad is denied" deny "rm -rf /private/tmp/claude-${CURRENT_USER_ID}9/-x/0b7c9e2a/scratchpad/probe" 'rm -rf of absolute path' || failed=1
   expect_rm_verdict "a .. escape out of the session scratchpad is denied" deny "rm -rf $SESSION_SCRATCHPAD/../../../../../Users/you" 'rm -rf of absolute path' || failed=1
   # The rows below set the root variables; each unsets or restores them after, so
@@ -618,8 +615,7 @@ t' || failed=1
   # The flag probe matches `-[a-zA-Z]*[rRfF]`, which a hyphenated path component
   # ending in `r` or `f` satisfies: `my-matcher`, `my-perf`, and the incident's own
   # `c-text-matcher-guards` all contain one. So a flagless `rm <abs path>` was read
-  # as a destructive `rm -r` purely because of a directory name, which is the half
-  # of the incident neither issue explains.
+  # as a destructive `rm -r` purely because of a directory name.
   #
   # A genuine flag is always its own shell word, so the probe now requires a token
   # boundary in front of the dash. Quote and backslash bytes count as boundaries,
@@ -847,7 +843,7 @@ run_fixture_main_rmrf() {
   [ "$failed" -eq 0 ]
 }
 
-@test "_rm_whitelisted_absolute matches children_only bases, registry additions and the empty registry" {
+@test "_rm_whitelisted_absolute honors children_only, picks up registry additions and matches nothing on an empty registry" {
   local failed=0
   source_hook
   # _rm_whitelisted_absolute: the registry-driven absolute-whitelist matcher:
@@ -901,9 +897,9 @@ run_fixture_main_rmrf() {
   source_hook
   expect_helper_result "_rm_repository_relative_hint: a path inside a root names its relative spelling" 0 " From the repository root, its repo-relative spelling '.gaia/local/x' is judged by the relative-path rules instead." _rm_repository_relative_hint /repo/.gaia/local/x /repo || failed=1
   expect_helper_result "_rm_repository_relative_hint: every root is tried, so the physical spelling matches" 0 " From the repository root, its repo-relative spelling 'notes.txt' is judged by the relative-path rules instead." _rm_repository_relative_hint /private/tmp/repo/notes.txt /tmp/repo /private/tmp/repo || failed=1
-  expect_helper_result "_rm_repository_relative_hint: the root itself, a sibling, and an empty or / root print nothing (the root itself)" - "" _rm_repository_relative_hint /repo /repo || failed=1
-  expect_helper_result "_rm_repository_relative_hint: the root itself, a sibling, and an empty or / root print nothing (a sibling)" - "" _rm_repository_relative_hint /repository-two/x /repo || failed=1
-  expect_helper_result "_rm_repository_relative_hint: the root itself, a sibling, and an empty or / root print nothing (an empty or / root)" 0 "" _rm_repository_relative_hint /repo/x "" / || failed=1
+  expect_helper_result "_rm_repository_relative_hint: the root itself prints nothing" - "" _rm_repository_relative_hint /repo /repo || failed=1
+  expect_helper_result "_rm_repository_relative_hint: a sibling prints nothing" - "" _rm_repository_relative_hint /repository-two/x /repo || failed=1
+  expect_helper_result "_rm_repository_relative_hint: an empty or / root prints nothing" 0 "" _rm_repository_relative_hint /repo/x "" / || failed=1
   [ "$failed" -eq 0 ]
 }
 
@@ -1040,8 +1036,9 @@ run_staged_rmrf() {
   # Unpinned twins of the two registry cases above, and they are not redundant with
   # them. The pinned cases cover the bash-3.2 abort on the load itself; these cover
   # a SECOND failure on the same degrade path that only 4.4+ has. `rm_whitelist` is
-  # assigned only when the registry loads, and bash 3.2 reads a declared-but-
-  # unassigned local as empty while 4.4+ reads it as unset and dies on `set -u`. So
+  # assigned only when the registry loads, so main initializes it empty; dropping
+  # that leaves it unset, which bash 3.2 reads as empty and 4.4+ dies on under
+  # `set -u`. So
   # the /bin/bash pin that gives the cases above their teeth is exactly what blinds
   # them here on a stock Mac, and without these twins the class is caught by CI
   # alone.

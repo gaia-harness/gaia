@@ -128,8 +128,8 @@ run_settings_row() {
 
 # --- Bash denies: readers, residual read paths and shell forms ---
 #
-# The segment walk splits on &&, ; and ||, and reaches into `$(...)` because
-# the parens are in its character set. `.env*`, `.env.*` and `.env?` each expand
+# The segment walk splits on each of `|`, `&`, `;`, `(` and `)`, so it covers
+# &&, ; and || and reaches into `$(...)`. `.env*`, `.env.*` and `.env?` each expand
 # to dotenv files in the directory, so they read the same bytes the literal path
 # does; the predicate once matched only the literal spellings with a regex no
 # metacharacter satisfies, so the globs were allowed while `cat .env` was denied.
@@ -198,7 +198,7 @@ run_settings_row() {
 # pattern. The `!.env*` row is not a guard on the negation skip: the dotenv
 # predicate never matches a basename starting with `!`, so it stays green with
 # the skip removed; the skip is guarded by the derived negated-glob test below.
-@test "grep and rg read the target file, not the pattern, filter or exclude operand (dotenv)" {
+@test "grep and rg are judged on the target file and select-filter value, not the pattern or exclude operand (dotenv)" {
   local row
   for row in \
     "Bash|deny|grep SECRET .env" \

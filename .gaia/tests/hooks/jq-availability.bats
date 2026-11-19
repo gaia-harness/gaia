@@ -141,17 +141,15 @@ row_payload() {
   esac
 }
 
-# --- the matcher cannot reach the jq install, so the refusal is unconditional -
-# --- the matcher CAN reach the jq install, so the refusal is narrowed ---------
-#
-# Each pair is the whole claim: the in-remit call is refused, and the install
-# that repairs the machine is not.
+# A hook whose matcher cannot reach the jq install refuses unconditionally.
+# One whose matcher can refuses only its in-remit call: its refusal row below
+# and its allow row in the next test are together the whole claim.
 
 # Rows are label|hook|payload kind|argument|refusal text the output must carry.
 # A row naming a refusal text also asserts its payload never spells audit-loop,
 # so the protected folder is armed by the `local/protected` literal alone and an
 # omitted literal would exit 0 there.
-@test "with jq absent each blocking hook refuses: dotenv edit, eslint config edit, app edit in a worktree, dotenv read, force push to main, --no-verify, manifest write, rm -rf /, key path read, description-first dotenv read, member dispatch, audit-loop state write, new protected-folder file, protected-folder redirect, gh pr merge" {
+@test "with jq absent these blocking hooks refuse: dotenv edit, eslint config edit, app/foo.ts edit, dotenv read, force push to main, --no-verify, manifest write, rm -rf /, key path read, description-first dotenv read, member dispatch, audit-loop state write, new protected-folder file, protected-folder redirect, gh pr merge" {
   local original_path="$PATH" row label hook kind argument needle json
   for row in \
     "secrets-write|block-secrets-write.sh|edit|.env.local|" \
@@ -185,7 +183,7 @@ row_payload() {
   done
 }
 
-@test "with jq absent each blocking hook still allows: the jq install, a manifest-free edit, a README read, a non-member dispatch, an unrelated write" {
+@test "with jq absent the narrowed hooks still allow: the jq install, a manifest-free edit, a README read, a non-member dispatch, an unrelated write" {
   local original_path="$PATH" row label hook kind argument json
   for row in \
     "sensitive-read-install|block-sensitive-read.sh|bash|$INSTALL_COMMAND" \

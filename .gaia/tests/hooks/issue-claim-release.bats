@@ -312,7 +312,7 @@ reset_hook_state() {
   assert_nothing_released || { echo "case 5f"; return 1; }
 }
 
-@test "a merge not in command position (string, comment, other command, heredoc, directory change, subshell) releases nothing" {
+@test "a merge releases only as the first command of the call: in a string, comment, other command, heredoc, directory change or subshell it releases nothing" {
   reset_hook_state
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook 'echo "gh pr merge 42"'
@@ -512,14 +512,10 @@ reset_hook_state() {
   [ "$(cat "$FAKE_GH_STATE/pr_view_repo")" = "gaia-react/gaia" ] || { echo "case 7h"; return 1; }
   [ "$(grep -cxF -- "gaia-react/gaia" "$FAKE_GH_STATE/issue_edit_repos")" -eq 1 ] || { echo "case 7h"; return 1; }
 
-# Test 6 proves the matcher rejects a mention inside a string. This proves the
-# other half: a real invocation after a shell separator DOES arm. Without it,
-# separator_regex could silently stop matching and every compound-command merge would
-# release nothing with the suite still green.
-# gh's flag library accepts a shorthand with its value attached, so this is
-# the same invocation as the spaced form two cases up. Read as a bare boolean
-# flag it sets no repository at all, and the whole-slug boundary check below
-# never arms: the hook then reads THIS repository's pull request 5.
+# 7ae and 7af: gh's flag library accepts a shorthand with its value attached,
+# so `-Rother-org/other-repo` is the same invocation as the spaced `-R` of 7l.
+# Read as a bare boolean flag it sets no repository at all, and the whole-slug
+# boundary check never arms: the hook then reads THIS repository's pull request 5.
   reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'gh pr merge -Rother-org/other-repo 5'
@@ -947,7 +943,6 @@ reset_hook_state() {
   [ ! -s "$FAKE_GH_STATE/pr_view_calls" ] || { echo "case hook-payload-missing"; return 1; }
 }
 
-# ---------- Shared arming decision (tokenizer, and the bound past 6d) ----------
 
 @test "the hook file is executable" {
   [ -x "$HOOK_ABSOLUTE_PATH" ]

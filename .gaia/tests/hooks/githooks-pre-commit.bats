@@ -574,7 +574,7 @@ assert_gate_not_invoked() {
 # Fail closed on a registry or descriptor failure (UAT-018). On an unreadable
 # registry the reader prints its own reason and next step; the hook's closing
 # line points at them and names the file, so the refusal is not a dead end.
-@test "a registry that is unreadable or unparseable, or a missing descriptor, fails the commit with a pointer" {
+@test "a malformed registry (root or apps/web layout) or a missing descriptor fails the commit before any gate step" {
   local label
   snapshot_sandbox
   for label in "unreadable registry" "unparseable registry" "missing descriptor"; do

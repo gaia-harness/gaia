@@ -55,8 +55,8 @@ extractor_names_for() {
 # story with no tests (it has no play to sign). A `!test` story is never run.
 SHAPES_RENDER_ONLY="Render Only"
 
-# A row's excluded name is a test the reporter runs that the extractor must
-# not emit; "-" means the two name lists must be equal outright.
+# A row's excluded name is one of those tests; "-" means the two name lists
+# must be equal outright.
 @test "the extractor names equal the reporter's names on the shapes and meta-play fixtures" {
   local row label fixture excluded reporter_names extractor_names expected
   for row in \

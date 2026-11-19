@@ -31,10 +31,10 @@ setup() {
   mkdir -p "$TEMPORARY_DIRECTORY"
 }
 
-# Each row's content is a printf format written to the VERSION file; "absent"
+# Each row's content is a printf %b escape string written to the VERSION file; "absent"
 # reads a path that does not exist and "empty-argument" passes "" as the path.
 #
-# The cr-only row pins the ordering inside the reader rather than a
+# The cr-only-line row pins the ordering inside the reader rather than a
 # caller-visible nicety: CR is not awk's default field separator, so a reader
 # that tested for a non-blank line BEFORE stripping would select that line,
 # print nothing, and report a readable version file as missing.
@@ -43,7 +43,7 @@ setup() {
 # three: each yields the empty string and exits 0, because the call sites
 # disagree on what a missing file means and the helper must not flatten those
 # policies.
-@test "a version file normalizes to the bare literal: plain, CRLF, leading blank lines, CR-only line, surrounding whitespace, absent, whitespace-only, empty argument" {
+@test "a version file normalizes to the bare literal (plain, CRLF, leading blank lines, CR-only line, surrounding whitespace) and an absent file, whitespace-only file or empty argument to the empty string" {
   local row label content expected path
   for row in \
     'plain|1.6.1\n|1.6.1' \

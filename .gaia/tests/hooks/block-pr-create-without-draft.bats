@@ -76,8 +76,7 @@ check_decision() {
   fi
 }
 
-# Each row: label~~decision~~command. Every deny sits one spelling away from an
-# allow.
+# Each row: label~~decision~~command.
 @test "the draft flag spellings decide a create on the origin repository: --draft, -d, --draft=true, --draft=false, --repo with --draft" {
   local row label rest decision cmd
   for row in \
@@ -118,7 +117,7 @@ check_decision() {
   done
 }
 
-# A private repository is where drafts are refused, so a
+# GitHub refuses drafts on a private repository under some plans, so a
 # non-draft create there is allowed. Only the exact answer PRIVATE counts;
 # any other answer, an empty one, or a probe error (the stub exits 1 when no
 # visibility file exists) keeps the block. The probe-target row also asserts the
@@ -163,7 +162,7 @@ check_decision() {
 # --repo cannot be matched, so it is allowed, while a plain create still targets
 # the own repository and stays blocked.
 # Each row: label~~origin(keep|removed)~~decision~~command.
-@test "another repository, the scaffold PR, a shell-expanded repository or an unreadable origin is not blocked as the own repository" {
+@test "another repository, the scaffold PR, a shell-expanded repository or a --repo with an unreadable origin is not blocked as the own repository" {
   local row label rest origin decision cmd
   # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
   for row in \

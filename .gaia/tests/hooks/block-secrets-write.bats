@@ -141,7 +141,7 @@ check_message() {
   check_verdict pem-header deny
 }
 
-@test "a literal dotenv value is denied however substitutions, declarations, expansions, separators or comments surround it" {
+@test "a literal dotenv value, or an empty substitution, is denied however substitutions, declarations, expansions, separators or comments surround it" {
   run_hook_write "$(printf 'API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
   check_verdict literal deny
   run_hook_edit "$(printf 'DB_PASSWORD=%s\n' 'hunter2-not-a-placeholder')"
@@ -302,7 +302,7 @@ check_message() {
   # Recognizing the declaration keywords pulls shell lines into a rule written
   # for dotenv files, and a shell value references a variable far more often
   # than a dotenv value does. These carry no literal secret but the
-  # bare-identifier `${VAR}` arm alone would deny them.
+  # bare-identifier `${VAR}` arm alone would deny the expansions.
   run_hook_write "$(printf 'export GITHUB_TOKEN=%s\n' '"${GITHUB_TOKEN:-}"')"
   check_verdict default-operator allow
   run_hook_write "$(printf 'local CACHE_KEY=%s\n' '"${1}"')"
@@ -417,7 +417,7 @@ check_message() {
 # A committed file is the worst place for a real key, so dropping the allowlist
 # must not drop the backstop; the pattern rules do not care which file they are
 # writing into; and the exemption is scoped to that one basename.
-@test "a secret-shaped value in .env.example is denied (shape, comment, AWS, PAT, PEM), and the same values outside it are denied" {
+@test "a secret-shaped value in .env.example is denied (shape, comment, AWS, PAT, PEM), and values it exempts are denied outside it" {
   run_hook_write_path '.env.example' "$(printf 'API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
   check_verdict shaped-literal deny
   run_hook_edit_path '.env.example' "$(printf 'API_KEY=%s\n' 'aB3xK9pQ7zR2wL5t')"

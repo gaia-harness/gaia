@@ -207,8 +207,8 @@ git commit --no-verify -m y" \
 # `| & ; ( )` between it and the command word (reserved-*). The set is
 # hand-written, because bash's reserved words are not derivable from anything
 # in this repository, so it carries its non-members with reasons
-# (`.claude/rules/bats-assertions.md`). Every reserved word that can stand
-# immediately before a command is driven below. Deliberately not members, each
+# (`.claude/rules/bats-assertions.md`). Every member is driven immediately
+# before git except `while`, whose row puts git after `do`. Deliberately not members, each
 # because it precedes something other than a command: `function` and `for` and
 # `select` precede a NAME, `case` precedes a WORD, `[[` precedes a conditional
 # expression, and `in`, `esac`, `fi`, `done`, `}` and `]]` close a construct
@@ -222,7 +222,7 @@ git commit --no-verify -m y" \
 # A redirection may lead a simple command and occupy the command-word slot
 # (redirect-*). Deliberately not a member: a redirection whose target is another
 # descriptor (`2>&1`, `>&2`); the walk cuts segments at `&` before the strip
-# sees them, which the hook's own second honest limit states.
+# sees them, which the second honest limit in lib/git-segments.sh states.
 #
 # A word merely beginning with a reserved word is an ordinary command name, so
 # the strip requires the whitespace that makes the reserved word a word
@@ -342,9 +342,10 @@ run_staged() {
 # reds it, and the shell is then abandoned on a status PreToolUse does not read
 # as a deny, so both rows red on the missing verdict.
 #
-# git-segments.sh and hook-payload.sh: an unloadable copy refuses a call the
-# hook would deny with exit 2 naming the library, never failing open; a non-git
-# call still passes silently.
+# git-segments.sh and hook-payload.sh: an unloadable copy refuses with exit 2
+# naming the library, never failing open. git-segments.sh loads after the git
+# fast path, so without it a non-git call still passes silently; hook-payload.sh
+# loads before it and refuses every call.
 #
 # Each row: label~~library~~damage~~expect~~command. expect is allow or deny
 # (the JSON verdict), refuse (exit 2 with the BLOCKED line naming the library),

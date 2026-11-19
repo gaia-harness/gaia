@@ -146,7 +146,7 @@ reset_cache() {
 # The issue row keeps the forensics write-allowlist intact; the prose row has
 # no shell separator; the detached-HEAD row is refused by the lib for an empty
 # branch, so it runs last on the shared repo.
-@test "a call that is not a successful gh pr create writes nothing: gh issue create, non-Bash, prose, empty stdout, no URL, empty session_id, detached HEAD" {
+@test "no breadcrumb is written for gh issue create, a non-Bash call, prose, empty stdout, no URL, an empty session_id or a detached HEAD" {
   local input
   build_repo
   cd "$REPO"
@@ -237,13 +237,13 @@ reset_cache() {
 
 # ---------- A missing dependency degrades silently ----------
 
-# Each row needs its own tree: the lib row stages a copy of the hook (it
+# The lib and hook-payload rows each need their own tree: the lib row stages a copy of the hook (it
 # resolves gh-artifact-lib.sh off its OWN location, so running
 # $HOOK_ABSOLUTE_PATH from a lib-less directory would reach the real checkout's
 # lib and record normally; `stage_hook_repo` keeps the verb-arming load
 # resolvable so the hook reaches the gh-artifact load), and the hook-payload row
 # stages the whole lib directory less that one file.
-@test "a missing jq, gh-artifact lib or hook-payload library degrades to exit 0, no output, no breadcrumb and no edge" {
+@test "a missing jq, gh-artifact lib or hook-payload library degrades to exit 0, no output and no breadcrumb, and a missing jq writes no edge" {
   local nojq_bin input
 
   build_repo

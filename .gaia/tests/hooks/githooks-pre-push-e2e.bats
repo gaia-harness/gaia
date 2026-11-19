@@ -217,7 +217,7 @@ path_without() {
 
 # The rows share one fixture copy: each branches from main and pushes its own
 # branch, so neither sees the other's commit.
-@test "a missing rsync or jq skips its checks, never passes them, and the push proceeds: rsync, jq" {
+@test "a missing rsync or jq skips its checks, never passes them, and the push proceeds" {
   local tool branch
   enable_hook
   for tool in rsync jq; do

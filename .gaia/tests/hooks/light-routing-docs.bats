@@ -2,8 +2,6 @@
 # Reproducing test for the first wait step of the audit-loop unit's "Waiting
 # for a dispatch" subsection: it prints the time before it sleeps, on one line.
 #
-# GAIA_LIGHT_ROUTING_UNIT overrides the unit path so a scratch copy can be
-# driven through the same predicate; it defaults to the real file.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 

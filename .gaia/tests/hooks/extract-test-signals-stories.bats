@@ -153,7 +153,7 @@ SIBLING_NAMES=(
 
 # Row columns: label, repo path the source is judged under, source file,
 # expected exit, a marker the committed fixture must still contain ("-" for a
-# scratch source), and the expected stderr. Exit 8 expects exactly the one
+# scratch source), and the expected text (stderr on exit 7 or 8, the fullName on exit 0). Exit 8 expects exactly the one
 # migration line; exit 7 expects the refusal text; exit 0 expects the one
 # parsed fullName on stdout.
 @test "an unsupported story file exits 7 or 8 with the refusal line and no stdout; a CSF4 relative preview path is parsed" {

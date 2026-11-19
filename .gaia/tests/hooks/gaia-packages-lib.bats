@@ -297,7 +297,7 @@ check_case() {
 
 # A hostile registry path is refused as malformed; a hostile descriptor glob is
 # data and loads. Neither may run its embedded command.
-@test "a hostile registry path or glob is data and runs nothing" {
+@test "a hostile registry path is refused as malformed and a hostile glob loads as data; neither runs its command" {
   # shellcheck source=/dev/null
   . "$LIBRARY"
   local row label expected_status root marker status

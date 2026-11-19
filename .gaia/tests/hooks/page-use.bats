@@ -5,8 +5,7 @@
 # use prints, the clean verdict for request-only tests (including request
 # contexts named like a page and words in strings and comments), the printed
 # line shape, the exit codes, the symlinked invocation, the pageUsesOf export,
-# and the static half of the template's page-status check. Every check has a
-# red twin: a positive fixture beside a negative one, or a mutated scratch copy.
+# and the static half of the template's page-status check.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/page-use.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -40,7 +39,7 @@ assert_reason() {
   esac
 }
 
-# The template checks, each taking the file so a red twin runs on a mutated copy.
+# The template checks, each taking the file to check.
 template_opens_no_page() {
   node "$DETECTOR" "$1"
 }
