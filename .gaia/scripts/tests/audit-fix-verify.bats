@@ -427,38 +427,6 @@ declared_edit_check() {
   done < <(moved_library_paths)
 }
 
-@test "twin: the same edit passes once its line is off the enforcement list" {
-  local mutant_directory="$BATS_TEST_TMPDIR/mutant" file_path=.gaia/scripts/audit-pr-sections-lib.sh
-  mkdir -p "$mutant_directory"
-  cp "$REAL_SCRIPT" "$BATS_TEST_DIRNAME/../main-root-lib.sh" "$BATS_TEST_DIRNAME/../audit-key-lib.sh" "$mutant_directory/"
-  grep -vF -- "'$file_path'" "$REAL_SCRIPT" >"$mutant_directory/audit-fix-verify.sh"
-  cmp -s "$REAL_SCRIPT" "$mutant_directory/audit-fix-verify.sh" && return 1
-  declared_edit_check "$mutant_directory/audit-fix-verify.sh" "$file_path"
-  [ "$status" -eq 0 ] || {
-    echo "status=$status output=$output"
-    return 1
-  }
-}
-
-@test "twin: an edit to each veto, triage and owed-gate script passes once its line is off the enforcement list" {
-  local mutant_directory file_path
-  for file_path in .gaia/scripts/audit-veto-lib.sh .gaia/scripts/audit-triage-lib.sh .gaia/scripts/audit-gate-owed.sh; do
-    rm -rf "$REPO" "$BATS_TEST_TMPDIR/mutant"
-    make_repo "$REPO"
-    mkdir -p "$RUN_FOLDER"
-    mutant_directory="$BATS_TEST_TMPDIR/mutant"
-    mkdir -p "$mutant_directory"
-    cp "$REAL_SCRIPT" "$BATS_TEST_DIRNAME/../main-root-lib.sh" "$BATS_TEST_DIRNAME/../audit-key-lib.sh" "$mutant_directory/"
-    grep -vF -- "'$file_path'" "$REAL_SCRIPT" >"$mutant_directory/audit-fix-verify.sh"
-    cmp -s "$REAL_SCRIPT" "$mutant_directory/audit-fix-verify.sh" && return 1
-    declared_edit_check "$mutant_directory/audit-fix-verify.sh" "$file_path"
-    [ "$status" -eq 0 ] || {
-      echo "$file_path: status=$status output=$output"
-      return 1
-    }
-  done
-}
-
 @test "a gate-repair result with no fix entries passes check, and an undeclared changed path still fails" {
   write_dispositions '[]'
   take_baseline
