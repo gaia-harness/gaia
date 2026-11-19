@@ -1332,7 +1332,7 @@ instantiate_glob() {
 
 @test "a frontend-only change arms no leg" {
   require_yaml_parser
-  [ "$(filter_coverage filtermatch "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" code,scoped,sandbox,commitlint apps/web/app/root.tsx)" = "no-match" ]
+  [ "$(filter_coverage filtermatch "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" code,scoped,sandbox,commitlint,protected-tests apps/web/app/root.tsx)" = "no-match" ]
 }
 
 @test "the install inputs arm commitlint, and docs, hooks, CLI source and wiki pages are change-scoped" {

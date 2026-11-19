@@ -44,6 +44,28 @@ verify_line_limit_command='./.gaia/cli/gaia fitness check --json --scope all --f
 # reproduce command; a full shell-lint report can run to hundreds of lines.
 verify_detail_line_limit=200
 
+verify_shell_lint_script=.gaia/tests/shell-lint.sh
+
+# verify_delta_names_shell_lint_input <NUL-delimited delta file>: succeed when
+# the delta changes an input that decides shell-lint's verdict over files the
+# delta does not name, so narrowing to the delta would miss a finding the
+# change creates elsewhere. Those inputs are the gate script itself, which
+# holds the severity floors, the excluded codes and the discovery globs and
+# sources nothing, and the linter's own config files,
+# which it reads from each linted file's directory upward. The folded guards,
+# their awk library and the helpers they source are not here: the guards scan
+# the whole tree even under --paths-from, so a change to any of them is
+# already judged over every file.
+verify_delta_names_shell_lint_input() {
+  local delta_path
+  while IFS= read -r -d '' delta_path; do
+    case "$delta_path" in
+      "$verify_shell_lint_script" | .shellcheckrc | */.shellcheckrc | shellcheckrc | */shellcheckrc) return 0 ;;
+    esac
+  done <"$1"
+  return 1
+}
+
 verify_git() {
   git -C "$verified_root" "$@"
 }
@@ -167,7 +189,7 @@ verify_label_for() {
 
 verify_reproduce_for() {
   case "$1" in
-    shell-lint) printf 'bash .gaia/tests/shell-lint.sh' ;;
+    shell-lint) printf 'bash %s' "$verify_shell_lint_script" ;;
     line-limit) printf '%s' "$verify_line_limit_command" ;;
     leak) printf 'bash .gaia/tests/distribution/lib/build-staging.sh "$(mktemp -d)"' ;;
     files-present) printf 'bash .gaia/tests/distribution/01-files-present.sh' ;;
@@ -182,7 +204,19 @@ verify_execute_check() {
   local kind="$1" tree="$2" output_file="$3" staging_directory line_limit_status
   case "$kind" in
     shell-lint)
-      (cd "$tree" && bash .gaia/tests/shell-lint.sh) >"$output_file" 2>&1 </dev/null
+      # A merge base whose gate predates --paths-from would exit 2 on it, and
+      # that exit would pass off a HEAD failure with no readable items as
+      # "main is red"; such a gate lints the whole tree.
+      # A host without shellcheck runs only the folded guards; a gate that
+      # predates `--only guards` has no such mode, so it runs in full and stops
+      # at its missing-shellcheck check before any pass.
+      if [ "${verify_shell_lint_guards_only:-0}" -eq 1 ] && grep -qF -- "| guards)" "$tree/$verify_shell_lint_script"; then
+        (cd "$tree" && bash "$verify_shell_lint_script" --only guards) >"$output_file" 2>&1 </dev/null
+      elif [ -n "${verify_round_delta_file:-}" ] && grep -qF -- '--paths-from)' "$tree/$verify_shell_lint_script"; then
+        (cd "$tree" && bash "$verify_shell_lint_script" --paths-from "$verify_round_delta_file") >"$output_file" 2>&1 </dev/null
+      else
+        (cd "$tree" && bash "$verify_shell_lint_script") >"$output_file" 2>&1 </dev/null
+      fi
       ;;
     line-limit)
       # shellcheck disable=SC2086
@@ -214,11 +248,15 @@ verify_extract_items() {
   case "$kind" in
     shell-lint)
       # The linter's "In <file> line N:", bash -n's "<file>: line N:", and
-      # the repo guards' "<file>:<line>:" each name the offending file.
+      # the repo guards' "<file>:<line>:" each name the offending file. The
+      # protected-test gate's REMOVED and BAD-WAIVER lines carry no line
+      # number, so the whole line is the item, and the merge base never prints
+      # the branch's own removal or waiver.
       sed -n -E \
         -e 's/^In (.+) line [0-9]+:.*$/\1/p' \
         -e 's/^([^ :]+): line [0-9]+:.*$/\1/p' \
-        -e 's/^([^ :]+):[0-9]+(:.*)?$/\1/p' "$output_file" | LC_ALL=C sort -u
+        -e 's/^([^ :]+):[0-9]+(:.*)?$/\1/p' \
+        -e 's/^((REMOVED|BAD-WAIVER) .*)$/\1/p' "$output_file" | LC_ALL=C sort -u
       ;;
     line-limit)
       sed -n -E 's/^([^ :]+):[0-9]+ [^ ]+: .*$/\1/p' "$output_file" | LC_ALL=C sort -u

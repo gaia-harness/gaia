@@ -124,6 +124,32 @@ commit_base_files() {
   }
 }
 
+@test "a suite declaring a file fixture-only is selected only by the changed paths it does not declare" {
+  base="$(commit_base_files \
+    'CHANGELOG.md=# changelog' \
+    'scripts/tool.sh=a' \
+    'tests/reads-changelog.bats=body="$(cat "$REPO_ROOT/CHANGELOG.md")"' \
+    $'tests/scratch-changelog.bats=# bats-selector fixture-only: CHANGELOG.md\necho x > "$ROOT/CHANGELOG.md"; bash "$SCRIPTS/tool.sh"')"
+  printf 'edited\n' >> "$FIXTURE/CHANGELOG.md"
+  git -C "$FIXTURE" commit -q -am changelog
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
+  [ "$status" -eq 0 ]
+  [ "$output" = "tests/reads-changelog.bats" ] || {
+    printf 'changelog only, got:\n%s\n' "$output" >&2
+    return 1
+  }
+
+  printf 'edited\n' >> "$FIXTURE/scripts/tool.sh"
+  git -C "$FIXTURE" commit -q -am tool
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
+  [ "$status" -eq 0 ]
+  [ "$output" = $'tests/reads-changelog.bats\ntests/scratch-changelog.bats' ] || {
+    printf 'changelog and tool, got:\n%s\n' "$output" >&2
+    return 1
+  }
+}
+
 @test "a source file sharing its basename, in a tree with no suite, selects only suites naming its unique trailing path" {
   base="$(commit_base_files \
     'apps/web/app/form-error/index.tsx=a' \

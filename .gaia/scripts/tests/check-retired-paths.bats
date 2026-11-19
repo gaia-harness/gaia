@@ -15,7 +15,6 @@
 
 setup() {
   SCRIPT_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
-  REPO_ROOT="$(cd "$SCRIPT_DIRECTORY/../.." && pwd)"
   FIXTURES="$BATS_TEST_DIRNAME/fixtures/retired-paths"
 }
 
@@ -37,13 +36,6 @@ stage_all() {
 
 run_gate() {
   run bash "$1/.gaia/scripts/check-retired-paths.sh" "${@:2}"
-}
-
-# bats test_tags=whole-tree
-@test "the real working tree is clean" {
-  run bash "$SCRIPT_DIRECTORY/check-retired-paths.sh" --root "$REPO_ROOT"
-  [ "$status" -eq 0 ]
-  grep -qF -- "check-retired-paths: clean" <<<"$output"
 }
 
 @test "a root app/ citation in a hook names the file and line and fails" {

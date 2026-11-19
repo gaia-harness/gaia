@@ -22,6 +22,8 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
+# bats-selector fixture-only: CHANGELOG.md
+
 # The masked-tool test uses `run --separate-stderr`.
 bats_require_minimum_version 1.5.0
 
