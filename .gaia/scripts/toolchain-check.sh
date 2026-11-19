@@ -183,6 +183,7 @@ tool_reason() {
   case "$1" in
     git) printf 'GAIA'"'"'s light audit review replays the merge with git merge-tree --merge-base.' ;;
     jq) printf 'GAIA'"'"'s hooks and scripts read JSON with it.' ;;
+    node) printf 'pnpm and GAIA'"'"'s CLI run on it.' ;;
     pnpm) printf 'GAIA installs, tests and builds with it.' ;;
     lsof | ss) printf 'dev-smoke finds the running dev server with it.' ;;
   esac
@@ -194,6 +195,9 @@ guide() {
     git | jq)
       lead="Update to the latest $tool"
       printf 'GUIDE %s: %s: %s. %s\n' "$tool" "$lead" "$(package_route "$tool")" "$(tool_reason "$tool")"
+      ;;
+    node)
+      printf 'GUIDE node: Install the Node version .nvmrc and .node-version pin with nvm or fnm: run nvm install or fnm install from the project root, then make it your default. Then reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. %s\n' "$(tool_reason node)"
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
@@ -223,6 +227,25 @@ brew_route() {
   fi
 }
 
+PNPM_INSTALL='corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
+
+# node_route: a terminal route through the version manager this machine has,
+# or nothing. It is terminal because the new Node reaches only a new shell's
+# PATH, and it sets the default so the profile each new shell sources keeps it.
+# Global packages stay with the old Node, so pnpm is reinstalled under the new
+# one. nvm is a shell function, invisible to command -v here, so its install
+# script stands in for it. Windows gets no route: these commands are bash.
+# The $(...) stays unexpanded: it is printed for the user's shell.
+# shellcheck disable=SC2016
+node_route() {
+  [ "$PLATFORM" != windows ] || return 0
+  if command -v fnm >/dev/null 2>&1; then
+    printf 'terminal fnm install && fnm use && fnm default "$(fnm current)" && { %s; }' "$PNPM_INSTALL"
+  elif [ -s "${NVM_DIR:-${HOME:-}/.nvm}/nvm.sh" ]; then
+    printf 'terminal nvm install && nvm alias default "$(nvm current)" && { %s; }' "$PNPM_INSTALL"
+  fi
+}
+
 # route_for <tool>: "<class> <command>" for the ROUTE line, or nothing when no
 # exact command exists. The class tells the caller who runs it: run (Claude,
 # after asking), user (the user, as `! <command>`: it needs sudo) or terminal
@@ -231,7 +254,11 @@ route_for() {
   local tool="$1"
   case "$tool" in
     pnpm)
-      printf 'run corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
+      printf 'run %s' "$PNPM_INSTALL"
+      return 0
+      ;;
+    node)
+      node_route
       return 0
       ;;
     lsof)

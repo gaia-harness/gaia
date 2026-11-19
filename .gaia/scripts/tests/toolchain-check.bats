@@ -33,6 +33,7 @@ stub() {
 stub_current() {
   stub git 'git version 2.56.0'
   stub jq 'jq-1.7.1-apple'
+  stub node 'v26.13.1'
   stub pnpm '12.11.2'
   stub lsof 'lsof 4.91'
   stub ss 'ss utility, iproute2-6.1.0'
@@ -235,6 +236,36 @@ route_line() {
   [[ "$(route_line pnpm)" == "ROUTE pnpm run "*"npm install -g pnpm@latest" ]]
 }
 
+@test "Node 24 is below the floor: it blocks, and with no version manager the guide alone names the install and the pnpm reinstall" {
+  stub_current
+  stub node 'v24.11.0'
+  check --platform darwin
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF "BELOW node 24.11.0 $(floor_of node)"
+  [[ "$output" == *"GUIDE node: "*"nvm install or fnm install"*"npm install -g pnpm@latest"*"GAIA's CLI run on it."* ]]
+  [ -z "$(route_line node)" ]
+}
+
+@test "ROUTE terminal for node through fnm or nvm, reinstalling pnpm with the pnpm route's own command, and none on Windows" {
+  stub_current
+  stub pnpm '11.2.0'
+  stub node 'v24.11.0'
+  mkdir -p "$STUBS/nvm"
+  printf 'x\n' >"$STUBS/nvm/nvm.sh"
+  run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
+  local pnpm_command
+  pnpm_command="$(route_line pnpm)"
+  pnpm_command="${pnpm_command#ROUTE pnpm run }"
+  [ -n "$pnpm_command" ]
+  [ "$(route_line node)" = "ROUTE node terminal nvm install && nvm alias default \"\$(nvm current)\" && { $pnpm_command; }" ]
+  stub fnm 'fnm 1.38.1'
+  run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform linux --os-id debian
+  [ "$(route_line node)" = "ROUTE node terminal fnm install && fnm use && fnm default \"\$(fnm current)\" && { $pnpm_command; }" ]
+  check --platform windows
+  [ "$status" -eq 1 ]
+  [ -z "$(route_line node)" ]
+}
+
 @test "no ROUTE line without an exact command, and none for a passing tool" {
   stub_current
   rm "$STUBS/ss"
@@ -261,7 +292,7 @@ route_line() {
 }
 
 @test "no guidance pins a version: each route reaches latest, never the floor" {
-  run grep -nE '(git|jq|pnpm)@?[ -]?[0-9]+\.[0-9]+' "$CHECK"
+  run grep -nE '(git|jq|node|pnpm)@?[ -]?[0-9]+\.[0-9]+' "$CHECK"
   [ "$status" -ne 0 ]
 }
 
@@ -273,6 +304,7 @@ route_line() {
   grep -qiw 'warn' "$NOTE" && return 1
   grep -q "git $(floor_of git)" "$NOTE"
   grep -q "jq $(floor_of jq)" "$NOTE"
+  grep -q "node $(floor_of node)" "$NOTE"
   grep -q "pnpm $(floor_of pnpm)" "$NOTE"
 }
 

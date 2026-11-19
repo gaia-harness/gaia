@@ -3,7 +3,7 @@ type: concept
 title: Toolchain Floors
 status: active
 created: 2026-10-31
-updated: 2026-11-01
+updated: 2026-11-19
 tags: [concept, setup, update]
 ---
 
@@ -22,7 +22,7 @@ GAIA runs on tools it cannot always install itself. `.gaia/toolchain-floors.tsv`
 
 Whatever Claude can install, it installs after confirming with the user. What only the user can do, Claude hands over as a `! <command>` to type in the prompt, or says plainly when it needs a fresh terminal. That holds for any GAIA flow that needs a tool installed. For the floors, `toolchain-check.sh` prints a `ROUTE` line for each short tool that has an exact command, and its class says which of the three applies, and `.claude/skills/gaia/references/toolchain.md` (`## Below a floor`) walks the user through it and checks again in the same run.
 
-The floor is only the pass or fail line. Each message says why GAIA needs the tool. For git, jq and pnpm it says to update to the latest release, and every route reaches one: where a package manager stays behind, as apt does on Debian stable, the route is another source. lsof and ss need only be present, so their messages say how to get them; `.gaia/scripts/toolchain-check.sh` holds the exact text. No message pins a version number.
+The floor is only the pass or fail line. Each message says why GAIA needs the tool. For git, jq and pnpm it says to update to the latest release, and every route reaches one: where a package manager stays behind, as apt does on Debian stable, the route is another source. For node it installs the version `.nvmrc` and `.node-version` pin, through nvm or fnm, then reinstalls pnpm under it. lsof and ss need only be present, so their messages say how to get them; `.gaia/scripts/toolchain-check.sh` holds the exact text. No message pins a version number.
 
 ## At runtime
 
