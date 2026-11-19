@@ -205,7 +205,7 @@ guide() {
       lead='nvm or fnm: run nvm install or fnm install'
       [ "$PLATFORM" != windows ] || lead='fnm: run fnm install'
       printf 'GUIDE node: Install Node %s with %s, then make it your default. Then' "${node_version:-the version .node-version pins}" "${lead}${node_version:+ $node_version}"
-      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal and start Claude Code again from it, since a running session keeps the old PATH. %s\n' "$(tool_reason node)"
+      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal and start Claude Code again from it, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), first write that version into the .nvmrc and .node-version in the project root, or the old pin is reselected and this check fails again. %s\n' "$(tool_reason node)"
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
@@ -248,11 +248,21 @@ node_pin() {
   printf '%s' "${pin//[[:space:]]/}"
 }
 
+# pin_files_command <version>: one shell command writing the bundle's pin into
+# the project's .nvmrc and .node-version (GAIA-owned; the update's merge writes
+# the same bytes). A shell that switches Node per folder (fnm --use-on-cd, nvm
+# auto-use, asdf, mise) would otherwise reselect the project's old pin and undo
+# the install, in the route's own pnpm step and in the fresh terminal.
+pin_files_command() {
+  printf "printf '%%s\\\\n' %s | tee .nvmrc >.node-version" "$1"
+}
+
 # node_route: a terminal route through the version manager this machine has,
 # or nothing. It is terminal because the new Node reaches only a new shell's
 # PATH, and it sets the default so the profile each new shell sources keeps it.
-# It installs the bundle's pinned version explicitly (node_pin), so it works
-# from any folder. Global packages stay with the old Node, so pnpm is
+# It installs the bundle's pinned version explicitly (node_pin), writes it to
+# the project's pin files, and switches this terminal to it (use) so the pnpm
+# reinstall runs under the new Node. Run it from the project root. Global packages stay with the old Node, so pnpm is
 # reinstalled under the new one. nvm is a shell function, invisible to
 # command -v here, so its install script stands in for it. Windows gets no
 # route: these commands are bash.
@@ -263,9 +273,9 @@ node_route() {
   node_version="$(node_pin)"
   [ -n "$node_version" ] || return 0
   if command -v fnm >/dev/null 2>&1; then
-    printf 'terminal fnm install %s && fnm default %s && { %s; }' "$node_version" "$node_version" "$PNPM_INSTALL"
+    printf 'terminal %s && fnm install %s && fnm use %s && fnm default %s && { %s; }' "$(pin_files_command "$node_version")" "$node_version" "$node_version" "$node_version" "$PNPM_INSTALL"
   elif [ -s "${NVM_DIR:-${HOME:-}/.nvm}/nvm.sh" ]; then
-    printf 'terminal nvm install %s && nvm alias default %s && { %s; }' "$node_version" "$node_version" "$PNPM_INSTALL"
+    printf 'terminal %s && nvm install %s && nvm use %s && nvm alias default %s && { %s; }' "$(pin_files_command "$node_version")" "$node_version" "$node_version" "$node_version" "$PNPM_INSTALL"
   fi
 }
 
