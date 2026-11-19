@@ -4,7 +4,7 @@ status: active
 created: 2026-11-19
 updated: 2026-11-19
 promoted_at: 2026-11-19T06:51:37Z
-promoted_hash: sha256:d74e62090350d34cd2a508fccd3abf7a85136013067b9ed84c13e9ed988ed9fe
+promoted_hash: sha256:c4b5a650bc8d8e954d04ac29eb9207d3b9a8b5627d1803893d2627f55620af56
 pr_number: 3673
 tags: [promoted, concepts]
 ---
@@ -39,5 +39,5 @@ Every GAIA session of one checkout shows the freshest 5-hour and 7-day rate-limi
 
 ## Divergence
 
-- **Hook timing.** The assumed 50 ms p50 budget on the silent paths is exceeded on three of them as measured on a heavily loaded machine: no shared reading 75 to 83 ms, below the warning band 88 to 98 ms, band already marked 88 to 99 ms. The sub-agent path (18 to 21 ms) and the firing path (95 to 99 ms against 100 ms) are within budget. Every path past the sub-agent check pays the library sourcing and main-root resolution before it can exit; moving the shared-file existence check ahead of them is the candidate fix. Recorded in `wiki/concepts/Workflow Doctrine.md` `## Measurements`.
+- **Hook timing.** The below-the-warning-band and band-already-marked paths gain nothing from the absent pre-check and exceed their assumed 50 ms p50 budget: they pay the libraries, the full `gaia_resolve_main_root` git calls and the one `jq`. The pre-check cuts the no-shared-reading path to about a third. Figures, load-inflated: `wiki/concepts/Workflow Doctrine.md` `## Measurements`.
 - **Last-observed time on a lower reading.** The SPEC says `observed_at` advances on every accepted write; the shipped writer reads a lower same-window reading as not accepted for that window, so a stale idle session cannot make the stored figure look freshly confirmed.

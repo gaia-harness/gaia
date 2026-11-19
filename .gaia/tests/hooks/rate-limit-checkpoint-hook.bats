@@ -59,7 +59,7 @@ install_hook() {
   mkdir -p "$root/.claude/hooks" "$root/.gaia/scripts"
   cp "$HOOK_SOURCE_PATH" "$root/.claude/hooks/rate-limit-checkpoint-inject.sh"
   chmod 755 "$root/.claude/hooks/rate-limit-checkpoint-inject.sh"
-  for library_file in context-checkpoint-lib.sh rate-limits-lib.sh main-root-lib.sh; do
+  for library_file in context-checkpoint-lib.sh rate-limits-lib.sh main-root-lib.sh main-root-fast-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$library_file" "$root/.gaia/scripts/$library_file"
   done
   HOOK="$root/.claude/hooks/rate-limit-checkpoint-inject.sh"
@@ -371,4 +371,29 @@ Policy: .claude/doctrine/rate-limit-checkpoint.md"
   # A later dispatch with neither window changed is silent.
   dispatch 3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f Task
   silent || return 1
+}
+
+@test "the fast pre-check only concludes absent: a root where the reading exists still reaches the full ladder" {
+  local decoy="$TEMPORARY_DIRECTORY/decoy" library="$MAIN/.gaia/scripts/main-root-fast-lib.sh"
+
+  # The fast layout read is overridden to answer a decoy root that holds a
+  # reading with nothing to say (a 40% window). The true main root holds a 91%
+  # window. A pre-check that trusted the fast answer for anything but "absent"
+  # would go on with the decoy and stay silent; the full ladder resolves the
+  # true root and speaks.
+  mkdir -p "$decoy"
+  rate_limits_seed_file "$decoy/.gaia/local/cache/shared/$READING_NAME.json" "$NOW" five_hour 40 "$RESETS_AT"
+  printf 'gaia_resolve_main_root_fast() { printf "%%s\n" "%s"; }\n' "$decoy" >>"$library"
+  seed five_hour 91 "$RESETS_AT"
+
+  dispatch "$SESSION_ONE" Agent
+  speaks || return 1
+  [ "$(first_line)" = "Rate-limit checkpoint: five_hour critical band (91%), resets 14:00." ] || { echo "$(first_line)"; return 1; }
+  [ -f "$MARKER_DIRECTORY/$SESSION_ONE.json" ] || return 1
+
+  # Control: when the fast answer is a root with no reading, the hook exits early.
+  rm -f "$decoy/.gaia/local/cache/shared/$READING_NAME.json"
+  dispatch "$SESSION_TWO" Agent
+  silent || return 1
+  [ ! -e "$MARKER_DIRECTORY/$SESSION_TWO.json" ] || return 1
 }

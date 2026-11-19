@@ -331,6 +331,7 @@
     ".gaia/scripts/link-worktree.sh": "owned",
     ".gaia/scripts/machine-local-ref-lib.sh": "owned",
     ".gaia/scripts/main-only-lib.sh": "owned",
+    ".gaia/scripts/main-root-fast-lib.sh": "owned",
     ".gaia/scripts/main-root-lib.sh": "owned",
     ".gaia/scripts/notebook/legacy-roots.sh": "owned",
     ".gaia/scripts/notebook/move.sh": "owned",
@@ -878,7 +879,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-19T06:52:12.474Z",
+  "generated": "2026-11-19T11:46:40.667Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

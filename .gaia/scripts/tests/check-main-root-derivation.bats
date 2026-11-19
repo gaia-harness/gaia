@@ -108,6 +108,24 @@ commit_fixture() {
   grep -qF "consumer.sh" <<<"$output" || return 1
 }
 
+@test "fixture: the fast lib is exempt, and the same line in a sibling scripts file fails" {
+  local repo
+  repo="$(make_fixture_repo companion-exemption)"
+  mkdir -p "$repo/.gaia/scripts"
+  printf 'raw="$(git rev-parse --git-common-dir)"\n' >"$repo/.gaia/scripts/main-root-fast-lib.sh"
+  commit_fixture "$repo"
+  run gaia_check_main_root_derivation "$repo"
+  [ "$status" -eq 0 ]
+  grep -qF "hand-rolled --git-common-dir uses outside the resolver: 0" <<<"$output" || return 1
+
+  printf 'raw="$(git rev-parse --git-common-dir)"\n' >"$repo/.gaia/scripts/tree-root-helper.sh"
+  commit_fixture "$repo"
+  run gaia_check_main_root_derivation "$repo"
+  [ "$status" -eq 1 ]
+  grep -qF "hand-rolled --git-common-dir uses outside the resolver: 1" <<<"$output" || return 1
+  grep -qF ".gaia/scripts/tree-root-helper.sh" <<<"$output" || return 1
+}
+
 @test "fixture: --git-common-dir mentioned only in a comment does not fail" {
   local repo
   repo="$(make_fixture_repo comment-common-dir)"

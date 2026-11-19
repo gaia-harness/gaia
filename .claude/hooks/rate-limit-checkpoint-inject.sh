@@ -25,10 +25,15 @@
 # and an injection whose encoded text would pass the byte cap.
 #
 # Exit ladder, cheapest first: raw pattern checks on the payload with bash only
-# (event, agent_id, tool name, session id, cwd); the main root; the raw
-# silent-path pre-check that the shared file exists; then the one jq of the run,
-# inside gaia_rate_limits_report, which also emits the merged marker body. The
-# hook never runs `rate-limits.sh read` and never parses the marker itself.
+# (event, agent_id, tool name, session id, cwd); the fast pre-check, which
+# sources only the two main-root libraries, trusts gaia_resolve_main_root_fast
+# (main-root-fast-lib.sh) for "absent" only, and exits when its root holds no
+# shared file, before any git process (any other outcome changes nothing);
+# context-checkpoint-lib.sh and the session id check;
+# rate-limits-lib.sh; gaia_resolve_main_root and the authoritative shared-file
+# check; then the one jq of the run, inside gaia_rate_limits_report, which also
+# emits the merged marker body. The hook never runs `rate-limits.sh read` and
+# never parses the marker itself.
 #
 # Marker: <main root>/.gaia/local/cache/rate-limit-checkpoint/<session id>.json,
 # a JSON object holding, per window name, the reset time and the highest band
@@ -77,18 +82,43 @@ case "$cwd" in /*) ;; *) exit 0 ;; esac
 case "$cwd" in *\\*) exit 0 ;; esac
 [ -d "$cwd" ] || exit 0
 
+# Fast pre-check (exit ladder above). The relative path is read from
+# rate-limits-lib.sh's own assignment, not sourced, so this exit skips that
+# library's load and the path is never spelled here.
+# A failed load of main-root-fast-lib.sh skips only the pre-check; a failed
+# load of main-root-lib.sh also leaves gaia_resolve_main_root undefined, so the
+# hook exits silently at the full resolution below.
+fast_precheck_ready=0
+# shellcheck source=/dev/null
+if . "$scripts/main-root-lib.sh" && . "$scripts/main-root-fast-lib.sh"; then
+  fast_precheck_ready=1
+fi
+shared_relative=""
+while IFS= read -r library_line; do
+  case "$library_line" in
+    _GAIA_RATE_LIMITS_RELATIVE_PATH=*)
+      shared_relative="${library_line#*=}"
+      break
+      ;;
+  esac
+done <"$scripts/rate-limits-lib.sh"
+case "$shared_relative" in
+  '' | *[!A-Za-z0-9_./-]*) shared_relative="" ;;
+esac
+if [ "$fast_precheck_ready" = 1 ] && [ -n "$shared_relative" ] && precheck_root=$(gaia_resolve_main_root_fast "$cwd") && [ ! -f "$precheck_root/$shared_relative" ]; then
+  exit 0
+fi
+
 # shellcheck source=/dev/null
 . "$scripts/context-checkpoint-lib.sh" || exit 0
 gaia_context_is_session_id "$session_id" || exit 0
 # shellcheck source=/dev/null
 . "$scripts/rate-limits-lib.sh" || exit 0
-# shellcheck source=/dev/null
-. "$scripts/main-root-lib.sh" || exit 0
 
 main_root=$(gaia_resolve_main_root "$cwd") || exit 0
 [ -n "$main_root" ] || exit 0
 
-# Raw silent-path pre-check: no shared reading, nothing to say.
+# Authoritative check: no shared reading, nothing to say.
 shared_file=$(gaia_rate_limits_file "$main_root")
 [ -f "$shared_file" ] || exit 0
 
