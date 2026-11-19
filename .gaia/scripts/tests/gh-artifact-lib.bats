@@ -176,6 +176,7 @@ setup() {
   jq -e '.number | type == "number"' >/dev/null 2>&1 <<<"$output" || return 1
 }
 
+# bats test_tags=protected
 @test "gaia_gh_artifact_parse_url: rejects issue URLs, gitlab host, http scheme, non-numeric number, unsafe owner, and an injection canary" {
   local rejected
   for rejected in \

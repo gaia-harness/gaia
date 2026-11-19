@@ -127,6 +127,7 @@ reset_case() {
   [ "$(jq -r '.ghLogin' "$CACHE_FILE")" = "" ]
 }
 
+# bats test_tags=protected
 @test "a login or claim with control bytes never reaches the cache" {
   echo "case: an out-of-set login writes an empty ghLogin"
   reset_case
