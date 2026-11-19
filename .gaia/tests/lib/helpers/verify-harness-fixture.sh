@@ -238,7 +238,7 @@ vhf_empty_candidates() {
 
 # vhf_path_without <tool...>: print a PATH directory holding every command of
 # the current PATH except the named ones. Each name links to its first
-# executable regular file on PATH, as PATH lookup resolves it, so a
+# executable non-directory entry on PATH, as PATH lookup resolves it, so a
 # non-executable file or a directory earlier on PATH never shadows the command.
 # The linter is always the stub, and naming it removes even that.
 vhf_path_without() {
