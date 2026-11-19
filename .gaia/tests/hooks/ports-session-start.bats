@@ -477,61 +477,52 @@ expected_context_line() {
     "$1" "$((DEV_BASE + $1))" "$((STORYBOOK_BASE + $1))"
 }
 
-@test "context line: compact and clear in a provisioned worktree print exactly the frozen line" {
+@test "context line: compact and clear in a provisioned worktree print exactly the frozen line; startup, main and a worktree without a port file print none" {
   add_tree feature
   for source_name in compact clear; do
     run_hook "$source_name" session-two "$TREE"
-    [ "$status" -eq 0 ]
-    [ "$output" = "$(expected_context_line "$SLOT")" ]
+    [ "$status" -eq 0 ] || { echo "case $source_name: status=$status"; return 1; }
+    [ "$output" = "$(expected_context_line "$SLOT")" ] || { echo "case $source_name: output=$output"; return 1; }
   done
-}
 
-@test "context line: startup prints none, main prints none, and a worktree without a port file prints none" {
-  add_tree feature
   run_hook startup session-two "$TREE"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [ "$status" -eq 0 ] || { echo "case startup: status=$status"; return 1; }
+  [ -z "$output" ] || { echo "case startup: output=$output"; return 1; }
 
   run_hook clear session-two "$MAIN"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [ "$status" -eq 0 ] || { echo "case main: status=$status"; return 1; }
+  [ -z "$output" ] || { echo "case main: output=$output"; return 1; }
 
   rm -f "$TREE/apps/web/.gaia-ports"
   run_hook compact session-two "$TREE"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [ "$status" -eq 0 ] || { echo "case no-port-file: status=$status"; return 1; }
+  [ -z "$output" ] || { echo "case no-port-file: output=$output"; return 1; }
 }
 
 # ---------- session registration ----------
 
-@test "registration: every source writes the session file with the host pid and start" {
+@test "registration: an empty payload writes nothing, every source writes the session file with the host pid and start, a path-shaped session id writes nothing outside sessions" {
+  run --separate-stderr env GAIA_PORTS_HOST_PID="$LIVE_HOST_PID" bash "$HOOK" <<<""
+  [ "$status" -eq 0 ] || { echo "case empty-payload: status=$status"; return 1; }
+  [ -z "$output" ] || { echo "case empty-payload: output=$output"; return 1; }
+  [ ! -d "$STATE/sessions" ] || { echo "case empty-payload: sessions written"; return 1; }
+
   host_start="$(identity_of "$LIVE_HOST_PID")"
   host_start="${host_start%%"$TAB"*}"
   for source_name in startup resume clear compact; do
     run_hook "$source_name" "session-$source_name" "$MAIN"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 0 ] || { echo "case $source_name: status=$status"; return 1; }
     IFS=$'\t' read -r recorded_pid recorded_start _ <"$STATE/sessions/session-$source_name.tsv"
-    [ "$recorded_pid" = "$LIVE_HOST_PID" ]
-    [ "$recorded_start" = "$host_start" ]
+    [ "$recorded_pid" = "$LIVE_HOST_PID" ] || { echo "case $source_name: pid=$recorded_pid"; return 1; }
+    [ "$recorded_start" = "$host_start" ] || { echo "case $source_name: start=$recorded_start"; return 1; }
   done
-}
 
-@test "registration: a path-shaped session id writes nothing outside sessions" {
   payload="$(printf '{"hook_event_name":"SessionStart","session_id":"../x","source":"startup","cwd":"%s"}' "$MAIN")"
   run --separate-stderr env GAIA_PORTS_HOST_PID="$LIVE_HOST_PID" bash "$HOOK" <<<"$payload"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -e "$STATE/x.tsv" ]
-  [ ! -e "$STATE/sessions/x.tsv" ]
-  [ ! -e "$MAIN/.gaia/local/x.tsv" ]
-  [ -z "$(find "$SCRATCH" -name 'x.tsv' 2>/dev/null)" ]
-}
-
-# ---------- refusals ----------
-
-@test "payload: an empty payload exits 0 quietly and writes nothing" {
-  run --separate-stderr env GAIA_PORTS_HOST_PID="$LIVE_HOST_PID" bash "$HOOK" <<<""
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -d "$STATE/sessions" ]
+  [ "$status" -eq 0 ] || { echo "case path-shaped-id: status=$status"; return 1; }
+  [ -z "$output" ] || { echo "case path-shaped-id: output=$output"; return 1; }
+  [ ! -e "$STATE/x.tsv" ] || { echo "case path-shaped-id: $STATE/x.tsv"; return 1; }
+  [ ! -e "$STATE/sessions/x.tsv" ] || { echo "case path-shaped-id: sessions/x.tsv"; return 1; }
+  [ ! -e "$MAIN/.gaia/local/x.tsv" ] || { echo "case path-shaped-id: local/x.tsv"; return 1; }
+  [ -z "$(find "$SCRATCH" -name 'x.tsv' 2>/dev/null)" ] || { echo "case path-shaped-id: stray x.tsv"; return 1; }
 }

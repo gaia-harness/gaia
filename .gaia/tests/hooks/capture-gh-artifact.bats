@@ -121,207 +121,194 @@ any_breadcrumb_exists() {
   [ "$(jq -r '.number' "$breadcrumb_file")" = "900" ]
 }
 
+# Case-table checks: each names its row and returns 1 explicitly, so a failing
+# row reports its label and fails the test.
+check_status_zero() {
+  [ "$status" -eq 0 ] || { echo "case $1: status=$status output=$output"; return 1; }
+}
+check_silent() {
+  check_status_zero "$1" || return 1
+  [ -z "$output" ] || { echo "case $1: unexpected output: $output"; return 1; }
+}
+check_no_breadcrumb() {
+  any_breadcrumb_exists && { echo "case $1: a breadcrumb was written"; return 1; }
+  return 0
+}
+check_breadcrumb_for() {
+  [ -f "$(breadcrumb_path "$2")" ] || { echo "case $1: no breadcrumb for $2"; return 1; }
+}
+reset_cache() {
+  rm -f "$CACHE"/gh-artifact-pr*.json
+}
+
 # ---------- It does NOT write when it should not ----------
 
-@test "gh issue create writes nothing (forensics write-allowlist stays intact)" {
+# The issue row keeps the forensics write-allowlist intact; the prose row has
+# no shell separator; the detached-HEAD row is refused by the lib for an empty
+# branch, so it runs last on the shared repo.
+@test "a call that is not a successful gh pr create writes nothing: gh issue create, non-Bash, prose, empty stdout, no URL, empty session_id, detached HEAD" {
+  local input
   build_repo
   cd "$REPO"
-  git checkout -b feat/issue --quiet
 
+  git checkout -b feat/issue --quiet
   run_hook "gh issue create --repo gaia-react/gaia --label gaia-forensics --title t --body-file f" \
     "https://github.com/gaia-react/gaia/issues/415"
-  [ "$status" -eq 0 ]
+  check_status_zero issue-create
+  check_no_breadcrumb issue-create
 
-  any_breadcrumb_exists && return 1
-  return 0
-}
-
-@test "a non-Bash tool call: exit 0, no file" {
-  build_repo
-  cd "$REPO"
+  reset_cache
   input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Edit "gh pr create")
   invoke_hook "$input" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
+  check_status_zero non-bash
+  check_no_breadcrumb non-bash
 
-  any_breadcrumb_exists && return 1
-  return 0
-}
-
-@test "a prose mention with no shell separator: exit 0, no file" {
-  build_repo
-  cd "$REPO"
+  reset_cache
   run_hook 'git commit -m "run gh pr create next"' ""
-  [ "$status" -eq 0 ]
+  check_status_zero prose-mention
+  check_no_breadcrumb prose-mention
 
-  any_breadcrumb_exists && return 1
-  return 0
-}
-
-# ---------- Shared arming decision (data proof, bound, tokenizer) ----------
-
-@test "a real gh pr create heredoc body (cat-to-file) is proven data: no file, and the same text without it writes" {
-  build_repo
-  cd "$REPO"
-  git checkout -b feat/heredoc --quiet
-
-  heredoc_command=$'cat > /tmp/notes.txt <<EOF\ngh pr create --title x\nEOF'
-  run_hook "$heredoc_command" "https://github.com/gaia-react/gaia/pull/712"
-  [ "$status" -eq 0 ]
-  any_breadcrumb_exists && return 1
-
-  run_hook "gh pr create --title x" "https://github.com/gaia-react/gaia/pull/712"
-  [ "$status" -eq 0 ]
-  [ -f "$(breadcrumb_path "feat/heredoc")" ]
-}
-
-@test "the same heredoc-body payload padded past the arming bound does write" {
-  build_repo
-  cd "$REPO"
-  git checkout -b feat/overbound --quiet
-
-  local pad heredoc_command
-  pad=$(printf 'x%.0s' $(seq 1 16400))
-  heredoc_command=$'cat > /tmp/notes.txt <<EOF\n'"$pad"$'\ngh pr create --title x\nEOF'
-  [ "${#heredoc_command}" -gt 16384 ] || return 1
-
-  run_hook "$heredoc_command" "https://github.com/gaia-react/gaia/pull/712"
-  [ "$status" -eq 0 ]
-  [ -f "$(breadcrumb_path "feat/overbound")" ]
-}
-
-@test "a quoted verb in the first command writes (tokenizer arm; red before this change)" {
-  build_repo
-  cd "$REPO"
-  git checkout -b feat/quoted --quiet
-
-  run_hook 'gh pr "create" --title x' "https://github.com/gaia-react/gaia/pull/712"
-  [ "$status" -eq 0 ]
-  [ -f "$(breadcrumb_path "feat/quoted")" ]
-}
-
-@test "a multi-statement command still writes (no regression)" {
-  build_repo
-  cd "$REPO"
-  git checkout -b feat/multi --quiet
-
-  run_hook "echo start && gh pr create --title x" "https://github.com/gaia-react/gaia/pull/712"
-  [ "$status" -eq 0 ]
-  [ -f "$(breadcrumb_path "feat/multi")" ]
-}
-
-@test "a failed gh pr create (empty stdout): exit 0, no file" {
-  build_repo
-  cd "$REPO"
+  reset_cache
   run_hook "gh pr create --title x --body y" ""
-  [ "$status" -eq 0 ]
+  check_status_zero empty-stdout
+  check_no_breadcrumb empty-stdout
 
-  any_breadcrumb_exists && return 1
-  return 0
-}
-
-@test "gh pr create whose stdout carries no parseable URL: exit 0, no file" {
-  build_repo
-  cd "$REPO"
+  reset_cache
   run_hook "gh pr create --title x --body y" "Creating pull request..."
-  [ "$status" -eq 0 ]
+  check_status_zero no-url
+  check_no_breadcrumb no-url
 
-  any_breadcrumb_exists && return 1
-  return 0
-}
-
-@test "detached HEAD: exit 0, no file (the lib refuses an empty branch)" {
-  build_repo
-  cd "$REPO"
-  git checkout --detach --quiet
-
-  run_hook "gh pr create --title x --body y" "https://github.com/gaia-react/gaia/pull/712"
-  [ "$status" -eq 0 ]
-
-  any_breadcrumb_exists && return 1
-  return 0
-}
-
-@test "empty session_id: exit 0, no file" {
-  build_repo
-  cd "$REPO"
+  reset_cache
   git checkout -b feat/nosid --quiet
-
   input=$(jq -n --arg t "Bash" --arg c "gh pr create --title x --body y" \
     --arg o "https://github.com/gaia-react/gaia/pull/712" \
     '{session_id: "", transcript_path: "/tmp/transcript.jsonl", cwd: ".",
       hook_event_name: "PostToolUse", tool_name: $t, tool_input: {command: $c},
       tool_response: {stdout: $o, stderr: "", interrupted: false}}')
   run_hook_raw "$input"
-  [ "$status" -eq 0 ]
+  check_status_zero empty-session-id
+  check_no_breadcrumb empty-session-id
 
-  any_breadcrumb_exists && return 1
-  return 0
+  reset_cache
+  git checkout --detach --quiet
+  run_hook "gh pr create --title x --body y" "https://github.com/gaia-react/gaia/pull/712"
+  check_status_zero detached-head
+  check_no_breadcrumb detached-head
 }
 
-@test "jq absent on PATH: exit 0, no file, no output" {
+# ---------- Shared arming decision (data proof, bound, tokenizer) ----------
+
+# A heredoc body is proven data and writes nothing, while the same text outside
+# it writes; padded past the arming bound the proof is not attempted and it
+# writes; a quoted verb in the first command arms through the tokenizer; a
+# multi-statement command still writes.
+@test "a create inside a heredoc body writes nothing; outside it, past the arming bound, with a quoted verb or after another statement it writes" {
+  local heredoc_command pad
+  build_repo
+  cd "$REPO"
+
+  git checkout -b feat/heredoc --quiet
+  heredoc_command=$'cat > /tmp/notes.txt <<EOF\ngh pr create --title x\nEOF'
+  run_hook "$heredoc_command" "https://github.com/gaia-react/gaia/pull/712"
+  check_status_zero heredoc-body
+  check_no_breadcrumb heredoc-body
+  run_hook "gh pr create --title x" "https://github.com/gaia-react/gaia/pull/712"
+  check_status_zero heredoc-text-unwrapped
+  check_breadcrumb_for heredoc-text-unwrapped feat/heredoc
+
+  git checkout -b feat/overbound --quiet
+  pad=$(printf 'x%.0s' $(seq 1 16400))
+  heredoc_command=$'cat > /tmp/notes.txt <<EOF\n'"$pad"$'\ngh pr create --title x\nEOF'
+  [ "${#heredoc_command}" -gt 16384 ] || { echo "case over-bound: payload not past the bound"; return 1; }
+  run_hook "$heredoc_command" "https://github.com/gaia-react/gaia/pull/712"
+  check_status_zero over-bound
+  check_breadcrumb_for over-bound feat/overbound
+
+  git checkout -b feat/quoted --quiet
+  run_hook 'gh pr "create" --title x' "https://github.com/gaia-react/gaia/pull/712"
+  check_status_zero quoted-verb
+  check_breadcrumb_for quoted-verb feat/quoted
+
+  git checkout -b feat/multi --quiet
+  run_hook "echo start && gh pr create --title x" "https://github.com/gaia-react/gaia/pull/712"
+  check_status_zero multi-statement
+  check_breadcrumb_for multi-statement feat/multi
+}
+
+# ---------- A missing dependency degrades silently ----------
+
+# Each row needs its own tree: the lib row stages a copy of the hook (it
+# resolves gh-artifact-lib.sh off its OWN location, so running
+# $HOOK_ABSOLUTE_PATH from a lib-less directory would reach the real checkout's
+# lib and record normally; `stage_hook_repo` keeps the verb-arming load
+# resolvable so the hook reaches the gh-artifact load), and the hook-payload row
+# stages the whole lib directory less that one file.
+@test "a missing jq, gh-artifact lib or hook-payload library degrades to exit 0, no output, no breadcrumb and no edge" {
+  local nojq_bin input
+
   build_repo
   cd "$REPO"
   git checkout -b feat/nojq --quiet
-
   nojq_bin="$(path_allowlist bash cat git)"
-
   input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash "gh pr create --title x" \
     "https://github.com/gaia-react/gaia/pull/712")
   PATH="$nojq_bin" invoke_hook "$input" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  check_silent jq-absent
+  check_no_breadcrumb jq-absent
 
-  any_breadcrumb_exists && return 1
-  return 0
-}
+  git checkout -b feat/nojq-edge --quiet
+  unset GAIA_USAGE_HOOKS_DISABLE
+  input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash "gh pr create --title x" \
+    "https://github.com/gaia-react/gaia/pull/80")
+  PATH="$nojq_bin" invoke_hook "$input" "$HOOK_ABSOLUTE_PATH"
+  check_silent jq-absent-edge
+  [ ! -e "$(edge_file)" ] || { echo "case jq-absent-edge: an edge was written"; return 1; }
+  export GAIA_USAGE_HOOKS_DISABLE=1
 
-@test "lib absent: exit 0, no file, no output" {
-  # The hook resolves gh-artifact-lib.sh off its OWN location, so an absent lib
-  # is expressed by staging a copy of the hook in a tree that does not carry
-  # one. Running $HOOK_ABSOLUTE_PATH from a lib-less working directory would not express
-  # it: that reaches the real checkout's lib and records normally, which is the
-  # whole point of the rooting. `stage_hook_repo` is reused rather than a bare
-  # tmp repo so the verb-arming load still resolves and the hook reaches the
-  # gh-artifact load this case is about.
+  cd "$BATS_TEST_TMPDIR"
+  rm -rf "$REPO"
+  reset_cache
   stage_hook_repo
   rm -f "$REPO/.gaia/scripts/gh-artifact-lib.sh"
   cd "$REPO"
   git checkout -b feat/nolib --quiet
-
   run_staged_hook "gh pr create --title x" "https://github.com/gaia-react/gaia/pull/712"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  check_silent lib-absent
+  check_no_breadcrumb lib-absent
 
-  any_breadcrumb_exists && return 1
-  return 0
+  cd "$BATS_TEST_TMPDIR"
+  rm -rf "$REPO"
+  reset_cache
+  build_repo
+  mkdir -p "$REPO/.claude/hooks"
+  cp -R "$REPO_ROOT/.claude/hooks/lib" "$REPO/.claude/hooks/lib"
+  rm -f "$REPO/.claude/hooks/lib/hook-payload.sh"
+  cp "$HOOK_ABSOLUTE_PATH" "$REPO/.claude/hooks/capture-gh-artifact.sh"
+  cd "$REPO"
+  input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash "gh pr create --fill" "https://github.com/acme/widgets/pull/7")
+  invoke_hook "$input" "$REPO/.claude/hooks/capture-gh-artifact.sh"
+  check_silent hook-payload-absent
+  check_no_breadcrumb hook-payload-absent
 }
 
 # ---------- Injection safety ----------
 
-@test "injection: command substitution in the repo slug never executes and writes no breadcrumb" {
+@test "a hostile repo slug (command substitution, shell metacharacter) never executes and writes no breadcrumb" {
   build_repo
   cd "$REPO"
+
   git checkout -b feat/inject --quiet
-
   run_hook "gh pr create --title x" 'https://github.com/o$(touch CANARY)/n/pull/1'
-  [ "$status" -eq 0 ]
+  check_status_zero command-substitution
+  [ -e "$REPO/CANARY" ] && { echo "case command-substitution: CANARY created in repo"; return 1; }
+  check_no_breadcrumb command-substitution
+  [ -e "$CACHE/CANARY" ] && { echo "case command-substitution: CANARY created in cache"; return 1; }
 
-  [ -e "$REPO/CANARY" ] && return 1
-  any_breadcrumb_exists && return 1
-  [ -e "$CACHE/CANARY" ] && return 1
-  return 0
-}
-
-@test "injection: a shell metacharacter in the repo slug writes no breadcrumb" {
-  build_repo
-  cd "$REPO"
+  reset_cache
   git checkout -b feat/inject2 --quiet
-
   run_hook "gh pr create --title x" "https://github.com/o;id/n/pull/1"
-  [ "$status" -eq 0 ]
-
-  any_breadcrumb_exists && return 1
-  return 0
+  check_status_zero metacharacter
+  check_no_breadcrumb metacharacter
 }
 
 # ---------- Registration ----------
@@ -341,6 +328,7 @@ any_breadcrumb_exists() {
 stage_hook_repo() {
   build_repo
   mkdir -p "$REPO/.claude/hooks/lib"
+  cp "$REPO_ROOT/.claude/hooks/lib/hook-payload.sh" "$REPO/.claude/hooks/lib/"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming.sh" "$REPO/.claude/hooks/lib/"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-walk.sh" "$REPO/.claude/hooks/lib/"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-view.sh" "$REPO/.claude/hooks/lib/"
@@ -363,102 +351,66 @@ run_staged_hook() {
 
 edge_file() { printf '%s/.gaia/local/telemetry/links.jsonl' "$REPO"; }
 
-@test "gh pr create records the pr:<N> to branch edge, normalizing a worktree branch spelling" {
-  build_repo
-  cd "$REPO"
-  unset GAIA_USAGE_HOOKS_DISABLE
-  git checkout -b worktree-debt+42-fix --quiet
-
-  run_hook "gh pr create --title x --body y" "https://github.com/gaia-react/gaia/pull/77"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-
-  [ "$(jq -sc '[.[] | [.kind, .child, .parent, .source]]' "$(edge_file)")" = '[["edge","pr:77","branch:debt/42-fix","gh-pr-create"]]' ]
-  [ -f "$(breadcrumb_path "worktree-debt+42-fix")" ]
+# check_no_pr_edge LABEL: the ledger is absent or holds no pr: edge.
+check_no_pr_edge() {
+  [ -f "$(edge_file)" ] || return 0
+  grep -q '"pr:' "$(edge_file)" && { echo "case $1: a pr: edge was recorded"; return 1; }
+  return 0
 }
 
-@test "gh pr create with a repo flag records no pr:<N> edge, in any flag spelling" {
+# A repo flag in any spelling, even after a multi-line body, names a repository
+# the edge cannot vouch for, so no edge is recorded. The ledger is cleared
+# between rows so the recording row asserts its own single edge.
+@test "the pr:<N> edge is recorded, normalizing a worktree branch spelling, unless a repo flag in any spelling or after a multi-line body names the repository" {
   build_repo
   cd "$REPO"
   unset GAIA_USAGE_HOOKS_DISABLE
-  git checkout -b feat/foreign --quiet
 
+  git checkout -b feat/foreign --quiet
   run_hook "gh pr create --repo x/y --title t" "https://github.com/x/y/pull/79"
-  [ "$status" -eq 0 ]
+  check_status_zero repo-long
   run_hook "gh pr create -R x/y --title t" "https://github.com/x/y/pull/80"
   run_hook "gh pr create --title t --repo=x/y" "https://github.com/x/y/pull/81"
-  [ ! -f "$(edge_file)" ] || ! grep -q '"pr:' "$(edge_file)"
-}
+  check_no_pr_edge repo-flag-spellings
 
-@test "gh pr create with a multi-line body before a repo flag records no pr:<N> edge" {
-  build_repo
-  cd "$REPO"
-  unset GAIA_USAGE_HOOKS_DISABLE
+  rm -f "$(edge_file)"
   git checkout -b feat/foreign-body --quiet
-
   run_hook $'gh pr create --title t --body "line one\nline two" --repo x/y' "https://github.com/x/y/pull/82"
-  [ "$status" -eq 0 ]
+  check_status_zero multi-line-body
   run_hook $'gh pr create --body "line one\nline two" -Rx/y' "https://github.com/x/y/pull/83"
-  [ ! -f "$(edge_file)" ] || ! grep -q '"pr:' "$(edge_file)"
+  check_no_pr_edge multi-line-body
+
+  rm -f "$(edge_file)"
+  reset_cache
+  git checkout -b worktree-debt+42-fix --quiet
+  run_hook "gh pr create --title x --body y" "https://github.com/gaia-react/gaia/pull/77"
+  check_silent records-edge
+  [ "$(jq -sc '[.[] | [.kind, .child, .parent, .source]]' "$(edge_file)")" = '[["edge","pr:77","branch:debt/42-fix","gh-pr-create"]]' ] \
+    || { echo "case records-edge: ledger is $(cat "$(edge_file)")"; return 1; }
+  check_breadcrumb_for records-edge worktree-debt+42-fix
 }
 
-@test "an unwritable breadcrumb cache never drops the edge" {
+# The seam (GAIA_USAGE_HOOKS_DISABLE) keeps the real ledger untouched while the
+# breadcrumb still lands; an unwritable breadcrumb cache must not take the edge
+# down with it.
+@test "an unwritable breadcrumb cache never drops the edge, and the test seam keeps the edge unwritten" {
   build_repo
   cd "$REPO"
+
+  git checkout -b feat/seam --quiet
+  run_hook "gh pr create --title x --body y" "https://github.com/gaia-react/gaia/pull/79"
+  check_status_zero seam
+  [ ! -e "$(edge_file)" ] || { echo "case seam: an edge was written"; return 1; }
+  check_breadcrumb_for seam feat/seam
+
+  reset_cache
   unset GAIA_USAGE_HOOKS_DISABLE
   git checkout -b feat/edge --quiet
   : >"$BATS_TEST_TMPDIR/not-a-dir"
   export GAIA_GH_ARTIFACT_CACHE_DIRECTORY="$BATS_TEST_TMPDIR/not-a-dir/cache"
-
   run_hook "gh pr create --title x --body y" "https://github.com/gaia-react/gaia/pull/78"
-  [ "$status" -eq 0 ]
-
-  [ "$(jq -sc '[.[] | [.child, .parent]]' "$(edge_file)")" = '[["pr:78","branch:feat/edge"]]' ]
-  any_breadcrumb_exists && return 1
-  return 0
-}
-
-@test "the test seam keeps the edge unwritten" {
-  build_repo
-  cd "$REPO"
-  git checkout -b feat/seam --quiet
-
-  run_hook "gh pr create --title x --body y" "https://github.com/gaia-react/gaia/pull/79"
-  [ "$status" -eq 0 ]
-
-  [ ! -e "$(edge_file)" ]
-  [ -f "$(breadcrumb_path "feat/seam")" ]
-}
-
-@test "jq absent on PATH: no edge is written" {
-  build_repo
-  cd "$REPO"
-  unset GAIA_USAGE_HOOKS_DISABLE
-  git checkout -b feat/nojq-edge --quiet
-
-  nojq_bin="$(path_allowlist bash cat git)"
-  input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash "gh pr create --title x" \
-    "https://github.com/gaia-react/gaia/pull/80")
-  PATH="$nojq_bin" invoke_hook "$input" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-
-  [ ! -e "$(edge_file)" ]
-}
-
-@test "hook-payload.sh missing: exit 0 with empty stdout, no breadcrumb" {
-  build_repo
-  mkdir -p "$REPO/.claude/hooks"
-  cp -R "$REPO_ROOT/.claude/hooks/lib" "$REPO/.claude/hooks/lib"
-  rm -f "$REPO/.claude/hooks/lib/hook-payload.sh"
-  cp "$HOOK_ABSOLUTE_PATH" "$REPO/.claude/hooks/capture-gh-artifact.sh"
-  cd "$REPO"
-
-  local input
-  input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash "gh pr create --fill" "https://github.com/acme/widgets/pull/7")
-  invoke_hook "$input" "$REPO/.claude/hooks/capture-gh-artifact.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  any_breadcrumb_exists && return 1
-  return 0
+  check_status_zero unwritable-cache
+  [ "$(jq -sc '[.[] | [.child, .parent]]' "$(edge_file)")" = '[["pr:78","branch:feat/edge"]]' ] \
+    || { echo "case unwritable-cache: ledger is $(cat "$(edge_file)")"; return 1; }
+  check_no_breadcrumb unwritable-cache
 }

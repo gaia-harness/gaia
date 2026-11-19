@@ -108,463 +108,260 @@ run_write_hook_edit() {
   assert_denied
 }
 
-@test "a GitHub personal-access-token is denied" {
+# check_verdict LABEL deny|allow
+# The run-hook pair leans on errexit for its status line, which a `||` caller
+# switches off, so each case-table row checks the JSON verdict here with
+# explicit returns and names its own label when it fails.
+check_verdict() {
+  [ "$status" -eq 0 ] || { echo "case $1: status=$status output=$output"; return 1; }
+  if grep -qF -- '"permissionDecision": "deny"' <<<"$output"; then
+    [ "$2" = deny ] || { echo "case $1: denied, expected allow: $output"; return 1; }
+  else
+    [ "$2" = allow ] || { echo "case $1: allowed, expected deny: $output"; return 1; }
+  fi
+}
+
+# check_message LABEL present|absent NEEDLE
+check_message() {
+  if grep -qF -- "$3" <<<"$output"; then
+    [ "$2" = present ] || { echo "case $1: '$3' present: $output"; return 1; }
+  else
+    [ "$2" = absent ] || { echo "case $1: '$3' missing: $output"; return 1; }
+  fi
+}
+
+# Each row below is one call with its exact fixture, then its labelled verdict.
+
+@test "a GitHub personal-access-token and a PEM private-key header are denied" {
   local pat="ghp""_0123456789abcdefghij"
   run_hook_write "const token = '$pat'"
-  assert_denied
-}
-
-@test "a PEM private-key header is denied" {
+  check_verdict github-pat deny
   local pem="-----BEGIN RSA PRIVATE ""KEY-----"
   run_hook_write "$pem"
-  assert_denied
+  check_verdict pem-header deny
 }
 
-# --- The dotenv rule still denies a real literal value ---
-
-@test "a dotenv assignment with a literal value is denied" {
+@test "a literal dotenv value is denied however substitutions, declarations, expansions, separators or comments surround it" {
   run_hook_write "$(printf 'API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a dotenv assignment with a literal value is denied through Edit too" {
+  check_verdict literal deny
   run_hook_edit "$(printf 'DB_PASSWORD=%s\n' 'hunter2-not-a-placeholder')"
-  assert_denied
-}
-
-@test "a literal value is denied even when a command substitution precedes it" {
+  check_verdict literal-edit deny
   run_hook_write "$(printf 'API_KEY=%s\n' '$(whoami)-sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
+  check_verdict substitution-before deny
 
-# The four below pin the allowlist's command-substitution arm to "wholly a
-# substitution" rather than "starts with $( and ends with )". The first three
-# are values a both-ends-anchored `\$\(.+\)` admits, because `.` matches the
-# very `)` the closing anchor is supposed to certify; they pin the trailing
-# anchor. The fourth pins the leading one, and only that one: it never starts
-# with `$(`, so it is the shape a dropped `^` would silently let through.
-
-@test "a literal value between two command substitutions is denied" {
+  # These pin the allowlist's command-substitution arm to "wholly a
+  # substitution" rather than "starts with $( and ends with )". The first three
+  # are values a both-ends-anchored `\$\(.+\)` admits, because `.` matches the
+  # very `)` the closing anchor is supposed to certify; they pin the trailing
+  # anchor. The fourth pins the leading one: it never starts with `$(`, so it is
+  # the shape a dropped `^` would silently let through.
   run_hook_write "$(printf 'API_KEY=%s\n' '$(true)sk-live-9f3a1c4e8b7d2064$(true)')"
-  assert_denied
-}
-
-@test "a literal value is denied when it merely ends in a closing paren" {
+  check_verdict between-substitutions deny
   run_hook_write "$(printf 'API_KEY=%s\n' '$(whoami)sk-live-9f3a1c4e8b7d2064)')"
-  assert_denied
-}
-
-@test "a literal value spliced between quoted command substitutions is denied" {
+  check_verdict ends-in-paren deny
   run_hook_write "$(printf 'API_KEY=%s\n' '"$(a)"sk-live-9f3a1c4e8b7d2064"$(b)"')"
-  assert_denied
-}
-
-@test "a literal value is denied even when a command substitution follows it" {
+  check_verdict quoted-substitutions deny
   run_hook_write "$(printf 'API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064$(whoami)')"
-  assert_denied
-}
+  check_verdict substitution-after deny
 
-# --- A shell declaration keyword does not hide the assignment ---
-#
-# The name grep anchors the suspicious name to the start of the line, so a
-# declaration keyword in front of it took the line out of the scan entirely,
-# and no allowlist arm was ever consulted.
-
-@test "an exported literal value is denied" {
+  # The name grep anchors the suspicious name to the start of the line, so a
+  # declaration keyword in front of it took the line out of the scan entirely.
+  # `declare -r` and `local -r` are the idiomatic careful-bash spellings, so the
+  # keyword carries its options; `typeset` is bash's synonym for `declare`.
   run_hook_write "$(printf 'export API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a local-declared literal value is denied" {
+  check_verdict export deny
   run_hook_write "$(printf 'local API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a readonly-declared literal value is denied through Edit too" {
+  check_verdict local deny
   run_hook_edit "$(printf 'readonly DB_PASSWORD=%s\n' 'hunter2-not-a-placeholder')"
-  assert_denied
-}
-
-# --- The existing allowlist arms still allow ---
-
-@test "an empty value is allowed" {
-  run_hook_write "$(printf 'API_KEY=\n')"
-  assert_allowed_by_json
-}
-
-@test "a bare \$VAR value is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '$MY_API_KEY')"
-  assert_allowed_by_json
-}
-
-@test "a braced \${VAR} value is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '${MY_API_KEY}')"
-  assert_allowed_by_json
-}
-
-@test "a named placeholder value is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' 'placeholder')"
-  assert_allowed_by_json
-}
-
-@test "content with no secret shape at all is allowed" {
-  run_hook_write "export function add(a, b) { return a + b }"
-  assert_allowed_by_json
-}
-
-# The tightened arms have to stay usable: these are the placeholder values the
-# arms exist to admit, and the ones a too-eager anchor would take down with the
-# splices above.
-
-@test "an angle-bracket placeholder is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '<your-key-here>')"
-  assert_allowed_by_json
-}
-
-@test "a your- placeholder is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' 'your-api-key-here')"
-  assert_allowed_by_json
-}
-
-@test "a bare example placeholder is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' 'example')"
-  assert_allowed_by_json
-}
-
-@test "an example domain placeholder is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' 'example.com')"
-  assert_allowed_by_json
-}
-
-@test "an exported \$VAR value is allowed" {
-  run_hook_write "$(printf 'export API_KEY=%s\n' '$MY_API_KEY')"
-  assert_allowed_by_json
-}
-
-# Recognizing the declaration keywords pulls shell lines into a rule written for
-# dotenv files, and a shell value references a variable far more often than a
-# dotenv value does. These are the shapes that carry no literal secret but that
-# the bare-identifier `${VAR}` arm alone would deny.
-
-@test "an expansion carrying a default operator is allowed" {
-  run_hook_write "$(printf 'export GITHUB_TOKEN=%s\n' '"${GITHUB_TOKEN:-}"')"
-  assert_allowed_by_json
-}
-
-@test "a positional expansion is allowed" {
-  run_hook_write "$(printf 'local CACHE_KEY=%s\n' '"${1}"')"
-  assert_allowed_by_json
-}
-
-@test "an expansion followed by a literal path is allowed" {
-  run_hook_write "$(printf 'readonly SIGNING_KEY=%s\n' '"${REPO_ROOT}/dev.pem"')"
-  assert_allowed_by_json
-}
-
-@test "a named fake placeholder is allowed" {
-  run_hook_write "$(printf 'export GH_TOKEN=%s\n' '"fake-token"')"
-  assert_allowed_by_json
-}
-
-# The expansion allowance is bounded: a secret does not stop being a secret for
-# sitting inside a default.
-
-@test "a literal secret inside an expansion default is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '${API_KEY:-sk-live-9f3a1c4e8b7d2064}')"
-  assert_denied
-}
-
-@test "a literal secret concatenated onto an expansion is denied" {
-  run_hook_write "$(printf 'export API_KEY=%s\n' '"${PREFIX}sk-live-9f3a1c4e8b7d2064"')"
-  assert_denied
-}
-
-# A segmented secret has the same structure a placeholder does, so the operand
-# arm requires an EMPTY operand rather than a short one: a default value is
-# exactly where a real secret lands, and a UUID clears any per-segment bound.
-
-@test "a segmented secret inside an expansion default is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '${API_KEY:-550e8400-e29b-41d4-a716-446655440000}')"
-  assert_denied
-}
-
-@test "an expansion followed by a non-path literal is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '${X}550e8400-e29b-41d4-a716-446655440000')"
-  assert_denied
-}
-
-# The path arm bounds each segment, so the separator buys a path suffix and not
-# an unbounded tail. Without these three
-# the arm's allow direction is pinned and its failure mode is not: a secret
-# behind the separator is exactly what the separator must not admit.
-
-@test "a literal secret behind a slash separator is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '${X}/sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a literal secret behind a dot separator is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '${X}.sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a segmented secret behind a path separator is denied" {
-  run_hook_write "$(printf 'export API_KEY=%s\n' '"${VAULT}/550e8400-e29b-41d4-a716-446655440000"')"
-  assert_denied
-}
-
-# A variable reference inside a command-substitution body must not buy the
-# value an expansion arm: that would re-open the very splice the `$(…)` arm
-# exists to close.
-
-@test "a substitution whose body references a variable is still spliced, so denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '$(echo ${X})550e8400-e29b-41d4-a716-446655440000')"
-  assert_denied
-}
-
-@test "a long but segmented your- placeholder is allowed" {
-  run_hook_write "$(printf 'GITHUB_TOKEN=%s\n' 'your-github-personal-access-token')"
-  assert_allowed_by_json
-}
-
-@test "an underscore-segmented your_ placeholder is allowed" {
-  run_hook_write "$(printf 'SUPABASE_ANON_KEY=%s\n' 'your_supabase_anon_key_here')"
-  assert_allowed_by_json
-}
-
-# --- A computed value is allowed: the source line holds no literal secret ---
-#
-# A value that is wholly a command substitution is resolved at run time, so the
-# source line carries nothing to leak. Denying it taught callers to launder the
-# assignment through a throwaway variable or an off-target name, which is
-# unexplained residue in exchange for no security.
-#
-# The arm reads shape, not meaning, and the deny cases above are the price of
-# keeping that shape honest. A nested `$(op read op://vault/$(hostname))` is
-# denied, and `$(echo <a-literal-secret>)` is allowed: no regex tells those
-# apart from `$(mint_key)` without reading the command. Neither is pinned here,
-# because neither is behavior worth freezing.
-
-@test "a value that is wholly a command substitution is allowed" {
-  run_hook_write "$(printf 'AUDIT_KEY="%s"\n' '$(gaia_audit_key "$BASE_SHA")')"
-  assert_allowed_by_json
-}
-
-@test "an unquoted command substitution value is allowed" {
-  run_hook_write "$(printf 'SESSION_TOKEN=%s\n' '$(mint_token)')"
-  assert_allowed_by_json
-}
-
-@test "a command substitution is allowed through Edit too" {
-  run_hook_edit "$(printf 'AUDIT_KEY="%s"\n' '$(gaia_audit_key "$BASE_SHA")')"
-  assert_allowed_by_json
-}
-
-# --- The declaration keyword carries its options ---
-#
-# `declare -r` and `local -r` are the idiomatic spellings in careful bash, so a
-# keyword group that only accepts the bare keyword takes the very lines it was
-# widened for back out of the scan. The flags are part of the declaration, not
-# part of the name.
-
-@test "a secret behind declare -r is denied" {
+  check_verdict readonly-edit deny
   run_hook_write "$(printf 'declare -r API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a secret behind local -r is denied" {
+  check_verdict declare-r deny
   run_hook_write "$(printf 'local -r API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a secret behind readonly -g is denied" {
+  check_verdict local-r deny
   run_hook_write "$(printf 'readonly -g API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a secret behind an end-of-options marker is denied" {
+  check_verdict readonly-g deny
   run_hook_write "$(printf 'export -- API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a secret behind two declaration flags is denied" {
+  check_verdict end-of-options deny
   run_hook_write "$(printf 'declare -r -x API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-# --- Ordinary secret-free shell lines stay allowed ---
-#
-# Pulling shell lines into a rule written for dotenv files means the rule now
-# sees shapes a dotenv file never carries: a trailing comment, a trailing
-# operator, an unbraced positional, two references concatenated. None of them
-# holds a literal, and denying them is a hard block whose stated remedy ("use
-# environment variables") is what the line already does.
-
-@test "a trailing comment does not defeat the value extraction" {
-  run_hook_write "$(printf 'export GITHUB_TOKEN=%s\n' '"$GH_PAT" # for gh cli')"
-  assert_allowed_by_json
-}
-
-@test "a trailing or-clause does not defeat the value extraction" {
-  run_hook_write "$(printf 'local API_KEY=%s\n' '"$1" || true')"
-  assert_allowed_by_json
-}
-
-@test "an unbraced positional is allowed" {
-  run_hook_write "$(printf 'local API_KEY=%s\n' '"$1"')"
-  assert_allowed_by_json
-}
-
-@test "two concatenated references are allowed" {
-  run_hook_write "$(printf 'export API_KEY=%s\n' '"${A}${B}"')"
-  assert_allowed_by_json
-}
-
-# A trailing comment strips the comment, not the scan: a literal secret ahead of
-# one is still the value, and still denied.
-
-@test "a literal secret ahead of a trailing comment is still denied" {
-  run_hook_write "$(printf 'export API_KEY=%s\n' '"sk-live-9f3a1c4e8b7d2064" # from vault')"
-  assert_denied
-}
-
-# The tail comes off the value but is never discarded unread. A placeholder on
-# the left with the real key parked in the comment is the plausible accident;
-# a second assignment after `;` is worse in kind, because the discarded text is
-# executable. Without these the tail-strip trades a false positive for a hole.
-
-@test "a secret parked in a trailing comment is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '$MY_VAR # sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a secret parked beside an empty value is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '  # sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a secret parked behind a placeholder is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '<paste> # sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a second assignment after a statement separator is denied" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '"" ; API_TOKEN=sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-# Ordinary prose in a comment is not secret-shaped, so the tail check has to
-# stay quiet for it or it re-creates the false positive it was added beside.
-
-@test "ordinary prose in a trailing comment is allowed" {
-  run_hook_write "$(printf 'export GITHUB_TOKEN=%s\n' '"$GH_PAT" # authentication for the gh cli')"
-  assert_allowed_by_json
-}
-
-# `typeset` is bash's synonym for `declare`, so it belongs with the other three.
-
-@test "a secret behind typeset -r is denied" {
+  check_verdict two-flags deny
   run_hook_write "$(printf 'typeset -r API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
+  check_verdict typeset-r deny
 
-# A `;`, `&&`, or `||` can sit INSIDE the value rather than after it, and the
-# tail strip is a regex with no quoting or substitution context, so it cannot
-# tell the two apart on its own. Judging the untrimmed value FIRST is what
-# bounds the strip to turning a deny into an allow and never the reverse. The
-# guarded-substitution idiom below is how this repo's own audit scripts write a
-# fallible command substitution, so getting the order wrong hard-blocks them.
+  # The expansion allowance is bounded: a secret does not stop being a secret
+  # for sitting inside a default. A segmented secret has the same structure a
+  # placeholder does, so the operand arm requires an EMPTY operand rather than a
+  # short one: a default value is exactly where a real secret lands, and a UUID
+  # clears any per-segment bound.
+  run_hook_write "$(printf 'API_KEY=%s\n' '${API_KEY:-sk-live-9f3a1c4e8b7d2064}')"
+  check_verdict expansion-default deny
+  run_hook_write "$(printf 'export API_KEY=%s\n' '"${PREFIX}sk-live-9f3a1c4e8b7d2064"')"
+  check_verdict expansion-concatenated deny
+  run_hook_write "$(printf 'API_KEY=%s\n' '${API_KEY:-550e8400-e29b-41d4-a716-446655440000}')"
+  check_verdict expansion-default-segmented deny
+  run_hook_write "$(printf 'API_KEY=%s\n' '${X}550e8400-e29b-41d4-a716-446655440000')"
+  check_verdict expansion-non-path deny
 
-@test "an or-separator inside a command substitution is allowed" {
-  run_hook_write "$(printf 'AUDIT_KEY=%s\n' '"$(gaia_audit_key "$BASE" "$ROOT" 2>/dev/null || true)"')"
-  assert_allowed_by_json
-}
+  # The path arm bounds each segment, so the separator buys a path suffix and
+  # not an unbounded tail: a secret behind the separator is exactly what the
+  # separator must not admit.
+  run_hook_write "$(printf 'API_KEY=%s\n' '${X}/sk-live-9f3a1c4e8b7d2064')"
+  check_verdict behind-slash deny
+  run_hook_write "$(printf 'API_KEY=%s\n' '${X}.sk-live-9f3a1c4e8b7d2064')"
+  check_verdict behind-dot deny
+  run_hook_write "$(printf 'export API_KEY=%s\n' '"${VAULT}/550e8400-e29b-41d4-a716-446655440000"')"
+  check_verdict behind-path-segmented deny
 
-@test "an and-separator inside a command substitution is allowed" {
-  run_hook_write "$(printf 'GH_TOKEN=%s\n' '$(gh auth token 2>/dev/null && :)')"
-  assert_allowed_by_json
-}
+  # A variable reference inside a command-substitution body must not buy the
+  # value an expansion arm: that would re-open the very splice the `$(…)` arm
+  # exists to close.
+  run_hook_write "$(printf 'API_KEY=%s\n' '$(echo ${X})550e8400-e29b-41d4-a716-446655440000')"
+  check_verdict substitution-body-variable deny
 
-@test "a separator inside an angle-bracket placeholder is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '<paste || generate>')"
-  assert_allowed_by_json
-}
+  # A trailing comment strips the comment, not the scan. The tail comes off the
+  # value but is never discarded unread: a placeholder on the left with the real
+  # key parked in the comment is the plausible accident; a second assignment
+  # after `;` is worse in kind, because the discarded text is executable.
+  run_hook_write "$(printf 'export API_KEY=%s\n' '"sk-live-9f3a1c4e8b7d2064" # from vault')"
+  check_verdict ahead-of-comment deny
+  run_hook_write "$(printf 'API_KEY=%s\n' '$MY_VAR # sk-live-9f3a1c4e8b7d2064')"
+  check_verdict parked-in-comment deny
+  run_hook_write "$(printf 'API_KEY=%s\n' '  # sk-live-9f3a1c4e8b7d2064')"
+  check_verdict parked-beside-empty deny
+  run_hook_write "$(printf 'API_KEY=%s\n' '<paste> # sk-live-9f3a1c4e8b7d2064')"
+  check_verdict parked-behind-placeholder deny
+  run_hook_write "$(printf 'API_KEY=%s\n' '"" ; API_TOKEN=sk-live-9f3a1c4e8b7d2064')"
+  check_verdict second-assignment deny
 
-# The remaining limit belongs to the separator grammar. An executable separator
-# has to be preceded by whitespace to open a tail, so a bare `;` behind a value
-# is read as part of it and the line is denied. That grammar stays as it is on
-# purpose: `a;b` is ordinary content in a dotenv value.
-
-@test "a bare separator after a guarded substitution is denied" {
+  # An executable separator has to be preceded by whitespace to open a tail, so
+  # a bare `;` behind a value is read as part of it and the line is denied. That
+  # grammar stays on purpose: `a;b` is ordinary content in a dotenv value.
   run_hook_write "$(printf 'GH_TOKEN=%s; export GH_TOKEN\n' '$(gh auth token 2>/dev/null || true)')"
-  assert_denied
-}
+  check_verdict bare-separator deny
 
-# The tail's shape rule only sees a run of 13+ alphanumerics mixing letters and
-# digits, so an assignment parked after a separator clears it whenever the value
-# is shorter than that or carries no digit. The feeder grep is line-anchored and
-# never re-reads the fragment, so shape alone leaves the hole open; an executable
-# tail carrying an assignment is judged by the assignment rule instead.
-
-@test "a short second assignment after a separator is denied" {
+  # The tail's shape rule only sees a run of 13+ alphanumerics mixing letters
+  # and digits, so an assignment parked after a separator clears it whenever the
+  # value is shorter or carries no digit; an executable tail carrying an
+  # assignment is judged by the assignment rule instead.
   run_hook_write "$(printf 'API_KEY=%s\n' '"" ; API_TOKEN=abc123xyz')"
-  assert_denied
-}
-
-@test "an all-letter second assignment after a separator is denied" {
+  check_verdict short-second-assignment deny
   run_hook_write "$(printf 'API_KEY=%s\n' '<paste> ; REAL_KEY=correcthorsebattery')"
-  assert_denied
-}
+  check_verdict all-letter-second-assignment deny
 
-# The rescan reuses the value allowlist rather than denying on the name alone,
-# so a parked assignment whose value is an ordinary reference stays allowed.
-
-@test "an allowed assignment in an executable tail is allowed" {
-  run_hook_write "$(printf 'API_KEY=%s\n' '$X ; OTHER_TOKEN=${Y}')"
-  assert_allowed_by_json
-}
-
-# A tail carrying no watched assignment at all still reaches the shape rule.
-
-@test "secret-shaped material in a substitution with no assignment is denied" {
+  # A tail carrying no watched assignment still reaches the shape rule; the
+  # substitution arm's own `[^)]+` declines an empty body.
   run_hook_write "$(printf 'export API_KEY=%s\n' '$X ; OUT=$(echo hunter2xyz123)')"
-  assert_denied
-}
-
-# The substitution arm's own `[^)]+` declines an empty body.
-
-@test "an empty substitution in a tail is denied" {
+  check_verdict tail-substitution-no-assignment deny
   run_hook_write "$(printf 'export API_KEY=%s\n' '$X ; A_TOKEN=$()')"
-  assert_denied
-}
+  check_verdict tail-empty-substitution deny
 
-# The fragment loop is fed by process substitution rather than a pipe so it runs
-# in this shell and `tail_has_assignment` survives it. A pipe-fed rewrite is
-# invisible until the tail is BOTH assignment-carrying and secret-shaped: only
-# then is the lost flag observable, as the shape rule firing on a tail the
-# allowlist has already cleared.
-
-@test "an allowed assignment in a secret-shaped executable tail is allowed" {
-  local long_variable_name="LONGVARNAME""1234567"
-  run_hook_write "$(printf 'API_KEY=%s\n' "\$X ; OTHER_TOKEN=\${$long_variable_name}")"
-  assert_allowed_by_json
-}
-
-# `secret_shaped` is fed by process substitution rather than sitting at the end
-# of a pipe, and it fails in the worse direction. Under `pipefail` the
-# pipeline's status IS the function's return value, and its `grep -q` leaves on
-# the first match; on a tail carrying enough runs that the producer is still
-# writing, the producer takes SIGPIPE and the pipeline reports 141. Written as a
-# bare pipeline the shape backstop then reports NOT secret-shaped on exactly the
-# tails densest with secret-shaped material, so the guard fails OPEN. Only
-# length exposes it, and the short twin above ("a secret parked in a trailing
-# comment is denied") passes either way.
-
-@test "a long secret-shaped comment tail is denied" {
+  # `secret_shaped` is fed by process substitution rather than sitting at the
+  # end of a pipe, and it fails in the worse direction. Under `pipefail` the
+  # pipeline's status IS the function's return value, and its `grep -q` leaves
+  # on the first match; on a tail carrying enough runs that the producer is
+  # still writing, the producer takes SIGPIPE and the pipeline reports 141.
+  # Written as a bare pipeline the shape backstop then reports NOT
+  # secret-shaped on exactly the tails densest with secret-shaped material, so
+  # the guard fails OPEN. Only length exposes it; the short parked-in-comment
+  # row above passes either way.
   local runs
   runs=$(yes 'hunter2xyz123' | head -n 4000 | tr '\n' ' ')
   run_hook_write "$(printf 'export API_KEY=%s\n' "\$X # ${runs}")"
-  assert_denied
+  check_verdict long-comment-tail deny
+}
+
+@test "empty, variable, placeholder, expansion and computed values, and secret-free shell tails, are allowed" {
+  run_hook_write "$(printf 'API_KEY=\n')"
+  check_verdict empty allow
+  run_hook_write "$(printf 'API_KEY=%s\n' '$MY_API_KEY')"
+  check_verdict bare-var allow
+  run_hook_write "$(printf 'API_KEY=%s\n' '${MY_API_KEY}')"
+  check_verdict braced-var allow
+  run_hook_write "$(printf 'API_KEY=%s\n' 'placeholder')"
+  check_verdict named-placeholder allow
+  run_hook_write "export function add(a, b) { return a + b }"
+  check_verdict no-secret-shape allow
+
+  # The tightened substitution arms have to stay usable: these are the
+  # placeholder values the arms exist to admit, and the ones a too-eager anchor
+  # would take down with the splices.
+  run_hook_write "$(printf 'API_KEY=%s\n' '<your-key-here>')"
+  check_verdict angle-bracket allow
+  run_hook_write "$(printf 'API_KEY=%s\n' 'your-api-key-here')"
+  check_verdict your-dash allow
+  run_hook_write "$(printf 'API_KEY=%s\n' 'example')"
+  check_verdict example allow
+  run_hook_write "$(printf 'API_KEY=%s\n' 'example.com')"
+  check_verdict example-domain allow
+  run_hook_write "$(printf 'export API_KEY=%s\n' '$MY_API_KEY')"
+  check_verdict exported-var allow
+  run_hook_write "$(printf 'GITHUB_TOKEN=%s\n' 'your-github-personal-access-token')"
+  check_verdict long-segmented-your allow
+  run_hook_write "$(printf 'SUPABASE_ANON_KEY=%s\n' 'your_supabase_anon_key_here')"
+  check_verdict underscore-your allow
+
+  # Recognizing the declaration keywords pulls shell lines into a rule written
+  # for dotenv files, and a shell value references a variable far more often
+  # than a dotenv value does. These carry no literal secret but the
+  # bare-identifier `${VAR}` arm alone would deny them.
+  run_hook_write "$(printf 'export GITHUB_TOKEN=%s\n' '"${GITHUB_TOKEN:-}"')"
+  check_verdict default-operator allow
+  run_hook_write "$(printf 'local CACHE_KEY=%s\n' '"${1}"')"
+  check_verdict positional-braced allow
+  run_hook_write "$(printf 'readonly SIGNING_KEY=%s\n' '"${REPO_ROOT}/dev.pem"')"
+  check_verdict expansion-path allow
+  run_hook_write "$(printf 'export GH_TOKEN=%s\n' '"fake-token"')"
+  check_verdict fake-placeholder allow
+
+  # A value that is wholly a command substitution is resolved at run time, so
+  # the source line carries nothing to leak. Denying it taught callers to launder
+  # the assignment through a throwaway variable or an off-target name. The arm
+  # reads shape, not meaning: a nested `$(op read op://vault/$(hostname))` is
+  # denied, and `$(echo <a-literal-secret>)` is allowed; neither is pinned,
+  # because neither is behavior worth freezing.
+  run_hook_write "$(printf 'AUDIT_KEY="%s"\n' '$(gaia_audit_key "$BASE_SHA")')"
+  check_verdict wholly-substitution allow
+  run_hook_write "$(printf 'SESSION_TOKEN=%s\n' '$(mint_token)')"
+  check_verdict unquoted-substitution allow
+  run_hook_edit "$(printf 'AUDIT_KEY="%s"\n' '$(gaia_audit_key "$BASE_SHA")')"
+  check_verdict substitution-edit allow
+
+  # Pulling shell lines into a dotenv rule means it sees shapes a dotenv file
+  # never carries: a trailing comment, a trailing operator, an unbraced
+  # positional, two references concatenated. None holds a literal, and denying
+  # them is a hard block whose stated remedy is what the line already does.
+  # Ordinary prose in a comment is not secret-shaped either.
+  run_hook_write "$(printf 'export GITHUB_TOKEN=%s\n' '"$GH_PAT" # for gh cli')"
+  check_verdict trailing-comment allow
+  run_hook_write "$(printf 'local API_KEY=%s\n' '"$1" || true')"
+  check_verdict trailing-or-clause allow
+  run_hook_write "$(printf 'local API_KEY=%s\n' '"$1"')"
+  check_verdict unbraced-positional allow
+  run_hook_write "$(printf 'export API_KEY=%s\n' '"${A}${B}"')"
+  check_verdict two-references allow
+  run_hook_write "$(printf 'export GITHUB_TOKEN=%s\n' '"$GH_PAT" # authentication for the gh cli')"
+  check_verdict prose-comment allow
+
+  # A `;`, `&&`, or `||` can sit INSIDE the value rather than after it, and the
+  # tail strip is a regex with no quoting context. Judging the untrimmed value
+  # FIRST bounds the strip to turning a deny into an allow, never the reverse.
+  # The guarded-substitution idiom is how this repo's own audit scripts write a
+  # fallible command substitution, so getting the order wrong hard-blocks them.
+  run_hook_write "$(printf 'AUDIT_KEY=%s\n' '"$(gaia_audit_key "$BASE" "$ROOT" 2>/dev/null || true)"')"
+  check_verdict or-inside-substitution allow
+  run_hook_write "$(printf 'GH_TOKEN=%s\n' '$(gh auth token 2>/dev/null && :)')"
+  check_verdict and-inside-substitution allow
+  run_hook_write "$(printf 'API_KEY=%s\n' '<paste || generate>')"
+  check_verdict separator-in-placeholder allow
+
+  # The rescan reuses the value allowlist rather than denying on the name alone.
+  # The fragment loop is fed by process substitution rather than a pipe so
+  # `tail_has_assignment` survives it; a pipe-fed rewrite shows only when the
+  # tail is BOTH assignment-carrying and secret-shaped (the last row).
+  run_hook_write "$(printf 'API_KEY=%s\n' '$X ; OTHER_TOKEN=${Y}')"
+  check_verdict allowed-tail-assignment allow
+  local long_variable_name="LONGVARNAME""1234567"
+  run_hook_write "$(printf 'API_KEY=%s\n' "\$X ; OTHER_TOKEN=\${$long_variable_name}")"
+  check_verdict allowed-secret-shaped-tail-assignment allow
 }
 
 # --- `.env.example` drops the ALLOWLIST, not the rule ---
@@ -585,123 +382,89 @@ run_write_hook_edit() {
 # run mixing letters and digits", which every one of them passes and a pasted
 # key does not. The pattern rules run there as everywhere.
 
-@test "a short placeholder assignment in .env.example is allowed" {
+@test "a .env.example value is allowed when short, all-letter, a URL, segmented or slash-broken, through Write, Edit and MultiEdit" {
   run_hook_write_path '.env.example' "$(printf 'SESSION_SECRET=%s\n' 'local')"
-  assert_allowed_by_json
-}
-
-@test "the tracked .env.example content is allowed whole" {
+  check_verdict short-placeholder allow
   run_hook_write_path '.env.example' "$(printf '%s\n%s\n%s\n' \
     'SITE_URL=http://localhost:5173' 'SESSION_SECRET=local' 'MSW_ENABLED=true')"
-  assert_allowed_by_json
-}
-
-# The values the ALLOWLIST would refuse and shape accepts. These are the whole
-# point of dropping the allowlist for this file.
-
-@test "an all-letter word in .env.example is allowed" {
+  check_verdict tracked-content-whole allow
+  # The values the ALLOWLIST would refuse and shape accepts: the whole point of
+  # dropping the allowlist for this file.
   run_hook_write_path '.env.example' "$(printf 'SESSION_SECRET=%s\n' 'development')"
-  assert_allowed_by_json
-}
-
-@test "a localhost URL in .env.example is allowed" {
+  check_verdict all-letter allow
   run_hook_write_path '.env.example' "$(printf 'API_KEY=%s\n' 'http://localhost:3001/api/')"
-  assert_allowed_by_json
-}
-
-@test "a short value in .env.example is allowed through Edit too" {
+  check_verdict localhost-url allow
   run_hook_edit_path '.env.example' "$(printf 'SESSION_SECRET=%s\n' '"local"')"
-  assert_allowed_by_json
-}
-
-@test "a short value in .env.example is allowed through MultiEdit too" {
+  check_verdict short-edit allow
   run_hook_multiedit_path '.env.example' "$(printf 'SESSION_SECRET=%s\n' 'local')"
-  assert_allowed_by_json
-}
-
-@test "a nested .env.example is matched by basename" {
+  check_verdict short-multiedit allow
   run_hook_write_path 'packages/api/.env.example' "$(printf 'SESSION_SECRET=%s\n' 'local')"
-  assert_allowed_by_json
-}
-
-# ...and the values shape still refuses there. A committed file is the worst
-# place for a real key, so dropping the allowlist must not drop the backstop.
-
-@test "a secret-shaped literal in .env.example is denied" {
-  run_hook_write_path '.env.example' "$(printf 'API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-@test "a secret-shaped literal in .env.example is denied through Edit too" {
-  run_hook_edit_path '.env.example' "$(printf 'API_KEY=%s\n' 'aB3xK9pQ7zR2wL5t')"
-  assert_denied
-}
-
-@test "a secret-shaped literal in .env.example is denied through MultiEdit too" {
-  run_hook_multiedit_path '.env.example' "$(printf 'API_KEY=%s\n' 'aB3xK9pQ7zR2wL5t')"
-  assert_denied
-}
-
-@test "a secret parked in a comment in .env.example is denied" {
-  run_hook_write_path '.env.example' "$(printf 'SESSION_SECRET=%s\n' 'local # real: sk-live-9f3a1c4e8b7d2064')"
-  assert_denied
-}
-
-# Where the shape backstop stops, pinned so the limit is enforced-as-documented
-# rather than latent. The bound is on the RUN, not the value, so a segmented
-# secret clears however much material it carries: every run in a UUID-format key
-# is under 13 or all digits, and a `/` breaks a base64 secret the same way. That
-# is the accepted cost of judging this one file by shape, and these tests fail
-# the moment someone narrows or widens it without saying so.
-
-@test "a segmented UUID-format value in .env.example is allowed" {
+  check_verdict nested-basename allow
+  # Where the shape backstop stops, pinned so the limit is enforced as
+  # documented. The bound is on the RUN, not the value, so a segmented secret
+  # clears however much material it carries: every run in a UUID-format key is
+  # under 13 or all digits, and a `/` breaks a base64 secret the same way. That
+  # is the accepted cost of judging this one file by shape; these rows (and the
+  # outside-UUID deny row) fail the moment someone narrows or widens it.
   run_hook_write_path '.env.example' \
     "$(printf 'API_KEY=%s\n' '550e8400-e29b-41d4-a716-446655440000')"
-  assert_allowed_by_json
-}
-
-@test "the same UUID-format value outside .env.example is denied" {
-  run_hook_write_path 'app/config.ts' \
-    "$(printf 'API_KEY=%s\n' '550e8400-e29b-41d4-a716-446655440000')"
-  assert_denied
-}
-
-@test "a slash-broken value in .env.example is allowed" {
+  check_verdict segmented-uuid allow
   run_hook_write_path '.env.example' \
     "$(printf 'API_KEY=%s\n' 'aB3xK9pQ7zR2/wL5tN8mV4cX/pQ7zR2wL5tN')"
-  assert_allowed_by_json
+  check_verdict slash-broken allow
+}
+
+# A committed file is the worst place for a real key, so dropping the allowlist
+# must not drop the backstop; the pattern rules do not care which file they are
+# writing into; and the exemption is scoped to that one basename.
+@test "a secret-shaped value in .env.example is denied (shape, comment, AWS, PAT, PEM), and the same values outside it are denied" {
+  run_hook_write_path '.env.example' "$(printf 'API_KEY=%s\n' 'sk-live-9f3a1c4e8b7d2064')"
+  check_verdict shaped-literal deny
+  run_hook_edit_path '.env.example' "$(printf 'API_KEY=%s\n' 'aB3xK9pQ7zR2wL5t')"
+  check_verdict shaped-literal-edit deny
+  run_hook_multiedit_path '.env.example' "$(printf 'API_KEY=%s\n' 'aB3xK9pQ7zR2wL5t')"
+  check_verdict shaped-literal-multiedit deny
+  run_hook_write_path '.env.example' "$(printf 'SESSION_SECRET=%s\n' 'local # real: sk-live-9f3a1c4e8b7d2064')"
+  check_verdict parked-in-comment deny
+  run_hook_write_path 'app/config.ts' \
+    "$(printf 'API_KEY=%s\n' '550e8400-e29b-41d4-a716-446655440000')"
+  check_verdict uuid-outside deny
+  local aws_id="AKIA""IOSFODNN7EXAMPLE"
+  run_hook_write_path '.env.example' "$(printf 'AWS_ACCESS_KEY_ID=%s\n' "$aws_id")"
+  check_verdict aws-id deny
+  local pat="ghp""_0123456789abcdefghij"
+  run_hook_write_path '.env.example' "$(printf 'GH_TOKEN=%s\n' "$pat")"
+  check_verdict github-pat deny
+  local pem="-----BEGIN RSA PRIVATE ""KEY-----"
+  run_hook_write_path '.env.example' "$pem"
+  check_verdict pem-header deny
+  run_hook_write_path 'app/config.ts' "$(printf 'SESSION_SECRET=%s\n' 'local')"
+  check_verdict short-value-outside deny
 }
 
 # Dropping the allowlist drops the executable-tail rescan with it: the whole
 # post-`=` remainder is shape-tested as one string here, so a second assignment
 # parked after a separator is judged by shape rather than allowlist-rescanned.
-# That inverts what the general path's own tail tests pin, which is exactly why
-# it is pinned here rather than left to be rediscovered.
+# That inverts what the general path's own tail rows pin, which is why it is
+# pinned here.
 #
 # The SPACE before each `;` is load-bearing. The tail extractor requires
 # `[[:space:]]+` ahead of the separator, so `local;` opens no tail at all and
 # the general-path deny would arrive from the primary-value allowlist instead,
-# leaving these tests naming a rescan they never reach. The middle test asserts
+# leaving these rows naming a rescan they never reach. The outside row asserts
 # the rescan's own message for that reason: it fails if the space is ever
 # dropped, rather than passing on the wrong arm.
-
-@test "an executable tail in .env.example is judged by shape, not the rescan" {
+@test "an executable tail in .env.example is judged by shape, elsewhere by the rescan" {
   run_hook_write_path '.env.example' \
     "$(printf 'SESSION_SECRET=%s ; API_KEY=%s\n' 'local' 'abcd')"
-  assert_allowed_by_json
-}
-
-@test "the same executable tail outside .env.example is denied by the rescan" {
+  check_verdict example-shape-allow allow
   run_hook_write_path 'app/config.ts' \
     "$(printf 'SESSION_SECRET=%s ; API_KEY=%s\n' 'local' 'abcd')"
-  grep -qF -- 'parks a secret assignment after a shell separator' <<<"$output"
-  assert_denied
-}
-
-@test "an executable tail carrying secret-shaped material in .env.example is denied" {
+  check_message outside-rescan present 'parks a secret assignment after a shell separator'
+  check_verdict outside-rescan deny
   run_hook_write_path '.env.example' \
     "$(printf 'SESSION_SECRET=%s ; API_KEY=%s\n' 'local' 'aB3xK9pQ7zR2wL5t')"
-  assert_denied
+  check_verdict example-shaped-tail deny
 }
 
 # A dash-leading path must not be read as a basename option. The verdict is safe
@@ -721,45 +484,15 @@ run_write_hook_edit() {
   assert_denied
 }
 
-# The pattern rules do not care which file they are writing into.
-
-@test "an AWS access-key id in .env.example is still denied" {
-  local aws_id="AKIA""IOSFODNN7EXAMPLE"
-  run_hook_write_path '.env.example' "$(printf 'AWS_ACCESS_KEY_ID=%s\n' "$aws_id")"
-  assert_denied
-}
-
-@test "a GitHub PAT in .env.example is still denied" {
-  local pat="ghp""_0123456789abcdefghij"
-  run_hook_write_path '.env.example' "$(printf 'GH_TOKEN=%s\n' "$pat")"
-  assert_denied
-}
-
-@test "a PEM private-key header in .env.example is still denied" {
-  local pem="-----BEGIN RSA PRIVATE ""KEY-----"
-  run_hook_write_path '.env.example' "$pem"
-  assert_denied
-}
-
-# The exemption is scoped to that one basename, and nothing near it.
-
-@test "the same short value outside .env.example is still denied" {
-  run_hook_write_path 'app/config.ts' "$(printf 'SESSION_SECRET=%s\n' 'local')"
-  assert_denied
-}
-
-@test "a real dotenv file is not exempt" {
+@test "a real dotenv file or a name merely starting with .env.example is not exempt" {
   run_hook_write_path '.env' "$(printf 'SESSION_SECRET=%s\n' 'local')"
-  assert_denied
-}
-
-@test "a name merely starting with .env.example is not exempt" {
+  check_verdict real-dotenv deny
   run_hook_write_path '.env.example.local' "$(printf 'SESSION_SECRET=%s\n' 'local')"
-  assert_denied
+  check_verdict lookalike-name deny
 }
 
 # A payload carrying no file_path cannot be exempted, so it is scanned. This is
-# what keeps every test written before the guard read a path meaningful, and it
+# what keeps every row written before the guard read a path meaningful, and it
 # is the fail-closed direction.
 
 @test "a payload with no file_path is still scanned" {
@@ -769,16 +502,6 @@ run_write_hook_edit() {
 
 # --- The dotenv path deny: rules on the target path before any content scan ---
 
-@test "Edit on .env.local is denied by the dotenv path deny" {
-  run_write_hook_edit "Edit" ".env.local"
-  assert_denied_by_json
-}
-
-@test "Write on .env.example is allowed by the dotenv path deny" {
-  run_write_hook_edit "Write" ".env.example"
-  assert_allowed_by_json
-}
-
 # bats test_tags=protected
 @test "Write to .env.production is denied with the dotenv write message" {
   run_hook_write_path '.env.production' 'PORT=3000'
@@ -787,30 +510,24 @@ run_write_hook_edit() {
 }
 
 # Every gate explains itself: the dotenv denial says why the write is blocked,
-# not only that the developer edits the file.
-@test "the dotenv write denial states its reason" {
+# not only that the developer edits the file. The path message wins over the
+# content scan when both would deny.
+@test "dotenv path deny: Edit on .env.local, a nested .env, the reason, the path message first; .env.example passes to the content scan" {
+  run_write_hook_edit "Edit" ".env.local"
+  check_verdict edit-env-local deny
+  run_write_hook_edit "Write" ".env.example"
+  check_verdict path-only-env-example allow
   run_hook_write_path '.env' 'PORT=3000'
-  assert_denied_by_json
-  grep -qF -- 'They hold local secrets this session is kept from reading, so a write here would overwrite values it cannot see.' <<<"$output"
-}
-
-@test "the dotenv path message wins over the content scan when both would deny" {
+  check_verdict reason deny
+  check_message reason present 'They hold local secrets this session is kept from reading, so a write here would overwrite values it cannot see.'
   local aws_id="AKIA""IOSFODNN7EXAMPLE"
   run_hook_write_path '.env.production' "const id = '$aws_id'"
-  assert_denied_by_json
-  grep -qF -- "writes to '.env.production' are forbidden" <<<"$output"
-  grep -qF -- "AWS access-key" <<<"$output" && return 1
-  return 0
-}
-
-@test "Write to .env.example with clean content reaches the content scan and is allowed" {
+  check_verdict path-message-wins deny
+  check_message path-message-wins present "writes to '.env.production' are forbidden"
+  check_message path-message-wins absent "AWS access-key"
   run_hook_write_path '.env.example' 'PORT=3000'
-  assert_allowed_by_json
-}
-
-@test "a nested .env is denied by basename" {
+  check_verdict env-example-clean allow
   run_hook_write_path 'packages/api/.env' 'PORT=3000'
-  assert_denied_by_json
-  grep -qF -- "writes to 'packages/api/.env' are forbidden" <<<"$output"
+  check_verdict nested-env deny
+  check_message nested-env present "writes to 'packages/api/.env' are forbidden"
 }
-

@@ -153,26 +153,49 @@ branch_exists() {
   git -C "$REPO" rev-parse --verify --quiet "refs/heads/$1" >/dev/null 2>&1
 }
 
-@test "keeps a gone branch outside the wiki landing class" {
+@test "only a gone wiki/<YYYY-MM-DD-HHMM> branch is deleted: kept are a live wiki branch, gone feature branches and gone hand-named wiki/ branches" {
   make_repo
   make_gone_branch "feature/some-work"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "feature/some-work"
-}
-
-@test "deletes a gone wiki landing branch while keeping a live one and gone non-wiki" {
-  make_repo
   make_gone_branch "wiki/2026-04-04-1004"
   make_live_branch "wiki/2026-05-05-1005"
   make_gone_branch "feature/keepme"
+  make_live_branch "wiki/2026-10-15-0535"
+  make_gone_branch "wiki/docs"
+  make_gone_branch "wiki/2026-10-15-0535-notes"
+  make_gone_branch "wiki/2026-10-15-053"
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki/2026-04-04-1004" && return 1
-  branch_exists "wiki/2026-05-05-1005"
-  branch_exists "feature/keepme"
+  [ "$status" -eq 0 ] || { echo "status=$status output=$output"; return 1; }
+  local kept
+  for kept in feature/some-work wiki/2026-05-05-1005 feature/keepme wiki/2026-10-15-0535 wiki/docs wiki/2026-10-15-0535-notes wiki/2026-10-15-053; do
+    branch_exists "$kept" || { echo "case $kept: deleted"; return 1; }
+  done
+  branch_exists "wiki/2026-04-04-1004" && { echo "case gone wiki landing branch: kept"; return 1; }
+  return 0
+}
+
+@test "the fetch gate: no wiki landing branch and a lone hand-named wiki/ branch make ZERO fetch calls, a lone wiki/<YYYY-MM-DD-HHMM> branch opens it" {
+  make_repo
+  make_argv_witness_shim
+  cd "$REPO"
+
+  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || { echo "case no-landing-branch: status=$status"; return 1; }
+  [ -z "$output" ] || { echo "case no-landing-branch: output=$output"; return 1; }
+  [ "$(grep -c 'fetch' "$witness")" -eq 0 ] || { echo "case no-landing-branch: fetched"; return 1; }
+  branch_exists "main" || { echo "case no-landing-branch: main gone"; return 1; }
+
+  make_live_branch "wiki/docs"
+  : > "$witness"
+  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || { echo "case hand-named: status=$status"; return 1; }
+  [ "$(grep -c 'fetch' "$witness")" -eq 0 ] || { echo "case hand-named: fetched"; return 1; }
+
+  make_live_branch "wiki/2026-10-15-0536"
+  : > "$witness"
+  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || { echo "case timestamp: status=$status"; return 1; }
+  [ "$(grep -c 'fetch' "$witness")" -ge 1 ] || { echo "case timestamp: no fetch"; return 1; }
 }
 
 # bats test_tags=protected
@@ -184,49 +207,6 @@ branch_exists() {
   run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
   branch_exists "wiki/2026-10-15-0534"
-}
-
-@test "keeps gone hand-named wiki/ branches outside the timestamp shape" {
-  make_repo
-  make_live_branch "wiki/2026-10-15-0535"
-  make_gone_branch "wiki/docs"
-  make_gone_branch "wiki/2026-10-15-0535-notes"
-  make_gone_branch "wiki/2026-10-15-053"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki/docs"
-  branch_exists "wiki/2026-10-15-0535-notes"
-  branch_exists "wiki/2026-10-15-053"
-}
-
-@test "a lone hand-named wiki/ branch does not open the gate: ZERO fetch calls" {
-  make_repo
-  make_live_branch "wiki/docs"
-  make_argv_witness_shim
-  cd "$REPO"
-  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ "$(grep -c 'fetch' "$witness")" -eq 0 ]
-}
-
-@test "a lone wiki/<YYYY-MM-DD-HHMM> branch opens the gate: the sweep fetches" {
-  make_repo
-  make_live_branch "wiki/2026-10-15-0536"
-  make_argv_witness_shim
-  cd "$REPO"
-  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ "$(grep -c 'fetch' "$witness")" -ge 1 ]
-}
-
-@test "no wiki landing branches: silent no-op, exit 0" {
-  make_repo
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  branch_exists "main"
 }
 
 # --- Sweep #1's bounded prune-fetch and guarded reap (TST-003: reuse the
@@ -352,16 +332,6 @@ printf 'ARGV=%s GIT_TERMINAL_PROMPT=%s GIT_ASKPASS=%s SSH_ASKPASS=%s GIT_SSH_COM
 exec "$real_git" "\$@"
 SHIM
   chmod +x "$SHIM_DIRECTORY/git"
-}
-
-@test "sweep 1: no wiki landing branch makes ZERO fetch calls (positive argv witness)" {
-  make_repo
-  make_argv_witness_shim
-  cd "$REPO"
-  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ "$(grep -c 'fetch' "$witness")" -eq 0 ]
 }
 
 @test "sweep 1: GAIA_WIKI_FETCH_TIMEOUT_SECONDS=0 disables the fetch" {

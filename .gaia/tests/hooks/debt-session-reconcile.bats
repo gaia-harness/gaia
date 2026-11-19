@@ -42,41 +42,35 @@ run_hook() {
   [ "$status" -eq 0 ]
 }
 
-@test "openCount > 0 arms the sentinel" {
-  write_cache 3
-  run_hook
-  [ -f "$SENTINEL" ]
+@test "openCount 3, openCount 1 and empty stdin with openCount 2 arm the sentinel" {
+  local label
+  for label in three one empty-stdin; do
+    rm -f "$SENTINEL"
+    case "$label" in
+      three) write_cache 3; run_hook || { echo "case $label: hook failed"; return 1; } ;;
+      one) write_cache 1; run_hook || { echo "case $label: hook failed"; return 1; } ;;
+      empty-stdin)
+        write_cache 2
+        invoke_hook_in "$SANDBOX" "" "$HOOK_ABSOLUTE_PATH"
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status"; return 1; }
+        ;;
+    esac
+    [ -f "$SENTINEL" ] || { echo "case $label: sentinel not armed"; return 1; }
+  done
 }
 
-@test "openCount == 1 arms the sentinel (boundary)" {
-  write_cache 1
-  run_hook
-  [ -f "$SENTINEL" ]
-}
-
-@test "openCount == 0 leaves the sentinel unset (network-free)" {
-  write_cache 0
-  run_hook
-  [ ! -f "$SENTINEL" ]
-}
-
-@test "missing cache: no-op, sentinel unset" {
-  rm -f "$CACHE"
-  run_hook
-  [ ! -f "$SENTINEL" ]
-}
-
-@test "malformed openCount: no-op, sentinel unset" {
-  write_cache '"abc"'
-  run_hook
-  [ ! -f "$SENTINEL" ]
-}
-
-@test "empty stdin is drained without error" {
-  write_cache 2
-  invoke_hook_in "$SANDBOX" "" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -f "$SENTINEL" ]
+@test "openCount 0, a missing cache and a malformed openCount leave the sentinel unset" {
+  local label
+  for label in zero missing malformed; do
+    rm -f "$SENTINEL" "$CACHE"
+    case "$label" in
+      zero) write_cache 0 ;;
+      missing) ;;
+      malformed) write_cache '"abc"' ;;
+    esac
+    run_hook || { echo "case $label: hook failed"; return 1; }
+    [ ! -f "$SENTINEL" ] || { echo "case $label: sentinel armed"; return 1; }
+  done
 }
 
 @test "the hook file is executable" {

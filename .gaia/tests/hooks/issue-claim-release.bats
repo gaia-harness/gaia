@@ -180,70 +180,55 @@ released_issues() { cat "$FAKE_GH_STATE/issue_edits" 2>/dev/null; }
 assert_released_once() { [ "$(grep -cxF -- "$1" <<<"$(released_issues)")" -eq 1 ]; }
 assert_nothing_released() { [ ! -s "$FAKE_GH_STATE/issue_edits" ]; }
 
-@test "1: MERGED pr with Closes #<n> strips in-progress from that issue" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_released_once "12"
+# reset_hook_state: a clean slate between the rows of a case table, so one
+# row's recorded gh calls and fixture variables never reach the next.
+reset_hook_state() {
+  : > "$FAKE_GH_STATE/issue_edits"
+  : > "$FAKE_GH_STATE/issue_edit_repos"
+  : > "$FAKE_GH_STATE/pr_view_calls"
+  rm -f "$FAKE_GH_STATE/pr_view_ref" "$FAKE_GH_STATE/pr_view_repo"
+  unset FAKE_GH_PR_BODY FAKE_GH_PR_STATE_SEQUENCE FAKE_GH_PR_VIEW_FAIL_CALLS FAKE_GH_HOME_HOST
+  export FAKE_GH_PR_STATE=MERGED
 }
 
-@test "2: multiple mixed-case closing keywords release every issue" {
-  export FAKE_GH_PR_BODY=$'Fixes #3\nresolved #4\nCLOSES #5'
-  run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_released_once "3"
-  assert_released_once "4"
-  assert_released_once "5"
-}
-
-@test "3: a duplicated reference releases the issue exactly once" {
-  export FAKE_GH_PR_BODY=$'Closes #7\nCloses #7'
-  run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_released_once "7"
-}
-
-@test "4: a pull request that is not MERGED releases nothing" {
+@test "only a MERGED pull request releases, and the state re-reads are bounded" {
+  reset_hook_state
   export FAKE_GH_PR_STATE="OPEN"
   export FAKE_GH_PR_BODY="Closes #9"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 4"; return 1; }
+  assert_nothing_released || { echo "case 4"; return 1; }
 
 # 4a-4c: the state read is re-read briefly rather than decided on one
 # immediate read. The hook runs microseconds after the merge call returns, and
 # GitHub answers the state from a replica, so a merge that landed can still
 # read OPEN on the first look. Deciding there is silent and costs the release.
-@test "4a: a state that reads not-MERGED and then MERGED releases the issue" {
+  reset_hook_state
   export FAKE_GH_PR_STATE_SEQUENCE="OPEN MERGED"
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_released_once "12"
-}
+  [ "$status" -eq 0 ] || { echo "case 4a"; return 1; }
+  assert_released_once "12" || { echo "case 4a"; return 1; }
 
-@test "4b: a state that never settles on MERGED releases nothing, and the re-reads stop" {
+  reset_hook_state
   export FAKE_GH_PR_STATE_SEQUENCE="OPEN"
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
+  [ "$status" -eq 0 ] || { echo "case 4b"; return 1; }
+  assert_nothing_released || { echo "case 4b"; return 1; }
   # Both directions: it did re-read, and the re-reading is bounded rather than
   # waiting out a pull request that a rejected merge leaves open indefinitely.
-  [ "$(pr_view_calls)" -ge 2 ]
-  [ "$(pr_view_calls)" -le 5 ]
-}
+  [ "$(pr_view_calls)" -ge 2 ] || { echo "case 4b"; return 1; }
+  [ "$(pr_view_calls)" -le 5 ] || { echo "case 4b"; return 1; }
 
-@test "4c: a pr view that fails and then succeeds releases the issue" {
+  reset_hook_state
   export FAKE_GH_PR_VIEW_FAIL_CALLS=1
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_released_once "12"
-}
+  [ "$status" -eq 0 ] || { echo "case 4c"; return 1; }
+  assert_released_once "12" || { echo "case 4c"; return 1; }
 
-@test "4d: a pr view that never answers releases nothing, and the re-reads stop" {
+  reset_hook_state
   # 4b's bound on the other arm into the loop: a state that never settles and a
   # call that never answers are separate ways to stay in it.
   #
@@ -255,68 +240,84 @@ assert_nothing_released() { [ ! -s "$FAKE_GH_STATE/issue_edits" ]; }
   export FAKE_GH_PR_VIEW_FAIL_CALLS=99
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-  [ "$(pr_view_calls)" -ge 2 ]
-  [ "$(pr_view_calls)" -le 5 ]
+  [ "$status" -eq 0 ] || { echo "case 4d"; return 1; }
+  assert_nothing_released || { echo "case 4d"; return 1; }
+  [ "$(pr_view_calls)" -ge 2 ] || { echo "case 4d"; return 1; }
+  [ "$(pr_view_calls)" -le 5 ] || { echo "case 4d"; return 1; }
 }
 
-@test "5: a body with no closing reference releases nothing" {
+@test "closing-keyword spellings in the body decide which issues release, each once" {
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge 42'
+  [ "$status" -eq 0 ] || { echo "case 1"; return 1; }
+  assert_released_once "12" || { echo "case 1"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY=$'Fixes #3\nresolved #4\nCLOSES #5'
+  run_hook 'gh pr merge 42'
+  [ "$status" -eq 0 ] || { echo "case 2"; return 1; }
+  assert_released_once "3" || { echo "case 2"; return 1; }
+  assert_released_once "4" || { echo "case 2"; return 1; }
+  assert_released_once "5" || { echo "case 2"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY=$'Closes #7\nCloses #7'
+  run_hook 'gh pr merge 42'
+  [ "$status" -eq 0 ] || { echo "case 3"; return 1; }
+  assert_released_once "7" || { echo "case 3"; return 1; }
+
+  reset_hook_state
   export FAKE_GH_PR_BODY="See discussion, no keyword here"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 5"; return 1; }
+  assert_nothing_released || { echo "case 5"; return 1; }
 
 # GitHub requires a closing keyword to stand as its own word, so a keyword
 # that is only the tail of a longer one closes nothing and must release
 # nothing. This is the one direction in which the hook can strip a claim off
 # work still in flight.
-@test "5b: a keyword inside a longer word releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="This leaves the design unresolved #91 for now"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 5b"; return 1; }
+  assert_nothing_released || { echo "case 5b"; return 1; }
 
-@test "5c: a keyword opening the body still releases" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="resolved #4"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_released_once "4"
-}
+  [ "$status" -eq 0 ] || { echo "case 5c"; return 1; }
+  assert_released_once "4" || { echo "case 5c"; return 1; }
 
 # 5d-5f cover the two spellings GitHub documents beside the bare one. The
 # first two are merges that DID close an issue, so failing to match them
 # leaves a claim live on finished work; the third is the reason the qualifier
 # is compared rather than merely allowed.
-@test "5d: the colon spelling releases" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes: #5"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_released_once "5"
-}
+  [ "$status" -eq 0 ] || { echo "case 5d"; return 1; }
+  assert_released_once "5" || { echo "case 5d"; return 1; }
 
-@test "5e: a reference qualified with the home repo releases" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes gaia-react/gaia#12"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_released_once "12"
-}
+  [ "$status" -eq 0 ] || { echo "case 5e"; return 1; }
+  assert_released_once "12" || { echo "case 5e"; return 1; }
 
-@test "5f: a reference qualified with another repo releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes other-org/other-repo#13"
   run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
+  [ "$status" -eq 0 ] || { echo "case 5f"; return 1; }
+  assert_nothing_released || { echo "case 5f"; return 1; }
 }
 
-@test "6: gh pr merge mentioned inside a string is not a real invocation" {
+@test "a merge not in command position (string, comment, other command, heredoc, directory change, subshell) releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook 'echo "gh pr merge 42"'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 6"; return 1; }
+  assert_nothing_released || { echo "case 6"; return 1; }
 
 # Test 6 pins a mention with no real invocation after it. 6b and 6c pin the
 # other half: a mention FOLLOWED by one. Both assert the selector rather than
@@ -328,608 +329,79 @@ assert_nothing_released() { [ ! -s "$FAKE_GH_STATE/issue_edits" ]; }
 # heredoc body line, a directory change and a subshell all satisfy that while
 # meaning something else. Each one previously resolved a pull request this
 # merge never touched and stripped labels off its issues.
-@test "6b: a merge behind a comment line releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook $'# gh pr merge 5 (old, already done)\ngh pr merge 9'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 6b"; return 1; }
+  assert_nothing_released || { echo "case 6b"; return 1; }
 
-@test "6c: a merge behind another gh command releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook 'gh pr comment 9 --body "ready; gh pr merge 5 landed" && gh pr merge 9'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 6c"; return 1; }
+  assert_nothing_released || { echo "case 6c"; return 1; }
 
-@test "6d: a merge behind a heredoc releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook $'cat <<\'EOF\' > notes.md\ngh pr merge 5\nEOF\ngh pr merge 9'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 6d"; return 1; }
+  assert_nothing_released || { echo "case 6d"; return 1; }
 
-@test "6e: a merge behind a directory change releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'git fetch && cd ../other && gh pr merge 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 6e"; return 1; }
+  assert_nothing_released || { echo "case 6e"; return 1; }
 
 # The subshell form is the one the shell-cwd rule pushes toward, and it is
 # glued to its `cd`, so any guard matching the word `cd` misses it. Under the
 # first-command contract the spelling stops mattering.
-@test "6g: a merge inside a subshell that changes directory releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook '(cd ../other && gh pr merge 5 --squash)'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 6g"; return 1; }
+  assert_nothing_released || { echo "case 6g"; return 1; }
 
 # 6f and 6h are the controls that keep the contract from collapsing into
 # "release nothing". A command AFTER the merge cannot change which pull
 # request merged, so it is still read; and an empty leading piece, from a
 # newline or from the second character of `&&`, is not a command at all.
-@test "6f: a command after the merge does not stand it down" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'gh pr merge 1508 && git checkout main'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "77"
-}
+  [ "$status" -eq 0 ] || { echo "case 6f"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 6f"; return 1; }
+  assert_released_once "77" || { echo "case 6f"; return 1; }
 
-@test "6h: a leading blank line does not count as a command" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook $'\n  gh pr merge 1508'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "77"
-}
+  [ "$status" -eq 0 ] || { echo "case 6h"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 6h"; return 1; }
+  assert_released_once "77" || { echo "case 6h"; return 1; }
 
-@test "7: a foreign-repo command releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #99"
-  run_hook 'gh pr merge --repo other-org/other-repo 1'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7b: a same-repo --repo command resolves the ref, not the flag value" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge --repo gaia-react/gaia 12'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "12" ]
-  assert_released_once "12"
-}
-
-# 7f-7h cover the reference form the `--repo` guard cannot reach. gh takes
-# `<number> | <url> | <branch>`, and a URL names its own repository, so a
-# merged sibling-repo pull request read by URL would otherwise have its
-# closing references applied to THIS repository's issues of the same number.
-@test "7f: a foreign-repo URL reference releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #99"
-  run_hook 'gh pr merge https://github.com/other-org/other-repo/pull/1'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7g: a home-repo URL reference resolves to its number" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge https://github.com/gaia-react/gaia/pull/1508'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_repo")" = "gaia-react/gaia" ]
-  assert_released_once "12"
-}
-
-# The sandbox toplevel is named `gaia`, so `--repo other-org/gaia` is exactly
-# the value a repo-NAME comparison calls "home". repo-scope.sh's blocking
-# guard does compare that way, and for a consumer that ENFORCES the
-# over-classification is safe; this hook ACTS, so it compares the whole slug
-# and this case has to stay foreign.
-@test "7i: a same-named sibling repo releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge --repo other-org/gaia 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# gh accepts flags in any position, so the boundary check has to survive a
-# --repo written after the reference. 7k and 7l are 7i with the argument order
-# reversed, which is the spelling a leading-flag-only guard leaves open.
-@test "7k: a trailing --repo naming a same-named sibling releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge 5 --repo other-org/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7l: a trailing -R naming a same-named sibling releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge 5 --squash -R other-org/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# gh takes its repository flag ahead of the subcommand too. The flag still
-# decides the boundary there, and the last spelling wins, as gh's own does.
-@test "7bc: a home repository flag ahead of the subcommand releases" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh -R gaia-react/gaia pr merge 12 --squash'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "12" ]
-  assert_released_once "12"
-}
-
-@test "7bd: an equals-joined home repository flag ahead of the subcommand releases" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh --repo=gaia-react/gaia pr merge 12'
-  [ "$status" -eq 0 ]
-  assert_released_once "12"
-}
-
-@test "7be: a same-named sibling ahead of the subcommand releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh -R other-org/gaia pr merge 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7bf: a trailing sibling overrides a home repository flag ahead of the subcommand" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh -R gaia-react/gaia pr merge 5 -R other-org/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# 7p-7r pin the separator handling in both directions. A separator inside a
-# quoted subject or body is ordinary text and must not end the scan, or every
-# token after it, a trailing --repo included, drops out of the set the guard
-# reads. A real separator must still end it, or a later command's own --repo
-# decides this one.
-@test "7p: a semicolon inside a quoted body does not end the scan" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge 5 --body "fix; ship it" --repo other-org/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7q: a pipe inside a quoted body does not end the scan" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge 5 --body "a | b" -R other-org/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7r: a semicolon inside a quoted subject does not end the scan" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge 5 --squash -t "labels: rename; recolor" --repo other-org/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7s: a later command's --repo does not decide this one" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'gh pr merge 5 --repo other-org/gaia && gh issue list --repo gaia-react/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 7s"; return 1; }
+  assert_nothing_released || { echo "case 7s"; return 1; }
 
-# 7t-7w pin the boundary between the two, which is where a pattern over the
-# raw text keeps getting it wrong: a separator glued to a CLOSING quote is a
-# real separator, a separator inside an open quote or behind a backslash is
-# text. Each spelling below is ordinary shell, not a crafted string.
-@test "7t: a separator glued to a closing quote ends the scan" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge 5 --repo other-org/gaia -t "subj"; gh issue list --repo gaia-react/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# A newline separates two commands exactly as `&&` does, and the matcher that
-# arms this hook already treats it that way, so the scan has to agree.
-@test "7x: a newline ends the command as a separator does" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook $'gh pr merge --repo other-org/gaia 5 --squash\ngh issue list --repo gaia-react/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7y: a multi-line no-reference merge still resolves the current branch" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook $'gh pr merge --squash\necho done'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "" ]
-  assert_released_once "77"
-}
-
-@test "7u: a later command does not stand a home merge down" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'gh pr merge 5 -t "subj"; gh issue list --repo other-org/gaia'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-@test "7v: an attached --body= value keeps its separator as text" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge --squash --body="fix; ship it" --repo other-org/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7w: a backslash-escaped separator is text, not an end of command" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge 5 --body fix\;ship --repo other-org/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# 7z and 7aa are the other half of 7w: a backslash before a newline is a line
-# CONTINUATION rather than an escape, so both characters go away instead of
-# the newline becoming a word. Treated as an escape it becomes the first
-# non-flag word, which is the reference, so a merge written across two lines
-# resolves a newline and releases nothing. 7aa pins that the bogus word takes
-# the slot even when the real number comes later.
-@test "7z: a line continuation before the reference resolves it" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook $'gh pr merge \\\n  1508 --squash'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "77"
-}
-
-@test "7aa: a line continuation before a flag leaves a later reference intact" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook $'gh pr merge \\\n  --squash 1508'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "77"
-}
-
-# The scan reads the command one fixed-size block at a time, so word, quote and
-# escape state has to survive a block boundary. Every other case here is short
-# enough to fit in one block, which would leave the chaining unexercised. These
-# two straddle several boundaries: 7ab carries a word across them, 7ac holds a
-# quoted span open across them so a separator inside it stays text and the flag
-# after it is still scanned.
-@test "7ab: a value spanning several blocks does not become the reference" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  local pad
-  pad=$(printf 'x%.0s' $(seq 1 600))
-  run_hook "gh pr merge --body \"$padding\" 1508"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "77"
-}
-
-# 7ab and 7ac pin quote state across a boundary but not the WORD itself: in
-# both, a word truncated at the boundary is a flag value nothing reads back,
-# so the reference still resolves. This sweeps the reference across a whole
-# block's worth of offsets so at least one run has it straddling, whatever
-# the scan's block constant is; a truncated word there resolves the wrong
-# pull request outright.
-@test "7ad: the reference resolves wherever it straddles a block boundary" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  local padding_length padding
-  for padding_length in $(seq 230 262); do
-    padding=$(printf 'x%.0s' $(seq 1 "$padding_length"))
-    run_hook "gh pr merge --body \"$padding\" 1508"
-    [ "$status" -eq 0 ]
-    [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  done
-}
-
-@test "7ac: a quoted span held open across blocks keeps its separator as text" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  local half body
-  half=$(printf 'x%.0s' $(seq 1 300))
-  body="$half;$half"
-  run_hook "gh pr merge 5 --body \"$body\" --repo other-org/gaia"
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# 7n and 7o pin the spellings that carry a quote into the parser. Each one
-# fails closed when mishandled, releasing nothing on a merge that closed
-# issues, which the rule promises needs no manual step.
-@test "7n: a multi-word --body= value does not become the reference" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge --squash --body="release notes here" 1508'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "12"
-}
-
-@test "7o: a quoted reference resolves without its quotes" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge "1508" --squash'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "12"
-}
-
-@test "7j: a quoted multi-word flag value does not become the reference" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge --squash --body "release notes here" 1508'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "12"
-}
-
-@test "7h: both the read and the write name the home repo" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge 42'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_repo")" = "gaia-react/gaia" ]
-  [ "$(grep -cxF -- "gaia-react/gaia" "$FAKE_GH_STATE/issue_edit_repos")" -eq 1 ]
-}
-
-@test "8a: gh absent from PATH releases nothing and exits 0" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  nogh_bin="$(path_allowlist bash jq git grep sort cat)"
-
-  input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash 'gh pr merge 42')
-  PATH="$nogh_bin" invoke_hook_in "$REPO" "$input" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "8b: jq absent from PATH releases nothing and exits 0" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  nojq_bin="$(path_allowlist bash cat)"
-
-  input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash 'gh pr merge 42')
-  PATH="$nojq_bin" invoke_hook_in "$REPO" "$input" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# 7c-7e pin the value-taking flag table against gh's real flag set. Each one
-# fails if the table gains or loses the flag it names: a boolean listed as
-# value-taking swallows the reference, and a value-taking flag left out makes
-# its own value the reference. Both end the same way, a merged pull request
-# whose issues keep a live claim forever.
-@test "7c: -m is boolean --merge, so the reference after it still resolves" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge -m 1498'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1498" ]
-  assert_released_once "12"
-}
-
-@test "7d: -F takes a value, so the filename is not read as the reference" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge -F notes.txt 1498'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1498" ]
-  assert_released_once "12"
-}
-
-@test "7e: -A takes a value, so the email is not read as the reference" {
-  export FAKE_GH_PR_BODY="Closes #12"
-  run_hook 'gh pr merge -A me@example.com 1498'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1498" ]
-  assert_released_once "12"
-}
-
-# Test 6 proves the matcher rejects a mention inside a string. This proves the
-# other half: a real invocation after a shell separator DOES arm. Without it,
-# separator_regex could silently stop matching and every compound-command merge would
-# release nothing with the suite still green.
-# gh's flag library accepts a shorthand with its value attached, so this is
-# the same invocation as the spaced form two cases up. Read as a bare boolean
-# flag it sets no repository at all, and the whole-slug boundary check below
-# never arms: the hook then reads THIS repository's pull request 5.
-@test "7ae: an attached -R naming another repo releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge -Rother-org/other-repo 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7af: an attached -R naming the home repo still resolves the ref" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge -Rgaia-react/gaia 5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-# 7ak-7an: gh identifies a repository as [HOST/]OWNER/REPO, so the slug alone
-# does not name one. An adopter mirroring a repository between github.com and
-# an enterprise host carries the SAME owner/repo on both, and the shared guard
-# compares only the repo-name half, so nothing upstream separates them. Read
-# on the slug alone, a merge on the other host resolves this host's pull
-# request of that number and strips labels off issues it never closed. The
-# home-host controls are what keep the check from degrading into "reject every
-# qualifier".
-@test "7ak: a --repo qualified with another host releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge --repo ghe.example.com/gaia-react/gaia 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7al: a --repo qualified with the home host still resolves the ref" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge --repo github.com/gaia-react/gaia 5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-@test "7am: a URL on another host releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge https://ghe.example.com/gaia-react/gaia/pull/5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# The mirror direction: when the enterprise host IS home, its own URL has to
-# resolve and github.com's must not. Without this the check could pass by
-# hardcoding github.com rather than by reading the home repository.
-@test "7an: on an enterprise home host, a github.com URL releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  export FAKE_GH_HOME_HOST="ghe.example.com"
-  run_hook 'gh pr merge https://github.com/gaia-react/gaia/pull/5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7ao: on an enterprise home host, its own URL resolves the ref" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  export FAKE_GH_HOME_HOST="ghe.example.com"
-  run_hook 'gh pr merge https://ghe.example.com/gaia-react/gaia/pull/5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-# 7ap-7aq: gh's own URL matcher is unanchored after the number and its host
-# comparison drops a port, so each of these merges home pull request 5 while a
-# tighter matcher declines and leaves the claim standing. The shape rules live
-# in the lib and `repo-scope-home-pr.bats` covers them exhaustively; these two
-# pin that THIS hook reaches them, which is the half a lib-only suite cannot
-# see. 7ap is the spelling a human actually produces, by copying the address
-# bar off the Files tab.
-@test "7ap: a home URL carrying a /files suffix resolves the ref" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge https://github.com/gaia-react/gaia/pull/5/files'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-@test "7aq: a home URL carrying the default port resolves the ref" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge https://github.com:443/gaia-react/gaia/pull/5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-@test "7ar: a suffix does not carry a foreign URL past the boundary" {
-  # The relaxation is to the shape, never to the repository comparison.
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge https://github.com/other-org/other-repo/pull/5/files'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# 7ag-7aj: gh clusters single-dash shorthands, and this parser does not model
-# that. The first value-taking letter in a cluster swallows the rest of the
-# token or the next word, so `-sR<slug>` leaves the repository check unarmed
-# and `-st 1234 5` hands `1234` to the subject. Read as one unknown flag both
-# resolve a pull request in THIS repository that the merge never touched, so
-# a cluster is refused outright rather than decoded. 7aj is the control: a
-# lone shorthand is not a cluster and still works.
-@test "7ag: an attached cluster naming another repo releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge -sRother-org/other-repo 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7ah: a spaced cluster naming another repo releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge -sR other-org/other-repo 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# Refused even when it names the home repo, and even when every letter in it
-# is a boolean. The parser cannot tell those apart from the dangerous shape
-# without modelling the cluster grammar, and this is the direction to be
-# wrong in: `-sd 1508` costs a release that is done by hand.
-@test "7ai: a cluster releases nothing even when it is harmless" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge -sd 1508'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7aj: a lone shorthand is not a cluster and still resolves the ref" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge -s 1508'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ]
-  assert_released_once "77"
-}
-
-# 7az-7bb and 7as: a word-initial unquoted `#` opens a shell COMMENT, so gh
-# receives none of it. Read as ordinary text those words reach the flag parser,
-# and a `--repo` among them wins over the one the merge carried, because the
-# parser keeps the last one it sees and the shared guard captures greedily.
-# 7az is the harm that reaches: a merge landing in the SIBLING repository,
-# stripping claims here. 7ba and 7bb are the controls that the arm cuts a
-# comment rather than every `#`. 7as pins the stop rather than a skip to the
-# newline: a comment hiding a leading command must not promote the words after
-# it into the first command, which is the one shape a skip would get wrong.
-@test "7az: a trailing comment's --repo does not turn a foreign merge into a home release" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge --repo other-org/other-repo 5 # was --repo gaia-react/gaia'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-@test "7ba: a trailing comment does not cost a home merge its release" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge 5 --squash # ship it'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-@test "7bb: a mid-word # is ordinary text, not a comment" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge --body fix#77 5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-@test "7as: a comment hiding a leading command releases nothing" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook $'# merge it now\ngh pr merge 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# 7at, 7au: GitHub resolves OWNER/REPO case-insensitively, so a merge spelled
-# in another case lands on the home repository and a case-sensitive comparison
-# would read it as a different one and cost the release. Every half of the
-# value is compared case-blind, and the three cases below cover them: the
-# owner half here, both halves of a URL in 7au, and the repo-NAME half in 7av.
-# 7aw and 7ay pin the direction that keeps case-blindness honest.
-@test "7at: a --repo differing only in owner case still resolves the ref" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge --repo GAIA-React/gaia 5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
-
-@test "7au: a home URL differing in case still resolves the ref" {
-  export FAKE_GH_PR_BODY="Closes #77"
-  run_hook 'gh pr merge https://github.com/GAIA-React/GAIA/pull/5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
+  [ "$status" -eq 0 ] || { echo "case 7u"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7u"; return 1; }
+  assert_released_once "77" || { echo "case 7u"; return 1; }
 
 # The merge has to be the first command in the tool call, so an ordinary
 # benign prefix costs the release. That is the deliberate price of the
 # first-command contract, and it is what the rule's own bullet tells a reader
 # to expect, so it is pinned rather than left to drift.
-@test "9: a merge behind an ordinary earlier command releases nothing" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #12"
   run_hook 'git fetch && gh pr merge 42'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
-
-# ---------- Shared arming decision (tokenizer, and the bound past 6d) ----------
+  [ "$status" -eq 0 ] || { echo "case 9"; return 1; }
+  assert_nothing_released || { echo "case 9"; return 1; }
 
 # The generic past-bound pairing (6d's heredoc, padded past
 # GAIA_VERB_ARM_MAXIMUM_CHARACTERS, arms because the walker abstains above the bound)
@@ -939,17 +411,256 @@ assert_nothing_released() { [ ! -s "$FAKE_GH_STATE/issue_edits" ]; }
 # it. The bound's effect on arming is proven once, at the library level, in
 # verb-arming-lib.bats; this pins that the boundary decline still holds past
 # the bound, so a bigger heredoc never becomes a spurious release.
-@test "11: a heredoc-behind merge padded past the arming bound still releases nothing (boundary, not masking)" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   local pad
   pad=$(printf 'x%.0s' $(seq 1 16400))
   run_hook $'cat <<\'EOF\' > notes.md\n'"$pad"$'\ngh pr merge 5\nEOF\ngh pr merge 9'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
+  [ "$status" -eq 0 ] || { echo "case 11"; return 1; }
+  assert_nothing_released || { echo "case 11"; return 1; }
 }
-@test "the hook file is executable" {
-  [ -x "$HOOK_ABSOLUTE_PATH" ]
-}
+
+@test "only a home-repo reference, flag or URL resolves; a foreign, sibling, other-host or cluster form releases nothing" {
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #99"
+  run_hook 'gh pr merge --repo other-org/other-repo 1'
+  [ "$status" -eq 0 ] || { echo "case 7"; return 1; }
+  assert_nothing_released || { echo "case 7"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge --repo gaia-react/gaia 12'
+  [ "$status" -eq 0 ] || { echo "case 7b"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "12" ] || { echo "case 7b"; return 1; }
+  assert_released_once "12" || { echo "case 7b"; return 1; }
+
+# 7f-7h cover the reference form the `--repo` guard cannot reach. gh takes
+# `<number> | <url> | <branch>`, and a URL names its own repository, so a
+# merged sibling-repo pull request read by URL would otherwise have its
+# closing references applied to THIS repository's issues of the same number.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #99"
+  run_hook 'gh pr merge https://github.com/other-org/other-repo/pull/1'
+  [ "$status" -eq 0 ] || { echo "case 7f"; return 1; }
+  assert_nothing_released || { echo "case 7f"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge https://github.com/gaia-react/gaia/pull/1508'
+  [ "$status" -eq 0 ] || { echo "case 7g"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7g"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_repo")" = "gaia-react/gaia" ] || { echo "case 7g"; return 1; }
+  assert_released_once "12" || { echo "case 7g"; return 1; }
+
+# The sandbox toplevel is named `gaia`, so `--repo other-org/gaia` is exactly
+# the value a repo-NAME comparison calls "home". repo-scope.sh's blocking
+# guard does compare that way, and for a consumer that ENFORCES the
+# over-classification is safe; this hook ACTS, so it compares the whole slug
+# and this case has to stay foreign.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge --repo other-org/gaia 5'
+  [ "$status" -eq 0 ] || { echo "case 7i"; return 1; }
+  assert_nothing_released || { echo "case 7i"; return 1; }
+
+# gh accepts flags in any position, so the boundary check has to survive a
+# --repo written after the reference. 7k and 7l are 7i with the argument order
+# reversed, which is the spelling a leading-flag-only guard leaves open.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge 5 --repo other-org/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7k"; return 1; }
+  assert_nothing_released || { echo "case 7k"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge 5 --squash -R other-org/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7l"; return 1; }
+  assert_nothing_released || { echo "case 7l"; return 1; }
+
+# gh takes its repository flag ahead of the subcommand too. The flag still
+# decides the boundary there, and the last spelling wins, as gh's own does.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh -R gaia-react/gaia pr merge 12 --squash'
+  [ "$status" -eq 0 ] || { echo "case 7bc"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "12" ] || { echo "case 7bc"; return 1; }
+  assert_released_once "12" || { echo "case 7bc"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh --repo=gaia-react/gaia pr merge 12'
+  [ "$status" -eq 0 ] || { echo "case 7bd"; return 1; }
+  assert_released_once "12" || { echo "case 7bd"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh -R other-org/gaia pr merge 5'
+  [ "$status" -eq 0 ] || { echo "case 7be"; return 1; }
+  assert_nothing_released || { echo "case 7be"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh -R gaia-react/gaia pr merge 5 -R other-org/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7bf"; return 1; }
+  assert_nothing_released || { echo "case 7bf"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge 42'
+  [ "$status" -eq 0 ] || { echo "case 7h"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_repo")" = "gaia-react/gaia" ] || { echo "case 7h"; return 1; }
+  [ "$(grep -cxF -- "gaia-react/gaia" "$FAKE_GH_STATE/issue_edit_repos")" -eq 1 ] || { echo "case 7h"; return 1; }
+
+# Test 6 proves the matcher rejects a mention inside a string. This proves the
+# other half: a real invocation after a shell separator DOES arm. Without it,
+# separator_regex could silently stop matching and every compound-command merge would
+# release nothing with the suite still green.
+# gh's flag library accepts a shorthand with its value attached, so this is
+# the same invocation as the spaced form two cases up. Read as a bare boolean
+# flag it sets no repository at all, and the whole-slug boundary check below
+# never arms: the hook then reads THIS repository's pull request 5.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge -Rother-org/other-repo 5'
+  [ "$status" -eq 0 ] || { echo "case 7ae"; return 1; }
+  assert_nothing_released || { echo "case 7ae"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge -Rgaia-react/gaia 5'
+  [ "$status" -eq 0 ] || { echo "case 7af"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7af"; return 1; }
+  assert_released_once "77" || { echo "case 7af"; return 1; }
+
+# 7ak-7an: gh identifies a repository as [HOST/]OWNER/REPO, so the slug alone
+# does not name one. An adopter mirroring a repository between github.com and
+# an enterprise host carries the SAME owner/repo on both, and the shared guard
+# compares only the repo-name half, so nothing upstream separates them. Read
+# on the slug alone, a merge on the other host resolves this host's pull
+# request of that number and strips labels off issues it never closed. The
+# home-host controls are what keep the check from degrading into "reject every
+# qualifier".
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge --repo ghe.example.com/gaia-react/gaia 5'
+  [ "$status" -eq 0 ] || { echo "case 7ak"; return 1; }
+  assert_nothing_released || { echo "case 7ak"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge --repo github.com/gaia-react/gaia 5'
+  [ "$status" -eq 0 ] || { echo "case 7al"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7al"; return 1; }
+  assert_released_once "77" || { echo "case 7al"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge https://ghe.example.com/gaia-react/gaia/pull/5'
+  [ "$status" -eq 0 ] || { echo "case 7am"; return 1; }
+  assert_nothing_released || { echo "case 7am"; return 1; }
+
+# The mirror direction: when the enterprise host IS home, its own URL has to
+# resolve and github.com's must not. Without this the check could pass by
+# hardcoding github.com rather than by reading the home repository.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  export FAKE_GH_HOME_HOST="ghe.example.com"
+  run_hook 'gh pr merge https://github.com/gaia-react/gaia/pull/5'
+  [ "$status" -eq 0 ] || { echo "case 7an"; return 1; }
+  assert_nothing_released || { echo "case 7an"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  export FAKE_GH_HOME_HOST="ghe.example.com"
+  run_hook 'gh pr merge https://ghe.example.com/gaia-react/gaia/pull/5'
+  [ "$status" -eq 0 ] || { echo "case 7ao"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7ao"; return 1; }
+  assert_released_once "77" || { echo "case 7ao"; return 1; }
+
+# 7ap-7aq: gh's own URL matcher is unanchored after the number and its host
+# comparison drops a port, so each of these merges home pull request 5 while a
+# tighter matcher declines and leaves the claim standing. The shape rules live
+# in the lib and `repo-scope-home-pr.bats` covers them exhaustively; these two
+# pin that THIS hook reaches them, which is the half a lib-only suite cannot
+# see. 7ap is the spelling a human actually produces, by copying the address
+# bar off the Files tab.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge https://github.com/gaia-react/gaia/pull/5/files'
+  [ "$status" -eq 0 ] || { echo "case 7ap"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7ap"; return 1; }
+  assert_released_once "77" || { echo "case 7ap"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge https://github.com:443/gaia-react/gaia/pull/5'
+  [ "$status" -eq 0 ] || { echo "case 7aq"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7aq"; return 1; }
+  assert_released_once "77" || { echo "case 7aq"; return 1; }
+
+  reset_hook_state
+  # The relaxation is to the shape, never to the repository comparison.
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge https://github.com/other-org/other-repo/pull/5/files'
+  [ "$status" -eq 0 ] || { echo "case 7ar"; return 1; }
+  assert_nothing_released || { echo "case 7ar"; return 1; }
+
+# 7ag-7aj: gh clusters single-dash shorthands, and this parser does not model
+# that. The first value-taking letter in a cluster swallows the rest of the
+# token or the next word, so `-sR<slug>` leaves the repository check unarmed
+# and `-st 1234 5` hands `1234` to the subject. Read as one unknown flag both
+# resolve a pull request in THIS repository that the merge never touched, so
+# a cluster is refused outright rather than decoded. 7aj is the control: a
+# lone shorthand is not a cluster and still works.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge -sRother-org/other-repo 5'
+  [ "$status" -eq 0 ] || { echo "case 7ag"; return 1; }
+  assert_nothing_released || { echo "case 7ag"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge -sR other-org/other-repo 5'
+  [ "$status" -eq 0 ] || { echo "case 7ah"; return 1; }
+  assert_nothing_released || { echo "case 7ah"; return 1; }
+
+# Refused even when it names the home repo, and even when every letter in it
+# is a boolean. The parser cannot tell those apart from the dangerous shape
+# without modelling the cluster grammar, and this is the direction to be
+# wrong in: `-sd 1508` costs a release that is done by hand.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge -sd 1508'
+  [ "$status" -eq 0 ] || { echo "case 7ai"; return 1; }
+  assert_nothing_released || { echo "case 7ai"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge -s 1508'
+  [ "$status" -eq 0 ] || { echo "case 7aj"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7aj"; return 1; }
+  assert_released_once "77" || { echo "case 7aj"; return 1; }
+
+# 7at, 7au: GitHub resolves OWNER/REPO case-insensitively, so a merge spelled
+# in another case lands on the home repository and a case-sensitive comparison
+# would read it as a different one and cost the release. Every half of the
+# value is compared case-blind, and the three cases below cover them: the
+# owner half here, both halves of a URL in 7au, and the repo-NAME half in 7av.
+# 7aw and 7ay pin the direction that keeps case-blindness honest.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge --repo GAIA-React/gaia 5'
+  [ "$status" -eq 0 ] || { echo "case 7at"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7at"; return 1; }
+  assert_released_once "77" || { echo "case 7at"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge https://github.com/GAIA-React/GAIA/pull/5'
+  [ "$status" -eq 0 ] || { echo "case 7au"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7au"; return 1; }
+  assert_released_once "77" || { echo "case 7au"; return 1; }
 
 # 7av-7ay: the boundary is read from the SCANNED value rather than from a
 # regex over the raw command, which is what makes these four spellings behave.
@@ -958,41 +669,268 @@ assert_nothing_released() { [ ! -s "$FAKE_GH_STATE/issue_edits" ]; }
 # 7av's spelling was called foreign and cost the release; and a quoted value
 # kept its quotes through that capture, so 7ax's was too. The scan strips the
 # quotes and knows which command in the tool call owns the flag.
-@test "7av: a --repo differing only in repo-name case still resolves the ref" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'gh pr merge --repo gaia-react/GAIA 5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
+  [ "$status" -eq 0 ] || { echo "case 7av"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7av"; return 1; }
+  assert_released_once "77" || { echo "case 7av"; return 1; }
 
-@test "7aw: a same-named sibling differing in case still releases nothing" {
+  reset_hook_state
   # 7av's safety direction: case-blindness must not turn a different
   # repository into the home one.
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'gh pr merge --repo OTHER-ORG/GAIA 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
-}
+  [ "$status" -eq 0 ] || { echo "case 7aw"; return 1; }
+  assert_nothing_released || { echo "case 7aw"; return 1; }
 
-@test "7ax: a quoted home --repo value resolves the ref" {
+  reset_hook_state
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'gh pr merge --repo="gaia-react/gaia" 5'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ]
-  assert_released_once "77"
-}
+  [ "$status" -eq 0 ] || { echo "case 7ax"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7ax"; return 1; }
+  assert_released_once "77" || { echo "case 7ax"; return 1; }
 
-@test "7ay: a quoted foreign --repo value releases nothing" {
+  reset_hook_state
   # 7ax's safety direction, and the one that matters: reading a quoted value
   # at all is only correct if reading it foreign still declines.
   export FAKE_GH_PR_BODY="Closes #77"
   run_hook 'gh pr merge --repo="other-org/gaia" 5'
-  [ "$status" -eq 0 ]
-  assert_nothing_released
+  [ "$status" -eq 0 ] || { echo "case 7ay"; return 1; }
+  assert_nothing_released || { echo "case 7ay"; return 1; }
 }
 
-@test "hook-payload.sh missing: exit 0 with empty stdout, no label edit" {
+@test "quoting, separators, newlines, continuations and block boundaries do not change the resolved reference" {
+# 7p-7r pin the separator handling in both directions. A separator inside a
+# quoted subject or body is ordinary text and must not end the scan, or every
+# token after it, a trailing --repo included, drops out of the set the guard
+# reads. A real separator must still end it, or a later command's own --repo
+# decides this one.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge 5 --body "fix; ship it" --repo other-org/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7p"; return 1; }
+  assert_nothing_released || { echo "case 7p"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge 5 --body "a | b" -R other-org/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7q"; return 1; }
+  assert_nothing_released || { echo "case 7q"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge 5 --squash -t "labels: rename; recolor" --repo other-org/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7r"; return 1; }
+  assert_nothing_released || { echo "case 7r"; return 1; }
+
+# 7t-7w pin the boundary between the two, which is where a pattern over the
+# raw text keeps getting it wrong: a separator glued to a CLOSING quote is a
+# real separator, a separator inside an open quote or behind a backslash is
+# text. Each spelling below is ordinary shell, not a crafted string.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge 5 --repo other-org/gaia -t "subj"; gh issue list --repo gaia-react/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7t"; return 1; }
+  assert_nothing_released || { echo "case 7t"; return 1; }
+
+# A newline separates two commands exactly as `&&` does, and the matcher that
+# arms this hook already treats it that way, so the scan has to agree.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook $'gh pr merge --repo other-org/gaia 5 --squash\ngh issue list --repo gaia-react/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7x"; return 1; }
+  assert_nothing_released || { echo "case 7x"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook $'gh pr merge --squash\necho done'
+  [ "$status" -eq 0 ] || { echo "case 7y"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "" ] || { echo "case 7y"; return 1; }
+  assert_released_once "77" || { echo "case 7y"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge --squash --body="fix; ship it" --repo other-org/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7v"; return 1; }
+  assert_nothing_released || { echo "case 7v"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge 5 --body fix\;ship --repo other-org/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7w"; return 1; }
+  assert_nothing_released || { echo "case 7w"; return 1; }
+
+# 7z and 7aa are the other half of 7w: a backslash before a newline is a line
+# CONTINUATION rather than an escape, so both characters go away instead of
+# the newline becoming a word. Treated as an escape it becomes the first
+# non-flag word, which is the reference, so a merge written across two lines
+# resolves a newline and releases nothing. 7aa pins that the bogus word takes
+# the slot even when the real number comes later.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook $'gh pr merge \\\n  1508 --squash'
+  [ "$status" -eq 0 ] || { echo "case 7z"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7z"; return 1; }
+  assert_released_once "77" || { echo "case 7z"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook $'gh pr merge \\\n  --squash 1508'
+  [ "$status" -eq 0 ] || { echo "case 7aa"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7aa"; return 1; }
+  assert_released_once "77" || { echo "case 7aa"; return 1; }
+
+# The scan reads the command one fixed-size block at a time, so word, quote and
+# escape state has to survive a block boundary. Every other case here is short
+# enough to fit in one block, which would leave the chaining unexercised. These
+# two straddle several boundaries: 7ab carries a word across them, 7ac holds a
+# quoted span open across them so a separator inside it stays text and the flag
+# after it is still scanned.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  local pad
+  pad=$(printf 'x%.0s' $(seq 1 600))
+  run_hook "gh pr merge --body \"$pad\" 1508"
+  [ "$status" -eq 0 ] || { echo "case 7ab"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7ab"; return 1; }
+  assert_released_once "77" || { echo "case 7ab"; return 1; }
+
+# 7ab and 7ac pin quote state across a boundary but not the WORD itself: in
+# both, a word truncated at the boundary is a flag value nothing reads back,
+# so the reference still resolves. This sweeps the reference across a whole
+# block's worth of offsets so at least one run has it straddling, whatever
+# the scan's block constant is; a truncated word there resolves the wrong
+# pull request outright.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  local padding_length padding
+  for padding_length in $(seq 230 262); do
+    padding=$(printf 'x%.0s' $(seq 1 "$padding_length"))
+    run_hook "gh pr merge --body \"$padding\" 1508"
+    [ "$status" -eq 0 ] || { echo "case 7ad"; return 1; }
+    [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7ad"; return 1; }
+  done
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  local half body
+  half=$(printf 'x%.0s' $(seq 1 300))
+  body="$half;$half"
+  run_hook "gh pr merge 5 --body \"$body\" --repo other-org/gaia"
+  [ "$status" -eq 0 ] || { echo "case 7ac"; return 1; }
+  assert_nothing_released || { echo "case 7ac"; return 1; }
+
+# 7n and 7o pin the spellings that carry a quote into the parser. Each one
+# fails closed when mishandled, releasing nothing on a merge that closed
+# issues, which the rule promises needs no manual step.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge --squash --body="release notes here" 1508'
+  [ "$status" -eq 0 ] || { echo "case 7n"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7n"; return 1; }
+  assert_released_once "12" || { echo "case 7n"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge "1508" --squash'
+  [ "$status" -eq 0 ] || { echo "case 7o"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7o"; return 1; }
+  assert_released_once "12" || { echo "case 7o"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge --squash --body "release notes here" 1508'
+  [ "$status" -eq 0 ] || { echo "case 7j"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1508" ] || { echo "case 7j"; return 1; }
+  assert_released_once "12" || { echo "case 7j"; return 1; }
+}
+
+@test "flag arity: -m is boolean, -F and -A take a value" {
+# 7c-7e pin the value-taking flag table against gh's real flag set. Each one
+# fails if the table gains or loses the flag it names: a boolean listed as
+# value-taking swallows the reference, and a value-taking flag left out makes
+# its own value the reference. Both end the same way, a merged pull request
+# whose issues keep a live claim forever.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge -m 1498'
+  [ "$status" -eq 0 ] || { echo "case 7c"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1498" ] || { echo "case 7c"; return 1; }
+  assert_released_once "12" || { echo "case 7c"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge -F notes.txt 1498'
+  [ "$status" -eq 0 ] || { echo "case 7d"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1498" ] || { echo "case 7d"; return 1; }
+  assert_released_once "12" || { echo "case 7d"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  run_hook 'gh pr merge -A me@example.com 1498'
+  [ "$status" -eq 0 ] || { echo "case 7e"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "1498" ] || { echo "case 7e"; return 1; }
+  assert_released_once "12" || { echo "case 7e"; return 1; }
+}
+
+@test "a trailing or leading comment never changes the resolved merge" {
+# 7az-7bb and 7as: a word-initial unquoted `#` opens a shell COMMENT, so gh
+# receives none of it. Read as ordinary text those words reach the flag parser,
+# and a `--repo` among them wins over the one the merge carried, because the
+# parser keeps the last one it sees and the shared guard captures greedily.
+# 7az is the harm that reaches: a merge landing in the SIBLING repository,
+# stripping claims here. 7ba and 7bb are the controls that the arm cuts a
+# comment rather than every `#`. 7as pins the stop rather than a skip to the
+# newline: a comment hiding a leading command must not promote the words after
+# it into the first command, which is the one shape a skip would get wrong.
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge --repo other-org/other-repo 5 # was --repo gaia-react/gaia'
+  [ "$status" -eq 0 ] || { echo "case 7az"; return 1; }
+  assert_nothing_released || { echo "case 7az"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge 5 --squash # ship it'
+  [ "$status" -eq 0 ] || { echo "case 7ba"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7ba"; return 1; }
+  assert_released_once "77" || { echo "case 7ba"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook 'gh pr merge --body fix#77 5'
+  [ "$status" -eq 0 ] || { echo "case 7bb"; return 1; }
+  [ "$(cat "$FAKE_GH_STATE/pr_view_ref")" = "5" ] || { echo "case 7bb"; return 1; }
+  assert_released_once "77" || { echo "case 7bb"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #77"
+  run_hook $'# merge it now\ngh pr merge 5'
+  [ "$status" -eq 0 ] || { echo "case 7as"; return 1; }
+  assert_nothing_released || { echo "case 7as"; return 1; }
+}
+
+@test "gh, jq or hook-payload.sh absent releases nothing and exits 0" {
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  nogh_bin="$(path_allowlist bash jq git grep sort cat)"
+
+  input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash 'gh pr merge 42')
+  PATH="$nogh_bin" invoke_hook_in "$REPO" "$input" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || { echo "case 8a"; return 1; }
+  assert_nothing_released || { echo "case 8a"; return 1; }
+
+  reset_hook_state
+  export FAKE_GH_PR_BODY="Closes #12"
+  nojq_bin="$(path_allowlist bash cat)"
+
+  input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash 'gh pr merge 42')
+  PATH="$nojq_bin" invoke_hook_in "$REPO" "$input" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || { echo "case 8b"; return 1; }
+  assert_nothing_released || { echo "case 8b"; return 1; }
+
+  reset_hook_state
   local scratch="$BATS_TEST_TMPDIR/scratch-hooks"
   mkdir -p "$scratch/.claude/hooks"
   cp -R "$(dirname "$HOOK_ABSOLUTE_PATH")/lib" "$scratch/.claude/hooks/lib"
@@ -1003,8 +941,14 @@ assert_nothing_released() { [ ! -s "$FAKE_GH_STATE/issue_edits" ]; }
   input=$("$HELPERS/mock-hook-input.sh" post-tool-use S1 Bash 'gh pr merge 5 --squash')
   cd "$REPO" || return 1
   invoke_hook "$input" "$scratch/.claude/hooks/issue-claim-release.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -s "$FAKE_GH_STATE/issue_edits" ]
-  [ ! -s "$FAKE_GH_STATE/pr_view_calls" ]
+  [ "$status" -eq 0 ] || { echo "case hook-payload-missing"; return 1; }
+  [ -z "$output" ] || { echo "case hook-payload-missing"; return 1; }
+  [ ! -s "$FAKE_GH_STATE/issue_edits" ] || { echo "case hook-payload-missing"; return 1; }
+  [ ! -s "$FAKE_GH_STATE/pr_view_calls" ] || { echo "case hook-payload-missing"; return 1; }
+}
+
+# ---------- Shared arming decision (tokenizer, and the bound past 6d) ----------
+
+@test "the hook file is executable" {
+  [ -x "$HOOK_ABSOLUTE_PATH" ]
 }

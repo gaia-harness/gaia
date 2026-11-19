@@ -112,132 +112,6 @@ edit_payload() {
 # with no way out from inside it.
 readonly INSTALL_COMMAND="brew install jq"
 
-# --- the matcher cannot reach the jq install, so the refusal is unconditional -
-
-@test "jq absent: block-secrets-write refuses a dotenv edit rather than letting it through" {
-  local json
-  json=$(edit_payload ".env.local")
-  without_jq block-secrets-write.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-eslint-config-edit refuses an edit" {
-  local json
-  json=$(edit_payload "eslint.config.ts")
-  without_jq block-eslint-config-edit.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-worktree-path-mismatch refuses an edit" {
-  local json
-  json=$(edit_payload "app/foo.ts")
-  without_jq block-worktree-path-mismatch.sh "$json"
-  assert_blocked_by_exit
-}
-
-# --- the matcher CAN reach the jq install, so the refusal is narrowed ---------
-#
-# Each pair is the whole claim: the in-remit call is refused, and the install
-# that repairs the machine is not.
-
-@test "jq absent: block-sensitive-read refuses a dotenv read" {
-  local json
-  json=$(bash_payload "cat .env.local")
-  without_jq block-sensitive-read.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-sensitive-read allows the jq install" {
-  local json
-  json=$(bash_payload "$INSTALL_COMMAND")
-  without_jq block-sensitive-read.sh "$json"
-  assert_allowed_by_exit
-}
-
-@test "jq absent: block-main-destructive-git refuses a git command" {
-  local json
-  json=$(bash_payload "git push --force origin main")
-  without_jq block-main-destructive-git.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-main-destructive-git allows the jq install" {
-  local json
-  json=$(bash_payload "$INSTALL_COMMAND")
-  without_jq block-main-destructive-git.sh "$json"
-  assert_allowed_by_exit
-}
-
-@test "jq absent: block-no-verify refuses a git command" {
-  local json
-  json=$(bash_payload "git commit --no-verify -m x")
-  without_jq block-no-verify.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-no-verify allows the jq install" {
-  local json
-  json=$(bash_payload "$INSTALL_COMMAND")
-  without_jq block-no-verify.sh "$json"
-  assert_allowed_by_exit
-}
-
-@test "jq absent: block-manifest-write refuses a write to the manifest" {
-  local json
-  json=$(edit_payload ".gaia/manifest.json")
-  without_jq block-manifest-write.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-manifest-write allows an edit naming no manifest" {
-  local json
-  json=$(edit_payload "app/foo.ts")
-  without_jq block-manifest-write.sh "$json"
-  assert_allowed_by_exit
-}
-
-@test "jq absent: block-rm-rf refuses a command carrying its literal" {
-  local json
-  json=$(bash_payload "rm -rf /")
-  without_jq block-rm-rf.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-rm-rf allows the jq install" {
-  local json
-  json=$(bash_payload "$INSTALL_COMMAND")
-  without_jq block-rm-rf.sh "$json"
-  assert_allowed_by_exit
-}
-
-@test "jq absent: block-sensitive-read refuses a read of a key path" {
-  local json
-  json=$(jq -n '{tool_name: "Read", tool_input: {file_path: "certs/server.pem"}}')
-  without_jq block-sensitive-read.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-sensitive-read allows a read naming no secret class" {
-  local json
-  json=$(jq -n '{tool_name: "Read", tool_input: {file_path: "README.md"}}')
-  without_jq block-sensitive-read.sh "$json"
-  assert_allowed_by_exit
-}
-
-@test "jq absent: block-sensitive-read refuses a dotenv read with the description first" {
-  local json
-  json=$(bash_payload_description_first "cat .env.local")
-  without_jq block-sensitive-read.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: block-sensitive-read allows the jq install with the description first" {
-  local json
-  json=$(bash_payload_description_first "$INSTALL_COMMAND")
-  without_jq block-sensitive-read.sh "$json"
-  assert_allowed_by_exit
-}
-
 # The Agent payload keeps the harness key order: ambient head first, then the
 # tool call. The bound hook's binding literal is the member-name prefix, which
 # no ambient path carries.
@@ -246,64 +120,93 @@ agent_payload() {
     '$a + {tool_name: "Agent", tool_input: {subagent_type: $s}}'
 }
 
-@test "jq absent: audit-loop-bound refuses a member dispatch" {
-  local json
-  json=$(agent_payload "code-audit-frontend")
-  without_jq audit-loop-bound.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: audit-loop-bound allows a dispatch naming no member" {
-  local json
-  json=$(agent_payload "general-purpose")
-  without_jq audit-loop-bound.sh "$json"
-  assert_allowed_by_exit
-}
-
 write_payload() {
   jq -n --argjson a "$(ambient)" --arg p "$1" \
     '$a + {tool_name: "Write", tool_input: {file_path: $p, content: "x"}}'
 }
 
-@test "jq absent: block-audit-loop-write refuses a write under the loop state" {
-  local json
-  json=$(write_payload ".gaia/local/protected/audit-loop/state.json")
-  without_jq block-audit-loop-write.sh "$json"
-  assert_blocked_by_exit
+read_payload() {
+  jq -n --arg p "$1" '{tool_name: "Read", tool_input: {file_path: $p}}'
 }
 
-# The protected folder is armed by the `local/protected` literal alone: none of
-# these payloads names `audit-loop`, so an omitted literal would exit 0 here.
-@test "jq absent: block-audit-loop-write refuses a write naming only a new file in the protected folder" {
-  local json
-  json=$(write_payload "/Users/you/work/repo/.gaia/local/protected/new-state.json")
-  grep -qF -- 'audit-loop' <<<"$json" && return 1
-  without_jq block-audit-loop-write.sh "$json"
-  assert_blocked_by_exit
-  grep -qF -- 'cannot be checked' <<<"$output"
+# row_payload <kind> <argument>: builds the payload while jq is still on PATH.
+row_payload() {
+  case "$1" in
+    edit) edit_payload "$2" ;;
+    bash) bash_payload "$2" ;;
+    bash-description-first) bash_payload_description_first "$2" ;;
+    read) read_payload "$2" ;;
+    agent) agent_payload "$2" ;;
+    write) write_payload "$2" ;;
+  esac
 }
 
-@test "jq absent: block-audit-loop-write refuses a redirect into the protected folder" {
-  local json
-  json=$(bash_payload "printf x > /Users/you/work/repo/.gaia/local/protected/new-state.json")
-  grep -qF -- 'audit-loop' <<<"$json" && return 1
-  without_jq block-audit-loop-write.sh "$json"
-  assert_blocked_by_exit
-  grep -qF -- 'cannot be checked' <<<"$output"
+# --- the matcher cannot reach the jq install, so the refusal is unconditional -
+# --- the matcher CAN reach the jq install, so the refusal is narrowed ---------
+#
+# Each pair is the whole claim: the in-remit call is refused, and the install
+# that repairs the machine is not.
+
+# Rows are label|hook|payload kind|argument|refusal text the output must carry.
+# A row naming a refusal text also asserts its payload never spells audit-loop,
+# so the protected folder is armed by the `local/protected` literal alone and an
+# omitted literal would exit 0 there.
+@test "with jq absent each blocking hook refuses: dotenv edit, eslint config edit, app edit in a worktree, dotenv read, force push to main, --no-verify, manifest write, rm -rf /, key path read, description-first dotenv read, member dispatch, audit-loop state write, new protected-folder file, protected-folder redirect, gh pr merge" {
+  local original_path="$PATH" row label hook kind argument needle json
+  for row in \
+    "secrets-write|block-secrets-write.sh|edit|.env.local|" \
+    "eslint-config|block-eslint-config-edit.sh|edit|eslint.config.ts|" \
+    "worktree-path-mismatch|block-worktree-path-mismatch.sh|edit|app/foo.ts|" \
+    "sensitive-read-dotenv|block-sensitive-read.sh|bash|cat .env.local|" \
+    "main-destructive-git|block-main-destructive-git.sh|bash|git push --force origin main|" \
+    "no-verify|block-no-verify.sh|bash|git commit --no-verify -m x|" \
+    "manifest-write|block-manifest-write.sh|edit|.gaia/manifest.json|" \
+    "rm-rf|block-rm-rf.sh|bash|rm -rf /|" \
+    "sensitive-read-key-path|block-sensitive-read.sh|read|certs/server.pem|" \
+    "sensitive-read-description-first|block-sensitive-read.sh|bash-description-first|cat .env.local|" \
+    "audit-loop-bound|audit-loop-bound.sh|agent|code-audit-frontend|" \
+    "audit-loop-write-state|block-audit-loop-write.sh|write|.gaia/local/protected/audit-loop/state.json|" \
+    "audit-loop-write-new-file|block-audit-loop-write.sh|write|/Users/you/work/repo/.gaia/local/protected/new-state.json|cannot be checked" \
+    "audit-loop-write-redirect|block-audit-loop-write.sh|bash|printf x > /Users/you/work/repo/.gaia/local/protected/new-state.json|cannot be checked" \
+    "pr-merge-audit-check|pr-merge-audit-check.sh|bash|gh pr merge 42 --squash|" \
+    "worthiness-presence-check|worthiness-presence-check.sh|bash|gh pr merge 42 --squash|"; do
+    IFS='|' read -r label hook kind argument needle <<<"$row"
+    PATH="$original_path"
+    json=$(row_payload "$kind" "$argument")
+    if [ -n "$needle" ]; then
+      grep -qF -- 'audit-loop' <<<"$json" && { echo "case $label: payload names audit-loop"; return 1; }
+    fi
+    without_jq "$hook" "$json"
+    [ "$status" -eq 2 ] || { echo "case $label: status=$status output=$output"; return 1; }
+    grep -qF -- 'BLOCKED' <<<"$output" || { echo "case $label: no BLOCKED in $output"; return 1; }
+    if [ -n "$needle" ]; then
+      grep -qF -- "$needle" <<<"$output" || { echo "case $label: no '$needle' in $output"; return 1; }
+    fi
+  done
 }
 
-@test "jq absent: block-audit-loop-write allows the jq install" {
-  local json
-  json=$(bash_payload "$INSTALL_COMMAND")
-  without_jq block-audit-loop-write.sh "$json"
-  assert_allowed_by_exit
-}
-
-@test "jq absent: block-audit-loop-write allows an unrelated write" {
-  local json
-  json=$(write_payload "app/foo.ts")
-  without_jq block-audit-loop-write.sh "$json"
-  assert_allowed_by_exit
+@test "with jq absent each blocking hook still allows: the jq install, a manifest-free edit, a README read, a non-member dispatch, an unrelated write" {
+  local original_path="$PATH" row label hook kind argument json
+  for row in \
+    "sensitive-read-install|block-sensitive-read.sh|bash|$INSTALL_COMMAND" \
+    "main-destructive-git-install|block-main-destructive-git.sh|bash|$INSTALL_COMMAND" \
+    "no-verify-install|block-no-verify.sh|bash|$INSTALL_COMMAND" \
+    "manifest-write-no-manifest|block-manifest-write.sh|edit|app/foo.ts" \
+    "rm-rf-install|block-rm-rf.sh|bash|$INSTALL_COMMAND" \
+    "sensitive-read-no-secret-class|block-sensitive-read.sh|read|README.md" \
+    "sensitive-read-install-description-first|block-sensitive-read.sh|bash-description-first|$INSTALL_COMMAND" \
+    "audit-loop-bound-no-member|audit-loop-bound.sh|agent|general-purpose" \
+    "audit-loop-write-install|block-audit-loop-write.sh|bash|$INSTALL_COMMAND" \
+    "audit-loop-write-unrelated|block-audit-loop-write.sh|write|app/foo.ts" \
+    "pr-merge-audit-check-install|pr-merge-audit-check.sh|bash|$INSTALL_COMMAND" \
+    "worthiness-presence-check-install|worthiness-presence-check.sh|bash|$INSTALL_COMMAND"; do
+    IFS='|' read -r label hook kind argument <<<"$row"
+    PATH="$original_path"
+    json=$(row_payload "$kind" "$argument")
+    without_jq "$hook" "$json"
+    [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+    [ -z "$output" ] || { echo "case $label: unexpected output $output"; return 1; }
+  done
 }
 
 # The grant hook runs on UserPromptSubmit, so its payload carries that head and
@@ -324,54 +227,21 @@ state_listing() {
   true
 }
 
-@test "jq absent: audit-loop-grant says so and records nothing for a grant line" {
-  local json before after
+@test "jq absent: audit-loop-grant says so and records nothing for a grant line, stays silent for a prompt without the keyword" {
+  local original_path="$PATH" json before after
   json=$(grant_payload "audit-grant 2")
   before=$(state_listing)
   without_jq audit-loop-grant.sh "$json"
   after=$(state_listing)
-  [ "$status" -eq 0 ]
-  grep -qF -- 'jq is missing' <<<"$output"
-  [ "$before" = "$after" ]
-}
+  [ "$status" -eq 0 ] || { echo "case grant-line: status=$status output=$output"; return 1; }
+  grep -qF -- 'jq is missing' <<<"$output" || { echo "case grant-line: no 'jq is missing' in $output"; return 1; }
+  [ "$before" = "$after" ] || { echo "case grant-line: state changed"; return 1; }
 
-@test "jq absent: audit-loop-grant stays silent for a prompt without the keyword" {
-  local json
+  PATH="$original_path"
   json=$(grant_payload "please continue")
   without_jq audit-loop-grant.sh "$json"
-  assert_allowed_by_exit
-}
-
-# The gates converted off the `|| exit 0` stand-down, each in-remit case naming
-# the verb that gate's own predicate binds on, so a conversion that dropped its
-# literal would green the refusal here and red the install beside it.
-
-@test "jq absent: pr-merge-audit-check refuses a merge attempt" {
-  local json
-  json=$(bash_payload "gh pr merge 42 --squash")
-  without_jq pr-merge-audit-check.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: pr-merge-audit-check allows the jq install" {
-  local json
-  json=$(bash_payload "$INSTALL_COMMAND")
-  without_jq pr-merge-audit-check.sh "$json"
-  assert_allowed_by_exit
-}
-
-@test "jq absent: worthiness-presence-check refuses a merge attempt" {
-  local json
-  json=$(bash_payload "gh pr merge 42 --squash")
-  without_jq worthiness-presence-check.sh "$json"
-  assert_blocked_by_exit
-}
-
-@test "jq absent: worthiness-presence-check allows the jq install" {
-  local json
-  json=$(bash_payload "$INSTALL_COMMAND")
-  without_jq worthiness-presence-check.sh "$json"
-  assert_allowed_by_exit
+  [ "$status" -eq 0 ] || { echo "case no-keyword: status=$status output=$output"; return 1; }
+  [ -z "$output" ] || { echo "case no-keyword: unexpected output $output"; return 1; }
 }
 
 # --- the arm's own library is unreachable ------------------------------------
