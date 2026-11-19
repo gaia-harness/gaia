@@ -198,6 +198,7 @@ commit_in_worktree() {
 
 # --- the allowance checkpoint -------------------------------------------------
 
+# bats test_tags=protected
 @test "a sixth tree is denied with the checkpoint, the rounds run and both typed lines" {
   alf_sequence 6 5 4 3 2
   new_tree
@@ -833,6 +834,7 @@ fork_mutant() {
   HOOK="$mutant_directory/.claude/hooks/audit-loop-bound.sh"
 }
 
+# bats test_tags=protected
 @test "UAT-010: a dispatch for a fork pull request is denied with the refusal and records no round" {
   local message
   printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"

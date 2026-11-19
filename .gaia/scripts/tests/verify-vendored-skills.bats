@@ -39,6 +39,7 @@ make_fixture() {
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=protected
 @test "a changed byte fails and names the file as MODIFIED" {
   make_fixture
   printf 'top levem\n' >"$FIXTURE/$TARGET_RELATIVE/SKILL.md"

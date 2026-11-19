@@ -97,6 +97,7 @@ holds_within() {
     END { exit (hold_count > 0 && bad == 0) ? 0 : 1 }' "$1"
 }
 
+# bats test_tags=protected
 @test "TST-012a: two session flushers, a sweep, and a links append released together: no torn line, golden totals, quiescent cursors" {
   install conc
   local rows="$TEMPORARY_DIRECTORY/link.jsonl" release_file="$TEMPORARY_DIRECTORY/go" flusher_arguments flusher_pid pids=()

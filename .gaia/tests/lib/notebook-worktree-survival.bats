@@ -58,6 +58,7 @@ _write_three_items() {
   printf 'research body\n' > "$research_directory/README.md"
 }
 
+# bats test_tags=protected
 @test "link-worktree links the worktree's notebook to main's, and the work outlives a plain worktree removal" {
   _fixture_repository
   [ ! -e "$WORKTREE/.notebook" ]

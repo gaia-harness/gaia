@@ -182,6 +182,7 @@ refusal_message() {
   bash -c '. "$1"; printf "%s" "$GAIA_CROSS_REPO_REFUSAL_MESSAGE"' _ "$LIBRARY_FILE"
 }
 
+# bats test_tags=protected
 @test "UAT-010: a fork pull request's merge is denied with the refusal, and no fork-supplied code runs" {
   local reason
   fork_head_fixture

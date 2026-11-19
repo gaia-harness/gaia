@@ -185,6 +185,7 @@ assert_red() {
   check_refuses - '../x'
 }
 
+# bats test_tags=protected
 @test "a branch that still has a local ref keeps its state" {
   make_main
   branch fix/a
@@ -205,6 +206,7 @@ assert_red() {
   check_refuses worktree fix/a
 }
 
+# bats test_tags=protected
 @test "a merged branch whose key a live worktree session still holds keeps its run folder" {
   make_main
   "$REAL_GIT" -C "$MAIN" worktree add -q -b 'worktree-fix+a' "$BATS_TEST_TMPDIR/session-tree"

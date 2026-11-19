@@ -257,6 +257,7 @@ _fixture_with_legacy() {
   [[ "$output" == *"SPEC-003: row without folder"* ]]
 }
 
+# bats test_tags=protected
 @test "a both-present collision keeps both copies and a second run changes nothing" {
   _fixture_with_legacy
   mkdir -p "$REPO/.notebook/research/beta" "$REPO/.notebook/specs/SPEC-002"

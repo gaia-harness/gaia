@@ -98,6 +98,7 @@ run_in() {
 }
 
 # ---------- 3. Worktree with a pre-existing plain .gaia/local ----------
+# bats test_tags=protected
 @test "pre-existing plain .gaia/local: backed up whole, then symlinked" {
   # A real (non-symlink) .gaia/local with content, as a worktree used before
   # this cutover would have (per-tree entries as real directories under it).

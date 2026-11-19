@@ -56,6 +56,7 @@ assert_allowed() {
 
 # --- the own repository -------------------------------------------------------
 
+# bats test_tags=protected
 @test "a create with no --repo and no --draft is blocked and names the draft form" {
   run_hook 'gh pr create --title "feat: x" --body-file f'
   assert_blocked

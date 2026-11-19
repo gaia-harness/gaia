@@ -100,6 +100,7 @@ assert_settings_ask() {
 
 # --- asks: the write matrix ---
 
+# bats test_tags=protected
 @test "Bash and Monitor writes of a settings.json path ask, for every path and shape" {
   local tool_name guarded_path shape command_line
   for tool_name in Bash Monitor; do

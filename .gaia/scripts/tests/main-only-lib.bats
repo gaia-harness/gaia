@@ -78,6 +78,7 @@ run_in() {
 
 # ---------- linked worktree, resolvable main ----------
 
+# bats test_tags=protected
 @test "linked worktree with resolvable main: returns 1, message names both roots, no state_line_function given" {
   make_repo
   make_worktree "$REPO" w wtbranch1
@@ -986,6 +987,7 @@ commit_on_main() {
   git -C "$1" commit -q --allow-empty -m "local only"
 }
 
+# bats test_tags=protected
 @test "pull gate: local main ahead of origin/main returns 3 naming the count and the fix" {
   make_gate_repo 2.0.4 -
   add_origin "$REPO"

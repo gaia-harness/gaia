@@ -93,6 +93,7 @@ commit_fixture() {
   grep -qF "worktree list --porcelain piped to a first-record reader: 0" <<<"$output" || return 1
 }
 
+# bats test_tags=protected
 @test "fixture: a bare --git-common-dir derivation in a consumer fails" {
   local repo
   repo="$(make_fixture_repo bad-common-dir)"

@@ -215,6 +215,7 @@ export default"
 
 # --- including the shapes that are usually silencing, so the floor is pinned -
 
+# bats test_tags=protected
 @test "asks on adding a rule override" {
   run_edit "$(write_config_fixture)" "    rules: {'no-console': 'off'}," \
     "    rules: {'no-console': 'off', 'no-empty-pattern': 'off'},"

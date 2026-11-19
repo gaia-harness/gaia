@@ -91,6 +91,7 @@ check_tree() {
   [ "$status" -eq 2 ] || { printf '%s\n' "$output"; return 1; }
 }
 
+# bats test_tags=protected
 @test "failing state: a modified tracked file is DIRTY and names the removal commands" {
   printf 'edited\n' >>"$TREE/base"
   check_tree
@@ -116,6 +117,7 @@ check_tree() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
 }
 
+# bats test_tags=protected
 @test "failing state: a commit ahead of an existing upstream reports Unpushed" {
   printf 'more\n' >"$TREE/more"
   git -C "$TREE" add more

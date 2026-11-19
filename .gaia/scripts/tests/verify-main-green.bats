@@ -77,6 +77,7 @@ open_issue() {
 
 # Red main refuses
 
+# bats test_tags=protected
 @test "red main: a failed push run refuses with exit 1, naming the run and the repair" {
   write_run 555 completed failure
   run "$SCRIPT" --repo example/repo --branch main

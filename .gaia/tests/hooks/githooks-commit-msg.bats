@@ -60,6 +60,7 @@ edit_argument_was_recorded() {
   grep -qF -- "--edit $MESSAGE_FILE" "$PNPM_LOG"
 }
 
+# bats test_tags=protected
 @test "commit-msg: REFUSES when commitlint rejects the message, and names the convention page" {
   STUB_EDIT_EXIT=1 run_hook
   [ "$status" -ne 0 ]
@@ -85,6 +86,7 @@ edit_argument_was_recorded() {
   true
 }
 
+# bats test_tags=protected
 @test "commit-msg: REFUSES a message citing a SPEC number, naming the line and the rule" {
   printf 'feat: add a thing\n\nImplements SPEC-128.\n' > "$MESSAGE_FILE"
   run_hook

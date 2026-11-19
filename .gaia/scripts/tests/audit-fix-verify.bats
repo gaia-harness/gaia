@@ -328,6 +328,7 @@ spec093_enforcement_paths() {
   enforcement_paths | grep -Fxq '.claude/settings.local.json'
 }
 
+# bats test_tags=protected
 @test "directive 2: a declared edit to every enforcement-set path fails enforcement-path" {
   local path_count=0 file_path entries_json result_json
   # One repository holds every enforcement path (force-added: the local
@@ -540,6 +541,7 @@ declared_edit_check() {
   assert_fail_kind bad-input "no fix entry names"
 }
 
+# bats test_tags=protected
 @test "directive 2: a *.ok marker written under .gaia/local/audit after the baseline fails audit-artifact-written" {
   prepare
   edit a.txt

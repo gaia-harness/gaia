@@ -62,6 +62,7 @@ fixture_test_script() {
 
 # 2. The detector fires on an unguarded bare expansion under set -u
 
+# bats test_tags=protected
 @test "flags an unguarded bare \${arr[@]} under set -u" {
   fixture_hook $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" "${arr[@]}"'
   run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"

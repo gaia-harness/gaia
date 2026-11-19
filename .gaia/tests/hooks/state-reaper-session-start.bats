@@ -238,7 +238,7 @@ mutate_hook() {
 
 # ---------- single flight ----------
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "two concurrent starts against a stale stamp launch exactly one reaper" {
   make_fixture
   touch "$STAMP"

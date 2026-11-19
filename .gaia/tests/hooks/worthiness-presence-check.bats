@@ -290,6 +290,7 @@ write_helper_folder_descriptor() {
 
 # --- clean-case deny: emergent test changed, no matching ledger line ---
 
+# bats test_tags=protected
 @test "denies an emergent component test with no ledger entry" {
   commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook

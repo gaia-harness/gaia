@@ -351,6 +351,7 @@ JS
   fi
 }
 
+# bats test_tags=protected
 @test "C4-05: SPEC/plan locks serialize across worktrees" {
   MAIN="$(gaia_new_main gaia-c405-main)"
   notebook_files="$(_notebook_library_files)"

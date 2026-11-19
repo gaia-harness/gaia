@@ -307,6 +307,7 @@ a dropped option|.tool_input.questions[0].options |= .[1:]
 CASES
 }
 
+# bats test_tags=protected
 @test "UAT-012: an agent_id on the payload records nothing" {
   seed_pinned
   snapshot

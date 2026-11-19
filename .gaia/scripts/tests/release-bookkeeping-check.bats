@@ -119,6 +119,7 @@ run_diff() {
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=protected
 @test "diff: a file outside the bookkeeping set is not bookkeeping" {
   apply_release
   write_file a.sh $'echo changed\n'

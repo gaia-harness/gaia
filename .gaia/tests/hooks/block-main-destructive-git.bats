@@ -74,6 +74,7 @@ run_hook_from() {
 
 # --- denied ---
 
+# bats test_tags=protected
 @test "git commit on main is denied" {
   on_main
   run_hook 'git commit -m "x"'
@@ -92,6 +93,7 @@ run_hook_from() {
   assert_denied_by_json
 }
 
+# bats test_tags=protected
 @test "force-push to main is denied from a feature branch" {
   on_feature
   run_hook 'git push --force origin main'
@@ -1075,6 +1077,7 @@ on_feature_with_second_commit() {
   HEAD_SHA=$(git -C "$REPO" rev-parse HEAD)
 }
 
+# bats test_tags=protected
 @test "git reset --hard to an earlier commit is denied in every spelling" {
   local target
   on_feature_with_second_commit

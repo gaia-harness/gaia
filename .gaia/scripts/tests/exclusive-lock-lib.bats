@@ -17,6 +17,7 @@ setup() {
   mkdir -p "${LOCK%/*}"
 }
 
+# bats test_tags=protected
 @test "take: a second take while the lock is held is refused, with a non-exclusive mkdir first on PATH" {
   PATH="$(non_exclusive_mkdir_path)"
   gaia_exclusive_lock_take "$LOCK"
@@ -25,6 +26,7 @@ setup() {
   [ -d "$LOCK" ]
 }
 
+# bats test_tags=protected
 @test "take: concurrent writers through the lock all land, with a non-exclusive mkdir first on PATH" {
   local counter="$BATS_TEST_TMPDIR/counter" writer_count=6
   PATH="$(non_exclusive_mkdir_path)"

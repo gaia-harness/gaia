@@ -75,6 +75,7 @@ patterns() {
 
 # E2. The refusal, and the paths it names. The exit code alone is not the claim:
 # a maintainer reads the annotation to learn which file leaked.
+# bats test_tags=protected
 @test "E2: an excluded path in the staged tree refuses and names it" {
   stage 'app/index.ts'
   stage '.gaia/scripts/tests/secret.bats'
