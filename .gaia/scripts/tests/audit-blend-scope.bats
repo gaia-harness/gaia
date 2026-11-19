@@ -54,6 +54,8 @@ fresh_sandbox() {
   cp -R "$BATS_FILE_TMPDIR/template" "$directory"
   CATCHUP_ORIGIN="$directory/origin.git"
   CATCHUP_ROOT="$directory/repository"
+  # The catch-up fixture's functions read it, which shellcheck cannot see.
+  # shellcheck disable=SC2034
   CATCHUP_BASE_BRANCH=main
   CATCHUP_BRANCH=feat/catchup
   CATCHUP_BASE_WORKTREE="$CATCHUP_ROOT.catchup-base"

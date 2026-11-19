@@ -71,10 +71,14 @@ setup() {
   cp -R "$TEMPLATE_DIRECTORY/root" "$ROOT"
   cp -R "$TEMPLATE_DIRECTORY/root.catchup-origin.git" "$ROOT.catchup-origin.git"
   git -C "$ROOT" remote set-url origin "$ROOT.catchup-origin.git"
-  CATCHUP_ROOT="$ROOT"
-  CATCHUP_ORIGIN="$ROOT.catchup-origin.git"
-  CATCHUP_BASE_BRANCH=main
-  CATCHUP_BRANCH=main
+  # The catch-up fixture's functions read these, which shellcheck cannot see.
+  # shellcheck disable=SC2034
+  {
+    CATCHUP_ROOT="$ROOT"
+    CATCHUP_ORIGIN="$ROOT.catchup-origin.git"
+    CATCHUP_BASE_BRANCH=main
+    CATCHUP_BRANCH=main
+  }
   _catchup_base_attach
 
   TREE="$(git -C "$ROOT" rev-parse "HEAD^{tree}")"
