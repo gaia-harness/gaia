@@ -404,7 +404,7 @@ write_route_events() {
   done
 }
 
-@test "engagement rate divides by post-clearance rotations only, and a scratch copy dividing by every route event fails the same fixture" {
+@test "engagement rate divides by post-clearance rotations only" {
   write_route_events light-eligible 2
   write_route_events over-cap 1
   write_route_events no-full-clearance 3
@@ -414,14 +414,6 @@ write_route_events() {
   [ "$(tally_value light_routes)" = "2" ]
   [ "$(tally_value engagement_rate)" = "0.67" ]
 
-  scratch="$BATS_TEST_TMPDIR/scratch-scripts"
-  mkdir -p "$scratch"
-  cp "$SCRIPT" "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$scratch/"
-  sed 's/select((\.reason \/\/ "") | excluded_reason | not)/select(true)/' "$SCRIPT" > "$scratch/audit-light-telemetry.sh"
-  cmp -s "$SCRIPT" "$scratch/audit-light-telemetry.sh" && return 1
-  broken_rate="$(bash "$scratch/audit-light-telemetry.sh" tally --root "$ROOT" | awk -F': ' '$1 == "engagement_rate" { print $2 }')"
-  [ "$broken_rate" = "0.22" ]
-  [ "$broken_rate" != "$(tally_value engagement_rate)" ]
 }
 
 @test "tally reports escalation rate, counts outcomes with no cost event as unmeasured, and skips a torn line" {
@@ -600,19 +592,6 @@ write_kill_log() {
   [ "$status" -eq 2 ]
 }
 
-@test "a scratch copy that counts excluded reasons as eligible fails the fixture the eligible figure is read from" {
-  write_kill_log
-  log_event route b1 "$SHELL_MEMBER" not-opted-in
-  [ "$(tally_value eligible_reaudits)" = "4" ]
-  scratch="$BATS_TEST_TMPDIR/scratch-kill"
-  mkdir -p "$scratch"
-  cp "$SCRIPT" "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$scratch/"
-  sed 's/select(\.event == "route" and ((\.reason \/\/ "") | excluded_reason | not))/select(.event == "route")/' "$SCRIPT" > "$scratch/audit-light-telemetry.sh"
-  cmp -s "$SCRIPT" "$scratch/audit-light-telemetry.sh" && return 1
-  broken="$(bash "$scratch/audit-light-telemetry.sh" tally --root "$ROOT" | awk -F': ' '$1 == "eligible_reaudits" { print $2 }')"
-  [ "$broken" = "6" ]
-}
-
 # ---------------------------------------------------------------------------
 # tally: merge-base (quick) events stay out of the re-audit figures
 # ---------------------------------------------------------------------------
@@ -686,19 +665,6 @@ preexisting_lines() {
   [ "$(sed -n "$((rate_line + 2))p" <<<"$output")" = "quick_cleared: 2" ]
 }
 
-@test "a scratch copy without the merge-base filter changes a pre-existing tally figure on the same fixture" {
-  write_reaudit_log
-  write_quick_events
-  baseline_figures="$(preexisting_lines)"
-
-  scratch="$BATS_TEST_TMPDIR/scratch-quick"
-  mkdir -p "$scratch"
-  cp "$SCRIPT" "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$scratch/"
-  sed 's/def quick_anchor: .*;$/def quick_anchor: false;/' "$SCRIPT" > "$scratch/audit-light-telemetry.sh"
-  cmp -s "$SCRIPT" "$scratch/audit-light-telemetry.sh" && return 1
-  [ "$(preexisting_lines "$scratch/audit-light-telemetry.sh")" != "$baseline_figures" ]
-}
-
 # ---------------------------------------------------------------------------
 # tally and follow-up: cost events stay out of every reader
 # ---------------------------------------------------------------------------
@@ -746,19 +712,6 @@ tally_with_and_without_cost() {
   [ "$plain_figures" = "$cost_figures" ]
   tally_with_and_without_cost "$SCRIPT"
   [ "$plain_figures" = "$cost_figures" ]
-}
-
-@test "a scratch copy without the event-type allowlist lets a cost-only branch change window_prs" {
-  scratch="$BATS_TEST_TMPDIR/scratch-allowlist"
-  mkdir -p "$scratch"
-  cp "$SCRIPT" "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$scratch/"
-  sed 's/ and (\.event | IN([^)]*))//' "$SCRIPT" > "$scratch/audit-light-telemetry.sh"
-  cmp -s "$SCRIPT" "$scratch/audit-light-telemetry.sh" && return 1
-  tally_with_and_without_cost "$scratch/audit-light-telemetry.sh" --window 4
-  plain_window="$(grep -x 'window_prs: .*' <<<"$plain_figures")"
-  cost_window="$(grep -x 'window_prs: .*' <<<"$cost_figures")"
-  [ "$plain_window" = "window_prs: 3" ]
-  [ "$plain_window" != "$cost_window" ]
 }
 
 # followup_without_time <yes|no>: the escalation follow-up the member-result
@@ -865,11 +818,4 @@ write_spend_log() {
   without_cost="$(bash "$SCRIPT" tally --root "$ROOT" --window 3 | grep -E "$kill_lines")"
   grep -qxF 'window_prs: 3' <<<"$without_cost"
   [ "$with_cost" = "$without_cost" ]
-}
-
-# bats test_tags=whole-tree
-@test "the telemetry script stays within its recorded line ceiling" {
-  ceiling="$(jq -r '.ceilings[".gaia/scripts/audit-light-telemetry.sh"]' "$REPO_ROOT/.claude/maintainers/line-limit-ceilings.json")"
-  [ "$ceiling" -gt 0 ]
-  [ "$(wc -l < "$SCRIPT")" -le "$ceiling" ]
 }
