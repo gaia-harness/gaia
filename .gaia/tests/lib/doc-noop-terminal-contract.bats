@@ -26,8 +26,8 @@
 # a further surface added with a third ending stops the suite instead of being
 # silently uncovered, and a surface that drops the statement stops it too. The
 # declaration half pins that the owner page states the general ending once, that
-# it admits the exceptions rather than asserting uniformity, and that each
-# departing surface declares its own departure and names the reason.
+# it admits the merge gate's exception rather than asserting uniformity, and
+# that the merge gate declares its own departure and names the reason.
 #
 # Derivation, and why by phrase. No machine-readable artifact enumerates these
 # surfaces; the coupling is prose-to-prose. The marker is the terminal-statement

@@ -12,8 +12,6 @@
 # ORCHESTRATOR.md, so its merge question and post-clearance block run before
 # the merge; the grant hook tells the main thread to print that prompt.
 #
-# Method: every check takes a root directory and reads one region.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {

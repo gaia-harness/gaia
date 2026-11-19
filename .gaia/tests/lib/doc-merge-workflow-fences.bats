@@ -322,10 +322,7 @@ flags_for() {
 #
 # Anchored to the arm, not a substring match over the file. A flag deleted
 # from a `case` and left behind in the usage header keeps a bare match green,
-# which is precisely the drift the lens exists to see. Factored into a
-# function rather than written inline in the lens, so the control below drives
-# the same predicate the lens does; a control re-implementing it would
-# certify its own copy.
+# which is precisely the drift the lens exists to see.
 script_parses_flag() {
   grep -qE "(^|[|[:space:]])${2//./\\.}[)|=]" "$1"
 }
@@ -419,7 +416,7 @@ residue_pr_fixture() {
 # Lens 1: the fence set is covered
 # ---------------------------------------------------------------------------
 
-@test "the fence table claims every fence exactly once and records why a static fence cannot run" {
+@test "fence set: the table claims every fence exactly once, each exec row has a runner and each static row a reason" {
   local total claimed_list claimed
   # Case: every table anchor names exactly one fence.
   fence_table | while IFS='|' read -r id anchor mode note; do
@@ -483,10 +480,12 @@ residue_pr_fixture() {
   # The complement guard. Discovery reads tagged shell fences, so an untagged
   # block is outside every lens; this asks whether anything is hiding there.
   #
-  # An empty complement is the strongest pass: it means the discovery set is
-  # the whole set.
+  # An empty complement means the discovery set is the whole set. The floor
+  # below fails when the extractor reads no fenced lines at all, so a broken
+  # extractor cannot pass this test by reading nothing.
   covered="${BATS_TEST_TMPDIR}/covered"
   all_fence_bodies >"$covered"
+  [ -s "$covered" ] || { echo "the extractor read no fenced lines from ${PAGE}" >&2; return 1; }
   untagged_fence_bodies | while read -r line; do
     trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     [ -n "$trimmed" ] || continue

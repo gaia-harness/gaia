@@ -7,8 +7,6 @@
 # exactly one of its test lines carries the named substring) and that no enforcer
 # path leaks outside a maintainer-only block into text an adopter reads.
 #
-# Every assertion is about the tree as it stands.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {

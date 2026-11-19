@@ -4,7 +4,7 @@
 #
 # planner.md holds the verbatim step blocks a planner copies into a generated
 # ORCHESTRATOR.md, each opening with a sentinel line plan-verify.sh checks.
-# This suite pins what a script reads or a bad ordering would destroy:
+# This suite pins:
 #
 #   - the sentinel list for each plan kind, from one array here: each sentinel
 #     sits once in planner.md, inside a fenced block, in that order, and the
@@ -292,7 +292,7 @@ assembled_sentinels() {
 
 # ---------- close order: nothing irreversible before MERGED ----------
 
-@test "archive, removal and reap run only after a confirmed MERGED close" {
+@test "archive and removal wait for a confirmed MERGED close, and the sweep scans before it reaps" {
   check_plan_close_order "$PLANNER_MD" || { printf 'case failed: planner.md archives and removes layers only in or after the post-merge close\n' >&2; return 1; }
   check_lifecycle_close_order "$LIFECYCLE_MD" || { printf 'case failed: lifecycle.md post-merge close confirms MERGED before archive and removal\n' >&2; return 1; }
   check_preflight_sites "$LIFECYCLE_MD" || { printf 'case failed: the sweep scans before it reaps and the close passes the PR number\n' >&2; return 1; }

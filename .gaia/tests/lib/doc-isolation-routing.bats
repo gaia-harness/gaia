@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
-# Doc-pin: the update commands isolate their work in a worktree and keep no
-# "on any other branch, work in place" arm.
+# Doc-pin: no update-deps or update-gaia file keeps an "on any other branch,
+# work in place" arm.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 #

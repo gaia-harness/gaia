@@ -12,8 +12,6 @@
 # shared error mapping pinned again per caller. A model executes these
 # passages, so an edit that drops one clause would ship silently.
 #
-# Method: every check takes a root directory and reads one region.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# UAT-010 (SPEC-051): the countable-findings prose rewrite left the wiki page
-# wiki/concepts/Policy-Memory Loop.md free of working-doc references.
+# Pins that wiki/concepts/Policy-Memory Loop.md carries no working-doc
+# reference (UAT, SPEC, PR or as-of date).
 #
 # No lint guard for working-doc references in the wiki exists yet, so this one
 # check stays here.

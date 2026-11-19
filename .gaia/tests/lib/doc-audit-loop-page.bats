@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
 # Doc pins for the audit loop: the fix round on `wiki/concepts/Audit Round Procedure.md`
 # (`#### The fix round: fixer, verifier, gate`) and the branch checkpoint on the
-# runbook `wiki/concepts/PR Merge Workflow.md` (`#### The branch checkpoint`), plus the one clause the Quality
-# Gate page carries for them. `.claude/rules/pr-merge.md` makes the merge page
-# an executed contract, so each pin below holds a sentence an orchestrator
-# acts on: who edits during the loop, when a round has no fixer, what a
-# resume may not re-dispatch, and what a checkpoint selection does not do.
+# runbook `wiki/concepts/PR Merge Workflow.md` (`#### The branch checkpoint`).
+# `.claude/rules/pr-merge.md` makes the merge page an executed contract, so
+# each pin below holds a sentence an orchestrator acts on: who edits during
+# the loop, when a round makes no commit, and what a checkpoint selection does
+# not do.
 #
 # Prose-to-prose only. Whether the fences in those sections run as written is
 # doc-merge-workflow-fences.bats's subject; whether the scripts behave as the
@@ -122,7 +122,7 @@ anchors_resolve() {
   }
 }
 
-@test "DP-018: every anchor the unit agent names resolves to exactly one heading" {
+@test "every anchor the unit agent names resolves to exactly one heading" {
   anchors_resolve "$PAGE" "$UNIT_AGENT" || return 1
   grep -qxF -- '#### The audit loop unit' "$PAGE"
 }

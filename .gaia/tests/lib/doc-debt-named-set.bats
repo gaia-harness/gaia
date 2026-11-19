@@ -161,7 +161,7 @@ security_arm_has() {
   grep -qiF -- "$1" <<<"$security"
 }
 
-@test "named set security screening and rejection line" {
+@test "a named set screens security, spec and branch name before the scorer and prints only fixed strings about a rejected member" {
   case_row "security, spec, branch-name, then the scorer, in order" named_set_order_holds
   case_row "fixed security rejection line" section_has_ci "\`#<P> can't join a batch on a non-private repo; drain it alone.\`"
   case_row "no-disclosure covers printed messages" section_has_ci 'covers the run'"'"'s printed messages'

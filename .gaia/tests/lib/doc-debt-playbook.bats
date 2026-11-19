@@ -7,8 +7,6 @@
 # names no sub-reference that does not exist. No lint guard covers these links
 # yet, so the two checks stay here.
 #
-# DOC_DEBT_PLAYBOOK_DIR points the suite at a copy of the references directory.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
@@ -16,7 +14,7 @@ setup() {
   PLAYBOOK_DIR="${DOC_DEBT_PLAYBOOK_DIR:-$REPO_ROOT/.claude/skills/gaia/references}"
 }
 
-# --- 5. the split: every sub-reference is routed and owns its sections -------
+# --- every sub-reference is routed, and every route resolves ----------------
 
 ROUTE_PREFIX='Read `.claude/skills/gaia/references/debt/'
 

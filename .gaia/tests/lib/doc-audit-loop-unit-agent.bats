@@ -4,8 +4,7 @@
 # roster glob that routes a change to that file to a reviewing member.
 #
 # Prose-to-prose checks: each literal below is something the unit acts on (a
-# page anchor it follows, a deny prefix it classifies, a stop it writes, a
-# thing it must never do).
+# deny prefix it classifies, a stop it writes, a thing it must never do).
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 

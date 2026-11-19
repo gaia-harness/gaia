@@ -8,7 +8,7 @@
 #
 # The executable render is the gate: it extracts the `--jq` PROGRAM TEXT out of
 # debt.md with awk, feeds it a synthetic fixture
-# (fixtures/debt-query/backlog.json, four issues, none real), and asserts on
+# (fixtures/debt-query/backlog.json, six issues, none real), and asserts on
 # the emitted objects. Do not "simplify" this back into a hand-copied program:
 # rendering it from the artifact is what makes the gate measure debt.md
 # instead of measuring itself.
@@ -17,7 +17,7 @@
 # `.labels`, `.body`), never a whole-object comparison, so a field added to
 # the program later does not break a case that is correct by design.
 #
-# One structural check remains, anchored on the FIRST `--jq '` line in debt.md,
+# The one structural check anchors on the FIRST `--jq '` line in debt.md,
 # which is the ordering query inside the `## Read and order the backlog` fence.
 #
 # Engine note: `gh --jq` runs gojq (Go regexp, where `(?m)` enables line
@@ -105,7 +105,7 @@ fail_case() {
   return 1
 }
 
-@test "Arm 1: the ordering query keeps --limit 1000, the silent-truncation repair" {
+@test "the ordering query keeps --limit 1000" {
   block="$(extract_query_fence)"
   printf '%s\n' "$block" | grep -qF -- "--limit 1000" || return 1
 }

@@ -9,7 +9,6 @@
 # the frontend definition stays inside a byte budget so the text is removed, not
 # merely moved (UAT-041).
 #
-# Each target reads through an env override that defaults to the real file.
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
@@ -31,7 +30,7 @@ strip_maintainer_blocks() {
   ' "$1"
 }
 
-# --- UAT-009: one shared protocol, pointed at by every member -----------------
+# --- UAT-009: the shared protocol ships and keeps its markers ------------------
 
 @test "UAT-009: the protocol ships: it is absent from the release-exclude list" {
   [ -s "$RELEASE_EXCLUDE" ] || return 1

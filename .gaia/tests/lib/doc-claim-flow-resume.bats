@@ -66,7 +66,7 @@ pin_order() {
   [ "$adopt" -lt "$rewrite" ] && [ "$adopt" -lt "$drop" ]
 }
 
-@test "Step 11 adopts an own open claim before the body rewrite" {
+@test "Step 11 adopts an own open claim by branch and login, falls through otherwise, before the body rewrite" {
   local case
   for case in pin_adoption_present pin_match_keys pin_falls_through pin_order; do
     "$case" "$CLAIM_FLOW" || { printf 'failed case: %s\n' "$case" >&2; return 1; }

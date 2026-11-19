@@ -37,14 +37,14 @@ setup() {
   WIKI="$ROOT/wiki/concepts/Audit Round Procedure.md"
 }
 
-@test "Group 1: cross-remit section states an empty eligibility set disengages rather than opens the waive" {
+@test "cross-remit section states an empty eligibility set disengages rather than opens the waive" {
   local section
   section="$(extract_section_or_fail "$WIKI" '^#### Cross-remit findings' '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qF -- "disengages" || return 1
   printf '%s\n' "$section" | grep -qF -- "rather than opening it" || return 1
 }
 
-@test "Group 4: cross-remit section states the waive files nothing" {
+@test "cross-remit section states the waive files nothing" {
   local section
   section="$(extract_section_or_fail "$WIKI" '^#### Cross-remit findings' '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qF -- "no tech-debt issue" || return 1
