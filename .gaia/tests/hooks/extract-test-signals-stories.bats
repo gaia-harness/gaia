@@ -79,15 +79,6 @@ PLAY_SOURCE_NAMES=(
   "Extended Play"
 )
 
-# The entries of stories other than Play With Tests and its extend story.
-SIBLING_NAMES=(
-  "Render With Test   base story"
-  "Render With Test   shows the marker"
-  "Play Only"
-  "Custom Display Name"
-  "Extended Named"
-)
-
 @test "the shapes fixture yields base story plus each test for test-carrying stories, the plain name for play-only and extend stories, and nothing for the render-only story" {
   local output_ndjson actual expected
   output_ndjson=$(signals_of_path "$SHAPES_PATH")
