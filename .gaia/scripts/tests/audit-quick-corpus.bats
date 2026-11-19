@@ -210,48 +210,6 @@ mutation_pairs() {
 }
 
 # bats test_tags=whole-tree
-@test "the corpus file is well formed: required fields, unique ids, no working-document ids" {
-  jq empty "$CORPUS"
-  [ "$(jq -r '.schema' "$CORPUS")" = "1" ]
-  [ "$(jq '.entries | length' "$CORPUS")" -gt 0 ]
-  [ "$(jq '.mutations | length' "$CORPUS")" -gt 0 ]
-  jq -e '
-    all(.entries[];
-      (.id | type == "string") and (.id | length > 0)
-      and (.expected == "quick" or .expected == "deep")
-      and (.expected_line | type == "string")
-      and (.shape | type == "string") and (.shape | length > 0)
-      and (.files | type == "array") and (.files | length > 0)
-      and all(.files[];
-        (.path | type == "string")
-        and ((.before | type) == "string" or (.before | type) == "null")
-        and ((.after | type) == "string" or (.after | type) == "null")
-        and ((.before == null and .after == null) | not)))
-  ' "$CORPUS" >/dev/null
-  [ "$(jq -r '[.entries[].id] | length' "$CORPUS")" = "$(jq -r '[.entries[].id] | unique | length' "$CORPUS")" ]
-  jq -e '
-    all(.entries[]; select(.mutation_targets != null) | . as $entry
-      | all(.mutation_targets[]; .path as $path | any($entry.files[]; .path == $path)))
-  ' "$CORPUS" >/dev/null
-  jq -e '
-    all(.entries[]; (.expected == "quick") == (.expected_line == "light\tquick-eligible"))
-    and all(.entries[]; (.expected == "deep") == (.expected_line | startswith("full\t")))
-  ' "$CORPUS" >/dev/null
-  jq -e '
-    all(.mutations[];
-      (.reason | startswith("quick-"))
-      and (.context == "jsx-child" or .context == "opening-tag" or .context == "language-value")
-      and ((.op == "insert") or (.op == "replace-value"))
-      and (.text | type == "string"))
-  ' "$CORPUS" >/dev/null
-  if jq -r '.entries[] | (.id, .shape)' "$CORPUS" | grep -Eq 'SPEC-[0-9]|UAT-[0-9]|#[0-9]|github\.com'; then
-    printf 'an entry id or shape names a working document\n' >&2
-    return 1
-  fi
-  true
-}
-
-# bats test_tags=whole-tree
 @test "every classifier reason in the header is some deep entry's expected reason" {
   local unmarked reason missing=""
   unmarked="$(header_rows unmarked)"

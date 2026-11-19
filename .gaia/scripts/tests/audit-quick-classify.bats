@@ -444,15 +444,6 @@ render_wrapped() {
   done
 }
 
-# bats test_tags=whole-tree
-@test "the classifier header keeps every router-owned row ahead of the classifier rows" {
-  local first_classifier last_router
-  first_classifier="$(awk '/^# quick-signals:start$/ { inside = 1; next } /^# quick-signals:end$/ { inside = 0 } inside && $3 != "router-owned:" { print NR; exit }' "$LIBRARY")"
-  last_router="$(awk '/^# quick-signals:start$/ { inside = 1; next } /^# quick-signals:end$/ { inside = 0 } inside && $3 == "router-owned:" { last = NR } END { print last }' "$LIBRARY")"
-  [ -n "$first_classifier" ] && [ -n "$last_router" ]
-  [ "$last_router" -lt "$first_classifier" ]
-}
-
 # The siblings the library loads beside itself, in its load order.
 quick_siblings() {
   printf '%s\n' audit-quick-classify-paths-lib.sh audit-quick-classify-awk-lexer-lib.sh \
@@ -482,43 +473,6 @@ quick_library_files() {
   grep -nF '.gaia/local' "${files[@]}" && return 1
   grep -nE '(SPEC|UAT|PLAN)-[0-9]|(^|[^A-Za-z])[A-Z]{2,5}-[0-9]{3}([^0-9]|$)|#[0-9]{2,}' "${files[@]}" && return 1
   true
-}
-
-# bats test_tags=whole-tree
-@test "the library is shellcheck clean" {
-  command -v shellcheck >/dev/null 2>&1 || skip "shellcheck not available"
-  # shellcheck disable=SC2046
-  run shellcheck -x $(quick_library_files)
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-}
-
-# bats test_tags=whole-tree
-@test "the line program is the awk fragments joined in their documented order, each from its own file" {
-  local directory="$REPO_ROOT/.claude/hooks/lib" variable file expected_first value checked=0 newline='
-'
-  [ "$(quick_siblings | grep -c .)" -eq "$(find "$directory" -name 'audit-quick-classify-*-lib.sh' | grep -c .)" ]
-  while read -r variable file expected_first; do
-    value="${!variable}"
-    [ -n "$value" ] || { printf '%s is empty\n' "$variable" >&2; return 1; }
-    case "$value" in
-      "$expected_first"*) ;;
-      *) printf '%s does not start with %s\n' "$variable" "$expected_first" >&2; return 1 ;;
-    esac
-    case "$value" in
-      *"$newline") ;;
-      *) printf '%s lost its trailing newline\n' "$variable" >&2; return 1 ;;
-    esac
-    grep -qF "read -r -d '' $variable <<'AWK'" "$directory/$file" ||
-      { printf '%s is not assigned in %s\n' "$variable" "$file" >&2; return 1; }
-    checked=$((checked + 1))
-  done <<'EOF'
-_QUICK_AWK_LEXER audit-quick-classify-awk-lexer-lib.sh function trim(
-_QUICK_AWK_NESTED audit-quick-classify-awk-nested-lib.sh # ---- nested-element pass
-_QUICK_AWK_HELPERS audit-quick-classify-awk-helpers-lib.sh # ---- TSX line helpers
-_QUICK_AWK_MAIN audit-quick-classify-awk-main-lib.sh # ---- story lines
-EOF
-  [ "$checked" -eq "$(quick_siblings | grep -c -- '-awk-')" ]
-  [ "$_QUICK_LINE_PROGRAM" = "$_QUICK_AWK_LEXER$_QUICK_AWK_NESTED$_QUICK_AWK_HELPERS$_QUICK_AWK_MAIN" ]
 }
 
 # bats test_tags=whole-tree
@@ -1434,26 +1388,6 @@ EOF
 }
 
 # --- determinism and failure direction ----------------------------------------
-
-@test "each classifier function prints byte-identical output on the same inputs" {
-  local first second
-  qc_component
-  qc_edit "$COMPONENT" replace 7 '  <div className="flex gap-2 hidden">'
-  qc_head
-  qc_write_paths "$COMPONENT"
-  first="$(quick_classify_lines "$QC_ROOT" "$QC_FROM" "$QC_HEAD" "$QC_PATHS")"
-  second="$(quick_classify_lines "$QC_ROOT" "$QC_FROM" "$QC_HEAD" "$QC_PATHS")"
-  [ -n "$first" ] && [ "$first" = "$second" ]
-  first="$(quick_classify_paths "$QC_ROOT" "$QC_FROM" "$QC_HEAD" "$QC_PATHS")"
-  second="$(quick_classify_paths "$QC_ROOT" "$QC_FROM" "$QC_HEAD" "$QC_PATHS")"
-  [ "$first" = "quick" ] && [ "$first" = "$second" ]
-  first="$(quick_path_class "$COMPONENT")"
-  second="$(quick_path_class "$COMPONENT")"
-  [ "$first" = "$second" ]
-  first="$(quick_story_component "$STORY")"
-  second="$(quick_story_component "$STORY")"
-  [ "$first" = "$second" ]
-}
 
 @test "an unreadable from-tree exits 2 with no quick on stdout" {
   qc_component

@@ -178,92 +178,63 @@ seed_base() {
 # Whitespace, mode, symlink and binary edits inside a merge
 # ---------------------------------------------------------------------------
 
-@test "a whitespace-only edit inside a merge rotates; a clean catch-up over one does not; -w misses it" {
-  seed_base P.txt 40
+@test "an edit inside a merge rotates the path's identity for each frame element, a clean catch-up over the same kinds does not, and removing the frame misses it: whitespace, mode, symlink target, binary blob" {
+  seed_base PW.txt 40
   seed_base W.txt 20
-  catchup_branch_commit P.txt "$(lines_file p-branch 40 30='branch thirty')"
-  catchup_branch_commit W.txt "$(lines_file w-branch 20 5='line 5 ')"
-  ignore_whitespace="$(mutate ignore-whitespace 's/-U3/-U3 -w/')"
-
-  before_w="$(identity_of W.txt)"
-  catchup_base_commit U.txt "base one"
-  catchup_merge_base
-  [ "$(identity_of W.txt)" = "$before_w" ]
-
-  before="$(identity_of P.txt)"
-  before_mutated="$(identity_of P.txt "$ignore_whitespace")"
-  catchup_base_commit U.txt "base two"
-  catchup_merge_base --no-commit
-  lines_file p-space 40 30='branch thirty' 12='line 12	' >/dev/null
-  cp "$BATS_TEST_TMPDIR/p-space" "$CATCHUP_ROOT/P.txt"
-  catchup_commit_merge
-  [ "$(identity_of P.txt)" != "$before" ]
-  [ "$(identity_of P.txt "$ignore_whitespace")" = "$before_mutated" ]
-}
-
-@test "a mode edit inside a merge rotates; a clean catch-up over one does not; dropping the mode frame misses it" {
-  seed_base P.txt 40
+  seed_base PM.txt 40
   seed_base X.sh 10
-  catchup_branch_commit P.txt "$(lines_file p-branch 40 30='branch thirty')"
+  catchup_branch_commit PW.txt "$(lines_file pw-branch 40 30='branch thirty')"
+  catchup_branch_commit W.txt "$(lines_file w-branch 20 5='line 5 ')"
+  catchup_branch_commit PM.txt "$(lines_file pm-branch 40 30='branch thirty')"
   catchup_mode branch X.sh +x
-  no_mode="$(mutate no-mode '/# frame: modes$/d')"
-
-  before_x="$(identity_of X.sh)"
-  [ -n "$before_x" ]
-  catchup_base_commit U.txt "base one"
-  catchup_merge_base
-  [ "$(identity_of X.sh)" = "$before_x" ]
-
-  before="$(identity_of P.txt)"
-  before_mutated="$(identity_of P.txt "$no_mode")"
-  catchup_base_commit U.txt "base two"
-  catchup_merge_base --no-commit
-  catchup_mode worktree P.txt +x
-  catchup_commit_merge
-  [ "$(identity_of P.txt)" != "$before" ]
-  [ "$(identity_of P.txt "$no_mode")" = "$before_mutated" ]
-}
-
-@test "a symlink retarget inside a merge rotates; a clean catch-up over one does not; dropping blob ids misses it" {
   catchup_symlink branch link target-one
   catchup_symlink branch steady target-steady
-  no_blobs="$(mutate no-blobs '/# frame: blobs$/d')"
-
-  before_steady="$(identity_of steady)"
-  [ -n "$before_steady" ]
-  catchup_base_commit U.txt "base one"
-  catchup_merge_base
-  [ "$(identity_of steady)" = "$before_steady" ]
-
-  before="$(identity_of link)"
-  before_mutated="$(identity_of link "$no_blobs")"
-  catchup_base_commit U.txt "base two"
-  catchup_merge_base --no-commit
-  catchup_symlink worktree link target-two
-  catchup_commit_merge
-  [ "$(identity_of link)" != "$before" ]
-  [ "$(identity_of link "$no_blobs")" = "$before_mutated" ]
-}
-
-@test "a binary edit inside a merge rotates; a clean catch-up over one does not; dropping blob ids misses it" {
   catchup_binary branch image.bin one
   catchup_binary branch steady.bin steady
-  no_blobs="$(mutate no-blobs '/# frame: blobs$/d')"
   catchup_git diff-tree -p "$(tip)" HEAD -- image.bin | grep -q '^Binary files'
+  ignore_whitespace="$(mutate ignore-whitespace 's/-U3/-U3 -w/')"
+  no_mode="$(mutate no-mode '/# frame: modes$/d')"
+  no_blobs="$(mutate no-blobs '/# frame: blobs$/d')"
 
-  before_steady="$(identity_of steady.bin)"
+  # a clean catch-up leaves the steady path of each kind alone
+  before_w="$(identity_of W.txt)"
+  before_x="$(identity_of X.sh)"
+  before_steady="$(identity_of steady)"
+  before_steady_bin="$(identity_of steady.bin)"
+  [ -n "$before_x" ] || { echo "X.sh identity is empty"; return 1; }
+  [ -n "$before_steady" ] || { echo "steady identity is empty"; return 1; }
   catchup_base_commit U.txt "base one"
   catchup_merge_base
-  [ "$(identity_of steady.bin)" = "$before_steady" ]
+  [ "$(identity_of W.txt)" = "$before_w" ] || { echo "whitespace: clean catch-up rotated"; return 1; }
+  [ "$(identity_of X.sh)" = "$before_x" ] || { echo "mode: clean catch-up rotated"; return 1; }
+  [ "$(identity_of steady)" = "$before_steady" ] || { echo "symlink: clean catch-up rotated"; return 1; }
+  [ "$(identity_of steady.bin)" = "$before_steady_bin" ] || { echo "binary: clean catch-up rotated"; return 1; }
 
-  before="$(identity_of image.bin)"
-  before_mutated="$(identity_of image.bin "$no_blobs")"
+  # one merge carrying an edit of each kind, each on its own path
+  before_ws="$(identity_of PW.txt)"
+  before_ws_mutated="$(identity_of PW.txt "$ignore_whitespace")"
+  before_mode="$(identity_of PM.txt)"
+  before_mode_mutated="$(identity_of PM.txt "$no_mode")"
+  before_link="$(identity_of link)"
+  before_link_mutated="$(identity_of link "$no_blobs")"
+  before_image="$(identity_of image.bin)"
+  before_image_mutated="$(identity_of image.bin "$no_blobs")"
   catchup_base_commit U.txt "base two"
   catchup_merge_base --no-commit
+  lines_file pw-space 40 30='branch thirty' 12='line 12	' >/dev/null
+  cp "$BATS_TEST_TMPDIR/pw-space" "$CATCHUP_ROOT/PW.txt"
+  catchup_mode worktree PM.txt +x
+  catchup_symlink worktree link target-two
   catchup_binary worktree image.bin two
   catchup_commit_merge
-  [ "$(identity_of image.bin)" != "$before" ]
-  [ "$(identity_of image.bin "$no_blobs")" = "$before_mutated" ]
+  [ "$(identity_of PW.txt)" != "$before_ws" ] || { echo "whitespace: edit in a merge did not rotate"; return 1; }
+  [ "$(identity_of PW.txt "$ignore_whitespace")" = "$before_ws_mutated" ] || { echo "whitespace: -w no longer misses it"; return 1; }
+  [ "$(identity_of PM.txt)" != "$before_mode" ] || { echo "mode: edit in a merge did not rotate"; return 1; }
+  [ "$(identity_of PM.txt "$no_mode")" = "$before_mode_mutated" ] || { echo "mode: dropping the frame no longer misses it"; return 1; }
+  [ "$(identity_of link)" != "$before_link" ] || { echo "symlink: retarget in a merge did not rotate"; return 1; }
+  [ "$(identity_of link "$no_blobs")" = "$before_link_mutated" ] || { echo "symlink: dropping blob ids no longer misses it"; return 1; }
+  [ "$(identity_of image.bin)" != "$before_image" ] || { echo "binary: edit in a merge did not rotate"; return 1; }
+  [ "$(identity_of image.bin "$no_blobs")" = "$before_image_mutated" ] || { echo "binary: dropping blob ids no longer misses it"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
@@ -556,7 +527,7 @@ build_merge_scenario() {
   catchup_commit_merge
 }
 
-@test "hostile diff configuration and a textconv driver leave the identity set unchanged" {
+@test "no diff configuration, config-injecting environment variable or tracked -diff attribute changes the identity set: a hostile config with a textconv driver, GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS and GIT_EXTERNAL_DIFF, a -diff attribute" {
   catchup_base_commit .gitattributes '*.txt diff=upper'
   catchup_merge_base
   build_merge_scenario
@@ -581,14 +552,12 @@ build_merge_scenario() {
   catchup_git config core.bigFileThreshold 1
 
   [ "$(identities_text)" = "$clean" ]
-}
 
-@test "GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS and GIT_EXTERNAL_DIFF leave the identity set unchanged" {
-  catchup_base_commit .gitattributes '*.txt diff=upper'
-  catchup_merge_base
-  build_merge_scenario
-  clean="$(identities_text)"
-
+  # the environment case starts from a repository without the config above
+  catchup_git config --remove-section diff.upper
+  catchup_git config --remove-section diff
+  catchup_git config --remove-section color
+  catchup_git config --unset core.bigFileThreshold
   export GIT_CONFIG_COUNT=3
   GIT_CONFIG_VALUE_0="$(upper_driver)"
   export GIT_CONFIG_KEY_0=diff.upper.textconv GIT_CONFIG_VALUE_0
@@ -600,12 +569,8 @@ build_merge_scenario() {
   export GIT_EXTERNAL_DIFF=false GIT_DIFF_OPTS=--unified=0
 
   [ "$(identities_text)" = "$clean" ]
-}
 
-@test "a tracked -diff attribute leaves the identity set equal to a sandbox without it" {
-  build_merge_scenario
-  clean="$(identities_text)"
-
+  unset GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS GIT_EXTERNAL_DIFF GIT_DIFF_OPTS
   catchup_init "$BATS_TEST_TMPDIR/attributed"
   catchup_base_commit .gitattributes '*.sh -diff'
   catchup_merge_base
