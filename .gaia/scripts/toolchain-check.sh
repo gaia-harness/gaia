@@ -46,6 +46,8 @@ usage() {
 
 script_directory="${BASH_SOURCE[0]%/*}"
 [ "$script_directory" != "${BASH_SOURCE[0]}" ] || script_directory="."
+# shellcheck source=.gaia/scripts/toolchain-node-lib.sh
+. "$script_directory/toolchain-node-lib.sh"
 FLOORS_FILE="$script_directory/../toolchain-floors.tsv"
 SCOPE="all"
 ONLY_TOOL=""
@@ -202,17 +204,17 @@ guide() {
       # nvm-windows has no nvm alias default, so Windows hears only of fnm. The
       # version is the floor's major from the floors file: the project's own
       # .nvmrc and .node-version still pin the old release during /update-gaia.
-      local node_major version use_command
+      local node_major version missing_manager=""
       node_major="$(node_floor_major)"
       version="${node_major:-<major>}"
       lead="fnm: run fnm install $version, fnm use $version and fnm default $version"
-      use_command="fnm use $version"
+      [ -n "$(node_version_manager)" ] || missing_manager=" fnm is not installed here, so install it first, or install Node $version another way and make it your default."
       if [ "$PLATFORM" != windows ]; then
         lead="nvm or fnm: run nvm install $version, nvm use $version and nvm alias default $version, or fnm install $version, fnm use $version and fnm default $version"
-        use_command="fnm use $version or nvm use $version"
+        [ -z "$missing_manager" ] || missing_manager=" Neither nvm nor fnm is installed here, so install one of them first, or install Node $version another way and make it your default."
       fi
-      printf 'GUIDE node: Install Node %s with %s, so this terminal uses it and it is your default. Then' "${node_major:-at the floor major in .gaia/toolchain-floors.tsv}" "$lead"
-      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal in the project folder, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), run %s there, or the old pin is reselected and this check fails again. Then start Claude Code from that terminal. %s\n' "$use_command" "$(tool_reason node)"
+      printf 'GUIDE node: Install Node %s with %s, so this terminal uses it and it is your default.%s Then' "${node_major:-at the floor major in .gaia/toolchain-floors.tsv}" "$lead" "$missing_manager"
+      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal in the project folder, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), select Node %s there, or the old pin is reselected and this check fails again. Then start Claude Code from that terminal. %s\n' "$version" "$(tool_reason node)"
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
@@ -243,43 +245,6 @@ brew_route() {
 }
 
 PNPM_INSTALL='corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
-
-# node_floor_major: the major of the node row's floor in the floors file, read
-# from FLOORS_FILE so /update-gaia's target bundle names the Node that clears
-# its own floor. Prints nothing when the row is absent or the floor is not a
-# number.
-node_floor_major() {
-  local tool floor _rest major=""
-  while IFS=$'\t' read -r tool floor _rest; do
-    [ "$tool" = node ] || continue
-    major="${floor%%.*}"
-    break
-  done <"$FLOORS_FILE"
-  case "$major" in '' | *[!0-9]*) major="" ;; esac
-  printf '%s' "$major"
-}
-
-# node_route: a terminal route through the version manager this machine has,
-# or nothing. It is terminal because the new Node reaches only a new shell's
-# PATH, and it sets the default so the profile each new shell sources keeps it.
-# It installs the floor's Node major (node_floor_major), switches this terminal
-# to it (use) so the pnpm reinstall runs under the new Node, and writes no project
-# file, so it does not depend on its working directory. Global packages stay with the
-# old Node, so pnpm is reinstalled under the new one. nvm is a shell function,
-# invisible to command -v here, so its install script stands in for it. Windows
-# gets no route: these commands are bash.
-# shellcheck disable=SC2016
-node_route() {
-  local node_major
-  [ "$PLATFORM" != windows ] || return 0
-  node_major="$(node_floor_major)"
-  [ -n "$node_major" ] || return 0
-  if command -v fnm >/dev/null 2>&1; then
-    printf 'terminal fnm install %s && fnm use %s && fnm default %s && { %s; }' "$node_major" "$node_major" "$node_major" "$PNPM_INSTALL"
-  elif [ -s "${NVM_DIR:-${HOME:-}/.nvm}/nvm.sh" ]; then
-    printf 'terminal nvm install %s && nvm use %s && nvm alias default %s && { %s; }' "$node_major" "$node_major" "$node_major" "$PNPM_INSTALL"
-  fi
-}
 
 # route_for <tool>: "<class> <command>" for the ROUTE line, or nothing when no
 # exact command exists. The class tells the caller who runs it: run (Claude,
