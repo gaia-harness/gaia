@@ -64,6 +64,20 @@ ask_with_stub() {
   [ "${lines[0]}" = 1 ]
 }
 
+@test "library: a success with a hint on stderr is judged by stdout alone" {
+  local hint='hint: if you need to wait for this pull request, use gh event listen instead of polling'
+  library_stub 'false' "$hint" 0
+  ask_with_stub 34
+  [ "${lines[0]}" = 1 ]
+  library_stub 'true' "$hint" 0
+  ask_with_stub ''
+  [ "${lines[0]}" = 0 ]
+  library_stub '{"isCrossRepository":false}' "$hint" 0
+  ask_with_stub 34
+  [ "${lines[0]}" = 2 ]
+  grep -qF -- "answered '{\"isCrossRepository\":false}'" <<<"${lines[1]}"
+}
+
 @test "library: an empty argument asks about the current branch and passes gh no empty positional" {
   library_stub 'false' '' 0
   ask_with_stub ''
