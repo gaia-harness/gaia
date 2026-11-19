@@ -255,6 +255,12 @@ copy_script_tree() {
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
+@test "an absolute --spec path spelled through .. passes like its canonical spelling" {
+  spec_fixture
+  run bash "$SCRIPT" "$PLAN" --spec "$PLAN/../SPEC.md"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
 @test "a complete spec-less plan passes" {
   spec_less_fixture
   verify_spec_less

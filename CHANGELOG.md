@@ -85,6 +85,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **The plan check accepts an absolute SPEC path spelled through `..`:** an absolute `--spec` path that reaches the right SPEC through `..` no longer fails the plan check with a misleading ORCHESTRATOR.md block mismatch (#3671)
 - **A plan run retries a file-length failure instead of halting:** a phase gate that fails on a file over its line limit now sends it back to the owning task as a static retry, told to split the file into a lib rather than trim wording. The planner also gives the current line count of a file a task grows near the limit, and puts each citation rewrite in the same phase as the deletion or rename it follows (#3665)
 - **Plan tasks list the existing tests that pin the files they edit:** a task that changes a file another test asserts on, such as an expected table or a pattern matched against its text, now names that test in its files to touch, so the executor updates it in scope and a gate failure there goes back to that task instead of halting the run (#3678)
 - **The wiki lint scans the web app's instruction files and the doctrine for working-doc ids:** the FLOW/SPEC id check `/gaia-wiki` runs skipped `apps/web/.claude/` and `.claude/doctrine/`, so a narrative SPEC or FLOW id there passed lint (#3667)
