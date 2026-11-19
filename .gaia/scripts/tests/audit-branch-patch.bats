@@ -201,7 +201,8 @@ seed_base() {
   before_x="$(identity_of X.sh)"
   before_steady="$(identity_of steady)"
   before_steady_bin="$(identity_of steady.bin)"
-  [ -n "$before_x" ] && [ -n "$before_steady" ]
+  [ -n "$before_x" ] || { echo "X.sh identity is empty"; return 1; }
+  [ -n "$before_steady" ] || { echo "steady identity is empty"; return 1; }
   catchup_base_commit U.txt "base one"
   catchup_merge_base
   [ "$(identity_of W.txt)" = "$before_w" ] || { echo "whitespace: clean catch-up rotated"; return 1; }

@@ -34,8 +34,8 @@ item() {
 expect_reason() {
   local verdict
   verdict="$(gaia_review_judge "$RESULT")"
-  [ "$(jq -r .verdict <<<"$verdict")" = failed ]
-  [ "$(jq -r .reason <<<"$verdict")" = "$1" ]
+  [ "$(jq -r .verdict <<<"$verdict")" = failed ] || return 1
+  [ "$(jq -r .reason <<<"$verdict")" = "$1" ] || return 1
 }
 
 @test "the first failed check wins over everything after it" {
@@ -119,8 +119,7 @@ expect_reason() {
     name="${names[$i]}"
     text="${texts[$i]}"
     write_result "$text"
-    run expect_reason 'unusable result'
-    [ "$status" -eq 0 ] || { echo "case failed: $name"; false; }
+    expect_reason 'unusable result' || { echo "case failed: $name"; return 1; }
   done
 }
 

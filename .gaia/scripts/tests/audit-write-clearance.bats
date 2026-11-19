@@ -2048,7 +2048,8 @@ light_fixture() {
   [ -f "$refused" ]
   before="$(cat "$refused")"
   light_row "same-digest refusal sibling" "refusal exists" --route-record "$light_record"
-  [ -f "$refused" ] && [ "$(cat "$refused")" = "$before" ]
+  [ -f "$refused" ] || { echo "same-digest refusal sibling: refusal removed"; return 1; }
+  [ "$(cat "$refused")" = "$before" ] || { echo "same-digest refusal sibling: refusal rewritten"; return 1; }
   rm -f "$refused"
 
   echo "more" >> "$ROOT/README.md"

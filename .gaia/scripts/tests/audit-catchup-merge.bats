@@ -25,7 +25,13 @@ bats_require_minimum_version 1.5.0
 
 # One plain sandbox is built for the file; every test's lsb_init copies it.
 setup_file() {
-  command -v jq >/dev/null 2>&1 || skip "jq not available"
+  if ! command -v jq >/dev/null 2>&1; then
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+      echo "jq not present on a CI runner; the gate probes here would report green" >&2
+      return 1
+    fi
+    skip "jq not available"
+  fi
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   # shellcheck source=.gaia/scripts/tests/helpers/light-sandbox.sh
   . "$REPO_ROOT/.gaia/scripts/tests/helpers/light-sandbox.sh"
