@@ -242,7 +242,9 @@ route_line() {
   check --platform darwin
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qxF "BELOW node 24.11.0 $(floor_of node)"
-  [[ "$output" == *"GUIDE node: "*"nvm install or fnm install $(cat "$BATS_TEST_DIRNAME/../../../.node-version")"*"npm install -g pnpm@latest"*"fresh terminal"*".nvmrc and .node-version"*"GAIA's CLI run on it."* ]]
+  local major
+  major="$(floor_of node)"
+  [[ "$output" == *"GUIDE node: Install Node $major with nvm or fnm: run nvm install or fnm install $major"*"npm install -g pnpm@latest"*"fresh terminal"*"select the new Node in the project shell"*"GAIA's CLI run on it."* ]] || return 1
   [ -z "$(route_line node)" ]
 }
 
@@ -253,19 +255,19 @@ route_line() {
   mkdir -p "$STUBS/nvm"
   printf 'x\n' >"$STUBS/nvm/nvm.sh"
   run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
-  local pnpm_command pin
-  pin="$(cat "$BATS_TEST_DIRNAME/../../../.node-version")"
+  local pnpm_command major
+  major="$(floor_of node)"
   pnpm_command="$(route_line pnpm)"
   pnpm_command="${pnpm_command#ROUTE pnpm run }"
   [ -n "$pnpm_command" ]
-  [ "$(route_line node)" = "ROUTE node terminal printf '%s\n' $pin | tee .nvmrc >.node-version && nvm install $pin && nvm use $pin && nvm alias default $pin && { $pnpm_command; }" ]
+  [ "$(route_line node)" = "ROUTE node terminal nvm install $major && nvm use $major && nvm alias default $major && { $pnpm_command; }" ]
   stub fnm 'fnm 1.38.1'
   run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform linux --os-id debian
-  [ "$(route_line node)" = "ROUTE node terminal printf '%s\n' $pin | tee .nvmrc >.node-version && fnm install $pin && fnm use $pin && fnm default $pin && { $pnpm_command; }" ]
+  [ "$(route_line node)" = "ROUTE node terminal fnm install $major && fnm use $major && fnm default $major && { $pnpm_command; }" ]
   check --platform windows
   [ "$status" -eq 1 ]
   [ -z "$(route_line node)" ]
-  [[ "$output" == *"GUIDE node: "*"with fnm: run fnm install $pin"*"fresh terminal"* ]]
+  [[ "$output" == *"GUIDE node: Install Node $major with fnm: run fnm install $major"*"fresh terminal"* ]] || return 1
   grep -qF 'nvm install' <<<"$output" && return 1
   true
 }
@@ -295,9 +297,25 @@ route_line() {
   true
 }
 
-@test "no guidance pins a version: each route reaches latest, never the floor" {
-  run grep -nE '(git|jq|node|pnpm)@?[ -]?[0-9]+\.[0-9]+' "$CHECK"
+@test "no guidance pins a version: each route reaches latest, and node alone names its floor major" {
+  run grep -inE '(git|jq|node|pnpm)@?[ -]?v?[0-9]+([^0-9>]|$)' "$CHECK"
   [ "$status" -ne 0 ]
+  stub_current
+  stub node 'v24.11.0'
+  stub git 'git version 2.39.5'
+  stub jq 'jq-1.5'
+  stub pnpm '11.2.0'
+  local platform guide_text major
+  major="$(floor_of node)"
+  for platform in darwin windows; do
+    check --platform "$platform"
+    guide_text="$(printf '%s\n' "$output" | grep '^GUIDE ')"
+    [ "$(printf '%s\n' "$guide_text" | grep -c '^GUIDE ')" -ge 4 ]
+    printf '%s\n' "$guide_text" | grep '^GUIDE node:' | grep -qF "Install Node $major with" || return 1
+    printf '%s\n' "$guide_text" | grep -v '^GUIDE node:' | grep -qE '[0-9]+(\.[0-9]+)?' && return 1
+    printf '%s\n' "$guide_text" | grep '^GUIDE node:' | sed "s/Node $major with/Node with/; s/install $major/install/" | grep -qiE '(node|v|@)[ ]?[0-9]+|[0-9]+\.[0-9]+\.[0-9]+' && return 1
+  done
+  true
 }
 
 @test "the floors file has one row per tool, and the note states the same floors" {

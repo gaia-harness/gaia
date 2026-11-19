@@ -197,15 +197,15 @@ guide() {
       printf 'GUIDE %s: %s: %s. %s\n' "$tool" "$lead" "$(package_route "$tool")" "$(tool_reason "$tool")"
       ;;
     node)
-      # nvm-windows ignores .nvmrc and needs an explicit version, so Windows
-      # hears only of fnm. The version is the bundle's own pin, not the
-      # project's, which still holds the old release's pin during /update-gaia.
-      local node_version
-      node_version="$(node_pin)"
+      # nvm-windows has no nvm alias default, so Windows hears only of fnm. The
+      # version is the floor's major from the floors file: the project's own
+      # .nvmrc and .node-version still pin the old release during /update-gaia.
+      local node_major
+      node_major="$(node_floor_major)"
       lead='nvm or fnm: run nvm install or fnm install'
       [ "$PLATFORM" != windows ] || lead='fnm: run fnm install'
-      printf 'GUIDE node: Install Node %s with %s, then make it your default. Then' "${node_version:-the version .node-version pins}" "${lead}${node_version:+ $node_version}"
-      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal and start Claude Code again from it, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), first write that version into the .nvmrc and .node-version in the project root, or the old pin is reselected and this check fails again. %s\n' "$(tool_reason node)"
+      printf 'GUIDE node: Install Node %s with %s, then make it your default. Then' "${node_major:-the floor major in .gaia/toolchain-floors.tsv}" "${lead}${node_major:+ $node_major}"
+      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal and start Claude Code again from it, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), first select the new Node in the project shell (fnm use or nvm use with that version), or the old pin is reselected and this check fails again. %s\n' "$(tool_reason node)"
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
@@ -237,45 +237,40 @@ brew_route() {
 
 PNPM_INSTALL='corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
 
-# node_pin: the Node version this bundle pins, from the .node-version at the
-# bundle root, two folders above this script. On /update-gaia the bundle is the
-# target release, so it names the floor-clearing version even while the
-# project's own .nvmrc and .node-version still pin the old one. Prints nothing
-# when the file is absent or empty.
-node_pin() {
-  local pin=""
-  [ ! -r "$script_directory/../../.node-version" ] || IFS= read -r pin <"$script_directory/../../.node-version" || true
-  printf '%s' "${pin//[[:space:]]/}"
-}
-
-# pin_files_command <version>: one shell command writing the bundle's pin into
-# the project's .nvmrc and .node-version (GAIA-owned; the update's merge writes
-# the same bytes). A shell that switches Node per folder (fnm --use-on-cd, nvm
-# auto-use, asdf, mise) would otherwise reselect the project's old pin and undo
-# the install, in the route's own pnpm step and in the fresh terminal.
-pin_files_command() {
-  printf "printf '%%s\\\\n' %s | tee .nvmrc >.node-version" "$1"
+# node_floor_major: the major of the node row's floor in the floors file, read
+# from FLOORS_FILE so /update-gaia's target bundle names the Node that clears
+# its own floor. Prints nothing when the row is absent or the floor is not a
+# number.
+node_floor_major() {
+  local tool floor _rest major=""
+  while IFS=$'\t' read -r tool floor _rest; do
+    [ "$tool" = node ] || continue
+    major="${floor%%.*}"
+    break
+  done <"$FLOORS_FILE"
+  case "$major" in '' | *[!0-9]*) major="" ;; esac
+  printf '%s' "$major"
 }
 
 # node_route: a terminal route through the version manager this machine has,
 # or nothing. It is terminal because the new Node reaches only a new shell's
 # PATH, and it sets the default so the profile each new shell sources keeps it.
-# It installs the bundle's pinned version explicitly (node_pin), writes it to
-# the project's pin files, and switches this terminal to it (use) so the pnpm
-# reinstall runs under the new Node. Run it from the project root. Global packages stay with the old Node, so pnpm is
-# reinstalled under the new one. nvm is a shell function, invisible to
-# command -v here, so its install script stands in for it. Windows gets no
-# route: these commands are bash.
+# It installs the floor's Node major (node_floor_major), switches this terminal
+# to it (use) so the pnpm reinstall runs under the new Node, and writes no file,
+# so it does not depend on its working directory. Global packages stay with the
+# old Node, so pnpm is reinstalled under the new one. nvm is a shell function,
+# invisible to command -v here, so its install script stands in for it. Windows
+# gets no route: these commands are bash.
 # shellcheck disable=SC2016
 node_route() {
-  local node_version
+  local node_major
   [ "$PLATFORM" != windows ] || return 0
-  node_version="$(node_pin)"
-  [ -n "$node_version" ] || return 0
+  node_major="$(node_floor_major)"
+  [ -n "$node_major" ] || return 0
   if command -v fnm >/dev/null 2>&1; then
-    printf 'terminal %s && fnm install %s && fnm use %s && fnm default %s && { %s; }' "$(pin_files_command "$node_version")" "$node_version" "$node_version" "$node_version" "$PNPM_INSTALL"
+    printf 'terminal fnm install %s && fnm use %s && fnm default %s && { %s; }' "$node_major" "$node_major" "$node_major" "$PNPM_INSTALL"
   elif [ -s "${NVM_DIR:-${HOME:-}/.nvm}/nvm.sh" ]; then
-    printf 'terminal %s && nvm install %s && nvm use %s && nvm alias default %s && { %s; }' "$(pin_files_command "$node_version")" "$node_version" "$node_version" "$node_version" "$PNPM_INSTALL"
+    printf 'terminal nvm install %s && nvm use %s && nvm alias default %s && { %s; }' "$node_major" "$node_major" "$node_major" "$PNPM_INSTALL"
   fi
 }
 
