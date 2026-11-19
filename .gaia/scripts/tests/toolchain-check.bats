@@ -242,7 +242,7 @@ route_line() {
   check --platform darwin
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qxF "BELOW node 24.11.0 $(floor_of node)"
-  [[ "$output" == *"GUIDE node: "*"nvm install or fnm install"*"npm install -g pnpm@latest"*"GAIA's CLI run on it."* ]]
+  [[ "$output" == *"GUIDE node: "*"nvm install or fnm install $(cat "$BATS_TEST_DIRNAME/../../../.node-version")"*"npm install -g pnpm@latest"*"fresh terminal"*"GAIA's CLI run on it."* ]]
   [ -z "$(route_line node)" ]
 }
 
@@ -253,19 +253,19 @@ route_line() {
   mkdir -p "$STUBS/nvm"
   printf 'x\n' >"$STUBS/nvm/nvm.sh"
   run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
-  local pnpm_command project_root
+  local pnpm_command pin
+  pin="$(cat "$BATS_TEST_DIRNAME/../../../.node-version")"
   pnpm_command="$(route_line pnpm)"
   pnpm_command="${pnpm_command#ROUTE pnpm run }"
   [ -n "$pnpm_command" ]
-  project_root="$(printf '%q' "$PWD")"
-  [ "$(route_line node)" = "ROUTE node terminal cd $project_root && nvm install && nvm alias default \"\$(nvm current)\" && { $pnpm_command; }" ]
+  [ "$(route_line node)" = "ROUTE node terminal nvm install $pin && nvm alias default $pin && { $pnpm_command; }" ]
   stub fnm 'fnm 1.38.1'
   run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform linux --os-id debian
-  [ "$(route_line node)" = "ROUTE node terminal cd $project_root && fnm install && fnm use && fnm default \"\$(fnm current)\" && { $pnpm_command; }" ]
+  [ "$(route_line node)" = "ROUTE node terminal fnm install $pin && fnm default $pin && { $pnpm_command; }" ]
   check --platform windows
   [ "$status" -eq 1 ]
   [ -z "$(route_line node)" ]
-  [[ "$output" == *"GUIDE node: "*"with fnm: run fnm install from the project root"* ]]
+  [[ "$output" == *"GUIDE node: "*"with fnm: run fnm install $pin"*"fresh terminal"* ]]
   grep -qF 'nvm install' <<<"$output" && return 1
   true
 }
