@@ -108,7 +108,34 @@ run_linter() {
   run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$STAGED_LINTER' 2>&1"
 }
 
-# --- the class fires, one test per position the header enumerates -----------
+# refuse_case <label> <hook body> <expected substring>...: the hook must be refused
+# (exit 1) and the report must carry every substring. The label is echoed first so
+# a red case names itself. Reuses the repo fixture_repo built; only check.sh is
+# rewritten per case.
+refuse_case() {
+  local label="$1" body="$2" needle
+  echo "case: $label"
+  fixture_hook "$body"
+  run_linter
+  [ "$status" -eq 1 ]
+  shift 2
+  for needle in "$@"; do
+    grep -qF -- "$needle" <<<"$output" || return 1
+  done
+}
+
+# quiet_case <label> <hook body>: the hook must pass (exit 0) and the report must
+# not name check.sh.
+quiet_case() {
+  echo "case: $1"
+  fixture_hook "$2"
+  run_linter
+  [ "$status" -eq 0 ]
+  grep -qF -- "check.sh" <<<"$output" && return 1
+  return 0
+}
+
+# --- the class fires, one case per position the header enumerates -----------
 
 @test "reds against the historical blocking-hook shape" {
   fixture_repo
@@ -117,24 +144,6 @@ type worthiness_ledger_path >/dev/null 2>&1 || exit 0'
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
-  grep -qF -- "a file-test operand names a bare repo-relative path" <<<"$output"
-}
-
-@test "reds against the NEGATED spelling of the historical shape" {
-  # The positive twin of the test above, and the idiomatic spelling of the
-  # stand-down this gate exists to prevent: `[ ! -f <library> ] && exit 0` reads a
-  # moved working directory as a missing library exactly as the unnegated form
-  # does. The `!` stands where the arm requires the test primary, so reaching it
-  # takes an explicit optional negation rather than falling out of the unnegated
-  # pattern. Both bracket forms and the quoted spelling ride this one test
-  # because the negation is admitted once, ahead of the rest of the arm.
-  fixture_repo
-  fixture_hook '[ ! -f .claude/hooks/lib/worthiness-ledger.sh ] && exit 0
-[[ ! -f ".gaia/scripts/main-root-lib.sh" ]] && exit 0'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
-  grep -qF -- ".claude/hooks/check.sh:4:" <<<"$output" || return 1
   grep -qF -- "a file-test operand names a bare repo-relative path" <<<"$output"
 }
 
@@ -148,80 +157,36 @@ type worthiness_ledger_path >/dev/null 2>&1 || exit 0'
   grep -qF -- "a source operand names a bare repo-relative path" <<<"$output"
 }
 
-@test "flags an INDENTED source operand, the idiomatic spelling of the class" {
+@test "flags each position and spelling of a bare repo-relative load" {
   fixture_repo
-  fixture_hook 'if true; then
+
+  # The negated stand-down reads a moved working directory as a missing library
+  # exactly as the unnegated form does; both bracket forms ride one case.
+  refuse_case 'NEGATED spelling of the historical shape' '[ ! -f .claude/hooks/lib/worthiness-ledger.sh ] && exit 0
+[[ ! -f ".gaia/scripts/main-root-lib.sh" ]] && exit 0' \
+    ".claude/hooks/check.sh:3:" ".claude/hooks/check.sh:4:" \
+    "a file-test operand names a bare repo-relative path"
+
+  refuse_case 'INDENTED source operand' 'if true; then
   . .claude/hooks/lib/worthiness-ledger.sh
-fi'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/check.sh:4:" <<<"$output" || return 1
-  grep -qF -- "a source operand names a bare repo-relative path" <<<"$output"
-}
+fi' \
+    ".claude/hooks/check.sh:4:" "a source operand names a bare repo-relative path"
 
-@test "an indented VARIABLE-rooted load is still the repair, not a hit" {
-  fixture_repo
-  fixture_hook 'if true; then
-  . "$_hook_dir/lib/worthiness-ledger.sh"
-fi'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "lint-hook-cwd-relative-loads: clean" <<<"$output"
-}
+  refuse_case 'bare interpreter argument' 'bash .gaia/scripts/usage.sh pr 1' \
+    ".claude/hooks/check.sh:3:" "an interpreter argument names a bare repo-relative path"
 
-@test "flags a bare interpreter argument" {
-  fixture_repo
-  fixture_hook 'bash .gaia/scripts/usage.sh pr 1'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
-  grep -qF -- "an interpreter argument names a bare repo-relative path" <<<"$output"
-}
+  refuse_case 'assignment naming a code file' 'classifier=".gaia/scripts/classifier/classify-determinism.mjs"' \
+    ".claude/hooks/check.sh:3:" "this assignment names a bare repo-relative path to a code file"
 
-@test "flags an assignment naming a code file" {
-  fixture_repo
-  fixture_hook 'classifier=".gaia/scripts/classifier/classify-determinism.mjs"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
-  grep -qF -- "this assignment names a bare repo-relative path to a code file" <<<"$output"
-}
+  # Literal-versus-variable-rooted is the distinction, never quoted-versus-unquoted.
+  refuse_case 'QUOTED spelling of each position' '[ -f ".claude/hooks/lib/worthiness-ledger.sh" ] && . ".claude/hooks/lib/worthiness-ledger.sh"
+bash ".gaia/scripts/usage.sh" pr 1' \
+    ".claude/hooks/check.sh:3:" ".claude/hooks/check.sh:4:" \
+    "a file-test operand names a bare repo-relative path" \
+    "an interpreter argument names a bare repo-relative path"
 
-@test "flags the QUOTED spelling of each position, not only the bare one" {
-  # The distinction is literal-versus-variable-rooted, never quoted-versus-
-  # unquoted: a quoted literal resolves against the working directory exactly
-  # as its bare spelling does. A gate that read only the bare form would report
-  # clean over half its own class, and the tree carried a live quoted instance.
-  fixture_repo
-  fixture_hook '[ -f ".claude/hooks/lib/worthiness-ledger.sh" ] && . ".claude/hooks/lib/worthiness-ledger.sh"
-bash ".gaia/scripts/usage.sh" pr 1'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
-  grep -qF -- ".claude/hooks/check.sh:4:" <<<"$output" || return 1
-  grep -qF -- "a file-test operand names a bare repo-relative path" <<<"$output" || return 1
-  grep -qF -- "an interpreter argument names a bare repo-relative path" <<<"$output"
-}
-
-@test "flags a single-quoted literal too" {
-  fixture_repo
-  fixture_hook ". '.gaia/scripts/main-root-lib.sh'"
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "a source operand names a bare repo-relative path" <<<"$output"
-}
-
-@test "a quoted VARIABLE-rooted path is still the repair, not a hit" {
-  # The negative control for the two tests above: adding the optional quote must
-  # not turn the advertised repair into a finding.
-  fixture_repo
-  fixture_hook '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
-[ -f "$_library_directory/worthiness-ledger.sh" ] && . "$_library_directory/worthiness-ledger.sh"
-bash "$_library_directory/../../.gaia/scripts/usage.sh"'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
+  refuse_case 'single-quoted literal' ". '.gaia/scripts/main-root-lib.sh'" \
+    "a source operand names a bare repo-relative path"
 }
 
 @test "scans from its own root, not the working directory" {
@@ -250,143 +215,79 @@ bash "$_library_directory/../../.gaia/scripts/usage.sh"'
 
 # --- quiet on every shape the header lists as deliberately not a hit --------
 
-@test "quiet on the BASH_SOURCE repair it advertises" {
+@test "quiet on every variable-rooted repair spelling" {
   fixture_repo
-  fixture_hook '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
+
+  echo "case: indented VARIABLE-rooted load"
+  fixture_hook 'if true; then
+  . "$_hook_dir/lib/worthiness-ledger.sh"
+fi'
+  run_linter
+  [ "$status" -eq 0 ]
+  grep -qF -- "lint-hook-cwd-relative-loads: clean" <<<"$output"
+
+  quiet_case 'quoted VARIABLE-rooted path' '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
+[ -f "$_library_directory/worthiness-ledger.sh" ] && . "$_library_directory/worthiness-ledger.sh"
+bash "$_library_directory/../../.gaia/scripts/usage.sh"'
+
+  quiet_case 'BASH_SOURCE repair' '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
 [ -n "$_library_directory" ] && [ -f "$_library_directory/worthiness-ledger.sh" ] && . "$_library_directory/worthiness-ledger.sh"'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
-}
 
-@test "quiet on the NEGATED spelling of the repair it advertises" {
-  # The negative control for the widening: the arm admits a `!` in front of the
-  # primary, so the variable-rooted repair written in the negated stand-down
-  # style has to stay the repair rather than become a finding.
-  fixture_repo
-  fixture_hook '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
+  # The arm admits a `!` in front of the primary, so the repair written in the
+  # negated stand-down style has to stay the repair rather than become a finding.
+  quiet_case 'NEGATED spelling of the repair' '_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=""
 [ ! -f "$_library_directory/worthiness-ledger.sh" ] && exit 0'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
 }
 
-@test "quiet on a per-tree state path in ASSIGNMENT position" {
+@test "quiet on state paths, git revision paths and cd'd interpreter args" {
   fixture_repo
-  fixture_hook 'marker=".claude/example-session-marker"
+
+  quiet_case 'per-tree state path in ASSIGNMENT position' 'marker=".claude/example-session-marker"
 config_path=".gaia/local/example-state.json"'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
-}
 
-@test "quiet on a per-tree state path in FILE TEST position" {
-  # The sibling above pins the assignment arm, which reaches this shape only
-  # because it is pinned to a code extension. The file-test arm is the other
-  # position a state path is written in, and it needs the same pin for the same
-  # reason: the remedy it hands out roots the operand at `${BASH_SOURCE[0]}`,
-  # which is the root the gate's own header rules out for state, because a
-  # `main-only` marker rooted at the script's directory follows a linked
-  # worktree. Every live state site tests through a variable today, so this arm
-  # is unexercised by the tree and only a fixture reaches it.
-  fixture_repo
-  fixture_hook '[ -f .claude/example-session-marker ] || exit 0
+  # A state path carries no code extension, so the file-test arm gives up the
+  # operand and the gate does not prescribe the BASH_SOURCE root its header rules
+  # out for state, in either spelling.
+  quiet_case 'per-tree state path in FILE TEST position' '[ -f .claude/example-session-marker ] || exit 0
 [ -f ".gaia/local/example-state.json" ] || exit 0'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
-}
 
-@test "quiet on a NEGATED per-tree state path in FILE TEST position" {
-  # The sibling above pins the unnegated spelling. Admitting a negation into the
-  # arm must not re-open the misdirection that pin closed: a state path carries
-  # no code extension in either spelling, so the negated form gives up the
-  # operand for the same reason and the gate stays silent rather than
-  # prescribing the `${BASH_SOURCE[0]}` root its own header rules out for state.
-  fixture_repo
-  fixture_hook '[ ! -f .claude/example-session-marker ] && exit 0
+  quiet_case 'NEGATED per-tree state path in FILE TEST position' '[ ! -f .claude/example-session-marker ] && exit 0
 [ ! -f ".gaia/local/example-state.json" ] && exit 0'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
+
+  quiet_case 'git revision path, which git resolves from the repo root' 'blob=$(git rev-parse "HEAD:.gaia/manifest.json")'
+
+  quiet_case 'interpreter argument the same line cds for' 'members="$( cd "$tree_root" && bash .gaia/scripts/resolve-audit-members.sh )"'
 }
 
-@test "quiet on a git revision path, which git resolves from the repo root" {
+@test "quiet on the class inside a heredoc, a multi-line string or a comment" {
   fixture_repo
-  fixture_hook 'blob=$(git rev-parse "HEAD:.gaia/manifest.json")'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
-}
 
-@test "quiet on an interpreter argument the same line cds for" {
-  fixture_repo
-  fixture_hook 'members="$( cd "$tree_root" && bash .gaia/scripts/resolve-audit-members.sh )"'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
-}
-
-@test "quiet on the class inside a heredoc body" {
-  fixture_repo
-  fixture_hook 'cat <<EOF
+  quiet_case 'heredoc body' 'cat <<EOF
 [ -f .claude/hooks/lib/repo-scope.sh ] && . .claude/hooks/lib/repo-scope.sh
 EOF'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
-}
 
-@test "quiet on the class inside a multi-line double-quoted string" {
-  fixture_repo
-  fixture_hook 'reason="To unblock:
+  quiet_case 'multi-line double-quoted string' 'reason="To unblock:
   1. Run the ledger writer per judged test:
        node .gaia/scripts/audit-ledger/append-worthiness.mjs <file>
   2. Retry gh pr merge."'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
-}
 
-@test "quiet on the class in a comment, whole-line and trailing" {
-  fixture_repo
-  fixture_hook '# Usage: [ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh
+  quiet_case 'comment, whole-line and trailing' '# Usage: [ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh
 true  # Usage: [ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh'
-  run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "check.sh" <<<"$output" && return 1
-  true
 }
 
 # --- where the quiet arms stop, and the class reports again -----------------
 
-@test "reports a mention inside a QUOTED span, which the # does not cut" {
+@test "reports a mention past a quoted span or an apostrophe comment" {
   fixture_repo
+
   # The mention sits BEHIND the `#`, so only the quote tracker keeps it in the
   # scanned prefix: a cut at that `#` would drop it and report clean.
-  fixture_hook 'msg="the shape is # [ -f .claude/hooks/lib/worthiness-ledger.sh ]"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
-  grep -qF -- "a file-test operand names a bare repo-relative path" <<<"$output"
-}
+  refuse_case 'mention inside a QUOTED span, which the # does not cut' 'msg="the shape is # [ -f .claude/hooks/lib/worthiness-ledger.sh ]"' \
+    ".claude/hooks/check.sh:3:" "a file-test operand names a bare repo-relative path"
 
-@test "a comment carrying an apostrophe does not blind the next line" {
-  fixture_repo
-  fixture_hook "# The gate own tracker must not read this apostrophe as a quote: don't.
-[ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh"
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/check.sh:4:" <<<"$output"
+  refuse_case 'comment carrying an apostrophe does not blind the next line' "# The gate own tracker must not read this apostrophe as a quote: don't.
+[ -f .claude/hooks/lib/worthiness-ledger.sh ] && . .claude/hooks/lib/worthiness-ledger.sh" \
+    ".claude/hooks/check.sh:4:"
 }
 
 # --- the discovery itself --------------------------------------------------

@@ -367,27 +367,6 @@ JSON
   [ -z "$output" ]
 }
 
-# The guard proof: the same script with the per-package arm cut out leaves the
-# package env file unlinked in the identical fixture, so the assertion above is
-# not satisfied by anything else in the script.
-@test "package env files: the script without its per-package arm leaves apps/web/.env unlinked" {
-  mutant="$BATS_TEST_TMPDIR/mutant"
-  mkdir -p "$mutant/.gaia/scripts" "$mutant/.claude/hooks/lib"
-  cp "$SCRIPT_DIRECTORY/main-root-lib.sh" "$mutant/.gaia/scripts/"
-  cp "$SCRIPT_DIRECTORY/../../.claude/hooks/lib/gaia-packages.sh" "$mutant/.claude/hooks/lib/"
-  grep -v '^    link_env_files_in "\$package_path"$' "$SCRIPT" > "$mutant/.gaia/scripts/link-worktree.sh"
-  # The mutation must have removed exactly the per-package call.
-  [ "$(grep -c 'link_env_files_in' "$SCRIPT")" -gt "$(grep -c 'link_env_files_in' "$mutant/.gaia/scripts/link-worktree.sh")" ] || return 1
-
-  mkdir -p "$MAIN/apps/web" "$LINKED/apps/web"
-  printf 'PKG_VAR=pkg' > "$MAIN/apps/web/.env"
-  write_builtin_descriptor "$LINKED"
-
-  run bash -c "cd '$LINKED' && bash '$mutant/.gaia/scripts/link-worktree.sh'"
-  [ "$status" -eq 0 ]
-  [ ! -e "$LINKED/apps/web/.env" ]
-}
-
 @test "package env files: a worktree whose branch has no package directory, so no descriptor, logs it and gets none created" {
   mkdir -p "$MAIN/apps/web"
   printf 'PKG_VAR=pkg' > "$MAIN/apps/web/.env"

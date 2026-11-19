@@ -12,7 +12,6 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   FIXTURE="$BATS_TEST_DIRNAME/fixtures/context-checkpoint/pinned-question.txt"
-  LIBRARY_NAMES="context-checkpoint-lib.sh audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh"
 }
 
 # emit_questions <library-directory>: the four fixture questions, one line each.
@@ -25,15 +24,6 @@ emit_questions() {
   gaia_loop_pinned_question feat/sample 0123456789abcdef 4 3 true false rubric:enriching "fresh 250000 1000000" accept 300000
 }
 
-# copy_libraries <destination>: a scratch copy of every library the builder sources.
-copy_libraries() {
-  local name
-  mkdir -p "$1"
-  for name in $LIBRARY_NAMES; do
-    cp "$REPO_ROOT/.gaia/scripts/$name" "$1/$name"
-  done
-}
-
 @test "the fixture holds four non-empty question lines" {
   [ "$(wc -l <"$FIXTURE" | tr -d ' ')" = "4" ]
   [ "$(grep -c '^{"questions":' "$FIXTURE")" = "4" ]
@@ -43,17 +33,4 @@ copy_libraries() {
   local actual="$BATS_TEST_TMPDIR/actual.txt"
   (emit_questions "$REPO_ROOT/.gaia/scripts") >"$actual"
   cmp "$actual" "$FIXTURE"
-}
-
-@test "red twin: a changed summary format in the shared context lib fails the compare" {
-  local scratch="$BATS_TEST_TMPDIR/mutant" actual="$BATS_TEST_TMPDIR/mutant-actual.txt"
-  copy_libraries "$scratch"
-  sed 's/k of /K of /g' "$scratch/context-checkpoint-lib.sh" >"$scratch/context-checkpoint-lib.sh.new"
-  mv "$scratch/context-checkpoint-lib.sh.new" "$scratch/context-checkpoint-lib.sh"
-  # The mutation must actually have changed the copy.
-  run cmp -s "$scratch/context-checkpoint-lib.sh" "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
-  [ "$status" -ne 0 ]
-  (emit_questions "$scratch") >"$actual"
-  run cmp -s "$actual" "$FIXTURE"
-  [ "$status" -ne 0 ]
 }

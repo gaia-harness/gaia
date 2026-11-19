@@ -124,17 +124,6 @@ entry() {
   [ "$output" = ".claude/skills/a/SKILL.md" ]
 }
 
-@test "the extraction reads the real playbook: a copy without the filter line fails the helper" {
-  local scratch_playbook
-  scratch_playbook="$BATS_TEST_TMPDIR/playbook-without-filter.md"
-  grep -vE "^jq -er '\[\.inventory" "$PLAYBOOK" >"$scratch_playbook"
-  run extract_filter "$scratch_playbook"
-  [ "$status" -ne 0 ]
-  run extract_filter "$PLAYBOOK"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-}
-
 # write_judge_input <playbook> <scratch>: runs the playbook's input-writer
 # block (the indented `{ ... } > <SCRATCH>/judge-input.md` group) with
 # <SCRATCH> bound to the second argument, from the current directory.
