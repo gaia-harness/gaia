@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
-# Doc-pin: no update-deps or update-gaia file keeps an "on any other branch,
-# work in place" arm.
+# Doc-pin: none of the update-deps and update-gaia files in UPDATE_FILES keeps
+# an "on any other branch, work in place" arm.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 #

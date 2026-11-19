@@ -1,7 +1,9 @@
 #!/usr/bin/env bats
-# Doc pins for the audit loop: the fix round on `wiki/concepts/Audit Round Procedure.md`
-# (`#### The fix round: fixer, verifier, gate`) and the branch checkpoint on the
-# runbook `wiki/concepts/PR Merge Workflow.md` (`#### The branch checkpoint`).
+# Doc pins for the audit loop: the fix round and cross-remit sections of
+# `wiki/concepts/Audit Round Procedure.md` (`#### The fix round: fixer,
+# verifier, gate`, `#### Cross-remit findings`), and the branch checkpoint and
+# audit loop unit sections of the runbook `wiki/concepts/PR Merge Workflow.md`
+# (`#### The branch checkpoint`, `## Dispatch the audit loop unit`).
 # `.claude/rules/pr-merge.md` makes the merge page an executed contract, so
 # each pin below holds a sentence an orchestrator acts on: who edits during
 # the loop, when a round makes no commit, and what a checkpoint selection does

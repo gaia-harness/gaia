@@ -127,7 +127,7 @@ extract_section() {
 
 # --- 4. the three pre-implementation peels pin their ordering ---------------
 
-@test "each fix-time screen section states it is load-bearing and makes no commits" {
+@test "each fix-time screen states its place before implementation is load-bearing because a member it peels has no commits" {
   local heading section
   for heading in '## Fix-time security screen' '## Fix-time staleness screen' '## Fix-time spec screen'; do
     section="$(extract_section "$heading")"

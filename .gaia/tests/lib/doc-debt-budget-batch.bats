@@ -61,7 +61,7 @@ check_row() {
   }
 }
 
-@test "the budget batch's security read fails closed and every member passes the fix-time screen" {
+@test "the budget batch's security read fails closed and every member passes the fix-time security screen" {
   check_row "an empty list without classifying is the confirmed-PRIVATE arm only" debt/recommend.md "$OFFER_HEADING" 'Confirmed PRIVATE' 'pass an empty list, with no classification'
   check_row "a completed classification that finds nothing passes an empty list and the option still shows" debt/recommend.md "$OFFER_HEADING" 'classification complete on every candidate' 'The list may be empty, and the budget option still shows'
   check_row "PUBLIC counts as non-PRIVATE" debt/recommend.md "$OFFER_HEADING" 'count as non-PRIVATE' 'PUBLIC'

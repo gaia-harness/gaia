@@ -481,8 +481,7 @@ residue_pr_fixture() {
   # block is outside every lens; this asks whether anything is hiding there.
   #
   # An empty complement means the discovery set is the whole set. The floor
-  # below fails when the extractor reads no fenced lines at all, so a broken
-  # extractor cannot pass this test by reading nothing.
+  # below fails when the extractor reads no fenced lines.
   covered="${BATS_TEST_TMPDIR}/covered"
   all_fence_bodies >"$covered"
   [ -s "$covered" ] || { echo "the extractor read no fenced lines from ${PAGE}" >&2; return 1; }
