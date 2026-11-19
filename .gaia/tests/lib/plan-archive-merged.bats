@@ -238,6 +238,7 @@ _days_ago() {
 
 # --- 8: only merged rows with folders are swept ------------------------------
 
+# bats test_tags=protected
 @test "8: a folder without a merged catalog row is never deleted" {
   _seed_merged_plan PLAN-001
   _seed_folder_only PLAN-002

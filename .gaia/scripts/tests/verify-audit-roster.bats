@@ -313,6 +313,7 @@ YAML
   assert_contains "roster clean"
 }
 
+# bats test_tags=protected
 @test "registration: a member whose definition no machinery entry reaches fails, naming it" {
   local fixture_directory="$BATS_TEST_TMPDIR/unregistered"
   scaffold_root "$fixture_directory" <<'YAML'
@@ -807,6 +808,7 @@ YAML
   printf '  - "%s"\n' "$@"
 }
 
+# bats test_tags=protected
 @test "coverage: a tracked path owned by nobody and exempted by nobody fails" {
   local fixture_directory="$BATS_TEST_TMPDIR/cov-orphan"
   tracked_roster '.claude/**' '.gaia/**' | scaffold_tracked_root "$fixture_directory" \

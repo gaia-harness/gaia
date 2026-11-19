@@ -450,6 +450,7 @@ view_tsv() {
   true
 }
 
+# bats test_tags=protected
 @test "close-own refuses when the author is not the current login" {
   printf 'octo-cat\n' >"$STATE_DIR/login.txt"
   view_tsv OPEN "$CLAIM_BRANCH" someone-else false

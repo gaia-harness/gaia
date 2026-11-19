@@ -49,6 +49,7 @@ commit_through_hook() {
   grep -qF "roster clean" <<<"$output"
 }
 
+# bats test_tags=protected
 @test "a staged roster edit that breaks an invariant refuses the commit and names the finding" {
   sed -e 's/name: code-audit-github-workflows/name: workflows-reviewer/' "$SANDBOX/.gaia/audit-ci.yml" > "$SANDBOX/roster.tmp"
   mv "$SANDBOX/roster.tmp" "$SANDBOX/.gaia/audit-ci.yml"

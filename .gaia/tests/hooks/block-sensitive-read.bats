@@ -83,6 +83,7 @@ run_hook_without_library() {
 
 # --- Read-tool denies ---
 
+# bats test_tags=protected
 @test "Read a nested packages/api/.env.production is denied" {
   run_hook_read "packages/api/.env.production"
   assert_denied_by_json
@@ -520,6 +521,7 @@ run_hook_monitor() {
 
 # --- Read-tool denies, one per path class the removed Read() globs covered ---
 
+# bats test_tags=protected
 @test "Read certs/server.key is denied" {
   run_hook_read "certs/server.key"
   assert_denied_by_json

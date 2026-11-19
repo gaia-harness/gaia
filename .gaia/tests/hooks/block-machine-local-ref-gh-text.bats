@@ -62,6 +62,7 @@ assert_allowed() {
 
 # --- each verb the hook reads ------------------------------------------------
 
+# bats test_tags=protected
 @test "gh pr create with a SPEC number in the title is blocked and names the match" {
   run_hook 'gh pr create --draft --title "feat: build SPEC-123" --body "plain"'
   assert_blocked

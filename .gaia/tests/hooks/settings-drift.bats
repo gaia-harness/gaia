@@ -143,6 +143,7 @@ regenerate() {
 
 # --- the drift check can fail ---
 
+# bats test_tags=protected
 @test "a changed root hook command without regenerating is drift naming the generated file" {
   build_tree
   jq '.hooks.PreToolUse[0].hooks[0].command = "other.sh"' "$TREE/.claude/settings.json" >"$TREE/changed.json"
@@ -177,6 +178,7 @@ regenerate() {
   jq -e '.permissions.allow | index("Edit(extra/**)") != null' "$TREE/apps/web/.claude/settings.json"
 }
 
+# bats test_tags=protected
 @test "the presence assertion fails on a dropped deny even when the generator reports clean" {
   build_tree
   # A generator that always agrees with itself: only the independent jq

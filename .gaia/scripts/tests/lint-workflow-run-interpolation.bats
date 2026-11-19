@@ -62,6 +62,7 @@ surface_has_workflow_and_action() {
   grep -qE -- '^\.github/actions/[^/]+/action\.ya?ml$' <<<"$output" || return 1
 }
 
+# bats test_tags=protected
 @test "reds against the pre-fix forensics-triage handler shape" {
   fixture_repo
   fixture_workflow triage.yml 'jobs:

@@ -514,6 +514,7 @@ assert_not_in_set() {
   [[ "$output" != *'"permissionDecision": "deny"'* ]]
 }
 
+# bats test_tags=protected
 @test "denies a PR that changes app/ source" {
   commit_files "apps/web/app/components/Foo/index.tsx" "export const Foo = () => null"
   run_merge_hook
@@ -638,6 +639,7 @@ assert_not_in_set() {
   [[ "$output" != *'"permissionDecision": "deny"'* ]]
 }
 
+# bats test_tags=protected
 @test "AND-aggregator: mixed app/ + .gaia .sh diff denies while the maintainer-shell member withholds" {
   commit_files \
     "apps/web/app/x.ts" "export const x = 1" \
@@ -843,6 +845,7 @@ assert_not_in_set() {
 # same-digest earned marker present.
 # ---------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "UAT-004: a live refusal for the SAME digest denies even with a valid earned marker present (frontend)" {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_marker "code-audit-frontend"
@@ -1989,6 +1992,7 @@ EOF
   assert_allowed_by_json
 }
 
+# bats test_tags=protected
 @test "out-of-scope: the bypass denies a merge naming a pull request other than the record's" {
   install_gh_stub
   commit_files "wiki/x.md" "doc"
@@ -2102,6 +2106,7 @@ EOF
 # them with one call today, but a future change that pushes the question back
 # down into the individual signals must not reopen one of them silently.
 
+# bats test_tags=protected
 @test "clearance: a frontend marker denies a merge naming a pull request other than the record's" {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"

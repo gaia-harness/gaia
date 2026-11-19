@@ -332,6 +332,7 @@ assert_no_post() {
   assert_no_post
 }
 
+# bats test_tags=protected
 @test "marker present but not writer-produced: declines as not a valid clearance" {
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   digest=$(digest_of "$REPO" code-audit-frontend)
@@ -957,6 +958,7 @@ mutated_hook_mirror() {
 # Owed gate steps
 # -----------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "success declines and posts nothing while gate steps are owed" {
   use_hook_copy 1
   push_head_to_upstream

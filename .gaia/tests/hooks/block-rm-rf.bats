@@ -54,6 +54,7 @@ assert_denied_because() {
 
 # --- denied: bare targets ---
 
+# bats test_tags=protected
 @test "rm -rf / is denied" {
   run_hook_bash 'rm -rf /'
   assert_denied_by_json
@@ -89,6 +90,7 @@ assert_denied_because() {
   assert_denied_by_json
 }
 
+# bats test_tags=protected
 @test "rm -rf .git is denied" {
   run_hook_bash 'rm -rf .git'
   assert_denied_by_json

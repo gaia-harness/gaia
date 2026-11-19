@@ -84,6 +84,7 @@ allowed() { gaia_loop_allowed "$(cat "$ALF_STATE")"; }
   printf '%s' "$output" | grep -qF '7'
 }
 
+# bats test_tags=protected
 @test "an sdk-cli transcript (the nested claude -p shape) records nothing and says not interactive" {
   seed_pending
   snapshot

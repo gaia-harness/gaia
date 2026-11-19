@@ -138,6 +138,7 @@ type worthiness_ledger_path >/dev/null 2>&1 || exit 0'
   grep -qF -- "a file-test operand names a bare repo-relative path" <<<"$output"
 }
 
+# bats test_tags=protected
 @test "flags a bare source operand" {
   fixture_repo
   fixture_hook '. .gaia/scripts/main-root-lib.sh'

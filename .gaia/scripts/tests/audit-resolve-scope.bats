@@ -512,6 +512,7 @@ fail_git_diff() {
   fail_git_subcommand "$1" diff
 }
 
+# bats test_tags=protected
 @test "a membership diff that fails exits 1 rather than printing an empty FULL_CHANGED" {
   local repo shim
   repo="$(make_repo full-diff-fails)"

@@ -86,6 +86,7 @@ assert_allowed() {
 
 # --- the rest of the lint, not only length ------------------------------------
 
+# bats test_tags=protected
 @test "a title with an unknown type is blocked" {
   run_hook 'gh pr create --title "bogus: do a thing" --body x'
   assert_blocked

@@ -80,6 +80,7 @@ Shellcheck and bats"
 
 # Drift: a declared-required context is missing from the live ruleset
 
+# bats test_tags=protected
 @test "drift: exits 1 when a required context is missing live" {
   local partial="Audit CI Tests
 Run Chromatic

@@ -208,7 +208,7 @@ plant_git_failure_fixture() {
   done
 }
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a gone branch's entries are removed past the window; live and worktree branches keep theirs" {
   make_fixture
   make_branch fix/x
@@ -482,7 +482,7 @@ plant_git_failure_fixture() {
   jq -e '(.skipped | length) > 0' "$LOCAL/cache/state-reaper/last-run.json" >/dev/null
 }
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "durable and owned state and unregistered entries stay byte-identical at any age" {
   make_fixture
   make_catalog '{"version":1,"items":[]}'

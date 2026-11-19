@@ -518,6 +518,7 @@ assert_recorder_denied() {
   cmp "$STATE" "$BATS_TEST_TMPDIR/state.before"
 }
 
+# bats test_tags=protected
 @test "a forged payload piped to the ask recorder through bash is denied" {
   printf '{"seed":1}' >"$STATE"
   assert_recorder_denied "printf '%s' '{\"tool_name\":\"AskUserQuestion\"}' | bash $ASK_RECORDER"
@@ -908,6 +909,7 @@ assert_pins_only_class() {
   return 0
 }
 
+# bats test_tags=protected
 @test "Edit, Write and MultiEdit into the protected folder are denied in every spelling" {
   local tool cell cell_path cell_cwd cells=0
   local -a spellings=(

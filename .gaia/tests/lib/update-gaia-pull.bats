@@ -193,6 +193,7 @@ assert_refused() {
   assert_refused not-default-branch "$before"
 }
 
+# bats test_tags=protected
 @test "refuses with a modified tracked file and leaves the tree untouched" {
   make_origin_and_tree
   advance_origin 2.0.4
@@ -232,6 +233,7 @@ assert_refused() {
   assert_refused worktree "$before"
 }
 
+# bats test_tags=protected
 @test "refuses when diverged from origin, after the fetch, and merges nothing" {
   make_origin_and_tree
   advance_origin 2.0.4

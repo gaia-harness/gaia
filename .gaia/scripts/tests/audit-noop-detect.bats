@@ -226,6 +226,7 @@ setup() {
   [ "$output" = "real" ]
 }
 
+# bats test_tags=protected
 @test "audit-team-member: no marker, harness-reminder-echo return is NO-OP" {
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
   [ "$status" -eq 1 ]

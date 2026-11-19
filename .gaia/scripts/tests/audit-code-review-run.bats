@@ -214,6 +214,7 @@ EOF
   [ "$(jq -c . "$log")" = '{"tool":"Read","path":".env.local"}' ]
 }
 
+# bats test_tags=protected
 @test "the guard denies and logs a git command that reads outside the review root" {
   local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh" root="/work/tree" command_text
   for command_text in 'git diff /dev/null .env' "git -C $root diff /dev/null ~/.aws/credentials" 'git blame --contents .env HEAD' \

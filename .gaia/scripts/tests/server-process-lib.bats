@@ -376,6 +376,7 @@ write_launch_record() {
   wait_until_gone "$LISTENER_PID"
 }
 
+# bats test_tags=protected
 @test "removed tree refusal: a live tree's listener survives and nothing is printed" {
   make_tree "$SCRATCH/tree"
   start_listener_on_free_port "$SCRATCH/tree/apps/web"
@@ -449,6 +450,7 @@ $recorder" gaia_server_stop_removed_tree_listeners "$SCRATCH/tree" "$LISTENER_PO
 
 # ---------- verified stop ----------
 
+# bats test_tags=protected
 @test "verified stop: each mismatched field refuses with rc 1 and the process survives" {
   make_tree "$SCRATCH/tree"
   make_tree "$SCRATCH/other"

@@ -162,6 +162,7 @@ $(stamp_of "$HEAD_SHA")"
   true
 }
 
+# bats test_tags=protected
 @test "check exits 1 on a stale body with the reason, and 0 on a current one" {
   install_script_gh_stub "Summary."
   run bash "$STAMP_SCRIPT" check --pr 7
@@ -229,6 +230,7 @@ marker_cleared_app_pr() {
   [ -z "$output" ]
 }
 
+# bats test_tags=protected
 @test "gate: a stamp for an older head denies the marker-cleared merge, naming the write command" {
   gate_setup
   marker_cleared_app_pr

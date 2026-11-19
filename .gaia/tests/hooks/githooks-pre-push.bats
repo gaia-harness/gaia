@@ -118,6 +118,7 @@ NOTE='pre-push: no branch update in this push, nothing to verify'
   remote_has_branch feat-twin
 }
 
+# bats test_tags=protected
 @test "a runner refusal refuses the push and the ref never reaches the remote" {
   commit_on_branch feat-red > /dev/null
   printf '1\n' > "$RUNNER_STATUS"

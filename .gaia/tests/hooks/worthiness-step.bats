@@ -386,6 +386,7 @@ state_checksum() {
   [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ]
 }
 
+# bats test_tags=protected
 @test "record with a verdict missing for an evaluate test exits 1 naming it and appends nothing" {
   commit_widget_edits
   run_route

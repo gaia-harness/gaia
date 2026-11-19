@@ -465,7 +465,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a wrong digest in the verdict prints full verdict-mismatch" {
   use_shared_light
   clear_reply_to_file
@@ -574,7 +574,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a hard-full edit committed after routing never clears light" {
   prepare_light
   clear_reply_to_file

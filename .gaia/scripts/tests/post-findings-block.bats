@@ -756,6 +756,7 @@ write_sidecar_with_review_base() {
 # where an unfixed hole sits, so a security-class or Critical entry reaches the
 # comment only as a bare count.
 
+# bats test_tags=protected
 @test "a security-class entry and a Critical entry are withheld from the comment, counted only" {
   # Written straight to disk: write_sidecar would record the unflagged entry as
   # security:false, which is exactly the case under test.

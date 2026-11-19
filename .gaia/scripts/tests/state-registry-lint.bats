@@ -103,7 +103,7 @@ mutate_registry() {
   [ "$output" = "$row_id: duplicate row id" ]
 }
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a protected row must be keep or branch-spent with days 7" {
   local expected="audit-loop-state: a protected/ row must be keep, or branch-spent with days 7"
 

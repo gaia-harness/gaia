@@ -54,6 +54,7 @@ reason() {
   jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output"
 }
 
+# bats test_tags=protected
 @test "UAT-010: gh pr checkout of a fork pull request is denied with the refusal" {
   run_guard 'gh pr checkout 34'
   assert_denied_by_json

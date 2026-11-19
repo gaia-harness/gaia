@@ -1338,6 +1338,7 @@ snapshot_ledger() {
   cp "$LEDGER" "$BATS_TEST_TMPDIR/ledger.before"
 }
 
+# bats test_tags=protected
 @test "accounting: an earned write that omits an open finding exits 3 and publishes nothing" {
   accounting_fixture
   write_findings_sidecar "$member" '[]' "$(resolution_json "$FIRST_ID")"
@@ -1755,6 +1756,7 @@ EOF
 # write-time derive, rather than publishing a marker keyed to unread content.
 # -----------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "UAT-001: a rotated digest refuses on the earned path and writes nothing" {
   digest="$(member_digest "$ROOT" code-audit-frontend)"
 

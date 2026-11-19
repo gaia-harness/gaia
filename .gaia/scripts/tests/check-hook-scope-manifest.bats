@@ -68,6 +68,7 @@ add_hook() {
 
 # ========== bare literal ==========
 
+# bats test_tags=protected
 @test "bare literal: a bare .gaia/local literal in a top-level hook fails" {
   local repo; repo="$(make_fixture_repo bare-top)"
   add_hook "$repo" "foo.sh" '#!/usr/bin/env bash

@@ -200,6 +200,7 @@ pnpm -C $R build" ]
 
 # --- pass evidence -----------------------------------------------------------
 
+# bats test_tags=protected
 @test "steps-passed with no pass evidence refuses with exit 4 and the gate stays owed" {
   commit_path apps/web/app/a.ts
   gate mark --round 1

@@ -140,6 +140,7 @@ denied_by_settings() {
   [ "$(edited_sums)" = "$EDITED_SUMS" ]
 }
 
+# bats test_tags=protected
 @test "a patch that cannot be written refuses the reset" {
   make_edits
   printf 'a file, not a folder\n' >"$BATS_TEST_TMPDIR/blocker"

@@ -109,6 +109,7 @@ path_without() {
   printf '%s\n' "$farm"
 }
 
+# bats test_tags=protected
 @test "a branch that deletes a manifest-listed file is refused before the ref reaches the remote" {
   enable_hook
   missing_path="$(manifest_path_matching '^wiki/concepts/')"
@@ -125,6 +126,7 @@ path_without() {
   if remote_has_branch feat/missing; then return 1; fi
 }
 
+# bats test_tags=protected
 @test "a shipped agent file referencing a maintainer-only path is refused by the leak check" {
   enable_hook
   agent_path=".claude/agents/code-audit-frontend.md"

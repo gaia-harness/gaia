@@ -188,6 +188,7 @@ write_hook() {
   grep -qF -- 'no gaia_require_jq call reaches its payload read' <<<"$output"
 }
 
+# bats test_tags=protected
 @test "red: a blocking hook with no jq arm at all is reported" {
   local fixture_directory
   fixture_directory="$(make_fixture red-bare)"
