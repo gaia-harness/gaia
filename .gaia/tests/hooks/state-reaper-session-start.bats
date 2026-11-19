@@ -192,10 +192,6 @@ reset_fixture() {
   rm -f "$LAUNCH_MARKER" "$LAUNCH_DONE"
 }
 
-# One cadence rule, three stamp states: 2 hours old launches nothing from the
-# main checkout or a linked tree and leaves the stamp alone; 25 hours old
-# launches the stub once from each tree, restamps main's and returns while the
-# stub sleeps; a missing stamp launches.
 # bats test_tags=whole-tree
 @test "the launch cadence follows the stamp age: 2 hours old launches nothing, 25 hours old launches once per tree, missing launches" {
   announce_row "a stamp 2 hours old launches nothing from the main checkout or a linked tree and leaves the stamp alone"
@@ -269,9 +265,6 @@ reset_fixture() {
   release_stub "$LOCAL"
 }
 
-# One lock-state rule: a held fresh lock launches nothing, a lock held through
-# the shared helper launches nothing (with a non-exclusive mkdir first on PATH),
-# and a lock older than 10 minutes is reclaimed and the reaper launches.
 # bats test_tags=whole-tree
 @test "a held fresh lock or a lock held through the shared helper launches nothing, and a lock older than 10 minutes is reclaimed" {
   announce_row "a held fresh lock launches nothing"
@@ -312,9 +305,7 @@ reset_fixture() {
 
 # ---------- fail open ----------
 
-# One fail-open rule, three failure inputs: outside any repository, with no
-# reaper script, or with an unwritable cache, the hook exits 0 and launches
-# nothing. The outside-a-repository row reassigns MAIN, so it runs last.
+# The outside-a-repository row reassigns MAIN, so it runs last.
 # bats test_tags=whole-tree
 @test "the hook exits 0 and launches nothing outside a repository, with no reaper script, or with an unwritable cache" {
   announce_row "an absent reaper script exits 0, launches nothing and leaves the stamp alone"

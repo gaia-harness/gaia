@@ -420,9 +420,10 @@ write_helper_folder_descriptor() {
   grep -qF -- "renders a label" <<<"$output"
 }
 
-# One committed test serves the ledger rows, each from an empty ledger. A `fix`
-# verdict still satisfies presence and signal match: the verdict is advisory and
-# never read for the presence decision.
+# One committed test serves the first four ledger rows, each from an empty
+# ledger; the transition rows reset to a second test. A `fix` verdict still
+# satisfies presence and signal match: the verdict is advisory and never read
+# for the presence decision.
 @test "a gated test needs a ledger line at its current signal, whatever its verdict: an unrelated line denies, a matching keep or fix line allows, a stale signal denies, and appending a matching line turns a deny into an allow" {
   local test_path="apps/web/app/components/Foo/tests/index.test.tsx"
   local widget_path="apps/web/app/components/Widget/tests/index.test.tsx"

@@ -102,7 +102,7 @@ expect_resolve() {
   fi
 }
 
-# One boundary rule, eight inputs: the home repository resolves, another
+# One boundary rule: the home repository resolves, another
 # repository or host declines, an enterprise home host resolves its own URL and
 # not github.com (without it the host comparison could pass by hardcoding
 # github.com), the slug and host compare case-insensitively, and neither a

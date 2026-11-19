@@ -346,7 +346,7 @@ write_sidecar() {
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
 
   next_case "the same heredoc-body payload padded past the arming bound still posts nothing (boundary, not masking)"
-  # The generic past-bound pairing (case 2's heredoc, padded past
+  # The generic past-bound pairing (the previous row's heredoc, padded past
   # GAIA_VERB_ARM_MAXIMUM_CHARACTERS, arms because the walker abstains above the bound)
   # cannot discriminate through THIS hook's observable side effect: the
   # opener's command word is necessarily `cat`/`tee`, never `gh`, so
@@ -381,8 +381,7 @@ write_sidecar() {
   # The merge stays first, with a trailing statement after it: this hook's own
   # boundary check (repo-scope's act-on-home entry point) requires the merge to
   # BE the tool call's first command, so a leading `<something> &&` before the
-  # merge declines regardless of arming, unchanged by this work. This is the
-  # multi-statement shape that already worked and must keep working.
+  # merge declines regardless of arming.
   write_sidecar
   export FAKE_GH_STATE
 
@@ -401,12 +400,6 @@ write_sidecar() {
   [ ! -s "$FAKE_GH_STATE/post_count" ]
 
   next_case "a home repository flag ahead of the subcommand posts the block"
-  # The sandbox toplevel is a mktemp directory, and the home repo gh reports is
-  # `acme/repo`, so the two are deliberately unrelated. That is what makes the
-  # next fixture decisive: `-R other-org/<toplevel-basename>` is the value the
-  # repo-NAME comparison calls home and the whole-slug comparison calls foreign.
-  # This hook ACTS on the home repo, so calling it home posts a findings block
-  # onto THIS repository's pull request of that number.
   write_sidecar
   export FAKE_GH_STATE
   run_merge_hook "gh -R acme/repo pr merge 42 --squash"
@@ -421,6 +414,12 @@ write_sidecar() {
   [ ! -s "$FAKE_GH_STATE/post_count" ]
 
   next_case "a same-named sibling repo posts nothing"
+  # The sandbox toplevel is a mktemp directory, and the home repo gh reports is
+  # `acme/repo`, so the two are deliberately unrelated. That is what makes this
+  # row decisive: `-R other-org/<toplevel-basename>` is the value the repo-NAME
+  # comparison calls home and the whole-slug comparison calls foreign. This hook
+  # ACTS on the home repo, so calling it home posts a findings block onto THIS
+  # repository's pull request of that number.
   write_sidecar
   export FAKE_GH_STATE
 
@@ -763,7 +762,7 @@ run_staged_merge_hook() {
   next_case "staged hook under stock /bin/bash, every lib usable: posts the findings block (control)"
   # The stock-/bin/bash control, and it is not redundant with the control above.
   # Every pinned case in this suite asserts only exit 0, no output, and no
-  # artifact, which a hook that does nothing at all under 3.2 satisfies just as
+  # post, which a hook that does nothing at all under 3.2 satisfies just as
   # well as a hook that degrades correctly. Without a control on the SAME
   # interpreter proving the normal path still works there, the pinned cases
   # cannot separate the repair from total inertness on the one shell they exist

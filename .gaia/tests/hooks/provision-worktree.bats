@@ -216,7 +216,8 @@ begin_row() {
   [ "$target_real" = "$main_real" ]
 }
 
-# One outcome (the .gaia/local symlink) through the input shapes the header lists.
+# One outcome (the .gaia/local symlink) through each way a caller hands the hook
+# a tree; the header's process-cwd fallback is not a row here.
 @test "a tree is provisioned however the hook names it" {
   begin_row "an explicit worktree argument is provisioned"
   make_main
@@ -239,7 +240,7 @@ begin_row() {
   [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
 
   begin_row "a SessionStart payload is provisioned from its cwd"
-  # The SessionStart payload carries a cwd and nothing else, so this is the arm
+  # The SessionStart payload names no tree but its cwd, so this is the arm
   # that covers a session STARTING inside a worktree.
   make_main
   WORKTREE_PATH="$(add_worktree feat-sessionstart)"
@@ -421,7 +422,8 @@ begin_row() {
   return 0
 }
 
-# One carry-forward rule over three directories.
+# One carry-forward rule: a worktree's ledger and forensics directories, and the
+# main checkout's own ledger.
 @test "unkeyed data is carried forward to the keyed path" {
   begin_row "unkeyed worthiness-ledger data is carried forward to the keyed path, byte for byte"
   make_main
@@ -815,7 +817,8 @@ begin_row() {
 
   begin_row "a .gaia/cli directory with no lockfile of its own gets no install"
   # The adopter shape: .gaia/cli ships its bundled binary but not its lockfile,
-  # which is release-excluded, so the directory exists and the install must not.
+  # which is release-excluded, so the directory exists and gets no install of
+  # its own.
   make_main
   add_lockfile
   mkdir -p "$MAIN/.gaia/cli"

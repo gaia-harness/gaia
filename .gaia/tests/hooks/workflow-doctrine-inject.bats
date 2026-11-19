@@ -317,7 +317,7 @@ assert_silent() {
   run_hook "$(post_tool_bash_payload d2 'git switch fix/7-x' "$REPO")"
   assert_injects_keyed PostToolUse "Branch key: branch:fix/7-x. "
 
-  # case: a no-injection resume or compact also removes the marker; startup leaves it
+  # case: a no-injection resume also removes the marker; startup leaves it
   run_hook "$(session_start_payload d3 startup "$REPO")"
   assert_injects_keyed SessionStart "Branch key: branch:fix/7-x. "
   git -C "$REPO" checkout -q main
