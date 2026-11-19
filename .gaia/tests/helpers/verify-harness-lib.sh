@@ -183,8 +183,8 @@ verify_execute_check() {
   case "$kind" in
     shell-lint)
       # A merge base whose gate predates --paths-from would exit 2 on it, and
-      # that failed base re-run would read a new finding as "main is red"; such a
-      # gate lints the whole tree.
+      # that exit would pass off a HEAD failure with no readable items as
+      # "main is red"; such a gate lints the whole tree.
       if [ -n "${verify_round_delta_file:-}" ] && grep -qF -- '--paths-from)' "$tree/.gaia/tests/shell-lint.sh"; then
         (cd "$tree" && bash .gaia/tests/shell-lint.sh --paths-from "$verify_round_delta_file") >"$output_file" 2>&1 </dev/null
       else
