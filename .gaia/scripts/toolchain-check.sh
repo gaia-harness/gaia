@@ -240,9 +240,9 @@ PNPM_INSTALL='corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
 # Global packages stay with the old Node, so pnpm is reinstalled under the new
 # one. nvm is a shell function, invisible to command -v here, so its install
 # script stands in for it. Windows gets no route: these commands are bash.
-# Callers run this check from the project root, but a fresh terminal opens
-# elsewhere, so the route changes there first for the managers to find the
-# version files. The $(...) stays unexpanded: it is printed for the user's shell.
+# Callers run this check from the project root, so $PWD names it; a fresh
+# terminal opens elsewhere, so the route cds there first for the managers to
+# find the version files. The $(...) stays unexpanded for the user's shell.
 # shellcheck disable=SC2016
 node_route() {
   local project_root
