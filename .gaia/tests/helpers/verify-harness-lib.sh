@@ -186,7 +186,8 @@ verify_execute_check() {
       # that exit would pass off a HEAD failure with no readable items as
       # "main is red"; such a gate lints the whole tree.
       # A host without shellcheck runs only the folded guards; a gate that
-      # predates `--only guards` has no such mode and runs every pass.
+      # predates `--only guards` has no such mode, so it runs in full and stops
+      # at its missing-shellcheck check before any pass.
       if [ "${verify_shell_lint_guards_only:-0}" -eq 1 ] && grep -qF -- "| guards)" "$tree/.gaia/tests/shell-lint.sh"; then
         (cd "$tree" && bash .gaia/tests/shell-lint.sh --only guards) >"$output_file" 2>&1 </dev/null
       elif [ -n "${verify_round_delta_file:-}" ] && grep -qF -- '--paths-from)' "$tree/.gaia/tests/shell-lint.sh"; then
@@ -228,7 +229,7 @@ verify_extract_items() {
       # the repo guards' "<file>:<line>:" each name the offending file. The
       # protected-test gate's REMOVED and BAD-WAIVER lines carry no line
       # number, so the whole line is the item, and the merge base never prints
-      # the branch's own removal.
+      # the branch's own removal or waiver.
       sed -n -E \
         -e 's/^In (.+) line [0-9]+:.*$/\1/p' \
         -e 's/^([^ :]+): line [0-9]+:.*$/\1/p' \
