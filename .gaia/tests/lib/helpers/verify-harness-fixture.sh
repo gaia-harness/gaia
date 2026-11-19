@@ -258,7 +258,8 @@ vhf_path_without() {
       [ -L "$farm/${command_path##*/}" ] && continue
       links+=("$command_path")
     done
-    # One ln per directory, not per executable: a PATH holds ~1750 commands.
+    # One ln per directory, not per executable: a fork per command on PATH
+    # makes building the farm slow.
     [ "${#links[@]}" -eq 0 ] || ln -s "${links[@]}" "$farm/"
   done
   IFS="$saved_ifs"
