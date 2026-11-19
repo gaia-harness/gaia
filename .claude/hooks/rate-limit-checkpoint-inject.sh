@@ -26,9 +26,9 @@
 #
 # Exit ladder, cheapest first: raw pattern checks on the payload with bash only
 # (event, agent_id, tool name, session id, cwd); the fast pre-check, which
-# sources only the two main-root libraries, trusts gaia_resolve_main_root_fast
-# (main-root-fast-lib.sh) for "absent" only, and exits when its root holds no
-# shared file, before any git process (any other outcome changes nothing);
+# sources only main-root-lib.sh and rate-limit-main-root-probe-lib.sh, trusts
+# gaia_resolve_main_root_fast for "absent" only, and exits when its root holds
+# no shared file, before any git process (any other outcome changes nothing);
 # context-checkpoint-lib.sh and the session id check;
 # rate-limits-lib.sh; gaia_resolve_main_root and the authoritative shared-file
 # check; then the one jq of the run, inside gaia_rate_limits_report, which also
@@ -85,12 +85,12 @@ case "$cwd" in *\\*) exit 0 ;; esac
 # Fast pre-check (exit ladder above). The relative path is read from
 # rate-limits-lib.sh's own assignment, not sourced, so this exit skips that
 # library's load and the path is never spelled here.
-# A failed load of main-root-fast-lib.sh skips only the pre-check; a failed
-# load of main-root-lib.sh also leaves gaia_resolve_main_root undefined, so the
-# hook exits silently at the full resolution below.
+# A failed load of rate-limit-main-root-probe-lib.sh skips only the pre-check;
+# a failed load of main-root-lib.sh also leaves gaia_resolve_main_root
+# undefined, so the hook exits silently at the full resolution below.
 fast_precheck_ready=0
 # shellcheck source=/dev/null
-if . "$scripts/main-root-lib.sh" && . "$scripts/main-root-fast-lib.sh"; then
+if . "$scripts/main-root-lib.sh" && . "$scripts/rate-limit-main-root-probe-lib.sh"; then
   fast_precheck_ready=1
 fi
 shared_relative=""

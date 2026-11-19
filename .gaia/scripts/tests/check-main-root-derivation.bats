@@ -112,7 +112,7 @@ commit_fixture() {
   local repo
   repo="$(make_fixture_repo companion-exemption)"
   mkdir -p "$repo/.gaia/scripts"
-  printf 'raw="$(git rev-parse --git-common-dir)"\n' >"$repo/.gaia/scripts/main-root-fast-lib.sh"
+  printf 'raw="$(git rev-parse --git-common-dir)"\n' >"$repo/.gaia/scripts/rate-limit-main-root-probe-lib.sh"
   commit_fixture "$repo"
   run gaia_check_main_root_derivation "$repo"
   [ "$status" -eq 0 ]

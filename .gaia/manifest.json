@@ -331,7 +331,6 @@
     ".gaia/scripts/link-worktree.sh": "owned",
     ".gaia/scripts/machine-local-ref-lib.sh": "owned",
     ".gaia/scripts/main-only-lib.sh": "owned",
-    ".gaia/scripts/main-root-fast-lib.sh": "owned",
     ".gaia/scripts/main-root-lib.sh": "owned",
     ".gaia/scripts/notebook/legacy-roots.sh": "owned",
     ".gaia/scripts/notebook/move.sh": "owned",
@@ -351,6 +350,7 @@
     ".gaia/scripts/pr-wait-merge.sh": "owned",
     ".gaia/scripts/precommit-packages.sh": "owned",
     ".gaia/scripts/provision-wait.sh": "owned",
+    ".gaia/scripts/rate-limit-main-root-probe-lib.sh": "owned",
     ".gaia/scripts/rate-limits-lib.sh": "owned",
     ".gaia/scripts/rate-limits.sh": "owned",
     ".gaia/scripts/react-doctor-version-lib.sh": "owned",
@@ -879,7 +879,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-19T11:46:40.667Z",
+  "generated": "2026-11-19T12:57:16.149Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

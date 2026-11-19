@@ -161,7 +161,7 @@ The rate-limit checkpoint hook runs before every `Agent`, `Task` and `Workflow` 
 | Firing | 205.1 / 182.6 ms | 212.3 / 163.3 ms | 100 ms |
 | No-op baseline (`/bin/sh -c true`) | 8.2 / 7.8 ms | 9.3 / 6.0 ms | none |
 
-The runs share a 1-minute load of 41 to 48, which inflates every row; compare the columns, not a row against its budget. The no-shared-reading path concludes "absent" from `gaia_resolve_main_root_fast` (`.gaia/scripts/main-root-fast-lib.sh`) without a git process and exits before the other libraries are sourced, about a third of its cost without the pre-check. The paths with a reading run the full `gaia_resolve_main_root` and pay its git calls, at the same cost in both columns.
+The runs share a 1-minute load of 41 to 48, which inflates every row; compare the columns, not a row against its budget. The no-shared-reading path concludes "absent" from `gaia_resolve_main_root_fast` (`.gaia/scripts/rate-limit-main-root-probe-lib.sh`) without a git process and exits before the other libraries are sourced, about a third of its cost without the pre-check. The paths with a reading run the full `gaia_resolve_main_root` and pay its git calls, at the same cost in both columns.
 <!-- gaia:maintainer-only:end -->
 
 ## See also

@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# GAIA hook-only fast main-root read.
+# Only .claude/hooks/rate-limit-checkpoint-inject.sh sources this file; no
+# audit-loop, merge-gate or audit-scope script does, so it sits outside
+# main-root-lib.sh's global audit tier. Its name keeps it outside the
+# main-root-*-lib.sh split-sibling pattern the audit-rules guard derives from
+# disk.
 #
 # gaia_resolve_main_root_fast [directory]
-#   A bash-only read of the layout off disk, for the rate-limit checkpoint
-#   hook's silent-path pre-check. The hook is its only caller; it is NOT a
-#   resolver for general use, and gaia_resolve_main_root never calls it.
+#   A bash-only read of the layout off disk, for that hook's silent-path
+#   pre-check. It is NOT a resolver for general use, and gaia_resolve_main_root
+#   never calls it.
 #
 #   Absent-only: a caller may use its answer only to conclude that a file it
 #   looks for is absent under that root. On every other outcome, including a

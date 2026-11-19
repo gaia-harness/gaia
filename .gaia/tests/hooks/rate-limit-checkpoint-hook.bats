@@ -59,7 +59,7 @@ install_hook() {
   mkdir -p "$root/.claude/hooks" "$root/.gaia/scripts"
   cp "$HOOK_SOURCE_PATH" "$root/.claude/hooks/rate-limit-checkpoint-inject.sh"
   chmod 755 "$root/.claude/hooks/rate-limit-checkpoint-inject.sh"
-  for library_file in context-checkpoint-lib.sh rate-limits-lib.sh main-root-lib.sh main-root-fast-lib.sh; do
+  for library_file in context-checkpoint-lib.sh rate-limits-lib.sh main-root-lib.sh rate-limit-main-root-probe-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$library_file" "$root/.gaia/scripts/$library_file"
   done
   HOOK="$root/.claude/hooks/rate-limit-checkpoint-inject.sh"
@@ -374,7 +374,7 @@ Policy: .claude/doctrine/rate-limit-checkpoint.md"
 }
 
 @test "the fast pre-check only concludes absent: a root where the reading exists still reaches the full ladder" {
-  local decoy="$TEMPORARY_DIRECTORY/decoy" library="$MAIN/.gaia/scripts/main-root-fast-lib.sh"
+  local decoy="$TEMPORARY_DIRECTORY/decoy" library="$MAIN/.gaia/scripts/rate-limit-main-root-probe-lib.sh"
 
   # The fast layout read is overridden to answer a decoy root that holds a
   # reading with nothing to say (a 40% window). The true main root holds a 91%

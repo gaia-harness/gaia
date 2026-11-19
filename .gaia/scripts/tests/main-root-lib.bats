@@ -736,7 +736,7 @@ resolve_common() {
 
 # resolve_fast <directory>: the bash-only layout read alone, stdout only.
 resolve_fast() {
-  run bash -c 'source "$1"; source "$2"; gaia_resolve_main_root_fast "$3" 2>/dev/null' _ "$LIBRARY_SCRIPT" "${LIBRARY_SCRIPT%/*}/main-root-fast-lib.sh" "$1"
+  run bash -c 'source "$1"; source "$2"; gaia_resolve_main_root_fast "$3" 2>/dev/null' _ "$LIBRARY_SCRIPT" "${LIBRARY_SCRIPT%/*}/rate-limit-main-root-probe-lib.sh" "$1"
 }
 
 # resolve_full <directory>: the full resolver itself, which never calls the

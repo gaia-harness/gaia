@@ -85,10 +85,10 @@
 #                                 must not trip the real-source scan.
 #   the two resolver definitions themselves (main-root-lib.sh and
 #     main-root.ts) -- they ARE the legitimate derivation -- and
-#     main-root-fast-lib.sh, the hook-only absent-only fast read, which
-#     parses the same layout off disk (its `${git_directory%/worktrees/*}`
-#     trim is ingredient 2) and is held to the full resolver by the parity
-#     tests in main-root-lib.bats.
+#     rate-limit-main-root-probe-lib.sh, the hook-only absent-only fast
+#     read, which parses the same layout off disk (its
+#     `${git_directory%/worktrees/*}` trim is ingredient 2) and is held to
+#     the full resolver by the parity tests in main-root-lib.bats.
 #   the two committed CLI bundles -- esbuild output containing an inlined
 #     copy of the resolver, not a second one; scanning them would fail this
 #     check on every release.
@@ -105,7 +105,7 @@ GAIA_MAIN_ROOT_DERIVATION_EXCLUDE=(
   ':!*.test.ts'
   ':!*.test.tsx'
   ':!.gaia/scripts/main-root-lib.sh'
-  ':!.gaia/scripts/main-root-fast-lib.sh'
+  ':!.gaia/scripts/rate-limit-main-root-probe-lib.sh'
   ':!.gaia/scripts/check-main-root-derivation.sh'
   ':!.gaia/cli/src/util/main-root.ts'
   ':!.gaia/cli/gaia'
