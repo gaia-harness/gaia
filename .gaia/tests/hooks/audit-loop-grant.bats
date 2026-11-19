@@ -508,7 +508,7 @@ seed_capped() {
   alf_add_checkpoint 10 allowance
 }
 
-@test "a typed grant or accept records with source typed, below round 10 and at 10 rounds used, where past the cap each unit runs on a human answer and an accept is the deliberate override" {
+@test "a typed grant or accept records with source typed, below the round cap and at it" {
   local row seed line built=""
   local rows=(
     'seed_pending|grant'
