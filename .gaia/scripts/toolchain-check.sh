@@ -28,8 +28,10 @@
 # checks a fresh clone that has no pnpm yet.
 #
 # Everything here is a bash builtin or a tool being checked: this script is what
-# tells a machine with no jq that it needs one. Guidance always routes to the
-# latest release of a tool, never to its floor, and pins no version number.
+# tells a machine with no jq that it needs one. For git, jq and pnpm, guidance
+# routes to the latest release and pins no version number. Node is the
+# exception: its guidance and route name and install the floor's Node major as
+# read from the floors file (wiki/concepts/Toolchain Floors.md, ## Guidance).
 #
 # Bash 3.2 compatible. Never `cd`.
 
