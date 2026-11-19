@@ -28,7 +28,7 @@ setup_file() {
 
 # fresh_fixture: discard the current fixture and start again from a copy of
 # the setup_file repository and origin, on feat/loop, with an empty gh stub
-# state, the real hook and no knob or deadline override.
+# state, the suite's hook ($BOUND_HOOK) and no knob or deadline override.
 fresh_fixture() {
   local fixture_directory="$BATS_TEST_TMPDIR/fixture"
   rm -rf "$fixture_directory"

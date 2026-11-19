@@ -142,15 +142,13 @@ run_hook_monitor() {
 
 # --- allowed ------------------------------------------------------------------
 #
-# The false positives the matcher was narrowed to avoid: the shipped script
-# (the blessed path), a command that already reads `mergeable` (the stand-down),
-# a one-shot state read, a loop on a field other than state, prose mentioning a
-# poll, and a state read that is not the loop's own. The three conjuncts (a loop
+# Beyond the header's list: the shipped script (the blessed path) and a state
+# read that is not the loop's own. The three conjuncts (a loop
 # keyword, a `done`, a state read) would otherwise be independent tests over the
 # whole command, so a one-shot `gh pr` read beside an unrelated loop satisfies
 # all three; denying those is the over-deny direction this guard cannot afford.
 # The arithmetic `mergeable` row names `state` alongside `mergeable` so the
-# stand-down is the only thing allowing it. The CONFLICTING row pins the second
+# stand-down is the only thing allowing it. The mergeStateStatus row pins the second
 # alternative of the stand-down pattern: it never names the field `mergeable`.
 # The `--body` rows pin the narrowing and the `done` conjunct: the second one
 # reaches the loop keyword but carries no `done`.

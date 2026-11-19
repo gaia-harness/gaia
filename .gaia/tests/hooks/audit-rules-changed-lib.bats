@@ -34,7 +34,7 @@ setup() {
 }
 
 # The split this pins: a convention rule still rotates every digest (it is
-# machinery), but it no longer throws away a sound anchor. A regression here
+# machinery) but never throws away a sound anchor. A regression here
 # reads as a green suite and a roster that silently re-reads its whole owned
 # surface on every rule edit, so each path is asserted by name rather than by
 # prefix. The merely-shared machinery rows and the light-review siblings must

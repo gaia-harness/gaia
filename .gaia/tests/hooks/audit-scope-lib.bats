@@ -4,7 +4,7 @@
 # phase: exactly-one-classifier (part 1), every-consumer-sources-it
 # (part 2), the remaining in-scope sets staying separately named plus the
 # retired auditable-base literal's pins (part 3), the golden behavior table
-# (part 4), and absent-module -> DENY (part 5). Plus two further invariants:
+# (part 4), and absent-module -> DENY (part 5). Plus one further invariant:
 # SEC-007 (every machinery path is roster-claimed).
 #
 # Assertion style: .claude/rules/bats-assertions.md.
@@ -544,15 +544,15 @@ EOF
 # - The default member's own `pnpm-workspace.yaml` glob never crosses a `/`, so
 #   it claims the repository-root file, which carries the supply-chain policy
 #   for every workspace member, the CLI included.
-# - `.gaia/cli/` carries three tool configs beside src/. The default member's
+# - `.gaia/cli/` carries its own vitest, eslint and prettier configs beside src/. The default member's
 #   bare `*.config.ts` / `*.config.mjs` globs never cross a `/`, so they claim
 #   only the repository-root files; without the node member's glob a PR whose
-#   only change is one of the three dispatches no member. vitest.config.ts is
+#   only change is one of them dispatches no member. vitest.config.ts is
 #   the sharpest, since its `setupFiles` executes arbitrary code in every CLI
 #   test run. The root files stay with the default member, so the two do not
 #   collide.
-# - UAT-002: no member owns `.claude/skills/**` since the prose-legibility
-#   member was deleted, so a skills .md file and a non-.md helper are ownerless.
+# - UAT-002: no member owns `.claude/skills/**`, so a skills .md file and a
+#   non-.md helper are ownerless.
 # Rows are path | owner (empty: ownerless).
 # bats test_tags=whole-tree
 @test "ownership of named paths: each resolves to its stated owner" {

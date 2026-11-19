@@ -204,11 +204,6 @@ scan() {
   [ -z "$output" ]
 }
 
-# ---------------------------------------------------------------------------
-# Acceptance criterion 4: an absent or empty audit directory returns 1 and
-# prints nothing -- never an error, never a partial line.
-# ---------------------------------------------------------------------------
-
 @test "clearance_scan: an absent or empty audit directory returns 1 and prints nothing" {
   local row
   for row in absent empty; do

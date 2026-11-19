@@ -370,15 +370,6 @@ write_marker_at() {
   printf '%s\n' "$digest"
 }
 
-# provision_all_members <root>: an earned marker for every roster member,
-# keyed to and stored under <root> itself (self-consistent, single-root use).
-provision_all_members() {
-  local root="$1" member_name
-  for member_name in "${ALL_MEMBERS[@]}"; do
-    write_marker_at "$root" "$root" "$member_name" >/dev/null
-  done
-}
-
 # install_gh_stub: a `gh` on a fresh PATH-only directory that logs every
 # invocation's OWN $PWD (the load-bearing field, stage 6) plus its argv to
 # GH_LOG, then answers just enough to let post-audit-status.sh proceed:
@@ -590,7 +581,6 @@ run_audit_root_block() {
 
 # -----------------------------------------------------------------------------
 # Stage 6: post-audit-status.sh (anchor: caller cd, no root argument at all).
-# Instance 4. Option C put the anchoring in the caller, not in this hook.
 # -----------------------------------------------------------------------------
 
 @test "stage 6 (anchor: caller cd) anchored on WORKTREE, from OUTSIDE: every gh invocation ran with WORKTREE as its working directory" {
@@ -681,7 +671,7 @@ run_audit_root_block() {
 # -----------------------------------------------------------------------------
 # Stage 8: the extracted agent handshake block (AUDIT_ROOT derivation).
 # Instances 2, 7. The block is byte-identical across every agent
-# definition (FC-5), so the tests below drive every one of them rather than
+# definition, so the tests below drive every one of them rather than
 # pinning the default member's copy and inferring the rest.
 # -----------------------------------------------------------------------------
 

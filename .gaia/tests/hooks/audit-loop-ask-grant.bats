@@ -164,9 +164,8 @@ silent() {
   unchanged || { printf 'state changed for %s\n' "$1" >&2; return 1; }
 }
 
-# scratch_hook <sed-expression>: a scratch copy of the hook with its libraries
-# reached through a `.gaia` symlink beside it; sets HOOK and proves the edit
-# changed the copy.
+# scratch_hook <sed-expression>: points HOOK at a scratch copy carrying the edit,
+# and fails when the edit changed nothing.
 scratch_hook() {
   local scratch_directory="$BATS_TEST_TMPDIR/scratch"
   mkdir -p "$scratch_directory/.claude/hooks"

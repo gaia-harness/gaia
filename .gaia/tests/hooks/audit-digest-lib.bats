@@ -614,7 +614,7 @@ v2_base_edit_run() {
 
 # ---------------------------------------------------------------------------
 # UAT-013 and the branch-own degradations: every fail-closed condition emits
-# NOTHING and exits non-zero, atomically -- never a partial/empty digest that
+# NOTHING and exits non-zero, atomically, never a partial/empty digest that
 # could key or match a marker. Where a row's condition can be lifted, the
 # lifted run succeeds, so the failure is the condition and not the fixture.
 # ---------------------------------------------------------------------------
@@ -806,7 +806,6 @@ STUB
 # the members whose frame holds more than machinery are exactly the members the
 # dispatch resolver names, on a release-applying branch and on an ordinary one,
 # for HEAD and for HEAD's bare tree id (the fix verifier's target).
-# The mutation proofs live in audit-scope-release-skip.bats.
 # ---------------------------------------------------------------------------
 
 # release_skip_digest_set <root> <target>: members whose digest differs from

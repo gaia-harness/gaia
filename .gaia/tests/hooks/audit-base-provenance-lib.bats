@@ -495,7 +495,7 @@ make_feature_repo() {
 }
 
 # Both rows copy a feat repo with a local main and no remote-tracking ref; the
-# cached-ghost row adds origin/main and caches a base name no ref carries.
+# cached-name-with-no-ref row adds origin/main and caches a base name no ref carries.
 @test "local_base_reference: an unresolvable reference returns 1 naming git fetch origin" {
   use_gh_stub
   local base_repo label repo

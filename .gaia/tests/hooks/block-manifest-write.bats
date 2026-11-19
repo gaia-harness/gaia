@@ -85,8 +85,7 @@ run_hook_bash() {
 
 # --- denied: Bash write vectors, no marker ---
 
-# Rows carry single quotes of their own (echo '{}' > ..., sed -i '' ..., a jq
-# filter); the `echo '{}'` row is the quote-safety canary: a denial there
+# The `echo '{}'` row is the quote-safety canary: a denial there
 # proves the harness's quote-safe delivery is wired, not just the guard logic.
 @test "a Bash write vector to the manifest is denied" {
   local row

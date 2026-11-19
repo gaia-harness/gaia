@@ -602,11 +602,9 @@ failing_review() {
   [ "${lines[$((${#lines[@]} - 1))]}" = 'code-review exit 0' ]
 }
 
-# reset_failure_row: undo what one case-table row left, so the next row starts as
-# setup leaves a fresh test: an empty run folder, no call count, version or round
-# state, setup's stand-in claude, result and gh, and setup's PATH with the gate
-# unprepared (prepare_gate puts the gate fixture's own gh first on PATH). Each
-# table saves ROW_PATH="$PATH" before its first row.
+# reset_failure_row: return the next case-table row to setup's state, including
+# setup's PATH and an unprepared gate (prepare_gate puts its own gh first on
+# PATH). Each table saves ROW_PATH="$PATH" before its first row.
 reset_failure_row() {
   rm -rf "$RUN" "$STAND_IN/calls" "$STAND_IN/version" "$ALF_STATE"
   mkdir -p "$RUN"

@@ -75,7 +75,8 @@ run_hook_from() {
 # keep_feature (the existing feature branch) or none; both directories empty
 # means the payload carries no cwd and the hook runs in the home repo, and an
 # empty payload directory reuses the process directory. The command is last so
-# it may carry the separator. Placeholders in any field name the fixtures.
+# it may carry the separator. Placeholders in the directory and command fields
+# name the fixtures.
 resolve_row_text() {
   local text="$1"
   text=${text//@MAIN@/$REPO}
@@ -139,7 +140,6 @@ add_worktree() {
 
 @test "a plain push from main, and a refspec push naming main, are denied" {
   local row
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'deny|main|||git push'
     'deny|feature|||git push origin main'
@@ -158,7 +158,6 @@ add_worktree() {
 # refspec too. Row: branch|command|needle|second needle|text that must be absent.
 @test "each denial states its reason and the repair it names" {
   local row branch command present_one present_two absent
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     "main|git commit -m \"x\"|Work reaches 'main' only through a pull request, where the audit gate reviews it before it merges.||"
     'main|git push|It lands local commits on the shared branch without the pull request and audit every change passes through.||'
@@ -205,7 +204,6 @@ add_worktree() {
   echo "# readme" > "$spaced/README.md"
   git -C "$spaced" add README.md
   git -C "$spaced" commit --quiet -m init
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'deny|main|||git -C @MAIN@ commit -m "x"'
     'deny|main|||git commit -m x && grep -R app/routes .'
@@ -244,7 +242,6 @@ add_worktree() {
 # argument carrying a branch name is ordinary text.
 @test "feature-branch commits and pushes are allowed, quoted and option text included" {
   local row
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'allow|feature|||git push --quiet origin feature'
     'allow|feature|||git push -o ci.skip origin feature'
@@ -298,7 +295,6 @@ add_worktree() {
   add_worktree
   git -C "$BATS_TEST_TMPDIR/wt" commit --quiet --allow-empty -m "worktree only"
   mkdir "$BATS_TEST_TMPDIR/wt/sub" "$REPO/sub"
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     "allow|main|@MAIN@||cd '@WT@' && git commit -m x"
     "allow|main|@MAIN@||cd '@WT@' && git push origin wt-branch"
@@ -371,7 +367,6 @@ add_worktree() {
   on_main
   foreign_on_sidebranch
   add_worktree
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'allow|main|@WT@||git status && git -C @FOREIGN@ commit -m x'
     'allow|main|@WT@||git status && git -C @FOREIGN@ push'
@@ -391,7 +386,6 @@ add_worktree() {
 @test "a kept cd target, the -C fallback and the cwd candidate each deny with no candidate on main" {
   local row
   three_checkouts
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     "deny|none|@WTA@||cd '@WTB@'; cd /nonexistent; git commit -m x"
     "deny|none|@WTA@||cd '@WTB@'; cd /nonexistent; git push"
@@ -415,7 +409,6 @@ add_worktree() {
 @test "a literal tilde is expanded before the branch is read" {
   local row home_directory session_directory command
   three_checkouts
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     '@WTB@|@WTA@|git -C ~ commit -m x'
     '@WTB@|@WTA@|git -C ~ push'
@@ -471,7 +464,6 @@ add_worktree() {
 # cleanup must NOT keep main-branch protection suspended.
 @test "the setup sentinel stands the guard down only while it is fresh" {
   local row state command verdict sentinel="$REPO/.gaia/local/setup-in-progress"
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'fresh|git commit -m "x"|allow'
     'fresh|git push origin main|allow'
@@ -506,7 +498,6 @@ add_worktree() {
 # leaves them alone; a real invocation after another command is still caught.
 @test "command text that only mentions git is allowed, and a git call after other commands is denied" {
   local row
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'allow|main|||pnpm run build'
     'allow|main|||grep -n -e git commit app/foo.ts'
@@ -550,8 +541,7 @@ add_worktree() {
   grep -qF -- 'refspec names main' <<<"$output"
 }
 
-# The payload's cwd is the acting agent's directory, so a command with no `cd`
-# and no `-C` is judged on the branch there, not on the hook process's own.
+# run_hook_split <command> <process directory> <payload cwd>
 run_hook_split() {
   local json
   json=$(jq -n --arg command "$1" --arg directory "$3" '{tool_name: "Bash", cwd: $directory, tool_input: {command: $command}}')
@@ -634,8 +624,7 @@ run_staged() {
 
 # --- the staged-tree degrade cases ---
 #
-# Each library load in this hook resolves off BASH_SOURCE, so a degraded library
-# needs a COPY of the hook in a tree the test controls. The tree is staged once
+# The tree is staged once
 # per table; each row restores the one library it degrades from the real
 # source, then corrupts or removes it. Row for the first table:
 # library|kind|branch|interpreter|command|verdict.
@@ -668,7 +657,6 @@ degrade_staged_library() {
 @test "a conflicted or absent library never opens the guard" {
   local row library kind branch interpreter command verdict
   stage_hook_tree
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     '.claude/hooks/lib/repo-scope.sh|conflicted|feature||git status|allow'
     '.claude/hooks/lib/repo-scope.sh|conflicted|main||git commit -m "x"|deny'
@@ -703,7 +691,6 @@ degrade_staged_library() {
 @test "an unloadable guard library refuses an armed call with exit 2 and never fails open" {
   local row library kind command verdict
   stage_hook_tree
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     '.claude/hooks/lib/git-segments.sh|absent|git commit -m x|blocked'
     '.claude/hooks/lib/git-segments.sh|absent|ls|silent'
@@ -778,6 +765,8 @@ degrade_staged_library() {
   done
 }
 
+# --- main-checkout hop guard, segment parsing and the -C early exit ---
+
 # A peer's hop is denied in each spelling that moves the main checkout's HEAD:
 # a checkout or switch naming another branch, the branch-creating, detaching
 # and previous-branch forms, `-C` after `switch` (force-create, not a
@@ -793,7 +782,6 @@ degrade_staged_library() {
   add_worktree
   git -C "$REPO" update-ref refs/remotes/origin/remoteonly HEAD
   [ -z "$(git -C "$REPO" rev-parse --verify -q remoteonly 2>/dev/null)" ] || return 1
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     '|git checkout main'
     '|git checkout main 2>/dev/null'
@@ -835,7 +823,6 @@ degrade_staged_library() {
   git -C "$FOREIGN" commit --quiet --allow-empty -m init
   git -C "$FOREIGN" branch --quiet other
   git -C "$FOREIGN" checkout --quiet -B feature
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'feature|sid-peer||git -C @FOREIGN@ switch other'
     'feature|sid-owner||git switch other'
@@ -877,7 +864,6 @@ degrade_staged_library() {
 @test "hop guard: a gh failure or a non-number answer fails open naming the cause" {
   local row stub needle_one needle_two
   hold_feature_with_pr 42
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'fail|could not check|exited 4'
     'garbage|could not check|'
@@ -927,7 +913,6 @@ degrade_staged_library() {
   local row
   on_main
   add_worktree
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     "deny|main|@WT@||cd '@MAIN@' && git -C '@MAIN@' status && git -C '@MAIN@' commit -m x"
     'deny|main|||git -C @MAIN@ status && git -C @MAIN@ commit -m x'
@@ -945,7 +930,6 @@ degrade_staged_library() {
 # and from a session whose cwd was a worktree the cleanup just removed.
 @test "the post-merge pull into a main checkout on main is allowed" {
   local row
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
   local rows=(
     'allow|main|||git -C @MAIN@ pull --ff-only origin main'
     'allow|main|@MAIN@|@MAIN@/.claude/worktrees/removed|git -C @MAIN@ pull --ff-only origin main'
