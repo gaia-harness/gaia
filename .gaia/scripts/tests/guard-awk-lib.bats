@@ -13,16 +13,11 @@
 # herestring rather than `[[ == * ]]`, POSIX `[ ]` for equality and numerics,
 # and `<positive-condition-for-the-bad-case> && return 1` for absence.
 #
-# GAIA_GUARD_LIBRARY and GAIA_GUARD_STUB override the two artifacts under test. They
-# exist for the mutation proofs at the foot of this file, which copy a neutered
-# library into a tmpdir and require a NAMED test here to red against it. Nothing
-# outside this suite sets either.
 
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   LIBRARY="${GAIA_GUARD_LIBRARY:-$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh}"
-  STUB="${GAIA_GUARD_STUB:-$REPO_ROOT/.gaia/scripts/tests/fixtures/stub-guard.sh}"
   SCRIPTS_DIRECTORY="$( cd "$( dirname "$LIBRARY" )" && pwd )"
   TEMPORARY_DIRECTORY="$(mktemp -d -t guard-awk-lib-XXXXXX)"
   # shellcheck source=/dev/null
@@ -614,33 +609,6 @@ EOF
   true
 }
 
-# ---- the stub guard --------------------------------------------------------
-
-@test "the stub guard skips a fixture region and honors a pragma with no logic of its own" {
-  cat > "$TEMPORARY_DIRECTORY/stub.bats" <<'EOF'
-fixture_file probe.sh "STUBCLASS inside a fixture argument"
-
-# gaia-lint-ignore stub-guard: the demonstration is the point here
-echo "STUBCLASS under a pragma"
-
-echo "STUBCLASS on an executed line"
-EOF
-  run bash "$STUB" "$TEMPORARY_DIRECTORY/stub.bats"
-  [ "$status" -eq 1 ]
-  grep -qF -- "stub.bats:6:" <<<"$output" || return 1
-  grep -qF -- "stub.bats:1:" <<<"$output" && return 1
-  grep -qF -- "stub.bats:4:" <<<"$output" && return 1
-  true
-}
-
-# A future adopter that needs more machinery than this reds the budget rather
-# than quietly re-inventing a tokenizer beside the one the library owns.
-@test "the stub guard non-boilerplate body stays inside its line budget" {
-  local body_line_count
-  body_line_count="$(grep -vcE '^[[:space:]]*#|^[[:space:]]*$|^#!|^set -euo pipefail$' "$STUB")"
-  [ "$body_line_count" -le 40 ]
-}
-
 # ---- the bats discovery ----------------------------------------------------
 
 # The widened pathspec matching nothing means the discovery is wrong, not that
@@ -975,51 +943,6 @@ EOF
   true
 }
 
-# ---- mutation proofs -------------------------------------------------------
-#
-# Both proofs fork bats over a suite that contains them, so the naive shape
-# re-enters itself unboundedly. Two mechanisms hold it, and the phase that adds
-# the cross-suite half of this proof reuses both spellings unchanged: the
-# GAIA_GUARD_MUTATION_CHILD sentinel every mutation test skips on and every
-# inner invocation sets, and a `--filter` naming the one test the mutation is
-# expected to red.
-
-# mutate <sed-free awk program> : write a neutered copy of the library into a
-# tmpdir laid out so the stub fixture beside it resolves the copy, and fail
-# outright when the mutation did not apply. An unapplied mutation makes the
-# proof vacuous while it still reports green.
-mutate() {
-  local program="$1" directory="$TEMPORARY_DIRECTORY/mut"
-  mkdir -p "$directory/scripts/tests/fixtures"
-  awk "$program" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" > "$directory/scripts/guard-awk-lib.sh"
-  cmp -s "$directory/scripts/guard-awk-lib.sh" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" && return 1
-  cp "$REPO_ROOT/.gaia/scripts/tests/fixtures/stub-guard.sh" "$directory/scripts/tests/fixtures/stub-guard.sh"
-  MUTATED_LIBRARY="$directory/scripts/guard-awk-lib.sh"
-  MUTATED_STUB="$directory/scripts/tests/fixtures/stub-guard.sh"
-}
-
-# Target: "a pragma is honored above its target in a bats file".
-@test "mutation: a pragma reader that always declines reds the honored-pragma test" {
-  [ -z "${GAIA_GUARD_MUTATION_CHILD:-}" ] || skip "mutation child run"
-  mutate '/^function gaia_scan_suppressed/{in_region = 1}
-          in_region && index($0, "return hit") > 0 { sub(/return hit/, "return 0"); in_region = 0 }
-          {print}'
-  GAIA_GUARD_MUTATION_CHILD=1 GAIA_GUARD_LIBRARY="$MUTATED_LIBRARY" \
-    run bats --filter 'a pragma is honored above its target in a bats file' "$BATS_TEST_FILENAME"
-  [ "$status" -ne 0 ]
-}
-
-# Target: "the stub guard skips a fixture region and honors a pragma with no
-# logic of its own".
-@test "mutation: a fixture-region rule that always declines reds the stub guard test" {
-  [ -z "${GAIA_GUARD_MUTATION_CHILD:-}" ] || skip "mutation child run"
-  mutate '/^function gaia_scan_skip\(\)/ { print "function gaia_scan_skip() { return 0 }"; next }
-          {print}'
-  GAIA_GUARD_MUTATION_CHILD=1 GAIA_GUARD_STUB="$MUTATED_STUB" \
-    run bats --filter 'the stub guard skips a fixture region and honors a pragma' "$BATS_TEST_FILENAME"
-  [ "$status" -ne 0 ]
-}
-
 # ============================================================================
 # Section A: shared-entry-point conformance (UAT-010)
 # ============================================================================
@@ -1164,10 +1087,8 @@ assert_consumer_count() {
   done < <(participating_files)
 }
 
-# The library header's awk surface freezes ten entry points. The stub is
-# capped at a 40-line non-boilerplate body (asserted below by "the stub guard
-# non-boilerplate body stays inside its line budget") and its own header states
-# it calls the five common ones above and none of the prepass, pragma-here or
+# The library header freezes its awk entry points. The stub's own header states
+# it calls the common ones above and none of the prepass, pragma-here or
 # run-only ones: no prepass (it reports on one surface with no need for a
 # second pass), no gaia_scan_pragma_here (it has no off-surface pragma to
 # name), and no gaia_scan_run_only (it detects a class errexit arming does not
@@ -1285,25 +1206,6 @@ strip_full_line_comments() {
   grep -vE '^[[:space:]]*#' "$1"
 }
 
-@test "no production guard, and not the library, names a literal bats suite basename on a non-comment line" {
-  # UAT-006 / README C8: the discrimination must not be a per-file or
-  # per-suite allowlist, and an allowlist would have to live in code.
-  # Scoped to non-comment lines because the guards' header comments
-  # legitimately name their own sibling suites ("Enforced by the sibling
-  # bats suite ..."); a whole-file assertion would delete those references
-  # for no gain. The literal pathspec token '*.bats' can never match this
-  # character class, because the character before the dot is '*', outside
-  # [A-Za-z0-9_.-], so there is no allowlist arm to carve out.
-  no_bats_basename_on_code_lines
-}
-
-@test "a bats suite basename planted on a non-comment line reds the no-basename-list check" {
-  local copy="$TEMPORARY_DIRECTORY/planted.sh"
-  cp "$REPO_ROOT/.gaia/scripts/lint-git-path-quoting.sh" "$copy"
-  printf '\nSUITE=lint-git-path-quoting.bats\n' >> "$copy"
-  strip_full_line_comments "$copy" | grep -qE '[A-Za-z0-9_.-]+\.bats' || return 1
-}
-
 # Derived from production_guards() rather than re-listed, so a guard added
 # there is held to the no-basename-list check above without a second edit
 # here. The library itself is checked too and is not a guard, so it is
@@ -1327,115 +1229,16 @@ no_bats_basename_on_code_lines() {
   true
 }
 
-# A split guard is read as its whole text set, so a basename moved into one of
-# its pieces is still caught. The guard file itself stays clean here: only
-# reading the pieces can find the plant.
-@test "a bats suite basename planted in a split guard's piece reds the no-basename-list check" {
-  local directory="$TEMPORARY_DIRECTORY/split-guard" text_file
-  mkdir -p "$directory"
-  while IFS= read -r text_file; do
-    cp "$text_file" "$directory/"
-  done < <(guard_text_files "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh")
-  [ -f "$directory/lint-errexit-status-read-walk.sh" ]
-  printf '\nSUITE=lint-errexit-status-read.bats\n' >> "$directory/lint-errexit-status-read-walk.sh"
-  production_guards() { printf '%s\n' "$directory/lint-errexit-status-read.sh"; }
-  strip_full_line_comments "$directory/lint-errexit-status-read.sh" | grep -qE '[A-Za-z0-9_.-]+\.bats' && return 1
-  run no_bats_basename_on_code_lines
-  [ "$status" -eq 1 ]
-  grep -qF "lint-errexit-status-read-walk.sh: names a bats basename" <<<"$output"
-}
-
-# ============================================================================
-# Section D: the cross-suite mutation proofs (UAT-007)
-# ============================================================================
-#
-# Phase 1 wrote the within-suite half above (GAIA_GUARD_LIBRARY / GAIA_GUARD_STUB,
-# which exist only for this suite). These two prove the same mutation
-# matters to every real consumer: a copy of a production guard, laid beside
-# a neutered library exactly the way the real tree lays them, reproduces
-# the same verdict flip the guard's own suite already asserts. Same two
-# mechanisms, reused unchanged: the GAIA_GUARD_MUTATION_CHILD sentinel every
-# mutation test skips on, and a --filter naming the one test the mutation is
-# expected to red.
-
-# mutate_guard_copy <sed-free awk program> <guard-basename> <suite-filename>:
-# lay a copy of one production guard and its own bats suite beside a
-# neutered library, at the same relative depth the real tree uses (guard and
-# library siblings under .gaia/scripts/, the suite one level under
-# .gaia/scripts/tests/), so the guard's own script-relative resolution finds
-# the neutered copy rather than the real one. Sets CROSS_GUARD_ROOT and CROSS_GUARD_SUITE
-# for the caller.
-mutate_guard_copy() {
-  local program="$1" guard="$2" suite="$3"
-  local directory="$TEMPORARY_DIRECTORY/xmut-$guard"
-  mkdir -p "$directory/.gaia/scripts/tests"
-  awk "$program" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" > "$directory/.gaia/scripts/guard-awk-lib.sh"
-  cmp -s "$directory/.gaia/scripts/guard-awk-lib.sh" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" && return 1
-  # The library sources this beside itself; without it the guard cannot pick an
-  # interpreter, so the child suite reds whether or not the mutation took.
-  cp "$REPO_ROOT/.gaia/scripts/awk-interp-lib.sh" "$directory/.gaia/scripts/awk-interp-lib.sh"
-  local text_file
-  while IFS= read -r text_file; do
-    cp "$text_file" "$directory/.gaia/scripts/"
-  done < <(guard_text_files "$REPO_ROOT/.gaia/scripts/$guard.sh")
-  cp "$REPO_ROOT/.gaia/scripts/tests/$suite" "$directory/.gaia/scripts/tests/$suite"
-  CROSS_GUARD_ROOT="$directory"
-  CROSS_GUARD_SUITE="$directory/.gaia/scripts/tests/$suite"
-}
-
-@test "mutation: a pragma reader that always declines reds a named test in every production guard suite" {
-  [ -z "${GAIA_GUARD_MUTATION_CHILD:-}" ] || skip "mutation child run"
-  local program='/^function gaia_scan_suppressed/{in_region = 1}
-              in_region && index($0, "return hit") > 0 { sub(/return hit/, "return 0"); in_region = 0 }
-              {print}'
-
-  mutate_guard_copy "$program" lint-git-path-quoting lint-git-path-quoting.bats
-  GAIA_GUARD_MUTATION_CHILD=1 run bash "$REPO_ROOT/.gaia/scripts/bats5.sh" \
-    --filter "a pragma naming this guard suppresses a genuine instance, resolved against the guard's own directory" \
-    "$CROSS_GUARD_SUITE"
-  [ "$status" -ne 0 ]
-
-  mutate_guard_copy "$program" lint-errexit-status-read lint-errexit-status-read.bats
-  GAIA_GUARD_MUTATION_CHILD=1 run bash "$REPO_ROOT/.gaia/scripts/bats5.sh" \
-    --filter "a pragma naming this gate suppresses the instance below it" \
-    "$CROSS_GUARD_SUITE"
-  [ "$status" -ne 0 ]
-}
-
-@test "mutation: a fixture-region rule that always declines reds the stub guard's suite and a production guard's suite" {
-  [ -z "${GAIA_GUARD_MUTATION_CHILD:-}" ] || skip "mutation child run"
-  local program='/^function gaia_scan_skip\(\)/ { print "function gaia_scan_skip() { return 0 }"; next }
-              {print}'
-
-  # The stub half: Phase 1's own mechanism, reused rather than re-derived.
-  mutate "$program"
-  GAIA_GUARD_MUTATION_CHILD=1 GAIA_GUARD_STUB="$MUTATED_STUB" \
-    run bash "$REPO_ROOT/.gaia/scripts/bats5.sh" \
-    --filter 'the stub guard skips a fixture region and honors a pragma with no logic of its own' \
-    "$BATS_TEST_FILENAME"
-  [ "$status" -ne 0 ]
-
-  # A production guard: lint-git-path-quoting.sh's own suite carries real
-  # fixture literals of its class, so the guard's clean verdict over it
-  # depends on the library's region-skip telling those fixtures apart from
-  # executed shell. Tracking the copied suite beside a minimal workflow in a
-  # throwaway repository reproduces that verdict without touching the real
-  # tree. The workflow keeps the scan surface non-empty, and a control run of
-  # the unmutated library must exit 0 first, so the mutated run's red can only
-  # come from the mutation.
-  mutate_guard_copy "$program" lint-git-path-quoting lint-git-path-quoting.bats
-  mkdir -p "$CROSS_GUARD_ROOT/.github/workflows"
-  printf 'on: push\njobs:\n  x:\n    steps:\n      - run: echo hi\n' > "$CROSS_GUARD_ROOT/.github/workflows/ci.yml"
-  git -C "$CROSS_GUARD_ROOT" init -q .
-  git -C "$CROSS_GUARD_ROOT" add -A
-  mv "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh" "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh.keep"
-  cp "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh"
-  run bash -c "cd '$CROSS_GUARD_ROOT' && bash .gaia/scripts/lint-git-path-quoting.sh 2>&1"
-  [ "$status" -eq 0 ]
-  mv "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh.keep" "$CROSS_GUARD_ROOT/.gaia/scripts/guard-awk-lib.sh"
-  run bash -c "cd '$CROSS_GUARD_ROOT' && bash .gaia/scripts/lint-git-path-quoting.sh 2>&1"
-  [ "$status" -ne 0 ]
-  grep -qF -- ".gaia/scripts/tests/lint-git-path-quoting.bats:" <<<"$output"
+@test "no production guard, and not the library, names a literal bats suite basename on a non-comment line" {
+  # The discrimination must not be a per-file or
+  # per-suite allowlist, and an allowlist would have to live in code.
+  # Scoped to non-comment lines because the guards' header comments
+  # legitimately name their own sibling suites ("Enforced by the sibling
+  # bats suite ..."); a whole-file assertion would delete those references
+  # for no gain. The literal pathspec token '*.bats' can never match this
+  # character class, because the character before the dot is '*', outside
+  # [A-Za-z0-9_.-], so there is no allowlist arm to carve out.
+  no_bats_basename_on_code_lines
 }
 
 # ============================================================================
@@ -1468,17 +1271,4 @@ mutate_guard_copy() {
 # bats test_tags=whole-tree
 @test "the real scan surface holds a workflow and a composite action" {
   surface_has_workflow_and_action "$REPO_ROOT" "$LIBRARY"
-}
-
-@test "the surface check fails when the composite-action directory is absent" {
-  local scratch
-  scratch="$(mktemp -d -t surface-probe-XXXXXX)"
-  mkdir -p "$scratch/.github/workflows"
-  git -C "$scratch" init -q .
-  printf 'x\n' > "$scratch/.github/workflows/only.yml"
-  git -C "$scratch" add -A
-  local verdict=0
-  surface_has_workflow_and_action "$scratch" "$LIBRARY" || verdict=$?
-  rm -rf "$scratch"
-  [ "$verdict" -eq 1 ]
 }

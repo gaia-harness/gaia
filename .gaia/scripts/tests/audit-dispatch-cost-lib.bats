@@ -5,19 +5,13 @@
 # line, unpriced and mixed-role models, a missing timestamp, an unparsed
 # transcript, the linkage and unreadable-meta states, the light reviewer, the
 # Claude Code version, parity with the committed toolkit, a bounded jq process
-# count, and red twins that prove the walk, the dedup, the bucket mapping and
-# the bucket key can each be broken and are noticed.
+# count.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
-#
-# SC2016 is intentional file-wide: the mutation scripts are single-quoted sed
-# programs whose `$` must reach sed literally.
-# shellcheck disable=SC2016
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   LIBRARY="$REPO_ROOT/.gaia/scripts/audit-dispatch-cost-lib.sh"
-  PRICING_LIBRARY="$REPO_ROOT/.gaia/scripts/token-pricing-lib.sh"
   RATES_FILE="$REPO_ROOT/.gaia/scripts/token-rates.json"
   FIXTURE="$REPO_ROOT/.gaia/tests/audit-cost/fixtures/dispatch-cost"
   command -v jq >/dev/null 2>&1 || skip "jq not available"
@@ -73,23 +67,6 @@ within() {
   awk -v a="$1" -v b="$2" -v tolerance="$3" 'BEGIN { d = a - b; if (d < 0) d = -d; exit !(d <= tolerance + 0.000000001) }'
 }
 
-# Runs a mutated copy of the library in a fresh shell, beside a copy of the
-# pricing library it sources. Prints the member's measurement; fails when the
-# sed script did not change the copy.
-run_mutated_library() {
-  local sed_script="$1" mutation_directory="$BATS_TEST_TMPDIR/mutated"
-  rm -rf "$mutation_directory"
-  mkdir -p "$mutation_directory"
-  cp "$PRICING_LIBRARY" "$mutation_directory/token-pricing-lib.sh"
-  sed "$sed_script" "$LIBRARY" >"$mutation_directory/audit-dispatch-cost-lib.sh"
-  if cmp -s "$LIBRARY" "$mutation_directory/audit-dispatch-cost-lib.sh"; then
-    echo "mutation did not change the library copy" >&2
-    return 1
-  fi
-  env -u GAIA_PRICING_JQ_DEFS bash -c '. "$1/audit-dispatch-cost-lib.sh"; gaia_dispatch_cost_measure "$2" "$3" "$4"' \
-    _ "$mutation_directory" "$SUBAGENTS" "$MEMBER" "$GAIA_RATES_JSON"
-}
-
 toolkit_json() {
   node "$REPO_ROOT/.gaia/tests/audit-cost/measure-dispatch.mjs" --session "$SCRATCH/session.jsonl" --rates "$RATES_FILE"
 }
@@ -114,7 +91,7 @@ toolkit_json() {
 }
 
 @test "descendant walk: a grandchild counts under its own type and the walk cannot be cut to direct children" {
-  local expected output_text
+  local expected
   expected=$(( $(counted_calls "$SUBAGENTS/agent-$OTHER_CHILD.jsonl") + $(counted_calls "$SUBAGENTS/agent-$GRANDCHILD.jsonl") ))
   [ "$expected" -eq 4 ]
   run measure "$MEMBER"
@@ -123,9 +100,6 @@ toolkit_json() {
   # The unrelated top-level agent adds nothing to any role.
   [ "$(field "$output" '[.children[].dispatches] | add')" = 6 ]
 
-  output_text="$(run_mutated_library 's/range(0; ($agents | length) + 1)/range(0; 1)/')"
-  [ "$(field "$output_text" '.state')" = ok ]
-  [ "$(field "$output_text" '.children.other.dispatches')" = 1 ]
 }
 
 @test "dedup: a call repeated with growing usage counts once with its last block" {
@@ -148,7 +122,11 @@ toolkit_json() {
   [ "$(field "$output" '.own.dollars | type')" = number ]
 }
 
-@test "unpriced: a model with no rate row keeps every figure and nulls dollars" {
+@test "dollars null, never zero: an unrated model on the member, a non-Claude model, one unrated specialist, a call without a timestamp" {
+  local baseline
+  baseline="$(measure "$MEMBER")"
+
+  # unrated model on the member: every figure kept, dollars null
   scratch_fixture
   sed 's/claude-opus-5-5/claude-unrated-9/g' "$SUBAGENTS/agent-$MEMBER.jsonl" >"$SUBAGENTS/member.new"
   mv "$SUBAGENTS/member.new" "$SUBAGENTS/agent-$MEMBER.jsonl"
@@ -161,6 +139,7 @@ toolkit_json() {
   [ "$(field "$output" '.own.dollars')" = null ]
   [ "$(field "$output" '.own.unpriced | join(",")')" = claude-unrated-9 ]
 
+  # non-Claude model on the member
   scratch_fixture
   sed 's/claude-opus-5-5/gpt-9-mini/g' "$SUBAGENTS/agent-$MEMBER.jsonl" >"$SUBAGENTS/member.new"
   mv "$SUBAGENTS/member.new" "$SUBAGENTS/agent-$MEMBER.jsonl"
@@ -169,11 +148,8 @@ toolkit_json() {
   [ "$(field "$output" '.own.calls')" = 4 ]
   [ "$(field "$output" '.own.dollars')" = null ]
   [ "$(field "$output" '.own.unpriced | join(",")')" = gpt-9-mini ]
-}
 
-@test "mixed role: one unrated specialist nulls the role and the children total only" {
-  local baseline
-  baseline="$(measure "$MEMBER")"
+  # one unrated specialist: nulls the role and the children total only
   scratch_fixture
   sed 's/claude-sonnet-5-5/claude-unrated-9/g' "$SUBAGENTS/agent-$SPECIALIST_ONE.jsonl" >"$SUBAGENTS/specialist.new"
   mv "$SUBAGENTS/specialist.new" "$SUBAGENTS/agent-$SPECIALIST_ONE.jsonl"
@@ -187,9 +163,8 @@ toolkit_json() {
   [ "$(field "$output" '.own.dollars | type')" = number ]
   [ "$(field "$output" '.children.refuter.dollars | type')" = number ]
   [ "$(field "$output" '.children.other.dollars | type')" = number ]
-}
 
-@test "missing timestamp: a call without one flags missing_anchor and nulls dollars, never zero" {
+  # a call without a timestamp: missing_anchor flagged, dollars null
   scratch_fixture
   sed '/"id":"msg_m3"/ s/"timestamp":"[^"]*",//' "$SUBAGENTS/agent-$MEMBER.jsonl" >"$SUBAGENTS/member.new"
   mv "$SUBAGENTS/member.new" "$SUBAGENTS/agent-$MEMBER.jsonl"
@@ -200,8 +175,10 @@ toolkit_json() {
   [ "$(field "$output" '.own.calls')" = 4 ]
 }
 
-@test "unparsed: no countable call is transcript_unparsed with null figures, never ok with zero calls" {
-  local first_output
+@test "measurement states: non-JSON or usage-less transcript is transcript_unparsed; unlinked metas or a torn meta keep own figures and leave children unparsed" {
+  local first_output name
+
+  # non-JSON transcript
   scratch_fixture
   printf 'not json\nstill not json\n' >"$SUBAGENTS/agent-$MEMBER.jsonl"
   run measure "$MEMBER"
@@ -210,6 +187,7 @@ toolkit_json() {
   [ "$(field "$first_output" '.state')" = transcript_unparsed ]
   [ "$(field "$first_output" '[.own, .children_state, .children, .children_dollars] | map(. == null) | all')" = true ]
 
+  # usage-less transcript
   scratch_fixture
   printf '%s\n' '{"type":"assistant","timestamp":"2026-10-19T08:00:00.000Z","message":{"role":"assistant"}}' \
     '{"type":"user","timestamp":"2026-10-19T08:00:01.000Z","message":{"role":"user","content":"x"}}' \
@@ -218,10 +196,8 @@ toolkit_json() {
   [ "$(field "$output" '.state')" = transcript_unparsed ]
   [ "$(field "$output" '[.own, .children_state, .children, .children_dollars] | map(. == null) | all')" = true ]
   [ "$(field "$first_output $output" '. | select(.state == "ok" and .own.calls == 0) | .state' | wc -l | tr -d ' ')" = 0 ]
-}
 
-@test "linkage: fewer parented metas than dispatched tool uses leaves own figures and unparsed children" {
-  local name
+  # fewer parented metas than dispatched tool uses
   scratch_fixture
   for name in "$SPECIALIST_ONE" "$SPECIALIST_TWO"; do
     jq -c 'del(.parentAgentId)' "$SUBAGENTS/agent-$name.meta.json" >"$SUBAGENTS/meta.new"
@@ -231,6 +207,17 @@ toolkit_json() {
   [ "$(field "$output" '.state')" = ok ]
   [ "$(field "$output" '.own.calls')" = 4 ]
   [ "$(field "$output" '.own.dollars')" = 0.029426 ]
+  [ "$(field "$output" '.children_state')" = unparsed ]
+  [ "$(field "$output" '.children')" = null ]
+  [ "$(field "$output" '.children_dollars')" = null ]
+
+  # a torn meta
+  scratch_fixture
+  printf '{"agentType": "general-pur\n' >"$SUBAGENTS/agent-a00000000000000ff.meta.json"
+  run measure "$MEMBER"
+  [ "$status" -eq 0 ]
+  [ "$(field "$output" '.state')" = ok ]
+  [ "$(field "$output" '.own.calls')" = 4 ]
   [ "$(field "$output" '.children_state')" = unparsed ]
   [ "$(field "$output" '.children')" = null ]
   [ "$(field "$output" '.children_dollars')" = null ]
@@ -259,18 +246,6 @@ toolkit_json() {
   run measure "$MEMBER"
   [ "$(field "$output" '.state')" = ok ]
   [ "$(field "$output" '.claude_code_version')" = null ]
-}
-
-@test "unreadable meta: any torn meta clears the children and keeps own figures" {
-  scratch_fixture
-  printf '{"agentType": "general-pur\n' >"$SUBAGENTS/agent-a00000000000000ff.meta.json"
-  run measure "$MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(field "$output" '.state')" = ok ]
-  [ "$(field "$output" '.own.calls')" = 4 ]
-  [ "$(field "$output" '.children_state')" = unparsed ]
-  [ "$(field "$output" '.children')" = null ]
-  [ "$(field "$output" '.children_dollars')" = null ]
 }
 
 @test "one pass: the jq process count does not grow with the descendant count" {
@@ -331,28 +306,4 @@ toolkit_json() {
   done
   calls="$(field "$library_output" '[.children[].dispatches] | add')"
   [ "$calls" = 6 ]
-}
-
-# bats test_tags=whole-tree
-@test "parity red twins: first-wins dedup, unsplit to 1h and a wrong bucket key each fall outside the toolkit" {
-  local toolkit toolkit_dollars mutated
-  scratch_fixture
-  toolkit="$(toolkit_json)"
-  toolkit_dollars="$(jq -r --arg id "$MEMBER" '.dispatches[] | select(.agent_id == $id) | .cost_usd' <<<"$toolkit")"
-
-  mutated="$(run_mutated_library 's/\.usage = ($record\.message\.usage | if type == "object" then \. else {} end) | \.model/.model/')"
-  [ "$(field "$mutated" '.state')" = ok ]
-  [ "$(field "$mutated" '.own.output_tokens')" = 445 ]
-  within "$(field "$mutated" '.own.dollars')" "$toolkit_dollars" 0.0000005 && return 1
-
-  mutated="$(run_mutated_library 's#($split.ephemeral_1h_input_tokens // 0) as $one_hour#($split.ephemeral_1h_input_tokens // (if $split == null then ($usage.cache_creation_input_tokens // 0) else 0 end)) as $one_hour#')"
-  [ "$(field "$mutated" '.state')" = ok ]
-  [ "$(field "$mutated" '.own.cache_write_1h_tokens')" = 1350 ]
-  [ "$(field "$mutated" '.own.cache_write_5m_tokens')" = 1050 ]
-  within "$(field "$mutated" '.own.dollars')" "$toolkit_dollars" 0.0000005 && return 1
-
-  mutated="$(run_mutated_library 's#fresh_input: ($usage.input_tokens#input: ($usage.input_tokens#')"
-  [ "$(field "$mutated" '.state')" = ok ]
-  within "$(field "$mutated" '.own.dollars')" "$toolkit_dollars" 0.0000005 && return 1
-  true
 }

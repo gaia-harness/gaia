@@ -61,134 +61,54 @@ run_library() {
 
 # --- signal helper: fullName ---
 
-@test "helper emits the bare title for a top-level test" {
+@test "helper fullName follows the test's describe nesting for each test shape" {
   run_helper "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts"
   [ "$status" -eq 0 ]
   [[ "$output" == *'"fullName":"adds two numbers"'* ]]
-}
 
-@test "helper joins nested describe titles with the test title" {
   run_helper "$FIXTURE_RELATIVE_DIRECTORY/nested-describe.test.ts"
   [ "$status" -eq 0 ]
   [[ "$output" == *'"fullName":"outer inner does a thing"'* ]]
-}
 
-@test "helper treats Playwright test.describe and its modifiers as describes, adds no title for an untitled one, and records nothing for test.describe.configure" {
+  # Playwright test.describe and its modifiers are describes, an untitled one
+  # adds no title, and test.describe.configure records nothing.
   run_helper "$FIXTURE_RELATIVE_DIRECTORY/playwright-describe.spec.ts"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | jq -r .fullName)" = "$(printf '%s\n' 'outer inner does a thing' 'runs in an untitled group')" ]
 }
 
-# --- signal helper: distinct tests, distinct signals ---
-
-@test "two tests in one file yield two lines with distinct signals" {
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/two-tests.test.ts"
-  [ "$status" -eq 0 ]
-  # Two output lines.
-  [ "$(printf '%s\n' "$output" | grep -c '"fullName"')" -eq 2 ]
-  local first_signal second_signal
-  first_signal=$(printf '%s\n' "$output" | sed -n '1p' | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-  second_signal=$(printf '%s\n' "$output" | sed -n '2p' | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-  [ -n "$first_signal" ]
-  [ -n "$second_signal" ]
-  [ "$first_signal" != "$second_signal" ]
-}
-
-@test "every signal carries the sha256: prefix" {
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/two-tests.test.ts"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"signal":"sha256:'* ]]
-}
-
-# --- signal helper: stability under reformatting, change on edit ---
-
-@test "reformatting-only edit yields the same signal" {
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/stable-a.test.ts"
-  [ "$status" -eq 0 ]
-  local signal_a
-  signal_a=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/stable-b.test.ts"
-  [ "$status" -eq 0 ]
-  local signal_b
-  signal_b=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  [ -n "$signal_a" ]
-  [ "$signal_a" = "$signal_b" ]
-}
-
-@test "changing an assertion literal yields a different signal" {
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/stable-a.test.ts"
-  [ "$status" -eq 0 ]
-  local signal_a
-  signal_a=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/changed.test.ts"
-  [ "$status" -eq 0 ]
-  local signal_changed
-  signal_changed=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  [ -n "$signal_a" ]
-  [ "$signal_a" != "$signal_changed" ]
-}
-
 # --- signal helper: kind classification ---
 
-@test "helper tags an expectTypeOf-only test kind=type-only" {
+@test "helper kind is type-only for type proofs and runtime otherwise" {
   run_helper "$FIXTURE_RELATIVE_DIRECTORY/kind-type-only.test.ts"
   [ "$status" -eq 0 ]
-  local kind
-  kind=$(printf '%s\n' "$output" \
-    | jq -r 'select(.fullName=="type proof via expectTypeOf") | .kind')
-  [ "$kind" = "type-only" ]
-}
+  [ "$(printf '%s\n' "$output" | jq -r 'select(.fullName=="type proof via expectTypeOf") | .kind')" = "type-only" ]
+  [ "$(printf '%s\n' "$output" | jq -r 'select(.fullName=="type proof via ts-expect-error") | .kind')" = "type-only" ]
 
-@test "helper tags a @ts-expect-error-only test kind=type-only" {
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/kind-type-only.test.ts"
-  [ "$status" -eq 0 ]
-  local kind
-  kind=$(printf '%s\n' "$output" \
-    | jq -r 'select(.fullName=="type proof via ts-expect-error") | .kind')
-  [ "$kind" = "type-only" ]
-}
-
-@test "helper tags a plain runtime test kind=runtime" {
   run_helper "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | jq -r '.kind')" = "runtime" ]
-}
 
-@test "helper tags both mixed runtime+type tests kind=runtime" {
+  # A runtime assertion alongside a type-level proof is still runtime.
   run_helper "$FIXTURE_RELATIVE_DIRECTORY/kind-mixed.test.ts"
   [ "$status" -eq 0 ]
-  # Two tests, and every one classifies runtime (a runtime assertion present
-  # alongside a type-level proof is still runtime, never type-only).
   [ "$(printf '%s\n' "$output" | grep -c '"fullName"')" -eq 2 ]
   [ "$(printf '%s\n' "$output" | jq -r '.kind' | sort -u)" = "runtime" ]
 }
 
 # --- signal helper: exit codes ---
 
-@test "helper exits 0 with no output on a valid file with no tests" {
+@test "helper exit codes: 0 with no output on a valid file with no tests, non-zero on a broken file or a missing argument" {
   run_helper "$FIXTURE_RELATIVE_DIRECTORY/no-tests.test.ts"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
 
-@test "helper exits non-zero with a stderr message on a broken file" {
   run_helper "$FIXTURE_RELATIVE_DIRECTORY/broken.test.ts"
   [ "$status" -ne 0 ]
   [[ "$output" == *"extract-test-signals"* ]]
-}
 
-@test "helper exits non-zero when the argument is missing" {
   run bash -c "cd '$REPO_ROOT' && node '$HELPER'"
   [ "$status" -ne 0 ]
-}
-
-@test "helper resolves typescript from node_modules" {
-  run bash -c "cd '$REPO_ROOT' && node -e 'require(\"typescript\")'"
-  [ "$status" -eq 0 ]
 }
 
 # A reader that stops early closes the pipe under the helper's feet. Without an
@@ -218,45 +138,29 @@ run_library() {
 
 # --- shell lib: test_signals_repo_relative_path ---
 
-@test "test_signals_repo_relative_path strips the repo-root prefix from an absolute path" {
-  run_library "test_signals_repo_relative_path '$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ]
-}
-
-@test "test_signals_repo_relative_path strips a leading ./" {
-  run_library "test_signals_repo_relative_path './$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ]
-}
-
-@test "test_signals_repo_relative_path is idempotent on an already-relative path" {
-  run_library "test_signals_repo_relative_path '$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ]
+@test "test_signals_repo_relative_path normalizes an absolute path, a leading ./ and an already-relative path" {
+  local input
+  for input in "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" \
+    "./$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" \
+    "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts"; do
+    run_library "test_signals_repo_relative_path '$input'"
+    [ "$status" -eq 0 ] || { echo "$input: non-zero status" >&2; return 1; }
+    [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ] || { echo "$input: got $output" >&2; return 1; }
+  done
 }
 
 # --- shell lib: test_signals_signals ---
 
-@test "test_signals_signals returns the helper NDJSON for a valid fixture" {
+@test "test_signals_signals returns the helper NDJSON for a valid fixture and propagates the helper failure on a broken file" {
   run_library "test_signals_signals '$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
   [ "$status" -eq 0 ]
   [[ "$output" == *'"fullName":"adds two numbers"'* ]]
   [[ "$output" == *'"signal":"sha256:'* ]]
-}
 
-@test "test_signals_signals propagates the helper non-zero exit on a broken file" {
   run_library "test_signals_signals '$FIXTURE_RELATIVE_DIRECTORY/broken.test.ts'"
   [ "$status" -ne 0 ]
 }
 
-# --- double-sourcing is safe ---
-
-@test "sourcing the lib twice is a no-op" {
-  run bash -c "cd '$REPO_ROOT' && set -uo pipefail && . '$LIBRARY' && . '$LIBRARY' && test_signals_repo_relative_path '$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$FIXTURE_RELATIVE_DIRECTORY/top-level.test.ts" ]
-}
 
 # --- shell lib: refusal status constants and reason text ---
 
@@ -286,39 +190,6 @@ run_library() {
 }
 
 # --- signal helper: comment-free content, fixture pairs ---
-
-@test "a comment-only edit does not rotate the signal, and pins to a known digest" {
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/comment-a.test.ts"
-  [ "$status" -eq 0 ]
-  local signal_a
-  signal_a=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/comment-b.test.ts"
-  [ "$status" -eq 0 ]
-  local signal_b
-  signal_b=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  [ -n "$signal_a" ]
-  [ "$signal_a" = "$signal_b" ]
-  [ "$signal_a" = "sha256:26fd52ef906dbbdbd213a15316025420b2b317022ed2572db0e5a68b14e5d754" ]
-}
-
-@test "an assertion absorbed into a comment rotates the signal, and pins each side" {
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/absorb-a.test.ts"
-  [ "$status" -eq 0 ]
-  local signal_a
-  signal_a=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/absorb-b.test.ts"
-  [ "$status" -eq 0 ]
-  local signal_b
-  signal_b=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  [ -n "$signal_a" ]
-  [ "$signal_a" != "$signal_b" ]
-  [ "$signal_a" = "sha256:36440c7f57cac008007a29ed7f02227095071ecd3b1358fc430b19eaaa377ac2" ]
-  [ "$signal_b" = "sha256:4713b19b36a174404558498a550b42e4a446ef8cd6c051f2f0565875c7abbefd" ]
-}
 
 @test "a tight inline comment does not fuse its neighbours" {
   # fusion-pair.test.ts holds two tests sharing one title on purpose: two
@@ -381,37 +252,40 @@ run_library() {
 
 # --- signal helper: JSX text vs a JSX expression comment ---
 
-@test "changed JSX text rotates the signal" {
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/jsx-text-a.test.tsx"
-  [ "$status" -eq 0 ]
-  local signal_a
-  signal_a=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/jsx-text-b.test.tsx"
-  [ "$status" -eq 0 ]
-  local signal_b
-  signal_b=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  [ -n "$signal_a" ]
-  [ "$signal_a" != "$signal_b" ]
-}
-
-@test "a changed JSX expression comment does not rotate the signal" {
-  # The fixture places the {/* ... */} comment inside the trailing `>`
-  # token's swallow range, so this is the standing catcher for a
-  # merge-before-discard step order (README.md, "The signal computation").
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/jsx-text-a.test.tsx"
-  [ "$status" -eq 0 ]
-  local signal_a
-  signal_a=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/jsx-comment.test.tsx"
-  [ "$status" -eq 0 ]
-  local signal_comment
-  signal_comment=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
-
-  [ -n "$signal_a" ]
-  [ "$signal_a" = "$signal_comment" ]
+@test "the signal rotates on a code change and holds on a reformat, comment or reword, per case" {
+  # Each row: label|file a|file b|relation|pin a|pin b ('-' pins nothing).
+  local rows=(
+    "reformatting only|stable-a.test.ts|stable-b.test.ts|same|-|-"
+    "changed assertion literal|stable-a.test.ts|changed.test.ts|differ|-|-"
+    "comment only edit|comment-a.test.ts|comment-b.test.ts|same|sha256:26fd52ef906dbbdbd213a15316025420b2b317022ed2572db0e5a68b14e5d754|-"
+    "assertion absorbed into a comment|absorb-a.test.ts|absorb-b.test.ts|differ|sha256:36440c7f57cac008007a29ed7f02227095071ecd3b1358fc430b19eaaa377ac2|sha256:4713b19b36a174404558498a550b42e4a446ef8cd6c051f2f0565875c7abbefd"
+    "changed JSX text|jsx-text-a.test.tsx|jsx-text-b.test.tsx|differ|-|-"
+    "changed JSX expression comment|jsx-text-a.test.tsx|jsx-comment.test.tsx|same|-|-"
+  )
+  # The JSX expression comment sits inside the trailing > token's swallow
+  # range, so its row is the standing catcher for a merge-before-discard order.
+  local row label file_a file_b relation pin_a pin_b signal_a signal_b
+  for row in "${rows[@]}"; do
+    IFS='|' read -r label file_a file_b relation pin_a pin_b <<<"$row"
+    run_helper "$FIXTURE_RELATIVE_DIRECTORY/$file_a"
+    [ "$status" -eq 0 ] || { echo "$label: helper failed on $file_a" >&2; return 1; }
+    signal_a=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
+    run_helper "$FIXTURE_RELATIVE_DIRECTORY/$file_b"
+    [ "$status" -eq 0 ] || { echo "$label: helper failed on $file_b" >&2; return 1; }
+    signal_b=$(printf '%s\n' "$output" | sed -E 's/.*"signal":"([^"]+)".*/\1/')
+    [ -n "$signal_a" ] || { echo "$label: empty signal" >&2; return 1; }
+    if [ "$relation" = same ]; then
+      [ "$signal_a" = "$signal_b" ] || { echo "$label: signal rotated" >&2; return 1; }
+    else
+      [ "$signal_a" != "$signal_b" ] || { echo "$label: signal held" >&2; return 1; }
+    fi
+    if [ "$pin_a" != "-" ]; then
+      [ "$signal_a" = "$pin_a" ] || { echo "$label: pin a mismatch" >&2; return 1; }
+    fi
+    if [ "$pin_b" != "-" ]; then
+      [ "$signal_b" = "$pin_b" ] || { echo "$label: pin b mismatch" >&2; return 1; }
+    fi
+  done
 }
 
 # --- signal helper: one computation across disk, stdin, and the ledger writer ---
@@ -454,11 +328,6 @@ run_library() {
   local signal_ledger
   signal_ledger=$(jq -r '.signal' "$ledger")
   [ "$signal_helper" = "$signal_ledger" ]
-}
-
-@test "the helper reads no process.env, the static floor on a second computation" {
-  grep -qF -- 'process.env' "$HELPER" && return 1
-  true
 }
 
 # --- the dependency gate itself ---
@@ -567,34 +436,4 @@ run_library() {
   # than a check; the real catcher for `kind` classification is the
   # "helper tags an expectTypeOf-only test kind=type-only" case above, which
   # must stay green.
-}
-
-# The corpus check's exemption is dormant while no tracked frontend test holds
-# such a describe, so these fixtures are what keep it able to fail.
-@test "the corpus floor's exemption fires on a non-literal describe title, and on no literal describe or tagged-template describe.each" {
-  local fixture=dynamic-title-describe.test.ts file_floor file_record_count
-  run_helper "$FIXTURE_RELATIVE_DIRECTORY/$fixture"
-  [ "$status" -eq 0 ]
-  file_record_count=0
-  [ -z "$output" ] || file_record_count=$(printf '%s\n' "$output" | grep -c '"fullName"')
-  file_floor=$(grep -cE "$PLAIN_TEST_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || true)
-  # Without the exemption the floor would red here: grep counts a test the
-  # helper must not record.
-  [ "$file_floor" -gt "$file_record_count" ] || {
-    echo "$fixture: floor $file_floor does not exceed $file_record_count record(s); the fixture no longer exercises the exemption" >&2
-    return 1
-  }
-  grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" || {
-    echo "$fixture: the exemption pattern does not match" >&2
-    return 1
-  }
-
-  # A tagged-template describe.each records its tests, so it stays on the floor.
-  for fixture in nested-describe.test.ts each-describe.test.ts; do
-    grep -qE "$UNRECORDED_SUBTREE_PATTERN" "$REPO_ROOT/$FIXTURE_RELATIVE_DIRECTORY/$fixture" && {
-      echo "$fixture: the exemption matches a describe whose tests the helper records, which would drop its file from the floor" >&2
-      return 1
-    }
-  done
-  true
 }

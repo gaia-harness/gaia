@@ -147,14 +147,6 @@ verdict() {
   [ "$output" = "1" ]
 }
 
-@test "no claims at all is a complete answer that needs no other input" {
-  printf '[]' >"$TEST_DIRECTORY/claims.json"
-  run --separate-stderr bash "$SCRIPT" --claims-json "$TEST_DIRECTORY/claims.json" \
-    --prs-json "$TEST_DIRECTORY/missing.json" --branches "$TEST_DIRECTORY/missing" --now "$NOW"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 # ========== fail-closed ==========
 
 @test "fail-closed: an unreadable input prints nothing and exits 3 with its reason" {

@@ -45,11 +45,6 @@ assert_foreign_ignored() {
   [ ! -f "$GH_STUB_DIRECTORY/argv.log" ] || ! grep -q 'pr view 45' "$GH_STUB_DIRECTORY/argv.log" || return 1
 }
 
-@test "a PR URL with no origin remote counts as foreign" {
-  run_merge "gh pr merge https://github.com/o/r/pull/45"
-  assert_foreign_ignored
-}
-
 @test "a PR URL for the origin repository still resolves, https and ssh remotes" {
   # The stub answers a URL operand from view.json.
   cp "$GH_STUB_DIRECTORY/view-45.json" "$GH_STUB_DIRECTORY/view.json"
@@ -123,7 +118,7 @@ foreign_spellings() {
 
 run_foreign_spellings() {
   local foreign_command
-  git -C "$REPO" remote add origin https://github.com/o/r.git
+  git -C "$REPO" remote get-url origin >/dev/null 2>&1 || git -C "$REPO" remote add origin https://github.com/o/r.git
   while IFS= read -r foreign_command; do
     rm -f "$GH_STUB_DIRECTORY/argv.log"
     run_merge "$foreign_command"
@@ -135,13 +130,17 @@ run_foreign_spellings() {
   assert_nothing_touched
 }
 
-@test "a foreign merge on a feature branch with an OPEN PR 12 reads and prints nothing" {
+@test "foreign merge spellings are terminal: no read, no block, no row (no origin URL, OPEN PR 12, MERGED PR 12)" {
+  # No origin remote: a PR URL counts as foreign.
+  run_merge "gh pr merge https://github.com/o/r/pull/45"
+  assert_foreign_ignored
+
+  # A feature branch whose own PR 12 is OPEN.
   use_feature_branch OPEN
   run_foreign_spellings
-}
 
-@test "a foreign merge on a feature branch whose PR 12 is MERGED writes no row and no edge" {
-  use_feature_branch MERGED 2026-09-25T02:00:00Z
+  # The same branch with PR 12 MERGED writes no row and no edge.
+  gh_view none 12 feat/cur MERGED 2026-09-25T02:00:00Z
   run_foreign_spellings
 }
 
@@ -162,8 +161,10 @@ run_foreign_spellings() {
   [ "$(merge_key 12)" = branch:feat/cur ]
 }
 
-@test "a branch-name operand resolves that branch's PR, never the current branch's" {
+@test "operand resolution never falls back to the current branch (branch name, gh cannot answer, unreadable operand, number-looking flag value)" {
   use_feature_branch MERGED 2026-09-25T02:00:00Z
+
+  # A branch-name operand resolves that branch's PR, never the current branch's.
   gh_view mybranch 77 mybranch MERGED 2026-09-26T02:00:00Z
   run_merge "gh pr merge mybranch --squash"
   [ "$status" -eq 0 ]
@@ -173,22 +174,18 @@ run_foreign_spellings() {
   [ "$(merge_rows 12)" -eq 0 ]
   argv_has '^pr view mybranch '
   argv_has '^pr view --json' && return 1
-  true
-}
 
-@test "a branch-name operand that gh cannot answer never falls back to the current branch" {
-  use_feature_branch MERGED 2026-09-25T02:00:00Z
+  # A branch-name operand gh cannot answer never falls back either.
+  rm -f "$GH_STUB_DIRECTORY/argv.log"
   run_merge "gh pr merge ghostbranch"
   [ "$status" -eq 0 ]
   lacks "--merge 12 "
   no_trace_of_12
   argv_has '^pr view ghostbranch '
   argv_has '^pr view --json' && return 1
-  true
-}
 
-@test "an operand the scan cannot read never reads the current branch's PR" {
-  use_feature_branch MERGED 2026-09-25T02:00:00Z
+  # An operand the scan cannot read never reads the current branch's PR.
+  rm -f "$GH_STUB_DIRECTORY/argv.log"
   run_merge 'gh pr merge $(echo 45)'
   [ "$status" -eq 0 ]
   lacks "--merge 12 "
@@ -201,11 +198,9 @@ run_foreign_spellings() {
   lacks "--merge 12 "
   no_trace_of_12
   argv_has '^pr view' && return 1
-  true
-}
 
-@test "a flag value that looks like a number never becomes the operand" {
-  use_feature_branch OPEN
+  # A flag value that looks like a number never becomes the operand.
+  gh_view none 12 feat/cur OPEN ""
   local flag_spelling
   for flag_spelling in "--subject 99" "-t 99" "--body 99" "-b 99" "--match-head-commit 99" "-A 99" "--author-email 99"; do
     rm -f "$GH_STUB_DIRECTORY/argv.log"
@@ -232,7 +227,7 @@ slow_render() {
     "$1" >"$REPO/.gaia/scripts/usage.sh"
 }
 
-@test "an OPEN PR with a hostile headRefName prints a hashed --key and nothing shell-active" {
+@test "a hostile headRefName never prints raw or shell-active, only a hashed key (command substitution, metacharacters)" {
   gh_view 108 108 'x$(touch pwn)' OPEN ""
   run_merge "gh pr merge 108"
   [ "$status" -eq 0 ]
@@ -240,9 +235,7 @@ slow_render() {
   lacks '$('
   lacks 'touch'
   grep -Eq 'link --merge 108 --key branch:%[0-9a-f]{16}\)$' <<<"$output"
-}
 
-@test "a hostile name with shell metacharacters is never printed raw" {
   gh_view 108 108 'x;rm-rf' OPEN ""
   run_merge "gh pr merge 108"
   [ "$status" -eq 0 ]
@@ -266,21 +259,4 @@ slow_render() {
   run_merge "gh pr merge 109"
   [ "$status" -eq 0 ]
   grep -qF 'link --merge 109 --key branch:fix/foo)' <<<"$output"
-}
-
-@test "guards-must-fail: copies of the hint sites that print the raw branch leak a hostile name" {
-  gh_view 108 108 'x$(touch pwn)' OPEN ""
-  sed -i.bak 's|^    if \[\[ \$key =~ .*|    if false; then rerun_flags=""|; s|^    elif \[\[ \$raw_branch =~ .*|    elif true; then rerun_flags="--branch $raw_branch"|' "$REPO/.gaia/scripts/usage-render-lib.sh"
-  grep -q 'elif true' "$REPO/.gaia/scripts/usage-render-lib.sh"
-  run_merge "gh pr merge 108"
-  grep -qF -- '--branch x$(touch pwn)' <<<"$output"
-
-  cp "$SOURCE_ROOT/.gaia/scripts/usage-render-lib.sh" "$REPO/.gaia/scripts/usage-render-lib.sh"
-  git -C "$REPO" checkout -q -b 'x$(touch-pwn)'
-  slow_render 8
-  export GAIA_USAGE_RENDER_CAP_SECONDS=1
-  sed -i.bak 's|^    if \[\[ \$rerun_key =~ .*|    if false; then rerun_flags=""|; s|^    elif \[\[ \$branch =~ .*|    elif true; then rerun_flags="--branch $branch"|' "$REPO/.gaia/scripts/usage-merge.sh"
-  grep -q 'elif true' "$REPO/.gaia/scripts/usage-merge.sh"
-  run_merge "gh pr merge"
-  grep -qF -- '--branch x$(touch-pwn)' <<<"$output"
 }

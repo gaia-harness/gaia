@@ -77,15 +77,14 @@ fix_entry() {
 
 # --- choose ------------------------------------------------------------------
 
-@test "choose: all-Minor fixes pick the smaller gate" {
+@test "choose: smaller only when every fix entry is a Minor non-security finding with a row; Major, Critical, security true or absent, a missing row or zero fixes pick full" {
+  # case: all-Minor fixes pick the smaller gate
   write_findings "$(finding_row a.ts minor false),$(finding_row b.ts minor false)"
   write_fixes "$(fix_entry a.ts),$(fix_entry b.ts)"
   run gate choose --round 1
   [ "$status" -eq 0 ]
   [ "$output" = smaller ]
-}
-
-@test "choose: a Major, a Critical, security true or absent, a missing row, or zero fixes pick full" {
+  # case: every other shape picks full
   local severity
   for severity in major critical; do
     write_findings "$(finding_row a.ts minor false),$(finding_row b.ts "$severity" false)"
@@ -124,12 +123,11 @@ fix_entry() {
   [ "$output" = apps/web/app/a.ts ]
 }
 
-@test "status is clear with no record" {
+@test "status exit codes: clear with no record, 3 on a corrupt record" {
+  # case: no record is clear
   run gate status
   [ "$status" -eq 0 ]
-}
-
-@test "a corrupt record exits 3 on status" {
+  # case: corrupt record exits 3
   printf 'not json\n' >"$D/gate-owed.json"
   run gate status
   [ "$status" -eq 3 ]
@@ -151,7 +149,8 @@ pnpm -C $R build" ]
   [ ! -e "$D/gate-failure.json" ]
 }
 
-@test "a failing step leaves the gate owed and writes the failure record" {
+@test "run: a failing step or a step that changes the tree exits 1, writes the failure record and stays owed" {
+  # case: a failing step
   commit_path apps/web/app/a.ts
   gate mark --round 2
   touch "$T/fail-build"
@@ -162,9 +161,8 @@ pnpm -C $R build" ]
   [ "$(jq -r .tree "$D/gate-failure.json")" = "$(git -C "$R" rev-parse 'HEAD^{tree}')" ]
   run gate status
   [ "$status" -eq 1 ]
-}
-
-@test "a step that edits a tracked file fails the run though it exited 0" {
+  rm -f "$T/fail-build" "$D/gate-failure.json"
+  # case: a step that edits a tracked file though it exited 0
   commit_path apps/web/app/a.ts
   gate mark --round 1
   touch "$T/edit-pw"
@@ -173,7 +171,8 @@ pnpm -C $R build" ]
   [ "$(jq -r .step "$D/gate-failure.json")" = pw ]
 }
 
-@test "an unreadable current round exits 3 and writes no failure record" {
+@test "run refusals: an unreadable current round or a smoke exit of 2 or 3 exits 3, writes no failure record and stays owed" {
+  # case: unreadable current round
   commit_path apps/web/app/a.ts
   gate mark --round 1
   touch "$T/fail-pw"
@@ -181,9 +180,9 @@ pnpm -C $R build" ]
   run gate run
   [ "$status" -eq 3 ]
   [ ! -e "$D/gate-failure.json" ]
-}
-
-@test "a smoke refusal of 2 or 3 stays owed, writes no failure record and exits 3" {
+  printf '3\n' >"$T/current-round"
+  rm -f "$T/fail-pw"
+  # case: smoke exit of 2 or 3
   local code
   commit_path apps/web/app/a.ts
   gate mark --round 1
@@ -216,9 +215,12 @@ pnpm -C $R build" ]
   [ "$status" -eq 1 ]
 }
 
-@test "steps-passed refuses evidence recorded for another tree" {
+@test "steps-passed refuses with exit 4 and leaves the gate owed on evidence for another tree, a malformed, step-missing or non-zero-exit evidence file, or a commit that leaves out a gated change" {
+  local tree
   commit_path apps/web/app/a.ts
   gate mark --round 1
+
+  # case: evidence recorded for another tree
   run gate gate-steps
   [ "$status" -eq 0 ]
   commit_path apps/web/app/a.ts
@@ -226,12 +228,8 @@ pnpm -C $R build" ]
   [ "$status" -eq 4 ]
   run gate status
   [ "$status" -eq 1 ]
-}
 
-@test "steps-passed refuses a malformed evidence file or one missing a step" {
-  local tree
-  commit_path apps/web/app/a.ts
-  gate mark --round 1
+  # case: malformed evidence file, evidence missing a step, evidence with a non-zero exit
   tree="$(git -C "$R" rev-parse 'HEAD^{tree}')"
   printf 'not json\n' >"$D/gate-pass.json"
   run gate steps-passed
@@ -240,6 +238,18 @@ pnpm -C $R build" ]
   run gate steps-passed
   [ "$status" -eq 4 ]
   jq -n -c --arg tree "$tree" '{version: 1, tree: $tree, commit: "x", steps: ["pw", "smoke", "build"], exit: 1}' >"$D/gate-pass.json"
+  run gate steps-passed
+  [ "$status" -eq 4 ]
+  run gate status
+  [ "$status" -eq 1 ]
+
+  # case: a commit that leaves out a gated change
+  rm -f "$D/gate-pass.json"
+  printf 'export const b = 2;\n' >"$R/apps/web/app/b.ts"
+  printf 'export const c = 3;\n' >"$R/apps/web/app/c.ts"
+  gate gate-steps >/dev/null
+  git -C "$R" add apps/web/app/b.ts
+  git -C "$R" commit --quiet -m "partial"
   run gate steps-passed
   [ "$status" -eq 4 ]
   run gate status
@@ -276,18 +286,6 @@ pnpm -C $R build" ]
   [ "$(jq -r .owed "$D/gate-owed.json")" = false ]
   run gate status
   [ "$status" -eq 0 ]
-}
-
-@test "a commit that leaves out a gated change gives steps-passed nothing to clear" {
-  commit_path apps/web/app/a.ts
-  gate mark --round 1
-  printf 'export const b = 2;\n' >"$R/apps/web/app/b.ts"
-  printf 'export const c = 3;\n' >"$R/apps/web/app/c.ts"
-  gate gate-steps >/dev/null
-  git -C "$R" add apps/web/app/b.ts
-  git -C "$R" commit --quiet -m "partial"
-  run gate steps-passed
-  [ "$status" -eq 4 ]
 }
 
 @test "a failing gate-steps writes no evidence and leaves the owed record alone" {

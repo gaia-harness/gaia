@@ -140,6 +140,21 @@ floor_of() {
   printf '%s\n' "$output" | grep -qxF "BELOW git 2.56.0 3.0"
 }
 
+@test "a target bundle's copy runs with the Node helpers the release ships beside it" {
+  grep -qF '".gaia/scripts/toolchain-node-lib.sh": "owned"' "$REPO_ROOT/.gaia/manifest.json"
+  local bundle="$BATS_TEST_TMPDIR/bundle" major
+  mkdir -p "$bundle/.gaia/scripts"
+  cp "$CHECK" "$REPO_ROOT/.gaia/scripts/toolchain-node-lib.sh" "$bundle/.gaia/scripts/"
+  cp "$FLOORS" "$bundle/.gaia/"
+  stub_current
+  stub node 'v24.11.0'
+  stub fnm 'fnm 1.38.1'
+  major="$(floor_of node)"
+  run env -i PATH="$STUBS" "$ABSOLUTE_BASH_PATH" "$bundle/.gaia/scripts/toolchain-check.sh" --platform darwin
+  [ "$status" -eq 1 ]
+  [[ "$(printf '%s\n' "$output" | grep '^ROUTE node ')" == "ROUTE node terminal fnm install $major && "* ]]
+}
+
 @test "lsof missing on macOS blocks: no floor row only warns" {
   stub_current
   rm "$STUBS/lsof"
@@ -244,8 +259,47 @@ route_line() {
   printf '%s\n' "$output" | grep -qxF "BELOW node 24.11.0 $(floor_of node)"
   local major
   major="$(floor_of node)"
-  [[ "$output" == *"GUIDE node: Install Node $major with nvm or fnm: run nvm install $major, nvm use $major and nvm alias default $major, or fnm install $major, fnm use $major and fnm default $major"*"npm install -g pnpm@latest"*"fresh terminal in the project folder"*"run fnm use $major or nvm use $major there"*"Then start Claude Code"*"GAIA's CLI run on it."* ]] || return 1
+  [[ "$output" == *"GUIDE node: Install Node $major with nvm or fnm: run nvm install $major, nvm use $major and nvm alias default $major, or fnm install $major, fnm use $major and fnm default $major"*"npm install -g pnpm@latest"*"fresh terminal in the project folder"*"select Node $major there"*"Then start Claude Code"*"GAIA's CLI run on it."* ]] || return 1
   [ -z "$(route_line node)" ]
+}
+
+@test "the per-folder switcher advice holds for asdf and mise: it says to select the floor's Node there, never an fnm or nvm command" {
+  stub_current
+  stub node 'v24.11.0'
+  stub fnm 'fnm 1.38.1'
+  local major platform
+  major="$(floor_of node)"
+  for platform in darwin windows; do
+    check --platform "$platform"
+    [[ "$output" == *"(fnm --use-on-cd, nvm auto-use, asdf, mise), select Node $major there, or the old pin is reselected"* ]] || return 1
+    grep '^GUIDE node:' <<<"$output" | grep -qE '(fnm|nvm) use [0-9]+ there' && return 1
+  done
+  true
+}
+
+@test "with no version manager to run the guide's commands, the node guide says to install one first or get Node another way" {
+  stub_current
+  stub node 'v24.11.0'
+  local major
+  major="$(floor_of node)"
+  check --platform darwin
+  [[ "$output" == *"GUIDE node: "*"Neither nvm nor fnm is installed here, so install one of them first, or install Node $major another way and make it your default."* ]] || return 1
+  check --platform windows
+  [[ "$output" == *"GUIDE node: "*"fnm is not installed here, so install it first, or install Node $major another way and make it your default."* ]] || return 1
+  stub fnm 'fnm 1.38.1'
+  check --platform darwin
+  grep '^GUIDE node:' <<<"$output" | grep -qE 'is not installed here|is installed here' && return 1
+  mkdir -p "$STUBS/nvm"
+  printf 'x\n' >"$STUBS/nvm/nvm.sh"
+  rm "$STUBS/fnm"
+  run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
+  grep '^GUIDE node:' <<<"$output" | grep -qE 'is not installed here|is installed here' && return 1
+  rm -r "$STUBS/nvm"
+  mkdir -p "$STUBS/brew/opt/nvm" "$STUBS/home"
+  printf 'x\n' >"$STUBS/brew/opt/nvm/nvm.sh"
+  run env -i PATH="$STUBS" HOME="$STUBS/home" HOMEBREW_PREFIX="$STUBS/brew" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
+  grep '^GUIDE node:' <<<"$output" | grep -qE 'is not installed here|is installed here' && return 1
+  true
 }
 
 @test "ROUTE terminal for node through fnm or nvm, reinstalling pnpm with the pnpm route's own command, and none on Windows" {
@@ -313,7 +367,7 @@ route_line() {
     [ "$(printf '%s\n' "$guide_text" | grep -c '^GUIDE ')" -ge 4 ]
     printf '%s\n' "$guide_text" | grep '^GUIDE node:' | grep -qF "Install Node $major with" || return 1
     printf '%s\n' "$guide_text" | grep -v '^GUIDE node:' | grep -qE '[0-9]+(\.[0-9]+)?' && return 1
-    printf '%s\n' "$guide_text" | grep '^GUIDE node:' | sed "s/Node $major with/Node with/; s/install $major/install/" | grep -qiE '(node|v|@)[ ]?[0-9]+|[0-9]+\.[0-9]+\.[0-9]+' && return 1
+    printf '%s\n' "$guide_text" | grep '^GUIDE node:' | sed "s/Node $major /Node /g; s/install $major/install/" | grep -qiE '(node|v|@)[ ]?[0-9]+|[0-9]+\.[0-9]+\.[0-9]+' && return 1
   done
   true
 }

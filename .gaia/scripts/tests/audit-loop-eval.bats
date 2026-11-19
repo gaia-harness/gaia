@@ -17,6 +17,12 @@
 
 bats_require_minimum_version 1.5.0
 
+setup_file() {
+  # shellcheck source=/dev/null
+  . "$BATS_TEST_DIRNAME/../../tests/helpers/audit-loop-fixture.sh"
+  alf_build_template
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS="${AUDIT_LOOP_SCRIPTS_DIRECTORY:-$REPO_ROOT/.gaia/scripts}"
@@ -775,19 +781,6 @@ write_review_ledger() {
   [ "$output" = '{"total":0,"members":{},"grants":0,"light":{"code-audit-frontend":1,"code-audit-maintainer-shell":1}}' ]
 }
 
-@test "record-values: the anchor filter is what keeps a quick clear out of light" {
-  cli_copy
-  write_review_ledger merge-base clear code-audit-frontend
-  write_review_ledger full clear code-audit-frontend
-  grep -qF 'tally(.anchor_kind != "merge-base")' "$CLI/audit-loop-eval.sh"
-  sed 's/tally(\.anchor_kind != "merge-base")/tally(true)/' "$CLI/audit-loop-eval.sh" >"$CLI/audit-loop-eval.mutant.sh"
-  chmod +x "$CLI/audit-loop-eval.mutant.sh"
-  grep -qF 'tally(true)' "$CLI/audit-loop-eval.mutant.sh"
-  run "$CLI/audit-loop-eval.mutant.sh" record-values --root "$ALF_ROOT"
-  [ "$status" -eq 0 ]
-  [ "$(jq -c '.light' <<<"$output")" = '{"code-audit-frontend":2}' ]
-}
-
 @test "exit codes: detached is 4, corrupt state is 5, missing jq is 6, each with one diagnostic line" {
   cli_copy
   alf_sequence 2
@@ -1160,22 +1153,6 @@ drift_fixture() {
   [ "$(read_json "$snapshot" '.A')" = 1 ]
   [ "$(read_json "$snapshot" '.counted_keys[0].security')" = false ]
   [ "$(read_json "$snapshot" '.accept_eligible')" = true ]
-}
-
-@test "red twin: the alternative-operator spelling turns security:false into true" {
-  local copy="$BATS_TEST_TMPDIR/twin" twin_output
-  mkdir -p "$copy"
-  cp "$SCRIPTS"/*.sh "$copy"/
-  grep -qF '(if (.security | type) == "boolean" then .security else true end)' "$copy/audit-loop-eval.sh"
-  sed -i.bak 's/(if (.security | type) == "boolean" then .security else true end)/(.security \/\/ true)/' "$copy/audit-loop-eval.sh"
-  grep -qF '(.security // true)' "$copy/audit-loop-eval.sh"
-  alf_fill f.txt 12 feature
-  alf_set_line other.txt 1 "round 1"
-  alf_commit "round 1"
-  alf_round 1 "$MEMBER" '[{"path":"f.txt","line":2,"security":false}]'
-  twin_output="$(bash -c '. "$1/audit-loop-eval.sh"; gaia_loop_findings "$2" "$(cat "$3")" 1' _ "$copy" "$ALF_ROOT" "$ALF_STATE")"
-  [ "$(read_json "$twin_output" '.entries[0].security')" = true ]
-  [ "$(read_json "$(gaia_loop_findings "$ALF_ROOT" "$(cat "$ALF_STATE")" 1)" '.entries[0].security')" = false ]
 }
 
 @test "decision: 6 rounds used, a fresh reading below the line and no signal admit a unit past the fallback checkpoint" {

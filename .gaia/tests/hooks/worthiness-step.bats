@@ -175,81 +175,91 @@ state_checksum() {
   [ "$output" = "[]" ]
 }
 
-@test "keep at the current signal is keep, at a stale signal is evaluate, with no line is evaluate" {
+# expect_field <row> <file> <fullName> <jq field> <expected>: one check of the
+# last route output, naming the row on failure.
+expect_field() {
+  local actual
+  actual="$(field "$2" "$3" "$4")"
+  [ "$actual" = "$5" ] || {
+    printf 'row %s: %s / %s %s is "%s", expected "%s"\n' "$1" "$2" "$3" "$4" "$actual" "$5" >&2
+    return 1
+  }
+}
+
+# A row of a shared-fixture table starts from an empty ledger and run folder.
+reset_verdict_state() {
+  : >"$LEDGER"
+  rm -rf "$RUN_FOLDER"
+  mkdir -p "$RUN_FOLDER"
+}
+
+@test "routes by ledger line and signal: keep at the current signal, a stale or absent line evaluates, fix and delete by authorship, the last line at one signal wins" {
   commit_widget_edits
+
+  reset_verdict_state
   seed "$WIDGET" "second" keep
   seed "$WIDGET" "third" keep "sha256:stale"
   run_route
-  [ "$status" -eq 0 ]
-  [ "$(field "$WIDGET" second .route)" = keep ]
-  [ "$(field "$WIDGET" third .route)" = evaluate ]
-  [ "$(field "$WIDGET" first .route)" = evaluate ]
-}
+  [ "$status" -eq 0 ] || { echo "row keep-stale-absent: status $status" >&2; return 1; }
+  expect_field keep-stale-absent "$WIDGET" second .route keep
+  expect_field keep-stale-absent "$WIDGET" third .route evaluate
+  expect_field keep-stale-absent "$WIDGET" first .route evaluate
 
-@test "a fix on a test edited mid-body routes fix and authored" {
-  commit_widget_edits
+  reset_verdict_state
   seed "$WIDGET" "first" fix
   run_route
-  [ "$(field "$WIDGET" first .route)" = fix ]
-  [ "$(field "$WIDGET" first .authored)" = true ]
-  [ "$(field "$WIDGET" first .artifact)" = "an artifact" ]
-}
+  expect_field fix-on-midbody-edit "$WIDGET" first .route fix
+  expect_field fix-on-midbody-edit "$WIDGET" first .authored true
+  expect_field fix-on-midbody-edit "$WIDGET" first .artifact "an artifact"
 
-@test "a fix on an untouched test in an edited file routes file, a delete on an edited test routes delete" {
-  commit_widget_edits
+  reset_verdict_state
   seed "$WIDGET" "second" fix
   seed "$WIDGET" "first" delete
   run_route
-  [ "$(field "$WIDGET" second .route)" = file ]
-  [ "$(field "$WIDGET" second .authored)" = false ]
-  [ "$(field "$WIDGET" first .route)" = delete ]
-}
+  expect_field fix-untouched-delete-edited "$WIDGET" second .route file
+  expect_field fix-untouched-delete-edited "$WIDGET" second .authored false
+  expect_field fix-untouched-delete-edited "$WIDGET" first .route delete
 
-@test "a delete on an untouched test routes delete" {
-  commit_widget_edits
+  reset_verdict_state
   seed "$WIDGET" "second" delete
   run_route
-  [ "$(field "$WIDGET" second .route)" = delete ]
-  [ "$(field "$WIDGET" second .authored)" = false ]
-}
+  expect_field delete-untouched "$WIDGET" second .route delete
+  expect_field delete-untouched "$WIDGET" second .authored false
 
-@test "a test whose only edited line is its last line is authored" {
-  commit_widget_edits
-  run_route
-  [ "$(field "$WIDGET" third .authored)" = true ]
-  [ "$(field "$WIDGET" second .authored)" = false ]
-}
-
-@test "a base-story-only edit makes that story and its tests authored and not an unrelated story" {
-  edit_story_alpha_declaration
-  commit_paths "$MARKER_STORY"
-  run_route
-  [ "$status" -eq 0 ]
-  [ "$(field "$MARKER_STORY" "Alpha   base story" .authored)" = true ]
-  [ "$(field "$MARKER_STORY" "Alpha   shows alpha" .authored)" = true ]
-  [ "$(field "$MARKER_STORY" "Beta   base story" .authored)" = false ]
-  [ "$(field "$MARKER_STORY" "Beta   shows beta" .authored)" = false ]
-}
-
-@test "a meta-only edit makes every story in the file authored" {
-  edit_story_meta
-  commit_paths "$MARKER_STORY"
-  run_route
-  [ "$(field "$MARKER_STORY" "Alpha   base story" .authored)" = true ]
-  [ "$(field "$MARKER_STORY" "Alpha   shows alpha" .authored)" = true ]
-  [ "$(field "$MARKER_STORY" "Beta   base story" .authored)" = true ]
-  [ "$(field "$MARKER_STORY" "Beta   shows beta" .authored)" = true ]
-}
-
-@test "keep then fix at one signal routes fix, fix then keep routes keep" {
-  commit_widget_edits
+  reset_verdict_state
   seed "$WIDGET" "first" keep
   seed "$WIDGET" "first" fix
   seed "$WIDGET" "third" fix
   seed "$WIDGET" "third" keep
   run_route
-  [ "$(field "$WIDGET" first .route)" = fix ]
-  [ "$(field "$WIDGET" third .route)" = keep ]
+  expect_field replay-order "$WIDGET" first .route fix
+  expect_field replay-order "$WIDGET" third .route keep
+}
+
+# The rows edit cumulatively on one branch; the base-story row runs before the
+# meta row because a meta edit makes Beta authored too.
+@test "authored by edit position: a last-line-only edit, a base-story-only edit and not an unrelated story, a meta-only edit makes every story" {
+  commit_widget_edits
+  run_route
+  expect_field last-line-edit "$WIDGET" third .authored true
+  expect_field last-line-edit "$WIDGET" second .authored false
+
+  edit_story_alpha_declaration
+  commit_paths "$MARKER_STORY"
+  run_route
+  [ "$status" -eq 0 ] || { echo "row base-story-edit: status $status" >&2; return 1; }
+  expect_field base-story-edit "$MARKER_STORY" "Alpha   base story" .authored true
+  expect_field base-story-edit "$MARKER_STORY" "Alpha   shows alpha" .authored true
+  expect_field base-story-edit "$MARKER_STORY" "Beta   base story" .authored false
+  expect_field base-story-edit "$MARKER_STORY" "Beta   shows beta" .authored false
+
+  edit_story_meta
+  commit_paths "$MARKER_STORY"
+  run_route
+  expect_field meta-edit "$MARKER_STORY" "Alpha   base story" .authored true
+  expect_field meta-edit "$MARKER_STORY" "Alpha   shows alpha" .authored true
+  expect_field meta-edit "$MARKER_STORY" "Beta   base story" .authored true
+  expect_field meta-edit "$MARKER_STORY" "Beta   shows beta" .authored true
 }
 
 @test "a base that does not resolve prints an empty list and exits 0" {
@@ -288,31 +298,47 @@ state_checksum() {
   [ "$(field "$WIDGET" second .route)" = fix ]
 }
 
-@test "a missing classifier exits 3 with the reason on stderr and never an empty list" {
+# One fixture serves every row: each broken input is restored before the next
+# row, a clean flow route is proven before the uats row so its exit 3 comes from
+# the SPEC, and the old-format story runs last because it stays committed.
+@test "route fails closed, never an empty list: a missing classifier, a package load failure, one flow flag without the other, a SPEC carrying uats, an extractor refusal" {
   commit_widget_edits
+
   rm -f "$REPO/.gaia/scripts/classifier"
   run_route
-  [ "$status" -eq 3 ]
-  grep -qF -- "classifier" <<<"$stderr"
-  [ "$output" != "[]" ]
-}
+  [ "$status" -eq 3 ] || { echo "row missing-classifier: status $status" >&2; return 1; }
+  grep -qF -- "classifier" <<<"$stderr" || { echo "row missing-classifier: stderr lacks the reason: $stderr" >&2; return 1; }
+  [ "$output" != "[]" ] || { echo "row missing-classifier: printed an empty list" >&2; return 1; }
+  ln -sfn "$HOME_ROOT/.gaia/scripts/classifier" "$REPO/.gaia/scripts/classifier"
 
-@test "a package load failure exits 3 and never prints an empty list" {
-  commit_widget_edits
+  [ -e "$REPO/.gaia/packages.json" ] && { echo "row package-load-failure: the fixture already has a registry" >&2; return 1; }
   printf 'not json\n' >"$REPO/.gaia/packages.json"
   run_route
-  [ "$status" -eq 3 ]
-  [ -n "$stderr" ]
-  [ "$output" != "[]" ]
-}
+  [ "$status" -eq 3 ] || { echo "row package-load-failure: status $status" >&2; return 1; }
+  [ -n "$stderr" ] || { echo "row package-load-failure: empty stderr" >&2; return 1; }
+  [ "$output" != "[]" ] || { echo "row package-load-failure: printed an empty list" >&2; return 1; }
+  rm -f "$REPO/.gaia/packages.json"
 
-@test "an extractor refusal exits 3 with the reason on stderr and never an empty list" {
+  commit_flow_tests
+  write_flows_spec
+  run bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER" --flows-spec "$FLOWS_SPEC"
+  [ "$status" -eq 2 ] || { echo "row flows-spec-only: status $status" >&2; return 1; }
+  run bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER" --flow-tests "$FLOW_TESTS"
+  [ "$status" -eq 2 ] || { echo "row flow-tests-only: status $status" >&2; return 1; }
+  run_flow_route
+  [ "$status" -eq 0 ] || { echo "row spec-carrying-uats: the restored fixture does not route cleanly: status $status: $stderr" >&2; return 1; }
+  printf '%s\n' '---' 'spec_id: SPEC-900' 'uats:' '  - uat_id: UAT-001' '---' >"$FLOWS_SPEC"
+  run_flow_route
+  [ "$status" -eq 3 ] || { echo "row spec-carrying-uats: status $status" >&2; return 1; }
+  [ -n "$stderr" ] || { echo "row spec-carrying-uats: empty stderr" >&2; return 1; }
+  [ "$output" != "[]" ] || { echo "row spec-carrying-uats: printed an empty list" >&2; return 1; }
+
   cp "$HOME_ROOT/.gaia/tests/hooks/fixtures/test-signals/csf3-old-format.stories.tsx" "$REPO/apps/web/app/components/Marker/old.stories.tsx"
   commit_paths apps/web/app/components/Marker/old.stories.tsx
   run_route
-  [ "$status" -eq 3 ]
-  grep -qF -- "old-format" <<<"$stderr"
-  [ "$output" != "[]" ]
+  [ "$status" -eq 3 ] || { echo "row extractor-refusal: status $status" >&2; return 1; }
+  grep -qF -- "old-format" <<<"$stderr" || { echo "row extractor-refusal: stderr lacks the reason: $stderr" >&2; return 1; }
+  [ "$output" != "[]" ] || { echo "row extractor-refusal: printed an empty list" >&2; return 1; }
 }
 
 @test "record then route in one case reads the line record wrote through the ledger seam" {
@@ -325,33 +351,31 @@ state_checksum() {
   [ "$(field "$WIDGET" second .route)" = keep ]
 }
 
-@test "a fixed settlement at a fix line's signal routes residual, a stale fixed row changes nothing" {
+@test "settlement routes: a fixed settlement at a fix line's signal routes residual and a stale one changes nothing, a fixed settlement alone settles nothing, residual and refused route settled and lapse on an edit" {
   commit_widget_edits
+
+  reset_verdict_state
   seed "$WIDGET" "first" fix
   seed "$WIDGET" "third" fix
   settle "$WIDGET" first fixed
   settle "$WIDGET" third fixed "sha256:stale"
   run_route
-  [ "$(field "$WIDGET" first .route)" = residual ]
-  [ "$(field "$WIDGET" third .route)" = fix ]
-}
+  expect_field fixed-at-fix-signal "$WIDGET" first .route residual
+  expect_field fixed-at-stale-signal "$WIDGET" third .route fix
 
-@test "a fixed settlement alone does not settle a test with no stored fix" {
-  commit_widget_edits
+  reset_verdict_state
   settle "$WIDGET" second fixed
   run_route
-  [ "$(field "$WIDGET" second .route)" = evaluate ]
-}
+  expect_field fixed-without-stored-fix "$WIDGET" second .route evaluate
 
-@test "residual and refused settlements route settled and lapse when the test is edited" {
-  commit_widget_edits
+  reset_verdict_state
   seed "$WIDGET" "first" fix
   seed "$WIDGET" "second" fix
   settle "$WIDGET" first residual
   settle "$WIDGET" second refused
   run_route
-  [ "$(field "$WIDGET" first .route)" = settled ]
-  [ "$(field "$WIDGET" second .route)" = settled ]
+  expect_field residual-settles "$WIDGET" first .route settled
+  expect_field refused-settles "$WIDGET" second .route settled
 
   sed -i.bak 's/expect(2).toBe(2);/expect(2).toBeTruthy();/;s/expect(value).toBeTruthy();/expect(value).toBeDefined();/' "$REPO/$WIDGET"
   rm -f "$REPO/$WIDGET.bak"
@@ -359,8 +383,8 @@ state_checksum() {
   seed "$WIDGET" "first" fix
   seed "$WIDGET" "second" keep
   run_route
-  [ "$(field "$WIDGET" first .route)" = fix ]
-  [ "$(field "$WIDGET" second .route)" = keep ]
+  expect_field residual-lapses-on-edit "$WIDGET" first .route fix
+  expect_field refused-lapses-on-edit "$WIDGET" second .route keep
 }
 
 @test "settling residual twice leaves one recorded row and route changes no file" {
@@ -378,12 +402,25 @@ state_checksum() {
   [ "$(state_checksum)" = "$before" ]
 }
 
-@test "settle as residual needs a first line and a reason" {
+@test "settle and record validation refusals append nothing: settle as residual without a first line or a reason, a fix verdict with no artifact, a flow key missing undeclaredFolders" {
   run bash "$STEP" settle --run-folder "$RUN_FOLDER" --file f --full-name n --signal s --as residual --reason r
-  [ "$status" -eq 2 ]
+  [ "$status" -eq 2 ] || { echo "row settle-without-first-line: status $status" >&2; return 1; }
   run bash "$STEP" settle --run-folder "$RUN_FOLDER" --file f --full-name n --signal s --as residual --first-line 3
-  [ "$status" -eq 2 ]
-  [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ]
+  [ "$status" -eq 2 ] || { echo "row settle-without-reason: status $status" >&2; return 1; }
+  [ -e "$RUN_FOLDER/recorded-residuals.jsonl" ] && { echo "row settle: a residual was recorded" >&2; return 1; }
+
+  jq -nc --arg f "$WIDGET" '[{file: $f, fullName: "second", verdict: "keep"}, {file: $f, fullName: "first", verdict: "fix"}]' >"$BATS_TEST_TMPDIR/verdicts.json"
+  run bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
+  [ "$status" -ne 0 ] || { echo "row fix-without-artifact: accepted" >&2; return 1; }
+  [ -s "$LEDGER" ] && { echo "row fix-without-artifact: ledger appended" >&2; return 1; }
+
+  commit_flow_tests
+  flow_verdicts '{"flowId":"FLOW-002","missingOutcome":null}' fix
+  run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
+  [ "$status" -eq 3 ] || { echo "row flow-key-without-undeclared-folders: status $status" >&2; return 1; }
+  grep -qF -- "refuses bad input" <<<"$stderr" || { echo "row flow-key-without-undeclared-folders: stderr: $stderr" >&2; return 1; }
+  [ -s "$LEDGER" ] && { echo "row flow-key-without-undeclared-folders: ledger appended" >&2; return 1; }
+  true
 }
 
 # bats test_tags=protected
@@ -427,13 +464,6 @@ state_checksum() {
   run bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.signal' "$LEDGER")" = "$(signal_of "$WIDGET" first)" ]
-}
-
-@test "record refuses a fix verdict with no artifact and appends nothing" {
-  jq -nc --arg f "$WIDGET" '[{file: $f, fullName: "second", verdict: "keep"}, {file: $f, fullName: "first", verdict: "fix"}]' >"$BATS_TEST_TMPDIR/verdicts.json"
-  run bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
-  [ "$status" -ne 0 ]
-  [ ! -s "$LEDGER" ]
 }
 
 @test "finding output passes the filer screen as clear" {
@@ -480,27 +510,13 @@ commit_route_test() {
   commit_paths "$ROUTE_TEST"
 }
 
-@test "route: a changed route test is listed for evaluation" {
+@test "route lists a changed test by its classification: a route test, a strict util test and a test helper folder test" {
   write_builtin_descriptor "$REPO" '' '' '["app/route-tests/**/*.test.ts"]'
   commit_route_test
   run_route
-  [ "$status" -eq 0 ]
-  [ "$(field "$ROUTE_TEST" 'refuses an anonymous visitor' .route)" = evaluate ]
-}
+  [ "$status" -eq 0 ] || { echo "row route-test: status $status" >&2; return 1; }
+  expect_field route-test "$ROUTE_TEST" 'refuses an anonymous visitor' .route evaluate
 
-@test "route: a selection that accepts only emergent drops the route test" {
-  # Mutation proof on a scratch copy of the selection library.
-  write_builtin_descriptor "$REPO" '' '' '["app/route-tests/**/*.test.ts"]'
-  rm -f "$REPO/.claude/hooks/lib/worthiness-selection.sh"
-  sed 's/ or (.classification \/\/ "") == "route"//' "$HOME_ROOT/.claude/hooks/lib/worthiness-selection.sh" >"$REPO/.claude/hooks/lib/worthiness-selection.sh"
-  if grep -q '== "route"' "$REPO/.claude/hooks/lib/worthiness-selection.sh"; then return 1; fi
-  commit_route_test
-  run_route
-  [ "$status" -eq 0 ]
-  [ "$output" = "[]" ]
-}
-
-@test "route: a strict util test and a test helper folder test are both listed" {
   write_builtin_descriptor "$REPO" '' '' '["test/**/*.test.ts"]'
   mkdir -p "$REPO/apps/web/app/utils/x" "$REPO/apps/web/test"
   printf '%s\n' \
@@ -512,9 +528,9 @@ commit_route_test() {
   cp "$REPO/apps/web/app/utils/x/index.test.ts" "$REPO/apps/web/test/helper.test.ts"
   commit_paths apps/web/app/utils/x/index.test.ts apps/web/test/helper.test.ts
   run_route
-  [ "$status" -eq 0 ]
-  [ "$(field apps/web/app/utils/x/index.test.ts 'adds two numbers' .route)" = evaluate ]
-  [ "$(field apps/web/test/helper.test.ts 'adds two numbers' .route)" = evaluate ]
+  [ "$status" -eq 0 ] || { echo "row strict-util-and-helper: status $status" >&2; return 1; }
+  expect_field strict-util apps/web/app/utils/x/index.test.ts 'adds two numbers' .route evaluate
+  expect_field helper-folder apps/web/test/helper.test.ts 'adds two numbers' .route evaluate
 }
 
 FLOW_BATS=".gaia/tests/lib/refuses-bad-input.bats"
@@ -569,42 +585,21 @@ run_flow_route() {
   run --separate-stderr bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER" --flows-spec "$FLOWS_SPEC" --flow-tests "$FLOW_TESTS"
 }
 
-@test "route with flow inputs selects a flow test the globs exclude and tags it with its flow" {
+@test "route with flow inputs tags flow tests: a bats flow test the globs exclude is selected with its flow, a web flow spec gets its covers from the SPEC" {
   commit_widget_edits
   commit_flow_tests
   write_flows_spec
   run_flow_route
-  [ "$status" -eq 0 ]
-  [ "$(field "$FLOW_BATS" 'refuses bad input' .route)" = evaluate ]
-  [ "$(field "$FLOW_BATS" 'refuses bad input' .flow.name)" = "The command refuses bad input" ]
-  [ "$(field "$FLOW_BATS" 'refuses bad input' .flow.why)" = "A silent pass would hide a broken gate" ]
-  [ "$(field "$FLOW_BATS" 'refuses bad input' .flow.testPath)" = "$FLOW_BATS" ]
-  [ "$(field "$FLOW_BATS" 'refuses bad input' .flow.covers)" = null ]
-  [ "$(field "$WIDGET" first 'has("flow")')" = false ]
-}
-
-@test "route with flow inputs gives a web flow spec its covers from the SPEC" {
-  commit_flow_tests
-  write_flows_spec
-  run_flow_route
-  [ "$status" -eq 0 ]
-  [ "$(field "$FLOW_WEB" 'signs in' .flow.flowId)" = FLOW-001 ]
-  [ "$(field "$FLOW_WEB" 'signs in' '.flow.covers | join(",")')" = "app/pages/sign-in,app/routes/drafts" ]
-  [ "$(field "$FLOW_WEB" 'signs in' .flow.testPath)" = null ]
-}
-
-@test "route refuses one flow flag without the other, and a SPEC carrying uats" {
-  commit_flow_tests
-  write_flows_spec
-  run bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER" --flows-spec "$FLOWS_SPEC"
-  [ "$status" -eq 2 ]
-  run bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER" --flow-tests "$FLOW_TESTS"
-  [ "$status" -eq 2 ]
-  printf '%s\n' '---' 'spec_id: SPEC-900' 'uats:' '  - uat_id: UAT-001' '---' >"$FLOWS_SPEC"
-  run_flow_route
-  [ "$status" -eq 3 ]
-  [ -n "$stderr" ]
-  [ "$output" != "[]" ]
+  [ "$status" -eq 0 ] || { echo "status $status: $stderr" >&2; return 1; }
+  expect_field bats-flow "$FLOW_BATS" 'refuses bad input' .route evaluate
+  expect_field bats-flow "$FLOW_BATS" 'refuses bad input' .flow.name "The command refuses bad input"
+  expect_field bats-flow "$FLOW_BATS" 'refuses bad input' .flow.why "A silent pass would hide a broken gate"
+  expect_field bats-flow "$FLOW_BATS" 'refuses bad input' .flow.testPath "$FLOW_BATS"
+  expect_field bats-flow "$FLOW_BATS" 'refuses bad input' .flow.covers null
+  expect_field non-flow "$WIDGET" first 'has("flow")' false
+  expect_field web-flow "$FLOW_WEB" 'signs in' .flow.flowId FLOW-001
+  expect_field web-flow "$FLOW_WEB" 'signs in' '.flow.covers | join(",")' "app/pages/sign-in,app/routes/drafts"
+  expect_field web-flow "$FLOW_WEB" 'signs in' .flow.testPath null
 }
 
 flow_verdicts() {
@@ -612,32 +607,21 @@ flow_verdicts() {
     '[{file: $f, fullName: "refuses bad input", verdict: $v, flow: $flow} + (if $v == "keep" then {} else {artifact: "an artifact"} end)]' >"$BATS_TEST_TMPDIR/verdicts.json"
 }
 
-@test "record keeps a well-formed flow key on a bats flow test's ledger line" {
+@test "record writes a flow key: keeps a well-formed one on a bats flow test's ledger line, and neither requires nor routes untestedErrorPaths" {
   commit_flow_tests
   flow_verdicts '{"flowId":"FLOW-002","missingOutcome":"never asserts the write took effect","undeclaredFolders":[]}' fix
   run bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.flow.flowId' "$LEDGER")" = FLOW-002 ]
-  [ "$(jq -r '.flow.missingOutcome' "$LEDGER")" = "never asserts the write took effect" ]
-  [ "$(jq -r '.signal' "$LEDGER")" = "$(signal_of "$FLOW_BATS" 'refuses bad input')" ]
-}
+  [ "$status" -eq 0 ] || { echo "row well-formed: status $status" >&2; return 1; }
+  [ "$(jq -r '.flow.flowId' "$LEDGER")" = FLOW-002 ] || { echo "row well-formed: flowId" >&2; return 1; }
+  [ "$(jq -r '.flow.missingOutcome' "$LEDGER")" = "never asserts the write took effect" ] || { echo "row well-formed: missingOutcome" >&2; return 1; }
+  [ "$(jq -r '.signal' "$LEDGER")" = "$(signal_of "$FLOW_BATS" 'refuses bad input')" ] || { echo "row well-formed: signal" >&2; return 1; }
 
-@test "record refuses a flow key missing undeclaredFolders and appends nothing" {
-  commit_flow_tests
-  flow_verdicts '{"flowId":"FLOW-002","missingOutcome":null}' fix
-  run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
-  [ "$status" -eq 3 ]
-  grep -qF -- "refuses bad input" <<<"$stderr"
-  [ ! -s "$LEDGER" ]
-}
-
-@test "record neither requires nor routes untestedErrorPaths on a flow key" {
-  commit_flow_tests
+  reset_verdict_state
   flow_verdicts '{"flowId":"FLOW-002","untestedErrorPaths":[{"source":"a.sh:3","description":"d"}],"missingOutcome":null,"undeclaredFolders":[]}' keep
   run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.verdict' "$LEDGER")" = keep ]
+  [ "$status" -eq 0 ] || { echo "row with-untested-error-paths: status $status" >&2; return 1; }
+  [ "$(jq -r '.verdict' "$LEDGER")" = keep ] || { echo "row with-untested-error-paths: verdict" >&2; return 1; }
   flow_verdicts '{"flowId":"FLOW-002","missingOutcome":null,"undeclaredFolders":[]}' keep
   run --separate-stderr bash "$STEP" record --root "$REPO" --verdicts "$BATS_TEST_TMPDIR/verdicts.json"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "row without-untested-error-paths: status $status" >&2; return 1; }
 }

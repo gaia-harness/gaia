@@ -93,20 +93,25 @@ run_drift() {
   grep -qF -- "check-settings-drift: clean" <<<"$output"
 }
 
-@test "a deleted stub is a warning naming the member and the exit status stays 0" {
+# Each case starts from the same synced tree: sync once, keep a copy of the
+# synced settings files, and restore them before each case instead of
+# re-running the CLI.
+@test "a deleted or edited stub is a warning naming the member and the exit status stays 0" {
   sync_settings
-  rm "$TREE/apps/api/.claude/settings.json"
-  run_drift
-  [ "$status" -eq 0 ]
-  grep -qF -- "warning: member api" <<<"$output"
-}
-
-@test "an edited stub is a warning naming the member and the exit status stays 0" {
-  sync_settings
-  sed -i.bak 's/startup/other/' "$TREE/apps/api/.claude/settings.json"
-  run_drift
-  [ "$status" -eq 0 ]
-  grep -qF -- "warning: member api" <<<"$output"
+  local stub="$TREE/apps/api/.claude/settings.json"
+  cp "$stub" "$BATS_TEST_TMPDIR/stub.synced"
+  local mutation
+  for mutation in deleted edited; do
+    echo "row: $mutation stub"
+    cp "$BATS_TEST_TMPDIR/stub.synced" "$stub"
+    case "$mutation" in
+      deleted) rm "$stub" ;;
+      edited) sed -i.bak 's/startup/other/' "$stub" ;;
+    esac
+    run_drift
+    [ "$status" -eq 0 ]
+    grep -qF -- "warning: member api" <<<"$output"
+  done
 }
 
 @test "sync restores a deleted or edited stub" {
@@ -121,24 +126,25 @@ run_drift() {
   [ "$(cksum <"$TREE/apps/api/.claude/settings.json")" = "$original" ]
 }
 
-@test "a missing file on a web member fails the drift check" {
+@test "a missing or stale generated file on a web or opted-in member fails the drift check" {
   sync_settings
-  rm "$TREE/apps/web/.claude/settings.json"
-  run_drift
-  [ "$status" -eq 1 ]
-  grep -qF -- "apps/web/.claude/settings.json" <<<"$output"
-}
-
-@test "a stale file on an opted-in member fails the drift check" {
-  sync_settings
-  printf '{}\n' >"$TREE/libs/optin/.claude/settings.json"
-  run_drift
-  [ "$status" -eq 1 ]
-}
-
-@test "a stale file on a web member fails the drift check" {
-  sync_settings
-  printf '{}\n' >"$TREE/apps/web/.claude/settings.json"
-  run_drift
-  [ "$status" -eq 1 ]
+  local web="$TREE/apps/web/.claude/settings.json" optin="$TREE/libs/optin/.claude/settings.json"
+  cp "$web" "$BATS_TEST_TMPDIR/web.synced"
+  cp "$optin" "$BATS_TEST_TMPDIR/optin.synced"
+  local row
+  for row in missing-web stale-optin stale-web; do
+    echo "row: $row"
+    cp "$BATS_TEST_TMPDIR/web.synced" "$web"
+    cp "$BATS_TEST_TMPDIR/optin.synced" "$optin"
+    case "$row" in
+      missing-web) rm "$web" ;;
+      stale-optin) printf '{}\n' >"$optin" ;;
+      stale-web) printf '{}\n' >"$web" ;;
+    esac
+    run_drift
+    [ "$status" -eq 1 ]
+    if [ "$row" = missing-web ]; then
+      grep -qF -- "apps/web/.claude/settings.json" <<<"$output"
+    fi
+  done
 }

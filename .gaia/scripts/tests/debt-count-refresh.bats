@@ -71,57 +71,30 @@ run_refresh() {
 
 open_count() { jq -r '.openCount' "$CACHE"; }
 
-# --- 5. Excludes in-progress from the open count -------------------------
-# The core concurrency contract: an open tech-debt issue carrying the claim label
-# is subtracted from the count so a peer session's nudge drops. Three issues, one
-# claimed, must count 2.
+# --- openCount exclusions --------------------------------------------------
+# An open tech-debt issue carrying in-progress, debt:spec-pending or
+# debt:spec-active is parked out of the backlog and must not inflate the nudge
+# count.
 #
-# Issue 1 carries an apostrophe in its body on purpose. Filed issue bodies
-# routinely do, and it is what pins the stub's fixture handling: splice the
-# fixture into the stub between single quotes and the apostrophe closes the
-# quote, so the stub becomes a syntax error, reads as a gh failure, and this
-# test reds on a stale count rather than on the real cause.
-@test "excludes in-progress from the open count" {
-  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}],"body":"the refresher'"'"'s own count"},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"in-progress"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
-  : > "$SENTINEL"
-  run run_refresh
-  [ "$status" -eq 0 ]
-  [ "$(open_count)" = "2" ]
-}
-
-# --- 6. Excludes debt:spec-pending from the open count ------------------------
-# A handed-off (design-first) issue carries debt:spec-pending and is parked out of
-# the backlog until its SPEC and implementation land, so it must not inflate the
-# nudge. Three issues, one spec-pending, must count 2.
-@test "excludes debt:spec-pending from the open count" {
-  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"debt:spec-pending"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
-  : > "$SENTINEL"
-  run run_refresh
-  [ "$status" -eq 0 ]
-  [ "$(open_count)" = "2" ]
-}
-
-# --- 6b. Excludes debt:spec-active from the open count ------------------------
-# Once the pipeline starts, the handoff swaps the park label from
-# debt:spec-pending to debt:spec-active. The issue is no less parked for having
-# started, so the active state must leave the count exactly as the pending one
-# does. Three issues, one spec-active, must count 2.
-@test "excludes debt:spec-active from the open count" {
-  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"debt:spec-active"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
-  : > "$SENTINEL"
-  run run_refresh
-  [ "$status" -eq 0 ]
-  [ "$(open_count)" = "2" ]
-}
-
-# --- 7. Excludes every claim label together ------------------------------
-# in-progress, debt:spec-pending, and debt:spec-active are distinct exclusions;
-# all three must drop. Five issues: plain, in-progress, spec-pending,
-# spec-active, and one carrying every one of them -> counts 1.
-@test "excludes in-progress, debt:spec-pending and debt:spec-active" {
-  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"in-progress"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"debt:spec-pending"}]},{"number":4,"labels":[{"name":"tech-debt"},{"name":"debt:spec-active"}]},{"number":5,"labels":[{"name":"tech-debt"},{"name":"in-progress"},{"name":"debt:spec-pending"},{"name":"debt:spec-active"}]}]'
-  : > "$SENTINEL"
-  run run_refresh
-  [ "$status" -eq 0 ]
-  [ "$(open_count)" = "1" ]
+# The first case's issue 1 carries an apostrophe in its body on purpose. Filed
+# issue bodies routinely do, and it pins the stub's fixture handling: spliced
+# into the stub between single quotes it would close the quote, make the stub a
+# syntax error, and read as a gh failure that reds on a stale count rather than
+# on the real cause.
+@test "openCount excludes issues carrying in-progress, debt:spec-pending or debt:spec-active, each alone and together" {
+  local label expected issues
+  while IFS='|' read -r label expected issues; do
+    stub_gh_json "$issues"
+    : > "$SENTINEL"
+    run run_refresh
+    if [ "$status" -ne 0 ] || [ "$(open_count)" != "$expected" ]; then
+      echo "case '$label': status=$status openCount=$(open_count 2>/dev/null) expected=$expected" >&2
+      return 1
+    fi
+  done <<'ROWS'
+in-progress|2|[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}],"body":"the refresher's own count"},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"in-progress"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]
+debt:spec-pending|2|[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"debt:spec-pending"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]
+debt:spec-active|2|[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"debt:spec-active"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]
+every label together|1|[{"number":1,"labels":[{"name":"tech-debt"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"in-progress"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"debt:spec-pending"}]},{"number":4,"labels":[{"name":"tech-debt"},{"name":"debt:spec-active"}]},{"number":5,"labels":[{"name":"tech-debt"},{"name":"in-progress"},{"name":"debt:spec-pending"},{"name":"debt:spec-active"}]}]
+ROWS
 }

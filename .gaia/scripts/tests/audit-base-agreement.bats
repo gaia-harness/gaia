@@ -192,7 +192,7 @@ make_no_base_repo() {
   printf '%s' "$directory"
 }
 
-@test "every specialist stops instead of self-skipping when FULL_BASE cannot resolve" {
+@test "every specialist's FULL_BASE guard stops with do NOT self-skip when the base cannot resolve and stays silent when it does" {
   local repo member exit_status resolver_output
   repo="$(make_no_base_repo)"
   for member in "${SPECIALISTS[@]}"; do
@@ -210,9 +210,6 @@ make_no_base_repo() {
       return 1
     }
   done
-}
-
-@test "the FULL_BASE guard stays silent when the base does resolve" {
   local repo member resolver_output
   repo="$(make_repo full-base-control)"
   for member in "${SPECIALISTS[@]}"; do
@@ -245,10 +242,8 @@ extract_resolver_line() {
 }
 
 # --- scratch repo ------------------------------------------------------------
-#
-# A repo carrying the machinery the snippets reach for, at its real
-# repo-relative path. <name> names the directory; the caller commits into it.
-# `include_machinery_library` (arg 2, default "yes") decides whether
+# build_repo <directory> [yes|no]: a repo carrying the machinery the snippets
+# reach for, at its real repo-relative path. Arg 2 decides whether
 # .claude/hooks/lib/audit-machinery.sh is present: omitting it is what puts
 # resolve-audit-base.sh's classifier-load check into its `degraded` arm.
 # Every other predicate library the resolver and its per-member arm reach for
@@ -256,12 +251,10 @@ extract_resolver_line() {
 # would take the degraded arm regardless of this switch, and without
 # audit-clearance.sh the per-member arm has no store to read, so the
 # two-bases probe below would fail for a reason it never names.
-# audit-write-clearance.sh and audit-member-digest.sh are copied too, which
-# that probe needs to write a real clearance with the real writer against the
-# real digest engine.
-make_repo() {
-  local name="$1" include_machinery_library="${2:-yes}"
-  local directory="$BATS_TEST_TMPDIR/$name"
+# audit-write-clearance.sh and audit-member-digest.sh are copied too, so that
+# probe writes a real clearance with the real writer and digest engine.
+build_repo() {
+  local directory="$1" include_machinery_library="${2:-yes}"
   mkdir -p "$directory/.gaia/scripts" "$directory/.gaia/local/audit" \
     "$directory/.github/audit" "$directory/.claude/hooks/lib" "$directory/bin"
   cp "$REPO_ROOT"/.github/audit/resolve-audit-base*.sh "$directory/.github/audit/"
@@ -300,6 +293,20 @@ make_repo() {
   git -C "$directory" commit -q -m "init"
   # The branch-own patch is measured against refs/remotes/origin/main.
   catchup_add_origin "$directory" >/dev/null
+}
+
+setup_file() {
+  REPO_ROOT="$(git -C "$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)" rev-parse --show-toplevel)"
+  . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
+  build_repo "$BATS_FILE_TMPDIR/template-yes" yes && build_repo "$BATS_FILE_TMPDIR/template-no" no
+}
+
+# make_repo <name> [yes|no]: a copy of the fixture built in setup_file.
+make_repo() {
+  local directory="$BATS_TEST_TMPDIR/$1" template="$BATS_FILE_TMPDIR/template-${2:-yes}"
+  cp -R "$template" "$directory"
+  cp -R "$template.catchup-origin.git" "$directory.catchup-origin.git"
+  git -C "$directory" remote set-url origin "$directory.catchup-origin.git"
   printf '%s' "$directory"
 }
 
@@ -642,7 +649,7 @@ owners_of() {
 # TS/TSX pathspec; the specialists' identical form is already covered by
 # probe 1's shared BASE_SHA and by their own resolver commands here.
 
-@test "the frontend's changed-file list is HEAD's content, not the working tree's" {
+@test "the frontend's review scope is HEAD's commits since the fork point: a committed-then-reverted file stays, an uncommitted edit and a default-branch-only file stay out" {
   local repo changed
   repo="$(make_repo worktree-scope)"
   start_branch "$repo" feat
@@ -679,11 +686,7 @@ owners_of() {
     printf 'an uncommitted working-tree edit entered review scope, where no marker can cover it: %s\n' "$changed" >&2
     return 1
   }
-  return 0
-}
 
-@test "the frontend's review scope is the fork point, not an advanced ref tip" {
-  local repo changed
   repo="$(make_repo forkpoint-scope)"
 
   # The second failure direction, reachable only when the base is a REF whose
@@ -1080,7 +1083,7 @@ probe_deadlock() {
 # the TS/TSX-filtered review-scope set, and that the command continues rather
 # than exiting when the base cannot resolve.
 
-@test "the eligibility derivation is present and resolves the fork point" {
+@test "the eligibility set is every file the pull request changes at the fork point, unfiltered and distinct from the review-scope set" {
   local repo expected_base full_base full_changed
 
   repo="$(make_repo elig-presence)"
@@ -1112,9 +1115,6 @@ probe_deadlock() {
     printf 'full_changed missing .claude/rules/fixture.md: %s\n' "$full_changed" >&2
     return 1
   }
-}
-
-@test "the eligibility set is unfiltered and distinct from the review-scope set" {
   local repo eligibility review
 
   repo="$(make_repo elig-unfiltered)"
@@ -1228,29 +1228,6 @@ make_stacked_repo() {
   printf '%s' "$repo"
 }
 
-@test "the eligibility set excludes what only the pull request's base branch changed" {
-  local repo eligibility_changed
-
-  repo="$(make_stacked_repo elig-stacked)"
-
-  # The pull request's own record names the branch it merges into.
-  install_pr_view_mock release
-
-  eligibility_changed="$(evaluate_eligibility code-audit-frontend "$repo" ELIG_CHANGED)" || {
-    echo "the default member's resolver command failed to resolve an eligibility set" >&2
-    return 1
-  }
-  grep -qxF "app/feat-only.ts" <<<"$eligibility_changed" || {
-    printf 'write side dropped the pull request own change: %s\n' "$eligibility_changed" >&2
-    return 1
-  }
-  grep -qxF "app/base-only.ts" <<<"$eligibility_changed" && {
-    printf 'write side still carries a base-branch-only file: %s\n' "$eligibility_changed" >&2
-    return 1
-  }
-  true
-}
-
 @test "the eligibility derivation refuses an empty root rather than reading the ambient repository" {
   # The member types the working root into its resolver command. Left empty,
   # every `git -C ""` exits 0 against whatever repository the shell sits in,
@@ -1271,33 +1248,6 @@ make_stacked_repo() {
   [ "$status" -ne 0 ]
   grep -qF -- '--root is empty' <<<"$stderr"
   grep -qF -- 'ELIG_BASE=' <<<"$output" && return 1
-  true
-}
-
-@test "an unverifiable declared base falls back to the advertised default" {
-  local repo eligibility_changed expected
-
-  repo="$(make_stacked_repo elig-unverifiable)"
-
-  # A base branch naming no remote-tracking ref is not evidence about the base,
-  # the same rule the merge gate's own derivation applies: a bare local branch
-  # of the same name could sit on this pull request's commits and narrow the
-  # answer to nothing.
-  install_pr_view_mock no-such-branch
-
-  expected="$(git -C "$repo" diff --name-only -z "$(git -C "$repo" merge-base HEAD origin/main)...HEAD" | tr '\0' '\n')"
-  eligibility_changed="$(evaluate_eligibility code-audit-frontend "$repo" ELIG_CHANGED)" || {
-    echo "the default member's resolver command failed to resolve an eligibility set" >&2
-    return 1
-  }
-  [ "$eligibility_changed" = "$expected" ] || {
-    printf 'fallback set %s, expected the default-branch set %s\n' "$eligibility_changed" "$expected" >&2
-    return 1
-  }
-  grep -qxF "app/base-only.ts" <<<"$eligibility_changed" || {
-    printf 'the fallback narrowed rather than staying wide: %s\n' "$eligibility_changed" >&2
-    return 1
-  }
   true
 }
 
@@ -1324,19 +1274,56 @@ EOF
   unset GITHUB_ACTIONS GITHUB_BASE_REF
 }
 
-@test "no environment variable naming a base branch is read anywhere in the shared resolver (COV-002)" {
-  local library_file hits non_comment
+@test "the eligibility base ladder: a verifiable pull request base excludes base-only files, an unverifiable base falls back to the advertised default, a shadowing local origin/main ahead of or behind the remote-tracking ref is ignored" {
+  local ladder_path="$PATH"
+  local repo eligibility_changed
 
-  library_file="$REPO_ROOT/.claude/hooks/lib/audit-base-provenance.sh"
-  hits="$(grep -nE 'GITHUB_BASE_REF|GITHUB_HEAD_REF|GITHUB_REF' "$library_file" || true)"
-  non_comment="$(printf '%s\n' "$hits" | grep -vE '^[0-9]+:[[:space:]]*#' || true)"
-  [ -z "$non_comment" ] || {
-    printf 'non-comment environment-variable reference in the shared resolver:\n%s\n' "$non_comment" >&2
+  repo="$(make_stacked_repo elig-stacked)"
+
+  # The pull request's own record names the branch it merges into.
+  install_pr_view_mock release
+
+  eligibility_changed="$(evaluate_eligibility code-audit-frontend "$repo" ELIG_CHANGED)" || {
+    echo "the default member's resolver command failed to resolve an eligibility set" >&2
     return 1
   }
-}
+  grep -qxF "app/feat-only.ts" <<<"$eligibility_changed" || {
+    printf 'write side dropped the pull request own change: %s\n' "$eligibility_changed" >&2
+    return 1
+  }
+  grep -qxF "app/base-only.ts" <<<"$eligibility_changed" && {
+    printf 'write side still carries a base-branch-only file: %s\n' "$eligibility_changed" >&2
+    return 1
+  }
+  true
+  PATH="$ladder_path"
+  rm -rf "$BATS_TEST_TMPDIR/gh-bin"
+  local repo eligibility_changed expected
 
-@test "the write side resolves correctly under a shadowing local branch named origin/main that sits AHEAD of the remote-tracking ref (DP-002, ahead)" {
+  repo="$(make_stacked_repo elig-unverifiable)"
+
+  # A base branch naming no remote-tracking ref is not evidence about the base,
+  # the same rule the merge gate's own derivation applies: a bare local branch
+  # of the same name could sit on this pull request's commits and narrow the
+  # answer to nothing.
+  install_pr_view_mock no-such-branch
+
+  expected="$(git -C "$repo" diff --name-only -z "$(git -C "$repo" merge-base HEAD origin/main)...HEAD" | tr '\0' '\n')"
+  eligibility_changed="$(evaluate_eligibility code-audit-frontend "$repo" ELIG_CHANGED)" || {
+    echo "the default member's resolver command failed to resolve an eligibility set" >&2
+    return 1
+  }
+  [ "$eligibility_changed" = "$expected" ] || {
+    printf 'fallback set %s, expected the default-branch set %s\n' "$eligibility_changed" "$expected" >&2
+    return 1
+  }
+  grep -qxF "app/base-only.ts" <<<"$eligibility_changed" || {
+    printf 'the fallback narrowed rather than staying wide: %s\n' "$eligibility_changed" >&2
+    return 1
+  }
+  true
+  PATH="$ladder_path"
+  rm -rf "$BATS_TEST_TMPDIR/gh-bin"
   local repo eligibility_changed
 
   # Cleared so no ambient value can stand in for the default-branch rung this
@@ -1366,9 +1353,8 @@ EOF
     printf 'write side did not see the advance past the shadowed ref: %s\n' "$eligibility_changed" >&2
     return 1
   }
-}
-
-@test "the write side resolves correctly under a shadowing local branch named origin/main that sits BEHIND the remote-tracking ref (DP-002, behind)" {
+  PATH="$ladder_path"
+  rm -rf "$BATS_TEST_TMPDIR/gh-bin"
   local repo eligibility_changed
 
   # The no-record arm is the only one that consults the default-branch rung, so
@@ -1403,3 +1389,16 @@ EOF
     return 1
   }
 }
+
+@test "no environment variable naming a base branch is read anywhere in the shared resolver" {
+  local library_file hits non_comment
+
+  library_file="$REPO_ROOT/.claude/hooks/lib/audit-base-provenance.sh"
+  hits="$(grep -nE 'GITHUB_BASE_REF|GITHUB_HEAD_REF|GITHUB_REF' "$library_file" || true)"
+  non_comment="$(printf '%s\n' "$hits" | grep -vE '^[0-9]+:[[:space:]]*#' || true)"
+  [ -z "$non_comment" ] || {
+    printf 'non-comment environment-variable reference in the shared resolver:\n%s\n' "$non_comment" >&2
+    return 1
+  }
+}
+

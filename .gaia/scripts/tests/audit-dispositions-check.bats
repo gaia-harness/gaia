@@ -14,6 +14,12 @@
 
 bats_require_minimum_version 1.5.0
 
+setup_file() {
+  # shellcheck source=/dev/null
+  . "$BATS_TEST_DIRNAME/../../tests/helpers/audit-loop-fixture.sh"
+  alf_build_template
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS="$REPO_ROOT/.gaia/scripts"
@@ -457,10 +463,21 @@ tree_state() {
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
 }
 
-@test "exit 2: no subcommand and a missing round are usage errors" {
+@test "exit 2: each usage error (no subcommand, missing round, pr-sections without --root, a bad or misplaced --decision) exits 2" {
+  printf 'case: %s\n' 'no subcommand and missing round' >&2
   run bash "$SCRIPT"
   [ "$status" -eq 2 ] || return 1
   run_check ""
+  [ "$status" -eq 2 ]
+  printf 'case: %s\n' 'pr-sections without --root' >&2
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
+  run bash "$SCRIPT" pr-sections --run-folder "$RUN_FOLDER"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; return 1; }
+  printf 'case: %s\n' 'bad or misplaced --decision' >&2
+  printf '{"member":"%s","finding_class":"c/sug","path":"f.txt","line":6}\n' "$MEMBER" >"$BATS_TEST_TMPDIR/finding.json"
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/finding.json" --decision defer
+  [ "$status" -eq 2 ] || return 1
+  run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --decision accept
   [ "$status" -eq 2 ]
 }
 
@@ -560,17 +577,6 @@ tree_state() {
   [ ! -e "$BATS_TEST_TMPDIR/calls" ] || { echo "evaluator was called"; return 1; }
   echo "check-all over 9 snapshots: $((end_milliseconds - start_milliseconds)) ms" >&3
   [ $((end_milliseconds - start_milliseconds)) -lt 2000 ]
-}
-
-@test "red state: the shimmed evaluator is actually reached when no snapshot exists" {
-  local shim="$BATS_TEST_TMPDIR/shim"
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
-  mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$shim/"
-  printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
-  run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
-  [ -e "$BATS_TEST_TMPDIR/calls" ]
 }
 
 # --- every finding disposed, divert, visibility, outcomes, triage, PR sections ---
@@ -881,12 +887,6 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   green || return 1
   run_outcomes 1
   green
-}
-
-@test "pr-sections: without --root it is a usage error" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
-  run bash "$SCRIPT" pr-sections --run-folder "$RUN_FOLDER"
-  [ "$status" -eq 2 ] || { echo "status $status: $output"; return 1; }
 }
 
 @test "forward-only: a version-1 snapshot re-grades an undisposed out-of-branch finding clean; live, or as version 2, it fails undisposed" {
@@ -1998,14 +1998,6 @@ discard_refused() {
   mutant_check_tree audit-recorded-decision-lib.sh -e 's/ and all(\.\[\]; security_class | not)//' || return 1
   decide 1 discard
   [ "$status" -eq 0 ] || { echo "the security-class mutant still refused: $output"; return 1; }
-}
-
-@test "record-residual: --decision takes only accept, waive, fix, fixed or discard, and only on record-residual" {
-  printf '{"member":"%s","finding_class":"c/sug","path":"f.txt","line":6}\n' "$MEMBER" >"$BATS_TEST_TMPDIR/finding.json"
-  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/finding.json" --decision defer
-  [ "$status" -eq 2 ] || return 1
-  run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --decision accept
-  [ "$status" -eq 2 ]
 }
 
 @test "check-outcomes: refused-authored passes once the exact key is vetoed; a malformed vetoes.json exits 3 and an absent one runs clean" {

@@ -60,99 +60,6 @@ fixture_test_script() {
   printf '%s\n' "$2" > "$TEMPORARY_DIRECTORY/.gaia/tests/$1"
 }
 
-# 2. The detector fires on an unguarded bare expansion under set -u
-
-# bats test_tags=protected
-@test "flags an unguarded bare \${arr[@]} under set -u" {
-  fixture_hook $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/probe.sh:4" <<<"$output"
-  grep -qF -- "unguarded" <<<"$output"
-}
-
-@test "flags an unguarded bare \${arr[*]} under set -u" {
-  fixture_hook $'#!/usr/bin/env bash\nset -u\narr=()\nprintf "%s\\n" "${arr[*]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/probe.sh:4" <<<"$output"
-}
-
-# 3. Guarded / out-of-scope forms are NOT flagged
-
-@test "offset-guarded expansion passes" {
-  fixture_hook $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" ${arr[@]+"${arr[@]}"}'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
-@test "count-guarded expansion passes" {
-  fixture_hook $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\n[ "${#arr[@]}" -eq 0 ] || printf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
-@test "a bare expansion in a file with no set -u is not scanned" {
-  fixture_hook $'#!/usr/bin/env bash\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
-@test "a bare expansion in a full-line comment is skipped" {
-  fixture_hook $'#!/usr/bin/env bash\nset -u\n# printf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
-# 4. The widened surface: .gaia/scripts/** is scanned too, recursively
-
-@test "flags an unguarded bare \${arr[@]} in a .gaia/scripts file under set -u" {
-  fixture_script probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".gaia/scripts/probe.sh:4" <<<"$output"
-  grep -qF -- "unguarded" <<<"$output"
-}
-
-@test "recurses into .gaia/scripts subdirectories" {
-  fixture_script sub/deep.sh $'#!/usr/bin/env bash\nset -u\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".gaia/scripts/sub/deep.sh:4" <<<"$output"
-}
-
-@test "an offset-guarded expansion in a .gaia/scripts file passes" {
-  fixture_script probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" ${arr[@]+"${arr[@]}"}'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
-# 5. The framework test bash under .gaia/tests/** is scanned too, recursively.
-# It runs under the same stock macOS /bin/bash a contributor invokes it with, so
-# the abort class is identical there; the bash-5 bats suites cannot see it, and
-# the sharder that class first bit is itself one of these files.
-
-@test "flags an unguarded bare \${arr[@]} in a .gaia/tests file under set -u" {
-  fixture_test_script probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".gaia/tests/probe.sh:4" <<<"$output"
-  grep -qF -- "unguarded" <<<"$output"
-}
-
-@test "recurses into .gaia/tests subdirectories" {
-  fixture_test_script sub/deep.sh $'#!/usr/bin/env bash\nset -u\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".gaia/tests/sub/deep.sh:4" <<<"$output"
-}
-
-@test "an offset-guarded expansion in a .gaia/tests file passes" {
-  fixture_test_script probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" ${arr[@]+"${arr[@]}"}'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
 # 6. The sourced libraries under .claude/hooks/lib/ are scanned too, recursively.
 #
 # They are function modules sourced into hooks running `set -euo pipefail`, so
@@ -174,49 +81,92 @@ fixture_library() {
   printf '%s\n' "$2" > "$TEMPORARY_DIRECTORY/.claude/hooks/lib/$1"
 }
 
-@test "flags an unguarded bare \${arr[@]} in a .claude/hooks/lib file that sets set -u" {
+# lint_case <label> <expected status> <expected path:line | ->: run the linter from the
+# fixture the caller just built, echo the label so a red case names itself, assert
+# the status, then the located line on a refusal. The fixture is removed after
+# each case so the next builds its own.
+lint_case() {
+  echo "case: $1"
+  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
+  rm -rf "$TEMPORARY_DIRECTORY"
+  [ "$status" -eq "$2" ]
+  if [ "$2" -eq 1 ]; then
+    grep -qF -- "$3" <<<"$output"
+  fi
+  return 0
+}
+
+# lint_case_unguarded <label> <path:line>: a refusal case that also asserts the
+# word "unguarded" in the report. lint_case removes the fixture but leaves $output.
+lint_case_unguarded() {
+  lint_case "$1" 1 "$2"
+  grep -qF -- "unguarded" <<<"$output"
+}
+
+# 2. The detector fires on an unguarded bare expansion under set -u
+
+# bats test_tags=protected
+@test "flags an unguarded bare \${arr[@]} under set -u" {
+  fixture_hook $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" "${arr[@]}"'
+  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
+  [ "$status" -eq 1 ]
+  grep -qF -- ".claude/hooks/probe.sh:4" <<<"$output"
+  grep -qF -- "unguarded" <<<"$output"
+}
+
+@test "flags an unguarded bare array expansion in every scan root, spelling and recursion" {
+  fixture_hook $'#!/usr/bin/env bash\nset -u\narr=()\nprintf "%s\\n" "${arr[*]}"'
+  lint_case 'arr[*] under set -u in hooks' 1 ".claude/hooks/probe.sh:4"
+
+  fixture_script probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" "${arr[@]}"'
+  lint_case_unguarded 'arr[@] in .gaia/scripts' ".gaia/scripts/probe.sh:4"
+
+  fixture_script sub/deep.sh $'#!/usr/bin/env bash\nset -u\narr=()\nprintf "%s\\n" "${arr[@]}"'
+  lint_case 'recurses into .gaia/scripts subdirectories' 1 ".gaia/scripts/sub/deep.sh:4"
+
+  fixture_test_script probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" "${arr[@]}"'
+  lint_case_unguarded 'arr[@] in .gaia/tests' ".gaia/tests/probe.sh:4"
+
+  fixture_test_script sub/deep.sh $'#!/usr/bin/env bash\nset -u\narr=()\nprintf "%s\\n" "${arr[@]}"'
+  lint_case 'recurses into .gaia/tests subdirectories' 1 ".gaia/tests/sub/deep.sh:4"
+
   fixture_library probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/lib/probe.sh:4" <<<"$output"
-  grep -qF -- "unguarded" <<<"$output"
-}
+  lint_case_unguarded 'arr[@] in hooks/lib that sets set -u' ".claude/hooks/lib/probe.sh:4"
 
-@test "flags an unguarded bare \${arr[@]} in a .claude/hooks/lib file that sets no set -u of its own" {
   fixture_library inherits.sh $'#!/usr/bin/env bash\n# shellcheck shell=bash\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/lib/inherits.sh:4" <<<"$output"
-  grep -qF -- "unguarded" <<<"$output"
-}
+  lint_case_unguarded 'arr[@] in hooks/lib that sets no set -u of its own' ".claude/hooks/lib/inherits.sh:4"
 
-@test "recurses into .claude/hooks subdirectories" {
   fixture_library sub/deep.sh $'#!/usr/bin/env bash\nset -u\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 1 ]
-  grep -qF -- ".claude/hooks/lib/sub/deep.sh:4" <<<"$output"
+  lint_case 'recurses into .claude/hooks subdirectories' 1 ".claude/hooks/lib/sub/deep.sh:4"
 }
 
-@test "an offset-guarded expansion in a .claude/hooks/lib file passes" {
-  fixture_library probe.sh $'#!/usr/bin/env bash\narr=()\nprintf "%s\\n" ${arr[@]+"${arr[@]}"}'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
-@test "a count-guarded expansion in a .claude/hooks/lib file passes" {
-  fixture_library probe.sh $'#!/usr/bin/env bash\narr=()\n[ "${#arr[@]}" -eq 0 ] || printf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
-@test "a bare expansion in a full-line comment in a .claude/hooks/lib file is skipped" {
-  fixture_library probe.sh $'#!/usr/bin/env bash\n# printf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
-@test "a root .claude/hooks script with no set -u of its own is still not scanned" {
+@test "a file outside hooks/lib with no set -u is not scanned" {
   fixture_hook $'#!/usr/bin/env bash\narr=()\nprintf "%s\\n" "${arr[@]}"'
-  run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
+  lint_case 'a root hook with no set -u is not scanned, unlike hooks/lib' 0 -
+}
+
+@test "guarded and comment forms pass in every scan root" {
+  fixture_hook $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" ${arr[@]+"${arr[@]}"}'
+  lint_case 'offset-guarded in hooks' 0 -
+
+  fixture_hook $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\n[ "${#arr[@]}" -eq 0 ] || printf "%s\\n" "${arr[@]}"'
+  lint_case 'count-guarded in hooks' 0 -
+
+  fixture_hook $'#!/usr/bin/env bash\nset -u\n# printf "%s\\n" "${arr[@]}"'
+  lint_case 'full-line comment in hooks' 0 -
+
+  fixture_script probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" ${arr[@]+"${arr[@]}"}'
+  lint_case 'offset-guarded in .gaia/scripts' 0 -
+
+  fixture_test_script probe.sh $'#!/usr/bin/env bash\nset -euo pipefail\narr=()\nprintf "%s\\n" ${arr[@]+"${arr[@]}"}'
+  lint_case 'offset-guarded in .gaia/tests' 0 -
+
+  fixture_library probe.sh $'#!/usr/bin/env bash\narr=()\nprintf "%s\\n" ${arr[@]+"${arr[@]}"}'
+  lint_case 'offset-guarded in hooks/lib' 0 -
+
+  fixture_library probe.sh $'#!/usr/bin/env bash\narr=()\n[ "${#arr[@]}" -eq 0 ] || printf "%s\\n" "${arr[@]}"'
+  lint_case 'count-guarded in hooks/lib' 0 -
+
+  fixture_library probe.sh $'#!/usr/bin/env bash\n# printf "%s\\n" "${arr[@]}"'
+  lint_case 'full-line comment in hooks/lib' 0 -
 }

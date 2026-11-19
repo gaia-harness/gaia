@@ -98,12 +98,31 @@ setup() {
   BASE_TIP=$(git -C "$REPO" rev-parse HEAD)
 
   API_CALLS="$BATS_TEST_TMPDIR/api-calls"
+  CASE_STARTED=""
 }
 
 teardown() {
   [ -n "${REPO:-}" ] && rm -rf "$REPO" || true
   [ -n "${REMOTE:-}" ] && rm -rf "$REMOTE" || true
   return 0
+}
+
+# Helper: start one row of a case table. The first row uses the fixture setup
+# already built; every later row tears it down and builds a fresh repo, remote
+# and stub state, because each row needs its own repo shape.
+next_case() {
+  echo "row: $1"
+  if [ -n "${CASE_STARTED:-}" ]; then
+    cd "$BATS_TEST_TMPDIR" || return 1
+    teardown
+    rm -rf "$BATS_TEST_TMPDIR/pr-body" "$BATS_TEST_TMPDIR/is-draft" \
+      "$BATS_TEST_TMPDIR/ready-rc" "$BATS_TEST_TMPDIR/ready-stderr" \
+      "$BATS_TEST_TMPDIR/base-branch-fails" "$BATS_TEST_TMPDIR/call-order" \
+      "$BATS_TEST_TMPDIR/gate-owed-calls" "$BATS_TEST_TMPDIR/mirror" \
+      "$BATS_TEST_TMPDIR/hook-tree" "$API_CALLS"
+    setup
+  fi
+  CASE_STARTED=1
 }
 
 # Helper: copy the notebook library (with its own loads) from tree $1 into
@@ -320,7 +339,8 @@ assert_no_post() {
   assert_no_post
 }
 
-@test "marker absent: declines" {
+@test "marker preconditions: an absent marker and another member's refusal each decline with a named marker line and post nothing" {
+  next_case "marker absent: declines"
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   digest=$(digest_of "$REPO" code-audit-frontend)
 
@@ -330,6 +350,25 @@ assert_no_post() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: marker absent" ]
   assert_no_post
+
+  next_case "refusal whose body names another member: declines as not a valid clearance"
+  # The failure arm reuses the same well-formedness key the success arm does,
+  # so a refusal that is not this member's own for this digest posts nothing.
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+
+  digest=$(digest_of "$REPO" code-audit-frontend)
+  path="$REPO/.gaia/local/audit/${digest}.refused"
+  mkdir -p "$(dirname "$path")"
+  printf '{"version":"1.2.3","schema":3,"member":"code-audit-maintainer-shell","provenance":"refused","digest":"%s","tree":"t","sha":"s"}\n' \
+    "$digest" > "$path"
+
+  cd "$REPO"
+  run "$HOOK_ABSOLUTE_PATH" "$path"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "status: declined: marker not a valid clearance" ]
+  assert_no_post || return 1
 }
 
 # bats test_tags=protected
@@ -354,7 +393,8 @@ assert_no_post() {
 # Divergence guards
 # -----------------------------------------------------------------------------
 
-@test "un-pushed tree-changing work: declines audited tree not on pushed head" {
+@test "divergence guards: tree-changing, empty-commit and amend un-pushed work decline on both success and refusal arms" {
+  next_case "un-pushed tree-changing work: declines audited tree not on pushed head"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -379,9 +419,8 @@ assert_no_post() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: audited tree not on pushed head" ]
   assert_no_post
-}
 
-@test "un-pushed empty commit: declines stamp not pushed (tree guard is blind to it)" {
+  next_case "un-pushed empty commit: declines stamp not pushed (tree guard is blind to it)"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -400,9 +439,8 @@ assert_no_post() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: stamp not pushed" ]
   assert_no_post
-}
 
-@test "un-pushed message amend on a pushed commit: declines stamp not pushed" {
+  next_case "un-pushed message amend on a pushed commit: declines stamp not pushed"
   # The amended commit is branch work on top of the base tip, so the base tip
   # the stub reports survives the amend.
   printf 'branch work\n' > "$REPO/branch-work.txt"
@@ -424,13 +462,34 @@ assert_no_post() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: stamp not pushed" ]
   assert_no_post
+
+  next_case "refusal on un-pushed tree-changing work: declines rather than posting"
+  # The pushed-head guards apply to both states. Declining here is the
+  # fail-safe direction: the local gate still denies the merge, and a head the
+  # audit never covered carries no success to retract.
+  push_head_to_upstream
+  pushed_sha=$(git -C "$REPO" rev-parse HEAD)
+  install_gh_stub "$pushed_sha"
+
+  echo "unpushed change" >> "$REPO/README.md"
+  git -C "$REPO" add README.md
+  git -C "$REPO" commit --quiet -m "unpushed"
+  refusal=$(write_refusal code-audit-frontend)
+
+  cd "$REPO"
+  run "$HOOK_ABSOLUTE_PATH" "$refusal"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "status: declined: audited tree not on pushed head" ]
+  assert_no_post || return 1
 }
 
 # -----------------------------------------------------------------------------
 # Posting arms: the sha guard must not fire where local HEAD IS the target
 # -----------------------------------------------------------------------------
 
-@test "local HEAD is the pushed PR head: posts the success status on that sha" {
+@test "success posts on the pushed head and creates or amends no commit" {
+  next_case "local HEAD is the pushed PR head: posts the success status on that sha"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -451,9 +510,8 @@ assert_no_post() {
   grep -qF -- "state=success" "$API_CALLS" || return 1
   grep -qF -- "context=GAIA-Audit" "$API_CALLS" || return 1
   grep -qF -- "description=1.2.3 ${digest} ${tree}" "$API_CALLS" || return 1
-}
 
-@test "posting the status creates and amends no commit: HEAD is the same sha afterwards" {
+  next_case "posting the status creates and amends no commit: HEAD is the same sha afterwards"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -496,7 +554,8 @@ assert_no_post() {
 # These arms pin the post, its state, and the description shape that keeps it
 # unreadable as cleared.
 
-@test "refusal for the current digest: posts the failure status on the pushed head" {
+@test "refusal arm posts failure under every precondition state (current digest, no VERSION, description shape, earned marker beside it, absent base tip, owed gate steps)" {
+  next_case "refusal for the current digest: posts the failure status on the pushed head"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -513,9 +572,8 @@ assert_no_post() {
   grep -qF -- "repos/gaia-react/gaia/statuses/${pushed_sha}" "$API_CALLS" || return 1
   grep -qF -- "state=failure" "$API_CALLS" || return 1
   grep -qF -- "context=GAIA-Audit" "$API_CALLS" || return 1
-}
 
-@test "refusal posts with no .gaia/VERSION: the arm reads neither the version nor the frontend digest" {
+  next_case "refusal posts with no .gaia/VERSION: the arm reads neither the version nor the frontend digest"
   # The success description's inputs are not the refusal description's, so
   # declining a retraction over a field it never reads would withhold it while
   # the stale success it exists to retract stands.
@@ -533,9 +591,8 @@ assert_no_post() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: posted GAIA-Audit failure ${short}" ]
   grep -qF -- "state=failure" "$API_CALLS" || return 1
-}
 
-@test "refusal description carries neither the cleared shape nor a version in field 1" {
+  next_case "refusal description carries neither the cleared shape nor a version in field 1"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -554,9 +611,8 @@ assert_no_post() {
   # And can never be read as cleared by a state-blind reader.
   grep -qF -- "description=1.2.3 ${digest} ${tree}" "$API_CALLS" && return 1
   true
-}
 
-@test "refusal posts even when the earned marker for the same digest is present" {
+  next_case "refusal posts even when the earned marker for the same digest is present"
   # The incident shape: an earlier wave cleared and posted success, a later wave
   # of the same member refused the same content. The writer publishes the
   # refusal BESIDE the earned marker rather than replacing it, so both are on
@@ -579,47 +635,30 @@ assert_no_post() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: posted GAIA-Audit failure ${short}" ]
   grep -qF -- "state=failure" "$API_CALLS" || return 1
-}
 
-@test "refusal whose body names another member: declines as not a valid clearance" {
-  # The failure arm reuses the same well-formedness key the success arm does,
-  # so a refusal that is not this member's own for this digest posts nothing.
-  push_head_to_upstream
-  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
-
-  digest=$(digest_of "$REPO" code-audit-frontend)
-  path="$REPO/.gaia/local/audit/${digest}.refused"
-  mkdir -p "$(dirname "$path")"
-  printf '{"version":"1.2.3","schema":3,"member":"code-audit-maintainer-shell","provenance":"refused","digest":"%s","tree":"t","sha":"s"}\n' \
-    "$digest" > "$path"
-
-  cd "$REPO"
-  run "$HOOK_ABSOLUTE_PATH" "$path"
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: marker not a valid clearance" ]
-  assert_no_post || return 1
-}
-
-@test "refusal on un-pushed tree-changing work: declines rather than posting" {
-  # The pushed-head guards apply to both states. Declining here is the
-  # fail-safe direction: the local gate still denies the merge, and a head the
-  # audit never covered carries no success to retract.
+  next_case "refusal with a base tip that is not present locally: still posts the failure status"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
-
-  echo "unpushed change" >> "$REPO/README.md"
-  git -C "$REPO" add README.md
-  git -C "$REPO" commit --quiet -m "unpushed"
   refusal=$(write_refusal code-audit-frontend)
+  printf '%s' "$ABSENT_TIP" > "$BATS_TEST_TMPDIR/base-tip"
+  short=$(git -C "$REPO" rev-parse --short "$pushed_sha")
 
   cd "$REPO"
   run "$HOOK_ABSOLUTE_PATH" "$refusal"
 
   [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: audited tree not on pushed head" ]
-  assert_no_post || return 1
+  [ "$output" = "status: posted GAIA-Audit failure ${short}" ]
+  grep -qF -- "state=failure" "$API_CALLS" || return 1
+
+  next_case "the refusal arm posts a failure even with gate steps owed"
+  use_hook_copy 1
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_refusal)
+  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
+  [[ "$output" == *"posted GAIA-Audit failure"* ]] || return 1
+  [ -s "$API_CALLS" ]
 }
 
 @test "caller's own live refusal blocks its earned marker's success post, with no resolver" {
@@ -691,7 +730,8 @@ call_order() {
   sed -e 's/^api .*state=\([a-z]*\).*$/post \1/' "$BATS_TEST_TMPDIR/call-order"
 }
 
-@test "a success posts the status first and then marks the pull request ready" {
+@test "draft flip: status first then ready or undo, in every success and refusal outcome" {
+  next_case "a success posts the status first and then marks the pull request ready"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -703,9 +743,8 @@ call_order() {
   [ "$status" -eq 0 ]
   [ "$(call_order)" = "post success
 pr ready" ]
-}
 
-@test "a refusal posts failure first and then converts the pull request back to draft" {
+  next_case "a refusal posts failure first and then converts the pull request back to draft"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -717,9 +756,8 @@ pr ready" ]
   [ "$status" -eq 0 ]
   [ "$(call_order)" = "post failure
 pr ready --undo" ]
-}
 
-@test "a success on a pull request that is not a draft posts the status and makes no flip" {
+  next_case "a success on a pull request that is not a draft posts the status and makes no flip"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -732,9 +770,8 @@ pr ready --undo" ]
 
   [ "$status" -eq 0 ]
   [ "$(call_order)" = "post success" ]
-}
 
-@test "a refusal whose undo GitHub rejects as unsupported drafts is not a failure" {
+  next_case "a refusal whose undo GitHub rejects as unsupported drafts is not a failure"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -750,9 +787,8 @@ pr ready --undo" ]
 pr ready --undo" ]
   grep -qF -- 'run it by hand' <<<"$output" && return 1
   true
-}
 
-@test "an undo that fails for any other reason still exits non-zero" {
+  next_case "an undo that fails for any other reason still exits non-zero"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -765,9 +801,8 @@ pr ready --undo" ]
 
   [ "$status" -ne 0 ]
   grep -qF -- 'run it by hand: gh pr ready --undo' <<<"$output"
-}
 
-@test "a declined post flips nothing" {
+  next_case "a declined post flips nothing"
   push_head_to_upstream
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   empty_commit
@@ -778,9 +813,8 @@ pr ready --undo" ]
 
   [ "$status" -eq 0 ]
   [ ! -s "$BATS_TEST_TMPDIR/call-order" ]
-}
 
-@test "no pull request resolved: the status posts and there is no flip to make" {
+  next_case "no pull request resolved: the status posts and there is no flip to make"
   install_gh_stub ""
   marker=$(write_marker code-audit-frontend)
 
@@ -789,9 +823,8 @@ pr ready --undo" ]
 
   [ "$status" -eq 0 ]
   [ "$(call_order)" = "post success" ]
-}
 
-@test "a failed ready flip after a success exits non-zero naming the manual command, and the status stays posted" {
+  next_case "a failed ready flip after a success exits non-zero naming the manual command, and the status stays posted"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -806,9 +839,8 @@ pr ready --undo" ]
   grep -qF -- "status: posted GAIA-Audit success ${short}" <<<"$output" || return 1
   grep -qF -- 'run it by hand: gh pr ready' <<<"$output" || return 1
   grep -qF -- "state=success" "$API_CALLS" || return 1
-}
 
-@test "a failed undo flip after a refusal exits non-zero naming the manual undo command" {
+  next_case "a failed undo flip after a refusal exits non-zero naming the manual undo command"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -830,24 +862,8 @@ pr ready --undo" ]
 # A forty-hex id no repository carries.
 ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
 
-# A scratch copy of the hook tree whose merge-base derivation is replaced by
-# SUBSTITUTE, so a test can prove a base guard decides the outcome.
-mutated_hook_mirror() {
-  local substitute="$1"
-  mirror="$BATS_TEST_TMPDIR/mirror/.claude/hooks"
-  mkdir -p "$mirror/lib" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts"
-  cp "$HOOK_ABSOLUTE_PATH" "$mirror/post-audit-status.sh"
-  cp "$(dirname "$HOOK_ABSOLUTE_PATH")"/lib/*.sh "$mirror/lib/"
-  cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/audit-key-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-key-lib.sh"
-  cp "$(dirname "$HOOK_ABSOLUTE_PATH")/../../.gaia/scripts/main-root-lib.sh" "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/main-root-lib.sh"
-  copy_notebook_libraries "$(dirname "$HOOK_ABSOLUTE_PATH")/../.." "$BATS_TEST_TMPDIR/mirror"
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$BATS_TEST_TMPDIR/mirror/.gaia/scripts/audit-gate-owed.sh"
-  sed -i.bak "s|merge_base=\"\$(audit_branch_patch_merge_base \"\$repo_root\" \"\$base_tip\" HEAD 2>/dev/null)\"|merge_base=\"$substitute\"|" "$mirror/post-audit-status.sh"
-  rm -f "$mirror/post-audit-status.sh.bak"
-  grep -qF -- "merge_base=\"$substitute\"" "$mirror/post-audit-status.sh"
-}
-
-@test "success with a base tip that is not present locally: declines naming git fetch origin, no POST" {
+@test "trusted base: success declines naming its next step for every unverified-base kind" {
+  next_case "success with a base tip that is not present locally: declines naming git fetch origin, no POST"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -860,9 +876,8 @@ mutated_hook_mirror() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: trusted base unverified, the base tip is not present locally; next step: git fetch origin" ]
   assert_no_post || return 1
-}
 
-@test "success with a cached audit base that differs from the one GitHub reports: declines naming git config --unset, no POST" {
+  next_case "success with a cached audit base that differs from the one GitHub reports: declines naming git config --unset, no POST"
   push_head_to_upstream
   pushed_sha=$(git -C "$REPO" rev-parse HEAD)
   install_gh_stub "$pushed_sha"
@@ -876,9 +891,8 @@ mutated_hook_mirror() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: trusted base unverified, the cached audit base differs from the base GitHub reports; next step: git config --unset branch.${branch}.gaia-audit-base" ]
   assert_no_post || return 1
-}
 
-@test "success with the base branch read failing on the default branch: declines naming the wrong tree, not gh auth status, no POST" {
+  next_case "success with the base branch read failing on the default branch: declines naming the wrong tree, not gh auth status, no POST"
   push_head_to_upstream
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   marker=$(write_marker code-audit-frontend)
@@ -890,9 +904,8 @@ mutated_hook_mirror() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: trusted base unverified, this checkout is on main, which holds no pull request; next step: run this hook from the checkout that holds the pull request branch (git worktree list names it)" ]
   assert_no_post || return 1
-}
 
-@test "success with the base branch read failing on a detached HEAD: declines naming the wrong tree, no POST" {
+  next_case "success with the base branch read failing on a detached HEAD: declines naming the wrong tree, no POST"
   push_head_to_upstream
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   marker=$(write_marker code-audit-frontend)
@@ -905,9 +918,8 @@ mutated_hook_mirror() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: trusted base unverified, this checkout is on a detached HEAD, which holds no pull request; next step: run this hook from the checkout that holds the pull request branch (git worktree list names it)" ]
   assert_no_post || return 1
-}
 
-@test "success with the base branch read failing on a feature branch: still declines naming gh auth status, no POST" {
+  next_case "success with the base branch read failing on a feature branch: still declines naming gh auth status, no POST"
   push_head_to_upstream
   git -C "$REPO" checkout --quiet -b feature
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
@@ -920,38 +932,6 @@ mutated_hook_mirror() {
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: trusted base unverified, audit-base-provenance: gh failed reading the pull request base branch; run gh auth status and retry; next step: gh auth status" ]
   assert_no_post || return 1
-}
-
-@test "refusal with a base tip that is not present locally: still posts the failure status" {
-  push_head_to_upstream
-  pushed_sha=$(git -C "$REPO" rev-parse HEAD)
-  install_gh_stub "$pushed_sha"
-  refusal=$(write_refusal code-audit-frontend)
-  printf '%s' "$ABSENT_TIP" > "$BATS_TEST_TMPDIR/base-tip"
-  short=$(git -C "$REPO" rev-parse --short "$pushed_sha")
-
-  cd "$REPO"
-  run "$HOOK_ABSOLUTE_PATH" "$refusal"
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: posted GAIA-Audit failure ${short}" ]
-  grep -qF -- "state=failure" "$API_CALLS" || return 1
-}
-
-@test "the base presence guard can fail: with the merge-base derivation replaced on a scratch copy, the absent tip is not declined" {
-  push_head_to_upstream
-  pushed_sha=$(git -C "$REPO" rev-parse HEAD)
-  install_gh_stub "$pushed_sha"
-  marker=$(write_marker code-audit-frontend)
-  printf '%s' "$ABSENT_TIP" > "$BATS_TEST_TMPDIR/base-tip"
-  mutated_hook_mirror "$BASE_TIP" || return 1
-
-  cd "$REPO"
-  run bash "$mirror/post-audit-status.sh" "$marker"
-
-  [ "$status" -eq 0 ]
-  grep -qF -- "status: posted GAIA-Audit success" <<<"$output" || return 1
-  grep -qF -- "state=success" "$API_CALLS" || return 1
 }
 
 # -----------------------------------------------------------------------------
@@ -971,7 +951,8 @@ mutated_hook_mirror() {
   grep -qF -- "status --root $(git -C "$REPO" rev-parse --show-toplevel)" "$BATS_TEST_TMPDIR/gate-owed-calls"
 }
 
-@test "success declines when the owed-gate script is absent" {
+@test "owed gate steps: success declines when the owed-gate script is absent and posts when the gate reports clear" {
+  next_case "success declines when the owed-gate script is absent"
   use_hook_copy
   rm "$HOOK_TREE/.gaia/scripts/audit-gate-owed.sh"
   push_head_to_upstream
@@ -980,9 +961,8 @@ mutated_hook_mirror() {
   run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
   [[ "$output" == *"declined: gate steps owed"* ]] || return 1
   assert_no_post
-}
 
-@test "success posts when the owed gate reports clear" {
+  next_case "success posts when the owed gate reports clear"
   use_hook_copy 0
   push_head_to_upstream
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
@@ -992,17 +972,8 @@ mutated_hook_mirror() {
   [ -s "$API_CALLS" ]
 }
 
-@test "the refusal arm posts a failure even with gate steps owed" {
-  use_hook_copy 1
-  push_head_to_upstream
-  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
-  marker=$(write_refusal)
-  run bash -c "cd '$REPO' && '$HOOK_ABSOLUTE_PATH' '$marker'"
-  [[ "$output" == *"posted GAIA-Audit failure"* ]] || return 1
-  [ -s "$API_CALLS" ]
-}
-
-@test "success declines on a PR body whose stamp names an older head, naming the write command" {
+@test "PR body stamp: success declines on an older-head stamp or no stamp" {
+  next_case "success declines on a PR body whose stamp names an older head, naming the write command"
   push_head_to_upstream
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   printf 'Summary.\n<!-- gaia-pr-body-head: %040d -->\n' 0 > "$BATS_TEST_TMPDIR/pr-body"
@@ -1012,9 +983,8 @@ mutated_hook_mirror() {
   grep -qF -- "status: declined: the PR body stamp is not for head" <<<"$output" || return 1
   grep -qF -- "run .gaia/scripts/pr-body-stamp.sh write" <<<"$output" || return 1
   assert_no_post
-}
 
-@test "success declines on a PR body with no stamp" {
+  next_case "success declines on a PR body with no stamp"
   push_head_to_upstream
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
   printf 'Summary.\n' > "$BATS_TEST_TMPDIR/pr-body"
@@ -1024,3 +994,4 @@ mutated_hook_mirror() {
   grep -qF -- "status: declined: the PR body carries no head stamp" <<<"$output" || return 1
   assert_no_post
 }
+
