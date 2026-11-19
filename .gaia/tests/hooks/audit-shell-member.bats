@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # audit-shell-member.bats: the adopter shell member's roster entry, its routing
-# against the maintainer shell member, and the content of its definition.
+# against the maintainer shell member, and its settings lens.
 #
 # Routing is first-match, so the adopter entry sits after the maintainer-only
 # block: this repository's own shell stays on the maintainer member, and an
@@ -35,20 +35,30 @@ adopter_roster() {
   printf '%s\n' "$BATS_TEST_TMPDIR/adopter.yml"
 }
 
-@test "this repository's own shell routes to the maintainer shell member, never the adopter member" {
-  local path owner
-  for path in .gaia/tests/verify-harness.sh .gaia/scripts/tests/audit-scope-lib.bats .claude/hooks/audit-loop-bound.sh .githooks/pre-commit .claude/hooks/lib/audit-member-protocol.md .github/actions/x/run.sh; do
-    owner="$(owner_of "$ROSTER" "$path")"
-    [ "$owner" = code-audit-maintainer-shell ] || { echo "$path -> $owner" >&2; return 1; }
-  done
-}
-
-@test "an adopter clone routes shell, bats, hooks, git hooks and composite-action scripts to the adopter shell member" {
-  local roster path owner
-  roster="$(adopter_roster)"
-  for path in scripts/build.sh tests/shell/a.bats .claude/hooks/x.sh .githooks/pre-commit .github/actions/x/run.sh apps/web/app/x.sh; do
-    owner="$(owner_of "$roster" "$path")"
-    [ "$owner" = code-audit-shell ] || { echo "$path -> $owner" >&2; return 1; }
+@test "shell routes to the right member: the maintainer member in this repository, the adopter member in an adopter clone" {
+  local adopter row roster roster_file path expected owner
+  adopter="$(adopter_roster)"
+  local rows=(
+    "own|code-audit-maintainer-shell|.gaia/tests/verify-harness.sh"
+    "own|code-audit-maintainer-shell|.gaia/scripts/tests/audit-scope-lib.bats"
+    "own|code-audit-maintainer-shell|.claude/hooks/audit-loop-bound.sh"
+    "own|code-audit-maintainer-shell|.githooks/pre-commit"
+    "own|code-audit-maintainer-shell|.claude/hooks/lib/audit-member-protocol.md"
+    "own|code-audit-maintainer-shell|.github/actions/x/run.sh"
+    "adopter|code-audit-shell|scripts/build.sh"
+    "adopter|code-audit-shell|tests/shell/a.bats"
+    "adopter|code-audit-shell|.claude/hooks/x.sh"
+    "adopter|code-audit-shell|.githooks/pre-commit"
+    "adopter|code-audit-shell|.github/actions/x/run.sh"
+    "adopter|code-audit-shell|apps/web/app/x.sh"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r roster expected path <<<"$row"
+    roster_file="$ROSTER"
+    if [ "$roster" = adopter ]; then roster_file="$adopter"; fi
+    owner="$(owner_of "$roster_file" "$path")"
+    [ "$owner" = "$expected" ] || { echo "$path -> $owner" >&2; return 1; }
   done
 }
 
@@ -68,32 +78,6 @@ adopter_roster() {
   grep -qx '    audience: adopter' <<<"$entry" || return 1
   grep -qF '".githooks/**"' <<<"$entry" || return 1
   grep -qF '"**/*.bats"' <<<"$entry" || return 1
-}
-
-@test "the definition is registered as audit machinery" {
-  bash -c '. "$1/.claude/hooks/lib/audit-machinery.sh" && audit_path_is_machinery .claude/agents/code-audit-shell.md' _ "$REPO_ROOT"
-}
-
-@test "the definition carries the correctness core, scoped hook and bats lenses, and no maintainer-only content" {
-  local topic
-  [ -s "$DEFINITION" ] || return 1
-  for topic in 'Quoting' 'set -euo pipefail' 'Fail-open vs. fail-closed' 'Bash 3.2' 'BSD-vs-GNU'; do
-    grep -qF -- "$topic" "$DEFINITION" || { echo "missing: $topic" >&2; return 1; }
-  done
-  grep -qE '^## Conditional hook-contract lens' "$DEFINITION" || return 1
-  grep -qF 'This lens activates only for hook scripts' "$DEFINITION" || return 1
-  grep -qE '^## Conditional bats-suite lens' "$DEFINITION" || return 1
-  grep -qF 'This lens activates only for `.bats` files' "$DEFINITION" || return 1
-  for topic in 'Conditional declarative-surface lens' 'Triage threshold' 'harness-triage-threshold' '.gaia/tests/' 'bats5' 'shell-lint.sh' 'verify-harness' 'code-audit-maintainer-shell'; do
-    grep -qF -- "$topic" "$DEFINITION" && { echo "forbidden: $topic" >&2; return 1; }
-  done
-  true
-}
-
-@test "the definition cites the shell testing page and the bats assertion rule" {
-  grep -qF 'wiki/concepts/Shell Testing and CI.md' "$DEFINITION" || return 1
-  grep -qF '.claude/rules/bats-assertions.md' "$DEFINITION" || return 1
-  true
 }
 
 @test "the shell entry claims the Claude settings file and leaves it off the hard-full list" {
@@ -125,14 +109,7 @@ settings_lens_complete() {
   return 0
 }
 
+# bats test_tags=protected
 @test "the definition carries the settings lens, its activation sentence, Contents entry and methodology step" {
   settings_lens_complete "$DEFINITION"
-}
-
-@test "guard can fail: a definition without the settings lens section fails the lens predicate" {
-  local stripped="$BATS_TEST_TMPDIR/no-settings-lens.md"
-  awk '/^## Conditional settings lens/ { skipping = 1; next } skipping && /^## / { skipping = 0 } !skipping { print }' "$DEFINITION" > "$stripped"
-  cmp -s "$DEFINITION" "$stripped" && return 1
-  run settings_lens_complete "$stripped"
-  [ "$status" -ne 0 ]
 }

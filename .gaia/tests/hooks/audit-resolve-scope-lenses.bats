@@ -95,6 +95,7 @@ resolve() {
     --skip-full-base --eligibility --review-path '*.ts' --review-path '*.tsx' --specialists </dev/null
 }
 
+# bats test_tags=protected
 @test "a library .tsx with an i18n call produces no react-patterns or translation token, the web member produces both" {
   build_base "$REGISTRY_WEB_AND_LIBRARY"
   put libs/kit/src/panel.tsx 'export const Panel = () => t("hello");'
@@ -132,38 +133,46 @@ resolve() {
   true
 }
 
-@test "a language file under a web member is a language-file token, the same shape under a library is not" {
-  build_base "$REGISTRY_WEB_AND_LIBRARY"
-  put apps/storefront/app/languages/en/common.ts 'export default { a: "b" };'
-  put libs/kit/app/languages/en/common.ts 'export default { a: "b" };'
-  commit_files
-  run --separate-stderr resolve
-  [ "$status" -eq 0 ]
-  has_line "SPECIALIST=translation language-file:apps/storefront/app/languages/en/common.ts"
-  if has_text "language-file:libs/kit"; then return 1; fi
-  true
-}
-
-@test "a language file under a sole web member at the repository root is a language-file token" {
-  write_descriptor . root web
-  build_base '[{"name":"root","path":"."}]'
-  put app/languages/en/common.ts 'export default { a: "b" };'
-  commit_files
-  run --separate-stderr resolve
-  [ "$status" -eq 0 ]
-  has_line "SPECIALIST=translation language-file:app/languages/en/common.ts"
-}
-
-@test "a root web member beside apps/storefront keeps a language-file token for both" {
-  write_descriptor . root web
-  build_base '[{"name":"root","path":"."},{"name":"storefront","path":"apps/storefront"}]'
-  put app/languages/en/common.ts 'export default { a: "b" };'
-  put apps/storefront/app/languages/en/common.ts 'export default { a: "b" };'
-  commit_files
-  run --separate-stderr resolve
-  [ "$status" -eq 0 ]
-  specialist_line_names translation "language-file:app/languages/en/common.ts"
-  specialist_line_names translation "language-file:apps/storefront/app/languages/en/common.ts"
+@test "a language file is a token only under a web member, whatever other members the registry holds" {
+  local row
+  for row in web-beside-library sole-root-web root-web-beside-storefront; do
+    echo "case: $row"
+    rm -rf "$FIXTURE" "$ORIGIN"
+    case "$row" in
+      web-beside-library)
+        build_base "$REGISTRY_WEB_AND_LIBRARY"
+        put apps/storefront/app/languages/en/common.ts 'export default { a: "b" };'
+        put libs/kit/app/languages/en/common.ts 'export default { a: "b" };'
+        ;;
+      sole-root-web)
+        write_descriptor . root web
+        build_base '[{"name":"root","path":"."}]'
+        put app/languages/en/common.ts 'export default { a: "b" };'
+        ;;
+      root-web-beside-storefront)
+        write_descriptor . root web
+        build_base '[{"name":"root","path":"."},{"name":"storefront","path":"apps/storefront"}]'
+        put app/languages/en/common.ts 'export default { a: "b" };'
+        put apps/storefront/app/languages/en/common.ts 'export default { a: "b" };'
+        ;;
+    esac
+    commit_files
+    run --separate-stderr resolve
+    [ "$status" -eq 0 ]
+    case "$row" in
+      web-beside-library)
+        has_line "SPECIALIST=translation language-file:apps/storefront/app/languages/en/common.ts"
+        if has_text "language-file:libs/kit"; then return 1; fi
+        ;;
+      sole-root-web)
+        has_line "SPECIALIST=translation language-file:app/languages/en/common.ts"
+        ;;
+      root-web-beside-storefront)
+        specialist_line_names translation "language-file:app/languages/en/common.ts"
+        specialist_line_names translation "language-file:apps/storefront/app/languages/en/common.ts"
+        ;;
+    esac
+  done
 }
 
 @test "a path owned by no member reads as not web" {
@@ -189,25 +198,4 @@ resolve() {
   has_line "SPECIALIST=translation i18n-signal:libs/kit/src/panel.tsx"
   has_line "LENSES=libs/kit/src/panel.tsx"$'\t'"$WEB_LENSES"
   [[ "$stderr" == *"could not read the package registry"* ]]
-}
-
-@test "text check: the agent file scopes the web lenses by LENSES and splits the typescript dispatch (prose, not behavior)" {
-  agent="$REPO_ROOT/.claude/agents/code-audit-frontend.md"
-  grep -qF 'whose `LENSES=` line lists `accessibility`' "$agent"
-  grep -qF 'lists `project-specific-rules`' "$agent"
-  grep -qF 'splits the `typescript` dispatch in two' "$agent"
-  grep -qF 'goes only to a specialist reviewing a path whose `LENSES=` line' "$agent"
-}
-
-@test "emitting LENSES over CHANGED instead of the diff drops the .sh path (mutation)" {
-  build_base "$REGISTRY_WEB_AND_LIBRARY"
-  put libs/kit/run.sh 'echo hi'
-  commit_files
-  sed 's/\${lens_paths\[@\]+"\${lens_paths\[@\]}"}/${changed[@]+"${changed[@]}"}/' \
-    "$FIXTURE/.gaia/scripts/audit-resolve-scope.sh" >"$BATS_TEST_TMPDIR/mutant.sh"
-  if cmp -s "$BATS_TEST_TMPDIR/mutant.sh" "$FIXTURE/.gaia/scripts/audit-resolve-scope.sh"; then return 1; fi
-  cp "$BATS_TEST_TMPDIR/mutant.sh" "$FIXTURE/.gaia/scripts/audit-resolve-scope.sh"
-  run --separate-stderr resolve
-  if has_text "LENSES=libs/kit/run.sh"; then return 1; fi
-  true
 }

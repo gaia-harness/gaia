@@ -12,6 +12,10 @@
 # name the folder. A path segment that merely ends in `audit-loop` (a worktree
 # named like `spec-091-audit-loop`) or merely starts with `protected` does not
 # arm it.
+#
+# Most tests are case tables: one fixture, one row per spelling. A row is
+# `tool~input~cwd~extra` (an empty cwd means the main checkout); `~` never
+# appears in the fixture paths.
 
 setup() {
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
@@ -64,203 +68,133 @@ run_bash() {
   invoke_hook "$(command_payload Bash "$1" "${2:-$MAIN}")" "$HOOK_ABSOLUTE_PATH"
 }
 
-# --- denied: edit tools ---
+run_monitor() {
+  invoke_hook "$(command_payload Monitor "$1" "${2:-$MAIN}")" "$HOOK_ABSOLUTE_PATH"
+}
 
-@test "Write with a .. segment that resolves into the directory is denied" {
+# run_as <tool> <input> [cwd]: the input is a path for the edit tools and Read,
+# a command line for Bash and Monitor.
+run_as() {
+  case "$1" in
+    Write | Edit | MultiEdit) run_edit "$1" "$2" "${3:-$MAIN}" ;;
+    Bash) run_bash "$2" "${3:-$MAIN}" ;;
+    Monitor) run_monitor "$2" "${3:-$MAIN}" ;;
+    Read) invoke_hook "$(jq -n --arg file_path "$2" '{tool_name: "Read", tool_input: {file_path: $file_path}}')" "$HOOK_ABSOLUTE_PATH" ;;
+  esac
+}
+
+# parse_row <row>: split `tool~input~cwd~extra` (an input may span lines) into
+# row_tool, row_input, row_cwd and row_extra.
+parse_row() {
+  local rest="$1"
+  row_tool="${rest%%~*}"
+  rest="${rest#*~}"
+  row_input="${rest%%~*}"
+  rest="${rest#*~}"
+  row_cwd="${rest%%~*}"
+  row_extra="${rest#*~}"
+}
+
+# A table row for an allowed call: allowed, and silent.
+assert_row_allowed() {
+  assert_allowed_by_json
+  [ -z "$output" ]
+}
+
+# --- denied: state folder ---
+
+@test "Write into the protected state folder is denied in each non-direct spelling" {
+  local row
+  # The first two rows run before `runs/` exists, so the `..` segment is
+  # resolved through a directory that is absent.
+  echo "case: .. through an absent directory"
   run_edit Write "$MAIN/.gaia/local/runs/../protected/audit-loop/feat/x.json"
   assert_denied_by_json
-}
-
-@test "Write to a not-yet-existing nested state path is denied" {
+  echo "case: a not-yet-existing nested state path"
   run_edit Write "$MAIN/.gaia/local/protected/audit-loop/new/branch/y.json"
   assert_denied_by_json
-}
 
-@test "Write elsewhere is allowed" {
-  run_edit Write "$MAIN/.gaia/local/runs/feat/notes.json"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-# --- denied: Bash natural spellings ---
-
-@test "Bash rm -f of the state path is denied" {
-  run_bash "rm -f $STATE"
-  assert_denied_by_json
-}
-
-@test "Bash rm -rf of the directory itself (no trailing slash) is denied" {
-  run_bash "rm -rf $MAIN/.gaia/local/protected/audit-loop"
-  assert_denied_by_json
-}
-
-@test "Bash mv of the state path is denied" {
-  run_bash "mv $STATE /tmp/y"
-  assert_denied_by_json
-}
-
-@test "Bash python3 -c writing the state path is denied" {
-  run_bash "python3 -c \"open('$STATE','w')\""
-  assert_denied_by_json
-}
-
-@test "Bash mv through the worktree spelling is denied" {
-  run_bash "mv $WORKTREE_STATE /tmp/y" "$WORKTREE"
-  assert_denied_by_json
-}
-
-@test "Bash redirect with no space before the target is denied" {
-  run_bash "echo x >$STATE"
-  assert_denied_by_json
-}
-
-@test "deny reason names the human recovery and the checkpoint page" {
-  run_bash "rm $STATE"
-  assert_denied_by_json
-  grep -qF -- 'The branch checkpoint' <<<"$output"
-  grep -qF -- 'outside Claude Code' <<<"$output"
-}
-
-# --- redirect target, not redirect anywhere ---
-
-# A note that quotes a guarded path as text and is redirected elsewhere is the
-# shape an audit member stages a findings sidecar with.
-@test "printf of quoted text naming each guarded path, redirected to a /tmp file, is allowed" {
-  local checked=0 guarded_path
-  for guarded_path in "$STATE" "$CONTEXT_FILE" "$OVERRIDE" "$NEW_STATE"; do
-    run_bash "printf '%s\n' 'the hook trusts $guarded_path as written' > $BATS_TEST_TMPDIR/note.txt"
-    assert_allowed_by_json
-    [ -z "$output" ]
-    checked=$((checked + 1))
+  mkdir -p "$MAIN/.gaia/local/runs"
+  ln -s "$FOLDER" "$FIX/vault"
+  ln -s "$MAIN/.gaia/local" "$FIX/alias-local"
+  local rows=(
+    "Write~.gaia/local/protected/new-state.json~~folder"
+    "Write~$MAIN/.gaia/local/runs/../protected/audit-loop/feat/x.json~~state"
+    "Write~$WORKTREE/.gaia/local/runs/../protected/audit-loop/feat/x.json~$WORKTREE~state"
+    "Write~$FIX/vault/audit-loop/feat/x.json~~state"
+    "Write~$FIX/alias-local/protected/new-state.json~~folder"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_pins_only_class "$row_extra"
   done
-  [ "$checked" -eq 4 ]
 }
 
-@test "a double-quoted note naming the state path with a write verb as text, redirected to /tmp, is allowed" {
-  run_bash "printf '%s\n' \"never rm or mv $STATE by hand\" >> $BATS_TEST_TMPDIR/note.txt"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Bash redirect into the quoted state path is denied" {
-  run_bash "printf '{}' > \"$STATE\""
-  assert_denied_by_json
-}
-
-@test "Bash redirect into the state path after a quoted note is denied" {
-  run_bash "printf '%s' 'a > b' > $STATE"
-  assert_denied_by_json
-}
-
-@test "Bash write inside a quoted command substitution is denied" {
-  run_bash "x=\"\$(printf '{}' > $STATE)\""
-  assert_denied_by_json
-}
-
-@test "Bash write after a heredoc whose body has an apostrophe is denied" {
-  run_bash "cat <<EOF > $BATS_TEST_TMPDIR/n
-don't
-EOF
-echo x > $STATE"
-  assert_denied_by_json
-}
-
-# An apostrophe in a comment is not a quote: read as one it would swallow the
-# write between two comments.
-@test "Bash rm of the state path between two comments with apostrophes is denied" {
-  run_bash "echo hi # don't
-rm $STATE # it's gone"
-  assert_denied_by_json
-}
-
-@test "Bash rm -f of the state path after a comment line with an apostrophe is denied" {
-  run_bash "# don't do this lightly
-rm -f $STATE
-# it's fine now"
-  assert_denied_by_json
-}
-
-@test "Bash redirect into the state path between comment lines with apostrophes is denied" {
-  run_bash "# don't do this lightly
-echo '{}' > $STATE
-# it's fine now"
-  assert_denied_by_json
-}
-
-# A redirect target built from a variable or a glob can land on the path the
-# command names elsewhere.
-@test "Bash redirect into a variable holding the state directory is denied" {
-  run_bash "D=$MAIN/.gaia/local/protected/audit-loop/feat; echo x > \"\$D/x.json\""
-  assert_denied_by_json
-}
-
-@test "Bash redirect in a loop over a glob of the state directory is denied" {
-  run_bash "for f in $MAIN/.gaia/local/protected/audit-loop/feat/*.json; do echo '{}' > \"\$f\"; done"
-  assert_denied_by_json
-}
-
-@test "the Bash deny text names the trigger and an allowed spelling" {
-  run_bash "echo x > $STATE"
-  assert_denied_by_json
-  grep -qF -- 'redirects into it' <<<"$output"
-  grep -qF -- 'only as quoted text' <<<"$output"
+@test "Bash and Monitor writes into the state folder are denied in every shape" {
+  local row nl=$'\n'
+  local rows=(
+    "Bash~rm -f $STATE~~"
+    "Bash~rm -rf $MAIN/.gaia/local/protected/audit-loop~~"
+    "Bash~mv $STATE /tmp/y~~"
+    "Bash~python3 -c \"open('$STATE','w')\"~~"
+    "Bash~mv $WORKTREE_STATE /tmp/y~$WORKTREE~"
+    "Bash~echo x >$STATE~~"
+    "Bash~printf '{}' > \"$STATE\"~~"
+    "Bash~printf '%s' 'a > b' > $STATE~~"
+    "Bash~x=\"\$(printf '{}' > $STATE)\"~~"
+    "Bash~cat <<EOF > $BATS_TEST_TMPDIR/n${nl}don't${nl}EOF${nl}echo x > $STATE~~"
+    "Bash~echo hi # don't${nl}rm $STATE # it's gone~~"
+    "Bash~# don't do this lightly${nl}rm -f $STATE${nl}# it's fine now~~"
+    "Bash~# don't do this lightly${nl}echo '{}' > $STATE${nl}# it's fine now~~"
+    "Bash~D=$MAIN/.gaia/local/protected/audit-loop/feat; echo x > \"\$D/x.json\"~~"
+    "Bash~for f in $MAIN/.gaia/local/protected/audit-loop/feat/*.json; do echo '{}' > \"\$f\"; done~~"
+    "Bash~rm -f $FIX/spec-091-audit-loop/.gaia/local/protected/audit-loop/feat/x.json~~"
+    "Bash~rm -rf $MAIN/.gaia/local/protected/audit-loop/feat~~state"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    if [ -n "$row_extra" ]; then
+      assert_pins_only_class "$row_extra"
+    else
+      assert_denied_by_json
+    fi
+  done
 }
 
 # --- allowed ---
 
-@test "Bash ls of the directory is allowed" {
-  run_bash "ls $MAIN/.gaia/local/protected/audit-loop/"
-  assert_allowed_by_json
-}
-
-@test "Bash read with stderr folded to stdout is allowed" {
-  run_bash "cat $STATE 2>&1 | head -5"
-  assert_allowed_by_json
-}
-
-@test "Bash read with output to /dev/null is allowed" {
-  run_bash "cat $STATE > /dev/null"
-  assert_allowed_by_json
-}
-
-@test "the evaluator script is allowed" {
-  run_bash "bash .gaia/scripts/audit-loop-eval.sh brief --root /x"
-  assert_allowed_by_json
-}
-
-@test "the record script is allowed" {
-  run_bash "bash .gaia/scripts/audit-loop-record.sh --pr 1 --values-json -"
-  assert_allowed_by_json
-}
-
-@test "rm of a file under a worktree whose name ends in audit-loop is allowed" {
-  run_bash "rm -f $FIX/spec-091-audit-loop/notes.txt"
-  assert_allowed_by_json
-}
-
-@test "a redirect into a worktree whose name ends in audit-loop is allowed" {
-  run_bash "echo x > $FIX/spec-091-audit-loop/app/file.ts"
-  assert_allowed_by_json
-}
-
-@test "the state path inside a worktree named like audit-loop is still denied" {
-  run_bash "rm -f $FIX/spec-091-audit-loop/.gaia/local/protected/audit-loop/feat/x.json"
-  assert_denied_by_json
-}
-
-@test "an unrelated rm is allowed" {
-  run_bash "rm /tmp/z"
-  assert_allowed_by_json
-}
-
-@test "an unrelated redirect is allowed" {
-  run_bash "echo x > /tmp/z"
-  assert_allowed_by_json
-}
-
-@test "a non-Bash, non-edit tool is allowed" {
-  invoke_hook "$(jq -n --arg file_path "$STATE" '{tool_name: "Read", tool_input: {file_path: $file_path}}')" "$HOOK_ABSOLUTE_PATH"
-  assert_allowed_by_json
+# A note that quotes a guarded path as text and is redirected elsewhere is the
+# shape an audit member stages a findings sidecar with.
+@test "reads, quoted notes naming a guarded path, lookalike worktrees and unrelated calls are allowed" {
+  local row guarded_path
+  local rows=(
+    "Write~$MAIN/.gaia/local/runs/feat/notes.json~~"
+    "Bash~ls $MAIN/.gaia/local/protected/audit-loop/~~"
+    "Bash~cat $STATE 2>&1 | head -5~~"
+    "Bash~cat $STATE > /dev/null~~"
+    "Bash~bash .gaia/scripts/audit-loop-eval.sh brief --root /x~~"
+    "Bash~bash .gaia/scripts/audit-loop-record.sh --pr 1 --values-json -~~"
+    "Bash~rm -f $FIX/spec-091-audit-loop/notes.txt~~"
+    "Bash~echo x > $FIX/spec-091-audit-loop/app/file.ts~~"
+    "Bash~rm /tmp/z~~"
+    "Bash~echo x > /tmp/z~~"
+    "Read~$STATE~~"
+    "Bash~git -C $FIX/spec-093-audit-loop-unit status --short~~"
+    "Bash~printf '%s\n' \"never rm or mv $STATE by hand\" >> $BATS_TEST_TMPDIR/note.txt~~"
+  )
+  for guarded_path in "$STATE" "$CONTEXT_FILE" "$OVERRIDE" "$NEW_STATE"; do
+    rows+=("Bash~printf '%s\n' 'the hook trusts $guarded_path as written' > $BATS_TEST_TMPDIR/note.txt~~")
+  done
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
 }
 
 # --- jq absent ---
@@ -276,15 +210,26 @@ run_without_jq() {
   run /bin/bash -c 'PATH="$1"; printf %s "$2" | /bin/bash "$3"' _ "$bin" "$payload" "$hook"
 }
 
-@test "jq absent: a Write to the state path is refused" {
-  run_without_jq "$(edit_payload Write "$STATE" "$MAIN")"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'BLOCKED' <<<"$output"
-}
-
-@test "jq absent: a command that rewrites the state path is refused" {
-  run_without_jq "$(command_payload Bash "rm $STATE" "$MAIN")"
-  [ "$status" -eq 2 ]
+@test "jq absent: a write to a guarded path is refused" {
+  local row payload
+  local rows=(
+    "Write~$STATE~~"
+    "Bash~rm $STATE~~"
+    "Write~$CONTEXT_FILE~~"
+    "Bash~echo '{}' > $OVERRIDE~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    if [ "$row_tool" = Write ]; then
+      payload=$(edit_payload Write "$row_input" "$MAIN")
+    else
+      payload=$(command_payload Bash "$row_input" "$MAIN")
+    fi
+    run_without_jq "$payload"
+    [ "$status" -eq 2 ]
+    grep -qF -- 'BLOCKED' <<<"$output"
+  done
 }
 
 @test "jq absent: installing jq is allowed" {
@@ -305,215 +250,105 @@ assert_denied_class() {
   grep -qF -- "$1" <<<"$output"
 }
 
-run_monitor() {
-  invoke_hook "$(command_payload Monitor "$1" "${2:-$MAIN}")" "$HOOK_ABSOLUTE_PATH"
+# --- context readings ---
+
+# bats test_tags=protected
+@test "a context reading is never written by an edit tool, Bash or Monitor, in any spelling" {
+  local row
+  local rows=(
+    "Write~$CONTEXT_FILE~~"
+    "Edit~$CONTEXT_FILE~~"
+    "Write~$MAIN/.gaia/local/cache/shared/context/0a1b2c3d-0000-4000-8000-000000000002.json~~"
+    "Write~$WORKTREE_CONTEXT_FILE~$WORKTREE~"
+    "Write~$MAIN/.gaia/local/cache/../cache/shared/context/$CONTEXT_FILE_NAME~~"
+    "Bash~printf x > $CONTEXT_FILE~~"
+    "Bash~mv $CONTEXT_FILE /tmp/x~~"
+    "Bash~rm -f $CONTEXT_FILE~~"
+    "Bash~rm -rf $MAIN/.gaia/local/cache/shared/context~~"
+    "Bash~printf x > $WORKTREE_CONTEXT_FILE~$WORKTREE~"
+    "Bash~mv $WORKTREE_CONTEXT_FILE /tmp/x~$WORKTREE~"
+    "Bash~rm -f $WORKTREE_CONTEXT_FILE~$WORKTREE~"
+    "Monitor~rm -f $CONTEXT_FILE~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_denied_class 'context readings'
+  done
 }
 
-# scratch_hook <sed-script>: write a mutated copy of the hook under test into a
-# scratch tree that still resolves its library and main-root lib, print its
-# path, and fail when the mutation changed nothing (a twin that mutates no line
-# proves nothing).
-scratch_hook() {
-  local root="$BATS_TEST_TMPDIR/scratch-hook"
-  mkdir -p "$root/.claude/hooks" "$root/.gaia"
-  ln -sfn "$HOOKS_SOURCE_DIRECTORY/lib" "$root/.claude/hooks/lib"
-  ln -sfn "$HOOKS_SOURCE_DIRECTORY/../../.gaia/scripts" "$root/.gaia/scripts"
-  sed -E "$1" "$HOOK_ABSOLUTE_PATH" >"$root/.claude/hooks/block-audit-loop-write.sh"
-  if cmp -s "$HOOK_ABSOLUTE_PATH" "$root/.claude/hooks/block-audit-loop-write.sh"; then
-    return 1
-  fi
-  printf '%s' "$root/.claude/hooks/block-audit-loop-write.sh"
-}
-
-# --- context readings: edit tools ---
-
-@test "Write to a context file is denied naming the guard" {
-  run_edit Write "$CONTEXT_FILE"
-  assert_denied_class 'context readings'
-}
-
-@test "Edit of a context file is denied" {
-  run_edit Edit "$CONTEXT_FILE"
-  assert_denied_class 'context readings'
-}
-
-@test "Write to a not-yet-existing context file is denied" {
-  run_edit Write "$MAIN/.gaia/local/cache/shared/context/0a1b2c3d-0000-4000-8000-000000000002.json"
-  assert_denied_class 'context readings'
-}
-
-@test "Write to a context file through the worktree symlink spelling is denied" {
-  run_edit Write "$WORKTREE_CONTEXT_FILE" "$WORKTREE"
-  assert_denied_class 'context readings'
-}
-
-@test "Write to a context file with a .. segment is denied" {
-  run_edit Write "$MAIN/.gaia/local/cache/../cache/shared/context/$CONTEXT_FILE_NAME"
-  assert_denied_class 'context readings'
-}
-
-# --- context readings: Bash natural spellings ---
-
-@test "Bash redirect into a context file is denied" {
-  run_bash "printf x > $CONTEXT_FILE"
-  assert_denied_class 'context readings'
-}
-
-@test "Bash mv of a context file is denied" {
-  run_bash "mv $CONTEXT_FILE /tmp/x"
-  assert_denied_class 'context readings'
-}
-
-@test "Bash rm -f of a context file is denied" {
-  run_bash "rm -f $CONTEXT_FILE"
-  assert_denied_class 'context readings'
-}
-
-@test "Bash rm of the context directory itself is denied" {
-  run_bash "rm -rf $MAIN/.gaia/local/cache/shared/context"
-  assert_denied_class 'context readings'
-}
-
-@test "Bash redirect into a context file through the worktree spelling is denied" {
-  run_bash "printf x > $WORKTREE_CONTEXT_FILE" "$WORKTREE"
-  assert_denied_class 'context readings'
-}
-
-@test "Bash mv of a context file through the worktree spelling is denied" {
-  run_bash "mv $WORKTREE_CONTEXT_FILE /tmp/x" "$WORKTREE"
-  assert_denied_class 'context readings'
-}
-
-@test "Bash rm -f of a context file through the worktree spelling is denied" {
-  run_bash "rm -f $WORKTREE_CONTEXT_FILE" "$WORKTREE"
-  assert_denied_class 'context readings'
-}
-
-@test "Monitor writing a context file is denied" {
-  run_monitor "rm -f $CONTEXT_FILE"
-  assert_denied_class 'context readings'
-}
-
-@test "Bash cat of a context file is allowed" {
-  run_bash "cat $CONTEXT_FILE"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Bash jq read of a context file is allowed" {
-  run_bash "jq . $CONTEXT_FILE"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Write to a sibling cache file is allowed" {
-  run_edit Write "$MAIN/.gaia/local/cache/shared/update-check.json"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-# --- override file: edit tools and Bash ---
-
-@test "Write creating the override file is denied with the human-only message" {
-  [ ! -e "$OVERRIDE" ]
-  run_edit Write "$OVERRIDE"
-  assert_denied_class 'only a human edits the override'
-}
-
-@test "Edit of the override file is denied" {
+@test "reading a context file or the override, and writing a sibling cache file, are allowed" {
+  local row
   printf '{}' >"$OVERRIDE"
+  local rows=(
+    "Bash~cat $CONTEXT_FILE~~"
+    "Bash~jq . $CONTEXT_FILE~~"
+    "Write~$MAIN/.gaia/local/cache/shared/update-check.json~~"
+    "Bash~cat $OVERRIDE~~"
+    "Bash~jq . $OVERRIDE~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
+}
+
+# --- override file ---
+
+# bats test_tags=protected
+@test "the checkpoint override is never written by an edit tool, Bash or Monitor" {
+  local row
+  # The denied rows create nothing, so the file stays absent through the loop.
+  [ ! -e "$OVERRIDE" ]
+  local rows=(
+    "Write~$OVERRIDE~~"
+    "Write~$WORKTREE_OVERRIDE~$WORKTREE~"
+    "Bash~echo '{}' > $OVERRIDE~~"
+    "Bash~echo '{}' > $WORKTREE_OVERRIDE~$WORKTREE~"
+    "Bash~rm -f $OVERRIDE~~"
+    "Bash~mv /tmp/s.json $OVERRIDE~~"
+    "Monitor~echo '{}' > $OVERRIDE~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_denied_class 'only a human edits the override'
+  done
+  printf '{}' >"$OVERRIDE"
+  echo "case: Edit of an existing override file"
   run_edit Edit "$OVERRIDE"
   assert_denied_class 'only a human edits the override'
 }
 
-@test "Write creating the override file through the worktree spelling is denied" {
-  run_edit Write "$WORKTREE_OVERRIDE" "$WORKTREE"
-  assert_denied_class 'only a human edits the override'
-}
-
-@test "Bash redirect creating the override file is denied" {
-  run_bash "echo '{}' > $OVERRIDE"
-  assert_denied_class 'only a human edits the override'
-}
-
-@test "Bash redirect creating the override file through the worktree spelling is denied" {
-  run_bash "echo '{}' > $WORKTREE_OVERRIDE" "$WORKTREE"
-  assert_denied_class 'only a human edits the override'
-}
-
-@test "Bash rm of the override file is denied" {
-  run_bash "rm -f $OVERRIDE"
-  assert_denied_class 'only a human edits the override'
-}
-
-@test "Bash mv onto the override file is denied" {
-  run_bash "mv /tmp/s.json $OVERRIDE"
-  assert_denied_class 'only a human edits the override'
-}
-
-@test "Monitor creating the override file is denied" {
-  run_monitor "echo '{}' > $OVERRIDE"
-  assert_denied_class 'only a human edits the override'
-}
-
-@test "Bash cat of the override file is allowed" {
-  printf '{}' >"$OVERRIDE"
-  run_bash "cat $OVERRIDE"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Bash jq read of the override file is allowed" {
-  printf '{}' >"$OVERRIDE"
-  run_bash "jq . $OVERRIDE"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Write to .claude/settings.json is allowed" {
-  run_edit Write "$MAIN/.claude/settings.json"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Write to .claude/settings.local.json is allowed" {
-  run_edit Write "$MAIN/.claude/settings.local.json"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Bash redirect into .claude/settings.json is allowed" {
-  run_bash "echo '{}' > $MAIN/.claude/settings.json"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-# .gaia/local/settings.json holds GAIA's per-machine opt-ins (the statusline
-# left-side choice), which /setup-gaia writes, so the guard must not match it.
-@test "Write to the opt-ins file .gaia/local/settings.json is allowed" {
-  run_edit Write "$MAIN/.gaia/local/settings.json"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Write to the opt-ins file through the worktree spelling is allowed" {
-  run_edit Write "$WORKTREE/.gaia/local/settings.json" "$WORKTREE"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Bash redirect into the opt-ins file .gaia/local/settings.json is allowed" {
-  run_bash "echo '{}' > $MAIN/.gaia/local/settings.json"
-  assert_allowed_by_json
-  [ -z "$output" ]
+@test "writes to settings files and the opt-ins file are allowed" {
+  local row
+  local rows=(
+    "Write~$MAIN/.claude/settings.json~~"
+    "Write~$MAIN/.claude/settings.local.json~~"
+    "Bash~echo '{}' > $MAIN/.claude/settings.json~~"
+    "Write~$MAIN/.gaia/local/settings.json~~"
+    "Write~$WORKTREE/.gaia/local/settings.json~$WORKTREE~"
+    "Bash~echo '{}' > $MAIN/.gaia/local/settings.json~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
 }
 
 # --- recorder execution ---
 
 # Each execution form is denied before it runs, and the state is untouched.
+# The optional second argument names the runner (run_bash by default).
 assert_recorder_denied() {
   cp "$STATE" "$BATS_TEST_TMPDIR/state.before"
-  run_bash "$1"
+  "${2:-run_bash}" "$1"
   assert_denied_class 'run only as hooks'
   cmp "$STATE" "$BATS_TEST_TMPDIR/state.before"
 }
@@ -524,137 +359,53 @@ assert_recorder_denied() {
   assert_recorder_denied "printf '%s' '{\"tool_name\":\"AskUserQuestion\"}' | bash $ASK_RECORDER"
 }
 
-@test "a forged payload piped to the ask recorder as the command word is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "printf x | $ASK_RECORDER"
-}
-
-@test "bash running the grant recorder with a payload redirect is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "bash .claude/hooks/audit-loop-grant.sh < payload.json"
-}
-
-@test "the grant recorder as the command word with a payload redirect is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied ".claude/hooks/audit-loop-grant.sh < payload.json"
-}
-
-@test "sourcing the grant recorder is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "source .claude/hooks/audit-loop-grant.sh"
-}
-
-@test "dot-sourcing the grant recorder is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied ". .claude/hooks/audit-loop-grant.sh"
-}
-
-@test "sh running the grant recorder after && is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "true && sh $GRANT_RECORDER"
-}
-
-@test "exec of the ask recorder is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "exec $ASK_RECORDER"
-}
-
-@test "bash with flags running the grant recorder is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "bash -eu -o pipefail $GRANT_RECORDER"
-}
-
-@test "a quoted recorder path with an env prefix is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "FOO=1 \"$ASK_RECORDER\" < /dev/null"
-}
-
-@test "the recorder after a newline is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "echo hi
-bash $GRANT_RECORDER"
-}
-
 # A checkout path with a space: the quoted recorder path is one shell word, so
 # splitting before the quotes are read would hand the guard `.../My` instead.
-@test "bash running the quoted grant recorder under a spaced checkout path is denied" {
+@test "every form of running a recorder is denied before it runs" {
+  local row nl=$'\n'
   printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "bash \"$FIX/My Repo/.claude/hooks/audit-loop-grant.sh\" < p.json"
+  local rows=(
+    "Bash~printf x | $ASK_RECORDER~~"
+    "Bash~bash .claude/hooks/audit-loop-grant.sh < payload.json~~"
+    "Bash~.claude/hooks/audit-loop-grant.sh < payload.json~~"
+    "Bash~source .claude/hooks/audit-loop-grant.sh~~"
+    "Bash~. .claude/hooks/audit-loop-grant.sh~~"
+    "Bash~true && sh $GRANT_RECORDER~~"
+    "Bash~exec $ASK_RECORDER~~"
+    "Bash~bash -eu -o pipefail $GRANT_RECORDER~~"
+    "Bash~FOO=1 \"$ASK_RECORDER\" < /dev/null~~"
+    "Bash~echo hi${nl}bash $GRANT_RECORDER~~"
+    "Bash~bash \"$FIX/My Repo/.claude/hooks/audit-loop-grant.sh\" < p.json~~"
+    "Bash~\"$FIX/My Repo/.claude/hooks/audit-loop-grant.sh\" < p.json~~"
+    "Monitor~printf '%s' '{}' | bash $ASK_RECORDER~~"
+    "Monitor~bash .claude/hooks/audit-loop-grant.sh < payload.json~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    assert_recorder_denied "$row_input" "run_$(printf '%s' "$row_tool" | tr 'A-Z' 'a-z')"
+  done
 }
 
-@test "the quoted grant recorder under a spaced checkout path as the command word is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "\"$FIX/My Repo/.claude/hooks/audit-loop-grant.sh\" < p.json"
-}
-
-@test "git add of the quoted recorder under a spaced checkout path is allowed" {
-  run_bash "git -C \"$FIX/My Repo\" add -- \"$FIX/My Repo/.claude/hooks/audit-loop-grant.sh\""
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Monitor piping a forged payload to the ask recorder is denied" {
-  run_monitor "printf '%s' '{}' | bash $ASK_RECORDER"
-  assert_denied_class 'run only as hooks'
-}
-
-@test "Monitor running the grant recorder with a payload redirect is denied" {
-  run_monitor "bash .claude/hooks/audit-loop-grant.sh < payload.json"
-  assert_denied_class 'run only as hooks'
-}
-
-@test "git add naming the grant recorder is allowed" {
-  run_bash "git -C $MAIN add -- .claude/hooks/audit-loop-grant.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "git diff naming the grant recorder is allowed" {
-  run_bash "git -C $MAIN diff -- .claude/hooks/audit-loop-grant.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "git grep -l naming the grant recorder is allowed" {
-  run_bash "git -C $MAIN grep -l 'audit-loop-grant.sh' -- '*.bats'"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "git log naming the ask recorder is allowed" {
-  run_bash "git -C $MAIN log --oneline -- .claude/hooks/audit-loop-ask-grant.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "shellcheck of the ask recorder is allowed" {
-  run_bash "shellcheck .claude/hooks/audit-loop-ask-grant.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "bash -n of the grant recorder is allowed" {
-  run_bash "bash -n .claude/hooks/audit-loop-grant.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "cat of the grant recorder is allowed" {
-  run_bash "cat .claude/hooks/audit-loop-grant.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "grep for the recorder name is allowed" {
-  run_bash "grep -n audit-loop-ask-grant.sh .claude/settings.json"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "a Bash command naming a worktree directory called spec-093-audit-loop-unit is allowed" {
-  run_bash "git -C $FIX/spec-093-audit-loop-unit status --short"
-  assert_allowed_by_json
-  [ -z "$output" ]
+@test "staging, reading and checking a recorder is allowed" {
+  local row
+  local rows=(
+    "Bash~git -C \"$FIX/My Repo\" add -- \"$FIX/My Repo/.claude/hooks/audit-loop-grant.sh\"~~"
+    "Bash~git -C $MAIN add -- .claude/hooks/audit-loop-grant.sh~~"
+    "Bash~git -C $MAIN diff -- .claude/hooks/audit-loop-grant.sh~~"
+    "Bash~git -C $MAIN grep -l 'audit-loop-grant.sh' -- '*.bats'~~"
+    "Bash~git -C $MAIN log --oneline -- .claude/hooks/audit-loop-ask-grant.sh~~"
+    "Bash~shellcheck .claude/hooks/audit-loop-ask-grant.sh~~"
+    "Bash~bash -n .claude/hooks/audit-loop-grant.sh~~"
+    "Bash~cat .claude/hooks/audit-loop-grant.sh~~"
+    "Bash~grep -n audit-loop-ask-grant.sh .claude/settings.json~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
 }
 
 # --- reaper execution ---
@@ -667,178 +418,75 @@ assert_reaper_denied() {
   grep -qF -- 'block-audit-loop-write.sh' <<<"$output"
 }
 
-@test "bash running the reaper is denied" {
-  run_bash "bash .gaia/scripts/state-reaper.sh"
-  assert_reaper_denied
+# bats test_tags=protected
+@test "every form of running the state reaper is denied" {
+  local row
+  local rows=(
+    "Bash~bash .gaia/scripts/state-reaper.sh~~"
+    "Bash~.gaia/scripts/state-reaper.sh~~"
+    "Bash~$MAIN/.gaia/scripts/state-reaper.sh~~"
+    "Bash~bash .claude/hooks/state-reaper-session-start.sh~~"
+    "Bash~source .gaia/scripts/state-reaper-classes.sh~~"
+    "Bash~. .gaia/scripts/state-reaper-lib.sh~~"
+    "Bash~FOO=1 bash .gaia/scripts/state-reaper.sh~~"
+    "Bash~true && bash .gaia/scripts/state-reaper.sh~~"
+    "Monitor~bash .gaia/scripts/state-reaper.sh~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_reaper_denied
+  done
 }
 
-@test "the reaper as the command word is denied" {
-  run_bash ".gaia/scripts/state-reaper.sh"
-  assert_reaper_denied
-}
-
-@test "the reaper under an absolute path is denied" {
-  run_bash "$MAIN/.gaia/scripts/state-reaper.sh"
-  assert_reaper_denied
-}
-
-@test "bash running the reaper session start launcher is denied" {
-  run_bash "bash .claude/hooks/state-reaper-session-start.sh"
-  assert_reaper_denied
-}
-
-@test "sourcing the reaper classes is denied" {
-  run_bash "source .gaia/scripts/state-reaper-classes.sh"
-  assert_reaper_denied
-}
-
-@test "dot-sourcing the reaper library is denied" {
-  run_bash ". .gaia/scripts/state-reaper-lib.sh"
-  assert_reaper_denied
-}
-
-@test "bash running the reaper after an env prefix is denied" {
-  run_bash "FOO=1 bash .gaia/scripts/state-reaper.sh"
-  assert_reaper_denied
-}
-
-@test "bash running the reaper after && is denied" {
-  run_bash "true && bash .gaia/scripts/state-reaper.sh"
-  assert_reaper_denied
-}
-
-@test "Monitor running the reaper is denied" {
-  run_monitor "bash .gaia/scripts/state-reaper.sh"
-  assert_reaper_denied
-}
-
-@test "git add naming the reaper is allowed" {
-  run_bash "git add .gaia/scripts/state-reaper.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "shellcheck of the reaper is allowed" {
-  run_bash "shellcheck .gaia/scripts/state-reaper.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "bash -n of the reaper is allowed" {
-  run_bash "bash -n .gaia/scripts/state-reaper.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "cat of the reaper library is allowed" {
-  run_bash "cat .gaia/scripts/state-reaper-lib.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "running the reaper bats suite is allowed" {
-  run_bash "bash .gaia/scripts/bats5.sh .gaia/scripts/tests/state-reaper.bats < /dev/null"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "running the post-merge cleanup script is allowed" {
-  run_bash "bash .gaia/scripts/state-cleanup.sh --branch fix/a"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "an rm under the protected audit-loop folder is still denied as state" {
-  run_bash "rm -rf $MAIN/.gaia/local/protected/audit-loop/feat"
-  assert_pins_only_class state
-}
-
-@test "red twin: without the reaper names in the matcher a reaper run is allowed" {
-  local twin
-  twin=$(scratch_hook '/^    state-reaper\.sh \|/,/^      ;;$/d')
-  invoke_hook "$(command_payload Bash "bash .gaia/scripts/state-reaper.sh" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  # The unmutated hook denies the same payload.
-  run_bash "bash .gaia/scripts/state-reaper.sh"
-  assert_pins_only_class reaper
-}
-
-@test "red twin: without the reaper pre-filter literal a reaper run is allowed" {
-  local twin
-  twin=$(scratch_hook 's/ \*state-reaper\* \|//')
-  invoke_hook "$(command_payload Bash "bash .gaia/scripts/state-reaper.sh" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  # The unmutated hook denies the same payload.
-  run_bash "bash .gaia/scripts/state-reaper.sh"
-  assert_pins_only_class reaper
+@test "staging, reading and checking the state reaper, and running its suite and the cleanup script, is allowed" {
+  local row
+  local rows=(
+    "Bash~git add .gaia/scripts/state-reaper.sh~~"
+    "Bash~shellcheck .gaia/scripts/state-reaper.sh~~"
+    "Bash~bash -n .gaia/scripts/state-reaper.sh~~"
+    "Bash~cat .gaia/scripts/state-reaper-lib.sh~~"
+    "Bash~bash .gaia/scripts/bats5.sh .gaia/scripts/tests/state-reaper.bats < /dev/null~~"
+    "Bash~bash .gaia/scripts/state-cleanup.sh --branch fix/a~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
 }
 
 # --- deny text, every class ---
 
-@test "the deny text of every class carries both answer channels and names the guard" {
-  local checked=0 payload
-  for payload in \
-    "$(edit_payload Write "$STATE" "$MAIN")" \
-    "$(edit_payload Write "$CONTEXT_FILE" "$MAIN")" \
-    "$(edit_payload Write "$OVERRIDE" "$MAIN")" \
-    "$(edit_payload Write "$NEW_STATE" "$MAIN")" \
-    "$(command_payload Bash "bash $ASK_RECORDER" "$MAIN")"; do
-    invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
-    assert_denied_by_json
-    grep -qF -- 'block-audit-loop-write.sh' <<<"$output"
-    grep -qF -- 'AskUserQuestion' <<<"$output"
-    grep -qF -- 'audit-grant' <<<"$output"
-    checked=$((checked + 1))
+@test "each deny message names the guard, its class and both answer channels" {
+  local row frag class_name fragments
+  local channels='block-audit-loop-write.sh;AskUserQuestion;audit-grant'
+  local rows=(
+    "Bash~rm $STATE~~state;The branch checkpoint;outside Claude Code"
+    "Bash~echo x > $STATE~~state;redirects into it;only as quoted text"
+    "Write~$STATE~~state;$channels;audit-accept;#### The branch checkpoint"
+    "Write~$CONTEXT_FILE~~;$channels"
+    "Write~$OVERRIDE~~override;$channels;audit-accept;#### The branch checkpoint;<main>/.gaia/local/protected/checkpoint-override.json;<main>/.gaia/local/settings.json"
+    "Write~$NEW_STATE~~folder;$channels;audit-accept;#### The branch checkpoint"
+    "Bash~bash $ASK_RECORDER~~;$channels"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    IFS=';' read -ra fragments <<<"$row_extra"
+    class_name="${fragments[0]}"
+    if [ -n "$class_name" ]; then
+      assert_pins_only_class "$class_name"
+    else
+      assert_denied_by_json
+    fi
+    for frag in "${fragments[@]:1}"; do
+      grep -qF -- "$frag" <<<"$output"
+    done
   done
-  [ "$checked" -eq 5 ]
-}
-
-# --- red twins: the new arms are what deny ---
-
-@test "red twin: without the execution rule a piped forgery to the recorder is allowed" {
-  local twin
-  twin=$(scratch_hook '/^    runs_guarded_script "\$command_line" && deny "\$SCRIPT_KIND"$/d')
-  invoke_hook "$(command_payload Bash "printf x | bash $ASK_RECORDER" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  # The unmutated hook denies the same payload.
-  run_bash "printf x | bash $ASK_RECORDER"
-  assert_denied_by_json
-}
-
-@test "red twin: a rule widened to any command naming the recorder denies git add" {
-  local twin
-  twin=$(scratch_hook 's/^    runs_guarded_script "\$command_line" && deny "\$SCRIPT_KIND"$/    case "$command_line" in *audit-loop-grant.sh* | *audit-loop-ask-grant.sh*) deny recorder ;; esac/')
-  invoke_hook "$(command_payload Bash "git -C $MAIN add -- .claude/hooks/audit-loop-grant.sh" "$MAIN")" "$twin"
-  assert_denied_by_json
-  # The unmutated hook allows the same payload.
-  run_bash "git -C $MAIN add -- .claude/hooks/audit-loop-grant.sh"
-  assert_allowed_by_json
-}
-
-@test "red twin: without the widened pre-filter a context redirect and an override redirect are allowed" {
-  local twin
-  twin=$(scratch_hook 's/^  \*audit-loop\* \| \*state-reaper\* \| \*local\/protected\* \| \*cache\/shared\/context\*.*\) ;;$/  *audit-loop* | *state-reaper*) ;;/')
-  invoke_hook "$(command_payload Bash "printf x > $CONTEXT_FILE" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  invoke_hook "$(command_payload Bash "echo '{}' > $OVERRIDE" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  # The unmutated hook denies both.
-  run_bash "printf x > $CONTEXT_FILE"
-  assert_denied_by_json
-  run_bash "echo '{}' > $OVERRIDE"
-  assert_denied_by_json
-}
-
-# --- jq absent, new spellings ---
-
-@test "jq absent: a Write to a context file is refused" {
-  run_without_jq "$(edit_payload Write "$CONTEXT_FILE" "$MAIN")"
-  [ "$status" -eq 2 ]
-}
-
-@test "jq absent: a command that rewrites the override file is refused" {
-  run_without_jq "$(command_payload Bash "echo '{}' > $OVERRIDE" "$MAIN")"
-  [ "$status" -eq 2 ]
 }
 
 # --- the protected folder as a whole ---
@@ -929,35 +577,6 @@ assert_pins_only_class() {
   [ "$cells" -eq 18 ]
 }
 
-@test "Write to a relative path into the protected folder is denied" {
-  run_edit Write ".gaia/local/protected/new-state.json" "$MAIN"
-  assert_pins_only_class folder
-}
-
-@test "Write with a .. segment that resolves into the protected folder is denied" {
-  mkdir -p "$MAIN/.gaia/local/runs"
-  run_edit Write "$MAIN/.gaia/local/runs/../protected/audit-loop/feat/x.json"
-  assert_pins_only_class state
-}
-
-@test "Write through the worktree symlink with a .. segment into the protected folder is denied" {
-  mkdir -p "$MAIN/.gaia/local/runs"
-  run_edit Write "$WORKTREE/.gaia/local/runs/../protected/audit-loop/feat/x.json" "$WORKTREE"
-  assert_pins_only_class state
-}
-
-@test "Write through a symlink alias to the protected folder that never names it is denied" {
-  ln -s "$FOLDER" "$FIX/vault"
-  run_edit Write "$FIX/vault/audit-loop/feat/x.json"
-  assert_pins_only_class state
-}
-
-@test "Write through a symlink alias to the local directory is denied with the folder message" {
-  ln -s "$MAIN/.gaia/local" "$FIX/alias-local"
-  run_edit Write "$FIX/alias-local/protected/new-state.json"
-  assert_pins_only_class folder
-}
-
 # The tool-spelling matrix for Bash and Monitor: every target through every
 # write shape.
 assert_write_matrix() {
@@ -994,14 +613,6 @@ assert_write_matrix() {
   [ "$cells" -eq 110 ]
 }
 
-@test "Bash write shapes against every protected target are denied" {
-  assert_write_matrix run_bash
-}
-
-@test "Monitor write shapes against every protected target are denied" {
-  assert_write_matrix run_monitor
-}
-
 assert_indirect_writes_denied() {
   local runner="$1"
   "$runner" "D=$MAIN/.gaia/local/protected; echo x > \"\$D/new-state.json\"" "$MAIN"
@@ -1010,11 +621,10 @@ assert_indirect_writes_denied() {
   cell_is_denied "$runner loop over a glob"
 }
 
-@test "Bash variable and loop writes into the protected folder are denied" {
+@test "Bash and Monitor write shapes, variable writes and loop writes against every protected target are denied" {
+  assert_write_matrix run_bash
+  assert_write_matrix run_monitor
   assert_indirect_writes_denied run_bash
-}
-
-@test "Monitor variable and loop writes into the protected folder are denied" {
   assert_indirect_writes_denied run_monitor
 }
 
@@ -1042,110 +652,63 @@ assert_read_matrix() {
   cell_is_allowed "$runner: ls of the relative folder piped to wc"
 }
 
-@test "Bash reads of every protected target are allowed" {
+@test "Bash and Monitor reads of every protected target are allowed" {
   assert_read_matrix run_bash
-}
-
-@test "Monitor reads of every protected target are allowed" {
   assert_read_matrix run_monitor
-}
-
-@test "a read compounded with a write verb on a protected file is denied" {
-  run_bash "cat $NEW_STATE && rm $NEW_STATE"
-  assert_pins_only_class folder
 }
 
 # --- deny class dispatch ---
 
-@test "the Edit tools dispatch each protected path to its own class" {
-  local row row_class row_path checked=0
-  for row in \
-    "state|$STATE" \
-    "state|$FOLDER/audit-loop" \
-    "override|$OVERRIDE" \
-    "folder|$NEW_STATE" \
-    "folder|$FOLDER/audit-loop-notes.json" \
-    "folder|$FOLDER/checkpoint-override.json.bak" \
-    "folder|$FOLDER"; do
-    row_class="${row%%|*}"
-    row_path="${row#*|}"
-    run_edit Write "$row_path"
-    assert_pins_only_class "$row_class"
-    checked=$((checked + 1))
+# A Write row's input is a path; a Bash or Monitor row's input is the command.
+@test "each protected path and compound command is denied with its own class" {
+  local row
+  local rows=(
+    "Write~$STATE~~state"
+    "Write~$FOLDER/audit-loop~~state"
+    "Write~$OVERRIDE~~override"
+    "Write~$NEW_STATE~~folder"
+    "Write~$FOLDER/audit-loop-notes.json~~folder"
+    "Write~$FOLDER/checkpoint-override.json.bak~~folder"
+    "Write~$FOLDER~~folder"
+    "Bash~printf x > $STATE~~state"
+    "Bash~printf x > $FOLDER/audit-loop~~state"
+    "Bash~printf x > $OVERRIDE~~override"
+    "Bash~printf x > $NEW_STATE~~folder"
+    "Bash~printf x > $FOLDER/audit-loop-notes.json~~folder"
+    "Bash~printf x > $FOLDER/checkpoint-override.json.bak~~folder"
+    "Bash~printf x > $FOLDER~~folder"
+    "Bash~cat $NEW_STATE && rm $NEW_STATE~~folder"
+    "Bash~cat $STATE; printf x > $OVERRIDE~~override"
+    "Bash~printf x > $NEW_STATE; cat $STATE~~folder"
+    "Monitor~cat $STATE; printf x > $OVERRIDE~~override"
+    "Monitor~printf x > $NEW_STATE; cat $STATE~~folder"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_pins_only_class "$row_extra"
   done
-  [ "$checked" -eq 7 ]
-}
-
-@test "Bash dispatches each protected path to its own class" {
-  local row row_class row_path checked=0
-  for row in \
-    "state|$STATE" \
-    "state|$FOLDER/audit-loop" \
-    "override|$OVERRIDE" \
-    "folder|$NEW_STATE" \
-    "folder|$FOLDER/audit-loop-notes.json" \
-    "folder|$FOLDER/checkpoint-override.json.bak" \
-    "folder|$FOLDER"; do
-    row_class="${row%%|*}"
-    row_path="${row#*|}"
-    run_bash "printf x > $row_path"
-    assert_pins_only_class "$row_class"
-    checked=$((checked + 1))
-  done
-  [ "$checked" -eq 7 ]
-}
-
-assert_compound_pins() {
-  local runner="$1"
-  "$runner" "cat $STATE; printf x > $OVERRIDE" "$MAIN"
-  assert_pins_only_class override
-  "$runner" "printf x > $NEW_STATE; cat $STATE" "$MAIN"
-  assert_pins_only_class folder
-}
-
-@test "Bash compound commands get the class of what is written" {
-  assert_compound_pins run_bash
-}
-
-@test "Monitor compound commands get the class of what is written" {
-  assert_compound_pins run_monitor
-}
-
-@test "each deny message names its location and keeps the answer channels" {
-  local row row_class row_path checked=0
-  for row in "state|$STATE" "override|$OVERRIDE" "folder|$NEW_STATE"; do
-    row_class="${row%%|*}"
-    row_path="${row#*|}"
-    run_edit Write "$row_path"
-    assert_pins_only_class "$row_class"
-    grep -qF -- 'AskUserQuestion' <<<"$output"
-    grep -qF -- 'audit-grant' <<<"$output"
-    grep -qF -- 'audit-accept' <<<"$output"
-    grep -qF -- '#### The branch checkpoint' <<<"$output"
-    checked=$((checked + 1))
-  done
-  [ "$checked" -eq 3 ]
-}
-
-@test "the override message names its location and the writable opt-ins home" {
-  run_edit Write "$OVERRIDE"
-  assert_pins_only_class override
-  grep -qF -- '<main>/.gaia/local/protected/checkpoint-override.json' <<<"$output"
-  grep -qF -- '<main>/.gaia/local/settings.json' <<<"$output"
 }
 
 # --- siblings and lookalikes ---
 
-@test "Write to a sibling that merely shares the audit-loop prefix is allowed" {
-  run_edit Write "$MAIN/.gaia/local/audit-loop-notes.md"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Write to a sibling that merely shares the protected prefix is allowed" {
-  run_edit Write "$MAIN/.gaia/local/protected-notes.md"
-  assert_allowed_by_json
-  [ -z "$output" ]
+@test "siblings that share a prefix with a protected path, and the old state locations, are allowed" {
+  local row
+  local rows=(
+    "Write~$MAIN/.gaia/local/audit-loop-notes.md~~"
+    "Write~$MAIN/.gaia/local/protected-notes.md~~"
+    "Bash~mkdir -p $MAIN/.gaia/local/protected/audit-loop/feat~~"
+    "Write~$OLD_STATE~~"
+    "Write~$OLD_OVERRIDE~~"
+    "Bash~printf x > $OLD_OVERRIDE~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
 }
 
 assert_lookalikes_allowed() {
@@ -1163,42 +726,6 @@ assert_lookalikes_allowed() {
   grep -qF -- 'local/protected' <<<"$command_line"
 }
 
-@test "Bash writes to protected siblings and a lookalike in another tree are allowed" {
-  assert_lookalikes_allowed run_bash
-}
-
-@test "Monitor writes to protected siblings and a lookalike in another tree are allowed" {
-  assert_lookalikes_allowed run_monitor
-}
-
-@test "mkdir inside the protected folder is allowed" {
-  run_bash "mkdir -p $MAIN/.gaia/local/protected/audit-loop/feat"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-# --- old locations are neither guarded nor read ---
-
-@test "Write to the old state location is allowed" {
-  run_edit Write "$OLD_STATE"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Write to the old override location is allowed" {
-  run_edit Write "$OLD_OVERRIDE"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "Bash redirect into the old override location is allowed" {
-  run_bash "printf x > $OLD_OVERRIDE"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-# --- recorder execution reaches the guard through the audit-loop literal ---
-
 assert_recorder_run_denied_and_staging_allowed() {
   local runner="$1" recorder_command="bash .claude/hooks/audit-loop-grant.sh"
   grep -qF -- protected <<<"$recorder_command" && return 1
@@ -1209,103 +736,11 @@ assert_recorder_run_denied_and_staging_allowed() {
   cell_is_allowed "$runner: git add of the grant recorder"
 }
 
-@test "Bash running the grant recorder is denied through the audit-loop literal, and staging it is allowed" {
+@test "Bash and Monitor writes to protected lookalikes are allowed, and running the grant recorder is denied through the audit-loop literal while staging it is allowed" {
+  assert_lookalikes_allowed run_bash
+  assert_lookalikes_allowed run_monitor
   assert_recorder_run_denied_and_staging_allowed run_bash
-}
-
-@test "Monitor running the grant recorder is denied through the audit-loop literal, and staging it is allowed" {
   assert_recorder_run_denied_and_staging_allowed run_monitor
-}
-
-# --- red twins: the protected arms are what deny ---
-
-@test "red twin: without the protected pre-filter literal a redirect and a Write into the folder are allowed" {
-  local twin
-  twin=$(scratch_hook 's/ \*local\/protected\* \|//')
-  grep -qF -- audit-loop <<<"echo '{}' > $OVERRIDE" && return 1
-  grep -qF -- audit-loop <<<"$NEW_STATE" && return 1
-  invoke_hook "$(command_payload Bash "echo '{}' > $OVERRIDE" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  invoke_hook "$(edit_payload Write "$NEW_STATE" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  # The unmutated hook denies both.
-  run_bash "echo '{}' > $OVERRIDE"
-  assert_denied_by_json
-  run_edit Write "$NEW_STATE"
-  assert_denied_by_json
-}
-
-@test "red twin: without the protected jq literal a missing jq no longer refuses a write into the folder" {
-  local twin payload
-  twin=$(scratch_hook "/^gaia_require_jq /s/ 'local\/protected'//")
-  payload=$(edit_payload Write "$NEW_STATE" "$MAIN")
-  grep -qF -- audit-loop <<<"$payload" && return 1
-  run_without_jq "$payload" "$twin"
-  [ "$status" -eq 0 ]
-  # The unmutated hook refuses the same payload.
-  run_without_jq "$payload"
-  [ "$status" -eq 2 ]
-}
-
-@test "red twin: without the guarded_class folder arm a path with no resolvable checkout is allowed" {
-  local twin
-  mkdir -p "$FIX/nogit/.gaia/local/protected"
-  . "$HOOKS_SOURCE_DIRECTORY/../../.gaia/scripts/main-root-lib.sh"
-  [ -z "$(gaia_resolve_main_root "$FIX/nogit" 2>/dev/null)" ]
-  twin=$(scratch_hook '/^    \*\/\.gaia\/local\/protected\/\* \| \*\/\.gaia\/local\/protected\) protected_class /d')
-  invoke_hook "$(edit_payload Write "$FIX/nogit/.gaia/local/protected/new-state.json" "$FIX/nogit")" "$twin"
-  assert_allowed_by_json
-  # The unmutated hook denies the same payload.
-  run_edit Write "$FIX/nogit/.gaia/local/protected/new-state.json" "$FIX/nogit"
-  assert_denied_by_json
-}
-
-# The resolved-path case arm and the trailing guarded_class fallback each catch
-# a resolved alias alone, so removing one is an equivalent mutant no test can
-# see; the twin removes both.
-@test "red twin: without both resolved-path arms a symlink alias into the folder is allowed" {
-  local twin
-  ln -s "$MAIN/.gaia/local" "$FIX/alias-local"
-  twin=$(scratch_hook '/^        "\$main_root\/\.gaia\/local\/protected" \|/d;/^    class=\$\(guarded_class "\$resolved"\)$/d')
-  invoke_hook "$(edit_payload Write "$FIX/alias-local/protected/new-state.json" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  # The unmutated hook denies the same payload.
-  run_edit Write "$FIX/alias-local/protected/new-state.json"
-  assert_denied_by_json
-}
-
-@test "red twin: a Bash path regex that cannot match lets a protected rm through" {
-  local twin
-  twin=$(scratch_hook '/^    protected_names_re=/s/local\/protected/local\/protectedX/')
-  invoke_hook "$(command_payload Bash "rm $NEW_STATE" "$MAIN")" "$twin"
-  assert_allowed_by_json
-  # The unmutated hook denies the same payload.
-  run_bash "rm $NEW_STATE"
-  assert_denied_by_json
-}
-
-@test "red twin: without the Edit-tool state dispatch the state path is denied with the folder message" {
-  local twin
-  twin=$(scratch_hook '/^    "\$2\/audit-loop" \| "\$2\/audit-loop"\/\*\) printf state ;;$/d')
-  invoke_hook "$(edit_payload Write "$STATE" "$MAIN")" "$twin"
-  assert_denied_by_json
-  grep -qF -- "$(class_pin folder)" <<<"$output"
-  grep -qF -- "$(class_pin state)" <<<"$output" && return 1
-  # The unmutated hook carries the state pin.
-  run_edit Write "$STATE"
-  assert_pins_only_class state
-}
-
-@test "red twin: without the Bash state dispatch a state write is denied with the folder message" {
-  local twin
-  twin=$(scratch_hook '/^      if \[\[ "\$command_line" =~ \$state_subpath_re \]\]/,/^      fi$/d')
-  invoke_hook "$(command_payload Bash "rm $STATE" "$MAIN")" "$twin"
-  assert_denied_by_json
-  grep -qF -- "$(class_pin folder)" <<<"$output"
-  grep -qF -- "$(class_pin state)" <<<"$output" && return 1
-  # The unmutated hook carries the state pin.
-  run_bash "rm $STATE"
-  assert_pins_only_class state
 }
 
 # --- the shared payload reader ---

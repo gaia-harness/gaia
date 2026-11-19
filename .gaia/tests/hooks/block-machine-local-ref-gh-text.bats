@@ -70,152 +70,91 @@ assert_allowed() {
   grep -qF -- '.claude/rules/working-doc-ids.md' <<<"$output"
 }
 
-@test "gh pr create with a clean title and body is allowed" {
-  run_hook 'gh pr create --draft --title "feat: build the thing" --body "Closes #2895"'
-  assert_allowed
-}
-
-@test "gh pr edit with a run-folder path in the body is blocked" {
-  run_hook 'gh pr edit 2898 --body "Evidence in .gaia/local/runs/feat/12-x/STATE.md"'
-  assert_blocked
-  grep -qF -- '--body line 1: .gaia/local/runs/feat/12-x/STATE.md' <<<"$output"
-}
-
-@test "gh issue create with a research folder in the body is blocked" {
-  run_hook 'gh issue create --title "t" --body "see .notebook/research/2026-10-07-review/README.md"'
-  assert_blocked
-  grep -qF -- '.notebook/research/2026-10-07-review/README.md' <<<"$output"
-}
-
-@test "gh issue edit with a FLOW number in the title is blocked" {
-  run_hook 'gh issue edit 12 --title "FLOW-001 fails"'
-  assert_blocked
-}
-
-@test "gh issue edit with a UAT number in the title is allowed" {
-  run_hook 'gh issue edit 12 --title "UAT-001 fails"'
-  assert_allowed
-}
-
-@test "a gh pr view carrying a SPEC number is not read" {
-  run_hook 'gh pr view 12 --json body --jq ".body | test(\"SPEC-123\")"'
-  assert_allowed
-}
-
-@test "gh pr comment is not read" {
-  run_hook 'gh pr comment 12 --body "SPEC-123"'
-  assert_allowed
-}
-
-# --- what passes the detector ------------------------------------------------
-
-@test "a placeholder run-folder path and a bare issue number are allowed" {
-  run_hook 'gh pr edit 12 --body "State lives in .gaia/local/runs/<branch>/STATE.md; Closes #2895; SPEC-NNN"'
-  assert_allowed
-}
-
-@test "a lowercase three-digit spec id is blocked, a one-digit plan revision is allowed" {
-  run_hook 'gh pr edit 12 --body "branch feat/spec-123-x"'
-  assert_blocked
-  run_hook 'gh pr edit 12 --body "revision plan-2"'
-  assert_allowed
-}
-
-# --- flag spellings ----------------------------------------------------------
-
-@test "the short and equals spellings of title and body are read" {
-  run_hook 'gh issue create -t "SPEC-123" -b "plain"'
-  assert_blocked
-  run_hook 'gh issue create -t "plain" -b "SPEC-123"'
-  assert_blocked
-  run_hook 'gh pr create --draft --title=SPEC-123 --body=plain'
-  assert_blocked
-  run_hook 'gh pr create --draft --title=plain --body=SPEC-123'
-  assert_blocked
-}
-
-@test "a heredoc body in a command substitution is scanned" {
-  run_hook $'gh pr create --draft --title "fix: y" --body "$(cat <<\'EOF\'\n## Summary\nSee SPEC-042 here\nEOF\n)"'
-  assert_blocked
-  grep -qF -- '--body line 3: SPEC-042' <<<"$output"
-}
-
-@test "a clean heredoc body in a command substitution is allowed" {
-  run_hook $'gh pr create --draft --title "fix: y" --body "$(cat <<\'EOF\'\n## Summary\nCloses #12\nEOF\n)"'
-  assert_allowed
-}
-
-# --- body files --------------------------------------------------------------
-
-@test "a body file citing a SPEC number is blocked, by --body-file, -F and --body-file=" {
+# Rows are `fragment|command`: the fragment is the match the denial names (empty
+# when the row asserts only the block); the command is everything after the first
+# `|`, so it may be multi-line and carry pipes. The rows span the verbs and flag
+# spellings the hook reads: short and equals forms of title and body, a heredoc
+# body in a command substitution, body files, a list operator ahead of the
+# command, and a --repo naming the home repository (after the subcommand or ahead
+# of it).
+@test "a machine-local reference in gh text is blocked" {
+  local row fragment command_text
   printf '## Summary\n\nImplements SPEC-321.\n' >"$SCRATCH/body.md"
-  run_hook "gh pr create --draft --title \"fix: z\" --body-file $SCRATCH/body.md"
-  assert_blocked
-  grep -qF -- "--body-file line 3: SPEC-321" <<<"$output"
-  run_hook "gh issue edit 3 -F $SCRATCH/body.md"
-  assert_blocked
-  run_hook "gh issue create --title t --body-file=$SCRATCH/body.md"
-  assert_blocked
-}
+  local rows=(
+    '--body line 1: .gaia/local/runs/feat/12-x/STATE.md|gh pr edit 2898 --body "Evidence in .gaia/local/runs/feat/12-x/STATE.md"'
+    '.notebook/research/2026-10-07-review/README.md|gh issue create --title "t" --body "see .notebook/research/2026-10-07-review/README.md"'
+    '|gh issue edit 12 --title "FLOW-001 fails"'
+    '|gh pr edit 12 --body "branch feat/spec-123-x"'
+    '|gh issue create -t "SPEC-123" -b "plain"'
+    '|gh issue create -t "plain" -b "SPEC-123"'
+    '|gh pr create --draft --title=SPEC-123 --body=plain'
+    '|gh pr create --draft --title=plain --body=SPEC-123'
+    $'--body line 3: SPEC-042|gh pr create --draft --title "fix: y" --body "$(cat <<\'EOF\'\n## Summary\nSee SPEC-042 here\nEOF\n)"'
+    "--body-file line 3: SPEC-321|gh pr create --draft --title \"fix: z\" --body-file $SCRATCH/body.md"
+    "|gh issue edit 3 -F $SCRATCH/body.md"
+    "|gh issue create --title t --body-file=$SCRATCH/body.md"
+    '|git push -u origin x && gh pr create --draft --title "fix: x" --body "SPEC-123"'
+    '|gh pr create --repo acme/widgets --title "SPEC-123" --body "x"'
+    '|gh issue edit 7 -R github.com/ACME/widgets --body "see .gaia/local/runs/feat/12-x/STATE.md"'
+    '|gh -R Acme/Widgets pr create --title "SPEC-123" --body "x"'
+    '|gh --repo=acme/widgets issue create --title "SPEC-123" --body "x"'
+    '|gh pr -R acme/widgets create --title "SPEC-123" --body "x"'
+    '|gh -R other/repo issue --repo acme/widgets create --title "SPEC-123" --body "x"'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    fragment=${row%%|*}
+    command_text=${row#*|}
+    run_hook "$command_text"
+    assert_blocked
+    if [ -n "$fragment" ]; then
+      grep -qF -- "$fragment" <<<"$output"
+    fi
+  done
 
-@test "a clean body file is allowed" {
-  printf '## Summary\n\nCloses #12\n' >"$SCRATCH/body.md"
-  run_hook "gh pr create --draft --title \"fix: z\" --body-file $SCRATCH/body.md"
-  assert_allowed
-}
-
-@test "a relative body file resolves against the payload cwd" {
+  echo "case: a relative body file resolves against the payload cwd"
   mkdir -p "$SCRATCH/work"
   printf 'SPEC-321\n' >"$SCRATCH/work/body.md"
   run_hook 'gh pr edit 12 --body-file body.md' "$SCRATCH/work"
   assert_blocked
-  run_hook 'gh pr edit 12 --body-file body.md' "$SCRATCH"
-  assert_allowed
 }
 
-@test "a body read from stdin is not read" {
-  run_hook 'gh pr edit 12 --body-file -'
-  assert_allowed
-}
+# Each row sits one spelling away from a deny: a placeholder, a bare number, a
+# verb the hook does not read, a body it cannot read (stdin), another
+# repository, or a clean body.
+@test "clean or unread gh text is allowed" {
+  local command_text
+  printf '## Summary\n\nCloses #12\n' >"$SCRATCH/clean-body.md"
+  mkdir -p "$SCRATCH/work"
+  printf 'SPEC-321\n' >"$SCRATCH/work/body.md"
+  local rows=(
+    'gh pr create --draft --title "feat: build the thing" --body "Closes #2895"'
+    'gh issue edit 12 --title "UAT-001 fails"'
+    'gh pr view 12 --json body --jq ".body | test(\"SPEC-123\")"'
+    'gh pr comment 12 --body "SPEC-123"'
+    'gh pr edit 12 --body "State lives in .gaia/local/runs/<branch>/STATE.md; Closes #2895; SPEC-NNN"'
+    'gh pr edit 12 --body "revision plan-2"'
+    $'gh pr create --draft --title "fix: y" --body "$(cat <<\'EOF\'\n## Summary\nCloses #12\nEOF\n)"'
+    "gh pr create --draft --title \"fix: z\" --body-file $SCRATCH/clean-body.md"
+    'gh pr edit 12 --body-file -'
+    'gh pr create --repo other/repo --title "SPEC-123" --body "x"'
+    'gh -R other/repo pr create --title "SPEC-123" --body "x"'
+    'gh -R acme/widgets pr create --title "feat: clean" --body "x"'
+    'gh pr edit 12 --body-file body.md'
+  )
+  for command_text in "${rows[@]}"; do
+    echo "case: $command_text"
+    run_hook "$command_text"
+    assert_allowed
+  done
 
-# --- command shape -----------------------------------------------------------
-
-@test "a gh pr create after a list operator is read" {
-  run_hook 'git push -u origin x && gh pr create --draft --title "fix: x" --body "SPEC-123"'
-  assert_blocked
-}
-
-@test "a pull request in another repository is not read" {
-  run_hook 'gh pr create --repo other/repo --title "SPEC-123" --body "x"'
-  assert_allowed
-  run_hook 'gh -R other/repo pr create --title "SPEC-123" --body "x"'
-  assert_allowed
-}
-
-@test "a --repo naming the home repository is read, after the subcommand or ahead of it" {
-  run_hook 'gh pr create --repo acme/widgets --title "SPEC-123" --body "x"'
-  assert_blocked
-  run_hook 'gh issue edit 7 -R github.com/ACME/widgets --body "see .gaia/local/runs/feat/12-x/STATE.md"'
-  assert_blocked
-  run_hook 'gh -R Acme/Widgets pr create --title "SPEC-123" --body "x"'
-  assert_blocked
-  run_hook 'gh --repo=acme/widgets issue create --title "SPEC-123" --body "x"'
-  assert_blocked
-  run_hook 'gh pr -R acme/widgets create --title "SPEC-123" --body "x"'
-  assert_blocked
-  run_hook 'gh -R other/repo issue --repo acme/widgets create --title "SPEC-123" --body "x"'
-  assert_blocked
-  run_hook 'gh -R acme/widgets pr create --title "feat: clean" --body "x"'
-  assert_allowed
-}
-
-@test "a --repo is not read when gh cannot name the home repository" {
+  echo "case: a --repo is not read when gh cannot name the home repository"
   : >"$SCRATCH/no-home"
   run_hook 'gh -R acme/widgets pr create --title "SPEC-123" --body "x"'
   assert_allowed
-}
+  rm -f "$SCRATCH/no-home"
 
-@test "a non-Bash tool call is allowed" {
+  echo "case: a non-Bash tool call"
   local payload
   payload=$(jq -nc '{tool_name: "Write", tool_input: {file_path: "/tmp/x", content: "SPEC-123"}}')
   run bash -c 'printf %s "$1" | bash "$2"' _ "$payload" "$HOOK"

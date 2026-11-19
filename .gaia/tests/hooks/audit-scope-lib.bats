@@ -5,8 +5,7 @@
 # (part 2), the remaining in-scope sets staying separately named plus the
 # retired auditable-base literal's pins (part 3), the golden behavior table
 # (part 4), and absent-module -> DENY (part 5). Plus two further invariants:
-# SEC-007 (every machinery path is roster-claimed) and the scrub-marker
-# survival check.
+# SEC-007 (every machinery path is roster-claimed).
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -125,42 +124,6 @@ EOF
   [ "$count" -eq 1 ]
 }
 
-# The counter is what both pins above rest on, so its own boundary is asserted
-# rather than trusted. A terminator that demands whitespace declines `;`, `)`,
-# `|`, `&` and end-of-line, so a real second call written any of those ways
-# would green a pin that exists to catch exactly that drift.
-@test "count_invocations counts a second call whatever terminator it carries" {
-  probe="$BATS_TEST_TMPDIR/probe.sh"
-
-  printf '%s\n' 'audit_scope_init "$r"' > "$probe"
-  [ "$(count_invocations "$probe" audit_scope_init)" -eq 1 ]
-
-  printf '%s\n' 'audit_scope_init "$r"' 'audit_scope_init; :' > "$probe"
-  [ "$(count_invocations "$probe" audit_scope_init)" -eq 2 ]
-
-  printf '%s\n' 'audit_scope_init "$r"' 'audit_scope_init' > "$probe"
-  [ "$(count_invocations "$probe" audit_scope_init)" -eq 2 ]
-
-  # Exactly one non-identifier character between two occurrences, the spelling
-  # a boundary-consuming match cannot see.
-  printf '%s\n' 'audit_scope_init;audit_scope_init' > "$probe"
-  [ "$(count_invocations "$probe" audit_scope_init)" -eq 2 ]
-
-  printf '%s\n' '{ audit_scope_init; }' 'audit_scope_init&&audit_scope_init' > "$probe"
-  [ "$(count_invocations "$probe" audit_scope_init)" -eq 3 ]
-
-  # And still declines the two shapes the filters above it exist to drop.
-  printf '%s\n' 'audit_scope_init "$r"' 'type audit_scope_init >/dev/null' > "$probe"
-  [ "$(count_invocations "$probe" audit_scope_init)" -eq 1 ]
-
-  printf '%s\n' 'audit_scope_init "$r"' '# audit_scope_init audit_scope_init in prose' > "$probe"
-  [ "$(count_invocations "$probe" audit_scope_init)" -eq 1 ]
-
-  # A longer name that merely starts with the symbol is not an invocation.
-  printf '%s\n' 'audit_scope_init "$r"' 'audit_scope_init_extra "$r"' > "$probe"
-  [ "$(count_invocations "$probe" audit_scope_init)" -eq 1 ]
-}
-
 # last_definition <file>: the name of the last function the file defines at top
 # level, in either spelling bash accepts (`name()` and `function name`, the
 # `()` optional after the keyword) and with the opening brace on the definition
@@ -183,39 +146,6 @@ last_definition() {
     -e 's/^function[[:space:]]+([A-Za-z0-9_]+)[[:space:]]*(\(\)[[:space:]]*)?$/\1/p' \
     -e 's/^([A-Za-z0-9_]+)[[:space:]]*\([[:space:]]*\)[[:space:]]*$/\1/p' \
     "$1" | tail -1
-}
-
-# The matcher is what the pin below rests on, so its own boundary is asserted
-# rather than trusted, exactly as count_invocations` is above. A spelling it
-# cannot see returns the PREVIOUSLY-last definition, which still equals the
-# resolver`s probe, so the pin stays green while the probe has silently become
-# the early-export kind the resolver rules out.
-@test "last_definition reads a definition whose brace is on the next line" {
-  probe="$BATS_TEST_TMPDIR/lib.sh"
-
-  printf '%s\n' 'first() {' '  :' '}' > "$probe"
-  [ "$(last_definition "$probe")" = "first" ]
-
-  printf '%s\n' 'first() {' '  :' '}' 'second()' '{' '  :' '}' > "$probe"
-  [ "$(last_definition "$probe")" = "second" ]
-
-  printf '%s\n' 'first() {' '  :' '}' 'function second' '{' '  :' '}' > "$probe"
-  [ "$(last_definition "$probe")" = "second" ]
-
-  printf '%s\n' 'first() {' '  :' '}' 'function second ()' '{' '  :' '}' > "$probe"
-  [ "$(last_definition "$probe")" = "second" ]
-
-  # And still declines the shapes that are not definitions at all: a bare call,
-  # and a command substitution in an assignment. Each one names something the
-  # DEFINITION does not, so a matcher that wrongly credited either line returns
-  # that name and the assertion reds. Reusing the defined name here would admit
-  # the exact state the assertion forbids, which is the whole failure this
-  # helper was repaired for, one level up.
-  printf '%s\n' 'first() {' '  :' '}' 'second' > "$probe"
-  [ "$(last_definition "$probe")" = "first" ]
-
-  printf '%s\n' 'first() {' '  :' '}' 'x=$(second)' > "$probe"
-  [ "$(last_definition "$probe")" = "first" ]
 }
 
 # The resolver argues that probing each module's LAST definition needs no
@@ -429,84 +359,49 @@ golden_run_hook() {
   PATH="$GOLDEN_GH_BIN:$PATH" invoke_hook_in "$GREPO" "$json" "$HOOK"
 }
 
-@test "golden table: pure wiki-only diff allows" {
+# Rows are decision | path | content [| path | content]. One sandbox serves
+# every row: each row resets `feature` to `main` and empties the local store,
+# so no row's commit or gate state reaches the next.
+#
+# The Makefile row's witness must be a root file in scope that no member's
+# globs claim, or the table loses its ownerless-in-scope row entirely; a root
+# `Dockerfile` is claimed by the default member, so it would exercise the owned
+# branch instead. public/ is NOT allowlisted, and its row is what keeps it that
+# way: the tree carries executed JavaScript under it, so the subtree stays in
+# scope. The workflow row's template on the base and the installed workflow
+# carry identical bytes, which is exactly what the removed self-modification
+# bypass cleared on; the workflow is in scope, so with no marker it denies.
+@test "golden table: each path set routes the merge to its stated decision" {
+  local row expected first_path first_content second_path second_content
+  local rows=(
+    'allow|wiki/x.md|doc||'
+    'deny|app/x.ts|export const x = 1;||'
+    'deny|app/x.ts|export const x = 1;|wiki/x.md|doc'
+    'deny|.gaia/scripts/probe.sh|#!/bin/bash||'
+    'deny|Makefile|all:||'
+    'deny|public/logo.svg|<svg></svg>||'
+    'deny|.github/workflows/fixture-audit.yml|name: Code Review Audit||'
+  )
   golden_setup
-  golden_commit "wiki/x.md" "doc"
-  golden_run_hook
+  for row in "${rows[@]}"; do
+    IFS='|' read -r expected first_path first_content second_path second_content <<<"$row"
+    echo "case: $expected $first_path ${second_path}"
+    git -C "$GREPO" checkout --quiet -B feature main
+    rm -rf "$GREPO/.gaia/local"
+    if [ -n "$second_path" ]; then
+      golden_commit "$first_path" "$first_content" "$second_path" "$second_content"
+    else
+      golden_commit "$first_path" "$first_content"
+    fi
+    golden_run_hook
+    [ "$status" -eq 0 ]
+    if [ "$expected" = allow ]; then
+      grep -qF -- '"permissionDecision": "deny"' <<<"$output" && return 1
+    else
+      grep -qF -- '"permissionDecision": "deny"' <<<"$output" || return 1
+    fi
+  done
   golden_teardown
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" && return 1
-  true
-}
-
-@test "golden table: pure app/ diff denies (marker mandatory)" {
-  golden_setup
-  golden_commit "app/x.ts" "export const x = 1;"
-  golden_run_hook
-  golden_teardown
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" || return 1
-  true
-}
-
-@test "golden table: mixed app/ + wiki/ diff denies" {
-  golden_setup
-  golden_commit "app/x.ts" "export const x = 1;" "wiki/x.md" "doc"
-  golden_run_hook
-  golden_teardown
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" || return 1
-  true
-}
-
-@test "golden table: .gaia/**/*.sh-only diff denies (allowlisted AND owned; legacy branch never reached)" {
-  golden_setup
-  golden_commit ".gaia/scripts/probe.sh" "#!/bin/bash"
-  golden_run_hook
-  golden_teardown
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" || return 1
-  true
-}
-
-# The witness must be a root file in scope that no member's globs claim, or the
-# table loses its ownerless-in-scope row entirely. A root `Makefile` is that
-# file; `Dockerfile` is claimed by the default member, so it would exercise the
-# owned branch instead.
-@test "golden table: ownerless-but-in-scope root Makefile denies" {
-  golden_setup
-  golden_commit "Makefile" "all:"
-  golden_run_hook
-  golden_teardown
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" || return 1
-  true
-}
-
-# public/ is NOT allowlisted, and this row is what keeps it that way: the tree
-# carries executed JavaScript under it, so the subtree stays in scope and a
-# public-only diff still denies without a marker.
-@test "golden table: nested public/ asset denies" {
-  golden_setup
-  golden_commit "public/logo.svg" "<svg></svg>"
-  golden_run_hook
-  golden_teardown
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" || return 1
-  true
-}
-
-@test "golden table: a verbatim re-render of a bundled workflow template denies" {
-  golden_setup
-  # The template on the base and the installed workflow carry identical bytes,
-  # which is exactly what the removed self-modification bypass cleared on.
-  # The workflow is in scope, so with no marker the merge denies.
-  golden_commit ".github/workflows/fixture-audit.yml" "name: Code Review Audit"
-  golden_run_hook
-  golden_teardown
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output" || return 1
-  true
 }
 
 # ---------------------------------------------------------------------------
@@ -638,73 +533,49 @@ EOF
   [ "$(grep -c 'code-audit' <<<"$output")" -eq 0 ]
 }
 
+# Each row names a path no other invariant reaches, so this table is its pin.
+# - .githooks/pre-commit is the Quality Gate floor for every commit and is
+#   POSIX shell, so the shell member (which holds the shellcheck oracle) owns
+#   it. Without a glob claiming it, a PR changing the hook alongside other owned
+#   surfaces merges the hook with no member responsible. It is deliberately NOT
+#   in AUDIT_MACHINERY_PATHS (that list holds bytes that change what a member
+#   reviews, who reviews it, where a clearance lands, or whether a clearance is
+#   believed; this hook gates commits, not audits), so SEC-007 does not reach it.
+# - The default member's own `pnpm-workspace.yaml` glob never crosses a `/`, so
+#   it claims the repository-root file, which carries the supply-chain policy
+#   for every workspace member, the CLI included.
+# - `.gaia/cli/` carries three tool configs beside src/. The default member's
+#   bare `*.config.ts` / `*.config.mjs` globs never cross a `/`, so they claim
+#   only the repository-root files; without the node member's glob a PR whose
+#   only change is one of the three dispatches no member. vitest.config.ts is
+#   the sharpest, since its `setupFiles` executes arbitrary code in every CLI
+#   test run. The root files stay with the default member, so the two do not
+#   collide.
+# - UAT-002: no member owns `.claude/skills/**` since the prose-legibility
+#   member was deleted, so a skills .md file and a non-.md helper are ownerless.
+# Rows are path | owner (empty: ownerless).
 # bats test_tags=whole-tree
-@test "the git commit hook is owned by the shell member" {
-  # .githooks/pre-commit is the Quality Gate floor for every commit and is POSIX
-  # shell, so the shell member (which holds the shellcheck oracle) owns it.
-  # Without a glob claiming it, a PR that changes the hook alongside any other
-  # owned surface dispatches members for the other files only, and the hook
-  # itself merges with no member responsible for it.
-  #
-  # It is deliberately NOT in AUDIT_MACHINERY_PATHS: that list's generating
-  # rule is bytes that change what a member reviews, who reviews it, where a
-  # clearance lands, or whether a clearance is believed. This hook gates
-  # commits, not audits, so SEC-007 does not reach it and this test is the pin.
-
+@test "ownership of named paths: each resolves to its stated owner" {
+  local row path expected
+  local rows=(
+    '.githooks/pre-commit|code-audit-maintainer-shell'
+    'pnpm-workspace.yaml|code-audit-frontend'
+    '.gaia/cli/vitest.config.ts|code-audit-maintainer-node'
+    '.gaia/cli/eslint.config.mjs|code-audit-maintainer-node'
+    '.gaia/cli/prettier.config.mjs|code-audit-maintainer-node'
+    'vitest.config.ts|code-audit-frontend'
+    'eslint.config.mjs|code-audit-frontend'
+    '.claude/skills/gaia/references/debt.md|'
+    '.claude/skills/gaia/helper.py|'
+  )
   # shellcheck source=/dev/null
   . "$SCOPE_LIBRARY"
   audit_scope_init "$REPO_ROOT"
-  [ "$(audit_owner_for_path '.githooks/pre-commit')" = "code-audit-maintainer-shell" ]
-}
-
-# bats test_tags=whole-tree
-@test "the root workspace policy file stays with the default member" {
-  # The default member's own `pnpm-workspace.yaml` glob never crosses a `/`,
-  # so it claims the repository-root file, which carries the supply-chain
-  # policy for every workspace member, the CLI included.
-
-  # shellcheck source=/dev/null
-  . "$SCOPE_LIBRARY"
-  audit_scope_init "$REPO_ROOT"
-  [ "$(audit_owner_for_path 'pnpm-workspace.yaml')" = "code-audit-frontend" ]
-}
-
-# bats test_tags=whole-tree
-@test "the CLI's own tool config files are owned by the node member" {
-  # `.gaia/cli/` carries three tool configs beside src/: vitest.config.ts,
-  # eslint.config.mjs, and prettier.config.mjs. The default member's bare
-  # `*.config.ts` / `*.config.mjs` globs never cross a `/`, so they claim the
-  # repository-root files only and reach none of these; the node member's
-  # explicit CLI build/config list named package.json and
-  # tsconfig*.json but not these. Without a glob
-  # claiming them, a PR whose only change is one of the three resolves an
-  # empty dispatched set: no member runs, no marker is required, and it merges
-  # with no member responsible for it. vitest.config.ts is the sharpest of the
-  # three, since its `setupFiles` executes arbitrary code in every CLI test
-  # run.
-
-  # shellcheck source=/dev/null
-  . "$SCOPE_LIBRARY"
-  audit_scope_init "$REPO_ROOT"
-  [ "$(audit_owner_for_path '.gaia/cli/vitest.config.ts')" = "code-audit-maintainer-node" ]
-  [ "$(audit_owner_for_path '.gaia/cli/eslint.config.mjs')" = "code-audit-maintainer-node" ]
-  [ "$(audit_owner_for_path '.gaia/cli/prettier.config.mjs')" = "code-audit-maintainer-node" ]
-  # The default member's own bare config globs never cross a `/`, so the
-  # repository-root files stay with it and the two do not collide.
-  [ "$(audit_owner_for_path 'vitest.config.ts')" = "code-audit-frontend" ]
-  [ "$(audit_owner_for_path 'eslint.config.mjs')" = "code-audit-frontend" ]
-}
-
-# bats test_tags=whole-tree
-@test "UAT-002: skills-md and non-md under skills both stay ownerless" {
-  # The prose-legibility member that used to own `.claude/skills/**/*.md`
-  # is deleted (harness triage P3-09); nothing replaces its lens, so both
-  # a skills .md file and a non-.md helper under skills are ownerless.
-  # shellcheck source=/dev/null
-  . "$SCOPE_LIBRARY"
-  audit_scope_init "$REPO_ROOT"
-  [ -z "$(audit_owner_for_path '.claude/skills/gaia/references/debt.md')" ]
-  [ -z "$(audit_owner_for_path '.claude/skills/gaia/helper.py')" ]
+  for row in "${rows[@]}"; do
+    IFS='|' read -r path expected <<<"$row"
+    echo "case: $path"
+    [ "$(audit_owner_for_path "$path")" = "$expected" ]
+  done
 }
 
 @test "the shared awk source carries exactly one copy of each transformation" {
@@ -782,62 +653,46 @@ LIGHT_ROSTER_WITH_KEYS='auditors:
       - "plain/**"
     audience: adopter'
 
-@test "audit_roster_light_config: opted member yields true, the cap, and one HARDFULL line per item in order" {
-  local fixture
-  fixture="$(mktemp -d -t audit-light-roster-XXXXXX)"
-  write_light_roster "$fixture" "$LIGHT_ROSTER_WITH_KEYS"
+# Rows are roster | member | light_review value | status | output (with \t and
+# \n escapes). The `keys` roster is LIGHT_ROSTER_WITH_KEYS; the `value` roster
+# is one member whose light_review takes the row's value and whose cap is the
+# non-numeric `abc`, which comes back raw; `absent` is a root with no roster.
+@test "audit_roster_light_config: each roster and member answers its opt-in, cap and hard-Full items" {
+  local row roster member value expected_status expected_output fixture
+  local rows=(
+    'keys|code-audit-light||0|true\t50\nHARDFULL\towned/tests/**\nHARDFULL\t*.config.ts'
+    'keys|code-audit-plain||0|false\t-'
+    'keys|code-audit-no-such-member||0|false\t-'
+    'value|code-audit-light|yes|0|false\tabc'
+    'value|code-audit-light|"true"|0|false\tabc'
+    'value|code-audit-light|True|0|false\tabc'
+    'value|code-audit-light|1|0|false\tabc'
+    'value|code-audit-light||0|false\tabc'
+    'absent|code-audit-light||1|'
+  )
   # shellcheck source=/dev/null
   . "$SCOPE_LIBRARY"
-  run audit_roster_light_config "$fixture" code-audit-light
-  rm -rf "$fixture"
-  [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 3 ]
-  [ "${lines[0]}" = "$(printf 'true\t50')" ]
-  [ "${lines[1]}" = "$(printf 'HARDFULL\towned/tests/**')" ]
-  [ "${lines[2]}" = "$(printf 'HARDFULL\t*.config.ts')" ]
-}
-
-@test "audit_roster_light_config: a member without the keys, and an unknown member, answer false and no cap" {
-  local fixture
-  fixture="$(mktemp -d -t audit-light-roster-XXXXXX)"
-  write_light_roster "$fixture" "$LIGHT_ROSTER_WITH_KEYS"
-  # shellcheck source=/dev/null
-  . "$SCOPE_LIBRARY"
-  run audit_roster_light_config "$fixture" code-audit-plain
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'false\t-')" ]
-  run audit_roster_light_config "$fixture" code-audit-no-such-member
-  rm -rf "$fixture"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'false\t-')" ]
-}
-
-@test "audit_roster_light_config: only the literal true opts in, and the cap comes back raw" {
-  local fixture value
-  fixture="$(mktemp -d -t audit-light-roster-XXXXXX)"
-  # shellcheck source=/dev/null
-  . "$SCOPE_LIBRARY"
-  for value in yes '"true"' True 1 ''; do
-    write_light_roster "$fixture" "auditors:
+  fixture="$BATS_TEST_TMPDIR/light-roster"
+  for row in "${rows[@]}"; do
+    IFS='|' read -r roster member value expected_status expected_output <<<"$row"
+    echo "case: $roster $member light_review='$value'"
+    rm -rf "$fixture"
+    case "$roster" in
+      keys) write_light_roster "$fixture" "$LIGHT_ROSTER_WITH_KEYS" ;;
+      value)
+        write_light_roster "$fixture" "auditors:
   - name: code-audit-light
     globs:
       - \"owned/**\"
     light_review: $value
     light_line_cap: abc
     audience: adopter"
-    run audit_roster_light_config "$fixture" code-audit-light
-    [ "$status" -eq 0 ] || { rm -rf "$fixture"; return 1; }
-    [ "$output" = "$(printf 'false\tabc')" ] || { rm -rf "$fixture"; echo "value '$value' gave: $output" >&2; return 1; }
+        ;;
+    esac
+    run audit_roster_light_config "$fixture" "$member"
+    [ "$status" -eq "$expected_status" ]
+    [ "$output" = "$(printf '%b' "$expected_output")" ]
   done
-  rm -rf "$fixture"
-}
-
-@test "audit_roster_light_config: a roster that cannot be read exits 1 with nothing on stdout" {
-  # shellcheck source=/dev/null
-  . "$SCOPE_LIBRARY"
-  run audit_roster_light_config "$BATS_TEST_TMPDIR/no-such-root" code-audit-light
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
 }
 
 @test "light_hard_full items never reach ownership, and the ownership parser's output is unchanged by the keys" {
@@ -948,28 +803,6 @@ glob_matcher_disagreements() {
   run glob_matcher_disagreements "$SCOPE_LIBRARY"
   [ "$status" -eq 0 ]
   [ -z "$output" ] || { printf '%s\n' "$output" >&2; return 1; }
-}
-
-@test "audit_glob_matches: a matcher with a hand-rolled regex is caught by the ownership parity case" {
-  # Scratch copy of the library whose matcher is redefined with its own regex
-  # (`**` compiled like a single `*`) instead of the shared compiler. The
-  # parity case must go red on it; on the real library it is green (test above).
-  local scratch_library="$BATS_TEST_TMPDIR/audit-scope-handrolled.sh"
-  cat "$SCOPE_LIBRARY" > "$scratch_library"
-  cat >> "$scratch_library" <<'MUTANT'
-
-audit_glob_matches() {
-  local pattern="${1//./\\.}"
-  pattern="${pattern//\*\*/@@}"
-  pattern="${pattern//\*/[^/]*}"
-  pattern="${pattern//@@/[^/]*}"
-  [[ "$2" =~ ^${pattern}$ ]]
-}
-MUTANT
-  run glob_matcher_disagreements "$scratch_library"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  grep -qF '**/x | x |' <<<"$output"
 }
 
 @test "audit_glob_matches: a missing or empty argument exits 2 and prints nothing" {

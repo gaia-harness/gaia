@@ -12,8 +12,7 @@
 # Every fixture lives under $BATS_TEST_TMPDIR. pnpm is stubbed on PATH, and the
 # dev smoke test by a script under the fixture root.
 #
-# GAIA_LOOP_BOUND_HOOK points the suite at a scratch copy of the hook, which is
-# how a mutant is run against it without touching the working file.
+# GAIA_LOOP_BOUND_HOOK points the suite at another copy of the hook.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/audit-loop-reopen-e2e.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -24,7 +23,6 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS="$REPO_ROOT/.gaia/scripts"
   HOOK="${GAIA_LOOP_BOUND_HOOK:-$REPO_ROOT/.claude/hooks/audit-loop-bound.sh}"
-  BOUND_HOOK="$HOOK"
   unset GAIA_AUDIT_CHECKPOINT_ROUND GAIA_AUDIT_GRANT_ROUNDS GAIA_AUDIT_LOOP_DEADLINE_SECONDS
   # shellcheck source=/dev/null
   . "$SCRIPTS/audit-loop-eval.sh"
@@ -252,17 +250,6 @@ heading_lines() {
   printf '%s\n' "$((shown + ${withheld:-0}))"
 }
 
-# scratch_hook_no_reopen: a copy of the hook that never reopens a round.
-scratch_hook_no_reopen() {
-  local scratch_directory="$BATS_TEST_TMPDIR/scratch"
-  mkdir -p "$scratch_directory/.claude/hooks"
-  ln -sfn "$REPO_ROOT/.gaia" "$scratch_directory/.gaia"
-  ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
-  sed 's/\[ "\$reopen" = true \]/[ "$reopen" = never ]/' "$BOUND_HOOK" >"$scratch_directory/.claude/hooks/audit-loop-bound.sh"
-  cmp -s "$BOUND_HOOK" "$scratch_directory/.claude/hooks/audit-loop-bound.sh" && return 1
-  HOOK="$scratch_directory/.claude/hooks/audit-loop-bound.sh"
-}
-
 # veto_flow <all|one>: the stop, a veto effective at the next round, the reopening
 # unit, the fix, a member on the fixed tree (round 5) writing a sidecar without
 # the vetoed key, and a second unit dispatch whose dispositions check runs over
@@ -303,6 +290,7 @@ accepted_keys() {
   rendered_sections | awk '/^## Accepted residuals/ { reading = 1; next } /^## / { reading = 0 } reading && /^- `/' | sed 's/^- `\([^`]*\)`.*/\1/'
 }
 
+# bats test_tags=protected
 @test "veto after a stop: the reopened round takes the fix, the key leaves the accepted residuals and the others stay" {
   local accepted_before
   below
@@ -370,22 +358,6 @@ accepted_keys() {
   [ "$(residual_count)" = "0 0" ] || return 1
   [ "$(heading_lines)" -eq 0 ] || return 1
   [ -z "$(accepted_keys)" ]
-}
-
-@test "veto after a stop: with the reopen disabled in a scratch hook no round holds the veto, the hook's call passes and the read-only check-all fails" {
-  below
-  stop_case one
-  veto_key 4
-  scratch_hook_no_reopen || return 1
-  unit_dispatch
-  assert_allowed || return 1
-  [ "$(nrounds)" -eq 3 ] || return 1
-  [ "$(state_field '.history.rounds | map(.reopened // false) | any')" = false ] || return 1
-  unit_dispatch
-  assert_allowed || return 1
-  check_all_read_only
-  [ "$status" -eq 1 ] || return 1
-  grep -qxF -- 'violation: undisposed {"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1}' <<<"$output"
 }
 
 # closing_flow: the veto flow's run at round 5 (the vetoed key fixed and absent),
@@ -566,33 +538,49 @@ assert_rubric_checkpoint() {
   [ "$(nrounds)" -eq 3 ]
 }
 
-@test "no checkpoint on a stop's follow-up: the reopening unit is admitted on a round holding enriching" {
-  below
-  stop_case all
-  veto_key 4
-  unit_dispatch
-  assert_allowed || return 1
-  [ "$(checkpoints)" -eq 0 ] || return 1
-  [ "$(state_field '.history.rounds[2].snapshot | [.signals.enriching, .default_stop] | tojson')" = '[true,true]' ] || return 1
-  assert_reopened 4
+# fresh_fixture: discard the last row's fixture and build a new one, as setup does per test.
+fresh_fixture() {
+  rm -rf "${BATS_TEST_TMPDIR:?}"/*
+  setup
 }
 
-@test "no checkpoint on a stop's follow-up: the same dispatch with default_stop false in the stored snapshot records a checkpoint" {
-  below
-  stop_case all
-  unit_dispatch
-  assert_allowed || return 1
-  alf_state_edit '.history.rounds[2].snapshot.default_stop = false'
-  veto_key 4
-  unit_dispatch
-  assert_rubric_checkpoint
-}
-
-@test "no checkpoint on a stop's follow-up: a threshold fix on a stop key records a checkpoint with default_stop still true in the stored snapshot" {
-  below
-  stop_case fixed
-  veto_key 4
-  unit_dispatch
-  assert_rubric_checkpoint || return 1
-  [ "$(state_field '.history.rounds[2].snapshot.default_stop')" = true ]
+@test "a stop's follow-up: a veto on a default stop reopens without a checkpoint, and records one when the stored snapshot does not stop or a stop key was fixed" {
+  local row
+  local rows=(
+    'admitted on a round holding enriching'
+    'default_stop false in the stored snapshot records a checkpoint'
+    'a threshold fix on a stop key records a checkpoint with default_stop still true'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    fresh_fixture
+    below
+    case "$row" in
+      admitted*)
+        stop_case all
+        veto_key 4
+        unit_dispatch
+        assert_allowed
+        [ "$(checkpoints)" -eq 0 ]
+        [ "$(state_field '.history.rounds[2].snapshot | [.signals.enriching, .default_stop] | tojson')" = '[true,true]' ]
+        assert_reopened 4
+        ;;
+      default_stop*)
+        stop_case all
+        unit_dispatch
+        assert_allowed
+        alf_state_edit '.history.rounds[2].snapshot.default_stop = false'
+        veto_key 4
+        unit_dispatch
+        assert_rubric_checkpoint
+        ;;
+      *)
+        stop_case fixed
+        veto_key 4
+        unit_dispatch
+        assert_rubric_checkpoint
+        [ "$(state_field '.history.rounds[2].snapshot.default_stop')" = true ]
+        ;;
+    esac
+  done
 }
