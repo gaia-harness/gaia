@@ -268,7 +268,7 @@ route_line() {
   [ "$status" -eq 1 ]
   [ -z "$(route_line node)" ]
   [[ "$output" == *"GUIDE node: Install Node $major with fnm: run fnm install $major"*"fresh terminal"* ]] || return 1
-  grep -qF 'nvm install' <<<"$output" && return 1
+  grep '^GUIDE node:' <<<"$output" | grep -qE 'nvm (install|use|alias)' && return 1
   true
 }
 

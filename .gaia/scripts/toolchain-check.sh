@@ -202,13 +202,17 @@ guide() {
       # nvm-windows has no nvm alias default, so Windows hears only of fnm. The
       # version is the floor's major from the floors file: the project's own
       # .nvmrc and .node-version still pin the old release during /update-gaia.
-      local node_major version
+      local node_major version use_command
       node_major="$(node_floor_major)"
       version="${node_major:-<major>}"
       lead="fnm: run fnm install $version, fnm use $version and fnm default $version"
-      [ "$PLATFORM" = windows ] || lead="nvm or fnm: run nvm install $version, nvm use $version and nvm alias default $version, or fnm install $version, fnm use $version and fnm default $version"
+      use_command="fnm use $version"
+      if [ "$PLATFORM" != windows ]; then
+        lead="nvm or fnm: run nvm install $version, nvm use $version and nvm alias default $version, or fnm install $version, fnm use $version and fnm default $version"
+        use_command="fnm use $version or nvm use $version"
+      fi
       printf 'GUIDE node: Install Node %s with %s, so this terminal uses it and it is your default. Then' "${node_major:-at the floor major in .gaia/toolchain-floors.tsv}" "$lead"
-      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal in the project folder, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), run fnm use %s or nvm use %s there, or the old pin is reselected and this check fails again. Then start Claude Code from that terminal. %s\n' "$version" "$version" "$(tool_reason node)"
+      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal in the project folder, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), run %s there, or the old pin is reselected and this check fails again. Then start Claude Code from that terminal. %s\n' "$use_command" "$(tool_reason node)"
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
