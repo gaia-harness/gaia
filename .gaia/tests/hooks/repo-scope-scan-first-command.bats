@@ -218,55 +218,38 @@ CEILING_SCAN_UNQUOTED_64K_MS=5000
 # backslash; everything else is ordinary text however it would read unquoted.
 # ---------------------------------------------------------------------------
 
-@test "scan: an escaped double quote stays inside the double-quoted word" {
-  assert_scan "$MERGE_PREFIX \"a\\\"b\"" 0 0 gh pr merge 5 --squash --body 'a"b'
+# assert_scan_row <row> <assert_scan args...>: assert_scan that names the failing row.
+assert_scan_row() {
+  local row="$1"
+  shift
+  assert_scan "$@" || { echo "row '$row' failed" >&2; return 1; }
 }
 
-@test "scan: an escaped backslash collapses to one inside a double-quoted word" {
-  assert_scan "$MERGE_PREFIX \"a\\\\b\"" 0 0 gh pr merge 5 --squash --body 'a\b'
-}
-
-@test "scan: a backslash is literal inside a single-quoted word" {
-  assert_scan "$MERGE_PREFIX 'a\\b'" 0 0 gh pr merge 5 --squash --body 'a\b'
-}
-
-@test "scan: a double quote is ordinary text inside a single-quoted word" {
-  assert_scan "$MERGE_PREFIX 'a\"b'" 0 0 gh pr merge 5 --squash --body 'a"b'
-}
-
-@test "scan: a single quote is ordinary text inside a double-quoted word" {
-  assert_scan "$MERGE_PREFIX \"a'b\"" 0 0 gh pr merge 5 --squash --body "a'b"
-}
-
-@test "scan: separators inside a quoted span do not close the command" {
-  assert_scan "$MERGE_PREFIX \"a; b | c && d\"" 0 0 \
-    gh pr merge 5 --squash --body 'a; b | c && d'
-}
-
-@test "scan: a newline inside a quoted span is ordinary text" {
-  assert_scan "$MERGE_PREFIX \"a"$'\n'"b\"" 0 0 \
-    gh pr merge 5 --squash --body "a"$'\n'"b"
-}
-
-@test "scan: a hash inside a quoted span does not open a comment" {
-  assert_scan "$MERGE_PREFIX \"a #b\"" 0 0 gh pr merge 5 --squash --body 'a #b'
-}
-
-@test "scan: an empty quoted span still yields a word" {
-  assert_scan "$MERGE_PREFIX \"\"" 0 0 gh pr merge 5 --squash --body ''
-}
-
-@test "scan: adjacent quoted and unquoted pieces join into one word" {
-  assert_scan 'a"b"'"'"'c'"'"'d e' 0 0 abcd e
-}
-
-@test "scan: an unterminated quote still yields the text it opened" {
-  assert_scan "$MERGE_PREFIX \"abc" 0 0 gh pr merge 5 --squash --body abc
-}
-
-@test "scan: a separator after a closing quote closes the command" {
-  assert_scan "$MERGE_PREFIX \"ab\" && echo hi" 0 1 \
-    gh pr merge 5 --squash --body ab
+@test "scan: quoted spans keep every character inside one word" {
+  assert_scan_row "an escaped double quote stays inside the double-quoted word" \
+    "$MERGE_PREFIX \"a\\\"b\"" 0 0 gh pr merge 5 --squash --body 'a"b'
+  assert_scan_row "an escaped backslash collapses to one inside a double-quoted word" \
+    "$MERGE_PREFIX \"a\\\\b\"" 0 0 gh pr merge 5 --squash --body 'a\b'
+  assert_scan_row "a backslash is literal inside a single-quoted word" \
+    "$MERGE_PREFIX 'a\\b'" 0 0 gh pr merge 5 --squash --body 'a\b'
+  assert_scan_row "a double quote is ordinary text inside a single-quoted word" \
+    "$MERGE_PREFIX 'a\"b'" 0 0 gh pr merge 5 --squash --body 'a"b'
+  assert_scan_row "a single quote is ordinary text inside a double-quoted word" \
+    "$MERGE_PREFIX \"a'b\"" 0 0 gh pr merge 5 --squash --body "a'b"
+  assert_scan_row "separators inside a quoted span do not close the command" \
+    "$MERGE_PREFIX \"a; b | c && d\"" 0 0 gh pr merge 5 --squash --body 'a; b | c && d'
+  assert_scan_row "a newline inside a quoted span is ordinary text" \
+    "$MERGE_PREFIX \"a"$'\n'"b\"" 0 0 gh pr merge 5 --squash --body "a"$'\n'"b"
+  assert_scan_row "a hash inside a quoted span does not open a comment" \
+    "$MERGE_PREFIX \"a #b\"" 0 0 gh pr merge 5 --squash --body 'a #b'
+  assert_scan_row "an empty quoted span still yields a word" \
+    "$MERGE_PREFIX \"\"" 0 0 gh pr merge 5 --squash --body ''
+  assert_scan_row "adjacent quoted and unquoted pieces join into one word" \
+    'a"b"'"'"'c'"'"'d e' 0 0 abcd e
+  assert_scan_row "an unterminated quote still yields the text it opened" \
+    "$MERGE_PREFIX \"abc" 0 0 gh pr merge 5 --squash --body abc
+  assert_scan_row "a separator after a closing quote closes the command" \
+    "$MERGE_PREFIX \"ab\" && echo hi" 0 1 gh pr merge 5 --squash --body ab
 }
 
 # ---------------------------------------------------------------------------
@@ -278,32 +261,25 @@ CEILING_SCAN_UNQUOTED_64K_MS=5000
 # block on both sides and land exactly on it.
 # ---------------------------------------------------------------------------
 
-@test "scan: a quoted word spanning block boundaries survives intact" {
-  local size body
+@test "scan: words spanning 256-byte block boundaries survive intact" {
+  local size body word
   for size in 255 256 257 511 512 513; do
     body=$(head -c "$size" < /dev/zero | tr '\0' 'y')
     assert_scan "$MERGE_PREFIX \"$body\"" 0 0 \
-      gh pr merge 5 --squash --body "$body" || return 1
-  done
-}
-
-@test "scan: an unquoted word spanning block boundaries survives intact" {
-  local size word
-  for size in 255 256 257 511 512 513; do
+      gh pr merge 5 --squash --body "$body" \
+      || { echo "row 'quoted word, size $size' failed" >&2; return 1; }
     word=$(head -c "$size" < /dev/zero | tr '\0' 'z')
     assert_scan "$MERGE_PREFIX $word end" 0 0 \
-      gh pr merge 5 --squash --body "$word" end || return 1
+      gh pr merge 5 --squash --body "$word" end \
+      || { echo "row 'unquoted word, size $size' failed" >&2; return 1; }
   done
-}
-
-@test "scan: a quoted word whose escape straddles a block boundary survives" {
-  local size body
   # 254 and 255 put the backslash of the trailing \" on either side of the
   # 256-byte edge, and 256 puts the escaped quote itself across it.
   for size in 254 255 256; do
     body=$(head -c "$size" < /dev/zero | tr '\0' 'y')
     assert_scan "$MERGE_PREFIX \"$body\\\"tail\"" 0 0 \
-      gh pr merge 5 --squash --body "${body}\"tail" || return 1
+      gh pr merge 5 --squash --body "${body}\"tail" \
+      || { echo "row 'escape straddling the edge, size $size' failed" >&2; return 1; }
   done
 }
 
@@ -329,25 +305,29 @@ scan_from() {
   ' _ "$LIBRARY_FILE" "$1" "$2" "$RS"
 }
 
-@test "scan: the end offset lands just past the separator, and a scan from it reads the next command" {
-  run scan_from "git status && git commit -m y" 0
-  [ "$output" = "0 1 12 git${RS}status" ]
-  run scan_from "git status && git commit -m y" 12
-  [ "$output" = "0 0 29 git${RS}commit${RS}-m${RS}y" ]
+# expect_scan_from <row> <expected> <command_text> <start>: names the failing row.
+expect_scan_from() {
+  local row="$1" expected="$2" actual
+  actual="$(scan_from "$3" "$4")"
+  if [ "$actual" != "$expected" ]; then
+    printf "row '%s': expected [%s], got [%s]\n" "$row" "$expected" "$actual" >&2
+    return 1
+  fi
 }
 
-@test "scan: a comment closes with the end offset just past the hash" {
-  run scan_from "echo a # note" 0
-  [ "$output" = "0 1 8 echo${RS}a" ]
-}
-
-@test "scan: the end offset counts bytes, across a block edge" {
+@test "scan: the end offset lands past the closing character, in bytes, and a rescan reads the next command" {
   local word
+  expect_scan_from "the end offset lands just past the separator" \
+    "0 1 12 git${RS}status" "git status && git commit -m y" 0
+  expect_scan_from "a scan from the separator's end reads the next command" \
+    "0 0 29 git${RS}commit${RS}-m${RS}y" "git status && git commit -m y" 12
+  expect_scan_from "a comment closes with the end offset just past the hash" \
+    "0 1 8 echo${RS}a" "echo a # note" 0
   word=$(head -c 300 < /dev/zero | tr '\0' 'z')
-  run scan_from "echo é$word; git commit" 0
-  [ "$output" = "0 1 308 echo${RS}é$word" ]
-  run scan_from "echo é$word; git commit" 308
-  [ "$output" = "0 0 319 git${RS}commit" ]
+  expect_scan_from "the end offset counts bytes, across a block edge" \
+    "0 1 308 echo${RS}é$word" "echo é$word; git commit" 0
+  expect_scan_from "a rescan from the byte offset reads the next command" \
+    "0 0 319 git${RS}commit" "echo é$word; git commit" 308
 }
 
 # ---------------------------------------------------------------------------

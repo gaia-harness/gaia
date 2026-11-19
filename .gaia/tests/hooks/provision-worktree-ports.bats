@@ -232,9 +232,19 @@ start_host_process() {
   process_running "$LISTENER_PID"
 }
 
-@test "a slot stays put after a peer is removed and its port file is byte-identical" {
+# announce_row <name>: bats prints a failing test's output, so the last row line
+# names the row that failed.
+announce_row() { printf 'row: %s\n' "$1" >&2; }
+
+# One ledger rule, three transitions. The first two rows share one fixture
+# because the second continues the first's end state (a is removed and b keeps
+# slot 2); the third needs a locked tree and an rm -rf'd one, so it builds its
+# own.
+@test "slot ledger keeps, reclaims and reuses slots as trees come and go" {
   make_main
-  local tree_a tree_b
+  local tree_a tree_b tree_c tree_d tree_e tree_f
+
+  announce_row "a slot stays put after a peer is removed and its port file is byte-identical"
   tree_a="$(add_worktree a)"
   tree_b="$(add_worktree b)"
   provision "$tree_a"
@@ -245,6 +255,33 @@ start_host_process() {
   provision "$tree_b"
   [ "$(port_value "$tree_b" GAIA_PORT_SLOT)" = "2" ]
   cmp -s "$SCRATCH/b-before" "$(port_file "$tree_b")"
+
+  announce_row "a reclaimed slot is reused by the next new worktree, with one ledger line for it"
+  tree_c="$(add_worktree c)"
+  provision "$tree_c"
+  [ "$(port_value "$tree_c" GAIA_PORT_SLOT)" = "1" ]
+  [ "$(port_value "$tree_c" DEV_PORT)" = "$((DEV_BASE + 1))" ]
+  [ "$(port_value "$tree_c" STORYBOOK_PORT)" = "$((STORYBOOK_BASE + 1))" ]
+  [ "$(awk -F '\t' '$1 == 1' "$LEDGER" | wc -l | tr -d ' ')" -eq 1 ]
+  [ "$(ledger_slot_for "$tree_c")" = "1" ]
+  [ -z "$(ledger_slot_for "$tree_a")" ]
+
+  announce_row "an rm -rf'd tree loses its entry, a locked tree keeps its own"
+  rm -rf "$MAIN"
+  make_main
+  tree_d="$(add_worktree d)"
+  tree_e="$(add_worktree e)"
+  provision "$tree_d"
+  provision "$tree_e"
+  [ "$(ledger_slot_for "$tree_e")" = "2" ]
+  git -C "$MAIN" worktree lock "$tree_d"
+  rm -rf "$tree_e"
+  tree_f="$(add_worktree f)"
+  provision "$tree_f"
+  [ -z "$(ledger_slot_for "$tree_e")" ]
+  [ "$(ledger_slot_for "$tree_d")" = "1" ]
+  # The removed tree's slot is free and went to the next new worktree.
+  [ "$(port_value "$tree_f" GAIA_PORT_SLOT)" = "2" ]
 }
 
 @test "a symlinked tree path is keyed physically, so a sibling run keeps its ledger entry" {
@@ -273,25 +310,6 @@ start_host_process() {
   [ "$(ledger_slot_for "$tree")" = "1" ]
   [ "$(port_value "$tree" GAIA_PORT_SLOT)" = "1" ]
   [ ! -e "$tree/apps/web/apps/web/.gaia-ports" ]
-}
-
-@test "a reclaimed slot is reused by the next new worktree, with one ledger line for it" {
-  make_main
-  local tree_a tree_b tree_c
-  tree_a="$(add_worktree a)"
-  tree_b="$(add_worktree b)"
-  provision "$tree_a"
-  provision "$tree_b"
-  git -C "$MAIN" worktree remove --force "$tree_a"
-  provision "$tree_b"
-  tree_c="$(add_worktree c)"
-  provision "$tree_c"
-  [ "$(port_value "$tree_c" GAIA_PORT_SLOT)" = "1" ]
-  [ "$(port_value "$tree_c" DEV_PORT)" = "$((DEV_BASE + 1))" ]
-  [ "$(port_value "$tree_c" STORYBOOK_PORT)" = "$((STORYBOOK_BASE + 1))" ]
-  [ "$(awk -F '\t' '$1 == 1' "$LEDGER" | wc -l | tr -d ' ')" -eq 1 ]
-  [ "$(ledger_slot_for "$tree_c")" = "1" ]
-  [ -z "$(ledger_slot_for "$tree_a")" ]
 }
 
 @test "ledger authority: a hand-edited port file is rewritten to the ledger's slot" {
@@ -384,24 +402,6 @@ start_host_process() {
   return 0
 }
 
-@test "an rm -rf'd tree loses its entry, a locked tree keeps its own" {
-  make_main
-  local tree_d tree_e tree_f
-  tree_d="$(add_worktree d)"
-  tree_e="$(add_worktree e)"
-  provision "$tree_d"
-  provision "$tree_e"
-  [ "$(ledger_slot_for "$tree_e")" = "2" ]
-  git -C "$MAIN" worktree lock "$tree_d"
-  rm -rf "$tree_e"
-  tree_f="$(add_worktree f)"
-  provision "$tree_f"
-  [ -z "$(ledger_slot_for "$tree_e")" ]
-  [ "$(ledger_slot_for "$tree_d")" = "1" ]
-  # The removed tree's slot is free and went to the next new worktree.
-  [ "$(port_value "$tree_f" GAIA_PORT_SLOT)" = "2" ]
-}
-
 @test "a tree recreated at the same path loses its old server and takes a new marker" {
   require_process_backend
   make_main
@@ -455,9 +455,13 @@ SH
 
 # ---------- context line ----------
 
-@test "SessionStart: stdout is exactly one context line with concrete values" {
+# One expected line asserted through three input shapes. The shapes share one
+# fixture, so each takes the next slot: 1, 2, 3.
+@test "the context line is one line with concrete values on every channel that carries it" {
   make_main
   local tree payload
+
+  announce_row "SessionStart: stdout is exactly one context line with concrete values"
   tree="$(add_worktree a)"
   payload="$(jq -nc --arg tree_path "$tree" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
   provision_with_payload "$tree" "$payload"
@@ -466,25 +470,19 @@ SH
   [ "$(cat "$PROVISION_STDOUT")" = "$(expected_context_line 1)" ]
   # stderr is where the logs go and is not part of the channel.
   grep -qF 'provision-worktree: ' "$PROVISION_STDERR"
-}
 
-@test "a direct call prints the same plain context line" {
-  make_main
-  local tree
-  tree="$(add_worktree a)"
+  announce_row "a direct call prints the same plain context line"
+  tree="$(add_worktree b)"
   provision "$tree"
-  [ "$(cat "$PROVISION_STDOUT")" = "$(expected_context_line 1)" ]
-}
+  [ "$(cat "$PROVISION_STDOUT")" = "$(expected_context_line 2)" ]
 
-@test "EnterWorktree with jq: stdout is one JSON object carrying the context line" {
-  make_main
-  local tree payload
-  tree="$(add_worktree a)"
+  announce_row "EnterWorktree with jq: stdout is one JSON object carrying the context line"
+  tree="$(add_worktree c)"
   payload="$(jq -nc --arg tree_path "$tree" '{hook_event_name: "PostToolUse", tool_name: "EnterWorktree", cwd: $tree_path, tool_response: {worktreePath: $tree_path}}')"
   provision_with_payload "$tree" "$payload"
   [ "$PROVISION_STATUS" -eq 0 ]
   jq -e '.hookSpecificOutput.hookEventName == "PostToolUse"' "$PROVISION_STDOUT" >/dev/null
-  [ "$(jq -r '.hookSpecificOutput.additionalContext' "$PROVISION_STDOUT")" = "$(expected_context_line 1)" ]
+  [ "$(jq -r '.hookSpecificOutput.additionalContext' "$PROVISION_STDOUT")" = "$(expected_context_line 3)" ]
 }
 
 @test "EnterWorktree without jq: the port file is written and stdout is one valid JSON object" {

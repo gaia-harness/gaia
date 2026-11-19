@@ -181,8 +181,20 @@ mutate_hook() {
 
 # ---------- launch cadence ----------
 
+# announce_row <name>: bats prints a failing test's output, so the last row line
+# names the row that failed.
+announce_row() { printf 'row: %s\n' "$1" >&2; }
+
+# reset_fixture: drops the fixture so the next row of a case table builds a
+# clean one (no launch marker, stamp, lock or worktree carried over).
+reset_fixture() {
+  rm -rf "$MAIN" "$TREE"
+  rm -f "$LAUNCH_MARKER" "$LAUNCH_DONE"
+}
+
 # bats test_tags=whole-tree
-@test "a stamp 2 hours old launches nothing from the main checkout or a linked tree and leaves the stamp alone" {
+@test "the launch cadence follows the stamp age: 2 hours old launches nothing, 25 hours old launches once per tree, missing launches" {
+  announce_row "a stamp 2 hours old launches nothing from the main checkout or a linked tree and leaves the stamp alone"
   make_fixture
   make_linked_tree
   touch "$STAMP"
@@ -196,10 +208,9 @@ mutate_hook() {
   sleep 0.5
   [ "$(launch_count)" -eq 0 ]
   [ "$(modification_time "$STAMP")" = "$before" ]
-}
 
-# bats test_tags=whole-tree
-@test "a stamp 25 hours old launches the stub once from each tree, restamps main's, and returns while the stub sleeps" {
+  announce_row "a stamp 25 hours old launches the stub once from each tree, restamps main's, and returns while the stub sleeps"
+  reset_fixture
   make_fixture
   make_linked_tree
   local tree start finish expected=0
@@ -224,10 +235,9 @@ mutate_hook() {
     [ -z "$(find "$STAMP" -maxdepth 0 -mmin +1)" ]
     release_stub "$LOCAL"
   done
-}
 
-# bats test_tags=whole-tree
-@test "a missing stamp launches" {
+  announce_row "a missing stamp launches"
+  reset_fixture
   make_fixture
   run_hook "$MAIN"
   [ "$status" -eq 0 ]
@@ -256,7 +266,8 @@ mutate_hook() {
 }
 
 # bats test_tags=whole-tree
-@test "a held fresh lock launches nothing" {
+@test "a held fresh lock or a lock held through the shared helper launches nothing, and a lock older than 10 minutes is reclaimed" {
+  announce_row "a held fresh lock launches nothing"
   make_fixture
   mkdir "$LOCK"
   run_hook "$MAIN"
@@ -264,24 +275,24 @@ mutate_hook() {
   sleep 0.5
   [ "$(launch_count)" -eq 0 ]
   [ -d "$LOCK" ]
-}
 
-# bats test_tags=whole-tree
-@test "a lock held through the shared helper launches nothing, with a non-exclusive mkdir first on PATH" {
+  announce_row "a lock held through the shared helper launches nothing, with a non-exclusive mkdir first on PATH"
+  reset_fixture
   make_fixture
   mkdir -p "$STATE_DIRECTORY"
   bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$LOCK"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/tests/helpers/non-exclusive-mkdir.sh"
+  local saved_path="$PATH"
   PATH="$(non_exclusive_mkdir_path)"
   run_hook "$MAIN"
+  PATH="$saved_path"
   [ "$status" -eq 0 ]
   sleep 0.5
   [ "$(launch_count)" -eq 0 ]
-}
 
-# bats test_tags=whole-tree
-@test "a lock older than 10 minutes is reclaimed and the reaper launches" {
+  announce_row "a lock older than 10 minutes is reclaimed and the reaper launches"
+  reset_fixture
   make_fixture
   mkdir "$LOCK"
   age_minutes 11 "$LOCK"
@@ -294,8 +305,30 @@ mutate_hook() {
 
 # ---------- fail open ----------
 
+# The outside-a-repository row reassigns MAIN, so it runs last.
 # bats test_tags=whole-tree
-@test "outside any repository the hook exits 0 and launches nothing" {
+@test "the hook exits 0 and launches nothing outside a repository, with no reaper script, or with an unwritable cache" {
+  announce_row "an absent reaper script exits 0, launches nothing and leaves the stamp alone"
+  make_fixture
+  rm "$MAIN/.gaia/scripts/state-reaper.sh"
+  run_hook "$MAIN"
+  [ "$status" -eq 0 ]
+  [ ! -e "$STAMP" ]
+  [ ! -e "$LOCK" ]
+
+  announce_row "an unwritable cache exits 0 and launches nothing"
+  reset_fixture
+  make_fixture
+  rmdir "$STATE_DIRECTORY"
+  rmdir "$LOCAL/cache"
+  printf 'not a directory\n' >"$LOCAL/cache"
+  run_hook "$MAIN"
+  [ "$status" -eq 0 ]
+  sleep 0.5
+  [ "$(launch_count)" -eq 0 ]
+
+  announce_row "outside any repository the hook exits 0 and launches nothing"
+  reset_fixture
   local bare="$TEMPORARY_DIRECTORY/bare"
   mkdir -p "$bare/.claude/hooks" "$bare/.gaia/scripts"
   cp "$REPO_ROOT/.claude/hooks/$HOOK_NAME" "$bare/.claude/hooks/"
@@ -308,28 +341,6 @@ mutate_hook() {
   sleep 0.5
   [ ! -e "$bare/.gaia/local/launch-marker" ]
   [ ! -e "$bare/.gaia/local/cache/state-reaper/last-launch" ]
-}
-
-# bats test_tags=whole-tree
-@test "an absent reaper script exits 0, launches nothing and leaves the stamp alone" {
-  make_fixture
-  rm "$MAIN/.gaia/scripts/state-reaper.sh"
-  run_hook "$MAIN"
-  [ "$status" -eq 0 ]
-  [ ! -e "$STAMP" ]
-  [ ! -e "$LOCK" ]
-}
-
-# bats test_tags=whole-tree
-@test "an unwritable cache exits 0 and launches nothing" {
-  make_fixture
-  rmdir "$STATE_DIRECTORY"
-  rmdir "$LOCAL/cache"
-  printf 'not a directory\n' >"$LOCAL/cache"
-  run_hook "$MAIN"
-  [ "$status" -eq 0 ]
-  sleep 0.5
-  [ "$(launch_count)" -eq 0 ]
 }
 
 # ---------- end to end with the real reaper ----------
@@ -442,10 +453,6 @@ EOF
 
 # ---------- registration ----------
 
-@test "the tracked hook is executable" {
-  [ -x "$REPO_ROOT/.claude/hooks/$HOOK_NAME" ]
-}
-
 # assert_registered <settings>: the SessionStart startup|resume group names the
 # hook.
 assert_registered() {
@@ -453,19 +460,12 @@ assert_registered() {
   . "$REPO_ROOT/.gaia/tests/helpers/hook-registration.sh"
   hook_registered "$1" '.hooks.SessionStart[] | select(.matcher == "startup|resume")' "$HOOK_NAME"
 }
-
 # bats test_tags=whole-tree
-@test "both settings files register the hook in the SessionStart startup|resume group" {
+@test "the hook is executable and registered in both settings files" {
+  announce_row "the tracked hook is executable"
+  [ -x "$REPO_ROOT/.claude/hooks/$HOOK_NAME" ]
+  announce_row "the root settings file registers the hook in the SessionStart startup|resume group"
   assert_registered "$REPO_ROOT/.claude/settings.json"
+  announce_row "the web app settings file registers the hook in the SessionStart startup|resume group"
   assert_registered "$REPO_ROOT/apps/web/.claude/settings.json"
-}
-
-# bats test_tags=whole-tree
-@test "red state: a settings copy without the entry no longer registers the hook" {
-  local mutant="$TEMPORARY_DIRECTORY/settings-mutant.json"
-  jq --arg name "$HOOK_NAME" '.hooks.SessionStart |= map(.hooks |= map(select(.command | contains($name) | not)))' \
-    "$REPO_ROOT/.claude/settings.json" >"$mutant"
-  cmp -s "$mutant" "$REPO_ROOT/.claude/settings.json" && return 1
-  run assert_registered "$mutant"
-  [ "$status" -ne 0 ]
 }

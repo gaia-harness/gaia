@@ -481,7 +481,44 @@ assert_not_in_set() {
   return 0
 }
 
-@test "allows a docs/metadata-only PR (wiki + .claude + .gaia)" {
+# run_case_rows <row-function>...: run each row against a fresh copy of the
+# fixture setup() built (the repository, its bare origin and the scratch
+# directory with the gh stub), so a case table pays setup() once instead of once
+# per row. Each row runs in a subshell, so the PATH, exports and working
+# directory it changes die with it. A failing assertion exits that subshell
+# non-zero, which fails the table under errexit; the row line printed before it
+# names the failing row. The subshell is never followed by `||`, which would
+# switch errexit off inside it.
+run_case_rows() {
+  local snapshot="$BATS_TEST_TMPDIR/.case-row-fixture" row entry
+  mkdir -p "$snapshot/scratch"
+  cp -Rp "$REPO" "$snapshot/repo"
+  cp -Rp "$CATCHUP_ORIGIN" "$snapshot/origin"
+  for entry in "$BATS_TEST_TMPDIR"/* "$BATS_TEST_TMPDIR"/.[!.]*; do
+    [ -e "$entry" ] || continue
+    [ "$entry" = "$snapshot" ] && continue
+    cp -Rp "$entry" "$snapshot/scratch/"
+  done
+  for row in "$@"; do
+    rm -rf "$REPO" "$CATCHUP_ORIGIN"
+    for entry in "$BATS_TEST_TMPDIR"/* "$BATS_TEST_TMPDIR"/.[!.]*; do
+      [ -e "$entry" ] || continue
+      [ "$entry" = "$snapshot" ] && continue
+      rm -rf "$entry"
+    done
+    cp -Rp "$snapshot/repo" "$REPO"
+    cp -Rp "$snapshot/origin" "$CATCHUP_ORIGIN"
+    for entry in "$snapshot/scratch"/* "$snapshot/scratch"/.[!.]*; do
+      [ -e "$entry" ] || continue
+      cp -Rp "$entry" "$BATS_TEST_TMPDIR/"
+    done
+    printf 'row: %s\n' "$row" >&2
+    ( "$row" )
+  done
+}
+
+# Row of "out-of-scope diffs allow with no marker and spawn nobody": allows a docs/metadata-only PR (wiki + .claude + .gaia)
+row_allows_a_docs_metadata_only_pr_wiki_claude_gaia() {
   install_gh_stub
   # The .claude/ witness must be a path no roster member owns. Skill prose is
   # declared in `unowned:` (`.claude/skills/**/*.md`, and the roster carries
@@ -498,7 +535,8 @@ assert_not_in_set() {
   [[ "$output" != *'"permissionDecision": "deny"'* ]]
 }
 
-@test "allows a root-level markdown-only PR" {
+# Row of "out-of-scope diffs allow with no marker and spawn nobody": allows a root-level markdown-only PR
+row_allows_a_root_level_markdown_only_pr() {
   install_gh_stub
   commit_files "README.md" "# changed"
   run_merge_hook
@@ -506,7 +544,8 @@ assert_not_in_set() {
   [[ "$output" != *'"permissionDecision": "deny"'* ]]
 }
 
-@test "allows a docs-only PR under docs/" {
+# Row of "out-of-scope diffs allow with no marker and spawn nobody": allows a docs-only PR under docs/
+row_allows_a_docs_only_pr_under_docs() {
   install_gh_stub
   commit_files "docs/guide.md" "guide"
   run_merge_hook
@@ -522,7 +561,8 @@ assert_not_in_set() {
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
-@test "a roster-less config denies with the roster named, even on a docs-only diff" {
+# Row of "roster-less or unanswerable resolver denies (case table)": a roster-less config denies with the roster named, even on a docs-only diff
+row_a_roster_less_config_denies_with_the_roster_named_even_on_a() {
   # There is no fallback roster. A docs-only diff would otherwise clear on the
   # out-of-scope bypass, so this proves the roster deny runs first and names
   # its own remedy rather than the digest-batch deny's missing sha256 tool.
@@ -538,21 +578,24 @@ assert_not_in_set() {
   [[ "$output" != *'sha256'* ]]
 }
 
-@test "denies a PR that changes a root config (package.json)" {
+# Row of "in-scope diffs deny with no marker (case table)": denies a PR that changes a root config (package.json)
+row_denies_a_pr_that_changes_a_root_config_package_json() {
   commit_files "package.json" '{"name":"x"}'
   run_merge_hook
   [ "$status" -eq 0 ]
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
-@test "denies a PR that changes a root *.config.ts" {
+# Row of "in-scope diffs deny with no marker (case table)": denies a PR that changes a root *.config.ts
+row_denies_a_pr_that_changes_a_root_config_ts() {
   commit_files "vitest.config.ts" "export default {}"
   run_merge_hook
   [ "$status" -eq 0 ]
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
-@test "denies a PR mixing out-of-scope docs with in-scope source" {
+# Row of "in-scope diffs deny with no marker (case table)": denies a PR mixing out-of-scope docs with in-scope source
+row_denies_a_pr_mixing_out_of_scope_docs_with_in_scope_source() {
   commit_files \
     "wiki/x.md" "doc" \
     "apps/web/app/y.ts" "export const y = 1"
@@ -561,7 +604,8 @@ assert_not_in_set() {
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
-@test "denies a PR that changes a CI workflow" {
+# Row of "in-scope diffs deny with no marker (case table)": denies a PR that changes a CI workflow
+row_denies_a_pr_that_changes_a_ci_workflow() {
   commit_files ".github/workflows/tests.yml" "name: t"
   run_merge_hook
   [ "$status" -eq 0 ]
@@ -580,7 +624,8 @@ assert_not_in_set() {
 # template is an in-scope change like any other.
 # ---------------------------------------------------------------------------
 
-@test "denies a workflow re-render whose bytes equal the bundled template" {
+# Row of "in-scope diffs deny with no marker (case table)": denies a workflow re-render whose bytes equal the bundled template
+row_denies_a_workflow_re_render_whose_bytes_equal_the_bundled_te() {
   install_gh_stub
   seed_base_template
   commit_files \
@@ -611,7 +656,8 @@ assert_not_in_set() {
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
-@test "denies a second workflow alongside the matching audit re-render" {
+# Row of "in-scope diffs deny with no marker (case table)": denies a second workflow alongside the matching audit re-render
+row_denies_a_second_workflow_alongside_the_matching_audit_re_ren() {
   # Only the audit workflow is a permitted in-scope path; any other workflow
   # file keeps the marker mandatory.
   seed_base_template
@@ -623,6 +669,16 @@ assert_not_in_set() {
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
+@test "in-scope diffs deny with no marker (case table)" {
+  run_case_rows \
+    row_denies_a_pr_that_changes_a_root_config_package_json \
+    row_denies_a_pr_that_changes_a_root_config_ts \
+    row_denies_a_pr_mixing_out_of_scope_docs_with_in_scope_source \
+    row_denies_a_pr_that_changes_a_ci_workflow \
+    row_denies_a_workflow_re_render_whose_bytes_equal_the_bundled_te \
+    row_denies_a_second_workflow_alongside_the_matching_audit_re_ren
+}
+
 # ---------------------------------------------------------------------------
 # AND-aggregator (FC-5): the dispatched member set drives a per-member
 # clearance requirement instead of a single OR'd signal. SEC-001/UAT-002/018:
@@ -631,7 +687,8 @@ assert_not_in_set() {
 # out-of-scope gate above, NOT an unconditional allow.
 # ---------------------------------------------------------------------------
 
-@test "AND-aggregator: app-only diff allows once the frontend marker is present (regression)" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": AND-aggregator: app-only diff allows once the frontend marker is present (regression)
+row_and_aggregator_app_only_diff_allows_once_the_frontend_marker() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_marker "code-audit-frontend"
   run_merge_hook
@@ -650,7 +707,8 @@ assert_not_in_set() {
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
-@test "AND-aggregator: mixed app/ + .gaia .sh diff allows once both dispatched members clear" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": AND-aggregator: mixed app/ + .gaia .sh diff allows once both dispatched members clear
+row_and_aggregator_mixed_app_gaia_sh_diff_allows_once_both_dispa() {
   commit_files \
     "apps/web/app/x.ts" "export const x = 1" \
     ".gaia/scripts/example.sh" "#!/bin/bash"
@@ -668,7 +726,8 @@ assert_not_in_set() {
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
-@test "AND-aggregator: .gaia .sh-only diff allows once the maintainer-shell marker is present" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": AND-aggregator: .gaia .sh-only diff allows once the maintainer-shell marker is present
+row_and_aggregator_gaia_sh_only_diff_allows_once_the_maintainer() {
   commit_files ".gaia/scripts/example.sh" "#!/bin/bash"
   write_marker "code-audit-maintainer-shell"
   run_merge_hook
@@ -680,14 +739,16 @@ assert_not_in_set() {
 # pair below stops exercising the zero-match legacy branch and silently becomes
 # two more member-aware cases. `Dockerfile` fails that bar, since it is claimed
 # by the default member. A root `Makefile` is not.
-@test "AND-aggregator: root Makefile-only diff denies without a marker (zero-match falls through to the legacy gate, not an auto-allow)" {
+# Row of "ownerless in-scope root files deny unmarked and allow on the frontend marker (case table)": AND-aggregator: root Makefile-only diff denies without a marker (zero-match falls through to the legacy gate, not an auto-allow)
+row_and_aggregator_root_makefile_only_diff_denies_without_a_mark() {
   commit_files "Makefile" "all:"
   run_merge_hook
   [ "$status" -eq 0 ]
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
-@test "AND-aggregator: root Makefile-only diff allows once the legacy marker is present" {
+# Row of "ownerless in-scope root files deny unmarked and allow on the frontend marker (case table)": AND-aggregator: root Makefile-only diff allows once the legacy marker is present
+row_and_aggregator_root_makefile_only_diff_allows_once_the_legac() {
   commit_files "Makefile" "all:"
   write_marker "code-audit-frontend"
   run_merge_hook
@@ -708,7 +769,8 @@ assert_not_in_set() {
   [[ "$output" != *'"permissionDecision": "deny"'* ]]
 }
 
-@test "AND-aggregator: a resolver that CANNOT answer denies instead of falling through to the legacy path" {
+# Row of "roster-less or unanswerable resolver denies (case table)": AND-aggregator: a resolver that CANNOT answer denies instead of falling through to the legacy path
+row_and_aggregator_a_resolver_that_cannot_answer_denies_instead() {
   # A non-zero resolver exit means the audited root did not resolve, which is
   # never "nothing owed". The diff below is entirely out of scope, so the
   # legacy single-signal path would ALLOW it: only the unanswerable-query deny
@@ -727,7 +789,8 @@ assert_not_in_set() {
 # then an EMPTY commit lands -- HEAD advances, every blob stays
 # byte-identical. A member's digest is a sha256 over blob shas, so it does not
 # rotate either, and no sibling member's marker is orphaned by the commit.
-@test "AND-aggregator: every member's marker survives a content-preserving empty commit (digest is content-keyed)" {
+# Row of "digest keying: only the owning change rotates a member's digest (case table)": AND-aggregator: every member's marker survives a content-preserving empty commit (digest is content-keyed)
+row_and_aggregator_every_member_s_marker_survives_a_content_pres() {
   commit_files "apps/web/app/a.ts" "export const a = 1" ".gaia/scripts/x.sh" "echo x"
   write_marker "code-audit-frontend"
   write_marker "code-audit-maintainer-shell"
@@ -749,7 +812,8 @@ assert_not_in_set() {
 # the merge gate.
 # ---------------------------------------------------------------------------
 
-@test "UAT-001: an out-of-glob commit (CHANGELOG.md) leaves every digest unchanged; zero new marker" {
+# Row of "digest keying: only the owning change rotates a member's digest (case table)": UAT-001: an out-of-glob commit (CHANGELOG.md) leaves every digest unchanged; zero new marker
+row_uat_001_an_out_of_glob_commit_changelog_md_leaves_every_dige() {
   commit_files "apps/web/app/x.ts" "export const x = 1" ".gaia/scripts/y.sh" "#!/bin/bash"
   write_marker "code-audit-frontend"
   write_marker "code-audit-maintainer-shell"
@@ -773,7 +837,8 @@ assert_not_in_set() {
 # member's digest; every unrelated member keeps its clearance.
 # ---------------------------------------------------------------------------
 
-@test "UAT-002: a maintainer-node-owned change rotates only that member's digest" {
+# Row of "digest keying: only the owning change rotates a member's digest (case table)": UAT-002: a maintainer-node-owned change rotates only that member's digest
+row_uat_002_a_maintainer_node_owned_change_rotates_only_that_mem() {
   commit_files "apps/web/app/a.ts" "export const a = 1" ".gaia/scripts/x.sh" "echo x" ".gaia/cli/src/foo.ts" "export const foo = 1"
   write_marker "code-audit-frontend"
   write_marker "code-audit-maintainer-shell"
@@ -803,7 +868,8 @@ assert_not_in_set() {
 # full team is re-dispatched, not just the owner of the touched file.
 # ---------------------------------------------------------------------------
 
-@test "UAT-003: a machinery-file change rotates every member's digest and re-dispatches the full team" {
+# Row of "digest keying: only the owning change rotates a member's digest (case table)": UAT-003: a machinery-file change rotates every member's digest and re-dispatches the full team
+row_uat_003_a_machinery_file_change_rotates_every_member_s_diges() {
   commit_files "apps/web/app/a.ts" "export const a = 1" ".gaia/scripts/x.sh" "echo x" ".gaia/cli/src/foo.ts" "export const foo = 1"
   write_marker "code-audit-frontend"
   write_marker "code-audit-maintainer-shell"
@@ -855,7 +921,8 @@ assert_not_in_set() {
   assert_denied_by_json
 }
 
-@test "UAT-004: refusal precedence also applies to a specialized member" {
+# Row of "a live refusal at the current digest denies over any earned marker (case table)": UAT-004: refusal precedence also applies to a specialized member
+row_uat_004_refusal_precedence_also_applies_to_a_specialized_mem() {
   commit_files "apps/web/app/x.ts" "export const x = 1" ".gaia/scripts/y.sh" "#!/bin/bash"
   write_marker "code-audit-frontend"
   write_marker "code-audit-maintainer-shell"
@@ -872,7 +939,8 @@ assert_not_in_set() {
 # outranks it.
 # ---------------------------------------------------------------------------
 
-@test "light marker: an earned review-light marker at the current digest allows the merge" {
+# Row of "light marker clears like a full one only at the current digest (case table)": light marker: an earned review-light marker at the current digest allows the merge
+row_light_marker_an_earned_review_light_marker_at_the_current_di() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_marker_at "$REPO" "code-audit-frontend" light
   grep -qF '"review":"light"' "$REPO"/.gaia/local/audit/*.ok
@@ -882,7 +950,8 @@ assert_not_in_set() {
   [[ "$output" != *'"permissionDecision": "deny"'* ]]
 }
 
-@test "light marker: a light marker at a stale digest denies the merge" {
+# Row of "light marker clears like a full one only at the current digest (case table)": light marker: a light marker at a stale digest denies the merge
+row_light_marker_a_light_marker_at_a_stale_digest_denies_the_mer() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_marker_at "$REPO" "code-audit-frontend" light
   commit_files "apps/web/app/y.ts" "export const y = 2"
@@ -891,7 +960,14 @@ assert_not_in_set() {
   assert_denied_by_json
 }
 
-@test "light marker: a refusal at the same digest as a light earned marker denies" {
+@test "light marker clears like a full one only at the current digest (case table)" {
+  run_case_rows \
+    row_light_marker_an_earned_review_light_marker_at_the_current_di \
+    row_light_marker_a_light_marker_at_a_stale_digest_denies_the_mer
+}
+
+# Row of "a live refusal at the current digest denies over any earned marker (case table)": light marker: a refusal at the same digest as a light earned marker denies
+row_light_marker_a_refusal_at_the_same_digest_as_a_light_earned() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_marker_at "$REPO" "code-audit-frontend" light
   write_refused "code-audit-frontend"
@@ -900,13 +976,20 @@ assert_not_in_set() {
   assert_denied_by_json
 }
 
+@test "a live refusal at the current digest denies over any earned marker (case table)" {
+  run_case_rows \
+    row_uat_004_refusal_precedence_also_applies_to_a_specialized_mem \
+    row_light_marker_a_refusal_at_the_same_digest_as_a_light_earned
+}
+
 # ---------------------------------------------------------------------------
 # UAT-011: the in-scope-but-ownerless band is closed structurally by the
 # frontend digest fold, not by a bespoke guard. A stale frontend marker
 # (earned before an ownerless in-scope path was added) no longer validates.
 # ---------------------------------------------------------------------------
 
-@test "UAT-011: a stale frontend marker does not clear a merge that adds an in-scope-but-ownerless root Makefile" {
+# Row of "digest keying: only the owning change rotates a member's digest (case table)": UAT-011: a stale frontend marker does not clear a merge that adds an in-scope-but-ownerless root Makefile
+row_uat_011_a_stale_frontend_marker_does_not_clear_a_merge_that() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_marker "code-audit-frontend"
   commit_files "Makefile" "all:"
@@ -915,13 +998,24 @@ assert_not_in_set() {
   assert_denied_by_json
 }
 
-@test "UAT-011: a stale frontend marker does not clear a merge that adds a nested ownerless public asset" {
+# Row of "digest keying: only the owning change rotates a member's digest (case table)": UAT-011: a stale frontend marker does not clear a merge that adds a nested ownerless public asset
+row_uat_011_a_stale_frontend_marker_does_not_clear_a_merge_that_2() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_marker "code-audit-frontend"
   commit_files "public/logo.svg" "<svg></svg>"
 
   run_merge_hook
   assert_denied_by_json
+}
+
+@test "digest keying: only the owning change rotates a member's digest (case table)" {
+  run_case_rows \
+    row_and_aggregator_every_member_s_marker_survives_a_content_pres \
+    row_uat_001_an_out_of_glob_commit_changelog_md_leaves_every_dige \
+    row_uat_002_a_maintainer_node_owned_change_rotates_only_that_mem \
+    row_uat_003_a_machinery_file_change_rotates_every_member_s_diges \
+    row_uat_011_a_stale_frontend_marker_does_not_clear_a_merge_that \
+    row_uat_011_a_stale_frontend_marker_does_not_clear_a_merge_that_2
 }
 
 # ---------------------------------------------------------------------------
@@ -944,7 +1038,8 @@ assert_not_in_set() {
 # marker is written directly rather than through the dispatched set.
 # ---------------------------------------------------------------------------
 
-@test "FC-4 no-deadlock: apps/web/app/x.tsx spawns the default member alone, and its marker allows" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": FC-4 no-deadlock: apps/web/app/x.tsx spawns the default member alone, and its marker allows
+row_fc_4_no_deadlock_apps_web_app_x_tsx_spawns_the_default_membe() {
   commit_files "apps/web/app/x.tsx" "export const X = 1"
   set=$(spawn_set)
   [ "$set" = "code-audit-frontend" ]
@@ -953,7 +1048,8 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: frontend tsconfig.json spawns the default member alone, and its marker allows" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": FC-4 no-deadlock: frontend tsconfig.json spawns the default member alone, and its marker allows
+row_fc_4_no_deadlock_frontend_tsconfig_json_spawns_the_default_m() {
   commit_files "apps/web/tsconfig.json" '{"compilerOptions":{}}'
   set=$(spawn_set)
   [ "$set" = "code-audit-frontend" ]
@@ -962,7 +1058,8 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: a CI workflow spawns the workflows member only (not the default), and its marker allows" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": FC-4 no-deadlock: a CI workflow spawns the workflows member only (not the default), and its marker allows
+row_fc_4_no_deadlock_a_ci_workflow_spawns_the_workflows_member_o() {
   commit_files ".github/workflows/ci.yml" "name: CI"
   set=$(spawn_set)
   [ "$set" = "code-audit-github-workflows" ]
@@ -972,7 +1069,8 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: framework shell spawns the shell member only (not the default), and its marker allows" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": FC-4 no-deadlock: framework shell spawns the shell member only (not the default), and its marker allows
+row_fc_4_no_deadlock_framework_shell_spawns_the_shell_member_onl() {
   commit_files ".gaia/scripts/y.sh" "#!/bin/bash"
   set=$(spawn_set)
   [ "$set" = "code-audit-maintainer-shell" ]
@@ -982,7 +1080,8 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: framework CLI TypeScript spawns the node member only (not the default), and its marker allows" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": FC-4 no-deadlock: framework CLI TypeScript spawns the node member only (not the default), and its marker allows
+row_fc_4_no_deadlock_framework_cli_typescript_spawns_the_node_me() {
   commit_files ".gaia/cli/src/foo.ts" "export const foo = 1"
   set=$(spawn_set)
   [ "$set" = "code-audit-maintainer-node" ]
@@ -992,7 +1091,8 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: skills prose spawns nobody (not the default), and no markers still allows" {
+# Row of "out-of-scope diffs allow with no marker and spawn nobody": FC-4 no-deadlock: skills prose spawns nobody (not the default), and no markers still allows
+row_fc_4_no_deadlock_skills_prose_spawns_nobody_not_the_default() {
   # The prose-legibility member that used to own `.claude/skills/**/*.md` is
   # deleted (harness triage P3-09); nothing replaces its lens, so skills
   # prose is ownerless like the rest of GAIA's former prose-member territory.
@@ -1003,7 +1103,8 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: mixed app/ + framework shell spawns both, sorted, and their markers allow" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": FC-4 no-deadlock: mixed app/ + framework shell spawns both, sorted, and their markers allow
+row_fc_4_no_deadlock_mixed_app_framework_shell_spawns_both_sorte() {
   commit_files "apps/web/app/x.tsx" "export const X = 1" ".gaia/scripts/y.sh" "#!/bin/bash"
   set=$(spawn_set)
   expected=$'code-audit-frontend\ncode-audit-maintainer-shell'
@@ -1013,7 +1114,8 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: wiki + .claude + root markdown spawns nobody, and no markers still allows" {
+# Row of "out-of-scope diffs allow with no marker and spawn nobody": FC-4 no-deadlock: wiki + .claude + root markdown spawns nobody, and no markers still allows
+row_fc_4_no_deadlock_wiki_claude_root_markdown_spawns_nobody_and() {
   install_gh_stub
   # The .claude/ witness has to keep the spawn set EMPTY, which is what this
   # case is about, so it must be a path no roster member owns. `.claude/rules/**`
@@ -1030,7 +1132,17 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: a root in-scope ownerless file denies unmarked and allows once its marker is written" {
+@test "out-of-scope diffs allow with no marker and spawn nobody" {
+  run_case_rows \
+    row_allows_a_docs_metadata_only_pr_wiki_claude_gaia \
+    row_allows_a_root_level_markdown_only_pr \
+    row_allows_a_docs_only_pr_under_docs \
+    row_fc_4_no_deadlock_skills_prose_spawns_nobody_not_the_default \
+    row_fc_4_no_deadlock_wiki_claude_root_markdown_spawns_nobody_and
+}
+
+# Row of "ownerless in-scope root files deny unmarked and allow on the frontend marker (case table)": FC-4 no-deadlock: a root in-scope ownerless file denies unmarked and allows once its marker is written
+row_fc_4_no_deadlock_a_root_in_scope_ownerless_file_denies_unmar() {
   commit_files "Makefile" "all:"
   set=$(spawn_set)
   [ -z "$set" ]
@@ -1053,7 +1165,8 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: nested public/** (in-scope, ownerless) denies unmarked and allows once its marker is written" {
+# Row of "ownerless in-scope root files deny unmarked and allow on the frontend marker (case table)": FC-4 no-deadlock: nested public/** (in-scope, ownerless) denies unmarked and allows once its marker is written
+row_fc_4_no_deadlock_nested_public_in_scope_ownerless_denies_unm() {
   commit_files "public/logo.svg" "<svg></svg>"
   set=$(spawn_set)
   [ -z "$set" ]
@@ -1066,7 +1179,16 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-deadlock: an ownerless in-scope file riding with a specialized member spawns the specialized member only" {
+@test "ownerless in-scope root files deny unmarked and allow on the frontend marker (case table)" {
+  run_case_rows \
+    row_fc_4_no_deadlock_a_root_in_scope_ownerless_file_denies_unmar \
+    row_fc_4_no_deadlock_nested_public_in_scope_ownerless_denies_unm \
+    row_and_aggregator_root_makefile_only_diff_denies_without_a_mark \
+    row_and_aggregator_root_makefile_only_diff_allows_once_the_legac
+}
+
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": FC-4 no-deadlock: an ownerless in-scope file riding with a specialized member spawns the specialized member only
+row_fc_4_no_deadlock_an_ownerless_in_scope_file_riding_with_a_sp() {
   # The dispatched set here is non-empty (the shell member owns y.sh), so the
   # hook takes the member-aware path and never reaches its legacy out-of-scope
   # gate: the Makefile is audited by nobody. This is the gate's own
@@ -1090,14 +1212,16 @@ assert_not_in_set() {
 
 # --- No useless spawn: withholding a spawned member's marker must deny -----
 
-@test "FC-4 no-useless-spawn: mixed diff denies while only the default member's marker is present" {
+# Row of "a missing member marker denies (case table)": FC-4 no-useless-spawn: mixed diff denies while only the default member's marker is present
+row_fc_4_no_useless_spawn_mixed_diff_denies_while_only_the_defau() {
   commit_files "apps/web/app/x.tsx" "export const X = 1" ".gaia/scripts/y.sh" "#!/bin/bash"
   write_marker "code-audit-frontend"
   run_merge_hook
   assert_denied_by_json
 }
 
-@test "FC-4 no-useless-spawn: mixed diff denies with only the shell marker, then allows once both are present" {
+# Row of "a missing member marker denies (case table)": FC-4 no-useless-spawn: mixed diff denies with only the shell marker, then allows once both are present
+row_fc_4_no_useless_spawn_mixed_diff_denies_with_only_the_shell() {
   commit_files "apps/web/app/x.tsx" "export const X = 1" ".gaia/scripts/y.sh" "#!/bin/bash"
   write_marker "code-audit-maintainer-shell"
   run_merge_hook
@@ -1108,11 +1232,19 @@ assert_not_in_set() {
   assert_allowed_by_json
 }
 
-@test "FC-4 no-useless-spawn: framework-shell-only diff denies with a frontend marker instead of the shell one" {
+# Row of "a missing member marker denies (case table)": FC-4 no-useless-spawn: framework-shell-only diff denies with a frontend marker instead of the shell one
+row_fc_4_no_useless_spawn_framework_shell_only_diff_denies_with() {
   commit_files ".gaia/scripts/y.sh" "#!/bin/bash"
   write_marker "code-audit-frontend"
   run_merge_hook
   assert_denied_by_json
+}
+
+@test "a missing member marker denies (case table)" {
+  run_case_rows \
+    row_fc_4_no_useless_spawn_mixed_diff_denies_while_only_the_defau \
+    row_fc_4_no_useless_spawn_mixed_diff_denies_with_only_the_shell \
+    row_fc_4_no_useless_spawn_framework_shell_only_diff_denies_with
 }
 
 # --- Linked-worktree anchoring (regression) ---------------------------------
@@ -1171,7 +1303,8 @@ teardown_linked_worktree() {
   return 0
 }
 
-@test "linked worktree: a marker keyed to the WORKTREE's own content allows the merge" {
+# Row of "linked worktree digest keys on the acting tree (case table)": linked worktree: a marker keyed to the WORKTREE's own content allows the merge
+row_linked_worktree_a_marker_keyed_to_the_worktree_s_own_content() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   setup_linked_worktree
 
@@ -1188,7 +1321,8 @@ teardown_linked_worktree() {
   [[ "$output" != *'"permissionDecision": "deny"'* ]]
 }
 
-@test "linked worktree: a marker keyed to MAIN's content does NOT clear the worktree's merge" {
+# Row of "linked worktree digest keys on the acting tree (case table)": linked worktree: a marker keyed to MAIN's content does NOT clear the worktree's merge
+row_linked_worktree_a_marker_keyed_to_main_s_content_does_not_cl() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   setup_linked_worktree
 
@@ -1211,11 +1345,18 @@ teardown_linked_worktree() {
   [[ "$output" == *'"permissionDecision": "deny"'* ]]
 }
 
+@test "linked worktree digest keys on the acting tree (case table)" {
+  run_case_rows \
+    row_linked_worktree_a_marker_keyed_to_the_worktree_s_own_content \
+    row_linked_worktree_a_marker_keyed_to_main_s_content_does_not_cl
+}
+
 # A `--repo` naming this repository is this repository wherever the merge runs
 # from. Neither the worktree's directory nor REPO's is named `gaia`, so a
 # comparison against a checkout's directory name reads both merges below as
 # foreign and exits before any audit check.
-@test "linked worktree: --repo naming this repository is still gated" {
+# Row of "a --repo or -R naming this repository is still gated, another repository exits (case table)": linked worktree: --repo naming this repository is still gated
+row_linked_worktree_repo_naming_this_repository_is_still_gated() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
   setup_linked_worktree
@@ -1226,7 +1367,8 @@ teardown_linked_worktree() {
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
 }
 
-@test "linked worktree: a quoted --repo naming this repository is still gated" {
+# Row of "a --repo or -R naming this repository is still gated, another repository exits (case table)": linked worktree: a quoted --repo naming this repository is still gated
+row_linked_worktree_a_quoted_repo_naming_this_repository_is_stil() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
   setup_linked_worktree
@@ -1237,7 +1379,8 @@ teardown_linked_worktree() {
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
 }
 
-@test "linked worktree: a brace-expanded --repo naming this repository is still gated" {
+# Row of "a --repo or -R naming this repository is still gated, another repository exits (case table)": linked worktree: a brace-expanded --repo naming this repository is still gated
+row_linked_worktree_a_brace_expanded_repo_naming_this_repository() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
   setup_linked_worktree
@@ -1248,7 +1391,8 @@ teardown_linked_worktree() {
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
 }
 
-@test "linked worktree: --repo naming another repository exits before the gate" {
+# Row of "a --repo or -R naming this repository is still gated, another repository exits (case table)": linked worktree: --repo naming another repository exits before the gate
+row_linked_worktree_repo_naming_another_repository_exits_before() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
   setup_linked_worktree
@@ -1262,7 +1406,8 @@ teardown_linked_worktree() {
 
 # gh takes its repository flag ahead of the subcommand too, and that spelling
 # has to reach the gate rather than fail open past it.
-@test "a repository flag ahead of the subcommand naming this repository is still gated" {
+# Row of "a --repo or -R naming this repository is still gated, another repository exits (case table)": a repository flag ahead of the subcommand naming this repository is still gated
+row_a_repository_flag_ahead_of_the_subcommand_naming_this_reposi() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
 
@@ -1280,7 +1425,8 @@ teardown_linked_worktree() {
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
 }
 
-@test "a repository flag ahead of the subcommand naming another repository exits before the gate" {
+# Row of "a --repo or -R naming this repository is still gated, another repository exits (case table)": a repository flag ahead of the subcommand naming another repository exits before the gate
+row_a_repository_flag_ahead_of_the_subcommand_naming_another_rep() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
 
@@ -1293,7 +1439,8 @@ teardown_linked_worktree() {
 # The repo-scope verdict covers the whole tool call, so a foreign `gh` ahead of
 # a home merge, even a read-only one, does not carry the merge past the gate
 # (gaia-react/gaia#2081).
-@test "a foreign gh in the same call does not exempt a home merge" {
+# Row of "a foreign command or cd in the same call never exempts a home merge (case table)": a foreign gh in the same call does not exempt a home merge
+row_a_foreign_gh_in_the_same_call_does_not_exempt_a_home_merge() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
 
@@ -1310,7 +1457,8 @@ teardown_linked_worktree() {
 
 # A `cd` inside a subshell moves nothing for the merge after it, so it cannot
 # carry that merge past the gate as foreign.
-@test "a cd into another repository inside a subshell does not exempt a later home merge" {
+# Row of "a foreign command or cd in the same call never exempts a home merge (case table)": a cd into another repository inside a subshell does not exempt a later home merge
+row_a_cd_into_another_repository_inside_a_subshell_does_not_exem() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   local other
   other=$(mktemp -d -t merge-other-XXXXXX)
@@ -1327,7 +1475,8 @@ gh pr merge 30 --squash"
 
 # A comment line after `&&` does not end the list, so the `cd` after it may
 # never run and the merge after that is this repository's.
-@test "a cd continued past a comment line after && does not exempt a later home merge" {
+# Row of "a foreign command or cd in the same call never exempts a home merge (case table)": a cd continued past a comment line after && does not exempt a later home merge
+row_a_cd_continued_past_a_comment_line_after_does_not_exempt_a_l() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   local other
   other=$(mktemp -d -t merge-other-XXXXXX)
@@ -1341,7 +1490,15 @@ gh pr merge 30 --squash"
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
 }
 
-@test "a call whose every command is foreign exits before the gate" {
+@test "a foreign command or cd in the same call never exempts a home merge (case table)" {
+  run_case_rows \
+    row_a_foreign_gh_in_the_same_call_does_not_exempt_a_home_merge \
+    row_a_cd_into_another_repository_inside_a_subshell_does_not_exem \
+    row_a_cd_continued_past_a_comment_line_after_does_not_exempt_a_l
+}
+
+# Row of "a --repo or -R naming this repository is still gated, another repository exits (case table)": a call whose every command is foreign exits before the gate
+row_a_call_whose_every_command_is_foreign_exits_before_the_gate() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
 
@@ -1351,13 +1508,26 @@ gh pr merge 30 --squash"
   true
 }
 
-@test "checkout not named for the repository: --repo naming this repository is still gated" {
+# Row of "a --repo or -R naming this repository is still gated, another repository exits (case table)": checkout not named for the repository: --repo naming this repository is still gated
+row_checkout_not_named_for_the_repository_repo_naming_this_repos() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
 
   run_merge_hook "gh pr merge 30 --repo gaia-react/gaia --squash --delete-branch"
   [ "$status" -eq 0 ]
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
+}
+
+@test "a --repo or -R naming this repository is still gated, another repository exits (case table)" {
+  run_case_rows \
+    row_linked_worktree_repo_naming_this_repository_is_still_gated \
+    row_linked_worktree_a_quoted_repo_naming_this_repository_is_stil \
+    row_linked_worktree_a_brace_expanded_repo_naming_this_repository \
+    row_linked_worktree_repo_naming_another_repository_exits_before \
+    row_a_repository_flag_ahead_of_the_subcommand_naming_this_reposi \
+    row_a_repository_flag_ahead_of_the_subcommand_naming_another_rep \
+    row_checkout_not_named_for_the_repository_repo_naming_this_repos \
+    row_a_call_whose_every_command_is_foreign_exits_before_the_gate
 }
 
 # ---------------------------------------------------------------------------
@@ -1375,7 +1545,8 @@ gh pr merge 30 --squash"
 # the title, so every case below states its file list explicitly.
 # ---------------------------------------------------------------------------
 
-@test "chore(deps): a dep-bump PR with a manifest-only file list is allowed with no marker at all" {
+# Row of "chore(deps) bypass allows only a manifest-only record bound to the named pull request (case table)": chore(deps): a dep-bump PR with a manifest-only file list is allowed with no marker at all
+row_chore_deps_a_dep_bump_pr_with_a_manifest_only_file_list_is_a() {
   install_gh_stub_with_title "chore(deps): bump the github-actions group" "[]" "package.json" "pnpm-lock.yaml"
   install_chore_deps_predicate
   commit_files "package.json" "{}"
@@ -1384,7 +1555,8 @@ gh pr merge 30 --squash"
   assert_allowed_by_json
 }
 
-@test "chore(deps): a dep-bump title whose PR changes app/ still requires a marker" {
+# Row of "chore(deps) bypass allows only a manifest-only record bound to the named pull request (case table)": chore(deps): a dep-bump title whose PR changes app/ still requires a marker
+row_chore_deps_a_dep_bump_title_whose_pr_changes_app_still_requi() {
   install_gh_stub_with_title "chore(deps): bump the github-actions group" "[]" "package.json" "apps/web/app/x.ts"
   install_chore_deps_predicate
   commit_files "apps/web/app/x.ts" "export const x = 1"
@@ -1393,7 +1565,8 @@ gh pr merge 30 --squash"
   assert_denied_by_json
 }
 
-@test "chore(deps): a record with no files keeps the marker mandatory" {
+# Row of "chore(deps) bypass allows only a manifest-only record bound to the named pull request (case table)": chore(deps): a record with no files keeps the marker mandatory
+row_chore_deps_a_record_with_no_files_keeps_the_marker_mandatory() {
   install_gh_stub_with_title "chore(deps): bump the github-actions group"
   install_chore_deps_predicate
   commit_files "apps/web/app/x.ts" "export const x = 1"
@@ -1402,7 +1575,8 @@ gh pr merge 30 --squash"
   assert_denied_by_json
 }
 
-@test "chore(deps): an ordinary PR title still requires a marker" {
+# Row of "chore(deps) bypass allows only a manifest-only record bound to the named pull request (case table)": chore(deps): an ordinary PR title still requires a marker
+row_chore_deps_an_ordinary_pr_title_still_requires_a_marker() {
   install_gh_stub_with_title "feat: add a thing" "[]" "package.json"
   install_chore_deps_predicate
   commit_files "apps/web/app/x.ts" "export const x = 1"
@@ -1628,7 +1802,8 @@ run_recording_hook() {
   grep -qF 'anchor default-branch' <<<"$output" || return 1
 }
 
-@test "a cached audit base that differs from the record's base denies, naming the git config --unset recovery" {
+# Row of "a cached audit base differing from the record's denies, equal does not (case table)": a cached audit base that differs from the record's base denies, naming the git config --unset recovery
+row_a_cached_audit_base_that_differs_from_the_record_s_base_deni() {
   install_gh_stub
   # A recorded head other than local HEAD keeps the empty-range permit from
   # clearing the merge ahead of the stale-cache check.
@@ -1640,13 +1815,20 @@ run_recording_hook() {
   grep -qF 'git config --unset branch.feature.gaia-audit-base' <<<"$output" || return 1
 }
 
-@test "a cached audit base equal to the record's base does not trigger the stale-cache deny" {
+# Row of "a cached audit base differing from the record's denies, equal does not (case table)": a cached audit base equal to the record's base does not trigger the stale-cache deny
+row_a_cached_audit_base_equal_to_the_record_s_base_does_not_trig() {
   install_gh_stub
   git -C "$REPO" config branch.feature.gaia-audit-base main
 
   run_merge_hook
   grep -qF 'gaia-audit-base' <<<"$output" && return 1
   true
+}
+
+@test "a cached audit base differing from the record's denies, equal does not (case table)" {
+  run_case_rows \
+    row_a_cached_audit_base_that_differs_from_the_record_s_base_deni \
+    row_a_cached_audit_base_equal_to_the_record_s_base_does_not_trig
 }
 
 @test "an unresolvable base denies, and the reason names it as unresolvable" {
@@ -1665,7 +1847,8 @@ run_recording_hook() {
   grep -qF 'base unresolved' <<<"$output" || return 1
 }
 
-@test "a synced default-branch checkout denies gh pr merge for a pull request it is not on (no record)" {
+# Row of "empty range permits only when every conjunct holds (case table)": a synced default-branch checkout denies gh pr merge for a pull request it is not on (no record)
+row_a_synced_default_branch_checkout_denies_gh_pr_merge_for_a_pu() {
   # The reproduced hole: on a synced default branch merge-base(HEAD,
   # refs/remotes/origin/main) IS HEAD, so the range holds zero files on remote
   # provenance. Nothing in the command being gated says which pull request 999
@@ -1678,7 +1861,8 @@ run_recording_hook() {
   assert_denied_by_json
 }
 
-@test "a synced default-branch checkout denies even when the record answers with this checkout's own head sha" {
+# Row of "empty range permits only when every conjunct holds (case table)": a synced default-branch checkout denies even when the record answers with this checkout's own head sha
+row_a_synced_default_branch_checkout_denies_even_when_the_record() {
   # Isolates the anchor conjunct: trust is remote and the recorded head sha
   # matches local HEAD, so only "the base was taken against the pull request's
   # own recorded base branch" stands between this and a permit.
@@ -1690,7 +1874,8 @@ run_recording_hook() {
   assert_denied_by_json
 }
 
-@test "an empty range on a record base denies when the recorded head sha is not local HEAD" {
+# Row of "empty range permits only when every conjunct holds (case table)": an empty range on a record base denies when the recorded head sha is not local HEAD
+row_an_empty_range_on_a_record_base_denies_when_the_recorded_hea() {
   # Isolates the head-sha conjunct: anchor and trust both qualify, and the
   # checkout is simply not on the pull request being merged.
   set_origin_main_at refs/heads/feature
@@ -1700,7 +1885,8 @@ run_recording_hook() {
   assert_denied_by_json
 }
 
-@test "an empty range denies when the command names a pull request other than the record's" {
+# Row of "empty range permits only when every conjunct holds (case table)": an empty range denies when the command names a pull request other than the record's
+row_an_empty_range_denies_when_the_command_names_a_pull_request() {
   # Isolates the number conjunct: trust, anchor and head sha all qualify, so
   # the ONLY thing between this and the permit its sibling above earns is that
   # the record describes pull request 30 and the command merges 999. The
@@ -1715,7 +1901,8 @@ run_recording_hook() {
   assert_denied_by_json
 }
 
-@test "an empty range denies when the command names a target the gate cannot confirm" {
+# Row of "empty range permits only when every conjunct holds (case table)": an empty range denies when the command names a target the gate cannot confirm
+row_an_empty_range_denies_when_the_command_names_a_target_the_ga() {
   # `gh pr merge` also accepts a branch and a URL. Both resolve to a number
   # only through a network read this gate does not make, so an unconfirmable
   # target takes the deny rather than the relaxation. A separated option value
@@ -1738,7 +1925,8 @@ run_recording_hook() {
   assert_denied_by_json
 }
 
-@test "an empty range denies when a separated option value is the record's own number" {
+# Row of "empty range permits only when every conjunct holds (case table)": an empty range denies when a separated option value is the record's own number
+row_an_empty_range_denies_when_a_separated_option_value_is_the_r() {
   # The defect this pins: skipping options by their leading dash alone reads a
   # value-taking flag's SEPARATED value as the positional. Every spelling below
   # hands the record's number to a flag and merges 999, so a scanner that does
@@ -1753,7 +1941,8 @@ run_recording_hook() {
   assert_denied_by_json
 }
 
-@test "an empty range still permits when a separated option value sits beside the record's own number" {
+# Row of "empty range permits only when every conjunct holds (case table)": an empty range still permits when a separated option value sits beside the record's own number
+row_an_empty_range_still_permits_when_a_separated_option_value_s() {
   # The complement of the test above, and what keeps its deny from being
   # trivially satisfied by "any command carrying a flag value denies": the same
   # flag shapes with the RECORD's number as the real positional still permit,
@@ -1770,7 +1959,8 @@ run_recording_hook() {
   assert_allowed_by_json
 }
 
-@test "an empty range denies anything at all following the merge in the same command" {
+# Row of "empty range permits only when every conjunct holds (case table)": an empty range denies anything at all following the merge in the same command
+row_an_empty_range_denies_anything_at_all_following_the_merge_in() {
   # One tool call, two merges: the first names the record's pull request and
   # the second an arbitrary one. Reading the first reference and permitting
   # would clear both, so the relaxation requires the merge to be the whole
@@ -1790,7 +1980,8 @@ run_recording_hook() {
   assert_denied_by_json
 }
 
-@test "an empty range denies a second merge smuggled in through an expansion" {
+# Row of "empty range permits only when every conjunct holds (case table)": an empty range denies a second merge smuggled in through an expansion
+row_an_empty_range_denies_a_second_merge_smuggled_in_through_an() {
   # The class a word-level tokenizer cannot report. An expansion is ordinary
   # word text to a scan that models words, so the scan reaches the end of the
   # string having found no separator at all while the shell runs the payload
@@ -1807,7 +1998,8 @@ run_recording_hook() {
   assert_denied_by_json
 }
 
-@test "an empty range denies when the merge is not the first command in the tool call" {
+# Row of "empty range permits only when every conjunct holds (case table)": an empty range denies when the merge is not the first command in the tool call
+row_an_empty_range_denies_when_the_merge_is_not_the_first_comman() {
   # The shared scanner reads the FIRST command and abstains otherwise, because
   # whatever sits ahead of a merge decides which repository and which checkout
   # it lands in. An abstention denies here rather than being read approximately.
@@ -1818,6 +2010,20 @@ run_recording_hook() {
 
   run_merge_hook "echo ready && gh pr merge 30 --squash"
   assert_denied_by_json
+}
+
+@test "empty range permits only when every conjunct holds (case table)" {
+  run_case_rows \
+    row_a_synced_default_branch_checkout_denies_gh_pr_merge_for_a_pu \
+    row_a_synced_default_branch_checkout_denies_even_when_the_record \
+    row_an_empty_range_on_a_record_base_denies_when_the_recorded_hea \
+    row_an_empty_range_denies_when_the_command_names_a_pull_request \
+    row_an_empty_range_denies_when_the_command_names_a_target_the_ga \
+    row_an_empty_range_denies_when_a_separated_option_value_is_the_r \
+    row_an_empty_range_still_permits_when_a_separated_option_value_s \
+    row_an_empty_range_denies_anything_at_all_following_the_merge_in \
+    row_an_empty_range_denies_a_second_merge_smuggled_in_through_an \
+    row_an_empty_range_denies_when_the_merge_is_not_the_first_comman
 }
 
 @test "a non-empty dispatched member set still denies while a member withholds, on remote provenance at the recorded head" {
@@ -1887,7 +2093,8 @@ run_recording_hook() {
   true
 }
 
-@test "the gate denies with well-formed JSON when gh is absent from PATH entirely" {
+# Row of "the gate denies with JSON when gh is absent or has no record (case table)": the gate denies with well-formed JSON when gh is absent from PATH entirely
+row_the_gate_denies_with_well_formed_json_when_gh_is_absent_from() {
   # resolve_pr_record returns at its `command -v gh` guard, before any field
   # assignment. Every reader of a record field must survive that under set -u,
   # or the hook dies and emits nothing at all where it owes a deny.
@@ -1900,7 +2107,8 @@ run_recording_hook() {
   [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')" = "deny" ]
 }
 
-@test "the gate denies with well-formed JSON when gh answers with no record at all" {
+# Row of "the gate denies with JSON when gh is absent or has no record (case table)": the gate denies with well-formed JSON when gh answers with no record at all
+row_the_gate_denies_with_well_formed_json_when_gh_answers_with_n() {
   # The other early return: gh exists, and there is no pull request for this
   # branch. Same obligation, reached one line later.
   set_origin_main_at refs/heads/feature
@@ -1921,6 +2129,12 @@ EOF
   [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')" = "deny" ]
 }
 
+@test "the gate denies with JSON when gh is absent or has no record (case table)" {
+  run_case_rows \
+    row_the_gate_denies_with_well_formed_json_when_gh_is_absent_from \
+    row_the_gate_denies_with_well_formed_json_when_gh_answers_with_n
+}
+
 # ---------------------------------------------------------------------------
 # Arming: which command shapes reach the gate at all
 #
@@ -1931,7 +2145,8 @@ EOF
 # here asserting a deny is asserting that the gate ran at all.
 # ---------------------------------------------------------------------------
 
-@test "arming: a merge that is not the first command still reaches the gate" {
+# Row of "arming: which command shapes reach the gate (case table)": arming: a merge that is not the first command still reaches the gate
+row_arming_a_merge_that_is_not_the_first_command_still_reaches_t() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -1942,7 +2157,8 @@ EOF
   assert_denied_by_json
 }
 
-@test "arming: a non-merge command carrying the word merge does not arm the gate" {
+# Row of "arming: which command shapes reach the gate (case table)": arming: a non-merge command carrying the word merge does not arm the gate
+row_arming_a_non_merge_command_carrying_the_word_merge_does_not() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -1968,7 +2184,8 @@ EOF
 # proves the arm still clears the pull request it is meant to.
 # ---------------------------------------------------------------------------
 
-@test "chore(deps): the bypass denies a merge naming a pull request other than the record's" {
+# Row of "chore(deps) bypass allows only a manifest-only record bound to the named pull request (case table)": chore(deps): the bypass denies a merge naming a pull request other than the record's
+row_chore_deps_the_bypass_denies_a_merge_naming_a_pull_request_o() {
   install_gh_stub_with_title "chore(deps): bump the github-actions group" "[]" "package.json"
   install_chore_deps_predicate
   commit_files "package.json" "{}"
@@ -1981,7 +2198,8 @@ EOF
   assert_denied_by_json
 }
 
-@test "chore(deps): the bypass still fires when the command names no pull request" {
+# Row of "chore(deps) bypass allows only a manifest-only record bound to the named pull request (case table)": chore(deps): the bypass still fires when the command names no pull request
+row_chore_deps_the_bypass_still_fires_when_the_command_names_no() {
   install_gh_stub_with_title "chore(deps): bump the github-actions group" "[]" "package.json"
   install_chore_deps_predicate
   commit_files "package.json" "{}"
@@ -1990,6 +2208,16 @@ EOF
   # pull request the record was read for, so the turnkey spelling keeps clearing.
   run_merge_hook "gh pr merge --squash --delete-branch"
   assert_allowed_by_json
+}
+
+@test "chore(deps) bypass allows only a manifest-only record bound to the named pull request (case table)" {
+  run_case_rows \
+    row_chore_deps_a_dep_bump_pr_with_a_manifest_only_file_list_is_a \
+    row_chore_deps_a_dep_bump_title_whose_pr_changes_app_still_requi \
+    row_chore_deps_a_record_with_no_files_keeps_the_marker_mandatory \
+    row_chore_deps_an_ordinary_pr_title_still_requires_a_marker \
+    row_chore_deps_the_bypass_denies_a_merge_naming_a_pull_request_o \
+    row_chore_deps_the_bypass_still_fires_when_the_command_names_no
 }
 
 # bats test_tags=protected
@@ -2001,7 +2229,8 @@ EOF
   assert_denied_by_json
 }
 
-@test "out-of-scope: the bypass still fires when the command names no pull request" {
+# Row of "out-of-scope bypass binds to the named pull request (case table)": out-of-scope: the bypass still fires when the command names no pull request
+row_out_of_scope_the_bypass_still_fires_when_the_command_names_n() {
   install_gh_stub
   commit_files "wiki/x.md" "doc"
 
@@ -2020,7 +2249,8 @@ EOF
 # a diff that owes no marker.
 # ---------------------------------------------------------------------------
 
-@test "unbound bypass: a lone merge of a .gaia-only pull request bypasses" {
+# Row of "out-of-scope bypass binds to the named pull request (case table)": unbound bypass: a lone merge of a .gaia-only pull request bypasses
+row_unbound_bypass_a_lone_merge_of_a_gaia_only_pull_request_bypa() {
   install_gh_stub
   commit_files ".gaia/audit-residual-dismissals.jsonl" "{}"
 
@@ -2028,7 +2258,8 @@ EOF
   assert_allowed_by_json
 }
 
-@test "unbound bypass: a compound merge of a .gaia-only pull request names the binding and the lone spelling" {
+# Row of "out-of-scope bypass binds to the named pull request (case table)": unbound bypass: a compound merge of a .gaia-only pull request names the binding and the lone spelling
+row_unbound_bypass_a_compound_merge_of_a_gaia_only_pull_request() {
   install_gh_stub
   commit_files ".gaia/audit-residual-dismissals.jsonl" "{}"
 
@@ -2040,7 +2271,8 @@ EOF
   return 0
 }
 
-@test "unbound bypass: a piped merge of a .gaia-only pull request names the binding and the lone spelling" {
+# Row of "out-of-scope bypass binds to the named pull request (case table)": unbound bypass: a piped merge of a .gaia-only pull request names the binding and the lone spelling
+row_unbound_bypass_a_piped_merge_of_a_gaia_only_pull_request_nam() {
   install_gh_stub
   commit_files ".gaia/audit-residual-dismissals.jsonl" "{}"
 
@@ -2051,7 +2283,8 @@ EOF
   return 0
 }
 
-@test "unbound bypass: a compound merge of a mixed diff keeps the marker deny" {
+# Row of "out-of-scope bypass binds to the named pull request (case table)": unbound bypass: a compound merge of a mixed diff keeps the marker deny
+row_unbound_bypass_a_compound_merge_of_a_mixed_diff_keeps_the_ma() {
   install_gh_stub
   commit_files \
     "wiki/x.md" "doc" \
@@ -2063,7 +2296,8 @@ EOF
   return 0
 }
 
-@test "unbound bypass: a compound merge of a chore(deps) manifest-only pull request names the binding" {
+# Row of "out-of-scope bypass binds to the named pull request (case table)": unbound bypass: a compound merge of a chore(deps) manifest-only pull request names the binding
+row_unbound_bypass_a_compound_merge_of_a_chore_deps_manifest_onl() {
   install_gh_stub_with_title "chore(deps): bump the github-actions group" "[]" "package.json"
   install_chore_deps_predicate
   commit_files "package.json" "{}"
@@ -2076,7 +2310,8 @@ EOF
   return 0
 }
 
-@test "unbound bypass: the chore(deps) binding deny also holds on the single-signal path" {
+# Row of "out-of-scope bypass binds to the named pull request (case table)": unbound bypass: the chore(deps) binding deny also holds on the single-signal path
+row_unbound_bypass_the_chore_deps_binding_deny_also_holds_on_the() {
   # With the member resolver absent the gate takes the single-signal path, which
   # carries its own copy of the deny; the case above drives the member-aware one.
   rm -f "$REPO/.gaia/scripts/resolve-audit-members.sh"
@@ -2089,6 +2324,17 @@ EOF
   grep -qF -- "could not bind the merge command" <<<"$output" || return 1
   grep -qF -- "PR title does not match" <<<"$output" && return 1
   return 0
+}
+
+@test "out-of-scope bypass binds to the named pull request (case table)" {
+  run_case_rows \
+    row_out_of_scope_the_bypass_still_fires_when_the_command_names_n \
+    row_unbound_bypass_a_lone_merge_of_a_gaia_only_pull_request_bypa \
+    row_unbound_bypass_a_compound_merge_of_a_gaia_only_pull_request \
+    row_unbound_bypass_a_piped_merge_of_a_gaia_only_pull_request_nam \
+    row_unbound_bypass_a_compound_merge_of_a_mixed_diff_keeps_the_ma \
+    row_unbound_bypass_a_compound_merge_of_a_chore_deps_manifest_onl \
+    row_unbound_bypass_the_chore_deps_binding_deny_also_holds_on_the
 }
 
 # --- Clearance binding: the merge names the pull request the clearance is for
@@ -2117,7 +2363,8 @@ EOF
   assert_denied_by_json
 }
 
-@test "clearance: a frontend marker still clears a merge naming the record's own number" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: a frontend marker still clears a merge naming the record's own number
+row_clearance_a_frontend_marker_still_clears_a_merge_naming_the() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2126,7 +2373,8 @@ EOF
   assert_allowed_by_json
 }
 
-@test "clearance: a frontend marker still clears when the command names no pull request" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: a frontend marker still clears when the command names no pull request
+row_clearance_a_frontend_marker_still_clears_when_the_command_na() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2154,7 +2402,8 @@ EOF
   return 0
 }
 
-@test "clearance: a GAIA-Audit CI status denies a merge naming a pull request other than the record's" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: a GAIA-Audit CI status denies a merge naming a pull request other than the record's
+row_clearance_a_gaia_audit_ci_status_denies_a_merge_naming_a_pul() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   install_gh_stub_with_status
 
@@ -2162,7 +2411,8 @@ EOF
   assert_denied_by_json
 }
 
-@test "clearance: a GAIA-Audit CI status still clears a merge naming the record's own number" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: a GAIA-Audit CI status still clears a merge naming the record's own number
+row_clearance_a_gaia_audit_ci_status_still_clears_a_merge_naming() {
   commit_files "apps/web/app/x.ts" "export const x = 1"
   install_gh_stub_with_status
 
@@ -2170,7 +2420,8 @@ EOF
   assert_allowed_by_json
 }
 
-@test "clearance: a specialized member's marker denies a merge naming a pull request other than the record's" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: a specialized member's marker denies a merge naming a pull request other than the record's
+row_clearance_a_specialized_member_s_marker_denies_a_merge_namin() {
   install_gh_stub
   commit_files ".gaia/scripts/y.sh" "#!/bin/bash"
   set=$(spawn_set)
@@ -2183,7 +2434,8 @@ EOF
   assert_denied_by_json
 }
 
-@test "clearance: a specialized member's marker still clears when the command names no pull request" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: a specialized member's marker still clears when the command names no pull request
+row_clearance_a_specialized_member_s_marker_still_clears_when_th() {
   install_gh_stub
   commit_files ".gaia/scripts/y.sh" "#!/bin/bash"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2192,7 +2444,8 @@ EOF
   assert_allowed_by_json
 }
 
-@test "clearance: a merge naming an unconfirmable target denies even with every marker present" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: a merge naming an unconfirmable target denies even with every marker present
+row_clearance_a_merge_naming_an_unconfirmable_target_denies_even() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2204,7 +2457,8 @@ EOF
   assert_denied_by_json
 }
 
-@test "clearance: the legacy permit site binds when the dispatched set is empty" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: the legacy permit site binds when the dispatched set is empty
+row_clearance_the_legacy_permit_site_binds_when_the_dispatched_s() {
   install_gh_stub
   # Every other case here commits an owned path, so the dispatched set is
   # non-empty and they all exit through the AND-aggregator. The legacy
@@ -2220,7 +2474,8 @@ EOF
   grep -qF -- "does not name the pull request" <<<"$output"
 }
 
-@test "clearance: the legacy permit site still clears the record's own number" {
+# Row of "clearance permits bind to the pull request the merge names (case table)": clearance: the legacy permit site still clears the record's own number
+row_clearance_the_legacy_permit_site_still_clears_the_record_s_o() {
   install_gh_stub
   commit_files "wiki/x.md" "# x"
   [ -z "$(spawn_set)" ]
@@ -2230,7 +2485,21 @@ EOF
   assert_allowed_by_json
 }
 
-@test "clearance: the deny reads the record rather than reporting it unread" {
+@test "clearance permits bind to the pull request the merge names (case table)" {
+  run_case_rows \
+    row_clearance_a_frontend_marker_still_clears_a_merge_naming_the \
+    row_clearance_a_frontend_marker_still_clears_when_the_command_na \
+    row_clearance_a_gaia_audit_ci_status_denies_a_merge_naming_a_pul \
+    row_clearance_a_gaia_audit_ci_status_still_clears_a_merge_naming \
+    row_clearance_a_specialized_member_s_marker_denies_a_merge_namin \
+    row_clearance_a_specialized_member_s_marker_still_clears_when_th \
+    row_clearance_a_merge_naming_an_unconfirmable_target_denies_even \
+    row_clearance_the_legacy_permit_site_binds_when_the_dispatched_s \
+    row_clearance_the_legacy_permit_site_still_clears_the_record_s_o
+}
+
+# Row of "binding deny reason names the right cause (case table)": clearance: the deny reads the record rather than reporting it unread
+row_clearance_the_deny_reads_the_record_rather_than_reporting_it() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2246,7 +2515,8 @@ EOF
   return 0
 }
 
-@test "clearance: a readable command naming the right number blames the spelling, not the target" {
+# Row of "binding deny reason names the right cause (case table)": clearance: a readable command naming the right number blames the spelling, not the target
+row_clearance_a_readable_command_naming_the_right_number_blames() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2263,7 +2533,8 @@ EOF
   return 0
 }
 
-@test "clearance: an unreadable command with no number blames the spelling, not the target" {
+# Row of "binding deny reason names the right cause (case table)": clearance: an unreadable command with no number blames the spelling, not the target
+row_clearance_an_unreadable_command_with_no_number_blames_the_sp() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2281,7 +2552,8 @@ EOF
   return 0
 }
 
-@test "clearance: a genuine mismatch still gets the mismatch headline, not the spelling one" {
+# Row of "binding deny reason names the right cause (case table)": clearance: a genuine mismatch still gets the mismatch headline, not the spelling one
+row_clearance_a_genuine_mismatch_still_gets_the_mismatch_headlin() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2294,7 +2566,8 @@ EOF
   return 0
 }
 
-@test "clearance: the deny says a clearance does not lift it, rather than sending the operator back to the audit" {
+# Row of "binding deny reason names the right cause (case table)": clearance: the deny says a clearance does not lift it, rather than sending the operator back to the audit
+row_clearance_the_deny_says_a_clearance_does_not_lift_it_rather() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2309,7 +2582,8 @@ EOF
   return 0
 }
 
-@test "clearance: the deny names the binding rather than reporting the signal missing" {
+# Row of "binding deny reason names the right cause (case table)": clearance: the deny names the binding rather than reporting the signal missing
+row_clearance_the_deny_names_the_binding_rather_than_reporting_t() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2319,6 +2593,16 @@ EOF
   # The marker IS present, so a "no signal for HEAD" reason would send the
   # operator to re-spawn the audit forever. The reason must name the mismatch.
   grep -qF -- '999' <<<"$output"
+}
+
+@test "binding deny reason names the right cause (case table)" {
+  run_case_rows \
+    row_clearance_the_deny_reads_the_record_rather_than_reporting_it \
+    row_clearance_a_readable_command_naming_the_right_number_blames \
+    row_clearance_an_unreadable_command_with_no_number_blames_the_sp \
+    row_clearance_a_genuine_mismatch_still_gets_the_mismatch_headlin \
+    row_clearance_the_deny_says_a_clearance_does_not_lift_it_rather \
+    row_clearance_the_deny_names_the_binding_rather_than_reporting_t
 }
 
 @test "arming: a large non-merge command does not pay an unbounded scan" {
@@ -2395,7 +2679,8 @@ run_merge_hook_library_absent() {
   invoke_hook_in "$REPO" "$json" "$stage/pr-merge-audit-check.sh"
 }
 
-@test "data-proof: a cat-to-file heredoc body carrying the verb does not arm" {
+# Row of "arming: which command shapes reach the gate (case table)": data-proof: a cat-to-file heredoc body carrying the verb does not arm
+row_data_proof_a_cat_to_file_heredoc_body_carrying_the_verb_does() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -2404,7 +2689,8 @@ run_merge_hook_library_absent() {
   [ -z "$output" ]
 }
 
-@test "data-proof: removing the heredoc opener line leaves the same body text armed" {
+# Row of "arming: which command shapes reach the gate (case table)": data-proof: removing the heredoc opener line leaves the same body text armed
+row_data_proof_removing_the_heredoc_opener_line_leaves_the_same() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -2414,7 +2700,8 @@ run_merge_hook_library_absent() {
   assert_denied_by_json
 }
 
-@test "arming: a merge cited in a pull-request body passed through a quoted-delimiter heredoc is allowed" {
+# Row of "arming: which command shapes reach the gate (case table)": arming: a merge cited in a pull-request body passed through a quoted-delimiter heredoc is allowed
+row_arming_a_merge_cited_in_a_pull_request_body_passed_through_a() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -2446,7 +2733,8 @@ run_merge_hook_library_absent() {
   true
 }
 
-@test "data-proof: the same payload with the quote terminated is proven data and allowed" {
+# Row of "arming: which command shapes reach the gate (case table)": data-proof: the same payload with the quote terminated is proven data and allowed
+row_data_proof_the_same_payload_with_the_quote_terminated_is_pro() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -2455,7 +2743,8 @@ run_merge_hook_library_absent() {
   [ -z "$output" ]
 }
 
-@test "data-proof: a heredoc-body merge at the character bound is proven data and allowed" {
+# Row of "arming: which command shapes reach the gate (case table)": data-proof: a heredoc-body merge at the character bound is proven data and allowed
+row_data_proof_a_heredoc_body_merge_at_the_character_bound_is_pr() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -2466,7 +2755,8 @@ run_merge_hook_library_absent() {
   [ -z "$output" ]
 }
 
-@test "no-regression: an unrelated first line with an unquoted merge on the second line still arms" {
+# Row of "arming: which command shapes reach the gate (case table)": no-regression: an unrelated first line with an unquoted merge on the second line still arms
+row_no_regression_an_unrelated_first_line_with_an_unquoted_merge() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -2474,7 +2764,8 @@ run_merge_hook_library_absent() {
   assert_denied_by_json
 }
 
-@test "no-regression: a merge after a word-initial # comment does not arm" {
+# Row of "arming: which command shapes reach the gate (case table)": no-regression: a merge after a word-initial # comment does not arm
+row_no_regression_a_merge_after_a_word_initial_comment_does_not() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -2483,7 +2774,21 @@ run_merge_hook_library_absent() {
   [ -z "$output" ]
 }
 
-@test "library-absent: repo-scope.sh missing denies by name, not by blaming the command's spelling" {
+@test "arming: which command shapes reach the gate (case table)" {
+  run_case_rows \
+    row_arming_a_merge_that_is_not_the_first_command_still_reaches_t \
+    row_arming_a_non_merge_command_carrying_the_word_merge_does_not \
+    row_data_proof_a_cat_to_file_heredoc_body_carrying_the_verb_does \
+    row_data_proof_removing_the_heredoc_opener_line_leaves_the_same \
+    row_arming_a_merge_cited_in_a_pull_request_body_passed_through_a \
+    row_data_proof_the_same_payload_with_the_quote_terminated_is_pro \
+    row_data_proof_a_heredoc_body_merge_at_the_character_bound_is_pr \
+    row_no_regression_an_unrelated_first_line_with_an_unquoted_merge \
+    row_no_regression_a_merge_after_a_word_initial_comment_does_not
+}
+
+# Row of "a missing gate library or payload reader denies, a missing walker degrades to arming (case table)": library-absent: repo-scope.sh missing denies by name, not by blaming the command's spelling
+row_library_absent_repo_scope_sh_missing_denies_by_name_not_by_b() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2500,7 +2805,8 @@ run_merge_hook_library_absent() {
   return 0
 }
 
-@test "library-absent: audit-scope.sh missing denies through the library guard, naming the ownership classifier" {
+# Row of "a missing gate library or payload reader denies, a missing walker degrades to arming (case table)": library-absent: audit-scope.sh missing denies through the library guard, naming the ownership classifier
+row_library_absent_audit_scope_sh_missing_denies_through_the_lib() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
   write_markers_for_spawn_set "$(spawn_set)"
@@ -2510,13 +2816,15 @@ run_merge_hook_library_absent() {
   grep -qF -- 'cannot load the ownership classifier' <<<"$output"
 }
 
-@test "library-absent: verb-arming.sh missing denies every Bash tool call, naming the file" {
+# Row of "a missing gate library or payload reader denies, a missing walker degrades to arming (case table)": library-absent: verb-arming.sh missing denies every Bash tool call, naming the file
+row_library_absent_verb_arming_sh_missing_denies_every_bash_tool() {
   run_merge_hook_library_absent "verb-arming.sh" "echo hi"
   assert_denied_by_json
   grep -qF 'verb-arming.sh' <<<"$output" || return 1
 }
 
-@test "walker-absent: verb-arming-walk.sh missing degrades to the raw match, so the heredoc-body payload still arms" {
+# Row of "a missing gate library or payload reader denies, a missing walker degrades to arming (case table)": walker-absent: verb-arming-walk.sh missing degrades to the raw match, so the heredoc-body payload still arms
+row_walker_absent_verb_arming_walk_sh_missing_degrades_to_the_ra() {
   install_gh_stub
   commit_files "apps/web/app/x.ts" "export const x = 1"
 
@@ -2534,7 +2842,8 @@ run_merge_hook_library_absent() {
 
 # ---- SPEC-092: the apps/web/ roster globs and the merge-layer fail-closed ---
 
-@test "apps/web/ roster: a apps/web/app diff is claimed by the default member, so its marker is demanded and clears" {
+# Row of "dispatched-member spawn set allows once each spawned member's marker is written (case table)": apps/web/ roster: a apps/web/app diff is claimed by the default member, so its marker is demanded and clears
+row_apps_web_roster_a_apps_web_app_diff_is_claimed_by_the_defaul() {
   commit_files "apps/web/app/routes/x.tsx" "export const X = 1"
   [ "$(spawn_set)" = "code-audit-frontend" ]
   run_merge_hook
@@ -2544,7 +2853,23 @@ run_merge_hook_library_absent() {
   assert_allowed_by_json
 }
 
-@test "apps/web/ roster guard can fail: with the apps/web/ globs removed the resolver is empty and the gate still refuses without a frontend marker" {
+@test "dispatched-member spawn set allows once each spawned member's marker is written (case table)" {
+  run_case_rows \
+    row_fc_4_no_deadlock_apps_web_app_x_tsx_spawns_the_default_membe \
+    row_fc_4_no_deadlock_frontend_tsconfig_json_spawns_the_default_m \
+    row_fc_4_no_deadlock_a_ci_workflow_spawns_the_workflows_member_o \
+    row_fc_4_no_deadlock_framework_shell_spawns_the_shell_member_onl \
+    row_fc_4_no_deadlock_framework_cli_typescript_spawns_the_node_me \
+    row_fc_4_no_deadlock_mixed_app_framework_shell_spawns_both_sorte \
+    row_fc_4_no_deadlock_an_ownerless_in_scope_file_riding_with_a_sp \
+    row_apps_web_roster_a_apps_web_app_diff_is_claimed_by_the_defaul \
+    row_and_aggregator_app_only_diff_allows_once_the_frontend_marker \
+    row_and_aggregator_mixed_app_gaia_sh_diff_allows_once_both_dispa \
+    row_and_aggregator_gaia_sh_only_diff_allows_once_the_maintainer
+}
+
+# Row of "roster-less or unanswerable resolver denies (case table)": apps/web/ roster guard can fail: with the apps/web/ globs removed the resolver is empty and the gate still refuses without a frontend marker
+row_apps_web_roster_guard_can_fail_with_the_apps_web_globs_remov() {
   grep -vE '"apps/(web/|\*\*")' "$REPO/.gaia/audit-ci.yml" > "$REPO/.gaia/audit-ci.yml.tmp"
   mv "$REPO/.gaia/audit-ci.yml.tmp" "$REPO/.gaia/audit-ci.yml"
   commit_files "apps/web/app/routes/x.tsx" "export const X = 1"
@@ -2555,9 +2880,17 @@ run_merge_hook_library_absent() {
   [[ "$output" == *'code-audit-frontend'* ]]
 }
 
+@test "roster-less or unanswerable resolver denies (case table)" {
+  run_case_rows \
+    row_a_roster_less_config_denies_with_the_roster_named_even_on_a \
+    row_and_aggregator_a_resolver_that_cannot_answer_denies_instead \
+    row_apps_web_roster_guard_can_fail_with_the_apps_web_globs_remov
+}
+
 # --- the one-jq payload reader ---
 
-@test "lib/hook-payload.sh absent: a payload the hook would deny exits 2 naming the library" {
+# Row of "a missing gate library or payload reader denies, a missing walker degrades to arming (case table)": lib/hook-payload.sh absent: a payload the hook would deny exits 2 naming the library
+row_lib_hook_payload_sh_absent_a_payload_the_hook_would_deny_exi() {
   local hooks_directory scratch_hooks payload
   hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
   scratch_hooks="$BATS_TEST_TMPDIR/scratch-hooks"
@@ -2568,6 +2901,15 @@ run_merge_hook_library_absent() {
   run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$BATS_TEST_TMPDIR" "$payload" "$scratch_hooks/pr-merge-audit-check.sh"
   [ "$status" -eq 2 ]
   grep -qF 'BLOCKED: pr-merge-audit-check.sh cannot load lib/hook-payload.sh' <<<"$output"
+}
+
+@test "a missing gate library or payload reader denies, a missing walker degrades to arming (case table)" {
+  run_case_rows \
+    row_library_absent_repo_scope_sh_missing_denies_by_name_not_by_b \
+    row_library_absent_audit_scope_sh_missing_denies_through_the_lib \
+    row_library_absent_verb_arming_sh_missing_denies_every_bash_tool \
+    row_walker_absent_verb_arming_walk_sh_missing_degrades_to_the_ra \
+    row_lib_hook_payload_sh_absent_a_payload_the_hook_would_deny_exi
 }
 
 # --- the gate's own siblings ---
@@ -2671,19 +3013,22 @@ release_skip_gate_agrees() {
   assert_allowed_by_json || { echo "markers for the resolver's members did not clear: $output" >&2; return 1; }
 }
 
-@test "release skip: the gate owes markers from exactly the resolver's members on a release-applying branch" {
+# Row of "the gate owes markers from exactly the resolver's members across release contexts (case table)": release skip: the gate owes markers from exactly the resolver's members on a release-applying branch
+row_release_skip_the_gate_owes_markers_from_exactly_the_resolver() {
   command -v jq >/dev/null 2>&1 || skip "jq required"
   release_skip_gate_branch release
   release_skip_gate_agrees release "$(printf 'fixture-default\nfixture-scripts')"
 }
 
-@test "release skip: the gate owes markers from exactly the resolver's members on an ordinary branch" {
+# Row of "the gate owes markers from exactly the resolver's members across release contexts (case table)": release skip: the gate owes markers from exactly the resolver's members on an ordinary branch
+row_release_skip_the_gate_owes_markers_from_exactly_the_resolver_2() {
   command -v jq >/dev/null 2>&1 || skip "jq required"
   release_skip_gate_branch ordinary
   release_skip_gate_agrees ordinary fixture-shell
 }
 
-@test "release skip: the gate agreement fails when the digest arms against the base tip instead of the merge base" {
+# Row of "the gate owes markers from exactly the resolver's members across release contexts (case table)": release skip: the gate agreement fails when the digest arms against the base tip instead of the merge base
+row_release_skip_the_gate_agreement_fails_when_the_digest_arms_a() {
   command -v jq >/dev/null 2>&1 || skip "jq required"
   release_skip_gate_branch release
   # The base takes the same update after the branch was cut, so the tip's
@@ -2706,6 +3051,13 @@ release_skip_gate_agrees() {
   [[ "$output" == *"markers for the resolver's members did not clear"* ]] || return 1
 }
 
+@test "the gate owes markers from exactly the resolver's members across release contexts (case table)" {
+  run_case_rows \
+    row_release_skip_the_gate_owes_markers_from_exactly_the_resolver \
+    row_release_skip_the_gate_owes_markers_from_exactly_the_resolver_2 \
+    row_release_skip_the_gate_agreement_fails_when_the_digest_arms_a
+}
+
 # ---------------------------------------------------------------------------
 # The release-bookkeeping arm: a change the release-bookkeeping predicate
 # accepts is wholly out of scope, so the out-of-scope bypass clears it with no
@@ -2726,7 +3078,8 @@ release_bookkeeping_gate_branch() {
   release_bookkeeping_apply "$REPO"
 }
 
-@test "release bookkeeping: the out-of-scope bypass clears a bookkeeping release with no markers" {
+# Row of "release bookkeeping clears only when the release context is armed (case table)": release bookkeeping: the out-of-scope bypass clears a bookkeeping release with no markers
+row_release_bookkeeping_the_out_of_scope_bypass_clears_a_bookkee() {
   command -v jq >/dev/null 2>&1 || skip "jq required"
   release_bookkeeping_gate_branch
   [ -z "$(spawn_set)" ]
@@ -2734,7 +3087,8 @@ release_bookkeeping_gate_branch() {
   assert_allowed_by_json
 }
 
-@test "release bookkeeping: the clear fails against a bypass that never arms the release context" {
+# Row of "release bookkeeping clears only when the release context is armed (case table)": release bookkeeping: the clear fails against a bypass that never arms the release context
+row_release_bookkeeping_the_clear_fails_against_a_bypass_that_ne() {
   command -v jq >/dev/null 2>&1 || skip "jq required"
   release_bookkeeping_gate_branch
   local real_root scratch="$BATS_TEST_TMPDIR/unarmed-bypass" json
@@ -2752,4 +3106,10 @@ release_bookkeeping_gate_branch() {
   cmp -s "$real_root/.claude/hooks/pr-merge-audit-check-bypass.sh" "$scratch/.claude/hooks/pr-merge-audit-check-bypass.sh" && return 1
   invoke_hook_in "$REPO" "$json" "$scratch/.claude/hooks/pr-merge-audit-check.sh"
   assert_denied_by_json
+}
+
+@test "release bookkeeping clears only when the release context is armed (case table)" {
+  run_case_rows \
+    row_release_bookkeeping_the_out_of_scope_bypass_clears_a_bookkee \
+    row_release_bookkeeping_the_clear_fails_against_a_bypass_that_ne
 }

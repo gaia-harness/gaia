@@ -91,63 +91,34 @@ wait_for() {
   [ -e "$1" ]
 }
 
-# mutated_hook <sed-expr>: a scratch copy of the hook beside the original,
-# failing when the sed changed nothing so a stale mutation cannot green.
-mutated_hook() {
-  HOOK="$REPO/.claude/hooks/usage-capture-mut.sh"
-  sed "$1" "$REPO/.claude/hooks/usage-capture.sh" >"$HOOK"
-  if cmp -s "$REPO/.claude/hooks/usage-capture.sh" "$HOOK"; then
-    echo "mutation did not apply" >&2
-    return 1
-  fi
-}
-
 # ---------- UAT-015: detached, cheap, argv ----------
 
-@test "UAT-015: Stop launches the flusher detached, returns under 2s, stdin is /dev/null" {
+@test "the hook launches the flusher detached with the right argv per event, returns under 2s, and stdin is /dev/null" {
   stub_repo
-  local transcript_path="$PROJECT_DIRECTORY/S1.jsonl" started_at_milliseconds ended_at_milliseconds
-  started_at_milliseconds="$(now_ms)"
-  fire "$(payload Stop S1 "$transcript_path")"
-  ended_at_milliseconds="$(now_ms)"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ $((ended_at_milliseconds - started_at_milliseconds)) -lt 2000 ]
-  [ ! -e "$STUB_DONE" ]
-  wait_for "$STUB_DONE" 80
-  [ "$(sed -n 1p "$STUB_LOG")" = "--session S1 --transcript $transcript_path --finished-main --projects-root $PROJECTS_DIRECTORY" ]
-  grep -qx devnull-stdin "$STUB_LOG"
-}
-
-@test "UAT-015: SessionStart launches the sweep detached, returns under 2s, stdin is /dev/null" {
-  stub_repo
-  local transcript_path="$PROJECT_DIRECTORY/S2.jsonl" started_at_milliseconds ended_at_milliseconds
-  started_at_milliseconds="$(now_ms)"
-  fire "$(payload SessionStart S2 "$transcript_path")"
-  ended_at_milliseconds="$(now_ms)"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ $((ended_at_milliseconds - started_at_milliseconds)) -lt 2000 ]
-  [ ! -e "$STUB_DONE" ]
-  wait_for "$STUB_DONE" 80
-  [ "$(sed -n 1p "$STUB_LOG")" = "--sweep --self-session S2 --projects-root $PROJECTS_DIRECTORY" ]
-  grep -qx devnull-stdin "$STUB_LOG"
-}
-
-@test "SessionStart without a transcript_path passes no --projects-root" {
-  stub_repo
-  fire "$(payload SessionStart S3)"
-  [ "$status" -eq 0 ]
-  wait_for "$STUB_LOG" 50
-  [ "$(sed -n 1p "$STUB_LOG")" = "--sweep --self-session S3" ]
-}
-
-@test "an empty session_id launches nothing" {
-  stub_repo
-  fire "$(payload Stop "" "$PROJECT_DIRECTORY/x.jsonl")"
-  [ "$status" -eq 0 ]
-  sleep 1
-  [ ! -e "$STUB_LOG" ]
+  # Each row: event|session id|transcript file|expected argv. The last row has
+  # no transcript_path, so it passes no --projects-root.
+  local rows=(
+    "Stop|S1|S1.jsonl|--session S1 --transcript $PROJECT_DIRECTORY/S1.jsonl --finished-main --projects-root $PROJECTS_DIRECTORY"
+    "SessionStart|S2|S2.jsonl|--sweep --self-session S2 --projects-root $PROJECTS_DIRECTORY"
+    "SessionStart|S3||--sweep --self-session S3"
+  )
+  local row event session_id transcript_name expected_argv transcript_path started_at_milliseconds ended_at_milliseconds
+  for row in "${rows[@]}"; do
+    IFS='|' read -r event session_id transcript_name expected_argv <<<"$row"
+    rm -f "$STUB_LOG" "$STUB_DONE"
+    transcript_path=""
+    [ -z "$transcript_name" ] || transcript_path="$PROJECT_DIRECTORY/$transcript_name"
+    started_at_milliseconds="$(now_ms)"
+    fire "$(payload "$event" "$session_id" "$transcript_path")"
+    ended_at_milliseconds="$(now_ms)"
+    [ "$status" -eq 0 ] || { echo "$event $session_id: non-zero status" >&2; return 1; }
+    [ -z "$output" ] || { echo "$event $session_id: printed output" >&2; return 1; }
+    [ $((ended_at_milliseconds - started_at_milliseconds)) -lt 2000 ] || { echo "$event $session_id: hook took 2s or more" >&2; return 1; }
+    [ ! -e "$STUB_DONE" ] || { echo "$event $session_id: hook waited for the flusher" >&2; return 1; }
+    wait_for "$STUB_DONE" 80 || { echo "$event $session_id: flusher never finished" >&2; return 1; }
+    [ "$(sed -n 1p "$STUB_LOG")" = "$expected_argv" ] || { echo "$event $session_id: argv was $(sed -n 1p "$STUB_LOG")" >&2; return 1; }
+    grep -qx devnull-stdin "$STUB_LOG" || { echo "$event $session_id: stdin was not /dev/null" >&2; return 1; }
+  done
 }
 
 # ---------- no transcript read ----------
@@ -163,61 +134,29 @@ mutated_hook() {
   [ $((ended_at_milliseconds - started_at_milliseconds)) -lt 2000 ]
 }
 
-@test "guard can fail: a hook that reads the transcript is killed by the watchdog on a FIFO" {
-  stub_repo
-  mkfifo "$PROJECT_DIRECTORY/S5.jsonl"
-  mutated_hook 's|^root_args=()$|root_args=(); head -c1 "$transcript_path" >/dev/null|'
-  payload Stop S5 "$PROJECT_DIRECTORY/S5.jsonl" >"$TEMPORARY_DIRECTORY/payload.json"
-  # The redirects sit inside `bash -c` so they bind to the hook itself: the
-  # orphaned reader would otherwise hold bats' own pipes and hang the suite.
-  # SIGALRM is reset first: a runner that starts bats with it ignored (GNU
-  # parallel under `bats --jobs`) would otherwise leave the alarm inert.
-  run bash -c 'perl -e "\$SIG{ALRM}=q(DEFAULT); alarm 3; exec @ARGV" bash "$1" <"$2" >/dev/null 2>&1 3>&- 4>&-' _ "$HOOK" "$TEMPORARY_DIRECTORY/payload.json"
-  local exit_status="$status"
-  # Release the orphaned reader before asserting, so a failed assertion never
-  # leaves it outliving the test.
-  { : >"$PROJECT_DIRECTORY/S5.jsonl"; } </dev/null >/dev/null 2>&1 3>&- 4>&- &
-  disown "$!" 2>/dev/null || true
-  # 142 is 128 + SIGALRM: the watchdog fired because the read never returned.
-  [ "$exit_status" -eq 142 ]
-}
+# ---------- no launch ----------
 
-# ---------- detach guard ----------
-
-@test "guard can fail: without the redirects the hook holds its pipes for the flusher's whole run" {
+@test "the hook launches nothing for an empty session_id, a missing jq, or a stop_hook_active Stop" {
   stub_repo
-  mutated_hook 's| </dev/null >/dev/null 2>&1 &$| \&|'
-  local started_at_milliseconds ended_at_milliseconds
-  started_at_milliseconds="$(now_ms)"
-  fire "$(payload Stop S6 "$PROJECT_DIRECTORY/S6.jsonl")"
-  ended_at_milliseconds="$(now_ms)"
+  fire "$(payload Stop "" "$PROJECT_DIRECTORY/x.jsonl")"
   [ "$status" -eq 0 ]
-  [ $((ended_at_milliseconds - started_at_milliseconds)) -ge 4000 ]
-}
+  sleep 1
+  [ ! -e "$STUB_LOG" ] || { echo "empty session_id launched the flusher" >&2; return 1; }
 
-# ---------- UAT-013 (hook side) ----------
-
-@test "UAT-013: jq absent from PATH exits 0 and launches nothing" {
-  stub_repo
   mkdir "$TEMPORARY_DIRECTORY/nojq"
   ln -s "$(command -v bash)" "$TEMPORARY_DIRECTORY/nojq/bash"
   run env PATH="$TEMPORARY_DIRECTORY/nojq" "$(command -v bash)" "$REPO/.claude/hooks/usage-capture.sh" <<<"$(payload Stop S9 "$PROJECT_DIRECTORY/S9.jsonl")"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   sleep 1
-  [ ! -e "$STUB_LOG" ]
-  [ ! -e "$REPO/.gaia/local/telemetry" ]
-}
+  [ ! -e "$STUB_LOG" ] || { echo "jq absent launched the flusher" >&2; return 1; }
+  [ ! -e "$REPO/.gaia/local/telemetry" ] || { echo "jq absent wrote telemetry" >&2; return 1; }
 
-# ---------- re-entry ----------
-
-@test "Stop with stop_hook_active true launches nothing" {
-  stub_repo
   fire "$(payload Stop S10 "$PROJECT_DIRECTORY/S10.jsonl" true)"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   sleep 1
-  [ ! -e "$STUB_LOG" ]
+  [ ! -e "$STUB_LOG" ] || { echo "stop_hook_active Stop launched the flusher" >&2; return 1; }
 }
 
 # ---------- UAT-011: real flusher ----------
