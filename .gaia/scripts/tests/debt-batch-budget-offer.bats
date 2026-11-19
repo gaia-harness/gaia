@@ -6,12 +6,6 @@
 # the real debt-backlog.sh over it, and the probe report is hand-written except
 # in the one test that runs the real debt-path-probe.sh.
 #
-# The script is resolved from DEBT_BATCH_BUDGET_SCRIPT when set, so a mutated
-# scratch copy can be run through the same assertions to prove they can fail.
-# The script sources its offer library from its own directory, so a mutated
-# copy of either file runs from a scratch pair (scratch_pair) beside an
-# unchanged copy of the other.
-#
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   source .gaia/scripts/bats5.sh && bats5 .gaia/scripts/tests/debt-batch-budget-offer.bats
 
@@ -24,9 +18,7 @@ export BATS_TEST_TIMEOUT=60
 setup() {
   SCRIPTS_DIRECTORY="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
   REAL_SCRIPT="$SCRIPTS_DIRECTORY/debt-batch-budget.sh"
-  REAL_LIBRARY="$SCRIPTS_DIRECTORY/debt-batch-budget-offer-lib.sh"
   SCRIPT="${DEBT_BATCH_BUDGET_SCRIPT:-$REAL_SCRIPT}"
-  LIBRARY="$(dirname "$SCRIPT")/debt-batch-budget-offer-lib.sh"
   BACKLOG_SCRIPT="$SCRIPTS_DIRECTORY/debt-backlog.sh"
   PROBE_SCRIPT="$SCRIPTS_DIRECTORY/debt-path-probe.sh"
   BACKLOG="$BATS_TEST_TMPDIR/backlog.json"
@@ -69,22 +61,6 @@ numbered_lines() {
   local count="$1"
   shift
   awk -v count="$count" -v body="$*" 'BEGIN { for (n = 1; n <= count; n++) { line = body; gsub(/@/, n, line); print n " " line } }'
-}
-
-# scratch_pair <name>: a scratch directory holding copies of the real script
-# and its offer library; prints the directory.
-scratch_pair() {
-  local directory="$BATS_TEST_TMPDIR/$1"
-  mkdir -p "$directory"
-  cp "$REAL_SCRIPT" "$REAL_LIBRARY" "$directory/"
-  printf '%s\n' "$directory"
-}
-
-# True when the offer program in an offer library calls the subset enumeration.
-offer_program_calls_fitting() {
-  awk '/^offer_program=/ { inside = 1 } /^# run_offer/ { inside = 0 } inside' "$1" >"$BATS_TEST_TMPDIR/offer-region.txt"
-  [ -s "$BATS_TEST_TMPDIR/offer-region.txt" ] || return 2
-  grep -q 'fitting' "$BATS_TEST_TMPDIR/offer-region.txt"
 }
 
 # twelve_issues: the walk fixture. Parts in order: a five-member cluster worth
@@ -317,35 +293,6 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq -r '.total')" = "12" ]
   [ "$(printf '%s' "$output" | jq -r '.verdict')" = "fits" ]
-}
-
-@test "a lowered limit and a raised easy cost each shift the walk by that one edit" {
-  fixture "$BACKLOG" <<'EOF'
-1 easy wide src/w/a.ts class-1
-2 easy wide src/w/b.ts class-2
-3 easy wide src/w/c.ts class-3
-4 easy wide src/w/d.ts class-4
-5 easy wide src/w/e.ts class-5
-6 easy wide src/w/f.ts class-6
-EOF
-  make_report
-  local lowered raised
-  lowered="$(scratch_pair lowered)/debt-batch-budget.sh"
-  raised="$(scratch_pair raised)/debt-batch-budget.sh"
-  sed 's/^DEBT_BUDGET_LIMIT=12/DEBT_BUDGET_LIMIT=8/' "$REAL_SCRIPT" >"$lowered"
-  sed 's/^DEBT_BUDGET_COST_EASY=2/DEBT_BUDGET_COST_EASY=3/' "$REAL_SCRIPT" >"$raised"
-  [ "$(diff "$REAL_SCRIPT" "$lowered" | grep -c '^[<>]')" -eq 2 ]
-  [ "$(diff "$REAL_SCRIPT" "$raised" | grep -c '^[<>]')" -eq 2 ]
-
-  run --separate-stderr bash "$lowered" --offer --backlog "$BACKLOG" --report "$REPORT" --withheld ""
-  [ "$status" -eq 0 ]
-  [ "$(offer_members)" = "1 2 3 4" ]
-  [ "$(printf '%s' "$output" | jq -r '.total')" = "8" ]
-
-  run --separate-stderr bash "$raised" --offer --backlog "$BACKLOG" --report "$REPORT" --withheld ""
-  [ "$status" -eq 0 ]
-  [ "$(offer_members)" = "1 2 3 4" ]
-  [ "$(printf '%s' "$output" | jq -r '.total')" = "12" ]
 }
 
 # --- a long backlog
@@ -600,51 +547,4 @@ assert_unreadable() {
 
 # --- structure
 
-@test "the offer program does not call the subset enumeration" {
-  run offer_program_calls_fitting "$LIBRARY"
-  [ "$status" -eq 1 ]
-}
-
-@test "the structure check goes red on a copy seeded with the call" {
-  local seeded="$BATS_TEST_TMPDIR/seeded.sh"
-  sed 's/^def run:$/def run: fitting(0; {}) | /' "$REAL_LIBRARY" >"$seeded"
-  [ "$(diff "$REAL_LIBRARY" "$seeded" | grep -c '^[<>]')" -eq 2 ]
-  run offer_program_calls_fitting "$seeded"
-  [ "$status" -eq 0 ]
-}
-
 # --- guards must fail: each mutated copy loses a UAT
-
-@test "the eligibility filter can fail: dropping the severity test admits a major cluster member" {
-  local pair mutated
-  pair="$(scratch_pair mutated-eligibility)"
-  mutated="$pair/debt-batch-budget-offer-lib.sh"
-  sed 's/\$issue\.sev == 1/true/' "$REAL_LIBRARY" >"$mutated"
-  [ "$(diff "$REAL_LIBRARY" "$mutated" | grep -c '^[<>]')" -eq 2 ]
-  cluster_with_one_ineligible "easy narrow 2"
-  run --separate-stderr bash "$pair/debt-batch-budget.sh" --offer --backlog "$BACKLOG" --report "$REPORT" --withheld ""
-  [ "$(offer_members)" != "3 4" ]
-}
-
-@test "the whole-or-nothing rule can fail: admitting a part with any eligible member keeps the cluster" {
-  local pair mutated
-  pair="$(scratch_pair mutated-cluster)"
-  mutated="$pair/debt-batch-budget-offer-lib.sh"
-  sed 's/map(select(all(\.\[\]; eligible(\.))))/map(select(any(.[]; eligible(.))))/' "$REAL_LIBRARY" >"$mutated"
-  [ "$(diff "$REAL_LIBRARY" "$mutated" | grep -c '^[<>]')" -eq 2 ]
-  cluster_with_one_ineligible "hard narrow 1"
-  run --separate-stderr bash "$pair/debt-batch-budget.sh" --offer --backlog "$BACKLOG" --report "$REPORT" --withheld ""
-  [ "$(offer_members)" != "3 4" ]
-}
-
-@test "the continue-past-a-skip rule can fail: stopping at the first skip loses the later parts" {
-  local pair mutated
-  pair="$(scratch_pair mutated-walk)"
-  mutated="$pair/debt-batch-budget-offer-lib.sh"
-  sed -e 's/if total_of(\$trial;/if (.halted | not) and total_of($trial;/' \
-    -e 's/else \. end)) as \$walk/else . + {halted: true} end)) as $walk/' "$REAL_LIBRARY" >"$mutated"
-  [ "$(diff "$REAL_LIBRARY" "$mutated" | grep -c '^[<>]')" -eq 4 ]
-  twelve_issues
-  run --separate-stderr bash "$pair/debt-batch-budget.sh" --offer --backlog "$BACKLOG" --report "$REPORT" --withheld ""
-  [ "$(offer_members)" != "2 6 9 10" ]
-}

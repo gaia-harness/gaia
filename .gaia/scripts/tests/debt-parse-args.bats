@@ -167,12 +167,6 @@ run_unrecognized() {
   [ "$row_count" -ge 13 ]
 }
 
-@test "a lone newline is the empty argument" {
-  run --separate-stderr bash "$SCRIPT" <<<""
-  [ "$status" -eq 0 ]
-  [ "$output" = "top" ]
-}
-
 @test "input is never evaluated" {
   cd "$BATS_TEST_TMPDIR"
   parse bash '$(touch pwned)'

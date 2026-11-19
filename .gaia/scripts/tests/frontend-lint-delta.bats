@@ -37,7 +37,16 @@ commit_change() {
   git -C "$FIXTURE" commit -q -m change
 }
 
-@test "a changed frontend source file is linted and a non-frontend file is not" {
+# reset_fixture: back to the base commit with no leftover files, so one fixture
+# serves every case of a table.
+reset_fixture() {
+  git -C "$FIXTURE" reset -q --hard "$BASE"
+  git -C "$FIXTURE" clean -fdq
+  mkdir -p "$FIXTURE/apps/web/app" "$FIXTURE/wiki"
+}
+
+@test "plan selection by path: frontend source, each extension, deletes and moves, non-ASCII, nothing lintable" {
+  echo "case: a changed lintable frontend file is linted and a non-lintable file is not"
   printf 'export const kept = 2;\n' > "$FIXTURE/apps/web/app/kept.ts"
   printf 'body {}\n' > "$FIXTURE/apps/web/app/style.css"
   printf 'note\n' > "$FIXTURE/wiki/page.md"
@@ -45,9 +54,9 @@ commit_change() {
   run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf 'delta\napp/kept.ts')" ]
-}
 
-@test "each lintable extension is selected" {
+  echo "case: each lintable extension is selected"
+  reset_fixture
   for extension in js jsx ts tsx mjs cjs; do
     printf 'export const value = 1;\n' > "$FIXTURE/apps/web/app/file.$extension"
   done
@@ -56,23 +65,31 @@ commit_change() {
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = delta ]
   [ "${#lines[@]}" -eq 7 ]
-}
 
-@test "a deleted file is dropped and a moved file lists only its new path" {
+  echo "case: a deleted file is dropped and a moved file lists only its new path"
+  reset_fixture
   git -C "$FIXTURE" rm -q apps/web/app/gone.ts
   git -C "$FIXTURE" mv apps/web/app/old-name.ts apps/web/app/new-name.ts
   commit_change
   run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf 'delta\napp/new-name.ts')" ]
-}
 
-@test "a path with a non-ASCII name is selected, not C-quoted out" {
+  echo "case: a path with a non-ASCII name is selected, not C-quoted out"
+  reset_fixture
   printf 'export const value = 1;\n' > "$FIXTURE/apps/web/app/café.ts"
   commit_change
   run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf 'delta\napp/café.ts')" ]
+
+  echo "case: a change with nothing lintable selects no lint"
+  reset_fixture
+  printf 'note\n' > "$FIXTURE/wiki/page.md"
+  commit_change
+  run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
+  [ "$status" -eq 0 ]
+  [ "$output" = none ]
 }
 
 @test "each lint input change selects the full lint" {
@@ -103,25 +120,19 @@ commit_change() {
   [ "$output" = full ]
 }
 
-@test "a change with nothing lintable selects no lint" {
-  printf 'note\n' > "$FIXTURE/wiki/page.md"
-  commit_change
-  run "$SCRIPT" --root "$FIXTURE" --base "$BASE" --plan
-  [ "$status" -eq 0 ]
-  [ "$output" = none ]
-}
-
-@test "an unreadable base fails rather than reading as no change" {
+@test "refusals: an unreadable base exits 2, and a missing --base or --root is a usage error" {
+  echo "case: an unreadable base fails rather than reading as no change"
   printf 'export const kept = 2;\n' > "$FIXTURE/apps/web/app/kept.ts"
   commit_change
   run "$SCRIPT" --root "$FIXTURE" --base refs/heads/no-such-branch --plan
   [ "$status" -eq 2 ]
   grep -qF -- "could not read the diff" <<<"$output"
-}
 
-@test "a missing --base or --root is a usage error" {
+  echo "case: a missing --base is a usage error"
   run "$SCRIPT" --root "$FIXTURE" --plan
   [ "$status" -eq 2 ]
+
+  echo "case: a missing --root is a usage error"
   run "$SCRIPT" --base "$BASE" --plan
   [ "$status" -eq 2 ]
 }
