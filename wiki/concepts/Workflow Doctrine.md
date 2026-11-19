@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-11-09
+updated: 2026-11-19
 tags: [concept, claude, workflow, doctrine]
 ---
 
@@ -71,6 +71,12 @@ Claude cannot see its own context reading, so a long session has no way to notic
 The main-session hook stays silent for sub-agents, when there is no fresh reading, and while the audit loop holds the session: its state file for the branch shows this session's latest unit still running (no `unit-<u>.json` yet), or the branch's latest checkpoint (of any session) carries this session, is answered, and has no unit admitted after it. The bands come from `.gaia/scripts/context-checkpoint-lib.sh`, the same source the statusline reads, so the two never disagree. Marks live per session: a session resumed after `/clear` starts unmarked and is checked afresh, while compaction keeps its marks.
 
 A sub-agent gets its own checkpoint from a separate PostToolUse hook, `.claude/hooks/context-checkpoint-subagent.sh`. It reads the sub-agent's context from the sub-agent's own transcript and injects [`.claude/doctrine/context-yield.md`](../../.claude/doctrine/context-yield.md), but only for a sub-agent that opted in by naming a handoff path in its dispatch prompt. A heavy sub-agent writes the handoff and returns instead of running on; the dispatcher re-dispatches a fresh agent from that handoff and halts for the human once the yield limit `gaia_context_yield_limit` returns is passed. The bands and the limit come from `.gaia/scripts/context-checkpoint-lib.sh`; the doctrine file and `.claude/skills/gaia/references/plan/planner.md` own the rules.
+
+## Rate-limit checkpoint
+
+A session cannot see how much of the account's usage windows it has spent. A PreToolUse hook on the dispatch tools (`Agent`, `Task`, `Workflow`) reads the shared rate-limit reading and, once per band per window, injects the reading with a pointer to [`.claude/doctrine/rate-limit-checkpoint.md`](../../.claude/doctrine/rate-limit-checkpoint.md). It runs in main sessions only and never blocks: the dispatch that triggered it proceeds, and the reading governs the dispatches after it.
+
+The reading comes from `.gaia/scripts/rate-limits-lib.sh`, the same source the statusline draws its usage segments from; [[Claude Integration]] describes where the statusline gets its figures. The doctrine file owns the policy: what to ask, what to recommend, and what to do with no human present. This page does not restate it.
 
 ## Concurrency limits
 
@@ -143,6 +149,19 @@ The sub-agent checkpoint hook is registered with no matcher, so it also runs aft
 | Per-session chain over the no-matcher PostToolUse hooks | 3,955 ms | none |
 
 The figures come from one run on a machine whose other sessions were idle, at a 1-minute load of 7.3 at the start and 13.7 at the end; runs under a load of 30 to 63 read the same or lower on every per-call row, so these rows do not track load. Profiling the opted-in path under bash 3.2 splits it into the cost every call pays (about 22 ms, the main-session row), the payload confirm's one `jq` (about 13 ms), the transcript tail read and scan (about 23 ms: `wc`, `tail` of the tail read bound, and the bash scan over it), and the window, line and band (about 6 ms). The per-session row is the main-session hook's below-red, no-marker p50 (34.2 ms, above) plus this hook's main-session payload p50, times 70 tool calls, the median over the 596 main-session transcripts of this repository's maintainer that held at least one tool call (a one-off count of `tool_use` blocks per transcript file). To re-check it, repeat the count on any machine and pass the two inputs to the tool as `--main-hook-ms` and `--median-tool-calls`.
+
+The rate-limit checkpoint hook runs before every `Agent`, `Task` and `Workflow` dispatch of every session. Each path that ends early carries 50 ms and the firing path 100 ms. Measured with `bash .gaia/tests/hooks/rate-limit-checkpoint-timing.sh --runs 30`, through the registered command string with its rooting step included, interleaved next to the same no-op baseline, as a same-load comparison: a copy of the hook with its absent pre-check removed (the script has no flag for it) and the shipped hook, run alternately, two rounds each, p50 per round.
+
+| Path | Without pre-check | Shipped | Budget |
+| --- | --- | --- | --- |
+| Sub-agent payload | 31.6 / 31.0 ms | 29.4 / 36.7 ms | 50 ms |
+| No shared reading | 145.4 / 137.8 ms | 46.8 / 42.8 ms | 50 ms |
+| Below the warning band | 171.5 / 165.5 ms | 182.2 / 161.5 ms | 50 ms |
+| Band already marked | 186.1 / 163.5 ms | 172.8 / 154.5 ms | 50 ms |
+| Firing | 205.1 / 182.6 ms | 212.3 / 163.3 ms | 100 ms |
+| No-op baseline (`/bin/sh -c true`) | 8.2 / 7.8 ms | 9.3 / 6.0 ms | none |
+
+The runs share a 1-minute load of 41 to 48, which inflates every row; compare the columns, not a row against its budget. The no-shared-reading path concludes "absent" from `gaia_resolve_main_root_fast` (`.gaia/scripts/rate-limit-main-root-probe-lib.sh`) without a git process and exits before the other libraries are sourced, about a third of its cost without the pre-check. The paths with a reading run the full `gaia_resolve_main_root` and pay its git calls, at the same cost in both columns.
 <!-- gaia:maintainer-only:end -->
 
 ## See also

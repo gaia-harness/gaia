@@ -732,6 +732,120 @@ resolve_common() {
   [ "$output" = "$REPO/.git" ]
 }
 
+# ---------- fast layout read: parity with the full resolver ----------
+
+# resolve_fast <directory>: the bash-only layout read alone, stdout only.
+resolve_fast() {
+  run bash -c 'source "$1"; source "$2"; gaia_resolve_main_root_fast "$3" 2>/dev/null' _ "$LIBRARY_SCRIPT" "${LIBRARY_SCRIPT%/*}/rate-limit-main-root-probe-lib.sh" "$1"
+}
+
+# resolve_full <directory>: the full resolver itself, which never calls the
+# fast read, so the two answers come from independent code.
+resolve_full() {
+  run bash -c 'source "$1"; gaia_resolve_main_root "$2" 2>/dev/null' _ "$LIBRARY_SCRIPT" "$1"
+}
+
+# assert_fast_agrees_with_full <directory>: whenever the fast read yields a
+# root, the full resolution yields the same one; a deferral prints nothing.
+assert_fast_agrees_with_full() {
+  resolve_fast "$1"
+  local fast_status="$status" fast_output="$output"
+  resolve_full "$1"
+  if [ "$fast_status" -eq 0 ]; then
+    [ "$status" -eq 0 ]
+    [ "$output" = "$fast_output" ]
+  else
+    [ -z "$fast_output" ]
+  fi
+}
+
+@test "fast read: a plain checkout, at its root and from a subdirectory, yields the full resolver's root" {
+  make_repo
+  mkdir -p "$REPO/a/b"
+  local directory
+  for directory in "$REPO" "$REPO/a/b"; do
+    resolve_fast "$directory"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$REPO" ]
+    assert_fast_agrees_with_full "$directory"
+  done
+}
+
+@test "fast read: a linked worktree yields the main root, as the full resolver does" {
+  make_repo
+  make_worktree "$REPO" "w" "fastbranch1"
+  mkdir -p "$WORKTREE/sub"
+  local directory
+  for directory in "$WORKTREE" "$WORKTREE/sub"; do
+    resolve_fast "$directory"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$REPO" ]
+    assert_fast_agrees_with_full "$directory"
+  done
+}
+
+@test "fast read: a symlinked checkout yields the physical root" {
+  make_repo
+  local symlink="${REPO}-fastlink"
+  ln -s "$REPO" "$symlink"
+  CLEANUP_DIRECTORIES+=("$symlink")
+  resolve_fast "$symlink"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$REPO" ]
+  assert_fast_agrees_with_full "$symlink"
+}
+
+@test "fast read: a core.worktree checkout defers and the full resolver decides" {
+  make_repo
+  make_worktree "$REPO" "w" "fastbranch2"
+  local common_config="$REPO/.git/config"
+  git config --file "$common_config" core.worktree "$REPO"
+  resolve_fast "$REPO"
+  local plain_status="$status" plain_output="$output"
+  resolve_fast "$WORKTREE"
+  local linked_status="$status" linked_output="$output"
+  assert_fast_agrees_with_full "$REPO"
+  assert_fast_agrees_with_full "$WORKTREE"
+  git config --file "$common_config" --unset core.worktree || true
+  [ "$plain_status" -ne 0 ]
+  [ -z "$plain_output" ]
+  [ "$linked_status" -ne 0 ]
+  [ -z "$linked_output" ]
+}
+
+@test "fast read: an unrelated core.worktree never yields a root the full resolver refuses" {
+  make_repo
+  make_worktree "$REPO" "w" "fastbranch3"
+  git config --file "$REPO/.git/config" core.worktree "/nonexistent/evil/path"
+  assert_fast_agrees_with_full "$WORKTREE"
+  git config --file "$REPO/.git/config" --unset core.worktree || true
+}
+
+@test "fast read: submodule, separate git dir, a .git directory interior and a non-repository all defer" {
+  make_submodule
+  make_separate_gitdir
+  make_repo
+  local outside
+  outside=$(mktemp -d -t gaia-mrl-outside-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$outside")
+  local directory
+  for directory in "$SUBMODULE" "$WORK" "$REPO/.git" "$REPO/.git/refs" "$outside"; do
+    resolve_fast "$directory"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+    assert_fast_agrees_with_full "$directory"
+  done
+}
+
+@test "fast read: a worktree whose back-link no longer names it defers" {
+  make_repo
+  make_worktree "$REPO" "w" "fastbranch4"
+  printf '%s\n' "$REPO/.claude/worktrees/elsewhere/.git" >"$REPO/.git/worktrees/w/gitdir"
+  resolve_fast "$WORKTREE"
+  [ "$status" -ne 0 ]
+  [ -z "$output" ]
+}
+
 # ---------- structural ----------
 
 @test "structural: main-root-lib.sh is executable" {

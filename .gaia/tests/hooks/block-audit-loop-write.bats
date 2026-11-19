@@ -816,7 +816,7 @@ assert_reaper_denied() {
 
 @test "red twin: without the widened pre-filter a context redirect and an override redirect are allowed" {
   local twin
-  twin=$(scratch_hook 's/^  \*audit-loop\* \| \*state-reaper\* \| \*local\/protected\* \| \*cache\/shared\/context\*\) ;;$/  *audit-loop* | *state-reaper*) ;;/')
+  twin=$(scratch_hook 's/^  \*audit-loop\* \| \*state-reaper\* \| \*local\/protected\* \| \*cache\/shared\/context\*.*\) ;;$/  *audit-loop* | *state-reaper*) ;;/')
   invoke_hook "$(command_payload Bash "printf x > $CONTEXT_FILE" "$MAIN")" "$twin"
   assert_allowed_by_json
   invoke_hook "$(command_payload Bash "echo '{}' > $OVERRIDE" "$MAIN")" "$twin"
