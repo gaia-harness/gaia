@@ -16,7 +16,7 @@ How to write a test at a layer lives in the stack references:
 **Stated requirement.** A stated requirement is a SPEC flow, a success criterion, a scope boundary, an answered clarification, an audit directive, or a statement in a document the SPEC's Required reading names. A spec-less plan's stated requirement is its description; work with no plan states its requirement in its issue or request. A scope boundary or audit directive that directs the builder rather than stating what the app does (ask before adding a dependency, never add a database, rename an env var in every file that names it) names no behavior to test.
 
 - Test stated requirements only.
-- Never plan, list or write a test for a corner case or an error path no stated requirement names.
+- Never plan, list or write a test for a corner case or an error path no stated requirement names. A usage error (a bad flag, a missing argument) is such an error path unless a SPEC, an issue or a calling script depends on its exit code or message.
 - Give a bug fix one test that reproduces the bug.
 - Write at most one test per user-observable behavior; a case table is one test. This is a cap, not a quota: the tests the rules below require still apply.
 - Assert every case a multi-case requirement lists. Split a compound condition into one case per part (`an open, unlocked account`: a closed account, a locked account). Split an order-of-checks requirement into one case per adjacent pair of checks, with an input that passes every earlier check, fails both checks of the pair, and asserts the earlier one refused.
@@ -89,6 +89,10 @@ Outside it, a `.bats` file is shell unless a plan names it as a flow test. A har
 **Guard.** A guard is code that refuses: an access check, a refusal, a validation or a gate.
 
 - Drive every guard into its failing state with a test that asserts the refusal. A test that only watches a guard pass cannot tell a working guard from an inert one.
+- Never commit a mutant or red twin: a copy of a guard or its checker that only proves the suite can fail tests the test. Prove that by mutating in a scratch copy and restoring; the committed test is the guard's real deny case, and every guard keeps at least one.
+<!-- gaia:maintainer-only:start -->
+- In a bats suite, tag that deny case per `.claude/rules/bats-assertions.md`, ``## Mark a guard's real deny case with `# bats test_tags=protected` ``.
+<!-- gaia:maintainer-only:end -->
 - Name a guard's test in the task that delivers the guard, never leave it to the closing flow test. One test may cover several guards of one security kind.
 - A flow test never stands in for a guard's lower-layer test, and a browser test or flow test never counts as the covering sibling of the only lower-layer test driving a guard.
 
