@@ -167,7 +167,7 @@ fi
 # a payload without any is outside the remit with no
 # jq read at all. This is the path every ordinary Bash call takes.
 case "$payload" in
-  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits.json* | *rate-limits-lib.sh* | *'rate-limits.sh write'* | *rate-limits.sh*write*) ;;
+  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits.json* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
   *) exit 0 ;;
 esac
 
@@ -485,7 +485,7 @@ writes_named() {
 
 # guarded_script_kind <word>: rc 0 when the word's file name is one of the two
 # recorders or one of the four reaper scripts; sets SCRIPT_KIND to the deny
-# class (recorder or reaper).
+# class (recorder or reaper). The default matcher of words_run_guarded_script.
 # shellcheck disable=SC2329
 guarded_script_kind() {
   case "$1" in
@@ -501,13 +501,13 @@ guarded_script_kind() {
   return 1
 }
 
-# words_run_guarded_script: rc 0 when the simple command held in the `words`
-# array executes a recorder or a reaper script (command word, or script
-# argument of a shell or `source`/`.`/`exec`).
-# invoked through runs_guarded_script's predicate name
-# shellcheck disable=SC2329
+# words_run_guarded_script [matcher]: rc 0 when the simple command held in the
+# `words` array executes a script the matcher accepts (command word, or script
+# argument of a shell or `source`/`.`/`exec`). The matcher is called as
+# `<matcher> <script-word> <next-word>`; the default, guarded_script_kind,
+# accepts a recorder or a reaper script.
 words_run_guarded_script() {
-  local count=${#words[@]} word_index=0 word base syntax_check
+  local matcher="${1:-guarded_script_kind}" count=${#words[@]} word_index=0 word base syntax_check
 
   # Skip leading NAME=value words, `!`, and `exec`.
   while [ "$word_index" -lt "$count" ]; do
@@ -519,7 +519,7 @@ words_run_guarded_script() {
   [ "$word_index" -lt "$count" ] || return 1
 
   word="${words[$word_index]}"
-  guarded_script_kind "$word" && return 0
+  "$matcher" "$word" "${words[$((word_index + 1))]-}" && return 0
   base="${word##*/}"
   case "$base" in
     bash | sh | zsh | dash | ksh | source | .)
@@ -532,7 +532,7 @@ words_run_guarded_script() {
           -o | +o) word_index=$((word_index + 1)) ;;
           -* | +*) ;;
           *)
-            if guarded_script_kind "$word" && [ "$syntax_check" -eq 0 ]; then
+            if "$matcher" "$word" "${words[$((word_index + 1))]-}" && [ "$syntax_check" -eq 0 ]; then
               return 0
             fi
             break
@@ -545,16 +545,16 @@ words_run_guarded_script() {
   return 1
 }
 
-# runs_guarded_script <command> [predicate]: rc 0 when a simple command in the
-# line executes a recorder or a reaper script, with SCRIPT_KIND naming which, or
-# when the named predicate (default words_run_guarded_script) holds. Each
+# runs_guarded_script <command> [matcher]: rc 0 when a simple command in the
+# line executes a script the matcher accepts (default guarded_script_kind: a
+# recorder or a reaper script, with SCRIPT_KIND naming which). Each
 # segment is read twice, as the shell groups its quotes (a
 # quoted path with a space stays one word) and as blank-separated words with
 # their quotes stripped (a quote the segment split cut in half), and either
 # reading executing a recorder counts.
 runs_guarded_script() {
-  local command_line="$1" run_predicate="${2:-words_run_guarded_script}" segments segment words word_index count word
-  if [ "$run_predicate" = words_run_guarded_script ]; then
+  local command_line="$1" matcher="${2:-guarded_script_kind}" segments segment words word_index count word
+  if [ "$matcher" = guarded_script_kind ]; then
     case "$command_line" in
       *audit-loop-grant.sh* | *audit-loop-ask-grant.sh* | *state-reaper*) ;;
       *) return 1 ;;
@@ -574,7 +574,7 @@ runs_guarded_script() {
       words[word_index]="$word"
       word_index=$((word_index + 1))
     done
-    "$run_predicate" && return 0
+    words_run_guarded_script "$matcher" && return 0
 
     shell_scan "$segment"
     words=()
@@ -585,7 +585,7 @@ runs_guarded_script() {
       word_index=$((word_index + 1))
     done
     [ "$count" -gt 0 ] || continue
-    "$run_predicate" && return 0
+    words_run_guarded_script "$matcher" && return 0
   done <<<"$segments"
   return 1
 }
@@ -632,7 +632,7 @@ case "$tool_name" in
     # whose main root could not be resolved).
     class=$(guarded_class "$resolved")
     [ -z "$class" ] || deny "$class"
-    ! gaia_rate_limits_guard_path "$file_path" "$resolved" "$main_root" || deny rate-limits
+    ! gaia_rate_limits_guard_path "$file_path" "$resolved" || deny rate-limits
     exit 0
     ;;
 

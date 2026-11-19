@@ -242,20 +242,6 @@ gaia_rate_limits_now() {
   printf '%s\n' "$value"
 }
 
-# gaia_rate_limits_band <whole-percentage>: green, warning or critical, by the
-# same at-or-past comparisons the statusline draws. rc 2 on a non-integer.
-gaia_rate_limits_band() {
-  local pattern='^[0-9]{1,12}$'
-  [[ ${1:-} =~ $pattern ]] || return 2
-  if [ "$((10#$1))" -ge "$GAIA_RATE_LIMIT_CRITICAL_PERCENTAGE" ]; then
-    printf 'critical\n'
-  elif [ "$((10#$1))" -ge "$GAIA_RATE_LIMIT_WARNING_PERCENTAGE" ]; then
-    printf 'warning\n'
-  else
-    printf 'green\n'
-  fi
-}
-
 # gaia_rate_limits_is_window_name <name>: rc 0 for 1-32 lowercase letters,
 # digits and underscores. Builtins only.
 gaia_rate_limits_is_window_name() {
@@ -316,22 +302,18 @@ gaia_rate_limits_write() {
   case $output in
     *$'\n'*) records="${output#*$'\n'}" ;;
   esac
+  [ -z "$records" ] || printf '%s\n' "$records"
   case $status in
     invalid)
-      [ -n "$records" ] && printf '%s\n' "$records"
       printf 'rate-limits: invalid reading\n' >&2
       return 2
       ;;
-    foreign | unchanged)
-      [ -n "$records" ] && printf '%s\n' "$records"
-      return 0
-      ;;
+    foreign | unchanged) return 0 ;;
     write) ;;
     *) return 1 ;;
   esac
-  [ -n "$records" ] && printf '%s\n' "$records"
   directory="${file%/*}"
-  mkdir -p "$directory" 2>/dev/null || return 1
+  [ -d "$directory" ] || mkdir -p "$directory" 2>/dev/null || return 1
   temporary_file="$file.tmp.$$"
   printf '%s\n' "$body" 2>/dev/null >"$temporary_file" || {
     rm -f "$temporary_file" 2>/dev/null

@@ -16,6 +16,8 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   STATUSLINE="$REPO_ROOT/.gaia/statusline/gaia-statusline.sh"
   CLI="$REPO_ROOT/.gaia/scripts/rate-limits.sh"
+  # shellcheck source=.gaia/tests/helpers/rate-limits-fixture.sh
+  . "$REPO_ROOT/.gaia/tests/helpers/rate-limits-fixture.sh"
   ESCAPE_CHARACTER=$'\033'
   FIVE_HOUR_RESETS_AT=$((NOW + 3690))
   SEVEN_DAY_RESETS_AT=$((NOW + 187230))
@@ -56,15 +58,7 @@ render() {
 # seed_file <name> <percentage> <resets_at> [<name> <percentage> <resets_at> ...]:
 # a valid stored file, observed at NOW.
 seed_file() {
-  local windows='{}'
-  while [ "$#" -ge 3 ]; do
-    windows=$(jq -c --arg name "$1" --argjson percentage "$2" --argjson resets_at "$3" --argjson observed_at "$NOW" \
-      '.[$name] = {used_percentage: $percentage, resets_at: $resets_at, observed_at: $observed_at, producer: "statusline",
-        history: [{used_percentage: $percentage, observed_at: $observed_at, producer: "statusline"}]}' <<<"$windows")
-    shift 3
-  done
-  mkdir -p "${FILE%/*}"
-  jq -n --argjson windows "$windows" '{version: 1, windows: $windows}' >"$FILE"
+  rate_limits_seed_file "$FILE" "$NOW" "$@"
 }
 
 stored() {

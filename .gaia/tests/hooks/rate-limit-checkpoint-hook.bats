@@ -28,6 +28,8 @@ SESSION_TWO=7a6b5c4d-3e2f-4a1b-9c8d-0e1f2a3b4c5d
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   HOOK_SOURCE_PATH="${HOOK_SOURCE_PATH:-$REPO_ROOT/.claude/hooks/rate-limit-checkpoint-inject.sh}"
+  # shellcheck source=.gaia/tests/helpers/rate-limits-fixture.sh
+  . "$REPO_ROOT/.gaia/tests/helpers/rate-limits-fixture.sh"
   TEMPORARY_DIRECTORY="$(cd "$BATS_TEST_TMPDIR" && pwd -P)"
   unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
@@ -66,15 +68,7 @@ install_hook() {
 # seed <name> <percentage> <resets_at> [<name> <percentage> <resets_at> ...]:
 # a valid stored file, every window observed at NOW.
 seed() {
-  local windows='{}'
-  while [ "$#" -ge 3 ]; do
-    windows=$(jq -c --arg name "$1" --argjson percentage "$2" --argjson resets_at "$3" --argjson observed_at "$NOW" \
-      '.[$name] = {used_percentage: $percentage, resets_at: $resets_at, observed_at: $observed_at, producer: "statusline",
-        history: [{used_percentage: $percentage, observed_at: $observed_at, producer: "statusline"}]}' <<<"$windows")
-    shift 3
-  done
-  mkdir -p "$SHARED_DIRECTORY"
-  jq -n --argjson windows "$windows" '{version: 1, windows: $windows}' >"$READING"
+  rate_limits_seed_file "$READING" "$NOW" "$@"
 }
 
 # payload <session> <tool> [<extra-jq-filter>]: a PreToolUse payload for MAIN.

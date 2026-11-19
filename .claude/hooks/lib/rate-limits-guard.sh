@@ -20,22 +20,12 @@
 # The shared file's path below the main checkout's local state.
 GAIA_RATE_LIMITS_GUARD_SHARED_SUFFIX='cache/shared/rate-limits.json'
 
-# gaia_rate_limits_guard_path <literal-path> <resolved-path> <main-root>
+# gaia_rate_limits_guard_path <literal-path> <resolved-path>
 # rc 0 when the path names the shared file: by its literal spelling (survives a
-# symlink that cannot be resolved), by its physical resolution, or by the main
-# checkout's own path (the resolved form of a linked worktree's symlink).
+# symlink that cannot be resolved) or by its physical resolution (a linked
+# worktree's symlink resolves to the main checkout's file).
 gaia_rate_limits_guard_path() {
-  local literal_path="$1" resolved_path="$2" main_root="$3"
-  case "$literal_path" in
-    *"$GAIA_RATE_LIMITS_GUARD_SHARED_SUFFIX") return 0 ;;
-  esac
-  case "$resolved_path" in
-    *"$GAIA_RATE_LIMITS_GUARD_SHARED_SUFFIX") return 0 ;;
-  esac
-  if [ -n "$main_root" ]; then
-    [ "$resolved_path" != "$main_root/.gaia/local/$GAIA_RATE_LIMITS_GUARD_SHARED_SUFFIX" ] || return 0
-  fi
-  return 1
+  [[ $1 == *"$GAIA_RATE_LIMITS_GUARD_SHARED_SUFFIX" || $2 == *"$GAIA_RATE_LIMITS_GUARD_SHARED_SUFFIX" ]]
 }
 
 # gaia_rate_limits_guard_writes_file <command>
@@ -50,53 +40,17 @@ gaia_rate_limits_guard_writes_file() {
   writes_named "$1" "$names_re"
 }
 
-# words_run_rate_limits_write: rc 0 when the simple command held in the `words`
-# array executes rate-limits.sh with `write` as its first argument (command
-# word, or script argument of a shell or `source`/`.`/`exec`). A lone `-n`
-# syntax check is excepted, and any other verb, `read` included, is allowed.
-# `words` is the array runs_guarded_script fills
-# shellcheck disable=SC2154
-words_run_rate_limits_write() {
-  local count=${#words[@]} word_index=0 word base syntax_check
-  while [ "$word_index" -lt "$count" ]; do
-    case "${words[$word_index]}" in
-      [A-Za-z_]*=* | '!' | exec) word_index=$((word_index + 1)) ;;
-      *) break ;;
-    esac
-  done
-  [ "$word_index" -lt "$count" ] || return 1
-
-  word="${words[$word_index]}"
-  case "$word" in
-    rate-limits.sh | */rate-limits.sh)
-      [ "${words[$((word_index + 1))]-}" = write ]
-      return
-      ;;
+# names_rate_limits_write <script-word> <next-word>: the words_run_guarded_script
+# matcher for rate-limits.sh run with `write` as its first argument (a lone `-n`
+# syntax check is excepted by the walker). Any other verb, `read` included, is
+# allowed.
+# invoked through runs_guarded_script's matcher name
+# shellcheck disable=SC2329
+names_rate_limits_write() {
+  case "$1" in
+    rate-limits.sh | */rate-limits.sh) [ "${2-}" = write ] ;;
+    *) return 1 ;;
   esac
-  base="${word##*/}"
-  case "$base" in
-    bash | sh | zsh | dash | ksh | source | .)
-      syntax_check=0
-      word_index=$((word_index + 1))
-      while [ "$word_index" -lt "$count" ]; do
-        word="${words[$word_index]}"
-        case "$word" in
-          -n) syntax_check=1 ;;
-          -o | +o) word_index=$((word_index + 1)) ;;
-          -* | +*) ;;
-          rate-limits.sh | */rate-limits.sh)
-            if [ "$syntax_check" -eq 0 ] && [ "${words[$((word_index + 1))]-}" = write ]; then
-              return 0
-            fi
-            break
-            ;;
-          *) break ;;
-        esac
-        word_index=$((word_index + 1))
-      done
-      ;;
-  esac
-  return 1
 }
 
 # gaia_rate_limits_guard_runs_write <command>: rc 0 when a simple command in
@@ -106,5 +60,5 @@ gaia_rate_limits_guard_runs_write() {
     *rate-limits.sh*) ;;
     *) return 1 ;;
   esac
-  runs_guarded_script "$1" words_run_rate_limits_write
+  runs_guarded_script "$1" names_rate_limits_write
 }
