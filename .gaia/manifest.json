@@ -781,6 +781,7 @@
     "wiki/concepts/React Perf Diagnostic.md": "wiki-owned",
     "wiki/concepts/Registering a Code Audit Team Member.md": "wiki-owned",
     "wiki/concepts/Setup Features.md": "wiki-owned",
+    "wiki/concepts/Shared Rate-limit Reading And Dispatch Checkpoint.md": "wiki-owned",
     "wiki/concepts/Shell Testing and CI.md": "wiki-owned",
     "wiki/concepts/Single-session First-time Onboarding.md": "wiki-owned",
     "wiki/concepts/Task Orchestration.md": "wiki-owned",
@@ -877,7 +878,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-19T05:21:42.848Z",
+  "generated": "2026-11-19T06:52:12.474Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
