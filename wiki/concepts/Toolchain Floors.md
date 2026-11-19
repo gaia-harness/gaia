@@ -3,7 +3,7 @@ type: concept
 title: Toolchain Floors
 status: active
 created: 2026-10-31
-updated: 2026-11-01
+updated: 2026-11-20
 tags: [concept, setup, update]
 ---
 
@@ -22,7 +22,7 @@ GAIA runs on tools it cannot always install itself. `.gaia/toolchain-floors.tsv`
 
 Whatever Claude can install, it installs after confirming with the user. What only the user can do, Claude hands over as a `! <command>` to type in the prompt, or says plainly when it needs a fresh terminal. That holds for any GAIA flow that needs a tool installed. For the floors, `toolchain-check.sh` prints a `ROUTE` line for each short tool that has an exact command, and its class says which of the three applies, and `.claude/skills/gaia/references/toolchain.md` (`## Below a floor`) walks the user through it and checks again in the same run.
 
-The floor is only the pass or fail line. Each message says why GAIA needs the tool. For git, jq and pnpm it says to update to the latest release, and every route reaches one: where a package manager stays behind, as apt does on Debian stable, the route is another source. lsof and ss need only be present, so their messages say how to get them; `.gaia/scripts/toolchain-check.sh` holds the exact text. No message pins a version number.
+The floor is only the pass or fail line. Each `GUIDE` line says why GAIA needs the tool. For git, jq and pnpm it says to update to the latest release, and every route reaches one: where a package manager stays behind, as apt does on Debian stable, the route is another source. For node, the `GUIDE` line names and the `ROUTE` installs the floor's Node major as read from `.gaia/toolchain-floors.tsv`, never the version `.nvmrc` or `.node-version` pins, since during an update those pins hold the old release's Node until the update merges. Both make that Node the default and reinstall pnpm under it, and the `ROUTE` writes no tracked file. A shell that switches Node per folder (fnm `--use-on-cd`, nvm auto-use, asdf or mise reading `.nvmrc` or `.node-version`) can reselect the old pin in the project root, so the `GUIDE` line tells that user to select the new Node in the project shell before starting Claude Code. lsof and ss need only be present, so their `GUIDE` lines say how to get them. `guide()` in `.gaia/scripts/toolchain-check.sh` holds the exact text. Apart from node's floor major, no `GUIDE` line names a version number.
 
 ## At runtime
 
