@@ -294,6 +294,11 @@ route_line() {
   rm "$STUBS/fnm"
   run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
   grep '^GUIDE node:' <<<"$output" | grep -qE 'is not installed here|is installed here' && return 1
+  rm -r "$STUBS/nvm"
+  mkdir -p "$STUBS/brew/opt/nvm" "$STUBS/home"
+  printf 'x\n' >"$STUBS/brew/opt/nvm/nvm.sh"
+  run env -i PATH="$STUBS" HOME="$STUBS/home" HOMEBREW_PREFIX="$STUBS/brew" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
+  grep '^GUIDE node:' <<<"$output" | grep -qE 'is not installed here|is installed here' && return 1
   true
 }
 

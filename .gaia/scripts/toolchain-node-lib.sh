@@ -24,12 +24,17 @@ node_floor_major() {
 
 # node_version_manager: the version manager the node guide's commands run
 # through, fnm or nvm, or nothing. nvm is a shell function, invisible to
-# command -v here, so its install script stands in for it. Windows counts only
-# fnm, the one manager its guide names.
+# command -v here, so its install script stands in for it: the one under
+# NVM_DIR (default ~/.nvm), or a Homebrew install's under HOMEBREW_PREFIX, which
+# the profile sources while NVM_DIR holds only Node versions. Windows counts
+# only fnm, the one manager its guide names.
 node_version_manager() {
   if command -v fnm >/dev/null 2>&1; then
     printf 'fnm'
-  elif [ "$PLATFORM" != windows ] && [ -s "${NVM_DIR:-${HOME:-}/.nvm}/nvm.sh" ]; then
+  elif [ "$PLATFORM" != windows ] && {
+    [ -s "${NVM_DIR:-${HOME:-}/.nvm}/nvm.sh" ] ||
+      { [ -n "${HOMEBREW_PREFIX:-}" ] && [ -s "$HOMEBREW_PREFIX/opt/nvm/nvm.sh" ]; }
+  }; then
     printf 'nvm'
   fi
 }
