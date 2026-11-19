@@ -185,7 +185,11 @@ verify_execute_check() {
       # A merge base whose gate predates --paths-from would exit 2 on it, and
       # that exit would pass off a HEAD failure with no readable items as
       # "main is red"; such a gate lints the whole tree.
-      if [ -n "${verify_round_delta_file:-}" ] && grep -qF -- '--paths-from)' "$tree/.gaia/tests/shell-lint.sh"; then
+      # A host without shellcheck runs only the folded guards; a gate that
+      # predates `--only guards` has no such mode and runs whole.
+      if [ "${verify_shell_lint_guards_only:-0}" -eq 1 ] && grep -qF -- "| guards)" "$tree/.gaia/tests/shell-lint.sh"; then
+        (cd "$tree" && bash .gaia/tests/shell-lint.sh --only guards) >"$output_file" 2>&1 </dev/null
+      elif [ -n "${verify_round_delta_file:-}" ] && grep -qF -- '--paths-from)' "$tree/.gaia/tests/shell-lint.sh"; then
         (cd "$tree" && bash .gaia/tests/shell-lint.sh --paths-from "$verify_round_delta_file") >"$output_file" 2>&1 </dev/null
       else
         (cd "$tree" && bash .gaia/tests/shell-lint.sh) >"$output_file" 2>&1 </dev/null
@@ -221,11 +225,14 @@ verify_extract_items() {
   case "$kind" in
     shell-lint)
       # The linter's "In <file> line N:", bash -n's "<file>: line N:", and
-      # the repo guards' "<file>:<line>:" each name the offending file.
+      # the repo guards' "<file>:<line>:" each name the offending file. The
+      # protected-test gate's REMOVED and BAD-WAIVER lines name no line, so
+      # each whole line is the item, which a base without it cannot reproduce.
       sed -n -E \
         -e 's/^In (.+) line [0-9]+:.*$/\1/p' \
         -e 's/^([^ :]+): line [0-9]+:.*$/\1/p' \
-        -e 's/^([^ :]+):[0-9]+(:.*)?$/\1/p' "$output_file" | LC_ALL=C sort -u
+        -e 's/^([^ :]+):[0-9]+(:.*)?$/\1/p' \
+        -e 's/^((REMOVED|BAD-WAIVER) .*)$/\1/p' "$output_file" | LC_ALL=C sort -u
       ;;
     line-limit)
       sed -n -E 's/^([^ :]+):[0-9]+ [^ ]+: .*$/\1/p' "$output_file" | LC_ALL=C sort -u

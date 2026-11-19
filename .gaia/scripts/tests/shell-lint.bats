@@ -101,8 +101,9 @@ tracked_sh() {
   # gaia-lint-ignore whole-tree-mark-guard: the callers, the first-chunk and
   # last-chunk fail-closed tests, each carry the per-test whole-tree mark. The
   # clean-tree run test is left unmarked because branch mode's shell-lint step
-  # runs the same gate over the real tree, and is skipped on a host that
-  # has no shellcheck, where only the full CI run covers it.
+  # runs the same gate over the real tree. On a host with no shellcheck that
+  # step still runs the folded guards alone, so only the shellcheck passes fall
+  # to the full CI run.
   done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh')
   if [ "$which_end" = "first" ]; then
     printf '%s\n' "$first"
@@ -322,6 +323,38 @@ STUB
   [ "$status" -eq 1 ]
   grep -qF -- "--> check-retired-paths" <<<"$output"
   grep -qF -- "stub failure: retired" <<<"$output"
+  grep -qF -- "shell-lint FAILED" <<<"$output"
+}
+
+# `--only guards` is how branch verify keeps the folded guards running on a
+# host with no shellcheck, so it has to need no binary and run no linter pass.
+# bats test_tags=whole-tree
+@test "--only guards runs every folded guard, no linter pass, and no shellcheck binary" {
+  if PATH="/usr/bin:/bin" command -v shellcheck >/dev/null 2>&1; then
+    skip "this host carries shellcheck in /usr/bin or /bin"
+  fi
+  local overrides=() line pass_name guard_count=0
+  while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
+  run env PATH="/usr/bin:/bin" ${overrides[@]+"${overrides[@]}"} bash "$GATE" --only guards
+  [ "$status" -eq 0 ]
+  grep -qF -- "shell-lint passed" <<<"$output"
+  while IFS= read -r pass_name; do
+    case "$pass_name" in
+      lint-* | check-*)
+        guard_count=$(( guard_count + 1 ))
+        grep -qF -- "$pass_name: clean" <<<"$output" || return 1
+        ;;
+      *) grep -qF -- "--> $pass_name" <<<"$output" && return 1 ;;
+    esac
+  done < <(gate_pass_headers)
+  [ "$guard_count" -gt 1 ]
+
+  local failing_stub="$STUB_DIRECTORY/fail.sh"
+  printf '#!/usr/bin/env bash\necho "stub failure" >&2\nexit 1\n' > "$failing_stub"
+  chmod +x "$failing_stub"
+  run env PATH="/usr/bin:/bin" ${overrides[@]+"${overrides[@]}"} \
+    SHELL_LINT_GUARD_OVERRIDE_check_protected_tests="$failing_stub" bash "$GATE" --only guards
+  [ "$status" -eq 1 ]
   grep -qF -- "shell-lint FAILED" <<<"$output"
 }
 

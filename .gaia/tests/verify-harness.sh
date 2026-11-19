@@ -232,7 +232,7 @@ rsync_missing=0
 bats_missing=0
 if [ "$mode" != push ] && tool_missing shellcheck; then
   shellcheck_missing=1
-  warn_missing_tool shellcheck 'brew install shellcheck' 'shell-lint'
+  warn_missing_tool shellcheck 'brew install shellcheck' 'the shellcheck and bash-3.2 parse passes of shell-lint'
 fi
 if [ "$mode" != push ] && tool_missing node; then
   node_missing=1
@@ -350,11 +350,10 @@ else
     printf 'DELTA  %s: %s path(s)\n' "$delta_description" "$delta_path_count"
   fi
 
-  if [ "$shellcheck_missing" -eq 1 ]; then
-    verify_skip shell-lint "shellcheck not found"
-  else
-    verify_run_check shell-lint "$verified_root" "$merge_base" "" ""
-  fi
+  # Without shellcheck the linter passes cannot run, but the folded guards
+  # (the protected-test gate among them) need no linter and still run.
+  verify_shell_lint_guards_only="$shellcheck_missing"
+  verify_run_check shell-lint "$verified_root" "$merge_base" "" ""
   if [ "$node_missing" -eq 1 ]; then
     verify_skip line-limit "node not found"
   elif [ ! -x "$verified_root/.gaia/cli/gaia" ]; then

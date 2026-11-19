@@ -241,15 +241,25 @@ harness_commit() {
   vhf_commit "a harness change s2 names"
 }
 
-@test "a missing linter skips only shell-lint and says so" {
+@test "a missing linter still runs shell-lint's folded guards and says so" {
   fixture
+  cat >.gaia/tests/shell-lint.sh <<'STUB'
+#!/usr/bin/env bash
+# Carries the `| guards)` literal the runner probes for before passing it.
+case "$1 $2" in
+  "--only guards") printf 'shell-lint-mode|guards only\n' >>"$VERIFY_FIXTURE_LOG" ;;
+  *) printf 'shell-lint-mode|whole\n' >>"$VERIFY_FIXTURE_LOG" ; exit 1 ;;
+esac
+# '' | bash32-parse | guards) ;;
+STUB
+  vhf_commit "a shell-lint stub that logs its mode"
   harness_commit
   farm="$(vhf_path_without shellcheck)"
   run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
   [ "$status" -eq 0 ]
-  has 'WARN  shellcheck not found: install with brew install shellcheck; CI remains the only check for shell-lint'
-  every_label_is SKIP shell-lint
-  every_label_is PASS 'release-scrub leak check' 01-files-present 02-marker-strip 'bats selected'
+  has 'WARN  shellcheck not found: install with brew install shellcheck; CI remains the only check for the shellcheck and bash-3.2 parse passes of shell-lint'
+  [ "$(vhf_log_entries shell-lint-mode)" = "guards only" ] || { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
+  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip 'bats selected'
 }
 
 @test "a missing rsync skips the three distribution checks and says so" {

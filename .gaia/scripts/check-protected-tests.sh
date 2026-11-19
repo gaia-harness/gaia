@@ -19,7 +19,7 @@
 # The base defaults to the merge base of HEAD with the remote default branch.
 # With no such ref (a shallow CI checkout) the gate prints that it checked
 # nothing and exits 0: `verify-harness.sh branch`, which every audit dispatch
-# waits on, runs it with the full history.
+# waits on, runs it with the full history, shellcheck installed or not.
 #
 # Exit 0 clean (or no base to compare). Exit 1 on an unwaived removal or a
 # waiver with no reason. Exit 2 on a usage error or a git read that failed.
@@ -128,7 +128,7 @@ while IFS= read -r -d '' suite_path; do
   fi
   while IFS= read -r test_name; do
     grep -qxF -- "$test_name" "$scratch_directory/after" && continue
-    awk -v key="$suite_path :: $test_name" 'index($0, key " -- ") == 1 { found = 1 } END { exit !found }' \
+    WAIVER_KEY="$suite_path :: $test_name" awk 'index($0, ENVIRON["WAIVER_KEY"] " -- ") == 1 { found = 1 } END { exit !found }' \
       "$scratch_directory/waivers" && continue
     printf 'REMOVED %s :: %s\n' "$suite_path" "$test_name"
     status=1

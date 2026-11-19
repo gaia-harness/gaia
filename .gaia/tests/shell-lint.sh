@@ -17,7 +17,7 @@
 # a usage error, a bad argument, and no pass ran at all.
 # Run it directly from anywhere: `bash .gaia/tests/shell-lint.sh`.
 #
-# Usage: shell-lint.sh [--only bash32-parse] [--paths-from <file>]
+# Usage: shell-lint.sh [--only bash32-parse|guards] [--paths-from <file>]
 #
 # `--paths-from` narrows the shellcheck passes and the bash-3.2 parse pass to
 # the tracked files the given NUL-delimited list names; a pass whose set comes
@@ -33,6 +33,11 @@
 # other pass either needs shellcheck or reads a surface the ubuntu leg already
 # covers. The parse pass is the one whose verdict depends on the host's
 # /bin/bash, so it is the one worth a second runner.
+#
+# `--only guards` runs the folded guards and nothing else: no shellcheck binary
+# is required and neither the shellcheck passes nor the bash-3.2 parse pass
+# run. `verify-harness.sh` uses it on a host without shellcheck, so the guards'
+# verdict over the real tree is never skipped along with the linter.
 #
 # Maintainer-only. Adopters run GAIA's bash but never author it, so the linter
 # guarding the framework's own shell has no adopter surface. Excluded from the
@@ -113,20 +118,20 @@ while [ "$#" -gt 0 ]; do
       ;;
     *)
       echo "ERROR: unknown argument: $1" >&2
-      echo "usage: shell-lint.sh [--only bash32-parse] [--paths-from <file>]" >&2
+      echo "usage: shell-lint.sh [--only bash32-parse|guards] [--paths-from <file>]" >&2
       exit 2
       ;;
   esac
 done
 
 case "$ONLY_PASS" in
-  '' | bash32-parse) ;;
+  '' | bash32-parse | guards) ;;
   *)
     # Reject rather than fall through to a full run. A typo'd pass name reaching
     # the default would run the shellcheck passes on the macOS leg, which
     # installs no shellcheck, and report the flag's own absence as a lint
     # failure -- loud, but about the wrong thing.
-    echo "ERROR: unknown --only pass: $ONLY_PASS (known: bash32-parse)" >&2
+    echo "ERROR: unknown --only pass: $ONLY_PASS (known: bash32-parse, guards)" >&2
     exit 2
     ;;
 esac
@@ -426,62 +431,64 @@ fi
 # SHELL_LINT_BASH32 overrides the interpreter, which is what lets the bats
 # suite drive the fail-closed and loud-skip branches on a host carrying only
 # one bash.
-BASH32="${SHELL_LINT_BASH32:-/bin/bash}"
-echo "--> bash-3.2 parse ($BASH32 -n): ${#sh_scripts[@]} tracked scripts"
-if [ ! -x "$BASH32" ]; then
-  # Fail closed, the same precondition the empty-*.sh-set guard above carries:
-  # a pass that cannot run has to say so, never report clean having parsed
-  # nothing.
-  echo "ERROR: $BASH32 is not executable; the bash-3.2 parse pass cannot run" >&2
-  status=1
-else
-  # SC2016: the single quotes are intentional. BASH_VERSINFO has to expand
-  # inside the resolved interpreter, not in this shell.
-  # shellcheck disable=SC2016
-  bash32_major="$("$BASH32" -c 'printf "%s\n" "${BASH_VERSINFO[0]}"' 2>/dev/null || true)"
-  case "$bash32_major" in
-    '' | *[!0-9]*)
-      # Fail closed for the same reason: an interpreter that will not report a
-      # version is one this pass cannot reason about.
-      echo "ERROR: $BASH32 reported no numeric major version; the bash-3.2 parse pass cannot run" >&2
-      status=1
-      ;;
-    *)
-      if [ "$bash32_major" -ge 4 ]; then
-        # Skip LOUDLY, the posture .gaia/scripts/bats5.sh already takes on the
-        # mirror-image gap. A silent skip on every bash-5 host would reproduce
-        # one layer up the exact failure this pass exists to close: the tree
-        # would read clean everywhere and be parsed nowhere.
-        echo "############################################################" >&2
-        echo "# WARNING: $BASH32 is bash $bash32_major, so the bash-3.2" >&2
-        echo "# parse pass was SKIPPED. A 3.2-only syntax error is invisible" >&2
-        echo "# to this run. Re-run on stock macOS /bin/bash (3.2.57) before" >&2
-        echo "# trusting this gate over shell syntax." >&2
-        echo "############################################################" >&2
-      else
-        # One subshell for the whole sweep rather than one per file, and run
-        # from the repo root so the file:line the interpreter prints is
-        # repo-relative. Every file is parsed before the sweep reports, so one
-        # invocation names every broken script rather than only the first.
-        if ! (
-          cd "$REPO_ROOT" || exit 2
-          sweep_exit_status=0
-          for tracked_path in ${sh_scripts[@]+"${sh_scripts[@]}"}; do
-            "$BASH32" -n "$tracked_path" || sweep_exit_status=1
-          done
-          exit "$sweep_exit_status"
-        ); then
-          status=1
+if [ "$ONLY_PASS" != guards ]; then
+  BASH32="${SHELL_LINT_BASH32:-/bin/bash}"
+  echo "--> bash-3.2 parse ($BASH32 -n): ${#sh_scripts[@]} tracked scripts"
+  if [ ! -x "$BASH32" ]; then
+    # Fail closed, the same precondition the empty-*.sh-set guard above carries:
+    # a pass that cannot run has to say so, never report clean having parsed
+    # nothing.
+    echo "ERROR: $BASH32 is not executable; the bash-3.2 parse pass cannot run" >&2
+    status=1
+  else
+    # SC2016: the single quotes are intentional. BASH_VERSINFO has to expand
+    # inside the resolved interpreter, not in this shell.
+    # shellcheck disable=SC2016
+    bash32_major="$("$BASH32" -c 'printf "%s\n" "${BASH_VERSINFO[0]}"' 2>/dev/null || true)"
+    case "$bash32_major" in
+      '' | *[!0-9]*)
+        # Fail closed for the same reason: an interpreter that will not report a
+        # version is one this pass cannot reason about.
+        echo "ERROR: $BASH32 reported no numeric major version; the bash-3.2 parse pass cannot run" >&2
+        status=1
+        ;;
+      *)
+        if [ "$bash32_major" -ge 4 ]; then
+          # Skip LOUDLY, the posture .gaia/scripts/bats5.sh already takes on the
+          # mirror-image gap. A silent skip on every bash-5 host would reproduce
+          # one layer up the exact failure this pass exists to close: the tree
+          # would read clean everywhere and be parsed nowhere.
+          echo "############################################################" >&2
+          echo "# WARNING: $BASH32 is bash $bash32_major, so the bash-3.2" >&2
+          echo "# parse pass was SKIPPED. A 3.2-only syntax error is invisible" >&2
+          echo "# to this run. Re-run on stock macOS /bin/bash (3.2.57) before" >&2
+          echo "# trusting this gate over shell syntax." >&2
+          echo "############################################################" >&2
+        else
+          # One subshell for the whole sweep rather than one per file, and run
+          # from the repo root so the file:line the interpreter prints is
+          # repo-relative. Every file is parsed before the sweep reports, so one
+          # invocation names every broken script rather than only the first.
+          if ! (
+            cd "$REPO_ROOT" || exit 2
+            sweep_exit_status=0
+            for tracked_path in ${sh_scripts[@]+"${sh_scripts[@]}"}; do
+              "$BASH32" -n "$tracked_path" || sweep_exit_status=1
+            done
+            exit "$sweep_exit_status"
+          ); then
+            status=1
+          fi
         fi
-      fi
-      ;;
-  esac
+        ;;
+    esac
+  fi
 fi
 
 # `--only bash32-parse` has run its pass and stops here. The guards below
 # read the tree with tools that have nothing to do with the host's /bin/bash, so
 # a second runner would only re-run what the ubuntu leg already did.
-if [ -n "$ONLY_PASS" ]; then
+if [ "$ONLY_PASS" = bash32-parse ]; then
   report_verdict
 fi
 

@@ -244,19 +244,20 @@ jobs:
               - '.githooks/**'
               - '.gaia/packages.json'
               - '.gaia/scripts/**'
-              # Every tracked shell file. The shell lint suites
-              # (.gaia/scripts/tests/lint-*.bats) scan the real tree's tracked
-              # shell and carry the whole-tree mark; a suite testing one script
-              # names it. The glob is the scans' own input rather than an
-              # enumeration of the files it reaches today, so it self-maintains
-              # when shell appears somewhere new.
+              # Every tracked shell file. A suite testing one script names it,
+              # and the whole-tree-marked suites that enumerate tracked shell
+              # read this glob's files. The real tree's lint verdict comes from
+              # shell-lint.yml, not from these suites. The glob is the scans'
+              # own input rather than an enumeration of the files it reaches
+              # today, so it self-maintains when shell appears somewhere new.
               - '**/*.sh'
               # check-main-root-derivation.bats scans tracked source for a
               # hand-rolled main-checkout derivation, and hook commands live in
               # settings.json as inline shell; the suites reading it name it.
               - '.claude/settings.json'
               # shell-lint.bats names the local shell gate it asserts the wiring
-              # of; its real-tree pass carries the whole-tree mark.
+              # of, with its guards stubbed; shell-lint.yml runs the real-tree
+              # pass.
               - '.gaia/tests/shell-lint.sh'
               # audit-guard-structural.bats names code-audit-frontend.md, whose
               # no-op-guard wiring it greps.

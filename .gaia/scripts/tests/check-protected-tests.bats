@@ -84,3 +84,14 @@ run_gate() {
   [ "$status" -eq 1 ]
   [ "$output" = "BAD-WAIVER tests/all.bats :: every case --" ] || { printf 'got\n%s\n' "$output" >&2; return 1; }
 }
+
+@test "a waiver names a protected test whose name carries a backslash" {
+  local backslash_name='denies a path with \n in it'
+  write_guard_suite "$backslash_name"
+  commit_change "a protected test with a backslash"
+  BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
+  printf '@test "prints usage" {\n  true\n}\n' > "$FIXTURE/tests/guard.bats"
+  commit_change "$(printf 'drop it\n\nProtected-Test-Removed: tests/guard.bats :: %s -- covered elsewhere' "$backslash_name")"
+  run_gate
+  [ "$status" -eq 0 ] || { printf '%s\n%s\n' "$output" "$stderr" >&2; return 1; }
+}
