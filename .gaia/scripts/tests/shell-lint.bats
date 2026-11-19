@@ -23,7 +23,8 @@
 # is a smaller unit for the sharder to place, not a cheaper one. Lowering the
 # number here means
 # reducing how many times the tests below re-drive the whole-tree gate, which
-# is why every test here stubs the folded lint guards.
+# is why every test here but the single real-tree guard run stubs the folded
+# guards.
 #
 # The shellcheck binary is stubbed with an always-clean, pinned-version fake on
 # PATH so the suite runs on the audit-ci-tests box (bats installed, no linter
@@ -158,8 +159,8 @@ gate_pass_headers() {
   # Each folded guard is asserted twice: the gate's own header, which says the
   # gate reached the pass, and the guard's OWN clean line, which only the
   # invoked script (here its stub) prints, so it appears only if the invocation
-  # actually ran. The real guards' verdict over the tree is the branch verify's
-  # shell-lint step, so this run checks the wiring alone.
+  # actually ran. The real guards' verdict over the tree is the real-tree test
+  # below, so this run checks the wiring alone.
   # The header alone would survive exactly the edit this test exists to catch.
   local pass_name folded=0
   while IFS= read -r pass_name; do
@@ -183,6 +184,19 @@ gate_pass_headers() {
   # cannot fold into the *.sh pass.
   grep -qE -- '(^| )-s sh( |$).*\.githooks/pre-commit' "$STUB_DIRECTORY/argv.log"
   grep -qE -- '(^| )-s sh( |$).*\.githooks/pre-push' "$STUB_DIRECTORY/argv.log"
+}
+
+# The one run of the real folded guards over the real tree in this suite, and
+# the reason it exists: shell-lint.yml is advisory and runs on pull requests
+# only, so without this test no required check and no push to main would give
+# the guards' verdict. `--only guards` keeps it free of the shellcheck binary
+# the CI bats legs do not install.
+# bats test_tags=whole-tree
+@test "the real folded guards pass over the real tree" {
+  run bash "$GATE" --only guards
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  grep -qF -- "GUARD OVERRIDE" <<<"$output" && return 1
+  grep -qF -- "shell-lint passed" <<<"$output"
 }
 
 

@@ -14,15 +14,23 @@
 # rather than a tracked file because a deleted suite has no file left to carry
 # it, and the squash merge keeps it in the history the reviewer reads.
 #
-# Usage: check-protected-tests.sh [--base <rev>]
+# Usage: check-protected-tests.sh [--base <rev>] [--require-base]
 #
 # The base defaults to the merge base of HEAD with the remote default branch.
-# With no such ref (a shallow CI checkout) the gate prints that it checked
-# nothing and exits 0: `verify-harness.sh branch`, which every audit dispatch
-# waits on, runs it with the full history, shellcheck installed or not.
+# With no such ref (a shallow CI checkout, such as the bats legs' run of
+# shell-lint) the gate prints that it checked nothing and exits 0:
+# `verify-harness.sh branch`, which every audit dispatch waits on, runs it
+# with the full history, shellcheck installed or not. Under GitHub Actions
+# the notice is also a `::warning::` line, an annotation wherever stdout
+# reaches the job log (shell-lint.yml's run, not a bats test's capture).
+# `--require-base` makes the missing base a failure instead: the
+# full-history CI leg in .github/workflows/audit-ci-tests.yml passes it,
+# because a checkout there that cannot compare would otherwise green the
+# required check having checked nothing.
 #
-# Exit 0 clean (or no base to compare). Exit 1 on an unwaived removal or a
-# waiver with no reason. Exit 2 on a usage error or a git read that failed.
+# Exit 0 clean (or no base to compare, without --require-base). Exit 1 on an
+# unwaived removal or a waiver with no reason. Exit 2 on a usage error, a git
+# read that failed, or no merge base under --require-base.
 #
 # Output lines:
 #   REMOVED <suite path> :: <test name>   a protected test gone or untagged
@@ -32,12 +40,17 @@ set -uo pipefail
 
 PROGRAM_NAME=check-protected-tests
 base=""
+require_base=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --base)
       [ "$#" -ge 2 ] || { printf '%s: --base needs a revision\n' "$PROGRAM_NAME" >&2; exit 2; }
       base="$2"
       shift 2
+      ;;
+    --require-base)
+      require_base=1
+      shift
       ;;
     *)
       printf '%s: unknown argument %s\n' "$PROGRAM_NAME" "$1" >&2
@@ -54,7 +67,15 @@ if [ -z "$base" ]; then
   default_branch="${default_branch#refs/remotes/origin/}"
   [ -n "$default_branch" ] || default_branch=main
   if ! base="$(git -C "$repository_root" merge-base "refs/remotes/origin/$default_branch" HEAD 2>/dev/null)"; then
+    if [ "$require_base" -eq 1 ]; then
+      printf '%s: no merge base with refs/remotes/origin/%s, and --require-base demands one; fetch the full history and the base branch\n' \
+        "$PROGRAM_NAME" "$default_branch" >&2
+      exit 2
+    fi
     printf '%s: no merge base with refs/remotes/origin/%s; nothing was compared\n' "$PROGRAM_NAME" "$default_branch" >&2
+    if [ "${GITHUB_ACTIONS:-}" = true ]; then
+      printf '::warning::%s compared nothing: no merge base with refs/remotes/origin/%s in this checkout\n' "$PROGRAM_NAME" "$default_branch"
+    fi
     exit 0
   fi
 fi
@@ -64,11 +85,17 @@ git -C "$repository_root" rev-parse -q --verify "$base^{commit}" >/dev/null \
 # protected_names: the names of the protected tests in the suite text on stdin,
 # one per line. bats applies a test_tags line to the next @test only, and keeps
 # the last one before it; a file_tags line applies to every test after it.
+# The patterns are bats-preprocess's own: a tag line may be indented and needs
+# no blank after its `#`, `@test` may be indented and followed by any blank, a
+# name ends at the last blank run before a `{` and loses one leading and one
+# trailing quote independently, and `name() { # @test` declares a test too. A
+# tag list bats rejects as malformed still counts here, which can only report a
+# removal bats would not, never hide one.
 protected_names() {
   awk '
     function tagged(line,   list, items, count, position) {
       list = line
-      sub(/^# bats (test|file)_tags=/, "", list)
+      sub(/^[ \t]*#[ \t]*bats[ \t]+(test|file)_tags=/, "", list)
       count = split(list, items, ",")
       for (position = 1; position <= count; position++) {
         gsub(/[ \t]/, "", items[position])
@@ -76,21 +103,30 @@ protected_names() {
       }
       return 0
     }
-    /^# bats file_tags=/ { file_protected = tagged($0); next }
-    /^# bats test_tags=/ { test_protected = tagged($0); next }
-    /^@test / {
-      if (file_protected || test_protected) {
-        name = $0
-        sub(/^@test[ \t]+/, "", name)
-        sub(/[ \t]*\{[ \t]*$/, "", name)
-        quote = substr(name, 1, 1)
-        if ((quote == "\"" || quote == "'"'"'") && substr(name, length(name), 1) == quote) {
-          name = substr(name, 2, length(name) - 2)
-        }
-        print name
-      }
+    function report(name) {
+      if (file_protected || test_protected) print name
       test_protected = 0
     }
+    { gsub(/\r/, "") }
+    /^[ \t]*@test[ \t]+.*[^ \t][ \t]+\{/ {
+      name = $0
+      sub(/^[ \t]*@test[ \t]+/, "", name)
+      match(name, /.*[^ \t][ \t]+\{/)
+      name = substr(name, 1, RLENGTH)
+      sub(/[ \t]+\{$/, "", name)
+      sub(/^["'"'"']/, "", name)
+      sub(/["'"'"']$/, "", name)
+      report(name)
+      next
+    }
+    match($0, /[^ \t()]+[ \t]*\(?\)?[ \t]+\{[ \t]+#[ \t]*@test[ \t]*$/) {
+      name = substr($0, RSTART, RLENGTH)
+      sub(/[ \t(].*$/, "", name)
+      report(name)
+      next
+    }
+    /^[ \t]*#[ \t]*bats[ \t]+file_tags=/ { file_protected = tagged($0); next }
+    /^[ \t]*#[ \t]*bats[ \t]+test_tags=/ { test_protected = tagged($0); next }
   '
 }
 

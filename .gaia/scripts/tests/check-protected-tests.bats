@@ -95,3 +95,63 @@ run_gate() {
   run_gate
   [ "$status" -eq 0 ] || { printf '%s\n%s\n' "$output" "$stderr" >&2; return 1; }
 }
+
+# The non-canonical spellings bats-preprocess accepts as a tag line or a test
+# declaration, one fixture test each. The keyword and the directive word are
+# spliced in at run time, so no fixture line is one bats would read in this file.
+# Real bats counts the fixture's protected tests first, which proves each
+# spelling is one bats tags.
+@test "a protected test in a non-canonical spelling bats accepts is tracked when removed" {
+  local keyword='@test' directive='bats' tab
+  tab="$(printf '\t')"
+  {
+    printf '#%s test_tags=protected\n%s "no blank after the hash" {\n  true\n}\n' "$directive" "$keyword"
+    printf '  #  %s   test_tags=protected\n%s "an indented tag line" {\n  true\n}\n' "$directive" "$keyword"
+    printf '# %s test_tags=protected\n%s%s"a tab after the keyword" {\n  true\n}\n' "$directive" "$keyword" "$tab"
+    printf '# %s test_tags=protected\n  %s "an indented test" {\n    true\n  }\n' "$directive" "$keyword"
+    printf '# %s test_tags=protected\ncomment_form() { # %s\n  true\n}\n' "$directive" "$keyword"
+    printf '%s "an untagged test" {\n  true\n}\n' "$keyword"
+  } > "$FIXTURE/tests/forms.bats"
+  run "$BATS_ROOT/bin/bats" --count --filter-tags protected "$FIXTURE/tests/forms.bats"
+  [ "$output" = 5 ] || { printf 'bats counted %s protected tests\n' "$output" >&2; return 1; }
+  commit_change "every spelling"
+  BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
+
+  printf '%s "an untagged test" {\n  true\n}\n' "$keyword" > "$FIXTURE/tests/forms.bats"
+  commit_change "drop every spelling"
+  run_gate
+  [ "$status" -eq 1 ]
+  [ "$output" = "$(printf 'REMOVED tests/forms.bats :: %s\n' 'no blank after the hash' 'an indented tag line' \
+    'a tab after the keyword' 'an indented test' 'comment_form')" ] || { printf 'got\n%s\n' "$output" >&2; return 1; }
+}
+
+# The merge base CI reaches decides whether the gate compares anything, so a
+# checkout without one has to show on the run rather than read as clean.
+@test "no merge base exits 0 and warns under GitHub Actions only" {
+  run --separate-stderr bash -c "cd '$FIXTURE' && GITHUB_ACTIONS=true bash '$GATE'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == '::warning::check-protected-tests compared nothing: '* ]] || { printf 'got\n%s\n' "$output" >&2; return 1; }
+  run --separate-stderr bash -c "cd '$FIXTURE' && GITHUB_ACTIONS= bash '$GATE'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *'nothing was compared'* ]] || return 1
+}
+
+# The CI leg's own invocation: no --base, the base read from origin/main, and a
+# missing base a failure rather than the warning.
+@test "--require-base fails with no merge base and compares against origin/main when there is one" {
+  run --separate-stderr bash -c "cd '$FIXTURE' && GITHUB_ACTIONS=true bash '$GATE' --require-base"
+  [ "$status" -eq 2 ] || { printf 'status %s\n%s\n' "$status" "$output" >&2; return 1; }
+  [[ "$stderr" == *'--require-base demands one'* ]] || return 1
+
+  git -C "$FIXTURE" update-ref refs/remotes/origin/main "$BASE"
+  printf '@test "prints usage" {\n  true\n}\n' > "$FIXTURE/tests/guard.bats"
+  commit_change "drop the deny case"
+  run --separate-stderr bash -c "cd '$FIXTURE' && GITHUB_ACTIONS=true bash '$GATE' --require-base"
+  [ "$status" -eq 1 ]
+  [ "$output" = "REMOVED tests/guard.bats :: denies a forged token" ] || { printf 'got\n%s\n' "$output" >&2; return 1; }
+
+  git -C "$FIXTURE" commit -q --allow-empty -m "$(printf 'note\n\nProtected-Test-Removed: tests/guard.bats :: denies a forged token -- covered by the hook suite')"
+  run --separate-stderr bash -c "cd '$FIXTURE' && GITHUB_ACTIONS=true bash '$GATE' --require-base"
+  [ "$status" -eq 0 ] || { printf 'status %s\n%s\n%s\n' "$status" "$output" "$stderr" >&2; return 1; }
+}

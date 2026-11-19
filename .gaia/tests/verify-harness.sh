@@ -13,7 +13,8 @@
 #
 # Checks, in order, each run with the tree under check as its working
 # directory: shell-lint (branch, round: its shellcheck and bash-3.2 parse
-# passes over the round's delta only, its folded guards over the whole tree),
+# passes over the round's delta only, or the whole tree when the delta changes
+# an input of the gate's own verdict; its folded guards over the whole tree),
 # line-limit (branch, round: the
 # fitness lint's harness line-limit rule alone), the release-scrub leak check
 # (a bare build-staging into an empty directory), 01-files-present, 02-marker-strip,
@@ -342,6 +343,9 @@ else
       printf 'WARN  the round delta could not be read; shell-lint covers the whole tree\n'
       verify_round_delta_file=""
       : >"$run_temporary_directory/round-delta"
+    elif verify_delta_names_shell_lint_input "$verify_round_delta_file"; then
+      printf 'NOTE  the round delta changes an input of shell-lint'\''s own verdict; shell-lint covers the whole tree\n'
+      verify_round_delta_file=""
     fi
     delta_path_count=0
     while IFS= read -r -d '' delta_path; do
@@ -354,6 +358,9 @@ else
   # (the protected-test gate among them) need no linter and still run.
   verify_shell_lint_guards_only="$shellcheck_missing"
   verify_run_check shell-lint "$verified_root" "$merge_base" "" ""
+  if [ "$shellcheck_missing" -eq 1 ]; then
+    verify_skip "shell-lint shellcheck and bash-3.2 parse passes" "shellcheck not found"
+  fi
   if [ "$node_missing" -eq 1 ]; then
     verify_skip line-limit "node not found"
   elif [ ! -x "$verified_root/.gaia/cli/gaia" ]; then
