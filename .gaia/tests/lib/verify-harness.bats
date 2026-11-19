@@ -223,6 +223,18 @@ harness_commit() {
   vhf_commit "a harness change s2 names"
 }
 
+@test "the tool farm skips a non-executable file that comes earlier on PATH" {
+  fixture
+  shadow_directory="$BATS_TEST_TMPDIR/shadow"
+  mkdir -p "$shadow_directory"
+  printf 'export PATH\n' >"$shadow_directory/env"
+  chmod 644 "$shadow_directory/env"
+  PATH="$shadow_directory:$PATH"
+  farm="$(vhf_path_without)"
+  run "$farm/env" true
+  [ "$status" -eq 0 ]
+}
+
 @test "a missing linter skips only shell-lint and says so" {
   fixture
   harness_commit
