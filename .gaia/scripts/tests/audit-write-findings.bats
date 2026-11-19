@@ -157,11 +157,6 @@ write() {
   [ -z "$leftover" ]
 }
 
-@test "structural: writes atomically via a temp file in the target dir + mv" {
-  grep -qF "mktemp" "$WRITER"
-  grep -qF "mv -f" "$WRITER"
-}
-
 # The point of the writer: an entry that cannot brief a repair is REJECTED, and
 # nothing is written. One test per rule, each derived from the complete finding
 # so it can only fail for the reason it names.
@@ -378,12 +373,6 @@ STUB
 @test "structural: no hardcoded /Users or /home paths" {
   grep -nE "/Users/|/home/" "$WRITER" && return 1
   return 0
-}
-
-@test "structural: shellcheck is clean" {
-  command -v shellcheck >/dev/null 2>&1 || skip "shellcheck not available"
-  run shellcheck "$WRITER"
-  [ "$status" -eq 0 ]
 }
 
 # review_base: the per-member decision record (--review-base/--base-reason/

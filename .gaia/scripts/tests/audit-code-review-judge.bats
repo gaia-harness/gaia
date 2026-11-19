@@ -66,11 +66,6 @@ expect_reason() {
   expect_reason 'not the built-in'
 }
 
-@test "a bad target's free prose from the built-in is an unusable result" {
-  write_result 'I could not find that revision range, so I reviewed nothing.'
-  expect_reason 'unusable result'
-}
-
 @test "the built-in's not-logged-in answer names that reason, only at the start and only at zero cost" {
   write_result 'Not logged in · Please run /login' '.total_cost_usd = 0'
   expect_reason 'not logged in'
@@ -87,17 +82,46 @@ expect_reason() {
   [ "$(gaia_review_judge "$RESULT" | jq -r .verdict)" = 'no findings' ]
 }
 
-@test "an empty answer without exactly one closed fenced array is unusable" {
-  write_result 'No issues found.'
-  expect_reason 'unusable result'
-  write_result '(none)'
-  expect_reason 'unusable result'
-  write_result "$(printf '%s\n%s' "$CLEAN_RESULT" "$CLEAN_RESULT")"
-  expect_reason 'unusable result'
-  write_result "$(printf '```json\n[]')"
-  expect_reason 'unusable result'
-  write_result "$(fenced '{}')"
-  expect_reason 'unusable result'
+@test "every result without exactly one closed json fence holding an array is an unusable result" {
+  local good name text
+  good="$(item a.ts 1)"
+  local -a names=(
+    "free prose from a bad target"
+    "no issues sentence"
+    "(none)"
+    "two clean fences"
+    "unclosed empty fence"
+    "fenced object"
+    "two fences holding a finding"
+    "unclosed fence holding a finding"
+    "closed fence then an unclosed fence"
+    "fenced object with a file key"
+    "unparsable fence"
+    "two arrays in one fence"
+    "untagged fence"
+  )
+  local -a texts=(
+    'I could not find that revision range, so I reviewed nothing.'
+    'No issues found.'
+    '(none)'
+    "$(printf '%s\n%s' "$CLEAN_RESULT" "$CLEAN_RESULT")"
+    "$(printf '```json\n[]')"
+    "$(fenced '{}')"
+    "$(printf '%s\n%s' "$(fenced "[$good]")" "$(fenced "[$good]")")"
+    "$(printf '```json\n[%s]' "$good")"
+    "$(printf '%s\n```json\n[%s]' "$(fenced "[$good]")" "$good")"
+    "$(fenced '{"file":"a.ts"}')"
+    "$(fenced '[not json')"
+    "$(fenced '[] []')"
+    "$(printf '```\n[%s]\n```' "$good")"
+  )
+  for i in "${!names[@]}"; do
+    name="${names[$i]}"
+    text="${texts[$i]}"
+    write_result "$text"
+    run expect_reason 'unusable result'
+    [ "$status" -eq 0 ] || { echo "case failed: $name"; false; }
+  done
 }
 
 @test "the two clean captures read no findings from their verbatim result" {
@@ -116,25 +140,6 @@ expect_reason() {
   verdict="$(gaia_review_judge "$FIXTURES/findings-docs-range.json")"
   [ "$(jq -r .verdict <<<"$verdict")" = ran ]
   [ "$(jq -r '.findings | length' <<<"$verdict")" = 2 ]
-}
-
-@test "the fence count, shape and parse are all refused" {
-  local good
-  good="$(item a.ts 1)"
-  write_result "$(printf '%s\n%s' "$(fenced "[$good]")" "$(fenced "[$good]")")"
-  expect_reason 'unusable result'
-  write_result "$(printf '```json\n[%s]' "$good")"
-  expect_reason 'unusable result'
-  write_result "$(printf '%s\n```json\n[%s]' "$(fenced "[$good]")" "$good")"
-  expect_reason 'unusable result'
-  write_result "$(fenced '{"file":"a.ts"}')"
-  expect_reason 'unusable result'
-  write_result "$(fenced '[not json')"
-  expect_reason 'unusable result'
-  write_result "$(fenced '[] []')"
-  expect_reason 'unusable result'
-  write_result "$(printf '```\n[%s]\n```' "$good")"
-  expect_reason 'unusable result'
 }
 
 @test "one bad item refuses the whole result" {

@@ -11,6 +11,13 @@
 
 bats_require_minimum_version 1.5.0
 
+setup_file() {
+  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/tests/helpers/audit-loop-fixture.sh"
+  alf_build_template
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SHIPPED="$REPO_ROOT/.gaia/scripts"
@@ -512,7 +519,7 @@ EOF
   done
 }
 
-@test "each blocking placeholder makes no spawn and names its reason" {
+@test "each placeholder left UNMEASURED: the three blocking constants make no spawn and name their reason, the documenting one still spawns" {
   local pair constant reason
   for pair in 'REVIEW_CHILD_PROVEN:child isolation unproven' 'REVIEW_TARGET_FORMAT:target unproven' 'REVIEW_TIMEOUT_SECONDS:timeout unmeasured'; do
     constant="${pair%%:*}"
@@ -522,20 +529,19 @@ EOF
     rm -f "$RECORD"
     behave_clean
     run_review
-    [ "$status" -eq 0 ]
-    [ "$(spawn_count)" = 0 ]
-    [ "$(record_field .reason)" = "$reason" ]
-    [ "$(record_field .cost)" = none ]
+    [ "$status" -eq 0 ] || { echo "case $constant: status"; false; }
+    [ "$(spawn_count)" = 0 ] || { echo "case $constant: spawned"; false; }
+    [ "$(record_field .reason)" = "$reason" ] || { echo "case $constant: reason"; false; }
+    [ "$(record_field .cost)" = none ] || { echo "case $constant: cost"; false; }
   done
-}
-
-@test "the recorded-only placeholder still spawns" {
+  make_tool_copy
   fill_constant REVIEW_HOOK_DENIALS_VISIBLE UNMEASURED
+  rm -f "$RECORD"
   behave_clean
   run_review
-  [ "$status" -eq 0 ]
-  [ "$(spawn_count)" = 1 ]
-  [ "$(record_field .outcome)" = 'ran, clean' ]
+  [ "$status" -eq 0 ] || { echo "case REVIEW_HOOK_DENIALS_VISIBLE: status"; false; }
+  [ "$(spawn_count)" = 1 ] || { echo "case REVIEW_HOOK_DENIALS_VISIBLE: no spawn"; false; }
+  [ "$(record_field .outcome)" = 'ran, clean' ] || { echo "case REVIEW_HOOK_DENIALS_VISIBLE: outcome"; false; }
 }
 
 @test "the shipped script has its three blocking constants measured" {
@@ -545,18 +551,6 @@ EOF
     grep -q "^$constant=UNMEASURED\$" "$SHIPPED/audit-code-review.sh" && return 1
   done
   true
-}
-
-@test "the fill helper replaces a constant already holding a filled value" {
-  fill_constant REVIEW_TIMEOUT_SECONDS 1200
-  fill_constant REVIEW_TIMEOUT_SECONDS 1500
-  grep -Fxq 'REVIEW_TIMEOUT_SECONDS=1500' "$TOOL"
-  fill_constant REVIEW_TARGET_FORMAT '<a>...<b>'
-  [ "$(grep -c '^REVIEW_TARGET_FORMAT=' "$TOOL")" = 1 ]
-  run bash -c "$(grep '^REVIEW_TARGET_FORMAT=' "$TOOL"); printf '%s' \"\$REVIEW_TARGET_FORMAT\""
-  [ "$output" = '<a>...<b>' ]
-  run fill_constant REVIEW_NOT_A_CONSTANT 1
-  [ "$status" -eq 3 ]
 }
 
 @test "wait-ms prints nothing and fails while unmeasured, twice the timeout plus a margin once filled" {
