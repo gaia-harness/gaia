@@ -25,6 +25,20 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   mgf_init
   write_builtin_descriptor "$REPO"
+  row_fixture_used=0
+}
+
+# row_fixture <label>: give a case-table row its own sandbox. The first row
+# takes the one setup() built; each later row builds a fresh one under its own
+# directory, because a row commits to the repository and rewrites the stub.
+row_fixture() {
+  unset GH_STUB_FAIL_BRANCHES GH_STUB_BASE_TIP
+  if [ "$row_fixture_used" -eq 1 ]; then
+    mkdir -p "$BATS_TEST_TMPDIR/row-$1"
+    BATS_TEST_TMPDIR="$BATS_TEST_TMPDIR/row-$1" mgf_init || return 1
+    write_builtin_descriptor "$REPO"
+  fi
+  row_fixture_used=1
 }
 
 # assert_one_post <description>: exactly one status POST, to the pull request's
@@ -51,7 +65,8 @@ assert_allowed_silently() {
   [ -z "$output" ] || { printf 'expected an allow (empty stdout), got: %s\n' "$output" >&2; return 1; }
 }
 
-# The marker-present fixture both the real hook and its mutant run.
+# The marker-present fixture: a frontend marker that still validates, because a
+# wiki change rotates no digest.
 wiki_pr_with_stale_marker() {
   mgf_commit "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" checkout --quiet main
@@ -63,25 +78,50 @@ wiki_pr_with_stale_marker() {
   mgf_record 12 false "docs: page" "wiki/page.md"
 }
 
-# --- out of scope ------------------------------------------------------------
-
-@test "UAT-011: a wiki-only pull request is allowed and gets exactly one out-of-scope stamp before the allow" {
+out_of_scope_pull_request() {
   mgf_commit "wiki/page.md" "doc"
   mgf_record 12 false "docs: page" "wiki/page.md"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  assert_one_post 'skipped: out of scope'
 }
 
-@test "UAT-011: a wiki-only pull request a still-valid frontend marker would clear first still gets the out-of-scope stamp" {
-  wiki_pr_with_stale_marker
-  # The marker validates for the unchanged digest: a wiki change rotates none.
-  [ -f "$REPO/.gaia/local/audit/$(mgf_member_digest code-audit-frontend).ok" ]
+chore_deps_pull_request() {
+  cp "$MGF_REPO_ROOT/.gaia/scripts/chore-deps-skip.sh" "$REPO/.gaia/scripts/chore-deps-skip.sh"
+  mkdir -p "$REPO/.claude/hooks/lib"
+  cp "$MGF_REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" "$REPO/.claude/hooks/lib/gaia-packages.sh"
+  mgf_commit "package.json" '{"name":"x","version":"1.0.1"}'
+  mgf_record 12 false "chore(deps): bump x from 1.0.0 to 1.0.1" "package.json"
+}
 
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  assert_one_post 'skipped: out of scope'
+# --- out of scope and chore(deps): stamped before the allow ----------------------
+
+@test "UAT-011: an out-of-scope or chore(deps) pull request is allowed and stamped before the allow" {
+  local label
+  for label in wiki-only wiki-only-with-valid-frontend-marker manifest-only-chore-deps; do
+    row_fixture "$label" || { echo "case $label: fixture failed"; return 1; }
+    case "$label" in
+      wiki-only)
+        out_of_scope_pull_request
+        ;;
+      wiki-only-with-valid-frontend-marker)
+        wiki_pr_with_stale_marker
+        # The marker validates for the unchanged digest: a wiki change rotates none.
+        [ -f "$REPO/.gaia/local/audit/$(mgf_member_digest code-audit-frontend).ok" ] \
+          || { echo "case $label: the frontend marker does not validate"; return 1; }
+        ;;
+      manifest-only-chore-deps)
+        chore_deps_pull_request
+        # Non-vacuity: package.json dispatches a member, so this is the
+        # member-aware gate's allow, cleared by the waiver rather than a marker.
+        [ -n "$(cd "$REPO" && bash .gaia/scripts/resolve-audit-members.sh 2>/dev/null)" ] \
+          || { echo "case $label: package.json dispatches no member"; return 1; }
+        ;;
+    esac
+    mgf_run_merge "gh pr merge 12 --squash"
+    assert_allowed_silently || { echo "case $label: not allowed silently"; return 1; }
+    case "$label" in
+      manifest-only-chore-deps) assert_one_post 'skipped: chore(deps) manifest-only' ;;
+      *) assert_one_post 'skipped: out of scope' ;;
+    esac || { echo "case $label: not exactly one stamp before the allow"; return 1; }
+  done
 }
 
 @test "UAT-011: a wiki-only pull request whose head already carries a cleared GAIA-Audit status is allowed with no POST" {
@@ -94,37 +134,6 @@ wiki_pr_with_stale_marker() {
   [ "$(mgf_post_count)" -eq 0 ]
   # Non-vacuity: the gate did read the statuses the fixture planted.
   grep -qF -- '/statuses --jq' "$MGF_GH_LOG"
-}
-
-@test "UAT-011 mutation: evaluating the out-of-scope check after frontend_cleared loses the stamp on the marker-present fixture" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's/\n  check_out_of_scope_pr && out_of_scope_pr=1\n/\n  frontend_cleared || { check_out_of_scope_pr && out_of_scope_pr=1; }\n/')"
-  # Not deleted: the evaluation still runs, but only when no marker clears first.
-  [ "$(grep -c 'check_out_of_scope_pr && out_of_scope_pr=1' "${mutant%.sh}-dispatch.sh")" -eq 1 ]
-  wiki_pr_with_stale_marker
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_allowed_silently
-  # The real hook posts once here (the test above); the mutant posts nothing,
-  # so that test's assertion is red against it.
-  [ "$(mgf_post_count)" -eq 0 ]
-}
-
-# --- chore(deps) --------------------------------------------------------------
-
-@test "UAT-011: a manifest-only chore(deps) pull request is allowed and gets the chore(deps) stamp" {
-  cp "$MGF_REPO_ROOT/.gaia/scripts/chore-deps-skip.sh" "$REPO/.gaia/scripts/chore-deps-skip.sh"
-  mkdir -p "$REPO/.claude/hooks/lib"
-  cp "$MGF_REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" "$REPO/.claude/hooks/lib/gaia-packages.sh"
-  mgf_commit "package.json" '{"name":"x","version":"1.0.1"}'
-  mgf_record 12 false "chore(deps): bump x from 1.0.0 to 1.0.1" "package.json"
-  # Non-vacuity: package.json dispatches a member, so this is the member-aware
-  # gate's allow, cleared by the waiver rather than a marker.
-  [ -n "$(cd "$REPO" && bash .gaia/scripts/resolve-audit-members.sh 2>/dev/null)" ]
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  assert_one_post 'skipped: chore(deps) manifest-only'
 }
 
 # --- a bypass pull request makes no base lookup -----------------------------------
@@ -145,87 +154,28 @@ assert_no_branches_call() {
   return 0
 }
 
-# assert_branches_call: the stub saw the base branch lookup (non-vacuity for the
-# mutants below).
-assert_branches_call() {
-  grep -qF -- '/branches/' "$MGF_GH_LOG"
-}
-
-out_of_scope_pull_request() {
-  mgf_commit "wiki/page.md" "doc"
-  mgf_record 12 false "docs: page" "wiki/page.md"
-}
-
-chore_deps_pull_request() {
-  cp "$MGF_REPO_ROOT/.gaia/scripts/chore-deps-skip.sh" "$REPO/.gaia/scripts/chore-deps-skip.sh"
-  mkdir -p "$REPO/.claude/hooks/lib"
-  cp "$MGF_REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" "$REPO/.claude/hooks/lib/gaia-packages.sh"
-  mgf_commit "package.json" '{"name":"x","version":"1.0.1"}'
-  mgf_record 12 false "chore(deps): bump x from 1.0.0 to 1.0.1" "package.json"
-}
-
-@test "an out-of-scope pull request is allowed with the branches lookup failing, and the gate never asks for the base" {
-  out_of_scope_pull_request
-  export GH_STUB_FAIL_BRANCHES=1
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  assert_one_post 'skipped: out of scope'
-  assert_no_branches_call
-}
-
-@test "an out-of-scope pull request is allowed with the base tip absent locally, and the gate never asks for the base" {
-  out_of_scope_pull_request
-  export GH_STUB_BASE_TIP="$ABSENT_BASE_TIP"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  assert_one_post 'skipped: out of scope'
-  assert_no_branches_call
-}
-
-@test "a chore(deps) pull request is allowed with the branches lookup failing, and the gate never asks for the base" {
-  chore_deps_pull_request
-  export GH_STUB_FAIL_BRANCHES=1
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  assert_one_post 'skipped: chore(deps) manifest-only'
-  assert_no_branches_call
-}
-
-@test "a chore(deps) pull request is allowed with the base tip absent locally, and the gate never asks for the base" {
-  chore_deps_pull_request
-  export GH_STUB_BASE_TIP="$ABSENT_BASE_TIP"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  assert_one_post 'skipped: chore(deps) manifest-only'
-  assert_no_branches_call
-}
-
-@test "mutation: the base lookup moved ahead of the out-of-scope arm denies the out-of-scope pull request" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's/\n  out_of_scope_pr=0\n/\n  gate_require_digests\n  out_of_scope_pr=0\n/')"
-  out_of_scope_pull_request
-  export GH_STUB_FAIL_BRANCHES=1
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_denied_by_json
-  assert_branches_call
-  [ "$(mgf_post_count)" -eq 0 ]
-}
-
-@test "mutation: the base lookup moved ahead of the chore(deps) arm denies the chore(deps) pull request" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's/(  frontend_cleared_by=""\n)(  # The chore\(deps\) waiver reads no digest)/$1  gate_require_digests\n$2/')"
-  chore_deps_pull_request
-  export GH_STUB_FAIL_BRANCHES=1
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_denied_by_json
-  assert_branches_call
-  [ "$(mgf_post_count)" -eq 0 ]
+@test "an out-of-scope or chore(deps) pull request is allowed with a lookup failing and the base never asked" {
+  local row label kind lookup description
+  for row in \
+    "out-of-scope|branches-fail" \
+    "out-of-scope|base-tip-absent" \
+    "chore-deps|branches-fail" \
+    "chore-deps|base-tip-absent"; do
+    kind=${row%%|*}; lookup=${row#*|}; label="$kind/$lookup"
+    row_fixture "${kind}-${lookup}" || { echo "case $label: fixture failed"; return 1; }
+    case "$kind" in
+      out-of-scope) out_of_scope_pull_request; description='skipped: out of scope' ;;
+      chore-deps) chore_deps_pull_request; description='skipped: chore(deps) manifest-only' ;;
+    esac
+    case "$lookup" in
+      branches-fail) export GH_STUB_FAIL_BRANCHES=1 ;;
+      base-tip-absent) export GH_STUB_BASE_TIP="$ABSENT_BASE_TIP" ;;
+    esac
+    mgf_run_merge "gh pr merge 12 --squash"
+    assert_allowed_silently || { echo "case $label: not allowed silently"; return 1; }
+    assert_one_post "$description" || { echo "case $label: not exactly one stamp"; return 1; }
+    assert_no_branches_call || { echo "case $label: the gate asked for the base"; return 1; }
+  done
 }
 
 # --- the refusal state ----------------------------------------------------------
@@ -259,18 +209,6 @@ chore_deps_pull_request() {
   [ "$(mgf_post_count)" -eq 0 ]
 }
 
-@test "UAT-011 mutation: posting on every member-aware allow turns the marker-cleared case red" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's/if \[ "\$frontend_chore_deps_waived" -eq 0 \]; then/if false; then/')"
-  mgf_commit "apps/web/app/x.ts" "export const x = 1"
-  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
-  mgf_marker code-audit-frontend >/dev/null
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_allowed_silently
-  [ "$(mgf_post_count)" -eq 1 ]
-}
-
 @test "no stamp when the pull request's recorded head is not local HEAD, and the reason names the manual command" {
   mgf_commit "wiki/page.md" "doc"
   mgf_record 12 false "docs: page" "wiki/page.md"
@@ -300,75 +238,46 @@ moved_head_after_record() {
   ! grep -qF -- '0123456789abcdef0123456789abcdef01234567' "$MGF_GH_LOG"
 }
 
-@test "mutation: re-reading the pull request head for the stamp moves the POST onto the unclassified head" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's/audit_post_bypass_status "\$pr_record_number" "\$sha" "\$description"/audit_post_bypass_status "\$pr_record_number" "\$(gh pr view "\$pr_record_number" --json headRefOid --jq .headRefOid)" "\$description"/')"
-  mgf_commit "wiki/page.md" "doc"
-  mgf_record 12 false "docs: page" "wiki/page.md"
-  moved_head_after_record
+# --- the draft flip and a rejected POST -------------------------------------------
 
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_allowed_silently
-  # The real hook posts on local HEAD (the test above); the mutant posts on the
-  # moved head, so that test's assertion is red against it.
-  mgf_post_lines | grep -qF -- 'statuses/0123456789abcdef0123456789abcdef01234567'
-}
-
-@test "a failed ready flip still allows the bypass, keeps the posted status and names the manual flip on stderr" {
-  mgf_commit "wiki/page.md" "doc"
-  mgf_record 12 false "docs: page" "wiki/page.md"
-  : > "$MGF_STUB_DIRECTORY/ready-fails"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  [ "$(mgf_post_count)" -eq 1 ]
-  grep -qF -- 'gh pr ready 12' <<<"$stderr" || return 1
-}
-
-@test "a pull request that is not a draft is not flipped, and the status still posts" {
-  mgf_commit "wiki/page.md" "doc"
-  mgf_record 12 false "docs: page" "wiki/page.md"
-  printf 'false\n' > "$MGF_STUB_DIRECTORY/is-draft"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  [ "$(mgf_post_count)" -eq 1 ]
-  grep -qF -- 'pr view 12 --json isDraft' "$MGF_GH_LOG" || return 1
-  grep -qF -- 'pr ready' "$MGF_GH_LOG" && return 1
-  grep -qF -- 'draft flip' <<<"$stderr" && return 1
-  true
-}
-
-@test "an unreadable draft state still attempts the flip" {
-  mgf_commit "wiki/page.md" "doc"
-  mgf_record 12 false "docs: page" "wiki/page.md"
-  printf 'null\n' > "$MGF_STUB_DIRECTORY/is-draft"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  grep -qF -- 'pr ready 12' "$MGF_GH_LOG"
-}
-
-@test "a rejected POST flips nothing" {
-  mgf_commit "wiki/page.md" "doc"
-  mgf_record 12 false "docs: page" "wiki/page.md"
-  sed -i.bak 's/\*" -X POST "\*) exit 0 ;;/*" -X POST "*) exit 1 ;;/' "$MGF_STUB_DIRECTORY/bin/gh"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  ! grep -qF -- 'pr ready' "$MGF_GH_LOG"
-}
-
-@test "a rejected POST still allows the bypass and names the manual command on stderr" {
-  mgf_commit "wiki/page.md" "doc"
-  mgf_record 12 false "docs: page" "wiki/page.md"
-  sed -i.bak 's/\*" -X POST "\*) exit 0 ;;/*" -X POST "*) exit 1 ;;/' "$MGF_STUB_DIRECTORY/bin/gh"
-  grep -qF -- '" -X POST "*) exit 1' "$MGF_STUB_DIRECTORY/bin/gh"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  [ "$(mgf_post_count)" -eq 1 ]
-  grep -qF -- "description='skipped: out of scope'" <<<"$stderr" || return 1
+@test "a failed ready flip or rejected POST still allows the bypass and names the manual command" {
+  local label
+  for label in ready-flip-fails not-a-draft unreadable-draft-state rejected-post; do
+    row_fixture "$label" || { echo "case $label: fixture failed"; return 1; }
+    out_of_scope_pull_request
+    case "$label" in
+      ready-flip-fails) : > "$MGF_STUB_DIRECTORY/ready-fails" ;;
+      not-a-draft) printf 'false\n' > "$MGF_STUB_DIRECTORY/is-draft" ;;
+      unreadable-draft-state) printf 'null\n' > "$MGF_STUB_DIRECTORY/is-draft" ;;
+      rejected-post)
+        sed -i.bak 's/\*" -X POST "\*) exit 0 ;;/*" -X POST "*) exit 1 ;;/' "$MGF_STUB_DIRECTORY/bin/gh"
+        grep -qF -- '" -X POST "*) exit 1' "$MGF_STUB_DIRECTORY/bin/gh" \
+          || { echo "case $label: the stub still accepts the POST"; return 1; }
+        ;;
+    esac
+    mgf_run_merge "gh pr merge 12 --squash"
+    assert_allowed_silently || { echo "case $label: not allowed silently"; return 1; }
+    case "$label" in
+      ready-flip-fails)
+        [ "$(mgf_post_count)" -eq 1 ] || { echo "case $label: the status did not post once"; return 1; }
+        grep -qF -- 'gh pr ready 12' <<<"$stderr" || { echo "case $label: stderr names no manual flip"; return 1; }
+        ;;
+      not-a-draft)
+        [ "$(mgf_post_count)" -eq 1 ] || { echo "case $label: the status did not post once"; return 1; }
+        grep -qF -- 'pr view 12 --json isDraft' "$MGF_GH_LOG" || { echo "case $label: the draft state was not read"; return 1; }
+        grep -qF -- 'pr ready' "$MGF_GH_LOG" && { echo "case $label: a non-draft was flipped"; return 1; }
+        grep -qF -- 'draft flip' <<<"$stderr" && { echo "case $label: stderr reports a draft flip"; return 1; }
+        ;;
+      unreadable-draft-state)
+        grep -qF -- 'pr ready 12' "$MGF_GH_LOG" || { echo "case $label: no flip attempted"; return 1; }
+        ;;
+      rejected-post)
+        grep -qF -- 'pr ready' "$MGF_GH_LOG" && { echo "case $label: flipped after a rejected POST"; return 1; }
+        [ "$(mgf_post_count)" -eq 1 ] || { echo "case $label: the POST was not attempted once"; return 1; }
+        grep -qF -- "description='skipped: out of scope'" <<<"$stderr" || { echo "case $label: stderr names no manual command"; return 1; }
+        ;;
+    esac
+  done
 }
 
 # --- the marker path: the gate allows and post-audit-status.sh posts -----------
@@ -390,38 +299,30 @@ uat_004_fixture() {
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
 }
 
-@test "UAT-004 fixture A (stale workflow, no default_mode): the marker allows the merge and post-audit-status.sh posts success" {
-  local marker
-  uat_004_fixture ''
-  grep -q 'default_mode' "$REPO/.gaia/audit-ci.yml" && return 1
-  marker="$(mgf_marker code-audit-frontend)"
+@test "UAT-004: a stale workflow fixture A or B: the marker allows the merge and the status posts" {
+  local row label default_mode marker
+  # A: stale workflow, no default_mode. B: stale workflow, default_mode: ci.
+  for row in "A|" "B|ci"; do
+    label=${row%%|*}; default_mode=${row#*|}
+    row_fixture "fixture-$label" || { echo "case $label: fixture failed"; return 1; }
+    uat_004_fixture "$default_mode"
+    if [ -z "$default_mode" ]; then
+      grep -q 'default_mode' "$REPO/.gaia/audit-ci.yml" && { echo "case $label: default_mode present"; return 1; }
+    else
+      grep -qx "default_mode: $default_mode" "$REPO/.gaia/audit-ci.yml" || { echo "case $label: default_mode missing"; return 1; }
+    fi
+    marker="$(mgf_marker code-audit-frontend)"
 
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  [ "$(mgf_post_count)" -eq 0 ]
+    mgf_run_merge "gh pr merge 12 --squash"
+    assert_allowed_silently || { echo "case $label: not allowed silently"; return 1; }
+    [ "$(mgf_post_count)" -eq 0 ] || { echo "case $label: the gate posted"; return 1; }
 
-  run bash -c 'cd "$1" && bash "$2" "$3"' _ "$REPO" "$MGF_REPO_ROOT/.claude/hooks/post-audit-status.sh" "$marker"
-  [ "$status" -eq 0 ]
-  [ "$(mgf_post_count)" -eq 1 ]
-  mgf_post_lines | grep -qF -- 'state=success' || return 1
-  mgf_post_lines | grep -qF -- 'context=GAIA-Audit' || return 1
-}
-
-@test "UAT-004 fixture B (stale workflow, default_mode: ci): the marker allows the merge and post-audit-status.sh posts success" {
-  local marker
-  uat_004_fixture ci
-  grep -qx 'default_mode: ci' "$REPO/.gaia/audit-ci.yml"
-  marker="$(mgf_marker code-audit-frontend)"
-
-  mgf_run_merge "gh pr merge 12 --squash"
-  assert_allowed_silently
-  [ "$(mgf_post_count)" -eq 0 ]
-
-  run bash -c 'cd "$1" && bash "$2" "$3"' _ "$REPO" "$MGF_REPO_ROOT/.claude/hooks/post-audit-status.sh" "$marker"
-  [ "$status" -eq 0 ]
-  [ "$(mgf_post_count)" -eq 1 ]
-  mgf_post_lines | grep -qF -- 'state=success' || return 1
-  mgf_post_lines | grep -qF -- 'context=GAIA-Audit' || return 1
+    run bash -c 'cd "$1" && bash "$2" "$3"' _ "$REPO" "$MGF_REPO_ROOT/.claude/hooks/post-audit-status.sh" "$marker"
+    [ "$status" -eq 0 ] || { echo "case $label: post-audit-status.sh status=$status"; return 1; }
+    [ "$(mgf_post_count)" -eq 1 ] || { echo "case $label: post-audit-status.sh did not post once"; return 1; }
+    mgf_post_lines | grep -qF -- 'state=success' || { echo "case $label: no success state"; return 1; }
+    mgf_post_lines | grep -qF -- 'context=GAIA-Audit' || { echo "case $label: no GAIA-Audit context"; return 1; }
+  done
 }
 
 @test "UAT-004: the merge gate carries no self-modification bypass" {

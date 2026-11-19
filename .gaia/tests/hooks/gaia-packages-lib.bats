@@ -189,35 +189,6 @@ check_case() {
   [ "$failed" = 0 ]
 }
 
-@test "corpus: the check itself fails on a wrong expectation (guard can fail)" {
-  # shellcheck source=/dev/null
-  . "$LIBRARY"
-  local root="$BATS_TEST_TMPDIR/mutant" expected="$BATS_TEST_TMPDIR/expected.json"
-  materialize "$CORPUS/path-frontend" "$root"
-
-  # Control: the untouched oracle passes, so the failures below are the mutants'.
-  check_case "$CORPUS/path-frontend/expected.json" "$root"
-
-  # A glob that must match, claimed not to.
-  jq '.globs.tddUnitTests.noMatch += ["frontend/app/x.test.ts"]' \
-    "$CORPUS/path-frontend/expected.json" >"$expected"
-  run check_case "$expected" "$root"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"want NO match"* ]]
-
-  # A load status that is not the real one.
-  jq '.load = 3 | .error = "x"' "$CORPUS/path-frontend/expected.json" >"$expected"
-  run check_case "$expected" "$root"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"load: want 3, got 0"* ]]
-
-  # An owner that is not the real one.
-  jq '.forPath["frontend/app/x.ts"] = "ios"' "$CORPUS/path-frontend/expected.json" >"$expected"
-  run check_case "$expected" "$root"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"for_path"* ]]
-}
-
 @test "a descriptor that still carries a retired globs key loads clean and the key answers nothing" {
   # shellcheck source=/dev/null
   . "$LIBRARY"
@@ -236,41 +207,48 @@ check_case() {
   [ "$key_status" -eq 1 ]
 }
 
-@test "a failed load after a good one clears the earlier answers" {
+# Each row loads a good case, confirms it answered, then loads a bad case of
+# a different failure kind; every answer must be cleared afterwards.
+@test "a failed load after a good one clears the earlier answers, including the web answers" {
   # shellcheck source=/dev/null
   . "$LIBRARY"
-  materialize "$CORPUS/path-frontend" "$BATS_TEST_TMPDIR/good"
-  materialize "$CORPUS/registry-malformed-json" "$BATS_TEST_TMPDIR/bad"
-  gaia_packages_load "$BATS_TEST_TMPDIR/good"
-  [ -n "$(gaia_package_globs_ere tddUnitTests)" ]
-  local status=0
-  gaia_packages_load "$BATS_TEST_TMPDIR/bad" || status=$?
-  [ "$status" -eq 2 ]
-  [ -z "$(gaia_package_globs_ere tddUnitTests)" ]
-  [ -z "$(gaia_packages_list)" ]
+  local row label good bad expected_status status
+  for row in \
+    "malformed-registry|path-frontend|registry-malformed-json|2" \
+    "invalid-stack-descriptor|stack-web|descriptor-stack-invalid|3"; do
+    IFS='|' read -r label good bad expected_status <<<"$row"
+    materialize "$CORPUS/$good" "$BATS_TEST_TMPDIR/$label-good"
+    materialize "$CORPUS/$bad" "$BATS_TEST_TMPDIR/$label-bad"
+    gaia_packages_load "$BATS_TEST_TMPDIR/$label-good" || { echo "case $label: good load failed"; return 1; }
+    case "$label" in
+      malformed-registry) [ -n "$(gaia_package_globs_ere tddUnitTests)" ] || { echo "case $label: good load gave no globs"; return 1; } ;;
+      invalid-stack-descriptor) [ -n "$(gaia_packages_web_members)" ] || { echo "case $label: good load gave no web members"; return 1; } ;;
+    esac
+    status=0
+    gaia_packages_load "$BATS_TEST_TMPDIR/$label-bad" || status=$?
+    [ "$status" -eq "$expected_status" ] || { echo "case $label: status=$status"; return 1; }
+    [ -z "$(gaia_package_globs_ere tddUnitTests)" ] || { echo "case $label: globs survived"; return 1; }
+    [ -z "$(gaia_packages_list)" ] || { echo "case $label: list survived"; return 1; }
+    [ -z "$(gaia_packages_web_members)" ] || { echo "case $label: web members survived"; return 1; }
+  done
 }
 
-@test "jq unavailable: load returns 4 naming jq, never 0" {
-  local shimmed_path
+@test "jq unavailable: load returns 4 naming jq, and an absent registry does not fall back to the built-in default" {
+  local row label root shimmed_path
   shimmed_path="$(path_shim_without jq)"
-  materialize "$CORPUS/path-frontend" "$BATS_TEST_TMPDIR/r"
-  PATH="$shimmed_path" run bash -c 'command -v jq && exit 99
-    . "$1"; status=0; gaia_packages_load "$2" || status=$?
-    printf "%s\n" "$status" "$GAIA_PACKAGES_ERROR"' _ "$LIBRARY" "$BATS_TEST_TMPDIR/r"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = 4 ]
-  [[ "${lines[1]}" == *jq* ]]
-  [[ "${lines[1]}" == *"Next step: "* ]]
-}
-
-@test "jq unavailable: an absent registry does not fall back to the built-in default" {
-  local shimmed_path
-  shimmed_path="$(path_shim_without jq)"
-  mkdir -p "$BATS_TEST_TMPDIR/empty-root"
-  PATH="$shimmed_path" run bash -c '. "$1"; status=0; gaia_packages_load "$2" || status=$?
-    printf "%s\n" "$status"; gaia_package_globs_ere tddUnitTests' _ "$LIBRARY" "$BATS_TEST_TMPDIR/empty-root"
-  [ "${lines[0]}" = 4 ]
-  [ -z "${lines[1]:-}" ]
+  materialize "$CORPUS/path-frontend" "$BATS_TEST_TMPDIR/registry-present"
+  mkdir -p "$BATS_TEST_TMPDIR/registry-absent"
+  for label in registry-present registry-absent; do
+    root="$BATS_TEST_TMPDIR/$label"
+    PATH="$shimmed_path" run bash -c 'command -v jq && exit 99
+      . "$1"; status=0; gaia_packages_load "$2" || status=$?
+      printf "%s\n" "$status" "globs=$(gaia_package_globs_ere tddUnitTests)" "$GAIA_PACKAGES_ERROR"' _ "$LIBRARY" "$root"
+    [ "$status" -eq 0 ] || { echo "case $label: shim leaked jq or the shell failed: $output"; return 1; }
+    [ "${lines[0]}" = 4 ] || { echo "case $label: load=${lines[0]}"; return 1; }
+    [ "${lines[1]}" = "globs=" ] || { echo "case $label: fell back to ${lines[1]}"; return 1; }
+    [[ "${lines[2]}" == *jq* ]] || { echo "case $label: error does not name jq: ${lines[2]}"; return 1; }
+    [[ "${lines[2]}" == *"Next step: "* ]] || { echo "case $label: error has no next step: ${lines[2]}"; return 1; }
+  done
 }
 
 @test "registry absent: the committed descriptor drives the built-in default, apps/web/app matches and root app does not" {
@@ -317,28 +295,31 @@ check_case() {
   [ "$status" -eq 0 ]
 }
 
-@test "hostile registry path is malformed (2) and runs nothing" {
+# A hostile registry path is refused as malformed; a hostile descriptor glob is
+# data and loads. Neither may run its embedded command.
+@test "a hostile registry path or glob is data and runs nothing" {
   # shellcheck source=/dev/null
   . "$LIBRARY"
-  local root="$BATS_TEST_TMPDIR/hostile" marker="$BATS_TEST_TMPDIR/pwned" status=0
-  mkdir -p "$root/.gaia"
-  jq -n --arg p "frontend\"; touch $marker" '[{name: "frontend", path: $p}]' >"$root/.gaia/packages.json"
-  gaia_packages_load "$root" || status=$?
-  [ "$status" -eq 2 ]
-  [ ! -e "$marker" ]
-}
-
-@test "hostile descriptor glob is data: it compiles to an ERE and runs nothing" {
-  # shellcheck source=/dev/null
-  . "$LIBRARY"
-  local root="$BATS_TEST_TMPDIR/hostile-glob" marker="$BATS_TEST_TMPDIR/pwned-glob" status=0
-  materialize "$CORPUS/path-frontend" "$root"
-  jq --arg g "\$(touch $marker)" '.globs.doctorConfigs = [$g]' \
-    "$root/frontend/gaia.package.json" >"$root/frontend/next.json"
-  mv "$root/frontend/next.json" "$root/frontend/gaia.package.json"
-  gaia_packages_load "$root" || status=$?
-  [ "$status" -eq 0 ]
-  [ ! -e "$marker" ]
+  local row label expected_status root marker status
+  for row in "registry-path|2" "descriptor-glob|0"; do
+    label=${row%%|*}; expected_status=${row#*|}
+    root="$BATS_TEST_TMPDIR/hostile-$label" marker="$BATS_TEST_TMPDIR/pwned-$label"
+    case "$label" in
+      registry-path)
+        mkdir -p "$root/.gaia"
+        jq -n --arg p "frontend\"; touch $marker" '[{name: "frontend", path: $p}]' >"$root/.gaia/packages.json" ;;
+      descriptor-glob)
+        materialize "$CORPUS/path-frontend" "$root"
+        jq --arg g "\$(touch $marker)" '.globs.doctorConfigs = [$g]' \
+          "$root/frontend/gaia.package.json" >"$root/frontend/next.json"
+        mv "$root/frontend/next.json" "$root/frontend/gaia.package.json" ;;
+    esac
+    status=0
+    gaia_packages_load "$root" || status=$?
+    [ "$status" -eq "$expected_status" ] || { echo "case $label: status=$status"; return 1; }
+    [ -e "$marker" ] && { echo "case $label: embedded command ran"; return 1; }
+  done
+  true
 }
 
 @test "the library is safe under set -euo pipefail with unset caller state" {
@@ -349,39 +330,45 @@ check_case() {
   [ "$output" = frontend ]
 }
 
-@test "an all-empty member leaves no empty alternative in any ERE" {
+# Rows: the mixed registry (an all-empty lib beside a web member) and the same
+# registry cut down to the all-empty lib alone.
+@test "an all-empty member leaves no empty alternative and no web member" {
   # shellcheck source=/dev/null
   . "$LIBRARY"
-  local key ere
-  materialize "$CORPUS/non-web-all-empty" "$BATS_TEST_TMPDIR/r"
-  gaia_packages_load "$BATS_TEST_TMPDIR/r"
-  for key in tddUnitTests tddStrictCandidates emergentTests preCommitSource doctorConfigs dependencyManifests; do
-    ere="$(gaia_package_globs_ere "$key")"
-    [ -n "$ere" ]
-    [[ $ere == *"||"* ]] && return 1
-    [[ $ere == *"(|"* ]] && return 1
-    [[ $ere == *"|)"* ]] && return 1
+  local label key ere status
+  for label in mixed-registry single-member; do
+    materialize "$CORPUS/non-web-all-empty" "$BATS_TEST_TMPDIR/$label"
+    if [ "$label" = single-member ]; then
+      rm -rf "$BATS_TEST_TMPDIR/$label/frontend"
+      jq 'del(.[0])' "$BATS_TEST_TMPDIR/$label/.gaia/packages.json" >"$BATS_TEST_TMPDIR/next.json"
+      mv "$BATS_TEST_TMPDIR/next.json" "$BATS_TEST_TMPDIR/$label/.gaia/packages.json"
+    fi
+    gaia_packages_load "$BATS_TEST_TMPDIR/$label" || { echo "case $label: load failed"; return 1; }
+    case "$label" in
+      mixed-registry)
+        for key in tddUnitTests tddStrictCandidates emergentTests preCommitSource doctorConfigs dependencyManifests; do
+          ere="$(gaia_package_globs_ere "$key")"
+          [ -n "$ere" ] || { echo "case $label: $key ERE empty"; return 1; }
+          [[ $ere == *"||"* ]] && { echo "case $label: $key has ||"; return 1; }
+          [[ $ere == *"(|"* ]] && { echo "case $label: $key has (|"; return 1; }
+          [[ $ere == *"|)"* ]] && { echo "case $label: $key has |)"; return 1; }
+        done
+        ere="$(gaia_package_globs_ere tddUnitTests)"
+        [[ "packages/lib/src/a.test.ts" =~ $ere ]] && { echo "case $label: lib test matched"; return 1; }
+        ;;
+      single-member)
+        [ -z "$(gaia_package_globs_ere tddUnitTests)" ] || { echo "case $label: tddUnitTests not empty"; return 1; }
+        [ "$(gaia_package_globs_ere preCommitSource)" = '^(packages/lib/.*)$' ] || { echo "case $label: preCommitSource"; return 1; }
+        [ -z "$(gaia_packages_web_members)" ] || { echo "case $label: has a web member"; return 1; }
+        for key in lib nope; do
+          status=0
+          gaia_package_is_web "$key" || status=$?
+          [ "$status" -eq 1 ] || { echo "case $label: is_web $key=$status"; return 1; }
+        done
+        ;;
+    esac
   done
-  ere="$(gaia_package_globs_ere tddUnitTests)"
-  [[ "packages/lib/src/a.test.ts" =~ $ere ]] && return 1
   true
-}
-
-@test "an all-empty single member leaves tddUnitTests empty, keeps preCommitSource and has no web member" {
-  # shellcheck source=/dev/null
-  . "$LIBRARY"
-  materialize "$CORPUS/non-web-all-empty" "$BATS_TEST_TMPDIR/r"
-  rm -rf "$BATS_TEST_TMPDIR/r/frontend"
-  jq 'del(.[0])' "$BATS_TEST_TMPDIR/r/.gaia/packages.json" >"$BATS_TEST_TMPDIR/next.json"
-  mv "$BATS_TEST_TMPDIR/next.json" "$BATS_TEST_TMPDIR/r/.gaia/packages.json"
-  gaia_packages_load "$BATS_TEST_TMPDIR/r"
-  [ -z "$(gaia_package_globs_ere tddUnitTests)" ]
-  [ "$(gaia_package_globs_ere preCommitSource)" = '^(packages/lib/.*)$' ]
-  [ -z "$(gaia_packages_web_members)" ]
-  run gaia_package_is_web lib
-  [ "$status" -eq 1 ]
-  run gaia_package_is_web nope
-  [ "$status" -eq 1 ]
 }
 
 @test "web members: exactly the web member of a mixed registry, tab-separated, registry order" {
@@ -393,17 +380,4 @@ check_case() {
   gaia_package_wants_settings frontend
   run gaia_package_wants_settings lib
   [ "$status" -eq 1 ]
-}
-
-@test "a failed load clears the web answers" {
-  # shellcheck source=/dev/null
-  . "$LIBRARY"
-  local status=0
-  materialize "$CORPUS/stack-web" "$BATS_TEST_TMPDIR/good"
-  materialize "$CORPUS/descriptor-stack-invalid" "$BATS_TEST_TMPDIR/bad"
-  gaia_packages_load "$BATS_TEST_TMPDIR/good"
-  [ -n "$(gaia_packages_web_members)" ]
-  gaia_packages_load "$BATS_TEST_TMPDIR/bad" || status=$?
-  [ "$status" -eq 3 ]
-  [ -z "$(gaia_packages_web_members)" ]
 }

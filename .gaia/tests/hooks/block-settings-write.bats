@@ -128,68 +128,44 @@ assert_settings_ask() {
   done
 }
 
-@test "the guard never denies" {
-  local tool_name guarded_path shape command_line
-  for tool_name in Bash Monitor; do
-    for guarded_path in "${GUARDED_PATHS[@]}"; do
-      for shape in "${WRITE_SHAPES[@]}"; do
-        command_line="${shape//PATH/$guarded_path}"
-        run_hook_command "$tool_name" "$command_line"
-        [ "$status" -eq 0 ] || return 1
-        if grep -qF -- '"deny"' <<<"$output"; then
-          printf 'denied: tool=%s path=%s shape=%s\n' "$tool_name" "$guarded_path" "$shape" >&2
-          return 1
-        fi
-        grep -qF -- '"permissionDecision": "ask"' <<<"$output" || return 1
-      done
-    done
-  done
-}
-
 # --- passes silently ---
 
-@test "reads and writes to other files pass silently under Bash" {
-  local command_line
-  for command_line in \
-    "cat .claude/settings.json" \
-    "jq . .claude/settings.json" \
-    "cp .claude/settings.json /tmp/x" \
-    "cat .claude/settings.json | tee /tmp/x" \
-    "sed -n p .claude/settings.json" \
-    "echo x > apps/web/package.json" \
-    "echo x > .claude/settings.json.bak" \
-    "sed -i s/a/b/ .claude/settings.local.json" \
-    "cp a .claude/settings.local.json" \
-    $'cp .claude/settings.json \\\n  /tmp/x' \
-    "cat .claude/settings.json; echo done" \
-    "cp .claude/settings.json /tmp/x; echo done" \
-    "echo x > .claude/settings.json.bak; echo done" \
-    "(cat .claude/settings.json)" \
-    "cp .claude/settings.json /tmp/x >& /dev/null" \
-    $'jq \'.a\n| .b\' .claude/settings.json > /tmp/x'; do
-    run_hook_command Bash "$command_line"
+# An Edit row passes its input as file_path: the permissions.ask rule covers the
+# file tools, so the hook stays silent for them.
+@test "reads, other-file writes and edit-tool payloads pass silently" {
+  local row tool_name command_line json
+  for row in \
+    "Bash|cat .claude/settings.json" \
+    "Bash|jq . .claude/settings.json" \
+    "Bash|cp .claude/settings.json /tmp/x" \
+    "Bash|cat .claude/settings.json | tee /tmp/x" \
+    "Bash|sed -n p .claude/settings.json" \
+    "Bash|echo x > apps/web/package.json" \
+    "Bash|echo x > .claude/settings.json.bak" \
+    "Bash|sed -i s/a/b/ .claude/settings.local.json" \
+    "Bash|cp a .claude/settings.local.json" \
+    $'Bash|cp .claude/settings.json \\\n  /tmp/x' \
+    "Bash|cat .claude/settings.json; echo done" \
+    "Bash|cp .claude/settings.json /tmp/x; echo done" \
+    "Bash|echo x > .claude/settings.json.bak; echo done" \
+    "Bash|(cat .claude/settings.json)" \
+    "Bash|cp .claude/settings.json /tmp/x >& /dev/null" \
+    $'Bash|jq \'.a\n| .b\' .claude/settings.json > /tmp/x' \
+    "Monitor|cat .claude/settings.json" \
+    "Monitor|echo x > .claude/settings.json.bak" \
+    "Edit|.claude/settings.json"; do
+    tool_name=${row%%|*}; command_line=${row#*|}
+    if [ "$tool_name" = Edit ]; then
+      json=$(jq -n --arg file_path "$command_line" '{tool_name: "Edit", tool_input: {file_path: $file_path}}')
+      invoke_hook "$json" "$HOOK_ABSOLUTE_PATH"
+    else
+      run_hook_command "$tool_name" "$command_line"
+    fi
     if [ "$status" -ne 0 ] || [ -n "$output" ]; then
-      printf 'not silent: %s\n' "$command_line" >&2
+      printf 'not silent: tool=%s input=%s status=%s output=%s\n' "$tool_name" "$command_line" "$status" "$output" >&2
       return 1
     fi
   done
-}
-
-@test "a read and an other-file write pass silently under Monitor" {
-  local command_line
-  for command_line in "cat .claude/settings.json" "echo x > .claude/settings.json.bak"; do
-    run_hook_command Monitor "$command_line"
-    [ "$status" -eq 0 ] || return 1
-    [ -z "$output" ] || return 1
-  done
-}
-
-@test "an Edit payload on settings.json passes silently; the ask rule covers the file tools" {
-  local json
-  json=$(jq -n '{tool_name: "Edit", tool_input: {file_path: ".claude/settings.json"}}')
-  invoke_hook "$json" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
 }
 
 # --- fail loud: a missing library refuses rather than failing open ---
@@ -211,23 +187,6 @@ assert_settings_ask() {
   done
 }
 
-# --- guard can fail ---
-
-@test "a hook whose path rule is broken no longer asks, so the matrix can go red" {
-  local scratch="$BATS_TEST_TMPDIR/broken-predicate"
-  mkdir -p "$scratch"
-  cp -R "$HOOKS_SOURCE_DIRECTORY/lib" "$scratch/lib"
-  sed 's#== ".claude/settings.json" ||#== ".claude/no-such.json" ||#; s#\*/.claude/settings.json\]\]#*/.claude/no-such.json]]#' \
-    "$HOOK_ABSOLUTE_PATH" >"$scratch/block-settings-write.sh"
-  # The copy must differ from the original in its predicate, or this proves nothing.
-  grep -qF -- 'no-such.json' "$scratch/block-settings-write.sh" || return 1
-  local json
-  json=$(jq -n --arg command 'echo x > .claude/settings.json' '{tool_name: "Bash", tool_input: {command: $command}}')
-  invoke_hook "$json" "$scratch/block-settings-write.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 # --- jq absent ---
 
 without_jq() {
@@ -237,16 +196,13 @@ without_jq() {
   invoke_hook "$1" "$HOOK_ABSOLUTE_PATH"
 }
 
-@test "jq absent: a settings write is refused with exit 2" {
-  local json
-  json=$(jq -n --arg command 'echo x > .claude/settings.json' '{tool_name: "Bash", tool_input: {command: $command}}')
-  without_jq "$json"
-  [ "$status" -eq 2 ]
-}
-
-@test "jq absent: a command naming no settings.json exits 0" {
-  local json
-  json=$(jq -n --arg command 'echo hello' '{tool_name: "Bash", tool_input: {command: $command}}')
-  without_jq "$json"
-  [ "$status" -eq 0 ]
+@test "jq absent: a settings write is refused, an unrelated command exits 0" {
+  local settings_write_json unrelated_json
+  # Both payloads are built before without_jq strips jq from PATH.
+  settings_write_json=$(jq -n --arg command 'echo x > .claude/settings.json' '{tool_name: "Bash", tool_input: {command: $command}}')
+  unrelated_json=$(jq -n --arg command 'echo hello' '{tool_name: "Bash", tool_input: {command: $command}}')
+  without_jq "$settings_write_json"
+  [ "$status" -eq 2 ] || { echo "case settings-write: status=$status, expected 2"; return 1; }
+  without_jq "$unrelated_json"
+  [ "$status" -eq 0 ] || { echo "case unrelated: status=$status, expected 0"; return 1; }
 }

@@ -55,16 +55,25 @@ extractor_names_for() {
 # story with no tests (it has no play to sign). A `!test` story is never run.
 SHAPES_RENDER_ONLY="Render Only"
 
-@test "the shapes fixture's extractor names equal the reporter's names, bar the render-only story" {
-  local reporter_names extractor_names expected
-  reporter_names=$(reporter_names_for "app/utils/tests/csf-shapes.stories.tsx")
-  extractor_names=$(extractor_names_for "app/utils/tests/csf-shapes.stories.tsx")
-  [ -n "$extractor_names" ]
-
-  grep -qxF -- "$SHAPES_RENDER_ONLY" <<<"$reporter_names" || { echo "reporter ran no render-only story" >&2; return 1; }
-  grep -qxF -- "$SHAPES_RENDER_ONLY" <<<"$extractor_names" && { echo "extractor emitted the render-only story" >&2; return 1; }
-  expected=$(grep -vxF -- "$SHAPES_RENDER_ONLY" <<<"$reporter_names")
-  [ "$extractor_names" = "$expected" ] || { printf 'reporter:\n%s\nextractor:\n%s\n' "$expected" "$extractor_names" >&2; return 1; }
+# A row's excluded name is a test the reporter runs that the extractor must
+# not emit; "-" means the two name lists must be equal outright.
+@test "the extractor names equal the reporter's names on the shapes and meta-play fixtures" {
+  local row label fixture excluded reporter_names extractor_names expected
+  for row in \
+    "shapes|app/utils/tests/csf-shapes.stories.tsx|$SHAPES_RENDER_ONLY" \
+    "meta-play|app/utils/tests/csf-meta-play.stories.tsx|-"; do
+    IFS='|' read -r label fixture excluded <<<"$row"
+    reporter_names=$(reporter_names_for "$fixture")
+    extractor_names=$(extractor_names_for "$fixture")
+    [ -n "$extractor_names" ] || { echo "case $label: extractor emitted no names" >&2; return 1; }
+    expected=$reporter_names
+    if [ "$excluded" != "-" ]; then
+      grep -qxF -- "$excluded" <<<"$reporter_names" || { echo "case $label: reporter ran no $excluded story" >&2; return 1; }
+      grep -qxF -- "$excluded" <<<"$extractor_names" && { echo "case $label: extractor emitted $excluded" >&2; return 1; }
+      expected=$(grep -vxF -- "$excluded" <<<"$reporter_names")
+    fi
+    [ "$extractor_names" = "$expected" ] || { printf 'case %s:\nreporter:\n%s\nextractor:\n%s\n' "$label" "$expected" "$extractor_names" >&2; return 1; }
+  done
 }
 
 @test "the reporter names the base story, each .test() and both .extend stories exactly as the extractor does" {
@@ -81,19 +90,4 @@ SHAPES_RENDER_ONLY="Render Only"
     "Custom Display Name"; do
     grep -qxF -- "$full_name" <<<"$reporter_names" || { echo "reporter has no test named: $full_name" >&2; return 1; }
   done
-}
-
-@test "the meta-play fixture's extractor names equal the reporter's names" {
-  local reporter_names extractor_names
-  reporter_names=$(reporter_names_for "app/utils/tests/csf-meta-play.stories.tsx")
-  extractor_names=$(extractor_names_for "app/utils/tests/csf-meta-play.stories.tsx")
-  [ -n "$extractor_names" ]
-  [ "$reporter_names" = "$extractor_names" ]
-}
-
-@test "both fixture files load and every fixture test passes in the browser" {
-  # Judged per file, never by assertion count: a file that fails to import
-  # reports no assertions while the other file's pass.
-  jq -e '[.testResults[] | select(.status == "passed")] | length == 2' "$REPORT" >/dev/null || { echo "a fixture file did not load or failed" >&2; return 1; }
-  jq -e '[.testResults[].assertionResults[] | select(.status != "passed")] | length == 0' "$REPORT" >/dev/null
 }

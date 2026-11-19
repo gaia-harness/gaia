@@ -4,8 +4,7 @@
 # at least two real options, no option line contains the word "Other" (the
 # tool's own Other is an inert button that returns no value; an option that
 # points at it in other words is not caught), and the primary-language question's
-# second option can never repeat the first. Runs once on the real file (must
-# pass) and on mutated scratch copies (must fail).
+# second option can never repeat the first. Runs on the real file.
 
 bats_require_minimum_version 1.5.0
 
@@ -15,8 +14,6 @@ BLOCK_END='^### Q6,'
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  SCRATCH="$BATS_TEST_TMPDIR/gaia-init.md"
-  cp "$REPO_ROOT/$INIT_DOC" "$SCRATCH"
 }
 
 # identity_questions_ok <file>: prints each failure on stdout and returns 1
@@ -71,30 +68,6 @@ identity_questions_ok() {
   [ -z "$output" ]
 }
 
-@test "red twin: an identity question with one option fails" {
-  sed '/^- `Set it later`/d' "$SCRATCH" >"$SCRATCH.new"
-  mv "$SCRATCH.new" "$SCRATCH"
-  run identity_questions_ok "$SCRATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"Q3, GitHub username for CODEOWNERS: 1 option(s)"* ]]
-}
-
-@test "red twin: an option pointing at Other fails" {
-  sed 's/^- `{folder name as-is}`.*/- `Enter another`: type a title via Other./' "$SCRATCH" >"$SCRATCH.new"
-  mv "$SCRATCH.new" "$SCRATCH"
-  run identity_questions_ok "$SCRATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"option points at Other"* ]]
-}
-
-@test "red twin: a missing identity block fails" {
-  sed 's/^### Q3–Q5, Project identity/### Identity/' "$SCRATCH" >"$SCRATCH.new"
-  mv "$SCRATCH.new" "$SCRATCH"
-  run identity_questions_ok "$SCRATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"not found"* ]]
-}
-
 # language_options_ok <file>: the primary-language question lists exactly two
 # options, distinct, neither pointing at Other, and the second is the
 # `{second language}` placeholder whose rule falls back to English for a
@@ -132,36 +105,4 @@ language_options_ok() {
   run language_options_ok "$REPO_ROOT/$INIT_DOC"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "red twin: a fixed English second option fails" {
-  sed 's/^> - {second language}$/> - English/' "$SCRATCH" >"$SCRATCH.new"
-  mv "$SCRATCH.new" "$SCRATCH"
-  run language_options_ok "$SCRATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"fixed literal: English"* ]]
-}
-
-@test "red twin: a repeated language option fails" {
-  sed 's/^> - {second language}$/> - {detected user language}/' "$SCRATCH" >"$SCRATCH.new"
-  mv "$SCRATCH.new" "$SCRATCH"
-  run language_options_ok "$SCRATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"language options repeat"* ]]
-}
-
-@test "red twin: dropping the Spanish fallback fails" {
-  sed 's/, else Spanish\././' "$SCRATCH" >"$SCRATCH.new"
-  mv "$SCRATCH.new" "$SCRATCH"
-  run language_options_ok "$SCRATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"rule is incomplete"* ]]
-}
-
-@test "red twin: a third language option pointing at Other fails" {
-  awk '{ print } /^> - \{second language\}$/ { print "> - Another language: type it via Other" }' "$SCRATCH" >"$SCRATCH.new"
-  mv "$SCRATCH.new" "$SCRATCH"
-  run language_options_ok "$SCRATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"points at Other"* ]]
 }

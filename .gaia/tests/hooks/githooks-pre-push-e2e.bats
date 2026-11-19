@@ -215,37 +215,38 @@ path_without() {
   remote_has_branch feat/clean
 }
 
-@test "without rsync all three distribution checks are skipped, never passed, and the push proceeds" {
+# The rows share one fixture copy: each branches from main and pushes its own
+# branch, so neither sees the other's commit.
+@test "a missing rsync or jq skips its checks, never passes them, and the push proceeds: rsync, jq" {
+  local tool branch
   enable_hook
-  git -C "$REPO" checkout --quiet -b feat/no-rsync
-  printf 'a change\n' > "$REPO/note.txt"
-  commit_all "a change"
+  for tool in rsync jq; do
+    branch="feat/no-$tool"
+    git -C "$REPO" checkout --quiet -b "$branch" main
+    printf 'a change\n' > "$REPO/note.txt"
+    commit_all "a change"
 
-  run env PATH="$(path_without rsync)" git -C "$REPO" push origin feat/no-rsync
-  [ "$status" -eq 0 ]
-  grep -qE -- '^WARN  rsync not found: install with brew install rsync' <<<"$output"
-  grep -qF -- "CI remains the only check" <<<"$output"
-  grep -qE -- '^SKIP  release-scrub leak check: rsync not found' <<<"$output"
-  grep -qE -- '^SKIP  01-files-present: rsync not found' <<<"$output"
-  grep -qE -- '^SKIP  02-marker-strip: rsync not found' <<<"$output"
-  grep -qE -- '^PASS  ' <<<"$output" && return 1
-  remote_has_branch feat/no-rsync
-}
-
-@test "without jq only 01-files-present is skipped and the other two checks run" {
-  enable_hook
-  git -C "$REPO" checkout --quiet -b feat/no-jq
-  printf 'a change\n' > "$REPO/note.txt"
-  commit_all "a change"
-
-  run env PATH="$(path_without jq)" git -C "$REPO" push origin feat/no-jq
-  [ "$status" -eq 0 ]
-  grep -qE -- '^WARN  jq not found: install with brew install jq' <<<"$output"
-  grep -qE -- '^SKIP  01-files-present: jq not found' <<<"$output"
-  grep -qE -- '^PASS  release-scrub leak check \([0-9]+s\)' <<<"$output"
-  grep -qE -- '^PASS  02-marker-strip \([0-9]+s\)' <<<"$output"
-  grep -qE -- '^PASS  01-files-present' <<<"$output" && return 1
-  remote_has_branch feat/no-jq
+    run env PATH="$(path_without "$tool")" git -C "$REPO" push origin "$branch"
+    [ "$status" -eq 0 ] || { echo "case $tool: status=$status output=$output"; return 1; }
+    case "$tool" in
+      rsync)
+        grep -qE -- '^WARN  rsync not found: install with brew install rsync' <<<"$output" || { echo "case $tool: no install warning: $output"; return 1; }
+        grep -qF -- "CI remains the only check" <<<"$output" || { echo "case $tool: no CI note: $output"; return 1; }
+        grep -qE -- '^SKIP  release-scrub leak check: rsync not found' <<<"$output" || { echo "case $tool: leak check not skipped: $output"; return 1; }
+        grep -qE -- '^SKIP  01-files-present: rsync not found' <<<"$output" || { echo "case $tool: 01-files-present not skipped: $output"; return 1; }
+        grep -qE -- '^SKIP  02-marker-strip: rsync not found' <<<"$output" || { echo "case $tool: 02-marker-strip not skipped: $output"; return 1; }
+        grep -qE -- '^PASS  ' <<<"$output" && { echo "case $tool: a check passed: $output"; return 1; }
+        ;;
+      jq)
+        grep -qE -- '^WARN  jq not found: install with brew install jq' <<<"$output" || { echo "case $tool: no install warning: $output"; return 1; }
+        grep -qE -- '^SKIP  01-files-present: jq not found' <<<"$output" || { echo "case $tool: 01-files-present not skipped: $output"; return 1; }
+        grep -qE -- '^PASS  release-scrub leak check \([0-9]+s\)' <<<"$output" || { echo "case $tool: leak check did not pass: $output"; return 1; }
+        grep -qE -- '^PASS  02-marker-strip \([0-9]+s\)' <<<"$output" || { echo "case $tool: 02-marker-strip did not pass: $output"; return 1; }
+        grep -qE -- '^PASS  01-files-present' <<<"$output" && { echo "case $tool: 01-files-present passed: $output"; return 1; }
+        ;;
+    esac
+    remote_has_branch "$branch" || { echo "case $tool: $branch did not reach the remote"; return 1; }
+  done
 }
 
 @test "nothing the hook or the runner adds ships, and the shipped hooks match the source less their maintainer-only blocks" {

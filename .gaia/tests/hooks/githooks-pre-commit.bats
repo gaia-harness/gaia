@@ -153,71 +153,80 @@ assert_gate_skipped() {
   [ ! -s "$PNPM_LOG" ]
 }
 
-# --- a change in a lintable directory runs the gate ---
-
-@test "app/ change runs the gate" {
-  use_root_package
-  stage_and_run "app/routes/home.tsx"
-  assert_gate_ran
+# Row checks for the case tables. Every line returns on its own because a
+# function called on the left of `||` runs with errexit off, so the bare greps
+# of assert_gate_ran would not stop it there.
+check_gate_ran() {
+  local label="$1" package_path="${2:-$REPO}" step
+  [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+  grep -qF -- "running lint-staged" <<<"$output" || { echo "case $label: no 'running lint-staged' in output=$output"; return 1; }
+  for step in typecheck "exec lint-staged" test:lint-staged; do
+    grep -qxF -- "-C $package_path $step" "$PNPM_LOG" || { echo "case $label: pnpm log lacks '-C $package_path $step'"; return 1; }
+  done
 }
 
-@test "test/ change runs the gate" {
-  use_root_package
-  stage_and_run "test/setup.ts"
-  assert_gate_ran
+check_gate_skipped() {
+  local label="$1"
+  [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+  grep -qF -- "skipping lint-staged" <<<"$output" || { echo "case $label: no 'skipping lint-staged' in output=$output"; return 1; }
+  [ ! -s "$PNPM_LOG" ] || { echo "case $label: a gate step ran: $(cat "$PNPM_LOG")"; return 1; }
 }
 
-@test ".storybook/ change runs the gate" {
-  use_root_package
-  stage_and_run ".storybook/preview.ts"
-  assert_gate_ran
+# Case-table rows share one setup(): snapshot the fresh sandbox once, then give
+# each row its own copy at the same path, so no row sees another's commits,
+# staged entries or config.
+snapshot_sandbox() {
+  SANDBOX_SNAPSHOT="$BATS_TEST_TMPDIR/sandbox-snapshot"
+  rm -rf "$SANDBOX_SNAPSHOT"
+  cp -Rp "$REPO" "$SANDBOX_SNAPSHOT"
 }
 
+restore_sandbox() {
+  rm -rf "$REPO"
+  cp -Rp "$SANDBOX_SNAPSHOT" "$REPO"
+}
+
+# --- a change or deletion in a lintable directory runs the gate ---
+#
 # .lintstagedrc.json lints {.storybook,.playwright}/**/*.{ts,tsx}, so the
 # .playwright half needs an arm of its own; without one that entry is
 # unreachable for an e2e-spec-only commit, the most common .playwright shape.
-@test ".playwright/ change runs the gate" {
-  use_root_package
-  stage_and_run ".playwright/e2e/home.spec.ts"
-  assert_gate_ran
-}
-
-# --- a deletion in a lintable directory runs the gate ---
 #
 # Deleting a shared helper, fixture, or spec breaks the types of every file that
 # imported it, which is exactly what the skipped `pnpm typecheck` would catch.
-# All four arms therefore carry `D`; these tests pin that agreement so a future
-# edit cannot narrow one arm back without a failure.
-
-@test "app/ deletion runs the gate" {
-  use_root_package
-  stage_deletion_and_run "app/routes/home.tsx"
-  assert_gate_ran
-}
-
-@test "test/ deletion runs the gate" {
-  use_root_package
-  stage_deletion_and_run "test/setup.ts"
-  assert_gate_ran
-}
-
-@test ".storybook/ deletion runs the gate" {
-  use_root_package
-  stage_deletion_and_run ".storybook/preview.ts"
-  assert_gate_ran
-}
-
-@test ".playwright/ deletion runs the gate" {
-  use_root_package
-  stage_deletion_and_run ".playwright/e2e/home.spec.ts"
-  assert_gate_ran
-}
-
-
-@test "a change matching no lintable directory skips the gate" {
-  use_root_package
-  stage_and_run "docs/notes.md"
-  assert_gate_skipped
+# All four arms therefore carry `D`; the deletion rows pin that agreement so a
+# future edit cannot narrow one arm back without a failure.
+@test "a staged change or deletion under a lintable directory runs the gate, one outside skips it" {
+  local row label kind path
+  snapshot_sandbox
+  for row in \
+    "change|app/routes/home.tsx" \
+    "change|test/setup.ts" \
+    "change|.storybook/preview.ts" \
+    "change|.playwright/e2e/home.spec.ts" \
+    "deletion|app/routes/home.tsx" \
+    "deletion|test/setup.ts" \
+    "deletion|.storybook/preview.ts" \
+    "deletion|.playwright/e2e/home.spec.ts" \
+    "outside|docs/notes.md"; do
+    kind=${row%%|*}; path=${row#*|}; label="$kind $path"
+    restore_sandbox
+    use_root_package
+    case "$kind" in
+      change)
+        stage_and_run "$path"
+        check_gate_ran "$label" || return 1
+        ;;
+      deletion)
+        stage_deletion_and_run "$path"
+        check_gate_ran "$label" || return 1
+        ;;
+      outside)
+        stage_and_run "$path"
+        check_gate_skipped "$label" || return 1
+        ;;
+    esac
+  done
 }
 
 # --- every gated directory is reachable by lint-staged ---
@@ -480,79 +489,6 @@ arm_names_directory() {
   done <<<"$globs"
 }
 
-# --- the head reader and the arm relation the guards above are built on ---
-#
-# Both guards above reduce a glob key to directories and compare those against
-# the arms, so a head shape the reader mis-reads, or an arm relation that does
-# not model the greps, is a false red or a silent pass on both. The live
-# .lintstagedrc.json exercises only the head shapes it happens to use, and a
-# shape it does not carry is exactly where the reader has been wrong, so these
-# drive the helpers directly, one case per shape rather than one representative.
-
-# `app/**/**/*.ts` is the one case that reds if the cut below the reader's
-# second-recursive-segment refusal is swapped to a lazy `${glob%/\*\*/*}`. A
-# doubled globstar is the same directory as one, so its head is `app`, and the
-# lazy cut yields `app/**` instead. It is what keeps that refusal from looking
-# like an interchangeable spelling of the lazy cut.
-@test "glob_head_directories reduces each head shape it can expand to that head's directories" {
-  local glob expect got
-  while IFS='|' read -r glob expect; do
-    [ -n "$glob" ] || continue
-    got=$(glob_head_directories "$glob" | tr '\n' ' ')
-    if [ "${got% }" != "$expect" ]; then
-      printf 'glob_head_directories %s yielded "%s", expected "%s"\n' "$glob" "${got% }" "$expect" >&2
-      return 1
-    fi
-  done <<'CASES'
-app/**/*.{ts,tsx}|app/
-app/routes/**/*.ts|app/routes/
-{.storybook,.playwright,test}/**/*.{ts,tsx}|.storybook/ .playwright/ test/
-{app/routes,test}/**/*.ts|app/routes/ test/
-app/**/**/*.ts|app/
-CASES
-}
-
-# `app}/**/*.ts` and `/**/*.ts` read as malformed noise and are not. The first
-# is a head carrying a closing brace with no opening one, and it is the only
-# case that reds if the metacharacter class narrows to `*{*`; the second is a
-# head that reduces to empty, and it is the only case that reds if the
-# empty-alternative arm is dropped. Pruning either as junk retires a reject
-# arm's only cover.
-#
-# `app/**/routes/**/*.ts` is the opposite kind of case: well-formed, and legible
-# enough that the reader would happily cut it to `app/`. It is refused because
-# that reduction would be wrong rather than unreadable, and it is the only case
-# that reds if the second-recursive-segment arm is dropped.
-@test "glob_head_directories yields nothing for a head shape it cannot expand" {
-  local glob got
-  while IFS= read -r glob; do
-    [ -n "$glob" ] || continue
-    got=$(glob_head_directories "$glob")
-    if [ -n "$got" ]; then
-      printf 'glob_head_directories %s yielded "%s", expected nothing\n' "$glob" "$got" >&2
-      return 1
-    fi
-  done <<'CASES'
-app/{routes,components}/**/*.ts
-{app,{test,mocks}}/**/*.ts
-app}/**/*.ts
-/**/*.ts
-app/*.{ts,tsx}
-**/*.ts
-app/**/routes/**/*.ts
-CASES
-}
-
-@test "arm_names_directory reads the arms as the unanchored substring greps they are" {
-  local arms
-  arms=$(printf '%s\n' 'app/' 'test/')
-  arm_names_directory 'app/' "$arms" || return 1
-  arm_names_directory 'app/routes/' "$arms" || return 1
-  arm_names_directory 'test/mocks/' "$arms" || return 1
-  arm_names_directory '.storybook/' "$arms" && return 1
-  true
-}
-
 # A descriptor glob the hook never acts on is dead: the directory looks gated in
 # the descriptor and decides nothing. For each directory the LIVE descriptor
 # gates, the real hook, given a sandbox carrying the live registry and
@@ -595,67 +531,81 @@ assert_gate_not_invoked() {
   [ ! -s "$PNPM_LOG" ]
 }
 
-@test "apps/web/ package: staging apps/web/app/x.tsx runs the gate in apps/web/" {
-  use_frontend_package
-  stage_and_run "apps/web/app/x.tsx"
-  assert_gate_ran "$REPO/apps/web"
+# The descriptor-names-nothing row is the guard's failing state: with a
+# descriptor that gates nothing the staged file matches, a frontend commit
+# skips, which proves the descriptor decides rather than an unanchored
+# substring of the path.
+@test "apps/web/ package: a change runs the gate in apps/web/ with a registry or the built-in default, a descriptor naming nothing skips, a root app/x.tsx is refused" {
+  local label
+  snapshot_sandbox
+  for label in "registry" "descriptor names nothing" "root app/x.tsx" "built-in default"; do
+    restore_sandbox
+    case "$label" in
+      "registry")
+        use_frontend_package
+        stage_and_run "apps/web/app/x.tsx"
+        check_gate_ran "$label" "$REPO/apps/web" || return 1
+        ;;
+      "descriptor names nothing")
+        use_frontend_package
+        write_descriptor "$REPO/apps/web" '["nomatch/**"]'
+        stage_and_run "apps/web/app/x.tsx"
+        check_gate_skipped "$label" || return 1
+        ;;
+      "root app/x.tsx")
+        use_frontend_package
+        stage_and_run "app/x.tsx"
+        [ "$status" -ne 0 ] || { echo "case $label: status=$status"; return 1; }
+        grep -qF -- "app/x.tsx -> apps/web/app/x.tsx" <<<"$output" || { echo "case $label: refusal does not name the move: $output"; return 1; }
+        [ ! -s "$PNPM_LOG" ] || { echo "case $label: a gate step ran: $(cat "$PNPM_LOG")"; return 1; }
+        ;;
+      "built-in default")
+        rm -f "$REPO/.gaia/packages.json"
+        . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
+        write_builtin_descriptor "$REPO"
+        write_member_manifest "$REPO/apps/web"
+        stage_and_run "apps/web/app/x.tsx"
+        check_gate_ran "$label" "$REPO/apps/web" || return 1
+        ;;
+    esac
+  done
 }
 
-# The guard can fail: with a descriptor that gates nothing the staged file
-# matches, a frontend commit skips. Proves the descriptor decides, rather than
-# an unanchored substring of the path.
-@test "apps/web/ package: a descriptor whose preCommitSource names nothing here skips the gate" {
-  use_frontend_package
-  write_descriptor "$REPO/apps/web" '["nomatch/**"]'
-  stage_and_run "apps/web/app/x.tsx"
-  assert_gate_skipped
-}
-
-# The RED on today's tree: the unmodified hook text, run against the same
-# frontend-layout fixture, never runs the gate in apps/web/.
-@test "today's hook text does not run the apps/web/ gate" {
-  use_frontend_package
-  # The pre-frontend/ hook shape, inlined: the gate runs at the repo root, never
-  # `pnpm -C <repo>/apps/web`. The old text has no shebang, so this copy runs
-  # through `sh -e`.
-  cat >"$REPO/old-pre-commit" <<'OLD_HOOK'
-HAS_APP_CHANGED=$(git diff --cached --name-only -z --diff-filter=ACDM | tr '\0' '\n' | grep 'app/' || true)
-HAS_TEST_CHANGED=$(git diff --cached --name-only -z --diff-filter=ACDM | tr '\0' '\n' | grep 'test/' || true)
-if [ -n "$HAS_APP_CHANGED" ] || [ -n "$HAS_TEST_CHANGED" ]
-then
-	pnpm typecheck
-	pnpm exec lint-staged
-	pnpm test:lint-staged
-fi
-OLD_HOOK
-  mkdir -p "$REPO/apps/web/app"
-  echo "// content" > "$REPO/apps/web/app/x.tsx"
-  git -C "$REPO" add apps/web/app/x.tsx
-  run env PATH="$STUB_BIN:$PATH" PNPM_LOG="$PNPM_LOG" \
-    sh -c 'cd "$1" && sh -e "$2"' _ "$REPO" "$REPO/old-pre-commit"
-  [ "$status" -eq 0 ]
-  ! grep -qxF -- "-C $REPO/apps/web exec lint-staged" "$PNPM_LOG"
-}
-
-@test "apps/web/ package: a root app/x.tsx is refused and runs no gate step" {
-  use_frontend_package
-  stage_and_run "app/x.tsx"
-  [ "$status" -ne 0 ]
-  grep -qF -- "app/x.tsx -> apps/web/app/x.tsx" <<<"$output"
-  [ ! -s "$PNPM_LOG" ]
-}
-
-# The registry reader prints its own reason and next step; the hook's closing
+# Fail closed on a registry or descriptor failure (UAT-018). On an unreadable
+# registry the reader prints its own reason and next step; the hook's closing
 # line points at them and names the file, so the refusal is not a dead end.
-@test "an unreadable package registry is refused with a pointer to the reason and the file" {
-  mkdir -p "$REPO/.gaia"
-  printf 'not json\n' > "$REPO/.gaia/packages.json"
-  stage_and_run "app/x.tsx"
-  [ "$status" -ne 0 ]
-  grep -qF -- ".gaia/packages.json is malformed" <<<"$output"
-  grep -qF -- "The reason and its next step are printed above" <<<"$output"
-  grep -qF -- "bash .gaia/scripts/precommit-packages.sh" <<<"$output"
-  [ ! -s "$PNPM_LOG" ]
+@test "a registry that is unreadable or unparseable, or a missing descriptor, fails the commit with a pointer" {
+  local label
+  snapshot_sandbox
+  for label in "unreadable registry" "unparseable registry" "missing descriptor"; do
+    restore_sandbox
+    case "$label" in
+      "unreadable registry")
+        mkdir -p "$REPO/.gaia"
+        printf 'not json\n' > "$REPO/.gaia/packages.json"
+        stage_and_run "app/x.tsx"
+        [ "$status" -ne 0 ] || { echo "case $label: status=$status"; return 1; }
+        grep -qF -- ".gaia/packages.json is malformed" <<<"$output" || { echo "case $label: no malformed line: $output"; return 1; }
+        grep -qF -- "The reason and its next step are printed above" <<<"$output" || { echo "case $label: no pointer to the reason: $output"; return 1; }
+        grep -qF -- "bash .gaia/scripts/precommit-packages.sh" <<<"$output" || { echo "case $label: file not named: $output"; return 1; }
+        ;;
+      "unparseable registry")
+        use_frontend_package
+        printf 'not json {\n' > "$REPO/.gaia/packages.json"
+        stage_and_run "apps/web/app/x.tsx"
+        [ "$status" -eq 1 ] || { echo "case $label: status=$status"; return 1; }
+        grep -qF -- "gaia-packages: " <<<"$output" || { echo "case $label: no gaia-packages message: $output"; return 1; }
+        ;;
+      "missing descriptor")
+        use_frontend_package
+        rm "$REPO/apps/web/gaia.package.json"
+        stage_and_run "apps/web/app/x.tsx"
+        [ "$status" -eq 1 ] || { echo "case $label: status=$status"; return 1; }
+        grep -qF -- "gaia-packages: " <<<"$output" || { echo "case $label: no gaia-packages message: $output"; return 1; }
+        ;;
+    esac
+    [ ! -s "$PNPM_LOG" ] || { echo "case $label: a gate step ran: $(cat "$PNPM_LOG")"; return 1; }
+  done
 }
 
 @test "a harness-only staged set skips the gate" {
@@ -708,15 +658,6 @@ OLD_HOOK
   [ ! -s "$PNPM_LOG" ]
 }
 
-@test "built-in default: with no registry, apps/web/app/x.tsx runs the gate in apps/web/" {
-  rm -f "$REPO/.gaia/packages.json"
-  . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
-  write_builtin_descriptor "$REPO"
-  write_member_manifest "$REPO/apps/web"
-  stage_and_run "apps/web/app/x.tsx"
-  assert_gate_ran "$REPO/apps/web"
-}
-
 # --- C13: the migration-rename exemption ---
 
 # Commit the retired root paths, then stage their renames the way the Phase 4
@@ -758,84 +699,75 @@ stage_rename() {
   assert_gate_skipped
 }
 
-@test "C13 refusal: an R100 rename inside apps/web/ runs the full gate" {
-  use_frontend_package
-  commit_root_frontend_files apps/web/app/utils/a.ts
-  stage_rename apps/web/app/utils/a.ts apps/web/app/utils/b.ts
-  git -C "$REPO" diff --cached --name-status -M100% | grep -q '^R100'
-  run_hook
-  assert_gate_ran "$REPO/apps/web"
-}
-
-@test "C13 refusal: a rename to a destination that is not the C6 counterpart runs the full gate" {
-  use_root_package
-  commit_root_frontend_files app/x.tsx
-  stage_rename app/x.tsx src/x.tsx
-  git -C "$REPO" diff --cached --name-status -M100% | grep -q '^R100'
-  run_hook
-  assert_gate_ran "$REPO"
-}
-
-@test "C13 refusal: a C6 rename with one changed line runs the full gate" {
-  use_frontend_package
-  commit_root_frontend_files app/x.tsx
-  stage_rename app/x.tsx apps/web/app/x.tsx
-  printf 'a changed line\n' >> "$REPO/apps/web/app/x.tsx"
-  git -C "$REPO" add apps/web/app/x.tsx
-  run_hook
-  assert_gate_ran "$REPO/apps/web"
-}
-
-@test "C13 refusal: one non-exempt entry beside C6 renames runs the full gate" {
-  use_frontend_package
-  commit_root_frontend_files app/x.tsx
-  stage_rename app/x.tsx apps/web/app/x.tsx
-  mkdir -p "$REPO/apps/web/app"
-  echo "// new" > "$REPO/apps/web/app/new.tsx"
-  git -C "$REPO" add apps/web/app/new.tsx
-  run_hook
-  assert_gate_ran "$REPO/apps/web"
+@test "C13 refusal: a rename that is not a pure C6 rename runs the full gate: R100 inside apps/web/, a non-counterpart destination, one changed line, a non-exempt entry beside" {
+  local label
+  snapshot_sandbox
+  for label in "R100 inside apps/web/" "non-counterpart destination" "one changed line" "non-exempt entry beside"; do
+    restore_sandbox
+    case "$label" in
+      "R100 inside apps/web/")
+        use_frontend_package
+        commit_root_frontend_files apps/web/app/utils/a.ts
+        stage_rename apps/web/app/utils/a.ts apps/web/app/utils/b.ts
+        git -C "$REPO" diff --cached --name-status -M100% | grep -q '^R100' || { echo "case $label: no R100 entry staged"; return 1; }
+        run_hook
+        check_gate_ran "$label" "$REPO/apps/web" || return 1
+        ;;
+      "non-counterpart destination")
+        use_root_package
+        commit_root_frontend_files app/x.tsx
+        stage_rename app/x.tsx src/x.tsx
+        git -C "$REPO" diff --cached --name-status -M100% | grep -q '^R100' || { echo "case $label: no R100 entry staged"; return 1; }
+        run_hook
+        check_gate_ran "$label" "$REPO" || return 1
+        ;;
+      "one changed line")
+        use_frontend_package
+        commit_root_frontend_files app/x.tsx
+        stage_rename app/x.tsx apps/web/app/x.tsx
+        printf 'a changed line\n' >> "$REPO/apps/web/app/x.tsx"
+        git -C "$REPO" add apps/web/app/x.tsx
+        run_hook
+        check_gate_ran "$label" "$REPO/apps/web" || return 1
+        ;;
+      "non-exempt entry beside")
+        use_frontend_package
+        commit_root_frontend_files app/x.tsx
+        stage_rename app/x.tsx apps/web/app/x.tsx
+        mkdir -p "$REPO/apps/web/app"
+        echo "// new" > "$REPO/apps/web/app/new.tsx"
+        git -C "$REPO" add apps/web/app/new.tsx
+        run_hook
+        check_gate_ran "$label" "$REPO/apps/web" || return 1
+        ;;
+    esac
+  done
 }
 
 # --- doctor guard, one config per package directory ---
 
-@test "doctor guard: two configs under apps/web/ fail the commit naming apps/web" {
-  use_frontend_package
-  mkdir -p "$REPO/apps/web"
-  : > "$REPO/apps/web/doctor.config.ts"
-  : > "$REPO/apps/web/doctor.config.json"
-  stage_and_run "docs/notes.md"
-  [ "$status" -eq 1 ]
-  grep -qF -- "Multiple react-doctor configs found in apps/web" <<<"$output"
-  grep -qF -- "apps/web/doctor.config.json" <<<"$output"
-  [ ! -s "$PNPM_LOG" ]
-}
-
-@test "doctor guard: one config under apps/web/ passes" {
-  use_frontend_package
-  : > "$REPO/apps/web/doctor.config.ts"
-  stage_and_run "docs/notes.md"
-  assert_gate_skipped
-}
-
-# --- fail closed on a descriptor failure (UAT-018) ---
-
-@test "an unparseable registry fails the commit with the gaia-packages message" {
-  use_frontend_package
-  printf 'not json {\n' > "$REPO/.gaia/packages.json"
-  stage_and_run "apps/web/app/x.tsx"
-  [ "$status" -eq 1 ]
-  grep -qF -- "gaia-packages: " <<<"$output"
-  [ ! -s "$PNPM_LOG" ]
-}
-
-@test "a missing descriptor fails the commit with the gaia-packages message" {
-  use_frontend_package
-  rm "$REPO/apps/web/gaia.package.json"
-  stage_and_run "apps/web/app/x.tsx"
-  [ "$status" -eq 1 ]
-  grep -qF -- "gaia-packages: " <<<"$output"
-  [ ! -s "$PNPM_LOG" ]
+@test "doctor guard: two configs under apps/web/ fail the commit naming apps/web, one config passes" {
+  local label
+  snapshot_sandbox
+  for label in "two configs" "one config"; do
+    restore_sandbox
+    use_frontend_package
+    : > "$REPO/apps/web/doctor.config.ts"
+    case "$label" in
+      "two configs")
+        : > "$REPO/apps/web/doctor.config.json"
+        stage_and_run "docs/notes.md"
+        [ "$status" -eq 1 ] || { echo "case $label: status=$status"; return 1; }
+        grep -qF -- "Multiple react-doctor configs found in apps/web" <<<"$output" || { echo "case $label: no multiple-configs line: $output"; return 1; }
+        grep -qF -- "apps/web/doctor.config.json" <<<"$output" || { echo "case $label: second config not named: $output"; return 1; }
+        [ ! -s "$PNPM_LOG" ] || { echo "case $label: a gate step ran: $(cat "$PNPM_LOG")"; return 1; }
+        ;;
+      "one config")
+        stage_and_run "docs/notes.md"
+        check_gate_skipped "$label" || return 1
+        ;;
+    esac
+  done
 }
 
 # --- the hook runs as a native git hook ---
@@ -912,14 +844,6 @@ commit_frontend_file_through_hook() {
 
 # --- the root prepare script ---
 
-# `--local` because a machine can carry a global core.hooksPath that a plain
-# `--get` would report. Unset means no output and exit status 1.
-assert_local_hooks_path_unset() {
-  run git -C "$1" config --local --get core.hooksPath
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-}
-
 # Run the root prepare script from directory $1 with the env words in "${@:2}".
 # Absolute interpreters, so a PATH reduced to an empty directory still finds them.
 run_prepare() {
@@ -930,38 +854,44 @@ run_prepare() {
   run /usr/bin/env "$@" /bin/sh -c 'cd "$1" && /bin/sh -c "$2"' _ "$directory" "$prepare_script"
 }
 
-@test "prepare sets the local core.hooksPath in a repository outside CI" {
-  run_prepare "$REPO" -u CI
-  [ "$status" -eq 0 ]
-  [ "$(git -C "$REPO" config --local --get core.hooksPath)" = ".githooks" ]
-}
-
-@test "prepare is a no-op when CI is set" {
-  run_prepare "$REPO" CI=true
-  [ "$status" -eq 0 ]
-  assert_local_hooks_path_unset "$REPO"
-}
-
-@test "prepare exits 0 and stays quiet outside a repository" {
-  local bare_directory="$BATS_TEST_TMPDIR/not-a-repository"
-  mkdir -p "$bare_directory"
-  run_prepare "$bare_directory" -u CI
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "prepare exits 0 outside a repository when no git binary is on PATH" {
-  local bare_directory="$BATS_TEST_TMPDIR/not-a-repository"
-  local empty_bin="$BATS_TEST_TMPDIR/empty-bin"
+# The unset checks use `--local` because a machine can carry a global
+# core.hooksPath that a plain `--get` would report. Unset means no output and
+# exit status 1.
+@test "prepare sets or leaves core.hooksPath by environment: outside CI, CI set, outside a repository, no git binary, a nested directory" {
+  local label bare_directory="$BATS_TEST_TMPDIR/not-a-repository" empty_bin="$BATS_TEST_TMPDIR/empty-bin"
   mkdir -p "$bare_directory" "$empty_bin"
-  run_prepare "$bare_directory" -u CI "PATH=$empty_bin"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "prepare from a nested directory leaves the enclosing repository's core.hooksPath alone" {
-  mkdir -p "$REPO/nested/package"
-  run_prepare "$REPO/nested/package" -u CI
-  [ "$status" -eq 0 ]
-  assert_local_hooks_path_unset "$REPO"
+  snapshot_sandbox
+  for label in "outside CI" "CI set" "outside a repository" "no git binary" "nested directory"; do
+    restore_sandbox
+    case "$label" in
+      "outside CI")
+        run_prepare "$REPO" -u CI
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+        [ "$(git -C "$REPO" config --local --get core.hooksPath)" = ".githooks" ] || { echo "case $label: core.hooksPath not .githooks"; return 1; }
+        ;;
+      "CI set")
+        run_prepare "$REPO" CI=true
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+        run git -C "$REPO" config --local --get core.hooksPath
+        [ "$status" -eq 1 ] && [ -z "$output" ] || { echo "case $label: core.hooksPath set: status=$status output=$output"; return 1; }
+        ;;
+      "outside a repository")
+        run_prepare "$bare_directory" -u CI
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status"; return 1; }
+        [ -z "$output" ] || { echo "case $label: printed $output"; return 1; }
+        ;;
+      "no git binary")
+        run_prepare "$bare_directory" -u CI "PATH=$empty_bin"
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status"; return 1; }
+        [ -z "$output" ] || { echo "case $label: printed $output"; return 1; }
+        ;;
+      "nested directory")
+        mkdir -p "$REPO/nested/package"
+        run_prepare "$REPO/nested/package" -u CI
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+        run git -C "$REPO" config --local --get core.hooksPath
+        [ "$status" -eq 1 ] && [ -z "$output" ] || { echo "case $label: enclosing core.hooksPath set: status=$status output=$output"; return 1; }
+        ;;
+    esac
+  done
 }
