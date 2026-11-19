@@ -39,8 +39,7 @@ node_version_manager() {
 # PATH, and it sets the default so the profile each new shell sources keeps it.
 # It installs the floor's Node major (node_floor_major), switches this terminal
 # to it (use) so the pnpm reinstall runs under the new Node, and writes no project
-# file, so it does not depend on its working directory. Global packages stay with the
-# old Node, so pnpm is reinstalled under the new one. Windows gets no route:
+# file, so it does not depend on its working directory. Windows gets no route:
 # these commands are bash.
 # shellcheck disable=SC2016
 node_route() {
