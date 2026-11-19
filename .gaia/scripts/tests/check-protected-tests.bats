@@ -96,6 +96,21 @@ run_gate() {
   [ "$status" -eq 0 ] || { printf '%s\n%s\n' "$output" "$stderr" >&2; return 1; }
 }
 
+# A verbatim commit keeps the trailing space git's default cleanup would strip,
+# so the blank reason reaches the gate as written.
+@test "a blank reason after a protected test name that carries ' -- ' does not waive it" {
+  local dashed_name='denies a token -- forged signature'
+  write_guard_suite "$dashed_name"
+  commit_change "a protected test with a dash separator in its name"
+  BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
+  printf '@test "prints usage" {\n  true\n}\n' > "$FIXTURE/tests/guard.bats"
+  git -C "$FIXTURE" add -A
+  git -C "$FIXTURE" commit -q --cleanup=verbatim -m "$(printf 'drop it\n\nProtected-Test-Removed: tests/guard.bats :: %s -- \nend' "$dashed_name")"
+  run_gate
+  [ "$status" -eq 1 ] || { printf 'status %s\n%s\n' "$status" "$output" >&2; return 1; }
+  [ "$output" = "REMOVED tests/guard.bats :: $dashed_name" ] || { printf 'got\n%s\n' "$output" >&2; return 1; }
+}
+
 # The non-canonical spellings bats-preprocess accepts as a tag line or a test
 # declaration, one fixture test each. The keyword and the directive word are
 # spliced in at run time, so no fixture line is one bats would read in this file.

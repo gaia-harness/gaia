@@ -164,8 +164,12 @@ while IFS= read -r -d '' suite_path; do
   fi
   while IFS= read -r test_name; do
     grep -qxF -- "$test_name" "$scratch_directory/after" && continue
-    WAIVER_KEY="$suite_path :: $test_name" awk 'index($0, ENVIRON["WAIVER_KEY"] " -- ") == 1 { found = 1 } END { exit !found }' \
-      "$scratch_directory/waivers" && continue
+    # The reason is read after the exact key, not after the first " -- ": a
+    # test name can itself carry " -- ", which would let a blank reason pass.
+    WAIVER_PREFIX="$suite_path :: $test_name -- " awk '
+      index($0, ENVIRON["WAIVER_PREFIX"]) == 1 && substr($0, length(ENVIRON["WAIVER_PREFIX"]) + 1) ~ /[^ \t]/ { found = 1 }
+      END { exit !found }
+    ' "$scratch_directory/waivers" && continue
     printf 'REMOVED %s :: %s\n' "$suite_path" "$test_name"
     status=1
   done <"$scratch_directory/before"
