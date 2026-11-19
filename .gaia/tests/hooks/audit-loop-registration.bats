@@ -31,49 +31,39 @@ setup() {
 
 # --- settings: which events reach which hook ---------------------------------
 
-@test "Agent|Task registers the bound hook and not the retired counter" {
-  hook_registered "$SETTINGS" '.hooks.PreToolUse[] | select(.matcher == "Agent|Task")' audit-loop-bound.sh
-  # The retired name is spelled as a character class so this file never holds it.
-  run jq -e '[.hooks.PreToolUse[] | select(.matcher == "Agent|Task") | .hooks[].command] | any(test("block-fourth[-]audit-round")) | not' "$SETTINGS"
-  [ "$status" -eq 0 ]
-}
-
-@test "no SessionStart entry names an audit loop hook or the retired counter" {
-  run jq -e '[.hooks.SessionStart[]?.hooks[]?.command] | length > 0' "$SETTINGS"
-  [ "$status" -eq 0 ]
-  run jq -e '[.hooks.SessionStart[]?.hooks[]?.command] | any(test("audit-loop|block-fourth[-]audit-round")) | not' "$SETTINGS"
-  [ "$status" -eq 0 ]
-}
-
-@test "no SessionStart entry has a clear matcher that carries only an audit hook" {
-  run jq -e '[.hooks.SessionStart[] | select(.matcher == "clear")] | length == 0' "$SETTINGS"
-  [ "$status" -eq 0 ]
-}
-
-@test "UserPromptSubmit registers the grant hook" {
-  hook_registered "$SETTINGS" '.hooks.UserPromptSubmit[]' audit-loop-grant.sh
-}
-
-@test "PostToolUse AskUserQuestion registers the ask recorder with a rooted command and a timeout" {
-  hook_registered "$SETTINGS" '.hooks.PostToolUse[] | select(.matcher == "AskUserQuestion")' audit-loop-ask-grant.sh
-  run jq -e '[.hooks.PostToolUse[] | select(.matcher == "AskUserQuestion") | .hooks[]
+# Each registered row is "<event filter>^<hook>"; each absence or shape row is
+# a jq program that must exit 0 over the settings file. The retired counter's
+# name is spelled as a character class so this file never holds it.
+@test "settings.json registers each audit hook on its events" {
+  local row event_filter hook_name
+  local registered_rows=(
+    '.hooks.PreToolUse[] | select(.matcher == "Agent|Task")^audit-loop-bound.sh'
+    '.hooks.UserPromptSubmit[]^audit-loop-grant.sh'
+    '.hooks.PostToolUse[] | select(.matcher == "AskUserQuestion")^audit-loop-ask-grant.sh'
+    '.hooks.PreToolUse[] | select(.matcher == "Edit|Write|MultiEdit")^block-audit-loop-write.sh'
+    '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")^block-audit-loop-write.sh'
+  )
+  local shape_rows=(
+    '[.hooks.PreToolUse[] | select(.matcher == "Agent|Task") | .hooks[].command] | any(test("block-fourth[-]audit-round")) | not'
+    '[.hooks.SessionStart[]?.hooks[]?.command] | length > 0'
+    '[.hooks.SessionStart[]?.hooks[]?.command] | any(test("audit-loop|block-fourth[-]audit-round")) | not'
+    '[.hooks.SessionStart[] | select(.matcher == "clear")] | length == 0'
+    '[.hooks.PostToolUse[] | select(.matcher == "AskUserQuestion") | .hooks[]
       | select(.command | test("audit-loop-ask-grant[.]sh"))] | length == 1
-      and all(.[]; (.command | startswith("\"$(git rev-parse --show-toplevel")) and (.timeout | type == "number" and . >= 10))' "$SETTINGS"
-  [ "$status" -eq 0 ]
-}
-
-@test "the ask recorder is registered on no event other than PostToolUse AskUserQuestion" {
-  run jq -e '[.hooks | to_entries[] | .key as $event | .value[] | .matcher as $m | .hooks[]
-      | select(.command | test("audit-loop-ask-grant[.]sh")) | [$event, $m]] == [["PostToolUse", "AskUserQuestion"]]' "$SETTINGS"
-  [ "$status" -eq 0 ]
-}
-
-@test "Edit|Write|MultiEdit registers the write guard" {
-  hook_registered "$SETTINGS" '.hooks.PreToolUse[] | select(.matcher == "Edit|Write|MultiEdit")' block-audit-loop-write.sh
-}
-
-@test "Bash|Monitor registers the write guard" {
-  hook_registered "$SETTINGS" '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")' block-audit-loop-write.sh
+      and all(.[]; (.command | startswith("\"$(git rev-parse --show-toplevel")) and (.timeout | type == "number" and . >= 10))'
+    '[.hooks | to_entries[] | .key as $event | .value[] | .matcher as $m | .hooks[]
+      | select(.command | test("audit-loop-ask-grant[.]sh")) | [$event, $m]] == [["PostToolUse", "AskUserQuestion"]]'
+  )
+  for row in "${registered_rows[@]}"; do
+    echo "case: registered $row"
+    IFS='^' read -r event_filter hook_name <<<"$row"
+    hook_registered "$SETTINGS" "$event_filter" "$hook_name"
+  done
+  for row in "${shape_rows[@]}"; do
+    echo "case: shape $row"
+    run jq -e "$row" "$SETTINGS"
+    [ "$status" -eq 0 ]
+  done
 }
 
 # --- settings: the registered timeout outlasts the hook's own deadline -------

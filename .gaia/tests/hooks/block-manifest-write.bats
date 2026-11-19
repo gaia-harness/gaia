@@ -34,8 +34,6 @@ run_hook_bash() {
   invoke_hook "$json" "$HOOK_ABSOLUTE_PATH"
 }
 
-
-
 # --- denied: edit tools, no exemption ---
 
 # bats test_tags=protected
@@ -44,19 +42,19 @@ run_hook_bash() {
   assert_denied_by_json
 }
 
-@test "Write on .gaia/manifest.json is denied" {
-  run_hook_edit "Write" ".gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "MultiEdit on .gaia/manifest.json is denied" {
-  run_hook_edit "MultiEdit" ".gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "Edit on an absolute path ending /.gaia/manifest.json is denied" {
-  run_hook_edit "Edit" "/Users/you/projects/my-app/.gaia/manifest.json"
-  assert_denied_by_json
+@test "an edit tool on the manifest is denied" {
+  local row tool path
+  local rows=(
+    'Write|.gaia/manifest.json'
+    'MultiEdit|.gaia/manifest.json'
+    'Edit|/Users/you/projects/my-app/.gaia/manifest.json'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r tool path <<<"$row"
+    run_hook_edit "$tool" "$path"
+    assert_denied_by_json
+  done
 }
 
 # Every gate explains itself: the denial names what a hand edit breaks, not
@@ -69,256 +67,106 @@ run_hook_bash() {
 
 # --- allowed: edit tools ---
 
-@test "Edit on .gaia/manifest.json.tmp is allowed" {
-  run_hook_edit "Edit" ".gaia/manifest.json.tmp"
-  assert_allowed_by_json
-}
-
-@test "Edit on .gaia/manifest.json.bak is allowed" {
-  run_hook_edit "Edit" ".gaia/manifest.json.bak"
-  assert_allowed_by_json
-}
-
-@test "Write on public/site.webmanifest is allowed" {
-  run_hook_edit "Write" "public/site.webmanifest"
-  assert_allowed_by_json
-}
-
-@test "Edit on an unrelated plan README is allowed" {
-  run_hook_edit "Edit" ".notebook/plans/x/README.md"
-  assert_allowed_by_json
+@test "a lookalike path is allowed by the edit tools" {
+  local row tool path
+  local rows=(
+    'Edit|.gaia/manifest.json.tmp'
+    'Edit|.gaia/manifest.json.bak'
+    'Write|public/site.webmanifest'
+    'Edit|.notebook/plans/x/README.md'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r tool path <<<"$row"
+    run_hook_edit "$tool" "$path"
+    assert_allowed_by_json
+  done
 }
 
 # --- denied: Bash write vectors, no marker ---
 
-@test "jq rewrite redirected back into the manifest is denied" {
-  run_hook_bash "jq '.files += {\"app/x.tsx\":\"owned\"}' .gaia/manifest.json > .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "echo redirect overwriting the manifest is denied (quote-safety canary)" {
-  # This payload's command text carries single quotes of its own; a denial
-  # here proves the harness's quote-safe delivery is wired correctly, not
-  # just that the guard logic works.
-  run_hook_bash "echo '{}' > .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "append redirect onto the manifest is denied" {
-  run_hook_bash "cat frag >> .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "sed -i with a macOS empty backup suffix targeting the manifest is denied" {
-  run_hook_bash "sed -i '' 's/a/b/' .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "sed -i (GNU, no backup suffix) targeting the manifest is denied" {
-  run_hook_bash "sed -i 's/a/b/' .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "cp with the manifest as destination is denied" {
-  run_hook_bash "cp /tmp/x.json .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "mv with the manifest as destination is denied" {
-  run_hook_bash "mv /tmp/x.json .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "tee targeting the manifest is denied" {
-  run_hook_bash "tee .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "sponge targeting the manifest is denied" {
-  run_hook_bash "jq '.files' .gaia/manifest.json | sponge .gaia/manifest.json"
-  assert_denied_by_json
-}
-
-@test "a quoted redirect target is still denied" {
-  run_hook_bash 'echo x > ".gaia/manifest.json"'
-  assert_denied_by_json
-}
-
-# --- denied: multi-line commands ---
-
-@test "a redirect write on line 2 of a multi-line command is denied" {
-  run_hook_bash $'echo ok\nprintf x > .gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "a redirect after the closing quote of a multi-line argument is denied" {
-  run_hook_bash $'echo \'line one\nline two\' > .gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "an mv after a multi-line jq program is denied" {
-  run_hook_bash $'jq \'.a = 1\n| .b = 2\' x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "an mv before a later spaced quoted argument after a multi-line jq program is denied" {
-  run_hook_bash $'jq \'.a = 1\n| .b = 2\' x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json && echo \'two words\''
-  assert_denied_by_json
-}
-
-@test "an mv after a jq program whose closing single quote starts its own line is denied" {
-  run_hook_bash $'jq \'.a = 1\n| .b = 2\n\' x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json && echo \'two words\''
-  assert_denied_by_json
-}
-
-@test "an mv after a jq program whose closing double quote starts its own line is denied" {
-  run_hook_bash $'jq ".a = 1\n| .b = 2\n" x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json && echo "two words"'
-  assert_denied_by_json
-}
-
-@test "a stray word-start apostrophe that never closes does not hide a later write" {
-  run_hook_bash $'echo \'tis the season\nmv /tmp/tmp.json .gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "a cp destination followed by a spaced redirect is denied" {
-  run_hook_bash 'cp /tmp/x.json .gaia/manifest.json >& /dev/null'
-  assert_denied_by_json
-}
-
-@test "a cp or mv destination followed by a spaced separator or comment is denied" {
-  run_hook_bash '( mv /tmp/x.json .gaia/manifest.json )'
-  assert_denied_by_json
-  run_hook_bash 'cp /tmp/x.json .gaia/manifest.json & wait'
-  assert_denied_by_json
-  run_hook_bash 'cp /tmp/x.json .gaia/manifest.json # restore'
-  assert_denied_by_json
-}
-
-@test "a glued redirect to a quoted path with a space is denied" {
-  run_hook_bash 'echo x >"/Users/you/my app/.gaia/manifest.json"'
-  assert_denied_by_json
-}
-
-@test "a redirect target with a glued semicolon is denied" {
-  run_hook_bash 'echo x > .gaia/manifest.json; echo done'
-  assert_denied_by_json
-}
-
-@test "a cp destination with a glued separator is denied" {
-  run_hook_bash 'cp /tmp/x.json .gaia/manifest.json&& echo done'
-  assert_denied_by_json
-}
-
-@test "a sed -i script spanning lines before the manifest path is denied" {
-  run_hook_bash $'sed -i \'s/a/b/\n s/c/d/\' .gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "a cp source spanning lines before the manifest destination is denied" {
-  run_hook_bash $'cp \'/tmp/a\n b.json\' .gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "a target closing a subshell is denied" {
-  run_hook_bash '(echo x > .gaia/manifest.json)'
-  assert_denied_by_json
-}
-
-@test "a cp destination on a backslash continuation line is denied" {
-  run_hook_bash $'cp /tmp/x.json \\\n  .gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "a blank line between statements does not break detection of a later write" {
-  run_hook_bash $'echo prep\n\nprintf x > .gaia/manifest.json'
-  assert_denied_by_json
-}
-
-# --- denied: no-space redirect shapes ---
-
-@test "a no-space redirect (>path, no space after >) onto the manifest is denied" {
-  run_hook_bash 'echo x >.gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "a no-space append redirect (>>path, no space after >>) onto the manifest is denied" {
-  run_hook_bash 'echo x >>.gaia/manifest.json'
-  assert_denied_by_json
-}
-
-@test "a no-space redirect with a \$(...) prefix in the target is denied" {
-  run_hook_bash 'echo x >"$(pwd)/.gaia/manifest.json"'
-  assert_denied_by_json
-}
-
-@test "a no-space redirect to a manifest-adjacent path is still allowed" {
-  run_hook_bash 'echo x >.gaia/manifest.json.bak'
-  assert_allowed_by_json
+# The `echo '{}'` row is the quote-safety canary: a denial there
+# proves the harness's quote-safe delivery is wired, not just the guard logic.
+@test "a Bash write vector to the manifest is denied" {
+  local row
+  local rows=(
+    "jq '.files += {\"app/x.tsx\":\"owned\"}' .gaia/manifest.json > .gaia/manifest.json"
+    "echo '{}' > .gaia/manifest.json"
+    'cat frag >> .gaia/manifest.json'
+    "sed -i '' 's/a/b/' .gaia/manifest.json"
+    "sed -i 's/a/b/' .gaia/manifest.json"
+    'cp /tmp/x.json .gaia/manifest.json'
+    'mv /tmp/x.json .gaia/manifest.json'
+    'tee .gaia/manifest.json'
+    "jq '.files' .gaia/manifest.json | sponge .gaia/manifest.json"
+    'echo x > ".gaia/manifest.json"'
+    $'echo ok\nprintf x > .gaia/manifest.json'
+    $'echo \'line one\nline two\' > .gaia/manifest.json'
+    $'jq \'.a = 1\n| .b = 2\' x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json'
+    $'jq \'.a = 1\n| .b = 2\' x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json && echo \'two words\''
+    $'jq \'.a = 1\n| .b = 2\n\' x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json && echo \'two words\''
+    $'jq ".a = 1\n| .b = 2\n" x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json && echo "two words"'
+    $'echo \'tis the season\nmv /tmp/tmp.json .gaia/manifest.json'
+    'cp /tmp/x.json .gaia/manifest.json >& /dev/null'
+    '( mv /tmp/x.json .gaia/manifest.json )'
+    'cp /tmp/x.json .gaia/manifest.json & wait'
+    'cp /tmp/x.json .gaia/manifest.json # restore'
+    'echo x >"/Users/you/my app/.gaia/manifest.json"'
+    'echo x > .gaia/manifest.json; echo done'
+    'cp /tmp/x.json .gaia/manifest.json&& echo done'
+    $'sed -i \'s/a/b/\n s/c/d/\' .gaia/manifest.json'
+    $'cp \'/tmp/a\n b.json\' .gaia/manifest.json'
+    '(echo x > .gaia/manifest.json)'
+    $'cp /tmp/x.json \\\n  .gaia/manifest.json'
+    $'echo prep\n\nprintf x > .gaia/manifest.json'
+    'echo x >.gaia/manifest.json'
+    'echo x >>.gaia/manifest.json'
+    'echo x >"$(pwd)/.gaia/manifest.json"'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_hook_bash "$row"
+    assert_denied_by_json
+  done
 }
 
 # --- allowed: Bash with the GAIA_MANIFEST_WRITE= exemption marker ---
 
-@test "marked release cp is allowed" {
-  run_hook_bash 'GAIA_MANIFEST_WRITE=release cp "$LATEST_DIR/.gaia/manifest.json" .gaia/manifest.json'
-  assert_allowed_by_json
-}
-
-@test "a marked write on line 2 of a multi-line command is allowed" {
-  run_hook_bash $'echo prep\nGAIA_MANIFEST_WRITE=release cp x .gaia/manifest.json'
-  assert_allowed_by_json
-}
-
-@test "marked remove-i18n jq step is allowed" {
-  run_hook_bash "GAIA_MANIFEST_WRITE=remove-i18n jq 'del(.files[\"app/i18n.ts\"])' .gaia/manifest.json > .gaia/manifest.json.tmp"
-  assert_allowed_by_json
-}
-
-@test "marked remove-i18n mv step is allowed" {
-  run_hook_bash 'GAIA_MANIFEST_WRITE=remove-i18n mv .gaia/manifest.json.tmp .gaia/manifest.json'
-  assert_allowed_by_json
-}
-
-@test "marker among multiple leading env assignments is still exempt" {
-  run_hook_bash 'FOO=1 GAIA_MANIFEST_WRITE=release cp x .gaia/manifest.json'
-  assert_allowed_by_json
+@test "a marked release writer is allowed" {
+  local row
+  local rows=(
+    'GAIA_MANIFEST_WRITE=release cp "$LATEST_DIR/.gaia/manifest.json" .gaia/manifest.json'
+    $'echo prep\nGAIA_MANIFEST_WRITE=release cp x .gaia/manifest.json'
+    "GAIA_MANIFEST_WRITE=remove-i18n jq 'del(.files[\"app/i18n.ts\"])' .gaia/manifest.json > .gaia/manifest.json.tmp"
+    'GAIA_MANIFEST_WRITE=remove-i18n mv .gaia/manifest.json.tmp .gaia/manifest.json'
+    'FOO=1 GAIA_MANIFEST_WRITE=release cp x .gaia/manifest.json'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_hook_bash "$row"
+    assert_allowed_by_json
+  done
 }
 
 # --- allowed: Bash with no write vector (legitimate reads / release CLI) ---
 
-@test "the release CLI mentioning manifest with no write vector is allowed" {
-  run_hook_bash '.gaia/cli/gaia-maintainer release manifest'
-  assert_allowed_by_json
-}
-
-@test "cat of the manifest is allowed" {
-  run_hook_bash 'cat .gaia/manifest.json'
-  assert_allowed_by_json
-}
-
-@test "jq read of the manifest is allowed" {
-  run_hook_bash "jq '.files' .gaia/manifest.json"
-  assert_allowed_by_json
-}
-
-@test "grep over the manifest is allowed" {
-  run_hook_bash 'grep owned .gaia/manifest.json'
-  assert_allowed_by_json
-}
-
-@test "git add of the manifest is allowed" {
-  run_hook_bash 'git add .gaia/manifest.json'
-  assert_allowed_by_json
-}
-
-@test "cp with the manifest as source (not destination) is allowed" {
-  run_hook_bash 'cp .gaia/manifest.json /tmp/backup.json'
-  assert_allowed_by_json
-}
-
-@test "redirect to a different manifest-adjacent path is allowed" {
-  run_hook_bash 'echo x > .gaia/manifest.json.bak'
-  assert_allowed_by_json
+@test "reads and look-alike Bash writes are allowed" {
+  local row
+  local rows=(
+    'echo x >.gaia/manifest.json.bak'
+    '.gaia/cli/gaia-maintainer release manifest'
+    'cat .gaia/manifest.json'
+    "jq '.files' .gaia/manifest.json"
+    'grep owned .gaia/manifest.json'
+    'git add .gaia/manifest.json'
+    'cp .gaia/manifest.json /tmp/backup.json'
+    'echo x > .gaia/manifest.json.bak'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_hook_bash "$row"
+    assert_allowed_by_json
+  done
 }
 
 # --- structural ---
@@ -327,16 +175,8 @@ run_hook_bash() {
   [ -x "$HOOK_ABSOLUTE_PATH" ]
 }
 
-@test "settings.json is valid JSON" {
-  run jq empty "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
-@test "settings.json registers the hook under the Edit|Write|MultiEdit matcher" {
+@test "settings.json registers the hook on both matchers" {
   hook_registered "$SETTINGS_ABSOLUTE_PATH" '.hooks.PreToolUse[] | select(.matcher == "Edit|Write|MultiEdit")' block-manifest-write.sh
-}
-
-@test "settings.json registers the hook on the Bash|Monitor matcher" {
   hook_registered "$SETTINGS_ABSOLUTE_PATH" '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")' block-manifest-write.sh
 }
 

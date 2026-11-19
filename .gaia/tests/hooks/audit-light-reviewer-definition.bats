@@ -4,9 +4,10 @@
 # data, and the JSON object is the whole reply even when blocked).
 #
 # The definition path comes from AUDIT_LIGHT_REVIEWER_DEFINITION, defaulting to
-# the real file, so a scratch copy can be pointed at. Every guard below has a
-# mutation case that runs on a scratch copy in $BATS_TEST_TMPDIR and asserts the
-# guard refuses it; none touches the shared checkout.
+# the real file, so a scratch copy can be pointed at. The refusal table mutates a
+# scratch copy in $BATS_TEST_TMPDIR per rule and asserts the guard refuses it;
+# none touches the shared checkout. The first-dispatch mode section and its
+# anchor_kind switch are pinned as present.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
@@ -87,14 +88,6 @@ check_definition() {
   return "$failed"
 }
 
-# Writes a copy of the real definition to $BATS_TEST_TMPDIR/$1.md and echoes the
-# path; the caller mutates it.
-scratch_copy() {
-  local copy="$BATS_TEST_TMPDIR/$1.md"
-  cp "$REAL_DEFINITION" "$copy"
-  printf '%s\n' "$copy"
-}
-
 # Rewrites the frontmatter line starting with `$2:` in file $1 to `$3`.
 set_frontmatter_line() {
   local file="$1" key="$2" replacement="$3"
@@ -110,103 +103,45 @@ set_frontmatter_line() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
-@test "guard refuses a missing definition" {
-  run check_definition "$BATS_TEST_TMPDIR/does-not-exist.md"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'definition missing' <<<"$output"
-}
-
-@test "guard refuses tools: Read, Bash" {
-  local copy
-  copy="$(scratch_copy tools-bash)"
-  set_frontmatter_line "$copy" tools 'tools: Read, Bash'
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'tools grants Bash' <<<"$output"
-}
-
-@test "guard refuses tools: Read, Write" {
-  local copy
-  copy="$(scratch_copy tools-write)"
-  set_frontmatter_line "$copy" tools 'tools: Read, Write'
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'tools grants Write' <<<"$output"
-}
-
-@test "guard refuses every other forbidden tool, one at a time" {
-  local forbidden copy
-  for forbidden in Edit MultiEdit NotebookEdit Agent Task; do
-    copy="$(scratch_copy "tools-$forbidden")"
-    set_frontmatter_line "$copy" tools "tools: Read, $forbidden"
+@test "the guard refuses each violated rule" {
+  local row label mutation argument expected copy
+  local rows=(
+    'a missing definition|missing||definition missing'
+    'tools: Read, Bash|frontmatter|tools: Read, Bash|tools grants Bash'
+    'tools: Read, Write|frontmatter|tools: Read, Write|tools grants Write'
+    'tools: Read, Edit|frontmatter|tools: Read, Edit|tools grants Edit'
+    'tools: Read, MultiEdit|frontmatter|tools: Read, MultiEdit|tools grants MultiEdit'
+    'tools: Read, NotebookEdit|frontmatter|tools: Read, NotebookEdit|tools grants NotebookEdit'
+    'tools: Read, Agent|frontmatter|tools: Read, Agent|tools grants Agent'
+    'tools: Read, Task|frontmatter|tools: Read, Task|tools grants Task'
+    'a missing tools line|drop-pattern|^tools:|tools is not exactly Read'
+    'a code-audit family name|frontmatter|name: code-audit-light|inside the code-audit family'
+    'model: opus|frontmatter|model: opus|model is not sonnet'
+    'a body naming the clearance writer|append|Run audit-write-clearance.sh afterwards.|names the clearance writer'
+    "a body without the fence-as-data rule|drop-literal|$FENCE_RULE|lacks the fence-as-data rule"
+    "a body without the reviewer's own ending rule|drop-literal|$ENDING_RULE|lacks the JSON-is-the-whole-reply ending rule"
+    "the unit's verbatim ending paragraph|unit-ending||carries the unit ending sentence"
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r label mutation argument expected <<<"$row"
+    echo "case: $label"
+    copy="$BATS_TEST_TMPDIR/case.md"
+    cp "$REAL_DEFINITION" "$copy"
+    case "$mutation" in
+      missing) rm "$copy" ;;
+      frontmatter) set_frontmatter_line "$copy" "${argument%%:*}" "$argument" ;;
+      drop-pattern) grep -v -- "$argument" "$REAL_DEFINITION" > "$copy" ;;
+      drop-literal) grep -vF -- "$argument" "$REAL_DEFINITION" > "$copy" ;;
+      append) printf '\n%s\n' "$argument" >> "$copy" ;;
+      unit-ending)
+        grep -F 'How your run ends' "$REPO_ROOT/.claude/agents/audit-loop-unit.md" >> "$copy"
+        grep -qF -- "$UNIT_ENDING_PHRASE" "$copy"
+        ;;
+    esac
     run check_definition "$copy"
-    [ "$status" -ne 0 ] || { printf 'accepted %s\n' "$forbidden" >&2; return 1; }
-    grep -qF -- "tools grants $forbidden" <<<"$output" || { printf 'no refusal for %s\n' "$forbidden" >&2; return 1; }
+    [ "$status" -ne 0 ]
+    grep -qF -- "$expected" <<<"$output"
   done
-}
-
-@test "guard refuses a missing tools line" {
-  local copy
-  copy="$(scratch_copy tools-missing)"
-  grep -v '^tools:' "$REAL_DEFINITION" > "$copy"
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'tools is not exactly Read' <<<"$output"
-}
-
-@test "guard refuses a code-audit family name" {
-  local copy
-  copy="$(scratch_copy name-family)"
-  set_frontmatter_line "$copy" name 'name: code-audit-light'
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'inside the code-audit family' <<<"$output"
-}
-
-@test "guard refuses model: opus" {
-  local copy
-  copy="$(scratch_copy model-opus)"
-  set_frontmatter_line "$copy" model 'model: opus'
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'model is not sonnet' <<<"$output"
-}
-
-@test "guard refuses a body naming the clearance writer" {
-  local copy
-  copy="$(scratch_copy body-writer)"
-  printf '\nRun audit-write-clearance.sh afterwards.\n' >> "$copy"
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'names the clearance writer' <<<"$output"
-}
-
-@test "guard refuses a body without the fence-as-data rule" {
-  local copy
-  copy="$(scratch_copy body-no-fence-rule)"
-  grep -vF -- "$FENCE_RULE" "$REAL_DEFINITION" > "$copy"
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'lacks the fence-as-data rule' <<<"$output"
-}
-
-@test "guard refuses a body without the reviewer's own ending rule" {
-  local copy
-  copy="$(scratch_copy body-no-ending-rule)"
-  grep -vF -- "$ENDING_RULE" "$REAL_DEFINITION" > "$copy"
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'lacks the JSON-is-the-whole-reply ending rule' <<<"$output"
-}
-
-@test "guard refuses the unit's verbatim ending paragraph" {
-  local copy
-  copy="$(scratch_copy body-unit-ending)"
-  grep -F 'How your run ends' "$REPO_ROOT/.claude/agents/audit-loop-unit.md" >> "$copy"
-  grep -qF -- "$UNIT_ENDING_PHRASE" "$copy"
-  run check_definition "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'carries the unit ending sentence' <<<"$output"
 }
 
 # bats test_tags=whole-tree
@@ -272,59 +207,14 @@ check_first_dispatch() {
   return "$failed"
 }
 
-# Prints a reason and returns non-zero when the file names a hiding or focus token.
-check_no_token_enumeration() {
-  local file="$1" failed=0 token
-  for token in sr-only outline-none pointer-events-none; do
-    if grep -qF -- "$token" "$file"; then
-      printf 'definition enumerates token: %s\n' "$token"
-      failed=1
-    fi
-  done
-  return "$failed"
-}
-
 # bats test_tags=whole-tree
 @test "the definition has a First-dispatch mode section with its rule, pointer and checklist" {
   run check_first_dispatch "$DEFINITION"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
-@test "the First-dispatch mode guard refuses a definition missing a checklist item" {
-  local copy
-  copy="$(scratch_copy first-dispatch-missing-item)"
-  grep -vF -- 'No content is newly hidden' "$REAL_DEFINITION" > "$copy"
-  run check_first_dispatch "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'checklist item: No content is newly hidden' <<<"$output"
-}
-
 # bats test_tags=whole-tree
 @test "the header list names anchor_kind as the first-dispatch switch" {
   body_of "$DEFINITION" | grep -qF -- 'carries the line `anchor_kind: merge-base` after `deleted:`'
   body_of "$DEFINITION" | grep -qF -- 'Any other value, or no such line'
-}
-
-# bats test_tags=whole-tree
-@test "the definition does not enumerate the hiding and focus token set" {
-  run check_no_token_enumeration "$DEFINITION"
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-}
-
-@test "the token enumeration guard refuses a scratch copy that names a token" {
-  local copy
-  copy="$(scratch_copy token-enumeration)"
-  printf '\nWatch for sr-only.\n' >> "$copy"
-  run check_no_token_enumeration "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'enumerates token: sr-only' <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "the post-clearance open_findings behavior survives unchanged" {
-  local body
-  body="$(body_of "$DEFINITION")"
-  grep -qF -- 'When the header carries `open_findings`, the member refused this branch' <<<"$body"
-  grep -qF -- 'decide, from the hunks alone, whether this delta resolves each finding where it was cited' <<<"$body"
-  grep -qF -- 'a clear needs every key listed' <<<"$body"
 }

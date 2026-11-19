@@ -70,7 +70,57 @@ run_hook_from() {
   invoke_hook_in "$2" "$json" "$HOOK_ABSOLUTE_PATH"
 }
 
+# Case-table support. A row is 'verdict|branch|process_directory|payload_directory|command':
+# verdict is deny or allow; branch is main, feature (a fresh feature branch),
+# keep_feature (the existing feature branch) or none; both directories empty
+# means the payload carries no cwd and the hook runs in the home repo, and an
+# empty payload directory reuses the process directory. The command is last so
+# it may carry the separator. Placeholders in the directory and command fields
+# name the fixtures.
+resolve_row_text() {
+  local text="$1"
+  text=${text//@MAIN@/$REPO}
+  text=${text//@WTA@/$BATS_TEST_TMPDIR/wt-a}
+  text=${text//@WTB@/$BATS_TEST_TMPDIR/wt-b}
+  text=${text//@WT@/$BATS_TEST_TMPDIR/wt}
+  text=${text//@FOREIGN@/$FOREIGN}
+  text=${text//@SPACED@/$BATS_TEST_TMPDIR/dir with space}
+  text=${text//@TMP@/$BATS_TEST_TMPDIR}
+  text=${text//@HEAD@/${HEAD_SHA:-}}
+  printf '%s' "$text"
+}
 
+run_row() {
+  local rest="$1" verdict branch process_directory payload_directory command
+  verdict=${rest%%|*}; rest=${rest#*|}
+  branch=${rest%%|*}; rest=${rest#*|}
+  process_directory=${rest%%|*}; rest=${rest#*|}
+  payload_directory=${rest%%|*}; command=${rest#*|}
+  process_directory=$(resolve_row_text "$process_directory")
+  payload_directory=$(resolve_row_text "${payload_directory:-$process_directory}")
+  command=$(resolve_row_text "$command")
+  case "$branch" in
+    main) on_main ;;
+    feature) on_feature ;;
+    keep_feature) git -C "$REPO" checkout --quiet feature ;;
+    none) ;;
+    *) echo "bad branch: $branch"; return 1 ;;
+  esac
+  if [ -z "$process_directory" ]; then
+    run_hook "$command"
+  else
+    run_hook_split "$command" "$process_directory" "$payload_directory"
+  fi
+  case "$verdict" in
+    deny) assert_denied_by_json ;;
+    allow) assert_allowed_by_json ;;
+    *) echo "bad verdict: $verdict"; return 1 ;;
+  esac
+}
+
+add_worktree() {
+  git -C "$REPO" worktree add --quiet -b wt-branch "$BATS_TEST_TMPDIR/wt"
+}
 
 # --- denied ---
 
@@ -81,18 +131,6 @@ run_hook_from() {
   assert_denied_by_json
 }
 
-@test "plain git push from main is denied" {
-  on_main
-  run_hook 'git push'
-  assert_denied_by_json
-}
-
-@test "git push origin main (refspec) is denied from a feature branch" {
-  on_feature
-  run_hook 'git push origin main'
-  assert_denied_by_json
-}
-
 # bats test_tags=protected
 @test "force-push to main is denied from a feature branch" {
   on_feature
@@ -100,127 +138,64 @@ run_hook_from() {
   assert_denied_by_json
 }
 
+@test "a plain push from main, and a refspec push naming main, are denied" {
+  local row
+  local rows=(
+    'deny|main|||git push'
+    'deny|feature|||git push origin main'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
 # Every gate explains itself: each denial says why the action is blocked, not
-# only that it is, so the reader can weigh the repair it names.
-@test "the commit-on-main denial states its reason" {
-  on_main
-  run_hook 'git commit -m "x"'
-  assert_denied_by_json
-  grep -qF -- "Work reaches 'main' only through a pull request, where the audit gate reviews it before it merges." <<<"$output"
+# only that it is, so the reader can weigh the repair it names. Two independent
+# conditions reach the push deny and their repairs differ, so an operator denied
+# for the refspec, already on a feature branch, is not told to create one; the
+# on-main cause answers first where both hold, because leaving main settles the
+# refspec too. Row: branch|command|needle|second needle|text that must be absent.
+@test "each denial states its reason and the repair it names" {
+  local row branch command present_one present_two absent
+  local rows=(
+    "main|git commit -m \"x\"|Work reaches 'main' only through a pull request, where the audit gate reviews it before it merges.||"
+    'main|git push|It lands local commits on the shared branch without the pull request and audit every change passes through.||'
+    'feature|git push --force origin main|Its history is shared, so rewriting it pulls commits out from under every clone and branch built on it.|Fix conflicts with a merge or rebase on the feature branch, then open a PR.|'
+    'feature|git push origin HEAD|refspec names main, master or HEAD||Create a feature branch and open a PR'
+    'feature|git push origin HEAD|without the pull request and audit every change passes through|git push -u origin <branch-name>|'
+    'main|git push|Create a feature branch and open a PR||'
+    'main|git push origin main|Create a feature branch and open a PR||refspec names main, master or HEAD'
+    'second|git reset --hard HEAD~1|any commit the branch holds after it is dropped|Ask the user to run it themselves|'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r branch command present_one present_two absent <<<"$row"
+    case "$branch" in
+      main) on_main ;;
+      feature) on_feature ;;
+      second) on_feature_with_second_commit ;;
+    esac
+    run_hook "$command"
+    assert_denied_by_json
+    grep -qF -- "$present_one" <<<"$output"
+    [ -z "$present_two" ] || grep -qF -- "$present_two" <<<"$output"
+    [ -n "$absent" ] && grep -qF -- "$absent" <<<"$output" && return 1
+  done
+  true
 }
 
-@test "the plain-push denial states its reason" {
-  on_main
-  run_hook 'git push'
-  assert_denied_by_json
-  grep -qF -- 'It lands local commits on the shared branch without the pull request and audit every change passes through.' <<<"$output"
-}
-
-@test "the force-push denial states its reason and its repair" {
-  on_feature
-  run_hook 'git push --force origin main'
-  assert_denied_by_json
-  grep -qF -- 'Its history is shared, so rewriting it pulls commits out from under every clone and branch built on it.' <<<"$output"
-  grep -qF -- 'Fix conflicts with a merge or rebase on the feature branch, then open a PR.' <<<"$output"
-}
-
-@test "home-repo git -C commit on main is denied" {
-  on_main
-  run_hook "git -C $REPO commit -m \"x\""
-  assert_denied_by_json
-}
-
-# A `-R` belonging to another program in the same tool call was read as gh's
-# repository flag, so the shared repo-scope helper answered "foreign" and this
-# guard skipped its commit rule for the whole command (#2011). The remote is
-# required: with none, the helper has no repository name to compare and fails
-# closed a line earlier, which would pass this test without exercising it.
-@test "a trailing program's -R does not exempt a commit on main" {
+# A spelling of a commit or push that once hid it from the rules: a `-R` or
+# `-C` belonging to another program or to commit itself, a global option or a
+# quoted option value ahead of the subcommand, an option or several refspecs
+# ahead of the operand naming main, and a `-C` path carrying whitespace. The
+# remote is required for the trailing `-R` row: with none, the repo-scope
+# helper has no repository name to compare and fails closed a line earlier,
+# which would pass that row without exercising it. A `-c` value naming main is
+# not a refspec, so that row is the allowed control.
+@test "a spelling variant of commit or push is still decided on main" {
+  local row spaced="$BATS_TEST_TMPDIR/dir with space"
   git -C "$REPO" remote add origin https://github.com/acme/widget.git
-  on_main
-  run_hook 'git commit -m x && grep -R app/routes .'
-  assert_denied_by_json
-}
-
-# `-C` after the subcommand is commit's reuse-message option, not a directory.
-@test "git commit -C HEAD on main is denied" {
-  on_main
-  run_hook 'git commit --allow-empty -C HEAD'
-  assert_denied_by_json
-  run_hook 'git commit --allow-empty -m x -C HEAD'
-  assert_denied_by_json
-}
-
-# A git global option ahead of the subcommand hid the invocation from the
-# commit and push rules, which matched the subcommand only where it sat
-# directly after the word `git`, so the PR-only flow was defeated by an option
-# with nothing to do with the branch (#2003).
-@test "a git global option ahead of commit does not hide it on main" {
-  on_main
-  run_hook 'git -c user.name=x commit -m "y"'
-  assert_denied_by_json
-  run_hook 'git --no-pager commit -m "y"'
-  assert_denied_by_json
-}
-
-@test "a git global option ahead of push does not hide it on main" {
-  on_main
-  run_hook 'git -c pack.threads=1 push'
-  assert_denied_by_json
-  run_hook 'git --no-pager push'
-  assert_denied_by_json
-}
-
-@test "a git global option ahead of a refspec push naming main does not hide it" {
-  on_feature
-  run_hook 'git -c pack.threads=1 push origin main'
-  assert_denied_by_json
-  run_hook 'git --no-pager push origin HEAD:main'
-  assert_denied_by_json
-}
-
-# Arming the push rules on the parsed subcommand brings a global option's own
-# VALUE within reach of the force and main/master tests, which the old literal
-# `git push` anchor excluded by construction. A `-c` value is not a refspec, so
-# reading one as a push target is a false deny the arming must not introduce.
-@test "a git -c value naming main does not read as a force-push to main" {
-  on_feature
-  run_hook 'git -c user.name=main push --force origin feature'
-  assert_allowed_by_json
-}
-
-# The short force flag is the first word after the subcommand, so a pattern
-# demanding whitespace before it matches in the whole segment and misses in the
-# argument list.
-@test "the short force flag as the first push argument is still denied to main" {
-  on_feature
-  run_hook 'git push -f origin main'
-  assert_denied_by_json
-}
-
-# The segment was split on whitespace alone, so a quoted global-option value
-# carrying a space arrived as fragments and the fragment after the space landed
-# in the slot the subcommand is read from. Every rule armed on that slot then
-# read a subcommand nobody spelled, and a commit on main was allowed (#2020).
-@test "a quoted global-option value carrying whitespace does not hide the subcommand on main" {
-  on_main
-  run_hook 'git -c "user.name=a b" commit -m x'
-  assert_denied_by_json
-  run_hook "git -c 'user.name=a b' commit -m x"
-  assert_denied_by_json
-  run_hook 'git --namespace "a b" commit -m x'
-  assert_denied_by_json
-  run_hook 'git -c "user.name=a b" push origin main'
-  assert_denied_by_json
-  run_hook 'git -c "user.name=a b" push --force origin main'
-  assert_denied_by_json
-}
-
-# The same split reaching the directory the branch is read from: the `-C` value
-# broke at the space, so the rules resolved a branch from a path git could not
-# open, read no branch at all, and allowed the commit (#2020).
-@test "a -C path carrying whitespace is still enforced on main" {
-  local spaced="$BATS_TEST_TMPDIR/dir with space"
   mkdir -p "$spaced"
   git -C "$spaced" init --quiet --initial-branch=main
   git -C "$spaced" config user.email "test@example.com"
@@ -229,404 +204,312 @@ run_hook_from() {
   echo "# readme" > "$spaced/README.md"
   git -C "$spaced" add README.md
   git -C "$spaced" commit --quiet -m init
-  run_hook_from "git -C \"$spaced\" commit -m x" "$spaced"
-  assert_denied_by_json
+  local rows=(
+    'deny|main|||git -C @MAIN@ commit -m "x"'
+    'deny|main|||git commit -m x && grep -R app/routes .'
+    'deny|main|||git commit --allow-empty -C HEAD'
+    'deny|main|||git commit --allow-empty -m x -C HEAD'
+    'deny|main|||git -c user.name=x commit -m "y"'
+    'deny|main|||git --no-pager commit -m "y"'
+    'deny|main|||git -c pack.threads=1 push'
+    'deny|main|||git --no-pager push'
+    'deny|feature|||git -c pack.threads=1 push origin main'
+    'deny|feature|||git --no-pager push origin HEAD:main'
+    'allow|feature|||git -c user.name=main push --force origin feature'
+    'deny|feature|||git push -f origin main'
+    'deny|main|||git -c "user.name=a b" commit -m x'
+    "deny|main|||git -c 'user.name=a b' commit -m x"
+    'deny|main|||git --namespace "a b" commit -m x'
+    'deny|main|||git -c "user.name=a b" push origin main'
+    'deny|main|||git -c "user.name=a b" push --force origin main'
+    'deny|main|@SPACED@||git -C "@SPACED@" commit -m x'
+    'deny|feature|||git push --quiet origin main'
+    'deny|feature|||git push -q origin main'
+    'deny|feature|||git push --quiet origin HEAD:main'
+    'deny|feature|||git push --quiet --no-verify origin master'
+    'deny|feature|||git push --quiet origin feature main'
+    'deny|feature|||git push origin -- main'
+    'deny|feature|||git push --quiet origin +main'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
-# The ref was pinned to the word after the remote, so an option written ahead of
-# the remote shifted both positions and the push was allowed. Rule 2 still caught
-# the shape when a force flag was present, which is what left the plain push as
-# the hole (#2021).
-@test "an option ahead of the remote does not hide a refspec push naming main" {
-  on_feature
-  run_hook 'git push --quiet origin main'
-  assert_denied_by_json
-  run_hook 'git push -q origin main'
-  assert_denied_by_json
-  run_hook 'git push --quiet origin HEAD:main'
-  assert_denied_by_json
-  run_hook 'git push --quiet --no-verify origin master'
-  assert_denied_by_json
-}
-
-# The operands after the remote are all refspecs, so a push naming several is
-# read whole rather than at its first one, and a `--` ends option parsing
-# without itself becoming the remote (#2021).
-@test "a refspec naming main is read past an earlier refspec and past a -- separator" {
-  on_feature
-  run_hook 'git push --quiet origin feature main'
-  assert_denied_by_json
-  run_hook 'git push origin -- main'
-  assert_denied_by_json
-  run_hook 'git push --quiet origin +main'
-  assert_denied_by_json
-}
-
-# Two independent conditions reach this deny and their repairs differ, so each
-# one carries its own message. An operator denied for the refspec is already
-# standing on a feature branch:
-# telling them to create one names a cause they have ruled out and never names
-# the respelling that clears the deny.
-@test "a refspec-triggered push deny names the refspec cause, not the branch" {
-  on_feature
-  run_hook 'git push origin HEAD'
-  assert_denied_by_json
-  grep -qF -- 'refspec names main, master or HEAD' <<<"$output"
-  grep -qF -- 'Create a feature branch and open a PR' <<<"$output" && return 1
-  true
-}
-
-@test "the refspec push denial states its reason and the spelling that passes" {
-  on_feature
-  run_hook 'git push origin HEAD'
-  assert_denied_by_json
-  grep -qF -- 'without the pull request and audit every change passes through' <<<"$output"
-  grep -qF -- 'git push -u origin <branch-name>' <<<"$output"
-}
-
-# The on-main cause keeps its own repair, and it answers first where both
-# conditions hold: leaving main settles the refspec too, so the operator reads
-# the repair that clears the push rather than the narrower one.
-@test "an on-main push deny names the branch cause, and outranks the refspec cause" {
-  on_main
-  run_hook 'git push'
-  assert_denied_by_json
-  grep -qF -- 'Create a feature branch and open a PR' <<<"$output"
-  run_hook 'git push origin main'
-  assert_denied_by_json
-  grep -qF -- 'Create a feature branch and open a PR' <<<"$output"
-  grep -qF -- 'refspec names main, master or HEAD' <<<"$output" && return 1
-  true
-}
-
-# --- allowed ---
-
-# The operand scan must not read an ordinary feature push as a push to main, and
-# a push option's own value is not a refspec.
-@test "an option ahead of the remote does not create a false deny on a feature push" {
-  on_feature
-  run_hook 'git push --quiet origin feature'
-  assert_allowed_by_json
-  run_hook 'git push -o ci.skip origin feature'
-  assert_allowed_by_json
-  run_hook 'git push --quiet --no-verify origin feature'
-  assert_allowed_by_json
-}
-
-# Modelling quotes must not buy the deny side at the cost of a false deny: a
-# quoted argument carrying a branch name is ordinary text, and a push option's
-# own quoted value is not a refspec.
-@test "a quoted argument carrying whitespace does not create a false deny on a feature branch" {
-  on_feature
-  run_hook 'git commit -m "touch up main and master"'
-  assert_allowed_by_json
-  run_hook 'git push origin feature -o "ci.skip main"'
-  assert_allowed_by_json
-}
-
-@test "git commit on a feature branch is allowed" {
-  on_feature
-  run_hook 'git commit -m "x"'
-  assert_allowed_by_json
-}
-
-@test "git push origin feature from a feature branch is allowed" {
-  on_feature
-  run_hook 'git push origin feature'
-  assert_allowed_by_json
-}
-
-@test "plain git push from a feature branch is allowed" {
-  on_feature
-  run_hook 'git push'
-  assert_allowed_by_json
-}
-
-@test "foreign-repo commit is allowed even though it targets main" {
-  on_main
-  run_hook "git -C $FOREIGN commit -m \"x\""
-  assert_allowed_by_json
+# The operand scan must not read an ordinary feature push as a push to main, a
+# push option's own value (quoted or not) is not a refspec, and a quoted
+# argument carrying a branch name is ordinary text.
+@test "feature-branch commits and pushes are allowed, quoted and option text included" {
+  local row
+  local rows=(
+    'allow|feature|||git push --quiet origin feature'
+    'allow|feature|||git push -o ci.skip origin feature'
+    'allow|feature|||git push --quiet --no-verify origin feature'
+    'allow|feature|||git commit -m "touch up main and master"'
+    'allow|feature|||git push origin feature -o "ci.skip main"'
+    'allow|feature|||git commit -m "x"'
+    'allow|feature|||git push origin feature'
+    'allow|feature|||git push'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
 # The repo-scope verdict covers the whole tool call, so any home command in it
-# keeps the guard armed (gaia-react/gaia#2081).
-@test "a foreign command in the same call does not exempt a commit on main" {
-  on_main
-  git -C "$REPO" remote add origin https://github.com/acme/widget.git
-  run_hook 'gh pr merge 5 -R other/x && git commit -m y'
-  assert_denied_by_json
-  run_hook 'gh pr merge 5 -R other/x; git commit -m y'
-  assert_denied_by_json
-  run_hook "gh pr merge 5 -R other/x
-git commit -m y"
-  assert_denied_by_json
-  run_hook "git commit -m y && git -C $FOREIGN status"
-  assert_denied_by_json
-}
-
-# A substitution in a foreign command's own arguments runs in this repository
-# before the foreign command does (gaia-react/gaia#2148).
-@test "a commit inside a substitution in a foreign command's arguments is denied on main" {
-  on_main
+# keeps the guard armed, including a commit inside a substitution in a foreign
+# command's own arguments, which runs in this repository first.
+@test "a foreign-repo call does not exempt a home commit" {
+  local row
   git -C "$REPO" remote add origin https://github.com/acme/widget.git
   # shellcheck disable=SC2016 # the hook must receive the unexpanded opener
-  run_hook 'gh pr view 5 -R other/x --jq "$(git commit -m y)"'
-  assert_denied_by_json
-  run_hook "git -C $FOREIGN log --format \"\$(git commit -m y)\""
-  assert_denied_by_json
-  run_hook "gh pr create -R other/x --body-file =(git commit -m y)"
-  assert_denied_by_json
+  local rows=(
+    'allow|main|||git -C @FOREIGN@ commit -m "x"'
+    'deny|main|||gh pr merge 5 -R other/x && git commit -m y'
+    'deny|main|||gh pr merge 5 -R other/x; git commit -m y'
+    'deny|main|||'$'gh pr merge 5 -R other/x\ngit commit -m y'
+    'deny|main|||git commit -m y && git -C @FOREIGN@ status'
+    'deny|main|||gh pr view 5 -R other/x --jq "$(git commit -m y)"'
+    'deny|main|||git -C @FOREIGN@ log --format "$(git commit -m y)"'
+    'deny|main|||gh pr create -R other/x --body-file =(git commit -m y)'
+    'allow|main|||gh pr merge 5 -R other/x && git -C @FOREIGN@ commit -m y'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
-@test "a call whose every command is foreign still passes a commit to main" {
+# A linked worktree is this repository, so a `cd` into one is enforced against
+# the branch the command runs on rather than the session's. The payload's cwd
+# is the acting agent's directory, so a command with no `cd` and no `-C` is
+# judged on the branch there, not on the hook process's own; relative `cd` and
+# `-C` words resolve against it; a payload cwd that is not an absolute path
+# inside a git tree falls back to the process cwd; and the walk's own reset
+# boundary, spelled in command text, must not clear the tracked directory.
+@test "cd, -C and the payload cwd pick the checkout a commit or push is read against" {
+  local row
   on_main
-  git -C "$REPO" remote add origin https://github.com/acme/widget.git
-  run_hook "gh pr merge 5 -R other/x && git -C $FOREIGN commit -m y"
-  assert_allowed_by_json
+  add_worktree
+  git -C "$BATS_TEST_TMPDIR/wt" commit --quiet --allow-empty -m "worktree only"
+  mkdir "$BATS_TEST_TMPDIR/wt/sub" "$REPO/sub"
+  local rows=(
+    "allow|main|@MAIN@||cd '@WT@' && git commit -m x"
+    "allow|main|@MAIN@||cd '@WT@' && git push origin wt-branch"
+    "deny|main|@WT@||cd '@MAIN@' && git commit -m x"
+    'allow|main|@MAIN@|@WT@|git push'
+    'allow|main|@MAIN@|@WT@|git push -u origin wt-branch'
+    'allow|main|@MAIN@|@WT@|git commit -m x'
+    'deny|main|@WT@|@MAIN@|git push'
+    'deny|main|@WT@|@MAIN@|git commit -m x'
+    'deny|main|@MAIN@|@WT@|git reset --hard main'
+    'allow|main|@MAIN@|@WT@|git reset --hard HEAD'
+    'allow|main|@MAIN@|@WT@|cd sub && git push'
+    'allow|main|@MAIN@|@WT@|git -C sub commit -m x'
+    'deny|main|@WT@|@MAIN@|cd sub && git commit -m x'
+    'deny|main|@WT@|@MAIN@|git -C sub commit -m x'
+    'deny|main|@MAIN@|relative/dir|git push'
+    'deny|main|@MAIN@|@TMP@|git push'
+    "deny|main|@WT@||cd '@MAIN@';__gaia_walk_reset__;git commit -m x"
+    "deny|main|@WT@||cd '@MAIN@';__gaia_walk_reset__;git push"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
-# A linked worktree is this repository, so a `cd` into one is enforced, and
-# enforced against the branch the command runs on rather than the session's.
-@test "cd into a linked worktree on its own branch, from a main checkout on main: commit and push are allowed" {
+# A failed `cd` leaves the real shell where the previous one moved it, so a
+# target that does not resolve keeps the tracked directory; a resolvable second
+# hop still replaces the first. The other half of an unresolvable `cd` is that
+# the hop may have SUCCEEDED into a checkout the scan cannot name (`cd -` lands
+# back where the shell started), so a candidate standing on main arms the rule,
+# from a main checkout and from a worktree alike. The ambiguity reads
+# candidates, not the session: with nothing on main to find it stays allowed.
+@test "an unresolvable cd is read against every checkout it could name" {
+  local row
   on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$worktree_directory' && git commit -m x" "$REPO"
-  assert_allowed_by_json
-  run_hook_from "cd '$worktree_directory' && git push origin wt-branch" "$REPO"
-  assert_allowed_by_json
-}
-
-@test "cd into the main checkout on main, from a linked worktree: commit is denied" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$REPO' && git commit -m x" "$worktree_directory"
-  assert_denied_by_json
-}
-
-# The payload's cwd is the acting agent's directory, so a command with no `cd`
-# and no `-C` is judged on the branch there, not on the hook process's own.
-run_hook_split() {
-  local json
-  json=$(jq -n --arg command "$1" --arg directory "$3" '{tool_name: "Bash", cwd: $directory, tool_input: {command: $command}}')
-  invoke_hook_in "$2" "$json" "$HOOK_ABSOLUTE_PATH"
-}
-
-@test "process cwd in the main checkout on main, payload cwd a worktree on its own branch: plain commit and push are allowed" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_split 'git push' "$REPO" "$worktree_directory"
-  assert_allowed_by_json
-  run_hook_split 'git push -u origin wt-branch' "$REPO" "$worktree_directory"
-  assert_allowed_by_json
-  run_hook_split 'git commit -m x' "$REPO" "$worktree_directory"
-  assert_allowed_by_json
-}
-
-@test "process cwd a worktree on its own branch, payload cwd the main checkout on main: plain commit and push are denied" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_split 'git push' "$worktree_directory" "$REPO"
-  assert_denied_by_json
-  run_hook_split 'git commit -m x' "$worktree_directory" "$REPO"
-  assert_denied_by_json
-}
-
-@test "process cwd in the main checkout on main, payload cwd a worktree holding extra commits: a hard reset to main is denied" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  git -C "$worktree_directory" commit --quiet --allow-empty -m "worktree only"
-  run_hook_split 'git reset --hard main' "$REPO" "$worktree_directory"
-  assert_denied_by_json
-  run_hook_split 'git reset --hard HEAD' "$REPO" "$worktree_directory"
-  assert_allowed_by_json
-}
-
-@test "relative cd and -C words resolve against the payload cwd, not the process cwd" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  mkdir "$worktree_directory/sub" "$REPO/sub"
-  run_hook_split 'cd sub && git push' "$REPO" "$worktree_directory"
-  assert_allowed_by_json
-  run_hook_split 'git -C sub commit -m x' "$REPO" "$worktree_directory"
-  assert_allowed_by_json
-  run_hook_split 'cd sub && git commit -m x' "$worktree_directory" "$REPO"
-  assert_denied_by_json
-  run_hook_split 'git -C sub commit -m x' "$worktree_directory" "$REPO"
-  assert_denied_by_json
-}
-
-@test "a payload cwd that is not an absolute path inside a git tree falls back to the process cwd" {
-  on_main
-  run_hook_split 'git push' "$REPO" "relative/dir"
-  assert_denied_by_json
-  run_hook_split 'git push' "$REPO" "$BATS_TEST_TMPDIR"
-  assert_denied_by_json
-}
-
-# The walk's own boundary between the command's reading and the collapsed
-# re-emission travels on the same line stream the command text does, and the
-# arm consuming it clears the tracked directory. A boundary spelled the same
-# way on every run would be one the guarded command can write for itself, so
-# the fixed spelling must not move the verdict.
-@test "command text spelling the walk-reset boundary does not clear the tracked directory" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$REPO';__gaia_walk_reset__;git commit -m x" "$worktree_directory"
-  assert_denied_by_json
-  run_hook_from "cd '$REPO';__gaia_walk_reset__;git push" "$worktree_directory"
-  assert_denied_by_json
-}
-
-@test "a leading cd whose target does not resolve, from a main checkout on main: commit and push are denied" {
-  on_main
-  # shellcheck disable=SC2016 # the literal, unexpanded variable is the case
-  run_hook_from 'cd "$UNSET_VAR" && git commit -m x' "$REPO"
-  assert_denied_by_json
-  run_hook_from 'cd /nonexistent; git commit -m x' "$REPO"
-  assert_denied_by_json
-  # shellcheck disable=SC2016
-  run_hook_from 'cd ${ROOT}; git push' "$REPO"
-  assert_denied_by_json
-}
-
-# A failed `cd` leaves the real shell standing in the directory the previous
-# one moved into, so a target that does not resolve must keep the tracked
-# directory rather than clear it. The single-`cd` shape above pins the
-# clear-to-nothing case from the main checkout, where the fallback happens to
-# be main either way.
-#
-# This case reads the two-hop shape from another checkout. It does not isolate
-# the keep on its own: the main checkout is also an ambiguity candidate here,
-# so the deny it asserts has two possible sources. The pair further down,
-# driving a fixture where no ambiguity candidate stands on main, is what pins
-# the keep by itself.
-@test "a second cd whose target does not resolve keeps the checkout the first one moved into" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$REPO'; cd /nonexistent; git commit -m x" "$worktree_directory"
-  assert_denied_by_json
-  run_hook_from "cd '$REPO'; cd /nonexistent; git push" "$worktree_directory"
-  assert_denied_by_json
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
-  run_hook_from "cd '$REPO'; cd \"\$UNSET_VAR\"; git commit -m x" "$worktree_directory"
-  assert_denied_by_json
-}
-
-# A resolvable second hop still replaces the first, so keeping the previous
-# target on a failed resolve does not pin the walk to the leading `cd`.
-@test "a second cd that does resolve still replaces the checkout the first one moved into" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$REPO'; cd '$worktree_directory'; git commit -m x" "$worktree_directory"
-  assert_allowed_by_json
-}
-
-# The other half of an unresolvable `cd`, and the one keeping the previous
-# target cannot answer on its own: the hop may have SUCCEEDED into a checkout
-# the scan cannot name. `cd -` is the common spelling and it lands back where
-# the shell started, so a command that steps into a worktree and back reads
-# the worktree's branch while the commit lands in the main checkout. Neither
-# reading is knowable here, so a candidate standing on main arms the rule.
-@test "a second cd that may have stepped back into the main checkout is denied" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$worktree_directory' && cd - && git commit -m x" "$REPO"
-  assert_denied_by_json
-  run_hook_from "cd '$worktree_directory' && cd - && git push" "$REPO"
-  assert_denied_by_json
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
-  run_hook_from "cd '$worktree_directory'; cd \"\$BACK\"; git commit -m x" "$REPO"
-  assert_denied_by_json
-}
-
-# The ambiguity arm reads candidates, not the session: from a checkout that is
-# not on main, an unresolvable hop off a worktree has nothing on main to find
-# and stays allowed, so the arm above is not a blanket deny on `cd -`.
-@test "an unresolvable second cd is allowed when no candidate checkout is on main" {
-  on_feature
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$worktree_directory' && cd - && git commit -m x" "$REPO"
-  assert_allowed_by_json
-}
-
-# The mirror of the two arms above, and the shape a worktree session actually
-# spells: from a linked worktree neither the tracked directory nor this hook's
-# own is the main checkout, so an unreadable word pointing at it has to be
-# tested against that checkout directly or the commit it lands there is read
-# against the worktree's own branch and allowed.
-@test "an unreadable cd target is read against the main checkout from a worktree" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
-  run_hook_from 'cd "$MAIN" && git commit -m x' "$worktree_directory"
-  assert_denied_by_json
-  # shellcheck disable=SC2016
-  run_hook_from 'cd "$MAIN" && git push' "$worktree_directory"
-  assert_denied_by_json
-  run_hook_from 'cd - && git commit -m x' "$worktree_directory"
-  assert_denied_by_json
-}
-
-# And the control that keeps it from being a blanket deny on a worktree
-# session: with the main checkout off main, the same unreadable hop has no
-# candidate on main and is allowed.
-@test "an unreadable cd target from a worktree is allowed when the main checkout is off main" {
-  on_feature
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
-  run_hook_from 'cd "$MAIN" && git commit -m x' "$worktree_directory"
-  assert_allowed_by_json
+  add_worktree
+  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
+  local rows=(
+    'deny|main|@MAIN@||cd "$UNSET_VAR" && git commit -m x'
+    'deny|main|@MAIN@||cd /nonexistent; git commit -m x'
+    'deny|main|@MAIN@||cd ${ROOT}; git push'
+    "deny|main|@WT@||cd '@MAIN@'; cd /nonexistent; git commit -m x"
+    "deny|main|@WT@||cd '@MAIN@'; cd /nonexistent; git push"
+    "deny|main|@WT@||cd '@MAIN@'; cd \"\$UNSET_VAR\"; git commit -m x"
+    "allow|main|@WT@||cd '@MAIN@'; cd '@WT@'; git commit -m x"
+    "deny|main|@MAIN@||cd '@WT@' && cd - && git commit -m x"
+    "deny|main|@MAIN@||cd '@WT@' && cd - && git push"
+    "deny|main|@MAIN@||cd '@WT@'; cd \"\$BACK\"; git commit -m x"
+    "allow|feature|@MAIN@||cd '@WT@' && cd - && git commit -m x"
+    'deny|main|@WT@||cd "$MAIN" && git commit -m x'
+    'deny|main|@WT@||cd "$MAIN" && git push'
+    'deny|main|@WT@||cd - && git commit -m x'
+    'allow|feature|@WT@||cd "$MAIN" && git commit -m x'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
 # A directory word the scan CAN read settles which checkout the segment acts
-# in, whatever repository that word turns out to name. The ambiguity arm is
-# for a word that resolves to NOTHING, and reading a readable sibling
-# repository as ambiguous denied a commit landing in that sibling against THIS
-# checkout's branch: the foreign stand-down is a whole-call verdict, so a home
-# command sharing the call keeps the guard armed and the sibling segment
-# reaches the directory read.
-#
-# These drive it from a linked worktree with the main checkout on main, which
-# is the shape that separates the two readings: the worktree's own branch
-# allows, and only a candidate found through the ambiguity arm denies.
-foreign_on_sidebranch() {
-  git -C "$FOREIGN" commit --quiet --allow-empty -m init
-  git -C "$FOREIGN" checkout --quiet -B sidebranch
-}
-
-@test "a readable foreign -C beside a home command is not ambiguous" {
+# in, whatever repository it names. Reading a readable sibling repository as
+# ambiguous denied a commit landing in that sibling against THIS checkout's
+# branch. Driven from a linked worktree with the main checkout on main, the
+# shape that separates the readings: the worktree's own branch allows, and only
+# a candidate found through the ambiguity arm denies.
+@test "a readable foreign -C or cd beside a home command is not ambiguous" {
+  local row
   on_main
   foreign_on_sidebranch
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "git status && git -C $FOREIGN commit -m x" "$worktree_directory"
-  assert_allowed_by_json
-  run_hook_from "git status && git -C $FOREIGN push" "$worktree_directory"
-  assert_allowed_by_json
+  add_worktree
+  local rows=(
+    'allow|main|@WT@||git status && git -C @FOREIGN@ commit -m x'
+    'allow|main|@WT@||git status && git -C @FOREIGN@ push'
+    'allow|main|@WT@||git status && cd @FOREIGN@ && git commit -m x'
+    'allow|main|@WT@||git status && cd @FOREIGN@ && git push'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
-@test "a readable foreign cd beside a home command is not ambiguous" {
+# The arms the directory read adds, each isolated from the ambiguity arm that
+# would otherwise answer for them. Three checkouts, with the session's own and
+# the main checkout BOTH off main, leave the tracked `cd` target, the `-C`
+# fallback and the working-directory probe as the only things that can deny.
+@test "a kept cd target, the -C fallback and the cwd candidate each deny with no candidate on main" {
+  local row
+  three_checkouts
+  local rows=(
+    "deny|none|@WTA@||cd '@WTB@'; cd /nonexistent; git commit -m x"
+    "deny|none|@WTA@||cd '@WTB@'; cd /nonexistent; git push"
+    "deny|none|@WTA@||cd '@WTB@'; git -C \"\$UNSET_VAR\" commit -m x"
+    "deny|none|@WTB@||cd '@WTA@'; cd /nonexistent; git commit -m x"
+    "deny|none|@WTB@||cd '@WTA@'; cd /nonexistent; git push"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# A tilde reaches the directory read as a literal character, since it arrived
+# as text inside the tool call rather than through a shell. Both callers route
+# their word through the expansion, and the bare `~` and the `~/` prefix are
+# each their own case arm, so with no case driving one the arm can be removed
+# with nothing going red. Driven from a worktree with every other candidate off
+# main, so the deny can only come from the expansion resolving, for a foreign
+# word too. Row: home directory|session directory|command.
+@test "a literal tilde is expanded before the branch is read" {
+  local row home_directory session_directory command
+  three_checkouts
+  local rows=(
+    '@WTB@|@WTA@|git -C ~ commit -m x'
+    '@WTB@|@WTA@|git -C ~ push'
+    '@WTB@|@WTA@|git -C ~/. commit -m x'
+    '@WTB@|@WTA@|cd ~ && git commit -m x'
+    '@WTB@|@WTA@|cd ~/. && git commit -m x'
+    '@FOREIGN@|@WTA@|git status && git -C ~ commit -m x'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r home_directory session_directory command <<<"$row"
+    run_hook_from_home "$command" "$(resolve_row_text "$session_directory")" "$(resolve_row_text "$home_directory")"
+    assert_denied_by_json
+  done
+}
+
+# The `-C` word is read by a scan that models quoting but never expands, so a
+# value it cannot resolve names no readable checkout and falls back to the
+# directory the command runs in, ambiguous on the same terms an unresolvable
+# `cd` is. A later `cd` replaces the leading one, so a command that stepped
+# into a worktree and back reads the main checkout, and a `cd` inside a subshell
+# stands tracking down; the stand-down reads quoting, so a parenthesis inside a
+# commit subject does not.
+@test "-C and later cd decide the checkout a commit or push is read against" {
+  local row
   on_main
-  foreign_on_sidebranch
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "git status && cd $FOREIGN && git commit -m x" "$worktree_directory"
-  assert_allowed_by_json
-  run_hook_from "git status && cd $FOREIGN && git push" "$worktree_directory"
-  assert_allowed_by_json
+  add_worktree
+  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
+  local rows=(
+    "deny|main|@MAIN@||git -C @WT@ status && git commit -m x"
+    'deny|main|@MAIN@||git -C "$UNSET_VAR" commit -m x'
+    'deny|main|@MAIN@||git -C "$UNSET_VAR" push'
+    'deny|main|@MAIN@||git -C "$(pwd)" commit -m x'
+    'deny|main|@MAIN@||git -C /nonexistent commit -m x'
+    "deny|main|@MAIN@||cd '@WT@'; git -C \"\$UNSET_VAR\" commit -m x"
+    "deny|main|@WT@||cd '@MAIN@'; git -C \"\$UNSET_VAR\" commit -m x"
+    "allow|feature|@MAIN@||cd '@WT@'; git -C \"\$UNSET_VAR\" commit -m x"
+    "deny|main|@MAIN@||cd '@WT@' && git status && cd '@MAIN@' && git commit -m x"
+    "deny|main|@MAIN@||cd '@WT@' && git status && cd '@MAIN@' && git push"
+    "allow|main|@MAIN@||cd '@MAIN@' && git status && cd '@WT@' && git commit -m x"
+    "deny|main|@MAIN@||(cd '@WT@' && git status) && git commit -m x"
+    "allow|main|@MAIN@||cd '@WT@' && git commit -m 'debt(hooks): x'"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# The setup sentinel suspends enforcement for the greenfield finalize commit and
+# push, then resumes: a total standdown while fresh, restored once removed, and
+# self-healing when stale, because a leftover from a setup that crashed before
+# cleanup must NOT keep main-branch protection suspended.
+@test "the setup sentinel stands the guard down only while it is fresh" {
+  local row state command verdict sentinel="$REPO/.gaia/local/setup-in-progress"
+  local rows=(
+    'fresh|git commit -m "x"|allow'
+    'fresh|git push origin main|allow'
+    'fresh|git push --force origin main|allow'
+    'removed|git commit -m "x"|deny'
+    'stale|git commit -m "x"|deny'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r state command verdict <<<"$row"
+    on_main
+    mkdir -p "$REPO/.gaia/local"
+    rm -f "$sentinel"
+    touch "$sentinel"
+    case "$state" in
+      stale) touch -t 200001010000 "$sentinel" ;;
+      removed)
+        run_hook "$command"
+        assert_allowed_by_json
+        rm -f "$sentinel"
+        ;;
+    esac
+    run_hook "$command"
+    case "$verdict" in
+      allow) assert_allowed_by_json ;;
+      deny) assert_denied_by_json ;;
+    esac
+  done
+}
+
+# The words appear but git is not the program, so command-position anchoring
+# leaves them alone; a real invocation after another command is still caught.
+@test "command text that only mentions git is allowed, and a git call after other commands is denied" {
+  local row
+  local rows=(
+    'allow|main|||pnpm run build'
+    'allow|main|||grep -n -e git commit app/foo.ts'
+    'allow|main|||echo "git push origin main"'
+    'allow|main|||echo git commit && grep -n foo bar'
+    'deny|main|||echo hi | git commit -m "x"'
+    'deny|feature|||true && git push origin main'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
 # The control that keeps the two arms above from reading as a blanket allow:
@@ -657,34 +540,26 @@ foreign_on_sidebranch() {
   assert_denied_by_json
   grep -qF -- 'refspec names main' <<<"$output"
 }
-# The two arms this branch adds to the directory read, each isolated from the
-# ambiguity arm that would otherwise answer for them.
-#
-# Every other case here is driven from a checkout that is itself on main, or
-# alongside a main checkout that is, so the ambiguity arm finds a candidate on
-# main and denies whatever the two arms do: revert either one and the suite
-# stays green. These drive three checkouts instead, with the session's own and
-# the main checkout BOTH off main, which leaves the tracked `cd` target and
-# the `-C` fallback as the only things that can produce the deny.
+
+# run_hook_split <command> <process directory> <payload cwd>
+run_hook_split() {
+  local json
+  json=$(jq -n --arg command "$1" --arg directory "$3" '{tool_name: "Bash", cwd: $directory, tool_input: {command: $command}}')
+  invoke_hook_in "$2" "$json" "$HOOK_ABSOLUTE_PATH"
+}
+
+# A sibling repository on its own branch, for the rows that must not read it
+# as ambiguous.
+foreign_on_sidebranch() {
+  git -C "$FOREIGN" commit --quiet --allow-empty -m init
+  git -C "$FOREIGN" checkout --quiet -B sidebranch
+}
+
+# Three checkouts, the session's own and the main checkout both off main.
 three_checkouts() {
   on_feature
   git -C "$REPO" worktree add --quiet -b feature-a "$BATS_TEST_TMPDIR/wt-a"
   git -C "$REPO" worktree add --quiet -b master "$BATS_TEST_TMPDIR/wt-b"
-}
-
-@test "the kept cd target is what denies when no ambiguity candidate is on main" {
-  three_checkouts
-  run_hook_from "cd '$BATS_TEST_TMPDIR/wt-b'; cd /nonexistent; git commit -m x" "$BATS_TEST_TMPDIR/wt-a"
-  assert_denied_by_json
-  run_hook_from "cd '$BATS_TEST_TMPDIR/wt-b'; cd /nonexistent; git push" "$BATS_TEST_TMPDIR/wt-a"
-  assert_denied_by_json
-}
-
-@test "the -C fallback is what denies when no ambiguity candidate is on main" {
-  three_checkouts
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
-  run_hook_from "cd '$BATS_TEST_TMPDIR/wt-b'; git -C \"\$UNSET_VAR\" commit -m x" "$BATS_TEST_TMPDIR/wt-a"
-  assert_denied_by_json
 }
 
 # Same as run_hook_from, with HOME pointed at a named checkout. The directory
@@ -694,245 +569,6 @@ run_hook_from_home() {
   local json
   json=$(jq -n --arg command "$1" --arg directory "$2" '{tool_name: "Bash", cwd: $directory, tool_input: {command: $command}}')
   run bash -c 'cd "$1" && printf %s "$2" | HOME="$4" bash "$3"' _ "$2" "$json" "$HOOK_ABSOLUTE_PATH" "$3"
-}
-
-# A tilde reaches the directory read as a literal character: it arrived as text
-# inside the tool call rather than through a shell. Both callers route their
-# word through the expansion, and with no case driving one the arm can be
-# removed with nothing going red, leaving a `-C ~` or a `cd ~` into a checkout
-# on main reading nothing and allowing.
-#
-# Driven from a worktree with every other candidate off main, so the deny can
-# only come from the expansion resolving.
-# Both spellings the expansion admits are driven, the bare `~` and the `~/`
-# prefix, since each is its own case arm and one says nothing about the other.
-@test "a literal tilde in a -C is expanded before the branch is read" {
-  three_checkouts
-  run_hook_from_home 'git -C ~ commit -m x' "$BATS_TEST_TMPDIR/wt-a" "$BATS_TEST_TMPDIR/wt-b"
-  assert_denied_by_json
-  run_hook_from_home 'git -C ~ push' "$BATS_TEST_TMPDIR/wt-a" "$BATS_TEST_TMPDIR/wt-b"
-  assert_denied_by_json
-  run_hook_from_home 'git -C ~/. commit -m x' "$BATS_TEST_TMPDIR/wt-a" "$BATS_TEST_TMPDIR/wt-b"
-  assert_denied_by_json
-}
-
-@test "a literal tilde in a cd is expanded before the branch is read" {
-  three_checkouts
-  run_hook_from_home 'cd ~ && git commit -m x' "$BATS_TEST_TMPDIR/wt-a" "$BATS_TEST_TMPDIR/wt-b"
-  assert_denied_by_json
-  run_hook_from_home 'cd ~/. && git commit -m x' "$BATS_TEST_TMPDIR/wt-a" "$BATS_TEST_TMPDIR/wt-b"
-  assert_denied_by_json
-}
-
-# The expansion has to reach the branch read for a FOREIGN word too, not only
-# a same-repository one: classifying on the expanded path and then reading a
-# branch out of the literal `~` spelling answers nothing and allows.
-@test "a literal tilde in a foreign -C is expanded before the branch is read" {
-  three_checkouts
-  run_hook_from_home 'git status && git -C ~ commit -m x' "$BATS_TEST_TMPDIR/wt-a" "$FOREIGN"
-  assert_denied_by_json
-}
-
-# `ambiguous_main_branch` probes this hook's own working directory as well as
-# the main checkout, and every other fixture here places the session where the
-# main checkout already answers for it. This one separates them: the session's
-# own worktree is the only candidate on main/master, and the tracked `cd` names
-# a feature checkout, so the deny can only come from the working-directory
-# probe.
-@test "the working-directory candidate is what denies when the main checkout is off main" {
-  three_checkouts
-  run_hook_from "cd '$BATS_TEST_TMPDIR/wt-a'; cd /nonexistent; git commit -m x" "$BATS_TEST_TMPDIR/wt-b"
-  assert_denied_by_json
-  run_hook_from "cd '$BATS_TEST_TMPDIR/wt-a'; cd /nonexistent; git push" "$BATS_TEST_TMPDIR/wt-b"
-  assert_denied_by_json
-}
-
-@test "a -C into a linked worktree does not lend its branch to a later bare commit on main" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "git -C $worktree_directory status && git commit -m x" "$REPO"
-  assert_denied_by_json
-}
-
-# The `-C` word is read by a scan that models quoting but never expands, so a
-# value it cannot resolve names no readable checkout. Reading a branch from it
-# answers nothing and every branch-armed rule allows, which is why an
-# unresolvable value falls back to the directory the command actually runs in.
-@test "an unresolvable -C value does not disarm the branch-armed rules on main" {
-  on_main
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
-  run_hook_from 'git -C "$UNSET_VAR" commit -m x' "$REPO"
-  assert_denied_by_json
-  # shellcheck disable=SC2016
-  run_hook_from 'git -C "$UNSET_VAR" push' "$REPO"
-  assert_denied_by_json
-  # shellcheck disable=SC2016 # a substitution is text to the scan, not a path
-  run_hook_from 'git -C "$(pwd)" commit -m x' "$REPO"
-  assert_denied_by_json
-  run_hook_from 'git -C /nonexistent commit -m x' "$REPO"
-  assert_denied_by_json
-}
-
-# An unresolvable `-C` falls back to the checkout a preceding `cd` named, and
-# is ambiguous on the same terms an unresolvable `cd` is: the value the scan
-# could not expand may name any checkout, the main one included. So the
-# tracked `cd` answers the ordinary case, and a candidate on main still arms
-# the rule even when that tracked `cd` is a worktree on its own branch.
-@test "an unresolvable -C value is read against every checkout it could name" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
-  run_hook_from "cd '$worktree_directory'; git -C \"\$UNSET_VAR\" commit -m x" "$REPO"
-  assert_denied_by_json
-  # shellcheck disable=SC2016
-  run_hook_from "cd '$REPO'; git -C \"\$UNSET_VAR\" commit -m x" "$worktree_directory"
-  assert_denied_by_json
-}
-
-# The tracked `cd` still decides a resolvable case: with nothing on main among
-# the candidates, an unresolvable `-C` is allowed, so the arm above is driven
-# by a candidate on main rather than by unresolvability alone.
-@test "an unresolvable -C value is allowed when no candidate checkout is on main" {
-  on_feature
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded variable
-  run_hook_from "cd '$worktree_directory'; git -C \"\$UNSET_VAR\" commit -m x" "$REPO"
-  assert_allowed_by_json
-}
-
-# The leading `cd` target stood for every segment and a later `cd` did not
-# replace it, so a command that stepped into a worktree and back read the
-# worktree's branch and allowed a commit that landed on main (#2014).
-@test "a later cd in the same command decides the checkout a commit is read against" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$worktree_directory' && git status && cd '$REPO' && git commit -m x" "$REPO"
-  assert_denied_by_json
-  run_hook_from "cd '$worktree_directory' && git status && cd '$REPO' && git push" "$REPO"
-  assert_denied_by_json
-}
-
-@test "a later cd into a linked worktree is read in place of the leading one" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$REPO' && git status && cd '$worktree_directory' && git commit -m x" "$REPO"
-  assert_allowed_by_json
-}
-
-# A `cd` inside a subshell moves nothing once the group closes, and the segment
-# walk cannot tell which character it split at, so tracking stands down for the
-# whole command and the commit is read against the hook's own directory (#2014).
-@test "a cd inside a subshell does not lend its branch to a later commit on main" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "(cd '$worktree_directory' && git status) && git commit -m x" "$REPO"
-  assert_denied_by_json
-}
-
-# The stand-down reads quoting rather than the bare character, because a commit
-# subject routinely carries a parenthesis and standing tracking down on one
-# would deny an ordinary commit made after a `cd` into a worktree (#2014).
-@test "a parenthesis inside a quoted commit subject does not stand down cd tracking" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$worktree_directory' && git commit -m 'debt(hooks): x'" "$REPO"
-  assert_allowed_by_json
-}
-
-@test "a non-git command is ignored" {
-  on_main
-  run_hook 'pnpm run build'
-  assert_allowed_by_json
-}
-
-# --- setup standdown: the .gaia/local/setup-in-progress sentinel suspends ---
-# enforcement for /setup-gaia's greenfield finalize commit+push, then resumes.
-
-@test "setup sentinel allows git commit on main" {
-  on_main
-  mkdir -p "$REPO/.gaia/local"
-  touch "$REPO/.gaia/local/setup-in-progress"
-  run_hook 'git commit -m "x"'
-  assert_allowed_by_json
-}
-
-@test "setup sentinel allows git push origin main from main" {
-  on_main
-  mkdir -p "$REPO/.gaia/local"
-  touch "$REPO/.gaia/local/setup-in-progress"
-  run_hook 'git push origin main'
-  assert_allowed_by_json
-}
-
-@test "enforcement resumes once the setup sentinel is removed" {
-  on_main
-  mkdir -p "$REPO/.gaia/local"
-  touch "$REPO/.gaia/local/setup-in-progress"
-  run_hook 'git commit -m "x"'
-  assert_allowed_by_json
-  rm -f "$REPO/.gaia/local/setup-in-progress"
-  run_hook 'git commit -m "x"'
-  assert_denied_by_json
-}
-
-@test "setup sentinel is a total standdown: force-push to main is allowed" {
-  on_main
-  mkdir -p "$REPO/.gaia/local"
-  touch "$REPO/.gaia/local/setup-in-progress"
-  run_hook 'git push --force origin main'
-  assert_allowed_by_json
-}
-
-@test "a stale setup sentinel self-heals: enforcement resumes without removal" {
-  on_main
-  mkdir -p "$REPO/.gaia/local"
-  touch "$REPO/.gaia/local/setup-in-progress"
-  # Age the sentinel past the freshness window. A leftover from a setup that
-  # crashed before cleanup must NOT keep main-branch protection suspended.
-  touch -t 200001010000 "$REPO/.gaia/local/setup-in-progress"
-  run_hook 'git commit -m "x"'
-  assert_denied_by_json
-}
-
-# --- command-position anchoring: the words appear, but git is not the program ---
-
-@test "grep for the text 'git commit' is allowed on main" {
-  on_main
-  run_hook 'grep -n -e git commit app/foo.ts'
-  assert_allowed_by_json
-}
-
-@test "echo of 'git push origin main' is allowed on main" {
-  on_main
-  run_hook 'echo "git push origin main"'
-  assert_allowed_by_json
-}
-
-@test "echo 'git commit' piped to grep is allowed on main" {
-  on_main
-  run_hook 'echo git commit && grep -n foo bar'
-  assert_allowed_by_json
-}
-
-# --- command-position anchoring still catches real invocations ---
-
-@test "git commit after an unrelated piped command is denied on main" {
-  on_main
-  run_hook 'echo hi | git commit -m "x"'
-  assert_denied_by_json
-}
-
-@test "git push origin main after && is denied" {
-  on_feature
-  run_hook 'true && git push origin main'
-  assert_denied_by_json
 }
 
 # --- the staged-tree harness the degrade cases below share ---
@@ -986,79 +622,322 @@ run_staged() {
   run bash -c 'cd "$1" && printf %s "$2" | $4 "$3"' _ "$STAGED_ROOT" "$json" "$STAGED_HOOK" "$interpreter"
 }
 
-# --- an unparseable repo-scope.sh degrades, it does not deny ---
+# --- the staged-tree degrade cases ---
 #
-# The repo-scope load sits under this hook's `set -euo pipefail`, so before the
-# fix an unparseable copy abandoned the shell ahead of the `type
-# command_targets_foreign_repo` check on the next line, exiting 2 -- the PreToolUse
-# deny code -- for every git command the hook matches. That holds on bash 5 as
-# well as on 3.2, so neither conflict-marker case below needs a /bin/bash pin to
-# have teeth.
-#
-# The conflict-marker pair discriminates: the allow case alone is satisfied by a
-# hook that stopped enforcing, so the deny twin proves the degrade kept the
-# main-branch floor. Without command_targets_foreign_repo the foreign-repo carve-out
-# does not fire, which is the fail-closed direction the hook's own repo-scope
-# comment documents.
-#
-# The absent-library case pins the other direction, and an unbracketed load is
-# not a probe that can red it: with the library missing, the `[ -f ]` guard ahead
-# of the source short-circuits, and errexit exempts a non-final command in an
-# `&&` list, so that path never reaches the source the bracket protects. What
-# reds it is the degrade failing open, a missing library leaving the hook a
-# pass-through instead of holding the main-branch floor.
+# The tree is staged once
+# per table; each row restores the one library it degrades from the real
+# source, then corrupts or removes it. Row for the first table:
+# library|kind|branch|interpreter|command|verdict.
 
-@test "repo-scope.sh holding conflict markers: an ordinary git command is still allowed" {
-  stage_hook_tree
-  git -C "$STAGED_ROOT" checkout --quiet -B feature
-  write_conflicted_library "$STAGED_ROOT/.claude/hooks/lib/repo-scope.sh"
-  run_staged 'git status'
-  assert_allowed_by_json
+# restore_staged_library <path relative to the staged root>
+restore_staged_library() {
+  [ "$1" = none ] && return 0
+  cp "${HOOKS_SOURCE_DIRECTORY%/.claude/hooks}/$1" "$STAGED_ROOT/$1"
 }
 
-@test "repo-scope.sh holding conflict markers: a commit on main is still denied" {
-  stage_hook_tree
-  write_conflicted_library "$STAGED_ROOT/.claude/hooks/lib/repo-scope.sh"
-  run_staged 'git commit -m "x"'
-  assert_denied_by_json
+degrade_staged_library() {
+  case "$2" in
+    absent) rm -f "$STAGED_ROOT/$1" ;;
+    conflicted) write_conflicted_library "$STAGED_ROOT/$1" ;;
+  esac
+  return 0
 }
 
-@test "repo-scope.sh absent entirely: a commit on main is still denied" {
+# The repo-scope load sits under the hook's `set -euo pipefail`, so an
+# unparseable copy once abandoned the shell ahead of the `type
+# command_targets_foreign_repo` check, exiting 2 (the PreToolUse deny code) for
+# every git command the hook matches. The conflict-marker pair discriminates:
+# the allow case alone is satisfied by a hook that stopped enforcing, so the
+# deny twin proves the degrade kept the main-branch floor. An absent library
+# is its own case: the `[ -f ]` guard short-circuits, and what reds it is the
+# degrade failing open. The main-root-lib rows are pinned to stock /bin/bash,
+# since the `|| true` arm they replaced survives on bash 5 and is abandoned
+# ahead of on 3.2, so only a /bin/bash run tells the fix apart; the control row
+# proves that interpreter still denies on an intact tree.
+@test "a conflicted or absent library never opens the guard" {
+  local row library kind branch interpreter command verdict
   stage_hook_tree
-  rm -f "$STAGED_ROOT/.claude/hooks/lib/repo-scope.sh"
-  run_staged 'git commit -m "x"'
-  assert_denied_by_json
+  local rows=(
+    '.claude/hooks/lib/repo-scope.sh|conflicted|feature||git status|allow'
+    '.claude/hooks/lib/repo-scope.sh|conflicted|main||git commit -m "x"|deny'
+    '.claude/hooks/lib/repo-scope.sh|absent|main||git commit -m "x"|deny'
+    'none|none|main|/bin/bash|git commit -m "x"|deny'
+    '.gaia/scripts/main-root-lib.sh|conflicted|main|/bin/bash|git commit -m "x"|deny'
+    '.gaia/scripts/main-root-lib.sh|conflicted|feature|/bin/bash|git status|allow'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r library kind branch interpreter command verdict <<<"$row"
+    [ -z "$interpreter" ] || [ -x "$interpreter" ] || { echo "skipped: no $interpreter"; continue; }
+    restore_staged_library "$library"
+    git -C "$STAGED_ROOT" checkout --quiet -B "$branch"
+    degrade_staged_library "$library" "$kind"
+    run_staged "$command" "$interpreter"
+    case "$verdict" in
+      allow) assert_allowed_by_json ;;
+      deny) assert_denied_by_json ;;
+    esac
+    restore_staged_library "$library"
+  done
 }
 
-# --- an unparseable main-root-lib.sh degrades, it does not deny ---
-#
-# Pinned to stock /bin/bash: the `|| true` arm this load already carried
-# survives on bash 5 and is abandoned ahead of on 3.2, so only a /bin/bash run
-# tells the fix apart from the arm it replaced. On a bash-5 /bin/bash (Linux
-# CI) these pass either way.
-
-@test "control: the staged hook denies a commit on main under stock /bin/bash" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
+# The parser, the hop guard, the segment splitter and the payload reader hold
+# every rule the walk applies, so a hook that loaded none of them would allow
+# every commit and push: an unloadable one refuses loudly with exit 2 naming
+# the library. Absent and unparseable are separate cases: the `[ -f ]` test
+# catches the first, and only the errexit bracket keeps the second from exiting
+# 2 before the `type` check can name the library. A call that would not arm
+# the hook still passes silently. Row: library|kind|command|verdict.
+@test "an unloadable guard library refuses an armed call with exit 2 and never fails open" {
+  local row library kind command verdict
   stage_hook_tree
-  run_staged 'git commit -m "x"' /bin/bash
-  assert_denied_by_json
+  local rows=(
+    '.claude/hooks/lib/git-segments.sh|absent|git commit -m x|blocked'
+    '.claude/hooks/lib/git-segments.sh|absent|ls|silent'
+    '.claude/hooks/lib/main-git-guard-parse.sh|absent|git commit -m x|blocked'
+    '.claude/hooks/lib/main-git-guard-parse.sh|conflicted|git commit -m x|blocked'
+    '.claude/hooks/lib/main-checkout-hop-guard.sh|absent|git commit -m x|blocked'
+    '.claude/hooks/lib/main-checkout-hop-guard.sh|conflicted|git commit -m x|blocked'
+    '.claude/hooks/lib/main-git-guard-parse.sh|absent|ls|silent'
+    '.claude/hooks/lib/hook-payload.sh|absent|git push --force origin main|blocked'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r library kind command verdict <<<"$row"
+    restore_staged_library "$library"
+    degrade_staged_library "$library" "$kind"
+    run_staged "$command"
+    case "$verdict" in
+      blocked)
+        [ "$status" -eq 2 ]
+        grep -qF "BLOCKED: block-main-destructive-git.sh cannot load lib/${library#.claude/hooks/lib/}" <<<"$output"
+        ;;
+      silent)
+        [ "$status" -eq 0 ]
+        [ -z "$output" ]
+        ;;
+    esac
+    restore_staged_library "$library"
+  done
 }
 
-@test "main-root-lib.sh holding conflict markers: a commit on main is still denied, on stock /bin/bash" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
-  stage_hook_tree
-  write_conflicted_library "$STAGED_ROOT/.gaia/scripts/main-root-lib.sh"
-  run_staged 'git commit -m "x"' /bin/bash
-  assert_denied_by_json
+# --- a hard reset that moves HEAD drops commits, whatever the spelling ---
+
+@test "git reset --hard to a target that moves HEAD is denied" {
+  local row
+  on_feature_with_second_commit
+  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
+  local rows=(
+    'deny|keep_feature|||git reset -q --hard HEAD~1'
+    'deny|keep_feature|||git reset --hard --quiet HEAD^'
+    'deny|keep_feature|||git -C @MAIN@ reset --hard HEAD~1'
+    'deny|keep_feature|||git reset --hard no-such-ref'
+    'deny|keep_feature|||cd "$SOMEWHERE" && git reset --hard @HEAD@'
+    'deny|main|||git reset --hard @HEAD@'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
-@test "main-root-lib.sh holding conflict markers: an ordinary git command is still allowed, on stock /bin/bash" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
-  stage_hook_tree
-  git -C "$STAGED_ROOT" checkout --quiet -B feature
-  write_conflicted_library "$STAGED_ROOT/.gaia/scripts/main-root-lib.sh"
-  run_staged 'git status' /bin/bash
-  assert_allowed_by_json
+# A target resolving to HEAD's own commit moves nothing, a reset without
+# --hard is not this rule's, command text that only quotes a hard reset is not
+# a reset, and after an unreadable directory only a literal HEAD still passes.
+@test "git reset --hard that keeps HEAD where it is, and other resets, are allowed" {
+  local row
+  on_feature_with_second_commit
+  # shellcheck disable=SC2016 # the hook must receive the unexpanded text
+  local rows=(
+    'allow|keep_feature|||git reset --hard'
+    'allow|keep_feature|||git reset --hard HEAD'
+    'allow|keep_feature|||git reset --hard @'
+    'allow|keep_feature|||git reset --hard @HEAD@'
+    'allow|keep_feature|||git reset --hard feature'
+    'allow|keep_feature|||git reset HEAD~1'
+    'allow|keep_feature|||git reset --soft HEAD~1'
+    'allow|keep_feature|||echo "git reset --hard HEAD~1"'
+    'allow|keep_feature|||cd "$SOMEWHERE" && git reset --hard HEAD'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# --- main-checkout hop guard, segment parsing and the -C early exit ---
+
+# A peer's hop is denied in each spelling that moves the main checkout's HEAD:
+# a checkout or switch naming another branch, the branch-creating, detaching
+# and previous-branch forms, `-C` after `switch` (force-create, not a
+# directory), git's own options ahead of the subcommand, a worktree session
+# aiming `-C` at the main checkout, and a bare switch name that exists only on
+# the remote or nowhere (git would DWIM the first into a new tracking branch;
+# denying the second refuses a command git rejects anyway, the safe direction
+# for a guard whose escape is the ! prefix). Row: session directory|command.
+@test "hop guard: a peer's move of the main checkout's HEAD is denied in every spelling" {
+  local row session_directory command
+  hold_feature_with_pr 42
+  write_breadcrumb feature sid-owner
+  add_worktree
+  git -C "$REPO" update-ref refs/remotes/origin/remoteonly HEAD
+  [ -z "$(git -C "$REPO" rev-parse --verify -q remoteonly 2>/dev/null)" ] || return 1
+  local rows=(
+    '|git checkout main'
+    '|git checkout main 2>/dev/null'
+    '|git checkout main > /dev/null'
+    '|git checkout -b brand-new'
+    '|git checkout -'
+    '|git checkout --detach'
+    '|git checkout -B brand-new'
+    '|git checkout --orphan o2'
+    '|git switch -C other'
+    '|git switch -C main main'
+    '@WT@|git -C @MAIN@ switch -C other'
+    '|git -c advice.detachedHead=false switch other'
+    '|git --git-dir .git checkout main'
+    '@WT@|git -C @MAIN@ checkout main'
+    '|git switch remoteonly'
+    '|git switch nonexistent'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    session_directory=${row%%|*}
+    command=${row#*|}
+    run_hop "$(resolve_row_text "$command")" sid-peer "$(resolve_row_text "$session_directory")"
+    assert_denied_by_json
+  done
+}
+
+# Each state below is reset before its row. Allowed: a checkout aimed at a
+# different repository, the session that created the pull request, a branch
+# whose pull request is merged or closed, a checkout run inside a linked
+# worktree, path-restore forms, and hopping off the default branch (named
+# main, named by origin/HEAD, or a detached HEAD). The origin/HEAD row is last
+# because it leaves that ref behind. Row: state|session|directory|command.
+@test "hop guard: a hop is allowed for the owner, a closed pull request, a restore or a default branch" {
+  local row state session directory command
+  hold_feature_with_pr 42
+  write_breadcrumb feature sid-owner
+  add_worktree
+  git -C "$FOREIGN" commit --quiet --allow-empty -m init
+  git -C "$FOREIGN" branch --quiet other
+  git -C "$FOREIGN" checkout --quiet -B feature
+  local rows=(
+    'feature|sid-peer||git -C @FOREIGN@ switch other'
+    'feature|sid-owner||git switch other'
+    'nopr|sid-peer||git checkout main'
+    'feature|sid-peer|@WT@|git switch other'
+    'feature|sid-peer||git checkout -- README.md'
+    'feature|sid-peer||git checkout main -- README.md'
+    'feature|sid-peer||git checkout -p main'
+    'feature|sid-peer||git checkout -- main'
+    'feature|sid-peer||git checkout main README.md'
+    'feature|sid-peer||git checkout README.md'
+    'main|sid-peer||git switch other'
+    'detached|sid-peer||git switch other'
+    'trunk|sid-peer||git switch other'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r state session directory command <<<"$row"
+    export GH_STUB="open:42"
+    git -C "$REPO" checkout --quiet feature
+    case "$state" in
+      nopr) export GH_STUB=none ;;
+      main) git -C "$REPO" checkout --quiet main ;;
+      detached) git -C "$REPO" checkout --quiet --detach ;;
+      trunk)
+        git -C "$REPO" checkout --quiet -B trunk
+        git -C "$REPO" update-ref refs/remotes/origin/trunk HEAD
+        git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
+        ;;
+    esac
+    run_hop "$(resolve_row_text "$command")" "$session" "$(resolve_row_text "$directory")"
+    assert_allowed_by_json
+  done
+}
+
+# A lookup that fails or answers with something that is not a pull request
+# number fails open, with one stderr line naming the cause. Row:
+# stub|needle|second needle.
+@test "hop guard: a gh failure or a non-number answer fails open naming the cause" {
+  local row stub needle_one needle_two
+  hold_feature_with_pr 42
+  local rows=(
+    'fail|could not check|exited 4'
+    'garbage|could not check|'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r stub needle_one needle_two <<<"$row"
+    export GH_STUB="$stub"
+    run_hop 'git checkout main' sid-peer
+    assert_allowed_by_json
+    grep -qF -- "$needle_one" <<<"$output"
+    [ -z "$needle_two" ] || grep -qF -- "$needle_two" <<<"$output"
+  done
+}
+
+# Parsing must not hide the git command: a command name merely beginning with a
+# reserved word is an ordinary name; an assignment's quoted value may carry
+# whitespace and must not stand where the command word is read; a `$( )` inside
+# git's own arguments cuts the segment at its parens, so the subcommand must be
+# read past it; and the collapse must not hand a non-git segment the
+# substitution's own text.
+@test "segment parsing does not hide the git command" {
+  local row
+  # shellcheck disable=SC2016 # the hook must receive the unexpanded opener
+  local rows=(
+    'allow|main|||iffy git commit -m y'
+    'allow|main|||dotimes git commit -m y'
+    'allow|main|||coprocess git commit -m y'
+    'deny|main|||GIT_EDITOR="code --wait" git commit -m x'
+    'deny|main|||GIT_AUTHOR_DATE="2024-01-01 12:00" git commit --amend'
+    "deny|main|||GIT_AUTHOR_DATE='2024-01-01 12:00' git push"
+    'deny|main|||git -c user.name="$(whoami)" commit -m y'
+    'deny|main|||git commit -m "$(date)"'
+    'deny|feature|||git push "$(echo origin)" main'
+    'allow|feature|||echo "$(git log)" main'
+    'allow|feature|||grep -R "$(echo commit)" .'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# The early exit for subcommands no rule reads must not skip a later commit or
+# push that does arm one.
+@test "the -C early exit does not skip a later commit or push" {
+  local row
+  on_main
+  add_worktree
+  local rows=(
+    "deny|main|@WT@||cd '@MAIN@' && git -C '@MAIN@' status && git -C '@MAIN@' commit -m x"
+    'deny|main|||git -C @MAIN@ status && git -C @MAIN@ commit -m x'
+    'deny|feature|||git -C @MAIN@ push origin main'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# The post-merge cleanup pulls `main` into the main checkout when that checkout
+# is on `main` (PR Merge Workflow, worktree arm). The pull moves no HEAD to
+# another branch, so the guard must let it through, both from the main checkout
+# and from a session whose cwd was a worktree the cleanup just removed.
+@test "the post-merge pull into a main checkout on main is allowed" {
+  local row
+  local rows=(
+    'allow|main|||git -C @MAIN@ pull --ff-only origin main'
+    'allow|main|@MAIN@|@MAIN@/.claude/worktrees/removed|git -C @MAIN@ pull --ff-only origin main'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
 }
 
 # --- a hard reset that moves HEAD drops commits, whatever the spelling ---
@@ -1086,70 +965,6 @@ on_feature_with_second_commit() {
     run_hook "git reset --hard $target"
     assert_denied_by_json || { echo "allowed: git reset --hard $target"; return 1; }
   done
-}
-
-@test "git reset --hard with options around the target is denied" {
-  on_feature_with_second_commit
-  run_hook 'git reset -q --hard HEAD~1'
-  assert_denied_by_json
-  run_hook 'git reset --hard --quiet HEAD^'
-  assert_denied_by_json
-  run_hook "git -C $REPO reset --hard HEAD~1"
-  assert_denied_by_json
-}
-
-@test "git reset --hard to a target that resolves nowhere is denied" {
-  on_feature_with_second_commit
-  run_hook 'git reset --hard no-such-ref'
-  assert_denied_by_json
-}
-
-@test "git reset --hard on main is denied too" {
-  on_feature_with_second_commit
-  on_main
-  run_hook "git reset --hard $HEAD_SHA"
-  assert_denied_by_json
-}
-
-@test "the hard-reset denial states its reason and hands the step to the user" {
-  on_feature_with_second_commit
-  run_hook 'git reset --hard HEAD~1'
-  assert_denied_by_json
-  grep -qF -- 'any commit the branch holds after it is dropped' <<<"$output"
-  grep -qF -- 'Ask the user to run it themselves' <<<"$output"
-}
-
-@test "git reset --hard that keeps HEAD where it is is allowed" {
-  local target
-  on_feature_with_second_commit
-  for target in '' ' HEAD' ' @' " $HEAD_SHA" ' feature'; do
-    run_hook "git reset --hard$target"
-    assert_allowed_by_json || { echo "denied: git reset --hard$target"; return 1; }
-  done
-}
-
-@test "a reset without --hard is not this rule's" {
-  on_feature_with_second_commit
-  run_hook 'git reset HEAD~1'
-  assert_allowed_by_json
-  run_hook 'git reset --soft HEAD~1'
-  assert_allowed_by_json
-}
-
-@test "command text that only quotes a hard reset is allowed" {
-  on_feature_with_second_commit
-  run_hook 'echo "git reset --hard HEAD~1"'
-  assert_allowed_by_json
-}
-
-# An unreadable directory leaves the checkout unknown, so the target cannot be
-# compared with that checkout's HEAD: only a literal HEAD still passes.
-@test "a hard reset after an unreadable cd passes only for a literal HEAD" {
-  on_feature_with_second_commit
-  run_hook "cd \"\$SOMEWHERE\" && git reset --hard $HEAD_SHA"
-  assert_denied_by_json
-  run_hook 'cd "$SOMEWHERE" && git reset --hard HEAD'
-  assert_allowed_by_json
 }
 
 # --- main-checkout hop guard ---
@@ -1226,77 +1041,6 @@ run_hop() {
   grep -qF -- 'with the ! prefix' <<<"$output"
 }
 
-@test "hop guard: a peer's git checkout main off a branch with an open PR is denied" {
-  hold_feature_with_pr 42
-  write_breadcrumb feature sid-owner
-  run_hop 'git checkout main' sid-peer
-  assert_denied_by_json
-  run_hop 'git checkout main 2>/dev/null' sid-peer
-  assert_denied_by_json
-  run_hop 'git checkout main > /dev/null' sid-peer
-  assert_denied_by_json
-}
-
-@test "hop guard: checkout's branch-creating, detaching, and previous-branch forms are denied in a peer-held main checkout" {
-  hold_feature_with_pr 42
-  run_hop 'git checkout -b brand-new' sid-peer
-  assert_denied_by_json
-  run_hop 'git checkout -' sid-peer
-  assert_denied_by_json
-  run_hop 'git checkout --detach' sid-peer
-  assert_denied_by_json
-  run_hop 'git checkout -B brand-new' sid-peer
-  assert_denied_by_json
-  run_hop 'git checkout --orphan o2' sid-peer
-  assert_denied_by_json
-}
-
-# `-C` after `switch` is force-create, not a directory, so reading it as git's
-# own `-C` aimed the guard at a directory named for the branch and let it pass.
-@test "hop guard: git switch -C in a peer-held main checkout is denied" {
-  hold_feature_with_pr 42
-  run_hop 'git switch -C other' sid-peer
-  assert_denied_by_json
-  run_hop 'git switch -C main main' sid-peer
-  assert_denied_by_json
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hop "git -C $REPO switch -C other" sid-peer "$worktree_directory"
-  assert_denied_by_json
-}
-
-@test "hop guard: git's own options ahead of the subcommand do not hide it" {
-  hold_feature_with_pr 42
-  run_hop 'git -c advice.detachedHead=false switch other' sid-peer
-  assert_denied_by_json
-  run_hop 'git --git-dir .git checkout main' sid-peer
-  assert_denied_by_json
-}
-
-@test "hop guard: a checkout aimed at a different repository's main checkout is allowed" {
-  hold_feature_with_pr 42
-  git -C "$FOREIGN" commit --quiet --allow-empty -m init
-  git -C "$FOREIGN" branch --quiet other
-  git -C "$FOREIGN" checkout --quiet -B feature
-  run_hop "git -C $FOREIGN switch other" sid-peer
-  assert_allowed_by_json
-}
-
-@test "hop guard: a worktree session aiming git -C at the peer-held main checkout is denied" {
-  hold_feature_with_pr 42
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hop "git -C $REPO checkout main" sid-peer "$worktree_directory"
-  assert_denied_by_json
-}
-
-@test "hop guard: the session that created the PR may hop off its own branch" {
-  hold_feature_with_pr 42
-  write_breadcrumb feature sid-owner
-  run_hop 'git switch other' sid-owner
-  assert_allowed_by_json
-}
-
 @test "hop guard: the owner is matched before any gh call" {
   hold_feature_with_pr 42
   write_breadcrumb feature sid-owner
@@ -1314,30 +1058,6 @@ run_hop() {
   hold_feature_with_pr 42
   run_hop 'git switch other' sid-owner
   assert_denied_by_json
-}
-
-@test "hop guard: a branch whose PR is merged or closed is allowed" {
-  hold_feature_with_pr 42
-  export GH_STUB=none
-  run_hop 'git checkout main' sid-peer
-  assert_allowed_by_json
-}
-
-@test "hop guard: a gh failure fails open with one stderr line naming the cause" {
-  hold_feature_with_pr 42
-  export GH_STUB=fail
-  run_hop 'git checkout main' sid-peer
-  assert_allowed_by_json
-  grep -qF -- 'could not check' <<<"$output"
-  grep -qF -- 'exited 4' <<<"$output"
-}
-
-@test "hop guard: a gh answer that is not a PR number fails open" {
-  hold_feature_with_pr 42
-  export GH_STUB=garbage
-  run_hop 'git checkout main' sid-peer
-  assert_allowed_by_json
-  grep -qF -- 'could not check' <<<"$output"
 }
 
 # The bound killed the pid it backgrounded, but the output was read through the
@@ -1430,26 +1150,6 @@ run_hop() {
   assert_denied_by_json
 }
 
-# A bare name resolves against refs/remotes/<name>, never
-# refs/remotes/origin/<name>, so a branch that exists only on the remote fails
-# the operand's commit-ish test and reads as moving nothing. `git switch` DWIMs
-# that same name into a new tracking branch and moves HEAD, which is the hop the
-# guard exists to refuse, and the fail-open diagnostic is never reached either
-# (gaia-react/gaia#2018).
-@test "hop guard: a switch to a remote-only branch is denied in a peer-held main checkout" {
-  hold_feature_with_pr 42
-  git -C "$REPO" update-ref refs/remotes/origin/remoteonly HEAD
-  # The precondition the case turns on: the bare name does not resolve locally.
-  [ -z "$(git -C "$REPO" rev-parse --verify -q remoteonly 2>/dev/null)" ] || return 1
-  run_hop 'git switch remoteonly' sid-peer
-  assert_denied_by_json
-  # A name with no local and no remote counterpart takes the same path. Denying
-  # it refuses a command git would reject anyway, which is the safe direction
-  # for a guard whose escape is running it with the ! prefix.
-  run_hop 'git switch nonexistent' sid-peer
-  assert_denied_by_json
-}
-
 # A checkout naming the branch HEAD already holds, or HEAD itself, moves
 # nothing, so denying it refuses a no-op (#2005).
 @test "hop guard: a checkout that moves nothing is allowed in a peer-held main checkout" {
@@ -1461,53 +1161,6 @@ run_hop() {
   # The control: a checkout that really moves HEAD is still denied.
   run_hop 'git checkout other' sid-peer
   assert_denied_by_json
-}
-
-@test "hop guard: a checkout run inside a linked worktree is allowed" {
-  hold_feature_with_pr 42
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hop 'git switch other' sid-peer "$worktree_directory"
-  assert_allowed_by_json
-}
-
-@test "hop guard: path-restore forms are allowed" {
-  hold_feature_with_pr 42
-  run_hop 'git checkout -- README.md' sid-peer
-  assert_allowed_by_json
-  run_hop 'git checkout main -- README.md' sid-peer
-  assert_allowed_by_json
-  run_hop 'git checkout -p main' sid-peer
-  assert_allowed_by_json
-  run_hop 'git checkout -- main' sid-peer
-  assert_allowed_by_json
-  run_hop 'git checkout main README.md' sid-peer
-  assert_allowed_by_json
-  run_hop 'git checkout README.md' sid-peer
-  assert_allowed_by_json
-}
-
-@test "hop guard: hopping off the default branch is allowed" {
-  hold_feature_with_pr 42
-  git -C "$REPO" checkout --quiet main
-  run_hop 'git switch other' sid-peer
-  assert_allowed_by_json
-}
-
-@test "hop guard: hopping off the default branch origin/HEAD names is allowed" {
-  hold_feature_with_pr 42
-  git -C "$REPO" checkout --quiet -B trunk
-  git -C "$REPO" update-ref refs/remotes/origin/trunk HEAD
-  git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
-  run_hop 'git switch other' sid-peer
-  assert_allowed_by_json
-}
-
-@test "hop guard: hopping off a detached HEAD is allowed" {
-  hold_feature_with_pr 42
-  git -C "$REPO" checkout --quiet --detach
-  run_hop 'git switch other' sid-peer
-  assert_allowed_by_json
 }
 
 # The collapsed line re-emits the WHOLE command, so every intact git segment
@@ -1555,161 +1208,6 @@ run_hop() {
   assert_allowed_by_json
 }
 
-# --- command-word derivation: prefixes that hid `git` from the segment walk ---
-
-# A word merely beginning with a reserved word is an ordinary command name, so
-# the strip requires the whitespace that makes the reserved word a word.
-@test "a command name beginning with a reserved word is left alone" {
-  on_main
-  run_hook 'iffy git commit -m y'
-  assert_allowed_by_json
-  run_hook 'dotimes git commit -m y'
-  assert_allowed_by_json
-  run_hook 'coprocess git commit -m y'
-  assert_allowed_by_json
-}
-
-# An assignment's value may be quoted and carry whitespace, which the shell
-# accepts as an ordinary command prefix. A value read as an unquoted run stops
-# at the opening quote, leaving the rest of the value standing where the
-# command word is read.
-@test "a quoted env-assignment value does not hide the git command word" {
-  on_main
-  run_hook 'GIT_EDITOR="code --wait" git commit -m x'
-  assert_denied_by_json
-  run_hook 'GIT_AUTHOR_DATE="2024-01-01 12:00" git commit --amend'
-  assert_denied_by_json
-  run_hook "GIT_AUTHOR_DATE='2024-01-01 12:00' git push"
-  assert_denied_by_json
-}
-
-# A `$( )` inside git's OWN arguments cuts the segment at its parens, so no one
-# segment carries both the command word and the subcommand the rules arm on.
-#
-# A `-C` whose value is a substitution is asserted by the branch read's own
-# fail-closed case rather than here: an unresolvable directory word falls back
-# to the checkout the command runs in, so the rules stay armed. This test pins
-# the narrower claim that the walk reads the subcommand past a substitution
-# standing in git's other arguments.
-@test "a command substitution inside git's arguments does not hide the subcommand" {
-  on_main
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded opener
-  run_hook 'git -c user.name="$(whoami)" commit -m y'
-  assert_denied_by_json
-  # shellcheck disable=SC2016
-  run_hook 'git commit -m "$(date)"'
-  assert_denied_by_json
-  on_feature
-  # shellcheck disable=SC2016
-  run_hook 'git push "$(echo origin)" main'
-  assert_denied_by_json
-}
-
-# The collapse must not hand a non-git segment the substitution's own text: the
-# body still reaches the walk as its own segment, which is where a command
-# inside one is read.
-@test "text inside a collapsed substitution does not arm the outer segment" {
-  on_feature
-  # shellcheck disable=SC2016 # the hook must receive the unexpanded opener
-  run_hook 'echo "$(git log)" main'
-  assert_allowed_by_json
-  # shellcheck disable=SC2016
-  run_hook 'grep -R "$(echo commit)" .'
-  assert_allowed_by_json
-}
-
-# --- an unloadable lib/git-segments.sh refuses loudly, never fails open ---
-#
-# The library load resolves off BASH_SOURCE, so expressing a missing library
-# needs a COPY of the hooks directory the test controls.
-stage_hook_tree_without_segments_library() {
-  STAGED_ROOT="$BATS_TEST_TMPDIR/staged"
-  rm -rf "$STAGED_ROOT"
-  mkdir -p "$STAGED_ROOT/.claude"
-  cp -R "$HOOKS_SOURCE_DIRECTORY" "$STAGED_ROOT/.claude/hooks"
-  rm -f "$STAGED_ROOT/.claude/hooks/lib/git-segments.sh"
-  STAGED_HOOK="$STAGED_ROOT/.claude/hooks/block-main-destructive-git.sh"
-}
-
-run_staged_hook() {
-  local json
-  json=$(jq -n --arg command "$1" '{tool_name: "Bash", tool_input: {command: $command}}')
-  invoke_hook_in "$REPO" "$json" "$STAGED_HOOK"
-}
-
-@test "git-segments.sh absent: a git commit call exits 2 naming the library" {
-  on_main
-  stage_hook_tree_without_segments_library
-  run_staged_hook 'git commit -m x'
-  [ "$status" -eq 2 ]
-  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/git-segments.sh' <<<"$output"
-}
-
-@test "git-segments.sh absent: a non-git call is still allowed" {
-  stage_hook_tree_without_segments_library
-  run_staged_hook 'ls'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# --- an unloadable guard library refuses loudly, never fails open ---
-#
-# The parser and the hop guard hold every rule the walk applies, so a hook
-# that loaded neither would allow every commit and push. Absent and
-# unparseable are separate cases: the `[ -f ]` test catches the first, and
-# only the errexit bracket keeps the second from exiting 2 before the `type`
-# check can name the library.
-stage_hook_tree_with_degraded_library() {
-  STAGED_ROOT="$BATS_TEST_TMPDIR/staged"
-  rm -rf "$STAGED_ROOT"
-  mkdir -p "$STAGED_ROOT/.claude"
-  cp -R "$HOOKS_SOURCE_DIRECTORY" "$STAGED_ROOT/.claude/hooks"
-  case "$2" in
-    absent) rm -f "$STAGED_ROOT/.claude/hooks/lib/$1" ;;
-    conflicted) write_conflicted_library "$STAGED_ROOT/.claude/hooks/lib/$1" ;;
-  esac
-  STAGED_HOOK="$STAGED_ROOT/.claude/hooks/block-main-destructive-git.sh"
-}
-
-@test "main-git-guard-parse.sh absent: a git commit call exits 2 naming the library" {
-  on_main
-  stage_hook_tree_with_degraded_library main-git-guard-parse.sh absent
-  run_staged_hook 'git commit -m x'
-  [ "$status" -eq 2 ]
-  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-git-guard-parse.sh' <<<"$output"
-}
-
-@test "main-git-guard-parse.sh holding conflict markers: a git commit call exits 2 naming the library" {
-  on_main
-  stage_hook_tree_with_degraded_library main-git-guard-parse.sh conflicted
-  run_staged_hook 'git commit -m x'
-  [ "$status" -eq 2 ]
-  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-git-guard-parse.sh' <<<"$output"
-}
-
-@test "main-checkout-hop-guard.sh absent: a git commit call exits 2 naming the library" {
-  on_main
-  stage_hook_tree_with_degraded_library main-checkout-hop-guard.sh absent
-  run_staged_hook 'git commit -m x'
-  [ "$status" -eq 2 ]
-  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-checkout-hop-guard.sh' <<<"$output"
-}
-
-@test "main-checkout-hop-guard.sh holding conflict markers: a git commit call exits 2 naming the library" {
-  on_main
-  stage_hook_tree_with_degraded_library main-checkout-hop-guard.sh conflicted
-  run_staged_hook 'git commit -m x'
-  [ "$status" -eq 2 ]
-  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-checkout-hop-guard.sh' <<<"$output"
-}
-
-@test "main-git-guard-parse.sh absent: a non-git call is still allowed" {
-  stage_hook_tree_with_degraded_library main-git-guard-parse.sh absent
-  run_staged_hook 'ls'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 # --- the early exit for subcommands no rule reads ---
 
 # A `git` shim first on PATH logs each argv and execs the real git, so the
@@ -1752,40 +1250,8 @@ run_hook_with_shim() {
   [ "$status_count" -lt "$commit_count" ]
 }
 
-@test "cd into the main checkout on main then git -C commit is still denied after the early exit" {
-  on_main
-  local worktree_directory="$BATS_TEST_TMPDIR/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$worktree_directory"
-  run_hook_from "cd '$REPO' && git -C '$REPO' status && git -C '$REPO' commit -m x" "$worktree_directory"
-  assert_denied_by_json
-}
-
-@test "a -C status segment does not skip a later -C commit segment on main" {
-  on_main
-  run_hook "git -C $REPO status && git -C $REPO commit -m x"
-  assert_denied_by_json
-}
-
-@test "git -C push origin main is still denied after the early exit" {
-  on_feature
-  run_hook "git -C $REPO push origin main"
-  assert_denied_by_json
-}
-
 # --- the one-jq payload reader ---
 
-@test "lib/hook-payload.sh absent: a payload the hook would deny exits 2 naming the library" {
-  local hooks_directory scratch_hooks payload
-  hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
-  scratch_hooks="$BATS_TEST_TMPDIR/scratch-hooks"
-  mkdir -p "$scratch_hooks"
-  cp -R "$hooks_directory/." "$scratch_hooks/"
-  rm -f "$scratch_hooks/lib/hook-payload.sh"
-  payload=$(jq -nc --arg command 'git push --force origin main' '{tool_name: "Bash", tool_input: {command: $command}}')
-  run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$BATS_TEST_TMPDIR" "$payload" "$scratch_hooks/block-main-destructive-git.sh"
-  [ "$status" -eq 2 ]
-  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/hook-payload.sh' <<<"$output"
-}
 
 @test "a non-arming Bash payload spawns exactly one jq process" {
   local hooks_directory shim_directory spawn_log real_jq payload spawn_count
@@ -1803,23 +1269,4 @@ run_hook_with_shim() {
   [ -z "$output" ]
   spawn_count=$(wc -c <"$spawn_log" | tr -d ' ')
   [ "$spawn_count" -eq 1 ]
-}
-
-# The post-merge cleanup pulls `main` into the main checkout when that checkout
-# is on `main` (PR Merge Workflow, worktree arm). The pull moves no HEAD to
-# another branch, so the guard must let it through, both from the main checkout
-# and from a session whose cwd was a worktree the cleanup just removed.
-@test "the post-merge pull into a main checkout on main is allowed" {
-  on_main
-  run_hook "git -C $REPO pull --ff-only origin main"
-  assert_allowed_by_json
-}
-
-@test "the post-merge pull is allowed when the session cwd was a removed worktree" {
-  local json
-  on_main
-  json=$(jq -n --arg command "git -C $REPO pull --ff-only origin main" --arg directory "$REPO/.claude/worktrees/removed" \
-    '{tool_name: "Bash", cwd: $directory, tool_input: {command: $command}}')
-  invoke_hook_in "$REPO" "$json" "$HOOK_ABSOLUTE_PATH"
-  assert_allowed_by_json
 }
