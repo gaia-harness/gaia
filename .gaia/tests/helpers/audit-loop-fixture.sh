@@ -28,11 +28,34 @@ alf_git() {
   git -C "$ALF_ROOT" -c user.email=gaia-test@example.com -c user.name="GAIA Test" -c commit.gpgsign=false "$@"
 }
 
-# alf_init: build origin plus a repo on `main` holding base.txt (20 lines).
+# alf_build_template: from setup_file, build the alf_init fixture once under
+# $BATS_FILE_TMPDIR/alf-template and export ALF_TEMPLATE_ROOT, so each later
+# alf_init copies it instead of rebuilding.
+alf_build_template() {
+  [ -n "${BATS_FILE_TMPDIR:-}" ] || { printf 'alf_build_template: BATS_FILE_TMPDIR is unset\n' >&2; return 1; }
+  local template_directory="$BATS_FILE_TMPDIR/alf-template"
+  mkdir -p "$template_directory" || return 1
+  ( BATS_TEST_TMPDIR="$template_directory" ALF_TEMPLATE_ROOT="" alf_init ) || return 1
+  export ALF_TEMPLATE_ROOT="$template_directory"
+}
+
+# alf_init: build origin plus a repo on `main` holding base.txt (20 lines), or
+# copy it from the alf_build_template fixture when one exists.
 alf_init() {
   [ -n "${BATS_TEST_TMPDIR:-}" ] || { printf 'alf_init: BATS_TEST_TMPDIR is unset\n' >&2; return 1; }
   local repo="$BATS_TEST_TMPDIR/repo" i
   ALF_ORIGIN="$BATS_TEST_TMPDIR/origin.git"
+  if [ -n "${ALF_TEMPLATE_ROOT:-}" ] && [ -d "$ALF_TEMPLATE_ROOT/repo" ]; then
+    cp -Rp "$ALF_TEMPLATE_ROOT/repo" "$repo" || return 1
+    cp -Rp "$ALF_TEMPLATE_ROOT/origin.git" "$ALF_ORIGIN" || return 1
+    ALF_ROOT="$(cd "$repo" && pwd -P)" || return 1
+    # The origin URL is the one absolute path in the fixture: re-point it, or
+    # a push lands in the shared template. A copy has new inodes, so refresh
+    # the index or plumbing sees every tracked file as modified.
+    alf_git remote set-url origin "$ALF_ORIGIN" || return 1
+    alf_git update-index -q --refresh >/dev/null 2>&1 || true
+    return 0
+  fi
   git init -q --bare -b main "$ALF_ORIGIN" || return 1
   git init -q -b main "$repo" || return 1
   ALF_ROOT="$(cd "$repo" && pwd -P)" || return 1

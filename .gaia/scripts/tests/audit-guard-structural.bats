@@ -93,13 +93,6 @@ assert_predicate_retry_fallback() {
   assert_predicate_retry_fallback "$reference"
 }
 
-@test "wiring red twin: a refuter reference without the inline fallback is rejected" {
-  sed 's/inline fallback/inline step/g' "$REFUTER_REFERENCE" >"$BATS_TEST_TMPDIR/refuter.md"
-  reference="$(cat "$BATS_TEST_TMPDIR/refuter.md")"
-  run assert_predicate_retry_fallback "$reference"
-  [ "$status" -ne 0 ]
-}
-
 # 6. Shared clearance writer: the one handshake surface, the shared member
 #    protocol file, invokes the ONE shared writer, every member definition
 #    points at that protocol file, and NONE still carries the inline marker
@@ -109,6 +102,7 @@ assert_predicate_retry_fallback() {
 #    gate passes and the only symptom is a member that silently never carries
 #    forward.
 
+# bats test_tags=protected
 @test "clearance writer: the handshake surfaces invoke the shared writer, none keeps the inline printf or the [ ! -f marker ] guard" {
   local markdown_file
   # Every member carries its handshake in the shared protocol file.

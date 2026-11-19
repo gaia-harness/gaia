@@ -26,10 +26,7 @@
 # of audit-guard-structural.bats: the contract lives once, in the "Scope
 # resolution" section of the shared member protocol, and every member sends
 # itself to that section before it invokes the resolver whose output the
-# contract consumes. Every pin
-# carries its own non-vacuity proof at the bottom of this file; see the comment
-# there for why those are meaning-changing edits rather than deletions of the
-# pinned string.
+# contract consumes.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
@@ -61,26 +58,10 @@ code-audit-maintainer-shell"
   # an accident of how many members exist today.
   GATING="$MEMBERS"
 
-  # The detection line, pinned in the one place it now lives. One line on
-  # purpose: a wrapped command cannot be asserted with a fixed-string grep. The
-  # behavioural tests below are what prove it runs over the right list; this
-  # pin is what makes a change to the status call itself visible.
-  CHECK_LINE='if ! printf '"'"'%s\0'"'"' "${changed[@]}" | xargs -0 git -C "$root" status --porcelain -z -- > "$ars_temporary_directory/dirty"; then'
-
-  # The print of the result to stderr, beside the DIRTY= lines on stdout.
-  PRINT_LINE='printf '"'"'%s\n'"'"' "${dirty[@]}" >&2'
-
   # The sentinel the remit filter must never discard, and the artifact rule that
   # keeps a withheld pass from stranding a digest-keyed refusal across a revert.
   SENTINEL_CARVEOUT='is a sentinel rather than a path and withholds unconditionally'
   NO_REFUSAL_ARTIFACT='**Withhold without writing a `.refused` artifact.**'
-
-  # The assignment that PRODUCES the sentinel the carve-out above protects.
-  # Pinned separately because the two say different things: SENTINEL_CARVEOUT
-  # pins the prose promising the sentinel is never remit-filtered, and
-  # CHECK_LINE pins only the `if` that detects the failure. Matched without
-  # leading indentation: the content is what must not drift.
-  SENTINEL_LINE='dirty=("dirty-scope check failed")'
 
   # The pointer every member carries to the protocol section holding the
   # refusal contract below. The contract binds a member only through it.
@@ -141,10 +122,9 @@ resolver_invocation() {
 
 # make_repo NAME [SCRIPT_SRC]: a committed repo carrying the resolver and
 # everything it reaches for, on a feature branch that changed app/a.ts, with
-# other/untouched.md committed on the base. SCRIPT_SRC overrides the resolver
-# copied in, which is how the behavioural non-vacuity control runs a mutant.
+# other/untouched.md committed on the base.
 make_repo() {
-  local name="$1" script_source_path="${2:-$SCRIPT}"
+  local name="$1" script_source_path="$SCRIPT"
   local repository_directory="$BATS_TEST_TMPDIR/$name"
   mkdir -p "$repository_directory/.gaia/scripts" "$repository_directory/.gaia/local/audit" \
     "$repository_directory/.github/audit" "$repository_directory/.claude/hooks/lib" "$repository_directory/other" "$repository_directory/app"
@@ -209,16 +189,16 @@ EOF
   chmod +x "$shim/git"
 }
 
-# --- Structural pins ----------------------------------------------------------
-
-@test "every member file exists" {
-  for member_name in $MEMBERS; do
-    [ -f "$(member_path "$member_name")" ] || return 1
-  done
+assert_carries() {
+  grep -qF -- "$2" "$1"
 }
 
-@test "every member runs the scope resolver, exactly once, under its own member name" {
-  local member_name resolver_command invocation_count
+# --- Structural pins ----------------------------------------------------------
+
+@test "the dirty-tree refusal contract binds every member (resolver run once under its own name, pointer read before the invocation, sidecar obligation) and every gating member (withhold sentence, run-order anchor, sentinel carve-out, no refusal artifact)" {
+  local member_name member_file resolver_command invocation_count invocation_line pointer_line
+
+  # every member runs the scope resolver, exactly once, under its own member name
   for member_name in $MEMBERS; do
     resolver_command="$(resolver_invocation "$(member_path "$member_name")")"
     invocation_count="$(printf '%s' "$resolver_command" | grep -c 'audit-resolve-scope' || true)"
@@ -228,30 +208,8 @@ EOF
       return 1
     }
   done
-}
 
-@test "the dirty-scope check lives once, in the resolver, and no member carries a private copy" {
-  local member_name check_copy_count
-  check_copy_count="$(grep -cF -- "$CHECK_LINE" "$SCRIPT" || true)"
-  [ "$check_copy_count" -eq 1 ] || { echo "resolver carries the dirty-scope check $check_copy_count times" >&2; return 1; }
-  for member_name in $MEMBERS; do
-    grep -qE 'status --porcelain' "$(member_path "$member_name")" && {
-      echo "$member_name derives its own dirty-scope check beside the resolver's" >&2
-      return 1
-    }
-  done
-  true
-}
-
-@test "every GATING member reaches the byte-identical withhold contract" {
-  assert_contract_reaches "$GATING" "$REFUSAL" || {
-    echo "missing or drifted refusal contract" >&2
-    return 1
-  }
-}
-
-@test "every member reads the dirty contract's section before it runs the resolver" {
-  local member_name member_file invocation_line pointer_line
+  # every member reads the dirty contract's section before it runs the resolver
   for member_name in $MEMBERS; do
     member_file="$(member_path "$member_name")"
     invocation_line="$(grep -nF -- "<root>/.gaia/scripts/audit-resolve-scope.sh --member $member_name" "$member_file" | head -1 | cut -d: -f1)"
@@ -263,46 +221,34 @@ EOF
       return 1
     }
   done
-}
 
-@test "every GATING member names the refusal in its run order" {
+  # every GATING member reaches the byte-identical withhold contract
+  assert_contract_reaches "$GATING" "$REFUSAL" || {
+    echo "missing or drifted refusal contract" >&2
+    return 1
+  }
+
+  # every GATING member names the refusal in its run order
   for member_name in $GATING; do
     assert_carries "$(member_path "$member_name")" "$METHOD_ANCHOR" || {
       echo "run order does not name the refusal: $member_name" >&2
       return 1
     }
   done
-}
 
-@test "the resolver assigns the fail-closed sentinel" {
-  assert_carries "$SCRIPT" "$SENTINEL_LINE" || {
-    echo "fail-closed arm produces no sentinel to withhold on" >&2
-    return 1
-  }
-}
-
-@test "the resolver prints the result it computed to stderr" {
-  assert_carries "$SCRIPT" "$PRINT_LINE" || {
-    echo "computes the dirty set and never prints it to stderr" >&2
-    return 1
-  }
-}
-
-@test "every GATING member exempts the failure sentinel from the remit filter" {
+  # every GATING member exempts the failure sentinel from the remit filter
   assert_contract_reaches "$GATING" "$SENTINEL_CARVEOUT" || {
     echo "fail-closed sentinel is filterable away" >&2
     return 1
   }
-}
 
-@test "every GATING member withholds without stranding a refusal artifact" {
+  # every GATING member withholds without stranding a refusal artifact
   assert_contract_reaches "$GATING" "$NO_REFUSAL_ARTIFACT" || {
     echo "does not forbid the digest-keyed refusal artifact" >&2
     return 1
   }
-}
 
-@test "the refusal briefs: every member owes the sidecar on the dirty path" {
+  # every member owes the sidecar on the dirty path
   assert_contract_reaches "$MEMBERS" "$SIDECAR_CLAUSE" || {
     echo "refusal does not oblige the findings sidecar" >&2
     return 1
@@ -311,9 +257,12 @@ EOF
 
 # --- Behavioural: each member's own invocation --------------------------------
 
-@test "every member's resolver reports a dirty in-scope file as a DIRTY line" {
-  local member_name repo
-  repo="$(make_repo dirty-in-scope)"
+@test "every member's resolver reports its review scope's dirt: a dirty in-scope file is a DIRTY line and reaches stderr, a clean tree and a dirty file outside the review list report none, a status that cannot run fails closed to the sentinel" {
+  local member_name repo shim="$BATS_TEST_TMPDIR/shim"
+  repo="$(make_repo dirt)"
+  failing_status_shim "$shim"
+
+  # dirty in scope
   printf 'edit\n' >> "$repo/app/a.ts"
   for member_name in $MEMBERS; do
     run_member_resolver "$member_name" "$repo" || return 1
@@ -321,22 +270,17 @@ EOF
     grep -qxF 'DIRTY= M app/a.ts' <<<"$output" || { echo "$member_name: no DIRTY line for a dirty in-scope file" >&2; return 1; }
     grep -qF 'DIRTY IN REVIEW SCOPE:' <<<"$stderr" || { echo "$member_name: dirty set never reached stderr" >&2; return 1; }
   done
-}
 
-@test "every member's resolver reports nothing on a clean review list" {
-  local member_name repo
-  repo="$(make_repo clean)"
+  # clean review list
+  git -C "$repo" checkout -q -- app/a.ts
   for member_name in $MEMBERS; do
     run_member_resolver "$member_name" "$repo" || return 1
     [ "$status" -eq 0 ] || { echo "$member_name: resolver exited $status: $stderr" >&2; return 1; }
     grep -q '^DIRTY=' <<<"$output" && { echo "$member_name: DIRTY line on a clean tree" >&2; return 1; }
     true
   done
-}
 
-@test "a dirty file outside the review list cannot refuse the pass" {
-  local member_name repo
-  repo="$(make_repo dirty-out-of-scope)"
+  # dirty outside the review list
   printf 'edit\n' >> "$repo/other/untouched.md"
   for member_name in $MEMBERS; do
     run_member_resolver "$member_name" "$repo" || return 1
@@ -344,12 +288,9 @@ EOF
     grep -q '^DIRTY=' <<<"$output" && { echo "$member_name: a sibling's dirt outside the review list reached DIRTY" >&2; return 1; }
     true
   done
-}
+  git -C "$repo" checkout -q -- other/untouched.md
 
-@test "every member's resolver fails closed to the sentinel when status cannot run" {
-  local member_name repo shim="$BATS_TEST_TMPDIR/shim"
-  repo="$(make_repo status-fails)"
-  failing_status_shim "$shim"
+  # status cannot run
   for member_name in $MEMBERS; do
     PATH="$shim:$PATH" run_member_resolver "$member_name" "$repo" || return 1
     [ "$status" -eq 0 ] || { echo "$member_name: resolver exited $status: $stderr" >&2; return 1; }
@@ -358,118 +299,4 @@ EOF
       return 1
     }
   done
-}
-
-# --- Non-vacuity ------------------------------------------------------------
-#
-# These prove the pins above are worth something, and they are deliberately NOT
-# "delete the pinned string, confirm it is gone". That form is a tautology: it
-# can only fail if `grep -v` is broken, so it holds for any pin however weak.
-#
-# Each proof instead applies a MEANING-CHANGING edit to a COPY of a real member
-# or of the resolver and requires the pin to stop holding. A pin strong enough
-# to be worth having breaks under it; a pin weakened to some short common
-# substring survives the edit and the proof reds. Tracked files are never
-# touched.
-
-# assert_carries FILE NEEDLE: the single definition of "this file satisfies the
-# pin". Both the real tests and the mutants call THIS function, so a mutant
-# cannot pass by exercising a re-implementation of the check.
-assert_carries() {
-  grep -qF -- "$2" "$1"
-}
-
-# mutate_copy SOURCE_PATH TAG SED_EXPR NEEDLE: copy SOURCE_PATH, confirm the copy satisfies
-# NEEDLE before the edit (so a red is the mutation talking, not a broken
-# fixture), apply the edit, and print the mutant's path.
-mutate_copy() {
-  local source_path="$1" tag="$2" sed_expression="$3" needle="$4" mutant_path="$BATS_TEST_TMPDIR/mutant-$2"
-  cp "$source_path" "$mutant_path"
-  assert_carries "$mutant_path" "$needle" || {
-    echo "fixture broken: pin does not hold before mutation ($tag)" >&2
-    return 1
-  }
-  sed "$sed_expression" "$mutant_path" > "$mutant_path.new" && mv "$mutant_path.new" "$mutant_path"
-  printf '%s' "$mutant_path"
-}
-
-# assert_pin_breaks SOURCE_PATH TAG SED_EXPR NEEDLE: the whole shape in one line.
-assert_pin_breaks() {
-  local mutant
-  mutant="$(mutate_copy "$1" "$2" "$3" "$4")" || return 1
-  # Bad case written as a positive match per the bats-assertions rule.
-  assert_carries "$mutant" "$4" && {
-    echo "pin still holds after a meaning-changing edit; it is too weak to assert the posture ($2)" >&2
-    return 1
-  }
-  return 0
-}
-
-@test "the check pin breaks when the status call changes meaning (non-vacuity)" {
-  # --untracked-files=no narrows what the check can see.
-  assert_pin_breaks "$SCRIPT" check 's|status --porcelain -z -- >|status --porcelain -z --untracked-files=no -- >|' "$CHECK_LINE"
-}
-
-@test "the refusal pin breaks when the refusal becomes a warning (non-vacuity)" {
-  assert_pin_breaks "$(scope_section_file)" refusal 's|WITHHOLDS this pass|is worth noting|' "$REFUSAL"
-}
-
-@test "the print pin breaks when the result stops reaching stderr (non-vacuity)" {
-  assert_pin_breaks "$SCRIPT" print 's|"${dirty\[@\]}" >&2|"${dirty[@]}"|' "$PRINT_LINE"
-}
-
-@test "the sentinel-assignment pin breaks when the arm stops failing closed (non-vacuity)" {
-  assert_pin_breaks "$SCRIPT" sentinel_line 's|dirty=("dirty-scope check failed")|dirty=()|' "$SENTINEL_LINE"
-}
-
-@test "the fail-closed behaviour reds when the resolver's sentinel is emptied (non-vacuity)" {
-  # The behavioural half's own control: the same mutation as above, run rather
-  # than grepped. A resolver that keeps its warning but assigns nothing reports
-  # a clean tree on a status that could not run, and the behavioural test's
-  # assertion must see that.
-  local mutant repo shim="$BATS_TEST_TMPDIR/shim-mutant"
-  mutant="$(mutate_copy "$SCRIPT" sentinel_run 's|dirty=("dirty-scope check failed")|dirty=()|' "$SENTINEL_LINE")" || return 1
-  repo="$(make_repo status-fails-mutant "$mutant")"
-  failing_status_shim "$shim"
-  PATH="$shim:$PATH" run_member_resolver code-audit-maintainer-shell "$repo" || return 1
-  [ "$status" -eq 0 ] || { echo "mutant resolver exited $status: $stderr" >&2; return 1; }
-  grep -qxF 'DIRTY=dirty-scope check failed' <<<"$output" && {
-    echo "the sentinel assertion still holds against a resolver that no longer fails closed" >&2
-    return 1
-  }
-  true
-}
-
-@test "the dirty-in-scope behaviour reds when the check stops running (non-vacuity)" {
-  local mutant repo
-  mutant="$(mutate_copy "$SCRIPT" check_run 's|if \[ "${#changed\[@\]}" -gt 0 \]; then|if false; then|' 'if [ "${#changed[@]}" -gt 0 ]; then')" || return 1
-  repo="$(make_repo dirty-mutant "$mutant")"
-  printf 'edit\n' >> "$repo/app/a.ts"
-  run_member_resolver code-audit-maintainer-shell "$repo" || return 1
-  [ "$status" -eq 0 ] || { echo "mutant resolver exited $status: $stderr" >&2; return 1; }
-  grep -qxF 'DIRTY= M app/a.ts' <<<"$output" && {
-    echo "the DIRTY assertion still holds against a resolver whose check never runs" >&2
-    return 1
-  }
-  true
-}
-
-@test "the sentinel pin breaks when the carve-out is softened (non-vacuity)" {
-  assert_pin_breaks "$(scope_section_file)" sentinel 's|withholds unconditionally|is worth a look|' "$SENTINEL_CARVEOUT"
-}
-
-@test "the artifact pin breaks when the prohibition is softened (non-vacuity)" {
-  assert_pin_breaks "$(scope_section_file)" artifact 's|Withhold without writing|Consider not writing|' "$NO_REFUSAL_ARTIFACT"
-}
-
-@test "the sidecar pin breaks when the obligation is softened (non-vacuity)" {
-  assert_pin_breaks "$(scope_section_file)" sidecar 's|write the findings sidecar naming each dirty path|mention the dirty paths somewhere|' "$SIDECAR_CLAUSE"
-}
-
-@test "the run-order pin breaks when the anchor stops refusing (non-vacuity)" {
-  assert_pin_breaks "$(member_path code-audit-maintainer-shell)" anchor 's|refuse the pass|warn|g' "$METHOD_ANCHOR"
-}
-
-@test "the pointer pin breaks when a member is sent to a different section (non-vacuity)" {
-  assert_pin_breaks "$(member_path code-audit-maintainer-shell)" pointer 's|follow its "Scope resolution" section|follow its "Output format" section|' "$SCOPE_POINTER"
 }

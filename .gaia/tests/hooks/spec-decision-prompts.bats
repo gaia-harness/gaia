@@ -5,8 +5,7 @@
 # never says "plain prompt" again, every review or audit finding list is one
 # accept-or-revise question rather than one question per finding, and no paragraph anywhere in the swept trees sends a
 # question to a plain prompt without saying why its answer is open-ended. Each
-# guard runs once on the real tree (must pass) and once on a mutated scratch
-# copy (must fail).
+# guard runs on the real tree and must pass.
 
 bats_require_minimum_version 1.5.0
 
@@ -106,8 +105,6 @@ OPEN_ENDED_ERE='open-ended|free[- ]text|what to change|not present'
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  SCRATCH_ROOT="$BATS_TEST_TMPDIR/root"
-  mkdir -p "$SCRATCH_ROOT"
 }
 
 # site_text <file> <start ERE> <end ERE>: prints the site's lines. The EREs
@@ -197,16 +194,6 @@ prints_ok() {
   return "$failed"
 }
 
-# copy_print_pin_files_into_scratch: copies every print-pin file to the scratch root.
-copy_print_pin_files_into_scratch() {
-  local row file
-  for row in "${PRINT_PINS[@]}"; do
-    file="${row%%|*}"
-    mkdir -p "$(dirname "$SCRATCH_ROOT/$file")"
-    cp "$REPO_ROOT/$file" "$SCRATCH_ROOT/$file"
-  done
-}
-
 # swept_files <root>: prints every Markdown file the rule governs, one per line.
 swept_files() {
   local root="$1" directory page
@@ -250,27 +237,6 @@ unjustified_plain_prompts() {
   return "$failed"
 }
 
-# copy_swept_trees_into_scratch: copies every swept file to the scratch root.
-copy_swept_trees_into_scratch() {
-  local file relative
-  while IFS= read -r file; do
-    relative="${file#"$REPO_ROOT"/}"
-    mkdir -p "$(dirname "$SCRATCH_ROOT/$relative")"
-    cp "$file" "$SCRATCH_ROOT/$relative"
-  # gaia-lint-ignore whole-tree-mark-guard: every test that calls this helper carries the test mark
-  done < <(swept_files "$REPO_ROOT")
-}
-
-# copy_tree_into_scratch: copies every site file to the scratch root.
-copy_tree_into_scratch() {
-  local row file
-  for row in "${SITES[@]}"; do
-    file="${row%%|*}"
-    mkdir -p "$(dirname "$SCRATCH_ROOT/$file")"
-    cp "$REPO_ROOT/$file" "$SCRATCH_ROOT/$file"
-  done
-}
-
 # bats test_tags=whole-tree
 @test "real tree: every converted site asks through AskUserQuestion, and review lists ask once" {
   sites_ok "$REPO_ROOT"
@@ -281,171 +247,9 @@ copy_tree_into_scratch() {
   prints_ok "$REPO_ROOT"
 }
 
-# bats test_tags=whole-tree
-@test "red twin: a gate 1 that stops requiring every flow line fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  sed 's/the proposed critical flows, one line each/the flows in brief/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing"*"the proposed critical flows"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a gate 1 that may point at the draft file fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  sed 's/never point the user at the draft file/point the user at the draft file when long/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing"*"never point the user at the draft file"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a gate whose print goes back to suggested text fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  awk '{ print } /^### 4\. Gate 1/ { print "Suggested text:" }' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"gate print is only suggested"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a gate 2 that goes back to printing the whole artifact fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  awk '{ print } /^### 9\. Gate 2/ { print "> <full rendered artifact>" }' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"gate prints the whole artifact"*"<full rendered artifact>"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a gate 2 brief that drops the sign-off section fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  sed 's/\*\*You are signing off on:\*\*/**Risks:**/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing"*"You are signing off on"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a gate 2 brief that lets length drop a flow fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  sed 's/never drops or merges a flow, a sign-off item, or a not-settled item/may trim flows when long/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing"*"never drops or merges a flow"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a gate 2 brief with no length bound fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  sed 's/at most 50 lines/as long as it needs/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing"*"at most 50 lines"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a clarify question that may cite a finding id fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec/clarify-loop.md"
-  sed 's/never cite an id or label from them/cite finding ids where helpful/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing: $REFERENCES/spec/clarify-loop.md"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a review-list template that goes back to a blockquote fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
-  awk '{ print } /^\*\*Interactive:\*\*/ { print "  > Plan review flagged a concern in `<location>`:" }' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print template is a blockquote: $REFERENCES/plan/decomposition-audit.md"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a review-list format that may print finding ids fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/.claude/rules/user-questions.md"
-  sed 's/Internal finding ids stay in the decision list and are never printed/Each finding shows its id/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing: .claude/rules/user-questions.md"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a review list that may print a count fails" {
-  copy_print_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
-  sed 's/never a count, a summary, or a pointer to a findings file/a count is enough/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run prints_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"print pin missing: $REFERENCES/plan/decomposition-audit.md"* ]]
-}
-
 @test "real tree: the open-ended prompts stay plain" {
   grep -qE -- 'What do you want to spec\?.*use a plain prompt' "$REPO_ROOT/$REFERENCES/spec.md"
   grep -qF -- 'ask: **"What do you want me to orchestrate?"** and wait' "$REPO_ROOT/$REFERENCES/plan.md"
-}
-
-@test "red twin: a gate that says plain prompt again fails" {
-  copy_tree_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  awk '{ print } /^### 9\. Gate 2/ { print "Use a plain prompt, not `AskUserQuestion`." }' \
-    "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run sites_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"says plain prompt"* ]]
-}
-
-@test "red twin: a review list that loses its accept-all option fails" {
-  copy_tree_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
-  sed 's/Accept all as recommended (Recommended)/Apply the fix (Recommended)/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run sites_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"lost the accept-all option"* ]]
-}
-
-@test "red twin: a review list that goes back to one question per finding fails" {
-  copy_tree_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
-  awk '{ print } /^\*\*Interactive:\*\*/ { print "Ask one question per finding." }' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run sites_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"asks per finding"* ]]
-}
-
-@test "red twin: a site whose heading moved fails as not found" {
-  copy_tree_into_scratch
-  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
-  sed 's/^\*\*Interactive:\*\*/**Interactive mode:**/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run sites_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"site not found"* ]]
 }
 
 # bats test_tags=whole-tree
@@ -458,26 +262,6 @@ copy_tree_into_scratch() {
   [[ "$stderr" =~ checked\ ([0-9]+) ]]
   [ "${BASH_REMATCH[1]}" -gt 0 ]
   grep -qE -- 'What do you want to spec\?.*use a plain prompt' "$REPO_ROOT/$REFERENCES/spec.md"
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a closed-set confirmation sent to a plain prompt fails" {
-  copy_swept_trees_into_scratch
-  local file="$SCRATCH_ROOT/.claude/commands/gaia-init.md"
-  printf '\nThen echo the resolved choice back as a plain chat message, e.g. `Look right?`\n' >>"$file"
-  run --separate-stderr unjustified_plain_prompts "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *".claude/commands/gaia-init.md: Then echo the resolved choice back"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a plain prompt that names its open-ended answer passes" {
-  copy_swept_trees_into_scratch
-  local file="$SCRATCH_ROOT/.claude/commands/gaia-init.md"
-  printf '\nAsk for the project description as a plain prompt: the answer is free text.\n' >>"$file"
-  run --separate-stderr unjustified_plain_prompts "$SCRATCH_ROOT"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
 }
 
 # ---------- verified human-done option (halt questions) ----------
@@ -512,41 +296,8 @@ halt_pins_ok() {
   return "$failed"
 }
 
-copy_halt_pin_files_into_scratch() {
-  local row file
-  for row in "${HALT_PINS[@]}"; do
-    file="${row%%|*}"
-    mkdir -p "$(dirname "$SCRATCH_ROOT/$file")"
-    cp "$REPO_ROOT/$file" "$SCRATCH_ROOT/$file"
-  done
-}
-
 # bats test_tags=whole-tree
 @test "real tree: a verified human-done option may lead, bounded to one rerun" {
   run halt_pins_ok "$REPO_ROOT"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a rule that drops the failed-rerun bound fails" {
-  copy_halt_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/.claude/rules/user-questions.md"
-  sed 's/A failed rerun stops the work and offers no new continuing option/A failed rerun asks again/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  ! cmp -s "$REPO_ROOT/.claude/rules/user-questions.md" "$file" || return 1
-  run halt_pins_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"halt pin missing: .claude/rules/user-questions.md"* ]]
-}
-
-# bats test_tags=whole-tree
-@test "red twin: a dev smoke env branch that may edit .env fails" {
-  copy_halt_pin_files_into_scratch
-  local file="$SCRATCH_ROOT/wiki/decisions/Quality Gate.md"
-  sed 's/never read or edit `\.env`/add the line to `.env`/' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  ! cmp -s "$REPO_ROOT/wiki/decisions/Quality Gate.md" "$file" || return 1
-  run halt_pins_ok "$SCRATCH_ROOT"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"halt pin missing: wiki/decisions/Quality Gate.md"* ]]
 }

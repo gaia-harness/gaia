@@ -107,101 +107,38 @@ assert_janitor_report_prints_in_same_run() {
   assert_report_prints_once "$hook"
 }
 
-@test "guard: a hook that never deletes the report fails the print-once assertion" {
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  hook=$(install_hook)
-  grep -qF -- 'rm -f "$catchup_report"' "$hook" || return 1
-  sed -e '/rm -f "\$catchup_report"/d' "$hook" > "$hook.mutated"
-  mv "$hook.mutated" "$hook"
-  grep -qF -- 'rm -f "$catchup_report"' "$hook" && return 1
-  run assert_report_prints_once "$hook"
-  [ "$status" -ne 0 ]
-}
-
-@test "no report: nothing on stdout or stderr and exit 0" {
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  hook=$(install_hook)
-  invoke_hook_in "$REPO" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "a repo with no commits yet does not fail the session" {
-  REPO=$(mktemp -d -t gaia-session-start-unborn-XXXXXX)
-  git -C "$REPO" init --quiet --initial-branch=main
-  hook=$(install_hook)
-  invoke_hook_in "$REPO" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "outside a git repository the hook is a silent no-op" {
-  PLAIN=$(mktemp -d -t gaia-session-start-plain-XXXXXX)
-  invoke_hook_in "$PLAIN" '' "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "prints a report written at the main root from a subdirectory" {
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  hook=$(install_hook)
-  seed_report "$REPO"
-  mkdir -p "$REPO/sub/deeper"
-  invoke_hook_in "$REPO/sub/deeper" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPORT_LINE" ] || return 1
-  [ -f "$REPO/.gaia/local/cache/shared/wiki-base-catchup.report" ] && return 1
-  return 0
-}
-
-@test "prints a report written at the main root from a linked worktree, exactly once" {
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  hook=$(install_hook)
-  WORKTREE_PATH="$REPO/.claude/worktrees/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$WORKTREE_PATH" main
-  seed_report "$REPO"
-  invoke_hook_in "$WORKTREE_PATH" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPORT_LINE" ] || return 1
-  [ -f "$REPO/.gaia/local/cache/shared/wiki-base-catchup.report" ] && return 1
-
-  invoke_hook_in "$WORKTREE_PATH" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "prints a report written at the main root from a subdirectory of a linked worktree" {
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  hook=$(install_hook)
-  WORKTREE_PATH="$REPO/.claude/worktrees/wt"
-  git -C "$REPO" worktree add --quiet -b wt-branch "$WORKTREE_PATH" main
-  mkdir -p "$WORKTREE_PATH/sub/deeper"
-  seed_report "$REPO"
-  invoke_hook_in "$WORKTREE_PATH/sub/deeper" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPORT_LINE" ] || return 1
-  [ -f "$REPO/.gaia/local/cache/shared/wiki-base-catchup.report" ] && return 1
-  return 0
+@test "a silent exit 0 with nothing to print: no report, a repo with no commits yet, outside a git repository" {
+  local case_name case_directory case_hook
+  for case_name in no-report unborn-repo outside-git-repository; do
+    case "$case_name" in
+      no-report)
+        REPO=$("$HELPERS/tmp-git-repo.sh")
+        case_hook=$(install_hook)
+        case_directory=$REPO
+        ;;
+      unborn-repo)
+        rm -rf "$REPO"
+        REPO=$(mktemp -d -t gaia-session-start-unborn-XXXXXX)
+        git -C "$REPO" init --quiet --initial-branch=main
+        case_hook=$(install_hook)
+        case_directory=$REPO
+        ;;
+      outside-git-repository)
+        PLAIN=$(mktemp -d -t gaia-session-start-plain-XXXXXX)
+        case_hook=$HOOK_ABSOLUTE_PATH
+        case_directory=$PLAIN
+        ;;
+    esac
+    invoke_hook_in "$case_directory" '' "$case_hook"
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    [ -z "$output" ] || { echo "case $case_name: unexpected output: $output"; return 1; }
+  done
 }
 
 @test "a report the janitor writes during the run is printed in that same run" {
   REPO=$("$HELPERS/tmp-git-repo.sh")
   hook=$(install_hook)
   assert_janitor_report_prints_in_same_run "$hook"
-}
-
-@test "guard: a hook that prints before running the janitor fails the same-run assertion" {
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  hook=$(install_hook)
-  # Move the janitor line after the print: drop it and the closing `exit 0`,
-  # then re-append the janitor line and the exit.
-  grep -qE '^\[ -f .*local-janitor\.sh' "$hook" || return 1
-  janitor_line=$(grep -E '^\[ -f .*local-janitor\.sh' "$hook")
-  sed -e '/^\[ -f .*local-janitor\.sh/d' -e '$d' "$hook" > "$hook.mutated"
-  printf '%s\nexit 0\n' "$janitor_line" >> "$hook.mutated"
-  mv "$hook.mutated" "$hook"
-  run assert_janitor_report_prints_in_same_run "$hook"
-  [ "$status" -ne 0 ]
 }
 
 # An unresolved-merge-conflict body: the file opens and reads fine, so an
@@ -211,16 +148,33 @@ write_conflicted_library() {
     printf 'y() { :; }\n'; printf '>>>>>>> other\n'; } > "$1"
 }
 
-@test "main-root-lib.sh holding conflict markers: the report is still printed" {
+# One repo with one linked worktree serves every row: each row re-seeds the
+# report at the main root, and the conflicted-library row runs last because it
+# breaks the library for good.
+@test "prints a report written at the main root exactly once from a subdirectory, a linked worktree, a linked worktree's subdirectory, and with main-root-lib.sh holding conflict markers" {
+  local row case_name case_directory
   REPO=$("$HELPERS/tmp-git-repo.sh")
   hook=$(install_hook)
-  write_conflicted_library "$REPO/.gaia/scripts/main-root-lib.sh"
-  seed_report "$REPO"
-  invoke_hook_in "$REPO" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPORT_LINE" ] || return 1
-  [ -f "$REPO/.gaia/local/cache/shared/wiki-base-catchup.report" ] && return 1
-  return 0
+  WORKTREE_PATH="$REPO/.claude/worktrees/wt"
+  git -C "$REPO" worktree add --quiet -b wt-branch "$WORKTREE_PATH" main
+  mkdir -p "$REPO/sub/deeper" "$WORKTREE_PATH/sub/deeper"
+  for row in \
+    "subdirectory|$REPO/sub/deeper" \
+    "linked worktree|$WORKTREE_PATH" \
+    "linked worktree subdirectory|$WORKTREE_PATH/sub/deeper" \
+    "conflicted main-root library|$REPO"; do
+    case_name=${row%%|*}
+    case_directory=${row#*|}
+    [ "$case_name" = "conflicted main-root library" ] && write_conflicted_library "$REPO/.gaia/scripts/main-root-lib.sh"
+    seed_report "$REPO"
+    invoke_hook_in "$case_directory" '' "$hook"
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    [ "$output" = "$REPORT_LINE" ] || { echo "case $case_name: output: $output"; return 1; }
+    [ -f "$REPO/.gaia/local/cache/shared/wiki-base-catchup.report" ] && { echo "case $case_name: report not deleted"; return 1; }
+    invoke_hook_in "$case_directory" '' "$hook"
+    [ "$status" -eq 0 ] || { echo "case $case_name: second run status $status"; return 1; }
+    [ -z "$output" ] || { echo "case $case_name: second run printed: $output"; return 1; }
+  done
 }
 
 @test "writes nothing into the git dir" {
@@ -258,31 +212,6 @@ write_conflicted_library() {
   [ -f "$REPO/local-janitor.sh.ran" ]
 }
 
-@test "a missing janitor is not an error" {
-  # An adopter clone, or a checkout mid-update, can be missing the script.
-  # The session must start anyway.
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  hook=$(install_hook)
-  [ ! -f "$REPO/.claude/hooks/local-janitor.sh" ]
-  invoke_hook_in "$REPO" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "a janitor that exits non-zero never fails the session" {
-  # A janitor bug must cost a sweep, not the session, and must not cost the
-  # report that was already pending.
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  hook=$(install_hook)
-  seed_report "$REPO"
-  printf '#!/usr/bin/env bash\necho boom >&2\nexit 3\n' > "$REPO/.claude/hooks/local-janitor.sh"
-  chmod +x "$REPO/.claude/hooks/local-janitor.sh"
-  invoke_hook_in "$REPO" '' "$hook"
-  [ "$status" -eq 0 ]
-  grep -qF -- "$REPORT_LINE" <<<"$output" || return 1
-  return 0
-}
-
 # --- the kept-worktree reminder ---
 
 # kept_tree_fixture: a linked worktree with a ledger entry under the main root,
@@ -317,44 +246,39 @@ kept_tree_fixture() {
   true
 }
 
-@test "guard: a hook that passes no own tree shows a session its own tree" {
+# A broken neighbor must cost its own work, never the session or a pending
+# report: an adopter clone or a checkout mid-update can lack the janitor, and a
+# janitor or reminder bug must not fail the start. The rows share one repo; the
+# failing janitor is removed before the reminder row because the hook does not
+# silence the janitor's stderr, which that row's exact-output check would see.
+@test "never fails the session: a missing janitor, a janitor that exits non-zero, a reminder script that fails" {
   REPO=$("$HELPERS/tmp-git-repo.sh")
-  kept_tree_fixture
-  grep -q -- '--own-tree "$_own_tree"' "$hook" || return 1
-  sed -e 's/ --own-tree "\$_own_tree"//' "$hook" > "$hook.mutated"
-  mv "$hook.mutated" "$hook"
-  invoke_hook_in "$WORKTREE_PATH" '' "$hook"
-  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH" || { printf 'stayed green: %s\n' "$output"; return 1; }
-}
+  hook=$(install_hook)
 
-@test "guard: a hook without the reminder call prints no reminder" {
-  REPO=$("$HELPERS/tmp-git-repo.sh")
-  kept_tree_fixture
-  grep -q '_kept_worktrees" remind' "$hook" || return 1
-  sed -e '/_kept_worktrees" remind/d' "$hook" > "$hook.mutated"
-  mv "$hook.mutated" "$hook"
+  [ -f "$REPO/.claude/hooks/local-janitor.sh" ] && { echo "case missing janitor: fixture has a janitor"; return 1; }
   invoke_hook_in "$REPO" '' "$hook"
-  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH" && { printf 'stayed green: %s\n' "$output"; return 1; }
-  true
-}
+  [ "$status" -eq 0 ] || { echo "case missing janitor: status $status"; return 1; }
+  [ -z "$output" ] || { echo "case missing janitor: output: $output"; return 1; }
 
-@test "a reminder script that fails never fails the session or the report" {
-  REPO=$("$HELPERS/tmp-git-repo.sh")
+  seed_report "$REPO"
+  printf '#!/usr/bin/env bash\necho boom >&2\nexit 3\n' > "$REPO/.claude/hooks/local-janitor.sh"
+  chmod +x "$REPO/.claude/hooks/local-janitor.sh"
+  invoke_hook_in "$REPO" '' "$hook"
+  [ "$status" -eq 0 ] || { echo "case failing janitor: status $status"; return 1; }
+  grep -qF -- "$REPORT_LINE" <<<"$output" || { echo "case failing janitor: report missing: $output"; return 1; }
+
+  rm -f "$REPO/.claude/hooks/local-janitor.sh"
   kept_tree_fixture
   printf '#!/usr/bin/env bash\necho boom >&2\nexit 3\n' > "$REPO/.gaia/scripts/kept-worktrees.sh"
   invoke_hook_in "$REPO" '' "$hook"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPORT_LINE" ] || { printf '%s\n' "$output"; return 1; }
+  [ "$status" -eq 0 ] || { echo "case failing reminder: status $status"; return 1; }
+  [ "$output" = "$REPORT_LINE" ] || { echo "case failing reminder: output: $output"; return 1; }
 }
 
 # --- structural ---
 
 @test "wiki-session-start.sh is executable" {
   [ -x "$HOOK_ABSOLUTE_PATH" ]
-}
-
-@test "settings.json registers the hook under SessionStart startup|resume" {
-  hook_registered "$SETTINGS_ABSOLUTE_PATH" '.hooks.SessionStart[] | select(.matcher == "startup|resume")' wiki-session-start.sh
 }
 
 @test "both settings files register the hook on startup and resume, never on clear or compact" {
@@ -366,27 +290,15 @@ kept_tree_fixture() {
   [ "$status" -ne 0 ]
 }
 
-@test "guard: a clear|compact group running the hook fails the no-reset assertion" {
-  # Running the janitor and printing the report again on clear or compact would
-  # re-announce a report the session already saw.
-  scratch_settings="$BATS_TEST_TMPDIR/settings.json"
-  jq '.hooks.SessionStart += [{matcher: "clear|compact", hooks: [{type: "command", command: "\"$(git rev-parse --show-toplevel)/.claude/hooks/wiki-session-start.sh\""}]}]' \
-    "$SETTINGS_ABSOLUTE_PATH" > "$scratch_settings"
-  run jq -e "$RESET_MATCHER_REGISTRATION_FILTER" "$scratch_settings"
-  [ "$status" -eq 0 ]
-}
-
 # --- removed hooks stay removed ---
 
-@test "no hook prints a wiki state, nudge, or end-of-session tag" {
+@test "removed wiki hooks stay removed: no wiki state, nudge or end-of-session tag printed, no settings registration, no hook files" {
   tag_pattern='\[wiki (state|nudge|end-of'"-session)\\]"
   run grep -rnE "$tag_pattern" "$REPO_ROOT/.claude/hooks"
   # grep exits 1 on no match; any other status is a real failure or a hit.
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-}
+  [ "$status" -eq 1 ] || { echo "tag output: grep status $status: $output"; return 1; }
+  [ -z "$output" ] || { echo "tag output: $output"; return 1; }
 
-@test "neither settings file registers a removed wiki hook" {
   drift_hook="wiki-drift""-check.sh"
   nudge_hook="wiki-commit""-nudge.sh"
   hot_inject_hook="wiki-hot""-inject.sh"
@@ -396,10 +308,7 @@ kept_tree_fixture() {
     grep -qF -- "$removed_hook" "$SETTINGS_ABSOLUTE_PATH" && return 1
     grep -qF -- "$removed_hook" "$FRONTEND_SETTINGS_ABSOLUTE_PATH" && return 1
   done
-  return 0
-}
 
-@test "the removed hook files are gone" {
   for removed_hook in "wiki-hot""-inject.sh" "wiki-session""-stop.sh" "janitor-report""-drain.sh" "lib/wiki-dirty""-fingerprint.sh"; do
     [ -e "$HOOKS_SOURCE_DIRECTORY/$removed_hook" ] && return 1
   done

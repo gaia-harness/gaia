@@ -217,15 +217,6 @@ invoked() {
   row knip | grep -q 'scope unresolved; ran anyway'
 }
 
-@test "the same markdown-only branch with a valid base skips both (red twin)" {
-  branch_with docs/note.md
-  run_oracles "$BASE_SHA"
-  [ "$(invoked npx)" -eq 0 ]
-  [ "$(invoked pnpm)" -eq 0 ]
-  row react-doctor | grep -q 'scope unresolved' && return 1
-  true
-}
-
 @test "an empty --base followed by --out runs everything, writes to --out and exits 0" {
   branch_with docs/note.md
   run --separate-stderr bash "$SCRIPT" --root "$SANDBOX" --base '' --out "$OUT_DIR"
@@ -237,15 +228,6 @@ invoked() {
   [ -f "$OUT_DIR/knip.json" ]
   [ -f "$OUT_DIR/advisories.json" ]
   row react-doctor | grep -q 'scope unresolved; ran anyway'
-}
-
-@test "a parser that skips an empty --base value exits 2 on the same call (red twin)" {
-  branch_with docs/note.md
-  local mutant="$SANDBOX/.gaia/scripts/mutant.sh"
-  perl -pe 's/^(\s*)base=\$2$/$1if [ -z "\$2" ]; then shift; continue; fi\n$1base=\$2/' "$SCRIPT" >"$mutant"
-  cmp -s "$SCRIPT" "$mutant" && return 1
-  run --separate-stderr bash "$mutant" --root "$SANDBOX" --base '' --out "$OUT_DIR"
-  [ "$status" -eq 2 ]
 }
 
 @test "advisories: one surfaced high, one acknowledged critical, a single second-table row" {

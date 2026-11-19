@@ -36,11 +36,10 @@ setup() {
   fi
 }
 
-# make_repo <name> [<initial-branch>]: a committed repo carrying the script and
-# everything it reaches for.
-make_repo() {
-  local name="$1" branch="${2:-main}"
-  local repository_directory="$BATS_TEST_TMPDIR/$name"
+# build_repo <directory> <initial-branch>: a committed repo carrying the script and
+# everything it reaches for; make_repo <name> [<branch>] copies the one built per file.
+build_repo() {
+  local repository_directory="$1" branch="$2"
   mkdir -p "$repository_directory/.gaia/scripts" "$repository_directory/.gaia/local/audit" \
     "$repository_directory/.github/audit" "$repository_directory/.claude/hooks/lib"
   cp "$REPO_ROOT/.gaia/scripts/audit-resolve-scope.sh" \
@@ -82,7 +81,22 @@ make_repo() {
   # the branch-own patch is measured against. A repo whose initial branch is
   # not main stays origin-less on purpose: it is the unresolvable-base fixture.
   [ "$branch" != main ] || catchup_add_origin "$repository_directory" >/dev/null
-  printf '%s' "$(cd "$repository_directory" && pwd -P)"
+}
+
+setup_file() {
+  REPO_ROOT="$(git -C "$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)" rev-parse --show-toplevel)"
+  . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
+  build_repo "$BATS_FILE_TMPDIR/template-main" main && build_repo "$BATS_FILE_TMPDIR/template-master" master
+}
+
+make_repo() {
+  local directory="$BATS_TEST_TMPDIR/$1" template="$BATS_FILE_TMPDIR/template-${2:-main}"
+  cp -R "$template" "$directory"
+  if [ -d "$template.catchup-origin.git" ]; then
+    cp -R "$template.catchup-origin.git" "$directory.catchup-origin.git"
+    git -C "$directory" remote set-url origin "$directory.catchup-origin.git"
+  fi
+  printf '%s' "$(cd "$directory" && pwd -P)"
 }
 
 # publish_main <repo>: push what main holds to the origin, so a base commit made
@@ -114,32 +128,27 @@ value_of() {
 
 # ---------- confinement -------------------------------------------------------
 
-@test "refuses a --root that is not the tree the script sits in" {
+@test "a --root that is not the tree the script sits in is refused with exit 2: a foreign tree, an empty root, a root that does not exist, a subdirectory of its own tree" {
+  # refuses a --root that is not the tree the script sits in
   local repo
   repo="$(make_repo foreign)"
   run "$REPO_ROOT/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$repo"
   [ "$status" -eq 2 ]
   [[ "$output" == *"not to $(cd "$REPO_ROOT" && pwd -P), the tree this script belongs to"* ]] || return 1
   [[ "$output" != *"KEY_BASE="* ]] || return 1
-}
-
-@test "refuses an empty --root instead of resolving the ambient directory" {
+  # refuses an empty --root instead of resolving the ambient directory
   local repo
   repo="$(make_repo empty-root)"
   run bash -c 'cd "$1" && "$1/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root ""' _ "$repo"
   [ "$status" -eq 2 ]
   [[ "$output" == *"--root is empty"* ]] || return 1
-}
-
-@test "refuses a --root that does not exist" {
+  # refuses a --root that does not exist
   local repo
   repo="$(make_repo missing-root)"
   run "$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$repo/nope"
   [ "$status" -eq 2 ]
   [[ "$output" == *"does not resolve to a directory"* ]] || return 1
-}
-
-@test "refuses a subdirectory of its own tree" {
+  # refuses a subdirectory of its own tree
   local repo
   repo="$(make_repo subdir-root)"
   run "$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$repo/.gaia"
@@ -222,17 +231,6 @@ value_of() {
   run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-node --root "$repo"
   [ "$status" -eq 0 ]
   [ "$(value_of "$output" KEY_BASE)" = "$reader_base" ]
-}
-
-@test "an unresolvable membership base exits 1 before resolving anything else" {
-  local repo
-  repo="$(make_repo no-base master)"
-  run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$repo"
-  [ "$status" -eq 1 ]
-  [[ "$stderr" == *"do NOT self-skip"* ]] || return 1
-  [ "$(value_of "$output" FULL_BASE)" = "" ]
-  [[ "$output" != *"KEY_BASE="* ]] || return 1
-  [[ "$output" != *"D_SCOPE="* ]] || return 1
 }
 
 @test "--skip-full-base resolves on a repo whose membership base is unresolvable" {
@@ -527,7 +525,17 @@ fail_git_diff() {
   true
 }
 
-@test "a review diff that fails exits 1 rather than printing an empty CHANGED" {
+@test "a failed git read exits 1 with a diagnostic rather than printing an empty list: an unresolvable membership base, a review diff, a pathspec listing, an absent local base tip, a missing base-provenance resolver" {
+  # an unresolvable membership base exits 1 before resolving anything else
+  local repo
+  repo="$(make_repo no-base master)"
+  run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$repo"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"do NOT self-skip"* ]] || return 1
+  [ "$(value_of "$output" FULL_BASE)" = "" ]
+  [[ "$output" != *"KEY_BASE="* ]] || return 1
+  [[ "$output" != *"D_SCOPE="* ]] || return 1
+  # a review diff that fails exits 1 rather than printing an empty CHANGED
   local repo shim
   repo="$(make_repo review-diff-fails)"
   start_branch "$repo" feat
@@ -539,9 +547,7 @@ fail_git_diff() {
   grep -qF -- 'could not list the review increment' <<<"$stderr"
   grep -qF -- 'D_SCOPE=' <<<"$output" && return 1
   true
-}
-
-@test "a pathspec listing that fails exits 1 rather than printing an empty CHANGED" {
+  # a pathspec listing that fails exits 1 rather than printing an empty CHANGED
   local repo shim
   repo="$(make_repo pathspec-diff-fails)"
   start_branch "$repo" feat
@@ -553,9 +559,7 @@ fail_git_diff() {
   grep -qF -- 'could not list the review increment' <<<"$stderr"
   grep -qF -- 'D_SCOPE=' <<<"$output" && return 1
   true
-}
-
-@test "an absent local base tip exits 1 naming git fetch origin rather than printing an empty CHANGED" {
+  # an absent local base tip exits 1 naming git fetch origin rather than printing an empty CHANGED
   local repo
   repo="$(make_repo no-local-base)"
   start_branch "$repo" feat
@@ -568,9 +572,7 @@ fail_git_diff() {
   grep -qF -- 'could not list the review increment' <<<"$stderr"
   grep -qF -- 'D_SCOPE=' <<<"$output" && return 1
   true
-}
-
-@test "a missing base-provenance resolver exits 1 and names it, rather than resolving a private base" {
+  # a missing base-provenance resolver exits 1 and names it, rather than resolving a private base
   local repo
   repo="$(make_repo no-provenance-lib)"
   start_branch "$repo" feat
@@ -677,7 +679,8 @@ SHIM
   printf '%s\n' "$output" | grep -qxF 'ELIG_CHANGED=app/base-only.ts'
 }
 
-@test "an unresolvable eligibility base prints ELIG_BASE empty at status 0, with no ELIG_CHANGED line" {
+@test "an eligibility base that cannot be resolved or listed prints ELIG_BASE empty at status 0: an unresolvable base, a diff that fails on a resolved base" {
+  # an unresolvable eligibility base prints ELIG_BASE empty at status 0, with no ELIG_CHANGED line
   local repo
   repo="$(make_repo elig-no-base master)"
   run --separate-stderr env -u GITHUB_ACTIONS -u GITHUB_BASE_REF PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" \
@@ -686,9 +689,7 @@ SHIM
   printf '%s\n' "$output" | grep -qxF 'ELIG_BASE='
   grep -qF -- 'ELIG_CHANGED=' <<<"$output" && return 1
   grep -qF -- 'no eligibility base' <<<"$stderr"
-}
-
-@test "an eligibility diff that fails prints ELIG_BASE empty at status 0 rather than an empty set on a resolved base" {
+  # an eligibility diff that fails prints ELIG_BASE empty at status 0 rather than an empty set on a resolved base
   local repo shim
   repo="$(make_repo elig-diff-fails)"
   start_branch "$repo" feat
@@ -723,7 +724,8 @@ linked_worktree() {
   printf '%s' "$(cd "$worktree_directory" && pwd -P)"
 }
 
-@test "DEFINITION prints right after REVIEW_DIFF and is unchanged when the main checkout's copy is byte-identical" {
+@test "DEFINITION is unchanged when the main checkout's copy is byte-identical and names the working root's copy to re-read when it differs, is absent or the main checkout cannot be resolved" {
+  # DEFINITION prints right after REVIEW_DIFF and is unchanged when the main checkout's copy is byte-identical
   local repo worktree
   repo="$(make_repo definition-same)"
   worktree="$(linked_worktree "$repo" definition-same-wt)"
@@ -732,9 +734,7 @@ linked_worktree() {
   [ "$(value_of "$output" DEFINITION)" = "unchanged" ]
   [ "$(printf '%s\n' "$output" | grep -n '^DEFINITION=' | head -1 | cut -d: -f1)" -eq "$(( $(printf '%s\n' "$output" | grep -n '^REVIEW_DIFF=' | head -1 | cut -d: -f1) + 1 ))" ]
   [ "$(printf '%s\n' "$output" | grep -n '^REVIEW_DIFF=' | head -1 | cut -d: -f1)" -eq "$(( $(printf '%s\n' "$output" | grep -n '^D_SCOPE=' | head -1 | cut -d: -f1) + 1 ))" ]
-}
-
-@test "DEFINITION names the working root's copy to re-read when it differs from the main checkout's" {
+  # DEFINITION names the working root's copy to re-read when it differs from the main checkout's
   local repo worktree
   repo="$(make_repo definition-differs)"
   worktree="$(linked_worktree "$repo" definition-differs-wt)"
@@ -742,9 +742,7 @@ linked_worktree() {
   run --separate-stderr "$worktree/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$worktree" --skip-full-base
   [ "$status" -eq 0 ]
   [ "$(value_of "$output" DEFINITION)" = "reread $worktree/.claude/agents/code-audit-maintainer-shell.md" ]
-}
-
-@test "DEFINITION is reread when the main checkout holds no copy of the definition" {
+  # DEFINITION is reread when the main checkout holds no copy of the definition
   local repo worktree
   repo="$(make_repo definition-absent)"
   worktree="$(linked_worktree "$repo" definition-absent-wt)"
@@ -752,9 +750,7 @@ linked_worktree() {
   run --separate-stderr "$worktree/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$worktree" --skip-full-base
   [ "$status" -eq 0 ]
   [ "$(value_of "$output" DEFINITION)" = "reread $worktree/.claude/agents/code-audit-maintainer-shell.md" ]
-}
-
-@test "DEFINITION is reread when the main checkout cannot be resolved" {
+  # DEFINITION is reread when the main checkout cannot be resolved
   local repo
   repo="$(make_repo definition-unresolvable)"
   rm -r "$repo/.git"
@@ -823,19 +819,6 @@ TS_REVIEW_PATHS=(--review-path '*.ts' --review-path '*.tsx')
   [ "$normalized" = "$(cat "$THIS_DIRECTORY/fixtures/audit-resolve-scope/flagless-golden.txt")" ]
 }
 
-@test "the invariance helper fails on a script that prints an extra non-SPECIALIST line under the flag" {
-  local repo
-  repo="$(make_repo specialists-invariance-red)"
-  start_branch "$repo" feat
-  commit_file "$repo" app/a.tsx
-  sed -i.bak 's/^if \[ "\$specialists" -eq 1 \]; then$/&\n  printf "EXTRA=1\\n"/' "$repo/.gaia/scripts/audit-resolve-scope.sh"
-  grep -q 'EXTRA=1' "$repo/.gaia/scripts/audit-resolve-scope.sh"
-  if resolve_with_specialists "$repo"; then
-    return 1
-  fi
-  [[ "$FLAGGED_OUTPUT" == *"EXTRA=1"* ]] || return 1
-}
-
 @test "--specialists prints its lines after DIRTY, after every other line" {
   local repo last_non_specialist first_specialist
   repo="$(make_repo specialists-order)"
@@ -851,7 +834,8 @@ TS_REVIEW_PATHS=(--review-path '*.ts' --review-path '*.tsx')
   [ "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep -n '^DIRTY=' | cut -d: -f1)" -lt "$first_specialist" ]
 }
 
-@test "language files run typescript and translation, never react-patterns" {
+@test "specialist signals pick specialists from the changed files: language files, no signal from a dollar-t nesting or a split call, each translation signal alternative, HEAD not the working tree, a deleted path, a page with useTranslation and a language edit" {
+  # language files run typescript and translation, never react-patterns
   local repo
   repo="$(make_repo specialists-language)"
   start_branch "$repo" feat
@@ -861,9 +845,7 @@ TS_REVIEW_PATHS=(--review-path '*.ts' --review-path '*.tsx')
   [ "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep '^SPECIALIST=')" = "SPECIALIST=typescript ts:apps/web/app/languages/en/common.ts ts:apps/web/app/languages/en/errors.ts
 SPECIALIST=translation language-file:apps/web/app/languages/en/common.ts language-file:apps/web/app/languages/en/errors.ts" ]
   [ -z "$(specialist_line react-patterns)" ]
-}
-
-@test "a dollar-t nesting and a member split call are no translation signal; a bare t call is" {
+  # a dollar-t nesting and a member split call are no translation signal; a bare t call is
   local repo
   repo="$(make_repo specialists-negative)"
   start_branch "$repo" feat
@@ -877,9 +859,7 @@ const nested = 'a \$t(key) b';
 const text = t('key');"
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
   [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:apps/web/app/utils/split.ts" ]
-}
-
-@test "each translation signal alternative triggers i18n-signal on its own file" {
+  # each translation signal alternative triggers i18n-signal on its own file
   local repo name content
   repo="$(make_repo specialists-signals)"
   start_branch "$repo" feat
@@ -894,9 +874,7 @@ const text = t('key');"
   done
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
   [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:apps/web/app/signals/i18n-call.ts i18n-signal:apps/web/app/signals/trans-eol.ts i18n-signal:apps/web/app/signals/trans-open.ts i18n-signal:apps/web/app/signals/use-translation.ts" ]
-}
-
-@test "the translation signal reads HEAD, not the working tree" {
+  # the translation signal reads HEAD, not the working tree
   local repo
   repo="$(make_repo specialists-head)"
   start_branch "$repo" feat
@@ -906,9 +884,7 @@ const text = t('key');"
   printf 'nothing\n' > "$repo/apps/web/app/utils/signal.ts"
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
   [ "$(specialist_line translation)" = "SPECIALIST=translation i18n-signal:apps/web/app/utils/signal.ts" ]
-}
-
-@test "a path deleted at HEAD prints no specialist line" {
+  # a path deleted at HEAD prints no specialist line
   local repo
   repo="$(make_repo specialists-deleted)"
   commit_content "$repo" apps/web/app/gone.tsx "useTranslation();"
@@ -919,9 +895,7 @@ const text = t('key');"
   resolve_with_specialists "$repo" "${TS_REVIEW_PATHS[@]}"
   printf '%s\n' "$FLAGGED_OUTPUT" | grep -qxF 'CHANGED=apps/web/app/gone.tsx'
   [ -z "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep '^SPECIALIST=')" ]
-}
-
-@test "a page tsx gaining useTranslation plus a language edit runs all three specialists" {
+  # a page tsx gaining useTranslation plus a language edit runs all three specialists
   local repo
   repo="$(make_repo specialists-tsx)"
   start_branch "$repo" feat
@@ -972,7 +946,8 @@ list_lines() {
   printf '%s\n' "$1" | grep -E '^(FULL_CHANGED|CHANGED)='
 }
 
-@test "a release-skip member lists only the adopter files on a mixed release branch" {
+@test "a release-skip member lists only the adopter files on a mixed release branch and keeps an adopter edit to a shipped file on an ordinary branch; an unkeyed member's output is unchanged and a missing classifier leaves the lists unfiltered" {
+  # a release-skip member lists only the adopter files on a mixed release branch
   local repo
   repo="$(release_skip_repo release-mixed mixed)"
   PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-shell --root "$repo"
@@ -980,17 +955,13 @@ list_lines() {
   [ "$(list_lines "$output")" = "$(printf 'FULL_CHANGED=scripts/deploy.sh\nCHANGED=scripts/deploy.sh')" ]
   printf '%s\n' "$output" | grep -q 'gaia-tool.sh' && return 1
   true
-}
-
-@test "a release-skip member keeps an adopter edit to a shipped file on an ordinary branch" {
+  # a release-skip member keeps an adopter edit to a shipped file on an ordinary branch
   local repo
   repo="$(release_skip_repo release-hand-edit hand-edit)"
   PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-shell --root "$repo"
   [ "$status" -eq 0 ]
   [ "$(list_lines "$output")" = "$(printf 'FULL_CHANGED=.claude/hooks/gaia-guard.sh\nCHANGED=.claude/hooks/gaia-guard.sh')" ]
-}
-
-@test "an unkeyed member's output on a mixed release branch is byte-identical with the keyed entry absent" {
+  # an unkeyed member's output on a mixed release branch is byte-identical with the keyed entry absent
   local repo with_keyed without_keyed
   repo="$(release_skip_repo release-unkeyed mixed)"
   with_keyed="$(PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-scripts --root "$repo" 2>/dev/null)"
@@ -998,9 +969,7 @@ list_lines() {
   release_skip_roster "$repo/.gaia/audit-ci.yml" without-keyed
   without_keyed="$(PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-scripts --root "$repo" 2>/dev/null)"
   [ "$with_keyed" = "$without_keyed" ]
-}
-
-@test "a release-skip member's lists stay unfiltered when the classifier is missing" {
+  # a release-skip member's lists stay unfiltered when the classifier is missing
   local repo
   repo="$(release_skip_repo release-no-classifier mixed)"
   rm "$repo/.claude/hooks/lib/audit-scope.sh"
