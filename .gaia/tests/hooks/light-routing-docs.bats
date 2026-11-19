@@ -2,7 +2,6 @@
 # Reproducing test for the first wait step of the audit-loop unit's "Waiting
 # for a dispatch" subsection: it prints the time before it sleeps, on one line.
 #
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {

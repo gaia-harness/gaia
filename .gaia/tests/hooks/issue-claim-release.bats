@@ -513,7 +513,7 @@ reset_hook_state() {
   [ "$(grep -cxF -- "gaia-react/gaia" "$FAKE_GH_STATE/issue_edit_repos")" -eq 1 ] || { echo "case 7h"; return 1; }
 
 # 7ae and 7af: gh's flag library accepts a shorthand with its value attached,
-# so `-Rother-org/other-repo` is the same invocation as the spaced `-R` of 7l.
+# so `-Rother-org/other-repo` sets the repository as the spaced `-R` of 7l does.
 # Read as a bare boolean flag it sets no repository at all, and the whole-slug
 # boundary check never arms: the hook then reads THIS repository's pull request 5.
   reset_hook_state
