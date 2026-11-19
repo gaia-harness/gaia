@@ -14,7 +14,7 @@ paths:
 
 A guard (test assertion, lint script, CI condition, hook precondition) is only evidence a construct holds when red is reachable. Before relying on one:
 
-- **Prove it can fail.** Break the construct, run the guard, confirm red; restore, confirm green. Commit an awkward-to-hand-break case as a fixture instead.
+- **Prove it can fail.** Break the construct, run the guard, confirm red; restore, confirm green. Commit an awkward-to-hand-break case only as the guard's real deny-case input, never as a mutant of the guard or its checker.
 - **Assert the input set is non-empty and the expected size**, derived from the same source the rule binds to.
 - **Stage a new guard and its sibling suite before the run that validates them** (or confirm their paths appear in the discovery output): both are untracked at the moment they are first run, which is exactly when a discovery over tracked files cannot see them, and that first-run "clean" is indistinguishable from a real one.
 
