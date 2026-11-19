@@ -243,6 +243,7 @@ vhf_empty_candidates() {
 # The linter is always the stub, and naming it removes even that.
 vhf_path_without() {
   local farm="$BATS_TEST_TMPDIR/farm" path_directory command_path omitted
+  local -a links
   local saved_ifs="$IFS"
   rm -rf "$farm"
   mkdir -p "$farm"
@@ -251,11 +252,14 @@ vhf_path_without() {
     IFS="$saved_ifs"
     [ "$path_directory" = "$VHF_SHIM" ] && continue
     [ -d "$path_directory" ] || continue
+    links=()
     for command_path in "$path_directory"/*; do
       [ -x "$command_path" ] && [ ! -d "$command_path" ] || continue
       [ -L "$farm/${command_path##*/}" ] && continue
-      ln -s "$command_path" "$farm/"
+      links+=("$command_path")
     done
+    # One ln per directory, not per executable: a PATH holds ~1750 commands.
+    [ "${#links[@]}" -eq 0 ] || ln -s "${links[@]}" "$farm/"
   done
   IFS="$saved_ifs"
   rm -f "$farm/shellcheck"
