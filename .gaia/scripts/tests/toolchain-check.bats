@@ -253,17 +253,21 @@ route_line() {
   mkdir -p "$STUBS/nvm"
   printf 'x\n' >"$STUBS/nvm/nvm.sh"
   run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
-  local pnpm_command
+  local pnpm_command project_root
   pnpm_command="$(route_line pnpm)"
   pnpm_command="${pnpm_command#ROUTE pnpm run }"
   [ -n "$pnpm_command" ]
-  [ "$(route_line node)" = "ROUTE node terminal nvm install && nvm alias default \"\$(nvm current)\" && { $pnpm_command; }" ]
+  project_root="$(printf '%q' "$PWD")"
+  [ "$(route_line node)" = "ROUTE node terminal cd $project_root && nvm install && nvm alias default \"\$(nvm current)\" && { $pnpm_command; }" ]
   stub fnm 'fnm 1.38.1'
   run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform linux --os-id debian
-  [ "$(route_line node)" = "ROUTE node terminal fnm install && fnm use && fnm default \"\$(fnm current)\" && { $pnpm_command; }" ]
+  [ "$(route_line node)" = "ROUTE node terminal cd $project_root && fnm install && fnm use && fnm default \"\$(fnm current)\" && { $pnpm_command; }" ]
   check --platform windows
   [ "$status" -eq 1 ]
   [ -z "$(route_line node)" ]
+  [[ "$output" == *"GUIDE node: "*"with fnm: run fnm install from the project root"* ]]
+  grep -qF 'nvm install' <<<"$output" && return 1
+  true
 }
 
 @test "no ROUTE line without an exact command, and none for a passing tool" {

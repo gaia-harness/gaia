@@ -197,7 +197,12 @@ guide() {
       printf 'GUIDE %s: %s: %s. %s\n' "$tool" "$lead" "$(package_route "$tool")" "$(tool_reason "$tool")"
       ;;
     node)
-      printf 'GUIDE node: Install the Node version .nvmrc and .node-version pin with nvm or fnm: run nvm install or fnm install from the project root, then make it your default. Then reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. %s\n' "$(tool_reason node)"
+      # nvm-windows ignores .nvmrc and needs an explicit version, so Windows
+      # hears only of fnm.
+      lead='nvm or fnm: run nvm install or fnm install'
+      [ "$PLATFORM" != windows ] || lead='fnm: run fnm install'
+      printf 'GUIDE node: Install the Node version .nvmrc and .node-version pin with %s from the project root, then make it your default. Then' "$lead"
+      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. %s\n' "$(tool_reason node)"
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
@@ -235,14 +240,18 @@ PNPM_INSTALL='corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
 # Global packages stay with the old Node, so pnpm is reinstalled under the new
 # one. nvm is a shell function, invisible to command -v here, so its install
 # script stands in for it. Windows gets no route: these commands are bash.
-# The $(...) stays unexpanded: it is printed for the user's shell.
+# Callers run this check from the project root, but a fresh terminal opens
+# elsewhere, so the route changes there first for the managers to find the
+# version files. The $(...) stays unexpanded: it is printed for the user's shell.
 # shellcheck disable=SC2016
 node_route() {
+  local project_root
   [ "$PLATFORM" != windows ] || return 0
+  project_root="$(printf '%q' "$PWD")"
   if command -v fnm >/dev/null 2>&1; then
-    printf 'terminal fnm install && fnm use && fnm default "$(fnm current)" && { %s; }' "$PNPM_INSTALL"
+    printf 'terminal cd %s && fnm install && fnm use && fnm default "$(fnm current)" && { %s; }' "$project_root" "$PNPM_INSTALL"
   elif [ -s "${NVM_DIR:-${HOME:-}/.nvm}/nvm.sh" ]; then
-    printf 'terminal nvm install && nvm alias default "$(nvm current)" && { %s; }' "$PNPM_INSTALL"
+    printf 'terminal cd %s && nvm install && nvm alias default "$(nvm current)" && { %s; }' "$project_root" "$PNPM_INSTALL"
   fi
 }
 
