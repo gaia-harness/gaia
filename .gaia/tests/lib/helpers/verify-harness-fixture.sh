@@ -237,10 +237,13 @@ vhf_empty_candidates() {
 }
 
 # vhf_path_without <tool...>: print a PATH directory holding every command of
-# the current PATH except the named ones. The linter is always the stub, and
-# naming it removes even that.
+# the current PATH except the named ones. Each name links to its first
+# executable non-directory entry on PATH, as PATH lookup resolves it, so a
+# non-executable file or a directory earlier on PATH never shadows the command.
+# The linter is always the stub, and naming it removes even that.
 vhf_path_without() {
-  local farm="$BATS_TEST_TMPDIR/farm" path_directory omitted
+  local farm="$BATS_TEST_TMPDIR/farm" path_directory command_path omitted
+  local -a links
   local saved_ifs="$IFS"
   rm -rf "$farm"
   mkdir -p "$farm"
@@ -249,7 +252,15 @@ vhf_path_without() {
     IFS="$saved_ifs"
     [ "$path_directory" = "$VHF_SHIM" ] && continue
     [ -d "$path_directory" ] || continue
-    ln -s "$path_directory"/* "$farm"/ 2>/dev/null
+    links=()
+    for command_path in "$path_directory"/*; do
+      [ -x "$command_path" ] && [ ! -d "$command_path" ] || continue
+      [ -L "$farm/${command_path##*/}" ] && continue
+      links+=("$command_path")
+    done
+    # One ln per directory, not per executable: a fork per command on PATH
+    # makes building the farm slow.
+    [ "${#links[@]}" -eq 0 ] || ln -s "${links[@]}" "$farm/"
   done
   IFS="$saved_ifs"
   rm -f "$farm/shellcheck"
