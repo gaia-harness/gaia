@@ -22,8 +22,8 @@
 # `--paths-from` narrows the shellcheck passes and the bash-3.2 parse pass to
 # the tracked files the given NUL-delimited list names; a pass whose set comes
 # back empty is skipped, not failed. The folded guards still scan the whole
-# tree: each treats an empty surface as a hard error, so a delta holding none
-# of a guard's file types would red it. `verify-harness.sh round` passes the
+# tree: they take no path list, and most treat an empty surface as a hard
+# error, so a delta holding none of a guard's file types would red them. `verify-harness.sh round` passes the
 # round's delta here; branch mode and CI lint the whole tree.
 #
 # `--only bash32-parse` runs the bash-3.2 parse pass and nothing else. That is
@@ -177,19 +177,6 @@ if [ -z "$ONLY_PASS" ]; then
   fi
 fi
 
-# Tracked files only. Worktrees under .claude/worktrees/ are untracked checkouts
-# of these same scripts, so `git ls-files` never double-counts them.
-#
-# Collected with a read loop rather than `mapfile`: mapfile is bash 4+, and these
-# scripts are authored and run on stock macOS /bin/bash (3.2.57).
-#
-# NUL-delimited, because under git's default `core.quotePath` a tracked path
-# carrying a non-ASCII byte prints C-quoted (`"caf\303\251.sh"`). The quoted
-# form fails the `[ -f ]` test every consumer applies and is dropped silently,
-# so the pass reports clean having never opened the file. The empty-set guard
-# below cannot catch that: the other files match normally, so the set is not
-# empty. `.gaia/scripts/lint-git-path-quoting.sh` is the check that keeps this
-# whole family quoted.
 # narrow_to_paths_from: pass through, NUL-delimited, the paths on stdin that the
 # --paths-from list names; with no list, every path. A case match on the joined
 # list rather than an associative array, which bash 3.2 lacks.
@@ -210,6 +197,19 @@ narrow_to_paths_from() {
   done
 }
 
+# Tracked files only. Worktrees under .claude/worktrees/ are untracked checkouts
+# of these same scripts, so `git ls-files` never double-counts them.
+#
+# Collected with a read loop rather than `mapfile`: mapfile is bash 4+, and these
+# scripts are authored and run on stock macOS /bin/bash (3.2.57).
+#
+# NUL-delimited, because under git's default `core.quotePath` a tracked path
+# carrying a non-ASCII byte prints C-quoted (`"caf\303\251.sh"`). The quoted
+# form fails the `[ -f ]` test every consumer applies and is dropped silently,
+# so the pass reports clean having never opened the file. The empty-set guard
+# below cannot catch that: the other files match normally, so the set is not
+# empty. `.gaia/scripts/lint-git-path-quoting.sh` is the check that keeps this
+# whole family quoted.
 sh_scripts=()
 while IFS= read -r -d '' tracked_path; do
   sh_scripts+=("$tracked_path")

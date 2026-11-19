@@ -249,7 +249,7 @@ gate_pass_headers() {
 # a bare `printf`, no `>&2`) rather than derived live -- a stub rig is
 # allowed to assume the shape it stands in for. No count here: the list goes
 # stale by gaining a member, and a cardinal beside it would only go stale
-# twice. Re-derive it with `grep -n ': clean' .gaia/scripts/lint-*.sh` when a
+# twice. Re-derive it with `grep -n ': clean' .gaia/scripts/lint-*.sh .gaia/scripts/check-*.sh` when a
 # guard is folded in.
 #
 # Prints one `SHELL_LINT_GUARD_OVERRIDE_<slug>=<path>` line per folded guard,
@@ -260,7 +260,7 @@ gate_pass_headers() {
 # Args: <directory to write stub scripts into>
 stub_all_guards() {
   local directory="$1" stdout_guards pass_name script stream_redirect variable_name
-  stdout_guards="lint-hook-jq-availability"
+  stdout_guards="lint-hook-jq-availability check-retired-paths"
   while IFS= read -r pass_name; do
     case "$pass_name" in lint-* | check-*) ;; *) continue ;; esac
     script="$directory/$pass_name.stub.sh"

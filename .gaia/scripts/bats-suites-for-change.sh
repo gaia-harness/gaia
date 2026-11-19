@@ -7,9 +7,9 @@
 # audit round. In branch mode the runner subtracts this output from the
 # whole-tree-marked suites and runs it in full; round mode runs it alone.
 #
-# A suite is selected when it contains a changed file's match text as a fixed
-# string, unless it declares that file fixture-only (the `fixture-only` block
-# below), or when it is itself a changed suite that still exists. The match
+# A suite is selected when it is itself a changed suite that still exists, or
+# when it contains a changed file's match text as a fixed string and does not
+# declare that file fixture-only (the `fixture-only` block below). The match
 # text is the basename, because a suite names the file it tests through a
 # directory variable and the bare name (`"$SCRIPTS/usage-lib.sh"`), with two
 # exceptions where the bare name is mostly fixture data (a staged path, a hook
