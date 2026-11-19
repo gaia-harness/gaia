@@ -128,6 +128,7 @@ tally_value() {
 # anchor_kind as JSON (MISSING when the event has no such key).
 route_event_anchor_kind() {
   local record="$LIGHT_DIRECTORY/$DIGEST.$MEMBER.route.json"
+  rm -f "$LOG"
   write_light_route_record
   if [ "$1" != "-" ]; then
     jq -c --argjson kind "$1" '. + {anchor_kind: $kind}' "$record" > "$record.tmp"
@@ -137,24 +138,21 @@ route_event_anchor_kind() {
   jq -c 'if has("anchor_kind") then .anchor_kind else "MISSING" end' "$LOG"
 }
 
-@test "route copies a merge-base anchor_kind from the record" {
+@test "anchor_kind reaches the event: copied from the route record (merge-base, full, null, absent) and from the outcome flag (merge-base, absent)" {
   enable_maintainer_repo
   [ "$(route_event_anchor_kind '"merge-base"')" = '"merge-base"' ]
-}
-
-@test "route copies a full anchor_kind from the record" {
-  enable_maintainer_repo
   [ "$(route_event_anchor_kind '"full"')" = '"full"' ]
-}
-
-@test "route writes a null anchor_kind when the record's is null" {
-  enable_maintainer_repo
   [ "$(route_event_anchor_kind 'null')" = 'null' ]
-}
-
-@test "route writes a null anchor_kind when the record has no such key" {
-  enable_maintainer_repo
   [ "$(route_event_anchor_kind '-')" = 'null' ]
+  rm -f "$LOG" "$LIGHT_DIRECTORY/$DIGEST.$MEMBER.route.json"
+  run run_outcome --verdict clear --anchor-kind merge-base
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(jq -c '.anchor_kind' "$LOG")" = '"merge-base"' ]
+  rm -f "$LOG"
+  run run_outcome --verdict clear
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '.anchor_kind' "$LOG")" = 'null' ]
 }
 
 @test "route with an unparseable record exits 0 and writes nothing" {
@@ -189,7 +187,7 @@ route_event_anchor_kind() {
   [ "$(jq -r '.tree' <<<"$event")" = "$TREE" ]
 }
 
-@test "outcome with no route record at the digest still appends, with the four copied fields null" {
+@test "outcome with no readable route record still appends, with the copied fields null: absent record, unparseable record, member climbing out of the light directory" {
   enable_maintainer_repo
   run run_outcome --verdict escalate
   [ "$status" -eq 0 ]
@@ -202,10 +200,7 @@ route_event_anchor_kind() {
   [ "$(jq -r '.tokens' <<<"$event")" = "null" ]
   [ "$(jq -r '.duration_ms' <<<"$event")" = "null" ]
   [ "$(jq -r '.verdict' <<<"$event")" = "escalate" ]
-}
-
-@test "outcome with an unparseable route record still appends, with the four copied fields null" {
-  enable_maintainer_repo
+  rm -f "$LOG"
   printf 'not json' > "$LIGHT_DIRECTORY/$DIGEST.$MEMBER.route.json"
   run run_outcome --verdict failed
   [ "$status" -eq 0 ]
@@ -213,10 +208,7 @@ route_event_anchor_kind() {
   [ "$(jq -r '.route' <<<"$event")" = "null" ]
   [ "$(jq -r '.files' <<<"$event")" = "null" ]
   [ "$(jq -r '.verdict' <<<"$event")" = "failed" ]
-}
-
-@test "outcome names a member that could climb out of the light directory: no record is read" {
-  enable_maintainer_repo
+  rm -f "$LOG"
   write_light_route_record
   run bash "$SCRIPT" outcome --root "$ROOT" --member "../audit/light/../$MEMBER" --digest "$DIGEST" --tree "$TREE" --verdict clear
   [ "$status" -eq 0 ]
@@ -224,31 +216,11 @@ route_event_anchor_kind() {
   [ "$(jq -r '.route' <<<"$event")" = "null" ]
 }
 
-@test "outcome --anchor-kind merge-base writes the field" {
-  enable_maintainer_repo
-  run run_outcome --verdict clear --anchor-kind merge-base
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ "$(jq -c '.anchor_kind' "$LOG")" = '"merge-base"' ]
-}
-
-@test "outcome without --anchor-kind writes a null anchor_kind" {
-  enable_maintainer_repo
-  run run_outcome --verdict clear
-  [ "$status" -eq 0 ]
-  [ "$(jq -c '.anchor_kind' "$LOG")" = 'null' ]
-}
-
-@test "outcome --anchor-kind with an unknown value exits 0 and appends nothing" {
+@test "outcome swallows a bad argument: an unknown anchor kind or verdict exits 0 and appends nothing" {
   enable_maintainer_repo
   run run_outcome --verdict clear --anchor-kind bogus
   [ "$status" -eq 0 ]
   [ -e "$LOG" ] && return 1
-  true
-}
-
-@test "outcome refuses an unknown verdict: exit 0, nothing written" {
-  enable_maintainer_repo
   run run_outcome --verdict maybe
   [ "$status" -eq 0 ]
   [ -e "$LOG" ] && return 1
@@ -295,7 +267,7 @@ route_event_anchor_kind() {
   [ "$(tail -n 1 "$LOG" | jq -r '.result')" = "cleared" ]
 }
 
-@test "member-result writes no follow-up when the light outcome was clear" {
+@test "member-result writes no follow-up when the light outcome was clear or the newest route on this tree was full" {
   enable_maintainer_repo
   write_light_route_record
   run_route
@@ -304,10 +276,7 @@ route_event_anchor_kind() {
   [ "$(jq -r 'select(.event == "member_result") | .event' "$LOG")" = "member_result" ]
   followups="$(jq -r 'select(.event == "escalation_followup") | .event' "$LOG")"
   [ -z "$followups" ]
-}
-
-@test "member-result writes no follow-up when the newest route on this tree was full" {
-  enable_maintainer_repo
+  rm -f "$LOG"
   write_route_record "$LIGHT_DIRECTORY/$DIGEST.$MEMBER.route.json" full over-cap '[]'
   run_route
   run_outcome --verdict escalate
@@ -369,7 +338,7 @@ route_event_anchor_kind() {
 # tally
 # ---------------------------------------------------------------------------
 
-@test "tally on an absent log exits 0 with zero counts and n/a ratios" {
+@test "tally on an absent log exits 0 with zero counts, n/a ratios and the kill-rule figures at zero" {
   run bash "$SCRIPT" tally --root "$ROOT"
   [ "$status" -eq 0 ]
   grep -qxF 'rotations: 0' <<<"$output"
@@ -384,10 +353,20 @@ route_event_anchor_kind() {
   grep -qxF 'baseline_tokens: 3300000' <<<"$output"
   grep -qxF 'baseline_source: default' <<<"$output"
   grep -qxF 'light_spend_vs_member_spend: n/a' <<<"$output"
+  grep -qxF 'window_prs: 0' <<<"$output"
+  grep -qxF 'eligible_reaudits: 0' <<<"$output"
+  grep -qxF 'light_cleared: 0' <<<"$output"
+  grep -qxF 'light_cleared_rate: n/a' <<<"$output"
+  grep -qxF 'quick_routes: 0' <<<"$output"
+  grep -qxF 'quick_cleared: 0' <<<"$output"
 }
 
-@test "tally rejects a non-numeric baseline with exit 2" {
+@test "tally rejects a bad numeric flag with exit 2: a non-numeric baseline, a zero window, a non-numeric window" {
   run bash "$SCRIPT" tally --root "$ROOT" --baseline-tokens many
+  [ "$status" -eq 2 ]
+  run bash "$SCRIPT" tally --root "$ROOT" --window 0
+  [ "$status" -eq 2 ]
+  run bash "$SCRIPT" tally --root "$ROOT" --window many
   [ "$status" -eq 2 ]
 }
 
@@ -413,7 +392,6 @@ write_route_events() {
   [ "$(tally_value rotations)" = "9" ]
   [ "$(tally_value light_routes)" = "2" ]
   [ "$(tally_value engagement_rate)" = "0.67" ]
-
 }
 
 @test "tally reports escalation rate, counts outcomes with no cost event as unmeasured, and skips a torn line" {
@@ -442,22 +420,17 @@ prepare_light_miss() {
   run_member_result
 }
 
-@test "a full-member finding inside a range an earlier light clear covered is a light miss" {
+@test "light miss: a finding inside a range an earlier light clear covered is one; outside the range, on an uncovered path, or before the clear it is not" {
+  rm -f "$LOG"
   prepare_light_miss apps/web/app/x.tsx 12
   [ "$(tally_value light_misses)" = "1" ]
-}
-
-@test "a finding outside the covered ranges is not a light miss" {
+  rm -f "$LOG"
   prepare_light_miss apps/web/app/x.tsx 40
   [ "$(tally_value light_misses)" = "0" ]
-}
-
-@test "a finding on a path the light review did not cover is not a light miss" {
+  rm -f "$LOG"
   prepare_light_miss apps/web/app/other.tsx 12
   [ "$(tally_value light_misses)" = "0" ]
-}
-
-@test "a finding before the light clear is not a light miss" {
+  rm -f "$LOG"
   enable_maintainer_repo
   write_light_route_record '[[10,14]]'
   run_route
@@ -508,53 +481,19 @@ write_kill_log() {
   log_event route b4 "$SHELL_MEMBER" light-eligible
 }
 
-@test "tally on an absent log prints the kill-rule figures as zero" {
-  run bash "$SCRIPT" tally --root "$ROOT"
-  [ "$status" -eq 0 ]
-  grep -qxF 'window_prs: 0' <<<"$output"
-  grep -qxF 'eligible_reaudits: 0' <<<"$output"
-  grep -qxF 'light_cleared: 0' <<<"$output"
-  grep -qxF 'light_cleared_rate: n/a' <<<"$output"
-  grep -qxF 'quick_routes: 0' <<<"$output"
-  grep -qxF 'quick_cleared: 0' <<<"$output"
-}
-
-@test "tally prints the window PR count, the eligible re-audit count and the light-cleared count over the fixture log" {
+@test "eligible re-audit and light-cleared counts, overall and per member, follow the fixture log and its one-event variants" {
   write_kill_log
   [ "$(tally_value window_prs)" = "3" ]
   [ "$(tally_value eligible_reaudits)" = "4" ]
   [ "$(tally_value light_cleared)" = "2" ]
   [ "$(tally_value light_cleared_rate)" = "0.50" ]
-}
-
-@test "tally prints the eligible and light-cleared counts per member" {
+  rm -f "$LOG"
   write_kill_log
   [ "$(tally_value "eligible_reaudits[$FRONTEND_MEMBER]")" = "2" ]
   [ "$(tally_value "light_cleared[$FRONTEND_MEMBER]")" = "1" ]
   [ "$(tally_value "eligible_reaudits[$SHELL_MEMBER]")" = "2" ]
   [ "$(tally_value "light_cleared[$SHELL_MEMBER]")" = "1" ]
-}
-
-# Each figure below is driven by a fixture that differs from write_kill_log by
-# one event, so a tally that printed a constant or the wrong count fails.
-@test "the window PR count changes with a branch that touches the frontend remit, and with nothing else" {
-  write_kill_log
-  log_event route b5 "$FRONTEND_MEMBER" not-opted-in
-  [ "$(tally_value window_prs)" = "4" ]
-  [ "$(tally_value eligible_reaudits)" = "4" ]
-  [ "$(tally_value light_cleared)" = "2" ]
-}
-
-@test "a branch only another member touched is outside the window" {
-  write_kill_log
-  log_event route b6 "$SHELL_MEMBER" over-cap
-  log_event outcome b6 "$SHELL_MEMBER" clear
-  [ "$(tally_value window_prs)" = "3" ]
-  [ "$(tally_value eligible_reaudits)" = "4" ]
-  [ "$(tally_value light_cleared)" = "2" ]
-}
-
-@test "the eligible re-audit count changes with one more eligible route event, and with an excluded reason it does not" {
+  rm -f "$LOG"
   write_kill_log
   log_event route b1 "$SHELL_MEMBER" hard-full
   [ "$(tally_value eligible_reaudits)" = "5" ]
@@ -564,9 +503,7 @@ write_kill_log() {
   log_event route b1 "$SHELL_MEMBER" not-opted-in
   log_event route b1 "$SHELL_MEMBER" no-full-clearance
   [ "$(tally_value eligible_reaudits)" = "5" ]
-}
-
-@test "the light-cleared count changes with one more clear and not with an escalate" {
+  rm -f "$LOG"
   write_kill_log
   log_event outcome b3 "$FRONTEND_MEMBER" clear
   [ "$(tally_value light_cleared)" = "3" ]
@@ -576,20 +513,28 @@ write_kill_log() {
   [ "$(tally_value light_cleared)" = "3" ]
 }
 
-@test "the window keeps the most recent branches that touched the frontend remit" {
+# Each figure below is driven by a fixture that differs from write_kill_log by
+# one event, so a tally that printed a constant or the wrong count fails.
+@test "the window holds the most recent branches with a frontend event: an extra frontend branch counts, another member alone does not, --window limits it" {
+  write_kill_log
+  log_event route b5 "$FRONTEND_MEMBER" not-opted-in
+  [ "$(tally_value window_prs)" = "4" ]
+  [ "$(tally_value eligible_reaudits)" = "4" ]
+  [ "$(tally_value light_cleared)" = "2" ]
+  rm -f "$LOG"
+  write_kill_log
+  log_event route b6 "$SHELL_MEMBER" over-cap
+  log_event outcome b6 "$SHELL_MEMBER" clear
+  [ "$(tally_value window_prs)" = "3" ]
+  [ "$(tally_value eligible_reaudits)" = "4" ]
+  [ "$(tally_value light_cleared)" = "2" ]
+  rm -f "$LOG"
   write_kill_log
   [ "$(tally_value window_prs --window 1)" = "1" ]
   [ "$(tally_value eligible_reaudits --window 1)" = "2" ]
   [ "$(tally_value light_cleared --window 1)" = "0" ]
   [ "$(tally_value window_prs --window 2)" = "2" ]
   [ "$(tally_value light_cleared --window 2)" = "1" ]
-}
-
-@test "tally rejects a window that is not a positive integer" {
-  run bash "$SCRIPT" tally --root "$ROOT" --window 0
-  [ "$status" -eq 2 ]
-  run bash "$SCRIPT" tally --root "$ROOT" --window many
-  [ "$status" -eq 2 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -706,12 +651,23 @@ tally_with_and_without_cost() {
   cost_figures="$(bash "$script" tally --root "$ROOT" "$@")"
 }
 
-@test "tally output is byte-identical with cost events interleaved, in a window the cost-only branch would enter and in the default window" {
+@test "tally output is byte-identical with cost events interleaved, and the kill-rule figures hold with complete cost events on a branch of their own" {
   tally_with_and_without_cost "$SCRIPT" --window 3
   [ -n "$plain_figures" ]
   [ "$plain_figures" = "$cost_figures" ]
   tally_with_and_without_cost "$SCRIPT"
   [ "$plain_figures" = "$cost_figures" ]
+  rm -f "$LOG"
+  write_spend_log
+  log_spend_cost member b-cost-only "$FRONTEND_MEMBER" m10 1000000
+  log_spend_cost light_reviewer b-cost-only "$FRONTEND_MEMBER" d10 1000000
+  kill_lines='^(window_prs|eligible_reaudits|light_cleared|light_cleared_rate|quick_routes|quick_cleared)(\[|:)'
+  with_cost="$(bash "$SCRIPT" tally --root "$ROOT" --window 3 | grep -E "$kill_lines")"
+  grep -v '"dispatch_cost"' "$LOG" > "$LOG.plain"
+  mv "$LOG.plain" "$LOG"
+  without_cost="$(bash "$SCRIPT" tally --root "$ROOT" --window 3 | grep -E "$kill_lines")"
+  grep -qxF 'window_prs: 3' <<<"$without_cost"
+  [ "$with_cost" = "$without_cost" ]
 }
 
 # followup_without_time <yes|no>: the escalation follow-up the member-result
@@ -807,15 +763,3 @@ write_spend_log() {
   [ "$(tally_value light_spend_vs_member_spend --baseline-tokens 660000)" = "0.50" ]
 }
 
-@test "complete cost events, on a branch of their own too, leave the kill-rule figures unchanged" {
-  write_spend_log
-  log_spend_cost member b-cost-only "$FRONTEND_MEMBER" m10 1000000
-  log_spend_cost light_reviewer b-cost-only "$FRONTEND_MEMBER" d10 1000000
-  kill_lines='^(window_prs|eligible_reaudits|light_cleared|light_cleared_rate|quick_routes|quick_cleared)(\[|:)'
-  with_cost="$(bash "$SCRIPT" tally --root "$ROOT" --window 3 | grep -E "$kill_lines")"
-  grep -v '"dispatch_cost"' "$LOG" > "$LOG.plain"
-  mv "$LOG.plain" "$LOG"
-  without_cost="$(bash "$SCRIPT" tally --root "$ROOT" --window 3 | grep -E "$kill_lines")"
-  grep -qxF 'window_prs: 3' <<<"$without_cost"
-  [ "$with_cost" = "$without_cost" ]
-}
