@@ -51,6 +51,8 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
     A task that grows a file within 10% of a file-length limit the phase gate enforces (a lint `max-lines` rule, the fitness lint's line limit) gives that file's current line count in its Files to touch and tells the executor to put the new code in an existing or new lib file rather than append past the limit.
 
+    A task that edits an existing file lists in its Files to touch each existing test file that pins what the edit changes (an expected table, a snapshot, a pattern matched against the file's text), naming the test and what it pins, so the executor updates it in scope and a gate failure there is attributed to the task. Find them by grepping the test files for the edited file's repo-relative path and its basename and reading each hit. This names existing files the edit touches, not tests to write: **The plan names no test** below still holds.
+
     A plan that deletes or renames a file greps the tree for its path and puts every task that repoints a citation of it (a wiki page, a rule, a skill) in the same phase as the deletion or rename, so no phase commits a citation of a path that no longer exists.
     <!-- gaia:maintainer-only:start -->
     A task that adds or removes a bats suite's use of installed dependencies adds or removes that suite's `# bats file_tags=installed-dependencies` line, listed in its Files to touch, so the mark changes in the same phase (`.gaia/tests/installed-dependencies-mark-guard.sh` fails on a stale one, and no phase gate runs it).
