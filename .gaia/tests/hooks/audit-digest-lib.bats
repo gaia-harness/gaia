@@ -254,6 +254,16 @@ mutate_commit() {
   [ "$output" = "$(v2_local | awk -F'\t' -v member="$FRONTEND_MEMBER" '$1 == member { print $2 }')" ] || return 1
 }
 
+@test "CLI: missing --root or --member exits 2" {
+  run bash "$CLI" --member code-audit-frontend
+  [ "$status" -eq 2 ]
+  ROOT="$BATS_TEST_TMPDIR/cli2"
+  mkdir -p "$ROOT"
+  seed_repo "$ROOT"
+  run bash "$CLI" --root "$ROOT"
+  [ "$status" -eq 2 ]
+}
+
 @test "CLI: a fail-closed digest exits non-zero with empty stdout (never swallowed)" {
   v2_seed "$BATS_TEST_TMPDIR/cli3" || return 1
   run bash "$CLI" --root "$CATCHUP_ROOT" --member "$FRONTEND_MEMBER"

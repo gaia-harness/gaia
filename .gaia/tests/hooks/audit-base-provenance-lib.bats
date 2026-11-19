@@ -61,11 +61,16 @@ resolve() {
 # Each row copies one main-plus-feat repo and adds only the refs or override
 # its trust level needs. The supplied rows take an override; the others do not.
 @test "resolve_base_provenance: each trust level resolves as stated" {
-  local base_repo main_sha label repo expected
+  local base_repo main_sha supplied_sha label repo expected
   base_repo="$(make_repo trust-base)"
   git -C "$base_repo" checkout -q -b feat
   commit_file "$base_repo" "feat.txt" "feat commit"
+  commit_file "$base_repo" "feat-tip.txt" "feat tip commit"
   main_sha="$(git -C "$base_repo" rev-parse main)"
+  # The supplied override names a commit that is neither the ladder's answer
+  # nor HEAD, so the output carries it only when the override wins.
+  supplied_sha="$(git -C "$base_repo" rev-parse HEAD~1)"
+  [ "$supplied_sha" != "$main_sha" ]
   local rows=(remote local unresolvable supplied supplied-unresolvable)
   for label in "${rows[@]}"; do
     echo "case: $label"
@@ -88,8 +93,8 @@ resolve() {
         expected="unresolvable	default-branch	"
         ;;
       supplied)
-        resolve "$repo" default-branch "$main_sha"
-        expected="supplied	default-branch	$main_sha"
+        resolve "$repo" default-branch "$supplied_sha"
+        expected="supplied	default-branch	$supplied_sha"
         ;;
       supplied-unresolvable)
         resolve "$repo" default-branch "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -175,6 +180,26 @@ resolve() {
         [ "$output" = "$default_output" ]
         ;;
     esac
+  done
+}
+
+# --- usage errors --------------------------------------------------------------
+
+@test "resolve_base_provenance: invalid input returns 2 with empty stdout" {
+  local row repo non_repository_directory
+  repo="$(make_repo bad-anchor)"
+  non_repository_directory="$BATS_TEST_TMPDIR/not-a-repo"
+  mkdir -p "$non_repository_directory"
+  local rows=(unrecognized-anchor empty-root non-work-tree-root)
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    case "$row" in
+      unrecognized-anchor) resolve "$repo" bogus-anchor ;;
+      empty-root) resolve "" default-branch ;;
+      non-work-tree-root) resolve "$non_repository_directory" default-branch ;;
+    esac
+    [ "$status" -eq 2 ]
+    [ -z "$output" ]
   done
 }
 

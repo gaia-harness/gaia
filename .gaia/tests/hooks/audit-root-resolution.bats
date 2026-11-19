@@ -642,7 +642,18 @@ run_audit_root_block() {
 
 # bats test_tags=protected
 @test "stage 7 main-anchored root (store), anchored on WORKTREE from OUTSIDE: only a marker in MAIN's store keyed to WORKTREE's digest clears the merge" {
-  local row digest_root expected member_name digest payload
+  local row digest_root expected member_name digest payload main_digest worktree_digest
+  # The deny row below passes when any one member denies, so each member's
+  # fixture digests must differ on their own for that row to mean anything.
+  [ "${#ALL_MEMBERS[@]}" -gt 0 ]
+  for member_name in "${ALL_MEMBERS[@]}"; do
+    echo "case: $member_name digest differs between MAIN and WORKTREE"
+    main_digest="$(digest_of "$MAIN" "$member_name")"
+    worktree_digest="$(digest_of "$WORKTREE" "$member_name")"
+    [ -n "$main_digest" ]
+    [ -n "$worktree_digest" ]
+    [ "$main_digest" != "$worktree_digest" ]
+  done
   # Rows are the root each marker is keyed to | the merge decision. MAIN's
   # store is emptied before each row so no marker carries over.
   local rows=(
