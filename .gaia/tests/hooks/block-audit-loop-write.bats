@@ -135,7 +135,7 @@ assert_row_allowed() {
 # With no resolvable checkout, only the guarded_class protected-folder arm
 # recognizes the path.
 # bats test_tags=protected
-@test "Write into a protected folder with no resolvable checkout is denied" {
+@test "Write into the protected folder with no resolvable checkout is denied" {
   mkdir -p "$FIX/nogit/.gaia/local/protected"
   . "$HOOKS_SOURCE_DIRECTORY/../../.gaia/scripts/main-root-lib.sh"
   [ -z "$(gaia_resolve_main_root "$FIX/nogit" 2>/dev/null)" ]

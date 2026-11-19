@@ -643,8 +643,8 @@ run_audit_root_block() {
 # bats test_tags=protected
 @test "stage 7 main-anchored root (store), anchored on WORKTREE from OUTSIDE: only a marker in MAIN's store keyed to WORKTREE's digest clears the merge" {
   local row digest_root expected member_name digest payload main_digest worktree_digest
-  # The deny row below passes when any one member denies, so each member's
-  # fixture digests must differ on their own for that row to mean anything.
+  # The merge hook denies when any one member's marker misses, so the deny row
+  # proves the mismatch for every member only if each member's digest differs.
   [ "${#ALL_MEMBERS[@]}" -gt 0 ]
   for member_name in "${ALL_MEMBERS[@]}"; do
     echo "case: $member_name digest differs between MAIN and WORKTREE"

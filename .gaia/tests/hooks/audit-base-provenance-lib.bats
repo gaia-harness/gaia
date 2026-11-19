@@ -183,9 +183,7 @@ resolve() {
   done
 }
 
-# --- usage errors --------------------------------------------------------------
-
-@test "resolve_base_provenance: invalid input returns 2 with empty stdout" {
+@test "resolve_base_provenance: a usage error returns 2 with empty stdout" {
   local row repo non_repository_directory
   repo="$(make_repo bad-anchor)"
   non_repository_directory="$BATS_TEST_TMPDIR/not-a-repo"
