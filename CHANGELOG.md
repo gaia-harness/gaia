@@ -85,6 +85,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **A vetoed audit finding reaches the fixer with the human's direction:** a `fix` decision's reason, or a `direction` written on a hand-recorded veto, now briefs the next round's fixer over the finding's original suggested fix, so a redirect no longer gets the rejected fix applied again or stalls the audit at another needs-human stop (#3675)
 - **A plan run retries a file-length failure instead of halting:** a phase gate that fails on a file over its line limit now sends it back to the owning task as a static retry, told to split the file into a lib rather than trim wording. The planner also gives the current line count of a file a task grows near the limit, and puts each citation rewrite in the same phase as the deletion or rename it follows (#3665)
 - **The wiki lint scans the web app's instruction files and the doctrine for working-doc ids:** the FLOW/SPEC id check `/gaia-wiki` runs skipped `apps/web/.claude/` and `.claude/doctrine/`, so a narrative SPEC or FLOW id there passed lint (#3667)
 - **`/gaia-spec` pre-flight finds unconsolidated merged folders under zsh:** the cold-consolidation pass looped over its id list in a way zsh does not split, so on macOS it reported nothing and merged SPEC and plan folders with leftover layers were never consolidated or reaped. It now reads the ids line by line and behaves the same under bash and zsh (#3659)

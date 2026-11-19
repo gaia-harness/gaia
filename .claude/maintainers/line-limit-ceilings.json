@@ -38,7 +38,7 @@
     ".gaia/cli/src/wiki/chain.ts": 686,
     ".gaia/cli/src/wiki/commit-classify.ts": 639,
     ".gaia/scripts/audit-dispositions-check.sh": 694,
-    ".gaia/scripts/audit-fix-verify.sh": 779,
+    ".gaia/scripts/audit-fix-verify.sh": 781,
     ".gaia/scripts/audit-light-route.sh": 663,
     ".gaia/scripts/audit-light-telemetry.sh": 574,
     ".gaia/scripts/audit-loop-eval.sh": 775,

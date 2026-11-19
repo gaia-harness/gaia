@@ -1737,6 +1737,21 @@ decide() {
   red undisposed "{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
 }
 
+@test "needs-human: a fix decision's reason becomes its veto's direction, a repeat replaces it, and a decision with no reason carries none rather than its failure mode" {
+  stop_rounds "$(minor_rows f.txt 1 2)"
+  decide 1 fix '{"reason":"use one shared reader"}'
+  [ "$status" -eq 0 ] || { echo "the fix was refused: $output"; return 1; }
+  [ "$(jq -r '.keys[0].direction' "$RUN_FOLDER/vetoes.json")" = "use one shared reader" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  decide 1 fix '{"reason":"move it into the lib"}'
+  [ "$status" -eq 0 ] || { echo "the repeat fix was refused: $output"; return 1; }
+  [ "$(jq -c '[.keys[] | .direction]' "$RUN_FOLDER/vetoes.json")" = '["move it into the lib"]' ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  decide 2 fix '{"failure_mode":"the reader drops the date","reason":"  "}'
+  [ "$status" -eq 0 ] || { echo "the reasonless fix was refused: $output"; return 1; }
+  [ "$(jq -c '.keys[1] | has("direction")' "$RUN_FOLDER/vetoes.json")" = false ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  run_check_all
+  red undisposed "{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
+}
+
 # race_shims <directory>: a forced interleave of two fix decisions. Its mkdir
 # exits 0 even when the directory exists, as uutils mkdir does for two racing
 # creators, and counts attempts on the veto lock. Its date holds the first
