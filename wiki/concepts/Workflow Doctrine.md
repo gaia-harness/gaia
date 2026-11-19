@@ -149,6 +149,19 @@ The sub-agent checkpoint hook is registered with no matcher, so it also runs aft
 | Per-session chain over the no-matcher PostToolUse hooks | 3,955 ms | none |
 
 The figures come from one run on a machine whose other sessions were idle, at a 1-minute load of 7.3 at the start and 13.7 at the end; runs under a load of 30 to 63 read the same or lower on every per-call row, so these rows do not track load. Profiling the opted-in path under bash 3.2 splits it into the cost every call pays (about 22 ms, the main-session row), the payload confirm's one `jq` (about 13 ms), the transcript tail read and scan (about 23 ms: `wc`, `tail` of the tail read bound, and the bash scan over it), and the window, line and band (about 6 ms). The per-session row is the main-session hook's below-red, no-marker p50 (34.2 ms, above) plus this hook's main-session payload p50, times 70 tool calls, the median over the 596 main-session transcripts of this repository's maintainer that held at least one tool call (a one-off count of `tool_use` blocks per transcript file). To re-check it, repeat the count on any machine and pass the two inputs to the tool as `--main-hook-ms` and `--median-tool-calls`.
+
+The rate-limit checkpoint hook runs before every `Agent`, `Task` and `Workflow` dispatch of every session. Each path that ends early carries 50 ms and the firing path 100 ms. Re-measured with `bash .gaia/tests/hooks/rate-limit-checkpoint-timing.sh`, through the registered command string with its rooting step included, 50 runs per path, interleaved next to the same no-op baseline.
+
+| Path | p50 | Budget |
+| --- | --- | --- |
+| Sub-agent payload | 18.1 ms | 50 ms |
+| No shared reading | 75.3 ms | 50 ms |
+| Below the warning band | 87.5 ms | 50 ms |
+| Band already marked | 87.5 ms | 50 ms |
+| Firing | 94.8 ms | 100 ms |
+| No-op baseline (`/bin/sh -c true`) | 4.6 ms | none |
+
+The figures come from the first of two runs on a machine whose 1-minute load was 36.4 at the start and 22.7 at the end; the second run, at a load of 20.9 to 26.4, read the same paths at 83.3, 97.6 and 98.6 ms, so the three over-budget early-exit paths are recorded as measured, not as load artifacts. Every path past the sub-agent check pays the library loads and the main-root resolution before it can exit.
 <!-- gaia:maintainer-only:end -->
 
 ## See also
