@@ -107,13 +107,11 @@ expect_refusal() {
   [ -z "$printed" ] || { echo "case $label: printed: $printed"; return 1; }
 }
 
-# A failing slug is the way a key can be undeterminable that the documented
-# contract used to promise without enforcing: the slug was interpolated
-# straight into the output inside a command substitution, so a non-zero slug
-# still printed "<base_sha>." at status 0, a plausible-looking key with the
-# branch discriminator silently gone. The stub reproduces the failure shape
-# without depending on what makes a real slug fail.
-@test "gaia_branch_slug and gaia_audit_key print the encoded half or key, else fail non-zero printing nothing: missing base, detached HEAD, a dir outside a repository, a failing slug" {
+# A failing slug must fail the key: a slug interpolated inside a command
+# substitution would still print "<base_sha>." at status 0, a plausible-looking
+# key with the branch discriminator silently gone. The stub reproduces that
+# failure without depending on what makes a real slug fail.
+@test "gaia_branch_slug and gaia_audit_key print the encoded half or key, else fail non-zero printing nothing: missing base, detached HEAD, a directory outside a repository, a failing slug" {
   local nongit
   nongit=$(mktemp -d -t gaia-akl-nongit-XXXXXX)
   CLEANUP_DIRECTORIES+=("$nongit")

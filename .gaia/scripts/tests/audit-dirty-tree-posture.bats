@@ -189,14 +189,13 @@ EOF
   chmod +x "$shim/git"
 }
 
-# assert_carries FILE NEEDLE: this file satisfies the pin.
 assert_carries() {
   grep -qF -- "$2" "$1"
 }
 
 # --- Structural pins ----------------------------------------------------------
 
-@test "every gating member is bound to the dirty-tree refusal contract: resolver run once under its own name, pointer read before the invocation, withhold sentence, run-order anchor, sentinel carve-out, no refusal artifact, sidecar obligation" {
+@test "the dirty-tree refusal contract binds every member (resolver run once under its own name, pointer read before the invocation, sidecar obligation) and every gating member (withhold sentence, run-order anchor, sentinel carve-out, no refusal artifact)" {
   local member_name member_file resolver_command invocation_count invocation_line pointer_line
 
   # every member runs the scope resolver, exactly once, under its own member name

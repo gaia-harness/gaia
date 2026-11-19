@@ -30,7 +30,7 @@ alf_git() {
 
 # alf_build_template: from setup_file, build the alf_init fixture once under
 # $BATS_FILE_TMPDIR/alf-template and export ALF_TEMPLATE_ROOT, so each later
-# alf_init copies it (about a quarter of the cost of building it).
+# alf_init copies it instead of rebuilding.
 alf_build_template() {
   [ -n "${BATS_FILE_TMPDIR:-}" ] || { printf 'alf_build_template: BATS_FILE_TMPDIR is unset\n' >&2; return 1; }
   local template_directory="$BATS_FILE_TMPDIR/alf-template"

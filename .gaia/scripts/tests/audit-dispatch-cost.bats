@@ -4,8 +4,8 @@
 # finish wait and finish states, the worktree project folders and the
 # newest-match rule. The figure rules (dedup, unpriced and mixed models,
 # unparsed and unlinked states) are owned by audit-dispatch-cost-lib.bats; the
-# not-dispatched, adopter-gate, lookup-scope, never-block, delegation and
-# registration cases are in audit-dispatch-cost-states.bats.
+# not-dispatched, argument-refusal, adopter-gate, lookup-scope, never-block,
+# delegation, usage and registration cases are in audit-dispatch-cost-states.bats.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 

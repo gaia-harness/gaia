@@ -226,7 +226,7 @@ expect_nothing_recorded() {
 }
 
 # bats test_tags=whole-tree
-@test "registration: the three dispatch-cost scripts are release-excluded and the registry names the recorder only in prose" {
+@test "registration: the dispatch-cost scripts are release-excluded and the registry names the recorder only in prose" {
   local why excluded
   for excluded in audit-dispatch-cost.sh audit-dispatch-cost-lib.sh audit-dispatch-cost-report.sh; do
     grep -qxF ".gaia/scripts/$excluded" "$REPO_ROOT/.gaia/release-exclude" || { echo "not release-excluded: $excluded" >&2; return 1; }

@@ -686,8 +686,7 @@ owners_of() {
     printf 'an uncommitted working-tree edit entered review scope, where no marker can cover it: %s\n' "$changed" >&2
     return 1
   }
-  return 0
-  local repo changed
+
   repo="$(make_repo forkpoint-scope)"
 
   # The second failure direction, reachable only when the base is a REF whose
@@ -1391,7 +1390,7 @@ EOF
   }
 }
 
-@test "no environment variable naming a base branch is read anywhere in the shared resolver (COV-002)" {
+@test "no environment variable naming a base branch is read anywhere in the shared resolver" {
   local library_file hits non_comment
 
   library_file="$REPO_ROOT/.claude/hooks/lib/audit-base-provenance.sh"

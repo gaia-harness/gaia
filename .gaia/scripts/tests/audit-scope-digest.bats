@@ -112,8 +112,6 @@ reset_case() { rm -rf "$ROOT/.gaia/local"; }
   grep -qF "usage: audit-scope-digest.sh" <<<"$output" || return 1
 }
 
-# ========== UAT-014: --capture writes, prints ==========
-
 @test "usage errors exit non-zero with a stderr diagnostic: neither --capture, --read nor --release, a missing --root, --member or --base, an unrecognized argument" {
   run "$SCRIPT" --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
@@ -129,6 +127,8 @@ reset_case() { rm -rf "$ROOT/.gaia/local"; }
   run "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE" --bogus
   [ "$status" -ne 0 ]
 }
+
+# ========== --capture writes, prints ==========
 
 @test "UAT-014: --capture in a writable fixture root writes the scope file, prints the 64-hex digest, exits 0" {
   run "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"

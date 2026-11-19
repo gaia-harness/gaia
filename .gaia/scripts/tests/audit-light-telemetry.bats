@@ -513,8 +513,6 @@ write_kill_log() {
   [ "$(tally_value light_cleared)" = "3" ]
 }
 
-# Each figure below is driven by a fixture that differs from write_kill_log by
-# one event, so a tally that printed a constant or the wrong count fails.
 @test "the window holds the most recent branches with a frontend event: an extra frontend branch counts, another member alone does not, --window limits it" {
   write_kill_log
   log_event route b5 "$FRONTEND_MEMBER" not-opted-in

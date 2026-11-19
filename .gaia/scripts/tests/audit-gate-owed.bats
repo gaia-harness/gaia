@@ -215,7 +215,7 @@ pnpm -C $R build" ]
   [ "$status" -eq 1 ]
 }
 
-@test "steps-passed refuses with exit 4 and leaves the gate owed on evidence for another tree, a malformed or step-missing evidence file, or a commit that leaves out a gated change" {
+@test "steps-passed refuses with exit 4 and leaves the gate owed on evidence for another tree, a malformed, step-missing or non-zero-exit evidence file, or a commit that leaves out a gated change" {
   local tree
   commit_path apps/web/app/a.ts
   gate mark --round 1

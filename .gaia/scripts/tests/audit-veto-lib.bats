@@ -93,7 +93,6 @@ assert_unsatisfied() {
 
 @test "veto-state fixer route: a fix satisfies a key only when it landed, was committed and the member, dispatched after it, did not re-report" {
   local tree line expected unsatisfied
-  # veto-state: a key whose fix landed, was committed and the member did not re-report is satisfied
   satisfied_base
   [ "$(veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ]
   reset_run # veto-state: a fix entry before effective_from_round does not count
@@ -213,7 +212,7 @@ inline_veto_state() {
   gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 2 "$ROUND_KEYS"
 }
 
-@test "veto-state inline route: a main-thread commit satisfies a key only when it touched the key's path and a clean review followed, unmoved, moved-aside, re-reported, relocated, unreadable-tree and round-1 cases stay unsatisfied" {
+@test "veto-state inline route: a main-thread commit satisfies a key only when it touched the key's path, the key's member then reviewed clean on a readable tree, and no same-class finding sits near the vetoed line's new place or a line the fix wrote; a round-1 veto needs the fixer route" {
   local tree line expected unsatisfied
   # veto-state inline: a main-thread commit touching the key's path after the waiver round, then a clean review, satisfies the veto with no fixer result
   inline_base TREE_FIXED || return 1
@@ -302,7 +301,7 @@ owner_reviews() {
 
 @test "veto-state cross-remit: a clean review by the path's roster owner satisfies a key its reporting member never reviews, unless the owner reports at the fixed line, the reporting member owns the path, no roster is readable or only the reporting member is dispatched" {
   local tree line expected unsatisfied
-  # veto-state cross-remit: a clean review by the path's roster owner satisfies a key its reporting member never reviews, on the fixer and the commit route
+  # satisfied on the fixer and the commit route
   roster_owning_vetoed_path code-audit-shell
   satisfied_base
   STATE="$(owner_reviews "$STATE")"

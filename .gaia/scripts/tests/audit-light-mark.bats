@@ -63,7 +63,7 @@ setup_file() {
     [ "$routed" = "$(printf 'light\tlight-eligible')" ] || { printf 'two-file router: %s\n' "$routed" >&2; exit 1; }
     cp "$LSB_TEMPLATE_ROOT/plain/slug" "$BATS_TEST_TMPDIR/slug"
   ) || return 1
-  # Five owned lines refused with a major on line 2 and a minor on line 4; each
+  # Owned lines refused with a major on line 2 and a minor on line 4; each
   # case then commits its own repair and routes it.
   (
     BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/prepared-refused"

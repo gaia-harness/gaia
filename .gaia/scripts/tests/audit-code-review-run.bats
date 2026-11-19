@@ -519,7 +519,7 @@ EOF
   done
 }
 
-@test "each placeholder left UNMEASURED: the three blocking constants make no spawn and name their reason, the documenting one still spawns" {
+@test "each placeholder left UNMEASURED: the blocking constants make no spawn and name their reason, the documenting one still spawns" {
   local pair constant reason
   for pair in 'REVIEW_CHILD_PROVEN:child isolation unproven' 'REVIEW_TARGET_FORMAT:target unproven' 'REVIEW_TIMEOUT_SECONDS:timeout unmeasured'; do
     constant="${pair%%:*}"

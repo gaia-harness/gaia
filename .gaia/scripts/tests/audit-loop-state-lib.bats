@@ -67,7 +67,7 @@ valid_state() {
   [ "$output" = "debt/42-fix" ]
 }
 
-@test "key: an undeterminable branch is refused by rc" {
+@test "key: an undeterminable branch is refused by exit status" {
   printf 'case: %s\n' 'detached HEAD rc 4' >&2
   alf_git checkout -q --detach
   run gaia_loop_key "$ALF_ROOT"
@@ -410,7 +410,7 @@ labels() { printf '%s' "$1" | jq -r '[.questions[0].options[].label] | join("|")
   [[ "$question" == *"audit-accept"*"deliberate override"* ]]
 }
 
-@test "pinned question: bad inputs are rc 2 or 6 with empty stdout" {
+@test "pinned question: bad inputs exit 2, or 6 with the context library unsourced, with empty stdout" {
   printf 'case: %s\n' 'bad builder arguments rc 2' >&2
   run gaia_loop_pinned_question feat/x ZZZZ 6 3 true false context
   [ "$status" -eq 2 ]

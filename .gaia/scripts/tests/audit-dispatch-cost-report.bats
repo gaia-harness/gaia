@@ -156,7 +156,7 @@ ESCALATE_LIGHT_LINE="code-audit-frontend light_reviewer branches=1 dispatches=1 
 $ESCALATE_LIGHT_LINE" ]
 }
 
-@test "unrecorded counts only results at or after the branch's first cost event: no cost event on the branch is nowhere, before the first is zero, after the first with no cost event of its own is one" {
+@test "unrecorded counts only results at or after the branch's first cost event: a branch with no cost event prints no line, a result before the first is zero, one after the first with no cost event of its own is one" {
   # no cost event on the branch
   add_result member_result lb1 "$FRONTEND" d1
   add_result member_result lb1 "$FRONTEND" d1

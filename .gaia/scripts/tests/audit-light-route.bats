@@ -1880,7 +1880,7 @@ git_shim_failing_walk() {
   mb_path_rows "${MB_QUICK_ROWS[@]}"
 }
 
-@test "merge-base hard-full: each floor path routes full naming its glob: manifest, env example, non-paired test, config file" {
+@test "merge-base hard-full: each floor path routes full: manifest (naming its glob), env example, non-paired test, config file" {
   lsb_from_template mb-paths
   mb_path_rows "${MB_FLOOR_ROWS[@]}"
 }
