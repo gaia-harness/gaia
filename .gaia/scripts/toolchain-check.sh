@@ -202,12 +202,13 @@ guide() {
       # nvm-windows has no nvm alias default, so Windows hears only of fnm. The
       # version is the floor's major from the floors file: the project's own
       # .nvmrc and .node-version still pin the old release during /update-gaia.
-      local node_major
+      local node_major version
       node_major="$(node_floor_major)"
-      lead='nvm or fnm: run nvm install or fnm install'
-      [ "$PLATFORM" != windows ] || lead='fnm: run fnm install'
-      printf 'GUIDE node: Install Node %s with %s, then make it your default. Then' "${node_major:-the floor major in .gaia/toolchain-floors.tsv}" "${lead}${node_major:+ $node_major}"
-      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal and start Claude Code again from it, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), first select the new Node in the project shell (fnm use or nvm use with that version), or the old pin is reselected and this check fails again. %s\n' "$(tool_reason node)"
+      version="${node_major:-<major>}"
+      lead="fnm: run fnm install $version, fnm use $version and fnm default $version"
+      [ "$PLATFORM" = windows ] || lead="nvm or fnm: run nvm install $version, nvm use $version and nvm alias default $version, or fnm install $version, fnm use $version and fnm default $version"
+      printf 'GUIDE node: Install Node %s with %s, so this terminal uses it and it is your default. Then' "${node_major:-at the floor major in .gaia/toolchain-floors.tsv}" "$lead"
+      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal in the project folder, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), run fnm use %s or nvm use %s there, or the old pin is reselected and this check fails again. Then start Claude Code from that terminal. %s\n' "$version" "$version" "$(tool_reason node)"
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
@@ -258,8 +259,8 @@ node_floor_major() {
 # or nothing. It is terminal because the new Node reaches only a new shell's
 # PATH, and it sets the default so the profile each new shell sources keeps it.
 # It installs the floor's Node major (node_floor_major), switches this terminal
-# to it (use) so the pnpm reinstall runs under the new Node, and writes no file,
-# so it does not depend on its working directory. Global packages stay with the
+# to it (use) so the pnpm reinstall runs under the new Node, and writes no project
+# file, so it does not depend on its working directory. Global packages stay with the
 # old Node, so pnpm is reinstalled under the new one. nvm is a shell function,
 # invisible to command -v here, so its install script stands in for it. Windows
 # gets no route: these commands are bash.

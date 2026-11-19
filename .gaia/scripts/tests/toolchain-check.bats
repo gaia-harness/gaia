@@ -244,7 +244,7 @@ route_line() {
   printf '%s\n' "$output" | grep -qxF "BELOW node 24.11.0 $(floor_of node)"
   local major
   major="$(floor_of node)"
-  [[ "$output" == *"GUIDE node: Install Node $major with nvm or fnm: run nvm install or fnm install $major"*"npm install -g pnpm@latest"*"fresh terminal"*"select the new Node in the project shell"*"GAIA's CLI run on it."* ]] || return 1
+  [[ "$output" == *"GUIDE node: Install Node $major with nvm or fnm: run nvm install $major, nvm use $major and nvm alias default $major, or fnm install $major, fnm use $major and fnm default $major"*"npm install -g pnpm@latest"*"fresh terminal in the project folder"*"run fnm use $major or nvm use $major there"*"Then start Claude Code"*"GAIA's CLI run on it."* ]] || return 1
   [ -z "$(route_line node)" ]
 }
 
