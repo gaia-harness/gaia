@@ -141,6 +141,7 @@ run_hook_edit() {
 
 # --- denied: the #841 regression, a stale path into a different checkout ---
 
+# bats test_tags=protected
 @test "Edit targeting the main checkout while the session is inside the worktree is denied" {
   make_repo
   make_worktree "debt/4-foo" "debt/4-foo"

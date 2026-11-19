@@ -119,6 +119,7 @@ assert_every_writer_landed() {
   done
 }
 
+# bats test_tags=protected
 @test "concurrent writers from main and a worktree all land under the mkdir lock" {
   local worktree
   worktree="$(make_worktree)"

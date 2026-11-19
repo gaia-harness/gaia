@@ -161,6 +161,7 @@ The retired form was BASE_SHA=$(git merge-base HEAD main), now BASE_REF.
   grep -qF "agent files naming BASE_SHA without naming resolve-audit-base.sh: 0" <<<"$output" || return 1
 }
 
+# bats test_tags=protected
 @test "fixture: a BASE_SHA derived by a bare merge-base fails assertion 1" {
   local repo
   repo="$(make_fixture_repo drifted-bare)"

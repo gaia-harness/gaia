@@ -169,6 +169,7 @@ surface_has_workflow_and_action() {
 
 # --- the class fires, shell surface ----------------------------------------
 
+# bats test_tags=protected
 @test "flags a quoted command-substitution assignment under set -euo pipefail" {
   fixture_repo
   fixture_script 'set -euo pipefail

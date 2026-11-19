@@ -80,6 +80,7 @@ stage_and_run_hook() {
   [ "$(cat "$STEP_LOG")" = "typecheck" ]
 }
 
+# bats test_tags=protected
 @test "a type error in a typecheck-only member refuses the commit" {
   write_member packages/lib "{\"typecheck\":\"echo typecheck >> '$STEP_LOG'; exit 1\"}"
   stage_and_run_hook packages/lib/src/value.ts

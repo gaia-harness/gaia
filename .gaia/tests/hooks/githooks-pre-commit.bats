@@ -670,6 +670,7 @@ OLD_HOOK
 
 # --- machine-local references: the staged scan runs before any gate step ---
 
+# bats test_tags=protected
 @test "machine-local refs: a staged prose line naming a plan number is refused and runs no gate step" {
   use_frontend_package
   mkdir -p "$REPO/wiki"

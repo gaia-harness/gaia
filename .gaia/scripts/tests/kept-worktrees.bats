@@ -224,6 +224,7 @@ blocked_ledger_run() {
   grep -Fq "$TREE" "$LEDGER" || { cat "$LEDGER"; return 1; }
 }
 
+# bats test_tags=protected
 @test "the reminder never removes a tree" {
   seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
   gone_upstream || return 1

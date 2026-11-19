@@ -228,6 +228,7 @@ stage_renames() {
   [ -z "$output" ]
 }
 
+# bats test_tags=protected
 @test "an unparseable registry exits 1 with the gaia-packages message" {
   use_frontend_package
   printf 'not json {\n' > "$REPO/.gaia/packages.json"

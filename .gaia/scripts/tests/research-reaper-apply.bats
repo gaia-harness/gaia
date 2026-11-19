@@ -150,6 +150,7 @@ assert_refused_unchanged() {
 
 # --- eligibility is decided at delete time -----------------------------------
 
+# bats test_tags=protected
 @test "apply refuses an active folder and a closed folder cited by a ready plan, exit 8, nothing changed" {
   reaper_fixture
   add_research still-active active

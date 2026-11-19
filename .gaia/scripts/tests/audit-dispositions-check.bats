@@ -131,6 +131,7 @@ vetoes() {
     >"$RUN_FOLDER/vetoes.json"
 }
 
+# bats test_tags=protected
 @test "critical: a branch-authored Critical as accept-residual fails critical-not-fix" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 1 c/crit accept-residual)]")"
   run_check 1
@@ -157,6 +158,7 @@ vetoes() {
   red critical-not-fix "$(key_json c/crit f.txt 1)"
 }
 
+# bats test_tags=protected
 @test "security: a security:true Minor waived fails security-not-fix" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 2 c/sec waive-out-of-scope because triage-threshold)]")"
   run_check 1
@@ -1546,6 +1548,7 @@ veto_unsatisfied_red() {
   red undisposed "$(key_json c/imp f.txt 3)"
 }
 
+# bats test_tags=protected
 @test "vetoes: an unsatisfied veto fails vetoed-not-fix on an accept and undisposed with no entry: never fixed, re-reported, or the fixer disputed or could not fix" {
   local fixer_disposition
   vetoes 1 c/imp f.txt 3

@@ -384,6 +384,7 @@ EOF
 
 # --- 9b. Spec-less PLAN-NNN with no SUMMARY.md yet: kept, not reduced ------
 
+# bats test_tags=protected
 @test "spec-less PLAN-NNN with no SUMMARY.md yet: kept intact, not reduced (fail-closed consolidation gate)" {
   local plan_directory="$SANDBOX/.notebook/plans/PLAN-010"
   mkdir -p "$plan_directory/.work"
@@ -546,6 +547,7 @@ EOF
 
 # --- 15. Refuse "." slug (would resolve to plans/ itself, mass-deleting siblings) --
 
+# bats test_tags=protected
 @test "refuses the notebook plans folder plus a dot segment (mass-delete guard)" {
   seed_plan ".notebook/plans/PLAN-011"
   mkdir -p "$SANDBOX/.notebook/plans/PLAN-012"
@@ -636,6 +638,7 @@ EOF
   [ "$(listing)" = "$before" ]
 }
 
+# bats test_tags=protected
 @test "refuses a symlinked plan folder and leaves the folder it points at untouched" {
   outside="$BATS_TEST_TMPDIR/outside-target"
   mkdir -p "$outside/.work"

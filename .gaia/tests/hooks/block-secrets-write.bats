@@ -101,6 +101,7 @@ run_write_hook_edit() {
 
 # --- The three secret-shaped patterns still deny ---
 
+# bats test_tags=protected
 @test "an AWS access-key id is denied" {
   local aws_id="AKIA""IOSFODNN7EXAMPLE"
   run_hook_write "const id = '$aws_id'"
@@ -778,6 +779,7 @@ run_write_hook_edit() {
   assert_allowed_by_json
 }
 
+# bats test_tags=protected
 @test "Write to .env.production is denied with the dotenv write message" {
   run_hook_write_path '.env.production' 'PORT=3000'
   assert_denied_by_json

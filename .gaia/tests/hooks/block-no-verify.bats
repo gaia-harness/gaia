@@ -60,6 +60,7 @@ run_hook() {
 
 # --- denied ---
 
+# bats test_tags=protected
 @test "git commit --no-verify is denied" {
   run_hook 'git commit --no-verify -m "x"'
   assert_denied_by_json

@@ -175,6 +175,7 @@ branch_exists() {
   branch_exists "feature/keepme"
 }
 
+# bats test_tags=protected
 @test "never deletes the checked-out wiki/<YYYY-MM-DD-HHMM> branch, even when gone" {
   make_repo
   make_gone_branch "wiki/2026-10-15-0534"
@@ -506,6 +507,7 @@ SHIM
   [ "$(grep -c 'fetch' "$witness")" -eq 1 ]
 }
 
+# bats test_tags=protected
 @test "sweep 1: the reap REFUSES a gone branch carrying commits the remote never had" {
   make_repo
   make_gone_branch_unpruned "wiki/2026-07-14-1014"

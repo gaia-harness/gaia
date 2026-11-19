@@ -74,6 +74,7 @@ fixture_with() {
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=protected
 @test "a bare repo-relative command is caught" {
   local root
   root="$(fixture_with '[".claude/hooks/block-rm-rf.sh"]')"

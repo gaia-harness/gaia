@@ -317,6 +317,7 @@ refuse_notes() {
   expect_route full refusal-open-security
 }
 
+# bats test_tags=protected
 @test "an open finding with security true routes full refusal-open-security" {
   lsb_init
   refuse_notes "$(lsb_finding apps/web/app/notes.md 2 major false)" "$(lsb_finding apps/web/app/notes.md 4 minor true)"

@@ -52,6 +52,7 @@ run_hook_monitor() {
 
 # --- blocked: the shape that spins forever ------------------------------------
 
+# bats test_tags=protected
 @test "the observed recurrence is blocked" {
   # Verbatim from gaia-react/gaia#2203: the loop substituted after the
   # worktree-isolation guard refused the documented compound form. It waits

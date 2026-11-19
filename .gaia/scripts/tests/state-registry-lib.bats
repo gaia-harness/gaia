@@ -295,6 +295,7 @@ run_in_registry_repo() {
   [ "$status" -eq 1 ]
 }
 
+# bats test_tags=protected
 @test "gaia_registry_recognizes: jq unavailable fails SAFE (recognized, exit 0) rather than reaping the unknown" {
   saved_path="$PATH"
   # shellcheck disable=SC2123 # deliberately blank PATH to make jq unfindable; restored right after the call

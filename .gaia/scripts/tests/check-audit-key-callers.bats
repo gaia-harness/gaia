@@ -119,6 +119,7 @@ LEDGER=".gaia/local/audit/${BASE_SHA}.rerun.json"
   grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" || return 1
 }
 
+# bats test_tags=protected
 @test "fixture: a bare \${BASE_SHA}.rerun.json ledger literal fails assertion 1" {
   local repo
   repo="$(make_fixture_repo bad-ledger)"

@@ -105,6 +105,7 @@ sequence_case() {
   [ "$(read_json "$decorated" '.evidence | tojson')" = "$(read_json "$plain" '.evidence | tojson')" ]
 }
 
+# bats test_tags=protected
 @test "UAT-006: A 5,5,5 is stalled and denies" {
   sequence_case stalled "deny stalled" 5 5 5
 }

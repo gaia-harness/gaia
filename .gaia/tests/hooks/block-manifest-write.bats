@@ -38,6 +38,7 @@ run_hook_bash() {
 
 # --- denied: edit tools, no exemption ---
 
+# bats test_tags=protected
 @test "Edit on .gaia/manifest.json is denied" {
   run_hook_edit "Edit" ".gaia/manifest.json"
   assert_denied_by_json

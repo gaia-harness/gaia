@@ -662,6 +662,7 @@ WITH_AUDIT_DECLARED='"GAIA-Audit"
   grep -qF -- 'not yet present and passed: GAIA-Audit' <<<"$output"
 }
 
+# bats test_tags=protected
 @test "--until-green reports a present failing GAIA-Audit as a failed required check" {
   stub_required "$(open_on_main)" '' "$WITH_AUDIT_DECLARED" \
     '[{"name":"Shellcheck and bats","bucket":"pass"},{"name":"Audit CI Tests","bucket":"pass"},{"name":"GAIA-Audit","bucket":"fail"}]'
