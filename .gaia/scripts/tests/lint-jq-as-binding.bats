@@ -219,10 +219,3 @@ jq -n '.a + .b as \$v | \$v'"
   [ "$status" -eq 3 ]
   grep -qF -- "discovery failed" <<<"$output"
 }
-
-# bats test_tags=whole-tree
-@test "the real repository tree is clean" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER' 2>&1"
-  [ "$status" -eq 0 ]
-  grep -qF -- "clean" <<<"$output"
-}

@@ -272,13 +272,6 @@ jobs:
   grep -qF -- "nothing was scanned" <<<"$output"
 }
 
-# bats test_tags=whole-tree
-@test "the real repository tree is clean" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER' 2>&1"
-  [ "$status" -eq 0 ]
-  grep -qF -- "clean" <<<"$output"
-}
-
 # --- no phantom coverage ----------------------------------------------------
 
 @test "the real scan surface holds a workflow and a composite action" {

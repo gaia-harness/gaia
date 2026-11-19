@@ -14,6 +14,8 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
+# bats-selector fixture-only: CHANGELOG.md
+
 setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/catchup-fixture.sh"

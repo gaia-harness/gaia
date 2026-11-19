@@ -271,6 +271,7 @@ stub_floor_row() {
   mkdir -p "$STUBS"
   stub git 'git version 2.56.0'
   stub jq 'jq-1.7.1'
+  stub node 'v26.13.1'
   stub pnpm '12.11.2'
   stub lsof 'lsof 4.91'
   stub ss 'ss utility, iproute2-6.1.0'
@@ -312,6 +313,9 @@ floor_row() {
   stub_floor_row
   stub pnpm '11.2.0'
   floor_row pnpm "BELOW pnpm 11.2.0 $(floor_of pnpm)" --platform darwin
+  stub_floor_row
+  stub node 'v24.11.0'
+  floor_row node "BELOW node 24.11.0 $(floor_of node)" --platform darwin
   stub_floor_row
   rm "$STUBS/lsof"
   floor_row lsof 'MISSING lsof -' --platform darwin

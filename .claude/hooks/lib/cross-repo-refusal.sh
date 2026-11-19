@@ -36,7 +36,7 @@ fi
 GAIA_CROSS_REPO_GH_ERROR=''
 
 gaia_pr_is_cross_repository() {
-  local pr_number="${1-}" answer exit_status first_line
+  local pr_number="${1-}" answer exit_status first_line error_file error_output
   GAIA_CROSS_REPO_GH_ERROR=''
 
   case "$pr_number" in
@@ -52,16 +52,22 @@ gaia_pr_is_cross_repository() {
     return 2
   fi
 
-  # stderr is folded into the capture so the "no pull requests found" wording
-  # can be read on failure. On success a stray stderr line (an update notice)
-  # would spoil the exact match below; the notifier is switched off for that
-  # reason, and anything else that slips in still fails closed as exit 2.
+  # stderr is captured apart from stdout: gh prints hints and notices there
+  # even on success, and folded into the answer they would spoil the exact
+  # match below and refuse every pull request. On failure stderr carries the
+  # "no pull requests found" wording and the error line.
   # ${pr_number:+...} keeps an empty argument from reaching gh as an empty
   # positional, which gh would reject rather than read as the current branch.
+  error_file="$(mktemp "${TMPDIR:-/tmp}/gaia-cross-repo.XXXXXX" 2>/dev/null)" || {
+    GAIA_CROSS_REPO_GH_ERROR='could not create a temporary file for the gh error output'
+    return 2
+  }
   exit_status=0
   answer=$(GH_NO_UPDATE_NOTIFIER=1 GH_PROMPT_DISABLED=1 \
     gh pr view ${pr_number:+"$pr_number"} --json isCrossRepository --jq .isCrossRepository \
-    2>&1 </dev/null) || exit_status=$?
+    2>"$error_file" </dev/null) || exit_status=$?
+  error_output="$(tr -d '\r' <"$error_file")"
+  rm -f "$error_file"
   answer="$(printf '%s' "$answer" | tr -d '\r')"
 
   if [ "$exit_status" -eq 0 ]; then
@@ -75,12 +81,12 @@ gaia_pr_is_cross_repository() {
   fi
 
   if [ -z "$pr_number" ]; then
-    case "$answer" in
+    case "$error_output" in
       *'no pull requests found'*) return 1 ;;
     esac
   fi
 
-  first_line="$(printf '%s\n' "$answer" | head -n 1)"
+  first_line="$(printf '%s\n' "${error_output:-$answer}" | head -n 1)"
   GAIA_CROSS_REPO_GH_ERROR="gh pr view exited ${exit_status}${first_line:+: ${first_line}}"
   return 2
 }

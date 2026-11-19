@@ -170,6 +170,24 @@ missing_manifest_diagnostic() {
   [ "$(vhf_log_entries 02-marker-strip)" = "$VHF_ROOT" ]
 }
 
+@test "round mode hands shell-lint the round's delta as its path list" {
+  fixture
+  cat >.gaia/tests/shell-lint.sh <<'STUB'
+#!/usr/bin/env bash
+# Carries the `--paths-from)` literal the runner probes for before passing it.
+case "$1" in
+  --paths-from) tr '\0' '\n' <"$2" | sed 's/^/shell-lint-path|/' >>"$VERIFY_FIXTURE_LOG" ;;
+  *) printf 'shell-lint-path|whole tree\n' >>"$VERIFY_FIXTURE_LOG" ;;
+esac
+STUB
+  vhf_commit "a shell-lint stub that logs its path list"
+  printf 's1 two\n' >src/s1-input.txt
+  vhf_commit "a HEAD commit touching one file"
+  run_runner round
+  [ "$status" -eq 0 ]
+  [ "$(vhf_log_entries shell-lint-path)" = "src/s1-input.txt" ] || { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
+}
+
 @test "round mode runs the HEAD commit's selection and leaves the marked suites to branch mode" {
   fixture
   printf 's1 two\n' >src/s1-input.txt
@@ -235,15 +253,58 @@ harness_commit() {
   [ "$status" -eq 0 ]
 }
 
-@test "a missing linter skips only shell-lint and says so" {
+@test "a missing linter still runs shell-lint's folded guards and says so" {
   fixture
+  cat >.gaia/tests/shell-lint.sh <<'STUB'
+#!/usr/bin/env bash
+# Carries the `| guards)` literal the runner probes for before passing it.
+case "$1 $2" in
+  "--only guards") printf 'shell-lint-mode|guards only\n' >>"$VERIFY_FIXTURE_LOG" ;;
+  *) printf 'shell-lint-mode|whole\n' >>"$VERIFY_FIXTURE_LOG" ; exit 1 ;;
+esac
+# '' | bash32-parse | guards) ;;
+STUB
+  vhf_commit "a shell-lint stub that logs its mode"
   harness_commit
   farm="$(vhf_path_without shellcheck)"
-  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
+  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" branch
   [ "$status" -eq 0 ]
-  has 'WARN  shellcheck not found: install with brew install shellcheck; CI remains the only check for shell-lint'
-  every_label_is SKIP shell-lint
-  every_label_is PASS 'release-scrub leak check' 01-files-present 02-marker-strip 'bats selected'
+  has 'WARN  shellcheck not found: install with brew install shellcheck; CI remains the only check for the shellcheck and bash-3.2 parse passes of shell-lint'
+  [ "$(vhf_log_entries shell-lint-mode)" = "guards only" ] || { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
+  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip 'bats selected'
+  # The partial run shows in the summary and in the pass record, not only in
+  # the WARN at the top of the run.
+  every_label_is SKIP 'shell-lint shellcheck and bash-3.2 parse passes'
+  jq -e '.skipped | index("shell-lint shellcheck and bash-3.2 parse passes: shellcheck not found")' "$VHF_RECORD" >/dev/null \
+    || { cat "$VHF_RECORD" >&2; return 1; }
+}
+
+# A delta that changes a shell-lint input, such as the gate itself, could create
+# findings in files it does not name, so the round lints the whole tree; a delta
+# naming no such input still narrows.
+@test "round mode lints the whole tree when its delta changes the shell-lint gate" {
+  fixture
+  cat >.gaia/tests/shell-lint.sh <<'STUB'
+#!/usr/bin/env bash
+# Carries the `--paths-from)` literal the runner probes for before passing it.
+case "$1" in
+  --paths-from) printf 'shell-lint-mode|narrowed\n' >>"$VERIFY_FIXTURE_LOG" ;;
+  *) printf 'shell-lint-mode|whole\n' >>"$VERIFY_FIXTURE_LOG" ;;
+esac
+STUB
+  vhf_commit "a shell-lint stub that logs its mode"
+  run_runner round
+  [ "$status" -eq 0 ]
+  has 'NOTE  the round delta changes an input of shell-lint'
+  [ "$(vhf_log_entries shell-lint-mode)" = "whole" ] || { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
+
+  : >"$VERIFY_FIXTURE_LOG"
+  printf 's1 two\n' >src/s1-input.txt
+  vhf_commit "a HEAD commit touching one ordinary file"
+  run_runner round
+  [ "$status" -eq 0 ]
+  lacks 'NOTE  the round delta changes an input of shell-lint'
+  [ "$(vhf_log_entries shell-lint-mode)" = "narrowed" ] || { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
 }
 
 @test "a missing rsync skips the three distribution checks and says so" {

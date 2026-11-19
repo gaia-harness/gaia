@@ -33,6 +33,7 @@ stub() {
 stub_current() {
   stub git 'git version 2.56.0'
   stub jq 'jq-1.7.1-apple'
+  stub node 'v26.13.1'
   stub pnpm '12.11.2'
   stub lsof 'lsof 4.91'
   stub ss 'ss utility, iproute2-6.1.0'
@@ -235,6 +236,42 @@ route_line() {
   [[ "$(route_line pnpm)" == "ROUTE pnpm run "*"npm install -g pnpm@latest" ]]
 }
 
+@test "Node 24 is below the floor: it blocks, and with no version manager the guide alone names the install and the pnpm reinstall" {
+  stub_current
+  stub node 'v24.11.0'
+  check --platform darwin
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF "BELOW node 24.11.0 $(floor_of node)"
+  local major
+  major="$(floor_of node)"
+  [[ "$output" == *"GUIDE node: Install Node $major with nvm or fnm: run nvm install $major, nvm use $major and nvm alias default $major, or fnm install $major, fnm use $major and fnm default $major"*"npm install -g pnpm@latest"*"fresh terminal in the project folder"*"run fnm use $major or nvm use $major there"*"Then start Claude Code"*"GAIA's CLI run on it."* ]] || return 1
+  [ -z "$(route_line node)" ]
+}
+
+@test "ROUTE terminal for node through fnm or nvm, reinstalling pnpm with the pnpm route's own command, and none on Windows" {
+  stub_current
+  stub pnpm '11.2.0'
+  stub node 'v24.11.0'
+  mkdir -p "$STUBS/nvm"
+  printf 'x\n' >"$STUBS/nvm/nvm.sh"
+  run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
+  local pnpm_command major
+  major="$(floor_of node)"
+  pnpm_command="$(route_line pnpm)"
+  pnpm_command="${pnpm_command#ROUTE pnpm run }"
+  [ -n "$pnpm_command" ]
+  [ "$(route_line node)" = "ROUTE node terminal nvm install $major && nvm use $major && nvm alias default $major && { $pnpm_command; }" ]
+  stub fnm 'fnm 1.38.1'
+  run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform linux --os-id debian
+  [ "$(route_line node)" = "ROUTE node terminal fnm install $major && fnm use $major && fnm default $major && { $pnpm_command; }" ]
+  check --platform windows
+  [ "$status" -eq 1 ]
+  [ -z "$(route_line node)" ]
+  [[ "$output" == *"GUIDE node: Install Node $major with fnm: run fnm install $major"*"fresh terminal"* ]] || return 1
+  grep '^GUIDE node:' <<<"$output" | grep -qE 'nvm (install|use|alias)' && return 1
+  true
+}
+
 @test "no ROUTE line without an exact command, and none for a passing tool" {
   stub_current
   rm "$STUBS/ss"
@@ -260,9 +297,25 @@ route_line() {
   true
 }
 
-@test "no guidance pins a version: each route reaches latest, never the floor" {
-  run grep -nE '(git|jq|pnpm)@?[ -]?[0-9]+\.[0-9]+' "$CHECK"
+@test "no guidance pins a version: each route reaches latest, and node alone names its floor major" {
+  run grep -inE '(git|jq|node|pnpm)@?[ -]?v?[0-9]+([^0-9>]|$)' "$CHECK"
   [ "$status" -ne 0 ]
+  stub_current
+  stub node 'v24.11.0'
+  stub git 'git version 2.39.5'
+  stub jq 'jq-1.5'
+  stub pnpm '11.2.0'
+  local platform guide_text major
+  major="$(floor_of node)"
+  for platform in darwin windows; do
+    check --platform "$platform"
+    guide_text="$(printf '%s\n' "$output" | grep '^GUIDE ')"
+    [ "$(printf '%s\n' "$guide_text" | grep -c '^GUIDE ')" -ge 4 ]
+    printf '%s\n' "$guide_text" | grep '^GUIDE node:' | grep -qF "Install Node $major with" || return 1
+    printf '%s\n' "$guide_text" | grep -v '^GUIDE node:' | grep -qE '[0-9]+(\.[0-9]+)?' && return 1
+    printf '%s\n' "$guide_text" | grep '^GUIDE node:' | sed "s/Node $major with/Node with/; s/install $major/install/" | grep -qiE '(node|v|@)[ ]?[0-9]+|[0-9]+\.[0-9]+\.[0-9]+' && return 1
+  done
+  true
 }
 
 @test "the floors file has one row per tool, and the note states the same floors" {
@@ -273,6 +326,7 @@ route_line() {
   grep -qiw 'warn' "$NOTE" && return 1
   grep -q "git $(floor_of git)" "$NOTE"
   grep -q "jq $(floor_of jq)" "$NOTE"
+  grep -q "node $(floor_of node)" "$NOTE"
   grep -q "pnpm $(floor_of pnpm)" "$NOTE"
 }
 

@@ -1121,14 +1121,6 @@ YAML'
   grep -qF -- "guard-awk-lib.sh is missing beside this script" <<<"$output"
 }
 
-# --- the real tree ---------------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "the real scanned tree passes the lint" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
 # --- no phantom coverage ----------------------------------------------------
 
 # bats test_tags=whole-tree

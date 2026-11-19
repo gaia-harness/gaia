@@ -60,14 +60,6 @@ fixture_test_script() {
   printf '%s\n' "$2" > "$TEMPORARY_DIRECTORY/.gaia/tests/$1"
 }
 
-# 1. The real scanned tree is clean (regression gate)
-
-# bats test_tags=whole-tree
-@test "the real scanned tree (.claude/hooks + .gaia/scripts + .gaia/tests) passes the lint" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
 # 2. The detector fires on an unguarded bare expansion under set -u
 
 @test "flags an unguarded bare \${arr[@]} under set -u" {

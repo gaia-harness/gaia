@@ -81,8 +81,9 @@ jobs:
           token: ${{ github.token }}
 
   # The fan-out matrix: one leg per bats shard, plus the sandbox conformance
-  # tree, the INV-7 concurrency meter and the commitlint config suite as three
-  # further legs that run their own runners under their own filter gates. `audit-ci-tests` below is the
+  # tree, the INV-7 concurrency meter, the commitlint config suite and the
+  # protected-test gate as further legs that run their own runners under their
+  # own filter gates. `audit-ci-tests` below is the
   # thin aggregator that carries the declared-required check name; splitting
   # the name off this job is what lets `fail-fast: false` keep one failing
   # shard from cancelling its siblings without also cancelling the check
@@ -121,23 +122,29 @@ jobs:
     # shard must not cancel its siblings, or the aggregator adjudicates a
     # partial picture and a re-run loses information about every leg GitHub
     # cancelled rather than ran. The matrix values are the bats-shards.sh shard
-    # ids plus the three workflow-level legs; audit-ci-shards.bats checks the
-    # two stay in sync.
+    # ids plus the workflow-level legs; audit-ci-shards.bats checks the two
+    # stay in sync.
     # `max-parallel` caps only a push run, whose whole legs would otherwise hold
     # most concurrent-job slots right after a merge and queue pull request legs;
     # nothing waits on a push run. A pull request's value is the leg count.
     # audit-ci-push-parallelism.bats guards both values.
     strategy:
       fail-fast: false
-      max-parallel: ${{ github.event_name == 'push' && 6 || 21 }}
+      max-parallel: ${{ github.event_name == 'push' && 6 || 22 }}
       matrix:
-        shard: [hooks-1, hooks-2, hooks-3, hooks-4, hooks-5, hooks-6, scripts-1, scripts-2, scripts-3, scripts-4, scripts-5, scripts-6, scripts-7, audit, lib-1, lib-2, lib-3, misc, sandbox, concurrency, commitlint]
+        shard: [hooks-1, hooks-2, hooks-3, hooks-4, hooks-5, hooks-6, scripts-1, scripts-2, scripts-3, scripts-4, scripts-5, scripts-6, scripts-7, audit, lib-1, lib-2, lib-3, misc, sandbox, concurrency, commitlint, protected-tests]
     steps:
       # Depth 2 so the change-scoped run can diff the pull request's merge
       # commit against its first parent, the base branch it merges into.
+      # The protected-test leg alone takes the full history (depth 0), which
+      # also maps every branch to refs/remotes/origin/*: its gate needs
+      # origin/main for the merge base and every commit since it for the
+      # waiver trailers, and no other leg pays for that fetch. The values are
+      # quoted strings because a bare 0 is falsy in an expression and the
+      # `&&`/`||` pair would fall through to 2.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
+          fetch-depth: ${{ matrix.shard == 'protected-tests' && '0' || '2' }}
       # A pull request that touches nothing these filters list reports this
       # check green without installing or running anything.
       #
@@ -244,19 +251,20 @@ jobs:
               - '.githooks/**'
               - '.gaia/packages.json'
               - '.gaia/scripts/**'
-              # Every tracked shell file. The shell lint suites
-              # (.gaia/scripts/tests/lint-*.bats) scan the real tree's tracked
-              # shell and carry the whole-tree mark; a suite testing one script
-              # names it. The glob is the scans' own input rather than an
-              # enumeration of the files it reaches today, so it self-maintains
-              # when shell appears somewhere new.
+              # Every tracked shell file. A suite testing one script names it,
+              # and the whole-tree-marked suites that enumerate tracked shell
+              # read this glob's files. The real tree's lint verdict comes from
+              # shell-lint.yml, not from these suites. The glob is the scans'
+              # own input rather than an enumeration of the files it reaches
+              # today, so it self-maintains when shell appears somewhere new.
               - '**/*.sh'
               # check-main-root-derivation.bats scans tracked source for a
               # hand-rolled main-checkout derivation, and hook commands live in
               # settings.json as inline shell; the suites reading it name it.
               - '.claude/settings.json'
               # shell-lint.bats names the local shell gate it asserts the wiring
-              # of; its real-tree pass carries the whole-tree mark.
+              # of, with its guards stubbed; shell-lint.yml runs the real-tree
+              # pass.
               - '.gaia/tests/shell-lint.sh'
               # audit-guard-structural.bats names code-audit-frontend.md, whose
               # no-op-guard wiring it greps.
@@ -504,6 +512,13 @@ jobs:
               - '.gaia/tests/install-bats.sh'
               - '.gaia/tests/vendor/**'
               - '.gaia/scripts/bats5.sh'
+            # The protected-test gate's leg. Only a change to a suite can lose a
+            # protected test, a deleted suite included, so every tracked suite
+            # arms it, along with the gate itself and this job's definition.
+            protected-tests:
+              - '.github/workflows/audit-ci-tests.yml'
+              - '.gaia/scripts/check-protected-tests.sh'
+              - '**/*.bats'
       # What this bats leg will run, decided before anything is installed:
       # `mode` (full, scoped or none) and whether that set needs Node or
       # Chromium. Every bats-leg install step and the run step below gate on it,
@@ -513,7 +528,7 @@ jobs:
       # shard (`--full`); `scoped` alone plans the pull request's net change, the
       # merge commit the checkout holds against its first parent. A non-zero
       # `plan` fails the leg rather than greening it empty.
-      - if: matrix.shard != 'sandbox' && matrix.shard != 'concurrency' && matrix.shard != 'commitlint' && (steps.filter.outputs.code == 'true' || steps.filter.outputs.scoped == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      - if: matrix.shard != 'sandbox' && matrix.shard != 'concurrency' && matrix.shard != 'commitlint' && matrix.shard != 'protected-tests' && (steps.filter.outputs.code == 'true' || steps.filter.outputs.scoped == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         id: selection
         name: Plan this shard's suites
         env:
@@ -569,7 +584,7 @@ jobs:
       # leg with nothing selected from installing anything.
       # `workflow-filter-coverage.bats` holds install-bats.sh reachable by the
       # outputs that arm the selection step.
-      - if: matrix.shard != 'sandbox' && matrix.shard != 'concurrency' && matrix.shard != 'commitlint' && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
+      - if: matrix.shard != 'sandbox' && matrix.shard != 'concurrency' && matrix.shard != 'commitlint' && matrix.shard != 'protected-tests' && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
         name: Install pinned bats
         run: bash .gaia/tests/install-bats.sh
       # The concurrency leg has no selection step: its meter runs whole on
@@ -901,6 +916,15 @@ jobs:
         name: Run the commitlint suites
         timeout-minutes: 2
         run: bash .gaia/scripts/bats5.sh .gaia/tests/commitlint/
+      # The protected-test gate over this leg's full-history checkout. The bats
+      # legs reach the same gate through shell-lint at depth 2, where it has no
+      # merge base and only warns; here `--require-base` turns a checkout that
+      # cannot compare into a red leg. A push to main, or a dispatch on it, has
+      # HEAD as its own merge base, so that run compares an empty range and passes.
+      - if: matrix.shard == 'protected-tests' && (steps.filter.outputs.protected-tests == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        name: Run the protected-test gate against the merge base with main
+        timeout-minutes: 2
+        run: bash .gaia/scripts/check-protected-tests.sh --require-base
 
   # The declared-required check. `always()` is what stops a plain
   # skip-on-dependency-failure from satisfying nothing: a `needs:` with no

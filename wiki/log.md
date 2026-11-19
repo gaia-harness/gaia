@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-19 PROMOTED: wiki/concepts/Shared Rate-limit Reading And Dispatch Checkpoint.md (PR #3673)
 - 2026-11-18 PROMOTED: wiki/decisions/Spec And Plan Without Test Design.md (PR #3661)
 - 2026-11-18 ADDED: wiki/concepts/Test Stage.md
 - 2026-11-18 RETIRED: wiki/decisions/Test Design Table.md (deleted, every link repointed to the Test Stage page)
