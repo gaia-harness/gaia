@@ -65,7 +65,11 @@ ask_with_stub() {
 }
 
 @test "library: a success with a hint on stderr is judged by stdout alone" {
-  local hint='hint: if you need to wait for this pull request, use gh event listen instead of polling'
+  local hint
+  hint="$(printf '%s\n' \
+    'hint: if you need to wait for this pull request to be reviewed, merged, or closed before continuing, use this instead of polling:' \
+    '    gh event listen --resource https://github.com/owner/repo/pull/34 --event com.github.pull_request.state.changed.v1' \
+    '  - It prints the first event as a JSON line on stdout and exits; run it again to wait for the next one.')"
   library_stub 'false' "$hint" 0
   ask_with_stub 34
   [ "${lines[0]}" = 1 ]
