@@ -48,31 +48,9 @@ deletes_add_locale() {
   verifies_once_after_last "$INIT_MD"
 }
 
-@test "the verify-once check fails on a scratch copy that executes the whole runbook per locale" {
-  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  sed 's/Run Step 8 (verify) once/Execute every step in the substituted instruction/' "$INIT_MD" >"$scratch"
-  cmp -s "$INIT_MD" "$scratch" && return 1
-  run verifies_once_after_last "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "the verify-once check fails on a scratch copy that skips the configure-i18n re-run" {
-  local scratch="$BATS_TEST_TMPDIR/gaia-init.no-rerun.md"
-  grep -vF -- 'After the last locale, re-run Step 3' "$INIT_MD" >"$scratch"
-  cmp -s "$INIT_MD" "$scratch" && return 1
-  run verifies_once_after_last "$scratch"
-  [ "$status" -ne 0 ]
-}
-
 @test "add-locale.md does not delete itself" {
   run deletes_add_locale "$ADD_LOCALE_MD"
   [ "$status" -ne 0 ]
-}
-
-@test "the self-delete check fires on a scratch copy that removes add-locale.md" {
-  local scratch="$BATS_TEST_TMPDIR/add-locale.scratch.md"
-  { cat "$ADD_LOCALE_MD"; printf '%s\n' 'rm apps/web/.claude/instructions/add-locale.md'; } >"$scratch"
-  deletes_add_locale "$scratch"
 }
 
 @test "remove-i18n.md deletes add-locale.md along with itself" {

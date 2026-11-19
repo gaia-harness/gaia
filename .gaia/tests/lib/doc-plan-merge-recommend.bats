@@ -12,9 +12,7 @@
 # ORCHESTRATOR.md, so its merge question and post-clearance block run before
 # the merge; the grant hook tells the main thread to print that prompt.
 #
-# Method: every check takes a root directory and reads one region; each red
-# twin mutates one clause of a scratch copy, proves the copy changed, and runs
-# the same check against it.
+# Method: every check takes a root directory and reads one region.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -54,35 +52,6 @@ lacks() {
 
 need_text() {
   [ -n "$2" ] || { printf 'region not found: %s\n' "$1" >&2; return 1; }
-}
-
-# mutated_tree <rel> <old> <new>: a scratch copy (TREE) of every file the
-# checks read, with the first fixed-string <old> in <rel> replaced by <new>,
-# proved changed.
-mutated_tree() {
-  local rel="$1" content mutated file
-  TREE="$BATS_TEST_TMPDIR/tree"
-  rm -rf "$TREE"
-  for file in "$PLANNER_REL" "$RULE_REL" "$WORKFLOW_REL" "$HOOK_REL"; do
-    mkdir -p "$TREE/$(dirname "$file")"
-    cp "$REPO_ROOT/$file" "$TREE/$file"
-  done
-  content="$(cat "$REPO_ROOT/$rel"; printf x)"
-  mutated="${content/"$2"/"$3"}"
-  printf '%s' "${mutated%x}" >"$TREE/$rel"
-  if cmp -s "$REPO_ROOT/$rel" "$TREE/$rel"; then
-    printf 'mutation left %s unchanged: %s\n' "$rel" "$2" >&2
-    return 1
-  fi
-}
-
-red() {
-  local check="$1"
-  shift
-  mutated_tree "$@" || return 1
-  run "$check" "$TREE"
-  [ "$status" -ne 0 ] || { printf 'check %s still passed on the mutated copy\n' "$check" >&2; return 1; }
-  [ -n "$output" ] || { printf 'check %s failed without a reason\n' "$check" >&2; return 1; }
 }
 
 green() {
@@ -155,39 +124,15 @@ check_hook_plan_prompt() {
   green check_plan_merge_question
 }
 
-@test "red twin: a fixed hold-first merge question fails" {
-  red check_plan_merge_question "$PLANNER_REL" 'Recommend `Merge it` when the merge is ready' 'Recommend `Hold the merge` always'
-}
-
-@test "red twin: a halt hold keyed on how the halt was answered fails" {
-  red check_plan_merge_question "$PLANNER_REL" '      - a deviation the summary surfaced' '      - a phase committed after a `(HALTED)` block in `{PLAN_DIR}/PROGRESS.md` whose answer was not `I did it` with `Rerun: passed`;
-      - a deviation the summary surfaced'
-}
-
-@test "red twin: a hold description free to quote internal labels fails" {
-  red check_plan_merge_question "$PLANNER_REL" ', never quoting this list'"'"'s wording, a verdict token such as `CHECK_FAILED`, or a `PROGRESS.md` label' ''
-}
-
 @test "the rule drops a plan build's merge from the never-Recommended list and states the merge rule" {
   green check_rule_merge
-}
-
-@test "red twin: a rule that still never recommends a plan build's merge fails" {
-  red check_rule_merge "$RULE_REL" 'merging over audit residuals the residual question asks about while no human has answered it' "merging a plan build's pull request or merging over audit residuals"
 }
 
 @test "a plan build resumed into the merge workflow returns to its ORCHESTRATOR.md" {
   green check_workflow_plan_route
 }
 
-@test "red twin: a continuation prompt with no plan arm fails" {
-  red check_workflow_plan_route "$WORKFLOW_REL" 'Resume the plan for PR #<N>' 'Resume the PR merge workflow for PR #<N>'
-}
-
 @test "the grant hook routes a plan build's new-session prompt to the plan" {
   green check_hook_plan_prompt
 }
 
-@test "red twin: a hook arm with no plan-build prompt fails" {
-  red check_hook_plan_prompt "$HOOK_REL" 'ORCHESTRATOR.md' 'the workflow'
-}

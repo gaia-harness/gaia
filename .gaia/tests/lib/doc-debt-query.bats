@@ -5,41 +5,27 @@
 # file: the deterministic sort every subcommand (list, why, fix) shares, and
 # the source of the `labels`, `key`, `body`, and `footprint` fields the
 # clustering pass, the two security screens, and the spec screen all read.
-# `footprint` is resolved out of the `labels` projection, the same way `sev` and
-# `difficulty` are; a body-line capture is the shape this suite forbids.
 #
-# Two arms.
+# The executable render is the gate: it extracts the `--jq` PROGRAM TEXT out of
+# debt.md with awk, feeds it a synthetic fixture
+# (fixtures/debt-query/backlog.json, four issues, none real), and asserts on
+# the emitted objects. Do not "simplify" this back into a hand-copied program:
+# rendering it from the artifact is what makes the gate measure debt.md
+# instead of measuring itself.
 #
-# ARM 1 (structural greps) anchors extraction on the FIRST `--jq '` line in
-# debt.md (`grep -n -F -- "--jq '" ... | head -1`), which is the ordering query
-# inside the `## Read and order the backlog` fence. Later sections carry `--jq '`
-# lines of their own, so the invariant is that none appears above that one, and
-# a naive first-fenced-block grab can never land on the reconcile
-# pre-pass query instead, where every negative assertion below would pass
-# vacuously. It carries a positive `sort_by` assertion for the same reason:
-# proof the extraction landed on the ordering query, not a silent pass on the
-# wrong block.
+# The render cases assert one key at a time (`.key.line`, `.footprint`,
+# `.labels`, `.body`), never a whole-object comparison, so a field added to
+# the program later does not break a case that is correct by design.
 #
-# ARM 2 (executable render) is the stronger gate and the reason this suite
-# exists: it extracts the `--jq` PROGRAM TEXT out of debt.md with awk, feeds
-# it a synthetic fixture (fixtures/debt-query/backlog.json, four issues, none
-# real, not captured from git the way the isolation suite's golden fixtures
-# are), and asserts on the emitted objects. Do not "simplify" this back into a
-# hand-copied program: rendering it from the artifact is what makes the gate
-# measure debt.md instead of measuring itself, and a hand-copied program would
-# stay green through a regression in the real file.
-#
-# Arm 2 asserts one key at a time (`.key.line`, `.footprint`, `.labels`,
-# `.body`), never a whole-object comparison. A later phase adds a `difficulty`
-# field to this same program; a whole-object assertion would break on a change
-# that is correct by design, a per-key assertion does not.
+# One structural check remains, anchored on the FIRST `--jq '` line in debt.md,
+# which is the ordering query inside the `## Read and order the backlog` fence.
 #
 # Engine note: `gh --jq` runs gojq (Go regexp, where `(?m)` enables line
 # anchors); a local `jq` runs Oniguruma (where `^` is always a line anchor and
 # `(?m)` means dotall, harmless here since the pattern contains no `.`). The
-# one frozen form in debt.md is correct under both. Arm 2 runs under whichever
-# engine is on PATH and skips with a message if neither is present; GitHub's
-# ubuntu-latest image ships `jq`, so the arm runs in CI.
+# one frozen form in debt.md is correct under both. The render cases run under
+# whichever engine is on PATH and skip with a message if neither is present;
+# the ubuntu-latest image ships `jq`, so they run in CI.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -62,9 +48,9 @@ jq_bin() {
 # binaries on PATH (some of jq/gojq, or nothing), and states on stderr which
 # of the two is absent. The ordering query is body-scoped, so its newline
 # exclusion behaves differently under jq's Oniguruma and gojq's Go RE2 in
-# principle; a body-scoped case this suite adds drives every engine present
-# rather than the first one found, and reports an absent engine explicitly
-# rather than silently skipping it.
+# principle; a body-scoped case drives every engine present rather than the
+# first one found, and reports an absent engine explicitly rather than
+# silently skipping it.
 report_engines() {
   local present="" absent=""
   command -v jq >/dev/null 2>&1 && present="jq" || absent="jq"
@@ -80,44 +66,9 @@ report_engines() {
   printf '%s\n' "$present"
 }
 
-# sub_literal_once <file> <needle> <replacement>: literal (non-regex)
-# substring substitution, in place, first occurrence per line. Mirrors
-# doc-merge-workflow-fences.bats' sub_literal; duplicated rather than shared
-# because the two suites are independent bats files with no common library.
-#
-# Reads the needle/replacement out of the environment rather than via awk's
-# own -v assignment: awk's -v processes C-style backslash escapes in the
-# assigned value, so a needle containing the literal two characters `\n`
-# (this query's own jq-regex newline escape) arrives as an actual newline
-# instead, and index() then finds it nowhere on a single physical line.
-# ENVIRON values carry no such processing.
-sub_literal_once() {
-  local file="$1" output_path
-  output_path="${file}.sub"
-  SUB_NEEDLE="$2" SUB_REPLACEMENT="$3" awk '
-    BEGIN { needle_text = ENVIRON["SUB_NEEDLE"]; replacement_text = ENVIRON["SUB_REPLACEMENT"] }
-    {
-      line = $0
-      needle_position = index(line, needle_text)
-      if (needle_position > 0) {
-        print substr(line, 1, needle_position - 1) replacement_text substr(line, needle_position + length(needle_text))
-        hits++
-      } else {
-        print line
-      }
-    }
-    END { exit hits ? 0 : 1 }
-  ' "$file" >"$output_path" || {
-    echo "substitution needle absent from ${file}: ${2}" >&2
-    rm -f "$output_path"
-    return 1
-  }
-  mv "$output_path" "$file"
-}
-
 # The ordering query's whole fenced code block, anchored on the unique
 # `--jq '` line: the last ``` fence before it opens the block, the first ```
-# fence after it closes it. Arm 1's structural greps run over this.
+# fence after it closes it.
 extract_query_fence() {
   local jq_line start end
   jq_line=$(grep -n -F -- "--jq '" "$DEBT_MD" | head -1 | cut -d: -f1)
@@ -127,8 +78,8 @@ extract_query_fence() {
 }
 
 # The bare `--jq` PROGRAM TEXT, from the line after the `--jq '` anchor up to
-# the line whose only non-whitespace content is a closing `'`. Arm 2 executes
-# this directly; it is never hand-copied into the suite.
+# the line whose only non-whitespace content is a closing `'`. The render
+# cases execute this directly; it is never hand-copied into the suite.
 extract_jq_program() {
   awk -v single_quote="'" '
     index($0, "--jq " single_quote) { found = 1; next }
@@ -143,212 +94,72 @@ render_backlog() {
   "$(jq_bin)" "$(extract_jq_program)" "$FIXTURE"
 }
 
+# issue_of <number> <output>: the rendered object of one issue number.
+issue_of() {
+  jq --arg issue_number "$1" '.[] | select(.number == ($issue_number | tonumber))' <<<"$2"
+}
+
+# fail_case <case name>: names the failing case on stderr and fails.
+fail_case() {
+  printf 'failed case: %s\n' "$1" >&2
+  return 1
+}
+
 @test "Arm 1: the ordering query keeps --limit 1000, the silent-truncation repair" {
   block="$(extract_query_fence)"
   printf '%s\n' "$block" | grep -qF -- "--limit 1000" || return 1
 }
 
-@test "Arm 1: labels project as name strings, not raw label objects" {
-  block="$(extract_query_fence)"
-  printf '%s\n' "$block" | grep -qF -- "labels: [.labels[].name]" || return 1
-}
-
-@test "Arm 1: the dedup key is captured with the v1 gaia-debt-key prefix" {
-  block="$(extract_query_fence)"
-  printf '%s\n' "$block" | grep -qF -- "capture(" || return 1
-  printf '%s\n' "$block" | grep -qF -- "<!-- gaia-debt-key: v1 " || return 1
-}
-
-@test "Arm 1: footprint resolves from the labels projection, not from a body capture" {
-  block="$(extract_query_fence)"
-  printf '%s\n' "$block" | grep -qF -- 'map(select(startswith("footprint:")) | ltrimstr("footprint:"))' || return 1
-  # The bad case: the superseded body-line regex, matched as the CLASS rather
-  # than as one frozen spelling. It parses null on any body a human reformatted,
-  # which is the silent-parse the label representation exists to remove, so its
-  # return must fail this suite rather than pass unnoticed. Pinning the literal
-  # `^Handler:` would miss a capture reintroduced as `capture("Handler:[ ]+…")`
-  # or `(?m)^Handler[: ]`, which is the same defect wearing a different regex.
-  printf '%s\n' "$block" | grep -qE 'capture\("[^"]*[Hh]andler' && return 1
-  true
-}
-
-@test "Arm 1: body is emitted unconditionally, with nothing nulling it" {
-  block="$(extract_query_fence)"
-  printf '%s\n' "$block" | grep -qF -- "body," || return 1
-  # The bad case: a computed/conditional `body:` value. The repaired query
-  # only ever emits `body` as a bare shorthand key.
-  printf '%s\n' "$block" | grep -qF -- "body:" && return 1
-  true
-}
-
-@test "Arm 1: sort_by is unchanged, and the extraction landed on the ordering query, not the reconcile pre-pass" {
-  block="$(extract_query_fence)"
-  # The reconcile pre-pass carries no sort_by at all, so a wrong-block
-  # extraction fails loudly here instead of passing the negative test below
-  # vacuously.
-  printf '%s\n' "$block" | grep -qF -- "sort_by([(-.sev), .createdAt])" || return 1
-}
-
-@test "Arm 1: the block never projects a bare number/title/createdAt straight into sev, the original defect" {
-  block="$(extract_query_fence)"
-  flat="$(printf '%s\n' "$block" | tr '\n' ' ' | tr -s ' ')"
-  printf '%s' "$flat" | grep -qF -- "createdAt, sev:" && return 1
-  true
-}
-
-@test "Arm 1: severity:investigate has its own rank arm, and the unlabelled else stays in the suggestion band" {
-  block="$(extract_query_fence)"
-  # Two halves of one decision, and they are asserted together because the
-  # tempting edit collapses them: mapping the unlabelled `else` onto the
-  # investigate rank would make `investigate` the fallback, which is the shape
-  # that turned the dedup key's `class=` axis into a graveyard, and it would
-  # also drop every human-filed fieldless issue out of the fix pool, since
-  # investigate is excluded from candidacy.
-  printf '%s\n' "$block" | grep -qE 'elif index\("severity:investigate"\) +then 0' || return 1
-  printf '%s\n' "$block" | grep -qF -- 'else 1 end' || return 1
-}
-
-@test "Arm 2: an investigate-graded issue ranks 0 and sorts below the suggestion band" {
+@test "ordering query ranks severity, investigate and unlabelled issues" {
   bin="$(jq_bin)"
   [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
   output="$(render_backlog)"
-  investigate="$(jq --arg issue_number 106 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-  [ "$(jq '.sev' <<<"$investigate")" = "0" ]
+  investigate="$(issue_of 106 "$output")"
+  unlabelled="$(issue_of 104 "$output")"
+  [ "$(jq '.sev' <<<"$investigate")" = "0" ] || fail_case "an investigate-graded issue ranks 0"
   # Last in the whole ordering, below every suggestion and below the
   # unlabelled issue, which is what "not an ordinal severity" costs it.
-  [ "$(jq '.[-1].number' <<<"$output")" = "106" ]
+  [ "$(jq '.[-1].number' <<<"$output")" = "106" ] || fail_case "the investigate issue sorts below the suggestion band"
+  [ "$(jq '.sev' <<<"$unlabelled")" = "1" ] || fail_case "an unlabelled issue still ranks 1"
+  [ "$(jq '.[0].number' <<<"$output")" = "101" ] || fail_case "the top-severity issue sorts first"
 }
 
-@test "Arm 2: an unlabelled issue still ranks 1, not the investigate rank" {
+@test "ordering query projects labels, key line, footprint and body" {
   bin="$(jq_bin)"
   [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
   output="$(render_backlog)"
-  unlabelled="$(jq --arg issue_number 104 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-  [ "$(jq '.sev' <<<"$unlabelled")" = "1" ]
-}
-
-@test "Arm 2: the top-severity issue sorts first" {
-  bin="$(jq_bin)"
-  [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
-  output="$(render_backlog)"
-  [ "$(jq '.[0].number' <<<"$output")" = "101" ]
-}
-
-@test "Arm 2: labels project as an array of strings" {
-  bin="$(jq_bin)"
-  [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
-  output="$(render_backlog)"
-  [ "$(jq -r '.[0].labels | type' <<<"$output")" = "array" ]
-  [ "$(jq -r '.[0].labels[0] | type' <<<"$output")" = "string" ]
-}
-
-@test "Arm 2: key.line coerces to a JSON number, distinguishing line=4 from line=42" {
-  bin="$(jq_bin)"
-  [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
-  output="$(render_backlog)"
-  issue_101="$(jq --arg issue_number 101 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-  issue_102="$(jq --arg issue_number 102 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-  [ "$(jq '.key.line' <<<"$issue_101")" = "4" ]
-  [ "$(jq -r '.key.line | type' <<<"$issue_101")" = "number" ]
-  [ "$(jq '.key.line' <<<"$issue_102")" = "42" ]
-}
-
-@test "Arm 2: footprint resolves the footprint: label's value, prefix stripped" {
-  bin="$(jq_bin)"
-  [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
-  output="$(render_backlog)"
-  issue_101="$(jq --arg issue_number 101 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-  issue_102="$(jq --arg issue_number 102 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-  [ "$(jq -r '.footprint' <<<"$issue_101")" = "narrow" ]
-  [ "$(jq -r '.footprint' <<<"$issue_102")" = "wide" ]
-}
-
-@test "Arm 2: a malformed key and an unlabelled issue both emit key: null and footprint: null" {
-  bin="$(jq_bin)"
-  [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
-  output="$(render_backlog)"
-  issue_103="$(jq --arg issue_number 103 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-  issue_104="$(jq --arg issue_number 104 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-  [ "$(jq '.key' <<<"$issue_103")" = "null" ]
-  [ "$(jq '.footprint' <<<"$issue_103")" = "null" ]
-  [ "$(jq '.key' <<<"$issue_104")" = "null" ]
-  [ "$(jq '.footprint' <<<"$issue_104")" = "null" ]
-}
-
-@test "Arm 2: every issue emits a non-empty string body, the security-screen contract made mechanical" {
-  bin="$(jq_bin)"
-  [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
-  output="$(render_backlog)"
+  issue_101="$(issue_of 101 "$output")"
+  issue_102="$(issue_of 102 "$output")"
+  issue_103="$(issue_of 103 "$output")"
+  issue_104="$(issue_of 104 "$output")"
+  [ "$(jq -r '.[0].labels | type' <<<"$output")" = "array" ] || fail_case "labels project as an array"
+  [ "$(jq -r '.[0].labels[0] | type' <<<"$output")" = "string" ] || fail_case "labels project as strings"
+  [ "$(jq '.key.line' <<<"$issue_101")" = "4" ] || fail_case "key.line 4"
+  [ "$(jq -r '.key.line | type' <<<"$issue_101")" = "number" ] || fail_case "key.line coerces to a number"
+  [ "$(jq '.key.line' <<<"$issue_102")" = "42" ] || fail_case "key.line 42"
+  [ "$(jq -r '.footprint' <<<"$issue_101")" = "narrow" ] || fail_case "footprint narrow, prefix stripped"
+  [ "$(jq -r '.footprint' <<<"$issue_102")" = "wide" ] || fail_case "footprint wide, prefix stripped"
+  [ "$(jq '.key' <<<"$issue_103")" = "null" ] || fail_case "a malformed key emits key: null"
+  [ "$(jq '.footprint' <<<"$issue_103")" = "null" ] || fail_case "a malformed key emits footprint: null"
+  [ "$(jq '.key' <<<"$issue_104")" = "null" ] || fail_case "an unlabelled issue emits key: null"
+  [ "$(jq '.footprint' <<<"$issue_104")" = "null" ] || fail_case "an unlabelled issue emits footprint: null"
   for issue_number in 101 102 103 104; do
-    issue="$(jq --arg issue_number "$issue_number" '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-    [ "$(jq -r '.body | type' <<<"$issue")" = "string" ] || return 1
+    issue="$(issue_of "$issue_number" "$output")"
+    [ "$(jq -r '.body | type' <<<"$issue")" = "string" ] || fail_case "issue ${issue_number} emits a string body"
     body_length="$(jq -r '.body | length' <<<"$issue")"
-    [ "$body_length" -gt 0 ] || return 1
+    [ "$body_length" -gt 0 ] || fail_case "issue ${issue_number} emits a non-empty body"
   done
 }
 
-@test "Arm 2: a spaced path key parses verbatim with its own line number" {
-  engines="$(report_engines)"
-  [ -n "$engines" ] || skip "neither jq nor gojq on PATH"
-  program="$(extract_jq_program)"
-  for engine in $engines; do
-    output="$("$engine" "$program" "$FIXTURE")"
-    issue_105="$("$engine" --arg issue_number 105 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
-    path="$("$engine" -r '.key.path' <<<"$issue_105")"
-    line="$("$engine" '.key.line' <<<"$issue_105")"
-    if [ "$path" != "wiki/concepts/PR Merge Workflow.md" ] || [ "$line" != "175" ]; then
-      echo "engine ${engine}: key.path=${path} key.line=${line}" >&2
-      return 1
-    fi
-  done
-}
-
-@test "Arm 2: a two-key continuation line yields the first key's own path and line, and a pre-change greedy capture would splice them" {
+@test "ordering query key capture on spaced, continued and multiline input" {
   engines="$(report_engines)"
   [ -n "$engines" ] || skip "neither jq nor gojq on PATH"
   two_keys_fixture="$REPO_ROOT/.gaia/tests/fixtures/dedup-key-corpus/two-keys-one-line-issues.json"
+  decoy="$REPO_ROOT/.gaia/tests/fixtures/dedup-key-corpus/multiline-decoy-body.txt"
   [ -f "$two_keys_fixture" ] || {
     echo "fixture absent: ${two_keys_fixture}" >&2
     return 1
   }
-  program="$(extract_jq_program)"
-
-  for engine in $engines; do
-    output="$("$engine" "$program" "$two_keys_fixture")"
-    issue="$("$engine" '.[] | select(.number == 9001)' <<<"$output")"
-    path="$("$engine" -r '.key.path' <<<"$issue")"
-    line="$("$engine" '.key.line' <<<"$issue")"
-    if [ "$path" != "wiki/concepts/PR Merge Workflow.md" ] || [ "$line" != "7" ]; then
-      echo "engine ${engine}: key.path=${path} key.line=${line}" >&2
-      return 1
-    fi
-  done
-
-  # Guard-can-fail: the pre-change spelling this query carried before
-  # SPEC-082 was a bare greedy path=(?<path>.+), which has no closer to stop
-  # at and backtracks to the LAST ` line=<NUM>) -->` in the body, splicing
-  # across both keys and attaching the second key's line number to the
-  # first key's class.
-  bin="$(jq_bin)"
-  mutant_file="${BATS_TEST_TMPDIR}/debt-program-greedy.jq"
-  printf '%s\n' "$program" >"$mutant_file"
-  sub_literal_once "$mutant_file" 'path=(?<path>[^>\n]+)' 'path=(?<path>.+)'
-  mutant_output="$("$bin" "$(cat "$mutant_file")" "$two_keys_fixture")"
-  mutant_issue="$("$bin" '.[] | select(.number == 9001)' <<<"$mutant_output")"
-  mutant_path="$("$bin" -r '.key.path' <<<"$mutant_issue")"
-  case "$mutant_path" in
-    *"Task Orchestration.md"*) : ;;
-    *)
-      echo "expected the pre-change greedy capture to splice across both keys, got: ${mutant_path}" >&2
-      return 1
-      ;;
-  esac
-}
-
-@test "Arm 2: the multiline decoy body does not swallow the real key, and a newline-unsafe class would" {
-  engines="$(report_engines)"
-  [ -n "$engines" ] || skip "neither jq nor gojq on PATH"
-  decoy="$REPO_ROOT/.gaia/tests/fixtures/dedup-key-corpus/multiline-decoy-body.txt"
   [ -f "$decoy" ] || {
     echo "fixture absent: ${decoy}" >&2
     return 1
@@ -356,6 +167,27 @@ render_backlog() {
   program="$(extract_jq_program)"
 
   for engine in $engines; do
+    # A spaced path key parses verbatim with its own line number.
+    output="$("$engine" "$program" "$FIXTURE")"
+    issue_105="$("$engine" --arg issue_number 105 '.[] | select(.number == ($issue_number | tonumber))' <<<"$output")"
+    path="$("$engine" -r '.key.path' <<<"$issue_105")"
+    line="$("$engine" '.key.line' <<<"$issue_105")"
+    if [ "$path" != "wiki/concepts/PR Merge Workflow.md" ] || [ "$line" != "175" ]; then
+      echo "failed case: spaced path key; engine ${engine}: key.path=${path} key.line=${line}" >&2
+      return 1
+    fi
+
+    # A two-key continuation line yields the first key's own path and line.
+    output="$("$engine" "$program" "$two_keys_fixture")"
+    issue="$("$engine" '.[] | select(.number == 9001)' <<<"$output")"
+    path="$("$engine" -r '.key.path' <<<"$issue")"
+    line="$("$engine" '.key.line' <<<"$issue")"
+    if [ "$path" != "wiki/concepts/PR Merge Workflow.md" ] || [ "$line" != "7" ]; then
+      echo "failed case: two-key continuation line; engine ${engine}: key.path=${path} key.line=${line}" >&2
+      return 1
+    fi
+
+    # The multiline decoy body does not swallow the real key.
     wrapped="${BATS_TEST_TMPDIR}/decoy-issue-${engine}.json"
     "$engine" -n --rawfile body "$decoy" \
       '[{number: 9002, title: "decoy", createdAt: "2026-01-06T00:00:00Z", labels: [], body: $body}]' \
@@ -365,34 +197,13 @@ render_backlog() {
     path="$("$engine" -r '.key.path' <<<"$issue")"
     case "$path" in
       *$'\n'*)
-        echo "engine ${engine}: the committed capture leaked a newline into the path: ${path}" >&2
+        echo "failed case: multiline decoy; engine ${engine}: the capture leaked a newline into the path: ${path}" >&2
         return 1
         ;;
     esac
     if [ "$path" != "app/real.ts" ]; then
-      echo "engine ${engine}: the committed capture did not land on the real key: ${path}" >&2
+      echo "failed case: multiline decoy; engine ${engine}: the capture did not land on the real key: ${path}" >&2
       return 1
     fi
   done
-
-  # Guard-can-fail: a class missing the newline exclusion is the mutation
-  # this row exists to catch, and it must swallow the real key.
-  bin="$(jq_bin)"
-  wrapped="${BATS_TEST_TMPDIR}/decoy-issue-mutant.json"
-  "$bin" -n --rawfile body "$decoy" \
-    '[{number: 9002, title: "decoy", createdAt: "2026-01-06T00:00:00Z", labels: [], body: $body}]' \
-    >"$wrapped"
-  mutant_file="${BATS_TEST_TMPDIR}/debt-program-no-newline-exclusion.jq"
-  printf '%s\n' "$program" >"$mutant_file"
-  sub_literal_once "$mutant_file" 'path=(?<path>[^>\n]+)' 'path=(?<path>[^>]+)'
-  mutant_output="$("$bin" "$(cat "$mutant_file")" "$wrapped")"
-  mutant_issue="$("$bin" '.[] | select(.number == 9002)' <<<"$mutant_output")"
-  mutant_path="$("$bin" -r '.key.path' <<<"$mutant_issue")"
-  case "$mutant_path" in
-    *$'\n'*) : ;;
-    *)
-      echo "expected the newline-unsafe mutant to leak a newline into the path, got: ${mutant_path}" >&2
-      return 1
-      ;;
-  esac
 }

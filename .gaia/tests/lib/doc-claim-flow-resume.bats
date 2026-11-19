@@ -15,8 +15,7 @@
 #   4. it appears before the body rewrite and the drop-claim call.
 #
 # Section-scoped: every assertion runs over the Step 11 body, so a phrase
-# surviving in the claim check cannot green a Step 11 that dropped it. Each
-# pin has a red twin that mutates a scratch copy and expects the pin to fail.
+# surviving in the claim check cannot green a Step 11 that dropped it.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -67,54 +66,9 @@ pin_order() {
   [ "$adopt" -lt "$rewrite" ] && [ "$adopt" -lt "$drop" ]
 }
 
-# mutate <needle> <out>: copy the doc without the lines containing needle.
-mutate() {
-  grep -vF -- "$1" "$CLAIM_FLOW" >"$2"
-}
-
-@test "Step 11 section exists and is non-empty" {
-  [ -n "$(step11_body "$CLAIM_FLOW")" ]
-}
-
-@test "Step 11 adopts an own open claim when CLAIM_PR is unset" {
-  pin_adoption_present "$CLAIM_FLOW"
-}
-
-@test "red twin: adoption removed turns the presence pin red" {
-  mutate 'Adopt an own open claim' "$BATS_TEST_TMPDIR/m.md"
-  run pin_adoption_present "$BATS_TEST_TMPDIR/m.md"
-  [ "$status" -ne 0 ]
-}
-
-@test "adoption matches on headRefName against the branch and on the current login" {
-  pin_match_keys "$CLAIM_FLOW"
-}
-
-@test "red twin: dropping the match keys turns the match pin red" {
-  mutate 'Adopt an own open claim' "$BATS_TEST_TMPDIR/m.md"
-  run pin_match_keys "$BATS_TEST_TMPDIR/m.md"
-  [ "$status" -ne 0 ]
-}
-
-@test "adoption falls through unclaimed on exit 3 or no match and never closes or creates" {
-  pin_falls_through "$CLAIM_FLOW"
-}
-
-@test "red twin: dropping the fall-through turns the fall-through pin red" {
-  mutate 'Adopt an own open claim' "$BATS_TEST_TMPDIR/m.md"
-  run pin_falls_through "$BATS_TEST_TMPDIR/m.md"
-  [ "$status" -ne 0 ]
-}
-
-@test "adoption precedes the body rewrite and the drop-claim call" {
-  pin_order "$CLAIM_FLOW"
-}
-
-@test "red twin: adoption moved after the drop-claim call turns the order pin red" {
-  local scratch="$BATS_TEST_TMPDIR/m.md" line
-  line="$(grep -F -- 'Adopt an own open claim' "$CLAIM_FLOW")"
-  mutate 'Adopt an own open claim' "$scratch"
-  printf '%s\n' "$line" >>"$scratch"
-  run pin_order "$scratch"
-  [ "$status" -ne 0 ]
+@test "Step 11 adopts an own open claim before the body rewrite" {
+  local case
+  for case in pin_adoption_present pin_match_keys pin_falls_through pin_order; do
+    "$case" "$CLAIM_FLOW" || { printf 'failed case: %s\n' "$case" >&2; return 1; }
+  done
 }

@@ -82,27 +82,12 @@ extract_section() {
 @test "the commit step forbids a closing keyword in any commit message" {
   section="$(extract_section '## Resolve the selected unit')"
   [ -n "$section" ]
-  grep -Eiq "closing keyword" <<<"$section"
-  grep -Eiq "no commit message" <<<"$section"
-}
-
-@test "the commit step names the alternate closing-keyword spellings" {
-  # `Closes` is not the only spelling GitHub acts on; a rule naming it alone
-  # reads as a ban on one word rather than on the keyword family.
-  #
-  # The needle is the keyword pair as written, not the bare words: this same
-  # section's step 3 reads "Implement all fixes in the unit", so a bare
-  # `fixes` needle is satisfied by prose that has nothing to do with the rule
-  # and stays green when step 4 drops the spelling.
-  section="$(extract_section '## Resolve the selected unit')"
-  [ -n "$section" ]
-  grep -qF -- '`fixes` / `resolves`' <<<"$section"
-}
-
-@test "the commit step names the squash concatenation as the reason" {
-  section="$(extract_section '## Resolve the selected unit')"
-  [ -n "$section" ]
-  grep -Eiq "squash merge concatenates" <<<"$section"
+  grep -Eiq "closing keyword" <<<"$section" || { echo "case: forbids a closing keyword" >&2; return 1; }
+  grep -Eiq "no commit message" <<<"$section" || { echo "case: forbids it in any commit message" >&2; return 1; }
+  # `Closes` is not the only spelling GitHub acts on; the needle is the pair as
+  # written, since a bare `fixes` is satisfied by "Implement all fixes".
+  grep -qF -- '`fixes` / `resolves`' <<<"$section" || { echo "case: names the alternate spellings" >&2; return 1; }
+  grep -Eiq "squash merge concatenates" <<<"$section" || { echo "case: names the squash concatenation" >&2; return 1; }
 }
 
 @test "the PR body is stated as the sole carrier" {
@@ -142,23 +127,12 @@ extract_section() {
 
 # --- 4. the three pre-implementation peels pin their ordering ---------------
 
-@test "the security screen states its pre-implementation position is load-bearing" {
-  section="$(extract_section '## Fix-time security screen')"
-  [ -n "$section" ]
-  grep -Eiq "load-bearing" <<<"$section"
-  grep -Eiq "no commits" <<<"$section"
-}
-
-@test "the staleness screen states its pre-implementation position is load-bearing" {
-  section="$(extract_section '## Fix-time staleness screen')"
-  [ -n "$section" ]
-  grep -Eiq "load-bearing" <<<"$section"
-  grep -Eiq "no commits" <<<"$section"
-}
-
-@test "the spec screen states its pre-implementation position is load-bearing" {
-  section="$(extract_section '## Fix-time spec screen')"
-  [ -n "$section" ]
-  grep -Eiq "load-bearing" <<<"$section"
-  grep -Eiq "no commits" <<<"$section"
+@test "each screen runs before implementation" {
+  local heading section
+  for heading in '## Fix-time security screen' '## Fix-time staleness screen' '## Fix-time spec screen'; do
+    section="$(extract_section "$heading")"
+    [ -n "$section" ] || { echo "case: $heading has no section" >&2; return 1; }
+    grep -Eiq "load-bearing" <<<"$section" || { echo "case: $heading lacks load-bearing" >&2; return 1; }
+    grep -Eiq "no commits" <<<"$section" || { echo "case: $heading lacks no commits" >&2; return 1; }
+  done
 }

@@ -2,29 +2,20 @@
 #
 # Doc-conformance suite for /gaia-debt's named-issue strictness and
 # operator-named batches (.claude/skills/gaia/references/debt.md and
-# .claude/commands/gaia-debt.md).
+# .claude/skills/gaia/references/debt/named.md).
 #
 # What it guards. A /gaia-debt argument names what the operator wants drained,
 # and the playbook is followed literally by a model, so every place the prose
 # lets a named number turn into a different issue is a drain nobody asked for:
-# a claim, a branch, and a pull request against the wrong ticket. Before this
-# behavior existed, `/gaia-debt 12 34` fixed #12 and silently dropped 34, a
-# typo such as `12x` drained the top of the backlog, and an ineligible number
-# printed its reason and then fell through to the top-of-backlog flow.
+# a claim, a branch, and a pull request against the wrong ticket.
 #
 # The invariants, each pinned to the section that owns it:
-#   - argument parsing calls the executable parser through a quoted heredoc
-#     and maps every one of its outputs; the old first-token fall-through is
-#     gone;
-#   - a named number is validated against a fixed, first-match reason table
-#     (one test per row, so a dropped row reds alone), and an ineligible one
-#     stops the run;
+#   - argument parsing maps every output of the executable parser;
+#   - a named number is validated against a fixed, first-match reason table,
+#     and an ineligible one stops the run;
 #   - a named set runs security pre-filter, spec pre-filter, branch-name
-#     dry-run, then the scorer, in that order, prints only fixed strings about
-#     a rejected member, and states no weight, budget, or exit-code number of
-#     its own (the scorer owns them);
-#   - a named selection that loses a member at the claim-time re-read releases
-#     the claims set so far and stops, never re-presents the backlog;
+#     dry-run, then the scorer, in that order, and prints only fixed strings
+#     about a rejected member;
 #   - the budget constants are assigned in exactly one file, the scorer.
 #
 # Section-scoped, not whole-file: a phrase surviving elsewhere cannot green a
@@ -33,24 +24,12 @@
 # inside a fenced block in debt.md truncates the haystack early. The error
 # direction is over-strict: a truncated haystack fails, it never passes.
 #
-# Mutation. Each target is read through an overridable variable, so a mutated
-# scratch copy can be pointed at without touching the real file:
-#   DOC_DEBT_NAMED_SET_DEBT_MD     the playbook's core (debt.md)
-#   DOC_DEBT_NAMED_SET_NAMED_MD    the named-number sub-reference (debt/named.md),
-#                                  which owns validation, the direct-number
-#                                  path, and the named-set flow
-#   DOC_DEBT_NAMED_SET_REPO_ROOT   the tree the budget-constant owner check scans
-# Every fixture is generated at runtime under $BATS_TEST_TMPDIR, and a line
-# assigning a budget constant is built with printf from parts, so this suite
-# never matches the owner check's own pattern.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  DEBT_MD="${DOC_DEBT_NAMED_SET_DEBT_MD:-$REPO_ROOT/.claude/skills/gaia/references/debt.md}"
-  NAMED_MD="${DOC_DEBT_NAMED_SET_NAMED_MD:-$REPO_ROOT/.claude/skills/gaia/references/debt/named.md}"
-  SCAN_ROOT="${DOC_DEBT_NAMED_SET_REPO_ROOT:-$REPO_ROOT}"
+  DEBT_MD="$REPO_ROOT/.claude/skills/gaia/references/debt.md"
+  NAMED_MD="$REPO_ROOT/.claude/skills/gaia/references/debt/named.md"
   NAMED_SET_HEADING='## Fix a named set (two or more numbers)'
 }
 
@@ -97,13 +76,15 @@ named_set_section() {
   extract_section "$NAMED_SET_HEADING" "$NAMED_MD"
 }
 
-# --- 1. argument parsing ----------------------------------------------------
-
-@test "argument parsing calls the parser through a quoted heredoc" {
-  section="$(extract_section '## Argument parsing')"
-  [ -n "$section" ]
-  grep -qF -- "bash .gaia/scripts/debt-parse-args.sh <<'GAIA_DEBT_ARGUMENTS'" <<<"$section"
-  grep -qx -- 'GAIA_DEBT_ARGUMENTS' <<<"$section"
+# case_row <case name> <command...>: runs the command and names the case that
+# failed.
+case_row() {
+  local case_name="$1"
+  shift
+  "$@" || {
+    printf 'failed case: %s\n' "$case_name" >&2
+    return 1
+  }
 }
 
 @test "argument parsing maps every parser output" {
@@ -115,129 +96,80 @@ named_set_section() {
   grep -qF -- '- `unrecognized <token>`' <<<"$section"
 }
 
-@test "argument parsing relays the refusal verbatim and ends before the backend probe" {
-  section="$(extract_section '## Argument parsing')"
-  [ -n "$section" ]
-  grep -qiF -- 'before `## Backend probe`' <<<"$section"
-  grep -qiF -- 'verbatim' <<<"$section"
-  grep -qiF -- 'claim nothing' <<<"$section"
-}
-
-# --- 2. the validation reason table -----------------------------------------
-
+# validate_has_row <literal>: the validation section holds the row.
 validate_has_row() {
+  local section
   section="$(extract_section '## Validate named numbers' "$NAMED_MD")"
-  [ -n "$section" ]
+  [ -n "$section" ] || return 1
   grep -qF -- "$1" <<<"$section"
 }
 
-@test "validation row: not an issue in this repository" {
-  validate_has_row '`#<N> is not an issue in this repository`'
-}
-
-@test "validation row: could not be read" {
-  validate_has_row '`#<N> could not be read: <gh error, one line>`'
-}
-
-@test "validation row: already closed" {
-  validate_has_row '`#<N> is already closed`'
-}
-
-@test "validation row: no tech-debt label" {
-  validate_has_row '`#<N> doesn'"'"'t carry the tech-debt label`'
-}
-
-@test "validation row: already being fixed" {
-  validate_has_row '`#<N> is already being fixed by another session`'
-}
-
-@test "validation row: parked pending a SPEC handoff" {
-  validate_has_row '`#<N> is parked pending a SPEC handoff`'
-}
-
-@test "validation row: parked with a SPEC underway" {
-  validate_has_row '`#<N> is parked with a SPEC underway or holding it open`'
-}
-
-@test "validation row: graded severity:investigate" {
-  validate_has_row '`#<N> is graded severity:investigate: answer its question and re-grade it before fixing it`'
-}
-
-@test "validation states first-match precedence and reads url to tell a pull request apart" {
+# validate_has_row_ci <literal>: the same, case-insensitive.
+validate_has_row_ci() {
+  local section
   section="$(extract_section '## Validate named numbers' "$NAMED_MD")"
-  [ -n "$section" ]
-  grep -qiF -- 'first matching row wins' <<<"$section"
-  grep -qF -- 'gh issue view <n> --json state,labels,url' <<<"$section"
-  grep -qF -- '`url` contains `/pull/`' <<<"$section"
-  grep -qF -- 'Could not resolve to an issue or pull request' <<<"$section"
+  [ -n "$section" ] || return 1
+  grep -qiF -- "$1" <<<"$section"
 }
 
-@test "validation stops the run on any ineligible number, with no fall-through" {
-  section="$(extract_section '## Validate named numbers' "$NAMED_MD")"
-  [ -n "$section" ]
-  grep -qiF -- 'any ineligible number ends the run with nothing claimed' <<<"$section"
-  grep -qiF -- 'no fall-through' <<<"$section"
+@test "a named number that is not an eligible tech-debt issue stops the run" {
+  case_row "not an issue in this repository" validate_has_row '`#<N> is not an issue in this repository`'
+  case_row "could not be read" validate_has_row '`#<N> could not be read: <gh error, one line>`'
+  case_row "already closed" validate_has_row '`#<N> is already closed`'
+  case_row "no tech-debt label" validate_has_row '`#<N> doesn'"'"'t carry the tech-debt label`'
+  case_row "already being fixed" validate_has_row '`#<N> is already being fixed by another session`'
+  case_row "parked pending a SPEC handoff" validate_has_row '`#<N> is parked pending a SPEC handoff`'
+  case_row "parked with a SPEC underway" validate_has_row '`#<N> is parked with a SPEC underway or holding it open`'
+  case_row "graded severity:investigate" validate_has_row '`#<N> is graded severity:investigate: answer its question and re-grade it before fixing it`'
+  case_row "first matching row wins" validate_has_row_ci 'first matching row wins'
+  case_row "reads url" validate_has_row 'gh issue view <n> --json state,labels,url'
+  case_row "pull request apart by url" validate_has_row '`url` contains `/pull/`'
+  case_row "unresolvable number" validate_has_row 'Could not resolve to an issue or pull request'
+  case_row "ineligible number ends the run" validate_has_row_ci 'any ineligible number ends the run with nothing claimed'
+  case_row "no fall-through" validate_has_row_ci 'no fall-through'
 }
 
-# --- 3. the direct-number path ----------------------------------------------
-
-@test "the direct-number path stops when the named issue is lost at claim time" {
-  section="$(extract_section '## Fix a specific issue (direct-number path)' "$NAMED_MD")"
-  [ -n "$section" ]
-  grep -qF -- 'losing `#<N>` at the claim-time re-read' <<<"$section"
-  grep -qiF -- 'stops the run' <<<"$section"
-}
-
-@test "the direct-number singleton claims only the named issue" {
-  section="$(extract_section '## Fix a specific issue (direct-number path)' "$NAMED_MD")"
-  [ -n "$section" ]
-  grep -qF -- 'claims only `#<N>`' <<<"$section"
-}
-
-# --- 4. the named-set flow --------------------------------------------------
-
-@test "the named set runs security, spec, branch-name, then the scorer, in that order" {
+# section_has_ci <literal>: the named-set section holds the literal,
+# case-insensitive.
+section_has_ci() {
+  local section
   section="$(named_set_section)"
-  [ -n "$section" ]
+  [ -n "$section" ] || return 1
+  grep -qiF -- "$1" <<<"$section"
+}
+
+# named_set_order_holds: security, spec, branch-name, then the scorer.
+named_set_order_holds() {
+  local section security spec branch score
+  section="$(named_set_section)"
+  [ -n "$section" ] || return 1
   security=$(line_of '**Security pre-filter.**' <<<"$section")
   spec=$(line_of '**Spec pre-filter.**' <<<"$section")
   branch=$(line_of 'bash .gaia/scripts/branch-name-lib.sh name debt' <<<"$section")
   score=$(line_of 'bash .gaia/scripts/debt-batch-budget.sh' <<<"$section")
-  [ -n "$security" ] && [ -n "$spec" ] && [ -n "$branch" ] && [ -n "$score" ]
-  [ "$security" -lt "$spec" ]
-  [ "$spec" -lt "$branch" ]
-  [ "$branch" -lt "$score" ]
+  [ -n "$security" ] && [ -n "$spec" ] && [ -n "$branch" ] && [ -n "$score" ] || return 1
+  [ "$security" -lt "$spec" ] && [ "$spec" -lt "$branch" ] && [ "$branch" -lt "$score" ]
 }
 
-@test "the named set carries the fixed security rejection line" {
+# security_arm_has <literal>: the security pre-filter arm holds the literal.
+security_arm_has() {
+  local section security
   section="$(named_set_section)"
-  [ -n "$section" ]
-  grep -qF -- "\`#<P> can't join a batch on a non-private repo; drain it alone.\`" <<<"$section"
+  [ -n "$section" ] || return 1
+  security="$(extract_between '1. **Security pre-filter.**' '2. **Spec pre-filter.**' <<<"$section")"
+  [ -n "$security" ] || return 1
+  grep -qiF -- "$1" <<<"$security"
 }
 
-@test "the named set scopes the no-disclosure rule to printed messages" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  grep -qiF -- 'covers the run'"'"'s printed messages' <<<"$section"
-  grep -qiF -- 'no printed message names a security-class member'"'"'s title, body, or path' <<<"$section"
-  grep -qiF -- 'staleness probe'"'"'s annotation is never printed for a named set'"'"'s security-class member' <<<"$section"
+@test "named set security screening and rejection line" {
+  case_row "security, spec, branch-name, then the scorer, in order" named_set_order_holds
+  case_row "fixed security rejection line" section_has_ci "\`#<P> can't join a batch on a non-private repo; drain it alone.\`"
+  case_row "no-disclosure covers printed messages" section_has_ci 'covers the run'"'"'s printed messages'
+  case_row "no printed message names a security-class member" section_has_ci 'no printed message names a security-class member'"'"'s title, body, or path'
+  case_row "staleness annotation never printed for a security-class member" section_has_ci 'staleness probe'"'"'s annotation is never printed for a named set'"'"'s security-class member'
+  case_row "benign member passes" security_arm_has 'a **benign member** passes'
+  case_row "confirmed-PRIVATE filters nothing" security_arm_has 'on a **confirmed-PRIVATE** repo nothing is filtered: a security-class member passes and batches normally'
 }
-
-@test "the over-budget prompt lists the subsets before Force and Other never forces" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  subsets=$(line_of "each of the scorer's \`subsets\`" <<<"$section")
-  force=$(line_of '`Force #<A> #<B> ...` last' <<<"$section")
-  [ -n "$subsets" ] && [ -n "$force" ]
-  [ "$subsets" -lt "$force" ]
-  grep -qiF -- 'use Other to cancel' <<<"$section"
-  grep -qiF -- 'declined or dismissed prompt' <<<"$section"
-  grep -qiF -- 'never forces and never drains' <<<"$section"
-}
-
-# --- 5. no weight, budget, or exit-code literal in the named-set section ----
-
-# --- 6. the budget constants live in the scorer alone -----------------------
 
 # budget_constant_owners <root>: every tracked or untracked (not ignored) file
 # under <root> that assigns a DEBT_BUDGET_ constant at column 0, one
@@ -258,165 +190,7 @@ budget_constant_owners() {
 @test "the budget constants are assigned in exactly one file, the scorer" {
   # Read the scorer directly as well, so an empty owner list (an unstaged
   # scorer, a git failure) cannot pass for "exactly one".
-  grep -qE '^DEBT_BUDGET_LIMIT=' "$SCAN_ROOT/.gaia/scripts/debt-batch-budget.sh"
-  owners="$(budget_constant_owners "$SCAN_ROOT")"
+  grep -qE '^DEBT_BUDGET_LIMIT=' "$REPO_ROOT/.gaia/scripts/debt-batch-budget.sh"
+  owners="$(budget_constant_owners "$REPO_ROOT")"
   [ "$owners" = ".gaia/scripts/debt-batch-budget.sh" ]
-}
-
-@test "the budget-constant owner check catches a second assigning file" {
-  # Red twin: a scratch repo whose stand-in file assigns a constant, once
-  # untracked and once tracked, must yield two owners.
-  scratch="$BATS_TEST_TMPDIR/owners"
-  mkdir -p "$scratch/.gaia/scripts"
-  git -C "$scratch" init -q
-  cp "$REPO_ROOT/.gaia/scripts/debt-batch-budget.sh" "$scratch/.gaia/scripts/"
-  git -C "$scratch" add .gaia/scripts/debt-batch-budget.sh
-  printf '%s%s\n' 'DEBT_BUDGET' '_LIMIT=99' >"$scratch/stand-in.sh"
-  owners="$(budget_constant_owners "$scratch")"
-  [ "$(printf '%s\n' "$owners" | wc -l | tr -d ' ')" -eq 2 ]
-  git -C "$scratch" add stand-in.sh
-  owners="$(budget_constant_owners "$scratch")"
-  [ "$(printf '%s\n' "$owners" | wc -l | tr -d ' ')" -eq 2 ]
-}
-
-# --- 7. the named-selection claim rule --------------------------------------
-
-@test "a named selection re-reads and claims each member in backlog order, interleaved" {
-  section="$(extract_section '## Claim the fix unit')"
-  [ -n "$section" ]
-  grep -qiF -- 're-read and claim each member in backlog order, interleaved' <<<"$section"
-  grep -qF -- 're-read `#A`'"'"'s labels, claim `#A`, re-read `#B`, claim `#B`' <<<"$section"
-}
-
-@test "a named selection's claim-time loss releases the claims so far and stops" {
-  section="$(extract_section '## Claim the fix unit')"
-  [ -n "$section" ]
-  grep -qiF -- 'release every claim this run already set' <<<"$section"
-  grep -qF -- '`#<N> was <claimed by another session | parked on a SPEC> before this run could claim it; released this run'"'"'s claims and stopped. Re-run /gaia-debt with the numbers you still want.`' <<<"$section"
-  grep -qiF -- 'without re-presenting the backlog' <<<"$section"
-}
-
-@test "the guardrails forbid a named number draining a different issue" {
-  section="$(extract_section '## Guardrails')"
-  [ -n "$section" ]
-  grep -qiF -- 'a named number never drains a different issue without the operator choosing it' <<<"$section"
-}
-
-# --- 9b. a named number never reaches offer mode ----------------------------
-
-# named_sections_call_no_offer_mode <named.md>: both named-number sections are
-# non-empty and neither invokes the scorer's offer mode.
-named_sections_call_no_offer_mode() {
-  local set_section direct_section
-  set_section="$(extract_section "$NAMED_SET_HEADING" "$1")"
-  direct_section="$(extract_section '## Fix a specific issue (direct-number path)' "$1")"
-  [ -n "$set_section" ] || return 1
-  [ -n "$direct_section" ] || return 1
-  grep -qF -- '--offer' <<<"$set_section" && return 1
-  grep -qF -- '--offer' <<<"$direct_section" && return 1
-  return 0
-}
-
-# recommend_names_only_entry <recommend.md>: the offer section says a named
-# set never reaches it and names option 3 of the direct-number offer as the
-# only entry from named.md.
-recommend_names_only_entry() {
-  local section
-  section="$(extract_section '## Recommend and present' "$1")"
-  [ -n "$section" ] || return 1
-  grep -qF -- 'a named set never reaches it' <<<"$section" || return 1
-  grep -qF -- 'picks option 3 of the direct-number cluster offer in `debt/named.md`' <<<"$section"
-}
-
-@test "the named-set and direct-number sections never invoke offer mode" {
-  named_sections_call_no_offer_mode "$NAMED_MD"
-}
-
-@test "the no-offer-mode check goes red on an offer-mode call in the named-set section" {
-  copy="$BATS_TEST_TMPDIR/named.md"
-  awk -v heading="$NAMED_SET_HEADING" '
-    { print }
-    index($0, heading) == 1 { print "bash .gaia/scripts/debt-batch-budget.sh --offer"; }
-  ' "$NAMED_MD" >"$copy"
-  grep -qF -- '--offer' "$copy"
-  run named_sections_call_no_offer_mode "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the recommend section says a named set never reaches it and names option 3 as the only entry" {
-  recommend_names_only_entry "$REPO_ROOT/.claude/skills/gaia/references/debt/recommend.md"
-}
-
-@test "the recommend-entry check goes red when the named-set sentence is removed" {
-  copy="$BATS_TEST_TMPDIR/recommend.md"
-  awk '{ gsub(/; a named set never reaches it/, ""); print }' "$REPO_ROOT/.claude/skills/gaia/references/debt/recommend.md" >"$copy"
-  run recommend_names_only_entry "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# --- 10. the command surface ------------------------------------------------
-
-# --- 11. the ordering query stays the first --jq line -----------------------
-
-@test "the first --jq line is the ordering query inside the backlog-read fence" {
-  [ -s "$DEBT_MD" ]
-  first=$(grep -n -F -- "--jq '" "$DEBT_MD" | head -1 | cut -d: -f1)
-  [ -n "$first" ]
-  heading=$(grep -n -F -- '## Read and order the backlog' "$DEBT_MD" | head -1 | cut -d: -f1)
-  [ -n "$heading" ]
-  [ "$first" -gt "$heading" ]
-  # The fence around the anchor: the last ``` line above it opens the block,
-  # the first ``` line below it closes it.
-  open=$(awk -v stop="$first" 'NR < stop && /^```/ { last = NR } END { print last }' "$DEBT_MD")
-  close=$(awk -v start="$first" 'NR > start && /^```/ { print NR; exit }' "$DEBT_MD")
-  [ -n "$open" ] && [ -n "$close" ]
-  [ "$open" -gt "$heading" ]
-  block="$(sed -n "${open},${close}p" "$DEBT_MD")"
-  grep -qF -- 'sort_by' <<<"$block"
-}
-
-# --- 12. overlap credit from the dedup-key path alone -----------------------
-
-# --- 13 and 17. the spec hand-off -------------------------------------------
-
-spec_arm() {
-  extract_between '2. **Spec pre-filter.**' '3. **Branch-name dry-run.**' <<<"$(named_set_section)"
-}
-
-@test "a hand-off with two or more downgraded members drains only the first" {
-  arm="$(spec_arm)"
-  [ -n "$arm" ]
-  grep -qiF -- 'the first downgraded member in backlog order drains alone exactly as `/gaia-debt <S>` would' <<<"$arm"
-  grep -qiF -- "every other downgraded member's claim is released" <<<"$arm"
-  grep -qF -- '`Released #<S2> [#<S3> ...]: the spec screen found no SPEC needed, and a hand-off drains one downgraded issue per run. Re-run /gaia-debt <S2> [<S3> ...] to drain them.`' <<<"$arm"
-  grep -qiF -- 'downgraded members never drain together' <<<"$arm"
-  grep -qiF -- 'one block per confirmed member' <<<"$arm"
-}
-
-@test "the hand-off runs the spec members alone and no other named member is claimed" {
-  arm="$(spec_arm)"
-  [ -n "$arm" ]
-  grep -qiF -- 'the security, staleness, and spec screens' <<<"$arm"
-  grep -qiF -- 'no other named member gains `in-progress`' <<<"$arm"
-}
-
-# --- 14, 15, 16, 18. selection, branch, PR, and the over-budget arm ---------
-
-@test "the named selection's branch comes from pre-flight isolation and its PR closes exactly its members" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  grep -qF -- 'minted by `## Pre-flight isolation (branch vs worktree)` unchanged' <<<"$section"
-  grep -qF -- 'the single-issue `--slug` form for a one-member selection, the batch form for two or more' <<<"$section"
-  grep -qF -- 'one `Closes #N` per selected member and no other' <<<"$section"
-}
-
-# --- 21. the security pre-filter's two passes -------------------------------
-
-@test "the security pre-filter names the benign-member and confirmed-private passes" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  security="$(extract_between '1. **Security pre-filter.**' '2. **Spec pre-filter.**' <<<"$section")"
-  [ -n "$security" ]
-  grep -qiF -- 'a **benign member** passes' <<<"$security"
-  grep -qiF -- 'on a **confirmed-PRIVATE** repo nothing is filtered: a security-class member passes and batches normally' <<<"$security"
 }

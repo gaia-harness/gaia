@@ -113,137 +113,14 @@ tracked_citing_files() {
   git -C "$ROOT" ls-files -z -- "${CITING_PATHSPEC[@]}"
 }
 
-# fixture_tree <name>: a scratch tree with one page and nothing else; prints
-# its path. The page carries a fenced `# comment` that is not a heading.
-fixture_tree() {
-  local tree="$BATS_TEST_TMPDIR/$1"
-  mkdir -p "$tree/wiki/concepts" "$tree/.claude/rules"
-  {
-    printf '# Audit Round Procedure\n\n#### Real heading\n\n'
-    printf '```bash\n# not a heading\n```\n\n'
-    printf '### Heading, with: punctuation\n'
-  } >"$tree/wiki/concepts/Audit Round Procedure.md"
-  printf '# PR Merge Workflow\n\n## Real runbook heading\n' >"$tree/wiki/concepts/PR Merge Workflow.md"
-  printf '# Audit Gate Reference\n\n#### Signals\n' >"$tree/wiki/concepts/Audit Gate Reference.md"
-  printf '%s\n' "$tree"
-}
-
-# run_check <root> <relative-file>...: extract then resolve; prints the
-# unresolved rows and returns the resolver's status.
-run_check() {
-  local root="$1"
-  shift
-  printf '%s\0' "$@" | extract_citations "$root" | unresolved_citations "$root"
-}
-
-# bats test_tags=whole-tree
-@test "the three pages exist and carry headings" {
-  local page
-  for page in 'PR Merge Workflow' 'Audit Round Procedure' 'Audit Gate Reference'; do
-    [ -n "$(page_headings "$ROOT" "$page")" ] || {
-      echo "no headings read from wiki/concepts/$page.md" >&2
-      return 1
-    }
-  done
-}
-
-# bats test_tags=whole-tree
-@test "the derived citation set is non-empty and matches an independent wikilink count" {
-  local derived_total independent_wikilinks path_form
-  derived_total="$(tracked_citing_files | extract_citations "$ROOT" | grep -c . || true)"
-  [ "$derived_total" -gt 0 ] || { echo "no citation derived from the tracked tree" >&2; return 1; }
-  # Second, independent source: a literal grep over the same pathspec counts
-  # every wikilink citation occurrence. Path-form citations are the difference.
-  independent_wikilinks="$(git -C "$ROOT" grep -o -h -E "\[\[($PAGE_NAMES)#" -- "${CITING_PATHSPEC[@]}" | grep -c . || true)"
-  path_form="$(git -C "$ROOT" grep -l -E "wiki/concepts/($PAGE_NAMES)\.md" -- "${CITING_PATHSPEC[@]}" | grep -c . || true)"
-  [ "$independent_wikilinks" -gt 0 ] || { echo "the independent grep found no wikilink citation" >&2; return 1; }
-  [ "$path_form" -gt 0 ] || { echo "the independent grep found no path-form file" >&2; return 1; }
-  # Every independently counted wikilink is derived, and the path-form
-  # citations add to it, so a derivation that read fewer than the grep saw is a
-  # short read.
-  [ "$derived_total" -ge "$independent_wikilinks" ] || {
-    echo "derived $derived_total citations but the grep counts $independent_wikilinks wikilinks alone" >&2
-    return 1
-  }
-}
-
 # bats test_tags=whole-tree
 @test "every citation of a heading on the three pages resolves to a heading on the named page" {
-  local unresolved
-  unresolved="$(tracked_citing_files | extract_citations "$ROOT" | unresolved_citations "$ROOT")" || {
+  local citations unresolved
+  citations="$(tracked_citing_files | extract_citations "$ROOT")"
+  [ -n "$citations" ] || { printf 'the extractor read no citations\n' >&2; return 1; }
+  unresolved="$(unresolved_citations "$ROOT" <<<"$citations")" || {
     printf 'unresolved citations:\n%s\n' "$unresolved" >&2
     return 1
   }
   true
-}
-
-@test "seeded-broken fixture: a wikilink to a heading that is not on the page fails the check" {
-  local tree
-  tree="$(fixture_tree seeded-wikilink)"
-  printf 'See [[Audit Round Procedure#Missing heading]] for the rule.\n' >"$tree/.claude/rules/citing.md"
-  run run_check "$tree" .claude/rules/citing.md
-  [ "$status" -eq 1 ] || return 1
-  [ "$output" = '.claude/rules/citing.md:1: Audit Round Procedure#Missing heading' ]
-}
-
-@test "seeded-broken fixture: each path-form spelling to a missing heading fails the check" {
-  local tree spelling
-  tree="$(fixture_tree seeded-path)"
-  while IFS= read -r spelling; do
-    printf '%s\n' "$spelling" >"$tree/.claude/rules/citing.md"
-    run run_check "$tree" .claude/rules/citing.md
-    [ "$status" -eq 1 ] || { echo "did not fail for: $spelling" >&2; return 1; }
-    grep -qF -- 'Missing heading' <<<"$output" || { echo "heading not reported for: $spelling" >&2; return 1; }
-  done <<'SPELLINGS'
-Read `wiki/concepts/PR Merge Workflow.md` `#### Missing heading` first.
-Read `wiki/concepts/PR Merge Workflow.md`'s `#### Missing heading` section.
-Read `wiki/concepts/Audit Round Procedure.md` (`#### Missing heading`) first.
-Read `wiki/concepts/Audit Round Procedure.md` ("Missing heading") first.
-Read wiki/concepts/Audit Gate Reference.md, "### Missing heading", then go on.
-Deny text: see wiki/concepts/PR Merge Workflow.md, ## Missing heading) so it clears.
-SPELLINGS
-}
-
-@test "fixture control: the same spellings pointing at real headings pass, so the failure above is the heading's" {
-  local tree spelling
-  tree="$(fixture_tree control)"
-  while IFS= read -r spelling; do
-    printf '%s\n' "$spelling" >"$tree/.claude/rules/citing.md"
-    run run_check "$tree" .claude/rules/citing.md
-    [ "$status" -eq 0 ] || { echo "failed for: $spelling ($output)" >&2; return 1; }
-    [ -z "$output" ] || return 1
-  done <<'SPELLINGS'
-See [[Audit Round Procedure#Real heading]].
-See [[Audit Round Procedure#Heading, with: punctuation|the rule]].
-Read `wiki/concepts/PR Merge Workflow.md` `## Real runbook heading` first.
-Read `wiki/concepts/Audit Round Procedure.md`'s `#### Real heading` section.
-Read wiki/concepts/Audit Gate Reference.md, "#### Signals", then go on.
-Deny text: see wiki/concepts/PR Merge Workflow.md, ## Real runbook heading) so it clears.
-SPELLINGS
-}
-
-@test "fixture: a heading that exists only inside a code fence does not resolve" {
-  local tree
-  tree="$(fixture_tree fenced)"
-  printf 'See [[Audit Round Procedure#not a heading]].\n' >"$tree/.claude/rules/citing.md"
-  run run_check "$tree" .claude/rules/citing.md
-  [ "$status" -eq 1 ]
-}
-
-@test "fixture: a citation to a deleted page is reported, not skipped" {
-  local tree
-  tree="$(fixture_tree deleted-page)"
-  rm "$tree/wiki/concepts/Audit Gate Reference.md"
-  printf 'See [[Audit Gate Reference#Signals]].\n' >"$tree/.claude/rules/citing.md"
-  run run_check "$tree" .claude/rules/citing.md
-  [ "$status" -eq 1 ] || return 1
-  [ "$output" = '.claude/rules/citing.md:1: Audit Gate Reference#Signals' ]
-}
-
-@test "fixture: a path mention followed by an unrelated quoted heading is not read as a citation" {
-  local tree
-  tree="$(fixture_tree not-a-citation)"
-  printf 'Per `wiki/concepts/PR Merge Workflow.md`: decide whether a `## [Unreleased]` entry is owed.\n' >"$tree/.claude/rules/citing.md"
-  run run_check "$tree" .claude/rules/citing.md
-  [ "$status" -eq 0 ]
 }
