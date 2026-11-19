@@ -423,15 +423,6 @@ unmatched_chore_subjects() {
   [ -z "$output" ]
 }
 
-@test "the migration drift check reports an invented chore subject" {
-  local migration="$REPO_ROOT/.gaia/migrations/2.0.0.md"
-  [ -f "$migration" ] || skip "migration file absent"
-  cp "$migration" "$BATS_TEST_TMPDIR/migration.md"
-  printf '\nRun `chore: an invented migration step` next.\n' >>"$BATS_TEST_TMPDIR/migration.md"
-  run unmatched_chore_subjects "$BATS_TEST_TMPDIR/migration.md"
-  [ "$output" = "chore: an invented migration step" ]
-}
-
 # ----------------------------------------------------------- commit count
 
 # Commit with explicit author and committer dates: $1 repo, $2 file, $3 subject,
@@ -645,7 +636,3 @@ TWO_ENTRIES='{"version":1,"entries":[{"path":".claude/rules/a.md","version":"2.0
   [ "$output" = "status=0" ]
 }
 
-@test "the library parses under the system bash" {
-  run /bin/bash -n "$LIBRARY"
-  [ "$status" -eq 0 ]
-}

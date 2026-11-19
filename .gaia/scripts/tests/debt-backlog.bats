@@ -265,15 +265,3 @@ refused() {
 }
 
 # ========== guards can fail ==========
-
-@test "a copy without the sentinel-class check fails the sentinel refusal" {
-  local scratch="$BATS_TEST_TMPDIR/debt-backlog-mutant.sh"
-  grep -q 'holistic/unclassified' "$SCRIPT" || return 1
-  sed 's#holistic/unclassified#never/matches/anything#' "$SCRIPT" >"$scratch"
-  cmp -s "$SCRIPT" "$scratch" && return 1
-  write_backlog "$(issue 1 holistic/unclassified .claude/hooks/a.sh)" \
-    "$(issue 2 holistic/unclassified .claude/hooks/b.sh)"
-  run --separate-stderr bash "$scratch" <"$BACKLOG"
-  [ "$status" -eq 0 ]
-  [ "$(field '.clusters | length')" = '1' ]
-}

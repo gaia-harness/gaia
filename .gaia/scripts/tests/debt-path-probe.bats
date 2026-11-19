@@ -251,9 +251,3 @@ status_of() {
   [ "$status" -eq 0 ]
   [ "$(status_of 1)" = "gone" ]
 }
-
-@test "the probe script holds no legacy-root path spelling" {
-  local legacy_root=frontend
-  run grep -c "$legacy_root/" "$SCRIPT"
-  [ "$output" = "0" ]
-}

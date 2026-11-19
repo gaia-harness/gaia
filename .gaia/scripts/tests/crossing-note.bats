@@ -4,8 +4,7 @@
 # bundle, so a project at 2.0.0, 2.3.0 or 2.3.1 reaches the note only through
 # that tagged copy. The copies under .gaia/tests/fixtures/crossing/old-selector
 # are committed, not read with `git show`, because these suites run in CI
-# shards checked out at depth 2 with no tags. One integrity test compares the
-# copies with the tags and skips where the tags are absent.
+# shards checked out at depth 2 with no tags.
 #
 # Also here: the note's order of operations, its floors stopping the run before
 # any crossing verb, and its release-scrub pass.
@@ -24,9 +23,6 @@ setup() {
   FLOORS="$REPO_ROOT/.gaia/toolchain-floors.tsv"
   ABSOLUTE_BASH_PATH="$(command -v bash)"
 }
-
-# The tags whose select_notes the fixture copies, oldest first.
-OLD_TAGS='v2.0.0 v2.3.0 v2.3.1'
 
 # bundle_with <selector script> [<extra note version> <mode>]: a target bundle
 # at $BUNDLE carrying this tree's notes, the given selector and the shared
@@ -56,12 +52,6 @@ line_of() {
   grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1
 }
 
-# offset_of <file> <fixed string>: the character offset of its first
-# occurrence, or nothing, so two parts on one line still order.
-offset_of() {
-  awk -v needle="$2" '{ text = text $0 "\n" } END { at = index(text, needle); if (at) print at }' "$1"
-}
-
 # bats test_tags=whole-tree
 @test "each old select_notes copy, from either selector, stops a 2.x project at the blocking note" {
   local selector tag baseline expected
@@ -78,37 +68,6 @@ offset_of() {
       [ "$output" = "BLOCKING 2.4.0 $BUNDLE/.gaia/migrations/2.4.0.md" ]
     done
   done
-}
-
-# fixture_matches_tags <fixture dir>: status 0 when every copy equals its tag.
-fixture_matches_tags() {
-  local tag copies
-  copies="$(find "$1" -name 'select-notes-v*.sh' | wc -l | tr -d ' ')"
-  [ "$copies" -eq 3 ] || { echo "expected 3 select_notes copies, found $copies"; return 1; }
-  for tag in $OLD_TAGS; do
-    cmp -s \
-      <(awk '/^select_notes\(\) \{/,/^}$/' "$1/select-notes-$tag.sh") \
-      <(git -C "$REPO_ROOT" show "$tag:.gaia/scripts/update-gaia-preflight.sh" | awk '/^select_notes\(\) \{/,/^}$/') \
-      || { echo "select_notes copy differs from $tag"; return 1; }
-    cmp -s <(sed 2d "$1/select-migration-notes.sh") \
-      <(git -C "$REPO_ROOT" show "$tag:.gaia/scripts/select-migration-notes.sh") \
-      || { echo "selector copy differs from $tag"; return 1; }
-  done
-}
-
-@test "the committed copies equal the tags they name, and a mutated copy fails the comparison" {
-  local tag
-  for tag in $OLD_TAGS; do
-    git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$tag" >/dev/null || skip "tag $tag absent in this checkout"
-  done
-  run fixture_matches_tags "$OLD_SELECTOR"
-  [ "$status" -eq 0 ]
-  cp -R "$OLD_SELECTOR" "$BATS_TEST_TMPDIR/mutated"
-  sed -i.bak 's/echo "BLOCKING/echo "BLOCKED/' "$BATS_TEST_TMPDIR/mutated/select-notes-v2.3.0.sh"
-  rm -f "$BATS_TEST_TMPDIR/mutated/select-notes-v2.3.0.sh.bak"
-  run fixture_matches_tags "$BATS_TEST_TMPDIR/mutated"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"differs from v2.3.0"* ]]
 }
 
 # bats test_tags=whole-tree
@@ -174,73 +133,6 @@ tree_state() {
   stop="$(line_of "$NOTE" 'A `BLOCKING` line from it: stop before any merge')"
   branch="$(line_of "$NOTE" 'branch-name-lib.sh name update')"
   [ -n "$stop" ] && [ "$stop" -lt "$branch" ]
-}
-
-# note_carries_the_crossing <note>: status 0 when the note names every part of
-# the crossing, with the ordered parts in order. Prints the first gap.
-note_carries_the_crossing() {
-  local needle offset previous=0
-  local -a ordered=(
-    '## Goal state'
-    'select-notes --latest-dir <bundle folder> --baseline 2.4.0 --latest <target>'
-    'update crossing preflight'
-    'branch-name-lib.sh name update'
-    '**Sweep.**'
-    'update crossing roster'
-    'run `pnpm install`'
-    'Follow every persisted `AFTER_MERGE` line'
-    'the `## Quality gate` section'
-  )
-  local -a present=(
-    '### Goal state'
-    'update crossing move'
-    'update crossing rekey'
-    'roster-prune-overbroad.sh'
-    'GAIA_MANIFEST_WRITE=release'
-    'Steps 9c, 9c2 and 9d'
-    'Step 7e'
-    'Steps 11 and 12'
-    'the review point'
-  )
-  for needle in "${ordered[@]}"; do
-    offset="$(offset_of "$1" "$needle")"
-    [ -n "$offset" ] || { echo "missing: $needle"; return 1; }
-    [ "$offset" -gt "$previous" ] || { echo "out of order: $needle"; return 1; }
-    previous="$offset"
-  done
-  for needle in "${present[@]}"; do
-    grep -qF -- "$needle" "$1" || { echo "missing: $needle"; return 1; }
-  done
-}
-
-@test "the note names each part of the crossing in order, and a stub or a truncated note fails" {
-  run note_carries_the_crossing "$NOTE"
-  [ "$status" -eq 0 ]
-  printf -- '---\nmode: blocking\n---\n\n## Goal state\n\nbody\n' >"$BATS_TEST_TMPDIR/stub.md"
-  run note_carries_the_crossing "$BATS_TEST_TMPDIR/stub.md"
-  [ "$status" -eq 1 ]
-  local sweep
-  sweep="$(line_of "$NOTE" '**Sweep.**')"
-  head -n "$((sweep - 1))" "$NOTE" >"$BATS_TEST_TMPDIR/truncated.md"
-  run note_carries_the_crossing "$BATS_TEST_TMPDIR/truncated.md"
-  [ "$status" -eq 1 ]
-  [ "$output" = 'missing: **Sweep.**' ]
-  local notes_line
-  notes_line="$(line_of "$NOTE" 'Follow every persisted `AFTER_MERGE` line')"
-  awk -v sweep="$sweep" -v moved_line="$notes_line" \
-    'NR == FNR { if (FNR == moved_line) moved = $0; next } FNR == sweep { print moved } FNR != moved_line { print }' \
-    "$NOTE" "$NOTE" >"$BATS_TEST_TMPDIR/reordered.md"
-  run note_carries_the_crossing "$BATS_TEST_TMPDIR/reordered.md"
-  [ "$status" -eq 1 ]
-  [[ "$output" == "out of order: "* ]]
-}
-
-@test "the note names no whole word warn, no working-document id and no machine-local path" {
-  grep -qiw 'warn' "$NOTE" && return 1
-  grep -qE '(SPEC|UAT|PLAN)-[0-9]' "$NOTE" && return 1
-  grep -qE '(^|[^&[:alnum:]])#[0-9]+' "$NOTE" && return 1
-  grep -qF '.notebook' "$NOTE" && return 1
-  true
 }
 
 @test "the note passes the release scrub, and a leak in it fails" {

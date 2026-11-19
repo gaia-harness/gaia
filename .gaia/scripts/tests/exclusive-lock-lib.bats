@@ -48,13 +48,17 @@ setup() {
   [ ! -e "$LOCK" ]
 }
 
-@test "take: a bare directory at the lock path reads as held" {
+@test "take: a bare directory at the lock path reads as held, and an empty path is refused" {
+  echo "case: a bare directory at the lock path reads as held"
   mkdir "$LOCK"
   run gaia_exclusive_lock_take "$LOCK"
   [ "$status" -eq 1 ]
   [ -d "$LOCK" ]
   [ -e "$LOCK/owner" ] && return 1
-  true
+
+  echo "case: an empty path is refused"
+  run gaia_exclusive_lock_take ""
+  [ "$status" -eq 1 ]
 }
 
 @test "take: the owner file records the taking process" {
@@ -69,11 +73,6 @@ setup() {
   run gaia_exclusive_lock_release "$LOCK"
   [ "$status" -eq 0 ]
   gaia_exclusive_lock_take "$LOCK"
-}
-
-@test "take: an empty path is refused" {
-  run gaia_exclusive_lock_take ""
-  [ "$status" -eq 1 ]
 }
 
 @test "sourcing the lib with PATH empty still succeeds" {

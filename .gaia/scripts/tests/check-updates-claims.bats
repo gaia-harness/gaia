@@ -82,50 +82,63 @@ claim_payload() {
   [ "$(jq -c '.gaiaUpdateClaims' "$CACHE_FILE")" = '[{"number":41,"headRefName":"update/v2.0.4-2026-10-18-1200","tag":"v2.0.4","authorLogin":"other","createdAt":"2026-10-18T12:00:00Z"}]' ]
 }
 
-@test "a failing claim list writes an empty claims array and keeps the other fields" {
+# reset_case: a clean cache, no failing verbs and the claim script back in place,
+# so each row of a case table starts from the setup state.
+reset_case() {
+  rm -f "$CACHE_FILE" "$GH_STATE"/fail-*
+  cp "$SCRIPTS_DIRECTORY/update-claim.sh" "$REFRESH_ROOT/.gaia/scripts/update-claim.sh"
+  printf '[]' >"$GH_STATE/pr-list.json"
+  printf 'octo-cat\n' >"$GH_STATE/login.txt"
+}
+
+@test "failed or missing reads fall back to empty or previous values" {
+  echo "case: a failing claim list writes an empty claims array and keeps the other fields"
+  reset_case
   : >"$GH_STATE/fail-list"
   run_refresher
   [ "$(jq -c '.gaiaUpdateClaims' "$CACHE_FILE")" = "[]" ]
   [ "$(jq -r '.gaiaOriginVersion' "$CACHE_FILE")" = "2.0.4" ]
   [ "$(jq -r '.ghLogin' "$CACHE_FILE")" = "octo-cat" ]
-}
 
-@test "a failing origin read keeps the previous cached origin version" {
+  echo "case: a failing origin read keeps the previous cached origin version"
+  reset_case
   jq -n '{checkedAt: 0, gaiaOriginVersion: "2.0.1"}' >"$CACHE_FILE"
   : >"$GH_STATE/fail-origin"
   run_refresher
   [ "$(jq -r '.gaiaOriginVersion' "$CACHE_FILE")" = "2.0.1" ]
-}
 
-@test "a failing origin read with no previous value leaves the origin version empty" {
+  echo "case: a failing origin read with no previous value leaves the origin version empty"
+  reset_case
   : >"$GH_STATE/fail-origin"
   run_refresher
   [ -z "$(jq -r '.gaiaOriginVersion // ""' "$CACHE_FILE")" ]
-}
 
-@test "an out-of-set login writes an empty ghLogin" {
-  printf 'bad\033name\n' >"$GH_STATE/login.txt"
-  run_refresher
-  [ "$(jq -r '.ghLogin' "$CACHE_FILE")" = "" ]
-}
-
-@test "a failing login read writes an empty ghLogin" {
+  echo "case: a failing login read writes an empty ghLogin"
+  reset_case
   : >"$GH_STATE/fail-login"
   run_refresher
   [ "$(jq -r '.ghLogin' "$CACHE_FILE")" = "" ]
+
+  echo "case: a refresh with no claim script still writes the cache with empty claim fields"
+  reset_case
+  rm "$REFRESH_ROOT/.gaia/scripts/update-claim.sh"
+  run_refresher
+  [ "$(jq -c '.gaiaUpdateClaims' "$CACHE_FILE")" = "[]" ]
+  [ "$(jq -r '.ghLogin' "$CACHE_FILE")" = "" ]
 }
 
-@test "a claim with a control byte never reaches the cache file" {
+@test "a login or claim with control bytes never reaches the cache" {
+  echo "case: an out-of-set login writes an empty ghLogin"
+  reset_case
+  printf 'bad\033name\n' >"$GH_STATE/login.txt"
+  run_refresher
+  [ "$(jq -r '.ghLogin' "$CACHE_FILE")" = "" ]
+
+  echo "case: a claim with a control byte never reaches the cache file"
+  reset_case
   claim_payload 41 "update/v2.0.4-2026-10-18-1200" "$(printf 'bad\033name')" >"$GH_STATE/pr-list.json"
   run_refresher
   [ "$(jq -c '.gaiaUpdateClaims' "$CACHE_FILE")" = "[]" ]
   LC_ALL=C grep -q "$(printf '[\001-\011\013-\037]')" "$CACHE_FILE" && return 1
   true
-}
-
-@test "a refresh with no claim script still writes the cache with empty claim fields" {
-  rm "$REFRESH_ROOT/.gaia/scripts/update-claim.sh"
-  run_refresher
-  [ "$(jq -c '.gaiaUpdateClaims' "$CACHE_FILE")" = "[]" ]
-  [ "$(jq -r '.ghLogin' "$CACHE_FILE")" = "" ]
 }
