@@ -85,6 +85,20 @@ teardown() {
   return 0
 }
 
+# Start one row of a case table. The first row uses the fixture setup already
+# built; every later row builds a fresh sandbox and stub state, and clears the
+# stub variables an earlier row exported, so no row inherits another's state.
+next_case() {
+  echo "row: $1"
+  if [ -n "${CASE_STARTED:-}" ]; then
+    teardown
+    unset FAKE_GH_BRANCH_PR FAKE_GH_RESOLVED_PR FAKE_GH_REPO FAKE_GH_HOST STAGED_HOOK
+    rm -rf "$BATS_TEST_TMPDIR/gh-state"
+    setup
+  fi
+  CASE_STARTED=1
+}
+
 # Write a fake `gh` that answers exactly the calls this hook and
 # post-findings-block.sh make: PR number lookups,
 # `gh auth status`, `gh repo view`, and the comment list/POST/PATCH trio.
@@ -303,74 +317,118 @@ write_sidecar() {
   [ "$status" -eq 0 ]
 }
 
-@test "ignores commands that are not gh pr merge" {
+@test "arming table: only a real gh pr merge in a Bash call arms the post (non-merge, non-Bash, heredoc body, padded heredoc, quoted verb, trailing statement)" {
+  next_case "ignores commands that are not gh pr merge"
   write_sidecar
   export FAKE_GH_STATE
   run_merge_hook "git status"
   [ "$status" -eq 0 ]
   [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
 
-@test "ignores a gh pr merge aimed at a foreign repo" {
-  write_sidecar
-  export FAKE_GH_STATE
-  run_merge_hook "gh pr merge 42 -R other-org/other-repo --squash"
-  [ "$status" -eq 0 ]
-  [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
-
-@test "ignores a non-Bash tool_name payload" {
+  next_case "ignores a non-Bash tool_name payload"
   write_sidecar
   export FAKE_GH_STATE
   run_merge_hook "gh pr merge 42" "Read"
   [ "$status" -eq 0 ]
   [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
 
-@test "no sidecars: the hook runs but posts nothing, and still exits 0" {
+  next_case "a heredoc body carrying the verb produces no post, and the same text without the heredoc does"
+  write_sidecar
   export FAKE_GH_STATE
-  run_merge_hook
+
+  heredoc_command=$'cat > /tmp/notes.txt <<EOF\ngh pr merge 42\nEOF'
+  run_merge_hook "$heredoc_command"
   [ "$status" -eq 0 ]
   [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
 
-@test "settings.json remains valid JSON" {
-  run jq . "$SETTINGS_ABSOLUTE_PATH"
+  run_merge_hook "gh pr merge 42"
   [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
+
+  next_case "the same heredoc-body payload padded past the arming bound still posts nothing (boundary, not masking)"
+  # The generic past-bound pairing (case 2's heredoc, padded past
+  # GAIA_VERB_ARM_MAXIMUM_CHARACTERS, arms because the walker abstains above the bound)
+  # cannot discriminate through THIS hook's observable side effect: the
+  # opener's command word is necessarily `cat`/`tee`, never `gh`, so
+  # repo-scope's act-on-home boundary (which requires the merge to BE the tool
+  # call's first command) declines here regardless of arming or masking, above
+  # the bound or below it. The bound's effect on arming is proven once, at the
+  # library level, in verb-arming-lib.bats ("a payload at the bound is
+  # suppressed and the same payload past it is not"); this pins that the
+  # boundary decline still holds past the bound, so a bigger heredoc never
+  # becomes a spurious post for the wrong reason.
+  write_sidecar
+  export FAKE_GH_STATE
+
+  local padding heredoc_command
+  padding=$(printf 'x%.0s' $(seq 1 16400))
+  heredoc_command=$'cat > /tmp/notes.txt <<EOF\n'"$padding"$'\ngh pr merge 42\nEOF'
+  [ "${#heredoc_command}" -gt 16384 ] || return 1
+
+  run_merge_hook "$heredoc_command"
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_GH_STATE/post_count" ]
+
+  next_case "a quoted verb in the first command produces the post (tokenizer arm)"
+  write_sidecar
+  export FAKE_GH_STATE
+
+  run_merge_hook 'gh pr "merge" 42'
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
+
+  next_case "a trailing statement after the merge does not cost the post"
+  # The merge stays first, with a trailing statement after it: this hook's own
+  # boundary check (repo-scope's act-on-home entry point) requires the merge to
+  # BE the tool call's first command, so a leading `<something> &&` before the
+  # merge declines regardless of arming, unchanged by this work. This is the
+  # multi-statement shape that already worked and must keep working.
+  write_sidecar
+  export FAKE_GH_STATE
+
+  run_merge_hook "gh pr merge 42 --squash && echo done"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
+  true
 }
 
-# The sandbox toplevel is a mktemp directory, and the home repo gh reports is
-# `acme/repo`, so the two are deliberately unrelated. That is what makes the
-# next fixture decisive: `-R other-org/<toplevel-basename>` is the value the
-# repo-NAME comparison calls home and the whole-slug comparison calls foreign.
-# This hook ACTS on the home repo, so calling it home posts a findings block
-# onto THIS repository's pull request of that number.
-@test "a home repository flag ahead of the subcommand posts the block" {
+@test "repo boundary table: posts only for the home repo across -R, --repo, case, cwd and same-named sibling spellings" {
+  next_case "ignores a gh pr merge aimed at a foreign repo"
+  write_sidecar
+  export FAKE_GH_STATE
+  run_merge_hook "gh pr merge 42 -R other-org/other-repo --squash"
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_GH_STATE/post_count" ]
+
+  next_case "a home repository flag ahead of the subcommand posts the block"
+  # The sandbox toplevel is a mktemp directory, and the home repo gh reports is
+  # `acme/repo`, so the two are deliberately unrelated. That is what makes the
+  # next fixture decisive: `-R other-org/<toplevel-basename>` is the value the
+  # repo-NAME comparison calls home and the whole-slug comparison calls foreign.
+  # This hook ACTS on the home repo, so calling it home posts a findings block
+  # onto THIS repository's pull request of that number.
   write_sidecar
   export FAKE_GH_STATE
   run_merge_hook "gh -R acme/repo pr merge 42 --squash"
   [ "$status" -eq 0 ]
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
-}
 
-@test "a foreign repository flag ahead of the subcommand posts nothing" {
+  next_case "a foreign repository flag ahead of the subcommand posts nothing"
   write_sidecar
   export FAKE_GH_STATE
   run_merge_hook "gh -R other-org/other-repo pr merge 42 --squash"
   [ "$status" -eq 0 ]
   [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
 
-@test "a same-named sibling repo posts nothing" {
+  next_case "a same-named sibling repo posts nothing"
   write_sidecar
   export FAKE_GH_STATE
 
   run_merge_hook "gh pr merge 42 -R other-org/$(basename "$REPO") --squash"
   [ "$status" -eq 0 ]
   [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
 
-@test "a -R attached to a same-named sibling posts nothing" {
+  next_case "a -R attached to a same-named sibling posts nothing"
   # gh accepts `-R` attached to its value, a spelling the shared capture
   # misses; missing it here means posting to the wrong repository's pull
   # request rather than merely over-enforcing.
@@ -380,9 +438,8 @@ write_sidecar() {
   run_merge_hook "gh pr merge 42 -Rother-org/$(basename "$REPO")"
   [ "$status" -eq 0 ]
   [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
 
-@test "a --repo naming the home repo still posts" {
+  next_case "a --repo naming the home repo still posts"
   # The boundary's other direction: tightening it must not cost the posting it
   # exists to let through.
   write_sidecar
@@ -391,9 +448,8 @@ write_sidecar() {
   run_merge_hook "gh pr merge 42 --repo acme/repo --squash"
   [ "$status" -eq 0 ]
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
-}
 
-@test "a --repo naming the home repo in another case still posts" {
+  next_case "a --repo naming the home repo in another case still posts"
   # GitHub resolves OWNER/REPO case-insensitively, so this lands on the home
   # repository and a case-sensitive comparison would cost the posting.
   write_sidecar
@@ -402,14 +458,13 @@ write_sidecar() {
   run_merge_hook "gh pr merge 42 --repo ACME/Repo --squash"
   [ "$status" -eq 0 ]
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
-}
 
-# The lib is resolved from the hook's own location rather than from cwd. Run
-# from a subdirectory, a cwd-relative source misses, which left the boundary
-# function undefined; the old `type f && f` guard then fell THROUGH to posting.
-# The two defects composed into no boundary check at all, so this fixture fails
-# on either half alone.
-@test "from a non-root cwd, a foreign merge still posts nothing" {
+  next_case "from a non-root cwd, a foreign merge still posts nothing"
+  # The lib is resolved from the hook's own location rather than from cwd. Run
+  # from a subdirectory, a cwd-relative source misses, which left the boundary
+  # function undefined; the old `type f && f` guard then fell THROUGH to posting.
+  # The two defects composed into no boundary check at all, so this fixture fails
+  # on either half alone.
   write_sidecar
   export FAKE_GH_STATE
 
@@ -420,14 +475,23 @@ write_sidecar() {
   invoke_hook_in "$REPO/sub/dir" "$json" "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
   [ ! -s "$FAKE_GH_STATE/post_count" ]
+  true
 }
 
-# The reference the merge names comes from the shared first-command scan, not
-# from a pattern over the raw command text. These three pin the rows a pattern
-# gets wrong, and each asserts WHICH pull request the block landed on, because
-# a correct block posted onto the wrong pull request is indistinguishable from
-# a correct post by every other assertion in this file.
-@test "the merge's own reference decides, even when its flags come first" {
+@test "no sidecars: the hook runs but posts nothing, and still exits 0" {
+  export FAKE_GH_STATE
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_GH_STATE/post_count" ]
+}
+
+@test "reference resolution table: which PR number the block lands on (flags first, later command, no reference, unresolvable named ref)" {
+  next_case "the merge's own reference decides, even when its flags come first"
+  # The reference the merge names comes from the shared first-command scan, not
+  # from a pattern over the raw command text. These rows pin the spellings a pattern
+  # gets wrong, and each asserts WHICH pull request the block landed on, because
+  # a correct block posted onto the wrong pull request is indistinguishable from
+  # a correct post by every other assertion in this file.
   write_sidecar
   export FAKE_GH_STATE
   # A pattern anchored to a number right after the verb misses this spelling
@@ -439,9 +503,8 @@ write_sidecar() {
 
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
   [ "$(cat "$FAKE_GH_STATE/comment_pr")" = "42" ]
-}
 
-@test "a later command's own merge reference does not decide this one" {
+  next_case "a later command's own merge reference does not decide this one"
   write_sidecar
   export FAKE_GH_STATE
 
@@ -453,9 +516,8 @@ write_sidecar() {
 
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
   [ "$(cat "$FAKE_GH_STATE/comment_pr")" = "42" ]
-}
 
-@test "a merge naming no reference falls back to the current branch's PR" {
+  next_case "a merge naming no reference falls back to the current branch's PR"
   write_sidecar
   export FAKE_GH_STATE
   export FAKE_GH_BRANCH_PR="77"
@@ -465,40 +527,8 @@ write_sidecar() {
 
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
   [ "$(cat "$FAKE_GH_STATE/comment_pr")" = "77" ]
-}
 
-# gh resolves a URL against the repository the URL names, and a branch name
-# against whatever pull request that branch has. Neither is necessarily this
-# repository's, while the block always posts here, so the reference arms carry
-# their own boundary and their own fail direction. `issue-claim-release.sh`
-# already answers both for the identical scanned value.
-@test "a foreign repository's pull-request URL posts nothing" {
-  write_sidecar
-  export FAKE_GH_STATE
-  export FAKE_GH_REPO="acme/repo"
-  # gh would resolve this URL against other-org/other-repo and hand back THAT
-  # repository's number, which the post would then apply to this one.
-  export FAKE_GH_RESOLVED_PR="7"
-
-  run_merge_hook "gh pr merge https://github.com/other-org/other-repo/pull/7"
-  [ "$status" -eq 0 ]
-
-  [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
-
-@test "a pull-request URL naming the home repository still posts, reduced to its number" {
-  write_sidecar
-  export FAKE_GH_STATE
-  export FAKE_GH_REPO="acme/repo"
-
-  run_merge_hook "gh pr merge https://github.com/acme/repo/pull/7"
-  [ "$status" -eq 0 ]
-
-  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
-  [ "$(cat "$FAKE_GH_STATE/comment_pr")" = "7" ]
-}
-
-@test "a named reference gh cannot resolve declines rather than falling back" {
+  next_case "a named reference gh cannot resolve declines rather than falling back"
   write_sidecar
   export FAKE_GH_STATE
   # The merge named a branch; gh resolves no pull request for it (a typo, one
@@ -512,9 +542,40 @@ write_sidecar() {
   [ "$status" -eq 0 ]
 
   [ ! -s "$FAKE_GH_STATE/post_count" ]
+  true
 }
 
-@test "a pull-request URL on another host posts nothing, even naming the home slug" {
+@test "URL reference wiring table: foreign, other host, suffix and port spellings reach the lib's home-PR boundary" {
+  next_case "a foreign repository's pull-request URL posts nothing"
+  # gh resolves a URL against the repository the URL names, and a branch name
+  # against whatever pull request that branch has. Neither is necessarily this
+  # repository's, while the block always posts here, so the reference arms carry
+  # their own boundary and their own fail direction. `issue-claim-release.sh`
+  # already answers both for the identical scanned value.
+  write_sidecar
+  export FAKE_GH_STATE
+  export FAKE_GH_REPO="acme/repo"
+  # gh would resolve this URL against other-org/other-repo and hand back THAT
+  # repository's number, which the post would then apply to this one.
+  export FAKE_GH_RESOLVED_PR="7"
+
+  run_merge_hook "gh pr merge https://github.com/other-org/other-repo/pull/7"
+  [ "$status" -eq 0 ]
+
+  [ ! -s "$FAKE_GH_STATE/post_count" ]
+
+  next_case "a pull-request URL naming the home repository still posts, reduced to its number"
+  write_sidecar
+  export FAKE_GH_STATE
+  export FAKE_GH_REPO="acme/repo"
+
+  run_merge_hook "gh pr merge https://github.com/acme/repo/pull/7"
+  [ "$status" -eq 0 ]
+
+  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
+  [ "$(cat "$FAKE_GH_STATE/comment_pr")" = "7" ]
+
+  next_case "a pull-request URL on another host posts nothing, even naming the home slug"
   write_sidecar
   export FAKE_GH_STATE
   export FAKE_GH_REPO="acme/repo" FAKE_GH_HOST="github.com"
@@ -525,15 +586,14 @@ write_sidecar() {
   [ "$status" -eq 0 ]
 
   [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
 
-# gh's own URL matcher is unanchored after the number and its host comparison
-# drops a port, so each of the next two merges home pull request 7 while a
-# tighter matcher declines and the merge contributes nothing to the
-# finding-recurrence tally. The shape rules live in the lib and
-# `repo-scope-home-pr.bats` covers them exhaustively; these pin that THIS hook
-# reaches them, which is the half a lib-only suite cannot see.
-@test "a home pull-request URL carrying a /files suffix still posts" {
+  next_case "a home pull-request URL carrying a /files suffix still posts"
+  # gh's own URL matcher is unanchored after the number and its host comparison
+  # drops a port, so this row and the next each merge home pull request 7 while a
+  # tighter matcher declines and the merge contributes nothing to the
+  # finding-recurrence tally. The shape rules live in the lib and
+  # `repo-scope-home-pr.bats` covers them exhaustively; these pin that THIS hook
+  # reaches them, which is the half a lib-only suite cannot see.
   write_sidecar
   export FAKE_GH_STATE
   export FAKE_GH_REPO="acme/repo"
@@ -545,9 +605,8 @@ write_sidecar() {
 
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
   [ "$(cat "$FAKE_GH_STATE/comment_pr")" = "7" ]
-}
 
-@test "a home pull-request URL carrying the default port still posts" {
+  next_case "a home pull-request URL carrying the default port still posts"
   write_sidecar
   export FAKE_GH_STATE
   export FAKE_GH_REPO="acme/repo"
@@ -557,9 +616,8 @@ write_sidecar() {
 
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
   [ "$(cat "$FAKE_GH_STATE/comment_pr")" = "7" ]
-}
 
-@test "a suffix does not carry a foreign pull-request URL past the boundary" {
+  next_case "a suffix does not carry a foreign pull-request URL past the boundary"
   write_sidecar
   export FAKE_GH_STATE
   export FAKE_GH_REPO="acme/repo"
@@ -569,70 +627,7 @@ write_sidecar() {
   [ "$status" -eq 0 ]
 
   [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
-
-# ---------- Shared arming decision (data proof, bound, tokenizer) ----------
-
-@test "a heredoc body carrying the verb produces no post, and the same text without the heredoc does" {
-  write_sidecar
-  export FAKE_GH_STATE
-
-  heredoc_command=$'cat > /tmp/notes.txt <<EOF\ngh pr merge 42\nEOF'
-  run_merge_hook "$heredoc_command"
-  [ "$status" -eq 0 ]
-  [ ! -s "$FAKE_GH_STATE/post_count" ]
-
-  run_merge_hook "gh pr merge 42"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
-}
-
-# The generic past-bound pairing (case 2's heredoc, padded past
-# GAIA_VERB_ARM_MAXIMUM_CHARACTERS, arms because the walker abstains above the bound)
-# cannot discriminate through THIS hook's observable side effect: the
-# opener's command word is necessarily `cat`/`tee`, never `gh`, so
-# repo-scope's act-on-home boundary (which requires the merge to BE the tool
-# call's first command) declines here regardless of arming or masking, above
-# the bound or below it. The bound's effect on arming is proven once, at the
-# library level, in verb-arming-lib.bats ("a payload at the bound is
-# suppressed and the same payload past it is not"); this pins that the
-# boundary decline still holds past the bound, so a bigger heredoc never
-# becomes a spurious post for the wrong reason.
-@test "the same heredoc-body payload padded past the arming bound still posts nothing (boundary, not masking)" {
-  write_sidecar
-  export FAKE_GH_STATE
-
-  local padding heredoc_command
-  padding=$(printf 'x%.0s' $(seq 1 16400))
-  heredoc_command=$'cat > /tmp/notes.txt <<EOF\n'"$padding"$'\ngh pr merge 42\nEOF'
-  [ "${#heredoc_command}" -gt 16384 ] || return 1
-
-  run_merge_hook "$heredoc_command"
-  [ "$status" -eq 0 ]
-  [ ! -s "$FAKE_GH_STATE/post_count" ]
-}
-
-@test "a quoted verb in the first command produces the post (tokenizer arm)" {
-  write_sidecar
-  export FAKE_GH_STATE
-
-  run_merge_hook 'gh pr "merge" 42'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
-}
-
-# The merge stays first, with a trailing statement after it: this hook's own
-# boundary check (repo-scope's act-on-home entry point) requires the merge to
-# BE the tool call's first command, so a leading `<something> &&` before the
-# merge declines regardless of arming, unchanged by this work. This is the
-# multi-statement shape that already worked and must keep working.
-@test "a trailing statement after the merge does not cost the post" {
-  write_sidecar
-  export FAKE_GH_STATE
-
-  run_merge_hook "gh pr merge 42 --squash && echo done"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
+  true
 }
 
 # ---------- library-load degradation (gaia-react/gaia#1556) ----------
@@ -675,10 +670,11 @@ run_staged_merge_hook() {
   invoke_hook_in "$REPO" "$json" "$STAGED_HOOK"
 }
 
-# The control that gives the two cases teeth: their assertions (exit 0, no
-# deny) are equally satisfied by a hook that does nothing at all, so the same
-# staging has to be shown posting normally first.
-@test "staged hook, every lib usable: posts the findings block (control)" {
+@test "library-load degradation table: every unusable lib (conflict markers, missing) leaves the hook exiting 0 with no deny, on bash 5 and stock /bin/bash, with both normal-path controls" {
+  next_case "staged hook, every lib usable: posts the findings block (control)"
+  # The control that gives the degradation rows teeth: their assertions (exit 0, no
+  # deny) are equally satisfied by a hook that does nothing at all, so the same
+  # staging has to be shown posting normally first.
   write_sidecar
   export FAKE_GH_STATE
   stage_merge_hook
@@ -686,36 +682,13 @@ run_staged_merge_hook() {
   run_staged_merge_hook
   [ "$status" -eq 0 ]
   [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
-}
 
-# The stock-/bin/bash control, and it is not redundant with the control above.
-# Every pinned case in this suite asserts only exit 0, no output, and no
-# artifact, which a hook that does nothing at all under 3.2 satisfies just as
-# well as a hook that degrades correctly. Without a control on the SAME
-# interpreter proving the normal path still works there, the pinned cases
-# cannot separate the repair from total inertness on the one shell they exist
-# to exercise. Proved hollow before adding this: inserting an early
-# `BASH_VERSINFO -lt 4` exit into the hook left this suite entirely green.
-@test "staged hook under stock /bin/bash, every lib usable: posts the findings block (control)" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
-  write_sidecar
-  export FAKE_GH_STATE
-  stage_merge_hook
-
-  local json
-  json=$(jq -n --arg command_line "gh pr merge 42 --squash --delete-branch" \
-    '{tool_name: "Bash", tool_input: {command: $command_line}}')
-  run bash -c 'cd "$1" && printf %s "$2" | /bin/bash "$3"' _ "$REPO" "$json" "$STAGED_HOOK"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
-}
-
-# Unpinned on purpose: the form each load replaced was a bare `.` behind an
-# `-f` test, carrying no arm at all, so both die on bash 5 as well as 3.2 and
-# these cases have teeth on Linux CI. Asserting a non-2 status is the point:
-# exit 2 is what a PreToolUse hook means by "deny", and this hook has no deny
-# to emit.
-@test "repo-scope.sh holds conflict markers: exit 0, the merge is not denied" {
+  next_case "repo-scope.sh holds conflict markers: exit 0, the merge is not denied"
+  # Unpinned on purpose: the form each load replaced was a bare `.` behind an
+  # `-f` test, carrying no arm at all, so both die on bash 5 as well as 3.2 and
+  # these cases have teeth on Linux CI. Asserting a non-2 status is the point:
+  # exit 2 is what a PreToolUse hook means by "deny", and this hook has no deny
+  # to emit.
   write_sidecar
   export FAKE_GH_STATE
   stage_merge_hook
@@ -724,12 +697,10 @@ run_staged_merge_hook() {
   run_staged_merge_hook
   [ "$status" -eq 0 ]
   grep -qF -- '"permissionDecision"' <<<"$output" && return 1
-  return 0
-}
 
-# repo-scope.sh pulls its three siblings in through further sources, past the
-# parse-check on repo-scope.sh itself, so each needs its own conflicted case.
-@test "a repo-scope sibling holds conflict markers: exit 0, the merge is not denied" {
+  next_case "a repo-scope sibling holds conflict markers: exit 0, the merge is not denied"
+  # repo-scope.sh pulls its three siblings in through further sources, past the
+  # parse-check on repo-scope.sh itself, so each needs its own conflicted case.
   local sibling
   for sibling in repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
     write_sidecar
@@ -743,10 +714,8 @@ run_staged_merge_hook() {
     grep -qF -- '"permissionDecision"' <<<"$output" && return 1
     cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}/$sibling" "$REPO/.claude/hooks/lib/$sibling"
   done
-  return 0
-}
 
-@test "a repo-scope sibling is missing: exit 0, the merge is not denied" {
+  next_case "a repo-scope sibling is missing: exit 0, the merge is not denied"
   local sibling
   for sibling in repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
     write_sidecar
@@ -759,12 +728,62 @@ run_staged_merge_hook() {
     grep -qF -- '"permissionDecision"' <<<"$output" && return 1
     cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}/$sibling" "$REPO/.claude/hooks/lib/$sibling"
   done
-  return 0
-}
 
-# Pinned to stock bash 3.2, where an unbracketed failed source abandons the
-# shell before the load's `|| true`.
-@test "a repo-scope sibling holds conflict markers, under stock /bin/bash: exit 0, the merge is not denied" {
+  next_case "verb-arming.sh holds conflict markers: exit 0, the merge is not denied"
+  # The pre-gate load, and the widest exposure of the hooks that share it:
+  # this one is PreToolUse and the load sits ahead of the arming gate, so an
+  # unparseable verb-arming.sh denied EVERY Bash tool call rather than merges
+  # alone. It parse-checks rather than taking the cheap arm for exactly that
+  # reason, so both halves are closed and its two rows say so: unpinned for
+  # the bash 5 half, which is the one with teeth on Linux CI, and pinned to
+  # /bin/bash for the 3.2 half. The 3.2 case is the one the arm would have left
+  # open, and it would have been left open
+  # SILENTLY: a PreToolUse exit 2 surfaces stderr as the deny reason, and the
+  # arm's `2>/dev/null` suppressed the syntax error naming the broken file.
+  write_sidecar
+  export FAKE_GH_STATE
+  stage_merge_hook
+  write_conflicted_library "$REPO/.claude/hooks/lib/verb-arming.sh"
+
+  run_staged_merge_hook
+  [ "$status" -eq 0 ]
+  grep -qF -- '"permissionDecision"' <<<"$output" && return 1
+
+  next_case "hook-payload.sh missing: exit 0 with empty stdout, nothing posted"
+  write_sidecar
+  export FAKE_GH_STATE
+  stage_merge_hook
+  rm -f "$REPO/.claude/hooks/lib/hook-payload.sh"
+
+  run_staged_merge_hook
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(cat "$FAKE_GH_STATE/post_count")" != "1" ]
+
+  next_case "staged hook under stock /bin/bash, every lib usable: posts the findings block (control)"
+  # The stock-/bin/bash control, and it is not redundant with the control above.
+  # Every pinned case in this suite asserts only exit 0, no output, and no
+  # artifact, which a hook that does nothing at all under 3.2 satisfies just as
+  # well as a hook that degrades correctly. Without a control on the SAME
+  # interpreter proving the normal path still works there, the pinned cases
+  # cannot separate the repair from total inertness on the one shell they exist
+  # to exercise. Proved hollow before adding this: inserting an early
+  # `BASH_VERSINFO -lt 4` exit into the hook left this suite entirely green.
+  [ -x /bin/bash ] || skip "no /bin/bash"
+  write_sidecar
+  export FAKE_GH_STATE
+  stage_merge_hook
+
+  local json
+  json=$(jq -n --arg command_line "gh pr merge 42 --squash --delete-branch" \
+    '{tool_name: "Bash", tool_input: {command: $command_line}}')
+  run bash -c 'cd "$1" && printf %s "$2" | /bin/bash "$3"' _ "$REPO" "$json" "$STAGED_HOOK"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GH_STATE/post_count")" = "1" ]
+
+  next_case "a repo-scope sibling holds conflict markers, under stock /bin/bash: exit 0, the merge is not denied"
+  # Pinned to stock bash 3.2, where an unbracketed failed source abandons the
+  # shell before the load's `|| true`.
   [ -x /bin/bash ] || skip "no /bin/bash"
   local sibling json
   json=$(jq -n --arg command_line "gh pr merge 42 --squash --delete-branch" \
@@ -781,32 +800,8 @@ run_staged_merge_hook() {
     grep -qF -- '"permissionDecision"' <<<"$output" && return 1
     cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}/$sibling" "$REPO/.claude/hooks/lib/$sibling"
   done
-  return 0
-}
 
-# The pre-gate load, and the widest exposure of the hooks that share it:
-# this one is PreToolUse and the load sits ahead of the arming gate, so an
-# unparseable verb-arming.sh denied EVERY Bash tool call rather than merges
-# alone. It parse-checks rather than taking the cheap arm for exactly that
-# reason, so both halves are closed and the pair below says so: unpinned for
-# the bash 5 half, which is the one with teeth on Linux CI, and pinned to
-# /bin/bash for the 3.2 half. The 3.2 case is the one the arm would have left
-# open, and it would have been left open
-# SILENTLY: a PreToolUse exit 2 surfaces stderr as the deny reason, and the
-# arm's `2>/dev/null` suppressed the syntax error naming the broken file.
-@test "verb-arming.sh holds conflict markers: exit 0, the merge is not denied" {
-  write_sidecar
-  export FAKE_GH_STATE
-  stage_merge_hook
-  write_conflicted_library "$REPO/.claude/hooks/lib/verb-arming.sh"
-
-  run_staged_merge_hook
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision"' <<<"$output" && return 1
-  return 0
-}
-
-@test "verb-arming.sh holds conflict markers, under stock /bin/bash: exit 0, the merge is not denied" {
+  next_case "verb-arming.sh holds conflict markers, under stock /bin/bash: exit 0, the merge is not denied"
   [ -x /bin/bash ] || skip "no /bin/bash"
   write_sidecar
   export FAKE_GH_STATE
@@ -819,17 +814,6 @@ run_staged_merge_hook() {
   run bash -c 'cd "$1" && printf %s "$2" | /bin/bash "$3"' _ "$REPO" "$json" "$STAGED_HOOK"
   [ "$status" -eq 0 ]
   grep -qF -- '"permissionDecision"' <<<"$output" && return 1
-  return 0
+  true
 }
 
-@test "hook-payload.sh missing: exit 0 with empty stdout, nothing posted" {
-  write_sidecar
-  export FAKE_GH_STATE
-  stage_merge_hook
-  rm -f "$REPO/.claude/hooks/lib/hook-payload.sh"
-
-  run_staged_merge_hook
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ "$(cat "$FAKE_GH_STATE/post_count")" != "1" ]
-}

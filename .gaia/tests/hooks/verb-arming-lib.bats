@@ -130,24 +130,21 @@ parity() {
 # Arming parity: no spelling that arms today stops arming.
 # ---------------------------------------------------------------------------
 
-@test "the merge fragment arms at command start and after every separator" {
-  parity "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh pr merge 12'
-}
+@test "every fragment arms at command start and after every separator (merge, create, tail-capturing, git, debt-sentinel)" {
+  # case: the merge fragment arms at command start and after every separator
+  parity "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh pr merge 12' || return 1
 
-@test "the pull-request-creation fragment arms at command start and after every separator" {
-  parity "$CREATE_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill'
-}
+  # case: the pull-request-creation fragment arms at command start and after every separator
+  parity "$CREATE_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill' || return 1
 
-@test "the tail-capturing creation fragment arms at command start and after every separator" {
-  parity "$CREATE_TAIL_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill'
-}
+  # case: the tail-capturing creation fragment arms at command start and after every separator
+  parity "$CREATE_TAIL_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill' || return 1
 
-@test "the git-operation fragment arms at command start and after every separator" {
+  # case: the git-operation fragment arms at command start and after every separator
   parity "$GIT_FRAGMENT" "$GIT_WORDS" 'git commit -m subject'
-  parity "$GIT_FRAGMENT" "$GIT_WORDS" 'git -C /some/path push origin main'
-}
+  parity "$GIT_FRAGMENT" "$GIT_WORDS" 'git -C /some/path push origin main' || return 1
 
-@test "the debt-sentinel fragment arms at command start and after every separator" {
+  # case: the debt-sentinel fragment arms at command start and after every separator
   parity "$DEBT_FRAGMENT" "$DEBT_WORDS" 'gh issue create --title subject'
   parity "$DEBT_FRAGMENT" "$DEBT_WORDS" 'gh pr merge 12'
 }
@@ -183,29 +180,53 @@ opener_pair() {
   true
 }
 
-@test "the merge fragment arms after every substitution opener" {
-  opener_pair "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh pr merge 12 --squash)'
-}
+@test "every fragment arms after every substitution opener (merge, create, tail-capturing, git, debt-sentinel)" {
+  # case: the merge fragment arms after every substitution opener
+  opener_pair "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh pr merge 12 --squash)' || return 1
 
-@test "the pull-request-creation fragment arms after every substitution opener" {
-  opener_pair "$CREATE_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill)'
-}
+  # case: the pull-request-creation fragment arms after every substitution opener
+  opener_pair "$CREATE_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill)' || return 1
 
-@test "the tail-capturing creation fragment arms after every substitution opener" {
-  opener_pair "$CREATE_TAIL_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill)'
-}
+  # case: the tail-capturing creation fragment arms after every substitution opener
+  opener_pair "$CREATE_TAIL_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill)' || return 1
 
-@test "the git-operation fragment arms after every substitution opener" {
+  # case: the git-operation fragment arms after every substitution opener
   opener_pair "$GIT_FRAGMENT" "$GIT_WORDS" 'git commit -m subject)'
-  opener_pair "$GIT_FRAGMENT" "$GIT_WORDS" 'git -C /some/path push origin main)'
-}
+  opener_pair "$GIT_FRAGMENT" "$GIT_WORDS" 'git -C /some/path push origin main)' || return 1
 
-@test "the debt-sentinel fragment arms after every substitution opener" {
+  # case: the debt-sentinel fragment arms after every substitution opener
   opener_pair "$DEBT_FRAGMENT" "$DEBT_WORDS" 'gh issue create --title subject)'
   opener_pair "$DEBT_FRAGMENT" "$DEBT_WORDS" 'gh pr merge 12 --squash)'
 }
 
-@test "a substitution opener is the separator group, so the fragment's groups still start at 2" {
+@test "the match array numbers the fragment's groups from 1 under start and 2 under sep, including the tail-capturing fragment and the opener separator group" {
+  # case: the match array numbers the fragment's groups from 1 under start and from 2 under sep
+  match_of "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh pr merge 12'
+  grep -qF "kind=start" <<<"$output" || return 1
+  grep -qF "count=2" <<<"$output" || return 1
+  grep -qF "m[1]=[ ]" <<<"$output" || return 1
+
+  match_of "$MERGE_FRAGMENT" "$MERGE_WORDS" 'echo x && gh pr merge 12'
+  grep -qF "kind=sep" <<<"$output" || return 1
+  grep -qF "count=3" <<<"$output" || return 1
+  grep -qF "m[1]=[&&]" <<<"$output" || return 1
+  grep -qF "m[2]=[ ]" <<<"$output" || return 1
+  true
+
+  # case: the tail-capturing fragment keeps its own group numbering under both patterns
+  match_of "$CREATE_TAIL_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill --base main'
+  grep -qF "kind=start" <<<"$output" || return 1
+  grep -qF "m[1]=[ ]" <<<"$output" || return 1
+  grep -qF "m[2]=[--fill --base main]" <<<"$output" || return 1
+
+  match_of "$CREATE_TAIL_FRAGMENT" "$CREATE_WORDS" 'echo x && gh pr create --fill'
+  grep -qF "kind=sep" <<<"$output" || return 1
+  grep -qF "m[1]=[&&]" <<<"$output" || return 1
+  grep -qF "m[2]=[ ]" <<<"$output" || return 1
+  grep -qF "m[3]=[--fill]" <<<"$output" || return 1
+  true
+
+  # case: a substitution opener is the separator group, so the fragment's groups still start at 2
   match_of "$MERGE_FRAGMENT" "$MERGE_WORDS" 'echo "$(gh pr merge 12 --squash)"'
   grep -qF "kind=sep" <<<"$output" || return 1
   grep -qF "count=3" <<<"$output" || return 1
@@ -451,17 +472,17 @@ opener_pair() {
 # The data proof
 # ---------------------------------------------------------------------------
 
-@test "a heredoc body written to a file by cat does not arm, and the same payload without the opener does" {
+@test "a heredoc body written to a file by cat or tee does not arm, and its twin does" {
+  # case: a heredoc body written to a file by cat does not arm, and the same payload without the opener does
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
   assert_not_armed || return 1
   assert_suppressed 1 || return 1
   assert_length_matches || return 1
 
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_armed
-}
+  assert_armed || return 1
 
-@test "tee, tee -a and an appending redirect prove the same thing cat does" {
+  # case: tee, tee -a and an appending redirect prove the same thing cat does
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "tee /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
   assert_not_armed || return 1
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "tee -a /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
@@ -478,7 +499,8 @@ opener_pair() {
   assert_kind sep
 }
 
-@test "a heredoc fed to an interpreter or a remote shell arms in every spelling" {
+@test "a heredoc whose owner or opener line keeps the match stays armed (interpreter, second command, expansion, non-file output)" {
+  # case: a heredoc fed to an interpreter or a remote shell arms in every spelling
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat <<EOF | bash$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
   assert_armed || return 1
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "bash <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
@@ -486,10 +508,9 @@ opener_pair() {
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "ssh host <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
   assert_armed || return 1
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "\$RUNNER <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_armed
-}
+  assert_armed || return 1
 
-@test "a heredoc belonging to a second command on the opener line keeps the match" {
+  # case: a heredoc belonging to a second command on the opener line keeps the match
   # Condition 6. The command word at the line's start and the redirect on it
   # both belong to `cat`, while the heredoc belongs to the command after the
   # separator, and that is the one the shell hands the body to. Reading the
@@ -504,6 +525,24 @@ opener_pair() {
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "tee /tmp/f || sh <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
   assert_armed || return 1
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > /tmp/f && ssh host <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
+  assert_armed || return 1
+
+  # case: an expansion or a backtick anywhere on the opener line keeps the match
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > \"\$(mktemp)\" <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
+  assert_armed || return 1
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > f\${SUFFIX} <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
+  assert_armed || return 1
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > \$OUT <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
+  assert_armed || return 1
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > \`mktemp\` <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
+  assert_armed || return 1
+
+  # case: output going anywhere but a file keeps the match
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat <<EOF | wc -l$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
+  assert_armed || return 1
+  # No redirect and no file operand at all: the body reaches stdout, which the
+  # whitelist does not accept as a file.
+  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
   assert_armed
 }
 
@@ -517,26 +556,6 @@ opener_pair() {
   assert_not_armed || return 1
   assert_suppressed 1 || return 1
   assert_length_matches
-}
-
-@test "an expansion or a backtick anywhere on the opener line keeps the match" {
-  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > \"\$(mktemp)\" <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_armed || return 1
-  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > f\${SUFFIX} <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_armed || return 1
-  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > \$OUT <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_armed || return 1
-  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > \`mktemp\` <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_armed
-}
-
-@test "output going anywhere but a file keeps the match" {
-  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat <<EOF | wc -l$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_armed || return 1
-  # No redirect and no file operand at all: the body reaches stdout, which the
-  # whitelist does not accept as a file.
-  arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_armed
 }
 
 @test "the <<- form suppresses under a tab-indented delimiter and keeps the match when the delimiter is unreachable" {
@@ -592,7 +611,8 @@ opener_pair() {
 # Abstention, whole-input
 # ---------------------------------------------------------------------------
 
-@test "an unterminated single quote abandons suppression, and its terminated twin does not" {
+@test "an unmodelable text abandons suppression, and its twin does not (unterminated single, double, missing delimiter, dollar-quoted)" {
+  # case: an unterminated single quote abandons suppression, and its terminated twin does not
   local base="cat > /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF${NEWLINE}echo "
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "$base'"
   assert_armed || return 1
@@ -600,27 +620,24 @@ opener_pair() {
   assert_length_matches || return 1
 
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "$base''"
-  assert_not_armed
-}
+  assert_not_armed || return 1
 
-@test "an unterminated double quote abandons suppression, and its terminated twin does not" {
+  # case: an unterminated double quote abandons suppression, and its terminated twin does not
   local base="cat > /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF${NEWLINE}echo "
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "$base\""
   assert_armed || return 1
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "$base\"\""
-  assert_not_armed
-}
+  assert_not_armed || return 1
 
-@test "a heredoc whose delimiter never appears abandons suppression, and its reachable twin does not" {
+  # case: a heredoc whose delimiter never appears abandons suppression, and its reachable twin does not
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > /tmp/f <<NOPE$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
   assert_armed || return 1
   assert_suppressed 0 || return 1
 
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
-  assert_not_armed
-}
+  assert_not_armed || return 1
 
-@test "a dollar-quoted word abandons suppression, and the same payload without one does not" {
+  # case: a dollar-quoted word abandons suppression, and the same payload without one does not
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF${NEWLINE}echo \$'x'"
   assert_armed || return 1
   assert_suppressed 0 || return 1
@@ -717,14 +734,14 @@ opener_pair() {
 # The tokenizer arm
 # ---------------------------------------------------------------------------
 
-@test "a quoted verb in the first command arms through the tokenizer" {
+@test "a quoted verb arms only as the first command through the tokenizer" {
+  # case: a quoted verb in the first command arms through the tokenizer
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh pr "merge" 12'
   assert_armed || return 1
   assert_kind first-command || return 1
-  assert_suppressed 0
-}
+  assert_suppressed 0 || return 1
 
-@test "a quoted verb that is not the first command arms nothing" {
+  # case: a quoted verb that is not the first command arms nothing
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" 'echo x && gh pr "merge" 12'
   assert_not_armed
 }
@@ -764,7 +781,8 @@ opener_pair() {
 # The view contract
 # ---------------------------------------------------------------------------
 
-@test "the view is the same length as the text when suppressed, when the identity, and when over the bound" {
+@test "the view is the same length as the text (suppressed, identity, over bound, trailing newline)" {
+  # case: the view is the same length as the text when suppressed, when the identity, and when over the bound
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF"
   assert_length_matches || return 1
   assert_suppressed 1 || return 1
@@ -779,10 +797,9 @@ opener_pair() {
   over="$head$(make_run $(( 16384 - ${#head} - ${#tail} + 10 )) y)$tail"
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "$over"
   assert_length_matches || return 1
-  assert_suppressed 0
-}
+  assert_suppressed 0 || return 1
 
-@test "the view is the same length as a text whose final character is a newline" {
+  # case: the view is the same length as a text whose final character is a newline
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "cat > /tmp/f <<EOF$NEWLINE$MERGE_INVOCATION${NEWLINE}EOF$NEWLINE"
   assert_not_armed || return 1
   assert_suppressed 1 || return 1
@@ -800,34 +817,6 @@ opener_pair() {
   # No heredoc at all.
   arm "$MERGE_FRAGMENT" "$MERGE_WORDS" "echo x && $MERGE_INVOCATION"
   assert_suppressed 0
-}
-
-@test "the match array numbers the fragment's groups from 1 under start and from 2 under sep" {
-  match_of "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh pr merge 12'
-  grep -qF "kind=start" <<<"$output" || return 1
-  grep -qF "count=2" <<<"$output" || return 1
-  grep -qF "m[1]=[ ]" <<<"$output" || return 1
-
-  match_of "$MERGE_FRAGMENT" "$MERGE_WORDS" 'echo x && gh pr merge 12'
-  grep -qF "kind=sep" <<<"$output" || return 1
-  grep -qF "count=3" <<<"$output" || return 1
-  grep -qF "m[1]=[&&]" <<<"$output" || return 1
-  grep -qF "m[2]=[ ]" <<<"$output" || return 1
-  true
-}
-
-@test "the tail-capturing fragment keeps its own group numbering under both patterns" {
-  match_of "$CREATE_TAIL_FRAGMENT" "$CREATE_WORDS" 'gh pr create --fill --base main'
-  grep -qF "kind=start" <<<"$output" || return 1
-  grep -qF "m[1]=[ ]" <<<"$output" || return 1
-  grep -qF "m[2]=[--fill --base main]" <<<"$output" || return 1
-
-  match_of "$CREATE_TAIL_FRAGMENT" "$CREATE_WORDS" 'echo x && gh pr create --fill'
-  grep -qF "kind=sep" <<<"$output" || return 1
-  grep -qF "m[1]=[&&]" <<<"$output" || return 1
-  grep -qF "m[2]=[ ]" <<<"$output" || return 1
-  grep -qF "m[3]=[--fill]" <<<"$output" || return 1
-  true
 }
 
 @test "the match array is empty when the tokenizer decides and when nothing arms" {
@@ -876,7 +865,8 @@ opener_pair() {
 # reaching an ERR trap would exit the hook before it did any of its work.
 # ---------------------------------------------------------------------------
 
-@test "an armed call returns into a caller running errexit with an ERR trap" {
+@test "a caller running errexit or an ERR trap survives an armed or not-armed return" {
+  # case: an armed call returns into a caller running errexit with an ERR trap
   run bash -c '
     set -euo pipefail
     trap "exit 0" ERR
@@ -886,9 +876,8 @@ opener_pair() {
   ' _ "$LIBRARY_FILE" "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh pr merge 12'
   grep -qF "REACHED kind=start" <<<"$output" || return 1
   true
-}
 
-@test "a not-armed call returns into a caller running errexit with an ERR trap" {
+  # case: a not-armed call returns into a caller running errexit with an ERR trap
   run bash -c '
     set -euo pipefail
     trap "exit 0" ERR
@@ -898,9 +887,8 @@ opener_pair() {
   ' _ "$LIBRARY_FILE" "$MERGE_FRAGMENT" "$MERGE_WORDS" 'gh issue list --state open'
   grep -qF "REACHED kind=empty" <<<"$output" || return 1
   true
-}
 
-@test "a not-armed call returns into a caller trapping ERR without errexit" {
+  # case: a not-armed call returns into a caller trapping ERR without errexit
   run bash -c '
     set -uo pipefail
     trap "exit 0" ERR

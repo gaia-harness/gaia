@@ -160,18 +160,16 @@ cost_line() { grep -q "^Cost: $1, [0-9hms]*\$" <<<"$output" || { printf 'no "Cos
   lacks "tokens"
 }
 
-@test "no operand on worktree-fix+bar with gh failing: the current branch names the block, not confirmed" {
+@test "with gh failing and no operand, the current branch or the unresolved line names the block (worktree-fix+bar, default branch)" {
+  run_merge "gh pr merge"
+  [ "$status" -eq 0 ]
+  [ "$output" = "[PR cost] unresolved: no PR number or branch" ]
+
   git -C "$REPO" checkout -q -b worktree-fix+bar
   run_merge "gh pr merge"
   [ "$status" -eq 0 ]
   cost_line '0\.0M tokens, \$0\.00'
   grep -qF 'merge not confirmed; boundary not recorded (record it: bash .gaia/scripts/usage.sh link --merge <N> --key branch:fix/bar)' <<<"$output"
-}
-
-@test "no operand, on the default branch, gh failing: the single unresolved line" {
-  run_merge "gh pr merge"
-  [ "$status" -eq 0 ]
-  [ "$output" = "[PR cost] unresolved: no PR number or branch" ]
 }
 
 @test "a hostile headRefName creates no file, never reaches the block, and records a hashed branch key" {
@@ -217,7 +215,7 @@ seed_unflushed() {
   gh_view 106 106 fix/unfl MERGED 2026-10-02T00:00:00Z
 }
 
-@test "the cap: a held ledger lock still returns within cap plus 3 s, marks the partial flush and the unconfirmed merge, and writes nothing" {
+@test "the flush cap: a held ledger lock returns within the cap and marks partial; a free lock flushes synchronously" {
   seed_unflushed
   export GAIA_USAGE_MERGE_CAP_SECONDS=1 GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 GAIA_LEDGER_LOCK_TIMEOUT_SECONDS=6
   mkdir "$TELEMETRY_DIRECTORY/specs.lock.d"
@@ -231,10 +229,10 @@ seed_unflushed() {
   grep -qF '! merge not confirmed; boundary not recorded' <<<"$output"
   [ ! -s "$TELEMETRY_DIRECTORY/links.jsonl" ]
   rmdir "$TELEMETRY_DIRECTORY/specs.lock.d"
-}
 
-@test "the cap, control: a free lock flushes synchronously, so the unflushed spend is in the block with no partial marker" {
-  seed_unflushed
+  # Control: a free lock flushes synchronously, so the unflushed spend is in
+  # the block with no partial marker.
+  unset GAIA_LEDGER_LOCK_FORCE_FALLBACK GAIA_LEDGER_LOCK_TIMEOUT_SECONDS
   export GAIA_USAGE_MERGE_CAP_SECONDS=5
   run_merge "gh pr merge 106" s-un
   [ "$status" -eq 0 ]
@@ -271,7 +269,7 @@ slow_render() {
     "$1" >"$REPO/.gaia/scripts/usage.sh"
 }
 
-@test "the render cap: a render past the cap is killed and one timed-out line replaces the block" {
+@test "the render cap: a past-cap render is killed with one timed-out line, numberless names the branch, inside-cap prints the block" {
   seed_uat007
   slow_render 8
   gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
@@ -287,20 +285,15 @@ slow_render() {
   lacks "[PR cost]"
   lacks "[cycle cost at merge]"
   [ "$(merge_rows 103)" -eq 1 ]
-}
 
-@test "the render cap, numberless: the rerun line names the branch the block would have used" {
+  # Numberless: the rerun line names the branch the block would have used.
   git -C "$REPO" checkout -q -b worktree-fix+bar
-  slow_render 8
-  export GAIA_USAGE_RENDER_CAP_SECONDS=1
   run_merge "gh pr merge"
   [ "$status" -eq 0 ]
   [ "$output" = "! readout timed out after 1s; rerun: bash .gaia/scripts/usage.sh pr --key branch:fix/bar" ]
-}
 
-@test "the render cap, control: a render inside the cap prints the block and no timed-out line" {
-  seed_uat007
-  gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
+  # Control: a render inside the cap prints the block and no timed-out line.
+  mv "$REPO/.gaia/scripts/usage-real.sh" "$REPO/.gaia/scripts/usage.sh"
   export GAIA_USAGE_RENDER_CAP_SECONDS=5
   run_merge "gh pr merge 103"
   [ "$status" -eq 0 ]

@@ -22,11 +22,15 @@ setup() {
   # shellcheck source=helpers/package-fixture.sh
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   TREE=""
+  TEMPLATE=""
 }
 
 teardown() {
   if [ -n "${TREE:-}" ]; then
     rm -rf "$TREE"
+  fi
+  if [ -n "${TEMPLATE:-}" ]; then
+    rm -rf "$TEMPLATE"
   fi
   return 0
 }
@@ -64,6 +68,25 @@ build_tree() {
   git -C "$TREE" commit --quiet -m "baseline"
 }
 
+# build_template: build_tree once, kept as TEMPLATE for next_case to clone, so a
+# case table pays for one git init and commit instead of one per case.
+build_template() {
+  build_tree
+  TEMPLATE="$TREE"
+  TREE=""
+}
+
+# next_case <row>: names the row (printed with a failure) and gives it a fresh
+# copy of TEMPLATE as TREE, discarding the previous case's copy.
+next_case() {
+  echo "row: $1"
+  if [ -n "${TREE:-}" ]; then
+    rm -rf "$TREE"
+  fi
+  TREE=$(cd "$(mktemp -d -t settings-drift-XXXXXX)" && pwd -P)
+  cp -R "$TEMPLATE/." "$TREE/"
+}
+
 run_drift() {
   run bash "$TREE/.gaia/scripts/check-settings-drift.sh" "$TREE"
 }
@@ -79,35 +102,39 @@ regenerate() {
 
 # --- the committed shape ---
 
-@test "root settings carry apps/web/ forms of the app-path Edit allows" {
-  jq -e '.permissions.allow | index("Edit(apps/web/app/**)") != null' "$ROOT_SETTINGS"
-  local retired
-  for retired in 'Edit(app/**)' 'Edit(test/**)' 'Edit(public/**)' 'Edit(.playwright/**)' 'Edit(.storybook/**)'; do
-    jq -e --arg r "$retired" '.permissions.allow | index($r) == null' "$ROOT_SETTINGS"
-  done
-  local unit
-  for unit in agents instructions rules skills; do
-    jq -e --arg r "Edit(apps/web/.claude/$unit/**)" '.permissions.allow | index($r) != null' "$ROOT_SETTINGS"
-  done
-}
-
-@test "root settings deny editing every env file and the generated settings, with no .env.* glob" {
-  local rule
-  for rule in 'Edit(**/.env)' 'Edit(.env)' 'Edit(apps/web/.claude/settings.json)'; do
-    jq -e --arg r "$rule" '.permissions.deny | index($r) != null' "$ROOT_SETTINGS"
-  done
-  # A .env.* deny also blocks the tracked, editable .env.example; block-secrets-write.sh covers it.
-  jq -e '.permissions.deny | index("Edit(**/.env.*)") == null' "$ROOT_SETTINGS"
-}
-
-@test "root settings allow the explicit pnpm -C forms and never the blanket ones" {
-  local rule
-  for rule in 'Bash(pnpm -C apps/web typecheck:*)' 'Bash(pnpm -C apps/web lint)' \
-    'Bash(pnpm -C apps/web exec playwright test:*)' 'Bash(pnpm -C .gaia/cli bundle)'; do
-    jq -e --arg r "$rule" '.permissions.allow | index($r) != null' "$ROOT_SETTINGS"
-  done
-  for rule in 'Bash(pnpm -C apps/web:*)' 'Bash(pnpm -C apps/web exec:*)' 'Bash(pnpm -C .gaia/cli:*)'; do
-    jq -e --arg r "$rule" '.permissions.allow | index($r) == null' "$ROOT_SETTINGS"
+@test "root settings carry the expected allow and deny rules" {
+  # One row per rule: <permissions list>|<present or absent>|<rule>.
+  local row list want rule
+  for row in \
+    'allow|present|Edit(apps/web/app/**)' \
+    'allow|absent|Edit(app/**)' \
+    'allow|absent|Edit(test/**)' \
+    'allow|absent|Edit(public/**)' \
+    'allow|absent|Edit(.playwright/**)' \
+    'allow|absent|Edit(.storybook/**)' \
+    'allow|present|Edit(apps/web/.claude/agents/**)' \
+    'allow|present|Edit(apps/web/.claude/instructions/**)' \
+    'allow|present|Edit(apps/web/.claude/rules/**)' \
+    'allow|present|Edit(apps/web/.claude/skills/**)' \
+    'deny|present|Edit(**/.env)' \
+    'deny|present|Edit(.env)' \
+    'deny|present|Edit(apps/web/.claude/settings.json)' \
+    'deny|absent|Edit(**/.env.*)' \
+    'allow|present|Bash(pnpm -C apps/web typecheck:*)' \
+    'allow|present|Bash(pnpm -C apps/web lint)' \
+    'allow|present|Bash(pnpm -C apps/web exec playwright test:*)' \
+    'allow|present|Bash(pnpm -C .gaia/cli bundle)' \
+    'allow|absent|Bash(pnpm -C apps/web:*)' \
+    'allow|absent|Bash(pnpm -C apps/web exec:*)' \
+    'allow|absent|Bash(pnpm -C .gaia/cli:*)'; do
+    IFS='|' read -r list want rule <<<"$row"
+    echo "row: $row"
+    # A .env.* deny also blocks the tracked, editable .env.example; block-secrets-write.sh covers it.
+    if [ "$want" = present ]; then
+      jq -e --arg l "$list" --arg r "$rule" '.permissions[$l] | index($r) != null' "$ROOT_SETTINGS"
+    else
+      jq -e --arg l "$list" --arg r "$rule" '.permissions[$l] | index($r) == null' "$ROOT_SETTINGS"
+    fi
   done
 }
 
@@ -192,8 +219,11 @@ regenerate() {
   grep -qF -- "Edit(../../.env)" <<<"$output"
 }
 
-@test "the presence assertion fails on a dropped hook command and a dropped additionalDirectories" {
-  build_tree
+@test "the presence assertion fails on each dropped or rewritten root entry" {
+  build_template
+  local command_json
+
+  next_case "dropped hook command and dropped additionalDirectories"
   printf '#!/bin/sh\nexit 0\n' >"$TREE/.gaia/cli/gaia"
   jq 'del(.hooks.PreToolUse[0].hooks[0]) | del(.permissions.additionalDirectories)' "$TREE/apps/web/.claude/settings.json" >"$TREE/changed.json"
   mv "$TREE/changed.json" "$TREE/apps/web/.claude/settings.json"
@@ -201,39 +231,29 @@ regenerate() {
   [ "$status" -eq 1 ]
   grep -qF -- "PreToolUse hook command" <<<"$output"
   grep -qF -- 'additionalDirectories entry "../.."' <<<"$output"
-}
 
-# set_handler_if <settings file> <hook index> <if rule>: set one PreToolUse handler's if.
-set_handler_if() {
-  jq --argjson i "$2" --arg r "$3" '.hooks.PreToolUse[0].hooks[$i]["if"] = $r' "$1" >"$TREE/changed.json"
-  mv "$TREE/changed.json" "$1"
-}
-
-@test "the presence assertion fails on a generated handler that dropped the root's if" {
-  build_tree
+  next_case "generated handler dropped the root's if"
   printf '#!/bin/sh\nexit 0\n' >"$TREE/.gaia/cli/gaia"
   set_handler_if "$TREE/.claude/settings.json" 0 'Bash(git *)'
   run_drift
   [ "$status" -eq 1 ]
   grep -qF -- "apps/web/.claude/settings.json is missing" <<<"$output"
-  grep -qF -- "$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")" <<<"$output"
+  command_json=$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")
+  grep -qF -- "$command_json" <<<"$output"
   grep -qF -- '"Bash(git *)"' <<<"$output"
-}
 
-@test "the presence assertion fails on a generated handler whose if was rewritten" {
-  build_tree
+  next_case "generated handler's if was rewritten"
   printf '#!/bin/sh\nexit 0\n' >"$TREE/.gaia/cli/gaia"
   set_handler_if "$TREE/.claude/settings.json" 0 'Bash(git *)'
   set_handler_if "$TREE/apps/web/.claude/settings.json" 0 'Bash(gh *)'
   run_drift
   [ "$status" -eq 1 ]
   grep -qF -- "apps/web/.claude/settings.json is missing" <<<"$output"
-  grep -qF -- "$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")" <<<"$output"
+  command_json=$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")
+  grep -qF -- "$command_json" <<<"$output"
   grep -qF -- '"Bash(git *)"' <<<"$output"
-}
 
-@test "the presence assertion fails when one of two same-command handlers is missing from the generated file" {
-  build_tree
+  next_case "one of two same-command handlers missing from the generated file"
   printf '#!/bin/sh\nexit 0\n' >"$TREE/.gaia/cli/gaia"
   # The generated file carries the handler with the first rule only; the root
   # also carries a copy of it with a second rule.
@@ -245,10 +265,17 @@ set_handler_if() {
   run_drift
   [ "$status" -eq 1 ]
   grep -qF -- "apps/web/.claude/settings.json is missing" <<<"$output"
-  grep -qF -- "$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")" <<<"$output"
+  command_json=$(jq -c '.hooks.PreToolUse[0].hooks[0].command' "$TREE/.claude/settings.json")
+  grep -qF -- "$command_json" <<<"$output"
   grep -qF -- '"Bash(gh pr merge *)"' <<<"$output"
   grep -qF -- '"Bash(git *)"' <<<"$output" && return 1
   true
+}
+
+# set_handler_if <settings file> <hook index> <if rule>: set one PreToolUse handler's if.
+set_handler_if() {
+  jq --argjson i "$2" --arg r "$3" '.hooks.PreToolUse[0].hooks[$i]["if"] = $r' "$1" >"$TREE/changed.json"
+  mv "$TREE/changed.json" "$1"
 }
 
 @test "the presence assertion passes when root and generated agree on command and if" {
@@ -287,24 +314,22 @@ deny_guards_with_if() {
   [ "$output" = "PreToolUse block-no-verify.sh" ]
 }
 
-@test "a missing generated file fails the drift check" {
-  build_tree
+@test "the drift check refuses to report clean when it cannot read its inputs" {
+  build_template
+
+  next_case "missing generated file"
   rm "$TREE/apps/web/.claude/settings.json"
   run_drift
   [ "$status" -eq 1 ]
   grep -qF -- "apps/web/.claude/settings.json" <<<"$output"
-}
 
-@test "the drift check refuses to run without the CLI bundle" {
-  build_tree
+  next_case "missing CLI bundle"
   rm "$TREE/.gaia/cli/gaia"
   run_drift
   [ "$status" -eq 2 ]
   grep -qF -- "Next step" <<<"$output"
-}
 
-@test "a malformed registry makes the drift check exit 2, never clean" {
-  build_tree
+  next_case "malformed registry"
   printf '[{"name":"frontend"}]\n' >"$TREE/.gaia/packages.json"
   run_drift
   [ "$status" -eq 2 ]
@@ -323,38 +348,25 @@ assert_generation_refused() {
   [ "$before" = "$after" ]
 }
 
-@test "an overlay with a hooks key fails generation and writes nothing" {
-  build_tree
-  printf '{"hooks":{}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
-  assert_generation_refused
-  grep -qF -- 'overlay key \"hooks\"' <<<"$output"
-}
-
-@test "an overlay with a sandbox key fails generation and writes nothing" {
-  build_tree
-  printf '{"sandbox":{}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
-  assert_generation_refused
-  grep -qF -- 'overlay key \"sandbox\"' <<<"$output"
-}
-
-@test "an overlay allow entry equal to a root deny entry is a removal attempt" {
-  build_tree
-  printf '{"permissions":{"allow":["Edit(pnpm-lock.yaml)"]}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
-  assert_generation_refused
-  grep -qF -- "re-open what the root denies" <<<"$output"
-}
-
-@test "an overlay rule path with a command substitution fails the charset check" {
-  build_tree
-  printf '{"permissions":{"allow":["Edit(a$(x))"]}}\n' >"$TREE/apps/web/.claude/settings.overlay.json"
-  assert_generation_refused
-  grep -qF -- "characters outside" <<<"$output"
-}
-
-@test "a hostile registry package path fails generation" {
-  build_tree
+@test "generation refuses each hostile overlay or registry input and writes nothing" {
+  build_template
+  # One row per overlay: <overlay JSON>|<expected message>.
+  local row overlay message
+  for row in \
+    '{"hooks":{}}|overlay key \"hooks\"' \
+    '{"sandbox":{}}|overlay key \"sandbox\"' \
+    '{"permissions":{"allow":["Edit(pnpm-lock.yaml)"]}}|re-open what the root denies' \
+    '{"permissions":{"allow":["Edit(a$(x))"]}}|characters outside'; do
+    overlay="${row%%|*}"
+    message="${row#*|}"
+    next_case "overlay $overlay"
+    printf '%s\n' "$overlay" >"$TREE/apps/web/.claude/settings.overlay.json"
+    assert_generation_refused
+    grep -qF -- "$message" <<<"$output"
+  done
   local hostile
   for hostile in 'front end' 'apps/web/../x'; do
+    next_case "registry package path $hostile"
     printf '[{"name":"frontend","path":"%s"}]\n' "$hostile" >"$TREE/.gaia/packages.json"
     run "$TREE/.gaia/cli/gaia" packages sync-settings --repo-root "$TREE"
     [ "$status" -eq 2 ]
@@ -364,10 +376,12 @@ assert_generation_refused() {
 
 # --- MIG-013: no new files under a retired root path ---
 
-@test "every retired root directory is refused" {
-  build_tree
+@test "the retired-root-path block refuses each retired directory and allows apps/web files, a registered root package and a C13 rename" {
+  build_template
   local directory
+  next_case "retired root directories"
   for directory in app test public .playwright .storybook; do
+    echo "row: retired $directory"
     mkdir -p "$TREE/$directory"
     printf 'x\n' >"$TREE/$directory/new.ts"
     git -C "$TREE" add "$directory/new.ts"
@@ -376,20 +390,16 @@ assert_generation_refused() {
     grep -qF -- "$directory/new.ts -> apps/web/$directory/new.ts" <<<"$output"
     git -C "$TREE" rm --cached --quiet "$directory/new.ts"
   done
-}
 
-@test "a new apps/web/app file is not refused by the retired-path block" {
-  build_tree
+  next_case "a new apps/web/app file is allowed"
   mkdir -p "$TREE/apps/web/app"
   printf 'x\n' >"$TREE/apps/web/app/x.tsx"
   git -C "$TREE" add apps/web/app/x.tsx
   run_hook
   [ "$status" -eq 0 ]
   grep -qF -- "running lint-staged" <<<"$output"
-}
 
-@test "the retired-path block stands down while a package is registered at the root" {
-  build_tree
+  next_case "the block stands down while a package is registered at the root"
   write_packages_today "$TREE"
   rm -rf "$TREE/apps/web/gaia.package.json"
   mkdir -p "$TREE/app"
@@ -397,10 +407,8 @@ assert_generation_refused() {
   git -C "$TREE" add app/x.tsx
   run_hook
   [ "$status" -eq 0 ]
-}
 
-@test "a C13-exempt rename staged alone is not refused" {
-  build_tree
+  next_case "a C13-exempt rename staged alone is allowed"
   mkdir -p "$TREE/apps/web/app"
   mkdir -p "$TREE/app"
   printf 'content that is long enough to keep rename detection exact\n' >"$TREE/app/y.ts"
@@ -411,3 +419,4 @@ assert_generation_refused() {
   [ "$status" -eq 0 ]
   grep -qF -- "migration renames staged" <<<"$output"
 }
+

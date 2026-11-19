@@ -87,110 +87,71 @@ resolve() {
     fi )
 }
 
-@test "h1: a home-repository URL resolves to its number" {
-  [ "$(resolve 'https://github.com/acme/widgets/pull/7')" = "7" ]
+# Fail with the row's name when a reference does not resolve as expected. An
+# optional fourth argument sets the fake home host for that row only.
+expect_resolve() {
+  local row="$1" expected="$2" reference="$3" home_host="${4:-}" actual
+  if [ -n "$home_host" ]; then
+    actual="$(FAKE_GH_HOME_HOST="$home_host" resolve "$reference")"
+  else
+    actual="$(resolve "$reference")"
+  fi
+  if [ "$actual" != "$expected" ]; then
+    echo "row '$row': expected $expected, got $actual for: $reference" >&2
+    return 1
+  fi
 }
 
-@test "h2: another repository's URL declines" {
-  [ "$(resolve 'https://github.com/other-org/other-repo/pull/7')" = "decline" ]
+# One boundary rule, eight inputs: the home repository resolves, another
+# repository or host declines, an enterprise home host resolves its own URL and
+# not github.com (without it the host comparison could pass by hardcoding
+# github.com), the slug and host compare case-insensitively, and neither a
+# suffix nor a port widens the comparison. The relaxation is to the shape,
+# never to the boundary.
+@test "repo and host comparison: home resolves, foreign repo or host declines, enterprise home host, case-insensitive slug and host, suffix and port never widen the comparison" {
+  expect_resolve "h1 a home-repository URL resolves to its number" 7 'https://github.com/acme/widgets/pull/7'
+  expect_resolve "h2 another repository's URL declines" decline 'https://github.com/other-org/other-repo/pull/7'
+  expect_resolve "h3 the home slug on another host declines" decline 'https://ghe.example.com/acme/widgets/pull/7'
+  expect_resolve "h4 an enterprise home host resolves its own URL" 7 'https://ghe.example.com/acme/widgets/pull/7' ghe.example.com
+  expect_resolve "h4 an enterprise home host declines github.com" decline 'https://github.com/acme/widgets/pull/7' ghe.example.com
+  expect_resolve "h5 a slug differing only in case resolves" 7 'https://github.com/ACME/Widgets/pull/7'
+  expect_resolve "h6 a host differing only in case resolves" 7 'https://GitHub.COM/acme/widgets/pull/7'
+  expect_resolve "h11 a suffix does not widen the repository comparison (other repo)" decline 'https://github.com/other-org/other-repo/pull/7/files'
+  expect_resolve "h11 a suffix does not widen the repository comparison (other host)" decline 'https://ghe.example.com/acme/widgets/pull/7/files'
+  expect_resolve "h14 a port does not widen the host comparison" decline 'https://ghe.example.com:443/acme/widgets/pull/7'
 }
 
-@test "h3: the home slug on another host declines" {
-  # The same OWNER/REPO served from another host is another repository, which
-  # a slug-only comparison would accept.
-  [ "$(resolve 'https://ghe.example.com/acme/widgets/pull/7')" = "decline" ]
-}
-
-@test "h4: on an enterprise home host, its own URL resolves and github.com does not" {
-  # The mirror direction. Without it the host comparison could pass by
-  # hardcoding github.com rather than by reading the home repository.
-  export FAKE_GH_HOME_HOST="ghe.example.com"
-  [ "$(resolve 'https://ghe.example.com/acme/widgets/pull/7')" = "7" ]
-  [ "$(resolve 'https://github.com/acme/widgets/pull/7')" = "decline" ]
-}
-
-@test "h5: a slug differing only in case resolves" {
-  # GitHub resolves OWNER/REPO case-insensitively, so this URL lands on the
-  # home repository and a case-sensitive comparison would cost the action.
-  [ "$(resolve 'https://github.com/ACME/Widgets/pull/7')" = "7" ]
-}
-
-@test "h6: a host differing only in case resolves" {
-  [ "$(resolve 'https://GitHub.COM/acme/widgets/pull/7')" = "7" ]
-}
-
-# h7-h10 are the suffix group: gh's URL matcher is unanchored after the
-# number, so each of these is a URL gh merges as home pull request 7 while an
-# anchored matcher here declines and posts nothing. h7 is the one a human
-# actually produces, by copying the address bar off the Files tab.
-@test "h7: a /files suffix resolves" {
-  [ "$(resolve 'https://github.com/acme/widgets/pull/7/files')" = "7" ]
-}
-
-@test "h8: a query suffix resolves" {
-  [ "$(resolve 'https://github.com/acme/widgets/pull/7?w=1')" = "7" ]
-}
-
-@test "h9: a fragment suffix resolves" {
-  [ "$(resolve 'https://github.com/acme/widgets/pull/7#issuecomment-1')" = "7" ]
-}
-
-@test "h10: a trailing slash resolves" {
-  [ "$(resolve 'https://github.com/acme/widgets/pull/7/')" = "7" ]
-}
-
-@test "h11: a suffix does not widen the repository comparison" {
-  # The relaxation is to the shape, never to the boundary: a foreign URL is
-  # still foreign with the same suffix that makes a home one resolve.
-  [ "$(resolve 'https://github.com/other-org/other-repo/pull/7/files')" = "decline" ]
-  [ "$(resolve 'https://ghe.example.com/acme/widgets/pull/7/files')" = "decline" ]
-}
-
-@test "h12: the shapes gh accepts and this deliberately does not" {
-  # The relaxation's own limits, pinned so the lib's comment about them is a
-  # claim that re-checks itself. gh reads pull request 7 out of both of these,
-  # so a reader who took "follow gh" as the rule would loosen the separator
-  # class to `.*` and strip userinfo, and only this case would object.
-  #
-  # First: a suffix has to start with a separator, so `7files` is not pull
-  # request 7 with a suffix, it is an unrecognized shape. Second: userinfo
-  # stays on the compared authority, where gh's `u.Hostname()` drops it.
-  [ "$(resolve 'https://github.com/acme/widgets/pull/7files')" = "decline" ]
-  [ "$(resolve 'https://user@github.com/acme/widgets/pull/7')" = "decline" ]
-}
-
-@test "h13: the default port resolves, as gh's own Hostname() drops it" {
-  [ "$(resolve 'https://github.com:443/acme/widgets/pull/7')" = "7" ]
-}
-
-@test "h14: a port does not widen the host comparison" {
-  [ "$(resolve 'https://ghe.example.com:443/acme/widgets/pull/7')" = "decline" ]
-}
-
-@test "h15: a bracketed IPv6 authority keeps its brackets" {
-  # The port strip cuts at a colon followed by digits, so it reaches the port
-  # in the second spelling and none of the address's own colons in the first.
-  # A strip written to cut at the LAST colon regardless would leave `[:` here
-  # and decline a URL naming the home host outright.
-  export FAKE_GH_HOME_HOST="[::1]"
-  [ "$(resolve 'https://[::1]/acme/widgets/pull/7')" = "7" ]
-  [ "$(resolve 'https://[::1]:443/acme/widgets/pull/7')" = "7" ]
-}
-
-@test "h16: a non-URL reference declines" {
-  # The consumers gate this function behind a `*://*` arm, so a number or a
-  # branch never reaches it there. It answers for itself anyway: a function
-  # whose whole job is a boundary must not depend on its caller's arm to
-  # refuse a value it cannot read.
-  [ "$(resolve '7')" = "decline" ]
-  [ "$(resolve 'some-branch')" = "decline" ]
-  [ "$(resolve '')" = "decline" ]
-}
-
-@test "h17: a URL naming no pull request declines" {
-  [ "$(resolve 'https://github.com/acme/widgets')" = "decline" ]
-  [ "$(resolve 'https://github.com/acme/widgets/issues/7')" = "decline" ]
-  [ "$(resolve 'https://github.com/acme/widgets/pull/')" = "decline" ]
+# One parser, many input shapes. h7-h10 are the suffix group: gh's URL matcher
+# is unanchored after the number, so each is a URL gh merges as home pull
+# request 7 while an anchored matcher declines and posts nothing. The h12 and
+# h20 rows pin the relaxation's limits: a suffix has to start with a separator
+# (`7files` is an unrecognized shape), userinfo stays on the compared authority
+# where gh's `u.Hostname()` drops it, and only http and https are read as a URL
+# (the `http` and mixed-case rows are the control). h15 keeps a bracketed IPv6
+# authority's brackets: a strip cutting at the LAST colon would leave `[:` and
+# decline a URL naming the home host outright. h16 pins that the function
+# refuses a non-URL itself rather than depending on its callers' `*://*` arm.
+@test "URL shape: suffix, query, fragment and slash resolve; 7files, userinfo, non-URL, no-PR URLs and odd schemes decline; default port and IPv6 resolve" {
+  expect_resolve "h7 a /files suffix resolves" 7 'https://github.com/acme/widgets/pull/7/files'
+  expect_resolve "h8 a query suffix resolves" 7 'https://github.com/acme/widgets/pull/7?w=1'
+  expect_resolve "h9 a fragment suffix resolves" 7 'https://github.com/acme/widgets/pull/7#issuecomment-1'
+  expect_resolve "h10 a trailing slash resolves" 7 'https://github.com/acme/widgets/pull/7/'
+  expect_resolve "h12 7files declines" decline 'https://github.com/acme/widgets/pull/7files'
+  expect_resolve "h12 userinfo declines" decline 'https://user@github.com/acme/widgets/pull/7'
+  expect_resolve "h13 the default port resolves, as gh's own Hostname() drops it" 7 'https://github.com:443/acme/widgets/pull/7'
+  expect_resolve "h15 a bracketed IPv6 authority keeps its brackets" 7 'https://[::1]/acme/widgets/pull/7' '[::1]'
+  expect_resolve "h15 a bracketed IPv6 authority with a port resolves" 7 'https://[::1]:443/acme/widgets/pull/7' '[::1]'
+  expect_resolve "h16 a number declines" decline '7'
+  expect_resolve "h16 a branch name declines" decline 'some-branch'
+  expect_resolve "h16 an empty reference declines" decline ''
+  expect_resolve "h17 a URL with no pull request declines" decline 'https://github.com/acme/widgets'
+  expect_resolve "h17 an issue URL declines" decline 'https://github.com/acme/widgets/issues/7'
+  expect_resolve "h17 an empty pull number declines" decline 'https://github.com/acme/widgets/pull/'
+  expect_resolve "h20 ftp declines" decline 'ftp://github.com/acme/widgets/pull/7'
+  expect_resolve "h20 ssh declines" decline 'ssh://github.com/acme/widgets/pull/7'
+  expect_resolve "h20 httpx declines" decline 'httpx://github.com/acme/widgets/pull/7'
+  expect_resolve "h20 http resolves" 7 'http://github.com/acme/widgets/pull/7'
+  expect_resolve "h20 a mixed-case scheme resolves" 7 'HTTPS://github.com/acme/widgets/pull/7'
 }
 
 @test "h18: an unresolvable home declines rather than reading the URL" {
@@ -204,20 +165,6 @@ resolve() {
   # green, so read it as a claim about the answer and not about the line.
   export FAKE_GH_REPO_VIEW_EXIT=1
   [ "$(resolve 'https://github.com/acme/widgets/pull/7')" = "decline" ]
-}
-
-@test "h20: only http and https are read as a URL" {
-  # gh reads no other scheme as a URL: it falls through to the branch lookup
-  # and resolves nothing. A general scheme class here would hand a number back
-  # for a reference gh never resolved, which is an accept where gh declines,
-  # the one direction this function cannot diverge in. The `http` and mixed-
-  # case rows are the control: narrowing the scheme must not cost a spelling
-  # gh does merge, and a URL scheme is case-insensitive.
-  [ "$(resolve 'ftp://github.com/acme/widgets/pull/7')" = "decline" ]
-  [ "$(resolve 'ssh://github.com/acme/widgets/pull/7')" = "decline" ]
-  [ "$(resolve 'httpx://github.com/acme/widgets/pull/7')" = "decline" ]
-  [ "$(resolve 'http://github.com/acme/widgets/pull/7')" = "7" ]
-  [ "$(resolve 'HTTPS://github.com/acme/widgets/pull/7')" = "7" ]
 }
 
 @test "h19: a decline leaves no number behind for a caller to read" {

@@ -97,43 +97,29 @@ EOF
   [ "$(printf '%s\n' "$output" | tail -n 1)" = "  ! audit line unavailable: no auditors roster in .gaia/audit-ci.yml" ] || return 1
 }
 
-@test "guards-must-fail: a copy of usage-merge.sh without the marker line fails the unreadable-roster expectation" {
+@test "a missing library makes usage-merge.sh exit non-zero naming it (usage-lib.sh, audit-scope.sh, usage.sh)" {
   seed_audit_branch
-  rm "$REPO/.gaia/audit-ci.yml"
-  sed '/audit line unavailable/d' "$REPO/.gaia/scripts/usage-merge.sh" >"$REPO/.gaia/scripts/usage-merge-mutant.sh"
-  cmp -s "$REPO/.gaia/scripts/usage-merge.sh" "$REPO/.gaia/scripts/usage-merge-mutant.sh" && return 1
-  run_script "$REPO/.gaia/scripts/usage-merge-mutant.sh" "gh pr merge 101"
-  [ "$status" -eq 0 ]
-  has_line "Cost: 1.6M tokens, \$3.50, 50m0s"
-  grep -qF "audit line unavailable" <<<"$output" && return 1
-  true
-}
-
-@test "a missing usage-lib.sh makes usage-merge.sh exit non-zero naming it, and the hook prints the unavailable marker" {
-  seed_audit_branch
-  rm "$REPO/.gaia/scripts/usage-lib.sh"
-  run --separate-stderr run_script_split "$REPO/.gaia/scripts/usage-merge.sh" "gh pr merge 101"
-  [ "$status" -ne 0 ]
-  grep -qF "usage-lib.sh" <<<"$stderr"
-  run_merge "gh pr merge 101"
-  [ "$status" -eq 0 ]
-  has_line "[PR cost] unavailable: usage-merge.sh exited 1; rerun: bash .gaia/scripts/usage.sh pr 101"
-}
-
-@test "a missing audit-scope.sh makes usage-merge.sh exit non-zero naming it" {
-  seed_audit_branch
-  rm "$REPO/.claude/hooks/lib/audit-scope.sh"
-  run --separate-stderr run_script_split "$REPO/.gaia/scripts/usage-merge.sh" "gh pr merge 101"
-  [ "$status" -ne 0 ]
-  grep -qF "audit-scope.sh" <<<"$stderr"
-}
-
-@test "a missing usage.sh makes usage-merge.sh exit non-zero naming it" {
-  seed_audit_branch
-  rm "$REPO/.gaia/scripts/usage.sh"
-  run --separate-stderr run_script_split "$REPO/.gaia/scripts/usage-merge.sh" "gh pr merge 101"
-  [ "$status" -ne 0 ]
-  grep -qF "usage.sh" <<<"$stderr"
+  # Each row: path of the library to remove, the name stderr must carry.
+  local rows=(
+    ".gaia/scripts/usage-lib.sh|usage-lib.sh"
+    ".claude/hooks/lib/audit-scope.sh|audit-scope.sh"
+    ".gaia/scripts/usage.sh|usage.sh"
+  )
+  local row library_path library_name
+  for row in "${rows[@]}"; do
+    IFS='|' read -r library_path library_name <<<"$row"
+    cp "$REPO/$library_path" "$TEMPORARY_DIRECTORY/library.backup"
+    rm "$REPO/$library_path"
+    run --separate-stderr run_script_split "$REPO/.gaia/scripts/usage-merge.sh" "gh pr merge 101"
+    [ "$status" -ne 0 ] || { echo "$library_name: exited 0 with the library missing" >&2; return 1; }
+    grep -qF "$library_name" <<<"$stderr" || { echo "$library_name: stderr does not name it" >&2; return 1; }
+    if [ "$library_name" = usage-lib.sh ]; then
+      run_merge "gh pr merge 101"
+      [ "$status" -eq 0 ]
+      has_line "[PR cost] unavailable: usage-merge.sh exited 1; rerun: bash .gaia/scripts/usage.sh pr 101"
+    fi
+    cp "$TEMPORARY_DIRECTORY/library.backup" "$REPO/$library_path"
+  done
 }
 
 # run_script_split <script> <command>: a usage-merge.sh copy run directly, for

@@ -77,6 +77,7 @@ setup() {
   echo "# readme" > "$REPO/README.md"
   git -C "$REPO" add README.md
   git -C "$REPO" commit --quiet -m "init"
+  INITIAL_BASE=$(git -C "$REPO" rev-parse HEAD)
 
   git -C "$REPO" checkout --quiet -b feature
 }
@@ -206,45 +207,116 @@ test("adds two numbers", () => {
 });
 '
 
-# --- no-op when nothing emergent changed ---
+# --- case-table plumbing ---
 
-@test "allows a PR that changes no emergent test files (no-op)" {
+# clear_ledger: drop every worthiness-ledger line REPO's gate reads.
+clear_ledger() {
+  rm -f "$( . "$REPO/.claude/hooks/lib/worthiness-ledger.sh" && worthiness_ledger_path "$REPO" )"
+}
+
+# reset_row: return the fixture to setup()'s state between the rows of a case
+# table: main and the feature branch back at the initial commit, no ledger line,
+# no registry, root descriptor or run folder, the default descriptor, and the
+# real hook. Untracked fixture files a row wrote are removed by name here, since
+# a hard reset keeps them.
+reset_row() {
+  git -C "$REPO" branch --quiet -f main "$INITIAL_BASE"
+  git -C "$REPO" reset --quiet --hard "$INITIAL_BASE"
+  clear_ledger
+  rm -rf "$REPO/.gaia/local" "$REPO/.gaia/packages.json" "$REPO/gaia.package.json"
+  write_builtin_descriptor "$REPO"
+  HOOK_ABSOLUTE_PATH="$HOME_ROOT/.claude/hooks/worthiness-presence-check.sh"
+}
+
+# expect_deny <row> [needle...]: the last hook run exited 0 with a deny whose
+# output carries every needle. Names the row on failure.
+expect_deny() {
+  local row="$1" needle
+  shift
+  [ "$status" -eq 0 ] || { echo "row $row: status $status: $output" >&2; return 1; }
+  denied || { echo "row $row: expected a deny, got: $output" >&2; return 1; }
+  for needle in "$@"; do
+    grep -qF -- "$needle" <<<"$output" || { echo "row $row: the deny lacks \"$needle\": $output" >&2; return 1; }
+  done
+  return 0
+}
+
+# expect_allow <row>: the last hook run exited 0 without a deny.
+expect_allow() {
+  [ "$status" -eq 0 ] || { echo "row $1: status $status: $output" >&2; return 1; }
+  denied && { echo "row $1: expected an allow, got: $output" >&2; return 1; }
+  return 0
+}
+
+@test "no gated test changed: the merge is allowed for a non-test file and for non-test source under apps/web/app/components" {
   commit_file "README.md" "# changed"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  ! denied
+  expect_allow readme-only
+
+  reset_row
+  commit_file "apps/web/app/components/Foo/index.tsx" "export const Foo = () => null;"
+  run_merge_hook
+  expect_allow component-source-only
 }
 
-@test "denies a PR changing only a deterministic util test with no ledger line" {
+# Each surface's pair shares one commit: the deny without a verdict, then the
+# allow once the verdict is recorded. A bats file is outside every scope glob,
+# so until a flow-tests file lists it nothing is demanded.
+@test "each gated surface denies without a verdict and allows with one: a strict util test, a test helper folder test, a .playwright spec, a route test, a listed bats flow test (not demanded unlisted) and a listed CLI flow test" {
   commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  [[ "$output" == *"adds two numbers"* ]]
-}
-
-@test "allows a PR changing only a deterministic util test once its verdict is recorded" {
-  commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
+  expect_deny strict-util "adds two numbers"
   seed_matching "apps/web/app/utils/x/index.test.ts" "adds two numbers" "keep"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
+  expect_allow strict-util-with-verdict
 
-@test "red twin: a selection library that drops the strict verdict lets the util test through" {
-  commit_file "apps/web/app/utils/x/index.test.ts" "$STRICT_TEST"
+  reset_row
+  write_helper_folder_descriptor
+  commit_file "apps/web/test/helper.test.ts" "$STRICT_TEST"
   run_merge_hook
-  denied
-  # The hook loads the library from its own location, so the mutation is a
-  # scratch copy of the whole hook directory.
-  local stage="$BATS_TEST_TMPDIR/staged-hooks-strict"
-  cp -r "$(dirname "$HOOK_ABSOLUTE_PATH")" "$stage"
-  sed 's/ or (.classification \/\/ "") == "strict"//' "$HOME_ROOT/.claude/hooks/lib/worthiness-selection.sh" >"$stage/lib/worthiness-selection.sh"
-  if grep -q '== "strict"' "$stage/lib/worthiness-selection.sh"; then return 1; fi
-  HOOK_ABSOLUTE_PATH="$stage/worthiness-presence-check.sh"
+  expect_deny helper-folder "adds two numbers"
+  seed_matching "apps/web/test/helper.test.ts" "adds two numbers" "keep"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
+  expect_allow helper-folder-with-verdict
+
+  reset_row
+  commit_file "apps/web/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_deny playwright-spec
+  seed_matching "apps/web/.playwright/e2e/home.spec.ts" "renders a label" "keep"
+  run_merge_hook
+  expect_allow playwright-spec-with-verdict
+
+  reset_row
+  commit_file "$ROUTE_TEST_PATH" "$ROUTE_TEST_SOURCE"
+  run_merge_hook
+  expect_deny route-test "refuses an anonymous visitor"
+  seed_matching "$ROUTE_TEST_PATH" "refuses an anonymous visitor"
+  run_merge_hook
+  expect_allow route-test-with-verdict
+
+  reset_row
+  build_flow_bats_source
+  commit_file "$FLOW_BATS_PATH" "$FLOW_BATS_SOURCE"
+  run_merge_hook
+  expect_allow unlisted-bats-flow-test
+  write_flow_tests_file "$FLOW_BATS_PATH"
+  run_merge_hook
+  expect_deny listed-bats-flow-test "refuses a spec that still carries uats"
+  ( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/audit-ledger/append-worthiness.mjs" \
+      "$FLOW_BATS_PATH" "refuses a spec that still carries uats" keep )
+  run_merge_hook
+  expect_allow listed-bats-flow-test-with-verdict
+
+  reset_row
+  commit_file "$FLOW_CLI_PATH" 'import {expect, test} from "vitest";
+test("refuses a spec that still carries uats", () => {
+  expect(1 + 1).toBe(2);
+});
+'
+  write_flow_tests_file "$FLOW_CLI_PATH"
+  run_merge_hook
+  expect_deny listed-cli-flow-test "refuses a spec that still carries uats"
 }
 
 # The app's test helper folder joins the emergent list as one glob.
@@ -252,40 +324,59 @@ write_helper_folder_descriptor() {
   write_builtin_descriptor "$REPO" '' '' '["app/components/**/*.test.ts","app/components/**/*.test.tsx",".playwright/**/*.spec.ts",".playwright/**/*.spec.tsx",".playwright/**/*.test.ts",".playwright/**/*.test.tsx","app/route-tests/**/*.test.ts","test/**/*.test.ts"]'
 }
 
-@test "denies a PR changing only a test helper folder test with no ledger line" {
+@test "the descriptor's scope globs decide what is gated: the helper folder glob, an apps/web component test but not a root app/ one, an apps/web .playwright spec but not a root one, globs that match nothing, a page glob, and a literal path-dot registry" {
   write_helper_folder_descriptor
   commit_file "apps/web/test/helper.test.ts" "$STRICT_TEST"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  [[ "$output" == *"adds two numbers"* ]]
-}
-
-@test "allows a PR changing only a test helper folder test once its verdict is recorded" {
-  write_helper_folder_descriptor
-  commit_file "apps/web/test/helper.test.ts" "$STRICT_TEST"
-  seed_matching "apps/web/test/helper.test.ts" "adds two numbers" "keep"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
-
-@test "red twin: the default emergent list without the helper folder glob lets the helper folder test through" {
-  write_helper_folder_descriptor
-  commit_file "apps/web/test/helper.test.ts" "$STRICT_TEST"
-  run_merge_hook
-  denied
+  expect_deny helper-folder-glob
   write_builtin_descriptor "$REPO"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
+  expect_allow default-list-without-helper-folder-glob
 
-@test "allows a PR changing only non-test source under apps/web/app/components" {
-  commit_file "apps/web/app/components/Foo/index.tsx" "export const Foo = () => null;"
+  reset_row
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  ! denied
+  expect_deny apps-web-component-test "apps/web/app/components/X/tests/X.test.tsx"
+  reset_row
+  commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_allow root-app-component-test
+
+  reset_row
+  commit_file "apps/web/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_deny apps-web-playwright-spec
+  reset_row
+  commit_file ".playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_allow root-playwright-spec
+
+  reset_row
+  write_packages_moved "$REPO"
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_deny moved-layout-default-globs
+  write_packages_moved "$REPO" '["app/**/*.test.ts"]' '["app/utils/**"]' '["nomatch/**"]'
+  run_merge_hook
+  expect_allow globs-matching-nothing
+
+  reset_row
+  write_packages_moved "$REPO" '["app/**/*.test.ts"]' '["app/utils/**"]' '["app/pages/**/*.test.tsx"]'
+  commit_file "apps/web/app/pages/x/tests/page.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_deny page-glob "renders a label"
+
+  # The path-dot registry is untracked, so the plain reset between its two
+  # halves keeps it.
+  reset_row
+  write_packages_today "$REPO"
+  commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_deny path-dot-root-app-test "app/components/X/tests/X.test.tsx"
+  git -C "$REPO" reset --quiet --hard "$INITIAL_BASE"
+  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_allow path-dot-apps-web-test
 }
 
 # --- clean-case deny: emergent test changed, no matching ledger line ---
@@ -299,27 +390,20 @@ write_helper_folder_descriptor() {
   [[ "$output" == *"renders a label"* ]]
 }
 
-@test "still denies when the working directory is a subdirectory" {
-  # The regression this pins: the gate located its shared libraries, and read
-  # the changed test files, by bare repository-root-relative paths, so from any
-  # subdirectory the loads and the reads all failed and every path out of them
-  # was a fail-open. One `cd` cleared the merge with no verdict demanded, and
-  # nothing said so.
+# The regression this pins: the gate located its shared libraries, and read
+# the changed test files, by bare repository-root-relative paths, so from any
+# subdirectory the loads and the reads all failed and every path out of them
+# was a fail-open. One `cd` cleared the merge with no verdict demanded, and
+# nothing said so. The allow row is the other half: the rooting must not make
+# the gate deny everything from a subdirectory either, which would be a
+# different silent break.
+@test "from a subdirectory working directory the gate still denies a missing verdict and still allows a matching one" {
   commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook_from "apps/web/app/components"
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "renders a label" <<<"$output"
-}
-
-@test "still allows a matching verdict when the working directory is a subdirectory" {
-  # The other half: the rooting must not make the gate deny everything from a
-  # subdirectory either, which would be a different silent break.
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  expect_deny subdirectory-without-verdict "renders a label"
   seed_matching "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" "keep"
   run_merge_hook_from "apps/web/app/components"
-  [ "$status" -eq 0 ]
-  refute_denied
+  expect_allow subdirectory-with-verdict
 }
 
 @test "a local branch named origin/main does not shadow the remote-tracking base" {
@@ -336,63 +420,45 @@ write_helper_folder_descriptor() {
   grep -qF -- "renders a label" <<<"$output"
 }
 
-@test "denies an emergent test when the ledger has only an unrelated line" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+# One committed test serves the ledger rows, each from an empty ledger. A `fix`
+# verdict still satisfies presence and signal match: the verdict is advisory and
+# never read for the presence decision.
+@test "a gated test needs a ledger line at its current signal, whatever its verdict: an unrelated line denies, a matching keep or fix line allows, a stale signal denies, and appending a matching line turns a deny into an allow" {
+  local test_path="apps/web/app/components/Foo/tests/index.test.tsx"
+  local widget_path="apps/web/app/components/Widget/tests/index.test.tsx"
+  local zero_signal="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  commit_file "$test_path" "$EMERGENT_TEST"
+
   seed_ledger "apps/web/app/components/Other/tests/index.test.tsx" "something else" "sha256:deadbeef" "keep"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-}
+  expect_deny unrelated-line-only
 
-# --- allow: matching ledger line present ---
-
-@test "allows an emergent test with a matching keep line" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  seed_matching "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" "keep"
+  clear_ledger
+  seed_matching "$test_path" "renders a label" "keep"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  ! denied
-}
+  expect_allow matching-keep-line
 
-@test "allows on a matching line regardless of verdict (verdict not gated)" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  # A `fix` verdict still satisfies presence + signal match; the verdict is
-  # advisory and never read for the presence decision.
-  seed_ledger "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" \
-    "$(signals_for apps/web/app/components/Foo/tests/index.test.tsx | jq -r 'select(.fullName=="renders a label") | .signal')" \
+  clear_ledger
+  seed_ledger "$test_path" "renders a label" \
+    "$(signals_for "$test_path" | jq -r 'select(.fullName=="renders a label") | .signal')" \
     "fix" "no-interaction-assertions"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  ! denied
-}
+  expect_allow matching-fix-line
 
-# --- stale-signal rejection ---
-
-@test "denies when the ledger line carries a stale (pre-edit) signal" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  clear_ledger
   # A line written before a later edit: real file, real fullName, wrong signal.
-  seed_ledger "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" \
-    "sha256:0000000000000000000000000000000000000000000000000000000000000000" "keep"
+  seed_ledger "$test_path" "renders a label" "$zero_signal" "keep"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-}
+  expect_deny stale-signal
 
-# --- playwright emergent surface ---
-
-@test "denies an emergent .playwright spec with no ledger entry" {
-  commit_file "apps/web/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
+  reset_row
+  commit_file "$widget_path" "$COMMENT_EMERGENT_PRE"
+  seed_ledger "$widget_path" "renders a widget" "$zero_signal" "keep"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-}
-
-@test "allows an emergent .playwright spec with a matching line" {
-  commit_file "apps/web/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
-  seed_matching "apps/web/.playwright/e2e/home.spec.ts" "renders a label" "keep"
+  expect_deny transition-before-append
+  seed_matching "$widget_path" "renders a widget"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  ! denied
+  expect_allow transition-after-append
 }
 
 # --- path encoding: a non-ASCII path is still scoped in ---
@@ -412,107 +478,104 @@ write_helper_folder_descriptor() {
 
 # --- fail-open: unparseable file is skipped, not denied ---
 
-@test "skips (allows) an emergent test file with a syntax error" {
+# bats test_tags=whole-tree
+@test "fails open on what it cannot read: a test file with a syntax error, a story file with a syntax error, and audit-base-provenance.sh missing on a merge the intact stage denies" {
   commit_file "apps/web/app/components/Foo/tests/index.test.tsx" 'import {test} from "vitest";
 test("oops" => { syntax(((;'
   run_merge_hook
-  [ "$status" -eq 0 ]
-  ! denied
+  expect_allow test-file-syntax-error
+
+  reset_row
+  write_story_descriptor
+  commit_file "apps/web/app/utils/tests/broken.stories.tsx" "export const Broken = {play: async ((( => {"
+  run_merge_hook
+  expect_allow story-file-syntax-error
+
+  reset_row
+  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook_staged_root ""
+  expect_deny intact-staged-root
+  run_merge_hook_staged_root "audit-base-provenance.sh"
+  expect_allow audit-base-provenance-absent
 }
 
 # --- command-position match ---
 
-@test "ignores commands that are not gh pr merge" {
+@test "arming: a command that is not a merge is ignored; a merge after a separator, a quoted verb, a heredoc body without its opener and a heredoc piped into bash reach the gate; a cat-to-file heredoc body does not" {
   commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook "git status"
-  [ "$status" -eq 0 ]
-  ! denied
-}
 
-@test "matches gh pr merge after a shell separator" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook "git status"
+  expect_allow not-a-merge
+
   run_merge_hook "git fetch origin && gh pr merge 30 --squash"
-  [ "$status" -eq 0 ]
-  denied
+  expect_deny after-a-separator
+
+  run_merge_hook 'gh pr "merge" 30 --squash'
+  expect_deny quoted-verb "Worthiness presence gate"
+
+  run_merge_hook $'cat > f.txt <<EOF\ngh pr merge 30 --squash\nEOF\n'
+  expect_allow cat-to-file-heredoc-body
+
+  run_merge_hook $'gh pr merge 30 --squash\nEOF\n'
+  expect_deny heredoc-opener-removed
+
+  run_merge_hook $'cat <<EOF | bash\ngh pr merge 30 --squash\nEOF\n'
+  expect_deny heredoc-piped-into-bash
 }
 
 # --- coexistence: deny names this gate, distinct from the audit gate ---
 
-@test "deny reason references the worthiness presence gate" {
+# The refusal reaches Claude, so naming the ledger writer in it would offer a
+# way to record a verdict without the review the gate exists to require.
+@test "the refusal names the gate and the evaluator as the one unblock path, offers no direct ledger write, and tells the agent to fix on the branch or ask with the rotation and CI cost, without debt wording" {
+  local refusal needle
   commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"Worthiness presence gate"* ]]
+  expect_deny names-the-gate "Worthiness presence gate"
+  expect_deny names-the-evaluator "To unblock:" "worthiness evaluator"
+  grep -qF -- "append-worthiness" <<<"$output" && { echo "row no-direct-ledger-write: $output" >&2; return 1; }
+  refusal=$(reason_of_output)
+  for needle in \
+    'To unblock:' \
+    'worthiness evaluator' \
+    '.claude/skills/gaia/references/worthiness-step.md' \
+    'only keep verdicts needs no commit' \
+    'Fix a fix verdict on the branch: this is the recommendation' \
+    'ask the human' \
+    'clearances the fix rotates and the CI cycle it costs' \
+    'Accepted residual is the alternative' \
+    'Retry gh pr merge'; do
+    grep -qF -- "$needle" <<<"$refusal" || { echo "row next-steps: the refusal lacks \"$needle\": $refusal" >&2; return 1; }
+  done
+  refusal_free_of_debt_wording "$refusal" || { echo "row no-debt-wording: $refusal" >&2; return 1; }
 }
 
-@test "deny reason names the evaluator as the one unblock path" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  grep -qF -- "To unblock:" <<<"$output"
-  grep -qF -- "worthiness evaluator" <<<"$output"
-  denied
-}
+# --- comment-only edit vs. an assertion absorbed into a comment ---
 
-# The refusal reaches Claude, so naming the ledger writer in it offers a way to
-# record a verdict without the review the gate exists to require.
-@test "deny reason never offers a direct ledger write" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "append-worthiness" <<<"$output" && return 1
-  true
-}
-
-# --- comment-only edit vs. an assertion absorbed into a comment (UAT-005, UAT-014, UAT-008) ---
-
-@test "allows a comment-only reword after a matching verdict (emergent, UAT-005)" {
-  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
+@test "the signal ignores comments: a reworded comment keeps a matching verdict, the same reword with a mismatched signal denies, and an assertion absorbed into a comment denies" {
+  local widget_path="apps/web/app/components/Widget/tests/index.test.tsx"
+  commit_file "$widget_path" "$COMMENT_EMERGENT_PRE"
   # Seed BEFORE the edit, against the pre-edit revision's real signal.
-  seed_matching "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget"
-  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_POST"
+  seed_matching "$widget_path" "renders a widget"
+  commit_file "$widget_path" "$COMMENT_EMERGENT_POST"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-  grep -qF -- "renders a widget" <<<"$output" && return 1
-  true
-}
+  expect_allow comment-reword-after-verdict
+  grep -qF -- "renders a widget" <<<"$output" && { echo "row comment-reword-after-verdict: the test is named: $output" >&2; return 1; }
 
-@test "denies the same comment-reword fixture when the ledger's signal doesn't match (UAT-005 negative control)" {
-  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
-  seed_ledger "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget" \
+  reset_row
+  commit_file "$widget_path" "$COMMENT_EMERGENT_PRE"
+  seed_ledger "$widget_path" "renders a widget" \
     "sha256:0000000000000000000000000000000000000000000000000000000000000000" "keep"
-  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_POST"
+  commit_file "$widget_path" "$COMMENT_EMERGENT_POST"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-}
+  expect_deny comment-reword-mismatched-signal
 
-@test "denies when a live assertion is absorbed into a comment after a matching verdict (emergent, UAT-014)" {
-  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$ABSORB_EMERGENT_PRE"
-  seed_matching "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget"
-  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$ABSORB_EMERGENT_POST"
+  reset_row
+  commit_file "$widget_path" "$ABSORB_EMERGENT_PRE"
+  seed_matching "$widget_path" "renders a widget"
+  commit_file "$widget_path" "$ABSORB_EMERGENT_POST"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  grep -qF -- "renders a widget" <<<"$output"
-  denied
-}
-
-@test "three-run transition: deny, then allow once a matching line is appended, then allow again (UAT-008, TST-009)" {
-  commit_file "apps/web/app/components/Widget/tests/index.test.tsx" "$COMMENT_EMERGENT_PRE"
-  # Run 1: a non-matching literal seeded -- deny.
-  seed_ledger "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget" \
-    "sha256:0000000000000000000000000000000000000000000000000000000000000000" "keep"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  grep -qF -- '"permissionDecision": "deny"' <<<"$output"
-
-  # Run 2: append a line at the CURRENT signal -- allow.
-  seed_matching "apps/web/app/components/Widget/tests/index.test.tsx" "renders a widget"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
+  expect_deny absorbed-assertion "renders a widget"
 }
 
 # ---------------------------------------------------------------------------
@@ -539,41 +602,21 @@ run_merge_hook_library_absent() {
   invoke_hook_in "$REPO" "$json" "$stage/worthiness-presence-check.sh"
 }
 
-@test "arming: a quoted verb now reaches the gate (tokenizer arm)" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook 'gh pr "merge" 30 --squash'
-  [ "$status" -eq 0 ]
-  denied
-  [[ "$output" == *"Worthiness presence gate"* ]]
-}
-
-@test "arming: a cat-to-file heredoc body carrying the verb does not reach the gate" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook $'cat > f.txt <<EOF\ngh pr merge 30 --squash\nEOF\n'
-  [ "$status" -eq 0 ]
-  refute_denied
-}
-
-@test "arming: removing the heredoc opener line leaves the same body text reaching the gate" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook $'gh pr merge 30 --squash\nEOF\n'
-  [ "$status" -eq 0 ]
-  denied
-}
-
-@test "arming: a heredoc piped into bash still reaches the gate" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook $'cat <<EOF | bash\ngh pr merge 30 --squash\nEOF\n'
-  [ "$status" -eq 0 ]
-  denied
-}
-
 # bats test_tags=whole-tree
-@test "library-absent: verb-arming.sh missing denies every Bash tool call, naming the file" {
+@test "a required library absent fails closed: verb-arming.sh missing denies every Bash tool call naming the file, lib/hook-payload.sh absent exits 2 naming the library" {
+  local hooks_directory scratch_hooks payload
   run_merge_hook_library_absent "verb-arming.sh" "echo hi"
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF 'verb-arming.sh' <<<"$output" || return 1
+  expect_deny verb-arming-absent "verb-arming.sh"
+
+  hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
+  scratch_hooks="$BATS_TEST_TMPDIR/scratch-hooks"
+  mkdir -p "$scratch_hooks"
+  cp -R "$hooks_directory/." "$scratch_hooks/"
+  rm -f "$scratch_hooks/lib/hook-payload.sh"
+  payload=$(jq -nc --arg command 'gh pr merge 1' '{tool_name: "Bash", tool_input: {command: $command}}')
+  run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$BATS_TEST_TMPDIR" "$payload" "$scratch_hooks/worthiness-presence-check.sh"
+  [ "$status" -eq 2 ] || { echo "row hook-payload-absent: status $status: $output" >&2; return 1; }
+  grep -qF 'BLOCKED: worthiness-presence-check.sh cannot load lib/hook-payload.sh' <<<"$output" || { echo "row hook-payload-absent: $output" >&2; return 1; }
 }
 
 # Stage a whole checkout-shaped root, not just .claude/hooks: past arming the
@@ -591,17 +634,6 @@ run_merge_hook_staged_root() {
   fi
   json=$(jq -nc --arg c "gh pr merge 30 --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
   invoke_hook_in "$REPO" "$json" "$stage/.claude/hooks/worthiness-presence-check.sh"
-}
-
-# bats test_tags=whole-tree
-@test "library-absent: audit-base-provenance.sh missing fails open on a merge the intact stage denies" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook_staged_root ""
-  [ "$status" -eq 0 ]
-  denied
-  run_merge_hook_staged_root "audit-base-provenance.sh"
-  [ "$status" -eq 0 ]
-  refute_denied
 }
 
 # ---------------------------------------------------------------------------
@@ -635,34 +667,26 @@ run_merge_hook_in() {
   invoke_hook_in "$cwd" "$json" "$HOOK_ABSOLUTE_PATH"
 }
 
-@test "a leading cd into a linked worktree reads that worktree's changed tests" {
+# The rows run the false-deny half first: the session's own un-ledgered
+# emergent test belongs to a tree this merge never lands on. The session
+# checkout is then reset clean, so the next deny can only come from the
+# worktree. The ledger is per-tree state, so following the command's target has
+# to reach the ledger lookup as well as the diff.
+@test "a leading cd into a linked worktree gates that worktree: the session checkout's changed tests are not read, the worktree's are, and the worktree's own ledger allows the merge" {
+  local test_path="apps/web/app/components/Foo/tests/index.test.tsx"
   make_worktree
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST" "$WORKTREE"
+  commit_file "$test_path" "$EMERGENT_TEST"
   run_merge_hook_in "$REPO" "cd $WORKTREE && gh pr merge 30 --squash"
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "renders a label" <<<"$output"
-}
+  expect_allow session-checkout-test-not-read
 
-@test "a leading cd into a linked worktree does not read the session checkout's changed tests" {
-  # The false-deny half. The session's own un-ledgered emergent test belongs to
-  # a tree this merge never lands on.
-  make_worktree
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  git -C "$REPO" reset --quiet --hard "$INITIAL_BASE"
+  commit_file "$test_path" "$EMERGENT_TEST" "$WORKTREE"
   run_merge_hook_in "$REPO" "cd $WORKTREE && gh pr merge 30 --squash"
-  [ "$status" -eq 0 ]
-  refute_denied
-}
+  expect_deny worktree-test-read "renders a label"
 
-@test "a matching verdict in the target worktree's own ledger allows the merge" {
-  # The ledger is per-tree state, so following the command's target has to
-  # reach the ledger lookup as well as the diff.
-  make_worktree
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST" "$WORKTREE"
-  seed_matching "apps/web/app/components/Foo/tests/index.test.tsx" "renders a label" "keep" "$WORKTREE"
+  seed_matching "$test_path" "renders a label" "keep" "$WORKTREE"
   run_merge_hook_in "$REPO" "cd $WORKTREE && gh pr merge 30 --squash"
-  [ "$status" -eq 0 ]
-  refute_denied
+  expect_allow worktree-ledger-read
 }
 
 # --- package scope: the emergent-test globs come from the descriptor ---
@@ -699,83 +723,30 @@ install_stub_classifier_home() {
   HOOK_ABSOLUTE_PATH="$FAKE_HOME/.claude/hooks/worthiness-presence-check.sh"
 }
 
-@test "UAT-016: an emergent frontend component test with no ledger line denies; the same test at a root app/ path is ignored" {
-  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "apps/web/app/components/X/tests/X.test.tsx" <<<"$output"
-
-  git -C "$REPO" reset --quiet --hard main
-  commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
-
-@test "an emergent .playwright spec under apps/web/ with no ledger line denies; a root .playwright spec is ignored" {
-  commit_file "apps/web/.playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
-  run_merge_hook
-  denied
-  git -C "$REPO" reset --quiet --hard main
-  commit_file ".playwright/e2e/home.spec.ts" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
-
-@test "emergent globs that match nothing let the same merge through (the guard can fail)" {
-  write_packages_moved "$REPO"
-  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  denied
-  write_packages_moved "$REPO" '["app/**/*.test.ts"]' '["app/utils/**"]' '["nomatch/**"]'
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
-
-@test "denies an emergent page test with no ledger entry when the emergent globs cover app/pages" {
-  write_packages_moved "$REPO" '["app/**/*.test.ts"]' '["app/utils/**"]' '["app/pages/**/*.test.tsx"]'
-  commit_file "apps/web/app/pages/x/tests/page.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  [[ "$output" == *"renders a label"* ]]
-}
-
-@test "DP-002: an exact rename into apps/web/ is skipped, so a PR that only moves its tests needs no ledger line" {
+# move_root_x_test_into_apps_web: commit an emergent test under the root app/,
+# make that the base, then move it into apps/web/ on the branch, staged but not
+# committed.
+move_root_x_test_into_apps_web() {
   commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   advance_base_to_head
   mkdir -p "$REPO/apps/web/app/components/X/tests"
   git -C "$REPO" mv app/components/X/tests/X.test.tsx apps/web/app/components/X/tests/X.test.tsx
-  git -C "$REPO" commit --quiet -m "move X test"
-  git -C "$REPO" diff --name-status -M100% main...HEAD | grep -q '^R100'
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
 }
 
-@test "DP-002: the same rename plus a new emergent test with no ledger line still denies, naming the new one" {
-  commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  advance_base_to_head
-  mkdir -p "$REPO/apps/web/app/components/X/tests"
-  git -C "$REPO" mv app/components/X/tests/X.test.tsx apps/web/app/components/X/tests/X.test.tsx
+@test "a rename is gated by its content: an exact rename into apps/web/ needs no ledger line, a new test beside it still denies naming only the new one, and a rename that changes a line denies at its new path" {
+  move_root_x_test_into_apps_web
   git -C "$REPO" commit --quiet -m "move X test"
+  git -C "$REPO" diff --name-status -M100% main...HEAD | grep -q '^R100' || { echo "row exact-rename: the move is not an exact rename" >&2; return 1; }
+  run_merge_hook
+  expect_allow exact-rename
+
   commit_file "apps/web/app/components/Y/tests/Y.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "Y.test.tsx" <<<"$output"
-  grep -qF -- "X.test.tsx" <<<"$output" && return 1
-  true
-}
+  expect_deny rename-plus-new-test "Y.test.tsx"
+  grep -qF -- "X.test.tsx" <<<"$output" && { echo "row rename-plus-new-test: the renamed test is named: $output" >&2; return 1; }
 
-@test "DP-002: a rename that also changes a line is in scope at its new path and denies" {
-  commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  advance_base_to_head
-  mkdir -p "$REPO/apps/web/app/components/X/tests"
-  git -C "$REPO" mv app/components/X/tests/X.test.tsx apps/web/app/components/X/tests/X.test.tsx
+  reset_row
+  move_root_x_test_into_apps_web
   printf '%s' 'import {expect, test} from "vitest";
 test("renders a label", () => {
   expect(false).toBe(false);
@@ -783,62 +754,43 @@ test("renders a label", () => {
 ' >"$REPO/apps/web/app/components/X/tests/X.test.tsx"
   git -C "$REPO" add apps/web/app/components/X/tests/X.test.tsx
   git -C "$REPO" commit --quiet -m "move and edit X test"
-  git -C "$REPO" diff --name-status -M100% main...HEAD | grep -q '^R' && return 1
+  git -C "$REPO" diff --name-status -M100% main...HEAD | grep -q '^R' && { echo "row rename-with-edit: the move still reads as an exact rename" >&2; return 1; }
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "apps/web/app/components/X/tests/X.test.tsx" <<<"$output"
-}
-
-@test "an unparseable registry denies with the gaia-packages reason, never an allow" {
-  write_package_registry "$REPO" '{'
-  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  reason_of_output | grep -qF -- 'gaia-packages: .gaia/packages.json is malformed'
-}
-
-@test "a registered package with no descriptor denies with the gaia-packages reason, never an allow" {
-  rm "$REPO/apps/web/gaia.package.json"
-  write_package_registry "$REPO" '[{"name":"web","path":"apps/web"}]'
-  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  reason_of_output | grep -qF -- 'gaia-packages: apps/web/gaia.package.json is missing'
+  expect_deny rename-with-edit "apps/web/app/components/X/tests/X.test.tsx"
 }
 
 # bats test_tags=whole-tree
-@test "a classifier that exits 7 denies with its error; exit 3 fails open; an emergent verdict demands the line" {
-  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
+@test "a package or classifier failure denies, never allows: an unparseable registry, a registered package with no descriptor, a classifier exiting 7; a classifier exiting 3 fails open; an emergent classifier verdict demands the line" {
+  local test_path="apps/web/app/components/X/tests/X.test.tsx"
+  write_package_registry "$REPO" '{'
+  commit_file "$test_path" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_deny unparseable-registry
+  reason_of_output | grep -qF -- 'gaia-packages: .gaia/packages.json is malformed' || { echo "row unparseable-registry: $output" >&2; return 1; }
+
+  reset_row
+  rm "$REPO/apps/web/gaia.package.json"
+  write_package_registry "$REPO" '[{"name":"web","path":"apps/web"}]'
+  commit_file "$test_path" "$EMERGENT_TEST"
+  run_merge_hook
+  expect_deny package-without-descriptor
+  reason_of_output | grep -qF -- 'gaia-packages: apps/web/gaia.package.json is missing' || { echo "row package-without-descriptor: $output" >&2; return 1; }
+
+  reset_row
+  commit_file "$test_path" "$EMERGENT_TEST"
   install_stub_classifier_home 7 '{"error":"gaia-packages: stub descriptor failure. Next step: fix it."}'
   run_merge_hook
-  denied
-  [ "$(reason_of_output)" = "gaia-packages: stub descriptor failure. Next step: fix it." ]
+  expect_deny classifier-exit-7
+  [ "$(reason_of_output)" = "gaia-packages: stub descriptor failure. Next step: fix it." ] || { echo "row classifier-exit-7: $output" >&2; return 1; }
 
   install_stub_classifier_home 3 ''
   run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
+  expect_allow classifier-exit-3
 
   install_stub_classifier_home 0 '{"file":"x","classification":"emergent","reasons":[]}'
   run_merge_hook
-  denied
-  reason_of_output | grep -qF -- 'Worthiness presence gate'
-}
-
-@test "today's layout, a literal path-dot registry: a root app/ emergent test is gated and a apps/web/ one is not" {
-  write_packages_today "$REPO"
-  commit_file "app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  denied
-  grep -qF -- "app/components/X/tests/X.test.tsx" <<<"$output"
-  git -C "$REPO" reset --quiet --hard main
-  commit_file "apps/web/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
+  expect_deny classifier-emergent
+  reason_of_output | grep -qF -- 'Worthiness presence gate' || { echo "row classifier-emergent: $output" >&2; return 1; }
 }
 
 # --- story files: play stories are emergent and gated like component tests ---
@@ -883,55 +835,40 @@ write_story_descriptor() {
   write_builtin_descriptor "$REPO" '' '' '["app/components/**/*.test.ts","app/components/**/*.test.tsx",".playwright/**/*.spec.ts",".playwright/**/*.spec.tsx",".playwright/**/*.test.ts",".playwright/**/*.test.tsx","app/**/*.stories.tsx"]'
 }
 
-@test "denies a changed CSF4 story under app/components and one under app/utils/tests, then allows once verdicts are recorded" {
-  write_story_descriptor
+@test "story files are gated per unit: component and utility stories deny then allow once verdicts are recorded, a test without a verdict denies beside a recorded base story, a test changed after its verdict denies, a render-only file demands nothing, an old-format file and an imported play are refused" {
   local component_story="apps/web/app/components/Marker/tests/marker.stories.tsx"
   local utility_story="apps/web/app/utils/tests/utility-marker.stories.tsx"
+  local story
+
+  write_story_descriptor
   commit_file "$component_story" "$(story_source ShowsComponentMarker 'component marker')"
   commit_file "$utility_story" "$(story_source ShowsUtilityMarker 'utility marker')"
-
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "$component_story" <<<"$output"
-  grep -qF -- "Shows Component Marker   base story" <<<"$output"
-  grep -qF -- "Shows Component Marker   shows the marker" <<<"$output"
-  grep -qF -- "$utility_story" <<<"$output"
-  grep -qF -- "Shows Utility Marker   shows the marker" <<<"$output"
-
+  expect_deny component-and-utility-stories "$component_story" \
+    "Shows Component Marker   base story" "Shows Component Marker   shows the marker" \
+    "$utility_story" "Shows Utility Marker   shows the marker"
   record_story_verdicts "$component_story" "Shows Component Marker"
   record_story_verdicts "$utility_story" "Shows Utility Marker"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
+  expect_allow component-and-utility-stories-with-verdicts
 
-@test "a story test with no verdict is denied even when its base story has one" {
+  reset_row
   write_story_descriptor
-  local story="apps/web/app/utils/tests/utility-marker.stories.tsx"
-  commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker')"
-  record_verdict "$story" "Shows Utility Marker   base story"
+  commit_file "$utility_story" "$(story_source ShowsUtilityMarker 'utility marker')"
+  record_verdict "$utility_story" "Shows Utility Marker   base story"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "Shows Utility Marker   shows the marker" <<<"$output"
-  grep -qF -- "Shows Utility Marker   base story" <<<"$output" && return 1
-  true
-}
+  expect_deny test-without-verdict "Shows Utility Marker   shows the marker"
+  grep -qF -- "Shows Utility Marker   base story" <<<"$output" && { echo "row test-without-verdict: the recorded base story is named: $output" >&2; return 1; }
 
-@test "a story whose test changed after its verdict is denied again" {
+  reset_row
   write_story_descriptor
-  local story="apps/web/app/utils/tests/utility-marker.stories.tsx"
-  commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker')"
-  record_story_verdicts "$story" "Shows Utility Marker"
-  commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker edited')"
+  commit_file "$utility_story" "$(story_source ShowsUtilityMarker 'utility marker')"
+  record_story_verdicts "$utility_story" "Shows Utility Marker"
+  commit_file "$utility_story" "$(story_source ShowsUtilityMarker 'utility marker edited')"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "Shows Utility Marker   shows the marker" <<<"$output"
-}
+  expect_deny test-changed-after-verdict "Shows Utility Marker   shows the marker"
 
-@test "a render-only CSF4 story file demands no verdict" {
+  reset_row
   write_story_descriptor
   commit_file "apps/web/app/components/Marker/tests/marker.stories.tsx" "import preview from '#.storybook/preview';
 
@@ -942,64 +879,26 @@ const meta = preview.meta({component: Marker, title: 'Internal/Marker'});
 export const Plain = meta.story({});
 "
   run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
+  expect_allow render-only
 
-@test "an old-format story file is denied with the extractor's migration line, not skipped" {
+  reset_row
   write_story_descriptor
-  local story="apps/web/app/utils/tests/old-format.stories.tsx"
+  story="apps/web/app/utils/tests/old-format.stories.tsx"
   commit_file "$story" "$(cat "$BATS_TEST_DIRNAME/fixtures/test-signals/csf3-old-format.stories.tsx")"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "extract-test-signals: $story is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4" <<<"$output"
-  grep -qF -- "Next step:" <<<"$output"
-}
+  expect_deny old-format \
+    "extract-test-signals: $story is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4" \
+    "Next step:"
 
-@test "a story whose play is an imported identifier is denied naming the file and the unsupported shape" {
+  reset_row
   write_story_descriptor
-  local story="apps/web/app/utils/tests/imported-play.stories.tsx"
-  commit_file "$story" "import preview from '#.storybook/preview';
-import {sharedPlay} from './shared-play';
-
-const Marker = () => <p>marker</p>;
-
-const meta = preview.meta({component: Marker, title: 'Internal/Imported'});
-
-export const UsesImportedPlay = meta.story({play: sharedPlay});
-"
+  story="apps/web/app/utils/tests/imported-play.stories.tsx"
+  commit_file "$story" "$IMPORTED_PLAY_STORY"
   run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  grep -qF -- "$story" <<<"$output"
-  grep -qF -- "unsupported story shape" <<<"$output"
-  grep -qF -- "Next step:" <<<"$output"
-}
-
-@test "a story file with a syntax error still passes through (the extractor's other failures fail open)" {
-  write_story_descriptor
-  commit_file "apps/web/app/utils/tests/broken.stories.tsx" "export const Broken = {play: async ((( => {"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
+  expect_deny imported-play "$story" "unsupported story shape" "Next step:"
 }
 
 # --- the one-jq payload reader ---
-
-# bats test_tags=whole-tree
-@test "lib/hook-payload.sh absent: a payload the hook would deny exits 2 naming the library" {
-  local hooks_directory scratch_hooks payload
-  hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
-  scratch_hooks="$BATS_TEST_TMPDIR/scratch-hooks"
-  mkdir -p "$scratch_hooks"
-  cp -R "$hooks_directory/." "$scratch_hooks/"
-  rm -f "$scratch_hooks/lib/hook-payload.sh"
-  payload=$(jq -nc --arg command 'gh pr merge 1' '{tool_name: "Bash", tool_input: {command: $command}}')
-  run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$BATS_TEST_TMPDIR" "$payload" "$scratch_hooks/worthiness-presence-check.sh"
-  [ "$status" -eq 2 ]
-  grep -qF 'BLOCKED: worthiness-presence-check.sh cannot load lib/hook-payload.sh' <<<"$output"
-}
 
 # bats test_tags=whole-tree
 @test "a non-arming Bash payload spawns exactly one jq process" {
@@ -1124,40 +1023,6 @@ export const UsesImportedPlay = meta.story({play: sharedPlay});
   [ "$(reason_of_output)" = "$walk_reason" ]
 }
 
-# A copy of the hook whose walk call is routed through a pipe. Every library and
-# script is the real one, linked in.
-install_piped_walk_hook() {
-  local entry
-  FAKE_HOME="$BATS_TEST_TMPDIR/piped-home"
-  mkdir -p "$FAKE_HOME/.claude/hooks/lib" "$FAKE_HOME/.gaia/scripts"
-  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
-  for entry in "$HOME_ROOT"/.claude/hooks/lib/*; do
-    ln -sfn "$entry" "$FAKE_HOME/.claude/hooks/lib/$(basename "$entry")"
-  done
-  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
-  for entry in "$HOME_ROOT"/.gaia/scripts/*; do
-    ln -sfn "$entry" "$FAKE_HOME/.gaia/scripts/$(basename "$entry")"
-  done
-  sed 's#worthiness_selection_walk "$tree_root" "$base" >"$records_file"#worthiness_selection_walk "$tree_root" "$base" | cat >"$records_file"#' \
-    "$HOME_ROOT/.claude/hooks/worthiness-presence-check.sh" >"$FAKE_HOME/.claude/hooks/worthiness-presence-check.sh"
-  grep -qF '| cat >"$records_file"' "$FAKE_HOME/.claude/hooks/worthiness-presence-check.sh"
-  HOOK_ABSOLUTE_PATH="$FAKE_HOME/.claude/hooks/worthiness-presence-check.sh"
-}
-
-# bats test_tags=whole-tree
-@test "red twin: routing the walk through a pipe loses the refusal reason" {
-  write_story_descriptor
-  commit_file "apps/web/app/utils/tests/imported-play.stories.tsx" "$IMPORTED_PLAY_STORY"
-  run_merge_hook
-  local expected_reason
-  expected_reason=$(reason_of_output)
-  [[ "$expected_reason" == *"unsupported story shape"* ]]
-
-  install_piped_walk_hook
-  run_merge_hook
-  [ "$(reason_of_output)" != "$expected_reason" ]
-}
-
 @test "the library returns 9 and emits nothing when a required input is unset; a set but empty glob returns 0 with no records" {
   commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
 
@@ -1182,33 +1047,6 @@ refusal_free_of_debt_wording() {
   return 0
 }
 
-@test "the refusal tells the agent to run the evaluator, fix on the branch, and ask with the rotation and CI cost, without debt wording" {
-  commit_file "apps/web/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
-  run_merge_hook
-  denied
-  local refusal
-  refusal=$(reason_of_output)
-  grep -qF -- 'To unblock:' <<<"$refusal"
-  grep -qF -- 'worthiness evaluator' <<<"$refusal"
-  grep -qF -- '.claude/skills/gaia/references/worthiness-step.md' <<<"$refusal"
-  grep -qF -- 'only keep verdicts needs no commit' <<<"$refusal"
-  grep -qF -- 'Fix a fix verdict on the branch: this is the recommendation' <<<"$refusal"
-  grep -qF -- 'ask the human' <<<"$refusal"
-  grep -qF -- 'clearances the fix rotates and the CI cycle it costs' <<<"$refusal"
-  grep -qF -- 'Accepted residual is the alternative' <<<"$refusal"
-  grep -qF -- 'Retry gh pr merge' <<<"$refusal"
-  refusal_free_of_debt_wording "$refusal"
-}
-
-@test "red twin: a refusal seeded with debt wording fails the debt-free assertion" {
-  local seeded_phrase
-  for seeded_phrase in 'file it as tech debt' 'use the file-tech-debt skill' 'record Tech-Debt'; do
-    if refusal_free_of_debt_wording "To unblock: $seeded_phrase"; then
-      return 1
-    fi
-  done
-}
-
 # --- route tests: worthiness-audited on both axes ---
 
 ROUTE_TEST_PATH="apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts"
@@ -1217,22 +1055,6 @@ test("refuses an anonymous visitor", () => {
   expect(1 + 1).toBe(2);
 });
 '
-
-@test "route test: denies a changed route test with no ledger entry" {
-  commit_file "$ROUTE_TEST_PATH" "$ROUTE_TEST_SOURCE"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  [[ "$output" == *"refuses an anonymous visitor"* ]]
-}
-
-@test "route test: allows a changed route test with a matching ledger line" {
-  commit_file "$ROUTE_TEST_PATH" "$ROUTE_TEST_SOURCE"
-  seed_matching "$ROUTE_TEST_PATH" "refuses an anonymous visitor"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
 
 # --- flow files: a listed bats or CLI test is demanded whatever the scope globs say ---
 
@@ -1261,37 +1083,3 @@ write_flow_tests_file() {
   printf 'FLOW-001\tflow-sample\tcommand\t%s\n' "$flow_path" >"$run_folder/flow-tests.tsv"
 }
 
-@test "flow files: a listed bats flow test is denied without a verdict, allowed with one, and not demanded when unlisted" {
-  build_flow_bats_source
-  commit_file "$FLOW_BATS_PATH" "$FLOW_BATS_SOURCE"
-
-  # No flow-tests.tsv: the bats file is outside every scope glob, so nothing is demanded.
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-
-  write_flow_tests_file "$FLOW_BATS_PATH"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  [[ "$output" == *"refuses a spec that still carries uats"* ]]
-
-  ( cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/audit-ledger/append-worthiness.mjs" \
-      "$FLOW_BATS_PATH" "refuses a spec that still carries uats" keep )
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
-}
-
-@test "flow files: a listed CLI flow test is denied without a verdict" {
-  commit_file "$FLOW_CLI_PATH" 'import {expect, test} from "vitest";
-test("refuses a spec that still carries uats", () => {
-  expect(1 + 1).toBe(2);
-});
-'
-  write_flow_tests_file "$FLOW_CLI_PATH"
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  denied
-  [[ "$output" == *"refuses a spec that still carries uats"* ]]
-}

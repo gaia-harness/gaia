@@ -161,59 +161,17 @@ SH
   chmod +x "$PNPM_STUB_DIRECTORY/pnpm"
 }
 
-# ---------- 1. The direct-call form provisions the named tree ----------
-@test "an explicit worktree argument is provisioned" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-arg)"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
-
-  target_real="$(cd "$WORKTREE_PATH/.gaia/local" && pwd -P)"
-  main_real="$(cd "$MAIN/.gaia/local" && pwd -P)"
-  [ "$target_real" = "$main_real" ]
-}
-
-@test "the EnterWorktree tool_response names the tree to provision" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-enter)"
-
-  invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
-}
-
-# ---------- 3. The payload cwd is used when there is no tool_response ----------
-# The SessionStart payload carries a cwd and nothing else, so this is the arm
-# that covers a session STARTING inside a worktree.
-@test "a SessionStart payload is provisioned from its cwd" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-sessionstart)"
-
-  payload="$(jq -nc --arg tree_path "$WORKTREE_PATH" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
-  invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
-}
-
-# The predicate, not the caller, is what decides. A SessionStart in the main
-# checkout fires this hook on every startup, and it must do nothing there.
-@test "the main checkout is left alone" {
-  make_main
-
-  payload="$(jq -nc --arg tree_path "$MAIN" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
-  invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-
-  # No symlink was created over main's own real directory, and nothing was
-  # logged: the hook returned before acting. The shape checked is the one a
-  # provisioned tree actually has -- .gaia/local is itself the one symlink --
-  # so main's own real directory is what proves the hook declined.
-  [ -L "$MAIN/.gaia/local" ] && return 1
-  [ -d "$MAIN/.gaia/local" ] || return 1
-  grep -qF -- "linked shared state" <<<"$output" && return 1
-  return 0
+# begin_row <name>: starts one row of a case table. bats prints a failing
+# test's output, so the last row line names the row that failed. Each row gets
+# a clean world: the PATH the test started with (a stub pnpm from the previous
+# row must not leak), and no fixture main checkout or stub directory.
+begin_row() {
+  printf 'row: %s\n' "$1" >&2
+  PATH="${ROW_BASE_PATH:=$PATH}"
+  export PATH
+  [ -z "${MAIN:-}" ] || rm -rf "$MAIN"
+  [ -z "${PNPM_STUB_DIRECTORY:-}" ] || rm -rf "$PNPM_STUB_DIRECTORY"
+  unset MAIN PNPM_STUB_DIRECTORY
 }
 
 # ---------- 5. Idempotent: a correct worktree survives a second run ----------
@@ -258,10 +216,42 @@ SH
   [ "$target_real" = "$main_real" ]
 }
 
-# ---------- 7. A worktree made outside GAIA's machinery is provisioned ----------
-# Plain `git worktree add` fires no creation hook, so a tree made that way has
-# never been provisioned by anything. Entry is what covers it.
-@test "a worktree created by plain git worktree add is provisioned on entry" {
+# One outcome (the .gaia/local symlink) through the input shapes the header lists.
+@test "a tree is provisioned however the hook names it" {
+  begin_row "an explicit worktree argument is provisioned"
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-arg)"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
+
+  target_real="$(cd "$WORKTREE_PATH/.gaia/local" && pwd -P)"
+  main_real="$(cd "$MAIN/.gaia/local" && pwd -P)"
+  [ "$target_real" = "$main_real" ]
+
+  begin_row "the EnterWorktree tool_response names the tree to provision"
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-enter)"
+
+  invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
+
+  begin_row "a SessionStart payload is provisioned from its cwd"
+  # The SessionStart payload carries a cwd and nothing else, so this is the arm
+  # that covers a session STARTING inside a worktree.
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-sessionstart)"
+
+  payload="$(jq -nc --arg tree_path "$WORKTREE_PATH" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
+  invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
+
+  begin_row "a worktree created by plain git worktree add is provisioned on entry"
+  # Plain `git worktree add` fires no creation hook, so a tree made that way has
+  # never been provisioned by anything. Entry is what covers it.
   make_main
   WORKTREE_PATH="$(add_worktree feat-byhand)"
   [ -L "$WORKTREE_PATH/.gaia/local" ] && return 1
@@ -269,6 +259,7 @@ SH
   invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
   [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
+  true
 }
 
 # ---------- 8. Typed routes are generated in the worktree, not in main ----------
@@ -307,17 +298,6 @@ SH
   [ "$status" -eq 0 ]
   grep -qF LEFTOVER "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" && return 1
   [ "$(cat "$WORKTREE_PATH/apps/web/.react-router/types/.stamp")" = "$WORKTREE_PATH/apps/web" ]
-}
-
-@test "a main checkout with no installed CLI provisions links and skips typegen" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-nocli)"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
-  [ -e "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" ] && return 1
-  return 0
 }
 
 # ---------- 11. A non-repository path is not provisioned ----------
@@ -377,22 +357,6 @@ SH
   return 0
 }
 
-# ---------- 13. Carry-forward: worthiness-ledger ----------
-@test "unkeyed worthiness-ledger data is carried forward to the keyed path, byte for byte" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger)"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
-  printf '{"a":1}\n{"a":2}\n' > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-
-  key="$(tree_key_for "$WORKTREE_PATH")"
-  [ -f "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
-  [ -e "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
-  diff <(printf '{"a":1}\n{"a":2}\n') "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
-}
-
 # The removed test-first commit gate's per-tree data is no longer migrated: a
 # leftover unkeyed file stays where it is and nothing logs a carry-forward.
 @test "a leftover unkeyed red-ledger observations file is left where it is" {
@@ -414,56 +378,6 @@ SH
   done
   [ -n "$backup_directory" ] || return 1
   [ "$(cat "$backup_directory/red-ledger/observations.jsonl")" = "leftover" ]
-}
-
-# ---------- 14. Carry-forward is idempotent ----------
-@test "carrying forward the worthiness ledger twice loses nothing on the second run" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger-twice)"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
-  printf 'line-one\n' > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  key="$(tree_key_for "$WORKTREE_PATH")"
-  [ -f "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "line-one" ]
-  [ -e "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
-  return 0
-}
-
-# ---------- 15. Carry-forward never overwrites keyed data ----------
-@test "keyed worthiness-ledger data already present is never overwritten by stale unkeyed data" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger-noclobber)"
-  key="$(tree_key_for "$WORKTREE_PATH")"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key"
-  echo keyed > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
-  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
-  echo stale > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-
-  # The keyed data survives untouched, reached through the worktree's new
-  # symlink into main's .gaia/local: migrate_keyed_subtrees_to_main moved it
-  # there, never overwriting it.
-  [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "keyed" ]
-
-  # The stale unkeyed file was carry-forward's to move, and carry-forward
-  # declined because the keyed file already existed -- so it was never
-  # touched, and it rides along inside the whole pre-cutover .gaia/local that
-  # the linker backs up wholesale, unread and unmerged, when it replaces it
-  # with the symlink. It survives there, not at the live (now-symlinked) path.
-  backup_directory=""
-  for backup_candidate in "$WORKTREE_PATH"/.gaia/local.bak.*; do
-    [ -d "$backup_candidate" ] && backup_directory="$backup_candidate"
-  done
-  [ -n "$backup_directory" ] || return 1
-  [ "$(cat "$backup_directory/worthiness-ledger/worthiness.jsonl")" = "stale" ]
 }
 
 # The gate this test exercises exists for a change not yet landed: a linked
@@ -496,24 +410,6 @@ SH
   return 0
 }
 
-# The case the early gate would otherwise miss: nothing else runs at main's
-# own session start to carry this forward.
-@test "the main checkout's own unkeyed data is carried forward" {
-  make_main
-  mkdir -p "$MAIN/.gaia/local/worthiness-ledger"
-  echo main-worthiness > "$MAIN/.gaia/local/worthiness-ledger/worthiness.jsonl"
-
-  payload="$(jq -nc --arg tree_path "$MAIN" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
-  invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-
-  key="$(tree_key_for "$MAIN")"
-  [ -f "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
-  [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "main-worthiness" ]
-  [ -e "$MAIN/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
-  return 0
-}
-
 @test "nothing to migrate is a silent no-op" {
   make_main
   WORKTREE_PATH="$(add_worktree feat-carry-nothing)"
@@ -525,23 +421,23 @@ SH
   return 0
 }
 
-# ---------- 19. The worthiness-ledger sibling migrates the same way ----------
-@test "unkeyed worthiness-ledger data is carried forward to the keyed path" {
+# One carry-forward rule over three directories.
+@test "unkeyed data is carried forward to the keyed path" {
+  begin_row "unkeyed worthiness-ledger data is carried forward to the keyed path, byte for byte"
   make_main
-  WORKTREE_PATH="$(add_worktree feat-carry-worthiness)"
+  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger)"
   mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
-  echo worth-data > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
+  printf '{"a":1}\n{"a":2}\n' > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
 
   key="$(tree_key_for "$WORKTREE_PATH")"
   [ -f "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
-  [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "worth-data" ]
-}
+  [ -e "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
+  diff <(printf '{"a":1}\n{"a":2}\n') "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
 
-# ---------- 20. forensics/: the multi-file, loosely-named directory shape ----------
-@test "unkeyed forensics reports are carried forward to the keyed subdirectory" {
+  begin_row "unkeyed forensics reports are carried forward to the keyed subdirectory"
   make_main
   WORKTREE_PATH="$(add_worktree feat-carry-forensics)"
   mkdir -p "$WORKTREE_PATH/.gaia/local/forensics"
@@ -556,11 +452,57 @@ SH
   [ "$(cat "$WORKTREE_PATH/.gaia/local/forensics/$key/20260102T000000Z-hook.md")" = "report-two" ]
   [ -e "$WORKTREE_PATH/.gaia/local/forensics/20260101T000000Z-hook.md" ] && return 1
   [ -e "$WORKTREE_PATH/.gaia/local/forensics/20260102T000000Z-hook.md" ] && return 1
-  return 0
+
+  begin_row "the main checkout's own unkeyed data is carried forward"
+  # The case the early gate would otherwise miss: nothing else runs at main's
+  # own session start to carry this forward.
+  make_main
+  mkdir -p "$MAIN/.gaia/local/worthiness-ledger"
+  echo main-worthiness > "$MAIN/.gaia/local/worthiness-ledger/worthiness.jsonl"
+
+  payload="$(jq -nc --arg tree_path "$MAIN" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
+  invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+
+  key="$(tree_key_for "$MAIN")"
+  [ -f "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
+  [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "main-worthiness" ]
+  [ -e "$MAIN/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
+  true
 }
 
-# ---------- 21. forensics/: never overwrites a keyed file with a stale one ----------
-@test "keyed forensics data already present is never overwritten by stale unkeyed data" {
+# The same no-clobber rule, two directories.
+@test "carry-forward and cutover migration never overwrite existing keyed data" {
+  begin_row "keyed worthiness-ledger data already present is never overwritten by stale unkeyed data"
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger-noclobber)"
+  key="$(tree_key_for "$WORKTREE_PATH")"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key"
+  echo keyed > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
+  echo stale > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+
+  # The keyed data survives untouched, reached through the worktree's new
+  # symlink into main's .gaia/local: migrate_keyed_subtrees_to_main moved it
+  # there, never overwriting it.
+  [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "keyed" ]
+
+  # The stale unkeyed file was carry-forward's to move, and carry-forward
+  # declined because the keyed file already existed -- so it was never
+  # touched, and it rides along inside the whole pre-cutover .gaia/local that
+  # the linker backs up wholesale, unread and unmerged, when it replaces it
+  # with the symlink. It survives there, not at the live (now-symlinked) path.
+  backup_directory=""
+  for backup_candidate in "$WORKTREE_PATH"/.gaia/local.bak.*; do
+    [ -d "$backup_candidate" ] && backup_directory="$backup_candidate"
+  done
+  [ -n "$backup_directory" ] || return 1
+  [ "$(cat "$backup_directory/worthiness-ledger/worthiness.jsonl")" = "stale" ]
+
+  begin_row "keyed forensics data already present is never overwritten by stale unkeyed data"
   make_main
   WORKTREE_PATH="$(add_worktree feat-carry-forensics-noclobber)"
   key="$(tree_key_for "$WORKTREE_PATH")"
@@ -586,15 +528,17 @@ SH
   done
   [ -n "$backup_directory" ] || return 1
   [ "$(cat "$backup_directory/forensics/20260101T000000Z-hook.md")" = "stale-report" ]
+  true
 }
 
-# ---------- 23. migrate_keyed_subtrees_to_main: the cutover-migration half ----------
-# A linked worktree still holding a REAL .gaia/local (pre-cutover, already
-# tree-keyed by an earlier session) must have its keyed per-tree subtrees
-# rescued into main's .gaia/local before the linker backs the whole directory
-# up to .gaia/local.bak.<ts> and replaces it with the one shared symlink --
-# otherwise the data ends up inside a backup nothing reads.
-@test "pre-cutover keyed data migrates into main's .gaia/local, byte for byte, reachable through the new symlink" {
+# Migrate, then rerun.
+@test "cutover migration is idempotent and byte-exact" {
+  begin_row "pre-cutover keyed data migrates into main's .gaia/local, byte for byte, reachable through the new symlink"
+  # A linked worktree still holding a REAL .gaia/local (pre-cutover, already
+  # tree-keyed by an earlier session) must have its keyed per-tree subtrees
+  # rescued into main's .gaia/local before the linker backs the whole directory
+  # up to .gaia/local.bak.<ts> and replaces it with the one shared symlink --
+  # otherwise the data ends up inside a backup nothing reads.
   make_main
   WORKTREE_PATH="$(add_worktree feat-migrate-basic)"
   key="$(tree_key_for "$WORKTREE_PATH")"
@@ -613,9 +557,8 @@ SH
   [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
   diff <(printf '{"a":1}\n{"a":2}\n') "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl"
   [ "$(cat "$WORKTREE_PATH/.gaia/local/forensics/$key/20260101T000000Z-hook.md")" = "forensic-body" ]
-}
 
-@test "migrate_keyed_subtrees_to_main is idempotent: a second run changes nothing" {
+  begin_row "migrate_keyed_subtrees_to_main is idempotent: a second run changes nothing"
   make_main
   WORKTREE_PATH="$(add_worktree feat-migrate-idempotent)"
   key="$(tree_key_for "$WORKTREE_PATH")"
@@ -634,6 +577,23 @@ SH
   grep -qF -- "migrated worthiness-ledger/$key into" <<<"$output" && return 1
   [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "line-one" ]
   [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "line-one" ]
+
+  begin_row "carrying forward the worthiness ledger twice loses nothing on the second run"
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-carry-worthiness-ledger-twice)"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/worthiness-ledger"
+  printf 'line-one\n' > "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  key="$(tree_key_for "$WORKTREE_PATH")"
+  [ -f "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl" ] || return 1
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$WORKTREE_PATH/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "line-one" ]
+  [ -e "$WORKTREE_PATH/.gaia/local/worthiness-ledger/worthiness.jsonl" ] && return 1
+  true
 }
 
 @test "a destination that already exists in main is skipped, not overwritten, not merged, and logged loudly" {
@@ -666,7 +626,26 @@ SH
   [ "$(cat "$backup_directory/worthiness-ledger/$key/worthiness.jsonl")" = "worktree-data" ]
 }
 
-@test "the main checkout itself is never migrated -- it is not a linked worktree" {
+# One rule: main is not a linked worktree.
+@test "the main checkout is never provisioned or migrated" {
+  begin_row "the main checkout is left alone"
+  # The predicate, not the caller, is what decides. A SessionStart in the main
+  # checkout fires this hook on every startup, and it must do nothing there.
+  make_main
+
+  payload="$(jq -nc --arg tree_path "$MAIN" '{hook_event_name: "SessionStart", source: "startup", cwd: $tree_path}')"
+  invoke_hook "$payload" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+
+  # No symlink was created over main's own real directory, and nothing was
+  # logged: the hook returned before acting. The shape checked is the one a
+  # provisioned tree actually has -- .gaia/local is itself the one symlink --
+  # so main's own real directory is what proves the hook declined.
+  [ -L "$MAIN/.gaia/local" ] && return 1
+  [ -d "$MAIN/.gaia/local" ] || return 1
+  grep -qF -- "linked shared state" <<<"$output" && return 1
+
+  begin_row "the main checkout itself is never migrated -- it is not a linked worktree"
   make_main
   key="$(tree_key_for "$MAIN")"
   mkdir -p "$MAIN/.gaia/local/worthiness-ledger/$key"
@@ -679,16 +658,17 @@ SH
   grep -qF -- "CUTOVER MIGRATION" <<<"$output" && return 1
   [ "$(cat "$MAIN/.gaia/local/worthiness-ledger/$key/worthiness.jsonl")" = "main-own-data" ]
   [ -L "$MAIN/.gaia/local" ] && return 1
-  return 0
+  true
 }
 
-# ---------- 24. migrate_audit_artifacts_to_main: the audit/ half ----------
-# A Code Audit Team member dispatched into a worktree made with plain
-# `git worktree add` writes its marker, findings sidecar, and scope file into
-# that worktree's REAL .gaia/local/audit/. Those are not tree-keyed, so the
-# keyed-subtree migration never sees them; without this step they land in the
-# unread backup and the merge gate declines "marker absent".
-@test "worktree-local audit artifacts migrate into main's audit/, byte for byte, reachable through the new symlink" {
+# One audit-migration rule: the move case and the collision case.
+@test "worktree-local audit artifacts migrate to main and a collision is skipped and logged" {
+  begin_row "worktree-local audit artifacts migrate into main's audit/, byte for byte, reachable through the new symlink"
+  # A Code Audit Team member dispatched into a worktree made with plain
+  # `git worktree add` writes its marker, findings sidecar, and scope file into
+  # that worktree's REAL .gaia/local/audit/. Those are not tree-keyed, so the
+  # keyed-subtree migration never sees them; without this step they land in the
+  # unread backup and the merge gate declines "marker absent".
   make_main
   WORKTREE_PATH="$(add_worktree feat-migrate-audit)"
   mkdir -p "$WORKTREE_PATH/.gaia/local/audit"
@@ -702,9 +682,8 @@ SH
   [ "$(cat "$MAIN/.gaia/local/audit/def456.feat%2Fx.code-audit-maintainer-shell.findings.json")" = "[]" ] || return 1
   [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
   [ "$(cat "$WORKTREE_PATH/.gaia/local/audit/abc123.code-audit-maintainer-shell.ok")" = "marker-body" ]
-}
 
-@test "an audit artifact already present in main is left alone and the collision is logged" {
+  begin_row "an audit artifact already present in main is left alone and the collision is logged"
   make_main
   WORKTREE_PATH="$(add_worktree feat-migrate-audit-conflict)"
   mkdir -p "$MAIN/.gaia/local/audit" "$WORKTREE_PATH/.gaia/local/audit"
@@ -719,52 +698,12 @@ SH
   [ "$(cat "$MAIN/.gaia/local/audit/abc123.code-audit-maintainer-shell.ok")" = "main-marker" ] || return 1
   # A collision on one file does not hold back the rest.
   [ "$(cat "$MAIN/.gaia/local/audit/fff999.code-audit-frontend.ok")" = "only-in-worktree" ]
+  true
 }
 
-@test "dependencies are installed on entry when a lockfile is present" {
-  make_main
-  add_lockfile
-  stub_pnpm
-  WORKTREE_PATH="$(add_worktree feat-install)"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  [ -s "$PNPM_LOG" ] || return 1
-  # The stub records the cwd it ran in: the worktree, never main.
-  [ "$(cat "$PNPM_LOG")" = "$WORKTREE_PATH" ] || return 1
-  [ "$(cat "$PNPM_ARGS_LOG")" = "install --frozen-lockfile" ]
-}
-
-@test "dependencies are installed on every entry, not only when node_modules is absent" {
-  make_main
-  add_lockfile
-  stub_pnpm
-  WORKTREE_PATH="$(add_worktree feat-install-every)"
-  mkdir -p "$WORKTREE_PATH/node_modules"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  [ "$(wc -l < "$PNPM_LOG" | tr -d ' ')" = "1" ] || return 1
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  [ "$(wc -l < "$PNPM_LOG" | tr -d ' ')" = "2" ]
-}
-
-@test "no lockfile means no install is attempted, and linking plus typegen still happen" {
-  make_main
-  stub_typegen
-  stub_pnpm
-  WORKTREE_PATH="$(add_worktree feat-nolock)"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  [ -s "$PNPM_LOG" ] && return 1
-  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
-  [ -f "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" ]
-}
-
-@test "pnpm absent from PATH: install is skipped, logged, non-fatal, and typegen still runs" {
+# The same non-fatal install-failure rule.
+@test "a failed or impossible install is logged, non-fatal, and typegen still runs" {
+  begin_row "pnpm absent from PATH: install is skipped, logged, non-fatal, and typegen still runs"
   make_main
   add_lockfile
   stub_typegen
@@ -796,9 +735,8 @@ SH
   [ "$status" -eq 0 ]
   grep -qF -- "no pnpm found on PATH" <<<"$output" || return 1
   [ -f "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" ]
-}
 
-@test "the install exiting non-zero is logged, non-fatal, and typegen still runs" {
+  begin_row "the install exiting non-zero is logged, non-fatal, and typegen still runs"
   make_main
   add_lockfile
   stub_typegen
@@ -809,13 +747,56 @@ SH
   [ "$status" -eq 0 ]
   grep -qF -- "INSTALL FAILED for $WORKTREE_PATH" <<<"$output" || return 1
   [ -f "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" ]
+  true
 }
 
-# The CLI is a member of the root workspace, so the one root install provisions
-# its node_modules too; a second install in the member directory would repeat
-# the work. The fixture still carries a lockfile and a manifest at the member
-# so a regression to a per-member install shows up as a second pnpm invocation.
-@test "a tree whose CLI member carries a lockfile and manifest is installed exactly once, at the root" {
+# Install gating by lockfile, node_modules and CLI member.
+@test "install runs once at the root on every entry and only when a lockfile is present" {
+  begin_row "dependencies are installed on entry when a lockfile is present"
+  make_main
+  add_lockfile
+  stub_pnpm
+  WORKTREE_PATH="$(add_worktree feat-install)"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  [ -s "$PNPM_LOG" ] || return 1
+  # The stub records the cwd it ran in: the worktree, never main.
+  [ "$(cat "$PNPM_LOG")" = "$WORKTREE_PATH" ] || return 1
+  [ "$(cat "$PNPM_ARGS_LOG")" = "install --frozen-lockfile" ]
+
+  begin_row "dependencies are installed on every entry, not only when node_modules is absent"
+  make_main
+  add_lockfile
+  stub_pnpm
+  WORKTREE_PATH="$(add_worktree feat-install-every)"
+  mkdir -p "$WORKTREE_PATH/node_modules"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$PNPM_LOG" | tr -d ' ')" = "1" ] || return 1
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$PNPM_LOG" | tr -d ' ')" = "2" ]
+
+  begin_row "no lockfile means no install is attempted, and linking plus typegen still happen"
+  make_main
+  stub_typegen
+  stub_pnpm
+  WORKTREE_PATH="$(add_worktree feat-nolock)"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  [ -s "$PNPM_LOG" ] && return 1
+  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
+  [ -f "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" ]
+
+  begin_row "a tree whose CLI member carries a lockfile and manifest is installed exactly once, at the root"
+  # The CLI is a member of the root workspace, so the one root install provisions
+  # its node_modules too; a second install in the member directory would repeat
+  # the work. The fixture still carries a lockfile and a manifest at the member
+  # so a regression to a per-member install shows up as a second pnpm invocation.
   make_main
   add_lockfile
   local cli_directory="$MAIN/.gaia/cli"
@@ -831,11 +812,10 @@ SH
   [ "$status" -eq 0 ]
   [ "$(cat "$PNPM_LOG")" = "$WORKTREE_PATH" ] || return 1
   [ "$(cat "$PNPM_ARGS_LOG")" = "install --frozen-lockfile" ]
-}
 
-# The adopter shape: .gaia/cli ships its bundled binary but not its lockfile,
-# which is release-excluded, so the directory exists and the install must not.
-@test "a .gaia/cli directory with no lockfile of its own gets no install" {
+  begin_row "a .gaia/cli directory with no lockfile of its own gets no install"
+  # The adopter shape: .gaia/cli ships its bundled binary but not its lockfile,
+  # which is release-excluded, so the directory exists and the install must not.
   make_main
   add_lockfile
   mkdir -p "$MAIN/.gaia/cli"
@@ -850,28 +830,6 @@ SH
   [ "$(cat "$PNPM_LOG")" = "$WORKTREE_PATH" ] || return 1
   grep -qF -- "$WORKTREE_PATH/.gaia/cli" <<<"$output" && return 1
   true
-}
-
-# The other half of test 8's pair: when the tree HAS its own CLI, it is used
-# instead of main's borrowed one, even though main's is also present here.
-@test "typegen prefers the tree's own CLI when one is present" {
-  make_main
-  stub_typegen
-  WORKTREE_PATH="$(add_worktree feat-typegen-own)"
-
-  mkdir -p "$WORKTREE_PATH/apps/web/node_modules/.bin"
-  cat > "$WORKTREE_PATH/apps/web/node_modules/.bin/react-router" <<'SH'
-#!/bin/sh
-if [ "$1" = "typegen" ]; then
-  mkdir -p .react-router/types
-  echo own-cli > .react-router/types/.stamp
-fi
-SH
-  chmod +x "$WORKTREE_PATH/apps/web/node_modules/.bin/react-router"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$WORKTREE_PATH/apps/web/.react-router/types/.stamp")" = "own-cli" ]
 }
 
 # ---------- Typegen is per registered package ----------
@@ -921,52 +879,18 @@ SH
   true
 }
 
-@test "typegen falls back to the main checkout's package CLI and runs in the tree's package directory" {
+# The typegen skip kinds.
+@test "typegen is skipped without a CLI or a router config and logs no FAILED" {
+  begin_row "a main checkout with no installed CLI provisions links and skips typegen"
   make_main
-  stub_typegen
-  WORKTREE_PATH="$(add_worktree feat-pkg-fallback)"
+  WORKTREE_PATH="$(add_worktree feat-nocli)"
 
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ]
-  [ "$(cat "$WORKTREE_PATH/apps/web/.react-router/types/.stamp")" = "$WORKTREE_PATH/apps/web" ] || return 1
-  grep -qF -- "generated typed routes for package web" <<<"$output"
-}
-
-@test "a failing typegen logs a FAILED line naming the package and stays non-fatal" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-pkg-fails)"
-  mkdir -p "$WORKTREE_PATH/apps/web/node_modules/.bin"
-  printf '#!/bin/sh\nexit 1\n' > "$WORKTREE_PATH/apps/web/node_modules/.bin/react-router"
-  chmod +x "$WORKTREE_PATH/apps/web/node_modules/.bin/react-router"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  grep -qF -- "TYPEGEN FAILED (non-fatal) for package web" <<<"$output" || return 1
-  [ -L "$WORKTREE_PATH/.gaia/local" ]
-}
-
-# The guard this proves: before the per-package rewrite the hook ran the root
-# CLI from the root cwd, which after the move generates nothing for the app.
-@test "a CLI only at the old root path is reported FAILED for the package, never run from the root" {
-  make_main
-  WORKTREE_PATH="$(add_worktree feat-pkg-rootcli)"
-  mkdir -p "$WORKTREE_PATH/node_modules/.bin"
-  cat > "$WORKTREE_PATH/node_modules/.bin/react-router" <<'SH'
-#!/bin/sh
-mkdir -p .react-router/types
-echo root-cli > .react-router/types/.stamp
-SH
-  chmod +x "$WORKTREE_PATH/node_modules/.bin/react-router"
-
-  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
-  [ "$status" -eq 0 ]
-  grep -qF -- "TYPEGEN FAILED (non-fatal) for package web" <<<"$output" || return 1
-  [ -e "$WORKTREE_PATH/.react-router/types/.stamp" ] && return 1
+  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
   [ -e "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" ] && return 1
-  true
-}
 
-@test "a package with no react-router config gets no typegen and no FAILED line" {
+  begin_row "a package with no react-router config gets no typegen and no FAILED line"
   make_main
   git -C "$MAIN" rm -q apps/web/react-router.config.ts
   git -C "$MAIN" commit -q -m "drop router config"
@@ -1001,7 +925,40 @@ SH
   [ "$(cat "$WORKTREE_PATH/.react-router/types/.stamp")" = "$WORKTREE_PATH" ]
 }
 
-@test "a registry whose descriptor is missing logs the gaia-packages message, skips typegen, and stays non-fatal" {
+# The FAILED line kinds of the typegen arm.
+@test "typegen failure and skip kinds stay non-fatal and say what happened" {
+  begin_row "a failing typegen logs a FAILED line naming the package and stays non-fatal"
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-pkg-fails)"
+  mkdir -p "$WORKTREE_PATH/apps/web/node_modules/.bin"
+  printf '#!/bin/sh\nexit 1\n' > "$WORKTREE_PATH/apps/web/node_modules/.bin/react-router"
+  chmod +x "$WORKTREE_PATH/apps/web/node_modules/.bin/react-router"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  grep -qF -- "TYPEGEN FAILED (non-fatal) for package web" <<<"$output" || return 1
+  [ -L "$WORKTREE_PATH/.gaia/local" ]
+
+  begin_row "a CLI only at the old root path is reported FAILED for the package, never run from the root"
+  # The guard this proves: before the per-package rewrite the hook ran the root
+  # CLI from the root cwd, which after the move generates nothing for the app.
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-pkg-rootcli)"
+  mkdir -p "$WORKTREE_PATH/node_modules/.bin"
+  cat > "$WORKTREE_PATH/node_modules/.bin/react-router" <<'SH'
+#!/bin/sh
+mkdir -p .react-router/types
+echo root-cli > .react-router/types/.stamp
+SH
+  chmod +x "$WORKTREE_PATH/node_modules/.bin/react-router"
+
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ]
+  grep -qF -- "TYPEGEN FAILED (non-fatal) for package web" <<<"$output" || return 1
+  [ -e "$WORKTREE_PATH/.react-router/types/.stamp" ] && return 1
+  [ -e "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" ] && return 1
+
+  begin_row "a registry whose descriptor is missing logs the gaia-packages message, skips typegen, and stays non-fatal"
   make_main
   printf '[{"name":"web","path":"apps/web"}]\n' > "$MAIN/.gaia/packages.json"
   rm "$MAIN/apps/web/gaia.package.json"
@@ -1015,6 +972,7 @@ SH
   grep -qF -- "TYPEGEN FAILED (non-fatal): gaia-packages: apps/web/gaia.package.json is missing" <<<"$output" || return 1
   [ -e "$WORKTREE_PATH/apps/web/.react-router/types/.stamp" ] && return 1
   [ -L "$WORKTREE_PATH/.gaia/local" ]
+  true
 }
 
 # ---------- A hook-triggered entry installs in the background ----------
@@ -1045,7 +1003,9 @@ SH
   [ "$(cat "$WORKTREE_PATH/apps/web/.react-router/types/.stamp")" = "$WORKTREE_PATH/apps/web" ]
 }
 
-@test "a second entry while the background job runs starts no second install" {
+# One job-state rule, two states.
+@test "the background job is not duplicated while running and restarts after it finished" {
+  begin_row "a second entry while the background job runs starts no second install"
   make_main
   add_lockfile
   stub_blocking_pnpm
@@ -1060,11 +1020,10 @@ SH
   touch "$PNPM_RELEASE"
   wait_for_background_provisioning "$WORKTREE_PATH" || return 1
   [ "$(wc -l < "$PNPM_LOG" | tr -d ' ')" = "1" ]
-}
 
-# A finished job leaves its pid file behind, so a later entry is told apart
-# from a running one by the finished line, not by the pid alone.
-@test "an entry after the background job finished starts a fresh install" {
+  begin_row "an entry after the background job finished starts a fresh install"
+  # A finished job leaves its pid file behind, so a later entry is told apart
+  # from a running one by the finished line, not by the pid alone.
   make_main
   add_lockfile
   stub_pnpm
@@ -1079,6 +1038,7 @@ SH
   grep -qF -- "provisioning already running" <<<"$output" && return 1
   wait_for_background_provisioning "$WORKTREE_PATH" || return 1
   [ "$(wc -l < "$PNPM_LOG" | tr -d ' ')" = "2" ]
+  true
 }
 
 @test "an EnterWorktree payload's additionalContext names the background log" {

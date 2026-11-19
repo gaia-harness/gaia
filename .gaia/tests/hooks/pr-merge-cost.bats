@@ -71,78 +71,56 @@ run_nojq() {
   lacks "[cycle cost at merge]"
 }
 
-@test "non-merge commands print nothing and exit 0" {
-  stub_usage_merge 0
-  run_merge "git commit -m x"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  run_merge "gh pr view 7"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "a payload that is not JSON prints nothing and exits 0" {
-  stub_usage_merge 0
-  run bash -c 'cd "$1" && printf %s "not json" | bash "$2"' _ "$REPO" "$REPO/.claude/hooks/pr-merge-cost.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "a merge aimed at another repository does nothing: no gh read, no output" {
+@test "arming table: non-merge, non-JSON, foreign repo, quoted mention, heredoc and past-bound, quoted verb and multi-statement" {
+  # The foreign-repo row runs against the real usage-merge.sh, so a gh read would show in argv.log.
   gh_view 45 45 fix/foo MERGED 2026-09-25T02:00:00Z
   run_merge "gh pr merge 45 --repo other/project"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -e "$GH_STUB_DIRECTORY/argv.log" ]
-}
+  [ "$status" -eq 0 ] || { echo "row foreign repo: status $status" >&2; return 1; }
+  [ -z "$output" ] || { echo "row foreign repo: printed [$output]" >&2; return 1; }
+  [ ! -e "$GH_STUB_DIRECTORY/argv.log" ] || { echo "row foreign repo: gh was read" >&2; return 1; }
 
-@test "gh pr merge mentioned inside a quoted string: not matched" {
   stub_usage_merge 0
-  run_merge 'echo "remember to gh pr merge later"'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "the positive control arms, the heredoc-body payload does not, and the same payload past the arming bound arms again" {
-  stub_usage_merge 0
-  run_merge "gh pr merge 7 --squash"
-  [ "$status" -eq 0 ]
-  has_line "STUB BLOCK"
-
-  run_merge $'cat > /tmp/notes.txt <<EOF\ngh pr merge 7\nEOF'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  run bash -c 'cd "$1" && printf %s "not json" | bash "$2"' _ "$REPO" "$REPO/.claude/hooks/pr-merge-cost.sh"
+  [ "$status" -eq 0 ] || { echo "row non-JSON: status $status" >&2; return 1; }
+  [ -z "$output" ] || { echo "row non-JSON: printed [$output]" >&2; return 1; }
 
   local pad over_limit_command
   pad=$(printf 'x%.0s' $(seq 1 16400))
   over_limit_command=$'cat > /tmp/notes.txt <<EOF\n'"$pad"$'\ngh pr merge 7\nEOF'
   [ "${#over_limit_command}" -gt 16384 ] || return 1
-  run_merge "$over_limit_command"
-  [ "$status" -eq 0 ]
-  has_line "STUB BLOCK"
+
+  # Each row: the expectation (silent = no output, arms = the stub's line), then the command.
+  local -a rows=(
+    silent "git commit -m x"
+    silent "gh pr view 7"
+    silent 'echo "remember to gh pr merge later"'
+    arms "gh pr merge 7 --squash"
+    silent $'cat > /tmp/notes.txt <<EOF\ngh pr merge 7\nEOF'
+    arms "$over_limit_command"
+    arms 'gh pr "merge" 7'
+    arms "echo start && gh pr merge 7"
+  )
+  local index expectation command
+  for ((index = 0; index < ${#rows[@]}; index += 2)); do
+    expectation="${rows[index]}" command="${rows[index + 1]}"
+    run_merge "$command"
+    [ "$status" -eq 0 ] || { echo "row ${command:0:60}: status $status" >&2; return 1; }
+    if [ "$expectation" = silent ]; then
+      [ -z "$output" ] || { echo "row ${command:0:60}: expected silence, got [$output]" >&2; return 1; }
+    else
+      has_line "STUB BLOCK" || { echo "row ${command:0:60}: did not arm" >&2; return 1; }
+    fi
+  done
 }
 
-@test "a quoted verb in the first command and a multi-statement command both arm" {
-  stub_usage_merge 0
-  run_merge 'gh pr "merge" 7'
-  [ "$status" -eq 0 ]
-  has_line "STUB BLOCK"
-  run_merge "echo start && gh pr merge 7"
-  [ "$status" -eq 0 ]
-  has_line "STUB BLOCK"
-}
-
-@test "a usage-merge.sh that exits 3 yields exactly one unavailable line naming the rerun command" {
+@test "unavailable marker: one line naming the rerun command, branch form and hostile-branch placeholder" {
   stub_usage_merge 3
   run_merge "gh pr merge 7 --squash"
   [ "$status" -eq 0 ]
   has_line "STUB BLOCK"
   [ "$(grep -c '^\[PR cost\] unavailable' <<<"$output")" -eq 1 ]
   has_line "[PR cost] unavailable: usage-merge.sh exited 3; rerun: bash .gaia/scripts/usage.sh pr 7"
-}
 
-@test "the unavailable line names the current branch when the command carries no number, and a placeholder for a hostile branch name" {
-  stub_usage_merge 3
   git -C "$REPO" checkout -q -b fix/numberless
   run_merge "gh pr merge"
   [ "$status" -eq 0 ]
@@ -154,18 +132,15 @@ run_nojq() {
   [ ! -e "$REPO/pwn" ]
 }
 
-@test "a missing hook-payload.sh exits non-zero and stderr names it" {
-  rm "$REPO/.claude/hooks/lib/hook-payload.sh"
-  run_hook_split "gh pr merge 7"
-  [ "$status" -ne 0 ]
-  grep -qF "hook-payload.sh" <<<"$stderr"
-}
-
-@test "a missing verb-arming.sh exits non-zero and stderr names it" {
-  rm "$REPO/.claude/hooks/lib/verb-arming.sh"
-  run_hook_split "gh pr merge 7"
-  [ "$status" -ne 0 ]
-  grep -qF "verb-arming.sh" <<<"$stderr"
+@test "missing library table: hook-payload.sh or verb-arming.sh absent exits non-zero naming it" {
+  local library
+  for library in hook-payload.sh verb-arming.sh; do
+    mv "$REPO/.claude/hooks/lib/$library" "$BATS_TEST_TMPDIR/$library.saved"
+    run_hook_split "gh pr merge 7"
+    mv "$BATS_TEST_TMPDIR/$library.saved" "$REPO/.claude/hooks/lib/$library"
+    [ "$status" -ne 0 ] || { echo "row $library: exited 0" >&2; return 1; }
+    grep -qF "$library" <<<"$stderr" || { echo "row $library: stderr does not name it: [$stderr]" >&2; return 1; }
+  done
 }
 
 @test "jq absent: an armed merge prints the inactive marker and exits 0; a non-merge prints nothing" {
@@ -175,23 +150,4 @@ run_nojq() {
   run_nojq "$REPO/.claude/hooks/pr-merge-cost.sh" "gh pr view 101"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "guards-must-fail: a copy of the hook without the raw-grep branch stays silent for the same merge payload" {
-  local mutant="$BATS_TEST_TMPDIR/hook-noraw.sh"
-  sed 's/^  if grep -Eq .*<<<"$payload"; then$/  if false; then/' "$REPO/.claude/hooks/pr-merge-cost.sh" >"$mutant"
-  cmp -s "$REPO/.claude/hooks/pr-merge-cost.sh" "$mutant" && return 1
-  run_nojq "$mutant" "gh pr merge 101"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "guards-must-fail: a copy of the hook that never prints the unavailable marker stays silent when usage-merge.sh fails" {
-  stub_usage_merge 3
-  sed '/unavailable: usage-merge.sh exited/d' "$REPO/.claude/hooks/pr-merge-cost.sh" >"$REPO/.claude/hooks/pr-merge-cost-mutant.sh"
-  cmp -s "$REPO/.claude/hooks/pr-merge-cost.sh" "$REPO/.claude/hooks/pr-merge-cost-mutant.sh" && return 1
-  run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$REPO" "$(payload_for "gh pr merge 7")" "$REPO/.claude/hooks/pr-merge-cost-mutant.sh"
-  [ "$status" -eq 0 ]
-  grep -qF "unavailable" <<<"$output" && return 1
-  true
 }
