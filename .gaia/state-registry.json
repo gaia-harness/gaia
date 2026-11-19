@@ -859,6 +859,27 @@
       }
     },
     {
+      "id": "rate-limit-checkpoint-markers",
+      "path": "cache/rate-limit-checkpoint/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "main-only",
+      "keyed_by": null,
+      "why": "Per-session marker written by rate-limit-checkpoint-inject.sh (tmp + mv) holding, per window name, the reset time and the highest rate-limit band the checkpoint has told the session about, so each band of each window is told once per session. Anchored to the main root so a session moving between the main checkout and a worktree sees one marker.",
+      "writer": "code",
+      "retention": {
+        "class": "age",
+        "days": 7,
+        "types": [
+          "file"
+        ],
+        "names": [
+          "[!.]*",
+          ".*.*"
+        ]
+      }
+    },
+    {
       "id": "context-checkpoint-agent-markers",
       "path": "cache/context-checkpoint-agents/",
       "match": "prefix",

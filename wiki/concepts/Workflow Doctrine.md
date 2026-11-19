@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-11-09
+updated: 2026-11-19
 tags: [concept, claude, workflow, doctrine]
 ---
 
@@ -71,6 +71,12 @@ Claude cannot see its own context reading, so a long session has no way to notic
 The main-session hook stays silent for sub-agents, when there is no fresh reading, and while the audit loop holds the session: its state file for the branch shows this session's latest unit still running (no `unit-<u>.json` yet), or the branch's latest checkpoint (of any session) carries this session, is answered, and has no unit admitted after it. The bands come from `.gaia/scripts/context-checkpoint-lib.sh`, the same source the statusline reads, so the two never disagree. Marks live per session: a session resumed after `/clear` starts unmarked and is checked afresh, while compaction keeps its marks.
 
 A sub-agent gets its own checkpoint from a separate PostToolUse hook, `.claude/hooks/context-checkpoint-subagent.sh`. It reads the sub-agent's context from the sub-agent's own transcript and injects [`.claude/doctrine/context-yield.md`](../../.claude/doctrine/context-yield.md), but only for a sub-agent that opted in by naming a handoff path in its dispatch prompt. A heavy sub-agent writes the handoff and returns instead of running on; the dispatcher re-dispatches a fresh agent from that handoff and halts for the human once the yield limit `gaia_context_yield_limit` returns is passed. The bands and the limit come from `.gaia/scripts/context-checkpoint-lib.sh`; the doctrine file and `.claude/skills/gaia/references/plan/planner.md` own the rules.
+
+## Rate-limit checkpoint
+
+A session cannot see how much of the account's usage windows it has spent. A PreToolUse hook on the dispatch tools (`Agent`, `Task`, `Workflow`) reads the shared rate-limit reading and, once per band per window, injects the reading with a pointer to [`.claude/doctrine/rate-limit-checkpoint.md`](../../.claude/doctrine/rate-limit-checkpoint.md). It runs in main sessions only and never blocks: the dispatch that triggered it proceeds, and the reading governs the dispatches after it.
+
+The reading comes from `.gaia/scripts/rate-limits-lib.sh`, the same source the statusline draws its usage segments from; [[Claude Integration]] describes where the statusline gets its figures. The doctrine file owns the policy: what to ask, what to recommend, and what to do with no human present. This page does not restate it.
 
 ## Concurrency limits
 

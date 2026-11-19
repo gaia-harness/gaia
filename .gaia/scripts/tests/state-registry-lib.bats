@@ -749,6 +749,7 @@ ports-launch-records owned - - - - -
 ports-session-registry owned - - - - -
 doctrine-injected-marker age 7 - - - -
 context-checkpoint-markers age 7 - - file [!.]*,.*.*
+rate-limit-checkpoint-markers age 7 - - file [!.]*,.*.*
 context-checkpoint-agent-markers age 7 - - file [!.]*,.*.*
 TABLE
 }

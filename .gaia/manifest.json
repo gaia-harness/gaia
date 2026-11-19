@@ -24,6 +24,7 @@
     ".claude/doctrine/context-checkpoint.md": "owned",
     ".claude/doctrine/context-yield.md": "owned",
     ".claude/doctrine/execution.md": "owned",
+    ".claude/doctrine/rate-limit-checkpoint.md": "owned",
     ".claude/doctrine/testing.md": "owned",
     ".claude/hooks/audit-loop-ask-grant.sh": "owned",
     ".claude/hooks/audit-loop-bound.sh": "owned",
@@ -104,6 +105,7 @@
     ".claude/hooks/pr-merge-audit-check.sh": "owned",
     ".claude/hooks/pr-merge-cost.sh": "owned",
     ".claude/hooks/provision-worktree.sh": "owned",
+    ".claude/hooks/rate-limit-checkpoint-inject.sh": "owned",
     ".claude/hooks/state-reaper-session-start.sh": "owned",
     ".claude/hooks/usage-capture.sh": "owned",
     ".claude/hooks/wiki-session-start.sh": "owned",
@@ -875,7 +877,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-18T19:42:22.616Z",
+  "generated": "2026-11-19T05:21:42.848Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

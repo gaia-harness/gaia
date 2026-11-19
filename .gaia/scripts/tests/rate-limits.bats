@@ -313,3 +313,90 @@ CASES
   [ "${lines[3]}" = "rc=2" ] || { echo "records: $output"; return 1; }
   [ "$(cat "$FILE")" = "$before" ] || return 1
 }
+
+# render_five_hour <now>: one real statusline render in MAIN whose payload holds
+# five_hour 55%; PLAIN_OUTPUT is its output without ANSI escapes.
+render_five_hour() {
+  local now="$1" payload escape=$'\033'
+  payload=$(jq -nc --arg current_directory "$MAIN" --argjson resets_at $((now + 3690)) \
+    '{workspace: {current_dir: $current_directory}, model: {display_name: "Claude Opus"}, effort: {level: "xhigh"},
+      context_window: {used_percentage: 21, context_window_size: 1000000},
+      rate_limits: {five_hour: {used_percentage: 55, resets_at: $resets_at}}}')
+  PAYLOAD="$payload" run env HOME="$BATS_TEST_TMPDIR/home" COLUMNS=300 GAIA_RATE_LIMITS_NOW="$now" \
+    bash -c "printf '%s' \"\$PAYLOAD\" | bash '$REPO_ROOT/.gaia/statusline/gaia-statusline.sh'"
+  PLAIN_OUTPUT=$(sed "s/${escape}\[[0-9;]*m//g" <<<"$output")
+}
+
+# dispatch_hook <now>: the real dispatch hook as a main session in MAIN.
+dispatch_hook() {
+  local now="$1" payload
+  payload=$(jq -nc --arg cwd "$MAIN" \
+    '{hook_event_name: "PreToolUse", session_id: "0b9c2d4e-1f3a-4b5c-8d7e-9f0a1b2c3d4e", cwd: $cwd, tool_name: "Agent", tool_input: {}}')
+  run --separate-stderr env GAIA_RATE_LIMITS_NOW="$now" /bin/bash "$REPO_ROOT/.claude/hooks/rate-limit-checkpoint-inject.sh" <<<"$payload"
+  rm -rf "$MAIN/.gaia/local/cache/rate-limit-checkpoint"
+}
+
+@test "a stored file that parses but fails validation breaks no reader and the next write repairs it" {
+  local now=1795440000 label stored_file reader_expectation repaired
+  local beyond_bound=$((now + 30000)) five_hour_reset=$((now + 3600))
+  mkdir -p "$BATS_TEST_TMPDIR/home" "$MAIN/.gaia/local"
+  printf '{"version":1,"statusline":{"left":"gaia"}}' >"$MAIN/.gaia/local/settings.json"
+  git -C "$MAIN" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m init
+
+  while IFS='|' read -r label stored_file reader_expectation; do
+    [ -n "$label" ] || continue
+    # The reader prints only what is valid, the hook is silent, and nothing is stderr noise.
+    put_file "$stored_file"
+    run --separate-stderr rate_limits "$now" read
+    [ "$status" -eq 0 ] || { echo "case $label: reader status $status"; return 1; }
+    case $output in
+      "$reader_expectation"*) ;;
+      *) echo "case $label: reader got '$output', want '$reader_expectation'"; return 1 ;;
+    esac
+    [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" = 1 ] || { echo "case $label: reader got '$output'"; return 1; }
+    dispatch_hook "$now"
+    [ "$status" -eq 0 ] || { echo "case $label: hook status $status"; return 1; }
+    [ -z "$output" ] || { echo "case $label: hook spoke: $output"; return 1; }
+    [ -z "$stderr" ] || { echo "case $label: hook stderr: $stderr"; return 1; }
+
+    # The render shows its own payload.
+    render_five_hour "$now"
+    case $PLAIN_OUTPUT in
+      *"55%"*) ;;
+      *) echo "case $label: render lost its payload: $PLAIN_OUTPUT"; return 1 ;;
+    esac
+
+    # The next write repairs a repairable file and leaves a foreign version alone.
+    put_file "$stored_file"
+    before="$(cat "$FILE")"
+    run rate_limits "$now" write "{\"producer\":\"statusline\",\"windows\":{\"five_hour\":{\"used_percentage\":95,\"resets_at\":$five_hour_reset}}}"
+    [ "$status" -eq 0 ] || { echo "case $label: writer status $status"; return 1; }
+    if [ "$label" = "a later version" ]; then
+      [ "$(cat "$FILE")" = "$before" ] || { echo "case $label: file changed"; return 1; }
+      continue
+    fi
+    repaired="$(stored '[.version, .windows.five_hour.used_percentage, .windows.five_hour.resets_at]')"
+    [ "$repaired" = "[1,95,$five_hour_reset]" ] || { echo "case $label: repaired '$repaired'"; return 1; }
+    # Control: the repaired file qualifies, so the hook speaks over it.
+    dispatch_hook "$now"
+    [ -n "$output" ] || { echo "case $label: hook silent over the repaired file"; return 1; }
+  done <<EOF
+a top-level array|[]|no reading
+no windows object|{"version":1}|no reading
+a string reset beside a valid window|{"version":1,"windows":{"seven_day":{"used_percentage":50,"resets_at":$((now + 90000)),"observed_at":$now,"producer":"statusline","history":[]},"five_hour":{"used_percentage":95,"resets_at":"soon","observed_at":$now,"producer":"statusline","history":[]}}}|seven_day 50%
+a later version|{"version":2,"windows":{"five_hour":{"used_percentage":95,"resets_at":$five_hour_reset,"observed_at":$now,"producer":"statusline","history":[]}}}|no reading
+a reset past the future bound|{"version":1,"windows":{"five_hour":{"used_percentage":95,"resets_at":$beyond_bound,"observed_at":$now,"producer":"statusline","history":[]}}}|no reading
+EOF
+
+  # The string-reset window is dropped and the valid one kept on rewrite.
+  put_file '{"version":1,"windows":{"seven_day":{"used_percentage":50,"resets_at":1795530000,"observed_at":1795440000,"producer":"statusline","history":[]},"five_hour":{"used_percentage":95,"resets_at":"soon","observed_at":1795440000,"producer":"statusline","history":[]}}}'
+  run rate_limits "$now" write "{\"producer\":\"statusline\",\"windows\":{\"seven_day\":{\"used_percentage\":51,\"resets_at\":1795530000}}}"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(stored '.windows | keys')" = '["seven_day"]' ] || { stored '.windows | keys'; return 1; }
+
+  # An unknown top-level key and an unknown window key survive a rewrite.
+  put_file '{"version":1,"note":"kept","windows":{"seven_day":{"used_percentage":50,"resets_at":1795530000,"observed_at":1795440000,"producer":"statusline","history":[],"extra":"kept"}}}'
+  run rate_limits "$now" write "{\"producer\":\"statusline\",\"windows\":{\"seven_day\":{\"used_percentage\":60,\"resets_at\":1795530000}}}"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(stored '[.note, .windows.seven_day.extra, .windows.seven_day.used_percentage]')" = '["kept","kept",60]' ] || { stored '.'; return 1; }
+}
