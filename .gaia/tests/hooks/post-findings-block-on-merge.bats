@@ -761,9 +761,9 @@ run_staged_merge_hook() {
 
   next_case "staged hook under stock /bin/bash, every lib usable: posts the findings block (control)"
   # The stock-/bin/bash control, and it is not redundant with the control above.
-  # Every pinned case in this suite asserts only exit 0, no output, and no
-  # post, which a hook that does nothing at all under 3.2 satisfies just as
-  # well as a hook that degrades correctly. Without a control on the SAME
+  # Every pinned case in this suite asserts only exit 0 and no deny, which a
+  # hook that does nothing at all under 3.2 satisfies just as well as a hook
+  # that degrades correctly. Without a control on the SAME
   # interpreter proving the normal path still works there, the pinned cases
   # cannot separate the repair from total inertness on the one shell they exist
   # to exercise. Proved hollow before adding this: inserting an early

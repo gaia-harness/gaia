@@ -102,12 +102,9 @@ expect_resolve() {
   fi
 }
 
-# One boundary rule: the home repository resolves, another
-# repository or host declines, an enterprise home host resolves its own URL and
-# not github.com (without it the host comparison could pass by hardcoding
-# github.com), the slug and host compare case-insensitively, and neither a
-# suffix nor a port widens the comparison. The relaxation is to the shape,
-# never to the boundary.
+# The enterprise home host row that declines github.com stops a host
+# comparison that passes by hardcoding github.com. A suffix or port relaxes the
+# shape, never the boundary.
 @test "repo and host comparison: home resolves, foreign repo or host declines, enterprise home host, case-insensitive slug and host, suffix and port never widen the comparison" {
   expect_resolve "h1 a home-repository URL resolves to its number" 7 'https://github.com/acme/widgets/pull/7'
   expect_resolve "h2 another repository's URL declines" decline 'https://github.com/other-org/other-repo/pull/7'

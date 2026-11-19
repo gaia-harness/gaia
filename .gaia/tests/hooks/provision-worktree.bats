@@ -817,8 +817,7 @@ begin_row() {
 
   begin_row "a .gaia/cli directory with no lockfile of its own gets no install"
   # The adopter shape: .gaia/cli ships its bundled binary but not its lockfile,
-  # which is release-excluded, so the directory exists and gets no install of
-  # its own.
+  # which is release-excluded.
   make_main
   add_lockfile
   mkdir -p "$MAIN/.gaia/cli"
