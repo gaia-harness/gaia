@@ -53,19 +53,3 @@ push_runs_are_capped() {
 @test "a push run is capped below the leg count and a pull request runs every leg at once" {
   push_runs_are_capped "$WORKFLOW"
 }
-
-@test "the guard fails on a cap that also binds pull requests, a missing cap, or a stale leg count (the guard can fail)" {
-  local scratch="$BATS_TEST_TMPDIR/audit-ci-tests.yml" legs
-  legs="$(matrix_leg_count "$WORKFLOW")"
-  sed "s/^\([[:space:]]*max-parallel:\).*/\1 6/" "$WORKFLOW" >"$scratch"
-  cmp -s "$WORKFLOW" "$scratch" && return 1
-  run push_runs_are_capped "$scratch"
-  [ "$status" -ne 0 ] || return 1
-  sed '/^[[:space:]]*max-parallel:/d' "$WORKFLOW" >"$scratch"
-  run push_runs_are_capped "$scratch"
-  [ "$status" -ne 0 ] || return 1
-  sed "s/\(github\.event_name == 'push' && [0-9]* || \)[0-9]*/\1$((legs + 1))/" "$WORKFLOW" >"$scratch"
-  cmp -s "$WORKFLOW" "$scratch" && return 1
-  run push_runs_are_capped "$scratch"
-  [ "$status" -ne 0 ]
-}

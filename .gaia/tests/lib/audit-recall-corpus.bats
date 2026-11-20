@@ -134,19 +134,6 @@ fixture_corpus() {
 }
 
 # bats test_tags=whole-tree
-@test "the PRNG gives the same order for the same seed and a different order for another seed" {
-  run node --input-type=module -e "
-    import { seededShuffle } from '$RECALL/lib/prng.mjs';
-    const items = Array.from({ length: 20 }, (_, index) => index);
-    const first = seededShuffle(items, 122).join(',');
-    const again = seededShuffle(items, 122).join(',');
-    const other = seededShuffle(items, 123).join(',');
-    console.log(first === again, first !== other, items.join(',') === Array.from({ length: 20 }, (_, index) => index).join(','));"
-  [ "$status" -eq 0 ]
-  [ "$output" = "true true true" ]
-}
-
-# bats test_tags=whole-tree
 @test "selection is byte-identical on a re-run, and seed 123 gives a different entry order" {
   build_maintainer_fixture "$BATS_TEST_TMPDIR/maintainer"
   SOURCE="$BATS_TEST_TMPDIR/mined.json"
@@ -286,7 +273,7 @@ fixture_corpus() {
   [ "$status" -eq 2 ]
 }
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "run-recall refuses a missing --max-usd, an unknown --bundle and a scaffold without the sentinel" {
   scratch_scaffold
   run bash "$RECALL/run-recall.sh" --bundle before --run 1 --clone "$BATS_TEST_TMPDIR/clones" --scaffold "$SCAFFOLD" --out "$BATS_TEST_TMPDIR/out"

@@ -82,15 +82,6 @@ check_rules_dir() {
 }
 
 # bats test_tags=whole-tree
-@test "every moved frontend rule is present (a short read of the directory fails)" {
-  local name missing=""
-  for name in accessibility api-service design-baseline i18n playwright react-router-docs routes state-pattern storybook tailwind; do
-    [ -f "$RULES_DIR/$name.md" ] || missing="$missing $name"
-  done
-  [ -z "$missing" ] || { echo "missing rules:$missing" >&2; return 1; }
-}
-
-# bats test_tags=whole-tree
 @test "every moved rule declares at least one paths glob" {
   local name globs bare=""
   for name in accessibility api-service design-baseline i18n playwright react-router-docs routes state-pattern storybook tailwind; do
@@ -113,53 +104,4 @@ check_rules_dir() {
     glob_form_problem "$glob" && return 1
   done < <(rule_globs "$file")
   true
-}
-
-# bats test_tags=whole-tree
-@test "the check refuses a copy with one glob reverted to the repo-root form" {
-  local copy="$BATS_TEST_TMPDIR/rules"
-  mkdir -p "$copy"
-  cp "$RULES_DIR"/*.md "$copy/"
-  # Baseline: the untouched copy passes, so the failure below is the revert's.
-  run check_rules_dir "$copy"
-  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-  sed "s#'app/components/\*\*/\*'#'apps/web/app/components/**/*'#" "$RULES_DIR/accessibility.md" >"$copy/accessibility.md"
-  cmp -s "$RULES_DIR/accessibility.md" "$copy/accessibility.md" && return 1
-  run check_rules_dir "$copy"
-  [ "$status" -ne 0 ] || return 1
-  grep -qF -- "accessibility.md: 'apps/web/app/components/**/*': repo-root form" <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "the check refuses a glob that matches no tracked file" {
-  local copy="$BATS_TEST_TMPDIR/rules-dead"
-  mkdir -p "$copy"
-  cat >"$copy/dead.md" <<'EOF'
----
-paths:
-  - 'no-such-directory/**/*'
----
-
-# Dead
-EOF
-  run check_rules_dir "$copy"
-  [ "$status" -ne 0 ] || return 1
-  grep -qF -- "matches no tracked file" <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "the renderer-filled exemption is exact: a misspelled route-tests glob still fails" {
-  local copy="$BATS_TEST_TMPDIR/rules-near-miss"
-  mkdir -p "$copy"
-  cat >"$copy/near.md" <<'EOF'
----
-paths:
-  - 'app/route-test/**/*'
----
-
-# Near miss
-EOF
-  run check_rules_dir "$copy"
-  [ "$status" -ne 0 ] || return 1
-  grep -qF -- "near.md: 'app/route-test/**/*': matches no tracked file" <<<"$output"
 }

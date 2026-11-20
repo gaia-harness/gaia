@@ -148,38 +148,32 @@ extract_pristine() {
   tar -xzOf "$tarball" "$top/.gaia/manifest.json" | jq -e '.files | has(".claude/rules/local-bundle-probe.md")'
 }
 
-@test "uncommitted tracked changes are refused with no tarball, an untracked file is not" {
+# bats test_tags=protected
+@test "the builder refuses a stale CLI bundle, a dirty tracked file and a staged change with no tarball, and builds past an untracked file" {
   local clone="$BATS_TEST_TMPDIR/clone"
   clone_repository "$clone"
-  printf '\nunsaved\n' >> "$clone/README.md"
-  build "$clone" "$BATS_TEST_TMPDIR/out"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -q 'commit first, any branch is fine'
-  [ -z "$(ls -A "$BATS_TEST_TMPDIR/out")" ]
-  # A staged-but-uncommitted change is refused the same way.
-  git -C "$clone" add README.md
-  build "$clone" "$BATS_TEST_TMPDIR/out2"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -q 'commit first, any branch is fine'
-  [ -z "$(ls -A "$BATS_TEST_TMPDIR/out2")" ]
-}
 
-@test "an untracked new file does not trigger the dirty refusal" {
-  local clone="$BATS_TEST_TMPDIR/clone"
-  clone_repository "$clone"
+  build "$clone" "$BATS_TEST_TMPDIR/out-stale" "$BATS_FILE_TMPDIR/stale-stub.sh"
+  [ "$status" -ne 0 ] || return 1
+  printf '%s\n' "$output" | grep -qi 'stale' || return 1
+  [ -z "$(ls -A "$BATS_TEST_TMPDIR/out-stale")" ] || return 1
+
   printf 'untracked\n' > "$clone/untracked-probe.txt"
-  build "$clone" "$BATS_TEST_TMPDIR/out"
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -q '^TAG '
-}
+  build "$clone" "$BATS_TEST_TMPDIR/out-untracked"
+  [ "$status" -eq 0 ] || return 1
+  printf '%s\n' "$output" | grep -q '^TAG ' || return 1
 
-@test "a stale CLI bundle is refused with no tarball" {
-  local clone="$BATS_TEST_TMPDIR/clone"
-  clone_repository "$clone"
-  build "$clone" "$BATS_TEST_TMPDIR/out" "$BATS_FILE_TMPDIR/stale-stub.sh"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -qi 'stale'
-  [ -z "$(ls -A "$BATS_TEST_TMPDIR/out")" ]
+  printf '\nunsaved\n' >> "$clone/README.md"
+  build "$clone" "$BATS_TEST_TMPDIR/out-dirty"
+  [ "$status" -ne 0 ] || return 1
+  printf '%s\n' "$output" | grep -q 'commit first, any branch is fine' || return 1
+  [ -z "$(ls -A "$BATS_TEST_TMPDIR/out-dirty")" ] || return 1
+
+  git -C "$clone" add README.md
+  build "$clone" "$BATS_TEST_TMPDIR/out-staged"
+  [ "$status" -ne 0 ] || return 1
+  printf '%s\n' "$output" | grep -q 'commit first, any branch is fine' || return 1
+  [ -z "$(ls -A "$BATS_TEST_TMPDIR/out-staged")" ]
 }
 
 @test "a source tree that tracks the build record fails the build and the manifest commands" {
@@ -216,6 +210,7 @@ extract_pristine() {
   true
 }
 
+# bats test_tags=protected
 @test "a second build at the same commit refuses and leaves the first tarball untouched" {
   local tarball before after
   tarball="$(pristine_tarball)"
