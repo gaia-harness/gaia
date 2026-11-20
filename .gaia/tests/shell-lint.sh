@@ -24,8 +24,8 @@
 # back empty is skipped, not failed. It narrows lint-errexit-status-read,
 # lint-git-path-quoting and lint-sigpipe-readers the same way, through
 # GAIA_GUARD_DELTA_FILE (.gaia/scripts/guard-awk-lib.sh), unless the delta
-# changes that guard's own sources. The other folded guards scan the whole tree:
-# some hold floors or check across files, and the rest are cheap. `verify-harness.sh round` passes the
+# changes that guard's own sources. The other folded guards scan the whole tree.
+# `verify-harness.sh round` passes the
 # round's delta here; branch mode and CI lint the whole tree.
 #
 # `--only bash32-parse` runs the bash-3.2 parse pass and nothing else. That is

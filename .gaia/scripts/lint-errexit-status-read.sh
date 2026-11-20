@@ -447,7 +447,7 @@ githook_files=()
 githook_error_file="$(mktemp -t gaia-errexit-githooks-XXXXXX)"
 if gaia_guard_scan_files lint-errexit-status-read githooks 2>"$githook_error_file"; then
   githook_files=(${GAIA_GUARD_SCAN_FILES[@]+"${GAIA_GUARD_SCAN_FILES[@]}"})
-  # A success says nothing on stderr except a delta-mode skip, which is owed.
+  # A success says nothing on stderr except a delta-mode skip notice, which must reach the run output.
   cat "$githook_error_file" >&2
 else
   githook_status=$?
