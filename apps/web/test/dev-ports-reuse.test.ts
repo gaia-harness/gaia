@@ -1,6 +1,10 @@
 /* eslint-disable unicorn/prevent-abbreviations -- the module under test is named dev-ports-reuse */
 import {describe, expect, test, vi} from 'vitest';
-import {ASK_FIRST_SENTENCE} from '../dev-ports';
+import {
+  ASK_FIRST_SENTENCE,
+  buildForeignServerMessage,
+  PORTS_HINT,
+} from '../dev-ports';
 import type {ListenerOwner} from '../dev-ports';
 import {decideServerReuse} from '../dev-ports-reuse';
 
@@ -118,4 +122,32 @@ describe('decideServerReuse', () => {
       }
     }
   );
+
+  test.each([
+    {
+      expected: `GAIA: port 5180 is held by a server that is not this tree's own (/trees/other), so Playwright will not reuse it. ${ASK_FIRST_SENTENCE} ${PORTS_HINT}`,
+      name: 'with an owner path',
+      ownerPath: '/trees/other',
+    },
+    {
+      expected: `GAIA: port 5180 is held by a server that is not this tree's own (owner unknown), so Playwright will not reuse it. ${ASK_FIRST_SENTENCE} ${PORTS_HINT}`,
+      name: 'without an owner path',
+      ownerPath: undefined,
+    },
+  ])(
+    'buildForeignServerMessage words the refusal exactly: $name',
+    ({expected, ownerPath}) => {
+      expect(buildForeignServerMessage({ownerPath, port: 5180})).toBe(expected);
+    }
+  );
+
+  test('defaults the probe to the real listener lookup, which answers unknown without a tree root', () => {
+    expect(
+      decideServerReuse({
+        isContinuousIntegration: false,
+        port: 5180,
+        treeRoot: undefined,
+      })
+    ).toBe(false);
+  });
 });

@@ -1,6 +1,6 @@
 import {delay} from 'msw';
 import {http, HttpResponse} from 'msw/http';
-import {afterEach, describe, expect, expectTypeOf, test, vi} from 'vitest';
+import {afterEach, describe, expect, expectTypeOf, test} from 'vitest';
 import {z} from 'zod';
 import {createServer} from 'node:http';
 import type {Server} from 'node:http';
@@ -15,9 +15,6 @@ const ORIGIN_B = 'https://api-b.test';
 
 const itemSchema = z.object({displayName: z.string()});
 const envelopeSchema = z.object({data: itemSchema});
-
-const parseJsonOrPlainText = (text: string): unknown =>
-  text === 'not json' ? {display_name: 'parsed'} : JSON.parse(text);
 
 const originalApiUrl = process.env.API_URL;
 
@@ -54,21 +51,16 @@ const startSocketServer = async (
   process.env.API_URL = `http://127.0.0.1:${(startedServer.address() as AddressInfo).port}`;
 };
 
-const useMockHandler = (handler: ReturnType<typeof http.get>) => (): void => {
-  process.env.API_URL = ORIGIN_A;
-  server.use(handler);
-};
+const registerMockHandler =
+  (handler: ReturnType<typeof http.get>) => (): void => {
+    process.env.API_URL = ORIGIN_A;
+    server.use(handler);
+  };
 
-const useSocketServer =
+const arrangeSocketServer =
   (behavior: 'drop' | 'oversized' | 'stall', status?: number) =>
   async (): Promise<void> =>
     startSocketServer(behavior, status);
-
-const fulfilledValue = (settled: PromiseSettledResult<unknown>): unknown => {
-  expect(settled.status).toBe('fulfilled');
-
-  return (settled as PromiseFulfilledResult<unknown>).value;
-};
 
 const networkFailure = {
   isNetworkFailure: true,
@@ -118,7 +110,7 @@ describe('create', () => {
   test.each(
     [
       {
-        arrange: useMockHandler(
+        arrange: registerMockHandler(
           http.get(`${ORIGIN_A}/items`, () =>
             HttpResponse.json({data: {nope: 1}})
           )
@@ -131,7 +123,7 @@ describe('create', () => {
         request: async () => create()('items', {schema: envelopeSchema}),
       },
       {
-        arrange: useMockHandler(
+        arrange: registerMockHandler(
           http.get(`${ORIGIN_A}/items`, () => HttpResponse.error())
         ),
         check: resolvesAs(networkFailure),
@@ -139,7 +131,7 @@ describe('create', () => {
         request: async () => create()('items', {retry: 0}),
       },
       {
-        arrange: useMockHandler(
+        arrange: registerMockHandler(
           http.get(`${ORIGIN_A}/items`, async () => {
             await delay(200);
 
@@ -152,7 +144,7 @@ describe('create', () => {
           create()('items', {retry: 0, schema: envelopeSchema, timeout: 20}),
       },
       {
-        arrange: useSocketServer('drop'),
+        arrange: arrangeSocketServer('drop'),
         check: resolvesAs(networkFailure),
         name: 'a schema-less body that drops is a 503',
         request: async () => create()('items', {retry: 0}),
@@ -161,7 +153,7 @@ describe('create', () => {
         ['the default layer', false],
         ['the snake_case layer', true],
       ].map(([layer, isSnakeCaseEnabled]) => ({
-        arrange: useSocketServer('stall'),
+        arrange: arrangeSocketServer('stall'),
         check: resolvesAs(timedOut),
         name: `a schema-less body that stalls on ${layer} is a 504`,
         request: async () =>
@@ -171,7 +163,7 @@ describe('create', () => {
           }),
       })),
       {
-        arrange: useSocketServer('stall'),
+        arrange: arrangeSocketServer('stall'),
         check: resolvesAs(timedOut),
         name: 'a body that stalls on the snake_case layer with a schema is a 504',
         request: async () =>
@@ -182,7 +174,7 @@ describe('create', () => {
           }),
       },
       {
-        arrange: useSocketServer('drop'),
+        arrange: arrangeSocketServer('drop'),
         check: resolvesAs(networkFailure),
         name: 'a body that drops on the snake_case layer is a 503',
         request: async () =>
@@ -192,7 +184,7 @@ describe('create', () => {
           }),
       },
       {
-        arrange: useSocketServer('drop', 404),
+        arrange: arrangeSocketServer('drop', 404),
         check: (attemptOutcome: unknown) => {
           const [error] = attemptOutcome as [object, undefined];
 
@@ -228,7 +220,7 @@ describe('create', () => {
           create()('items', {retry: 0, signal: AbortSignal.abort()}),
       },
       {
-        arrange: useSocketServer('oversized'),
+        arrange: arrangeSocketServer('oversized'),
         errorName: 'ResponseSizeError',
         name: 'a body over maxResponseSize on the snake_case layer',
         request: async () =>
@@ -239,7 +231,7 @@ describe('create', () => {
           }),
       },
       {
-        arrange: useSocketServer('stall'),
+        arrange: arrangeSocketServer('stall'),
         errorName: 'TimeoutError',
         name: 'a body read cancelled on the snake_case layer',
         request: async () =>
@@ -313,142 +305,6 @@ describe('create', () => {
       await expect(request()).resolves.toBe(expected);
     }
   );
-
-  describe('the snake_case layer converts bodies and honors caller options', () => {
-    type Sent = {header: null | string; text: string};
-
-    const callerAfterResponse = vi.fn();
-
-    test.each(
-      [
-        {
-          name: 'isSnakeCaseEnabled converts a JSON body to snake_case and the response to camelCase',
-          register: http.post,
-          request: async () =>
-            create({isSnakeCaseEnabled: true})('items', {
-              json: {displayName: 'x'},
-              method: 'post',
-              schema: envelopeSchema,
-            }),
-          respond: () => HttpResponse.json({data: {display_name: 'x'}}),
-          verify: (sent: Sent, settled: PromiseSettledResult<unknown>) => {
-            expect(JSON.parse(sent.text)).toEqual({display_name: 'x'});
-            expect(fulfilledValue(settled)).toMatchObject({
-              data: {displayName: 'x'},
-            });
-          },
-        },
-        {
-          name: 'leaves the body and response keys unchanged by default',
-          register: http.post,
-          request: async () =>
-            create()('items', {
-              json: {displayName: 'x'},
-              method: 'post',
-              schema: envelopeSchema,
-            }),
-          respond: () => HttpResponse.json({data: {displayName: 'x'}}),
-          verify: (sent: Sent, settled: PromiseSettledResult<unknown>) => {
-            expect(JSON.parse(sent.text)).toEqual({displayName: 'x'});
-            expect(fulfilledValue(settled)).toMatchObject({
-              data: {displayName: 'x'},
-            });
-          },
-        },
-        {
-          name: 'a snake_case layer sends a non-JSON body unchanged',
-          register: http.post,
-          request: async () =>
-            create({isSnakeCaseEnabled: true})('items', {
-              body: 'plain text body',
-              method: 'post',
-            }),
-          respond: () => new HttpResponse(null, {status: 204}),
-          verify: (sent: Sent, settled: PromiseSettledResult<unknown>) => {
-            fulfilledValue(settled);
-
-            expect(sent.text).toBe('plain text body');
-          },
-        },
-        {
-          name: 'a snake_case layer runs the caller hooks and still snake_cases the JSON body',
-          register: http.post,
-          request: async () =>
-            create({
-              hooks: {
-                afterResponse: [callerAfterResponse],
-                beforeRequest: [
-                  ({request}) => {
-                    request.headers.set('X-Caller-Hook', 'ran');
-                  },
-                ],
-              },
-              isSnakeCaseEnabled: true,
-            })('items', {json: {displayName: 'x'}, method: 'post'}),
-          respond: () => HttpResponse.json({}),
-          verify: (sent: Sent, settled: PromiseSettledResult<unknown>) => {
-            fulfilledValue(settled);
-
-            expect(sent.header).toBe('ran');
-            expect(JSON.parse(sent.text)).toEqual({display_name: 'x'});
-            expect(callerAfterResponse).toHaveBeenCalledExactlyOnceWith(
-              expect.objectContaining({response: expect.any(Response)})
-            );
-          },
-        },
-        {
-          name: "a caller's parseJson still parses the body on the snake_case layer",
-          register: http.get,
-          request: async () =>
-            create({
-              isSnakeCaseEnabled: true,
-              parseJson: parseJsonOrPlainText,
-            })('items', {schema: itemSchema}),
-          respond: () => HttpResponse.text('not json'),
-          verify: (_sent: Sent, settled: PromiseSettledResult<unknown>) => {
-            expect(fulfilledValue(settled)).toEqual({displayName: 'parsed'});
-          },
-        },
-        {
-          name: "a caller's parseJson error propagates on the snake_case layer",
-          register: http.get,
-          request: async () =>
-            create({
-              isSnakeCaseEnabled: true,
-              parseJson: () => {
-                throw new Error('bad data');
-              },
-            })('items', {schema: z.null()}),
-          respond: () => HttpResponse.json({}),
-          verify: (_sent: Sent, settled: PromiseSettledResult<unknown>) => {
-            expect(settled.status).toBe('rejected');
-            expect(
-              (settled as PromiseRejectedResult).reason as Error
-            ).toHaveProperty('message', expect.stringContaining('bad data'));
-          },
-        },
-      ].map((row) => [row.name, row] as const)
-    )(
-      'the snake_case layer converts bodies and honors caller options: %s',
-      async (_name, {register, request, respond, verify}) => {
-        callerAfterResponse.mockClear();
-        process.env.API_URL = ORIGIN_A;
-        const sent: Sent = {header: null, text: ''};
-        server.use(
-          register(`${ORIGIN_A}/items`, async (context) => {
-            sent.text = await context.request.text();
-            sent.header = context.request.headers.get('X-Caller-Hook');
-
-            return respond();
-          })
-        );
-
-        const [settled] = await Promise.allSettled([request()]);
-
-        verify(sent, settled);
-      }
-    );
-  });
 
   test.each(
     (

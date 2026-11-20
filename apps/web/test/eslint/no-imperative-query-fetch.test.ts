@@ -23,10 +23,26 @@ beforeAll(async () => {
   rules = config.rules ?? {};
 }, 60_000);
 
+const optionsOf = (ruleId: string): unknown[] => {
+  const entry = rules[ruleId];
+
+  return Array.isArray(entry) ? entry.slice(1) : [];
+};
+
 describe('no-imperative-query-fetch in the resolved project config', () => {
   test('enables the rule as an error', () => {
     expect(
       rules['no-imperative-query-fetch/no-imperative-query-fetch']
     ).toEqual([2]);
+  });
+
+  test.each([
+    ['no-restricted-properties', {object: 'Math', property: 'pow'}],
+    [
+      'no-restricted-syntax',
+      {selector: 'ExportDefaultDeclaration > FunctionDeclaration'},
+    ],
+  ])('keeps the inherited %s entries', (ruleId, entry) => {
+    expect(optionsOf(ruleId)).toContainEqual(expect.objectContaining(entry));
   });
 });
