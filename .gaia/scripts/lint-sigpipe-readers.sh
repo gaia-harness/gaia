@@ -101,7 +101,7 @@
 # it, so a file whose only arming is that idiom is not a seed. The two arms
 # share one arming test rather than two that agree by inspection
 # (`arms_at_depth_zero` in lint-sigpipe-readers-detect.sh). What that costs is
-# stated below, with the workflow arm's depth test.
+# stated below, where the script arm applies the same depth test to a FILE.
 #
 # An edge resolves by BASENAME against the tracked set, because a load names its
 # target through a variable far more often than not
