@@ -97,16 +97,6 @@ describe('updateProjectConfig', () => {
     }
   );
 
-  test('an invalid known key leaves an existing file byte-identical', () => {
-    seed('{"version": 1, "future": "x"}\n');
-    const before = read();
-
-    expect(() => {
-      updateProjectConfig(root, {isolation_policy: 'sometimes'});
-    }).toThrow(expect.objectContaining({kind: 'invalid_value'}));
-    expect(read()).toBe(before);
-  });
-
   test('writes fitness_commit_threshold and keeps unknown keys', () => {
     seed(JSON.stringify({future: 'x', version: 1}));
 
@@ -119,53 +109,55 @@ describe('updateProjectConfig', () => {
     });
   });
 
-  test.each([0, 15.5, '25'])(
-    'refuses fitness_commit_threshold %j, naming the key, and leaves the file byte-identical',
-    (value) => {
-      seed('{"version": 1, "future": "x"}\n');
-      const before = read();
+  const FUTURE_FILE = '{"version": 1, "future": "x"}\n';
 
-      expect(() => {
-        updateProjectConfig(root, {fitness_commit_threshold: value});
-      }).toThrow(expect.objectContaining({kind: 'invalid_value'}));
-      expect(() => {
-        updateProjectConfig(root, {fitness_commit_threshold: value});
-      }).toThrow(/fitness_commit_threshold/u);
-      expect(read()).toBe(before);
-    }
-  );
-
-  test('a file already holding fitness_commit_threshold 0 refuses an unrelated patch', () => {
-    seed('{"version": 1, "fitness_commit_threshold": 0}\n');
-    const before = read();
+  test.each(
+    [
+      {
+        kind: 'invalid_value',
+        message: /isolation_policy/u,
+        name: 'an invalid known key leaves an existing file byte-identical',
+        patch: {isolation_policy: 'sometimes'},
+        seeded: FUTURE_FILE,
+      },
+      ...[0, 15.5, '25'].map((value) => ({
+        kind: 'invalid_value',
+        message: /fitness_commit_threshold/u,
+        name: `refuses fitness_commit_threshold ${JSON.stringify(value)}, naming the key, and leaves the file byte-identical`,
+        patch: {fitness_commit_threshold: value},
+        seeded: FUTURE_FILE,
+      })),
+      {
+        kind: 'invalid_value',
+        message: /fitness_commit_threshold/u,
+        name: 'a file already holding fitness_commit_threshold 0 refuses an unrelated patch',
+        patch: {sandbox_recommended: true},
+        seeded: '{"version": 1, "fitness_commit_threshold": 0}\n',
+      },
+      {
+        kind: 'malformed',
+        message: /project\.json/u,
+        name: 'throws a malformed error naming the file and leaves it unchanged',
+        patch: {isolation_policy: 'prefer-branch'},
+        seeded: '{not json',
+      },
+      {
+        kind: 'malformed',
+        message: /project\.json/u,
+        name: 'refuses a non-object file as malformed',
+        patch: {sandbox_recommended: true},
+        seeded: '[]',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {kind, message, patch, seeded}) => {
+    seed(seeded);
 
     expect(() => {
-      updateProjectConfig(root, {sandbox_recommended: true});
-    }).toThrow(expect.objectContaining({kind: 'invalid_value'}));
+      updateProjectConfig(root, patch);
+    }).toThrow(expect.objectContaining({kind}));
     expect(() => {
-      updateProjectConfig(root, {sandbox_recommended: true});
-    }).toThrow(/fitness_commit_threshold/u);
-    expect(read()).toBe(before);
-  });
-
-  test('throws a malformed error naming the file and leaves it unchanged', () => {
-    seed('{not json');
-
-    expect(() => {
-      updateProjectConfig(root, {isolation_policy: 'prefer-branch'});
-    }).toThrow(expect.objectContaining({kind: 'malformed'}));
-    expect(() => {
-      updateProjectConfig(root, {isolation_policy: 'prefer-branch'});
-    }).toThrow(/project\.json/u);
-    expect(read()).toBe('{not json');
-  });
-
-  test('refuses a non-object file as malformed', () => {
-    seed('[]');
-
-    expect(() => {
-      updateProjectConfig(root, {sandbox_recommended: true});
-    }).toThrow(expect.objectContaining({kind: 'malformed'}));
-    expect(read()).toBe('[]');
+      updateProjectConfig(root, patch);
+    }).toThrow(message);
+    expect(read()).toBe(seeded);
   });
 });

@@ -13,7 +13,6 @@ import {
 } from '../util/git-maintenance.js';
 import {
   NON_ASCII_STEM,
-  QUOTED_FIRST_BYTE,
   QUOTEPATH_PIN_ARGS,
 } from '../util/non-ascii-path-fixture.js';
 import {committedFrontendDescriptor} from '../util/package-fixture.js';
@@ -273,122 +272,192 @@ describe('wiki commit-classify', () => {
     vi.restoreAllMocks();
   });
 
-  test('chore(deps): bumps without architecture body → SKIP', () => {
-    sandbox.commit('chore(deps): bump foo from 1.0.0 to 1.0.1', {
-      'package.json': '{"version": "1.0.1"}\n',
-    });
+  test.each(
+    Array.of<{
+      files: Record<string, string>;
+      name: string;
+      reasonParts: string[];
+      subject: string;
+      suggestion: 'SKIP' | 'WORTHY';
+    }>(
+      {
+        files: {'package.json': '{"version": "1.0.1"}\n'},
+        name: 'chore(deps): bumps without architecture body → SKIP',
+        reasonParts: ['chore(deps)'],
+        subject: 'chore(deps): bump foo from 1.0.0 to 1.0.1',
+        suggestion: 'SKIP',
+      },
+      {
+        files: {'package.json': '{"version": "2.0.0"}\n'},
+        name: 'chore(deps): with BREAKING CHANGE body → WORTHY',
+        reasonParts: [],
+        subject:
+          'chore(deps): swap axios for ofetch\n\nBREAKING CHANGE: server-side fetch surface changed',
+        suggestion: 'WORTHY',
+      },
+      {
+        files: {'app/foo.ts': 'export const x = 1;\n'},
+        name: 'feat: touching app/** non-test → WORTHY',
+        reasonParts: ['source-bearing'],
+        subject: 'feat: add new module',
+        suggestion: 'WORTHY',
+      },
+      {
+        files: {
+          'app/components/button/index.tsx':
+            'export const Button = () => null;\n',
+        },
+        name: 'feat: only inventory paths without decision keywords → SKIP',
+        reasonParts: ['inventory'],
+        subject: 'feat: add Button variant',
+        suggestion: 'SKIP',
+      },
+      {
+        files: {'app/foo.test.ts': 'test ...\n'},
+        name: 'test: prefix → SKIP',
+        reasonParts: [],
+        subject: 'test: add coverage',
+        suggestion: 'SKIP',
+      },
+      {
+        files: {'docs/decisions/zod.md': '# zod\n'},
+        name: 'docs(decision): → WORTHY',
+        reasonParts: ['ADR'],
+        subject: 'docs(decision): adopt zod',
+        suggestion: 'WORTHY',
+      },
+      {
+        files: {'README.md': '# repo updated\n'},
+        name: 'Merge pull request → SKIP',
+        reasonParts: [],
+        subject: 'Merge pull request #42 from feature/foo',
+        suggestion: 'SKIP',
+      },
+      {
+        files: {'CHANGELOG.md': '# 1.0.0\n'},
+        name: 'chore(release): → SKIP',
+        reasonParts: [],
+        subject: 'chore(release): 1.0.0',
+        suggestion: 'SKIP',
+      },
+      {
+        files: {'app/middleware/foo.ts': 'export const foo = () => null;\n'},
+        name: 'touching app/middleware → WORTHY (flows-relevant)',
+        reasonParts: ['flows'],
+        subject: 'feat: middleware tweak',
+        suggestion: 'WORTHY',
+      },
+      {
+        files: {'wiki/concepts/Foo.md': '# Foo\n'},
+        name: 'touching wiki/concepts/ → WORTHY',
+        reasonParts: ['wiki-heavy'],
+        subject: 'chore: rewrite concept',
+        suggestion: 'WORTHY',
+      },
+      {
+        files: {'app/api.ts': 'export const api = null;\n'},
+        name: 'feat(scope)!: → WORTHY (breaking)',
+        reasonParts: ['breaking'],
+        subject: 'feat(api)!: drop the legacy endpoint',
+        suggestion: 'WORTHY',
+      },
+      // Once every rule matches breaking-agnostically, the `!` no longer breaks a
+      // prefix match by accident, so a breaking subject on a SKIP-rule type would
+      // be silently skipped unless rule 2 claims it first.
+      ...[
+        'chore(cli)!: drop the legacy flag',
+        'refactor(components)!: rename the exported prop',
+        'fix(hooks)!: change the return shape',
+      ].map((subject) => ({
+        files: {'app/components/Thing/index.tsx': 'export {};\n'},
+        name: `${subject} → WORTHY (breaking beats every SKIP rule)`,
+        reasonParts: ['breaking'],
+        subject,
+        suggestion: 'WORTHY' as const,
+      })),
+      // Rule 1 is deliberately "SKIP regardless", ahead of the breaking signal:
+      // both its categories are mechanical, so a `!` on them is either
+      // meaningless (formatting cannot break a contract) or still just plumbing.
+      ...['style!: reformat everything', 'chore(release)!: 2.0.0'].map(
+        (subject) => ({
+          files: {'app/foo.ts': 'export const x = 1;\n'},
+          name: `${subject} → SKIP (rule 1 outranks the breaking marker)`,
+          reasonParts: [],
+          subject,
+          suggestion: 'SKIP' as const,
+        })
+      ),
+      // Deliberately outside wiki/{decisions,concepts,...}, so rule 3 cannot
+      // rescue it and the ADR rule is the only thing standing between this
+      // commit and rule 8's `docs: prose-only` SKIP.
+      ...['docs(decision): adopt zod', 'docs(decisions): adopt zod'].map(
+        (subject) => ({
+          files: {'.claude/rules/zod.md': '# zod\n'},
+          name: `${subject} → WORTHY (ADR signal outside a wiki-heavy path)`,
+          reasonParts: ['ADR'],
+          subject,
+          suggestion: 'WORTHY' as const,
+        })
+      ),
+      {
+        files: {'app/foo.ts': 'export const x = 1;\n'},
+        name: 'debt: touching app/** non-test → WORTHY',
+        reasonParts: ['source-bearing'],
+        subject: 'debt(cli): remove the dead telemetry write',
+        suggestion: 'WORTHY',
+      },
+      {
+        files: {'app/foo.test.ts': 'test ...\n'},
+        name: 'debt: tests-only → SKIP',
+        reasonParts: ['tests-only'],
+        subject: 'debt(shell-lint): drop the redundant case',
+        suggestion: 'SKIP',
+      },
+      {
+        files: {'.github/workflows/release.yml': 'on: push\n'},
+        name: 'ci: without an architecture body → SKIP',
+        reasonParts: ['ci'],
+        subject: 'ci(release): add the distribution gate',
+        suggestion: 'SKIP',
+      },
+      {
+        files: {'.github/workflows/tests.yml': 'on: push\n'},
+        name: 'ci: with an architecture body → WORTHY',
+        reasonParts: [],
+        subject:
+          'ci(gaia): run the bats gate under bash 5\n\nRecords the decision to pin the CI shell.',
+        suggestion: 'WORTHY',
+      },
+      {
+        files: {'dist/gaia': 'binary\n'},
+        name: 'build: without an architecture body → SKIP',
+        reasonParts: ['build'],
+        subject: 'build(cli): rebundle the gaia binary',
+        suggestion: 'SKIP',
+      },
+      {
+        files: {'app/gate.ts': 'export const gate = null;\n'},
+        name: 'a non-conforming subject still defers to human review',
+        reasonParts: ['no matching prefix'],
+        subject: 'Harden the Code Audit Team merge gate (#793)',
+        suggestion: 'WORTHY',
+      }
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {files, reasonParts, subject, suggestion}) => {
+    sandbox.commit(subject, files);
 
     const json = classify(sandbox);
     expect(json.commits).toHaveLength(1);
-    expect(json.commits[0]?.suggestion).toBe('SKIP');
-    expect(json.commits[0]?.suggestion_reason).toContain('chore(deps)');
-  });
+    expect(json.commits[0]?.suggestion).toBe(suggestion);
 
-  test('chore(deps): with BREAKING CHANGE body → WORTHY', () => {
-    sandbox.commit(
-      'chore(deps): swap axios for ofetch\n\nBREAKING CHANGE: server-side fetch surface changed',
-      {'package.json': '{"version": "2.0.0"}\n'}
-    );
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-  });
-
-  test('feat: touching app/** non-test → WORTHY', () => {
-    sandbox.commit('feat: add new module', {
-      'app/foo.ts': 'export const x = 1;\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-    expect(json.commits[0]?.suggestion_reason).toContain('source-bearing');
-  });
-
-  test('feat: only inventory paths without decision keywords → SKIP', () => {
-    sandbox.commit('feat: add Button variant', {
-      'app/components/button/index.tsx': 'export const Button = () => null;\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('SKIP');
-    expect(json.commits[0]?.suggestion_reason).toContain('inventory');
-  });
-
-  test('test: prefix → SKIP', () => {
-    sandbox.commit('test: add coverage', {'app/foo.test.ts': 'test ...\n'});
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('SKIP');
-  });
-
-  test('docs(decision): → WORTHY', () => {
-    sandbox.commit('docs(decision): adopt zod', {
-      'docs/decisions/zod.md': '# zod\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-    expect(json.commits[0]?.suggestion_reason).toContain('ADR');
-  });
-
-  test('Merge pull request → SKIP', () => {
-    sandbox.commit('Merge pull request #42 from feature/foo', {
-      'README.md': '# repo updated\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('SKIP');
-  });
-
-  test('chore(release): → SKIP', () => {
-    sandbox.commit('chore(release): 1.0.0', {'CHANGELOG.md': '# 1.0.0\n'});
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('SKIP');
-  });
-
-  test('touching app/middleware → WORTHY (flows-relevant)', () => {
-    sandbox.commit('feat: middleware tweak', {
-      'app/middleware/foo.ts': 'export const foo = () => null;\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-    expect(json.commits[0]?.suggestion_reason).toContain('flows');
-  });
-
-  test('touching wiki/concepts/ → WORTHY', () => {
-    sandbox.commit('chore: rewrite concept', {
-      'wiki/concepts/Foo.md': '# Foo\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-    expect(json.commits[0]?.suggestion_reason).toContain('wiki-heavy');
+    for (const part of reasonParts) {
+      expect(json.commits[0]?.suggestion_reason).toContain(part);
+    }
   });
 
   describe('paths git rewrites on the way out', () => {
     beforeEach(() => {
       sandboxGit(sandbox.root, [...QUOTEPATH_PIN_ARGS]);
-    });
-
-    test('the fixture path really is C-quoted, so the assertion below can fail', () => {
-      const sha = sandbox.commit('chore: rewrite concept', {
-        [`wiki/concepts/${NON_ASCII_STEM}.md`]: '# concept\n',
-      });
-
-      // Deliberately unrouted: runs without -z on purpose, since
-      // the quoted output is what proves the fixture can fail the assertion.
-      const listed = sandboxGit(sandbox.root, [
-        'diff-tree',
-        '--no-commit-id',
-        '--name-only',
-        '-r',
-        sha,
-      ]);
-
-      expect(listed).toContain(QUOTED_FIRST_BYTE);
-      expect(listed).not.toContain(NON_ASCII_STEM);
     });
 
     test('a commit whose only wiki page is non-ASCII still reads as wiki-heavy', () => {
@@ -434,118 +503,6 @@ describe('wiki commit-classify', () => {
         );
       }
     );
-  });
-
-  test('feat(scope)!: → WORTHY (breaking)', () => {
-    sandbox.commit('feat(api)!: drop the legacy endpoint', {
-      'app/api.ts': 'export const api = null;\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-    expect(json.commits[0]?.suggestion_reason).toContain('breaking');
-  });
-
-  // Once every rule matches breaking-agnostically, the `!` no longer breaks a
-  // prefix match by accident, so a breaking subject on a SKIP-rule type would
-  // be silently skipped unless rule 2 claims it first.
-  test.each([
-    'chore(cli)!: drop the legacy flag',
-    'refactor(components)!: rename the exported prop',
-    'fix(hooks)!: change the return shape',
-  ])('%s → WORTHY (breaking beats every SKIP rule)', (subject) => {
-    sandbox.commit(subject, {'app/components/Thing/index.tsx': 'export {};\n'});
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-    expect(json.commits[0]?.suggestion_reason).toContain('breaking');
-  });
-
-  // Rule 1 is deliberately "SKIP regardless", ahead of the breaking signal:
-  // both its categories are mechanical, so a `!` on them is either
-  // meaningless (formatting cannot break a contract) or still just plumbing.
-  test.each(['style!: reformat everything', 'chore(release)!: 2.0.0'])(
-    '%s → SKIP (rule 1 outranks the breaking marker)',
-    (subject) => {
-      sandbox.commit(subject, {'app/foo.ts': 'export const x = 1;\n'});
-
-      const json = classify(sandbox);
-      expect(json.commits[0]?.suggestion).toBe('SKIP');
-    }
-  );
-
-  test.each(['docs(decision): adopt zod', 'docs(decisions): adopt zod'])(
-    '%s → WORTHY (ADR signal outside a wiki-heavy path)',
-    (subject) => {
-      // Deliberately outside wiki/{decisions,concepts,...}, so rule 3 cannot
-      // rescue it and the ADR rule is the only thing standing between this
-      // commit and rule 8's `docs: prose-only` SKIP.
-      sandbox.commit(subject, {'.claude/rules/zod.md': '# zod\n'});
-
-      const json = classify(sandbox);
-      expect(json.commits[0]?.suggestion).toBe('WORTHY');
-      expect(json.commits[0]?.suggestion_reason).toContain('ADR');
-    }
-  );
-
-  test('debt: touching app/** non-test → WORTHY', () => {
-    sandbox.commit('debt(cli): remove the dead telemetry write', {
-      'app/foo.ts': 'export const x = 1;\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-    expect(json.commits[0]?.suggestion_reason).toContain('source-bearing');
-  });
-
-  test('debt: tests-only → SKIP', () => {
-    sandbox.commit('debt(shell-lint): drop the redundant case', {
-      'app/foo.test.ts': 'test ...\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('SKIP');
-    expect(json.commits[0]?.suggestion_reason).toContain('tests-only');
-  });
-
-  test('ci: without an architecture body → SKIP', () => {
-    sandbox.commit('ci(release): add the distribution gate', {
-      '.github/workflows/release.yml': 'on: push\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('SKIP');
-    expect(json.commits[0]?.suggestion_reason).toContain('ci');
-  });
-
-  test('ci: with an architecture body → WORTHY', () => {
-    sandbox.commit(
-      'ci(gaia): run the bats gate under bash 5\n\nRecords the decision to pin the CI shell.',
-      {'.github/workflows/tests.yml': 'on: push\n'}
-    );
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-  });
-
-  test('build: without an architecture body → SKIP', () => {
-    sandbox.commit('build(cli): rebundle the gaia binary', {
-      'dist/gaia': 'binary\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('SKIP');
-    expect(json.commits[0]?.suggestion_reason).toContain('build');
-  });
-
-  test('a non-conforming subject still defers to human review', () => {
-    sandbox.commit('Harden the Code Audit Team merge gate (#793)', {
-      'app/gate.ts': 'export const gate = null;\n',
-    });
-
-    const json = classify(sandbox);
-    expect(json.commits[0]?.suggestion).toBe('WORTHY');
-    expect(json.commits[0]?.suggestion_reason).toContain('no matching prefix');
   });
 
   test('exits 1 when --since missing', () => {
@@ -607,43 +564,65 @@ describe('wiki commit-classify', () => {
   // matched none of the three discriminating branches, so every source commit
   // fell to rule 7's tail with a plausible-looking reason.
   describe('configurable path vocabulary', () => {
-    test('a configured source path is recognized outside app/**', () => {
-      sandbox.commit('chore: configure', {
-        'package.json': withConfig({sourcePaths: ['cli/src/']}),
-      });
-      sandbox.commit('fix(cli): repair the parser', {
-        'cli/src/parse.ts': 'export const x = 1;\n',
-      });
+    test.each(
+      Array.of<{
+        files: Record<string, string>;
+        name: string;
+        packageJson: string;
+        reasonPart: string;
+        subject: string;
+        suggestion: 'SKIP' | 'WORTHY';
+      }>(
+        {
+          files: {'cli/src/parse.ts': 'export const x = 1;\n'},
+          name: 'a configured source path is recognized outside app/**',
+          packageJson: withConfig({sourcePaths: ['cli/src/']}),
+          reasonPart: 'source-bearing',
+          subject: 'fix(cli): repair the parser',
+          suggestion: 'WORTHY',
+        },
+        {
+          files: {'suite/guard.bats': '@test "guard" { true; }\n'},
+          name: 'a configured test path counts as tests-only',
+          packageJson: withConfig({testPaths: ['suite/']}),
+          reasonPart: 'tests-only',
+          subject: 'fix(hooks): tighten the guard case',
+          suggestion: 'SKIP',
+        },
+        {
+          files: {'lib/widgets/Thing.ts': 'export const Thing = null;\n'},
+          name: 'a configured inventory path skips without decision keywords',
+          packageJson: withConfig({inventoryPaths: ['lib/widgets/']}),
+          reasonPart: 'inventory',
+          subject: 'feat(widgets): add a variant',
+          suggestion: 'SKIP',
+        },
+        // Adopters get today's behavior with no config, and a malformed config
+        // must degrade to it rather than fail a sync: this is a cheap pre-filter
+        // ahead of an expensive read, not a correctness gate.
+        ...[
+          ['absent gaia key', '{"name": "sandbox"}\n'],
+          ['malformed JSON', '{not json\n'],
+          [
+            'wrong value type',
+            '{"gaia": {"wikiClassify": {"sourcePaths": 7}}}\n',
+          ],
+        ].map(([label, packageJson]) => ({
+          files: {'app/foo.ts': 'export const x = 1;\n'},
+          name: `${label} falls back to the app/** defaults`,
+          packageJson: packageJson ?? '',
+          reasonPart: 'source-bearing',
+          subject: 'feat: add a module',
+          suggestion: 'WORTHY' as const,
+        }))
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {files, packageJson, reasonPart, subject, suggestion}) => {
+      sandbox.commit('chore: configure', {'package.json': packageJson});
+      sandbox.commit(subject, files);
 
       const {commits} = classify(sandbox);
-      expect(commits[1]?.suggestion).toBe('WORTHY');
-      expect(commits[1]?.suggestion_reason).toContain('source-bearing');
-    });
-
-    test('a configured test path counts as tests-only', () => {
-      sandbox.commit('chore: configure', {
-        'package.json': withConfig({testPaths: ['suite/']}),
-      });
-      sandbox.commit('fix(hooks): tighten the guard case', {
-        'suite/guard.bats': '@test "guard" { true; }\n',
-      });
-
-      const {commits} = classify(sandbox);
-      expect(commits[1]?.suggestion).toBe('SKIP');
-      expect(commits[1]?.suggestion_reason).toContain('tests-only');
-    });
-
-    test('a configured inventory path skips without decision keywords', () => {
-      sandbox.commit('chore: configure', {
-        'package.json': withConfig({inventoryPaths: ['lib/widgets/']}),
-      });
-      sandbox.commit('feat(widgets): add a variant', {
-        'lib/widgets/Thing.ts': 'export const Thing = null;\n',
-      });
-
-      const {commits} = classify(sandbox);
-      expect(commits[1]?.suggestion).toBe('SKIP');
-      expect(commits[1]?.suggestion_reason).toContain('inventory');
+      expect(commits[1]?.suggestion).toBe(suggestion);
+      expect(commits[1]?.suggestion_reason).toContain(reasonPart);
     });
 
     // An empty `sourcePaths` matches no file at all, so every source commit
@@ -679,24 +658,6 @@ describe('wiki commit-classify', () => {
       expect(commits[1]?.suggestion_reason).toContain('source-bearing');
       expect(stdio.errors.join('')).toBe('');
     });
-
-    // Adopters get today's behavior with no config, and a malformed config
-    // must degrade to it rather than fail a sync: this is a cheap pre-filter
-    // ahead of an expensive read, not a correctness gate.
-    test.each([
-      ['absent gaia key', '{"name": "sandbox"}\n'],
-      ['malformed JSON', '{not json\n'],
-      ['wrong value type', '{"gaia": {"wikiClassify": {"sourcePaths": 7}}}\n'],
-    ])('%s falls back to the app/** defaults', (_label, contents) => {
-      sandbox.commit('chore: configure', {'package.json': contents});
-      sandbox.commit('feat: add a module', {
-        'app/foo.ts': 'export const x = 1;\n',
-      });
-
-      const {commits} = classify(sandbox);
-      expect(commits[1]?.suggestion).toBe('WORTHY');
-      expect(commits[1]?.suggestion_reason).toContain('source-bearing');
-    });
   });
 
   // The health signal, not any individual commit, is what reports that the
@@ -704,20 +665,61 @@ describe('wiki commit-classify', () => {
   // rule 7's tail, which emits a specific-sounding reason and would otherwise
   // hide a path vocabulary that matches nothing.
   describe('health signal', () => {
-    test('counts rule-9 fallthrough as deferred, without calling it inert', () => {
-      commitManyTo(
-        sandbox,
-        4,
-        'Not a conventional subject',
-        'tooling/thing.cfg'
-      );
+    test.each(
+      Array.of<{
+        batches: [count: number, subject: string, file: string][];
+        health: Partial<CommitClassification['health']>;
+        name: string;
+      }>(
+        {
+          batches: [[4, 'Not a conventional subject', 'tooling/thing.cfg']],
+          // Below HEALTH_MIN_SAMPLE, so a bad rate alone never fires.
+          health: {deferral_rate: 1, deferred: 4, evaluated: 4, inert: false},
+          name: 'counts rule-9 fallthrough as deferred, without calling it inert',
+        },
+        {
+          batches: [[4, 'docs: prose', 'notes/thing.md']],
+          health: {deferral_rate: 0, deferred: 0},
+          name: 'a discriminating rule is not deferral',
+        },
+        // WORTHY rate is reported alongside deferral so configuring the path
+        // vocabulary cannot quietly turn "I could not tell" into "definitely
+        // read this" while the deep-read cost stays exactly the same.
+        {
+          batches: [[4, 'feat: add a module', 'app/foo.ts']],
+          health: {deferred: 0, worthy_rate: 1},
+          name: 'worthy_rate stays visible when deferral is zero',
+        },
+        // The threshold is calibrated against both observed inert cases, not
+        // picked round. The path-vocabulary failure sat at 55% deferral, so a
+        // threshold above that would have missed it while still catching the
+        // 68% type-vocabulary one.
+        {
+          batches: [
+            [11, 'fix(cli): repair the thing', 'tooling/thing.cfg'],
+            [11, 'docs: prose', 'notes/thing.md'],
+          ],
+          health: {deferred: 11, evaluated: 22, inert: true},
+          name: 'a ~50% deferral rate fires, the rate the path failure produced',
+        },
+        {
+          batches: [],
+          health: {
+            deferral_rate: 0,
+            evaluated: 0,
+            inert: false,
+            worthy_rate: 0,
+          },
+          name: 'an empty range reports zeroed rates rather than NaN',
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {batches, health: expectedHealth}) => {
+      for (const [count, subject, file] of batches) {
+        commitManyTo(sandbox, count, subject, file);
+      }
 
       const {health} = classify(sandbox);
-      expect(health.evaluated).toBe(4);
-      expect(health.deferred).toBe(4);
-      expect(health.deferral_rate).toBe(1);
-      // Below HEALTH_MIN_SAMPLE, so a bad rate alone never fires.
-      expect(health.inert).toBe(false);
+      expect(health).toMatchObject(expectedHealth);
     });
 
     test("counts rule 7's tail as deferred despite its specific reason", () => {
@@ -731,14 +733,6 @@ describe('wiki commit-classify', () => {
       const {commits, health} = classify(sandbox);
       expect(commits[0]?.suggestion_reason).toContain('defer to human review');
       expect(health.deferred).toBe(4);
-    });
-
-    test('a discriminating rule is not deferral', () => {
-      commitManyTo(sandbox, 4, 'docs: prose', 'notes/thing.md');
-
-      const {health} = classify(sandbox);
-      expect(health.deferred).toBe(0);
-      expect(health.deferral_rate).toBe(0);
     });
 
     test('a large sample over the threshold reports inert and warns', () => {
@@ -762,44 +756,6 @@ describe('wiki commit-classify', () => {
       expect(health.evaluated).toBe(25);
       expect(health.inert).toBe(false);
       expect(stdio.errors.join('')).toBe('');
-    });
-
-    // WORTHY rate is reported alongside deferral so configuring the path
-    // vocabulary cannot quietly turn "I could not tell" into "definitely
-    // read this" while the deep-read cost stays exactly the same.
-    test('worthy_rate stays visible when deferral is zero', () => {
-      commitManyTo(sandbox, 4, 'feat: add a module', 'app/foo.ts');
-
-      const {health} = classify(sandbox);
-      expect(health.deferred).toBe(0);
-      expect(health.worthy_rate).toBe(1);
-    });
-
-    // The threshold is calibrated against both observed inert cases, not
-    // picked round. The path-vocabulary failure sat at 55% deferral, so a
-    // threshold above that would have missed the case #945 describes while
-    // still catching the 68% type-vocabulary one.
-    test('a ~50% deferral rate fires, the rate the path failure produced', () => {
-      commitManyTo(
-        sandbox,
-        11,
-        'fix(cli): repair the thing',
-        'tooling/thing.cfg'
-      );
-      commitManyTo(sandbox, 11, 'docs: prose', 'notes/thing.md');
-
-      const {health} = classify(sandbox);
-      expect(health.evaluated).toBe(22);
-      expect(health.deferred).toBe(11);
-      expect(health.inert).toBe(true);
-    });
-
-    test('an empty range reports zeroed rates rather than NaN', () => {
-      const {health} = classify(sandbox);
-      expect(health.evaluated).toBe(0);
-      expect(health.deferral_rate).toBe(0);
-      expect(health.worthy_rate).toBe(0);
-      expect(health.inert).toBe(false);
     });
   });
 
@@ -947,34 +903,46 @@ describe('wiki commit-classify under the built-in frontend package', () => {
     vi.restoreAllMocks();
   });
 
-  test('a apps/web/app source commit is source-bearing', () => {
-    sandbox.commit('feat: add a module', {
-      'apps/web/app/foo.ts': 'export const x = 1;\n',
-    });
+  test.each(
+    Array.of<{
+      contents: string;
+      file: string;
+      name: string;
+      reasonPart: string;
+      subject: string;
+      suggestion: 'SKIP' | 'WORTHY';
+    }>(
+      {
+        contents: 'export const x = 1;\n',
+        file: 'apps/web/app/foo.ts',
+        name: 'a apps/web/app source commit is source-bearing',
+        reasonPart: 'source-bearing',
+        subject: 'feat: add a module',
+        suggestion: 'WORTHY',
+      },
+      {
+        contents: 'export const X = null;\n',
+        file: 'apps/web/app/components/X/index.tsx',
+        name: 'apps/web/app/components is inventory and skips',
+        reasonPart: 'inventory',
+        subject: 'feat: add Button variant',
+        suggestion: 'SKIP',
+      },
+      {
+        contents: 'export default [];\n',
+        file: 'apps/web/app/routes.ts',
+        name: 'apps/web/app/routes.ts is flows-relevant',
+        reasonPart: 'flows-relevant',
+        subject: 'chore: touch routes',
+        suggestion: 'WORTHY',
+      }
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {contents, file, reasonPart, subject, suggestion}) => {
+    sandbox.commit(subject, {[file]: contents});
 
     const {commits} = classify(sandbox);
-    expect(commits[0]?.suggestion).toBe('WORTHY');
-    expect(commits[0]?.suggestion_reason).toContain('source-bearing');
-  });
-
-  test('apps/web/app/components is inventory and skips', () => {
-    sandbox.commit('feat: add Button variant', {
-      'apps/web/app/components/X/index.tsx': 'export const X = null;\n',
-    });
-
-    const {commits} = classify(sandbox);
-    expect(commits[0]?.suggestion).toBe('SKIP');
-    expect(commits[0]?.suggestion_reason).toContain('inventory');
-  });
-
-  test('apps/web/app/routes.ts is flows-relevant', () => {
-    sandbox.commit('chore: touch routes', {
-      'apps/web/app/routes.ts': 'export default [];\n',
-    });
-
-    const {commits} = classify(sandbox);
-    expect(commits[0]?.suggestion).toBe('WORTHY');
-    expect(commits[0]?.suggestion_reason).toContain('flows-relevant');
+    expect(commits[0]?.suggestion).toBe(suggestion);
+    expect(commits[0]?.suggestion_reason).toContain(reasonPart);
   });
 
   test('a root app/ path is not inventory and not source-bearing', () => {

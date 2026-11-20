@@ -44,11 +44,25 @@ describe('editWorkspacePackages', () => {
     );
   });
 
-  test('a finished list is returned unchanged', () => {
-    const before = `packages:\n  - apps/*\n  - packages/*\n  - .gaia/cli\n${TAIL}`;
-    const result = editWorkspacePackages(before);
-
-    expect(result).toEqual({changed: false, ok: true, text: before});
+  test.each([
+    [
+      'a finished list is returned unchanged',
+      `packages:\n  - apps/*\n  - packages/*\n  - .gaia/cli\n${TAIL}`,
+      `packages:\n  - apps/*\n  - packages/*\n  - .gaia/cli\n${TAIL}`,
+      false,
+    ],
+    [
+      'does not append the packages glob twice, or the apps glob twice',
+      `packages:\n  - frontend\n  - apps/*\n  - packages/*\n${TAIL}`,
+      `packages:\n  - apps/*\n  - packages/*\n${TAIL}`,
+      true,
+    ],
+  ])('%s', (_name, before, after, changed) => {
+    expect(editWorkspacePackages(before)).toEqual({
+      changed,
+      ok: true,
+      text: after,
+    });
   });
 
   test('appends both globs when no entry names the app folder', () => {
@@ -57,15 +71,6 @@ describe('editWorkspacePackages', () => {
 
     expect(textOf(result)).toBe(
       `packages:\n  - '*'\n  - .gaia/cli\n  - apps/*\n  - packages/*\n${TAIL}`
-    );
-  });
-
-  test('does not append the packages glob twice, or the apps glob twice', () => {
-    const before = `packages:\n  - frontend\n  - apps/*\n  - packages/*\n${TAIL}`;
-    const result = editWorkspacePackages(before);
-
-    expect(textOf(result)).toBe(
-      `packages:\n  - apps/*\n  - packages/*\n${TAIL}`
     );
   });
 

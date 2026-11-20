@@ -97,26 +97,39 @@ describe('wiki near-collisions', () => {
     }
   });
 
-  test('respects --max-distance threshold', () => {
-    sandbox.writePage('wiki/concepts/short.md', '# A\n');
-    sandbox.writePage('wiki/concepts/somewhat-longer.md', '# B\n');
+  const maxDistanceThresholdCases: readonly {
+    args: readonly string[];
+    name: string;
+    output: string;
+    pages: readonly string[];
+  }[] = [
+    {
+      args: ['--max-distance', '2'],
+      name: 'respects --max-distance threshold',
+      // Distance between "short" and "somewhat-longer" >> 2.
+      output: '',
+      pages: ['wiki/concepts/short.md', 'wiki/concepts/somewhat-longer.md'],
+    },
+    {
+      args: [],
+      name: 'default --max-distance is 3',
+      output: 'concepts\tabcd\tabcde\t1',
+      pages: ['wiki/concepts/abcd.md', 'wiki/concepts/abcde.md'],
+    },
+  ];
 
-    const exit = run(['--max-distance', '2'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-    // Distance between "short" and "somewhat-longer" >> 2.
-    expect(stdio.outputs.join('')).toBe('');
-  });
+  test.each(maxDistanceThresholdCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {args, output, pages}) => {
+      for (const page of pages) {
+        sandbox.writePage(page, '# Page\n');
+      }
 
-  test('default --max-distance is 3', () => {
-    sandbox.writePage('wiki/concepts/abcd.md', '# A\n');
-    sandbox.writePage('wiki/concepts/abcde.md', '# B\n');
-
-    const exit = run([], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-
-    const out = stdio.outputs.join('').trim();
-    expect(out).toContain('abcd\tabcde\t1');
-  });
+      const exit = run([...args], {cwd: sandbox.root});
+      expect(exit).toBe(0);
+      expect(stdio.outputs.join('').trim()).toBe(output);
+    }
+  );
 
   test('normalizes _ and - so they do not contribute to the distance', () => {
     sandbox.writePage('wiki/concepts/a-b.md', '# A\n');
@@ -129,15 +142,29 @@ describe('wiki near-collisions', () => {
     expect(out).toContain('concepts\ta-b\ta_b\t0');
   });
 
-  test('rejects malformed --max-distance', () => {
-    const exit = run(['--max-distance', 'no'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('positive integer');
-  });
+  const nearCollisionsRefusalsCases: readonly {
+    args: readonly string[];
+    error: string;
+    name: string;
+  }[] = [
+    {
+      args: ['--max-distance', 'no'],
+      error: 'positive integer',
+      name: 'rejects malformed --max-distance',
+    },
+    {
+      args: ['--bogus'],
+      error: 'unknown flag',
+      name: 'rejects unknown flag',
+    },
+  ];
 
-  test('rejects unknown flag', () => {
-    const exit = run(['--bogus'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
-  });
+  test.each(nearCollisionsRefusalsCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {args, error}) => {
+      const exit = run([...args], {cwd: sandbox.root});
+      expect(exit).toBe(1);
+      expect(stdio.errors.join('')).toContain(error);
+    }
+  );
 });

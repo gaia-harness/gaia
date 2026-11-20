@@ -220,27 +220,74 @@ describe('wiki state', () => {
     vi.restoreAllMocks();
   });
 
-  test('reports drift_severity none when state matches HEAD', () => {
-    const sha = sandbox.commit('initial', {'README.md': '# repo\n'});
-    writeStateFile(sandbox.root, sha);
-    // Re-write state file (now untracked); commit it so HEAD is unchanged.
-    // Actually: the state-file write is untracked, so HEAD === sha still. Good.
+  const driftSeverityBandsCases: readonly {
+    commitsAhead: readonly {
+      files: Record<string, string>;
+      message: string;
+    }[];
+    name: string;
+    recentCommits: number;
+    severity: string;
+  }[] = [
+    {
+      commitsAhead: [],
+      name: 'reports drift_severity none when state matches HEAD',
+      recentCommits: 0,
+      severity: 'none',
+    },
+    {
+      commitsAhead: [
+        {
+          files: {'app/foo.ts': 'export const x = 1;\n'},
+          message: 'feat: add a thing',
+        },
+      ],
+      name: 'reports drift_severity low for 1-5 commits ahead',
+      recentCommits: 1,
+      severity: 'low',
+    },
+    {
+      commitsAhead: Array.from({length: 6}, (_, index) => ({
+        files: {[`app/foo${index}.ts`]: 'x\n'},
+        message: `feat: change ${index}`,
+      })),
+      name: 'reports drift_severity medium for 6-20 commits ahead',
+      // recent_commits lists only the newest few commits, so it stops short
+      // of the six ahead.
+      recentCommits: 5,
+      severity: 'medium',
+    },
+  ];
 
-    const exit = run(['--json'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
+  test.each(driftSeverityBandsCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {commitsAhead, recentCommits, severity}) => {
+      const baseSha = sandbox.commit('initial', {'README.md': '# repo\n'});
+      writeStateFile(sandbox.root, baseSha);
 
-    const json = JSON.parse(stdio.outputs.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(json.commits_ahead).toBe(0);
-    expect(json.drift_severity).toBe('none');
-    expect(json.reachable).toBe(true);
-    expect(typeof json.head_short).toBe('string');
-    expect(json.head_short as string).toHaveLength(7);
-    // suggested_base only fires on the unreachable recovery path.
-    expect(json.suggested_base).toBe('');
-  });
+      for (const {files, message} of commitsAhead) {
+        sandbox.commit(message, files);
+      }
+
+      const exit = run(['--json'], {cwd: sandbox.root});
+      expect(exit).toBe(0);
+
+      const json = JSON.parse(stdio.outputs.join('').trim()) as Record<
+        string,
+        unknown
+      >;
+      expect(json.commits_ahead).toBe(commitsAhead.length);
+      expect(json.drift_severity).toBe(severity);
+      expect(json.reachable).toBe(true);
+      expect(typeof json.head_short).toBe('string');
+      expect(json.head_short as string).toHaveLength(7);
+      // suggested_base only fires on the unreachable recovery path.
+      expect(json.suggested_base).toBe('');
+      expect(Array.isArray(json.recent_commits)).toBe(true);
+      expect(json.recent_commits as unknown[]).toHaveLength(recentCommits);
+    },
+    15_000
+  );
 
   test('suggested_base resolves to newest reachable ancestor at/older than last_evaluated_at when unreachable', () => {
     // Mirrors the squash-merge orphan: a sync evaluated up to an orphaned
@@ -402,45 +449,6 @@ describe('wiki state', () => {
     >;
     expect(json.reachable).toBe(false);
     expect(json.suggested_base).toBe('');
-  }, 15_000);
-
-  test('reports drift_severity low for 1-5 commits ahead', () => {
-    const baseSha = sandbox.commit('initial', {'README.md': '# repo\n'});
-    writeStateFile(sandbox.root, baseSha);
-    sandbox.commit('feat: add a thing', {
-      'app/foo.ts': 'export const x = 1;\n',
-    });
-
-    const exit = run(['--json'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-
-    const json = JSON.parse(stdio.outputs.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(json.commits_ahead).toBe(1);
-    expect(json.drift_severity).toBe('low');
-    expect(Array.isArray(json.recent_commits)).toBe(true);
-    expect(json.recent_commits as unknown[]).toHaveLength(1);
-  }, 15_000);
-
-  test('reports drift_severity medium for 6-20 commits ahead', () => {
-    const baseSha = sandbox.commit('initial', {'README.md': '# repo\n'});
-    writeStateFile(sandbox.root, baseSha);
-
-    for (let index = 0; index < 6; index += 1) {
-      sandbox.commit(`feat: change ${index}`, {[`app/foo${index}.ts`]: 'x\n'});
-    }
-
-    const exit = run(['--json'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-
-    const json = JSON.parse(stdio.outputs.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(json.commits_ahead).toBe(6);
-    expect(json.drift_severity).toBe('medium');
   }, 15_000);
 
   test('reports drift_severity high for 21+ commits', () => {
