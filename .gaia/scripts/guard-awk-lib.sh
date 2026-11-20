@@ -35,7 +35,9 @@
 # `gaia_guard_bats_files <label>`, which fills the global array
 # `GAIA_GUARD_BATS_FILES` and returns non-zero on an empty bats surface, and
 # `gaia_guard_scan_files <label> <set>...`, which fills `GAIA_GUARD_SCAN_FILES`
-# the same way (its own header at its definition owns the sets). The
+# the same way (its own header at its definition owns the sets). With
+# `GAIA_GUARD_DELTA_FILE` set, both narrow their set to the paths it lists
+# (`gaia_guard_delta_intersect`, whose header owns delta mode). The
 # caller reads that status directly:
 #
 #     gaia_guard_bats_files my-guard || exit 1
@@ -780,13 +782,58 @@ function G_resolve(token,   path, read_status, junk) {
 }
 '
 
+# Filled by gaia_guard_delta_intersect, read by its caller.
+GAIA_GUARD_DELTA_KEPT=()
+
+# gaia_guard_delta_intersect <guard-label> <surface> <path>...: fill
+# GAIA_GUARD_DELTA_KEPT with the paths that GAIA_GUARD_DELTA_FILE also names,
+# or with every path when that variable is empty. Return 0, or 3 having said so
+# on stderr when the delta file cannot be read.
+#
+# GAIA_GUARD_DELTA_FILE names a NUL-delimited list of repo-relative paths: the
+# delta mode `.gaia/tests/shell-lint.sh --paths-from` sets for the guards it
+# names. A guard whose verdict on one file reads other files of its surface
+# discovers that surface with the variable emptied and narrows only the files it
+# reports on, or a hit the delta holds would be lost. Both discovery functions
+# below intersect only after their own empty-set check, so a broken discovery is
+# still a hard error in delta mode. An empty intersection is a clean skip, said on
+# stderr: the delta holding none of a surface's file types is ordinary, and
+# reporting it as a refusal would red every round whose delta holds no workflow.
+gaia_guard_delta_intersect() {
+  GAIA_GUARD_DELTA_KEPT=()
+  local label="$1" surface="$2" delta_framed candidate_path
+  shift 2
+  if [ -z "${GAIA_GUARD_DELTA_FILE:-}" ]; then
+    GAIA_GUARD_DELTA_KEPT=(${1+"$@"})
+    return 0
+  fi
+  # A newline-framed copy and a case match rather than an associative array,
+  # which bash 3.2 lacks; shell-lint.sh narrows its own passes the same way.
+  if [ ! -r "$GAIA_GUARD_DELTA_FILE" ] || ! delta_framed="$(tr '\0' '\n' < "$GAIA_GUARD_DELTA_FILE")"; then
+    printf '%s: ERROR: the delta file %s could not be read; nothing was scanned\n' \
+      "$label" "$GAIA_GUARD_DELTA_FILE" >&2
+    return 3
+  fi
+  delta_framed=$'\n'"$delta_framed"$'\n'
+  for candidate_path in ${1+"$@"}; do
+    case "$delta_framed" in
+      *$'\n'"$candidate_path"$'\n'*) GAIA_GUARD_DELTA_KEPT+=("$candidate_path") ;;
+    esac
+  done
+  if [ "${#GAIA_GUARD_DELTA_KEPT[@]}" -eq 0 ]; then
+    printf '%s: delta mode: the delta holds no %s file; skipped\n' "$label" "$surface" >&2
+  fi
+  return 0
+}
+
 # Filled by gaia_guard_bats_files, read by its caller. Declared here so a caller
 # that iterates before calling reads an empty array rather than an unset name.
 GAIA_GUARD_BATS_FILES=()
 
 # gaia_guard_bats_files <guard-label>: fill GAIA_GUARD_BATS_FILES with the
-# tracked bats set and return 0, or return 1 having said so on stderr when the
-# discovery read nothing.
+# tracked bats set (narrowed to the delta in delta mode) and return 0, or return
+# 1 having said so on stderr when the discovery read nothing or the delta file
+# could not be read.
 #
 # An empty bats surface is a hard error rather than a clean tree: the widened
 # pathspec matching nothing means the discovery is wrong, and a guard that
@@ -809,6 +856,13 @@ gaia_guard_bats_files() {
   if [ "${#GAIA_GUARD_BATS_FILES[@]}" -eq 0 ]; then
     printf '%s: ERROR: no tracked bats suites matched the scan surface; nothing was scanned\n' "$label" >&2
     return 1
+  fi
+  if [ -n "${GAIA_GUARD_DELTA_FILE:-}" ]; then
+    if ! gaia_guard_delta_intersect "$label" '*.bats' ${GAIA_GUARD_BATS_FILES[@]+"${GAIA_GUARD_BATS_FILES[@]}"}; then
+      GAIA_GUARD_BATS_FILES=()
+      return 1
+    fi
+    GAIA_GUARD_BATS_FILES=(${GAIA_GUARD_DELTA_KEPT[@]+"${GAIA_GUARD_DELTA_KEPT[@]}"})
   fi
   return 0
 }
@@ -862,7 +916,8 @@ _gaia_guard_scan_set() {
 # of them, which is why it is stated ahead of the list rather than beside an
 # entry in it.
 #
-#   0  the union is non-empty and the array holds it.
+#   0  the union is non-empty and the array holds it, narrowed to the delta in
+#      delta mode, where it may come back empty (gaia_guard_delta_intersect).
 #   1  every named set resolved and the union came back empty. A hard error
 #      rather than a clean tree, for the reason gaia_guard_bats_files states
 #      about its own surface. This is the ONLY status a caller may tolerate,
@@ -872,7 +927,7 @@ _gaia_guard_scan_set() {
 #      surface other than the one it asked for and still report clean, which is
 #      the discovery-stage failure `.claude/rules/guards-must-fail.md` names.
 #   3  the discovery machinery failed: a named set's own `git ls-files`, the
-#      sort, or the scratch file each of them needs. Distinct from 1 because
+#      sort, the scratch file each of them needs, or the delta file. Distinct from 1 because
 #      the repairs differ, and distinct from a partial result because a set
 #      that returned nothing on a failed call is otherwise indistinguishable
 #      from one that legitimately matched nothing: with several sets asked for,
@@ -974,6 +1029,13 @@ gaia_guard_scan_files() {
     printf '%s: ERROR: no tracked files matched the scan surface (%s); nothing was scanned\n' \
       "$label" "$*" >&2
     return 1
+  fi
+  if [ -n "${GAIA_GUARD_DELTA_FILE:-}" ]; then
+    if ! gaia_guard_delta_intersect "$label" "$*" ${GAIA_GUARD_SCAN_FILES[@]+"${GAIA_GUARD_SCAN_FILES[@]}"}; then
+      GAIA_GUARD_SCAN_FILES=()
+      return 3
+    fi
+    GAIA_GUARD_SCAN_FILES=(${GAIA_GUARD_DELTA_KEPT[@]+"${GAIA_GUARD_DELTA_KEPT[@]}"})
   fi
   return 0
 }

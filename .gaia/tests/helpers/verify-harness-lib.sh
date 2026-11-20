@@ -53,9 +53,9 @@ verify_shell_lint_script=.gaia/tests/shell-lint.sh
 # holds the severity floors, the excluded codes and the discovery globs and
 # sources nothing, and the linter's own config files,
 # which it reads from each linted file's directory upward. The folded guards,
-# their awk library and the helpers they source are not here: the guards scan
-# the whole tree even under --paths-from, so a change to any of them is
-# already judged over every file.
+# their awk library and the helpers they source are not here: a guard that
+# takes the delta widens itself to the whole tree when the delta changes its own
+# sources, and the rest always scan the whole tree.
 verify_delta_names_shell_lint_input() {
   local delta_path
   while IFS= read -r -d '' delta_path; do
