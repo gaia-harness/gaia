@@ -53,7 +53,7 @@ ORDER_ROWS=(
   '| `removal`, a tracked file references it | `keep` | `keep, remove, defer` |'
 )
 
-# Prints each contract element missing from merge-report.md copy `$1`.
+# Prints each contract element missing from the merge-report.md at `$1`.
 contract_violations() {
   local file="$1" status kind row
   while IFS= read -r status; do

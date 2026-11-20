@@ -53,7 +53,7 @@ must_precede() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Creation is conditioned on the flag
+# Creation is conditioned on the flag
 # ---------------------------------------------------------------------------
 
 CREATION_CONDITION='Run it only when `SHOULD_CREATE_WORKTREE=true`'

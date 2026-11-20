@@ -5,18 +5,18 @@
 # .claude/skills/gaia/references/spec/ that it reads at their branch points.
 #
 # The invariants:
-#   b. a sub-reference read is a step a model can skip, so every spec/<name>.md
+#   a. a sub-reference read is a step a model can skip, so every spec/<name>.md
 #      that spec.md names exists and is listed in the command's sub-reference
 #      index (.claude/commands/gaia-spec.md), and each sub-reference moved out
 #      of spec.md has a `Read` line there;
-#   c. each moved section lives in exactly one file of the playbook set;
-#   d. every closed-set menu fits AskUserQuestion: no Other label, no save
+#   b. each moved section lives in exactly one file of the playbook set;
+#   c. every closed-set menu fits AskUserQuestion: no Other label, no save
 #      escape, and no more than four entries;
-#   f. the SPEC audit refuter marks an overstated severity `partial`, refutes
+#   d. the SPEC audit refuter marks an overstated severity `partial`, refutes
 #      a finding only when every gap it names fails, and never refutes a
 #      missing server-only rule for a held value, or lowers it below major, on
 #      ownership or a cookie or transport attribute;
-#   g. the clarify loop tells the SPEC to cite the requirements file in the
+#   e. the clarify loop tells the SPEC to cite the requirements file in the
 #      `REQUIREMENTS.md § <heading text>` form drop-check-lib.mjs parses.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
@@ -43,7 +43,7 @@ playbook_files() {
   return 0
 }
 
-# --- b. routing and the command index ----------------------------------------
+# --- a. routing and the command index ----------------------------------------
 
 # named_sub_references <root>: every spec/<name>.md spec.md names, one per line.
 named_sub_references() {
@@ -79,11 +79,11 @@ sub_references_routed_and_listed() {
 }
 
 # bats test_tags=whole-tree
-@test "b. every sub-reference spec.md names exists, is indexed, and each moved one is routed" {
+@test "a. every sub-reference spec.md names exists, is indexed, and each moved one is routed" {
   sub_references_routed_and_listed "$PLAYBOOK_ROOT"
 }
 
-# --- c. each moved section has one owner -------------------------------------
+# --- b. each moved section has one owner -------------------------------------
 
 # owner<TAB>needle<TAB>kind: kind `heading` matches a line starting with the
 # needle, kind `literal` matches the needle anywhere.
@@ -130,11 +130,11 @@ sections_owned() {
 }
 
 # bats test_tags=whole-tree
-@test "c. each moved section lives in exactly one sub-reference" {
+@test "b. each moved section lives in exactly one sub-reference" {
   sections_owned "$PLAYBOOK_ROOT"
 }
 
-# --- d. every closed-set menu fits AskUserQuestion ---------------------------
+# --- c. every closed-set menu fits AskUserQuestion ---------------------------
 
 # AskUserQuestion takes at most four options and supplies its own free-text
 # Other, so a menu listing Other or the save-partial escape crowds out a real
@@ -187,11 +187,11 @@ menus_fit() {
 }
 
 # bats test_tags=whole-tree
-@test "d. no closed-set menu lists Other, the save escape, or more than four entries" {
+@test "c. no closed-set menu lists Other, the save escape, or more than four entries" {
   menus_fit "$PLAYBOOK_ROOT"
 }
 
-# --- f. the refuter keeps a sound gap and a held credential's server-only rule --
+# --- d. the refuter keeps a sound gap and a held credential's server-only rule --
 
 REFUTER_LINE='> For each id, open the cited SPEC section and any cited file yourself and try to REFUTE it'
 REFUTER_NEEDLES=(
@@ -215,11 +215,11 @@ refuter_keeps_sound_gaps() {
 }
 
 # bats test_tags=whole-tree
-@test "f. the refuter keeps a sound gap and a held credential's server-only rule" {
+@test "d. the refuter keeps a sound gap and a held credential's server-only rule" {
   refuter_keeps_sound_gaps "$PLAYBOOK_ROOT"
 }
 
 
-@test "g. the clarify loop states the requirements pointer form the drop check parses" {
+@test "e. the clarify loop states the requirements pointer form the drop check parses" {
   grep -qF -- 'the literal `REQUIREMENTS.md § <heading text>`' "$PLAYBOOK_ROOT/$REFERENCES/spec/clarify-loop.md"
 }

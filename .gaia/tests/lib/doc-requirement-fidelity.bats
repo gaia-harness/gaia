@@ -15,8 +15,6 @@
 # executes these passages, so an edit that drops one clause would ship
 # silently. This suite pins each clause.
 #
-# Method: every check takes a root directory and reads one region.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {

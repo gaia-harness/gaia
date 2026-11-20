@@ -8,8 +8,7 @@
 # plan's tests follow (guards, case splits, flow tests, page headings). This
 # suite pins that text.
 #
-# Method: every check takes a root directory and reads the planner reference or
-# the doctrine from it. Presence matches on whitespace-normalized text.
+# Presence matches on whitespace-normalized text.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -129,7 +128,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" 'never a test, at any layer, that hand-calls the middleware function; a new case for that guard extends the row that runs the real chain' || return 1
 }
 
-@test "the test design lens checks the doctrine's barred rows and security kinds" {
+@test "the doctrine keeps the barred rows a plan's tests follow" {
   green check_lens_doctrine_rows
 }
 
@@ -148,7 +147,7 @@ check_flow_row_allow_list() {
   need "$doctrine" "A happy-path step's own result that the user sees as a refusal (after sign-out the protected page redirects to sign-in) is a happy-path effect and stays." || return 1
 }
 
-@test "a flow row holds only the doctrine's allow-list in the doctrine, the test design lens and the planner" {
+@test "a flow row holds only the doctrine's allow-list" {
   green check_flow_row_allow_list
 }
 
@@ -174,6 +173,6 @@ check_page_heading_rows() {
   need "$doctrine" "Every page story, an error page an error boundary renders included, carries the landmark check, one \`.test()\` asserting one level-1 heading and one \`main\` landmark; a row asserting a stated heading is that check only when it asserts the \`main\` landmark too." || return 1
 }
 
-@test "a loader-data heading has a route row and every page story, an error page's included, has the whole landmark check, in the doctrine and the test design lens" {
+@test "a loader-data heading has a route row and every page story, an error page's included, has the whole landmark check" {
   green check_page_heading_rows
 }

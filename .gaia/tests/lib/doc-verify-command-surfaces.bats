@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 # Pins for the shipped surfaces that tell the maintainer how to run the round
 # verification: the audit-loop-unit agent prescribes the background round run
-# as one plain command the runner signals, and no surface appends the exit line
-# after it (#3134).
+# as one plain command, the audit round procedure says the runner writes its
+# own completion signal, and no surface appends the exit line after it.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 

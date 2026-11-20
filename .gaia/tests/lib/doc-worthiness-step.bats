@@ -7,7 +7,7 @@
 #
 #   - the late pass's one arm per route value, recommending a residual for a
 #     fix or delete;
-#   - the single invoker of the ledger writer;
+#   - no file under .claude or .gaia/scripts runs the ledger writer with node;
 #   - maintainer-only markers balanced, and the verification command named
 #     only inside a marked block.
 #

@@ -97,7 +97,7 @@ put_line() {
   grep -E -- '(^| )-X PUT ' "${BATS_TEST_TMPDIR}/gh.log" || true
 }
 
-# assert_stale_context_dropped <fence-file>: fixture 1. The GET reports the
+# assert_stale_context_dropped <fence-file>: the GET reports the
 # stale context beside a sibling; the PUT carries GAIA-Audit and the sibling
 # and not the stale context.
 assert_stale_context_dropped() {

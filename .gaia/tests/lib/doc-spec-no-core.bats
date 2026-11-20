@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
 #
-# Doc-conformance suite: /gaia-spec runs as one explicit, script-driven
-# workflow with no dependency on a spec-kit core install. The shipped SPEC
-# template, filled in, passes the lint script directly.
+# Doc-conformance suite: the shipped SPEC template, filled in, passes the SPEC
+# lint script.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 

@@ -6,8 +6,9 @@
 # is still owed, and a setup-not-finished line naming the re-run otherwise. A
 # run whose GitHub setup was refused or skipped must not end on a line that
 # reads as done, and the message reads the same predicate the statusline's
-# setup nudge counts, so the two never disagree. The setup-running marker the
-# page touches and removes is read by the statusline.
+# setup nudge counts, so the two never disagree. `setup-gaia.md` touches the
+# statusline's setup-running marker after the worktree refusal and removes it
+# on finish and on halt.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 

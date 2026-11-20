@@ -1,25 +1,20 @@
 #!/usr/bin/env bats
 # Single ownership of the scope-resolution obligation: the sentence lives once,
 # in the "Scope resolution" section of .claude/hooks/lib/audit-member-protocol.md.
-#   Group 1: every agent definition sends its member to that section and
-#     carries no copy of the sentence, which would drift from the protocol's.
+#   Group 1: the protocol carries the sentence once, and every agent
+#     definition sends its member to that section and carries no copy of the
+#     sentence, which would drift from the protocol's.
 #   Group 2: the registration page's step 1 sends the next member author to
 #     the same section and carries no copy.
 # Honest limit: presence and absence, not meaning and not behavior.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
-#
-# `.gaia/tests/` is out of `wiki-style.md`'s scope entirely and release-
-# excluded, so the SPEC traceability above is correct and expected here,
-# unlike in the shipped prose this suite guards.
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
 
-  # Discovered, not transcribed. A hardcoded list here would assert the
-  # obligation literal over the definitions that existed the day this suite
-  # was written, and stay green for a newly registered member that never
-  # carried the literal at all.
+  # Discovered, not transcribed: a hardcoded list would stay green for a newly
+  # registered member that never carries the pointer.
   AGENTS=()
   local agent
   # gaia-lint-ignore whole-tree-mark-guard: every test that uses the agent roster this collects carries the
@@ -29,6 +24,7 @@ setup() {
   done
   # An empty discovery has verified nothing; fail rather than pass vacuously.
   [ "${#AGENTS[@]}" -gt 0 ] || return 1
+  PROTOCOL="$ROOT/.claude/hooks/lib/audit-member-protocol.md"
   REGISTRATION="$ROOT/wiki/concepts/Registering a Code Audit Team Member.md"
   SCOPE_POINTER='Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path and follow its "Scope resolution" section'
   REGISTRATION_POINTER='sends the member to the `## Scope resolution` section of `.claude/hooks/lib/audit-member-protocol.md`'
@@ -37,6 +33,29 @@ setup() {
 }
 
 # --- Group 1: no agent definition carries its own copy ---------------------
+
+# scope_section: the protocol's "## Scope resolution" section body.
+scope_section() {
+  awk '/^## Scope resolution$/ { inside = 1; next } inside && /^## / { exit } inside { print }' "$PROTOCOL"
+}
+
+# The absence checks below compare against OBLIGATION_LITERAL, so this pins the
+# literal to the protocol's one copy: a reworded protocol sentence fails here
+# instead of leaving the absence checks green against a stale literal.
+@test "Group 1: the obligation literal appears exactly once in the protocol, inside its Scope resolution section" {
+  local section count
+  section="$(scope_section)"
+  [ -n "$section" ] || { echo "no \"## Scope resolution\" section in $PROTOCOL" >&2; return 1; }
+  grep -qF -- "$OBLIGATION_LITERAL" <<<"$section" || {
+    echo "obligation literal missing from the protocol's Scope resolution section" >&2
+    return 1
+  }
+  count="$(grep -cF -- "$OBLIGATION_LITERAL" "$PROTOCOL")"
+  [ "$count" -eq 1 ] || {
+    echo "obligation literal appears $count times in $PROTOCOL, expected exactly 1" >&2
+    return 1
+  }
+}
 
 # bats test_tags=whole-tree
 @test "Group 1: every agent definition sends its member to that section and carries no copy of its own" {

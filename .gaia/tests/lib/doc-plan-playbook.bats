@@ -6,9 +6,9 @@
 # line routes a run to it.
 #
 # The invariants:
-#   b. every plan/*.md is named in plan.md by its repo path and listed in the
+#   a. every plan/*.md is named in plan.md by its repo path and listed in the
 #      /gaia-plan command, so a sub-reference no line routes to cannot exist;
-#   c. every plan/<name>.md either file names exists.
+#   b. every plan/<name>.md either file names exists.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -18,7 +18,7 @@ setup() {
   COMMAND_RELATIVE='.claude/commands/gaia-plan.md'
 }
 
-# --- b. every sub-reference is routed and listed ----------------------------
+# --- a. every sub-reference is routed and listed ----------------------------
 
 # every_sub_reference_listed <root>: the set comes from the directory, and an
 # independent count catches a glob that read fewer files than exist; an empty
@@ -45,7 +45,7 @@ every_sub_reference_listed() {
   every_sub_reference_listed "$REPO_ROOT"
 }
 
-# --- c. no route to a missing file ------------------------------------------
+# --- b. no route to a missing file ------------------------------------------
 
 no_orphan_route() {
   local root="$1" names name

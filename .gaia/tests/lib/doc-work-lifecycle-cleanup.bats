@@ -124,7 +124,7 @@ fence_body() {
 # rendered_body <heading> <index> <branch> <worktree path> <main checkout path>:
 # the fence with its three placeholders replaced by literal substitution, and
 # the repo-relative check script replaced by CHECK_SCRIPT so a fixture runs the
-# real file (or a mutated copy), and the repo-relative cleanup verb replaced by
+# real file, and the repo-relative cleanup verb replaced by
 # the fixture main checkout's copy (the absolute-path spellings already reach
 # it through the main checkout placeholder). Fails when the fence is empty or any
 # angle-bracket placeholder survives, because bash would read a leftover
@@ -298,7 +298,8 @@ main_matches_origin() {
 }
 
 # ---------------------------------------------------------------------------
-# Checks. Each takes a scratch dir, builds its own fixture, and returns
+# Checks. Each takes a fresh case directory, makes its fixture there with
+# make_fixture, and returns
 # non-zero with a FAIL line when the promised outcome does not hold.
 
 check_feature_head_on_merged_branch() {

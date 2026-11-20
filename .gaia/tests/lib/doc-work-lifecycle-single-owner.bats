@@ -19,10 +19,9 @@
 #   3. outside the reference, a fence holding the merge-wait phrase appears only
 #      in the merge workflow page. Exemption: a fence that carries a
 #      `gaia:orchestrator-step` sentinel line (the plan reference's post-merge
-#      close template block is such a fence and must stay byte-identical.
+#      close template block is such a fence and must stay byte-identical).
 #
-# Every check takes a root laid out like the repository and prints one offender
-# line per violation.
+# Every check prints one offender line per violation.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 #
@@ -30,7 +29,6 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  DOC_ROOT="$REPO_ROOT"
   REFERENCE='.claude/skills/gaia/references/work-lifecycle.md'
   MERGE_WORKFLOW='wiki/concepts/PR Merge Workflow.md'
   SCOPE_DIRS=(.claude/skills .claude/rules wiki/concepts)
@@ -114,16 +112,14 @@ check_3() {
   return "$failed"
 }
 
-# --- the checks on the real tree -------------------------------------
-
 @test "check 2: no full statement of cleanup, worktree removal or the heading outside the reference" {
-  run check_2 "$DOC_ROOT"
+  run check_2 "$REPO_ROOT"
   printf '%s\n' "$output"
   [ "$status" -eq 0 ]
 }
 
 @test "check 3: a merge-wait fence appears only in the merge workflow page, sentinel fences excepted" {
-  run check_3 "$DOC_ROOT"
+  run check_3 "$REPO_ROOT"
   printf '%s\n' "$output"
   [ "$status" -eq 0 ]
 }

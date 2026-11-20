@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
 #
-# Doc-conformance suite for the wiki pages that point at the Test Layering
-# page: the wiki index lists the page, and every wikilink in the changed pages
-# resolves to a wiki page.
+# Doc-conformance suite: the wiki index lists the Test Layering page, and every
+# wikilink in the pages CHANGED_PAGES names resolves to a wiki page.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
