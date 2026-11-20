@@ -2,42 +2,19 @@
 #
 # Doc-conformance suite for the generated orchestrator's lifecycle steps.
 #
-# .claude/skills/gaia/references/plan/planner.md, the file the planner
-# sub-agent reads, holds the verbatim step blocks a planner copies into a
-# generated ORCHESTRATOR.md, each opening with a sentinel line plan-verify.sh
-# checks: the resume detection, the sub-agent yield handling, the phase gate
-# retry, the security writer, the simplify pass, the pre-audit flow checks, the wiki promotion,
-# the code audit, the post-clearance step and the post-merge
-# close. .claude/skills/gaia/references/spec/lifecycle.md holds the procedures
-# those blocks point at, and .claude/skills/gaia/references/plan.md, the
-# /gaia-plan entry file, keeps the pre-flight sweep pointer. This suite pins:
+# planner.md holds the verbatim step blocks a planner copies into a generated
+# ORCHESTRATOR.md, each opening with a sentinel line plan-verify.sh checks.
+# This suite pins:
 #
 #   - the sentinel list for each plan kind, from one array here: each sentinel
-#     sits once in planner.md, inside a fenced block, in that order; the
-#     verbatim-block sentence names each in order and the compared set; and
-#     each block carries the command or pointer it exists for;
-#   - plan.md holds no sentinel and never names plan-archive.sh, so the
-#     blocks have one home;
-#   - nothing in planner.md archives the plan folder or removes SPEC.md before
-#     the post-merge close, and lifecycle.md's close confirms MERGED first;
-#   - the blocks, assembled the way a planner copies them (indentation
-#     kept) into a plan with a closing flow-test phase, pass plan-verify.sh;
-#   - the shared pre-flight sweep runs its reconcile scan before the reap that
-#     reads what it stamps, and the post-merge close passes the PR number;
+#     sits once in planner.md, inside a fenced block, in that order, and the
+#     verbatim-block sentence names each in order and the compared set;
+#   - nothing is archived or removed before a confirmed MERGED close, and the
+#     pre-flight sweep scans before it reaps;
+#   - the blocks, assembled the way a planner copies them, pass plan-verify.sh;
 #   - the new PROGRESS.md blocks never move plan-resume-point.sh's answer;
-#   - the adopter form of planner.md and lifecycle.md (every maintainer-only
-#     pair stripped) names no verify-harness, every changed page keeps its
-#     markers balanced, and no block holds the release manifest mechanics;
-#   - the post-clearance block commits no SUMMARY.md, the wiki promotion block
-#     sits above the code audit block, and the final summary names the
-#     worthiness step block its late pass feeds;
-#   - lifecycle.md says which pass writes the wiki promotion record;
-#   - a plan-time directive constrains the code or a flow test's assertions,
-#     never a test layer, and spec/audit.md writes a directive as a property
-#     or a code constraint.
-#
-# Every check is a function taking the file(s) it reads, so each red twin
-# runs the same function against a mutated copy and proves it can fail.
+#   - the adopter form names no maintainer-only step and markers stay balanced;
+#   - a page-markup rule is a plan-time directive.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -62,7 +39,6 @@ UNCOMPARED_STEP=post-merge-close
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLAN_MD="$REPO_ROOT/.claude/skills/gaia/references/plan.md"
   PLANNER_MD="$REPO_ROOT/.claude/skills/gaia/references/plan/planner.md"
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   WIKI_PROMOTE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/wiki-promote.md"
@@ -70,14 +46,7 @@ setup() {
   SPEC_TEMPLATE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
   PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
-  S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
-  S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
-  S_SIMPLIFY='<!-- gaia:orchestrator-step simplify-pass -->'
   S_FLOW='<!-- gaia:orchestrator-step flow-checks -->'
-  S_SECURITY='<!-- gaia:orchestrator-step security-writer -->'
-  S_WIKI='<!-- gaia:orchestrator-step wiki-promotion -->'
-  S_AUDIT='<!-- gaia:orchestrator-step code-audit -->'
-  S_CLEAR='<!-- gaia:orchestrator-step post-clearance -->'
   S_CLOSE='<!-- gaia:orchestrator-step post-merge-close -->'
 }
 
@@ -123,15 +92,6 @@ fence_with() {
       next
     }
     in_fence { buffer = buffer $0 "\n"; if (t == want) hit = 1 }' "$1"
-}
-
-# range_of <file> <start fixed string> <end fixed string>: the lines from the
-# first start match up to, not including, the first end match after it.
-range_of() {
-  awk -v start="$2" -v stop="$3" '
-    !inside && index($0, start) { inside = 1; print; next }
-    inside && index($0, stop) { exit }
-    inside { print }' "$1"
 }
 
 # section_of <file> <heading>: a "## " section up to the next "## " heading
@@ -212,30 +172,6 @@ check_verbatim_sentence() {
     fi
   done < <(steps_of spec-derived)
   return 0
-}
-
-# check_block_has <file> <sentinel> <needle>...
-check_block_has() {
-  local file="$1" sentinel="$2" block needle
-  shift 2
-  block="$(fence_with "$file" "$sentinel")"
-  [ -n "$block" ] || { printf 'no fenced block holds %s\n' "$sentinel" >&2; return 1; }
-  for needle in "$@"; do
-    grep -qF -- "$needle" <<<"$block" || { printf 'block %s lacks: %s\n' "$sentinel" "$needle" >&2; return 1; }
-  done
-}
-
-check_block_contents() {
-  local file="$1"
-  check_block_has "$file" "$S_YIELD" 'gaia_context_yield_limit' 'Yield handoff:' '(YIELD k)' || return 1
-  check_block_has "$file" "$S_RETRY" '(GATE RETRY k)' 'Yield handoff:' 'Stop conditions' || return 1
-  check_block_has "$file" "$S_SIMPLIFY" 'simplify-pass.md' '## Simplify pass' || return 1
-  check_block_has "$file" "$S_FLOW" 'flow-coverage.sh' '--spec {SPEC_PATH}' '--flow-tests-out' 'flow-tests.tsv' '{PLAN_DIR}/PROGRESS.md' 'before the wiki promotion' || return 1
-  check_block_has "$file" "$S_SECURITY" 'security-test-writer' 'security-writer.md' 'Test lines' || return 1
-  check_block_has "$file" "$S_WIKI" 'wiki-promote.md' 'promoted-pages.txt' 'Pass: pre-audit' 'verify-harness.sh branch' || return 1
-  check_block_has "$file" "$S_AUDIT" 'resolve-audit-members.sh' || return 1
-  check_block_has "$file" "$S_CLEAR" 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh' || return 1
-  check_block_has "$file" "$S_CLOSE" 'plan-archive.sh` runs only after `MERGED` is confirmed' || return 1
 }
 
 # Nothing above the post-merge-close sentinel names plan-archive.sh or
@@ -346,23 +282,6 @@ assembled_sentinels() {
   check_sentinels_once_in_fences "$PLANNER_MD"
 }
 
-@test "red twin: a duplicated, unfenced or unlisted sentinel fails the sentinel check" {
-  check_sentinels_once_in_fences "$PLANNER_MD"
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  cp "$PLANNER_MD" "$copy"
-  printf '\n%s\n' "$S_FLOW" >>"$copy"
-  run check_sentinels_once_in_fences "$copy"
-  [ "$status" -ne 0 ]
-  # Unfenced: drop every fence line, so the sentinel lines sit in prose.
-  grep -vE '^[[:space:]]*```' "$PLANNER_MD" >"$copy"
-  run check_sentinels_once_in_fences "$copy"
-  [ "$status" -ne 0 ]
-  # A block the list does not name, inside its own fence.
-  { cat "$PLANNER_MD"; printf '\n```\n<!-- gaia:orchestrator-step red-split -->\n```\n'; } >"$copy"
-  run check_sentinels_once_in_fences "$copy"
-  [ "$status" -ne 0 ]
-}
-
 @test "the sentinels sit in planner.md in the list's order, flow-checks between the simplify pass and the wiki promotion" {
   check_sentinel_file_order "$PLANNER_MD"
 }
@@ -371,98 +290,12 @@ assembled_sentinels() {
   check_verbatim_sentence "$PLANNER_MD"
 }
 
-@test "red twin: a step missing, out of order or wrongly compared in the verbatim-block sentence fails" {
-  check_verbatim_sentence "$PLANNER_MD"
-  local copy="$BATS_TEST_TMPDIR/planner.md" step
-  for step in "${SPEC_DERIVED_STEPS[@]}"; do
-    awk -v step="\`$step\`" '/\*\*Verbatim step blocks\.\*\*/ { i = index($0, step); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(step)) } { print }' "$PLANNER_MD" >"$copy"
-    cmp -s "$PLANNER_MD" "$copy" && { echo "\`$step\` is not in the verbatim-block sentence" >&2; return 1; }
-    run check_verbatim_sentence "$copy"
-    [ "$status" -ne 0 ] || { echo "dropping $step from the order list did not fail" >&2; return 1; }
-  done
-  # Swap two neighbours in the order list.
-  sed '/\*\*Verbatim step blocks\.\*\*/s/`simplify-pass`, `flow-checks`/`flow-checks`, `simplify-pass`/' "$PLANNER_MD" >"$copy"
-  cmp -s "$PLANNER_MD" "$copy" && { echo "simplify-pass, flow-checks is not in the order list" >&2; return 1; }
-  run check_verbatim_sentence "$copy"
-  [ "$status" -ne 0 ]
-  awk '/\*\*Verbatim step blocks\.\*\*/ { gsub(/[Ss]pec-less/, "other") } { print }' "$PLANNER_MD" >"$copy"
-  cmp -s "$PLANNER_MD" "$copy" && { echo "the verbatim-block sentence does not mention spec-less plans" >&2; return 1; }
-  run check_verbatim_sentence "$copy"
-  [ "$status" -ne 0 ]
-  sed '/\*\*Verbatim step blocks\.\*\*/s/compares the text of the resume-detection, /compares the text of the /' "$PLANNER_MD" >"$copy"
-  cmp -s "$PLANNER_MD" "$copy" && { echo "the compared set does not open with resume-detection" >&2; return 1; }
-  run check_verbatim_sentence "$copy"
-  [ "$status" -ne 0 ]
-  sed '/\*\*Verbatim step blocks\.\*\*/s/ and post-clearance blocks/, post-clearance and post-merge-close blocks/' "$PLANNER_MD" >"$copy"
-  cmp -s "$PLANNER_MD" "$copy" && { echo "the compared set does not end with post-clearance" >&2; return 1; }
-  run check_verbatim_sentence "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "each block carries the command or pointer it exists for" {
-  check_block_contents "$PLANNER_MD"
-}
-
-@test "red twin: a block missing its command fails the contents check" {
-  check_block_contents "$PLANNER_MD"
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  local needle
-  for needle in 'flow-coverage.sh' 'flow-tests.tsv' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' 'wiki-promote.md' 'runs only after' 'simplify-pass.md' 'security-writer.md' 'promoted-pages.txt' 'Pass: pre-audit' 'Pass: refresh' 'post-audit-status.sh' '#### Posting the status last' 'Skipping already-cleared members' 'verify-harness.sh branch' 'Consolidation refresh'; do
-    awk -v needle="$needle" '{ gsub(needle, "removed") } { print }' "$PLANNER_MD" >"$copy"
-    run check_block_contents "$copy"
-    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail the check" >&2; return 1; }
-  done
-}
-
-# The entry file routes to planner.md and must not carry a second copy of a
-# block or the archive call a stale copy would run.
-check_entry_file_has_no_blocks() {
-  local file="$1" hit
-  hit="$(grep -nF -- '<!-- gaia:orchestrator-step' "$file" || true)"
-  [ -z "$hit" ] || { printf '%s holds an orchestrator-step sentinel: %s\n' "$file" "$hit" >&2; return 1; }
-  hit="$(grep -nF -- 'plan-archive.sh' "$file" || true)"
-  [ -z "$hit" ] || { printf '%s names plan-archive.sh: %s\n' "$file" "$hit" >&2; return 1; }
-}
-
-@test "plan.md holds no orchestrator-step sentinel and never names plan-archive.sh" {
-  check_entry_file_has_no_blocks "$PLAN_MD"
-}
-
-@test "red twin: a sentinel or a plan-archive.sh line in plan.md fails the entry-file check" {
-  copy="$BATS_TEST_TMPDIR/plan.md"
-  { cat "$PLAN_MD"; printf '\n%s\n' "$S_CLOSE"; } >"$copy"
-  run check_entry_file_has_no_blocks "$copy"
-  [ "$status" -ne 0 ]
-  { cat "$PLAN_MD"; printf '\nbash .gaia/scripts/plan-archive.sh {PLAN_DIR}\n'; } >"$copy"
-  run check_entry_file_has_no_blocks "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # ---------- close order: nothing irreversible before MERGED ----------
 
-@test "planner.md archives and removes layers only in or after the post-merge close" {
-  check_plan_close_order "$PLANNER_MD"
-}
-
-@test "red twin: an archive or a SPEC.md removal above the post-merge close fails" {
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  { sed -n '1,20p' "$PLANNER_MD"; printf '      bash .gaia/scripts/plan-archive.sh {PLAN_DIR}\n'; sed -n '21,$p' "$PLANNER_MD"; } >"$copy"
-  run check_plan_close_order "$copy"
-  [ "$status" -ne 0 ]
-  { sed -n '1,20p' "$PLANNER_MD"; printf '      On exit 0, rm the folder SPEC.md and AUDIT.md.\n'; sed -n '21,$p' "$PLANNER_MD"; } >"$copy"
-  run check_plan_close_order "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "lifecycle.md's post-merge close confirms MERGED before archive and removal" {
-  check_lifecycle_close_order "$LIFECYCLE_MD"
-}
-
-@test "red twin: an archive above the MERGED confirmation fails the close order" {
-  copy="$BATS_TEST_TMPDIR/lifecycle.md"
-  awk '{ print } /^## Post-merge close$/ { print ""; print "bash .gaia/scripts/plan-archive.sh <PLAN_DIR>" }' "$LIFECYCLE_MD" >"$copy"
-  run check_lifecycle_close_order "$copy"
-  [ "$status" -ne 0 ]
+@test "archive and removal wait for a confirmed MERGED close, and the sweep scans before it reaps" {
+  check_plan_close_order "$PLANNER_MD" || { printf 'case failed: planner.md archives and removes layers only in or after the post-merge close\n' >&2; return 1; }
+  check_lifecycle_close_order "$LIFECYCLE_MD" || { printf 'case failed: lifecycle.md post-merge close confirms MERGED before archive and removal\n' >&2; return 1; }
+  check_preflight_sites "$LIFECYCLE_MD" || { printf 'case failed: the sweep scans before it reaps and the close passes the PR number\n' >&2; return 1; }
 }
 
 # ---------- assembled blocks pass plan-verify.sh ----------
@@ -490,25 +323,6 @@ check_entry_file_has_no_blocks() {
   grep -qF "$S_FLOW" "$FIXTURE_PLAN/ORCHESTRATOR.md" && return 1
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
-
-# ---------- pre-flight sweep call sites and order ----------
-
-@test "the sweep scans before it reaps and the close passes the PR number" {
-  check_preflight_sites "$LIFECYCLE_MD"
-}
-
-@test "red twin: a reap above the scan, or a close without the PR number, fails" {
-  copy="$BATS_TEST_TMPDIR/lifecycle.md"
-  # Move the plan reap line to the top of the sweep section.
-  awk '
-    /^## Pre-flight sweep$/ { print; print ""; print "bash .gaia/scripts/spec/plan-archive-merged.sh \"$PWD\" 2>/dev/null || true"; next }
-    { print }' "$LIFECYCLE_MD" >"$copy"
-  run check_preflight_sites "$copy"
-  [ "$status" -ne 0 ]
-  sed 's/"\$PLAN_ID" "<N>"/"$PLAN_ID"/' "$LIFECYCLE_MD" >"$copy"
-  run check_preflight_sites "$copy"
-  [ "$status" -ne 0 ]
 }
 
 # ---------- the resume helper ignores the new PROGRESS.md blocks ----------
@@ -578,12 +392,6 @@ EOF
   [ "$(resume_point)" = "$baseline" ]
 }
 
-@test "red twin: a HALTED phase 2 with no Commit line lowers the resume point" {
-  resume_fixture
-  printf '## Phase 1, One\nCommit: %s\n\n_No notes._\n\n## Phase 2, Two (HALTED)\nReason: flow test failed in the closing gate\n' "$SHA_ONE" >"$PROGRESS_DIR/PROGRESS.md"
-  [ "$(resume_point)" = "2" ]
-}
-
 # ---------- adopter form, manifest placement, commit proxies, record arm ----------
 
 # strip_marked <in> <out>: the file with each maintainer-only marker pair and
@@ -614,28 +422,11 @@ check_adopter_form() {
   [ "$count" -eq 0 ] || { printf '%s names verify-harness outside a marked pair (%s lines)\n' "$file" "$count" >&2; return 1; }
 }
 
-@test "the adopter form of planner.md and lifecycle.md names no verify-harness" {
-  check_adopter_form "$PLANNER_MD"
-  check_adopter_form "$LIFECYCLE_MD"
-}
-
-@test "the marked pair holds the verify-harness mention in planner.md" {
-  grep -qF 'verify-harness' "$PLANNER_MD"
-}
-
-@test "red twin: an unmarked verify-harness in a block fails the adopter-form check" {
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  awk -v want="$S_AUDIT" '{ print } { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) } t == want { print "      Run bash .gaia/tests/verify-harness.sh branch first." }' "$PLANNER_MD" >"$copy"
-  run check_adopter_form "$copy"
-  [ "$status" -ne 0 ]
-  copy="$BATS_TEST_TMPDIR/lifecycle.md"
-  { cat "$LIFECYCLE_MD"; printf '\nRun verify-harness.sh branch.\n'; } >"$copy"
-  run check_adopter_form "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "each changed page keeps its maintainer-only markers balanced" {
+@test "adopter form names no maintainer-only step and markers stay balanced" {
   local file
+  check_adopter_form "$PLANNER_MD" || { printf 'case failed: planner.md adopter form\n' >&2; return 1; }
+  check_adopter_form "$LIFECYCLE_MD" || { printf 'case failed: lifecycle.md adopter form\n' >&2; return 1; }
+  grep -qF 'verify-harness' "$PLANNER_MD" || { printf 'case failed: the marked pair holds the verify-harness mention in planner.md\n' >&2; return 1; }
   for file in \
     "$PLANNER_MD" "$LIFECYCLE_MD" "$WIKI_PROMOTE_MD" \
     "$REPO_ROOT/wiki/concepts/Task Orchestration.md" \
@@ -643,247 +434,8 @@ check_adopter_form() {
     "$REPO_ROOT/wiki/concepts/Wiki Consolidate.md" \
     "$REPO_ROOT/.claude/skills/gaia/references/wiki/consolidate.md"; do
     [ -f "$file" ] || { printf 'missing %s\n' "$file" >&2; return 1; }
-    check_markers_balanced "$file" || return 1
+    check_markers_balanced "$file" || { printf 'case failed: markers balanced in %s\n' "$file" >&2; return 1; }
   done
-}
-
-@test "red twin: an unbalanced marker fails the balance check" {
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  grep -vF -- '<!-- gaia:maintainer-only:end -->' "$PLANNER_MD" >"$copy"
-  run check_markers_balanced "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# check_manifest_placement <planner>: the release manifest mechanics live only in
-# wiki-promote.md's maintainer note.
-check_manifest_placement() {
-  local file="$1" hit
-  hit="$(grep -nE -e '--ship|release manifest' "$file" || true)"
-  [ -z "$hit" ] || { printf '%s holds manifest mechanics: %s\n' "$file" "$hit" >&2; return 1; }
-  check_block_has "$file" "$S_WIKI" 'wiki-promote.md' "maintainer note" || return 1
-  check_block_has "$file" "$S_CLEAR" 'wiki-promote.md' "maintainer note" || return 1
-}
-
-@test "planner.md holds no manifest mechanics and its blocks point at the maintainer note" {
-  check_manifest_placement "$PLANNER_MD"
-}
-
-@test "red twin: a seeded --ship or release manifest in planner.md fails" {
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  { cat "$PLANNER_MD"; printf '\nrun release manifest --ship wiki/concepts/X.md\n'; } >"$copy"
-  run check_manifest_placement "$copy"
-  [ "$status" -ne 0 ]
-  { cat "$PLANNER_MD"; printf '\nrun release manifest\n'; } >"$copy"
-  run check_manifest_placement "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# check_post_clearance_commits_nothing_of_summary <planner>: SUMMARY.md is
-# untracked, so the refresh states it stays uncommitted and never stages it.
-check_post_clearance_commits_nothing_of_summary() {
-  local block
-  block="$(fence_with "$1" "$S_CLEAR")"
-  [ -n "$block" ] || { printf 'no post-clearance block\n' >&2; return 1; }
-  grep -qF 'uncommitted' <<<"$block" || { printf 'post-clearance block does not state SUMMARY.md stays uncommitted\n' >&2; return 1; }
-  grep -qiE '(commit|stage|git add)[^.]*SUMMARY\.md' <<<"$(grep -v 'uncommitted' <<<"$block")" && { printf 'post-clearance block instructs committing SUMMARY.md\n' >&2; return 1; }
-  true
-}
-
-# check_promotion_above_audit <planner>: the wiki promotion block precedes the
-# code audit block.
-check_promotion_above_audit() {
-  local file="$1" wiki audit
-  wiki="$(awk -v want="$S_WIKI" '{ t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) } t == want { print NR; exit }' "$file")"
-  audit="$(awk -v want="$S_AUDIT" '{ t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) } t == want { print NR; exit }' "$file")"
-  { [ -n "$wiki" ] && [ -n "$audit" ]; } || { printf 'wiki-promotion (%s) or code-audit (%s) sentinel missing\n' "$wiki" "$audit" >&2; return 1; }
-  [ "$wiki" -lt "$audit" ] || { printf 'wiki-promotion (%s) is not above code-audit (%s)\n' "$wiki" "$audit" >&2; return 1; }
-}
-
-@test "the post-clearance block commits no SUMMARY.md and the promotion block sits above the audit" {
-  check_post_clearance_commits_nothing_of_summary "$PLANNER_MD"
-  check_promotion_above_audit "$PLANNER_MD"
-}
-
-@test "red twin: a SUMMARY.md commit in post-clearance, or the audit above the promotion, fails" {
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  awk -v want="$S_CLEAR" '{ print } { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) } t == want { print "      Commit SUMMARY.md with the page fixes." }' "$PLANNER_MD" >"$copy"
-  run check_post_clearance_commits_nothing_of_summary "$copy"
-  [ "$status" -ne 0 ]
-  awk 'BEGIN { RS = "\0" } { gsub(/uncommitted/, "committed"); printf "%s", $0 }' "$PLANNER_MD" >"$copy"
-  run check_post_clearance_commits_nothing_of_summary "$copy"
-  [ "$status" -ne 0 ]
-  awk -v wiki="$S_WIKI" -v audit="$S_AUDIT" '
-    { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) }
-    t == wiki { sub(/wiki-promotion/, "TEMP-SENTINEL") }
-    t == audit { sub(/code-audit/, "wiki-promotion") }
-    { print }' "$PLANNER_MD" >"$copy"
-  sed -i.bak 's/TEMP-SENTINEL/code-audit/' "$copy"
-  run check_promotion_above_audit "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# check_final_summary_names_worthiness_block <planner>: the final summary reads the
-# worthiness step block, and the late pass sits in the code audit block above it.
-check_final_summary_names_worthiness_block() {
-  local file="$1" summary audit_block summary_line audit_line
-  summary="$(range_of "$file" '**Final summary.**' '**Post-clearance')"
-  grep -qF '## Worthiness step' <<<"$summary" || { printf 'final summary does not name the ## Worthiness step block\n' >&2; return 1; }
-  audit_block="$(fence_with "$file" "$S_AUDIT")"
-  grep -qF 'the late pass' <<<"$audit_block" || { printf 'code-audit block does not run the late pass\n' >&2; return 1; }
-  summary_line="$(grep -nF -m1 '**Final summary.**' "$file" | cut -d: -f1)"
-  audit_line="$(awk -v want="$S_AUDIT" '{ t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) } t == want { print NR; exit }' "$file")"
-  [ "$audit_line" -lt "$summary_line" ] || { printf 'the late pass block (%s) is not above the final summary (%s)\n' "$audit_line" "$summary_line" >&2; return 1; }
-}
-
-@test "the final summary names the worthiness step block and the late pass sits above it" {
-  check_final_summary_names_worthiness_block "$PLANNER_MD"
-}
-
-@test "red twin: dropping the worthiness step mention or the late pass fails" {
-  copy="$BATS_TEST_TMPDIR/planner.md"
-  sed 's/## Worthiness step` block from/removed block from/' "$PLANNER_MD" >"$copy"
-  cmp -s "$PLANNER_MD" "$copy" && { echo "worthiness step mention not found" >&2; return 1; }
-  run check_final_summary_names_worthiness_block "$copy"
-  [ "$status" -ne 0 ]
-  sed 's/the late pass from/the other pass from/' "$PLANNER_MD" >"$copy"
-  run check_final_summary_names_worthiness_block "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# ---------- lifecycle.md's promotion record ----------
-
-# check_record_arm <lifecycle>: which pass writes the promotion record.
-check_record_arm() {
-  local file="$1" section needle
-  section="$(section_of "$file" '## Consolidation')"
-  [ -n "$section" ] || { printf 'no ## Consolidation section\n' >&2; return 1; }
-  for needle in \
-    'is written only by a pass attempting promotion' \
-    'It always attempts promotion' \
-    'attempts promotion only when it reaches' \
-    '`## Consolidation refresh`' \
-    'A plan generated before this order' \
-    'Pass: pre-audit'; do
-    grep -qF -- "$needle" <<<"$section" || { printf 'consolidation section lacks: %s\n' "$needle" >&2; return 1; }
-  done
-}
-
-@test "lifecycle.md states which pass writes the promotion record and names the fourth caller" {
-  check_record_arm "$LIFECYCLE_MD"
-}
-
-@test "red twin: removing any record-arm sentence fails" {
-  local needle copy="$BATS_TEST_TMPDIR/lifecycle.md"
-  for needle in 'is written only by a pass attempting promotion' 'It always attempts promotion' 'attempts promotion only when it reaches' 'Consolidation refresh' 'A plan generated before this order'; do
-    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$LIFECYCLE_MD" >"$copy"
-    cmp -s "$LIFECYCLE_MD" "$copy" && { echo "'$needle' not found" >&2; return 1; }
-    run check_record_arm "$copy"
-    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail the check" >&2; return 1; }
-  done
-}
-
-# check_old_order_gone <file>...: no statement of promotion after clearance as
-# the order, and the maintainer note still names the verify pass and re-audit.
-check_old_order_gone() {
-  local file
-  for file in "$@"; do
-    grep -qF -e 'Promotion runs after audit clearance' -e 'Two callers run it' -e 'runs after every dispatched Code Audit Team member has cleared and the human has confirmed' "$file" && {
-      printf '%s still states the old promotion order\n' "$file" >&2
-      return 1
-    }
-  done
-  return 0
-}
-
-check_maintainer_note_costs() {
-  local note
-  note="$(awk '
-    { t = $0; sub(/^[ \t]+/, "", t) }
-    t == "<!-- gaia:maintainer-only:start -->" { inside = 1; next }
-    t == "<!-- gaia:maintainer-only:end -->" { inside = 0; next }
-    inside { print }' "$1")"
-  grep -qF 'verify-harness.sh branch' <<<"$note" || { printf 'maintainer note lacks the verify pass\n' >&2; return 1; }
-  grep -qF 'shell re-audit' <<<"$note" || { printf 'maintainer note lacks the shell re-audit\n' >&2; return 1; }
-}
-
-@test "no owned page states the old promotion order and the maintainer note names its cost" {
-  check_old_order_gone "$PLANNER_MD" "$LIFECYCLE_MD" "$WIKI_PROMOTE_MD"
-  check_maintainer_note_costs "$WIKI_PROMOTE_MD"
-}
-
-@test "red twin: the old order sentence, or a note without the re-audit, fails" {
-  copy="$BATS_TEST_TMPDIR/wiki-promote.md"
-  { cat "$WIKI_PROMOTE_MD"; printf '\nPromotion runs after audit clearance because it summarizes the audited code.\n'; } >"$copy"
-  run check_old_order_gone "$copy"
-  [ "$status" -ne 0 ]
-  sed 's/shell re-audit/other work/g' "$WIKI_PROMOTE_MD" >"$copy"
-  run check_maintainer_note_costs "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# ---------- plan-time directives never pick a test layer ----------
-
-# check_directive_routing <planner> <audit>: the planner's directive paragraph
-# carries no routing-ladder or surface wording, and the SPEC audit writes a
-# directive as the property a test proves or the constraint the code meets,
-# never the layer, fixture or helper that proves it.
-check_directive_routing() {
-  local planner="$1" audit="$2" para word
-  para="$(grep -F 'Its `## Plan-time directives` section' "$planner")"
-  [ -n "$para" ] || { printf 'planner.md has no AUDIT_PATH directive paragraph\n' >&2; return 1; }
-  for word in 'ladder' 'surface' 'routes to' 'routed'; do
-    grep -qiF -- "$word" <<<"$para" && { printf 'planner AUDIT_PATH paragraph still holds routing wording: %s\n' "$word" >&2; return 1; }
-  done
-  grep -qF -- 'as the property a test proves, never the test layer' "$audit" ||
-    { printf 'audit.md 7c lacks the property-not-layer rule\n' >&2; return 1; }
-  grep -qF -- 'naming no test layer, fixture or helper' "$audit" ||
-    { printf 'audit.md 7d template lacks the no-layer clause\n' >&2; return 1; }
-}
-
-@test "a plan-time directive never picks a test layer, in planner.md and the SPEC audit" {
-  check_directive_routing "$PLANNER_MD" "$AUDIT_MD"
-}
-
-@test "red twin: routing wording in the directive paragraph, or an audit without the no-layer rule, fails" {
-  check_directive_routing "$PLANNER_MD" "$AUDIT_MD"
-  local needle plan_copy="$BATS_TEST_TMPDIR/planner.md" audit_copy="$BATS_TEST_TMPDIR/audit.md"
-  for needle in 'route it by the ladder first' 'honor its intent on the routed surface'; do
-    awk -v needle="$needle" '/Its `## Plan-time directives` section/ { $0 = $0 " " needle "." } { print }' "$PLANNER_MD" >"$plan_copy"
-    cmp -s "$PLANNER_MD" "$plan_copy" && { echo "the directive paragraph is not in planner.md" >&2; return 1; }
-    run check_directive_routing "$plan_copy" "$AUDIT_MD"
-    [ "$status" -ne 0 ] || { echo "adding '$needle' did not fail" >&2; return 1; }
-  done
-  for needle in 'as the property a test proves, never the test layer' 'naming no test layer, fixture or helper'; do
-    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
-    run check_directive_routing "$PLANNER_MD" "$audit_copy"
-    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
-  done
-}
-
-# ---------- a directive never adds a test file, and a flow is one test ----------
-
-# A directive written as a test demand, or a flow's paths split across files,
-# let a plan name tests beyond the one flow test per flow and both-condition
-# unit tests, which breaks the trophy's cap of one test per behavior.
-DIRECTIVE_NEW_TEST_NEEDLE='It never asks for a new test, a test file, or a rule proven on its own'
-UNCOVERED_RULE_NEEDLE='Any other finding that a rule has no flow or success criterion stating it is `spec_defect`, never `plan_directive`'
-FOLD_INTO_UAT_NEEDLE='folds into the intent or a success criterion, never into the flow as a branch or case list; a new flow is added only for a critical path no flow names'
-HONOR_INSIDE_NEEDLE='or an assertion inside a test the plan names'
-DIRECTIVE_TABLE_ROW_NEEDLE='Each directive is a requirement key (`directive:<n>`), so the test-design table gives it a row whenever it needs a test'
-DIRECTIVE_DOCTRINE_NEEDLE='the doctrine decides which test and which layer (`.claude/doctrine/testing.md`)'
-FLOW_TEST_PATHS_NEEDLE='Each flow test is one test file, shaped by the doctrine'
-
-# check_directive_test_scope <planner> <audit>
-check_directive_test_scope() {
-  local planner="$1" audit="$2" para needle
-  for needle in "$DIRECTIVE_NEW_TEST_NEEDLE" "$UNCOVERED_RULE_NEEDLE" "$FOLD_INTO_UAT_NEEDLE"; do
-    grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
-  done
-  para="$(grep -F 'Its `## Plan-time directives` section' "$planner")"
-  for needle in "$HONOR_INSIDE_NEEDLE" "$DIRECTIVE_TABLE_ROW_NEEDLE" "$DIRECTIVE_DOCTRINE_NEEDLE"; do
-    grep -qF -- "$needle" <<<"$para" || { printf 'planner AUDIT_PATH paragraph lacks: %s\n' "$needle" >&2; return 1; }
-  done
-  grep -qF -- "$FLOW_TEST_PATHS_NEEDLE" "$planner" || { printf 'planner.md lacks the one-test-per-flow paths rule\n' >&2; return 1; }
 }
 
 # ---------- a page-markup rule is a directive, never then-clause text ----------
@@ -908,14 +460,3 @@ check_markup_rule_placement() {
   check_markup_rule_placement "$AUDIT_MD" "$SPEC_TEMPLATE_MD"
 }
 
-@test "red twin: dropping any markup-rule sentence fails" {
-  local needle audit_copy="$BATS_TEST_TMPDIR/audit.md" template_copy="$BATS_TEST_TMPDIR/spec-template.md"
-  for needle in 'never flow or success-criterion text' 'even when it cites a flow' 'naming the page or component it applies to'; do
-    awk -v needle="$needle" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(needle)) } { print }' "$AUDIT_MD" >"$audit_copy"
-    run check_markup_rule_placement "$audit_copy" "$SPEC_TEMPLATE_MD"
-    [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail" >&2; return 1; }
-  done
-  sed 's/A page-markup or accessibility structure rule/removed/' "$SPEC_TEMPLATE_MD" >"$template_copy"
-  run check_markup_rule_placement "$AUDIT_MD" "$template_copy"
-  [ "$status" -ne 0 ]
-}

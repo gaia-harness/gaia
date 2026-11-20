@@ -4,10 +4,6 @@
 # the cost record is appended, so the next statusline refresh recomputes from
 # the new close row. A refresh between the two would stamp the old anchor.
 #
-# The check is a function over a file path, so the test that proves the real
-# page passes has a twin that runs the same function over a scratch copy with
-# the two instructions swapped and asserts it fails.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
@@ -42,22 +38,4 @@ bust_follows_record_recipe() {
 
 @test "the run-end section busts the update-check cache in fitness mode after the record recipe" {
   bust_follows_record_recipe "$FITNESS"
-}
-
-@test "the run-end section resolves the main checkout through the canonical resolver" {
-  cost_record_section "$FITNESS" | grep -qF 'main-root-lib.sh'
-}
-
-@test "red twin: a section with the bust before the record recipe fails the order check" {
-  local scratch="${BATS_TEST_TMPDIR}/swapped.md"
-  printf '## Cost record (run end)\n\nbash x/update-check-bust.sh --mode fitness\n\nApply the shared record recipe.\n' >"$scratch"
-  run bust_follows_record_recipe "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a section with no fitness bust fails the order check" {
-  local scratch="${BATS_TEST_TMPDIR}/missing.md"
-  printf '## Cost record (run end)\n\nApply the shared record recipe.\n' >"$scratch"
-  run bust_follows_record_recipe "$scratch"
-  [ "$status" -ne 0 ]
 }

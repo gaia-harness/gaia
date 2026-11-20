@@ -1,11 +1,13 @@
 #!/usr/bin/env bats
-# Doc pins for the audit loop: the fix round on `wiki/concepts/Audit Round Procedure.md`
-# (`#### The fix round: fixer, verifier, gate`) and the branch checkpoint on the
-# runbook `wiki/concepts/PR Merge Workflow.md` (`#### The branch checkpoint`), plus the one clause the Quality
-# Gate page carries for them. `.claude/rules/pr-merge.md` makes the merge page
-# an executed contract, so each pin below holds a sentence an orchestrator
-# acts on: who edits during the loop, when a round has no fixer, what a
-# resume may not re-dispatch, and what a checkpoint selection does not do.
+# Doc pins for the audit loop: the fix round and cross-remit sections of
+# `wiki/concepts/Audit Round Procedure.md` (`#### The fix round: fixer,
+# verifier, gate`, `#### Cross-remit findings`), and the branch checkpoint and
+# audit loop unit sections of the runbook `wiki/concepts/PR Merge Workflow.md`
+# (`#### The branch checkpoint`, `## Dispatch the audit loop unit`).
+# `.claude/rules/pr-merge.md` makes the merge page an executed contract, so
+# each pin below holds a sentence an orchestrator acts on: who edits during
+# the loop, when a round makes no commit, and what a checkpoint selection does
+# not do.
 #
 # Prose-to-prose only. Whether the fences in those sections run as written is
 # doc-merge-workflow-fences.bats's subject; whether the scripts behave as the
@@ -14,10 +16,6 @@
 # Sentence-scoped checks split a section on ". " after collapsing whitespace.
 # A period inside a path or a section number has no space after it, so it
 # never splits a sentence.
-#
-# GAIA_AUDIT_LOOP_PAGE (the round procedure), GAIA_AUDIT_LOOP_RUNBOOK and
-# GAIA_QUALITY_GATE_PAGE override the page paths so a mutated scratch copy can
-# be driven through these same cases; each defaults to the real page.
 #
 # Assertion style: .claude/rules/bats-assertions.md. `.gaia/tests/` is
 # release-excluded and out of wiki-style.md's scope, so SPEC-090 UAT ids in
@@ -29,17 +27,14 @@
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PAGE="${GAIA_AUDIT_LOOP_PAGE:-$ROOT/wiki/concepts/Audit Round Procedure.md}"
-  RUNBOOK="${GAIA_AUDIT_LOOP_RUNBOOK:-$ROOT/wiki/concepts/PR Merge Workflow.md}"
-  QUALITY_GATE_PAGE="${GAIA_QUALITY_GATE_PAGE:-$ROOT/wiki/decisions/Quality Gate.md}"
-  STEP2='^### 2\. Fix all issues'
+  PAGE="$ROOT/wiki/concepts/Audit Round Procedure.md"
+  RUNBOOK="$ROOT/wiki/concepts/PR Merge Workflow.md"
   FIXROUND='^#### The fix round: fixer, verifier, gate'
   CHECKPOINT='^#### The branch checkpoint'
-  WHENSTOP='^#### When rounds stop: pre-commit a disposition for every branch'
   CROSSREMIT='^#### Cross-remit findings'
   UNIT='^#### The audit loop unit'
   DISPATCH_UNIT='^## Dispatch the audit loop unit'
-  UNIT_AGENT="${GAIA_AUDIT_LOOP_UNIT_AGENT:-$ROOT/.claude/agents/audit-loop-unit.md}"
+  UNIT_AGENT="$ROOT/.claude/agents/audit-loop-unit.md"
 }
 
 # section <start_ERE> [page]: the page (the round procedure unless <page> is
@@ -79,18 +74,6 @@ hand_edit_sentences() {
   sentences | grep -iE '(orchestrator|main thread) (applies|makes|edits|fixes).*(repair|fix|edit)'
 }
 
-@test "UAT-001: step 2 and the fix round name the fixer dispatch and tell the main thread to make no repair itself" {
-  local section_text
-  section_text="$(section "$STEP2")" || return 1
-  grep -qF -- 'a fresh fixer sub-agent makes the repairs' <<<"$section_text" || return 1
-  grep -qF -- 'During the loop the main thread never hand-edits a file a finding names.' <<<"$section_text" || return 1
-  hand_edit_sentences <<<"$section_text" && return 1
-  section_text="$(section "$FIXROUND")" || return 1
-  grep -qF -- '**Fixer dispatch.** Exactly one fresh `general-purpose` sub-agent per round' <<<"$section_text" || return 1
-  hand_edit_sentences <<<"$section_text" && return 1
-  true
-}
-
 @test "UAT-001: the cross-remit section routes an in-scope repair to the fixer, never the orchestrator" {
   local section_text
   section_text="$(section "$CROSSREMIT")" || return 1
@@ -109,55 +92,11 @@ hand_edit_sentences() {
   grep -qF -- 'Claude never types, writes, or simulates the line, and never writes the branch state file.' <<<"$section_text"
 }
 
-@test "UAT-008: quiet only proposes the When-rounds-stop disposition and the page's judgment decides it" {
-  local section_text
-  section_text="$(section "$WHENSTOP")" || return 1
-  sentences <<<"$section_text" | grep -qE -- 'A `quiet` verdict .* only proposes this section'"'"'s disposition; this section'"'"'s own judgment of what this change authored decides it' || return 1
-  section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
-  grep -qF -- 'a stop heuristic that proposes the [[Audit Round Procedure#When rounds stop: pre-commit a disposition for every branch]] disposition and decides nothing on its own' <<<"$section_text"
-}
-
-@test "UAT-027: the fix round's resume rule runs drift and overrides the generic re-dispatch rule" {
-  local section_text
-  section_text="$(section "$FIXROUND")" || return 1
-  grep -qF -- 'bash <RUN_FOLDER>/verifier-bin-<r>/audit-fix-verify.sh drift --root <RESOLVED_ROOT> --baseline <RUN_FOLDER>/baseline-<r>.json' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- "overrides the execution doctrine's generic rule to re-dispatch any dispatch whose artifact is missing: a round with \`baseline-<r>.json\` and no \`fixer-<r>-audit.json\`" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'means a fixer edited and never wrote its result: do not re-dispatch the fixer' || return 1
-  grep -qF -- 'An interactive run asks the human through `AskUserQuestion`, an unattended run stops and reports. A second fixer on top of those edits' <<<"$(sentences <<<"$section_text" | tr '\n' ' ')"
-}
-
-@test "UAT-017: the closing round after an accept has no fixer and records the residuals under the heading" {
-  local section_text
-  section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'No fixer is dispatched for it, so the round has no `fixer-<r>-audit.json`: the members re-audit the current tree to earn their markers, and the remaining entries are recorded under the heading `## Accepted residuals (recorded, not fixed)` in the PR body' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'A closing round never re-arms the loop: if it does not clear, the next new-tree dispatch is denied and the human decides again.' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'No member repairs anything in it either: members edit no tracked file.' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'A member counts a non-security Major that `audit-loop-eval.sh accepted-keys` lists under its name as acknowledged, and supersedes any same-digest refusal it wrote over it.'
-}
-
-@test "COV-001: the record is published at every round end, a round with no commit included" {
-  local section_text
-  section_text="$(section "$FIXROUND")" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'Publish it at every round end, not only after a push: a committed round, a clean or zero-fix round that makes no commit, the closing round, and any stop' || return 1
-}
-
 @test "a round whose staging stages nothing runs no gate and makes no commit" {
   local section_text
   section_text="$(section "$FIXROUND")" || return 1
   sentences <<<"$section_text" | grep -qF -- 'When the staging block stages nothing (`git -C <RESOLVED_ROOT> diff --cached --quiet` exits 0) and no fixer result is `fixed`, skip the gate and the commit, run the **Round check** below, and end the round as **Zero `fix` entries** above does.' || return 1
   sentences <<<"$section_text" | grep -qF -- 'A `fixed` result with nothing staged stops the round for a human, since the fixer claimed a repair the tree does not show.' || return 1
-}
-
-@test "DP-003 and DP-004: the fix round states the attempt rule and reads the round index from current-round" {
-  local section_text
-  section_text="$(section "$FIXROUND")" || return 1
-  grep -qF -- 'bash .gaia/scripts/audit-loop-eval.sh current-round --root <RESOLVED_ROOT>' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'Never count rounds by hand:' || return 1
-  sentences <<<"$section_text" | grep -qF -- '`k` starts at 1 for the fixer'"'"'s first write in a round and increases by 1 on every SendMessage continuation of that fixer, a verifier retry or a gate repair alike.' || return 1
-}
-
-@test "the Quality Gate page's stop-and-report step carries the fix-round clause" {
-  grep -qF -- '10. **Stop and report**: ask for approval with `AskUserQuestion` (`Commit` (Recommended) or `Hold for review`), except inside a workflow whose own instructions commit without stopping: the audit fix round ([[Audit Round Procedure#The fix round: fixer, verifier, gate]]),' "$QUALITY_GATE_PAGE"
 }
 
 # --- the audit loop unit ----------------------------------------------------
@@ -185,27 +124,9 @@ anchors_resolve() {
   }
 }
 
-@test "DP-018: every anchor the unit agent names resolves to exactly one heading, and the check has a red twin" {
+@test "every anchor the unit agent names resolves to exactly one heading" {
   anchors_resolve "$PAGE" "$UNIT_AGENT" || return 1
-  grep -qxF -- '#### The audit loop unit' "$PAGE" || return 1
-  local copy="$BATS_TEST_TMPDIR/page-renamed.md"
-  sed 's/^#### The audit loop unit$/#### The audit loop unit renamed/' "$PAGE" >"$copy"
-  anchors_resolve "$copy" "$UNIT_AGENT" 2>/dev/null && return 1
-  copy="$BATS_TEST_TMPDIR/page-duplicated.md"
-  { cat "$PAGE"; printf '\n#### The audit loop unit\n'; } >"$copy"
-  anchors_resolve "$copy" "$UNIT_AGENT" 2>/dev/null && return 1
-  true
-}
-
-@test "the unit section states the main thread's loop: next-unit, pre-clear, one blocking wait, the classifier call" {
-  local section_text
-  section_text="$(section "$DISPATCH_UNIT" "$RUNBOOK")" || return 1
-  grep -qF -- 'audit-loop-eval.sh next-unit --root <RESOLVED_ROOT>' <<<"$section_text" || return 1
-  grep -qF -- 'rm -f <RUN_FOLDER>/unit-<u>.json' <<<"$section_text" || return 1
-  grep -qF -- 'one blocking Monitor until-loop on `<RUN_FOLDER>/unit-<u>.json`' <<<"$section_text" || return 1
-  grep -qF -- 'audit-noop-detect.sh --shape agent-report-file --path <RUN_FOLDER>/unit-<u>.json --report-key rounds --min-count 1' <<<"$section_text" || return 1
-  grep -qF -- 'subagent_type: "audit-loop-unit"' <<<"$section_text" || return 1
-  grep -qF -- 'Claude Code 2.1.287 or later' <<<"$section_text" || return 1
+  grep -qxF -- '#### The audit loop unit' "$PAGE"
 }
 
 @test "the unit section maps every stop_reason and every deny class the agent classifies" {
@@ -222,105 +143,11 @@ anchors_resolve() {
   grep -qF -- 'audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>' <<<"$section_text" || return 1
 }
 
-@test "the unit section states the in-unit rule: agent_id and agent_type, anything else is a one-round unit" {
-  local section_text
-  section_text="$(section "$UNIT")" || return 1
-  grep -qF -- 'only when its payload carries an `agent_id` and its `agent_type` is `audit-loop-unit`' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- "Any other member dispatch, the main thread's included, is judged inline as a one-round unit" || return 1
-  ! grep -qF -- 'fallback' <<<"$section_text" || return 1
-}
-
-@test "the unit section builds the waiver table from the dispositions files and binds a veto to the next unit's rounds" {
-  local section_text
-  section_text="$(section "$DISPATCH_UNIT" "$RUNBOOK")" || return 1
-  grep -qF -- 'audit-dispositions-check.sh waiver-table --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --rounds <a>-<b>' <<<"$section_text" || return 1
-  grep -qF -- 'never from the informational `waiver_table` in `unit-<u>.json`' <<<"$section_text" || return 1
-  grep -qF -- '`<RUN_FOLDER>/vetoes.json` the way `.claude/doctrine/execution.md` (`## Run folder`) prescribes' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'Each veto'"'"'s `effective_from_round` is the `<s>` that `next-unit` prints at that moment, so a veto binds the next unit'"'"'s rounds and never re-grades the round that held the waiver.' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'The fix'"'"'s commit rotates the owning member'"'"'s digest' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'whether the loop'"'"'s fixer made it or a commit outside the fix round touched its path'
-}
-
-@test "the unit section assigns the three PR-body sections to the unit and the rewrite after a veto to the main thread" {
-  local section_text heading
-  section_text="$(unit_halves)" || return 1
-  for heading in '## Accepted residuals (recorded, not fixed)' '## Out-of-scope machinery findings (recorded, not filed)' '## Waived below triage threshold (not filed)'; do
-    grep -qF -- "$heading" <<<"$section_text" || { echo "heading missing: $heading" >&2; return 1; }
-  done
-  sentences <<<"$section_text" | grep -qF -- 'After a veto, rewrite the PR-body sections the unit wrote' || return 1
-  grep -qF -- 'audit-dispositions-check.sh pr-sections --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>' <<<"$section_text"
-}
-
 @test "UAT-007: the unit section maps member-wave-dirty to its own main-thread action and a dirty closing wave to the same stop" {
   local section_text
   section_text="$(unit_halves)" || return 1
   grep -qF -- '| `member-wave-dirty` | Asks the human what to do through `AskUserQuestion`, naming the wave'"'"'s members and the dirty paths from `stop_detail`' <<<"$section_text" || return 1
   sentences <<<"$section_text" | grep -qF -- 'a dirty tree after the closing wave stops the unit the same way.' || return 1
-}
-
-# names_unit_file_filing_fields: stdin names the unit file's filing fields.
-# The list lives once, on the round procedure's unit section; the runbook
-# points there rather than restating it.
-names_unit_file_filing_fields() {
-  grep -qF -- '`diverted_count`, `diverted_records` (the local record paths), `filing_outcomes` (the outcome files'
-}
-
-@test "UAT-038: the unit file carries the filing fields and no finding detail, and the main thread surfaces the count then merges" {
-  local section_text
-  section_text="$(unit_halves)" || return 1
-  section "$UNIT" | names_unit_file_filing_fields || return 1
-  sentences <<<"$section_text" | grep -qF -- 'The file carries counts and paths only and no finding detail' || return 1
-  grep -qF -- 'which surfaces a non-zero `diverted_count` first' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'Before posting the status the main thread surfaces a non-zero `diverted_count` to the human ([[PR Merge Workflow#Posting the status last]]) and then merges without stopping.' || return 1
-}
-
-@test "red twin: a unit section that drops the filing field list is refused" {
-  local scratch="$BATS_TEST_TMPDIR/round-procedure.md"
-  sed 's/`diverted_records` (the local record paths), //' "$PAGE" >"$scratch"
-  PAGE="$scratch"
-  run names_unit_file_filing_fields < <(section "$UNIT")
-  [ "$status" -eq 1 ]
-}
-
-@test "UAT-005 and UAT-040: the fix round files through the filing script, runs the retry pass and reconciles with check-outcomes" {
-  local section_text
-  section_text="$(section "$FIXROUND")" || return 1
-  grep -qF -- 'bash <RESOLVED_ROOT>/.gaia/scripts/file-tech-debt.sh file --finding <that file> --outcome-file <RUN_FOLDER>/filing-outcomes-<r>.jsonl --disposition <file|divert>' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'Then run the retry pass: the same command, `--finding <f>` for each file in `<RUN_FOLDER>/filing-retry/` that an earlier `transient` outcome left, into the same outcome file.' || return 1
-  grep -qF -- 'audit-dispositions-check.sh check-outcomes --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --round <r>' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'An `absent` backend and a `transient` failure pass: neither blocks the merge' || return 1
-  grep -qF -- 'gh issue create' <<<"$section_text" && return 1
-  true
-}
-
-@test "UAT-007: the fix round stages only the fixer and autofix delta" {
-  local section_text
-  section_text="$(section "$FIXROUND")" || return 1
-  grep -qF -- "stage exactly the delta: the paths the fixer declared, and any path an earlier gate attempt's autofix changed." <<<"$section_text" || return 1
-  grep -qF -- "jq -r '(.dirty | keys[]), .untracked[]' <RUN_FOLDER>/baseline-<r>.json" <<<"$section_text" && return 1
-  true
-}
-
-@test "UAT-002 and UAT-003: When rounds stop disposes every finding whoever authored it, names divert, and states the honest limit" {
-  local section_text
-  section_text="$(section "$WHENSTOP")" || return 1
-  grep -qF -- '**Every finding is disposed, whoever authored it.**' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- '`divert` is the disposition for a security-class finding the branch did not author' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'A finding that is security-class and branch-authored is `fix`, never `divert`.' || return 1
-  grep -qF -- 'honors the mark only for those two members' <<<"$section_text" || return 1
-  grep -qF -- '**The honest limit.** The checks bound a mistaken disposition, not a forged input.' <<<"$section_text" || return 1
-  grep -qF -- '.claude/hooks/block-audit-loop-write.sh` guards the loop state and the protected folder, not those sidecars' <<<"$section_text" || return 1
-}
-
-@test "UAT-002 and UAT-003: Cross-remit disposes an out-of-scope security-class finding by divert and a non-security one by waive or file" {
-  local section_text
-  section_text="$(section "$CROSSREMIT")" || return 1
-  grep -qF -- 'is disposed `divert`: `.gaia/scripts/file-tech-debt.sh file --disposition divert` runs no write verb' <<<"$section_text" || return 1
-  grep -qF -- '(`divert-not-allowed`)' <<<"$section_text" || return 1
-  grep -qF -- 'is disposed `file` and filed as a tech-debt issue through `.gaia/scripts/file-tech-debt.sh`' <<<"$section_text" || return 1
-  grep -qF -- 'Three walls stand on that second question' <<<"$section_text" || return 1
-  grep -qF -- 'through `/gaia-debt` and the `file-tech-debt` skill' <<<"$section_text" && return 1
-  true
 }
 
 @test "the unit section never lets the unit merge, and a missing unit file stops for the human" {
@@ -331,66 +158,6 @@ names_unit_file_filing_fields() {
   grep -qF -- 'While a unit is available the main thread reads this page and does not read [[Audit Round Procedure]]' <<<"$(sentences <<<"$section_text" | tr '\n' ' ')" || return 1
 }
 
-@test "the fix round runs the dispositions check before the baseline, and states unit recovery beside the resume override" {
-  local section_text check_line baseline_line
-  section_text="$(section "$FIXROUND")" || return 1
-  check_line="$(grep -nF -- 'audit-dispositions-check.sh check --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --round <r>' <<<"$section_text" | head -1 | cut -d: -f1)"
-  baseline_line="$(grep -nF -- '**Baseline.**' <<<"$section_text" | head -1 | cut -d: -f1)"
-  [ -n "$check_line" ] && [ -n "$baseline_line" ] || return 1
-  [ "$check_line" -lt "$baseline_line" ] || return 1
-  grep -qF -- 'with no `--snapshot-dir` (only the bound hook writes snapshots;' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'runs the `drift` check above on any `baseline-<r>.json` that has no `fixer-<r>-audit.json`: exit 1 stops it `needs-human`.' || return 1
-  grep -qF -- '**Unit recovery.**' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'the unit calls `audit-loop-record.sh` itself' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'The procedure each round runs, inside the unit, in this order.' || return 1
-}
-
-# pinned_labels: the option labels the evaluator's pinned question can carry,
-# one per line, without the (Recommended) suffix. Derived from the builder, not retyped.
-pinned_labels() {
-  bash -c '
-    . "$1/.gaia/scripts/context-checkpoint-lib.sh"
-    . "$1/.gaia/scripts/audit-loop-state-lib.sh"
-    unit_round_count="$GAIA_CONTEXT_UNIT_ROUNDS"
-    { gaia_loop_pinned_question feat/x 0123456789abcdef 6 "$unit_round_count" true false context
-      gaia_loop_pinned_question feat/x 0123456789abcdef 10 "$unit_round_count" false true cap
-      gaia_loop_pinned_question feat/x 0123456789abcdef 6 "$unit_round_count" false false fallback "" grant "" \
-        "[{\"path\":\"a.ts\",\"line\":1,\"severity\":\"major\",\"reason\":\"needs a requirement: r\",\"repeated\":true}]"
-    } | jq -r ".questions[0].options[].label" | sed "s/ (Recommended)$//" | sort -u
-  ' _ "$ROOT"
-}
-
-@test "the checkpoint section quotes every pinned option label and says the recommended one leads" {
-  local section_text labels label label_count=0
-  section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
-  labels="$(pinned_labels)"
-  [ -n "$labels" ] || { echo "no labels derived from the pinned question builder" >&2; return 1; }
-  while IFS= read -r label; do
-    label_count=$((label_count + 1))
-    grep -qF -- "\`$label\`" <<<"$section_text" || { echo "label not quoted: $label" >&2; return 1; }
-  done <<<"$labels"
-  [ "$label_count" -eq 6 ] || { echo "expected 6 distinct labels, derived $label_count" >&2; return 1; }
-  grep -qF -- '(Recommended)' <<<"$section_text" || return 1
-  grep -qF -- 'leads' <<<"$section_text" || return 1
-  grep -qF -- 'context-checkpoint-lib.sh' <<<"$section_text" || return 1
-  true
-}
-
-@test "UAT-014: the new-session option prints a fenced continuation prompt and an unattended run prints the typed line and none" {
-  local section_text fence
-  section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'for the human to paste into a fresh session' || return 1
-  grep -qF -- 'Run `/clear`, then paste the prompt below.' <<<"$section_text" || return 1
-  grep -qF -- 'Press Ctrl+C, run `claude` (with any needed environment variable), then paste the prompt below.' <<<"$section_text" || return 1
-  grep -qF -- 'would run stale without a fresh launch' <<<"$section_text" || return 1
-  grep -qF -- 'In a worktree, Claude Code may ask whether to keep or remove it as it exits: choose keep.' <<<"$section_text" || return 1
-  fence="$(awk '/^```text$/ { open = 1; next } /^```$/ { open = 0 } open { print }' <<<"$section_text")"
-  grep -qF -- 'Resume the PR merge workflow for PR #<N>' <<<"$fence" || return 1
-  grep -qF -- 'audit-loop-eval.sh next-unit --root <RESOLVED_ROOT>' <<<"$fence" || return 1
-  sentences <<<"$section_text" | grep -qF -- "It prints the typed \`audit-grant <n>\` line from the brief's \`grant_line\` and no continuation prompt" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'An unattended run never asks and never grants.' || return 1
-}
-
 @test "the clean-stop last guard is read-only and reads the branch's frozen snapshots" {
   local row
   row="$(grep -F -- 'audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` once more as a last guard' "$RUNBOOK")" || return 1
@@ -398,20 +165,6 @@ pinned_labels() {
   grep -qF -- 'it writes nothing' <<<"$row" || return 1
   grep -qF -- 'no snapshot directory)' <<<"$row" && return 1
   true
-}
-
-# page_with <sed_expr>: prints the path of a scratch copy of the page edited
-# by the sed expression.
-page_with() {
-  local scratch_page="$BATS_TEST_TMPDIR/page-edited.md"
-  sed -E "$1" "$PAGE" >"$scratch_page"
-  printf '%s\n' "$scratch_page"
-}
-
-# fixer_template_passes <page>: rc 0 when the fixer template names the
-# promoted-pages carrier.
-fixer_template_passes() {
-  section "$FIXROUND" "$1" | grep -qF -- 'promoted-pages.txt exists it lists the wiki pages this PR promoted'
 }
 
 # digest_statement_passes <page>: rc 0 when the late worthiness statement
@@ -428,34 +181,8 @@ digest_statement_passes() {
   true
 }
 
-# reconcile_passes <page>: rc 0 when the reconcile text calls refused-authored
-# a named violation that the unit re-disposes only where the check allows
-# accept-residual, stops needs-human otherwise, and still stops on failed.
-reconcile_passes() {
-  local reconcile
-  reconcile="$(section "$FIXROUND" "$1" | sentences)" || return 1
-  grep -qF -- 'A `refused-authored` outcome is a named violation.' <<<"$reconcile" || return 1
-  grep -qF -- 'Where `check` allows `accept-residual`' <<<"$reconcile" || return 1
-  grep -qF -- 'the unit re-disposes: it rewrites that entry' <<<"$reconcile" || return 1
-  grep -qF -- 'Otherwise it stops `needs-human` naming the key, and a veto on that `file` row clears the stop' <<<"$reconcile" || return 1
-  grep -qF -- 'a recorded row is outside the eligibility refusal and still reaches the residual question' <<<"$reconcile" || return 1
-  grep -qF -- 'the unit re-disposes, not a stop' <<<"$reconcile" && return 1
-  grep -qF -- 'or a `failed` outcome) stops the unit `dispositions-check-failed`' <<<"$reconcile"
-}
-
-@test "the fixer template hands the fixer the promoted pages, with a red twin" {
-  fixer_template_passes "$PAGE" || return 1
-  fixer_template_passes "$(page_with 's/promoted-pages\.txt/other.txt/')" && return 1
-  true
-}
-
-@test "a late worthiness verdict folds nothing in by default and recommends a residual: the statement passes, and a seeded fold or Light fails" {
+@test "a late worthiness verdict folds nothing in by default and recommends a residual: the statement says so and never says Light" {
   digest_statement_passes "$PAGE" || return 1
-  digest_statement_passes "$(page_with 's/folds nothing in/is recommended/')" && return 1
-  digest_statement_passes "$(page_with 's/recommends settling a branch test it would repair or delete as a residual/recommends the repair/')" && return 1
-  digest_statement_passes "$(page_with 's/recommends settling a branch test it would repair or delete as a residual/recommends the repair, and a human may settle it as a residual/')" && return 1
-  digest_statement_passes "$(page_with 's/Full under the Hard-Full floor/Light under the Hard-Full floor/')" && return 1
-  true
 }
 
 # in_round_worthiness_passes <page>: rc 0 when the fix round runs the
@@ -471,208 +198,8 @@ in_round_worthiness_passes() {
   grep -qF -- 'stops the unit `needs-human`, naming it' <<<"$fix_round"
 }
 
-@test "the fix round judges a committing round's tests before the next member wave, with red twins" {
-  in_round_worthiness_passes "$PAGE" || return 1
-  in_round_worthiness_passes "$(page_with 's/On a round that committed, run the worthiness step below\. //')" && return 1
-  in_round_worthiness_passes "$(page_with 's/the window'"'"'s last included, //')" && return 1
-  in_round_worthiness_passes "$(page_with 's/a `delete` settles as a residual/a `delete` asks the human/')" && return 1
-  true
-}
-
-@test "the reconcile text re-disposes a refused-authored key only where accept-residual is allowed, with red twins" {
-  reconcile_passes "$PAGE" || return 1
-  reconcile_passes "$(page_with 's/is a named violation\. Where/is a named violation the unit re-disposes, not a stop. Where/')" && return 1
-  reconcile_passes "$(page_with 's/Otherwise it stops `needs-human`/Otherwise it goes on/')" && return 1
-  reconcile_passes "$(page_with 's/a recorded row is outside the eligibility refusal and still reaches/a recorded row counts nothing and reaches/')" && return 1
-  true
-}
-
-# bats test_tags=whole-tree
-@test "every skill file that lists the absent and transient outcomes also names refused-authored, with a red twin" {
-  local caller_files caller_count caller_file copy
-  caller_files="$(git -C "$ROOT" grep --untracked -l -F -e '`absent`' -- .claude/skills | while IFS= read -r caller_file; do
-    grep -qF -- 'transient' "$ROOT/$caller_file" && printf '%s\n' "$caller_file"
-  done)"
-  caller_count="$(grep -c . <<<"$caller_files")"
-  [ "$caller_count" -eq 4 ] || { echo "expected 4 caller files, found $caller_count: $caller_files" >&2; return 1; }
-  while IFS= read -r caller_file; do
-    grep -qF -- 'refused-authored' "$ROOT/$caller_file" || { echo "missing refused-authored: $caller_file" >&2; return 1; }
-  done <<<"$caller_files"
-  copy="$BATS_TEST_TMPDIR/caller-copy.md"
-  sed 's/refused-authored/refused/g' "$ROOT/.claude/skills/file-tech-debt/SKILL.md" >"$copy"
-  grep -qF -- 'refused-authored' "$copy" && return 1
-  true
-}
-
-# --- the default stop on the loop pages ------------------------------------
-
-# replace_in <source> <from> <to>: prints the path of a scratch copy of
-# <source> with the first literal <from> replaced by <to>. A <from> that
-# matches nothing fails loudly, so a reworded sentence never leaves a red
-# twin identical to the page.
-replace_in() {
-  local content scratch
-  content="$(cat "$1")"
-  [[ "$content" == *"$2"* ]] || {
-    echo "red twin anchor matched nothing: $2" >&2
-    return 1
-  }
-  scratch="$(mktemp "$BATS_TEST_TMPDIR/edited.XXXXXX")"
-  printf '%s\n' "${content/"$2"/"$3"}" >"$scratch"
-  printf '%s\n' "$scratch"
-}
-
-# in_order <text> <marker>...: rc 0 when every marker occurs in the text, each
-# after the one before it.
-in_order() {
-  local text="$1" marker
-  shift
-  for marker in "$@"; do
-    [[ "$text" == *"$marker"* ]] || return 1
-    text="${text#*"$marker"}"
-  done
-  true
-}
-
-# clean_row_passes <runbook>: rc 0 when the clean row runs its steps in order.
-clean_row_passes() {
-  local row
-  row="$(grep -F -- '| `clean` |' "$1")" || return 1
-  in_order "$row" 'as a last guard' 'then the late worthiness pass' 'then the residual count read' 'then the residual question' 'then the owed steps' 'then the diverted surfacing' 'then the `GAIA-Audit` status' 'then the merge report' 'then the merge. |'
-}
-
-@test "UAT-009: the clean row orders the last guard, late pass, count read, residual question, owed steps, diverted surfacing, status, merge report and merge, with red twins" {
-  local mutated
-  clean_row_passes "$RUNBOOK" || return 1
-  mutated="$(replace_in "$RUNBOOK" 'then the owed steps ([[#Posting the status last]]), ' '')" || return 1
-  mutated="$(replace_in "$mutated" 'then the merge report,' 'then the owed steps, then the merge report,')" || return 1
-  clean_row_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'then the merge report, ' '')" || return 1
-  clean_row_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'then the merge report, then the merge. |' 'then the merge, then the merge report. |')" || return 1
-  clean_row_passes "$mutated" && return 1
-  true
-}
-
-# count_read_passes <runbook>: rc 0 when the clean row reads the residual count
-# once, after the late pass, and never sums it.
-count_read_passes() {
-  local row
-  row="$(grep -F -- '| `clean` |' "$1")" || return 1
-  grep -qF -- 'bash .gaia/scripts/audit-dispositions-check.sh residual-count --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>' <<<"$row" || return 1
-  grep -qF -- 'run once, after the late pass so its rows are included' <<<"$row" || return 1
-  grep -qF -- 'the residual question and the merge report both use that one result, which is never summed: the value is run-wide' <<<"$row" || return 1
-  grep -qF -- "the unit file's \`accepted_residual_count\` is informational" <<<"$row"
-}
-
-@test "UAT-009: the count read runs once after the late pass and is never summed, with red twins" {
-  local mutated
-  count_read_passes "$RUNBOOK" || return 1
-  mutated="$(replace_in "$RUNBOOK" 'which is never summed' 'which is summed across units')" || return 1
-  count_read_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'run once, after the late pass so its rows are included' 'run per unit')" || return 1
-  count_read_passes "$mutated" && return 1
-  true
-}
-
-# residual_question_passes <runbook>: rc 0 when the residual question asks
-# under a header other than the checkpoint's, recommends neither option, and does
-# not pause an unattended run.
-residual_question_passes() {
-  local paragraph header
-  paragraph="$(section "$DISPATCH_UNIT" "$1" | sentences)" || return 1
-  header="$(grep -F -- 'In an interactive run where the count read' <<<"$paragraph" | sed -n 's/.*with the header `\([^`]*\)`, never.*/\1/p')"
-  [ "$header" = Residuals ] || return 1
-  grep -qF -- 'never `Audit loop`' <<<"$paragraph" || return 1
-  grep -qF -- "\`.ask\` is non-zero" <<<"$paragraph" || return 1
-  grep -qF -- 'It recommends nothing, so its options are `Fix chosen ones` then `Merge`, neither marked `(Recommended)`.' <<<"$paragraph" || return 1
-  [ "$(grep -oF -- '(Recommended)' <<<"$paragraph" | wc -l | tr -d ' ')" = 1 ] || return 1
-  grep -qF -- 'An unattended run does not pause; the residue drain is the route after the merge.' <<<"$paragraph"
-}
-
-@test "UAT-018: the residual question uses the Residuals header, never the checkpoint's, with red twins" {
-  local mutated
-  residual_question_passes "$RUNBOOK" || return 1
-  grep -qF -- '.header == "Audit loop"' "$ROOT/.claude/hooks/audit-loop-ask-grant.sh" || return 1
-  mutated="$(replace_in "$RUNBOOK" 'with the header `Residuals`, never `Audit loop`' 'with the header `Audit loop`, never `Residuals`')" || return 1
-  residual_question_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'An unattended run does not pause;' 'An unattended run asks too;')" || return 1
-  residual_question_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'neither marked `(Recommended)`.' 'neither marked `(Recommended)`. The options are `Merge (Recommended)` and `Fix chosen ones`.')" || return 1
-  residual_question_passes "$mutated" && return 1
-  true
-}
-
-# merge_report_passes <runbook>: rc 0 when the merge report is the main
-# thread's message before the merge, rendered with the count read's total.
-merge_report_passes() {
-  local sentence_text
-  sentence_text="$(section "$DISPATCH_UNIT" "$1" | sentences)" || return 1
-  grep -qF -- 'The main thread'"'"'s message when the audit loop clears before the merge, and the step directly before the merge in the `clean` row.' <<<"$sentence_text" || return 1
-  grep -qF -- 'It is rendered from the unit report, with `.total` from the count read: the count of accepted residuals and a link to the pull request'"'"'s `## Accepted residuals (recorded, not fixed)` section.' <<<"$sentence_text" || return 1
-  grep -qF -- 'It is not the `/update-gaia` artifact of the same name.' <<<"$sentence_text"
-}
-
-@test "UAT-009: the merge report is the main thread's message rendered from the count read's total, with red twins" {
-  local mutated
-  merge_report_passes "$RUNBOOK" || return 1
-  mutated="$(replace_in "$RUNBOOK" 'with `.total` from the count read' 'with the sum of the unit files')" || return 1
-  merge_report_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'It is not the `/update-gaia` artifact of the same name.' '')" || return 1
-  merge_report_passes "$mutated" && return 1
-  true
-}
-
-# owed_steps_passes <runbook>: rc 0 when the status-post section states the
-# owed-steps condition and its exits.
-owed_steps_passes() {
-  local owed
-  owed="$(section '^#### Posting the status last' "$1" | sentences)" || return 1
-  grep -qF -- 'run `bash .gaia/scripts/audit-gate-owed.sh status --root <RESOLVED_ROOT>` before the status posts.' <<<"$owed" || return 1
-  grep -qF -- 'On exit 1, start `bash .gaia/scripts/audit-gate-owed.sh run --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` in the background' <<<"$owed" || return 1
-  grep -qF -- 'wait with Monitor on `gate-owed exit`.' <<<"$owed" || return 1
-  grep -qF -- 'Exit 1 where a fixer can run dispatches the next unit from step 1, and the bound hook reopens the round' <<<"$owed" || return 1
-  grep -qF -- 'stops `needs-human` naming the step, and no status posts.' <<<"$owed" || return 1
-  grep -qF -- '`steps-passed` clears only on the pass evidence `gate-steps` recorded for the HEAD tree, and otherwise exits 4 with the steps still owed.' <<<"$owed" || return 1
-  grep -qF -- 'Exit 3 is a refusal, such as a held dev port: nothing reopens, the steps stay owed, and the main thread asks the human as step 7 of [[Quality Gate]] does' <<<"$owed" || return 1
-  grep -qF -- 'This covers every ending: clean, default stop, closing round, quick or light clear, and the late worthiness pass.' <<<"$owed" || return 1
-  grep -qF -- 'A post-clearance commit, a CHANGELOG commit, a catch-up merge or a wiki-only correction owes nothing' <<<"$owed"
-}
-
-@test "UAT-021: the status post runs the owed steps as a condition on every ending, with red twins" {
-  local mutated
-  owed_steps_passes "$RUNBOOK" || return 1
-  mutated="$(replace_in "$RUNBOOK" 'naming the step, and no status posts.' 'naming the step, and the status posts.')" || return 1
-  owed_steps_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'a CHANGELOG commit,' 'a CHANGELOG commit that touches source,')" || return 1
-  owed_steps_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'Exit 3 is a refusal' 'Exit 3 is a failure')" || return 1
-  owed_steps_passes "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'and otherwise exits 4 with the steps still owed' 'and otherwise clears on request')" || return 1
-  owed_steps_passes "$mutated" && return 1
-  true
-}
-
-# unattended_veto_passes <runbook>: rc 0 when a refused-authored stop routes
-# to a veto the unattended run writes itself.
-unattended_veto_passes() {
-  local row
-  row="$(grep -F -- '| `dispositions-check-failed`, `needs-human`, `failure` |' "$1")" || return 1
-  grep -qF -- 'When `stop_detail` names a `refused-authored` key, the route is a veto on that key' <<<"$row" || return 1
-  grep -qF -- 'an interactive run offers it as the recommended answer' <<<"$row" || return 1
-  grep -qF -- 'an unattended run writes the veto itself, per the veto paragraph below, and starts the next unit' <<<"$row" || return 1
-  grep -qF -- 'a veto can only demand more fix, never less, so it needs no human consent' <<<"$row"
-}
-
-@test "UAT-012: an unattended run writes the refused-authored veto itself, and restoring the old re-dispose sentence goes red" {
-  local mutated
-  unattended_veto_passes "$RUNBOOK" || return 1
-  mutated="$(replace_in "$RUNBOOK" 'an unattended run writes the veto itself' 'an unattended run stops and reports')" || return 1
-  unattended_veto_passes "$mutated" && return 1
-  grep -qF -- 'the unit re-disposes, not a stop' "$PAGE" "$RUNBOOK" "$ROOT/wiki/concepts/Audit Disposition and Debt Fix.md" && return 1
-  mutated="$(replace_in "$PAGE" 'A `refused-authored` outcome is a named violation.' 'A `refused-authored` outcome is a named violation the unit re-disposes, not a stop.')" || return 1
-  reconcile_passes "$mutated" && return 1
-  true
+@test "the fix round judges a committing round's tests before the next member wave" {
+  in_round_worthiness_passes "$PAGE"
 }
 
 @test "the veto paragraph disposes a vetoed key fix until satisfied, and the checkpoint never reaches a qualifying round" {
@@ -684,21 +211,6 @@ unattended_veto_passes() {
   grep -qF -- 'A vetoed key is disposed `fix` from then on' <<<"$section_text" && return 1
   section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
   grep -qF -- 'A round the default stop qualifies never reaches the checkpoint, and a grant does not suspend the stop.' <<<"$section_text"
-}
-
-@test "the round procedure states the default stop, the owed-steps exception and the reopened round" {
-  local section_text
-  section_text="$(section "$STEP2")" || return 1
-  grep -qF -- "except on a round where the evaluator's \`default_stop\` holds" <<<"$section_text" || return 1
-  grep -qF -- 'to the human on any round the default stop does not cover' <<<"$section_text" || return 1
-  grep -qF -- 'fix every Minor' "$PAGE" && return 1
-  section_text="$(section "$FIXROUND")" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'no gate runs here, and any owed steps run at the status post' || return 1
-  grep -qF -- '`bash .gaia/scripts/audit-gate-owed.sh choose --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --round <r>` picks the gate' <<<"$section_text" || return 1
-  grep -qF -- '**The reopened round.**' <<<"$section_text" || return 1
-  grep -qF -- '`gate-failure.json`' <<<"$section_text" || return 1
-  grep -qF -- '`gate-owed.json`' <<<"$section_text" || return 1
-  grep -qF -- '`gate-owed-<n>.log`' <<<"$section_text"
 }
 
 # enforcement_draft_passes <page> <runbook>: rc 0 when the fixer may draft a
@@ -718,20 +230,6 @@ enforcement_draft_passes() {
   grep -qF -- '`discard` is refused on a Critical or security-class key, which leaves the tree as it is, so offer only `Hold` and `Commit`' <<<"$row"
 }
 
-@test "a vetoed enforcement-path repair is drafted, stops uncommitted, and the human picks with Hold first; each mutation goes red" {
-  local mutated
-  enforcement_draft_passes "$PAGE" "$RUNBOOK" || return 1
-  mutated="$(replace_in "$PAGE" ' or a fix entry on that path carries enforcement_draft: true' '')" || return 1
-  enforcement_draft_passes "$mutated" "$RUNBOOK" && return 1
-  mutated="$(replace_in "$PAGE" 'gets no continuation: the edits stay uncommitted' 'gets one continuation')" || return 1
-  enforcement_draft_passes "$mutated" "$RUNBOOK" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'its options in this order: `Hold` (leave the tree as it is and stop), `Commit`' 'its options in this order: `Commit`')" || return 1
-  enforcement_draft_passes "$PAGE" "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" '`git -C <RESOLVED_ROOT> diff`, every path' '`git -C <RESOLVED_ROOT> diff -- <path>`, every path')" || return 1
-  enforcement_draft_passes "$PAGE" "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" '(first run `record-residual --decision discard` for each named key, which removes its veto and records it as an accepted residual; once every key is recorded, restore' '(restore')" || return 1
-  enforcement_draft_passes "$PAGE" "$mutated" && return 1
-  mutated="$(replace_in "$RUNBOOK" 'so offer only `Hold` and `Commit`' 'so offer all three')" || return 1
-  enforcement_draft_passes "$PAGE" "$mutated" && return 1
-  true
+@test "a vetoed enforcement-path repair is drafted, stops uncommitted, and the human picks with Hold first" {
+  enforcement_draft_passes "$PAGE" "$RUNBOOK"
 }

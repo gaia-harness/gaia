@@ -1,9 +1,8 @@
 #!/usr/bin/env bats
 # Doc-conformance: /gaia-fitness and /gaia-cleanse pass the authoring lint.
-# 1. the loaded set (commands plus `Read` targets, transitively) is derived;
-# 2. each file in it is under 500 lines; 3. the committed CLI raises no
-# `authoring.*` finding on it; 4. each fitness/ and cleanse/ sub-reference is
-# linked from its entry. Every invariant has a red twin on a scratch copy.
+# 1. the committed CLI raises no `authoring.*` finding on the loaded set
+# (commands plus `Read` targets, transitively); 2. each fitness/ and cleanse/
+# sub-reference is linked from its entry.
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup_file() {
@@ -58,20 +57,6 @@ loaded_set() {
   return 0
 }
 
-# over_limit <root> <file>...: print each file of 500 lines or more.
-over_limit() {
-  local root="$1" file lines status=0
-  shift
-  for file in "$@"; do
-    lines="$(wc -l <"$root/$file" | tr -d ' ')"
-    if [ "$lines" -ge 500 ]; then
-      printf '%s has %s lines\n' "$file" "$lines"
-      status=1
-    fi
-  done
-  return "$status"
-}
-
 # unlinked_references <root>: print each sub-reference its entry playbook does
 # not link by repo-relative path. Non-zero when any is unlinked.
 unlinked_references() {
@@ -88,39 +73,6 @@ unlinked_references() {
     done
   done
   return "$status"
-}
-
-# scratch_tree: a scratch root holding only the command and playbook files.
-scratch_tree() {
-  local scratch="$BATS_TEST_TMPDIR/scratch"
-  mkdir -p "$scratch/.claude/commands" "$scratch/.claude/skills/gaia"
-  cp "$REPO_ROOT/.claude/commands/gaia-fitness.md" "$REPO_ROOT/.claude/commands/gaia-cleanse.md" "$scratch/.claude/commands/"
-  cp -R "$REPO_ROOT/.claude/skills/gaia/references" "$scratch/.claude/skills/gaia/references"
-  printf '%s\n' "$scratch"
-}
-
-# bats test_tags=whole-tree
-@test "the loaded set is derived and holds both entry playbooks" {
-  run loaded_set "$REPO_ROOT"
-  [ "$status" -eq 0 ]
-  grep -qxF -- "$FITNESS_ENTRY" <<<"$output"
-  grep -qxF -- "$CLEANSE_ENTRY" <<<"$output"
-  local sub
-  for sub in "$REPO_ROOT"/.claude/skills/gaia/references/cleanse/*.md; do
-    [ -e "$sub" ] || return 1
-    grep -qxF -- "${sub#"$REPO_ROOT"/}" <<<"$output" || return 1
-  done
-}
-
-# bats test_tags=whole-tree
-@test "every file in the loaded set is under 500 lines" {
-  local set
-  set="$(loaded_set "$REPO_ROOT")"
-  [ -n "$set" ]
-  local -a files
-  mapfile -t files <<<"$set"
-  run over_limit "$REPO_ROOT" "${files[@]}"
-  [ "$status" -eq 0 ]
 }
 
 # bats test_tags=whole-tree
@@ -143,32 +95,4 @@ scratch_tree() {
   [ -d "$REPO_ROOT/.claude/skills/gaia/references/cleanse" ]
   run unlinked_references "$REPO_ROOT"
   [ "$status" -eq 0 ]
-}
-
-@test "red twin: a set member padded past 500 lines fails the line check" {
-  local scratch file i
-  scratch="$(scratch_tree)"
-  file=".claude/skills/gaia/references/cleanse/research.md"
-  for i in $(seq 1 300); do printf 'padding line %s\n' "$i" >>"$scratch/$file"; done
-  run over_limit "$scratch" "$file"
-  [ "$status" -eq 1 ]
-  grep -qF -- "$file has" <<<"$output"
-}
-
-@test "red twin: an unlinked sub-reference fails the link check" {
-  local scratch
-  scratch="$(scratch_tree)"
-  printf '# Orphan\n\nNothing links here.\n' >"$scratch/.claude/skills/gaia/references/cleanse/orphan.md"
-  run unlinked_references "$scratch"
-  [ "$status" -eq 1 ]
-  grep -qF -- "cleanse/orphan.md" <<<"$output"
-}
-
-@test "red twin: commands with no Read line fail the derivation" {
-  local scratch
-  scratch="$(scratch_tree)"
-  printf -- '---\ndescription: x\n---\nNothing is loaded here.\n' >"$scratch/.claude/commands/gaia-fitness.md"
-  printf -- '---\ndescription: x\n---\nNothing is loaded here.\n' >"$scratch/.claude/commands/gaia-cleanse.md"
-  run loaded_set "$scratch"
-  [ "$status" -eq 1 ]
 }

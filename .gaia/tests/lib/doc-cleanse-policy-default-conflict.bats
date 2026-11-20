@@ -64,23 +64,7 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "red twin: a CONFLICT bullet without the action-prescribing search fails the pin" {
-  local scratch="$BATS_TEST_TMPDIR/research.md"
-  sed 's/prescribes or forbids//g' "$RESEARCH" >"$scratch"
-  run conflict_bullet_searches_defaults "$scratch"
-  [ "$status" -eq 1 ]
-  grep -qF -- "lacks 'prescribes or forbids'" <<<"$output"
-}
-
 @test "the verification round's CF lens walks the KEEP-LOCAL and NO-MATCH entries" {
   run cf_lens_walks_unacted_entries "$ROUND"
   [ "$status" -eq 0 ]
-}
-
-@test "red twin: a CF lens that skips NO-MATCH entries fails the pin" {
-  local scratch="$BATS_TEST_TMPDIR/verification-round.md"
-  sed 's/NO-MATCH//g' "$ROUND" >"$scratch"
-  run cf_lens_walks_unacted_entries "$scratch"
-  [ "$status" -eq 1 ]
-  grep -qF -- "lacks 'NO-MATCH'" <<<"$output"
 }

@@ -8,8 +8,6 @@
 #
 # Every assertion is about the tree as it stands (never a comparison with
 # another revision's copy), so the suite holds on the default branch and on every later branch.
-# Each helper takes the file or directory it reads so a scratch copy proves a
-# case can fail.
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
@@ -92,90 +90,24 @@ assert_only_frontend_names_flag() {
 # --- live tree ----------------------------------------------------------------
 
 # bats test_tags=whole-tree
-@test "the frontend definition's resolver line equals its row" {
-  assert_row "$AGENTS_DIRECTORY/code-audit-frontend.md" code-audit-frontend
-}
-
-# bats test_tags=whole-tree
-@test "the workflows definition's resolver line equals its row" {
-  assert_row "$AGENTS_DIRECTORY/code-audit-github-workflows.md" code-audit-github-workflows
-}
-
-# bats test_tags=whole-tree
-@test "the node definition's resolver line equals its row" {
-  assert_row "$AGENTS_DIRECTORY/code-audit-maintainer-node.md" code-audit-maintainer-node
-}
-
-# bats test_tags=whole-tree
-@test "the shell definition's resolver line equals its row" {
-  assert_row "$AGENTS_DIRECTORY/code-audit-maintainer-shell.md" code-audit-maintainer-shell
-}
-
-# bats test_tags=whole-tree
-@test "the adopter shell definition's resolver line equals its row" {
-  assert_row "$AGENTS_DIRECTORY/code-audit-shell.md" code-audit-shell
-}
-
-# bats test_tags=whole-tree
-@test "every code-audit definition has a resolver row" {
-  local member_file member
-  local count=0
+@test "each definition's resolver line equals its row" {
+  local member_file member count=0
   for member_file in "$AGENTS_DIRECTORY"/code-audit-*.md; do
     [ -f "$member_file" ] || continue
     member="$(basename "$member_file" .md)"
-    expected_line "$member" >/dev/null || { echo "$member has no resolver row" >&2; return 1; }
+    assert_row "$member_file" "$member" || { echo "case failed: $member" >&2; return 1; }
     count=$((count + 1))
   done
   [ "$count" -ge 4 ] || { echo "only $count member definitions found" >&2; return 1; }
+  # The roster this table covers: a definition that vanished must not shrink it silently.
+  for member in code-audit-frontend code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell code-audit-shell; do
+    [ -f "$AGENTS_DIRECTORY/$member.md" ] || { echo "case failed: $member.md is missing" >&2; return 1; }
+  done
 }
 
 # bats test_tags=whole-tree
-@test "the frontend resolver line ends with --specialists" {
-  assert_frontend_ends_with_flag "$AGENTS_DIRECTORY/code-audit-frontend.md"
-}
-
-# bats test_tags=whole-tree
-@test "the frontend resolver line contains --specialists exactly once" {
-  assert_flag_exactly_once "$AGENTS_DIRECTORY/code-audit-frontend.md"
-}
-
-# bats test_tags=whole-tree
-@test "no other agent definition and not the protocol contains --specialists" {
-  assert_only_frontend_names_flag "$AGENTS_DIRECTORY" "$PROTOCOL"
-}
-
-# --- red twins: scratch copies, each helper must fail -------------------------
-
-@test "red twin: a frontend copy without --specialists fails its row" {
-  local scratch="$BATS_TEST_TMPDIR/agents"
-  mkdir -p "$scratch"
-  sed 's/ --specialists$//' "$AGENTS_DIRECTORY/code-audit-frontend.md" >"$scratch/code-audit-frontend.md"
-  run assert_row "$scratch/code-audit-frontend.md" code-audit-frontend
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a frontend copy without --specialists fails the ends-with test" {
-  local scratch="$BATS_TEST_TMPDIR/agents"
-  mkdir -p "$scratch"
-  sed 's/ --specialists$//' "$AGENTS_DIRECTORY/code-audit-frontend.md" >"$scratch/code-audit-frontend.md"
-  run assert_frontend_ends_with_flag "$scratch/code-audit-frontend.md"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a frontend copy with --specialists doubled fails the exactly-once test" {
-  local scratch="$BATS_TEST_TMPDIR/agents"
-  mkdir -p "$scratch"
-  sed 's/ --specialists$/ --specialists --specialists/' "$AGENTS_DIRECTORY/code-audit-frontend.md" >"$scratch/code-audit-frontend.md"
-  run assert_flag_exactly_once "$scratch/code-audit-frontend.md"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a node copy carrying --specialists fails the only-frontend test" {
-  local scratch="$BATS_TEST_TMPDIR/agents"
-  mkdir -p "$scratch"
-  cp "$AGENTS_DIRECTORY/code-audit-frontend.md" "$scratch/code-audit-frontend.md"
-  sed 's/--root <root>$/--root <root> --specialists/' "$AGENTS_DIRECTORY/code-audit-maintainer-node.md" >"$scratch/code-audit-maintainer-node.md"
-  grep -qF -- '--specialists' "$scratch/code-audit-maintainer-node.md" || { echo "twin was not built" >&2; return 1; }
-  run assert_only_frontend_names_flag "$scratch" "$PROTOCOL"
-  [ "$status" -ne 0 ]
+@test "only the frontend resolver line carries --specialists, once, last" {
+  assert_frontend_ends_with_flag "$AGENTS_DIRECTORY/code-audit-frontend.md" || { echo "case failed: ends with the flag" >&2; return 1; }
+  assert_flag_exactly_once "$AGENTS_DIRECTORY/code-audit-frontend.md" || { echo "case failed: flag exactly once" >&2; return 1; }
+  assert_only_frontend_names_flag "$AGENTS_DIRECTORY" "$PROTOCOL" || { echo "case failed: no other file names the flag" >&2; return 1; }
 }

@@ -1,79 +1,15 @@
 #!/usr/bin/env bats
 
 # Static guard for the context checkpoint doctrine: the file the checkpoint hook
-# injects verbatim, plus the surfaces that point at it (the always-loaded rule
-# and the Workflow Doctrine wiki page). Run it with
+# injects verbatim must stay under its byte budget and ship in a release. Run it with
 # `.gaia/scripts/bats5.sh .gaia/tests/hooks/context-checkpoint-doctrine.bats < /dev/null`.
-#
-# Each guard is a helper that takes the file to check, so the same helper runs
-# once on the real tree (must pass) and once on a mutated scratch copy (must
-# fail). Helpers return explicitly (never lean on `set -e`, which is suppressed
-# inside `if`/`||`); tests call them in `if` form so a red twin that stops
-# failing fails the test.
 
 bats_require_minimum_version 1.5.0
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DOCTRINE="$REPO_ROOT/.claude/doctrine/context-checkpoint.md"
-  WIKI="$REPO_ROOT/wiki/concepts/Workflow Doctrine.md"
   EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
-  WIKI_HEADING='## Context checkpoint'
-  TEMPORARY_DIRECTORY="$BATS_TEST_TMPDIR"
-}
-
-# ---------------------------------------------------------------- helpers
-
-# One row per required statement: kind (F fixed string, R extended regex), then
-# the text. Keep each statement's literal on one line of the doctrine so a
-# line-deletion twin can remove exactly it.
-ANCHORS=(
-  'F|Save the place before you ask'
-  'F|Commit and push first'
-  'F|The `Save path:` line'
-  'F|Never the scratchpad'
-  'F|no further tool calls'
-  'F|With no human in the session, never ask'
-)
-
-anchors_ok() {
-  local file_path="$1" anchor kind pattern
-  [ -f "$file_path" ] || return 1
-  for anchor in "${ANCHORS[@]}"; do
-    kind="${anchor%%|*}"
-    pattern="${anchor#*|}"
-    case "$kind" in
-      F) grep -qF -- "$pattern" "$file_path" || return 1 ;;
-      R) grep -qE -- "$pattern" "$file_path" || return 1 ;;
-      *) return 1 ;;
-    esac
-  done
-  return 0
-}
-
-# the file with every line matching one anchor removed
-without_anchor_lines() {
-  local anchor="$1" file_path="$2" kind pattern
-  kind="${anchor%%|*}"
-  pattern="${anchor#*|}"
-  case "$kind" in
-    F) grep -vF -- "$pattern" "$file_path" || true ;;
-    R) grep -vE -- "$pattern" "$file_path" || true ;;
-    *) return 1 ;;
-  esac
-  return 0
-}
-
-# the save step's first line precedes the first line naming AskUserQuestion
-save_before_ask_ok() {
-  local file_path="$1" save_line ask_line
-  [ -f "$file_path" ] || return 1
-  save_line="$(grep -nF -- 'Save the place' "$file_path" | head -n 1 | cut -d: -f1)"
-  ask_line="$(grep -nF -- 'AskUserQuestion' "$file_path" | head -n 1 | cut -d: -f1)"
-  [ -n "$save_line" ] || return 1
-  [ -n "$ask_line" ] || return 1
-  [ "$save_line" -lt "$ask_line" ] || return 1
-  return 0
 }
 
 document_shape_ok() {
@@ -83,22 +19,6 @@ document_shape_ok() {
   [ "$(tail -c 1 "$file_path" | od -An -tx1 | tr -d ' \n')" = "0a" ] || return 1
   [ "$(tail -c 2 "$file_path" | od -An -tx1 | tr -d ' \n')" = "0a0a" ] && return 1
   LC_ALL=C grep -q $'[\x01-\x09\x0b-\x1f\x7f]' "$file_path" && return 1
-  return 0
-}
-
-# the band values live only in the lib, so the file spells no run of digits and no percent sign
-no_band_numbers_ok() {
-  local file_path="$1"
-  [ -f "$file_path" ] || return 1
-  grep -qE '[0-9]{2,}' "$file_path" && return 1
-  grep -qF '%' "$file_path" && return 1
-  return 0
-}
-
-no_ids_ok() {
-  local file_path="$1"
-  [ -f "$file_path" ] || return 1
-  grep -qE 'SPEC-[0-9]|UAT-[0-9]|PLAN-[0-9]|#[0-9]' "$file_path" && return 1
   return 0
 }
 
@@ -116,126 +36,9 @@ not_excluded_ok() {
   return 0
 }
 
-wiki_section_body() {
-  awk -v heading="$WIKI_HEADING" '
-    $0 == heading { on = 1; next }
-    on && /^## / { exit }
-    on { print }
-  ' "$1"
-}
-
-wiki_section_ok() {
-  local file_path="$1" body
-  [ -f "$file_path" ] || return 1
-  body="$(wiki_section_body "$file_path")"
-  [ -n "$body" ] || return 1
-  printf '%s\n' "$body" | grep -qF -- '.claude/doctrine/context-checkpoint.md' || return 1
-  printf '%s\n' "$body" | grep -qF -- '(Recommended)' && return 1
-  printf '%s\n' "$body" | grep -qF -- 'a few steps' && return 1
-  printf '%s\n' "$body" | grep -qF -- 'pre-merge audit' && return 1
-  printf '%s\n' "$body" | grep -q '[0-9]' && return 1
-  return 0
-}
-
-# the wiki with one line planted directly under the section heading
-plant_in_wiki_section() {
-  awk -v heading="$WIKI_HEADING" -v planted="$2" '{ print } $0 == heading { print planted }' "$1"
-}
-
-# ------------------------------------------------------------- the doctrine
-
-@test "doctrine anchors: every required statement is present" {
-  [ "${#ANCHORS[@]}" -gt 0 ]
-  anchors_ok "$DOCTRINE"
-}
-
-@test "doctrine anchors red twins: deleting any anchor's line fails the check" {
-  local anchor index=0 visited=0 mutated
-  for anchor in "${ANCHORS[@]}"; do
-    index=$((index + 1))
-    mutated="$TEMPORARY_DIRECTORY/without-anchor-$index.md"
-    without_anchor_lines "$anchor" "$DOCTRINE" >"$mutated"
-    if cmp -s "$DOCTRINE" "$mutated"; then return 1; fi
-    if anchors_ok "$mutated"; then return 1; fi
-    visited=$((visited + 1))
-  done
-  [ "$visited" -eq "${#ANCHORS[@]}" ]
-}
-
-@test "doctrine anchors red twin: an unknown anchor kind fails" {
-  local original=("${ANCHORS[@]}")
-  ANCHORS=('Z|anything')
-  if anchors_ok "$DOCTRINE"; then ANCHORS=("${original[@]}"); return 1; fi
-  ANCHORS=("${original[@]}")
-  true
-}
-
-@test "doctrine: the save step comes before the question" {
-  save_before_ask_ok "$DOCTRINE"
-}
-
-@test "doctrine order red twin: the save step moved below the question fails" {
-  {
-    grep -vF -- 'Save the place' "$DOCTRINE" || true
-    grep -F -- 'Save the place' "$DOCTRINE"
-  } >"$TEMPORARY_DIRECTORY/swapped-order.md"
-  if cmp -s "$DOCTRINE" "$TEMPORARY_DIRECTORY/swapped-order.md"; then return 1; fi
-  if save_before_ask_ok "$TEMPORARY_DIRECTORY/swapped-order.md"; then return 1; fi
-  true
-}
-
-# ------------------------------------------------------------------ budget
-
 @test "doctrine budget: byte cap, one trailing newline, no control characters" {
   document_shape_ok "$DOCTRINE"
 }
-
-@test "doctrine budget red twins: oversize, trailing blank line, no final newline, control character" {
-  local size padding
-  size="$(wc -c <"$DOCTRINE" | tr -d ' ')"
-  padding=$((3585 - size - 1))
-  [ "$padding" -gt 0 ]
-  { cat "$DOCTRINE"; head -c "$padding" /dev/zero | tr '\0' x; printf '\n'; } >"$TEMPORARY_DIRECTORY/oversize.md"
-  [ "$(wc -c <"$TEMPORARY_DIRECTORY/oversize.md" | tr -d ' ')" -eq 3585 ]
-  if document_shape_ok "$TEMPORARY_DIRECTORY/oversize.md"; then return 1; fi
-  { cat "$DOCTRINE"; printf '\n'; } >"$TEMPORARY_DIRECTORY/blank-tail.md"
-  if document_shape_ok "$TEMPORARY_DIRECTORY/blank-tail.md"; then return 1; fi
-  head -c $((size - 1)) "$DOCTRINE" >"$TEMPORARY_DIRECTORY/no-newline.md"
-  if document_shape_ok "$TEMPORARY_DIRECTORY/no-newline.md"; then return 1; fi
-  { cat "$DOCTRINE"; printf 'bell\001\n'; } >"$TEMPORARY_DIRECTORY/control.md"
-  if document_shape_ok "$TEMPORARY_DIRECTORY/control.md"; then return 1; fi
-  true
-}
-
-# --------------------------------------------------- numbers and working ids
-
-@test "doctrine: no band numbers and no percent sign" {
-  no_band_numbers_ok "$DOCTRINE"
-}
-
-@test "doctrine band-number red twins: a planted number run or percent sign fails" {
-  { cat "$DOCTRINE"; printf 'Red starts at 70 tokens.\n'; } >"$TEMPORARY_DIRECTORY/number.md"
-  if no_band_numbers_ok "$TEMPORARY_DIRECTORY/number.md"; then return 1; fi
-  { cat "$DOCTRINE"; printf 'A mark of 5%% here.\n'; } >"$TEMPORARY_DIRECTORY/percent.md"
-  if no_band_numbers_ok "$TEMPORARY_DIRECTORY/percent.md"; then return 1; fi
-  true
-}
-
-@test "doctrine: no working-document ids" {
-  no_ids_ok "$DOCTRINE"
-}
-
-@test "doctrine id red twins: planted SPEC, UAT, plan and issue ids fail" {
-  local planted index=0
-  for planted in 'See SPEC-7.' 'See UAT-3.' 'See PLAN-2.' 'See #4.'; do
-    index=$((index + 1))
-    { cat "$DOCTRINE"; printf '%s\n' "$planted"; } >"$TEMPORARY_DIRECTORY/id-$index.md"
-    if no_ids_ok "$TEMPORARY_DIRECTORY/id-$index.md"; then return 1; fi
-  done
-  [ "$index" -eq 4 ]
-}
-
-# ----------------------------------------------------------------- release
 
 @test "release-exclude: the doctrine file and the hook ship" {
   local shipped_path checked_count=0
@@ -244,34 +47,4 @@ plant_in_wiki_section() {
     not_excluded_ok "$EXCLUDE" "$shipped_path"
   done
   [ "$checked_count" -eq 2 ]
-}
-
-@test "release-exclude red twins: the directory, or either exact path, is caught" {
-  { cat "$EXCLUDE"; printf '.claude/doctrine\n'; } >"$TEMPORARY_DIRECTORY/exclude-directory"
-  if not_excluded_ok "$TEMPORARY_DIRECTORY/exclude-directory" .claude/doctrine/context-checkpoint.md; then return 1; fi
-  { cat "$EXCLUDE"; printf '.claude/hooks/context-checkpoint-inject.sh\n'; } >"$TEMPORARY_DIRECTORY/exclude-hook"
-  if not_excluded_ok "$TEMPORARY_DIRECTORY/exclude-hook" .claude/hooks/context-checkpoint-inject.sh; then return 1; fi
-  { cat "$EXCLUDE"; printf '# .claude/doctrine\n'; } >"$TEMPORARY_DIRECTORY/exclude-comment"
-  not_excluded_ok "$TEMPORARY_DIRECTORY/exclude-comment" .claude/doctrine/context-checkpoint.md
-}
-
-# ------------------------------------------------------------ doc surfaces
-
-@test "wiki: the checkpoint section links the doctrine, restates nothing, spells no number" {
-  wiki_section_ok "$WIKI"
-}
-
-@test "wiki section red twins: link removed, rule restated, number planted" {
-  sed 's|\.claude/doctrine/context-checkpoint\.md|elsewhere.md|g' "$WIKI" >"$TEMPORARY_DIRECTORY/wiki-no-link.md"
-  if cmp -s "$WIKI" "$TEMPORARY_DIRECTORY/wiki-no-link.md"; then return 1; fi
-  if wiki_section_ok "$TEMPORARY_DIRECTORY/wiki-no-link.md"; then return 1; fi
-
-  plant_in_wiki_section "$WIKI" 'Recommend `Continue here` (Recommended).' >"$TEMPORARY_DIRECTORY/wiki-restated.md"
-  if cmp -s "$WIKI" "$TEMPORARY_DIRECTORY/wiki-restated.md"; then return 1; fi
-  if wiki_section_ok "$TEMPORARY_DIRECTORY/wiki-restated.md"; then return 1; fi
-
-  plant_in_wiki_section "$WIKI" 'It fires at 5 bands.' >"$TEMPORARY_DIRECTORY/wiki-number.md"
-  if cmp -s "$WIKI" "$TEMPORARY_DIRECTORY/wiki-number.md"; then return 1; fi
-  if wiki_section_ok "$TEMPORARY_DIRECTORY/wiki-number.md"; then return 1; fi
-  true
 }

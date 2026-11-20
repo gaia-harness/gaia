@@ -79,15 +79,6 @@ PLAY_SOURCE_NAMES=(
   "Extended Play"
 )
 
-# The entries of stories other than Play With Tests and its extend story.
-SIBLING_NAMES=(
-  "Render With Test   base story"
-  "Render With Test   shows the marker"
-  "Play Only"
-  "Custom Display Name"
-  "Extended Named"
-)
-
 @test "the shapes fixture yields base story plus each test for test-carrying stories, the plain name for play-only and extend stories, and nothing for the render-only story" {
   local output_ndjson actual expected
   output_ndjson=$(signals_of_path "$SHAPES_PATH")
@@ -122,98 +113,77 @@ SIBLING_NAMES=(
   [ "$from_path" = "$from_stdin" ]
 }
 
-@test "editing the source story's play rotates its base story, each of its tests and the extend story inheriting it, and no sibling" {
-  local before after copy full_name
+# Each row edits the shapes fixture once (OLD to NEW) and names the entries
+# that edit must rotate, separated by ";"; every other shapes entry must keep
+# its signal.
+@test "editing one story or test rotates only the signals that depend on it: the source play, a sibling story, one test body" {
+  local row label old new rotated_list before after copy full_name
+  local -a rotated
   before=$(signals_of_path "$SHAPES_PATH")
-  copy=$(edited_shapes_copy "canvasElement.dataset.played = 'play with tests';" "canvasElement.dataset.played = 'edited play';")
-  after=$(signals_of_source "$SHAPES_PATH" "$copy")
-  [ "$(grep -c . <<<"$after")" -eq "${#SHAPES_NAMES[@]}" ]
-
-  for full_name in "${PLAY_SOURCE_NAMES[@]}"; do
-    [ -n "$(signal_for "$before" "$full_name")" ] || { echo "no entry for $full_name" >&2; return 1; }
-    [ "$(signal_for "$before" "$full_name")" != "$(signal_for "$after" "$full_name")" ] || { echo "signal unchanged for $full_name" >&2; return 1; }
-  done
-  for full_name in "${SIBLING_NAMES[@]}"; do
-    [ "$(signal_for "$before" "$full_name")" = "$(signal_for "$after" "$full_name")" ] || { echo "signal moved for $full_name" >&2; return 1; }
-  done
-}
-
-@test "editing a sibling story leaves the source story's and its extend story's signals unchanged" {
-  local before after copy full_name
-  before=$(signals_of_path "$SHAPES_PATH")
-  copy=$(edited_shapes_copy "args: {text: 'play only marker'}," "args: {text: 'edited play only marker'},")
-  after=$(signals_of_source "$SHAPES_PATH" "$copy")
-
-  [ "$(signal_for "$before" "Play Only")" != "$(signal_for "$after" "Play Only")" ]
-  for full_name in "${PLAY_SOURCE_NAMES[@]}"; do
-    [ -n "$(signal_for "$before" "$full_name")" ] || { echo "no entry for $full_name" >&2; return 1; }
-    [ "$(signal_for "$before" "$full_name")" = "$(signal_for "$after" "$full_name")" ] || { echo "signal moved for $full_name" >&2; return 1; }
-  done
-}
-
-@test "editing one test's body rotates only that test's signal" {
-  local before after copy full_name
-  before=$(signals_of_path "$SHAPES_PATH")
-  copy=$(edited_shapes_copy "await expect(canvas.getByText('play marker')).toBeVisible();" "await expect(canvas.getByText('play marker')).toBeInTheDocument();")
-  after=$(signals_of_source "$SHAPES_PATH" "$copy")
-
-  [ "$(signal_for "$before" "Play With Tests   shows the marker")" != "$(signal_for "$after" "Play With Tests   shows the marker")" ]
   for full_name in "${SHAPES_NAMES[@]}"; do
-    [ "$full_name" = "Play With Tests   shows the marker" ] && continue
-    [ "$(signal_for "$before" "$full_name")" = "$(signal_for "$after" "$full_name")" ] || { echo "signal moved for $full_name" >&2; return 1; }
+    [ -n "$(signal_for "$before" "$full_name")" ] || { echo "no entry for $full_name" >&2; return 1; }
+  done
+  for row in \
+    "source-play|canvasElement.dataset.played = 'play with tests';|canvasElement.dataset.played = 'edited play';|$(IFS=';'; printf '%s' "${PLAY_SOURCE_NAMES[*]}")" \
+    "sibling-story|args: {text: 'play only marker'},|args: {text: 'edited play only marker'},|Play Only" \
+    "test-body|await expect(canvas.getByText('play marker')).toBeVisible();|await expect(canvas.getByText('play marker')).toBeInTheDocument();|Play With Tests   shows the marker"; do
+    IFS='|' read -r label old new rotated_list <<<"$row"
+    IFS=';' read -r -a rotated <<<"$rotated_list"
+    copy=$(edited_shapes_copy "$old" "$new") || { echo "case $label: edit not applied" >&2; return 1; }
+    after=$(signals_of_source "$SHAPES_PATH" "$copy")
+    [ "$(grep -c . <<<"$after")" -eq "${#SHAPES_NAMES[@]}" ] || { echo "case $label: entry count changed" >&2; return 1; }
+    for full_name in "${SHAPES_NAMES[@]}"; do
+      if printf '%s\n' "${rotated[@]}" | grep -qxF -- "$full_name"; then
+        [ "$(signal_for "$before" "$full_name")" != "$(signal_for "$after" "$full_name")" ] || { echo "case $label: signal unchanged for $full_name" >&2; return 1; }
+      else
+        [ "$(signal_for "$before" "$full_name")" = "$(signal_for "$after" "$full_name")" ] || { echo "case $label: signal moved for $full_name" >&2; return 1; }
+      fi
+    done
   done
 }
 
-@test "the CSF3 refusal fixture exits 8 with the migration line and no stdout" {
-  grep -qF 'export default meta;' "$HOME_ROOT/$CSF3_PATH"
-  run_extractor_on_source "$CSF3_PATH" "$HOME_ROOT/$CSF3_PATH"
-  [ "$status" -eq 8 ]
-  [ -z "$output" ]
-  grep -qxF -- "extract-test-signals: $CSF3_PATH $MIGRATE_LINE_SUFFIX" "$BATS_TEST_TMPDIR/stderr.txt"
-  [ "$(grep -c . "$BATS_TEST_TMPDIR/stderr.txt")" -eq 1 ]
-}
-
-@test "the CSF2 refusal fixture exits 8 with the migration line and no stdout" {
-  grep -qF 'Template.bind({})' "$HOME_ROOT/$CSF2_PATH"
-  run_extractor_on_source "$CSF2_PATH" "$HOME_ROOT/$CSF2_PATH"
-  [ "$status" -eq 8 ]
-  [ -z "$output" ]
-  grep -qxF -- "extract-test-signals: $CSF2_PATH $MIGRATE_LINE_SUFFIX" "$BATS_TEST_TMPDIR/stderr.txt"
-  [ "$(grep -c . "$BATS_TEST_TMPDIR/stderr.txt")" -eq 1 ]
-}
-
-@test "a CSF4 file whose play is an imported identifier exits 7, not 8, with the refusal line and no stdout" {
-  local source="$BATS_TEST_TMPDIR/imported.stories.tsx"
+# Row columns: label, repo path the source is judged under, source file,
+# expected exit, a marker the committed fixture must still contain ("-" for a
+# scratch source), and the expected text. Exit 8 expects exactly the one
+# migration line; exit 7 expects the refusal text; exit 0 expects the one
+# parsed fullName on stdout.
+@test "an unsupported story file exits 7 or 8 with the refusal line and no stdout; a CSF4 relative preview path is parsed" {
+  local row label relative_path source_file expected_status marker expected
   printf '%s\n' \
     "import preview from '#.storybook/preview';" \
     "import {sharedPlay} from './shared-play';" \
     "const meta = preview.meta({title: 'Internal/Imported'});" \
-    "export const UsesImportedPlay = meta.story({play: sharedPlay});" > "$source"
-  run_extractor_on_source "apps/web/app/utils/tests/imported.stories.tsx" "$source"
-  [ "$status" -eq 7 ]
-  [ -z "$output" ]
-  grep -qF -- "unsupported story shape in apps/web/app/utils/tests/imported.stories.tsx: UsesImportedPlay" "$BATS_TEST_TMPDIR/stderr.txt"
-}
-
-@test "a CSF4 file importing the preview by a relative .storybook/preview path is parsed, not refused" {
-  local source="$BATS_TEST_TMPDIR/relative.stories.tsx"
+    "export const UsesImportedPlay = meta.story({play: sharedPlay});" > "$BATS_TEST_TMPDIR/imported.stories.tsx"
   printf '%s\n' \
     "import preview from '../../.storybook/preview';" \
     "const meta = preview.meta({title: 'Internal/Relative'});" \
-    "export const Relative = meta.story({play: async () => {}});" > "$source"
-  run_extractor_on_source "apps/web/app/utils/tests/relative.stories.tsx" "$source"
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.fullName' <<<"$output")" = "Relative" ]
-}
-
-@test "a file with an object-literal named export beside preview.meta is unknown and exits 7, not 8" {
-  local source="$BATS_TEST_TMPDIR/unknown.stories.tsx"
+    "export const Relative = meta.story({play: async () => {}});" > "$BATS_TEST_TMPDIR/relative.stories.tsx"
   printf '%s\n' \
     "import preview from '#.storybook/preview';" \
     "const meta = preview.meta({title: 'Internal/Unknown'});" \
-    "export const Leftover = {args: {text: 'left over'}};" > "$source"
-  run_extractor_on_source "apps/web/app/utils/tests/unknown.stories.tsx" "$source"
-  [ "$status" -eq 7 ]
-  [ -z "$output" ]
-  grep -qF -- "unsupported story shape in apps/web/app/utils/tests/unknown.stories.tsx: default: the file is not a CSF4 story file" "$BATS_TEST_TMPDIR/stderr.txt"
+    "export const Leftover = {args: {text: 'left over'}};" > "$BATS_TEST_TMPDIR/unknown.stories.tsx"
+  for row in \
+    "csf3|$CSF3_PATH|$HOME_ROOT/$CSF3_PATH|8|export default meta;|extract-test-signals: $CSF3_PATH $MIGRATE_LINE_SUFFIX" \
+    "csf2|$CSF2_PATH|$HOME_ROOT/$CSF2_PATH|8|Template.bind({})|extract-test-signals: $CSF2_PATH $MIGRATE_LINE_SUFFIX" \
+    "imported-play|apps/web/app/utils/tests/imported.stories.tsx|$BATS_TEST_TMPDIR/imported.stories.tsx|7|-|unsupported story shape in apps/web/app/utils/tests/imported.stories.tsx: UsesImportedPlay" \
+    "relative-preview|apps/web/app/utils/tests/relative.stories.tsx|$BATS_TEST_TMPDIR/relative.stories.tsx|0|-|Relative" \
+    "object-literal-export|apps/web/app/utils/tests/unknown.stories.tsx|$BATS_TEST_TMPDIR/unknown.stories.tsx|7|-|unsupported story shape in apps/web/app/utils/tests/unknown.stories.tsx: default: the file is not a CSF4 story file"; do
+    IFS='|' read -r label relative_path source_file expected_status marker expected <<<"$row"
+    if [ "$marker" != "-" ]; then
+      grep -qF -- "$marker" "$source_file" || { echo "case $label: fixture no longer contains $marker" >&2; return 1; }
+    fi
+    run_extractor_on_source "$relative_path" "$source_file"
+    [ "$status" -eq "$expected_status" ] || { echo "case $label: status=$status" >&2; return 1; }
+    case "$expected_status" in
+      0)
+        [ "$(jq -r '.fullName' <<<"$output")" = "$expected" ] || { echo "case $label: output=$output" >&2; return 1; } ;;
+      7)
+        [ -z "$output" ] || { echo "case $label: stdout=$output" >&2; return 1; }
+        grep -qF -- "$expected" "$BATS_TEST_TMPDIR/stderr.txt" || { echo "case $label: stderr=$(cat "$BATS_TEST_TMPDIR/stderr.txt")" >&2; return 1; } ;;
+      8)
+        [ -z "$output" ] || { echo "case $label: stdout=$output" >&2; return 1; }
+        grep -qxF -- "$expected" "$BATS_TEST_TMPDIR/stderr.txt" || { echo "case $label: stderr=$(cat "$BATS_TEST_TMPDIR/stderr.txt")" >&2; return 1; }
+        [ "$(grep -c . "$BATS_TEST_TMPDIR/stderr.txt")" -eq 1 ] || { echo "case $label: stderr not one line" >&2; return 1; } ;;
+    esac
+  done
 }

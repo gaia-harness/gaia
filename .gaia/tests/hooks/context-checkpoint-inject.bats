@@ -10,9 +10,8 @@
 #
 # Every fixture repo carries its own copy of the hook, the libraries it loads
 # and the real doctrine file. HOOK_SOURCE_PATH points the suite at another copy
-# of the hook (a mutated scratch copy proves the cases can go red); it defaults
-# to the real hook. Token values come from the lib at test time, never from a
-# literal here, so the suite follows the lib's bands.
+# of the hook; it defaults to the real hook. Token values come from the lib at
+# test time, never from a literal here, so the suite follows the lib's bands.
 #
 # Each negative case runs in the same fixture as a positive control that differs
 # by one variable. The hook runs under /bin/bash, the shell whose cost budget it
@@ -21,8 +20,7 @@
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/tests/hooks/context-checkpoint-inject.bats < /dev/null
 
-# The jq programs and the hook lines the mutants match are single-quoted so
-# their `$` reaches jq or the match literally.
+# The jq programs are single-quoted so their `$` reaches jq.
 # shellcheck disable=SC2016
 
 bats_require_minimum_version 1.5.0
@@ -67,8 +65,6 @@ install_hook() {
   done
   cp "$REAL_DOCTRINE" "$root/.claude/doctrine/context-checkpoint.md"
   HOOK="$root/.claude/hooks/context-checkpoint-inject.sh"
-  # Beside the hook, so a mutant loads the same libraries and doctrine.
-  MUTANT="$root/.claude/hooks/mutant.sh"
   DOCTRINE="$root/.claude/doctrine/context-checkpoint.md"
 }
 
@@ -118,8 +114,9 @@ invoke() {
 marker_path() { printf '%s/.gaia/local/cache/context-checkpoint/%s' "$MAIN_ROOT" "$SID"; }
 session_save_path() { printf '%s/.gaia/local/runs/session-%s/STATE.md' "$MAIN_ROOT" "$SID"; }
 
-# The helpers below return 1 explicitly on every failed check, so a red twin
-# can call them in an `&& return 1` probe.
+# The helpers below return 1 explicitly on every failed check, so a case-table
+# row can report its own label through `|| { ...; return 1; }`, where set -e
+# would not stop at a bare failed `[ ]` inside the helper.
 
 silent_ok() {
   [ "$HOOK_STATUS" -eq 0 ] || return 1
@@ -168,17 +165,6 @@ oracle_save_path() {
   fi
 }
 
-# make_mutant <needle> <replacement> <output>: a copy of the hook with every
-# line containing <needle> replaced by <replacement> (empty deletes it). Fails
-# when nothing matched, so a mutant can never be the unmutated hook.
-make_mutant() {
-  NEEDLE="$1" REPLACEMENT="$2" awk '
-    index($0, ENVIRON["NEEDLE"]) { if (ENVIRON["REPLACEMENT"] != "") print ENVIRON["REPLACEMENT"]; next }
-    { print }' "$HOOK_SOURCE_PATH" >"$3"
-  cmp -s "$HOOK_SOURCE_PATH" "$3" && return 1
-  return 0
-}
-
 # A PATH shim whose git and jq append their name to a call log, then run the
 # real binary.
 make_shim() {
@@ -224,30 +210,79 @@ seed_loop_entry() {
   fi
 }
 
-@test "first crossing: a yellow reading is silent, then red emits header plus doctrine and marks red" {
-  [ "$YELLOW" -lt "$RED" ]
-  write_reading "$YELLOW"
-  invoke "$(payload)"
-  silent_unmarked_ok
-
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED"
-  cmp "$DOCTRINE" "$REAL_DOCTRINE"
-  grep -qxF "Session id: $SID" "$TEMPORARY_DIRECTORY/context"
+# mark_band <band>: plant $SID's marker as already holding <band>.
+mark_band() {
+  mkdir -p "${MAIN_ROOT}/.gaia/local/cache/context-checkpoint"
+  printf '%s\n' "$1" >"$(marker_path)"
 }
 
-@test "a marked red band stays silent below fire; past fire in the same fixture emits" {
-  mkdir -p "${MAIN_ROOT}/.gaia/local/cache/context-checkpoint"
-  printf 'red\n' >"$(marker_path)"
-  write_reading $((FIRE - 1))
-  invoke "$(payload)"
-  silent_ok
-  [ "$(cat "$(marker_path)")" = red ]
-
-  write_reading "$FIRE"
-  invoke "$(payload)"
-  fires_ok fire "$FIRE"
+# Each row takes a fresh session id, so no earlier row's reading or marker applies.
+@test "band transitions emit once per band and mark it: first crossing, marked red below fire, red to fire to skull, jump to fire, jump to skull" {
+  local label
+  for label in first-crossing marked-red-below-fire red-fire-skull jump-to-fire jump-to-skull; do
+    new_session
+    case "$label" in
+      first-crossing)
+        [ "$YELLOW" -lt "$RED" ] || { echo "case $label: yellow $YELLOW not below red $RED"; return 1; }
+        write_reading "$YELLOW"
+        invoke "$(payload)"
+        silent_unmarked_ok || { echo "case $label: yellow not silent and unmarked"; return 1; }
+        write_reading "$RED"
+        invoke "$(payload)"
+        fires_ok red "$RED" || { echo "case $label: red did not fire"; return 1; }
+        cmp "$DOCTRINE" "$REAL_DOCTRINE" || { echo "case $label: doctrine differs from the shipped file"; return 1; }
+        grep -qxF "Session id: $SID" "$TEMPORARY_DIRECTORY/context" || { echo "case $label: no session id line"; return 1; }
+        ;;
+      marked-red-below-fire)
+        mark_band red
+        write_reading $((FIRE - 1))
+        invoke "$(payload)"
+        silent_ok || { echo "case $label: below fire not silent"; return 1; }
+        [ "$(cat "$(marker_path)")" = red ] || { echo "case $label: marker changed below fire"; return 1; }
+        write_reading "$FIRE"
+        invoke "$(payload)"
+        fires_ok fire "$FIRE" || { echo "case $label: fire did not fire"; return 1; }
+        ;;
+      red-fire-skull)
+        mark_band red
+        write_reading "$FIRE"
+        invoke "$(payload)"
+        fires_ok fire "$FIRE" || { echo "case $label: fire did not fire"; return 1; }
+        invoke "$(payload)"
+        silent_ok || { echo "case $label: repeated fire not silent"; return 1; }
+        [ "$(cat "$(marker_path)")" = fire ] || { echo "case $label: marker not fire"; return 1; }
+        write_reading "$SKULL"
+        invoke "$(payload)"
+        fires_ok skull "$SKULL" || { echo "case $label: skull did not fire"; return 1; }
+        invoke "$(payload)"
+        silent_ok || { echo "case $label: repeated skull not silent"; return 1; }
+        [ "$(cat "$(marker_path)")" = skull ] || { echo "case $label: marker not skull"; return 1; }
+        ;;
+      jump-to-fire)
+        write_reading $((RED - 1))
+        invoke "$(payload)"
+        silent_unmarked_ok || { echo "case $label: below red not silent and unmarked"; return 1; }
+        write_reading "$FIRE"
+        invoke "$(payload)"
+        fires_ok fire "$FIRE" || { echo "case $label: fire did not fire"; return 1; }
+        write_reading "$RED"
+        invoke "$(payload)"
+        silent_ok || { echo "case $label: red after fire not silent"; return 1; }
+        [ "$(cat "$(marker_path)")" = fire ] || { echo "case $label: marker not fire"; return 1; }
+        ;;
+      jump-to-skull)
+        write_reading $((RED - 1))
+        invoke "$(payload)"
+        silent_unmarked_ok || { echo "case $label: below red not silent and unmarked"; return 1; }
+        write_reading "$SKULL"
+        invoke "$(payload)"
+        fires_ok skull "$SKULL" || { echo "case $label: skull did not fire"; return 1; }
+        invoke "$(payload)"
+        silent_ok || { echo "case $label: repeated skull not silent"; return 1; }
+        [ "$(cat "$(marker_path)")" = skull ] || { echo "case $label: marker not skull"; return 1; }
+        ;;
+    esac
+  done
 }
 
 @test "a sub-agent payload past red is silent, unmarked and parse-free; the same payload without agent_id emits" {
@@ -261,105 +296,116 @@ seed_loop_entry() {
   fires_ok red "$RED"
 }
 
-@test "this session's latest unit silences while its unit file is absent; once the unit returns the hook emits" {
-  local run_directory
-  alf_branch feat/loop-units
-  run_directory="$(gaia_loop_run_directory "$MAIN_ROOT" feat/loop-units)"
-  seed_loop_entry units "$SID"
-  write_reading "$RED"
-  invoke "$(payload)"
-  silent_unmarked_ok
-
-  mkdir -p "$run_directory"
-  printf '{}\n' >"$run_directory/unit-1.json"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$run_directory/STATE.md"
+# Each row cuts its own branch off main, so its state file is its own, and takes
+# a fresh session id. A row whose first call is silent then emits after one
+# change shares that silent call's fixture with its positive control.
+@test "audit-loop state: a live unit silences until it returns, an unanswered checkpoint emits, another branch's state or other session ids never silence, an answered checkpoint silences without a later unit and emits with a returned one" {
+  local label run_directory
+  for label in live-unit unanswered-checkpoint other-branch other-sessions answered-no-later-unit answered-then-returned-unit; do
+    new_session
+    alf_git checkout -q main || { echo "case $label: checkout main failed"; return 1; }
+    case "$label" in
+      live-unit)
+        alf_branch feat/loop-units
+        run_directory="$(gaia_loop_run_directory "$MAIN_ROOT" feat/loop-units)"
+        seed_loop_entry units "$SID"
+        write_reading "$RED"
+        invoke "$(payload)"
+        silent_unmarked_ok || { echo "case $label: live unit did not silence"; return 1; }
+        mkdir -p "$run_directory"
+        printf '{}\n' >"$run_directory/unit-1.json"
+        invoke "$(payload)"
+        fires_ok red "$RED" "$run_directory/STATE.md" || { echo "case $label: returned unit did not emit"; return 1; }
+        ;;
+      unanswered-checkpoint)
+        alf_branch feat/loop-checkpoints
+        seed_loop_entry checkpoints "$SID"
+        write_reading "$RED"
+        invoke "$(payload)"
+        fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/loop-checkpoints/STATE.md" || { echo "case $label: did not emit"; return 1; }
+        ;;
+      other-branch)
+        alf_branch feat/other-branch
+        seed_loop_entry units "$SID"
+        alf_git checkout -q -b feat/this-branch
+        [ -f "$ALF_STATE" ] || { echo "case $label: other branch state file missing"; return 1; }
+        write_reading "$RED"
+        invoke "$(payload)"
+        fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/this-branch/STATE.md" || { echo "case $label: did not emit"; return 1; }
+        ;;
+      other-sessions)
+        alf_branch feat/other-sessions
+        seed_loop_entry units other-session
+        alf_state_edit '.history.checkpoints = [{index: 1, at_round: 3, reason: "context", session_id: "other-session"}]'
+        write_reading "$RED"
+        invoke "$(payload)"
+        fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/other-sessions/STATE.md" || { echo "case $label: did not emit"; return 1; }
+        ;;
+      answered-no-later-unit)
+        alf_branch feat/answered
+        seed_loop_entry units other-session
+        alf_state_edit '.history.checkpoints = [{index: 1, at_round: 3, reason: "context", session_id: $session_id}]
+          | .allowance.answers = [{checkpoint: 1, kind: "grant", n: 3, at: "2026-01-01T00:00:00Z", session_id: $session_id}]' \
+          --arg session_id "$SID"
+        write_reading "$RED"
+        invoke "$(payload)"
+        silent_unmarked_ok || { echo "case $label: answered checkpoint did not silence"; return 1; }
+        alf_state_edit '.history.checkpoints[0].session_id = "other-session"'
+        invoke "$(payload)"
+        fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/answered/STATE.md" || { echo "case $label: another session id did not emit"; return 1; }
+        ;;
+      answered-then-returned-unit)
+        alf_branch feat/answered-then-unit
+        run_directory="$(gaia_loop_run_directory "$MAIN_ROOT" feat/answered-then-unit)"
+        alf_seed_state '{}'
+        alf_state_edit '.history.checkpoints = [{index: 1, at_round: 3, reason: "context", session_id: $session_id}]
+          | .allowance.answers = [{checkpoint: 1, kind: "grant", n: 3, at: "2026-01-01T00:00:00Z", session_id: $session_id}]
+          | .history.units = [{unit: 2, start_round: 4, k: 3, through_round: 6, after_checkpoint: 1,
+              admitted_on: "grant", session_id: $session_id}]' --arg session_id "$SID"
+        mkdir -p "$run_directory"
+        printf '{}\n' >"$run_directory/unit-2.json"
+        write_reading "$RED"
+        invoke "$(payload)"
+        fires_ok red "$RED" "$run_directory/STATE.md" || { echo "case $label: did not emit"; return 1; }
+        ;;
+    esac
+  done
 }
 
-@test "an unanswered checkpoint carrying this session in the cwd branch's state file emits" {
-  alf_branch feat/loop-checkpoints
-  seed_loop_entry checkpoints "$SID"
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/loop-checkpoints/STATE.md"
-}
-
-@test "a missing reading is silent; a fresh reading in the same fixture emits" {
-  invoke "$(payload)"
-  silent_unmarked_ok
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED"
-}
-
-@test "a stale reading is silent; a fresh reading in the same fixture emits" {
-  write_reading "$RED" "$WINDOW" $(($(date +%s) - GAIA_CONTEXT_FRESH_SECONDS - 60))
-  invoke "$(payload)"
-  silent_unmarked_ok
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED"
-}
-
-@test "a future reading past the skew is silent; a fresh reading in the same fixture emits" {
-  write_reading "$RED" "$WINDOW" $(($(date +%s) + 3600))
-  invoke "$(payload)"
-  silent_unmarked_ok
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED"
-}
-
-@test "an unparseable reading is silent; a fresh reading in the same fixture emits" {
-  local reading_file
-  reading_file="$(gaia_context_file "$MAIN_ROOT" "$SID")"
-  mkdir -p "${reading_file%/*}"
-  printf '{"version":1,"used_tokens":' >"$reading_file"
-  invoke "$(payload)"
-  silent_unmarked_ok
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED"
-}
-
-@test "a fresh reading with a zero window is silent; a positive window in the same fixture emits" {
-  write_reading "$RED" 0
-  invoke "$(payload)"
-  silent_unmarked_ok
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED"
-}
-
-@test "no jq on PATH is silent; the same PATH with jq emits" {
-  local tool_directory="$TEMPORARY_DIRECTORY/tools" tool
-  mkdir -p "$tool_directory"
-  for tool in cat date mkdir mv rm; do ln -s "$(command -v "$tool")" "$tool_directory/$tool"; done
-  write_reading "$RED"
-  PATH="$tool_directory" invoke "$(payload)"
-  silent_unmarked_ok
-
-  ln -s "$(command -v jq)" "$tool_directory/jq"
-  PATH="$tool_directory" invoke "$(payload)"
-  fires_ok red "$RED"
-}
-
-@test "from a red marker: fire emits once and marks fire, then skull emits once; repeats are silent" {
-  mkdir -p "${MAIN_ROOT}/.gaia/local/cache/context-checkpoint"
-  printf 'red\n' >"$(marker_path)"
-  write_reading "$FIRE"
-  invoke "$(payload)"
-  fires_ok fire "$FIRE"
-  invoke "$(payload)"
-  silent_ok
-  [ "$(cat "$(marker_path)")" = fire ]
-
-  write_reading "$SKULL"
-  invoke "$(payload)"
-  fires_ok skull "$SKULL"
-  invoke "$(payload)"
-  silent_ok
-  [ "$(cat "$(marker_path)")" = skull ]
+# Each row takes a fresh session id, so its reading file and marker are its own.
+@test "a missing, stale, future, unparseable or zero-window reading, or no jq on PATH, is silent; a fresh reading, or jq added, in the same fixture emits" {
+  local label reading_file tool_directory tool
+  for label in missing stale future unparseable zero-window no-jq; do
+    new_session
+    case "$label" in
+      missing) ;;
+      stale) write_reading "$RED" "$WINDOW" $(($(date +%s) - GAIA_CONTEXT_FRESH_SECONDS - 60)) ;;
+      future) write_reading "$RED" "$WINDOW" $(($(date +%s) + 3600)) ;;
+      unparseable)
+        reading_file="$(gaia_context_file "$MAIN_ROOT" "$SID")"
+        mkdir -p "${reading_file%/*}"
+        printf '{"version":1,"used_tokens":' >"$reading_file"
+        ;;
+      zero-window) write_reading "$RED" 0 ;;
+    esac
+    if [ "$label" = no-jq ]; then
+      tool_directory="$TEMPORARY_DIRECTORY/tools"
+      mkdir -p "$tool_directory"
+      for tool in cat date mkdir mv rm; do ln -s "$(command -v "$tool")" "$tool_directory/$tool"; done
+      write_reading "$RED"
+      PATH="$tool_directory" invoke "$(payload)"
+      silent_unmarked_ok || { echo "case $label: not silent and unmarked"; return 1; }
+      ln -s "$(command -v jq)" "$tool_directory/jq"
+      PATH="$tool_directory" invoke "$(payload)"
+      fires_ok red "$RED" || { echo "case $label: jq added did not emit"; return 1; }
+      continue
+    fi
+    invoke "$(payload)"
+    silent_unmarked_ok || { echo "case $label: not silent and unmarked"; return 1; }
+    write_reading "$RED"
+    invoke "$(payload)"
+    fires_ok red "$RED" || { echo "case $label: fresh reading did not emit"; return 1; }
+  done
 }
 
 @test "save path: the default branch and a detached HEAD take the session form; a feature branch takes its run folder" {
@@ -382,107 +428,39 @@ seed_loop_entry() {
   fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/save-path-control/STATE.md"
 }
 
-@test "a state file on another branch carrying this session never silences" {
-  alf_branch feat/other-branch
-  seed_loop_entry units "$SID"
-  alf_git checkout -q -b feat/this-branch
-  [ -f "$ALF_STATE" ]
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/this-branch/STATE.md"
-}
-
-@test "the cwd branch's state file carrying only other session ids emits" {
-  alf_branch feat/other-sessions
-  seed_loop_entry units other-session
-  alf_state_edit '.history.checkpoints = [{index: 1, at_round: 3, reason: "context", session_id: "other-session"}]'
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/other-sessions/STATE.md"
-}
-
-@test "an answered latest checkpoint carrying this session with no later unit silences; another session id emits" {
-  alf_branch feat/answered
-  seed_loop_entry units other-session
-  alf_state_edit '.history.checkpoints = [{index: 1, at_round: 3, reason: "context", session_id: $session_id}]
-    | .allowance.answers = [{checkpoint: 1, kind: "grant", n: 3, at: "2026-01-01T00:00:00Z", session_id: $session_id}]' \
-    --arg session_id "$SID"
-  write_reading "$RED"
-  invoke "$(payload)"
-  silent_unmarked_ok
-
-  alf_state_edit '.history.checkpoints[0].session_id = "other-session"'
-  invoke "$(payload)"
-  fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/answered/STATE.md"
-}
-
-@test "an answered checkpoint carrying this session with a later unit that returned emits" {
-  local run_directory
-  alf_branch feat/answered-then-unit
-  run_directory="$(gaia_loop_run_directory "$MAIN_ROOT" feat/answered-then-unit)"
-  alf_seed_state '{}'
-  alf_state_edit '.history.checkpoints = [{index: 1, at_round: 3, reason: "context", session_id: $session_id}]
-    | .allowance.answers = [{checkpoint: 1, kind: "grant", n: 3, at: "2026-01-01T00:00:00Z", session_id: $session_id}]
-    | .history.units = [{unit: 2, start_round: 4, k: 3, through_round: 6, after_checkpoint: 1,
-        admitted_on: "grant", session_id: $session_id}]' --arg session_id "$SID"
-  mkdir -p "$run_directory"
-  printf '{}\n' >"$run_directory/unit-2.json"
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$run_directory/STATE.md"
-}
-
-@test "a jump from below red to fire emits fire once and marks red too" {
-  write_reading $((RED - 1))
-  invoke "$(payload)"
-  silent_unmarked_ok
-  write_reading "$FIRE"
-  invoke "$(payload)"
-  fires_ok fire "$FIRE"
-  write_reading "$RED"
-  invoke "$(payload)"
-  silent_ok
-  [ "$(cat "$(marker_path)")" = fire ]
-}
-
-@test "a jump from below red to skull emits skull once and marks every band" {
-  write_reading $((RED - 1))
-  invoke "$(payload)"
-  silent_unmarked_ok
-  write_reading "$SKULL"
-  invoke "$(payload)"
-  fires_ok skull "$SKULL"
-  invoke "$(payload)"
-  silent_ok
-  [ "$(cat "$(marker_path)")" = skull ]
-}
-
-@test "a missing doctrine file is silent and unmarked; the shipped file emits" {
-  write_reading "$RED"
-  mv "$DOCTRINE" "$DOCTRINE.saved"
-  invoke "$(payload)"
-  silent_unmarked_ok
-  mv "$DOCTRINE.saved" "$DOCTRINE"
-  invoke "$(payload)"
-  fires_ok red "$RED"
-}
-
-@test "a doctrine file one byte over the cap is silent and unmarked; exactly at the cap emits" {
-  local size
-  write_reading "$RED"
-  size="$(wc -c <"$REAL_DOCTRINE" | tr -d ' ')"
-  [ "$size" -lt 3584 ]
-  cp "$REAL_DOCTRINE" "$DOCTRINE"
-  printf '%*s' $((3585 - size)) '' | tr ' ' x >>"$DOCTRINE"
-  [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -eq 3585 ]
-  invoke "$(payload)"
-  silent_unmarked_ok
-
-  cp "$REAL_DOCTRINE" "$DOCTRINE"
-  printf '%*s' $((3584 - size)) '' | tr ' ' x >>"$DOCTRINE"
-  [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -eq 3584 ]
-  invoke "$(payload)"
-  fires_ok red "$RED"
+# Both rows share the fixture's doctrine file, each with a fresh session id; the
+# over-cap row restores the shipped file when done.
+@test "a missing doctrine or one a byte over the cap is silent and unmarked; the shipped file, or one exactly at the cap, emits" {
+  local label size
+  for label in missing over-cap; do
+    new_session
+    write_reading "$RED"
+    case "$label" in
+      missing)
+        mv "$DOCTRINE" "$DOCTRINE.saved"
+        invoke "$(payload)"
+        silent_unmarked_ok || { echo "case $label: not silent and unmarked"; return 1; }
+        mv "$DOCTRINE.saved" "$DOCTRINE"
+        invoke "$(payload)"
+        fires_ok red "$RED" || { echo "case $label: shipped file did not emit"; return 1; }
+        ;;
+      over-cap)
+        size="$(wc -c <"$REAL_DOCTRINE" | tr -d ' ')"
+        [ "$size" -lt 3584 ] || { echo "case $label: shipped doctrine is $size bytes, not under the cap"; return 1; }
+        cp "$REAL_DOCTRINE" "$DOCTRINE"
+        printf '%*s' $((3585 - size)) '' | tr ' ' x >>"$DOCTRINE"
+        [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -eq 3585 ] || { echo "case $label: padding missed 3585"; return 1; }
+        invoke "$(payload)"
+        silent_unmarked_ok || { echo "case $label: over the cap not silent and unmarked"; return 1; }
+        cp "$REAL_DOCTRINE" "$DOCTRINE"
+        printf '%*s' $((3584 - size)) '' | tr ' ' x >>"$DOCTRINE"
+        [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -eq 3584 ] || { echo "case $label: padding missed 3584"; return 1; }
+        invoke "$(payload)"
+        fires_ok red "$RED" || { echo "case $label: exactly at the cap did not emit"; return 1; }
+        cp "$REAL_DOCTRINE" "$DOCTRINE"
+        ;;
+    esac
+  done
 }
 
 @test "compaction keeps the marker: SessionStart compact is silent and leaves it byte-identical; fire emits later" {
@@ -562,92 +540,66 @@ seed_loop_entry() {
   fork_budget_ok
 }
 
-@test "fork budget red twin: a hook that calls gaia_loop_key on the firing path logs git" {
-  make_shim
-  alf_branch feat/budget-twin
-  make_mutant '  emit) ;;' '  emit) gaia_loop_key "$cwd" >/dev/null || true ;;' "$MUTANT"
-  write_reading "$RED"
-  invoke_shimmed "$(payload)" "$MUTANT"
-  fires_ok red "$RED" "$MAIN_ROOT/.gaia/local/runs/feat/budget-twin/STATE.md"
-  fork_budget_ok && return 1
-  [ "$(logged_count git)" -ge 1 ]
-}
-
-@test "branch derivation: a feature branch matches gaia_loop_key and gaia_usage_default_branch" {
-  alf_git checkout -q -b feat/derive-feature
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")"
-  [ "$(oracle_save_path "$MAIN_ROOT")" = "$MAIN_ROOT/.gaia/local/runs/feat/derive-feature/STATE.md" ]
-}
-
-@test "branch derivation: main as a loose ref, with no origin/HEAD and a master beside it, is the default" {
-  alf_git remote set-head origin -d
-  alf_git branch master
-  [ -f "$MAIN_ROOT/.git/refs/heads/main" ]
-  [ "$(gaia_usage_default_branch "$MAIN_ROOT")" = main ]
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")"
-  [ "$(oracle_save_path "$MAIN_ROOT")" = "$(session_save_path)" ]
-}
-
-@test "branch derivation: main only in packed-refs is the default; a hook that skips packed-refs is not" {
-  alf_git remote set-head origin -d
-  alf_git pack-refs --all
-  alf_git branch master
-  [ ! -e "$MAIN_ROOT/.git/refs/heads/main" ]
-  [ -f "$MAIN_ROOT/.git/refs/heads/master" ]
-  grep -q ' refs/heads/main$' "$MAIN_ROOT/.git/packed-refs"
-  [ "$(gaia_usage_default_branch "$MAIN_ROOT")" = main ]
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")"
-  [ "$(oracle_save_path "$MAIN_ROOT")" = "$(session_save_path)" ]
-
-  new_session
-  make_mutant 'packed_references <"$common_directory/packed-refs"' '      :' "$MUTANT"
-  write_reading "$RED"
-  invoke "$(payload)" "$MUTANT"
-  fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")" && return 1
-  grep -qxF "Save path: $MAIN_ROOT/.gaia/local/runs/main/STATE.md" "$TEMPORARY_DIRECTORY/context"
-}
-
-@test "branch derivation: origin/HEAD naming a non-main default wins" {
-  alf_git push -q origin main:develop
-  alf_git fetch -q origin
-  alf_git remote set-head origin develop >/dev/null
-  [ "$(gaia_usage_default_branch "$MAIN_ROOT")" = develop ]
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")"
-  [ "$(oracle_save_path "$MAIN_ROOT")" = "$MAIN_ROOT/.gaia/local/runs/main/STATE.md" ]
-}
-
-@test "branch derivation: a master-only repository defaults to master" {
-  alf_git remote remove origin
-  alf_git branch -m main master
-  [ "$(gaia_usage_default_branch "$MAIN_ROOT")" = master ]
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")"
-  [ "$(oracle_save_path "$MAIN_ROOT")" = "$(session_save_path)" ]
-}
-
-@test "branch derivation: a detached HEAD has no key" {
-  alf_git checkout -q --detach
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")"
-  [ "$(oracle_save_path "$MAIN_ROOT")" = "$(session_save_path)" ]
-}
-
-@test "branch derivation: a name gaia_branch_normalize rewrites keys by its normalized form" {
-  alf_git checkout -q -b 'worktree-feat+derive-normalized'
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")"
-  [ "$(oracle_save_path "$MAIN_ROOT")" = "$MAIN_ROOT/.gaia/local/runs/feat/derive-normalized/STATE.md" ]
+# The rows rewrite refs, the remote and the origin, so the fixture's repo and
+# origin are copied once before the loop and restored before every row: one
+# fixture build instead of one per row, at the same absolute paths the repo's
+# config and the hook's reads expect.
+@test "branch derivation matches gaia_loop_key and the default-branch rules: a feature branch, main loose beside master, main only in packed-refs, origin/HEAD naming develop, master-only, a detached HEAD, a normalized name" {
+  local label expected pristine="$TEMPORARY_DIRECTORY/pristine"
+  mkdir -p "$pristine"
+  cp -Rp "$MAIN_ROOT" "$pristine/repo"
+  cp -Rp "$ALF_ORIGIN" "$pristine/origin.git"
+  for label in feature loose-main packed-main origin-head-develop master-only detached normalized; do
+    rm -rf "$MAIN_ROOT" "$ALF_ORIGIN"
+    cp -Rp "$pristine/repo" "$MAIN_ROOT"
+    cp -Rp "$pristine/origin.git" "$ALF_ORIGIN"
+    new_session
+    expected="$(session_save_path)"
+    case "$label" in
+      feature)
+        alf_git checkout -q -b feat/derive-feature
+        expected="$MAIN_ROOT/.gaia/local/runs/feat/derive-feature/STATE.md"
+        ;;
+      loose-main)
+        alf_git remote set-head origin -d
+        alf_git branch master
+        [ -f "$MAIN_ROOT/.git/refs/heads/main" ] || { echo "case $label: main is not a loose ref"; return 1; }
+        [ "$(gaia_usage_default_branch "$MAIN_ROOT")" = main ] || { echo "case $label: default is not main"; return 1; }
+        ;;
+      packed-main)
+        alf_git remote set-head origin -d
+        alf_git pack-refs --all
+        alf_git branch master
+        [ ! -e "$MAIN_ROOT/.git/refs/heads/main" ] || { echo "case $label: main is still a loose ref"; return 1; }
+        [ -f "$MAIN_ROOT/.git/refs/heads/master" ] || { echo "case $label: master is not a loose ref"; return 1; }
+        grep -q ' refs/heads/main$' "$MAIN_ROOT/.git/packed-refs" || { echo "case $label: main not in packed-refs"; return 1; }
+        [ "$(gaia_usage_default_branch "$MAIN_ROOT")" = main ] || { echo "case $label: default is not main"; return 1; }
+        ;;
+      origin-head-develop)
+        alf_git push -q origin main:develop
+        alf_git fetch -q origin
+        alf_git remote set-head origin develop >/dev/null
+        [ "$(gaia_usage_default_branch "$MAIN_ROOT")" = develop ] || { echo "case $label: default is not develop"; return 1; }
+        expected="$MAIN_ROOT/.gaia/local/runs/main/STATE.md"
+        ;;
+      master-only)
+        alf_git remote remove origin
+        alf_git branch -m main master
+        [ "$(gaia_usage_default_branch "$MAIN_ROOT")" = master ] || { echo "case $label: default is not master"; return 1; }
+        ;;
+      detached)
+        alf_git checkout -q --detach
+        ;;
+      normalized)
+        alf_git checkout -q -b 'worktree-feat+derive-normalized'
+        expected="$MAIN_ROOT/.gaia/local/runs/feat/derive-normalized/STATE.md"
+        ;;
+    esac
+    write_reading "$RED"
+    invoke "$(payload)"
+    fires_ok red "$RED" "$(oracle_save_path "$MAIN_ROOT")" || { echo "case $label: save path differs from the oracle's $(oracle_save_path "$MAIN_ROOT")"; return 1; }
+    [ "$(oracle_save_path "$MAIN_ROOT")" = "$expected" ] || { echo "case $label: oracle gave $(oracle_save_path "$MAIN_ROOT"), expected $expected"; return 1; }
+  done
 }
 
 @test "JSON encoding: a main root with a space and a doctrine with quote and backslash decode byte for byte" {
@@ -665,18 +617,6 @@ seed_loop_entry() {
   invoke "$(payload "$MAIN_ROOT")"
   fires_ok red "$RED"
   grep -qF "Save path: $TEMPORARY_DIRECTORY/main root/repo/.gaia/local/runs/session-$SID/STATE.md" "$TEMPORARY_DIRECTORY/context"
-}
-
-@test "JSON encoding red twin: a hook that skips the backslash escape does not decode to the doctrine" {
-  printf 'A line with a "quote", a back\\slash and a trailing \\\n' >>"$DOCTRINE"
-  make_mutant 'text_line=${text_line//\\/\\\\}' '' "$MUTANT"
-  write_reading "$RED"
-  invoke "$(payload)" "$MUTANT"
-  [ -s "$TEMPORARY_DIRECTORY/stdout" ]
-  fires_ok red "$RED" && return 1
-  rm -f "$(marker_path)"
-  invoke "$(payload)"
-  fires_ok red "$RED"
 }
 
 # The band values for a 1M and a 200k window at the shipped line, plus the
@@ -700,14 +640,6 @@ band_value_pattern() {
   [ -n "$pattern" ]
   grep -nwE "$pattern" "$HOOK_SOURCE_PATH" && return 1
   true
-}
-
-@test "band value red twin: a hook copy with one planted value fails the scan" {
-  local pattern planted
-  pattern="$(band_value_pattern)"
-  planted="${pattern%%|*}"
-  { cat "$HOOK_SOURCE_PATH"; printf '# %s\n' "$planted"; } >"$MUTANT"
-  grep -qwE "$pattern" "$MUTANT"
 }
 
 @test "the hook is executable" {
