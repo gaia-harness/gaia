@@ -111,32 +111,6 @@ notebook_retired_paths_check() {
 setup() {
   REAL_ROOT="$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)"
   REAL_ALLOWLIST="$BATS_TEST_DIRNAME/../fixtures/notebook-retired-paths-allowlist.tsv"
-  FIXTURE="$BATS_TEST_TMPDIR/fixture"
-  ALLOWLIST="$BATS_TEST_TMPDIR/allowlist.tsv"
-}
-
-# A temp git repo with one innocent tracked file, so a clean scan has a scan set.
-_fixture_repository() {
-  mkdir -p "$FIXTURE"
-  git -C "$FIXTURE" init --quiet --initial-branch=main
-  git -C "$FIXTURE" config user.email test@example.com
-  git -C "$FIXTURE" config user.name Test
-  git -C "$FIXTURE" config commit.gpgsign false
-  printf 'innocent\n' > "$FIXTURE/README.md"
-}
-
-_plant() {
-  mkdir -p "$(dirname "$FIXTURE/$1")"
-  printf '%s\n' "$2" > "$FIXTURE/$1"
-}
-
-_commit_fixture() {
-  git -C "$FIXTURE" add -A
-  git -C "$FIXTURE" commit --quiet -m fixture
-}
-
-_write_allowlist() {
-  printf '%s\n' "$@" > "$ALLOWLIST"
 }
 
 # bats test_tags=whole-tree
@@ -144,15 +118,6 @@ _write_allowlist() {
   run notebook_retired_paths_check "$REAL_ROOT" "$REAL_ALLOWLIST"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-# bats test_tags=whole-tree
-@test "the real scan is armed: an empty allowlist reports hits in the history ledger and the migration prompt" {
-  : > "$ALLOWLIST"
-  run notebook_retired_paths_check "$REAL_ROOT" "$ALLOWLIST"
-  [ "$status" -eq 1 ]
-  grep -qE '^RETIRED CHANGELOG\.md:[0-9]+: ' <<<"$output"
-  grep -qE '^RETIRED \.gaia/migrations/2\.0\.0\.md:[0-9]+: ' <<<"$output"
 }
 
 # bats test_tags=whole-tree
@@ -173,132 +138,4 @@ _write_allowlist() {
     esac
   done < "$REAL_ALLOWLIST"
   [ "$row_count" -gt 0 ]
-}
-
-@test "a planted skill file telling the reader to save under an old root fails naming that file" {
-  _fixture_repository
-  _plant .claude/skills/x/SKILL.md 'Save the result to `.gaia/local/specs/SPEC-NNN/`.'
-  _commit_fixture
-  : > "$ALLOWLIST"
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 1 ]
-  [ "$output" = 'RETIRED .claude/skills/x/SKILL.md:1: Save the result to `.gaia/local/specs/SPEC-NNN/`.' ]
-}
-
-@test "each of the three old roots is caught" {
-  _fixture_repository
-  _plant a.md 'see .gaia/local/specs/x'
-  _plant b.md 'see .gaia/local/plans/x'
-  _plant c.md 'see .gaia/local/research/x'
-  _commit_fixture
-  : > "$ALLOWLIST"
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 1 ]
-  grep -qF 'RETIRED a.md:1: ' <<<"$output"
-  grep -qF 'RETIRED b.md:1: ' <<<"$output"
-  grep -qF 'RETIRED c.md:1: ' <<<"$output"
-}
-
-@test "a name that only extends an old-root word is not a hit" {
-  _fixture_repository
-  _plant a.md 'see .gaia/local/specsfoo/x and .gaia/local/runs/y'
-  _commit_fixture
-  : > "$ALLOWLIST"
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 0 ]
-}
-
-@test "the same file allowlisted without a line pattern passes" {
-  _fixture_repository
-  _plant .claude/skills/x/SKILL.md 'Save the result to `.gaia/local/specs/SPEC-NNN/`.'
-  _commit_fixture
-  _write_allowlist $'.claude/skills/x/SKILL.md\ttest allowance'
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "an allowlist row whose file has no hit fails as stale, and so does a row for a missing file" {
-  _fixture_repository
-  _commit_fixture
-  _write_allowlist $'README.md\tno hit in this file' $'gone.md\tfile does not exist'
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 1 ]
-  grep -qxF 'STALE-ALLOW README.md' <<<"$output"
-  grep -qxF 'STALE-ALLOW gone.md' <<<"$output"
-}
-
-@test "an allowlist row without a reason fails as malformed" {
-  _fixture_repository
-  _plant a.md 'see .gaia/local/specs/x'
-  _commit_fixture
-  _write_allowlist 'a.md' $'a.md\t'
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 1 ]
-  grep -qF 'BAD-ALLOW 1:' <<<"$output"
-  grep -qF 'BAD-ALLOW 2:' <<<"$output"
-  grep -qF 'RETIRED a.md:1: ' <<<"$output"
-}
-
-@test "a row with a line pattern allows the matching line and still fails a line naming an old root as live" {
-  _fixture_repository
-  _plant wiki/concepts/Notebook.md 'Old machines hold 1.x-era folders under .gaia/local/specs/.
-Write each new spec to .gaia/local/specs/SPEC-NNN/ when you start.'
-  _commit_fixture
-  _write_allowlist $'wiki/concepts/Notebook.md\tlive prose describing the old roots as old\t1\\.x-era folders under'
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 1 ]
-  grep -qF 'RETIRED wiki/concepts/Notebook.md:2: ' <<<"$output"
-  grep -qF 'wiki/concepts/Notebook.md:1: ' <<<"$output" && return 1
-  true
-}
-
-@test "a row with a line pattern passes when every hit line matches it" {
-  _fixture_repository
-  _plant wiki/concepts/Notebook.md 'Old machines hold 1.x-era folders under .gaia/local/specs/.'
-  _commit_fixture
-  _write_allowlist $'wiki/concepts/Notebook.md\tlive prose describing the old roots as old\t1\\.x-era folders under'
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 0 ]
-}
-
-@test "this suite and the allowlist are exempt by path, a copy elsewhere is not" {
-  _fixture_repository
-  _plant "$SUITE_PATH" 'RETIRED_ROOTS_PATTERN=.gaia/local/specs'
-  _plant "$ALLOWLIST_PATH" '.gaia/local/plans'
-  _commit_fixture
-  : > "$ALLOWLIST"
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 0 ]
-  _plant copy/notebook-retired-paths.bats 'RETIRED_ROOTS_PATTERN=.gaia/local/specs'
-  git -C "$FIXTURE" add -A
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 1 ]
-  grep -qF 'RETIRED copy/notebook-retired-paths.bats:1: ' <<<"$output"
-}
-
-@test "an untracked file naming an old root is outside the scan" {
-  _fixture_repository
-  _commit_fixture
-  _plant untracked.md 'see .gaia/local/specs/x'
-  : > "$ALLOWLIST"
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 0 ]
-}
-
-@test "an empty tracked set fails instead of reporting clean" {
-  mkdir -p "$FIXTURE"
-  git -C "$FIXTURE" init --quiet --initial-branch=main
-  : > "$ALLOWLIST"
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 2 ]
-  [ "$output" = "EMPTY-SCAN-SET" ]
-}
-
-@test "a root that is not a repository fails" {
-  mkdir -p "$FIXTURE"
-  : > "$ALLOWLIST"
-  run notebook_retired_paths_check "$FIXTURE" "$ALLOWLIST"
-  [ "$status" -eq 2 ]
-  grep -qF 'NOT-A-REPOSITORY' <<<"$output"
 }

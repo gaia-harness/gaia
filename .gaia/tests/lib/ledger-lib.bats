@@ -18,12 +18,9 @@ _iso_days_before_now() {
   date -u -r "$epoch" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ
 }
 
-@test "kind_for_id: SPEC ids are spec, PLAN ids are plan" {
+@test "gaia_ledger_kind_for_id maps SPEC-n to spec and PLAN-n to plan, and prints nothing and returns 2 for anything else" {
   [ "$(gaia_ledger_kind_for_id SPEC-001)" = "spec" ]
   [ "$(gaia_ledger_kind_for_id PLAN-123)" = "plan" ]
-}
-
-@test "kind_for_id: anything else prints nothing and returns 2" {
   for bad in FOO-1 plan-001 SPEC- PLAN-1x SPEC-001-extra " SPEC-001" ""; do
     run gaia_ledger_kind_for_id "$bad"
     [ "$status" -eq 2 ]
@@ -31,21 +28,15 @@ _iso_days_before_now() {
   done
 }
 
-@test "status_allowed: spec accepts draft ready merged abandoned" {
+@test "gaia_ledger_status_allowed accepts draft ready merged abandoned for spec, ready merged abandoned for plan, and rejects off-vocabulary values and unknown kinds" {
   for value in draft ready merged abandoned; do
     gaia_ledger_status_allowed spec "$value"
   done
-}
-
-@test "status_allowed: plan rejects draft, accepts ready merged abandoned" {
   run gaia_ledger_status_allowed plan draft
   [ "$status" -eq 1 ]
   for value in ready merged abandoned; do
     gaia_ledger_status_allowed plan "$value"
   done
-}
-
-@test "status_allowed: off-vocabulary values and unknown kinds are rejected" {
   for value in shipped allocated "" bogus; do
     run gaia_ledger_status_allowed spec "$value"
     [ "$status" -eq 1 ]
@@ -56,17 +47,11 @@ _iso_days_before_now() {
   [ "$status" -eq 1 ]
 }
 
-@test "age_past_window: exactly at the boundary is past, one day inside is not" {
+@test "gaia_ledger_age_past_window is past exactly at the boundary, parses fractional seconds, and never reaps on an empty or garbage timestamp or an empty or non-positive now" {
   gaia_ledger_age_past_window "$(_iso_days_before_now 30)" "$NOW_EPOCH" 30
   run gaia_ledger_age_past_window "$(_iso_days_before_now 29)" "$NOW_EPOCH" 30
   [ "$status" -eq 1 ]
-}
-
-@test "age_past_window: fractional-second timestamps parse" {
   gaia_ledger_age_past_window "2020-01-01T00:00:00.123Z" "$NOW_EPOCH" 30
-}
-
-@test "age_past_window: empty, garbage, and non-positive now never reap" {
   run gaia_ledger_age_past_window "" "$NOW_EPOCH" 30
   [ "$status" -eq 1 ]
   run gaia_ledger_age_past_window "not-a-date" "$NOW_EPOCH" 30

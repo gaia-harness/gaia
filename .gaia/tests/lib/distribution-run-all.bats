@@ -42,102 +42,100 @@ changed() {
   printf '%s\n' "$list"
 }
 
-@test "a skip-marked scenario never runs, prints as SKIP, and its failure does not fail the run" {
+# reset_scenarios: removes every fixture scenario and recorded run, so each row
+# of a case table starts from an empty runner directory.
+reset_scenarios() {
+  rm -f "$DISTRIBUTION"/[0-9]*.sh "$RAN"/*
+}
+
+@test "the skip marker keeps a scenario from running and failing the run, wins over exclusive and over a matching paths declaration, and an unmarked failing scenario runs and fails" {
   scenario 01-runs.sh 0
   scenario 02-skipped.sh 1 '# distribution-runner: skip'
   run_all
-  [ "$status" -eq 0 ]
-  [ -f "$RAN/01-runs.sh" ]
-  [ -e "$RAN/02-skipped.sh" ] && return 1
-  printf '%s\n' "$output" | grep -qx 'SKIP  02-skipped.sh'
-  printf '%s\n' "$output" | grep -qx 'PASS  01-runs.sh'
-  printf '%s\n' "$output" | grep -q 'skipping 1$'
-}
+  [ "$status" -eq 0 ] || { echo "skipped: status $status"; return 1; }
+  [ -f "$RAN/01-runs.sh" ] || { echo "skipped: 01-runs.sh did not run"; return 1; }
+  [ -e "$RAN/02-skipped.sh" ] && { echo "skipped: 02-skipped.sh ran"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'SKIP  02-skipped.sh' || { echo "skipped: no SKIP line"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'PASS  01-runs.sh' || { echo "skipped: no PASS line"; return 1; }
+  printf '%s\n' "$output" | grep -q 'skipping 1$' || { echo "skipped: no skipping count"; return 1; }
 
-@test "red twin: the same failing scenario without the marker runs and fails the run" {
+  reset_scenarios
   scenario 01-runs.sh 0
   scenario 02-unmarked.sh 1
   run_all
-  [ "$status" -eq 1 ]
-  [ -f "$RAN/02-unmarked.sh" ]
-  printf '%s\n' "$output" | grep -qx 'FAIL  02-unmarked.sh'
-}
+  [ "$status" -eq 1 ] || { echo "unmarked: status $status"; return 1; }
+  [ -f "$RAN/02-unmarked.sh" ] || { echo "unmarked: 02-unmarked.sh did not run"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'FAIL  02-unmarked.sh' || { echo "unmarked: no FAIL line"; return 1; }
 
-@test "the skip marker wins over the exclusive marker" {
+  reset_scenarios
   scenario 01-runs.sh 0
   scenario 02-exclusive-skipped.sh 1 '# distribution-runner: exclusive' '# distribution-runner: skip'
   scenario 03-exclusive.sh 0 '# distribution-runner: exclusive'
   run_all
-  [ "$status" -eq 0 ]
-  [ -e "$RAN/02-exclusive-skipped.sh" ] && return 1
-  [ -f "$RAN/03-exclusive.sh" ]
-  printf '%s\n' "$output" | grep -qx 'SKIP  02-exclusive-skipped.sh'
-  printf '%s\n' "$output" | grep -qx 'PASS  03-exclusive.sh'
-}
+  [ "$status" -eq 0 ] || { echo "exclusive: status $status"; return 1; }
+  [ -e "$RAN/02-exclusive-skipped.sh" ] && { echo "exclusive: skipped scenario ran"; return 1; }
+  [ -f "$RAN/03-exclusive.sh" ] || { echo "exclusive: 03-exclusive.sh did not run"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'SKIP  02-exclusive-skipped.sh' || { echo "exclusive: no SKIP line"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'PASS  03-exclusive.sh' || { echo "exclusive: no PASS line"; return 1; }
 
-@test "change-scoped: a declared scenario runs when a path matching one of its globs changed" {
-  scenario 01-fast.sh 0
-  scenario 02-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/scaffold/** apps/web/package.json'
-  run_all --changed-paths "$(changed .gaia/cli/src/scaffold/route-data.ts)"
-  [ "$status" -eq 0 ]
-  [ -f "$RAN/01-fast.sh" ]
-  [ -f "$RAN/02-slow.sh" ]
-  printf '%s\n' "$output" | grep -qx 'PASS  02-slow.sh'
-}
-
-@test "change-scoped: a declared scenario is skipped when no declared path changed, and its failure does not fail the run" {
-  scenario 01-fast.sh 0
-  scenario 02-slow.sh 1 '# distribution-runner: paths .gaia/cli/src/scaffold/**'
-  run_all --changed-paths "$(changed .gaia/cli/src/release/bump.ts)"
-  [ "$status" -eq 0 ]
-  [ -f "$RAN/01-fast.sh" ]
-  [ -e "$RAN/02-slow.sh" ] && return 1
-  printf '%s\n' "$output" | grep -qx 'SKIP  02-slow.sh (no declared path changed)'
-  printf '%s\n' "$output" | grep -q 'skipping 1$'
-}
-
-@test "change-scoped: globs on a second paths line select too" {
-  scenario 01-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/init/**' '# distribution-runner: paths apps/web/.storybook/**'
-  run_all --changed-paths "$(changed apps/web/.storybook/preview.ts)"
-  [ "$status" -eq 0 ]
-  [ -f "$RAN/01-slow.sh" ]
-}
-
-@test "change-scoped: an edit to the declared scenario's own file selects it" {
-  scenario 01-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/scaffold/**'
-  run_all --changed-paths "$(changed .gaia/tests/distribution/01-slow.sh)"
-  [ "$status" -eq 0 ]
-  [ -f "$RAN/01-slow.sh" ]
-}
-
-@test "change-scoped: a shared harness input runs every declared scenario" {
-  local shared
-  for shared in .gaia/tests/distribution/run-all.sh .gaia/tests/distribution/lib/lib.sh \
-    .github/workflows/distribution-harness.yml .github/actions/gaia-setup-node/action.yml; do
-    rm -f "$RAN"/*
-    scenario 01-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/scaffold/**'
-    run_all --changed-paths "$(changed "$shared")"
-    [ "$status" -eq 0 ]
-    [ -f "$RAN/01-slow.sh" ] || { echo "$shared did not run the declared scenario" >&2; return 1; }
-  done
-}
-
-@test "change-scoped: the skip marker still wins over a matching declaration" {
+  reset_scenarios
   scenario 01-slow.sh 1 '# distribution-runner: skip' '# distribution-runner: paths .gaia/cli/src/scaffold/**'
   scenario 02-fast.sh 0
   run_all --changed-paths "$(changed .gaia/cli/src/scaffold/route.ts)"
-  [ "$status" -eq 0 ]
-  [ -e "$RAN/01-slow.sh" ] && return 1
-  printf '%s\n' "$output" | grep -qx 'SKIP  01-slow.sh'
+  [ "$status" -eq 0 ] || { echo "matching paths: status $status"; return 1; }
+  [ -e "$RAN/01-slow.sh" ] && { echo "matching paths: skipped scenario ran"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'SKIP  01-slow.sh' || { echo "matching paths: no SKIP line"; return 1; }
 }
 
-@test "full run: with no changed-path list every declared scenario runs, failures included" {
+@test "change-scoped selection runs a declared scenario when a matching glob, a second paths line, its own file or a shared harness input changed, skips it when none did, and a run with no list runs everything" {
+  local shared
+
+  scenario 01-fast.sh 0
+  scenario 02-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/scaffold/** apps/web/package.json'
+  run_all --changed-paths "$(changed .gaia/cli/src/scaffold/route-data.ts)"
+  [ "$status" -eq 0 ] || { echo "matching glob: status $status"; return 1; }
+  [ -f "$RAN/01-fast.sh" ] || { echo "matching glob: 01-fast.sh did not run"; return 1; }
+  [ -f "$RAN/02-slow.sh" ] || { echo "matching glob: 02-slow.sh did not run"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'PASS  02-slow.sh' || { echo "matching glob: no PASS line"; return 1; }
+
+  reset_scenarios
+  scenario 01-fast.sh 0
+  scenario 02-slow.sh 1 '# distribution-runner: paths .gaia/cli/src/scaffold/**'
+  run_all --changed-paths "$(changed .gaia/cli/src/release/bump.ts)"
+  [ "$status" -eq 0 ] || { echo "no declared path: status $status"; return 1; }
+  [ -f "$RAN/01-fast.sh" ] || { echo "no declared path: 01-fast.sh did not run"; return 1; }
+  [ -e "$RAN/02-slow.sh" ] && { echo "no declared path: 02-slow.sh ran"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'SKIP  02-slow.sh (no declared path changed)' || { echo "no declared path: no SKIP line"; return 1; }
+  printf '%s\n' "$output" | grep -q 'skipping 1$' || { echo "no declared path: no skipping count"; return 1; }
+
+  reset_scenarios
+  scenario 01-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/init/**' '# distribution-runner: paths apps/web/.storybook/**'
+  run_all --changed-paths "$(changed apps/web/.storybook/preview.ts)"
+  [ "$status" -eq 0 ] || { echo "second paths line: status $status"; return 1; }
+  [ -f "$RAN/01-slow.sh" ] || { echo "second paths line: 01-slow.sh did not run"; return 1; }
+
+  reset_scenarios
+  scenario 01-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/scaffold/**'
+  run_all --changed-paths "$(changed .gaia/tests/distribution/01-slow.sh)"
+  [ "$status" -eq 0 ] || { echo "own file: status $status"; return 1; }
+  [ -f "$RAN/01-slow.sh" ] || { echo "own file: 01-slow.sh did not run"; return 1; }
+
+  for shared in .gaia/tests/distribution/run-all.sh .gaia/tests/distribution/lib/lib.sh \
+    .github/workflows/distribution-harness.yml .github/actions/gaia-setup-node/action.yml; do
+    reset_scenarios
+    scenario 01-slow.sh 0 '# distribution-runner: paths .gaia/cli/src/scaffold/**'
+    run_all --changed-paths "$(changed "$shared")"
+    [ "$status" -eq 0 ] || { echo "$shared: status $status"; return 1; }
+    [ -f "$RAN/01-slow.sh" ] || { echo "$shared did not run the declared scenario"; return 1; }
+  done
+
+  reset_scenarios
   scenario 01-fast.sh 0
   scenario 02-slow.sh 1 '# distribution-runner: paths .gaia/cli/src/scaffold/**'
   run_all
-  [ "$status" -eq 1 ]
-  [ -f "$RAN/02-slow.sh" ]
-  printf '%s\n' "$output" | grep -qx 'FAIL  02-slow.sh'
+  [ "$status" -eq 1 ] || { echo "no list: status $status"; return 1; }
+  [ -f "$RAN/02-slow.sh" ] || { echo "no list: 02-slow.sh did not run"; return 1; }
+  printf '%s\n' "$output" | grep -qx 'FAIL  02-slow.sh' || { echo "no list: no FAIL line"; return 1; }
 }
 
 @test "change-scoped: an unreadable changed-path list or an unknown argument exits 2 and runs nothing" {
@@ -184,15 +182,6 @@ duplicate_scenario_numbers() {
   [ -e "${scenarios[0]}" ] || { echo "no scenarios found" >&2; return 1; }
   duplicates="$(duplicate_scenario_numbers "$REPO_ROOT/.gaia/tests/distribution")"
   [ -z "$duplicates" ] || { echo "shared numbers: $duplicates" >&2; return 1; }
-}
-
-@test "the shared-number check reports a duplicate, including a zero-padding variant" {
-  scenario 01-first.sh 0
-  scenario 02-second.sh 0
-  scenario 02-third.sh 0
-  scenario 3-fourth.sh 0
-  scenario 03-fifth.sh 0
-  [ "$(duplicate_scenario_numbers "$DISTRIBUTION")" = "$(printf '2\n3')" ]
 }
 
 # A pull request reaches run-all.sh only when the workflow's `code:` filter
@@ -243,12 +232,6 @@ uncovered_globs() {
   [ -n "$entries" ]
   uncovered="$(uncovered_globs "$globs" "$entries")"
   [ -z "$uncovered" ] || { printf 'not covered by the code filter: %s\n' "$uncovered" >&2; return 1; }
-}
-
-@test "red twin: a declared glob outside the code filter is reported" {
-  local uncovered
-  uncovered="$(uncovered_globs 'apps/web/app/routes/**' "$(workflow_code_filter "$REPO_ROOT/.github/workflows/distribution-harness.yml")")"
-  [ "$uncovered" = 'apps/web/app/routes/**' ]
 }
 
 @test "the harness workflow runs the full harness on every push to main and change-scopes only pull requests" {

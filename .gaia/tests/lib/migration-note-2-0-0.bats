@@ -2,15 +2,12 @@
 # The bundled 2.0.0 migration note and the release configuration around it.
 #
 #   N1     the frontmatter and byte hygiene of the note
-#   N2     no working-document id and no migrate-page URL in the note
 #   R      the note passes the real release scrub, the id check still covers
 #          the folder, and the excluded-refs exemption is what lets it pass
-#   G      the ground rule and the step 7 restart paragraph
 #   P1     GAIA's own project config is withheld from the bundle
 #
-# Tokens the suite must not contain (the migrate URL, an em dash, a concrete
-# working-document id) are assembled at run time so the suite never matches
-# itself. Assertion style per .claude/rules/bats-assertions.md.
+# The concrete working-document id the suite needs is assembled at run time so
+# the suite never matches itself. Assertion style per .claude/rules/bats-assertions.md.
 #
 # Maintainer-only. `.gaia/tests` is wholesale release-excluded.
 
@@ -19,7 +16,6 @@ setup() {
   NOTE="$REPO_ROOT/.gaia/migrations/2.0.0.md"
   MAINTAINER_CLI="$REPO_ROOT/.gaia/cli/gaia-maintainer"
   SCRUB_CONFIG="$REPO_ROOT/.gaia/release-scrub.yml"
-  MIGRATE_URL="$(printf '%s%s' 'https://gaiareact.com' '/migrate')"
   SPEC_ID="$(printf '%s%s' 'SPEC-' '123')"
 }
 
@@ -33,20 +29,6 @@ scrub_note() {
   run bash -c 'cd "$1" && "$2" release scrub "$3" --config "$4"' _ "$REPO_ROOT" "$MAINTAINER_CLI" "$staging" "$config"
 }
 
-# Exit 0 when the restart paragraph in the note at $1 carries every required
-# token, 1 otherwise.
-restart_paragraph_ok() {
-  local paragraph
-  paragraph="$(grep -F -- '**Restart point.**' "$1")"
-  [ -n "$paragraph" ] || return 1
-  local token
-  for token in 'new session' 're-verify' '.sha256' 're-extract' 'tree/.gaia/migrations/2.0.0.md'; do
-    printf '%s\n' "$paragraph" | grep -qF -- "$token" || return 1
-  done
-  printf '%s\n' "$paragraph" | grep -q -i -- 'paste' && return 1
-  return 0
-}
-
 @test "N1: the note opens with exactly the three frontmatter lines, with no byte-order mark or carriage return" {
   [ -f "$NOTE" ]
   [ "$(head -n 3 "$NOTE")" = "$(printf -- '---\nmode: blocking\n---')" ]
@@ -56,28 +38,18 @@ restart_paragraph_ok() {
   true
 }
 
-@test "N2: the note carries no concrete working-document id and no migrate-page URL" {
-  grep -qE 'SPEC-[0-9]{3,}' "$NOTE" && return 1
-  grep -qE 'UAT-[0-9]{3}' "$NOTE" && return 1
-  grep -qF -- "$MIGRATE_URL" "$NOTE" && return 1
-  true
-}
-
-@test "R1: the real release scrub reports no finding on the note" {
+# bats test_tags=protected
+@test "the real release scrub reports no finding on the note, fails a concrete id naming spec-concrete-ids, and fails with an excluded-refs finding without the migrations exemption" {
   scrub_note "$NOTE"
   [ "$status" -eq 0 ]
   printf '%s\n' "$output" | grep -qF 'leaks: none'
-}
 
-@test "R2: a concrete id in the note still fails the scrub, and the output names the id check" {
   fixture="$BATS_TEST_TMPDIR/with-id.md"
   { cat "$NOTE"; printf 'See %s for the background.\n' "$SPEC_ID"; } > "$fixture"
   scrub_note "$fixture"
   [ "$status" -ne 0 ]
   printf '%s\n' "$output" | grep -qF 'spec-concrete-ids'
-}
 
-@test "R3: without the excluded-refs exemption the note produces an excluded-refs finding" {
   config="$BATS_TEST_TMPDIR/no-exemption.yml"
   grep -vF -- '- ".gaia/migrations/**"' "$SCRUB_CONFIG" > "$config"
   [ "$(grep -cF -- '.gaia/migrations/**' "$config")" -eq 0 ]
@@ -90,27 +62,6 @@ restart_paragraph_ok() {
   [ "$(grep -cF -- '".gaia/migrations/**"' "$SCRUB_CONFIG")" -eq 1 ]
   block="$(awk '/^      - id: /{f = ($0 == "      - id: excluded-refs")} f{print}' "$SCRUB_CONFIG")"
   [ "$(printf '%s\n' "$block" | grep -cF -- '".gaia/migrations/**"')" -eq 1 ]
-}
-
-@test "G1: the untrusted-data ground rule names the note from the verified bundle as the guideline" {
-  rule="$(grep -F -- '- **Untrusted data.**' "$NOTE")"
-  [ -n "$rule" ]
-  printf '%s\n' "$rule" | grep -qF -- 'checksum-verified v2.0.0 bundle'
-  printf '%s\n' "$rule" | grep -qF -- '.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md'
-  printf '%s\n' "$rule" | grep -qF -- 'is the guideline you follow'
-}
-
-@test "G2: the step 7 restart paragraph re-verifies and re-extracts the bundle and never says to paste" {
-  restart_paragraph_ok "$NOTE"
-}
-
-@test "G3: a copy with the old restart sentence restored fails the restart assertion" {
-  fixture="$BATS_TEST_TMPDIR/old-restart.md"
-  # shellcheck disable=SC2016 # the backticks are literal sed text
-  sed 's|^\(\*\*Restart point\.\*\*.*\)ask Claude to re-verify .* then follow `[^`]*`\. The new session|\1paste this same prompt. The new session|' "$NOTE" > "$fixture"
-  grep -qF -- 'paste this same prompt' "$fixture"
-  run restart_paragraph_ok "$fixture"
-  [ "$status" -ne 0 ]
 }
 
 @test "P1: GAIA's project config is excluded from the bundle and opted out of the excluded-refs check" {

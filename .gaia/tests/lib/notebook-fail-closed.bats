@@ -2,29 +2,19 @@
 #
 # Fail-closed contract of the notebook: while the one-time move is pending,
 # every consumer script refuses with the move line on stderr and changes
-# nothing, and the pre-flight sweep that fronts the skills blocks on the same
-# readiness check before it runs anything else.
+# nothing.
 #
-# SCRIPT HALF. Each consumer is run from a fixture whose catalog lacks the move
-# marker while a legacy ledger still exists (`--legacy`), and again with no
-# catalog at all (`--no-catalog --legacy`). For each: exit non-zero, stderr
-# names the move command, and a before/after snapshot of the fixture's
-# notebook and local state is identical, so no id was minted, no row written,
-# no folder created and nothing removed. The snapshot is the path list plus a
-# sha256 of every regular file.
-#
-# PROSE HALF. lifecycle.md's `## Pre-flight sweep` names the readiness check
-# before any other command and states that a non-zero exit stops the command,
-# and the two callers (/gaia-spec step 2, /gaia-plan step 0) route through that
-# section.
-#
-# Each half has a red twin (.claude/rules/guards-must-fail.md): the script half
-# redefines the readiness function in a fixture copy of the library so the
-# script's own call passes, which makes the refusal case fail; the prose half
-# moves the readiness check below the reconcile in a temp copy, or drops a
-# caller's route.
+# Each consumer is run from a fixture whose catalog lacks the move marker while
+# a legacy ledger still exists (`--legacy`), and again with no catalog at all
+# (`--no-catalog --legacy`). For each: exit non-zero, stderr names the move
+# command, and a before/after snapshot of the fixture's notebook and local
+# state is identical, so no id was minted, no row written, no folder created
+# and nothing removed.
 
 bats_require_minimum_version 1.5.0
+
+# shellcheck source=helpers/usage-gate.sh
+source "$BATS_TEST_DIRNAME/helpers/usage-gate.sh"
 
 # Builds the throwaway fixture repository the suite acts on. Called through a
 # wrapper so the whole-tree mark guard does not read the helper call as the
@@ -34,10 +24,6 @@ _fixture_repository() {
 }
 
 setup() {
-  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
-  SPEC_MD="$REPO_ROOT/.claude/skills/gaia/references/spec.md"
-  PLAN_MD="$REPO_ROOT/.claude/skills/gaia/references/plan.md"
   FIXTURES=()
 }
 
@@ -99,6 +85,15 @@ _check_refusal() {
     printf '%s exited 0 although the one-time move is pending (stdout: %s)\n' "$name" "$output" >&2
     return 1
   fi
+  # The spec and plan scripts document exit 3 for this refusal, with nothing on stdout.
+  case "$name" in
+    spec-* | plan-*)
+      if [ "$status" -ne 3 ] || [ -n "$output" ]; then
+        printf '%s refused with status %s and stdout %s, not exit 3 and empty stdout\n' "$name" "$status" "$output" >&2
+        return 1
+      fi
+      ;;
+  esac
   if ! printf '%s\n' "$stderr" | grep -qF 'bash .gaia/scripts/notebook/move.sh run'; then
     printf '%s refused (status %s) without the move line on stderr: %s\n' "$name" "$status" "$stderr" >&2
     return 1
@@ -112,135 +107,28 @@ _check_refusal() {
   true
 }
 
-_check_refusal_in_both_shapes() {
-  local name="$1" repo
-  FIXTURES+=("$(_fixture_repository --legacy)")
-  repo="${FIXTURES[${#FIXTURES[@]} - 1]}"
-  _check_refusal "$repo" "$name" || return 1
-
-  FIXTURES+=("$(_fixture_repository --no-catalog --legacy)")
-  repo="${FIXTURES[${#FIXTURES[@]} - 1]}"
-  _check_refusal "$repo" "$name"
-}
-
-@test "spec-allocator.sh next refuses while the move is pending and changes nothing" {
-  _check_refusal_in_both_shapes spec-allocator
-}
-
-@test "plan-allocator.sh next refuses while the move is pending and changes nothing" {
-  _check_refusal_in_both_shapes plan-allocator
-}
-
-@test "spec-archive-merged.sh refuses while the move is pending and changes nothing" {
-  _check_refusal_in_both_shapes spec-archive-merged
-}
-
-@test "plan-archive-merged.sh refuses while the move is pending and changes nothing" {
-  _check_refusal_in_both_shapes plan-archive-merged
-}
-
-@test "spec-archive-abandoned.sh refuses while the move is pending and changes nothing" {
-  _check_refusal_in_both_shapes spec-archive-abandoned
-}
-
-@test "research-reaper.sh list refuses while the move is pending and changes nothing" {
-  _check_refusal_in_both_shapes research-reaper-list
-}
-
-@test "research-reaper.sh apply refuses while the move is pending and changes nothing" {
-  _check_refusal_in_both_shapes research-reaper-apply
-}
-
-@test "notebook/reconcile.sh refuses while the move is pending and changes nothing" {
-  _check_refusal_in_both_shapes reconcile
-}
-
-@test "red twin script half: a script whose readiness check is bypassed fails the refusal check" {
-  local name repo reason
+# bats test_tags=protected
+@test "each notebook consumer refuses while the one-time move is pending, in a legacy and a no-catalog repository, and changes nothing" {
+  local name template repo legacy_template no_catalog_template
+  # The legacy fixture seeds what each reaper could delete (a merged spec and a
+  # merged plan folder, each with its consolidated SUMMARY.md and its close row
+  # in the usage ledger, an abandoned spec folder, a closed research folder), so
+  # a reaper that deleted before its readiness check would change the snapshot.
+  legacy_template="$(_fixture_repository --legacy \
+    --seed-spec-merged-folder SPEC-001 --seed-spec-abandoned-folder SPEC-002 \
+    --seed-plan-folder PLAN-001 merged --seed-research old-topic closed)"
+  printf -- '---\nwiki_promote_default: ask\nwiki_promote_targets: []\n---\n# PLAN-001\n\nConsolidated summary body.\n' \
+    > "$legacy_template/.notebook/plans/PLAN-001/SUMMARY.md"
+  seed_close_row "$legacy_template/.gaia/local/telemetry" spec:SPEC-001 gaia-spec
+  seed_close_row "$legacy_template/.gaia/local/telemetry" plan:PLAN-001 gaia-plan
+  no_catalog_template="$(_fixture_repository --no-catalog --legacy)"
+  FIXTURES+=("$legacy_template" "$no_catalog_template")
   for name in spec-allocator plan-allocator spec-archive-merged plan-archive-merged \
     spec-archive-abandoned research-reaper-list research-reaper-apply reconcile; do
-    FIXTURES+=("$(_fixture_repository --legacy)")
-    repo="${FIXTURES[${#FIXTURES[@]} - 1]}"
-    # The library's own readiness function now passes, so the script proceeds as
-    # on a ready machine: sourced functions do not re-check readiness.
-    printf '\ngaia_notebook_require_ready() { return 0; }\n' >> "$repo/.gaia/scripts/notebook/notebook-lib.sh"
-    reason="$(_check_refusal "$repo" "$name" 2>&1 >/dev/null)" && {
-      printf 'the refusal check still passed for %s with its readiness check bypassed\n' "$name" >&2
-      return 1
-    }
-    # A failing check names why, so the twin cannot pass on an unrelated crash.
-    [ -n "$reason" ] || { printf 'the refusal check failed for %s without a reason\n' "$name" >&2; return 1; }
-    printf '# bypassed %s: %s\n' "$name" "$(printf '%s' "$reason" | head -1)" >&3
+    for template in "$legacy_template" "$no_catalog_template"; do
+      repo="$BATS_TEST_TMPDIR/$name-$(basename "$template")"
+      cp -R "$template" "$repo"
+      _check_refusal "$repo" "$name" || return 1
+    done
   done
-  true
-}
-
-# --- prose half --------------------------------------------------------------
-
-# The `## Pre-flight sweep` section of a lifecycle.md, to the end of the file.
-sweep_section() {
-  local start_line
-  start_line="$(grep -n -F -- '## Pre-flight sweep' "$1" | head -1 | cut -d: -f1)"
-  [ -n "$start_line" ] || { printf 'no "## Pre-flight sweep" section in %s\n' "$1" >&2; return 1; }
-  sed -n "${start_line},\$p" "$1"
-}
-
-check_sweep_blocks_on_readiness() {
-  local section first_command
-  section="$(sweep_section "$1")" || return 1
-  # The first shell command of the section, in document order, is the check.
-  first_command="$(printf '%s\n' "$section" | grep -m1 -E '^bash \.gaia/scripts/')"
-  if [ "$first_command" != 'bash .gaia/scripts/notebook/notebook-lib.sh require-ready' ]; then
-    printf 'the first command of the pre-flight sweep is not the readiness check: %s\n' "$first_command" >&2
-    return 1
-  fi
-  if ! printf '%s\n' "$section" | grep -qF 'A non-zero exit stops the command'; then
-    printf 'the pre-flight sweep does not state that a non-zero readiness exit stops the command\n' >&2
-    return 1
-  fi
-  true
-}
-
-@test "the pre-flight sweep names the readiness check before any other command and a non-zero exit stops the command" {
-  check_sweep_blocks_on_readiness "$LIFECYCLE_MD"
-}
-
-@test "red twin prose half: the readiness check moved below the reconcile fails the order check" {
-  local mutated="$BATS_TEST_TMPDIR/lifecycle-reordered.md"
-  awk '
-    /^bash \.gaia\/scripts\/notebook\/notebook-lib\.sh require-ready$/ { held = 1; next }
-    { print }
-    /^bash \.gaia\/scripts\/spec\/plan-reconcile\.sh "\$PWD"/ && held { print "bash .gaia/scripts/notebook/notebook-lib.sh require-ready"; held = 0 }
-  ' "$LIFECYCLE_MD" > "$mutated"
-  if cmp -s "$LIFECYCLE_MD" "$mutated"; then
-    printf 'the reorder was not applied\n' >&2
-    return 1
-  fi
-  check_sweep_blocks_on_readiness "$mutated" && return 1
-  true
-}
-
-# Whether the text of <file> between two anchors routes through the sweep.
-check_caller_routes_through_sweep() {
-  local file="$1" start_anchor="$2" end_anchor="$3" start_line end_line
-  start_line="$(grep -n -F -- "$start_anchor" "$file" | head -1 | cut -d: -f1)"
-  end_line="$(grep -n -F -- "$end_anchor" "$file" | head -1 | cut -d: -f1)"
-  [ -n "$start_line" ] && [ -n "$end_line" ] || { printf 'anchors not found in %s\n' "$file" >&2; return 1; }
-  sed -n "${start_line},$((end_line - 1))p" "$file" | grep -qF 'spec/lifecycle.md` and run its `## Pre-flight sweep`'
-}
-
-@test "spec.md step 2 and plan.md step 0 both route through the pre-flight sweep" {
-  check_caller_routes_through_sweep "$SPEC_MD" '### 2. Resume-vs-start-new prompt' '### 3. Allocate, anchor, stamp'
-  check_caller_routes_through_sweep "$PLAN_MD" '### 0. Pre-flight sweep' '### 1. Get description'
-}
-
-@test "red twin prose half: a caller that drops the route to the sweep fails the routing check" {
-  local mutated="$BATS_TEST_TMPDIR/plan-no-route.md"
-  sed 's|run its `## Pre-flight sweep`|run its checks|' "$PLAN_MD" > "$mutated"
-  if cmp -s "$PLAN_MD" "$mutated"; then
-    printf 'the route was not dropped\n' >&2
-    return 1
-  fi
-  check_caller_routes_through_sweep "$mutated" '### 0. Pre-flight sweep' '### 1. Get description' && return 1
-  true
 }

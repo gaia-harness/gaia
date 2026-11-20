@@ -5,9 +5,9 @@
 # notebook link is gitignored, so removing the worktree never needs force and
 # never takes the notebook with it.
 #
-# The red twin makes the worktree's .notebook a real directory instead of the
-# link: the library resolves the main checkout itself, so the writes still land
-# in main and the hand-made directory stays empty.
+# Without the link, whether the worktree's .notebook is absent or a real
+# directory, the library resolves the main checkout itself, so the writes still
+# land in main and the worktree gains no notebook content.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -92,24 +92,27 @@ _write_three_items() {
   [ "$(jq '[.items[] | select(.id == "SPEC-001" or .id == "PLAN-001" or .id == "survival-topic-2026-10-01")] | length' "$REPO/.notebook/catalog.json")" -eq 3 ]
 }
 
-@test "a worktree whose notebook is a real directory still writes to main, and the directory stays empty" {
-  _fixture_repository
-  mkdir "$WORKTREE/.notebook"
-  [ ! -L "$WORKTREE/.notebook" ]
+@test "the library writes to main from a worktree whose notebook link is absent or a real directory, and the worktree gains no notebook content" {
+  local shape
+  for shape in absent directory; do
+    _fixture_repository
+    if [ "$shape" = directory ]; then
+      mkdir "$WORKTREE/.notebook"
+    fi
 
-  _write_three_items
+    _write_three_items
 
-  [ -z "$(ls -A "$WORKTREE/.notebook")" ]
-  [ "$(cat "$REPO/.notebook/specs/SPEC-001/SPEC.md")" = "spec body" ]
-  [ "$(cat "$REPO/.notebook/plans/PLAN-001/PROGRESS.md")" = "plan body" ]
-  [ "$(cat "$REPO/.notebook/research/survival-topic-2026-10-01/README.md")" = "research body" ]
-  [ "$(jq '[.items[] | select(.id == "SPEC-001" or .id == "PLAN-001" or .id == "survival-topic-2026-10-01")] | length' "$REPO/.notebook/catalog.json")" -eq 3 ]
-}
-
-@test "the library writes to main even when the link step never ran, and creates no notebook in the worktree" {
-  _fixture_repository
-  [ ! -e "$WORKTREE/.notebook" ]
-  _write_three_items
-  [ ! -e "$WORKTREE/.notebook" ]
-  [ -f "$REPO/.notebook/specs/SPEC-001/SPEC.md" ]
+    if [ "$shape" = directory ]; then
+      [ -z "$(ls -A "$WORKTREE/.notebook")" ] || { echo "shape $shape: the worktree directory holds content"; return 1; }
+    else
+      [ ! -e "$WORKTREE/.notebook" ] || { echo "shape $shape: a notebook appeared in the worktree"; return 1; }
+    fi
+    [ "$(cat "$REPO/.notebook/specs/SPEC-001/SPEC.md")" = "spec body" ] || { echo "shape $shape: spec not in main"; return 1; }
+    [ "$(cat "$REPO/.notebook/plans/PLAN-001/PROGRESS.md")" = "plan body" ] || { echo "shape $shape: plan not in main"; return 1; }
+    [ "$(cat "$REPO/.notebook/research/survival-topic-2026-10-01/README.md")" = "research body" ] || { echo "shape $shape: research not in main"; return 1; }
+    [ "$(jq '[.items[] | select(.id == "SPEC-001" or .id == "PLAN-001" or .id == "survival-topic-2026-10-01")] | length' "$REPO/.notebook/catalog.json")" -eq 3 ] || { echo "shape $shape: catalog rows missing"; return 1; }
+    git -C "$REPO" worktree remove --force "$WORKTREE"
+    rm -rf "$REPO" "$WORKTREE"
+  done
+  REPO=""
 }

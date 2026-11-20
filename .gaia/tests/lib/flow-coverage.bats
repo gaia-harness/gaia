@@ -131,7 +131,27 @@ script_exists() {
   [ -f "$SCRATCH/.gaia/scripts/spec/flow-coverage.sh" ]
 }
 
-@test "a web flow with no spec and a command flow with no file each exit 1 naming the flow and the path" {
+# reset_scratch: a fresh scratch repository, so each row of a case table
+# builds its own SPEC and branch.
+reset_scratch() {
+  rm -rf "$SCRATCH"
+  build_scratch_repo
+}
+
+# expect_coverage <row> <status> <expected output>: runs the check and compares
+# the exit status and the output lines, ignoring their order.
+expect_coverage() {
+  run coverage
+  [ "$status" -eq "$2" ] || { echo "row $1: status $status, output: $output"; return 1; }
+  [ "$(printf '%s\n' "$output" | sort)" = "$(printf '%s\n' "$3" | sort)" ] \
+    || { echo "row $1: output: $output"; return 1; }
+}
+
+@test "flow-coverage reports each mechanical gap as one finding naming the flow and the fault, and accepts the covered twins" {
+  script_exists
+
+  # Missing web flow test and missing command flow test.
+  reset_scratch
   write_spec flows: \
     "$(web_flow FLOW-001 sign-in app/a)" \
     "$(command_flow FLOW-002 refuse-check .gaia/tests/lib/refuse-check.bats)"
@@ -140,13 +160,120 @@ script_exists() {
   write_listing
   add_file apps/web/app/a/more.ts 'export {};'
   commit_all branch
+  expect_coverage missing-tests 1 "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts
+flow-coverage: FLOW-002: missing .gaia/tests/lib/refuse-check.bats" || return 1
 
-  script_exists
+  # A changed command flow test passes; only the web flow with no spec is reported.
+  reset_scratch
+  write_spec flows: \
+    "$(web_flow FLOW-001 sign-in app/a)" \
+    "$(command_flow FLOW-002 refuse-check .gaia/tests/lib/refuse-check.bats)"
+  add_file apps/web/app/a/index.ts 'export {};'
+  mark_base
+  write_listing
+  add_file .gaia/tests/lib/refuse-check.bats '@test "refuses" { true; }'
+  commit_all branch
+  expect_coverage changed-command-test 1 "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts" || return 1
+
+  # A flow test untouched on the branch is reported; the same file extended passes.
+  reset_scratch
+  write_spec flows: \
+    "$(web_flow FLOW-001 untouched app/a)" \
+    "$(web_flow FLOW-002 extended app/a)"
+  add_file apps/web/app/a/index.ts 'export {};'
+  add_spec_file untouched app/a
+  add_spec_file extended app/a
+  mark_base
+  write_listing untouched extended
+  add_file apps/web/app/a/more.ts 'export {};'
+  printf '%s\n' "test('also works', async () => {});" >>"$SCRATCH/$FLOWS_DIRECTORY/extended.spec.ts"
+  commit_all branch
+  expect_coverage untouched-test 1 "flow-coverage: FLOW-001: $FLOWS_DIRECTORY/untouched.spec.ts not changed on the branch" || return 1
+
+  # A changed web flow spec the Playwright listing omits is not collected.
+  reset_scratch
+  write_spec flows: "$(web_flow FLOW-001 sign-in app/a)"
+  add_file apps/web/app/a/index.ts 'export {};'
+  mark_base
+  write_listing
+  add_file apps/web/app/a/more.ts 'export {};'
+  add_spec_file sign-in app/a
+  commit_all branch
+  expect_coverage not-collected 1 "flow-coverage: $FLOWS_DIRECTORY/sign-in.spec.ts: not in the Playwright listing" || return 1
+
+  # A spec with no covers line and a spec whose covers path does not exist.
+  reset_scratch
+  write_spec flows: \
+    "$(web_flow FLOW-001 no-declaration app/a)" \
+    "$(web_flow FLOW-002 bad-declaration app/a)"
+  add_file apps/web/app/a/index.ts 'export {};'
+  mark_base
+  write_listing no-declaration bad-declaration
+  add_file "$FLOWS_DIRECTORY/no-declaration.spec.ts" "import { test } from '@playwright/test';" "test('x works', async () => {});"
+  add_spec_file bad-declaration app/a app/ghost
+  add_file apps/web/app/a/more.ts 'export {};'
+  commit_all branch
+  expect_coverage covers-line 1 "flow-coverage: $FLOWS_DIRECTORY/no-declaration.spec.ts: no @covers declaration
+flow-coverage: $FLOWS_DIRECTORY/bad-declaration.spec.ts: @covers path does not resolve: app/ghost" || return 1
+
+  # A spec that declares only one of two changed SPEC folders misses the other.
+  reset_scratch
+  write_spec flows: "$(web_flow FLOW-001 sign-in 'app/a, app/b')"
+  add_file apps/web/app/a/index.ts 'export {};'
+  add_file apps/web/app/b/index.ts 'export {};'
+  mark_base
+  write_listing sign-in
+  add_file apps/web/app/a/more.ts 'export {};'
+  add_file apps/web/app/b/more.ts 'export {};'
+  add_spec_file sign-in app/a
+  commit_all branch
+  expect_coverage missed-folder 1 "flow-coverage: $FLOWS_DIRECTORY/sign-in.spec.ts: @covers misses app/b" || return 1
+
+  # A branch that changed only the declared folder passes though the SPEC lists a second.
+  reset_scratch
+  write_spec flows: "$(web_flow FLOW-001 sign-in 'app/a, app/b')"
+  add_file apps/web/app/a/index.ts 'export {};'
+  add_file apps/web/app/b/index.ts 'export {};'
+  mark_base
+  write_listing sign-in
+  add_file apps/web/app/a/more.ts 'export {};'
+  add_spec_file sign-in app/a
+  commit_all branch
   run coverage
-  [ "$status" -eq 1 ]
-  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
-  printf '%s\n' "$output" | grep -qxF "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts"
-  printf '%s\n' "$output" | grep -qxF "flow-coverage: FLOW-002: missing .gaia/tests/lib/refuse-check.bats"
+  [ "$status" -eq 0 ] || { echo "declared folder only: status $status, output: $output"; return 1; }
+  [ -z "$output" ] || { echo "declared folder only: output: $output"; return 1; }
+
+  # A declaration of app/home does not cover a changed app/homepage folder.
+  reset_scratch
+  write_spec flows: "$(web_flow FLOW-001 sign-in 'app/home, app/homepage')"
+  add_file apps/web/app/home/index.ts 'export {};'
+  add_file apps/web/app/homepage/index.ts 'export {};'
+  mark_base
+  write_listing sign-in
+  add_file apps/web/app/homepage/more.ts 'export {};'
+  add_spec_file sign-in app/home
+  commit_all branch
+  expect_coverage short-prefix 1 "flow-coverage: $FLOWS_DIRECTORY/sign-in.spec.ts: @covers misses app/homepage" || return 1
+
+  # A flow test whose title holds a SPEC id is reported with its file, line and match.
+  reset_scratch
+  write_spec flows: "$(web_flow FLOW-001 sign-in app/a)"
+  add_file apps/web/app/a/index.ts 'export {};'
+  mark_base
+  write_listing sign-in
+  add_file apps/web/app/a/more.ts 'export {};'
+  add_file "$FLOWS_DIRECTORY/sign-in.spec.ts" \
+    '// @covers app/a' \
+    "import { test } from '@playwright/test';" \
+    "test('SPEC-123 sign in works', async () => {});"
+  commit_all branch
+  run coverage
+  [ "$status" -eq 1 ] || { echo "id in title: status $status, output: $output"; return 1; }
+  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ] || { echo "id in title: output: $output"; return 1; }
+  case "$output" in
+    "flow-coverage: "*"sign-in.spec.ts:3: working-doc id "*SPEC-123*) ;;
+    *) echo "id in title: output: $output"; return 1 ;;
+  esac
 }
 
 # write_stage <first line|none>: a plan folder whose TEST-STAGE record starts
@@ -160,7 +287,7 @@ write_stage() {
   fi
 }
 
-@test "a skipped or absent test stage reports each flow as a gap and passes" {
+@test "a skipped or absent test stage reports each flow with no test as a gap and passes, a ran or running stage reports it as a finding, and an unknown stage status exits 3" {
   write_spec flows: \
     "$(web_flow FLOW-001 sign-in app/a)" \
     "$(command_flow FLOW-002 refuse-check .gaia/tests/lib/refuse-check.bats)"
@@ -202,7 +329,7 @@ write_stage() {
     [ "$output" = "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts" ]
   done
 
-  # A first line that is none of the three statuses is an operational failure.
+  # A first line that is no known status is an operational failure.
   for stage_line in 'status: done' '' 'ran'; do
     write_stage "$stage_line"
     run coverage --plan-dir "$PLAN"
@@ -213,180 +340,26 @@ write_stage() {
   done
 }
 
-@test "a --plan-dir that is not a directory exits 2" {
+@test "flow-coverage refuses a --plan-dir that is not a directory and a SPEC with a uats key or without flows with exit 2 and no clean result" {
+  script_exists
   write_spec flows: "$(web_flow FLOW-001 sign-in app/a)"
   mark_base
   write_listing
-  script_exists
   run coverage --plan-dir "$BATS_TEST_TMPDIR/absent"
-  [ "$status" -eq 2 ]
+  [ "$status" -eq 2 ] || { echo "plan-dir: status $status"; return 1; }
+
+  local row
+  for row in 'uats-key' 'no-flows-key'; do
+    case "$row" in
+      uats-key) write_spec 'uats:' '  - uat_id: UAT-001' ;;
+      no-flows-key) write_spec 'tags: [x]' ;;
+    esac
+    run coverage
+    [ "$status" -eq 2 ] || { echo "$row: status $status"; return 1; }
+    [ -z "$output" ] || { echo "$row: output: $output"; return 1; }
+    grep -q . "$STDERR_FILE" || { echo "$row: no reason on stderr"; return 1; }
+  done
 }
-
-@test "a changed command flow test passes inside a run that reports only the web flow with no spec" {
-  write_spec flows: \
-    "$(web_flow FLOW-001 sign-in app/a)" \
-    "$(command_flow FLOW-002 refuse-check .gaia/tests/lib/refuse-check.bats)"
-  add_file apps/web/app/a/index.ts 'export {};'
-  mark_base
-  write_listing
-  add_file .gaia/tests/lib/refuse-check.bats '@test "refuses" { true; }'
-  commit_all branch
-
-  script_exists
-  run coverage
-  [ "$status" -eq 1 ]
-  [ "$output" = "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts" ]
-}
-
-@test "a flow test untouched on the branch exits 1 while the same file extended on the branch passes" {
-  write_spec flows: \
-    "$(web_flow FLOW-001 untouched app/a)" \
-    "$(web_flow FLOW-002 extended app/a)"
-  add_file apps/web/app/a/index.ts 'export {};'
-  add_spec_file untouched app/a
-  add_spec_file extended app/a
-  mark_base
-  write_listing untouched extended
-  add_file apps/web/app/a/more.ts 'export {};'
-  printf '%s\n' "test('also works', async () => {});" >>"$SCRATCH/$FLOWS_DIRECTORY/extended.spec.ts"
-  commit_all branch
-
-  script_exists
-  run coverage
-  [ "$status" -eq 1 ]
-  [ "$output" = "flow-coverage: FLOW-001: $FLOWS_DIRECTORY/untouched.spec.ts not changed on the branch" ]
-}
-
-@test "a changed web flow spec that the Playwright listing omits exits 1 as not collected" {
-  write_spec flows: "$(web_flow FLOW-001 sign-in app/a)"
-  add_file apps/web/app/a/index.ts 'export {};'
-  mark_base
-  write_listing
-  add_file apps/web/app/a/more.ts 'export {};'
-  add_spec_file sign-in app/a
-  commit_all branch
-
-  script_exists
-  run coverage
-  [ "$status" -eq 1 ]
-  [ "$output" = "flow-coverage: $FLOWS_DIRECTORY/sign-in.spec.ts: not in the Playwright listing" ]
-}
-
-@test "a spec with no covers line and a spec whose covers path does not exist are both reported in one run" {
-  write_spec flows: \
-    "$(web_flow FLOW-001 no-declaration app/a)" \
-    "$(web_flow FLOW-002 bad-declaration app/a)"
-  add_file apps/web/app/a/index.ts 'export {};'
-  mark_base
-  write_listing no-declaration bad-declaration
-  add_file "$FLOWS_DIRECTORY/no-declaration.spec.ts" "import { test } from '@playwright/test';" "test('x works', async () => {});"
-  add_spec_file bad-declaration app/a app/ghost
-  add_file apps/web/app/a/more.ts 'export {};'
-  commit_all branch
-
-  script_exists
-  run coverage
-  [ "$status" -eq 1 ]
-  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
-  printf '%s\n' "$output" | grep -qxF "flow-coverage: $FLOWS_DIRECTORY/no-declaration.spec.ts: no @covers declaration"
-  printf '%s\n' "$output" | grep -qxF "flow-coverage: $FLOWS_DIRECTORY/bad-declaration.spec.ts: @covers path does not resolve: app/ghost"
-}
-
-@test "a spec that declares only one of two changed SPEC folders exits 1 naming the missed folder" {
-  write_spec flows: "$(web_flow FLOW-001 sign-in 'app/a, app/b')"
-  add_file apps/web/app/a/index.ts 'export {};'
-  add_file apps/web/app/b/index.ts 'export {};'
-  mark_base
-  write_listing sign-in
-  add_file apps/web/app/a/more.ts 'export {};'
-  add_file apps/web/app/b/more.ts 'export {};'
-  add_spec_file sign-in app/a
-  commit_all branch
-
-  script_exists
-  run coverage
-  [ "$status" -eq 1 ]
-  [ "$output" = "flow-coverage: $FLOWS_DIRECTORY/sign-in.spec.ts: @covers misses app/b" ]
-}
-
-@test "a branch that changed only the declared SPEC folder passes though the SPEC lists a second folder" {
-  write_spec flows: "$(web_flow FLOW-001 sign-in 'app/a, app/b')"
-  add_file apps/web/app/a/index.ts 'export {};'
-  add_file apps/web/app/b/index.ts 'export {};'
-  mark_base
-  write_listing sign-in
-  add_file apps/web/app/a/more.ts 'export {};'
-  add_spec_file sign-in app/a
-  commit_all branch
-
-  script_exists
-  run coverage
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "a declaration of app/home does not cover a changed app/homepage folder the SPEC lists" {
-  write_spec flows: "$(web_flow FLOW-001 sign-in 'app/home, app/homepage')"
-  add_file apps/web/app/home/index.ts 'export {};'
-  add_file apps/web/app/homepage/index.ts 'export {};'
-  mark_base
-  write_listing sign-in
-  add_file apps/web/app/homepage/more.ts 'export {};'
-  add_spec_file sign-in app/home
-  commit_all branch
-
-  script_exists
-  run coverage
-  [ "$status" -eq 1 ]
-  [ "$output" = "flow-coverage: $FLOWS_DIRECTORY/sign-in.spec.ts: @covers misses app/homepage" ]
-}
-
-@test "a flow test whose title holds a SPEC id exits 1 naming the file, the line and the match" {
-  write_spec flows: "$(web_flow FLOW-001 sign-in app/a)"
-  add_file apps/web/app/a/index.ts 'export {};'
-  mark_base
-  write_listing sign-in
-  add_file apps/web/app/a/more.ts 'export {};'
-  add_file "$FLOWS_DIRECTORY/sign-in.spec.ts" \
-    '// @covers app/a' \
-    "import { test } from '@playwright/test';" \
-    "test('SPEC-123 sign in works', async () => {});"
-  commit_all branch
-
-  script_exists
-  run coverage
-  [ "$status" -eq 1 ]
-  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ]
-  case "$output" in
-    "flow-coverage: "*"sign-in.spec.ts:3: working-doc id "*SPEC-123*) ;;
-    *) return 1 ;;
-  esac
-}
-
-@test "a SPEC with a uats key and no flows exits 2 with a reason and no clean result" {
-  write_spec 'uats:' '  - uat_id: UAT-001'
-  mark_base
-  write_listing
-
-  script_exists
-  run coverage
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -q . "$STDERR_FILE"
-}
-
-@test "a SPEC with no flows key exits 2 with a reason and no clean result" {
-  write_spec 'tags: [x]'
-  mark_base
-  write_listing
-
-  script_exists
-  run coverage
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -q . "$STDERR_FILE"
-}
-
 @test "flow-tests-out writes one row per existing flow test with its kind and path" {
   write_spec flows: \
     "$(web_flow FLOW-001 sign-in app/a)" \
