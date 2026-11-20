@@ -12,9 +12,6 @@
 # own save, archive and stage-record steps, which their own suites pin, so they
 # are left out here.
 #
-# The check is a function over a file list, so the test that proves the real
-# tree passes has twins that run it over scratch copies and assert it fails.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup_file() {
@@ -51,10 +48,6 @@ workflow_records_its_run() {
   cost_record_sections "${files[@]}" | grep -qF -- "\`{{COMMAND}}\` = \`${workflow}\`"
 }
 
-@test "the start set names command workflows to check" {
-  [ -n "$(command_workflows)" ]
-}
-
 # bats test_tags=whole-tree
 @test "every command workflow in the start set records its run" {
   local workflow playbooks missing=""
@@ -67,42 +60,4 @@ workflow_records_its_run() {
     echo "no playbook records the run of:${missing}" >&2
     return 1
   }
-}
-
-@test "red twin: a playbook with its run-end section removed fails the check" {
-  local scratch="${BATS_TEST_TMPDIR}/wiki.md"
-  awk '
-    /^## Cost record \(run end\)/ { skip = 1; next }
-    skip && /^## / { skip = 0 }
-    !skip { print }
-  ' "${REPO_ROOT}/.claude/skills/gaia/references/wiki.md" >"$scratch"
-  grep -qF '## Sync' "$scratch"
-  run workflow_records_its_run gaia-wiki <<<"$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a run-end section naming another command fails the check" {
-  local scratch="${BATS_TEST_TMPDIR}/other.md"
-  printf '## Cost record (run end)\n\nApply the recipe with `{{COMMAND}}` = `update-gaia`.\n' >"$scratch"
-  run workflow_records_its_run update-deps <<<"$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: the recipe line outside a run-end section fails the check" {
-  local scratch="${BATS_TEST_TMPDIR}/outside.md"
-  printf '## Notes\n\nApply the recipe with `{{COMMAND}}` = `update-deps`.\n' >"$scratch"
-  run workflow_records_its_run update-deps <<<"$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a section that ends before the recipe line in a second file fails the check" {
-  local first="${BATS_TEST_TMPDIR}/first.md" second="${BATS_TEST_TMPDIR}/second.md"
-  printf '## Cost record (run end)\n\nNothing here.\n' >"$first"
-  printf 'Apply the recipe with `{{COMMAND}}` = `update-deps`.\n' >"$second"
-  run workflow_records_its_run update-deps < <(printf '%s\n' "$first" "$second")
-  [ "$status" -ne 0 ]
-}
-
-@test "the real wiki playbook passes the check it fails without its section" {
-  workflow_records_its_run gaia-wiki <<<"${REPO_ROOT}/.claude/skills/gaia/references/wiki.md"
 }

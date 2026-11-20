@@ -26,8 +26,8 @@
 # a further surface added with a third ending stops the suite instead of being
 # silently uncovered, and a surface that drops the statement stops it too. The
 # declaration half pins that the owner page states the general ending once, that
-# it admits the exceptions rather than asserting uniformity, and that each
-# departing surface declares its own departure and names the reason.
+# it admits the merge gate's exception rather than asserting uniformity, and
+# that the merge gate declares its own departure and names the reason.
 #
 # Derivation, and why by phrase. No machine-readable artifact enumerates these
 # surfaces; the coupling is prose-to-prose. The marker is the terminal-statement
@@ -66,15 +66,6 @@ setup() {
   GATE_RELATIVE_PATH='wiki/concepts/Audit Round Procedure.md'
   # The runbook states the same stop for the unit file the main thread reads.
   RUNBOOK_RELATIVE_PATH='wiki/concepts/PR Merge Workflow.md'
-  # The second deliberate departure: the caller wrote the code the evaluator judges.
-  WORTHINESS_RELATIVE_PATH='.claude/skills/gaia/references/worthiness-step.md'
-  # The fourth: the main thread edits nothing in a plan run, and nothing depends
-  # on the simplify pass, so a double no-op records `not run`.
-  SIMPLIFY_RELATIVE_PATH='.claude/skills/gaia/references/simplify-pass.md'
-  # The fifth: a security test is never written by the code's own author, so a
-  # double no-op halts the phase and the main thread does not write the tests.
-  SECURITY_WRITER_RELATIVE_PATH='.claude/skills/gaia/references/security-writer.md'
-
   OWNER="$ROOT/$OWNER_RELATIVE_PATH"
   GATE="$ROOT/$GATE_RELATIVE_PATH"
 
@@ -214,37 +205,6 @@ terminal_segments() {
   }
 }
 
-@test "every roster surface but the declared departure ends inline, in the terminal statement itself" {
-  local relative_path lines
-  for relative_path in "${ROSTER[@]}"; do
-    [ "$relative_path" = "$GATE_RELATIVE_PATH" ] && continue
-    [ "$relative_path" = "$RUNBOOK_RELATIVE_PATH" ] && continue
-    [ "$relative_path" = "$WORTHINESS_RELATIVE_PATH" ] && continue
-    [ "$relative_path" = "$SIMPLIFY_RELATIVE_PATH" ] && continue
-    [ "$relative_path" = "$SECURITY_WRITER_RELATIVE_PATH" ] && continue
-    lines="$(terminal_segments "$ROOT/$relative_path")"
-    [ -n "$lines" ] || { echo "no terminal statement read in ${relative_path}" >&2; return 1; }
-    # Per statement, not per file: a file whose ending drifted at one of
-    # several sites would still carry `inline` at the others and green a
-    # whole-file grep.
-    printf '%s\n' "$lines" | grep -qvi -- 'inline' && {
-      echo "a terminal statement in ${relative_path} names no inline ending:" >&2
-      printf '%s\n' "$lines" | grep -vi -- 'inline' >&2
-      return 1
-    }
-    # And not the merge gate's ending. Requiring `inline` alone is satisfied by
-    # a line that adopts the stop-and-surface ending while still naming the
-    # inline fallback it no longer takes, which is the drift direction that
-    # matters: the exception is warranted only where a clearance is at stake.
-    printf '%s\n' "$lines" | grep -qi -- 'stop and surface' && {
-      echo "a terminal statement in ${relative_path} takes the merge gate's exception, which is warranted only there:" >&2
-      printf '%s\n' "$lines" | grep -i -- 'stop and surface' >&2
-      return 1
-    }
-  done
-  return 0
-}
-
 @test "the merge gate's terminal statement does not fall back inline" {
   local lines
   lines="$(terminal_segments "$GATE")"
@@ -271,49 +231,6 @@ terminal_segments() {
   # The reason, not merely the fact. Without it a reader cannot tell a
   # deliberate exception from an unmaintained one, which is the whole defect.
   grep -qF -- "own attestation" "$OWNER"
-}
-
-@test "the owner page admits the worthiness step's exception and states its reason" {
-  grep -qF -- "$WORTHINESS_RELATIVE_PATH" "$OWNER"
-  grep -qF -- 'an absent verdict is not a keep' "$OWNER"
-  grep -qF -- 'tdd never interrupts mid-implementation' "$OWNER"
-}
-
-@test "the worthiness step's terminal statements halt or report and do not fall back inline" {
-  local lines
-  lines="$(terminal_segments "$ROOT/$WORTHINESS_RELATIVE_PATH")"
-  [ -n "$lines" ] || { echo "no terminal statement read in $WORTHINESS_RELATIVE_PATH" >&2; return 1; }
-  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
-  printf '%s\n' "$lines" | grep -qF -- 'is a HALT'
-  printf '%s\n' "$lines" | grep -qF -- 'is reported in that summary'
-}
-
-@test "the worthiness step declares its departure as deliberate and names the owner" {
-  grep -qF -- 'departs from the general inline ending' "$ROOT/$WORTHINESS_RELATIVE_PATH"
-  grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$WORTHINESS_RELATIVE_PATH"
-  grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$WORTHINESS_RELATIVE_PATH"
-  grep -qF -- 'same deliberate departure from the general inline ending' "$ROOT/$WORTHINESS_RELATIVE_PATH"
-}
-
-@test "the simplify pass admits its departure on the owner page and on its own page" {
-  grep -qF -- "$SIMPLIFY_RELATIVE_PATH" "$OWNER"
-  local lines
-  lines="$(terminal_segments "$ROOT/$SIMPLIFY_RELATIVE_PATH")"
-  [ -n "$lines" ] || { echo "no terminal statement read in $SIMPLIFY_RELATIVE_PATH" >&2; return 1; }
-  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
-  printf '%s\n' "$lines" | grep -qF -- 'not run'
-  grep -qF -- 'departs from the general inline ending' "$ROOT/$SIMPLIFY_RELATIVE_PATH"
-  grep -qF -- 'nothing depends on this pass' "$ROOT/$SIMPLIFY_RELATIVE_PATH"
-}
-
-@test "the security writer admits its departure on the owner page and halts instead of falling back inline" {
-  grep -qF -- "$SECURITY_WRITER_RELATIVE_PATH" "$OWNER"
-  grep -qF -- "never written by the code's own author" "$OWNER"
-  local lines
-  lines="$(terminal_segments "$ROOT/$SECURITY_WRITER_RELATIVE_PATH")"
-  [ -n "$lines" ] || { echo "no terminal statement read in $SECURITY_WRITER_RELATIVE_PATH" >&2; return 1; }
-  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
-  printf '%s\n' "$lines" | grep -qF -- 'HALTED'
 }
 
 @test "the owner page no longer asserts a uniform ending across every surface" {

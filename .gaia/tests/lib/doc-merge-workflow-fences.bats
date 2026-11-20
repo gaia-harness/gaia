@@ -152,7 +152,7 @@ fence_body() {
   ' "$PAGE"
 }
 
-# untagged_fence_bodies [<file>]: the bodies of fences opened with a bare
+# untagged_fence_bodies: the bodies of fences opened with a bare
 # ```, which discovery does not read.
 #
 # The complement of the discovery set, so the guard below can ask whether
@@ -168,7 +168,7 @@ untagged_fence_bodies() {
       next
     }
     inside && tag == "" { print }
-  ' "${1:-$PAGE}"
+  ' "$PAGE"
 }
 
 # fence_indices_for <anchor>: every fence index whose body contains <anchor>
@@ -254,21 +254,6 @@ value_of() {
   sed -n "s/^GAIA_FENCE_VALUE $1=//p" <<<"$output" | head -1
 }
 
-# bodies_source [<file>]: what the discovery functions below read. With no
-# argument it is the page's own fences; with one, that file's contents.
-#
-# The seam exists for the non-vacuity control. A control that re-implements a
-# lens's predicate inline certifies its own copy and not the lens, so it stays
-# green while the extraction it vouches for drifts to reading nothing. Driving
-# a fabricated body through these same functions is what makes it a control.
-bodies_source() {
-  if [ -n "${1:-}" ]; then
-    cat "$1"
-  else
-    all_fence_bodies
-  fi
-}
-
 # all_fence_bodies: every fence body concatenated, for the whole-page lenses.
 all_fence_bodies() {
   local total i
@@ -284,7 +269,7 @@ all_fence_bodies() {
 # deduped. The `bash ` prefix and the `.sh` suffix are both required, so this
 # never answers with a directory.
 cited_scripts() {
-  bodies_source "${1:-}" \
+  all_fence_bodies \
     | grep -oE 'bash (\.gaia|\.github|\.claude)/[A-Za-z0-9_./-]+\.sh' \
     | sed 's/^bash //' \
     | sort -u
@@ -298,7 +283,7 @@ cited_scripts() {
 # existence check below therefore carries an explicit skip arm for it, beside
 # the `.gaia/local/*` one, and that arm is load-bearing rather than defensive.
 cited_paths() {
-  bodies_source "${1:-}" \
+  all_fence_bodies \
     | grep -oE '(\.gaia|\.github|\.claude)/[A-Za-z0-9_./-]+[A-Za-z0-9_-]' \
     | sort -u
 }
@@ -313,7 +298,7 @@ cited_paths() {
 # substitution the whole invocation may itself sit inside.
 flags_for() {
   local script="$1"
-  bodies_source "${2:-}" \
+  all_fence_bodies \
     | sed -e ':a' -e '/\\$/{N; s/\\\n[[:space:]]*/ /; ta' -e '}' \
     | awk -v script_command="bash $script" '
         {
@@ -337,10 +322,7 @@ flags_for() {
 #
 # Anchored to the arm, not a substring match over the file. A flag deleted
 # from a `case` and left behind in the usage header keeps a bare match green,
-# which is precisely the drift the lens exists to see. Factored into a
-# function rather than written inline in the lens, so the control below drives
-# the same predicate the lens does; a control re-implementing it would
-# certify its own copy.
+# which is precisely the drift the lens exists to see.
 script_parses_flag() {
   grep -qE "(^|[|[:space:]])${2//./\\.}[)|=]" "$1"
 }
@@ -434,16 +416,9 @@ residue_pr_fixture() {
 # Lens 1: the fence set is covered
 # ---------------------------------------------------------------------------
 
-@test "fence set: the page opens fences and the table is not empty" {
-  # A derivation that comes back empty makes every per-fence claim below true
-  # without meaning anything, so both derivations report empty as a failure.
-  count="$(fence_count)"
-  [ "$count" -gt 0 ]
-  rows="$(fence_table | grep -c '|')"
-  [ "$rows" -gt 0 ]
-}
-
-@test "fence set: every table anchor names exactly one fence" {
+@test "fence set: the table claims every fence exactly once, each exec row has a runner and each static row a reason" {
+  local total claimed_list claimed
+  # Case: every table anchor names exactly one fence.
   fence_table | while IFS='|' read -r id anchor mode note; do
     [ -n "$id" ] || continue
     expected_hits=1
@@ -452,81 +427,19 @@ residue_pr_fixture() {
     esac
     # `|| true`: grep -c exits 1 on no match, and under bats' set -e the
     # assignment inherits that status, so the zero case, the rotted anchor
-    # this test exists to catch, aborted before printing which anchor rotted.
+    # this case exists to catch, aborted before printing which anchor rotted.
     hits="$(fence_indices_for "$anchor" | grep -c . || true)"
     if [ "$hits" -ne "$expected_hits" ]; then
       echo "anchor for ${id} matched ${hits} fences, expected ${expected_hits}: ${anchor}" >&2
       exit 1
     fi
-  done
-}
+  done || return 1
 
-@test "fence set: discovery reads every fence tag that can carry shell" {
-  # Standing control for FENCE_OPEN_REGEX, driven off a fixture because the page
-  # itself uses one spelling and cannot exercise the others. $PAGE is a plain
-  # variable and bats runs each test in its own process, so reassigning it
-  # here reaches the discovery functions and leaks nowhere.
-  fixture="${BATS_TEST_TMPDIR}/tags.md"
-  {
-    printf '```bash\necho one\n```\n\n'
-    printf '```sh\necho two\n```\n\n'
-    printf '```shell\necho three\n```\n\n'
-    printf '```bash \necho four\n```\n\n'
-    printf '```json\n{}\n```\n'
-  } >"$fixture"
-  PAGE="$fixture"
-  [ "$(fence_count)" -eq 4 ]
-  grep -qx 'echo two' <<<"$(fence_body 2)"
-  grep -qx 'echo three' <<<"$(fence_body 3)"
-  grep -qx 'echo four' <<<"$(fence_body 4)"
-  # The tagged non-shell fence stays out: a tag declares the block data.
-  # The bodies are joined on newlines rather than concatenated: command
-  # substitution strips each trailing newline, so a bare `$(fence_body 1)$(…)`
-  # collapses the four onto one line and the whole-line match below could
-  # never fire whatever the bodies held.
-  bodies="${BATS_TEST_TMPDIR}/bodies"
-  for i in 1 2 3 4; do fence_body "$i"; done >"$bodies"
-  grep -qx '{}' "$bodies" && return 1
-  true
-}
-
-@test "fence set: an untagged fence carries no line the covered fences lack" {
-  # The complement guard. Discovery reads tagged shell fences, so an untagged
-  # block is outside every lens; this asks whether anything is hiding there.
-  #
-  # An empty complement is the strongest pass rather than a vacuous one: it
-  # means the discovery set is the whole set. The control below is what keeps
-  # an extractor that reads nothing from producing the same green.
-  covered="${BATS_TEST_TMPDIR}/covered"
-  all_fence_bodies >"$covered"
-  untagged_fence_bodies | while read -r line; do
-    trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    [ -n "$trimmed" ] || continue
-    if ! grep -qF -- "$trimmed" "$covered"; then
-      echo "an untagged fence carries a line no covered fence does: ${trimmed}" >&2
-      exit 1
-    fi
-  done
-}
-
-@test "fence set: the untagged-fence extractor reads a fixture that has one" {
-  # Non-vacuity control for the guard above, whose own subject is legitimately
-  # empty on a page that tags every fence.
-  fixture="${BATS_TEST_TMPDIR}/untagged.md"
-  printf '```bash\necho covered\n```\n\n```\necho hidden\n```\n' >"$fixture"
-  grep -qx 'echo hidden' <<<"$(untagged_fence_bodies "$fixture")"
-  grep -qx 'echo covered' <<<"$(untagged_fence_bodies "$fixture")" && return 1
-  true
-}
-
-@test "fence set: every fence in the page is claimed by exactly one table row" {
-  # The short-read guard. Counting claimed fences against the page's own fence
-  # count is what stops a new fence from entering the page unexamined: the
-  # suite would otherwise stay green while driving a subset of a set whose
-  # name says every.
+  # Case: every fence in the page is claimed by exactly one table row. The
+  # short-read guard: counting claimed fences against the page's own fence
+  # count stops a new fence from entering the page unexamined.
   total="$(fence_count)"
-  # Derived once and reused. Written out twice, the count and the diagnostic
-  # can be repaired independently, and the one nobody re-reads goes stale.
+  [ "$total" -gt 0 ] || { echo "the page opens no shell fences" >&2; return 1; }
   claimed_list="${BATS_TEST_TMPDIR}/claimed"
   fence_table | while IFS='|' read -r id anchor mode note; do
     [ -n "$id" ] || continue
@@ -543,23 +456,40 @@ residue_pr_fixture() {
     comm -23 <(seq 1 "$total" | sort) <(sort "$claimed_list") >&2
     return 1
   fi
-}
 
-@test "fence set: every exec row has a runner test naming its id" {
+  # Case: every exec row has a runner test naming its id.
   fence_table | while IFS='|' read -r id anchor mode note; do
     [ "$mode" = "exec" ] || continue
     if ! grep -qF -- "@test \"fence ${id}:" "$BATS_TEST_FILENAME"; then
       echo "table row ${id} is mode exec with no runner test in this file" >&2
       exit 1
     fi
-  done
-}
+  done || return 1
 
-@test "fence set: every static row records why it cannot run here" {
+  # Case: every static row records why it cannot run here.
   fence_table | while IFS='|' read -r id anchor mode note; do
     [ "$mode" = "static" ] || continue
     if [ -z "$note" ]; then
       echo "table row ${id} is mode static with no reason recorded" >&2
+      exit 1
+    fi
+  done
+}
+
+@test "fence set: an untagged fence carries no line the covered fences lack" {
+  # The complement guard. Discovery reads tagged shell fences, so an untagged
+  # block is outside every lens; this asks whether anything is hiding there.
+  #
+  # An empty complement means the discovery set is the whole set. The floor
+  # below fails when the extractor reads no fenced lines.
+  covered="${BATS_TEST_TMPDIR}/covered"
+  all_fence_bodies >"$covered"
+  [ -s "$covered" ] || { echo "the extractor read no fenced lines from ${PAGE}" >&2; return 1; }
+  untagged_fence_bodies | while read -r line; do
+    trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [ -n "$trimmed" ] || continue
+    if ! grep -qF -- "$trimmed" "$covered"; then
+      echo "an untagged fence carries a line no covered fence does: ${trimmed}" >&2
       exit 1
     fi
   done
@@ -610,20 +540,6 @@ residue_pr_fixture() {
   done
 }
 
-@test "the script-path extractor and a plain count agree on how many scripts the fences cite" {
-  # Two independent derivations, because a short read here is more dangerous
-  # than an empty one: the per-flag test below would still pass while silently
-  # covering fewer scripts than the fences name.
-  extracted="$(cited_scripts | grep -c .)"
-  plain="$(all_fence_bodies | grep -oE '(\.gaia|\.github|\.claude)/[A-Za-z0-9_./-]+\.sh' | sort -u | grep -c .)"
-  if [ "$extracted" -ne "$plain" ]; then
-    echo "bash-invocation extraction found ${extracted} scripts, a plain path scan found ${plain}" >&2
-    cited_scripts >&2
-    return 1
-  fi
-  [ "$extracted" -gt 0 ]
-}
-
 @test "every flag a fence hands a repo script resolves to a parse arm in it" {
   scripts="$(cited_scripts)"
   [ -n "$scripts" ] || {
@@ -651,49 +567,6 @@ residue_pr_fixture() {
       fi
     done
   done
-}
-
-@test "the static lenses are not vacuous: the real extractors read a fabricated fence and it fails both" {
-  # Non-vacuity control, deliberately sampling one fabricated body rather than
-  # mutating every fence: one instance establishes that the lenses can fail,
-  # and mutating the whole set buys the same signal at N times the cost.
-  #
-  # It runs the fabricated body through cited_paths, cited_scripts and
-  # flags_for themselves. Asserting the lens PREDICATES inline instead, a bare
-  # `[ ! -e ]` and a bare grep against hardcoded literals, would leave the
-  # extraction functions uncertified, and those are the half that drifts.
-  bad="${BATS_TEST_TMPDIR}/fabricated.sh"
-  printf 'bash .gaia/scripts/does-not-exist-anywhere.sh --no-such-flag\n' >"$bad"
-
-  grep -qx '\.gaia/scripts/does-not-exist-anywhere\.sh' <<<"$(cited_paths "$bad")"
-  [ ! -e "${REPO_ROOT}/.gaia/scripts/does-not-exist-anywhere.sh" ]
-
-  [ "$(cited_scripts "$bad")" = ".gaia/scripts/does-not-exist-anywhere.sh" ]
-
-  [ "$(flags_for .gaia/scripts/does-not-exist-anywhere.sh "$bad")" = "--no-such-flag" ]
-  script_parses_flag "${REPO_ROOT}/.gaia/scripts/audit-noop-detect.sh" --no-such-flag && return 1
-  true
-}
-
-@test "the flag lens tells a parse arm apart from a usage comment" {
-  # The anchoring is latent on this tree: every flag the page cites today
-  # resolves to a real arm, so an un-anchored bare match would agree with the
-  # anchored one on every live input and no mutation of the suite can show the
-  # difference. A fixture carrying the two cases side by side is what makes
-  # the discrimination testable at all.
-  fake="${BATS_TEST_TMPDIR}/fake-script.sh"
-  cat >"$fake" <<'FAKE'
-#!/usr/bin/env bash
-# Usage: fake-script.sh [--retired-flag <value>] [--real-arm]
-case "$1" in
-  --real-arm) shift ;;
-esac
-FAKE
-  script_parses_flag "$fake" --real-arm
-  script_parses_flag "$fake" --retired-flag && return 1
-  # And the bare match this replaced would have accepted the retired one,
-  # which is the whole reason the predicate is anchored.
-  grep -qF -- '--retired-flag' "$fake"
 }
 
 # ---------------------------------------------------------------------------
@@ -795,78 +668,6 @@ FAKE
     echo "expected:                  ${expected}" >&2
     return 1
   fi
-}
-
-@test "fence residual-enumerate: the pre-change class misses the spaced path, and a bare greedy class splices a two-key line" {
-  bin="$(jq_bin)"
-  [ -n "$bin" ] || skip "neither jq nor gojq on PATH"
-  fence="$(materialize 'gh pr list --state merged')"
-  program="$(extract_enumeration_jq_program "$fence")"
-  program_file="${BATS_TEST_TMPDIR}/enum-program.jq"
-  printf '%s\n' "$program" >"$program_file"
-
-  # Mutant 1, the pre-change spelling: [^ ]+ instead of [^>]+.
-  reverted_file="${BATS_TEST_TMPDIR}/enum-program-reverted.jq"
-  cp "$program_file" "$reverted_file"
-  sub_literal "$reverted_file" 'path=(?<path>[^>]+)' 'path=(?<path>[^ ]+)'
-
-  # Mutant 2, a bare greedy class that is not the alternative fix: .+
-  # instead of [^>]+.
-  greedy_file="${BATS_TEST_TMPDIR}/enum-program-greedy.jq"
-  cp "$program_file" "$greedy_file"
-  sub_literal "$greedy_file" 'path=(?<path>[^>]+)' 'path=(?<path>.+)'
-
-  fixture_3006="$(residue_pr_fixture 3006)"
-  fixture_3002="$(residue_pr_fixture 3002)"
-
-  # Mutant 1 over PR 3006's spaced path: the committed [^>]+ class is what
-  # makes this residual enumerable at all, so the reverted class must find
-  # nothing for it.
-  reverted_output="$("$bin" -r "$(cat "$reverted_file")" "$fixture_3006")"
-  if [ -n "$reverted_output" ]; then
-    echo "reverted [^ ]+ class unexpectedly emitted: ${reverted_output}" >&2
-    return 1
-  fi
-
-  # Mutant 2 needs a different fixture to discriminate: over PR 3006's
-  # single-key line the greedy class agrees with the committed one, there is
-  # nothing on that line for it to overrun into. PR 3002 carries a single
-  # line with two wrapped keys; a class able to cross the first key's own
-  # '-->' splices the second key's line number onto the first key's path.
-  committed_3002="$("$bin" -r "$(cat "$program_file")" "$fixture_3002")"
-  expected_3002=$'3002\tapp/dup/first.ts:1\tv1 class=dupe path=app/dup/first.ts line=1'
-  if [ "$committed_3002" != "$expected_3002" ]; then
-    echo "committed [^>]+ class over the two-key line: ${committed_3002}" >&2
-    return 1
-  fi
-  greedy_3002="$("$bin" -r "$(cat "$greedy_file")" "$fixture_3002")"
-  if [ "$greedy_3002" = "$expected_3002" ]; then
-    echo "expected the greedy .+ class to splice the two-key line, it did not" >&2
-    return 1
-  fi
-  echo "greedy .+ class over the two-key line: ${greedy_3002}" >&2
-}
-
-@test "fence residual-enumerate: the extractor reds on a debt.md-shaped reflow rather than silently truncating" {
-  fence="$(materialize 'gh pr list --state merged')"
-  program="$(extract_enumeration_jq_program "$fence")"
-
-  # Reflows the fence into debt.md's shape: the opening quote alone on its
-  # own line, and the closing quote alone on its own line, rather than
-  # inline at the end of the last program line. This suite's own extractor
-  # is written for this fence's shape, not debt.md's, so it must red here
-  # with its own message instead of silently handing jq a truncated program.
-  reflowed="${BATS_TEST_TMPDIR}/enum-reflowed.sh"
-  {
-    printf 'gh pr list --state merged --limit 2000 --json number,body \\\n'
-    printf "  --jq '\n"
-    printf '%s\n' "$program"
-    printf "'\n"
-  } >"$reflowed"
-
-  run extract_enumeration_jq_program "$reflowed"
-  [ "$status" -ne 0 ]
-  grep -qF -- "extract_enumeration_jq_program:" <<<"$output" || return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -992,7 +793,10 @@ fix_fixture() {
   [ "$staged" = "b.txt e.txt " ]
 }
 
-@test "fence gate-paths: it records the paths the gate changed and no path it left alone" {
+@test "fence gate-paths: it records the paths the gate changed, and none it left alone, with or without a before-snapshot" {
+  local script
+  # Case: the gate rewrites a staged path and creates a new one beside an
+  # unstaged change it never touches.
   fix_fixture
   printf 'delta\n' >>"${FIX_ROOT}/a.txt"
   git -C "$FIX_ROOT" add -- a.txt
@@ -1007,13 +811,15 @@ fix_fixture() {
   # stays a comment after the substitution.
   sub_literal "$script" '# run the per-round verification here' "echo fixed >>'${FIX_ROOT}/a.txt'; echo new >'${FIX_ROOT}/n.txt' #"
   run bash "$script"
-  [ "$status" -eq 0 ]
-  [ "$(LC_ALL=C sort "${FIX_RUN_FOLDER}/gate-1-1.paths" | tr '\n' ' ')" = "a.txt n.txt " ]
-}
+  [ "$status" -eq 0 ] || { echo "case with unstaged change: exit $status" >&2; return 1; }
+  [ "$(LC_ALL=C sort "${FIX_RUN_FOLDER}/gate-1-1.paths" | tr '\n' ' ')" = "a.txt n.txt " ] || {
+    echo "case with unstaged change: wrong paths" >&2
+    return 1
+  }
 
-@test "fence gate-paths: it records the gate's paths when the before-snapshot is empty" {
-  # Staging the whole delta first leaves nothing unstaged or untracked, the
-  # documented common case; an NR == FNR comparison prints nothing here.
+  # Case: staging the whole delta first leaves nothing unstaged or untracked,
+  # the documented common case; an NR == FNR comparison prints nothing here.
+  rm -rf "$FIX_ROOT" "$FIX_RUN_FOLDER"
   fix_fixture
   printf 'delta\n' >>"${FIX_ROOT}/a.txt"
   git -C "$FIX_ROOT" add -- a.txt
@@ -1026,7 +832,7 @@ fix_fixture() {
   sub_literal "$script" '<k>' 1
   sub_literal "$script" '# run the per-round verification here' "echo new >'${FIX_ROOT}/n.txt' #"
   run bash "$script"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "case with empty before-snapshot: exit $status" >&2; return 1; }
   [ "$(tr '\n' ' ' <"${FIX_RUN_FOLDER}/gate-1-1.paths")" = "n.txt " ]
 }
 

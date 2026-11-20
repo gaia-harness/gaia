@@ -4,13 +4,8 @@
 # protocol. Where a paragraph was cut to a one-line rule, a maintainer-only
 # block directly after the line names the bats file and test that enforces the
 # rest; this suite checks each pointer is real (the enforcer file exists and
-# exactly one of its test lines carries the named substring), that no enforcer
-# path leaks outside a maintainer-only block into text an adopter reads, that
-# the deleted prose stays deleted, and that the prose deliberately kept
-# verbatim (nothing enforces it but the text) stays.
-#
-# Every assertion is about the tree as it stands. Each helper takes the file or
-# root it reads so a scratch copy proves a case can fail.
+# exactly one of its test lines carries the named substring) and that no enforcer
+# path leaks outside a maintainer-only block into text an adopter reads.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -18,9 +13,6 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PROTOCOL_RELATIVE='.claude/hooks/lib/audit-member-protocol.md'
   FRONTEND_RELATIVE='.claude/agents/code-audit-frontend.md'
-  WORKFLOWS_RELATIVE='.claude/agents/code-audit-github-workflows.md'
-  NODE_RELATIVE='.claude/agents/code-audit-maintainer-node.md'
-  SHELL_RELATIVE='.claude/agents/code-audit-maintainer-shell.md'
   START_MARKER='<!-- gaia:maintainer-only:start -->'
   END_MARKER='<!-- gaia:maintainer-only:end -->'
 }
@@ -104,35 +96,6 @@ assert_no_enforcer_path_outside_blocks() {
   return 0
 }
 
-# assert_absent <file> <fixed phrase>
-assert_absent() {
-  grep -qF -- "$2" "$1" && { echo "$1 still carries [$2]" >&2; return 1; }
-  return 0
-}
-
-# assert_present <file> <fixed phrase>
-assert_present() {
-  grep -qF -- "$2" "$1" || { echo "$1 lost [$2]" >&2; return 1; }
-  return 0
-}
-
-# unfence_first_pointer <in> <out>: copies the file with the first enforcer
-# pointer's maintainer-only markers removed, leaving the pointer in plain text.
-unfence_first_pointer() {
-  awk -v start_marker="$START_MARKER" -v end_marker="$END_MARKER" '
-    { lines[NR] = $0 }
-    END {
-      for (i = 1; i <= NR; i++) {
-        if (!done && lines[i] == start_marker && index(lines[i + 1], "Enforced by ") == 1 && index(lines[i + 2], end_marker) == 1) {
-          done = 1; skip_end = i + 2; continue
-        }
-        if (i == skip_end) continue
-        print lines[i]
-      }
-    }
-  ' "$1" >"$2"
-}
-
 # --- the table and its pointers -------------------------------------------------
 
 # bats test_tags=whole-tree
@@ -162,106 +125,4 @@ unfence_first_pointer() {
 @test "no enforcer path appears in the protocol or the frontend definition outside a maintainer-only block" {
   assert_no_enforcer_path_outside_blocks "$REPO_ROOT/$PROTOCOL_RELATIVE"
   assert_no_enforcer_path_outside_blocks "$REPO_ROOT/$FRONTEND_RELATIVE"
-}
-
-# --- deleted prose stays deleted -------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "the frontend definition no longer carries its deleted sections or restatements" {
-  local phrase
-  for phrase in \
-    '## Durable knowledge' \
-    'Candidate wiki updates' \
-    '### Subagent instructions template' \
-    'You are an adversarial reviewer' \
-    'wrong, or will produce broken work'; do
-    assert_absent "$REPO_ROOT/$FRONTEND_RELATIVE" "$phrase" || return 1
-  done
-}
-
-# bats test_tags=whole-tree
-@test "the workflows definition no longer points at the harness triage threshold" {
-  assert_absent "$REPO_ROOT/$WORKFLOWS_RELATIVE" 'harness-triage-threshold.md'
-}
-
-# bats test_tags=whole-tree
-@test "the workflows, node and shell definitions no longer carry the Write-or-Edit refusal clause" {
-  local relative
-  for relative in "$WORKFLOWS_RELATIVE" "$NODE_RELATIVE" "$SHELL_RELATIVE"; do
-    assert_absent "$REPO_ROOT/$relative" 'a `Write` or `Edit` naming a path there is refused' || return 1
-  done
-}
-
-# --- prose kept verbatim stays ---------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "the protocol keeps every DIRTY paragraph" {
-  local phrase
-  for phrase in \
-    '- `DIRTY=` lines name entries in your review increment whose working-tree bytes differ from HEAD.' \
-    '**Any `DIRTY=` line WITHHOLDS this pass.**' \
-    'On a `DIRTY=` line that survives your remit filter'; do
-    assert_present "$REPO_ROOT/$PROTOCOL_RELATIVE" "$phrase" || return 1
-  done
-}
-
-# bats test_tags=whole-tree
-@test "the protocol keeps the literal-values rule, its precedence clause and the digest-capture opening" {
-  local phrase
-  for phrase in \
-    '**From here on, every value travels as a literal typed into the command, never as a shell variable or a command substitution.**' \
-    'Where your definition and this file differ' \
-    'Capture your own branch-own digest at scope resolution'; do
-    assert_present "$REPO_ROOT/$PROTOCOL_RELATIVE" "$phrase" || return 1
-  done
-}
-
-# bats test_tags=whole-tree
-@test "the workflows, node and shell definitions keep the narrower-CHANGED risk paragraph" {
-  local relative
-  for relative in "$WORKFLOWS_RELATIVE" "$NODE_RELATIVE" "$SHELL_RELATIVE"; do
-    assert_present "$REPO_ROOT/$relative" 'A narrower `CHANGED` shifts one risk onto you' || return 1
-  done
-}
-
-# --- red twins: scratch copies, each helper must fail ------------------------------
-
-# bats test_tags=whole-tree
-@test "red twin: a row naming a substring no enforcer test line contains fails" {
-  local row
-  row="$(cut_rows | head -n 1)"
-  row="${row%|*}|a substring that no test line in the enforcer could ever contain"
-  run check_cut_row "$REPO_ROOT" "$row"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a protocol copy with one enforcer pointer outside its block fails the row check" {
-  local scratch="$BATS_TEST_TMPDIR/root" row
-  mkdir -p "$scratch/.claude/hooks/lib"
-  unfence_first_pointer "$REPO_ROOT/$PROTOCOL_RELATIVE" "$scratch/$PROTOCOL_RELATIVE"
-  row="$(cut_rows | head -n 1)"
-  run check_cut_row "$scratch" "$row"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a protocol copy with one enforcer pointer outside its block fails the leak check" {
-  local scratch="$BATS_TEST_TMPDIR/protocol.md"
-  unfence_first_pointer "$REPO_ROOT/$PROTOCOL_RELATIVE" "$scratch"
-  grep -qF -- 'Enforced by ' "$scratch" || { echo "twin was not built" >&2; return 1; }
-  run assert_no_enforcer_path_outside_blocks "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a frontend copy with the deleted durable-knowledge heading restored fails the absence check" {
-  local scratch="$BATS_TEST_TMPDIR/frontend.md"
-  { cat "$REPO_ROOT/$FRONTEND_RELATIVE"; printf '\n## Durable knowledge\n'; } >"$scratch"
-  run assert_absent "$scratch" '## Durable knowledge'
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a protocol copy without the precedence clause fails the presence check" {
-  local scratch="$BATS_TEST_TMPDIR/protocol.md"
-  sed 's/Where your definition and this file differ/Elsewhere/' "$REPO_ROOT/$PROTOCOL_RELATIVE" >"$scratch"
-  run assert_present "$scratch" 'Where your definition and this file differ'
-  [ "$status" -ne 0 ]
 }

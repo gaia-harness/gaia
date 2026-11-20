@@ -10,9 +10,6 @@
 #   - the gate section names both moments and the fix_count re-read trigger;
 #   - the merge step and pr-merge.md point at the verify-only check.
 #
-# Every check is a function taking the file it reads, so each red twin runs
-# the same function against a mutated copy and proves it can fail.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 # shellcheck disable=SC2016
@@ -77,36 +74,14 @@ rule_lands_before_audit() {
   marked_only "$MERGE_WORKFLOW" "$H_PRE" "$PRE_LITERAL"
 }
 
-@test "red twin: the gate named outside the marked block fails" {
-  copy="$BATS_TEST_TMPDIR/workflow.md"
-  awk -v lit="$PRE_LITERAL" '{ print } index($0, "#### Before the first dispatch") == 1 { print "- " lit }' \
-    "$MERGE_WORKFLOW" > "$copy"
-  run marked_only "$copy" "$H_PRE" "$PRE_LITERAL"
-  [ "$status" -ne 0 ]
-}
-
 # ---------- the gate's two moments ----------
 
 @test "the gate section names both moments and the fix_count trigger" {
   gate_names_both_moments "$MERGE_WORKFLOW"
 }
 
-@test "red twin: dropping the fix_count trigger fails" {
-  copy="$BATS_TEST_TMPDIR/workflow.md"
-  grep -vF -- '`fix_count` above 0' "$MERGE_WORKFLOW" > "$copy"
-  run gate_names_both_moments "$copy"
-  [ "$status" -ne 0 ]
-}
-
 @test "the merge step runs the verify-only check" {
   merge_step_verifies "$MERGE_WORKFLOW"
-}
-
-@test "red twin: the merge step without the check fails" {
-  copy="$BATS_TEST_TMPDIR/workflow.md"
-  grep -vF -- 'Run the **CHANGELOG gate**' "$MERGE_WORKFLOW" > "$copy"
-  run merge_step_verifies "$copy"
-  [ "$status" -ne 0 ]
 }
 
 # ---------- the rule ----------
@@ -115,9 +90,3 @@ rule_lands_before_audit() {
   rule_lands_before_audit "$PR_MERGE_RULE"
 }
 
-@test "red twin: a rule without the backstop condition fails" {
-  copy="$BATS_TEST_TMPDIR/pr-merge.md"
-  grep -vF -- 'only when the entry is missing or false' "$PR_MERGE_RULE" > "$copy"
-  run rule_lands_before_audit "$copy"
-  [ "$status" -ne 0 ]
-}

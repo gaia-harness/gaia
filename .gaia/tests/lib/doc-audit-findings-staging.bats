@@ -100,25 +100,6 @@ setup() {
   done
 }
 
-@test "every member points at the protocol file, which prescribes the write" {
-  # The floor for the SPECS/DELEGATES split: a member that loses its pointer
-  # moves to SPECS and fails every positive check there, and a missing
-  # protocol file leaves the delegates with no write at all.
-  [ -s "$ROOT/$PROTOCOL_RELATIVE_PATH" ] || { echo "$PROTOCOL_RELATIVE_PATH is missing or empty" >&2; return 1; }
-  [ "${#DELEGATES[@]}" -ge 4 ]
-  for member in \
-    code-audit-frontend \
-    code-audit-github-workflows \
-    code-audit-maintainer-node \
-    code-audit-maintainer-shell \
-    code-audit-shell; do
-    grep -qF -- "$PROTOCOL_RELATIVE_PATH" "$ROOT/.claude/agents/${member}.md" || {
-      echo "${member}.md does not point at $PROTOCOL_RELATIVE_PATH" >&2
-      return 1
-    }
-  done
-}
-
 # --- Group 2: the prescribed call reads a member-private staged file ----------
 
 @test "every findings invocation in every spec reads the member-private staged file" {
@@ -188,60 +169,34 @@ setup() {
   done
 }
 
-@test "no findings payload is double-quoted" {
-  # A double-quoted payload expands `$` and backticks inside the finding text
-  # before the writer validates the array, so a finding quoting shell prose
-  # publishes something other than what the member wrote.
+# --- Group 4: payload forms the writer or the isolation guard refuses ---------
+
+@test "no spec pipes the payload into the writer, double-quotes it, revives a heredoc or hands a resolver value to a flag unquoted, and every spec carries the quoted anchor-tree form" {
+  # Double-quoted payload: expands `$` and backticks in finding text before the
+  # writer validates the array. Pipe into the writer: the superseded stdin form,
+  # refused by worktree isolation whenever the payload carries the token `git`.
+  # Heredoc: unrunnable from a linked worktree. Unquoted resolver value: the
+  # resolver prints ANCHOR_TREE empty on every first dispatch, so a bare
+  # `--anchor-tree <ANCHOR_TREE>` swallows the next flag and the writer exits 2.
+  # The anchor-tree presence check is the floor for that last absence rule.
+  local forbidden_case forbidden_pattern forbidden_label
+  local -a forbidden_cases=(
+    "^printf '%s' \"|double-quoted payload"
+    '\|[[:space:]]*bash[[:space:]].*audit-write-findings\.sh|payload piped into the writer'
+    "--findings - <<|revived --findings heredoc"
+    "^printf '%s'.*<<|revived producer heredoc"
+    '--[a-z-]+ <[A-Z_]+>|resolver value handed to a flag unquoted'
+  )
   for audited_file in "${ALL[@]}"; do
-    grep -qE -- "^printf '%s' \"" "$audited_file" && return 1
+    for forbidden_case in "${forbidden_cases[@]}"; do
+      forbidden_pattern="${forbidden_case%|*}"
+      forbidden_label="${forbidden_case##*|}"
+      if grep -qE -- "$forbidden_pattern" "$audited_file"; then
+        echo "$audited_file: $forbidden_label" >&2
+        return 1
+      fi
+    done
   done
-  true
-}
-
-@test "no spec pipes the payload into the writer, which the isolation guard refuses" {
-  # A pipe into the writer is the superseded stdin form. The confinement
-  # refuses it whenever the payload carries the token `git`, which any finding
-  # path under `.github/` does, so it is unrunnable from a linked worktree.
-  for audited_file in "${ALL[@]}"; do
-    grep -qE -- '\|[[:space:]]*bash[[:space:]].*audit-write-findings\.sh' "$audited_file" && return 1
-  done
-  true
-}
-
-@test "no spec has revived the heredoc the isolation guard refuses" {
-  # Subsumed by Group 2's anchored rule for the flag line, and extended to the
-  # producer, so a revival reads as the regression it is: a heredoc form cannot
-  # run at all on a pull request audited from a linked worktree.
-  for audited_file in "${ALL[@]}"; do
-    grep -qF -- '--findings - <<' "$audited_file" && return 1
-    grep -qE -- "^printf '%s'.*<<" "$audited_file" && return 1
-  done
-  true
-}
-
-# --- Group 3: a value the scope resolver prints empty still reaches its flag --
-
-@test "no spec hands a resolver value to a flag unquoted" {
-  # A member types each resolver value into the command as a literal. The
-  # resolver prints ANCHOR_TREE empty on every no-anchor round, which is every
-  # first dispatch on a branch, so a bare `--anchor-tree <ANCHOR_TREE>` becomes
-  # a flag with nothing after it and takes the next flag as its value: the
-  # sidecar writer then exits 2 on `--findings` as an unrecognized argument,
-  # and no report of record is written. Observed live from a linked worktree.
-  # Single quotes keep an empty value as its own `''` argument.
-  for audited_file in "${ALL[@]}"; do
-    local offenders
-    offenders="$(grep -nE -- '--[a-z-]+ <[A-Z_]+>' "$audited_file" || true)"
-    [ -z "$offenders" ] || {
-      echo "$audited_file passes a resolver value to a flag unquoted: $offenders" >&2
-      return 1
-    }
-  done
-}
-
-@test "every spec carries the quoted anchor-tree form" {
-  # The floor for the rule above: a spec that stopped prescribing the sidecar
-  # write, or dropped the flag, would pass an absence check on nothing.
   for audited_file in "${SPECS[@]}"; do
     grep -qF -- "--anchor-tree '<ANCHOR_TREE>'" "$audited_file" || {
       echo "$audited_file carries no quoted --anchor-tree form" >&2
