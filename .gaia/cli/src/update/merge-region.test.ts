@@ -117,7 +117,6 @@ describe('computeRegionMerge', () => {
           verdict: 'conflict',
         },
         {
-          // The baseline is the duplicate-start side.
           baseline: [START, 'a', START, 'b', END].join('\n'),
           current: ['outside', START, 'region', END].join('\n'),
           latest: ['outside', START, 'region', END].join('\n'),
@@ -290,7 +289,6 @@ describe('computeRegionMerge', () => {
   test.each(
     [
       {
-        // The baseline region is empty.
         baseline: ['outside', START, END].join('\n'),
         latest: [
           'outside',

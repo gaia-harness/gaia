@@ -23,9 +23,7 @@ const NOT_A_HEADER = [
 ];
 
 describe('parseConventionalCommitHeader', () => {
-  // The bang rows pin the drift that motivated the extraction: `bump.ts` read
-  // the bang on any type, `changelog.ts` matched it without capturing, and only
-  // `commit-classify.ts` named the scope. All three now read this one answer.
+  // Read by `bump.ts`, `changelog.ts` and `commit-classify.ts`.
   test.each(
     [
       {

@@ -619,7 +619,6 @@ describe('update-deps run: computeUpdates', () => {
           versionLists: {vite: ['8.0.16', '8.1.0']},
         },
         {
-          // foo flows through; vite is held out.
           ceiling: '8.0',
           dependencies: {foo: '^1.2.3', vite: '8.0.16'},
           expectedSkipped: [heldVite('8.1.0')],

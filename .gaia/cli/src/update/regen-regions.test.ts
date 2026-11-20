@@ -233,12 +233,10 @@ describe('update regen-regions: hostile-input coverage', () => {
   // Either way scoping the snapshot to the whole tree is the outcome refused,
   // and a bare `/` reaches it by the absolute-path guard (1j).
   //
-  // `1j`: normalization strips a trailing separator, but never the last one: a
-  // lone '/' reduced to the empty string would be refused for the least
-  // descriptive of the four reasons, naming neither what was written nor why
-  // it cannot be declared. `/.` is deliberately not here: it carries a `.`
-  // segment and nothing else, so it normalizes away exactly as `.` does and
-  // 1e's empty-entry refusal is the one it earns.
+  // `1j`: normalizeRepoPath collapses `//` to `/` and strips no trailing
+  // separator, so both reach the absolute-path guard. Reduced to the empty
+  // string, `/` would get the least descriptive declaration reason, naming
+  // neither what was written nor why it cannot be declared.
   test.each(
     (
       [

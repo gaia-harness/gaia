@@ -690,10 +690,6 @@ describe('wiki commit-classify', () => {
           health: {deferred: 0, worthy_rate: 1},
           name: 'worthy_rate stays visible when deferral is zero',
         },
-        // The threshold is calibrated against both observed inert cases, not
-        // picked round. The path-vocabulary failure sat at 55% deferral, so a
-        // threshold above that would have missed it while still catching the
-        // 68% type-vocabulary one.
         {
           batches: [
             [11, 'fix(cli): repair the thing', 'tooling/thing.cfg'],

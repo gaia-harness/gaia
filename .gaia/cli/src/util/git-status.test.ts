@@ -10,7 +10,6 @@
 import {describe, expect, test} from 'vitest';
 import {porcelainZPaths} from './git-status.js';
 
-// Each row holds one or more [stream, paths] cases.
 const ROWS: {cases: [string, string[]][]; name: string}[] = [
   {
     cases: [[' M wiki/log.md\0', ['wiki/log.md']]],

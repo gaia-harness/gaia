@@ -139,7 +139,6 @@ describe('wiki log-prepend', () => {
 
     const written = readFileSync(sandbox.logPath, 'utf8');
     expect(written).toContain(entry);
-    // The new entry should appear before the existing entry.
     expect(written.indexOf(entry)).toBeLessThan(written.indexOf('abc1234'));
   });
 
