@@ -164,7 +164,24 @@ record_for_frontend() {
   assert_gate_allows
 }
 
-@test "a quick route whose reply carries a minor note is refused, the router still sends the delta to the reviewer, and the merge gate keeps denying" {
+@test "a refused branch repaired by a small delta clears light against the refusal's findings, and the merge gate allows it" {
+  lsb_init
+  lsb_commit_lines apps/web/app/notes.md 5 line
+  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding apps/web/app/notes.md 2 major false)]"
+  assert_gate_denies
+  lsb_commit_lines apps/web/app/notes.md 5 fixed
+  assert_gate_denies
+  lsb_route "$FRONTEND"
+  expect_line "$(printf 'light\trefusal-anchored')"
+  grep -qxF 'open_findings: 1' "$(route_input_path)"
+  clear_through_light
+  expect_line "light-cleared"
+  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
+  assert_gate_allows
+}
+
+@test "a reply that does not clear leaves no marker and the merge gate keeps denying: a minor note on a quick-eligible route, an escalate on a light-eligible route" {
+  # case: a quick route whose reply carries a minor note is refused, the router still sends the delta to the reviewer, and the merge gate keeps denying
   lsb_init
   lsb_main_base_begin
   lsb_commit "$QUICK_ENGLISH" "$(quick_locale_text Hello)"
@@ -184,25 +201,9 @@ record_for_frontend() {
   clear_through_light
   expect_line "light-cleared"
   assert_gate_allows
-}
 
-@test "a refused branch repaired by a small delta clears light against the refusal's findings, and the merge gate allows it" {
-  lsb_init
-  lsb_commit_lines apps/web/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding apps/web/app/notes.md 2 major false)]"
-  assert_gate_denies
-  lsb_commit_lines apps/web/app/notes.md 5 fixed
-  assert_gate_denies
-  lsb_route "$FRONTEND"
-  expect_line "$(printf 'light\trefusal-anchored')"
-  grep -qxF 'open_findings: 1' "$(route_input_path)"
-  clear_through_light
-  expect_line "light-cleared"
-  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
-  assert_gate_allows
-}
-
-@test "an escalate reply leaves no marker for the current digest and the merge gate denies" {
+  # case: an escalate reply leaves no marker for the current digest and the merge gate denies
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
   prepare_light
   escalate_through_light
   expect_full escalate
