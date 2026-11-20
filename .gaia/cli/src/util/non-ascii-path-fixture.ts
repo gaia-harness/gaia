@@ -19,16 +19,6 @@
 export const NON_ASCII_STEM = '日本語';
 
 /**
- * The leading octal escape of `NON_ASCII_STEM`'s C-quoted spelling.
- *
- * A canary asserts a listing contains this, and does not contain the raw stem,
- * before the test beside it asserts anything about the code under test. A
- * fixture that is not in fact being quoted makes that second test vacuously
- * green, which is the outcome a canary exists to rule out.
- */
-export const QUOTED_FIRST_BYTE = String.raw`\346`;
-
-/**
  * `git config` argv pinning C-quoting on in a fixture repository.
  *
  * This is git's own default, set explicitly all the same. A developer whose
