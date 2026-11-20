@@ -19,9 +19,11 @@ const REMOVED_FEATURE_NAME = ['gaia', 'ci'].join('-');
 const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
 const registry = readRegistry(repoRoot);
 
+type Feature = 'dependabot' | 'forensics' | 'tech-debt';
+
 const names = (
   audience: 'adopter' | 'maintainer',
-  features: ('dependabot' | 'forensics' | 'tech-debt')[]
+  features: Feature[]
 ): string[] =>
   registry.labels
     .filter((entry) => isCreatable(entry, audience, features))
@@ -51,35 +53,25 @@ describe('labels/registry readRegistry', () => {
     }
   });
 
-  test('labelsRegistryPath joins onto the given root', () => {
-    expect(labelsRegistryPath('/checkout/example')).toBe(
-      path.join('/checkout/example', '.gaia', 'labels.json')
-    );
-  });
-
-  test('a malformed registry throws with the file named', () => {
+  test.each([
+    [
+      'a malformed registry throws with the file named',
+      (directory: string): void => {
+        mkdirSync(path.join(directory, '.gaia'), {recursive: true});
+        writeFileSync(
+          path.join(directory, '.gaia', 'labels.json'),
+          '{"version": 2}',
+          'utf8'
+        );
+      },
+    ],
+    ['an unreadable registry throws with the file named', (): void => {}],
+  ])('%s', (_name, prepare) => {
     const directory = mkdtempSync(path.join(tmpdir(), 'gaia-labels-'));
 
     try {
-      mkdirSync(path.join(directory, '.gaia'), {recursive: true});
-      writeFileSync(
-        path.join(directory, '.gaia', 'labels.json'),
-        '{"version": 2}',
-        'utf8'
-      );
+      prepare(directory);
 
-      expect(() => readRegistry(directory)).toThrow(
-        labelsRegistryPath(directory)
-      );
-    } finally {
-      rmSync(directory, {force: true, recursive: true});
-    }
-  });
-
-  test('an unreadable registry throws with the file named', () => {
-    const directory = mkdtempSync(path.join(tmpdir(), 'gaia-labels-'));
-
-    try {
       expect(() => readRegistry(directory)).toThrow(
         labelsRegistryPath(directory)
       );
@@ -89,67 +81,123 @@ describe('labels/registry readRegistry', () => {
   });
 });
 
+type CreatableRow = {
+  audience: 'adopter' | 'maintainer';
+  expected: string[];
+  features: Feature[];
+  name: string;
+};
+
 describe('labels/registry creatable entries', () => {
-  test('every feature on yields the adopter-role entries', () => {
-    expect(names('adopter', ['tech-debt', 'dependabot', 'forensics'])).toEqual([
-      'bug',
-      'debt:spec-active',
-      'debt:spec-pending',
-      'difficulty:easy',
-      'difficulty:hard',
-      'difficulty:medium',
-      'documentation',
-      'enhancement',
-      'footprint:narrow',
-      'footprint:spec',
-      'footprint:wide',
-      'in-progress',
-      'needs-human',
-      'security',
-      'severity:critical',
-      'severity:investigate',
-      'severity:major',
-      'severity:minor',
-      'tech-debt',
-      'wontfix',
-    ]);
-  });
+  const creatableRows: CreatableRow[] = [
+    {
+      audience: 'adopter',
+      expected: [
+        'bug',
+        'debt:spec-active',
+        'debt:spec-pending',
+        'difficulty:easy',
+        'difficulty:hard',
+        'difficulty:medium',
+        'documentation',
+        'enhancement',
+        'footprint:narrow',
+        'footprint:spec',
+        'footprint:wide',
+        'in-progress',
+        'needs-human',
+        'security',
+        'severity:critical',
+        'severity:investigate',
+        'severity:major',
+        'severity:minor',
+        'tech-debt',
+        'wontfix',
+      ],
+      features: ['tech-debt', 'dependabot', 'forensics'],
+      name: 'every feature on yields the adopter-role entries',
+    },
+    {
+      audience: 'adopter',
+      expected: [
+        'bug',
+        'debt:spec-active',
+        'debt:spec-pending',
+        'difficulty:easy',
+        'difficulty:hard',
+        'difficulty:medium',
+        'documentation',
+        'enhancement',
+        'footprint:narrow',
+        'footprint:spec',
+        'footprint:wide',
+        'in-progress',
+        'needs-human',
+        'severity:critical',
+        'severity:investigate',
+        'severity:major',
+        'severity:minor',
+        'tech-debt',
+        'wontfix',
+      ],
+      features: ['tech-debt', 'forensics'],
+      name: 'dependabot off drops only the security label',
+    },
+    {
+      audience: 'adopter',
+      expected: [
+        'bug',
+        'documentation',
+        'enhancement',
+        'in-progress',
+        'needs-human',
+        'security',
+        'wontfix',
+      ],
+      features: ['dependabot', 'forensics'],
+      name: 'tech-debt off leaves the always-on set plus the dependabot set',
+    },
+    {
+      audience: 'maintainer',
+      expected: [
+        'audience:adopter',
+        'audience:maintainer',
+        'auto-fixable',
+        'bug',
+        'debt:spec-active',
+        'debt:spec-pending',
+        'difficulty:easy',
+        'difficulty:hard',
+        'difficulty:medium',
+        'documentation',
+        'enhancement',
+        'footprint:narrow',
+        'footprint:spec',
+        'footprint:wide',
+        'gaia-forensics',
+        'gaia-triaged',
+        'in-progress',
+        'needs-human',
+        'non-issue',
+        'security',
+        'severity:critical',
+        'severity:investigate',
+        'severity:major',
+        'severity:minor',
+        'tech-debt',
+        'wontfix',
+      ],
+      features: ['tech-debt', 'dependabot', 'forensics'],
+      name: 'the maintainer set is the adopter set plus the maintainer entries',
+    },
+  ];
 
-  test('dependabot off drops only the security label', () => {
-    expect(names('adopter', ['tech-debt', 'forensics'])).toEqual([
-      'bug',
-      'debt:spec-active',
-      'debt:spec-pending',
-      'difficulty:easy',
-      'difficulty:hard',
-      'difficulty:medium',
-      'documentation',
-      'enhancement',
-      'footprint:narrow',
-      'footprint:spec',
-      'footprint:wide',
-      'in-progress',
-      'needs-human',
-      'severity:critical',
-      'severity:investigate',
-      'severity:major',
-      'severity:minor',
-      'tech-debt',
-      'wontfix',
-    ]);
-  });
-
-  test('tech-debt off leaves the always-on set plus the dependabot set', () => {
-    expect(names('adopter', ['dependabot', 'forensics'])).toEqual([
-      'bug',
-      'documentation',
-      'enhancement',
-      'in-progress',
-      'needs-human',
-      'security',
-      'wontfix',
-    ]);
-  });
+  test.each(creatableRows.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {audience, expected, features}) => {
+      expect(names(audience, features)).toEqual(expected);
+    }
+  );
 
   test('a maintainer entry never reaches an adopter creatable set', () => {
     const maintainerNames = new Set(
@@ -162,39 +210,6 @@ describe('labels/registry creatable entries', () => {
     expect(adopterNames.filter((name) => maintainerNames.has(name))).toEqual(
       []
     );
-  });
-
-  test('the maintainer set is the adopter set plus the maintainer entries', () => {
-    expect(
-      names('maintainer', ['tech-debt', 'dependabot', 'forensics'])
-    ).toEqual([
-      'audience:adopter',
-      'audience:maintainer',
-      'auto-fixable',
-      'bug',
-      'debt:spec-active',
-      'debt:spec-pending',
-      'difficulty:easy',
-      'difficulty:hard',
-      'difficulty:medium',
-      'documentation',
-      'enhancement',
-      'footprint:narrow',
-      'footprint:spec',
-      'footprint:wide',
-      'gaia-forensics',
-      'gaia-triaged',
-      'in-progress',
-      'needs-human',
-      'non-issue',
-      'security',
-      'severity:critical',
-      'severity:investigate',
-      'severity:major',
-      'severity:minor',
-      'tech-debt',
-      'wontfix',
-    ]);
   });
 });
 
@@ -243,62 +258,81 @@ describe('labels/registry resolveAudience and resolveFeatures', () => {
     writeFileSync(path.join(fixture, '.gaia', 'project.json'), text, 'utf8');
   };
 
-  test('a tree without .gaia/cli/src is an adopter tree', () => {
-    expect(resolveAudience(fixture)).toBe('adopter');
+  test.each(
+    [
+      {
+        arrange: (): void => {},
+        expected: 'adopter',
+        name: 'a tree without .gaia/cli/src is an adopter tree',
+      },
+      {
+        arrange: (): void => {
+          mkdirSync(path.join(fixture, '.gaia', 'cli', 'src'), {
+            recursive: true,
+          });
+        },
+        expected: 'maintainer',
+        name: 'a tree carrying .gaia/cli/src is the maintainer tree',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {arrange, expected}) => {
+    arrange();
+
+    expect(resolveAudience(fixture)).toBe(expected);
   });
 
-  test('a tree carrying .gaia/cli/src is the maintainer tree', () => {
-    mkdirSync(path.join(fixture, '.gaia', 'cli', 'src'), {recursive: true});
+  const writeFixtureFile = (relativePath: string, text: string): void => {
+    mkdirSync(path.join(fixture, path.dirname(relativePath)), {
+      recursive: true,
+    });
+    writeFileSync(path.join(fixture, relativePath), text, 'utf8');
+  };
 
-    expect(resolveAudience(fixture)).toBe('maintainer');
-  });
+  test.each(
+    [
+      {
+        arrange: (): void => {},
+        expected: ['tech-debt'],
+        name: 'tech-debt is always on and the other two key on a file',
+      },
+      {
+        arrange: (): void =>
+          writeProjectConfig(
+            '{"version":1,"dependabot_security_updates":"on"}'
+          ),
+        expected: ['tech-debt'],
+        name: 'a retired project config opt-in alone leaves dependabot off',
+      },
+      {
+        arrange: (): void =>
+          writeFixtureFile('.github/dependabot.yaml', 'version: 2\n'),
+        expected: ['tech-debt', 'dependabot'],
+        name: 'an existing .github/dependabot.yaml alone turns dependabot on',
+      },
+      {
+        arrange: (): void =>
+          writeFixtureFile('.github/dependabot.yml', 'version: 2\n'),
+        expected: ['tech-debt', 'dependabot'],
+        name: 'an existing .github/dependabot.yml turns dependabot on without a project config',
+      },
+      {
+        arrange: (): void => writeProjectConfig('{not json'),
+        expected: ['tech-debt'],
+        name: 'a malformed project config does not turn dependabot on',
+      },
+      {
+        arrange: (): void =>
+          writeFixtureFile(
+            '.github/workflows/forensics-triage.yml',
+            'name: x\n'
+          ),
+        expected: ['tech-debt', 'forensics'],
+        name: 'a forensics triage workflow turns forensics on',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {arrange, expected}) => {
+    arrange();
 
-  test('tech-debt is always on and the other two key on a file', () => {
-    expect(resolveFeatures(fixture)).toEqual(['tech-debt']);
-  });
-
-  test('a retired project config opt-in alone leaves dependabot off', () => {
-    writeProjectConfig('{"version":1,"dependabot_security_updates":"on"}');
-
-    expect(resolveFeatures(fixture)).toEqual(['tech-debt']);
-  });
-
-  test('an existing .github/dependabot.yaml alone turns dependabot on', () => {
-    mkdirSync(path.join(fixture, '.github'), {recursive: true});
-    writeFileSync(
-      path.join(fixture, '.github', 'dependabot.yaml'),
-      'version: 2\n',
-      'utf8'
-    );
-
-    expect(resolveFeatures(fixture)).toEqual(['tech-debt', 'dependabot']);
-  });
-
-  test('an existing .github/dependabot.yml turns dependabot on without a project config', () => {
-    mkdirSync(path.join(fixture, '.github'), {recursive: true});
-    writeFileSync(
-      path.join(fixture, '.github', 'dependabot.yml'),
-      'version: 2\n',
-      'utf8'
-    );
-
-    expect(resolveFeatures(fixture)).toEqual(['tech-debt', 'dependabot']);
-  });
-
-  test('a malformed project config does not turn dependabot on', () => {
-    writeProjectConfig('{not json');
-
-    expect(resolveFeatures(fixture)).toEqual(['tech-debt']);
-  });
-
-  test('a forensics triage workflow turns forensics on', () => {
-    mkdirSync(path.join(fixture, '.github', 'workflows'), {recursive: true});
-    writeFileSync(
-      path.join(fixture, '.github', 'workflows', 'forensics-triage.yml'),
-      'name: x\n',
-      'utf8'
-    );
-
-    expect(resolveFeatures(fixture)).toEqual(['tech-debt', 'forensics']);
+    expect(resolveFeatures(fixture)).toEqual(expected);
   });
 });

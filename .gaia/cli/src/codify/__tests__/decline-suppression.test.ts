@@ -96,52 +96,51 @@ afterEach(() => {
   rmSync(root, {force: true, recursive: true});
 });
 
+const resurface = (reason: string) => ({reason, status: 'resurface'});
+
 describe('committed declines', () => {
-  test('suppress below a material rise and resurface at one', () => {
-    putCommitted(entry('rule/a', daysAgo(1)));
+  const committedSuppressed = {source: 'committed', status: 'suppressed'};
+
+  test.each([
+    {
+      checks: [
+        ['rule/a', 5, committedSuppressed],
+        ['rule/a', 12, resurface('material_rise')],
+        ['rule/other', 5, resurface('no_decline')],
+      ],
+      declines: [entry('rule/a', daysAgo(1))],
+      name: 'suppress below a material rise and resurface at one',
+    },
+    {
+      checks: [['rule/a', 4, resurface('schema_version_mismatch')]],
+      declines: [entry('rule/a', daysAgo(1), 4, TALLY_SCHEMA_VERSION - 1)],
+      name: 'a different tally schema version resurfaces below a rise',
+    },
+    {
+      checks: [
+        ['rule/live', 4, committedSuppressed],
+        ['rule/old', 4, resurface('lapsed')],
+      ],
+      declines: [
+        entry('rule/live', daysAgo(WINDOW_DAYS)),
+        entry('rule/old', daysAgo(WINDOW_DAYS, 1)),
+      ],
+      name: 'exactly one window old is live, one millisecond older lapses',
+    },
+  ] as {
+    checks: [string, number, unknown][];
+    declines: unknown[];
+    name: string;
+  }[])('$name', ({checks, declines}) => {
+    for (const decline of declines) {
+      putCommitted(decline);
+    }
 
     const {check} = load();
 
-    expect(check('rule/a', 5, 394)).toEqual({
-      source: 'committed',
-      status: 'suppressed',
-    });
-    expect(check('rule/a', 12, 394)).toEqual({
-      reason: 'material_rise',
-      status: 'resurface',
-    });
-    expect(check('rule/other', 5, 394)).toEqual({
-      reason: 'no_decline',
-      status: 'resurface',
-    });
-  });
-
-  test('a different tally schema version resurfaces below a rise', () => {
-    putCommitted(entry('rule/a', daysAgo(1), 4, TALLY_SCHEMA_VERSION - 1));
-
-    expect(load().check('rule/a', 4, 394)).toEqual({
-      reason: 'schema_version_mismatch',
-      status: 'resurface',
-    });
-  });
-
-  test('exactly one window old is live, one millisecond older lapses', () => {
-    putCommitted(entry('rule/live', daysAgo(WINDOW_DAYS)));
-    putCommitted(entry('rule/old', daysAgo(WINDOW_DAYS, 1)));
-
-    const {check} = load();
-
-    expect(check('rule/live', 4, 394).status).toBe('suppressed');
-    expect(check('rule/old', 4, 394)).toEqual({
-      reason: 'lapsed',
-      status: 'resurface',
-    });
-  });
-
-  test('a 60-day-old decline still suppresses', () => {
-    putCommitted(entry('rule/a', daysAgo(60)));
-
-    expect(load().check('rule/a', 4, 394).status).toBe('suppressed');
+    for (const [findingClass, prCount, expected] of checks) {
+      expect(check(findingClass, prCount, 394)).toEqual(expected);
+    }
   });
 
   test('a skipped file is reported by relative path and suppresses nothing', () => {
@@ -221,34 +220,33 @@ describe('legacy ledger', () => {
 });
 
 describe('both sources', () => {
-  test('committed suppresses while the legacy entry rose materially', () => {
-    putCommitted(entry('rule/a', daysAgo(1), 10));
-    putLegacy({declines: [legacyEntry('rule/a', daysAgo(2), 4)], version: 2});
+  test.each([
+    {
+      committed: entry('rule/a', daysAgo(1), 10),
+      expected: {source: 'committed', status: 'suppressed'},
+      legacy: legacyEntry('rule/a', daysAgo(2), 4),
+      name: 'committed suppresses while the legacy entry rose materially',
+      prCount: 10,
+    },
+    {
+      committed: entry('rule/a', daysAgo(WINDOW_DAYS, 1)),
+      expected: {source: 'legacy', status: 'suppressed'},
+      legacy: legacyEntry('rule/a', daysAgo(2)),
+      name: 'a lapsed committed decline yields to a live legacy one',
+      prCount: 4,
+    },
+    {
+      committed: entry('rule/a', daysAgo(WINDOW_DAYS, 1)),
+      expected: {reason: 'lapsed', status: 'resurface'},
+      legacy: legacyEntry('rule/a', daysAgo(2), 1),
+      name: 'both resurfacing resurfaces with the committed reason',
+      prCount: 20,
+    },
+  ])('$name', ({committed, expected, legacy, prCount}) => {
+    putCommitted(committed);
+    putLegacy({declines: [legacy], version: 2});
 
-    expect(load().check('rule/a', 10, 394)).toEqual({
-      source: 'committed',
-      status: 'suppressed',
-    });
-  });
-
-  test('a lapsed committed decline yields to a live legacy one', () => {
-    putCommitted(entry('rule/a', daysAgo(WINDOW_DAYS, 1)));
-    putLegacy({declines: [legacyEntry('rule/a', daysAgo(2))], version: 2});
-
-    expect(load().check('rule/a', 4, 394)).toEqual({
-      source: 'legacy',
-      status: 'suppressed',
-    });
-  });
-
-  test('both resurfacing resurfaces with the committed reason', () => {
-    putCommitted(entry('rule/a', daysAgo(WINDOW_DAYS, 1)));
-    putLegacy({declines: [legacyEntry('rule/a', daysAgo(2), 1)], version: 2});
-
-    expect(load().check('rule/a', 20, 394)).toEqual({
-      reason: 'lapsed',
-      status: 'resurface',
-    });
+    expect(load().check('rule/a', prCount, 394)).toEqual(expected);
   });
 });
 

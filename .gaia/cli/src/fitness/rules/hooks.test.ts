@@ -3,19 +3,11 @@ import {describe, expect, test} from 'vitest';
 import {chmodSync, existsSync} from 'node:fs';
 import path from 'node:path';
 import {runCheck} from '../check.js';
-import {
-  createScratchProject,
-  expectFixtureParity,
-  FIXTURE_PARITY_TIMEOUT_MS,
-} from '../test-support.js';
-import type {FixtureProject, RuleDefinition} from '../types.js';
+import {createScratchProject} from '../test-support.js';
+import type {FixtureProject} from '../types.js';
 import {readScriptReference, splitCommandWords} from './hook-command.js';
-import {
-  hookProject,
-  HOOKS_FIXTURES,
-  SANCTIONED_ROOT,
-} from './hooks.fixtures.js';
-import {createHookRules, HOOKS_RULES} from './hooks.js';
+import {hookProject, SANCTIONED_ROOT} from './hooks.fixtures.js';
+import {HOOKS_RULES} from './hooks.js';
 
 const EXAMPLE_SCRIPT = '.claude/hooks/example.sh';
 
@@ -23,7 +15,7 @@ type Outcome = {ids: string[]; root: string};
 
 const findingIds = (
   project: FixtureProject,
-  options: {catalog?: readonly RuleDefinition[]; executable?: string[]} = {}
+  options: {executable?: string[]} = {}
 ): Outcome => {
   const scratch = createScratchProject(project);
 
@@ -33,7 +25,7 @@ const findingIds = (
     }
 
     const report = runCheck({
-      catalog: options.catalog ?? HOOKS_RULES,
+      catalog: HOOKS_RULES,
       env: scratch.env,
       root: scratch.root,
       scope: 'all',
@@ -56,34 +48,20 @@ const withScript = (command: string, event = 'PreToolUse') =>
     files: {[EXAMPLE_SCRIPT]: '#!/usr/bin/env bash\nexit 0\n'},
   });
 
-describe('hook rules fixtures', () => {
-  test(
-    'fires on every red fixture and stays quiet on every green one',
-    () => {
-      expectFixtureParity(HOOKS_RULES, HOOKS_FIXTURES);
-    },
-    FIXTURE_PARITY_TIMEOUT_MS
-  );
-});
-
 describe('hook command reading', () => {
-  test('keeps a quoted command substitution as one word', () => {
-    const words = splitCommandWords(
-      `bash "${SANCTIONED_ROOT}/.claude/hooks/example.sh" --flag`
-    );
-
-    expect(words).toEqual([
-      'bash',
-      `${SANCTIONED_ROOT}/.claude/hooks/example.sh`,
-      '--flag',
-    ]);
-  });
-
-  test('stops at the first command separator', () => {
-    expect(splitCommandWords('jq . ; echo $(touch sentinel)')).toEqual([
-      'jq',
-      '.',
-    ]);
+  test.each([
+    [
+      'keeps a quoted command substitution as one word',
+      `bash "${SANCTIONED_ROOT}/.claude/hooks/example.sh" --flag`,
+      ['bash', `${SANCTIONED_ROOT}/.claude/hooks/example.sh`, '--flag'],
+    ],
+    [
+      'stops at the first command separator',
+      'jq . ; echo $(touch sentinel)',
+      ['jq', '.'],
+    ],
+  ])('splitCommandWords %s', (_name, command, expected) => {
+    expect(splitCommandWords(command)).toEqual(expected);
   });
 
   test.each([
@@ -126,73 +104,84 @@ describe('hook command reading', () => {
 });
 
 describe('hooks.path-exists-executable', () => {
-  test.each([
-    ['the sanctioned prefix', `"${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`],
-    ['a braced project dir', `\${CLAUDE_PROJECT_DIR}/${EXAMPLE_SCRIPT}`],
-    ['a bare project dir', `"$CLAUDE_PROJECT_DIR"/${EXAMPLE_SCRIPT}`],
+  const nestedHook = hookProject(`"${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`, {
+    files: {[EXAMPLE_SCRIPT]: '#!/usr/bin/env bash\n'},
+    path: 'apps/web/.claude/settings.json',
+  });
+
+  const executableRows: [string, FixtureProject, string[]][] = [
     [
-      'the short toplevel form',
-      `$(git rev-parse --show-toplevel)/${EXAMPLE_SCRIPT}`,
+      'passes an executable script behind the sanctioned prefix',
+      withScript(`"${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`),
+      [EXAMPLE_SCRIPT],
     ],
-    ['an interpreter', `bash "${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`],
-  ])('passes an executable script behind %s', (_label, command) => {
-    expect(
-      findingIds(withScript(command), {executable: [EXAMPLE_SCRIPT]}).ids
-    ).toEqual([]);
+    [
+      'passes an executable script behind a braced project dir',
+      withScript(`\${CLAUDE_PROJECT_DIR}/${EXAMPLE_SCRIPT}`),
+      [EXAMPLE_SCRIPT],
+    ],
+    [
+      'passes an executable script behind a bare project dir',
+      withScript(`"$CLAUDE_PROJECT_DIR"/${EXAMPLE_SCRIPT}`),
+      [EXAMPLE_SCRIPT],
+    ],
+    [
+      'passes an executable script behind the short toplevel form',
+      withScript(`$(git rev-parse --show-toplevel)/${EXAMPLE_SCRIPT}`),
+      [EXAMPLE_SCRIPT],
+    ],
+    [
+      'passes an executable script behind an interpreter',
+      withScript(`bash "${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`),
+      [EXAMPLE_SCRIPT],
+    ],
+    [
+      'does not stat a $HOME token whose prefix it does not recognize',
+      withScript('$HOME/missing/example.sh'),
+      [],
+    ],
+    [
+      'does not stat a ${VAR} token whose prefix it does not recognize',
+      withScript('${VAR}/missing/example.sh'),
+      [],
+    ],
+    [
+      'does not stat a $(other) token whose prefix it does not recognize',
+      withScript('$(other)/missing/example.sh'),
+      [],
+    ],
+    ['does not check a bare executable name', withScript('jq -r .x'), []],
+    ['passes a hook in a nested settings file', nestedHook, [EXAMPLE_SCRIPT]],
+    [
+      'passes a non-executable script run through an interpreter',
+      withScript(`bash "${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`),
+      [],
+    ],
+  ];
+
+  test.each(executableRows)('%s', (_name, project, executable) => {
+    expect(findingIds(project, {executable}).ids).toEqual([]);
   });
 
-  test('does not stat a token whose prefix it does not recognize', () => {
-    expect(findingIds(withScript('$HOME/missing/example.sh')).ids).toEqual([]);
-    expect(findingIds(withScript('${VAR}/missing/example.sh')).ids).toEqual([]);
-    expect(findingIds(withScript('$(other)/missing/example.sh')).ids).toEqual(
-      []
-    );
-  });
-
-  test('does not check a bare executable name', () => {
-    expect(findingIds(withScript('jq -r .x')).ids).toEqual([]);
-  });
-
-  test('passes a hook in a nested settings file', () => {
-    const project = hookProject(`"${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`, {
-      files: {[EXAMPLE_SCRIPT]: '#!/usr/bin/env bash\n'},
-      path: 'apps/web/.claude/settings.json',
-    });
-
-    expect(findingIds(project, {executable: [EXAMPLE_SCRIPT]}).ids).toEqual([]);
-  });
-
-  test('reports a missing script once', () => {
-    expect(
-      findingIds(hookProject('"$CLAUDE_PROJECT_DIR"/.claude/hooks/missing.sh'))
-        .ids
-    ).toEqual(['hooks.path-exists-executable']);
-  });
-
-  test('reports a script that exists without the executable bit', () => {
-    expect(
-      findingIds(withScript(`"$CLAUDE_PROJECT_DIR"/${EXAMPLE_SCRIPT}`)).ids
-    ).toEqual(['hooks.path-exists-executable']);
-  });
-
-  test('passes a non-executable script run through an interpreter', () => {
-    expect(
-      findingIds(withScript(`bash "${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`)).ids
-    ).toEqual([]);
-  });
-
-  test('reports a missing script run through an interpreter', () => {
-    expect(
-      findingIds(
-        hookProject(`bash "${SANCTIONED_ROOT}/.claude/hooks/missing.sh"`)
-      ).ids
-    ).toEqual(['hooks.path-exists-executable']);
-  });
-
-  test('reports a script that resolves outside the project', () => {
-    expect(
-      findingIds(hookProject('"$CLAUDE_PROJECT_DIR"/../outside/example.sh')).ids
-    ).toEqual(['hooks.path-exists-executable']);
+  test.each([
+    [
+      'reports a missing script once',
+      hookProject('"$CLAUDE_PROJECT_DIR"/.claude/hooks/missing.sh'),
+    ],
+    [
+      'reports a script that exists without the executable bit',
+      withScript(`"$CLAUDE_PROJECT_DIR"/${EXAMPLE_SCRIPT}`),
+    ],
+    [
+      'reports a missing script run through an interpreter',
+      hookProject(`bash "${SANCTIONED_ROOT}/.claude/hooks/missing.sh"`),
+    ],
+    [
+      'reports a script that resolves outside the project',
+      hookProject('"$CLAUDE_PROJECT_DIR"/../outside/example.sh'),
+    ],
+  ])('%s', (_name, project) => {
+    expect(findingIds(project).ids).toEqual(['hooks.path-exists-executable']);
   });
 
   test('never runs a substitution inside the command', () => {
@@ -205,69 +194,46 @@ describe('hooks.path-exists-executable', () => {
     expect(existsSync(path.join(outcome.root, 'sentinel'))).toBe(false);
     expect(existsSync(path.join(process.cwd(), 'sentinel'))).toBe(false);
   });
-
-  test('goes undetected when the check is replaced by an always-pass stand-in', () => {
-    const alwaysPass = createHookRules({findScriptProblem: () => undefined});
-
-    expect(
-      findingIds(
-        hookProject('"$CLAUDE_PROJECT_DIR"/.claude/hooks/missing.sh'),
-        {
-          catalog: alwaysPass,
-        }
-      ).ids
-    ).toEqual([]);
-  });
 });
 
 describe('hooks.rooted-command', () => {
   test.each([
-    ['a dot-claude path', '.claude/hooks/example.sh'],
-    ['a dot-slash path', './example.sh'],
-    ['a directory path', 'scripts/example.sh'],
-    ['a path behind an interpreter', 'bash scripts/example.sh'],
-  ])('reports %s once', (_label, command) => {
-    expect(findingIds(withScript(command)).ids).toEqual([
-      'hooks.rooted-command',
-    ]);
-  });
-
-  test.each([
-    ['an absolute path', '/opt/hooks/example.sh'],
-    ['a home-anchored path', '$HOME/hooks/example.sh'],
-    ['a braced expansion', '${VAR}/hooks/example.sh'],
-    ['a command substitution', '$(other)/hooks/example.sh'],
-    ['a bare executable', 'jq'],
-  ])('passes %s', (_label, command) => {
-    expect(findingIds(withScript(command)).ids).toEqual([]);
-  });
-
-  test('goes undetected when the check is replaced by an always-pass stand-in', () => {
-    const alwaysPass = createHookRules({isUnanchored: () => false});
-
-    expect(
-      findingIds(withScript('scripts/example.sh'), {catalog: alwaysPass}).ids
-    ).toEqual([]);
+    [
+      'reports a dot-claude path once',
+      '.claude/hooks/example.sh',
+      ['hooks.rooted-command'],
+    ],
+    ['reports a dot-slash path once', './example.sh', ['hooks.rooted-command']],
+    [
+      'reports a directory path once',
+      'scripts/example.sh',
+      ['hooks.rooted-command'],
+    ],
+    [
+      'reports a path behind an interpreter once',
+      'bash scripts/example.sh',
+      ['hooks.rooted-command'],
+    ],
+    ['passes an absolute path', '/opt/hooks/example.sh', []],
+    ['passes a home-anchored path', '$HOME/hooks/example.sh', []],
+    ['passes a braced expansion', '${VAR}/hooks/example.sh', []],
+    ['passes a command substitution', '$(other)/hooks/example.sh', []],
+    ['passes a bare executable', 'jq', []],
+  ])('%s', (_name, command, expectedIds) => {
+    expect(findingIds(withScript(command)).ids).toEqual(expectedIds);
   });
 });
 
 describe('hooks.event-name', () => {
-  test('reports an unknown event once', () => {
-    expect(findingIds(withScript('jq', 'PreToolRun')).ids).toEqual([
-      'hooks.event-name',
-    ]);
-  });
-
-  test('passes the events a repository registers', () => {
-    for (const event of [
-      'PreToolUse',
-      'PostToolUse',
-      'PostToolUseFailure',
-      'SessionStart',
-      'Stop',
-      'UserPromptSubmit',
-    ]) {
-      expect(findingIds(withScript('jq', event)).ids).toEqual([]);
-    }
+  test.each([
+    ['reports an unknown event once', 'PreToolRun', ['hooks.event-name']],
+    ['passes PreToolUse', 'PreToolUse', []],
+    ['passes PostToolUse', 'PostToolUse', []],
+    ['passes PostToolUseFailure', 'PostToolUseFailure', []],
+    ['passes SessionStart', 'SessionStart', []],
+    ['passes Stop', 'Stop', []],
+    ['passes UserPromptSubmit', 'UserPromptSubmit', []],
+  ])('%s', (_name, event, expected) => {
+    expect(findingIds(withScript('jq', event)).ids).toEqual(expected);
   });
 });

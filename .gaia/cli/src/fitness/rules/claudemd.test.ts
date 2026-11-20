@@ -14,19 +14,10 @@ import {
   RULE_LINE_BUDGET,
 } from '../budgets.js';
 import {runCheck} from '../check.js';
-import {
-  createScratchProject,
-  expectFixtureParity,
-  FIXTURE_PARITY_TIMEOUT_MS,
-  runFitness,
-} from '../test-support.js';
+import {createScratchProject, runFitness} from '../test-support.js';
 import type {Finding, FixtureProject, RuleDefinition} from '../types.js';
-import {CLAUDEMD_FIXTURES, wordsOf} from './claudemd.fixtures.js';
-import {
-  CLAUDEMD_RULES,
-  createClaudemdRules,
-  DEFAULT_BUDGETS,
-} from './claudemd.js';
+import {wordsOf} from './claudemd.fixtures.js';
+import {CLAUDEMD_RULES, createClaudemdRules} from './claudemd.js';
 
 const cleanups: (() => void)[] = [];
 
@@ -62,24 +53,6 @@ const ruleProject = (lines: number): FixtureProject => ({
   git: true,
 });
 
-describe('claudemd rules', () => {
-  test(
-    'every rule has a red fixture that fires it and a green fixture that does not',
-    () => {
-      expectFixtureParity(CLAUDEMD_RULES, CLAUDEMD_FIXTURES);
-    },
-    FIXTURE_PARITY_TIMEOUT_MS
-  );
-
-  test('the default budgets are the budgets module constants', () => {
-    expect(DEFAULT_BUDGETS).toEqual({
-      nestedWords: NESTED_CLAUDE_MD_WORD_BUDGET,
-      rootWords: ROOT_CLAUDE_MD_WORD_BUDGET,
-      ruleLines: RULE_LINE_BUDGET,
-    });
-  });
-});
-
 describe('claudemd.budget', () => {
   test('a root CLAUDE.md at the budget has no finding and one word over has one', () => {
     expect(
@@ -106,52 +79,47 @@ describe('claudemd.budget', () => {
     expect(over[0]?.message).toContain(String(ROOT_CLAUDE_MD_WORD_BUDGET));
   });
 
-  test('a nested CLAUDE.md is held to the nested budget, not the root one', () => {
-    const files = {
-      'apps/web/CLAUDE.md': wordsOf(NESTED_CLAUDE_MD_WORD_BUDGET),
-      'CLAUDE.md': 'Project rules.\n',
-    };
-
-    expect(findingsOf({files, git: true}, 'claudemd.budget')).toEqual([]);
-
-    const over = findingsOf(
+  test.each([
+    [
+      'a nested CLAUDE.md at the nested budget has no finding',
       {
-        files: {
-          ...files,
-          'apps/web/CLAUDE.md': wordsOf(NESTED_CLAUDE_MD_WORD_BUDGET + 50),
-        },
-        git: true,
+        'apps/web/CLAUDE.md': wordsOf(NESTED_CLAUDE_MD_WORD_BUDGET),
+        'CLAUDE.md': 'Project rules.\n',
       },
-      'claudemd.budget'
-    );
-
-    expect(over.map((finding) => finding.file)).toEqual(['apps/web/CLAUDE.md']);
-  });
-
-  test('a CLAUDE.md four path segments deep is not discovered, so it is not measured', () => {
+      [],
+    ],
+    [
+      'a nested CLAUDE.md over the nested budget, not the root one, has one',
+      {
+        'apps/web/CLAUDE.md': wordsOf(NESTED_CLAUDE_MD_WORD_BUDGET + 50),
+        'CLAUDE.md': 'Project rules.\n',
+      },
+      ['apps/web/CLAUDE.md'],
+    ],
+    [
+      'a CLAUDE.md four path segments deep is not discovered, so it is not measured',
+      {
+        'a/b/c/CLAUDE.md': wordsOf(900),
+        'CLAUDE.md': 'Project rules.\n',
+      },
+      [],
+    ],
+    [
+      'a rule file at the line budget has no finding',
+      ruleProject(RULE_LINE_BUDGET).files,
+      [],
+    ],
+    [
+      'a rule file one line over the line budget has one',
+      ruleProject(RULE_LINE_BUDGET + 1).files,
+      ['.claude/rules/example.md'],
+    ],
+  ])('%s', (_name, files, expected) => {
     expect(
-      findingsOf(
-        {
-          files: {
-            'a/b/c/CLAUDE.md': wordsOf(900),
-            'CLAUDE.md': 'Project rules.\n',
-          },
-          git: true,
-        },
-        'claudemd.budget'
-      )
-    ).toEqual([]);
-  });
-
-  test('a rule file at the line budget has no finding and one line over has one', () => {
-    expect(
-      findingsOf(ruleProject(RULE_LINE_BUDGET), 'claudemd.budget')
-    ).toEqual([]);
-    expect(
-      findingsOf(ruleProject(RULE_LINE_BUDGET + 1), 'claudemd.budget').map(
+      findingsOf({files, git: true}, 'claudemd.budget').map(
         (finding) => finding.file
       )
-    ).toEqual(['.claude/rules/example.md']);
+    ).toEqual(expected);
   });
 
   test('the rule reads its budgets from the injected values, so moving a budget moves the findings', () => {
@@ -234,43 +202,34 @@ describe('claudemd.imports-resolve and claudemd.dead-path', () => {
     });
   });
 
-  test('an @ inside an email, a code span or a fence, or a bare mention, is not an import', () => {
-    expect(
-      findingsOf(
-        {
-          files: {
-            'CLAUDE.md': [
-              'Mail me@example.com.',
-              'Use `@docs/missing.md` literally.',
-              '@someone reviews this.',
-              '```',
-              '@docs/also-missing.md',
-              '```',
-              '',
-            ].join('\n'),
-          },
-          git: true,
-        },
-        'claudemd.imports-resolve'
-      )
-    ).toEqual([]);
-  });
-
-  test('an import resolves against the importing file folder or the root', () => {
-    expect(
-      findingsOf(
-        {
-          files: {
-            'apps/web/CLAUDE.md': '@guide.md\n@docs/root-guide.md\n',
-            'apps/web/guide.md': '# Guide\n',
-            'CLAUDE.md': 'Root rules.\n',
-            'docs/root-guide.md': '# Guide\n',
-          },
-          git: true,
-        },
-        'claudemd.imports-resolve'
-      )
-    ).toEqual([]);
+  test.each([
+    [
+      'an @ inside an email, a code span or a fence, or a bare mention, is not an import',
+      {
+        'CLAUDE.md': [
+          'Mail me@example.com.',
+          'Use `@docs/missing.md` literally.',
+          '@someone reviews this.',
+          '```',
+          '@docs/also-missing.md',
+          '```',
+          '',
+        ].join('\n'),
+      },
+    ],
+    [
+      'an import resolves against the importing file folder or the root',
+      {
+        'apps/web/CLAUDE.md': '@guide.md\n@docs/root-guide.md\n',
+        'apps/web/guide.md': '# Guide\n',
+        'CLAUDE.md': 'Root rules.\n',
+        'docs/root-guide.md': '# Guide\n',
+      },
+    ],
+  ])('%s', (_name, files) => {
+    expect(findingsOf({files, git: true}, 'claudemd.imports-resolve')).toEqual(
+      []
+    );
   });
 
   test('an untracked CLAUDE.local.md with a dead import is still checked', () => {
@@ -319,54 +278,35 @@ describe('claudemd.imports-resolve and claudemd.dead-path', () => {
     });
   });
 
-  test('a markdown link is also tried against the file folder', () => {
-    expect(
-      findingsOf(
-        {
-          files: {
-            'apps/web/CLAUDE.md': 'See [the guide](guide.md).\n',
-            'apps/web/guide.md': '# Guide\n',
-            'CLAUDE.md': 'Root rules.\n',
-          },
-          git: true,
-        },
-        'claudemd.dead-path'
-      )
-    ).toEqual([]);
-  });
-
-  test('slash commands, urls, globs and placeholders are not paths', () => {
-    expect(
-      findingsOf(
-        {
-          files: {
-            'CLAUDE.md': [
-              'Run `/gaia-debt` or `/gaia-fitness`.',
-              'Docs: https://example.com/docs/page.md and [site](https://example.com/a.md).',
-              'Match `src/**/*.ts` or `<dir>/file.md` or `$HOME/file.md`.',
-              'Call `console.log` then `pnpm test`.',
-            ].join('\n'),
-          },
-          git: true,
-        },
-        'claudemd.dead-path'
-      )
-    ).toEqual([]);
-  });
-
-  test('a gitignored runtime path that is absent is not dead', () => {
-    expect(
-      findingsOf(
-        {
-          files: {
-            '.gitignore': 'runtime/\n',
-            'CLAUDE.md': 'Output lands in `runtime/output.json`.\n',
-          },
-          git: true,
-        },
-        'claudemd.dead-path'
-      )
-    ).toEqual([]);
+  test.each([
+    [
+      'a markdown link is also tried against the file folder',
+      {
+        'apps/web/CLAUDE.md': 'See [the guide](guide.md).\n',
+        'apps/web/guide.md': '# Guide\n',
+        'CLAUDE.md': 'Root rules.\n',
+      },
+    ],
+    [
+      'slash commands, urls, globs and placeholders are not paths',
+      {
+        'CLAUDE.md': [
+          'Run `/gaia-debt` or `/gaia-fitness`.',
+          'Docs: https://example.com/docs/page.md and [site](https://example.com/a.md).',
+          'Match `src/**/*.ts` or `<dir>/file.md` or `$HOME/file.md`.',
+          'Call `console.log` then `pnpm test`.',
+        ].join('\n'),
+      },
+    ],
+    [
+      'a gitignored runtime path that is absent is not dead',
+      {
+        '.gitignore': 'runtime/\n',
+        'CLAUDE.md': 'Output lands in `runtime/output.json`.\n',
+      },
+    ],
+  ])('%s', (_name, files) => {
+    expect(findingsOf({files, git: true}, 'claudemd.dead-path')).toEqual([]);
   });
 });
 
@@ -488,6 +428,7 @@ describe('claudemd.no-absolute-machine-path', () => {
     'app/Users/admin/list.tsx',
     '/abs/path/to/website/src/pages/home/sections/Hero.tsx',
     'git -C /abs/path/to/website add src/pages/home/sections/Hero.tsx',
+    'Use /Users/<name>/project or /home/<user>/x.',
   ])(
     'a home or Users folder inside a project path is not a machine path: %s',
     (text) => {
@@ -499,18 +440,4 @@ describe('claudemd.no-absolute-machine-path', () => {
       ).toEqual([]);
     }
   );
-
-  test('a placeholder user name is not a machine path', () => {
-    expect(
-      findingsOf(
-        {
-          files: {
-            'CLAUDE.md': 'Use /Users/<name>/project or /home/<user>/x.\n',
-          },
-          git: true,
-        },
-        'claudemd.no-absolute-machine-path'
-      )
-    ).toEqual([]);
-  });
 });

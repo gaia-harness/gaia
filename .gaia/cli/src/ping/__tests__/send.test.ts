@@ -139,14 +139,13 @@ describe('postPing', () => {
 });
 
 describe('normalizePlatform', () => {
-  test('maps known platforms to coarse labels', () => {
-    expect(normalizePlatform('darwin')).toBe('macos');
-    expect(normalizePlatform('win32')).toBe('windows');
-    expect(normalizePlatform('linux')).toBe('linux');
-  });
-
-  test('folds the long tail into "other"', () => {
-    expect(normalizePlatform('freebsd')).toBe('other');
-    expect(normalizePlatform('android')).toBe('other');
+  test.each([
+    ['darwin', 'macos'],
+    ['win32', 'windows'],
+    ['linux', 'linux'],
+    ['freebsd', 'other'],
+    ['android', 'other'],
+  ])('maps %s to %s', (platform, label) => {
+    expect(normalizePlatform(platform)).toBe(label);
   });
 });

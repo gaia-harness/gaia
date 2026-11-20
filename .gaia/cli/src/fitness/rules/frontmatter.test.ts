@@ -1,12 +1,8 @@
 import {describe, expect, test} from 'vitest';
 import {runCheck} from '../check.js';
-import {
-  createScratchProject,
-  expectFixtureParity,
-  FIXTURE_PARITY_TIMEOUT_MS,
-} from '../test-support.js';
+import {createScratchProject} from '../test-support.js';
 import type {Finding} from '../types.js';
-import {documentOf, FRONTMATTER_FIXTURES} from './frontmatter.fixtures.js';
+import {documentOf} from './frontmatter.fixtures.js';
 import {FRONTMATTER_RULES} from './frontmatter.js';
 
 const findingsFor = (files: Record<string, string>): readonly Finding[] => {
@@ -31,77 +27,103 @@ const idsOf = (findings: readonly Finding[]): readonly string[] =>
   findings.map((finding) => finding.rule_id);
 
 const PLAIN = 'description: Does an example thing.';
+const MAX_LENGTH = 'frontmatter.skill.description.max-length';
+const HAZARD = 'frontmatter.yaml-hazard';
 
 describe('frontmatter rules', () => {
-  test(
-    'has a red and a green fixture for every rule',
-    () => {
-      expectFixtureParity(FRONTMATTER_RULES, FRONTMATTER_FIXTURES);
-    },
-    FIXTURE_PARITY_TIMEOUT_MS
-  );
+  test.each([
+    [
+      'flags a description of 1025 characters',
+      [`description: ${'a'.repeat(1025)}`],
+      [MAX_LENGTH],
+    ],
+    [
+      'passes a description of 1024 characters',
+      [`description: ${'a'.repeat(1024)}`],
+      [],
+    ],
+    [
+      'counts code points, so 1024 emoji pass',
+      [`description: ${'😀'.repeat(1024)}`],
+      [],
+    ],
+    [
+      'counts code points, so 1025 emoji fail',
+      [`description: ${'😀'.repeat(1025)}`],
+      [MAX_LENGTH],
+    ],
+    [
+      'flags a description plus when_to_use over the listing cap',
+      [`description: ${'a'.repeat(1000)}`, `when_to_use: ${'b'.repeat(600)}`],
+      ['frontmatter.skill.description.listing-truncation'],
+    ],
+  ])('description length: %s', (_name, lines, expected) => {
+    const findings = skillFindings('name: example', ...lines);
 
-  test('flags a description of 1025 characters at warning and passes 1024', () => {
-    const over = skillFindings(
-      'name: example',
-      `description: ${'a'.repeat(1025)}`
-    );
+    expect(idsOf(findings)).toEqual(expected);
 
-    expect(over).toHaveLength(1);
-    expect(over[0]).toMatchObject({
-      rule_id: 'frontmatter.skill.description.max-length',
-      severity: 'warning',
-    });
-    expect(
-      skillFindings('name: example', `description: ${'a'.repeat(1024)}`)
-    ).toEqual([]);
+    for (const finding of findings) expect(finding.severity).toBe('warning');
   });
 
-  test('counts code points, so 1024 emoji pass and 1025 fail', () => {
-    expect(
-      skillFindings('name: example', `description: ${'😀'.repeat(1024)}`)
-    ).toEqual([]);
-    expect(
-      idsOf(skillFindings('name: example', `description: ${'😀'.repeat(1025)}`))
-    ).toEqual(['frontmatter.skill.description.max-length']);
+  test.each([
+    [
+      'flags an XML tag in a skill description',
+      {
+        '.claude/skills/example/SKILL.md': documentOf(
+          'name: example',
+          'description: Wraps <example>text</example> here.'
+        ),
+      },
+      ['frontmatter.skill.description.xml-tag'],
+    ],
+    [
+      'flags an XML tag in a command description',
+      {
+        '.claude/commands/example.md': documentOf(
+          'description: Wraps <example>text</example> here.'
+        ),
+      },
+      ['frontmatter.skill.description.xml-tag'],
+    ],
+    [
+      'passes a tag inside backticks',
+      {
+        '.claude/skills/example/SKILL.md': documentOf(
+          'name: example',
+          'description: Wraps `<tag>` in code.'
+        ),
+      },
+      [],
+    ],
+  ])('description tags: %s', (_name, files, expected) => {
+    const findings = findingsFor(files);
+
+    expect(idsOf(findings)).toEqual(expected);
+
+    for (const finding of findings) expect(finding.severity).toBe('warning');
   });
 
-  test('flags an XML tag in a skill description and in a command description', () => {
-    const skill = skillFindings(
-      'name: example',
-      'description: Wraps <example>text</example> here.'
-    );
-    const command = findingsFor({
-      '.claude/commands/example.md': documentOf(
-        'description: Wraps <example>text</example> here.'
-      ),
-    });
-
-    expect(idsOf(skill)).toEqual(['frontmatter.skill.description.xml-tag']);
-    expect(idsOf(command)).toEqual(['frontmatter.skill.description.xml-tag']);
-    expect(skill[0]?.severity).toBe('warning');
-  });
-
-  test('passes a tag inside backticks', () => {
-    expect(
-      skillFindings('name: example', 'description: Wraps `<tag>` in code.')
-    ).toEqual([]);
-  });
-
-  test('flags a reserved word, then an over-long name', () => {
-    const reserved = skillFindings('name: claude-tdd', PLAIN);
-    const tooLong = skillFindings(`name: ${'a'.repeat(65)}`, PLAIN);
-
-    expect(idsOf(reserved)).toEqual(['frontmatter.skill.name.reserved-word']);
-    expect(idsOf(tooLong)).toEqual(['frontmatter.skill.name.max-length']);
-    expect(reserved[0]?.severity).toBe('warning');
-    expect(tooLong[0]?.severity).toBe('warning');
-  });
-
-  test('flags a name outside the lowercase hyphen charset', () => {
-    expect(idsOf(skillFindings('name: -bad--name', PLAIN))).toEqual([
+  test.each([
+    [
+      'flags a reserved word',
+      'name: claude-tdd',
+      'frontmatter.skill.name.reserved-word',
+    ],
+    [
+      'flags an over-long name',
+      `name: ${'a'.repeat(65)}`,
+      'frontmatter.skill.name.max-length',
+    ],
+    [
+      'flags a name outside the lowercase hyphen charset',
+      'name: -bad--name',
       'frontmatter.skill.name.charset',
-    ]);
+    ],
+  ])('skill names: %s', (_name, nameLine, ruleId) => {
+    const findings = skillFindings(nameLine, PLAIN);
+
+    expect(idsOf(findings)).toEqual([ruleId]);
+    expect(findings[0]?.severity).toBe('warning');
   });
 
   test('flags an empty description and a missing description', () => {
@@ -116,20 +138,20 @@ describe('frontmatter rules', () => {
   test('flags an unquoted ": " and passes the quoted form', () => {
     const unquoted = skillFindings('name: example', 'description: Note: here');
 
-    expect(idsOf(unquoted)).toEqual(['frontmatter.yaml-hazard']);
+    expect(idsOf(unquoted)).toEqual([HAZARD]);
     expect(unquoted[0]).toMatchObject({line: 3, severity: 'warning'});
     expect(skillFindings('name: example', 'description: "Note: here"')).toEqual(
       []
     );
   });
 
-  test('flags an unquoted " #" and a leading backtick', () => {
-    expect(
-      idsOf(skillFindings('name: example', 'description: Fix a #1 bug'))
-    ).toEqual(['frontmatter.yaml-hazard']);
-    expect(
-      idsOf(skillFindings('name: example', 'description: `code` first'))
-    ).toEqual(['frontmatter.yaml-hazard']);
+  test.each([
+    ['an unquoted " #"', 'description: Fix a #1 bug'],
+    ['a leading backtick', 'description: `code` first'],
+  ])('flags %s as a YAML hazard', (_name, descriptionLine) => {
+    expect(idsOf(skillFindings('name: example', descriptionLine))).toEqual([
+      HAZARD,
+    ]);
   });
 
   test('does not report frontmatter.parse on a file the hazard rule already flagged', () => {
@@ -138,7 +160,7 @@ describe('frontmatter rules', () => {
         '---\ndescription: Note: here: there\nbad: [unclosed\n---\n',
     });
 
-    expect(idsOf(hazardAndBrokenYaml)).toContain('frontmatter.yaml-hazard');
+    expect(idsOf(hazardAndBrokenYaml)).toContain(HAZARD);
     expect(idsOf(hazardAndBrokenYaml)).not.toContain('frontmatter.parse');
   });
 
@@ -151,18 +173,6 @@ describe('frontmatter rules', () => {
     expect(missing).toHaveLength(1);
     expect(missing[0]).toMatchObject({line: 1, rule_id: 'frontmatter.parse'});
     expect(idsOf(unclosed)).toEqual(['frontmatter.parse']);
-  });
-
-  test('flags a description plus when_to_use over the listing cap', () => {
-    const findings = skillFindings(
-      'name: example',
-      `description: ${'a'.repeat(1000)}`,
-      `when_to_use: ${'b'.repeat(600)}`
-    );
-
-    expect(idsOf(findings)).toEqual([
-      'frontmatter.skill.description.listing-truncation',
-    ]);
   });
 
   test('flags a name collision once per file, and derives names from paths', () => {

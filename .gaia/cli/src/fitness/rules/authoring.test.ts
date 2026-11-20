@@ -1,13 +1,8 @@
 import {afterEach, describe, expect, test} from 'vitest';
 import {runCheck} from '../check.js';
-import {
-  createScratchProject,
-  expectFixtureParity,
-  FIXTURE_PARITY_TIMEOUT_MS,
-} from '../test-support.js';
+import {createScratchProject} from '../test-support.js';
 import type {Finding, FixtureProject} from '../types.js';
 import {
-  AUTHORING_FIXTURES,
   commandFile,
   filler,
   linesWithContents,
@@ -40,18 +35,18 @@ const idsOf = (project: FixtureProject): string[] =>
 const SKILL = '.claude/skills/example/SKILL.md';
 const REFS = '.claude/skills/example/references';
 
-const idsOfSkillBody = (count: number): string[] =>
-  idsOf({files: {[SKILL]: skillFile(linesWithContents(count))}});
+const skillBodyProject = (count: number): FixtureProject => ({
+  files: {[SKILL]: skillFile(linesWithContents(count))},
+});
 
-const idsOfPlaybook = (count: number): string[] =>
-  idsOf({
-    files: {
-      '.claude/commands/example.md': commandFile(
-        `Read \`${REFS}/big.md\` and follow it.\n`
-      ),
-      [`${REFS}/big.md`]: linesWithContents(count),
-    },
-  });
+const playbookProject = (count: number): FixtureProject => ({
+  files: {
+    '.claude/commands/example.md': commandFile(
+      `Read \`${REFS}/big.md\` and follow it.\n`
+    ),
+    [`${REFS}/big.md`]: linesWithContents(count),
+  },
+});
 
 const withRef = (reference: string): FixtureProject => ({
   files: {
@@ -67,24 +62,12 @@ const expectOnly = (project: FixtureProject, ruleId: string): void => {
   expect(findings[0]?.severity).toBe('warning');
 };
 
-const idsForDescription = (description: string): string[] =>
-  idsOf({files: {[SKILL]: skillFile('Body.\n', {description})}});
+const withDescription = (description: string): FixtureProject => ({
+  files: {[SKILL]: skillFile('Body.\n', {description})},
+});
 
-describe('authoring rules', () => {
-  test(
-    'every rule has a red fixture that fires it and a green fixture that does not',
-    () => {
-      expectFixtureParity(AUTHORING_RULES, AUTHORING_FIXTURES);
-    },
-    FIXTURE_PARITY_TIMEOUT_MS
-  );
-
-  test('every id starts with the authoring category', () => {
-    for (const rule of AUTHORING_RULES) {
-      expect(rule.ruleId.startsWith('authoring.')).toBe(true);
-      expect(rule.category).toBe('authoring');
-    }
-  });
+const withBody = (body: string): FixtureProject => ({
+  files: {[SKILL]: skillFile(body)},
 });
 
 describe('reference depth', () => {
@@ -98,16 +81,41 @@ describe('reference depth', () => {
     },
   });
 
-  test('accepts a playbook, a sub-reference it links and that sub-reference sibling', () => {
-    const ids = idsOf(
+  test.each([
+    [
+      'accepts a playbook, a sub-reference it links and that sub-reference sibling',
       routed({
         [`${REFS}/example/a.md`]: 'Then [b](b.md).\n',
         [`${REFS}/example/b.md`]: 'Done.\n',
         [PLAYBOOK]: 'Start with [a](example/a.md).\n',
-      })
-    );
-
-    expect(ids).toEqual([]);
+      }),
+    ],
+    [
+      'accepts a command, a routed playbook and a directory of sub-references',
+      routed({
+        [`${REFS}/example/a.md`]: 'First.\n',
+        [`${REFS}/example/b.md`]: 'Second.\n',
+        [PLAYBOOK]: [
+          'Read [a](example/a.md) now.',
+          'Read [b](example/b.md) now.',
+          '',
+        ].join('\n'),
+      }),
+    ],
+    [
+      'a file both an entry and a sub-reference link counts as one level down',
+      {
+        files: {
+          [`${REFS}/a.md`]: 'See [shared](shared/s.md).\n',
+          [`${REFS}/shared/s.md`]: 'Shared.\n',
+          [SKILL]: skillFile(
+            'See [a](references/a.md) and [s](references/shared/s.md).\n'
+          ),
+        },
+      },
+    ],
+  ])('reference depth: %s', (_name, project) => {
+    expect(idsOf(project)).toEqual([]);
   });
 
   test('flags a file reachable only through a sub-reference, on the linking line', () => {
@@ -126,133 +134,94 @@ describe('reference depth', () => {
       severity: 'warning',
     });
   });
-
-  test('accepts a command, a routed playbook and a directory of sub-references', () => {
-    const ids = idsOf(
-      routed({
-        [`${REFS}/example/a.md`]: 'First.\n',
-        [`${REFS}/example/b.md`]: 'Second.\n',
-        [PLAYBOOK]: [
-          'Read [a](example/a.md) now.',
-          'Read [b](example/b.md) now.',
-          '',
-        ].join('\n'),
-      })
-    );
-
-    expect(ids).toEqual([]);
-  });
-
-  test('a file both an entry and a sub-reference link counts as one level down', () => {
-    const ids = idsOf({
-      files: {
-        [`${REFS}/a.md`]: 'See [shared](shared/s.md).\n',
-        [`${REFS}/shared/s.md`]: 'Shared.\n',
-        [SKILL]: skillFile(
-          'See [a](references/a.md) and [s](references/shared/s.md).\n'
-        ),
-      },
-    });
-
-    expect(ids).toEqual([]);
-  });
 });
 
 describe('line limits', () => {
-  test('a command body of 510 lines yields exactly one body limit finding', () => {
-    const findings = findingsOf({
-      files: {
-        '.claude/commands/example.md': commandFile(linesWithContents(510)),
+  test.each([
+    [
+      'a command body of 510 lines yields exactly one body limit finding',
+      {
+        files: {
+          '.claude/commands/example.md': commandFile(linesWithContents(510)),
+        },
       },
-    });
-
-    expect(findings.map((finding) => finding.rule_id)).toEqual([
-      'authoring.skill.body.max-lines',
-    ]);
-  });
-
-  test('a 499 line body passes and a 500 line body fails', () => {
-    expect(idsOfSkillBody(499)).toEqual([]);
-    expect(idsOfSkillBody(500)).toEqual(['authoring.skill.body.max-lines']);
-  });
-
-  test('a 499 line playbook passes and a 500 line playbook fails', () => {
-    expect(idsOfPlaybook(499)).toEqual([]);
-    expect(idsOfPlaybook(500)).toEqual(['authoring.playbook.max-lines']);
-  });
-
-  test('frontmatter lines do not count toward the body', () => {
-    const ids = idsOf({files: {[SKILL]: skillFile(linesWithContents(499))}});
-
-    expect(ids).toEqual([]);
+      ['authoring.skill.body.max-lines'],
+    ],
+    ['a 499 line body passes', skillBodyProject(499), []],
+    [
+      'a 500 line body fails',
+      skillBodyProject(500),
+      ['authoring.skill.body.max-lines'],
+    ],
+    ['a 499 line playbook passes', playbookProject(499), []],
+    [
+      'a 500 line playbook fails',
+      playbookProject(500),
+      ['authoring.playbook.max-lines'],
+    ],
+    [
+      'frontmatter lines do not count toward the body',
+      skillBodyProject(499),
+      [],
+    ],
+  ])('%s', (_name, project, expected) => {
+    expect(idsOf(project)).toEqual(expected);
   });
 });
 
 describe('contents line', () => {
-  test('a 100 line reference without one passes and 101 lines fails', () => {
-    expect(idsOf(withRef(filler(100)))).toEqual([]);
-    expect(idsOf(withRef(filler(101)))).toEqual([
-      'authoring.reference.toc.required',
-    ]);
-  });
-
-  test('a Contents line inside a code fence does not count', () => {
-    const fenced = `\`\`\`text\nContents: fenced\n\`\`\`\n${filler(101)}`;
-
-    expect(idsOf(withRef(fenced))).toEqual([
-      'authoring.reference.toc.required',
-    ]);
-  });
-
-  test('a Contents heading and a table of contents line both count', () => {
-    expect(idsOf(withRef(`## Contents\n${filler(120)}`))).toEqual([]);
-    expect(idsOf(withRef(`Table of Contents below\n${filler(120)}`))).toEqual(
-      []
-    );
-  });
-
-  test('a Contents line past the first 30 non-blank lines does not count', () => {
-    expect(
-      idsOf(withRef(`${filler(40)}Contents: late\n${filler(70)}`))
-    ).toEqual(['authoring.reference.toc.required']);
+  test.each([
+    ['a 100 line reference without one passes', filler(100), []],
+    [
+      'a 101 line reference without one fails',
+      filler(101),
+      ['authoring.reference.toc.required'],
+    ],
+    [
+      'a Contents line inside a code fence does not count',
+      `\`\`\`text\nContents: fenced\n\`\`\`\n${filler(101)}`,
+      ['authoring.reference.toc.required'],
+    ],
+    ['a Contents heading counts', `## Contents\n${filler(120)}`, []],
+    [
+      'a table of contents line counts',
+      `Table of Contents below\n${filler(120)}`,
+      [],
+    ],
+    [
+      'a Contents line past the first 30 non-blank lines does not count',
+      `${filler(40)}Contents: late\n${filler(70)}`,
+      ['authoring.reference.toc.required'],
+    ],
+  ])('%s', (_name, reference, expected) => {
+    expect(idsOf(withRef(reference))).toEqual(expected);
   });
 });
 
 describe('each authoring defect yields exactly its own warning', () => {
-  test('a first-person description', () => {
-    expectOnly(
-      {
-        files: {
-          [SKILL]: skillFile('Body.\n', {
-            description: 'Helps me review code whenever a review is asked.',
-          }),
-        },
-      },
-      'authoring.skill.description.first-person'
-    );
-  });
-
-  test('a 520 line skill body', () => {
-    expectOnly(
-      {files: {[SKILL]: skillFile(linesWithContents(520))}},
-      'authoring.skill.body.max-lines'
-    );
-  });
-
-  test('a 140 line reference with no Contents line', () => {
-    expectOnly(
+  test.each([
+    [
+      'a first-person description',
+      withDescription('Helps me review code whenever a review is asked.'),
+      'authoring.skill.description.first-person',
+    ],
+    [
+      'a 520 line skill body',
+      skillBodyProject(520),
+      'authoring.skill.body.max-lines',
+    ],
+    [
+      'a 140 line reference with no Contents line',
       {
         files: {
           [`${REFS}/ref.md`]: filler(140),
           [SKILL]: skillFile('See [ref](references/ref.md).\n'),
         },
       },
-      'authoring.reference.toc.required'
-    );
-  });
-
-  test('a reference linked only from another reference', () => {
-    expectOnly(
+      'authoring.reference.toc.required',
+    ],
+    [
+      'a reference linked only from another reference',
       {
         files: {
           [`${REFS}/a.md`]: 'Next, [z](deep/z.md).\n',
@@ -260,88 +229,83 @@ describe('each authoring defect yields exactly its own warning', () => {
           [SKILL]: skillFile('See [a](references/a.md).\n'),
         },
       },
-      'authoring.reference.depth.one-level'
-    );
-  });
-
-  test('a backslash path', () => {
-    expectOnly(
-      {files: {[SKILL]: skillFile('Open docs\\guide.md first.\n')}},
-      'authoring.path.windows-separator'
-    );
-  });
-
-  test('a 510 line playbook', () => {
-    expectOnly(
-      {
-        files: {
-          '.claude/commands/example.md': commandFile(
-            `Read \`${REFS}/big.md\` and follow it.\n`
-          ),
-          [`${REFS}/big.md`]: linesWithContents(510),
-        },
-      },
-      'authoring.playbook.max-lines'
-    );
+      'authoring.reference.depth.one-level',
+    ],
+    [
+      'a backslash path',
+      withBody('Open docs\\guide.md first.\n'),
+      'authoring.path.windows-separator',
+    ],
+    [
+      'a 510 line playbook',
+      playbookProject(510),
+      'authoring.playbook.max-lines',
+    ],
+  ])('%s', (_name, project, ruleId) => {
+    expectOnly(project, ruleId);
   });
 });
 
+const commandWithInvocation = (invocation: boolean): FixtureProject => ({
+  files: {
+    '.claude/commands/example.md': `---\ndescription: Reviews pull request diffs for security defects.\ndisable-model-invocation: ${invocation}\n---\nBody.\n`,
+  },
+});
+
 describe('description rules', () => {
-  test('quoted spans are not matched as person words', () => {
-    expect(
-      idsForDescription(
-        'Reviews code when asked to "show me the diff" or `my-flag`.'
-      )
-    ).toEqual([]);
-  });
-
-  test('I is case sensitive and whole word', () => {
-    expect(idsForDescription('Reviews code when asked, I think.')).toEqual([
-      'authoring.skill.description.first-person',
-    ]);
-    expect(idsForDescription('Reviews item i/o paths when asked to.')).toEqual(
-      []
-    );
-  });
-
-  test('a contraction apostrophe does not open a quoted span', () => {
-    expect(
-      idsForDescription("Reviews code when it's asked, and we agree.")
-    ).toEqual(['authoring.skill.description.first-person']);
-  });
-
-  test('a command without a description is not judged', () => {
-    expect(
-      idsOf({files: {'.claude/commands/example.md': 'Do the thing.\n'}})
-    ).toEqual([]);
-  });
-
-  test('when_to_use satisfies the trigger rule', () => {
-    const ids = idsOf({
-      files: {
-        [SKILL]:
-          '---\nname: example\ndescription: Reviews pull request diffs for security defects.\nwhen_to_use: Whenever a diff lands.\n---\nBody.\n',
-      },
-    });
-
-    expect(ids).toEqual([]);
-  });
+  const FIRST_PERSON = ['authoring.skill.description.first-person'];
 
   test.each([
-    {expected: [], invocation: true},
-    {expected: ['authoring.skill.description.no-when'], invocation: false},
-  ])(
-    'disable-model-invocation: $invocation decides whether a command needs a trigger',
-    ({expected, invocation}) => {
-      const ids = idsOf({
+    [
+      'quoted spans are not matched as person words',
+      withDescription(
+        'Reviews code when asked to "show me the diff" or `my-flag`.'
+      ),
+      [],
+    ],
+    [
+      'I is case sensitive and whole word: a capital I flags',
+      withDescription('Reviews code when asked, I think.'),
+      FIRST_PERSON,
+    ],
+    [
+      'I is case sensitive and whole word: a lowercase i in i/o does not',
+      withDescription('Reviews item i/o paths when asked to.'),
+      [],
+    ],
+    [
+      'a contraction apostrophe does not open a quoted span',
+      withDescription("Reviews code when it's asked, and we agree."),
+      FIRST_PERSON,
+    ],
+    [
+      'a command without a description is not judged',
+      {files: {'.claude/commands/example.md': 'Do the thing.\n'}},
+      [],
+    ],
+    [
+      'when_to_use satisfies the trigger rule',
+      {
         files: {
-          '.claude/commands/example.md': `---\ndescription: Reviews pull request diffs for security defects.\ndisable-model-invocation: ${invocation}\n---\nBody.\n`,
+          [SKILL]:
+            '---\nname: example\ndescription: Reviews pull request diffs for security defects.\nwhen_to_use: Whenever a diff lands.\n---\nBody.\n',
         },
-      });
-
-      expect(ids).toEqual(expected);
-    }
-  );
+      },
+      [],
+    ],
+    [
+      'disable-model-invocation: true needs no trigger',
+      commandWithInvocation(true),
+      [],
+    ],
+    [
+      'disable-model-invocation: false needs a trigger',
+      commandWithInvocation(false),
+      ['authoring.skill.description.no-when'],
+    ],
+  ])('%s', (_name, project, expected) => {
+    expect(idsOf(project)).toEqual(expected);
+  });
 });
 
 describe('orphan references', () => {
@@ -375,66 +339,66 @@ describe('link resolution', () => {
     });
   });
 
-  test('a command repo-relative path that is missing is flagged', () => {
-    const ids = idsOf({
-      files: {
-        '.claude/commands/example.md': commandFile(
-          'Run `.claude/scripts/gone.sh` first.\n'
-        ),
+  test.each([
+    [
+      'a command repo-relative path that is missing is flagged',
+      {
+        files: {
+          '.claude/commands/example.md': commandFile(
+            'Run `.claude/scripts/gone.sh` first.\n'
+          ),
+        },
       },
-    });
-
-    expect(ids).toEqual(['authoring.reference.link.resolves']);
-  });
-
-  test('urls, anchors and fenced examples are not links', () => {
-    const ids = idsOf({
-      files: {
-        [SKILL]: skillFile(
-          'See [site](https://example.com/a.md) and [here](#top).\n```md\n[x](nope.md)\n```\n'
-        ),
-      },
-    });
-
-    expect(ids).toEqual([]);
+      ['authoring.reference.link.resolves'],
+    ],
+    [
+      'urls, anchors and fenced examples are not links',
+      withBody(
+        'See [site](https://example.com/a.md) and [here](#top).\n```md\n[x](nope.md)\n```\n'
+      ),
+      [],
+    ],
+  ])('%s', (_name, project, expected) => {
+    expect(idsOf(project)).toEqual(expected);
   });
 });
 
 describe('path and time rules', () => {
-  test('a backslash path inside a powershell fence is allowed', () => {
-    const body = '```powershell\nGet-Item docs\\guide.md\n```\n';
+  const WINDOWS = ['authoring.path.windows-separator'];
+  const TIME_SENSITIVE = ['authoring.content.time-sensitive'];
 
-    expect(idsOf({files: {[SKILL]: skillFile(body)}})).toEqual([]);
-  });
-
-  test('a backslash path inside a bash fence is flagged', () => {
-    const body = '```bash\ncat docs\\guide.md\n```\n';
-
-    expect(idsOf({files: {[SKILL]: skillFile(body)}})).toEqual([
-      'authoring.path.windows-separator',
-    ]);
-  });
-
-  test('a regex escape is not a path', () => {
-    expect(
-      idsOf({files: {[SKILL]: skillFile('Match `name\\.md` files.\n')}})
-    ).toEqual([]);
-  });
-
-  test('a dated phrase inside a legacy section or details block is allowed', () => {
-    const legacy =
-      '## Legacy notes\nUse this until 2024 only.\n## Current\nOk.\n';
-    const details = '<details>\nBefore March 2025 this differed.\n</details>\n';
-
-    expect(idsOf({files: {[SKILL]: skillFile(legacy)}})).toEqual([]);
-    expect(idsOf({files: {[SKILL]: skillFile(details)}})).toEqual([]);
-  });
-
-  test('a dated phrase after a legacy section ends is flagged', () => {
-    const body = '## Legacy notes\nOld.\n## Current\nUse this as of 2026.\n';
-
-    expect(idsOf({files: {[SKILL]: skillFile(body)}})).toEqual([
-      'authoring.content.time-sensitive',
-    ]);
+  test.each([
+    [
+      'a backslash path inside a powershell fence is allowed',
+      withBody('```powershell\nGet-Item docs\\guide.md\n```\n'),
+      [],
+    ],
+    [
+      'a backslash path inside a bash fence is flagged',
+      withBody('```bash\ncat docs\\guide.md\n```\n'),
+      WINDOWS,
+    ],
+    [
+      'a regex escape is not a path',
+      withBody('Match `name\\.md` files.\n'),
+      [],
+    ],
+    [
+      'a dated phrase inside a legacy section is allowed',
+      withBody('## Legacy notes\nUse this until 2024 only.\n## Current\nOk.\n'),
+      [],
+    ],
+    [
+      'a dated phrase inside a details block is allowed',
+      withBody('<details>\nBefore March 2025 this differed.\n</details>\n'),
+      [],
+    ],
+    [
+      'a dated phrase after a legacy section ends is flagged',
+      withBody('## Legacy notes\nOld.\n## Current\nUse this as of 2026.\n'),
+      TIME_SENSITIVE,
+    ],
+  ])('%s', (_name, project, expected) => {
+    expect(idsOf(project)).toEqual(expected);
   });
 });

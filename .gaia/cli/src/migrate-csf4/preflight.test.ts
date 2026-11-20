@@ -71,39 +71,42 @@ describe('dirtyWriteSetPaths with staged renames', () => {
     expect(dirtyWriteSetPaths(root, writeSet)).toEqual([]);
   });
 
-  test('a renamed path with different content stays dirty', () => {
+  test.each([
+    {
+      expected: ['new/a.stories.tsx'],
+      name: 'a renamed path with different content stays dirty',
+      paths: writeSet,
+      setup: (root: string): void => {
+        write(root, 'new/a.stories.tsx', 'export const a = 3;\n');
+        git(root, ['add', '-A']);
+      },
+    },
+    {
+      expected: ['new/.storybook/main.ts'],
+      name: 'a renamed config path with merged content stays dirty',
+      paths: writeSet,
+      setup: (root: string): void => {
+        write(
+          root,
+          'new/.storybook/main.ts',
+          'export default {stories: [], x: 2};\n'
+        );
+      },
+    },
+    {
+      expected: ['new/b.stories.tsx'],
+      name: 'an untracked path is still dirty',
+      paths: [...writeSet, 'new/b.stories.tsx'],
+      setup: (root: string): void => {
+        write(root, 'new/b.stories.tsx', 'export const b = 1;\n');
+      },
+    },
+  ])('$name', ({expected, paths, setup}) => {
     const root = repo();
 
     moveDirectory(root);
-    write(root, 'new/a.stories.tsx', 'export const a = 3;\n');
-    git(root, ['add', '-A']);
+    setup(root);
 
-    expect(dirtyWriteSetPaths(root, writeSet)).toEqual(['new/a.stories.tsx']);
-  });
-
-  test('a renamed config path with merged content stays dirty', () => {
-    const root = repo();
-
-    moveDirectory(root);
-    write(
-      root,
-      'new/.storybook/main.ts',
-      'export default {stories: [], x: 2};\n'
-    );
-
-    expect(dirtyWriteSetPaths(root, writeSet)).toEqual([
-      'new/.storybook/main.ts',
-    ]);
-  });
-
-  test('an untracked path is still dirty', () => {
-    const root = repo();
-
-    moveDirectory(root);
-    write(root, 'new/b.stories.tsx', 'export const b = 1;\n');
-
-    expect(
-      dirtyWriteSetPaths(root, [...writeSet, 'new/b.stories.tsx'])
-    ).toEqual(['new/b.stories.tsx']);
+    expect(dirtyWriteSetPaths(root, paths)).toEqual(expected);
   });
 });

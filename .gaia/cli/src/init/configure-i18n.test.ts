@@ -303,27 +303,22 @@ export default {de, en} as const;
     expect(after).toBe(first);
   });
 
-  test('exit 1 on missing flags', () => {
+  test.each([
+    ['a missing --strip', ['--locales', 'en'], ''],
+    ['a missing --locales', ['--strip', 'true'], ''],
+    [
+      'an invalid --strip value',
+      ['--locales', 'en', '--strip', 'yes'],
+      '--strip must be',
+    ],
+    [
+      'an invalid --locales list',
+      ['--locales', '???', '--strip', 'false'],
+      'invalid --locales',
+    ],
+  ])('flag validation exits 1: %s', (_name, args, message) => {
     sandbox = setupSandbox();
-    expect(run(['--locales', 'en'], {cwd: sandbox.root})).toBe(1);
-    expect(run(['--strip', 'true'], {cwd: sandbox.root})).toBe(1);
-  });
-
-  test('exit 1 on invalid --strip value', () => {
-    sandbox = setupSandbox();
-    const exit = run(['--locales', 'en', '--strip', 'yes'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--strip must be');
-  });
-
-  test('exit 1 on invalid --locales list', () => {
-    sandbox = setupSandbox();
-    const exit = run(['--locales', '???', '--strip', 'false'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('invalid --locales');
+    expect(run(args, {cwd: sandbox.root})).toBe(1);
+    expect(stdio.errors.join('')).toContain(message);
   });
 });
