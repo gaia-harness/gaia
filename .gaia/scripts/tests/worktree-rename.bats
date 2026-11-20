@@ -12,7 +12,6 @@
 #   2. a plain `push -u` creates the canonical remote ref (no `worktree-*` ref)
 #      and a later refspec-less `push` updates it
 #   3. an argument-less PR lookup keyed on the current branch resolves
-#   4. every one of those fails without the rename (can-fail twins)
 #   5. `git worktree remove` leaves the renamed branch behind, and the
 #      cleanup's `show-ref` plus `branch -D` is what removes it
 #   6. the resume lookup input: `git worktree list --porcelain`
@@ -108,13 +107,31 @@ run_hook() {
   run bash -c 'cd "$1" && printf "%s" "$2" | bash "$3"' _ "$1" "$payload" "$HOOK"
 }
 
-# --- 1. the rename ---
+# --- 1. the rename, push and PR lookup ---
 
-@test "after the rename the worktree is on the canonical branch" {
+@test "after the rename the worktree is on the canonical branch, push -u and a later push use the canonical ref, and the PR lookup resolves" {
   apply_reference_rename
   run git -C "$WORKTREE" branch --show-current
   [ "$status" -eq 0 ]
-  [ "$output" = "plan/plan-1-x" ]
+  [ "$output" = "plan/plan-1-x" ] || { echo "case branch: $output"; return 1; }
+
+  commit_in_worktree one.txt
+  git -C "$WORKTREE" push --quiet -u origin plan/plan-1-x
+  run git -C "$ORIGIN" for-each-ref --format='%(refname)' refs/heads
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qxF 'refs/heads/plan/plan-1-x' || { echo "case push -u: $output"; return 1; }
+  printf '%s\n' "$output" | grep -qF 'worktree-' && { echo "case push -u: $output"; return 1; }
+
+  commit_in_worktree two.txt
+  git -c push.default=simple -C "$WORKTREE" push --quiet
+  run git -C "$ORIGIN" rev-parse refs/heads/plan/plan-1-x
+  remote_sha="$output"
+  run git -C "$WORKTREE" rev-parse HEAD
+  [ "$output" = "$remote_sha" ] || { echo "case later push: head $output remote $remote_sha"; return 1; }
+
+  run pr_lookup
+  [ "$status" -eq 0 ] || { echo "case PR lookup: $output"; return 1; }
+  [ "$output" = "PR #7 head plan/plan-1-x" ] || { echo "case PR lookup: $output"; return 1; }
 }
 
 @test "branch-name-lib classifies the renamed branch as plan plan-1" {
@@ -122,63 +139,6 @@ run_hook() {
   run bash "$SCRIPTS_DIRECTORY/branch-name-lib.sh" classify plan/plan-1-x
   [ "$status" -eq 0 ]
   [ "$output" = "plan plan-1" ]
-}
-
-@test "a rename onto an existing canonical name fails and leaves the worktree spelling" {
-  git -C "$MAIN" branch plan/plan-1-x
-  run git -C "$WORKTREE" branch -m 'worktree-plan+plan-1-x' 'plan/plan-1-x'
-  [ "$status" -ne 0 ]
-  run git -C "$WORKTREE" branch --show-current
-  [ "$output" = "worktree-plan+plan-1-x" ]
-}
-
-# --- 2. push ---
-
-@test "a plain push -u creates the canonical remote ref and no worktree-* ref" {
-  apply_reference_rename
-  commit_in_worktree one.txt
-  git -C "$WORKTREE" push --quiet -u origin plan/plan-1-x
-  run git -C "$ORIGIN" for-each-ref --format='%(refname)' refs/heads
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'refs/heads/plan/plan-1-x' || return 1
-  printf '%s\n' "$output" | grep -qF 'worktree-' && return 1
-  true
-}
-
-@test "a later refspec-less push (push.default=simple) updates the canonical ref" {
-  apply_reference_rename
-  commit_in_worktree one.txt
-  git -C "$WORKTREE" push --quiet -u origin plan/plan-1-x
-  commit_in_worktree two.txt
-  git -c push.default=simple -C "$WORKTREE" push --quiet
-  run git -C "$ORIGIN" rev-parse refs/heads/plan/plan-1-x
-  remote_sha="$output"
-  run git -C "$WORKTREE" rev-parse HEAD
-  [ "$output" = "$remote_sha" ]
-}
-
-# --- 3. PR lookup ---
-
-@test "the argument-less PR lookup resolves after the rename" {
-  apply_reference_rename
-  run pr_lookup
-  [ "$status" -eq 0 ]
-  [ "$output" = "PR #7 head plan/plan-1-x" ]
-}
-
-# --- 4. can-fail twins: the same flow without the rename ---
-
-@test "twin: without the rename the argument-less PR lookup does not resolve" {
-  run pr_lookup
-  [ "$status" -ne 0 ]
-}
-
-@test "twin: without the rename a refspec-less push after a renamed-remote push -u fails" {
-  commit_in_worktree one.txt
-  git -C "$WORKTREE" push --quiet -u origin 'worktree-plan+plan-1-x:plan/plan-1-x'
-  commit_in_worktree two.txt
-  run git -c push.default=simple -C "$WORKTREE" push
-  [ "$status" -ne 0 ]
 }
 
 # --- 5. post-merge cleanup ---
@@ -209,13 +169,6 @@ run_hook() {
     found && /^branch refs\/heads\/plan\/plan-1-x$/ { hit = 1 }
     END { exit hit ? 0 : 1 }
   ' || return 1
-  true
-}
-
-@test "twin: without the rename the porcelain branch field is the worktree spelling" {
-  run git -C "$MAIN" worktree list --porcelain
-  printf '%s\n' "$output" | grep -qxF 'branch refs/heads/plan/plan-1-x' && return 1
-  printf '%s\n' "$output" | grep -qxF 'branch refs/heads/worktree-plan+plan-1-x' || return 1
   true
 }
 

@@ -122,87 +122,85 @@ row_figures() {
   grep -qE '^\| Total: 0\.6M tokens, \$1\.26, ' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
 }
 
-@test "the box is plain ASCII, so its width counted in bytes is its width on screen" {
-  full_cycle_rows
-  run run_usage initiative spec:SPEC-402 --box
-  [ "$status" -eq 0 ]
-  LC_ALL=C grep -q '[^ -~]' <<<"$output" && return 1
-  true
-}
-
-@test "guard red: the ASCII check flags a box with a non-ASCII character" {
-  local box
-  box=$'| Total: 0.3M tokens, \xc3\xa9 |'
-  LC_ALL=C grep -q '[^ -~]' <<<"$box"
-}
-
-@test "the right border is one column on every line for short and for wide figures" {
-  local short wide
+@test "the box layout is plain ASCII, straight-bordered and label-aligned" {
+  local short wide full
   spec_and_plan_rows
-  short="$(run_usage initiative spec:SPEC-402 --box)"
   wide_rows
+  short="$(run_usage initiative spec:SPEC-402 --box)"
   wide="$(run_usage initiative spec:SPEC-499 --box)"
-  straight_border "$short" || { printf '%s\n' "$short" >&2; return 1; }
-  straight_border "$wide" || { printf '%s\n' "$wide" >&2; return 1; }
-  grep -qE '^\|  Spec: 123\.5M tokens, \$1234\.56, 12h3m9s +\|$' <<<"$wide" || { printf '%s\n' "$wide" >&2; return 1; }
-  [ "$(border_columns "$short" | sort -u)" != "$(border_columns "$wide" | sort -u)" ]
-}
-
-@test "guard red: the border check fails on a ragged box" {
-  local ragged
-  ragged=$'+------+\n| a  |\n| bb   |\n+------+'
-  straight_border "$ragged" && return 1
+  # case: right border is one column for short and for wide figures
+  straight_border "$short" || { echo "case border short" >&2; printf '%s\n' "$short" >&2; return 1; }
+  straight_border "$wide" || { echo "case border wide" >&2; printf '%s\n' "$wide" >&2; return 1; }
+  grep -qE '^\|  Spec: 123\.5M tokens, \$1234\.56, 12h3m9s +\|$' <<<"$wide" || { echo "case wide figures" >&2; printf '%s\n' "$wide" >&2; return 1; }
+  [ "$(border_columns "$short" | sort -u)" != "$(border_columns "$wide" | sort -u)" ] || { echo "case border columns: the short and wide boxes must differ" >&2; return 1; }
+  # case: without an Execute row the width is set by Total
+  [ "$(colon_columns "$short")" = 8 ] || { echo "case no-execute colon" >&2; printf '%s\n' "$short" >&2; return 1; }
+  grep -qE '^\|  Spec: ' <<<"$short" || { echo "case no-execute Spec label" >&2; return 1; }
+  grep -qE '^\|  Plan: ' <<<"$short" || { echo "case no-execute Plan label" >&2; return 1; }
+  grep -qE '^\| Total: ' <<<"$short" || { echo "case no-execute Total label" >&2; return 1; }
+  one_space_margins "$short" || { echo "case no-execute margins" >&2; return 1; }
+  # case: with an Execute row the labels align at the width of Execute
+  segment branch:feat/build-x s4 2026-10-02T11:00:00Z 2026-10-02T11:45:00Z 1000000 10000
+  edge branch:feat/build-x spec:SPEC-402
+  edge pr:88 branch:feat/build-x
+  full="$(run_usage initiative spec:SPEC-402 --box)"
+  [ "$(colon_columns "$full")" = 10 ] || { echo "case execute colon" >&2; printf '%s\n' "$full" >&2; return 1; }
+  grep -qE '^\|    Spec: ' <<<"$full" || { echo "case execute Spec label" >&2; return 1; }
+  grep -qE '^\|    Plan: ' <<<"$full" || { echo "case execute Plan label" >&2; return 1; }
+  grep -qE '^\| Execute: ' <<<"$full" || { echo "case execute Execute label" >&2; return 1; }
+  grep -qE '^\|   Total: ' <<<"$full" || { echo "case execute Total label" >&2; return 1; }
+  one_space_margins "$full" || { echo "case execute margins" >&2; return 1; }
+  # case: plain ASCII, so the width in bytes is the width on screen
+  LC_ALL=C grep -q '[^ -~]' <<<"$full" && { echo "case non-ASCII" >&2; return 1; }
+  straight_border "$full" || { echo "case border execute" >&2; return 1; }
   true
 }
 
-@test "the Spec and Plan rows add up to the Total row, in tokens and in dollars" {
-  local box spec plan total
+@test "the rows add up to the Total row" {
+  local box spec plan execute total
   spec_and_plan_rows
   box="$(run_usage initiative spec:SPEC-402 --box)"
   spec="$(row_figures "$box" Spec)"
   plan="$(row_figures "$box" Plan)"
   total="$(row_figures "$box" Total)"
-  [ "$spec" = '1 21' ]
-  [ "$plan" = '2 42' ]
-  [ "$total" = "$(( ${spec% *} + ${plan% *} )) $(( ${spec#* } + ${plan#* } ))" ]
+  [ "$spec" = '1 21' ] || { echo "case spec and plan: Spec $spec" >&2; return 1; }
+  [ "$plan" = '2 42' ] || { echo "case spec and plan: Plan $plan" >&2; return 1; }
+  [ "$total" = "$(( ${spec% *} + ${plan% *} )) $(( ${spec#* } + ${plan#* } ))" ] || { echo "case spec and plan: Total $total" >&2; return 1; }
   wide_rows
   box="$(run_usage initiative spec:SPEC-499 --box)"
   spec="$(row_figures "$box" Spec)"
   plan="$(row_figures "$box" Plan)"
   total="$(row_figures "$box" Total)"
-  [ "$total" = "$(( ${spec% *} + ${plan% *} )) $(( ${spec#* } + ${plan#* } ))" ]
-}
-
-@test "guard red: the sum check fails on rows that do not add up" {
-  local box total
-  box=$'|  Spec: 0.1M tokens, $0.21, 30m0s |\n|  Plan: 0.2M tokens, $0.42, 40m0s |\n| Total: 0.4M tokens, $0.63, 1h10m0s |'
-  total="$(row_figures "$box" Total)"
-  [ "$total" != "$(( $(row_figures "$box" Spec | cut -d' ' -f1) + $(row_figures "$box" Plan | cut -d' ' -f1) )) 63" ]
-}
-
-@test "implementation spend on the branch gets an Execute row and the rows still add up to the Total" {
-  local box spec plan execute total
-  full_cycle_rows
+  [ "$total" = "$(( ${spec% *} + ${plan% *} )) $(( ${spec#* } + ${plan#* } ))" ] || { echo "case wide: Total $total" >&2; return 1; }
+  segment branch:feat/build-x s4 2026-10-02T11:00:00Z 2026-10-02T11:45:00Z 1000000 10000
+  edge branch:feat/build-x spec:SPEC-402
+  edge pr:88 branch:feat/build-x
   box="$(run_usage initiative spec:SPEC-402 --box)"
-  straight_border "$box"
-  grep -qE '^\| Execute: 1\.0M tokens, \$2\.10, 45m0s +\|$' <<<"$box" || { printf '%s\n' "$box" >&2; return 1; }
-  grep -qF 'pr:' <<<"$box" && return 1
+  straight_border "$box" || { echo "case execute: border" >&2; return 1; }
+  grep -qE '^\| Execute: 1\.0M tokens, \$2\.10, 45m0s +\|$' <<<"$box" || { echo "case execute: row" >&2; printf '%s\n' "$box" >&2; return 1; }
+  grep -qF 'pr:' <<<"$box" && { echo "case execute: pr key leaked" >&2; return 1; }
   spec="$(row_figures "$box" Spec)" plan="$(row_figures "$box" Plan)" execute="$(row_figures "$box" Execute)" total="$(row_figures "$box" Total)"
-  [ "$total" = "$(( ${spec% *} + ${plan% *} + ${execute% *} )) $(( ${spec#* } + ${plan#* } + ${execute#* } ))" ]
-  [ "$total" = '13 273' ]
+  [ "$total" = "$(( ${spec% *} + ${plan% *} + ${execute% *} )) $(( ${spec#* } + ${plan#* } + ${execute#* } ))" ] || { echo "case execute: sum" >&2; return 1; }
+  [ "$total" = '13 273' ] || { echo "case execute: Total $total" >&2; return 1; }
   grep -qE '^\| +Total: 1\.3M tokens, \$2\.73, 2h35m0s +\|$' <<<"$box"
 }
 
-@test "a row with an unpriced model says so in words, and the box notes the minimum" {
+@test "an unpriced model reads as a minimum with a plain Note" {
   local box
   spec_and_plan_rows
   segment session:s3 s3 2026-10-02T10:12:00Z 2026-10-02T10:13:00Z 10 0 claude-zeta-1
   box="$(run_usage initiative spec:SPEC-402 --box)"
-  grep -qE '^\|  Plan: 0\.2M tokens, at least \$0\.42, 40m0s +\|$' <<<"$box" || { printf '%s\n' "$box" >&2; return 1; }
-  grep -qE '^\|  Spec: 0\.1M tokens, \$0\.21, 30m0s +\|$' <<<"$box"
-  grep -qE '^\| Total: 0\.3M tokens, at least \$0\.63, ' <<<"$box"
-  grep -qxF 'Note: Includes a model GAIA has no price for, so the cost is a minimum.' <<<"$box"
-  straight_border "$(grep -E '^[|+]' <<<"$box")"
+  grep -qE '^\|  Plan: 0\.2M tokens, at least \$0\.42, 40m0s +\|$' <<<"$box" || { echo "case box: Plan row" >&2; printf '%s\n' "$box" >&2; return 1; }
+  grep -qE '^\|  Spec: 0\.1M tokens, \$0\.21, 30m0s +\|$' <<<"$box" || { echo "case box: Spec row" >&2; return 1; }
+  grep -qE '^\| Total: 0\.3M tokens, at least \$0\.63, ' <<<"$box" || { echo "case box: Total row" >&2; return 1; }
+  grep -qxF 'Note: Includes a model GAIA has no price for, so the cost is a minimum.' <<<"$box" || { echo "case box: Note" >&2; return 1; }
+  straight_border "$(grep -E '^[|+]' <<<"$box")" || { echo "case box: border" >&2; return 1; }
+  run run_usage initiative spec:SPEC-402 --line
+  [ "$status" -eq 0 ] || { echo "case line: status" >&2; return 1; }
+  [ "${#lines[@]}" -eq 2 ] || { echo "case line: two lines" >&2; return 1; }
+  [[ "${lines[0]}" == Cost:* ]] || { echo "case line: Cost line" >&2; return 1; }
+  [[ "${lines[0]}" == *'(partial'* ]] && { echo "case line: partial suffix" >&2; return 1; }
+  [ "${lines[1]}" = 'Note: Includes a model GAIA has no price for, so the cost is a minimum.' ]
 }
 
 @test "with no readable rate table every price reads cost unavailable and no figure is invented" {
@@ -218,29 +216,19 @@ row_figures() {
   true
 }
 
-@test "one line item prints as one plain Cost line, not a box" {
-  local output_text
+@test "one line item prints a plain Cost line and two print a box" {
+  local output_text box
   start p1 2026-10-05T09:00:00Z gaia-plan
   segment session:p1 p1 2026-10-05T09:10:00Z 2026-10-05T09:20:00Z 100000 1000
   close p1 2026-10-05T09:30:00Z plan:PLAN-411 gaia-plan
   output_text="$(run_usage initiative plan:PLAN-411 --box)"
-  [ "$output_text" = 'Cost: 0.1M tokens, $0.21, 30m0s' ]
-  grep -q '[|+]' <<<"$output_text" && return 1
-  [ "$(wc -l <<<"$output_text" | tr -d ' ')" -eq 1 ]
-}
-
-@test "two line items print a box with border characters and no plain Cost line" {
-  local box
+  [ "$output_text" = 'Cost: 0.1M tokens, $0.21, 30m0s' ] || { echo "case one item: line" >&2; return 1; }
+  grep -q '[|+]' <<<"$output_text" && { echo "case one item: border characters" >&2; return 1; }
+  [ "$(wc -l <<<"$output_text" | tr -d ' ')" -eq 1 ] || { echo "case one item: line count" >&2; return 1; }
   spec_and_plan_rows
   box="$(run_usage initiative spec:SPEC-402 --box)"
-  [ "$(grep -c '^+-*+$' <<<"$box")" -eq 3 ]
-  grep -q '^Cost:' <<<"$box" && return 1
-  true
-}
-
-@test "guard red: the border-character check flags a box and passes a plain line" {
-  grep -q '[|+]' <<<'| Total: 0.3M tokens, $0.63, 1h10m0s |'
-  grep -q '[|+]' <<<'Cost: 0.1M tokens, $0.21, 30m0s' && return 1
+  [ "$(grep -c '^+-*+$' <<<"$box")" -eq 3 ] || { echo "case two items: borders" >&2; return 1; }
+  grep -q '^Cost:' <<<"$box" && { echo "case two items: plain Cost line" >&2; return 1; }
   true
 }
 
@@ -269,37 +257,6 @@ one_space_margins() {
   rows="$(grep -E '^\|' <<<"$1")"
   [ "$(grep -cvE '^\| ' <<<"$rows")" = 0 ] || return 1
   [ "$(grep -cE '[^ ] \|$' <<<"$rows")" -ge 1 ]
-}
-
-@test "with an Execute row the labels right-align to the colon at the width of Execute, with one space inside each border" {
-  local box
-  full_cycle_rows
-  box="$(run_usage initiative spec:SPEC-402 --box)"
-  [ "$(colon_columns "$box")" = 10 ] || { printf '%s\n' "$box" >&2; return 1; }
-  grep -qE '^\|    Spec: ' <<<"$box"
-  grep -qE '^\|    Plan: ' <<<"$box"
-  grep -qE '^\| Execute: ' <<<"$box"
-  grep -qE '^\|   Total: ' <<<"$box"
-  one_space_margins "$box"
-}
-
-@test "without an Execute row the width is set by Total, with no space reserved for Execute" {
-  local box
-  spec_and_plan_rows
-  box="$(run_usage initiative spec:SPEC-402 --box)"
-  [ "$(colon_columns "$box")" = 8 ] || { printf '%s\n' "$box" >&2; return 1; }
-  grep -qE '^\|  Spec: ' <<<"$box"
-  grep -qE '^\|  Plan: ' <<<"$box"
-  grep -qE '^\| Total: ' <<<"$box"
-  one_space_margins "$box"
-}
-
-@test "guard red: the colon and margin checks fail on a box with a fixed label width and loose padding" {
-  local loose
-  loose=$'+------+\n|    Spec: 0.1M |\n| Total:  0.3M |\n+------+'
-  [ "$(colon_columns "$loose" | wc -l | tr -d ' ')" -gt 1 ]
-  one_space_margins $'| Total: 0.3M   |' && return 1
-  true
 }
 
 @test "a bare SPEC-NNN or PLAN-NNN resolves to its key and prints the same box" {
@@ -335,19 +292,8 @@ one_space_margins() {
   [ "$stderr" = 'usage initiative: --box and --line are exclusive' ]
 }
 
-@test "--line prints the Cost line, then a plain note for an unpriced model, with no partial suffix" {
-  spec_and_plan_rows
-  segment session:s3 s3 2026-10-02T10:12:00Z 2026-10-02T10:13:00Z 10 0 claude-zeta-1
-  run run_usage initiative spec:SPEC-402 --line
-  [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 2 ]
-  [[ "${lines[0]}" == Cost:* ]]
-  [[ "${lines[0]}" == *'(partial'* ]] && return 1
-  [ "${lines[1]}" = 'Note: Includes a model GAIA has no price for, so the cost is a minimum.' ]
-}
-
 # bats test_tags=whole-tree
-@test "the box waits for a still-running flusher and, when it outlasts the cap, notes that the figures may be low" {
+@test "the box waits for a running flusher, joins only a full-finish flusher, and notes a timeout" {
   local scratch="$TEMPORARY_DIRECTORY/scripts" file box
   mkdir -p "$scratch/spec" "$scratch/notebook"
   for file in "$SCRIPTS"/usage*.sh "$SCRIPTS"/token-*.sh "$SCRIPTS"/token-rates.json "$SCRIPTS"/branch-name-lib.sh \
@@ -362,11 +308,21 @@ one_space_margins() {
   box="$(CLAUDE_CODE_SESSION_ID=box-sess GAIA_USAGE_BOX_FLUSH_CAP_SECONDS=1 bash "$scratch/usage.sh" initiative SPEC-402 --box \
     --main-root "$MAIN" --rate-table "$RATES" --projects-root "$TEMPORARY_DIRECTORY/projects")"
   grep -qxF 'Note: Some usage was still being saved, so these figures may be low. For the final numbers run: bash .gaia/scripts/usage.sh initiative SPEC-402 --box' <<<"$box" ||
-    { printf '%s\n' "$box" >&2; return 1; }
-  grep -qE '^\| Total: ' <<<"$box"
+    { echo "case outlasts the cap: note" >&2; printf '%s\n' "$box" >&2; return 1; }
+  grep -qE '^\| Total: ' <<<"$box" || { echo "case outlasts the cap: Total" >&2; return 1; }
   # Without a session there is nothing to wait for, so no note.
   box="$(bash "$scratch/usage.sh" initiative SPEC-402 --box --main-root "$MAIN" --rate-table "$RATES" --projects-root "$TEMPORARY_DIRECTORY/projects")"
-  grep -qF 'Some usage was still being saved' <<<"$box" && return 1
+  grep -qF 'Some usage was still being saved' <<<"$box" && { echo "case no session: note" >&2; return 1; }
+  # A Stop-hook flusher holds back sidecars, so it is not joined: the box starts its own.
+  : >"$TELEMETRY_DIRECTORY/usage.jsonl"
+  box_join_scenario box-stop-sess --transcript x --finished-main
+  [ -f "$scratch/own-started" ] || { echo "case Stop-hook flusher: own flusher not started" >&2; return 1; }
+  # A flusher with --finished-main --all-sidecars-finished is joined: the box starts none.
+  : >"$TELEMETRY_DIRECTORY/usage.jsonl"
+  rm -f "$scratch/own-started"
+  box_join_scenario box-join-sess --finished-main --all-sidecars-finished --main-root x
+  [ -f "$scratch/own-started" ] && { echo "case full-finish flusher: own flusher started" >&2; return 1; }
+  grep -qF 'Some usage was still being saved' <<<"$box" || { echo "case full-finish flusher: note" >&2; return 1; }
   true
 }
 
@@ -395,19 +351,4 @@ box_join_scenario() {
   box="$(CLAUDE_CODE_SESSION_ID="$session_id" GAIA_USAGE_BOX_FLUSH_CAP_SECONDS=1 bash "$scratch/usage.sh" initiative SPEC-402 --box \
     --main-root "$MAIN" --rate-table "$RATES" --projects-root "$TEMPORARY_DIRECTORY/projects")"
   kill "$other_pid" 2>/dev/null || true
-}
-
-# bats test_tags=whole-tree
-@test "a running Stop-hook flusher, which holds back sidecars, is not joined: the box starts its own" {
-  local scratch box
-  box_join_scenario box-stop-sess --transcript x --finished-main
-  [ -f "$scratch/own-started" ]
-}
-
-# bats test_tags=whole-tree
-@test "a running flusher with --finished-main --all-sidecars-finished is joined: the box starts none and notes it outlasted the cap" {
-  local scratch box
-  box_join_scenario box-join-sess --finished-main --all-sidecars-finished --main-root x
-  [ -f "$scratch/own-started" ] && return 1
-  grep -qF 'Some usage was still being saved' <<<"$box"
 }

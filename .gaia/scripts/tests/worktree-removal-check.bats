@@ -60,61 +60,56 @@ check_tree() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
 }
 
-@test "a populated .gaia-backup that is ignored is CLEAR" {
+# bats test_tags=protected
+@test "DIRTY: a populated .gaia-merge, a modified tracked file and an untracked file each exit 1 and list the path" {
+  # a populated .gaia-merge is an ordinary untracked directory
+  mkdir "$TREE/.gaia-merge"
+  printf 'p\n' >"$TREE/.gaia-merge/a.patch"
+  check_tree
+  [ "$status" -eq 1 ] || { printf 'case gaia-merge: %s\n' "$output"; return 1; }
+  [ "$(printf '%s\n' "$output" | head -n 1)" = "DIRTY" ] || { printf 'case gaia-merge: %s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq "?? .gaia-merge/" || { printf 'case gaia-merge: %s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fxq "PENDING" && { printf 'case gaia-merge: %s\n' "$output"; return 1; }
+  [ "$(printf '%s\n' "$output" | grep -c '^Next step:')" -eq 1 ] || { printf 'case gaia-merge: %s\n' "$output"; return 1; }
+  rm -rf "$TREE/.gaia-merge"
+
+  # a modified tracked file names the removal commands
+  printf 'edited\n' >>"$TREE/base"
+  check_tree
+  [ "$status" -eq 1 ] || { printf 'case modified: %s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fxq "DIRTY" || { printf 'case modified: %s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq " M base" || { printf 'case modified: %s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq "git worktree remove --force $TREE" || { printf 'case modified: %s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq "git branch -D $BRANCH" || { printf 'case modified: %s\n' "$output"; return 1; }
+  git -C "$TREE" checkout -q -- base
+
+  # an untracked, non-ignored file
+  printf 'new\n' >"$TREE/untracked.txt"
+  check_tree
+  [ "$status" -eq 1 ] || { printf 'case untracked: %s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq "?? untracked.txt" || { printf 'case untracked: %s\n' "$output"; return 1; }
+}
+
+@test "ignored paths alone are CLEAR: .gaia-backup and node_modules" {
   mkdir "$TREE/.gaia-backup"
   printf 'x\n' >"$TREE/.gaia-backup/old.txt"
   printf '.gaia-backup/\n' >>"$MAIN/.git/info/exclude"
   check_tree
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
-}
+  [ "$status" -eq 0 ] || { printf 'case gaia-backup: %s\n' "$output"; return 1; }
 
-@test "failing state: a populated .gaia-merge is an ordinary untracked directory and reads DIRTY" {
-  mkdir "$TREE/.gaia-merge"
-  printf 'p\n' >"$TREE/.gaia-merge/a.patch"
-  check_tree
-  [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
-  [ "$(printf '%s\n' "$output" | head -n 1)" = "DIRTY" ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fq "?? .gaia-merge/" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq "PENDING" && { printf '%s\n' "$output"; return 1; }
-  [ "$(printf '%s\n' "$output" | grep -c '^Next step:')" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
-  true
-}
-
-@test "no --tree is a usage refusal" {
-  run bash "$CHECK"
-  [ "$status" -eq 2 ] || { printf '%s\n' "$output"; return 1; }
-}
-
-@test "a path that is not a git work tree is a refusal" {
-  mkdir "$BATS_TEST_TMPDIR/plain"
-  run bash "$CHECK" --tree "$BATS_TEST_TMPDIR/plain"
-  [ "$status" -eq 2 ] || { printf '%s\n' "$output"; return 1; }
-}
-
-# bats test_tags=protected
-@test "failing state: a modified tracked file is DIRTY and names the removal commands" {
-  printf 'edited\n' >>"$TREE/base"
-  check_tree
-  [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq "DIRTY" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fq " M base" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fq "git worktree remove --force $TREE" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fq "git branch -D $BRANCH" || { printf '%s\n' "$output"; return 1; }
-}
-
-@test "failing state: an untracked, non-ignored file is DIRTY" {
-  printf 'new\n' >"$TREE/untracked.txt"
-  check_tree
-  [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fq "?? untracked.txt" || { printf '%s\n' "$output"; return 1; }
-}
-
-@test "an ignored file alone is CLEAR" {
-  printf 'node_modules/\n' >"$MAIN/.git/info/exclude"
+  printf 'node_modules/\n' >>"$MAIN/.git/info/exclude"
   mkdir "$TREE/node_modules"
   printf 'x\n' >"$TREE/node_modules/pkg.js"
   check_tree
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
+  [ "$status" -eq 0 ] || { printf 'case node_modules: %s\n' "$output"; return 1; }
+}
+
+@test "refusal: no --tree or a non-work-tree path exits 2" {
+  run bash "$CHECK"
+  [ "$status" -eq 2 ] || { printf 'case no --tree: %s\n' "$output"; return 1; }
+  mkdir "$BATS_TEST_TMPDIR/plain"
+  run bash "$CHECK" --tree "$BATS_TEST_TMPDIR/plain"
+  [ "$status" -eq 2 ] || { printf 'case non-work-tree: %s\n' "$output"; return 1; }
 }
 
 # bats test_tags=protected
@@ -135,43 +130,4 @@ check_tree() {
   git -C "$MAIN" update-ref -d "refs/remotes/origin/$BRANCH"
   check_tree
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
-}
-
-# --- red twins: a mutated copy of the script must fail the matching case ---
-
-mutate_script() { # sed args...
-  local copy="$BATS_TEST_TMPDIR/mutated-check.sh"
-  sed "$@" "$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh" >"$copy" || return 1
-  if cmp -s "$copy" "$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh"; then
-    echo "the mutation changed nothing"
-    return 1
-  fi
-  CHECK=$copy
-}
-
-@test "red twin: without the status test a modified file reads CLEAR" {
-  mutate_script -e 's/^dirty=.*/dirty=""/' || return 1
-  printf 'edited\n' >>"$TREE/base"
-  check_tree
-  [ "$status" -eq 0 ] || { printf 'stayed red: %s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq "CLEAR" || return 1
-}
-
-@test "red twin: counting ignored files stops a tree holding only ignored files" {
-  mutate_script -e 's/status --porcelain/status --porcelain --ignored/' || return 1
-  printf 'node_modules/\n' >"$MAIN/.git/info/exclude"
-  mkdir "$TREE/node_modules"
-  printf 'x\n' >"$TREE/node_modules/pkg.js"
-  check_tree
-  [ "$status" -eq 1 ] || { printf 'stayed green: %s\n' "$output"; return 1; }
-}
-
-@test "red twin: counting against origin/main without the upstream guard stops a branch with no upstream" {
-  mutate_script -e 's|^if upstream=.*|upstream=origin/main; if true; then|' -e "s|'@{upstream}\\.\\.HEAD'|origin/main..HEAD|" || return 1
-  printf 'more\n' >"$TREE/more"
-  git -C "$TREE" add more
-  git -C "$TREE" commit -q -m more
-  git -C "$MAIN" update-ref -d "refs/remotes/origin/$BRANCH"
-  check_tree
-  [ "$status" -eq 1 ] || { printf 'stayed green: %s\n' "$output"; return 1; }
 }

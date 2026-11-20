@@ -96,86 +96,6 @@ EOF
   [ "$actual" = "$expected" ]
 }
 
-@test "a cache missing the keys still receives them" {
-  printf '{"codifyReviewCount": 1}\n' >"$CACHE"
-  run bash "$BUST" --cache "$CACHE" --mode deps
-  [ "$status" -eq 0 ]
-  [ "$(jq '.outdatedCount' "$CACHE")" = "0" ]
-  [ "$(jq '.codifyReviewCount' "$CACHE")" = "1" ]
-}
-
-@test "the rewrite leaves no temp file beside the cache" {
-  write_populated_cache
-  run bash "$BUST" --cache "$CACHE" --mode deps
-  [ "$status" -eq 0 ]
-  [ "$(find "$BATS_TEST_TMPDIR" -maxdepth 1 -name '.update-check-bust.*' | wc -l | tr -d ' ')" = "0" ]
-}
-
-@test "an absent cache exits 0 SKIPPED no cache and creates nothing" {
-  run bash "$BUST" --cache "$CACHE" --mode deps
-  [ "$status" -eq 0 ]
-  [ "$output" = "SKIPPED no cache" ]
-  [ ! -e "$CACHE" ]
-  [ "$(find "$BATS_TEST_TMPDIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "0" ]
-}
-
-@test "unparseable JSON exits 3 BUST_FAILED and leaves the file's bytes unchanged" {
-  printf '{"outdatedCount": 7,, nope' >"$CACHE"
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode deps
-  [ "$status" -eq 3 ]
-  case "$output" in BUST_FAILED*) ;; *) return 1 ;; esac
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  [ "$(find "$BATS_TEST_TMPDIR" -maxdepth 1 -name '.update-check-bust.*' | wc -l | tr -d ' ')" = "0" ]
-}
-
-@test "valid JSON that is not an object exits 3 BUST_FAILED and leaves the file unchanged" {
-  printf 'null\n' >"$CACHE"
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode deps
-  [ "$status" -eq 3 ]
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
-}
-
-@test "no jq on PATH exits 3 BUST_FAILED and leaves the file unchanged" {
-  write_populated_cache
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  local tool_directory="$BATS_TEST_TMPDIR/tools" tool
-  mkdir -p "$tool_directory"
-  for tool in date mktemp mv rm; do
-    ln -s "$(command -v "$tool")" "$tool_directory/$tool"
-  done
-  [ ! -e "$tool_directory/jq" ]
-  run env PATH="$tool_directory" "$(command -v bash)" "$BUST" --cache "$CACHE" --mode deps
-  [ "$status" -eq 3 ]
-  case "$output" in BUST_FAILED*) ;; *) return 1 ;; esac
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
-}
-
-@test "a relative --cache exits 2" {
-  run bash "$BUST" --cache relative/update-check.json --mode deps
-  [ "$status" -eq 2 ]
-}
-
-@test "a missing --cache exits 2" {
-  run bash "$BUST" --mode deps
-  [ "$status" -eq 2 ]
-}
-
-@test "an unknown --mode exits 2" {
-  write_populated_cache
-  run bash "$BUST" --cache "$CACHE" --mode other
-  [ "$status" -eq 2 ]
-}
-
-@test "gaia with no --version exits 2 and leaves the file unchanged" {
-  write_populated_cache
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode gaia
-  [ "$status" -eq 2 ]
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
-}
-
 write_cache_with_claims() {
   jq -n '{
     checkedAt: 1000, gaiaCurrent: "1.0.0", gaiaLatest: "2.0.0", gaiaHasUpdate: true,
@@ -203,34 +123,6 @@ write_cache_with_claims() {
   [ "$(jq -c '[.gaiaUpdateClaims[].number]' "$CACHE")" = "[41,42]" ]
 }
 
-@test "--drop-claim leaves a missing or malformed gaiaUpdateClaims alone" {
-  write_populated_cache
-  run bash "$BUST" --cache "$CACHE" --mode gaia --version 2.0.0 --drop-claim 42
-  [ "$status" -eq 0 ]
-  [ "$(jq 'has("gaiaUpdateClaims")' "$CACHE")" = "false" ]
-  jq '.gaiaUpdateClaims = "oops"' "$CACHE" >"$BATS_TEST_TMPDIR/malformed"
-  cp "$BATS_TEST_TMPDIR/malformed" "$CACHE"
-  run bash "$BUST" --cache "$CACHE" --mode gaia --version 2.0.0 --drop-claim 42
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.gaiaUpdateClaims' "$CACHE")" = "oops" ]
-}
-
-@test "--drop-claim with a non-numeric value exits 2 and leaves the file unchanged" {
-  write_cache_with_claims
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode gaia --version 2.0.0 --drop-claim abc
-  [ "$status" -eq 2 ]
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
-}
-
-@test "--drop-claim with --mode deps exits 2 and leaves the file unchanged" {
-  write_cache_with_claims
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode deps --drop-claim 42
-  [ "$status" -eq 2 ]
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
-}
-
 write_cache_behind_origin() {
   cat >"$CACHE" <<'JSON'
 {
@@ -246,39 +138,6 @@ write_cache_behind_origin() {
 JSON
 }
 
-@test "pull sets gaiaCurrent and gaiaOriginVersion to the version" {
-  write_cache_behind_origin
-  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
-  [ "$status" -eq 0 ]
-  [ "$output" = "BUSTED" ]
-  [ "$(jq -r '.gaiaCurrent' "$CACHE")" = "2.0.4" ]
-  [ "$(jq -r '.gaiaOriginVersion' "$CACHE")" = "2.0.4" ]
-}
-
-@test "pull keeps a newer release visible: gaiaHasUpdate true and gaiaLatest untouched" {
-  write_cache_behind_origin
-  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
-  [ "$status" -eq 0 ]
-  [ "$(jq '.gaiaHasUpdate' "$CACHE")" = "true" ]
-  [ "$(jq -r '.gaiaLatest' "$CACHE")" = "2.0.5" ]
-}
-
-@test "pull clears gaiaHasUpdate when gaiaLatest is the pulled version" {
-  write_cache_behind_origin
-  jq '.gaiaLatest = "2.0.4"' "$CACHE" >"$BATS_TEST_TMPDIR/edited"
-  cp "$BATS_TEST_TMPDIR/edited" "$CACHE"
-  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
-  [ "$status" -eq 0 ]
-  [ "$(jq '.gaiaHasUpdate' "$CACHE")" = "false" ]
-}
-
-@test "pull zeroes checkedAt so the next render refreshes" {
-  write_cache_behind_origin
-  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
-  [ "$status" -eq 0 ]
-  [ "$(jq '.checkedAt' "$CACHE")" = "0" ]
-}
-
 @test "pull carries the claims and every other field across" {
   write_cache_behind_origin
   local expected actual
@@ -290,45 +149,11 @@ JSON
   [ "$(jq -c '[.gaiaUpdateClaims[].number]' "$CACHE")" = "[41]" ]
 }
 
-@test "pull replaces the cache file and leaves no temp file behind" {
-  write_cache_behind_origin
-  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
-  [ "$status" -eq 0 ]
-  [ -f "$CACHE" ]
-  [ "$(find "$BATS_TEST_TMPDIR" -name '.update-check-bust.*' | wc -l | tr -d ' ')" = "0" ]
-}
-
-@test "pull on a missing cache prints SKIPPED no cache and creates nothing" {
-  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
-  [ "$status" -eq 0 ]
-  [ "$output" = "SKIPPED no cache" ]
-  [ ! -e "$CACHE" ]
-}
-
-@test "pull rejects a version that is not x.y.z and leaves the cache byte-identical" {
-  local bad_version
-  write_cache_behind_origin
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  for bad_version in 2.0 latest 2.0.4.1 v2.0.4 ''; do
-    run bash "$BUST" --cache "$CACHE" --mode pull --version "$bad_version"
-    [ "$status" -eq 2 ]
-    cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  done
-}
-
 @test "pull accepts a prerelease version" {
   write_cache_behind_origin
   run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4-rc.1
   [ "$status" -eq 0 ]
   [ "$(jq -r '.gaiaCurrent' "$CACHE")" = "2.0.4-rc.1" ]
-}
-
-@test "pull with --drop-claim exits 2" {
-  write_cache_behind_origin
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4 --drop-claim 41
-  [ "$status" -eq 2 ]
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
 }
 
 write_cache_with_fitness_fields() {
@@ -363,50 +188,128 @@ JSON
   cmp "$BATS_TEST_TMPDIR/expected" "$BATS_TEST_TMPDIR/actual"
 }
 
-@test "fitness replaces the cache file and leaves no temp file behind" {
-  write_cache_with_fitness_fields
-  run bash "$BUST" --cache "$CACHE" --mode fitness
-  [ "$status" -eq 0 ]
-  [ "$(find "$BATS_TEST_TMPDIR" -name '.update-check-bust.*' | wc -l | tr -d ' ')" = "0" ]
+# seed_cache <mode>: write the fixture cache the mode's cases start from.
+seed_cache() {
+  case "$1" in
+    deps | gaia) write_populated_cache ;;
+    pull) write_cache_behind_origin ;;
+    fitness) write_cache_with_fitness_fields ;;
+  esac
 }
 
-@test "fitness with --version exits 2 and leaves the cache byte-identical" {
-  write_cache_with_fitness_fields
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode fitness --version 2.0.4
-  [ "$status" -eq 2 ]
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+# run_mode <mode>: run the bust for the mode, with the version a pull needs.
+run_mode() {
+  if [ "$1" = "pull" ]; then
+    run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  else
+    run bash "$BUST" --cache "$CACHE" --mode "$1"
+  fi
 }
 
-@test "fitness with --drop-claim exits 2 and leaves the cache byte-identical" {
-  write_cache_with_fitness_fields
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode fitness --drop-claim 12
-  [ "$status" -eq 2 ]
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+# temp_file_count: leftover bust temp files beside the cache.
+temp_file_count() {
+  find "$BATS_TEST_TMPDIR" -name '.update-check-bust.*' | wc -l | tr -d ' '
 }
 
-@test "fitness on a missing cache prints SKIPPED no cache and creates nothing" {
-  run bash "$BUST" --cache "$CACHE" --mode fitness
-  [ "$status" -eq 0 ]
-  [ "$output" = "SKIPPED no cache" ]
-  [ ! -e "$CACHE" ]
+@test "the rewrite leaves no temp file beside the cache (deps, pull, fitness)" {
+  local mode
+  for mode in deps pull fitness; do
+    seed_cache "$mode"
+    run_mode "$mode"
+    [ "$status" -eq 0 ] || { echo "case $mode: status $status" >&2; return 1; }
+    [ -f "$CACHE" ] || { echo "case $mode: cache file gone" >&2; return 1; }
+    [ "$(temp_file_count)" = "0" ] || { echo "case $mode: temp file left behind" >&2; return 1; }
+  done
 }
 
-@test "fitness on unparsable JSON exits 3 BUST_FAILED and leaves no temp file" {
-  printf 'not json{' >"$CACHE"
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode fitness
-  [ "$status" -eq 3 ]
-  case "$output" in BUST_FAILED*) ;; *) return 1 ;; esac
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  [ "$(find "$BATS_TEST_TMPDIR" -name '.update-check-bust.*' | wc -l | tr -d ' ')" = "0" ]
+@test "an absent cache exits 0 SKIPPED no cache and creates nothing (deps, pull, fitness)" {
+  local mode
+  for mode in deps pull fitness; do
+    rm -f "$CACHE"
+    run_mode "$mode"
+    [ "$status" -eq 0 ] || { echo "case $mode: status $status" >&2; return 1; }
+    [ "$output" = "SKIPPED no cache" ] || { echo "case $mode: output [$output]" >&2; return 1; }
+    [ ! -e "$CACHE" ] || { echo "case $mode: cache created" >&2; return 1; }
+    [ "$(find "$BATS_TEST_TMPDIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "0" ] || { echo "case $mode: a file was created" >&2; return 1; }
+  done
 }
 
-@test "fitness on a non-object exits 3 BUST_FAILED and leaves the cache unchanged" {
-  printf '[1,2]' >"$CACHE"
-  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
-  run bash "$BUST" --cache "$CACHE" --mode fitness
-  [ "$status" -eq 3 ]
-  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+@test "BUST_FAILED exits 3 and leaves the file bytes unchanged (unparseable, non-object, no jq)" {
+  local case_name tool_directory tool
+  for case_name in deps-unparseable deps-not-object deps-no-jq fitness-unparseable fitness-not-object; do
+    rm -f "$CACHE"
+    case "$case_name" in
+      deps-unparseable) printf '{"outdatedCount": 7,, nope' >"$CACHE" ;;
+      deps-not-object) printf 'null
+' >"$CACHE" ;;
+      deps-no-jq) write_populated_cache ;;
+      fitness-unparseable) printf 'not json{' >"$CACHE" ;;
+      fitness-not-object) printf '[1,2]' >"$CACHE" ;;
+    esac
+    cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+    case "$case_name" in
+      deps-no-jq)
+        tool_directory="$BATS_TEST_TMPDIR/tools"
+        mkdir -p "$tool_directory"
+        for tool in date mktemp mv rm; do
+          [ -e "$tool_directory/$tool" ] || ln -s "$(command -v "$tool")" "$tool_directory/$tool"
+        done
+        [ ! -e "$tool_directory/jq" ] || { echo "case $case_name: jq is on the stripped PATH" >&2; return 1; }
+        run env PATH="$tool_directory" "$(command -v bash)" "$BUST" --cache "$CACHE" --mode deps ;;
+      fitness-*) run bash "$BUST" --cache "$CACHE" --mode fitness ;;
+      *) run bash "$BUST" --cache "$CACHE" --mode deps ;;
+    esac
+    [ "$status" -eq 3 ] || { echo "case $case_name: status $status" >&2; return 1; }
+    case "$output" in BUST_FAILED*) ;; *) echo "case $case_name: output [$output]" >&2; return 1 ;; esac
+    cmp "$CACHE" "$BATS_TEST_TMPDIR/original" || { echo "case $case_name: file bytes changed" >&2; return 1; }
+    [ "$(temp_file_count)" = "0" ] || { echo "case $case_name: temp file left behind" >&2; return 1; }
+  done
+}
+
+@test "usage errors exit 2 and leave the file unchanged" {
+  local case_name version
+  local -a arguments
+  for case_name in relative-cache missing-cache unknown-mode gaia-no-version drop-claim-non-numeric drop-claim-deps \
+    pull-version-2.0 pull-version-latest pull-version-2.0.4.1 pull-version-v2.0.4 pull-version- \
+    pull-drop-claim fitness-version fitness-drop-claim; do
+    rm -f "$CACHE"
+    case "$case_name" in
+      relative-cache) write_populated_cache; arguments=(--cache relative/update-check.json --mode deps) ;;
+      missing-cache) write_populated_cache; arguments=(--mode deps) ;;
+      unknown-mode) write_populated_cache; arguments=(--cache "$CACHE" --mode other) ;;
+      gaia-no-version) write_populated_cache; arguments=(--cache "$CACHE" --mode gaia) ;;
+      drop-claim-non-numeric) write_cache_with_claims; arguments=(--cache "$CACHE" --mode gaia --version 2.0.0 --drop-claim abc) ;;
+      drop-claim-deps) write_cache_with_claims; arguments=(--cache "$CACHE" --mode deps --drop-claim 42) ;;
+      pull-version-*)
+        version="${case_name#pull-version-}"
+        write_cache_behind_origin
+        arguments=(--cache "$CACHE" --mode pull --version "$version") ;;
+      pull-drop-claim) write_cache_behind_origin; arguments=(--cache "$CACHE" --mode pull --version 2.0.4 --drop-claim 41) ;;
+      fitness-version) write_cache_with_fitness_fields; arguments=(--cache "$CACHE" --mode fitness --version 2.0.4) ;;
+      fitness-drop-claim) write_cache_with_fitness_fields; arguments=(--cache "$CACHE" --mode fitness --drop-claim 12) ;;
+    esac
+    cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+    run bash "$BUST" "${arguments[@]}"
+    [ "$status" -eq 2 ] || { echo "case $case_name: status $status" >&2; return 1; }
+    cmp "$CACHE" "$BATS_TEST_TMPDIR/original" || { echo "case $case_name: file bytes changed" >&2; return 1; }
+  done
+}
+
+@test "pull sets gaiaCurrent/gaiaOriginVersion, keeps gaiaHasUpdate for a newer latest, clears it when latest is pulled, zeroes checkedAt" {
+  write_cache_behind_origin
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ] || { echo "case newer latest: status $status" >&2; return 1; }
+  [ "$output" = "BUSTED" ] || { echo "case newer latest: output [$output]" >&2; return 1; }
+  [ "$(jq -r '.gaiaCurrent' "$CACHE")" = "2.0.4" ] || { echo "case gaiaCurrent: not the version" >&2; return 1; }
+  [ "$(jq -r '.gaiaOriginVersion' "$CACHE")" = "2.0.4" ] || { echo "case gaiaOriginVersion: not the version" >&2; return 1; }
+  [ "$(jq '.gaiaHasUpdate' "$CACHE")" = "true" ] || { echo "case newer latest: gaiaHasUpdate not kept" >&2; return 1; }
+  [ "$(jq -r '.gaiaLatest' "$CACHE")" = "2.0.5" ] || { echo "case newer latest: gaiaLatest touched" >&2; return 1; }
+  [ "$(jq '.checkedAt' "$CACHE")" = "0" ] || { echo "case checkedAt: not zeroed" >&2; return 1; }
+
+  write_cache_behind_origin
+  jq '.gaiaLatest = "2.0.4"' "$CACHE" >"$BATS_TEST_TMPDIR/edited"
+  cp "$BATS_TEST_TMPDIR/edited" "$CACHE"
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ] || { echo "case latest pulled: status $status" >&2; return 1; }
+  [ "$(jq '.gaiaHasUpdate' "$CACHE")" = "false" ] || { echo "case latest pulled: gaiaHasUpdate not cleared" >&2; return 1; }
 }

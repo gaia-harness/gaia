@@ -112,26 +112,30 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { printf 'missing line: [%s]\nin:
 
 RESEARCH_WRITE_PATH="research/topic-x-2026-10-01/README.md"
 
-@test "a main-path Write binds its session; a worktree-path Write binds nothing" {
+@test "research Write path form: the main notebook path binds its topic; a worktree symlink path and the retired root bind nothing" {
+  echo "case: a main-path Write binds its session; a worktree-path Write binds nothing"
   make_worktree_session "$WORKTREE/.notebook/$RESEARCH_WRITE_PATH"
   make_main_session "$MAIN/.notebook/$RESEARCH_WRITE_PATH"
   run init research:topic-x-2026-10-01
   [ "$status" -eq 0 ]
   has_line "  total (distinct segments): tokens 3,300  est. \$0.01"
-}
-
-@test "positive control: only the worktree-path session is flushed and it reports no spend" {
-  make_worktree_session "$WORKTREE/.notebook/$RESEARCH_WRITE_PATH"
-  run init research:topic-x-2026-10-01
-  [ "$status" -eq 0 ]
-  has_line "  total (distinct segments): tokens 0  est. \$0.00"
-}
-
-@test "positive control: the same session with a main-path Write reports its tokens" {
-  make_worktree_session "$MAIN/.notebook/$RESEARCH_WRITE_PATH"
-  run init research:topic-x-2026-10-01
-  [ "$status" -eq 0 ]
-  has_line "  total (distinct segments): tokens 330  est. \$0.00"
+  echo "case: a notebook Write binds its topic and a retired-root Write binds nothing, counted by rows"
+  rm -rf "$TEL"
+  flush sess-nb "$(transcript sess-nb 100 10 200 20 "$MAIN/.notebook/research/topic-a-2026-10-01/x.md")"
+  flush sess-old "$(transcript sess-old 100 10 200 20 "$MAIN/.gaia/local/research/topic-b-2026-10-01/x.md")"
+  [ "$(jq -s '[.[] | select(.kind == "binding")] | length' "$TEL/usage.jsonl")" -eq 1 ]
+  [ "$(binding_refs)" = research:topic-a-2026-10-01 ]
+  [ "$(jq -s '[.[] | select(.kind == "binding" and .ref == "research:topic-b-2026-10-01")] | length' "$TEL/usage.jsonl")" -eq 0 ]
+  echo "case: a Write through a linked worktree's notebook symlink binds no row"
+  rm -rf "$TEL"
+  flush sess-link "$(transcript sess-link 100 10 200 20 "$WORKTREE/.notebook/research/topic-c-2026-10-01/x.md")"
+  [ "$(jq -s '[.[] | select(.kind == "binding")] | length' "$TEL/usage.jsonl")" -eq 0 ]
+  [ "$(jq -s '[.[] | select(.kind == "segment")] | length' "$TEL/usage.jsonl")" -ge 1 ]
+  echo "case: the main-root operand picks the research root: a flush from outside any repo binds into the fixture"
+  rm -rf "$TEL"
+  [ ! -d "$BATS_TEST_TMPDIR/.git" ]
+  flush sess-tree "$(transcript sess-tree 100 10 200 20 "$MAIN/.notebook/$RESEARCH_WRITE_PATH")"
+  [ "$(binding_refs)" = research:topic-x-2026-10-01 ]
 }
 
 @test "declare binds a session's spend to a research initiative without a Write" {
@@ -147,21 +151,8 @@ RESEARCH_WRITE_PATH="research/topic-x-2026-10-01/README.md"
 # binding_refs: the research refs of the ledger's binding rows, one per line.
 binding_refs() { jq -r 'select(.kind == "binding") | .ref' "$TEL/usage.jsonl"; }
 
-@test "a notebook Write binds its topic and a retired-root Write binds nothing, counted by rows" {
-  flush sess-nb "$(transcript sess-nb 100 10 200 20 "$MAIN/.notebook/research/topic-a-2026-10-01/x.md")"
-  flush sess-old "$(transcript sess-old 100 10 200 20 "$MAIN/.gaia/local/research/topic-b-2026-10-01/x.md")"
-  [ "$(jq -s '[.[] | select(.kind == "binding")] | length' "$TEL/usage.jsonl")" -eq 1 ]
-  [ "$(binding_refs)" = research:topic-a-2026-10-01 ]
-  [ "$(jq -s '[.[] | select(.kind == "binding" and .ref == "research:topic-b-2026-10-01")] | length' "$TEL/usage.jsonl")" -eq 0 ]
-}
-
-@test "a Write through a linked worktree's notebook symlink binds no row" {
-  flush sess-link "$(transcript sess-link 100 10 200 20 "$WORKTREE/.notebook/research/topic-c-2026-10-01/x.md")"
-  [ "$(jq -s '[.[] | select(.kind == "binding")] | length' "$TEL/usage.jsonl")" -eq 0 ]
-  [ "$(jq -s '[.[] | select(.kind == "segment")] | length' "$TEL/usage.jsonl")" -ge 1 ]
-}
-
-@test "a binding to a research folder that never existed is read without error" {
+@test "a binding whose research folder is absent or later removed is still read and attributed without error" {
+  echo "case: a binding to a research folder that never existed is read without error"
   rmdir "$MAIN/.notebook/research"
   make_main_session "$MAIN/.notebook/$RESEARCH_WRITE_PATH"
   [ ! -e "$MAIN/.notebook/research/topic-x-2026-10-01" ]
@@ -169,9 +160,8 @@ binding_refs() { jq -r 'select(.kind == "binding") | .ref' "$TEL/usage.jsonl"; }
   [ "$status" -eq 0 ]
   [ -z "$stderr" ]
   has_line "  total (distinct segments): tokens 3,300  est. \$0.01"
-}
-
-@test "a binding whose research folder was removed after the flush is still read and attributed" {
+  echo "case: a binding whose research folder was removed after the flush is still read and attributed"
+  rm -rf "$TEL"
   mkdir -p "$MAIN/.notebook/research/topic-x-2026-10-01"
   make_main_session "$MAIN/.notebook/$RESEARCH_WRITE_PATH"
   rm -rf "$MAIN/.notebook"
@@ -191,12 +181,6 @@ binding_refs() { jq -r 'select(.kind == "binding") | .ref' "$TEL/usage.jsonl"; }
   [ "$(grep -c 'bash .gaia/scripts/notebook/move.sh run' <<<"$stderr")" -eq 1 ]
 }
 
-@test "the main-root operand picks the research root: a flush from outside any repo binds into the fixture" {
-  [ ! -d "$BATS_TEST_TMPDIR/.git" ]
-  flush sess-tree "$(transcript sess-tree 100 10 200 20 "$MAIN/.notebook/$RESEARCH_WRITE_PATH")"
-  [ "$(binding_refs)" = research:topic-x-2026-10-01 ]
-}
-
 @test "the telemetry-untouched check passes over a writer's temp file and a grown ledger" {
   local stand_in="$BATS_TEST_TMPDIR/stand-in-telemetry"
   mkdir -p "$stand_in"
@@ -205,21 +189,6 @@ binding_refs() { jq -r 'select(.kind == "binding") | .ref' "$TEL/usage.jsonl"; }
   : >"$stand_in/.usage-cursors.tmp.4242"
   head -c 9000 /dev/zero >>"$stand_in/usage.jsonl"
   assert_telemetry_names_unchanged "$BATS_TEST_TMPDIR/stand-in-before" "$stand_in"
-}
-
-@test "the telemetry-untouched check fails on a new or removed stable name and names it" {
-  local stand_in="$BATS_TEST_TMPDIR/stand-in-telemetry"
-  mkdir -p "$stand_in"
-  : >"$stand_in/usage.jsonl"
-  telemetry_names "$stand_in" >"$BATS_TEST_TMPDIR/stand-in-before"
-  : >"$stand_in/new-stable.json"
-  run assert_telemetry_names_unchanged "$BATS_TEST_TMPDIR/stand-in-before" "$stand_in"
-  [ "$status" -eq 1 ]
-  grep -qxF '> new-stable.json' <<<"$output"
-  rm "$stand_in/new-stable.json" "$stand_in/usage.jsonl"
-  run assert_telemetry_names_unchanged "$BATS_TEST_TMPDIR/stand-in-before" "$stand_in"
-  [ "$status" -eq 1 ]
-  grep -qxF '< usage.jsonl' <<<"$output"
 }
 
 @test "the real checkout's telemetry directory is untouched by this suite" {

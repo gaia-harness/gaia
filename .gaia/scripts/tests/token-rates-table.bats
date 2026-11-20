@@ -55,57 +55,56 @@ rate_for() {
   done
 }
 
-@test "shipped table: claude-opus-5 prices at 5/25 with one unconditional window" {
-  [ "$(rate_for claude-opus-5 2026-07-30)" = "5 25" ]
+# assert_rate <model> <date> <"input output">: the real rate_window resolves
+# the pair, or the failing case is named.
+assert_rate() {
+  local got
+  got="$(rate_for "$1" "$2")"
+  [ "$got" = "$3" ] || { echo "case $1 at $2: got [$got], want [$3]" >&2; return 1; }
+}
 
+# assert_one_window <model>: the model has a single window row.
+assert_one_window() {
+  [ "$(jq -r --arg model "$1" '.models[$model] | length' "$TABLE")" -eq 1 ] || { echo "case $1: not exactly one window" >&2; return 1; }
+}
+
+@test "shipped table: each model prices at its card rate (opus-5 5/25, opus-5-5 4/20, mythos-5 10/50 (the fable-5 tier), sonnet-5 2/10, sonnet-5-5 2/10 across the cut, haiku-5-5 0.1/0.5, fable-5-1 and mythos-5-1 10/50)" {
   # Opus 5's 1M context carries no long-context premium, so a single window with
   # no effective_through is correct: the same rate must resolve at any date.
-  [ "$(rate_for claude-opus-5 2020-01-01)" = "5 25" ]
-  [ "$(jq -r '.models["claude-opus-5"] | length' "$TABLE")" -eq 1 ]
+  assert_rate claude-opus-5 2026-07-30 "5 25" || return 1
+  assert_rate claude-opus-5 2020-01-01 "5 25" || return 1
+  assert_one_window claude-opus-5 || return 1
+  jq -e '.models["claude-opus-5"][0] | has("effective_through") | not' "$TABLE" >/dev/null || { echo "case claude-opus-5: window has effective_through" >&2; return 1; }
 
-  jq -e '.models["claude-opus-5"][0] | has("effective_through") | not' "$TABLE" >/dev/null
-}
+  assert_rate claude-opus-5-5 2026-09-29 "4 20" || return 1
+  assert_rate claude-opus-5-5 2020-01-01 "4 20" || return 1
+  assert_one_window claude-opus-5-5 || return 1
 
-@test "shipped table: claude-opus-5-5 prices at 4/20 with one unconditional window" {
-  [ "$(rate_for claude-opus-5-5 2026-09-29)" = "4 20" ]
-  [ "$(rate_for claude-opus-5-5 2020-01-01)" = "4 20" ]
-  [ "$(jq -r '.models["claude-opus-5-5"] | length' "$TABLE")" -eq 1 ]
-}
+  assert_rate claude-mythos-5 2026-07-30 "10 50" || return 1
+  [ "$(rate_for claude-mythos-5 2026-07-30)" = "$(rate_for claude-fable-5 2026-07-30)" ] || { echo "case claude-mythos-5: differs from the fable-5 tier" >&2; return 1; }
 
-@test "shipped table: claude-mythos-5 prices at 10/50, the fable-5 tier" {
-  [ "$(rate_for claude-mythos-5 2026-07-30)" = "10 50" ]
-  [ "$(rate_for claude-mythos-5 2026-07-30)" = "$(rate_for claude-fable-5 2026-07-30)" ]
-}
-
-@test "shipped table: claude-sonnet-5 prices at 2/10 with one unconditional window" {
   # Launched at 2/10 as intro pricing through 2026-08-31; the scheduled rise to
   # 3/15 was cancelled and 2/10 became the standard price, so a dated second
   # window would overcharge every run after that date.
-  [ "$(rate_for claude-sonnet-5 2026-07-30)" = "2 10" ]
-  [ "$(rate_for claude-sonnet-5 2026-09-01)" = "2 10" ]
-  [ "$(jq -r '.models["claude-sonnet-5"] | length' "$TABLE")" -eq 1 ]
-}
+  assert_rate claude-sonnet-5 2026-07-30 "2 10" || return 1
+  assert_rate claude-sonnet-5 2026-09-01 "2 10" || return 1
+  assert_one_window claude-sonnet-5 || return 1
 
-@test "shipped table: claude-sonnet-5-5 prices at 2/10 on both sides of the cache-read cut" {
   # Only the cache-read rate changed on 2026-10-07, so both windows resolve
-  # 2/10; the cache-read tests below assert the cut itself.
-  [ "$(rate_for claude-sonnet-5-5 2020-01-01)" = "2 10" ]
-  [ "$(rate_for claude-sonnet-5-5 2026-10-06)" = "2 10" ]
-  [ "$(rate_for claude-sonnet-5-5 2026-10-07)" = "2 10" ]
-  [ "$(rate_for claude-sonnet-5-5 2030-01-01)" = "2 10" ]
-}
+  # 2/10; the cache-read test below asserts the cut itself.
+  assert_rate claude-sonnet-5-5 2020-01-01 "2 10" || return 1
+  assert_rate claude-sonnet-5-5 2026-10-06 "2 10" || return 1
+  assert_rate claude-sonnet-5-5 2026-10-07 "2 10" || return 1
+  assert_rate claude-sonnet-5-5 2030-01-01 "2 10" || return 1
 
-@test "shipped table: claude-haiku-5-5 prices at the short-prompt card, 0.1/0.5, with no dated window" {
   # The table holds one rate per window, so a prompt over 100k tokens, which the
   # card prices 5x higher, is priced at this short-prompt rate: a lower bound.
-  [ "$(rate_for claude-haiku-5-5 2026-10-07)" = "0.1 0.5" ]
-  [ "$(rate_for claude-haiku-5-5 2030-01-01)" = "0.1 0.5" ]
-  jq -e '.models["claude-haiku-5-5"] | all(has("effective_through") | not)' "$TABLE" >/dev/null
-}
+  assert_rate claude-haiku-5-5 2026-10-07 "0.1 0.5" || return 1
+  assert_rate claude-haiku-5-5 2030-01-01 "0.1 0.5" || return 1
+  jq -e '.models["claude-haiku-5-5"] | all(has("effective_through") | not)' "$TABLE" >/dev/null || { echo "case claude-haiku-5-5: has a dated window" >&2; return 1; }
 
-@test "shipped table: claude-fable-5-1 and claude-mythos-5-1 price at 10/50" {
-  [ "$(rate_for claude-fable-5-1 2026-09-30)" = "10 50" ]
-  [ "$(rate_for claude-mythos-5-1 2026-09-30)" = "10 50" ]
+  assert_rate claude-fable-5-1 2026-09-30 "10 50" || return 1
+  assert_rate claude-mythos-5-1 2026-09-30 "10 50" || return 1
 }
 
 # price_cache_read <model> <tokens> [<date>] -> dollars for a cache_read-only
@@ -119,25 +118,30 @@ price_cache_read() {
     <<<'null' 2>/dev/null
 }
 
-@test "shipped table: cache reads use the per-window multiplier where the price card sets one" {
-  # 1M cache-read tokens. The published card prices these cache hits below the
-  # global 0.1x: Opus 5.5 at 0.05x of $4, Fable 5.1 and Mythos 5.1 at 0.025x of $10.
-  [ "$(price_cache_read claude-opus-5-5 1000000)" = "0.2" ]
-  [ "$(price_cache_read claude-fable-5-1 1000000)" = "0.25" ]
-  [ "$(price_cache_read claude-mythos-5-1 1000000)" = "0.25" ]
-
-  # Sonnet 5.5 cache reads are 0.05x of $2 from the 2026-10-07 cut on.
-  [ "$(price_cache_read claude-sonnet-5-5 1000000 2026-10-07)" = "0.1" ]
-  [ "$(price_cache_read claude-sonnet-5-5 1000000 2030-01-01)" = "0.1" ]
+# assert_cache_read <model> <date or ""> <dollars for 1M tokens>
+assert_cache_read() {
+  local got
+  got="$(price_cache_read "$1" 1000000 "$2")"
+  [ "$got" = "$3" ] || { echo "case $1 ${2:-default date}: got [$got], want [$3]" >&2; return 1; }
 }
 
-@test "shipped table: cache reads fall back to the global multiplier without an override" {
+@test "shipped table: cache reads price at the per-window multiplier or fall back to the global one" {
+  # 1M cache-read tokens. The published card prices these cache hits below the
+  # global 0.1x: Opus 5.5 at 0.05x of $4, Fable 5.1 and Mythos 5.1 at 0.025x of $10.
+  assert_cache_read claude-opus-5-5 "" 0.2 || return 1
+  assert_cache_read claude-fable-5-1 "" 0.25 || return 1
+  assert_cache_read claude-mythos-5-1 "" 0.25 || return 1
+
+  # Sonnet 5.5 cache reads are 0.05x of $2 from the 2026-10-07 cut on.
+  assert_cache_read claude-sonnet-5-5 2026-10-07 0.1 || return 1
+  assert_cache_read claude-sonnet-5-5 2030-01-01 0.1 || return 1
+
   # Sonnet 5.5 before the cut, Fable 5, and Haiku 5.5 carry no override: 0.1x
   # of $2, of $10, and of $0.10. 2026-10-06 is the pre-cut window's last day.
-  [ "$(price_cache_read claude-sonnet-5-5 1000000)" = "0.2" ]
-  [ "$(price_cache_read claude-sonnet-5-5 1000000 2026-10-06)" = "0.2" ]
-  [ "$(price_cache_read claude-fable-5 1000000)" = "1" ]
-  [ "$(price_cache_read claude-haiku-5-5 1000000 2026-10-07)" = "0.01" ]
+  assert_cache_read claude-sonnet-5-5 "" 0.2 || return 1
+  assert_cache_read claude-sonnet-5-5 2026-10-06 0.2 || return 1
+  assert_cache_read claude-fable-5 "" 1 || return 1
+  assert_cache_read claude-haiku-5-5 2026-10-07 0.01 || return 1
 }
 
 @test "shipped table: the model key set is exactly this, and every window array is non-empty" {
