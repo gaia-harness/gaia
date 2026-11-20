@@ -171,36 +171,57 @@ describe('the MSW seed surface', () => {
     });
   });
 
-  test('a record that does not match the server schema fails naming its collection, index and field', async () => {
-    await expect(
-      seedRecords(baseURL, 'seedFixtures', [
-        {id: crypto.randomUUID(), name: 'Saw', quantity: 2},
-        {id: crypto.randomUUID(), name: 'Drill', quantity: 'two'},
-      ])
-    ).rejects.toThrow(
-      /^Seed seedFixtures\[1\] does not match the server schema: quantity: /u
-    );
-  });
+  test.each(
+    [
+      {
+        collection: 'seedFixtures',
+        message:
+          /^Seed seedFixtures\[1\] does not match the server schema: quantity: /u,
+        name: 'a record that does not match the server schema fails naming its collection, index and field',
+        records: [
+          {id: crypto.randomUUID(), name: 'Saw', quantity: 2},
+          {id: crypto.randomUUID(), name: 'Drill', quantity: 'two'},
+        ],
+      },
+      {
+        collection: 'seedFixture',
+        message:
+          /^No collection "seedFixture" in test\/mocks\/database\.ts; it has: .*\bseedFixtures\b/u,
+        name: 'an unknown collection fails naming the collections it has',
+        records: [{}],
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'seedRecords refuses a bad record or an unknown collection: %s',
+    async (_name, {collection, message, records}) => {
+      await expect(seedRecords(baseURL, collection, records)).rejects.toThrow(
+        message
+      );
+    }
+  );
 
-  test('an unknown collection fails naming the collections it has', async () => {
-    await expect(seedRecords(baseURL, 'seedFixture', [{}])).rejects.toThrow(
-      /^No collection "seedFixture" in test\/mocks\/database\.ts; it has: .*\bseedFixtures\b/u
-    );
-  });
+  test.each(
+    [
+      {
+        header: 'x-gaia-msw-unhandled',
+        name: 'a request no handler matches is reported as unhandled',
+        url: 'https://unmocked.test/x',
+      },
+      {
+        header: 'x-gaia-msw-network-error',
+        name: 'a mock that answers a network error is reported as one, not as an HTTP failure',
+        url: NETWORK_ERROR_URL,
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'the forward endpoint reports unhandled and network-error mocks: %s',
+    async (_name, {header, url}) => {
+      const response = await forward(url);
 
-  test('a request no handler matches is reported as unhandled', async () => {
-    const response = await forward('https://unmocked.test/x');
-
-    expect(response.status).toBe(204);
-    expect(response.headers.get('x-gaia-msw-unhandled')).toBe('true');
-  });
-
-  test('a mock that answers a network error is reported as one, not as an HTTP failure', async () => {
-    const response = await forward(NETWORK_ERROR_URL);
-
-    expect(response.status).toBe(204);
-    expect(response.headers.get('x-gaia-msw-network-error')).toBe('true');
-  });
+      expect(response.status).toBe(204);
+      expect(response.headers.get(header)).toBe('true');
+    }
+  );
 });
 
 describe('a baseline reset that fails', () => {

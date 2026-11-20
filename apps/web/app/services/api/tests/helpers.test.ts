@@ -4,41 +4,72 @@ import type {ZodError} from 'zod';
 import {z} from 'zod';
 import {attempt} from '../helpers';
 
+const buildHttpError = (): HTTPError =>
+  new HTTPError(
+    new Response('', {status: 404, statusText: 'Not Found'}),
+    new Request('https://example.test'),
+    {} as never
+  );
+
+const buildZodError = (): ZodError => {
+  try {
+    z.literal(['secret-option']).parse(123);
+  } catch (error) {
+    return error as ZodError;
+  }
+
+  throw new Error('expected the parse to throw');
+};
+
+const noExtraCheck = (): void => {};
+
 describe('attempt', () => {
-  test('HTTPError: resolves to [{status, statusText}, undefined]', async () => {
-    const response = new Response('', {status: 404, statusText: 'Not Found'});
-    const request = new Request('https://example.test');
-    const httpError = new HTTPError(response, request, {} as never);
+  test.each(
+    [
+      {
+        buildThrown: buildHttpError,
+        expected: {status: 404, statusText: 'Not Found'},
+        name: 'an HTTPError keeps its status and statusText',
+        verifyThrown: noExtraCheck,
+      },
+      {
+        // The thrown message carries the issue text, the statusText must not.
+        buildThrown: buildZodError,
+        expected: {
+          status: 500,
+          statusText: 'Response failed schema validation',
+        },
+        name: 'a ZodError resolves to a constant statusText that carries no issue text',
+        verifyThrown: (thrown: unknown) => {
+          expect((thrown as ZodError).message).toContain('secret-option');
+        },
+      },
+      {
+        buildThrown: () => 'something unexpected',
+        expected: {status: 500, statusText: 'Unknown error'},
+        name: 'a thrown string resolves to Unknown error',
+        verifyThrown: noExtraCheck,
+      },
+      {
+        buildThrown: () => null,
+        expected: {status: 500, statusText: 'Unknown error'},
+        name: 'a thrown null resolves to Unknown error',
+        verifyThrown: noExtraCheck,
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'attempt maps each thrown value to a status tuple: %s',
+    async (_name, {buildThrown, expected, verifyThrown}) => {
+      const thrown = buildThrown();
 
-    const attemptOutcome = await attempt(async () => {
-      throw httpError;
-    });
+      const attemptOutcome = await attempt(async () => {
+        throw thrown;
+      });
 
-    expect(attemptOutcome).toEqual([
-      {status: 404, statusText: 'Not Found'},
-      undefined,
-    ]);
-  });
-
-  test('ZodError: resolves to a constant statusText that carries no issue text', async () => {
-    let zodError: ZodError;
-
-    try {
-      z.literal(['secret-option']).parse(123);
-    } catch (error) {
-      zodError = error as ZodError;
+      expect(attemptOutcome).toEqual([expected, undefined]);
+      verifyThrown(thrown);
     }
-
-    const attemptOutcome = await attempt(async () => {
-      throw zodError!;
-    });
-
-    expect(attemptOutcome).toEqual([
-      {status: 500, statusText: 'Response failed schema validation'},
-      undefined,
-    ]);
-    expect(zodError!.message).toContain('secret-option');
-  });
+  );
 
   test('programming error: rejects', async () => {
     const programmingError = new TypeError('Cannot read properties');
@@ -49,18 +80,4 @@ describe('attempt', () => {
       })
     ).rejects.toBe(programmingError);
   });
-
-  test.each(['something unexpected', null])(
-    'non-Error throw (%o): resolves to [{status: 500, statusText: "Unknown error"}, undefined]',
-    async (thrownValue) => {
-      const attemptOutcome = await attempt(async () => {
-        throw thrownValue;
-      });
-
-      expect(attemptOutcome).toEqual([
-        {status: 500, statusText: 'Unknown error'},
-        undefined,
-      ]);
-    }
-  );
 });

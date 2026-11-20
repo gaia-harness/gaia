@@ -159,34 +159,37 @@ afterEach(async () => {
 });
 
 describe('config', () => {
-  test('serve pins the resolved dev port with strictPort', async () => {
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
-    const plugin = await loadPlugin();
+  test.each(
+    [
+      {
+        expectedPort: 5199,
+        name: 'serve pins the resolved dev port with strictPort',
+        override: undefined,
+      },
+      {
+        expectedPort: 5321,
+        name: 'a named port override replaces the tree port and keeps strictPort',
+        override: '5321',
+      },
+      {
+        expectedPort: 5199,
+        name: 'a malformed port override is ignored',
+        override: 'abc',
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'config pins the resolved or overridden dev port: %s',
+    async (_name, {expectedPort, override}) => {
+      resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
 
-    expect(plugin.config({}, {command: 'serve'})).toEqual({
-      server: {port: 5199, strictPort: true},
-    });
-  });
+      vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', override);
+      const plugin = await loadPlugin();
 
-  test('a named port override replaces the tree port and keeps strictPort', async () => {
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
-    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', '5321');
-    const plugin = await loadPlugin();
-
-    expect(plugin.config({}, {command: 'serve'})).toEqual({
-      server: {port: 5321, strictPort: true},
-    });
-  });
-
-  test('a malformed port override is ignored', async () => {
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
-    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', 'abc');
-    const plugin = await loadPlugin();
-
-    expect(plugin.config({}, {command: 'serve'})).toEqual({
-      server: {port: 5199, strictPort: true},
-    });
-  });
+      expect(plugin.config({}, {command: 'serve'})).toEqual({
+        server: {port: expectedPort, strictPort: true},
+      });
+    }
+  );
 
   test('build returns nothing port-related and never throws on a missing port file', async () => {
     resolveDevPortsMock.mockReturnValue({
@@ -243,15 +246,33 @@ describe('configureServer refusals', () => {
     }
   );
 
-  test('the override port is probed in place of the tree port', async () => {
-    const treePort = await findFreePort();
-    heldServers.push(await listenOn(treePort, '127.0.0.1'));
-    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', String(await findFreePort()));
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(treePort));
-    const plugin = await loadPlugin();
+  test.each(
+    [
+      {
+        arrange: async (treePort: number): Promise<void> => {
+          heldServers.push(await listenOn(treePort, '127.0.0.1'));
+          vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', String(await findFreePort()));
+        },
+        name: 'the override port is probed in place of the tree port',
+      },
+      {
+        arrange: async (): Promise<void> => {},
+        name: 'a free port resolves',
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'configureServer resolves on a free port and probes the override: %s',
+    async (_name, {arrange}) => {
+      const treePort = await findFreePort();
+      await arrange(treePort);
+      resolveDevPortsMock.mockReturnValue(buildResolvedResolution(treePort));
+      const plugin = await loadPlugin();
 
-    await expect(plugin.configureServer(makeServer())).resolves.toBeUndefined();
-  });
+      await expect(
+        plugin.configureServer(makeServer())
+      ).resolves.toBeUndefined();
+    }
+  );
 
   test('a taken override port rejects naming the override port', async () => {
     const overridePort = await findFreePort();
@@ -265,15 +286,6 @@ describe('configureServer refusals', () => {
     await expect(plugin.configureServer(makeServer())).rejects.toThrow(
       `port ${overridePort}`
     );
-  });
-
-  test('a free port resolves', async () => {
-    resolveDevPortsMock.mockReturnValue(
-      buildResolvedResolution(await findFreePort())
-    );
-    const plugin = await loadPlugin();
-
-    await expect(plugin.configureServer(makeServer())).resolves.toBeUndefined();
   });
 });
 
@@ -346,45 +358,66 @@ describe('config restart', () => {
   });
 });
 
+const expectNoRecorder = (): void => {
+  expect(spawnMock).not.toHaveBeenCalled();
+};
+
+const expectOneRecorder = (treeRoot: string): void => {
+  expect(spawnMock).toHaveBeenCalledTimes(1);
+  expect(spawnMock).toHaveBeenCalledWith(
+    'bash',
+    [
+      path.join(treeRoot, '.gaia', 'scripts', 'server-process-lib.sh'),
+      '--record-launch',
+      '--pid',
+      String(process.pid),
+      '--port',
+      '5301',
+      '--kind',
+      'dev',
+      '--tree',
+      treeRoot,
+    ],
+    {detached: true, stdio: 'ignore'}
+  );
+};
+
+const makeTreeWithoutScript = (): string => {
+  sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-plugin-'));
+
+  return sandbox;
+};
+
 describe('launch recording', () => {
-  test('with no session id nothing is spawned', async () => {
-    resolveDevPortsMock.mockReturnValue(
-      buildResolvedResolution(await findFreePort())
-    );
-    await listenWith(makeTreeWithScript());
+  test.each(
+    [
+      {
+        expectRecorder: expectNoRecorder,
+        makeTree: makeTreeWithScript,
+        name: 'with no session id nothing is spawned',
+        sessionId: undefined,
+      },
+      {
+        expectRecorder: expectOneRecorder,
+        makeTree: makeTreeWithScript,
+        name: 'with a session id and the script present exactly one detached recorder is spawned',
+        sessionId: 'session-two',
+      },
+      {
+        expectRecorder: expectNoRecorder,
+        makeTree: makeTreeWithoutScript,
+        name: 'with a session id but no script nothing is spawned',
+        sessionId: 'session-three',
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'launch recording spawns one recorder only with a session id and the script: %s',
+    async (_name, {expectRecorder, makeTree, sessionId}) => {
+      vi.stubEnv('CLAUDE_CODE_SESSION_ID', sessionId);
+      const treeRoot = makeTree();
+      await listenWith(treeRoot);
 
-    expect(spawnMock).not.toHaveBeenCalled();
-  });
-
-  test('with a session id and the script present exactly one detached recorder is spawned', async () => {
-    process.env.CLAUDE_CODE_SESSION_ID = 'session-two';
-    const treeRoot = makeTreeWithScript();
-    await listenWith(treeRoot);
-
-    expect(spawnMock).toHaveBeenCalledTimes(1);
-    expect(spawnMock).toHaveBeenCalledWith(
-      'bash',
-      [
-        path.join(treeRoot, '.gaia', 'scripts', 'server-process-lib.sh'),
-        '--record-launch',
-        '--pid',
-        String(process.pid),
-        '--port',
-        '5301',
-        '--kind',
-        'dev',
-        '--tree',
-        treeRoot,
-      ],
-      {detached: true, stdio: 'ignore'}
-    );
-  });
-
-  test('with a session id but no script nothing is spawned', async () => {
-    process.env.CLAUDE_CODE_SESSION_ID = 'session-three';
-    sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-plugin-'));
-    await listenWith(sandbox);
-
-    expect(spawnMock).not.toHaveBeenCalled();
-  });
+      expectRecorder(treeRoot);
+    }
+  );
 });

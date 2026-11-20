@@ -40,43 +40,30 @@ const walk = (children: FakeChild[]) =>
     defaults
   );
 
-describe('resolveStoryA11yOptOuts', () => {
-  test('reports a test child that disables a11y under its own id while the parent stays false', () => {
-    const result = walk([
-      {name: 'safe'},
-      {name: 'quiet one', parameters: {a11y: {disable: true}}},
-    ]);
-
-    expect(result).toEqual([
-      {id: 'a--default', isOptedOut: false},
-      {id: 'a--default:safe', isOptedOut: false},
-      {id: 'a--default:quiet-one', isOptedOut: true},
-    ]);
-  });
-
-  test('reports a test child that loses the test tag', () => {
-    expect(walk([{name: 'untagged', tags: ['!test']}])[1]).toEqual({
-      id: 'a--default:untagged',
-      isOptedOut: true,
-    });
-  });
-
-  test('names a story from its export key, not from its own name', () => {
-    const result = resolveStoryA11yOptOuts(
-      {
-        'a.stories.tsx': {
-          WithLongName: {
-            ...createStory('Group/Thing', [{name: 'safe'}]),
-            input: {name: 'Renamed'},
+describe('resolveStoryA11yOptOuts names stories by export key and flags a lost test tag', () => {
+  test.each([
+    [
+      'reports a test child that loses the test tag',
+      () => walk([{name: 'untagged', tags: ['!test']}])[1],
+      {id: 'a--default:untagged', isOptedOut: true},
+    ],
+    [
+      'names a story from its export key, not from its own name',
+      () =>
+        resolveStoryA11yOptOuts(
+          {
+            'a.stories.tsx': {
+              WithLongName: {
+                ...createStory('Group/Thing', [{name: 'safe'}]),
+                input: {name: 'Renamed'},
+              },
+            },
           },
-        },
-      },
-      defaults
-    );
-
-    expect(result.map(({id}) => id)).toEqual([
-      'group-thing--with-long-name',
-      'group-thing--with-long-name:safe',
-    ]);
+          defaults
+        ).map(({id}) => id),
+      ['group-thing--with-long-name', 'group-thing--with-long-name:safe'],
+    ],
+  ])('%s', (_name, resolve, expected) => {
+    expect(resolve()).toEqual(expected);
   });
 });

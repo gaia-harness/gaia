@@ -81,13 +81,16 @@ const findBadTokens = (
     return stylelintOklch.test(value) ? [] : [`${name}: ${value}`];
   });
 
-describe('theme tokens', () => {
-  test(':root defines every required token in stylelint oklch form, plus --radius', () => {
-    expect(findBadTokens(rootTokens, requiredTokens)).toEqual([]);
-    expect(rootTokens.has('--radius')).toBe(true);
-  });
+describe('theme.css defines every required token in oklch form', () => {
+  test.each([
+    [':root', rootTokens, ['--radius']],
+    ['.dark', darkTokens, []],
+  ])(
+    '%s defines every required token in stylelint oklch form',
+    (_block, tokens, extraTokens) => {
+      expect(findBadTokens(tokens, requiredTokens)).toEqual([]);
 
-  test('.dark defines every required token in stylelint oklch form', () => {
-    expect(findBadTokens(darkTokens, requiredTokens)).toEqual([]);
-  });
+      for (const name of extraTokens) expect(tokens.has(name)).toBe(true);
+    }
+  );
 });

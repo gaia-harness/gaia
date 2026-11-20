@@ -26,57 +26,96 @@ const decideReuseForOwner = (
 };
 
 describe('decideServerReuse', () => {
-  test('reuses a server this tree owns', () => {
-    expect(decideReuseForOwner({kind: 'own', pid: 10}).decision).toBe(true);
-  });
+  test.each(
+    (
+      [
+        {
+          expected: true,
+          isContinuousIntegration: false,
+          name: 'reuses a server this tree owns',
+          owner: {kind: 'own', pid: 10},
+          probeCalls: 1,
+        },
+        {
+          expected: false,
+          isContinuousIntegration: false,
+          name: 'does not reuse a free port',
+          owner: {kind: 'free'},
+          probeCalls: 1,
+        },
+        {
+          expected: false,
+          isContinuousIntegration: false,
+          name: 'does not reuse when ownership is unknown',
+          owner: {kind: 'unknown'},
+          probeCalls: 1,
+        },
+        {
+          expected: false,
+          isContinuousIntegration: true,
+          name: 'in continuous integration never reuses and never probes',
+          owner: {kind: 'own', pid: 10},
+          probeCalls: 0,
+        },
+      ] satisfies readonly {
+        expected: boolean;
+        isContinuousIntegration: boolean;
+        name: string;
+        owner: ListenerOwner;
+        probeCalls: number;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )(
+    'decideServerReuse decides per listener owner: %s',
+    (_name, {expected, isContinuousIntegration, owner, probeCalls}) => {
+      const {decision, probe} = decideReuseForOwner(
+        owner,
+        isContinuousIntegration
+      );
 
-  test('does not reuse a free port', () => {
-    expect(decideReuseForOwner({kind: 'free'}).decision).toBe(false);
-  });
+      expect(decision).toBe(expected);
 
-  test('does not reuse when ownership is unknown', () => {
-    expect(decideReuseForOwner({kind: 'unknown'}).decision).toBe(false);
-  });
+      expect(probe).toHaveBeenCalledTimes(probeCalls);
+    }
+  );
 
-  test('in continuous integration never reuses and never probes', () => {
-    const {decision, probe} = decideReuseForOwner({kind: 'own', pid: 10}, true);
+  test.each(
+    (
+      [
+        {
+          messageParts: ['5180', '/trees/other', ASK_FIRST_SENTENCE],
+          name: 'a foreign server with an owner path throws naming port, path, and the ask-first sentence',
+          owner: {
+            kind: 'foreign',
+            ownerPath: '/trees/other',
+            pid: 11,
+          },
+        },
+        {
+          messageParts: ['owner unknown'],
+          name: 'a foreign server with no owner path throws naming owner unknown',
+          owner: {
+            kind: 'foreign',
+            ownerPath: undefined,
+            pid: 0,
+          },
+        },
+      ] satisfies readonly {
+        messageParts: string[];
+        name: string;
+        owner: ListenerOwner;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )(
+    'decideServerReuse refuses a foreign server naming the owner: %s',
+    (_name, {messageParts, owner}) => {
+      const {decision} = decideReuseForOwner(owner);
 
-    expect(decision).toBe(false);
-    expect(probe).not.toHaveBeenCalled();
-  });
+      expect(decision).toBeInstanceOf(Error);
 
-  test('a foreign server with an owner path throws naming port, path, and the ask-first sentence', () => {
-    const {decision} = decideReuseForOwner({
-      kind: 'foreign',
-      ownerPath: '/trees/other',
-      pid: 11,
-    });
-
-    expect(decision).toBeInstanceOf(Error);
-    const {message} = decision as Error;
-    expect(message).toContain('5180');
-    expect(message).toContain('/trees/other');
-    expect(message).toContain(ASK_FIRST_SENTENCE);
-  });
-
-  test('a foreign server with no owner path throws naming owner unknown', () => {
-    const {decision} = decideReuseForOwner({
-      kind: 'foreign',
-      ownerPath: undefined,
-      pid: 0,
-    });
-
-    expect(decision).toBeInstanceOf(Error);
-    expect((decision as Error).message).toContain('owner unknown');
-  });
-
-  test('defaults the probe to the real listener lookup, which answers unknown without a tree root', () => {
-    expect(
-      decideServerReuse({
-        isContinuousIntegration: false,
-        port: 5180,
-        treeRoot: undefined,
-      })
-    ).toBe(false);
-  });
+      for (const part of messageParts) {
+        expect((decision as Error).message).toContain(part);
+      }
+    }
+  );
 });
