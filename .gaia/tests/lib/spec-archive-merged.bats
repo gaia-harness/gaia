@@ -288,16 +288,17 @@ past the retention window with its run recorded is reaped|30|days:45|yes|reaped|
 no merged_at is kept regardless of representation|0|none|no|kept|yes|no
 an unparseable merged_at is kept regardless of representation|0|not-a-timestamp|no|kept|yes|no
 GAIA_SPEC_RETENTION_DAYS=0 reaps a just-merged recorded folder|0|days:0|yes|reaped|no|no
-GAIA_SPEC_RETENTION_DAYS=99999 keeps an old merged folder|99999|days:400|no|kept|no|no
-a non-numeric GAIA_SPEC_RETENTION_DAYS keeps a 10-day-old folder under the 30-day default|abc|days:10|no|kept|no|no
+GAIA_SPEC_RETENTION_DAYS=99999 keeps an old merged folder|99999|days:400|yes|kept|no|no
+a non-numeric GAIA_SPEC_RETENTION_DAYS keeps a 10-day-old folder under the 30-day default|abc|days:10|yes|kept|no|no
 a non-numeric GAIA_SPEC_RETENTION_DAYS reaps a 45-day-old recorded folder under the 30-day default|abc|days:45|yes|reaped|no|no
-a within-window consolidated folder stays kept with and without --close|30|days:2|no|kept|no|yes
+a within-window consolidated folder stays kept with and without --close|30|days:2|yes|kept|no|yes
 CASES
 }
 
 # --- the consolidation gate ---------------------------------------------------
 
 _consolidation_close_does_not_bypass() {
+  _seed_close spec:SPEC-001 gaia-spec
   rm -f "$REPO/$SPECS/SPEC-001/SUMMARY.md"
 
   run bash "$REPO/$ARCHIVE" "$REPO" SPEC-001 --close

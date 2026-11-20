@@ -268,6 +268,8 @@ reset_case() {
   [ "$status" -eq 0 ]
   grep -qF -- 'evil-branch' "$BODY_LOG" "$GH_LOG" && return 1
   grep -qF -- 'hostile' "$BODY_LOG" "$GH_LOG" && return 1
+  # The script never reads the free-text event fields, so none can reach a body.
+  grep -qE 'head_commit|GITHUB_REF_NAME|GITHUB_HEAD_REF|github\.event|GITHUB_EVENT_PATH' "$SCRIPT" && return 1
   true
 }
 
