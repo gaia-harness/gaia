@@ -53,9 +53,7 @@ describe('coveredClassesFromRules', () => {
     {
       expected: ['axe/color-contrast', 'knip/exports'],
       files: {
-        // The one marker with a shortened tail, on purpose: the binder is
-        // prefix-bound and tail-agnostic. Every other fixture uses
-        // markerComment(...) so it cannot drift.
+        // Shortened tail on purpose: the binder is prefix-bound and tail-agnostic.
         'a.md':
           '<!-- gaia-harden: promoted from recurring finding_class axe/color-contrast; never for non-recurrence -->',
         'b.md': markerComment('knip/exports'),
