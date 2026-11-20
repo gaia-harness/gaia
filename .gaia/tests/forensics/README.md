@@ -6,7 +6,7 @@ Maintainer-only fixture suite for the `/gaia-forensics` skill. Excluded from the
 
 Each `*.bats` file's header comment names the UAT or TST ids it binds and what it asserts; this page does not restate them.
 
-The triage workflow's manual (layer C) checklist and coverage map: `integration.md` (`## Coverage map`). Its UAT ids number the triage workflow, not the skill ids the suite headers name. The skill's UAT-001 and UAT-002 are covered through the fixture inputs and golden files (the golden-file tests in `01-redaction-roundtrip.bats` and `03-strict-schema.bats`).
+UAT coverage: `integration.md`.
 
 ## Library
 
