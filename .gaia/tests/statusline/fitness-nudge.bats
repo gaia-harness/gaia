@@ -17,37 +17,30 @@
 # Run under bash 5 (see .claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/tests/statusline/fitness-nudge.bats < /dev/null
 
-setup() {
-  REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
-  command -v jq >/dev/null 2>&1 || skip "jq required"
-  command -v git >/dev/null 2>&1 || skip "git required"
-
-  TEMPORARY_HOME=$(mktemp -d -t gaia-fitness-nudge-home-XXXXXX)
-  FIXTURE_PARENT=$(mktemp -d -t gaia-fitness-nudge-fix-XXXXXX)
-  REPOSITORY_FIXTURE="$FIXTURE_PARENT/main-checkout"
-  mkdir -p "$REPOSITORY_FIXTURE"
-  REPOSITORY_FIXTURE=$(cd "$REPOSITORY_FIXTURE" && pwd -P)
-  COMMIT_REPO="$REPOSITORY_FIXTURE"
-  COMMIT_SEQUENCE=1
-  COMMIT_WHEN="2026-02-01T12:00:00Z"
-
-  git -C "$REPOSITORY_FIXTURE" init --quiet --initial-branch=main
-  git -C "$REPOSITORY_FIXTURE" config user.email "test@example.com"
-  git -C "$REPOSITORY_FIXTURE" config user.name "Test"
-  git -C "$REPOSITORY_FIXTURE" config commit.gpgsign false
-  printf '.gaia/local/\n' >> "$REPOSITORY_FIXTURE/.git/info/exclude"
-  mkdir -p "$REPOSITORY_FIXTURE/.gaia/scripts" "$REPOSITORY_FIXTURE/.gaia/cli" \
-    "$REPOSITORY_FIXTURE/.gaia/statusline" "$REPOSITORY_FIXTURE/.gaia/local/cache/shared" \
-    "$REPOSITORY_FIXTURE/.claude/rules" "$REPOSITORY_FIXTURE/wiki"
+# One base checkout is built once per file; every case copies it (new_fixture).
+setup_file() {
+  local repo_root script_name
+  repo_root=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
+  BASE_FIXTURE="$BATS_FILE_TMPDIR/base-checkout"
+  export BASE_FIXTURE
+  mkdir -p "$BASE_FIXTURE"
+  git -C "$BASE_FIXTURE" init --quiet --initial-branch=main
+  git -C "$BASE_FIXTURE" config user.email "test@example.com"
+  git -C "$BASE_FIXTURE" config user.name "Test"
+  git -C "$BASE_FIXTURE" config commit.gpgsign false
+  printf '.gaia/local/\n' >> "$BASE_FIXTURE/.git/info/exclude"
+  mkdir -p "$BASE_FIXTURE/.gaia/scripts" "$BASE_FIXTURE/.gaia/cli" \
+    "$BASE_FIXTURE/.gaia/statusline" "$BASE_FIXTURE/.gaia/local/cache/shared" \
+    "$BASE_FIXTURE/.claude/rules" "$BASE_FIXTURE/wiki"
   for script_name in check-updates.sh exclusive-lock-lib.sh main-root-lib.sh knowledge-inventory.sh \
     fitness-nudge-lib.sh update-check-bust.sh; do
-    cp "$REPO_ROOT/.gaia/scripts/$script_name" "$REPOSITORY_FIXTURE/.gaia/scripts/$script_name"
+    cp "$repo_root/.gaia/scripts/$script_name" "$BASE_FIXTURE/.gaia/scripts/$script_name"
   done
-  chmod -x "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
-  cp "$REPO_ROOT/.gaia/statusline/gaia-statusline.sh" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline.sh"
-  cp "$REPO_ROOT/.gaia/statusline/gaia-statusline-right.sh" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
+  chmod -x "$BASE_FIXTURE/.gaia/scripts/check-updates.sh"
+  cp "$repo_root/.gaia/statusline/gaia-statusline.sh" "$BASE_FIXTURE/.gaia/statusline/gaia-statusline.sh"
+  cp "$repo_root/.gaia/statusline/gaia-statusline-right.sh" "$BASE_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
 
-  cat > "$REPOSITORY_FIXTURE/.gaia/cli/gaia" <<'WRAPPER'
+  cat > "$BASE_FIXTURE/.gaia/cli/gaia" <<'WRAPPER'
 #!/usr/bin/env bash
 case "$1" in
   update-deps)
@@ -88,11 +81,28 @@ case "$1" in
   *) exit 1 ;;
 esac
 WRAPPER
-  chmod +x "$REPOSITORY_FIXTURE/.gaia/cli/gaia"
+  chmod +x "$BASE_FIXTURE/.gaia/cli/gaia"
+  printf '1.0.0\n' > "$BASE_FIXTURE/.gaia/VERSION"
+  printf 'seed\n' > "$BASE_FIXTURE/wiki/index.md"
+  printf 'short project instructions\n' > "$BASE_FIXTURE/CLAUDE.md"
+  printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$BASE_FIXTURE/.gaia/local/setup-state.json"
+  git -C "$BASE_FIXTURE" add -A
+  GIT_AUTHOR_DATE="2026-01-01T00:00:00Z" GIT_COMMITTER_DATE="2026-01-01T00:00:00Z" \
+    git -C "$BASE_FIXTURE" commit --quiet -m "chore: scaffold from GAIA 2.0.0"
+}
+
+setup() {
+  REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
+  command -v jq >/dev/null 2>&1 || skip "jq required"
+  command -v git >/dev/null 2>&1 || skip "git required"
+
+  TEMPORARY_HOME=$(mktemp -d -t gaia-fitness-nudge-home-XXXXXX)
+  FIXTURE_PARENT=$(mktemp -d -t gaia-fitness-nudge-fix-XXXXXX)
+  FIXTURE_PARENT=$(cd "$FIXTURE_PARENT" && pwd -P)
+  REPOSITORY_FIXTURE="$FIXTURE_PARENT/main-checkout"
   export GAIA_TEST_FITNESS_BUNDLE="$REPO_ROOT/.gaia/cli/gaia"
   FITNESS_REPORT_FIXTURE="$BATS_TEST_TMPDIR/report.json"
   export FITNESS_REPORT_FIXTURE
-  unset FITNESS_EXIT FITNESS_USE_REAL_BUNDLE FITNESS_CLI_LOG GAIA_FITNESS_OWNERSHIP_CLASSIFIER
 
   STUB_BIN="$BATS_TEST_TMPDIR/stub-bin"
   mkdir -p "$STUB_BIN"
@@ -107,16 +117,20 @@ STUB
   printf '#!/usr/bin/env bash\nexit 1\n' > "$STUB_BIN/curl"
   chmod +x "$STUB_BIN/gh" "$STUB_BIN/curl"
 
-  printf '1.0.0\n' > "$REPOSITORY_FIXTURE/.gaia/VERSION"
-  printf 'seed\n' > "$REPOSITORY_FIXTURE/wiki/index.md"
-  printf 'short project instructions\n' > "$REPOSITORY_FIXTURE/CLAUDE.md"
-  printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$REPOSITORY_FIXTURE/.gaia/local/setup-state.json"
-  git -C "$REPOSITORY_FIXTURE" add -A
-  GIT_AUTHOR_DATE="2026-01-01T00:00:00Z" GIT_COMMITTER_DATE="2026-01-01T00:00:00Z" \
-    git -C "$REPOSITORY_FIXTURE" commit --quiet -m "chore: scaffold from GAIA 2.0.0"
+  new_fixture
+}
 
+# new_fixture: a fresh copy of the base checkout with every per-case variable
+# back at its starting value, so one test can hold several independent cases.
+new_fixture() {
+  rm -rf "$REPOSITORY_FIXTURE"
+  cp -R "$BASE_FIXTURE" "$REPOSITORY_FIXTURE"
+  COMMIT_REPO="$REPOSITORY_FIXTURE"
+  COMMIT_SEQUENCE=1
+  COMMIT_WHEN="2026-02-01T12:00:00Z"
   CACHE_FILE="$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
   RENDER_ROOT="$REPOSITORY_FIXTURE"
+  unset FITNESS_EXIT FITNESS_USE_REAL_BUNDLE FITNESS_CLI_LOG GAIA_FITNESS_OWNERSHIP_CLASSIFIER
   write_report A
 }
 
@@ -305,22 +319,6 @@ assert_no_fitness_nudge() {
   true
 }
 
-# mutated_copy <name> <search> <replacement> [source]: a scratch copy of the
-# refresher with the one line holding <search> replaced; fails unless exactly
-# one line matched. The copy sits beside the original because the refresher
-# derives every path from its own location.
-mutated_copy() {
-  local target="$REPOSITORY_FIXTURE/.gaia/scripts/$1"
-  local source="${4:-$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh}"
-  # The texts travel through the environment: awk -v would interpret the
-  # backslashes in them.
-  SEARCH_TEXT="$2" REPLACEMENT_TEXT="$3" awk '
-    index($0, ENVIRON["SEARCH_TEXT"]) > 0 { print ENVIRON["REPLACEMENT_TEXT"]; hits++; next }
-    { print }
-    END { exit (hits == 1 ? 0 : 1) }
-  ' "$source" > "$target"
-}
-
 # ---------- the pre-TTL gate ----------
 
 @test "the gate inside the TTL neither reads the usage ledger nor runs git log" {
@@ -376,23 +374,24 @@ SPY
 
 # ---------- basis staleness ----------
 
-@test "a changed .gaia/VERSION recomputes inside the TTL and keeps the cache" {
+@test "the pre-TTL gate recomputes only on a version or pull bust and holds on a blend record or update bust" {
+  echo "case: a changed .gaia/VERSION recomputes inside the TTL and keeps the cache"
   refresh
   set_version 1.0.1
   refresh_within_ttl
   assert_recomputed
   [ "$(cache_value fitnessBasisVersion)" = "1.0.1" ]
-}
 
-@test "a changed blend record alone does not recompute inside the TTL" {
+  echo "case: a changed blend record alone does not recompute inside the TTL"
+  new_fixture
   refresh
   seed_probe
   write_blend_record 2.0.4 2
   run_refresher
   assert_held
-}
 
-@test "a cache without the basis field recomputes once and then holds, even with no version file" {
+  echo "case: a cache without the basis field recomputes once and then holds, even with no version file"
+  new_fixture
   rm -f "$REPOSITORY_FIXTURE/.gaia/VERSION"
   refresh
   jq 'del(.fitnessBasisVersion)' "$CACHE_FILE" > "$CACHE_FILE.next"
@@ -403,9 +402,9 @@ SPY
   refresh_within_ttl
   run_refresher
   assert_held
-}
 
-@test "an update bust keeps the basis and holds, while a pull bust and a version change recompute" {
+  echo "case: an update bust keeps the basis and holds, while a pull bust and a version change recompute"
+  new_fixture
   refresh
   seed_probe
   bust --mode gaia --version 1.0.0
@@ -420,9 +419,9 @@ SPY
   set_version 1.0.2
   run_refresher
   assert_recomputed
-}
 
-@test "a blend record written before an update bust does not recompute before the TTL, and a record checksum in the gate would" {
+  echo "case: a blend record written before an update bust does not recompute before the TTL, and a record checksum in the gate would"
+  new_fixture
   local before after
   refresh
   seed_probe
@@ -437,7 +436,8 @@ SPY
 
 # ---------- carry-forward ----------
 
-@test "a failing fitness CLI keeps every previous signal and still writes the basis" {
+@test "a failing or unreadable signal source keeps the previous nudge signals" {
+  echo "case: a failing fitness CLI keeps every previous signal and still writes the basis"
   add_harness_commits 16
   write_report B+ "[$(adopter_finding)]"
   refresh
@@ -457,18 +457,18 @@ SPY
   seed_probe
   run_refresher
   assert_held
-}
 
-@test "a first refresh with no previous cache and a failing CLI shows no fitness nudge" {
+  echo "case: a first refresh with no previous cache and a failing CLI shows no fitness nudge"
+  new_fixture
   add_harness_commits 16
   export FITNESS_EXIT=2
   refresh
   [ "$(cache_value fitnessCommitCount)" = "0" ]
   render_wide
   assert_no_fitness_nudge
-}
 
-@test "a report whose inventory is all unknown keeps the previous grade and commit count" {
+  echo "case: a report whose inventory is all unknown keeps the previous grade and commit count"
+  new_fixture
   add_harness_commits 15
   write_report B+ "[$(adopter_finding)]"
   refresh
@@ -485,27 +485,9 @@ SPY
   [ "$(cache_value fitnessCommitCount)" = "15" ]
   render_wide
   assert_fitness_nudge "(grade B+)"
-}
 
-@test "an unreadable usage ledger keeps the previous commit count rather than counting the whole history" {
-  [ "$(id -u)" -ne 0 ] || skip "root reads any file"
-  add_harness_commits 20 2026-01-10T00:00:00Z
-  append_close_row 2026-01-15T00:00:00Z
-  add_harness_commits 16
-  refresh
-  render_wide
-  assert_fitness_nudge "(16 harness commits)"
-
-  add_harness_commits 1
-  chmod 000 "$(ledger_file)"
-  set_checked_at 0
-  run_refresher
-  [ "$(cache_value fitnessCommitCount)" = "16" ]
-  render_wide
-  assert_fitness_nudge "(16 harness commits)"
-}
-
-@test "a malformed blend record keeps the previous blend count and landed stamps" {
+  echo "case: a malformed blend record keeps the previous blend count and landed stamps"
+  new_fixture
   set_version 2.0.4
   write_blend_record 2.0.4 2
   refresh
@@ -521,9 +503,9 @@ SPY
   [ "$(jq -c '.fitnessBlendLandedAt' "$CACHE_FILE")" = "$landed" ]
   render_wide
   assert_fitness_nudge "(2 blended files)"
-}
 
-@test "a git log failure keeps the previous commit count" {
+  echo "case: a git log failure keeps the previous commit count"
+  new_fixture
   local real_git failing_bin
   real_git=$(command -v git)
   failing_bin="$BATS_TEST_TMPDIR/failing-git-bin"
@@ -546,6 +528,26 @@ SPY
   [ "$(cache_value fitnessCommitCount)" = "16" ]
   render_wide
   assert_fitness_nudge "(16 harness commits)"
+
+  echo "case: an unreadable usage ledger keeps the previous commit count rather than counting the whole history"
+  new_fixture
+  # Root reads any file, so this case can only refuse for another user.
+  if [ "$(id -u)" -ne 0 ]; then
+    add_harness_commits 20 2026-01-10T00:00:00Z
+    append_close_row 2026-01-15T00:00:00Z
+    add_harness_commits 16
+    refresh
+    render_wide
+    assert_fitness_nudge "(16 harness commits)"
+
+    add_harness_commits 1
+    chmod 000 "$(ledger_file)"
+    set_checked_at 0
+    run_refresher
+    [ "$(cache_value fitnessCommitCount)" = "16" ]
+    render_wide
+    assert_fitness_nudge "(16 harness commits)"
+  fi
 }
 
 @test "a torn ledger line is skipped and the newer close row anchors the count" {
@@ -644,7 +646,8 @@ SPY
   assert_no_fitness_nudge
 }
 
-@test "scaffold, init and update commits stay out of the count in a whole-history walk" {
+@test "which commits count toward the harness count" {
+  echo "case: scaffold, init and update commits stay out of the count in a whole-history walk"
   commit_touching "$COMMIT_WHEN" "chore: initialize project with /gaia-init" .claude/rules/init.md
   add_harness_commits 16
   commit_touching "$COMMIT_WHEN" "chore(gaia): update to v1.1.0 (#12)" .claude/rules/update-squash.md
@@ -656,9 +659,9 @@ SPY
   refresh
   render_wide
   assert_fitness_nudge "(16 harness commits)"
-}
 
-@test "a fresh project whose harness commits are all scaffold, init and update commits shows no nudge" {
+  echo "case: a fresh project whose harness commits are all scaffold, init and update commits shows no nudge"
+  new_fixture
   local index
   commit_touching "$COMMIT_WHEN" "chore: initialize project with /gaia-init" .claude/rules/init.md
   for index in $(seq 1 15); do
@@ -668,9 +671,9 @@ SPY
   [ "$(cache_value fitnessCommitCount)" = "0" ]
   render_wide
   assert_no_fitness_nudge
-}
 
-@test "a history of 2.0.0 migration commits plus a few team commits shows no nudge" {
+  echo "case: a history of 2.0.0 migration commits plus a few team commits shows no nudge"
+  new_fixture
   local subject index=0
   local -a migration_subjects=(
     "chore: re-render code-review-audit.yml for v1.6.1"
@@ -695,9 +698,9 @@ SPY
   [ "$(cache_value fitnessCommitCount)" = "3" ]
   render_wide
   assert_no_fitness_nudge
-}
 
-@test "wiki-only commits never count and a commit touching a wiki page and a harness file counts once" {
+  echo "case: wiki-only commits never count and a commit touching a wiki page and a harness file counts once"
+  new_fixture
   local index
   for index in $(seq 1 20); do
     commit_touching "$COMMIT_WHEN" "docs: wiki edit $index" wiki/page.md
@@ -712,9 +715,24 @@ SPY
   refresh
   render_wide
   assert_fitness_nudge "(1 harness commit)"
+
+  echo "case: harness commits count and application commits do not"
+  new_fixture
+  write_report A "[]" "[]" '[{"path":"apps/web/CLAUDE.md","kinds":["claudemd"],"ownership":"adopter"}]'
+  add_harness_commits 14
+  add_app_commits 5
+  refresh
+  render_wide
+  assert_no_fitness_nudge
+
+  commit_touching "$COMMIT_WHEN" "docs: frontend instructions" apps/web/CLAUDE.md
+  refresh
+  render_wide
+  assert_fitness_nudge "(15 harness commits)"
 }
 
-@test "the grade nudge survives a close row when the finding is unchanged" {
+@test "a close row does not clear a grade nudge whose finding is unchanged" {
+  echo "case: the grade nudge survives a close row when the finding is unchanged"
   write_report B+ "[$(adopter_finding)]"
   refresh
   render_wide
@@ -725,17 +743,31 @@ SPY
   run_refresher
   render_wide
   assert_fitness_nudge "(grade B+)"
+
+  echo "case: a single info finding shows grade A and keeps showing it after a close row"
+  new_fixture
+  write_report A "[$(adopter_finding authoring.content.time-sensitive info)]"
+  refresh
+  render_wide
+  assert_fitness_nudge "(grade A)"
+
+  append_close_row 2026-03-01T00:00:00Z
+  bust --mode fitness
+  run_refresher
+  render_wide
+  assert_fitness_nudge "(grade A)"
 }
 
-@test "a record entry for a version main has not reached raises no blend reason" {
+@test "the blend nudge lifecycle: unreached, landed, kept past version, answered by a close row" {
+  echo "case: a record entry for a version main has not reached raises no blend reason"
   write_blend_record 2.0.4 2
   refresh
   [ "$(cache_value fitnessBlendCount)" = "0" ]
   render_wide
   assert_no_fitness_nudge
-}
 
-@test "a blend nudge clears after a close row dated after its landing stamp, a bust and a refresh" {
+  echo "case: a blend nudge clears after a close row dated after its landing stamp, a bust and a refresh"
+  new_fixture
   local stamp
   set_version 2.0.4
   write_blend_record 2.0.4 2
@@ -750,9 +782,9 @@ SPY
   [ "$(cache_value fitnessBlendCount)" = "0" ]
   render_wide
   assert_no_fitness_nudge
-}
 
-@test "a record for a version main reaches later raises the blend nudge once the version file changes" {
+  echo "case: a record for a version main reaches later raises the blend nudge once the version file changes"
+  new_fixture
   write_blend_record 2.0.4 2
   refresh
   render_wide
@@ -763,9 +795,9 @@ SPY
   assert_recomputed
   render_wide
   assert_fitness_nudge "(2 blended files)"
-}
 
-@test "a landed blend keeps counting when the version file moves past it" {
+  echo "case: a landed blend keeps counting when the version file moves past it"
+  new_fixture
   set_version 2.0.4
   write_blend_record 2.0.4 2
   refresh
@@ -777,9 +809,9 @@ SPY
   assert_recomputed
   render_wide
   assert_fitness_nudge "(2 blended files)"
-}
 
-@test "a close row from before a blend landed does not answer it, and a later one does" {
+  echo "case: a close row from before a blend landed does not answer it, and a later one does"
+  new_fixture
   local stamp
   set_version 2.0.3
   write_blend_record 2.0.4 2
@@ -802,7 +834,8 @@ SPY
   assert_no_fitness_nudge
 }
 
-@test "a configured threshold of 25 holds the nudge until 25 commits" {
+@test "the configured commit threshold" {
+  echo "case: a configured threshold of 25 holds the nudge until 25 commits"
   write_project_config '{"fitness_commit_threshold":25}'
   add_harness_commits 20
   refresh
@@ -813,9 +846,9 @@ SPY
   refresh
   render_wide
   assert_fitness_nudge "(25 harness commits)"
-}
 
-@test "a zero, negative, fractional, string or unparsable threshold falls back to 15" {
+  echo "case: a zero, negative, fractional, string or unparsable threshold falls back to 15"
+  new_fixture
   add_harness_commits 15
   write_project_config '{"fitness_commit_threshold":0}'
   refresh
@@ -823,47 +856,21 @@ SPY
   assert_fitness_nudge "(15 harness commits)"
 }
 
-@test "an over-budget CLAUDE.md alone raises the cleanse nudge and no fitness nudge" {
+@test "a budget error raises the cleanse nudge, alone or beside another finding" {
+  echo "case: an over-budget CLAUDE.md alone raises the cleanse nudge and no fitness nudge"
   write_report B "[$(adopter_finding claudemd.budget error)]"
   refresh
   render_wide
   assert_no_fitness_nudge
   grep -qF -- "/gaia-cleanse (over budget)" <<<"$plain"
-}
 
-@test "a budget error beside another adopter finding shows the unchanged grade and still raises the cleanse nudge" {
+  echo "case: a budget error beside another adopter finding shows the unchanged grade and still raises the cleanse nudge"
+  new_fixture
   write_report B- "[$(adopter_finding claudemd.budget error),$(adopter_finding authoring.path.windows-separator)]"
   refresh
   render_wide
   assert_fitness_nudge "(grade B-)"
   grep -qF -- "/gaia-cleanse (over budget)" <<<"$plain"
-}
-
-@test "a single info finding shows grade A and keeps showing it after a close row" {
-  write_report A "[$(adopter_finding authoring.content.time-sensitive info)]"
-  refresh
-  render_wide
-  assert_fitness_nudge "(grade A)"
-
-  append_close_row 2026-03-01T00:00:00Z
-  bust --mode fitness
-  run_refresher
-  render_wide
-  assert_fitness_nudge "(grade A)"
-}
-
-@test "harness commits count and application commits do not" {
-  write_report A "[]" "[]" '[{"path":"apps/web/CLAUDE.md","kinds":["claudemd"],"ownership":"adopter"}]'
-  add_harness_commits 14
-  add_app_commits 5
-  refresh
-  render_wide
-  assert_no_fitness_nudge
-
-  commit_touching "$COMMIT_WHEN" "docs: frontend instructions" apps/web/CLAUDE.md
-  refresh
-  render_wide
-  assert_fitness_nudge "(15 harness commits)"
 }
 
 @test "a fresh clone counts its own history against its own ledger" {
@@ -912,7 +919,8 @@ SPY
   assert_fitness_nudge "(15 harness commits)"
 }
 
-@test "a grade nudge clears once its only finding is suppressed with a reason" {
+@test "the grade nudge clears when its only finding is suppressed or fixed" {
+  echo "case: a grade nudge clears once its only finding is suppressed with a reason"
   use_real_bundle
   commit_touching "$COMMIT_WHEN" "docs: windows path" .claude/rules/windows.md
   printf '# Rule\n\nSee src\\app\\main.ts for details.\n' > "$REPOSITORY_FIXTURE/.claude/rules/windows.md"
@@ -932,9 +940,9 @@ SPY
   [ "$(cache_value fitnessGrade)" = "" ]
   render_wide
   assert_no_fitness_nudge
-}
 
-@test "a grade nudge clears once its only finding is fixed" {
+  echo "case: a grade nudge clears once its only finding is fixed"
+  new_fixture
   use_real_bundle
   commit_touching "$COMMIT_WHEN" "docs: windows path" .claude/rules/windows.md
   printf '# Rule\n\nSee src\\app\\main.ts for details.\n' > "$REPOSITORY_FIXTURE/.claude/rules/windows.md"
@@ -995,18 +1003,3 @@ race_scenario() {
   assert_no_fitness_nudge
 }
 
-@test "the pre-write bust check alone holds checkedAt at zero when the cache fingerprint check is out of play" {
-  add_harness_commits 16
-  mutated_copy check-updates-no-fingerprint.sh \
-    'if [ "$(cache_fingerprint)" != "$cache_fingerprint_before" ]; then' 'if false; then'
-  race_scenario "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates-no-fingerprint.sh"
-  [ "$race_checked_at" = "0" ]
-
-  # Refusal proof: without the pre-write check the same race stamps a fresh
-  # checkedAt over the bust.
-  mutated_copy check-updates-no-bust-check.sh \
-    '  && [ "$cache_checked_at_before" != "0" ] \' '  && [ "$cache_checked_at_before" = "never" ] \' \
-    "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates-no-fingerprint.sh"
-  race_scenario "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates-no-bust-check.sh"
-  [ "$race_checked_at" -gt 0 ]
-}

@@ -126,34 +126,48 @@ budget_finding_files() {
   jq -r '[.findings[] | select(.rule_id == "claudemd.budget") | .file] | join(",")' <<<"$1"
 }
 
-@test "a nested CLAUDE.md over its tighter budget records the over-budget nudge and one finding" {
+# Returns the fixture to the committed base so each case starts clean.
+reset_to_base() {
+  git -C "$REPOSITORY_FIXTURE" restore --source="$BASE_COMMIT" --staged --worktree -- .
+  git -C "$REPOSITORY_FIXTURE" clean -fdq
+}
+
+commit_base() {
+  git -C "$REPOSITORY_FIXTURE" add -A
+  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "chore: base"
+  BASE_COMMIT=$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)
+}
+
+@test "the claudemd budget rule: nudge over each limit, none within or for a wiki page" {
+  commit_base
+
+  echo "case: a nested CLAUDE.md over its tighter budget records the over-budget nudge and one finding"
   write_budget_fixture
   commit_fixture
   refresh
   [ "$(cache_value cleanseNudge)" = "true" ]
   [ "$(cache_value cleanseNudgeReason)" = "over budget" ]
-
   run "$GAIA_TEST_FITNESS_BUNDLE" fitness check --json --scope all --only claudemd.budget --root "$REPOSITORY_FIXTURE"
   [ "$(budget_finding_files "$output")" = "apps/web/CLAUDE.md" ]
-}
 
-@test "a root CLAUDE.md of 501 words records the over-budget nudge" {
+  echo "case: a root CLAUDE.md of 501 words records the over-budget nudge"
+  reset_to_base
   write_words 501 "$REPOSITORY_FIXTURE/CLAUDE.md"
   commit_fixture
   refresh
   [ "$(cache_value cleanseNudge)" = "true" ]
   [ "$(cache_value cleanseNudgeReason)" = "over budget" ]
-}
 
-@test "a rule of 201 lines records the over-budget nudge" {
+  echo "case: a rule of 201 lines records the over-budget nudge"
+  reset_to_base
   awk 'BEGIN { for (i = 0; i < 201; i++) print "line" }' > "$REPOSITORY_FIXTURE/.claude/rules/long.md"
   commit_fixture
   refresh
   [ "$(cache_value cleanseNudge)" = "true" ]
   [ "$(cache_value cleanseNudgeReason)" = "over budget" ]
-}
 
-@test "every auto-load file within budget records no nudge" {
+  echo "case: every auto-load file within budget records no nudge"
+  reset_to_base
   mkdir -p "$REPOSITORY_FIXTURE/apps/web"
   write_words 400 "$REPOSITORY_FIXTURE/apps/web/CLAUDE.md"
   write_words 500 "$REPOSITORY_FIXTURE/CLAUDE.md"
@@ -161,9 +175,9 @@ budget_finding_files() {
   commit_fixture
   refresh
   [ "$(cache_value cleanseNudge)" = "false" ]
-}
 
-@test "a 300-word ordinary wiki page records no over-budget cleanse nudge" {
+  echo "case: a 300-word ordinary wiki page records no over-budget cleanse nudge"
+  reset_to_base
   write_words 300 "$REPOSITORY_FIXTURE/wiki/notes.md"
   commit_fixture
   refresh
@@ -221,21 +235,22 @@ refresh_without_node() {
 }
 
 @test "with node absent the budget signal is skipped and the draft-resume signal still fires" {
+  commit_base
+
+  echo "case: with node absent an over-budget CLAUDE.md alone records no nudge"
   write_words 600 "$REPOSITORY_FIXTURE/CLAUDE.md"
-  mkdir -p "$REPOSITORY_FIXTURE/.gaia/local/cleanse"
-  printf -- '---\nstatus: draft\n---\n\n# Report\n' > "$REPOSITORY_FIXTURE/.gaia/local/cleanse/KNOWLEDGE-2026-01-01-1200.md"
   commit_fixture
   rm -f "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
   refresh_without_node
   assert_node_absent_witness "$CALL_LOG"
-  [ "$(cache_value cleanseNudgeReason)" = "resume draft" ]
-}
-
-@test "with node absent an over-budget CLAUDE.md alone records no nudge" {
-  write_words 600 "$REPOSITORY_FIXTURE/CLAUDE.md"
-  commit_fixture
-  refresh_without_node
-  assert_node_absent_witness "$CALL_LOG"
   [ "$(cache_value cleanseNudge)" = "false" ]
   [ "$(cache_value cleanseNudgeReason)" = "" ]
+
+  echo "case: with node absent the budget signal is skipped and the draft-resume signal still fires"
+  mkdir -p "$REPOSITORY_FIXTURE/.gaia/local/cleanse"
+  printf -- '---\nstatus: draft\n---\n\n# Report\n' > "$REPOSITORY_FIXTURE/.gaia/local/cleanse/KNOWLEDGE-2026-01-01-1200.md"
+  rm -f "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
+  refresh_without_node
+  assert_node_absent_witness "$CALL_LOG"
+  [ "$(cache_value cleanseNudgeReason)" = "resume draft" ]
 }

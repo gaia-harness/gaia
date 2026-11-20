@@ -50,7 +50,6 @@ bats .gaia/tests/forensics/01-redaction-roundtrip.bats
   - macOS: `brew install bats-core`
   - Debian/Ubuntu CI: `apt-get install -y bats`
   - Any platform: `npx -y bats@latest` (the run-all.sh entrypoint falls back to this)
-- `git` on `$PATH` (used in write-surface and redaction tests for `git init`/`git rev-parse`)
 - `python3` on `$PATH` (used for synthetic token generation in redaction tests; falls back to `printf` if absent)
 
 The npm package is `bats`, not `bats-core`. The project is bats-core and the

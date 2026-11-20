@@ -56,10 +56,23 @@ header_of_length() {
   printf 'feat: %s' "$(printf 'a%.0s' $(seq 1 "$filler_length"))"
 }
 
-@test "commitlint: REFUSES the retired debt type and names type-enum" {
+@test "commitlint REFUSES: retired debt type, uppercase type, trailing full stop, empty subject" {
+  echo "case: commitlint: REFUSES the retired debt type and names type-enum"
   lint "debt(hooks): widen the guard"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"type-enum"* ]]
+  [[ "$output" == *"type-enum"* ]] || return 1
+  echo "case: commitlint: REFUSES an uppercase type"
+  lint "Feat: Add thing"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"type-case"* ]] || return 1
+  echo "case: commitlint: REFUSES a trailing full stop"
+  lint "feat: add thing."
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"subject-full-stop"* ]] || return 1
+  echo "case: commitlint: REFUSES an empty subject"
+  lint "feat:"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"subject-empty"* ]]
 }
 
 @test "commitlint: ACCEPTS every type in the shared list" {
@@ -77,56 +90,32 @@ header_of_length() {
   [ "$checked" -eq "$expected" ]
 }
 
-@test "commitlint: REFUSES an uppercase type" {
-  lint "Feat: Add thing"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"type-case"* ]]
-}
-
-@test "commitlint: REFUSES a trailing full stop" {
-  lint "feat: add thing."
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"subject-full-stop"* ]]
-}
-
-@test "commitlint: REFUSES an empty subject" {
-  lint "feat:"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"subject-empty"* ]]
-}
-
-@test "commitlint: REFUSES a 101-character header" {
+@test "commitlint header length boundary: 101 refused, 100 accepted" {
   local header
+  echo "case: commitlint: REFUSES a 101-character header"
   header=$(header_of_length 101)
   [ "${#header}" -eq 101 ]
   lint "$header"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"header-max-length"* ]]
-}
-
-@test "commitlint: ACCEPTS a 100-character header" {
-  local header
+  [[ "$output" == *"header-max-length"* ]] || return 1
+  echo "case: commitlint: ACCEPTS a 100-character header"
   header=$(header_of_length 100)
   [ "${#header}" -eq 100 ]
   lint "$header"
   [ "$status" -eq 0 ]
 }
 
-@test "commitlint: ACCEPTS a breaking change with a BREAKING CHANGE footer" {
+@test "commitlint ACCEPTS: breaking-change footer, long body line, default-ignored shapes" {
+  local long_line message
+  echo "case: commitlint: ACCEPTS a breaking change with a BREAKING CHANGE footer"
   lint "$(printf 'feat(api)!: drop v1\n\nBREAKING CHANGE: v1 removed')"
   [ "$status" -eq 0 ]
-}
-
-@test "commitlint: ACCEPTS a body line longer than 100 characters" {
-  local long_line
+  echo "case: commitlint: ACCEPTS a body line longer than 100 characters"
   long_line=$(printf 'word %.0s' $(seq 1 40))
   [ "${#long_line}" -gt 100 ]
   lint "$(printf 'feat: add thing\n\n%s' "$long_line")"
   [ "$status" -eq 0 ]
-}
-
-@test "commitlint: ACCEPTS the default-ignored message shapes" {
-  local message
+  echo "case: commitlint: ACCEPTS the default-ignored message shapes"
   for message in \
     "fixup! feat: x" \
     "squash! feat: x" \
@@ -156,6 +145,7 @@ header_of_length() {
   [[ "$output" == *"type-enum"* ]]
 }
 
+# bats test_tags=protected
 @test "commit-msg hook end to end: git refuses debt and accepts feat" {
   local scratch="$BATS_TEST_TMPDIR/end-to-end"
   mkdir -p "$scratch/.githooks" "$scratch/.gaia/scripts" "$scratch/shim"

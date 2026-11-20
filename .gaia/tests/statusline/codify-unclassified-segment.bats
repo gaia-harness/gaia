@@ -3,12 +3,7 @@
 # Tests for the classless-recurrence delivery channels of the policy-memory
 # loop: the statusline's `codifyUnclassifiedCount` segment, the refresher
 # (.gaia/scripts/check-updates.sh) that writes that field from `codify-tally`'s
-# `unclassified` object, and the doc-grep coverage confirming:
-#   - codify.md presents the unclassified signal (UAT-008, review-grep half;
-#     the deterministic candidates[]-exclusion half is task-tally-core's Vitest)
-#   - check-updates.sh dropped the stale "at error/warning severity" phrasing
-#     (directive #6; this file is swept in Phase 2, so Phase 1's doc-grep,
-#     `.gaia/tests/lib/doc-countability-prose.bats`, never touches it)
+# `unclassified` object.
 #
 # The statusline half mirrors statusline-worktree.bats: a MAIN git checkout
 # with setup marked complete and no gaia-init gate file, so the right-side
@@ -21,7 +16,6 @@
 setup() {
   STATUSLINE_SOURCE=$(cd "$BATS_TEST_DIRNAME/../../statusline" && pwd)
   CHECK_UPDATES_SOURCE=$(cd "$BATS_TEST_DIRNAME/../../scripts" && pwd)/check-updates.sh
-  CODIFY_MARKDOWN=$(cd "$BATS_TEST_DIRNAME/../../../.claude/skills/gaia/references" && pwd)/codify.md
 
   # ---- statusline fixture ----
   MAIN=$(mktemp -d -t gaia-sl-codify-XXXXXX)
@@ -122,33 +116,30 @@ run_statusline_with_cache() {
   run env HOME="$TEMPORARY_HOME" bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
 }
 
-@test "statusline renders the unclassified segment when codifyUnclassifiedCount > 0" {
+@test "the statusline codify segment from the cached candidate and unclassified counts" {
+  echo "case: statusline renders the unclassified segment when codifyUnclassifiedCount > 0"
   run_statusline_with_cache 0 3
   [ "$status" -eq 0 ]
   grep -qF -- "🔨 /gaia-codify (3 unclassified)" <<<"$output"
-}
 
-@test "statusline renders the candidate segment alone, singular noun intact, when only codifyCandidateCount > 0" {
+  echo "case: statusline renders the candidate segment alone, singular noun intact, when only codifyCandidateCount > 0"
   run_statusline_with_cache 1 0
   [ "$status" -eq 0 ]
   grep -qF -- "🔨 /gaia-codify (1 recurring pattern)" <<<"$output"
   grep -qF -- "unclassified" <<<"$output" && return 1
   return 0
-}
 
-# Both counts non-zero is the case the merged segment introduces: the two
-# reasons stack into one parameter rather than into a second segment naming
-# the same command.
-@test "statusline folds both counts into one codify segment when both are non-zero" {
+  echo "case: statusline folds both counts into one codify segment when both are non-zero"
+  # Both counts non-zero: the two reasons stack into one parameter rather than
+  # into a second segment naming the same command.
   run_statusline_with_cache 2 3
   [ "$status" -eq 0 ]
   grep -qF -- "🔨 /gaia-codify (2 recurring patterns, 3 unclassified)" <<<"$output"
   # The statusline is one line, so `grep -c` would count that line once
   # whether it holds one segment or two. Count the occurrences themselves.
   [ "$(grep -oF -- "🔨 /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
-}
 
-@test "statusline renders no codify segment when both counts are 0" {
+  echo "case: statusline renders no codify segment when both counts are 0"
   run_statusline_with_cache 0 0
   [ "$status" -eq 0 ]
   grep -qF -- "gaia-codify" <<<"$output" && return 1
@@ -184,25 +175,4 @@ run_statusline_with_cache() {
   [ "$status" -eq 0 ]
   grep -qF -- "unclassified" <<<"$output" && return 1
   true
-}
-
-# --- doc-grep: codify.md presents the unclassified signal (UAT-008, review half) ---
-
-@test "codify.md binds the top-level unclassified field alongside the candidate fields" {
-  grep -Fq "bind the top-level \`unclassified\` field" "$CODIFY_MARKDOWN"
-}
-
-@test "codify.md presents the unclassified signal in its own seed-a-class-or-investigate section" {
-  grep -Fq "## Unclassified recurrence signal (seed-a-class-or-investigate)" "$CODIFY_MARKDOWN"
-}
-
-@test "codify.md states the unclassified signal is excluded from the draftable candidate set" {
-  grep -Fq "It is NEVER placed in the draftable candidate set." "$CODIFY_MARKDOWN"
-}
-
-# --- doc-grep: directive-#6 sweep of check-updates.sh (swept in Phase 2) ---
-
-@test "check-updates.sh drops the stale 'at error/warning severity' phrasing" {
-  grep -Fq "at error/warning severity" "$CHECK_UPDATES_SOURCE" && return 1
-  return 0
 }

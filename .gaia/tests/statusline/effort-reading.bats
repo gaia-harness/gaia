@@ -82,14 +82,15 @@ library() {
   [ ! -e "$CONTEXT_DIRECTORY/$SESSION_ID.json" ]
 }
 
-@test "red: an empty level writes the context reading as today and no effort reading" {
+@test "red: an empty or unknown level writes the context reading and no effort reading" {
+  echo "case: red: an empty level writes the context reading as today and no effort reading"
   render "$(payload "$SESSION_ID" "")"
   [ "$status" -eq 0 ]
   [ -f "$CONTEXT_DIRECTORY/$SESSION_ID.json" ]
   [ ! -e "$(effort_file "$SESSION_ID")" ]
-}
 
-@test "red: an unknown level writes the context reading as today and no effort reading" {
+  echo "case: red: an unknown level writes the context reading as today and no effort reading"
+  rm -rf "$CONTEXT_DIRECTORY"
   render "$(payload "$SESSION_ID" extreme)"
   [ "$status" -eq 0 ]
   [ -f "$CONTEXT_DIRECTORY/$SESSION_ID.json" ]
@@ -121,25 +122,24 @@ library() {
   [ "$output" = "low" ]
 }
 
-@test "red: gaia_context_effort_write refuses a non-UUID session id" {
+# bats test_tags=protected
+@test "red: gaia_context_effort_write refuses a bad session id, level or epoch" {
+  echo "case: red: gaia_context_effort_write refuses a non-UUID session id"
   library "gaia_context_effort_write '$MAIN' 'not-a-uuid' high 1700000000"
   [ "$status" -eq 1 ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
 
-@test "red: gaia_context_effort_write refuses a path-traversal session id" {
+  echo "case: red: gaia_context_effort_write refuses a path-traversal session id"
   library "gaia_context_effort_write '$MAIN' '../../x' high 1700000000"
   [ "$status" -eq 1 ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
 
-@test "red: gaia_context_effort_write refuses an invalid level" {
+  echo "case: red: gaia_context_effort_write refuses an invalid level"
   library "gaia_context_effort_write '$MAIN' '$SESSION_ID' extreme 1700000000"
   [ "$status" -eq 1 ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
 
-@test "red: gaia_context_effort_write refuses a non-integer epoch" {
+  echo "case: red: gaia_context_effort_write refuses a non-integer epoch"
   library "gaia_context_effort_write '$MAIN' '$SESSION_ID' high soon"
   [ "$status" -eq 1 ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
@@ -151,34 +151,31 @@ seed_effort() {
   printf '%s\n' "$1" >"$(effort_file "$SESSION_ID")"
 }
 
-@test "red: gaia_context_effort_read refuses a missing file" {
+@test "red: gaia_context_effort_read refuses a missing, corrupt, wrong-version, mismatched-session or invalid-effort file" {
+  echo "case: red: gaia_context_effort_read refuses a missing file"
   library "gaia_context_effort_read '$MAIN' '$SESSION_ID'"
   [ "$status" -eq 1 ]
   [ -z "$output" ]
-}
 
-@test "red: gaia_context_effort_read refuses a corrupt file" {
+  echo "case: red: gaia_context_effort_read refuses a corrupt file"
   seed_effort 'not json at all'
   library "gaia_context_effort_read '$MAIN' '$SESSION_ID'"
   [ "$status" -eq 1 ]
   [ -z "$output" ]
-}
 
-@test "red: gaia_context_effort_read refuses a version other than 1" {
+  echo "case: red: gaia_context_effort_read refuses a version other than 1"
   seed_effort '{"version":2,"session_id":"'"$SESSION_ID"'","effort":"high","written_at":1700000000}'
   library "gaia_context_effort_read '$MAIN' '$SESSION_ID'"
   [ "$status" -eq 1 ]
   [ -z "$output" ]
-}
 
-@test "red: gaia_context_effort_read refuses a mismatched session id" {
+  echo "case: red: gaia_context_effort_read refuses a mismatched session id"
   seed_effort '{"version":1,"session_id":"'"$OTHER_SESSION_ID"'","effort":"high","written_at":1700000000}'
   library "gaia_context_effort_read '$MAIN' '$SESSION_ID'"
   [ "$status" -eq 1 ]
   [ -z "$output" ]
-}
 
-@test "red: gaia_context_effort_read refuses an invalid effort" {
+  echo "case: red: gaia_context_effort_read refuses an invalid effort"
   seed_effort '{"version":1,"session_id":"'"$SESSION_ID"'","effort":"extreme","written_at":1700000000}'
   library "gaia_context_effort_read '$MAIN' '$SESSION_ID'"
   [ "$status" -eq 1 ]

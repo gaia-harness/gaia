@@ -90,21 +90,24 @@ pnpm_log_count() {
   grep -cE "^pnpm ${1}( |$)" "$PNPM_LOG" || true
 }
 
+# Helper: clear the pnpm log and the summary between the cases of one test,
+# so each case reads only its own runner pass.
+reset_run() {
+  rm -f "$PNPM_LOG" "$SUMMARY"
+}
+
 # ---------------------------------------------------------------------------
 # Usage / argument validation
 # ---------------------------------------------------------------------------
 
-@test "usage error with no args" {
+@test "usage errors exit 2" {
+  echo "case: usage error with no args"
   run "$RUNNER"
   [ "$status" -eq 2 ]
-}
-
-@test "usage error with too many args" {
+  echo "case: usage error with too many args"
   run "$RUNNER" a b
   [ "$status" -eq 2 ]
-}
-
-@test "errors when summary file's parent dir does not exist" {
+  echo "case: errors when summary file's parent dir does not exist"
   run "$RUNNER" "$BATS_TEST_TMPDIR/no-such-dir/out.json"
   [ "$status" -eq 2 ]
 }
@@ -113,26 +116,23 @@ pnpm_log_count() {
 # All-green path
 # ---------------------------------------------------------------------------
 
-@test "all-green: exits 0 and writes passed-true summary" {
+@test "all-green: passed summary, steps_run names every step, each step once in order, Chromium before test" {
+  # One green run serves every case below.
   run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 0 ]
+
+  echo "case: all-green: exits 0 and writes passed-true summary"
   [ -f "$SUMMARY" ]
   grep -qF '"passed": true' "$SUMMARY"
-}
 
-@test "all-green: summary names every step in steps_run" {
-  run "$RUNNER" "$SUMMARY"
-  [ "$status" -eq 0 ]
+  echo "case: all-green: summary names every step in steps_run"
   grep -qF '"install"' "$SUMMARY"
   grep -qF '"typecheck"' "$SUMMARY"
   grep -qF '"lint"' "$SUMMARY"
   grep -qF '"test"' "$SUMMARY"
   grep -qF '"knip"' "$SUMMARY"
-}
 
-@test "all-green: each pnpm step is invoked exactly once, in order" {
-  run "$RUNNER" "$SUMMARY"
-  [ "$status" -eq 0 ]
+  echo "case: all-green: each pnpm step is invoked exactly once, in order"
   [ "$(pnpm_log_count install)" = "1" ]
   [ "$(pnpm_log_count typecheck)" = "1" ]
   [ "$(pnpm_log_count lint)" = "1" ]
@@ -148,29 +148,24 @@ pnpm_log_count() {
   [ "$typecheck_line" -lt "$lint_line" ]
   [ "$lint_line" -lt "$test_line" ]
   [ "$test_line" -lt "$knip_line" ]
-}
 
-@test "all-green: the Chromium install runs once, before test" {
-  run "$RUNNER" "$SUMMARY"
-  [ "$status" -eq 0 ]
+  echo "case: all-green: the Chromium install runs once, before test"
   grep -qF '"browsers"' "$SUMMARY"
   [ "$(grep -cE '^pnpm -C apps/web exec playwright install .*chromium' "$PNPM_LOG")" = "1" ]
   browsers_line=$(grep -nE '^pnpm -C apps/web exec playwright install' "$PNPM_LOG" | head -1 | cut -d: -f1)
-  lint_line=$(grep -nE '^pnpm lint( |$)' "$PNPM_LOG" | head -1 | cut -d: -f1)
-  test_line=$(grep -nE '^pnpm test( |$)' "$PNPM_LOG" | head -1 | cut -d: -f1)
   [ "$lint_line" -lt "$browsers_line" ]
   [ "$browsers_line" -lt "$test_line" ]
 }
 
-@test "all-green off Linux: no apt dependency install, and never --with-deps" {
+@test "apt dependencies install only on Linux and never with --with-deps" {
+  echo "case: all-green off Linux: no apt dependency install, and never --with-deps"
   run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 0 ]
   grep -qF 'install-deps' "$PNPM_LOG" && return 1
   grep -qF -- '--with-deps' "$PNPM_LOG" && return 1
-  true
-}
 
-@test "all-green on Linux: apt dependencies install through the helper, then the browser" {
+  reset_run
+  echo "case: all-green on Linux: apt dependencies install through the helper, then the browser"
   UNAME_SYSTEM=Linux run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 0 ]
   [ "$(grep -cxF 'node apps/web/node_modules/playwright/cli.js install-deps chromium' "$PNPM_LOG")" = "1" ]
@@ -181,6 +176,7 @@ pnpm_log_count() {
   true
 }
 
+# bats test_tags=protected
 @test "fail at the Linux apt dependencies: browsers fails after three attempts, naming the re-run" {
   UNAME_SYSTEM=Linux NODE_INSTALL_DEPS_EXIT=100 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
@@ -191,23 +187,18 @@ pnpm_log_count() {
   grep -qF 'gh run rerun' "$SUMMARY"
 }
 
-@test "all-green: install uses --frozen-lockfile" {
+# bats test_tags=protected
+@test "step invocation flags: --frozen-lockfile, --ignore-scripts, test --run" {
+  # One green run serves every case below.
   run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 0 ]
+  echo "case: all-green: install uses --frozen-lockfile"
   grep -qE '^pnpm install --frozen-lockfile' "$PNPM_LOG"
-}
-
-@test "all-green: install runs no lifecycle scripts (--ignore-scripts)" {
   # The gate installs over model-edited files; a lifecycle script in any
   # workspace manifest must not run.
-  run "$RUNNER" "$SUMMARY"
-  [ "$status" -eq 0 ]
+  echo "case: all-green: install runs no lifecycle scripts (--ignore-scripts)"
   grep -qE '^pnpm install( .*)? --ignore-scripts( |$)' "$PNPM_LOG"
-}
-
-@test "all-green: test step uses --run (vitest non-watch)" {
-  run "$RUNNER" "$SUMMARY"
-  [ "$status" -eq 0 ]
+  echo "case: all-green: test step uses --run (vitest non-watch)"
   grep -qE '^pnpm test --run' "$PNPM_LOG"
 }
 
@@ -215,7 +206,9 @@ pnpm_log_count() {
 # Halt-on-first-fail per step
 # ---------------------------------------------------------------------------
 
-@test "fail at install: halts immediately, no later steps run" {
+# bats test_tags=protected
+@test "halt on first failing step: install, typecheck, lint, Chromium install, test, knip" {
+  echo "case: fail at install: halts immediately, no later steps run"
   PNPM_INSTALL_EXIT=1 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   [ "$(pnpm_log_count install)" = "1" ]
@@ -225,9 +218,9 @@ pnpm_log_count() {
   [ "$(pnpm_log_count knip)" = "0" ]
   grep -qF '"passed": false' "$SUMMARY"
   grep -qF '"failed_step": "install"' "$SUMMARY"
-}
 
-@test "fail at typecheck: install ran, typecheck ran, nothing after" {
+  reset_run
+  echo "case: fail at typecheck: install ran, typecheck ran, nothing after"
   PNPM_TYPECHECK_EXIT=2 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   [ "$(pnpm_log_count install)" = "1" ]
@@ -237,18 +230,18 @@ pnpm_log_count() {
   [ "$(pnpm_log_count knip)" = "0" ]
   grep -qF '"failed_step": "typecheck"' "$SUMMARY"
   grep -qF '"exit_code": 2' "$SUMMARY"
-}
 
-@test "fail at lint: nothing after lint runs" {
+  reset_run
+  echo "case: fail at lint: nothing after lint runs"
   PNPM_LINT_EXIT=1 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   [ "$(pnpm_log_count lint)" = "1" ]
   [ "$(pnpm_log_count test)" = "0" ]
   [ "$(pnpm_log_count knip)" = "0" ]
   grep -qF '"failed_step": "lint"' "$SUMMARY"
-}
 
-@test "fail at the Chromium install: summary names browsers and test never runs" {
+  reset_run
+  echo "case: fail at the Chromium install: summary names browsers and test never runs"
   PNPM_BROWSERS_STDOUT="Failed to download Chromium" PNPM_BROWSERS_EXIT=1 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   [ "$(pnpm_log_count lint)" = "1" ]
@@ -257,17 +250,17 @@ pnpm_log_count() {
   [ "$(pnpm_log_count knip)" = "0" ]
   grep -qF '"failed_step": "browsers"' "$SUMMARY"
   grep -qF 'Failed to download Chromium' "$SUMMARY"
-}
 
-@test "fail at test: knip never runs" {
+  reset_run
+  echo "case: fail at test: knip never runs"
   PNPM_TEST_EXIT=1 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   [ "$(pnpm_log_count test)" = "1" ]
   [ "$(pnpm_log_count knip)" = "0" ]
   grep -qF '"failed_step": "test"' "$SUMMARY"
-}
 
-@test "fail at knip: knip failure is treated identically to lint/test" {
+  reset_run
+  echo "case: fail at knip: knip failure is treated identically to lint/test"
   PNPM_KNIP_EXIT=1 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   [ "$(pnpm_log_count knip)" = "1" ]
@@ -280,15 +273,16 @@ pnpm_log_count() {
 # Log excerpt fidelity
 # ---------------------------------------------------------------------------
 
-@test "failure summary includes a log_excerpt field" {
+@test "failure log_excerpt is present and bounded to 2000 chars and 50 lines (tail kept)" {
+  echo "case: failure summary includes a log_excerpt field"
   PNPM_LINT_STDOUT="error TS2304: cannot find name foo" PNPM_LINT_EXIT=1 \
     run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   grep -qF '"log_excerpt":' "$SUMMARY"
   grep -qF 'cannot find name foo' "$SUMMARY"
-}
 
-@test "log excerpt is bounded to <= 2000 chars" {
+  reset_run
+  echo "case: log excerpt is bounded to <= 2000 chars"
   # Generate a 4000-char single-line payload; the runner should clip it.
   big=""
   i=0
@@ -301,9 +295,9 @@ pnpm_log_count() {
   # Pull just the log_excerpt string value via awk; verify length.
   excerpt_length=$(awk 'BEGIN { RS = ""; FS = "\"log_excerpt\": \"" } NR==1 { sub(/".*/, "", $2); print length($2) }' "$SUMMARY")
   [ "$excerpt_length" -le 2000 ]
-}
 
-@test "log excerpt is bounded to <= 50 lines" {
+  reset_run
+  echo "case: log excerpt is bounded to <= 50 lines"
   # 200 short lines; runner trims to last 50.
   many=""
   i=0
@@ -326,29 +320,29 @@ pnpm_log_count() {
 # JSON shape sanity
 # ---------------------------------------------------------------------------
 
-@test "summary is parseable as JSON (jq) on pass" {
+@test "summary is valid JSON on pass, on fail, and with embedded quotes and backslashes" {
   command -v jq >/dev/null || skip "jq not installed"
+
+  echo "case: summary is parseable as JSON (jq) on pass"
   run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 0 ]
   run jq -e '.passed == true' "$SUMMARY"
   [ "$status" -eq 0 ]
-}
 
-@test "summary is parseable as JSON (jq) on fail" {
-  command -v jq >/dev/null || skip "jq not installed"
+  reset_run
+  echo "case: summary is parseable as JSON (jq) on fail"
   PNPM_LINT_STDOUT="boom" PNPM_LINT_EXIT=1 run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   run jq -e '.passed == false and .failed_step == "lint" and .exit_code == 1' "$SUMMARY"
   [ "$status" -eq 0 ]
-}
 
-@test "summary JSON-escapes embedded quotes and backslashes" {
-  command -v jq >/dev/null || skip "jq not installed"
+  reset_run
+  echo "case: summary JSON-escapes embedded quotes and backslashes"
   PNPM_LINT_STDOUT='msg with "quote" and \backslash' PNPM_LINT_EXIT=1 \
     run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 1 ]
   run jq -er '.log_excerpt' "$SUMMARY"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"quote"'* ]]
+  [[ "$output" == *'"quote"'* ]] || return 1
   [[ "$output" == *'\backslash'* ]]
 }

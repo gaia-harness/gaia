@@ -18,194 +18,117 @@ setup() {
   FAKE_ROOT="/Users/testuser/Development/my-project"
 }
 
-# ---------------------------------------------------------------------------
-# Path conversion; Rule A (under project root)
-# ---------------------------------------------------------------------------
-
-@test "UAT-003: absolute path under project root becomes repo-relative" {
-  local input="The failing file is $FAKE_ROOT/.claude/hooks/wiki-session-stop.sh"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" == "The failing file is .claude/hooks/wiki-session-stop.sh" ]]
+# Synthetic token bodies are built at run time and never stored in fixture files.
+repeat_char() {
+  printf '%*s' "$2" '' | tr ' ' "$1"
 }
 
-@test "UAT-003: multiple absolute paths under project root all converted" {
-  local input="Files: $FAKE_ROOT/app/i18n.ts and $FAKE_ROOT/wiki/.state.json"
+# redact_equals <label> <input> <expected>: the redacted body is exactly <expected>.
+redact_equals() {
   local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" == "Files: app/i18n.ts and wiki/.state.json" ]]
+  echo "case: $1"
+  result="$(redact_body "$FAKE_ROOT" "$2")"
+  [[ "$result" == "$3" ]]
 }
 
-# ---------------------------------------------------------------------------
-# Path conversion; Rule B (outside project root, machine-leak fallback)
-# ---------------------------------------------------------------------------
-
-@test "UAT-003: absolute path outside project root collapses to filename only" {
-  local input="Config at /Users/testuser/.config/other-tool.json"
-  local result
+# redact_case <label> <input> <leaked> [<must-contain>...]: <leaked> (when not
+# empty) is gone from the redacted body and each <must-contain> is present.
+redact_case() {
+  local label="$1" input="$2" leaked="$3" result needle
+  shift 3
+  echo "case: $label"
   result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" == "Config at other-tool.json" ]]
-}
-
-@test "UAT-003: /home/ path outside project root collapses to filename only" {
-  local input="File at /home/runner/.ssh/known_hosts"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" == "File at known_hosts" ]]
+  if [[ -n "$leaked" && "$result" == *"$leaked"* ]]; then
+    return 1
+  fi
+  for needle in "$@"; do
+    [[ "$result" == *"$needle"* ]] || return 1
+  done
+  return 0
 }
 
 # ---------------------------------------------------------------------------
-# Token patterns; GitHub tokens (pattern 1)
-# Synthetic tokens constructed at test runtime; never stored in fixture files.
+# Path conversion: rule A (under project root), rule B (outside project root,
+# machine-leak fallback) and bare home dirs (/Users/<name>, /home/<name>, /root)
 # ---------------------------------------------------------------------------
 
-@test "UAT-003: gho_ GitHub OAuth token is redacted" {
-  # Construct a synthetic token-shaped string at runtime
-  local fake_token; fake_token="gho_$(python3 -c 'print("A"*20)' 2>/dev/null || printf 'AAAAAAAAAAAAAAAAAAAA')"
-  local input="Token: $fake_token in the env"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"$fake_token"* ]]
-  [[ "$result" == *"<redacted>"* ]]
-}
-
-@test "UAT-003: ghp_ GitHub PAT is redacted" {
-  local fake_token; fake_token="ghp_$(python3 -c 'print("B"*20)' 2>/dev/null || printf 'BBBBBBBBBBBBBBBBBBBB')"
-  local input="GITHUB_TOKEN=$fake_token"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"$fake_token"* ]]
-}
-
-@test "UAT-003: sk-ant- Anthropic API key is redacted" {
-  local fake_key; fake_key="sk-ant-api03-$(python3 -c 'print("C"*20)' 2>/dev/null || printf 'CCCCCCCCCCCCCCCCCCCC')"
-  local input="ANTHROPIC_API_KEY=$fake_key"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"$fake_key"* ]]
-}
-
-@test "UAT-003: sk- OpenAI key is redacted (and sk-ant- takes priority)" {
-  local fake_openai; fake_openai="sk-$(python3 -c 'print("D"*20)' 2>/dev/null || printf 'DDDDDDDDDDDDDDDDDDDD')"
-  local fake_anthropic; fake_anthropic="sk-ant-$(python3 -c 'print("E"*20)' 2>/dev/null || printf 'EEEEEEEEEEEEEEEEEEEE')"
-  local result_openai
-  result_openai="$(redact_body "$FAKE_ROOT" "key=$fake_openai")"
-  [[ "$result_openai" != *"$fake_openai"* ]]
-
-  local result_anthropic
-  result_anthropic="$(redact_body "$FAKE_ROOT" "key=$fake_anthropic")"
-  [[ "$result_anthropic" != *"$fake_anthropic"* ]]
-}
-
-@test "UAT-003: glpat- GitLab PAT is redacted" {
-  local fake_token; fake_token="glpat-$(python3 -c 'print("F"*20)' 2>/dev/null || printf 'FFFFFFFFFFFFFFFFFFFF')"
-  local input="GITLAB_TOKEN=$fake_token"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"$fake_token"* ]]
-}
-
-@test "UAT-003: xoxb- Slack token is redacted" {
-  local fake_token; fake_token="xoxb-$(python3 -c 'print("G"*10)' 2>/dev/null || printf 'GGGGGGGGGG')"
-  local input="SLACK_TOKEN=$fake_token"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"$fake_token"* ]]
+# bats test_tags=protected
+@test "redact_body path conversion and home collapse, one case per input" {
+  redact_equals "absolute path under project root becomes repo-relative" \
+    "The failing file is $FAKE_ROOT/.claude/hooks/wiki-session-stop.sh" \
+    "The failing file is .claude/hooks/wiki-session-stop.sh" || return 1
+  redact_equals "multiple absolute paths under project root all converted" \
+    "Files: $FAKE_ROOT/app/i18n.ts and $FAKE_ROOT/wiki/.state.json" \
+    "Files: app/i18n.ts and wiki/.state.json" || return 1
+  redact_equals "absolute path outside project root collapses to filename only" \
+    "Config at /Users/testuser/.config/other-tool.json" \
+    "Config at other-tool.json" || return 1
+  redact_equals "/home/ path outside project root collapses to filename only" \
+    "File at /home/runner/.ssh/known_hosts" \
+    "File at known_hosts" || return 1
+  redact_case "bare /Users/<name> home dir collapses to <home>" \
+    "User home is /Users/alice and nothing else" "/Users/alice" "<home>" || return 1
+  redact_case "bare /home/<name> home dir collapses to <home>" \
+    "The account lives at /home/bob today" "/home/bob" "<home>" || return 1
+  # No /root survives the trailing-component collapse.
+  redact_equals "/root path with trailing component collapses (no /root survives)" \
+    "Running as root from /root/.ssh/id_rsa" \
+    "Running as root from id_rsa" || return 1
+  redact_case "bare /root collapses to <home>" \
+    "Home directory: /root end" "/root" "<home>"
 }
 
 # ---------------------------------------------------------------------------
-# SEC-1: fine-grained GitHub PAT (github_pat_...)
-# Synthetic body is lowercase, so no other pattern (AWS, generic) catches it
-# pre-fix; this test is red until pattern 1 gains the github_pat_ pass.
+# Token patterns. Each SEC-3 shape sits mid-line with no token|key|secret
+# keyword nearby, so the generic fallback cannot mask a missing dedicated pass.
 # ---------------------------------------------------------------------------
 
-@test "SEC-1: github_pat_ fine-grained PAT is redacted" {
-  local fake_token; fake_token="github_pat_$(python3 -c 'print("a"*30)' 2>/dev/null || printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
-  local input="Found in shell environment: $fake_token was present"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"$fake_token"* ]]
-  [[ "$result" == *"<redacted>"* ]]
-}
+# bats test_tags=protected
+@test "redact_body redacts each token shape, one case per shape" {
+  local token
 
-# ---------------------------------------------------------------------------
-# SEC-3: JWT, Bearer, Slack xapp-, connection-string credentials
-# Each is placed mid-line with no token|key|secret keyword nearby, so the
-# generic fallback cannot mask a missing dedicated pass; each is red pre-fix.
-# ---------------------------------------------------------------------------
+  token="gho_$(repeat_char A 20)"
+  redact_case "gho_ GitHub OAuth token is redacted" \
+    "Token: $token in the env" "$token" "<redacted>" || return 1
 
-@test "SEC-3: JWT triple-segment token is redacted" {
-  local jwt="eyJhbGci.eyJzdW0iOne.abcdefghij0123"
-  local input="Session JWT was $jwt in the log"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"$jwt"* ]]
-  [[ "$result" == *"<redacted>"* ]]
-}
+  token="ghp_$(repeat_char B 20)"
+  redact_case "ghp_ GitHub PAT is redacted" "GITHUB_TOKEN=$token" "$token" || return 1
 
-@test "SEC-3: Bearer token value is redacted, label preserved" {
-  local bearer_token
-  bearer_token="$(python3 -c 'print("a"*24)' 2>/dev/null || printf 'aaaaaaaaaaaaaaaaaaaaaaaa')"
-  local input="Authorization: Bearer $bearer_token"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"Bearer $bearer_token"* ]]
-  [[ "$result" == *"Bearer <redacted>"* ]]
-}
+  token="sk-ant-api03-$(repeat_char C 20)"
+  redact_case "sk-ant- Anthropic API key is redacted" \
+    "ANTHROPIC_API_KEY=$token" "$token" || return 1
 
-@test "SEC-3: xapp- Slack app-level token is redacted" {
-  local fake_token; fake_token="xapp-$(python3 -c 'print("1-" + "G"*12)' 2>/dev/null || printf '1-GGGGGGGGGGGG')"
-  local input="Slack app credential $fake_token present"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"$fake_token"* ]]
-  [[ "$result" == *"<redacted>"* ]]
-}
+  token="sk-$(repeat_char D 20)"
+  redact_case "sk- OpenAI key is redacted" "key=$token" "$token" || return 1
+  token="sk-ant-$(repeat_char E 20)"
+  redact_case "sk-ant- takes priority over sk-" "key=$token" "$token" || return 1
 
-@test "SEC-3: connection-string credentials are redacted, scheme and host preserved" {
-  local input="DB at postgres://dbuser:s3cr3tpass@db.example.com:5432/mydb"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"dbuser:s3cr3tpass"* ]]
-  [[ "$result" == *"postgres://<redacted>@db.example.com"* ]]
-}
+  token="glpat-$(repeat_char F 20)"
+  redact_case "glpat- GitLab PAT is redacted" "GITLAB_TOKEN=$token" "$token" || return 1
 
-# ---------------------------------------------------------------------------
-# SEC-4: bare home dir (/Users/<name>, /home/<name>, /root) collapses to <home>
-# ---------------------------------------------------------------------------
+  token="xoxb-$(repeat_char G 10)"
+  redact_case "xoxb- Slack token is redacted" "SLACK_TOKEN=$token" "$token" || return 1
 
-@test "SEC-4: bare /Users/<name> home dir collapses to <home>" {
-  local input="User home is /Users/alice and nothing else"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"/Users/alice"* ]]
-  [[ "$result" == *"<home>"* ]]
-}
+  # Lowercase body: no other pattern (AWS, generic) catches it without the github_pat_ pass.
+  token="github_pat_$(repeat_char a 30)"
+  redact_case "github_pat_ fine-grained PAT is redacted" \
+    "Found in shell environment: $token was present" "$token" "<redacted>" || return 1
 
-@test "SEC-4: bare /home/<name> home dir collapses to <home>" {
-  local input="The account lives at /home/bob today"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"/home/bob"* ]]
-  [[ "$result" == *"<home>"* ]]
-}
+  token="eyJhbGci.eyJzdW0iOne.abcdefghij0123"
+  redact_case "JWT triple-segment token is redacted" \
+    "Session JWT was $token in the log" "$token" "<redacted>" || return 1
 
-@test "SEC-4: /root path with trailing component collapses (no /root survives)" {
-  local input="Running as root from /root/.ssh/id_rsa"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" == *"id_rsa"* ]]
-  # Discriminating assertion last (bats keys off the final command's status):
-  # /root must not survive after SEC-4's /root trailing collapse.
-  [[ "$result" == "Running as root from id_rsa" ]]
-}
+  token="$(repeat_char a 24)"
+  redact_case "Bearer token value is redacted, label preserved" \
+    "Authorization: Bearer $token" "Bearer $token" "Bearer <redacted>" || return 1
 
-@test "SEC-4: bare /root collapses to <home>" {
-  local input="Home directory: /root end"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" != *"/root"* ]]
-  [[ "$result" == *"<home>"* ]]
+  token="xapp-1-$(repeat_char G 12)"
+  redact_case "xapp- Slack app-level token is redacted" \
+    "Slack app credential $token present" "$token" "<redacted>" || return 1
+
+  redact_case "connection-string credentials are redacted, scheme and host preserved" \
+    "DB at postgres://dbuser:s3cr3tpass@db.example.com:5432/mydb" \
+    "dbuser:s3cr3tpass" "postgres://<redacted>@db.example.com"
 }
 
 # ---------------------------------------------------------------------------
@@ -214,9 +137,10 @@ setup() {
 # the recheck untouched; the recheck greps still fire and must halt.
 # ---------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "TST-03: recheck halts with no partial body when a token survives the forward passes" {
   sed() { cat; }
-  local fake_token; fake_token="gho_$(python3 -c 'print("Z"*24)' 2>/dev/null || printf 'ZZZZZZZZZZZZZZZZZZZZZZZZ')"
+  local fake_token; fake_token="gho_$(repeat_char Z 24)"
   run --separate-stderr redact_body "$FAKE_ROOT" "leaked credential: $fake_token"
   [ "$status" -ne 0 ]
   [ -z "$output" ]
@@ -224,25 +148,14 @@ setup() {
 }
 
 # ---------------------------------------------------------------------------
-# Env-var value scrub (step 3)
+# Env-var value scrub (step 3): names preserved, values scrubbed
 # ---------------------------------------------------------------------------
 
-@test "UAT-003: env-var name is preserved but value is scrubbed" {
-  local input="HOME=/Users/testuser"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  # Name preserved
-  [[ "$result" == *"HOME="* ]]
-  # Value scrubbed
-  [[ "$result" != *"/Users/testuser"* ]]
-  [[ "$result" == *"<redacted>"* ]]
-}
-
-@test "UAT-003: ANTHROPIC_API_KEY env-var name preserved, value scrubbed" {
-  local input="ANTHROPIC_API_KEY=some-value-here"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  [[ "$result" == *"ANTHROPIC_API_KEY=<redacted>"* ]]
+@test "redact_body scrubs env-var values and keeps names" {
+  redact_case "env-var name is preserved but value is scrubbed" \
+    "HOME=/Users/testuser" "/Users/testuser" "HOME=" "<redacted>" || return 1
+  redact_case "ANTHROPIC_API_KEY env-var name preserved, value scrubbed" \
+    "ANTHROPIC_API_KEY=some-value-here" "" "ANTHROPIC_API_KEY=<redacted>"
 }
 
 # ---------------------------------------------------------------------------
@@ -264,39 +177,20 @@ setup() {
 }
 
 # ---------------------------------------------------------------------------
-# Golden-file roundtrip for the secrets fixture
+# Golden-file roundtrip: redacted input equals the golden, byte for byte
 # ---------------------------------------------------------------------------
 
-@test "UAT-010: secrets fixture after redaction matches golden byte-for-byte" {
-  local input_file="$FIXTURES/input-with-secrets.txt"
-  local golden_file="$FIXTURES/golden-secrets-redacted.md"
-
-  [[ -f "$input_file" ]] || skip "input-with-secrets.txt not found"
-  [[ -f "$golden_file" ]] || skip "golden-secrets-redacted.md not found"
-
-  local input
-  input="$(cat "$input_file")"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  local golden
-  golden="$(cat "$golden_file")"
-
-  [[ "$result" == "$golden" ]]
-}
-
-@test "UAT-010: init fixture (no secrets) is unchanged through redaction" {
-  local input_file="$FIXTURES/input-init-failure.txt"
-  local golden_file="$FIXTURES/golden-init-redacted.md"
-
-  [[ -f "$input_file" ]] || skip "input-init-failure.txt not found"
-  [[ -f "$golden_file" ]] || skip "golden-init-redacted.md not found"
-
-  local input
-  input="$(cat "$input_file")"
-  local result
-  result="$(redact_body "$FAKE_ROOT" "$input")"
-  local golden
-  golden="$(cat "$golden_file")"
-
-  [[ "$result" == "$golden" ]]
+@test "redact_body output matches each golden fixture byte-for-byte" {
+  local pair input_file golden_file result
+  for pair in "input-with-secrets.txt golden-secrets-redacted.md" \
+    "input-init-failure.txt golden-init-redacted.md"; do
+    input_file="$FIXTURES/${pair% *}"
+    golden_file="$FIXTURES/${pair#* }"
+    echo "case: ${pair% *} redacts to ${pair#* }"
+    [[ -f "$input_file" ]] || return 1
+    [[ -f "$golden_file" ]] || return 1
+    result="$(redact_body "$FAKE_ROOT" "$(cat "$input_file")")"
+    [[ "$result" == "$(cat "$golden_file")" ]] || return 1
+  done
+  return 0
 }

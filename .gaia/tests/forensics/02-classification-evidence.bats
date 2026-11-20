@@ -15,126 +15,53 @@ setup() {
   source "$LIBRARY_DIRECTORY/classify.sh"
 }
 
-# ---------------------------------------------------------------------------
-# Classification table; each class matches its signal phrases
-# ---------------------------------------------------------------------------
-
-@test "UAT-009: 'init' signal phrase classifies as init" {
+# classify_case <description> <expected-class>
+classify_case() {
   local class
-  class="$(classify_description "the init step failed")"
-  [[ "$class" == "init" ]]
-}
-
-@test "UAT-009: 'scaffold failed' signal phrase classifies as init" {
-  local class
-  class="$(classify_description "scaffold failed during setup")"
-  [[ "$class" == "init" ]]
-}
-
-@test "UAT-009: 'update' signal phrase classifies as update" {
-  local class
-  class="$(classify_description "update conflict in hooks")"
-  [[ "$class" == "update" ]]
-}
-
-@test "UAT-009: 'merge conflict' signal phrase classifies as update" {
-  local class
-  class="$(classify_description "there was a merge conflict")"
-  [[ "$class" == "update" ]]
-}
-
-@test "UAT-009: 'wiki-sync' signal phrase classifies as wiki-sync" {
-  local class
-  class="$(classify_description "wiki-sync failed to push")"
-  [[ "$class" == "wiki-sync" ]]
-}
-
-@test "UAT-009: 'sync' signal phrase classifies as wiki-sync" {
-  local class
-  class="$(classify_description "the sync operation timed out")"
-  [[ "$class" == "wiki-sync" ]]
-}
-
-@test "UAT-009: 'quality gate' signal phrase classifies as quality-gate" {
-  local class
-  class="$(classify_description "quality gate failed")"
-  [[ "$class" == "quality-gate" ]]
-}
-
-@test "UAT-009: 'typecheck' signal phrase classifies as quality-gate" {
-  local class
-  class="$(classify_description "typecheck errors appeared")"
-  [[ "$class" == "quality-gate" ]]
-}
-
-@test "UAT-009: 'hook' signal phrase classifies as hook" {
-  local class
-  class="$(classify_description "the hook misfired")"
-  [[ "$class" == "hook" ]]
-}
-
-@test "UAT-009: 'PreToolUse' signal phrase classifies as hook" {
-  local class
-  class="$(classify_description "PreToolUse rejected the call")"
-  [[ "$class" == "hook" ]]
-}
-
-@test "UAT-009: 'new-component' signal phrase classifies as scaffold" {
-  local class
-  class="$(classify_description "new-component skill failed")"
-  [[ "$class" == "scaffold" ]]
-}
-
-@test "UAT-009: 'vite' signal phrase classifies as dev-server" {
-  local class
-  class="$(classify_description "vite crashed on startup")"
-  [[ "$class" == "dev-server" ]]
-}
-
-@test "UAT-009: '5173' signal phrase classifies as dev-server" {
-  local class
-  class="$(classify_description "port 5173 already in use")"
-  [[ "$class" == "dev-server" ]]
+  echo "case: \"$1\" classifies as $2"
+  class="$(classify_description "$1")"
+  [[ "$class" == "$2" ]]
 }
 
 # ---------------------------------------------------------------------------
-# Multi-match: first in declared order wins
+# Classification table: each class matches its signal phrases, the first class
+# in declared order wins a multi-match, and no match falls to other
 # ---------------------------------------------------------------------------
 
-@test "UAT-009: multi-match picks first in declared order (init before update)" {
-  local class
-  class="$(classify_description "init and update both mentioned")"
-  [[ "$class" == "init" ]]
-}
-
-# ---------------------------------------------------------------------------
-# Zero-match: class is other
-# ---------------------------------------------------------------------------
-
-@test "UAT-011: no matching signal phrase falls to 'other'" {
-  local class
-  class="$(classify_description "something went wrong that I cannot describe")"
-  [[ "$class" == "other" ]]
+@test "classify_description maps each description to its class (including multi-match order and other)" {
+  classify_case "the init step failed" init || return 1
+  classify_case "scaffold failed during setup" init || return 1
+  classify_case "update conflict in hooks" update || return 1
+  classify_case "there was a merge conflict" update || return 1
+  classify_case "wiki-sync failed to push" wiki-sync || return 1
+  classify_case "the sync operation timed out" wiki-sync || return 1
+  classify_case "quality gate failed" quality-gate || return 1
+  classify_case "typecheck errors appeared" quality-gate || return 1
+  classify_case "the hook misfired" hook || return 1
+  classify_case "PreToolUse rejected the call" hook || return 1
+  classify_case "new-component skill failed" scaffold || return 1
+  classify_case "vite crashed on startup" dev-server || return 1
+  classify_case "port 5173 already in use" dev-server || return 1
+  classify_case "init and update both mentioned" init || return 1
+  classify_case "something went wrong that I cannot describe" other
 }
 
 # ---------------------------------------------------------------------------
 # Evidence cite shape
 # ---------------------------------------------------------------------------
 
-@test "UAT-009: evidence cite for init contains signal phrase" {
+@test "classify_evidence cites the signal phrase, or 'no taxonomy class matched' for other" {
   local evidence
+
+  echo "case: evidence cite for init contains signal phrase"
   evidence="$(classify_evidence "init" "the init step failed")"
-  [[ "$evidence" == *"init"* ]]
-}
+  [[ "$evidence" == *"init"* ]] || return 1
 
-@test "UAT-011: evidence cite for other is 'no taxonomy class matched'" {
-  local evidence
+  echo "case: evidence cite for other is 'no taxonomy class matched'"
   evidence="$(classify_evidence "other" "something inexplicable happened")"
-  [[ "$evidence" == "no taxonomy class matched" ]]
-}
+  [[ "$evidence" == "no taxonomy class matched" ]] || return 1
 
-@test "UAT-009: evidence cite for update contains signal phrase" {
-  local evidence
+  echo "case: evidence cite for update contains signal phrase"
   evidence="$(classify_evidence "update" "merge conflict in hooks")"
   [[ "$evidence" == *"merge conflict"* ]]
 }

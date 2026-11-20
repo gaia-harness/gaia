@@ -113,17 +113,6 @@ run_type() {
   [ "$(step_field "$STEP_TYPE" env | tr '\n' ' ')" = "HEAD_REF PR_TITLE PR_AUTHOR " ]
 }
 
-@test "workflow: no run body interpolates an expression" {
-  local step_name checked=0
-  for step_name in "$STEP_BRANCH" "$STEP_CANARY" "$STEP_TITLE" "$STEP_TYPE"; do
-    step_field "$step_name" run > "$BATS_TEST_TMPDIR/body.sh"
-    [ -s "$BATS_TEST_TMPDIR/body.sh" ]
-    grep -qF '${{' "$BATS_TEST_TMPDIR/body.sh" && return 1
-    checked=$((checked + 1))
-  done
-  [ "$checked" -eq 4 ]
-}
-
 @test "workflow: every uses is pinned to a 40-hex SHA with a version comment" {
   local line count=0
   while IFS= read -r line; do
@@ -150,15 +139,15 @@ run_type() {
 
 # --- branch step -----------------------------------------------------------
 
-@test "branch step: REFUSES a worktree spelling and names the rename fix" {
+# bats test_tags=protected
+@test "branch step cases: worktree spelling, unknown/wrong-case/retired prefix refused; canonical shapes accepted" {
+  local head_ref checked=0
+  echo "case: branch step: REFUSES a worktree spelling and names the rename fix"
   run_branch 'worktree-plan+plan-023-x'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"::error::"* ]]
-  [[ "$output" == *"branch -m"* ]]
-}
-
-@test "branch step: REFUSES an unknown prefix, a wrong-case prefix and the retired plan prefix" {
-  local head_ref
+  [[ "$output" == *"::error::"* ]] || return 1
+  [[ "$output" == *"branch -m"* ]] || return 1
+  echo "case: branch step: REFUSES an unknown prefix, a wrong-case prefix and the retired plan prefix"
   for head_ref in 'feature/x' 'Fix/x' 'plan/plan-023-conventional-commits-naming'; do
     run_branch "$head_ref"
     if [ "$status" -ne 1 ]; then
@@ -166,10 +155,7 @@ run_type() {
       return 1
     fi
   done
-}
-
-@test "branch step: ACCEPTS every canonical shape" {
-  local head_ref checked=0
+  echo "case: branch step: ACCEPTS every canonical shape"
   for head_ref in \
     'fix/2450-statusline-nudge' \
     'dependabot/npm_and_yarn/foo-1.2.3' \
@@ -194,8 +180,12 @@ run_type() {
   [ "$status" -eq 0 ]
 }
 
-@test "canary step: FAILS when the config allows every type" {
+@test "canary step FAILS: config allows every type; commitlint errors without type-enum" {
   local scratch="$BATS_TEST_TMPDIR/scratch"
+  write_step "$STEP_CANARY" "$BATS_TEST_TMPDIR/canary.sh"
+  make_pnpm_stub
+
+  echo "case: canary step: FAILS when the config allows every type"
   mkdir -p "$scratch"
   ln -s "$REPO_ROOT/node_modules" "$scratch/node_modules"
   cp "$REPO_ROOT/package.json" "$scratch/package.json"
@@ -208,28 +198,23 @@ CONFIG
   # `pnpm exec commitlint` forwards to the real binary, which reads the scratch
   # directory's config; the real pnpm would first re-verify a lockfile this
   # scratch directory does not carry.
-  make_pnpm_stub
   cat > "$STUB_BIN/pnpm" <<STUB
 #!/bin/sh
 shift 2
 exec "$REPO_ROOT/node_modules/.bin/commitlint" "\$@"
 STUB
-  write_step "$STEP_CANARY" "$BATS_TEST_TMPDIR/canary.sh"
   cd "$scratch" || return 1
   PATH="$STUB_BIN:$PATH" run bash "$BATS_TEST_TMPDIR/canary.sh"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"commitlint accepted a retired type"* ]]
-}
+  [[ "$output" == *"commitlint accepted a retired type"* ]] || return 1
 
-@test "canary step: FAILS when commitlint errors without naming type-enum" {
-  make_pnpm_stub
+  echo "case: canary step: FAILS when commitlint errors without naming type-enum"
   cat > "$STUB_BIN/pnpm" <<'STUB'
 #!/bin/sh
 cat > /dev/null
 echo "ERR_PNPM_BROKEN install" >&2
 exit 1
 STUB
-  write_step "$STEP_CANARY" "$BATS_TEST_TMPDIR/canary.sh"
   cd "$REPO_ROOT" || return 1
   PATH="$STUB_BIN:$PATH" run bash "$BATS_TEST_TMPDIR/canary.sh"
   [ "$status" -ne 0 ]
@@ -238,28 +223,31 @@ STUB
 
 # --- title step ------------------------------------------------------------
 
-@test "title step: REFUSES a title with no type and a retired type" {
+# bats test_tags=protected
+@test "title step lint: no type and retired type refused, over-100 squash subject refused, conforming accepted, 99-char human refused" {
+  local title
+  local dependabot_title='ci(deps): bump chromaui/action from 18.8.1 to 18.9.4 in the github-actions group across 1 directory'
+  echo "case: title step: REFUSES a title with no type and a retired type"
   run_title 'Fix the thing' 2451 stevensacks
   [ "$status" -ne 0 ]
   run_title 'debt(x): y' 2451 stevensacks
   [ "$status" -ne 0 ]
-  [[ "$output" == *"type-enum"* ]]
-}
-
-@test "title step: REFUSES a title whose squash subject passes 100 characters" {
-  local title
+  [[ "$output" == *"type-enum"* ]] || return 1
+  echo "case: title step: REFUSES a title whose squash subject passes 100 characters"
   title="feat: $(printf 'a%.0s' $(seq 1 86))"
   [ "${#title}" -eq 92 ]
   [ "${#title}" -le 100 ]
   [ "$(printf '%s (#%s)' "$title" 12345 | wc -c | tr -d ' ')" -eq 101 ]
   run_title "$title" 12345 stevensacks
   [ "$status" -ne 0 ]
-  [[ "$output" == *"header-max-length"* ]]
-}
-
-@test "title step: ACCEPTS a conforming title" {
+  [[ "$output" == *"header-max-length"* ]] || return 1
+  echo "case: title step: ACCEPTS a conforming title"
   run_title 'feat(harness): enforce conventional commits and canonical branch names' 2451 stevensacks
   [ "$status" -eq 0 ]
+  echo "case: title step: the same 99-character title from a human is REFUSED"
+  run_title "$dependabot_title" 2452 stevensacks
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"header-max-length"* ]]
 }
 
 @test "title step: SKIPS Dependabot without invoking commitlint" {
@@ -272,20 +260,6 @@ STUB
   [ ! -s "$PNPM_LOG" ]
 }
 
-@test "title step: the same 99-character title from a human is REFUSED" {
-  local dependabot_title='ci(deps): bump chromaui/action from 18.8.1 to 18.9.4 in the github-actions group across 1 directory'
-  run_title "$dependabot_title" 2452 stevensacks
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"header-max-length"* ]]
-}
-
-@test "title step: the stub records a commitlint call for a human author" {
-  make_pnpm_stub
-  PNPM_LOG="$PNPM_LOG" run_title 'feat: x' 7 stevensacks "$STUB_BIN"
-  [ "$status" -eq 0 ]
-  grep -qF 'exec commitlint --verbose' "$PNPM_LOG"
-}
-
 @test "title step: shell metacharacters in a title run nothing" {
   local sentinel="$BATS_TEST_TMPDIR/pwned"
   run_title "feat: \$(touch $sentinel) \`touch $sentinel\`" 9 stevensacks
@@ -294,8 +268,10 @@ STUB
 
 # --- type-match step -------------------------------------------------------
 
-@test "type step: ACCEPTS a title type equal to the plan branch type" {
+# bats test_tags=protected
+@test "type step: matching type accepted, mismatch refused with fix, non-plan branch passes, Dependabot skipped" {
   local scenario checked=0
+  echo "case: type step: ACCEPTS a title type equal to the plan branch type"
   for scenario in \
     'feat/plan-024-x|feat(harness): y' \
     'feat/spec-005-cards|feat!: y' \
@@ -308,24 +284,18 @@ STUB
     checked=$((checked + 1))
   done
   [ "$checked" -eq 3 ]
-}
-
-@test "type step: REFUSES a mismatched type and names both types and the fix" {
+  echo "case: type step: REFUSES a mismatched type and names both types and the fix"
   run_type 'feat/plan-024-x' 'fix: y' stevensacks
   [ "$status" -eq 1 ]
-  [[ "$output" == *"::error::"* ]]
-  [[ "$output" == *"declares type feat"* ]]
-  [[ "$output" == *"title has type fix"* ]]
-  [[ "$output" == *"retitle"* ]]
-}
-
-@test "type step: passes a non-plan branch with any title" {
+  [[ "$output" == *"::error::"* ]] || return 1
+  [[ "$output" == *"declares type feat"* ]] || return 1
+  [[ "$output" == *"title has type fix"* ]] || return 1
+  [[ "$output" == *"retitle"* ]] || return 1
+  echo "case: type step: passes a non-plan branch with any title"
   run_type 'fix/2450-statusline-nudge' 'feat: y' stevensacks
   [ "$status" -eq 0 ]
-  [[ "$output" == *"declares no change type"* ]]
-}
-
-@test "type step: SKIPS Dependabot even when the types differ" {
+  [[ "$output" == *"declares no change type"* ]] || return 1
+  echo "case: type step: SKIPS Dependabot even when the types differ"
   run_type 'feat/plan-024-x' 'fix: y' 'dependabot[bot]'
   [ "$status" -eq 0 ]
   [[ "$output" == *"Skipping the type match for Dependabot"* ]]

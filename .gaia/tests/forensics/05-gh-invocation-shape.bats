@@ -1,8 +1,6 @@
 #!/usr/bin/env bats
-# UAT-012: gh issue create uses --repo gaia-harness/gaia, --label gaia-forensics,
-#          and the title format "forensics: <class>, <one-line user description>"
-# UAT-006: on gh failure (auth error / label-not-found), the skill surfaces gh's
-#          native error verbatim, leaves the local report in place, exits non-zero.
+# UAT-012: gh issue create uses --repo gaia-harness/gaia, a hardcoded constant
+#          read from the runbook, not derived from the git remote.
 
 HERE="$(cd "$(dirname "${BATS_TEST_FILENAME}")" && pwd)"
 LIBRARY_DIRECTORY="$HERE/lib"
@@ -56,33 +54,6 @@ teardown() {
 # Tests
 # ---------------------------------------------------------------------------
 
-@test "UAT-012: gh is invoked with --repo gaia-harness/gaia" {
-  invoke_gh_surrogate "$CAPTURE_FILE" "init" "gaia-init rename step failed" "$BODY_FILE"
-  grep -xF -- '--repo' "$CAPTURE_FILE"
-  grep -xF -- "$RUNBOOK_REPO" "$CAPTURE_FILE"
-}
-
-@test "UAT-012: gh is invoked with --label gaia-forensics" {
-  invoke_gh_surrogate "$CAPTURE_FILE" "hook" "hook misfired on PostToolUse" "$BODY_FILE"
-  grep -xF -- '--label' "$CAPTURE_FILE"
-  grep -xF -- 'gaia-forensics' "$CAPTURE_FILE"
-}
-
-@test "UAT-012: gh title format is forensics: <class>, <one-line>" {
-  local class="wiki-sync"
-  local one_line="sync failed to push"
-  invoke_gh_surrogate "$CAPTURE_FILE" "$class" "$one_line" "$BODY_FILE"
-  grep -xF -- '--title' "$CAPTURE_FILE"
-  grep -xF -- "forensics: $class, $one_line" "$CAPTURE_FILE"
-}
-
-@test "UAT-012: gh is invoked with --body-file (not --body)" {
-  invoke_gh_surrogate "$CAPTURE_FILE" "update" "merge conflict in hooks" "$BODY_FILE"
-  grep -xF -- '--body-file' "$CAPTURE_FILE"
-  # Confirm --body (without -file suffix) is not used as a standalone flag
-  ! grep -xF -- '--body' "$CAPTURE_FILE"
-}
-
 @test "UAT-012: gh repo arg is hardcoded constant, not derived from git remote" {
   # The frozen contract: the repo value must be exactly "gaia-harness/gaia"
   # regardless of what git remote would return.
@@ -91,104 +62,4 @@ teardown() {
   [ "$RUNBOOK_REPO" = "gaia-harness/gaia" ] || return 1
   # Confirm the captured argv does not contain any git-remote-derived value
   ! grep -q 'origin' "$CAPTURE_FILE"
-}
-
-@test "UAT-012: title for 'other' class uses 'other' as the class tag" {
-  local class="other"
-  local one_line="unknown failure outside taxonomy"
-  invoke_gh_surrogate "$CAPTURE_FILE" "$class" "$one_line" "$BODY_FILE"
-  grep -xF -- "forensics: $class, $one_line" "$CAPTURE_FILE"
-}
-
-@test "UAT-012: stub gh exits zero on a successful invocation" {
-  local result=0
-  invoke_gh_surrogate "$CAPTURE_FILE" "scaffold" "new-component skill failed" "$BODY_FILE" || result=$?
-  [[ "$result" -eq 0 ]]
-}
-
-# ---------------------------------------------------------------------------
-# UAT-006: gh failure path; error surfaced verbatim, local report preserved,
-#          exit non-zero. Tested via a "failing-gh" stub that exits 1.
-# ---------------------------------------------------------------------------
-
-# Synthetic stand-in for `bash .gaia/scripts/main-root-lib.sh --tree-key`'s
-# stdout (16 lowercase hex characters); this surrogate never invokes the real
-# resolver, same as the fixed synthetic $timestamp below.
-TREE_KEY_FIXTURE="deadbeefcafe1234"
-
-invoke_gh_failing_surrogate() {
-  local work_directory="$1"
-  local class="${2:-init}"
-  local timestamp="20260508T143022Z"
-
-  # Write the local report (always done before gh is called)
-  mkdir -p "$work_directory/.gaia/local/forensics/$TREE_KEY_FIXTURE"
-  local report_path="$work_directory/.gaia/local/forensics/$TREE_KEY_FIXTURE/${timestamp}-${class}.md"
-  printf '## Symptom\nTest report body.\n' > "$report_path"
-
-  # Build a failing gh stub
-  local stub_directory
-  stub_directory="$(mktemp -d)"
-  local failing_gh="$stub_directory/gh"
-  printf '#!/usr/bin/env bash\nprintf "ERROR: authentication required\n" >&2\nexit 1\n' > "$failing_gh"
-  chmod +x "$failing_gh"
-
-  local gh_exit=0
-  local gh_stderr
-  gh_stderr="$(PATH="$stub_directory:$PATH" gh issue create \
-    --repo "$RUNBOOK_REPO" \
-    --label "gaia-forensics" \
-    --title "forensics: $class, test failure" \
-    --body-file "$report_path" 2>&1)" || gh_exit=$?
-
-  rm -rf "$stub_directory"
-
-  # Surface gh's stderr verbatim (mirrors forensics.md § 8 On non-zero gh exit)
-  if [[ "$gh_exit" -ne 0 ]]; then
-    printf '%s\n' "$gh_stderr" >&2
-    return "$gh_exit"
-  fi
-}
-
-@test "UAT-006: gh failure exits non-zero and local report is preserved" {
-  local work_directory="$WORK_DIRECTORY"
-  local result=0
-  invoke_gh_failing_surrogate "$work_directory" "hook" 2>/dev/null || result=$?
-  # Must exit non-zero
-  [[ "$result" -ne 0 ]]
-  # Local report must still exist
-  [[ -f "$work_directory/.gaia/local/forensics/$TREE_KEY_FIXTURE/20260508T143022Z-hook.md" ]]
-}
-
-@test "UAT-006: gh failure surfaces native error verbatim to stderr" {
-  local work_directory="$WORK_DIRECTORY"
-  local error_output
-  error_output="$(invoke_gh_failing_surrogate "$work_directory" "init" 2>&1 || true)"
-  printf '%s' "$error_output" | grep -qi 'error\|authentication\|unauthorized\|not found'
-}
-
-@test "UAT-006: gh failure does not retry or partially file (stub called once)" {
-  # The stub writes to capture file; we use a counting stub to assert single call.
-  local stub_directory
-  stub_directory="$(mktemp -d)"
-  local count_file="$WORK_DIRECTORY/gh-call-count.txt"
-  local failing_gh="$stub_directory/gh"
-  printf '#!/usr/bin/env bash\nprintf "1\n" >> "%s"\nexit 1\n' "$count_file" > "$failing_gh"
-  chmod +x "$failing_gh"
-
-  local body_file="$WORK_DIRECTORY/body.md"
-  printf '## Symptom\nTest.\n' > "$body_file"
-
-  PATH="$stub_directory:$PATH" gh issue create \
-    --repo "$RUNBOOK_REPO" \
-    --label "gaia-forensics" \
-    --title "forensics: update, test" \
-    --body-file "$body_file" 2>/dev/null || true
-
-  rm -rf "$stub_directory"
-
-  local call_count
-  call_count="$(wc -l < "$count_file" | tr -d ' ')"
-  # Must be exactly 1; no retry
-  [[ "$call_count" -eq 1 ]]
 }

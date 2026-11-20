@@ -103,143 +103,33 @@ EOF
   export GITHUB_REPOSITORY="gaia-react/gaia"
 }
 
-@test "no green check on any PR commit → main ref" {
+# Every input here leaves no green ancestor that can anchor a base, so the
+# helper falls back to the full-scope main ref rather than skip un-passed code.
+# bats test_tags=protected
+@test "falls back to the main ref when no green ancestor can anchor a base (case table)" {
+  echo "case: single-commit PR → main ref"
   add_commit a
-  add_commit b
   run run_in_sandbox
   [ "$status" -eq 0 ]
   [ "$output" = "main" ]
-}
 
-# -----------------------------------------------------------------------------
-# 1b. Which ref the full-scope fallback names. This helper mirrors
-#     resolve-audit-base.sh's fallback contract, so a pull request stacked on a
-#     branch other than the default one falls back to ITS OWN base here too:
-#     falling back to the default would re-run the check over the base branch's
-#     whole divergence (gaia-react/gaia#1057). The sandbox has no remote, which
-#     is why every other test sees the bare local `main`; these write
-#     remote-tracking refs by hand so an `origin/<ref>` can resolve.
-# -----------------------------------------------------------------------------
-
-set_origin_reference() {
-  git -C "$SANDBOX" update-ref "refs/remotes/origin/$1" "$(git -C "$SANDBOX" rev-parse "$2")"
-}
-
-@test "the pull request's own base ref wins over the repository default" {
-  add_commit a
-  add_commit b
-  set_origin_reference main main
-  set_origin_reference release main
-  export GITHUB_ACTIONS=true GITHUB_BASE_REF=release
-  run run_in_sandbox
-  [ "$status" -eq 0 ]
-  [ "$output" = "origin/release" ]
-}
-
-@test "no base ref declared → the repository default" {
-  add_commit a
-  add_commit b
-  set_origin_reference main main
-  export GITHUB_ACTIONS=true
-  unset GITHUB_BASE_REF
-  run run_in_sandbox
-  [ "$status" -eq 0 ]
-  [ "$output" = "origin/main" ]
-}
-
-@test "a base ref naming no remote branch → the repository default" {
-  add_commit a
-  add_commit b
-  set_origin_reference main main
-  export GITHUB_ACTIONS=true GITHUB_BASE_REF=deleted-branch
-  run run_in_sandbox
-  [ "$status" -eq 0 ]
-  [ "$output" = "origin/main" ]
-}
-
-# Read only where the event sets it, the same gate and the same reason as the
-# sibling resolver: outside Actions the variable belongs to the caller, and a
-# value resolving near HEAD would skip work nothing proved green.
-@test "a base ref declared outside Actions is ignored" {
-  add_commit a
-  add_commit b
-  set_origin_reference main main
-  set_origin_reference release main
-  unset GITHUB_ACTIONS
-  export GITHUB_BASE_REF=release
-  run run_in_sandbox
-  [ "$status" -eq 0 ]
-  [ "$output" = "origin/main" ]
-}
-
-# -----------------------------------------------------------------------------
-# 2. Green check on the parent → that parent SHA. (A skipped-but-green run is
-#    indistinguishable here, its job check-run is also conclusion=success.)
-# -----------------------------------------------------------------------------
-
-@test "green check on parent → parent SHA" {
-  add_commit a
-  base="$(sha_of HEAD)"
-  add_commit b
-  install_gh_mock "${base}=${CHECK}"
-  run run_in_sandbox
-  [ "$status" -eq 0 ]
-  [ "$output" = "$base" ]
-}
-
-# -----------------------------------------------------------------------------
-# 3. Non-green parent, green grandparent → grandparent (last GREEN, not last
-#    run). A failed/cancelled run on the parent leaves no green signal.
-# -----------------------------------------------------------------------------
-
-@test "non-green parent with green grandparent → grandparent SHA" {
-  add_commit a
-  green="$(sha_of HEAD)"
-  add_commit b
-  # b has no green check (simulating a failed/cancelled run).
-  install_gh_mock "${green}=${CHECK}"
-  run run_in_sandbox
-  [ "$status" -eq 0 ]
-  [ "$output" = "$green" ]
-}
-
-@test "newest green commit wins over an older green commit" {
-  add_commit a
-  older="$(sha_of HEAD)"
-  add_commit b
-  newer="$(sha_of HEAD)"
-  add_commit c
-  install_gh_mock "${older}=${CHECK}" "${newer}=${CHECK}"
-  run run_in_sandbox
-  [ "$status" -eq 0 ]
-  [ "$output" = "$newer" ]
-  [ "$output" != "$older" ]
-}
-
-@test "green check on HEAD is not used as its own base" {
-  add_commit a
+  echo "case: green check on HEAD is not used as its own base"
   head="$(sha_of HEAD)"
   install_gh_mock "${head}=${CHECK}"
   run run_in_sandbox
   [ "$status" -eq 0 ]
   [ "$output" = "main" ]
-}
 
-# -----------------------------------------------------------------------------
-# 6. Single-commit PR (HEAD is the only commit past merge-base) → main ref
-# -----------------------------------------------------------------------------
+  base="$head"
+  add_commit b
 
-@test "single-commit PR → main ref" {
-  add_commit a
+  echo "case: no green check on any PR commit → main ref"
+  install_gh_mock
   run run_in_sandbox
   [ "$status" -eq 0 ]
   [ "$output" = "main" ]
-}
 
-@test "no GH_TOKEN → API unreachable → main ref" {
-  add_commit a
-  base="$(sha_of HEAD)"
-  add_commit b
+  echo "case: no GH_TOKEN → API unreachable → main ref"
   # A green check exists in principle, but without GH_TOKEN the helper never
   # queries it.
   install_gh_mock "${base}=${CHECK}"
@@ -247,24 +137,91 @@ set_origin_reference() {
   run run_in_sandbox
   [ "$status" -eq 0 ]
   [ "$output" = "main" ]
-}
 
-@test "green check for a different context is ignored → main ref" {
-  add_commit a
-  base="$(sha_of HEAD)"
-  add_commit b
+  echo "case: green check for a different context is ignored → main ref"
   install_gh_mock "${base}=Some Other Check"
   run run_in_sandbox
   [ "$status" -eq 0 ]
   [ "$output" = "main" ]
-}
 
-@test "missing check-name argument → main ref" {
-  add_commit a
-  base="$(sha_of HEAD)"
-  add_commit b
+  echo "case: missing check-name argument → main ref"
   install_gh_mock "${base}=${CHECK}"
   run run_in_sandbox_named
   [ "$status" -eq 0 ]
   [ "$output" = "main" ]
+}
+
+# -----------------------------------------------------------------------------
+# Which ref the full-scope fallback names. This helper mirrors
+# resolve-audit-base.sh's fallback contract, so a pull request stacked on a
+# branch other than the default one falls back to ITS OWN base here too:
+# falling back to the default would re-run the check over the base branch's
+# whole divergence (gaia-react/gaia#1057). The sandbox has no remote, which
+# is why every other test sees the bare local `main`; these write
+# remote-tracking refs by hand so an `origin/<ref>` can resolve.
+# -----------------------------------------------------------------------------
+
+set_origin_reference() {
+  git -C "$SANDBOX" update-ref "refs/remotes/origin/$1" "$(git -C "$SANDBOX" rev-parse "$2")"
+}
+
+# GITHUB_BASE_REF is read only where the event sets it, the same gate and the
+# same reason as the sibling resolver: outside Actions the variable belongs to
+# the caller, and a value resolving near HEAD would skip work nothing proved
+# green. Each case: label, GITHUB_ACTIONS ("-" unset), GITHUB_BASE_REF ("-"
+# unset), the expected ref.
+BASE_REFERENCE_CASES="the pull request's own base ref wins over the repository default|true|release|origin/release
+no base ref declared → the repository default|true|-|origin/main
+a base ref naming no remote branch → the repository default|true|deleted-branch|origin/main
+a base ref declared outside Actions is ignored|-|release|origin/main"
+
+# bats test_tags=protected
+@test "the fallback names the pull request's own base ref, else the default (case table)" {
+  local label actions base_reference expected cases=0
+  add_commit a
+  add_commit b
+  set_origin_reference main main
+  set_origin_reference release main
+
+  while IFS='|' read -r label actions base_reference expected; do
+    echo "case: $label"
+    cases=$((cases + 1))
+    unset GITHUB_ACTIONS GITHUB_BASE_REF
+    [ "$actions" = - ] || export GITHUB_ACTIONS="$actions"
+    [ "$base_reference" = - ] || export GITHUB_BASE_REF="$base_reference"
+    run run_in_sandbox
+    [ "$status" -eq 0 ] || return 1
+    [ "$output" = "$expected" ] || return 1
+  done <<<"$BASE_REFERENCE_CASES"
+  [ "$cases" -eq 4 ]
+}
+
+# A failed or cancelled run leaves no green signal, so the base is the last
+# GREEN ancestor, not the last run. (A skipped-but-green run is
+# indistinguishable here: its job check-run is also conclusion=success.)
+@test "the newest green ancestor of HEAD is the resolved base (case table)" {
+  add_commit a
+  older="$(sha_of HEAD)"
+  add_commit b
+  newer="$(sha_of HEAD)"
+  add_commit c
+
+  echo "case: green check on parent → parent SHA"
+  install_gh_mock "${newer}=${CHECK}"
+  run run_in_sandbox
+  [ "$status" -eq 0 ]
+  [ "$output" = "$newer" ]
+
+  echo "case: non-green parent with green grandparent → grandparent SHA"
+  install_gh_mock "${older}=${CHECK}"
+  run run_in_sandbox
+  [ "$status" -eq 0 ]
+  [ "$output" = "$older" ]
+
+  echo "case: newest green commit wins over an older green commit"
+  install_gh_mock "${older}=${CHECK}" "${newer}=${CHECK}"
+  run run_in_sandbox
+  [ "$status" -eq 0 ]
+  [ "$output" = "$newer" ]
+  [ "$output" != "$older" ]
 }

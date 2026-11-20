@@ -67,44 +67,50 @@ assert_no_fitness() {
   true
 }
 
-@test "a commit count at the default threshold arms the nudge in its Large form" {
+@test "the commit-count nudge arms at its threshold, with cached or default threshold and singular form" {
+  echo "case: a commit count at the default threshold arms the nudge in its Large form"
   assert_renders '{"fitnessCommitCount":15}' '💪 /gaia-fitness (15 harness commits)'
-}
 
-@test "a commit count under the default threshold arms nothing" {
+  echo "case: a commit count under the default threshold arms nothing"
   assert_no_fitness '{"fitnessCommitCount":14}'
-}
 
-@test "the cached threshold replaces the default" {
+  echo "case: the cached threshold replaces the default"
   assert_no_fitness '{"fitnessCommitCount":20,"fitnessCommitThreshold":25}'
   assert_renders '{"fitnessCommitCount":25,"fitnessCommitThreshold":25}' '(25 harness commits)'
-}
 
-@test "a threshold that is zero, not a number or absent falls back to the default" {
+  echo "case: a threshold that is zero, not a number or absent falls back to the default"
   assert_renders '{"fitnessCommitCount":15,"fitnessCommitThreshold":0}' '(15 harness commits)'
   assert_renders '{"fitnessCommitCount":15,"fitnessCommitThreshold":"abc"}' '(15 harness commits)'
   assert_renders '{"fitnessCommitCount":15}' '(15 harness commits)'
   assert_no_fitness '{"fitnessCommitCount":14,"fitnessCommitThreshold":0}'
-}
 
-@test "a single commit reads in the singular" {
+  echo "case: a single commit reads in the singular"
   assert_renders '{"fitnessCommitCount":1,"fitnessCommitThreshold":1}' '(1 harness commit)'
   grep -qF -- '(1 harness commits)' <<<"$plain" && return 1
   true
 }
 
-@test "a blended-file count arms the nudge, singular for one" {
+@test "each reason arms or not by its cached field: blended count, grade, invalid fields" {
+  echo "case: a blended-file count arms the nudge, singular for one"
   assert_renders '{"fitnessBlendCount":3}' '💪 /gaia-fitness (3 blended files)'
   assert_renders '{"fitnessBlendCount":1}' '(1 blended file)'
   grep -qF -- '(1 blended files)' <<<"$plain" && return 1
   true
-}
 
-@test "a cached grade arms the nudge" {
+  echo "case: a cached grade arms the nudge"
   assert_renders '{"fitnessGrade":"B+"}' '💪 /gaia-fitness (grade B+)'
   assert_renders '{"fitnessGrade":"A"}' '(grade A)'
   assert_renders '{"fitnessGrade":"F"}' '(grade F)'
   assert_renders '{"fitnessGrade":"D-"}' '(grade D-)'
+
+  echo "case: an invalid or missing field arms nothing and writes nothing to stderr"
+  assert_no_fitness '{"fitnessGrade":"Z"}'
+  assert_no_fitness '{"fitnessGrade":""}'
+  assert_no_fitness '{"fitnessBlendCount":-1}'
+  assert_no_fitness '{"fitnessBlendCount":"3"}'
+  assert_no_fitness '{"fitnessCommitCount":"20"}'
+  assert_no_fitness '{"fitnessBlendCount":0,"fitnessCommitCount":0}'
+  assert_no_fitness '{"outdatedCount":3}'
 }
 
 @test "the grade outranks blended files and commits, and blended files outrank commits" {
@@ -116,16 +122,6 @@ assert_no_fitness() {
   true
 }
 
-@test "an invalid or missing field arms nothing and writes nothing to stderr" {
-  assert_no_fitness '{"fitnessGrade":"Z"}'
-  assert_no_fitness '{"fitnessGrade":""}'
-  assert_no_fitness '{"fitnessBlendCount":-1}'
-  assert_no_fitness '{"fitnessBlendCount":"3"}'
-  assert_no_fitness '{"fitnessCommitCount":"20"}'
-  assert_no_fitness '{"fitnessBlendCount":0,"fitnessCommitCount":0}'
-  assert_no_fitness '{"outdatedCount":3}'
-}
-
 @test "an armed nudge is drawn in bright blue" {
   render_with_cache '{"fitnessCommitCount":15}'
   [ "$status" -eq 0 ]
@@ -135,7 +131,8 @@ assert_no_fitness() {
 # The nudge alone on the right side, so each step is the nudge's own form
 # rather than a neighbour's. Boundaries measured once and pinned: the first
 # width at a form, and the width one narrower.
-@test "a commit count steps down Large, Medium, Small, icon, then folds into +1" {
+@test "the nudge steps down by width, for a commit count and for a grade" {
+  echo "case: a commit count steps down Large, Medium, Small, icon, then folds into +1"
   render_with_cache '{"fitnessCommitCount":17}' 54
   [ "$right" = '💪 /gaia-fitness (17 harness commits)' ]
   render_with_cache '{"fitnessCommitCount":17}' 53
@@ -152,9 +149,8 @@ assert_no_fitness() {
   [ "$right" = '💪 17' ]
   render_with_cache '{"fitnessCommitCount":17}' 21
   [ "$right" = '+1' ]
-}
 
-@test "a grade steps down Large, Medium, Small, a bare icon, then folds into +1" {
+  echo "case: a grade steps down Large, Medium, Small, a bare icon, then folds into +1"
   render_with_cache '{"fitnessGrade":"B+"}' 44
   [ "$right" = '💪 /gaia-fitness (grade B+)' ]
   render_with_cache '{"fitnessGrade":"B+"}' 43
@@ -205,7 +201,8 @@ size_step() {
 
 ORDER_CACHE='{"cleanseNudge":true,"cleanseNudgeReason":"stale","fitnessCommitCount":17,"codifyNudgeReason":"2 recurring patterns","codifyCandidateCount":2}'
 
-@test "the nudge sits after /gaia-cleanse and before /gaia-codify" {
+@test "the nudge keeps its place and shrink order among cleanse and codify nudges" {
+  echo "case: the nudge sits after /gaia-cleanse and before /gaia-codify"
   render_with_cache "$ORDER_CACHE"
   [ "$status" -eq 0 ]
   before_cleanse="${plain%%/gaia-cleanse*}"
@@ -213,9 +210,8 @@ ORDER_CACHE='{"cleanseNudge":true,"cleanseNudgeReason":"stale","fitnessCommitCou
   before_codify="${plain%%/gaia-codify*}"
   [ "${#before_cleanse}" -lt "${#before_fitness}" ]
   [ "${#before_fitness}" -lt "${#before_codify}" ]
-}
 
-@test "codify is never at a smaller form than fitness, nor fitness than cleanse" {
+  echo "case: codify is never at a smaller form than fitness, nor fitness than cleanse"
   local width codify_step fitness_step cleanse_step codify_ahead=0 fitness_ahead=0
   for width in $(seq 120 -1 20); do
     render_with_cache "$ORDER_CACHE" "$width"
@@ -230,3 +226,4 @@ ORDER_CACHE='{"cleanseNudge":true,"cleanseNudgeReason":"stale","fitnessCommitCou
   [ "$codify_ahead" -gt 0 ]
   [ "$fitness_ahead" -gt 0 ]
 }
+

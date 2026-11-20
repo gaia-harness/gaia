@@ -126,61 +126,108 @@ first_captured_body() {
   head -1 "$CAPTURED_BODIES_DIRECTORY/index.txt"
 }
 
-# ---------------------------------------------------------------------------
-# handle-non-issue.sh: UAT-002
-# ---------------------------------------------------------------------------
-
-@test "non-issue: usage error with no args" {
-  run "$HANDLERS/handle-non-issue.sh"
-  [ "$status" -eq 2 ]
+# Helper: clear the gh and git logs and captured bodies between the cases of
+# one test, so each case reads only its own handler run.
+reset_logs() {
+  rm -f "$GH_LOG" "$GIT_LOG"
+  rm -rf "$CAPTURED_BODIES_DIRECTORY"
+  mkdir -p "$CAPTURED_BODIES_DIRECTORY"
 }
 
-@test "non-issue: missing reasoning file exits 2" {
-  run "$HANDLERS/handle-non-issue.sh" 42 "$BATS_TEST_TMPDIR/does-not-exist"
-  [ "$status" -eq 2 ]
-}
-
-@test "non-issue: applies non-issue label" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
-  printf 'user mis-config; not a bug.\n' > "$reasoning"
-  run "$HANDLERS/handle-non-issue.sh" 42 "$reasoning"
-  [ "$status" -eq 0 ]
-  [ "$(gh_log_count '--add-label non-issue')" -ge 1 ]
-}
-
-@test "non-issue: posts comment via --body-file (never inline)" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
-  printf 'user mis-config; not a bug.\n' > "$reasoning"
-  run "$HANDLERS/handle-non-issue.sh" 42 "$reasoning"
-  [ "$status" -eq 0 ]
-  [ "$(gh_log_count 'gh issue comment 42 --body-file')" -ge 1 ]
-  # No --body inline form anywhere (passthrough discipline).
-  [ "$(gh_log_count 'gh issue comment 42 --body ')" -eq 0 ]
-}
-
-@test "non-issue: closes the issue" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
-  printf 'x\n' > "$reasoning"
-  run "$HANDLERS/handle-non-issue.sh" 42 "$reasoning"
-  [ "$status" -eq 0 ]
-  [ "$(gh_log_count 'gh issue close 42')" -ge 1 ]
-}
-
-@test "non-issue: gaia-triaged is the LAST mutation" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
-  printf 'x\n' > "$reasoning"
-  run "$HANDLERS/handle-non-issue.sh" 42 "$reasoning"
-  [ "$status" -eq 0 ]
+# Helper: fails unless the gaia-triaged label is the last gh call logged.
+assert_triaged_last() {
   triaged_line="$(gh_log_line_number '--add-label gaia-triaged')"
   total_lines="$(wc -l < "$GH_LOG" | tr -d ' ')"
   [ "$triaged_line" = "$total_lines" ]
 }
 
-@test "non-issue: comment body contains the verdict header and reasoning" {
+# ---------------------------------------------------------------------------
+# argument validation, every handler
+# ---------------------------------------------------------------------------
+
+# bats test_tags=protected
+@test "every handler refuses a missing or bad argument with its exit code (case table)" {
+  reasoning="$BATS_TEST_TMPDIR/r.md"
+  printf 'x\n' > "$reasoning"
+  echo "case: non-issue: usage error with no args"
+  run "$HANDLERS/handle-non-issue.sh"
+  [ "$status" -eq 2 ]
+  echo "case: non-issue: missing reasoning file exits 2"
+  run "$HANDLERS/handle-non-issue.sh" 42 "$BATS_TEST_TMPDIR/does-not-exist"
+  [ "$status" -eq 2 ]
+  echo "case: needs-human: usage error with too few args"
+  run "$HANDLERS/handle-needs-human.sh" 42
+  [ "$status" -eq 2 ]
+  echo "case: needs-human: rejects unknown reason-code"
+  run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" not-a-real-reason
+  [ "$status" -eq 2 ]
+  echo "case: auto-fixable: usage error with too few args"
+  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate
+  [ "$status" -eq 2 ]
+  echo "case: auto-fixable: missing pr body file exits 2"
+  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$BATS_TEST_TMPDIR/nope"
+  [ "$status" -eq 2 ]
+  echo "case: malformed-body: usage error with no args"
+  run "$HANDLERS/handle-malformed-body.sh"
+  [ "$status" -eq 2 ]
+  echo "case: malformed-body: missing parser output exits 2"
+  run "$HANDLERS/handle-malformed-body.sh" 42 "$BATS_TEST_TMPDIR/nope"
+  [ "$status" -eq 2 ]
+  echo "case: already-triaged: usage error with no args"
+  run "$HANDLERS/handle-already-triaged.sh"
+  [ "$status" -eq 2 ]
+}
+
+@test "every labelling handler adds gaia-triaged as its last mutation (case table)" {
+  reasoning="$BATS_TEST_TMPDIR/r.md"
+  printf 'x\n' > "$reasoning"
+  body="$BATS_TEST_TMPDIR/pr.md"
+  printf 'x\n' > "$body"
+  parser="$BATS_TEST_TMPDIR/p.json"
+  printf '{"valid":false,"error":"missing-section","missing":["symptom"],"malformed":[]}\n' > "$parser"
+
+  echo "case: non-issue: gaia-triaged is the LAST mutation"
+  run "$HANDLERS/handle-non-issue.sh" 42 "$reasoning"
+  [ "$status" -eq 0 ]
+  assert_triaged_last
+
+  reset_logs
+  echo "case: needs-human: gaia-triaged is the LAST mutation"
+  run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" out-of-scope
+  [ "$status" -eq 0 ]
+  assert_triaged_last
+
+  reset_logs
+  echo "case: auto-fixable: gaia-triaged is the LAST mutation"
+  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
+  [ "$status" -eq 0 ]
+  assert_triaged_last
+
+  reset_logs
+  echo "case: malformed-body: gaia-triaged is the LAST mutation"
+  run "$HANDLERS/handle-malformed-body.sh" 42 "$parser"
+  [ "$status" -eq 0 ]
+  assert_triaged_last
+}
+
+# ---------------------------------------------------------------------------
+# handle-non-issue.sh: UAT-002
+# ---------------------------------------------------------------------------
+
+@test "handle-non-issue labels, comments via --body-file, closes and carries the verdict" {
   reasoning="$BATS_TEST_TMPDIR/r.md"
   printf 'sentinel-reason-line\n' > "$reasoning"
   run "$HANDLERS/handle-non-issue.sh" 42 "$reasoning"
   [ "$status" -eq 0 ]
+  echo "case: non-issue: applies non-issue label"
+  [ "$(gh_log_count '--add-label non-issue')" -ge 1 ]
+  echo "case: non-issue: posts comment via --body-file (never inline)"
+  [ "$(gh_log_count 'gh issue comment 42 --body-file')" -ge 1 ]
+  # No --body inline form anywhere (passthrough discipline).
+  [ "$(gh_log_count 'gh issue comment 42 --body ')" -eq 0 ]
+  echo "case: non-issue: closes the issue"
+  [ "$(gh_log_count 'gh issue close 42')" -ge 1 ]
+  echo "case: non-issue: comment body contains the verdict header and reasoning"
   body_path="$(first_captured_body)"
   grep -qF 'verdict: non-issue' "$body_path"
   grep -qF 'sentinel-reason-line' "$body_path"
@@ -190,74 +237,51 @@ first_captured_body() {
 # handle-needs-human.sh: UAT-003 / UAT-005 / UAT-007 / UAT-014
 # ---------------------------------------------------------------------------
 
-@test "needs-human: usage error with too few args" {
-  run "$HANDLERS/handle-needs-human.sh" 42
-  [ "$status" -eq 2 ]
-}
-
-@test "needs-human: rejects unknown reason-code" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
-  printf 'x\n' > "$reasoning"
-  run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" not-a-real-reason
-  [ "$status" -eq 2 ]
-}
-
-@test "needs-human: applies needs-human label" {
+# bats test_tags=protected
+@test "handle-needs-human labels, mentions the maintainer and never closes" {
   reasoning="$BATS_TEST_TMPDIR/r.md"
   printf 'x\n' > "$reasoning"
   run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" out-of-scope
   [ "$status" -eq 0 ]
+  echo "case: needs-human: applies needs-human label"
   [ "$(gh_log_count '--add-label needs-human')" -ge 1 ]
-}
-
-@test "needs-human: never closes the issue" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
-  printf 'x\n' > "$reasoning"
-  run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" out-of-scope
-  [ "$status" -eq 0 ]
+  echo "case: needs-human: never closes the issue"
   [ "$(gh_log_count 'gh issue close')" -eq 0 ]
-}
-
-@test "needs-human: comment mentions @stevensacks (UAT-003)" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
-  printf 'x\n' > "$reasoning"
-  run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" out-of-scope
-  [ "$status" -eq 0 ]
+  echo "case: needs-human: comment mentions @stevensacks (UAT-003)"
   body_path="$(first_captured_body)"
   grep -qF '@stevensacks' "$body_path"
 }
 
-@test "needs-human: comment names the reason-code out-of-scope" {
+@test "handle-needs-human comment names each reason-code and its text (case table)" {
   reasoning="$BATS_TEST_TMPDIR/r.md"
+
+  echo "case: needs-human: comment names the reason-code out-of-scope"
   printf 'x\n' > "$reasoning"
   run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" out-of-scope
   [ "$status" -eq 0 ]
   body_path="$(first_captured_body)"
   grep -qF 'out-of-scope' "$body_path"
   grep -qF 'outside the auto-fix allowlist' "$body_path"
-}
 
-@test "needs-human: comment names the reason-code gate-failure" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
+  reset_logs
+  echo "case: needs-human: comment names the reason-code gate-failure"
   printf 'gate failure detail\n' > "$reasoning"
   run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" gate-failure
   [ "$status" -eq 0 ]
   body_path="$(first_captured_body)"
   grep -qF 'gate-failure' "$body_path"
   grep -qF 'failed the Quality Gate' "$body_path"
-}
 
-@test "needs-human: comment names the reason-code ambiguous-verdict (UAT-003b)" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
+  reset_logs
+  echo "case: needs-human: comment names the reason-code ambiguous-verdict (UAT-003b)"
   printf 'ambiguous\n' > "$reasoning"
   run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" ambiguous-verdict
   [ "$status" -eq 0 ]
   body_path="$(first_captured_body)"
   grep -qF 'ambiguous-verdict' "$body_path"
-}
 
-@test "needs-human: comment names the reason-code deviation (UAT-010)" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
+  reset_logs
+  echo "case: needs-human: comment names the reason-code deviation (UAT-010)"
   printf 'deviation detail\n' > "$reasoning"
   run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" deviation
   [ "$status" -eq 0 ]
@@ -267,30 +291,11 @@ first_captured_body() {
   grep -qF 'deviates from the classifier' "$body_path"
 }
 
-@test "needs-human: gaia-triaged is the LAST mutation" {
-  reasoning="$BATS_TEST_TMPDIR/r.md"
-  printf 'x\n' > "$reasoning"
-  run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" out-of-scope
-  [ "$status" -eq 0 ]
-  triaged_line="$(gh_log_line_number '--add-label gaia-triaged')"
-  total_lines="$(wc -l < "$GH_LOG" | tr -d ' ')"
-  [ "$triaged_line" = "$total_lines" ]
-}
-
 # ---------------------------------------------------------------------------
 # handle-auto-fixable.sh: UAT-004 / UAT-008 / UAT-015
 # ---------------------------------------------------------------------------
 
-@test "auto-fixable: usage error with too few args" {
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate
-  [ "$status" -eq 2 ]
-}
-
-@test "auto-fixable: missing pr body file exits 2" {
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$BATS_TEST_TMPDIR/nope"
-  [ "$status" -eq 2 ]
-}
-
+# bats test_tags=protected
 @test "auto-fixable: missing remote branch exits 1" {
   body="$BATS_TEST_TMPDIR/pr.md"
   printf '## Capture\nverbatim\n' > "$body"
@@ -302,39 +307,37 @@ first_captured_body() {
   [ "$(gh_log_count 'gh pr create')" -eq 0 ]
 }
 
-@test "auto-fixable: invokes gh pr create with --draft (UAT-008)" {
+# bats test_tags=protected
+@test "handle-auto-fixable opens a draft PR with deterministic title, base, head and --body-file" {
   body="$BATS_TEST_TMPDIR/pr.md"
-  printf '## Capture\nverbatim\n' > "$body"
+  printf '## Capture\n```\napi_key: <redacted>\n```\n' > "$body"
   run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
   [ "$status" -eq 0 ]
+  pr_line="$(grep -F 'gh pr create' "$GH_LOG")"
+
+  echo "case: auto-fixable: invokes gh pr create with --draft (UAT-008)"
   [ "$(gh_log_count 'gh pr create')" -ge 1 ]
   [ "$(gh_log_count '--draft')" -ge 1 ]
-}
 
-@test "auto-fixable: pr create uses --base main and the supplied --head" {
-  body="$BATS_TEST_TMPDIR/pr.md"
-  printf 'x\n' > "$body"
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
-  [ "$status" -eq 0 ]
-  pr_line="$(grep -F 'gh pr create' "$GH_LOG")"
-  [[ "$pr_line" == *'--base main'* ]]
-  [[ "$pr_line" == *'--head forensics/42-quality-gate'* ]]
-}
+  echo "case: auto-fixable: pr create uses --base main and the supplied --head"
+  [[ "$pr_line" == *'--base main'* ]] || return 1
+  [[ "$pr_line" == *'--head forensics/42-quality-gate'* ]] || return 1
 
-@test "auto-fixable: pr title is the deterministic conventional header, not the issue title" {
-  body="$BATS_TEST_TMPDIR/pr.md"
-  printf 'x\n' > "$body"
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
-  [ "$status" -eq 0 ]
-  pr_line="$(grep -F 'gh pr create' "$GH_LOG")"
+  echo "case: auto-fixable: pr title is the deterministic conventional header, not the issue title"
   # The shim logs argv through printf %q, so the expectation is built the same way.
   expected_title="$(printf '%q' 'fix(forensics): auto-fix #42 (quality-gate)')"
-  [[ "$pr_line" == *"--title $expected_title "* ]]
+  [[ "$pr_line" == *"--title $expected_title "* ]] || return 1
   [[ "$pr_line" == *'gaia-forensics'* ]] && return 1
   [[ "$pr_line" == *'Test\ issue\ title'* ]] && return 1
+
+  echo "case: auto-fixable: pr body passed via --body-file (UAT-015 passthrough)"
+  [[ "$pr_line" == *'--body-file'* ]] || return 1
+  # Inline --body must NOT appear, passthrough goes through file only.
+  [[ "$pr_line" == *'--body '* ]] && return 1
   true
 }
 
+# bats test_tags=protected
 @test "auto-fixable: the issue title moves into the pr body as an inert code span" {
   body="$BATS_TEST_TMPDIR/pr.md"
   printf '## Capture\nverbatim\n' > "$body"
@@ -347,58 +350,28 @@ first_captured_body() {
   grep -qF 'verbatim' "$first_body"
 }
 
-@test "auto-fixable: pr body passed via --body-file (UAT-015 passthrough)" {
-  body="$BATS_TEST_TMPDIR/pr.md"
-  printf '## Capture\n```\napi_key: <redacted>\n```\n' > "$body"
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
-  [ "$status" -eq 0 ]
-  pr_line="$(grep -F 'gh pr create' "$GH_LOG")"
-  [[ "$pr_line" == *'--body-file'* ]]
-  # Inline --body must NOT appear, passthrough goes through file only.
-  [[ "$pr_line" != *'--body '* ]]
-}
-
-@test "auto-fixable: applies the auto-fixable label" {
+@test "handle-auto-fixable labels the issue and posts a --body-file link comment" {
   body="$BATS_TEST_TMPDIR/pr.md"
   printf 'x\n' > "$body"
   run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
   [ "$status" -eq 0 ]
+  echo "case: auto-fixable: applies the auto-fixable label"
   [ "$(gh_log_count '--add-label auto-fixable')" -ge 1 ]
   [ "$(gh_log_count '--add-label gaia-bug-confirmed')" -eq 0 ]
-}
-
-@test "auto-fixable: posts a link-back comment via --body-file" {
-  body="$BATS_TEST_TMPDIR/pr.md"
-  printf 'x\n' > "$body"
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
-  [ "$status" -eq 0 ]
+  echo "case: auto-fixable: posts a link-back comment via --body-file"
   [ "$(gh_log_count 'gh issue comment 42 --body-file')" -ge 1 ]
 }
 
-@test "auto-fixable: gaia-triaged is the LAST mutation" {
+# bats test_tags=protected
+@test "handle-auto-fixable never merges, readies or edits the issue" {
   body="$BATS_TEST_TMPDIR/pr.md"
   printf 'x\n' > "$body"
   run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
   [ "$status" -eq 0 ]
-  triaged_line="$(gh_log_line_number '--add-label gaia-triaged')"
-  total_lines="$(wc -l < "$GH_LOG" | tr -d ' ')"
-  [ "$triaged_line" = "$total_lines" ]
-}
-
-@test "auto-fixable: never invokes gh pr merge or gh pr ready (UAT-008)" {
-  body="$BATS_TEST_TMPDIR/pr.md"
-  printf 'x\n' > "$body"
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
-  [ "$status" -eq 0 ]
+  echo "case: auto-fixable: never invokes gh pr merge or gh pr ready (UAT-008)"
   [ "$(gh_log_count 'gh pr merge')" -eq 0 ]
   [ "$(gh_log_count 'gh pr ready')" -eq 0 ]
-}
-
-@test "auto-fixable: never modifies the issue body (only labels and comments)" {
-  body="$BATS_TEST_TMPDIR/pr.md"
-  printf 'x\n' > "$body"
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$body"
-  [ "$status" -eq 0 ]
+  echo "case: auto-fixable: never modifies the issue body (only labels and comments)"
   # `gh issue edit --body` would be a body mutation; the only --body* we
   # tolerate on the issue is `gh issue comment --body-file`.
   [ "$(gh_log_count 'gh issue edit 42 --body')" -eq 0 ]
@@ -409,16 +382,6 @@ first_captured_body() {
 # handle-malformed-body.sh: UAT-013
 # ---------------------------------------------------------------------------
 
-@test "malformed-body: usage error with no args" {
-  run "$HANDLERS/handle-malformed-body.sh"
-  [ "$status" -eq 2 ]
-}
-
-@test "malformed-body: missing parser output exits 2" {
-  run "$HANDLERS/handle-malformed-body.sh" 42 "$BATS_TEST_TMPDIR/nope"
-  [ "$status" -eq 2 ]
-}
-
 @test "malformed-body: applies needs-human label and stays open" {
   parser="$BATS_TEST_TMPDIR/p.json"
   printf '{"valid":false,"error":"missing-section","missing":["symptom"],"malformed":[]}\n' > "$parser"
@@ -428,8 +391,10 @@ first_captured_body() {
   [ "$(gh_log_count 'gh issue close')" -eq 0 ]
 }
 
-@test "malformed-body: comment names missing sections from parser output" {
+@test "handle-malformed-body comment names every missing and malformed section (case table)" {
   parser="$BATS_TEST_TMPDIR/p.json"
+
+  echo "case: malformed-body: comment names missing sections from parser output"
   printf '{"valid":false,"error":"missing-section","missing":["symptom","capture"],"malformed":[]}\n' > "$parser"
   run "$HANDLERS/handle-malformed-body.sh" 42 "$parser"
   [ "$status" -eq 0 ]
@@ -440,11 +405,9 @@ first_captured_body() {
   # User-facing comment must not surface internal UAT identifiers, they
   # rot as UATs are renumbered and confuse adopters who file issues by hand.
   grep -qE 'UAT-[0-9]+' "$body_path" && return 1
-  true
-}
 
-@test "malformed-body: comment names malformed sections from parser output" {
-  parser="$BATS_TEST_TMPDIR/p.json"
+  reset_logs
+  echo "case: malformed-body: comment names malformed sections from parser output"
   printf '{"valid":false,"error":"malformed-frontmatter","missing":[],"malformed":["frontmatter"]}\n' > "$parser"
   run "$HANDLERS/handle-malformed-body.sh" 42 "$parser"
   [ "$status" -eq 0 ]
@@ -453,41 +416,23 @@ first_captured_body() {
   grep -qF 'malformed-frontmatter' "$body_path"
 }
 
-@test "malformed-body: gaia-triaged is the LAST mutation" {
-  parser="$BATS_TEST_TMPDIR/p.json"
-  printf '{"valid":false,"error":"missing-section","missing":["symptom"],"malformed":[]}\n' > "$parser"
-  run "$HANDLERS/handle-malformed-body.sh" 42 "$parser"
-  [ "$status" -eq 0 ]
-  triaged_line="$(gh_log_line_number '--add-label gaia-triaged')"
-  total_lines="$(wc -l < "$GH_LOG" | tr -d ' ')"
-  [ "$triaged_line" = "$total_lines" ]
-}
-
 # ---------------------------------------------------------------------------
 # handle-already-triaged.sh: UAT-006
 # ---------------------------------------------------------------------------
 
-@test "already-triaged: usage error with no args" {
-  run "$HANDLERS/handle-already-triaged.sh"
-  [ "$status" -eq 2 ]
-}
-
-@test "already-triaged: emits ::notice:: and exits 0" {
+@test "handle-already-triaged is a notice-only no-op" {
   run "$HANDLERS/handle-already-triaged.sh" 42
   [ "$status" -eq 0 ]
-  [[ "$output" == *'::notice::'* ]]
-  [[ "$output" == *'#42'* ]]
-  [[ "$output" == *'already triaged'* ]]
-}
-
-@test "already-triaged: makes zero gh / git calls (no-op)" {
-  run "$HANDLERS/handle-already-triaged.sh" 42
-  [ "$status" -eq 0 ]
+  echo "case: already-triaged: emits ::notice:: and exits 0"
+  [[ "$output" == *'::notice::'* ]] || return 1
+  [[ "$output" == *'#42'* ]] || return 1
+  [[ "$output" == *'already triaged'* ]] || return 1
+  echo "case: already-triaged: makes zero gh / git calls (no-op)"
   # gh and git logs may not even exist, that's the no-op contract.
   if [ -f "$GH_LOG" ]; then
-    [ "$(wc -l < "$GH_LOG" | tr -d ' ')" = "0" ]
+    [ "$(wc -l < "$GH_LOG" | tr -d ' ')" = "0" ] || return 1
   fi
   if [ -f "$GIT_LOG" ]; then
-    [ "$(wc -l < "$GIT_LOG" | tr -d ' ')" = "0" ]
+    [ "$(wc -l < "$GIT_LOG" | tr -d ' ')" = "0" ] || return 1
   fi
 }
