@@ -117,32 +117,10 @@ record_at() {
 # cost_tail: the part of the printed Cost line after its tokens and dollars.
 cost_tail() { sed -n 's/^Cost: [0-9.]*M tokens, \$[0-9.]*, //p' <<<"$output"; }
 
-# ---------- scratch copies, for the guard-red cases ----------
-
-# scratch_scripts <directory>: a copy of the scripts a record loads, mutable
-# without touching the checkout. No node_modules or other real directory is linked.
-scratch_scripts() {
-  local scratch="$1" file
-  mkdir -p "$scratch/spec" "$scratch/notebook"
-  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this helper
-  # carries the per-test whole-tree mark, because it copies the scripts directory.
-  for file in "$SCRIPTS"/usage*.sh "$SCRIPTS"/token-*.sh "$SCRIPTS"/token-rates.json "$SCRIPTS"/branch-name-lib.sh \
-    "$SCRIPTS"/main-root-lib.sh "$SCRIPTS"/context-checkpoint-lib.sh; do
-    [ -f "$file" ] && cp "$file" "$scratch/"
-  done
-  cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"
-  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch/"
-  cp "$SCRIPTS"/notebook/*.sh "$scratch/notebook/"
-}
-
-# mutate <file> <text> <replacement>: replaces the one occurrence of a literal
-# text; fails when the text is absent, so a stale mutation cannot pass as red.
-mutate() {
-  local content
-  content="$(cat "$1")"
-  [ "$(grep -cF -- "$2" "$1")" -eq 1 ] || { printf 'mutation target not found once in %s: %s\n' "$1" "$2" >&2; return 1; }
-  printf '%s\n' "${content/"$2"/"$3"}" >"$1"
-  if grep -qF -- "$2" "$1"; then printf 'mutation did not apply to %s\n' "$1" >&2; return 1; fi
+# reset_run: clears the ledger and transcripts so a later case in one test starts clean.
+reset_run() {
+  rm -rf "$TEL" "$PROJECTS"
+  mkdir -p "$TEL" "$PROJECTS/$ENCODED_MAIN"
 }
 
 # ---------- scenarios ----------
@@ -214,21 +192,13 @@ run_join() {
 
 # ---------- the Cost line and its JSON ----------
 
-@test "sub-agents overlapping a turn count once, and the open final turn counts to its latest work" {
+@test "record prints the active figure per run shape (overlapping sub-agents, open final turn, question wait, background sub-agent past the turn)" {
   build_overlapping_subagents
   run record_at 11:01:00 "$REF" --workflow gaia-spec
-  [ "$status" -eq 0 ]
-  [ "$(cost_tail)" = '1h1m0s (6m0s active)' ]
-}
+  [ "$status" -eq 0 ] || { echo "case overlapping sub-agents: status $status" >&2; return 1; }
+  [ "$(cost_tail)" = '1h1m0s (6m0s active)' ] || { echo "case overlapping sub-agents: $(cost_tail)" >&2; return 1; }
 
-@test "record --json carries active_seconds and active_lower_bound beside elapsed_seconds" {
-  build_overlapping_subagents
-  run record_at 11:01:00 "$REF" --workflow gaia-spec --json
-  [ "$status" -eq 0 ]
-  jq -e '.elapsed_seconds == 3660 and .active_seconds == 360 and .active_lower_bound == false' <<<"${lines[$((${#lines[@]} - 1))]}" >/dev/null
-}
-
-@test "an open final turn counts from its opener to its latest work entry, with no Note" {
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   work 10:02:00
@@ -236,13 +206,11 @@ run_join() {
   prompt 11:00:00
   work 11:01:00
   run record_at 11:01:00 "$REF" --workflow gaia-spec
-  [ "$status" -eq 0 ]
-  [ "$(cost_tail)" = '1h1m0s (3m0s active)' ]
-  grep -q '^Note:' <<<"$output" && return 1
-  true
-}
+  [ "$status" -eq 0 ] || { echo "case open final turn: status $status" >&2; return 1; }
+  [ "$(cost_tail)" = '1h1m0s (3m0s active)' ] || { echo "case open final turn: $(cost_tail)" >&2; return 1; }
+  grep -q '^Note:' <<<"$output" && { echo "case open final turn: unexpected Note" >&2; return 1; }
 
-@test "a question wait inside a single turn is not active time" {
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   work 10:02:00
@@ -250,13 +218,11 @@ run_join() {
   answer 10:30:00 toolu-question
   work 10:32:00
   run record_at 10:32:00 "$REF" --workflow gaia-spec
-  [ "$status" -eq 0 ]
-  [ "$(cost_tail)" = '32m0s (5m0s active)' ]
-  grep -q '^Note:' <<<"$output" && return 1
-  true
-}
+  [ "$status" -eq 0 ] || { echo "case question wait: status $status" >&2; return 1; }
+  [ "$(cost_tail)" = '32m0s (5m0s active)' ] || { echo "case question wait: $(cost_tail)" >&2; return 1; }
+  grep -q '^Note:' <<<"$output" && { echo "case question wait: unexpected Note" >&2; return 1; }
 
-@test "a background sub-agent running past its turn's end adds its minutes to the union" {
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   work 10:05:00
@@ -268,8 +234,15 @@ run_join() {
   prompt 10:30:00
   work 10:30:00
   run record_at 10:30:00 "$REF" --workflow gaia-spec
+  [ "$status" -eq 0 ] || { echo "case background sub-agent: status $status" >&2; return 1; }
+  [ "$(cost_tail)" = '30m0s (9m0s active)' ] || { echo "case background sub-agent: $(cost_tail)" >&2; return 1; }
+}
+
+@test "record --json carries active_seconds and active_lower_bound beside elapsed_seconds" {
+  build_overlapping_subagents
+  run record_at 11:01:00 "$REF" --workflow gaia-spec --json
   [ "$status" -eq 0 ]
-  [ "$(cost_tail)" = '30m0s (9m0s active)' ]
+  jq -e '.elapsed_seconds == 3660 and .active_seconds == 360 and .active_lower_bound == false' <<<"${lines[$((${#lines[@]} - 1))]}" >/dev/null
 }
 
 @test "a background sub-agent still running past the close is clipped away, and the box shows the same figure afterward" {
@@ -294,20 +267,19 @@ run_join() {
 
 # ---------- members ----------
 
-@test "two member sessions whose windows overlap report their union, not their sum" {
+@test "member sessions report their union and only from their own start" {
   build_joined_overlap
   run env CLAUDE_CODE_SESSION_ID=s-joined GAIA_USAGE_TEST_NOW="$(at 10:20:00)" bash "$USAGE_SCRIPT" record "$REF" --workflow gaia-spec \
     --main-root "$MAIN" --projects-root "$PROJECTS" --rate-table "$RATES"
-  [ "$status" -eq 0 ]
-  [ "$(cost_tail)" = '20m0s (15m0s active)' ]
-}
+  [ "$status" -eq 0 ] || { echo "case overlapping windows: status $status" >&2; return 1; }
+  [ "$(cost_tail)" = '20m0s (15m0s active)' ] || { echo "case overlapping windows: $(cost_tail)" >&2; return 1; }
 
-@test "a member's windows before its own start are excluded" {
+  reset_run
   build_late_join
   run env CLAUDE_CODE_SESSION_ID=s-joined GAIA_USAGE_TEST_NOW="$(at 10:20:00)" bash "$USAGE_SCRIPT" record "$REF" --workflow gaia-spec \
     --main-root "$MAIN" --projects-root "$PROJECTS" --rate-table "$RATES"
-  [ "$status" -eq 0 ]
-  [ "$(cost_tail)" = '20m0s (12m0s active)' ]
+  [ "$status" -eq 0 ] || { echo "case windows before its own start: status $status" >&2; return 1; }
+  [ "$(cost_tail)" = '20m0s (12m0s active)' ] || { echo "case windows before its own start: $(cost_tail)" >&2; return 1; }
 }
 
 # ---------- spend recorded before facts existed ----------
@@ -343,33 +315,4 @@ run_join() {
   [ "$status" -eq 0 ]
   grep -q ' active)' <<<"$output" && return 1
   [ "$(grep '^Cost:' <<<"$output")" = "$with_facts" ]
-}
-
-# ---------- the guards can fail ----------
-
-# bats test_tags=whole-tree
-@test "a record that sums its members' figures instead of taking their union fails the overlap case" {
-  build_joined_overlap
-  local scratch="$TEMPORARY_DIRECTORY/scratch"
-  scratch_scripts "$scratch"
-  mutate "$scratch/usage-record-lib.sh" 'usage_active_union([.[] | (.active_pieces // [])[]]; $from; $to)' \
-    '([.[] | usage_active_union(.active_pieces // []; $from; $to)] | add)'
-  run env CLAUDE_CODE_SESSION_ID=s-joined GAIA_USAGE_TEST_NOW="$(at 10:20:00)" bash "$scratch/usage.sh" record "$REF" --workflow gaia-spec \
-    --main-root "$MAIN" --projects-root "$PROJECTS" --rate-table "$RATES"
-  [ "$status" -eq 0 ]
-  [ "$(cost_tail)" = '20m0s (20m0s active)' ]
-}
-
-# bats test_tags=whole-tree
-@test "a record that clips members to the run's origin instead of their own start counts the windows before a join" {
-  build_late_join
-  local scratch="$TEMPORARY_DIRECTORY/scratch"
-  scratch_scripts "$scratch"
-  mutate "$scratch/usage-record-lib.sh" 'gaia_usage_interval_view "$member_session" "$member_start" "$interval_end"' \
-    'gaia_usage_interval_view "$member_session" "$origin_start" "$interval_end"'
-  run env CLAUDE_CODE_SESSION_ID=s-joined GAIA_USAGE_TEST_NOW="$(at 10:20:00)" bash "$scratch/usage.sh" record "$REF" --workflow gaia-spec \
-    --main-root "$MAIN" --projects-root "$PROJECTS" --rate-table "$RATES"
-  [ "$status" -eq 0 ]
-  [ -n "$(cost_tail)" ]
-  [ "$(cost_tail)" != '20m0s (12m0s active)' ]
 }

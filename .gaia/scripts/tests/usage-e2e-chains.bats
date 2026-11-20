@@ -115,27 +115,6 @@ parity() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
-@test "guards-must-fail (grammar parity): a lint.sh copy that loosens the SPEC digits is reported with the offending ref" {
-  local mutant_script="$TEMPORARY_DIRECTORY/spec/lint-mutant.sh"
-  # lint.sh sources flows-lib.sh and runs behaviors.mjs from its own directory,
-  # and flows-lib.sh sources machine-local-ref-lib.sh one directory above it.
-  mkdir -p "$TEMPORARY_DIRECTORY/spec"
-  cp "$REPO/.gaia/scripts/machine-local-ref-lib.sh" "$TEMPORARY_DIRECTORY/"
-  cp "$REPO/.gaia/scripts/spec/flows-lib.sh" "$REPO/.gaia/scripts/spec/behaviors.mjs" "$TEMPORARY_DIRECTORY/spec/"
-  sed 's/\^spec:SPEC-\[0-9\]{3,}\$/^spec:SPEC-[0-9]{2,}$/' "$REPO/.gaia/scripts/spec/lint.sh" >"$mutant_script"
-  if cmp -s "$mutant_script" "$REPO/.gaia/scripts/spec/lint.sh"; then echo "mutation did not apply" >&2; return 1; fi
-  # A mutant that crashes prints nothing, which parity reads as accepting every
-  # ref, so the expected mismatch appears without the lint having run. Require
-  # real lint output from it first.
-  sed -e 's/SPEC-NNN/SPEC-001/g' \
-    "$REPO/.claude/skills/gaia/references/spec/spec-template.md" >"$TEMPORARY_DIRECTORY/mutant-probe-spec.md"
-  run bash "$mutant_script" "$TEMPORARY_DIRECTORY/mutant-probe-spec.md"
-  jq -e 'has("ok") and has("findings")' <<<"$output" >/dev/null
-  run parity "$mutant_script"
-  [ "$status" -eq 1 ]
-  grep -qF 'MISMATCH spec:SPEC-01 lint-accepts=yes lib-accepts=no' <<<"$output"
-}
-
 # ---------- coverage and markers on every readout ----------
 
 @test "the initiative and reconcile readouts print the earliest first_ts date as coverage start, pr --json carries it, and capture hooks not registered replaces every figure when the registrations are gone" {

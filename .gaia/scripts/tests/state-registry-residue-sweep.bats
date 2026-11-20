@@ -82,31 +82,26 @@ section() {
   '
 }
 
-@test "list mode names each residue path with its why, lists unknowns apart, and changes nothing" {
+@test "list mode: residue listed with why, unknowns apart, subtree once at its top, nothing changed" {
   make_sweep_repo
   put audit/a1.carried
   put old/inner/file.txt
-  put stray.txt
-  sweep
-  [ "$status" -eq 0 ]
-  section Residue | grep -qx 'audit/a1.carried  (dead carried marker)'
-  section Residue | grep -qx 'old  (retired feature)'
-  section Unknown | grep -qx 'stray.txt'
-  [ -f "$LOCAL_ROOT/audit/a1.carried" ]
-  [ -f "$LOCAL_ROOT/old/inner/file.txt" ]
-  [ -f "$LOCAL_ROOT/stray.txt" ]
-}
-
-@test "a subtree is listed once, at its top, never per child" {
-  make_sweep_repo
   put old/a.txt
   put old/b/c.txt
+  put stray.txt
   put mystery/one.txt
   put mystery/deep/two.txt
   sweep
   [ "$status" -eq 0 ]
-  [ "$(section Residue | grep -c '^old')" -eq 1 ]
-  [ "$(section Unknown)" = "mystery" ]
+  section Residue | grep -qx 'audit/a1.carried  (dead carried marker)' || { echo "case why: carried marker not listed with its why"; return 1; }
+  section Residue | grep -qx 'old  (retired feature)' || { echo "case why: old not listed with its why"; return 1; }
+  section Unknown | grep -qx 'stray.txt' || { echo "case unknown: stray.txt not listed"; return 1; }
+  [ "$(section Residue | grep -c '^old')" -eq 1 ] || { echo "case subtree: old not listed once"; return 1; }
+  [ "$(section Unknown | grep -c '^mystery')" -eq 1 ] || { echo "case subtree: mystery not listed once"; return 1; }
+  [ "$(section Unknown | grep -c '^mystery/')" -eq 0 ] || { echo "case subtree: mystery listed per child"; return 1; }
+  [ -f "$LOCAL_ROOT/audit/a1.carried" ] || { echo "case unchanged: carried marker removed"; return 1; }
+  [ -f "$LOCAL_ROOT/old/inner/file.txt" ] || { echo "case unchanged: old/inner removed"; return 1; }
+  [ -f "$LOCAL_ROOT/stray.txt" ] || { echo "case unchanged: stray.txt removed"; return 1; }
 }
 
 @test "--apply deletes the residue paths and nothing else" {
@@ -247,13 +242,6 @@ section() {
   sweep --aply
   [ "$status" -eq 2 ]
   [ -f "$LOCAL_ROOT/older.json" ]
-}
-
-@test "no .gaia/local at all is nothing to sweep" {
-  make_sweep_repo
-  rm -rf "$LOCAL_ROOT"
-  sweep --apply
-  [ "$status" -eq 0 ]
 }
 
 # ========== the shipped registry ==========

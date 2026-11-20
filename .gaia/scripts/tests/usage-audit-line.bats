@@ -52,9 +52,9 @@ audit_rows() {
   segment '' 2026-10-01T09:50:00Z 600000 6000
 }
 
-@test "the Audit row sums exactly the roster sidecars, Execute takes the rest, and the field-less segment is only counted" {
+@test "the Audit row sums exactly the roster sidecars; listing one more name adds only that type" {
   run run_usage pr --key branch:feat/audit --auditors code-audit-frontend,code-audit-maintainer-shell
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "case roster of two: status $status" >&2; return 1; }
   [ "$output" = 'branch:feat/audit Cost
 
 +------------------------------------+
@@ -64,16 +64,13 @@ audit_rows() {
 |   Total: 2.1M tokens, $4.41, 50m0s |
 +------------------------------------+
   ! lower bound: branch spend may predate coverage start
-  ! lower bound: 1 segment(s) predate agent fields' ] || { printf '%s\n' "$output" >&2; return 1; }
+  ! lower bound: 1 segment(s) predate agent fields' ] || { echo "case roster of two: box" >&2; printf '%s\n' "$output" >&2; return 1; }
   run run_usage pr --key branch:feat/audit --auditors code-audit-frontend,code-audit-maintainer-shell --json
-  [ "$status" -eq 0 ]
-  [ "$(jq -c '[.sum.total, .audit.sum.total, .audit.rest.sum.total, (.audit.sum.usd * 100 | round), .audit.predate]' <<<"$output")" = '[2121000,505000,1616000,105,1]' ]
-}
-
-@test "listing one more name adds only that agent type's spend" {
+  [ "$status" -eq 0 ] || { echo "case roster of two json: status $status" >&2; return 1; }
+  [ "$(jq -c '[.sum.total, .audit.sum.total, .audit.rest.sum.total, (.audit.sum.usd * 100 | round), .audit.predate]' <<<"$output")" = '[2121000,505000,1616000,105,1]' ] || { echo "case roster of two: json figures" >&2; return 1; }
   run run_usage pr --key branch:feat/audit --auditors code-audit-frontend,code-audit-maintainer-shell,general-purpose --json
-  [ "$status" -eq 0 ]
-  [ "$(jq -c '[.audit.sum.total, (.audit.sum.usd * 100 | round), .audit.rest.sum.total]' <<<"$output")" = '[909000,189,1212000]' ]
+  [ "$status" -eq 0 ] || { echo "case one more name: status $status" >&2; return 1; }
+  [ "$(jq -c '[.audit.sum.total, (.audit.sum.usd * 100 | round), .audit.rest.sum.total]' <<<"$output")" = '[909000,189,1212000]' ] || { echo "case one more name: figures" >&2; return 1; }
 }
 
 @test "with every segment carrying agent fields, the lower-bound marker does not print" {

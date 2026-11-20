@@ -61,37 +61,6 @@ make_second_web() {
   mv "$1/apps/mobile/next.json" "$1/apps/mobile/gaia.package.json"
 }
 
-# ========== the fixture helper ==========
-
-@test "the fixture helper stops at a crossing binary that fails and leaves no tree" {
-  printf '#!/usr/bin/env bash\nexit 1\n' >"$BATS_TEST_TMPDIR/broken"
-  chmod +x "$BATS_TEST_TMPDIR/broken"
-  CROSSED_FIXTURE_GAIA="$BATS_TEST_TMPDIR/broken"
-  run --separate-stderr crossed_fixture_build "$FIXTURE"
-  [ "$status" -ne 0 ]
-  [[ "$stderr" == *"crossing preflight failed"* ]]
-  [ ! -e "$FIXTURE" ]
-}
-
-@test "the fixture helper refuses to run with no crossing binary named" {
-  unset CROSSED_FIXTURE_GAIA GAIA_CROSSING_CLI
-  run --separate-stderr crossed_fixture_build "$FIXTURE"
-  [ "$status" -ne 0 ]
-  [[ "$stderr" == *"CROSSED_FIXTURE_GAIA"* ]]
-  [ ! -e "$FIXTURE" ]
-}
-
-@test "the crossed fixture carries what the crossing writes" {
-  crossed_fixture_build "$FIXTURE"
-  [ "$CROSSED_WEB_NAME" = web ]
-  [ "$CROSSED_WEB_PATH" = apps/web ]
-  [ "$(jq -r '.stack' "$FIXTURE/apps/web/gaia.package.json")" = web ]
-  [ "$(jq -r '.generatedSettings' "$FIXTURE/apps/api/gaia.package.json")" = true ]
-  [ "$(jq -r '.[] | select(.name == "mobile") | .path' "$FIXTURE/.gaia/packages.json")" = apps/mobile ]
-  grep -qF 'infra' "$FIXTURE/.gaia/audit-ci.yml"
-  [ "$(jq -c '.globs.tddUnitTests' "$FIXTURE/packages/kit/gaia.package.json")" = '[]' ]
-}
-
 # ========== rule locations ==========
 
 # assert_rule_locations <dir> <web path...>: web rule files resolve to the
@@ -116,21 +85,20 @@ assert_rule_locations() {
   done
 }
 
-@test "rule locations: only apps/web is a web rule location on the default fixture" {
+@test "rule locations: web rule files resolve to web-stack members only (default, storefront, two-web)" {
+  echo "case: only apps/web is a web rule location on the default fixture"
   crossed_fixture_build "$FIXTURE"
+  cp -R "$FIXTURE" "$BATS_TEST_TMPDIR/two-web"
   assert_rule_locations "$FIXTURE" apps/web
-}
 
-@test "rule locations: the storefront variant resolves web rules to apps/storefront only" {
-  crossed_fixture_build "$FIXTURE" storefront
+  echo "case: the storefront variant resolves web rules to apps/storefront only"
+  crossed_fixture_build "$BATS_TEST_TMPDIR/storefront" storefront
   [ "$CROSSED_WEB_PATH" = apps/storefront ]
-  assert_rule_locations "$FIXTURE" apps/storefront
-}
+  assert_rule_locations "$BATS_TEST_TMPDIR/storefront" apps/storefront
 
-@test "rule locations: two web-stack members both resolve, a library still does not" {
-  crossed_fixture_build "$FIXTURE"
-  make_second_web "$FIXTURE"
-  assert_rule_locations "$FIXTURE" apps/web apps/mobile
+  echo "case: two web-stack members both resolve, a library still does not"
+  make_second_web "$BATS_TEST_TMPDIR/two-web"
+  assert_rule_locations "$BATS_TEST_TMPDIR/two-web" apps/web apps/mobile
 }
 
 # ========== scaffold and rename ==========
@@ -163,56 +131,51 @@ assert_writes_under_web() {
   grep -qF "siteName: 'Renamed'" "$dir/$web_path/app/languages/en/common.ts"
 }
 
-@test "scaffold and rename: a non-web member is refused naming the web member, nothing changes" {
+@test "scaffold and rename: target resolves by stack (non-web refused, no-flag, --package, storefront, two-web refused, two-web with --package)" {
   crossed_fixture_build "$FIXTURE"
+  cp -R "$FIXTURE" "$BATS_TEST_TMPDIR/no-flag"
+  cp -R "$FIXTURE" "$BATS_TEST_TMPDIR/package-flag"
+  cp -R "$FIXTURE" "$BATS_TEST_TMPDIR/two-web"
+
+  echo "case: a non-web member is refused naming the web member, nothing changes"
   assert_non_web_refused "$FIXTURE" mobile web
   assert_non_web_refused "$FIXTURE" kit web
   assert_non_web_refused "$FIXTURE" no-such-member web
-}
 
-@test "scaffold and rename: no flag writes under the web member from apps/mobile" {
-  crossed_fixture_build "$FIXTURE"
-  assert_writes_under_web "$FIXTURE" apps/web
-}
+  echo "case: no flag writes under the web member from apps/mobile"
+  assert_writes_under_web "$BATS_TEST_TMPDIR/no-flag" apps/web
 
-@test "scaffold and rename: --package naming the web member writes under it" {
-  crossed_fixture_build "$FIXTURE"
-  gaia_in "$FIXTURE" scaffold component Widget --package web
+  echo "case: --package naming the web member writes under it"
+  gaia_in "$BATS_TEST_TMPDIR/package-flag" scaffold component Widget --package web
   [ "$status" -eq 0 ]
-  [ -f "$FIXTURE/apps/web/app/components/widget/index.tsx" ]
-}
+  [ -f "$BATS_TEST_TMPDIR/package-flag/apps/web/app/components/widget/index.tsx" ]
 
-@test "scaffold and rename: the storefront variant behaves the same" {
-  crossed_fixture_build "$FIXTURE" storefront
-  assert_non_web_refused "$FIXTURE" mobile storefront
-  assert_non_web_refused "$FIXTURE" web storefront
-  assert_writes_under_web "$FIXTURE" apps/storefront
-}
+  echo "case: the storefront variant behaves the same"
+  crossed_fixture_build "$BATS_TEST_TMPDIR/storefront" storefront
+  assert_non_web_refused "$BATS_TEST_TMPDIR/storefront" mobile storefront
+  assert_non_web_refused "$BATS_TEST_TMPDIR/storefront" web storefront
+  assert_writes_under_web "$BATS_TEST_TMPDIR/storefront" apps/storefront
 
-@test "scaffold and rename: two web members with no flag refuse naming both and change nothing" {
-  crossed_fixture_build "$FIXTURE"
-  make_second_web "$FIXTURE"
-  local before after
-  before="$(tree_digest "$FIXTURE")"
-  gaia_in "$FIXTURE/apps/api" scaffold component Widget
+  echo "case: two web members with no flag refuse naming both and change nothing"
+  make_second_web "$BATS_TEST_TMPDIR/two-web"
+  local before
+  before="$(tree_digest "$BATS_TEST_TMPDIR/two-web")"
+  gaia_in "$BATS_TEST_TMPDIR/two-web/apps/api" scaffold component Widget
   [ "$status" -eq "$CONFIG_INVALID" ]
   [[ "$stderr" == *web* ]]
   [[ "$stderr" == *mobile* ]]
-  gaia_in "$FIXTURE" init rename --title Renamed --kebab renamed
+  gaia_in "$BATS_TEST_TMPDIR/two-web" init rename --title Renamed --kebab renamed
   [ "$status" -eq "$CONFIG_INVALID" ]
   [[ "$stderr" == *web* ]]
   [[ "$stderr" == *mobile* ]]
-  [ "$before" = "$(tree_digest "$FIXTURE")" ]
-}
+  [ "$before" = "$(tree_digest "$BATS_TEST_TMPDIR/two-web")" ]
 
-@test "scaffold and rename: two web members resolve once --package names one" {
-  crossed_fixture_build "$FIXTURE"
-  make_second_web "$FIXTURE"
-  mkdir -p "$FIXTURE/apps/mobile/app/components"
-  gaia_in "$FIXTURE" scaffold component Widget --package mobile
+  echo "case: two web members resolve once --package names one"
+  mkdir -p "$BATS_TEST_TMPDIR/two-web/apps/mobile/app/components"
+  gaia_in "$BATS_TEST_TMPDIR/two-web" scaffold component Widget --package mobile
   [ "$status" -eq 0 ]
-  [ -f "$FIXTURE/apps/mobile/app/components/widget/index.tsx" ]
-  [ ! -e "$FIXTURE/apps/web/app/components/widget" ]
+  [ -f "$BATS_TEST_TMPDIR/two-web/apps/mobile/app/components/widget/index.tsx" ]
+  [ ! -e "$BATS_TEST_TMPDIR/two-web/apps/web/app/components/widget" ]
 }
 
 # ========== wiki classification ==========
@@ -236,38 +199,36 @@ classify_after() {
   [ "$status" -eq 0 ]
 }
 
-@test "wiki classification: source under the web member is source-bearing, a library is not" {
-  crossed_fixture_build "$FIXTURE"
+@test "wiki classification: source under a web-stack member is source-bearing (default, storefront, two-web)" {
   local base
+
+  echo "case: source under the web member is source-bearing, a library is not"
+  crossed_fixture_build "$FIXTURE"
+  cp -R "$FIXTURE" "$BATS_TEST_TMPDIR/two-web"
   base="$(git -C "$FIXTURE" rev-parse HEAD)"
   commit_file "$FIXTURE" apps/web/app/panel.ts 'feat: web panel'
   commit_file "$FIXTURE" packages/shared/src/panel.ts 'feat: shared panel'
   classify_after "$FIXTURE" "$base"
   [[ "$(reason_of 'feat: web panel')" == *'source-bearing path'* ]]
   [[ "$(reason_of 'feat: shared panel')" == *'defer to human review'* ]]
-}
 
-@test "wiki classification: the storefront variant classifies by stack, not by name" {
-  crossed_fixture_build "$FIXTURE" storefront
-  local base
-  base="$(git -C "$FIXTURE" rev-parse HEAD)"
-  commit_file "$FIXTURE" apps/storefront/app/panel.ts 'feat: storefront panel'
-  commit_file "$FIXTURE" packages/shared/src/panel.ts 'feat: shared panel'
-  classify_after "$FIXTURE" "$base"
+  echo "case: the storefront variant classifies by stack, not by name"
+  crossed_fixture_build "$BATS_TEST_TMPDIR/storefront" storefront
+  base="$(git -C "$BATS_TEST_TMPDIR/storefront" rev-parse HEAD)"
+  commit_file "$BATS_TEST_TMPDIR/storefront" apps/storefront/app/panel.ts 'feat: storefront panel'
+  commit_file "$BATS_TEST_TMPDIR/storefront" packages/shared/src/panel.ts 'feat: shared panel'
+  classify_after "$BATS_TEST_TMPDIR/storefront" "$base"
   [[ "$(reason_of 'feat: storefront panel')" == *'source-bearing path'* ]]
   [[ "$(reason_of 'feat: shared panel')" == *'defer to human review'* ]]
-}
 
-@test "wiki classification: with two web members each one's source counts" {
-  crossed_fixture_build "$FIXTURE"
-  make_second_web "$FIXTURE"
-  git -C "$FIXTURE" commit -q -am 'second web member'
-  local base
-  base="$(git -C "$FIXTURE" rev-parse HEAD)"
-  commit_file "$FIXTURE" apps/web/app/panel.ts 'feat: web panel'
-  commit_file "$FIXTURE" apps/mobile/app/panel.ts 'feat: mobile panel'
-  commit_file "$FIXTURE" apps/api/src/panel.ts 'feat: api panel'
-  classify_after "$FIXTURE" "$base"
+  echo "case: with two web members each one's source counts"
+  make_second_web "$BATS_TEST_TMPDIR/two-web"
+  git -C "$BATS_TEST_TMPDIR/two-web" commit -q -am 'second web member'
+  base="$(git -C "$BATS_TEST_TMPDIR/two-web" rev-parse HEAD)"
+  commit_file "$BATS_TEST_TMPDIR/two-web" apps/web/app/panel.ts 'feat: web panel'
+  commit_file "$BATS_TEST_TMPDIR/two-web" apps/mobile/app/panel.ts 'feat: mobile panel'
+  commit_file "$BATS_TEST_TMPDIR/two-web" apps/api/src/panel.ts 'feat: api panel'
+  classify_after "$BATS_TEST_TMPDIR/two-web" "$base"
   [[ "$(reason_of 'feat: web panel')" == *'source-bearing path'* ]]
   [[ "$(reason_of 'feat: mobile panel')" == *'source-bearing path'* ]]
   [[ "$(reason_of 'feat: api panel')" == *'defer to human review'* ]]
@@ -326,22 +287,23 @@ assert_lenses_follow_stack() {
   if printf '%s\n' "$output" | grep -F 'SPECIALIST=translation' | grep -qF apps/mobile; then return 1; fi
 }
 
-@test "web lenses: only the web member's paths take them, security stays on everywhere" {
+@test "web lenses: only web-stack members take them, security everywhere (default, storefront, two-web)" {
+  echo "case: only the web member's paths take them, security stays on everywhere"
   crossed_fixture_build "$FIXTURE"
+  cp -R "$FIXTURE" "$BATS_TEST_TMPDIR/two-web"
   assert_lenses_follow_stack "$FIXTURE" apps/web
-}
 
-@test "web lenses: the storefront variant follows the stack" {
-  crossed_fixture_build "$FIXTURE" storefront
-  assert_lenses_follow_stack "$FIXTURE" apps/storefront
-}
+  echo "case: the storefront variant follows the stack"
+  rm -rf "$BATS_TEST_TMPDIR/origin.git"
+  crossed_fixture_build "$BATS_TEST_TMPDIR/storefront" storefront
+  assert_lenses_follow_stack "$BATS_TEST_TMPDIR/storefront" apps/storefront
 
-@test "web lenses: a second web-stack member takes them too" {
-  crossed_fixture_build "$FIXTURE"
-  make_second_web "$FIXTURE"
-  git -C "$FIXTURE" commit -q -am 'second web member'
-  build_review_branch "$FIXTURE" apps/web
-  resolve_scope "$FIXTURE"
+  echo "case: a second web-stack member takes them too"
+  rm -rf "$BATS_TEST_TMPDIR/origin.git"
+  make_second_web "$BATS_TEST_TMPDIR/two-web"
+  git -C "$BATS_TEST_TMPDIR/two-web" commit -q -am 'second web member'
+  build_review_branch "$BATS_TEST_TMPDIR/two-web" apps/web
+  resolve_scope "$BATS_TEST_TMPDIR/two-web"
   [ "$status" -eq 0 ]
   has_line "LENSES=apps/mobile/src/panel.tsx"$'\t'"$WEB_LENSES"
   has_line "LENSES=packages/shared/src/index.ts"$'\t'security

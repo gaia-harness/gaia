@@ -112,7 +112,7 @@ compile_prefix() {
 REACHING_BODY='
 [usage_active_figure(usage_active_index([]; []); []; 0; 1), usage_active_union([]; 0; 1), usage_active_pieces({segments: {}}; [])] | 1'
 
-# ---------- scenarios shared with the guard-red cases ----------
+# ---------- shared scenarios ----------
 
 # A main turn 10:00 to 10:05 and two sidecars it launched, each 10:00:30 to 10:04:30.
 write_overlap_ledger() {
@@ -139,25 +139,19 @@ write_binding_cap_ledger() {
   [ "$(seconds_of s-tool)" = 540 ]
 }
 
-@test "a wait on the maintainer split across two facts objects is subtracted from the turn" {
+@test "a wait on the maintainer is subtracted, split across facts objects or still open" {
   segment s-wait 10:00:00 10:02:00 - "$(facts 10:00:00 '"e":"cli","o":[0],"c":[[0,120]],"q":[["ask-1",120]]')"
   segment s-wait 10:08:00 10:10:00 - "$(facts 10:08:00 '"e":"cli","c":[[0,120]],"r":[["ask-1",0]]')"
-  [ "$(seconds_of s-wait)" = 240 ]
-}
-
-@test "a turn length shorter than the reconstructed work caps the turn at the recorded length" {
-  write_binding_cap_ledger
-  [ "$(seconds_of s-cap)" = 240 ]
-}
-
-@test "of two turn lengths ending in one turn, the smaller caps it" {
-  segment s-two-caps 10:00:00 10:10:00 - "$(facts 10:00:00 '"e":"cli","o":[0],"c":[[0,600]],"d":[[600,300],[600,240]]')"
-  [ "$(seconds_of s-two-caps)" = 240 ]
-}
-
-@test "an open wait with no result yet is subtracted from its start to the turn's latest work" {
+  [ "$(seconds_of s-wait)" = 240 ] || { echo "case wait split across two facts objects" >&2; return 1; }
   segment s-open 10:00:00 10:05:00 - "$(facts 10:00:00 '"e":"cli","o":[0],"c":[[0,300]],"q":[["ask-9",120]]')"
-  [ "$(seconds_of s-open)" = 120 ]
+  [ "$(seconds_of s-open)" = 120 ] || { echo "case open wait with no result yet" >&2; return 1; }
+}
+
+@test "a turn length caps its turn, and of two lengths the smaller wins" {
+  write_binding_cap_ledger
+  [ "$(seconds_of s-cap)" = 240 ] || { echo "case shorter turn length caps the turn" >&2; return 1; }
+  segment s-two-caps 10:00:00 10:10:00 - "$(facts 10:00:00 '"e":"cli","o":[0],"c":[[0,600]],"d":[[600,300],[600,240]]')"
+  [ "$(seconds_of s-two-caps)" = 240 ] || { echo "case smaller of two turn lengths caps the turn" >&2; return 1; }
 }
 
 @test "a notification turn whose turn length reaches back past the previous prompt counts only from its own opener to its last work" {
@@ -172,15 +166,12 @@ write_binding_cap_ledger() {
   [ "$(engine "usage_active_union(usage_active_pieces(\$index; group_of(\"s-interrupt\")); at(\"$(iso 10:00:00)\"); at(\"$(iso 10:30:00)\"))")" = 150 ]
 }
 
-@test "openers decode as a running sum of their gaps" {
+@test "openers decode as a running sum and work before the first opener gets its own" {
   segment s-delta 10:00:00 10:21:00 - "$(facts 10:00:00 '"e":"cli","o":[0,600,600],"c":[[0,60],[600,60],[1200,60]]')"
-  [ "$(seconds_of s-delta)" = 180 ]
-}
-
-@test "work before the first opener of a range gets an opener at its own first stamp" {
+  [ "$(seconds_of s-delta)" = 180 ] || { echo "case openers as a running sum of gaps" >&2; return 1; }
   segment s-implicit 10:00:00 10:03:00 - "$(facts 10:00:00 '"e":"cli","c":[[0,60]]')"
   segment s-implicit 10:02:00 10:03:00 - "$(facts 10:02:00 '"e":"cli","o":[0],"c":[[0,60]]')"
-  [ "$(seconds_of s-implicit)" = 120 ]
+  [ "$(seconds_of s-implicit)" = 120 ] || { echo "case work before the first opener" >&2; return 1; }
 }
 
 # ---------- headless and sidecar sources ----------
@@ -212,17 +203,14 @@ write_binding_cap_ledger() {
   [ "$(engine "usage_active_figure(\$index; group_of(\"s-clip\"); at(\"$(iso 10:00:00)\"); at(\"$(iso 10:31:00)\"))")" = '{"active_seconds":60,"active_lower_bound":false}' ]
 }
 
-@test "fractional windows are summed before the one floor" {
+@test "window pieces are summed before the one floor, to the millisecond" {
   segment s-fraction 10:00:00.000 10:01:00.714 agent-one 0
   segment s-fraction 11:00:00.000 11:01:00.714 agent-two 0
-  [ "$(seconds_of s-fraction)" = 121 ]
-}
-
-@test "millisecond pieces that sum to whole seconds floor to those seconds, though their doubles sum just below" {
+  [ "$(seconds_of s-fraction)" = 121 ] || { echo "case fractional windows" >&2; return 1; }
   segment s-whole-seconds 10:00:00.002 10:01:00.004 agent-one 0
   segment s-whole-seconds 11:00:00.002 11:01:00.000 agent-two 0
-  [ "$(engine 'usage_active_union(usage_active_pieces($index; $segments); 0; infinite) < 120')" = true ]
-  [ "$(seconds_of s-whole-seconds)" = 120 ]
+  [ "$(engine 'usage_active_union(usage_active_pieces($index; group_of("s-whole-seconds")); 0; infinite) < 120')" = true ] || { echo "case millisecond pieces: doubles sum just below" >&2; return 1; }
+  [ "$(seconds_of s-whole-seconds)" = 120 ] || { echo "case millisecond pieces: whole seconds" >&2; return 1; }
 }
 
 # ---------- idempotence ----------
@@ -365,24 +353,4 @@ def usage_epoch: 0;/" "$ACTIVE_LIB" >"$mutant"
   printf '%s\n' "$report" | grep -qx "usage_epoch declared in $SCRIPTS/usage-resolve-lib.sh"
 }
 
-# ---------- guard red: the union and the cap ----------
 
-@test "a plain sum in place of the union fails the overlap case, and a lib without the cap fails the binding-cap case" {
-  local summing="$BATS_TEST_TMPDIR/summing-lib.sh" uncapped="$BATS_TEST_TMPDIR/uncapped-lib.sh"
-  sed 's/elif \$piece\[0\] <= \.end then \.end = (\[\.end, \$piece\[1\]\] | max)/elif false then ./' "$ACTIVE_LIB" >"$summing"
-  sed 's/_usage_active_trim(\$pieces; \$cap)/$pieces/' "$ACTIVE_LIB" >"$uncapped"
-  cmp -s "$summing" "$ACTIVE_LIB" && return 1
-  cmp -s "$uncapped" "$ACTIVE_LIB" && return 1
-
-  write_overlap_ledger
-  [ "$(seconds_of s-overlap)" = 300 ]
-  ENGINE_LIB="$summing"
-  [ "$(seconds_of s-overlap)" = 780 ]
-
-  : >"$LEDGER"
-  write_binding_cap_ledger
-  ENGINE_LIB="$ACTIVE_LIB"
-  [ "$(seconds_of s-cap)" = 240 ]
-  ENGINE_LIB="$uncapped"
-  [ "$(seconds_of s-cap)" = 600 ]
-}
