@@ -28,14 +28,19 @@ describe('installedVersions', () => {
     expect(installedVersions(lockfile, 'cookie')).toStrictEqual([]);
   });
 
-  test('a lockfile with no project document throws LockfileReadError', () => {
-    expect(() =>
-      installedVersions(selfLockfileDocument(['cookie@1.0.0']), 'cookie')
-    ).toThrow(LockfileReadError);
-  });
-
-  test('text that is not YAML throws LockfileReadError', () => {
-    expect(() => installedVersions('importers: [unclosed', 'cookie')).toThrow(
+  test.each(
+    [
+      {
+        lockfile: selfLockfileDocument(['cookie@1.0.0']),
+        name: 'a lockfile with no project document throws LockfileReadError',
+      },
+      {
+        lockfile: 'importers: [unclosed',
+        name: 'text that is not YAML throws LockfileReadError',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {lockfile}) => {
+    expect(() => installedVersions(lockfile, 'cookie')).toThrow(
       LockfileReadError
     );
   });

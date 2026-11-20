@@ -155,13 +155,46 @@ describe('wiki state-bump', () => {
     expect(parsed.name).toBe('hello world');
   });
 
-  test('exits 1 when wiki/.state.json is malformed JSON', () => {
-    sandbox = setupSandbox('{ not json');
+  const stateBumpRefusalsCases: readonly {
+    args: readonly string[];
+    initialState: string;
+    message: string;
+    name: string;
+    stream: 'errors' | 'outputs';
+  }[] = [
+    {
+      args: ['foo', 'bar'],
+      initialState: '{ not json',
+      message: 'not valid JSON',
+      name: 'exits 1 when wiki/.state.json is malformed JSON',
+      stream: 'errors',
+    },
+    {
+      args: [],
+      initialState: '{}',
+      message: 'Usage:',
+      name: 'exits 1 with usage hint when no args supplied',
+      stream: 'outputs',
+    },
+    {
+      args: ['only-field'],
+      initialState: '{}',
+      message: 'exactly',
+      name: 'exits 1 when only one positional supplied',
+      stream: 'errors',
+    },
+  ];
 
-    const exit = run(['foo', 'bar'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('not valid JSON');
-  });
+  test.each(stateBumpRefusalsCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {args, initialState, message, stream}) => {
+      sandbox = setupSandbox(initialState);
+
+      const exit = run([...args], {cwd: sandbox.root});
+      expect(exit).toBe(1);
+      expect(stdio[stream].join('')).toContain(message);
+    }
+  );
 
   test('exits 1 when wiki/.state.json is missing', () => {
     sandbox = setupSandbox('{}');
@@ -170,22 +203,6 @@ describe('wiki state-bump', () => {
     const exit = run(['foo', 'bar'], {cwd: sandbox.root});
     expect(exit).toBe(1);
     expect(stdio.errors.join('')).toContain('does not exist');
-  });
-
-  test('exits 1 with usage hint when no args supplied', () => {
-    sandbox = setupSandbox('{}');
-
-    const exit = run([], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('Usage:');
-  });
-
-  test('exits 1 when only one positional supplied', () => {
-    sandbox = setupSandbox('{}');
-
-    const exit = run(['only-field'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('exactly');
   });
 
   test('idempotent: running twice with the same value leaves identical bytes', () => {

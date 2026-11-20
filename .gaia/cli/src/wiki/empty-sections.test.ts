@@ -76,10 +76,27 @@ describe('wiki empty-sections', () => {
     vi.restoreAllMocks();
   });
 
-  test('flags a leaf heading followed by a sibling-level heading with no body', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Foo.md',
-      [
+  type EmptySectionCase = {
+    empty: readonly {heading: string; line: number; path: string}[];
+    lines: readonly string[];
+    name: string;
+    pagePath: string;
+  };
+
+  const expectEmptySections = ({
+    empty,
+    lines,
+    pagePath,
+  }: EmptySectionCase): void => {
+    sandbox.writeFile(pagePath, lines.join('\n'));
+
+    expect(findEmptySections(sandbox.root)).toEqual(empty);
+  };
+
+  const emptySectionDetectionRulesCases: readonly EmptySectionCase[] = [
+    {
+      empty: [{heading: '## Bar', line: 5, path: 'wiki/concepts/Foo.md'}],
+      lines: [
         '# Foo',
         '',
         'Intro.',
@@ -90,19 +107,13 @@ describe('wiki empty-sections', () => {
         '',
         'Content under baz.',
         '',
-      ].join('\n')
-    );
-
-    const empty = findEmptySections(sandbox.root);
-    expect(empty).toEqual([
-      {heading: '## Bar', line: 5, path: 'wiki/concepts/Foo.md'},
-    ]);
-  });
-
-  test('does not flag a parent heading whose child headings have content', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Parent.md',
-      [
+      ],
+      name: 'flags a leaf heading followed by a sibling-level heading with no body',
+      pagePath: 'wiki/concepts/Foo.md',
+    },
+    {
+      empty: [],
+      lines: [
         '# Accessibility',
         '',
         '## Static lint',
@@ -113,16 +124,13 @@ describe('wiki empty-sections', () => {
         '',
         'See the playbook.',
         '',
-      ].join('\n')
-    );
-
-    expect(findEmptySections(sandbox.root)).toEqual([]);
-  });
-
-  test('does not flag a heading whose only span content is a deeper heading with content', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Nested.md',
-      [
+      ],
+      name: 'does not flag a parent heading whose child headings have content',
+      pagePath: 'wiki/concepts/Parent.md',
+    },
+    {
+      empty: [],
+      lines: [
         '# Runbook',
         '',
         '## Operator runbook',
@@ -131,16 +139,13 @@ describe('wiki empty-sections', () => {
         '',
         'Press the stop button.',
         '',
-      ].join('\n')
-    );
-
-    expect(findEmptySections(sandbox.root)).toEqual([]);
-  });
-
-  test('flags a leaf child while leaving its parent unflagged', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Mixed.md',
-      [
+      ],
+      name: 'does not flag a heading whose only span content is a deeper heading with content',
+      pagePath: 'wiki/concepts/Nested.md',
+    },
+    {
+      empty: [{heading: '### Empty', line: 9, path: 'wiki/concepts/Mixed.md'}],
+      lines: [
         '# Top',
         '',
         '## Parent',
@@ -155,31 +160,19 @@ describe('wiki empty-sections', () => {
         '',
         'More body.',
         '',
-      ].join('\n')
-    );
-
-    const empty = findEmptySections(sandbox.root);
-    expect(empty).toEqual([
-      {heading: '### Empty', line: 9, path: 'wiki/concepts/Mixed.md'},
-    ]);
-  });
-
-  test('flags an EOF-terminated empty section', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Foo.md',
-      ['# Foo', '', 'Intro.', '', '## Trailing', '', ''].join('\n')
-    );
-
-    const empty = findEmptySections(sandbox.root);
-    expect(empty).toEqual([
-      {heading: '## Trailing', line: 5, path: 'wiki/concepts/Foo.md'},
-    ]);
-  });
-
-  test('does not flag a heading that has body content', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Foo.md',
-      [
+      ],
+      name: 'flags a leaf child while leaving its parent unflagged',
+      pagePath: 'wiki/concepts/Mixed.md',
+    },
+    {
+      empty: [{heading: '## Trailing', line: 5, path: 'wiki/concepts/Foo.md'}],
+      lines: ['# Foo', '', 'Intro.', '', '## Trailing', '', ''],
+      name: 'flags an EOF-terminated empty section',
+      pagePath: 'wiki/concepts/Foo.md',
+    },
+    {
+      empty: [],
+      lines: [
         '# Foo',
         '',
         'Body for foo.',
@@ -188,16 +181,23 @@ describe('wiki empty-sections', () => {
         '',
         'Body for bar.',
         '',
-      ].join('\n')
-    );
+      ],
+      name: 'does not flag a heading that has body content',
+      pagePath: 'wiki/concepts/Foo.md',
+    },
+  ];
 
-    expect(findEmptySections(sandbox.root)).toEqual([]);
+  test.each(
+    emptySectionDetectionRulesCases.map((row) => [row.name, row] as const)
+  )('%s', (_name, row) => {
+    expect.hasAssertions();
+    expectEmptySections(row);
   });
 
-  test('ignores fake headings inside fenced code blocks', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Code.md',
-      [
+  const fencedCodeHandlingCases: readonly EmptySectionCase[] = [
+    {
+      empty: [],
+      lines: [
         '# Code',
         '',
         'Intro.',
@@ -209,16 +209,13 @@ describe('wiki empty-sections', () => {
         'echo hi',
         '```',
         '',
-      ].join('\n')
-    );
-
-    expect(findEmptySections(sandbox.root)).toEqual([]);
-  });
-
-  test('treats fenced code content as satisfying the prior heading', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Code.md',
-      [
+      ],
+      name: 'ignores fake headings inside fenced code blocks',
+      pagePath: 'wiki/concepts/Code.md',
+    },
+    {
+      empty: [],
+      lines: [
         '# Code',
         '',
         'Intro.',
@@ -229,11 +226,42 @@ describe('wiki empty-sections', () => {
         'const x = 1;',
         '```',
         '',
-      ].join('\n')
-    );
+      ],
+      name: 'treats fenced code content as satisfying the prior heading',
+      pagePath: 'wiki/concepts/Code.md',
+    },
+  ];
 
-    expect(findEmptySections(sandbox.root)).toEqual([]);
-  });
+  test.each(fencedCodeHandlingCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, row) => {
+      expect.hasAssertions();
+      expectEmptySections(row);
+    }
+  );
+
+  const skippedFilesCases: readonly EmptySectionCase[] = [
+    {
+      empty: [],
+      lines: ['# Report', '', '## Empty Heading', '', ''],
+      name: 'skips wiki/meta/** audit artifacts',
+      pagePath: 'wiki/meta/report.md',
+    },
+    {
+      empty: [],
+      lines: ['# Log', '', ''],
+      name: 'skips the append-only wiki/log.md',
+      pagePath: 'wiki/log.md',
+    },
+  ];
+
+  test.each(skippedFilesCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, row) => {
+      expect.hasAssertions();
+      expectEmptySections(row);
+    }
+  );
 
   test('reports the original line number despite frontmatter', () => {
     sandbox.writeFile(
@@ -261,21 +289,6 @@ describe('wiki empty-sections', () => {
     expect(empty).toEqual([
       {heading: '## Empty', line: 10, path: 'wiki/concepts/Foo.md'},
     ]);
-  });
-
-  test('skips wiki/meta/** audit artifacts', () => {
-    sandbox.writeFile(
-      'wiki/meta/report.md',
-      ['# Report', '', '## Empty Heading', '', ''].join('\n')
-    );
-
-    expect(findEmptySections(sandbox.root)).toEqual([]);
-  });
-
-  test('skips the append-only wiki/log.md', () => {
-    sandbox.writeFile('wiki/log.md', ['# Log', '', ''].join('\n'));
-
-    expect(findEmptySections(sandbox.root)).toEqual([]);
   });
 
   test('CLI prints "path:line  heading" lines', () => {

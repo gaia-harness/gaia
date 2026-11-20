@@ -221,97 +221,58 @@ describe('wiki chain', () => {
       expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
     });
 
-    test('on main: exit 1, no branch cut, names the isolating command', () => {
+    test.each(
+      Array.of<{
+        args: string[];
+        error: string;
+        name: string;
+        scripted: Parameters<typeof buildRunner>[0];
+      }>(
+        {
+          args: ['begin'],
+          error:
+            'refusing to start a wiki run on main; run /gaia-wiki, which isolates the run',
+          name: 'on main: exit 1, no branch cut, names the isolating command',
+          scripted: [
+            {
+              argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+              result: okResult('main\n'),
+            },
+          ],
+        },
+        {
+          args: ['begin', '--branch-aware'],
+          error: 'unknown flag: --branch-aware',
+          name: 'rejects the retired --branch-aware flag rather than cutting a branch',
+          scripted: [],
+        },
+        {
+          args: ['begin'],
+          error: 'refusing to start a wiki run on main',
+          name: 'treats master like main',
+          scripted: [
+            {
+              argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+              result: okResult('master\n'),
+            },
+          ],
+        },
+        {
+          args: ['begin', '--bogus'],
+          error: 'unknown flag',
+          name: 'rejects unknown flag',
+          scripted: [],
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {args, error, scripted}) => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('main\n'),
-          },
-        ],
-        recorded
-      );
+      const runner = buildRunner(scripted, recorded);
 
-      const exit = run(['begin'], {cwd: sandbox.root, runner});
+      const exit = run(args, {cwd: sandbox.root, runner});
       expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain(
-        'refusing to start a wiki run on main; run /gaia-wiki, which isolates the run'
-      );
+      expect(stdio.errors.join('')).toContain(error);
       expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
-    });
-
-    test('rejects the retired --branch-aware flag rather than cutting a branch', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner([], recorded);
-
-      const exit = run(['begin', '--branch-aware'], {
-        cwd: sandbox.root,
-        runner,
-      });
-      expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain('unknown flag: --branch-aware');
-      expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
-    });
-
-    test('treats master like main', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('master\n'),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['begin'], {cwd: sandbox.root, runner});
-      expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain(
-        'refusing to start a wiki run on main'
-      );
-    });
-
-    test('rejects unknown flag', () => {
-      sandbox = setupSandbox();
-      const exit = run(['begin', '--bogus'], {cwd: sandbox.root});
-      expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain('unknown flag');
-    });
-
-    test('makes zero record calls, refused on main or in place', () => {
-      sandbox = setupSandbox();
-      const inPlaceRecorded: RecordedCall[] = [];
-      const inPlaceRunner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
-          },
-        ],
-        inPlaceRecorded
-      );
-
-      run(['begin'], {cwd: sandbox.root, runner: inPlaceRunner});
-      expect(recordCalls(inPlaceRecorded)).toHaveLength(0);
-
-      const onMainRecorded: RecordedCall[] = [];
-      const onMainRunner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('main\n'),
-          },
-        ],
-        onMainRecorded
-      );
-
-      run(['begin'], {cwd: sandbox.root, runner: onMainRunner});
-      expect(recordCalls(onMainRecorded)).toHaveLength(0);
     });
   });
 
@@ -378,33 +339,6 @@ describe('wiki chain', () => {
       expect(stdio.outputs.join('')).toContain(
         'chain commit: nothing to commit'
       );
-      expect(recorded.find((c) => c.args[0] === 'commit')).toBeUndefined();
-    });
-
-    test('with non-wiki changes: exit 1, no commit', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
-          },
-          {
-            argv: ['status', '--porcelain=v1', '-z', '-uall'],
-            result: okResult(' M app/foo.ts\0 M wiki/log.md\0'),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['commit'], {
-        cwd: sandbox.root,
-        now: NOW,
-        runner,
-      });
-      expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain('non-wiki changes');
       expect(recorded.find((c) => c.args[0] === 'commit')).toBeUndefined();
     });
 
@@ -477,53 +411,6 @@ describe('wiki chain', () => {
       });
     });
 
-    test('makes zero record calls, committing or no-op', () => {
-      sandbox = setupSandbox();
-      const committingRecorded: RecordedCall[] = [];
-      const committingRunner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
-          },
-          {
-            argv: ['status', '--porcelain=v1', '-z', '-uall'],
-            result: okResult(' M wiki/log.md\0'),
-          },
-        ],
-        committingRecorded
-      );
-
-      run(['commit'], {
-        cwd: sandbox.root,
-        now: NOW,
-        runner: committingRunner,
-      });
-      expect(recordCalls(committingRecorded)).toHaveLength(0);
-
-      const noopRecorded: RecordedCall[] = [];
-      const noopRunner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
-          },
-          {
-            argv: ['status', '--porcelain=v1', '-z', '-uall'],
-            result: okResult(''),
-          },
-        ],
-        noopRecorded
-      );
-
-      run(['commit'], {
-        cwd: sandbox.root,
-        now: NOW,
-        runner: noopRunner,
-      });
-      expect(recordCalls(noopRecorded)).toHaveLength(0);
-    });
-
     test('a successful commit sets checkedAt to 0 and keeps wikiDriftCount', () => {
       sandbox = setupSandbox();
       seedCache(sandbox.root);
@@ -554,186 +441,191 @@ describe('wiki chain', () => {
       ).toEqual({checkedAt: 0, wikiDriftCount: 31});
     });
 
-    test('the non-wiki refusal leaves the cache untouched', () => {
-      sandbox = setupSandbox();
-      const seeded = seedCache(sandbox.root);
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
-          },
-          {
-            argv: ['status', '--porcelain=v1', '-z', '-uall'],
-            result: okResult(' M app/foo.ts\0 M wiki/log.md\0'),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['commit'], {
-        cwd: sandbox.root,
-        now: NOW,
-        runner,
-      });
-      expect(exit).toBe(1);
-      expect(recorded.find((c) => c.args[0] === 'commit')).toBeUndefined();
-      expect(readFileSync(cachePathOf(sandbox.root), 'utf8')).toBe(seeded);
-    });
-
-    test('the nothing-to-commit no-op leaves the cache untouched', () => {
-      sandbox = setupSandbox();
-      const seeded = seedCache(sandbox.root);
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
-          },
-          {
-            argv: ['status', '--porcelain=v1', '-z', '-uall'],
-            result: okResult(''),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['commit'], {
-        cwd: sandbox.root,
-        now: NOW,
-        runner,
-      });
-      expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        'chain commit: nothing to commit'
-      );
-      expect(readFileSync(cachePathOf(sandbox.root), 'utf8')).toBe(seeded);
-    });
-
-    test.each(['main', 'master'])(
-      'on %s: refuses, records no add or commit, leaves the cache untouched',
-      (protectedBranch) => {
-        sandbox = setupSandbox();
-        const seeded = seedCache(sandbox.root);
-        const recorded: RecordedCall[] = [];
-        const runner = buildRunner(
-          [
+    test.each(
+      Array.of<{
+        error: string;
+        exit: number;
+        name: string;
+        scripted: Parameters<typeof buildRunner>[0];
+      }>(
+        {
+          error: 'non-wiki changes',
+          exit: 1,
+          name: 'with non-wiki changes: exit 1, no commit',
+          scripted: [
+            {
+              argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+              result: okResult('feature/x\n'),
+            },
+            {
+              argv: ['status', '--porcelain=v1', '-z', '-uall'],
+              result: okResult(' M app/foo.ts\0 M wiki/log.md\0'),
+            },
+          ],
+        },
+        ...['main', 'master'].map((protectedBranch) => ({
+          error: `chain commit: refusing to commit on ${protectedBranch}; run /gaia-wiki, which isolates the run on its own wiki branch, or switch to a non-protected branch`,
+          exit: 1,
+          name: `on ${protectedBranch}: refuses, records no add or commit, leaves the cache untouched`,
+          scripted: [
             {
               argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
               result: okResult(`${protectedBranch}\n`),
             },
             wikiOnlyStatus,
           ],
-          recorded
-        );
-
-        const exit = run(['commit'], {
-          cwd: sandbox.root,
-          now: NOW,
-          runner,
-        });
-        expect(exit).toBe(1);
-        expect(stdio.errors.join('')).toContain(
-          `chain commit: refusing to commit on ${protectedBranch}; run /gaia-wiki, which isolates the run on its own wiki branch, or switch to a non-protected branch`
-        );
-        expect(recorded.find((c) => c.args[0] === 'add')).toBeUndefined();
-        expect(recorded.find((c) => c.args[0] === 'commit')).toBeUndefined();
-        expect(readFileSync(cachePathOf(sandbox.root), 'utf8')).toBe(seeded);
-      }
-    );
-
-    test('a branch read failure exits 2 and commits nothing', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: failResult(128, 'fatal: not a git repository'),
-          },
-          wikiOnlyStatus,
-        ],
-        recorded
-      );
-
-      const exit = run(['commit'], {
-        cwd: sandbox.root,
-        now: NOW,
-        runner,
-      });
-      expect(exit).toBe(2);
-      expect(recorded.find((c) => c.args[0] === 'commit')).toBeUndefined();
-    });
-
-    test('a failed git commit leaves the cache untouched and unstages wiki', () => {
+        })),
+        {
+          error: 'fatal: not a git repository',
+          exit: 2,
+          name: 'a branch read failure exits 2 and commits nothing',
+          scripted: [
+            {
+              argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+              result: failResult(128, 'fatal: not a git repository'),
+            },
+            wikiOnlyStatus,
+          ],
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {error, exit: expectedExit, scripted}) => {
       sandbox = setupSandbox();
       const seeded = seedCache(sandbox.root);
       const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
-          },
-          wikiOnlyStatus,
-          {
-            argv: ['commit', '-m', NOW_SUBJECT],
-            result: failResult(1, 'hook rejected'),
-          },
-        ],
-        recorded
-      );
+      const runner = buildRunner(scripted, recorded);
 
-      const exit = run(['commit'], {
-        cwd: sandbox.root,
-        now: NOW,
-        runner,
-      });
-      expect(exit).not.toBe(0);
-      expect(gitCalls(recorded)).toContainEqual({
-        args: ['reset', 'HEAD', '--', 'wiki'],
-        command: 'git',
-      });
+      const exit = run(['commit'], {cwd: sandbox.root, now: NOW, runner});
+      expect(exit).toBe(expectedExit);
+      expect(stdio.errors.join('')).toContain(error);
+      expect(recorded.find((c) => c.args[0] === 'add')).toBeUndefined();
+      expect(recorded.find((c) => c.args[0] === 'commit')).toBeUndefined();
       expect(readFileSync(cachePathOf(sandbox.root), 'utf8')).toBe(seeded);
     });
+
+    test.each(
+      Array.of<{
+        absentVerbs: string[];
+        exit: number;
+        name: string;
+        outputs: string[];
+        presentCalls: RecordedCall[];
+        scripted: Parameters<typeof buildRunner>[0];
+      }>(
+        {
+          absentVerbs: ['commit'],
+          exit: 1,
+          name: 'the non-wiki refusal leaves the cache untouched',
+          outputs: [],
+          presentCalls: [],
+          scripted: [
+            {
+              argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+              result: okResult('feature/x\n'),
+            },
+            {
+              argv: ['status', '--porcelain=v1', '-z', '-uall'],
+              result: okResult(' M app/foo.ts\0 M wiki/log.md\0'),
+            },
+          ],
+        },
+        {
+          absentVerbs: ['commit'],
+          exit: 0,
+          name: 'the nothing-to-commit no-op leaves the cache untouched',
+          outputs: ['chain commit: nothing to commit'],
+          presentCalls: [],
+          scripted: [
+            {
+              argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+              result: okResult('feature/x\n'),
+            },
+            {
+              argv: ['status', '--porcelain=v1', '-z', '-uall'],
+              result: okResult(''),
+            },
+          ],
+        },
+        {
+          absentVerbs: [],
+          exit: 2,
+          name: 'a failed git commit leaves the cache untouched and unstages wiki',
+          outputs: [],
+          presentCalls: [
+            {args: ['reset', 'HEAD', '--', 'wiki'], command: 'git'},
+          ],
+          scripted: [
+            {
+              argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+              result: okResult('feature/x\n'),
+            },
+            wikiOnlyStatus,
+            {
+              argv: ['commit', '-m', NOW_SUBJECT],
+              result: failResult(1, 'hook rejected'),
+            },
+          ],
+        }
+      ).map((row) => [row.name, row] as const)
+    )(
+      '%s',
+      (
+        _name,
+        {absentVerbs, exit: expectedExit, outputs, presentCalls, scripted}
+      ) => {
+        sandbox = setupSandbox();
+        const seeded = seedCache(sandbox.root);
+        const recorded: RecordedCall[] = [];
+        const runner = buildRunner(scripted, recorded);
+
+        const exit = run(['commit'], {cwd: sandbox.root, now: NOW, runner});
+        expect(exit).toBe(expectedExit);
+
+        for (const output of outputs) {
+          expect(stdio.outputs.join('')).toContain(output);
+        }
+
+        for (const verb of absentVerbs) {
+          expect(recorded.find((c) => c.args[0] === verb)).toBeUndefined();
+        }
+
+        for (const call of presentCalls) {
+          expect(gitCalls(recorded)).toContainEqual(call);
+        }
+
+        expect(readFileSync(cachePathOf(sandbox.root), 'utf8')).toBe(seeded);
+      }
+    );
   });
 
   describe('finish', () => {
-    test('on a hand-named wiki/<slug> branch: stays in place, no push or gh call', () => {
+    test.each(
+      Array.of<{branch: string; name: string; outputs: string[]}>(
+        {
+          branch: 'wiki/docs-cleanup',
+          name: 'on a hand-named wiki/<slug> branch: stays in place, no push or gh call',
+          outputs: [
+            'chain finish: in-place commits remain on wiki/docs-cleanup',
+          ],
+        },
+        {
+          branch: 'feature/x',
+          name: 'on a non-chain branch: no-op, exit 0, no PR',
+          outputs: ['chain finish: in-place commits remain on feature/x'],
+        },
+        {
+          branch: 'wiki-sync/2026-05-07-bbbbbbb',
+          name: 'on a wiki-sync/ branch: treated as hand-named, no PR opened',
+          outputs: [],
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {branch, outputs}) => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
       const runner = buildRunner(
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/docs-cleanup\n'),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['finish'], {
-        cwd: sandbox.root,
-        runner,
-      });
-      expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        'chain finish: in-place commits remain on wiki/docs-cleanup'
-      );
-      expect(ghCalls(recorded)).toHaveLength(0);
-      expect(recorded.find((c) => c.args[0] === 'push')).toBeUndefined();
-    });
-
-    test('on a non-chain branch: no-op, exit 0, no PR', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
+            result: okResult(`${branch}\n`),
           },
         ],
         recorded
@@ -741,9 +633,11 @@ describe('wiki chain', () => {
 
       const exit = run(['finish'], {cwd: sandbox.root, runner});
       expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        'chain finish: in-place commits remain on feature/x'
-      );
+
+      for (const output of outputs) {
+        expect(stdio.outputs.join('')).toContain(output);
+      }
+
       expect(ghCalls(recorded)).toHaveLength(0);
       expect(recorded.find((c) => c.args[0] === 'push')).toBeUndefined();
     });
@@ -809,75 +703,43 @@ describe('wiki chain', () => {
       expect(recorded.find((c) => c.args[0] === 'branch')).toBeUndefined();
     });
 
-    test('on a wiki-sync/ branch: treated as hand-named, no PR opened', () => {
+    test.each(
+      Array.of<{
+        absentVerbs: string[];
+        branch: string;
+        name: string;
+        output: string;
+        presentCalls: RecordedCall[];
+        status: string;
+      }>(
+        {
+          absentVerbs: [],
+          branch: 'wiki/2026-05-07-0533',
+          name: 'on a chain branch with no commits ahead: drop empty branch, no PR',
+          output: 'removed empty branch wiki/2026-05-07-0533',
+          presentCalls: [
+            {args: ['checkout', 'main'], command: 'git'},
+            {args: ['branch', '-D', 'wiki/2026-05-07-0533'], command: 'git'},
+          ],
+          status: '',
+        },
+        {
+          absentVerbs: ['checkout', 'branch'],
+          branch: 'wiki/2026-05-07-0535',
+          name: 'empty chain branch with a dirty tree: left in place, no delete',
+          output: 'has uncommitted changes and no commits',
+          presentCalls: [],
+          status: ' M wiki/log.md\0',
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {absentVerbs, branch, output, presentCalls, status}) => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
       const runner = buildRunner(
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki-sync/2026-05-07-bbbbbbb\n'),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['finish'], {
-        cwd: sandbox.root,
-        runner,
-      });
-      expect(exit).toBe(0);
-
-      const ordered = recorded.map((c) => [c.command, ...c.args].join(' '));
-      expect(ordered.some((c) => c.startsWith('git push'))).toBe(false);
-      expect(ordered.some((c) => c.startsWith('gh pr create'))).toBe(false);
-    });
-
-    test('on a chain branch with no commits ahead: drop empty branch, no PR', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/2026-05-07-0533\n'),
-          },
-          {
-            argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-            result: okResult('origin/main\n'),
-          },
-          {
-            argv: ['rev-list', '--count', 'origin/main..HEAD'],
-            result: okResult('0\n'),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['finish'], {cwd: sandbox.root, runner});
-      expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        'removed empty branch wiki/2026-05-07-0533'
-      );
-      expect(gitCalls(recorded)).toContainEqual({
-        args: ['checkout', 'main'],
-        command: 'git',
-      });
-      expect(gitCalls(recorded)).toContainEqual({
-        args: ['branch', '-D', 'wiki/2026-05-07-0533'],
-        command: 'git',
-      });
-      expect(ghCalls(recorded)).toHaveLength(0);
-    });
-
-    test('empty chain branch with a dirty tree: left in place, no delete', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/2026-05-07-0535\n'),
+            result: okResult(`${branch}\n`),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -889,7 +751,7 @@ describe('wiki chain', () => {
           },
           {
             argv: ['status', '--porcelain=v1', '-z', '-uall'],
-            result: okResult(' M wiki/log.md\0'),
+            result: okResult(status),
           },
         ],
         recorded
@@ -897,11 +759,16 @@ describe('wiki chain', () => {
 
       const exit = run(['finish'], {cwd: sandbox.root, runner});
       expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        'has uncommitted changes and no commits'
-      );
-      expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
-      expect(recorded.find((c) => c.args[0] === 'branch')).toBeUndefined();
+      expect(stdio.outputs.join('')).toContain(output);
+
+      for (const verb of absentVerbs) {
+        expect(recorded.find((c) => c.args[0] === verb)).toBeUndefined();
+      }
+
+      for (const call of presentCalls) {
+        expect(gitCalls(recorded)).toContainEqual(call);
+      }
+
       expect(ghCalls(recorded)).toHaveLength(0);
     });
 
@@ -1038,107 +905,152 @@ describe('wiki chain', () => {
     });
   });
 
-  describe('finish: leaves the cost record to the playbook', () => {
+  describe('no subcommand writes the cost record', () => {
     // The /gaia-wiki playbook records the run once the merge wait returns, so
     // the recorded interval covers the wait; a record here would close it early.
-    test('a landed PR: no record call and no Cost line', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/2026-05-07-0532\n'),
-          },
-          {
-            argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-            result: okResult('origin/main\n'),
-          },
-          {
-            argv: ['rev-list', '--count', 'origin/main..HEAD'],
-            result: okResult('3\n'),
-          },
-          {
-            argv: ['rev-parse', 'HEAD'],
-            result: okResult('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'),
-          },
-          {
-            argv: [
-              'pr',
-              'create',
-              '--draft',
-              '--title',
-              'wiki: 2026-05-07 05:32 UTC',
-              '--body',
-              'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
-            ],
-            result: okResult('https://github.com/gaia-react/gaia/pull/712\n'),
-          },
-          {
-            argv: [
-              'pr',
-              'view',
-              'wiki/2026-05-07-0532',
-              '--json',
-              'state',
-              '--jq',
-              '.state',
-            ],
-            result: okResult('MERGED\n'),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['finish'], {cwd: sandbox.root, runner});
-      expect(exit).toBe(0);
-      expect(recordCalls(recorded)).toHaveLength(0);
-      expect(stdio.outputs.join('')).not.toContain('Cost:');
+    const currentBranch = (branch: string) => ({
+      argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+      result: okResult(`${branch}\n`),
     });
+    const aheadOfBase = (count: string) => [
+      {
+        argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+        result: okResult('origin/main\n'),
+      },
+      {
+        argv: ['rev-list', '--count', 'origin/main..HEAD'],
+        result: okResult(`${count}\n`),
+      },
+    ];
 
-    test('an empty branch: no record call and no Cost line', () => {
+    test.each(
+      Array.of<{
+        name: string;
+        scenarios: {
+          args: string[];
+          exit: number;
+          scripted: Parameters<typeof buildRunner>[0];
+        }[];
+      }>(
+        {
+          name: 'makes zero record calls, refused on main or in place',
+          scenarios: [
+            {
+              args: ['begin'],
+              exit: 0,
+              scripted: [currentBranch('feature/x')],
+            },
+            {args: ['begin'], exit: 1, scripted: [currentBranch('main')]},
+          ],
+        },
+        {
+          name: 'makes zero record calls, committing or no-op',
+          scenarios: [
+            {
+              args: ['commit'],
+              exit: 0,
+              scripted: [
+                currentBranch('feature/x'),
+                {
+                  argv: ['status', '--porcelain=v1', '-z', '-uall'],
+                  result: okResult(' M wiki/log.md\0'),
+                },
+              ],
+            },
+            {
+              args: ['commit'],
+              exit: 0,
+              scripted: [
+                currentBranch('feature/x'),
+                {
+                  argv: ['status', '--porcelain=v1', '-z', '-uall'],
+                  result: okResult(''),
+                },
+              ],
+            },
+          ],
+        },
+        {
+          name: 'a landed PR: no record call and no Cost line',
+          scenarios: [
+            {
+              args: ['finish'],
+              exit: 0,
+              scripted: [
+                currentBranch('wiki/2026-05-07-0532'),
+                ...aheadOfBase('3'),
+                {
+                  argv: ['rev-parse', 'HEAD'],
+                  result: okResult(
+                    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'
+                  ),
+                },
+                {
+                  argv: [
+                    'pr',
+                    'create',
+                    '--draft',
+                    '--title',
+                    'wiki: 2026-05-07 05:32 UTC',
+                    '--body',
+                    'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
+                  ],
+                  result: okResult(
+                    'https://github.com/gaia-react/gaia/pull/712\n'
+                  ),
+                },
+                {
+                  argv: [
+                    'pr',
+                    'view',
+                    'wiki/2026-05-07-0532',
+                    '--json',
+                    'state',
+                    '--jq',
+                    '.state',
+                  ],
+                  result: okResult('MERGED\n'),
+                },
+              ],
+            },
+          ],
+        },
+        {
+          name: 'an empty branch: no record call and no Cost line',
+          scenarios: [
+            {
+              args: ['finish'],
+              exit: 0,
+              scripted: [
+                currentBranch('wiki/2026-05-07-0533'),
+                ...aheadOfBase('0'),
+              ],
+            },
+          ],
+        },
+        {
+          name: 'an in-place branch: no record call and no Cost line',
+          scenarios: [
+            {
+              args: ['finish'],
+              exit: 0,
+              scripted: [currentBranch('feature/x')],
+            },
+          ],
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {scenarios}) => {
       sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/2026-05-07-0533\n'),
-          },
-          {
-            argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-            result: okResult('origin/main\n'),
-          },
-          {
-            argv: ['rev-list', '--count', 'origin/main..HEAD'],
-            result: okResult('0\n'),
-          },
-        ],
-        recorded
-      );
 
-      const exit = run(['finish'], {cwd: sandbox.root, runner});
-      expect(exit).toBe(0);
-      expect(recordCalls(recorded)).toHaveLength(0);
-      expect(stdio.outputs.join('')).not.toContain('Cost:');
-    });
+      for (const {args, exit: expectedExit, scripted} of scenarios) {
+        const recorded: RecordedCall[] = [];
+        const runner = buildRunner(scripted, recorded);
 
-    test('an in-place branch: no record call and no Cost line', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('feature/x\n'),
-          },
-        ],
-        recorded
-      );
+        const exit = run(args, {cwd: sandbox.root, now: NOW, runner});
+        expect(exit).toBe(expectedExit);
+        expect(recordCalls(recorded)).toHaveLength(0);
+      }
 
-      const exit = run(['finish'], {cwd: sandbox.root, runner});
-      expect(exit).toBe(0);
-      expect(recordCalls(recorded)).toHaveLength(0);
       expect(stdio.outputs.join('')).not.toContain('Cost:');
     });
   });
@@ -1388,20 +1300,64 @@ describe('wiki chain', () => {
       expect(stdio.errors.join('')).toContain(`gh pr ready ${BRANCH}`);
     });
 
-    test('a pull request path outside wiki/ posts nothing and still lands', () => {
+    test.each(
+      Array.of<{
+        errors: string[];
+        name: string;
+        options: Parameters<typeof finishRunner>[1];
+        statusCallCount: number;
+      }>(
+        {
+          errors: ['outside wiki/'],
+          name: 'a pull request path outside wiki/ posts nothing and still lands',
+          options: {
+            record: prRecord(['wiki/log.md', 'app/ahead-of-origin.ts']),
+          },
+          statusCallCount: 0,
+        },
+        {
+          errors: ['not the commit this checkout'],
+          name: 'a pull request head that is not the local HEAD posts nothing and still lands',
+          options: {record: prRecord(['wiki/log.md'], 'e'.repeat(40))},
+          statusCallCount: 0,
+        },
+        {
+          errors: ['could not read the pull request'],
+          name: 'a pull request record that cannot be read posts nothing and still lands',
+          options: {record: failResult(1, 'HTTP 502')},
+          statusCallCount: 0,
+        },
+        {
+          errors: ['code-audit-frontend'],
+          name: 'a dispatched roster member refuses the post, names the member, and still lands',
+          options: {resolver: okResult('code-audit-frontend\n')},
+          statusCallCount: 0,
+        },
+        {
+          errors: ['could not answer'],
+          name: 'a resolver that cannot answer refuses the post and still lands',
+          options: {resolver: failResult(2, 'no auditors roster')},
+          statusCallCount: 0,
+        },
+        {
+          errors: ['HTTP 403', 'PR Merge Workflow'],
+          name: 'a failing status POST leaves the exit code unchanged and names the manual path',
+          options: {post: failResult(1, 'HTTP 403')},
+          statusCallCount: 1,
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {errors, options, statusCallCount}) => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
 
-      const exit = finishLanding(
-        sandbox.root,
-        finishRunner(recorded, {
-          record: prRecord(['wiki/log.md', 'app/ahead-of-origin.ts']),
-        })
-      );
+      const exit = finishLanding(sandbox.root, finishRunner(recorded, options));
       expect(exit).toBe(0);
-      expect(statusCalls(recorded)).toHaveLength(0);
+      expect(statusCalls(recorded)).toHaveLength(statusCallCount);
       expect(mergeCalls(recorded)).toHaveLength(1);
-      expect(stdio.errors.join('')).toContain('outside wiki/');
+
+      for (const error of errors) {
+        expect(stdio.errors.join('')).toContain(error);
+      }
     });
 
     test('reads the pull request, never a local diff, and resolves members against the fetched remote base', () => {
@@ -1418,83 +1374,26 @@ describe('wiki chain', () => {
       expect(resolverCall?.args.at(-1)).toBe('origin/main');
     });
 
-    test('a pull request head that is not the local HEAD posts nothing and still lands', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-
-      const exit = finishLanding(
-        sandbox.root,
-        finishRunner(recorded, {
-          record: prRecord(['wiki/log.md'], 'e'.repeat(40)),
-        })
-      );
-      expect(exit).toBe(0);
-      expect(statusCalls(recorded)).toHaveLength(0);
-      expect(mergeCalls(recorded)).toHaveLength(1);
-      expect(stdio.errors.join('')).toContain('not the commit this checkout');
-    });
-
-    test('a pull request record that cannot be read posts nothing and still lands', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-
-      const exit = finishLanding(
-        sandbox.root,
-        finishRunner(recorded, {record: failResult(1, 'HTTP 502')})
-      );
-      expect(exit).toBe(0);
-      expect(statusCalls(recorded)).toHaveLength(0);
-      expect(mergeCalls(recorded)).toHaveLength(1);
-      expect(stdio.errors.join('')).toContain(
-        'could not read the pull request'
-      );
-    });
-
-    test('a dispatched roster member refuses the post, names the member, and still lands', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-
-      const exit = finishLanding(
-        sandbox.root,
-        finishRunner(recorded, {resolver: okResult('code-audit-frontend\n')})
-      );
-      expect(exit).toBe(0);
-      expect(statusCalls(recorded)).toHaveLength(0);
-      expect(mergeCalls(recorded)).toHaveLength(1);
-      expect(stdio.errors.join('')).toContain('code-audit-frontend');
-    });
-
-    test('a resolver that cannot answer refuses the post and still lands', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-
-      const exit = finishLanding(
-        sandbox.root,
-        finishRunner(recorded, {resolver: failResult(2, 'no auditors roster')})
-      );
-      expect(exit).toBe(0);
-      expect(statusCalls(recorded)).toHaveLength(0);
-      expect(mergeCalls(recorded)).toHaveLength(1);
-      expect(stdio.errors.join('')).toContain('could not answer');
-    });
-
-    test('a failing status POST leaves the exit code unchanged and names the manual path', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-
-      const exit = finishLanding(
-        sandbox.root,
-        finishRunner(recorded, {post: failResult(1, 'HTTP 403')})
-      );
-      expect(exit).toBe(0);
-      expect(mergeCalls(recorded)).toHaveLength(1);
-      expect(stdio.errors.join('')).toContain('HTTP 403');
-      expect(stdio.errors.join('')).toContain('PR Merge Workflow');
-    });
-
     // The main checkout's state file has not advanced until the merge lands
     // and cleanup pulls it, so the cache is refreshed then, not here.
-    test('a queued land leaves the cache untouched', () => {
+    test.each(
+      Array.of<{
+        exit: number;
+        name: string;
+        options: Parameters<typeof finishRunner>[1];
+      }>(
+        {
+          exit: 0,
+          name: 'a queued land leaves the cache untouched',
+          options: {},
+        },
+        {
+          exit: 2,
+          name: 'a push failure leaves the cache untouched',
+          options: {push: failResult(128, 'remote: rejected')},
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {exit, options}) => {
       sandbox = setupSandbox();
       mkdirSync(path.dirname(cachePathOf(sandbox.root)), {recursive: true});
       const seeded = JSON.stringify({
@@ -1503,24 +1402,7 @@ describe('wiki chain', () => {
       });
       writeFileSync(cachePathOf(sandbox.root), seeded, 'utf8');
 
-      expect(finishLanding(sandbox.root, finishRunner([]))).toBe(0);
-      expect(readFileSync(cachePathOf(sandbox.root), 'utf8')).toBe(seeded);
-    });
-
-    test('a push failure leaves the cache untouched', () => {
-      sandbox = setupSandbox();
-      mkdirSync(path.dirname(cachePathOf(sandbox.root)), {recursive: true});
-      const seeded = JSON.stringify({
-        checkedAt: 1_700_000_000,
-        wikiDriftCount: 27,
-      });
-      writeFileSync(cachePathOf(sandbox.root), seeded, 'utf8');
-
-      const exit = finishLanding(
-        sandbox.root,
-        finishRunner([], {push: failResult(128, 'remote: rejected')})
-      );
-      expect(exit).toBe(2);
+      expect(finishLanding(sandbox.root, finishRunner([], options))).toBe(exit);
       expect(readFileSync(cachePathOf(sandbox.root), 'utf8')).toBe(seeded);
     });
   });
@@ -1548,18 +1430,24 @@ describe('wiki chain', () => {
       expect(existsSync(cachePathOf(sandbox.root))).toBe(false);
     });
 
-    test('refresh-nudge rejects arguments: exit 1', () => {
+    test.each(
+      [
+        {
+          args: ['refresh-nudge', '--force'],
+          error: 'takes no arguments',
+          name: 'refresh-nudge rejects arguments: exit 1',
+        },
+        {
+          args: ['bogus'],
+          error: 'unknown wiki chain action',
+          name: 'unknown action: exit 1',
+        },
+      ].map((row) => [row.name, row] as const)
+    )('%s', (_name, {args, error}) => {
       sandbox = setupSandbox();
 
-      expect(run(['refresh-nudge', '--force'], {cwd: sandbox.root})).toBe(1);
-      expect(stdio.errors.join('')).toContain('takes no arguments');
-    });
-
-    test('unknown action: exit 1', () => {
-      sandbox = setupSandbox();
-      const exit = run(['bogus'], {cwd: sandbox.root});
-      expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain('unknown wiki chain action');
+      expect(run(args, {cwd: sandbox.root})).toBe(1);
+      expect(stdio.errors.join('')).toContain(error);
     });
   });
 });

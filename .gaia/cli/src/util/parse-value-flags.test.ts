@@ -63,15 +63,20 @@ describe('parseValueFlags', () => {
     });
   });
 
-  test('an unknown flag returns its message', () => {
-    const result = parseValueFlags(['--nope', 'x'], VALUE_FLAGS);
-
-    expect(result).toEqual({message: 'unknown flag: --nope', ok: false});
-  });
-
-  test('a known flag at the end of argv returns the requires-a-value message', () => {
-    const result = parseValueFlags(['--current'], VALUE_FLAGS);
-
-    expect(result).toEqual({message: '--current requires a value', ok: false});
+  test.each(
+    [
+      {
+        argv: ['--nope', 'x'],
+        message: 'unknown flag: --nope',
+        name: 'an unknown flag returns its message',
+      },
+      {
+        argv: ['--current'],
+        message: '--current requires a value',
+        name: 'a known flag at the end of argv returns the requires-a-value message',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {argv, message}) => {
+    expect(parseValueFlags(argv, VALUE_FLAGS)).toEqual({message, ok: false});
   });
 });

@@ -22,6 +22,8 @@ type Sandbox = {
   write: (which: 'baseline' | 'current' | 'latest', contents: string) => void;
 };
 
+type SandboxFile = Parameters<Sandbox['write']>[0];
+
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-field-merge-workspace-'));
   const baselinePath = path.join(root, 'baseline.yaml');
@@ -90,6 +92,11 @@ const argv = (sandbox: Sandbox): string[] => [
   sandbox.currentPath,
   '--json',
 ];
+
+const ageYaml = (value: number | undefined): string =>
+  value === undefined ?
+    'nodeLinker: hoisted\n'
+  : `minimumReleaseAge: ${value}\n`;
 
 describe('update merge-workspace', () => {
   let sandbox: Sandbox;
@@ -409,28 +416,69 @@ describe('update merge-workspace', () => {
     expect(report.conflicts).toEqual([]);
   });
 
-  test('malformed adopter YAML → non-zero exit with structured error', () => {
-    sandbox.write('baseline', 'minimumReleaseAge: 10080\n');
-    sandbox.write('latest', 'minimumReleaseAge: 20160\n');
-    sandbox.write('current', 'overrides:\n  qs: [unterminated\n');
+  test.each(
+    (
+      [
+        {
+          code: 'workspace_parse_failed',
+          extraArgs: () => [],
+          files: {
+            baseline: 'minimumReleaseAge: 10080\n',
+            current: 'overrides:\n  qs: [unterminated\n',
+            latest: 'minimumReleaseAge: 20160\n',
+          },
+          name: 'malformed adopter YAML → non-zero exit with structured error',
+        },
+        {
+          code: 'workspace_file_missing',
+          extraArgs: () => [],
+          // current never written.
+          files: {
+            baseline: 'minimumReleaseAge: 10080\n',
+            latest: 'minimumReleaseAge: 20160\n',
+          },
+          name: 'missing file → non-zero exit with structured error',
+        },
+        {
+          code: 'invalid_arguments',
+          extraArgs: () => ['--nope'],
+          files: {
+            baseline: 'minimumReleaseAge: 10080\n',
+            current: 'minimumReleaseAge: 10080\n',
+            latest: 'minimumReleaseAge: 20160\n',
+          },
+          name: 'an unknown flag exits non-zero with invalid_arguments',
+        },
+        {
+          code: 'workspace_file_missing',
+          // The deferred baseline file is never written.
+          extraArgs: (root) => [
+            '--deferred-baseline',
+            `minimumReleaseAge=${path.join(root, 'deferred.yaml')}`,
+          ],
+          files: {
+            baseline: ageYaml(2),
+            current: ageYaml(1),
+            latest: ageYaml(2),
+          },
+          name: 'a missing deferred file exits non-zero with a structured error',
+        },
+      ] satisfies {
+        code: string;
+        extraArgs: (root: string) => string[];
+        files: Partial<Record<SandboxFile, string>>;
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {code, extraArgs, files}) => {
+    for (const [which, contents] of Object.entries(files)) {
+      sandbox.write(which as SandboxFile, contents);
+    }
 
-    const exit = run(argv(sandbox));
+    const exit = run([...argv(sandbox), ...extraArgs(sandbox.root)]);
+
     expect(exit).not.toBe(0);
-
-    const stderr = stdio.errors.join('');
-    expect(stderr).toContain('workspace_parse_failed');
-  });
-
-  test('missing file → non-zero exit with structured error', () => {
-    sandbox.write('baseline', 'minimumReleaseAge: 10080\n');
-    sandbox.write('latest', 'minimumReleaseAge: 20160\n');
-    // current never written.
-
-    const exit = run(argv(sandbox));
-    expect(exit).not.toBe(0);
-
-    const stderr = stdio.errors.join('');
-    expect(stderr).toContain('workspace_file_missing');
+    expect(stdio.errors.join('')).toContain(code);
   });
 
   test('human output (no --json) prints counts', () => {
@@ -457,17 +505,6 @@ describe('update merge-workspace', () => {
     const exit = run(['--help']);
     expect(exit).toBe(0);
     expect(stdio.outputs.join('')).toContain('merge-workspace');
-  });
-
-  test('an unknown flag exits non-zero with invalid_arguments', () => {
-    sandbox.write('baseline', 'minimumReleaseAge: 10080\n');
-    sandbox.write('latest', 'minimumReleaseAge: 20160\n');
-    sandbox.write('current', 'minimumReleaseAge: 10080\n');
-
-    const exit = run([...argv(sandbox), '--nope']);
-
-    expect(exit).not.toBe(0);
-    expect(stdio.errors.join('')).toContain('invalid_arguments');
   });
 
   test('verdict items sort by section then key across a U+0000 separator', () => {
@@ -498,11 +535,6 @@ describe('update merge-workspace', () => {
     ]);
   });
 });
-
-const ageYaml = (value: number | undefined): string =>
-  value === undefined ?
-    'nodeLinker: hoisted\n'
-  : `minimumReleaseAge: ${value}\n`;
 
 describe('update merge-workspace verdict table', () => {
   let sandbox: Sandbox;
@@ -544,43 +576,59 @@ describe('update merge-workspace verdict table', () => {
     expect(report.keptRemoved).toHaveLength(1);
   });
 
-  test('a workspace-setting conflict and an allowBuilds conflict are not version valued', () => {
-    sandbox.write(
-      'baseline',
-      'minimumReleaseAge: 1\nallowBuilds:\n  msw: true\n'
-    );
-    sandbox.write(
-      'latest',
-      'minimumReleaseAge: 2\nallowBuilds:\n  msw: false\n'
-    );
-    sandbox.write(
-      'current',
-      'minimumReleaseAge: 3\nallowBuilds:\n  msw: null\n'
-    );
+  test.each(
+    (
+      [
+        {
+          conflicts: [
+            {recommendation: {option: 'keep'}, versionValued: false},
+            {recommendation: {option: 'keep'}, versionValued: false},
+          ],
+          files: {
+            baseline: 'minimumReleaseAge: 1\nallowBuilds:\n  msw: true\n',
+            current: 'minimumReleaseAge: 3\nallowBuilds:\n  msw: null\n',
+            latest: 'minimumReleaseAge: 2\nallowBuilds:\n  msw: false\n',
+          },
+          name: 'a workspace-setting conflict and an allowBuilds conflict are not version valued',
+        },
+        {
+          conflicts: [
+            {
+              recommendation: {
+                option: 'higher',
+                side: 'gaia',
+                value: '>=6.5.0',
+              },
+              versionValued: true,
+            },
+          ],
+          files: {
+            baseline: "overrides:\n  qs: '>=6.0.0'\n",
+            current: "overrides:\n  qs: '>=6.2.0'\n",
+            latest: "overrides:\n  qs: '>=6.5.0'\n",
+          },
+          name: 'an overrides conflict is version valued and recommends the higher range',
+        },
+      ] satisfies {
+        conflicts: object[];
+        files: Record<SandboxFile, string>;
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {conflicts, files}) => {
+    for (const [which, contents] of Object.entries(files)) {
+      sandbox.write(which as SandboxFile, contents);
+    }
 
     expect(run(argv(sandbox))).toBe(0);
 
     const report = parseJson(stdio.outputs);
-    expect(report.conflicts).toHaveLength(2);
+    expect(report.conflicts).toHaveLength(conflicts.length);
 
-    for (const item of report.conflicts) {
-      expect(item.versionValued).toBe(false);
-      expect(item.recommendation?.option).toBe('keep');
-      expect(item.recommendation?.reason).not.toBe('');
+    for (const [index, expected] of conflicts.entries()) {
+      expect(report.conflicts[index]).toMatchObject(expected);
+      expect(report.conflicts[index]?.recommendation?.reason).not.toBe('');
     }
-  });
-
-  test('an overrides conflict is version valued and recommends the higher range', () => {
-    sandbox.write('baseline', "overrides:\n  qs: '>=6.0.0'\n");
-    sandbox.write('latest', "overrides:\n  qs: '>=6.5.0'\n");
-    sandbox.write('current', "overrides:\n  qs: '>=6.2.0'\n");
-
-    expect(run(argv(sandbox))).toBe(0);
-
-    expect(parseJson(stdio.outputs).conflicts[0]).toMatchObject({
-      recommendation: {option: 'higher', side: 'gaia', value: '>=6.5.0'},
-      versionValued: true,
-    });
   });
 });
 
@@ -651,16 +699,5 @@ describe('update merge-workspace deferred baselines', () => {
       key: '@scope/pkg',
       section: 'overrides',
     });
-  });
-
-  test('a missing deferred file exits non-zero with a structured error', () => {
-    const exit = run([
-      ...argv(sandbox),
-      '--deferred-baseline',
-      `minimumReleaseAge=${deferredPath()}`,
-    ]);
-
-    expect(exit).not.toBe(0);
-    expect(stdio.errors.join('')).toContain('workspace_file_missing');
   });
 });

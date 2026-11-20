@@ -140,30 +140,47 @@ describe('wiki state-init', () => {
     expect(readFileSync(sandbox.statePath, 'utf8')).toBe('{"version":1}\n');
   });
 
-  test('refuses when <sha> cannot be resolved', () => {
-    const exit = run(['nonexistent-ref'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('sha_unresolvable');
-    expect(existsSync(sandbox.statePath)).toBe(false);
-  });
+  const stateInitRefusalsCases: readonly {
+    args: (headSha: string) => string[];
+    message: string;
+    name: string;
+    stream: 'errors' | 'outputs';
+  }[] = [
+    {
+      args: () => ['nonexistent-ref'],
+      message: 'sha_unresolvable',
+      name: 'refuses when <sha> cannot be resolved',
+      stream: 'errors',
+    },
+    {
+      args: () => [],
+      message: 'Usage:',
+      name: 'exits 1 with usage hint when no args supplied',
+      stream: 'outputs',
+    },
+    {
+      args: (headSha) => [headSha, 'extra'],
+      message: 'exactly',
+      name: 'exits 1 when extra positional args are supplied',
+      stream: 'errors',
+    },
+    {
+      args: () => ['--bogus'],
+      message: 'unknown flag',
+      name: 'exits 1 when an unknown flag is supplied',
+      stream: 'errors',
+    },
+  ];
 
-  test('exits 1 with usage hint when no args supplied', () => {
-    const exit = run([], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('Usage:');
-  });
-
-  test('exits 1 when extra positional args are supplied', () => {
-    const exit = run([sandbox.headSha, 'extra'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('exactly');
-  });
-
-  test('exits 1 when an unknown flag is supplied', () => {
-    const exit = run(['--bogus'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
-  });
+  test.each(stateInitRefusalsCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {args, message, stream}) => {
+      const exit = run(args(sandbox.headSha), {cwd: sandbox.root});
+      expect(exit).toBe(1);
+      expect(stdio[stream].join('')).toContain(message);
+      expect(existsSync(sandbox.statePath)).toBe(false);
+    }
+  );
 
   test('--help exits 0 and prints usage', () => {
     const exit = run(['--help'], {cwd: sandbox.root});

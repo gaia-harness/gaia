@@ -85,22 +85,32 @@ describe('advisory-landed', () => {
     expect(check('>= 4.0.0, < 4.17.21')).toBe(NOT_LANDED_EXIT);
   });
 
-  test('an invalid range exits INVALID_ARGUMENTS with landed false', () => {
-    writeLockfile(twoDocumentLockfile({project: ['cookie@2.1.0']}));
+  test.each(
+    [
+      {
+        name: 'an invalid range exits INVALID_ARGUMENTS with landed false',
+        range: '>=1.0.0; rm',
+        setup: (): void => {
+          writeLockfile(twoDocumentLockfile({project: ['cookie@2.1.0']}));
+        },
+      },
+      {
+        name: 'a lockfile with no project document exits INVALID_ARGUMENTS with landed false',
+        range: RANGE,
+        setup: (): void => {
+          writeLockfile(selfLockfileDocument(['cookie@2.1.0']));
+        },
+      },
+      {
+        name: 'a missing lockfile exits INVALID_ARGUMENTS with landed false',
+        range: RANGE,
+        setup: (): void => {},
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {range, setup}) => {
+    setup();
 
-    expect(check('>=1.0.0; rm')).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-    expect(report()).toMatchObject({landed: false});
-  });
-
-  test('a lockfile with no project document exits INVALID_ARGUMENTS with landed false', () => {
-    writeLockfile(selfLockfileDocument(['cookie@2.1.0']));
-
-    expect(check()).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-    expect(report()).toMatchObject({landed: false});
-  });
-
-  test('a missing lockfile exits INVALID_ARGUMENTS with landed false', () => {
-    expect(check()).toBe(EXIT_CODES.INVALID_ARGUMENTS);
+    expect(check(range)).toBe(EXIT_CODES.INVALID_ARGUMENTS);
     expect(report()).toMatchObject({landed: false});
   });
 
