@@ -29,143 +29,147 @@ const expectedBump = (type: string): null | string => {
 };
 
 describe('classifyCommit', () => {
-  test('feat: → minor', () => {
-    expect(classifyCommit({body: '', subject: 'feat: add thing'})).toBe(
-      'minor'
-    );
-    expect(classifyCommit({body: '', subject: 'feat(scope): add'})).toBe(
-      'minor'
-    );
-  });
-
-  test('fix:/docs:/etc → patch', () => {
-    expect(classifyCommit({body: '', subject: 'fix: a bug'})).toBe('patch');
-    expect(classifyCommit({body: '', subject: 'docs: typo'})).toBe('patch');
-    expect(classifyCommit({body: '', subject: 'chore(deps): bump'})).toBe(
-      'patch'
-    );
-    expect(classifyCommit({body: '', subject: 'refactor: clean'})).toBe(
-      'patch'
-    );
-    expect(classifyCommit({body: '', subject: 'perf: speed'})).toBe('patch');
-    expect(classifyCommit({body: '', subject: 'ci: pipeline'})).toBe('patch');
-    expect(classifyCommit({body: '', subject: 'test: cover'})).toBe('patch');
-    expect(classifyCommit({body: '', subject: 'style: lint'})).toBe('patch');
-  });
-
-  test('! suffix → major', () => {
-    expect(classifyCommit({body: '', subject: 'feat!: drop API'})).toBe(
-      'major'
-    );
-    expect(classifyCommit({body: '', subject: 'fix(scope)!: rename'})).toBe(
-      'major'
-    );
-  });
-
-  test('BREAKING CHANGE in body → major', () => {
-    expect(
-      classifyCommit({
-        body: 'BREAKING CHANGE: removed thing',
-        subject: 'feat: x',
-      })
-    ).toBe('major');
-  });
-
-  test('non-conventional → null', () => {
-    expect(classifyCommit({body: '', subject: 'random commit'})).toBeNull();
-    expect(classifyCommit({body: '', subject: 'merged something'})).toBeNull();
-  });
+  type CommitCase = {
+    commits: {body: string; subject: string}[];
+    expected: null | string;
+    name: string;
+  };
+  const bare = (...subjects: string[]): CommitCase['commits'] =>
+    subjects.map((subject) => ({body: '', subject}));
 
   // `/gaia-debt` emits `debt(...)` and a rebundle emits `build(cli):`, so a
   // maintenance release window can consist entirely of these. They used to
   // classify as null, and a window of only such commits aggregated to no bump
   // at all while every subject in it was correctly formatted.
-  test.each([
-    'debt(cli): drain the backlog',
-    'build(cli): rebundle the binary',
-  ])('%s → patch', (subject) => {
-    expect(classifyCommit({body: '', subject})).toBe('patch');
-  });
-
   // `wiki:` is the sync tool's own bookkeeping. It stays release-neutral on
   // purpose: a wiki sync should never be the reason a version ships.
-  test('wiki: → null (declared, but deliberately release-neutral)', () => {
-    expect(
-      classifyCommit({body: '', subject: 'wiki: maintenance chain'})
-    ).toBeNull();
-  });
-
-  // Falsifiable, unlike asserting the return is `BumpKind | null` (which the
-  // signature already guarantees): `feat` is the only minor, `wiki` the only
-  // declared type that contributes nothing, and every other declared type has
-  // to move the version.
-  test.each([...COMMIT_TYPES])(
-    '%s: has the intended bump disposition',
-    (type) => {
-      expect(classifyCommit({body: '', subject: `${type}: thing`})).toBe(
-        expectedBump(type)
-      );
+  test.each<CommitCase>([
+    {
+      commits: bare('feat: add thing', 'feat(scope): add'),
+      expected: 'minor',
+      name: 'feat: → minor',
+    },
+    {
+      commits: bare(
+        'fix: a bug',
+        'docs: typo',
+        'chore(deps): bump',
+        'refactor: clean',
+        'perf: speed',
+        'ci: pipeline',
+        'test: cover',
+        'style: lint'
+      ),
+      expected: 'patch',
+      name: 'fix:/docs:/etc → patch',
+    },
+    {
+      commits: bare('feat!: drop API', 'fix(scope)!: rename'),
+      expected: 'major',
+      name: '! suffix → major',
+    },
+    {
+      commits: [{body: 'BREAKING CHANGE: removed thing', subject: 'feat: x'}],
+      expected: 'major',
+      name: 'BREAKING CHANGE in body → major',
+    },
+    {
+      commits: bare('random commit', 'merged something'),
+      expected: null,
+      name: 'non-conventional → null',
+    },
+    {
+      commits: bare('debt(cli): drain the backlog'),
+      expected: 'patch',
+      name: 'debt(cli): drain the backlog → patch',
+    },
+    {
+      commits: bare('build(cli): rebundle the binary'),
+      expected: 'patch',
+      name: 'build(cli): rebundle the binary → patch',
+    },
+    {
+      commits: bare('wiki: maintenance chain'),
+      expected: null,
+      name: 'wiki: → null (declared, but deliberately release-neutral)',
+    },
+    {
+      commits: bare('spike: try a thing'),
+      expected: null,
+      name: 'a well-formed but undeclared type contributes nothing',
+    },
+    // Falsifiable, unlike asserting the return is `BumpKind | null` (which the
+    // signature already guarantees): `feat` is the only minor, `wiki` the only
+    // declared type that contributes nothing, and every other declared type has
+    // to move the version.
+    ...COMMIT_TYPES.map((type) => ({
+      commits: bare(`${type}: thing`),
+      expected: expectedBump(type),
+      name: `${type}: has the intended bump disposition`,
+    })),
+  ])('$name', ({commits, expected}) => {
+    for (const commit of commits) {
+      expect(classifyCommit(commit)).toBe(expected);
     }
-  );
-
-  test('a well-formed but undeclared type contributes nothing', () => {
-    expect(
-      classifyCommit({body: '', subject: 'spike: try a thing'})
-    ).toBeNull();
   });
 });
 
 describe('aggregateBump', () => {
-  test('highest severity wins', () => {
-    expect(
-      aggregateBump([
+  test.each<{
+    commits: {body: string; subject: string}[];
+    expected: null | string;
+    name: string;
+  }>([
+    {
+      commits: [
         {body: '', subject: 'fix: a'},
         {body: '', subject: 'feat: b'},
         {body: '', subject: 'docs: c'},
-      ])
-    ).toBe('minor');
-  });
-
-  test('breaking trumps everything', () => {
-    expect(
-      aggregateBump([
+      ],
+      expected: 'minor',
+      name: 'highest severity wins',
+    },
+    {
+      commits: [
         {body: '', subject: 'fix: a'},
         {body: '', subject: 'feat!: b'},
         {body: '', subject: 'feat: c'},
-      ])
-    ).toBe('major');
-  });
-
-  test('all-patch → patch', () => {
-    expect(
-      aggregateBump([
+      ],
+      expected: 'major',
+      name: 'breaking trumps everything',
+    },
+    {
+      commits: [
         {body: '', subject: 'fix: a'},
         {body: '', subject: 'chore: b'},
-      ])
-    ).toBe('patch');
-  });
-
-  test('no recognizable commits → null', () => {
-    expect(
-      aggregateBump([
+      ],
+      expected: 'patch',
+      name: 'all-patch → patch',
+    },
+    {
+      commits: [
         {body: '', subject: 'random'},
         {body: '', subject: 'merge'},
-      ])
-    ).toBeNull();
+      ],
+      expected: null,
+      name: 'no recognizable commits → null',
+    },
+  ])('$name', ({commits, expected}) => {
+    expect(aggregateBump(commits)).toBe(expected);
   });
 });
 
 describe('applyBump', () => {
-  test('major resets minor and patch', () => {
-    expect(applyBump('1.2.3', 'major')).toBe('2.0.0');
-  });
-
-  test('minor resets patch', () => {
-    expect(applyBump('1.2.3', 'minor')).toBe('1.3.0');
-  });
-
-  test('patch increments patch', () => {
-    expect(applyBump('1.2.3', 'patch')).toBe('1.2.4');
+  test.each<{
+    expected: string;
+    kind: 'major' | 'minor' | 'patch';
+    name: string;
+  }>([
+    {expected: '2.0.0', kind: 'major', name: 'major resets minor and patch'},
+    {expected: '1.3.0', kind: 'minor', name: 'minor resets patch'},
+    {expected: '1.2.4', kind: 'patch', name: 'patch increments patch'},
+  ])('$name', ({expected, kind}) => {
+    expect(applyBump('1.2.3', kind)).toBe(expected);
   });
 
   test('throws on non-semver', () => {
@@ -337,101 +341,129 @@ describe('release bump CLI', () => {
     vi.restoreAllMocks();
   });
 
-  test('proposes minor bump when feat: present, without writing', () => {
-    sandbox = setupSandbox('1.2.3');
-    const runner = buildRunner([
-      {subject: 'feat: add thing'},
-      {subject: 'fix: bug'},
-    ]);
+  // `files` maps a path under the sandbox root to its exact expected text
+  // after the run; `setup` seeds anything beyond the default sandbox.
+  test.each<{
+    args: string[];
+    commits: {subject: string}[];
+    errContains: string;
+    exit: number;
+    files: Record<string, string>;
+    name: string;
+    setup: (root: string) => void;
+    stdout: unknown;
+    version: string;
+  }>([
+    {
+      args: [],
+      commits: [{subject: 'feat: add thing'}, {subject: 'fix: bug'}],
+      errContains: '',
+      exit: 0,
+      // Proposing does NOT write.
+      files: {
+        '.gaia/VERSION': '1.2.3\n',
+        'package.json': `${JSON.stringify({name: 'gaia', version: '1.2.3'}, null, 2)}\n`,
+      },
+      name: 'proposes minor bump when feat: present, without writing',
+      setup: () => {},
+      stdout: 'v1.2.3 -> v1.3.0 (minor)',
+      version: '1.2.3',
+    },
+    {
+      args: ['--auto'],
+      commits: [{subject: 'fix: a'}, {subject: 'docs: b'}],
+      errContains: '',
+      exit: 0,
+      files: {
+        '.gaia/VERSION': '1.0.1\n',
+        'package.json': `${JSON.stringify({name: 'gaia', version: '1.0.1'}, null, 2)}\n`,
+      },
+      name: '--auto applies a patch bump',
+      setup: () => {},
+      stdout: '1.0.1',
+      version: '1.0.0',
+    },
+    {
+      args: ['--auto'],
+      commits: [{subject: 'fix: a'}],
+      errContains: '',
+      exit: 0,
+      files: {
+        'apps/web/package.json': `${JSON.stringify({name: 'web', version: '1.0.1'}, null, 2)}\n`,
+      },
+      name: '--auto keeps apps/web/package.json at the root version',
+      setup: (root) => {
+        mkdirSync(path.join(root, 'apps', 'web'), {recursive: true});
+        writeFileSync(
+          path.join(root, 'apps', 'web', 'package.json'),
+          `${JSON.stringify({name: 'web', version: '1.0.0'}, null, 2)}\n`,
+          'utf8'
+        );
+      },
+      stdout: expect.any(String),
+      version: '1.0.0',
+    },
+    {
+      args: ['--auto'],
+      commits: [{subject: 'feat!: rip out X'}],
+      errContains: 'refusing --auto',
+      exit: 1,
+      files: {
+        '.gaia/VERSION': '1.0.0\n',
+        'package.json': `${JSON.stringify({name: 'gaia', version: '1.0.0'}, null, 2)}\n`,
+      },
+      name: '--auto refuses major without confirmation',
+      setup: () => {},
+      stdout: expect.any(String),
+      version: '1.0.0',
+    },
+  ])(
+    '$name',
+    ({args, commits, errContains, exit, files, setup, stdout, version}) => {
+      sandbox = setupSandbox(version);
+      setup(sandbox.root);
 
-    const exit = run([], {cwd: sandbox.root, runner});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('').trim()).toBe('v1.2.3 -> v1.3.0 (minor)');
+      expect(run(args, {cwd: sandbox.root, runner: buildRunner(commits)})).toBe(
+        exit
+      );
+      expect(stdio.outputs.join('').trim()).toEqual(stdout);
+      expect(stdio.errors.join('')).toContain(errContains);
 
-    // Did NOT write
-    const pkg = JSON.parse(
-      readFileSync(path.join(sandbox.root, 'package.json'), 'utf8')
-    ) as {version: string};
-    expect(pkg.version).toBe('1.2.3');
-  });
+      for (const [file, text] of Object.entries(files)) {
+        expect(readFileSync(path.join(sandbox.root, file), 'utf8')).toBe(text);
+      }
+    }
+  );
 
-  test('--auto applies a patch bump', () => {
+  test.each<{
+    args: string[];
+    commits?: {subject: string}[];
+    message: string;
+    name: string;
+  }>([
+    {
+      args: [],
+      commits: [],
+      message: 'no commits since last tag',
+      name: 'exits 1 when no commits',
+    },
+    {
+      args: [],
+      commits: [{subject: 'random non-conventional commit'}],
+      message: 'no conventional-commit prefixes',
+      name: 'exits 1 when no conventional-commit prefixes',
+    },
+    {
+      args: ['--bogus'],
+      message: 'unknown flag',
+      name: 'rejects unknown flags',
+    },
+  ])('$name', ({args, commits, message}) => {
     sandbox = setupSandbox('1.0.0');
-    const runner = buildRunner([{subject: 'fix: a'}, {subject: 'docs: b'}]);
+    const runner = commits ? buildRunner(commits) : undefined;
 
-    const exit = run(['--auto'], {cwd: sandbox.root, runner});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('').trim()).toBe('1.0.1');
-
-    const pkg = JSON.parse(
-      readFileSync(path.join(sandbox.root, 'package.json'), 'utf8')
-    ) as {version: string};
-    expect(pkg.version).toBe('1.0.1');
-
-    const versionFile = readFileSync(
-      path.join(sandbox.root, '.gaia', 'VERSION'),
-      'utf8'
-    );
-    expect(versionFile).toBe('1.0.1\n');
-  });
-
-  test('--auto keeps apps/web/package.json at the root version', () => {
-    sandbox = setupSandbox('1.0.0');
-    mkdirSync(path.join(sandbox.root, 'apps', 'web'), {recursive: true});
-    writeFileSync(
-      path.join(sandbox.root, 'apps', 'web', 'package.json'),
-      `${JSON.stringify({name: 'web', version: '1.0.0'}, null, 2)}\n`,
-      'utf8'
-    );
-    const runner = buildRunner([{subject: 'fix: a'}]);
-
-    expect(run(['--auto'], {cwd: sandbox.root, runner})).toBe(0);
-
-    const frontend = JSON.parse(
-      readFileSync(
-        path.join(sandbox.root, 'apps', 'web', 'package.json'),
-        'utf8'
-      )
-    ) as {name: string; version: string};
-    expect(frontend).toEqual({name: 'web', version: '1.0.1'});
-  });
-
-  test('--auto refuses major without confirmation', () => {
-    sandbox = setupSandbox('1.0.0');
-    const runner = buildRunner([{subject: 'feat!: rip out X'}]);
-
-    const exit = run(['--auto'], {cwd: sandbox.root, runner});
+    const exit = run(args, {cwd: sandbox.root, runner});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('refusing --auto');
-
-    const pkg = JSON.parse(
-      readFileSync(path.join(sandbox.root, 'package.json'), 'utf8')
-    ) as {version: string};
-    expect(pkg.version).toBe('1.0.0');
-  });
-
-  test('exits 1 when no commits', () => {
-    sandbox = setupSandbox('1.0.0');
-    const runner = buildRunner([]);
-
-    const exit = run([], {cwd: sandbox.root, runner});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('no commits since last tag');
-  });
-
-  test('exits 1 when no conventional-commit prefixes', () => {
-    sandbox = setupSandbox('1.0.0');
-    const runner = buildRunner([{subject: 'random non-conventional commit'}]);
-
-    const exit = run([], {cwd: sandbox.root, runner});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('no conventional-commit prefixes');
-  });
-
-  test('rejects unknown flags', () => {
-    sandbox = setupSandbox('1.0.0');
-    const exit = run(['--bogus'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
+    expect(stdio.errors.join('')).toContain(message);
   });
 });

@@ -35,36 +35,40 @@ describe('resolveLayer', () => {
     expect(resolveLayer(packageDir, 'billing')).toEqual({layer: 'billing'});
   });
 
-  test('errors when the requested folder is missing', () => {
-    makeServiceFolders('api', 'acme');
+  describe('resolveLayer errors name the candidates', () => {
+    const noneFound =
+      'cannot pick the domain-layer folder under app/services/ (found: none); pass --layer <folder>';
 
-    expect(resolveLayer(packageDir, 'billing')).toEqual({
-      error: '--layer folder not found: app/services/billing/',
-    });
-  });
+    test.each([
+      {
+        error: '--layer folder not found: app/services/billing/',
+        folders: ['api', 'acme'],
+        name: 'errors when the requested folder is missing',
+        requested: 'billing',
+      },
+      {
+        error: noneFound,
+        folders: ['api'],
+        name: 'errors naming none when there is no candidate',
+        requested: undefined,
+      },
+      {
+        error: noneFound,
+        folders: [],
+        name: 'errors naming none when app/services is missing',
+        requested: undefined,
+      },
+      {
+        error:
+          'cannot pick the domain-layer folder under app/services/ (found: acme, billing); pass --layer <folder>',
+        folders: ['api', 'billing', 'acme'],
+        name: 'errors naming every candidate when there are several',
+        requested: undefined,
+      },
+    ])('$name', ({error, folders, requested}) => {
+      makeServiceFolders(...folders);
 
-  test('errors naming none when there is no candidate', () => {
-    makeServiceFolders('api');
-
-    expect(resolveLayer(packageDir, undefined)).toEqual({
-      error:
-        'cannot pick the domain-layer folder under app/services/ (found: none); pass --layer <folder>',
-    });
-  });
-
-  test('errors naming none when app/services is missing', () => {
-    expect(resolveLayer(packageDir, undefined)).toEqual({
-      error:
-        'cannot pick the domain-layer folder under app/services/ (found: none); pass --layer <folder>',
-    });
-  });
-
-  test('errors naming every candidate when there are several', () => {
-    makeServiceFolders('api', 'billing', 'acme');
-
-    expect(resolveLayer(packageDir, undefined)).toEqual({
-      error:
-        'cannot pick the domain-layer folder under app/services/ (found: acme, billing); pass --layer <folder>',
+      expect(resolveLayer(packageDir, requested)).toEqual({error});
     });
   });
 });

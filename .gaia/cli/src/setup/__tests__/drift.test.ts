@@ -40,6 +40,22 @@ describe('setup drift', () => {
     });
   };
 
+  const writeProjectConfigIfPresent = (
+    config: Record<string, unknown> | undefined
+  ): void => {
+    if (config !== undefined) {
+      sandbox.writeProjectConfig(config);
+    }
+  };
+
+  const writeStateIfPresent = (
+    decisions: Record<string, unknown> | undefined
+  ): void => {
+    if (decisions !== undefined) {
+      writeState(decisions);
+    }
+  };
+
   beforeEach(() => {
     sandbox = setupSandbox('gaia-setup-drift-');
     listPath = path.join(sandbox.root, 'fixture-list.json');
@@ -62,81 +78,93 @@ describe('setup drift', () => {
     vi.restoreAllMocks();
   });
 
-  test('classifies undecided entries by standalone and required', () => {
-    writeFeatureList(listPath, [
-      {id: 'feat-x', scope: 'project', standalone: true},
-      {id: 'feat-y', required: true, scope: 'machine', standalone: true},
-      {id: 'feat-w', scope: 'project', standalone: false},
-      {id: 'feat-z', scope: 'project', standalone: true},
-      {id: 'feat-r', scope: 'project', standalone: true},
-    ]);
-    sandbox.writeProjectConfig({
-      setup_decisions: {'feat-r': 'applied', 'feat-z': 'declined'},
-      version: 1,
-    });
-
-    expect(drift('--json')).toBe(EXIT_CODES.OK);
-    expect(actions()).toEqual({
-      'feat-w': 'setup',
-      'feat-x': 'ask',
-      'feat-y': 'apply',
-    });
-    expect(report().decided).toEqual({
-      'feat-r': 'applied',
-      'feat-z': 'declined',
-    });
-    expect(report().recorded).toEqual({machine: 0, project: 2});
-    expect(report().features).toBe(listPath);
-  });
-
-  test('with no records at all every entry is setup and decided is empty', () => {
-    writeFeatureList(listPath, [
-      {id: 'feat-x', scope: 'project', standalone: true},
-      {id: 'feat-y', required: true, scope: 'machine', standalone: true},
-    ]);
-
-    drift('--json');
-
-    expect(actions()).toEqual({'feat-x': 'setup', 'feat-y': 'setup'});
-    expect(report().decided).toEqual({});
-    expect(report().recorded).toEqual({machine: 0, project: 0});
-  });
-
-  test('machine records count and decide machine ids', () => {
-    writeFeatureList(listPath, [
-      {id: 'mach-a', scope: 'machine', standalone: true},
-      {id: 'proj-a', scope: 'project', standalone: true},
-    ]);
-    writeState({'mach-a': 'applied'});
-
-    drift('--json');
-
-    expect(report().decided).toEqual({'mach-a': 'applied'});
-    expect(report().recorded).toEqual({machine: 1, project: 0});
-    expect(actions()).toEqual({'proj-a': 'ask'});
-  });
-
-  test('ignores an unlisted id, an invalid value and a wrong-scope record', () => {
-    writeFeatureList(listPath, [
-      {id: 'mach-a', scope: 'machine', standalone: true},
-      {id: 'proj-a', scope: 'project', standalone: true},
-    ]);
-    sandbox.writeProjectConfig({
-      setup_decisions: {
-        'mach-a': 'applied',
-        'proj-a': 'maybe',
-        unlisted: 'applied',
+  test.each([
+    {
+      actions: {'feat-w': 'setup', 'feat-x': 'ask', 'feat-y': 'apply'},
+      decided: {'feat-r': 'applied', 'feat-z': 'declined'},
+      features: [
+        {id: 'feat-x', scope: 'project', standalone: true},
+        {id: 'feat-y', required: true, scope: 'machine', standalone: true},
+        {id: 'feat-w', scope: 'project', standalone: false},
+        {id: 'feat-z', scope: 'project', standalone: true},
+        {id: 'feat-r', scope: 'project', standalone: true},
+      ],
+      name: 'classifies undecided entries by standalone and required',
+      projectConfig: {
+        setup_decisions: {'feat-r': 'applied', 'feat-z': 'declined'},
+        version: 1,
       },
-      version: 1,
-    });
+      recorded: {machine: 0, project: 2},
+      state: undefined,
+    },
+    {
+      actions: {'feat-x': 'setup', 'feat-y': 'setup'},
+      decided: {},
+      features: [
+        {id: 'feat-x', scope: 'project', standalone: true},
+        {id: 'feat-y', required: true, scope: 'machine', standalone: true},
+      ],
+      name: 'with no records at all every entry is setup and decided is empty',
+      projectConfig: undefined,
+      recorded: {machine: 0, project: 0},
+      state: undefined,
+    },
+    {
+      actions: {'proj-a': 'ask'},
+      decided: {'mach-a': 'applied'},
+      features: [
+        {id: 'mach-a', scope: 'machine', standalone: true},
+        {id: 'proj-a', scope: 'project', standalone: true},
+      ],
+      name: 'machine records count and decide machine ids',
+      projectConfig: undefined,
+      recorded: {machine: 1, project: 0},
+      state: {'mach-a': 'applied'},
+    },
+    {
+      actions: {'mach-a': 'setup', 'proj-a': 'setup'},
+      decided: {},
+      features: [
+        {id: 'mach-a', scope: 'machine', standalone: true},
+        {id: 'proj-a', scope: 'project', standalone: true},
+      ],
+      name: 'ignores an unlisted id, an invalid value and a wrong-scope record',
+      projectConfig: {
+        setup_decisions: {
+          'mach-a': 'applied',
+          'proj-a': 'maybe',
+          unlisted: 'applied',
+        },
+        version: 1,
+      },
+      recorded: {machine: 0, project: 0},
+      state: undefined,
+    },
+  ])(
+    '$name',
+    ({
+      actions: expectedActions,
+      decided,
+      features,
+      projectConfig,
+      recorded,
+      state,
+    }) => {
+      writeFeatureList(
+        listPath,
+        features as Parameters<typeof writeFeatureList>[1]
+      );
 
-    expect(drift('--json')).toBe(EXIT_CODES.OK);
-    expect(report().decided).toEqual({});
-    expect(report().recorded).toEqual({machine: 0, project: 0});
-    expect(
-      Object.keys(actions()).toSorted((a, b) => a.localeCompare(b))
-    ).toEqual(['mach-a', 'proj-a']);
-  });
+      writeProjectConfigIfPresent(projectConfig);
+      writeStateIfPresent(state);
+
+      expect(drift('--json')).toBe(EXIT_CODES.OK);
+      expect(actions()).toEqual(expectedActions);
+      expect(report().decided).toEqual(decided);
+      expect(report().recorded).toEqual(recorded);
+      expect(report().features).toBe(listPath);
+    }
+  );
 
   test('prints one line per undecided entry, or the all-decided line', () => {
     writeFeatureList(listPath, [{id: 'proj-a', scope: 'project'}]);
@@ -162,35 +190,63 @@ describe('setup drift', () => {
     expect(actions()).toEqual({'proj-a': 'setup'});
   });
 
-  test('an unreadable path, an invalid list and malformed record files exit non-zero naming the file', () => {
-    expect(drift('--json')).toBe(EXIT_CODES.CONFIG_INVALID);
-    expect(err.join('')).toContain(listPath);
+  test.each([
+    {
+      args: (list: string) => ['--features', list, '--json'],
+      exit: EXIT_CODES.CONFIG_INVALID,
+      name: 'an unreadable path exits non-zero naming the file',
+      prepare: () => {},
+      stderr: (list: string) => list,
+    },
+    {
+      args: (list: string) => ['--features', list, '--json'],
+      exit: EXIT_CODES.CONFIG_INVALID,
+      name: 'an invalid list exits non-zero naming the file',
+      prepare: () => {
+        writeFileSync(listPath, '{"version": 2}', 'utf8');
+      },
+      stderr: (list: string) => list,
+    },
+    {
+      args: (list: string) => ['--features', list, '--json'],
+      exit: EXIT_CODES.CONFIG_INVALID,
+      name: 'a malformed project.json exits non-zero naming the file',
+      prepare: () => {
+        writeFeatureList(listPath, [{id: 'proj-a', scope: 'project'}]);
+        writeFileSync(projectConfigPath(sandbox.root), '{nope', 'utf8');
+      },
+      stderr: () => 'project.json',
+    },
+    {
+      args: (list: string) => ['--features', list, '--json'],
+      exit: EXIT_CODES.CONFIG_INVALID,
+      name: 'a malformed setup-state.json exits non-zero naming the file',
+      prepare: () => {
+        writeFeatureList(listPath, [{id: 'proj-a', scope: 'project'}]);
+        writeFileSync(projectConfigPath(sandbox.root), '{"version":1}', 'utf8');
+        writeState({});
+        writeFileSync(resolveStateFilePath(sandbox.root), '{nope', 'utf8');
+      },
+      stderr: () => 'state_malformed',
+    },
+    {
+      args: () => ['--bogus'],
+      exit: EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      name: 'an unknown flag is refused',
+      prepare: () => {},
+      stderr: () => '',
+    },
+    {
+      args: () => ['--features'],
+      exit: EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      name: 'a --features flag with no value is refused',
+      prepare: () => {},
+      stderr: () => '',
+    },
+  ])('$name', ({args, exit, prepare, stderr}) => {
+    prepare();
 
-    writeFileSync(listPath, '{"version": 2}', 'utf8');
-    err.length = 0;
-    expect(drift('--json')).toBe(EXIT_CODES.CONFIG_INVALID);
-    expect(err.join('')).toContain(listPath);
-
-    writeFeatureList(listPath, [{id: 'proj-a', scope: 'project'}]);
-    writeFileSync(projectConfigPath(sandbox.root), '{nope', 'utf8');
-    err.length = 0;
-    expect(drift('--json')).toBe(EXIT_CODES.CONFIG_INVALID);
-    expect(err.join('')).toContain('project.json');
-
-    writeFileSync(projectConfigPath(sandbox.root), '{"version":1}', 'utf8');
-    writeState({});
-    writeFileSync(resolveStateFilePath(sandbox.root), '{nope', 'utf8');
-    err.length = 0;
-    expect(drift('--json')).toBe(EXIT_CODES.CONFIG_INVALID);
-    expect(err.join('')).toContain('state_malformed');
-  });
-
-  test('an unknown flag is refused', () => {
-    expect(run(['--bogus'], {cwd: sandbox.root})).toBe(
-      EXIT_CODES.UNKNOWN_SUBCOMMAND
-    );
-    expect(run(['--features'], {cwd: sandbox.root})).toBe(
-      EXIT_CODES.UNKNOWN_SUBCOMMAND
-    );
+    expect(run(args(listPath), {cwd: sandbox.root})).toBe(exit);
+    expect(err.join('')).toContain(stderr(listPath));
   });
 });

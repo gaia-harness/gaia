@@ -57,17 +57,6 @@ const captureStdio = (): {
   };
 };
 
-// A runner that fails every call as if the `git` binary itself were missing.
-const gitNotFoundRunner: CommandRunner = () => ({
-  error: new Error('git not found'),
-  output: ['', '', ''] as never,
-  pid: 0,
-  signal: null,
-  status: null,
-  stderr: '',
-  stdout: '',
-});
-
 const okResult = (stdout = ''): SpawnSyncReturns<string> => ({
   output: ['', stdout, ''] as never,
   pid: 0,
@@ -148,6 +137,40 @@ describe('release preflight', () => {
     vi.restoreAllMocks();
   });
 
+  type Scripted = {
+    argv: readonly string[];
+    result: SpawnSyncReturns<string>;
+  }[];
+
+  const gitFailure = (stderr: string): SpawnSyncReturns<string> => ({
+    output: ['', '', ''] as never,
+    pid: 0,
+    signal: null,
+    status: 128,
+    stderr,
+    stdout: '',
+  });
+
+  // The two probes every preflight run makes before it looks at the wiki.
+  const branchAndStatus = (branch: string, status = ''): Scripted => [
+    {
+      argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+      result: okResult(`${branch}\n`),
+    },
+    {argv: ['status', '--porcelain=v1', '-uall'], result: okResult(status)},
+  ];
+
+  const probeWith =
+    (overrides: Record<string, unknown> = {}) =>
+    () => ({
+      commits_ahead: 0,
+      drift_count: 0,
+      reachable: true,
+      state_sha: STATE_SHA,
+      suggested_base: '',
+      ...overrides,
+    });
+
   test('exit 0 on main with clean tree and synced wiki', () => {
     const recorded: RecordedCall[] = [];
     const runner = buildRunner(
@@ -178,499 +201,295 @@ describe('release preflight', () => {
     expect(stdio.errors.join('')).toBe('');
   });
 
-  test('exit 1 when not on main', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('feature/x\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
-      ],
-      recorded
-    );
+  const THROWING_REVPARSE: Scripted = [
+    {
+      argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+      result: {
+        error: new Error('git not found'),
+        output: ['', '', ''] as never,
+        pid: 0,
+        signal: null,
+        status: null,
+        stderr: '',
+        stdout: '',
+      },
+    },
+  ];
 
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('must be on main');
-  });
-
-  test('exit 1 when working tree is dirty', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {
-          argv: ['status', '--porcelain=v1', '-uall'],
-          result: okResult(' M README.md\n'),
-        },
-      ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('working tree is dirty');
-  });
-
-  test('exit 1 when wiki is behind HEAD with substantive drift', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+  test.each<{
+    exit: number;
+    message: string;
+    name: string;
+    probe: Record<string, unknown>;
+    rangesAbsent: string[];
+    rangesSeen: string[];
+    scripted: Scripted;
+  }>([
+    {
+      exit: 1,
+      message: 'must be on main',
+      name: 'exit 1 when not on main',
+      probe: {},
+      rangesAbsent: [],
+      rangesSeen: [],
+      scripted: branchAndStatus('feature/x'),
+    },
+    {
+      exit: 1,
+      message: 'working tree is dirty',
+      name: 'exit 1 when working tree is dirty',
+      probe: {},
+      rangesAbsent: [],
+      rangesSeen: [],
+      scripted: branchAndStatus('main', ' M README.md\n'),
+    },
+    {
+      exit: 1,
+      message: 'wiki is 2 commits behind HEAD',
+      name: 'exit 1 when wiki is behind HEAD with substantive drift',
+      probe: {commits_ahead: 2, drift_count: 2},
+      rangesAbsent: [],
+      rangesSeen: [],
+      scripted: [
+        ...branchAndStatus('main'),
         {argv: REVPARSE_ARGS, result: okResult(`${STATE_SHA}\n`)},
         {
           argv: ['log', '--format=%s', DRIFT_RANGE],
           result: okResult('feat: a new thing\nwiki: sync through abc1234\n'),
         },
       ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 2,
-        drift_count: 2,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('wiki is 2 commits behind HEAD');
-  });
-
-  test('exit 0 when drift is entirely wiki-sync squash artifacts', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
-        {argv: REVPARSE_ARGS, result: okResult(`${STATE_SHA}\n`)},
-        {
-          argv: ['log', '--format=%s', DRIFT_RANGE],
-          result: okResult('wiki: sync through abc1234 (#173)\n'),
-        },
-      ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 1,
-        drift_count: 1,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(0);
-    expect(stdio.errors.join('')).toContain('wiki-sync squash artifact');
-  });
-
-  test('exit 1 when drift mixes a wiki artifact with a real commit', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+    },
+    {
+      exit: 1,
+      message: 'wiki is 2 commits behind HEAD',
+      name: 'exit 1 when drift mixes a wiki artifact with a real commit',
+      probe: {commits_ahead: 2, drift_count: 2},
+      rangesAbsent: [],
+      rangesSeen: [],
+      scripted: [
+        ...branchAndStatus('main'),
         {argv: REVPARSE_ARGS, result: okResult(`${STATE_SHA}\n`)},
         {
           argv: ['log', '--format=%s', DRIFT_RANGE],
           result: okResult('wiki: sync through abc1234\nfix: real bug\n'),
         },
       ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 2,
-        drift_count: 2,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('wiki is 2 commits behind HEAD');
-  });
-
-  test('exit 1 when the state SHA cannot be resolved', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+    },
+    {
+      exit: 1,
+      message: 'wiki is 1 commits behind HEAD',
+      name: 'exit 1 when the state SHA cannot be resolved',
+      probe: {commits_ahead: 1, drift_count: 1},
+      rangesAbsent: [],
+      rangesSeen: [],
+      scripted: [
+        ...branchAndStatus('main'),
         {
           argv: REVPARSE_ARGS,
-          result: {
-            output: ['', '', ''] as never,
-            pid: 0,
-            signal: null,
-            status: 128,
-            stderr: 'fatal: ambiguous argument',
-            stdout: '',
-          },
+          result: gitFailure('fatal: ambiguous argument'),
         },
       ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 1,
-        drift_count: 1,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('wiki is 1 commits behind HEAD');
-  });
-
-  test('exit 1 when drift commit log cannot be read', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+    },
+    {
+      exit: 1,
+      message: 'wiki is 1 commits behind HEAD',
+      name: 'exit 1 when drift commit log cannot be read',
+      probe: {commits_ahead: 1, drift_count: 1},
+      rangesAbsent: [],
+      rangesSeen: [],
+      scripted: [
+        ...branchAndStatus('main'),
         {argv: REVPARSE_ARGS, result: okResult(`${STATE_SHA}\n`)},
         {
           argv: ['log', '--format=%s', DRIFT_RANGE],
-          result: {
-            output: ['', '', ''] as never,
-            pid: 0,
-            signal: null,
-            status: 128,
-            stderr: 'fatal: bad revision',
-            stdout: '',
-          },
+          result: gitFailure('fatal: bad revision'),
         },
       ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 1,
-        drift_count: 1,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('wiki is 1 commits behind HEAD');
-  });
-
-  test('exit 1 when orphaned state recovers a window with substantive drift', () => {
-    // reachable:false is the normal post-squash-merge condition. `gaia wiki
-    // state` hardcodes commits_ahead:0 there, so the gate must recover the
-    // un-evaluated window from suggested_base..HEAD instead of reading the zero.
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
+    },
+    {
+      exit: 1,
+      message: 'cannot determine wiki drift',
+      name: 'exit 1 when the orphaned recovery base does not resolve, even at drift_count 0',
+      probe: {
+        reachable: false,
+        suggested_base: SUGGESTED_BASE,
+      },
+      rangesAbsent: [],
+      rangesSeen: [],
+      scripted: [
+        ...branchAndStatus('main'),
         {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
+          argv: SUGGESTED_REVPARSE,
+          result: gitFailure('fatal: bad revision'),
         },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+      ],
+    },
+    {
+      // reachable:false is the normal post-squash-merge condition. `gaia wiki
+      // state` hardcodes commits_ahead:0 there, so the gate must recover the
+      // un-evaluated window from suggested_base..HEAD instead of reading the
+      // zero. The orphaned state_sha range is topologically unreliable after a
+      // squash; the gate inspects suggested_base..HEAD, never state_sha..HEAD.
+      exit: 1,
+      message: 'wiki is 2 commits behind HEAD',
+      name: 'exit 1 when orphaned state recovers a window with substantive drift',
+      probe: {
+        drift_count: 2,
+        reachable: false,
+        suggested_base: SUGGESTED_BASE,
+      },
+      rangesAbsent: [DRIFT_RANGE],
+      rangesSeen: [SUGGESTED_RANGE],
+      scripted: [
+        ...branchAndStatus('main'),
         {argv: SUGGESTED_REVPARSE, result: okResult(`${SUGGESTED_FULL}\n`)},
         {
           argv: ['log', '--format=%s', SUGGESTED_RANGE],
           result: okResult('feat: a real change\nwiki: sync through abc1234\n'),
         },
       ],
-      recorded
-    );
-
-    const exit = run([], {
+    },
+    {
+      exit: 2,
+      message: 'preflight:',
+      name: 'exit 2 when git rev-parse fails',
+      probe: {},
+      rangesAbsent: [],
+      rangesSeen: [],
+      scripted: THROWING_REVPARSE,
+    },
+  ])('$name', ({exit, message, probe, rangesAbsent, rangesSeen, scripted}) => {
+    const recorded: RecordedCall[] = [];
+    const code = run([], {
       cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 2,
-        reachable: false,
-        state_sha: STATE_SHA,
-        suggested_base: SUGGESTED_BASE,
-      }),
+      runner: buildRunner(scripted, recorded),
+      wikiStateProbe: probeWith(probe),
     });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('wiki is 2 commits behind HEAD');
-    // The orphaned state_sha range is topologically unreliable after a squash;
-    // the gate inspects suggested_base..HEAD, never state_sha..HEAD.
-    expect(recorded.some((call) => call.args.includes(SUGGESTED_RANGE))).toBe(
-      true
-    );
-    expect(recorded.some((call) => call.args.includes(DRIFT_RANGE))).toBe(
-      false
-    );
+    expect(code).toBe(exit);
+    expect(stdio.errors.join('')).toContain(message);
+
+    for (const range of rangesSeen) {
+      expect(recorded.some((call) => call.args.includes(range))).toBe(true);
+    }
+
+    for (const range of rangesAbsent) {
+      expect(recorded.some((call) => call.args.includes(range))).toBe(false);
+    }
   });
 
-  test('exit 0 when orphaned recovered window is only wiki-sync artifacts', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
+  // `errors` is either the exact empty string or a substring matcher.
+  test.each<{
+    errors: unknown;
+    logRead: boolean;
+    name: string;
+    probe: Record<string, unknown>;
+    scripted: Scripted;
+  }>([
+    {
+      errors: expect.stringContaining('wiki-sync squash artifact'),
+      logRead: true,
+      name: 'exit 0 when drift is entirely wiki-sync squash artifacts',
+      probe: {commits_ahead: 1, drift_count: 1},
+      scripted: [
+        ...branchAndStatus('main'),
+        {argv: REVPARSE_ARGS, result: okResult(`${STATE_SHA}\n`)},
         {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
+          argv: ['log', '--format=%s', DRIFT_RANGE],
+          result: okResult('wiki: sync through abc1234 (#173)\n'),
         },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+      ],
+    },
+    {
+      errors: expect.stringContaining('wiki-sync squash artifact'),
+      logRead: true,
+      name: 'exit 0 when orphaned recovered window is only wiki-sync artifacts',
+      probe: {drift_count: 1, reachable: false, suggested_base: SUGGESTED_BASE},
+      scripted: [
+        ...branchAndStatus('main'),
         {argv: SUGGESTED_REVPARSE, result: okResult(`${SUGGESTED_FULL}\n`)},
         {
           argv: ['log', '--format=%s', SUGGESTED_RANGE],
           result: okResult('wiki: sync through abc1234 (#173)\n'),
         },
       ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 1,
-        reachable: false,
-        state_sha: STATE_SHA,
-        suggested_base: SUGGESTED_BASE,
-      }),
-    });
-    expect(exit).toBe(0);
-    expect(stdio.errors.join('')).toContain('wiki-sync squash artifact');
-  });
-
-  test('exit 0 when orphaned state has no recoverable baseline', () => {
+    },
     // suggested_base empty means the timestamp predates all history; there is
     // nothing un-evaluated to recover, so today's pass is preserved.
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
-      ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: false,
-        state_sha: '',
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toBe('');
-    expect(stdio.errors.join('')).toBe('');
-    // No recovery probe: no rev-list count, no drift log.
-    expect(recorded.every((call) => call.args[0] !== 'rev-list')).toBe(true);
-    expect(recorded.every((call) => call.args[0] !== 'log')).toBe(true);
-  });
-
-  test('exit 0 when the orphaned recovered window holds only bookkeeping commits', () => {
+    {
+      errors: '',
+      logRead: false,
+      name: 'exit 0 when orphaned state has no recoverable baseline',
+      probe: {reachable: false, state_sha: ''},
+      scripted: branchAndStatus('main'),
+    },
     // `gaia wiki state` excludes bookkeeping subjects from drift_count, so a
     // window of nothing else arrives as 0 and needs no drift-log inspection.
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+    {
+      errors: '',
+      logRead: false,
+      name: 'exit 0 when the orphaned recovered window holds only bookkeeping commits',
+      probe: {reachable: false, suggested_base: SUGGESTED_BASE},
+      scripted: [
+        ...branchAndStatus('main'),
         {argv: SUGGESTED_REVPARSE, result: okResult(`${SUGGESTED_FULL}\n`)},
       ],
-      recorded
-    );
-
+    },
+  ])('$name', ({errors, logRead, probe, scripted}) => {
+    const recorded: RecordedCall[] = [];
     const exit = run([], {
       cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: false,
-        state_sha: STATE_SHA,
-        suggested_base: SUGGESTED_BASE,
-      }),
+      runner: buildRunner(scripted, recorded),
+      wikiStateProbe: probeWith(probe),
     });
     expect(exit).toBe(0);
-    expect(stdio.errors.join('')).toBe('');
+    expect(stdio.errors.join('')).toEqual(errors);
+    expect(stdio.outputs.join('')).toBe('');
+    expect(recorded.some((call) => call.args[0] === 'log')).toBe(logRead);
+    // The count comes from the probe JSON; the gate never runs rev-list.
     expect(recorded.every((call) => call.args[0] !== 'rev-list')).toBe(true);
   });
 
-  test('exit 1 when the orphaned recovery base does not resolve, even at drift_count 0', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
-        {
-          argv: SUGGESTED_REVPARSE,
-          result: {
-            output: ['', '', ''] as never,
-            pid: 0,
-            signal: null,
-            status: 128,
-            stderr: 'fatal: bad revision',
-            stdout: '',
-          },
-        },
-      ],
-      recorded
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: false,
-        state_sha: STATE_SHA,
-        suggested_base: SUGGESTED_BASE,
-      }),
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('cannot determine wiki drift');
-  });
-
-  test('the unresolvable recovery base advice ends with the bare command', () => {
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+  test.each<{
+    line: string;
+    name: string;
+    probe: Record<string, unknown>;
+    scripted: Scripted;
+  }>([
+    {
+      line: 'cannot determine wiki drift',
+      name: 'the unresolvable recovery base advice ends with the bare command',
+      probe: {reachable: false, suggested_base: SUGGESTED_BASE},
+      scripted: [
+        ...branchAndStatus('main'),
         {
           argv: SUGGESTED_REVPARSE,
-          result: {
-            output: ['', '', ''] as never,
-            pid: 0,
-            signal: null,
-            status: 128,
-            stderr: 'fatal: bad revision',
-            stdout: '',
-          },
+          result: gitFailure('fatal: bad revision'),
         },
       ],
-      []
-    );
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: false,
-        state_sha: STATE_SHA,
-        suggested_base: SUGGESTED_BASE,
-      }),
-    });
-    const refusalLine = stdio.errors
-      .join('')
-      .split('\n')
-      .find((line) => line.includes('cannot determine wiki drift'));
-    expect(exit).toBe(1);
-    expect(refusalLine?.endsWith('; run /gaia-wiki first')).toBe(true);
-  });
-
-  test('the substantive drift advice ends with the bare command', () => {
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('main\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
+    },
+    {
+      line: 'commits behind HEAD',
+      name: 'the substantive drift advice ends with the bare command',
+      probe: {commits_ahead: 2, drift_count: 2},
+      scripted: [
+        ...branchAndStatus('main'),
         {argv: REVPARSE_ARGS, result: okResult(`${STATE_SHA}\n`)},
         {
           argv: ['log', '--format=%s', DRIFT_RANGE],
           result: okResult('feat: a new thing\nwiki: sync through abc1234\n'),
         },
       ],
-      []
-    );
-
+    },
+  ])('$name', ({line, probe, scripted}) => {
     const exit = run([], {
       cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 2,
-        drift_count: 2,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
+      runner: buildRunner(scripted, []),
+      wikiStateProbe: probeWith(probe),
     });
     const refusalLine = stdio.errors
       .join('')
       .split('\n')
-      .find((line) => line.includes('commits behind HEAD'));
+      .find((candidate) => candidate.includes(line));
     expect(exit).toBe(1);
     expect(refusalLine?.endsWith('; run /gaia-wiki first')).toBe(true);
   });
@@ -718,76 +537,41 @@ describe('release preflight', () => {
     expect(recorded.every((call) => call.args[0] !== 'rev-list')).toBe(true);
   });
 
-  test('exit 2 when git rev-parse fails', () => {
-    const exit = run([], {
+  test.each<{
+    args: string[];
+    exit: number;
+    name: string;
+    stream: 'errors' | 'outputs';
+    text: string;
+  }>([
+    {
+      args: ['--branch', 'release/v1'],
+      exit: 0,
+      name: '--branch overrides allowed release branch',
+      stream: 'errors',
+      text: '',
+    },
+    {
+      args: ['--bogus'],
+      exit: 1,
+      name: 'rejects unknown flags',
+      stream: 'errors',
+      text: 'unknown flag',
+    },
+    {
+      args: ['--help'],
+      exit: 0,
+      name: '--help prints usage',
+      stream: 'outputs',
+      text: 'Usage:',
+    },
+  ])('$name', ({args, exit, stream, text}) => {
+    const code = run(args, {
       cwd: sandbox.root,
-      runner: gitNotFoundRunner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
+      runner: buildRunner(branchAndStatus('release/v1'), []),
+      wikiStateProbe: probeWith(),
     });
-    expect(exit).toBe(2);
-    expect(stdio.errors.join('')).toContain('preflight:');
-  });
-
-  test('--branch overrides allowed release branch', () => {
-    const recorded: RecordedCall[] = [];
-    const runner = buildRunner(
-      [
-        {
-          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-          result: okResult('release/v1\n'),
-        },
-        {argv: ['status', '--porcelain=v1', '-uall'], result: okResult('')},
-      ],
-      recorded
-    );
-
-    const exit = run(['--branch', 'release/v1'], {
-      cwd: sandbox.root,
-      runner,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(0);
-  });
-
-  test('rejects unknown flags', () => {
-    const exit = run(['--bogus'], {
-      cwd: sandbox.root,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
-  });
-
-  test('--help prints usage', () => {
-    const exit = run(['--help'], {
-      cwd: sandbox.root,
-      wikiStateProbe: () => ({
-        commits_ahead: 0,
-        drift_count: 0,
-        reachable: true,
-        state_sha: STATE_SHA,
-        suggested_base: '',
-      }),
-    });
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('Usage:');
+    expect(code).toBe(exit);
+    expect(stdio[stream].join('')).toContain(text);
   });
 });

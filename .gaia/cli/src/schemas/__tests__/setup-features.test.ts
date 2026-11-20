@@ -42,6 +42,10 @@ const listOf = (features: unknown[]): unknown => ({
   version: 1,
 });
 
+const withoutStandalone: Record<string, unknown> = Object.fromEntries(
+  Object.entries(baseFeature).filter(([key]) => key !== 'standalone')
+);
+
 /** Ids that are not in the frozen set yet declare `standalone: false`. */
 const nonStandaloneNewIds = (features: readonly SetupFeature[]): string[] =>
   features
@@ -61,8 +65,24 @@ const committed = SetupFeaturesSchema.parse(
 const frozen = committed.features.slice(0, FROZEN_IDS.length);
 
 describe('committed .gaia/setup-features.json', () => {
-  test('holds the frozen ids first, in order', () => {
-    expect(frozen.map((feature) => feature.id)).toEqual([...FROZEN_IDS]);
+  test.each([
+    {
+      actual: () => frozen.map((feature) => feature.id),
+      expected: [...FROZEN_IDS],
+      name: 'holds the frozen ids first, in order',
+    },
+    {
+      actual: () => nonStandaloneNewIds(committed.features),
+      expected: [],
+      name: 'no id outside the frozen set is non-standalone',
+    },
+    {
+      actual: () => frozen.map((feature) => feature.standalone),
+      expected: FROZEN_IDS.map(() => false),
+      name: 'the frozen ids are all non-standalone',
+    },
+  ])('$name', ({actual, expected}) => {
+    expect(actual()).toEqual(expected);
   });
 
   test.each(
@@ -71,15 +91,17 @@ describe('committed .gaia/setup-features.json', () => {
     expect(SetupFeatureSchema.safeParse(feature).success).toBe(true);
     expect(existsSync(path.join(repoRoot, feature.reference))).toBe(true);
   });
-
-  test('no id outside the frozen set is non-standalone', () => {
-    expect(nonStandaloneNewIds(committed.features)).toEqual([]);
-  });
-
-  test('the frozen ids are all non-standalone', () => {
-    expect(frozen.every((feature) => !feature.standalone)).toBe(true);
-  });
 });
+
+const rejection = (
+  name: string,
+  inputs: unknown[]
+): {
+  firstIssuePath: unknown;
+  inputs: unknown[];
+  message: string;
+  name: string;
+} => ({firstIssuePath: expect.anything(), inputs, message: '', name});
 
 describe('SetupFeaturesSchema guards', () => {
   test('accepts a valid fixture list', () => {
@@ -88,60 +110,43 @@ describe('SetupFeaturesSchema guards', () => {
     );
   });
 
-  test('rejects a duplicate id, naming it and its index', () => {
-    const result = SetupFeaturesSchema.safeParse(
-      listOf([baseFeature, baseFeature])
-    );
-
-    expect(result.success).toBe(false);
-    expect(JSON.stringify(result.error?.issues)).toContain(
-      'duplicate setup feature id: example-feature'
-    );
-    expect(result.error?.issues[0]?.path).toEqual(['features', 1, 'id']);
-  });
-
-  test('rejects an id that is not kebab-case', () => {
-    expect(
-      SetupFeaturesSchema.safeParse(
-        listOf([{...baseFeature, id: 'Squash_Only'}])
-      ).success
-    ).toBe(false);
-  });
-
-  test('rejects an entry missing standalone', () => {
-    const withoutStandalone: Record<string, unknown> = {...baseFeature};
-    delete withoutStandalone.standalone;
-
-    expect(
-      SetupFeaturesSchema.safeParse(listOf([withoutStandalone])).success
-    ).toBe(false);
-  });
-
-  test('rejects an unknown scope', () => {
-    expect(
-      SetupFeaturesSchema.safeParse(
-        listOf([{...baseFeature, scope: 'organization'}])
-      ).success
-    ).toBe(false);
-  });
-
-  test('rejects a reference with a parent segment or a leading slash', () => {
-    for (const reference of ['../outside.md', 'a/../b.md', '/etc/passwd']) {
-      expect(
-        SetupFeaturesSchema.safeParse(listOf([{...baseFeature, reference}]))
-          .success
-      ).toBe(false);
-    }
-  });
-
-  test('rejects an em dash in the description', () => {
-    expect(
-      SetupFeaturesSchema.safeParse({
+  test.each([
+    {
+      firstIssuePath: ['features', 1, 'id'],
+      inputs: [listOf([baseFeature, baseFeature])],
+      message: 'duplicate setup feature id: example-feature',
+      name: 'rejects a duplicate id, naming it and its index',
+    },
+    rejection('rejects an id that is not kebab-case', [
+      listOf([{...baseFeature, id: 'Squash_Only'}]),
+    ]),
+    rejection('rejects an entry missing standalone', [
+      listOf([withoutStandalone]),
+    ]),
+    rejection('rejects an unknown scope', [
+      listOf([{...baseFeature, scope: 'organization'}]),
+    ]),
+    rejection(
+      'rejects a reference with a parent segment or a leading slash',
+      ['../outside.md', 'a/../b.md', '/etc/passwd'].map((reference) =>
+        listOf([{...baseFeature, reference}])
+      )
+    ),
+    rejection('rejects an em dash in the description', [
+      {
         description: ['bad', 'text'].join(String.fromCodePoint(0x20_14)),
         features: [],
         version: 1,
-      }).success
-    ).toBe(false);
+      },
+    ]),
+  ])('$name', ({firstIssuePath, inputs, message}) => {
+    for (const input of inputs) {
+      const result = SetupFeaturesSchema.safeParse(input);
+
+      expect(result.success).toBe(false);
+      expect(JSON.stringify(result.error?.issues)).toContain(message);
+      expect(result.error?.issues[0]?.path).toEqual(firstIssuePath);
+    }
   });
 
   test('strips an unknown extra field instead of rejecting it', () => {

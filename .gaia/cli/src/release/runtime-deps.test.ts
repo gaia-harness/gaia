@@ -96,200 +96,208 @@ const captureStdio = (): {
   };
 };
 
+type RefInput = {file: string; text: string | string[]};
+
+const pathsPerLine = ({file, text}: RefInput): string[][] =>
+  (Array.isArray(text) ? text : [text]).map((line) =>
+    extractPathRefs(file, line).map((ref) => ref.path)
+  );
+
 describe('extractPathRefs', () => {
-  test('extracts repo-relative paths from variable assignments', () => {
-    const refs = extractPathRefs(
-      '.gaia/statusline/foo.sh',
-      'CHECK_SCRIPT="$PROJECT_ROOT/.gaia/scripts/check-updates.sh"\n'
-    );
-    expect(refs.map((r) => r.path)).toContain('.gaia/scripts/check-updates.sh');
-  });
-
-  test('skips line-leading comments', () => {
-    const refs = extractPathRefs(
-      '.gaia/statusline/foo.sh',
-      '# A reference to .gaia/scripts/check-updates.sh in a comment.\nbash .gaia/cli/gaia\n'
-    );
-    expect(refs.map((r) => r.path)).toEqual(['.gaia/cli/gaia']);
-  });
-
-  test('handles bare path tokens in conditionals', () => {
-    const refs = extractPathRefs(
-      '.claude/hooks/foo.sh',
-      'if [ -x .gaia/cli/gaia ]; then\n  .gaia/cli/gaia run\nfi\n'
-    );
-    expect(refs.map((r) => r.path)).toEqual([
-      '.gaia/cli/gaia',
-      '.gaia/cli/gaia',
-    ]);
-  });
-
-  test('does not match substrings inside larger paths', () => {
-    const refs = extractPathRefs(
-      '.claude/hooks/foo.sh',
-      'echo "not-a-leak/.gaia/cli/foo"\n'
-    );
-    expect(refs).toEqual([]);
-  });
-
-  test('trims trailing punctuation', () => {
-    const refs = extractPathRefs(
-      '.claude/hooks/foo.sh',
-      'echo .gaia/cli/gaia.\n'
-    );
-    expect(refs.map((r) => r.path)).toEqual(['.gaia/cli/gaia']);
-  });
-
-  test('extracts multiple occurrences on the same line', () => {
-    const refs = extractPathRefs(
-      '.gaia/statusline/foo.sh',
-      'cp .gaia/cli/gaia .claude/hooks/x.sh\n'
-    );
-    expect(refs.map((r) => r.path)).toEqual([
-      '.gaia/cli/gaia',
-      '.claude/hooks/x.sh',
-    ]);
-  });
-
-  test('skips prose-allowlisted directory tokens in user-facing strings', () => {
-    // pr-merge-audit-check.sh names `.github/workflows/` as an example
-    // in-scope path inside a multi-line `reason="..."` error string. It is
-    // descriptive prose shown to the operator, not a runtime invocation, so
-    // the scan must not treat it as a runtime-dependency leak.
-    const refs = extractPathRefs(
-      '.claude/hooks/pr-merge-audit-check.sh',
-      '                     .github/workflows/), not a wiki/docs/.gaia-only diff\n'
-    );
-    expect(refs.map((r) => r.path)).not.toContain('.github/workflows');
-  });
-
-  test('still flags a genuine file leak under an allowlisted directory', () => {
-    // The allowlist is exact-token. A real invocation of a file under
-    // .github/workflows/ is a distinct, longer token and must still flag,
-    // guarding against the allowlist over-suppressing genuine leaks.
-    const refs = extractPathRefs(
-      '.gaia/statusline/foo.sh',
-      'bash .github/workflows/deploy.yml\n'
-    );
-    expect(refs.map((r) => r.path)).toContain('.github/workflows/deploy.yml');
-  });
-
-  test('skips the allowlisted shell-snapshots regex-literal token', () => {
-    // spec-session-lock.sh assigns Claude Code's snapshot-wrapper directory to
-    // a regex literal that a `ps` command line is matched against; it is never
-    // sourced or executed, so the exact token is allowlisted.
-    const refs = extractPathRefs(
-      '.gaia/scripts/spec/spec-session-lock.sh',
-      "SNAPSHOT_WRAPPER_PATTERN='\\.claude/shell-snapshots/'\n"
-    );
-    expect(refs.map((r) => r.path)).not.toContain('.claude/shell-snapshots');
-  });
-
-  test('still flags a genuine file leak under the shell-snapshots directory', () => {
-    // Exact-token allowlisting again: a real invocation of a file beneath the
-    // allowlisted directory is a longer token and must still flag.
-    const refs = extractPathRefs(
-      '.gaia/statusline/foo.sh',
-      'bash .claude/shell-snapshots/snapshot-zsh.sh\n'
-    );
-    expect(refs.map((r) => r.path)).toContain(
-      '.claude/shell-snapshots/snapshot-zsh.sh'
-    );
-  });
-
-  test('skips the allowlisted per-machine settings path in an enforcement-set array', () => {
-    // audit-fix-verify.sh lists the gitignored local settings file among the
-    // paths a fixer must not edit. It is compared against a changed-path list,
-    // never sourced, and can never have a manifest entry, so the exact token is
-    // allowlisted.
-    const refs = extractPathRefs(
-      '.gaia/scripts/audit-fix-verify.sh',
-      'ENFORCEMENT_SET=(.claude/settings.json .claude/settings.local.json)\n'
-    );
-    expect(refs.map((r) => r.path)).not.toContain(
-      '.claude/settings.local.json'
-    );
-    expect(refs.map((r) => r.path)).toContain('.claude/settings.json');
-  });
-
-  test('skips the allowlisted skill directory the React Doctor install script renders into', () => {
-    // install-react-doctor.sh names the per-machine, gitignored skill
-    // directory it writes. It is never sourced or executed, so the exact token
-    // is allowlisted.
-    const refs = extractPathRefs(
-      '.gaia/scripts/install-react-doctor.sh',
-      'skill_directory="$package_directory/.claude/skills/react-doctor"\n'
-    );
-    expect(refs.map((r) => r.path)).not.toContain(
-      '.claude/skills/react-doctor'
-    );
-  });
-
-  test('reduces a pattern that truncates mid-basename to its directory', () => {
-    // A pattern with a non-empty basename prefix before the `*` expanded to the
-    // fragment `.claude/agents/code-audit-`, which names no manifest entry and
-    // no shipped directory, so a legitimate line of prose reported a phantom
-    // leak. The fragment names a family of files, so the question worth asking
-    // is whether the directory holding that family ships.
-    const refs = extractPathRefs(
-      '.claude/hooks/foo.sh',
-      'reason="rewrites .claude/agents/code-audit-*.md, which are machinery"\n'
-    );
-    expect(refs.map((r) => r.path)).toEqual(['.claude/agents']);
-  });
-
-  test('keeps a pattern that starts at a directory boundary', () => {
-    // Control for the rule above, and the idiom already in the tree
-    // (`for f in .claude/hooks/*.sh`): the `*` follows a `/`, so the expansion
-    // is already the directory token, and both shapes now yield the same kind
-    // of token.
-    const refs = extractPathRefs(
-      '.gaia/scripts/lint-hook-array-guard.sh',
-      'for f in .claude/hooks/*.sh; do :; done\n'
-    );
-    expect(refs.map((r) => r.path)).toEqual(['.claude/hooks']);
-  });
-
-  test('reduces mid-basename truncation on the other pattern-opening characters', () => {
-    // `?`, `[`, `{`, and `$` are absent from the path-body character class for
-    // the same reason `*` is, so they truncate identically and are reduced
-    // identically. Mid-basename `${var}` is the most common of the five in
-    // shell.
-    for (const line of [
-      'ls .claude/agents/code-audit-?.md\n',
-      'ls .claude/agents/code-audit-[abc].md\n',
-      'ls .claude/agents/code-audit-{frontend,shell}.md\n',
-      // eslint-disable-next-line no-template-curly-in-string -- literal shell `${ }` syntax, not JS interpolation
-      'agent=".claude/agents/code-audit-${member}.md"\n',
-    ]) {
-      const refs = extractPathRefs('.claude/hooks/foo.sh', line);
-      expect(refs.map((r) => r.path)).toEqual(['.claude/agents']);
+  test.each<RefInput & {equal: string[]; name: string}>([
+    {
+      equal: ['.gaia/cli/gaia'],
+      file: '.gaia/statusline/foo.sh',
+      name: 'skips line-leading comments',
+      text: '# A reference to .gaia/scripts/check-updates.sh in a comment.\nbash .gaia/cli/gaia\n',
+    },
+    {
+      equal: ['.gaia/cli/gaia', '.gaia/cli/gaia'],
+      file: '.claude/hooks/foo.sh',
+      name: 'handles bare path tokens in conditionals',
+      text: 'if [ -x .gaia/cli/gaia ]; then\n  .gaia/cli/gaia run\nfi\n',
+    },
+    {
+      equal: [],
+      file: '.claude/hooks/foo.sh',
+      name: 'does not match substrings inside larger paths',
+      text: 'echo "not-a-leak/.gaia/cli/foo"\n',
+    },
+    {
+      equal: ['.gaia/cli/gaia'],
+      file: '.claude/hooks/foo.sh',
+      name: 'trims trailing punctuation',
+      text: 'echo .gaia/cli/gaia.\n',
+    },
+    {
+      equal: ['.gaia/cli/gaia', '.claude/hooks/x.sh'],
+      file: '.gaia/statusline/foo.sh',
+      name: 'extracts multiple occurrences on the same line',
+      text: 'cp .gaia/cli/gaia .claude/hooks/x.sh\n',
+    },
+    {
+      // Guards the suppression against over-reach: the rule keys on the
+      // halting metacharacter, not on the shape of the token, so a real
+      // reference that merely looks like a truncated prefix must still flag.
+      equal: ['.claude/agents/code-audit-'],
+      file: '.gaia/statusline/foo.sh',
+      name: 'still flags a genuine reference whose basename ends in a dash',
+      text: 'bash .claude/agents/code-audit-\n',
+    },
+    {
+      // A `*` after a non-empty basename prefix truncates the token to the
+      // fragment `.claude/agents/code-audit-`, which names no manifest entry
+      // and no shipped directory, so keeping it would report a phantom leak on
+      // legitimate prose. The fragment names a family of files, so the question
+      // worth asking is whether the directory holding that family ships.
+      equal: ['.claude/agents'],
+      file: '.claude/hooks/foo.sh',
+      name: 'reduces a pattern that truncates mid-basename to its directory',
+      text: 'reason="rewrites .claude/agents/code-audit-*.md, which are machinery"\n',
+    },
+    {
+      // Control for the rule above, and the idiom already in the tree
+      // (`for f in .claude/hooks/*.sh`): the `*` follows a `/`, so the
+      // expansion is already the directory token, and both shapes yield
+      // the same kind of token.
+      equal: ['.claude/hooks'],
+      file: '.gaia/scripts/lint-hook-array-guard.sh',
+      name: 'keeps a pattern that starts at a directory boundary',
+      text: 'for f in .claude/hooks/*.sh; do :; done\n',
+    },
+    {
+      // `?`, `[`, `{`, and `$` are absent from the path-body character class
+      // for the same reason `*` is, so they truncate identically and are
+      // reduced identically. Mid-basename `${var}` is the most common of the
+      // five in shell.
+      equal: ['.claude/agents'],
+      file: '.claude/hooks/foo.sh',
+      name: 'reduces mid-basename truncation on the other pattern-opening characters',
+      text: [
+        'ls .claude/agents/code-audit-?.md\n',
+        'ls .claude/agents/code-audit-[abc].md\n',
+        'ls .claude/agents/code-audit-{frontend,shell}.md\n',
+        // eslint-disable-next-line no-template-curly-in-string -- literal shell `${ }` syntax, not JS interpolation
+        'agent=".claude/agents/code-audit-${member}.md"\n',
+      ],
+    },
+  ])('$name', (row) => {
+    for (const paths of pathsPerLine(row)) {
+      expect(paths).toEqual(row.equal);
     }
   });
 
-  test('does not reduce a token that halts on a pattern-closing character', () => {
-    // `]` and `}` only ever close a pattern, so the token before one is a
-    // complete path. Reducing it to its directory would discard a real
-    // reference and silence a genuine leak.
-    const refs = extractPathRefs(
-      '.claude/hooks/foo.sh',
+  test.each<RefInput & {contain: string[]; name: string}>([
+    {
+      contain: ['.gaia/scripts/check-updates.sh'],
+      file: '.gaia/statusline/foo.sh',
+      name: 'extracts repo-relative paths from variable assignments',
+      text: 'CHECK_SCRIPT="$PROJECT_ROOT/.gaia/scripts/check-updates.sh"\n',
+    },
+    {
+      // The allowlist is exact-token. A real invocation of a file under
+      // .github/workflows/ is a distinct, longer token and must still flag,
+      // guarding against the allowlist over-suppressing genuine leaks.
+      contain: ['.github/workflows/deploy.yml'],
+      file: '.gaia/statusline/foo.sh',
+      name: 'still flags a genuine file leak under an allowlisted directory',
+      text: 'bash .github/workflows/deploy.yml\n',
+    },
+    {
+      // Exact-token allowlisting again: a real invocation of a file beneath
+      // the allowlisted directory is a longer token and must still flag.
+      contain: ['.claude/shell-snapshots/snapshot-zsh.sh'],
+      file: '.gaia/statusline/foo.sh',
+      name: 'still flags a genuine file leak under the shell-snapshots directory',
+      text: 'bash .claude/shell-snapshots/snapshot-zsh.sh\n',
+    },
+    {
+      // `]` and `}` only ever close a pattern, so the token before one is a
+      // complete path. Reducing it to its directory would discard a real
+      // reference and silence a genuine leak.
+      contain: ['.gaia/scripts/missing.sh'],
+      file: '.claude/hooks/foo.sh',
+      name: 'does not reduce a token that halts on a pattern-closing character',
       // eslint-disable-next-line no-template-curly-in-string -- literal shell `${ }` syntax, not JS interpolation
-      'echo "${paths[.gaia/scripts/missing.sh]}"\n'
-    );
-    expect(refs.map((r) => r.path)).toContain('.gaia/scripts/missing.sh');
+      text: 'echo "${paths[.gaia/scripts/missing.sh]}"\n',
+    },
+  ])('$name', (row) => {
+    for (const paths of pathsPerLine(row)) {
+      for (const wanted of row.contain) {
+        expect(paths).toContain(wanted);
+      }
+    }
   });
 
-  test('still flags a genuine reference whose basename ends in a dash', () => {
-    // Guards the suppression against over-reach: the rule keys on the halting
-    // metacharacter, not on the shape of the token, so a real reference that
-    // merely looks like a truncated prefix must still flag.
-    const refs = extractPathRefs(
-      '.gaia/statusline/foo.sh',
-      'bash .claude/agents/code-audit-\n'
-    );
-    expect(refs.map((r) => r.path)).toEqual(['.claude/agents/code-audit-']);
+  test.each<RefInput & {contain: string[]; name: string; notContain: string[]}>(
+    [
+      {
+        contain: [],
+        // pr-merge-audit-check.sh names `.github/workflows/` as an example
+        // in-scope path inside a multi-line `reason="..."` error string. It is
+        // descriptive prose shown to the operator, not a runtime invocation, so
+        // the scan must not treat it as a runtime-dependency leak.
+        file: '.claude/hooks/pr-merge-audit-check.sh',
+        name: 'skips prose-allowlisted directory tokens in user-facing strings',
+        notContain: ['.github/workflows'],
+        text: '                     .github/workflows/), not a wiki/docs/.gaia-only diff\n',
+      },
+      {
+        contain: [],
+        // spec-session-lock.sh assigns Claude Code's snapshot-wrapper directory
+        // to a regex literal that a `ps` command line is matched against; it is
+        // never sourced or executed, so the exact token is allowlisted.
+        file: '.gaia/scripts/spec/spec-session-lock.sh',
+        name: 'skips the allowlisted shell-snapshots regex-literal token',
+        notContain: ['.claude/shell-snapshots'],
+        text: "SNAPSHOT_WRAPPER_PATTERN='\\.claude/shell-snapshots/'\n",
+      },
+      {
+        // audit-fix-verify.sh lists the gitignored local settings file among the
+        // paths a fixer must not edit. It is compared against a changed-path
+        // list, never sourced, and can never have a manifest entry, so the exact
+        // token is allowlisted.
+        contain: ['.claude/settings.json'],
+        file: '.gaia/scripts/audit-fix-verify.sh',
+        name: 'skips the allowlisted per-machine settings path in an enforcement-set array',
+        notContain: ['.claude/settings.local.json'],
+        text: 'ENFORCEMENT_SET=(.claude/settings.json .claude/settings.local.json)\n',
+      },
+      {
+        contain: [],
+        // install-react-doctor.sh names the per-machine, gitignored skill
+        // directory it writes. It is never sourced or executed, so the exact
+        // token is allowlisted.
+        file: '.gaia/scripts/install-react-doctor.sh',
+        name: 'skips the allowlisted skill directory the React Doctor install script renders into',
+        notContain: ['.claude/skills/react-doctor'],
+        text: 'skill_directory="$package_directory/.claude/skills/react-doctor"\n',
+      },
+    ]
+  )('$name', (row) => {
+    for (const paths of pathsPerLine(row)) {
+      for (const wanted of row.contain) {
+        expect(paths).toContain(wanted);
+      }
+
+      for (const unwanted of row.notContain) {
+        expect(paths).not.toContain(unwanted);
+      }
+    }
   });
 });
+
+const script = (...body: string[]): string =>
+  ['#!/usr/bin/env bash', ...body, ''].join('\n');
+
+const writeManifestWhenGiven = (
+  sandbox: Sandbox,
+  manifest: ManifestFiles | undefined
+): void => {
+  if (manifest !== undefined) {
+    sandbox.writeManifest(manifest);
+  }
+};
 
 describe('release runtime-deps CLI', () => {
   let sandbox: Sandbox;
@@ -306,25 +314,393 @@ describe('release runtime-deps CLI', () => {
     vi.restoreAllMocks();
   });
 
-  test('passes when shipped scripts only reference manifested paths', () => {
-    sandbox.writeManifest({
-      '.gaia/cli/gaia': 'owned',
-      '.gaia/scripts/check-updates.sh': 'owned',
-      '.gaia/statusline/gaia-statusline.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/statusline/gaia-statusline.sh',
-      [
-        '#!/usr/bin/env bash',
-        'CHECK_SCRIPT="$PROJECT_ROOT/.gaia/scripts/check-updates.sh"',
-        'if [ -x .gaia/cli/gaia ]; then bash "$CHECK_SCRIPT"; fi',
-        '',
-      ].join('\n')
+  type CliCase = {
+    args?: string[];
+    err?: string[];
+    exit: number;
+    files?: Record<string, string>;
+    manifest?: ManifestFiles;
+    name: string;
+    notOut?: string[];
+    out?: string[];
+  };
+
+  test.each<CliCase>([
+    {
+      exit: 0,
+      files: {
+        '.gaia/statusline/gaia-statusline.sh': script(
+          'CHECK_SCRIPT="$PROJECT_ROOT/.gaia/scripts/check-updates.sh"',
+          'if [ -x .gaia/cli/gaia ]; then bash "$CHECK_SCRIPT"; fi'
+        ),
+      },
+      manifest: {
+        '.gaia/cli/gaia': 'owned',
+        '.gaia/scripts/check-updates.sh': 'owned',
+        '.gaia/statusline/gaia-statusline.sh': 'owned',
+      },
+      name: 'passes when shipped scripts only reference manifested paths',
+      out: ['runtime-dependency leaks: none'],
+    },
+    {
+      // Manifest excludes .gaia/scripts/; that directory is release-excluded.
+      // The scanned script itself must ship, or bare mode correctly skips it.
+      exit: 1,
+      files: {
+        '.gaia/statusline/gaia-statusline.sh': script(
+          'CHECK_SCRIPT="$PROJECT_ROOT/.gaia/scripts/check-updates.sh"',
+          'bash "$CHECK_SCRIPT"'
+        ),
+      },
+      manifest: {
+        '.gaia/cli/gaia': 'owned',
+        '.gaia/statusline/gaia-statusline.sh': 'owned',
+      },
+      name: 'flags references to release-excluded paths',
+      out: [
+        '.gaia/scripts/check-updates.sh',
+        '.gaia/statusline/gaia-statusline.sh:2',
+      ],
+    },
+    {
+      exit: 0,
+      files: {
+        '.claude/hooks/wiki-session-start.sh': script(
+          'cat .gaia/manifest.json',
+          'cat .gaia/VERSION',
+          'cat wiki/log.md'
+        ),
+      },
+      manifest: {
+        '.claude/hooks/wiki-session-start.sh': 'owned',
+        '.gaia/cli/gaia': 'owned',
+      },
+      name: 'allowlists adopter-owned sentinels',
+    },
+    {
+      exit: 0,
+      files: {
+        '.claude/hooks/wiki-session-start.sh': script(
+          'rm -f .gaia/local/cache/shared/update-check.json',
+          'STATE_FILE="$PROJECT_ROOT/.gaia/local/setup-state.json"'
+        ),
+      },
+      manifest: {
+        '.claude/hooks/wiki-session-start.sh': 'owned',
+        '.gaia/cli/gaia': 'owned',
+      },
+      name: 'allowlists runtime-allocated prefixes (.gaia/local)',
+    },
+    {
+      // Mirrors a shell array glob like `SCAN_GLOB=(.claude/hooks/*.sh)`: the
+      // extractor's path-body character class stops at `*`, yielding the bare
+      // directory token `.claude/hooks`. That token isn't itself a manifest
+      // entry, but files ship beneath it on a real adopter clone, so it must
+      // resolve as shipped rather than flag as a leak.
+      exit: 0,
+      files: {
+        '.gaia/scripts/lint-hook-array-guard.sh': script(
+          'SCAN_GLOB=(.claude/hooks/*.sh)'
+        ),
+      },
+      manifest: {
+        '.claude/hooks/wiki-session-start.sh': 'owned',
+        '.gaia/scripts/lint-hook-array-guard.sh': 'owned',
+      },
+      name: 'resolves a bare directory token as shipped when manifest entries exist beneath it',
+      out: ['runtime-dependency leaks: none'],
+    },
+    {
+      // The gate fails closed, so a phantom leak blocks every distribution
+      // scenario and `/gaia-release` itself until someone reverse-engineers
+      // the extractor. Operator-facing prose naming a family of files by
+      // pattern is legitimate and must not cost a release.
+      exit: 0,
+      files: {
+        '.claude/hooks/audit-loop-bound.sh': script(
+          'deny "rewrites .claude/agents/code-audit-*.md, which are machinery"'
+        ),
+      },
+      manifest: {
+        '.claude/agents/code-audit-frontend.md': 'owned',
+        '.claude/hooks/audit-loop-bound.sh': 'owned',
+      },
+      name: 'passes when a shipped script names a file family by pattern',
+      out: ['runtime-dependency leaks: none'],
+    },
+    {
+      // The counterpart to the test above, and the reason a truncated fragment
+      // is reduced rather than dropped: a shipped hook sourcing a family of
+      // files under a release-excluded directory is a genuine leak. Dropping
+      // the fragment would let it publish and fail on every adopter clone.
+      exit: 1,
+      files: {
+        '.claude/hooks/ships.sh': script(
+          'for t in .gaia/scripts/tests/run-*.sh; do bash "$t"; done'
+        ),
+      },
+      manifest: {
+        '.claude/hooks/ships.sh': 'owned',
+        '.gaia/scripts/run-tests.sh': 'owned',
+      },
+      name: 'still flags a file family sourced from a release-excluded directory',
+      out: ['.gaia/scripts/tests'],
+    },
+    {
+      // `.gaia/scripts/tests` is release-excluded end-to-end: zero manifest
+      // entries live beneath it, so a bare-directory reference must still
+      // flag, guarding against the directory rule over-rescuing a
+      // genuinely leaked directory.
+      exit: 1,
+      files: {
+        '.gaia/scripts/run-tests.sh': script(
+          'SCAN_GLOB=(.gaia/scripts/tests/*.sh)'
+        ),
+      },
+      manifest: {
+        '.gaia/cli/gaia': 'owned',
+        '.gaia/scripts/run-tests.sh': 'owned',
+      },
+      name: 'still flags a bare directory token as a leak when no manifest entries exist beneath it',
+      out: ['.gaia/scripts/tests'],
+    },
+    {
+      // The directory rule must stay scoped to bare directory tokens. A
+      // specific file path that sits under a shipped directory but isn't itself
+      // a manifest entry is still a genuine leak.
+      exit: 1,
+      files: {
+        '.gaia/statusline/foo.sh': 'bash .claude/hooks/not-a-real-hook.sh\n',
+      },
+      manifest: {
+        '.claude/hooks/wiki-session-start.sh': 'owned',
+        '.gaia/statusline/foo.sh': 'owned',
+      },
+      name: 'does not rescue an unmanifested file merely because its directory ships other files',
+      out: ['.claude/hooks/not-a-real-hook.sh'],
+    },
+    {
+      // Guards the fixed-point break in `computeShippedDirs`'s ancestor walk.
+      // Manifest keys are repo-relative by construction and drain to `.`, but
+      // `loadManifest` reads `Object.keys` off unvalidated JSON, so a corrupt
+      // manifest can carry an absolute key. `path.dirname('/')` is `'/'`, so
+      // such a key never reaches `.` and the walk must be bounded explicitly.
+      // Removing that break turns this into a synchronous infinite loop, which
+      // hangs the release gate instead of failing it.
+      exit: 0,
+      files: {'.gaia/statusline/foo.sh': 'echo hi\n'},
+      manifest: {
+        '.gaia/cli/gaia': 'owned',
+        '.gaia/statusline/foo.sh': 'owned',
+        '/absolute/path/oops.sh': 'owned',
+      },
+      name: 'terminates on a manifest key that is an absolute path',
+    },
+    {
+      // Recursion-and-leak guard: a maintainer-only path referenced inside a
+      // deeply nested composite-action script must still flag, proving the
+      // scan scope walks the tree rather than only its top level.
+      exit: 1,
+      files: {
+        '.github/actions/gaia-example-action/lib/render-issue.sh': script(
+          'bash .gaia/cli/src/release/scrub.ts'
+        ),
+      },
+      manifest: {
+        '.github/actions/gaia-example-action/lib/render-issue.sh': 'owned',
+      },
+      name: 'flags a release-excluded reference in a nested .github/actions script',
+      out: ['.gaia/cli/src/release/scrub.ts'],
+    },
+    {
+      exit: 0,
+      manifest: {},
+      name: 'exits 0 when there are no shipped script directories',
+    },
+    {
+      err: ['manifest_load_failed'],
+      exit: 2,
+      files: {'.gaia/statusline/foo.sh': 'bash .gaia/cli/gaia\n'},
+      name: 'exits 2 when manifest is missing',
+    },
+    {
+      args: ['--bogus'],
+      err: ['unknown flag'],
+      exit: 1,
+      manifest: {},
+      name: 'rejects unknown flags',
+    },
+    {
+      // Bare mode (no --staging) strips `# gaia:maintainer-only:start` / `:end`
+      // blocks in-memory, the same blocks the scrub's `**/*.sh` marker-strip
+      // transform removes before --staging scans, so a .gaia/cli/src reference
+      // inside one is not a leak and bare mode agrees with the authoritative
+      // staging run.
+      exit: 0,
+      files: {
+        '.gaia/scripts/resolve-audit-members.sh': script(
+          '# gaia:maintainer-only:start',
+          'echo .gaia/cli/src',
+          '# gaia:maintainer-only:end'
+        ),
+      },
+      manifest: {
+        '.gaia/cli/gaia': 'owned',
+        '.gaia/scripts/resolve-audit-members.sh': 'owned',
+      },
+      name: 'agrees with staging mode: a reference inside a maintainer-only block is not a leak',
+      out: ['runtime-dependency leaks: none'],
+    },
+    {
+      // Control for the row above: the marker strip must not disable
+      // leak detection wholesale, only the wrapped block.
+      exit: 1,
+      files: {
+        '.gaia/scripts/resolve-audit-members.sh': script('echo .gaia/cli/src'),
+      },
+      manifest: {
+        '.gaia/cli/gaia': 'owned',
+        '.gaia/scripts/resolve-audit-members.sh': 'owned',
+      },
+      name: 'still flags the same kind of reference outside a maintainer-only block',
+      out: ['.gaia/cli/src'],
+    },
+    {
+      exit: 0,
+      files: {
+        '.gaia/statusline/preferred-base.sh': script(
+          '# This file is .gaia/statusline/preferred-base.sh',
+          'echo .gaia/statusline/preferred-base.sh'
+        ),
+      },
+      manifest: {'.gaia/statusline/preferred-base.sh': 'owned'},
+      name: 'skips self-references',
+    },
+    {
+      // Bare mode walks the repo root, which holds scripts the staging tree
+      // never has. A release-excluded script (no manifest entry) naming a
+      // maintainer-only workflow in a TRAILING comment would surface as a leak,
+      // since `stripCommentSuffix` strips only line-leading `#` by design.
+      // Scanning a file that never ships can only produce a phantom, so the
+      // scan surface is the manifest.
+      exit: 0,
+      files: {
+        '.gaia/scripts/verify-required-checks.sh': script(
+          'REQUIRED_CONTEXTS=(',
+          '  "Audit CI Tests"   # .github/workflows/audit-ci-tests.yml',
+          ')'
+        ),
+      },
+      manifest: {'.gaia/cli/gaia': 'owned'},
+      name: 'bare mode does not scan a release-excluded script',
+      out: ['runtime-dependency leaks: none'],
+    },
+    {
+      // A clean bare result covers only what the manifest already answers
+      // for, so a shipped script added before its `/distribution-vet` answer
+      // lands is skipped rather than cleared. The header has to say so; an
+      // unqualified "scanned N script(s)" reads as "all of them" and turns a
+      // partial pass into a false all-clear.
+      exit: 0,
+      files: {'.claude/hooks/ships.sh': 'echo hi\n'},
+      manifest: {'.claude/hooks/ships.sh': 'owned'},
+      name: 'bare mode names its narrowed scope in the report header',
+      out: ['1 manifest-backed script(s)'],
+    },
+    {
+      // Control for the two tests above: narrowing the scan surface must not
+      // disable leak detection for the files that DO ship.
+      exit: 1,
+      files: {'.gaia/statusline/foo.sh': 'bash .gaia/scripts/missing.sh\n'},
+      manifest: {'.gaia/statusline/foo.sh': 'owned'},
+      name: 'bare mode still flags a leak in a manifest-backed script',
+      out: ['.gaia/scripts/missing.sh'],
+    },
+  ])('$name', ({args, err, exit, files, manifest, notOut, out}) => {
+    writeManifestWhenGiven(sandbox, manifest);
+
+    for (const [relativePath, contents] of Object.entries(files ?? {})) {
+      sandbox.writeFile(relativePath, contents);
+    }
+
+    expect(run(args ?? [], {cwd: sandbox.rootDir})).toBe(exit);
+
+    const stdout = stdio.outputs.join('');
+
+    for (const fragment of out ?? []) {
+      expect(stdout).toContain(fragment);
+    }
+
+    for (const fragment of notOut ?? []) {
+      expect(stdout).not.toContain(fragment);
+    }
+
+    for (const fragment of err ?? []) {
+      expect(stdio.errors.join('')).toContain(fragment);
+    }
+  });
+
+  test.each<{
+    exit: number;
+    name: string;
+    notOut?: string[];
+    out?: string[];
+    staged: string;
+  }>([
+    {
+      exit: 0,
+      name: '--staging scans inside the staging dir',
+      staged: 'bash .gaia/cli/gaia\n',
+    },
+    {
+      exit: 0,
+      name: '--staging with a shipped script referencing .gaia/VERSION-dev exits 0',
+      staged: 'cat .gaia/VERSION-dev\n',
+    },
+    {
+      exit: 1,
+      name: '--staging with a shipped script referencing .gaia/VERSION-other exits 1',
+      staged: 'cat .gaia/VERSION-other\n',
+    },
+    {
+      // Control: staging scans the tarball unfiltered, so its header must stay
+      // the unqualified count rather than inherit bare mode's caveat.
+      exit: 0,
+      name: '--staging does not claim the narrowed scope',
+      notOut: ['manifest-backed'],
+      out: ['scanned 1 script(s)'],
+      staged: 'bash .gaia/cli/gaia\n',
+    },
+    {
+      // Staging is the ground truth for what ships: it scans the extracted
+      // tarball unfiltered, so a shipped-but-unmanifested script still gets
+      // scanned there and a packaging bug stays visible to the release gate.
+      exit: 1,
+      name: '--staging scans every script present in the tarball',
+      out: ['.gaia/scripts/missing.sh'],
+      staged: 'bash .gaia/scripts/missing.sh\n',
+    },
+  ])('$name', ({exit, notOut, out, staged}) => {
+    const stagingDir = path.join(sandbox.rootDir, 'staging');
+    sandbox.writeStagingManifest(stagingDir, {'.gaia/cli/gaia': 'owned'});
+    mkdirSync(path.join(stagingDir, '.gaia/statusline'), {recursive: true});
+    writeFileSync(
+      path.join(stagingDir, '.gaia/statusline/foo.sh'),
+      staged,
+      'utf8'
     );
 
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('runtime-dependency leaks: none');
+    expect(run(['--staging', stagingDir], {cwd: sandbox.rootDir})).toBe(exit);
+
+    const stdout = stdio.outputs.join('');
+
+    for (const fragment of out ?? []) {
+      expect(stdout).toContain(fragment);
+    }
+
+    for (const fragment of notOut ?? []) {
+      expect(stdout).not.toContain(fragment);
+    }
   });
 
   test('scans a manifested script under .gaia/scripts/spec and classifies its tokens', () => {
@@ -357,51 +733,6 @@ describe('release runtime-deps CLI', () => {
     expect(stdio.outputs.join('')).toContain('.gaia/scripts/missing.sh');
   });
 
-  test('flags references to release-excluded paths', () => {
-    // Manifest excludes .gaia/scripts/; that directory is release-excluded.
-    // The scanned script itself must ship, or bare mode correctly skips it.
-    sandbox.writeManifest({
-      '.gaia/cli/gaia': 'owned',
-      '.gaia/statusline/gaia-statusline.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/statusline/gaia-statusline.sh',
-      [
-        '#!/usr/bin/env bash',
-        'CHECK_SCRIPT="$PROJECT_ROOT/.gaia/scripts/check-updates.sh"',
-        'bash "$CHECK_SCRIPT"',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('.gaia/scripts/check-updates.sh');
-    expect(out).toContain('.gaia/statusline/gaia-statusline.sh:2');
-  });
-
-  test('allowlists adopter-owned sentinels', () => {
-    sandbox.writeManifest({
-      '.claude/hooks/wiki-session-start.sh': 'owned',
-      '.gaia/cli/gaia': 'owned',
-    });
-    sandbox.writeFile(
-      '.claude/hooks/wiki-session-start.sh',
-      [
-        '#!/usr/bin/env bash',
-        'cat .gaia/manifest.json',
-        'cat .gaia/VERSION',
-        'cat wiki/log.md',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
   test('allowlists the adopter-owned update decision log, and reports it once the sentinel is gone', () => {
     sandbox.writeManifest({
       '.claude/hooks/wiki-session-start.sh': 'owned',
@@ -427,416 +758,103 @@ describe('release runtime-deps CLI', () => {
     }
   });
 
-  test('allowlists runtime-allocated prefixes (.gaia/local)', () => {
-    sandbox.writeManifest({
-      '.claude/hooks/wiki-session-start.sh': 'owned',
-      '.gaia/cli/gaia': 'owned',
-    });
-    sandbox.writeFile(
-      '.claude/hooks/wiki-session-start.sh',
-      [
-        '#!/usr/bin/env bash',
-        'rm -f .gaia/local/cache/shared/update-check.json',
-        'STATE_FILE="$PROJECT_ROOT/.gaia/local/setup-state.json"',
-        '',
-      ].join('\n')
-    );
+  test.each<{
+    exit: number;
+    files?: Record<string, string>;
+    leaks: string[];
+    manifest: ManifestFiles;
+    name: string;
+    scannedContains: string[];
+  }>([
+    {
+      exit: 0,
+      // Composite-action scripts can live two directories deep
+      // (.github/actions/<action>/lib/*.sh); the walk must recurse to reach
+      // them. This fixture ships (manifest "owned") and references no
+      // maintainer paths, so a clean scan is the expected steady state.
+      files: {
+        '.github/actions/gaia-example-action/lib/wait-for-ci.sh': script(
+          'gh pr checks "$PR_NUMBER"'
+        ),
+      },
+      leaks: [],
+      manifest: {
+        '.github/actions/gaia-example-action/lib/wait-for-ci.sh': 'owned',
+      },
+      name: 'scans nested scripts under .github/actions',
+      scannedContains: [
+        '.github/actions/gaia-example-action/lib/wait-for-ci.sh',
+      ],
+    },
+    {
+      exit: 1,
+      files: {'.gaia/statusline/foo.sh': 'bash .gaia/scripts/missing.sh\n'},
+      leaks: ['.gaia/scripts/missing.sh'],
+      manifest: {
+        '.gaia/cli/gaia': 'owned',
+        '.gaia/statusline/foo.sh': 'owned',
+      },
+      name: '--json emits structured report',
+      scannedContains: ['.gaia/statusline/foo.sh'],
+    },
+  ])('$name', ({exit, files, leaks, manifest, scannedContains}) => {
+    sandbox.writeManifest(manifest);
 
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('resolves a bare directory token as shipped when manifest entries exist beneath it', () => {
-    // Mirrors a shell array glob like `SCAN_GLOB=(.claude/hooks/*.sh)`: the
-    // extractor's path-body character class stops at `*`, yielding the bare
-    // directory token `.claude/hooks`. That token isn't itself a manifest
-    // entry, but files ship beneath it on a real adopter clone, so it must
-    // resolve as shipped rather than flag as a leak.
-    sandbox.writeManifest({
-      '.claude/hooks/wiki-session-start.sh': 'owned',
-      '.gaia/scripts/lint-hook-array-guard.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/scripts/lint-hook-array-guard.sh',
-      ['#!/usr/bin/env bash', 'SCAN_GLOB=(.claude/hooks/*.sh)', ''].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('runtime-dependency leaks: none');
-  });
-
-  test('passes when a shipped script names a file family by pattern', () => {
-    // The gate fails closed, so a phantom leak blocks every distribution
-    // scenario and `/gaia-release` itself until someone reverse-engineers the
-    // extractor. Operator-facing prose naming a family of files by pattern is
-    // legitimate and must not cost a release.
-    sandbox.writeManifest({
-      '.claude/agents/code-audit-frontend.md': 'owned',
-      '.claude/hooks/audit-loop-bound.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.claude/hooks/audit-loop-bound.sh',
-      [
-        '#!/usr/bin/env bash',
-        'deny "rewrites .claude/agents/code-audit-*.md, which are machinery"',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('runtime-dependency leaks: none');
-  });
-
-  test('still flags a file family sourced from a release-excluded directory', () => {
-    // The counterpart to the test above, and the reason a truncated fragment is
-    // reduced rather than dropped: a shipped hook sourcing a family of files
-    // under a release-excluded directory is a genuine leak. Dropping the
-    // fragment would let it publish and fail on every adopter clone.
-    sandbox.writeManifest({
-      '.claude/hooks/ships.sh': 'owned',
-      '.gaia/scripts/run-tests.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.claude/hooks/ships.sh',
-      [
-        '#!/usr/bin/env bash',
-        'for t in .gaia/scripts/tests/run-*.sh; do bash "$t"; done',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('.gaia/scripts/tests');
-  });
-
-  test('still flags a bare directory token as a leak when no manifest entries exist beneath it', () => {
-    // `.gaia/scripts/tests` is release-excluded end-to-end: zero manifest
-    // entries live beneath it, so a bare-directory reference must still
-    // flag, guarding against the new directory rule over-rescuing a
-    // genuinely leaked directory.
-    sandbox.writeManifest({
-      '.gaia/cli/gaia': 'owned',
-      '.gaia/scripts/run-tests.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/scripts/run-tests.sh',
-      ['#!/usr/bin/env bash', 'SCAN_GLOB=(.gaia/scripts/tests/*.sh)', ''].join(
-        '\n'
-      )
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('.gaia/scripts/tests');
-  });
-
-  test('does not rescue an unmanifested file merely because its directory ships other files', () => {
-    // The new directory rule must stay scoped to bare directory tokens. A
-    // specific file path that happens to sit under a shipped directory but
-    // isn't itself a manifest entry is still a genuine leak, unchanged from
-    // before the directory rule existed.
-    sandbox.writeManifest({
-      '.claude/hooks/wiki-session-start.sh': 'owned',
-      '.gaia/statusline/foo.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/statusline/foo.sh',
-      'bash .claude/hooks/not-a-real-hook.sh\n'
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain(
-      '.claude/hooks/not-a-real-hook.sh'
-    );
-  });
-
-  test('terminates on a manifest key that is an absolute path', () => {
-    // Guards the fixed-point break in `computeShippedDirs`'s ancestor walk.
-    // Manifest keys are repo-relative by construction and drain to `.`, but
-    // `loadManifest` reads `Object.keys` off unvalidated JSON, so a corrupt
-    // manifest can carry an absolute key. `path.dirname('/')` is `'/'`, so
-    // such a key never reaches `.` and the walk must be bounded explicitly.
-    // Removing that break turns this into a synchronous infinite loop, which
-    // hangs the release gate instead of failing it.
-    sandbox.writeManifest({
-      '.gaia/cli/gaia': 'owned',
-      '.gaia/statusline/foo.sh': 'owned',
-      '/absolute/path/oops.sh': 'owned',
-    });
-    sandbox.writeFile('.gaia/statusline/foo.sh', 'echo hi\n');
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('scans nested scripts under .github/actions', () => {
-    // Composite-action scripts can live two directories deep
-    // (.github/actions/<action>/lib/*.sh); the walk must recurse to reach
-    // them. This fixture ships (manifest "owned") and references no
-    // maintainer paths, so a clean scan is the expected steady state.
-    sandbox.writeManifest({
-      '.github/actions/gaia-example-action/lib/wait-for-ci.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.github/actions/gaia-example-action/lib/wait-for-ci.sh',
-      ['#!/usr/bin/env bash', 'gh pr checks "$PR_NUMBER"', ''].join('\n')
-    );
-
-    const exit = run(['--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const parsed = JSON.parse(stdio.outputs.join('')) as {
-      leaks: readonly unknown[];
-      scanned_files: readonly string[];
-    };
-    expect(parsed.scanned_files).toContain(
-      '.github/actions/gaia-example-action/lib/wait-for-ci.sh'
-    );
-    expect(parsed.leaks).toHaveLength(0);
-  });
-
-  test('flags a release-excluded reference in a nested .github/actions script', () => {
-    // Recursion-and-leak guard: a maintainer-only path referenced inside a
-    // deeply nested composite-action script must still flag, proving the new
-    // scan scope walks the tree rather than only its top level.
-    sandbox.writeManifest({
-      '.github/actions/gaia-example-action/lib/render-issue.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.github/actions/gaia-example-action/lib/render-issue.sh',
-      ['#!/usr/bin/env bash', 'bash .gaia/cli/src/release/scrub.ts', ''].join(
-        '\n'
-      )
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('.gaia/cli/src/release/scrub.ts');
-  });
-
-  test('--json emits structured report', () => {
-    sandbox.writeManifest({
-      '.gaia/cli/gaia': 'owned',
-      '.gaia/statusline/foo.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/statusline/foo.sh',
-      'bash .gaia/scripts/missing.sh\n'
-    );
-
-    const exit = run(['--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const parsed = JSON.parse(stdio.outputs.join('')) as {
-      leaks: readonly {file: string; line: number; path: string}[];
-      scanned_files: readonly string[];
-    };
-    expect(parsed.leaks).toHaveLength(1);
-    expect(parsed.leaks[0]?.path).toBe('.gaia/scripts/missing.sh');
-    expect(parsed.scanned_files).toContain('.gaia/statusline/foo.sh');
-  });
-
-  test('exits 0 when there are no shipped script directories', () => {
-    sandbox.writeManifest({});
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('exits 2 when manifest is missing', () => {
-    sandbox.writeFile('.gaia/statusline/foo.sh', 'bash .gaia/cli/gaia\n');
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(2);
-    expect(stdio.errors.join('')).toContain('manifest_load_failed');
-  });
-
-  test('--staging scans inside the staging dir', () => {
-    const stagingDir = path.join(sandbox.rootDir, 'staging');
-    sandbox.writeStagingManifest(stagingDir, {'.gaia/cli/gaia': 'owned'});
-    mkdirSync(path.join(stagingDir, '.gaia/statusline'), {recursive: true});
-    writeFileSync(
-      path.join(stagingDir, '.gaia/statusline/foo.sh'),
-      'bash .gaia/cli/gaia\n',
-      'utf8'
-    );
-
-    const exit = run(['--staging', stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test.each([
-    ['.gaia/VERSION-dev', 0],
-    ['.gaia/VERSION-other', 1],
-  ])(
-    '--staging with a shipped script referencing %s exits %i',
-    (reference, expectedExit) => {
-      const stagingDir = path.join(sandbox.rootDir, 'staging');
-      sandbox.writeStagingManifest(stagingDir, {'.gaia/cli/gaia': 'owned'});
-      mkdirSync(path.join(stagingDir, '.gaia/statusline'), {recursive: true});
-      writeFileSync(
-        path.join(stagingDir, '.gaia/statusline/foo.sh'),
-        `cat ${reference}\n`,
-        'utf8'
-      );
-
-      const exit = run(['--staging', stagingDir], {cwd: sandbox.rootDir});
-      expect(exit).toBe(expectedExit);
+    for (const [relativePath, contents] of Object.entries(files ?? {})) {
+      sandbox.writeFile(relativePath, contents);
     }
-  );
 
-  test('rejects unknown flags', () => {
-    sandbox.writeManifest({});
-    const exit = run(['--bogus'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
-  });
-
-  test('agrees with staging mode: a reference inside a maintainer-only block is not a leak', () => {
-    // Regression for #661: bare mode (no --staging) used to be marker-unaware,
-    // so a .gaia/cli/src reference wrapped in a
-    // `# gaia:maintainer-only:start` / `:end` block (which the scrub's
-    // `**/*.sh` marker-strip transform removes before --staging ever scans
-    // it) false-positived as a leak. Bare mode must now strip the same
-    // blocks in-memory so it agrees with the authoritative staging run.
-    sandbox.writeManifest({
-      '.gaia/cli/gaia': 'owned',
-      '.gaia/scripts/resolve-audit-members.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/scripts/resolve-audit-members.sh',
-      [
-        '#!/usr/bin/env bash',
-        '# gaia:maintainer-only:start',
-        'echo .gaia/cli/src',
-        '# gaia:maintainer-only:end',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('runtime-dependency leaks: none');
-  });
-
-  test('still flags the same kind of reference outside a maintainer-only block', () => {
-    // Control for the regression above: the marker strip must not disable
-    // leak detection wholesale, only the wrapped block.
-    sandbox.writeManifest({
-      '.gaia/cli/gaia': 'owned',
-      '.gaia/scripts/resolve-audit-members.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/scripts/resolve-audit-members.sh',
-      ['#!/usr/bin/env bash', 'echo .gaia/cli/src', ''].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('.gaia/cli/src');
-  });
-
-  test('skips self-references', () => {
-    sandbox.writeManifest({
-      '.gaia/statusline/preferred-base.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/statusline/preferred-base.sh',
-      [
-        '#!/usr/bin/env bash',
-        '# This file is .gaia/statusline/preferred-base.sh',
-        'echo .gaia/statusline/preferred-base.sh',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('bare mode does not scan a release-excluded script', () => {
-    // Bare mode walks the repo root, which holds scripts the staging tree
-    // never has. A release-excluded script (no manifest entry) that names a
-    // maintainer-only workflow in a TRAILING comment surfaced as a leak:
-    // `stripCommentSuffix` strips only line-leading `#` by design, so the
-    // reference survived. Scanning a file that never ships can only ever
-    // produce a phantom, so the scan surface is the manifest.
-    sandbox.writeManifest({
-      '.gaia/cli/gaia': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/scripts/verify-required-checks.sh',
-      [
-        '#!/usr/bin/env bash',
-        'REQUIRED_CONTEXTS=(',
-        '  "Audit CI Tests"   # .github/workflows/audit-ci-tests.yml',
-        ')',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('runtime-dependency leaks: none');
-  });
-
-  test('bare mode reports only manifest-backed scripts as scanned', () => {
-    // The scan surface itself is the contract: bare mode must agree with the
-    // authoritative post-scrub staging run, which only ever sees shipped
-    // files. A release-excluded sibling must not inflate the scanned count.
-    sandbox.writeManifest({
-      '.claude/hooks/ships.sh': 'owned',
-    });
-    sandbox.writeFile('.claude/hooks/ships.sh', 'echo hi\n');
-    sandbox.writeFile('.gaia/scripts/excluded.sh', 'echo hi\n');
-
-    const exit = run(['--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
+    expect(run(['--json'], {cwd: sandbox.rootDir})).toBe(exit);
 
     const parsed = JSON.parse(stdio.outputs.join('')) as {
+      leaks: readonly {path: string}[];
       scanned_files: readonly string[];
     };
-    expect(parsed.scanned_files).toEqual(['.claude/hooks/ships.sh']);
+    expect(parsed.leaks.map((leak) => leak.path)).toEqual(leaks);
+
+    for (const scanned of scannedContains) {
+      expect(parsed.scanned_files).toContain(scanned);
+    }
   });
 
-  test('bare mode names its narrowed scope in the report header', () => {
-    // A clean bare result covers only what the manifest already answers for,
-    // so a shipped script added before its `/distribution-vet` answer lands
-    // is skipped rather than cleared. The header has to say so; an unqualified
-    // "scanned N script(s)" reads as "all of them" and turns a partial pass
-    // into a false all-clear.
-    sandbox.writeManifest({
-      '.claude/hooks/ships.sh': 'owned',
-    });
-    sandbox.writeFile('.claude/hooks/ships.sh', 'echo hi\n');
+  test.each<{
+    exit: number;
+    files?: Record<string, string>;
+    leaks: string[];
+    manifest: ManifestFiles;
+    name: string;
+    scannedEquals: string[];
+  }>([
+    {
+      exit: 0,
+      // The scan surface itself is the contract: bare mode must agree with the
+      // authoritative post-scrub staging run, which only ever sees shipped
+      // files. A release-excluded sibling must not inflate the scanned count.
+      files: {
+        '.claude/hooks/ships.sh': 'echo hi\n',
+        '.gaia/scripts/excluded.sh': 'echo hi\n',
+      },
+      leaks: [],
+      manifest: {'.claude/hooks/ships.sh': 'owned'},
+      name: 'bare mode reports only manifest-backed scripts as scanned',
+      scannedEquals: ['.claude/hooks/ships.sh'],
+    },
+  ])('$name', ({exit, files, leaks, manifest, scannedEquals}) => {
+    sandbox.writeManifest(manifest);
 
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('1 manifest-backed script(s)');
-  });
+    for (const [relativePath, contents] of Object.entries(files ?? {})) {
+      sandbox.writeFile(relativePath, contents);
+    }
 
-  test('--staging does not claim the narrowed scope', () => {
-    // Control: staging scans the tarball unfiltered, so its header must stay
-    // the unqualified count rather than inherit bare mode's caveat.
-    const stagingDir = path.join(sandbox.rootDir, 'staging');
-    sandbox.writeStagingManifest(stagingDir, {'.gaia/cli/gaia': 'owned'});
-    mkdirSync(path.join(stagingDir, '.gaia/statusline'), {recursive: true});
-    writeFileSync(
-      path.join(stagingDir, '.gaia/statusline/foo.sh'),
-      'bash .gaia/cli/gaia\n',
-      'utf8'
-    );
+    expect(run(['--json'], {cwd: sandbox.rootDir})).toBe(exit);
 
-    const exit = run(['--staging', stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
+    const parsed = JSON.parse(stdio.outputs.join('')) as {
+      leaks: readonly {path: string}[];
+      scanned_files: readonly string[];
+    };
+    expect(parsed.leaks.map((leak) => leak.path)).toEqual(leaks);
 
-    const out = stdio.outputs.join('');
-    expect(out).toContain('scanned 1 script(s)');
-    expect(out).not.toContain('manifest-backed');
+    expect(parsed.scanned_files).toEqual(scannedEquals);
   });
 
   test('--json discriminates the scan scope in both modes', () => {
@@ -862,40 +880,6 @@ describe('release runtime-deps CLI', () => {
     ).toBe(0);
     const staging = JSON.parse(stdio.outputs.join('')) as {scan_scope: string};
     expect(staging.scan_scope).toBe('tarball');
-  });
-
-  test('bare mode still flags a leak in a manifest-backed script', () => {
-    // Control for the two tests above: narrowing the scan surface must not
-    // disable leak detection for the files that DO ship.
-    sandbox.writeManifest({
-      '.gaia/statusline/foo.sh': 'owned',
-    });
-    sandbox.writeFile(
-      '.gaia/statusline/foo.sh',
-      'bash .gaia/scripts/missing.sh\n'
-    );
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('.gaia/scripts/missing.sh');
-  });
-
-  test('--staging scans every script present in the tarball', () => {
-    // Staging is the ground truth for what ships: it scans the extracted
-    // tarball unfiltered, so a shipped-but-unmanifested script still gets
-    // scanned there and a packaging bug stays visible to the release gate.
-    const stagingDir = path.join(sandbox.rootDir, 'staging');
-    sandbox.writeStagingManifest(stagingDir, {'.gaia/cli/gaia': 'owned'});
-    mkdirSync(path.join(stagingDir, '.gaia/statusline'), {recursive: true});
-    writeFileSync(
-      path.join(stagingDir, '.gaia/statusline/unmanifested.sh'),
-      'bash .gaia/scripts/missing.sh\n',
-      'utf8'
-    );
-
-    const exit = run(['--staging', stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('.gaia/scripts/missing.sh');
   });
 });
 

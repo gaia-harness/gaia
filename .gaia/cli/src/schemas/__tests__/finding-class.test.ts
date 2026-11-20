@@ -82,155 +82,160 @@ const MAINTAINER_SURFACE_MEMBERS: readonly (readonly [
   ],
 ];
 
+const validOracleIds = [
+  'react-doctor/no-generic-handler-names',
+  'axe/color-contrast',
+  'knip/exports',
+  'knip/types',
+  'knip/dependencies',
+  'knip/enumMembers',
+  'axe/landmark-one-main',
+  'cve/1098765',
+  'cve/GHSA-9wv6-86v2-598j',
+  'cve/CVE-2024-12345',
+  'react-doctor/jsx-a11y/alt-text',
+  'react-doctor/react.no-danger_v2',
+];
+
+const unsafeOracleSlugs = [
+  'cve/GHSA[31m-red',
+  'axe/color-contrast\nforged line',
+  'knip/exports\r',
+  'axe/color contrast',
+  'cve/<script>',
+  'knip/`exports`',
+  'axe/-leading-dash',
+  'react-doctor/trailing/',
+  'react-doctor//double-slash',
+  `axe/${'a'.repeat(129)}`,
+];
+
+type ClassCase = {title: string; valid: boolean; value: string};
+
+const accepted = (title: string, values: readonly string[]): ClassCase[] =>
+  values.map((value) => ({title: `${title}: ${value}`, valid: true, value}));
+
+const rejected = (title: string, values: readonly string[]): ClassCase[] =>
+  values.map((value) => ({
+    title: `${title}: ${JSON.stringify(value)}`,
+    valid: false,
+    value,
+  }));
+
 describe('schemas/finding-class', () => {
-  describe('oracle buckets (open id space after the prefix)', () => {
-    test.each([
-      'react-doctor/no-generic-handler-names',
-      'axe/color-contrast',
-      'knip/exports',
-      'knip/types',
-      'knip/dependencies',
-      'knip/enumMembers',
-      'axe/landmark-one-main',
-      'cve/1098765',
-      'cve/GHSA-9wv6-86v2-598j',
-      'cve/CVE-2024-12345',
-      'react-doctor/jsx-a11y/alt-text',
-      'react-doctor/react.no-danger_v2',
-    ])('accepts a well-formed oracle id: %s', (value) => {
-      expect(FindingClassSchema.safeParse(value).success).toBe(true);
-      expect(isValidFindingClass(value)).toBe(true);
-    });
-
-    test('rejects an oracle prefix with an empty slug', () => {
-      expect(FindingClassSchema.safeParse('react-doctor/').success).toBe(false);
-      expect(isValidFindingClass('axe/')).toBe(false);
-    });
-
-    test.each([
-      'cve/GHSA[31m-red',
-      'axe/color-contrast\nforged line',
-      'knip/exports\r',
-      'axe/color contrast',
-      'cve/<script>',
-      'knip/`exports`',
-      'axe/-leading-dash',
-      'react-doctor/trailing/',
-      'react-doctor//double-slash',
-      `axe/${'a'.repeat(129)}`,
-    ])('rejects an oracle slug outside the safe id shape: %j', (value) => {
-      expect(FindingClassSchema.safeParse(value).success).toBe(false);
-      expect(isValidFindingClass(value)).toBe(false);
-      expect(isOracleFindingClass(value)).toBe(true);
-    });
-
-    test('accepts an oracle slug at the length bound', () => {
-      expect(isValidFindingClass(`axe/${'a'.repeat(128)}`)).toBe(true);
-    });
+  test.each([
+    ...accepted('accepts a well-formed oracle id', validOracleIds),
+    {
+      title: 'rejects an oracle prefix with an empty slug: react-doctor/',
+      valid: false,
+      value: 'react-doctor/',
+    },
+    {
+      title: 'rejects an oracle prefix with an empty slug: axe/',
+      valid: false,
+      value: 'axe/',
+    },
+    ...rejected(
+      'rejects an oracle slug outside the safe id shape',
+      unsafeOracleSlugs
+    ),
+    {
+      title: 'accepts an oracle slug at the length bound',
+      valid: true,
+      value: `axe/${'a'.repeat(128)}`,
+    },
+  ])('oracle buckets: $title', ({valid, value}) => {
+    expect(FindingClassSchema.safeParse(value).success).toBe(valid);
+    expect(isValidFindingClass(value)).toBe(valid);
+    expect(isOracleFindingClass(value)).toBe(true);
   });
 
-  describe('closed holistic/rule buckets (controlled vocabulary)', () => {
-    test.each(HOLISTIC_FINDING_CLASSES)(
-      'accepts seeded holistic member: %s',
-      (value) => {
-        expect(FindingClassSchema.safeParse(value).success).toBe(true);
-      }
-    );
-
-    test.each(RULE_FINDING_CLASSES)(
-      'accepts seeded rule member: %s',
-      (value) => {
-        expect(FindingClassSchema.safeParse(value).success).toBe(true);
-      }
-    );
-
-    test.each(WORKFLOW_FINDING_CLASSES)(
-      'accepts seeded workflow member: %s',
-      (value) => {
-        expect(FindingClassSchema.safeParse(value).success).toBe(true);
-      }
-    );
-
-    test('rejects an unseeded holistic member (closed bucket)', () => {
-      expect(
-        FindingClassSchema.safeParse('holistic/something-made-up').success
-      ).toBe(false);
-      expect(isValidFindingClass('holistic/something-made-up')).toBe(false);
-    });
-
-    test.each(MAINTAINER_SURFACE_MEMBERS.flatMap(([, misses]) => misses))(
-      'rejects a near-miss spelling of each seeded maintainer-surface member: %s',
-      (value) => {
-        expect(FindingClassSchema.safeParse(value).success).toBe(false);
-        expect(isValidFindingClass(value)).toBe(false);
-      }
-    );
-
-    test('rejects an unseeded rule member (closed bucket)', () => {
-      expect(
-        FindingClassSchema.safeParse('rule/totally-invented').success
-      ).toBe(false);
-    });
-
-    test('rejects an unseeded workflow member (closed bucket)', () => {
-      expect(FindingClassSchema.safeParse('workflow/made-up').success).toBe(
-        false
-      );
-      expect(isValidFindingClass('workflow/made-up')).toBe(false);
-    });
-
-    test('rejects an unseeded prose member (closed bucket)', () => {
-      expect(FindingClassSchema.safeParse('prose/made-up').success).toBe(false);
-      expect(isValidFindingClass('prose/made-up')).toBe(false);
-    });
+  test.each([
+    ...accepted('accepts seeded holistic member', HOLISTIC_FINDING_CLASSES),
+    ...accepted('accepts seeded rule member', RULE_FINDING_CLASSES),
+    ...accepted('accepts seeded workflow member', WORKFLOW_FINDING_CLASSES),
+    {
+      title: 'rejects an unseeded holistic member (closed bucket)',
+      valid: false,
+      value: 'holistic/something-made-up',
+    },
+    ...rejected(
+      'rejects a near-miss spelling of each seeded maintainer-surface member',
+      MAINTAINER_SURFACE_MEMBERS.flatMap(([, misses]) => misses)
+    ),
+    {
+      title: 'rejects an unseeded rule member (closed bucket)',
+      valid: false,
+      value: 'rule/totally-invented',
+    },
+    {
+      title: 'rejects an unseeded workflow member (closed bucket)',
+      valid: false,
+      value: 'workflow/made-up',
+    },
+    {
+      title: 'rejects an unseeded prose member (closed bucket)',
+      valid: false,
+      value: 'prose/made-up',
+    },
+    ...rejected('rejects', [
+      'just free text',
+      '',
+      'no-prefix-slug',
+      'unknown/whatever',
+    ]),
+  ])('closed buckets: $title', ({valid, value}) => {
+    expect(FindingClassSchema.safeParse(value).success).toBe(valid);
+    expect(isValidFindingClass(value)).toBe(valid);
   });
 
-  describe('free-text drift', () => {
-    test.each(['just free text', '', 'no-prefix-slug', 'unknown/whatever'])(
-      'rejects: %j',
-      (value) => {
-        expect(FindingClassSchema.safeParse(value).success).toBe(false);
-        expect(isValidFindingClass(value)).toBe(false);
-      }
-    );
-  });
-
-  describe('isOracleFindingClass (codify-tally is_oracle source)', () => {
-    test.each([
+  test.each([
+    ...[
       'react-doctor/no-generic-handler-names',
       'axe/color-contrast',
       'knip/exports',
       'cve/1098765',
-    ])('true for an oracle-prefixed class: %s', (value) => {
-      expect(isOracleFindingClass(value)).toBe(true);
-    });
-
-    test.each([
+    ].map((value) => ({
+      oracle: true,
+      title: `true for an oracle-prefixed class: ${value}`,
+      value,
+    })),
+    ...[
       'holistic/hardcoded-string',
       'rule/switch-statement',
       'workflow/unpinned-action',
       'prose/excessive-length',
       'not-a-real-prefix/x',
       '',
-    ])('false for a non-oracle class: %j', (value) => {
-      expect(isOracleFindingClass(value)).toBe(false);
-    });
-  });
+    ].map((value) => ({
+      oracle: false,
+      title: `false for a non-oracle class: ${JSON.stringify(value)}`,
+      value,
+    })),
+  ])(
+    'isOracleFindingClass (codify-tally is_oracle source): $title',
+    ({oracle, value}) => {
+      expect(isOracleFindingClass(value)).toBe(oracle);
+    }
+  );
 
-  describe('out-of-scope dedup-key fallback', () => {
-    test('has the expected value', () => {
-      expect(OUT_OF_SCOPE_FALLBACK_FINDING_CLASS).toBe('holistic/unclassified');
-    });
-
-    test('is NOT a valid finding_class (dedup-key fallback only)', () => {
-      expect(isValidFindingClass(OUT_OF_SCOPE_FALLBACK_FINDING_CLASS)).toBe(
-        false
-      );
-      expect(
+  test.each([
+    {
+      actual: () => OUT_OF_SCOPE_FALLBACK_FINDING_CLASS,
+      expected: 'holistic/unclassified',
+      name: 'has the expected value',
+    },
+    {
+      actual: () => [
+        isValidFindingClass(OUT_OF_SCOPE_FALLBACK_FINDING_CLASS),
         FindingClassSchema.safeParse(OUT_OF_SCOPE_FALLBACK_FINDING_CLASS)
-          .success
-      ).toBe(false);
-    });
+          .success,
+      ],
+      expected: [false, false],
+      name: 'is NOT a valid finding_class (dedup-key fallback only)',
+    },
+  ])('out-of-scope dedup-key fallback: $name', ({actual, expected}) => {
+    expect(actual()).toEqual(expected);
   });
 
   describe('project vocabulary (.gaia/finding-classes.json)', () => {
@@ -239,32 +244,54 @@ describe('schemas/finding-class', () => {
       oracle_prefixes: ['semgrep'],
     };
 
-    test.each(['holistic/missing-tenant-scope', 'billing/double-charge'])(
-      'accepts a project class only with the vocabulary: %s',
-      (value) => {
-        expect(isValidFindingClass(value)).toBe(false);
-        expect(isValidFindingClass(value, vocabulary)).toBe(true);
-      }
-    );
-
-    test('accepts any safe id after a project oracle prefix and reads it as oracle', () => {
-      expect(isValidFindingClass('semgrep/python.lang.eval', vocabulary)).toBe(
-        true
-      );
-      expect(isOracleFindingClass('semgrep/python.lang.eval', vocabulary)).toBe(
-        true
-      );
-      expect(isOracleFindingClass('semgrep/python.lang.eval')).toBe(false);
-      expect(isValidFindingClass('semgrep/has space', vocabulary)).toBe(false);
-    });
-
-    test('still rejects the fallback and unlisted classes', () => {
-      expect(
-        isValidFindingClass(OUT_OF_SCOPE_FALLBACK_FINDING_CLASS, vocabulary)
-      ).toBe(false);
-      expect(isValidFindingClass('billing/refund-race', vocabulary)).toBe(
-        false
-      );
+    test.each([
+      {
+        name: 'accepts a project class only with the vocabulary: holistic/missing-tenant-scope',
+        oracleWith: false,
+        validWith: true,
+        validWithout: false,
+        value: 'holistic/missing-tenant-scope',
+      },
+      {
+        name: 'accepts a project class only with the vocabulary: billing/double-charge',
+        oracleWith: false,
+        validWith: true,
+        validWithout: false,
+        value: 'billing/double-charge',
+      },
+      {
+        name: 'accepts any safe id after a project oracle prefix and reads it as oracle',
+        oracleWith: true,
+        validWith: true,
+        validWithout: false,
+        value: 'semgrep/python.lang.eval',
+      },
+      {
+        name: 'rejects an unsafe id after a project oracle prefix',
+        oracleWith: true,
+        validWith: false,
+        validWithout: false,
+        value: 'semgrep/has space',
+      },
+      {
+        name: 'still rejects the fallback and unlisted classes: fallback',
+        oracleWith: false,
+        validWith: false,
+        validWithout: false,
+        value: OUT_OF_SCOPE_FALLBACK_FINDING_CLASS,
+      },
+      {
+        name: 'still rejects the fallback and unlisted classes: unlisted',
+        oracleWith: false,
+        validWith: false,
+        validWithout: false,
+        value: 'billing/refund-race',
+      },
+    ])('$name', ({oracleWith, validWith, validWithout, value}) => {
+      expect(isValidFindingClass(value)).toBe(validWithout);
+      expect(isValidFindingClass(value, vocabulary)).toBe(validWith);
+      expect(isOracleFindingClass(value, vocabulary)).toBe(oracleWith);
+      expect(isOracleFindingClass(value)).toBe(false);
     });
   });
 
@@ -296,72 +323,76 @@ describe('schemas/finding-class', () => {
       rmSync(root, {force: true, recursive: true});
     });
 
-    test('a missing file is the empty vocabulary, silently', () => {
-      expect(readProjectFindingClasses(root)).toEqual(
-        EMPTY_FINDING_CLASS_VOCABULARY
-      );
-      expect(errors).toEqual([]);
-    });
+    const writeVocabularyIfPresent = (content: string | undefined): void => {
+      if (content !== undefined) {
+        writeVocabulary(content);
+      }
+    };
 
-    test('reads classes and oracle prefixes, ignoring $comment', () => {
-      writeVocabulary(
-        JSON.stringify({
-          $comment: 'project classes',
-          classes: ['billing/double-charge'],
-          oracle_prefixes: ['semgrep'],
-        })
-      );
-
-      expect(readProjectFindingClasses(root)).toEqual({
-        classes: ['billing/double-charge'],
-        oracle_prefixes: ['semgrep'],
-      });
-      expect(errors).toEqual([]);
+    const malformed = ['malformed_finding_classes'];
+    const reportsAndFallsBack = (label: string, content: string) => ({
+      content,
+      errorCodes: malformed,
+      expected: EMPTY_FINDING_CLASS_VOCABULARY,
+      name: `reports ${label} as a structured error and falls back to empty`,
     });
 
     test.each([
-      ['invalid JSON', '{'],
-      [
+      {
+        content: undefined,
+        errorCodes: [],
+        expected: EMPTY_FINDING_CLASS_VOCABULARY,
+        name: 'a missing file is the empty vocabulary, silently',
+      },
+      {
+        content: JSON.stringify({
+          $comment: 'project classes',
+          classes: ['billing/double-charge'],
+          oracle_prefixes: ['semgrep'],
+        }),
+        errorCodes: [],
+        expected: {
+          classes: ['billing/double-charge'],
+          oracle_prefixes: ['semgrep'],
+        },
+        name: 'reads classes and oracle prefixes, ignoring $comment',
+      },
+      reportsAndFallsBack('invalid JSON', '{'),
+      reportsAndFallsBack(
         'a non-kebab class',
-        JSON.stringify({classes: ['Billing/Double'], oracle_prefixes: []}),
-      ],
-      [
+        JSON.stringify({classes: ['Billing/Double'], oracle_prefixes: []})
+      ),
+      reportsAndFallsBack(
         'a class with no prefix',
-        JSON.stringify({classes: ['double-charge'], oracle_prefixes: []}),
-      ],
-      [
+        JSON.stringify({classes: ['double-charge'], oracle_prefixes: []})
+      ),
+      reportsAndFallsBack(
         'the fallback class',
         JSON.stringify({
           classes: ['holistic/unclassified'],
           oracle_prefixes: [],
-        }),
-      ],
-      [
+        })
+      ),
+      reportsAndFallsBack(
         'a class under a built-in oracle prefix',
-        JSON.stringify({classes: ['axe/custom'], oracle_prefixes: []}),
-      ],
-      [
+        JSON.stringify({classes: ['axe/custom'], oracle_prefixes: []})
+      ),
+      reportsAndFallsBack(
         'a built-in prefix as an oracle prefix',
-        JSON.stringify({classes: [], oracle_prefixes: ['holistic']}),
-      ],
-      [
+        JSON.stringify({classes: [], oracle_prefixes: ['holistic']})
+      ),
+      reportsAndFallsBack(
         'a non-kebab oracle prefix',
-        JSON.stringify({classes: [], oracle_prefixes: ['Semgrep']}),
-      ],
-      ['a missing key', JSON.stringify({classes: []})],
-    ])(
-      'reports %s as a structured error and falls back to empty',
-      (_label, content) => {
-        writeVocabulary(content);
+        JSON.stringify({classes: [], oracle_prefixes: ['Semgrep']})
+      ),
+      reportsAndFallsBack('a missing key', JSON.stringify({classes: []})),
+    ])('$name', ({content, errorCodes, expected}) => {
+      writeVocabularyIfPresent(content);
 
-        expect(readProjectFindingClasses(root)).toEqual(
-          EMPTY_FINDING_CLASS_VOCABULARY
-        );
-        expect(errors).toHaveLength(1);
-        expect(JSON.parse(errors[0] ?? '')).toMatchObject({
-          code: 'malformed_finding_classes',
-        });
-      }
-    );
+      expect(readProjectFindingClasses(root)).toEqual(expected);
+      expect(
+        errors.map((line) => (JSON.parse(line) as {code: string}).code)
+      ).toEqual(errorCodes);
+    });
   });
 });

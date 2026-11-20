@@ -74,75 +74,31 @@ describe('scanRegionDeclarations', () => {
     }
   });
 
-  test('a path carrying the pair but absent from shippedFiles is not declared', () => {
+  test.each([
+    {
+      content: [START, 'body', END].join('\n'),
+      file: 'orphan.md',
+      name: 'a shipped path carrying the pair that is not in rewrites throws, naming the path',
+      pattern: /orphan\.md/,
+      rewrites: [] as string[],
+    },
+    {
+      content: [START, 'a', START, 'b', END].join('\n'),
+      file: 'dup.md',
+      name: 'duplicated markers throw naming the malformation',
+      pattern: /duplicate-start/,
+      rewrites: ['dup.md'],
+    },
+  ])('$name', ({content, file, pattern, rewrites}) => {
     const sandbox = setupSandbox();
 
     try {
-      writeFile(sandbox.root, 'withheld.md', [START, 'body', END].join('\n'));
-      const entry = buildEntry({rewrites: () => new Set(['withheld.md'])});
-
-      const [declaration] = scanRegionDeclarations(sandbox.root, {}, [entry]);
-
-      expect(declaration).toBeDefined();
-      expect(declaration?.paths).toEqual([]);
-    } finally {
-      sandbox.cleanup();
-    }
-  });
-
-  test('a shipped path carrying the pair that is not in rewrites throws, naming the path', () => {
-    const sandbox = setupSandbox();
-
-    try {
-      writeFile(sandbox.root, 'orphan.md', [START, 'body', END].join('\n'));
-      const entry = buildEntry({rewrites: () => new Set()});
+      writeFile(sandbox.root, file, content);
+      const entry = buildEntry({rewrites: () => new Set(rewrites)});
 
       expect(() =>
-        scanRegionDeclarations(sandbox.root, {'orphan.md': 'owned'}, [entry])
-      ).toThrow(/orphan\.md/);
-    } finally {
-      sandbox.cleanup();
-    }
-  });
-
-  test('marker text as a substring of longer prose is not declared', () => {
-    const sandbox = setupSandbox();
-
-    try {
-      writeFile(
-        sandbox.root,
-        'prose.md',
-        `Use the \`${START}\` marker to delimit it.\n`
-      );
-      const entry = buildEntry({rewrites: () => new Set(['prose.md'])});
-
-      const [declaration] = scanRegionDeclarations(
-        sandbox.root,
-        {'prose.md': 'owned'},
-        [entry]
-      );
-
-      expect(declaration).toBeDefined();
-      expect(declaration?.paths).toEqual([]);
-    } finally {
-      sandbox.cleanup();
-    }
-  });
-
-  test('duplicated markers throw naming the malformation', () => {
-    const sandbox = setupSandbox();
-
-    try {
-      writeFile(
-        sandbox.root,
-        'dup.md',
-        [START, 'a', START, 'b', END].join('\n')
-      );
-      const entry = buildEntry({rewrites: () => new Set(['dup.md'])});
-
-      expect(() =>
-        scanRegionDeclarations(sandbox.root, {'dup.md': 'owned'}, [entry])
-      ).toThrow(/duplicate-start/);
+        scanRegionDeclarations(sandbox.root, {[file]: 'owned'}, [entry])
+      ).toThrow(pattern);
     } finally {
       sandbox.cleanup();
     }
@@ -169,18 +125,44 @@ describe('scanRegionDeclarations', () => {
     }
   });
 
-  test('a registry entry finding no carrying shipped path declares paths: [] without throwing', () => {
+  test.each([
+    {
+      disk: {'withheld.md': [START, 'body', END].join('\n')},
+      name: 'a path carrying the pair but absent from shippedFiles is not declared',
+      rewrites: ['withheld.md'],
+      shipped: {} as Record<string, string>,
+    },
+    {
+      disk: {'prose.md': `Use the \`${START}\` marker to delimit it.\n`},
+      name: 'marker text as a substring of longer prose is not declared',
+      rewrites: ['prose.md'],
+      shipped: {'prose.md': 'owned'},
+    },
+    {
+      disk: {'plain.md': 'nothing here\n'},
+      name: 'a registry entry finding no carrying shipped path declares paths: [] without throwing',
+      rewrites: [] as string[],
+      shipped: {'plain.md': 'owned'},
+    },
+    {
+      disk: {} as Record<string, string>,
+      name: 'a shippedFiles path missing from disk is skipped, not thrown',
+      rewrites: [] as string[],
+      shipped: {'ghost.md': 'owned'},
+    },
+  ])('$name', ({disk, rewrites, shipped}) => {
     const sandbox = setupSandbox();
 
     try {
-      writeFile(sandbox.root, 'plain.md', 'nothing here\n');
-      const entry = buildEntry({rewrites: () => new Set()});
+      for (const [file, content] of Object.entries(disk)) {
+        writeFile(sandbox.root, file, content);
+      }
 
-      const declarations = scanRegionDeclarations(
-        sandbox.root,
-        {'plain.md': 'owned'},
-        [entry]
-      );
+      const entry = buildEntry({rewrites: () => new Set(rewrites)});
+
+      const declarations = scanRegionDeclarations(sandbox.root, shipped, [
+        entry,
+      ]);
 
       expect(declarations).toEqual([
         {
@@ -195,24 +177,6 @@ describe('scanRegionDeclarations', () => {
           startMarker: START,
         },
       ]);
-    } finally {
-      sandbox.cleanup();
-    }
-  });
-
-  test('a shippedFiles path missing from disk is skipped, not thrown', () => {
-    const sandbox = setupSandbox();
-
-    try {
-      const entry = buildEntry({rewrites: () => new Set()});
-
-      const declarations = scanRegionDeclarations(
-        sandbox.root,
-        {'ghost.md': 'owned'},
-        [entry]
-      );
-
-      expect(declarations[0]?.paths).toEqual([]);
     } finally {
       sandbox.cleanup();
     }

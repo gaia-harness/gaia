@@ -63,30 +63,36 @@ const codesOf = (
 const CATEGORIES = parseExcludeCategories(EXCLUDE_FIXTURE);
 
 describe('parseExcludeCategories', () => {
-  test('finds every numbered header in file order with 0-based line indices', () => {
-    expect(CATEGORIES).toEqual([
-      {
-        headerLineIndex: 3,
-        number: 1,
-        title: 'Maintainer-only Claude surface',
-      },
-      {headerLineIndex: 8, number: 2, title: 'Maintainer-only wiki content'},
-      {
-        headerLineIndex: 12,
-        number: 3,
-        title: 'Test harnesses and audit reports',
-      },
-    ]);
-  });
-
-  test('ignores comments and path lines that are not numbered headers', () => {
-    expect(parseExcludeCategories('# just a comment\nwiki/entities\n')).toEqual(
-      []
-    );
-  });
-
-  test('returns an empty list for an empty body', () => {
-    expect(parseExcludeCategories('')).toEqual([]);
+  test.each<{expected: unknown[]; name: string; text: string}>([
+    {
+      expected: [
+        {
+          headerLineIndex: 3,
+          number: 1,
+          title: 'Maintainer-only Claude surface',
+        },
+        {headerLineIndex: 8, number: 2, title: 'Maintainer-only wiki content'},
+        {
+          headerLineIndex: 12,
+          number: 3,
+          title: 'Test harnesses and audit reports',
+        },
+      ],
+      name: 'finds every numbered header in file order with 0-based line indices',
+      text: EXCLUDE_FIXTURE,
+    },
+    {
+      expected: [],
+      name: 'ignores comments and path lines that are not numbered headers',
+      text: '# just a comment\nwiki/entities\n',
+    },
+    {
+      expected: [],
+      name: 'returns an empty list for an empty body',
+      text: '',
+    },
+  ])('$name', ({expected, text}) => {
+    expect(parseExcludeCategories(text)).toEqual(expected);
   });
 });
 
@@ -173,75 +179,230 @@ describe('applyWithholds', () => {
   });
 });
 
-describe('validateAnswers', () => {
-  const missing = ['app/new.ts', 'docs/guide.md'];
+type CaseBase = {
+  answerSet: AnswerSet;
+  name: string;
+  report?: {missing: string[]; shipped: string[]};
+};
+type ContainsCase = CaseBase & {contains: AnswerErrorCode[]};
+type ContainsPathsCase = ContainsCase & {
+  notContains: AnswerErrorCode[];
+  paths: string[];
+};
+type ExactCase = CaseBase & {codes: AnswerErrorCode[]};
+type ExactPathsCase = ExactCase & {paths: string[]};
 
-  test('returns no errors for an exactly-covering answer set', () => {
-    const errors = validateAnswers(
-      answers({
+const FRESH_REPORT = {missing: ['app/new.ts', 'docs/guide.md'], shipped: []};
+const WITHDRAW_REPORT = {
+  missing: ['app/new.ts'],
+  shipped: ['.github/FUNDING.yml', 'app/foo.ts'],
+};
+
+const metacharacterCase = (label: string, badPath: string): ContainsCase => ({
+  answerSet: answers({allowUndecided: true, withholds: [withhold(badPath)]}),
+  contains: ['withhold_metacharacter'],
+  name: `withhold_metacharacter rejects ${label}`,
+  report: {missing: [badPath], shipped: []},
+});
+
+const allowedPathCase = (label: string, goodPath: string): ExactCase => ({
+  answerSet: answers({allowUndecided: true, withholds: [withhold(goodPath)]}),
+  codes: [],
+  name: `allows ${label} in a withhold path`,
+  report: {missing: [goodPath], shipped: []},
+});
+
+const reasonCase = (label: string, reason: string): ExactCase => ({
+  answerSet: answers({
+    allowUndecided: true,
+    withholds: [withhold('app/new.ts', {reason})],
+  }),
+  codes: ['withhold_reason_invalid'],
+  name: `withhold_reason_invalid rejects ${label}`,
+});
+
+describe('validateAnswers', () => {
+  test.each<ExactCase>([
+    {
+      answerSet: answers({
         ships: ['app/new.ts'],
         withholds: [withhold('docs/guide.md')],
       }),
-      {missing, shipped: []},
-      CATEGORIES
+      codes: [],
+      name: 'returns no errors for an exactly-covering answer set',
+    },
+    {
+      answerSet: answers({
+        allowUndecided: true,
+        withholds: [withhold('docs/notes[1].md')],
+      }),
+      codes: ['withhold_metacharacter'],
+      name: 'withhold_metacharacter rejects a bracketed filename that IS a member',
+      report: {missing: ['docs/notes[1].md'], shipped: []},
+    },
+    allowedPathCase('a dot and a plus', 'app/routes/_public+/home.tsx'),
+    allowedPathCase('a tilde and an at', 'docs/~notes@2.md'),
+    allowedPathCase('a comma and an equals', 'docs/a,b=c.md'),
+    // Most wiki/ titles carry spaces, and .gaia/release-exclude already
+    // holds such lines. An exclude line is a literal path to every consumer,
+    // so a space is literal in all of them; refusing to write one would make
+    // a whole category of maintainer-only page unwithholdable.
+    allowedPathCase(
+      'an interior space',
+      'wiki/decisions/Sharded CI Test Matrix.md'
+    ),
+    reasonCase('a newline', 'internal\nwiki/decisions'),
+    reasonCase('a carriage return', 'internal\rwiki/decisions'),
+    reasonCase('an empty reason', ''),
+    reasonCase('a whitespace-only reason', ' '.repeat(3)),
+    {
+      answerSet: answers({
+        ships: ['app/ghost.ts'],
+        withholds: [
+          withhold('docs/*.md', {category: 99, reason: 'bad\nreason'}),
+        ],
+      }),
+      codes: [
+        'answer_not_missing',
+        'withhold_metacharacter',
+        'withhold_reason_invalid',
+        'unknown_category',
+        'unanswered_paths',
+      ],
+      name: 'reports every error class in one pass',
+    },
+    {
+      answerSet: answers({
+        allowUndecided: true,
+        withholds: [withhold('app/foo.ts')],
+      }),
+      codes: ['answer_not_missing'],
+      name: 'a withhold of an already-shipped path is still answer_not_missing',
+      report: WITHDRAW_REPORT,
+    },
+  ])('$name', ({answerSet, codes, report = FRESH_REPORT}) => {
+    expect(codesOf(validateAnswers(answerSet, report, CATEGORIES))).toEqual(
+      codes
     );
-
-    expect(errors).toEqual([]);
   });
 
-  test('unanswered_paths names every unanswered file', () => {
-    const errors = validateAnswers(
-      answers(),
-      {missing, shipped: []},
-      CATEGORIES
-    );
+  test.each<ExactPathsCase>([
+    {
+      answerSet: answers(),
+      codes: ['unanswered_paths'],
+      name: 'unanswered_paths names every unanswered file',
+      paths: ['app/new.ts', 'docs/guide.md'],
+    },
+    {
+      answerSet: answers({ships: ['app/typo.ts', 'docs/typo.md']}),
+      codes: ['answer_not_missing', 'unanswered_paths'],
+      name: 'answer_not_missing collects every offending path, not just the first',
+      paths: ['app/typo.ts', 'docs/typo.md'],
+    },
+    {
+      answerSet: answers({
+        allowUndecided: true,
+        withholds: [withhold('app/new.ts', {category: 99})],
+      }),
+      codes: ['unknown_category'],
+      name: 'unknown_category rejects a category no header declares',
+      paths: ['app/new.ts'],
+    },
+    {
+      answerSet: answers({
+        allowUndecided: true,
+        withdraws: [withhold('app/ghost.ts'), withhold('app/new.ts')],
+      }),
+      codes: ['withdraw_not_shipped'],
+      name: 'withdraw_not_shipped rejects a path the manifest does not ship, a newly-shipping one included',
+      paths: ['app/ghost.ts', 'app/new.ts'],
+      report: WITHDRAW_REPORT,
+    },
+  ])('$name', ({answerSet, codes, paths, report = FRESH_REPORT}) => {
+    const errors = validateAnswers(answerSet, report, CATEGORIES);
 
-    expect(codesOf(errors)).toEqual(['unanswered_paths']);
-    expect(errors[0]?.paths).toEqual(['app/new.ts', 'docs/guide.md']);
+    expect(codesOf(errors)).toEqual(codes);
+    expect(errors[0]?.paths).toEqual(paths);
+  });
+
+  test.each<ContainsPathsCase>([
+    {
+      // The directory carries no metacharacter; membership is what rejects it.
+      answerSet: answers({
+        ships: ['app/new.ts'],
+        withholds: [withhold('docs', {reason: 'internal'})],
+      }),
+      contains: ['answer_not_missing'],
+      name: 'answer_not_missing rejects a bare directory standing in for its subtree',
+      notContains: ['withhold_metacharacter'],
+      paths: ['docs'],
+    },
+  ])(
+    '$name',
+    ({answerSet, contains, notContains, paths, report = FRESH_REPORT}) => {
+      const errors = validateAnswers(answerSet, report, CATEGORIES);
+
+      for (const code of contains) {
+        expect(codesOf(errors)).toContain(code);
+      }
+
+      for (const code of notContains) {
+        expect(codesOf(errors)).not.toContain(code);
+      }
+
+      expect(errors[0]?.paths).toEqual(paths);
+    }
+  );
+
+  test.each<ContainsCase>([
+    metacharacterCase('a star', 'docs/*.md'),
+    metacharacterCase('a brace', 'docs/{a,b}.md'),
+    metacharacterCase('an anchor', '^docs/a.md'),
+    metacharacterCase('a pipe', 'docs/a|b.md'),
+    metacharacterCase('a backslash', String.raw`docs\a.md`),
+    metacharacterCase('a leading slash', '/docs/a.md'),
+    metacharacterCase('a trailing slash', 'docs/a/'),
+    metacharacterCase('a leading hash', '#docs/a.md'),
+    metacharacterCase('a leading space', ' docs/a.md'),
+    metacharacterCase('a trailing space', 'docs/a.md '),
+    metacharacterCase('an embedded newline', 'docs/a.md\nwiki/'),
+    metacharacterCase('an embedded carriage return', 'docs/a.md\rwiki/'),
+    // git C-quotes a tab in a bare `ls-files` but not in `ls-files -z`, so an
+    // exclude line carrying one masks a different file for any reader that
+    // regresses to the bare form. A space is quoted by neither, which is why
+    // it is allowed.
+    metacharacterCase('an embedded tab', 'docs/a\tb.md'),
+    metacharacterCase('an empty value', ''),
+    {
+      answerSet: answers({
+        allowUndecided: true,
+        ships: ['app/foo.ts'],
+        withdraws: [withhold('app/foo.ts')],
+      }),
+      contains: ['duplicate_answer'],
+      name: 'duplicate_answer catches a path both withdrawn and shipped',
+      report: WITHDRAW_REPORT,
+    },
+  ])('$name', ({answerSet, contains, report = FRESH_REPORT}) => {
+    const errors = validateAnswers(answerSet, report, CATEGORIES);
+
+    for (const code of contains) {
+      expect(codesOf(errors)).toContain(code);
+    }
   });
 
   test('--allow-undecided waives exact cover and nothing else', () => {
     expect(
-      validateAnswers(
-        answers({allowUndecided: true}),
-        {missing, shipped: []},
-        CATEGORIES
-      )
+      validateAnswers(answers({allowUndecided: true}), FRESH_REPORT, CATEGORIES)
     ).toEqual([]);
 
     // Membership still applies to whatever answers were given.
     const errors = validateAnswers(
       answers({allowUndecided: true, ships: ['app/ghost.ts']}),
-      {missing, shipped: []},
+      FRESH_REPORT,
       CATEGORIES
     );
     expect(codesOf(errors)).toEqual(['answer_not_missing']);
-  });
-
-  test('answer_not_missing rejects a bare directory standing in for its subtree', () => {
-    const errors = validateAnswers(
-      answers({
-        ships: ['app/new.ts'],
-        withholds: [withhold('docs', {reason: 'internal'})],
-      }),
-      {missing, shipped: []},
-      CATEGORIES
-    );
-
-    // The directory carries no metacharacter; membership is what rejects it.
-    expect(codesOf(errors)).toContain('answer_not_missing');
-    expect(codesOf(errors)).not.toContain('withhold_metacharacter');
-    expect(errors[0]?.paths).toEqual(['docs']);
-  });
-
-  test('answer_not_missing collects every offending path, not just the first', () => {
-    const errors = validateAnswers(
-      answers({ships: ['app/typo.ts', 'docs/typo.md']}),
-      {missing, shipped: []},
-      CATEGORIES
-    );
-
-    expect(errors[0]?.paths).toEqual(['app/typo.ts', 'docs/typo.md']);
   });
 
   test('duplicate_answer flags a path answered twice, and one answered both ways', () => {
@@ -250,7 +411,7 @@ describe('validateAnswers', () => {
         allowUndecided: true,
         ships: ['app/new.ts', 'app/new.ts'],
       }),
-      {missing, shipped: []},
+      FRESH_REPORT,
       CATEGORIES
     );
     expect(codesOf(twice)).toEqual(['duplicate_answer']);
@@ -262,130 +423,11 @@ describe('validateAnswers', () => {
         ships: ['app/new.ts'],
         withholds: [withhold('app/new.ts')],
       }),
-      {missing, shipped: []},
+      FRESH_REPORT,
       CATEGORIES
     );
     expect(codesOf(bothWays)).toEqual(['duplicate_answer']);
   });
-
-  test('withhold_metacharacter rejects a bracketed filename that IS a member', () => {
-    const errors = validateAnswers(
-      answers({
-        allowUndecided: true,
-        withholds: [withhold('docs/notes[1].md')],
-      }),
-      {missing: ['docs/notes[1].md'], shipped: []},
-      CATEGORIES
-    );
-
-    expect(codesOf(errors)).toEqual(['withhold_metacharacter']);
-  });
-
-  test.each([
-    ['a star', 'docs/*.md'],
-    ['a brace', 'docs/{a,b}.md'],
-    ['an anchor', '^docs/a.md'],
-    ['a pipe', 'docs/a|b.md'],
-    ['a backslash', String.raw`docs\a.md`],
-    ['a leading slash', '/docs/a.md'],
-    ['a trailing slash', 'docs/a/'],
-    ['a leading hash', '#docs/a.md'],
-    ['a leading space', ' docs/a.md'],
-    ['a trailing space', 'docs/a.md '],
-    ['an embedded newline', 'docs/a.md\nwiki/'],
-    ['an embedded carriage return', 'docs/a.md\rwiki/'],
-    // git C-quotes a tab in a bare `ls-files` but not in `ls-files -z`, so an
-    // exclude line carrying one masks a different file for any reader that
-    // regresses to the bare form. A space is quoted by neither, which is why
-    // it is allowed.
-    ['an embedded tab', 'docs/a\tb.md'],
-    ['an empty value', ''],
-  ])('withhold_metacharacter rejects %s', (_label, badPath) => {
-    const errors = validateAnswers(
-      answers({allowUndecided: true, withholds: [withhold(badPath)]}),
-      {missing: [badPath], shipped: []},
-      CATEGORIES
-    );
-
-    expect(codesOf(errors)).toContain('withhold_metacharacter');
-  });
-
-  test.each([
-    ['a dot and a plus', 'app/routes/_public+/home.tsx'],
-    ['a tilde and an at', 'docs/~notes@2.md'],
-    ['a comma and an equals', 'docs/a,b=c.md'],
-    // Every wiki/ title carries spaces, and .gaia/release-exclude already
-    // holds such lines. An exclude line is a literal path to every consumer,
-    // so a space is literal in all of them; refusing to write one would make
-    // a whole category of maintainer-only page unwithholdable.
-    ['an interior space', 'wiki/decisions/Sharded CI Test Matrix.md'],
-  ])('allows %s in a withhold path', (_label, goodPath) => {
-    const errors = validateAnswers(
-      answers({allowUndecided: true, withholds: [withhold(goodPath)]}),
-      {missing: [goodPath], shipped: []},
-      CATEGORIES
-    );
-
-    expect(errors).toEqual([]);
-  });
-
-  test.each([
-    ['a newline', 'internal\nwiki/decisions'],
-    ['a carriage return', 'internal\rwiki/decisions'],
-    ['an empty reason', ''],
-    ['a whitespace-only reason', ' '.repeat(3)],
-  ])('withhold_reason_invalid rejects %s', (_label, reason) => {
-    const errors = validateAnswers(
-      answers({
-        allowUndecided: true,
-        withholds: [withhold('app/new.ts', {reason})],
-      }),
-      {missing, shipped: []},
-      CATEGORIES
-    );
-
-    expect(codesOf(errors)).toEqual(['withhold_reason_invalid']);
-  });
-
-  test('unknown_category rejects a category no header declares', () => {
-    const errors = validateAnswers(
-      answers({
-        allowUndecided: true,
-        withholds: [withhold('app/new.ts', {category: 99})],
-      }),
-      {missing, shipped: []},
-      CATEGORIES
-    );
-
-    expect(codesOf(errors)).toEqual(['unknown_category']);
-    expect(errors[0]?.paths).toEqual(['app/new.ts']);
-  });
-
-  test('reports every error class in one pass', () => {
-    const errors = validateAnswers(
-      answers({
-        ships: ['app/ghost.ts'],
-        withholds: [
-          withhold('docs/*.md', {category: 99, reason: 'bad\nreason'}),
-        ],
-      }),
-      {missing, shipped: []},
-      CATEGORIES
-    );
-
-    expect(codesOf(errors)).toEqual([
-      'answer_not_missing',
-      'withhold_metacharacter',
-      'withhold_reason_invalid',
-      'unknown_category',
-      'unanswered_paths',
-    ]);
-  });
-});
-
-describe('validateAnswers (withdraw)', () => {
-  const missing = ['app/new.ts'];
-  const shipped = ['.github/FUNDING.yml', 'app/foo.ts'];
 
   test('withdrawing a shipped path is valid and leaves exact cover to the missing set', () => {
     expect(
@@ -394,7 +436,7 @@ describe('validateAnswers (withdraw)', () => {
           ships: ['app/new.ts'],
           withdraws: [withhold('.github/FUNDING.yml', {category: 3})],
         }),
-        {missing, shipped},
+        WITHDRAW_REPORT,
         CATEGORIES
       )
     ).toEqual([]);
@@ -402,37 +444,10 @@ describe('validateAnswers (withdraw)', () => {
     // A withdraw answers nothing in `missing`.
     const errors = validateAnswers(
       answers({withdraws: [withhold('app/foo.ts')]}),
-      {missing, shipped},
+      WITHDRAW_REPORT,
       CATEGORIES
     );
     expect(codesOf(errors)).toEqual(['unanswered_paths']);
-  });
-
-  test('withdraw_not_shipped rejects a path the manifest does not ship, a newly-shipping one included', () => {
-    const errors = validateAnswers(
-      answers({
-        allowUndecided: true,
-        withdraws: [withhold('app/ghost.ts'), withhold('app/new.ts')],
-      }),
-      {missing, shipped},
-      CATEGORIES
-    );
-
-    expect(codesOf(errors)).toEqual(['withdraw_not_shipped']);
-    expect(errors[0]?.paths).toEqual(['app/ghost.ts', 'app/new.ts']);
-  });
-
-  test('a withhold of an already-shipped path is still answer_not_missing', () => {
-    const errors = validateAnswers(
-      answers({
-        allowUndecided: true,
-        withholds: [withhold('app/foo.ts')],
-      }),
-      {missing, shipped},
-      CATEGORIES
-    );
-
-    expect(codesOf(errors)).toEqual(['answer_not_missing']);
   });
 
   test('a withdraw passes the same path, reason and category checks as a withhold', () => {
@@ -443,7 +458,10 @@ describe('validateAnswers (withdraw)', () => {
           withhold('app/foo.ts', {category: 99, reason: 'bad\nreason'}),
         ],
       }),
-      {missing, shipped: ['app/foo.ts', 'app/[id].ts']},
+      {
+        missing: WITHDRAW_REPORT.missing,
+        shipped: ['app/foo.ts', 'app/[id].ts'],
+      },
       CATEGORIES
     );
     expect(codesOf(errors)).toEqual([
@@ -453,23 +471,9 @@ describe('validateAnswers (withdraw)', () => {
 
     const bracketed = validateAnswers(
       answers({allowUndecided: true, withdraws: [withhold('app/[id].ts')]}),
-      {missing, shipped: ['app/[id].ts']},
+      {missing: WITHDRAW_REPORT.missing, shipped: ['app/[id].ts']},
       CATEGORIES
     );
     expect(codesOf(bracketed)).toEqual(['withhold_metacharacter']);
-  });
-
-  test('duplicate_answer catches a path both withdrawn and shipped', () => {
-    const errors = validateAnswers(
-      answers({
-        allowUndecided: true,
-        ships: ['app/foo.ts'],
-        withdraws: [withhold('app/foo.ts')],
-      }),
-      {missing, shipped},
-      CATEGORIES
-    );
-
-    expect(codesOf(errors)).toContain('duplicate_answer');
   });
 });

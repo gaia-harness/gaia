@@ -80,91 +80,33 @@ const captureStdio = (): {
   };
 };
 
-describe('run (CLI)', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('rejects unknown flags', () => {
-    sandbox.commit('seed', {
-      '.gaia/release-exclude': '# none\n',
-      '.gaia/VERSION': '0.0.1\n',
-    });
-
-    const exit = run(['--bogus'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
-  });
-
-  test.each([
-    'toString',
-    'valueOf',
-    'constructor',
-    'hasOwnProperty',
-    '__proto__',
-  ])('rejects the prototype-member token %s as an unknown flag', (token) => {
-    sandbox.commit('seed', {
-      '.gaia/release-exclude': '# none\n',
-      '.gaia/VERSION': '0.0.1\n',
-    });
-
-    const exit = run([token], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
-  });
-});
-
-describe('run --check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('--check is incompatible with --out', () => {
-    sandbox.commit('seed', {
-      '.gaia/release-exclude': '# none\n',
-      '.gaia/VERSION': '1.0.0\n',
-    });
-
-    const exit = run(['--check', '--out', 'foo.json'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('incompatible');
-  });
-
-  test('--json requires --check', () => {
-    sandbox.commit('seed', {
-      '.gaia/release-exclude': '# none\n',
-      '.gaia/VERSION': '1.0.0\n',
-    });
-
-    const exit = run(['--json'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--json requires --check');
-  });
-});
-
 const GENERATED_AT = '2026-05-07T00:00:00.000Z';
 
-describe('run (answer gate)', () => {
+type GrammarCase = {
+  argv: string[];
+  message: string;
+  name: string;
+  notMessages: string[];
+  version: string;
+};
+
+// Every flag in an `invalid_arguments` row is known, so an unknown-flag
+// refusal there is the wrong reason.
+const invalidArguments = (label: string, argv: string[]): GrammarCase => ({
+  argv,
+  message: 'invalid_arguments',
+  name: `rejects ${label}`,
+  notMessages: ['unknown flag'],
+  version: '1.0.0',
+});
+
+const withhold = (target: string, ...rest: string[]): string[] => [
+  '--withhold',
+  target,
+  ...rest,
+];
+
+describe('run (CLI flag grammar)', () => {
   let sandbox: Sandbox;
   let stdio: ReturnType<typeof captureStdio>;
 
@@ -179,88 +121,118 @@ describe('run (answer gate)', () => {
     vi.restoreAllMocks();
   });
 
-  const runGate = (argv: readonly string[]): number =>
-    run(argv, {cwd: sandbox.root, generatedAt: GENERATED_AT});
-
-  test.each([
-    ['--check with --ship', ['--check', '--ship', 'app/new.ts']],
-    ['--check with --allow-undecided', ['--check', '--allow-undecided']],
-    [
-      '--check with --withhold',
-      [
-        '--check',
-        '--withhold',
-        'app/new.ts',
-        '--category',
-        '1',
-        '--reason',
-        'r',
-      ],
-    ],
-    ['--category with no open --withhold', ['--category', '1']],
-    ['--reason with no open --withhold', ['--reason', 'r']],
-    [
+  test.each<GrammarCase>([
+    {
+      argv: ['--bogus'],
+      message: 'unknown flag',
+      name: 'rejects unknown flags',
+      notMessages: [],
+      version: '0.0.1',
+    },
+    ...[
+      'toString',
+      'valueOf',
+      'constructor',
+      'hasOwnProperty',
+      '__proto__',
+    ].map((token) => ({
+      argv: [token],
+      message: 'unknown flag',
+      name: `rejects the prototype-member token ${token} as an unknown flag`,
+      notMessages: [],
+      version: '0.0.1',
+    })),
+    {
+      argv: ['--check', '--out', 'foo.json'],
+      message: 'incompatible',
+      name: '--check is incompatible with --out',
+      notMessages: [],
+      version: '1.0.0',
+    },
+    {
+      argv: ['--json'],
+      message: '--json requires --check',
+      name: '--json requires --check',
+      notMessages: [],
+      version: '1.0.0',
+    },
+    invalidArguments('--check with --ship', [
+      '--check',
+      '--ship',
+      'app/new.ts',
+    ]),
+    invalidArguments('--check with --allow-undecided', [
+      '--check',
+      '--allow-undecided',
+    ]),
+    invalidArguments('--check with --withhold', [
+      '--check',
+      ...withhold('app/new.ts', '--category', '1', '--reason', 'r'),
+    ]),
+    invalidArguments('--category with no open --withhold', ['--category', '1']),
+    invalidArguments('--reason with no open --withhold', ['--reason', 'r']),
+    invalidArguments(
       'a --withhold with no --category',
-      ['--withhold', 'app/new.ts', '--reason', 'r'],
-    ],
-    [
+      withhold('app/new.ts', '--reason', 'r')
+    ),
+    invalidArguments(
       'a --withhold with no --reason',
-      ['--withhold', 'app/new.ts', '--category', '1'],
-    ],
-    [
+      withhold('app/new.ts', '--category', '1')
+    ),
+    invalidArguments(
       'two --category on one --withhold',
-      [
-        '--withhold',
+      withhold(
         'app/new.ts',
         '--category',
         '1',
         '--category',
         '2',
         '--reason',
-        'r',
-      ],
-    ],
-    [
+        'r'
+      )
+    ),
+    invalidArguments(
       'a non-numeric --category',
-      ['--withhold', 'app/new.ts', '--category', 'one', '--reason', 'r'],
-    ],
-    [
-      '--check with --withdraw',
-      [
-        '--check',
-        '--withdraw',
-        'app/foo.ts',
-        '--category',
-        '1',
-        '--reason',
-        'r',
-      ],
-    ],
-    [
-      'a --withdraw with no --category',
-      ['--withdraw', 'app/foo.ts', '--reason', 'r'],
-    ],
-    [
-      'a --withdraw with no --reason',
-      ['--withdraw', 'app/foo.ts', '--category', '1'],
-    ],
-    [
-      'a --withdraw left open by the next --withhold',
-      [
-        '--withdraw',
-        'app/foo.ts',
-        '--withhold',
-        'app/new.ts',
-        '--category',
-        '1',
-        '--reason',
-        'r',
-      ],
-    ],
-  ])('rejects %s', (_label, argv) => {
-    expect(runGate(argv)).toBe(1);
-    expect(stdio.errors.join('')).toContain('invalid_arguments');
-    // Every flag here is known, so an unknown-flag refusal is the wrong reason.
-    expect(stdio.errors.join('')).not.toContain('unknown flag');
+      withhold('app/new.ts', '--category', 'one', '--reason', 'r')
+    ),
+    invalidArguments('--check with --withdraw', [
+      '--check',
+      '--withdraw',
+      'app/foo.ts',
+      '--category',
+      '1',
+      '--reason',
+      'r',
+    ]),
+    invalidArguments('a --withdraw with no --category', [
+      '--withdraw',
+      'app/foo.ts',
+      '--reason',
+      'r',
+    ]),
+    invalidArguments('a --withdraw with no --reason', [
+      '--withdraw',
+      'app/foo.ts',
+      '--category',
+      '1',
+    ]),
+    invalidArguments('a --withdraw left open by the next --withhold', [
+      '--withdraw',
+      'app/foo.ts',
+      ...withhold('app/new.ts', '--category', '1', '--reason', 'r'),
+    ]),
+  ])('$name', ({argv, message, notMessages, version}) => {
+    sandbox.commit('seed', {
+      '.gaia/release-exclude': '# none\n',
+      '.gaia/VERSION': `${version}\n`,
+    });
+
+    const exit = run(argv, {cwd: sandbox.root, generatedAt: GENERATED_AT});
+    expect(exit).toBe(1);
+    expect(stdio.errors.join('')).toContain(message);
+
+    for (const unwanted of notMessages) {
+      expect(stdio.errors.join('')).not.toContain(unwanted);
+    }
   });
 });

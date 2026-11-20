@@ -79,40 +79,41 @@ const baseArgs = {
 };
 
 describe('computeCandidates, attribution and emit', () => {
-  test('emits exactly the keyed units; total_keyed_count matches a hand-enumerated expectation', () => {
-    const prs = [
-      pr({
-        entries: [
-          entry({key: {line: 1, path: 'a.ts'}}),
-          entry({key: {line: 2, path: 'b.ts'}}),
-        ],
-      }),
-      pr({entries: [entry({key: {line: 3, path: 'c.ts'}})], number: 2}),
-    ];
-
-    const result = computeCandidates({...baseArgs, prs});
-
-    expect(result.total_keyed_count).toBe(3);
-    expect(result.candidate_count).toBe(3);
-  });
-
-  test('both canonical dispositions appear, each candidate tagged per a hand-enumerated expectation', () => {
-    const prs = [
-      pr({
-        entries: [
-          entry({disposition: 'accept', key: {line: 1, path: 'a.ts'}}),
-          entry({disposition: 'waive', key: {line: 2, path: 'b.ts'}}),
-        ],
-      }),
-    ];
-
-    const result = computeCandidates({...baseArgs, prs});
-    const byPath = new Map(
-      result.candidates.map((candidate) => [candidate.path, candidate])
-    );
-
-    expect(byPath.get('a.ts')?.disposition).toBe('accept');
-    expect(byPath.get('b.ts')?.disposition).toBe('waive');
+  test.each<{expected: object; prs: CandidateInputPr[]; title: string}>([
+    {
+      expected: {candidate_count: 3, total_keyed_count: 3},
+      prs: [
+        pr({
+          entries: [
+            entry({key: {line: 1, path: 'a.ts'}}),
+            entry({key: {line: 2, path: 'b.ts'}}),
+          ],
+        }),
+        pr({entries: [entry({key: {line: 3, path: 'c.ts'}})], number: 2}),
+      ],
+      title:
+        'emits exactly the keyed units; total_keyed_count matches a hand-enumerated expectation',
+    },
+    {
+      expected: {
+        candidates: expect.arrayContaining([
+          expect.objectContaining({disposition: 'accept', path: 'a.ts'}),
+          expect.objectContaining({disposition: 'waive', path: 'b.ts'}),
+        ]),
+      },
+      prs: [
+        pr({
+          entries: [
+            entry({disposition: 'accept', key: {line: 1, path: 'a.ts'}}),
+            entry({disposition: 'waive', key: {line: 2, path: 'b.ts'}}),
+          ],
+        }),
+      ],
+      title:
+        'both canonical dispositions appear, each candidate tagged per a hand-enumerated expectation',
+    },
+  ])('$title', ({expected, prs}) => {
+    expect(computeCandidates({...baseArgs, prs})).toMatchObject(expected);
   });
 
   test('malformed entries carry all five contracted fields, tagged with pr_number', () => {
@@ -176,7 +177,22 @@ describe('computeCandidates, store suppression modes', () => {
     );
   });
 
-  test('content-bound mode: resolved content differing from the stored cited_line_text still offers the residual', () => {
+  test.each([
+    {
+      expectedCount: 1,
+      resolvedText: 'a completely different line now',
+      storedText: 'the old cited text',
+      title:
+        'content-bound mode: resolved content differing from the stored cited_line_text still offers the residual',
+    },
+    {
+      expectedCount: 0,
+      resolvedText: 'exact match',
+      storedText: 'exact match',
+      title:
+        'content-bound mode: matching stored content suppresses the residual',
+    },
+  ])('$title', ({expectedCount, resolvedText, storedText}) => {
     const prs = [
       pr({
         entries: [entry({key: {line: 5, path: 'app/x.ts'}})],
@@ -185,7 +201,7 @@ describe('computeCandidates, store suppression modes', () => {
     ];
     const storeRecords: StoreRecord[] = [
       {
-        cited_line_text: 'the old cited text',
+        cited_line_text: storedText,
         class: 'holistic/unclassified',
         date: '2026-01-01T00:00:00Z',
         disposition: 'dismissed',
@@ -199,45 +215,13 @@ describe('computeCandidates, store suppression modes', () => {
     const result = computeCandidates({
       ...baseArgs,
       prs,
-      resolve: stillResolverReturning('a completely different line now'),
+      resolve: stillResolverReturning(resolvedText),
       storeRecords,
       suppressionMode: 'content-bound',
     });
 
-    expect(result.remaining_count).toBe(1);
-    expect(result.candidate_count).toBe(1);
-  });
-
-  test('content-bound mode: matching stored content suppresses the residual', () => {
-    const prs = [
-      pr({
-        entries: [entry({key: {line: 5, path: 'app/x.ts'}})],
-        headRefOid: 'sha1',
-      }),
-    ];
-    const storeRecords: StoreRecord[] = [
-      {
-        cited_line_text: 'exact match',
-        class: 'holistic/unclassified',
-        date: '2026-01-01T00:00:00Z',
-        disposition: 'dismissed',
-        line: 5,
-        path: 'app/x.ts',
-        reason: 'not useful',
-        schema: 'v1',
-        source_pr: 1,
-      },
-    ];
-    const result = computeCandidates({
-      ...baseArgs,
-      prs,
-      resolve: stillResolverReturning('exact match'),
-      storeRecords,
-      suppressionMode: 'content-bound',
-    });
-
-    expect(result.remaining_count).toBe(0);
-    expect(result.candidate_count).toBe(0);
+    expect(result.remaining_count).toBe(expectedCount);
+    expect(result.candidate_count).toBe(expectedCount);
   });
 
   test('resolution budget: exactly the store-coordinate matches plus the emitted batch are resolved, each coordinate once', () => {
@@ -321,30 +305,42 @@ describe('computeCandidates, counts, ordering, and cursor', () => {
     expect(mergedAts).toEqual(mergedAts.toSorted((a, b) => a - b));
   });
 
-  test('aged_candidate_count is computed pre-cap: a cap of 3 over 8 aged survivors still reports 8 aged, 3 emitted', () => {
-    const now = new Date('2026-03-01T00:00:00Z');
-    const prs = Array.from({length: 8}, (_, index) =>
-      pr({
-        entries: [entry({key: {line: 1, path: `app/aged${index}.ts`}})],
-        mergedAt: '2026-01-01T00:00:00Z', // 59 days before `now`, well past the 30-day threshold
-        number: index + 1,
-      })
-    );
-
-    const result = computeCandidates({...baseArgs, cap: 3, now, prs});
-
-    expect(result.aged_candidate_count).toBe(8);
-    expect(result.candidate_count).toBe(3);
-  });
-
-  test('a cap above the survivor count emits every survivor', () => {
+  test.each<{
+    cap: number;
+    expected: object;
+    prs: () => CandidateInputPr[];
+    title: string;
+  }>([
+    {
+      cap: 3,
+      expected: {aged_candidate_count: 8, candidate_count: 3},
+      prs: () =>
+        Array.from({length: 8}, (_, index) =>
+          pr({
+            entries: [entry({key: {line: 1, path: `app/aged${index}.ts`}})],
+            // 59 days before `now`, well past the 30-day threshold
+            mergedAt: '2026-01-01T00:00:00Z',
+            number: index + 1,
+          })
+        ),
+      title:
+        'aged_candidate_count is computed pre-cap: a cap of 3 over 8 aged survivors still reports 8 aged, 3 emitted',
+    },
+    {
+      cap: Number.MAX_SAFE_INTEGER,
+      expected: {candidate_count: 25},
+      prs: corpusOf25,
+      title: 'a cap above the survivor count emits every survivor',
+    },
+  ])('$title', ({cap, expected, prs}) => {
     const result = computeCandidates({
       ...baseArgs,
-      cap: Number.MAX_SAFE_INTEGER,
-      prs: corpusOf25(),
+      cap,
+      now: new Date('2026-03-01T00:00:00Z'),
+      prs: prs(),
     });
 
-    expect(result.candidate_count).toBe(25);
+    expect(result).toMatchObject(expected);
   });
 
   test('every emitted candidate carries a cursor_token that round-trips to its own coordinate', () => {

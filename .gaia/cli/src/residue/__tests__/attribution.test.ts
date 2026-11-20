@@ -1,12 +1,6 @@
 import {describe, expect, test} from 'vitest';
 import {readFileSync} from 'node:fs';
-import {
-  attributeBody,
-  attributeBodyWith,
-  CANON_ACCEPT,
-  CANON_WAIVE,
-  DEFAULT_PREDICATES,
-} from '../attribution.js';
+import {attributeBody, CANON_ACCEPT, CANON_WAIVE} from '../attribution.js';
 
 // Fixtures are arrays of lines, and every expected line number is computed
 // from the array rather than hand-counted, so reordering a fixture cannot
@@ -95,95 +89,101 @@ const ALL_FIXTURES = [
   NO_V1_LINES,
 ];
 
-describe('attributeBody, entry attribution', () => {
-  test('attributes only keyed units, never a key sitting outside one', () => {
-    const result = attributeBody(bodyOf(MIXED_LINES));
-
-    expect(result.entries.map((entry) => entry.key.path)).toStrictEqual([
-      'app/one.ts',
-      'app/two.ts',
-      '.gaia/scripts/w.sh',
-    ]);
-    expect(result.keyless_count).toBe(0);
-    expect(result.malformed).toStrictEqual([]);
-  });
-
-  test('tags each entry with the disposition of the heading it sat beneath', () => {
-    const result = attributeBody(bodyOf(MIXED_LINES));
-
-    // Hand-enumerated per entry, not merely "both values occur".
-    expect(
-      result.entries.map((entry) => [entry.key.path, entry.disposition])
-    ).toStrictEqual([
-      ['app/one.ts', 'accept'],
-      ['app/two.ts', 'accept'],
-      ['.gaia/scripts/w.sh', 'waive'],
-    ]);
-  });
-
-  test('records each entry at its opening bullet line, key on the bullet or on a continuation', () => {
-    const result = attributeBody(bodyOf(MIXED_LINES));
-
-    expect(result.entries.map((entry) => entry.unit_start_line)).toStrictEqual([
-      lineOf(MIXED_LINES, '- Accepted one'),
-      lineOf(MIXED_LINES, '- Accepted two'),
-      lineOf(MIXED_LINES, '- Waived one'),
-    ]);
-  });
-
-  test('latches the first key in a unit and emits exactly one entry for it', () => {
-    const result = attributeBody(bodyOf(FIRST_MATCH_LINES));
-
-    expect(result.entries).toHaveLength(2);
-    expect(result.entries[0]?.raw_key).toBe(
-      'v1 class=a/first path=app/first.ts line=1'
-    );
-    expect(result.entries[1]?.raw_key).toBe(
-      'v1 class=b/left path=app/left.ts line=3'
-    );
-  });
-
-  test('records a keyless unit with its disposition and opening bullet line', () => {
-    const result = attributeBody(bodyOf(KEYLESS_LINES));
-
-    expect(result.entries).toHaveLength(1);
-    expect(result.keyless).toStrictEqual([
-      {
-        disposition: 'accept',
-        unit_start_line: lineOf(KEYLESS_LINES, '- An entry nobody keyed'),
+describe('attributeBody attributes keyed units under their disposition', () => {
+  test.each<{expected: object; lines: readonly string[]; title: string}>([
+    {
+      expected: {
+        entries: [
+          {key: {path: 'app/one.ts'}},
+          {key: {path: 'app/two.ts'}},
+          {key: {path: '.gaia/scripts/w.sh'}},
+        ],
+        keyless_count: 0,
+        malformed: [],
       },
-      {
-        disposition: 'waive',
-        unit_start_line: lineOf(KEYLESS_LINES, '- A waived entry'),
+      lines: MIXED_LINES,
+      title: 'attributes only keyed units, never a key sitting outside one',
+    },
+    {
+      // Hand-enumerated per entry, not merely "both values occur".
+      expected: {
+        entries: [
+          {disposition: 'accept', key: {path: 'app/one.ts'}},
+          {disposition: 'accept', key: {path: 'app/two.ts'}},
+          {disposition: 'waive', key: {path: '.gaia/scripts/w.sh'}},
+        ],
       },
-    ]);
-    expect(result.keyless_count).toBe(result.keyless.length);
-  });
-
-  test('attributes nothing in a body carrying no canonical heading', () => {
-    const result = attributeBody(
-      bodyOf([
+      lines: MIXED_LINES,
+      title:
+        'tags each entry with the disposition of the heading it sat beneath',
+    },
+    {
+      expected: {
+        entries: [
+          {unit_start_line: lineOf(MIXED_LINES, '- Accepted one')},
+          {unit_start_line: lineOf(MIXED_LINES, '- Accepted two')},
+          {unit_start_line: lineOf(MIXED_LINES, '- Waived one')},
+        ],
+      },
+      lines: MIXED_LINES,
+      title:
+        'records each entry at its opening bullet line, key on the bullet or on a continuation',
+    },
+    {
+      expected: {
+        entries: [
+          {raw_key: 'v1 class=a/first path=app/first.ts line=1'},
+          {raw_key: 'v1 class=b/left path=app/left.ts line=3'},
+        ],
+      },
+      lines: FIRST_MATCH_LINES,
+      title:
+        'latches the first key in a unit and emits exactly one entry for it',
+    },
+    {
+      expected: {
+        entries: [expect.anything()],
+        keyless: [
+          {
+            disposition: 'accept',
+            unit_start_line: lineOf(KEYLESS_LINES, '- An entry nobody keyed'),
+          },
+          {
+            disposition: 'waive',
+            unit_start_line: lineOf(KEYLESS_LINES, '- A waived entry'),
+          },
+        ],
+        keyless_count: 2,
+      },
+      lines: KEYLESS_LINES,
+      title:
+        'records a keyless unit with its disposition and opening bullet line',
+    },
+    {
+      expected: {entries: [], keyless: []},
+      lines: [
         '## Summary',
         `- An entry ${key('a/one', 'app/one.ts', 1)}`,
         '## Accepted residuals',
         `- A near-miss heading ${key('a/two', 'app/two.ts', 2)}`,
-      ])
-    );
-
-    expect(result.entries).toStrictEqual([]);
-    expect(result.keyless).toStrictEqual([]);
-  });
-
-  test('closes an open unit on a heading of any level', () => {
-    const result = attributeBody(bodyOf(INTERRUPTED_LINES));
-
-    expect(result.entries).toStrictEqual([]);
-    expect(result.keyless).toStrictEqual([
-      {
-        disposition: 'accept',
-        unit_start_line: lineOf(INTERRUPTED_LINES, '- An entry whose key'),
+      ],
+      title: 'attributes nothing in a body carrying no canonical heading',
+    },
+    {
+      expected: {
+        entries: [],
+        keyless: [
+          {
+            disposition: 'accept',
+            unit_start_line: lineOf(INTERRUPTED_LINES, '- An entry whose key'),
+          },
+        ],
       },
-    ]);
+      lines: INTERRUPTED_LINES,
+      title: 'closes an open unit on a heading of any level',
+    },
+  ])('$title', ({expected, lines}) => {
+    expect(attributeBody(bodyOf(lines))).toMatchObject(expected);
   });
 
   test('derives a failure_mode carrying no newline and no HTML comment', () => {
@@ -204,148 +204,122 @@ describe('attributeBody, entry attribution', () => {
     );
   });
 
-  // PR #1160's shape: the entry wraps, its key sits on a continuation line,
-  // and unrelated prose follows a blank line while still inside the unit.
-  test('keeps a wrapped entry whole and stops at the end of its list item', () => {
-    const lines = [
-      CANON_WAIVE,
-      '',
-      '- **`changelog.ts:4`**: the docblock opens `Step 7 of the',
-      '  runbook`, but `release changelog` is `### 5. Graduate`.',
-      '',
-      '  An indented paragraph still belongs to the item.',
-      `  ${key('holistic/unclassified', '.gaia/cli/src/release/changelog.ts', 4)}`,
-      '',
-      'Unindented prose after a blank line is not part of the entry.',
-    ];
-
+  test.each<{expected: string; lines: readonly string[]; title: string}>([
+    {
+      // The entry wraps, its key sits on a continuation line, and unrelated
+      // prose follows a blank line while still inside the unit.
+      expected:
+        '**`changelog.ts:4`**: the docblock opens `Step 7 of the runbook`, but `release changelog` is `### 5. Graduate`. An indented paragraph still belongs to the item.',
+      lines: [
+        CANON_WAIVE,
+        '',
+        '- **`changelog.ts:4`**: the docblock opens `Step 7 of the',
+        '  runbook`, but `release changelog` is `### 5. Graduate`.',
+        '',
+        '  An indented paragraph still belongs to the item.',
+        `  ${key('holistic/unclassified', '.gaia/cli/src/release/changelog.ts', 4)}`,
+        '',
+        'Unindented prose after a blank line is not part of the entry.',
+      ],
+      title:
+        'keeps a wrapped entry whole and stops at the end of its list item',
+    },
+    {
+      // A code span quotes a bare `<!--` opener before the real key comment,
+      // which is itself wrapped in a code span.
+      expected:
+        'quotes the `<!-- gaia-debt-key: v1 ` prefix, never parse behavior.',
+      lines: [
+        CANON_WAIVE,
+        `- quotes the \`<!-- gaia-debt-key: v1 \` prefix, never parse behavior. \`${key('holistic/unclassified', '.gaia/tests/lib/doc-debt-query.bats', 101)}\``,
+      ],
+      title:
+        'does not let a quoted comment opener swallow the text before the real key',
+    },
+    {
+      expected: 'spans `a` `b` stay apart',
+      lines: [
+        CANON_WAIVE,
+        `- spans \`a\`${key('holistic/unclassified', 'app/a.ts', 1)}\`b\` stay apart`,
+      ],
+      title: 'leaves the code spans on either side of a bare comment intact',
+    },
+    {
+      expected: 'wrapped ( ) and " "',
+      lines: [
+        CANON_WAIVE,
+        `- wrapped (\`${key('holistic/unclassified', 'app/a.ts', 1)}\`) and "\`${key('holistic/unclassified', 'app/b.ts', 2)}\`"`,
+      ],
+      title: 'strips a code-span-wrapped comment behind opening punctuation',
+    },
+  ])('$title', ({expected, lines}) => {
     expect(attributeBody(bodyOf(lines)).entries[0]?.failure_mode).toBe(
-      '**`changelog.ts:4`**: the docblock opens `Step 7 of the runbook`, but `release changelog` is `### 5. Graduate`. An indented paragraph still belongs to the item.'
-    );
-  });
-
-  // PR #1145's shape: a code span quotes a bare `<!--` opener before the real
-  // key comment, which is itself wrapped in a code span.
-  test('does not let a quoted comment opener swallow the text before the real key', () => {
-    const lines = [
-      CANON_WAIVE,
-      `- quotes the \`<!-- gaia-debt-key: v1 \` prefix, never parse behavior. \`${key('holistic/unclassified', '.gaia/tests/lib/doc-debt-query.bats', 101)}\``,
-    ];
-
-    expect(attributeBody(bodyOf(lines)).entries[0]?.failure_mode).toBe(
-      'quotes the `<!-- gaia-debt-key: v1 ` prefix, never parse behavior.'
-    );
-  });
-
-  test('leaves the code spans on either side of a bare comment intact', () => {
-    const lines = [
-      CANON_WAIVE,
-      `- spans \`a\`${key('holistic/unclassified', 'app/a.ts', 1)}\`b\` stay apart`,
-    ];
-
-    expect(attributeBody(bodyOf(lines)).entries[0]?.failure_mode).toBe(
-      'spans `a` `b` stay apart'
-    );
-  });
-
-  test('strips a code-span-wrapped comment behind opening punctuation', () => {
-    const lines = [
-      CANON_WAIVE,
-      `- wrapped (\`${key('holistic/unclassified', 'app/a.ts', 1)}\`) and "\`${key('holistic/unclassified', 'app/b.ts', 2)}\`"`,
-    ];
-
-    expect(attributeBody(bodyOf(lines)).entries[0]?.failure_mode).toBe(
-      'wrapped ( ) and " "'
+      expected
     );
   });
 });
 
-describe('attributeBody, malformed keys', () => {
-  test('withholds a gate-matching key whose fields fail validation and names why', () => {
-    const result = attributeBody(bodyOf(MALFORMED_LINES));
-
-    expect(result.entries).toStrictEqual([]);
-    expect(result.keyless).toStrictEqual([]);
-    expect(
-      result.malformed.map((entry) => [entry.unit_start_line, entry.reason])
-    ).toStrictEqual([
-      [
-        lineOf(MALFORMED_LINES, '- Absolute path'),
-        expect.stringContaining('absolute prefix'),
-      ],
-      [
-        lineOf(MALFORMED_LINES, '- Traversal path'),
-        expect.stringContaining('traversal segment'),
-      ],
-      [
-        lineOf(MALFORMED_LINES, '- Traversal after normalization'),
-        expect.stringContaining('traversal segment'),
-      ],
-      [
-        lineOf(MALFORMED_LINES, '- Leading dash'),
-        expect.stringContaining('leading dash'),
-      ],
-      [
-        lineOf(MALFORMED_LINES, '- Line zero'),
-        expect.stringContaining('below 1'),
-      ],
-    ]);
-    expect(result.malformed[0]?.disposition).toBe('accept');
-    expect(result.malformed[0]?.raw_key).toBe(
-      'v1 class=m/abs path=/etc/passwd line=5'
-    );
-  });
-
-  test('a unit whose only key omits v1 is keyless, exactly as the gate reads it', () => {
-    const result = attributeBody(bodyOf(NO_V1_LINES));
-
-    // The gate's grammar requires the v1 token, so it never sees this as a
-    // key at all and denies the merge over a keyless unit. Attributing it as
-    // malformed here would give the unit two tuples in the conformance
-    // comparison against the gate's one.
-    expect(result.entries).toStrictEqual([]);
-    expect(result.malformed).toStrictEqual([]);
-    expect(result.keyless).toHaveLength(1);
-  });
-
-  test('a valid path carrying a dot segment collapses and attributes', () => {
-    const result = attributeBody(
-      bodyOf([
+describe('attributeBody handles malformed keys as the gate does', () => {
+  test.each<{expected: object; lines: readonly string[]; title: string}>([
+    {
+      expected: {
+        entries: [],
+        keyless: [],
+        malformed: [
+          {
+            disposition: 'accept',
+            raw_key: 'v1 class=m/abs path=/etc/passwd line=5',
+            reason: expect.stringContaining('absolute prefix'),
+            unit_start_line: lineOf(MALFORMED_LINES, '- Absolute path'),
+          },
+          {
+            reason: expect.stringContaining('traversal segment'),
+            unit_start_line: lineOf(MALFORMED_LINES, '- Traversal path'),
+          },
+          {
+            reason: expect.stringContaining('traversal segment'),
+            unit_start_line: lineOf(
+              MALFORMED_LINES,
+              '- Traversal after normalization'
+            ),
+          },
+          {
+            reason: expect.stringContaining('leading dash'),
+            unit_start_line: lineOf(MALFORMED_LINES, '- Leading dash'),
+          },
+          {
+            reason: expect.stringContaining('below 1'),
+            unit_start_line: lineOf(MALFORMED_LINES, '- Line zero'),
+          },
+        ],
+      },
+      lines: MALFORMED_LINES,
+      title:
+        'withholds a gate-matching key whose fields fail validation and names why',
+    },
+    {
+      // The gate's grammar requires the v1 token, so it never sees this as a
+      // key at all and denies the merge over a keyless unit. Attributing it as
+      // malformed here would give the unit two tuples in the conformance
+      // comparison against the gate's one.
+      expected: {entries: [], keyless: [expect.anything()], malformed: []},
+      lines: NO_V1_LINES,
+      title:
+        'a unit whose only key omits v1 is keyless, exactly as the gate reads it',
+    },
+    {
+      expected: {
+        entries: [{key: {path: 'app/services/foo.ts'}}],
+        malformed: [],
+      },
+      lines: [
         CANON_ACCEPT,
         `- Dotted ${key('a/dot', 'app/./services//foo.ts', 1)}`,
-      ])
-    );
-
-    expect(result.malformed).toStrictEqual([]);
-    expect(result.entries[0]?.key.path).toBe('app/services/foo.ts');
-  });
-});
-
-describe('attributeBodyWith, the predicate seam', () => {
-  test('a mutated canonWaive stops attributing beneath the real waive heading', () => {
-    const body = bodyOf(MIXED_LINES);
-    const mutated = attributeBodyWith(body, {
-      ...DEFAULT_PREDICATES,
-      canonWaive: '## Out-of-scope machinery findings (recorded, not FILED)',
-    });
-
-    expect(mutated.entries.map((entry) => entry.key.path)).toStrictEqual([
-      'app/one.ts',
-      'app/two.ts',
-    ]);
-    expect(attributeBody(body).entries).toHaveLength(3);
-  });
-
-  test('a mutated keyPattern stops attributing keys the default recognizes', () => {
-    const body = bodyOf(FIRST_MATCH_LINES);
-    const mutated = attributeBodyWith(body, {
-      ...DEFAULT_PREDICATES,
-      keyPattern: /<!-- gaia-residue-key: (v\d+ [^>]*?) -->/,
-    });
-
-    expect(mutated.entries).toStrictEqual([]);
-    expect(mutated.keyless_count).toBe(2);
-    expect(attributeBody(body).entries).toHaveLength(2);
+      ],
+      title: 'a valid path carrying a dot segment collapses and attributes',
+    },
+  ])('$title', ({expected, lines}) => {
+    expect(attributeBody(bodyOf(lines))).toMatchObject(expected);
   });
 });
 

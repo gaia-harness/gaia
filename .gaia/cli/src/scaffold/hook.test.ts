@@ -130,165 +130,137 @@ describe('gaia scaffold hook', () => {
     );
   });
 
-  test('renders typed params from --params', () => {
-    const stdout = captureStdout();
+  describe('hook --params and --returns render typed signatures', () => {
+    test.each([
+      {
+        args: ['useFoo', '--params', 'id:string,count:number'],
+        hookContains:
+          'export const useFoo = (id: string, count: number): void => {',
+        name: 'renders typed params from --params',
+        testContains: ["renderHook(() => useFoo('', 0))"],
+      },
+      {
+        args: ['useFoo', '--returns', 'string'],
+        hookContains: 'export const useFoo = (): string => {',
+        name: 'renders return-type annotation from --returns',
+        testContains: [] as string[],
+      },
+      {
+        args: ['useFoo', '--params', 'id:string', '--returns', 'boolean'],
+        hookContains: 'export const useFoo = (id: string): boolean => {',
+        name: 'combines --params and --returns',
+        testContains: [] as string[],
+      },
+    ])('$name', ({args, hookContains, testContains}) => {
+      const stdout = captureStdout();
 
-    try {
-      const code = run(['useFoo', '--params', 'id:string,count:number'], {
-        repoRoot: sandbox.repoRoot,
-      });
+      try {
+        expect(run(args, {repoRoot: sandbox.repoRoot})).toBe(0);
+      } finally {
+        stdout.restore();
+      }
 
-      expect(code).toBe(0);
-    } finally {
-      stdout.restore();
-    }
+      expect(
+        read(path.join(sandbox.repoRoot, 'app/hooks/use-foo.ts'))
+      ).toContain(hookContains);
 
-    const hookContents = read(
-      path.join(sandbox.repoRoot, 'app/hooks/use-foo.ts')
-    );
-
-    expect(hookContents).toContain(
-      'export const useFoo = (id: string, count: number): void => {'
-    );
-
-    const testContents = read(
-      path.join(sandbox.repoRoot, 'app/hooks/tests/use-foo.test.ts')
-    );
-
-    expect(testContents).toContain("renderHook(() => useFoo('', 0))");
+      for (const fragment of testContains) {
+        expect(
+          read(path.join(sandbox.repoRoot, 'app/hooks/tests/use-foo.test.ts'))
+        ).toContain(fragment);
+      }
+    });
   });
 
-  test('renders return-type annotation from --returns', () => {
-    const stdout = captureStdout();
+  describe('hook file naming follows the kebab convention', () => {
+    test.each([
+      {
+        absent: [] as string[],
+        contains: {
+          'app/hooks/tests/use-toggle.test.ts': [
+            "import {useToggle} from '../use-toggle';",
+            'renderHook(() => useToggle())',
+          ],
+          'app/hooks/use-toggle.ts': ['export const useToggle = (): void => {'],
+        },
+        exists: [] as string[],
+        name: 'a kebab name emits a kebab file exporting the camelCase hook',
+        names: ['use-toggle'],
+      },
+      {
+        absent: ['app/hooks/useCounter.ts'],
+        contains: {
+          'app/hooks/tests/use-counter.test.ts': ["from '../use-counter'"],
+          'app/hooks/use-counter.ts': [
+            'export const useCounter = (): void => {',
+          ],
+        },
+        exists: ['app/hooks/use-toggle-open.ts'],
+        name: 'a camelCase name emits the kebab file name for the same hook',
+        names: ['useCounter', 'useToggleOpen'],
+      },
+    ])('$name', ({absent, contains, exists, names}) => {
+      const stdout = captureStdout();
 
-    try {
-      const code = run(['useFoo', '--returns', 'string'], {
-        repoRoot: sandbox.repoRoot,
-      });
+      try {
+        for (const hookName of names) {
+          expect(run([hookName], {repoRoot: sandbox.repoRoot})).toBe(0);
+        }
+      } finally {
+        stdout.restore();
+      }
 
-      expect(code).toBe(0);
-    } finally {
-      stdout.restore();
-    }
+      for (const [file, fragments] of Object.entries(contains)) {
+        for (const fragment of fragments) {
+          expect(read(path.join(sandbox.repoRoot, file))).toContain(fragment);
+        }
+      }
 
-    const hookContents = read(
-      path.join(sandbox.repoRoot, 'app/hooks/use-foo.ts')
-    );
+      for (const file of exists) {
+        expect(existsSync(path.join(sandbox.repoRoot, file))).toBe(true);
+      }
 
-    expect(hookContents).toContain('export const useFoo = (): string => {');
+      for (const file of absent) {
+        expect(existsSync(path.join(sandbox.repoRoot, file))).toBe(false);
+      }
+    });
   });
 
-  test('combines --params and --returns', () => {
-    const stdout = captureStdout();
-
-    try {
-      const code = run(
-        ['useFoo', '--params', 'id:string', '--returns', 'boolean'],
-        {repoRoot: sandbox.repoRoot}
-      );
-
-      expect(code).toBe(0);
-    } finally {
-      stdout.restore();
-    }
-
-    const hookContents = read(
-      path.join(sandbox.repoRoot, 'app/hooks/use-foo.ts')
-    );
-
-    expect(hookContents).toContain(
-      'export const useFoo = (id: string): boolean => {'
-    );
-  });
-
-  test('rejects names that do not start with `use`', () => {
-    const stderr = captureStderr();
-
-    try {
-      const code = run(['foo'], {repoRoot: sandbox.repoRoot});
-
-      expect(code).toBe(1);
-    } finally {
-      stderr.restore();
-    }
-
-    const payload = JSON.parse(stderr.written.join('').trim()) as {
-      code: string;
-    };
-
-    expect(payload.code).toBe('invalid_hook_name');
-  });
-
-  test('rejects names that start with `use` but are not camelCase', () => {
-    const stderr = captureStderr();
-
-    try {
-      // `usefoo` is lowercase after the prefix; must be `useF...`.
-      const code = run(['usefoo'], {repoRoot: sandbox.repoRoot});
-
-      expect(code).toBe(1);
-    } finally {
-      stderr.restore();
-    }
-
-    const payload = JSON.parse(stderr.written.join('').trim()) as {
-      code: string;
-    };
-
-    expect(payload.code).toBe('invalid_hook_name');
-  });
-
-  test('a kebab name emits a kebab file exporting the camelCase hook', () => {
-    const stdout = captureStdout();
-
-    try {
-      expect(run(['use-toggle'], {repoRoot: sandbox.repoRoot})).toBe(0);
-    } finally {
-      stdout.restore();
-    }
-
-    expect(
-      read(path.join(sandbox.repoRoot, 'app/hooks/use-toggle.ts'))
-    ).toContain('export const useToggle = (): void => {');
-    const testContents = read(
-      path.join(sandbox.repoRoot, 'app/hooks/tests/use-toggle.test.ts')
-    );
-
-    expect(testContents).toContain("import {useToggle} from '../use-toggle';");
-    expect(testContents).toContain('renderHook(() => useToggle())');
-  });
-
-  test('a camelCase name emits the kebab file name for the same hook', () => {
-    const stdout = captureStdout();
-
-    try {
-      expect(run(['useCounter'], {repoRoot: sandbox.repoRoot})).toBe(0);
-      expect(run(['useToggleOpen'], {repoRoot: sandbox.repoRoot})).toBe(0);
-    } finally {
-      stdout.restore();
-    }
-
-    expect(
-      read(path.join(sandbox.repoRoot, 'app/hooks/use-counter.ts'))
-    ).toContain('export const useCounter = (): void => {');
-    expect(
-      read(path.join(sandbox.repoRoot, 'app/hooks/tests/use-counter.test.ts'))
-    ).toContain("from '../use-counter'");
-    expect(
-      existsSync(path.join(sandbox.repoRoot, 'app/hooks/use-toggle-open.ts'))
-    ).toBe(true);
-    expect(
-      existsSync(path.join(sandbox.repoRoot, 'app/hooks/useCounter.ts'))
-    ).toBe(false);
-  });
-
-  test.each(['use_toggle', 'Usetoggle', 'use-', 'use--toggle', 'use-Toggle'])(
-    'rejects the invalid name %s and writes nothing',
-    (name) => {
+  describe('hook rejects a bad name or flag', () => {
+    test.each([
+      {
+        args: ['foo'],
+        code: 'invalid_hook_name',
+        name: 'rejects names that do not start with `use`',
+      },
+      {
+        // `usefoo` is lowercase after the prefix; must be `useF...`.
+        args: ['usefoo'],
+        code: 'invalid_hook_name',
+        name: 'rejects names that start with `use` but are not camelCase',
+      },
+      ...['use_toggle', 'Usetoggle', 'use-', 'use--toggle', 'use-Toggle'].map(
+        (invalidName) => ({
+          args: [invalidName],
+          code: 'invalid_hook_name',
+          name: `rejects the invalid name ${invalidName} and writes nothing`,
+        })
+      ),
+      {
+        args: [] as string[],
+        code: 'missing_argument',
+        name: 'rejects when no name is supplied',
+      },
+      {
+        args: ['useFoo', '--bogus'],
+        code: 'invalid_flag',
+        name: 'rejects unknown flags',
+      },
+    ])('$name', ({args, code}) => {
       const stderr = captureStderr();
 
       try {
-        expect(run([name], {repoRoot: sandbox.repoRoot})).toBe(1);
+        expect(run(args, {repoRoot: sandbox.repoRoot})).toBe(1);
       } finally {
         stderr.restore();
       }
@@ -297,27 +269,9 @@ describe('gaia scaffold hook', () => {
         code: string;
       };
 
-      expect(payload.code).toBe('invalid_hook_name');
+      expect(payload.code).toBe(code);
       expect(existsSync(path.join(sandbox.repoRoot, 'app'))).toBe(false);
-    }
-  );
-
-  test('rejects when no name is supplied', () => {
-    const stderr = captureStderr();
-
-    try {
-      const code = run([], {repoRoot: sandbox.repoRoot});
-
-      expect(code).toBe(1);
-    } finally {
-      stderr.restore();
-    }
-
-    const payload = JSON.parse(stderr.written.join('').trim()) as {
-      code: string;
-    };
-
-    expect(payload.code).toBe('missing_argument');
+    });
   });
 
   test('is idempotent: second invocation reports skipped', () => {
@@ -410,24 +364,6 @@ describe('gaia scaffold hook', () => {
       expect(path.isAbsolute(file)).toBe(true);
     }
   });
-
-  test('rejects unknown flags', () => {
-    const stderr = captureStderr();
-    let code = -1;
-
-    try {
-      code = run(['useFoo', '--bogus'], {repoRoot: sandbox.repoRoot});
-    } finally {
-      stderr.restore();
-    }
-
-    expect(code).toBe(1);
-    const payload = JSON.parse(stderr.written.join('').trim()) as {
-      code: string;
-    };
-
-    expect(payload.code).toBe('invalid_flag');
-  });
 });
 
 /**
@@ -466,53 +402,60 @@ describe('gaia scaffold hook root resolution', () => {
     return dir;
   };
 
-  test('scaffolds under the built-in frontend package outside a git repository', () => {
-    const root = newScratchDir();
-    const stdout = captureStdout();
-    let code = -1;
+  describe('hook resolves the package root', () => {
+    test.each([
+      {
+        absent: [] as string[],
+        exists: [
+          'apps/web/app/hooks/use-foo.ts',
+          'apps/web/app/hooks/tests/use-foo.test.ts',
+        ],
+        hookName: 'useFoo',
+        name: 'scaffolds under the built-in frontend package outside a git repository',
+        prepare: (root: string): string => root,
+      },
+      {
+        absent: [
+          'packages/inner/app/hooks/use-bar.ts',
+          'packages/inner/apps/web',
+        ],
+        exists: ['apps/web/app/hooks/use-bar.ts'],
+        hookName: 'useBar',
+        name: 'scaffolds into the working tree root, not the calling subdirectory',
+        prepare: (root: string): string => {
+          // Through the chokepoint, not a bare `execFileSync('git', ...)`: an
+          // ambient GIT_DIR would send `git init` at the directory that
+          // variable names, leaving `root` without a `.git` and this
+          // assertion measuring nothing.
+          execGaiaGit(['init', '-q', '-b', 'main'], root);
+          const inner = path.join(root, 'packages', 'inner');
+          mkdirSync(inner, {recursive: true});
 
-    process.chdir(root);
+          return inner;
+        },
+      },
+    ])('$name', ({absent, exists, hookName, prepare}) => {
+      const root = newScratchDir();
+      const stdout = captureStdout();
+      let code = -1;
 
-    try {
-      code = run(['useFoo']);
-    } finally {
-      stdout.restore();
-    }
+      process.chdir(prepare(root));
 
-    expect(code).toBe(0);
-    expect(existsSync(path.join(root, 'apps/web/app/hooks/use-foo.ts'))).toBe(
-      true
-    );
-    expect(
-      existsSync(path.join(root, 'apps/web/app/hooks/tests/use-foo.test.ts'))
-    ).toBe(true);
-  });
+      try {
+        code = run([hookName]);
+      } finally {
+        stdout.restore();
+      }
 
-  test('scaffolds into the working tree root, not the calling subdirectory', () => {
-    const root = newScratchDir();
-    // Through the chokepoint, not a bare `execFileSync('git', ...)`: an
-    // ambient GIT_DIR would send `git init` at the directory that variable
-    // names, leaving `root` without a `.git` and this assertion measuring
-    // nothing.
-    execGaiaGit(['init', '-q', '-b', 'main'], root);
-    const inner = path.join(root, 'packages', 'inner');
-    mkdirSync(inner, {recursive: true});
-    const stdout = captureStdout();
-    let code = -1;
+      expect(code).toBe(0);
 
-    process.chdir(inner);
+      for (const file of exists) {
+        expect(existsSync(path.join(root, file))).toBe(true);
+      }
 
-    try {
-      code = run(['useBar']);
-    } finally {
-      stdout.restore();
-    }
-
-    expect(code).toBe(0);
-    expect(existsSync(path.join(root, 'apps/web/app/hooks/use-bar.ts'))).toBe(
-      true
-    );
-    expect(existsSync(path.join(inner, 'app/hooks/use-bar.ts'))).toBe(false);
-    expect(existsSync(path.join(inner, 'apps', 'web'))).toBe(false);
+      for (const file of absent) {
+        expect(existsSync(path.join(root, file))).toBe(false);
+      }
+    });
   });
 });
