@@ -541,6 +541,7 @@ guard_delta_file() {
   [ -n "$PATHS_FROM" ] || return 0
   case $'\n'"$paths_from_joined"$'\n' in
     *$'\n'.gaia/scripts/guard-awk-lib.sh$'\n'* | *$'\n'.gaia/scripts/awk-interp-lib.sh$'\n'* | \
+      *$'\n'.gaia/scripts/guard-discovery-lib.sh$'\n'* | \
       *$'\n'".gaia/scripts/$slug.sh"$'\n'* | *$'\n'".gaia/scripts/$slug-"*.sh$'\n'*)
       printf '    scope: %s scans the whole tree, because the delta changes its own sources\n' "$slug" >&2
       return 0
