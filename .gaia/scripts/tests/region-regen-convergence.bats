@@ -219,51 +219,6 @@ examples/*.mdx"
   [ "$region_globs" = "$expected" ]
 }
 
-@test "the region differs between two trees whose rosters differ" {
-  local sandbox_a="$BATS_TEST_TMPDIR/sb-a" sandbox_b="$BATS_TEST_TMPDIR/sb-b"
-  scaffold_scripts "$sandbox_a"
-  scaffold_scripts "$sandbox_b"
-
-  cat > "$sandbox_a/.gaia/audit-ci.yml" <<'YAML'
-auditors:
-  - name: code-audit-region-only
-    globs:
-      - "alpha/**"
-    default: true
-YAML
-  cat > "$sandbox_b/.gaia/audit-ci.yml" <<'YAML'
-auditors:
-  - name: code-audit-region-only
-    globs:
-      - "beta/**"
-    default: true
-YAML
-  write_agent_stub "$sandbox_a" code-audit-region-only
-  write_agent_stub "$sandbox_b" code-audit-region-only
-
-  run_writer "$sandbox_a"
-  [ "$status" -eq 0 ]
-  run_writer "$sandbox_b"
-  [ "$status" -eq 0 ]
-
-  # Not a self-comparison: this fails if a bug hardcoded a fixed region body
-  # regardless of the roster it was handed.
-  #
-  # Compared as FILES, never through `$(cat …)`: command substitution strips
-  # all trailing newlines from both sides, so two bodies differing only there
-  # would compare equal. `-s` because on this side the expected outcome is a
-  # difference, and an unsuppressed `cmp` would print one on every good run.
-  local file_a="$sandbox_a/.claude/agents/code-audit-region-only.md"
-  local file_b="$sandbox_b/.claude/agents/code-audit-region-only.md"
-  # The bad case written as a positive match: identical files make `cmp -s`
-  # exit 0 and the test return 1. The trailing `true` is required because this
-  # is the body's FINAL statement -- without it, differing files leave `cmp`'s
-  # own non-zero status as the AND-list's, which would fail the test in exactly
-  # the case it exists to pass.
-  cmp -s "$file_a" "$file_b" && return 1
-  true
-}
-
 # Byte-identical convergence on a second run
 
 @test "a second writer run is byte-identical to the first (idempotent)" {

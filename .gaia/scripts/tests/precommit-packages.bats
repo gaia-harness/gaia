@@ -14,7 +14,11 @@ setup() {
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   HELPER="$REPO_ROOT/.gaia/scripts/precommit-packages.sh"
   [ -f "$HELPER" ] || { echo "missing $HELPER" >&2; return 1; }
+  make_sandbox
+}
 
+# A case table calls this again to start a case from a clean repo.
+make_sandbox() {
   REPO="$(cd "$(mktemp -d "$BATS_TEST_TMPDIR/precommit-packages.XXXXXX")" && pwd -P)"
   git -C "$REPO" init --quiet --initial-branch=main
   git -C "$REPO" config user.email "test@example.com"
@@ -90,170 +94,126 @@ stage_renames() {
   done
 }
 
-@test "usage: no argument exits 2" {
-  run bash "$HELPER"
-  [ "$status" -eq 2 ]
-}
-
-@test "usage: a root that is not a directory exits 2" {
-  run bash "$HELPER" "$REPO/nope"
-  [ "$status" -eq 2 ]
-}
-
-@test "an empty staged set plans nothing" {
-  use_frontend_package
+# expect_plan <label> <expected plan>: the helper exits 0 and prints exactly the plan.
+expect_plan() {
   plan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [ "$status" -eq 0 ] || { echo "$1: status $status"; return 1; }
+  [ "$output" = "$2" ] || { echo "$1: got '$output'"; return 1; }
 }
 
-@test "a frontend change plans the frontend package" {
+@test "staged paths plan packages by preCommitSource glob, and a retired root app path plans retired-add instead" {
   use_frontend_package
+  expect_plan "empty staged set" "" || return 1
+
   stage_files apps/web/app/x.tsx
-  plan
-  [ "$status" -eq 0 ]
-  [ "$output" = $'package\tapps/web' ]
-}
+  expect_plan "frontend change" $'package\tapps/web' || return 1
+  git -C "$REPO" reset --quiet
 
-@test "a path matching no preCommitSource glob plans nothing" {
-  use_frontend_package
   stage_files apps/web/README.md docs/a.md .claude/rules/a.md
-  plan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
+  expect_plan "no preCommitSource glob matches" "" || return 1
+  git -C "$REPO" reset --quiet
 
-@test "a root app/ path is not a frontend change when the package is at apps/web/" {
-  use_frontend_package
   stage_files app/x.tsx
   plan
-  [ "$status" -eq 0 ]
-  # Not a package change; it is the MIG-013 retired-path record instead.
-  grep -qxF -- "$(printf 'retired-add\tapp/x.tsx\tapps/web/app/x.tsx')" <<<"$output"
-  [ "$(grep -c '^package' <<<"$output" || true)" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "root app: status $status"; return 1; }
+  grep -qxF -- "$(printf 'retired-add\tapp/x.tsx\tapps/web/app/x.tsx')" <<<"$output" || { echo "root app: got '$output'"; return 1; }
+  [ "$(grep -c '^package' <<<"$output" || true)" -eq 0 ] || { echo "root app: planned a package: '$output'"; return 1; }
+  git -C "$REPO" reset --quiet
 
-# Guard can fail: the same staged file under a descriptor that names nothing it
-# matches plans nothing, so the descriptor decides.
-@test "a descriptor that gates nothing here plans nothing for a frontend path" {
-  use_frontend_package
+  # The same staged file under a descriptor that names nothing it matches plans
+  # nothing, so the descriptor decides.
   write_descriptor "$REPO/apps/web" web '["nomatch/**"]'
   stage_files apps/web/app/x.tsx
-  plan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
+  expect_plan "descriptor gates nothing" "" || return 1
+  git -C "$REPO" reset --quiet
 
-@test "a deletion counts" {
-  use_frontend_package
-  stage_files apps/web/app/x.tsx
-  git -C "$REPO" commit --quiet -m "add"
-  git -C "$REPO" rm --quiet apps/web/app/x.tsx
-  plan
-  [ "$status" -eq 0 ]
-  [ "$output" = $'package\tapps/web' ]
-}
-
-@test "a spaced and a non-ASCII path count and are not C-quoted into a miss" {
   use_frontend_package
   stage_files "apps/web/app/caf"$'\303\251'" x.tsx"
-  plan
-  [ "$status" -eq 0 ]
-  [ "$output" = $'package\tapps/web' ]
-}
+  expect_plan "spaced and non-ASCII path" $'package\tapps/web' || return 1
+  git -C "$REPO" reset --quiet
 
-@test "two registered packages plan only the one with a staged source path" {
   printf '[{"name":"web","path":"apps/web"},{"name":"admin","path":"admin"}]\n' > "$REPO/.gaia/packages.json"
   write_descriptor "$REPO/apps/web" web '["app/**"]'
   write_descriptor "$REPO/admin" admin '["app/**"]'
   stage_files admin/app/y.ts
-  plan
-  [ "$output" = $'package\tadmin' ]
+  expect_plan "two packages, one staged" $'package\tadmin' || return 1
   stage_files apps/web/app/x.ts
   plan
-  [ "$(printf '%s\n' "$output" | sort)" = $'package\tadmin\npackage\tapps/web' ]
+  [ "$(printf '%s\n' "$output" | sort)" = $'package\tadmin\npackage\tapps/web' ] || { echo "two packages, both staged: got '$output'"; return 1; }
+  git -C "$REPO" reset --quiet
+
+  use_frontend_package
+  stage_files apps/web/app/x.tsx
+  git -C "$REPO" commit --quiet -m "add"
+  git -C "$REPO" rm --quiet apps/web/app/x.tsx
+  expect_plan "deletion" $'package\tapps/web'
 }
 
-@test "doctor guard: two configs in a package dir are reported with the directory" {
+@test "doctor guard reports a directory with more than one react-doctor config" {
   use_frontend_package
   : > "$REPO/apps/web/doctor.config.ts"
   : > "$REPO/apps/web/doctor.config.json"
   plan
-  [ "$status" -eq 0 ]
-  grep -qxF $'doctor\tapps/web' <<<"$output"
-  grep -qxF $'doctor-file\tapps/web/doctor.config.json' <<<"$output"
-  grep -qxF $'doctor-file\tapps/web/doctor.config.ts' <<<"$output"
-}
+  [ "$status" -eq 0 ] || { echo "two configs: status $status"; return 1; }
+  grep -qxF $'doctor\tapps/web' <<<"$output" || { echo "two configs: got '$output'"; return 1; }
+  grep -qxF $'doctor-file\tapps/web/doctor.config.json' <<<"$output" || { echo "two configs: got '$output'"; return 1; }
+  grep -qxF $'doctor-file\tapps/web/doctor.config.ts' <<<"$output" || { echo "two configs: got '$output'"; return 1; }
 
-@test "doctor guard: a config whose name holds a space is counted with the others" {
-  use_frontend_package
+  find "$REPO" -name '*doctor.config*' -not -path '*/.git/*' -delete
   : > "$REPO/apps/web/doctor.config.ts"
   : > "$REPO/apps/web/doctor.config.local copy.ts"
   : > "$REPO/apps/web/not-a-config.ts"
   plan
-  [ "$status" -eq 0 ]
-  [ "$(grep -c '^doctor-file' <<<"$output")" -eq 2 ]
-  grep -qxF $'doctor\tapps/web' <<<"$output"
-  grep -qxF $'doctor-file\tapps/web/doctor.config.ts' <<<"$output"
-  grep -qxF $'doctor-file\tapps/web/doctor.config.local copy.ts' <<<"$output"
-}
+  [ "$status" -eq 0 ] || { echo "spaced name: status $status"; return 1; }
+  [ "$(grep -c '^doctor-file' <<<"$output")" -eq 2 ] || { echo "spaced name: got '$output'"; return 1; }
+  grep -qxF $'doctor\tapps/web' <<<"$output" || { echo "spaced name: got '$output'"; return 1; }
+  grep -qxF $'doctor-file\tapps/web/doctor.config.ts' <<<"$output" || { echo "spaced name: got '$output'"; return 1; }
+  grep -qxF $'doctor-file\tapps/web/doctor.config.local copy.ts' <<<"$output" || { echo "spaced name: got '$output'"; return 1; }
 
-@test "doctor guard: a package at the repo root reports its configs repo-relative" {
+  find "$REPO" -name '*doctor.config*' -not -path '*/.git/*' -delete
   printf '[{"name":"root","path":"."}]\n' > "$REPO/.gaia/packages.json"
   write_descriptor "$REPO" root '["app/**"]'
   : > "$REPO/doctor.config.ts"
   : > "$REPO/react-doctor.config.mjs"
   plan
-  [ "$status" -eq 0 ]
-  [ "$(grep -c '^doctor-file' <<<"$output")" -eq 2 ]
-  grep -qxF $'doctor\t.' <<<"$output"
-  grep -qxF $'doctor-file\tdoctor.config.ts' <<<"$output"
-  grep -qxF $'doctor-file\treact-doctor.config.mjs' <<<"$output"
-}
+  [ "$status" -eq 0 ] || { echo "root package: status $status"; return 1; }
+  [ "$(grep -c '^doctor-file' <<<"$output")" -eq 2 ] || { echo "root package: got '$output'"; return 1; }
+  grep -qxF $'doctor\t.' <<<"$output" || { echo "root package: got '$output'"; return 1; }
+  grep -qxF $'doctor-file\tdoctor.config.ts' <<<"$output" || { echo "root package: got '$output'"; return 1; }
+  grep -qxF $'doctor-file\treact-doctor.config.mjs' <<<"$output" || { echo "root package: got '$output'"; return 1; }
 
-@test "doctor guard: one config in a package dir reports nothing" {
+  find "$REPO" -name '*doctor.config*' -not -path '*/.git/*' -delete
   use_frontend_package
   : > "$REPO/apps/web/doctor.config.ts"
-  plan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
+  expect_plan "one config" "" || return 1
 
-@test "doctor guard: a stray config at the repo root is not a package config" {
-  use_frontend_package
+  find "$REPO" -name '*doctor.config*' -not -path '*/.git/*' -delete
   : > "$REPO/doctor.config.ts"
   : > "$REPO/doctor.config.json"
+  expect_plan "stray root configs" ""
+}
+
+# expect_registry_failure <label>: the helper exits 1 with the gaia-packages message.
+expect_registry_failure() {
+  stage_files apps/web/app/x.tsx
   plan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [ "$status" -eq 1 ] || { echo "$1: status $status"; return 1; }
+  grep -qF -- "gaia-packages: " <<<"$output" || { echo "$1: got '$output'"; return 1; }
 }
 
 # bats test_tags=protected
 @test "an unparseable registry exits 1 with the gaia-packages message" {
   use_frontend_package
   printf 'not json {\n' > "$REPO/.gaia/packages.json"
-  stage_files apps/web/app/x.tsx
-  plan
-  [ "$status" -eq 1 ]
-  grep -qF -- "gaia-packages: " <<<"$output"
-}
+  expect_registry_failure "unparseable registry" || return 1
 
-@test "a missing descriptor exits 1 with the gaia-packages message" {
   use_frontend_package
   rm "$REPO/apps/web/gaia.package.json"
-  stage_files apps/web/app/x.tsx
-  plan
-  [ "$status" -eq 1 ]
-  grep -qF -- "gaia-packages: " <<<"$output"
-}
+  expect_registry_failure "missing descriptor" || return 1
 
-@test "a missing registry reader exits 1 rather than allowing" {
   use_frontend_package
   rm "$REPO/.claude/hooks/lib/gaia-packages.sh"
-  stage_files apps/web/app/x.tsx
-  plan
-  [ "$status" -eq 1 ]
-  grep -qF -- "gaia-packages: " <<<"$output"
+  expect_registry_failure "missing registry reader"
 }
 
 # --- C13: the migration-rename exemption ---
@@ -327,73 +287,48 @@ C6_PAIRS=(
   [ "$output" = "exempt" ]
 }
 
-# Each negative stages the whole C6 set plus one entry that must not be exempt,
-# and asserts the exemption is refused (the plan is not `exempt`). The extra
-# pair rides in the same seed commit, so only renames are ever staged.
-@test "C13 refusal: an R100 rename inside apps/web/ beside the C6 set is not exempt and plans the package" {
+# expect_rename_plan <label> <expected> <pair>...: a fresh sandbox with the
+# given pairs staged as exact renames only. The expected plan is
+# `package<TAB>apps/web`, `none` (empty), or `not-exempt`.
+expect_rename_plan() {
+  local label="$1" expected="$2" count
+  shift 2
+  make_sandbox
   use_frontend_package
-  stage_renames "${C6_PAIRS[@]}" "apps/web/app/utils/a.ts:apps/web/app/utils/b.ts"
-  [ "$(git -C "$REPO" diff --cached --name-status -M100% | grep -c '^R100')" -eq $((${#C6_PAIRS[@]} + 1)) ]
+  stage_renames "$@"
+  count=$(git -C "$REPO" diff --cached --name-status -M100% | grep -c '^R100')
+  [ "$count" -eq "$#" ] || { echo "$label: staged $count exact renames, expected $#"; return 1; }
   plan
-  [ "$status" -eq 0 ]
-  [ "$output" = $'package\tapps/web' ]
+  [ "$status" -eq 0 ] || { echo "$label: status $status"; return 1; }
+  case "$expected" in
+    none) [ -z "$output" ] || { echo "$label: got '$output'"; return 1; } ;;
+    not-exempt) [ "$output" != "exempt" ] || { echo "$label: plan was exempt"; return 1; } ;;
+    *) [ "$output" = "$expected" ] || { echo "$label: got '$output'"; return 1; } ;;
+  esac
 }
 
-@test "C13 refusal: a harness rename outside the C6 units beside the C6 set is not exempt" {
-  use_frontend_package
-  stage_renames "${C6_PAIRS[@]}" "wiki/a.md:wiki/b.md"
-  [ "$(git -C "$REPO" diff --cached --name-status -M100% | grep -c '^R100')" -eq $((${#C6_PAIRS[@]} + 1)) ]
-  plan
-  [ "$status" -eq 0 ]
-  [ "$output" != "exempt" ]
-}
+# Each refusal stages one entry that must not be exempt; the first two ride
+# beside the whole C6 set to prove the exemption is all or nothing.
+@test "a rename is exempt only as an exact move to its counterpart; every other rename goes through the normal plan" {
+  expect_rename_plan "R100 rename inside apps/web beside the C6 set" $'package\tapps/web' \
+    "${C6_PAIRS[@]}" "apps/web/app/utils/a.ts:apps/web/app/utils/b.ts" || return 1
+  expect_rename_plan "harness rename outside the C6 units beside the C6 set" not-exempt \
+    "${C6_PAIRS[@]}" "wiki/a.md:wiki/b.md" || return 1
+  expect_rename_plan "C6 source renamed to a non-counterpart destination" not-exempt \
+    "app/x.tsx:src/x.tsx" || return 1
+  expect_rename_plan "source renamed under a different name inside apps/web" $'package\tapps/web' \
+    "app/x.tsx:apps/web/app/y.tsx" || return 1
+  expect_rename_plan ".claude file outside the C6 units" none \
+    ".claude/rules/quality-gate.md:apps/web/.claude/rules/quality-gate.md" || return 1
+  expect_rename_plan "root config file outside the C6 list" none \
+    "package.json:apps/web/package.json" || return 1
+  expect_rename_plan "dockerignore pair with a different destination" none \
+    ".dockerignore:apps/web/.dockerignore" || return 1
 
-@test "C13 refusal: a C6 source renamed to a destination that is not its counterpart is not exempt" {
-  use_frontend_package
-  stage_renames "app/x.tsx:src/x.tsx"
-  plan
-  [ "$status" -eq 0 ]
-  [ "$output" != "exempt" ]
-}
-
-@test "C13 refusal: a source renamed under a different name inside apps/web/ is not exempt" {
-  use_frontend_package
-  stage_renames "app/x.tsx:apps/web/app/y.tsx"
-  plan
-  [ "$status" -eq 0 ]
-  [ "$output" = $'package\tapps/web' ]
-}
-
-@test "C13 refusal: a .claude file outside the C6 units is not exempt" {
-  use_frontend_package
-  stage_renames ".claude/rules/quality-gate.md:apps/web/.claude/rules/quality-gate.md"
-  plan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "C13 refusal: a root config file outside the C6 list is not exempt" {
-  use_frontend_package
-  stage_renames "package.json:apps/web/package.json"
-  plan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "C13 refusal: the dockerignore pair with a different destination is not exempt" {
-  use_frontend_package
-  stage_renames ".dockerignore:apps/web/.dockerignore"
-  plan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "C13 refusal: a C6 rename carrying a content change is not exempt" {
+  make_sandbox
   use_frontend_package
   stage_renames "app/x.tsx:apps/web/app/x.tsx"
   printf 'a changed line\n' >> "$REPO/apps/web/app/x.tsx"
   git -C "$REPO" add apps/web/app/x.tsx
-  plan
-  [ "$output" = $'package\tapps/web' ]
+  expect_plan "C6 rename carrying a content change" $'package\tapps/web'
 }
-

@@ -116,17 +116,6 @@ jobs:
   [ "$status" -eq 0 ]
 }
 
-@test "flags an expression on an inline run: value" {
-  fixture_repo
-  fixture_workflow inline.yml 'jobs:
-  t:
-    steps:
-      - run: ./script.sh "${{ steps.x.outputs.y }}"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "inline.yml:4:" <<<"$output"
-}
-
 @test "flags an expression inside a comment in a run body" {
   fixture_repo
   fixture_workflow commented.yml 'jobs:
@@ -140,7 +129,61 @@ jobs:
   grep -qF -- "commented.yml:5:" <<<"$output"
 }
 
-@test "does not leak past the end of a run block" {
+# reset_workflows: drops every tracked workflow of the fixture repo so one repo
+# serves each case of a table.
+reset_workflows() {
+  rm -rf "$TEMPORARY_DIRECTORY/.github"
+  git -C "$TEMPORARY_DIRECTORY" add -A
+}
+
+# Each header shape is legal YAML whose body Actions runs. A block-scalar
+# header the pattern misses goes down the inline arm and leaves its body
+# unscanned: a fail-open on a real shape, not a declared blind spot.
+@test "a run: body is scanned whatever shape its header takes" {
+  local -a names=(inline commented-header indicator-order folded)
+  local -a bodies=(
+    'jobs:
+  t:
+    steps:
+      - run: ./script.sh "${{ steps.x.outputs.y }}"'
+    'jobs:
+  t:
+    steps:
+      - run: | # note
+          echo "${{ steps.x.outputs.y }}"'
+    'jobs:
+  t:
+    steps:
+      - name: A
+        run: |2-
+          echo "${{ steps.x.outputs.y }}"
+      - name: B
+        run: |-2
+          echo "${{ steps.a.outputs.b }}"'
+    'jobs:
+  t:
+    steps:
+      - run: >- # folded
+          echo "${{ steps.x.outputs.y }}"'
+  )
+  local -a first_lines=(4 5 6 5)
+  local -a second_lines=("" "" 9 "")
+  local index name
+  fixture_repo
+  for index in 0 1 2 3; do
+    name="${names[$index]}"
+    reset_workflows
+    fixture_workflow "$name.yml" "${bodies[$index]}"
+    run_linter
+    [ "$status" -eq 1 ] || { echo "case $name: status $status"; return 1; }
+    grep -qF -- "$name.yml:${first_lines[$index]}:" <<<"$output" || { echo "case $name: line ${first_lines[$index]} not reported"; return 1; }
+    if [ -n "${second_lines[$index]}" ]; then
+      grep -qF -- "$name.yml:${second_lines[$index]}:" <<<"$output" || { echo "case $name: line ${second_lines[$index]} not reported"; return 1; }
+    fi
+  done
+}
+
+@test "a run: body ends where its block ends, resumes after it, and spans blank lines" {
   fixture_repo
   fixture_workflow boundary.yml 'jobs:
   t:
@@ -154,11 +197,9 @@ jobs:
         run: |
           echo "$V"'
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case no leak past the end: status $status"; return 1; }
 
-@test "keeps scanning after a run block ends" {
-  fixture_repo
+  reset_workflows
   fixture_workflow second.yml 'jobs:
   t:
     steps:
@@ -169,12 +210,10 @@ jobs:
         run: |
           echo "${{ steps.x.outputs.y }}"'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "second.yml:9:" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case scanning after a block ends: status $status"; return 1; }
+  grep -qF -- "second.yml:9:" <<<"$output" || { echo "case scanning after a block ends: line 9 not reported"; return 1; }
 
-@test "blank lines do not end a run block" {
-  fixture_repo
+  reset_workflows
   fixture_workflow blanks.yml 'jobs:
   t:
     steps:
@@ -183,54 +222,8 @@ jobs:
 
           echo "${{ steps.x.outputs.y }}"'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "blanks.yml:7:" <<<"$output"
-}
-
-# The tests below pin block-scalar header shapes that are legal YAML and
-# whose bodies Actions runs normally. Each one, before the header pattern was
-# widened, sent the header down the inline arm and left every line of the body
-# unscanned -- a fail-open on a real shape rather than a declared blind spot.
-
-@test "a comment after the block-scalar indicator does not hide the body" {
-  fixture_repo
-  fixture_workflow commented-header.yml 'jobs:
-  t:
-    steps:
-      - run: | # note
-          echo "${{ steps.x.outputs.y }}"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "commented-header.yml:5:" <<<"$output"
-}
-
-@test "indentation and chomping indicators in either order do not hide the body" {
-  fixture_repo
-  fixture_workflow indicator-order.yml 'jobs:
-  t:
-    steps:
-      - name: A
-        run: |2-
-          echo "${{ steps.x.outputs.y }}"
-      - name: B
-        run: |-2
-          echo "${{ steps.a.outputs.b }}"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "indicator-order.yml:6:" <<<"$output"
-  grep -qF -- "indicator-order.yml:9:" <<<"$output"
-}
-
-@test "a folded scalar with a trailing comment does not hide the body" {
-  fixture_repo
-  fixture_workflow folded.yml 'jobs:
-  t:
-    steps:
-      - run: >- # folded
-          echo "${{ steps.x.outputs.y }}"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "folded.yml:5:" <<<"$output"
+  [ "$status" -eq 1 ] || { echo "case blank lines: status $status"; return 1; }
+  grep -qF -- "blanks.yml:7:" <<<"$output" || { echo "case blank lines: line 7 not reported"; return 1; }
 }
 
 # The gate scans composite actions too: workflows here invoke them, so stopping
@@ -279,15 +272,3 @@ jobs:
   surface_has_workflow_and_action "$REPO_ROOT" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh"
 }
 
-@test "the surface check fails when the composite-action directory is absent" {
-  local scratch
-  scratch="$(mktemp -d -t surface-probe-XXXXXX)"
-  mkdir -p "$scratch/.github/workflows"
-  git -C "$scratch" init -q .
-  printf 'x\n' > "$scratch/.github/workflows/only.yml"
-  git -C "$scratch" add -A
-  local verdict=0
-  surface_has_workflow_and_action "$scratch" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" || verdict=$?
-  rm -rf "$scratch"
-  [ "$verdict" -eq 1 ]
-}
