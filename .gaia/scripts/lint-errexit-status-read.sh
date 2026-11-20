@@ -315,7 +315,7 @@ case "$GAIA_AWK_STATUS" in
 esac
 
 # Shared detector, concatenated ahead of each per-surface scan program so the matcher is
-# written once and the two surfaces cannot drift apart. Single-quoted, and every
+# written once and SHELL_AWK, YAML_AWK and BATS_AWK cannot drift apart. Single-quoted, and every
 # literal quote inside is spelled as an escape (`\047` for `'`), so the shell
 # passes the program through untouched.
 # The detector lives in two pieces beside this script, loaded under the same
