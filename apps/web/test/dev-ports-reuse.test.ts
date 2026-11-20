@@ -1,10 +1,6 @@
 /* eslint-disable unicorn/prevent-abbreviations -- the module under test is named dev-ports-reuse */
 import {describe, expect, test, vi} from 'vitest';
-import {
-  ASK_FIRST_SENTENCE,
-  buildForeignServerMessage,
-  PORTS_HINT,
-} from '../dev-ports';
+import {ASK_FIRST_SENTENCE, buildForeignServerMessage} from '../dev-ports';
 import type {ListenerOwner} from '../dev-ports';
 import {decideServerReuse} from '../dev-ports-reuse';
 
@@ -125,12 +121,12 @@ describe('decideServerReuse', () => {
 
   test.each([
     {
-      expected: `GAIA: port 5180 is held by a server that is not this tree's own (/trees/other), so Playwright will not reuse it. ${ASK_FIRST_SENTENCE} ${PORTS_HINT}`,
+      expected: `GAIA: port 5180 is held by a server that is not this tree's own (/trees/other), so Playwright will not reuse it. Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports.`,
       name: 'with an owner path',
       ownerPath: '/trees/other',
     },
     {
-      expected: `GAIA: port 5180 is held by a server that is not this tree's own (owner unknown), so Playwright will not reuse it. ${ASK_FIRST_SENTENCE} ${PORTS_HINT}`,
+      expected: `GAIA: port 5180 is held by a server that is not this tree's own (owner unknown), so Playwright will not reuse it. Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports.`,
       name: 'without an owner path',
       ownerPath: undefined,
     },
