@@ -6,7 +6,7 @@ Maintainer-only fixture suite for the `/gaia-forensics` skill. Excluded from the
 
 Each `*.bats` file's header comment names the UAT or TST ids it binds and what it asserts; this page does not restate them.
 
-Bats binds the UATs its suite headers name; UAT-004, UAT-005 and UAT-008 are manual-only and live in `integration.md`. UAT-001 and UAT-002 are covered through the fixture inputs and golden files (the init/update classification and schema tests exercise these end-to-end scenarios).
+Manual (layer C) UATs and their checklist: `integration.md` (`## Coverage map`). UAT-001 and UAT-002 are covered through the fixture inputs and golden files (the init/update classification and schema tests exercise these end-to-end scenarios).
 
 ## Library
 
