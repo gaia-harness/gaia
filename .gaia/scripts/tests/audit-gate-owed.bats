@@ -111,7 +111,8 @@ fix_entry() {
 
 # --- mark, status, selection -------------------------------------------------
 
-@test "status after mark on a frontend path is owed, and a harness-only commit keeps it owed" {
+@test "status across a pass: frontend commits owe, harness-only commits and a catch-up merge after a pass do not" {
+  # case: a mark on a frontend path owes, and a harness-only commit keeps it owed
   commit_path apps/web/app/a.ts
   gate mark --round 1
   run gate status
@@ -121,6 +122,25 @@ fix_entry() {
   [ "$status" -eq 1 ]
   run gate selection
   [ "$output" = apps/web/app/a.ts ]
+  # case: after a pass a harness-only commit is clear, a later frontend commit is owed
+  gate run >/dev/null
+  commit_path .claude/rules/x.md
+  run gate status
+  [ "$status" -eq 0 ]
+  commit_path apps/web/app/a.ts
+  run gate status
+  [ "$status" -eq 1 ]
+  [ "$(jq -r .owed "$D/gate-owed.json")" = false ]
+  # case: a catch-up merge carrying frontend paths after a pass is clear
+  gate run >/dev/null
+  run gate status
+  [ "$status" -eq 0 ]
+  git -C "$R" checkout --quiet -b side HEAD~1
+  commit_path apps/web/app/side.ts
+  git -C "$R" checkout --quiet main
+  git -C "$R" merge --quiet --no-ff --no-edit side
+  run gate status
+  [ "$status" -eq 0 ]
 }
 
 @test "status exit codes: clear with no record, 3 on a corrupt record" {
@@ -302,31 +322,6 @@ pnpm -C $R build" ]
 }
 
 # --- pass-tree rule and since ------------------------------------------------
-
-@test "after a pass a harness-only commit is clear, a later frontend commit is owed" {
-  commit_path apps/web/app/a.ts
-  gate mark --round 1
-  gate run >/dev/null
-  commit_path .claude/rules/x.md
-  run gate status
-  [ "$status" -eq 0 ]
-  commit_path apps/web/app/a.ts
-  run gate status
-  [ "$status" -eq 1 ]
-  [ "$(jq -r .owed "$D/gate-owed.json")" = false ]
-}
-
-@test "a catch-up merge carrying frontend paths after a pass is clear" {
-  commit_path apps/web/app/a.ts
-  gate mark --round 1
-  gate run >/dev/null
-  git -C "$R" checkout --quiet -b side HEAD~1
-  commit_path apps/web/app/side.ts
-  git -C "$R" checkout --quiet main
-  git -C "$R" merge --quiet --no-ff --no-edit side
-  run gate status
-  [ "$status" -eq 0 ]
-}
 
 @test "since advances: a harness-only mark after a pass selects nothing" {
   commit_path apps/web/app/a.ts
