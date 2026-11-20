@@ -72,6 +72,7 @@ write_two_statement_suite() {
   } >"$VHF_ROOT/suites/two.bats"
 }
 
+# bats test_tags=protected
 @test "a test the base fails at a different statement is a new failure, not pre-existing" {
   fixture --no-branch
   write_two_statement_suite
@@ -116,6 +117,7 @@ write_two_statement_suite() {
   [ "$(awk -F'|' -v root="$VHF_ROOT" '$1 == "env" && $3 != root { print $2 }' "$VERIFY_FIXTURE_LOG" | sort -u)" = false ]
 }
 
+# bats test_tags=protected
 @test "a dependency-reading failure the base shares is unverified when the branch changes a dependency manifest" {
   fixture --no-branch
   {

@@ -48,7 +48,18 @@ lint_codes() {
   printf '%s' "$output" | jq -c '[.findings[].code]'
 }
 
-@test "the template filled by replacing its placeholders passes with a web and a command flow" {
+# _refuse <label> <make_spec args...>: names the case, writes the SPEC and
+# runs lint, asserting it fails; the caller asserts the finding.
+_refuse() {
+  echo "case: $1"
+  shift
+  make_spec "$BATS_TEST_TMPDIR/s.md" "$@"
+  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
+  [ "$status" -eq 1 ]
+}
+
+@test "valid web and command flows lint clean (template filled and written directly)" {
+  echo "case: the template filled by replacing its placeholders passes with a web and a command flow"
   awk -v one="$FLOW_ONE" -v two="$FLOW_TWO" -v spec="$SPEC_ID" '
     /^spec_id:/ { sub(/SPEC-NNN/, spec) }
     /flow_id:/ { sub(/FLOW-NNN/, (++seen == 1 ? one : two)) }
@@ -63,124 +74,67 @@ lint_codes() {
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 0 ]
   [ "$output" = '{"ok":true,"findings":[]}' ]
-}
 
-@test "a web flow and a command flow written directly pass" {
+  echo "case: a web flow and a command flow written directly pass"
   make_spec "$BATS_TEST_TMPDIR/s.md" "$WEB_FLOW"$'\n'"$COMMAND_FLOW"
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 0 ]
   [ "$output" = '{"ok":true,"findings":[]}' ]
 }
 
-@test "a SPEC with a uats key fails uats_key_present" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$WEB_FLOW" in-progress '' 'uats: []'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+@test "a malformed flows block fails with its finding code" {
+  _refuse "a SPEC with a uats key fails uats_key_present" "$WEB_FLOW" in-progress '' 'uats: []'
   [ "$(lint_codes)" = '["uats_key_present"]' ]
-}
 
-@test "a SPEC with no flows key fails missing_flows" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" ""
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+  _refuse "a SPEC with no flows key fails missing_flows" ""
   printf '%s' "$output" | jq -e '.findings | map(.code) | index("missing_flows") != null'
-}
 
-@test "a flow missing flow_id fails flow_missing_field naming the field" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed '/flow_id:/d;s/^    slug:/  - slug:/')"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+  _refuse "a flow missing flow_id fails flow_missing_field naming the field" \
+    "$(printf '%s\n' "$WEB_FLOW" | sed '/flow_id:/d;s/^    slug:/  - slug:/')"
   printf '%s' "$output" | jq -e '.findings | map(select(.code == "flow_missing_field" and (.where | endswith(".flow_id")))) | length == 1'
-}
 
-@test "a flow missing slug fails flow_missing_field naming the field" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed '/slug:/d')"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
-  [ "$(lint_codes)" = '["flow_missing_field"]' ]
-  [ "$(printf '%s' "$output" | jq -r '.findings[0].where')" = "frontmatter.flows.$FLOW_ONE.slug" ]
-}
+  local field
+  for field in slug name why; do
+    _refuse "a flow missing $field fails flow_missing_field naming the field" \
+      "$(printf '%s\n' "$WEB_FLOW" | sed "/$field:/d")"
+    [ "$(lint_codes)" = '["flow_missing_field"]' ]
+    [ "$(printf '%s' "$output" | jq -r '.findings[0].where')" = "frontmatter.flows.$FLOW_ONE.$field" ]
+  done
 
-@test "a flow missing name fails flow_missing_field naming the field" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed '/name:/d')"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
-  [ "$(lint_codes)" = '["flow_missing_field"]' ]
-  [ "$(printf '%s' "$output" | jq -r '.findings[0].where')" = "frontmatter.flows.$FLOW_ONE.name" ]
-}
-
-@test "a flow missing why fails flow_missing_field naming the field" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed '/why:/d')"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
-  [ "$(lint_codes)" = '["flow_missing_field"]' ]
-  [ "$(printf '%s' "$output" | jq -r '.findings[0].where')" = "frontmatter.flows.$FLOW_ONE.why" ]
-}
-
-@test "a slug that is not kebab-case fails bad_slug" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed 's/slug: sign-in/slug: Sign_In/')"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+  _refuse "a slug that is not kebab-case fails bad_slug" \
+    "$(printf '%s\n' "$WEB_FLOW" | sed 's/slug: sign-in/slug: Sign_In/')"
   [ "$(lint_codes)" = '["bad_slug"]' ]
-}
 
-@test "a flow_id with the wrong prefix fails bad_flow_id" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed "s/$FLOW_ONE/UAT-""001/")"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+  _refuse "a flow_id with the wrong prefix fails bad_flow_id" \
+    "$(printf '%s\n' "$WEB_FLOW" | sed "s/$FLOW_ONE/UAT-""001/")"
   [ "$(lint_codes)" = '["bad_flow_id"]' ]
-}
 
-@test "two flows with one id fail duplicate_flow_id" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$WEB_FLOW"$'\n'"$(printf '%s\n' "$COMMAND_FLOW" | sed "s/$FLOW_TWO/$FLOW_ONE/")"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+  _refuse "two flows with one id fail duplicate_flow_id" \
+    "$WEB_FLOW"$'\n'"$(printf '%s\n' "$COMMAND_FLOW" | sed "s/$FLOW_TWO/$FLOW_ONE/")"
   [ "$(lint_codes)" = '["duplicate_flow_id"]' ]
-}
 
-@test "a flow with a given field fails given_when_then_field" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$WEB_FLOW"$'\n    given: a signed-out member'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+  _refuse "a flow with a given field fails given_when_then_field" \
+    "$WEB_FLOW"$'\n    given: a signed-out member'
   [ "$(lint_codes)" = '["given_when_then_field"]' ]
-}
 
-@test "a flow with both covers and test_path fails flow_target_conflict" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$WEB_FLOW"$'\n    test_path: .gaia/tests/lib/x.bats'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+  _refuse "a flow with both covers and test_path fails flow_target_conflict" \
+    "$WEB_FLOW"$'\n    test_path: .gaia/tests/lib/x.bats'
+  [ "$(lint_codes)" = '["flow_target_conflict"]' ]
+
+  _refuse "a flow with neither covers nor test_path fails flow_target_conflict" \
+    "$(printf '%s\n' "$WEB_FLOW" | sed '/covers:/d')"
+  [ "$(lint_codes)" = '["flow_target_conflict"]' ]
+
+  _refuse "a flow with an empty covers list fails flow_target_conflict" \
+    "$(printf '%s\n' "$WEB_FLOW" | sed 's/covers: .*/covers: []/')"
   [ "$(lint_codes)" = '["flow_target_conflict"]' ]
 }
 
-@test "a flow with neither covers nor test_path fails flow_target_conflict" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed '/covers:/d')"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
-  [ "$(lint_codes)" = '["flow_target_conflict"]' ]
-}
-
-@test "a flow with an empty covers list fails flow_target_conflict" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed 's/covers: .*/covers: []/')"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
-  [ "$(lint_codes)" = '["flow_target_conflict"]' ]
-}
-
-@test "a flow name holding a plan id fails working_document_id" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$WEB_FLOW" | sed "s/name: .*/name: As built in PLAN-""042/")"
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
-  [ "$(lint_codes)" = '["working_document_id"]' ]
-}
-
-@test "a reopened SPEC without a reopen rationale still fails" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" "$WEB_FLOW" reopened
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-  [ "$status" -eq 1 ]
+@test "a reopened SPEC needs a reopen rationale" {
+  _refuse "a reopened SPEC without a reopen rationale still fails" "$WEB_FLOW" reopened
   [ "$(lint_codes)" = '["reopen_missing_rationale"]' ]
-}
 
-@test "a reopened SPEC with a reopen rationale and no UAT diff passes" {
+  echo "case: a reopened SPEC with a reopen rationale and no UAT diff passes"
   make_spec "$BATS_TEST_TMPDIR/s.md" "$WEB_FLOW" reopened '## Reopen rationale
 
 The sign-in path changed.'

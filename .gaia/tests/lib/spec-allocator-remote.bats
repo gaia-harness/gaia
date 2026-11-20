@@ -40,40 +40,122 @@ _last_spec_field() {
   jq -r --arg field "$field" '[.items[] | select(.kind == "spec")][-1][$field]' "$repository/.notebook/catalog.json"
 }
 
-# --- UAT-001: remote governs via union, + negative control ------------------
-
-@test "UAT-001a: remote max N over local max M; next returns SPEC-(N+1), pushes spec/(N+1)" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --seed-remote-tag spec/010 "seeded ten" --seed-spec SPEC-003 draft)"
-  ORIGIN="${REPO}.git"
-
-  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO' 'uat001 subject'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "SPEC-011" ]
-
-  # The remote (N=10), not the local ledger (M=3), governed the number.
-  [ "$(git -C "$ORIGIN" tag -l 'spec/011')" = "spec/011" ]
-  [ "$(_last_spec_field "$REPO" reservation)" = "reserved" ]
+# _retire_repo: queue the current fixture repo and its origin for teardown, so a
+# table test can build the next case's fixture in REPO.
+_retire_repo() {
+  CLEANUP_EXTRA+=("$REPO" "${REPO}.git")
 }
 
-@test "UAT-001b negative control: same fixture, GAIA_SPEC_FORCE_OFFLINE=1 degrades to provisional (not silently ledger-numbered)" {
+# --- Number selection and degrade modes ------------------------------------
+
+@test "UAT-001a, UAT-006, unseeded origin: next returns the highest of remote tags and local ledger plus one and reserves its tag" {
+  # Each case seeds a different origin and catalog, so each builds its own fixture.
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --seed-remote-tag spec/010 "seeded ten" --seed-spec SPEC-003 draft)"
   ORIGIN="${REPO}.git"
+  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO' 'uat001 subject'"
+  [ "$status" -eq 0 ] || { echo "case UAT-001a: status $status"; return 1; }
+  [ "$output" = "SPEC-011" ] || { echo "case UAT-001a: $output"; return 1; }
+  # The remote (N=10), not the local ledger (M=3), governed the number.
+  [ "$(git -C "$ORIGIN" tag -l 'spec/011')" = "spec/011" ] || { echo "case UAT-001a: spec/011 not pushed"; return 1; }
+  [ "$(_last_spec_field "$REPO" reservation)" = "reserved" ] || { echo "case UAT-001a: not reserved"; return 1; }
+  _retire_repo
 
+  # Remote tags with gaps below N and an empty local catalog: N+1, never a
+  # gap or SPEC-001.
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --seed-remote-tag spec/003 "sub three" --seed-remote-tag spec/007 "sub seven")"
+  ORIGIN="${REPO}.git"
+  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO' 'uat006 subject'"
+  [ "$status" -eq 0 ] || { echo "case UAT-006: status $status"; return 1; }
+  [ "$output" = "SPEC-008" ] || { echo "case UAT-006: $output"; return 1; }
+  [ "$(git -C "$ORIGIN" tag -l 'spec/008')" = "spec/008" ] || { echo "case UAT-006: spec/008 not pushed"; return 1; }
+  _retire_repo
+
+  # A reachable but unseeded origin and a non-empty local catalog: M+1,
+  # never SPEC-001.
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --seed-spec SPEC-004 draft)"
+  ORIGIN="${REPO}.git"
+  # Sanity: the origin is reachable and writable, but genuinely has zero
+  # spec/* tags.
+  [ -z "$(git -C "$ORIGIN" tag -l 'spec/*')" ] || { echo "case unseeded: origin has spec tags"; return 1; }
+  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO' 'reachable unseeded subject'"
+  [ "$status" -eq 0 ] || { echo "case unseeded: status $status"; return 1; }
+  [ "$output" = "SPEC-005" ] || { echo "case unseeded: $output"; return 1; }
+  [ "$(git -C "$ORIGIN" tag -l 'spec/005')" = "spec/005" ] || { echo "case unseeded: spec/005 not pushed"; return 1; }
+}
+
+@test "UAT-001b, UAT-004a, UAT-004b, UAT-007: an unreachable, forced-offline or tag-rejecting origin degrades without blocking" {
+  local start end
+  # Each case needs its own origin state, so each builds its own fixture.
+  # UAT-001b negative control: the UAT-001a fixture, forced offline.
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --seed-remote-tag spec/010 "seeded ten" --seed-spec SPEC-003 draft)"
+  ORIGIN="${REPO}.git"
   run bash -c "GAIA_SPEC_FORCE_OFFLINE=1 bash '$REPO/$ALLOCATOR' next '$REPO' 'uat001 negative control' 2>'$REPO/err'"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "case UAT-001b: status $status"; return 1; }
   # Forced offline: the remote's N=10 is unreachable, so the union falls back
   # to the LOCAL-only max (M=3) -> SPEC-004, never SPEC-011. A silent
   # ledger-only-numbered implementation and this provisional-degrade path are
   # observationally identical on id alone, which is exactly what the
   # reservation state + warning must distinguish.
-  [ "$output" = "SPEC-004" ]
-  [ "$(_last_spec_field "$REPO" reservation)" = "provisional" ]
-  grep -q "reserved provisionally" "$REPO/err"
+  [ "$output" = "SPEC-004" ] || { echo "case UAT-001b: $output"; return 1; }
+  [ "$(_last_spec_field "$REPO" reservation)" = "provisional" ] || { echo "case UAT-001b: not provisional"; return 1; }
+  grep -q "reserved provisionally" "$REPO/err" || { echo "case UAT-001b: no warning"; return 1; }
   # No tag was pushed for the offline id; nothing new landed on the origin.
-  [ -z "$(git -C "$ORIGIN" tag -l 'spec/004')" ]
+  [ -z "$(git -C "$ORIGIN" tag -l 'spec/004')" ] || { echo "case UAT-001b: spec/004 pushed"; return 1; }
+  _retire_repo
+
+  # UAT-004a: a configured but unreachable origin; the configured origin path
+  # no longer resolves (bare repo removed out from under the remote config).
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin)"
+  rm -rf "${REPO}.git"
+  start="$(date +%s)"
+  run bash -c "GAIA_SPEC_REMOTE_TIMEOUT_SECONDS=2 bash '$REPO/$ALLOCATOR' next '$REPO' 'uat004a subject' 2>'$REPO/err'"
+  end="$(date +%s)"
+  [ "$status" -eq 0 ] || { echo "case UAT-004a: status $status"; return 1; }
+  [ "$output" = "SPEC-001" ] || { echo "case UAT-004a: $output"; return 1; }
+  # Bounded: nowhere close to hanging (generous ceiling well above the 2s
+  # remote timeout to absorb CI slowness without flaking).
+  [ "$((end - start))" -le 10 ] || { echo "case UAT-004a: took $((end - start))s"; return 1; }
+  [ "$(_last_spec_field "$REPO" reservation)" = "provisional" ] || { echo "case UAT-004a: not provisional"; return 1; }
+  grep -q "reserved provisionally" "$REPO/err" || { echo "case UAT-004a: no warning"; return 1; }
+  _retire_repo
+
+  # UAT-004b: GAIA_SPEC_FORCE_OFFLINE=1 (credential-prompt analogue).
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin)"
+  start="$(date +%s)"
+  run bash -c "GAIA_SPEC_FORCE_OFFLINE=1 bash '$REPO/$ALLOCATOR' next '$REPO' 'uat004b subject' 2>'$REPO/err'"
+  end="$(date +%s)"
+  [ "$status" -eq 0 ] || { echo "case UAT-004b: status $status"; return 1; }
+  [ "$output" = "SPEC-001" ] || { echo "case UAT-004b: $output"; return 1; }
+  [ "$((end - start))" -le 10 ] || { echo "case UAT-004b: took $((end - start))s"; return 1; }
+  [ "$(_last_spec_field "$REPO" reservation)" = "provisional" ] || { echo "case UAT-004b: not provisional"; return 1; }
+  grep -q "reserved provisionally" "$REPO/err" || { echo "case UAT-004b: no warning"; return 1; }
+
+  # Companion no-remote fixture: same allocation, no origin configured at
+  # all. Distinguishable by BOTH reservation state and the absence of a
+  # warning, so a future implementation cannot collapse "never wired the
+  # remote" and "wired but currently unreachable" into the same signature.
+  NOREMOTE="$("$HELPERS/tmp-notebook-repo.sh")"
+  CLEANUP_EXTRA+=("$NOREMOTE")
+  run bash -c "bash '$NOREMOTE/$ALLOCATOR' next '$NOREMOTE' 'no remote subject' 2>'$NOREMOTE/err'"
+  [ "$status" -eq 0 ] || { echo "case no remote: status $status"; return 1; }
+  [ "$(_last_spec_field "$NOREMOTE" reservation)" = "local" ] || { echo "case no remote: not local"; return 1; }
+  [ ! -s "$NOREMOTE/err" ] || { echo "case no remote: warned"; return 1; }
+  _retire_repo
+
+  # UAT-007: the origin rejects refs/tags/spec/* pushes.
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --origin-reject-spec-tags)"
+  ORIGIN="${REPO}.git"
+  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO' 'uat007 subject' 2>'$REPO/err'"
+  [ "$status" -eq 0 ] || { echo "case UAT-007: status $status"; return 1; }
+  [ "$output" = "SPEC-001" ] || { echo "case UAT-007: $output"; return 1; }
+  [ "$(_last_spec_field "$REPO" reservation)" = "unavailable" ] || { echo "case UAT-007: not unavailable"; return 1; }
+  grep -q "cross-team collision-safety unavailable" "$REPO/err" || { echo "case UAT-007: no warning"; return 1; }
+  # The reject hook actually fired (this machine's global core.hooksPath
+  # would otherwise silently no-op it): the tag never landed on the origin.
+  [ -z "$(git -C "$ORIGIN" tag -l 'spec/001')" ] || { echo "case UAT-007: spec/001 pushed"; return 1; }
 }
 
-
+# bats test_tags=protected
 @test "UAT-002: two clones racing next; distinct ids, loser id > winner id (retry fired)" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin)"
   ORIGIN="${REPO}.git"
@@ -174,52 +256,9 @@ _last_spec_field() {
   [ "$(_tag_subject "$ORIGIN" "$tag")" = "$subject" ]
 }
 
-# --- UAT-004: bounded remote read, provisional, observably marked ----------
-
-@test "UAT-004a: configured-but-unreachable origin; next returns fast, provisional + warning" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin)"
-  # Simulate an unreachable remote: the configured origin path no longer
-  # resolves (bare repo removed out from under the remote config).
-  rm -rf "${REPO}.git"
-
-  start="$(date +%s)"
-  run bash -c "GAIA_SPEC_REMOTE_TIMEOUT_SECONDS=2 bash '$REPO/$ALLOCATOR' next '$REPO' 'uat004a subject' 2>'$REPO/err'"
-  end="$(date +%s)"
-  [ "$status" -eq 0 ]
-  [ "$output" = "SPEC-001" ]
-  # Bounded: nowhere close to hanging (generous ceiling well above the 2s
-  # remote timeout to absorb CI slowness without flaking).
-  [ "$((end - start))" -le 10 ]
-  [ "$(_last_spec_field "$REPO" reservation)" = "provisional" ]
-  grep -q "reserved provisionally" "$REPO/err"
-}
-
-@test "UAT-004b: GAIA_SPEC_FORCE_OFFLINE=1 (credential-prompt analogue); provisional + warning, distinguishable from the no-remote 'local' case" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin)"
-
-  start="$(date +%s)"
-  run bash -c "GAIA_SPEC_FORCE_OFFLINE=1 bash '$REPO/$ALLOCATOR' next '$REPO' 'uat004b subject' 2>'$REPO/err'"
-  end="$(date +%s)"
-  [ "$status" -eq 0 ]
-  [ "$output" = "SPEC-001" ]
-  [ "$((end - start))" -le 10 ]
-  [ "$(_last_spec_field "$REPO" reservation)" = "provisional" ]
-  grep -q "reserved provisionally" "$REPO/err"
-
-  # Companion no-remote fixture: same allocation, no origin configured at
-  # all. Distinguishable by BOTH reservation state and the absence of a
-  # warning, so a future implementation cannot collapse "never wired the
-  # remote" and "wired but currently unreachable" into the same signature.
-  NOREMOTE="$("$HELPERS/tmp-notebook-repo.sh")"
-  CLEANUP_EXTRA=("$NOREMOTE")
-  run bash -c "bash '$NOREMOTE/$ALLOCATOR' next '$NOREMOTE' 'no remote subject' 2>'$NOREMOTE/err'"
-  [ "$status" -eq 0 ]
-  [ "$(_last_spec_field "$NOREMOTE" reservation)" = "local" ]
-  [ ! -s "$NOREMOTE/err" ]
-}
-
 # --- UAT-005: offline-provisional collision -> renumber ---------------------
 
+# bats test_tags=protected
 @test "UAT-005: offline-provisional SPEC-K collides on reconnect; renumbered, folder + catalog row + caches re-keyed, new tag reserved" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" \
     --with-origin \
@@ -269,49 +308,4 @@ _last_spec_field() {
   [ "$(git -C "$ORIGIN" tag -l 'spec/006')" = "spec/006" ]
   [ "$(git -C "$ORIGIN" tag -l 'spec/005')" = "spec/005" ]
   [ "$(_tag_subject "$ORIGIN" "spec/005")" = "taken by another machine while offline" ]
-}
-
-# --- UAT-006: gaps below N, sparse/empty catalog -> N+1 ----------------------
-
-@test "UAT-006: remote tags with gaps below N, empty local catalog; next returns SPEC-(N+1), never a gap or SPEC-001" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --seed-remote-tag spec/003 "sub three" --seed-remote-tag spec/007 "sub seven")"
-  ORIGIN="${REPO}.git"
-
-  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO' 'uat006 subject'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "SPEC-008" ]
-  [ "$(git -C "$ORIGIN" tag -l 'spec/008')" = "spec/008" ]
-}
-
-# --- success_criteria b2: reachable-but-UNSEEDED remote (SPEC-001 blocker) -
-
-@test "reachable-but-unseeded origin, non-empty local catalog; next returns SPEC-(M+1), never SPEC-001" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --seed-spec SPEC-004 draft)"
-  ORIGIN="${REPO}.git"
-  # Sanity: the origin is reachable and writable, but genuinely has zero
-  # spec/* tags (this is the distinguishing fixture vs UAT-006, which seeds
-  # the remote, and vs UAT-001, where the remote max exceeds local).
-  [ -z "$(git -C "$ORIGIN" tag -l 'spec/*')" ]
-
-  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO' 'reachable unseeded subject'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "SPEC-005" ]
-  [ "$(git -C "$ORIGIN" tag -l 'spec/005')" = "spec/005" ]
-}
-
-# --- UAT-007: non-writable tag namespace -> local numbering + warning ------
-
-@test "UAT-007: origin rejects refs/tags/spec/* pushes; next returns the id, marks unavailable, warns, never blocks" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --with-origin --origin-reject-spec-tags)"
-  ORIGIN="${REPO}.git"
-
-  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO' 'uat007 subject' 2>'$REPO/err'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "SPEC-001" ]
-  [ "$(_last_spec_field "$REPO" reservation)" = "unavailable" ]
-  grep -q "cross-team collision-safety unavailable" "$REPO/err"
-
-  # The reject hook actually fired (this machine's global core.hooksPath
-  # would otherwise silently no-op it): the tag never landed on the origin.
-  [ -z "$(git -C "$ORIGIN" tag -l 'spec/001')" ]
 }

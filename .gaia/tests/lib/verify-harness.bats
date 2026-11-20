@@ -2,7 +2,7 @@
 #
 # Tests for .gaia/tests/verify-harness.sh: argument handling, branch-mode
 # preconditions and selection, round mode's narrower selection, and the missing-tool
-# probes. Every case builds a fixture repository under $BATS_TEST_TMPDIR with
+# probes. Most tests build a fixture repository and its origin under $BATS_TEST_TMPDIR with
 # .gaia/tests/lib/helpers/verify-harness-fixture.sh, whose stub checks log the
 # toplevel they ran from, so a passing case proves a check ran rather than a
 # label printed. The merge-base comparison and the pass record live in
@@ -71,6 +71,7 @@ missing_manifest_diagnostic() {
   printf '  - Manifest claims paths missing from staging tree:\n  -   apps/web/app/gone.ts\nFAIL  01-files-present.sh: 1 manifest path(s) missing from staging'
 }
 
+# bats test_tags=protected
 @test "branch mode reports every failure and withholds the pass record" {
   fixture
   mkdir -p content
@@ -105,8 +106,36 @@ missing_manifest_diagnostic() {
   lacks '--filter-tags suites/x.bats'
 }
 
-@test "the whole-tree step runs only the per-test-marked tests of a suite nothing selects" {
-  fixture --no-branch
+# case_fixture <directory> [--no-branch]: a fresh fixture for a case of a
+# table whose history the earlier cases cannot share, in its own directory
+# under the test's temporary directory, with PATH reset so an earlier
+# fixture's shim does not stay first.
+case_fixture() {
+  local case_directory="$1"
+  shift
+  BATS_TEST_TMPDIR="$TABLE_TMPDIR/$case_directory"
+  mkdir -p "$BATS_TEST_TMPDIR"
+  PATH="$TABLE_PATH"
+  fixture "$@"
+}
+
+# begin_case <label>: name the case in the output and start its check log
+# empty, so one case's log entries never satisfy the next case's assertions.
+begin_case() {
+  printf 'case: %s\n' "$1"
+  : >"$VERIFY_FIXTURE_LOG"
+}
+
+# The per-test-marked cases share one fixture whose main carries the marked
+# suites, and the file-marked cases share the plain fixture. The second case of
+# each pair builds on the first: branch mode selects over the merge-base range,
+# so the earlier unrelated commit stays in the range.
+@test "the whole-tree step runs the marked tests of an unselected suite, and a marked suite the change selects runs once in full" {
+  TABLE_TMPDIR="$BATS_TEST_TMPDIR"
+  TABLE_PATH="$PATH"
+
+  case_fixture per-test --no-branch
+  begin_case "the whole-tree step runs only the per-test-marked tests of a suite nothing selects"
   vhf_write_suite suites/pertest.bats tests:keep keep dropone droptwo
   vhf_write_suite suites/listed.bats tests+:listed listed other
   vhf_commit "suites marking one test each"
@@ -118,33 +147,25 @@ missing_manifest_diagnostic() {
   every_label_is PASS 'bats whole-tree'
   [ "$(vhf_suite_runs suites/pertest.bats "$VHF_ROOT")" = "pertest keep" ]
   [ "$(vhf_suite_runs suites/listed.bats "$VHF_ROOT")" = "listed listed" ]
-}
 
-@test "the whole-tree step runs every test of a file-marked suite nothing selects" {
-  fixture
-  printf 'page two\n' >apps/web/app/page.txt
-  vhf_commit "an unrelated branch change"
-  run_runner branch
-  [ "$status" -eq 0 ]
-  every_label_is PASS 'bats whole-tree'
-  [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole zero," ]
-}
-
-@test "a per-test-marked suite the change selects runs every test exactly once" {
-  fixture --no-branch
-  vhf_write_suite suites/pertest.bats tests:keep keep dropone droptwo
-  vhf_commit "a suite marking one test"
-  vhf_branch
+  begin_case "a per-test-marked suite the change selects runs every test exactly once"
   vhf_add_test suites/pertest.bats extra
   vhf_commit "the branch changes the marked suite"
   run_runner branch
   [ "$status" -eq 0 ]
   every_label_is PASS 'bats whole-tree' 'bats selected'
   [ "$(vhf_suite_runs suites/pertest.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "pertest dropone,pertest droptwo,pertest extra,pertest keep," ]
-}
 
-@test "a file-marked suite the change selects runs once in full and the whole-tree step says so" {
-  fixture
+  case_fixture file-marked
+  begin_case "the whole-tree step runs every test of a file-marked suite nothing selects"
+  printf 'page two\n' >apps/web/app/page.txt
+  vhf_commit "an unrelated branch change"
+  run_runner branch
+  [ "$status" -eq 0 ]
+  every_label_is PASS 'bats whole-tree'
+  [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole zero," ]
+
+  begin_case "a file-marked suite the change selects runs once in full and the whole-tree step says so"
   vhf_add_test suites/whole.bats two
   vhf_commit "the branch changes the file-marked suite"
   run_runner branch
@@ -154,8 +175,22 @@ missing_manifest_diagnostic() {
   [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole two,whole zero," ]
 }
 
-@test "round mode skips both bats steps when no suite references its delta" {
-  fixture
+# One fixture for every case. Round mode reads only the HEAD commit or the
+# uncommitted delta, so each case's own commit (or staged change) is its whole
+# delta; the staged case commits its change after its run so it leaves the
+# next case a clean tree. The parentless case runs first, on main's root commit.
+@test "round mode selects over the HEAD delta, skips unreferenced deltas, leaves marked suites to branch mode" {
+  fixture --no-branch
+
+  begin_case "round mode on a parentless HEAD selects over the empty tree without error"
+  run_runner round
+  [ "$status" -eq 0 ]
+  has 'DELTA  the root commit'
+  lacks 'FAIL  bats selected'
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
+  vhf_branch
+
+  begin_case "round mode skips both bats steps when no suite references its delta"
   printf 'page two\n' >apps/web/app/page.txt
   vhf_commit "a frontend-only change"
   run_runner round
@@ -168,6 +203,39 @@ missing_manifest_diagnostic() {
   [ "$(vhf_log_entries build-staging)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries 01-files-present)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries 02-marker-strip)" = "$VHF_ROOT" ]
+
+  begin_case "round mode runs the HEAD commit's selection and leaves the marked suites to branch mode"
+  printf 's1 two\n' >src/s1-input.txt
+  vhf_commit "an earlier commit touching what s1 names"
+  printf 's2 two\n' >.claude/rules/s2-rule.md
+  vhf_commit "a HEAD commit touching a harness rule s2 names"
+  run_runner round
+  [ "$status" -eq 0 ]
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
+  has_line '^PASS  bats selected \([0-9]+s\)$'
+  [ "$(vhf_suite_runs suites/s2.bats "$VHF_ROOT")" = "s2 rule" ]
+  [ -z "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT")" ]
+  [ -z "$(vhf_suite_runs suites/s1.bats "$VHF_ROOT")" ]
+
+  begin_case "round mode runs no marked suite for a staged harness change nothing selects"
+  printf 'new rule\n' >.claude/rules/unnamed-rule.md
+  vhf_git add .claude/rules/unnamed-rule.md
+  run_runner round
+  [ "$status" -eq 0 ]
+  has 'DELTA  uncommitted tracked changes against HEAD'
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
+  has_line '^SKIP  bats selected: '
+  [ -z "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT")" ]
+  vhf_commit "the staged rule"
+
+  begin_case "round mode runs a marked suite its delta selects under bats selected"
+  vhf_add_test suites/whole.bats two
+  vhf_commit "a HEAD commit editing the marked suite"
+  run_runner round
+  [ "$status" -eq 0 ]
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
+  has_line '^PASS  bats selected \([0-9]+s\)$'
+  [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole two,whole zero," ]
 }
 
 @test "round mode hands shell-lint the round's delta as its path list" {
@@ -186,53 +254,6 @@ STUB
   run_runner round
   [ "$status" -eq 0 ]
   [ "$(vhf_log_entries shell-lint-path)" = "src/s1-input.txt" ] || { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
-}
-
-@test "round mode runs the HEAD commit's selection and leaves the marked suites to branch mode" {
-  fixture
-  printf 's1 two\n' >src/s1-input.txt
-  vhf_commit "an earlier commit touching what s1 names"
-  printf 's2 two\n' >.claude/rules/s2-rule.md
-  vhf_commit "a HEAD commit touching a harness rule s2 names"
-  run_runner round
-  [ "$status" -eq 0 ]
-  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
-  has_line '^PASS  bats selected \([0-9]+s\)$'
-  [ "$(vhf_suite_runs suites/s2.bats "$VHF_ROOT")" = "s2 rule" ]
-  [ -z "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT")" ]
-  [ -z "$(vhf_suite_runs suites/s1.bats "$VHF_ROOT")" ]
-}
-
-@test "round mode runs no marked suite for a staged harness change nothing selects" {
-  fixture
-  printf 'new rule\n' >.claude/rules/unnamed-rule.md
-  vhf_git add .claude/rules/unnamed-rule.md
-  run_runner round
-  [ "$status" -eq 0 ]
-  has 'DELTA  uncommitted tracked changes against HEAD'
-  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
-  has_line '^SKIP  bats selected: '
-  [ -z "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT")" ]
-}
-
-@test "round mode runs a marked suite its delta selects under bats selected" {
-  fixture
-  vhf_add_test suites/whole.bats two
-  vhf_commit "a HEAD commit editing the marked suite"
-  run_runner round
-  [ "$status" -eq 0 ]
-  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
-  has_line '^PASS  bats selected \([0-9]+s\)$'
-  [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole two,whole zero," ]
-}
-
-@test "round mode on a parentless HEAD selects over the empty tree without error" {
-  fixture --no-branch
-  run_runner round
-  [ "$status" -eq 0 ]
-  has 'DELTA  the root commit'
-  lacks 'FAIL  bats selected'
-  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
 }
 
 # A harness commit, so both bats steps would run with every tool present.
@@ -307,43 +328,15 @@ STUB
   [ "$(vhf_log_entries shell-lint-mode)" = "narrowed" ] || { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
 }
 
-@test "a missing rsync skips the three distribution checks and says so" {
+# One fixture for every case. The branch-mode jq case runs first, while the
+# tree is clean; each chmod case restores the mode after its run, since the
+# executable bit is tracked and a later case would otherwise see it as a change.
+# bats test_tags=protected
+@test "a missing tool or non-executable binary skips only its own steps, warns, and (jq in branch mode) withholds the record" {
   fixture
   harness_commit
-  farm="$(vhf_path_without rsync)"
-  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
-  [ "$status" -eq 0 ]
-  has 'WARN  rsync not found: install with brew install rsync; CI remains the only check for release-scrub leak check, 01-files-present, 02-marker-strip'
-  every_label_is SKIP 'release-scrub leak check' 01-files-present 02-marker-strip
-  every_label_is PASS shell-lint 'bats selected'
-  [ -z "$(vhf_log_entries build-staging)" ]
-}
 
-@test "a missing bats skips both bats steps and says so" {
-  fixture
-  harness_commit
-  farm="$(vhf_path_without bats)"
-  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
-  [ "$status" -eq 0 ]
-  has 'WARN  bats not found: install with brew install bats-core; CI remains the only check for bats whole-tree, bats selected'
-  every_label_is SKIP 'bats whole-tree' 'bats selected'
-  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip
-}
-
-@test "a non-executable maintainer binary skips the three distribution checks and says so" {
-  fixture
-  harness_commit
-  chmod -x .gaia/cli/gaia-maintainer
-  run_runner round
-  [ "$status" -eq 0 ]
-  has 'WARN  .gaia/cli/gaia-maintainer not found: install with pnpm -C .gaia/cli bundle; CI remains the only check for release-scrub leak check, 01-files-present, 02-marker-strip'
-  every_label_is SKIP 'release-scrub leak check' 01-files-present 02-marker-strip
-  every_label_is PASS shell-lint
-}
-
-@test "a missing jq in branch mode skips 01 and writes no pass record, loudly" {
-  fixture
-  harness_commit
+  begin_case "a missing jq in branch mode skips 01 and writes no pass record, loudly"
   farm="$(vhf_path_without jq)"
   run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" branch
   [ "$status" -eq 0 ]
@@ -353,6 +346,50 @@ STUB
   has 'WARN  no pass record written: jq not found; the audit dispatch gate will deny until jq is installed (brew install jq) and branch mode is re-run'
   lacks 'Pass record written'
   [ ! -e "$VHF_RECORD" ]
+
+  begin_case "a missing rsync skips the three distribution checks and says so"
+  farm="$(vhf_path_without rsync)"
+  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
+  [ "$status" -eq 0 ]
+  has 'WARN  rsync not found: install with brew install rsync; CI remains the only check for release-scrub leak check, 01-files-present, 02-marker-strip'
+  every_label_is SKIP 'release-scrub leak check' 01-files-present 02-marker-strip
+  every_label_is PASS shell-lint 'bats selected'
+  [ -z "$(vhf_log_entries build-staging)" ]
+
+  begin_case "a missing bats skips both bats steps and says so"
+  farm="$(vhf_path_without bats)"
+  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
+  [ "$status" -eq 0 ]
+  has 'WARN  bats not found: install with brew install bats-core; CI remains the only check for bats whole-tree, bats selected'
+  every_label_is SKIP 'bats whole-tree' 'bats selected'
+  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip
+
+  begin_case "a missing node skips only the line-limit step and says so"
+  farm="$(vhf_path_without node)"
+  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
+  [ "$status" -eq 0 ]
+  has 'WARN  node not found: install with brew install node; CI remains the only check for line-limit'
+  every_label_is SKIP line-limit
+  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip 'bats selected'
+  [ -z "$(vhf_log_entries line-limit)" ]
+
+  begin_case "a non-executable maintainer binary skips the three distribution checks and says so"
+  chmod -x .gaia/cli/gaia-maintainer
+  run_runner round
+  [ "$status" -eq 0 ]
+  has 'WARN  .gaia/cli/gaia-maintainer not found: install with pnpm -C .gaia/cli bundle; CI remains the only check for release-scrub leak check, 01-files-present, 02-marker-strip'
+  every_label_is SKIP 'release-scrub leak check' 01-files-present 02-marker-strip
+  every_label_is PASS shell-lint
+  chmod +x .gaia/cli/gaia-maintainer
+
+  begin_case "a non-executable fitness CLI skips only the line-limit step and says so"
+  chmod -x .gaia/cli/gaia
+  run_runner round
+  [ "$status" -eq 0 ]
+  has 'WARN  .gaia/cli/gaia not found or not executable: build with pnpm -C .gaia/cli bundle; CI remains the only check for line-limit'
+  every_label_is SKIP line-limit
+  every_label_is PASS shell-lint 01-files-present
+  chmod +x .gaia/cli/gaia
 }
 
 # A bash that reports major version 3 to bats5.sh's probe and runs the real
@@ -372,21 +409,19 @@ EOF
   printf '%s\n' "$shim_directory"
 }
 
-@test "bats still runs under a bash 3.2 and relays the bats5 warning" {
+@test "bats still runs under a degraded bash or without a parallel runner and relays the warning" {
   fixture
   vhf_empty_candidates
   harness_commit
+
+  begin_case "bats still runs under a bash 3.2 and relays the bats5 warning"
   shim_directory="$(write_bash_three_shim)"
   run env PATH="$shim_directory:$PATH" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
   [ "$status" -eq 0 ]
   has 'WARNING: bats will run under bash 3'
   every_label_is PASS 'bats selected'
-}
 
-@test "bats still runs without a parallel runner and relays the serial warning" {
-  fixture
-  vhf_empty_candidates
-  harness_commit
+  begin_case "bats still runs without a parallel runner and relays the serial warning"
   farm="$(vhf_path_without parallel rush)"
   run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
   [ "$status" -eq 0 ]
@@ -394,19 +429,13 @@ EOF
   every_label_is PASS 'bats selected'
 }
 
-@test "a shell-lint failure names the check, the file and the reproduce command" {
+# One fixture for both cases: the uncommitted line-limit breach is restored
+# before the shell-lint finding is committed for the branch run.
+# bats test_tags=protected
+@test "a failing check names the check, the file and the reproduce command" {
   fixture
-  vhf_control shell-lint "$(printf 'In scripts/broken-lint.sh line 3:\necho $unquoted\n     ^-- SC2086 (info): Double quote to prevent globbing.')"
-  vhf_commit "a lint finding"
-  run_runner branch
-  [ "$status" -eq 1 ]
-  has_line '^FAIL  shell-lint \([0-9]+s\)$'
-  has 'scripts/broken-lint.sh'
-  has '  reproduce: bash .gaia/tests/shell-lint.sh'
-}
 
-@test "round mode fails an uncommitted line-limit breach, naming the file, the rule and the reproduce command" {
-  fixture
+  begin_case "round mode fails an uncommitted line-limit breach, naming the file, the rule and the reproduce command"
   vhf_control line-limit ".claude/hooks/grown-hook.sh"
   run_runner round
   [ "$status" -eq 1 ]
@@ -416,29 +445,16 @@ EOF
   [ "$(vhf_log_entries line-limit | sed -n 1p)" = "$VHF_ROOT" ]
   [ "$(cat "$VERIFY_FIXTURE_LOG.line-limit-arguments")" \
     = "fitness check --json --scope all --fail-on error --only authoring.harness.max-lines --config .claude/gaia-fitness.json" ]
-}
+  vhf_git checkout -q -- control/line-limit
 
-@test "a missing node skips only the line-limit step and says so" {
-  fixture
-  harness_commit
-  farm="$(vhf_path_without node)"
-  run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
-  [ "$status" -eq 0 ]
-  has 'WARN  node not found: install with brew install node; CI remains the only check for line-limit'
-  every_label_is SKIP line-limit
-  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip 'bats selected'
-  [ -z "$(vhf_log_entries line-limit)" ]
-}
-
-@test "a non-executable fitness CLI skips only the line-limit step and says so" {
-  fixture
-  harness_commit
-  chmod -x .gaia/cli/gaia
-  run_runner round
-  [ "$status" -eq 0 ]
-  has 'WARN  .gaia/cli/gaia not found or not executable: build with pnpm -C .gaia/cli bundle; CI remains the only check for line-limit'
-  every_label_is SKIP line-limit
-  every_label_is PASS shell-lint 01-files-present
+  begin_case "a shell-lint failure names the check, the file and the reproduce command"
+  vhf_control shell-lint "$(printf 'In scripts/broken-lint.sh line 3:\necho $unquoted\n     ^-- SC2086 (info): Double quote to prevent globbing.')"
+  vhf_commit "a lint finding"
+  run_runner branch
+  [ "$status" -eq 1 ]
+  has_line '^FAIL  shell-lint \([0-9]+s\)$'
+  has 'scripts/broken-lint.sh'
+  has '  reproduce: bash .gaia/tests/shell-lint.sh'
 }
 
 # real_fitness_cli: swap the stub for the committed CLI and give the fixture
@@ -477,18 +493,22 @@ real_fitness_cli() {
   every_label_is PASS line-limit
 }
 
-@test "branch mode refuses uncommitted tracked changes and runs nothing" {
+# One fixture for both refusals: the dirty file is restored before HEAD is
+# detached. Neither refusal runs a check, so the log stays empty throughout.
+# bats test_tags=protected
+@test "branch mode refuses uncommitted tracked changes and a detached HEAD and runs nothing" {
   fixture
+
+  printf 'case: %s\n' "branch mode refuses uncommitted tracked changes and runs nothing"
   printf 'dirty\n' >src/x-input.txt
   run_runner branch
   [ "$status" -eq 3 ]
   has 'REFUSED  uncommitted tracked changes (see git status): commit first'
   [ ! -s "$VERIFY_FIXTURE_LOG" ]
   [ ! -e "$VHF_RECORD" ]
-}
+  vhf_git checkout -q -- src/x-input.txt
 
-@test "branch mode refuses a detached HEAD and runs nothing" {
-  fixture
+  printf 'case: %s\n' "branch mode refuses a detached HEAD and runs nothing"
   vhf_git checkout -q --detach
   run_runner branch
   [ "$status" -eq 3 ]
@@ -505,6 +525,7 @@ real_fitness_cli() {
   has 'WARN  1 untracked file(s) under harness paths are not covered by this run: .claude/rules/untracked-draft.md'
 }
 
+# bats test_tags=protected
 @test "a missing origin/main warns, skips the selection and fails a failing check" {
   fixture
   vhf_control 01-files-present "$(missing_manifest_diagnostic)"
@@ -519,6 +540,7 @@ real_fitness_cli() {
   lacks 'PRE-EXISTING'
 }
 
+# bats test_tags=protected
 @test "no flag, operand or mode skips the run" {
   fixture
   local arguments
@@ -530,6 +552,7 @@ real_fitness_cli() {
   [ ! -s "$VERIFY_FIXTURE_LOG" ]
 }
 
+# bats test_tags=protected
 @test "no environment variable skips a failing check" {
   fixture
   vhf_control 01-files-present "$(missing_manifest_diagnostic)"
@@ -579,9 +602,16 @@ release_fixture() {
   vhf_commit "chore(release): v1.1.0"
 }
 
-@test "a release-bookkeeping branch runs only the manifest check and writes the pass record" {
+# One release fixture for every case. The passing case runs first, on an empty
+# check log; the failing case clears the record the passing case wrote, so
+# only its own run decides whether a record exists; the mixed case commits
+# last, on top of the bookkeeping commit.
+# bats test_tags=protected
+@test "a release-bookkeeping branch runs only the manifest check; any other change takes the full verification" {
   command -v node >/dev/null || skip "node not installed"
   release_fixture
+
+  printf 'case: %s\n' "a release-bookkeeping branch runs only the manifest check and writes the pass record"
   run_runner branch
   [ "$status" -eq 0 ]
   has 'RELEASE  bookkeeping 1.0.0 -> 1.1.0'
@@ -589,20 +619,15 @@ release_fixture() {
   every_label_is SKIP shell-lint 'distribution checks' 'bats whole-tree' 'bats selected'
   [ ! -s "$VERIFY_FIXTURE_LOG" ]
   [ -f "$VHF_RECORD" ]
-}
 
-@test "a release-bookkeeping branch whose manifest check fails withholds the pass record" {
-  command -v node >/dev/null || skip "node not installed"
-  release_fixture
+  printf 'case: %s\n' "a release-bookkeeping branch whose manifest check fails withholds the pass record"
+  rm -f "$VHF_RECORD"
   MANIFEST_CHECK_FAILS=1 run_runner branch
   [ "$status" -eq 1 ]
   has_line '^FAIL  release manifest --check \([0-9]+s\)$'
   [ ! -e "$VHF_RECORD" ]
-}
 
-@test "a release branch that also changes anything else takes the full verification" {
-  command -v node >/dev/null || skip "node not installed"
-  release_fixture
+  printf 'case: %s\n' "a release branch that also changes anything else takes the full verification"
   printf 'x2\n' >src/x-input.txt
   vhf_commit "a code change riding the release"
   run_runner branch

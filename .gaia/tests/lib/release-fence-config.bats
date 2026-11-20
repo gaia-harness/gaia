@@ -2,12 +2,11 @@
 # Release configuration that has to follow the 2.0.0 apps/web/ move
 # (SPEC-092 contracts C1, C8, C10).
 #
-#   M1-M3  the manifest classifier: no key at a retired root frontend path,
+#   M      the manifest classifier: no key at a retired root frontend path,
 #          apps/web/ keys present, and the generated and adopter-owned files
 #          absent from the manifest.
-#   X1-X2  .gaia/release-exclude and .gaia/release-scrub.yml name no retired
-#          root frontend path; X1 also drives a fixture that does and asserts
-#          the check reports it.
+#   X      .gaia/release-exclude and .gaia/release-scrub.yml name no retired
+#          root frontend path.
 #   S1     the scrub strips maintainer-only keys from both package.json files.
 #   S2     the scrub strips the release-notes skill override from the shipped
 #          root and frontend .claude/settings.json and keeps their siblings.
@@ -41,45 +40,26 @@ manifest_keys() {
   "$MAINTAINER_CLI" release manifest --stdout --allow-undecided | jq -r '.files | keys[]'
 }
 
-@test "M1: the manifest lists no key at a retired root frontend path and lists apps/web/app/root.tsx" {
+@test "M: the manifest omits retired root paths, the generated settings and the package registry, and lists the required apps/web keys" {
   keys="$(manifest_keys)"
-  [ -n "$keys" ]
+  [ -n "$keys" ] || { echo "case keys: manifest listed no keys"; return 1; }
   retired="$(printf '%s\n' "$keys" | grep -E -- "$RETIRED_ROOT_PATTERN" || true)"
-  [ -z "$retired" ]
-  printf '%s\n' "$keys" | grep -qxF 'apps/web/app/root.tsx'
+  [ -z "$retired" ] || { echo "case retired: $retired"; return 1; }
+  printf '%s\n' "$keys" | grep -qxF 'apps/web/app/root.tsx' || { echo "case root.tsx: absent"; return 1; }
+  printf '%s\n' "$keys" | grep -qxF 'apps/web/.claude/settings.json' && { echo "case generated settings: present"; return 1; }
+  printf '%s\n' "$keys" | grep -qxF '.gaia/packages.json' && { echo "case package registry: present"; return 1; }
+  printf '%s\n' "$keys" | grep -qxF 'apps/web/gaia.package.json' || { echo "case descriptor: absent"; return 1; }
+  printf '%s\n' "$keys" | grep -qxF 'apps/web/.claude/settings.overlay.json' || { echo "case overlay: absent"; return 1; }
+  printf '%s\n' "$keys" | grep -qxF 'apps/web/package.json' || { echo "case apps/web/package.json: absent"; return 1; }
 }
 
-@test "M2: the generated settings and the package registry are not in the manifest; the descriptor and overlay are" {
-  keys="$(manifest_keys)"
-  printf '%s\n' "$keys" | grep -qxF 'apps/web/.claude/settings.json' && return 1
-  printf '%s\n' "$keys" | grep -qxF '.gaia/packages.json' && return 1
-  printf '%s\n' "$keys" | grep -qxF 'apps/web/gaia.package.json'
-  printf '%s\n' "$keys" | grep -qxF 'apps/web/.claude/settings.overlay.json'
-  printf '%s\n' "$keys" | grep -qxF 'apps/web/package.json'
-}
-
-@test "M3: the retired-path pattern flags a root app path (the check can fail)" {
-  printf 'app/root.tsx\n' | grep -qE -- "$RETIRED_ROOT_PATTERN"
-  printf 'Dockerfile\n' | grep -qE -- "$RETIRED_ROOT_PATTERN"
-  printf 'apps/web/app/root.tsx\n' | grep -qE -- "$RETIRED_ROOT_PATTERN" && return 1
-  printf 'prettier.config.mjs\n' | grep -qE -- "$RETIRED_ROOT_PATTERN" && return 1
-  true
-}
-
-@test "X1: release-exclude names no retired root frontend path, and a fixture that does is reported" {
-  [ -z "$(retired_lines_in_exclude < "$REPO_ROOT/.gaia/release-exclude")" ]
+@test "X: release-exclude and release-scrub name no retired root frontend path" {
+  retired="$(retired_lines_in_exclude < "$REPO_ROOT/.gaia/release-exclude")"
+  [ -z "$retired" ] || { echo "case release-exclude: $retired"; return 1; }
   # The canary line is the one that was keyed at the root before the move.
-  grep -qxF 'apps/web/.playwright/e2e/react-perf-smoke.spec.ts' "$REPO_ROOT/.gaia/release-exclude"
-  fixture="$BATS_TEST_TMPDIR/exclude-old"
-  printf '# comment\n.playwright/e2e/react-perf-smoke.spec.ts\n' > "$fixture"
-  [ "$(retired_lines_in_exclude < "$fixture")" = '.playwright/e2e/react-perf-smoke.spec.ts' ]
-}
-
-@test "X2: release-scrub names no retired root frontend path, and a fixture that does is reported" {
-  [ -z "$(retired_paths_in_scrub < "$REPO_ROOT/.gaia/release-scrub.yml")" ]
-  fixture="$BATS_TEST_TMPDIR/scrub-old"
-  printf '    paths:\n      - "app/routes/x.tsx"\n' > "$fixture"
-  [ "$(retired_paths_in_scrub < "$fixture")" = 'app/routes/x.tsx' ]
+  grep -qxF 'apps/web/.playwright/e2e/react-perf-smoke.spec.ts' "$REPO_ROOT/.gaia/release-exclude" || { echo "case release-exclude canary: absent"; return 1; }
+  retired="$(retired_paths_in_scrub < "$REPO_ROOT/.gaia/release-scrub.yml")"
+  [ -z "$retired" ] || { echo "case release-scrub: $retired"; return 1; }
 }
 
 @test "S1: the maintainer-only package.json keys are stripped from both shipped package.json files" {

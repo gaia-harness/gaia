@@ -70,57 +70,54 @@ _no_gh_path() {
   NO_GH_PATH="$(path_allowlist bash jq git sed mktemp mv rm mkdir rmdir stat date sleep)"
 }
 
-# --- 6: matching merged PR flips SPEC-006 to merged with merged_at from the PR ---
-@test "6: gh returns a merged PR on plan/spec-006-*; SPEC-006 flips to merged" {
-  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
-  _stub_gh_echoing '[{"number":42,"headRefName":"plan/spec-006-x","mergedAt":"2026-05-01T00:00:00Z"}]'
+# --- the merge match: head-branch spelling, latest merge, other branches ------
+@test "a merged PR on a plan branch flips a ready SPEC to merged by head-branch spelling, latest merge wins, other branches no-op" {
+  # One seeded repo, copied per case. Columns: label, the gh stub's JSON, the
+  # expected status, the expected reconciled line, and the expected merged_at
+  # (absent when the row must not carry one). A dash skips that assertion.
+  base="$(_fixture_repository --seed-spec SPEC-006 ready)"
+  local label body expected_status reconciled_line expected_merged_at
+  while IFS='|' read -r label body expected_status reconciled_line expected_merged_at; do
+    echo "case: $label"
+    rm -rf "$REPO" "$STUB_DIRECTORY"
+    REPO="$BATS_TEST_TMPDIR/case"
+    cp -R "$base" "$REPO"
+    _stub_gh_echoing "$body"
 
-  run bash -c "PATH='$STUB_DIRECTORY:$PATH' bash '$REPO/$RECONCILE' '$REPO'"
-  [ "$status" -eq 0 ]
-  grep -qF "reconciled SPEC-006 -> merged (PR #42, 2026-05-01T00:00:00Z)" <<<"$output"
-  [ "$(_status_of SPEC-006)" = "merged" ]
-  [ "$(jq -r '.items[] | select(.kind=="spec" and .id=="SPEC-006") | .merged_at' "$(_catalog)")" = "2026-05-01T00:00:00Z" ]
+    run bash -c "PATH='$STUB_DIRECTORY:$PATH' bash '$REPO/$RECONCILE' '$REPO'"
+    [ "$status" -eq 0 ]
+    [ "$(_status_of SPEC-006)" = "$expected_status" ]
+    if [ "$reconciled_line" != - ]; then
+      grep -qF "$reconciled_line" <<<"$output"
+    fi
+    case "$expected_merged_at" in
+      -) ;;
+      absent) [ "$(jq -r '.items[] | select(.kind=="spec" and .id=="SPEC-006") | has("merged_at")' "$(_catalog)")" = "false" ] ;;
+      *) [ "$(jq -r '.items[] | select(.kind=="spec" and .id=="SPEC-006") | .merged_at' "$(_catalog)")" = "$expected_merged_at" ] ;;
+    esac
+  done <<'CASES'
+gh returns a merged PR on plan/spec-006-*; SPEC-006 flips to merged|[{"number":42,"headRefName":"plan/spec-006-x","mergedAt":"2026-05-01T00:00:00Z"}]|merged|reconciled SPEC-006 -> merged (PR #42, 2026-05-01T00:00:00Z)|2026-05-01T00:00:00Z
+a worktree-spelled head branch matches, and the latest of two merges wins|[{"number":40,"headRefName":"plan/spec-006-first","mergedAt":"2026-04-01T00:00:00Z"},{"number":43,"headRefName":"worktree-plan+spec-006-x","mergedAt":"2026-05-02T00:00:00Z"}]|merged|reconciled SPEC-006 -> merged (PR #43, 2026-05-02T00:00:00Z)|-
+no PR names SPEC-006 in a minted spelling (another SPEC, the retired unprefixed spelling); stays ready|[{"number":7,"headRefName":"plan/spec-999-other","mergedAt":"2026-05-01T00:00:00Z"},{"number":8,"headRefName":"spec-006-legacy","mergedAt":"2026-05-01T00:00:00Z"}]|ready|-|absent
+CASES
+  rm -rf "$base"
 }
 
-@test "6b: a worktree-spelled head branch matches, and the latest of two merges wins" {
-  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
-  _stub_gh_echoing '[{"number":40,"headRefName":"plan/spec-006-first","mergedAt":"2026-04-01T00:00:00Z"},{"number":43,"headRefName":"worktree-plan+spec-006-x","mergedAt":"2026-05-02T00:00:00Z"}]'
-
-  run bash -c "PATH='$STUB_DIRECTORY:$PATH' bash '$REPO/$RECONCILE' '$REPO'"
-  [ "$status" -eq 0 ]
-  grep -qF "reconciled SPEC-006 -> merged (PR #43, 2026-05-02T00:00:00Z)" <<<"$output"
-  [ "$(_status_of SPEC-006)" = "merged" ]
-}
-
-@test "7: no matching merged PR; SPEC-006 stays ready, no-op, exit 0" {
-  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
-  # Merged PRs exist, but none names SPEC-006 in a spelling GAIA mints: one
-  # names another SPEC, one carries the retired unprefixed spelling.
-  _stub_gh_echoing '[{"number":7,"headRefName":"plan/spec-999-other","mergedAt":"2026-05-01T00:00:00Z"},{"number":8,"headRefName":"spec-006-legacy","mergedAt":"2026-05-01T00:00:00Z"}]'
-
-  run bash -c "PATH='$STUB_DIRECTORY:$PATH' bash '$REPO/$RECONCILE' '$REPO'"
-  [ "$status" -eq 0 ]
-  [ "$(_status_of SPEC-006)" = "ready" ]
-  [ "$(jq -r '.items[] | select(.kind=="spec" and .id=="SPEC-006") | has("merged_at")' "$(_catalog)")" = "false" ]
-}
-
-# --- 8: fail-open; no gh on PATH, or gh present but returns empty ---
-@test "8a: gh absent from PATH; exit 0, catalog unchanged" {
+# --- fail-open: no gh on PATH, or gh present but returns empty ----------------
+@test "gh absent or empty leaves the catalog unchanged with exit 0" {
+  # Neither case writes, so both run against the one repo.
   REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
   before="$(snapshot_file "$(_catalog)")"
-  _no_gh_path
 
+  echo "case: gh absent from PATH"
+  _no_gh_path
   run bash -c "PATH='$NO_GH_PATH' bash '$REPO/$RECONCILE' '$REPO'"
   [ "$status" -eq 0 ]
   after="$(snapshot_file "$(_catalog)")"
   assert_files_identical "$before" "$after"
-}
 
-@test "8b: gh present but returns empty output; exit 0, catalog unchanged" {
-  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
-  before="$(snapshot_file "$(_catalog)")"
+  echo "case: gh present but returns empty output"
   _stub_gh_empty
-
   run bash -c "PATH='$STUB_DIRECTORY:$PATH' bash '$REPO/$RECONCILE' '$REPO'"
   [ "$status" -eq 0 ]
   after="$(snapshot_file "$(_catalog)")"

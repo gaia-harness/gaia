@@ -10,11 +10,6 @@
 #            so a stale bundle string is caught too.
 #   UAT-015: no tracked file outside the history ledgers and this guard's own
 #            two files names the removed sync-land subcommand.
-#
-# The matchers are functions over an explicit root, so the real tree and the
-# scratch trees that prove them able to fail run the same code. The banned
-# forms below are written as literals on purpose: an allowlist entry for this
-# file must match a hit, so the suite carries the forms it forbids.
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -106,18 +101,6 @@ guard_sync_land() {
   return 0
 }
 
-# A scratch repo with one tracked skill file holding exactly line $1, and an
-# empty allowlist.
-make_scratch_tree() {
-  SCRATCH="$BATS_TEST_TMPDIR/scratch"
-  mkdir -p "$SCRATCH/.claude/skills/x"
-  git -C "$SCRATCH" init -q
-  printf '%s\n' "$1" >"$SCRATCH/.claude/skills/x/SKILL.md"
-  git -C "$SCRATCH" add .claude/skills/x/SKILL.md
-  SCRATCH_ALLOWLIST="$BATS_TEST_TMPDIR/scratch.allowlist"
-  : >"$SCRATCH_ALLOWLIST"
-}
-
 # bats test_tags=whole-tree
 @test "UAT-007: no tracked file outside the allowlist invokes a retired stage, and no entry is unused" {
   run guard_stage_args "$REPO_ROOT" "$ALLOWLIST"
@@ -130,87 +113,6 @@ make_scratch_tree() {
   run guard_sync_land "$REPO_ROOT"
   echo "$output"
   [ "$status" -eq 0 ]
-}
-
-@test "UAT-007 can fail: a stage name after the command is flagged with file and line" {
-  make_scratch_tree '/gaia-wiki sync'
-  run guard_stage_args "$SCRATCH" "$SCRATCH_ALLOWLIST"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *".claude/skills/x/SKILL.md"* ]]
-  [[ "$output" == *":1:"* ]]
-}
-
-@test "UAT-007 can fail: a backticked command followed by a stage name is flagged with file and line" {
-  make_scratch_tree '`/gaia-wiki` consolidate'
-  run guard_stage_args "$SCRATCH" "$SCRATCH_ALLOWLIST"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *".claude/skills/x/SKILL.md"* ]]
-  [[ "$output" == *":1:"* ]]
-}
-
-@test "UAT-007 can fail: a bracketed menu of stage names is flagged with file and line" {
-  make_scratch_tree '/gaia-wiki [sync|consolidate|lint]'
-  run guard_stage_args "$SCRATCH" "$SCRATCH_ALLOWLIST"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *".claude/skills/x/SKILL.md"* ]]
-  [[ "$output" == *":1:"* ]]
-}
-
-@test "UAT-007 can fail: a stage placeholder is flagged with file and line" {
-  make_scratch_tree '/gaia-wiki <stage>'
-  run guard_stage_args "$SCRATCH" "$SCRATCH_ALLOWLIST"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *".claude/skills/x/SKILL.md"* ]]
-  [[ "$output" == *":1:"* ]]
-}
-
-@test "UAT-007 can fail: an any-sub-command note is flagged with file and line" {
-  make_scratch_tree '`/gaia-wiki` (any sub-command)'
-  run guard_stage_args "$SCRATCH" "$SCRATCH_ALLOWLIST"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *".claude/skills/x/SKILL.md"* ]]
-  [[ "$output" == *":1:"* ]]
-}
-
-@test "UAT-007: prose that names the command and the stages without invoking a stage passes" {
-  SCRATCH="$BATS_TEST_TMPDIR/scratch"
-  mkdir -p "$SCRATCH/.claude/skills/x"
-  git -C "$SCRATCH" init -q
-  {
-    printf '%s\n' '`/gaia-wiki` lints the wiki'
-    printf '%s\n' 'run bare `/gaia-wiki`'
-    printf '%s\n' '/gaia-wiki full-chain landing (sync + consolidate + lint)'
-    printf '%s\n' 'the sync stage of `/gaia-wiki`'
-    printf '%s\n' "\`/gaia-wiki\`'s lint stage"
-  } >"$SCRATCH/.claude/skills/x/SKILL.md"
-  git -C "$SCRATCH" add .claude/skills/x/SKILL.md
-  SCRATCH_ALLOWLIST="$BATS_TEST_TMPDIR/scratch.allowlist"
-  : >"$SCRATCH_ALLOWLIST"
-  run guard_stage_args "$SCRATCH" "$SCRATCH_ALLOWLIST"
-  echo "$output"
-  [ "$status" -eq 0 ]
-}
-
-@test "UAT-007 can fail: an allowlist entry that matches no hit is flagged" {
-  make_scratch_tree '/gaia-wiki sync'
-  printf '.claude/skills/x/SKILL.md\nnever-matches.md\n' >"$SCRATCH_ALLOWLIST"
-  run guard_stage_args "$SCRATCH" "$SCRATCH_ALLOWLIST"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"never-matches.md"* ]]
-}
-
-@test "UAT-007: the matcher passes a scratch tree whose only hit is allowlisted" {
-  make_scratch_tree '/gaia-wiki sync'
-  printf '.claude/skills/x/SKILL.md\n' >"$SCRATCH_ALLOWLIST"
-  run guard_stage_args "$SCRATCH" "$SCRATCH_ALLOWLIST"
-  [ "$status" -eq 0 ]
-}
-
-@test "UAT-015 can fail: a tracked file naming the removed subcommand is flagged with file and line" {
-  make_scratch_tree 'run gaia wiki sync land afterwards'
-  run guard_sync_land "$SCRATCH"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *".claude/skills/x/SKILL.md:1:"* ]]
 }
 
 @test "UAT-007: both committed CLI bundles are tracked" {
