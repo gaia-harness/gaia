@@ -2893,7 +2893,7 @@ case_w23_adversarial_a_reporter_copy_with_the_comparison_removed_is_caught() {
   [ "$status" -ne 0 ] || { echo "a reporter that closes without a compare verdict passed W23" >&2; return 1; }
 }
 
-@test "W23: the reporter closes the issue only after a compare verdict (live reporter passes, a copy without the comparison is caught)" {
+@test "W23: the reporter closes the issue only in the identical or ahead arm of a compare verdict (live reporter passes, a copy without the comparison is caught)" {
   echo "case: case_w23_the_reporter_closes_the_issue_only_after_a_compare_verdict_of_iden"
   case_w23_the_reporter_closes_the_issue_only_after_a_compare_verdict_of_iden
   echo "case: case_w23_adversarial_a_reporter_copy_with_the_comparison_removed_is_caught"

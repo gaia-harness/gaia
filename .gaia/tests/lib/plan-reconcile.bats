@@ -197,7 +197,7 @@ EOF
   [ "$(_row_field PLAN-005 pr_number)" = "null" ] || { echo "two-argument: stamped pr_number"; return 1; }
   [ ! -e "$STUB_DIRECTORY/gh-called" ] || { echo "two-argument: reached gh"; return 1; }
 
-  # A third argument that is not a positive integer stamps without pr_number and names the value on stderr.
+  # A third argument that is not a PR number (a positive integer with no leading zero) stamps without pr_number and names the value on stderr.
   for bad in abc 0 007 -4 12x ""; do
     _fresh_sandbox
     run --separate-stderr _reconcile PLAN-005 "$bad"
