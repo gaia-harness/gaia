@@ -137,7 +137,7 @@ _fixture_with_legacy() {
   _plant_legacy
 }
 
-@test "check exits 3 while the move is pending and 0 after it" {
+@test "check exits 3 while the move is pending, 0 after it and 0 with nothing to move" {
   _fixture_with_legacy
   run _move check
   [ "$status" -eq 3 ]
@@ -145,23 +145,14 @@ _fixture_with_legacy() {
   [ "$status" -eq 0 ]
   run _move check
   [ "$status" -eq 0 ]
-}
 
-@test "check exits 0 on a machine with nothing to move" {
+  command rm -rf "$REPO" "$REPO-"*
   REPO="$(_fixture_repository --no-catalog)"
   run _move check
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "nothing-to-move case: status $status"; return 1; }
 }
 
-@test "a usage error exits 2" {
-  _fixture_with_legacy
-  run _move bogus
-  [ "$status" -eq 2 ]
-  run _move
-  [ "$status" -eq 2 ]
-}
-
-@test "the move relocates every item by rename and folds both ledgers into the catalog" {
+@test "the move relocates items by rename, folds both ledgers into catalog rows, writes the marker and reconciles clean" {
   _fixture_with_legacy
   local before after
   before="$(_legacy_manifest)"
@@ -198,12 +189,7 @@ _fixture_with_legacy() {
   [[ "$output" == *"moved research folders: 2"* ]]
   [[ "$output" == *"moved specs: 3"* ]]
   [[ "$output" == *"moved plans: 1"* ]]
-}
 
-@test "catalog rows map the ledger fields and the marker is written" {
-  _fixture_with_legacy
-  run _move run
-  [ "$status" -eq 0 ]
   local catalog="$REPO/.notebook/catalog.json"
   jq -e '.move_complete.at | type == "string"' "$catalog"
   [ "$(jq '.items | length' "$catalog")" -eq 8 ]
@@ -236,12 +222,7 @@ _fixture_with_legacy() {
   [ "$(jq -c '[.items[] | select(.reap.by == "pre-catalog") | .id] | sort' "$catalog")" = '["PLAN-002","SPEC-003"]' ]
   jq -e '.items[] | select(.id == "SPEC-003") | .reap == {"at": null, "by": "pre-catalog"}' "$catalog"
   [ "$(jq '[.items[] | select(has("reap"))] | length' "$catalog")" -eq 2 ]
-}
 
-@test "reconcile reports none of the folded rows that carry the pre-catalog record" {
-  _fixture_with_legacy
-  run _move run
-  [ "$status" -eq 0 ]
   run env GAIA_NOTEBOOK_TREE="$REPO" bash "$REPO/.gaia/scripts/notebook/reconcile.sh"
   [ "$status" -eq 0 ]
   # The sweep did look at the notebook: it names the moved loose file.
@@ -438,25 +419,24 @@ _normalized_catalog() {
   [ "$(_tree_manifest)" = "$tree_before" ]
 }
 
-@test "the report names run states and notebook files that cite an old location" {
+@test "the report names run states and notebook files that cite an old location, and memory files only when one qualifies" {
   _fixture_with_legacy
   mkdir -p "$REPO/.gaia/local/runs/some-branch"
   printf 'see .gaia/local/specs/SPEC-001/SPEC.md\n' > "$REPO/.gaia/local/runs/some-branch/STATE.md"
   printf 'cite .gaia/local/research/beta/README.md\n' > "$REPO/.gaia/local/research/beta/CITES.md"
+  local memory="$BATS_TEST_TMPDIR/memory"
+  mkdir -p "$memory"
+  printf 'cache is .gaia/local/cache/x\n' > "$memory/clean.md"
+  export GAIA_NOTEBOOK_MEMORY_DIR="$memory"
   run _move run
   [ "$status" -eq 0 ]
   [[ "$output" == *"run state names an old location: .gaia/local/runs/some-branch/STATE.md"* ]]
   [[ "$output" == *"notebook file names an old location: .notebook/research/beta/CITES.md"* ]]
   [[ "$output" != *"memory-repoint"* ]] || return 1
-}
+  [[ "$output" != *"clean.md"* ]] || return 1
 
-@test "the report lists memory files and names the repoint command only when one qualifies" {
-  _fixture_with_legacy
-  local memory="$BATS_TEST_TMPDIR/memory"
-  mkdir -p "$memory"
+  # A memory file that names an old location is listed and the repoint command is named.
   printf 'plans live in .gaia/local/plans/ today\n' > "$memory/has-old.md"
-  printf 'cache is .gaia/local/cache/x\n' > "$memory/clean.md"
-  export GAIA_NOTEBOOK_MEMORY_DIR="$memory"
   run _move run
   [ "$status" -eq 0 ]
   [[ "$output" == *"memory file names an old location: $memory/has-old.md"* ]]

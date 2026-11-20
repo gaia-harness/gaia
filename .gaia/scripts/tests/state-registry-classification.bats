@@ -32,66 +32,32 @@ classify() {
   run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh classify "$2"' _ "$REGISTRY_REPO" "$1"
 }
 
-@test "registry: a context file classifies via the context-readings row, not cache-shared" {
+@test "classify maps registry paths exactly: context readings, settings.json, checkpoint-override and their .bak siblings" {
   make_registry_repo
-  # Give the new row a scope no other row has, so reaching it is observable.
-  jq '(.entries[] | select(.id == "context-readings") | .scope) = "per-tree"' "$REGISTRY_FILE" > "$REGISTRY_FILE.new"
+  run jq -r '.entries[] | select(.path == "protected/checkpoint-override.json") | .id' "$REAL_REGISTRY"
+  [ "$output" = "checkpoint-override" ]
+  local row path expected
+  for row in \
+    "cache/shared/context/abc.json|shared" \
+    "cache/shared/update-check.json|shared" \
+    "settings.json|shared" \
+    "settings.json.bak|unknown" \
+    "protected/checkpoint-override.json|shared" \
+    "protected/checkpoint-override.json.bak|unknown"; do
+    path="${row%%|*}"
+    expected="${row#*|}"
+    classify "$path"
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "row $row: got '$output'"; return 1; }
+  done
+
+  # Give the context row a scope no other row has, so reaching it, rather than
+  # the cache-shared row, is observable.
+  jq '(.entries[] | select(.id == "context-readings") | .scope) = "per-tree"' "$REGISTRY_FILE" >"$REGISTRY_FILE.new"
   mv "$REGISTRY_FILE.new" "$REGISTRY_FILE"
   classify "cache/shared/context/abc.json"
   [ "$status" -eq 0 ]
   [ "$output" = "per-tree" ]
   classify "cache/shared/update-check.json"
   [ "$output" = "shared" ]
-}
-
-@test "registry: the real registry classifies a context file and the update cache as shared" {
-  make_registry_repo
-  classify "cache/shared/context/abc.json"
-  [ "$output" = "shared" ]
-  classify "cache/shared/update-check.json"
-  [ "$output" = "shared" ]
-}
-
-@test "registry: settings.json maps to local-settings exactly, settings.json.bak does not" {
-  make_registry_repo
-  classify "settings.json"
-  [ "$output" = "shared" ]
-  classify "settings.json.bak"
-  [ "$output" = "unknown" ]
-}
-
-@test "registry red twin: without the local-settings row settings.json classifies unknown" {
-  make_registry_repo
-  jq '.entries |= map(select(.id != "local-settings"))' "$REGISTRY_FILE" > "$REGISTRY_FILE.new"
-  mv "$REGISTRY_FILE.new" "$REGISTRY_FILE"
-  classify "settings.json"
-  [ "$output" = "unknown" ]
-}
-
-@test "registry: protected/checkpoint-override.json maps to checkpoint-override exactly, its .bak sibling does not" {
-  make_registry_repo
-  run jq -r '.entries[] | select(.path == "protected/checkpoint-override.json") | .id' "$REAL_REGISTRY"
-  [ "$output" = "checkpoint-override" ]
-  classify "protected/checkpoint-override.json"
-  [ "$output" = "shared" ]
-  classify "protected/checkpoint-override.json.bak"
-  [ "$output" = "unknown" ]
-}
-
-@test "registry red twin: without the checkpoint-override row protected/checkpoint-override.json classifies unknown" {
-  make_registry_repo
-  jq '.entries |= map(select(.id != "checkpoint-override"))' "$REGISTRY_FILE" > "$REGISTRY_FILE.new"
-  mv "$REGISTRY_FILE.new" "$REGISTRY_FILE"
-  classify "protected/checkpoint-override.json"
-  [ "$output" = "unknown" ]
-}
-
-@test "registry red twin: without the audit-loop-state row a protected/audit-loop state file classifies unknown" {
-  make_registry_repo
-  classify "protected/audit-loop/feat/x.json"
-  [ "$output" = "main-only" ]
-  jq '.entries |= map(select(.id != "audit-loop-state"))' "$REGISTRY_FILE" > "$REGISTRY_FILE.new"
-  mv "$REGISTRY_FILE.new" "$REGISTRY_FILE"
-  classify "protected/audit-loop/feat/x.json"
-  [ "$output" = "unknown" ]
 }

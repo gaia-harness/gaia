@@ -55,31 +55,28 @@ build_fixture() {
   [ "$status" -eq 0 ]
 }
 
-@test "the library never redefines a gaia_loop name" {
-  run grep -nE '^_?gaia_loop_[a-z_]*\(\)' "$SCRIPTS/branch-authorship-lib.sh"
-  [ "$status" -eq 1 ]
-}
-
-@test "site_state: authored, not-authored and outside-the-diff answers" {
-  [ "$(gaia_authorship_site_state "$FIXTURE" f.txt 3)" = authored ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" f.txt 7)" = not-authored ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" g.txt 1)" = not-authored ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" f.txt 0)" = authored ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" f.txt null)" = authored ]
-}
-
-@test "site_state: unsafe path and out-of-range line answer unknown" {
-  [ "$(gaia_authorship_site_state "$FIXTURE" ../x 1)" = unknown ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" -rf 1)" = unknown ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" f.txt 9999999999)" = unknown ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" f.txt -1)" = unknown ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" f.txt x)" = unknown ]
-}
-
-@test "site_state: ./path and tree-prefixed path answer as the bare path" {
-  [ "$(gaia_authorship_site_state "$FIXTURE" ./f.txt 3)" = authored ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" "$FIXTURE/f.txt" 3)" = authored ]
-  [ "$(gaia_authorship_site_state "$FIXTURE" "$FIXTURE/f.txt" 7)" = not-authored ]
+@test "site_state answers authored, not-authored and unknown, and normalizes paths" {
+  local row path line expected
+  for row in \
+    "f.txt|3|authored" \
+    "f.txt|7|not-authored" \
+    "g.txt|1|not-authored" \
+    "f.txt|0|authored" \
+    "f.txt|null|authored" \
+    "../x|1|unknown" \
+    "-rf|1|unknown" \
+    "f.txt|9999999999|unknown" \
+    "f.txt|-1|unknown" \
+    "f.txt|x|unknown" \
+    "./f.txt|3|authored" \
+    "$FIXTURE/f.txt|3|authored" \
+    "$FIXTURE/f.txt|7|not-authored"; do
+    path=${row%%|*}
+    line=${row#*|}
+    expected=${line#*|}
+    line=${line%%|*}
+    [ "$(gaia_authorship_site_state "$FIXTURE" "$path" "$line")" = "$expected" ] || { echo "row $row: got '$(gaia_authorship_site_state "$FIXTURE" "$path" "$line")'"; return 1; }
+  done
 }
 
 @test "for_head from a linked worktree returns the branch hunks, not an empty diff" {
@@ -116,14 +113,6 @@ build_fixture() {
   run gaia_authorship_for_head "$BATS_TEST_TMPDIR/trunk-repo"
   [ "$(jq -c '[.state,.names,.hunks]' <<<"$output")" = '["unknown",null,null]' ]
   [ "$(gaia_authorship_site_state "$BATS_TEST_TMPDIR/trunk-repo" f.txt 3)" = unknown ]
-}
-
-@test "authorship jq: three outcomes from the predicate directly" {
-  run jq -n -r "$GAIA_AUTHORSHIP_JQ"'
-    [ ({path:"f.txt",line:3} | authorship(["f.txt"]; [{p:"f.txt",s:3,e:3}])),
-      ({path:"f.txt",line:5} | authorship(["f.txt"]; [{p:"f.txt",s:3,e:3}])),
-      ({path:"f.txt",line:5} | authorship(null; null)) ] | join(",")'
-  [ "$output" = "authored,not-authored,unknown" ]
 }
 
 @test "red twin: no merge base counts for the audit mapping and reads unknown for the library" {

@@ -9,17 +9,12 @@ setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../bats5.sh"
 }
 
-@test "sourcing defines the bats5 function" {
-  # shellcheck disable=SC1090
-  source "$SCRIPT"
-  [ -n "$(declare -F bats5)" ]
-}
-
-@test "sourcing does not auto-invoke bats" {
+@test "sourcing defines bats5 and does not auto-invoke bats" {
   marker="${BATS_TEST_TMPDIR}/called"
   bats() { echo called >>"$marker"; }
   # shellcheck disable=SC1090
   source "$SCRIPT"
+  [ -n "$(declare -F bats5)" ] || { echo "bats5 is not defined"; return 1; }
   [ ! -f "$marker" ]
 }
 

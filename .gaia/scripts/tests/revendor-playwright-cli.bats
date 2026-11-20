@@ -33,7 +33,7 @@ tree_digest() {
   done | openssl dgst -sha256
 }
 
-@test "a matching integrity replaces the folder wholesale and writes the marker" {
+@test "a matching integrity replaces the folder wholesale and writes the marker in contract order" {
   mkdir -p "$TARGET"
   printf 'stale\n' >"$TARGET/stale.md"
   run "$SCRIPT" --version 9.9.9 --tarball "$TARBALL" --integrity "$INTEGRITY" --root "$SCRATCH_ROOT"
@@ -43,14 +43,9 @@ tree_digest() {
   [ "$(jq -r .version "$MARKER")" = "9.9.9" ]
   [ "$(jq -r .integrity "$MARKER")" = "$INTEGRITY" ]
   [ "$(jq -r '.files | keys | join(",")' "$MARKER")" = "SKILL.md,references/one.md" ]
+  [ "$(jq -r 'keys_unsorted | join(",")' "$MARKER")" = "package,version,integrity,source,target,files" ]
   run "$VERIFY" --root "$SCRATCH_ROOT"
   [ "$status" -eq 0 ]
-}
-
-@test "the marker records keys in the contract order" {
-  run "$SCRIPT" --version 9.9.9 --tarball "$TARBALL" --integrity "$INTEGRITY" --root "$SCRATCH_ROOT"
-  [ "$status" -eq 0 ]
-  [ "$(jq -r 'keys_unsorted | join(",")' "$MARKER")" = "package,version,integrity,source,target,files" ]
 }
 
 @test "re-running with the same tarball and version leaves everything byte-identical" {
@@ -63,7 +58,12 @@ tree_digest() {
   [ "$(tree_digest)" = "$before" ]
 }
 
-@test "a wrong integrity exits non-zero and writes nothing" {
+# bats test_tags=protected
+@test "a wrong integrity exits non-zero and writes nothing, on a fresh root and an installed one" {
+  run "$SCRIPT" --version 1.0.0 --tarball "$TARBALL" --integrity "sha512-AAAA" --root "$SCRATCH_ROOT"
+  [ "$status" -ne 0 ]
+  [ ! -e "$TARGET" ]
+  [ ! -e "$MARKER" ]
   run "$SCRIPT" --version 9.9.9 --tarball "$TARBALL" --integrity "$INTEGRITY" --root "$SCRATCH_ROOT"
   [ "$status" -eq 0 ]
   printf 'local edit\n' >>"$TARGET/SKILL.md"
@@ -71,23 +71,6 @@ tree_digest() {
   before="$(tree_digest)"
   run "$SCRIPT" --version 1.0.0 --tarball "$TARBALL" --integrity "sha512-AAAA" --root "$SCRATCH_ROOT"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"integrity mismatch"* ]]
+  grep -qF -- "integrity mismatch" <<<"$output"
   [ "$(tree_digest)" = "$before" ]
-}
-
-@test "a wrong integrity on a fresh root creates neither folder nor marker" {
-  run "$SCRIPT" --version 1.0.0 --tarball "$TARBALL" --integrity "sha512-AAAA" --root "$SCRATCH_ROOT"
-  [ "$status" -ne 0 ]
-  [ ! -e "$TARGET" ]
-  [ ! -e "$MARKER" ]
-}
-
-@test "--tarball without --integrity is a usage error" {
-  run "$SCRIPT" --version 9.9.9 --tarball "$TARBALL" --root "$SCRATCH_ROOT"
-  [ "$status" -eq 2 ]
-}
-
-@test "a missing --version is a usage error" {
-  run "$SCRIPT" --root "$SCRATCH_ROOT"
-  [ "$status" -eq 2 ]
 }

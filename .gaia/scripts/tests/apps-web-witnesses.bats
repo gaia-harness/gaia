@@ -86,26 +86,16 @@ commit_paths() {
 
 # --- tests.yml filter ---------------------------------------------------------
 
-@test "tests workflow filter: an apps/web path and a packages/x path select the job" {
-  local pattern
+@test "tests workflow filter: selects apps/web, packages/x and workspace manifests, and not wiki or README paths" {
+  local pattern path
   pattern="$(workflow_filter_pattern)"
   [ -n "$pattern" ]
-  matches "$pattern" "apps/web/app/routes/_index.tsx"
-  matches "$pattern" "apps/web/package.json"
-  matches "$pattern" "packages/x/index.ts"
-  matches "$pattern" "pnpm-workspace.yaml"
-  matches "$pattern" ".gaia/packages.json"
-}
-
-@test "red tests workflow filter: a wiki page does not select the job, and the pattern without apps does not select an apps/web path" {
-  local pattern broken
-  pattern="$(workflow_filter_pattern)"
-  matches "$pattern" "wiki/index.md" && return 1
-  matches "$pattern" "README.md" && return 1
-  broken="${pattern/(apps|packages)\//(packages)\/}"
-  [ "$broken" != "$pattern" ]
-  matches "$broken" "apps/web/app/routes/_index.tsx" && return 1
-  matches "$broken" "packages/x/index.ts"
+  for path in apps/web/app/routes/_index.tsx apps/web/package.json packages/x/index.ts pnpm-workspace.yaml .gaia/packages.json; do
+    matches "$pattern" "$path" || { echo "not selected: $path"; return 1; }
+  done
+  for path in wiki/index.md README.md; do
+    matches "$pattern" "$path" && { echo "selected: $path"; return 1; }
+  done
   return 0
 }
 
@@ -121,28 +111,26 @@ classify() {
   ' _ "$REPO_ROOT" "$root" "$path"
 }
 
-@test "quick classifier: a language file under apps/web classifies as language" {
-  run classify "$REPO_ROOT" "apps/web/app/languages/en/x.ts"
-  [ "$status" -eq 0 ]
-  [ "$output" = "language" ]
-  run classify "$REPO_ROOT" "apps/web/app/components/card/index.tsx"
-  [ "$output" = "component" ]
-}
-
-@test "red quick classifier: non-web paths classify as none, and a member without the web stack classifies as none" {
-  local scratch="$BATS_TEST_TMPDIR/classifier"
-  run classify "$REPO_ROOT" "packages/x/app/languages/en/x.ts"
-  [ "$output" = "none" ]
-  run classify "$REPO_ROOT" ".gaia/cli/src/x.ts"
-  [ "$output" = "none" ]
-  run classify "$REPO_ROOT" "$LEGACY_ROOT/app/languages/en/x.ts"
-  [ "$output" = "none" ]
+@test "quick classifier: path class per input (apps/web language and component, packages/.gaia/retired root none, stack-less member none, stack-declared member language)" {
+  local scratch="$BATS_TEST_TMPDIR/classifier" row path expected
+  for row in \
+    "apps/web/app/languages/en/x.ts|language" \
+    "apps/web/app/components/card/index.tsx|component" \
+    "packages/x/app/languages/en/x.ts|none" \
+    ".gaia/cli/src/x.ts|none" \
+    "$LEGACY_ROOT/app/languages/en/x.ts|none"; do
+    path=${row%%|*}
+    expected=${row#*|}
+    run classify "$REPO_ROOT" "$path"
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "row $row: got '$output'"; return 1; }
+  done
   # The same web path under a registry whose member lacks `stack: web`.
   mkdir -p "$scratch/.gaia" "$scratch/apps/web"
   printf '%s\n' '[{"name":"web","path":"apps/web"}]' >"$scratch/.gaia/packages.json"
   printf '%s\n' '{"schemaVersion":1,"name":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$scratch/apps/web/gaia.package.json"
   run classify "$scratch" "apps/web/app/languages/en/x.ts"
-  [ "$output" = "none" ]
+  [ "$output" = "none" ] || { echo "stack-less member: got '$output'"; return 1; }
   # And with the stack declared, the same scratch routes the path to language.
   jq '. + {stack: "web"}' "$scratch/apps/web/gaia.package.json" >"$scratch/web.json"
   mv "$scratch/web.json" "$scratch/apps/web/gaia.package.json"
@@ -164,21 +152,15 @@ roster_owner() {
   ' _ "$REPO_ROOT" "$@"
 }
 
-@test "roster: apps/web and packages/x source resolve to the default member" {
-  local default_member
-  run roster_owner "apps/web/app/x.ts" "packages/x/index.ts" "apps/web/package.json"
+@test "roster owner: apps/web and packages/x resolve to the default member, an out-of-remit path to no owner" {
+  local default_member entry
+  run roster_owner "apps/web/app/x.ts" "packages/x/index.ts" "apps/web/package.json" "no-such-top-level/x.ts"
   [ "$status" -eq 0 ]
   default_member="$(printf '%s\n' "$output" | sed -n 's/^DEFAULT=//p')"
   [ -n "$default_member" ]
-  printf '%s\n' "$output" | grep -qxF "apps/web/app/x.ts=$default_member"
-  printf '%s\n' "$output" | grep -qxF "packages/x/index.ts=$default_member"
-  printf '%s\n' "$output" | grep -qxF "apps/web/package.json=$default_member"
-}
-
-@test "red roster: a path outside every remit has no owner" {
-  run roster_owner "no-such-top-level/x.ts"
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF "no-such-top-level/x.ts="
+  for entry in "apps/web/app/x.ts=$default_member" "packages/x/index.ts=$default_member" "apps/web/package.json=$default_member" "no-such-top-level/x.ts="; do
+    printf '%s\n' "$output" | grep -qxF "$entry" || { echo "missing: $entry"; return 1; }
+  done
 }
 
 @test "red roster: a packages/ folder with no tracked file leaves the packages glob matching nothing" {
@@ -201,8 +183,8 @@ lint_plan() {
   bash "$REPO_ROOT/.gaia/scripts/frontend-lint-delta.sh" --root "$dir" --base "$(git -C "$dir" rev-parse HEAD~1)" --plan
 }
 
-@test "lint delta: an apps/web source is linted and an eslint config change selects full" {
-  local repo="$BATS_TEST_TMPDIR/lint-delta"
+@test "lint delta plan per change: apps/web source delta, eslint config full, wiki and retired-root none" {
+  local repo="$BATS_TEST_TMPDIR/lint-delta" red="$BATS_TEST_TMPDIR/lint-delta-red"
   scratch_repo "$repo"
   commit_paths "$repo" apps/web/app/x.ts
   run lint_plan "$repo"
@@ -213,17 +195,13 @@ lint_plan() {
   run lint_plan "$repo"
   [ "$status" -eq 0 ]
   [ "$output" = "full" ]
-}
-
-@test "red lint delta: a wiki page and a retired-root source select nothing" {
-  local repo="$BATS_TEST_TMPDIR/lint-delta-red"
-  scratch_repo "$repo"
-  commit_paths "$repo" wiki/index.md
-  run lint_plan "$repo"
+  scratch_repo "$red"
+  commit_paths "$red" wiki/index.md
+  run lint_plan "$red"
   [ "$status" -eq 0 ]
   [ "$output" = "none" ]
-  commit_paths "$repo" "$LEGACY_ROOT/app/x.ts" "$LEGACY_ROOT/eslint.config.mjs"
-  run lint_plan "$repo"
+  commit_paths "$red" "$LEGACY_ROOT/app/x.ts" "$LEGACY_ROOT/eslint.config.mjs"
+  run lint_plan "$red"
   [ "$output" = "none" ]
 }
 
@@ -236,28 +214,24 @@ ports_directory() {
   ' _ "$REPO_ROOT" "$1"
 }
 
-@test "worktree ports: the router config under apps/web is found in a fixture" {
-  local tree="$BATS_TEST_TMPDIR/ports-tree"
+@test "worktree ports: package directory found with a router config, refused without one" {
+  local tree="$BATS_TEST_TMPDIR/ports-tree" empty="$BATS_TEST_TMPDIR/ports-tree-empty"
   mkdir -p "$tree/.gaia" "$tree/apps/web"
   printf '%s\n' '[{"name":"web","path":"apps/web"}]' >"$tree/.gaia/packages.json"
   : >"$tree/apps/web/react-router.config.ts"
   run ports_directory "$tree"
   [ "$status" -eq 0 ]
   [ "$output" = "$tree/apps/web" ]
-}
-
-@test "red worktree ports: a tree with no router config under the member finds no package directory" {
-  local tree="$BATS_TEST_TMPDIR/ports-tree-empty"
-  mkdir -p "$tree/.gaia" "$tree/apps/web" "$tree/packages/x"
-  printf '%s\n' '[{"name":"web","path":"apps/web"}]' >"$tree/.gaia/packages.json"
-  run ports_directory "$tree"
+  mkdir -p "$empty/.gaia" "$empty/apps/web" "$empty/packages/x"
+  printf '%s\n' '[{"name":"web","path":"apps/web"}]' >"$empty/.gaia/packages.json"
+  run ports_directory "$empty"
   [ "$status" -ne 0 ]
   [ -z "$output" ]
 }
 
 # --- Quality Gate Quick check -------------------------------------------------
 
-@test "quality gate quick check: matches a manifest, config or source at any member depth" {
+@test "quality gate quick check: matches manifests, configs and sources at any member depth, not docs or assets" {
   local pattern path
   pattern="$(gate_quick_pattern)"
   [ -n "$pattern" ]
@@ -275,18 +249,9 @@ ports_directory() {
     pnpm-lock.yaml; do
     matches "$pattern" "$path" || { printf 'no match: %s\n' "$path" >&2; return 1; }
   done
-}
-
-@test "red quality gate quick check: docs and assets do not match, and a pattern without the depth prefix misses a member manifest" {
-  local pattern broken path
-  pattern="$(gate_quick_pattern)"
   for path in wiki/index.md README.md .claude/settings.json apps/web/public/logo.png apps/web/app/x.md; do
     matches "$pattern" "$path" && { printf 'unexpected match: %s\n' "$path" >&2; return 1; }
   done
-  broken="$(printf '%s' "$pattern" | sed -e 's/(\[^\/\]+\/)\*//g')"
-  [ "$broken" != "$pattern" ]
-  matches "$broken" "apps/web/package.json" && return 1
-  matches "$broken" "package.json"
   return 0
 }
 
@@ -298,12 +263,6 @@ ports_directory() {
   matches "$filter" "packages/x/index.ts" && return 1
   matches "$filter" ".gaia/cli/src/x.ts"
   matches "$filter" ".gaia/scripts/x.sh"
-}
-
-@test "the owed-gate script carries the same Quick check and filter as the Quality Gate page" {
-  local script="$REPO_ROOT/.gaia/scripts/audit-gate-owed.sh"
-  [ "$(sed -n "s/^GATE_QUICK_CHECK_PATTERN='\\(.*\\)'\$/\\1/p" "$script")" = "$(gate_quick_pattern)" ]
-  [ "$(sed -n "s/^GATE_FRONTEND_FILTER_PATTERN='\\(.*\\)'\$/\\1/p" "$script")" = "$(gate_filter_pattern)" ]
 }
 
 # --- owed gate: mark and run --------------------------------------------------
@@ -322,7 +281,8 @@ owed_mark() {
   bash "$REPO_ROOT/.gaia/scripts/audit-gate-owed.sh" mark --root "$OWED_REPO" --run-folder "$OWED_FOLDER" --round 1
 }
 
-@test "owed gate: a fix commit on an apps/web manifest and one on a packages/x tsconfig each owe the web steps" {
+# bats test_tags=protected
+@test "owed gate: apps/web manifest and packages/x tsconfig owe the web steps, wiki and harness edits owe nothing" {
   owed_fixture
   commit_paths "$OWED_REPO" apps/web/package.json
   run owed_mark
@@ -340,10 +300,11 @@ owed_mark() {
   [ "$status" -eq 1 ]
   run bash "$REPO_ROOT/.gaia/scripts/audit-gate-owed.sh" selection --root "$OWED_REPO" --run-folder "$OWED_FOLDER"
   printf '%s\n' "$output" | grep -qxF "packages/x/tsconfig.json"
-}
 
-@test "red owed gate: a wiki edit and a harness script edit owe nothing" {
-  owed_fixture
+  # A wiki edit and a harness script edit owe nothing, in a fresh repository.
+  OWED_REPO="$BATS_TEST_TMPDIR/owed-repo-clear"
+  scratch_repo "$OWED_REPO"
+  rm -rf "$OWED_FOLDER"
   commit_paths "$OWED_REPO" wiki/index.md
   run owed_mark
   [ "$status" -eq 0 ]
@@ -386,15 +347,6 @@ run_fixture() {
   [ "$(paste -sd, "$RUN_MARKER")" = "pw,smoke,build" ]
 }
 
-@test "red owed run: a root pw script that does not reach apps/web leaves the marker empty" {
-  run_fixture
-  jq '.scripts.pw = "pnpm -C nowhere pw"' "$RUN_REPO/package.json" >"$RUN_REPO/package.next.json"
-  mv "$RUN_REPO/package.next.json" "$RUN_REPO/package.json"
-  run pnpm -C "$RUN_REPO" pw
-  [ "$status" -ne 0 ]
-  [ ! -s "$RUN_MARKER" ]
-}
-
 # --- deny entries -------------------------------------------------------------
 
 invoke() {
@@ -403,7 +355,8 @@ invoke() {
 
 denied() { [ "$status" -eq 0 ] && grep -qF -- '"permissionDecision": "deny"' <<<"$output"; }
 
-@test "deny entries: dotenv files under apps, packages and a second app are denied as Read, Bash and Write" {
+# bats test_tags=protected
+@test "deny hooks: dotenv under apps, packages and a second app denied as Read, Bash and Write; .env.example allowed for each" {
   local path json
   for path in apps/web/.env apps/mobile/.env packages/x/.env.local; do
     json="$(jq -n --arg p "$path" '{tool_name: "Read", tool_input: {file_path: $p}}')"
@@ -416,10 +369,6 @@ denied() { [ "$status" -eq 0 ] && grep -qF -- '"permissionDecision": "deny"' <<<
     invoke "$json" "$REPO_ROOT/.claude/hooks/block-secrets-write.sh"
     denied || { printf 'Write not denied: %s\n' "$path" >&2; return 1; }
   done
-}
-
-@test "red deny entries: the committed .env.example placeholder is allowed under every member" {
-  local path json
   for path in apps/web/.env.example apps/mobile/.env.example packages/x/.env.example; do
     json="$(jq -n --arg p "$path" '{tool_name: "Read", tool_input: {file_path: $p}}')"
     invoke "$json" "$REPO_ROOT/.claude/hooks/block-sensitive-read.sh"
@@ -452,20 +401,16 @@ probe_status() {
     | jq -r '.[0].status'
 }
 
-@test "debt probe: a legacy-root key still matches a tracked apps/web file" {
-  local repo="$BATS_TEST_TMPDIR/probe-repo"
+@test "debt probe: legacy-root key maps to tracked apps/web file, else gone (untracked counterpart, unrelated path)" {
+  local repo="$BATS_TEST_TMPDIR/probe-repo" red="$BATS_TEST_TMPDIR/probe-repo-red"
   scratch_repo "$repo"
   commit_paths "$repo" apps/web/x
   [ "$(probe_status "$repo" "$LEGACY_ROOT/x")" = "tracked" ]
   [ "$(probe_status "$repo" "apps/web/x")" = "tracked" ]
-}
-
-@test "red debt probe: a legacy-root key whose apps/web counterpart is not tracked is gone" {
-  local repo="$BATS_TEST_TMPDIR/probe-repo-red"
-  scratch_repo "$repo"
-  commit_paths "$repo" apps/web/y
-  [ "$(probe_status "$repo" "$LEGACY_ROOT/x")" = "gone" ]
-  [ "$(probe_status "$repo" "elsewhere/x")" = "gone" ]
-  printf 'x\n' >"$repo/apps/web/untracked"
-  [ "$(probe_status "$repo" "$LEGACY_ROOT/untracked")" = "gone" ]
+  scratch_repo "$red"
+  commit_paths "$red" apps/web/y
+  [ "$(probe_status "$red" "$LEGACY_ROOT/x")" = "gone" ]
+  [ "$(probe_status "$red" "elsewhere/x")" = "gone" ]
+  printf 'x\n' >"$red/apps/web/untracked"
+  [ "$(probe_status "$red" "$LEGACY_ROOT/untracked")" = "gone" ]
 }

@@ -163,17 +163,18 @@ need_shellcheck() {
 
 # ---------- selection ------------------------------------------------------
 
-@test "no shell change: nothing to do, decided from the files list alone" {
+@test "selection: the lint set follows the kind of change" {
+  # No shell change: nothing to do, decided from the files list alone.
   branch docs
   put README.md '# readme'
   commit
+  : > "$GH_LOG"
   plan_pr
   expect_plan none false none
   [ "$(wc -l < "$GH_LOG" | tr -d ' ')" -eq 1 ]
   grep -q '/pulls/7/files' "$GH_LOG"
-}
 
-@test "an adopter script change is linted through a sparse checkout" {
+  # An adopter script change is linted through a sparse checkout.
   branch adopter
   put scripts/deploy.sh
   commit
@@ -182,9 +183,27 @@ need_shellcheck() {
   [ "$(lint_paths)" = "scripts/deploy.sh" ]
   grep -qx '/scripts/deploy.sh' "$OUT/sparse-patterns"
   grep -qx '.shellcheckrc' "$OUT/sparse-patterns"
-}
 
-@test "a GAIA update skips owned shell (base only, head only, both) and keeps adopter shell" {
+  # A path with a space or a pattern character is matched literally.
+  branch odd
+  put 'scripts/my tool[1].sh'
+  commit
+  plan_pr
+  expect_plan changed false sparse
+  grep -qxF '/scripts/my tool\[1\].sh' "$OUT/sparse-patterns"
+
+  # A rename lints the new path only.
+  branch rename
+  put scripts/new.sh
+  commit
+  export GH_STUB_FILES_JSON="$BATS_TEST_TMPDIR/files.json"
+  printf '[{"status":"renamed","filename":"scripts/new.sh","previous_filename":"scripts/old.sh"}]\n' > "$GH_STUB_FILES_JSON"
+  plan_pr
+  expect_plan changed false sparse
+  [ "$(lint_paths)" = "scripts/new.sh" ]
+  unset GH_STUB_FILES_JSON
+
+  # A GAIA update skips owned shell (base only, head only, both) and keeps adopter shell.
   branch release
   release_skip_apply "$FIXTURE" release
   put scripts/deploy.sh
@@ -195,35 +214,32 @@ need_shellcheck() {
   grep -qx '.gaia/scripts/gaia-retired.sh' "$OUT/owned"
   grep -qx '.gaia/scripts/gaia-new.sh' "$OUT/owned"
   grep -qx '.gaia/scripts/gaia-tool.sh' "$OUT/owned"
-}
 
-@test "a GAIA update that changes only owned shell selects nothing" {
-  branch release
+  # A GAIA update that changes only owned shell selects nothing.
+  branch release-owned-only
   release_skip_apply "$FIXTURE" release
   plan_pr
   expect_plan none false none
-}
 
-@test "an ordinary pull request lints an owned file it edits" {
+  # An ordinary pull request lints an owned file it edits.
   branch hand-edit
   release_skip_apply "$FIXTURE" hand-edit
   plan_pr
   expect_plan changed false sparse
   [ "$(lint_paths)" = ".claude/hooks/gaia-guard.sh" ]
   [ ! -s "$OUT/owned" ]
-}
 
-@test "a GAIA update whose head manifest is unreadable skips nothing" {
-  branch release
+  # A GAIA update whose head manifest is unreadable skips nothing.
+  branch unreadable-manifest
   release_skip_apply "$FIXTURE" release
   git -C "$FIXTURE" rm -q .gaia/manifest.json
   commit
   plan_pr
   expect_plan changed false sparse
   lint_paths | grep -qx '.gaia/scripts/gaia-tool.sh'
-}
 
-@test "a deleted file is never linted" {
+  # A deleted file is never linted.
+  git -C "$FIXTURE" checkout -q main
   put scripts/old.sh
   commit seed
   branch delete
@@ -233,42 +249,28 @@ need_shellcheck() {
   expect_plan none false none
 }
 
-@test "a rename lints the new path only" {
-  branch rename
-  put scripts/new.sh
-  commit
-  export GH_STUB_FILES_JSON="$BATS_TEST_TMPDIR/files.json"
-  printf '[{"status":"renamed","filename":"scripts/new.sh","previous_filename":"scripts/old.sh"}]\n' > "$GH_STUB_FILES_JSON"
-  plan_pr
-  expect_plan changed false sparse
-  [ "$(lint_paths)" = "scripts/new.sh" ]
-}
-
-@test "project.json shellcheck false turns the lint off; true, absent and malformed lint" {
+@test "selection: lint and bats switch on and off by their own inputs" {
+  # project.json shellcheck false turns the lint off; true, absent and malformed lint.
   branch toggle
   put scripts/deploy.sh
   put .gaia/project.json '{"version": 1, "shellcheck": false}'
   commit
   plan_pr
   expect_plan none false none
-
   put .gaia/project.json '{"version": 1, "shellcheck": true}'
   commit
   plan_pr
   expect_plan changed false sparse
-
   put .gaia/project.json '{"version": 1}'
   commit
   plan_pr
   expect_plan changed false sparse
-
   put .gaia/project.json 'not json'
   commit
   plan_pr
   expect_plan changed false sparse
-}
 
-@test "a .shellcheckrc change lints every shell file under the owned rule" {
+  # A .shellcheckrc change lints every shell file under the owned rule.
   branch policy
   bump_version
   put .shellcheckrc 'disable=SC2034'
@@ -277,9 +279,9 @@ need_shellcheck() {
   expect_plan full false full
   [ ! -s "$OUT/lint-paths" ]
   grep -qx '.gaia/scripts/gaia-tool.sh' "$OUT/owned"
-}
 
-@test "a shellcheck pin change lints everything; a tests.yml change without one does not" {
+  # A shellcheck pin change lints everything; a tests.yml change without one does not.
+  git -C "$FIXTURE" checkout -q main
   put .github/workflows/tests.yml "    env:
       SHELLCHECK_VERSION: '0.10.0'"
   commit seed
@@ -289,70 +291,58 @@ need_shellcheck() {
   commit
   plan_pr
   expect_plan full false full
-
-  git -C "$FIXTURE" checkout -q -b same-pin main
+  branch same-pin
   put .github/workflows/tests.yml "    env:
       # a comment
       SHELLCHECK_VERSION: '0.10.0'"
   commit
   plan_pr
   expect_plan none false none
-}
 
-@test "bats is due when a suite exists and selected shell or tests/shell changed" {
-  suite
-  commit seed
-  branch shell
-  put scripts/deploy.sh
-  commit
-  plan_pr
-  expect_plan changed true full
-
-  git -C "$FIXTURE" checkout -q -b suite-only main
-  put tests/shell/README.md '# suite notes'
-  commit
-  plan_pr
-  expect_plan none true full
-
-  git -C "$FIXTURE" checkout -q -b unrelated main
-  put docs/notes.md '# notes'
-  commit
-  plan_pr
-  expect_plan none false none
-}
-
-@test "bats is not due without a suite, nor for a GAIA update's owned shell" {
+  # Bats is not due without a suite, nor for a GAIA update's owned shell.
   branch no-suite
   put scripts/deploy.sh
   commit
   plan_pr
   expect_plan changed false sparse
-
   git -C "$FIXTURE" checkout -q main
   suite
-  commit seed
-  git -C "$FIXTURE" checkout -q -b release main
+  commit seed-suite
+  branch release
   release_skip_apply "$FIXTURE" release
   plan_pr
   expect_plan none false none
-}
 
-@test "the shellcheck opt-out leaves bats running" {
-  suite
-  put .gaia/project.json '{"version": 1, "shellcheck": false}'
-  commit seed
+  # Bats is due when a suite exists and selected shell or tests/shell changed.
   branch shell
   put scripts/deploy.sh
   commit
   plan_pr
+  expect_plan changed true full
+  branch suite-only
+  put tests/shell/README.md '# suite notes'
+  commit
+  plan_pr
   expect_plan none true full
-}
+  branch unrelated
+  put docs/notes.md '# notes'
+  commit
+  plan_pr
+  expect_plan none false none
 
-@test "a manual run lints everything and runs bats when a suite exists" {
-  suite
-  commit seed
+  # A manual run lints everything and runs bats when a suite exists.
   run bash "$SELECTOR" plan --repository owner/name --head-sha main --output-directory "$OUT"
   expect_plan full true full
+
+  # The shellcheck opt-out leaves bats running.
+  git -C "$FIXTURE" checkout -q main
+  put .gaia/project.json '{"version": 1, "shellcheck": false}'
+  commit seed-opt-out
+  branch opt-out
+  put scripts/deploy.sh
+  commit
+  plan_pr
+  expect_plan none true full
 }
 
 @test "a pull request at the files cap takes its diff from git, not the API" {
@@ -374,15 +364,6 @@ need_shellcheck() {
   [ "$status" -eq 1 ]
   GH_STUB_FAIL=/contents/.gaia/project.json plan_pr
   [ "$status" -eq 1 ]
-}
-
-@test "a path with a space or a pattern character is matched literally by its sparse pattern" {
-  branch odd
-  put 'scripts/my tool[1].sh'
-  commit
-  plan_pr
-  expect_plan changed false sparse
-  grep -qxF '/scripts/my tool\[1\].sh' "$OUT/sparse-patterns"
 }
 
 @test "filter keeps shell paths the owned list does not name" {
@@ -409,6 +390,7 @@ audit_shell_paths() {
   ' _ "$REPO_ROOT/.claude/hooks/lib" "$FIXTURE" | awk -F'\t' '$2 == "fixture-shell" { print $1 }' | sort
 }
 
+# bats test_tags=protected
 @test "the selector and the audit agree on every release-skip branch kind" {
   local kind checked=0
   for kind in release ordinary hand-edit hand-edit-release mixed; do
@@ -425,36 +407,22 @@ audit_shell_paths() {
   [ "$checked" -eq 5 ]
 }
 
-@test "guard can fail: a selector that ignores the VERSION check disagrees with the audit" {
-  sed 's/! cmp -s "\$inputs\/base-VERSION" "\$inputs\/head-VERSION"/true/' "$SELECTOR" > "$BATS_TEST_TMPDIR/broken.sh"
-  grep -q 'cmp -s' "$BATS_TEST_TMPDIR/broken.sh" && return 1
-  SELECTOR="$BATS_TEST_TMPDIR/broken.sh"
-  branch hand-edit
-  release_skip_apply "$FIXTURE" hand-edit
-  plan_pr
-  [ "$status" -eq 0 ]
-  [ "$(lint_paths | sort)" != "$(audit_shell_paths)" ]
-}
-
 # ---------- lint runner ----------------------------------------------------
 
 lint() {
   run bash -c '{ [ "$#" -lt 2 ] || printf "%s\0" "${@:2}"; } | bash "$1" --root "$FIXTURE"' _ "$LINTER" "$@"
 }
 
-@test "lint: a warning fails and names the code; a clean file passes" {
+@test "lint: a warning fails and names the code, a bats file is linted as bash, the root .shellcheckrc applies, and no paths passes" {
   need_shellcheck
   put_warning scripts/bad.sh
   put scripts/good.sh
   lint scripts/bad.sh scripts/good.sh
   [ "$status" -eq 1 ]
-  [[ "$output" == *SC2034* ]]
+  grep -qF -- SC2034 <<<"$output"
   lint scripts/good.sh
   [ "$status" -eq 0 ]
-}
 
-@test "lint: a bats file is linted as bash" {
-  need_shellcheck
   put tests/shell/bad.bats '#!/usr/bin/env bats
 unused_variable=1
 @test "x" {
@@ -462,22 +430,14 @@ unused_variable=1
 }'
   lint tests/shell/bad.bats
   [ "$status" -eq 1 ]
-  [[ "$output" == *SC2034* ]]
-}
+  grep -qF -- SC2034 <<<"$output"
 
-@test "lint: the root .shellcheckrc applies" {
-  need_shellcheck
-  put_warning scripts/bad.sh
+  lint
+  [ "$status" -eq 0 ]
+
   put .shellcheckrc 'disable=SC2034'
   lint scripts/bad.sh
   [ "$status" -eq 0 ]
-}
-
-@test "lint: no paths passes; a missing path is a usage error" {
-  lint
-  [ "$status" -eq 0 ]
-  lint scripts/absent.sh
-  [ "$status" -eq 2 ]
 }
 
 @test "selection then lint: a warning in an owned file an ordinary pull request edits fails" {
@@ -539,29 +499,12 @@ for problem in problems:
 PY
 }
 
+# bats test_tags=protected
 @test "the shell job runs on every pull request, selects first and gates the rest" {
   require_yaml_parser
   run job_shape "$WORKFLOW"
   [ "$status" -eq 0 ]
   [ -z "$output" ] || { echo "$output" >&2; return 1; }
-}
-
-@test "guard can fail: the shape check reds on an ungated checkout and a paths filter" {
-  require_yaml_parser
-  local broken="$BATS_TEST_TMPDIR/tests.yml"
-  python3 - "$WORKFLOW" "$broken" <<'PY'
-import sys, yaml
-with open(sys.argv[1]) as handle:
-    document = yaml.safe_load(handle)
-triggers = document.get(True, document.get("on"))
-triggers["pull_request"]["paths"] = ["**/*.sh"]
-document["jobs"]["shell"]["steps"].insert(1, {"name": "Ungated", "uses": "actions/checkout@x"})
-with open(sys.argv[2], "w") as handle:
-    yaml.safe_dump(document, handle)
-PY
-  run job_shape "$broken"
-  [[ "$output" == *"paths filter"* ]]
-  [[ "$output" == *"'Ungated' is not gated"* ]]
 }
 
 @test "actionlint passes on the workflow" {

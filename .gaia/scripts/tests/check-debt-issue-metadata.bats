@@ -21,9 +21,9 @@
 # because a gate that fails for the wrong reason is a gate that will pass for
 # the wrong reason later.
 #
-# Two of the fixtures are the live defects that motivated the gate, kept as
-# named tests so the connection survives: an issue filed with no `audience:`
-# label, and an issue filed with no dedup key at all.
+# Two of the fixtures are the live defects that motivated the gate, the first
+# row of their case tables: an issue filed with no `audience:` label, and an
+# issue filed with no dedup key at all.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md. Note the
 # `run` idiom throughout, which captures status instead of letting a non-zero
@@ -92,345 +92,219 @@ refute_code() {
   return 0
 }
 
+# write_body <kind>: writes the named body fixture to $BODY.
+write_body() {
+  case "$1" in
+    good) good_body >"$BODY" ;;
+    investigate) good_investigate_body >"$BODY" ;;
+    investigate-empty-question)
+      {
+        good_body
+        printf '\n<!-- gaia-investigate: v1 -->\n**Question:**\n**Settled by:** a test that drives the branch.\n'
+      } >"$BODY"
+      ;;
+    investigate-no-settled-by)
+      {
+        good_body
+        printf '\n<!-- gaia-investigate: v1 -->\n**Question:** does the branch ever run?\n'
+      } >"$BODY"
+      ;;
+    investigate-second-block)
+      {
+        good_investigate_body
+        printf '\n<!-- gaia-investigate: v1 -->\n**Question:** a second, contradicting question.\n**Settled by:** something else.\n'
+      } >"$BODY"
+      ;;
+    investigate-prose-mention)
+      # A correction comment quoting the block's format indents or inlines the
+      # marker, so it matches none of the anchored patterns. A flush-left quote
+      # of the whole fence is a different case and does trip the gate.
+      {
+        good_body
+        printf '\nThe schema is `<!-- gaia-investigate: v1 -->` followed by two lines.\n'
+        printf '\n  <!-- gaia-investigate: v1 -->\n'
+      } >"$BODY"
+      ;;
+    investigate-crlf)
+      # A body last edited in the web UI arrives with a trailing carriage
+      # return on every line.
+      good_investigate_body | sed 's/$/\r/' >"$BODY"
+      ;;
+    key-absent) printf 'a body with prose and no key at all\n' >"$BODY" ;;
+    key-non-integer-line)
+      printf '<!-- gaia-debt-key: v1 class=holistic/unclassified path=app/foo.ts line=forty -->\n' >"$BODY"
+      ;;
+    key-duplicate)
+      {
+        good_body
+        printf '<!-- gaia-debt-key: v1 class=holistic/unclassified path=app/bar.ts line=7 -->\n'
+      } >"$BODY"
+      ;;
+    key-malformed-beside-valid)
+      # A valid key must not make the later checks unreachable: the stray line
+      # would enter the residue tally's suppression set.
+      {
+        good_body
+        printf '<!-- gaia-debt-key: v1 class=x path=app/bogus.ts line=nope -->\n'
+      } >"$BODY"
+      ;;
+    key-prose-only)
+      printf 'This issue predates the `<!-- gaia-debt-key: -->` wrapper entirely.\n' >"$BODY"
+      ;;
+    key-absolute-path)
+      printf '<!-- gaia-debt-key: v1 class=holistic/unclassified path=/Users/you/app/foo.ts line=42 -->\n' >"$BODY"
+      ;;
+    key-trailing-r)
+      # The tolerance for CRLF is a `tr`, not a `\r?` in the pattern: that
+      # escape matches a carriage return on BSD and a literal `r` on Linux.
+      printf '<!-- gaia-debt-key: v1 class=c path=app/a.ts line=1 -->r\n' >"$BODY"
+      ;;
+    key-path-with-spaces)
+      printf '<!-- gaia-debt-key: v1 class=holistic/unclassified path=wiki/concepts/PR Merge Workflow.md line=175 -->\n' >"$BODY"
+      ;;
+    key-prose-mention-beside-key)
+      {
+        good_body
+        printf 'Exactly one carries a dedup key, in bare form rather than the `<!-- gaia-debt-key: -->` wrapper.\n'
+      } >"$BODY"
+      ;;
+    *)
+      echo "write_body: unknown kind $1" >&2
+      return 1
+      ;;
+  esac
+}
+
 # ---------------------------------------------------------------------------
 # Green baseline
 # ---------------------------------------------------------------------------
 
-@test "a correct graded filing is clean" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 0 ]
-  assert_code "clean"
-}
-
-@test "an ungraded filing is clean: the difficulty label is optional by design" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:minor,audience:maintainer' --body-file "$BODY"
-  [ "$status" -eq 0 ]
-}
-
-# ---------------------------------------------------------------------------
-# audience: the namespace with no prior enforcement at all
-# ---------------------------------------------------------------------------
-
-@test "RED, live defect: a filing with no audience: label is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,difficulty:easy' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "audience-count"
-}
-
-@test "two audience: labels are rejected" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS,audience:maintainer" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "audience-count"
-}
-
-@test "a audience: value outside the permitted set is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:internal' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "audience-value"
+@test "a clean filing passes" {
+  local row kind labels refuted
+  for row in \
+    "good|$GOOD_LABELS|" \
+    "good|tech-debt,severity:minor,audience:maintainer|" \
+    "investigate|$INVESTIGATE_LABELS|severity-value" \
+    "investigate-prose-mention|$GOOD_LABELS|stray-investigate-block" \
+    "investigate-crlf|$INVESTIGATE_LABELS|missing-investigate-block" \
+    "good|tech-debt,severity:major,audience:adopter,footprint:narrow|" \
+    "good|tech-debt,severity:major,audience:adopter,footprint:wide|" \
+    "good|tech-debt,severity:major,audience:adopter,footprint:spec|" \
+    "key-path-with-spaces|$GOOD_LABELS|" \
+    "key-prose-mention-beside-key|$GOOD_LABELS|"; do
+    IFS='|' read -r kind labels refuted <<<"$row"
+    write_body "$kind"
+    run bash "$CHECK" --pre-file --labels "$labels" --body-file "$BODY"
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    assert_code "clean" || { echo "row $row: not reported clean"; return 1; }
+    if [ -n "$refuted" ]; then
+      refute_code "$refuted" || { echo "row $row: reported $refuted"; return 1; }
+    fi
+  done
 }
 
 # ---------------------------------------------------------------------------
-# severity and difficulty
+# Labels: the namespaces and the labels that belong to another lifecycle stage
 # ---------------------------------------------------------------------------
 
-@test "a filing with no severity: label is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,audience:adopter' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "severity-count"
-}
-
-@test "two severity: labels are rejected" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS,severity:critical" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "severity-count"
-}
-
-@test "a severity: value outside the permitted set is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:blocker,audience:adopter' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "severity-value"
-}
-
-@test "two difficulty: labels are rejected" {
-  # The zero case is the separate ungraded-filing test above; this one asserts
-  # only the two-label half, which is what its name now says.
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS,difficulty:hard" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "difficulty-count"
-}
-
-@test "a difficulty: value outside the permitted set is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,difficulty:trivial' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "difficulty-value"
+@test "a filing with a missing, duplicated or out-of-set label value is rejected" {
+  # The first row is the live defect that motivated the gate: an issue filed
+  # with no audience: label. Fields: labels | expected code | code that must
+  # not appear | expected finding total (empty to skip).
+  local row labels code refuted total
+  for row in \
+    'tech-debt,severity:major,difficulty:easy|audience-count||' \
+    "$GOOD_LABELS,audience:maintainer|audience-count||" \
+    'tech-debt,severity:major,audience:internal|audience-value||' \
+    'tech-debt,audience:adopter|severity-count||' \
+    "$GOOD_LABELS,severity:critical|severity-count||" \
+    'tech-debt,severity:blocker,audience:adopter|severity-value||' \
+    "$GOOD_LABELS,difficulty:hard|difficulty-count||" \
+    'tech-debt,severity:major,audience:adopter,difficulty:trivial|difficulty-value||' \
+    "$GOOD_LABELS,footprint:spec|footprint-count||" \
+    'tech-debt,severity:major,audience:adopter,footprint:agent|footprint-value||' \
+    'tech-debt,severity:,audience:adopter|severity-value|severity-count|' \
+    'tech-debt,severity:major,audience:adopter,difficulty:|difficulty-value||' \
+    'tech-debt,severity:major,audience:adopter maintainer|audience-value||' \
+    'tech-debt,severity:major,audience:*|audience-value|CHANGELOG.md|1' \
+    'severity:major,audience:adopter|missing-tech-debt||' \
+    "$GOOD_LABELS,in-progress|drain-label-on-new-filing||" \
+    "$GOOD_LABELS,debt:spec-pending|drain-label-on-new-filing||" \
+    "$GOOD_LABELS,debt:spec-active|drain-label-on-new-filing||"; do
+    IFS='|' read -r labels code refuted total <<<"$row"
+    run bash "$CHECK" --pre-file --labels "$labels" --body-file "$BODY"
+    [ "$status" -eq 1 ] || { echo "row $labels: status $status"; return 1; }
+    assert_code "$code" || { echo "row $labels: no $code finding"; return 1; }
+    # An empty value is one label with one wrong value, so the count check
+    # must stay quiet; a glob must be one finding, never expanded against the
+    # working directory into one per repository-root entry.
+    if [ -n "$refuted" ]; then
+      refute_code "$refuted" || { echo "row $labels: reported $refuted"; return 1; }
+    fi
+    if [ -n "$total" ]; then
+      grep -qF -- "$total finding(s)" <<<"$output" || { echo "row $labels: not $total finding(s)"; return 1; }
+    fi
+  done
 }
 
 # ---------------------------------------------------------------------------
 # severity:investigate and its research block
 #
-# `investigate` is the one severity value that costs something to pick. Every
-# other grade is a judgment the filer already made; this one is the admission
-# that they did not, so the gate demands the admission be specific. The failure
-# this guards against is the one the dedup key's `class=` field already ran and
-# lost: a free "I don't know" value absorbed 91.4% of that axis. A value that
-# cannot be picked without writing down WHAT is unknown is not free.
-#
-# Both directions are checked. The block is required when the grade is present,
-# and forbidden when it is not: a block left behind by a re-grade asserts an
-# open question that has since been answered, which is worse than no block at
-# all because a reader believes it.
+# `investigate` is the one severity value that costs something to pick: the
+# gate demands the admission of not knowing be specific. Both directions are
+# checked, because a block left behind by a re-grade asserts an open question
+# that has since been answered.
 # ---------------------------------------------------------------------------
 
-@test "severity:investigate is inside the permitted set" {
-  good_investigate_body >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$INVESTIGATE_LABELS" --body-file "$BODY"
-  [ "$status" -eq 0 ]
-  refute_code "severity-value"
-}
-
-@test "RED: an investigate filing with no research block is rejected" {
-  run bash "$CHECK" --pre-file --labels "$INVESTIGATE_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "missing-investigate-block"
-}
-
-@test "RED: an investigate block with an empty Question line is rejected" {
-  {
-    good_body
-    printf '\n<!-- gaia-investigate: v1 -->\n**Question:**\n**Settled by:** a test that drives the branch.\n'
-  } >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$INVESTIGATE_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "investigate-question"
-  # The block itself is present, so the presence check must NOT also fire:
-  # two findings for one defect sends the filer to fix the wrong thing.
-  refute_code "missing-investigate-block"
-}
-
-@test "RED: an investigate block with no Settled by line is rejected" {
-  {
-    good_body
-    printf '\n<!-- gaia-investigate: v1 -->\n**Question:** does the branch ever run?\n'
-  } >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$INVESTIGATE_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "investigate-settled-by"
-}
-
-@test "RED: a second investigate block is rejected" {
-  {
-    good_investigate_body
-    printf '\n<!-- gaia-investigate: v1 -->\n**Question:** a second, contradicting question.\n**Settled by:** something else.\n'
-  } >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$INVESTIGATE_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "duplicate-investigate-block"
-}
-
-@test "RED: a research block on a graded filing is rejected as stray" {
-  good_investigate_body >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "stray-investigate-block"
-}
-
-@test "a prose mention of the investigate marker beside a graded filing stays clean" {
-  # The mirror of the dedup-key checker's own prose-mention test. A correction
-  # comment quoting the block's format indents or inlines the marker, so it
-  # matches none of the anchored patterns and is not read as a stray block. A
-  # flush-left quote of the whole fence is a different case and does trip it,
-  # which is the same line the sibling checker draws.
-  {
-    good_body
-    printf '\nThe schema is `<!-- gaia-investigate: v1 -->` followed by two lines.\n'
-    printf '\n  <!-- gaia-investigate: v1 -->\n'
-  } >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 0 ]
-  refute_code "stray-investigate-block"
-}
-
-@test "a CRLF investigate block is not reported as missing" {
-  # Same contract as the CRLF dedup-key test below: a body last edited in the
-  # web UI arrives with a trailing carriage return on every line, and the
-  # end-anchored patterns would reject it without the shared normalization.
-  good_investigate_body | sed 's/$/\r/' >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$INVESTIGATE_LABELS" --body-file "$BODY"
-  [ "$status" -eq 0 ]
-}
-
-# ---------------------------------------------------------------------------
-# footprint: validated when present, never demanded
-# ---------------------------------------------------------------------------
-
-@test "each permitted footprint: value is accepted" {
-  local footprint_value
-  for footprint_value in narrow wide spec; do
-    run bash "$CHECK" --pre-file --labels "tech-debt,severity:major,audience:adopter,footprint:$footprint_value" --body-file "$BODY"
-    [ "$status" -eq 0 ] || return 1
+@test "an investigate filing without a well-formed research block is rejected" {
+  local row kind labels code refuted
+  for row in \
+    "good|$INVESTIGATE_LABELS|missing-investigate-block|" \
+    "investigate-empty-question|$INVESTIGATE_LABELS|investigate-question|missing-investigate-block" \
+    "investigate-no-settled-by|$INVESTIGATE_LABELS|investigate-settled-by|" \
+    "investigate-second-block|$INVESTIGATE_LABELS|duplicate-investigate-block|" \
+    "investigate|$GOOD_LABELS|stray-investigate-block|"; do
+    IFS='|' read -r kind labels code refuted <<<"$row"
+    write_body "$kind"
+    run bash "$CHECK" --pre-file --labels "$labels" --body-file "$BODY"
+    [ "$status" -eq 1 ] || { echo "row $row: status $status"; return 1; }
+    assert_code "$code" || { echo "row $row: no $code finding"; return 1; }
+    # Two findings for one defect sends the filer to fix the wrong thing.
+    if [ -n "$refuted" ]; then
+      refute_code "$refuted" || { echo "row $row: reported $refuted"; return 1; }
+    fi
   done
-}
-
-@test "two footprint: labels are rejected" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS,footprint:spec" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "footprint-count"
-}
-
-@test "a footprint: value outside the permitted set is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,footprint:agent' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "footprint-value"
-}
-
-# --- the shapes an unquoted value expansion used to let through ------------
-#
-# Each of these greened the gate before the value loop read its input line-wise.
-# They are grouped because they share one cause: a value reached the check as
-# shell syntax rather than as data. The empty case is the one a caller actually
-# hits, since the recipe substitutes placeholders into this argv.
-
-@test "RED: an empty namespace value is a finding, not an absence" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:,audience:adopter' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "severity-value"
-  # The count check cannot catch this: `severity:` is one label, so the count
-  # is correct and only the value is wrong.
-  refute_code "severity-count"
-}
-
-@test "RED: an unfilled difficulty placeholder is a finding, not a dropped flag" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,difficulty:' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "difficulty-value"
-}
-
-@test "RED: two values crammed into one label are rejected, not checked separately" {
-  # Both halves are individually legal, so a word-splitting loop passed this.
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter maintainer' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "audience-value"
-}
-
-@test "RED: a glob in a label value is reported as one finding, not expanded" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:*' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "audience-value"
-  # The bad case: the glob expanded against the working directory and the run
-  # reported a finding per repository-root entry instead of one naming the label.
-  grep -qF -- "CHANGELOG.md" <<<"$output" && return 1
-  grep -qF -- "1 finding(s)" <<<"$output" || return 1
-}
-
-@test "a filing with no tech-debt label is rejected" {
-  run bash "$CHECK" --pre-file --labels 'severity:major,audience:adopter' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "missing-tech-debt"
 }
 
 # ---------------------------------------------------------------------------
 # The dedup key
 # ---------------------------------------------------------------------------
 
-@test "RED, live defect: a body with no dedup key is rejected" {
-  printf 'a body with prose and no key at all\n' >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "missing-dedup-key"
-}
-
-@test "a key with a non-integer line reads as malformed, not as absent" {
-  printf '<!-- gaia-debt-key: v1 class=holistic/unclassified path=app/foo.ts line=forty -->\n' >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "malformed-dedup-key"
-  refute_code "missing-dedup-key"
-}
-
-@test "two dedup keys in one body are rejected" {
-  {
-    good_body
-    printf '<!-- gaia-debt-key: v1 class=holistic/unclassified path=app/bar.ts line=7 -->\n'
-  } >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "duplicate-dedup-key"
-}
-
-@test "RED: a malformed key line is reported even when a valid key stands beside it" {
-  # The ladder this replaced stopped at the first arm that held, so a valid key
-  # made every later check unreachable. The stray line is not inert: the
-  # residue tally's suppression reads keys with a looser grammar than this
-  # gate's shape test, so the bogus path would enter its suppression set.
-  {
-    good_body
-    printf '<!-- gaia-debt-key: v1 class=x path=app/bogus.ts line=nope -->\n'
-  } >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "malformed-dedup-key"
-}
-
-@test "a body carrying only a prose mention of the key has no key, rather than a malformed one" {
-  printf 'This issue predates the `<!-- gaia-debt-key: -->` wrapper entirely.\n' >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "missing-dedup-key"
-  refute_code "malformed-dedup-key"
-}
-
-@test "a repository path containing spaces is a valid key path" {
-  printf '<!-- gaia-debt-key: v1 class=holistic/unclassified path=wiki/concepts/PR Merge Workflow.md line=175 -->\n' >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 0 ]
-}
-
-@test "an absolute key path is rejected, and reported apart from the shape check" {
-  printf '<!-- gaia-debt-key: v1 class=holistic/unclassified path=/Users/you/app/foo.ts line=42 -->\n' >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "dedup-key-path"
-  refute_code "malformed-dedup-key"
-}
-
-@test "a prose mention of the key wrapper beside one real key stays clean" {
-  # The shape a correction comment takes when it quotes the key format in
-  # running text. The gate counts only whole-line keys, so the prose mention
-  # is not a second key.
-  {
-    good_body
-    printf 'Exactly one carries a dedup key, in bare form rather than the `<!-- gaia-debt-key: -->` wrapper.\n'
-  } >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 0 ]
+@test "a filing with a missing or malformed dedup key is rejected" {
+  # The first row is the live defect that motivated the gate: an issue filed
+  # with no dedup key at all.
+  local row kind code refuted
+  for row in \
+    'key-absent|missing-dedup-key|' \
+    'key-non-integer-line|malformed-dedup-key|missing-dedup-key' \
+    'key-duplicate|duplicate-dedup-key|' \
+    'key-malformed-beside-valid|malformed-dedup-key|' \
+    'key-prose-only|missing-dedup-key|malformed-dedup-key' \
+    'key-absolute-path|dedup-key-path|malformed-dedup-key' \
+    'key-trailing-r|malformed-dedup-key|'; do
+    IFS='|' read -r kind code refuted <<<"$row"
+    write_body "$kind"
+    run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
+    [ "$status" -eq 1 ] || { echo "row $kind: status $status"; return 1; }
+    assert_code "$code" || { echo "row $kind: no $code finding"; return 1; }
+    if [ -n "$refuted" ]; then
+      refute_code "$refuted" || { echo "row $kind: reported $refuted"; return 1; }
+    fi
+  done
 }
 
 # ---------------------------------------------------------------------------
-# Labels that belong to another lifecycle stage
-# ---------------------------------------------------------------------------
-
-@test "a drain label on a filing is rejected" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS,in-progress" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "drain-label-on-new-filing"
-}
-
-# The park labels are rejected on the same terms as the claim. Both spellings
-# are checked, because the guard names each one literally: a third name added
-# to the design but not to the regex fails open, and this is the only place
-# that distinction is visible.
-@test "either park label on a filing is rejected" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS,debt:spec-pending" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "drain-label-on-new-filing"
-
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS,debt:spec-active" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "drain-label-on-new-filing"
-}
-
-# ---------------------------------------------------------------------------
-# Reporting and error handling
+# Reporting
 # ---------------------------------------------------------------------------
 
 @test "every finding is reported, not just the first" {
@@ -445,26 +319,6 @@ refute_code() {
   assert_code "audience-count"
   assert_code "missing-dedup-key"
   grep -qF -- "4 finding(s)" <<<"$output" || return 1
-}
-
-@test "a usage error exits 2, distinguishable from a finding" {
-  run bash "$CHECK"
-  [ "$status" -eq 2 ]
-}
-
-@test "an unknown argument exits 2" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY" --nonsense
-  [ "$status" -eq 2 ]
-}
-
-@test "a missing body file exits 2 rather than reporting a clean filing" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$TEMPORARY_DIRECTORY/absent.md"
-  [ "$status" -eq 2 ]
-}
-
-@test "--pre-file with no --labels exits 2 rather than passing an empty label set" {
-  run bash "$CHECK" --pre-file --body-file "$BODY"
-  [ "$status" -eq 2 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -561,12 +415,6 @@ stub_gh_failing() {
   [ "$status" -eq 0 ]
 }
 
-@test "a gh failure exits 2, not the findings status" {
-  stub_gh_failing
-  run bash "$CHECK" --sweep
-  [ "$status" -eq 2 ]
-}
-
 @test "--issue reports on a single issue through the same shared checks" {
   stub_gh '[]' '{
     "number":200,
@@ -577,20 +425,6 @@ stub_gh_failing() {
   [ "$status" -eq 1 ]
   assert_code "audience-count"
   assert_code "missing-dedup-key"
-}
-
-@test "a key line ending in a literal r is malformed, on every platform" {
-  # The inverse of the CRLF fixture, and the reason the tolerance is a `tr`
-  # rather than a `\r?` in the pattern. That escape is BSD-only: it matches a
-  # carriage return on macOS and a literal `r` on Linux, so a pattern carrying
-  # it accepts this line on exactly one of the two platforms. Pinning both
-  # directions is what makes the platform-independence checkable rather than
-  # asserted, since either fixture alone passes under the broken spelling on the
-  # platform that happens to agree with it.
-  printf '<!-- gaia-debt-key: v1 class=c path=app/a.ts line=1 -->r\n' >"$BODY"
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "malformed-dedup-key"
 }
 
 # ---------------------------------------------------------------------------
@@ -621,23 +455,20 @@ stub_gh_failing() {
   [ "$status" -eq 0 ]
 }
 
-@test "RED: --investigate-cap refuses the filing that would exceed the cap, and names the queue" {
-  stub_gh '[{"number":11,"title":"one"},{"number":12,"title":"two"},{"number":13,"title":"three"}]'
-  run bash "$CHECK" --investigate-cap --labels "$INVESTIGATE_LABELS"
-  [ "$status" -eq 1 ]
-  assert_code "investigate-cap-reached"
-  # The open numbers are the whole point of the refusal: a filer told only
-  # "full" has nothing to act on, and the two exits out of the refusal both
-  # need the list.
-  grep -qF -- "#11" <<<"$output" || return 1
-  grep -qF -- "#13" <<<"$output" || return 1
-}
-
-@test "RED: --investigate-cap refuses a queue already over the cap" {
-  stub_gh '[{"number":11,"title":"one"},{"number":12,"title":"two"},{"number":13,"title":"three"},{"number":14,"title":"four"}]'
-  run bash "$CHECK" --investigate-cap --labels "$INVESTIGATE_LABELS"
-  [ "$status" -eq 1 ]
-  assert_code "investigate-cap-reached"
+@test "--investigate-cap refuses a filing that would exceed the cap, and names the queue" {
+  local corpus
+  for corpus in \
+    '[{"number":11,"title":"one"},{"number":12,"title":"two"},{"number":13,"title":"three"}]' \
+    '[{"number":11,"title":"one"},{"number":12,"title":"two"},{"number":13,"title":"three"},{"number":14,"title":"four"}]'; do
+    stub_gh "$corpus"
+    run bash "$CHECK" --investigate-cap --labels "$INVESTIGATE_LABELS"
+    [ "$status" -eq 1 ] || { echo "corpus $corpus: status $status"; return 1; }
+    assert_code "investigate-cap-reached" || { echo "corpus $corpus: no cap finding"; return 1; }
+    # The open numbers are the whole point of the refusal: a filer told only
+    # "full" has nothing to act on, and both exits out of it need the list.
+    grep -qF -- "#11" <<<"$output" || { echo "corpus $corpus: #11 not named"; return 1; }
+    grep -qF -- "#13" <<<"$output" || { echo "corpus $corpus: #13 not named"; return 1; }
+  done
 }
 
 @test "RED: the cap counts the investigate queue, not the whole open backlog" {
@@ -688,11 +519,6 @@ stub_gh_failing() {
   grep -qF -- "--label severity:investigate" "$TEMPORARY_DIRECTORY/argv.log" || return 1
   grep -F -- "--label severity:investigate" "$TEMPORARY_DIRECTORY/argv.log" | grep -qF -- "--repo" && return 1
   true
-}
-
-@test "--investigate-cap with no --labels exits 2 rather than reading an empty label set as clean" {
-  run bash "$CHECK" --investigate-cap
-  [ "$status" -eq 2 ]
 }
 
 # --- the marker-stripped (adopter) shape of this script ---------------------

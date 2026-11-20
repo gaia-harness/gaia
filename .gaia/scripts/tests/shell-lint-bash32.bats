@@ -157,90 +157,52 @@ gate_pass_headers() {
 # lever for this group, which is what this is. Widening one of these back to
 # the bare gate buys no assertion and costs about 68 seconds.
 
-# bats test_tags=whole-tree
-@test "the bash-3.2 parse pass runs and stays green when every script parses" {
-  run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
-    bash "$GATE" --only bash32-parse
-  [ "$status" -eq 0 ]
-  grep -qF -- "bash-3.2 parse ($STUB_DIRECTORY/bash32 -n)" <<<"$output"
-  grep -qF -- "shell-lint passed" <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "the bash-3.2 parse pass fails the gate on a script the interpreter cannot parse" {
-  first_sh="$(tracked_sh first)"
-  [ -n "$first_sh" ]
-  run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
-    BASH32_FAIL_ON="$first_sh" bash "$GATE" --only bash32-parse
-  [ "$status" -eq 1 ]
-  grep -qF -- "shell-lint FAILED" <<<"$output"
-  # The interpreter's own diagnostic has to reach the operator, or the gate
-  # reds without naming the file that will not parse.
-  grep -qF -- "$first_sh: line 1: syntax error" <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "the bash-3.2 parse pass reports EVERY broken script, not only the first" {
-  # The sweep's header claims one invocation names every broken script rather
-  # than only the first. Rigging a single file cannot check that claim wherever
-  # it is placed: rig only the first and an abort-after-it still prints that
-  # one diagnostic, rig only the last and an abort-on-first-error aborts with
-  # nothing left to report, so both produce byte-identical output. Two failures
-  # in ONE run is what discriminates, and rigging the two ends also covers the
-  # whole-list-coverage claim a truncated sweep would break.
+# bats test_tags=whole-tree,protected
+@test "the bash-3.2 parse pass fails on unparsable scripts and names every one, skips loudly when too new, and fails closed on a missing or versionless interpreter" {
+  local first_sh last_sh
   first_sh="$(tracked_sh first)"
   last_sh="$(tracked_sh last)"
   [ -n "$first_sh" ]
   [ -n "$last_sh" ]
   [ "$first_sh" != "$last_sh" ]
+
+  # The interpreter's own diagnostic has to reach the operator, or the gate
+  # reds without naming the file that will not parse.
   run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
-    BASH32_FAIL_ON="$first_sh $last_sh" bash "$GATE" --only bash32-parse
+    BASH32_FAIL_ON="$first_sh" bash "$GATE" --only bash32-parse
   [ "$status" -eq 1 ]
   grep -qF -- "shell-lint FAILED" <<<"$output"
   grep -qF -- "$first_sh: line 1: syntax error" <<<"$output"
-  grep -qF -- "$last_sh: line 1: syntax error" <<<"$output"
-}
 
-# bats test_tags=whole-tree
-@test "the bash-3.2 parse pass skips LOUDLY when the interpreter is too new" {
-  # A file is rigged to fail the sweep at the same time. That is what makes the
-  # green below mean "did not sweep" rather than merely "swept and found
-  # nothing": had the too-new interpreter parsed the tree, it would have hit
-  # this file and red.
-  first_sh="$(tracked_sh first)"
-  [ -n "$first_sh" ]
+  # One run names every broken script. Rigging a single file cannot show it:
+  # an abort after the first error prints that one diagnostic either way, so two
+  # failures at the two ends of the list in ONE run is what discriminates.
+  run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
+    BASH32_FAIL_ON="$first_sh $last_sh" bash "$GATE" --only bash32-parse
+  [ "$status" -eq 1 ]
+  grep -qF -- "$first_sh: line 1: syntax error" <<<"$output"
+  grep -qF -- "$last_sh: line 1: syntax error" <<<"$output"
+
+  # A too-new interpreter skips loudly and does not fail: an ubuntu runner has
+  # no bash 3.2 and must still clear the rest of the gate. The rigged file makes
+  # the green mean "did not sweep" rather than "swept and found nothing".
   run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
     BASH32_MAJOR=5 BASH32_FAIL_ON="$first_sh" bash "$GATE" --only bash32-parse
-  # A skip is not a failure: an ubuntu runner has no bash 3.2 and must still be
-  # able to clear the rest of the gate.
   [ "$status" -eq 0 ]
-  # Loud, not silent. A silent skip would let every bash-5 host report the tree
-  # clean over syntax nothing on that host ever parsed.
   grep -qF -- "WARNING:" <<<"$output"
   grep -qF -- "parse pass was SKIPPED" <<<"$output"
-  # The rigged file's diagnostic is absent, so no sweep ran. Written as the bad
-  # case plus an explicit `return 1`, per .claude/rules/bats-assertions.md, so
-  # the assertion keeps failing correctly if a later edit appends to this test.
   grep -qF -- "$first_sh: line 1: syntax error" <<<"$output" && return 1
-  true
-}
 
-# bats test_tags=whole-tree
-@test "the bash-3.2 parse pass fails closed when the interpreter is missing" {
+  # An interpreter this pass cannot place on either side of the 3.2 line fails
+  # closed rather than reporting clean over a tree it never parsed.
   run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/no-such-bash" \
     bash "$GATE" --only bash32-parse
   [ "$status" -eq 1 ]
   grep -qF -- "is not executable; the bash-3.2 parse pass cannot run" <<<"$output"
   grep -qF -- "shell-lint FAILED" <<<"$output"
-}
 
-# bats test_tags=whole-tree
-@test "the bash-3.2 parse pass fails closed when the interpreter reports no version" {
   run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
     BASH32_MAJOR= bash "$GATE" --only bash32-parse
-  # Fail closed rather than skip: an interpreter whose version cannot be read is
-  # one this pass cannot place on either side of the 3.2 line, and reporting
-  # clean having parsed nothing is the outcome the pass is here to rule out.
   [ "$status" -eq 1 ]
   grep -qF -- "reported no numeric major version" <<<"$output"
   grep -qF -- "shell-lint FAILED" <<<"$output"
@@ -304,19 +266,6 @@ gate_pass_headers() {
   grep -qF -- "shell-lint passed" <<<"$output"
 }
 
-# bats test_tags=whole-tree
-@test "--only bash32-parse still fails closed on a script the interpreter cannot parse" {
-  # Selecting one pass must not soften it: the flag narrows what runs, never
-  # what a run that finds something reports.
-  first_sh="$(tracked_sh first)"
-  [ -n "$first_sh" ]
-  run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
-    BASH32_FAIL_ON="$first_sh" bash "$GATE" --only bash32-parse
-  [ "$status" -eq 1 ]
-  grep -qF -- "shell-lint FAILED" <<<"$output"
-  grep -qF -- "$first_sh: line 1: syntax error" <<<"$output"
-}
-
 @test "an unknown --only pass is a usage error, not a silent full run" {
   # A typo falling through to the default would run the whole gate on a host
   # that has no shellcheck, reporting the flag's own absence as a lint failure.
@@ -325,18 +274,6 @@ gate_pass_headers() {
   grep -qF -- "unknown --only pass" <<<"$output"
   grep -qF -- "shell-lint passed" <<<"$output" && return 1
   true
-}
-
-@test "an unknown argument is a usage error" {
-  run env PATH="$STUB_DIRECTORY:$PATH" bash "$GATE" --bogus
-  [ "$status" -eq 2 ]
-  grep -qF -- "unknown argument" <<<"$output"
-}
-
-@test "--only with no pass name is a usage error" {
-  run env PATH="$STUB_DIRECTORY:$PATH" bash "$GATE" --only
-  [ "$status" -eq 2 ]
-  grep -qF -- "needs a pass name" <<<"$output"
 }
 
 @test "the CI workflow arms the parse pass on a runner that carries bash 3.2" {

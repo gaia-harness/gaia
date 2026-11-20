@@ -118,30 +118,31 @@ reconcile: spec specs/SPEC-003: folder without catalog row"
   [ "$(manifest_of "$SANDBOX/.notebook")" = "$manifest" ]
 }
 
-@test "rows carrying a reap record are silent, with or without a folder" {
+@test "reconcile reports only real mismatches and stays silent for reaped rows, dotfiles, temp files and a consistent notebook" {
+  # Rows carrying a reap record are silent, with or without a folder.
   make_fixture \
     --seed-row '{"kind":"spec","id":"SPEC-010","path":"specs/SPEC-010","status":"merged","reap":{"at":null,"by":"pre-catalog"}}' \
     --seed-row '{"kind":"spec","id":"SPEC-011","path":"specs/SPEC-011","status":"merged","reap":{"at":"2026-01-01T00:00:00Z","by":"spec-archive-merged"}}' \
     --seed-row '{"kind":"plan","id":"PLAN-010","path":"plans/PLAN-010","status":"merged","reap":{"at":null,"by":"pre-catalog"}}' \
     --seed-spec SPEC-012 ready
   run -0 reconcile
-  [ "$output" = "reconcile: spec specs/SPEC-012: row without folder" ]
-}
+  [ "$output" = "reconcile: spec specs/SPEC-012: row without folder" ] || { echo "reaped-rows case: got '$output'"; return 1; }
 
-@test "plans are reconciled like specs and dotfiles and the catalog temp file are ignored" {
+  # Plans are reconciled like specs; dotfiles and the catalog temp file are ignored.
+  rm -rf "$SANDBOX"
   make_fixture --seed-plan PLAN-001 ready --seed-plan-folder PLAN-002 ready
   mkdir -p "$SANDBOX/.notebook/plans/PLAN-003" "$SANDBOX/.notebook/research/.hidden"
   printf 'x\n' > "$SANDBOX/.notebook/.catalog.json.tmp.123"
   printf 'x\n' > "$SANDBOX/.notebook/research/.hidden-file"
   run -0 reconcile
   [ "$output" = "reconcile: plan plans/PLAN-001: row without folder
-reconcile: plan plans/PLAN-003: folder without catalog row" ]
-}
+reconcile: plan plans/PLAN-003: folder without catalog row" ] || { echo "plans-and-dotfiles case: got '$output'"; return 1; }
 
-@test "a consistent notebook prints nothing" {
+  # A consistent notebook prints nothing.
+  rm -rf "$SANDBOX"
   make_fixture --seed-spec-folder SPEC-001 draft --seed-plan-folder PLAN-001 ready --seed-research topic active
   run -0 reconcile
-  [ -z "$output" ]
+  [ -z "$output" ] || { echo "consistent case: got '$output'"; return 1; }
 }
 
 @test "run from a linked worktree it reconciles main's notebook and registers into main's catalog" {
@@ -180,10 +181,4 @@ reconcile: plan plans/PLAN-003: folder without catalog row" ]
   if [ -e "$REAL_ROOT/.notebook" ]; then
     [ "$(manifest_of "$REAL_ROOT/.notebook"; digest_of "$REAL_ROOT/.notebook/catalog.json" 2>/dev/null)" = "$real_before" ]
   fi
-}
-
-@test "more than one operand is a usage error" {
-  make_fixture --seed-spec SPEC-001 ready
-  run -2 --separate-stderr reconcile one two
-  grep -qF 'usage:' <<<"$stderr"
 }

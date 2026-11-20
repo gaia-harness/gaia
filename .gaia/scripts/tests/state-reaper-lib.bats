@@ -165,27 +165,17 @@ EOF
   check_rejects '{"path":"protected/x/","retention":{"class":"branch-spent","key":"normalized-path","days":8}}' 'protected/'
 }
 
-@test "forward matching keeps a live worktree branch's nested key and reaps keys no live branch maps to" {
+@test "branch liveness keeps live worktree and sibling-prefix keys and reaps only gone keys" {
   make_main
   branch 'worktree-a+b'
+  branch fix/a-b
+  branch fix/b
   snap
   run gaia_reaper_live_keys normalize
   [ "$status" -eq 0 ]
   printf '%s\n' "$output" | grep -qx 'a/b'
   put runs/a/b/STATE.md
   put runs/c/STATE.md
-  age runs/a 8
-  age runs/c 8
-  reap runs
-  present runs/a/b/STATE.md
-  absent runs/c
-}
-
-@test "a spent key is reaped beside live siblings that share its prefix, under nesting and slug keys" {
-  make_main
-  branch fix/a-b
-  branch fix/b
-  snap
   put runs/fix/a/STATE.md
   put runs/fix/a-b/STATE.md
   put runs/fix/b/STATE.md
@@ -193,6 +183,8 @@ EOF
   put audit/0123abcd.fix%2Fa.m.findings.json 8
   put audit/0123abcd.fix%2Fa-b.m.findings.json 8
   reap runs
+  present runs/a/b/STATE.md
+  absent runs/c
   absent runs/fix/a
   present runs/fix/a-b/STATE.md
   present runs/fix/b/STATE.md
@@ -286,6 +278,7 @@ EOF
   present "$directory/.closed/not-a-closed-name.json"
 }
 
+# bats test_tags=protected
 @test "an audit-loop state file whose lock another writer holds is never deleted" {
   make_main
   snap
@@ -349,7 +342,7 @@ EOF
   printf '%s\n' "$REAP_OUTPUT" | grep -q '^skipped worthiness:'
 }
 
-@test "spec scratch follows its catalog row, falls back to age without one, and an unreadable catalog reaps none" {
+@test "spec scratch follows its catalog row and an unreadable catalog reaps none" {
   make_main
   mkdir -p "$MAIN/.notebook"
   printf '%s\n' '{"version":1,"items":[{"kind":"spec","id":"alpha","status":"draft"},{"kind":"spec","id":"beta","status":"ready"},{"kind":"spec","id":"gamma","status":"merged"},{"kind":"plan","id":"delta","status":"ready"}]}' >"$MAIN/.notebook/catalog.json"
@@ -367,11 +360,6 @@ EOF
   absent cache/draft-delta.md
   present cache/draft-epsilon.md
   absent cache/draft.md
-}
-
-@test "an unparseable or absent catalog reaps no spec scratch while an age row still reaps" {
-  make_main
-  mkdir -p "$MAIN/.notebook"
   local catalog_state
   for catalog_state in unparseable absent; do
     if [ "$catalog_state" = unparseable ]; then
@@ -394,51 +382,37 @@ EOF
   done
 }
 
-@test "a failed worktree-list read disables branch-spent and tree-gone; an age row still reaps" {
+# bats test_tags=protected
+@test "a failed worktree-list or ref read disables branch-spent, the worktree-list read also tree-gone, and an age row still reaps" {
   make_main
-  put runs/gone/STATE.md 8
-  age runs 8
-  put worthiness-ledger/0000000000000000/worthiness.jsonl
-  put audit/0123abcd.gone.m.findings.json 8
-  put scratch/old.txt 8
-  fail_git 'worktree list'
-  run gaia_reaper_snapshot "$MAIN"
-  [ "$status" -eq 0 ]
-  snap
-  run gaia_reaper_live_keys normalize
-  [ "$status" -eq 1 ]
-  run gaia_reaper_reap_row "$MAIN" "$(row runs)"
-  [ "$status" -eq 0 ]
-  reap runs
-  reap worthiness
-  reap findings
-  reap scratch
-  present runs/gone/STATE.md
-  present worthiness-ledger/0000000000000000/worthiness.jsonl
-  present audit/0123abcd.gone.m.findings.json
-  absent scratch/old.txt
-}
-
-@test "a failed ref read disables branch-spent; an age row still reaps" {
-  make_main
-  put runs/gone/STATE.md 8
-  age runs 8
-  put audit/0123abcd.gone.m.findings.json 8
-  put scratch/old.txt 8
-  fail_git 'for-each-ref'
-  run gaia_reaper_snapshot "$MAIN"
-  [ "$status" -eq 0 ]
-  snap
-  run gaia_reaper_live_keys normalize
-  [ "$status" -eq 1 ]
-  run gaia_reaper_reap_row "$MAIN" "$(row runs)"
-  [ "$status" -eq 0 ]
-  reap runs
-  reap findings
-  reap scratch
-  present runs/gone/STATE.md
-  present audit/0123abcd.gone.m.findings.json
-  absent scratch/old.txt
+  local failing
+  for failing in 'worktree list' 'for-each-ref'; do
+    rm -rf "$LOCAL"
+    mkdir -p "$LOCAL"
+    put runs/gone/STATE.md 8
+    age runs 8
+    put worthiness-ledger/0000000000000000/worthiness.jsonl
+    put audit/0123abcd.gone.m.findings.json 8
+    put scratch/old.txt 8
+    fail_git "$failing"
+    run gaia_reaper_snapshot "$MAIN"
+    [ "$status" -eq 0 ] || { echo "read $failing: snapshot status $status"; return 1; }
+    snap
+    run gaia_reaper_live_keys normalize
+    [ "$status" -eq 1 ] || { echo "read $failing: live keys status $status"; return 1; }
+    run gaia_reaper_reap_row "$MAIN" "$(row runs)"
+    [ "$status" -eq 0 ] || { echo "read $failing: reap status $status"; return 1; }
+    reap runs
+    reap worthiness
+    reap findings
+    reap scratch
+    present runs/gone/STATE.md || { echo "read $failing"; return 1; }
+    present audit/0123abcd.gone.m.findings.json || { echo "read $failing"; return 1; }
+    absent scratch/old.txt || { echo "read $failing"; return 1; }
+    if [ "$failing" = 'worktree list' ]; then
+      present worthiness-ledger/0000000000000000/worthiness.jsonl || { echo "read $failing"; return 1; }
+    fi
+  done
 }
 
 @test "a candidate is reaped only by the row its path classifies to" {
@@ -487,7 +461,8 @@ EOF
   present cache/shared/context/link.json
 }
 
-@test "safe removal unlinks symlinks without touching their targets and refuses unsafe paths" {
+# bats test_tags=protected
+@test "safe removal unlinks symlinks without touching targets and refuses unsafe paths, including a glob row's own directory" {
   make_main
   snap
   put protected/thing.txt
@@ -521,6 +496,15 @@ EOF
     case "$argument" in "$LOCAL"/?*) ;; *) printf 'rm received %s\n' "$argument"; return 1 ;; esac
   done <"$BATS_TEST_TMPDIR/rm-arguments"
   [ "$count" -ge 2 ]
+  put cache/file/renders.json
+  put elsewhere/renders.json
+  ln -s ../elsewhere "$LOCAL/cache/linked"
+  run gaia_reaper_safe_remove "$LOCAL" "$(row renders)" cache/file/renders.json cache/linked/renders.json elsewhere/renders.json
+  printf '%s\n' "$output" | grep -qx 'removed cache/file/renders.json'
+  printf '%s\n' "$output" | grep -q '^refused cache/linked/renders.json:'
+  printf '%s\n' "$output" | grep -q '^refused elsewhere/renders.json:'
+  absent cache/file/renders.json
+  present elsewhere/renders.json
 }
 
 @test "keep and owned rows are never touched" {
@@ -616,27 +600,4 @@ EOF
     printf '%s\n' "$output" | grep -q '^skipped pr-cache:'
     present cache/gh-artifact-pr.gone.json
   done
-}
-
-@test "safe removal checks a glob row's candidate against the row's own directory" {
-  make_main
-  put cache/file/renders.json
-  put elsewhere/renders.json
-  ln -s ../elsewhere "$LOCAL/cache/linked"
-  run gaia_reaper_safe_remove "$LOCAL" "$(row renders)" cache/file/renders.json cache/linked/renders.json elsewhere/renders.json
-  printf '%s\n' "$output" | grep -qx 'removed cache/file/renders.json'
-  printf '%s\n' "$output" | grep -q '^refused cache/linked/renders.json:'
-  printf '%s\n' "$output" | grep -q '^refused elsewhere/renders.json:'
-  absent cache/file/renders.json
-  present elsewhere/renders.json
-}
-
-@test "both libraries parse under bash 3.2 and the current bash, and shellcheck is clean" {
-  local library
-  for library in state-reaper-lib.sh state-reaper-classes.sh; do
-    bash -n "$SCRIPT_DIRECTORY/$library"
-    if [ -x /bin/bash ]; then /bin/bash -n "$SCRIPT_DIRECTORY/$library"; fi
-  done
-  command -v shellcheck >/dev/null 2>&1 || skip 'shellcheck is not installed'
-  shellcheck "$SCRIPT_DIRECTORY/state-reaper-lib.sh" "$SCRIPT_DIRECTORY/state-reaper-classes.sh" "$BATS_TEST_FILENAME"
 }

@@ -68,182 +68,121 @@ add_hook() {
 
 # ========== bare literal ==========
 
+# A clean hook beside the bad one proves one bad hook fails the whole gate
+# without the clean one being reported.
 # bats test_tags=protected
 @test "bare literal: a bare .gaia/local literal in a top-level hook fails" {
-  local repo; repo="$(make_fixture_repo bare-top)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
+  local -a names=(top lib new-hook notebook notebook-lib)
+  local -a paths=("foo.sh" "lib/foo.sh" "nested/new-hook.sh" "foo.sh" "lib/foo.sh")
+  local -a line_suffixes=(":3" "" "" ":3" "")
+  local -a bodies=(
+    '#!/usr/bin/env bash
 source .gaia/scripts/main-root-lib.sh
 ledger=".gaia/local/plans/x.json"
 cat "$ledger"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "BARE LITERAL: .claude/hooks/foo.sh" <<<"$output" || return 1
-  grep -qF ".claude/hooks/foo.sh:3" <<<"$output" || return 1
-}
-
-@test "bare literal: a bare .gaia/local literal in a lib fails too" {
-  local repo; repo="$(make_fixture_repo bare-lib)"
-  add_hook "$repo" "lib/foo.sh" '#!/usr/bin/env bash
+    '#!/usr/bin/env bash
 cat ".gaia/local/audit/sneaky.json"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "BARE LITERAL: .claude/hooks/lib/foo.sh" <<<"$output" || return 1
-}
-
-@test "bare literal: a hook added with no declaration anywhere is still scanned" {
-  local repo; repo="$(make_fixture_repo bare-new)"
-  add_hook "$repo" "clean.sh" '#!/usr/bin/env bash
-exit 0'
-  add_hook "$repo" "nested/new-hook.sh" '#!/usr/bin/env bash
+    '#!/usr/bin/env bash
 : > ".gaia/local/cache/x"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "BARE LITERAL: .claude/hooks/nested/new-hook.sh" <<<"$output" || return 1
+    '#!/usr/bin/env bash
+source .gaia/scripts/main-root-lib.sh
+ledger=".notebook/specs/x.json"
+cat "$ledger"'
+    '#!/usr/bin/env bash
+cat ".notebook/research/sneaky.json"'
+  )
+  local index repo
+  for index in 0 1 2 3 4; do
+    repo="$(make_fixture_repo "bare-${names[$index]}")"
+    add_hook "$repo" "good-hook.sh" '#!/usr/bin/env bash
+source .gaia/scripts/main-root-lib.sh
+root="$(gaia_resolve_main_root)"
+cat "$root/.gaia/local/plans/x.json"'
+    add_hook "$repo" "${paths[$index]}" "${bodies[$index]}"
+    run gaia_check_hook_scope_manifest "$repo"
+    [ "$status" -eq 1 ] || { echo "case ${names[$index]}: status $status"; return 1; }
+    grep -qF "BARE LITERAL: .claude/hooks/${paths[$index]}" <<<"$output" || { echo "case ${names[$index]}: not reported as a bare literal"; return 1; }
+    if [ -n "${line_suffixes[$index]}" ]; then
+      grep -qF ".claude/hooks/${paths[$index]}${line_suffixes[$index]}" <<<"$output" || { echo "case ${names[$index]}: line not named"; return 1; }
+    fi
+    grep -qF "good-hook.sh" <<<"$output" && { echo "case ${names[$index]}: the clean hook was reported"; return 1; }
+  done
+  return 0
 }
 
-@test "bare literal: a comment mentioning .gaia/local does not trip the check" {
-  local repo; repo="$(make_fixture_repo bare-comment)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
+@test "a resolved root, a comment or an inherited root passes" {
+  local -a names=(comment regex resolved inherited lib-param notebook-joined notebook-comment)
+  local -a paths=("foo.sh" "foo.sh" "foo.sh" "foo.sh" "lib/foo.sh" "foo.sh" "foo.sh")
+  local -a bodies=(
+    '#!/usr/bin/env bash
 # This guard never touches .gaia/local.
 exit 0'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 0 ]
-}
-
-@test "bare literal: a structural regex over an already-resolved path passes" {
-  local repo; repo="$(make_fixture_repo bare-regex)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
+    '#!/usr/bin/env bash
 source .gaia/scripts/main-root-lib.sh
 name="$(printf "%s" "$1" | sed "s#.*/\.gaia/local/##")"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 0 ]
-}
-
-# ========== resolver-backed ==========
-
-@test "resolver: a resolved-root-joined reference naming main-root-lib.sh passes" {
-  local repo; repo="$(make_fixture_repo resolver-clean)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
+    '#!/usr/bin/env bash
 source .gaia/scripts/main-root-lib.sh
 root="$(gaia_resolve_main_root)"
 ledger="$root/.gaia/local/plans/x.json"
 cat "$ledger"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 0 ]
-}
-
-@test "resolver: a top-level hook joining a hand-derived root with no resolver lib fails" {
-  local repo; repo="$(make_fixture_repo resolver-none)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
-root="$(git rev-parse --show-toplevel)"
-ledger="$root/.gaia/local/plans/x.json"
-cat "$ledger"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "NO RESOLVER: .claude/hooks/foo.sh" <<<"$output" || return 1
-}
-
-@test "resolver: a hook sourcing a library outside the resolver list, with a resolved reference, fails" {
-  local repo; repo="$(make_fixture_repo resolver-other-lib)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
-. .gaia/scripts/branch-name-lib.sh
-root="$(git rev-parse --show-toplevel)"
-cat "$root/.gaia/local/plans/x.json"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "NO RESOLVER: .claude/hooks/foo.sh" <<<"$output" || return 1
-}
-
-@test "resolver: a hook that inherits its root via a resolver-backed lib, holding no literal of its own, passes" {
-  local repo; repo="$(make_fixture_repo resolver-inherits)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
+    '#!/usr/bin/env bash
 . .gaia/scripts/state-registry-lib.sh
 ledger="$(gaia_registry_path)"
 echo "$ledger"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 0 ]
-}
-
-@test "resolver: a lib taking its root from the caller passes (lib/audit-clearance.sh's own shape)" {
-  local repo; repo="$(make_fixture_repo resolver-lib-param)"
-  add_hook "$repo" "lib/foo.sh" '#!/usr/bin/env bash
+    '#!/usr/bin/env bash
 marker_path() {
   local root="$1" digest="$2"
   printf "%s\n" "${root}/.gaia/local/audit/${digest}.ok"
 }'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 0 ]
+    '#!/usr/bin/env bash
+source .gaia/scripts/main-root-lib.sh
+ledger="$main_root/.notebook/specs/x.json"
+cat "$ledger"'
+    '#!/usr/bin/env bash
+# This guard never touches .notebook.
+exit 0'
+  )
+  local index repo
+  for index in 0 1 2 3 4 5 6; do
+    repo="$(make_fixture_repo "pass-${names[$index]}")"
+    add_hook "$repo" "${paths[$index]}" "${bodies[$index]}"
+    run gaia_check_hook_scope_manifest "$repo"
+    [ "$status" -eq 0 ] || { echo "case ${names[$index]}: status $status"; return 1; }
+  done
+}
+
+# ========== resolver-backed ==========
+
+@test "resolver: a hook joining a root with no resolver-backed lib fails" {
+  local -a names=(hand-derived other-lib notebook)
+  local -a bodies=(
+    '#!/usr/bin/env bash
+root="$(git rev-parse --show-toplevel)"
+ledger="$root/.gaia/local/plans/x.json"
+cat "$ledger"'
+    '#!/usr/bin/env bash
+. .gaia/scripts/branch-name-lib.sh
+root="$(git rev-parse --show-toplevel)"
+cat "$root/.gaia/local/plans/x.json"'
+    '#!/usr/bin/env bash
+root="$1"
+cat "$root/.notebook/x.json"'
+  )
+  local index repo
+  for index in 0 1 2; do
+    repo="$(make_fixture_repo "resolver-${names[$index]}")"
+    add_hook "$repo" "foo.sh" "${bodies[$index]}"
+    run gaia_check_hook_scope_manifest "$repo"
+    [ "$status" -eq 1 ] || { echo "case ${names[$index]}: status $status"; return 1; }
+    grep -qF "NO RESOLVER: .claude/hooks/foo.sh" <<<"$output" || { echo "case ${names[$index]}: not reported as no resolver"; return 1; }
+  done
 }
 
 # ========== whole gate ==========
-
-@test "gate: one bad hook among clean ones still fails the whole gate" {
-  local repo; repo="$(make_fixture_repo gate-onebad)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
-source .gaia/scripts/main-root-lib.sh
-root="$(gaia_resolve_main_root)"
-cat "$root/.gaia/local/plans/x.json"'
-  add_hook "$repo" "bar.sh" '#!/usr/bin/env bash
-cat ".gaia/local/audit/sneaky.json"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "BARE LITERAL: .claude/hooks/bar.sh" <<<"$output" || return 1
-  grep -qF "foo.sh" <<<"$output" && return 1
-  return 0
-}
 
 @test "gate: a tree with no hooks fails rather than passing over nothing" {
   local repo; repo="$(make_fixture_repo gate-empty)"
   run gaia_check_hook_scope_manifest "$repo"
   [ "$status" -eq 1 ]
   grep -qF "no hooks found" <<<"$output" || return 1
-}
-
-# ========== notebook root ==========
-
-@test "notebook bare literal: a bare .notebook path in a hook fails; the same line joined to a resolved root passes" {
-  local repo; repo="$(make_fixture_repo notebook-bare)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
-source .gaia/scripts/main-root-lib.sh
-ledger=".notebook/specs/x.json"
-cat "$ledger"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "BARE LITERAL: .claude/hooks/foo.sh" <<<"$output" || return 1
-  grep -qF ".claude/hooks/foo.sh:3" <<<"$output" || return 1
-
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
-source .gaia/scripts/main-root-lib.sh
-ledger="$main_root/.notebook/specs/x.json"
-cat "$ledger"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 0 ]
-}
-
-@test "notebook bare literal: a bare .notebook literal in a lib fails too" {
-  local repo; repo="$(make_fixture_repo notebook-lib)"
-  add_hook "$repo" "lib/foo.sh" '#!/usr/bin/env bash
-cat ".notebook/research/sneaky.json"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "BARE LITERAL: .claude/hooks/lib/foo.sh" <<<"$output" || return 1
-}
-
-@test "notebook bare literal: a comment mentioning .notebook does not trip the check" {
-  local repo; repo="$(make_fixture_repo notebook-comment)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
-# This guard never touches .notebook.
-exit 0'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 0 ]
-}
-
-@test "notebook resolver: a hook with a resolved .notebook join but no resolver-backed lib fails" {
-  local repo; repo="$(make_fixture_repo notebook-resolver)"
-  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
-root="$1"
-cat "$root/.notebook/x.json"'
-  run gaia_check_hook_scope_manifest "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "NO RESOLVER: .claude/hooks/foo.sh" <<<"$output" || return 1
 }

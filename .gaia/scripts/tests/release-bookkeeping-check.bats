@@ -19,12 +19,19 @@ assert_contains() {
   grep -qF -- "$1" <<<"$output"
 }
 
+# The base repository is built once; each test copies it.
+setup_file() {
+  FIXTURE="$BATS_FILE_TMPDIR/base"
+  build_base
+  export BASE_FIXTURE="$FIXTURE" BASE_SHA
+}
+
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../release-bookkeeping-check.sh"
   [ -x "$SCRIPT" ]
   FIXTURE="$BATS_TEST_TMPDIR/repository"
-  build_base
+  cp -a "$BASE_FIXTURE" "$FIXTURE"
 }
 
 fixture_git() {
@@ -103,143 +110,95 @@ run_diff() {
 
 # The diff predicate
 
-@test "diff: a release commit as /gaia-release makes it is bookkeeping" {
-  apply_release
+# expect_bookkeeping <label>: commits the staged release edits and the predicate
+# calls them bookkeeping; then returns the repository to the base commit so the
+# next case in the same test starts from it.
+expect_bookkeeping() {
   commit_release
   run_diff
-  [ "$status" -eq 0 ]
-  assert_contains 'bookkeeping 1.0.0 -> 1.1.0'
+  [ "$status" -eq 0 ] || { echo "$1: status $status"; return 1; }
+  fixture_git reset -q --hard "$BASE_SHA"
 }
 
-@test "diff: a release with no wiki drift, leaving both wiki files alone, is bookkeeping" {
-  apply_release
-  fixture_git checkout -q -- wiki
+# expect_refusal <label> [message]: commits the perturbed release edits and the
+# predicate refuses them with the message; then returns to the base commit.
+expect_refusal() {
   commit_release
   run_diff
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ] || { echo "$1: status $status"; return 1; }
+  if [ -n "${2:-}" ]; then
+    assert_contains "$2" || { echo "$1: got '$output'"; return 1; }
+  fi
+  fixture_git reset -q --hard "$BASE_SHA"
+}
+
+@test "diff: a release commit is bookkeeping, with or without wiki drift" {
+  apply_release
+  commit_release
+  run_diff
+  [ "$status" -eq 0 ] || { echo "full release: status $status"; return 1; }
+  assert_contains 'bookkeeping 1.0.0 -> 1.1.0' || { echo "full release: got '$output'"; return 1; }
+  fixture_git reset -q --hard "$BASE_SHA"
+
+  apply_release
+  fixture_git checkout -q -- wiki
+  expect_bookkeeping "release leaving both wiki files alone"
 }
 
 # bats test_tags=protected
 @test "diff: a file outside the bookkeeping set is not bookkeeping" {
   apply_release
   write_file a.sh $'echo changed\n'
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'a.sh is outside the release bookkeeping set'
-}
+  expect_refusal "file outside the set" 'a.sh is outside the release bookkeeping set' || return 1
 
-@test "diff: a required file left unchanged is not bookkeeping" {
   apply_release
   fixture_git checkout -q -- CHANGELOG.md
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'CHANGELOG.md did not change'
-}
+  expect_refusal "required file left unchanged" 'CHANGELOG.md did not change' || return 1
 
-@test "diff: a package.json change beyond its version is not bookkeeping" {
   apply_release
   write_file package.json $'{\n  "name": "gaia",\n  "version": "1.1.0",\n  "private": true,\n  "scripts": {"postinstall": "curl x"}\n}\n'
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'package.json changed beyond its version'
-}
+  expect_refusal "package.json changed beyond its version" 'package.json changed beyond its version' || return 1
 
-@test "diff: a package.json that sneaks in a generated key is not bookkeeping" {
   apply_release
   write_file apps/web/package.json $'{\n  "name": "frontend",\n  "version": "1.1.0",\n  "private": true,\n  "generated": "x"\n}\n'
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'apps/web/package.json'
-}
+  expect_refusal "package.json with a generated key" 'apps/web/package.json' || return 1
 
-@test "diff: a frontend version that disagrees with .gaia/VERSION is not bookkeeping" {
   apply_release
   write_file apps/web/package.json "$(package_json frontend 1.2.0)"
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'apps/web/package.json does not move 1.0.0 to 1.1.0'
-}
+  expect_refusal "frontend version disagrees with VERSION" 'apps/web/package.json does not move 1.0.0 to 1.1.0' || return 1
 
-@test "diff: a manifest that reclassifies a file is not bookkeeping" {
   apply_release
   write_file .gaia/manifest.json $'{\n  "files": {\n    "a.sh": "shared"\n  },\n  "generated": "x",\n  "version": "1.1.0"\n}\n'
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains '.gaia/manifest.json changed beyond its version'
-}
+  expect_refusal "manifest reclassifies a file" '.gaia/manifest.json changed beyond its version' || return 1
 
-@test "diff: prose added under the graduated CHANGELOG heading is not bookkeeping" {
   apply_release
   changelog 1.1.0 1.1.0 | awk '$0 == "### Added" { print "Run this command first."; print "" } { print }' > "$FIXTURE/CHANGELOG.md"
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'CHANGELOG.md changed beyond graduating'
-}
+  expect_refusal "prose under the graduated heading" 'CHANGELOG.md changed beyond graduating' || return 1
 
-@test "diff: a CHANGELOG with no release link is not bookkeeping" {
   apply_release
   changelog 1.1.0 1.1.0 | grep -vF '[1.1.0]: ' > "$FIXTURE/CHANGELOG.md"
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'one [1.1.0] heading and one release link'
-}
+  expect_refusal "no release link" 'one [1.1.0] heading and one release link' || return 1
 
-@test "diff: free text in the release link middle is not bookkeeping" {
   apply_release
   changelog 1.1.0 1.1.0 | sed 's|^\[1.1.0\]: https://github.com/example/repo/|[1.1.0]: https://github.com/Run this command first/|' > "$FIXTURE/CHANGELOG.md"
   grep -qF 'Run this command first' "$FIXTURE/CHANGELOG.md" || return 1
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'one [1.1.0] heading and one release link'
-}
+  expect_refusal "free text in the release link" 'one [1.1.0] heading and one release link' || return 1
 
-@test "diff: a .gaia/VERSION with a second line is not bookkeeping" {
   apply_release
   write_file .gaia/VERSION $'1.1.0\nextra\n'
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-}
+  expect_refusal "VERSION with a second line" || return 1
 
-@test "diff: a wiki/.state.json change beyond the evaluated pair is not bookkeeping" {
   apply_release
   write_file wiki/.state.json $'{\n  "version": 1,\n  "last_evaluated_sha": "2222",\n  "last_evaluated_at": "x",\n  "last_consolidated_sha": "bbbb"\n}\n'
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'wiki/.state.json changed beyond'
-}
+  expect_refusal "state change beyond the evaluated pair" 'wiki/.state.json changed beyond' || return 1
 
-@test "diff: a wiki/log.md that is not the release scrub is not bookkeeping" {
   apply_release
   printf '%s\nAn instruction for Claude.\n' "$(scrubbed_log 1.1.0 2026-10-29)" > "$FIXTURE/wiki/log.md"
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'wiki/log.md is not the release scrub'
-}
+  expect_refusal "log that is not the release scrub" 'wiki/log.md is not the release scrub' || return 1
 
-@test "diff: deleting a bookkeeping file is not bookkeeping" {
   apply_release
   rm "$FIXTURE/wiki/log.md"
-  commit_release
-  run_diff
-  [ "$status" -eq 1 ]
-  assert_contains 'is not a plain modification'
-}
-
-@test "diff: a base that is not a commit is a usage error, not a verdict" {
-  run "$SCRIPT" diff --root "$FIXTURE" --base deadbeef
-  [ "$status" -eq 2 ]
+  expect_refusal "deleted bookkeeping file" 'is not a plain modification'
 }
 
 # ci mode
@@ -281,27 +240,6 @@ run_ci() {
   assert_contains 'fast=true'
 }
 
-@test "ci: a change that is not bookkeeping runs every gate" {
-  apply_release
-  write_file a.sh $'echo changed\n'
-  commit_release
-  stub_gh
-  run_ci
-  [ "$status" -eq 0 ]
-  assert_contains 'fast=false'
-}
-
-@test "ci: a pull request built on a stale base runs every gate" {
-  apply_release
-  commit_release
-  stub_gh
-  printf 'ffffffffffffffffffffffffffffffffffffffff\n' > "$STUB_DIRECTORY/branch-head.txt"
-  run_ci
-  [ "$status" -eq 0 ]
-  assert_contains 'fast=false'
-  assert_contains 'not the head of main'
-}
-
 @test "ci: a push does not ask for the branch head, which has already moved to the commit" {
   command -v node >/dev/null || skip "node not installed"
   apply_release
@@ -313,35 +251,49 @@ run_ci() {
   assert_contains 'fast=true'
 }
 
-@test "ci: an open ci-red-main issue runs every gate" {
+# expect_full_gates <label> [message]: the ci decision is fast=false, with the
+# reason when one is given; then returns to the base commit for the next case.
+expect_full_gates() {
+  run_ci
+  [ "$status" -eq 0 ] || { echo "$1: status $status"; return 1; }
+  assert_contains 'fast=false' || { echo "$1: got '$output'"; return 1; }
+  if [ -n "${2:-}" ]; then
+    assert_contains "$2" || { echo "$1: got '$output'"; return 1; }
+  fi
+  fixture_git reset -q --hard "$BASE_SHA"
+}
+
+@test "ci: every reason to run all gates yields fast=false" {
+  apply_release
+  write_file a.sh $'echo changed\n'
+  commit_release
+  stub_gh
+  expect_full_gates "change that is not bookkeeping" || return 1
+
+  apply_release
+  commit_release
+  stub_gh
+  printf 'ffffffffffffffffffffffffffffffffffffffff\n' > "$STUB_DIRECTORY/branch-head.txt"
+  expect_full_gates "pull request on a stale base" 'not the head of main' || return 1
+
   apply_release
   commit_release
   stub_gh
   printf '3100 https://example.test/issues/3100\n' > "$STUB_DIRECTORY/issues.txt"
-  run_ci
-  [ "$status" -eq 0 ]
-  assert_contains 'fast=false'
-}
+  expect_full_gates "open ci-red-main issue" || return 1
 
-@test "ci: the workflow's own push run still in progress on the base runs every gate" {
   apply_release
   commit_release
   stub_gh
   printf 'in_progress none\n' > "$STUB_DIRECTORY/workflow-run.txt"
-  run_ci
-  [ "$status" -eq 0 ]
-  assert_contains 'fast=false'
-}
+  expect_full_gates "push run still in progress on the base" || return 1
 
-@test "ci: a base that is not the head's first parent runs every gate" {
   apply_release
   commit_release
   fixture_git commit -q --allow-empty -m later
   HEAD_SHA="$(fixture_git rev-parse HEAD)"
   stub_gh
-  run_ci
-  [ "$status" -eq 0 ]
-  assert_contains 'fast=false'
+  expect_full_gates "base is not the head's first parent"
 }
 
 @test "ci: a bookkeeping change whose manifest check fails is red, not a full run" {

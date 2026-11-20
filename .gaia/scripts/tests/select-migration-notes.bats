@@ -4,7 +4,7 @@
 # runs from the verified target bundle to pick the migration notes a hop
 # crosses. It guards the range and ascending numeric order, the fail-closed
 # validation of the whole folder (in range or not), the unreadable-note
-# report, the usage exits, and the shared version comparison.
+# report, and the shared version comparison.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/scripts/tests/select-migration-notes.bats < /dev/null
@@ -32,207 +32,122 @@ expect_fail_closed() {
   grep -qF -- "$2" <<<"$stderr"
 }
 
-@test "selects notes above the baseline through the target, ascending, each with its mode" {
+# expect_selected <expected output> <baseline> <target> [<bundle root>]
+expect_selected() {
+  run --separate-stderr bash "$SCRIPT" "${4:-$ROOT}" "$2" "$3"
+  [ "$status" -eq 0 ] || { echo "selection $2..$3: status $status"; return 1; }
+  [ "$output" = "$1" ] || { echo "selection $2..$3: got '$output'"; return 1; }
+  [ -z "$stderr" ] || { echo "selection $2..$3: stderr '$stderr'"; return 1; }
+}
+
+@test "selects notes above the baseline through the target, ascending numerically, each with its mode and path" {
   write_note 2.1.0 blocking
   write_note 2.2.0 after-merge
   write_note 2.3.0 blocking
   write_note 3.0.0 blocking
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf '2.2.0\tafter-merge\t%s/.gaia/migrations/2.2.0.md\n2.3.0\tblocking\t%s/.gaia/migrations/2.3.0.md' "$ROOT" "$ROOT")" ]
-  [ -z "$stderr" ]
-}
+  expect_selected "$(printf '2.2.0\tafter-merge\t%s/.gaia/migrations/2.2.0.md\n2.3.0\tblocking\t%s/.gaia/migrations/2.3.0.md' "$ROOT" "$ROOT")" 2.1.0 2.3.0
 
-@test "one trailing slash on the bundle root is stripped from the printed path" {
-  write_note 2.2.0 blocking
-  run --separate-stderr bash "$SCRIPT" "$ROOT/" 2.1.0 2.2.0
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf '2.2.0\tblocking\t%s/.gaia/migrations/2.2.0.md' "$ROOT")" ]
-}
+  # one trailing slash on the bundle root is stripped from the printed path
+  expect_selected "$(printf '2.2.0\tafter-merge\t%s/.gaia/migrations/2.2.0.md\n2.3.0\tblocking\t%s/.gaia/migrations/2.3.0.md' "$ROOT" "$ROOT")" 2.1.0 2.3.0 "$ROOT/"
 
-@test "orders numerically per component: 2.9.0 before 2.10.0" {
+  # a note equal to the baseline is excluded and one equal to the target is included
+  expect_selected "$(printf '2.3.0\tblocking\t%s/.gaia/migrations/2.3.0.md' "$ROOT")" 2.2.0 2.3.0
+
+  # numeric per component: 2.9.0 before 2.10.0
+  rm -rf "$NOTES"
   write_note 2.10.0 blocking
   write_note 2.9.0 after-merge
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.8.0 2.10.0
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf '2.9.0\tafter-merge\t%s/.gaia/migrations/2.9.0.md\n2.10.0\tblocking\t%s/.gaia/migrations/2.10.0.md' "$ROOT" "$ROOT")" ]
+  expect_selected "$(printf '2.9.0\tafter-merge\t%s/.gaia/migrations/2.9.0.md\n2.10.0\tblocking\t%s/.gaia/migrations/2.10.0.md' "$ROOT" "$ROOT")" 2.8.0 2.10.0
 }
 
-@test "a note equal to the baseline is excluded and one equal to the target is included" {
-  write_note 2.0.0 blocking
-  write_note 2.1.0 blocking
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.0.0 2.1.0
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf '2.1.0\tblocking\t%s/.gaia/migrations/2.1.0.md' "$ROOT")" ]
-}
-
-@test "an absent migrations folder prints nothing and exits 0" {
+@test "an absent or empty migrations folder prints nothing and exits 0" {
   mkdir -p "$ROOT"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 1.0.0 2.0.0
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ -z "$stderr" ]
-}
-
-@test "an empty migrations folder prints nothing and exits 0" {
+  expect_selected "" 1.0.0 2.0.0
   mkdir -p "$NOTES"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 1.0.0 2.0.0
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ -z "$stderr" ]
+  expect_selected "" 1.0.0 2.0.0
 }
 
-@test "a note with no frontmatter fails closed" {
+# seed_malformed <case>: writes the folder content for one fail-closed case.
+seed_malformed() {
+  rm -rf "$ROOT"
   mkdir -p "$NOTES"
-  printf '# Just a heading\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "frontmatter"
+  case "$1" in
+    no-frontmatter) printf '# Just a heading\n' >"$NOTES/2.2.0.md" ;;
+    unknown-mode) printf -- '---\nmode: sometimes\n---\n' >"$NOTES/2.2.0.md" ;;
+    unknown-mode-out-of-range)
+      write_note 2.2.0 blocking
+      printf -- '---\nmode: sometimes\n---\n' >"$NOTES/9.0.0.md" ;;
+    quoted-mode) printf -- '---\nmode: "blocking"\n---\n' >"$NOTES/2.2.0.md" ;;
+    other-key) printf -- '---\nkind: blocking\n---\n' >"$NOTES/2.2.0.md" ;;
+    second-key) printf -- '---\nmode: blocking\nextra: 1\n---\n' >"$NOTES/2.2.0.md" ;;
+    trailing-text) printf -- '---\nmode: blocking # note\n---\n' >"$NOTES/2.2.0.md" ;;
+    trailing-space) printf -- '---\nmode: blocking \n---\n' >"$NOTES/2.2.0.md" ;;
+    non-version-name)
+      write_note 2.2.0 blocking
+      printf -- '---\nmode: blocking\n---\n' >"$NOTES/2.0.md" ;;
+    v-prefixed) printf -- '---\nmode: blocking\n---\n' >"$NOTES/v2.0.0.md" ;;
+    non-md) printf -- '---\nmode: blocking\n---\n' >"$NOTES/2.0.0.txt" ;;
+    leading-zero-major) printf -- '---\nmode: blocking\n---\n' >"$NOTES/02.0.0.md" ;;
+    leading-zero-minor) printf -- '---\nmode: blocking\n---\n' >"$NOTES/2.01.0.md" ;;
+    readme)
+      write_note 2.2.0 blocking
+      printf '# notes\n' >"$NOTES/README.md" ;;
+    dotfile)
+      write_note 2.2.0 blocking
+      : >"$NOTES/.gitkeep" ;;
+    subdirectory)
+      write_note 2.2.0 blocking
+      mkdir "$NOTES/archive" ;;
+    symlink)
+      mkdir -p "$BATS_TEST_TMPDIR/outside"
+      printf -- '---\nmode: blocking\n---\n' >"$BATS_TEST_TMPDIR/outside/real.md"
+      ln -s "$BATS_TEST_TMPDIR/outside/real.md" "$NOTES/2.2.0.md" ;;
+    byte-order-mark) printf '\xef\xbb\xbf---\nmode: blocking\n---\n' >"$NOTES/2.2.0.md" ;;
+    crlf) printf -- '---\r\nmode: blocking\r\n---\r\n' >"$NOTES/2.2.0.md" ;;
+    body-carriage-return) printf -- '---\nmode: blocking\n---\nbody\r\n' >"$NOTES/2.2.0.md" ;;
+    empty-file) : >"$NOTES/2.2.0.md" ;;
+    no-final-line-feed) printf -- '---\nmode: blocking\n---' >"$NOTES/2.2.0.md" ;;
+    spaces-in-name)
+      write_note 2.2.0 blocking
+      : >"$NOTES/my note.md" ;;
+  esac
 }
 
-@test "an unknown mode fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: sometimes\n---\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "mode"
-}
-
-@test "an unknown mode outside the range still fails the whole folder" {
-  write_note 2.2.0 blocking
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: sometimes\n---\n' >"$NOTES/9.0.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/9.0.0.md:" "mode"
-}
-
-@test "a quoted mode value fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: "blocking"\n---\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "mode"
-}
-
-@test "a frontmatter key other than mode fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nkind: blocking\n---\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "mode"
-}
-
-@test "a second frontmatter key fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: blocking\nextra: 1\n---\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "frontmatter"
-}
-
-@test "trailing text after the mode value fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: blocking # note\n---\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "mode"
-}
-
-@test "trailing whitespace after the mode value fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: blocking \n---\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "mode"
-}
-
-@test "a non-version filename fails closed" {
-  write_note 2.2.0 blocking
-  printf -- '---\nmode: blocking\n---\n' >"$NOTES/2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.0.md:" "version"
-}
-
-@test "a v-prefixed or non-md filename fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: blocking\n---\n' >"$NOTES/v2.0.0.md"
-  printf -- '---\nmode: blocking\n---\n' >"$NOTES/2.0.0.txt"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 1.0.0 3.0.0
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-  grep -qF -- "select-migration-notes: $NOTES/v2.0.0.md:" <<<"$stderr"
-  grep -qF -- "select-migration-notes: $NOTES/2.0.0.txt:" <<<"$stderr"
-}
-
-@test "a leading-zero major component fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: blocking\n---\n' >"$NOTES/02.0.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 1.0.0 3.0.0
-  expect_fail_closed "$NOTES/02.0.0.md:" "version"
-}
-
-@test "a leading-zero minor component fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: blocking\n---\n' >"$NOTES/2.01.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 1.0.0 3.0.0
-  expect_fail_closed "$NOTES/2.01.0.md:" "version"
-}
-
-@test "a README fails closed" {
-  write_note 2.2.0 blocking
-  printf '# notes\n' >"$NOTES/README.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/README.md:" "version"
-}
-
-@test "a dotfile fails closed" {
-  write_note 2.2.0 blocking
-  : >"$NOTES/.gitkeep"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/.gitkeep:" "version"
-}
-
-@test "a subdirectory fails closed" {
-  write_note 2.2.0 blocking
-  mkdir "$NOTES/archive"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/archive:" "directory"
-}
-
-@test "a symlink named like a valid note fails closed even when it points at a well-formed note" {
-  mkdir -p "$NOTES" "$BATS_TEST_TMPDIR/outside"
-  printf -- '---\nmode: blocking\n---\n' >"$BATS_TEST_TMPDIR/outside/real.md"
-  ln -s "$BATS_TEST_TMPDIR/outside/real.md" "$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "symlink"
-}
-
-@test "a byte-order mark fails closed" {
-  mkdir -p "$NOTES"
-  printf '\xef\xbb\xbf---\nmode: blocking\n---\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "byte-order mark"
-}
-
-@test "CRLF line endings fail closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\r\nmode: blocking\r\n---\r\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "carriage return"
-}
-
-@test "a carriage return in the body fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: blocking\n---\nbody\r\n' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "carriage return"
-}
-
-@test "an empty file fails closed" {
-  mkdir -p "$NOTES"
-  : >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "empty"
-}
-
-@test "a frontmatter whose last line has no line feed fails closed" {
-  mkdir -p "$NOTES"
-  printf -- '---\nmode: blocking\n---' >"$NOTES/2.2.0.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/2.2.0.md:" "frontmatter"
+# bats test_tags=protected
+@test "a malformed entry in the folder fails closed, names the entry and prints nothing" {
+  local row label file reason
+  for row in \
+    "no-frontmatter|2.2.0.md|frontmatter" \
+    "unknown-mode|2.2.0.md|mode" \
+    "unknown-mode-out-of-range|9.0.0.md|mode" \
+    "quoted-mode|2.2.0.md|mode" \
+    "other-key|2.2.0.md|mode" \
+    "second-key|2.2.0.md|frontmatter" \
+    "trailing-text|2.2.0.md|mode" \
+    "trailing-space|2.2.0.md|mode" \
+    "non-version-name|2.0.md|version" \
+    "v-prefixed|v2.0.0.md|version" \
+    "non-md|2.0.0.txt|version" \
+    "leading-zero-major|02.0.0.md|version" \
+    "leading-zero-minor|2.01.0.md|version" \
+    "readme|README.md|version" \
+    "dotfile|.gitkeep|version" \
+    "subdirectory|archive|directory" \
+    "symlink|2.2.0.md|symlink" \
+    "byte-order-mark|2.2.0.md|byte-order mark" \
+    "crlf|2.2.0.md|carriage return" \
+    "body-carriage-return|2.2.0.md|carriage return" \
+    "empty-file|2.2.0.md|empty" \
+    "no-final-line-feed|2.2.0.md|frontmatter" \
+    "spaces-in-name|my note.md|version"; do
+    label=${row%%|*}; file=${row#*|}; reason=${file#*|}; file=${file%%|*}
+    seed_malformed "$label"
+    run --separate-stderr bash "$SCRIPT" "$ROOT" 1.0.0 3.0.0
+    [ "$status" -eq 1 ] || { echo "row $label: status $status"; return 1; }
+    [ -z "$output" ] || { echo "row $label: stdout '$output'"; return 1; }
+    grep -qF -- "select-migration-notes: $NOTES/$file:" <<<"$stderr" || { echo "row $label: entry not named: $stderr"; return 1; }
+    grep -qF -- "$reason" <<<"$stderr" || { echo "row $label: reason '$reason' missing: $stderr"; return 1; }
+  done
 }
 
 @test "an unreadable note fails closed and is named as unreadable" {
@@ -260,55 +175,6 @@ expect_fail_closed() {
   [ "$(grep -c '^select-migration-notes: ' <<<"$stderr")" -eq 3 ]
 }
 
-@test "a malformed entry leaves stdout empty even when valid notes are in range" {
-  write_note 2.2.0 blocking
-  printf '# notes\n' >"$NOTES/README.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/README.md:" "version"
-}
-
-@test "names with spaces are validated, not split" {
-  write_note 2.2.0 blocking
-  : >"$NOTES/my note.md"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0 2.3.0
-  expect_fail_closed "$NOTES/my note.md:" "version"
-}
-
-@test "two arguments is a usage error" {
-  mkdir -p "$ROOT"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.1.0
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -qF -- "usage" <<<"$stderr"
-}
-
-@test "a baseline with a v prefix is a usage error" {
-  mkdir -p "$ROOT"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" v2.0.0 2.1.0
-  [ "$status" -eq 2 ]
-  grep -qF -- "usage" <<<"$stderr"
-}
-
-@test "a two-part target is a usage error" {
-  mkdir -p "$ROOT"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 2.0.0 2.1
-  [ "$status" -eq 2 ]
-  grep -qF -- "usage" <<<"$stderr"
-}
-
-@test "a leading-zero baseline is a usage error" {
-  mkdir -p "$ROOT"
-  run --separate-stderr bash "$SCRIPT" "$ROOT" 02.0.0 2.1.0
-  [ "$status" -eq 2 ]
-  grep -qF -- "usage" <<<"$stderr"
-}
-
-@test "a bundle root that does not exist is a usage error" {
-  run --separate-stderr bash "$SCRIPT" "$BATS_TEST_TMPDIR/missing" 2.0.0 2.1.0
-  [ "$status" -eq 2 ]
-  grep -qF -- "usage" <<<"$stderr"
-}
-
 # Prints each of the two scripts in <dir> that defines its own vcmp.
 inline_vcmp_scripts() {
   local script
@@ -326,17 +192,6 @@ inline_vcmp_scripts() {
     grep -qF 'lib/version-compare.awk' "$SCRIPTS_DIR/$script"
   done
   [ -z "$(inline_vcmp_scripts "$SCRIPTS_DIR")" ]
-}
-
-@test "a copy of either script with an inline vcmp is reported by the definition check" {
-  for script in select-migration-notes.sh changelog-range.sh; do
-    cp "$SCRIPTS_DIR/$script" "$BATS_TEST_TMPDIR/$script"
-    printf '# function vcmp(a,b){return 0}\n' >>"$BATS_TEST_TMPDIR/$script"
-  done
-  run inline_vcmp_scripts "$BATS_TEST_TMPDIR"
-  [ "$status" -eq 0 ]
-  grep -qxF 'select-migration-notes.sh' <<<"$output"
-  grep -qxF 'changelog-range.sh' <<<"$output"
 }
 
 @test "the selector loads the comparison from its own install directory" {

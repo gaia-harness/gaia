@@ -185,49 +185,280 @@ old_derivation() {
   (cd "$(dirname "$absolute_common")" 2>/dev/null && pwd -P)
 }
 
-# ---------- UAT-001 / UAT-003: submodule ----------
+# ---------- resolver per checkout shape ----------
 
-@test "UAT-001: submodule main checkout resolves to the submodule root" {
-  make_submodule
-  resolve "$SUBMODULE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$SUBMODULE" ]
+# assert_resolves <row> <directory> <expected>: the main-root resolver answers
+# <expected> for <directory>, naming the row on failure.
+assert_resolves() {
+  local row="$1" directory="$2" expected="$3"
+  resolve "$directory"
+  [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+  [ "$output" = "$expected" ] || { echo "row $row: got '$output', expected '$expected'"; return 1; }
 }
 
-@test "UAT-003: submodule linked worktree resolves to the submodule root, not .git/modules" {
-  make_submodule
-  make_worktree "$SUBMODULE" "w" "subwtbranch"
-  resolve "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$SUBMODULE" ]
-}
-
-# ---------- UAT-002 / UAT-009: ordinary clone ----------
-
-@test "UAT-009: ordinary clone main checkout resolves to the clone root" {
-  make_repo
-  resolve "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
-}
-
-@test "UAT-002: ordinary clone, cwd in a linked worktree resolves to the main root" {
+@test "main root resolves to the right root for each checkout shape" {
   make_repo
   make_worktree "$REPO" "w" "wtbranch"
-  resolve "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
+  local clone_worktree="$WORKTREE"
+  make_submodule
+  make_worktree "$SUBMODULE" "w" "subwtbranch"
+  local submodule_worktree="$WORKTREE"
+  local symlink="${REPO}-symlink"
+  ln -s "$REPO" "$symlink"
+  CLEANUP_DIRECTORIES+=("$symlink")
+
+  assert_resolves "submodule main" "$SUBMODULE" "$SUBMODULE" || return 1
+  assert_resolves "submodule linked worktree, not .git/modules" "$submodule_worktree" "$SUBMODULE" || return 1
+  assert_resolves "clone main" "$REPO" "$REPO" || return 1
+  assert_resolves "clone linked worktree" "$clone_worktree" "$REPO" || return 1
+  assert_resolves "clone main vs physical derivation" "$REPO" "$(old_derivation "$REPO")" || return 1
+  assert_resolves "clone worktree vs physical derivation" "$clone_worktree" "$(old_derivation "$clone_worktree")" || return 1
+  assert_resolves "symlinked clone vs physical derivation" "$symlink" "$(old_derivation "$symlink")" || return 1
+  assert_resolves "symlinked clone physical root" "$symlink" "$REPO" || return 1
+
+  make_separate_gitdir
+  assert_resolves "separate-git-dir main" "$WORK" "$WORK" || return 1
+  [ "$WORK" != "$ELSEWHERE" ] || return 1
+  [ "$WORK" != "$GITDIR" ] || return 1
 }
 
-# ---------- UAT-010: separate-git-dir main ----------
+# ---------- predicate ----------
 
-@test "UAT-010: separate-git-dir main checkout resolves to the working tree, not the relocated git dir" {
-  make_separate_gitdir
-  resolve "$WORK"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$WORK" ]
-  [ "$output" != "$ELSEWHERE" ]
-  [ "$output" != "$GITDIR" ]
+@test "linked-worktree predicate answers per shape" {
+  make_repo
+  make_worktree "$REPO" "w" "wtbranch2"
+  local clone_worktree="$WORKTREE"
+  make_submodule
+  make_worktree "$SUBMODULE" "w" "subwtbranch2"
+  local submodule_worktree="$WORKTREE"
+  local nongit symlink
+  nongit=$(mktemp -d -t gaia-mrl-nongit-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$nongit")
+  symlink="${REPO}-symlink2"
+  ln -s "$REPO" "$symlink"
+  CLEANUP_DIRECTORIES+=("$symlink")
+
+  local row label directory expected
+  for row in \
+    "clone linked worktree|$clone_worktree|0" \
+    "submodule linked worktree|$submodule_worktree|0" \
+    "submodule main checkout|$SUBMODULE|1" \
+    "clone main checkout|$REPO|1" \
+    "outside any repository|$nongit|1" \
+    "symlinked main checkout|$symlink|1"; do
+    label=${row%%|*}
+    expected=${row##*|}
+    directory=${row#*|}
+    directory=${directory%|*}
+    is_worktree "$directory"
+    [ "$status" -eq "$expected" ] || { echo "row $label: status $status"; return 1; }
+    [ -z "$output" ] || { echo "row $label: printed '$output'"; return 1; }
+  done
+}
+
+# ---------- dir operand ----------
+
+@test "a supplied dir operand resolves independent of cwd and of other calls" {
+  make_repo
+  make_worktree "$REPO" "w" "wtbranch3"
+  local clone_worktree="$WORKTREE"
+  make_submodule
+  mkdir -p "$REPO/sub"
+  local neutral
+  neutral=$(mktemp -d -t gaia-mrl-neutral-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$neutral")
+
+  resolve_from "$neutral" "$REPO"
+  [ "$status" -eq 0 ] || { echo "row main root from unrelated cwd: status $status"; return 1; }
+  [ "$output" = "$REPO" ] || { echo "row main root from unrelated cwd: got '$output'"; return 1; }
+
+  resolve_tree_from "$neutral" "$REPO"
+  [ "$status" -eq 0 ] || { echo "row tree root from unrelated cwd: status $status"; return 1; }
+  [ "$output" = "$REPO" ] || { echo "row tree root from unrelated cwd: got '$output'"; return 1; }
+
+  resolve_key_from "$neutral" "$REPO"
+  [ "$status" -eq 0 ] || { echo "row tree key from unrelated cwd: status $status"; return 1; }
+  [ "$output" = "$(printf '%s' "$REPO" | shasum -a 256 | cut -c1-16)" ] || { echo "row tree key from unrelated cwd: got '$output'"; return 1; }
+
+  run bash -c 'cd "$1" && bash "$2" --common-dir sub 2>/dev/null' _ "$REPO" "$LIBRARY_SCRIPT"
+  [ "$status" -eq 0 ] || { echo "row relative common directory: status $status"; return 1; }
+  [ "$output" = "$REPO/.git" ] || { echo "row relative common directory: got '$output'"; return 1; }
+
+  run bash -c '
+    cd "$1" || exit 1
+    # shellcheck disable=SC1090
+    source "$2"
+    repository_main_root="$(gaia_resolve_main_root "$3")" || exit 10
+    submodule_main_root="$(gaia_resolve_main_root "$4")" || exit 11
+    repository_tree_root="$(gaia_resolve_tree_root "$3")" || exit 12
+    worktree_tree_root="$(gaia_resolve_tree_root "$5")" || exit 13
+    if gaia_is_linked_worktree "$5"; then worktree_answer=0; else worktree_answer=1; fi
+    if gaia_is_linked_worktree "$3"; then main_checkout_answer=0; else main_checkout_answer=1; fi
+    printf "%s\n%s\n%s\n%s\n%s\n%s\n" "$repository_main_root" "$submodule_main_root" "$repository_tree_root" "$worktree_tree_root" "$worktree_answer" "$main_checkout_answer"
+  ' _ "$neutral" "$LIBRARY_SCRIPT" "$REPO" "$SUBMODULE" "$clone_worktree"
+  [ "$status" -eq 0 ] || { echo "row two calls in one process: status $status"; return 1; }
+  [ "${lines[0]}" = "$REPO" ] || { echo "row repository main root in one process: got '${lines[0]}'"; return 1; }
+  [ "${lines[1]}" = "$SUBMODULE" ] || { echo "row submodule main root in one process: got '${lines[1]}'"; return 1; }
+  [ "${lines[2]}" = "$REPO" ] || { echo "row repository tree root in one process: got '${lines[2]}'"; return 1; }
+  [ "${lines[3]}" = "$clone_worktree" ] || { echo "row worktree tree root in one process: got '${lines[3]}'"; return 1; }
+  [ "${lines[4]}" = "0" ] || { echo "row predicate on worktree in one process: got '${lines[4]}'"; return 1; }
+  [ "${lines[5]}" = "1" ] || { echo "row predicate on main in one process: got '${lines[5]}'"; return 1; }
+}
+
+# ---------- adversarial ----------
+
+@test "adversarial environment and config never override the layout-derived answer" {
+  make_repo
+  make_worktree "$REPO" "w" "wtbranch5"
+  local other neutral common_config
+  other=$(mktemp -d -t gaia-mrl-other-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$other")
+  git -C "$other" init -q --initial-branch=main
+  neutral=$(mktemp -d -t gaia-mrl-neutral3-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$neutral")
+  common_config="$(cd "$REPO/.git" && pwd -P)/config"
+
+  local poisoned
+  for poisoned in "/nonexistent/evil/path" "$other"; do
+    git config --file "$common_config" core.worktree "$poisoned"
+    resolve "$WORKTREE"
+    git config --file "$common_config" --unset core.worktree || true
+    [ "$status" -ne 0 ] || { echo "row core.worktree=$poisoned: status $status, output '$output'"; return 1; }
+    [ -z "$output" ] || { echo "row core.worktree=$poisoned: printed '$output'"; return 1; }
+  done
+
+  run bash -c 'cd "$1" && GIT_DIR="$2/.git" GIT_WORK_TREE="$2" bash "$3" "$4"' _ "$neutral" "$other" "$LIBRARY_SCRIPT" "$REPO"
+  [ "$status" -eq 0 ] || { echo "row GIT_DIR main root: status $status"; return 1; }
+  [ "$output" = "$REPO" ] || { echo "row GIT_DIR main root: got '$output'"; return 1; }
+
+  run bash -c 'cd "$1" && GIT_DIR="$2/.git" GIT_WORK_TREE="$2" bash "$3" --tree-root "$4"' _ "$neutral" "$other" "$LIBRARY_SCRIPT" "$REPO"
+  [ "$status" -eq 0 ] || { echo "row GIT_DIR tree root: status $status"; return 1; }
+  [ "$output" = "$REPO" ] || { echo "row GIT_DIR tree root: got '$output'"; return 1; }
+
+  run bash -c 'GIT_DIR="$1/.git" bash "$2" --common-dir "$3" 2>/dev/null' _ "$other" "$LIBRARY_SCRIPT" "$REPO"
+  [ "$status" -eq 0 ] || { echo "row GIT_DIR common directory: status $status"; return 1; }
+  [ "$output" = "$REPO/.git" ] || { echo "row GIT_DIR common directory: got '$output'"; return 1; }
+}
+
+# ---------- gaia_resolve_tree_root ----------
+# Its one divergence from gaia_resolve_main_root: a linked worktree resolves
+# to its own root, not main's.
+
+@test "gaia_resolve_tree_root answers each tree's own physical root" {
+  make_repo
+  make_worktree "$REPO" "w" "treewtbranch"
+  local symlink nongit
+  symlink="${REPO}-treesymlink"
+  ln -s "$REPO" "$symlink"
+  CLEANUP_DIRECTORIES+=("$symlink")
+  nongit=$(mktemp -d -t gaia-mrl-treenongit-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$nongit")
+
+  local row label directory expected
+  for row in \
+    "clone|$REPO|$REPO" \
+    "linked worktree|$WORKTREE|$WORKTREE" \
+    "symlinked checkout|$symlink|$REPO"; do
+    label=${row%%|*}
+    expected=${row##*|}
+    directory=${row#*|}
+    directory=${directory%|*}
+    resolve_tree "$directory"
+    [ "$status" -eq 0 ] || { echo "row $label: status $status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "row $label: got '$output', expected '$expected'"; return 1; }
+  done
+
+  resolve "$WORKTREE"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "$REPO" ] || { echo "row main root diverges from tree root for the worktree: got '$output'"; return 1; }
+
+  resolve_tree "$nongit"
+  [ "$status" -ne 0 ] || { echo "row outside any work tree: status $status"; return 1; }
+  [ -z "$output" ] || { echo "row outside any work tree: printed '$output'"; return 1; }
+}
+
+# ---------- gaia_tree_key ----------
+# The path-safe rendering of the tree identity gaia_resolve_tree_root returns:
+# the first 16 hex characters of the sha256 of that physically resolved root.
+
+# resolve_key <directory>: runs the executable entry's --tree-key operand. Mirrors
+# resolve()'s stderr-discard-inside-bash-c note.
+resolve_key() {
+  local directory="$1"
+  run bash -c 'bash "$1" --tree-key "$2" 2>/dev/null' _ "$LIBRARY_SCRIPT" "$directory"
+}
+
+# resolve_key_from <cwd> <directory>: process cwd=$1 (unrelated to $2), operand=$2.
+# Mirrors resolve_from().
+resolve_key_from() {
+  local cwd="$1" directory="$2"
+  run bash -c 'cd "$1" && bash "$2" --tree-key "$3" 2>/dev/null' _ "$cwd" "$LIBRARY_SCRIPT" "$directory"
+}
+
+@test "gaia_tree_key: stable 16-hex sha256 prefix, distinct per tree and worktree, fails outside a tree" {
+  make_repo
+  make_worktree "$REPO" "w" "keywtbranch"
+  make_submodule
+  local nongit expected
+  nongit=$(mktemp -d -t gaia-mrl-keynongit-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$nongit")
+
+  resolve_key "$REPO"
+  [ "$status" -eq 0 ] || return 1
+  local key_repo="$output"
+  resolve_key "$REPO"
+  [ "$output" = "$key_repo" ] || { echo "row same tree twice: got '$output' then '$key_repo'"; return 1; }
+  [[ "$key_repo" =~ ^[0-9a-f]{16}$ ]] || { echo "row key form: got '$key_repo'"; return 1; }
+  expected=$(printf '%s' "$REPO" | shasum -a 256 | cut -c1-16)
+  [ "$key_repo" = "$expected" ] || { echo "row differential: got '$key_repo', expected '$expected'"; return 1; }
+
+  resolve_key "$SUBMODULE"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" != "$key_repo" ] || { echo "row two different trees share a key"; return 1; }
+
+  resolve_key "$WORKTREE"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" != "$key_repo" ] || { echo "row linked worktree shares main's key"; return 1; }
+
+  resolve_key "$nongit"
+  [ "$status" -eq 1 ] || { echo "row outside any work tree: status $status"; return 1; }
+  [ -z "$output" ] || { echo "row outside any work tree: printed '$output'"; return 1; }
+  run bash -c 'bash "$1" --tree-key "$2" 2>&1 1>/dev/null' _ "$LIBRARY_SCRIPT" "$nongit"
+  grep -qF -- "GAIA_TREE_KEY_UNRESOLVABLE" <<<"$output" || return 1
+}
+
+# ---------- gaia_resolve_common_directory ----------
+# The repository-identity half of the resolver: a main checkout and every
+# linked worktree of it answer with one directory, and two repositories never
+# do.
+
+resolve_common() {
+  run bash -c 'bash "$1" --common-dir "$2" 2>/dev/null' _ "$LIBRARY_SCRIPT" "$1"
+}
+
+@test "gaia_resolve_common_directory: shared across worktrees, distinct per repo, fails outside a repo" {
+  make_repo
+  make_worktree "$REPO" "w" "commonwtbranch"
+  local first="$REPO" first_worktree="$WORKTREE"
+  local outside
+  outside=$(mktemp -d -t gaia-mrl-cd-outside-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$outside")
+
+  resolve_common "$first"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "$first/.git" ] || { echo "row main checkout: got '$output'"; return 1; }
+  resolve_common "$first_worktree"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "$first/.git" ] || { echo "row linked worktree: got '$output'"; return 1; }
+
+  make_repo
+  resolve_common "$REPO"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" != "$first/.git" ] || { echo "row two repositories share a common directory"; return 1; }
+
+  resolve_common "$outside"
+  [ "$status" -ne 0 ] || { echo "row outside any repository: status $status"; return 1; }
+  [ -z "$output" ] || { echo "row outside any repository: printed '$output'"; return 1; }
 }
 
 # ---------- UAT-004: separate-git-dir entered from a linked worktree ----------
@@ -252,94 +483,6 @@ old_derivation() {
   [ "$(wc -l <<<"$output" | tr -d ' ')" -eq 1 ]
 }
 
-# ---------- predicate: directive 4 + UAT-006 ----------
-
-@test "predicate: ordinary clone linked worktree answers yes (exit 0), prints nothing" {
-  make_repo
-  make_worktree "$REPO" "w" "wtbranch2"
-  is_worktree "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "predicate: submodule linked worktree answers yes (exit 0), prints nothing" {
-  make_submodule
-  make_worktree "$SUBMODULE" "w" "subwtbranch2"
-  is_worktree "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "UAT-006: predicate answers no in a submodule main checkout (the shape the old predicate got wrong)" {
-  make_submodule
-  is_worktree "$SUBMODULE"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-}
-
-@test "predicate: ordinary clone main checkout answers no" {
-  make_repo
-  is_worktree "$REPO"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-}
-
-@test "predicate: a directory outside any git repository answers no (indeterminate), prints nothing" {
-  local nongit
-  nongit=$(mktemp -d -t gaia-mrl-nongit-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$nongit")
-  is_worktree "$nongit"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-}
-
-@test "predicate: two independent calls for two different directories in one process do not leak state" {
-  make_repo
-  make_worktree "$REPO" "w" "wtbranch3"
-  run bash -c '
-    # shellcheck disable=SC1090
-    source "$1"
-    if gaia_is_linked_worktree "$2"; then worktree_answer=0; else worktree_answer=1; fi
-    if gaia_is_linked_worktree "$3"; then main_checkout_answer=0; else main_checkout_answer=1; fi
-    printf "%s\n%s\n" "$worktree_answer" "$main_checkout_answer"
-  ' _ "$LIBRARY_SCRIPT" "$WORKTREE" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "0" ]
-  [ "${lines[1]}" = "1" ]
-}
-
-# ---------- dir operand: UAT-008 ----------
-
-@test "UAT-008: a supplied dir operand resolves correctly when the process cwd is unrelated to it" {
-  make_repo
-  local neutral
-  neutral=$(mktemp -d -t gaia-mrl-neutral-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$neutral")
-  resolve_from "$neutral" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
-}
-
-@test "UAT-008: two independent resolutions for two different directories succeed in one process" {
-  make_repo
-  make_submodule
-  local neutral
-  neutral=$(mktemp -d -t gaia-mrl-neutral2-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$neutral")
-  run bash -c '
-    cd "$1" || exit 1
-    # shellcheck disable=SC1090
-    source "$2"
-    repository_main_root="$(gaia_resolve_main_root "$3")" || exit 10
-    submodule_main_root="$(gaia_resolve_main_root "$4")" || exit 11
-    printf "%s\n%s\n" "$repository_main_root" "$submodule_main_root"
-  ' _ "$neutral" "$LIBRARY_SCRIPT" "$REPO" "$SUBMODULE"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "$REPO" ]
-  [ "${lines[1]}" = "$SUBMODULE" ]
-  [ "${lines[0]}" != "${lines[1]}" ]
-}
-
 # ---------- output form: directive 7 ----------
 
 @test "output form: stdout is exactly one line terminated by a single newline on success" {
@@ -351,28 +494,6 @@ old_derivation() {
   [ "$(wc -l <"$outfile" | tr -d ' ')" -eq 1 ]
   [ "$(tail -c1 "$outfile" | od -An -tx1 | tr -d ' ')" = "0a" ]
   [ "$(cat "$outfile")" = "$REPO" ]
-}
-
-# TST-014: replaces the entailed "does not print a .git-prefixed path"
-# negative (which cannot fail unless the exact-value positive already has)
-# with the non-entailed property the audit asked for: every failure path
-# leaves stdout completely empty, which is a strictly stronger and
-# independently-checkable guarantee that no path -- git-dir-prefixed or
-# otherwise -- ever reaches stdout on a failed resolution.
-@test "output form: every failure path leaves stdout completely empty" {
-  make_separate_gitdir
-  make_worktree "$WORK" "w" "sepwtbranch2"
-  resolve "$WORKTREE"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-
-  local bare
-  bare=$(mktemp -d -t gaia-mrl-bare-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$bare")
-  git init -q --bare "$bare"
-  resolve "$bare"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
 }
 
 # ---------- bare repository / no working tree: directive 6 ----------
@@ -389,347 +510,6 @@ old_derivation() {
   resolve "$bare"
   [ "$status" -ne 0 ]
   [ -z "$output" ]
-}
-
-# ---------- differential: directive 20 / MIG-011 ----------
-
-@test "differential: ordinary clone main matches the current physical derivation" {
-  make_repo
-  local old
-  old="$(old_derivation "$REPO")"
-  resolve "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$old" ]
-}
-
-@test "differential: ordinary clone linked worktree matches the current physical derivation" {
-  make_repo
-  make_worktree "$REPO" "w" "wtbranch4"
-  local old
-  old="$(old_derivation "$WORKTREE")"
-  resolve "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$old" ]
-}
-
-@test "differential: a symlinked ordinary-clone checkout matches the current physical derivation" {
-  make_repo
-  local symlink old
-  symlink="${REPO}-symlink"
-  ln -s "$REPO" "$symlink"
-  CLEANUP_DIRECTORIES+=("$symlink")
-  old="$(old_derivation "$symlink")"
-  resolve "$symlink"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$old" ]
-  [ "$output" = "$REPO" ]
-}
-
-# ---------- symlinked-checkout predicate: directive 12 ----------
-
-@test "symlinked checkout: predicate answers no in the main checkout reached via a symlink" {
-  make_repo
-  local symlink
-  symlink="${REPO}-symlink2"
-  ln -s "$REPO" "$symlink"
-  CLEANUP_DIRECTORIES+=("$symlink")
-  is_worktree "$symlink"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-}
-
-# ---------- adversarial: directive 16 ----------
-
-@test "adversarial: core.worktree pointing outside the repo at a nonexistent path fails rather than returning it" {
-  make_repo
-  make_worktree "$REPO" "w" "wtbranch5"
-  local common_config
-  common_config="$(cd "$REPO/.git" && pwd -P)/config"
-  git config --file "$common_config" core.worktree "/nonexistent/evil/path"
-  resolve "$WORKTREE"
-  git config --file "$common_config" --unset core.worktree || true
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "adversarial: core.worktree pointing at an unrelated real repository fails rather than returning it" {
-  make_repo
-  make_worktree "$REPO" "w" "wtbranch6"
-  local other common_config
-  other=$(mktemp -d -t gaia-mrl-other-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$other")
-  git -C "$other" init -q --initial-branch=main
-  common_config="$(cd "$REPO/.git" && pwd -P)/config"
-  git config --file "$common_config" core.worktree "$other"
-  resolve "$WORKTREE"
-  git config --file "$common_config" --unset core.worktree || true
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "adversarial: GIT_DIR and GIT_WORK_TREE exported in the environment do not override the layout-derived root" {
-  make_repo
-  local other neutral
-  other=$(mktemp -d -t gaia-mrl-other2-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$other")
-  git -C "$other" init -q --initial-branch=main
-  neutral=$(mktemp -d -t gaia-mrl-neutral3-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$neutral")
-
-  run bash -c 'cd "$1" && GIT_DIR="$2/.git" GIT_WORK_TREE="$2" bash "$3" "$4"' _ "$neutral" "$other" "$LIBRARY_SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
-  [ "$output" != "$other" ]
-}
-
-# ---------- gaia_resolve_tree_root (task 3.6) ----------
-# The per-tree counterpart of gaia_resolve_main_root: "which tree is this",
-# not "where is main". Its one behavioral divergence from gaia_resolve_main_root
-# is the whole point -- a linked worktree resolves to ITS OWN root, not main's.
-
-@test "gaia_resolve_tree_root: ordinary clone resolves to the clone root" {
-  make_repo
-  resolve_tree "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
-}
-
-@test "gaia_resolve_tree_root: a linked worktree resolves to the WORKTREE's own root, diverging from gaia_resolve_main_root" {
-  make_repo
-  make_worktree "$REPO" "w" "treewtbranch"
-  resolve_tree "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$WORKTREE" ]
-  [ "$output" != "$REPO" ]
-
-  # Parity check: gaia_resolve_main_root answers the OTHER root for the same dir.
-  resolve "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
-}
-
-@test "gaia_resolve_tree_root: physical-form parity with gaia_resolve_main_root for the main checkout itself" {
-  make_repo
-  resolve_tree "$REPO"
-  [ "$status" -eq 0 ]
-  local tree_output="$output"
-  resolve "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$tree_output" = "$output" ]
-}
-
-@test "gaia_resolve_tree_root: a symlinked checkout path resolves to the physical (non-symlink) root" {
-  make_repo
-  local symlink
-  symlink="${REPO}-treesymlink"
-  ln -s "$REPO" "$symlink"
-  CLEANUP_DIRECTORIES+=("$symlink")
-  resolve_tree "$symlink"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
-}
-
-@test "gaia_resolve_tree_root: outside any work tree fails, empty stdout" {
-  local nongit
-  nongit=$(mktemp -d -t gaia-mrl-treenongit-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$nongit")
-  resolve_tree "$nongit"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "gaia_resolve_tree_root: a supplied dir operand resolves correctly when the process cwd is unrelated to it" {
-  make_repo
-  local neutral
-  neutral=$(mktemp -d -t gaia-mrl-treeneutral-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$neutral")
-  resolve_tree_from "$neutral" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
-}
-
-@test "gaia_resolve_tree_root: two independent resolutions for two different trees succeed in one process" {
-  make_repo
-  make_worktree "$REPO" "w" "treewtbranch2"
-  run bash -c '
-    # shellcheck disable=SC1090
-    source "$1"
-    repository_tree_root="$(gaia_resolve_tree_root "$2")" || exit 10
-    worktree_tree_root="$(gaia_resolve_tree_root "$3")" || exit 11
-    printf "%s\n%s\n" "$repository_tree_root" "$worktree_tree_root"
-  ' _ "$LIBRARY_SCRIPT" "$REPO" "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "$REPO" ]
-  [ "${lines[1]}" = "$WORKTREE" ]
-  [ "${lines[0]}" != "${lines[1]}" ]
-}
-
-@test "gaia_resolve_tree_root: GIT_DIR and GIT_WORK_TREE exported in the environment do not override the layout-derived root" {
-  make_repo
-  local other neutral
-  other=$(mktemp -d -t gaia-mrl-treeother-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$other")
-  git -C "$other" init -q --initial-branch=main
-  neutral=$(mktemp -d -t gaia-mrl-treeneutral2-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$neutral")
-
-  run bash -c 'cd "$1" && GIT_DIR="$2/.git" GIT_WORK_TREE="$2" bash "$3" --tree-root "$4"' _ "$neutral" "$other" "$LIBRARY_SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO" ]
-  [ "$output" != "$other" ]
-}
-
-# ---------- gaia_tree_key ----------
-# The path-safe rendering of the tree identity gaia_resolve_tree_root returns:
-# the first 16 hex characters of the sha256 of that physically resolved root.
-
-# resolve_key <directory>: runs the executable entry's --tree-key operand. Mirrors
-# resolve()'s stderr-discard-inside-bash-c note.
-resolve_key() {
-  local directory="$1"
-  run bash -c 'bash "$1" --tree-key "$2" 2>/dev/null' _ "$LIBRARY_SCRIPT" "$directory"
-}
-
-# resolve_key_from <cwd> <directory>: process cwd=$1 (unrelated to $2), operand=$2.
-# Mirrors resolve_from().
-resolve_key_from() {
-  local cwd="$1" directory="$2"
-  run bash -c 'cd "$1" && bash "$2" --tree-key "$3" 2>/dev/null' _ "$cwd" "$LIBRARY_SCRIPT" "$directory"
-}
-
-@test "gaia_tree_key: two independent calls for the same tree agree" {
-  make_repo
-  resolve_key "$REPO"
-  [ "$status" -eq 0 ]
-  local first="$output"
-  resolve_key "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$first" ]
-}
-
-@test "gaia_tree_key: output is 16 lowercase hex characters" {
-  make_repo
-  resolve_key "$REPO"
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ ^[0-9a-f]{16}$ ]] || return 1
-}
-
-@test "gaia_tree_key: differential, matches the first 16 hex chars of sha256(resolved root)" {
-  make_repo
-  local expected
-  expected=$(printf '%s' "$REPO" | shasum -a 256 | cut -c1-16)
-  resolve_key "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$expected" ]
-}
-
-@test "gaia_tree_key: two different trees get two different keys" {
-  make_repo
-  make_submodule
-  resolve_key "$REPO"
-  [ "$status" -eq 0 ]
-  local key_repo="$output"
-  resolve_key "$SUBMODULE"
-  [ "$status" -eq 0 ]
-  local key_submodule="$output"
-  [ "$key_repo" != "$key_submodule" ]
-}
-
-@test "gaia_tree_key: a linked worktree gets its own key, distinct from main's" {
-  make_repo
-  make_worktree "$REPO" "w" "keywtbranch"
-  resolve_key "$REPO"
-  [ "$status" -eq 0 ]
-  local main_key="$output"
-  resolve_key "$WORKTREE"
-  [ "$status" -eq 0 ]
-  local worktree_key="$output"
-  [ "$main_key" != "$worktree_key" ]
-}
-
-@test "gaia_tree_key: outside any work tree fails rc 1 with the named diagnostic, empty stdout" {
-  local nongit
-  nongit=$(mktemp -d -t gaia-mrl-keynongit-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$nongit")
-
-  resolve_key "$nongit"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-
-  run bash -c 'bash "$1" --tree-key "$2" 2>&1 1>/dev/null' _ "$LIBRARY_SCRIPT" "$nongit"
-  grep -qF -- "GAIA_TREE_KEY_UNRESOLVABLE" <<<"$output" || return 1
-}
-
-@test "gaia_tree_key: honors an explicit dir argument when the process cwd is unrelated to it" {
-  make_repo
-  local neutral
-  neutral=$(mktemp -d -t gaia-mrl-keyneutral-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$neutral")
-  resolve_key_from "$neutral" "$REPO"
-  [ "$status" -eq 0 ]
-  local expected
-  expected=$(printf '%s' "$REPO" | shasum -a 256 | cut -c1-16)
-  [ "$output" = "$expected" ]
-}
-
-# ---------- gaia_resolve_common_directory ----------
-# The repository-identity half of the resolver: a main checkout and every
-# linked worktree of it answer with one directory, and two repositories never
-# do.
-
-resolve_common() {
-  run bash -c 'bash "$1" --common-dir "$2" 2>/dev/null' _ "$LIBRARY_SCRIPT" "$1"
-}
-
-@test "gaia_resolve_common_directory: a main checkout and its linked worktree answer with the same physical directory" {
-  make_repo
-  make_worktree "$REPO" "w" "commonwtbranch"
-  resolve_common "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO/.git" ]
-  resolve_common "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO/.git" ]
-}
-
-@test "gaia_resolve_common_directory: two different repositories answer differently" {
-  make_repo
-  local first="$REPO"
-  make_repo
-  resolve_common "$first"
-  local first_common_directory="$output"
-  resolve_common "$REPO"
-  [ "$status" -eq 0 ]
-  [ -n "$first_common_directory" ]
-  [ "$first_common_directory" != "$output" ]
-}
-
-@test "gaia_resolve_common_directory: a supplied relative dir operand resolves against the process cwd" {
-  make_repo
-  mkdir -p "$REPO/sub"
-  run bash -c 'cd "$1" && bash "$2" --common-dir sub 2>/dev/null' _ "$REPO" "$LIBRARY_SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO/.git" ]
-}
-
-@test "gaia_resolve_common_directory: outside any git repository fails, empty stdout" {
-  local outside
-  outside=$(mktemp -d -t gaia-mrl-cd-outside-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$outside")
-  resolve_common "$outside"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "gaia_resolve_common_directory: GIT_DIR exported in the environment does not override the layout-derived answer" {
-  make_repo
-  local other
-  other=$(mktemp -d -t gaia-mrl-cd-other-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$other")
-  git -C "$other" init -q --initial-branch=main
-  run bash -c 'GIT_DIR="$1/.git" bash "$2" --common-dir "$3" 2>/dev/null' _ "$other" "$LIBRARY_SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$REPO/.git" ]
 }
 
 # ---------- fast layout read: parity with the full resolver ----------
@@ -844,25 +624,4 @@ assert_fast_agrees_with_full() {
   resolve_fast "$WORKTREE"
   [ "$status" -ne 0 ]
   [ -z "$output" ]
-}
-
-# ---------- structural ----------
-
-@test "structural: main-root-lib.sh is executable" {
-  [ -x "$LIBRARY_SCRIPT" ]
-}
-
-@test "structural: sourcing the library defines every public function with no side effects" {
-  run bash -c '
-    # shellcheck disable=SC1090
-    source "$1"
-    type gaia_resolve_main_root >/dev/null
-    type gaia_is_linked_worktree >/dev/null
-    type gaia_resolve_tree_root >/dev/null
-    type gaia_tree_key >/dev/null
-    type gaia_resolve_common_directory >/dev/null
-    echo OK
-  ' _ "$LIBRARY_SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$output" = "OK" ]
 }

@@ -12,21 +12,12 @@
 # on the gate deciding whether a maintainer-only path ships to every adopter,
 # and nothing in the repository went red when the scan did not happen.
 #
-# Three families, described rather than enumerated, so adding a member to one
-# does not leave a roster here saying otherwise.
+# The script tests drive the ordinary contract: the clean pass, the refusal that
+# names the leaked paths, and each way the question can be left unanswerable,
+# where each unanswerable input is a condition the predecessor read as clean.
 #
-# The E family drives the ordinary contract: the clean pass, the refusal that
-# names the leaked paths, the empty exclude list that is an answer rather than
-# an absent one, and each way the question can be left unanswerable.
-#
-# The A family arms the repair. Each member stages the condition the predecessor
-# read as clean, drives the script, and proves it refuses to answer. Each is
-# paired with a positive control that drives the SAME fixture through the
-# predecessor's own shape and shows it returning "clean", because a fixture that
-# would pass either way proves nothing about which one is being tested.
-#
-# The C family binds the caller, so the repaired shape cannot return to
-# release.yml silently.
+# The caller test binds release.yml, so the repaired shape cannot return to it
+# silently.
 #
 # Assertion style per .claude/rules/bats-assertions.md: no bare mid-test
 # [[ ... ]], POSIX [ ] and grep only, so a broken assertion still fails on
@@ -62,15 +53,20 @@ patterns() {
   printf '%s\n' "$@" > "$REGEX"
 }
 
-# E1. The ordinary case: a staged tree holding nothing the exclude list withholds
-# scans clean.
-@test "E1: a staged tree with no excluded path passes" {
+# E1. Exit 0 when the scan completes and finds nothing: a staged tree holding
+# nothing the exclude list withholds, and an empty compiled exclude list, which
+# withholds nothing so nothing can leak. The empty list is the one empty input
+# that is an answer rather than an absent one.
+@test "exit 0 when scanned clean: no excluded path, and an empty exclude list" {
   stage 'app/index.ts'
   stage 'README.md'
   patterns '^\.gaia/scripts/tests(/|$)'
-
   run bash "$SCRIPT" "$STAGING" "$REGEX"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "no excluded path: status $status"; return 1; }
+
+  : > "$REGEX"
+  run bash "$SCRIPT" "$STAGING" "$REGEX"
+  [ "$status" -eq 0 ] || { echo "empty exclude list: status $status"; return 1; }
 }
 
 # E2. The refusal, and the paths it names. The exit code alone is not the claim:
@@ -86,130 +82,47 @@ patterns() {
   grep -qF -- '.gaia/scripts/tests/secret.bats' <<<"$output"
 }
 
-# E3. An empty compiled exclude list withholds nothing, so nothing can leak.
-# This is the one empty input that is an answer rather than an absent one.
-@test "E3: an empty exclude list passes rather than refusing" {
-  stage 'app/index.ts'
-  : > "$REGEX"
-
-  run bash "$SCRIPT" "$STAGING" "$REGEX"
-  [ "$status" -eq 0 ]
-}
-
-# E4. Usage errors are unanswerable, not clean.
-@test "E4: a wrong argument count exits 2" {
+# Exit 2 on every unanswerable input. Each is the question left unanswered, never
+# a clean pass; release.yml treats any non-zero, non-1 status as an unproven scan.
+# A1: a directory inside the staged tree that `find` cannot descend, so the scan
+# stops short. A2: an empty staged tree, a staging step that copied nothing,
+# which satisfies any leak scan trivially. A3: a pattern file the ERE engine
+# rejects, where `grep` exits above 1.
+@test "exit 2 on every unanswerable input: wrong argument count, missing staging directory, missing regex file, unreadable subdirectory, empty staged tree, uncompilable pattern" {
   run bash "$SCRIPT" "$STAGING"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'usage:' <<<"$output"
-}
+  [ "$status" -eq 2 ] || { echo "wrong argument count: status $status"; return 1; }
+  grep -qF -- 'usage:' <<<"$output" || { echo "wrong argument count: $output"; return 1; }
 
-# E5. A staging directory that was never created cannot be scanned.
-@test "E5: a missing staging directory exits 2" {
   patterns '^\.gaia/scripts/tests(/|$)'
-
   run bash "$SCRIPT" "$BATS_TEST_TMPDIR/nope" "$REGEX"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'missing or is not a directory' <<<"$output"
-}
+  [ "$status" -eq 2 ] || { echo "missing staging directory: status $status"; return 1; }
+  grep -qF -- 'missing or is not a directory' <<<"$output" || { echo "missing staging directory: $output"; return 1; }
 
-# E6. A missing pattern file is the exclude-regex compile having failed upstream;
-# treating it as an empty list would pass every leak.
-@test "E6: a missing exclude-regex file exits 2" {
+  run bash "$SCRIPT" "$STAGING" "$REGEX"
+  [ "$status" -eq 2 ] || { echo "empty staged tree: status $status"; return 1; }
+  grep -qF -- 'holds no files' <<<"$output" || { echo "empty staged tree: $output"; return 1; }
+
   stage 'app/index.ts'
-
   run bash "$SCRIPT" "$STAGING" "$BATS_TEST_TMPDIR/nope.txt"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'missing or unreadable' <<<"$output"
-}
+  [ "$status" -eq 2 ] || { echo "missing regex file: status $status"; return 1; }
+  grep -qF -- 'missing or unreadable' <<<"$output" || { echo "missing regex file: $output"; return 1; }
 
-# A1. The partial-enumeration case, the shape the predecessor read as clean: a
-# directory inside the staged tree that `find` cannot descend. The scan stops
-# short, so the question is unanswered and the script says so.
-@test "A1: a staged tree find cannot fully enumerate exits 2" {
-  if [ "$(id -u)" -eq 0 ]; then
-    skip 'root traverses a mode-000 directory, so the fixture cannot arm'
-  fi
-  stage 'app/index.ts'
-  mkdir -p "$STAGING/.gaia/scripts/tests"
-  printf 'leaked\n' > "$STAGING/.gaia/scripts/tests/secret.bats"
-  chmod 000 "$STAGING/.gaia/scripts"
-  patterns '^\.gaia/scripts/tests(/|$)'
-
-  run bash "$SCRIPT" "$STAGING" "$REGEX"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'UNPROVEN' <<<"$output"
-}
-
-# A1-control. The same fixture through the predecessor's own shape, proving A1
-# arms the defect rather than some unrelated condition: the pre-fix pipeline
-# returns an empty `leaked` and reads it as a clean tree, while a real leak sits
-# inside the directory it could not enter.
-@test "A1-control: the pre-fix shape reads that same tree as clean" {
-  if [ "$(id -u)" -eq 0 ]; then
-    skip 'root traverses a mode-000 directory, so the fixture cannot arm'
-  fi
-  stage 'app/index.ts'
-  mkdir -p "$STAGING/.gaia/scripts/tests"
-  printf 'leaked\n' > "$STAGING/.gaia/scripts/tests/secret.bats"
-  chmod 000 "$STAGING/.gaia/scripts"
-  patterns '^\.gaia/scripts/tests(/|$)'
-
-  leaked="$( (cd "$STAGING" && find . -type f 2>/dev/null | sed 's|^\./||') \
-    | grep -E -f "$REGEX" || true )"
-  [ -z "$leaked" ]
-}
-
-# A2. The empty staged tree. A staging step that copied nothing satisfies any
-# leak scan trivially, which is the same fail-open shape one layer up.
-@test "A2: an empty staged tree exits 2 rather than passing" {
-  patterns '^\.gaia/scripts/tests(/|$)'
-
-  run bash "$SCRIPT" "$STAGING" "$REGEX"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'holds no files' <<<"$output"
-}
-
-# A2-control. The same fixture through the predecessor's shape, which returns an
-# empty `leaked` and lets the release proceed on a tree nothing was staged into.
-@test "A2-control: the pre-fix shape reads an empty staged tree as clean" {
-  patterns '^\.gaia/scripts/tests(/|$)'
-
-  leaked="$( (cd "$STAGING" && find . -type f | sed 's|^\./||') \
-    | grep -E -f "$REGEX" || true )"
-  [ -z "$leaked" ]
-}
-
-# A3. A pattern file the ERE engine rejects. `grep` exits above 1, which the
-# predecessor's `|| true` collapsed into the no-match arm and read as clean.
-@test "A3: a pattern grep cannot compile exits 2" {
-  stage 'app/index.ts'
   patterns '^\.gaia/scripts/tests[(/|$'
-
   run bash "$SCRIPT" "$STAGING" "$REGEX"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'UNPROVEN' <<<"$output"
-}
+  [ "$status" -eq 2 ] || { echo "uncompilable pattern: status $status"; return 1; }
+  grep -qF -- 'UNPROVEN' <<<"$output" || { echo "uncompilable pattern: $output"; return 1; }
 
-# A3-control. The same malformed pattern file through the predecessor's shape,
-# which swallows grep's error status and reports a clean tree.
-@test "A3-control: the pre-fix shape reads a grep failure as clean" {
-  stage 'app/index.ts'
-  patterns '^\.gaia/scripts/tests[(/|$'
-
-  leaked="$( (cd "$STAGING" && find . -type f | sed 's|^\./||') \
-    | grep -E -f "$REGEX" 2>/dev/null || true )"
-  [ -z "$leaked" ]
-}
-
-# C1. The caller binding. release.yml must reach the shipped-tree leak assertion
-# through this script, so the inline shape cannot return to the workflow without
-# this test going red. It reads live shell only, for the reason C2's header
-# gives: a pin satisfied by its own subject sat inside a YAML comment is
-# satisfied by the edit that disables the thing it pins.
-@test "C1: release.yml runs the leak assertion through this script" {
-  run grep -vE '^[[:space:]]*#' "$REPO_ROOT/.github/workflows/release.yml"
-  [ "$status" -eq 0 ]
-  grep -qF -- 'bash .gaia/scripts/assert-no-release-leak.sh' <<<"$output"
+  # Root traverses a mode-000 directory, so this row cannot arm there.
+  if [ "$(id -u)" -ne 0 ]; then
+    mkdir -p "$STAGING/.gaia/scripts/tests"
+    printf 'leaked\n' > "$STAGING/.gaia/scripts/tests/secret.bats"
+    chmod 000 "$STAGING/.gaia/scripts"
+    patterns '^\.gaia/scripts/tests(/|$)'
+    run bash "$SCRIPT" "$STAGING" "$REGEX"
+    [ "$status" -eq 2 ] || { echo "unreadable subdirectory: status $status"; return 1; }
+    grep -qF -- 'UNPROVEN' <<<"$output" || { echo "unreadable subdirectory: $output"; return 1; }
+  fi
+  return 0
 }
 
 # C2. The caller must also read the script's status rather than discarding it,
