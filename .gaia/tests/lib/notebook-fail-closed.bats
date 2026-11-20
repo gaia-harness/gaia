@@ -107,7 +107,12 @@ _check_refusal() {
 # bats test_tags=protected
 @test "each notebook consumer refuses while the one-time move is pending, in a legacy and a no-catalog repository, and changes nothing" {
   local name template repo legacy_template no_catalog_template
-  legacy_template="$(_fixture_repository --legacy)"
+  # The legacy fixture seeds what each reaper could delete (a merged and an
+  # abandoned spec folder, a merged plan folder, a closed research folder), so a
+  # reaper that deleted before its readiness check would change the snapshot.
+  legacy_template="$(_fixture_repository --legacy \
+    --seed-spec-merged-folder SPEC-001 --seed-spec-abandoned-folder SPEC-002 \
+    --seed-plan-folder PLAN-001 merged --seed-research old-topic closed)"
   no_catalog_template="$(_fixture_repository --no-catalog --legacy)"
   FIXTURES+=("$legacy_template" "$no_catalog_template")
   for name in spec-allocator plan-allocator spec-archive-merged plan-archive-merged \

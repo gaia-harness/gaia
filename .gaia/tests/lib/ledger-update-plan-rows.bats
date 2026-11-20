@@ -160,8 +160,8 @@ _spec_field() { _row_field spec SPEC-001 "$1"; }
       [ "$status" -eq 4 ]
       grep -qF "ledger-update: the shared ledger library is unusable" <<<"$output"
     done
+    assert_files_identical "$CATALOG" "$before"
   done
-  assert_files_identical "$CATALOG" "$before"
 }
 
 @test "ledger-update does not wait on a held mint lock and times out with exit 4 and no write on a held catalog lock" {

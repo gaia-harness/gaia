@@ -128,7 +128,7 @@ EOF
 }
 
 @test "single-id form: flips a ready row to merged with an ISO merged_at and a pr_number only when valid, never over the network, and ignores unusable ids" {
-  local before after id bad before_status before_output before_stderr
+  local before after id bad
 
   # Flips without a plan folder, never writes the retired "completed".
   [ ! -d "$SANDBOX/.notebook/plans/PLAN-005" ] || { echo "fixture holds a plan folder"; return 1; }
@@ -182,18 +182,22 @@ EOF
   jq -e '.items[] | select(.kind == "plan" and .id == "PLAN-005") | .pr_number == 2601' "$SANDBOX/$CATALOG_RELATIVE_PATH" >/dev/null || { echo "pr_number: not stamped as a number"; return 1; }
   [ ! -e "$STUB_DIRECTORY/gh-called" ] || { echo "pr_number: reached gh"; return 1; }
 
-  # The two-argument form matches the script at HEAD: same stdout, stderr and exit, no pr_number, no network.
+  # The two-argument form prints the exact line, stamps no pr_number, and reaches no network.
   _fresh_sandbox
-  git -C "$REPO_ROOT" show HEAD:.gaia/scripts/spec/plan-reconcile.sh \
-    | sed -e 's#/plan-\(ledger-update\.sh\)#/\1#g' -e 's#missing ledger/row#missing catalog row#' >"$SANDBOX/.gaia/scripts/spec/plan-reconcile-before.sh"
-  for id in PLAN-005 PLAN-x cache-thing PLAN-999; do
-    run --separate-stderr bash "$SANDBOX/.gaia/scripts/spec/plan-reconcile-before.sh" "$SANDBOX" "$id"
-    before_status="$status" before_output="$output" before_stderr="$stderr"
+  run --separate-stderr _reconcile PLAN-005
+  [ "$status" -eq 0 ] || { echo "two-argument PLAN-005: status $status"; return 1; }
+  [ "$output" = "reconciled PLAN-005 -> merged" ] || { echo "two-argument PLAN-005: stdout '$output'"; return 1; }
+  [ -z "$stderr" ] || { echo "two-argument PLAN-005: stderr '$stderr'"; return 1; }
+  for id in PLAN-x cache-thing; do
     run --separate-stderr _reconcile "$id"
-    [ "$status" -eq "$before_status" ] || { echo "two-argument $id: status $status"; return 1; }
-    [ "$output" = "$before_output" ] || { echo "two-argument $id: stdout differs"; return 1; }
-    [ "$stderr" = "$before_stderr" ] || { echo "two-argument $id: stderr differs"; return 1; }
+    [ "$status" -eq 0 ] || { echo "two-argument $id: status $status"; return 1; }
+    [ -z "$output" ] || { echo "two-argument $id: stdout '$output'"; return 1; }
+    [ "$stderr" = "plan-reconcile: $id not PLAN-NNN; nothing to do" ] || { echo "two-argument $id: stderr '$stderr'"; return 1; }
   done
+  run --separate-stderr _reconcile PLAN-999
+  [ "$status" -eq 0 ] || { echo "two-argument PLAN-999: status $status"; return 1; }
+  [ -z "$output" ] || { echo "two-argument PLAN-999: stdout '$output'"; return 1; }
+  [[ "$stderr" == "plan-reconcile: could not advance PLAN-999"* ]] || { echo "two-argument PLAN-999: stderr '$stderr'"; return 1; }
   [ "$(_row_field PLAN-005 pr_number)" = "null" ] || { echo "two-argument: stamped pr_number"; return 1; }
   [ ! -e "$STUB_DIRECTORY/gh-called" ] || { echo "two-argument: reached gh"; return 1; }
 
