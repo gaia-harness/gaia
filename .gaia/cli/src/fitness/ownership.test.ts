@@ -7,6 +7,7 @@ import {
   effectiveOwnership,
   OWNERSHIP_CLASSIFIER_ENV,
 } from './ownership.js';
+import type {FileKind, Ownership} from './types.js';
 
 let directory: string;
 
@@ -51,44 +52,46 @@ describe('classifyOwnership', () => {
     ]);
   });
 
-  test('a classifier that exits non-zero leaves every path unknown', () => {
-    const stub = writeStub(`${echoWith('adopter')}\nexit 3`);
-    const result = classify(stub, ['a.md', 'b.md']);
-
-    expect([...result.values()]).toEqual(['unknown', 'unknown']);
-  });
-
-  test('a classifier that prints one line too few leaves every path unknown', () => {
-    const stub = writeStub(String.raw`shift 3; printf 'adopter\ta\n'`);
-    const result = classify(stub, ['a.md', 'b.md']);
-
-    expect([...result.values()]).toEqual(['unknown', 'unknown']);
-  });
-
-  test('an unrecognised class leaves every path unknown', () => {
-    const stub = writeStub(echoWith('landlord'));
-
-    expect([...classify(stub, ['a.md']).values()]).toEqual(['unknown']);
-  });
-
-  test('a missing classifier leaves every path unknown', () => {
+  test.each<[string, readonly string[], () => NodeJS.ProcessEnv]>([
+    [
+      'a classifier that exits non-zero leaves every path unknown',
+      ['a.md', 'b.md'],
+      () => ({
+        [OWNERSHIP_CLASSIFIER_ENV]: writeStub(`${echoWith('adopter')}\nexit 3`),
+      }),
+    ],
+    [
+      'a classifier that prints one line too few leaves every path unknown',
+      ['a.md', 'b.md'],
+      () => ({
+        [OWNERSHIP_CLASSIFIER_ENV]: writeStub(
+          String.raw`shift 3; printf 'adopter\ta\n'`
+        ),
+      }),
+    ],
+    [
+      'an unrecognised class leaves every path unknown',
+      ['a.md'],
+      () => ({[OWNERSHIP_CLASSIFIER_ENV]: writeStub(echoWith('landlord'))}),
+    ],
+    [
+      'a missing classifier leaves every path unknown',
+      ['a.md'],
+      () => ({[OWNERSHIP_CLASSIFIER_ENV]: path.join(directory, 'absent.sh')}),
+    ],
+    [
+      'no classifier at the root leaves every path unknown',
+      ['a.md'],
+      () => ({}),
+    ],
+  ])('%s', (_name, paths, makeEnvironment) => {
     const result = classifyOwnership({
-      env: {[OWNERSHIP_CLASSIFIER_ENV]: path.join(directory, 'absent.sh')},
-      paths: ['a.md'],
+      env: makeEnvironment(),
+      paths,
       root: directory,
     });
 
-    expect([...result.values()]).toEqual(['unknown']);
-  });
-
-  test('no classifier at the root leaves every path unknown', () => {
-    const result = classifyOwnership({
-      env: {},
-      paths: ['a.md'],
-      root: directory,
-    });
-
-    expect([...result.values()]).toEqual(['unknown']);
+    expect([...result.values()]).toEqual(paths.map(() => 'unknown'));
   });
 
   test('a path with a control character is unknown and never reaches the classifier', () => {
@@ -144,19 +147,38 @@ describe('classifyOwnership', () => {
 });
 
 describe('effectiveOwnership', () => {
-  test('upgrades an ignored per-machine local file to adopter', () => {
-    expect(effectiveOwnership('ignored', ['settings-local'])).toBe('adopter');
-    expect(effectiveOwnership('ignored', ['claudemd-local'])).toBe('adopter');
-  });
-
-  test('leaves an ignored file of any other kind ignored', () => {
-    expect(effectiveOwnership('ignored', ['rule'])).toBe('ignored');
-  });
-
-  test('leaves a classified local file untouched', () => {
-    expect(effectiveOwnership('gaia-shipped', ['settings-local'])).toBe(
-      'gaia-shipped'
-    );
-    expect(effectiveOwnership('unknown', ['claudemd-local'])).toBe('unknown');
+  test.each<[string, Ownership, FileKind[], Ownership]>([
+    [
+      'upgrades an ignored settings-local file to adopter',
+      'ignored',
+      ['settings-local'],
+      'adopter',
+    ],
+    [
+      'upgrades an ignored claudemd-local file to adopter',
+      'ignored',
+      ['claudemd-local'],
+      'adopter',
+    ],
+    [
+      'leaves an ignored file of any other kind ignored',
+      'ignored',
+      ['rule'],
+      'ignored',
+    ],
+    [
+      'leaves a classified gaia-shipped local file untouched',
+      'gaia-shipped',
+      ['settings-local'],
+      'gaia-shipped',
+    ],
+    [
+      'leaves an unknown local file untouched',
+      'unknown',
+      ['claudemd-local'],
+      'unknown',
+    ],
+  ])('%s', (_name, classified, kinds, expected) => {
+    expect(effectiveOwnership(classified, kinds)).toBe(expected);
   });
 });

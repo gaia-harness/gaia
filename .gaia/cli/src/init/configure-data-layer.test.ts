@@ -324,20 +324,27 @@ describe('casing', () => {
     expect(read('app/services/gaia/api.ts')).toContain("arrayFormat: 'comma'");
   });
 
-  test('refuses an api.ts with no create() call', () => {
-    write('app/services/gaia/api.ts', 'export const api = 1;\n');
+  test.each([
+    [
+      'an api.ts with no create() call',
+      () => {
+        write('app/services/gaia/api.ts', 'export const api = 1;\n');
+      },
+      'data_layer_anchor_missing',
+    ],
+    [
+      'an ambiguous layer, naming --layer',
+      () => {
+        mkdirSync(rootPath('app/services/other'), {recursive: true});
+      },
+      '--layer',
+    ],
+  ])('snake casing refuses %s', (_name, arrange, expectedError) => {
+    arrange();
     const result = configure('--casing', 'snake');
 
     expect(result.code).toBe(1);
-    expect(result.errors).toContain('data_layer_anchor_missing');
-  });
-
-  test('refuses snake when the layer is ambiguous and names --layer', () => {
-    mkdirSync(rootPath('app/services/other'), {recursive: true});
-    const result = configure('--casing', 'snake');
-
-    expect(result.code).toBe(1);
-    expect(result.errors).toContain('--layer');
+    expect(result.errors).toContain(expectedError);
   });
 });
 

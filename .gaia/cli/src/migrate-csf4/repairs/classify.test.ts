@@ -44,20 +44,20 @@ export const Default: StoryObj<typeof meta> = {};
     expect(classify(source)).toBe('csf3');
   });
 
-  test('a preview.meta file importing #.storybook/preview is csf4', () => {
-    const source = `import preview from '#.storybook/preview';
+  test.each([
+    [
+      'a preview.meta file importing #.storybook/preview is csf4',
+      `import preview from '#.storybook/preview';
 import Button from '..';
 
 const meta = preview.meta({component: Button});
 
 export const Default = meta.story({});
-`;
-
-    expect(classify(source)).toBe('csf4');
-  });
-
-  test('a preview.type<...>().meta file is csf4', () => {
-    const source = `import preview from '#.storybook/preview';
+`,
+    ],
+    [
+      'a preview.type<...>().meta file is csf4',
+      `import preview from '#.storybook/preview';
 import Button from '..';
 
 type StoryArgs = {label: string};
@@ -65,41 +65,41 @@ type StoryArgs = {label: string};
 const meta = preview.type<{args: StoryArgs}>().meta({component: Button});
 
 export const Default = meta.story({});
-`;
-
-    expect(classify(source)).toBe('csf4');
-  });
-
-  test('a csf4 file whose preview import is relative is still csf4', () => {
-    const source = `import preview from '../../.storybook/preview';
+`,
+    ],
+    [
+      'a csf4 file whose preview import is relative is still csf4',
+      `import preview from '../../.storybook/preview';
 import Button from '..';
 
 const meta = preview.meta({component: Button});
 
 export const Default = meta.story({});
-`;
-
+`,
+    ],
+  ])('%s', (_name, source) => {
     expect(classify(source)).toBe('csf4');
   });
 
-  test('an object-literal named export beside preview.meta is unknown', () => {
-    const source = `import preview from '#.storybook/preview';
+  test.each([
+    [
+      'an object-literal named export beside preview.meta is unknown',
+      `import preview from '#.storybook/preview';
 import Button from '..';
 
 const meta = preview.meta({component: Button});
 
 export const Default = {args: {label: 'x'}} satisfies object;
-`;
-
-    expect(classify(source)).toBe('unknown');
-  });
-
-  test('a file with no preview import and no default export is unknown', () => {
-    const source = `import Button from '..';
+`,
+    ],
+    [
+      'a file with no preview import and no default export is unknown',
+      `import Button from '..';
 
 export const Default = () => <Button />;
-`;
-
+`,
+    ],
+  ])('%s', (_name, source) => {
     expect(classify(source)).toBe('unknown');
   });
 });

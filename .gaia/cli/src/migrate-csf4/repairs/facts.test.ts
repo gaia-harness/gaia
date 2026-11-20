@@ -34,24 +34,23 @@ describe('capturePreCodemodFacts', () => {
     ).toBeUndefined();
   });
 
-  test('captures a custom args type from Meta<StoryArgs>', () => {
-    const source = readMigrationFixture('composed-form.stories.tsx.csf3');
-
-    expect(capturePreCodemodFacts(ts, source, FILE).metaArgsType).toBe(
-      'StoryArgs'
-    );
-  });
-
-  test('captures a custom args type from satisfies Meta<StoryArgs>', () => {
-    const source = `import type {Meta} from '@storybook/react-vite';
+  test.each([
+    [
+      'captures a custom args type from Meta<StoryArgs>',
+      () => readMigrationFixture('composed-form.stories.tsx.csf3'),
+    ],
+    [
+      'captures a custom args type from satisfies Meta<StoryArgs>',
+      () => `import type {Meta} from '@storybook/react-vite';
 import Form from '..';
 
 type StoryArgs = {onSubmit: () => void};
 
 export default {component: Form} satisfies Meta<StoryArgs>;
-`;
-
-    expect(capturePreCodemodFacts(ts, source, FILE).metaArgsType).toBe(
+`,
+    ],
+  ])('%s', (_name, readSource) => {
+    expect(capturePreCodemodFacts(ts, readSource(), FILE).metaArgsType).toBe(
       'StoryArgs'
     );
   });

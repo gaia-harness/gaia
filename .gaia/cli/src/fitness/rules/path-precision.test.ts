@@ -128,12 +128,11 @@ describe('paths written relative to a nested package', () => {
 });
 
 describe('a file name without a folder', () => {
-  test('is not reported when a tracked file carries that name', () => {
-    expect(findingsOf(bareName(true), 'rules.dead-path')).toEqual([]);
-  });
-
-  test('is not reported when no tracked file carries that name', () => {
-    expect(findingsOf(bareName(false), 'rules.dead-path')).toEqual([]);
+  test.each([
+    ['is not reported when a tracked file carries that name', true],
+    ['is not reported when no tracked file carries that name', false],
+  ])('%s', (_name, withTarget) => {
+    expect(findingsOf(bareName(withTarget), 'rules.dead-path')).toEqual([]);
   });
 
   test('is not reported as a folder name, an example or a negation', () => {
@@ -325,23 +324,22 @@ describe('skill link resolution', () => {
     ).toHaveLength(1);
   });
 
-  test('does not report a backticked path whose first folder exists nowhere', () => {
+  test.each([
+    [
+      'does not report a backticked path whose first folder exists nowhere',
+      skillProject('The site build runs `scripts/check-titles.mjs`.\n'),
+      0,
+    ],
+    [
+      'reports it once that folder exists in the skill',
+      skillProject('Run `scripts/check-titles.mjs`.\n', {
+        '.claude/skills/example/scripts/other.sh': '#!/bin/sh\n',
+      }),
+      1,
+    ],
+  ])('%s', (_name, project, expectedCount) => {
     expect(
-      findingsOf(
-        skillProject('The site build runs `scripts/check-titles.mjs`.\n'),
-        'authoring.reference.link.resolves'
-      )
-    ).toEqual([]);
-  });
-
-  test('reports it once that folder exists in the skill', () => {
-    expect(
-      findingsOf(
-        skillProject('Run `scripts/check-titles.mjs`.\n', {
-          '.claude/skills/example/scripts/other.sh': '#!/bin/sh\n',
-        }),
-        'authoring.reference.link.resolves'
-      )
-    ).toHaveLength(1);
+      findingsOf(project, 'authoring.reference.link.resolves')
+    ).toHaveLength(expectedCount);
   });
 });

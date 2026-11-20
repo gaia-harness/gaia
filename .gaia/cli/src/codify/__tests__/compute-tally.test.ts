@@ -92,10 +92,10 @@ describe('computeTally', () => {
     expect(result.candidates[0]?.is_oracle).toBe(false);
   });
 
-  test('does not surface a class on only 2 distinct PRs', () => {
-    const result = computeTally({
-      coveredClass: noCover,
-      prs: [
+  test.each([
+    [
+      'does not surface a class on only 2 distinct PRs',
+      [
         pr(2, [
           {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
         ]),
@@ -103,23 +103,21 @@ describe('computeTally', () => {
           {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
         ]),
       ],
-      suppressedClass: noSuppress,
-      windowDays: 90,
-    });
-
-    expect(result.candidate_count).toBe(0);
-  });
-
-  test('does not surface a class repeated 3 times within ONE PR', () => {
-    const result = computeTally({
-      coveredClass: noCover,
-      prs: [
+    ],
+    [
+      'does not surface a class repeated 3 times within ONE PR',
+      [
         pr(1, [
           {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
           {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
           {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
         ]),
       ],
+    ],
+  ])('%s', (_label, prs) => {
+    const result = computeTally({
+      coveredClass: noCover,
+      prs,
       suppressedClass: noSuppress,
       windowDays: 90,
     });
@@ -167,40 +165,42 @@ describe('computeTally', () => {
     expect(atMajor.candidates[0]?.severity_max).toBe('major');
   });
 
-  test('combines CI-run and local-run findings for the same class across distinct PRs', () => {
-    // Each PR contributes one comment block (CI or local); the core only sees a
-    // per-PR finding list, so auditor location never changes eligibility.
+  test.each([
+    [
+      'combines CI-run and local-run findings for the same class across distinct PRs',
+      ['major', 'critical', 'major'],
+      'critical',
+    ],
+    [
+      'Directive #1: severity_max is a running max across PRs (minor then critical -> critical)',
+      ['minor', 'critical', 'minor'],
+      'critical',
+    ],
+    [
+      'Directive #1: severity_max is never downgraded (major then minor -> major)',
+      ['major', 'minor', 'minor'],
+      'major',
+    ],
+  ] as const)('%s', (_label, severities, expected) => {
+    // Each PR contributes one finding list; the core never sees the auditor,
+    // so CI versus local origin cannot change eligibility.
     const result = computeTally({
       coveredClass: noCover,
-      prs: [
-        pr(10, [
+      prs: severities.map((severity, index) =>
+        pr(index + 1, [
           {
             area_tags: ['app'],
             finding_class: 'rule/switch-statement',
-            severity: 'major',
+            severity,
           },
-        ]),
-        pr(11, [
-          {
-            area_tags: ['app'],
-            finding_class: 'rule/switch-statement',
-            severity: 'critical',
-          },
-        ]),
-        pr(12, [
-          {
-            area_tags: ['app'],
-            finding_class: 'rule/switch-statement',
-            severity: 'major',
-          },
-        ]),
-      ],
+        ])
+      ),
       suppressedClass: noSuppress,
       windowDays: 90,
     });
 
     expect(result.candidate_count).toBe(1);
-    expect(result.candidates[0]?.severity_max).toBe('critical');
+    expect(result.candidates[0]?.severity_max).toBe(expected);
   });
 
   test('collapses two same-class findings in one PR to a single distinct-PR count', () => {
@@ -417,72 +417,6 @@ describe('computeTally', () => {
     expect(result.unclassified).toBeNull();
   });
 
-  test('Directive #1: severity_max is a running max across PRs (minor then critical -> critical)', () => {
-    const result = computeTally({
-      coveredClass: noCover,
-      prs: [
-        pr(1, [
-          {
-            area_tags: [],
-            finding_class: 'rule/switch-statement',
-            severity: 'minor',
-          },
-        ]),
-        pr(2, [
-          {
-            area_tags: [],
-            finding_class: 'rule/switch-statement',
-            severity: 'critical',
-          },
-        ]),
-        pr(3, [
-          {
-            area_tags: [],
-            finding_class: 'rule/switch-statement',
-            severity: 'minor',
-          },
-        ]),
-      ],
-      suppressedClass: noSuppress,
-      windowDays: 90,
-    });
-
-    expect(result.candidates[0]?.severity_max).toBe('critical');
-  });
-
-  test('Directive #1: severity_max is never downgraded (major then minor -> major)', () => {
-    const result = computeTally({
-      coveredClass: noCover,
-      prs: [
-        pr(1, [
-          {
-            area_tags: [],
-            finding_class: 'rule/switch-statement',
-            severity: 'major',
-          },
-        ]),
-        pr(2, [
-          {
-            area_tags: [],
-            finding_class: 'rule/switch-statement',
-            severity: 'minor',
-          },
-        ]),
-        pr(3, [
-          {
-            area_tags: [],
-            finding_class: 'rule/switch-statement',
-            severity: 'minor',
-          },
-        ]),
-      ],
-      suppressedClass: noSuppress,
-      windowDays: 90,
-    });
-
-    expect(result.candidates[0]?.severity_max).toBe('major');
-  });
-
   test('Directive #5: an oracle-prefixed class at minor severity is still a candidate', () => {
     const result = computeTally({
       coveredClass: noCover,
@@ -503,32 +437,6 @@ describe('computeTally', () => {
       is_oracle: true,
       severity_max: 'minor',
     });
-  });
-
-  test('a recorded recurring class counts whether or not a later PR fixed it (the tally has no found-and-fixed notion)', () => {
-    // The tally only sees whatever findings were recorded in the block for
-    // each PR; it has no concept of "found-and-healed". A class recorded as
-    // recurring produces a candidate even though the tally cannot know (and
-    // does not care) whether a later PR fixed the underlying issue.
-    const result = computeTally({
-      coveredClass: noCover,
-      prs: [3, 2, 1].map((n) =>
-        pr(n, [
-          {
-            area_tags: [],
-            finding_class: 'holistic/swallowed-error',
-            severity: 'major',
-          },
-        ])
-      ),
-      suppressedClass: noSuppress,
-      windowDays: 90,
-    });
-
-    expect(result.candidate_count).toBe(1);
-    expect(result.candidates[0]?.finding_class).toBe(
-      'holistic/swallowed-error'
-    );
   });
 
   test('drops a class a promoted rule already covers', () => {

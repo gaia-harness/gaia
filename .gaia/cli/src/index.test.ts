@@ -85,22 +85,20 @@ describe('gaia top-level router', () => {
     );
   });
 
-  test('an unknown subcommand is rejected', async () => {
-    await expect(run(['bogus'])).resolves.toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    expect(readStderrPayload()).toMatchObject({code: 'unknown_subcommand'});
-  });
-
-  test('the retired setup-ci namespace is an unknown subcommand', async () => {
-    await expect(run(['setup-ci', 'detect-remote'])).resolves.toBe(
-      EXIT_CODES.UNKNOWN_SUBCOMMAND
-    );
-    expect(readStderrPayload()).toMatchObject({code: 'unknown_subcommand'});
-  });
-
-  test('the adopter labels namespace does not serve docs', async () => {
-    await expect(run(['labels', 'docs'])).resolves.toBe(
-      EXIT_CODES.UNKNOWN_SUBCOMMAND
-    );
+  test.each(
+    [
+      {argv: ['bogus'], name: 'an unknown subcommand is rejected'},
+      {
+        argv: ['setup-ci', 'detect-remote'],
+        name: 'the retired setup-ci namespace is an unknown subcommand',
+      },
+      {
+        argv: ['labels', 'docs'],
+        name: 'the adopter labels namespace does not serve docs',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', async (_name, row) => {
+    await expect(run(row.argv)).resolves.toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
     expect(readStderrPayload()).toMatchObject({code: 'unknown_subcommand'});
   });
 });

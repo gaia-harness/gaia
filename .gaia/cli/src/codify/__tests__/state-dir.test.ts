@@ -194,32 +194,35 @@ describe('relocateCodifyState', () => {
       );
     });
 
-    test('codify-tally --help leaves the earlier state in place', () => {
+    test.each([
+      {
+        argv: ['codify-tally', '--help'],
+        expectStatus: (status: null | number) => {
+          expect(status).toBe(0);
+        },
+        name: 'codify-tally --help leaves the earlier state in place',
+      },
+      {
+        argv: ['codify-ledger', 'not-a-verb'],
+        expectStatus: (status: null | number) => {
+          expect(status).not.toBe(0);
+        },
+        name: 'an unknown codify-ledger verb leaves the earlier state in place',
+      },
+      {
+        argv: ['codify-ledger', 'record'],
+        expectStatus: (status: null | number) => {
+          expect(status).not.toBe(0);
+        },
+        name: 'a usage error inside a known verb leaves the earlier state in place',
+      },
+    ])('$name', ({argv, expectStatus}) => {
       seedEarlier({'declines.json': VERSION_TWO_LEDGER});
 
-      const result = spawnCli(root, ['codify-tally', '--help']);
+      const result = spawnCli(root, argv);
 
-      expect(result.status).toBe(0);
-      expect(existsSync(earlierDirectory())).toBe(true);
-      expect(existsSync(currentDirectory())).toBe(false);
-    });
+      expectStatus(result.status);
 
-    test('an unknown codify-ledger verb leaves the earlier state in place', () => {
-      seedEarlier({'declines.json': VERSION_TWO_LEDGER});
-
-      const result = spawnCli(root, ['codify-ledger', 'not-a-verb']);
-
-      expect(result.status).not.toBe(0);
-      expect(existsSync(earlierDirectory())).toBe(true);
-      expect(existsSync(currentDirectory())).toBe(false);
-    });
-
-    test('a usage error inside a known verb leaves the earlier state in place', () => {
-      seedEarlier({'declines.json': VERSION_TWO_LEDGER});
-
-      const result = spawnCli(root, ['codify-ledger', 'record']);
-
-      expect(result.status).not.toBe(0);
       expect(existsSync(earlierDirectory())).toBe(true);
       expect(existsSync(currentDirectory())).toBe(false);
     });

@@ -16,63 +16,77 @@ describe('coveredClassesFromRules', () => {
     rmSync(dir, {force: true, recursive: true});
   });
 
-  test('reads the promoted finding_class from a provenance-marked rule', () => {
-    writeFileSync(
-      path.join(dir, 'switch-statement.md'),
-      [
-        '---',
-        'paths: app/**/*.ts',
-        '---',
-        markerComment('rule/switch-statement'),
-        '',
-        '# Rule body',
-      ].join('\n')
-    );
+  const earlierTail =
+    '<!-- gaia-harden: promoted from recurring finding_class rule/earlier-tail; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->';
 
-    expect(coveredClassesFromRules(dir).has('rule/switch-statement')).toBe(
-      true
-    );
-  });
+  // The abbreviated-tail row proves the binder is prefix-bound and tail-agnostic
+  // on purpose; every other fixture uses markerComment(...) so it cannot drift.
+  const cases: {
+    expected: string[];
+    files: Record<string, string>;
+    name: string;
+    readDir?: string;
+  }[] = [
+    {
+      expected: ['rule/switch-statement'],
+      files: {
+        'switch-statement.md': [
+          '---',
+          'paths: app/**/*.ts',
+          '---',
+          markerComment('rule/switch-statement'),
+          '',
+          '# Rule body',
+        ].join('\n'),
+      },
+      name: 'reads the promoted finding_class from a provenance-marked rule',
+    },
+    {
+      expected: [],
+      files: {'plain.md': '# Just a rule\nno marker here'},
+      name: 'returns an empty set for a directory with no marked rules',
+    },
+    {
+      expected: [],
+      files: {},
+      name: 'returns an empty set when the directory does not exist',
+      readDir: 'nope',
+    },
+    {
+      expected: ['axe/color-contrast', 'knip/exports'],
+      files: {
+        'a.md':
+          '<!-- gaia-harden: promoted from recurring finding_class axe/color-contrast; never for non-recurrence -->',
+        'b.md': markerComment('knip/exports'),
+      },
+      name: 'collects markers across multiple rule files',
+    },
+    {
+      expected: ['rule/current-tail', 'rule/earlier-tail'],
+      files: {
+        'current-tail.md': markerComment('rule/current-tail'),
+        'earlier-tail.md': earlierTail,
+      },
+      name: 'binds a marker carrying the earlier tail and one carrying the current tail',
+    },
+  ];
 
-  test('returns an empty set for a directory with no marked rules', () => {
-    writeFileSync(path.join(dir, 'plain.md'), '# Just a rule\nno marker here');
-    expect(coveredClassesFromRules(dir).size).toBe(0);
-  });
+  test.each(cases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {expected, files, readDir}) => {
+      for (const [fileName, content] of Object.entries(files)) {
+        writeFileSync(path.join(dir, fileName), content);
+      }
 
-  test('returns an empty set when the directory does not exist', () => {
-    expect(coveredClassesFromRules(path.join(dir, 'nope')).size).toBe(0);
-  });
+      const covered = coveredClassesFromRules(
+        readDir === undefined ? dir : path.join(dir, readDir)
+      );
 
-  test('collects markers across multiple rule files', () => {
-    // Deliberate abbreviated tail: the binder is prefix-bound / tail-agnostic,
-    // so a copy that keeps the frozen prefix but shortens the tail still binds.
-    // This is the ONE fixture that proves tail-agnosticism on purpose; every
-    // other fixture uses markerComment(...) so it cannot silently drift.
-    writeFileSync(
-      path.join(dir, 'a.md'),
-      '<!-- gaia-harden: promoted from recurring finding_class axe/color-contrast; never for non-recurrence -->'
-    );
-    writeFileSync(path.join(dir, 'b.md'), markerComment('knip/exports'));
+      expect(covered).toEqual(new Set(expected));
+    }
+  );
 
-    const covered = coveredClassesFromRules(dir);
-    expect(covered.has('axe/color-contrast')).toBe(true);
-    expect(covered.has('knip/exports')).toBe(true);
-  });
-
-  test('binds a marker carrying the earlier tail and one carrying the current tail', () => {
-    writeFileSync(
-      path.join(dir, 'earlier-tail.md'),
-      '<!-- gaia-harden: promoted from recurring finding_class rule/earlier-tail; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->'
-    );
-    writeFileSync(
-      path.join(dir, 'current-tail.md'),
-      markerComment('rule/current-tail')
-    );
-
+  test('the current marker tail names /gaia-cleanse', () => {
     expect(markerComment('rule/current-tail')).toContain('/gaia-cleanse');
-
-    const covered = coveredClassesFromRules(dir);
-    expect(covered.has('rule/earlier-tail')).toBe(true);
-    expect(covered.has('rule/current-tail')).toBe(true);
   });
 });

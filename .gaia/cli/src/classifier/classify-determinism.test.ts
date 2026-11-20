@@ -162,6 +162,32 @@ const descriptor = (strict: string[]): string =>
     },
   });
 
+type SourceCase = {
+  classification: Classification['classification'];
+  file: string;
+  name: string;
+  reason?: RegExp;
+  source: string;
+};
+
+// One test per row, titled with the full row name (`$name` would truncate).
+const eachSourceCase = (cases: SourceCase[]): void => {
+  test.each(cases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, row) => {
+      const result = classifySource(row.file, row.source);
+
+      expect(result.classification).toBe(row.classification);
+
+      // A row with no reason pattern matches any reasons.
+      expect(result.reasons.join(' ')).toMatch(row.reason ?? /^/);
+    }
+  );
+};
+
+const ADD_SOURCE =
+  'export const add = (a: number, b: number): number => a + b;\n';
+
 describe('classify-determinism', () => {
   test('emits the {file, classification, reasons} contract shape', () => {
     const result = classifySource(
@@ -175,223 +201,191 @@ describe('classify-determinism', () => {
   });
 
   describe('condition 1: path scoping', () => {
-    test('classifies a pure file outside the candidate paths EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/routes/_index.tsx',
-        'export const add = (a: number, b: number): number => a + b;\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-      expect(result.reasons.join(' ')).toMatch(/path/i);
-    });
-
-    test('classifies a .tsx file under app/components EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/components/Foo/utils.tsx',
-        'export const add = (a: number, b: number): number => a + b;\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-    });
-
-    test('classifies a pure .ts file under app/components STRICT', () => {
-      const result = classifySource(
-        'apps/web/app/components/Foo/utils.ts',
-        'export const add = (a: number, b: number): number => a + b;\n'
-      );
-
-      expect(result.classification).toBe('strict');
-    });
-
-    test('classifies a pure file under app/services STRICT', () => {
-      const result = classifySource(
-        'apps/web/app/services/example/parse.ts',
-        'export const toUpper = (s: string): string => s.toUpperCase();\n'
-      );
-
-      expect(result.classification).toBe('strict');
-    });
+    eachSourceCase([
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/routes/_index.tsx',
+        name: 'classifies a pure file outside the candidate paths EMERGENT',
+        reason: /path/i,
+        source: ADD_SOURCE,
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/components/Foo/utils.tsx',
+        name: 'classifies a .tsx file under app/components EMERGENT',
+        source: ADD_SOURCE,
+      },
+      {
+        classification: 'strict',
+        file: 'apps/web/app/components/Foo/utils.ts',
+        name: 'classifies a pure .ts file under app/components STRICT',
+        source: ADD_SOURCE,
+      },
+      {
+        classification: 'strict',
+        file: 'apps/web/app/services/example/parse.ts',
+        name: 'classifies a pure file under app/services STRICT',
+        source:
+          'export const toUpper = (s: string): string => s.toUpperCase();\n',
+      },
+    ]);
   });
 
   describe('condition 2: module-reachable non-determinism', () => {
-    test('classifies a default-parameter new Date() EMERGENT (the FI-3 fix)', () => {
-      const result = classifySource(
-        'apps/web/app/utils/date.ts',
-        "import {format} from 'date-fns';\n" +
-          "export const formatMY = (date = new Date()): string => format(date, 'MM/yy');\n"
-      );
-
-      expect(result.classification).toBe('emergent');
-      expect(result.reasons.join(' ')).toMatch(/new Date/);
-    });
-
-    test('classifies a module-level new Date() constant EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/utils/clock.ts',
-        'const TODAY = new Date();\nexport const year = (): number => TODAY.getFullYear();\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-    });
-
-    test('classifies a class-field Math.random() initializer EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/utils/id.ts',
-        'export class Id {\n  value = Math.random();\n}\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-      expect(result.reasons.join(' ')).toMatch(/Math\.random/);
-    });
-
-    test('classifies a Date.now() call EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/utils/now.ts',
-        'export const stamp = (): number => Date.now();\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-    });
-
-    test('classifies a crypto usage EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/utils/token.ts',
-        'export const token = (): string => crypto.randomUUID();\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-    });
-
-    test('classifies a top-level await EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/utils/config.ts',
-        "const data = await import('./other');\nexport const value = data;\n"
-      );
-
-      expect(result.classification).toBe('emergent');
-    });
+    eachSourceCase([
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/utils/date.ts',
+        name: 'classifies a default-parameter new Date() EMERGENT (the FI-3 fix)',
+        reason: /new Date/,
+        source:
+          "import {format} from 'date-fns';\n" +
+          "export const formatMY = (date = new Date()): string => format(date, 'MM/yy');\n",
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/utils/clock.ts',
+        name: 'classifies a module-level new Date() constant EMERGENT',
+        source:
+          'const TODAY = new Date();\nexport const year = (): number => TODAY.getFullYear();\n',
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/utils/id.ts',
+        name: 'classifies a class-field Math.random() initializer EMERGENT',
+        reason: /Math\.random/,
+        source: 'export class Id {\n  value = Math.random();\n}\n',
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/utils/now.ts',
+        name: 'classifies a Date.now() call EMERGENT',
+        source: 'export const stamp = (): number => Date.now();\n',
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/utils/token.ts',
+        name: 'classifies a crypto usage EMERGENT',
+        source: 'export const token = (): string => crypto.randomUUID();\n',
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/utils/config.ts',
+        name: 'classifies a top-level await EMERGENT',
+        source:
+          "const data = await import('./other');\nexport const value = data;\n",
+      },
+    ]);
   });
 
   describe('condition 3: hook call-surface rule', () => {
-    test('classifies a hook reading a react-router runtime hook EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/hooks/useThing.ts',
-        "import {useNavigate} from 'react-router';\n" +
-          'export const useThing = () => {\n  const navigate = useNavigate();\n  return navigate;\n};\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-      expect(result.reasons.join(' ')).toMatch(/useNavigate/);
-    });
-
-    test('classifies a hook calling a DOM-layout API EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/hooks/useSize.ts',
-        'export const useSize = (el: HTMLElement) => {\n' +
-          '  return el.getBoundingClientRect();\n};\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-    });
-
-    test('classifies a useState/useMemo-only hook STRICT', () => {
-      const result = classifySource(
-        'apps/web/app/hooks/useToggle.ts',
-        "import {useState, useCallback} from 'react';\n" +
+    eachSourceCase([
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/hooks/useThing.ts',
+        name: 'classifies a hook reading a react-router runtime hook EMERGENT',
+        reason: /useNavigate/,
+        source:
+          "import {useNavigate} from 'react-router';\n" +
+          'export const useThing = () => {\n  const navigate = useNavigate();\n  return navigate;\n};\n',
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/hooks/useSize.ts',
+        name: 'classifies a hook calling a DOM-layout API EMERGENT',
+        source:
+          'export const useSize = (el: HTMLElement) => {\n' +
+          '  return el.getBoundingClientRect();\n};\n',
+      },
+      {
+        classification: 'strict',
+        file: 'apps/web/app/hooks/useToggle.ts',
+        name: 'classifies a useState/useMemo-only hook STRICT',
+        source:
+          "import {useState, useCallback} from 'react';\n" +
           'export const useToggle = () => {\n' +
           '  const [on, setOn] = useState(false);\n' +
           '  const toggle = useCallback(() => setOn((v) => !v), []);\n' +
-          '  return {on, toggle};\n};\n'
-      );
-
-      expect(result.classification).toBe('strict');
-    });
-
-    test('classifies a hook using only the allowlisted matchMedia STRICT', () => {
-      const result = classifySource(
-        'apps/web/app/hooks/useMedia.ts',
-        "import {useState} from 'react';\n" +
+          '  return {on, toggle};\n};\n',
+      },
+      {
+        classification: 'strict',
+        file: 'apps/web/app/hooks/useMedia.ts',
+        name: 'classifies a hook using only the allowlisted matchMedia STRICT',
+        source:
+          "import {useState} from 'react';\n" +
           'export const useMedia = (q: string) => {\n' +
           '  const [match] = useState(() => globalThis.matchMedia(q).matches);\n' +
-          '  return match;\n};\n'
-      );
-
-      expect(result.classification).toBe('strict');
-    });
-
-    test('routes a use* export under app/utils through condition 3, not 2/4', () => {
-      // A hook is a hook even under app/utils/**: it is judged by its call
-      // surface (condition 3), and a plain useState hook is STRICT.
-      const result = classifySource(
-        'apps/web/app/utils/useCounter.ts',
-        "import {useState} from 'react';\n" +
+          '  return match;\n};\n',
+      },
+      {
+        // A hook is a hook even under app/utils/**: judged by its call
+        // surface, and a plain useState hook is STRICT.
+        classification: 'strict',
+        file: 'apps/web/app/utils/useCounter.ts',
+        name: 'routes a use* export under app/utils through condition 3, not 2/4',
+        source:
+          "import {useState} from 'react';\n" +
           'export const useCounter = () => {\n' +
           '  const [n, setN] = useState(0);\n' +
-          '  return {n, inc: () => setN((v) => v + 1)};\n};\n'
-      );
-
-      expect(result.classification).toBe('strict');
-    });
+          '  return {n, inc: () => setN((v) => v + 1)};\n};\n',
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/hooks/useBattery.ts',
+        name: 'classifies a hook calling a DOM API absent from the allowlist EMERGENT',
+        reason: /unknown DOM API|allowlist/i,
+        source:
+          'export const useBattery = () => {\n' +
+          '  return globalThis.navigator.getBattery();\n};\n',
+      },
+    ]);
   });
 
   describe('condition 4: no public async I/O export', () => {
-    test('classifies a public async export wrapping fetch EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/services/example/load.ts',
-        'export const load = async (url: string): Promise<Response> =>\n' +
-          '  fetch(url);\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-    });
-
-    test('classifies a public async setTimeout-as-sleep export EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/services/example/sleep.ts',
-        'export const sleep = async (ms: number): Promise<void> =>\n' +
-          '  new Promise((resolve) => setTimeout(resolve, ms));\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-    });
-  });
-
-  describe('versioned DOM-API allowlist + unknown-API default', () => {
-    test('classifies a hook calling a DOM API absent from the allowlist EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/hooks/useBattery.ts',
-        'export const useBattery = () => {\n' +
-          '  return globalThis.navigator.getBattery();\n};\n'
-      );
-
-      expect(result.classification).toBe('emergent');
-      expect(result.reasons.join(' ')).toMatch(/unknown DOM API|allowlist/i);
-    });
+    eachSourceCase([
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/services/example/load.ts',
+        name: 'classifies a public async export wrapping fetch EMERGENT',
+        source:
+          'export const load = async (url: string): Promise<Response> =>\n' +
+          '  fetch(url);\n',
+      },
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/services/example/sleep.ts',
+        name: 'classifies a public async setTimeout-as-sleep export EMERGENT',
+        source:
+          'export const sleep = async (ms: number): Promise<void> =>\n' +
+          '  new Promise((resolve) => setTimeout(resolve, ms));\n',
+      },
+    ]);
   });
 
   describe('route tests', () => {
     const testSource =
       "import {expect, test} from 'vitest';\ntest('x', () => { expect(1).toBe(1); });\n";
 
-    test('classifies a test in a route-tests tests folder as ROUTE with a reason', () => {
-      const result = classifySource(
-        'apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts',
-        testSource
-      );
-
-      expect(result.classification).toBe('route');
-      expect(result.reasons.join(' ')).toMatch(/route test/);
-    });
-
-    test.each([
-      'apps/web/app/route-tests/orders/refuses.test.ts',
-      'apps/web/app/route-tests/orders/tests/refuses.spec.ts',
-      'apps/web/app/other/orders/tests/refuses.test.ts',
-    ])('does not classify %s as ROUTE', (candidatePath) => {
-      const result = classifySource(candidatePath, testSource);
-
-      expect(result.classification).toBe('emergent');
-    });
+    eachSourceCase([
+      {
+        classification: 'route',
+        file: 'apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts',
+        name: 'classifies a test in a route-tests tests folder as ROUTE with a reason',
+        reason: /route test/,
+        source: testSource,
+      },
+      ...[
+        'apps/web/app/route-tests/orders/refuses.test.ts',
+        'apps/web/app/route-tests/orders/tests/refuses.spec.ts',
+        'apps/web/app/other/orders/tests/refuses.test.ts',
+      ].map((candidatePath) => ({
+        classification: 'emergent' as const,
+        file: candidatePath,
+        name: `does not classify ${candidatePath} as ROUTE`,
+        source: testSource,
+      })),
+    ]);
   });
 
   describe('story files', () => {
@@ -399,17 +393,27 @@ describe('classify-determinism', () => {
       /story file: a \*\.stories\.tsx is emergent regardless of path/;
     const pureSource = 'export const double = (n: number): number => n * 2;\n';
 
-    test.each([
-      'apps/web/app/utils/tests/notify.stories.tsx',
-      'apps/web/app/services/api/tests/client.stories.tsx',
-      'apps/web/app/hooks/tests/use-thing.stories.tsx',
-      'apps/web/app/components/Foo/tests/index.stories.tsx',
-    ])('classifies %s EMERGENT with the story reason', (storyPath) => {
-      const result = classifySource(storyPath, pureSource);
-
-      expect(result.classification).toBe('emergent');
-      expect(result.reasons.join(' ')).toMatch(STORY_REASON);
-    });
+    eachSourceCase([
+      ...[
+        'apps/web/app/utils/tests/notify.stories.tsx',
+        'apps/web/app/services/api/tests/client.stories.tsx',
+        'apps/web/app/hooks/tests/use-thing.stories.tsx',
+        'apps/web/app/components/Foo/tests/index.stories.tsx',
+      ].map((storyPath) => ({
+        classification: 'emergent' as const,
+        file: storyPath,
+        name: `classifies ${storyPath} EMERGENT with the story reason`,
+        reason: STORY_REASON,
+        source: pureSource,
+      })),
+      {
+        classification: 'emergent',
+        file: 'apps/web/app/utils/tests/pure.stories.ts',
+        name: 'classifies a .stories.ts file EMERGENT',
+        reason: STORY_REASON,
+        source: pureSource,
+      },
+    ]);
 
     test('classifies a pure story under a strict-candidate folder EMERGENT while the same content in a .ts file is STRICT', () => {
       const asStory = classifySource(
@@ -420,16 +424,6 @@ describe('classify-determinism', () => {
 
       expect(asStory.classification).toBe('emergent');
       expect(asModule.classification).toBe('strict');
-    });
-
-    test('classifies a .stories.ts file EMERGENT', () => {
-      const result = classifySource(
-        'apps/web/app/utils/tests/pure.stories.ts',
-        pureSource
-      );
-
-      expect(result.classification).toBe('emergent');
-      expect(result.reasons.join(' ')).toMatch(STORY_REASON);
     });
   });
 
@@ -482,87 +476,88 @@ describe('classify-determinism', () => {
         input: PURE,
       });
 
-    test("a literal path-'.' registry keeps today's layout: root app/utils is strict", () => {
-      withTree(
-        {
+    const registryRows: {
+      classification: string;
+      files: Record<string, string>;
+      name: string;
+      reasonFragments: string[];
+      target: string;
+    }[] = [
+      {
+        classification: 'strict',
+        files: {
           '.gaia/packages.json': '[{"name":"web","path":"."}]',
           'gaia.package.json': descriptor(['app/utils/**']),
         },
-        (cwd) => {
-          const result = run(cwd, 'app/utils/x.ts');
-
-          expect(result.status).toBe(0);
-          expect(JSON.parse(result.stdout).classification).toBe('strict');
-        }
-      );
-    });
-
-    test('a descriptor whose strict globs match nothing classifies the same file emergent (the guard can fail)', () => {
-      withTree(
-        {
+        name: "a literal path-'.' registry keeps today's layout: root app/utils is strict",
+        reasonFragments: [],
+        target: 'app/utils/x.ts',
+      },
+      {
+        classification: 'emergent',
+        files: {
           '.gaia/packages.json': '[{"name":"web","path":"apps/web"}]',
           'apps/web/gaia.package.json': descriptor(['nomatch/**']),
         },
-        (cwd) => {
-          const result = run(cwd, 'apps/web/app/utils/x.ts');
+        name: 'a descriptor whose strict globs match nothing classifies the same file emergent (the guard can fail)',
+        reasonFragments: ['path not in apps/web/nomatch/**'],
+        target: 'apps/web/app/utils/x.ts',
+      },
+      {
+        classification: 'emergent',
+        files: {'.gaia/packages.json': '[]'},
+        name: 'an empty registry has no strict candidates, so a pure file classifies emergent',
+        reasonFragments: [],
+        target: 'apps/web/app/utils/x.ts',
+      },
+    ];
+
+    test.each(registryRows.map((row) => [row.name, row] as const))(
+      '%s',
+      (_name, row) => {
+        withTree(row.files, (cwd) => {
+          const result = run(cwd, row.target);
 
           expect(result.status).toBe(0);
           const parsed = JSON.parse(result.stdout);
 
-          expect(parsed.classification).toBe('emergent');
-          expect(parsed.reasons.join(' ')).toContain(
-            'path not in apps/web/nomatch/**'
-          );
-        }
-      );
-    });
+          expect(parsed.classification).toBe(row.classification);
 
-    test('an empty registry has no strict candidates, so a pure file classifies emergent', () => {
-      withTree({'.gaia/packages.json': '[]'}, (cwd) => {
-        const result = run(cwd, 'apps/web/app/utils/x.ts');
+          for (const fragment of row.reasonFragments) {
+            expect(parsed.reasons.join(' ')).toContain(fragment);
+          }
+        });
+      }
+    );
 
-        expect(result.status).toBe(0);
-        expect(JSON.parse(result.stdout).classification).toBe('emergent');
-      });
-    });
-
-    test('no registry and no descriptor exits 7 naming the restore step', () => {
-      withTree({}, (cwd) => {
-        const result = run(cwd, 'apps/web/app/utils/x.ts');
-
-        expect(result.status).toBe(7);
-        expect(JSON.parse(result.stdout).error).toContain(
-          'git checkout origin/main -- apps/web/gaia.package.json'
-        );
-      });
-    });
-
-    test('an unparseable registry exits 7 with {"error"} on stdout and classifies nothing', () => {
-      withTree({'.gaia/packages.json': '{'}, (cwd) => {
+    test.each(
+      [
+        {
+          error: 'git checkout origin/main -- apps/web/gaia.package.json',
+          files: {} as Record<string, string>,
+          name: 'no registry and no descriptor exits 7 naming the restore step',
+        },
+        {
+          error: /^gaia-packages: \.gaia\/packages\.json is malformed/,
+          files: {'.gaia/packages.json': '{'},
+          name: 'an unparseable registry exits 7 with {"error"} on stdout and classifies nothing',
+        },
+        {
+          error: 'apps/web/gaia.package.json is missing',
+          files: {'.gaia/packages.json': '[{"name":"web","path":"apps/web"}]'},
+          name: 'a registered package with no descriptor exits 7 with {"error"} naming the descriptor',
+        },
+      ].map((row) => [row.name, row] as const)
+    )('%s', (_name, row) => {
+      withTree(row.files, (cwd) => {
         const result = run(cwd, 'apps/web/app/utils/x.ts');
 
         expect(result.status).toBe(7);
         const parsed = JSON.parse(result.stdout);
 
-        expect(parsed.error).toMatch(
-          /^gaia-packages: \.gaia\/packages\.json is malformed/
-        );
+        expect(parsed.error).toMatch(row.error);
         expect(parsed.classification).toBeUndefined();
       });
-    });
-
-    test('a registered package with no descriptor exits 7 with {"error"} naming the descriptor', () => {
-      withTree(
-        {'.gaia/packages.json': '[{"name":"web","path":"apps/web"}]'},
-        (cwd) => {
-          const result = run(cwd, 'apps/web/app/utils/x.ts');
-
-          expect(result.status).toBe(7);
-          expect(JSON.parse(result.stdout).error).toContain(
-            'apps/web/gaia.package.json is missing'
-          );
-        }
-      );
     });
   });
 });

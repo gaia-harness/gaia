@@ -16,23 +16,24 @@ afterEach(() => {
 });
 
 describe('judgeStoryFile', () => {
-  test('absent from the report is not loaded', () => {
-    expect(judgeStoryFile('a', undefined)).toMatchObject({
-      loaded: false,
-      passed: false,
-    });
-  });
-
-  test('failed with no assertions is not loaded', () => {
-    expect(
-      judgeStoryFile('a', {assertionResults: [], status: 'failed'})
-    ).toMatchObject({loaded: false});
-  });
-
-  test('zero tests is not loaded', () => {
-    expect(
-      judgeStoryFile('a', {assertionResults: [], status: 'passed'})
-    ).toMatchObject({loaded: false, tests: 0});
+  test.each([
+    [
+      'absent from the report is not loaded',
+      undefined,
+      {loaded: false, passed: false},
+    ],
+    [
+      'failed with no assertions is not loaded',
+      {assertionResults: [], status: 'failed'},
+      {loaded: false},
+    ],
+    [
+      'zero tests is not loaded',
+      {assertionResults: [], status: 'passed'},
+      {loaded: false, tests: 0},
+    ],
+  ])('%s', (_name, report, expected) => {
+    expect(judgeStoryFile('a', report)).toMatchObject(expected);
   });
 
   test('a failed assertion is loaded, not passed, and named', () => {

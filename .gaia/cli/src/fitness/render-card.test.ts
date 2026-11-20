@@ -129,11 +129,59 @@ describe('renderCard', () => {
     expect(card).toContain('GAIA FITNESS');
   });
 
-  test('every line shares one width so the borders align', () => {
-    const widths = lineWidths(renderCard(mixedReport(), 80));
+  test.each<[string, () => FitnessReport, number, string]>([
+    ['every line shares one width so the borders align', mixedReport, 80, ''],
+    [
+      'truncates an over-long file path while keeping borders aligned',
+      () => ({
+        ...mixedReport(),
+        findings: [
+          {
+            category: 'hooks',
+            file: `.claude/${'nested/'.repeat(40)}hook.sh`,
+            line: 9,
+            remediation: 'fix it',
+            rule_id: 'hooks.script-missing',
+            severity: 'error',
+          },
+        ],
+      }),
+      80,
+      '...',
+    ],
+    [
+      'keeps a mixed-severity note aligned and summarized',
+      () => ({
+        ...mixedReport(),
+        findings: [
+          {
+            category: 'settings',
+            file: '.claude/settings.json',
+            line: 3,
+            remediation: 'secret-shaped value in env block',
+            rule_id: 'settings.env.secret',
+            severity: 'error',
+          },
+          {
+            category: 'settings',
+            file: '.claude/settings.json',
+            line: 9,
+            remediation: 'redundant permission entry',
+            rule_id: 'settings.permissions.redundant',
+            severity: 'info',
+          },
+        ],
+      }),
+      100,
+      '1 error, 1 info',
+    ],
+  ])('%s', (_name, makeReport, width, fragment) => {
+    const card = renderCard(makeReport(), width);
+    const widths = lineWidths(card);
 
     expect(allEqual(widths)).toBe(true);
     expect(widths[0]).toBeGreaterThan(0);
+    expect(card).toContain(fragment);
   });
 
   test('opens and closes with a full border bar', () => {
@@ -180,52 +228,6 @@ describe('renderCard', () => {
     expect(
       Math.max(...lineWidths(renderCard(report, 500)))
     ).toBeLessThanOrEqual(WIDTH_CAP_PLUS_BORDER);
-  });
-
-  test('truncates an over-long file path while keeping borders aligned', () => {
-    const report = mixedReport();
-    report.findings = [
-      {
-        category: 'hooks',
-        file: `.claude/${'nested/'.repeat(40)}hook.sh`,
-        line: 9,
-        remediation: 'fix it',
-        rule_id: 'hooks.script-missing',
-        severity: 'error',
-      },
-    ];
-
-    const card = renderCard(report, 80);
-
-    expect(card).toContain('...');
-    expect(allEqual(lineWidths(card))).toBe(true);
-  });
-
-  test('keeps a mixed-severity note aligned and summarized', () => {
-    const report = mixedReport();
-    report.findings = [
-      {
-        category: 'settings',
-        file: '.claude/settings.json',
-        line: 3,
-        remediation: 'secret-shaped value in env block',
-        rule_id: 'settings.env.secret',
-        severity: 'error',
-      },
-      {
-        category: 'settings',
-        file: '.claude/settings.json',
-        line: 9,
-        remediation: 'redundant permission entry',
-        rule_id: 'settings.permissions.redundant',
-        severity: 'info',
-      },
-    ];
-
-    const card = renderCard(report, 100);
-
-    expect(card).toContain('1 error, 1 info');
-    expect(allEqual(lineWidths(card))).toBe(true);
   });
 
   test('labels the claudemd category as CLAUDE.md in its row and findings header', () => {

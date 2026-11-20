@@ -160,100 +160,119 @@ const FLAG_COMBINATIONS: SyncFlags[] = [
   },
 ];
 
+type CreateSetRow = {
+  expected: string[];
+  name: string;
+  options: Parameters<typeof plan>[0];
+};
+
 describe('labels/sync planSync create sets', () => {
-  test('an empty adopter repo with every feature on', () => {
-    expect(createNames(plan({}))).toEqual([
-      'bug',
-      'debt:spec-active',
-      'debt:spec-pending',
-      'difficulty:easy',
-      'difficulty:hard',
-      'difficulty:medium',
-      'documentation',
-      'enhancement',
-      'footprint:narrow',
-      'footprint:spec',
-      'footprint:wide',
-      'in-progress',
-      'needs-human',
-      'security',
-      'severity:critical',
-      'severity:investigate',
-      'severity:major',
-      'severity:minor',
-      'tech-debt',
-      'wontfix',
-    ]);
-  });
+  const createSetRows: CreateSetRow[] = [
+    {
+      expected: [
+        'bug',
+        'debt:spec-active',
+        'debt:spec-pending',
+        'difficulty:easy',
+        'difficulty:hard',
+        'difficulty:medium',
+        'documentation',
+        'enhancement',
+        'footprint:narrow',
+        'footprint:spec',
+        'footprint:wide',
+        'in-progress',
+        'needs-human',
+        'security',
+        'severity:critical',
+        'severity:investigate',
+        'severity:major',
+        'severity:minor',
+        'tech-debt',
+        'wontfix',
+      ],
+      name: 'an empty adopter repo with every feature on',
+      options: {},
+    },
+    {
+      expected: [
+        'bug',
+        'documentation',
+        'enhancement',
+        'in-progress',
+        'needs-human',
+        'security',
+        'wontfix',
+      ],
+      name: 'tech-debt off leaves the always-on set plus the dependabot set',
+      options: {features: ['dependabot', 'forensics']},
+    },
+    {
+      expected: [
+        'audience:adopter',
+        'audience:maintainer',
+        'auto-fixable',
+        'bug',
+        'debt:spec-active',
+        'debt:spec-pending',
+        'difficulty:easy',
+        'difficulty:hard',
+        'difficulty:medium',
+        'documentation',
+        'enhancement',
+        'footprint:narrow',
+        'footprint:spec',
+        'footprint:wide',
+        'gaia-forensics',
+        'gaia-triaged',
+        'in-progress',
+        'needs-human',
+        'non-issue',
+        'security',
+        'severity:critical',
+        'severity:investigate',
+        'severity:major',
+        'severity:minor',
+        'tech-debt',
+        'wontfix',
+      ],
+      name: 'the maintainer audience creates the adopter set as well as its own',
+      options: {audience: 'maintainer'},
+    },
+    {
+      expected: [
+        'auto-fixable',
+        'bug',
+        'documentation',
+        'enhancement',
+        'gaia-forensics',
+        'gaia-triaged',
+        'in-progress',
+        'needs-human',
+        'non-issue',
+        'security',
+        'wontfix',
+      ],
+      name: 'the maintainer audience with tech-debt off drops the audience axis',
+      options: {
+        audience: 'maintainer',
+        features: ['dependabot', 'forensics'],
+      },
+    },
+  ];
+
+  test.each(createSetRows.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {expected, options}) => {
+      expect(createNames(plan(options))).toEqual(expected);
+    }
+  );
 
   test('dependabot off drops the security label', () => {
     const names = createNames(plan({features: ['tech-debt', 'forensics']}));
 
     expect(names).not.toContain('security');
     expect(names).toHaveLength(19);
-  });
-
-  test('tech-debt off leaves the always-on set plus the dependabot set', () => {
-    expect(createNames(plan({features: ['dependabot', 'forensics']}))).toEqual([
-      'bug',
-      'documentation',
-      'enhancement',
-      'in-progress',
-      'needs-human',
-      'security',
-      'wontfix',
-    ]);
-  });
-
-  test('the maintainer audience creates the adopter set as well as its own', () => {
-    expect(createNames(plan({audience: 'maintainer'}))).toEqual([
-      'audience:adopter',
-      'audience:maintainer',
-      'auto-fixable',
-      'bug',
-      'debt:spec-active',
-      'debt:spec-pending',
-      'difficulty:easy',
-      'difficulty:hard',
-      'difficulty:medium',
-      'documentation',
-      'enhancement',
-      'footprint:narrow',
-      'footprint:spec',
-      'footprint:wide',
-      'gaia-forensics',
-      'gaia-triaged',
-      'in-progress',
-      'needs-human',
-      'non-issue',
-      'security',
-      'severity:critical',
-      'severity:investigate',
-      'severity:major',
-      'severity:minor',
-      'tech-debt',
-      'wontfix',
-    ]);
-  });
-
-  test('the maintainer audience with tech-debt off drops the audience axis', () => {
-    const names = createNames(
-      plan({audience: 'maintainer', features: ['dependabot', 'forensics']})
-    );
-
-    expect(names).toEqual([
-      'auto-fixable',
-      'bug',
-      'documentation',
-      'enhancement',
-      'gaia-forensics',
-      'gaia-triaged',
-      'in-progress',
-      'needs-human',
-      'non-issue',
-      'security',
-      'wontfix',
-    ]);
   });
 });
 
@@ -313,108 +332,100 @@ describe('labels/sync planSync rename', () => {
     }
   });
 
-  test('a rename edits the old name rather than recreating it', () => {
+  test.each(
+    [
+      {
+        expected: [
+          'label',
+          'edit',
+          'needs-human-review',
+          '--name',
+          'needs-human',
+        ],
+        name: 'a rename edits the old name rather than recreating it',
+        registryColor: null,
+      },
+      {
+        expected: [
+          'label',
+          'edit',
+          'needs-human-review',
+          '--name',
+          'needs-human',
+          '--color',
+          'd93f0b',
+        ],
+        name: 'a rename carrying a color edits both in one gh call',
+        registryColor: 'd93f0b',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, registryColor}) => {
     expect(
       mutationFor(
         {
           from: 'needs-human-review',
           kind: 'rename',
-          registryColor: null,
+          registryColor,
           to: 'needs-human',
         },
         NO_FLAGS
       )
-    ).toEqual(['label', 'edit', 'needs-human-review', '--name', 'needs-human']);
+    ).toEqual(expected);
   });
 
   // The new name is absent, so nothing plans `drift-color` for it, and without
-  // this the leftover reports next run as drift `--adopt` alone would clear.
-  // These inputs are also what an operator's own recolor of the old name
-  // produces, and the plan cannot tell the two apart: the registry wins here,
-  // so that recolor does not survive the rename. That is the accepted cost.
-  test('a rename carries the registry color when the live color differs', () => {
-    const actions = plan({
-      live: [{color: '2da44e', description: '', name: 'needs-human-review'}],
-    });
-
-    expect(kinds(actions, 'rename')).toEqual([
+  // the carried registry color the leftover reports next run as drift
+  // `--adopt` alone would clear. The registry wins here, so an operator's own
+  // recolor of the old name does not survive the rename. An unmanaged entry
+  // keeps its color: that is the operator's territory whatever else reconciles.
+  test.each(
+    [
       {
-        from: 'needs-human-review',
-        kind: 'rename',
-        registryColor: 'd93f0b',
-        to: 'needs-human',
-      },
-    ]);
-  });
-
-  test('a rename plans no recolor when the live color already matches', () => {
-    const actions = plan({
-      live: [{color: 'd93f0b', description: '', name: 'needs-human-review'}],
-    });
-
-    expect(kinds(actions, 'rename')).toEqual([
-      {
-        from: 'needs-human-review',
-        kind: 'rename',
-        registryColor: null,
-        to: 'needs-human',
-      },
-    ]);
-  });
-
-  test('an uppercase live color is not a recolor', () => {
-    const actions = plan({
-      live: [{color: 'D93F0B', description: '', name: 'needs-human-review'}],
-    });
-
-    expect(kinds(actions, 'rename')).toEqual([
-      {
-        from: 'needs-human-review',
-        kind: 'rename',
-        registryColor: null,
-        to: 'needs-human',
-      },
-    ]);
-  });
-
-  // Colors are the operator's territory for an unmanaged entry whatever else
-  // reconciles, so the rename does not become a way around that.
-  test('an unmanaged entry is renamed without its color', () => {
-    const actions = plan({
-      live: [{color: '000000', description: '', name: 'debt:unmanaged-old'}],
-      registry: unmanagedRenameRegistry,
-    });
-
-    expect(kinds(actions, 'rename')).toEqual([
-      {
-        from: 'debt:unmanaged-old',
-        kind: 'rename',
-        registryColor: null,
-        to: 'debt:unmanaged-new',
-      },
-    ]);
-  });
-
-  test('a rename carrying a color edits both in one gh call', () => {
-    expect(
-      mutationFor(
-        {
+        expected: {
           from: 'needs-human-review',
           kind: 'rename',
           registryColor: 'd93f0b',
           to: 'needs-human',
         },
-        NO_FLAGS
-      )
-    ).toEqual([
-      'label',
-      'edit',
-      'needs-human-review',
-      '--name',
-      'needs-human',
-      '--color',
-      'd93f0b',
-    ]);
+        live: {color: '2da44e', description: '', name: 'needs-human-review'},
+        name: 'a rename carries the registry color when the live color differs',
+      },
+      {
+        expected: {
+          from: 'needs-human-review',
+          kind: 'rename',
+          registryColor: null,
+          to: 'needs-human',
+        },
+        live: {color: 'd93f0b', description: '', name: 'needs-human-review'},
+        name: 'a rename plans no recolor when the live color already matches',
+      },
+      {
+        expected: {
+          from: 'needs-human-review',
+          kind: 'rename',
+          registryColor: null,
+          to: 'needs-human',
+        },
+        live: {color: 'D93F0B', description: '', name: 'needs-human-review'},
+        name: 'an uppercase live color is not a recolor',
+      },
+      {
+        expected: {
+          from: 'debt:unmanaged-old',
+          kind: 'rename',
+          registryColor: null,
+          to: 'debt:unmanaged-new',
+        },
+        live: {color: '000000', description: '', name: 'debt:unmanaged-old'},
+        name: 'an unmanaged entry is renamed without its color',
+        registry: unmanagedRenameRegistry,
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, live, ...row}) => {
+    const actions = plan({live: [live], registry: row.registry});
+
+    expect(kinds(actions, 'rename')).toEqual([expected]);
   });
 
   // `--adopt` buys consent to overwrite a color the operator chose. A rename
@@ -436,26 +447,29 @@ describe('labels/sync planSync rename', () => {
     }
   });
 
-  test('the report names the recolor the rename will apply', () => {
-    expect(
-      describeAction({
-        from: 'needs-human-review',
-        kind: 'rename',
+  test.each(
+    [
+      {
+        expected:
+          'rename needs-human-review to needs-human, recoloring to d93f0b',
+        name: 'the report names the recolor the rename will apply',
         registryColor: 'd93f0b',
-        to: 'needs-human',
-      })
-    ).toBe('rename needs-human-review to needs-human, recoloring to d93f0b');
-  });
-
-  test('a rename with no recolor reports the rename alone', () => {
+      },
+      {
+        expected: 'rename needs-human-review to needs-human',
+        name: 'a rename with no recolor reports the rename alone',
+        registryColor: null,
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, registryColor}) => {
     expect(
       describeAction({
         from: 'needs-human-review',
         kind: 'rename',
-        registryColor: null,
+        registryColor,
         to: 'needs-human',
       })
-    ).toBe('rename needs-human-review to needs-human');
+    ).toBe(expected);
   });
 });
 
@@ -704,28 +718,30 @@ describe('labels/sync unknown live labels', () => {
 });
 
 describe('labels/sync gh outcome classification', () => {
-  test('a zero exit is success', () => {
-    expect(classifyGhResult({exitCode: 0, stderr: '', stdout: ''})).toBe('ok');
-  });
-
-  test('an HTTP 403 degrades rather than failing', () => {
-    expect(
-      classifyGhResult({
-        exitCode: 1,
-        stderr: 'HTTP 403: Resource not accessible by integration',
-        stdout: '',
-      })
-    ).toBe('degraded');
-  });
-
-  test('any other non-zero exit stays a real failure', () => {
-    expect(
-      classifyGhResult({
-        exitCode: 1,
-        stderr: 'HTTP 404: Not Found',
-        stdout: '',
-      })
-    ).toBe('failed');
+  test.each(
+    [
+      {
+        expected: 'ok',
+        name: 'a zero exit is success',
+        result: {exitCode: 0, stderr: '', stdout: ''},
+      },
+      {
+        expected: 'degraded',
+        name: 'an HTTP 403 degrades rather than failing',
+        result: {
+          exitCode: 1,
+          stderr: 'HTTP 403: Resource not accessible by integration',
+          stdout: '',
+        },
+      },
+      {
+        expected: 'failed',
+        name: 'any other non-zero exit stays a real failure',
+        result: {exitCode: 1, stderr: 'HTTP 404: Not Found', stdout: ''},
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, result}) => {
+    expect(classifyGhResult(result)).toBe(expected);
   });
 
   test('a degraded mutation still names the exact manual command', () => {
