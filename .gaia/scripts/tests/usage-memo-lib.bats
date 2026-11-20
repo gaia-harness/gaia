@@ -227,7 +227,7 @@ load_reason() {
   last_trace
 }
 
-@test "load: cold reasons and a valid memo, as one case table" {
+@test "load: each cold reason (missing, unreadable, schema, stamp, sum, shape) and a valid memo" {
   local body='{"derive":{},"models":[],"stores":{}}' first_model old_stamp
   gaia_usage_memo_stamp
   rm -f "$MEMO"

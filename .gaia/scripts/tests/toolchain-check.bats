@@ -92,7 +92,7 @@ has_line() {
   done
 }
 
-@test "a tool short of its floor blocks: git, pnpm, absent jq, lsof missing, unreadable version" {
+@test "a tool below its floor, absent or unreadable blocks: git and pnpm below, jq and lsof absent, an unreadable jq version" {
   reset_stubs
   stub git 'git version 2.39.5'
   check --platform linux --os-id debian
@@ -218,7 +218,7 @@ route_absent() {
 @test "ROUTE and GUIDE lines per platform family and tool (run, user, terminal, none)" {
   local family platform route_count
 
-  # every git route names a package source, on every platform family
+  # every platform family prints a GUIDE git line that says latest git
   reset_stubs
   stub git 'git version 2.39.5'
   for family in 'darwin' 'windows' 'linux ubuntu' 'linux debian' 'linux fedora' 'linux rhel' 'linux arch' 'linux alpine' 'linux gentoo'; do

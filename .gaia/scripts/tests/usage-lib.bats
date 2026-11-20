@@ -142,8 +142,6 @@ expect_equal() {
   expect_equal "null branch" "$output" '{"key":"session:S3","inherit":false}' || return 1
 }
 
-# ---------- 4. default branch fallback ----------
-
 @test "key: a command-substitution branch is hashed and runs nothing" {
   cd "$TEMPORARY_DIRECTORY"
   local key_json_output
@@ -152,6 +150,8 @@ expect_equal() {
   [ ! -e "$TEMPORARY_DIRECTORY/pwned" ]
   [ ! -e "$REPO_ROOT/pwned" ]
 }
+
+# ---------- 4. default branch fallback ----------
 
 @test "default branch resolution: master only, main and master, neither" {
   make_repo "$TEMPORARY_DIRECTORY/dm" master
@@ -192,7 +192,7 @@ is_member() {
   [ "$(is_member "" "$roots")" = false ]
 }
 
-@test "candidate directories: decoy dropped, main and worktree dirs listed, encoding" {
+@test "candidate directories: decoy dropped, main, worktree and outside-worktree dirs listed, encoding" {
   local main="$TEMPORARY_DIRECTORY/main" encoded_path projects_directory="$TEMPORARY_DIRECTORY/projects" got
 
   # case: decoy dropped; main and worktree-prefixed project dirs listed

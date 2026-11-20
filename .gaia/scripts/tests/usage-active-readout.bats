@@ -320,7 +320,7 @@ check_line() {
   [ "$output" = "$2" ] || { echo "case $1: got: $output" >&2; return 1; }
 }
 
-@test "the line readout shows active time per the flushed transcript, case table of turn shapes" {
+@test "the line readout's active time for each turn shape in the flushed transcript" {
   # a seven-minute tool call that writes nothing while it runs counts in full
   prompt 10:00:00
   skill 10:00:00 gaia-spec
@@ -553,7 +553,7 @@ active_pairs() { jq -c '[.. | objects | select(has("elapsed_seconds")) | [.activ
   [ "$(jq -c '[.active_seconds, .active_lower_bound, .audit.active_seconds, .audit.active_lower_bound, .audit.rest.active_seconds, .audit.rest.active_lower_bound]' <<<"$output")" = '[900,false,300,false,900,false]' ]
 }
 
-@test "a one-row box or line shows the active figure, as a minimum with the Note over mixed spend" {
+@test "a one-row box or line shows the active figure: a minimum with the Note over mixed spend, exact over covered spend" {
   build_mixed
   run usage initiative "$REF" --line
   [ "$status" -eq 0 ] || { echo "case mixed line: status $status" >&2; return 1; }

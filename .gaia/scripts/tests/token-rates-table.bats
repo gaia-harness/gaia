@@ -68,7 +68,7 @@ assert_one_window() {
   [ "$(jq -r --arg model "$1" '.models[$model] | length' "$TABLE")" -eq 1 ] || { echo "case $1: not exactly one window" >&2; return 1; }
 }
 
-@test "shipped table: each model prices at its card rate (opus-5 5/25, opus-5-5 4/20, mythos-5, sonnet-5 2/10, sonnet-5-5 2/10 across the cut, haiku-5-5 0.1/0.5, fable-5-1 and mythos-5-1 10/50)" {
+@test "shipped table: each model prices at its card rate (opus-5 5/25, opus-5-5 4/20, mythos-5 10/50 (the fable-5 tier), sonnet-5 2/10, sonnet-5-5 2/10 across the cut, haiku-5-5 0.1/0.5, fable-5-1 and mythos-5-1 10/50)" {
   # Opus 5's 1M context carries no long-context premium, so a single window with
   # no effective_through is correct: the same rate must resolve at any date.
   assert_rate claude-opus-5 2026-07-30 "5 25" || return 1

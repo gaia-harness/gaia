@@ -3,9 +3,6 @@
 # Conformance suite for .gaia/scripts/update-state-line-lib.sh: the state-line
 # functions the update commands hand to gaia_refuse_if_worktree. Run under bash
 # 5 through .gaia/scripts/bats5.sh (see .claude/rules/bats-assertions.md).
-#
-# The expected-output case pins each function's exact line for a fixture cache,
-# under bash and zsh.
 
 setup() {
   LIBRARY_SCRIPT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)/update-state-line-lib.sh"
@@ -84,7 +81,7 @@ expected_matches() {
   return 0
 }
 
-@test "expected output: every fixture cache renders its exact line, under bash and zsh" {
+@test "expected output: every fixture cache renders its exact line, under bash and, when installed, zsh" {
   local shell_path
   expected_matches "$(command -v bash)" "$LIBRARY_SCRIPT" || { echo "case bash: differs" >&2; return 1; }
   if command -v zsh >/dev/null 2>&1; then

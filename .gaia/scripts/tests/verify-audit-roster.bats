@@ -421,9 +421,8 @@ YAML
 # is reported as parity-clean.
 
 @test "remit region shape: none, two, unbalanced, reversed each fail and are never reported parity-clean" {
-  # The reversed case: a single balanced pair (start=1, end=1) is not enough,
-  # since counting alone would read it as replaceable, which is the shape that
-  # made the writer destructive before it checked marker ORDER too.
+  # The reversed case: a single balanced pair (start=1, end=1) whose end sits
+  # above its start, which counting alone would read as replaceable.
   local shape slug agent_file fixture_directory
   for shape in strip:missing-remit-region duplicate:duplicate-remit-region unbalance:unbalanced-remit-region reverse:reversed-remit-region; do
     slug="${shape#*:}"

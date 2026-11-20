@@ -180,7 +180,7 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
 
 # --- 1. memo damage ----------------------------------------------------------
 
-@test "damage: a missing, garbled, stale-stamped or bad-sum memo reads cold and prints the pre-change bytes" {
+@test "damage: a missing, emptied, garbled, stale-stamped or bad-sum memo reads cold and prints the pre-change bytes" {
   local root bad="$BATS_TEST_TMPDIR/memo.bad"
   warm
   rm -f "$MEMO"
@@ -220,8 +220,6 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   check_same pr "$PR"
   assert_trace "path=cold reason=sum"
 }
-
-# --- 2. checksum self-check --------------------------------------------------
 
 # --- 3. escaped key backstop -------------------------------------------------
 

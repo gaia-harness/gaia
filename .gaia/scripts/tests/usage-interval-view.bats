@@ -111,7 +111,7 @@ interval_rows() {
   [ "$(jq -c '{tokens, elapsed_seconds, unpriced}' <<<"$output")" = '{"tokens":1100,"elapsed_seconds":1800,"unpriced":true}' ]
 }
 
-@test "the Cost line and duration format: millions to one decimal, dollars or cost unavailable, zero units dropped" {
+@test "the Cost line and duration format: millions to one decimal, dollars or cost unavailable, leading zero units dropped" {
   run render gaia_usage_cost_line 10600000 1.5 399
   [ "$status" -eq 0 ] || { echo "case cost line: exited $status"; return 1; }
   [ "$output" = 'Cost: 10.6M tokens, $1.50, 6m39s' ] || { echo "case cost line dollars: $output"; return 1; }

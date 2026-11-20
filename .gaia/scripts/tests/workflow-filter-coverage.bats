@@ -1196,12 +1196,12 @@ instantiate_glob() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "audit workflow filter outputs: frontend-only change arms nothing, install inputs arm commitlint, docs and hooks are scoped" {
+@test "audit workflow filter outputs: frontend-only change arms nothing, install inputs arm commitlint, harness docs, hooks, CLI source and wiki pages arm scoped and not code" {
   require_yaml_parser
   echo "case: a frontend-only change arms no leg"
   [ "$(filter_coverage filtermatch "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" code,scoped,sandbox,commitlint,protected-tests apps/web/app/root.tsx)" = "no-match" ]
 
-  echo "case: install inputs arm commitlint, docs, hooks, CLI source and wiki pages are change-scoped"
+  echo "case: install inputs arm commitlint; skills, commands, agents, hooks, CLI source and wiki pages arm scoped and not code"
   local workflow="$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" path gaps=""
   for path in pnpm-lock.yaml apps/web/package.json; do
     [ "$(filter_coverage filtermatch "$workflow" commitlint "$path")" = "match" ] || gaps="${gaps}  ${path} does not match commitlint"$'\n'

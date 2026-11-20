@@ -139,7 +139,7 @@ opener_case() {
   esac
 }
 
-@test "turn opener rules: each opener type opens a turn, and non-openers, out-of-root cwd and 10 ms duplicates do not" {
+@test "turn opener rules: each opener type opens a turn; non-openers and an out-of-root cwd do not; a dequeue and its prompt 10 ms later are one opener, two prompts are two" {
   local case_name check expected_checks
   for case_name in \
     "each opener type: a user prompt and a dequeue line with no cwd open a turn" \

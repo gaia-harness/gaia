@@ -61,7 +61,7 @@ check_tree() {
 }
 
 # bats test_tags=protected
-@test "DIRTY: a modified tracked file, an untracked file and a populated .gaia-merge each read DIRTY with the Next step line" {
+@test "DIRTY: a populated .gaia-merge, a modified tracked file and an untracked file each exit 1 and list the path" {
   # a populated .gaia-merge is an ordinary untracked directory
   mkdir "$TREE/.gaia-merge"
   printf 'p\n' >"$TREE/.gaia-merge/a.patch"

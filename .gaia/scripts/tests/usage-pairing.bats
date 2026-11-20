@@ -45,7 +45,7 @@ newer_start_rows() {
   close_row s1 2026-10-01T10:20:00Z spec:SPEC-301 gaia-spec
 }
 
-@test "start and close pairing: one case per start/close row sequence, each with its literal intervals" {
+@test "start and close pairing: each start/close row sequence pairs into its literal intervals" {
   echo "case: a newer start supersedes an older unclaimed one: the close pairs with the later start and the earlier is never claimed"
   run intervals < <(newer_start_rows)
   [ "$status" -eq 0 ]

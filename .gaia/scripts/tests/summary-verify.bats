@@ -57,7 +57,7 @@ EOF
 
 # --- 3. a SUMMARY.md missing any required part -------------------------------
 
-@test "a SUMMARY.md missing any required part exits 1 naming it (absent, empty, no frontmatter, no default key, no targets key, no H1, empty body)" {
+@test "a SUMMARY.md missing any required part exits 1 (absent, empty) and names the part (no frontmatter, no default key, no targets key, no H1, empty body)" {
   local case_name expected_message
   for case_name in absent empty no-frontmatter no-default no-targets no-h1 empty-body; do
     expected_message=""

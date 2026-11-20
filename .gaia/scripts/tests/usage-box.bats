@@ -132,7 +132,7 @@ row_figures() {
   straight_border "$short" || { echo "case border short" >&2; printf '%s\n' "$short" >&2; return 1; }
   straight_border "$wide" || { echo "case border wide" >&2; printf '%s\n' "$wide" >&2; return 1; }
   grep -qE '^\|  Spec: 123\.5M tokens, \$1234\.56, 12h3m9s +\|$' <<<"$wide" || { echo "case wide figures" >&2; printf '%s\n' "$wide" >&2; return 1; }
-  [ "$(border_columns "$short" | sort -u)" != "$(border_columns "$wide" | sort -u)" ] || { echo "case border widths differ" >&2; return 1; }
+  [ "$(border_columns "$short" | sort -u)" != "$(border_columns "$wide" | sort -u)" ] || { echo "case border columns: the short and wide boxes must differ" >&2; return 1; }
   # case: without an Execute row the width is set by Total
   [ "$(colon_columns "$short")" = 8 ] || { echo "case no-execute colon" >&2; printf '%s\n' "$short" >&2; return 1; }
   grep -qE '^\|  Spec: ' <<<"$short" || { echo "case no-execute Spec label" >&2; return 1; }

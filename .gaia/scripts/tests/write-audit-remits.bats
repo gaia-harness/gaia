@@ -197,8 +197,7 @@ YAML
 
     region_start_line="$(grep -n -- '^<!-- gaia:audit-remit:start -->$' "$agent_file" | head -1 | cut -d: -f1)"
     if [ "$shape" = heading ]; then
-      # The pre-existing content is present verbatim and in order: the heading,
-      # then the region, then the stub's own trailing prose.
+      # The heading, then the region, then the stub's own trailing prose.
       heading_line="$(grep -n -- '^## Remit and self-skip$' "$agent_file" | head -1 | cut -d: -f1)"
       prose_line="$(grep -n -- '^You own things\.$' "$agent_file" | head -1 | cut -d: -f1)"
       [ "$heading_line" -lt "$region_start_line" ] || { echo "case $shape: region not after the heading"; return 1; }
@@ -310,9 +309,6 @@ YAML
   region_sentence_lines "$default_agent" | grep -qF 'second precedence tier' || { echo "case release-skip: default sentence"; return 1; }
 }
 
-# Refusals: malformed markers are refused, not repaired, and a definition with
-# neither anchor is refused.
-
 @test "refusals leave the file byte-identical: duplicate start, missing end, reversed pair, neither anchor" {
   local base="$BATS_TEST_TMPDIR/refusal-base"
   fixture_root "$base" <<'YAML'
@@ -386,7 +382,7 @@ MD
     fi
   done
 
-  # Neither anchor present: refused, naming the member and the file.
+  # Neither anchor present: refused, naming the member.
   fixture_directory="$BATS_TEST_TMPDIR/refusal-no-anchor"
   fixture_root "$fixture_directory" noanchor <<'YAML'
 auditors:
@@ -423,7 +419,7 @@ auditors:
 YAML
 
   # Case unusable TMPDIR. Without the guard this is destructive and silent: an
-  # empty temporary directory makes the region body file unwritable, awk's
+  # empty $temporary_directory (mktemp's failed result) makes the region body file unwritable, awk's
   # getline cannot tell unreadable from empty, and every definition is
   # rewritten to a region holding the two markers and nothing between them,
   # with exit 0. The writer must refuse instead.

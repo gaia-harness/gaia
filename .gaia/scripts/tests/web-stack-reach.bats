@@ -85,7 +85,7 @@ assert_rule_locations() {
   done
 }
 
-@test "rule locations: web rule files resolve to web-stack members only (default, storefront, two-web case table)" {
+@test "rule locations: web rule files resolve to web-stack members only (default, storefront, two-web)" {
   echo "case: only apps/web is a web rule location on the default fixture"
   crossed_fixture_build "$FIXTURE"
   cp -R "$FIXTURE" "$BATS_TEST_TMPDIR/two-web"

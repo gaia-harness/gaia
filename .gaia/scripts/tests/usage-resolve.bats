@@ -343,7 +343,7 @@ derive() {
     shift; gaia_usage_derive_map "$@" | jq -cS .' _ "$SCRIPTS" "$@"
 }
 
-@test "derived edges: branch-name patterns link their parents (batch, hand-named issue, date and sync units link nothing)" {
+@test "derived edges: branch-name patterns link their parents (a batch, a hand-named issue branch); date-shaped and sync units link nothing" {
   echo "case: derived edges in one batch: each branch gets only its own parents, whatever came before it"
   run derive branch:debt/41-42-batch branch:debt/7-x branch:fix/foo branch:plan/spec-7 branch:feat/x \
     branch:spec-9-y branch:chore/12-z branch:plan/plan-5-q branch:debt/8 'branch:%0123456789abcdef' session:s

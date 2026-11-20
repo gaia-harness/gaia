@@ -52,7 +52,7 @@ reset_ledger() {
   mkdir -p "$TELEMETRY_DIRECTORY"
 }
 
-@test "usage.sh write refusals: each refused input exits with its code and writes nothing" {
+@test "usage.sh write refusals: each refused input exits with its code and writes nothing, and its accepted neighbor (research declare, released lock) writes" {
   # link: a ref failing the grammar exits 2
   seed_links
   run run_usage link spec:spec-001 research:x
