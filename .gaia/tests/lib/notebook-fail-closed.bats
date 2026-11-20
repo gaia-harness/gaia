@@ -13,6 +13,9 @@
 
 bats_require_minimum_version 1.5.0
 
+# shellcheck source=helpers/usage-gate.sh
+source "$BATS_TEST_DIRNAME/helpers/usage-gate.sh"
+
 # Builds the throwaway fixture repository the suite acts on. Called through a
 # wrapper so the whole-tree mark guard does not read the helper call as the
 # real tree.
@@ -107,12 +110,17 @@ _check_refusal() {
 # bats test_tags=protected
 @test "each notebook consumer refuses while the one-time move is pending, in a legacy and a no-catalog repository, and changes nothing" {
   local name template repo legacy_template no_catalog_template
-  # The legacy fixture seeds what each reaper could delete (a merged and an
-  # abandoned spec folder, a merged plan folder, a closed research folder), so a
-  # reaper that deleted before its readiness check would change the snapshot.
+  # The legacy fixture seeds what each reaper could delete (a merged spec and a
+  # merged plan folder, each with its consolidated SUMMARY.md and its close row
+  # in the usage ledger, an abandoned spec folder, a closed research folder), so
+  # a reaper that deleted before its readiness check would change the snapshot.
   legacy_template="$(_fixture_repository --legacy \
     --seed-spec-merged-folder SPEC-001 --seed-spec-abandoned-folder SPEC-002 \
     --seed-plan-folder PLAN-001 merged --seed-research old-topic closed)"
+  printf -- '---\nwiki_promote_default: ask\nwiki_promote_targets: []\n---\n# PLAN-001\n\nConsolidated summary body.\n' \
+    > "$legacy_template/.notebook/plans/PLAN-001/SUMMARY.md"
+  seed_close_row "$legacy_template/.gaia/local/telemetry" spec:SPEC-001 gaia-spec
+  seed_close_row "$legacy_template/.gaia/local/telemetry" plan:PLAN-001 gaia-plan
   no_catalog_template="$(_fixture_repository --no-catalog --legacy)"
   FIXTURES+=("$legacy_template" "$no_catalog_template")
   for name in spec-allocator plan-allocator spec-archive-merged plan-archive-merged \
