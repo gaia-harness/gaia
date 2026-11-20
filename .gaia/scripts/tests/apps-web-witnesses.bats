@@ -332,6 +332,19 @@ run_fixture() {
   jq -n --arg pw "printf 'pw\\n' >>$marker" --arg build "printf 'build\\n' >>$marker" \
     '{name: "web", private: true, scripts: {pw: $pw, build: $build}}' >"$RUN_REPO/apps/web/package.json"
   printf '#!/usr/bin/env bash\nprintf "smoke\\n" >>%s\n' "$marker" >"$RUN_REPO/.gaia/scripts/dev-smoke.sh"
+  # A pnpm stand-in for `pnpm -C <dir> <script>`: it runs <dir>'s package.json
+  # script, so the root scripts still have to name apps/web to reach the
+  # marker, without needing a pnpm the suite's CI leg may not install.
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat >"$BATS_TEST_TMPDIR/bin/pnpm" <<'STUB'
+#!/usr/bin/env bash
+[ "$1" = "-C" ] && [ "$#" -eq 3 ] || exit 64
+command_text="$(jq -er --arg script "$3" '.scripts[$script]' "$2/package.json")" || exit 1
+cd "$2" || exit 1
+exec sh -c "$command_text"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/pnpm"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH"
   git -C "$RUN_REPO" init -q -b main
   git -C "$RUN_REPO" add -A
   git -C "$RUN_REPO" commit -q -m base
