@@ -63,17 +63,12 @@ refute_code_match() {
   return 0
 }
 
-@test "V1: the version and digest pins parse out of the script" {
+# bats test_tags=protected
+@test "V2: the vendored archive exists for the pinned version and its digest matches the script's pin" {
+  local actual
   [ -n "$BATS_VERSION_PIN" ]
   [ -n "$BATS_SHA256_PIN" ]
-}
-
-@test "V2: a vendored archive exists for the pinned version" {
   [ -f "$VENDORED" ]
-}
-
-@test "V3: the vendored archive's digest matches the script's pin" {
-  local actual
   actual="$(file_sha256 "$VENDORED")"
   [ "$actual" = "$BATS_SHA256_PIN" ]
 }

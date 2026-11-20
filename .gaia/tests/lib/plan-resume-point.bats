@@ -19,18 +19,25 @@
 setup() {
   SCRIPT="$BATS_TEST_DIRNAME/../../scripts/plan-resume-point.sh"
   REPO="$(mktemp -d -t gaia-resume-XXXXXX)"
-  git -C "$REPO" init --quiet --initial-branch=main
-  git -C "$REPO" config user.email test@example.com
-  git -C "$REPO" config user.name Test
-  git -C "$REPO" config commit.gpgsign false
   PLAN="$REPO/plan"
-  mkdir -p "$PLAN"
+  new_repo
 }
 
 teardown() {
   if [ -n "${REPO:-}" ]; then
     rm -rf "$REPO"
   fi
+}
+
+# Reset $REPO to an empty repo with an empty plan folder, so each case starts clean.
+new_repo() {
+  rm -rf "$REPO"
+  mkdir -p "$REPO"
+  git -C "$REPO" init --quiet --initial-branch=main
+  git -C "$REPO" config user.email test@example.com
+  git -C "$REPO" config user.name Test
+  git -C "$REPO" config commit.gpgsign false
+  mkdir -p "$PLAN"
 }
 
 # Make a commit on the current branch of $REPO, echo its short-sha.
@@ -47,408 +54,158 @@ _run_helper() {
   run bash "$SCRIPT" --git-dir "$REPO" --plan-dir "$PLAN" "$@"
 }
 
-# --- 001a / 001b: constant-stub defeat pair ----------------------------------
-# Structurally similar fixtures that MUST yield different Line-1 values, so
-# a helper that echoes a constant fails one of the two.
+# _block <heading> <commit line>: one PROGRESS.md block.
+_block() {
+  printf '## %s\nCommit: %s\n\n_No notes._\n\n' "$1" "$2"
+}
 
-@test "001a: P1 and P2 ancestors, no P3 block -> resume 3, COMPLETE 1 and 2" {
+# _expect <label> <expected output> [helper args]: the helper exits 0 and prints
+# exactly the expected lines.
+_expect() {
+  local label="$1" expected="$2"
+  shift 2
+  _run_helper "$@"
+  [ "$status" -eq 0 ] || { echo "$label: status $status"; return 1; }
+  [ "$output" = "$expected" ] || { echo "$label: got '$output'"; return 1; }
+}
+
+@test "resume point: line 1 is the first gap and COMPLETE lines list the phases whose Commit is an ancestor" {
+  local sha1 sha2 sha3 sha30 nonrepo
+
+  new_repo
   sha1=$(_commit p1)
   sha2=$(_commit p2)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  { _block "Phase 1, First" "$sha1"; _block "Phase 2, Second" "$sha2"; } >"$PLAN/PROGRESS.md"
+  _expect "P1 and P2 ancestors, no P3 block" "$(printf '3\nCOMPLETE 1 %s\nCOMPLETE 2 %s' "$sha1" "$sha2")" --phases 3 || return 1
 
-_No notes._
-
-## Phase 2, Second
-Commit: $sha2
-
-_No notes._
-EOF
-  _run_helper --phases 3
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "3" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${lines[2]}" = "COMPLETE 2 $sha2" ]
-  [ "${#lines[@]}" -eq 3 ]
-}
-
-@test "001b: only a P1 block present and ancestor -> resume 2, COMPLETE 1 only" {
+  new_repo
   sha1=$(_commit p1)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  _block "Phase 1, First" "$sha1" >"$PLAN/PROGRESS.md"
+  _expect "only a P1 block" "$(printf '2\nCOMPLETE 1 %s' "$sha1")" --phases 3 || return 1
 
-_No notes._
-EOF
-  _run_helper --phases 3
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
-# --- 002: non-ancestor via branch reset --------------------------------------
-
-@test "002: P1 ancestor, P2 non-ancestor after branch reset -> resume 2, COMPLETE 1 only" {
+  new_repo
   sha1=$(_commit p1)
   sha2=$(_commit p2)
   git -C "$REPO" reset --hard --quiet HEAD~1
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  { _block "Phase 1, First" "$sha1"; _block "Phase 2, Second" "$sha2"; } >"$PLAN/PROGRESS.md"
+  _expect "P2 non-ancestor after branch reset" "$(printf '2\nCOMPLETE 1 %s' "$sha1")" --phases 2 || return 1
 
-_No notes._
-
-## Phase 2, Second
-Commit: $sha2
-
-_No notes._
-EOF
-  _run_helper --phases 2
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
-# --- 009: missing / empty / malformed ledger ---------------------------------
-
-@test "009a: no PROGRESS.md -> resume 1, no COMPLETE lines" {
-  _commit p1 >/dev/null
-  _run_helper --phases 3
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "1" ]
-  [ "${#lines[@]}" -eq 1 ]
-}
-
-@test "009b: empty PROGRESS.md -> resume 1, no COMPLETE lines" {
-  _commit p1 >/dev/null
-  : > "$PLAN/PROGRESS.md"
-  _run_helper --phases 3
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "1" ]
-  [ "${#lines[@]}" -eq 1 ]
-}
-
-@test "009c: malformed/garbage PROGRESS.md -> resume 1, no COMPLETE lines" {
-  _commit p1 >/dev/null
-  cat > "$PLAN/PROGRESS.md" <<'EOF'
-this is not a valid summary file
-random garbage text
-no phase headings anywhere in here
-EOF
-  _run_helper --phases 3
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "1" ]
-  [ "${#lines[@]}" -eq 1 ]
-}
-
-# SUMMARY.md is the consolidation output a reduced plan folder keeps, never
-# a ledger, so even one shaped like a ledger block is not read.
-
-@test "009d: SUMMARY.md without PROGRESS.md is not a ledger -> resume 1" {
-  sha1=$(_commit p1)
-  cat > "$PLAN/SUMMARY.md" <<EOF
-## Phase 1, First
-Commit: $sha1
-
-_No notes._
-EOF
-  _run_helper --phases 1
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "1" ]
-  [ "${#lines[@]}" -eq 1 ]
-}
-
-# --- 010: all phases ancestors ------------------------------------------------
-
-@test "010: P1 P2 P3 all ancestors -> resume 4, COMPLETE 1 2 3" {
+  new_repo
   sha1=$(_commit p1)
   sha2=$(_commit p2)
   sha3=$(_commit p3)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  { _block "Phase 1, First" "$sha1"; _block "Phase 2, Second" "$sha2"; _block "Phase 3, Third" "$sha3"; } >"$PLAN/PROGRESS.md"
+  _expect "P1 P2 P3 all ancestors" "$(printf '4\nCOMPLETE 1 %s\nCOMPLETE 2 %s\nCOMPLETE 3 %s' "$sha1" "$sha2" "$sha3")" --phases 3 || return 1
 
-_No notes._
-
-## Phase 2, Second
-Commit: $sha2
-
-_No notes._
-
-## Phase 3, Third
-Commit: $sha3
-
-_No notes._
-EOF
-  _run_helper --phases 3
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "4" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${lines[2]}" = "COMPLETE 2 $sha2" ]
-  [ "${lines[3]}" = "COMPLETE 3 $sha3" ]
-  [ "${#lines[@]}" -eq 4 ]
-}
-
-
-@test "011: HALTED Phase 2 block superseded by a later completion block -> resume 3, COMPLETE 1 2" {
+  new_repo
   sha1=$(_commit p1)
   sha2=$(_commit p2)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  {
+    _block "Phase 1, First" "$sha1"
+    printf '## Phase 2, Second (HALTED)\n\nRan out of budget before finishing.\n\n'
+    _block "Phase 2, Second" "$sha2"
+  } >"$PLAN/PROGRESS.md"
+  _expect "HALTED Phase 2 block superseded by a later completion block" "$(printf '3\nCOMPLETE 1 %s\nCOMPLETE 2 %s' "$sha1" "$sha2")" --phases 2 || return 1
 
-_No notes._
-
-## Phase 2, Second (HALTED)
-
-Ran out of budget before finishing.
-
-## Phase 2, Second
-Commit: $sha2
-
-_No notes._
-EOF
-  _run_helper --phases 2
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "3" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${lines[2]}" = "COMPLETE 2 $sha2" ]
-  [ "${#lines[@]}" -eq 3 ]
-}
-
-# --- 012a-c: per-block ambiguity (P2 unverifiable, P1 still counts) ---------
-
-@test "012a: P2 block has no Commit anchor (first content line is prose) -> resume 2, COMPLETE 1 only" {
+  new_repo
   sha1=$(_commit p1)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  {
+    _block "Phase 1, First" "$sha1"
+    printf '## Phase 2, Second\n\nThis block has no Commit anchor, just prose as the first content line.\n'
+  } >"$PLAN/PROGRESS.md"
+  _expect "P2 block with no Commit anchor" "$(printf '2\nCOMPLETE 1 %s' "$sha1")" --phases 2 || return 1
 
-_No notes._
-
-## Phase 2, Second
-
-This block has no Commit anchor, just prose as the first content line.
-EOF
-  _run_helper --phases 2
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
-@test "012b: P2 Commit is not a valid sha token -> resume 2, COMPLETE 1 only" {
+  new_repo
   sha1=$(_commit p1)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  { _block "Phase 1, First" "$sha1"; _block "Phase 2, Second" "not-a-sha"; } >"$PLAN/PROGRESS.md"
+  _expect "P2 Commit is not a sha token" "$(printf '2\nCOMPLETE 1 %s' "$sha1")" --phases 2 || return 1
 
-_No notes._
-
-## Phase 2, Second
-Commit: not-a-sha
-
-_No notes._
-EOF
-  _run_helper --phases 2
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
-@test "012c: P2 Commit is a well-formed but non-existent sha -> resume 2, COMPLETE 1 only" {
+  new_repo
   sha1=$(_commit p1)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  { _block "Phase 1, First" "$sha1"; _block "Phase 2, Second" "0000000000000000000000000000000000000000"; } >"$PLAN/PROGRESS.md"
+  _expect "P2 Commit is a well-formed but non-existent sha" "$(printf '2\nCOMPLETE 1 %s' "$sha1")" --phases 2 || return 1
 
-_No notes._
-
-## Phase 2, Second
-Commit: 0000000000000000000000000000000000000000
-
-_No notes._
-EOF
-  _run_helper --phases 2
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
-# --- 012d: unresolvable git context is a GLOBAL condition -------------------
-# With --git-dir at a non-repo, every ancestry check fails, including P1's.
-# Distinct from 012a-c (per-block ambiguity, where P1 still verifies).
-
-@test "012d: --git-dir at a non-repo makes every ancestry check fail, incl. P1 -> resume 1, no COMPLETE lines" {
+  new_repo
   sha1=$(_commit p1)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  _block "Phase 1, First" "$sha1" >"$PLAN/PROGRESS.md"
+  nonrepo="$BATS_TEST_TMPDIR/nonrepo"
+  mkdir -p "$nonrepo"
+  run bash "$SCRIPT" --git-dir "$nonrepo" --plan-dir "$PLAN" --phases 2
+  [ "$status" -eq 0 ] || { echo "non-repo git dir: status $status"; return 1; }
+  [ "$output" = "1" ] || { echo "non-repo git dir: got '$output'"; return 1; }
 
-_No notes._
-EOF
-  NONREPO="$(mktemp -d -t gaia-resume-nonrepo-XXXXXX)"
-  run bash "$SCRIPT" --git-dir "$NONREPO" --plan-dir "$PLAN" --phases 2
-  rm -rf "$NONREPO"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "1" ]
-  [ "${#lines[@]}" -eq 1 ]
-}
-
-# --- 013: canonical single-phase block --------------------------------------
-
-@test "013: canonical block (Commit is the first content line), ancestor -> resume 2, COMPLETE 1" {
+  new_repo
   sha1=$(_commit p1)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  _block "Phase 1, First" "$sha1" >"$PLAN/PROGRESS.md"
+  _expect "canonical single-phase block" "$(printf '2\nCOMPLETE 1 %s' "$sha1")" --phases 1 || return 1
 
-_No notes._
-EOF
-  _run_helper --phases 1
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
-# --- 014: number-bounded match (Phase 3 must never match Phase 30) ---------
-
-@test "014: P1 P2 ancestors, P3 non-ancestor, plus a Phase 30 ancestor block never counted as P3 -> resume 3, COMPLETE 1 2" {
+  new_repo
   sha1=$(_commit p1)
   sha2=$(_commit p2)
   sha3=$(_commit p3)
   git -C "$REPO" reset --hard --quiet HEAD~1
   sha30=$(_commit p30)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  {
+    _block "Phase 1, First" "$sha1"
+    _block "Phase 2, Second" "$sha2"
+    _block "Phase 3, Third" "$sha3"
+    _block "Phase 30, Thirtieth" "$sha30"
+  } >"$PLAN/PROGRESS.md"
+  _expect "P3 non-ancestor beside an ancestor Phase 30 block" "$(printf '3\nCOMPLETE 1 %s\nCOMPLETE 2 %s' "$sha1" "$sha2")" --phases 3 || return 1
 
-_No notes._
-
-## Phase 2, Second
-Commit: $sha2
-
-_No notes._
-
-## Phase 3, Third
-Commit: $sha3
-
-_No notes._
-
-## Phase 30, Thirtieth
-Commit: $sha30
-
-_No notes._
-EOF
-  _run_helper --phases 3
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "3" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${lines[2]}" = "COMPLETE 2 $sha2" ]
-  [ "${#lines[@]}" -eq 3 ]
-  grep -qF -- "COMPLETE 3 " <<<"$output" && return 1
-  true
-}
-
-# --- 015: delimiter-agnostic parse (dash form) ------------------------------
-# The doc-grep style guard that both plan/planner.md and the concept page use the
-# comma form is Phase 2's job; this asserts only that the parser itself
-# resolves a dash-form heading.
-
-@test "015: dash-form heading (## Phase 1 - X) parses the same as comma form -> resume 2, COMPLETE 1" {
+  new_repo
   sha1=$(_commit p1)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1 - First
-Commit: $sha1
+  _block "Phase 1 - First" "$sha1" >"$PLAN/PROGRESS.md"
+  _expect "dash-form heading" "$(printf '2\nCOMPLETE 1 %s' "$sha1")" --phases 1 || return 1
 
-_No notes._
-EOF
-  _run_helper --phases 1
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
-# --- 016 / 016b / 016c: worktree-HEAD discriminator -------------------------
-# Proves the ancestry check runs against --branch, not main HEAD.
-
-@test "016: P1 Commit reachable only from the wt branch -> --branch wt resume 2, COMPLETE 1" {
-  _commit base
-  git -C "$REPO" checkout --quiet -b wt
-  worktree_sha=$(_commit wt-only)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $worktree_sha
-
-_No notes._
-EOF
-  _run_helper --branch wt --phases 1
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $worktree_sha" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
-@test "016b: P1 Commit absent from wt HEAD -> --branch wt resume 1, no COMPLETE" {
-  _commit base
-  git -C "$REPO" checkout --quiet -b wt
-  git -C "$REPO" checkout --quiet main
-  mainsha=$(_commit main-only)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $mainsha
-
-_No notes._
-EOF
-  _run_helper --branch wt --phases 1
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "1" ]
-  [ "${#lines[@]}" -eq 1 ]
-}
-
-@test "016c: same worktree_sha fixture but --branch main -> resume 1 (ref matters, discriminator)" {
-  _commit base
-  git -C "$REPO" checkout --quiet -b wt
-  worktree_sha=$(_commit wt-only)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $worktree_sha
-
-_No notes._
-EOF
-  _run_helper --branch main --phases 1
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "1" ]
-  [ "${#lines[@]}" -eq 1 ]
-}
-
-# --- 019: no --phases -> first gap beyond recorded blocks, never all-complete
-
-@test "019: no --phases flag, P1 P2 ancestors -> resume 3, COMPLETE 1 2 (never an all-complete signal)" {
+  new_repo
   sha1=$(_commit p1)
   sha2=$(_commit p2)
-  cat > "$PLAN/PROGRESS.md" <<EOF
-## Phase 1, First
-Commit: $sha1
+  { _block "Phase 1, First" "$sha1"; _block "Phase 2, Second" "$sha2"; } >"$PLAN/PROGRESS.md"
+  _expect "no --phases flag" "$(printf '3\nCOMPLETE 1 %s\nCOMPLETE 2 %s' "$sha1" "$sha2")" || return 1
+}
 
-_No notes._
+@test "resume point: a plan folder with no PROGRESS.md ledger resumes at phase 1 with no COMPLETE lines" {
+  local sha1
 
-## Phase 2, Second
-Commit: $sha2
+  new_repo
+  _commit p1 >/dev/null
+  _expect "no PROGRESS.md" "1" --phases 3 || return 1
 
-_No notes._
-EOF
-  run bash "$SCRIPT" --git-dir "$REPO" --plan-dir "$PLAN"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "3" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${lines[2]}" = "COMPLETE 2 $sha2" ]
-  [ "${#lines[@]}" -eq 3 ]
+  new_repo
+  _commit p1 >/dev/null
+  : > "$PLAN/PROGRESS.md"
+  _expect "empty PROGRESS.md" "1" --phases 3 || return 1
+
+  new_repo
+  _commit p1 >/dev/null
+  printf 'this is not a valid summary file\nrandom garbage text\nno phase headings anywhere in here\n' >"$PLAN/PROGRESS.md"
+  _expect "garbage PROGRESS.md" "1" --phases 3 || return 1
+
+  # SUMMARY.md is the consolidation output a reduced plan folder keeps, never
+  # a ledger, so even one shaped like a ledger block is not read.
+  new_repo
+  sha1=$(_commit p1)
+  _block "Phase 1, First" "$sha1" >"$PLAN/SUMMARY.md"
+  _expect "SUMMARY.md without PROGRESS.md" "1" --phases 1 || return 1
+}
+
+@test "resume point: ancestry is checked against the --branch ref, not the main ref" {
+  local branch_sha main_sha
+
+  new_repo
+  _commit base >/dev/null
+  git -C "$REPO" checkout --quiet -b wt
+  branch_sha=$(_commit wt-only)
+  _block "Phase 1, First" "$branch_sha" >"$PLAN/PROGRESS.md"
+  _expect "commit reachable only from wt, --branch wt" "$(printf '2\nCOMPLETE 1 %s' "$branch_sha")" --branch wt --phases 1 || return 1
+  _expect "same commit, --branch main" "1" --branch main --phases 1 || return 1
+
+  new_repo
+  _commit base >/dev/null
+  git -C "$REPO" checkout --quiet -b wt
+  git -C "$REPO" checkout --quiet main
+  main_sha=$(_commit main-only)
+  _block "Phase 1, First" "$main_sha" >"$PLAN/PROGRESS.md"
+  _expect "commit absent from wt, --branch wt" "1" --branch wt --phases 1 || return 1
 }

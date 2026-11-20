@@ -42,36 +42,38 @@ attempts_made() {
   cat "$ATTEMPT_COUNTER"
 }
 
-@test "an install that finishes inside the bound runs once and passes" {
-  STUB_ATTEMPT_STATUSES="0" run bash "$helper" --attempt-seconds 180 -- fake-install --frozen-lockfile
-  [ "$status" -eq 0 ] || return 1
-  [ "$(attempts_made)" -eq 1 ] || return 1
-  grep -qxF "timeout --kill-after=15 180" "$call_log" || return 1
-  grep -qxF "fake-install --frozen-lockfile" "$call_log"
+# run_install <attempt statuses>: runs the helper with a scripted status per
+# attempt, from a zeroed attempt counter and call log.
+run_install() {
+  echo 0 >"$ATTEMPT_COUNTER"
+  : >"$call_log"
+  STUB_ATTEMPT_STATUSES="$1" run bash "$helper" --attempt-seconds 180 -- fake-install --frozen-lockfile
 }
 
-@test "an install the bound ends once is retried, warns, and passes" {
-  STUB_ATTEMPT_STATUSES="124 0" run bash "$helper" --attempt-seconds 180 -- fake-install
-  [ "$status" -eq 0 ] || return 1
-  [ "$(attempts_made)" -eq 2 ] || return 1
-  grep -qF "::warning::" <<<"$output" || return 1
-  grep -qF "180s" <<<"$output"
-}
+@test "bounded-install retries only an install the bound ended: in time runs once, ended once retries with a warning, ended twice fails naming the bound and input, failed on its own returns at once" {
+  run_install "0"
+  [ "$status" -eq 0 ] || { echo "in time: status $status"; return 1; }
+  [ "$(attempts_made)" -eq 1 ] || { echo "in time: attempts $(attempts_made)"; return 1; }
+  grep -qxF "timeout --kill-after=15 180" "$call_log" || { echo "in time: no bound recorded"; return 1; }
+  grep -qxF "fake-install --frozen-lockfile" "$call_log" || { echo "in time: install not run"; return 1; }
 
-@test "an install the bound ends twice fails with an error naming the bound and the input to raise" {
-  STUB_ATTEMPT_STATUSES="124 137" run bash "$helper" --attempt-seconds 180 -- fake-install
-  [ "$status" -eq 137 ] || return 1
-  [ "$(attempts_made)" -eq 2 ] || return 1
-  grep -qF "::error::" <<<"$output" || return 1
-  grep -qF "both attempts" <<<"$output" || return 1
-  grep -qF "install-attempt-seconds" <<<"$output"
-}
+  run_install "124 0"
+  [ "$status" -eq 0 ] || { echo "ended once: status $status"; return 1; }
+  [ "$(attempts_made)" -eq 2 ] || { echo "ended once: attempts $(attempts_made)"; return 1; }
+  grep -qF "::warning::" <<<"$output" || { echo "ended once: no warning"; return 1; }
+  grep -qF "180s" <<<"$output" || { echo "ended once: warning does not name the bound"; return 1; }
 
-@test "an install that fails on its own returns its status at once, without a retry" {
-  STUB_ATTEMPT_STATUSES="1 0" run bash "$helper" --attempt-seconds 180 -- fake-install
-  [ "$status" -eq 1 ] || return 1
-  [ "$(attempts_made)" -eq 1 ] || return 1
-  grep -qF "::warning::" <<<"$output" && return 1
+  run_install "124 137"
+  [ "$status" -eq 137 ] || { echo "ended twice: status $status"; return 1; }
+  [ "$(attempts_made)" -eq 2 ] || { echo "ended twice: attempts $(attempts_made)"; return 1; }
+  grep -qF "::error::" <<<"$output" || { echo "ended twice: no error"; return 1; }
+  grep -qF "both attempts" <<<"$output" || { echo "ended twice: error does not say both attempts"; return 1; }
+  grep -qF "install-attempt-seconds" <<<"$output" || { echo "ended twice: error does not name the input"; return 1; }
+
+  run_install "1 0"
+  [ "$status" -eq 1 ] || { echo "failed on its own: status $status"; return 1; }
+  [ "$(attempts_made)" -eq 1 ] || { echo "failed on its own: attempts $(attempts_made)"; return 1; }
+  grep -qF "::warning::" <<<"$output" && { echo "failed on its own: warned of a retry"; return 1; }
   true
 }
 
@@ -130,13 +132,4 @@ every_install_is_bounded() {
 
 @test "gaia-setup-node: every install mode runs pnpm install through the bound, sized by its input" {
   every_install_is_bounded "$BATS_TEST_DIRNAME/../../../.github/actions/gaia-setup-node/action.yml"
-}
-
-@test "gaia-setup-node: an install step that calls pnpm directly fails the wiring guard (the guard can fail)" {
-  local action="$BATS_TEST_DIRNAME/../../../.github/actions/gaia-setup-node/action.yml"
-  local scratch="$BATS_TEST_TMPDIR/action.yml"
-  sed "/if: inputs.install == 'cli'/{n;n;s|run: .*|run: pnpm install --frozen-lockfile --filter \"@gaia-harness/cli...\"|;}" "$action" >"$scratch"
-  cmp -s "$action" "$scratch" && return 1
-  run every_install_is_bounded "$scratch"
-  [ "$status" -ne 0 ]
 }

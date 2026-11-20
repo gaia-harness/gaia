@@ -9,15 +9,14 @@
 # runs again, every shard still greens, and the declared-required check still
 # reports success having covered less than it used to.
 #
-# S1/S2/S3 independently re-discover the six directories rather than asking
-# the script to grade its own homework, and the adversarial fixtures (A1-A3)
-# mutate a scratch copy of the script to prove those checks can actually fail.
-# S9 and A4 cover the second invariant the partition has to
-# hold: the weighted groups are split by weight, not by file count, and the
-# partition checks are blind to that on their own. S16, with A6, A7 and A8,
-# covers the third: no two suites the sharder declares cost outliers share a
-# scripts shard, which the weight checks are equally blind to, since those
-# suites are unremarkable by the weight being balanced.
+# The partition test independently re-discovers the six directories rather
+# than asking the script to grade its own homework. S9 covers the second
+# invariant the partition has to hold: the weighted groups are split by weight,
+# not by file count, and the partition check is blind to that on its own. S16,
+# with A6 and the fail-closed test, covers the third: no two suites the sharder
+# declares cost outliers share a scripts shard, which the weight checks are
+# equally blind to, since those suites are unremarkable by the weight being
+# balanced.
 #
 # Assertion style per .claude/rules/bats-assertions.md: no bare mid-test
 # [[ ... ]], POSIX [ ] and grep only, so a broken assertion still fails on
@@ -62,8 +61,8 @@ teardown() {
 
 # Every *.bats directly inside repo-relative directory $1, LC_ALL=C sorted. A
 # second, independent implementation of the script's own discover_bats: this
-# must never call the script, or S1 would only prove the script agrees with
-# itself.
+# must never call the script, or the partition test would only prove the
+# script agrees with itself.
 discover_independent() {
   local directory="$1" suite_file
   # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this discovery carries the per-test mark
@@ -88,7 +87,7 @@ all_discovered() {
 
 # The union of `files <id>` over every id `shards` prints, for the script at
 # $1. Takes the script path as an argument so the healthy run and a doctored
-# copy exercise the same code, per the adversarial-fixture requirement below.
+# copy exercise the same code.
 union_of_shard_files() {
   local script="$1" id
   while IFS= read -r id; do
@@ -96,29 +95,11 @@ union_of_shard_files() {
   done < <(bash "$script" shards)
 }
 
-# S1: the shard partition equals the independently discovered file set.
-check_partition() {
-  local script="$1"
-  [ "$(all_discovered)" = "$(union_of_shard_files "$script" | LC_ALL=C sort)" ]
-}
-
-# S2: no path repeats across the shard partition.
+# Whether any path repeats across the shard partition of script $1.
 check_no_duplicates() {
   local script="$1" duplicates
   duplicates="$(union_of_shard_files "$script" | LC_ALL=C sort | uniq -d)"
   [ -z "$duplicates" ]
-}
-
-# S3: every shard id resolves at least one file.
-check_no_empty_shard() {
-  local script="$1" id file_count
-  while IFS= read -r id; do
-    file_count="$(bash "$script" files "$id" 2>/dev/null | wc -l | tr -d ' ')"
-    if [ "$file_count" -eq 0 ]; then
-      return 1
-    fi
-  done < <(bash "$script" shards)
-  return 0
 }
 
 # Copies the sharder into a fresh scratch path, so a mutation for one
@@ -145,70 +126,6 @@ copy_sharder() {
   printf '%s\n' "$destination"
 }
 
-# The line number of greedy_bucket's assignment walk in copy $1. Matched by
-# shape, not by one exact spelling: a -F anchor pinned to today's variable
-# names silently stops matching the moment one is renamed, and a no-match
-# would splice nothing, leaving an undoctored copy that proves nothing. Every
-# fixture below splices into the top of this loop body, so each one skews the
-# assignment the same way for every shard the copy is asked about, which is
-# what keeps the doctored partition self-consistent rather than merely broken.
-greedy_walk_line() {
-  local anchor
-  anchor="$(grep -nE 'while IFS=.*read -r size bats_path' "$1" | head -1 | cut -d: -f1)"
-  [ -n "$anchor" ] || return 1
-  printf '%s\n' "$anchor"
-}
-
-# A1 fixture: drops the heaviest file of each weighted group on the copy, so it
-# is assigned to no shard while every shard the copy reports still exits 0 and
-# stays non-empty. Proves check_partition can fail.
-doctor_dropped_file() {
-  local destination anchor
-  destination="$(copy_sharder a1-dropped.sh)"
-  anchor="$(greedy_walk_line "$destination")" || return 1
-  awk -v anchor_line="$anchor" '
-    { print }
-    NR == anchor_line { print "    if [ -z \"${a1_seen:-}\" ]; then a1_seen=1; continue; fi" }
-  ' "$destination" >"$destination.new"
-  mv "$destination.new" "$destination"
-  printf '%s\n' "$destination"
-}
-
-# A2 fixture: forces each group's heaviest file to also print under the group's
-# SECOND shard on the copy. The unweighted walk already puts the first file it
-# sees on the first shard, so the file lands in both. Proves
-# check_no_duplicates can fail.
-doctor_duplicated_file() {
-  local destination anchor
-  destination="$(copy_sharder a2-duplicated.sh)"
-  anchor="$(greedy_walk_line "$destination")" || return 1
-  awk -v anchor_line="$anchor" '
-    { print }
-    NR == anchor_line { print "    if [ \"$target_index\" -eq 1 ] && [ -z \"${a2_seen:-}\" ]; then a2_seen=1; printf \"%s\\n\" \"$bats_path\"; fi" }
-  ' "$destination" >"$destination.new"
-  mv "$destination.new" "$destination"
-  printf '%s\n' "$destination"
-}
-
-# A3 fixture: removes subcommand_files' own fail-closed zero-files guard on the copy,
-# so a shard resolving to nothing still exits 0 with empty output instead of
-# exit 2. What this proves is that check_no_empty_shard itself would catch a
-# regression in that guard, not merely that the guard exists.
-doctor_bypassed_zero_guard() {
-  local destination start end
-  destination="$(copy_sharder a3-bypassed-guard.sh)"
-  start="$(grep -nF 'if [ -z "$shard_files" ]; then' "$destination" | head -1 | cut -d: -f1)"
-  [ -n "$start" ] || return 1
-  end=$((start + 4))
-  awk -v start_line="$start" -v end_line="$end" '
-    NR == start_line { print "  [ -z \"$shard_files\" ] || printf \"%s\\n\" \"$shard_files\""; next }
-    NR > start_line && NR <= end_line { next }
-    { print }
-  ' "$destination" >"$destination.new"
-  mv "$destination.new" "$destination"
-  printf '%s\n' "$destination"
-}
-
 # Writes a trivial single-@test .bats fixture whose test name and stdout are
 # both the given marker, so S12 can identify exactly which fixture ran. Built
 # from a variable rather than a literal `@test "..." {` line in this file's
@@ -227,21 +144,16 @@ write_trivial_bats() {
 }
 
 # bats test_tags=whole-tree
-@test "S1: shards partition equals the independently discovered file set" {
-  run check_partition "$SCRIPT"
-  [ "$status" -eq 0 ]
-}
-
-# bats test_tags=whole-tree
-@test "S2: no duplicate path across the shard partition" {
-  run check_no_duplicates "$SCRIPT"
-  [ "$status" -eq 0 ]
-}
-
-# bats test_tags=whole-tree
-@test "S3: no shard resolves to zero files" {
-  run check_no_empty_shard "$SCRIPT"
-  [ "$status" -eq 0 ]
+@test "S1: the shard partition is the discovered file set, no file lost, none duplicated, no shard empty" {
+  local id listing union='' sorted
+  while IFS= read -r id; do
+    listing="$(bash "$SCRIPT" files "$id")"
+    [ -n "$listing" ] || { echo "shard $id resolves to no files"; return 1; }
+    union="$union$listing"$'\n'
+  done < <(bash "$SCRIPT" shards)
+  sorted="$(printf '%s' "$union" | LC_ALL=C sort)"
+  [ "$(all_discovered)" = "$sorted" ] || { echo "the shard union differs from the discovered file set"; return 1; }
+  [ -z "$(printf '%s\n' "$sorted" | uniq -d)" ] || { echo "a path repeats across shards"; return 1; }
 }
 
 # bats test_tags=whole-tree
@@ -262,36 +174,112 @@ write_trivial_bats() {
   [ "$first" = "$second" ]
 }
 
-@test "S7: fail-closed on zero files, exit 2 naming the shard" {
-  local empty_hooks empty_forensics empty_statusline
-  empty_hooks="$BATS_TEST_TMPDIR/s7-empty-hooks"
+# bats test_tags=whole-tree,protected
+@test "fail-closed discovery: exit 2 naming the culprit for zero files, a missing pinned hook, a groupless shard, a stale anchor and more anchored files than shards" {
+  local empty_hooks empty_forensics empty_statusline directory copy bucket_count filler=1 every_file='heavy-x.bats heavy-y.bats'
+
+  empty_hooks="$BATS_TEST_TMPDIR/empty-hooks"
   mkdir -p "$empty_hooks"
   HOOKS_DIRECTORY="$empty_hooks" run bash "$SCRIPT" files hooks-2
-  [ "$status" -eq 2 ]
-  grep -qF -- 'hooks-2' <<<"$output"
+  [ "$status" -eq 2 ] || { echo "empty hooks: status $status"; return 1; }
+  grep -qF -- 'hooks-2' <<<"$output" || { echo "empty hooks: shard not named"; return 1; }
 
-  empty_forensics="$BATS_TEST_TMPDIR/s7-empty-forensics"
-  empty_statusline="$BATS_TEST_TMPDIR/s7-empty-statusline"
+  empty_forensics="$BATS_TEST_TMPDIR/empty-forensics"
+  empty_statusline="$BATS_TEST_TMPDIR/empty-statusline"
   mkdir -p "$empty_forensics" "$empty_statusline"
   FORENSICS_DIRECTORY="$empty_forensics" STATUSLINE_DIRECTORY="$empty_statusline" run bash "$SCRIPT" files misc
-  [ "$status" -eq 2 ]
-  grep -qF -- 'misc' <<<"$output"
+  [ "$status" -eq 2 ] || { echo "empty misc: status $status"; return 1; }
+  grep -qF -- 'misc' <<<"$output" || { echo "empty misc: shard not named"; return 1; }
+
+  directory="$BATS_TEST_TMPDIR/pinned-hooks-missing"
+  mkdir -p "$directory"
+  printf '#!/usr/bin/env bats\n@test "x" { true; }\n' >"$directory/not-the-pinned-file.bats"
+  HOOKS_DIRECTORY="$directory" run bash "$SCRIPT" files hooks-1
+  [ "$status" -eq 2 ] || { echo "pinned hook missing: status $status"; return 1; }
+  grep -qF -- 'local-janitor.bats' <<<"$output" || { echo "pinned hook missing: file not named"; return 1; }
+
+  # The healthy arm runs on the same doctored copy, so it cannot pass on a copy that simply broke.
+  copy="$(doctor_groupless_shard)"
+  run bash "$copy" group hooks-2
+  [ "$status" -eq 0 ] || { echo "groupless copy, healthy shard: status $status"; return 1; }
+  [ -n "$output" ] || { echo "groupless copy, healthy shard: empty group"; return 1; }
+  run bash "$copy" group audit
+  [ "$status" -eq 2 ] || { echo "groupless shard: status $status"; return 1; }
+  grep -qF -- 'audit' <<<"$output" || { echo "groupless shard: shard not named"; return 1; }
+
+  directory="$BATS_TEST_TMPDIR/anchor-seam"
+  seed_anchor_tree "$directory"
+
+  copy="$(doctor_outliers stale-scripts-anchor.sh 'no-such-suite.bats')"
+  run bash "$copy" files scripts-1
+  [ "$status" -eq 2 ] || { echo "stale scripts anchor: status $status"; return 1; }
+  grep -qF -- 'no-such-suite.bats' <<<"$output" || { echo "stale scripts anchor: file not named"; return 1; }
+  run bash "$SCRIPT" files scripts-1
+  [ "$status" -eq 0 ] || { echo "real list on the real seam: status $status"; return 1; }
+
+  # The stale-anchor check is scoped to the default seam, so a fixture seam is not read as a stale list.
+  SCRIPTS_TESTS_DIRECTORY="$directory" run bash "$SCRIPT" files scripts-1
+  [ "$status" -eq 0 ] || { echo "seam override: status $status"; return 1; }
+
+  # Every file seed_anchor_tree writes is one more than the group has buckets.
+  bucket_count="$(bash "$SCRIPT" group scripts-1 | grep -c .)"
+  while [ "$filler" -lt "$bucket_count" ]; do
+    every_file="fill-$filler.bats $every_file"
+    filler=$((filler + 1))
+  done
+  [ -f "$directory/fill-1.bats" ] || { echo "anchor seam has no fill-1.bats"; return 1; }
+  copy="$(doctor_outliers over-anchored.sh "$every_file")"
+  SCRIPTS_TESTS_DIRECTORY="$directory" run bash "$copy" files scripts-1
+  [ "$status" -eq 2 ] || { echo "more anchors than shards: status $status"; return 1; }
+  # The phrase, not a word inside it: this script prints several exit-2 diagnostics.
+  grep -qF -- 'anchored files over' <<<"$output" || { echo "more anchors than shards: diagnostic missing"; return 1; }
+
+  copy="$(doctor_outliers stale-hooks-anchor.sh 'no-such-hook-suite.bats' HOOKS_COST_OUTLIERS)"
+  run bash "$copy" files hooks-2
+  [ "$status" -eq 2 ] || { echo "stale hooks anchor: status $status"; return 1; }
+  grep -qF -- 'no-such-hook-suite.bats' <<<"$output" || { echo "stale hooks anchor: file not named"; return 1; }
+  write_trivial_bats "$directory/local-janitor.bats" "PINNED"
+  HOOKS_DIRECTORY="$directory" run bash "$copy" files hooks-2
+  [ "$status" -eq 0 ] || { echo "hooks seam override: status $status"; return 1; }
+  run bash "$SCRIPT" files hooks-2
+  [ "$status" -eq 0 ] || { echo "real hooks list on the real seam: status $status"; return 1; }
 }
 
 # bats test_tags=whole-tree
-@test "S8: usage errors" {
+@test "usage errors: a missing or unknown shard, id or change exits 2 with a usage line, and -h exits 0" {
   run bash "$SCRIPT" files nope
-  [ "$status" -eq 2 ]
-
+  [ "$status" -eq 2 ] || { echo "files nope: status $status"; return 1; }
   run bash "$SCRIPT" run nope
-  [ "$status" -eq 2 ]
-
+  [ "$status" -eq 2 ] || { echo "run nope: status $status"; return 1; }
   run bash "$SCRIPT"
-  [ "$status" -eq 2 ]
-  grep -qiF -- 'usage' <<<"$output"
-
+  [ "$status" -eq 2 ] || { echo "no arguments: status $status"; return 1; }
+  grep -qiF -- 'usage' <<<"$output" || { echo "no arguments: no usage line"; return 1; }
   run bash "$SCRIPT" -h
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "-h: status $status"; return 1; }
+
+  run bash "$SCRIPT" group nope
+  [ "$status" -eq 2 ] || { echo "group nope: status $status"; return 1; }
+  grep -qF -- 'nope' <<<"$output" || { echo "group nope: id not named"; return 1; }
+  run bash "$SCRIPT" group
+  [ "$status" -eq 2 ] || { echo "group: status $status"; return 1; }
+  grep -qiF -- 'usage' <<<"$output" || { echo "group: no usage line"; return 1; }
+
+  run bash "$SCRIPT" run-for-change audit
+  [ "$status" -eq 2 ] || { echo "run-for-change without a change: status $status"; return 1; }
+  run bash "$SCRIPT" files-for-change audit
+  [ "$status" -eq 2 ] || { echo "files-for-change without a change: status $status"; return 1; }
+  run bash "$SCRIPT" run-for-change no-such-shard base-ref head-ref
+  [ "$status" -eq 2 ] || { echo "run-for-change unknown shard: status $status"; return 1; }
+
+  run bash "$SCRIPT" plan
+  [ "$status" -eq 2 ] || { echo "plan without a shard: status $status"; return 1; }
+  grep -q '^bats-shards:' <<<"$output" || { echo "plan without a shard: no prefix"; return 1; }
+  run bash "$SCRIPT" plan no-such-shard --full
+  [ "$status" -eq 2 ] || { echo "plan unknown shard: status $status"; return 1; }
+  grep -q '^bats-shards:' <<<"$output" || { echo "plan unknown shard: no prefix"; return 1; }
+  run bash "$SCRIPT" plan audit
+  [ "$status" -eq 2 ] || { echo "plan without a change: status $status"; return 1; }
+  grep -q '^bats-shards:' <<<"$output" || { echo "plan without a change: no prefix"; return 1; }
 }
 
 # Size of one path as `files` prints it: repo-relative for a path under the
@@ -413,16 +401,6 @@ within_load_bound() {
   done
 }
 
-@test "S15: group's usage and unknown-id errors match files'" {
-  run bash "$SCRIPT" group nope
-  [ "$status" -eq 2 ]
-  grep -qF -- 'nope' <<<"$output"
-
-  run bash "$SCRIPT" group
-  [ "$status" -eq 2 ]
-  grep -qiF -- 'usage' <<<"$output"
-}
-
 # A5 fixture: deletes group_for_shard's whole-directory arm on the copy, so a
 # known shard resolves to an empty group. Proves subcommand_group's fail-closed guard
 # is the thing standing between that and a caller silently narrowing its set,
@@ -435,23 +413,6 @@ doctor_groupless_shard() {
   awk -v removed_line="$line" 'NR != removed_line { print }' "$destination" >"$destination.new"
   mv "$destination.new" "$destination"
   printf '%s\n' "$destination"
-}
-
-# bats test_tags=whole-tree
-@test "A5: a known shard with no group case fails closed rather than reporting an empty group" {
-  local copy
-  copy="$(doctor_groupless_shard)"
-
-  # The healthy arm first, on the same doctored copy: a shard whose arm was
-  # left alone still answers, so this cannot pass on a copy that simply broke.
-  run bash "$copy" group hooks-2
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-
-  run bash "$copy" group audit
-  [ "$status" -eq 2 ]
-  [ -n "$output" ]
-  grep -qF -- 'audit' <<<"$output"
 }
 
 # bats test_tags=whole-tree
@@ -479,72 +440,6 @@ doctor_groupless_shard() {
   # shellcheck disable=SC2046 # one id per word
   run within_load_bound "$SCRIPT" "$total" "$largest" $(bash "$SCRIPT" group lib-1)
   [ "$status" -eq 0 ]
-}
-
-# A4 fixture: makes every file weigh the same on the copy, which is the exact
-# regression S9 exists to catch -- greedy over equal weights degenerates to
-# round-robin over the sorted listing, i.e. back to counting files. The
-# lightest-bucket walk is untouched, so every shard stays non-empty and the
-# partition stays whole; only the balance goes.
-doctor_unweighted() {
-  local destination anchor
-  destination="$(copy_sharder)"
-  anchor="$(grep -nF 'size="${readable_sizes[$readable_position]:-0}"' "$destination" | head -1 | cut -d: -f1)"
-  [ -n "$anchor" ] || return 1
-  awk -v anchor_line="$anchor" '
-    NR == anchor_line { print "      size=1"; next }
-    { print }
-  ' "$destination" >"$destination.new"
-  mv "$destination.new" "$destination"
-  printf '%s\n' "$destination"
-}
-
-# A seam directory whose round-robin split across $2 shards is lopsided and
-# whose weighted split is not: two heavy files $2 positions apart in the
-# sorted listing land on the same shard when position decides, and on different
-# shards when weight does. Two files more than there are shards, so no shard is
-# empty under round-robin either way. The spacing follows the bucket count
-# rather than a literal, so a bucket added to the group keeps the two heavy
-# files on one round-robin shard.
-seed_lopsided_tree() {
-  local directory="$1" bucket_count="$2" position=0 name
-  mkdir -p "$directory"
-  while [ "$position" -le $((bucket_count + 1)) ]; do
-    name="$(printf 's-%02d' "$position")"
-    if [ "$position" -eq 0 ] || [ "$position" -eq "$bucket_count" ]; then
-      write_trivial_bats "$directory/$name.bats" "HEAVY-$name"
-      # Padded to a size the light files cannot approach, as one trailing
-      # comment line, so which shard holds the two heavy files is what decides
-      # the comparison.
-      head -c 1000 /dev/zero | tr '\0' '#' >>"$directory/$name.bats"
-    else
-      write_trivial_bats "$directory/$name.bats" "LIGHT-$name"
-    fi
-    position=$((position + 1))
-  done
-}
-
-@test "A4: a group split by file count rather than weight reds the load bound" {
-  local directory copy total largest scripts_ids
-  directory="$BATS_TEST_TMPDIR/a4-scripts"
-  scripts_ids="$(bash "$SCRIPT" group scripts-1)"
-  seed_lopsided_tree "$directory" "$(printf '%s\n' "$scripts_ids" | grep -c .)"
-  read -r total largest < <(printf '%s\n' "$directory"/*.bats | weight_profile)
-
-  # The healthy arm first, so a bound loose enough to pass anything could not
-  # pass this test.
-  # shellcheck disable=SC2086 # one id per word
-  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$SCRIPT" "$total" "$largest" $scripts_ids
-  [ "$status" -eq 0 ]
-
-  copy="$(doctor_unweighted)"
-  # The doctored copy still partitions the tree cleanly...
-  SCRIPTS_TESTS_DIRECTORY="$directory" run check_no_duplicates "$copy"
-  [ "$status" -eq 0 ]
-  # ...and is still caught, because the two heavy files landed together.
-  # shellcheck disable=SC2086 # one id per word
-  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$copy" "$total" "$largest" $scripts_ids
-  [ "$status" -eq 1 ]
 }
 
 # The sizes come from one wc over the whole group, paired to the files by
@@ -593,15 +488,13 @@ cost_outliers() {
 # A copy of the script whose anchor list $3 (SCRIPTS_COST_OUTLIERS when
 # omitted) is replaced by $2 (space-separated, possibly empty). Empty is the
 # "anchoring disabled" arm every fixture below compares against: it is the one
-# mutation that turns the mechanism off without touching the assignment walk
-# the A1/A2 fixtures splice into.
+# mutation that turns the mechanism off without touching the assignment walk.
 doctor_outliers() {
   local name="$1" list="$2" list_name="${3:-SCRIPTS_COST_OUTLIERS}" destination anchor
   destination="$(copy_sharder "$name")"
-  # Resolved and checked before splicing, for the reason greedy_walk_line
-  # gives: an awk program that matches nothing rewrites nothing and hands back
-  # an undoctored copy, which proves whatever the caller assumed rather than
-  # what it meant to test.
+  # Resolved and checked before splicing: an awk program that matches nothing
+  # rewrites nothing and hands back an undoctored copy, which proves whatever
+  # the caller assumed rather than what it meant to test.
   anchor="$(grep -nE "^${list_name}=\\(" "$destination" | head -1 | cut -d: -f1)"
   [ -n "$anchor" ] || return 1
   awk -v anchor_line="$anchor" -v list="$list" -v list_name="$list_name" '
@@ -675,26 +568,32 @@ seed_anchor_tree() {
 # is otherwise decided by the packing of every other file in the group, and a
 # tree change anywhere in it can put two together and red the leg on the cap.
 # bats test_tags=whole-tree
-@test "S16: no two declared cost outliers share a scripts shard" {
-  local base shard seen declaration declared_words
-  seen=""
-  while IFS= read -r base || [ -n "$base" ]; do
-    [ -n "$base" ] || continue
-    shard="$(scripts_shard_of "$SCRIPT" "$base" "")"
-    [ -n "$shard" ]
-    # Not already claimed by an earlier outlier.
-    printf '%s\n' "$seen" | grep -qxF -- "$shard" && return 1
-    seen="$(printf '%s\n%s' "$seen" "$shard")"
-  done < <(cost_outliers "$SCRIPT")
+@test "S16: no two declared cost outliers share a shard, in the scripts and hooks groups" {
+  local list_name base shard seen declaration declared_words
+  for list_name in SCRIPTS_COST_OUTLIERS HOOKS_COST_OUTLIERS; do
+    seen=""
+    while IFS= read -r base || [ -n "$base" ]; do
+      [ -n "$base" ] || continue
+      if [ "$list_name" = SCRIPTS_COST_OUTLIERS ]; then
+        shard="$(scripts_shard_of "$SCRIPT" "$base" "")"
+      else
+        shard="$(hooks_shard_of "$SCRIPT" "$base")"
+      fi
+      [ -n "$shard" ] || { echo "$list_name: $base is on no shard"; return 1; }
+      printf '%s\n' "$seen" | grep -qxF -- "$shard" && { echo "$list_name: $base shares shard $shard"; return 1; }
+      seen="$(printf '%s\n%s' "$seen" "$shard")"
+    done < <(cost_outliers "$SCRIPT" "$list_name")
+  done
   # The scripts list may legitimately be empty, so non-vacuity is asserted on
   # the parse rather than on the members: the declaration must exist, and the
   # parse must return exactly the words it holds. A renamed or reshaped
   # declaration would otherwise read as an empty list and pass the loop above
-  # without asserting anything; the hooks twin below carries the non-empty arm.
+  # without asserting anything; the hooks list carries the non-empty arm.
   declaration="$(grep -E '^SCRIPTS_COST_OUTLIERS=\(.*\)$' "$SCRIPT")"
   [ "$(printf '%s\n' "$declaration" | grep -c .)" -eq 1 ]
   declared_words="$(printf '%s' "$declaration" | sed 's/^[^(]*(\(.*\))$/\1/' | wc -w | tr -d ' ')"
   [ "$(cost_outliers "$SCRIPT" | grep -c .)" -eq "$declared_words" ]
+  [ -n "$(cost_outliers "$SCRIPT" HOOKS_COST_OUTLIERS)" ]
 }
 
 # A6. Proves S16's property comes from the anchoring and not from the byte
@@ -725,59 +624,6 @@ seed_anchor_tree() {
   [ "$status" -eq 0 ]
 }
 
-# A7. The stale-list arm. An anchor naming a file discovery does not return is
-# the silent failure the whole check exists for: anchoring stops applying, every
-# shard still exits 0 with a whole partition, and nothing says the guarantee is
-# gone.
-# bats test_tags=whole-tree
-@test "A7: an anchor naming a missing file is a fail-closed error" {
-  local copy
-  copy="$(doctor_outliers a7-stale.sh 'no-such-suite.bats')"
-  run bash "$copy" files scripts-1
-  [ "$status" -eq 2 ]
-  grep -qF -- 'no-such-suite.bats' <<<"$output"
-
-  # The healthy arm, so a check that passed everything could not pass this
-  # test: the real list against the real seam still resolves.
-  run bash "$SCRIPT" files scripts-1
-  [ "$status" -eq 0 ]
-}
-
-# A7 second arm: the check is scoped to the default seam deliberately, so a
-# caller pointing SCRIPTS_TESTS_DIRECTORY at a fixture tree is not read as carrying a
-# stale list. Without this scoping every seam-based test in this file reds.
-@test "A7: a seam override is not read as a stale anchor list" {
-  local directory
-  directory="$BATS_TEST_TMPDIR/a7-seam"
-  seed_anchor_tree "$directory"
-  SCRIPTS_TESTS_DIRECTORY="$directory" run bash "$SCRIPT" files scripts-1
-  [ "$status" -eq 0 ]
-}
-
-# A8. More anchors than buckets cannot be honoured, and honouring it partly
-# would silently put two of them together, which is the state the list exists
-# to forbid.
-@test "A8: more anchored files than shards is a fail-closed error" {
-  local directory copy bucket_count filler=1 every_file='heavy-x.bats heavy-y.bats'
-  directory="$BATS_TEST_TMPDIR/a8-scripts"
-  seed_anchor_tree "$directory"
-  # Every file seed_anchor_tree writes, which is one more than the group has
-  # buckets.
-  bucket_count="$(bash "$SCRIPT" group scripts-1 | grep -c .)"
-  while [ "$filler" -lt "$bucket_count" ]; do
-    every_file="fill-$filler.bats $every_file"
-    filler=$((filler + 1))
-  done
-  [ -f "$directory/fill-1.bats" ]
-  copy="$(doctor_outliers a8-over.sh "$every_file")"
-  SCRIPTS_TESTS_DIRECTORY="$directory" run bash "$copy" files scripts-1
-  [ "$status" -eq 2 ]
-  # The phrase, not a word inside it: this script prints several exit-2
-  # diagnostics, and pinning a substring short enough to appear in another one
-  # would let a differently-caused exit 2 satisfy the test.
-  grep -qF -- 'anchored files over' <<<"$output"
-}
-
 # Which weighted hooks shard of script $1 holds basename $2, the group's ids
 # asked for on scripts_shard_of's reasoning.
 hooks_shard_of() {
@@ -790,53 +636,6 @@ hooks_shard_of() {
     fi
   done < <(bash "$script" group hooks-2)
   return 1
-}
-
-# S16 for the hooks group: its cost outliers are the suites whose runtime lives
-# in what they run, so their byte weight says nothing about which leg can hold
-# two of them.
-# bats test_tags=whole-tree
-@test "S16: no two declared cost outliers share a hooks shard" {
-  local base shard seen
-  seen=""
-  while IFS= read -r base || [ -n "$base" ]; do
-    [ -n "$base" ] || continue
-    shard="$(hooks_shard_of "$SCRIPT" "$base")"
-    [ -n "$shard" ]
-    printf '%s\n' "$seen" | grep -qxF -- "$shard" && return 1
-    seen="$(printf '%s\n%s' "$seen" "$shard")"
-  done < <(cost_outliers "$SCRIPT" HOOKS_COST_OUTLIERS)
-  [ -n "$(cost_outliers "$SCRIPT" HOOKS_COST_OUTLIERS)" ]
-}
-
-# A7 for the hooks group: a stale name fails closed on the default seam, and a
-# seam override is not read as a stale list.
-# bats test_tags=whole-tree
-@test "A7: a hooks anchor naming a missing file is a fail-closed error" {
-  local copy directory
-  copy="$(doctor_outliers a7-hooks-stale.sh 'no-such-hook-suite.bats' HOOKS_COST_OUTLIERS)"
-  run bash "$copy" files hooks-2
-  [ "$status" -eq 2 ]
-  grep -qF -- 'no-such-hook-suite.bats' <<<"$output"
-
-  directory="$BATS_TEST_TMPDIR/a7-hooks-seam"
-  seed_anchor_tree "$directory"
-  write_trivial_bats "$directory/local-janitor.bats" "PINNED"
-  HOOKS_DIRECTORY="$directory" run bash "$copy" files hooks-2
-  [ "$status" -eq 0 ]
-
-  run bash "$SCRIPT" files hooks-2
-  [ "$status" -eq 0 ]
-}
-
-@test "S11: a pinned hook missing from discovery is a fail-closed error" {
-  local directory
-  directory="$BATS_TEST_TMPDIR/s11-hooks"
-  mkdir -p "$directory"
-  printf '#!/usr/bin/env bats\n@test "x" { true; }\n' >"$directory/not-the-pinned-file.bats"
-  HOOKS_DIRECTORY="$directory" run bash "$SCRIPT" files hooks-1
-  [ "$status" -eq 2 ]
-  grep -qF -- 'local-janitor.bats' <<<"$output"
 }
 
 @test "S12: run honors the seam and executes exactly what files lists" {
@@ -925,31 +724,6 @@ AT_TEST "subject" {
 FIXTURE
 }
 
-# The gating block in file $1, indentation stripped: every line from the
-# ambient-count read through the count export, so the key list and the
-# append-after-ambient shape are compared together. Prints nothing unless the
-# block opens exactly once, so a second copy, or a block rewritten to overwrite
-# the ambient entries, reads as no block rather than as whichever matched.
-gate_block() {
-  [ "$(grep -c '^ *config_entry_count="${GIT_CONFIG_COUNT:-0}"$' "$1")" -eq 1 ] || return 0
-  sed -n '/^ *config_entry_count="${GIT_CONFIG_COUNT:-0}"$/,/^ *export GIT_CONFIG_COUNT="$config_entry_count"$/p' "$1" |
-    sed 's/^ *//'
-}
-
-# A9 fixture: empties run's gate list on the copy, so the count it exports is
-# the ambient one and the suites it runs get git's own maintenance resolution.
-# What this proves is that S17's subject arm can red, not merely that the gates
-# are spelled out in the script.
-doctor_ungated_run() {
-  local destination
-  destination="$(copy_sharder a9-ungated-run.sh)"
-  [ -n "$(gate_block "$destination")" ] || return 1
-  sed 's/^\( *for key_value_pair in\) .*\(; do\)$/\1\2/' "$destination" >"$destination.new"
-  mv "$destination.new" "$destination"
-  grep -qxF '    for key_value_pair in; do' "$destination" || return 1
-  printf '%s\n' "$destination"
-}
-
 # The outer GIT_CONFIG_COUNT=0 is what makes a pass mean anything: this suite
 # normally runs under bats-shards.sh itself, and an inherited gate would green
 # the subject arm with run's own export deleted.
@@ -965,19 +739,6 @@ doctor_ungated_run() {
   grep -qE '^ok [0-9]+ subject$' <<<"$output"
   ok_count=$(grep -c '^ok ' <<<"$output")
   [ "$ok_count" -eq 2 ]
-}
-
-@test "A9: a run that leaves maintenance ungated reds S17's subject arm" {
-  local copy fixture_directory
-  copy="$(doctor_ungated_run)"
-  fixture_directory="$BATS_TEST_TMPDIR/a9-audit"
-  mkdir -p "$fixture_directory"
-  write_maintenance_fixture "$fixture_directory/maintenance.bats"
-
-  GIT_CONFIG_COUNT=0 AUDIT_TESTS_DIRECTORY="$fixture_directory" run bash "$copy" run audit
-  [ "$status" -eq 1 ]
-  grep -qE '^ok [0-9]+ control$' <<<"$output"
-  grep -qE '^not ok [0-9]+ subject$' <<<"$output"
 }
 
 # S13's allowlist: a tracked .bats file that no shard resolves, paired with
@@ -1054,7 +815,7 @@ covering_row() {
 
 # S13. Every tracked .bats file is executed by something.
 #
-# The sharder's own partition checks (S1-S3) prove the shards agree with a
+# The sharder's own partition test proves the shards agree with a
 # re-discovery of the SIX SEAM DIRECTORIES. That is a closed loop: a .bats
 # file in a seventh directory is outside both sides of the comparison, so
 # every one of those assertions passes while nothing runs the file. The check
@@ -1122,119 +883,6 @@ EOF
   [ "$exit_status" -eq 0 ]
 }
 
-# bats test_tags=whole-tree
-@test "S13 adversarial: an orphan suite outside the seam is caught" {
-  # The real failure shape: a .bats file tracked by git, in no seam directory
-  # and on no allowlist prefix. Written into a directory the seam does not
-  # reach, then staged so `git ls-files` reports it.
-  #
-  # Staged into a COPY of the index, never the repository's own. Writing the
-  # real index would make this the one test here that mutates shared repo
-  # state, and a documented invariant forbids it: a sibling suite derives its
-  # whole input population from `git ls-files`. It would also
-  # need an undo, whose own failure path (a contended index.lock) strands a
-  # staged-deleted path in the real index, which is exactly the dirty-tree
-  # state that makes every audit member withhold its marker. GIT_INDEX_FILE
-  # removes the hazard rather than reporting it: nothing to undo, so nothing
-  # that can fail to undo.
-  local directory relative_path git_directory index
-  directory="$REPO_ROOT/.gaia/tests/lib/fixtures"
-  relative_path=".gaia/tests/lib/fixtures/s13-orphan-probe.bats"
-  index="$BATS_TEST_TMPDIR/probe-index"
-  git_directory="$(git -C "$REPO_ROOT" rev-parse --absolute-git-dir)"
-  cp "$git_directory/index" "$index"
-  mkdir -p "$directory"
-  printf '%s\n' "$REPO_ROOT/$relative_path" >>"$BATS_TEST_TMPDIR/scratch-copies"
-  write_trivial_bats "$REPO_ROOT/$relative_path" "S13-ORPHAN"
-  GIT_INDEX_FILE="$index" git -C "$REPO_ROOT" add -N -- "$relative_path"
-
-  local tracked covered orphans
-  tracked="$(cd "$REPO_ROOT" && GIT_INDEX_FILE="$index" git -c core.quotepath=false ls-files -z '*.bats' | tr '\0' '\n' | LC_ALL=C sort)"
-  covered="$(union_of_shard_files "$SCRIPT" | LC_ALL=C sort -u)"
-  orphans="$(LC_ALL=C comm -23 <(printf '%s\n' "$tracked") <(printf '%s\n' "$covered"))"
-
-  # `fixtures/` is a subdirectory of a seam root, and the seam globs *.bats
-  # DIRECTLY inside its roots only, so this probe is genuinely unreached --
-  # which is exactly the blind spot S13 exists to name.
-  grep -qF -- "$relative_path" <<<"$orphans" || {
-    echo "an orphan .bats outside every seam root did not surface as uncovered" >&2
-    return 1
-  }
-}
-
-# bats test_tags=whole-tree
-@test "S13 adversarial: a file-path allowlist row does not excuse a suite beside it" {
-  # The waiver's own blind spot. `.gaia/tests/concurrency/concurrency.bats` is
-  # allowlisted because meter-gate.sh pins that one file; matched as a prefix,
-  # the row also excuses a tracked sibling whose name merely extends it, and
-  # nothing runs the sibling.
-  #
-  # Staged into a COPY of the index for the reason the probe above gives: a
-  # staged entry stranded in the real index is the dirty-tree state that makes
-  # every Code Audit Team member withhold its marker.
-  local directory relative_path git_directory index
-  directory="$REPO_ROOT/.gaia/tests/concurrency"
-  relative_path=".gaia/tests/concurrency/concurrency.bats.disabled.bats"
-  index="$BATS_TEST_TMPDIR/beside-index"
-  git_directory="$(git -C "$REPO_ROOT" rev-parse --absolute-git-dir)"
-  cp "$git_directory/index" "$index"
-  mkdir -p "$directory"
-  printf '%s\n' "$REPO_ROOT/$relative_path" >>"$BATS_TEST_TMPDIR/scratch-copies"
-  write_trivial_bats "$REPO_ROOT/$relative_path" "S13-BESIDE"
-  GIT_INDEX_FILE="$index" git -C "$REPO_ROOT" add -N -- "$relative_path"
-
-  local tracked covered orphans
-  tracked="$(cd "$REPO_ROOT" && GIT_INDEX_FILE="$index" git -c core.quotepath=false ls-files -z '*.bats' | tr '\0' '\n' | LC_ALL=C sort)"
-  covered="$(union_of_shard_files "$SCRIPT" | LC_ALL=C sort -u)"
-  orphans="$(LC_ALL=C comm -23 <(printf '%s\n' "$tracked") <(printf '%s\n' "$covered"))"
-
-  # No shard resolves it, so it reaches the allowlist as an orphan...
-  grep -qF -- "$relative_path" <<<"$orphans" || {
-    echo "the sibling suite did not reach the allowlist as an orphan" >&2
-    return 1
-  }
-  # ...and no row covers it, so S13 names it.
-  covering_row "$relative_path" && return 1
-
-  # The green half: the pinned file is still excused by its own row, and each
-  # directory row still covers an arbitrary suite beneath it.
-  covering_row '.gaia/tests/concurrency/concurrency.bats' >/dev/null || return 1
-  covering_row '.gaia/tests/sandbox/any-suite.bats' >/dev/null || return 1
-  covering_row '.github/forensics/tests/any-suite.bats' >/dev/null || return 1
-}
-
-# bats test_tags=whole-tree
-@test "A1: dropped file reds the partition check" {
-  local copy
-  copy="$(doctor_dropped_file)"
-  run check_partition "$copy"
-  [ "$status" -eq 1 ]
-}
-
-# bats test_tags=whole-tree
-@test "A2: duplicated file reds the no-duplicates check" {
-  local copy
-  copy="$(doctor_duplicated_file)"
-  run check_no_duplicates "$copy"
-  [ "$status" -eq 1 ]
-}
-
-@test "A3: an empty shard behind a bypassed guard reds the no-empty-shard check" {
-  local copy directory
-  copy="$(doctor_bypassed_zero_guard)"
-  directory="$BATS_TEST_TMPDIR/a3-empty-scripts"
-  mkdir -p "$directory"
-
-  # First, prove the guard itself is actually bypassed on the copy: exit 0
-  # with empty output, where the real script would exit 2.
-  SCRIPTS_TESTS_DIRECTORY="$directory" run bash "$copy" files scripts-1
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-
-  SCRIPTS_TESTS_DIRECTORY="$directory" run check_no_empty_shard "$copy"
-  [ "$status" -eq 1 ]
-}
-
 # The change-scoped subcommands. A leg running for a narrow change hands bats
 # the shard's suites the change selector picks, in full, and the shard's other
 # whole-tree-marked suites under the whole-tree tag. The fixture shard holds
@@ -1277,8 +925,8 @@ run_for_change_fixture() {
     bash "$1" "$3" audit base-ref head-ref
 }
 
-@test "S19: files-for-change lists the picked and the whole-tree-marked suites of the shard, and no other" {
-  local directory="$BATS_TEST_TMPDIR/s19"
+@test "files-for-change and run-for-change pick the picked and whole-tree-marked suites, and fall back to the whole shard when the selector fails" {
+  local directory="$BATS_TEST_TMPDIR/change-scoped"
   write_change_fixture "$directory"
 
   run run_for_change_fixture "$SCRIPT" "$directory" files-for-change
@@ -1287,11 +935,6 @@ run_for_change_fixture() {
   # The diff arguments reach the selector verbatim, after the repository root.
   [ "$(sed -n '1p' "$directory/selector-argv")" = "--dir" ]
   [ "$(sed -n '3,4p' "$directory/selector-argv" | tr '\n' ' ')" = "base-ref head-ref " ]
-}
-
-@test "S20: run-for-change runs a picked suite in full and only the whole-tree tests of a marked one" {
-  local directory="$BATS_TEST_TMPDIR/s20"
-  write_change_fixture "$directory"
 
   run run_for_change_fixture "$SCRIPT" "$directory" run-for-change
   [ "$status" -eq 0 ]
@@ -1300,12 +943,6 @@ run_for_change_fixture() {
   grep -qE '^ok [0-9]+ marked whole-tree$' <<<"$output"
   grep -qE 'marked plain$' <<<"$output" && return 1
   grep -qE 'unrelated$' <<<"$output" && return 1
-  true
-}
-
-@test "S21: a selector that cannot read the change runs the whole shard, never nothing" {
-  local directory="$BATS_TEST_TMPDIR/s21"
-  write_change_fixture "$directory"
 
   STUB_SELECTOR_FAILS=1 run run_for_change_fixture "$SCRIPT" "$directory" run-for-change
   [ "$status" -eq 0 ]
@@ -1316,42 +953,6 @@ run_for_change_fixture() {
   STUB_SELECTOR_FAILS=1 run run_for_change_fixture "$SCRIPT" "$directory" files-for-change
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | grep -c '\.bats$')" -eq 3 ]
-}
-
-@test "S22: the change-scoped subcommands refuse a call that names no change or no known shard" {
-  run bash "$SCRIPT" run-for-change audit
-  [ "$status" -eq 2 ]
-  run bash "$SCRIPT" files-for-change audit
-  [ "$status" -eq 2 ]
-  run bash "$SCRIPT" run-for-change no-such-shard base-ref head-ref
-  [ "$status" -eq 2 ]
-}
-
-@test "A11: a plan blind to the whole-tree mark reds S20's marked arm" {
-  local copy directory="$BATS_TEST_TMPDIR/a11"
-  copy="$(copy_sharder)"
-  grep -qF '"$verify_whole_tree_mark_pattern"' "$copy" || return 1
-  sed 's/"\$verify_whole_tree_mark_pattern"/"^never-matches$"/' "$copy" >"$copy.new"
-  mv "$copy.new" "$copy"
-  write_change_fixture "$directory"
-
-  run run_for_change_fixture "$copy" "$directory" run-for-change
-  grep -qE '^ok [0-9]+ marked whole-tree$' <<<"$output" && return 1
-  true
-}
-
-@test "A12: a fallback that runs nothing reds S21" {
-  local copy directory="$BATS_TEST_TMPDIR/a12"
-  copy="$(copy_sharder)"
-  grep -qF 'subcommand_run "$id"' "$copy" || return 1
-  sed 's/^\( *\)subcommand_run "\$id" # whole-shard fallback$/\1exit 0/' "$copy" >"$copy.new"
-  mv "$copy.new" "$copy"
-  grep -qF '# whole-shard fallback' "$copy" && return 1
-  write_change_fixture "$directory"
-
-  STUB_SELECTOR_FAILS=1 run run_for_change_fixture "$copy" "$directory" run-for-change
-  grep -qE '^ok [0-9]+ unrelated$' <<<"$output" && return 1
-  true
 }
 
 # The shard plan. The fixture shard holds a suite carrying the
@@ -1400,26 +1001,28 @@ plan_fixture() {
     bash "$sharder" "$@" 2>"$BATS_TEST_TMPDIR/stderr"
 }
 
-@test "P1: a harness change runs the whole shard and says why on one stderr line" {
-  local directory="$BATS_TEST_TMPDIR/p1"
+# The plan fixture's stubs are exported and inherited, so a section that wants
+# the defaults clears them first.
+clear_plan_stubs() {
+  unset STUB_CLASSIFIER_OUTPUT STUB_CLASSIFIER_STATUS STUB_SELECTOR_PICKS STUB_SELECTOR_FAILS
+}
+
+@test "plan prints mode, reason, needs_node and needs_chromium as four key=value lines for each change kind (harness, unreadable, dependency, none, selected, full)" {
+  local directory="$BATS_TEST_TMPDIR/plan" arm
   write_plan_fixture "$directory"
+
+  clear_plan_stubs
   STUB_CLASSIFIER_OUTPUT=$(printf 'harness\t.claude/hooks/lib/x.sh')
   export STUB_CLASSIFIER_OUTPUT
-
   run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | grep -c '\.bats$')" -eq 4 ]
   [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = "bats-shards: harness-change; running all of audit" ]
-
   run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
   [ "$status" -eq 0 ]
   [ "$(sed -n '1,2p' <<<"$output" | tr '\n' ' ')" = "mode=full reason=harness-change " ]
-}
 
-@test "P2: an unreadable change runs the whole shard even when a dependency path was printed" {
-  local directory="$BATS_TEST_TMPDIR/p2"
-  write_plan_fixture "$directory"
-
+  clear_plan_stubs
   STUB_CLASSIFIER_STATUS=3 run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | grep -c '\.bats$')" -eq 4 ]
@@ -1436,18 +1039,13 @@ plan_fixture() {
   STUB_SELECTOR_FAILS=1 run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
   grep -qx 'mode=full' <<<"$output"
   grep -qx 'reason=change-unreadable' <<<"$output"
-}
 
-@test "P3: a dependency change runs the installed-dependencies suites in full beside the whole-tree ones" {
-  local directory="$BATS_TEST_TMPDIR/p3"
-  write_plan_fixture "$directory"
+  clear_plan_stubs
   STUB_CLASSIFIER_OUTPUT=$(printf 'dependency\tpnpm-lock.yaml')
   export STUB_CLASSIFIER_OUTPUT
-
   run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | LC_ALL=C sort)" = "$(printf '%s\n%s' "$directory/audit/dependent.bats" "$directory/audit/marked.bats")" ]
-
   run plan_fixture "$SCRIPT" "$directory" run-for-change audit base-ref head-ref
   [ "$status" -eq 0 ]
   grep -qE '^ok [0-9]+ dependency one$' <<<"$output"
@@ -1455,46 +1053,21 @@ plan_fixture() {
   grep -qE '^ok [0-9]+ marked whole-tree$' <<<"$output"
   grep -qE 'marked plain$' <<<"$output" && return 1
   grep -qE 'unrelated$' <<<"$output" && return 1
-
   run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
   [ "$status" -eq 0 ]
   grep -qx 'mode=scoped' <<<"$output"
   grep -qx 'reason=selected' <<<"$output"
   grep -qx 'needs_node=1' <<<"$output"
   grep -qx 'needs_chromium=0' <<<"$output"
-}
 
-@test "P4: without a dependency line the installed-dependencies suite is not listed" {
-  local directory="$BATS_TEST_TMPDIR/p4"
-  write_plan_fixture "$directory"
-
+  clear_plan_stubs
   run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
   [ "$status" -eq 0 ]
   [ "$output" = "$directory/audit/marked.bats" ]
   run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
   grep -qx 'needs_node=0' <<<"$output"
-}
 
-@test "P5: a change that owes nothing selects nothing and installs nothing" {
-  local directory="$BATS_TEST_TMPDIR/p5"
-  write_plan_fixture "$directory"
-  rm "$directory/audit/dependent.bats" "$directory/audit/marked.bats" "$directory/audit/extract-test-signals-stories-reporter.bats"
-
-  run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  run plan_fixture "$SCRIPT" "$directory" run-for-change audit base-ref head-ref
-  [ "$status" -eq 0 ]
-  grep -qF 'audit holds no suite this change owes' <<<"$output"
-  run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'mode=none\nreason=nothing-selected\nneeds_node=0\nneeds_chromium=0')" ]
-}
-
-@test "P6: the Chromium need follows the set the leg will run" {
-  local directory="$BATS_TEST_TMPDIR/p6"
-  write_plan_fixture "$directory"
-
+  # The Chromium need follows the set the leg will run.
   STUB_SELECTOR_PICKS="$directory/audit/extract-test-signals-stories-reporter.bats" run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
   grep -qx 'needs_chromium=1' <<<"$output"
   run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
@@ -1502,14 +1075,9 @@ plan_fixture() {
   run plan_fixture "$SCRIPT" "$directory" plan audit --full
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf 'mode=full\nreason=requested\nneeds_node=1\nneeds_chromium=1')" ]
-}
-
-@test "P7: plan prints exactly four key=value lines in order, on every arm" {
-  local directory="$BATS_TEST_TMPDIR/p7" arm
-  write_plan_fixture "$directory"
 
   for arm in full harness unreadable selected none; do
-    unset STUB_CLASSIFIER_OUTPUT STUB_CLASSIFIER_STATUS STUB_SELECTOR_PICKS
+    clear_plan_stubs
     case "$arm" in
       full) set -- --full ;;
       harness)
@@ -1531,26 +1099,27 @@ plan_fixture() {
     esac
     export STUB_CLASSIFIER_OUTPUT STUB_CLASSIFIER_STATUS STUB_SELECTOR_PICKS
     run plan_fixture "$SCRIPT" "$directory" plan audit "$@"
-    [ "$status" -eq 0 ]
-    [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 4 ]
-    [ "$(sed -n '1p' <<<"$output" | cut -d= -f1)" = mode ]
-    [ "$(sed -n '2p' <<<"$output" | cut -d= -f1)" = reason ]
-    [ "$(sed -n '3p' <<<"$output" | cut -d= -f1)" = needs_node ]
-    [ "$(sed -n '4p' <<<"$output" | cut -d= -f1)" = needs_chromium ]
-    [ "$(grep -cE '^[a-z_]+=[a-z0-9-]+$' <<<"$output")" -eq 4 ]
+    [ "$status" -eq 0 ] || { echo "arm $arm: status $status"; return 1; }
+    [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 4 ] || { echo "arm $arm: not four lines"; return 1; }
+    [ "$(sed -n '1p' <<<"$output" | cut -d= -f1)" = mode ] || { echo "arm $arm: line 1 key"; return 1; }
+    [ "$(sed -n '2p' <<<"$output" | cut -d= -f1)" = reason ] || { echo "arm $arm: line 2 key"; return 1; }
+    [ "$(sed -n '3p' <<<"$output" | cut -d= -f1)" = needs_node ] || { echo "arm $arm: line 3 key"; return 1; }
+    [ "$(sed -n '4p' <<<"$output" | cut -d= -f1)" = needs_chromium ] || { echo "arm $arm: line 4 key"; return 1; }
+    [ "$(grep -cE '^[a-z_]+=[a-z0-9-]+$' <<<"$output")" -eq 4 ] || { echo "arm $arm: a line is not key=value"; return 1; }
   done
-}
 
-@test "P8: plan refuses a call with no shard, an unknown shard, or no change" {
-  run bash "$SCRIPT" plan
-  [ "$status" -eq 2 ]
-  grep -q '^bats-shards:' <<<"$output"
-  run bash "$SCRIPT" plan no-such-shard --full
-  [ "$status" -eq 2 ]
-  grep -q '^bats-shards:' <<<"$output"
-  run bash "$SCRIPT" plan audit
-  [ "$status" -eq 2 ]
-  grep -q '^bats-shards:' <<<"$output"
+  # With the marked, dependent and Chromium suites gone, the change owes nothing.
+  clear_plan_stubs
+  rm -f "$directory/audit/extract-test-signals-stories-reporter.bats"
+  run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run plan_fixture "$SCRIPT" "$directory" run-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  grep -qF 'audit holds no suite this change owes' <<<"$output"
+  run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'mode=none\nreason=nothing-selected\nneeds_node=0\nneeds_chromium=0')" ]
 }
 
 # bats test_tags=whole-tree

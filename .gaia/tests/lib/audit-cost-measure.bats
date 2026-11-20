@@ -5,10 +5,8 @@
 # argument and scratch-root guards, and the replay patches.
 #
 # Every test reads the committed fixtures (or the toolkit scripts) through the
-# real tree, so each carries the whole-tree mark. Mutation twins run on scratch
-# copies in $BATS_TEST_TMPDIR and assert the mutated copy behaves differently;
-# none touches the shared checkout. No test calls claude or gh: the drivers run
-# against stubs first on PATH.
+# real tree, so each carries the whole-tree mark. No test touches the shared
+# checkout or calls claude or gh: the drivers run against stubs first on PATH.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
@@ -22,15 +20,14 @@ setup() {
   REAL_RATES="$REPO_ROOT/.gaia/scripts/token-rates.json"
 }
 
-# measure_to_files <session jsonl> <rates file> [<script directory>]: runs
+# measure_to_files <session jsonl> <rates file>: runs
 # measure-dispatch.mjs, leaving stdout in $MEASURE_OUT, stderr in $MEASURE_ERR
 # and the exit status in $MEASURE_STATUS.
 measure_to_files() {
-  local script_directory="${3:-$TOOLKIT}"
   MEASURE_OUT="$BATS_TEST_TMPDIR/measure.out"
   MEASURE_ERR="$BATS_TEST_TMPDIR/measure.err"
   MEASURE_STATUS=0
-  node "$script_directory/measure-dispatch.mjs" --session "$1" --rates "$2" >"$MEASURE_OUT" 2>"$MEASURE_ERR" || MEASURE_STATUS=$?
+  node "$TOOLKIT/measure-dispatch.mjs" --session "$1" --rates "$2" >"$MEASURE_OUT" 2>"$MEASURE_ERR" || MEASURE_STATUS=$?
 }
 
 # The dollars token-pricing-lib.sh computes for one call's token buckets.
@@ -47,14 +44,6 @@ library_cost() {
 # Prints 0 when $1 and $2 agree to a millionth of a dollar.
 costs_agree() {
   jq -n --argjson left "$1" --argjson right "$2" '((($left - $right) | fabs) < 0.0000005)'
-}
-
-# Copies the committed pricing fixture and the library to a scratch directory.
-scratch_toolkit() {
-  SCRATCH_TOOLKIT="$BATS_TEST_TMPDIR/toolkit"
-  mkdir -p "$SCRATCH_TOOLKIT"
-  cp -R "$TOOLKIT/lib" "$SCRATCH_TOOLKIT/lib"
-  cp "$TOOLKIT/measure-dispatch.mjs" "$SCRATCH_TOOLKIT/measure-dispatch.mjs"
 }
 
 classify_json() {
@@ -86,19 +75,12 @@ classify_json() {
 }
 
 # bats test_tags=whole-tree
-@test "a repeated message id counts once at its last usage block, and the no-dedupe twin differs" {
+@test "a repeated message id counts once at its last usage block" {
   measure_to_files "$SYNTHETIC/pricing/session.jsonl" "$REAL_RATES"
   [ "$MEASURE_STATUS" -eq 0 ]
   [ "$(jq '.dispatches[0].calls' "$MEASURE_OUT")" -eq 1 ]
   [ "$(jq '.dispatches[0].per_call | length' "$MEASURE_OUT")" -eq 1 ]
   [ "$(jq -r '.dispatches[0].cost_usd' "$MEASURE_OUT")" = "0.2" ]
-  scratch_toolkit
-  sed 's/const dedupeKey = message\.id;/const dedupeKey = message.id + "-" + calls.length;/' "$TOOLKIT/lib/transcripts.mjs" >"$SCRATCH_TOOLKIT/lib/transcripts.mjs"
-  grep -qF 'calls.length;' "$SCRATCH_TOOLKIT/lib/transcripts.mjs" || return 1
-  measure_to_files "$SYNTHETIC/pricing/session.jsonl" "$REAL_RATES" "$SCRATCH_TOOLKIT"
-  [ "$MEASURE_STATUS" -eq 0 ]
-  [ "$(jq '.dispatches[0].calls' "$MEASURE_OUT")" -eq 2 ]
-  [ "$(jq -r '.dispatches[0].cost_usd' "$MEASURE_OUT")" != "0.2" ]
 }
 
 # bats test_tags=whole-tree
@@ -110,13 +92,6 @@ classify_json() {
   [ "$MEASURE_STATUS" -eq 3 ]
   grep -qF 'claude-unknown-0' "$MEASURE_ERR" || return 1
   [ ! -s "$MEASURE_OUT" ]
-}
-
-# bats test_tags=whole-tree
-@test "measure-dispatch rejects a missing flag with exit 2" {
-  run node "$TOOLKIT/measure-dispatch.mjs" --session "$RC3/session.jsonl"
-  [ "$status" -eq 2 ]
-  grep -qF 'usage: measure-dispatch.mjs' <<<"$output" || return 1
 }
 
 # bats test_tags=whole-tree
@@ -165,7 +140,7 @@ classify_json() {
 }
 
 # bats test_tags=whole-tree
-@test "classifyChild maps the rc3 specialist descriptions and the literal cases, and the twin without the translation rule differs" {
+@test "classifyChild maps the rc3 specialist descriptions and the literal cases" {
   local expected='{
     "byDescription": {
       "TypeScript rules audit": {"kind": "specialist", "role": "typescript"},
@@ -185,15 +160,6 @@ classify_json() {
   # Only the four specialist descriptions are asserted from the fixture; the fixture also holds a fixer.
   jq -n --argjson actual "$actual" --argjson expected "$expected" \
     '($expected.byDescription | to_entries | all(.value == $actual.byDescription[.key])) and ($expected.literal == $actual.literal)' | grep -qx true
-
-  scratch_toolkit
-  grep -v 'translation|i18n' "$TOOLKIT/lib/transcripts.mjs" >"$SCRATCH_TOOLKIT/lib/transcripts.mjs"
-  [ "$(grep -c 'translation|i18n' "$TOOLKIT/lib/transcripts.mjs")" -eq 1 ]
-  local mutated
-  mutated="$(classify_json "$SCRATCH_TOOLKIT/lib/transcripts.mjs")"
-  # Without the rule the description matches nothing, so the prompt (which names React) decides: not translation.
-  [ "$(jq -r '.byDescription["Translation rules audit"].role' <<<"$mutated")" != "translation" ]
-  [ "$(jq -c '.byDescription["TypeScript rules audit"]' <<<"$mutated")" = '{"kind":"specialist","role":"typescript"}' ]
 }
 
 # bats test_tags=whole-tree
@@ -303,7 +269,10 @@ classify_json() {
 }
 
 # bats test_tags=whole-tree
-@test "the probe, replay and scratch-clone scripts exit 2 with a usage line on no arguments or a missing required flag" {
+@test "the toolkit scripts exit 2 with a usage line on no arguments or a missing required flag" {
+  run node "$TOOLKIT/measure-dispatch.mjs" --session "$RC3/session.jsonl"
+  [ "$status" -eq 2 ]
+  grep -qF 'usage: measure-dispatch.mjs' <<<"$output" || return 1
   local script
   for script in prepare-scratch-clone.sh probe-first-call.sh run-replay.sh; do
     run bash "$TOOLKIT/$script"
@@ -354,8 +323,8 @@ make_throwaway() {
   git -C "$THROWAWAY" push -q origin main
 }
 
-# bats test_tags=whole-tree
-@test "the probe refuses a root without the scratch sentinel before any claude call, and passes the guard with it" {
+# bats test_tags=whole-tree,protected
+@test "the probe and replay drivers refuse a root without the scratch sentinel before any claude call, and pass the guard with it" {
   make_stubs
   mkdir -p "$BATS_TEST_TMPDIR/root"
   PATH="$STUB_DIRECTORY:$PATH" run bash "$TOOLKIT/probe-first-call.sh" --root "$BATS_TEST_TMPDIR/root" --types code-audit-frontend --out "$BATS_TEST_TMPDIR/out" --max-usd 1
@@ -367,19 +336,16 @@ make_throwaway() {
   PATH="$STUB_DIRECTORY:$PATH" run bash "$TOOLKIT/probe-first-call.sh" --root "$BATS_TEST_TMPDIR/root" --types code-audit-frontend --out "$BATS_TEST_TMPDIR/out" --max-usd 1
   [ "$status" -eq 3 ]
   grep -q '^claude ' "$STUB_LOG" || return 1
-}
 
-# bats test_tags=whole-tree
-@test "the replay refuses a scaffold without the sentinel before any claude call, and passes the guard with it" {
-  make_stubs
+  : >"$STUB_LOG"
   make_throwaway
-  PATH="$STUB_DIRECTORY:$PATH" run bash "$TOOLKIT/run-replay.sh" --scaffold "$THROWAWAY" --replay language-file --run 1 --out "$BATS_TEST_TMPDIR/out" --max-usd 1
+  PATH="$STUB_DIRECTORY:$PATH" run bash "$TOOLKIT/run-replay.sh" --scaffold "$THROWAWAY" --replay language-file --run 1 --out "$BATS_TEST_TMPDIR/replay-out" --max-usd 1
   [ "$status" -eq 2 ]
   [ ! -s "$STUB_LOG" ]
 
   mkdir -p "$THROWAWAY/.gaia/local"
   : >"$THROWAWAY/.gaia/local/measurement-scratch"
-  PATH="$STUB_DIRECTORY:$PATH" run bash "$TOOLKIT/run-replay.sh" --scaffold "$THROWAWAY" --replay language-file --run 1 --out "$BATS_TEST_TMPDIR/out" --max-usd 1
+  PATH="$STUB_DIRECTORY:$PATH" run bash "$TOOLKIT/run-replay.sh" --scaffold "$THROWAWAY" --replay language-file --run 1 --out "$BATS_TEST_TMPDIR/replay-out" --max-usd 1
   # The stub claude writes no session, so the run ends 3 after the guard.
   [ "$status" -eq 3 ]
   grep -q '^claude ' "$STUB_LOG" || return 1

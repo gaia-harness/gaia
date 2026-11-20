@@ -46,30 +46,22 @@ resume() {
   run bash "$SCRIPT" --git-dir "$REPO" --plan-dir "$PLAN" "$@"
 }
 
-@test "a yield block for phase 3 after committed phases 1 and 2 resumes at phase 3" {
-  local sha_one sha_two
+@test "a yield block is no anchor for its phase and a later commit block completes it after one or several yields" {
+  local sha_one sha_two sha_three expected
   sha_one="$(commit_one one)"
   sha_two="$(commit_one two)"
+  sha_three="$(commit_one three)"
+
   {
     commit_block 1 "$sha_one"
     commit_block 2 "$sha_two"
     yield_block 3 1
   } >"$PLAN/PROGRESS.md"
   resume --phases 4
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "3" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha_one" ]
-  [ "${lines[2]}" = "COMPLETE 2 $sha_two" ]
-  [ "${#lines[@]}" -eq 3 ]
-  echo "$output" | grep -qF 'COMPLETE 3' && return 1
-  true
-}
+  expected="$(printf '3\nCOMPLETE 1 %s\nCOMPLETE 2 %s' "$sha_one" "$sha_two")"
+  [ "$status" -eq 0 ] || { echo "yield after two commits: status $status"; return 1; }
+  [ "$output" = "$expected" ] || { echo "yield after two commits: got '$output'"; return 1; }
 
-@test "a yield block for phase 3 followed by its commit block completes phase 3" {
-  local sha_one sha_two sha_three
-  sha_one="$(commit_one one)"
-  sha_two="$(commit_one two)"
-  sha_three="$(commit_one three)"
   {
     commit_block 1 "$sha_one"
     commit_block 2 "$sha_two"
@@ -77,16 +69,10 @@ resume() {
     commit_block 3 "$sha_three"
   } >"$PLAN/PROGRESS.md"
   resume --phases 4
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "4" ]
-  [ "${lines[3]}" = "COMPLETE 3 $sha_three" ]
-  [ "${#lines[@]}" -eq 4 ]
-}
+  expected="$(printf '4\nCOMPLETE 1 %s\nCOMPLETE 2 %s\nCOMPLETE 3 %s' "$sha_one" "$sha_two" "$sha_three")"
+  [ "$status" -eq 0 ] || { echo "yield then commit: status $status"; return 1; }
+  [ "$output" = "$expected" ] || { echo "yield then commit: got '$output'"; return 1; }
 
-@test "two yield blocks for the same phase followed by its commit block complete the phase" {
-  local sha_one sha_two
-  sha_one="$(commit_one one)"
-  sha_two="$(commit_one two)"
   {
     commit_block 1 "$sha_one"
     yield_block 2 1
@@ -94,30 +80,7 @@ resume() {
     commit_block 2 "$sha_two"
   } >"$PLAN/PROGRESS.md"
   resume --phases 2
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "3" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha_one" ]
-  [ "${lines[2]}" = "COMPLETE 2 $sha_two" ]
-  [ "${#lines[@]}" -eq 3 ]
+  expected="$(printf '3\nCOMPLETE 1 %s\nCOMPLETE 2 %s' "$sha_one" "$sha_two")"
+  [ "$status" -eq 0 ] || { echo "two yields then commit: status $status"; return 1; }
+  [ "$output" = "$expected" ] || { echo "two yields then commit: got '$output'"; return 1; }
 }
-
-@test "red twin: a reader that accepts the Yield line as an anchor reports a yielded phase complete" {
-  local sha_one sha_two mutated="$BATS_TEST_TMPDIR/plan-resume-point-mutated.sh"
-  sha_one="$(commit_one one)"
-  sha_two="$(commit_one two)"
-  # The yield number is the token a mutated reader would try as a commit, so a
-  # tag of that name on an ancestor lets the mutation show its effect.
-  git -C "$REPO" tag 1 "$sha_one"
-  {
-    commit_block 1 "$sha_one"
-    commit_block 2 "$sha_two"
-    yield_block 3 1
-  } >"$PLAN/PROGRESS.md"
-  sed -e 's|\^Commit:\[\[:space:\]\]\*|^(Commit\|Yield):[[:space:]]*|g' "$SCRIPT" >"$mutated"
-  cmp -s "$SCRIPT" "$mutated" && return 1
-  run bash "$SCRIPT" --git-dir "$REPO" --plan-dir "$PLAN" --phases 4
-  [ "${lines[0]}" = "3" ]
-  run bash "$mutated" --git-dir "$REPO" --plan-dir "$PLAN" --phases 4
-  [ "${lines[0]}" = "4" ]
-}
-

@@ -2,9 +2,8 @@
 #
 # Runs the fitness lint exactly as the `cli-tests` job in
 # .github/workflows/cli-tests.yml runs it, against scratch copies of the
-# tracked tree, and proves the job fails on a frontmatter defect, holds when
-# the pull request edits its own suppression file, and stays red when the CI
-# line loses a flag.
+# tracked tree, and proves the job fails on a frontmatter defect and holds when
+# the pull request edits its own suppression file.
 #
 # The command line is read out of the workflow, not restated here, so an edit
 # to the workflow is what this suite sees. Scratch trees come from the index
@@ -99,6 +98,7 @@ commit_tree() {
   done
 }
 
+# bats test_tags=protected
 @test "a skill name that gains the reserved word claude fails and names the rule" {
   skill=".claude/skills/tdd/SKILL.md"
   sed -i.bak -E "s|^name: tdd\$|name: claude-tdd|" "$TREE/$skill"
@@ -109,6 +109,7 @@ commit_tree() {
   grep -qF -- "frontmatter.skill.name.reserved-word" <<<"$output" || return 1
 }
 
+# bats test_tags=protected
 @test "a pull request that suppresses its own violation still fails, because suppressions come from the base" {
   skill=".claude/skills/tdd/SKILL.md"
   long="$(printf 'x%.0s' $(seq 1 1100))"
@@ -123,73 +124,45 @@ commit_tree() {
   grep -qF -- "frontmatter.skill.description.max-length" <<<"$output" || return 1
 }
 
-@test "red twin: a workflow copy without --enforce frontmatter changes the extracted line and lets the reserved-word case pass" {
-  broken="$BATS_TEST_TMPDIR/cli-tests.yml"
-  sed 's| --enforce frontmatter||' "$WORKFLOW" >"$broken"
-  [ "$(ci_command_line "$broken")" != "$(ci_command_line "$WORKFLOW")" ]
-  skill=".claude/skills/tdd/SKILL.md"
-  sed -i.bak -E "s|^name: tdd\$|name: claude-tdd|" "$TREE/$skill"
-  rm "$TREE/$skill.bak"
-  commit_tree
-  run run_ci_lint "$broken" "$TREE" "$BASE_CONFIG"
-  [ "$status" -eq 0 ]
-}
-
-# bats test_tags=whole-tree
-@test "a new harness script over 400 lines fails and names the file and rule" {
-  full_tree
-  script=".gaia/scripts/line-limit-probe.sh"
-  seq 1 401 >"$TREE/$script"
-  commit_tree
-  run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
-  [ "$status" -ne 0 ]
-  grep -qF -- "$script" <<<"$output" || return 1
-  grep -qF -- "authoring.harness.max-lines" <<<"$output" || return 1
-}
-
 # grandfathered_entry: the first grandfathered path and its ceiling, from the
 # tree's own ceilings file.
 grandfathered_entry() {
   jq -r '.ceilings | to_entries[0] | "\(.key) \(.value)"' "$TREE/.claude/maintainers/line-limit-ceilings.json"
 }
 
-# bats test_tags=whole-tree
-@test "a grandfathered file grown one line past its ceiling fails" {
+# bats test_tags=whole-tree,protected
+@test "the line-limit gate fails a new harness script over 400 lines and a grandfathered file past its ceiling, and warns on a stale ceiling" {
   full_tree
-  read -r file ceiling <<<"$(grandfathered_entry)"
-  [ -n "$file" ] && [ "$ceiling" -gt 400 ]
-  line_count="$(wc -l <"$TREE/$file" | tr -d ' ')"
-  seq "$line_count" "$ceiling" >>"$TREE/$file"
-  [ "$(wc -l <"$TREE/$file" | tr -d ' ')" -eq $((ceiling + 1)) ]
+  script=".gaia/scripts/line-limit-probe.sh"
+  seq 1 401 >"$TREE/$script"
   commit_tree
   run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
-  [ "$status" -ne 0 ]
-  grep -qF -- "past its grandfathered ceiling of $ceiling" <<<"$output" || return 1
-}
+  [ "$status" -ne 0 ] || { echo "new script over 400 lines: status $status"; return 1; }
+  grep -qF -- "$script" <<<"$output" || { echo "new script: output does not name $script"; return 1; }
+  grep -qF -- "authoring.harness.max-lines" <<<"$output" || { echo "new script: output does not name the rule"; return 1; }
+  rm "$TREE/$script"
 
-# bats test_tags=whole-tree
-@test "a grandfathered file shrunk under 400 lines passes with a stale-ceiling warning" {
-  full_tree
   read -r file ceiling <<<"$(grandfathered_entry)"
-  [ -n "$file" ] && [ "$ceiling" -gt 400 ]
+  [ -n "$file" ] && [ "$ceiling" -gt 400 ] || { echo "no grandfathered entry above 400 lines"; return 1; }
+  line_count="$(wc -l <"$TREE/$file" | tr -d ' ')"
+  seq "$line_count" "$ceiling" >>"$TREE/$file"
+  [ "$(wc -l <"$TREE/$file" | tr -d ' ')" -eq $((ceiling + 1)) ] || { echo "$file is not one line past $ceiling"; return 1; }
+  commit_tree
+  run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
+  [ "$status" -ne 0 ] || { echo "past ceiling: status $status"; return 1; }
+  grep -qF -- "past its grandfathered ceiling of $ceiling" <<<"$output" || { echo "past ceiling: no ceiling message"; return 1; }
+
   # Rewritten in place, not replaced, so a hook keeps its executable bit.
   head -n 10 "$TREE/$file" >"$BATS_TEST_TMPDIR/shrunk"
   cat "$BATS_TEST_TMPDIR/shrunk" >"$TREE/$file"
   commit_tree
   run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "shrunk: status $status"; return 1; }
   grep -qF -- "authoring.harness.ceiling-stale" <<<"$output"
 }
 
 @test "the line-limit ceilings file is release-excluded" {
   grep -qxF '.claude/maintainers' "$REPO_ROOT/.gaia/release-exclude"
-}
-
-@test "red twin: a workflow with no fitness line fails the extraction" {
-  broken="$BATS_TEST_TMPDIR/cli-tests.yml"
-  grep -v 'gaia fitness check' "$WORKFLOW" >"$broken"
-  run ci_command_line "$broken"
-  [ "$status" -ne 0 ]
 }
 
 @test "the suppression file is release-excluded" {

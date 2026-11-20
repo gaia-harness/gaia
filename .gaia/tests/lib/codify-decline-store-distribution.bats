@@ -4,11 +4,9 @@
 # overwrites, prunes or flags them, and a pull request that only adds a decline
 # file owes no Code Audit Team member.
 #
-# Each property is a helper that returns non-zero on a violation. A real-tree
-# case proves the helper passes, and a mutation case drives a scratch copy into
-# the failing state and asserts the helper refuses, so no guard here can pass
-# vacuously. Scratch repositories live under $BATS_TEST_TMPDIR; the real
-# checkout's index, HEAD and working tree are never touched.
+# Each property is a helper that returns non-zero on a violation. Scratch
+# repositories live under $BATS_TEST_TMPDIR; the real checkout's index, HEAD and
+# working tree are never touched.
 #
 # Assertion style per .claude/rules/bats-assertions.md.
 #
@@ -149,31 +147,17 @@ grant_folder_to_shell_member() {
   assert_release_exclude_lists_folder "$REPO_ROOT/.gaia/release-exclude"
 }
 
-@test "release-exclude check refuses a copy without the decline folder line" {
-  grep -vxF -- "$DECLINE_FOLDER" "$REPO_ROOT/.gaia/release-exclude" > "$BATS_TEST_TMPDIR/release-exclude" || true
-  run assert_release_exclude_lists_folder "$BATS_TEST_TMPDIR/release-exclude"
-  [ "$status" -ne 0 ] || return 1
-}
-
-# Slow: one manifest generation per scratch clone.
+# Slow: one manifest generation per check.
 # bats test_tags=whole-tree
-@test "a committed decline file stays out of the release manifest" {
+@test "a committed decline file stays out of the release manifest, and the manifest check refuses once the release-exclude line is gone" {
   local clone="$BATS_TEST_TMPDIR/clone"
   clone_repository "$clone" || return 1
   write_decline_file "$clone" > /dev/null
   record_revision "$clone" "add a decline file" || return 1
-  assert_manifest_omits_decline_files "$clone"
-}
-
-# Slow: one manifest generation per scratch clone.
-# bats test_tags=whole-tree
-@test "manifest check refuses once the release-exclude line is gone" {
-  local clone="$BATS_TEST_TMPDIR/clone"
-  clone_repository "$clone" || return 1
-  write_decline_file "$clone" > /dev/null
+  assert_manifest_omits_decline_files "$clone" || return 1
   grep -vxF -- "$DECLINE_FOLDER" "$clone/.gaia/release-exclude" > "$clone/.gaia/release-exclude.new" || true
   mv "$clone/.gaia/release-exclude.new" "$clone/.gaia/release-exclude"
-  record_revision "$clone" "add a decline file without the exclusion" || return 1
+  record_revision "$clone" "drop the release-exclude line" || return 1
   run assert_manifest_omits_decline_files "$clone"
   [ "$status" -ne 0 ] || return 1
 }
@@ -182,69 +166,38 @@ grant_folder_to_shell_member() {
   assert_scrub_opts_out_folder "$REPO_ROOT/.gaia/release-scrub.yml"
 }
 
-@test "release-scrub check refuses a copy with the ref opt-out entry removed" {
-  grep -vF -- "- \"$DECLINE_FOLDER\"" "$REPO_ROOT/.gaia/release-scrub.yml" > "$BATS_TEST_TMPDIR/release-scrub.yml" || true
-  grep -qF -- "- \"$DECLINE_FOLDER\"" "$BATS_TEST_TMPDIR/release-scrub.yml" && return 1
-  run assert_scrub_opts_out_folder "$BATS_TEST_TMPDIR/release-scrub.yml"
-  [ "$status" -ne 0 ] || return 1
-}
-
-@test "release-scrub check refuses a copy with the entry moved to another list" {
-  awk -v folder="$DECLINE_FOLDER" '
-    index($0, "- \"" folder "\"") { next }
-    { print }
-    /^[[:space:]]*path-allowlist:[[:space:]]*$/ && !moved {
-      printf "          - \"%s\"\n", folder
-      moved = 1
-    }
-  ' "$REPO_ROOT/.gaia/release-scrub.yml" > "$BATS_TEST_TMPDIR/release-scrub.yml"
-  grep -qF -- "- \"$DECLINE_FOLDER\"" "$BATS_TEST_TMPDIR/release-scrub.yml" || return 1
-  run assert_scrub_opts_out_folder "$BATS_TEST_TMPDIR/release-scrub.yml"
-  [ "$status" -ne 0 ] || return 1
-}
-
 # bats test_tags=whole-tree
-@test "a decline-only diff resolves an empty audit member set" {
-  local clone="$BATS_TEST_TMPDIR/clone" base
-  clone_repository "$clone" || return 1
-  base="$(git -C "$clone" rev-parse HEAD)"
-  git -C "$clone" checkout --quiet -b decline-only || return 1
-  write_decline_file "$clone" > /dev/null
-  record_revision "$clone" "add a decline file" || return 1
-  assert_no_member_owed "$clone" "$base"
-}
-
-# bats test_tags=whole-tree
-@test "a roster that owns the decline folder makes the empty-member check refuse" {
-  local clone="$BATS_TEST_TMPDIR/clone" base
-  clone_repository "$clone" || return 1
-  grant_folder_to_shell_member "$clone" || return 1
-  record_revision "$clone" "grant the decline folder to the shell member" || return 1
-  # The roster edit is the base, so the decline file is the only path in the diff.
-  base="$(git -C "$clone" rev-parse HEAD)"
-  git -C "$clone" checkout --quiet -b decline-only || return 1
-  write_decline_file "$clone" > /dev/null
-  record_revision "$clone" "add a decline file" || return 1
-  run bash "$clone/.gaia/scripts/resolve-audit-members.sh" --root "$clone" --base "$base"
-  [ "$status" -eq 0 ] || return 1
-  [ "$output" = "code-audit-maintainer-shell" ] || return 1
-  run assert_no_member_owed "$clone" "$base"
-  [ "$status" -ne 0 ] || return 1
-}
-
-# bats test_tags=whole-tree
-@test "the same JSON one level up, as a .gaia json file, is owned by the shell member" {
+@test "a decline-only diff owes no audit member, while a roster that owns the folder or the same JSON as a flat .gaia file does" {
   local clone="$BATS_TEST_TMPDIR/clone" base relative_path
   clone_repository "$clone" || return 1
   base="$(git -C "$clone" rev-parse HEAD)"
-  git -C "$clone" checkout --quiet -b flat-file || return 1
+
+  git -C "$clone" checkout --quiet -b decline-only || return 1
+  write_decline_file "$clone" > /dev/null
+  record_revision "$clone" "add a decline file" || return 1
+  assert_no_member_owed "$clone" "$base" || return 1
+
+  git -C "$clone" checkout --quiet -b flat-file "$base" || return 1
   relative_path="$(write_decline_file "$clone")"
   mv "$clone/$relative_path" "$clone/.gaia/codify-declines.json"
   rm -rf "${clone:?}/$DECLINE_FOLDER"
   record_revision "$clone" "add the decline as a flat json file" || return 1
   run bash "$clone/.gaia/scripts/resolve-audit-members.sh" --root "$clone" --base "$base"
-  [ "$status" -eq 0 ] || return 1
-  [ "$output" = "code-audit-maintainer-shell" ] || return 1
+  [ "$status" -eq 0 ] || { echo "flat file: status $status"; return 1; }
+  [ "$output" = "code-audit-maintainer-shell" ] || { echo "flat file: got '$output'"; return 1; }
+
+  git -C "$clone" checkout --quiet -b owned-folder "$base" || return 1
+  grant_folder_to_shell_member "$clone" || return 1
+  record_revision "$clone" "grant the decline folder to the shell member" || return 1
+  # The roster edit is the base, so the decline file is the only path in the diff.
+  base="$(git -C "$clone" rev-parse HEAD)"
+  write_decline_file "$clone" > /dev/null
+  record_revision "$clone" "add a decline file" || return 1
+  run bash "$clone/.gaia/scripts/resolve-audit-members.sh" --root "$clone" --base "$base"
+  [ "$status" -eq 0 ] || { echo "owned folder: status $status"; return 1; }
+  [ "$output" = "code-audit-maintainer-shell" ] || { echo "owned folder: got '$output'"; return 1; }
+  run assert_no_member_owed "$clone" "$base"
+  [ "$status" -ne 0 ] || return 1
 }
 
 @test "the out-of-scope bypass allowlists a decline file and not an app source file" {

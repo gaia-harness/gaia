@@ -145,24 +145,21 @@ cluster_count() {
   [ -z "$output" ] || return 1
 }
 
-@test "a member inside a maintainer-only block is marked maintainer_only" {
-  write_file .claude/rules/a.md "# A" "" "<!-- gaia:maintainer-only:start -->" "$(procedure alpha)" "<!-- gaia:maintainer-only:end -->"
+@test "a maintainer-only block, flush or indented under a list item, marks its member maintainer_only and is stripped from the text" {
+  local shape
   write_file .claude/rules/b.md "# B" "" "$(procedure alpha)"
-  run node "$SCRIPT" --root "$REPO"
-  [ "$status" -eq 0 ] || return 1
-  [ "$(cluster_count)" = 1 ] || return 1
-  [ "$(jq -c '[.clusters[0].members[] | [.path, .maintainer_only]]' <<<"$output")" = '[[".claude/rules/a.md",true],[".claude/rules/b.md",false]]' ] || return 1
-  [ "$(jq '[.clusters[0].members[].text | contains("gaia:maintainer-only")] | any' <<<"$output")" = false ] || return 1
-}
-
-@test "a maintainer-only marker indented under a list item still toggles maintainer_only" {
-  write_file .claude/rules/a.md "# A" "" "- Intro item" "  <!-- gaia:maintainer-only:start -->" "  $(procedure alpha)" "  <!-- gaia:maintainer-only:end -->"
-  write_file .claude/rules/b.md "# B" "" "$(procedure alpha)"
-  run node "$SCRIPT" --root "$REPO"
-  [ "$status" -eq 0 ] || return 1
-  [ "$(cluster_count)" = 1 ] || return 1
-  [ "$(jq -c '[.clusters[0].members[] | [.path, .maintainer_only]]' <<<"$output")" = '[[".claude/rules/a.md",true],[".claude/rules/b.md",false]]' ] || return 1
-  [ "$(jq '[.clusters[0].members[].text | contains("gaia:maintainer-only")] | any' <<<"$output")" = false ] || return 1
+  for shape in flush indented; do
+    if [ "$shape" = flush ]; then
+      write_file .claude/rules/a.md "# A" "" "<!-- gaia:maintainer-only:start -->" "$(procedure alpha)" "<!-- gaia:maintainer-only:end -->"
+    else
+      write_file .claude/rules/a.md "# A" "" "- Intro item" "  <!-- gaia:maintainer-only:start -->" "  $(procedure alpha)" "  <!-- gaia:maintainer-only:end -->"
+    fi
+    run node "$SCRIPT" --root "$REPO"
+    [ "$status" -eq 0 ] || { echo "$shape: status $status"; return 1; }
+    [ "$(cluster_count)" = 1 ] || { echo "$shape: cluster count $(cluster_count)"; return 1; }
+    [ "$(jq -c '[.clusters[0].members[] | [.path, .maintainer_only]]' <<<"$output")" = '[[".claude/rules/a.md",true],[".claude/rules/b.md",false]]' ] || { echo "$shape: maintainer_only flags wrong"; return 1; }
+    [ "$(jq '[.clusters[0].members[].text | contains("gaia:maintainer-only")] | any' <<<"$output")" = false ] || { echo "$shape: marker left in text"; return 1; }
+  done
 }
 
 @test "a longer fence holds a shorter fence, so the block runs to the outer closing fence" {

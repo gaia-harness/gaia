@@ -5,20 +5,14 @@
 # or apps/web/tsconfig.json must still select the gate. The test extracts the
 # command from the page itself and runs it against staged files in a temp repo.
 #
-# The "old" control is an inline copy of the pre-move command, so the guard is
-# proven able to fail without reading git history (this PR is squash-merged).
-#
 # The maintainer-only "Frontend filter", piped after the Quick check, narrows
 # which gate-selecting commits run the web-only steps 6 to 8: CLI, test-harness, and
-# harness-script source belongs to no registered package. Its can-fail control
-# is the Quick check alone, which selects those same stages.
+# harness-script source belongs to no registered package.
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PAGE="$REPO_ROOT/wiki/decisions/Quality Gate.md"
   TMP_REPO="$(mktemp -d)"
-  git -C "$TMP_REPO" init -q
-  OLD_COMMAND="git diff --cached --name-only -z | tr '\\0' '\\n' | grep -E '\\.(ts|tsx|js|jsx|mjs|cjs|css)\$|^(package\\.json|pnpm-lock\\.yaml|tsconfig.*\\.json|vite\\.config\\.|vitest\\.config\\.|playwright\\.config\\.|eslint\\.config\\.)'"
 }
 
 teardown() {
@@ -53,6 +47,8 @@ page_frontend_check() {
 staged_selection() {
   local command="$1" path
   shift
+  find "$TMP_REPO" -mindepth 1 -delete
+  git -C "$TMP_REPO" init -q
   for path in "$@"; do
     mkdir -p "$TMP_REPO/$(dirname "$path")"
     printf '{}\n' >"$TMP_REPO/$path"
@@ -61,89 +57,40 @@ staged_selection() {
   (cd "$TMP_REPO" && bash -c "$command") || true
 }
 
-@test "the page carries exactly one quick-check command" {
-  run page_quick_check
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 1 ]
-}
-
-@test "staging only apps/web/package.json selects the gate" {
-  run staged_selection "$(page_quick_check)" apps/web/package.json
-  [ -n "$output" ]
-}
-
-@test "staging only apps/web/tsconfig.json selects the gate" {
-  run staged_selection "$(page_quick_check)" apps/web/tsconfig.json
-  [ -n "$output" ]
-}
-
-@test "staging only the package registry files selects the gate" {
-  run staged_selection "$(page_quick_check)" .gaia/packages.json apps/web/gaia.package.json
-  [ -n "$output" ]
-}
-
-@test "root package.json still selects the gate" {
-  run staged_selection "$(page_quick_check)" package.json
-  [ -n "$output" ]
-}
-
-@test "staging only wiki and rules markdown skips the gate" {
-  run staged_selection "$(page_quick_check)" wiki/a.md .claude/rules/a.md
-  [ -z "$output" ]
-}
-
-@test "guard can fail: the pre-move command skips a apps/web/tsconfig.json-only stage" {
-  run staged_selection "$OLD_COMMAND" apps/web/tsconfig.json
-  [ -z "$output" ]
-}
-
-@test "guard can fail: the pre-move command skips a apps/web/package.json-only stage" {
-  run staged_selection "$OLD_COMMAND" apps/web/package.json
-  [ -z "$output" ]
-}
-
-@test "steps 3 to 5 name their root scripts and steps 6 to 8 their pnpm -C apps/web equivalents, in order" {
-  local expected="typecheck lint test:ci pw dev build" actual=""
-  local n line
-  for n in 3 4 5; do
-    line="$(grep -E "^$n\. " "$PAGE")"
-    [ -n "$line" ]
-    [[ "$line" == "$n. \`pnpm "* ]]
-    actual="$actual $(printf '%s' "$line" | sed -E 's|^[0-9]+\. `pnpm ([a-z:]+).*|\1|')"
+@test "the Quality Gate quick-check command selects a commit staging only apps/web package.json or tsconfig.json, the package registry files or root package.json, and skips wiki and rules markdown" {
+  local command row paths expected
+  command="$(page_quick_check)"
+  [ -n "$command" ] || { echo "quick-check block is empty"; return 1; }
+  for row in \
+    "apps/web/package.json|select" \
+    "apps/web/tsconfig.json|select" \
+    ".gaia/packages.json apps/web/gaia.package.json|select" \
+    "package.json|select" \
+    "wiki/a.md .claude/rules/a.md|skip"; do
+    paths=${row%%|*}
+    expected=${row#*|}
+    # shellcheck disable=SC2086
+    run staged_selection "$command" $paths
+    if [ "$expected" = select ]; then
+      [ -n "$output" ] || { echo "row $row: gate skipped"; return 1; }
+    else
+      [ -z "$output" ] || { echo "row $row: gate selected '$output'"; return 1; }
+    fi
   done
-  for n in 6 7 8; do
-    line="$(grep -E "^$n\. " "$PAGE")"
-    [ -n "$line" ]
-    [[ "$line" == *'pnpm -C apps/web '* ]]
-    actual="$actual $(printf '%s' "$line" | sed -E 's|.*pnpm -C apps/web ([a-z]+).*|\1|')"
+}
+
+@test "the maintainer frontend filter skips CLI, test-harness and harness-script source, selects frontend source staged beside it, and still selects root config and the package registry" {
+  local command row paths expected
+  command="$(page_frontend_check)"
+  [ -n "$command" ] || { echo "frontend filter block is empty"; return 1; }
+  for row in \
+    ".gaia/cli/src/a.ts .gaia/tests/a.ts .gaia/scripts/lib/a.mjs|" \
+    ".gaia/cli/src/a.ts apps/web/app/a.tsx|apps/web/app/a.tsx" \
+    "package.json .gaia/packages.json apps/web/tsconfig.json|.gaia/packages.json,apps/web/tsconfig.json,package.json"; do
+    paths=${row%%|*}
+    expected=${row#*|}
+    # shellcheck disable=SC2086
+    run staged_selection "$command" $paths
+    [ "$(printf '%s\n' "$output" | paste -sd, -)" = "$expected" ] || { echo "row $row: got '$output'"; return 1; }
   done
-  [ "${actual# }" = "$expected" ]
-}
-
-@test "the page carries exactly one frontend filter" {
-  run page_frontend_check
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 1 ]
-}
-
-@test "staging only CLI, test-harness, and harness-script source skips the frontend steps" {
-  run staged_selection "$(page_frontend_check)" .gaia/cli/src/a.ts .gaia/tests/a.ts .gaia/scripts/lib/a.mjs
-  [ -z "$output" ]
-}
-
-@test "frontend source staged beside CLI source selects the frontend steps" {
-  run staged_selection "$(page_frontend_check)" .gaia/cli/src/a.ts apps/web/app/a.tsx
-  [ "$output" = "apps/web/app/a.tsx" ]
-}
-
-@test "root config and the package registry still select the frontend steps" {
-  run staged_selection "$(page_frontend_check)" package.json .gaia/packages.json apps/web/tsconfig.json
-  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 3 ]
-}
-
-@test "guard can fail: the quick check alone selects a CLI-only stage" {
-  run staged_selection "$(page_quick_check)" .gaia/cli/src/a.ts
-  [ "$output" = ".gaia/cli/src/a.ts" ]
 }

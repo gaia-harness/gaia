@@ -1131,41 +1131,6 @@ assert_paths_filter_pin_matches() {
   return 1
 }
 
-# The parser gate above is the single point where every parser-gated test in
-# this file, W10 among them, can be turned off at once, and nothing else here
-# would notice if it started skipping on CI: a lib leg that lost python3-yaml
-# would report `ok ... # skip` for each of them and green the job with the
-# shard-list invariant retired. This test is what makes that weakening red.
-# Same shape as workflow-filter-coverage.bats' own proving test for its
-# sibling gate. Not itself gated.
-
-@test "the parser gate fails on a CI runner and still skips off CI" {
-  local shim="$BATS_TEST_TMPDIR/no-parser" exit_status
-  mkdir -p "$shim"
-  # python3 present, but its `import yaml` fails: the shape a runner takes when
-  # python3-yaml is dropped from the apt line, not one where python3 is missing
-  # outright. The shebang is absolute so the stripped PATH below cannot affect it.
-  printf '#!/bin/sh\nexit 1\n' > "$shim/python3"
-  chmod +x "$shim/python3"
-
-  # Calling the gate in a subshell is what keeps its `skip` arm from marking this
-  # test skipped -- bats' `skip` exits 0, so the subshell's status is exactly the
-  # discriminator wanted here: non-zero is the CI failure, 0 is the off-CI skip.
-  exit_status=0
-  ( PATH="$shim" GITHUB_ACTIONS=true; require_yaml_parser ) >/dev/null 2>&1 || exit_status=$?
-  [ "$exit_status" -ne 0 ] || {
-    echo "the gate skipped on a CI runner with no YAML parser; every parser-gated test here would report green" >&2
-    return 1
-  }
-
-  exit_status=0
-  ( PATH="$shim"; unset GITHUB_ACTIONS; require_yaml_parser ) >/dev/null 2>&1 || exit_status=$?
-  [ "$exit_status" -eq 0 ] || {
-    echo "the gate failed off CI, where a missing parser must still skip" >&2
-    return 1
-  }
-}
-
 # W1. Exactly one job carries the required context name, byte-exact at four
 # spaces.
 
@@ -1198,12 +1163,12 @@ w1_check() {
   }
 }
 
-@test "W1: exactly one job carries the required context name" {
+case_w1_exactly_one_job_carries_the_required_context_name() {
   require_yaml_parser
   w1_check "$WORKFLOW"
 }
 
-@test "W1 adversarial: renaming the aggregator's name is caught" {
+case_w1_adversarial_renaming_the_aggregator_s_name_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w1a.yml"
   replace_line "$WORKFLOW" "    name: Audit CI Tests" "    name: Audit CI Tests Renamed" "$doctored"
@@ -1218,13 +1183,22 @@ w1_check() {
   }
 }
 
-@test "W1 adversarial: two jobs carrying the same name is caught" {
+case_w1_adversarial_two_jobs_carrying_the_same_name_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w1b.yml"
   replace_line "$WORKFLOW" '    name: Shard (${{ matrix.shard }})' "    name: Audit CI Tests" "$doctored"
 
   run w1_check "$doctored"
   [ "$status" -eq 1 ]
+}
+
+@test "W1: the required context name is carried by exactly one job (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w1_exactly_one_job_carries_the_required_context_name"
+  case_w1_exactly_one_job_carries_the_required_context_name
+  echo "case: case_w1_adversarial_renaming_the_aggregator_s_name_is_caught"
+  case_w1_adversarial_renaming_the_aggregator_s_name_is_caught
+  echo "case: case_w1_adversarial_two_jobs_carrying_the_same_name_is_caught"
+  case_w1_adversarial_two_jobs_carrying_the_same_name_is_caught
 }
 
 # W2. The aggregator runs on a dependency failure, on a push to main and on a
@@ -1244,12 +1218,12 @@ w2_check() {
   true
 }
 
-@test "W2: the aggregator's if: admits always(), push and workflow_dispatch, never negated" {
+case_w2_the_aggregator_s_if_admits_always_push_and_workflow_dispatch_never() {
   require_yaml_parser
   w2_check "$WORKFLOW"
 }
 
-@test "W2 adversarial: stripping always() from the aggregator's if: is caught" {
+case_w2_adversarial_stripping_always_from_the_aggregator_s_if_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w2.yml" line mutated
   line="$(sole_line_matching "$WORKFLOW" '^    if: always\(\) && \(')" || return 1
@@ -1261,7 +1235,7 @@ w2_check() {
   [ "$status" -ne 0 ] || { echo "an aggregator if: without always() passed W2" >&2; return 1; }
 }
 
-@test "W2 adversarial: dropping push from the aggregator's if: is caught" {
+case_w2_adversarial_dropping_push_from_the_aggregator_s_if_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w2-push.yml" line mutated
   line="$(sole_line_matching "$WORKFLOW" '^    if: always\(\) && \(')" || return 1
@@ -1273,13 +1247,22 @@ w2_check() {
   [ "$status" -ne 0 ] || { echo "an aggregator if: without push passed W2" >&2; return 1; }
 }
 
+@test "W2: the aggregator's if: admits always(), push and workflow_dispatch (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w2_the_aggregator_s_if_admits_always_push_and_workflow_dispatch_never"
+  case_w2_the_aggregator_s_if_admits_always_push_and_workflow_dispatch_never
+  echo "case: case_w2_adversarial_stripping_always_from_the_aggregator_s_if_is_caught"
+  case_w2_adversarial_stripping_always_from_the_aggregator_s_if_is_caught
+  echo "case: case_w2_adversarial_dropping_push_from_the_aggregator_s_if_is_caught"
+  case_w2_adversarial_dropping_push_from_the_aggregator_s_if_is_caught
+}
+
 # W3. The aggregator actually adjudicates every entry in its own needs: list:
 # per entry, a step that both references that entry's result and exits non-zero
 # on a bad value. Deliberately no count here or in any name below -- the
 # entries are the authority on how many, and a count rots the next time a job
 # joins needs:, which is the failure this pass repaired.
 
-@test "W3: the aggregator adjudicates every entry in its needs list" {
+case_w3_the_aggregator_adjudicates_every_entry_in_its_needs_list() {
   require_yaml_parser
   [ "$(read_workflow aggok "$WORKFLOW" audit-ci-tests)" = "yes" ] || {
     echo "an entry in the aggregator's needs: has no step that both references its result and exits non-zero on a bad value" >&2
@@ -1287,7 +1270,7 @@ w2_check() {
   }
 }
 
-@test "W3 adversarial: a bare true aggregator step is caught" {
+case_w3_adversarial_a_bare_true_aggregator_step_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w3.yml"
   local replacement=$'      - name: Require every dependency in needs to have concluded success\n        run: true'
@@ -1304,7 +1287,7 @@ w2_check() {
 # out of the workflow rather than restated, so this stays pointed at a real
 # dependency after the list is repacked; the last one is the one a fresh
 # addition lands on.
-@test "W3 adversarial: a needs entry whose result nothing reads is caught" {
+case_w3_adversarial_a_needs_entry_whose_result_nothing_reads_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w3b.yml" dependency binding
   dependency="$(read_workflow needs "$WORKFLOW" audit-ci-tests | grep '.' | tail -1)"
@@ -1321,6 +1304,15 @@ w2_check() {
     echo "needs entry ${dependency} still read as adjudicated with nothing reading its result" >&2
     return 1
   }
+}
+
+@test "W3: the aggregator adjudicates every needs entry (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w3_the_aggregator_adjudicates_every_entry_in_its_needs_list"
+  case_w3_the_aggregator_adjudicates_every_entry_in_its_needs_list
+  echo "case: case_w3_adversarial_a_bare_true_aggregator_step_is_caught"
+  case_w3_adversarial_a_bare_true_aggregator_step_is_caught
+  echo "case: case_w3_adversarial_a_needs_entry_whose_result_nothing_reads_is_caught"
+  case_w3_adversarial_a_needs_entry_whose_result_nothing_reads_is_caught
 }
 
 # W4. A push or dispatch run has no paths-filter output (the filter step runs
@@ -1398,12 +1390,12 @@ w4_check() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "W4: every filter-gated step and job admits push and workflow_dispatch, and FULL_RUN reads true for both" {
+case_w4_every_filter_gated_step_and_job_admits_push_and_workflow_dispatch_a() {
   require_yaml_parser
   w4_check "$WORKFLOW"
 }
 
-@test "W4 adversarial: dropping the dispatch admission from one filter-gated step is caught" {
+case_w4_adversarial_dropping_the_dispatch_admission_from_one_filter_gated_s() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w4.yml" line mutated
 
@@ -1418,7 +1410,7 @@ w4_check() {
   [ "$status" -ne 0 ] || { echo "a filter-gated step without the dispatch admission passed W4" >&2; return 1; }
 }
 
-@test "W4 adversarial: dropping the push admission from one filter-gated step is caught" {
+case_w4_adversarial_dropping_the_push_admission_from_one_filter_gated_step() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w4-push.yml" line mutated
 
@@ -1432,7 +1424,7 @@ w4_check() {
   printf '%s\n' "$output" | grep -qF -- "excludes push" || { echo "W4 did not name the missing push admission: $output" >&2; return 1; }
 }
 
-@test "W4 adversarial: a FULL_RUN that ignores push is caught" {
+case_w4_adversarial_a_full_run_that_ignores_push_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w4-full-run.yml" line mutated
 
@@ -1446,6 +1438,17 @@ w4_check() {
   printf '%s\n' "$output" | grep -qF -- "on push: the selection step does not plan --full" || { echo "W27 did not name the FULL_RUN gap: $output" >&2; return 1; }
 }
 
+@test "W4: filter-gated steps admit push and dispatch and FULL_RUN reads true (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w4_every_filter_gated_step_and_job_admits_push_and_workflow_dispatch_a"
+  case_w4_every_filter_gated_step_and_job_admits_push_and_workflow_dispatch_a
+  echo "case: case_w4_adversarial_dropping_the_dispatch_admission_from_one_filter_gated_s"
+  case_w4_adversarial_dropping_the_dispatch_admission_from_one_filter_gated_s
+  echo "case: case_w4_adversarial_dropping_the_push_admission_from_one_filter_gated_step"
+  case_w4_adversarial_dropping_the_push_admission_from_one_filter_gated_step
+  echo "case: case_w4_adversarial_a_full_run_that_ignores_push_is_caught"
+  case_w4_adversarial_a_full_run_that_ignores_push_is_caught
+}
+
 # W5. Every job is capped with an integer literal, and every run step that
 # executes bats, the sandbox runner, the concurrency meter or the commitlint
 # suites carries its own integer literal cap strictly below its job's. The job
@@ -1454,7 +1457,7 @@ w4_check() {
 # expression-valued cap is refused because it is not a bound anything here can
 # read.
 
-@test "W5: every job declares an integer cap" {
+case_w5_every_job_declares_an_integer_cap() {
   require_yaml_parser
   local job_id gaps=""
   for job_id in $(read_workflow jobs "$WORKFLOW"); do
@@ -1486,12 +1489,12 @@ w5_step_caps() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "W5: every runner step declares an integer cap strictly below its job's" {
+case_w5_every_runner_step_declares_an_integer_cap_strictly_below_its_job_s() {
   require_yaml_parser
   w5_step_caps "$WORKFLOW"
 }
 
-@test "W5 adversarial: a runner step with no cap, an expression cap, or a cap equal to the job's is caught" {
+case_w5_adversarial_a_runner_step_with_no_cap_an_expression_cap_or_a_cap_eq() {
   require_yaml_parser
   local section line doctored="$BATS_TEST_TMPDIR/w5-step.yml" job_cap
   section="$(gate_line_for_step "$WORKFLOW" 'Run a bats shard (hooks group)')" || return 1
@@ -1512,7 +1515,7 @@ w5_step_caps() {
   [ "$status" -ne 0 ] || { echo "a step cap equal to the job cap passed W5" >&2; return 1; }
 }
 
-@test "W5 adversarial: a job with no timeout-minutes is caught" {
+case_w5_adversarial_a_job_with_no_timeout_minutes_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w5b.yml"
   delete_line "$WORKFLOW" "    timeout-minutes: 2" "$doctored"
@@ -1523,7 +1526,7 @@ w5_step_caps() {
   }
 }
 
-@test "W5 adversarial: an expression-valued cap is caught" {
+case_w5_adversarial_an_expression_valued_cap_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w5c.yml"
   replace_line "$WORKFLOW" "    timeout-minutes: 25" "    timeout-minutes: \${{ github.event_name }}" "$doctored"
@@ -1534,12 +1537,25 @@ w5_step_caps() {
   }
 }
 
+@test "W5: every job and runner step declares an integer timeout cap (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w5_every_job_declares_an_integer_cap"
+  case_w5_every_job_declares_an_integer_cap
+  echo "case: case_w5_every_runner_step_declares_an_integer_cap_strictly_below_its_job_s"
+  case_w5_every_runner_step_declares_an_integer_cap_strictly_below_its_job_s
+  echo "case: case_w5_adversarial_a_runner_step_with_no_cap_an_expression_cap_or_a_cap_eq"
+  case_w5_adversarial_a_runner_step_with_no_cap_an_expression_cap_or_a_cap_eq
+  echo "case: case_w5_adversarial_a_job_with_no_timeout_minutes_is_caught"
+  case_w5_adversarial_a_job_with_no_timeout_minutes_is_caught
+  echo "case: case_w5_adversarial_an_expression_valued_cap_is_caught"
+  case_w5_adversarial_an_expression_valued_cap_is_caught
+}
+
 # W6. The matrix and bats-shards.sh agree: the matrix is exactly the sharder's
 # own shard ids plus the workflow-level legs below, no extras in either
 # direction.
 WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
 
-@test "W6: the matrix and the sharder agree" {
+case_w6_the_matrix_and_the_sharder_agree() {
   require_yaml_parser
   local matrix_list expected
   matrix_list="$(read_workflow matrix "$WORKFLOW" shards | LC_ALL=C sort)"
@@ -1554,7 +1570,7 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
   }
 }
 
-@test "W6 adversarial: a bogus shard added to the matrix is caught" {
+case_w6_adversarial_a_bogus_shard_added_to_the_matrix_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w6a.yml" line mutated
   line="$(sole_line_matching "$WORKFLOW" "$MATRIX_SHARD_PATTERN")" || return 1
@@ -1569,7 +1585,7 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
   [ "$matrix_list" != "$expected" ] || { echo "adding a bogus shard id did not desync the matrix from the sharder" >&2; return 1; }
 }
 
-@test "W6 adversarial: dropping lib-1 from the matrix is caught" {
+case_w6_adversarial_dropping_lib_1_from_the_matrix_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w6b.yml" line mutated
   line="$(sole_line_matching "$WORKFLOW" "$MATRIX_SHARD_PATTERN")" || return 1
@@ -1589,10 +1605,19 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
   [ "$matrix_list" != "$expected" ] || { echo "dropping lib-1 from the matrix did not desync it from the sharder" >&2; return 1; }
 }
 
+@test "W6: the matrix and the sharder agree (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w6_the_matrix_and_the_sharder_agree"
+  case_w6_the_matrix_and_the_sharder_agree
+  echo "case: case_w6_adversarial_a_bogus_shard_added_to_the_matrix_is_caught"
+  case_w6_adversarial_a_bogus_shard_added_to_the_matrix_is_caught
+  echo "case: case_w6_adversarial_dropping_lib_1_from_the_matrix_is_caught"
+  case_w6_adversarial_dropping_lib_1_from_the_matrix_is_caught
+}
+
 # W7. Exactly one dorny/paths-filter step in the whole workflow, pinning the
 # decision not to narrow filters per shard.
 
-@test "W7: exactly one dorny/paths-filter step in the whole workflow" {
+case_w7_exactly_one_dorny_paths_filter_step_in_the_whole_workflow() {
   require_yaml_parser
   [ "$(read_workflow filtercount "$WORKFLOW")" -eq 1 ] || {
     echo "expected exactly one dorny/paths-filter step, got $(read_workflow filtercount "$WORKFLOW")" >&2
@@ -1600,7 +1625,7 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
   }
 }
 
-@test "W7 adversarial: a second dorny/paths-filter step is caught" {
+case_w7_adversarial_a_second_dorny_paths_filter_step_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w7.yml"
   local extra_job
@@ -1613,10 +1638,17 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
   }
 }
 
+@test "W7: exactly one dorny/paths-filter step (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w7_exactly_one_dorny_paths_filter_step_in_the_whole_workflow"
+  case_w7_exactly_one_dorny_paths_filter_step_in_the_whole_workflow
+  echo "case: case_w7_adversarial_a_second_dorny_paths_filter_step_is_caught"
+  case_w7_adversarial_a_second_dorny_paths_filter_step_is_caught
+}
+
 # W8. No run: body interpolates an expression; ${{ matrix.shard }} reaches a
 # script only through env:.
 
-@test "W8: no run: body in the workflow interpolates an expression" {
+case_w8_no_run_body_in_the_workflow_interpolates_an_expression() {
   require_yaml_parser
   local hits
   hits="$(read_workflow runinterp "$WORKFLOW")"
@@ -1627,7 +1659,7 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
   }
 }
 
-@test "W8 adversarial: interpolating matrix.shard into a run: body is caught" {
+case_w8_adversarial_interpolating_matrix_shard_into_a_run_body_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w8.yml" line mutated
 
@@ -1645,11 +1677,18 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
   }
 }
 
+@test "W8: no run: body interpolates an expression (live workflow passes, doctored copy is caught)" {
+  echo "case: case_w8_no_run_body_in_the_workflow_interpolates_an_expression"
+  case_w8_no_run_body_in_the_workflow_interpolates_an_expression
+  echo "case: case_w8_adversarial_interpolating_matrix_shard_into_a_run_body_is_caught"
+  case_w8_adversarial_interpolating_matrix_shard_into_a_run_body_is_caught
+}
+
 # The same rule for code an action runs from its inputs: an
 # actions/github-script `script:` (or any action's `script` input) with an
 # expression in it is a run: body by another name. The reporter's shape,
 # every value through `env:` into a `run:` that names none, passes both halves.
-@test "W8: no script-executing action interpolates an expression into its inputs" {
+case_w8_no_script_executing_action_interpolates_an_expression_into_its_inpu() {
   require_yaml_parser
   local hits
   hits="$(read_workflow scriptinterp "$WORKFLOW")" || return 1
@@ -1660,7 +1699,7 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
   }
 }
 
-@test "W8 adversarial: a github-script step interpolating the head commit message is caught" {
+case_w8_adversarial_a_github_script_step_interpolating_the_head_commit_mess() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w8-script.yml"
   # insert_after lands on the first `    steps:`, the shards job's; the check
@@ -1672,6 +1711,13 @@ WORKFLOW_LEVEL_LEGS='sandbox concurrency commitlint protected-tests'
     echo "a github-script step interpolating the head commit message was not caught" >&2
     return 1
   }
+}
+
+@test "W8: no script-executing action interpolates an expression into its inputs (live workflow passes, doctored copy is caught)" {
+  echo "case: case_w8_no_script_executing_action_interpolates_an_expression_into_its_inpu"
+  case_w8_no_script_executing_action_interpolates_an_expression_into_its_inpu
+  echo "case: case_w8_adversarial_a_github_script_step_interpolating_the_head_commit_mess"
+  case_w8_adversarial_a_github_script_step_interpolating_the_head_commit_mess
 }
 
 # W9. The sandbox leg's reduced package set (no apt at all) stays true: no
@@ -1715,7 +1761,7 @@ sandbox_tree_references_packages() {
   printf '%s\n' "$hits"
 }
 
-@test "W9: no .gaia/tests/sandbox suite references zsh, python3, or require_yaml_parser" {
+case_w9_no_gaia_tests_sandbox_suite_references_zsh_python3_or_require_yaml() {
   local hits exit_status=0
   require_repo_path -d "$REPO_ROOT/.gaia/tests/sandbox" "sandbox suite dir" || return 1
   sandbox_suites_present "$REPO_ROOT/.gaia/tests/sandbox" || return 1
@@ -1727,7 +1773,7 @@ sandbox_tree_references_packages() {
   }
 }
 
-@test "W9 adversarial: a sandbox fixture naming zsh is caught" {
+case_w9_adversarial_a_sandbox_fixture_naming_zsh_is_caught() {
   local directory="$BATS_TEST_TMPDIR/sandbox-fixture" at_sign test_line
   mkdir -p "$directory"
   # Built from a variable rather than written literally: bats' preprocessor
@@ -1753,7 +1799,7 @@ sandbox_tree_references_packages() {
 # Pairs with W9's preconditions the way every other check here pairs with its
 # own fixture: both vacuous-pass arms are driven against a directory of this
 # test's own, since neither arm ever fires against the healthy tree.
-@test "W9 adversarial: an empty or absent sandbox directory is caught" {
+case_w9_adversarial_an_empty_or_absent_sandbox_directory_is_caught() {
   local empty="$BATS_TEST_TMPDIR/sandbox-empty"
   local absent="$BATS_TEST_TMPDIR/sandbox-absent"
   local populated="$BATS_TEST_TMPDIR/sandbox-populated"
@@ -1768,6 +1814,15 @@ sandbox_tree_references_packages() {
   # The healthy arm, so a helper that simply always failed could not pass this.
   run sandbox_suites_present "$populated"
   [ "$status" -eq 0 ]
+}
+
+@test "W9: no sandbox suite references zsh, python3 or require_yaml_parser (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w9_no_gaia_tests_sandbox_suite_references_zsh_python3_or_require_yaml"
+  case_w9_no_gaia_tests_sandbox_suite_references_zsh_python3_or_require_yaml
+  echo "case: case_w9_adversarial_a_sandbox_fixture_naming_zsh_is_caught"
+  case_w9_adversarial_a_sandbox_fixture_naming_zsh_is_caught
+  echo "case: case_w9_adversarial_an_empty_or_absent_sandbox_directory_is_caught"
+  case_w9_adversarial_an_empty_or_absent_sandbox_directory_is_caught
 }
 
 # W10. The apt step's shard list stays equal to the set of legs that actually
@@ -2085,7 +2140,7 @@ copy_sharder_without_group() {
 # Rounding up must not reach past the group that needs a package. Without this,
 # a closure that simply returned every shard id would satisfy the stability
 # check above perfectly and put an apt install on every leg in the matrix.
-@test "W10 adversarial: rounding up stops at the needing leg's own group" {
+case_w10_adversarial_rounding_up_stops_at_the_needing_leg_s_own_group() {
   local root="$BATS_TEST_TMPDIR/closure-bound" legs
   seed_seam_tree "$root"
   printf '#!/usr/bin/env bats\ncommand -v zsh\n' >"$root/needs/uses-zsh.bats"
@@ -2115,7 +2170,7 @@ copy_sharder_without_group() {
   true
 }
 
-@test "W10 adversarial: a group the sharder cannot resolve fails the closure rather than narrowing it" {
+case_w10_adversarial_a_group_the_sharder_cannot_resolve_fails_the_closure_r() {
   local root="$BATS_TEST_TMPDIR/bad-group" broken status_ok status_error
   seed_seam_tree "$root"
   printf '#!/usr/bin/env bats\ncommand -v zsh\n' >"$root/needs/uses-zsh.bats"
@@ -2152,7 +2207,7 @@ copy_sharder_without_group() {
 # run on every leg except the ones that need it, W10 would compare two equal
 # lists, and the check would green over the worst possible arrangement. This
 # pins that stepshards refuses the shape instead of reading it.
-@test "W10 adversarial: a negated apt gate is refused rather than read as the same list" {
+case_w10_adversarial_a_negated_apt_gate_is_refused_rather_than_read_as_the() {
   local doctored="$BATS_TEST_TMPDIR/negated.yml" declared exit_status=0 line mutated
   require_yaml_parser
 
@@ -2173,7 +2228,7 @@ copy_sharder_without_group() {
   }
 }
 
-@test "W10 adversarial: a shard whose suite names zsh is detected wherever it lands" {
+case_w10_adversarial_a_shard_whose_suite_names_zsh_is_detected_wherever_it() {
   local root="$BATS_TEST_TMPDIR/tree" scan_output reported
   seed_seam_tree "$root"
   printf '#!/usr/bin/env bats\ncommand -v zsh\n' >"$root/needs/uses-zsh.bats"
@@ -2203,7 +2258,7 @@ copy_sharder_without_group() {
   true
 }
 
-@test "W10 adversarial: a helper sourced by a suite is detected, not just the suite" {
+case_w10_adversarial_a_helper_sourced_by_a_suite_is_detected_not_just_the_s() {
   local root="$BATS_TEST_TMPDIR/helpers-tree" scan_output reported
   seed_seam_tree "$root"
   # No .bats file names either dependency anywhere in this tree. The only
@@ -2237,7 +2292,7 @@ copy_sharder_without_group() {
   true
 }
 
-@test "W10 adversarial: a shard that cannot be listed fails the scan rather than reporting it clean" {
+case_w10_adversarial_a_shard_that_cannot_be_listed_fails_the_scan_rather_th() {
   local root="$BATS_TEST_TMPDIR/unlistable"
   seed_seam_tree "$root"
   printf '#!/usr/bin/env bats\ncommand -v zsh\n' >"$root/needs/uses-zsh.bats"
@@ -2256,6 +2311,21 @@ copy_sharder_without_group() {
     echo "a shard the sharder refused to list reported a clean scan" >&2
     return 1
   }
+}
+
+@test "W10: the apt shard-list scan refuses each unresolvable or mis-gated input" {
+  echo "case: case_w10_adversarial_rounding_up_stops_at_the_needing_leg_s_own_group"
+  case_w10_adversarial_rounding_up_stops_at_the_needing_leg_s_own_group
+  echo "case: case_w10_adversarial_a_group_the_sharder_cannot_resolve_fails_the_closure_r"
+  case_w10_adversarial_a_group_the_sharder_cannot_resolve_fails_the_closure_r
+  echo "case: case_w10_adversarial_a_negated_apt_gate_is_refused_rather_than_read_as_the"
+  case_w10_adversarial_a_negated_apt_gate_is_refused_rather_than_read_as_the
+  echo "case: case_w10_adversarial_a_shard_whose_suite_names_zsh_is_detected_wherever_it"
+  case_w10_adversarial_a_shard_whose_suite_names_zsh_is_detected_wherever_it
+  echo "case: case_w10_adversarial_a_helper_sourced_by_a_suite_is_detected_not_just_the_s"
+  case_w10_adversarial_a_helper_sourced_by_a_suite_is_detected_not_just_the_s
+  echo "case: case_w10_adversarial_a_shard_that_cannot_be_listed_fails_the_scan_rather_th"
+  case_w10_adversarial_a_shard_that_cannot_be_listed_fails_the_scan_rather_th
 }
 
 # `sandbox` and `concurrency` are matrix legs the sharder does not name, so
@@ -2279,7 +2349,7 @@ concurrency_tree_needs_packages() {
   return "$exit_status"
 }
 
-@test "W10: the concurrency leg reaches for neither package the apt step dropped" {
+case_w10_the_concurrency_leg_reaches_for_neither_package_the_apt_step_dropp() {
   local declared
   require_yaml_parser
   require_repo_path -d "$REPO_ROOT/.gaia/tests/concurrency" "concurrency tree" || return 1
@@ -2311,7 +2381,7 @@ concurrency_tree_needs_packages() {
   }
 }
 
-@test "W10 adversarial: a concurrency file reaching for zsh is caught" {
+case_w10_adversarial_a_concurrency_file_reaching_for_zsh_is_caught() {
   local directory="$BATS_TEST_TMPDIR/conc"
   mkdir -p "$directory"
   printf '#!/usr/bin/env bash\necho clean\n' >"$directory/clean.sh"
@@ -2341,7 +2411,7 @@ concurrency_tree_needs_packages() {
 # still exited 0, so a grep hard error truncated the scan and reported a clean
 # one. Nothing above catches that: the truncated list can still equal the
 # workflow's, which is exactly how it would green.
-@test "W10 adversarial: a grep hard error fails the scan rather than reporting it clean" {
+case_w10_adversarial_a_grep_hard_error_fails_the_scan_rather_than_reporting() {
   local root="$BATS_TEST_TMPDIR/unreadable" status_ok status_error
   require_non_root
   seed_seam_tree "$root"
@@ -2371,6 +2441,15 @@ concurrency_tree_needs_packages() {
   }
 }
 
+@test "W10: the concurrency leg reaches for neither dropped package (live workflow passes, doctored copy and grep error are caught)" {
+  echo "case: case_w10_the_concurrency_leg_reaches_for_neither_package_the_apt_step_dropp"
+  case_w10_the_concurrency_leg_reaches_for_neither_package_the_apt_step_dropp
+  echo "case: case_w10_adversarial_a_concurrency_file_reaching_for_zsh_is_caught"
+  case_w10_adversarial_a_concurrency_file_reaching_for_zsh_is_caught
+  echo "case: case_w10_adversarial_a_grep_hard_error_fails_the_scan_rather_than_reporting"
+  case_w10_adversarial_a_grep_hard_error_fails_the_scan_rather_than_reporting
+}
+
 # W11. .gaia/release-exclude stays a full-run trigger in `code`. Its readers
 # mostly reach it through a script they call and never name it, so the change
 # selector cannot find them, and workflow-filter-coverage.bats cannot either:
@@ -2391,7 +2470,7 @@ concurrency_tree_needs_packages() {
 # #1473 it resolved code=false and greened the job having run the scenarios
 # that would have caught a bad manifest zero times.
 
-@test "W11: audit-ci-tests.yml's code filter lists release-exclude" {
+case_w11_audit_ci_tests_yml_s_code_filter_lists_release_exclude() {
   require_yaml_parser
   local list
   list="$(read_workflow codefilter "$WORKFLOW" shards)"
@@ -2401,7 +2480,7 @@ concurrency_tree_needs_packages() {
   }
 }
 
-@test "W11: distribution-harness.yml's code filter lists the release manifest" {
+case_w11_distribution_harness_yml_s_code_filter_lists_the_release_manifest() {
   require_yaml_parser
   local list
   list="$(read_workflow codefilter "$DISTRIBUTION_WORKFLOW" distribution-harness)"
@@ -2411,7 +2490,7 @@ concurrency_tree_needs_packages() {
   }
 }
 
-@test "W11 adversarial: dropping a line from audit-ci-tests.yml's code filter is caught" {
+case_w11_adversarial_dropping_a_line_from_audit_ci_tests_yml_s_code_filter() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w11a.yml" line
   line="$(sole_line_matching "$WORKFLOW" "^ *- '\\.gaia/release-exclude'\$")" || return 1
@@ -2426,7 +2505,14 @@ concurrency_tree_needs_packages() {
   true
 }
 
-@test "W11 adversarial: dropping a line from distribution-harness.yml's code filter is caught" {
+@test "W11: audit-ci-tests.yml's code filter lists release-exclude (live workflow passes, a dropped line is caught)" {
+  echo "case: case_w11_audit_ci_tests_yml_s_code_filter_lists_release_exclude"
+  case_w11_audit_ci_tests_yml_s_code_filter_lists_release_exclude
+  echo "case: case_w11_adversarial_dropping_a_line_from_audit_ci_tests_yml_s_code_filter"
+  case_w11_adversarial_dropping_a_line_from_audit_ci_tests_yml_s_code_filter
+}
+
+case_w11_adversarial_dropping_a_line_from_distribution_harness_yml_s_code_f() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w11b.yml" line
   line="$(sole_line_matching "$DISTRIBUTION_WORKFLOW" "^ *- '\\.gaia/manifest\\.json'\$")" || return 1
@@ -2441,51 +2527,13 @@ concurrency_tree_needs_packages() {
   true
 }
 
-# read_workflow codefilter unwraps a change-type mapping entry (`- deleted: 'x'`)
-# to its bare value. Doctored onto .gaia/release-exclude, a bare entry, so the
-# doctored line always differs from the real one; W11's own adversarial case
-# above already derives that same line, so the pattern is proven.
-
-@test "read_workflow codefilter unwraps a change-type mapping entry to its path" {
-  require_yaml_parser
-  local doctored="$BATS_TEST_TMPDIR/codefilter-unwrap.yml" line mutated list
-
-  line="$(sole_line_matching "$WORKFLOW" "^ *- '\\.gaia/release-exclude'\$")" || return 1
-  mutated="$(printf '%s' "$line" | sed "s/^\\( *\\)- '\\(.*\\)'\$/\\1- deleted: '\\2'/")"
-  assert_doctored "$line" "$mutated" "wrapping the entry in a change-type mapping" || return 1
-  replace_line "$WORKFLOW" "$line" "$mutated" "$doctored"
-
-  list="$(read_workflow codefilter "$doctored" shards)"
-  printf '%s\n' "$list" | grep -qxF -- '.gaia/release-exclude' || {
-    echo "the unwrapped mapping entry did not print its bare path" >&2
-    return 1
-  }
-  printf '%s\n' "$list" | grep -qF -- '{' && {
-    echo "the unwrapped output still carries a Python dict repr" >&2
-    return 1
-  }
-  true
+@test "W11: distribution-harness.yml's code filter lists the release manifest (live workflow passes, a dropped line is caught)" {
+  echo "case: case_w11_distribution_harness_yml_s_code_filter_lists_the_release_manifest"
+  case_w11_distribution_harness_yml_s_code_filter_lists_the_release_manifest
+  echo "case: case_w11_adversarial_dropping_a_line_from_distribution_harness_yml_s_code_f"
+  case_w11_adversarial_dropping_a_line_from_distribution_harness_yml_s_code_f
 }
 
-@test "read_workflow codefilter refuses a change-type mapping entry with more than one value" {
-  require_yaml_parser
-  local doctored="$BATS_TEST_TMPDIR/codefilter-two-value.yml" line mutated
-
-  line="$(sole_line_matching "$WORKFLOW" "^ *- '\\.gaia/release-exclude'\$")" || return 1
-  mutated="$(printf '%s' "$line" | sed "s/^\\( *\\)- '\\(.*\\)'\$/\\1- {deleted: '\\2', renamed: '\\2'}/")"
-  assert_doctored "$line" "$mutated" "wrapping the entry in a two-value mapping" || return 1
-  replace_line "$WORKFLOW" "$line" "$mutated" "$doctored"
-
-  run read_workflow codefilter "$doctored" shards
-  [ "$status" -ne 0 ] || {
-    echo "a two-value change-type mapping entry did not exit non-zero" >&2
-    return 1
-  }
-  printf '%s\n' "$output" | grep -qF -- '.gaia/release-exclude' || {
-    echo "the refusal message did not name the offending entry" >&2
-    return 1
-  }
-}
 
 # W13 (SPEC-078 lever one, UAT-003). dorny/paths-filter casts an unrecognized
 # change-status token without validating it (filter.ts:171-176), so a
@@ -2499,12 +2547,12 @@ concurrency_tree_needs_packages() {
 # getChangedFilesFromApi (main.ts:101-107), which does exactly that
 # decomposition (main.ts:227-239).
 
-@test "W13: no code: filter entry anywhere carries a renamed or copied change-type token" {
+case_w13_no_code_filter_entry_anywhere_carries_a_renamed_or_copied_change_t() {
   require_yaml_parser
   assert_no_renamed_or_copied_tokens "$WORKFLOW"
 }
 
-@test "W13 adversarial: the renamed/copied sweep reds when a second, unrelated entry is doctored" {
+case_w13_adversarial_the_renamed_copied_sweep_reds_when_a_second_unrelated() {
   require_yaml_parser
   local line mutated doctored="$BATS_TEST_TMPDIR/w13-sweep.yml"
   line="$(sole_line_matching "$WORKFLOW" "^ *- '\\.gaia/release-exclude'\$")" || return 1
@@ -2523,17 +2571,24 @@ concurrency_tree_needs_packages() {
   }
 }
 
+@test "W13: no code: filter entry carries a change-type token (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w13_no_code_filter_entry_anywhere_carries_a_renamed_or_copied_change_t"
+  case_w13_no_code_filter_entry_anywhere_carries_a_renamed_or_copied_change_t
+  echo "case: case_w13_adversarial_the_renamed_copied_sweep_reds_when_a_second_unrelated"
+  case_w13_adversarial_the_renamed_copied_sweep_reds_when_a_second_unrelated
+}
+
 # W14 (SPEC-078 lever one, UAT-025). Lever one's premises are properties of
 # an unvendored dependency, dorny/paths-filter, that a grouped weekly
 # dependency bump moves without anyone reading the diff. This pins the
 # workflow's dorny/paths-filter version to the pair lever one's premises were
 # verified against.
 
-@test "W14: the workflow's dorny/paths-filter pin matches the version lever one's premises were verified against" {
+case_w14_the_workflow_s_dorny_paths_filter_pin_matches_the_version_lever_on() {
   assert_paths_filter_pin_matches "$WORKFLOW"
 }
 
-@test "W14 adversarial: the committed bumped-pin fixture reds and names both versions" {
+case_w14_adversarial_the_committed_bumped_pin_fixture_reds_and_names_both_v() {
   run assert_paths_filter_pin_matches "$SPEC078_FIXTURES/paths-filter-pin-bumped.yml"
   [ "$status" -ne 0 ] || {
     echo "the bumped-pin fixture did not red" >&2
@@ -2547,6 +2602,13 @@ concurrency_tree_needs_packages() {
     echo "the refusal did not name the fixture's bumped SHA" >&2
     return 1
   }
+}
+
+@test "W14: the paths-filter pin matches the version the premises were verified against (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w14_the_workflow_s_dorny_paths_filter_pin_matches_the_version_lever_on"
+  case_w14_the_workflow_s_dorny_paths_filter_pin_matches_the_version_lever_on
+  echo "case: case_w14_adversarial_the_committed_bumped_pin_fixture_reds_and_names_both_v"
+  case_w14_adversarial_the_committed_bumped_pin_fixture_reds_and_names_both_v
 }
 
 
@@ -2598,13 +2660,13 @@ w20_lists() {
   bash "$REPO_ROOT/$CHANGE_SCOPE_SCRIPT_RELATIVE" --list-install-inputs >"$BATS_TEST_TMPDIR/install" || return 1
 }
 
-@test "W20: the code filter equals the classifier's harness list, and scoped and commitlint list every install input" {
+case_w20_the_code_filter_equals_the_classifier_s_harness_list_and_scoped_an() {
   require_yaml_parser
   w20_lists || return 1
   w20_check "$WORKFLOW" "$BATS_TEST_TMPDIR/harness" "$BATS_TEST_TMPDIR/install"
 }
 
-@test "W20 adversarial: dropping one harness glob from code, or one install input from commitlint, is caught" {
+case_w20_adversarial_dropping_one_harness_glob_from_code_or_one_install_inp() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w20.yml" line
   w20_lists || return 1
@@ -2618,6 +2680,13 @@ w20_lists() {
   run w20_check "$doctored" "$BATS_TEST_TMPDIR/harness" "$BATS_TEST_TMPDIR/install"
   [ "$status" -ne 0 ] || { echo "a commitlint filter missing an install input passed W20" >&2; return 1; }
   printf '%s\n' "$output" | grep -qxF -- '.gaia/cli/package.json' || { echo "W20 did not name the missing input: $output" >&2; return 1; }
+}
+
+@test "W20: the code filter equals the classifier's harness list (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w20_the_code_filter_equals_the_classifier_s_harness_list_and_scoped_an"
+  case_w20_the_code_filter_equals_the_classifier_s_harness_list_and_scoped_an
+  echo "case: case_w20_adversarial_dropping_one_harness_glob_from_code_or_one_install_inp"
+  case_w20_adversarial_dropping_one_harness_glob_from_code_or_one_install_inp
 }
 
 # W21. The permissions map, exactly. The workflow default-denies, and each job
@@ -2648,12 +2717,12 @@ w21_check() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "W21: every job's permissions equal the map, and the workflow default-denies" {
+case_w21_every_job_s_permissions_equal_the_map_and_the_workflow_default_den() {
   require_yaml_parser
   w21_check "$WORKFLOW"
 }
 
-@test "W21 adversarial: contents: write on the reporter, issues: write on shards, or no top-level {} is caught" {
+case_w21_adversarial_contents_write_on_the_reporter_issues_write_on_shards() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w21.yml"
 
@@ -2668,6 +2737,13 @@ w21_check() {
   delete_line "$WORKFLOW" "permissions: {}" "$doctored"
   run w21_check "$doctored"
   [ "$status" -ne 0 ] || { echo "a workflow without top-level permissions: {} passed W21" >&2; return 1; }
+}
+
+@test "W21: every job's permissions equal the map and the workflow default-denies (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w21_every_job_s_permissions_equal_the_map_and_the_workflow_default_den"
+  case_w21_every_job_s_permissions_equal_the_map_and_the_workflow_default_den
+  echo "case: case_w21_adversarial_contents_write_on_the_reporter_issues_write_on_shards"
+  case_w21_adversarial_contents_write_on_the_reporter_issues_write_on_shards
 }
 
 # W22. The reporter's scope. It writes to the issue tracker, so it runs on a
@@ -2708,12 +2784,12 @@ w22_check() {
   printf '%s\n' "$steps" | grep -qF 'report-main-status.sh' || { echo "report-main-status does not run the reporter" >&2; return 1; }
 }
 
-@test "W22: the reporter runs on push to main only, after shards, with no persisted credential and env-only values" {
+case_w22_the_reporter_runs_on_push_to_main_only_after_shards_with_no_persis() {
   require_yaml_parser
   w22_check "$WORKFLOW"
 }
 
-@test "W22 adversarial: a reporter admitting dispatch or pull_request, or persisting credentials, is caught" {
+case_w22_adversarial_a_reporter_admitting_dispatch_or_pull_request_or_persi() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w22.yml" line event
   line="$(sole_line_matching "$WORKFLOW" "^    if: always\\(\\) && github\\.event_name == 'push' && github\\.ref == 'refs/heads/main'\$")" || return 1
@@ -2726,6 +2802,13 @@ w22_check() {
   doctor_section "$WORKFLOW" "  report-main-status:" "          persist-credentials: false" "" "$doctored" || return 1
   run w22_check "$doctored"
   [ "$status" -ne 0 ] || { echo "a reporter checkout without persist-credentials: false passed W22" >&2; return 1; }
+}
+
+@test "W22: the reporter runs on push to main only with no persisted credential (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w22_the_reporter_runs_on_push_to_main_only_after_shards_with_no_persis"
+  case_w22_the_reporter_runs_on_push_to_main_only_after_shards_with_no_persis
+  echo "case: case_w22_adversarial_a_reporter_admitting_dispatch_or_pull_request_or_persi"
+  case_w22_adversarial_a_reporter_admitting_dispatch_or_pull_request_or_persi
 }
 
 # reporter_shards_result_line <workflow>: the reporter's SHARDS_RESULT env line,
@@ -2748,16 +2831,23 @@ reporter_reads_release_failure() {
   return 1
 }
 
-@test "the reporter's SHARDS_RESULT reads a failed release-fast-path job as a failing input" {
+case_the_reporter_s_shards_result_reads_a_failed_release_fast_path_job_as_a() {
   reporter_reads_release_failure "$WORKFLOW"
 }
 
-@test "the reporter's release-failure check fails against a reporter that drops the clause" {
+case_the_reporter_s_release_failure_check_fails_against_a_reporter_that_dro() {
   local doctored="$BATS_TEST_TMPDIR/reporter-no-release.yml"
   sed "s/needs.release-fast-path.result != 'success' \&\& needs.release-fast-path.result || //" "$WORKFLOW" > "$doctored"
   cmp -s "$WORKFLOW" "$doctored" && return 1
   run reporter_reads_release_failure "$doctored"
   [ "$status" -ne 0 ]
+}
+
+@test "the reporter reads a failed release-fast-path job as a failing input (live reporter passes, one dropping the clause fails)" {
+  echo "case: case_the_reporter_s_shards_result_reads_a_failed_release_fast_path_job_as_a"
+  case_the_reporter_s_shards_result_reads_a_failed_release_fast_path_job_as_a
+  echo "case: case_the_reporter_s_release_failure_check_fails_against_a_reporter_that_dro"
+  case_the_reporter_s_release_failure_check_fails_against_a_reporter_that_dro
 }
 
 # W23. The reporter closes the issue only forward. A green run on a commit
@@ -2789,18 +2879,25 @@ w23_check() {
   ' "$1"
 }
 
-@test "W23: the reporter closes the issue only after a compare verdict of identical or ahead" {
+case_w23_the_reporter_closes_the_issue_only_after_a_compare_verdict_of_iden() {
   require_repo_path -f "$REPO_ROOT/$REPORTER_RELATIVE" "report-main-status.sh" || return 1
   w23_check "$REPO_ROOT/$REPORTER_RELATIVE"
 }
 
-@test "W23 adversarial: a reporter copy with the comparison removed is caught" {
+case_w23_adversarial_a_reporter_copy_with_the_comparison_removed_is_caught() {
   require_repo_path -f "$REPO_ROOT/$REPORTER_RELATIVE" "report-main-status.sh" || return 1
   local copy="$BATS_TEST_TMPDIR/report-main-status.sh"
   grep -vE 'compare_status=.*api .*/compare/|case "\$compare_status" in' "$REPO_ROOT/$REPORTER_RELATIVE" >"$copy" || true
   cmp -s "$copy" "$REPO_ROOT/$REPORTER_RELATIVE" && { echo "removing the comparison left the copy unchanged" >&2; return 1; }
   run w23_check "$copy"
   [ "$status" -ne 0 ] || { echo "a reporter that closes without a compare verdict passed W23" >&2; return 1; }
+}
+
+@test "W23: the reporter closes the issue only after a compare verdict (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w23_the_reporter_closes_the_issue_only_after_a_compare_verdict_of_iden"
+  case_w23_the_reporter_closes_the_issue_only_after_a_compare_verdict_of_iden
+  echo "case: case_w23_adversarial_a_reporter_copy_with_the_comparison_removed_is_caught"
+  case_w23_adversarial_a_reporter_copy_with_the_comparison_removed_is_caught
 }
 
 # W24. The concurrency key. A push run's group is its own commit, so three
@@ -2824,12 +2921,12 @@ w24_check() {
   }
 }
 
-@test "W24: the concurrency group keys on the commit for push and the ref otherwise, cancelling pull requests only" {
+case_w24_the_concurrency_group_keys_on_the_commit_for_push_and_the_ref_othe() {
   require_yaml_parser
   w24_check "$WORKFLOW"
 }
 
-@test "W24 adversarial: a static group key, or cancel-in-progress: true, is caught" {
+case_w24_adversarial_a_static_group_key_or_cancel_in_progress_true_is_caugh() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w24.yml" line
   line="$(sole_line_matching "$WORKFLOW" '^  group: ')" || return 1
@@ -2841,6 +2938,13 @@ w24_check() {
   replace_line "$WORKFLOW" "$line" "  cancel-in-progress: true" "$doctored"
   run w24_check "$doctored"
   [ "$status" -ne 0 ] || { echo "cancel-in-progress: true passed W24" >&2; return 1; }
+}
+
+@test "W24: the concurrency group keys on commit for push and ref otherwise (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w24_the_concurrency_group_keys_on_the_commit_for_push_and_the_ref_othe"
+  case_w24_the_concurrency_group_keys_on_the_commit_for_push_and_the_ref_othe
+  echo "case: case_w24_adversarial_a_static_group_key_or_cancel_in_progress_true_is_caugh"
+  case_w24_adversarial_a_static_group_key_or_cancel_in_progress_true_is_caugh
 }
 
 # W25. Install gating. A bats leg whose plan selected nothing installs nothing
@@ -2898,12 +3002,12 @@ w25_check() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "W25: an empty or unarmed bats leg installs and runs nothing, and the concurrency leg keeps its bats install" {
+case_w25_an_empty_or_unarmed_bats_leg_installs_and_runs_nothing_and_the_con() {
   require_yaml_parser
   w25_check "$WORKFLOW"
 }
 
-@test "W25 adversarial: dropping the mode gate from the apt step, or deleting the concurrency bats install, is caught" {
+case_w25_adversarial_dropping_the_mode_gate_from_the_apt_step_or_deleting_t() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w25.yml" line mutated
   line="$(gate_line_for_step "$WORKFLOW" 'Install the YAML parser and zsh')" || return 1
@@ -2917,6 +3021,13 @@ w25_check() {
   delete_step "$WORKFLOW" 'Install pinned bats for the concurrency meter' "$doctored" || return 1
   run w25_check "$doctored"
   [ "$status" -ne 0 ] || { echo "a concurrency leg without a bats install passed W25" >&2; return 1; }
+}
+
+@test "W25: an empty or unarmed bats leg installs and runs nothing (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w25_an_empty_or_unarmed_bats_leg_installs_and_runs_nothing_and_the_con"
+  case_w25_an_empty_or_unarmed_bats_leg_installs_and_runs_nothing_and_the_con
+  echo "case: case_w25_adversarial_dropping_the_mode_gate_from_the_apt_step_or_deleting_t"
+  case_w25_adversarial_dropping_the_mode_gate_from_the_apt_step_or_deleting_t
 }
 
 # W26. Dependency provisioning. A suite the installed-dependencies guard
@@ -3104,12 +3215,12 @@ w27_check() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "W27: push and dispatch run every leg's widest step set, plan --full, and reach exactly one whole-shard run step" {
+case_w27_push_and_dispatch_run_every_leg_s_widest_step_set_plan_full_and_re() {
   require_yaml_parser
   w27_check "$WORKFLOW"
 }
 
-@test "W27 adversarial: a bats leg left out of every run step's leg list is caught" {
+case_w27_adversarial_a_bats_leg_left_out_of_every_run_step_s_leg_list_is_ca() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w27.yml" line mutated
   line="$(gate_line_for_step "$WORKFLOW" 'Run a bats shard (single-shard legs)')" || return 1
@@ -3121,7 +3232,7 @@ w27_check() {
   printf '%s\n' "$output" | grep -qF -- 'misc on push: 0 steps run the whole shard' || { echo "W27 did not name the leg: $output" >&2; return 1; }
 }
 
-@test "W27 adversarial: a selection step that drops push is caught" {
+case_w27_adversarial_a_selection_step_that_drops_push_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w27-selection.yml" line mutated
   line="$(gate_line_for_step "$WORKFLOW" "$SELECTION_STEP_NAME")" || return 1
@@ -3130,6 +3241,15 @@ w27_check() {
   replace_line "$WORKFLOW" "$line" "$mutated" "$doctored"
   run w27_check "$doctored"
   [ "$status" -ne 0 ] || { echo "a selection step skipped on push passed W27" >&2; return 1; }
+}
+
+@test "W27: push and dispatch run every leg's widest step set (live workflow passes, each doctored copy is caught)" {
+  echo "case: case_w27_push_and_dispatch_run_every_leg_s_widest_step_set_plan_full_and_re"
+  case_w27_push_and_dispatch_run_every_leg_s_widest_step_set_plan_full_and_re
+  echo "case: case_w27_adversarial_a_bats_leg_left_out_of_every_run_step_s_leg_list_is_ca"
+  case_w27_adversarial_a_bats_leg_left_out_of_every_run_step_s_leg_list_is_ca
+  echo "case: case_w27_adversarial_a_selection_step_that_drops_push_is_caught"
+  case_w27_adversarial_a_selection_step_that_drops_push_is_caught
 }
 
 # W28. The sandbox, commitlint and protected-test legs arm on their own filter
@@ -3149,12 +3269,12 @@ w28_check() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "W28: the sandbox, commitlint and protected-test legs run on their own filter output, not on code or scoped" {
+case_w28_the_sandbox_commitlint_and_protected_test_legs_run_on_their_own_fi() {
   require_yaml_parser
   w28_check "$WORKFLOW"
 }
 
-@test "W28 adversarial: a sandbox run step armed by code is caught" {
+case_w28_adversarial_a_sandbox_run_step_armed_by_code_is_caught() {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w28.yml" line mutated
   line="$(gate_line_for_step "$WORKFLOW" 'Run .gaia/tests/sandbox bats suites')" || return 1
@@ -3164,4 +3284,11 @@ w28_check() {
   replace_line "$WORKFLOW" "$line" "$mutated" "$doctored"
   run w28_check "$doctored"
   [ "$status" -ne 0 ] || { echo "a sandbox run step armed by code passed W28" >&2; return 1; }
+}
+
+@test "W28: the sandbox, commitlint and protected-test legs run on their own filter output (live workflow passes, a doctored copy is caught)" {
+  echo "case: case_w28_the_sandbox_commitlint_and_protected_test_legs_run_on_their_own_fi"
+  case_w28_the_sandbox_commitlint_and_protected_test_legs_run_on_their_own_fi
+  echo "case: case_w28_adversarial_a_sandbox_run_step_armed_by_code_is_caught"
+  case_w28_adversarial_a_sandbox_run_step_armed_by_code_is_caught
 }

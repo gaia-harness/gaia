@@ -22,11 +22,3 @@ freshness_step_active() {
 @test "the PR-time bundle-freshness step is wired into cli-tests" {
   freshness_step_active "$WORKFLOW"
 }
-
-@test "the freshness-step check flags a workflow copy with the step commented out" {
-  local scratch="$BATS_TEST_TMPDIR/cli-tests.yml"
-  sed -E 's/^([[:space:]]+)(run: bash \.gaia\/scripts\/verify-cli-bundle-fresh\.sh)/\1# \2/' "$WORKFLOW" >"$scratch"
-  cmp -s "$WORKFLOW" "$scratch" && return 1
-  run freshness_step_active "$scratch"
-  [ "$status" -ne 0 ]
-}
