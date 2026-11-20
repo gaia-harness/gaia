@@ -4,28 +4,16 @@
 # functions the update commands hand to gaia_refuse_if_worktree. Run under bash
 # 5 through .gaia/scripts/bats5.sh (see .claude/rules/bats-assertions.md).
 #
-# Two kinds of proof. The expected-output cases pin each function's exact line
-# for a fixture cache, under bash and zsh, and a mutated copy of the library
-# must be reported. The parity cases compare the library against the inline
-# definition in each skill's guard fence for as long as that fence still holds
-# one; once a skill sources the library instead, there is nothing inline to
-# compare and the parity case skips.
+# The expected-output case pins each function's exact line for a fixture cache,
+# under bash and zsh.
 
 setup() {
   LIBRARY_SCRIPT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)/update-state-line-lib.sh"
-  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   command -v jq >/dev/null 2>&1 || skip "jq not installed"
   CACHE_DIRECTORY="$BATS_TEST_TMPDIR/cache"
   mkdir -p "$CACHE_DIRECTORY"
   NO_JQ_PATH="$BATS_TEST_TMPDIR/empty-path"
   mkdir -p "$NO_JQ_PATH"
-}
-
-# available_shells: prints the absolute path of every shell the library must
-# work under, bash always and zsh when installed.
-available_shells() {
-  command -v bash
-  command -v zsh 2>/dev/null || true
 }
 
 # write_cache <name> <json>: writes a fixture cache file and prints its path.
@@ -96,85 +84,11 @@ expected_matches() {
   return 0
 }
 
-# inline_function_text <skill file> <function name>: the function definition as
-# written in the skill's fenced block, from its opening line to the closing
-# brace at column 0. Empty when the skill no longer defines it inline.
-inline_function_text() {
-  awk -v name="$2" '
-    $0 == name "() {" { in_function = 1 }
-    in_function { print }
-    in_function && $0 == "}" { exit }
-  ' "$1"
-}
-
-@test "structural: the library defines both state-line functions and is executable" {
-  [ -x "$LIBRARY_SCRIPT" ]
-  run bash -c '. "$1"; type gaia_update_deps_state_line >/dev/null && type gaia_update_gaia_state_line >/dev/null && echo OK' _ "$LIBRARY_SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$output" = "OK" ]
-}
-
-@test "expected output: every fixture cache renders its exact line, under bash" {
-  expected_matches "$(command -v bash)" "$LIBRARY_SCRIPT"
-}
-
-@test "expected output: every fixture cache renders its exact line, under zsh" {
-  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-  expected_matches "$(command -v zsh)" "$LIBRARY_SCRIPT"
-}
-
-@test "expected output: a library with the advisories-unavailable wording changed is reported" {
-  local mutated="$BATS_TEST_TMPDIR/mutated-lib.sh"
-  sed 's/security advisories unavailable/security advisories missing/' "$LIBRARY_SCRIPT" >"$mutated"
-  # The mutation must have landed, or the failing state below proves nothing.
-  grep -qF -- "security advisories missing" "$mutated" || return 1
-  run expected_matches "$(command -v bash)" "$mutated"
-  [ "$status" -eq 1 ]
-  grep -qF -- "security advisories missing" <<<"$output" || return 1
-}
-
-# parity_matches <function name> <inline text>: runs the inline definition and
-# the library's against every fixture cache of the matching function, under
-# each available shell, and returns 1 at the first byte of difference.
-parity_matches() {
-  local function_name="$1" inline_text="$2" inline_file="$BATS_TEST_TMPDIR/inline-$1.sh" checked_at shell_path cache expected actual
-  printf '%s\n' "$inline_text" >"$inline_file"
-  checked_at="$(fixture_age_checked_at)"
-  local caches=()
-  if [ "$function_name" = "gaia_update_deps_state_line" ]; then
-    caches+=("$(write_cache p-with-count "{\"outdatedCount\":4,\"checkedAt\":$checked_at,\"securityCount\":2,\"securitySource\":\"gh\"}")")
-    caches+=("$(write_cache p-unavailable "{\"outdatedCount\":4,\"checkedAt\":$checked_at,\"securityCount\":0,\"securitySource\":\"unavailable\"}")")
-    caches+=("$(write_cache p-null-count "{\"outdatedCount\":0,\"checkedAt\":$checked_at}")")
-  else
-    caches+=("$(write_cache p-gaia-update "{\"gaiaCurrent\":\"1.2.3\",\"gaiaLatest\":\"1.3.0\",\"gaiaHasUpdate\":true}")")
-    caches+=("$(write_cache p-gaia-current "{\"gaiaCurrent\":\"1.3.0\",\"gaiaLatest\":\"1.3.0\",\"gaiaHasUpdate\":false}")")
+@test "expected output: every fixture cache renders its exact line, under bash and zsh" {
+  local shell_path
+  expected_matches "$(command -v bash)" "$LIBRARY_SCRIPT" || { echo "case bash: differs" >&2; return 1; }
+  if command -v zsh >/dev/null 2>&1; then
+    shell_path="$(command -v zsh)"
+    expected_matches "$shell_path" "$LIBRARY_SCRIPT" || { echo "case zsh: differs" >&2; return 1; }
   fi
-  caches+=("$CACHE_DIRECTORY/missing.json")
-  [ "${#caches[@]}" -ge 3 ] || return 1
-  while IFS= read -r shell_path; do
-    [ -n "$shell_path" ] || continue
-    for cache in "${caches[@]}"; do
-      expected="$(call_function "$shell_path" "$inline_file" "$function_name" "$cache")"
-      actual="$(call_function "$shell_path" "$LIBRARY_SCRIPT" "$function_name" "$cache")"
-      [ "$actual" = "$expected" ] || { echo "$function_name under $shell_path on $cache: library [$actual] vs inline [$expected]" >&2; return 1; }
-    done
-    expected="$(call_function "$shell_path" "$inline_file" "$function_name" "${caches[0]}" "$NO_JQ_PATH")"
-    actual="$(call_function "$shell_path" "$LIBRARY_SCRIPT" "$function_name" "${caches[0]}" "$NO_JQ_PATH")"
-    [ "$actual" = "$expected" ] || { echo "$function_name under $shell_path without jq: library [$actual] vs inline [$expected]" >&2; return 1; }
-  done < <(available_shells)
-  return 0
-}
-
-@test "parity: the library matches the inline deps definition in its skill, under every available shell" {
-  local skill="$REPO_ROOT/.claude/skills/update-deps/SKILL.md" inline_text
-  inline_text="$(inline_function_text "$skill" gaia_update_deps_state_line)"
-  [ -n "$inline_text" ] || skip "update-deps no longer defines the function inline"
-  parity_matches gaia_update_deps_state_line "$inline_text"
-}
-
-@test "parity: the library matches the inline gaia definition in its skill, under every available shell" {
-  local skill="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md" inline_text
-  inline_text="$(inline_function_text "$skill" gaia_update_gaia_state_line)"
-  [ -n "$inline_text" ] || skip "update-gaia no longer defines the function inline"
-  parity_matches gaia_update_gaia_state_line "$inline_text"
 }

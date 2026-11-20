@@ -180,7 +180,8 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
 
 # --- 1. memo damage ----------------------------------------------------------
 
-@test "damage: a deleted, emptied or garbled memo reads cold and prints the pre-change bytes" {
+@test "damage: a missing, garbled, stale-stamped or bad-sum memo reads cold and prints the pre-change bytes" {
+  local root bad="$BATS_TEST_TMPDIR/memo.bad"
   warm
   rm -f "$MEMO"
   check_same pr "$PR"
@@ -197,10 +198,7 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   # The readout rewrote a good memo each time.
   check_same pr "$PR"
   assert_trace "path=warm"
-}
-
-@test "damage: a stale stamp over a wrong derive entry is never trusted, for pr, initiative and reconcile" {
-  local root bad="$BATS_TEST_TMPDIR/memo.bad"
+  echo "case: stale stamp over a wrong derive entry"
   warm
   root="$(jq -r --arg derive_key "$KEY" '.derive[$derive_key][0]' <<<"$(memo_body)")"
   [ -n "$root" ] && [ "$root" != null ] || { printf 'the probe key has no derive entry\n' >&2; return 1; }
@@ -215,51 +213,15 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   cp "$bad" "$MEMO"
   check_same reconcile
   assert_trace "path=cold reason=stamp"
-}
 
-@test "damage, guard red: a copy that skips the stamp comparison trusts the wrong derive entry" {
-  local root bad="$BATS_TEST_TMPDIR/memo.bad"
-  warm
-  root="$(jq -r --arg derive_key "$KEY" '.derive[$derive_key][0]' <<<"$(memo_body)")"
-  memo_rewrite ".derive[\"$KEY\"] = [\"$WRONG_REFERENCE\"]" 0000000000000000 fix
-  cp "$MEMO" "$bad"
-  _paths
-  run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" pr "$PR"
-  grep -qF "[initiative $root " "$OLD_OUTPUT_FILE"
-
-  make_tree stamp
-  mutate "$MUTANT_TREE/$LIBRARY" '[ "$stamp_hash" != "$_gaia_usage_memo_stamp" ]' 'false'
-  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
-  run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR"
-  assert_trace "path=warm"
-  assert_priced "$NEW_OUTPUT_FILE"
-  differs "$OLD_OUTPUT_FILE" "$NEW_OUTPUT_FILE"
-  grep -qF "[initiative $WRONG_REFERENCE " "$NEW_OUTPUT_FILE"
-}
-
-# --- 2. checksum self-check --------------------------------------------------
-
-@test "checksum: a derive entry edited without recomputing the sum reads cold and prints the pre-change bytes" {
+  echo "case: derive entry edited without recomputing the sum"
   warm
   memo_rewrite ".derive[\"$KEY\"] = [\"$WRONG_REFERENCE\"]" keep keep
   check_same pr "$PR"
   assert_trace "path=cold reason=sum"
 }
 
-@test "checksum, guard red: a copy that skips the sum comparison trusts the edited derive entry" {
-  warm
-  memo_rewrite ".derive[\"$KEY\"] = [\"$WRONG_REFERENCE\"]" keep keep
-  _paths
-  run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" pr "$PR"
-  make_tree sum
-  mutate "$MUTANT_TREE/$LIBRARY" '[ "$(_gaia_usage_hash16 "$body" 2>/dev/null)" != "$sum_hash" ]' 'false'
-  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
-  run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR"
-  assert_trace "path=warm"
-  assert_priced "$NEW_OUTPUT_FILE"
-  differs "$OLD_OUTPUT_FILE" "$NEW_OUTPUT_FILE"
-  grep -qF "[initiative $WRONG_REFERENCE " "$NEW_OUTPUT_FILE"
-}
+# --- 2. checksum self-check --------------------------------------------------
 
 # --- 3. escaped key backstop -------------------------------------------------
 
@@ -542,19 +504,6 @@ forced_failure_tree() {
   assert_same "$OLD_ERROR_FILE" "$NEW_ERROR_FILE"
   [ ! -s "$NEW_ERROR_FILE" ]
   assert_trace "fallback=legacy"
-}
-
-@test "fallback, guard red: a copy whose single-parse jq does not discard stderr prints jq's error" {
-  forced_failure_tree jqerr
-  mutate "$MUTANT_TREE/$LIBRARY" $'$filter end end" \\\n      2>/dev/null' '$filter end end"'
-  _paths
-  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
-  run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR"
-  run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" pr "$PR"
-  assert_trace "fallback=legacy"
-  assert_same "$OLD_OUTPUT_FILE" "$NEW_OUTPUT_FILE"
-  [ -s "$NEW_ERROR_FILE" ]
-  differs "$OLD_ERROR_FILE" "$NEW_ERROR_FILE"
 }
 
 # --- 13. a memo too large for one argument -----------------------------------

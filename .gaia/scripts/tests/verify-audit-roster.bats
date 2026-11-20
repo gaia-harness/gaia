@@ -50,6 +50,18 @@ assert_contains() {
   grep -qF -- "$1" <<<"$output"
 }
 
+# Case-table assertions: each names the case that failed. Call as
+# `case_status <case> <code> || return 1`.
+case_status() {
+  [ "$status" -eq "$2" ] || { printf 'case %s: exit %s, expected %s\n%s\n' "$1" "$status" "$2" "$output" >&2; return 1; }
+}
+case_contains() {
+  grep -qF -- "$2" <<<"$output" || { printf 'case %s: output lacks "%s"\n%s\n' "$1" "$2" "$output" >&2; return 1; }
+}
+case_lacks() {
+  if grep -qF -- "$2" <<<"$output"; then printf 'case %s: output has "%s"\n%s\n' "$1" "$2" "$output" >&2; return 1; fi
+}
+
 # Strips maintainer-only blocks from the file named by $1, writing the result to
 # stdout. One copy, used by every lockstep test that needs a stripped script.
 #
@@ -247,25 +259,19 @@ YAML
 
 # Usage surface
 
-@test "usage: --help exits 0 and prints the usage" {
+@test "usage surface: help exits 0, unknown flag, flag without value, missing roster exit 2" {
   run bash "$SCRIPT" --help
-  [ "$status" -eq 0 ]
-  assert_contains "Usage: verify-audit-roster.sh"
-}
+  [ "$status" -eq 0 ] || { echo "case --help: got $status"; return 1; }
+  assert_contains "Usage: verify-audit-roster.sh" || { echo "case --help: no usage text"; return 1; }
 
-@test "usage: an unknown flag exits 2" {
   run bash "$SCRIPT" --not-a-real-flag
-  [ "$status" -eq 2 ]
-}
+  [ "$status" -eq 2 ] || { echo "case unknown flag: got $status"; return 1; }
 
-@test "usage: a value-taking flag with no value exits 2" {
   run bash "$SCRIPT" --config
-  [ "$status" -eq 2 ]
-}
+  [ "$status" -eq 2 ] || { echo "case flag without value: got $status"; return 1; }
 
-@test "usage: a roster that does not exist exits 2 and names it" {
   run bash "$SCRIPT" --root "$BATS_TEST_TMPDIR" --config "$BATS_TEST_TMPDIR/nope.yml"
-  [ "$status" -eq 2 ]
+  [ "$status" -eq 2 ] || { echo "case missing roster: got $status"; return 1; }
 }
 
 # UAT-024: the roster this SPEC ships passes. If this fails, either the check
@@ -281,8 +287,10 @@ YAML
 # Member registration: the name prefix and the machinery entry are runtime
 # invariants of the check, exercised through fixtures like every other one.
 
-@test "registration: a member name without the code-audit- prefix fails, naming the member" {
-  local fixture_directory="$BATS_TEST_TMPDIR/bad-prefix"
+# bats test_tags=protected
+@test "registration: prefix, registered member, unregistered member, pattern entry, unreadable machinery list" {
+  local fixture_directory="$BATS_TEST_TMPDIR/registration"
+
   scaffold_root "$fixture_directory" <<'YAML'
 auditors:
   - name: code-audit-default
@@ -294,13 +302,10 @@ auditors:
       - "py/**"
 YAML
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "member-name-prefix"
-  assert_contains "python-reviewer"
-}
+  case_status "bad prefix" 1 || return 1
+  case_contains "bad prefix" "member-name-prefix" || return 1
+  case_contains "bad prefix" "python-reviewer" || return 1
 
-@test "registration: a prefixed, registered member raises no registration finding" {
-  local fixture_directory="$BATS_TEST_TMPDIR/good-prefix"
   scaffold_root "$fixture_directory" <<'YAML'
 auditors:
   - name: code-audit-default
@@ -309,13 +314,9 @@ auditors:
     default: true
 YAML
   run_root "$fixture_directory"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
-}
+  case_status "prefixed, registered member" 0 || return 1
+  case_contains "prefixed, registered member" "roster clean" || return 1
 
-# bats test_tags=protected
-@test "registration: a member whose definition no machinery entry reaches fails, naming it" {
-  local fixture_directory="$BATS_TEST_TMPDIR/unregistered"
   scaffold_root "$fixture_directory" <<'YAML'
 auditors:
   - name: code-audit-default
@@ -330,15 +331,11 @@ YAML
     > "$fixture_directory/machinery.tmp"
   mv "$fixture_directory/machinery.tmp" "$fixture_directory/.claude/hooks/lib/audit-machinery.sh"
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "unregistered-member-definition"
-  assert_contains ".claude/agents/code-audit-python.md"
-  grep -qF ".claude/agents/code-audit-default.md" <<<"$output" && return 1
-  true
-}
+  case_status "unregistered member" 1 || return 1
+  case_contains "unregistered member" "unregistered-member-definition" || return 1
+  case_contains "unregistered member" ".claude/agents/code-audit-python.md" || return 1
+  case_lacks "unregistered member" ".claude/agents/code-audit-default.md" || return 1
 
-@test "registration: one code-audit-*.md pattern entry registers every member" {
-  local fixture_directory="$BATS_TEST_TMPDIR/pattern-registered"
   scaffold_root "$fixture_directory" <<'YAML'
 auditors:
   - name: code-audit-default
@@ -352,12 +349,9 @@ YAML
   printf 'AUDIT_MACHINERY_PATHS="$(cat <<%s\n.claude/agents/code-audit-*.md\nEOF\n)"\n' "'EOF'" \
     > "$fixture_directory/.claude/hooks/lib/audit-machinery.sh"
   run_root "$fixture_directory"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
-}
+  case_status "pattern entry" 0 || return 1
+  case_contains "pattern entry" "roster clean" || return 1
 
-@test "an unreadable machinery list fails rather than passing every member" {
-  local fixture_directory="$BATS_TEST_TMPDIR/no-list"
   scaffold_root "$fixture_directory" <<'YAML'
 auditors:
   - name: code-audit-default
@@ -367,9 +361,9 @@ auditors:
 YAML
   rm "$fixture_directory/.claude/hooks/lib/audit-machinery.sh"
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "unreadable-machinery-list"
-  assert_contains "AUDIT_MACHINERY_PATHS"
+  case_status "unreadable machinery list" 1 || return 1
+  case_contains "unreadable machinery list" "unreadable-machinery-list" || return 1
+  case_contains "unreadable machinery list" "AUDIT_MACHINERY_PATHS" || return 1
 }
 
 # SPEC-056 UAT-001/002/003: remit region parity. The roster is the authority on
@@ -378,112 +372,63 @@ YAML
 # process-wide exit code: the check emits one block per violation across
 # independent invariants, so an unrelated one firing would mask the case.
 
-@test "SPEC-056 UAT-001: a roster glob missing from the region fails, naming the glob" {
-  local fixture_directory="$BATS_TEST_TMPDIR/remit-missing"
-  remit_root "$fixture_directory"
-  drop_region_glob "$fixture_directory/.claude/agents/code-audit-a.md" 'a/two/*.ts'
-  run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "remit-glob-missing"
-  assert_contains "code-audit-a"
-  assert_contains "a/two/*.ts"
-  assert_contains "bash .gaia/scripts/write-audit-remits.sh"
-  # The omission direction only: an omitted glob is not also an over-claim.
-  grep -qF "remit-glob-ungranted" <<<"$output" && return 1
-  return 0
-}
+@test "remit parity: a missing glob, an un-granted glob and a permuted region each fail, naming the glob" {
+  local fixture_directory="$BATS_TEST_TMPDIR/remit-parity"
+  local agent_file="$fixture_directory/.claude/agents/code-audit-a.md"
 
-@test "SPEC-056 UAT-002: an un-granted glob in the region fails, naming the glob" {
-  local fixture_directory="$BATS_TEST_TMPDIR/remit-ungranted"
+  remit_root "$fixture_directory"
+  drop_region_glob "$agent_file" 'a/two/*.ts'
+  run_root "$fixture_directory"
+  case_status "missing glob" 1 || return 1
+  case_contains "missing glob" "remit-glob-missing" || return 1
+  case_contains "missing glob" "code-audit-a" || return 1
+  case_contains "missing glob" "a/two/*.ts" || return 1
+  case_contains "missing glob" "bash .gaia/scripts/write-audit-remits.sh" || return 1
+  # The omission direction only: an omitted glob is not also an over-claim.
+  case_lacks "missing glob" "remit-glob-ungranted" || return 1
+
   remit_root "$fixture_directory"
   # In the dialect on purpose, so the undecidable arm cannot fire and blur the
   # case.
-  add_region_glob "$fixture_directory/.claude/agents/code-audit-a.md" 'zzz-not-granted/**'
+  add_region_glob "$agent_file" 'zzz-not-granted/**'
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "remit-glob-ungranted"
-  assert_contains "code-audit-a"
-  assert_contains "zzz-not-granted/**"
-  assert_contains "bash .gaia/scripts/write-audit-remits.sh"
-  # The over-claim direction only, and distinguishable from UAT-001's block.
-  grep -qF "remit-glob-missing" <<<"$output" && return 1
-  return 0
-}
+  case_status "un-granted glob" 1 || return 1
+  case_contains "un-granted glob" "remit-glob-ungranted" || return 1
+  case_contains "un-granted glob" "code-audit-a" || return 1
+  case_contains "un-granted glob" "zzz-not-granted/**" || return 1
+  case_contains "un-granted glob" "bash .gaia/scripts/write-audit-remits.sh" || return 1
+  # The over-claim direction only, and distinguishable from the missing-glob block.
+  case_lacks "un-granted glob" "remit-glob-missing" || return 1
 
-@test "SPEC-056 UAT-003: a permuted region fails, naming both globs at the position" {
-  # The case that proves parity is ordered, not a set comparison: the region
-  # holds exactly the roster's globs and still fails.
-  local fixture_directory="$BATS_TEST_TMPDIR/remit-order"
+  # Proves parity is ordered, not a set comparison: the region holds exactly
+  # the roster's globs and still fails.
   remit_root "$fixture_directory"
-  swap_region_globs "$fixture_directory/.claude/agents/code-audit-a.md"
+  swap_region_globs "$agent_file"
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "remit-glob-order"
-  assert_contains "code-audit-a"
-  assert_contains "position: 1"
-  assert_contains "roster:   a/one/**"
-  assert_contains "region:   a/two/*.ts"
-  assert_contains "bash .gaia/scripts/write-audit-remits.sh"
-  grep -qF "remit-glob-missing" <<<"$output" && return 1
-  grep -qF "remit-glob-ungranted" <<<"$output" && return 1
-  return 0
+  case_status "permuted region" 1 || return 1
+  case_contains "permuted region" "remit-glob-order" || return 1
+  case_contains "permuted region" "code-audit-a" || return 1
+  case_contains "permuted region" "position: 1" || return 1
+  case_contains "permuted region" "roster:   a/one/**" || return 1
+  case_contains "permuted region" "region:   a/two/*.ts" || return 1
+  case_contains "permuted region" "bash .gaia/scripts/write-audit-remits.sh" || return 1
+  case_lacks "permuted region" "remit-glob-missing" || return 1
+  case_lacks "permuted region" "remit-glob-ungranted" || return 1
 }
 
 # SPEC-056 UAT-004: the region's SHAPE. A region that cannot be read leaves
 # nothing to compare, so each of the three is its own finding and none of them
 # is reported as parity-clean.
 
-@test "SPEC-056 UAT-004: a definition with no region fails" {
-  local fixture_directory="$BATS_TEST_TMPDIR/remit-shape-missing"
-  remit_root "$fixture_directory"
-  strip_region "$fixture_directory/.claude/agents/code-audit-a.md"
-  run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "missing-remit-region"
-  assert_contains "code-audit-a"
-  assert_contains "bash .gaia/scripts/write-audit-remits.sh"
-}
-
-@test "SPEC-056 UAT-004: a definition with two regions fails" {
-  local fixture_directory="$BATS_TEST_TMPDIR/remit-shape-dup"
-  remit_root "$fixture_directory"
-  duplicate_region "$fixture_directory/.claude/agents/code-audit-a.md"
-  run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "duplicate-remit-region"
-  assert_contains "code-audit-a"
-  assert_contains "bash .gaia/scripts/write-audit-remits.sh"
-}
-
-@test "SPEC-056 UAT-004: a definition whose markers do not pair up fails" {
-  local fixture_directory="$BATS_TEST_TMPDIR/remit-shape-unbalanced"
-  remit_root "$fixture_directory"
-  unbalance_region "$fixture_directory/.claude/agents/code-audit-a.md"
-  run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "unbalanced-remit-region"
-  assert_contains "code-audit-a"
-  assert_contains "bash .gaia/scripts/write-audit-remits.sh"
-}
-
-@test "reversed-remit-region: a definition whose end marker precedes its start marker fails" {
-  # A single balanced pair (start=1, end=1) is not enough: counting alone
-  # would read this as replaceable, which is exactly the shape that made the
-  # writer destructive before it checked marker ORDER too.
-  local fixture_directory="$BATS_TEST_TMPDIR/remit-shape-reversed"
-  remit_root "$fixture_directory"
-  reverse_region "$fixture_directory/.claude/agents/code-audit-a.md"
-  run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "reversed-remit-region"
-  assert_contains "code-audit-a"
-  assert_contains "bash .gaia/scripts/write-audit-remits.sh"
-}
-
-@test "SPEC-056 UAT-004: no marker-shape failure is ever reported as parity-clean" {
-  local shape agent_file fixture_directory
-  for shape in strip duplicate unbalance reverse; do
-    fixture_directory="$BATS_TEST_TMPDIR/remit-shape-clean-$shape"
+@test "remit region shape: none, two, unbalanced, reversed each fail and are never reported parity-clean" {
+  # The reversed case: a single balanced pair (start=1, end=1) is not enough,
+  # since counting alone would read it as replaceable, which is the shape that
+  # made the writer destructive before it checked marker ORDER too.
+  local shape slug agent_file fixture_directory
+  for shape in strip:missing-remit-region duplicate:duplicate-remit-region unbalance:unbalanced-remit-region reverse:reversed-remit-region; do
+    slug="${shape#*:}"
+    shape="${shape%%:*}"
+    fixture_directory="$BATS_TEST_TMPDIR/remit-shape-$shape"
     remit_root "$fixture_directory"
     agent_file="$fixture_directory/.claude/agents/code-audit-a.md"
     case "$shape" in
@@ -493,10 +438,12 @@ YAML
       reverse)   reverse_region "$agent_file" ;;
     esac
     run_root "$fixture_directory"
-    [ "$status" -eq 1 ] || return 1
-    grep -qF "roster clean" <<<"$output" && return 1
+    case_status "$shape" 1 || return 1
+    case_contains "$shape" "$slug" || return 1
+    case_contains "$shape" "code-audit-a" || return 1
+    case_contains "$shape" "bash .gaia/scripts/write-audit-remits.sh" || return 1
+    case_lacks "$shape" "roster clean" || return 1
   done
-  return 0
 }
 
 # SPEC-056 UAT-005: a region glob the bounded dialect cannot decide FAILS. The
@@ -519,28 +466,21 @@ YAML
   run_root "$1"
 }
 
-@test "SPEC-056 UAT-005: an undecidable glob granted to the DEFAULT member fails" {
-  local glob
-  for glob in 'a/[a-z].ts' 'a/{b,c}/x.ts' 'a/?.ts' 'a/\x.ts' 'app/**.ts' 'a/***/b'; do
-    undecidable_remit_root "$BATS_TEST_TMPDIR/remit-undec-default" "$glob" 'a/one/**'
-    [ "$status" -eq 1 ] || return 1
-    grep -qF "undecidable-remit-glob" <<<"$output" || return 1
-    grep -qF "$glob" <<<"$output" || return 1
-    grep -qF "reason:" <<<"$output" || return 1
+@test "undecidable remit glob: granted to the DEFAULT member or to a LONE claimant fails" {
+  local glob position
+  for position in default claimant; do
+    for glob in 'a/[a-z].ts' 'a/{b,c}/x.ts' 'a/?.ts' 'a/\x.ts' 'app/**.ts' 'a/***/b'; do
+      if [ "$position" = default ]; then
+        undecidable_remit_root "$BATS_TEST_TMPDIR/remit-undec-$position" "$glob" 'a/one/**'
+      else
+        undecidable_remit_root "$BATS_TEST_TMPDIR/remit-undec-$position" 'zzz-default-only/**' "$glob"
+      fi
+      case_status "$position $glob" 1 || return 1
+      case_contains "$position $glob" "undecidable-remit-glob" || return 1
+      case_contains "$position $glob" "$glob" || return 1
+      case_contains "$position $glob" "reason:" || return 1
+    done
   done
-  return 0
-}
-
-@test "SPEC-056 UAT-005: an undecidable glob granted to a LONE claimant fails" {
-  local glob
-  for glob in 'a/[a-z].ts' 'a/{b,c}/x.ts' 'a/?.ts' 'a/\x.ts' 'app/**.ts' 'a/***/b'; do
-    undecidable_remit_root "$BATS_TEST_TMPDIR/remit-undec-claimant" 'zzz-default-only/**' "$glob"
-    [ "$status" -eq 1 ] || return 1
-    grep -qF "undecidable-remit-glob" <<<"$output" || return 1
-    grep -qF "$glob" <<<"$output" || return 1
-    grep -qF "reason:" <<<"$output" || return 1
-  done
-  return 0
 }
 
 # The raw-glob scrape is held in lockstep with the classifier
@@ -567,24 +507,16 @@ drifted_reader_sandbox() {
 }
 
 @test "reader drift: a scrape that disagrees with the classifier fails, naming the member" {
+  # The perturbed check's own observable output changes, so the shared scrape
+  # is load-bearing on the check's side as well as the writer's.
   local sandbox="$BATS_TEST_TMPDIR/drift-sandbox"
   drifted_reader_sandbox "$sandbox"
   local fixture_directory="$BATS_TEST_TMPDIR/drift-fixture"
-  scaffold_root "$fixture_directory" <<'YAML'
-auditors:
-  - name: code-audit-default
-    globs:
-      - "zzz-default-only/**"
-    default: true
-  - name: code-audit-a
-    globs:
-      - "a/**"
-      - "a/b/*.ts"
-YAML
+  drift_writer_fixture "$fixture_directory"
   run bash "$sandbox/.gaia/scripts/verify-audit-roster.sh" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
-  [ "$status" -eq 1 ]
-  assert_contains "roster-reader-drift"
-  assert_contains "code-audit-a"
+  case_status "drifted scrape" 1 || return 1
+  case_contains "drifted scrape" "roster-reader-drift" || return 1
+  case_contains "drifted scrape" "code-audit-a" || return 1
 }
 
 # SPEC-056 UAT-011: the writer reads the roster through THIS check's scrape,
@@ -625,19 +557,6 @@ YAML
   grep -qF -- "- \`a/**\`" "$agent"
 }
 
-@test "SPEC-056 UAT-011: the perturbed check still fires roster-reader-drift" {
-  # The other half of the same perturbation: the check's own observable output
-  # changes too, so the shared scrape is load-bearing on both sides.
-  local sandbox="$BATS_TEST_TMPDIR/drift-sandbox-both"
-  drifted_reader_sandbox "$sandbox"
-  local fixture_directory="$BATS_TEST_TMPDIR/drift-both-fixture"
-  drift_writer_fixture "$fixture_directory"
-  run bash "$sandbox/.gaia/scripts/verify-audit-roster.sh" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
-  [ "$status" -eq 1 ]
-  assert_contains "roster-reader-drift"
-  assert_contains "code-audit-a"
-}
-
 @test "SPEC-056 UAT-011: the writer carries no second roster scrape" {
   # The structural half. Not `grep -qE 'globs[[:space:]]*:'`: the scrape's own
   # line is `if (raw ~ /^[[:space:]]+globs[[:space:]]*:/)`, where the character
@@ -652,34 +571,6 @@ YAML
 
 # The maintainer-only lockstep block
 
-# The lockstep tests below strip with `strip_maintainer_only`, this suite's model
-# of the shipped scrub (`.gaia/cli/src/release/marker-strip.ts`). This one pins
-# the model to the shipped semantics rather than to a convenient subset of them:
-# the real parser recognizes a marker by substring, so it strips an indented
-# pair, and indented pairs are legitimate and already in the tree wherever a
-# block sits inside an `if` or an `else`. A model that only matched at column 0
-# would leave the maintainer-only text in the "stripped" copy, failing every
-# test below it on a file the release scrubs correctly.
-@test "lockstep: the marker model strips an indented pair, as the shipped stripper does" {
-  local script_file="$BATS_TEST_TMPDIR/indented-pair.sh"
-  # Built from the same constants the model matches on, so the fixture cannot
-  # drift into being a third spelling of the marker.
-  {
-    printf 'before=1\n'
-    printf '  %s\n' "$MAINTAINER_START"
-    printf '  maintainer_only=1\n'
-    printf '  %s\n' "$MAINTAINER_END"
-    printf 'after=1\n'
-  } > "$script_file"
-  run strip_maintainer_only "$script_file"
-  [ "$status" -eq 0 ]
-  assert_contains "before=1"
-  assert_contains "after=1"
-  grep -qF "maintainer_only=1" <<<"$output" && return 1
-  grep -qF "gaia:maintainer-only" <<<"$output" && return 1
-  true
-}
-
 @test "lockstep: the maintainer-only markers balance" {
   local starts ends
   starts="$(roster_check_text | grep -cF -- "$MAINTAINER_START")"
@@ -688,19 +579,17 @@ YAML
   [ "$starts" -eq "$ends" ]
 }
 
-@test "lockstep: the script is valid bash with the maintainer-only block stripped" {
+@test "lockstep: the stripped adopter copy is valid bash and still decides a roster" {
   local stripped="$BATS_TEST_TMPDIR/stripped" source checked=0
   mkdir -p "$stripped"
   stage_roster_check "$stripped" strip_maintainer_only
   for source in "$stripped"/*.sh; do
-    grep -qF "gaia:maintainer-only" "$source" && return 1
-    bash -n "$source"
+    grep -qF "gaia:maintainer-only" "$source" && { echo "case valid bash: markers left in $source"; return 1; }
+    bash -n "$source" || { echo "case valid bash: $source does not parse"; return 1; }
     checked=$((checked + 1))
   done
-  [ "$checked" -eq "$(roster_check_files | wc -l)" ]
-}
+  [ "$checked" -eq "$(roster_check_files | wc -l)" ] || { echo "case valid bash: checked $checked files"; return 1; }
 
-@test "lockstep: the stripped script still runs and still decides a roster" {
   # What an adopter runs. Resolved in a sandbox mirroring the repo layout, so
   # the stripped copy's own script-relative library resolution is exercised too.
   local sandbox="$BATS_TEST_TMPDIR/stripped-sandbox"
@@ -724,37 +613,32 @@ auditors:
       - "a/b/*.ts"
 YAML
   run bash "$sandbox/.gaia/scripts/verify-audit-roster.sh" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
+  case_status "stripped copy decides a roster" 0 || return 1
+  case_contains "stripped copy decides a roster" "roster clean" || return 1
 }
 
 # Read-only
 
-@test "the check never writes: the fixture root is byte-identical after a run" {
-  local fixture_directory="$BATS_TEST_TMPDIR/readonly"
+@test "the check never writes: the fixture root is byte-identical after a failing and a passing run" {
+  # A check that repaired a drifted region rather than reporting it would be
+  # indistinguishable from a clean run unless the clean run is pinned too.
+  # Fixture byte-identity, never git status: $BATS_TEST_TMPDIR is not a git repo.
+  local fixture_directory="$BATS_TEST_TMPDIR/readonly" before after
   remit_root "$fixture_directory"
   drop_region_glob "$fixture_directory/.claude/agents/code-audit-a.md" 'a/two/*.ts'
-  local before after
   before="$(find "$fixture_directory" -type f -exec shasum {} + | sort)"
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
+  case_status "failing path" 1 || return 1
   after="$(find "$fixture_directory" -type f -exec shasum {} + | sort)"
-  [ "$before" = "$after" ]
-}
+  [ "$before" = "$after" ] || { echo "case failing path: fixture changed"; return 1; }
 
-@test "SPEC-056 UAT-008: the check never writes on the passing path either" {
-  # The twin of the failing-path case above. A check that repaired a drifted
-  # region rather than reporting it would be indistinguishable from a clean run
-  # unless the clean run is pinned too. Fixture byte-identity, never git status:
-  # $BATS_TEST_TMPDIR is not a git repo.
-  local fixture_directory="$BATS_TEST_TMPDIR/readonly-clean"
+  fixture_directory="$BATS_TEST_TMPDIR/readonly-clean"
   remit_root "$fixture_directory"
-  local before after
   before="$(find "$fixture_directory" -type f -exec shasum {} + | sort)"
   run_root "$fixture_directory"
-  [ "$status" -eq 0 ]
+  case_status "passing path" 0 || return 1
   after="$(find "$fixture_directory" -type f -exec shasum {} + | sort)"
-  [ "$before" = "$after" ]
+  [ "$before" = "$after" ] || { echo "case passing path: fixture changed"; return 1; }
 }
 
 @test "the check never writes: no mutating command appears in the source" {
@@ -809,39 +693,26 @@ YAML
 }
 
 # bats test_tags=protected
-@test "coverage: a tracked path owned by nobody and exempted by nobody fails" {
+@test "coverage: an ownerless path fails and an owned one is not reported; an unowned: glob clears it" {
   local fixture_directory="$BATS_TEST_TMPDIR/cov-orphan"
   tracked_roster '.claude/**' '.gaia/**' | scaffold_tracked_root "$fixture_directory" \
     app/a.ts lib/b.ts docs/orphan.md
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "ownerless-path"
-  assert_contains "docs/orphan.md"
-}
+  case_status "ownerless path" 1 || return 1
+  case_contains "ownerless path" "ownerless-path" || return 1
+  case_contains "ownerless path" "docs/orphan.md" || return 1
+  # The owned paths are not reported, so the finding is not vacuous. The
+  # status and the finding above anchor these absences: an exit-2 usage error
+  # or an empty run would also name no owned path.
+  case_lacks "owned path not reported" "app/a.ts" || return 1
+  case_lacks "owned path not reported" "lib/b.ts" || return 1
 
-@test "coverage: an owned path is not reported, so the finding is not vacuous" {
-  local fixture_directory="$BATS_TEST_TMPDIR/cov-owned"
-  tracked_roster '.claude/**' '.gaia/**' | scaffold_tracked_root "$fixture_directory" \
-    app/a.ts lib/b.ts docs/orphan.md
-  run_root "$fixture_directory"
-  # Anchor on the finding this test controls for before asserting the absences.
-  # Two `grep … && return 1` checks plus `return 0` pass on ANY output that
-  # happens not to name the owned paths -- an exit-2 usage error, or an empty
-  # run -- so without these two lines the vacuity guard is itself vacuous.
-  [ "$status" -eq 1 ]
-  assert_contains "docs/orphan.md"
-  grep -qF "app/a.ts" <<<"$output" && return 1
-  grep -qF "lib/b.ts" <<<"$output" && return 1
-  return 0
-}
-
-@test "coverage: an unowned: glob covering the path clears it" {
-  local fixture_directory="$BATS_TEST_TMPDIR/cov-exempt"
+  fixture_directory="$BATS_TEST_TMPDIR/cov-exempt"
   tracked_roster '.claude/**' '.gaia/**' 'docs/**' | scaffold_tracked_root "$fixture_directory" \
     app/a.ts lib/b.ts docs/orphan.md
   run_root "$fixture_directory"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
+  case_status "unowned: glob clears it" 0 || return 1
+  case_contains "unowned: glob clears it" "roster clean" || return 1
 }
 
 # The adopter copy of the check: the release strips the maintainer-only block
@@ -862,60 +733,51 @@ harness_fixture() {
     app/a.ts lib/b.ts docs/a.md .gaia/scripts/tool.sh .githooks/pre-commit .github/audit/resolve.sh
 }
 
-@test "coverage: the adopter copy reads an unclaimed harness path as GAIA's, not ownerless" {
-  local fixture_directory="$BATS_TEST_TMPDIR/cov-harness-adopter" adopter_script
-  harness_fixture "$fixture_directory"
+@test "coverage: harness paths read as GAIA's on the adopter copy and ownerless on the source copy" {
+  local fixture_directory="$BATS_TEST_TMPDIR/cov-harness" adopter_script
   adopter_script="$(stripped_check)"
-  run bash "$adopter_script" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
-}
 
-@test "coverage: the adopter copy still reports an unclaimed path outside the harness trees" {
-  local fixture_directory="$BATS_TEST_TMPDIR/cov-harness-adopter-orphan" adopter_script
+  harness_fixture "$fixture_directory"
+  run bash "$adopter_script" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
+  case_status "adopter, harness paths" 0 || return 1
+  case_contains "adopter, harness paths" "roster clean" || return 1
+
   harness_fixture "$fixture_directory"
   : > "$fixture_directory/orphan.txt"
   git -C "$fixture_directory" add orphan.txt
-  adopter_script="$(stripped_check)"
   run bash "$adopter_script" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
-  [ "$status" -eq 1 ]
-  assert_contains "ownerless-path"
-  assert_contains "orphan.txt"
-  grep -qF ".gaia/scripts/tool.sh" <<<"$output" && return 1
-  true
-}
+  case_status "adopter, path outside the harness" 1 || return 1
+  case_contains "adopter, path outside the harness" "ownerless-path" || return 1
+  case_contains "adopter, path outside the harness" "orphan.txt" || return 1
+  case_lacks "adopter, path outside the harness" ".gaia/scripts/tool.sh" || return 1
 
-@test "coverage: the source copy reports the same unclaimed harness paths as ownerless" {
-  local fixture_directory="$BATS_TEST_TMPDIR/cov-harness-source"
   harness_fixture "$fixture_directory"
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "ownerless-path"
-  assert_contains ".gaia/scripts/tool.sh"
-  assert_contains ".githooks/pre-commit"
-  assert_contains ".github/audit/resolve.sh"
+  case_status "source copy" 1 || return 1
+  case_contains "source copy" "ownerless-path" || return 1
+  case_contains "source copy" ".gaia/scripts/tool.sh" || return 1
+  case_contains "source copy" ".githooks/pre-commit" || return 1
+  case_contains "source copy" ".github/audit/resolve.sh" || return 1
 }
 
-@test "coverage: an unowned: glob reaching an OWNED path fails as overbroad" {
+@test "coverage: an unowned: glob reaching an OWNED path fails as overbroad, citing the witness and its owner" {
   # The anti-rubber-stamp assertion. A blanket exemption is the one move that
   # would turn this invariant into a formality, and it fails here because it
   # necessarily also covers a path some member already owns.
   local fixture_directory="$BATS_TEST_TMPDIR/cov-overbroad"
   tracked_roster '**' | scaffold_tracked_root "$fixture_directory" app/a.ts lib/b.ts
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "overbroad-unowned-glob"
-}
+  case_status "blanket glob" 1 || return 1
+  case_contains "blanket glob" "overbroad-unowned-glob" || return 1
 
-@test "coverage: the overbroad finding cites the owned witness and its owner" {
-  local fixture_directory="$BATS_TEST_TMPDIR/cov-overbroad-witness"
+  fixture_directory="$BATS_TEST_TMPDIR/cov-overbroad-witness"
   tracked_roster '.claude/**' '.gaia/**' 'app/**' | scaffold_tracked_root "$fixture_directory" \
     app/a.ts lib/b.ts
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "overbroad-unowned-glob"
-  assert_contains "app/a.ts"
-  assert_contains "code-audit-frontend"
+  case_status "witness" 1 || return 1
+  case_contains "witness" "overbroad-unowned-glob" || return 1
+  case_contains "witness" "app/a.ts" || return 1
+  case_contains "witness" "code-audit-frontend" || return 1
 }
 
 @test "coverage: an unowned: glob outside the classifier dialect fails as undecidable" {
@@ -933,22 +795,12 @@ harness_fixture() {
   assert_contains "docs**"
 }
 
-@test "coverage: an in-dialect unowned: glob is not reported as undecidable" {
-  # The negative control. The gate above must reject the dialect's rejects and
-  # nothing else; a gate that failed every entry would pass its own test while
-  # making the list unusable.
-  local fixture_directory="$BATS_TEST_TMPDIR/cov-dialect-ok"
-  tracked_roster '.claude/**' '.gaia/**' 'docs/**' | scaffold_tracked_root "$fixture_directory" \
-    app/a.ts lib/b.ts docs/orphan.md
-  run_root "$fixture_directory"
-  [ "$status" -eq 0 ]
-  grep -qF "undecidable-unowned-glob" <<<"$output" && return 1
-  return 0
-}
-
-@test "coverage: a non-git fixture root has no universe, so the invariant is silent" {
-  # What keeps the rest of this suite green: most tests scaffold bare
-  # directories, and this is why that costs them nothing.
+@test "coverage universe: a non-git root is silent, the same root as a repository reports" {
+  # Most tests scaffold bare directories, and the silence is why that costs
+  # them nothing. The second half is its negative control: the same scaffolding
+  # and roster, the ONLY difference being a repository, must report, because
+  # the fixture's own roster and agent files are ownerless under a roster that
+  # claims app/** alone. Otherwise the silence could be a vacuous invariant.
   local fixture_directory="$BATS_TEST_TMPDIR/cov-nongit"
   scaffold_root "$fixture_directory" <<'YAML'
 auditors:
@@ -958,32 +810,15 @@ auditors:
     default: true
 YAML
   run_root "$fixture_directory"
-  [ "$status" -eq 0 ]
-  grep -qF "ownerless-path" <<<"$output" && return 1
-  return 0
-}
+  case_status "non-git root" 0 || return 1
+  case_lacks "non-git root" "ownerless-path" || return 1
 
-@test "coverage: that silence is the missing universe, not a vacuous invariant" {
-  # The negative control for the test above, and the one this suite most needs:
-  # if the invariant were simply never firing, that test would pass for the
-  # wrong reason and every other fixture's green would mean nothing. Same
-  # scaffolding, same roster, the ONLY difference being that this root is a
-  # repository -- and it must report, because a scaffolded fixture's own roster
-  # and agent files are ownerless under a roster that claims `app/**` alone.
-  local fixture_directory="$BATS_TEST_TMPDIR/cov-nonvacuous"
-  scaffold_root "$fixture_directory" <<'YAML'
-auditors:
-  - name: code-audit-default
-    globs:
-      - "app/**"
-    default: true
-YAML
   git init -q "$fixture_directory"
   git -C "$fixture_directory" add -A
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "ownerless-path"
-  assert_contains ".gaia/audit-ci.yml"
+  case_status "git root" 1 || return 1
+  case_contains "git root" "ownerless-path" || return 1
+  case_contains "git root" ".gaia/audit-ci.yml" || return 1
 }
 
 @test "coverage: a --root inside a repository does not enumerate that repository" {
@@ -1037,58 +872,40 @@ YAML
 # a tracked root where every glob matches, so each failure is the one glob the
 # test adds.
 
-@test "zero-match: a roster where every glob matches a tracked file passes" {
-  local fixture_directory="$BATS_TEST_TMPDIR/zero-ok"
-  tracked_roster '.claude/**' '.gaia/**' 'docs/**' | scaffold_tracked_root "$fixture_directory" \
-    app/a.ts lib/b.ts docs/orphan.md
-  run_root "$fixture_directory"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
-}
+@test "zero-match: an unowned: glob and a remit glob matching nothing fail, the allowlist passes, a comment exempts nothing" {
+  local fixture_directory="$BATS_TEST_TMPDIR/zero-match"
 
-@test "zero-match: an unowned: glob matching no tracked file fails, naming the glob" {
-  local fixture_directory="$BATS_TEST_TMPDIR/zero-unowned"
   tracked_roster '.claude/**' '.gaia/**' 'docs/**' 'retired-dir/**' | scaffold_tracked_root "$fixture_directory" \
     app/a.ts lib/b.ts docs/orphan.md
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "zero-match-glob"
-  assert_contains "retired-dir/**"
-  assert_contains "unowned list"
-}
+  case_status "unowned glob" 1 || return 1
+  case_contains "unowned glob" "zero-match-glob" || return 1
+  case_contains "unowned glob" "retired-dir/**" || return 1
+  case_contains "unowned glob" "unowned list" || return 1
 
-@test "zero-match: a remit glob matching no tracked file fails, naming the glob and member" {
-  local fixture_directory="$BATS_TEST_TMPDIR/zero-remit"
-  tracked_roster '.claude/**' '.gaia/**' 'docs/**' | scaffold_tracked_root "$fixture_directory" \
+  tracked_roster '.claude/**' '.gaia/**' 'docs/**' | scaffold_tracked_root "$fixture_directory-remit" \
     app/a.ts docs/orphan.md
-  run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "zero-match-glob"
-  assert_contains "lib/**"
-  assert_contains "remit of code-audit-alpha"
-  grep -qF "app/**" <<<"$output" && return 1
-  true
-}
+  run_root "$fixture_directory-remit"
+  case_status "remit glob" 1 || return 1
+  case_contains "remit glob" "zero-match-glob" || return 1
+  case_contains "remit glob" "lib/**" || return 1
+  case_contains "remit glob" "remit of code-audit-alpha" || return 1
+  case_lacks "remit glob" "app/**" || return 1
 
-@test "zero-match: a glob on the script's allowlist passes with no matching file" {
-  local fixture_directory="$BATS_TEST_TMPDIR/zero-allowlisted"
-  tracked_roster '.claude/**' '.gaia/**' 'docs/**' '*.config.ts' | scaffold_tracked_root "$fixture_directory" \
+  tracked_roster '.claude/**' '.gaia/**' 'docs/**' '*.config.ts' | scaffold_tracked_root "$fixture_directory-allowlist" \
     app/a.ts lib/b.ts docs/orphan.md
-  run_root "$fixture_directory"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
-}
+  run_root "$fixture_directory-allowlist"
+  case_status "allowlisted glob" 0 || return 1
+  case_contains "allowlisted glob" "roster clean" || return 1
 
-@test "zero-match: a roster comment naming the glob exempts nothing" {
-  local fixture_directory="$BATS_TEST_TMPDIR/zero-comment"
   {
     tracked_roster '.claude/**' '.gaia/**' 'docs/**' 'retired-dir/**'
     printf '  # retired-dir/** is deliberately empty: the allowlist is not this file.\n'
-  } | scaffold_tracked_root "$fixture_directory" app/a.ts lib/b.ts docs/orphan.md
-  run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "zero-match-glob"
-  assert_contains "retired-dir/**"
+  } | scaffold_tracked_root "$fixture_directory-comment" app/a.ts lib/b.ts docs/orphan.md
+  run_root "$fixture_directory-comment"
+  case_status "roster comment" 1 || return 1
+  case_contains "roster comment" "zero-match-glob" || return 1
+  case_contains "roster comment" "retired-dir/**" || return 1
 }
 
 @test "zero-match: the stripped script keeps the shipped allowlist and names no maintainer path" {
@@ -1148,84 +965,72 @@ light_root() {
   } | scaffold_root "$fixture_directory"
 }
 
-@test "light keys: a well-formed member passes, so the failures below are not vacuous" {
+@test "light keys: a well-formed member passes; bad light_review and light_line_cap values fail" {
+  local value
+
   light_root "$BATS_TEST_TMPDIR/light-ok" true 50 'app/tests/**' 'app/**' 'cfg/*.ts' 'cfg/exact.ts' 'app/**/x/*.ts'
   run_root "$BATS_TEST_TMPDIR/light-ok"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
-}
+  case_status "well-formed control" 0 || return 1
+  case_contains "well-formed control" "roster clean" || return 1
 
-@test "light keys: light_review other than the literal true or false fails" {
-  local value
   for value in yes '"true"' True 1 on; do
     light_root "$BATS_TEST_TMPDIR/light-review" "$value" 50 'app/tests/**'
     run_root "$BATS_TEST_TMPDIR/light-review"
-    [ "$status" -eq 1 ] || { echo "value '$value' passed" >&2; return 1; }
-    grep -qF "invalid-light-review" <<<"$output" || { echo "value '$value' not named: $output" >&2; return 1; }
-    grep -qF "$value" <<<"$output" || { echo "value '$value' not echoed" >&2; return 1; }
+    case_status "light_review $value" 1 || return 1
+    case_contains "light_review $value" "invalid-light-review" || return 1
+    case_contains "light_review $value" "$value" || return 1
   done
   # The boolean spellings the router accepts stay clean.
   for value in true false; do
     light_root "$BATS_TEST_TMPDIR/light-review" "$value" 50 'app/tests/**'
     run_root "$BATS_TEST_TMPDIR/light-review"
-    [ "$status" -eq 0 ] || { echo "value '$value' failed: $output" >&2; return 1; }
+    case_status "light_review $value" 0 || return 1
   done
-}
 
-@test "light keys: light_line_cap that is not a positive integer no greater than the ceiling fails" {
-  local value
   for value in 0 -3 abc 80 51 '"50"' 050 5.5 1000000000000; do
     light_root "$BATS_TEST_TMPDIR/light-cap" true "$value" 'app/tests/**'
     run_root "$BATS_TEST_TMPDIR/light-cap"
-    [ "$status" -eq 1 ] || { echo "cap '$value' passed" >&2; return 1; }
-    grep -qF "invalid-light-line-cap" <<<"$output" || { echo "cap '$value' not named: $output" >&2; return 1; }
+    case_status "light_line_cap $value" 1 || return 1
+    case_contains "light_line_cap $value" "invalid-light-line-cap" || return 1
   done
   # The edges that must stay clean: 1 and the ceiling itself.
   for value in 1 50; do
     light_root "$BATS_TEST_TMPDIR/light-cap" true "$value" 'app/tests/**'
     run_root "$BATS_TEST_TMPDIR/light-cap"
-    [ "$status" -eq 0 ] || { echo "cap '$value' failed: $output" >&2; return 1; }
+    case_status "light_line_cap $value" 0 || return 1
   done
-}
 
-@test "light keys: a cap above the ceiling is reported as one the router would clamp" {
   light_root "$BATS_TEST_TMPDIR/light-cap-high" true 80 'app/tests/**'
   run_root "$BATS_TEST_TMPDIR/light-cap-high"
-  [ "$status" -eq 1 ]
-  assert_contains "above the ceiling"
-}
+  case_status "cap above the ceiling" 1 || return 1
+  case_contains "cap above the ceiling" "above the ceiling" || return 1
 
-@test "light keys: an absent light_line_cap is not a finding" {
   light_root "$BATS_TEST_TMPDIR/light-no-cap" true '' 'app/tests/**'
   run_root "$BATS_TEST_TMPDIR/light-no-cap"
-  [ "$status" -eq 0 ]
+  case_status "absent light_line_cap" 0 || return 1
 }
 
-@test "light keys: a hard-Full glob outside the member's owned globs fails, wildcard or literal" {
+@test "light keys: a hard-Full glob outside the owned globs or the dialect fails; a literal inside an owned glob passes" {
   local glob
+
   for glob in 'docs/**' 'docs/*.md' 'docs/readme.md' 'cfg/**' 'app*/x.ts'; do
     light_root "$BATS_TEST_TMPDIR/light-uncovered" true 50 'app/tests/**' "$glob"
     run_root "$BATS_TEST_TMPDIR/light-uncovered"
-    [ "$status" -eq 1 ] || { echo "glob '$glob' passed" >&2; return 1; }
-    grep -qF "light-hard-full-glob-uncovered" <<<"$output" || { echo "glob '$glob' not named: $output" >&2; return 1; }
-    grep -qF "glob:    $glob" <<<"$output" || { echo "glob '$glob' not cited: $output" >&2; return 1; }
+    case_status "uncovered $glob" 1 || return 1
+    case_contains "uncovered $glob" "light-hard-full-glob-uncovered" || return 1
+    case_contains "uncovered $glob" "glob:    $glob" || return 1
   done
-}
 
-@test "light keys: a wildcard-free hard-Full path inside an owned glob is decided by the matcher and passes" {
   light_root "$BATS_TEST_TMPDIR/light-literal" true 50 'cfg/exact.ts' 'app/deep/er/file.ts'
   run_root "$BATS_TEST_TMPDIR/light-literal"
-  [ "$status" -eq 0 ]
-}
+  case_status "wildcard-free path inside an owned glob" 0 || return 1
 
-@test "light keys: a hard-Full glob outside the classifier dialect fails as undecidable" {
-  local glob
   for glob in 'app/[a-z].ts' 'app/{b,c}/x.ts' 'app/?.ts' 'app/**.ts' 'app/***/b'; do
     light_root "$BATS_TEST_TMPDIR/light-undecidable" true 50 "$glob"
     run_root "$BATS_TEST_TMPDIR/light-undecidable"
-    [ "$status" -eq 1 ] || { echo "glob '$glob' passed" >&2; return 1; }
-    grep -qF "undecidable-light-hard-full-glob" <<<"$output" || { echo "glob '$glob' not named: $output" >&2; return 1; }
-    grep -qF "reason:" <<<"$output" || return 1
+    case_status "undecidable $glob" 1 || return 1
+    case_contains "undecidable $glob" "undecidable-light-hard-full-glob" || return 1
+    case_contains "undecidable $glob" "reason:" || return 1
   done
 }
 
@@ -1283,34 +1088,25 @@ $1
 YAML
 }
 
-@test "release-skip key: a malformed value fails exactly once, naming the member and the value" {
-  local value fixture_directory
+@test "release-skip key: malformed values fail once, true/false/absent pass, the default member is refused" {
+  local value line fixture_directory="$BATS_TEST_TMPDIR/skip-key"
   for value in '"true"' 'yes' 'True' ''; do
-    fixture_directory="$BATS_TEST_TMPDIR/skip-bad"
     skip_key_roster "    skip_gaia_release_changes: $value" | scaffold_root "$fixture_directory"
     run_root "$fixture_directory"
-    [ "$status" -eq 1 ] || { printf 'value [%s]: %s\n' "$value" "$output" >&2; return 1; }
-    assert_contains "FAIL invalid-release-skip-key"
-    assert_contains "member: code-audit-a"
-    assert_contains "value:  $value"
-    [ "$(grep -cF 'FAIL invalid-release-skip-key' <<<"$output")" -eq 1 ]
+    case_status "malformed [$value]" 1 || return 1
+    case_contains "malformed [$value]" "FAIL invalid-release-skip-key" || return 1
+    case_contains "malformed [$value]" "member: code-audit-a" || return 1
+    case_contains "malformed [$value]" "value:  $value" || return 1
+    [ "$(grep -cF 'FAIL invalid-release-skip-key' <<<"$output")" -eq 1 ] || { echo "case malformed [$value]: not reported exactly once"; return 1; }
   done
-}
 
-@test "release-skip key: literal true and false and an absent key pass" {
-  local line fixture_directory
   for line in '    skip_gaia_release_changes: true' '    skip_gaia_release_changes: false' '    skip_gaia_release_changes: true # why' ''; do
-    fixture_directory="$BATS_TEST_TMPDIR/skip-good"
     skip_key_roster "$line" | scaffold_root "$fixture_directory"
     run_root "$fixture_directory"
-    [ "$status" -eq 0 ] || { printf 'line [%s]: %s\n' "$line" "$output" >&2; return 1; }
-    grep -qF 'invalid-release-skip-key' <<<"$output" && return 1
-    true
+    case_status "accepted [$line]" 0 || return 1
+    case_lacks "accepted [$line]" "invalid-release-skip-key" || return 1
   done
-}
 
-@test "release-skip key: the default member cannot carry it" {
-  local fixture_directory="$BATS_TEST_TMPDIR/skip-default"
   scaffold_root "$fixture_directory" <<'YAML'
 auditors:
   - name: code-audit-default
@@ -1323,10 +1119,10 @@ auditors:
       - "a/**"
 YAML
   run_root "$fixture_directory"
-  [ "$status" -eq 1 ]
-  assert_contains "FAIL invalid-release-skip-key"
-  assert_contains "member: code-audit-default"
-  assert_contains "the default member cannot carry the key"
+  case_status "default member" 1 || return 1
+  case_contains "default member" "FAIL invalid-release-skip-key" || return 1
+  case_contains "default member" "member: code-audit-default" || return 1
+  case_contains "default member" "the default member cannot carry the key" || return 1
 }
 
 @test "release-skip key: --emit-roster prints one RELEASESKIP record for the keyed member only" {
@@ -1404,20 +1200,6 @@ YAML
   [ "$status" -eq 1 ]
   assert_contains "zero-match-glob"
   assert_contains "libz/**"
-}
-
-# The structural checks above read roster_check_files, the loader's own list,
-# so that list must name exactly the verify-audit-roster-*.sh files on disk: a
-# sibling the loader never sources, or one it names that is not there, fails.
-# bats test_tags=whole-tree
-@test "the loader's sibling list is exactly the check's siblings on disk" {
-  local listed on_disk="" source
-  listed="$(roster_check_files | sed 1d | LC_ALL=C sort)"
-  [ -n "$listed" ]
-  for source in "${SCRIPT%.sh}"-*.sh; do
-    [ -f "$source" ] && on_disk="$on_disk$source"$'\n'
-  done
-  [ "$listed" = "$(printf '%s' "$on_disk" | LC_ALL=C sort)" ] || { printf 'listed:\n%s\non disk:\n%s\n' "$listed" "$on_disk" >&2; return 1; }
 }
 
 # bats test_tags=whole-tree

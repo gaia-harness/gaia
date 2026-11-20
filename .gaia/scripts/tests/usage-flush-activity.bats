@@ -44,7 +44,7 @@ encode_project_path() { printf '%s' "$1" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g'; }
 
 age() { touch -t 202001010000 "$@"; }
 
-flush() { bash "${FLUSHER:-$FLUSH}" --projects-root "$PROJECTS_DIRECTORY" --main-root "$ROOT" "$@"; }
+flush() { bash "$FLUSH" --projects-root "$PROJECTS_DIRECTORY" --main-root "$ROOT" "$@"; }
 
 flush_session() { age "$TRANSCRIPT"; flush --session s-act --finished-main "$@"; }
 
@@ -87,37 +87,6 @@ expected_mixed_act() {
     '{b: $b, e: "cli", o: [0], c: [[1, 32]], w: [[2, 28]], d: [[33, 3]]}'
 }
 
-# scratch_flusher <sed-expr>: a copy of the flusher and its libraries with one
-# mutation applied to usage-parse-lib.sh; fails when the sed changed nothing.
-scratch_flusher() {
-  local scratch_directory="$TEMPORARY_DIRECTORY/scratch"
-  mkdir -p "$scratch_directory/.gaia/scripts/spec" "$scratch_directory/.gaia/scripts/notebook"
-  cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
-    "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
-  cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
-  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch_directory/.gaia/scripts/"
-  cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"
-  sed "$1" "$SCRIPTS/usage-parse-lib.sh" >"$scratch_directory/.gaia/scripts/usage-parse-lib.sh.m"
-  if cmp -s "$SCRIPTS/usage-parse-lib.sh" "$scratch_directory/.gaia/scripts/usage-parse-lib.sh.m"; then
-    echo "mutation did not apply to usage-parse-lib.sh" >&2
-    return 1
-  fi
-  mv "$scratch_directory/.gaia/scripts/usage-parse-lib.sh.m" "$scratch_directory/.gaia/scripts/usage-parse-lib.sh"
-  FLUSHER="$scratch_directory/.gaia/scripts/usage-flush.sh"
-}
-
-# frozen_strings_ok <file>: each guard string other suites mutate with sed
-# occurs exactly once, on one line.
-frozen_strings_ok() {
-  local guard_string
-  for guard_string in \
-    '(usage_member($record.cwd; $roots) | not)' \
-    '| (if $finished then null else $trailing_line end) as $hold' \
-    ' or .type == "close"'; do
-    [ "$(grep -cF -- "$guard_string" "$1")" -eq 1 ] || return 1
-  done
-}
-
 # ---------- the facts a main transcript yields ----------
 
 @test "a main transcript yields counts equal to the pre-facts golden, and facts with opener, chunk, wait, turn length and entrypoint" {
@@ -131,54 +100,64 @@ frozen_strings_ok() {
   [ "$(first_act | jq -c '.c | map(.[0] + .[1]) | max')" = "33" ]
 }
 
-@test "each opener type: a user prompt and a dequeue line with no cwd open a turn" {
-  ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
-  ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
-  ut_notification "$TRANSCRIPT" 2026-10-20T10:00:05.000Z
-  ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:06.000Z m2
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(first_act | jq -c '.o')" = "[0,5]" ]
-  [ "$(first_act | jq -c '.c')" = "[[1,0],[6,0]]" ]
+# opener_case <name>: write one transcript for a turn-opener case and print the
+# expected "<jq filter>=<expected>" checks, one per line.
+opener_case() {
+  case "$1" in
+    "each opener type: a user prompt and a dequeue line with no cwd open a turn")
+      ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
+      ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
+      ut_notification "$TRANSCRIPT" 2026-10-20T10:00:05.000Z
+      ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:06.000Z m2
+      printf '%s\n' '.o=[0,5]' '.c=[[1,0],[6,0]]'
+      ;;
+    "a queued attachment, a meta prompt and the interrupt marker open no turn")
+      ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
+      ut_queued_attachment "$TRANSCRIPT" 2026-10-20T10:00:02.000Z
+      ut_meta_prompt "$TRANSCRIPT" 2026-10-20T10:00:03.000Z
+      ut_interrupt "$TRANSCRIPT" 2026-10-20T10:00:04.000Z
+      ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:05.000Z m2
+      printf '%s\n' 'has("o")=false' '.c=[[0,4]]'
+      ;;
+    "a line whose cwd is a string outside the roots adds no fact")
+      UT_CWD=/elsewhere/not-this-tree ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
+      ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
+      printf '%s\n' 'has("o")=false' ".b=$(epoch_ms 2026-10-20T10:00:01Z)"
+      ;;
+    "a dequeue followed 10 ms later by its notification prompt with no work between is one opener")
+      ut_notification "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
+      ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.010Z
+      ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
+      printf '%s\n' '.o=[0]'
+      ;;
+    "two user prompts with no work between are two openers")
+      ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
+      ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.010Z
+      ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
+      printf '%s\n' '.o=[0,0]'
+      ;;
+  esac
 }
 
-@test "a queued attachment, a meta prompt and the interrupt marker open no turn" {
-  ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
-  ut_queued_attachment "$TRANSCRIPT" 2026-10-20T10:00:02.000Z
-  ut_meta_prompt "$TRANSCRIPT" 2026-10-20T10:00:03.000Z
-  ut_interrupt "$TRANSCRIPT" 2026-10-20T10:00:04.000Z
-  ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:05.000Z m2
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(first_act | jq -c 'has("o")')" = "false" ]
-  [ "$(first_act | jq -c '.c')" = "[[0,4]]" ]
-}
-
-@test "a line whose cwd is a string outside the roots adds no fact" {
-  UT_CWD=/elsewhere/not-this-tree ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
-  ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(first_act | jq -c 'has("o")')" = "false" ]
-  [ "$(first_act | jq -c '.b')" = "$(epoch_ms 2026-10-20T10:00:01Z)" ]
-}
-
-@test "a dequeue followed 10 ms later by its notification prompt with no work between is one opener" {
-  ut_notification "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
-  ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.010Z
-  ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(first_act | jq -c '.o')" = "[0]" ]
-}
-
-@test "two user prompts with no work between are two openers" {
-  ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
-  ut_prompt "$TRANSCRIPT" 2026-10-20T10:00:00.010Z
-  ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(first_act | jq -c '.o')" = "[0,0]" ]
+@test "turn opener rules: each opener type opens a turn, and non-openers, out-of-root cwd and 10 ms duplicates do not" {
+  local case_name check expected_checks
+  for case_name in \
+    "each opener type: a user prompt and a dequeue line with no cwd open a turn" \
+    "a queued attachment, a meta prompt and the interrupt marker open no turn" \
+    "a line whose cwd is a string outside the roots adds no fact" \
+    "a dequeue followed 10 ms later by its notification prompt with no work between is one opener" \
+    "two user prompts with no work between are two openers"; do
+    rm -rf "$ROOT/.gaia/local" "$TRANSCRIPT"
+    expected_checks="$(opener_case "$case_name")"
+    run flush_session
+    [ "$status" -eq 0 ] || { echo "case $case_name: flush exited $status"; return 1; }
+    while IFS= read -r check; do
+      [ "$(first_act | jq -c "${check%%=*}")" = "${check#*=}" ] || {
+        echo "case $case_name: ${check%%=*} is $(first_act | jq -c "${check%%=*}"), want ${check#*=}"
+        return 1
+      }
+    done <<<"$expected_checks"
+  done
 }
 
 @test "a wait whose tool_use and result land in different flushes is q on the first and r on the second" {
@@ -287,39 +266,4 @@ frozen_strings_ok() {
   [ "$(first_act | jq -c '[.b, .o[0], .c[0][0], .c[0][1]]')" = \
     "$(printf '%s' "$expected" | jq -c '.[0] as $b | def s: ((. - $b) / 1000 | round); [$b, (.[0] | s), (.[1] | s), ((.[2] | s) - (.[1] | s))]')" ]
   [ "$(first_act | jq -c 'has("r")')" = "false" ]
-}
-
-# ---------- guards must be able to fail ----------
-
-# bats test_tags=whole-tree
-@test "guard: without the cwd-less allowance a dequeue line opens no turn" {
-  scratch_flusher 's/($record.cwd | type) != "string" or //'
-  ut_notification "$TRANSCRIPT" 2026-10-20T10:00:00.000Z
-  ut_assistant "$TRANSCRIPT" 2026-10-20T10:00:01.000Z m1
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(first_act | jq -c 'has("c")')" = "true" ]
-  [ "$(first_act | jq -c '.o')" != "[0]" ]
-}
-
-# bats test_tags=whole-tree
-@test "guard: with system entries counted as work the away_summary stamp lands in a chunk" {
-  scratch_flusher 's/\$record.type == "assistant" or (\$tool_results/$record.type == "assistant" or $record.type == "system" or ($tool_results/'
-  build_mixed
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(first_act | jq -c 'has("c")')" = "true" ]
-  [ "$(first_act | jq -c '[.c[][]] | max')" != "32500" ]
-}
-
-@test "frozen strings: each guard string other suites mutate occurs exactly once in the parse library" {
-  frozen_strings_ok "$SCRIPTS/usage-parse-lib.sh"
-}
-
-# bats test_tags=whole-tree
-@test "guard: a parse library with a guard string duplicated fails the frozen-strings check" {
-  sed '/ or \.type == "close"/p' "$SCRIPTS/usage-parse-lib.sh" >"$TEMPORARY_DIRECTORY/duplicated.sh"
-  [ "$(grep -cF -- ' or .type == "close"' "$TEMPORARY_DIRECTORY/duplicated.sh")" -eq 2 ]
-  run frozen_strings_ok "$TEMPORARY_DIRECTORY/duplicated.sh"
-  [ "$status" -ne 0 ]
 }

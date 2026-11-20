@@ -68,28 +68,37 @@ interval_rows() {
   segment session:s2 s2 2026-10-01T10:20:00Z 999000 9990
 }
 
-@test "the interval view counts that session's segments in [t0, t1) and prices them as the initiative does" {
+@test "the interval view counts a session's segments in [t0, t1), by key kind, and prices them as the initiative does" {
   local figures initiative
   interval_rows
-  run view s1 2026-10-01T10:00:00Z 2026-10-01T11:00:00Z
-  [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 1 ]
-  figures="$output"
-  [ "$(jq -c '{tokens, elapsed_seconds, unpriced}' <<<"$figures")" = '{"tokens":505000,"elapsed_seconds":3600,"unpriced":false}' ]
-  [ "$(LC_ALL=C printf '%.2f' "$(jq -r '.dollars' <<<"$figures")")" = 1.05 ]
-  initiative="$(bash "$SCRIPTS/usage.sh" initiative spec:SPEC-501 --line --json --main-root "$MAIN" --rate-table "$RATES" --projects-root "$TEMPORARY_DIRECTORY/projects")"
-  [ "$(jq -r '.tokens' <<<"$initiative")" = 505000 ]
-  [ "$(jq -r '.dollars' <<<"$initiative")" = "$(jq -r '.dollars' <<<"$figures")" ]
-}
+  segment branch:feat/x s4 2026-10-01T13:10:00Z 1000 0
+  segment session:s4 s4 2026-10-01T13:20:00Z 2000 0
 
-@test "the spend the interval view leaves out is real: the segment at the close instant and the other session's window" {
-  interval_rows
-  # Both exclusions carry spend, so a view that took either would move the
-  # figure the first case pins.
+  # case: in-window segments of one session, priced as the initiative prices them
+  run view s1 2026-10-01T10:00:00Z 2026-10-01T11:00:00Z
+  [ "$status" -eq 0 ] || { echo "case window: view exited $status"; return 1; }
+  [ "${#lines[@]}" -eq 1 ] || { echo "case window: view printed ${#lines[@]} lines"; return 1; }
+  figures="$output"
+  [ "$(jq -c '{tokens, elapsed_seconds, unpriced}' <<<"$figures")" = '{"tokens":505000,"elapsed_seconds":3600,"unpriced":false}' ] ||
+    { echo "case window: figures differ: $figures"; return 1; }
+  [ "$(LC_ALL=C printf '%.2f' "$(jq -r '.dollars' <<<"$figures")")" = 1.05 ] || { echo "case window: dollars differ"; return 1; }
+  initiative="$(bash "$SCRIPTS/usage.sh" initiative spec:SPEC-501 --line --json --main-root "$MAIN" --rate-table "$RATES" --projects-root "$TEMPORARY_DIRECTORY/projects")"
+  [ "$(jq -r '.tokens' <<<"$initiative")" = 505000 ] || { echo "case window: initiative tokens differ"; return 1; }
+  [ "$(jq -r '.dollars' <<<"$initiative")" = "$(jq -r '.dollars' <<<"$figures")" ] || { echo "case window: initiative dollars differ"; return 1; }
+
+  # case: the spend the view leaves out is real (the segment at the close instant, the other session's window)
   run view s1 2026-10-01T11:00:00Z 2026-10-01T11:30:00Z
-  [ "$(jq -r '.tokens' <<<"$output")" = 404000 ]
+  [ "$(jq -r '.tokens' <<<"$output")" = 404000 ] || { echo "case close instant: tokens differ"; return 1; }
   run view s2 2026-10-01T10:00:00Z 2026-10-01T11:00:00Z
-  [ "$(jq -r '.tokens' <<<"$output")" = 1008990 ]
+  [ "$(jq -r '.tokens' <<<"$output")" = 1008990 ] || { echo "case other session: tokens differ"; return 1; }
+
+  # case: a span with no paired close takes only session spend, a command interval takes branch-keyed spend too
+  run view s4 2026-10-01T13:00:00Z 2026-10-01T13:30:00Z
+  [ "$(jq -r '.tokens' <<<"$output")" = 2000 ] || { echo "case unpaired span: tokens differ"; return 1; }
+  binding start s4 2026-10-01T13:00:00Z gaia-debt
+  binding close s4 2026-10-01T13:30:00Z gaia-debt command:gaia-debt-20261001T130000Z-c3d4
+  run view s4 2026-10-01T13:00:00Z 2026-10-01T13:30:00Z
+  [ "$(jq -r '.tokens' <<<"$output")" = 3000 ] || { echo "case command interval: tokens differ"; return 1; }
 }
 
 @test "the interval view reports an unpriced claude- model" {
@@ -102,34 +111,18 @@ interval_rows() {
   [ "$(jq -c '{tokens, elapsed_seconds, unpriced}' <<<"$output")" = '{"tokens":1100,"elapsed_seconds":1800,"unpriced":true}' ]
 }
 
-@test "a command interval takes branch-keyed spend; a span with no paired close takes only session spend" {
-  segment branch:feat/x s4 2026-10-01T13:10:00Z 1000 0
-  segment session:s4 s4 2026-10-01T13:20:00Z 2000 0
-  run view s4 2026-10-01T13:00:00Z 2026-10-01T13:30:00Z
-  [ "$(jq -r '.tokens' <<<"$output")" = 2000 ]
-  binding start s4 2026-10-01T13:00:00Z gaia-debt
-  binding close s4 2026-10-01T13:30:00Z gaia-debt command:gaia-debt-20261001T130000Z-c3d4
-  run view s4 2026-10-01T13:00:00Z 2026-10-01T13:30:00Z
-  [ "$(jq -r '.tokens' <<<"$output")" = 3000 ]
-}
-
-@test "the Cost line rounds tokens to one decimal of millions behind one ~, prints dollars or cost unavailable, and appends terms" {
+@test "the Cost line and duration format: millions to one decimal, dollars or cost unavailable, zero units dropped" {
   run render gaia_usage_cost_line 10600000 1.5 399
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 10.6M tokens, $1.50, 6m39s' ]
+  [ "$status" -eq 0 ] || { echo "case cost line: exited $status"; return 1; }
+  [ "$output" = 'Cost: 10.6M tokens, $1.50, 6m39s' ] || { echo "case cost line dollars: $output"; return 1; }
   run render gaia_usage_cost_line 10600000 null 399
-  [ "$output" = 'Cost: 10.6M tokens, cost unavailable, 6m39s' ]
+  [ "$output" = 'Cost: 10.6M tokens, cost unavailable, 6m39s' ] || { echo "case cost line unavailable: $output"; return 1; }
   run render gaia_usage_cost_line 49999 0.004 45 'spec:SPEC-001 $0.00'
-  [ "$output" = 'Cost: 0.0M tokens, $0.00, 45s' ]
-}
-
-@test "the duration formatter drops leading zero units" {
-  run render gaia_usage_human_duration 45
-  [ "$output" = 45s ]
-  run render gaia_usage_human_duration 399
-  [ "$output" = 6m39s ]
-  run render gaia_usage_human_duration 3605
-  [ "$output" = 1h0m5s ]
-  run render gaia_usage_human_duration 0
-  [ "$output" = 0s ]
+  [ "$output" = 'Cost: 0.0M tokens, $0.00, 45s' ] || { echo "case cost line terms: $output"; return 1; }
+  local duration_case seconds expected
+  for duration_case in 45:45s 399:6m39s 3605:1h0m5s 0:0s; do
+    seconds="${duration_case%%:*}" expected="${duration_case#*:}"
+    run render gaia_usage_human_duration "$seconds"
+    [ "$output" = "$expected" ] || { echo "case duration $seconds: got $output, want $expected"; return 1; }
+  done
 }

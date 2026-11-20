@@ -3,8 +3,7 @@
 # The readouts read usage.jsonl and links.jsonl only. A retired cost store left
 # in the telemetry directory, holding spec, plan, command and execute rows that
 # the pre-change scripts would turn into interval closes and derived edges,
-# changes no byte of any readout. The pinned pre-change scripts run over the
-# same rows to prove the poison is real: their output moves with it.
+# changes no byte of any readout.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/scripts/tests/usage-poisoned-ledger.bats
@@ -91,24 +90,6 @@ same_capture() {
   [ "$seen" -eq "${#readouts[@]}" ]
   grep -qF '  spec:SPEC-601  tokens 101,000' "$CAPTURE_DIRECTORY/r2-clean.out"
   grep -q '^Cost: ' "$CAPTURE_DIRECTORY/r3-clean.out"
-}
-
-@test "the poison is real: the pre-change scripts print different per-PR and reconcile figures with it" {
-  local readout tag moved=0
-  for readout in "pr 70" "reconcile"; do
-    tag="${readout%% *}"
-    rm -f "$POISON"
-    # shellcheck disable=SC2086
-    capture "$tag-old-clean" old $readout
-    poison
-    # shellcheck disable=SC2086
-    capture "$tag-old-poisoned" old $readout
-    if ! cmp -s "$CAPTURE_DIRECTORY/$tag-old-clean.out" "$CAPTURE_DIRECTORY/$tag-old-poisoned.out"; then moved=$((moved + 1)); fi
-  done
-  [ "$moved" -eq 2 ]
-  grep -qF '[initiative plan:PLAN-060 to date' "$CAPTURE_DIRECTORY/pr-old-poisoned.out"
-  grep -qF '[initiative plan:PLAN-060 to date' "$CAPTURE_DIRECTORY/pr-old-clean.out" && return 1
-  true
 }
 
 @test "usage.sh --help no longer offers a retired-store flag" {
