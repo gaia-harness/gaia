@@ -81,11 +81,10 @@ setup_file() {
 
   # Provision the predicate libs on disk (the resolver sources them from
   # "$repo_root/.claude/hooks/lib/"). NOT committed: they only have to be
-  # loadable, never digest input (this script computes no digest). Each one
-  # decides the answer: without the classifier, the machinery matcher, the
-  # rules-tier predicate or the version normalizer the resolver resets to full
-  # scope, and without the clearance reader the per-member anchor arm is
-  # disabled.
+  # loadable, never digest input (this script computes no digest). Without the
+  # classifier, the machinery matcher, the rules-tier predicate or the version
+  # normalizer the resolver resets to full scope, and without the clearance
+  # reader the per-member anchor arm is disabled.
   mkdir -p "$template_sandbox/.claude/hooks/lib"
   local library_name
   for library_name in audit-scope.sh audit-machinery.sh audit-rules-changed.sh \
@@ -129,9 +128,10 @@ fresh_sandbox() {
   install_gh_mock
 }
 
-# run_cases <label> <command>...: each command in a fresh sandbox and its own
-# subshell, so nothing a case exports reaches the next. The subshell inherits
-# errexit and its status is never tested, so a failing assertion fails the test.
+# run_cases <label> <command> [<label> <command>...]: each command in a fresh
+# sandbox and its own subshell, so nothing a case exports reaches the next. The
+# subshell inherits errexit and its status is never tested, so a failing
+# assertion fails the test.
 run_cases() {
   local case_number=0 label command
   while [ "$#" -gt 0 ]; do

@@ -281,9 +281,8 @@ setup_c4_base_sha_pair() {
   # WHY the worthiness ledger is not symlinked, asked of the shipped code rather than
   # asserted by hand: the registry classifies it per-tree, and the linker's own
   # shared-set function is the single thing that decides what gets a symlink. A
-  # registry entry that started calling it shared -- the precise Phase-6
-  # cutover risk this scenario guards -- fails here rather than silently
-  # sharing the ledger.
+  # registry entry that started calling it shared fails here rather than
+  # silently sharing the ledger.
   classify="$(run_in "$WORKTREE_A" -- bash -c \
     '. .gaia/scripts/state-registry-lib.sh; gaia_registry_classify worthiness-ledger/worthiness.jsonl' 2>/dev/null)"
   [ "$classify" = "per-tree" ]
@@ -300,24 +299,16 @@ setup_c4_base_sha_pair() {
   # wrong reason. Assert that shared state really is shared, by resolution
   # rather than by "is a symlink".
   #
-  # RESTATED AT THE CUTOVER (see README, Published assertion changes). It used
-  # to hunt for the first entry the registry names shared that already existed
-  # as a directory under main, because before the flip "shared" meant six
-  # individually-symlinked entries and the per-entry linker created each one in
-  # main as its symlink's target. The flip removes both the per-entry links and
-  # that side effect: a worktree now creates directories exactly when and how
-  # the main checkout does, through the one parent symlink. So the control asks
-  # the parent, which is simpler and strictly stronger -- it holds for all six
-  # shared entries at once instead of whichever one happened to be pre-created.
+  # A worktree reaches shared state through the one parent symlink, so the
+  # control asks the parent: it holds for every shared entry at once.
   # It fails, as it must, on a linker that linked nothing: .gaia/local would
   # then be each tree's own real directory and resolve somewhere else.
   MAIN_LOCAL="$(cd "$MAIN/.gaia/local" && pwd -P)"
   [ "$(cd "$WORKTREE_A/.gaia/local" && pwd -P)" = "$MAIN_LOCAL" ]
   [ "$(cd "$WORKTREE_B/.gaia/local" && pwd -P)" = "$MAIN_LOCAL" ]
 
-  # No shared-state symlink exists for the per-tree entry in either tree. This
-  # is the mechanism check for TODAY's per-entry linking; the physical-path
-  # checks further down are what carry the guarantee across the cutover.
+  # No shared-state symlink exists for the per-tree entry in either tree; the
+  # physical-path checks further down carry the guarantee.
   [ -L "$WORKTREE_A/.gaia/local/worthiness-ledger" ] && return 1
   [ -L "$WORKTREE_B/.gaia/local/worthiness-ledger" ] && return 1
 

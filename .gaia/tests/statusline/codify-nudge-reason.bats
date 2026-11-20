@@ -227,7 +227,7 @@ render_statusline_against_refresher_cache() {
   echo "case: the statusline strips control bytes already present in the cached reason"
   # Only control bytes are this layer's job (mandate: strip control bytes from
   # the cached reason before printing it); an unsanitized printable segment
-  # like "FAKE" or stray parentheses is the composition layer's job (test 14),
+  # like "FAKE" or stray parentheses is the composition layer's job (the rising_class sanitize test),
   # so this fixture carries only a control-byte payload: an injected color
   # escape and a newline.
   local injected_sequence
@@ -334,7 +334,7 @@ render_statusline_against_refresher_cache() {
   [ "$status" -eq 0 ]
   [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "1 new pattern" ]
 
-  echo "case: no race: identical inputs to the race tests, without the rewrite"
+  echo "case: no race: identical inputs to the race cases, without the rewrite"
   rm -f "$CACHE_FILE"
   printf '{"reviewed_at":"X"}' > "$MOCK_SNAPSHOT_FILE"
   run env \

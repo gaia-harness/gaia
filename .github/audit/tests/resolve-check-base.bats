@@ -156,7 +156,7 @@ EOF
 # resolve-audit-base.sh's fallback contract, so a pull request stacked on a
 # branch other than the default one falls back to ITS OWN base here too:
 # falling back to the default would re-run the check over the base branch's
-# whole divergence (gaia-react/gaia#1057). The sandbox has no remote, which
+# whole divergence. The sandbox has no remote, which
 # is why every other test sees the bare local `main`; these write
 # remote-tracking refs by hand so an `origin/<ref>` can resolve.
 # -----------------------------------------------------------------------------

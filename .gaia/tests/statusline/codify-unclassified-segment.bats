@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Tests for the classless-recurrence delivery channels of the policy-memory
-# loop: the statusline's `codifyUnclassifiedCount` segment, the refresher
+# loop: the statusline's `codifyUnclassifiedCount` segment and the refresher
 # (.gaia/scripts/check-updates.sh) that writes that field from `codify-tally`'s
 # `unclassified` object.
 #

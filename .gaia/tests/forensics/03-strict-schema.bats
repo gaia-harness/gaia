@@ -45,7 +45,7 @@ assert_strict_body_schema() {
 # Schema validation against golden files
 # ---------------------------------------------------------------------------
 
-@test "each golden fixture has four ordered sections, classification and capture keys" {
+@test "each golden fixture has four ordered sections; the init golden carries classification and capture keys" {
   local name golden body section
   for name in init update secrets other-class; do
     case "$name" in

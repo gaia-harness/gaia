@@ -79,8 +79,9 @@ redact_case() {
 }
 
 # ---------------------------------------------------------------------------
-# Token patterns. Each SEC-3 shape sits mid-line with no token|key|secret
-# keyword nearby, so the generic fallback cannot mask a missing dedicated pass.
+# Token patterns. The SEC-3 shapes (JWT, Bearer, xapp-, connection string)
+# sit mid-line with no token|key|secret keyword nearby, so the generic fallback
+# cannot mask a missing dedicated pass.
 # ---------------------------------------------------------------------------
 
 # bats test_tags=protected
@@ -180,7 +181,7 @@ redact_case() {
 # Golden-file roundtrip: redacted input equals the golden, byte for byte
 # ---------------------------------------------------------------------------
 
-@test "redact_body output matches each golden fixture byte-for-byte" {
+@test "redact_body output matches the secrets and init golden fixtures byte-for-byte" {
   local pair input_file golden_file result
   for pair in "input-with-secrets.txt golden-secrets-redacted.md" \
     "input-init-failure.txt golden-init-redacted.md"; do
