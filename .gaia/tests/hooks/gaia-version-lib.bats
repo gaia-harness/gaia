@@ -31,63 +31,41 @@ setup() {
   mkdir -p "$TEMPORARY_DIRECTORY"
 }
 
-@test "a plain version file normalizes to the bare literal" {
-  printf '1.6.1\n' > "$TEMPORARY_DIRECTORY/VERSION"
-  run gaia_read_version "$TEMPORARY_DIRECTORY/VERSION"
-  [ "$status" -eq 0 ]
-  [ "$output" = "1.6.1" ]
-}
-
-@test "CRLF line endings are stripped" {
-  printf '1.6.1\r\n' > "$TEMPORARY_DIRECTORY/VERSION"
-  run gaia_read_version "$TEMPORARY_DIRECTORY/VERSION"
-  [ "$output" = "1.6.1" ]
-}
-
-@test "leading blank lines are skipped and the first non-blank line wins" {
-  printf '\n\n1.6.1\n2.0.0\n' > "$TEMPORARY_DIRECTORY/VERSION"
-  run gaia_read_version "$TEMPORARY_DIRECTORY/VERSION"
-  [ "$output" = "1.6.1" ]
-}
-
-# A line holding only a CR is blank once the CR is stripped, so it is skipped
-# like any other blank line. This pins the ordering inside the reader rather
-# than a caller-visible nicety: CR is not awk's default field separator, so a
-# reader that tested for a non-blank line BEFORE stripping would select this
-# line, print nothing, and report a readable version file as missing.
-@test "a CR-only line is blank and is skipped, not selected" {
-  printf '\r\n1.6.1\n' > "$TEMPORARY_DIRECTORY/VERSION"
-  run gaia_read_version "$TEMPORARY_DIRECTORY/VERSION"
-  [ "$output" = "1.6.1" ]
-}
-
-@test "surrounding whitespace is trimmed" {
-  printf '   1.6.1\t \n' > "$TEMPORARY_DIRECTORY/VERSION"
-  run gaia_read_version "$TEMPORARY_DIRECTORY/VERSION"
-  [ "$output" = "1.6.1" ]
-}
-
-# The absent-file and empty-file cases are one contract, not two: both yield
-# the empty string and exit 0, because the call sites disagree on what a
-# missing file means and the helper must not flatten those policies.
-
-@test "an absent file yields the empty string and exits 0" {
-  run gaia_read_version "$TEMPORARY_DIRECTORY/nope"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "a whitespace-only file yields the empty string and exits 0" {
-  printf '\n  \n\t\n' > "$TEMPORARY_DIRECTORY/VERSION"
-  run gaia_read_version "$TEMPORARY_DIRECTORY/VERSION"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "an empty argument yields the empty string and exits 0" {
-  run gaia_read_version ""
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+# Each row's content is a printf %b escape string written to the VERSION file; "absent"
+# reads a path that does not exist and "empty-argument" passes "" as the path.
+#
+# The cr-only-line row pins the ordering inside the reader rather than a
+# caller-visible nicety: CR is not awk's default field separator, so a reader
+# that tested for a non-blank line BEFORE stripping would select that line,
+# print nothing, and report a readable version file as missing.
+#
+# The absent, whitespace-only and empty-argument rows are one contract, not
+# three: each yields the empty string and exits 0, because the call sites
+# disagree on what a missing file means and the helper must not flatten those
+# policies.
+@test "a version file normalizes to the bare literal (plain, CRLF, leading blank lines, CR-only line, surrounding whitespace) and an absent file, whitespace-only file or empty argument to the empty string" {
+  local row label content expected path
+  for row in \
+    'plain|1.6.1\n|1.6.1' \
+    'crlf|1.6.1\r\n|1.6.1' \
+    'leading-blank-lines|\n\n1.6.1\n2.0.0\n|1.6.1' \
+    'cr-only-line|\r\n1.6.1\n|1.6.1' \
+    'surrounding-whitespace|   1.6.1\t \n|1.6.1' \
+    'absent|-|' \
+    'whitespace-only|\n  \n\t\n|' \
+    'empty-argument|-|'; do
+    IFS='|' read -r label content expected <<<"$row"
+    path="$TEMPORARY_DIRECTORY/VERSION"
+    rm -f "$path"
+    case "$label" in
+      absent) path="$TEMPORARY_DIRECTORY/nope" ;;
+      empty-argument) path="" ;;
+      *) printf '%b' "$content" > "$path" ;;
+    esac
+    run gaia_read_version "$path"
+    [ "$status" -eq 0 ] || { echo "case $label: status=$status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "case $label: output=[$output]"; return 1; }
+  done
 }
 
 # The structural pin. A CR strip paired with a first-non-blank-line awk select

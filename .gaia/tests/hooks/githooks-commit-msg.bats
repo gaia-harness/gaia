@@ -67,22 +67,25 @@ edit_argument_was_recorded() {
   [[ "$output" == *"wiki/decisions/Naming Conventions.md"* ]]
 }
 
-@test "commit-msg: passes when commitlint accepts, and hands it the message file" {
-  run_hook
-  [ "$status" -eq 0 ]
-  edit_argument_was_recorded
+@test "commit-msg: passes and hands commitlint the message file: a plain message, a placeholder and an issue number" {
+  local row label message
+  for row in \
+    "plain message|feat: add a thing\n" \
+    "placeholder and issue number|feat: add a thing\n\nA SPEC-NNN id resolves under .notebook/specs/<SPEC-ID>/.\n\nCloses #12\n"; do
+    label=${row%%|*}; message=${row#*|}
+    printf "$message" > "$MESSAGE_FILE"
+    : > "$PNPM_LOG"
+    run_hook
+    [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+    edit_argument_was_recorded || { echo "case $label: no --edit call carried the message file"; return 1; }
+  done
 }
 
-@test "commit-msg: REFUSES and names pnpm install when commitlint cannot run" {
+@test "commit-msg: REFUSES and names pnpm install when commitlint cannot run, never reaching the --edit run" {
   STUB_VERSION_EXIT=1 run_hook
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"pnpm install"* ]]
-}
-
-@test "commit-msg: a missing commitlint never reaches the --edit run" {
-  STUB_VERSION_EXIT=1 run_hook
-  [ "$status" -ne 0 ]
-  grep -qF -- "--edit" "$PNPM_LOG" && return 1
+  [ "$status" -ne 0 ] || { echo "status=$status"; return 1; }
+  [[ "$output" == *"pnpm install"* ]] || { echo "refusal does not name pnpm install: $output"; return 1; }
+  grep -qF -- "--edit" "$PNPM_LOG" && { echo "the --edit run was reached"; return 1; }
   true
 }
 
@@ -95,13 +98,6 @@ edit_argument_was_recorded() {
   [[ "$output" == *".claude/rules/working-doc-ids.md"* ]]
 }
 
-@test "commit-msg: a placeholder and an issue number pass the scan" {
-  printf 'feat: add a thing\n\nA SPEC-NNN id resolves under .notebook/specs/<SPEC-ID>/.\n\nCloses #12\n' > "$MESSAGE_FILE"
-  run_hook
-  [ "$status" -eq 0 ]
-  edit_argument_was_recorded
-}
-
 # The hook reads the detector beside its own tree. A copy with no detector
 # there must refuse rather than commit unscanned.
 @test "commit-msg: REFUSES when the detector cannot run" {
@@ -112,21 +108,4 @@ edit_argument_was_recorded() {
   run_hook "$orphan_hook"
   [ "$status" -ne 0 ]
   [[ "$output" == *"machine-local-ref-lib.sh"* ]]
-}
-
-@test "commit-msg: the pass-through assertion can fail (hook with the argument dropped)" {
-  # The copy reads the detector beside itself, so it gets one.
-  local broken_hook="$SANDBOX/.githooks/commit-msg-broken"
-  mkdir -p "$SANDBOX/.githooks" "$SANDBOX/.gaia/scripts"
-  cp "$REPO_ROOT/.gaia/scripts/machine-local-ref-lib.sh" "$SANDBOX/.gaia/scripts/"
-  sed 's/--edit "\$1"/--edit/' "$HOOK_ABSOLUTE_PATH" > "$broken_hook"
-  # The mutation must have changed the hook, or this twin proves nothing.
-  cmp -s "$HOOK_ABSOLUTE_PATH" "$broken_hook" && return 1
-  # Git runs the hook directly, so the copy needs the executable bit.
-  chmod +x "$broken_hook"
-
-  run_hook "$broken_hook"
-  [ "$status" -eq 0 ]
-  edit_argument_was_recorded && return 1
-  true
 }

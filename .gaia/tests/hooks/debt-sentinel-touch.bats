@@ -40,76 +40,46 @@ run_hook() {
 assert_armed() { [ -f "$REPO/$SENTINEL_RELATIVE_PATH" ]; }
 assert_not_armed() { [ ! -f "$REPO/$SENTINEL_RELATIVE_PATH" ]; }
 
-@test "gh issue create arms the sentinel" {
-  run_hook 'gh issue create --label tech-debt --label severity:minor --body-file /tmp/b.md'
-  assert_armed
+@test "a mutating gh command arms the sentinel: issue create, close, reopen, edit --add-label, edit --remove-label, pr merge, after a separator, in a multi-statement command" {
+  local row label command_text
+  for row in \
+    'issue create|gh issue create --label tech-debt --label severity:minor --body-file /tmp/b.md' \
+    'issue close|gh issue close 590' \
+    'issue reopen|gh issue reopen 590' \
+    'issue edit add-label|gh issue edit 590 --add-label in-progress' \
+    'issue edit remove-label|gh issue edit 590 --remove-label in-progress' \
+    'pr merge|gh pr merge 42 --auto --squash' \
+    'after a shell separator|git status && gh issue close 590' \
+    'multi-statement|echo start && gh issue close 590'; do
+    label=${row%%|*}; command_text=${row#*|}
+    run_hook "$command_text" || { echo "case $label: hook did not exit 0"; return 1; }
+    assert_armed || { echo "case $label: sentinel not armed"; return 1; }
+    rm -rf "$REPO"
+  done
 }
 
-@test "gh issue close arms the sentinel" {
-  run_hook 'gh issue close 590'
-  assert_armed
-}
-
-@test "gh issue reopen arms the sentinel" {
-  run_hook 'gh issue reopen 590'
-  assert_armed
-}
-
-@test "gh issue edit --add-label arms the sentinel" {
-  run_hook 'gh issue edit 590 --add-label in-progress'
-  assert_armed
-}
-
-@test "gh issue edit --remove-label arms the sentinel" {
-  run_hook 'gh issue edit 590 --remove-label in-progress'
-  assert_armed
-}
-
-@test "gh pr merge still arms the sentinel (regression)" {
-  run_hook 'gh pr merge 42 --auto --squash'
-  assert_armed
-}
-
-@test "arms after a shell separator" {
-  run_hook 'git status && gh issue close 590'
-  assert_armed
-}
-
-@test "non-Bash tool: no-op, not armed" {
+@test "a non-Bash tool, gh issue view, gh issue list, gh pr create and close quoted in a body do not arm the sentinel" {
+  local row label command_text input
   REPO=$("$HELPERS/tmp-git-repo.sh")
   cd "$REPO" || return 1
   input=$(jq -n '{tool_name:"Edit",tool_input:{file_path:"x"}}')
   invoke_hook "$input" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  assert_not_armed
-}
-
-@test "gh issue view: non-mutating, not armed" {
-  run_hook 'gh issue view 590'
-  assert_not_armed
-}
-
-@test "gh issue list: non-mutating, not armed" {
-  run_hook 'gh issue list --label tech-debt --state open'
-  assert_not_armed
-}
-
-@test "gh pr create: not a merge, not armed" {
-  run_hook 'gh pr create --title x --body y'
-  assert_not_armed
-}
-
-@test "close mentioned inside a --body string is not a real invocation" {
-  run_hook 'gh pr create --body "remember to gh issue close 590 later"'
-  assert_not_armed
+  [ "$status" -eq 0 ] || { echo "case non-Bash tool: status=$status"; return 1; }
+  assert_not_armed || { echo "case non-Bash tool: sentinel armed"; return 1; }
+  rm -rf "$REPO"
+  for row in \
+    'issue view|gh issue view 590' \
+    'issue list|gh issue list --label tech-debt --state open' \
+    'pr create|gh pr create --title x --body y' \
+    'close inside a body string|gh pr create --body "remember to gh issue close 590 later"'; do
+    label=${row%%|*}; command_text=${row#*|}
+    run_hook "$command_text" || { echo "case $label: hook did not exit 0"; return 1; }
+    assert_not_armed || { echo "case $label: sentinel armed"; return 1; }
+    rm -rf "$REPO"
+  done
 }
 
 # ---------- Shared arming decision (data proof, bound, tokenizer) ----------
-
-@test "a multi-statement command still arms (no regression)" {
-  run_hook "echo start && gh issue close 590"
-  assert_armed
-}
 
 @test "the hook file is executable" {
   [ -x "$HOOK_ABSOLUTE_PATH" ]

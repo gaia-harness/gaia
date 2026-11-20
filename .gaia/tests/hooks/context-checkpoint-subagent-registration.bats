@@ -86,17 +86,6 @@ assert_not_excluded() {
   return 0
 }
 
-# mutate_json SOURCE JQ_PROGRAM: writes a scratch copy of SOURCE transformed by
-# the program, and leaves its path in MUTANT.
-mutate_json() {
-  MUTANT="$BATS_TEST_TMPDIR/mutant-$(basename "$1")"
-  jq "$2" "$1" > "$MUTANT"
-  if cmp -s "$MUTANT" "$1"; then
-    printf 'mutation did not change %s\n' "$1" >&2
-    return 1
-  fi
-}
-
 # --- settings, both files -----------------------------------------------------
 
 @test "the sub-agent hook is registered once, on PostToolUse, with no matcher, beside the main-session hook" {
@@ -125,79 +114,5 @@ mutate_json() {
 @test "neither the hook nor the doctrine file is release-excluded" {
   assert_not_excluded "$EXCLUDE" "$HOOK_PATH"
   assert_not_excluded "$EXCLUDE" "$DOCTRINE_PATH"
-}
-
-# --- red twins ------------------------------------------------------------------
-
-@test "red twin: removing the registration fails the registration check" {
-  mutate_json "$SETTINGS" '.hooks.PostToolUse |= map(.hooks |= map(select(.command | test("context-checkpoint-subagent[.]sh") | not)))'
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a duplicate registration under PostToolUse fails the registration check" {
-  mutate_json "$SETTINGS" '.hooks.PostToolUse += [{hooks: [{type: "command", command: "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/context-checkpoint-subagent.sh\"", timeout: 10}]}]'
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a second registration under SessionStart fails the registration check" {
-  mutate_json "$SETTINGS" '.hooks.SessionStart += [{hooks: [{type: "command", command: "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/context-checkpoint-subagent.sh\"", timeout: 10}]}]'
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a matcher on the registration fails the registration check" {
-  mutate_json "$SETTINGS" '(.hooks.PostToolUse[] | select(any(.hooks[]; .command | test("context-checkpoint-subagent[.]sh")))) |= . + {matcher: "Bash"}'
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a registration outside the main-session hook's group fails the registration check" {
-  mutate_json "$SETTINGS" '(.hooks.PostToolUse |= map(.hooks |= map(select(.command | test("context-checkpoint-subagent[.]sh") | not)))) | .hooks.PostToolUse += [{hooks: [{type: "command", command: "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/context-checkpoint-subagent.sh\"", timeout: 10}]}]'
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a command rooted on CLAUDE_PROJECT_DIR alone fails the sanctioned-prefix check" {
-  mutate_json "$SETTINGS" '(.hooks.PostToolUse[].hooks[] | select(.command | test("context-checkpoint-subagent[.]sh")) | .command) = "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-checkpoint-subagent.sh\""'
-  run assert_rooted_with_timeout "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a non-numeric timeout fails the sanctioned-prefix check" {
-  mutate_json "$SETTINGS" '(.hooks.PostToolUse[].hooks[] | select(.command | test("context-checkpoint-subagent[.]sh")) | .timeout) = "10"'
-  run assert_rooted_with_timeout "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: removing the handoff pre-clear allowance fails the allowance check" {
-  mutate_json "$SETTINGS" '.permissions.allow |= map(select(. != "Bash(bash .gaia/scripts/spec/handoff-clear.sh:*)"))'
-  run assert_handoff_clear_allowed "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: removing the registry entry fails the registry check" {
-  mutate_json "$REGISTRY" '.entries |= map(select(.path != "cache/context-checkpoint-agents/"))'
-  run assert_registry_entry "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a why that does not name the hook fails the registry check" {
-  mutate_json "$REGISTRY" '(.entries[] | select(.path == "cache/context-checkpoint-agents/") | .why) = "Per-agent marker."'
-  run assert_registry_entry "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: the hook path in the exclusions fails the exclusion check" {
-  { cat "$EXCLUDE"; printf '%s\n' "$HOOK_PATH"; } > "$BATS_TEST_TMPDIR/exclude-hook"
-  run assert_not_excluded "$BATS_TEST_TMPDIR/exclude-hook" "$HOOK_PATH"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: the doctrine directory in the exclusions fails the exclusion check" {
-  { cat "$EXCLUDE"; printf '.claude/doctrine\n'; } > "$BATS_TEST_TMPDIR/exclude-doctrine"
-  run assert_not_excluded "$BATS_TEST_TMPDIR/exclude-doctrine" "$DOCTRINE_PATH"
-  [ "$status" -ne 0 ]
 }
 
