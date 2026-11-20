@@ -419,8 +419,9 @@ auditors:
 YAML
 
   # Case unusable TMPDIR. Without the guard this is destructive and silent: an
-  # empty $temporary_directory (mktemp's failed result) makes the region body file unwritable, awk's
-  # getline cannot tell unreadable from empty, and every definition is
+  # empty $temporary_directory (mktemp's failed result) makes the region body
+  # file unwritable, awk's getline cannot tell unreadable from empty, and every
+  # definition is
   # rewritten to a region holding the two markers and nothing between them,
   # with exit 0. The writer must refuse instead.
   local fixture_directory="$BATS_TEST_TMPDIR/bad-tmpdir"

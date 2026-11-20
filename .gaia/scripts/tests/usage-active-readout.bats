@@ -320,7 +320,7 @@ check_line() {
   [ "$output" = "$2" ] || { echo "case $1: got: $output" >&2; return 1; }
 }
 
-@test "the line readout's active time for each turn shape in the flushed transcript" {
+@test "the line readout counts active time for each turn shape in the flushed transcript" {
   # a seven-minute tool call that writes nothing while it runs counts in full
   prompt 10:00:00
   skill 10:00:00 gaia-spec
