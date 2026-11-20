@@ -33,39 +33,13 @@ last_line_is() {
   return 1
 }
 
-@test "a passing run ends with the exit line for status 0" {
-  run bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
-  [ "$status" -eq 0 ]
-  last_line_is 0
-}
-
-@test "a failing run ends with the exit line for status 1" {
-  vhf_control 01-files-present 'FAIL  01-files-present.sh: a missing path'
-  vhf_commit "a manifest failure"
-  run bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" branch
-  [ "$status" -eq 1 ]
-  last_line_is 1
-}
-
-@test "a usage error ends with the exit line for status 2" {
-  run bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" bogus
-  [ "$status" -eq 2 ]
-  last_line_is 2
-}
-
-@test "a refused branch run ends with the exit line for status 3" {
-  printf 'dirty\n' >src/x-input.txt
-  run bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" branch
-  [ "$status" -eq 3 ]
-  last_line_is 3
-}
-
 # interrupt_mid_check <signal> <expected status>: start a round run whose first
 # check blocks, signal the runner while that check runs, then end the check so
 # bash can act on the pending signal.
 interrupt_mid_check() {
   local signal="$1" expected_status="$2" ready_file="$BATS_TEST_TMPDIR/check-ready"
   local log_file="$BATS_TEST_TMPDIR/runner.log" runner_pid check_pid waited=0
+  rm -f "$ready_file" "$log_file"
   printf '#!/usr/bin/env bash\nprintf "%%s" "$$" >"%s"\nexec sleep 30\n' "$ready_file" >.gaia/tests/shell-lint.sh
   printf 'touch\n' >>.claude/rules/s2-rule.md
   # A non-interactive shell starts a background job with SIGINT ignored, a
@@ -89,10 +63,40 @@ interrupt_mid_check() {
   last_line_is "$expected_status"
 }
 
-@test "an interrupted run ends with the exit line for status 130" {
-  interrupt_mid_check INT 130
-}
+# One fixture serves every case. The cases run in this order so each starts
+# from a state the earlier ones leave usable: the dirty file is restored before
+# the interrupt cases, and the blocking shell-lint stub is restored before the
+# committed failure.
+# bats test_tags=protected
+@test "every exit path ends with the exit line carrying the real status (0, 1, 2, 3, 130, 143)" {
+  echo "case: a passing run, status 0"
+  run bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
+  [ "$status" -eq 0 ]
+  last_line_is 0
 
-@test "a terminated run ends with the exit line for status 143" {
+  echo "case: a usage error, status 2"
+  run bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" bogus
+  [ "$status" -eq 2 ]
+  last_line_is 2
+
+  echo "case: a refused branch run, status 3"
+  printf 'dirty\n' >src/x-input.txt
+  run bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" branch
+  [ "$status" -eq 3 ]
+  last_line_is 3
+  vhf_git checkout -q -- src/x-input.txt
+
+  echo "case: an interrupted run, status 130"
+  interrupt_mid_check INT 130
+
+  echo "case: a terminated run, status 143"
   interrupt_mid_check TERM 143
+  vhf_git checkout -q -- .gaia/tests/shell-lint.sh .claude/rules/s2-rule.md
+
+  echo "case: a failing run, status 1"
+  vhf_control 01-files-present 'FAIL  01-files-present.sh: a missing path'
+  vhf_commit "a manifest failure"
+  run bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" branch
+  [ "$status" -eq 1 ]
+  last_line_is 1
 }

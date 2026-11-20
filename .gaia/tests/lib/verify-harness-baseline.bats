@@ -129,8 +129,26 @@ source_pass_record_helper() {
   has "BASE  merge base $(vhf_git rev-parse --short "$merge_base") ($(vhf_git log -1 --format=%cs "$merge_base")), $behind commit(s) behind refs/remotes/origin/main"
 }
 
-@test "a failure main already has is pre-existing, a new one fails, and fixing it writes the record" {
-  fixture --no-branch
+# case_fixture <directory> [--no-branch]: a fresh fixture for one case of a
+# table, in its own directory under the test's temporary directory, with PATH
+# reset so an earlier case's shim does not stay first. Each case needs its own
+# main and branch history, so the cases cannot share one fixture.
+case_fixture() {
+  local case_directory="$1"
+  shift
+  BATS_TEST_TMPDIR="$TABLE_TMPDIR/$case_directory"
+  mkdir -p "$BATS_TEST_TMPDIR"
+  PATH="$TABLE_PATH"
+  fixture "$@"
+}
+
+# bats test_tags=protected
+@test "a failure main already has is pre-existing and a new one fails, per check kind and run mode" {
+  TABLE_TMPDIR="$BATS_TEST_TMPDIR"
+  TABLE_PATH="$PATH"
+
+  echo "case: whole-tree bats: main's failure is pre-existing, the branch's fails, the fix writes the record"
+  case_fixture whole-tree --no-branch
   vhf_control whole-one "broken on main"
   vhf_commit "main breaks the whole-tree suite"
   vhf_branch
@@ -155,8 +173,73 @@ source_pass_record_helper() {
   no_fail_line
   [ "$(jq -r .head "$VHF_RECORD")" = "$(vhf_git rev-parse HEAD)" ]
   [ "$(jq -c .preexisting "$VHF_RECORD")" = '["bats whole-tree"]' ]
+
+  echo "case: selected bats: a new failing test in a suite main already fails is reported"
+  case_fixture selected --no-branch
+  vhf_control whole-one "broken on main"
+  vhf_commit "main breaks one whole-tree test"
+  vhf_branch
+  vhf_add_test suites/whole.bats two
+  vhf_control whole-two "broken on the branch"
+  vhf_commit "the branch adds a second failing test to the same suite"
+  run_runner branch
+  [ "$status" -eq 1 ]
+  block_after 'PRE-EXISTING  bats selected' | grep -qxF '  suites/whole.bats: whole one'
+  block_after 'PRE-EXISTING  bats selected' | grep -qF 'whole two' && return 1
+  lacks 'FLAKY'
+  has_line '^FAIL  bats selected \([0-9]+s\)$'
+  block_after 'FAIL  bats selected' | grep -qxF '  suites/whole.bats: whole two'
+  # The base re-run ran only the failing names, in the base worktree.
+  [ "$(vhf_suite_runs_elsewhere suites/whole.bats "$VHF_ROOT")" = "whole one" ]
+  [ ! -e "$VHF_RECORD" ]
+
+  echo "case: line-limit: main's breach is pre-existing, the branch's fails"
+  case_fixture line-limit --no-branch
+  vhf_control line-limit ".gaia/scripts/old-breach.sh"
+  vhf_commit "main breaches the line limit"
+  vhf_branch
+  vhf_control line-limit "$(printf '.gaia/scripts/old-breach.sh\n.claude/hooks/new-breach.sh')"
+  vhf_commit "the branch adds a breach"
+  run_runner branch
+  [ "$status" -eq 1 ]
+  has_line '^PRE-EXISTING  line-limit: also fails on merge base [0-9a-f]+; main is red \([0-9]+s\)$'
+  [ "$(block_after 'PRE-EXISTING  line-limit' | sed -n 1p)" = "  .gaia/scripts/old-breach.sh" ]
+  has_line '^FAIL  line-limit \([0-9]+s\)$'
+  [ "$(block_after 'FAIL  line-limit' | sed -n 1p)" = "  .claude/hooks/new-breach.sh" ]
+  [ ! -f "$VHF_RECORD" ]
+
+  echo "case: distribution: a failure only HEAD has fails, its base re-run in a worktree"
+  case_fixture distribution
+  vhf_control 02-marker-strip "$(printf '  - Source has marker block but staged counterpart missing: .claude/hooks/x.sh\nFAIL  02-marker-strip.sh: 1 marker-bearing file(s) not stripped')"
+  vhf_commit "a marker failure on the branch only"
+  run_runner branch
+  [ "$status" -eq 1 ]
+  has_line '^FAIL  02-marker-strip \([0-9]+s\)$'
+  has '.claude/hooks/x.sh'
+  has '  reproduce: bash .gaia/tests/distribution/02-marker-strip.sh'
+  lacks 'PRE-EXISTING'
+  local base_root
+  base_root="$(vhf_log_entries 02-marker-strip | grep -vxF "$VHF_ROOT")"
+  [ -n "$base_root" ]
+  [ ! -e "$base_root" ]
+  [ "$(worktree_count)" -eq 1 ]
+
+  echo "case: push mode: main's failure is pre-existing and the push goes through"
+  case_fixture push --no-branch
+  vhf_control 01-files-present "$(printf '  - Manifest claims paths missing from staging tree:\n  -   apps/web/app/gone.ts\nFAIL  01-files-present.sh: 1 manifest path(s) missing from staging')"
+  vhf_commit "main breaks 01"
+  vhf_branch
+  printf 'page two\n' >apps/web/app/page.txt
+  vhf_commit "an unrelated branch change"
+  run_runner push "$(vhf_git rev-parse HEAD)"
+  [ "$status" -eq 0 ]
+  has_line '^PRE-EXISTING  01-files-present: also fails on merge base [0-9a-f]+; main is red \([0-9]+s\)$'
+  no_fail_line
+  lacks 'shell-lint'
+  lacks 'bats'
 }
 
+# bats test_tags=protected
 @test "a protected-test removal is not absorbed as pre-existing when main's shell-lint is red" {
   fixture --no-branch
   vhf_control shell-lint "In scripts/a.sh line 3:"
@@ -214,26 +297,6 @@ write_flaky_suite() {
   no_fail_line
 }
 
-@test "a new failing test in a suite main already fails is reported, not masked" {
-  fixture --no-branch
-  vhf_control whole-one "broken on main"
-  vhf_commit "main breaks one whole-tree test"
-  vhf_branch
-  vhf_add_test suites/whole.bats two
-  vhf_control whole-two "broken on the branch"
-  vhf_commit "the branch adds a second failing test to the same suite"
-  run_runner branch
-  [ "$status" -eq 1 ]
-  block_after 'PRE-EXISTING  bats selected' | grep -qxF '  suites/whole.bats: whole one'
-  block_after 'PRE-EXISTING  bats selected' | grep -qF 'whole two' && return 1
-  lacks 'FLAKY'
-  has_line '^FAIL  bats selected \([0-9]+s\)$'
-  block_after 'FAIL  bats selected' | grep -qxF '  suites/whole.bats: whole two'
-  # The base re-run ran only the failing names, in the base worktree.
-  [ "$(vhf_suite_runs_elsewhere suites/whole.bats "$VHF_ROOT")" = "whole one" ]
-  [ ! -e "$VHF_RECORD" ]
-}
-
 # write_load_gated_suite: a per-test-marked suite that fails to load while the
 # tracked control file holds text. It reads that file without naming it by
 # basename, so the change selector never picks it.
@@ -247,6 +310,7 @@ write_load_gated_suite() {
   } >"$VHF_ROOT/suites/gated.bats"
 }
 
+# bats test_tags=protected
 @test "a load failure's base re-run carries the same tag filter as the HEAD run" {
   fixture --no-branch
   vhf_empty_candidates
@@ -264,54 +328,7 @@ write_load_gated_suite() {
   [ "$base_runs" -ge 2 ]
 }
 
-@test "a line-limit breach main already has is pre-existing, and one only the branch adds fails" {
-  fixture --no-branch
-  vhf_control line-limit ".gaia/scripts/old-breach.sh"
-  vhf_commit "main breaches the line limit"
-  vhf_branch
-  vhf_control line-limit "$(printf '.gaia/scripts/old-breach.sh\n.claude/hooks/new-breach.sh')"
-  vhf_commit "the branch adds a breach"
-  run_runner branch
-  [ "$status" -eq 1 ]
-  has_line '^PRE-EXISTING  line-limit: also fails on merge base [0-9a-f]+; main is red \([0-9]+s\)$'
-  [ "$(block_after 'PRE-EXISTING  line-limit' | sed -n 1p)" = "  .gaia/scripts/old-breach.sh" ]
-  has_line '^FAIL  line-limit \([0-9]+s\)$'
-  [ "$(block_after 'FAIL  line-limit' | sed -n 1p)" = "  .claude/hooks/new-breach.sh" ]
-  [ ! -f "$VHF_RECORD" ]
-}
-
-@test "a distribution failure only HEAD has is new, and its base re-run happens in a worktree" {
-  fixture
-  vhf_control 02-marker-strip "$(printf '  - Source has marker block but staged counterpart missing: .claude/hooks/x.sh\nFAIL  02-marker-strip.sh: 1 marker-bearing file(s) not stripped')"
-  vhf_commit "a marker failure on the branch only"
-  run_runner branch
-  [ "$status" -eq 1 ]
-  has_line '^FAIL  02-marker-strip \([0-9]+s\)$'
-  has '.claude/hooks/x.sh'
-  has '  reproduce: bash .gaia/tests/distribution/02-marker-strip.sh'
-  lacks 'PRE-EXISTING'
-  local base_root
-  base_root="$(vhf_log_entries 02-marker-strip | grep -vxF "$VHF_ROOT")"
-  [ -n "$base_root" ]
-  [ ! -e "$base_root" ]
-  [ "$(worktree_count)" -eq 1 ]
-}
-
-@test "push mode shows a failure main already has as pre-existing and lets the push through" {
-  fixture --no-branch
-  vhf_control 01-files-present "$(printf '  - Manifest claims paths missing from staging tree:\n  -   apps/web/app/gone.ts\nFAIL  01-files-present.sh: 1 manifest path(s) missing from staging')"
-  vhf_commit "main breaks 01"
-  vhf_branch
-  printf 'page two\n' >apps/web/app/page.txt
-  vhf_commit "an unrelated branch change"
-  run_runner push "$(vhf_git rev-parse HEAD)"
-  [ "$status" -eq 0 ]
-  has_line '^PRE-EXISTING  01-files-present: also fails on merge base [0-9a-f]+; main is red \([0-9]+s\)$'
-  no_fail_line
-  lacks 'shell-lint'
-  lacks 'bats'
-}
-
+# bats test_tags=protected
 @test "push mode verifies the pushed commit in a worktree, not the dirty tree" {
   fixture
   vhf_control 02-marker-strip "  - broken in the older commit"
@@ -337,6 +354,7 @@ write_load_gated_suite() {
   [ "$(worktree_count)" -eq 1 ]
 }
 
+# bats test_tags=protected
 @test "push mode names the next step for a new runtime-dependency leak, not for one main already has" {
   local leak_report
   leak_report='runtime-dependency leaks (1):
@@ -376,6 +394,7 @@ write_load_gated_suite() {
   [ "$(grep -c '^PASS  01-files-present' <<<"$output")" -eq 2 ]
 }
 
+# bats test_tags=protected
 @test "a branch run removes a stale pass record before it runs" {
   fixture
   mkdir -p "${VHF_RECORD%/*}"
@@ -388,6 +407,7 @@ write_load_gated_suite() {
   [ ! -e "$VHF_RECORD" ]
 }
 
+# bats test_tags=protected
 @test "the read-only helper answers match, absence, another head, corruption and a missing jq" {
   fixture
   source_pass_record_helper

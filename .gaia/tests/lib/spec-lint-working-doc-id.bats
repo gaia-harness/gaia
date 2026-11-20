@@ -38,40 +38,37 @@ working_document_id_findings() {
   printf '%s' "$1" | jq -c '[.findings[] | select(.code == "working_document_id")]'
 }
 
-@test "a clean flow lints clean" {
+@test "a working-document id in a flow name or why fails with one finding per field; clean and placeholder text pass" {
+  echo "case: a clean flow lints clean"
   make_spec "$BATS_TEST_TMPDIR/s.md" "A member signs in" "Breaking sign-in blocks every task."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 0 ]
   [ "$output" = '{"ok":true,"findings":[]}' ]
-}
 
-@test "a plan id in name fails the lint, naming the flow and the field" {
+  echo "case: a plan id in name fails the lint, naming the flow and the field"
   make_spec "$BATS_TEST_TMPDIR/s.md" "As in PLAN-""003, a member signs in" "Breaking sign-in blocks every task."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 1 ]
   findings="$(working_document_id_findings "$output")"
   [ "$(printf '%s' "$findings" | jq 'length')" -eq 1 ]
   [ "$(printf '%s' "$findings" | jq -r '.[0].where')" = "frontmatter.flows.$FLOW_ONE.name" ]
-}
 
-@test "a spec id on a why continuation line fails the lint" {
+  echo "case: a spec id on a why continuation line fails the lint"
   make_spec "$BATS_TEST_TMPDIR/s.md" "A member signs in" "Breaking sign-in blocks every task," "unlike the case in SPEC-""003."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 1 ]
   findings="$(working_document_id_findings "$output")"
   [ "$(printf '%s' "$findings" | jq 'length')" -eq 1 ]
   [ "$(printf '%s' "$findings" | jq -r '.[0].where')" = "frontmatter.flows.$FLOW_ONE.why" ]
-}
 
-@test "ids in both name and why fail the lint, one finding per field" {
+  echo "case: ids in both name and why fail the lint, one finding per field"
   make_spec "$BATS_TEST_TMPDIR/s.md" "Per SPEC-""012, a member signs in" "Plan PLAN-""004 needs it."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 1 ]
   findings="$(working_document_id_findings "$output")"
   [ "$(printf '%s' "$findings" | jq -c '[.[].where]')" = "[\"frontmatter.flows.$FLOW_ONE.name\",\"frontmatter.flows.$FLOW_ONE.why\"]" ]
-}
 
-@test "a placeholder id with no number stays clean" {
+  echo "case: a placeholder id with no number stays clean"
   make_spec "$BATS_TEST_TMPDIR/s.md" "Like any FLOW-NNN, a member signs in" "Breaking sign-in blocks every task."
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 0 ]

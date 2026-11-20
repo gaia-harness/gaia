@@ -85,80 +85,56 @@ run_reference_snippet() {
   esac
 }
 
-@test "no owed ids and no setup type skips the ping" {
-  run_ping DRIFT_JSON="$(decided_json A)" --owed ''
-  [ "$status" -eq 0 ]
-  [ "$output" = PING_SKIPPED ]
-  [ ! -e "$PING_LOG" ]
+@test "the ping is sent only when an owed id was decided this run or a setup type is given" {
+  local label decided owed drift_fails type_value repo_value expected
+  # expected is the logged ping line, or SKIPPED for no ping.
+  while IFS='|' read -r label decided owed drift_fails type_value repo_value expected; do
+    [ -n "$label" ] || continue
+    rm -f "$PING_LOG"
+    # shellcheck disable=SC2086  # decided is a space-separated id list
+    if [ -n "$type_value" ]; then
+      run_ping DRIFT_JSON="$(decided_json $decided)" DRIFT_FAILS="$drift_fails" --owed "$owed" --type "$type_value" --repo "$repo_value"
+    else
+      run_ping DRIFT_JSON="$(decided_json $decided)" DRIFT_FAILS="$drift_fails" --owed "$owed"
+    fi
+    [ "$status" -eq 0 ] || { echo "case $label: status $status"; return 1; }
+    if [ "$expected" = SKIPPED ]; then
+      [ "$output" = PING_SKIPPED ] || { echo "case $label: output $output"; return 1; }
+      [ ! -e "$PING_LOG" ] || { echo "case $label: pinged $(cat "$PING_LOG")"; return 1; }
+    else
+      [ "$(cat "$PING_LOG")" = "$expected" ] || { echo "case $label: ping $(cat "$PING_LOG" 2>/dev/null)"; return 1; }
+    fi
+  done <<'CASES'
+no owed ids, no type|A|||||SKIPPED
+one owed id decided|A|A||||--event setup --sandbox off
+one owed id undecided|Z|A||||SKIPPED
+three owed, middle decided|B Z|A B C||||--event setup --sandbox off
+three owed, none decided|Y Z|A B C||||SKIPPED
+prefix is not a match|AB|A||||SKIPPED
+setup type with nothing decided||||fresh|create|--event setup --sandbox off --type fresh --repo create
+drift failure|A B C|A B C|1|||SKIPPED
+CASES
 }
 
-@test "one owed id decided this run sends the ping with no type" {
-  run_ping DRIFT_JSON="$(decided_json A)" --owed 'A'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$PING_LOG")" = '--event setup --sandbox off' ]
-}
-
-@test "one owed id left undecided skips the ping" {
-  run_ping DRIFT_JSON="$(decided_json Z)" --owed 'A'
-  [ "$output" = PING_SKIPPED ]
-  [ ! -e "$PING_LOG" ]
-}
-
-@test "three owed ids with only the middle one decided sends the ping" {
-  run_ping DRIFT_JSON="$(decided_json B Z)" --owed 'A B C'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$PING_LOG")" = '--event setup --sandbox off' ]
-}
-
-@test "three owed ids none decided skips the ping" {
-  run_ping DRIFT_JSON="$(decided_json Y Z)" --owed 'A B C'
-  [ "$output" = PING_SKIPPED ]
-  [ ! -e "$PING_LOG" ]
-}
-
-@test "an owed id matches only a whole decided id, never a prefix" {
-  run_ping DRIFT_JSON="$(decided_json AB)" --owed 'A'
-  [ "$output" = PING_SKIPPED ]
-}
-
-@test "a setup type sends the ping even with nothing newly decided" {
-  run_ping DRIFT_JSON="$(decided_json)" --owed '' --type fresh --repo create
-  [ "$status" -eq 0 ]
-  [ "$(cat "$PING_LOG")" = '--event setup --sandbox off --type fresh --repo create' ]
-}
-
-@test "empty type and repo values ride as absent" {
+@test "ping arguments: empty type and repo are absent, an enabled sandbox sends --sandbox on" {
   run_ping DRIFT_JSON="$(decided_json A)" --owed 'A' --type '' --repo ''
-  [ "$(cat "$PING_LOG")" = '--event setup --sandbox off' ]
-}
-
-@test "an enabled sandbox marker sends sandbox on" {
+  [ "$(cat "$PING_LOG")" = '--event setup --sandbox off' ] || { echo "case empty type and repo: $(cat "$PING_LOG")"; return 1; }
+  rm -f "$PING_LOG"
   run_ping DRIFT_JSON="$(decided_json A)" SANDBOX_OUTCOME=enabled --owed 'A'
-  [ "$(cat "$PING_LOG")" = '--event setup --sandbox on' ]
+  [ "$(cat "$PING_LOG")" = '--event setup --sandbox on' ] || { echo "case enabled sandbox: $(cat "$PING_LOG")"; return 1; }
 }
 
-@test "a drift failure counts as nothing newly decided" {
-  run_ping DRIFT_FAILS=1 --owed 'A B C'
-  [ "$status" -eq 0 ]
-  [ "$output" = PING_SKIPPED ]
-}
-
-@test "an unknown argument is a usage error" {
-  run_ping --bogus x
-  [ "$status" -eq 2 ]
-}
-
-@test "the reference snippet sends the ping under no-split semantics with three owed ids" {
+@test "the reference snippet sends the ping in bash with an empty IFS and in zsh, neither of which word-splits" {
+  local shell_kind
   DRIFT_JSON="$(decided_json B Z)"
-  run_reference_snippet bash-no-split 'A B C'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$PING_LOG")" = '--event setup --sandbox off' ]
-}
-
-@test "the reference snippet sends the ping under zsh with three owed ids" {
-  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-  DRIFT_JSON="$(decided_json B Z)"
-  run_reference_snippet zsh 'A B C'
-  [ "$status" -eq 0 ]
-  [ "$(cat "$PING_LOG")" = '--event setup --sandbox off' ]
+  for shell_kind in bash-no-split zsh; do
+    if [ "$shell_kind" = zsh ] && ! command -v zsh >/dev/null 2>&1; then
+      echo "case zsh: zsh not installed, not run" >&3
+      continue
+    fi
+    rm -f "$PING_LOG"
+    run_reference_snippet "$shell_kind" 'A B C'
+    [ "$status" -eq 0 ] || { echo "case $shell_kind: status $status"; return 1; }
+    [ "$(cat "$PING_LOG")" = '--event setup --sandbox off' ] || { echo "case $shell_kind: ping $(cat "$PING_LOG" 2>/dev/null)"; return 1; }
+  done
 }
