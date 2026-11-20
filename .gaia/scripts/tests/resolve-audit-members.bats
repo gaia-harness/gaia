@@ -31,6 +31,7 @@ setup() {
   git -C "$SANDBOX" add README.md
   git -C "$SANDBOX" commit --quiet -m "init"
   git -C "$SANDBOX" checkout --quiet -b feature
+  BASE_COMMIT="$(git -C "$SANDBOX" rev-parse HEAD)"
 }
 
 # Run the resolver with cwd inside the sandbox so its
@@ -108,39 +109,220 @@ auditors:
 YAML
 }
 
-# 1. app-only diff → frontend only
+# A roster with only root-form frontend globs, which leaves an apps/web/
+# diff unowned.
+write_premove_roster() {
+  cat > "$SANDBOX/.gaia/audit-ci.yml" <<'YAML'
+auditors:
+  - name: code-audit-frontend
+    globs:
+      - "app/**"
+      - "test/**"
+    audience: adopter
+    default: true
+YAML
+}
 
-@test "app-only diff dispatches code-audit-frontend only" {
+# Replace the sandbox roster with the committed one.
+seed_committed_roster() {
+  rm -f "$SANDBOX/.gaia/audit-ci.yml"
+  seed_audit_roster "$SANDBOX"
+}
+
+# begin_case <roster function>: a case starts from the base commit with no
+# leftovers from the previous case, and the roster it names.
+begin_case() {
+  git -C "$SANDBOX" reset -q --hard "$BASE_COMMIT"
+  git -C "$SANDBOX" clean -qfd
+  mkdir -p "$SANDBOX/.gaia"
+  "$1"
+}
+
+# expect_members <label> <expected member set>: the resolver answers with
+# exactly that set (empty for nothing owed).
+expect_members() {
+  run run_resolver
+  [ "$status" -eq 0 ] || { echo "$1: status $status"; return 1; }
+  [ "$output" = "$2" ] || { echo "$1: got '$output', expected '$2'"; return 1; }
+}
+
+# dispatch_case <label> <roster function> <expected> [<changed path>...]
+dispatch_case() {
+  local label="$1" roster="$2" expected="$3"
+  shift 3
+  begin_case "$roster"
+  if [ "$#" -gt 0 ]; then
+    stage "$@"
+    commit "case"
+  fi
+  expect_members "$label" "$expected"
+}
+
+@test "the dispatch set follows the changed paths on a fixture roster" {
+  local both=$'code-audit-frontend\ncode-audit-maintainer-shell'
+  dispatch_case "app-only diff" write_full_roster code-audit-frontend app/x.tsx || return 1
+  dispatch_case "app plus .gaia shell, sorted" write_full_roster "$both" app/x.tsx .gaia/scripts/y.sh || return 1
+  dispatch_case ".gaia shell only" write_full_roster code-audit-maintainer-shell .gaia/scripts/y.sh || return 1
+  dispatch_case "nested .claude/hooks/lib shell" write_full_roster code-audit-maintainer-shell .claude/hooks/lib/z.sh || return 1
+  dispatch_case ".gaia/cli/src TypeScript" write_full_roster code-audit-maintainer-node .gaia/cli/src/foo.ts || return 1
+
+  # Config and data the roster does not claim are out of scope.
+  begin_case write_full_roster
+  stage .gaia/VERSION .gaia/manifest.json
+  git -C "$SANDBOX" add .gaia/audit-ci.yml
+  commit "config"
+  expect_members "framework config and data only" "" || return 1
+
+  dispatch_case "workflow yaml via the default catch-all" write_full_roster code-audit-frontend .github/workflows/release.yml || return 1
+  dispatch_case "root tsconfig and *.config.ts" write_full_roster code-audit-frontend tsconfig.json vite.config.ts || return 1
+  dispatch_case "wiki and docs only" write_full_roster "" wiki/concepts/Foo.md docs/guide.md || return 1
+  # The **/ of .github/**/*.sh collapses to zero segments.
+  dispatch_case "top-level .github shell script" write_full_roster code-audit-maintainer-shell .github/x.sh || return 1
+  dispatch_case "single-star glob, direct child" write_full_roster code-audit-maintainer-shell tools/lib/foo.sh || return 1
+  # Staged alone: beside a direct child, a nested file wrongly matched by the
+  # single-* glob would route to the same member and dedupe out of sight.
+  dispatch_case "single-star glob, nested file" write_full_roster "" tools/lib/sub/bar.sh || return 1
+  dispatch_case "adopter roster, framework source" write_adopter_roster "" .gaia/cli/src/foo.ts || return 1
+  dispatch_case "empty diff" write_full_roster "" || return 1
+  dispatch_case "bats-only diff under .gaia" write_full_roster code-audit-maintainer-shell \
+    .gaia/scripts/tests/resolve-audit-members.bats .gaia/tests/hooks/session-stop.bats || return 1
+  dispatch_case "bats-only diff under .github" write_full_roster code-audit-maintainer-shell .github/audit/tests/post-audit-status.bats || return 1
+  # The adopter roster gives no member a bats glob, so an adopter clone has
+  # nobody to dispatch for a bats file.
+  dispatch_case "adopter roster, bats-only diff" write_adopter_roster "" .gaia/scripts/tests/usage-flush.bats || return 1
+  dispatch_case "pre-move roster, apps/web/app" write_premove_roster "" apps/web/app/routes/x.tsx
+}
+
+@test "the dispatch set follows the changed paths on the committed roster" {
+  dispatch_case "cli source" seed_committed_roster code-audit-maintainer-node .gaia/cli/src/foo.ts || return 1
+  dispatch_case "cli package.json" seed_committed_roster code-audit-maintainer-node .gaia/cli/package.json || return 1
+  dispatch_case "cli tsconfig.json" seed_committed_roster code-audit-maintainer-node .gaia/cli/tsconfig.json || return 1
+  # The sharpest of the CLI's tool configs: `setupFiles` executes arbitrary
+  # code in every CLI test run, so a config-only diff is a code diff.
+  dispatch_case "cli vitest.config.ts" seed_committed_roster code-audit-maintainer-node .gaia/cli/vitest.config.ts || return 1
+  dispatch_case "cli eslint.config.mjs" seed_committed_roster code-audit-maintainer-node .gaia/cli/eslint.config.mjs || return 1
+  dispatch_case "bats-only diff" seed_committed_roster code-audit-maintainer-shell .gaia/scripts/tests/usage-flush.bats || return 1
+  dispatch_case "apps/web/.claude and gaia.package.json" seed_committed_roster code-audit-frontend \
+    apps/web/.claude/rules/x.md apps/web/gaia.package.json apps/web/CLAUDE.md || return 1
+  dispatch_case "retired root app path" seed_committed_roster "" app/routes/x.tsx || return 1
+  # apps/web/public carries a service worker.
+  dispatch_case "apps/web/public" seed_committed_roster code-audit-frontend apps/web/public/sw.js || return 1
+
+  begin_case seed_committed_roster
+  stage .github/workflows/a.yml .gaia/scripts/a.sh
+  commit "mixed"
+  run run_resolver
+  [ "$status" -eq 0 ] || { echo "workflow and shell: status $status"; return 1; }
+  [[ "$output" == *"code-audit-github-workflows"* ]] || { echo "workflow and shell: got '$output'"; return 1; }
+  [[ "$output" == *"code-audit-maintainer-shell"* ]] || { echo "workflow and shell: got '$output'"; return 1; }
+
+  dispatch_case "apps/web/app" seed_committed_roster code-audit-frontend apps/web/app/routes/x.tsx || return 1
+  # Attribution: drop the member's own `apps/web/app/**` glob and the broader
+  # `apps/**` one, and the same diff resolves to nobody, so the match came from
+  # those globs and nothing else.
+  grep -vF -e '"apps/web/app/**"' -e '"apps/**"' "$SANDBOX/.gaia/audit-ci.yml" > "$SANDBOX/.gaia/audit-ci.yml.tmp"
+  mv "$SANDBOX/.gaia/audit-ci.yml.tmp" "$SANDBOX/.gaia/audit-ci.yml"
+  expect_members "apps/web/app without its globs" ""
+}
+
+@test "an answerable query with nothing owed exits 0 with empty stdout" {
+  local not_repository_root
+
+  begin_case true
+  run bash -c '( cd "$1" && "$2" --bogus 2>/dev/null )' _ "$SANDBOX" "$SCRIPT"
+  [ "$status" -eq 0 ] || { echo "unknown flag: status $status"; return 1; }
+  [ -z "$output" ] || { echo "unknown flag: got '$output'"; return 1; }
+
+  begin_case write_full_roster
+  stage app/a.tsx
+  commit "feat"
+  run run_resolver --base deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+  [ "$status" -eq 0 ] || { echo "unresolvable --base: status $status"; return 1; }
+  [ -z "$output" ] || { echo "unresolvable --base: got '$output'"; return 1; }
+
+  run bash -c '( cd "$1" && "$2" --base 2>/dev/null )' _ "$SANDBOX" "$SCRIPT"
+  [ "$status" -eq 0 ] || { echo "--base without an argument: status $status"; return 1; }
+  [ -z "$output" ] || { echo "--base without an argument: got '$output'"; return 1; }
+
+  # Neither a remote-tracking ref nor a local branch of the default name exists.
+  not_repository_root="$BATS_TEST_TMPDIR/unresolvable"
+  mkdir -p "$not_repository_root/.gaia" "$not_repository_root/app"
+  git -C "$not_repository_root" init -q --initial-branch=master
+  git -C "$not_repository_root" config user.email t@example.com
+  git -C "$not_repository_root" config user.name T
+  git -C "$not_repository_root" config commit.gpgsign false
+  cat > "$not_repository_root/.gaia/audit-ci.yml" <<'YAML'
+auditors:
+  - name: code-audit-frontend
+    globs:
+      - "app/**"
+    audience: adopter
+    default: true
+YAML
+  printf 'x\n' > "$not_repository_root/app/a.ts"
+  git -C "$not_repository_root" add -A
+  git -C "$not_repository_root" commit -q -m init
+  run bash -c '( cd "$1" && GIT_CEILING_DIRECTORIES="$1" "$2" 2>/dev/null )' _ "$not_repository_root" "$SCRIPT"
+  [ "$status" -eq 0 ] || { echo "no resolvable base: status $status"; return 1; }
+  [ -z "$output" ] || { echo "no resolvable base: got '$output'"; return 1; }
+
+  # A remote-verified base with no commits ahead is an empty, decisive answer.
+  begin_case write_full_roster
+  git -C "$SANDBOX" checkout -q main
+  git -C "$SANDBOX" update-ref refs/remotes/origin/main refs/heads/main
+  git -C "$SANDBOX" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  run run_resolver
+  [ "$status" -eq 0 ] || { echo "remote-verified base: status $status"; return 1; }
+  [ -z "$output" ] || { echo "remote-verified base: got '$output'"; return 1; }
+}
+
+# An unanswerable query exits 2 with empty stdout: empty stdout is reserved for
+# a real answer ("nothing in this diff is in audit scope"), and a caller that
+# read an unanswerable query as an empty member set would clear a diff no
+# dispatched member read.
+# bats test_tags=protected
+@test "an unanswerable query exits 2 with empty stdout" {
+  local not_repository_root error_output
   write_full_roster
   stage app/x.tsx
   commit "feat"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-frontend" ]
-}
 
-# 2. app + .gaia/**/*.sh diff → frontend + maintainer-shell (deduped, sorted)
+  not_repository_root="$BATS_TEST_TMPDIR/notrepo"
+  mkdir -p "$not_repository_root"
+  run bash -c 'cd "$1" && GIT_CEILING_DIRECTORIES="$1" "$2" 2>/dev/null' _ "$not_repository_root" "$SCRIPT"
+  [ "$status" -eq 2 ] || { echo "not in a git repo: status $status"; return 1; }
+  [ -z "$output" ] || { echo "not in a git repo: got '$output'"; return 1; }
+  # bats `run` merges stderr into `$output`, so prove the diagnostic goes to
+  # stderr specifically by discarding stdout.
+  # shellcheck disable=SC2069
+  error_output="$( ( cd "$not_repository_root" && GIT_CEILING_DIRECTORIES="$not_repository_root" "$SCRIPT" ) 2>&1 1>/dev/null || true )"
+  grep -qF -- "resolve-audit-members" <<<"$error_output" || { echo "not in a git repo: stderr '$error_output'"; return 1; }
 
-@test "app + .gaia shell diff dispatches frontend and maintainer-shell, sorted" {
-  write_full_roster
-  stage app/x.tsx .gaia/scripts/y.sh
-  commit "feat"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  expected="code-audit-frontend
-code-audit-maintainer-shell"
-  [ "$output" = "$expected" ]
-}
+  # cwd is a real repo, so only --root can produce the failure: this pins that
+  # the flag is authoritative and that its failure is not masked by a usable
+  # ambient cwd.
+  not_repository_root="$BATS_TEST_TMPDIR/notrepo-root"
+  mkdir -p "$not_repository_root"
+  run bash -c '( cd "$1" && GIT_CEILING_DIRECTORIES="$3" "$2" --root "$3" 2>/dev/null )' \
+    _ "$SANDBOX" "$SCRIPT" "$not_repository_root"
+  [ "$status" -eq 2 ] || { echo "--root at a non-repository: status $status"; return 1; }
+  [ -z "$output" ] || { echo "--root at a non-repository: got '$output'"; return 1; }
 
-# 3. .gaia/**/*.sh only → maintainer-shell only
+  # Reachable as `--root "$R"` with R unset: the quoted word survives, so the
+  # script sees $#=2 with an empty $2. Read as "no override" that would answer
+  # from a root the caller never named.
+  run bash -c '( cd "$1" && "$2" --root "" 2>/dev/null )' _ "$SANDBOX" "$SCRIPT"
+  [ "$status" -eq 2 ] || { echo "--root with an empty value: status $status"; return 1; }
+  [ -z "$output" ] || { echo "--root with an empty value: got '$output'"; return 1; }
 
-@test ".gaia shell-only diff dispatches maintainer-shell only" {
-  write_full_roster
-  stage .gaia/scripts/y.sh
-  commit "chore"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-shell" ]
+  # There is no fallback roster, so a config without an auditors: block cannot
+  # be answered.
+  printf 'gate_label: null\nunrelated_knob: true\n' > "$SANDBOX/.gaia/audit-ci.yml"
+  ( cd "$SANDBOX" && "$SCRIPT" ) >"$BATS_TEST_TMPDIR/out" 2>"$BATS_TEST_TMPDIR/err" && exit_status=0 || exit_status=$?
+  [ "$exit_status" -eq 2 ] || { echo "missing auditors key: status $exit_status"; return 1; }
+  [ ! -s "$BATS_TEST_TMPDIR/out" ] || { echo "missing auditors key: stdout not empty"; return 1; }
+  [ "$(wc -l <"$BATS_TEST_TMPDIR/err" | tr -d ' ')" -eq 1 ] || { echo "missing auditors key: stderr is not one line"; return 1; }
+  grep -qF 'has no auditors: roster' "$BATS_TEST_TMPDIR/err" || { echo "missing auditors key: stderr names no reason"; return 1; }
 }
 
 # 3b. a non-ASCII path is classified, not C-quoted into ownerlessness
@@ -180,30 +362,6 @@ code-audit-maintainer-shell"
   }
 }
 
-# 4. .claude/hooks/lib/*.sh → maintainer-shell (nested ** under hooks)
-
-@test "nested .claude/hooks/lib shell file dispatches maintainer-shell" {
-  write_full_roster
-  stage .claude/hooks/lib/z.sh
-  commit "chore"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-shell" ]
-}
-
-# 5. .gaia/cli/src/*.ts → maintainer-node
-
-@test ".gaia/cli/src TypeScript dispatches maintainer-node" {
-  write_full_roster
-  stage .gaia/cli/src/foo.ts
-  commit "feat"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-node" ]
-}
-
-# 6. Framework CONFIG/DATA only (.gaia/audit-ci.yml, VERSION, manifest) → empty
-
 @test "a rename out of app/ still dispatches the app/ owner" {
   # Rename detection would list only the new out-of-scope path and dispatch
   # nobody for the app/ source the branch removed.
@@ -218,174 +376,6 @@ code-audit-maintainer-shell"
   run run_resolver
   [ "$status" -eq 0 ]
   [ "$output" = "code-audit-frontend" ]
-}
-
-@test "framework config/data only diff dispatches nothing (out of scope)" {
-  write_full_roster
-  # Commit the config change plus VERSION + manifest so all three land in the
-  # diff; none is claimed by a specialized member or the auditable-base set.
-  stage .gaia/VERSION .gaia/manifest.json
-  git -C "$SANDBOX" add .gaia/audit-ci.yml
-  commit "chore: config"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 7. .github/workflows/*.yml only → frontend (default catch-all)
-
-@test ".github/workflows yaml dispatches frontend via the default catch-all" {
-  write_full_roster
-  stage .github/workflows/release.yml
-  commit "ci"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-frontend" ]
-}
-
-# 8. Root build-config files (tsconfig*.json, *.config.ts) → frontend
-
-@test "root tsconfig and *.config.ts dispatch frontend (default's own declared root globs)" {
-  write_full_roster
-  stage tsconfig.json vite.config.ts
-  commit "chore"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-frontend" ]
-}
-
-# 9. wiki/docs-only diff → empty
-
-@test "wiki and docs only diff dispatches nothing (out of scope)" {
-  write_full_roster
-  stage wiki/concepts/Foo.md docs/guide.md
-  commit "docs"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 10. .github/x.sh (top-level under .github) → maintainer-shell
-#     Glob-semantics decision: `.github/**/*.sh`'s `**/` collapses to zero
-#     segments, so a shell script directly under `.github/` is matched.
-
-@test "top-level .github shell script matches .github shell glob (zero-segment **)" {
-  write_full_roster
-  stage .github/x.sh
-  commit "chore"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-shell" ]
-}
-
-# 11. tools/lib/*.sh matches direct children only (a directory no other
-#     fixture glob reaches, so the nested file can only match through this one)
-
-@test "single-star shell glob matches a direct-child shell file" {
-  write_full_roster
-  stage tools/lib/foo.sh
-  commit "chore"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-shell" ]
-}
-
-# Staged alone: beside a direct child, a nested file wrongly matched by the
-# single-* glob would route to the same member and dedupe out of sight.
-@test "single-star shell glob does not match a nested shell file" {
-  write_full_roster
-  stage tools/lib/sub/bar.sh
-  commit "chore"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 12. Adopter roster (maintainer entries removed) + .gaia/cli/src → empty
-#     Proves the resolver never emits a member the roster does not define.
-
-@test "adopter roster never dispatches a maintainer member for framework source" {
-  write_adopter_roster
-  stage .gaia/cli/src/foo.ts
-  commit "feat"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 13. Missing auditors: key → unanswerable (exit 2, one named stderr line).
-#     There is no fallback roster, so the query cannot be answered, and an
-#     empty stdout here would read as "nobody is owed".
-
-@test "missing auditors key exits 2 with a named reason and empty stdout" {
-  # A config with other knobs but no `auditors:` block.
-  printf 'gate_label: null\nunrelated_knob: true\n' > "$SANDBOX/.gaia/audit-ci.yml"
-  stage app/x.tsx
-  commit "feat"
-  ( cd "$SANDBOX" && "$SCRIPT" ) >"$BATS_TEST_TMPDIR/out" 2>"$BATS_TEST_TMPDIR/err" && exit_status=0 || exit_status=$?
-  [ "$exit_status" -eq 2 ]
-  [ ! -s "$BATS_TEST_TMPDIR/out" ]
-  [ "$(wc -l <"$BATS_TEST_TMPDIR/err" | tr -d ' ')" -eq 1 ]
-  grep -qF 'has no auditors: roster' "$BATS_TEST_TMPDIR/err"
-}
-
-# 14. The committed roster dispatches the maintainer members (only the release
-#     scrub removes them).
-
-@test "committed roster dispatches maintainer-node for framework source" {
-  seed_audit_roster "$SANDBOX"
-  stage .gaia/cli/src/foo.ts
-  commit "feat"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-node" ]
-}
-
-# 14b. Committed roster: the CLI build/config surface dispatches maintainer-node.
-#      package.json carries the bundle build scripts + runtime deps,
-#      pnpm-lock.yaml the resolved dependency tree, tsconfig*.json the build
-#      config, and vitest/eslint/prettier.config.* the CLI's own test and lint
-#      tool configs. Each sits beside src/ but outside .gaia/cli/src/**, so
-#      before maintainer-node claims it a change to any merges with no
-#      code-audit review. One file per test on purpose: a combined stage would
-#      still emit maintainer-node if only one of them were owned.
-
-@test "committed roster dispatches maintainer-node for .gaia/cli/package.json" {
-  seed_audit_roster "$SANDBOX"
-  stage .gaia/cli/package.json
-  commit "chore: cli deps"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-node" ]
-}
-
-@test "committed roster dispatches maintainer-node for .gaia/cli/tsconfig.json (tsconfig*.json)" {
-  seed_audit_roster "$SANDBOX"
-  stage .gaia/cli/tsconfig.json
-  commit "chore: cli tsconfig"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-node" ]
-}
-
-@test "committed roster dispatches maintainer-node for .gaia/cli/vitest.config.ts (*.config.ts)" {
-  # The sharpest of the CLI's three tool configs: `setupFiles` executes
-  # arbitrary code in every CLI test run, so a config-only diff is a code diff.
-  seed_audit_roster "$SANDBOX"
-  stage .gaia/cli/vitest.config.ts
-  commit "chore: cli vitest config"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-node" ]
-}
-
-@test "committed roster dispatches maintainer-node for .gaia/cli/eslint.config.mjs (*.config.mjs)" {
-  seed_audit_roster "$SANDBOX"
-  stage .gaia/cli/eslint.config.mjs
-  commit "chore: cli eslint config"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-node" ]
 }
 
 # 15. Novel member (extensibility): a fabricated roster member is dispatched
@@ -472,124 +462,6 @@ YAML
   run run_resolver --help
   [ "$status" -eq 0 ]
   grep -qF "Usage: resolve-audit-members.sh" <<<"$output" || return 1
-}
-
-# 18. Unknown flag exits 0 with empty stdout (fail-safe for consumers)
-
-@test "unknown flag exits 0 with empty stdout" {
-  run bash -c '( cd "$1" && "$2" --bogus 2>/dev/null )' _ "$SANDBOX" "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 19. Empty diff (feature == main) → empty stdout, exit 0
-
-@test "empty diff dispatches nothing and exits 0" {
-  write_full_roster
-  # No commits past the base: merge-base(HEAD, main) == HEAD → empty diff.
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 20. Not in a git repo → exit 2, empty stdout, one stderr diagnostic.
-#     An unresolvable root is a query this resolver cannot answer, and empty
-#     stdout is reserved for a real answer ("nothing in this diff is in audit
-#     scope"). A caller that read the unanswerable case as an empty member set
-#     would clear a diff no dispatched member read.
-
-@test "not in a git repo exits 2 with empty stdout and a stderr diagnostic" {
-  notrepo="$BATS_TEST_TMPDIR/notrepo"
-  mkdir -p "$notrepo"
-  run bash -c 'cd "$1" && GIT_CEILING_DIRECTORIES="$1" "$2" 2>/dev/null' _ "$notrepo" "$SCRIPT"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  # bats `run` merges stderr into `$output`, so prove the diagnostic goes to
-  # stderr specifically by discarding stdout.
-  # shellcheck disable=SC2069
-  error_output="$( ( cd "$notrepo" && GIT_CEILING_DIRECTORIES="$notrepo" "$SCRIPT" ) 2>&1 1>/dev/null || true )"
-  grep -qF -- "resolve-audit-members" <<<"$error_output" || return 1
-}
-
-# 21. Bats-only diff under .gaia/ → maintainer-shell
-#     The suites guarding the framework's own bash are owned, not out of scope:
-#     a commit that weakens, skips, or deletes one is gated like any other
-#     shell change. Both bats trees under .gaia/ are covered by the one
-#     `.gaia/**/*.bats` glob.
-
-@test "bats-only diff under .gaia dispatches maintainer-shell" {
-  write_full_roster
-  stage .gaia/scripts/tests/resolve-audit-members.bats .gaia/tests/hooks/session-stop.bats
-  commit "test"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-shell" ]
-}
-
-# 22. Bats-only diff under .github/ → maintainer-shell
-#     `.github/**/*.bats` mirrors the `.github/**/*.sh` glob: the suites that
-#     test the CI-side shell are owned by the member that owns that shell.
-
-@test "bats-only diff under .github dispatches maintainer-shell" {
-  write_full_roster
-  stage .github/audit/tests/post-audit-status.bats
-  commit "test"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-shell" ]
-}
-
-# 23. The committed roster also owns the bats suites. Without a bats glob, a
-#     bats-only diff resolves to an empty member set and rides the merge gate's
-#     out-of-scope bypass.
-
-@test "committed roster dispatches maintainer-shell for a bats-only diff" {
-  seed_audit_roster "$SANDBOX"
-  stage .gaia/scripts/tests/usage-flush.bats
-  commit "test"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-maintainer-shell" ]
-}
-
-# 24. An adopter clone (maintainer entries scrubbed) never dispatches a
-#     maintainer member for a bats file, and the suites are not in the default
-#     member's auditable-base set, so the diff is correctly out of scope there.
-
-@test "adopter roster dispatches nothing for a bats-only diff" {
-  write_adopter_roster
-  stage .gaia/scripts/tests/usage-flush.bats
-  commit "test"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 25. --root: authoritative when supplied, validated, fail-closed when it does
-#     not name a git checkout.
-
-@test "--root pointing at a non-repository exits 2 with empty stdout" {
-  # cwd is a real repo, so only --root can produce the failure: this pins that
-  # the flag is authoritative and that its failure is not masked by a usable
-  # ambient cwd.
-  notrepo="$BATS_TEST_TMPDIR/notrepo-root"
-  mkdir -p "$notrepo"
-  run bash -c '( cd "$1" && GIT_CEILING_DIRECTORIES="$3" "$2" --root "$3" 2>/dev/null )' \
-    _ "$SANDBOX" "$SCRIPT" "$notrepo"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-}
-
-@test "--root with an empty value fails closed instead of falling back to cwd" {
-  write_full_roster
-  stage app/x.tsx
-  commit "feat"
-  # Reachable as `--root "$R"` with R unset: the quoted word survives, so the
-  # script sees $#=2 with an empty $2. Read as "no override" that would answer
-  # from a root the caller never named.
-  run bash -c '( cd "$1" && "$2" --root "" 2>/dev/null )' _ "$SANDBOX" "$SCRIPT"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
 }
 
 @test "--root answers for that checkout from an unrelated cwd; bare does not" {
@@ -679,154 +551,6 @@ code-audit-maintainer-shell" ]
 code-audit-maintainer-shell" ]
 }
 
-# 28. Empty range: a remote-verified base with no commits ahead is still
-#     an empty, decisive answer.
-
-@test "a remote-verified base with no commits ahead resolves an empty member set" {
-  write_full_roster
-  git -C "$SANDBOX" checkout -q main
-  git -C "$SANDBOX" update-ref refs/remotes/origin/main refs/heads/main
-  git -C "$SANDBOX" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 29. Unresolvable base: neither a remote-tracking ref nor a local branch of
-#     the default name exists. Unchanged answer, now reached through the
-#     shared resolver.
-
-@test "an unresolvable base (no origin, no local default branch) resolves an empty member set" {
-  repo="$BATS_TEST_TMPDIR/unresolvable"
-  mkdir -p "$repo/.gaia" "$repo/app"
-  git -C "$repo" init -q --initial-branch=master
-  git -C "$repo" config user.email t@example.com
-  git -C "$repo" config user.name T
-  git -C "$repo" config commit.gpgsign false
-  cat > "$repo/.gaia/audit-ci.yml" <<'YAML'
-auditors:
-  - name: code-audit-frontend
-    globs:
-      - "app/**"
-    audience: adopter
-    default: true
-YAML
-  printf 'x\n' > "$repo/app/a.ts"
-  git -C "$repo" add -A
-  git -C "$repo" commit -q -m init
-  run bash -c '( cd "$1" && GIT_CEILING_DIRECTORIES="$1" "$2" 2>/dev/null )' _ "$repo" "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 30. --base naming an unresolvable revision: the override now verifies first
-#     through the shared resolver, but the observable answer is the same.
-
-@test "--base naming an unresolvable revision exits 0 with empty stdout" {
-  write_full_roster
-  stage app/a.tsx
-  commit "feat"
-  run run_resolver --base deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# 31. --base with a missing argument: the untouched arm. Adoption does not
-#     reach this flag-parsing path at all.
-
-@test "--base with a missing argument exits 0 with empty stdout (untouched arm)" {
-  write_full_roster
-  stage app/a.tsx
-  commit "feat"
-  run bash -c '( cd "$1" && "$2" --base 2>/dev/null )' _ "$SANDBOX" "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# ---- SPEC-092: the committed roster claims the apps/web/ package ------------
-# These drive the roster that ships (seed_audit_roster copies the committed
-# `auditors:` block), so they pin the real globs rather than a fixture mirror.
-
-# Replace the sandbox roster with the committed one.
-seed_committed_roster() {
-  rm -f "$SANDBOX/.gaia/audit-ci.yml"
-  seed_audit_roster "$SANDBOX"
-}
-
-@test "committed roster: a apps/web/app diff resolves to the default member by its own apps/web/app/** glob" {
-  seed_committed_roster
-  stage apps/web/app/routes/x.tsx
-  commit "frontend app change"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-frontend" ]
-
-  # Attribution: drop the member's own `apps/web/app/**` glob and the broader
-  # `apps/**` one, and the same diff resolves to nobody, so the match came from
-  # those globs and nothing else.
-  grep -vF -e '"apps/web/app/**"' -e '"apps/**"' "$SANDBOX/.gaia/audit-ci.yml" > "$SANDBOX/.gaia/audit-ci.yml.tmp"
-  mv "$SANDBOX/.gaia/audit-ci.yml.tmp" "$SANDBOX/.gaia/audit-ci.yml"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "committed roster: apps/web/.claude and apps/web/gaia.package.json resolve to the frontend member" {
-  seed_committed_roster
-  stage apps/web/.claude/rules/x.md apps/web/gaia.package.json apps/web/CLAUDE.md
-  commit "frontend harness change"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-frontend" ]
-}
-
-@test "committed roster: workflow, shell and node paths keep their members" {
-  seed_committed_roster
-  stage .github/workflows/a.yml .gaia/scripts/a.sh
-  commit "mixed"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"code-audit-github-workflows"* ]]
-  [[ "$output" == *"code-audit-maintainer-shell"* ]]
-}
-
-@test "committed roster: a retired root app path resolves to no member (COV-005)" {
-  seed_committed_roster
-  stage app/routes/x.tsx
-  commit "retired root path"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "committed roster: an apps/web/public change resolves to the default member (it carries a service worker)" {
-  seed_committed_roster
-  stage apps/web/public/sw.js
-  commit "public"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ "$output" = "code-audit-frontend" ]
-}
-
-@test "base roster guard can fail: the pre-move roster attributes nothing to apps/web/app/**" {
-  # A roster still carrying only root-form frontend globs (the 1.6.1 shape)
-  # leaves a apps/web/ diff unowned, the RED state this change repairs.
-  cat > "$SANDBOX/.gaia/audit-ci.yml" <<'YAML'
-auditors:
-  - name: code-audit-frontend
-    globs:
-      - "app/**"
-      - "test/**"
-    audience: adopter
-    default: true
-YAML
-  stage apps/web/app/routes/x.tsx
-  commit "frontend app change"
-  run run_resolver
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 @test "committed roster: a apps/web/app change rotates the default member digest" {
   # The digest measures the branch's own patch against the base reference, so
   # the sandbox needs an origin carrying `main`. The fixture removes an existing
@@ -853,37 +577,25 @@ YAML
 # The fixture (.gaia/tests/helpers/release-skip-fixture.sh) keys fixture-shell
 # with skip_gaia_release_changes: true.
 
-# release_skip_resolve <kind>: the resolver's member set for a fresh fixture
-# branch of <kind>, against its merge base with main.
-release_skip_resolve() {
-  local root="$BATS_TEST_TMPDIR/release-skip"
+@test "release skip: the member set per branch kind" {
   command -v jq >/dev/null 2>&1 || skip "jq required"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/release-skip-fixture.sh"
+  local root="$BATS_TEST_TMPDIR/release-skip" row kind expected
   release_skip_init "$root"
-  release_skip_branch "$root" "$1"
-  "$SCRIPT" --root "$root" --base "$(git -C "$root" merge-base main HEAD)"
-}
-
-@test "release skip: a release-applying branch does not dispatch the keyed member" {
-  run release_skip_resolve release
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'fixture-default\nfixture-scripts')" ]
-}
-
-@test "release skip: adopter shell on an ordinary branch dispatches the keyed member" {
-  run release_skip_resolve ordinary
-  [ "$status" -eq 0 ]
-  [ "$output" = fixture-shell ]
-}
-
-@test "release skip: an adopter edit to a shipped hook dispatches the keyed member" {
-  run release_skip_resolve hand-edit
-  [ "$status" -eq 0 ]
-  [ "$output" = fixture-shell ]
-}
-
-@test "release skip: adopter shell on a release-applying branch keeps the keyed member dispatched" {
-  run release_skip_resolve mixed
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'fixture-default\nfixture-scripts\nfixture-shell')" ]
+  # A release-applying branch does not dispatch the keyed member; adopter shell
+  # does, on an ordinary branch, as an edit to a shipped hook, and beside a
+  # release.
+  for row in \
+    "release|fixture-default"$'\n'"fixture-scripts" \
+    "ordinary|fixture-shell" \
+    "hand-edit|fixture-shell" \
+    "mixed|fixture-default"$'\n'"fixture-scripts"$'\n'"fixture-shell"; do
+    kind="${row%%|*}"
+    expected="${row#*|}"
+    release_skip_branch "$root" "$kind"
+    run "$SCRIPT" --root "$root" --base "$(git -C "$root" merge-base main HEAD)"
+    [ "$status" -eq 0 ] || { echo "$kind: status $status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "$kind: got '$output', expected '$expected'"; return 1; }
+    git -C "$root" checkout -q main
+  done
 }

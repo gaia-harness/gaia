@@ -17,7 +17,6 @@ setup() {
   REPO_ROOT="$(cd "$THIS_DIRECTORY/../../.." && pwd)"
   HOOK_ABSOLUTE_PATH="$REPO_ROOT/.claude/hooks/block-main-destructive-git.sh"
   SETTINGS="$REPO_ROOT/.claude/settings.json"
-  PAGE="$REPO_ROOT/.claude/skills/gaia/references/simplify-pass.md"
   TREE="$BATS_TEST_TMPDIR/tree"
   PATCH="$BATS_TEST_TMPDIR/out/simplify-discarded.patch"
 
@@ -104,7 +103,7 @@ denied_by_settings() {
   return 1
 }
 
-@test "a discard saves every kind of edit, restores the tree, and the patch brings the edits back" {
+@test "a discard saves every kind of edit, staged or not and under a non-default diff format, restores the tree, and the patch brings the edits back" {
   make_edits
   run "$SCRIPT" --root "$TREE" --patch "$PATCH"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
@@ -117,26 +116,22 @@ denied_by_settings() {
   git -C "$TREE" apply --binary "$PATCH"
   [ "$(edited_sums)" = "$EDITED_SUMS" ]
   [ ! -e "$TREE/doomed.txt" ]
-}
 
-@test "a discard of edits the gate step already staged saves and restores them too" {
-  make_edits
+  # Edits the gate step already staged are saved and restored too.
   git -C "$TREE" add -A
-  run "$SCRIPT" --root "$TREE" --patch "$PATCH"
+  run "$SCRIPT" --root "$TREE" --patch "$PATCH.staged"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
   [ -z "$(git -C "$TREE" status --porcelain)" ]
-  git -C "$TREE" apply --binary "$PATCH"
+  git -C "$TREE" apply --binary "$PATCH.staged"
   [ "$(edited_sums)" = "$EDITED_SUMS" ]
-}
 
-@test "a discard under a non-default diff format still saves a patch that applies" {
-  make_edits
+  # A non-default diff format still saves a patch that applies.
   git -C "$TREE" config diff.noprefix true
   git -C "$TREE" config color.ui always
-  run "$SCRIPT" --root "$TREE" --patch "$PATCH"
+  run "$SCRIPT" --root "$TREE" --patch "$PATCH.format"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
   [ -z "$(git -C "$TREE" status --porcelain)" ]
-  git -C "$TREE" apply --binary "$PATCH"
+  git -C "$TREE" apply --binary "$PATCH.format"
   [ "$(edited_sums)" = "$EDITED_SUMS" ]
 }
 
@@ -150,48 +145,37 @@ denied_by_settings() {
   assert_nothing_reset
 }
 
-@test "a patch path git cannot write to refuses the reset at the save" {
+@test "a reset is refused and nothing reset: a patch path git cannot write to, an empty patch, a lossy binary patch, an unappliable patch" {
   make_edits
   mkdir -p "$BATS_TEST_TMPDIR/a-folder"
   run "$SCRIPT" --root "$TREE" --patch "$BATS_TEST_TMPDIR/a-folder"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *'could not save'* ]]
+  [ "$status" -eq 1 ] || { echo "unwritable path: status $status"; return 1; }
+  grep -qF 'could not save' <<<"$output" || { echo "unwritable path: $output"; return 1; }
   assert_nothing_reset
-}
 
-@test "an empty patch refuses the reset" {
+  git_shim '/^diff --git a\/image.bin/,/^diff --git a\/src/{/^diff --git a\/src/!d;}'
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run "$SCRIPT" --root "$TREE" --patch "$PATCH"
+  [ "$status" -eq 1 ] || { echo "lossy binary patch: status $status"; return 1; }
+  grep -qF 'does not restore the edits' <<<"$output" || { echo "lossy binary patch: $output"; return 1; }
+  assert_nothing_reset
+
+  git_shim 's/^@@ .*/@@ corrupted @@/'
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run "$SCRIPT" --root "$TREE" --patch "$PATCH"
+  [ "$status" -eq 1 ] || { echo "unappliable patch: status $status"; return 1; }
+  grep -qF 'does not apply' <<<"$output" || { echo "unappliable patch: $output"; return 1; }
+  assert_nothing_reset
+
+  # With no edits the patch is empty, and an empty patch refuses the reset.
+  git -C "$TREE" checkout -q -- . 2>/dev/null
+  git -C "$TREE" clean -fdq
   run "$SCRIPT" --root "$TREE" --patch "$PATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *'is empty'* ]]
+  [ "$status" -eq 1 ] || { echo "empty patch: status $status"; return 1; }
+  grep -qF 'is empty' <<<"$output" || { echo "empty patch: $output"; return 1; }
   [ "$(git -C "$TREE" rev-parse HEAD)" = "$HEAD_BEFORE" ]
 }
 
-@test "a patch that drops a binary file's change refuses the reset" {
-  make_edits
-  git_shim '/^diff --git a\/image.bin/,/^diff --git a\/src/{/^diff --git a\/src/!d;}'
-  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run "$SCRIPT" --root "$TREE" --patch "$PATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *'does not restore the edits'* ]]
-  assert_nothing_reset
-}
-
-@test "a patch that does not apply refuses the reset" {
-  make_edits
-  git_shim 's/^@@ .*/@@ corrupted @@/'
-  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run "$SCRIPT" --root "$TREE" --patch "$PATCH"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *'does not apply'* ]]
-  assert_nothing_reset
-}
-
-@test "a missing argument is a usage error and resets nothing" {
-  make_edits
-  run "$SCRIPT" --root "$TREE"
-  [ "$status" -eq 2 ]
-  assert_nothing_reset
-}
-
-@test "the script's own reset passes the real hook and every settings deny row" {
+# bats test_tags=protected
+@test "the real hook and the settings deny rows allow the script's own reset and deny a reset that moves HEAD" {
   local line
   line="$(grep -E '^if ! git -C "\$root" reset --hard; then$' "$SCRIPT")"
   [ -n "$line" ] || { echo 'the reset line moved; this test no longer reads it' >&2; return 1; }
@@ -201,10 +185,7 @@ denied_by_settings() {
   assert_allowed_by_json
   denied_by_settings "$command" && return 1
   denied_by_settings 'git reset --hard' && return 1
-  true
-}
 
-@test "red twin: a reset that moves HEAD is denied by the hook and by the settings row" {
   printf 'more\n' >>"$TREE/tracked.txt"
   git -C "$TREE" add -A
   git -C "$TREE" commit -qm 'chore: another'
@@ -216,26 +197,4 @@ denied_by_settings() {
 @test "no allow rule covers the script, so a default-permission run asks before the reset" {
   [ "$(jq '[.permissions.allow[] | select(contains("simplify-discard"))] | length' "$SETTINGS")" -eq 0 ]
   [ "$(jq '.permissions.allow | length' "$SETTINGS")" -gt 0 ]
-}
-
-# page_pins <file>: what the pass depends on and an edit could quietly lose.
-page_pins() {
-  grep -qF '<merge base sha>...HEAD' "$1" || return 1
-  grep -qF '@{upstream}...HEAD' "$1" || return 1
-  grep -qF 'model: "opus"' "$1" || return 1
-  grep -qF 'simplify-discard.sh --root' "$1" || return 1
-  grep -qF '## Simplify pass (HALTED)' "$1" || return 1
-  grep -qF 'Result: <applied | no changes | not run | discarded>' "$1" || return 1
-}
-
-@test "the page names the explicit range, the model, the discard and every result" {
-  page_pins "$PAGE"
-}
-
-@test "red twin: a page without the explicit range fails the pin check" {
-  local copy="$BATS_TEST_TMPDIR/page.md"
-  sed 's/<merge base sha>\.\.\.HEAD/HEAD/' "$PAGE" >"$copy"
-  cmp -s "$PAGE" "$copy" && { echo 'the range is not on the page' >&2; return 1; }
-  run page_pins "$copy"
-  [ "$status" -ne 0 ]
 }

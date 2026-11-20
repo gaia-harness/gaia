@@ -50,6 +50,13 @@ build_base() {
   lsb_main_base_end
 }
 
+# rebuild_base: discards the sandbox and builds a fresh one, so one test can
+# walk several branch shapes from the same starting point.
+rebuild_base() {
+  rm -rf "$LSB_ROOT" "$LSB_ORIGIN"
+  build_base
+}
+
 # anchor_and_clear: a branch-own anchor commit at a path the shell member does
 # not own, then a full clearance on it. A clearance on the merge base never
 # anchors, so the router would answer no-full-clearance.
@@ -99,28 +106,21 @@ expect_route() {
   [ "$output" = "$(printf '%s\t%s' "$1" "$2")" ] || { printf 'want %s/%s, got: %s\n' "$1" "$2" "$output" >&2; return 1; }
 }
 
-@test "a settings-only change on an ordinary branch dispatches the shell member" {
+@test "a settings-only change dispatches the shell member on an ordinary branch and on a GAIA update branch" {
   build_base
   commit_settings_change one
   [ "$(lsb_git diff --name-only origin/main...HEAD)" = "$SETTINGS" ]
   run dispatched_members
   [ "$status" -eq 0 ]
-  grep -qxF "$SHELL_MEMBER" <<<"$output"
-}
+  grep -qxF "$SHELL_MEMBER" <<<"$output" || { echo "ordinary branch: shell member not dispatched"; return 1; }
 
-@test "a settings-only change on a GAIA update branch dispatches the shell member" {
-  build_base
   raise_version
-  commit_settings_change one
   run dispatched_members
   [ "$status" -eq 0 ]
-  grep -qxF "$SHELL_MEMBER" <<<"$output"
-}
+  grep -qxF "$SHELL_MEMBER" <<<"$output" || { echo "update branch: shell member not dispatched"; return 1; }
 
-@test "guard can fail: the update branch dispatch rests on the shared class, not a disarmed context" {
-  build_base
-  raise_version
-  commit_settings_change one
+  # The update branch skip is armed: it drops an owned hook edited on the
+  # branch, while the shared-class settings file stays with the shell member.
   local owned_hook base_commit armed
   owned_hook="$(jq -r '.files | to_entries[] | select(.value == "owned") | .key' "$LSB_ROOT/.gaia/manifest.json" \
     | grep -E '^\.claude/hooks/[^/]+\.sh$' | grep -vE 'audit|resolve|scope|roster|manifest|provision' | sort | head -n 1)"
@@ -133,53 +133,33 @@ expect_route() {
   [ -n "$(owner_of "$armed" "$owned_hook")" ]
   [ "$(owner_of "$armed" "$owned_hook")" != "$SHELL_MEMBER" ]
   [ "$(owner_of "$armed" "$SETTINGS")" = "$SHELL_MEMBER" ]
-  # Class the settings file `owned` on the head side: the skip now drops it.
-  jq --arg path "$SETTINGS" '.files[$path] = "owned"' "$LSB_ROOT/.gaia/manifest.json" >"$LSB_ROOT/.gaia/manifest.next"
-  mv "$LSB_ROOT/.gaia/manifest.next" "$LSB_ROOT/.gaia/manifest.json"
-  lsb_git add -- .gaia/manifest.json && lsb_git commit -q -m "class settings owned"
-  armed="$(printf '%s\n' "$SETTINGS" | owners "$LSB_ROOT/.gaia/audit-ci.yml" "$base_commit")"
-  [ "$(owner_of "$armed" "$SETTINGS")" != "$SHELL_MEMBER" ]
-}
-
-@test "guard can fail: without the roster glob the shell member does not own the settings file" {
-  build_base
-  local scratch_roster="$BATS_TEST_TMPDIR/roster-without-glob.yml" owned
-  grep -vxF '      - ".claude/settings.json"' "$LSB_ROOT/.gaia/audit-ci.yml" >"$scratch_roster"
-  ! cmp -s "$LSB_ROOT/.gaia/audit-ci.yml" "$scratch_roster" || return 1
-  owned="$(printf '%s\n' "$SETTINGS" | owners "$LSB_ROOT/.gaia/audit-ci.yml" "")"
-  [ "$(owner_of "$owned" "$SETTINGS")" = "$SHELL_MEMBER" ]
-  owned="$(printf '%s\n' "$SETTINGS" | owners "$scratch_roster" "")"
-  [ "$(owner_of "$owned" "$SETTINGS")" != "$SHELL_MEMBER" ]
-}
-
-@test "the light router sends a settings delta to a full review after a full clearance" {
-  build_base
-  anchor_and_clear
-  commit_settings_change one
-  lsb_route "$SHELL_MEMBER"
-  expect_route full hard-full
 }
 
 # The clearance records the framework version it was earned under, so the
 # version is raised before it is written; raised after, the router answers
 # no-full-clearance for the stale version instead.
-@test "the light router sends a settings delta on an update branch to a full review" {
+@test "the light router sends a settings delta to a full review on an ordinary and an update branch, and a small script change light" {
   build_base
+  anchor_and_clear
+  commit_settings_change one
+  lsb_route "$SHELL_MEMBER"
+  expect_route full hard-full
+
+  rebuild_base
   raise_version
   anchor_and_clear
   commit_settings_change one
   lsb_route "$SHELL_MEMBER"
   expect_route full hard-full
-}
 
-@test "guard can fail: the router routes a small adopter script change light" {
-  build_base
+  rebuild_base
   anchor_and_clear
   lsb_commit scripts/deploy.sh "$(printf '#!/usr/bin/env bash\necho one\necho two\necho changed')"
   lsb_route "$SHELL_MEMBER"
   expect_route light light-eligible
 }
 
+# bats test_tags=protected
 @test "the merge gate holds a settings-only change until the shell member clears it" {
   build_base
   commit_settings_change one

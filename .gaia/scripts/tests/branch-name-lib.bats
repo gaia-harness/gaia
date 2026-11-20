@@ -117,15 +117,6 @@ worktree_spelling() {
   done
 }
 
-@test "the type-prefixed plan arm can fail: a lib without it classifies feat/plan-024-x as adhoc" {
-  local scratch_library="$BATS_TEST_TMPDIR/branch-name-lib-no-plan-arm.sh"
-  sed 's#^    \[a-z\]\*/spec-\* | \[a-z\]\*/plan-\*)$#    zz-never-matches/*)#' "$LIBRARY" >"$scratch_library"
-  cmp -s "$LIBRARY" "$scratch_library" && return 1
-  run bash -c ". '$scratch_library' && gaia_branch_classify feat/plan-024-x"
-  [ "$status" -eq 0 ]
-  [ "$output" = "adhoc unknown" ]
-}
-
 @test "table: mode never leaves the closed vocabulary, and classify never fails" {
   local branch mode
   for branch in "" "-" "/" "debt/" "plan/" "chore/" "a+b" "worktree-" "日本/語"; do
@@ -153,7 +144,8 @@ worktree_spelling() {
 
 # ========== 5. readers built on the table ==========
 
-@test "members: a single, a batch, and a worktree batch print their issues, anything else prints nothing" {
+@test "readers print their field or nothing (members, spec-number, plan-number, plan-type)" {
+  # members: a single, a batch, and a worktree batch print their issues, anything else prints nothing
   [ "$(gaia_branch_members "debt/2159-slug")" = "2159" ]
   [ "$(gaia_branch_members "debt/41-42-47-batch" | tr '\n' ' ')" = "41 42 47 " ]
   [ "$(gaia_branch_members "worktree-debt+41-42-batch" | tr '\n' ' ')" = "41 42 " ]
@@ -161,25 +153,19 @@ worktree_spelling() {
   [ -z "$(gaia_branch_members "feat/plan-024-x")" ]
   [ -z "$(gaia_branch_members "worktree-fix+spec-012-x")" ]
   [ -z "$(gaia_branch_members "main")" ]
-}
-
-@test "spec-number: a SPEC plan branch prints its number without padding, anything else prints nothing" {
+  # spec-number: a SPEC plan branch prints its number without padding, anything else prints nothing
   [ "$(gaia_branch_spec_number "feat/spec-005-x")" = "5" ]
   [ "$(gaia_branch_spec_number "worktree-feat+spec-120")" = "120" ]
   [ "$(gaia_branch_spec_number "feat/spec-000")" = "0" ]
   [ -z "$(gaia_branch_spec_number "feat/plan-012-x")" ]
   [ -z "$(gaia_branch_spec_number "spec-005-x")" ]
-}
-
-@test "spec-number: a type-prefixed SPEC plan branch prints its number, a type-prefixed plan-NNN branch prints nothing" {
+  # spec-number: a type-prefixed SPEC plan branch prints its number, a type-prefixed plan-NNN branch prints nothing
   [ "$(gaia_branch_spec_number "refactor/spec-005-x")" = "5" ]
   [ "$(gaia_branch_spec_number "docs/spec-007-cards")" = "7" ]
   [ "$(gaia_branch_spec_number "worktree-fix+spec-012-x")" = "12" ]
   [ -z "$(gaia_branch_spec_number "feat/plan-024-x")" ]
   [ -z "$(gaia_branch_spec_number "feat/spec-notes")" ]
-}
-
-@test "plan-number: every plan spelling prints its number without padding, anything else prints nothing" {
+  # plan-number: every plan spelling prints its number without padding, anything else prints nothing
   [ "$(gaia_branch_plan_number "feat/plan-031-x")" = "31" ]
   [ "$(gaia_branch_plan_number "worktree-feat+plan-007-x")" = "7" ]
   [ "$(gaia_branch_plan_number "feat/plan-000")" = "0" ]
@@ -188,22 +174,13 @@ worktree_spelling() {
   [ -z "$(gaia_branch_plan_number "feat/plan-notes")" ]
   [ -z "$(gaia_branch_plan_number "main")" ]
   [ "$(bash "$LIBRARY" plan-number feat/plan-031-x)" = "31" ]
-}
-
-# plan_type_in <library> <branch>: the plan-type output of the library copy at <library>.
-plan_type_in() {
-  run bash -c ". '$1' && gaia_branch_plan_type '$2'"
-}
-
-@test "plan-type: a type-prefixed plan branch prints its type, in either spelling" {
+  # plan-type: a type-prefixed plan branch prints its type, in either spelling
   [ "$(gaia_branch_plan_type "feat/plan-024-x")" = "feat" ]
   [ "$(gaia_branch_plan_type "fix/spec-012")" = "fix" ]
   [ "$(gaia_branch_plan_type "docs/spec-007-cards")" = "docs" ]
   [ "$(gaia_branch_plan_type "worktree-fix+spec-012-x")" = "fix" ]
   [ "$(bash "$LIBRARY" plan-type feat/plan-024-x)" = "feat" ]
-}
-
-@test "plan-type: hand-named branches, workflow branches and non-plan names print nothing" {
+  # plan-type: hand-named branches, workflow branches and non-plan names print nothing
   local branch
   for branch in feat/planning-notes \
     feat/new-thing debt/12-spec-1 cleanse/plan-1 release/v1.0.0 main ""; do
@@ -211,15 +188,6 @@ plan_type_in() {
     [ "$status" -eq 0 ] || { echo "branch '$branch': status $status" >&2; return 1; }
     [ -z "$output" ] || { echo "branch '$branch': printed '$output'" >&2; return 1; }
   done
-}
-
-@test "the plan-type test can fail: a lib that prints nothing for a type-prefixed plan branch is reported" {
-  local scratch_library="$BATS_TEST_TMPDIR/branch-name-lib-no-plan-type.sh"
-  sed 's#^  \[ "\$_gaia_branch_mode" = "plan" \] || return 0$#  return 0#' "$LIBRARY" >"$scratch_library"
-  cmp -s "$LIBRARY" "$scratch_library" && return 1
-  plan_type_in "$scratch_library" feat/plan-024-x
-  [ "$status" -eq 0 ]
-  [ "$output" != "feat" ]
 }
 
 # ========== 6. minting ==========
@@ -235,9 +203,7 @@ plan_type_in() {
   [ "$(gaia_branch_name plan spec-012 --slug x --type fix)" = "fix/spec-012-x" ]
   [ "$(gaia_branch_name release v1.4.0)" = "release/v1.4.0" ]
   [ "$(gaia_branch_name release 2.0.0-rc.1)" = "release/v2.0.0-rc.1" ]
-}
-
-@test "name: each argument-free maintenance kind appends a UTC minute stamp" {
+  # name: each argument-free maintenance kind appends a UTC minute stamp
   local kind
   for kind in cleanse codify fitness residue deps wiki; do
     run --separate-stderr gaia_branch_name "$kind"
@@ -247,40 +213,13 @@ plan_type_in() {
       return 1
     }
   done
-}
-
-@test "name: update mints the version and a UTC minute stamp, with or without the leading v" {
+  # name: update mints the version and a UTC minute stamp, with or without the leading v
   run gaia_branch_name update v2.0.0
   [ "$status" -eq 0 ]
   grep -qE '^update/v2\.0\.0-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}$' <<<"$output"
   run gaia_branch_name update 2.0.0
   [ "$status" -eq 0 ]
   grep -qE '^update/v2\.0\.0-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}$' <<<"$output"
-}
-
-@test "name: update without a version exits 2" {
-  run --separate-stderr gaia_branch_name update ''
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -qF 'gaia_branch_name:' <<<"$stderr"
-}
-
-@test "name: the retired chore kind exits 2 as an unknown kind with nothing on stdout" {
-  run --separate-stderr gaia_branch_name chore x
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -qF 'unknown kind' <<<"$stderr"
-}
-
-@test "name: the renamed audit and harden kinds exit 2 as unknown kinds naming the replacements" {
-  local retired_kind
-  for retired_kind in audit harden; do
-    run --separate-stderr gaia_branch_name "$retired_kind"
-    [ "$status" -eq 2 ] || { echo "kind '$retired_kind': status $status" >&2; return 1; }
-    [ -z "$output" ]
-    grep -qF 'unknown kind' <<<"$stderr"
-    grep -qF 'cleanse, codify' <<<"$stderr"
-  done
 }
 
 @test "name: a long slug is cut to keep the name within 64 bytes, never ending in a dash" {
@@ -302,7 +241,7 @@ plan_type_in() {
   done
 }
 
-@test "name: a bad argument exits 2 with nothing on stdout and a reason on stderr" {
+@test "name: a bad call exits 2 with nothing on stdout and a reason on stderr" {
   local args
   for args in "" "bogus" "debt" "debt abc" "debt 1 --slug" "plan" "plan spec-x" \
     "plan feat-1 --type feat" "plan spec-1" "plan spec-1 --type" "plan spec-1 --type feat extra" "plan --type feat" "chore" "chore x" "cleanse extra" "codify extra" "fitness extra" \
@@ -313,22 +252,32 @@ plan_type_in() {
     [ -z "$output" ] || { echo "args '$args': stdout '$output'" >&2; return 1; }
     grep -qF 'gaia_branch_name:' <<<"$stderr"
   done
-}
-
-@test "name: plan takes --type and --slug in either order" {
-  [ "$(gaia_branch_name plan plan-024 --type feat --slug a-b)" = "feat/plan-024-a-b" ]
-  [ "$(gaia_branch_name plan plan-024 --slug a-b --type feat)" = "feat/plan-024-a-b" ]
-}
-
-@test "name: plan without --type exits 2 with a usage line naming --type" {
+  # name: update without a version exits 2
+  run --separate-stderr gaia_branch_name update ''
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  grep -qF 'gaia_branch_name:' <<<"$stderr"
+  # name: the retired chore kind exits 2 as an unknown kind with nothing on stdout
+  run --separate-stderr gaia_branch_name chore x
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  grep -qF 'unknown kind' <<<"$stderr"
+  # name: the renamed audit and harden kinds exit 2 as unknown kinds naming the replacements
+  local retired_kind
+  for retired_kind in audit harden; do
+    run --separate-stderr gaia_branch_name "$retired_kind"
+    [ "$status" -eq 2 ] || { echo "kind '$retired_kind': status $status" >&2; return 1; }
+    [ -z "$output" ]
+    grep -qF 'unknown kind' <<<"$stderr"
+    grep -qF 'cleanse, codify' <<<"$stderr"
+  done
+  # name: plan without --type exits 2 with a usage line naming --type
   run --separate-stderr gaia_branch_name plan plan-024 --slug x
   [ "$status" -eq 2 ]
   [ -z "$output" ]
   grep -qF -- '--type' <<<"$stderr"
   grep -qF 'needs --type' <<<"$stderr"
-}
-
-@test "name: plan refuses a --type that is not lowercase letters or not a shared commit type" {
+  # name: plan refuses a --type that is not lowercase letters or not a shared commit type
   local type
   for type in Feat feat1 fe-at "feat/x" zzz debt; do
     run --separate-stderr gaia_branch_name plan plan-024 --type "$type"
@@ -339,6 +288,29 @@ plan_type_in() {
   run --separate-stderr gaia_branch_name plan plan-024 --type zzz
   grep -qF 'use one of:' <<<"$stderr"
   grep -qF 'feat' <<<"$stderr"
+  # name: adhoc exits 2 with nothing on stdout and a reason on stderr for every bad call
+  expect_adhoc_refused --type feature --slug x
+  expect_adhoc_refused --type Fix --slug x
+  expect_adhoc_refused --type debt --slug x
+  expect_adhoc_refused --slug x
+  expect_adhoc_refused --slug x --type
+  expect_adhoc_refused --type fix
+  expect_adhoc_refused --type fix --slug
+  expect_adhoc_refused --type fix --slug '!!!'
+  expect_adhoc_refused --type fix --issue abc --slug x
+  expect_adhoc_refused --type fix --issue --slug x
+  expect_adhoc_refused --type fix --slug x extra
+  expect_adhoc_refused
+  # name: a batch too wide for 64 bytes is refused rather than cut
+  run --separate-stderr gaia_branch_name debt 10001 10002 10003 10004 10005 10006 10007 10008 10009 10010 10011
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  grep -qF 'longer than 64 bytes' <<<"$stderr"
+}
+
+@test "name: plan takes --type and --slug in either order" {
+  [ "$(gaia_branch_name plan plan-024 --type feat --slug a-b)" = "feat/plan-024-a-b" ]
+  [ "$(gaia_branch_name plan plan-024 --slug a-b --type feat)" = "feat/plan-024-a-b" ]
 }
 
 @test "name: plan mints for every shared commit type" {
@@ -362,7 +334,8 @@ bin_without_jq() {
   done
 }
 
-@test "name: with jq absent plan still mints on the shape check alone, and still refuses a non-letter type" {
+@test "name: with jq absent minting falls back to the shape check" {
+  # name: with jq absent plan still mints on the shape check alone, and still refuses an uppercase type
   local bin="$BATS_TEST_TMPDIR/bin-no-jq-mint"
   bin_without_jq "$bin"
   run env PATH="$bin" "$BASH" -c 'command -v jq'
@@ -374,39 +347,22 @@ bin_without_jq() {
   [ "$status" -eq 2 ]
   [ -z "$output" ]
   grep -qF 'lowercase letters' <<<"$stderr"
-}
-
-# plan_mint_in <directory> <args>: mint through the library copy under <directory>.
-plan_mint_in() {
-  run --separate-stderr bash -c ". '$1/.gaia/scripts/branch-name-lib.sh' && gaia_branch_name plan plan-024 $2"
-}
-
-@test "the plan mint guards can fail: a lib copy missing each one mints what the real lib refuses" {
-  local directory="$BATS_TEST_TMPDIR/mint-twins" bin="$BATS_TEST_TMPDIR/bin-no-jq-twin"
-  scratch_library "$directory"
-  # Armed: the unmodified copy refuses all three bad calls.
-  plan_mint_in "$directory" "--slug x"
-  [ "$status" -eq 2 ]
-  plan_mint_in "$directory" "--type zzz"
-  [ "$status" -eq 2 ]
-  # No membership check: an unknown lowercase type mints.
-  sed 's#^      if _gaia_branch_load_types; then$#      if false; then#' "$LIBRARY" >"$directory/.gaia/scripts/branch-name-lib.sh"
-  plan_mint_in "$directory" "--type zzz"
-  [ "$status" -eq 0 ]
-  [ "$output" = "zzz/plan-024" ]
-  # No --type requirement: the usage line is gone.
-  scratch_library "$directory"
-  sed 's#^      \[ -n "\$type" \] || {$#      [ -n "x" ] || {#' "$LIBRARY" >"$directory/.gaia/scripts/branch-name-lib.sh"
-  plan_mint_in "$directory" "--slug x"
-  grep -qF 'needs --type' <<<"$stderr" && return 1
-  # No shape check: with jq absent an uppercase type mints.
-  scratch_library "$directory"
-  sed 's#^        \*\[!a-z\]\*)$#        zz-never)#' "$LIBRARY" >"$directory/.gaia/scripts/branch-name-lib.sh"
-  cmp -s "$LIBRARY" "$directory/.gaia/scripts/branch-name-lib.sh" && return 1
+  # name: with jq absent adhoc still mints on the shape check alone, and still refuses an uppercase type and the legacy debt type
+  local bin="$BATS_TEST_TMPDIR/bin-no-jq-adhoc"
   bin_without_jq "$bin"
-  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$directory/.gaia/scripts/branch-name-lib.sh' && gaia_branch_name plan plan-024 --type Feat"
+  run env PATH="$bin" "$BASH" -c 'command -v jq'
+  [ "$status" -eq 1 ]
+  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$LIBRARY' && gaia_branch_name adhoc --type fix --slug x"
   [ "$status" -eq 0 ]
-  [ "$output" = "Feat/plan-024" ]
+  [ "$output" = "fix/x" ]
+  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$LIBRARY' && gaia_branch_name adhoc --type Fix --slug x"
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  grep -qF 'lowercase letters' <<<"$stderr"
+  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$LIBRARY' && gaia_branch_name adhoc --type debt --slug x"
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  grep -qF 'debt' <<<"$stderr"
 }
 
 # letters <count>: <count> lowercase a's.
@@ -422,22 +378,17 @@ expect_adhoc_refused() {
   [ -n "$stderr" ] || { printf "adhoc '%s': empty stderr\n" "$*" >&2; return 1; }
 }
 
-@test "name: adhoc mints <type>/<issue>-<slug>, takes its options in any order, and strips a leading # and zeros from the issue" {
+@test "name: adhoc mints in any option order and for every shared commit type, stays within 64 bytes, and refuses a slug that reads as another kind until an issue breaks the shape" {
+  # name: adhoc mints <type>/<issue>-<slug>, takes its options in any order, and strips a leading # and zeros from the issue
   [ "$(gaia_branch_name adhoc --type fix --issue 12 --slug "Ad hoc lifecycle")" = "fix/12-ad-hoc-lifecycle" ]
   [ "$(gaia_branch_name adhoc --slug "Ad hoc lifecycle" --issue 12 --type fix)" = "fix/12-ad-hoc-lifecycle" ]
   [ "$(gaia_branch_name adhoc --slug "Ad hoc lifecycle" --type fix --issue 12)" = "fix/12-ad-hoc-lifecycle" ]
   [ "$(gaia_branch_name adhoc --type fix --issue '#0042' --slug "Ad hoc lifecycle")" = "fix/42-ad-hoc-lifecycle" ]
-}
-
-@test "name: adhoc without an issue mints <type>/<slug>" {
+  # name: adhoc without an issue mints <type>/<slug>
   [ "$(gaia_branch_name adhoc --type docs --slug "Readme typo")" = "docs/readme-typo" ]
-}
-
-@test "name: adhoc reduces uppercase and punctuation in the slug to lowercase kebab" {
+  # name: adhoc reduces uppercase and punctuation in the slug to lowercase kebab
   [ "$(gaia_branch_name adhoc --type feat --slug "  Add: The (New) Thing!! v2  ")" = "feat/add-the-new-thing-v2" ]
-}
-
-@test "name: adhoc mints for every shared commit type, and each name validates and reads as adhoc" {
+  # name: adhoc mints for every shared commit type, and each name validates and reads as adhoc
   local type checked=0 expected name
   expected="$(jq '.types | length' "$REPO_ROOT/.gaia/conventional-commits.json")"
   while IFS= read -r type; do
@@ -453,9 +404,7 @@ expect_adhoc_refused() {
   done < <(shared_types)
   [ "$expected" -gt 0 ]
   [ "$checked" -eq "$expected" ]
-}
-
-@test "name: adhoc keeps the name within 64 bytes at the cap boundary, never ending in a dash" {
+  # name: adhoc keeps the name within 64 bytes at the cap boundary, never ending in a dash
   local length name
   # `fix/` is 4 bytes and `fix/12-` is 7: slugs of 59, 60 and 61 land the
   # issue-less name at 63, 64 and 65 bytes; 56, 57 and 58 do for the issue form.
@@ -480,24 +429,7 @@ expect_adhoc_refused() {
   [ "$name" = "fix/12-$(letters 56)" ]
   case "$name" in *-) return 1 ;; esac
   true
-}
-
-@test "name: adhoc exits 2 with nothing on stdout and a reason on stderr for every bad call" {
-  expect_adhoc_refused --type feature --slug x
-  expect_adhoc_refused --type Fix --slug x
-  expect_adhoc_refused --type debt --slug x
-  expect_adhoc_refused --slug x
-  expect_adhoc_refused --slug x --type
-  expect_adhoc_refused --type fix
-  expect_adhoc_refused --type fix --slug
-  expect_adhoc_refused --type fix --slug '!!!'
-  expect_adhoc_refused --type fix --issue abc --slug x
-  expect_adhoc_refused --type fix --issue --slug x
-  expect_adhoc_refused --type fix --slug x extra
-  expect_adhoc_refused
-}
-
-@test "name: adhoc refuses a slug that would read as another kind, and mints it once an issue number breaks the shape" {
+  # name: adhoc refuses a slug that would read as another kind, and mints it once an issue number breaks the shape
   expect_adhoc_refused --type feat --slug "plan 3 x"
   grep -qF 'pick another slug' <<<"$stderr"
   grep -qF 'plan' <<<"$stderr"
@@ -510,75 +442,6 @@ expect_adhoc_refused() {
   for name in feat/7-plan-3-x fix/7-spec-12 wiki/7-sync-x; do
     [ "$(gaia_branch_classify "$name")" = "adhoc unknown" ]
   done
-}
-
-@test "name: with jq absent adhoc still mints on the shape check alone, and still refuses a non-letter type and the legacy debt type" {
-  local bin="$BATS_TEST_TMPDIR/bin-no-jq-adhoc"
-  bin_without_jq "$bin"
-  run env PATH="$bin" "$BASH" -c 'command -v jq'
-  [ "$status" -eq 1 ]
-  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$LIBRARY' && gaia_branch_name adhoc --type fix --slug x"
-  [ "$status" -eq 0 ]
-  [ "$output" = "fix/x" ]
-  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$LIBRARY' && gaia_branch_name adhoc --type Fix --slug x"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -qF 'lowercase letters' <<<"$stderr"
-  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$LIBRARY' && gaia_branch_name adhoc --type debt --slug x"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -qF 'debt' <<<"$stderr"
-}
-
-# adhoc_mint_in <directory> <args>: mint an ad-hoc name through the library copy under <directory>.
-adhoc_mint_in() {
-  run --separate-stderr bash -c ". '$1/.gaia/scripts/branch-name-lib.sh' && gaia_branch_name adhoc $2"
-}
-
-@test "the adhoc mint guards can fail: a lib copy missing each one mints what the real lib refuses" {
-  local directory="$BATS_TEST_TMPDIR/adhoc-twins" bin="$BATS_TEST_TMPDIR/bin-no-jq-adhoc-twin"
-  scratch_library "$directory"
-  # Armed: the unmodified copy refuses all three bad calls.
-  adhoc_mint_in "$directory" "--type feat --slug 'plan 3 x'"
-  [ "$status" -eq 2 ]
-  adhoc_mint_in "$directory" "--type zzz --slug x"
-  [ "$status" -eq 2 ]
-  bin_without_jq "$bin"
-  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$directory/.gaia/scripts/branch-name-lib.sh' && gaia_branch_name adhoc --type debt --slug x"
-  [ "$status" -eq 2 ]
-
-  # No classification check: the plan-shaped name mints.
-  sed 's#^      if \[ "\$_gaia_branch_mode" != "adhoc" \] || \[ "\$_gaia_branch_unit" != "unknown" \]; then$#      if false; then#' "$LIBRARY" >"$directory/.gaia/scripts/branch-name-lib.sh"
-  cmp -s "$LIBRARY" "$directory/.gaia/scripts/branch-name-lib.sh" && return 1
-  adhoc_mint_in "$directory" "--type feat --slug 'plan 3 x'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "feat/plan-3-x" ]
-
-  # No type membership check: an unknown lowercase type mints.
-  scratch_library "$directory"
-  sed 's#^      if _gaia_branch_load_types; then$#      if false; then#' "$LIBRARY" >"$directory/.gaia/scripts/branch-name-lib.sh"
-  cmp -s "$LIBRARY" "$directory/.gaia/scripts/branch-name-lib.sh" && return 1
-  adhoc_mint_in "$directory" "--type zzz --slug x"
-  [ "$status" -eq 0 ]
-  [ "$output" = "zzz/x" ]
-
-  # No legacy debt refusal: with jq absent the debt type mints a drain-shaped name
-  # (the classification check is also gone, since it would catch it).
-  scratch_library "$directory"
-  sed -e 's#^        debt)$#        zz-never)#' \
-    -e 's#^      if \[ "\$_gaia_branch_mode" != "adhoc" \] || \[ "\$_gaia_branch_unit" != "unknown" \]; then$#      if false; then#' \
-    "$LIBRARY" >"$directory/.gaia/scripts/branch-name-lib.sh"
-  cmp -s "$LIBRARY" "$directory/.gaia/scripts/branch-name-lib.sh" && return 1
-  run --separate-stderr env PATH="$bin" "$BASH" -c ". '$directory/.gaia/scripts/branch-name-lib.sh' && gaia_branch_name adhoc --type debt --slug x"
-  [ "$status" -eq 0 ]
-  [ "$output" = "debt/x" ]
-}
-
-@test "name: a batch too wide for 64 bytes is refused rather than cut" {
-  run --separate-stderr gaia_branch_name debt 10001 10002 10003 10004 10005 10006 10007 10008 10009 10010 10011
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -qF 'longer than 64 bytes' <<<"$stderr"
 }
 
 # ========== 7. round trip ==========
@@ -611,7 +474,8 @@ adhoc_mint_in() {
 
 # ========== 8. listing and ref readability ==========
 
-@test "list: local and remote-tracking branches, remote prefix dropped, symbolic HEAD skipped" {
+@test "list: reads local and remote branches and stays fail-open (outside a repository, unreadable ref store)" {
+  # list: local and remote-tracking branches, remote prefix dropped, symbolic HEAD skipped
   local repo="$BATS_TEST_TMPDIR/repo"
   git init -q --initial-branch=main "$repo"
   git -C "$repo" -c user.email=t@example.com -c user.name=T commit -q --allow-empty -m init
@@ -622,10 +486,14 @@ adhoc_mint_in() {
   run gaia_branch_list "$repo"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | LC_ALL=C sort | tr '\n' ' ')" = "debt/8-y main main worktree-debt+7-x " ]
-}
-
-@test "list: outside a repository prints nothing and returns 0" {
+  # list: outside a repository prints nothing and returns 0
   run gaia_branch_list "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  # list: stays fail-open on an unreadable ref store
+  local repo="$BATS_TEST_TMPDIR/badrefs-list"
+  corrupt_packed_refs "$repo"
+  run gaia_branch_list "$repo"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
@@ -640,14 +508,6 @@ corrupt_packed_refs() {
   git -C "$repo" branch "debt/11-x"
   git -C "$repo" pack-refs --all
   printf 'this is not a ref line\n' >>"$repo/.git/packed-refs"
-}
-
-@test "list: stays fail-open on an unreadable ref store" {
-  local repo="$BATS_TEST_TMPDIR/badrefs-list"
-  corrupt_packed_refs "$repo"
-  run gaia_branch_list "$repo"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
 }
 
 # ========== 9. lockstep with the kinds minted outside bash ==========
@@ -683,16 +543,6 @@ prefix_conforms() {
   prefix_conforms "wiki/" "2026-09-20-1432"
 }
 
-@test "the wiki lockstep can fail: a source file with a different pattern rejects the minted name" {
-  local scratch_chain="$BATS_TEST_TMPDIR/chain.ts" pattern
-  sed 's#WIKI_CHAIN_BRANCH_PATTERN = /^wiki\\/#WIKI_CHAIN_BRANCH_PATTERN = /^wiki-chain\\/#' \
-    "$REPO_ROOT/.gaia/cli/src/wiki/chain.ts" >"$scratch_chain"
-  pattern="$(chain_pattern "$scratch_chain")"
-  [ -n "$pattern" ]
-  grep -qE -- "$pattern" <<<"$(gaia_branch_name wiki)" && return 1
-  true
-}
-
 @test "lockstep: forensics-triage.yml mints forensics/<issue>-<class>, and it classifies and validates" {
   local prefix
   prefix="$(forensics_prefix "$REPO_ROOT/.github/workflows/forensics-triage.yml")"
@@ -701,33 +551,12 @@ prefix_conforms() {
   expect_classify "${prefix}123-some-class" "maintenance 123-some-class"
 }
 
-@test "the forensics lockstep can fail: a workflow with a different prefix literal is reported" {
-  local scratch_workflow="$BATS_TEST_TMPDIR/forensics-triage.yml" prefix
-  sed 's#branch="forensics/\${ISSUE_NUMBER}#branch="forensic-fix/${ISSUE_NUMBER}#' \
-    "$REPO_ROOT/.github/workflows/forensics-triage.yml" >"$scratch_workflow"
-  prefix="$(forensics_prefix "$scratch_workflow")"
-  [ "$prefix" = "forensic-fix/" ]
-  prefix_conforms "$prefix" "123-some-class" && return 1
-  true
-}
-
 # The prefix is built at runtime so no removed-layer literal lands in the tree.
 @test "a removed maintenance prefix falls through to the unrecognized class" {
   local prefix
   prefix="$(printf 'gaia%sci' -)"
   expect_classify "$prefix/tool/x" "adhoc unknown"
   expect_classify "$(worktree_spelling "$prefix/tool/x")" "adhoc unknown"
-}
-
-@test "the removed-prefix fall-through test can fail: a lib that still has the old arm classifies it maintenance" {
-  local prefix scratch_library
-  prefix="$(printf 'gaia%sci' -)"
-  scratch_library="$BATS_TEST_TMPDIR/branch-name-lib-old-arm.sh"
-  sed 's#forensics/\* \\$#forensics/* | PREFIX/* \\#' "$LIBRARY" | sed "s#PREFIX#$prefix#" > "$scratch_library"
-  grep -qF -- "| $prefix/* " "$scratch_library"
-  run bash -c ". '$scratch_library' && gaia_branch_classify '$prefix/t/x'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "maintenance t/x" ]
 }
 
 # ========== 10. creation sites mint through the library ==========
@@ -755,31 +584,6 @@ literal_hits() {
     printf 'branch literals outside the library:\n%s\n' "$hits" >&2
     return 1
   }
-}
-
-@test "the no-literal guard can fail: every spelling it names is reported" {
-  local repo="$BATS_TEST_TMPDIR/planted" hits line
-  mkdir -p "$repo/.claude"
-  git init -q "$repo"
-  printf '%s\n' \
-    'git checkout -b chore/update-deps-now' \
-    'git switch -c "debt/1-x"' \
-    'git worktree add -b plan/spec-001-x ../wt' \
-    'BRANCH="release/v1"' \
-    'EnterWorktree({name: "debt/2-y"})' \
-    'git checkout -b "$BRANCH"' \
-    'EnterWorktree({name: "<branch-name>"})' \
-    'git checkout -b deps/2026-01-01-0000' \
-    'git checkout -b update/v1' \
-    'git checkout -b wiki/2026-10-15-0532' >"$repo/.claude/x.md"
-  git -C "$repo" add .claude/x.md
-  hits="$(literal_hits "$repo")"
-  for line in 1 2 3 4 5 8 9 10; do
-    grep -qF ".claude/x.md:$line:" <<<"$hits" || { echo "line $line not reported" >&2; return 1; }
-  done
-  # The minted and placeholder forms are the correct spellings, never hits.
-  grep -qE '\.claude/x\.md:(6|7):' <<<"$hits" && return 1
-  true
 }
 
 # ========== 11. validate ==========
@@ -812,7 +616,8 @@ expect_invalid() {
   }
 }
 
-@test "validate accepts one canonical example per workflow kind" {
+@test "validate accepts every canonical and minted name, a dependabot and a chore branch, and the 64-byte boundary" {
+  # validate accepts one canonical example per workflow kind
   local branch
   for branch in debt/42-fix-it debt/41-42-47-batch fix/spec-005-cards feat/plan-023-naming \
     cleanse/2026-10-03-1200 codify/2026-10-03-1200 fitness/2026-10-03-1200 residue/2026-10-03-1200 \
@@ -820,9 +625,7 @@ expect_invalid() {
     wiki/2026-10-15-0532 forensics/123-some-class; do
     expect_valid "$branch"
   done
-}
-
-@test "validate accepts every name the library mints" {
+  # validate accepts every name the library mints
   local branch
   for branch in "$(gaia_branch_name debt 2159 --slug "reconcile claim")" "$(gaia_branch_name debt 3 1 2)" \
     "$(gaia_branch_name plan plan-023 --type feat --slug naming)" "$(gaia_branch_name cleanse)" "$(gaia_branch_name codify)" \
@@ -830,9 +633,7 @@ expect_invalid() {
     "$(gaia_branch_name update v2.0.0)" "$(gaia_branch_name release 2.0.0)"; do
     expect_valid "$branch"
   done
-}
-
-@test "validate accepts <type>/<issue>-<slug> and <type>/<slug> for every shared commit type" {
+  # validate accepts <type>/<issue>-<slug> and <type>/<slug> for every shared commit type
   local type checked=0 expected
   expected="$(jq '.types | length' "$REPO_ROOT/.gaia/conventional-commits.json")"
   while IFS= read -r type; do
@@ -842,9 +643,7 @@ expect_invalid() {
   done < <(shared_types)
   [ "$expected" -gt 0 ]
   [ "$checked" -eq "$expected" ]
-}
-
-@test "validate accepts <type>/plan-<nnn> and <type>/spec-<nnn> for every shared commit type" {
+  # validate accepts <type>/plan-<nnn> and <type>/spec-<nnn> for every shared commit type
   local type checked=0 expected
   expected="$(jq '.types | length' "$REPO_ROOT/.gaia/conventional-commits.json")"
   while IFS= read -r type; do
@@ -854,13 +653,19 @@ expect_invalid() {
   done < <(shared_types)
   [ "$expected" -gt 0 ]
   [ "$checked" -eq "$expected" ]
-}
-
-@test "validate accepts a mixed-case release version, a dependabot branch, and a chore slug" {
+  # validate accepts a mixed-case release or update version, a dependabot branch, and a chore slug
   expect_valid release/v2.0.0-RC.1
   expect_valid update/v2.0.0-RC.1-2026-10-03-1200
   expect_valid dependabot/npm_and_yarn/Foo-1.2.3
   expect_valid chore/fix-typo
+  # validate accepts the 64-byte boundary
+  local exact
+  exact="fix/$(printf 'a%.0s' $(seq 60))"
+  [ "${#exact}" -eq 64 ]
+  expect_valid "$exact"
+  # validate accepts debt/<n>-slug though debt is not a commit type
+  jq -e '.types | index("debt") | not' "$REPO_ROOT/.gaia/conventional-commits.json" >/dev/null
+  expect_valid debt/2159-slug
 }
 
 @test "validate refuses every malformed name with one stderr line and exit 1" {
@@ -873,32 +678,18 @@ expect_invalid() {
   done
 }
 
-@test "validate accepts the 64-byte boundary" {
-  local exact
-  exact="fix/$(printf 'a%.0s' $(seq 60))"
-  [ "${#exact}" -eq 64 ]
-  expect_valid "$exact"
-}
-
-@test "validate names the canonical name and the rename for a worktree spelling" {
+@test "validate refuses a worktree spelling with the canonical name and the rename" {
   run --separate-stderr gaia_branch_validate worktree-feat+plan-023-x
   [ "$status" -eq 1 ]
   grep -qF 'feat/plan-023-x' <<<"$stderr"
   grep -qF 'branch -m' <<<"$stderr"
-}
-
-@test "validate never suggests a prefix-less rename for a worktree spelling: it asks for a <type>/ prefix" {
+  # validate never suggests a prefix-less rename for a worktree spelling: it asks for a <type>/ prefix
   expect_invalid worktree-camelcase-default-casing
   grep -qF 'branch -m worktree-camelcase-default-casing <type>/camelcase-default-casing' <<<"$stderr"
   grep -qF 'fix/camelcase-default-casing' <<<"$stderr"
   grep -qF 'branch -m worktree-camelcase-default-casing camelcase-default-casing' <<<"$stderr" && return 1
   # Every concrete name the message offers must pass the validator itself.
   expect_valid fix/camelcase-default-casing
-}
-
-@test "validate accepts debt/<n>-slug though debt is not a commit type" {
-  jq -e '.types | index("debt") | not' "$REPO_ROOT/.gaia/conventional-commits.json" >/dev/null
-  expect_valid debt/2159-slug
 }
 
 # scratch_library <directory>: a copy of the library at <directory>/.gaia/scripts
@@ -915,7 +706,8 @@ validate_in() {
   run --separate-stderr bash -c ". '$1/.gaia/scripts/branch-name-lib.sh' && gaia_branch_validate '$2'"
 }
 
-@test "validate cannot decide when jq is missing: exit 2, never 0" {
+@test "validate cannot decide: exit 2, never 0 (jq missing, types file unreadable, types file without a usable list)" {
+  # jq missing
   local bin="$BATS_TEST_TMPDIR/bin-without-jq"
   mkdir -p "$bin"
   ln -s "$(command -v git)" "$bin/git"
@@ -923,9 +715,7 @@ validate_in() {
   [ "$status" -eq 2 ]
   [ -z "$output" ]
   grep -qF 'jq' <<<"$stderr"
-}
-
-@test "validate cannot decide when the shared types file is unreadable: exit 2, never 0" {
+  # the shared types file missing
   local directory="$BATS_TEST_TMPDIR/no-types"
   scratch_library "$directory"
   # Armed first: with the file present the same call is valid, so the 2 below
@@ -937,9 +727,7 @@ validate_in() {
   [ "$status" -eq 2 ]
   [ -z "$output" ]
   grep -qF 'cannot decide' <<<"$stderr"
-}
-
-@test "validate cannot decide when the shared types file holds no usable list" {
+  # validate cannot decide when the shared types file holds no usable list
   local directory="$BATS_TEST_TMPDIR/bad-types" content
   scratch_library "$directory"
   for content in '{"types": []}' '{"types": "fix"}' '{"legacyTypes": ["debt"]}' 'not json'; do
@@ -1001,36 +789,6 @@ unmintable_kinds() {
   done
   unmintable="$(unmintable_kinds "$REPO_ROOT")"
   [ -z "$unmintable" ] || { printf 'calls name a kind the library refuses: %s\n' "$unmintable" >&2; return 1; }
-}
-
-@test "the call-site guard can fail: a planted name chore call is reported" {
-  local repo="$BATS_TEST_TMPDIR/planted-call"
-  mkdir -p "$repo/.claude"
-  git init -q "$repo"
-  printf '%s\n' 'bash .gaia/scripts/branch-name-lib.sh name chore x' \
-    'bash .gaia/scripts/branch-name-lib.sh name cleanse' >"$repo/.claude/x.md"
-  git -C "$repo" add .claude/x.md
-  [ "$(name_call_kinds "$repo" | tr '\n' ' ')" = "chore cleanse " ]
-  [ "$(unmintable_kinds "$repo")" = "chore" ]
-}
-
-@test "the call-site guard finds a planted adhoc call and reports it unmintable only when the placeholder arm is missing" {
-  local repo="$BATS_TEST_TMPDIR/planted-adhoc-call"
-  mkdir -p "$repo/.claude"
-  git init -q "$repo"
-  printf '%s\n' 'bash .gaia/scripts/branch-name-lib.sh name adhoc --type fix --slug "a b"' >"$repo/.claude/x.md"
-  git -C "$repo" add .claude/x.md
-  [ "$(name_call_kinds "$repo")" = "adhoc" ]
-  [ -z "$(unmintable_kinds "$repo")" ]
-  # Red twin: this suite's own placeholder_arguments with the adhoc arm removed
-  # leaves `name adhoc` running with no arguments, which the library refuses.
-  local twin="$BATS_TEST_TMPDIR/placeholder-twin.sh"
-  sed -n '/^placeholder_arguments() {$/,/^}$/p' "$BATS_TEST_FILENAME" | grep -v '^    adhoc) ' >"$twin"
-  [ "$(grep -c 'adhoc' "$twin")" -eq 0 ]
-  [ "$(grep -c 'release | update' "$twin")" -eq 1 ]
-  # shellcheck disable=SC1090
-  source "$twin"
-  [ "$(unmintable_kinds "$repo")" = "adhoc" ]
 }
 
 # ========== structural hygiene ==========

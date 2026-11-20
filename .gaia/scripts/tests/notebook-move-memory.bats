@@ -49,7 +49,7 @@ _plant_memory() {
   printf 'cache lives in .gaia/local/cache/x\n' > "$MEMORY/unrelated.md"
 }
 
-@test "memory-report lists only files naming an old prefix and changes nothing" {
+@test "memory-report lists exactly the files naming an old prefix and changes nothing" {
   _plant_memory
   local first_before second_before
   first_before="$(_sha256 "$MEMORY/old-paths.md")"
@@ -59,27 +59,27 @@ _plant_memory() {
   [ "$output" = "$MEMORY/old-paths.md" ]
   [ "$(_sha256 "$MEMORY/old-paths.md")" = "$first_before" ]
   [ "$(_sha256 "$MEMORY/unrelated.md")" = "$second_before" ]
-}
 
-@test "memory-report does not list a near miss or a file in a subfolder or a symlink" {
-  printf 'only .gaia/local/specs-old/x\n' > "$MEMORY/near-miss.md"
-  mkdir -p "$MEMORY/nested"
-  printf '.gaia/local/specs/\n' > "$MEMORY/nested/deep.md"
+  # A near miss, a file in a subfolder and a symlink are not listed.
+  export GAIA_NOTEBOOK_MEMORY_DIR="$BATS_TEST_TMPDIR/memory-near-miss"
+  mkdir -p "$GAIA_NOTEBOOK_MEMORY_DIR/nested"
+  printf 'only .gaia/local/specs-old/x\n' > "$GAIA_NOTEBOOK_MEMORY_DIR/near-miss.md"
+  printf '.gaia/local/specs/\n' > "$GAIA_NOTEBOOK_MEMORY_DIR/nested/deep.md"
   printf '.gaia/local/specs/\n' > "$BATS_TEST_TMPDIR/target.md"
-  ln -s "$BATS_TEST_TMPDIR/target.md" "$MEMORY/linked.md"
+  ln -s "$BATS_TEST_TMPDIR/target.md" "$GAIA_NOTEBOOK_MEMORY_DIR/linked.md"
   run _move memory-report
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
+  [ "$status" -eq 0 ] || { echo "near-miss case: status $status"; return 1; }
+  [ -z "$output" ] || { echo "near-miss case: listed '$output'"; return 1; }
 
-@test "memory-report on an absent memory folder prints nothing" {
+  # An absent memory folder prints nothing.
   export GAIA_NOTEBOOK_MEMORY_DIR="$BATS_TEST_TMPDIR/not-there"
   run _move memory-report
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [ "$status" -eq 0 ] || { echo "absent-folder case: status $status"; return 1; }
+  [ -z "$output" ] || { echo "absent-folder case: printed '$output'"; return 1; }
 }
 
-@test "memory-repoint rewrites exactly the three prefixes in exactly the reported files" {
+@test "memory-repoint rewrites exactly the reported files and preserves bytes" {
+  # Every old prefix is rewritten in exactly the reported files, mode kept.
   _plant_memory
   local second_before
   second_before="$(_sha256 "$MEMORY/unrelated.md")"
@@ -92,15 +92,13 @@ _plant_memory() {
   # The report is empty once the files are repointed.
   run _move memory-report
   [ -z "$output" ]
-}
 
-@test "memory-repoint keeps a file without a trailing newline as it was" {
+  # A file without a trailing newline stays without one.
   printf '.gaia/local/plans/x' > "$MEMORY/no-newline.md"
   run _move memory-repoint
   [ "$status" -eq 0 ]
-  [ "$(od -c "$MEMORY/no-newline.md" | tail -2 | head -1 | tr -d ' ')" != "" ]
-  [ "$(cat "$MEMORY/no-newline.md")" = '.notebook/plans/x' ]
-  [ "$(wc -c < "$MEMORY/no-newline.md" | tr -d ' ')" -eq 17 ]
+  [ "$(cat "$MEMORY/no-newline.md")" = '.notebook/plans/x' ] || { echo "no-newline case: content changed"; return 1; }
+  [ "$(wc -c < "$MEMORY/no-newline.md" | tr -d ' ')" -eq 17 ] || { echo "no-newline case: byte count changed"; return 1; }
 }
 
 @test "memory-repoint refuses a symlink that names an old prefix and changes nothing" {

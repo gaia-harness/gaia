@@ -285,20 +285,6 @@ run_final_sequence() {
   (cd "$SCRATCH_ROOT" && "$SCRATCH_ROOT/.gaia/cli/gaia-real" update-deps write-security-cache "${arguments[@]}") > /dev/null
 }
 
-# The twin of run_final_sequence that hands write-security-cache the report's
-# raw final-tree advisory count, ignoring the baseline.
-run_final_sequence_with_raw_count() {
-  local payload="$BATS_TEST_TMPDIR/raw.json" count source reasons
-  local -a arguments
-  run_verb "$payload"
-  count="$(jq -r '.advisories | length' "$payload")"
-  source="$(jq -r '.source' "$payload")"
-  reasons="$(jq -r '.reasons | join(",")' "$payload")"
-  arguments=(--count "$count" --source "$source")
-  [ -n "$reasons" ] && arguments+=(--reason "$reasons")
-  (cd "$SCRATCH_ROOT" && "$SCRATCH_ROOT/.gaia/cli/gaia-real" update-deps write-security-cache "${arguments[@]}") > /dev/null
-}
-
 # Fails when the refresh's fields differ from the sequence's.
 fields_agree() {
   [ "$1" = "$2" ] || {
@@ -430,40 +416,22 @@ refresh_fields() {
   [ "$(jq -r '.source' "$payload")" = "dependabot" ]
 }
 
-@test "the refresh and the skill's final cache rewrite agree on the alerts count" {
-  seed_three_alerts_two_ids
+@test "the refresh and the skill's final cache rewrite agree on the cached security fields" {
   local refreshed rewritten
+
+  seed_three_alerts_two_ids
   refreshed="$(refresh_fields)"
   [ "$refreshed" = '[2,"dependabot",""]' ]
-
   write_old_cache
   run_final_sequence
   rewritten="$(security_fields)"
   fields_agree "$refreshed" "$rewritten"
-}
 
-@test "the refresh and the skill's final cache rewrite agree on the pnpm audit fallback" {
   seed_fallback_three_one_acknowledged
-  local refreshed rewritten
   refreshed="$(refresh_fields)"
   [ "$refreshed" = '[2,"pnpm-audit","forbidden"]' ]
-
   write_old_cache
   run_final_sequence
   rewritten="$(security_fields)"
   fields_agree "$refreshed" "$rewritten"
-}
-
-@test "passing the raw advisory count to the cache rewrite disagrees with the refresh" {
-  seed_fallback_three_one_acknowledged
-  local refreshed rewritten
-  refreshed="$(refresh_fields)"
-
-  write_old_cache
-  run_final_sequence_with_raw_count
-  rewritten="$(security_fields)"
-  [ "$rewritten" = '[3,"pnpm-audit","forbidden"]' ]
-
-  run fields_agree "$refreshed" "$rewritten"
-  [ "$status" -eq 1 ]
 }

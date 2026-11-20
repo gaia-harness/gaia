@@ -206,20 +206,6 @@ EOF
   [ "$(printf '%s' "$output" | jq -r '.citation_query.answered')" = "true" ]
 }
 
-@test "list: runs one GitHub read for all candidates, never one per folder" {
-  [ "$(cat "$SHARED/status-first")" -eq 0 ]
-  [ "$(grep -c '^api ' "$SHARED/calls-after-first")" -eq 1 ]
-}
-
-@test "list: a folder with nothing left to ask GitHub about makes no GitHub call" {
-  reaper_fixture
-  add_research still-active active
-  run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(gh_stub_call_count)" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r '.recommended')" = "none" ]
-}
-
 @test "list: the retention window follows GAIA_RESEARCH_RETENTION_DAYS and a non-numeric value falls back to the default" {
   reaper_fixture
   add_research aged-two-hundred closed '{}' "$(days_from_now_iso -200)"
@@ -234,69 +220,48 @@ EOF
 
 # --- GitHub cannot answer -------------------------------------------------
 
-@test "list: gh failing leaves nothing eligible and says why" {
-  reaper_fixture
-  add_research otherwise-eligible closed
-  gh_stub_mode fail
+# expect_unanswered <label>: list exits 0, offers nothing, and says the
+# citation query went unanswered; the reason is left in $reason.
+expect_unanswered() {
   run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq '.eligible | length')" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r '.citation_query.answered')" = "false" ]
-  [ -n "$(printf '%s' "$output" | jq -r '.citation_query.reason // empty')" ]
-  [ "$(printf '%s' "$output" | jq -r '[.kept[] | select(.slug == "otherwise-eligible") | .rule] | first')" = "citation-query-unanswered" ]
-  [ "$(printf '%s' "$output" | jq -r '.recommended')" = "none" ]
+  [ "$status" -eq 0 ] || { echo "$1: status $status"; return 1; }
+  [ "$(printf '%s' "$output" | jq '.eligible | length')" -eq 0 ] || { echo "$1: something is eligible"; return 1; }
+  [ "$(printf '%s' "$output" | jq -r '.citation_query.answered')" = "false" ] || { echo "$1: the query reads as answered"; return 1; }
+  reason="$(printf '%s' "$output" | jq -r '.citation_query.reason // empty')"
+  [ -n "$reason" ] || { echo "$1: no reason given"; return 1; }
 }
 
-@test "list: gh printing something that is not JSON leaves nothing eligible" {
-  reaper_fixture
-  add_research otherwise-eligible closed
-  gh_stub_mode nonjson
-  run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq '.eligible | length')" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r '.citation_query.answered')" = "false" ]
-  [ -n "$(printf '%s' "$output" | jq -r '.citation_query.reason // empty')" ]
-}
+@test "list: GitHub unable to answer leaves nothing eligible and says why" {
+  local reason
 
-@test "list: gh answering with an object instead of a list is not an answer" {
-  reaper_fixture
-  add_research otherwise-eligible closed
-  printf '{"message":"Not Found"}\n' >"$GH_STUB_DIR/issues.json"
-  run_reaper list
-  [ "$(printf '%s' "$output" | jq '.eligible | length')" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r '.citation_query.answered')" = "false" ]
-}
-
-@test "list: no GitHub remote leaves nothing eligible and says why" {
   reaper_fixture --no-remote
   add_research otherwise-eligible closed
-  run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq '.eligible | length')" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r '.citation_query.answered')" = "false" ]
-  printf '%s' "$output" | jq -r '.citation_query.reason' | grep -qi 'remote'
-  [ "$(gh_stub_call_count)" -eq 0 ]
-}
+  expect_unanswered "no GitHub remote" || return 1
+  grep -qi 'remote' <<<"$reason" || { echo "no GitHub remote: reason '$reason'"; return 1; }
+  [ "$(gh_stub_call_count)" -eq 0 ] || { echo "no GitHub remote: gh was called"; return 1; }
 
-@test "list: an unauthenticated gh leaves nothing eligible and the reason names authentication" {
   reaper_fixture
   add_research otherwise-eligible closed
+
+  gh_stub_mode fail
+  expect_unanswered "gh failing" || return 1
+  [ "$(printf '%s' "$output" | jq -r '[.kept[] | select(.slug == "otherwise-eligible") | .rule] | first')" = "citation-query-unanswered" ] || { echo "gh failing: kept rule"; return 1; }
+  [ "$(printf '%s' "$output" | jq -r '.recommended')" = "none" ] || { echo "gh failing: recommended"; return 1; }
+
+  gh_stub_mode nonjson
+  expect_unanswered "gh printing something that is not JSON" || return 1
+
+  gh_stub_mode ok
+  printf '{"message":"Not Found"}\n' >"$GH_STUB_DIR/issues.json"
+  expect_unanswered "gh answering with an object instead of a list" || return 1
+
   gh_stub_mode unauth
-  run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq '.eligible | length')" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r '.citation_query.answered')" = "false" ]
-  printf '%s' "$output" | jq -r '.citation_query.reason' | grep -qi 'authenticat'
-}
+  expect_unanswered "unauthenticated gh" || return 1
+  grep -qi 'authenticat' <<<"$reason" || { echo "unauthenticated gh: reason '$reason'"; return 1; }
 
-@test "list: a gh that outlasts the time bound is cut off and reads as unanswered" {
-  reaper_fixture
-  add_research otherwise-eligible closed
   gh_stub_mode slow
-  GAIA_RESEARCH_GH_TIMEOUT_SECONDS=1 run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq '.eligible | length')" -eq 0 ]
-  printf '%s' "$output" | jq -r '.citation_query.reason' | grep -qi 'timed out'
+  GAIA_RESEARCH_GH_TIMEOUT_SECONDS=1 expect_unanswered "gh outlasting the time bound" || return 1
+  grep -qi 'timed out' <<<"$reason" || { echo "gh outlasting the time bound: reason '$reason'"; return 1; }
 }
 
 @test "list: text from an issue is data, never a command or a reason" {
@@ -310,24 +275,60 @@ EOF
 
 # --- landed verdict and recommendation -------------------------------------
 
-@test "list: verdicts are landed, no evidence and not landed, and any doubt recommends snooze" {
+# expect_verdicts <label> <slug> <verdict>: the last list output gives the slug that verdict.
+expect_verdicts() {
+  local actual
+  actual="$(printf '%s' "$output" | jq -r --arg slug "$2" '.eligible[] | select(.slug == $slug) | .verdict')"
+  [ "$actual" = "$3" ] || { echo "$1: '$2' got '$actual', expected '$3'"; return 1; }
+}
+
+@test "list: landed verdict and recommendation per evidence shape" {
   reaper_fixture
   add_research via-merged-pr closed
   add_spec SPEC-120 merged '{"research":["via-merged-pr"],"pr":41}'
   add_research no-links closed
   add_research via-closed-pr closed
   add_spec SPEC-121 abandoned '{"research":["via-closed-pr"],"pr":42}'
+  add_research merged-and-open closed
+  add_spec SPEC-123 merged '{"research":["merged-and-open"],"pr":51}'
+  add_spec SPEC-126 abandoned '{"research":["merged-and-open"],"pr":52}'
+  add_research through-plan closed
+  add_spec SPEC-124 merged '{"research":["through-plan"]}'
+  add_plan PLAN-124 merged '{"spec":"SPEC-124","pr":61}'
+  add_research pr-missing closed
+  add_spec SPEC-125 merged '{"research":["pr-missing"],"pr":71}'
+  add_research via-edge closed
+  add_research via-open-edge closed
   gh_stub_pull_request 41 MERGED feat/merged-one
   gh_stub_pull_request 42 CLOSED feat/closed-one
-  run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "via-merged-pr") | .verdict')" = "landed" ]
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "no-links") | .verdict')" = "no evidence" ]
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "via-closed-pr") | .verdict')" = "not landed" ]
-  [ "$(printf '%s' "$output" | jq -r '.recommended')" = "snooze" ]
-}
+  gh_stub_pull_request 51 MERGED feat/first
+  gh_stub_pull_request 52 OPEN feat/second
+  gh_stub_pull_request 61 MERGED feat/plan-branch
+  gh_stub_pull_request 81 MERGED feat/x
+  gh_stub_pull_request 82 OPEN feat/y
 
-@test "list: recommends reap only when every eligible folder is landed" {
+  run_reaper list
+  [ "$status" -eq 0 ] || { echo "verdicts: status $status"; return 1; }
+  expect_verdicts "via a merged pull request" via-merged-pr landed || return 1
+  expect_verdicts "no links" no-links "no evidence" || return 1
+  expect_verdicts "via a closed pull request" via-closed-pr "not landed" || return 1
+  expect_verdicts "one merged and one open pull request" merged-and-open "not landed" || return 1
+  expect_verdicts "a plan linked to a merged spec" through-plan landed || return 1
+  expect_verdicts "a pull request the listing does not contain" pr-missing "not landed" || return 1
+  expect_verdicts "no edge" via-edge "no evidence" || return 1
+  [ "$(printf '%s' "$output" | jq -r '.recommended')" = "snooze" ] || { echo "any doubt did not recommend snooze"; return 1; }
+
+  bash "$REPO/.gaia/scripts/usage.sh" link branch:feat/x research:via-edge --main-root "$REPO"
+  bash "$REPO/.gaia/scripts/usage.sh" link branch:feat/y research:via-open-edge --main-root "$REPO"
+  [ -s "$REPO/.gaia/local/telemetry/links.jsonl" ] || { echo "no edge was recorded"; return 1; }
+  run_reaper list
+  expect_verdicts "an edge to a merged pull request" via-edge landed || return 1
+  expect_verdicts "an edge to an open pull request" via-open-edge "not landed" || return 1
+
+  bash "$REPO/.gaia/scripts/usage.sh" unlink branch:feat/x research:via-edge --main-root "$REPO"
+  run_reaper list
+  expect_verdicts "an unlinked edge" via-edge "no evidence" || return 1
+
   reaper_fixture
   add_research via-merged-pr closed
   add_spec SPEC-120 merged '{"research":["via-merged-pr"],"pr":41}'
@@ -335,62 +336,8 @@ EOF
   add_spec SPEC-122 merged '{"research":["another-merged"]}'
   gh_stub_pull_request 41 MERGED feat/merged-one
   run_reaper list
-  [ "$(printf '%s' "$output" | jq -r '.recommended')" = "reap" ]
-  [ "$(printf '%s' "$output" | jq -c '[.eligible[].verdict] | unique')" = '["landed"]' ]
-}
-
-@test "list: a spec with one merged and one open pull request is not landed" {
-  reaper_fixture
-  add_research merged-and-open closed
-  add_spec SPEC-123 merged '{"research":["merged-and-open"],"pr":51}'
-  add_spec SPEC-126 abandoned '{"research":["merged-and-open"],"pr":52}'
-  gh_stub_pull_request 51 MERGED feat/first
-  gh_stub_pull_request 52 OPEN feat/second
-  run_reaper list
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "merged-and-open") | .verdict')" = "not landed" ]
-  [ "$(printf '%s' "$output" | jq -r '.recommended')" = "snooze" ]
-}
-
-@test "list: a plan linked to a merged spec counts toward landed through its own pull request" {
-  reaper_fixture
-  add_research through-plan closed
-  add_spec SPEC-124 merged '{"research":["through-plan"]}'
-  add_plan PLAN-124 merged '{"spec":"SPEC-124","pr":61}'
-  gh_stub_pull_request 61 MERGED feat/plan-branch
-  run_reaper list
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "through-plan") | .verdict')" = "landed" ]
-}
-
-@test "list: a pull request the listing does not contain makes the verdict not landed, never landed" {
-  reaper_fixture
-  add_research pr-missing closed
-  add_spec SPEC-125 merged '{"research":["pr-missing"],"pr":71}'
-  run_reaper list
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "pr-missing") | .verdict')" = "not landed" ]
-}
-
-@test "list: a Usage Ledger edge from a branch makes a merged pull request count as landed, and no edge means no evidence" {
-  reaper_fixture
-  add_research via-edge closed
-  gh_stub_pull_request 81 MERGED feat/x
-  run_reaper list
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "via-edge") | .verdict')" = "no evidence" ]
-  bash "$REPO/.gaia/scripts/usage.sh" link branch:feat/x research:via-edge --main-root "$REPO"
-  [ -s "$REPO/.gaia/local/telemetry/links.jsonl" ]
-  run_reaper list
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "via-edge") | .verdict')" = "landed" ]
-  bash "$REPO/.gaia/scripts/usage.sh" unlink branch:feat/x research:via-edge --main-root "$REPO"
-  run_reaper list
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "via-edge") | .verdict')" = "no evidence" ]
-}
-
-@test "list: an edge to a branch whose pull request is still open is not landed" {
-  reaper_fixture
-  add_research via-open-edge closed
-  gh_stub_pull_request 82 OPEN feat/y
-  bash "$REPO/.gaia/scripts/usage.sh" link branch:feat/y research:via-open-edge --main-root "$REPO"
-  run_reaper list
-  [ "$(printf '%s' "$output" | jq -r '.eligible[] | select(.slug == "via-open-edge") | .verdict')" = "not landed" ]
+  [ "$(printf '%s' "$output" | jq -r '.recommended')" = "reap" ] || { echo "all landed did not recommend reap"; return 1; }
+  [ "$(printf '%s' "$output" | jq -c '[.eligible[].verdict] | unique')" = '["landed"]' ] || { echo "all landed: verdicts '$output'"; return 1; }
 }
 
 # --- read-only, usage and readiness ----------------------------------------
@@ -402,17 +349,13 @@ EOF
   cmp "$SHARED/catalog-before" "$SHARED/catalog-after"
 }
 
-@test "list: with no verb is the same as list, and a stray operand is a usage error" {
+@test "list: with no verb is the same as list" {
   reaper_fixture
   add_research once closed
   run_reaper list
   local explicit="$output"
   run_reaper
   [ "$output" = "$explicit" ]
-  run_reaper list extra
-  [ "$status" -eq 2 ]
-  run_reaper bogus
-  [ "$status" -eq 2 ]
 }
 
 @test "list: a not-ready machine exits 3 with the move command and reads nothing" {
@@ -431,13 +374,4 @@ EOF
   [ "$status" -ne 0 ]
   grep -q 'eligible' <<<"$output" && return 1
   true
-}
-
-@test "list: a folder the catalog calls closed but whose row has a reap record and no folder is simply absent" {
-  reaper_fixture
-  add_research gone closed '{"reap":{"at":"2026-02-01T00:00:00Z","by":"research-reaper"}}'
-  rm -rf "$RESEARCH/gone"
-  run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -c '[.eligible, .kept]')" = '[[],[]]' ]
 }

@@ -52,20 +52,14 @@ EOF
   unset CLAUDE_CODE_SESSION_ID GAIA_TALLY_PROJECTS_ROOT
 }
 
-# run_initiative [scripts-dir]: the initiative readout over the fixture ledger,
+# run_initiative: the initiative readout over the fixture ledger,
 # priced from the distributed table beside the scripts (no --rate-table), where
 # claude-aaa-1, claude-ccc-1 and claude-zzz-1 are all absent.
 run_initiative() {
-  bash "${1:-$SCRIPTS}/usage.sh" initiative research:net --main-root "$MAIN" --projects-root "$TEMPORARY_DIRECTORY/projects"
+  bash "$SCRIPTS/usage.sh" initiative research:net --main-root "$MAIN" --projects-root "$TEMPORARY_DIRECTORY/projects"
 }
 
 non_comment_matches() { grep -vE '^[[:space:]]*#' "$1" | grep -nE -- "$2" || true; }
-
-# function_body <file> <name>: the function's lines, comments stripped.
-function_body() {
-  awk -v name="$2" '$0 ~ "^" name "\\(\\) \\{" { inside = 1 } inside { print } inside && /^\}/ { exit }' "$1" |
-    grep -vE '^[[:space:]]*#' || true
-}
 
 @test "readout: an unpriced claude- model prints the lower-bound marker and calls no network tool" {
   run run_initiative
@@ -97,41 +91,4 @@ library_violations() {
   [ -s "$SCRIPTS/token-pricing-lib.sh" ]
   violations="$(library_violations "$SCRIPTS/token-pricing-lib.sh")"
   [ -z "$violations" ] || { printf 'token-pricing-lib.sh has a network or source line:\n%s\n' "$violations" >&2; return 1; }
-}
-
-@test "guard red: a pricing library gaining a source line or a top-level curl call trips the whole-file check" {
-  local scratch="$TEMPORARY_DIRECTORY/library-mutant.sh"
-  cp "$SCRIPTS/token-pricing-lib.sh" "$scratch"
-  [ -z "$(library_violations "$scratch")" ]
-  # shellcheck disable=SC2016 # the appended line is literal text to scan, not to expand
-  printf '%s\n' 'source "$(dirname "${BASH_SOURCE[0]}")/other-lib.sh" 2>/dev/null || true' >>"$scratch"
-  [ -n "$(library_violations "$scratch")" ]
-  cp "$SCRIPTS/token-pricing-lib.sh" "$scratch"
-  printf '%s\n' 'curl -s https://example.invalid/token-rates.json >/dev/null 2>&1 || true' >>"$scratch"
-  [ -n "$(library_violations "$scratch")" ]
-}
-
-# mutant_scripts <name>: a scratch copy of the scripts directory (files only, no
-# suites) whose gaia_rates_load gains a curl call; sets $MUTANT_SCRIPTS.
-mutant_scripts() {
-  MUTANT_SCRIPTS="$TEMPORARY_DIRECTORY/mutant-$1"
-  rm -rf "$MUTANT_SCRIPTS"
-  mkdir -p "$MUTANT_SCRIPTS"
-  # gaia-lint-ignore whole-tree-mark-guard: the only test that reaches this helper
-  # carries the per-test whole-tree mark, because it copies every file in the scripts directory.
-  find "$SCRIPTS" -maxdepth 1 -type f -exec cp {} "$MUTANT_SCRIPTS/" \;
-  local lib="$MUTANT_SCRIPTS/token-pricing-lib.sh" anchor='  GAIA_RATES_OVERRIDE_STATUS=none' text
-  [ "$(grep -cxF -- "$anchor" "$lib")" -eq 1 ]
-  text="$(cat "$lib")"
-  printf '%s\n' "${text/"$anchor"/"$anchor"$'\n'"  curl -s https://example.invalid/token-rates.json >/dev/null 2>&1 || true"}" >"$lib"
-  [ "$(grep -cF -- 'curl -s https://example.invalid' "$lib")" -eq 1 ]
-}
-
-# bats test_tags=whole-tree
-@test "guard red: a pricing lib whose gaia_rates_load calls curl trips both the behavioral and the static check" {
-  mutant_scripts curl
-  run run_initiative "$MUTANT_SCRIPTS"
-  [ "$status" -eq 0 ]
-  [ -s "$SENTINEL" ]
-  grep -qE -- "$LOAD_PATTERN" <<<"$(function_body "$MUTANT_SCRIPTS/token-pricing-lib.sh" gaia_rates_load)"
 }

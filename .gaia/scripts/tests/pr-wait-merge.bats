@@ -169,11 +169,19 @@ tsv() {
 
 # --- each verdict is reachable ------------------------------------------------
 
-@test "MERGED exits 0 and prints the token" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr 7 --interval 0
-  [ "$status" -eq 0 ]
-  grep -qF -- 'MERGED' <<<"$output"
+@test "a merged PR exits 0 and prints MERGED, never read as closed, even when mergeable reads CONFLICTING" {
+  # GitHub can leave a stale mergeability on a PR that has already merged.
+  # Reading the conflict first would report a failure on a landed merge, and
+  # the caller would skip its cleanup.
+  local mergeable
+  for mergeable in CLEAN CONFLICTING; do
+    stub_gh "$(tsv MERGED "$mergeable")"
+    run bash "$WAIT" --pr 7 --interval 0
+    [ "$status" -eq 0 ] || { echo "mergeable $mergeable: status $status"; return 1; }
+    grep -qF -- 'MERGED' <<<"$output" || { echo "mergeable $mergeable: no MERGED token"; return 1; }
+    grep -qF -- 'CLOSED' <<<"$output" && { echo "mergeable $mergeable: read as closed"; return 1; }
+  done
+  true
 }
 
 @test "CONFLICTING exits 3 and points at the conflict repair" {
@@ -198,22 +206,15 @@ tsv() {
   grep -qF -- 'TIMEOUT' <<<"$output"
 }
 
-@test "TIMEOUT says the merge may still land, rather than reporting a failure" {
+@test "TIMEOUT says the merge may still land and asserts no queued merge it never established" {
+  # This script issues no `gh pr merge`, so the arm is reached identically by a
+  # merge queued behind its checks and by a pull request with nothing merging
+  # it. A message naming only the first tells the operator a merge is pending
+  # on a pull request where none is.
   stub_gh "$(tsv OPEN MERGEABLE)" 0
   run bash "$WAIT" --pr 7 --attempts 1 --interval 0
   [ "$status" -eq 5 ]
   grep -qF -- 'This is not a failure' <<<"$output"
-}
-
-@test "TIMEOUT does not assert a queued merge it never established" {
-  # This script issues no `gh pr merge`, so the arm is reached identically by a
-  # merge queued behind its checks and by a pull request with nothing merging
-  # it. A message naming only the first tells the operator a merge is pending
-  # on a pull request where none is, which is the same over-assertion the
-  # zero-read refusal above exists to avoid making.
-  stub_gh "$(tsv OPEN MERGEABLE)" 0
-  run bash "$WAIT" --pr 7 --attempts 1 --interval 0
-  [ "$status" -eq 5 ]
   grep -qF -- 'nothing is merging this pull request yet' <<<"$output"
   grep -qE 'reads none|queues no merge' <<<"$output"
 }
@@ -224,57 +225,46 @@ tsv() {
 # five times and reports the first answer, which would spend four needless
 # round trips per wait and, with a real interval, two extra minutes.
 
-@test "MERGED breaks out rather than running the whole bound" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr 7 --attempts 5 --interval 0
-  [ "$status" -eq 0 ]
-  [ "$(view_calls)" -eq 1 ]
-}
-
-@test "CONFLICTING breaks out rather than running the whole bound" {
-  stub_gh "$(tsv OPEN CONFLICTING)"
-  run bash "$WAIT" --pr 7 --attempts 5 --interval 0
-  [ "$status" -eq 3 ]
-  [ "$(view_calls)" -eq 1 ]
-}
-
-@test "a pending merge really does read the state once per attempt" {
-  stub_gh "$(tsv OPEN MERGEABLE)" 0
-  run bash "$WAIT" --pr 7 --attempts 4 --interval 0
-  [ "$status" -eq 5 ]
-  [ "$(view_calls)" -eq 4 ]
-}
-
-@test "the bound waits between reads and never after the last one" {
-  # The one test that reaches the sleep at all: every other passes
-  # --interval 0, which short-circuits it, so the "N attempts owe N-1 waits"
-  # half of the guard goes unobserved. A regression there returns every
-  # TIMEOUT one whole interval late, and the callers that pass a long bound
-  # are the ones that would wear it.
-  stub_gh "$(tsv OPEN MERGEABLE)" 0
+@test "the bound: terminal verdicts break out, a pending merge reads once per attempt, waits only between reads" {
+  # Only the last row reaches the sleep (every other row passes --interval 0,
+  # which short-circuits it): N attempts owe N-1 waits.
+  local row view attempts interval want_status want_views want_sleeps
   stub_sleep
-  run bash "$WAIT" --pr 7 --attempts 3 --interval 1
-  [ "$status" -eq 5 ]
-  [ "$(view_calls)" -eq 3 ]
-  [ "$(sleep_calls)" -eq 2 ]
+  for row in \
+    "MERGED CLEAN|5|0|0|1|0" \
+    "OPEN CONFLICTING|5|0|3|1|0" \
+    "OPEN MERGEABLE|4|0|5|4|0" \
+    "OPEN MERGEABLE|3|1|5|3|2"; do
+    IFS='|' read -r view attempts interval want_status want_views want_sleeps <<<"$row"
+    rm -f "$TEMPORARY_DIRECTORY/argv.log" "$TEMPORARY_DIRECTORY/sleep.log"
+    stub_gh "$(tsv "${view% *}" "${view#* }")" 0
+    run bash "$WAIT" --pr 7 --attempts "$attempts" --interval "$interval"
+    [ "$status" -eq "$want_status" ] || { echo "row $row: status $status"; return 1; }
+    [ "$(view_calls)" -eq "$want_views" ] || { echo "row $row: view calls $(view_calls)"; return 1; }
+    [ "$(sleep_calls)" -eq "$want_sleeps" ] || { echo "row $row: sleep calls $(sleep_calls)"; return 1; }
+  done
 }
 
 # --- the keep-waiting rules ---------------------------------------------
 
-@test "mergeable UNKNOWN keeps waiting, it is neither clean nor conflicting" {
-  stub_gh "$(tsv OPEN UNKNOWN)" 0
-  run bash "$WAIT" --pr 7 --attempts 2 --interval 0
-  [ "$status" -eq 5 ]
-  grep -qF -- 'TIMEOUT' <<<"$output"
-}
-
-@test "a null mergeable is read as UNKNOWN, not as a conflict" {
-  # gh answers `null` before it has computed mergeability; the script's jq
-  # filter maps that to the literal UNKNOWN, so the tab-separated line the
-  # stub returns here is what the real gh produces in that window.
-  stub_gh "$(tsv OPEN UNKNOWN)" 0
-  run bash "$WAIT" --pr 7 --attempts 1 --interval 0
-  [ "$status" -eq 5 ]
+@test "mergeable UNKNOWN, no checks yet, and zero failed checks all keep waiting" {
+  # UNKNOWN is neither clean nor conflicting; gh answers `null` before it has
+  # computed mergeability and the script's jq filter maps that to UNKNOWN. A
+  # `gh pr checks` that exits non-zero with no output is what gh does before
+  # any check registers, and reading it as a failure would abandon every merge
+  # queued before CI starts.
+  local row view checks
+  for row in "OPEN UNKNOWN|0" "OPEN MERGEABLE|none" "OPEN MERGEABLE|0"; do
+    view=${row%%|*}; checks=${row#*|}
+    if [ "$checks" = none ]; then
+      stub_gh "$(tsv "${view% *}" "${view#* }")"
+    else
+      stub_gh "$(tsv "${view% *}" "${view#* }")" "$checks"
+    fi
+    run bash "$WAIT" --pr 7 --attempts 2 --interval 0
+    [ "$status" -eq 5 ] || { echo "row $row: status $status"; return 1; }
+    grep -qF -- 'TIMEOUT' <<<"$output" || { echo "row $row: no TIMEOUT"; return 1; }
+  done
 }
 
 # --- the jq filters themselves ------------------------------------------------
@@ -309,22 +299,6 @@ tsv() {
   [ "$(jq -r "$filter" <<<'[{"bucket":"fail"}]')" = 1 ] || return 1
   [ "$(jq -r "$filter" <<<'[{"bucket":"cancel"}]')" = 1 ] || return 1
   [ "$(jq -r "$filter" <<<'[{"bucket":"fail"},{"bucket":"cancel"},{"bucket":"pass"}]')" = 2 ]
-}
-
-@test "gh pr checks exiting non-zero with no output keeps waiting" {
-  # No second argument: the stub's `checks` arm exits 1 with nothing on stdout,
-  # which is what gh does before any check registers. Reading that as a failure
-  # would abandon every merge queued before CI starts.
-  stub_gh "$(tsv OPEN MERGEABLE)"
-  run bash "$WAIT" --pr 7 --attempts 2 --interval 0
-  [ "$status" -eq 5 ]
-  grep -qF -- 'TIMEOUT' <<<"$output"
-}
-
-@test "zero failed required checks keeps waiting" {
-  stub_gh "$(tsv OPEN MERGEABLE)" 0
-  run bash "$WAIT" --pr 7 --attempts 1 --interval 0
-  [ "$status" -eq 5 ]
 }
 
 @test "a non-numeric checks answer keeps waiting rather than ending the wait" {
@@ -416,7 +390,7 @@ tsv() {
   grep -qF -- 'gh auth status' <<<"$output"
 }
 
-@test "a transient read failure still keeps waiting, it is not a refusal" {
+@test "a transient read failure keeps waiting, is no refusal, and still reports a merge that lands" {
   # The refusal is gated on zero successful reads across the WHOLE bound. One
   # failed read followed by real answers is an ordinary pending merge, and
   # refusing there would abandon a live wait on a blip.
@@ -424,9 +398,6 @@ tsv() {
   run bash "$WAIT" --pr 7 --attempts 3 --interval 0
   [ "$status" -eq 5 ]
   grep -qF -- 'TIMEOUT' <<<"$output"
-}
-
-@test "a transient read failure before a merge still reports MERGED" {
   stub_gh_flaky 1 "$(tsv MERGED CLEAN)"
   run bash "$WAIT" --pr 7 --attempts 3 --interval 0
   [ "$status" -eq 0 ]
@@ -443,57 +414,50 @@ tsv() {
   [ "$(view_calls)" -eq 1 ]
 }
 
-@test "a merged PR is never read as closed" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr 7 --interval 0
-  [ "$status" -eq 0 ]
-}
-
 # --- --repo reaches both gh calls ---------------------------------------------
 #
 # Without it the script can only ever wait on a PR in the checkout it runs
 # from, so the merge workflow's own cross-repo waits have no blessed form and
 # the guard that denies hand-rolled polls denies them with nothing to offer.
 
-@test "--repo is passed through to gh pr view" {
-  stub_gh "$(tsv OPEN MERGEABLE)" 0
-  run bash "$WAIT" --pr 7 --repo gaia-react/create-gaia --attempts 1 --interval 0
-  grep -qF -- '--repo gaia-react/create-gaia' <<<"$(first_view_argv)"
-}
-
-@test "--repo is passed through to gh pr checks too" {
+@test "--repo is passed through to gh pr view and gh pr checks, and omitted when absent" {
   # The checks read decides CHECK_FAILED, so a --repo that reached only the
   # view call would consult the wrong repository's checks and could end the
   # wait on a failure that belongs to another PR.
   stub_gh "$(tsv OPEN MERGEABLE)" 0
   run bash "$WAIT" --pr 7 --repo gaia-react/create-gaia --attempts 1 --interval 0
-  grep -F -- 'pr checks' "$TEMPORARY_DIRECTORY/argv.log" | grep -qF -- '--repo gaia-react/create-gaia'
-}
-
-@test "omitting --repo passes no repo flag, so gh resolves from the cwd" {
-  stub_gh "$(tsv OPEN MERGEABLE)" 0
+  grep -qF -- '--repo gaia-react/create-gaia' <<<"$(first_view_argv)" || return 1
+  grep -F -- 'pr checks' "$TEMPORARY_DIRECTORY/argv.log" | grep -qF -- '--repo gaia-react/create-gaia' || return 1
+  rm -f "$TEMPORARY_DIRECTORY/argv.log"
   run bash "$WAIT" --pr 7 --attempts 1 --interval 0
   grep -qF -- '--repo' <<<"$(first_view_argv)" && return 1
   true
 }
 
-@test "--repo with no value is a usage error" {
+@test "a bad or missing argument is a usage error that exits 2, never a verdict or a silent default" {
+  # A bad bound silently defaulting is the specific hazard: a caller's
+  # deliberate 20-attempt release wait becoming a 5-attempt one shows up only
+  # as a TIMEOUT on a merge that was going to land.
+  local row arguments fragment
   stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr 7 --repo
-  [ "$status" -eq 2 ]
+  for row in \
+    "--pr 7 --repo|" \
+    "--interval 0|--pr is required" \
+    "--pr abc --interval 0|" \
+    "--pr 7 --attempts zero --interval 0|--attempts" \
+    "--pr 7 --attempts 0 --interval 0|" \
+    "--pr 7 --interval -5|" \
+    "--pr|" \
+    "--pr 7 --nope|"; do
+    arguments=${row%%|*}; fragment=${row#*|}
+    # shellcheck disable=SC2086 # rows are space-separated flags by design
+    run bash "$WAIT" $arguments
+    [ "$status" -eq 2 ] || { echo "row $row: status $status"; return 1; }
+    [ -z "$fragment" ] || grep -qF -- "$fragment" <<<"$output" || { echo "row $row: no '$fragment'"; return 1; }
+  done
 }
 
 # --- MERGED wins over a conflict on the same read -----------------------------
-
-@test "a merged PR reporting CONFLICTING still exits MERGED" {
-  # GitHub can leave a stale mergeability on a PR that has already merged.
-  # Reading the conflict first would report a failure on a landed merge, and
-  # the caller would skip its cleanup.
-  stub_gh "$(tsv MERGED CONFLICTING)"
-  run bash "$WAIT" --pr 7 --interval 0
-  [ "$status" -eq 0 ]
-  grep -qF -- 'MERGED' <<<"$output"
-}
 
 # --- usage errors are refusals, never verdicts --------------------------------
 #
@@ -501,50 +465,6 @@ tsv() {
 # defaulting is the specific hazard: a caller's deliberate 20-attempt release
 # wait becoming a 5-attempt one shows up only as a TIMEOUT on a merge that was
 # going to land.
-
-@test "a missing --pr is a usage error" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --interval 0
-  [ "$status" -eq 2 ]
-  grep -qF -- '--pr is required' <<<"$output"
-}
-
-@test "a non-numeric --pr is a usage error" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr abc --interval 0
-  [ "$status" -eq 2 ]
-}
-
-@test "a non-numeric --attempts is a usage error, not a silent default" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr 7 --attempts zero --interval 0
-  [ "$status" -eq 2 ]
-  grep -qF -- '--attempts' <<<"$output"
-}
-
-@test "a zero --attempts is a usage error" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr 7 --attempts 0 --interval 0
-  [ "$status" -eq 2 ]
-}
-
-@test "a negative --interval is a usage error" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr 7 --interval -5
-  [ "$status" -eq 2 ]
-}
-
-@test "a flag with no value is a usage error" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr
-  [ "$status" -eq 2 ]
-}
-
-@test "an unrecognized argument is a usage error" {
-  stub_gh "$(tsv MERGED CLEAN)"
-  run bash "$WAIT" --pr 7 --nope
-  [ "$status" -eq 2 ]
-}
 
 @test "--help exits 0 and prints the usage" {
   run bash "$WAIT" --help

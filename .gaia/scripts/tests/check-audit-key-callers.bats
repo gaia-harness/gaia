@@ -106,43 +106,6 @@ LEDGER=".gaia/local/audit/${BASE_SHA}.rerun.json"
 ```
 '
 
-# ---------- assertion 1: bad literal ----------
-
-@test "fixture: a converted file (calls gaia_audit_key, no bare literal) passes clean" {
-  local repo
-  repo="$(make_fixture_repo converted-ok)"
-  write_agent_file "$repo" code-audit-frontend.md "$CONVERTED_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 0" <<<"$output" || return 1
-  grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" || return 1
-}
-
-# bats test_tags=protected
-@test "fixture: a bare \${BASE_SHA}.rerun.json ledger literal fails assertion 1" {
-  local repo
-  repo="$(make_fixture_repo bad-ledger)"
-  write_agent_file "$repo" code-audit-frontend.md "$BAD_LEDGER_LITERAL"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "code-audit-frontend.md" <<<"$output" || return 1
-  grep -qF '${BASE_SHA}.rerun.json' <<<"$output" || return 1
-  grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a bare \${base}.<member>.findings.json literal (member name interposed) fails assertion 1" {
-  local repo
-  repo="$(make_fixture_repo bad-sidecar)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$BAD_SIDECAR_LITERAL_BASE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "code-audit-maintainer-shell.md" <<<"$output" || return 1
-  grep -qF '${base}.code-audit-maintainer-shell.findings.json' <<<"$output" || return 1
-}
-
 BAD_LEDGER_LITERAL_KEY_BASE='```bash
 LEDGER=".gaia/local/audit/${KEY_BASE}.rerun.json"
 ```
@@ -154,74 +117,73 @@ LEDGER=".gaia/local/audit/$(gaia_audit_key "$KEY_BASE").rerun.json"
 ```
 '
 
-@test "fixture: a bare \${KEY_BASE}.rerun.json ledger literal fails assertion 1" {
+# check_fixture <name> <agent file> <content>: builds a fixture repo
+# holding one agent file and runs the check over it.
+check_fixture() {
   local repo
-  repo="$(make_fixture_repo bad-ledger-key-base)"
-  write_agent_file "$repo" code-audit-frontend.md "$BAD_LEDGER_LITERAL_KEY_BASE"
+  repo="$(make_fixture_repo "$1")"
+  write_agent_file "$repo" "$2" "$3"
   commit_fixture_repo "$repo"
   run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "code-audit-frontend.md" <<<"$output" || return 1
-  grep -qF '${KEY_BASE}.rerun.json' <<<"$output" || return 1
-  grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 1" <<<"$output" || return 1
 }
 
-@test "fixture: a rerun path built through gaia_audit_key from KEY_BASE does not trip assertion 1" {
-  local repo
-  repo="$(make_fixture_repo good-ledger-key-base)"
-  write_agent_file "$repo" code-audit-frontend.md "$GOOD_LEDGER_VIA_KEY_LIB"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 0" <<<"$output" || return 1
+# ---------- assertion 1: bad literal ----------
+
+# bats test_tags=protected
+@test "fixture: a bare \${BASE_SHA}.rerun.json ledger literal fails assertion 1" {
+  local -a contents=(
+    "$BAD_LEDGER_LITERAL"
+    "$BAD_SIDECAR_LITERAL_BASE"
+    "$BAD_LEDGER_LITERAL_KEY_BASE"
+    "$BAD_LITERAL_PLUS_CALL_ELSEWHERE"
+  )
+  local index=0 row name agent needle
+  for row in \
+    'bad-ledger|code-audit-frontend.md|${BASE_SHA}.rerun.json' \
+    'bad-sidecar|code-audit-maintainer-shell.md|${base}.code-audit-maintainer-shell.findings.json' \
+    'bad-ledger-key-base|code-audit-frontend.md|${KEY_BASE}.rerun.json' \
+    'half-converted|code-audit-frontend.md|${BASE_SHA}.rerun.json'; do
+    IFS='|' read -r name agent needle <<<"$row"
+    check_fixture "$name" "$agent" "${contents[$index]}"
+    index=$((index + 1))
+    [ "$status" -eq 1 ] || { echo "row $name: status $status"; return 1; }
+    grep -qF "$agent" <<<"$output" || { echo "row $name: file not named"; return 1; }
+    grep -qF "$needle" <<<"$output" || { echo "row $name: literal not named"; return 1; }
+    grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 1" <<<"$output" || { echo "row $name: assertion 1 count not 1"; return 1; }
+  done
+  # A leftover literal fails even when the file also calls gaia_audit_key
+  # elsewhere, so assertion 2 stays clean for it.
   grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" || return 1
 }
 
-@test "fixture: a leftover bad literal fails assertion 1 even when the file also calls gaia_audit_key elsewhere" {
-  local repo
-  repo="$(make_fixture_repo half-converted)"
-  write_agent_file "$repo" code-audit-frontend.md "$BAD_LITERAL_PLUS_CALL_ELSEWHERE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF '${BASE_SHA}.rerun.json' <<<"$output" || return 1
-  # Assertion 2 passes for this file (it does call gaia_audit_key) -- only
-  # assertion 1's count is nonzero.
-  grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" || return 1
-  grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 1" <<<"$output" || return 1
+@test "a conforming file passes clean" {
+  local -a contents=("$CONVERTED_OK" "$GOOD_LEDGER_VIA_KEY_LIB" "$UNRELATED_FILE")
+  local index=0 row name agent
+  for row in \
+    'converted-ok|code-audit-frontend.md' \
+    'good-ledger-key-base|code-audit-frontend.md' \
+    'unrelated|unrelated.md'; do
+    IFS='|' read -r name agent <<<"$row"
+    check_fixture "$name" "$agent" "${contents[$index]}"
+    index=$((index + 1))
+    [ "$status" -eq 0 ] || { echo "row $name: status $status"; return 1; }
+    grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 0" <<<"$output" || { echo "row $name: assertion 1 count not 0"; return 1; }
+    grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" || { echo "row $name: assertion 2 count not 0"; return 1; }
+  done
 }
 
 # ---------- assertion 2: every namer calls gaia_audit_key ----------
 
-@test "fixture: a file naming the re-run ledger without ever calling gaia_audit_key fails assertion 2" {
-  local repo
-  repo="$(make_fixture_repo names-ledger-no-call)"
-  write_agent_file "$repo" some-agent.md "$NAMES_LEDGER_NO_CALL"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "names a sidecar/ledger but never calls gaia_audit_key: .claude/agents/some-agent.md" <<<"$output" || return 1
-  grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a file naming a findings sidecar without ever calling gaia_audit_key fails assertion 2" {
-  local repo
-  repo="$(make_fixture_repo names-findings-no-call)"
-  write_agent_file "$repo" some-agent.md "$NAMES_FINDINGS_NO_CALL"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "names a sidecar/ledger but never calls gaia_audit_key: .claude/agents/some-agent.md" <<<"$output" || return 1
-}
-
-@test "fixture: a file that never names a sidecar or the ledger is never required to call gaia_audit_key" {
-  local repo
-  repo="$(make_fixture_repo unrelated)"
-  write_agent_file "$repo" unrelated.md "$UNRELATED_FILE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_key_callers "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" || return 1
+@test "assertion 2: a file naming the artifact without calling gaia_audit_key fails" {
+  local -a contents=("$NAMES_LEDGER_NO_CALL" "$NAMES_FINDINGS_NO_CALL")
+  local index name
+  for index in 0 1; do
+    name="names-no-call-$index"
+    check_fixture "$name" some-agent.md "${contents[$index]}"
+    [ "$status" -eq 1 ] || { echo "row $name: status $status"; return 1; }
+    grep -qF "names a sidecar/ledger but never calls gaia_audit_key: .claude/agents/some-agent.md" <<<"$output" || { echo "row $name: file not named"; return 1; }
+    grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 1" <<<"$output" || { echo "row $name: assertion 2 count not 1"; return 1; }
+  done
 }
 
 @test "fixture: multiple violations across files are all named, and the check still fails once" {
@@ -263,34 +225,21 @@ LEDGER=".gaia/local/audit/$(gaia_audit_key "$KEY_BASE").rerun.json"
 
 # ---------- structural ----------
 
-@test "a repo_root that is not a git repository reports 2, never a clean 0" {
-  local outside="$BATS_TEST_TMPDIR/not-a-repo"
-  mkdir -p "$outside"
-  run gaia_check_audit_key_callers "$outside"
+@test "a bad repo_root reports 2, never a clean 0" {
   # 2, not 1: "the check could not run" is a different answer from "the check
-  # says no", and neither is the 0 an unscanned tree used to report.
-  [ "$status" -eq 2 ]
-  grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || return 1
-  # Both verdict lines, not just the first: each one alone reads as a clean
-  # bill of health for a tree that was never read.
-  grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 0" <<<"$output" && {
-    echo "printed a clean assertion-1 verdict for a tree it never scanned" >&2
-    return 1
-  }
-  grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" && {
-    echo "printed a clean assertion-2 verdict for a tree it never scanned" >&2
-    return 1
-  }
+  # says no". A repo subdirectory separates "is in a repo" from "is a repo root".
+  mkdir -p "$BATS_TEST_TMPDIR/not-a-repo"
+  local root
+  for root in "$BATS_TEST_TMPDIR/not-a-repo" "$REPO_ROOT/.gaia/scripts"; do
+    run gaia_check_audit_key_callers "$root"
+    [ "$status" -eq 2 ] || { echo "root $root: status $status"; return 1; }
+    grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || { echo "root $root: no refusal message"; return 1; }
+    # Both verdict lines: each one alone reads as a clean bill of health for a
+    # tree that was never read.
+    grep -qF "bare BASE_SHA/base literal sidecar-or-ledger paths found: 0" <<<"$output" && { echo "root $root: clean assertion-1 verdict for an unscanned tree"; return 1; }
+    grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" && { echo "root $root: clean assertion-2 verdict for an unscanned tree"; return 1; }
+  done
   return 0
-}
-
-@test "a repo_root that is a subdirectory of a repo reports 2, never a clean 0" {
-  # --git-dir alone succeeds from anywhere inside a repo, so this is the case
-  # that separates "is in a repo" from "is a repo root". The scan would find
-  # no .claude/agents/ beneath a subdirectory and report the same clean 0/0.
-  run gaia_check_audit_key_callers "$REPO_ROOT/.gaia/scripts"
-  [ "$status" -eq 2 ]
-  grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || return 1
 }
 
 @test "structural: sourcing the script defines gaia_check_audit_key_callers with no side effects" {

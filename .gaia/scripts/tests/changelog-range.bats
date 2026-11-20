@@ -78,17 +78,14 @@ EOF
   [ -z "$output" ]
 }
 
-@test "exits 2 with a usage line when a version is missing or malformed" {
+@test "exits 2 on a usage error (missing or malformed version) or an unreadable file" {
   run --separate-stderr bash "$SCRIPT" 1.1.0
-  [ "$status" -eq 2 ]
-  [[ "$stderr" == *"usage: changelog-range.sh"* ]]
+  [ "$status" -eq 2 ] || { echo "missing version: status $status"; return 1; }
+  grep -qF -- "usage: changelog-range.sh" <<<"$stderr" || { echo "missing version: stderr '$stderr'"; return 1; }
   run --separate-stderr bash "$SCRIPT" v1.1.0 1.10.0 "$CHANGELOG"
-  [ "$status" -eq 2 ]
-  [[ "$stderr" == *"usage: changelog-range.sh"* ]]
-}
-
-@test "exits 2 naming the file when the CHANGELOG file is unreadable" {
+  [ "$status" -eq 2 ] || { echo "malformed version: status $status"; return 1; }
+  grep -qF -- "usage: changelog-range.sh" <<<"$stderr" || { echo "malformed version: stderr '$stderr'"; return 1; }
   run --separate-stderr bash "$SCRIPT" 1.1.0 1.10.0 "$BATS_TEST_TMPDIR/absent.md"
-  [ "$status" -eq 2 ]
-  [[ "$stderr" == *"absent.md"* ]]
+  [ "$status" -eq 2 ] || { echo "unreadable file: status $status"; return 1; }
+  grep -qF -- "absent.md" <<<"$stderr" || { echo "unreadable file: stderr '$stderr'"; return 1; }
 }

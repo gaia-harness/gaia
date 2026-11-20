@@ -224,29 +224,19 @@ gate_pass_headers() {
 # distinguishing the two workers.
 
 # bats test_tags=whole-tree
-@test "shell-lint fails closed on a finding in the FIRST worker's chunk" {
-  first_sh="$(tracked_sh first)"
-  [ -n "$first_sh" ]
-  local overrides=() line
+@test "shell-lint fails closed on a finding in the first and in the last worker's chunk" {
+  local overrides=() line end_name end_path
   while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
-  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} SHELLCHECK_FAIL_ON="$first_sh" bash "$GATE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "shell-lint FAILED" <<<"$output"
-  # The failing worker's buffered log has to replay too, or the gate reds
-  # without ever naming what is broken.
-  grep -qF -- "In $first_sh line 1:" <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "shell-lint fails closed on a finding in the LAST worker's chunk" {
-  last_sh="$(tracked_sh last)"
-  [ -n "$last_sh" ]
-  local overrides=() line
-  while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
-  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} SHELLCHECK_FAIL_ON="$last_sh" bash "$GATE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "shell-lint FAILED" <<<"$output"
-  grep -qF -- "In $last_sh line 1:" <<<"$output"
+  for end_name in first last; do
+    end_path="$(tracked_sh "$end_name")"
+    [ -n "$end_path" ] || { echo "$end_name: no tracked script"; return 1; }
+    run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} SHELLCHECK_FAIL_ON="$end_path" bash "$GATE"
+    [ "$status" -eq 1 ] || { echo "$end_name: status $status"; return 1; }
+    grep -qF -- "shell-lint FAILED" <<<"$output" || { echo "$end_name: gate did not report failure"; return 1; }
+    # The failing worker's buffered log has to replay too, or the gate reds
+    # without ever naming what is broken.
+    grep -qF -- "In $end_path line 1:" <<<"$output" || { echo "$end_name: finding not replayed"; return 1; }
+  done
 }
 
 # stub_all_guards overrides EVERY folded guard with a trivial stub that emits
@@ -290,50 +280,40 @@ EOF
   done < <(gate_pass_headers)
 }
 
-# The settings drift pass is not a lint-* guard, so the loops above never drive
-# it. This drives it into its failing state through the same override seam.
+# The settings drift and retired-path passes are not lint-* guards, so the
+# guard loops above never drive them; this drives each into its failing state
+# through the same override seam, together with the first folded guard.
 # bats test_tags=whole-tree
-@test "a failing settings drift check fails the gate" {
-  local stub="$STUB_DIRECTORY/drift-fail.sh"
-  cat > "$stub" <<'STUB'
-#!/usr/bin/env bash
-echo "stub failure: drift" >&2
-exit 1
-STUB
-  chmod +x "$stub"
-  local overrides=() line
-  while IFS= read -r line; do
-    overrides+=("$line")
-  done < <(stub_all_guards "$STUB_DIRECTORY")
-  overrides+=("SHELL_LINT_GUARD_OVERRIDE_check_settings_drift=$stub")
-  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} bash "$GATE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "--> check-settings-drift" <<<"$output"
-  grep -qF -- "stub failure: drift" <<<"$output"
-  grep -qF -- "shell-lint FAILED" <<<"$output"
-}
-
-# The retired-path pass is not a lint-* guard either, so it gets the same
-# drive-into-failure test through the override seam.
-# bats test_tags=whole-tree
-@test "a failing retired-path check fails the gate" {
-  local stub="$STUB_DIRECTORY/retired-fail.sh"
-  cat > "$stub" <<'STUB'
-#!/usr/bin/env bash
-echo "stub failure: retired" >&2
-exit 1
-STUB
-  chmod +x "$stub"
-  local overrides=() line
-  while IFS= read -r line; do
-    overrides+=("$line")
-  done < <(stub_all_guards "$STUB_DIRECTORY")
-  overrides+=("SHELL_LINT_GUARD_OVERRIDE_check_retired_paths=$stub")
-  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} bash "$GATE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "--> check-retired-paths" <<<"$output"
-  grep -qF -- "stub failure: retired" <<<"$output"
-  grep -qF -- "shell-lint FAILED" <<<"$output"
+@test "a failing settings drift check, retired-path check or folded guard fails the gate while every other folded guard still runs" {
+  local first guard_variable stub row override_variable message banner pass_name overrides line
+  first="$(gate_pass_headers | grep '^lint-' | sed -n '1p')"
+  [ -n "$first" ]
+  guard_variable="SHELL_LINT_GUARD_OVERRIDE_$(printf '%s' "$first" | tr '-' '_')"
+  for row in \
+    "SHELL_LINT_GUARD_OVERRIDE_check_settings_drift|drift|check-settings-drift" \
+    "SHELL_LINT_GUARD_OVERRIDE_check_retired_paths|retired|check-retired-paths" \
+    "$guard_variable|guard|$first"; do
+    override_variable=${row%%|*}; message=${row#*|}; banner=${message#*|}; message=${message%%|*}
+    stub="$STUB_DIRECTORY/$message-fail.sh"
+    printf '#!/usr/bin/env bash\necho "stub failure: %s" >&2\nexit 1\n' "$message" > "$stub"
+    chmod +x "$stub"
+    overrides=()
+    while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
+    overrides+=("$override_variable=$stub")
+    run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} bash "$GATE"
+    [ "$status" -eq 1 ] || { echo "row $message: status $status"; return 1; }
+    grep -qF -- "--> $banner" <<<"$output" || { echo "row $message: banner missing"; return 1; }
+    grep -qF -- "stub failure: $message" <<<"$output" || { echo "row $message: stub failure not shown"; return 1; }
+    grep -qF -- "shell-lint FAILED" <<<"$output" || { echo "row $message: no FAILED verdict"; return 1; }
+    # The overridden guard must carry the gate's GUARD OVERRIDE notice; without
+    # it a substituted guard is invisible.
+    grep -qF -- "$banner: GUARD OVERRIDE" <<<"$output" || { echo "row $message: override notice missing"; return 1; }
+    while IFS= read -r pass_name; do
+      case "$pass_name" in lint-*) ;; *) continue ;; esac
+      [ "$pass_name" = "$banner" ] && continue
+      grep -qF -- "--> $pass_name" <<<"$output" || { echo "row $message: guard $pass_name did not run"; return 1; }
+    done < <(gate_pass_headers)
+  done
 }
 
 # `--only guards` is how verify-harness.sh keeps the folded guards running on a
@@ -367,42 +347,4 @@ STUB
     SHELL_LINT_GUARD_OVERRIDE_check_protected_tests="$failing_stub" bash "$GATE" --only guards
   [ "$status" -eq 1 ]
   grep -qF -- "shell-lint FAILED" <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "a failing guard fails the gate and every other guard still runs" {
-  local first override_variable_name stub
-  first="$(gate_pass_headers | grep '^lint-' | sed -n '1p')"
-  [ -n "$first" ]
-  override_variable_name="SHELL_LINT_GUARD_OVERRIDE_$(printf '%s' "$first" | tr '-' '_')"
-  stub="$STUB_DIRECTORY/guard-fail.sh"
-  cat > "$stub" <<'STUB'
-#!/usr/bin/env bash
-echo "stub failure: guard" >&2
-exit 1
-STUB
-  chmod +x "$stub"
-  local overrides=() line
-  while IFS= read -r line; do
-    overrides+=("$line")
-  done < <(stub_all_guards "$STUB_DIRECTORY")
-  overrides+=("$override_variable_name=$stub")
-  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} bash "$GATE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "shell-lint FAILED" <<<"$output"
-  grep -qF -- "stub failure: guard" <<<"$output"
-  # Every guard here is running from an override, and the gate owes a notice
-  # naming each one. Without this, deleting that notice leaves the whole suite
-  # green while a substituted guard becomes invisible again: the run reports
-  # the same banners, the same exit status and the same verdict as a real one,
-  # and the only residue is one `: clean` line missing, which nothing looks
-  # for. The sibling SHELL_LINT_BASH32 seam is pinned the same
-  # way, by asserting the substituted interpreter it names.
-  grep -qF -- "$first: GUARD OVERRIDE" <<<"$output"
-  local pass_name
-  while IFS= read -r pass_name; do
-    case "$pass_name" in lint-*) ;; *) continue ;; esac
-    [ "$pass_name" = "$first" ] && continue
-    grep -qF -- "--> $pass_name" <<<"$output"
-  done < <(gate_pass_headers)
 }

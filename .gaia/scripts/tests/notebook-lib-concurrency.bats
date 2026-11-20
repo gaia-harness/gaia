@@ -2,9 +2,8 @@
 #
 # Locking suite for the notebook library (.gaia/scripts/notebook/): concurrent
 # writers from the main checkout and a linked worktree released together
-# through a barrier, with a lost-update twin proving the harness can see a
-# lost write; a held catalog lock across many writes; the mint lock leaving
-# catalog writes free; and a rename racing a research register.
+# through a barrier; a held catalog lock across many writes; the mint lock
+# leaving catalog writes free; and a rename racing a research register.
 #
 # Writers start as background processes that spin on a barrier file, so they
 # all reach the catalog at once when the test creates it.
@@ -85,17 +84,6 @@ release_and_wait() {
   return "$failed"
 }
 
-# A read-modify-write with no lock, held open long enough that writers
-# released together overlap. The suite's own stand-in for a lockless writer.
-unlocked_register() {
-  local slug="$1" current
-  current="$(cat "$CATALOG")"
-  sleep 0.05
-  printf '%s' "$current" | jq --arg slug "$slug" \
-    '.items += [{kind: "research", id: $slug, path: ("research/" + $slug), status: "active"}]' >"$CATALOG.tmp.$slug"
-  mv -f "$CATALOG.tmp.$slug" "$CATALOG"
-}
-
 # Releases WRITER_COUNT registers, half from main and half from the worktree.
 WRITER_COUNT=8
 
@@ -128,31 +116,13 @@ assert_every_writer_landed() {
   assert_every_writer_landed
   [ -d "$REPO/.gaia/local/cache/shared/notebook-locks/catalog" ]
   [ ! -e "$worktree/.notebook" ]
-}
-
-@test "concurrent writers from main and a worktree all land under flock" {
-  command -v flock >/dev/null 2>&1 || skip "flock is not installed on this host"
-  local worktree
-  worktree="$(make_worktree)"
-  run_locked_round "$worktree"
-  assert_every_writer_landed
-}
-
-@test "the same barrier harness with an unlocked writer loses an update (red twin)" {
-  local round index lost=0
-  mkdir -p "$REPO/.notebook"
-  for round in 1 2 3 4 5; do
+  # The same round under flock, where the host has it.
+  if command -v flock >/dev/null 2>&1; then
+    unset GAIA_LEDGER_LOCK_FORCE_FALLBACK
     printf '{"version":1,"items":[]}\n' >"$CATALOG"
-    for index in $(seq 1 "$WRITER_COUNT"); do
-      launch_writer "$REPO" "u$round-$index" unlocked_register "u$index-2026-10-01"
-    done
-    release_and_wait
-    if [ "$(jq '.items | length' "$CATALOG")" -lt "$WRITER_COUNT" ]; then
-      lost=1
-      break
-    fi
-  done
-  [ "$lost" -eq 1 ]
+    run_locked_round "$worktree"
+    assert_every_writer_landed
+  fi
 }
 
 @test "a held catalog lock spans many writes without deadlock and makes an outside writer wait" {

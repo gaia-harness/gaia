@@ -19,6 +19,13 @@ bats_require_minimum_version 1.5.0
 setup() {
   SCRIPT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)/bats-suites-for-change.sh"
   FIXTURE="$BATS_TEST_TMPDIR/repo"
+  build_fixture
+}
+
+# build_fixture: (re)create the fixture repository from scratch, so a test
+# holding several cases gives each its own tree.
+build_fixture() {
+  rm -rf "$FIXTURE"
   mkdir -p "$FIXTURE/wiki" "$FIXTURE/tests" "$FIXTURE/scripts"
   git -C "$FIXTURE" init -q -b main
   git -C "$FIXTURE" config user.email t@example.com
@@ -54,38 +61,26 @@ setup() {
   }
 }
 
-@test "a deleted file still selects the suites referencing it" {
+@test "a deleted or renamed file still selects the suites naming it, including an uncommitted rename in default mode" {
   git -C "$FIXTURE" rm -q scripts/gone.sh
   git -C "$FIXTURE" commit -q -m delete
-
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/names-gone.bats" ]
-}
+  [ "$status" -eq 0 ] || { echo "deleted: status $status"; return 1; }
+  [ "$output" = "tests/names-gone.bats" ] || { echo "deleted: got '$output'"; return 1; }
 
-@test "a renamed file still selects the suites naming its old basename" {
+  build_fixture
   git -C "$FIXTURE" mv scripts/gone.sh scripts/renamed.sh
   git -C "$FIXTURE" commit -q -m rename
-
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/names-gone.bats" ] || {
-    printf 'got:\n%s\n' "$output" >&2
-    return 1
-  }
-}
+  [ "$status" -eq 0 ] || { echo "renamed: status $status"; return 1; }
+  [ "$output" = "tests/names-gone.bats" ] || { echo "renamed: got '$output'"; return 1; }
 
-@test "a renamed file selects the suites naming its old basename in the default mode" {
+  build_fixture
   git -C "$FIXTURE" mv scripts/gone.sh scripts/renamed.sh
-
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/names-gone.bats" ] || {
-    printf 'got:\n%s\n' "$output" >&2
-    return 1
-  }
+  [ "$status" -eq 0 ] || { echo "renamed, default mode: status $status"; return 1; }
+  [ "$output" = "tests/names-gone.bats" ] || { echo "renamed, default mode: got '$output'"; return 1; }
 }
-
 @test "a changed suite selects itself even when nothing names it" {
   printf '# edited\n' >> "$FIXTURE/tests/unrelated.bats"
   git -C "$FIXTURE" commit -q -am edit-suite
@@ -150,7 +145,8 @@ commit_base_files() {
   }
 }
 
-@test "a source file sharing its basename, in a tree with no suite, selects only suites naming its unique trailing path" {
+@test "a changed file selects suites by its unique trailing path (shared-basename source, deleted, in a tree holding a suite, unique basename, non-source, basename inside a directory path)" {
+  build_fixture
   base="$(commit_base_files \
     'apps/web/app/form-error/index.tsx=a' \
     'apps/web/app/form-error/tests/index.test.tsx=b' \
@@ -164,15 +160,10 @@ commit_base_files() {
   git -C "$FIXTURE" commit -q -am edit
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "source file in a tree with no suite: status $status"; return 1; }
   expected="$(printf 'tests/component-source.bats\ntests/component-test.bats')"
-  [ "$output" = "$expected" ] || {
-    printf 'got:\n%s\n' "$output" >&2
-    return 1
-  }
-}
-
-@test "a deleted source file sharing its basename still selects suites naming its unique trailing path" {
+  [ "$output" = "$expected" ] || { echo "source file in a tree with no suite: got '$output'"; return 1; }
+  build_fixture
   base="$(commit_base_files \
     'apps/web/app/form-error/index.tsx=a' \
     'apps/web/app/date/index.tsx=c' \
@@ -182,14 +173,9 @@ commit_base_files() {
   git -C "$FIXTURE" commit -q -m delete
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/date-source.bats" ] || {
-    printf 'got:\n%s\n' "$output" >&2
-    return 1
-  }
-}
-
-@test "a source file sharing its basename, in a tree holding a suite, still selects suites naming its basename" {
+  [ "$status" -eq 0 ] || { echo "deleted source file: status $status"; return 1; }
+  [ "$output" = "tests/date-source.bats" ] || { echo "deleted source file: got '$output'"; return 1; }
+  build_fixture
   base="$(commit_base_files \
     'tools/storage/index.ts=a' \
     'tools/wiki/index.ts=b' \
@@ -198,14 +184,9 @@ commit_base_files() {
   git -C "$FIXTURE" commit -q -am edit
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tools/tests/storage.bats" ] || {
-    printf 'got:\n%s\n' "$output" >&2
-    return 1
-  }
-}
-
-@test "a source file with a basename no other file has, in a tree with no suite, selects suites naming its basename" {
+  [ "$status" -eq 0 ] || { echo "source file in a tree holding a suite: status $status"; return 1; }
+  [ "$output" = "tools/tests/storage.bats" ] || { echo "source file in a tree holding a suite: got '$output'"; return 1; }
+  build_fixture
   base="$(commit_base_files \
     'apps/web/app/date/year-month-day.tsx=a' \
     'tests/names-date.bats=# reads "$COMPONENTS/year-month-day.tsx"')"
@@ -213,14 +194,9 @@ commit_base_files() {
   git -C "$FIXTURE" commit -q -am edit
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/names-date.bats" ] || {
-    printf 'got:\n%s\n' "$output" >&2
-    return 1
-  }
-}
-
-@test "a non-source file sharing its basename, in a tree with no suite, selects suites naming its basename" {
+  [ "$status" -eq 0 ] || { echo "source file with a unique basename: status $status"; return 1; }
+  [ "$output" = "tests/names-date.bats" ] || { echo "source file with a unique basename: got '$output'"; return 1; }
+  build_fixture
   base="$(commit_base_files \
     'config/hooks/settings.json={}' \
     'config/settings.json={}' \
@@ -229,14 +205,9 @@ commit_base_files() {
   git -C "$FIXTURE" commit -q -am edit
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/reads-settings.bats" ] || {
-    printf 'got:\n%s\n' "$output" >&2
-    return 1
-  }
-}
-
-@test "a file whose basename occurs inside a directory path selects only suites naming its trailing path" {
+  [ "$status" -eq 0 ] || { echo "non-source file: status $status"; return 1; }
+  [ "$output" = "tests/reads-settings.bats" ] || { echo "non-source file: got '$output'"; return 1; }
+  build_fixture
   base="$(commit_base_files \
     '.gaia/cli/gaia=bundle' \
     '.gaia/cli/src/main.ts=a' \
@@ -246,13 +217,9 @@ commit_base_files() {
   git -C "$FIXTURE" commit -q -am edit
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/runs-bundle.bats" ] || {
-    printf 'got:\n%s\n' "$output" >&2
-    return 1
-  }
+  [ "$status" -eq 0 ] || { echo "basename inside a directory path: status $status"; return 1; }
+  [ "$output" = "tests/runs-bundle.bats" ] || { echo "basename inside a directory path: got '$output'"; return 1; }
 }
-
 @test "a deleted suite is not printed, since there is nothing left to run" {
   git -C "$FIXTURE" rm -q tests/unrelated.bats
   git -C "$FIXTURE" commit -q -m drop-suite
@@ -309,14 +276,12 @@ commit_base_files() {
   [ -z "$output" ]
 }
 
-@test "an unreadable diff fails loudly instead of reporting no suites" {
+@test "a failing read fails loudly instead of reporting no suites (unreadable diff, failing suite search)" {
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" no-such-revision HEAD
-  [ "$status" -eq 3 ]
-  [ -z "$output" ]
-  [[ "$stderr" == *"bats-suites-for-change"* ]]
-}
+  [ "$status" -eq 3 ] || { echo "unreadable diff: status $status"; return 1; }
+  [ -z "$output" ] || { echo "unreadable diff: got '$output'"; return 1; }
+  grep -qF "bats-suites-for-change" <<<"$stderr" || { echo "unreadable diff: stderr '$stderr'"; return 1; }
 
-@test "a failing suite search fails loudly instead of dropping that path's suites" {
   printf 'edited\n' >> "$FIXTURE/wiki/PR Merge Workflow.md"
   git -C "$FIXTURE" commit -q -am edit
   # A git that answers every subcommand but grep, which it fails the way an
@@ -328,10 +293,9 @@ commit_base_files() {
   chmod +x "$BATS_TEST_TMPDIR/bin/git"
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
-  [ "$status" -eq 3 ]
+  [ "$status" -eq 3 ] || { echo "failing suite search: status $status"; return 1; }
   [ -z "$output" ]
 }
-
 @test "every changed path selects its own suites when the change spans several" {
   printf 'edited\n' >> "$FIXTURE/wiki/PR Merge Workflow.md"
   git -C "$FIXTURE" rm -q scripts/gone.sh
@@ -363,16 +327,14 @@ commit_base_files() {
   [ "$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')" -eq 1 ]
 }
 
-@test "no remote default branch in the default mode names the fix" {
+@test "no remote default branch exits 3 naming the fix, an unknown option exits 2" {
   git -C "$FIXTURE" update-ref -d refs/remotes/origin/main
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE"
-  [ "$status" -eq 3 ]
-  [ -z "$output" ]
-  [[ "$stderr" == *"pass a range"* ]]
-}
+  [ "$status" -eq 3 ] || { echo "no remote default branch: status $status"; return 1; }
+  [ -z "$output" ] || { echo "no remote default branch: got '$output'"; return 1; }
+  grep -qF "pass a range" <<<"$stderr" || { echo "no remote default branch: stderr '$stderr'"; return 1; }
 
-@test "an unknown option is a usage error" {
   run --separate-stderr bash "$SCRIPT" --bogus
   [ "$status" -eq 2 ]
 }
