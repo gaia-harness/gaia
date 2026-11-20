@@ -1211,8 +1211,7 @@ strip_full_line_comments() {
 # Derived from production_guards() rather than re-listed, so a guard added
 # there is held to the no-basename-list check above without a second edit
 # here. The libraries are checked too and are not guards, so they are
-# appended: guard-awk-lib.sh and guard-discovery-lib.sh, which holds the
-# bats-file discovery code split out of it.
+# appended.
 wiki_citing_files() {
   local guard_file
   while IFS= read -r guard_file; do
