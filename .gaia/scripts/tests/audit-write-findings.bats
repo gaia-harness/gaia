@@ -118,7 +118,7 @@ write() {
   [ "$(jq -c '.findings' "$EXPECTED")" = "[]" ]
 }
 
-@test "area_tags defaults to the finding directory" {
+@test "area_tags defaults to the finding directory, and an explicit value is kept" {
   write "[$(complete_finding)]" >/dev/null
   [ "$(jq -r '.findings[0].area_tags[0]' "$EXPECTED")" = ".claude/hooks" ]
   [ "$(jq '.findings[0].area_tags | length' "$EXPECTED")" = "1" ]
@@ -146,7 +146,7 @@ write() {
 }
 
 # The point of the writer: an entry that cannot brief a repair is REJECTED, and
-# nothing is written. One test per rule, each derived from the complete finding
+# nothing is written. Each case derives from the complete finding
 # so it can only fail for the reason it names.
 
 @test "rejects a finding that cannot brief a repair" {
@@ -384,6 +384,14 @@ write_with_review_base() {
 # security / cross_remit: optional booleans (SPEC-093 C3). Present and
 # non-boolean is a usage error naming the index; absent is accepted and the
 # writer invents nothing.
+#
+# triage / triage_reason: the maintainer members' below-threshold mark. The
+# writer checks shape only; whether the mark is honored is the dispositions
+# check's call.
+#
+# grade: the member's difficulty grade, which the audit loop unit carries into
+# the filing script as its `difficulty:` label. A bad value is refused here,
+# where the member can still fix it, instead of failing the filing later.
 
 @test "optional boolean and enum fields are preserved when valid" {
   write "[$(complete_finding | jq -c '.security = true'),$(complete_finding | jq -c '.security = false')]" >/dev/null
@@ -457,14 +465,6 @@ write_with_review_base() {
     [ ! -f "$EXPECTED" ] || return 1
   done
 }
-
-# triage / triage_reason: the maintainer members' below-threshold mark. The
-# writer checks shape only; whether the mark is honored is the dispositions
-# check's call.
-
-# grade: the member's difficulty grade, which the audit loop unit carries into
-# the filing script as its `difficulty:` label. A bad value is refused here,
-# where the member can still fix it, instead of failing the filing later.
 
 @test "structural: the writer carries no environment arm" {
   grep -nE 'GITHUB_ACTIONS|\$\{?CI\b' "$WRITER" && return 1

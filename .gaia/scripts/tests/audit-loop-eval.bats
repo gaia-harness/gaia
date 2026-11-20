@@ -402,7 +402,7 @@ sequence_case() {
        END { exit (bad || record_count == 0) }' "$log"
   [ "$(grep -c '^diff$' "$log")" -ge 2 ]
   fresh_fixture
-  echo "case: an uncomputable merge base counts every row as authored, and an untouched line is not"
+  echo "case: an untouched line is not authored, but an uncomputable merge base counts every row as authored"
   alf_fill f.txt 12 feature
   alf_set_line base.txt 5 "branch edit"
   alf_commit "round 1"
@@ -531,7 +531,7 @@ brief_check() {
   brief_check accept false 0 4 0
   [ "$(read_json "$BRIEF" '.verdict')" = enriching ]
   fresh_fixture
-  echo "case: unknown recommends grant; a failing or hanging usage.sh only blanks spend"
+  echo "case: unknown recommends grant; a failing or hanging usage.sh only sets spend to unavailable"
   sed -i.bak 's/^_GAIA_LOOP_SPEND_TIMEOUT=5$/_GAIA_LOOP_SPEND_TIMEOUT=1/' "$CLI/audit-loop-eval.sh"
   grep -qx '_GAIA_LOOP_SPEND_TIMEOUT=1' "$CLI/audit-loop-eval.sh"
   alf_fill f.txt 12 feature
@@ -1405,7 +1405,7 @@ grant_window_state() {
   [ "$(read_json "$snapshot" '.signals.reintroduced')" = false ]
   [ "$(read_json "$snapshot" '.accept_eligible')" = false ]
   fresh_fixture
-  echo "case: waiver-drift needs a new round r-1"
+  echo "case: a legacy round r-1 turns waiver-drift off"
   maintainer
   drift_fixture
   alf_state_edit 'del(.history.rounds[0].snapshot.counted_keys)'
@@ -1566,7 +1566,7 @@ stop_base_restore() {
   alf_git update-index -q --refresh >/dev/null 2>&1 || true
 }
 
-# Each case below runs in its own subshell, so a mutant sourced into one never
+# Each case after the first runs in its own subshell, so a mutant sourced into one never
 # reaches the next, and a failed assertion stops the whole test (errexit).
 @test "default stop: the base stops, and each conjunct of the default-stop formula denies it alone" {
   local snapshot extra round unreadable_sidecar token want

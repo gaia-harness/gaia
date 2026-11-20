@@ -702,7 +702,7 @@ scrub_maintainer_only() {
   clearance_member_refused "$ROOT" "$digest" "$member"
 }
 
-@test "supersede: refused with a usage error" {
+@test "supersede: --supersede-refusal with --provenance refused, or with an empty or blank reason, exits 2 and writes nothing" {
   member="code-audit-maintainer-shell"
   digest="$(member_digest "$ROOT" "$member")"
   run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused \
@@ -756,9 +756,8 @@ scrub_maintainer_only() {
 #
 # The gate exempts --supersede-refusal from the staleness comparison only
 # when a sibling refusal is actually on disk. Widening that operand back to
-# the flag-only form reds "supersede: no refusal on disk, a mismatched
-# --scope-digest refuses" and "supersede: no refusal on disk, an absent
-# --scope-digest refuses by its own token": both call the flag with nothing to
+# the flag-only form reds "supersede: no refusal on disk, a bad --scope-digest
+# refuses": both its calls pass the flag with nothing to
 # supersede, so a flag-only gate skips the comparison outright and each
 # publishes instead of refusing. The surviving two-call route below stays
 # green either way, because it writes a real refusal first and a widened
@@ -925,7 +924,7 @@ resolve_all_open() {
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   [ "$(jq -r '.remaining[0] | has("review_ids")' "$LEDGER")" = false ]
 
-  # fresh ledger and sidecars for the next case: each case counts rounds from one
+  # fresh ledger and sidecars for the next case
   rm -f "$LEDGER" "$AUDIT_DIRECTORY"/*.findings.json
   write_sidecar_for "$member" 113
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
@@ -939,7 +938,7 @@ resolve_all_open() {
   grep -qF "bound each trailing segment" <<<"$(jq -r .suggested_fix <<<"$entry")"
   [ "$(jq -r .first_seen_round <<<"$entry")" = "1" ]
 
-  # fresh ledger and sidecars for the next case: each case counts rounds from one
+  # fresh ledger and sidecars for the next case
   rm -f "$LEDGER" "$AUDIT_DIRECTORY"/*.findings.json
   write_sidecar_for "$member" 113 critical
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
@@ -953,7 +952,7 @@ resolve_all_open() {
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "minor" ]
 
-  # fresh ledger and sidecars for the next case: each case counts rounds from one
+  # fresh ledger and sidecars for the next case
   rm -f "$LEDGER" "$AUDIT_DIRECTORY"/*.findings.json
   write_sidecar_for "$member" 113 major
   sidecar="$AUDIT_DIRECTORY/${LEDGER_BASE_SHA}.fix%2Fledger.${member}.findings.json"
@@ -1307,7 +1306,7 @@ snapshot_ledger() {
 }
 
 # bats test_tags=protected
-@test "accounting: an open finding left unaccounted exits 3" {
+@test "accounting: an absent or corrupt ledger, a missing sidecar, a blank rationale or an unaccounted open finding exits 3 and writes no marker" {
   accounting_fixture
   cp "$LEDGER" "$BATS_TEST_TMPDIR/pristine.ledger"
   cp "$SIDECAR_PATH" "$BATS_TEST_TMPDIR/pristine.sidecar"
@@ -1344,7 +1343,7 @@ snapshot_ledger() {
   grep -qF -- "   ${FIRST_ID}  " <<<"$output" && return 1
   true
 
-  # every case starts from the fixture state: the cases remove or corrupt the ledger and sidecar
+  # back to the fixture state
   cp "$BATS_TEST_TMPDIR/pristine.ledger" "$LEDGER"
   cp "$BATS_TEST_TMPDIR/pristine.sidecar" "$SIDECAR_PATH"
   rm -f "$SIDECAR_PATH"
@@ -1361,7 +1360,7 @@ snapshot_ledger() {
   [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
   cmp "$LEDGER" "$BATS_TEST_TMPDIR/ledger.before"
 
-  # every case starts from the fixture state: the cases remove or corrupt the ledger and sidecar
+  # back to the fixture state
   cp "$BATS_TEST_TMPDIR/pristine.ledger" "$LEDGER"
   cp "$BATS_TEST_TMPDIR/pristine.sidecar" "$SIDECAR_PATH"
   write_findings_sidecar "$member" "[$(finding_json 113 critical "$FIRST_ID"),$(finding_json 59 major "$SECOND_ID")]"
@@ -1372,7 +1371,7 @@ snapshot_ledger() {
   grep -qF -- "audit-scope-digest.sh --release" <<<"$output" || return 1
   grep -qF "re-run the scope resolver" <<<"$output" || return 1
 
-  # every case starts from the fixture state: the cases remove or corrupt the ledger and sidecar
+  # back to the fixture state
   cp "$BATS_TEST_TMPDIR/pristine.ledger" "$LEDGER"
   cp "$BATS_TEST_TMPDIR/pristine.sidecar" "$SIDECAR_PATH"
   write_findings_sidecar "$member" '[]' "$(resolution_json "$FIRST_ID")"
@@ -1694,7 +1693,7 @@ EOF
 }
 
 @test "status hook failure or absence never fails the refusal write" {
-  # An adopter tree that has not installed the hook, and every non-local caller.
+  # An adopter tree that has not installed the hook.
   digest="$(member_digest "$ROOT" code-audit-frontend)"
   [ ! -e "$ROOT/.claude/hooks/post-audit-status.sh" ]
 

@@ -635,7 +635,7 @@ refuse_notes() {
 
 # --- special rows and renames ---------------------------------------------
 
-@test "a special row at an owned path routes full special-file: symlink, binary, mode change, gitlink, on the clearance and merge-base paths" {
+@test "a special row at an owned path routes full special-file: symlink, binary, mode change and gitlink on the clearance path, mode change and symlink on the merge-base path" {
   local base_sha label
   lsb_from_template cleared-frontend
   base_sha="$LSB_HEAD"
@@ -1076,7 +1076,7 @@ fresh_catchup_sandbox() {
     "$BATS_TEST_TMPDIR/lsb-repo.catchup-base" "$BATS_TEST_TMPDIR/lsb-repo.catchup-origin.git"
 }
 
-@test "content only the base brought raises no reason, and the same content on the branch does: rules-reset-global, hard-full, over-cap, a newline path" {
+@test "content only the base brought raises no reason (hard-full, over-cap, a newline path), and the same content on the branch does (rules-reset-global, hard-full, over-cap)" {
   local reason
   for reason in hard-full over-cap; do
     assert_base_content_is_not_the_branchs "$reason" || { printf 'case failed: base-only %s\n' "$reason" >&2; return 1; }

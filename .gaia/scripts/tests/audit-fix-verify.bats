@@ -142,7 +142,7 @@ do_check() {
 edit() { printf 'fixer edit\n' >>"$REPO/$1"; }
 
 # reset_case: return the fixture to its committed state between the rows of a
-# merged case table, so each row starts from the state its own test once had.
+# merged case table, so each row starts clean.
 reset_case() {
   git -C "$REPO" reset -q --hard HEAD
   git -C "$REPO" clean -fdq
@@ -343,7 +343,7 @@ spec093_enforcement_paths() {
     '.gaia/statusline/setup-owed.sh'
 }
 
-@test "each named enforcement path (local settings, moved libraries, SPEC-093 additions) is on the enforcement list" {
+@test "each named enforcement path (local settings, moved libraries, SPEC-093 additions) is on the enforcement list, and an unallowed fixer edit to the moved libraries fails enforcement-path" {
   local file_path listed entries_json
   # row: the local settings file
   enforcement_paths | grep -Fxq '.claude/settings.local.json' || {
@@ -360,7 +360,7 @@ spec093_enforcement_paths() {
     }
   done < <(moved_library_paths)
   [ "$listed" -eq "$(moved_library_paths | wc -l | tr -d ' ')" ] || return 1
-  # row: UAT-032, each SPEC-093 addition is listed (the all-paths refusal test above
+  # row: UAT-032, each SPEC-093 addition is listed (the all-paths refusal test below
   # builds the repository and runs the check)
   listed=0
   while IFS= read -r file_path; do
@@ -801,7 +801,7 @@ moved_library_paths() {
   printf '%s\n' "$output" | grep -qx 'dirty a.txt' || return 1
   printf '%s\n' "$output" | grep -qx 'dirty with space.txt' || return 1
   printf '%s\n' "$output" | grep -qx 'dirty fresh.txt' || return 1
-  # row: UAT-007, the only new file is git-ignored, so the baseline passes
+  # row: UAT-007, new files that are all git-ignored let the baseline pass
   reset_case
   mkdir -p "$REPO/.gaia/local/audit"
   printf 'x\n' >"$REPO/.gaia/local/audit/sidecar.json"

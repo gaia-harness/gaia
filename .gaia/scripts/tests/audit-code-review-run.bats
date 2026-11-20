@@ -234,13 +234,13 @@ guard_decides() {
 }
 
 # expect_guard <deny|pass> <command>: the guard's decision on one Bash command,
-# failing the test on this row alone.
+# failing the test when it differs from <deny|pass>.
 expect_guard() {
   [ "$(guard_decides "$2")" = "$1" ] || return 1
 }
 
 # bats test_tags=protected
-@test "the guard's Bash token rule: each denied form denies, logs and names its alternative; each ordinary in-root read passes with no log" {
+@test "the guard's Bash token rule: each denied form denies and logs, two name their alternative; each ordinary in-root read passes" {
   local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh" root="/work/tree" command_text
   for command_text in 'git diff /dev/null .env' "git -C $root diff /dev/null ~/.aws/credentials" 'git blame --contents .env HEAD' \
     'git diff ../outside.txt HEAD' "git diff --no-index$root /etc/hosts"; do

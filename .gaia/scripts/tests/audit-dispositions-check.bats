@@ -257,7 +257,7 @@ vetoes() {
   true
 }
 
-@test "undisposed: each omitted finding kind (branch Critical, security, Minor, vetoed key, out-of-branch Major and Critical) fails and an entry clears it (case table)" {
+@test "undisposed: each omitted finding kind (branch Critical, security, Minor, vetoed key, out-of-branch Major and Critical) fails, and an entry clears the Major, vetoed key, Critical and Minor (case table)" {
   printf 'case: %s\n' 'omitted branch-authored Critical, then security finding' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.line != 1)')"
   run_check 1
@@ -1435,7 +1435,7 @@ veto_unsatisfied_red() {
 }
 
 # bats test_tags=protected
-@test "vetoes: veto satisfaction, unsatisfied (never fixed, re-reported, fixer disputed or cannot_fix, member not dispatched, fix before the veto, shifted line) and satisfied (fixer fixed on a closing round, main-thread fix reviewed clean) (case table)" {
+@test "vetoes: unsatisfied (never fixed, re-reported, fixer disputed or cannot_fix, member not dispatched, fix before the veto, shifted line) and satisfied (fixer fixed on a closing round, main-thread fix reviewed clean) (case table)" {
   local fixer_disposition shifted
   printf 'case: %s\n' 'unsatisfied: never fixed, re-reported, fixer disputed or cannot_fix' >&2
   vetoes 1 c/imp f.txt 3
@@ -1463,6 +1463,7 @@ veto_unsatisfied_red() {
   run_check 2
   red undisposed "$(key_json c/imp f.txt 3)" || return 1
   alf_state_edit '.history.rounds[1].members = ["code-audit-frontend"]'
+  # the veto binds from round 3: round 2's waiver already sits on the fixed tree, so only counting round 1's fix could satisfy it
   vetoes 3 c/imp f.txt 3
   next_tree_round 3 "$(without_veto_key)"
   veto_unsatisfied_red 3 "$(without_veto_key)" || { echo "fix before the veto, the round it binds"; return 1; }
@@ -1531,8 +1532,6 @@ veto_unsatisfied_red() {
   green || { echo "synthetic entry, veto retired"; return 1; }
 }
 
-# The gate cases bind the veto from round 3: its waiver round 2 already sits
-# on the fixed tree, so only counting round 1's fix could satisfy it.
 @test "lapse guard: a veto past every dispositions file fails the read-only check-all and passes the bound hook's call" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
   vetoes 2 c/imp f.txt 3
@@ -1861,7 +1860,7 @@ discard_refused() {
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
   decide 1 discard || return 1
   [ "$status" -eq 3 ] || return 1
-  printf 'case: %s\n' 'refused: no enforcement_draft fix entry, an unvetoed key, a Critical or a security-class key; each guard mutant goes red' >&2
+  printf 'case: %s\n' 'refused: no enforcement_draft fix entry, an unvetoed key, a Critical or a security-class key; each guard mutant lets the discard through' >&2
   draft_stop "$(minor_rows f.txt 1 1)" false || return 1
   decide 1 discard; discard_refused || return 1
   mutant_check_tree audit-recorded-decision-lib.sh -e 's/ and \.enforcement_draft == true//' || return 1

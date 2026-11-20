@@ -15,9 +15,8 @@ assert_contains() {
 }
 
 # _noop_expect <status> <output|""> <helper args...>: run the helper once and
-# require its exit status and, when given, its stdout. Every check ends in an
-# explicit `|| return 1` so a failing row fails the whole test; the failing
-# row's arguments are printed first.
+# require its exit status and, when given, its stdout. On a mismatch it prints
+# the row's arguments and returns 1, which fails the test.
 _noop_expect() {
   local want_status="$1" want_output="$2"
   shift 2
@@ -154,7 +153,7 @@ setup() {
 # writer-shaped earned clearance whose `digest` equals the filename key (an
 # empty or legacy body falls through, covered below).
 @test "audit-team-member: an earned marker is REAL" {
-  # case: audit-team-member: writer-produced EARNED --marker is REAL regardless of --path content
+  # case: writer-produced EARNED --marker is REAL regardless of --path content
   marker="$BATS_TEST_TMPDIR/marker.ok"
   # Filename key is "marker" (stem up to the first dot), so the body digest
   # must equal it for clearance_acceptable.
@@ -162,14 +161,14 @@ setup() {
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member: writer-produced EARNED marker + token-free text is REAL
+  # case: writer-produced EARNED marker + token-free text is REAL
   digest="$(_noop_digest)"
   marker="$BATS_TEST_TMPDIR/${digest}.ok"
   _noop_write_clearance "$marker" "$digest" earned
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member: writer-produced EARNED specialist marker (<digest>.<member>.ok) is REAL
+  # case: writer-produced EARNED specialist marker (<digest>.<member>.ok) is REAL
   digest="$(_noop_digest)"
   marker="$BATS_TEST_TMPDIR/${digest}.code-audit-maintainer-shell.ok"
   printf '{"version":"1.6.1","schema":3,"member":"code-audit-maintainer-shell","provenance":"earned","digest":"%s","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","sha":"deadbeef","audited_at":"2026-01-01T00:00:00Z","sidecar":false}\n' "$digest" > "$marker"
@@ -180,28 +179,28 @@ setup() {
 
 # bats test_tags=protected
 @test "audit-team-member: no marker, classification by return text" {
-  # case: audit-team-member: no marker, backticked Location finding is REAL
+  # case: no marker, backticked Location finding is REAL
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/audit-team-member/finding-block.txt" --marker "$BATS_TEST_TMPDIR/does-not-exist.ok"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member: no marker, terse LOCAL return-contract preamble is REAL
+  # case: no marker, terse LOCAL return-contract preamble is REAL
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/audit-team-member/terse-return.txt" --marker "$BATS_TEST_TMPDIR/does-not-exist.ok"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member: no marker, harness-reminder-echo return is NO-OP
+  # case: no marker, harness-reminder-echo return is NO-OP
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
-  # case: audit-team-member: no marker, absent --path is NO-OP
+  # case: no marker, absent --path is NO-OP
   run "$SCRIPT" --shape audit-team-member --path "$BATS_TEST_TMPDIR/does-not-exist.txt" --marker "$BATS_TEST_TMPDIR/also-does-not-exist.ok"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
-  # case: audit-team-member: no marker at all + token-free text is NO-OP (unregressed)
+  # case: no marker at all + token-free text is NO-OP
   digest="$(_noop_digest)"
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.ok"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
-  # case: audit-team-member: legacy-bodied marker + token-free text is NO-OP (existence no longer authorizes real)
+  # case: legacy-bodied marker + token-free text is NO-OP (existence no longer authorizes real)
   digest="$(_noop_digest)"
   marker="$BATS_TEST_TMPDIR/${digest}.ok"
   printf '{"sha":"deadbeef","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","audited_at":"2026-01-01T00:00:00Z"}\n' > "$marker"
@@ -234,7 +233,7 @@ _noop_write_clearance() {
 }
 
 @test "audit-team-member: a refusal settles the run as REFUSED" {
-  # case: audit-team-member: a REFUSED marker (no earned .ok) + token-free text is REFUSED, not NO-OP
+  # case: a REFUSED marker (no earned .ok) + token-free text is REFUSED, not NO-OP
   digest="$(_noop_digest)"
   # Only the refusal artifact exists; the agent's .ok marker path is absent,
   # which is exactly what a member that reviewed fully and withheld clearance
@@ -245,13 +244,13 @@ _noop_write_clearance() {
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.ok"
   [ "$status" -eq 0 ]
   [ "$output" = "refused" ]
-  # case: audit-team-member: a specialist's REFUSED marker (<digest>.<member>.refused) is REFUSED
+  # case: a specialist's REFUSED marker (<digest>.<member>.refused) is REFUSED
   digest="$(_noop_digest)"
   printf '{"version":"1.6.1","schema":3,"member":"code-audit-maintainer-shell","provenance":"refused","digest":"%s","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","sha":"deadbeef","audited_at":"2026-01-01T00:00:00Z","sidecar":true}\n' "$digest" > "$BATS_TEST_TMPDIR/${digest}.code-audit-maintainer-shell.refused"
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.code-audit-maintainer-shell.ok"
   [ "$status" -eq 0 ]
   [ "$output" = "refused" ]
-  # case: audit-team-member: a REFUSED marker with NO findings sidecar is still REFUSED, never retried as a no-op
+  # case: a REFUSED marker with NO findings sidecar is still REFUSED, never retried as a no-op
   digest="$(_noop_digest)"
   # The lost-report gate deliberately does not apply to a refusal. Re-dispatching
   # a refusing member returns the identical empty hand, and that loop is the
@@ -266,7 +265,7 @@ _noop_write_clearance() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "refused" ]
-  # case: audit-team-member: a refusal beside a same-digest earned marker classifies REFUSED (refusal-first precedence)
+  # case: a refusal beside a same-digest earned marker classifies REFUSED (refusal-first precedence)
   digest="$(_noop_digest)"
   # The crash window in the supersede path leaves both markers on disk. The
   # merge gate checks the refusal family first; this classifier agrees.
@@ -351,7 +350,7 @@ _noop_write_clearance() {
 # branch did not resolve, which writes no sidecar at all.
 
 @test "usage error: the retired --findings flag is rejected" {
-  # case: audit-team-member: passing the retired --findings flag is a usage error naming its replacement
+  # case: audit-team-member names its replacement
   digest="$(_noop_digest)"
   marker="$BATS_TEST_TMPDIR/${digest}.ok"
   findings="$BATS_TEST_TMPDIR/base.code-audit-frontend.findings.json"
@@ -362,7 +361,7 @@ _noop_write_clearance() {
   [ "$status" -eq 2 ]
   assert_contains "--findings-root"
   assert_contains "--findings-since"
-  # case: usage error: --findings is rejected for every shape, naming --findings-root
+  # case: every other shape names --findings-root
   local shape
   for shape in cra-specialist cra-refuter agent-report-file; do
     run "$SCRIPT" --shape "$shape" --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" \
@@ -374,7 +373,7 @@ _noop_write_clearance() {
 }
 
 @test "audit-team-member: findings sidecar shape gates REAL" {
-  # case: audit-team-member: a sidecar carrying entry_id and resolutions is still REAL
+  # case: a sidecar carrying entry_id and resolutions is still REAL
   root="$BATS_TEST_TMPDIR/resolve-extra-fields"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -390,7 +389,7 @@ _noop_write_clearance() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member: EARNED marker + malformed findings sidecar is NO-OP
+  # case: EARNED marker + malformed findings sidecar is NO-OP
   root="$BATS_TEST_TMPDIR/resolve-malformed"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -406,7 +405,7 @@ _noop_write_clearance() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
-  # case: audit-team-member: a findings sidecar with no member attribution is NO-OP
+  # case: a findings sidecar with no member attribution is NO-OP
   # The wrong-member case is pinned by the identity test below; a sidecar that
   # carries no attribution at all is equally unacceptable, so the member bind
   # cannot be satisfied by the field's absence.
@@ -552,8 +551,8 @@ _noop_resolve_marker() {
   [ "$output" = "real" ]
 }
 
-@test "audit-team-member resolve arm: only the member own current sidecar answers" {
-  # case: audit-team-member resolve arm: only a PREVIOUS round's sidecar is NO-OP
+@test "audit-team-member resolve arm: only the member's own current sidecar answers" {
+  # case: only a PREVIOUS round's sidecar is NO-OP
   root="$BATS_TEST_TMPDIR/resolve-stale"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -583,7 +582,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member resolve arm: resolving nothing is a lost report, not an absent request
+  # case: resolving nothing is a lost report, not an absent request
   root="$BATS_TEST_TMPDIR/resolve-empty"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -597,7 +596,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
-  # case: audit-team-member resolve arm: another member's and another branch's sidecars do not answer
+  # case: another member's and another branch's sidecars do not answer
   root="$BATS_TEST_TMPDIR/resolve-identity"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -645,7 +644,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member resolve arm: a sibling's NEWER sidecar does not shadow this member's own
+  # case: a sibling's NEWER sidecar does not shadow this member's own
   # The identity binding is two-layered, and this pins the outer one. If the
   # glob's member half were a wildcard, the newest-wins walk would select the
   # sibling's file, the `.member` check inside would reject it, and the round
@@ -785,8 +784,8 @@ _noop_resolve_marker() {
 # the marker-only short-circuit. Either way, a report-shaped return still
 # classifies real on its own.
 
-@test "audit-team-member: a fresh own sidecar is REAL with no marker" {
-  # case: audit-team-member: a fresh own sidecar plus a terse return is REAL with no marker
+@test "audit-team-member: a report-shaped return is REAL with a fresh own sidecar and no marker, or an earned marker and no sidecar" {
+  # case: a fresh own sidecar plus a terse return is REAL with no marker
   # A DIRTY= withhold writes the sidecar but no marker and no .refused; the
   # return text classifies real on its own.
   root="$BATS_TEST_TMPDIR/withhold-terse"
@@ -803,7 +802,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member: a fresh own sidecar plus a finding block is REAL with no marker
+  # case: a fresh own sidecar plus a finding block is REAL with no marker
   root="$BATS_TEST_TMPDIR/withhold-block"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -818,7 +817,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-  # case: audit-team-member: an earned marker plus a finding block is REAL with no sidecar
+  # case: an earned marker plus a finding block is REAL with no sidecar
   # The report reached the orchestrator in the return, so the lost-report gate
   # has nothing to catch. Without --path the same setup is the lost-report
   # NO-OP pinned by the resolve-arm test above.

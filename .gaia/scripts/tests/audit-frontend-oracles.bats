@@ -163,7 +163,7 @@ gating_case() {
   [ "$(invoked gaia)" -eq 1 ] || return 1
 }
 
-@test "scope gating: markdown, package.json, pnpm-lock.yaml, nested package.json, pnpm-workspace.yaml and tsx paths each run the oracles the header names" {
+@test "scope gating: markdown, package.json, pnpm-lock.yaml, nested package.json, pnpm-workspace.yaml and tsx paths each run only the oracles their scope needs" {
   gating_case docs/note.md 0 0
   [ "$(printf '%s\n' "$output" | sed -n 1p)" = '| Oracle | Status | Result | Output |' ]
   [ "$(printf '%s\n' "$output" | sed -n 2p)" = '|---|---|---|---|' ]

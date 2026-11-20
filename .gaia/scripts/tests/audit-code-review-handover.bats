@@ -94,7 +94,7 @@ reconcile() {
 }
 
 # reset_review: clear the run folder and the members' sidecars between the rows
-# of a merged case table, so each row starts from the state its own test once had.
+# of a merged case table, so each row starts clean.
 reset_review() {
   rm -rf "$RUN"
   mkdir -p "$RUN"
