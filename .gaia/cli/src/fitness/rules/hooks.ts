@@ -87,7 +87,7 @@ const hookEntriesOf = (file: SettingsFile): readonly HookEntry[] =>
     });
   });
 
-export type HookRuleOptions = {
+type HookRuleOptions = {
   /** Why the script behind a recognized root prefix cannot run, else undefined. */
   findScriptProblem?: (
     context: RuleContext,
@@ -142,7 +142,7 @@ const eventCheck = (context: RuleContext): readonly RawFinding[] =>
   );
 
 /** Builds the hook rules; the optional predicates let a test prove each rule can fail. */
-export const createHookRules = (
+const createHookRules = (
   options: HookRuleOptions = {}
 ): readonly RuleDefinition[] => {
   const findScriptProblem =
