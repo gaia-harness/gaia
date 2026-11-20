@@ -81,7 +81,8 @@ describe('deriveExcludedRefTokens', () => {
       name: 'derives agent names from excluded agent files',
     },
     {
-      // A shipped file shares it, and a data fixture adopters also generate.
+      // `index.ts` is shared with a shipped file; `usage.jsonl` is a data
+      // fixture adopters also generate.
       absent: {basenames: ['index.ts', 'usage.jsonl']},
       expected: {
         basenames: expect.arrayContaining([

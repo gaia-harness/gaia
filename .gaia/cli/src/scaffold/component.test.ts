@@ -279,7 +279,6 @@ describe('scaffold component', () => {
   describe('component re-run is a no-op or refuses a conflict', () => {
     test.each([
       {
-        // Re-running the same args reports both files as skipped.
         changeBetween: (): void => undefined,
         code: 0,
         name: 're-running with the same args is a no-op (skipped)',
@@ -288,7 +287,6 @@ describe('scaffold component', () => {
         stdout: [/"skipped":\["[^"]+","[^"]+"\]/u, /"written":\[\]/u],
       },
       {
-        // Mutate the index file so the second run sees a conflict.
         changeBetween: (indexPath: string): void => {
           writeFileSync(
             indexPath,

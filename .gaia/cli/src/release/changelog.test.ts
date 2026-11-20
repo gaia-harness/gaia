@@ -501,7 +501,6 @@ describe('release changelog CLI', () => {
         'utf8'
       );
       for (const text of changelogPresent) expect(changelog).toContain(text);
-      // --draft never modifies CHANGELOG.
       for (const text of changelogAbsent) expect(changelog).not.toContain(text);
     }
   );

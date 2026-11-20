@@ -243,7 +243,7 @@ describe('validateAnswers', () => {
     allowedPathCase('a dot and a plus', 'app/routes/_public+/home.tsx'),
     allowedPathCase('a tilde and an at', 'docs/~notes@2.md'),
     allowedPathCase('a comma and an equals', 'docs/a,b=c.md'),
-    // Every wiki/ title carries spaces, and .gaia/release-exclude already
+    // Most wiki/ titles carry spaces, and .gaia/release-exclude already
     // holds such lines. An exclude line is a literal path to every consumer,
     // so a space is literal in all of them; refusing to write one would make
     // a whole category of maintainer-only page unwithholdable.

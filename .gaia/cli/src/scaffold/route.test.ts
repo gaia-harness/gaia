@@ -525,6 +525,8 @@ describe('scaffold route inserts the i18n barrel alphabetically', () => {
 
   test.each([
     {
+      // `[ \t]*\n[ \t]*`, not `\s*\n\s*`: `\s` already matches `\n`, the
+      // overlapping-quantifier shape sonarjs/super-linear-regex flags.
       blockPattern: /dashboard,[ \t]*\n[ \t]*index,[ \t]*\n[ \t]*legal,/u,
       // Alphabetical: dashboard < index < legal by import-name comparison.
       imports: [
@@ -608,9 +610,6 @@ describe('scaffold route inserts the i18n barrel alphabetically', () => {
         .filter((line) => /^import\s/u.test(line));
       expect(importLines).toEqual(imports);
 
-      // Default-export block updated. `[ \t]*\n[ \t]*` (not `\s*\n\s*`, whose
-      // `\s` already matches `\n` and overlaps with the literal that follows)
-      // avoids sonarjs/super-linear-regex's overlapping-quantifier shape.
       expect(after).toMatch(blockPattern);
 
       const localeFile = path.join(

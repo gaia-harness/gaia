@@ -398,7 +398,7 @@ describe('release commit-and-tag --tag', () => {
       for (const call of calls) {
         expect(callLinesOf(recorded)).toContain(call);
       }
-      // Push must NOT run after tag failure or under --no-push.
+      // Push runs only when the tag succeeds and --no-push is absent.
       expect(recorded.some((c) => c.args[0] === 'push')).toBe(pushAttempted);
     }
   );

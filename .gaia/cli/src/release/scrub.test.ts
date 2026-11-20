@@ -171,10 +171,9 @@ transforms:
           - ".github/workflows/**"
 `;
 
-// One scrub run over a mkdtemp sandbox, described by a case row. Rows differ
-// only in data (config, files, expected exit and output), so each describe
-// below is a single `test.each` table. Optional columns default to "no
-// assertion"; `seed` is a setup function for fixtures built from code.
+// One scrub run over a mkdtemp sandbox, described by a case row. Optional
+// assertion columns are skipped when absent; `seed` is a setup function for
+// fixtures built from code.
 type ScrubCase = {
   after?: Record<string, string[]>;
   afterJson?: Record<string, unknown>;
@@ -1187,7 +1186,7 @@ transforms:
       name: 'flags a newly excluded page with no config change (drift-proof)',
       out: ['Brand New Decision'],
       seed: seedExcludedSource,
-      // A slug that never appeared in the old hand-maintained alternation.
+      // A slug added only to release-exclude, named nowhere in the config.
       source: {
         '.gaia/release-exclude': `${EXCLUDE_FIXTURE}\nwiki/decisions/Brand New Decision.md\n`,
       },
@@ -1216,9 +1215,9 @@ transforms:
       },
     },
     {
-      // The old regex required `]]` immediately after the slug, so it missed
-      // `[[GAIA|alias]]` and `[[Bundle-time Scrub#anchor]]`. extractWikilinks
-      // normalizes both away before the Set test.
+      // A match requiring `]]` right after the slug would miss an alias (`|`)
+      // or an anchor (`#`); extractWikilinks normalizes both away before the
+      // Set test.
       config: WIKILINK_DERIVED_CONFIG,
       exit: 1,
       name: 'flags an aliased or anchored wikilink to an excluded slug',
@@ -1520,7 +1519,7 @@ describe('excluded-workflow-ref derived check', () => {
       name: 'flags a newly excluded workflow with no config change (drift-proof)',
       out: ['brand-new-maintainer.yml'],
       seed: seedWorkflowSource,
-      // A workflow that never appeared in any hand-maintained alternation.
+      // A workflow added only to release-exclude, named nowhere in the config.
       source: {
         '.gaia/release-exclude': `${WORKFLOW_EXCLUDE_FIXTURE}\n.github/workflows/brand-new-maintainer.yml\n`,
       },
@@ -1593,8 +1592,8 @@ transforms:
           - "Release Workflow"
 `;
 
-// Representative `.gaia/release-exclude` for the title derivation: two bare
-// directory excludes (entities, meta), four distinctive `.md` file excludes, and
+// Representative `.gaia/release-exclude` for the title derivation: bare
+// directory excludes (entities, meta), distinctive `.md` file excludes, and
 // non-wiki lines the derivation must ignore. `Release Workflow` is a `.md`
 // exclude so the config-level opt-out is observable against a title that IS in
 // the derived set.
@@ -2188,9 +2187,8 @@ describe('shipped absolute-paths check', () => {
 
   test.each<ScrubCase>([
     {
-      // The ban is repo-wide, not `.claude/`-only (gaia-react/gaia#1479), so
-      // the two surfaces are one assertion rather than a rule and an
-      // exception.
+      // The ban is repo-wide, not `.claude/`-only, so the two surfaces are one
+      // assertion rather than a rule and an exception.
       config,
       exit: 1,
       name: 'flags an absolute path anywhere in the shipped tree',
@@ -2206,8 +2204,8 @@ describe('shipped absolute-paths check', () => {
       },
     },
     {
-      // The gate has to permit what Exception 2 tells an author to write, or
-      // following the rule fails the bundle. Prefix use is how every shipped
+      // The gate has to permit the generic placeholders an author is told to
+      // write, or following the rule fails the bundle. Prefix use is how every shipped
       // instance spells them; a bare mention still flags, which
       // `.gaia/release-scrub.yml` records as the narrower of the two
       // available edges. `/Users/username` is where they ship today, in the
@@ -2361,9 +2359,8 @@ describe('shipped audience-label-vocabulary check', () => {
       // AUDIENCE_VALUES carriers happen to also contain the word: dropping
       // `maintainer|` from the pattern would keep every fixture matching while
       // a maintainer-side re-add shipped unflagged. A naive
-      // `audience:(adopter|maintainer)` pattern catches only two of the six
-      // (gaia-react/gaia#1437), so a tree still shipping the whole
-      // enforcement block would clear it.
+      // `audience:(adopter|maintainer)` pattern catches only two of the six, so
+      // a tree still shipping the whole enforcement block would clear it.
       config,
       exit: 1,
       name: 'flags every spelling the axis actually ships in',

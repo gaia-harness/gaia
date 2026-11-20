@@ -152,10 +152,6 @@ const seedDatabaseBody =
     writeFileSync(path.join(root, DATABASE_FILE), body, 'utf8');
   };
 
-/**
- * Applies one table row: runs its setup, runs the scaffold, then checks the
- * exit code, the stderr fragments, and the files named by the row.
- */
 const expectServiceCase = (root: string, row: ServiceCase): void => {
   row.setup?.(root);
   const before = (row.unchanged ?? []).map((file) =>

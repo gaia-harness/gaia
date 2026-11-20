@@ -145,10 +145,10 @@ describe('extractPathRefs', () => {
       text: 'bash .claude/agents/code-audit-\n',
     },
     {
-      // A pattern with a non-empty basename prefix before the `*` expanded to
-      // the fragment `.claude/agents/code-audit-`, which names no manifest
-      // entry and no shipped directory, so a legitimate line of prose reported
-      // a phantom leak. The fragment names a family of files, so the question
+      // A `*` after a non-empty basename prefix truncates the token to the
+      // fragment `.claude/agents/code-audit-`, which names no manifest entry
+      // and no shipped directory, so keeping it would report a phantom leak on
+      // legitimate prose. The fragment names a family of files, so the question
       // worth asking is whether the directory holding that family ships.
       equal: ['.claude/agents'],
       file: '.claude/hooks/foo.sh',
@@ -158,7 +158,7 @@ describe('extractPathRefs', () => {
     {
       // Control for the rule above, and the idiom already in the tree
       // (`for f in .claude/hooks/*.sh`): the `*` follows a `/`, so the
-      // expansion is already the directory token, and both shapes now yield
+      // expansion is already the directory token, and both shapes yield
       // the same kind of token.
       equal: ['.claude/hooks'],
       file: '.gaia/scripts/lint-hook-array-guard.sh',
@@ -449,7 +449,7 @@ describe('release runtime-deps CLI', () => {
     {
       // `.gaia/scripts/tests` is release-excluded end-to-end: zero manifest
       // entries live beneath it, so a bare-directory reference must still
-      // flag, guarding against the new directory rule over-rescuing a
+      // flag, guarding against the directory rule over-rescuing a
       // genuinely leaked directory.
       exit: 1,
       files: {
@@ -465,10 +465,9 @@ describe('release runtime-deps CLI', () => {
       out: ['.gaia/scripts/tests'],
     },
     {
-      // The new directory rule must stay scoped to bare directory tokens. A
-      // specific file path that happens to sit under a shipped directory but
-      // isn't itself a manifest entry is still a genuine leak, unchanged from
-      // before the directory rule existed.
+      // The directory rule must stay scoped to bare directory tokens. A
+      // specific file path that sits under a shipped directory but isn't itself
+      // a manifest entry is still a genuine leak.
       exit: 1,
       files: {
         '.gaia/statusline/foo.sh': 'bash .claude/hooks/not-a-real-hook.sh\n',
@@ -499,7 +498,7 @@ describe('release runtime-deps CLI', () => {
     },
     {
       // Recursion-and-leak guard: a maintainer-only path referenced inside a
-      // deeply nested composite-action script must still flag, proving the new
+      // deeply nested composite-action script must still flag, proving the
       // scan scope walks the tree rather than only its top level.
       exit: 1,
       files: {
@@ -532,12 +531,11 @@ describe('release runtime-deps CLI', () => {
       name: 'rejects unknown flags',
     },
     {
-      // Regression for #661: bare mode (no --staging) used to be marker-
-      // unaware, so a .gaia/cli/src reference wrapped in a
-      // `# gaia:maintainer-only:start` / `:end` block (which the scrub's
-      // `**/*.sh` marker-strip transform removes before --staging ever scans
-      // it) false-positived as a leak. Bare mode must now strip the same
-      // blocks in-memory so it agrees with the authoritative staging run.
+      // Bare mode (no --staging) strips `# gaia:maintainer-only:start` / `:end`
+      // blocks in-memory, the same blocks the scrub's `**/*.sh` marker-strip
+      // transform removes before --staging scans, so a .gaia/cli/src reference
+      // inside one is not a leak and bare mode agrees with the authoritative
+      // staging run.
       exit: 0,
       files: {
         '.gaia/scripts/resolve-audit-members.sh': script(
@@ -554,7 +552,7 @@ describe('release runtime-deps CLI', () => {
       out: ['runtime-dependency leaks: none'],
     },
     {
-      // Control for the regression above: the marker strip must not disable
+      // Control for the row above: the marker strip must not disable
       // leak detection wholesale, only the wrapped block.
       exit: 1,
       files: {
@@ -580,11 +578,11 @@ describe('release runtime-deps CLI', () => {
     },
     {
       // Bare mode walks the repo root, which holds scripts the staging tree
-      // never has. A release-excluded script (no manifest entry) that names a
-      // maintainer-only workflow in a TRAILING comment surfaced as a leak:
-      // `stripCommentSuffix` strips only line-leading `#` by design, so the
-      // reference survived. Scanning a file that never ships can only ever
-      // produce a phantom, so the scan surface is the manifest.
+      // never has. A release-excluded script (no manifest entry) naming a
+      // maintainer-only workflow in a TRAILING comment would surface as a leak,
+      // since `stripCommentSuffix` strips only line-leading `#` by design.
+      // Scanning a file that never ships can only produce a phantom, so the
+      // scan surface is the manifest.
       exit: 0,
       files: {
         '.gaia/scripts/verify-required-checks.sh': script(
