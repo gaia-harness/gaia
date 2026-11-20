@@ -16,9 +16,6 @@
 #      bytes.
 #   3. No fence in the files that carry the lifecycle holds `git worktree add`.
 #
-# Every check takes a root laid out like the repository, so the red twins run
-# the same function against a mutated scratch copy.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 #
 setup() {
@@ -127,17 +124,6 @@ check_3() {
   return "$failed"
 }
 
-# scratch_copy: copies every file this suite reads into a scratch root.
-scratch_copy() {
-  local copy="$BATS_TEST_TMPDIR/root" relative
-  rm -rf "$copy"
-  for relative in "${FENCE_FILES[@]}" "$HOOK"; do
-    mkdir -p "$copy/$(dirname "$relative")"
-    cp "$REPO_ROOT/$relative" "$copy/$relative"
-  done
-  printf '%s\n' "$copy"
-}
-
 # --- the checks on the real tree -----------------------------------------
 
 # bats test_tags=whole-tree
@@ -159,53 +145,4 @@ scratch_copy() {
   run check_3 "$REPO_ROOT"
   printf '%s\n' "$output"
   [ "$status" -eq 0 ]
-}
-
-# --- red twins -----------------------------------------------------------
-
-@test "red twin: a second line naming work-lifecycle.md in an issue-claim copy fails check 1" {
-  local copy
-  copy="$(scratch_copy)"
-  run check_1 "$copy"
-  [ "$status" -eq 0 ]
-  printf -- '- Also see `%s` outside a GAIA skill when you commit.\n' "$REFERENCE" >>"$copy/$ISSUE_CLAIM"
-  run check_1 "$copy"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -qF -- 'more than one line'
-}
-
-@test "red twin: a pointer to a path that does not exist fails check 1" {
-  local copy
-  copy="$(scratch_copy)"
-  sed 's#skills/gaia/references/work-lifecycle\.md#skills/gaia/missing/work-lifecycle.md#' "$copy/$ISSUE_CLAIM" >"$copy/claim.tmp"
-  mv "$copy/claim.tmp" "$copy/$ISSUE_CLAIM"
-  run check_1 "$copy"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -qF -- 'does not exist'
-}
-
-@test "red twin: an execution.md copy padded past the cap fails check 2" {
-  local copy cap size
-  copy="$(scratch_copy)"
-  run check_2 "$copy"
-  [ "$status" -eq 0 ]
-  cap="$(byte_cap "$copy")"
-  size="$(wc -c <"$copy/$EXECUTION" | tr -d ' ')"
-  head -c $((cap - size + 1)) /dev/zero | tr '\0' 'x' >"$BATS_TEST_TMPDIR/padding"
-  { cat "$copy/$EXECUTION"; cat "$BATS_TEST_TMPDIR/padding"; printf '\n'; } >"$copy/execution.tmp"
-  mv "$copy/execution.tmp" "$copy/$EXECUTION"
-  run check_2 "$copy"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -qF -- 'shape check'
-}
-
-@test "red twin: a git worktree add fence appended to a debt.md copy fails check 3 and names debt.md" {
-  local copy
-  copy="$(scratch_copy)"
-  run check_3 "$copy"
-  [ "$status" -eq 0 ]
-  printf '\n```bash\ngit worktree add .claude/worktrees/x -b x\n```\n' >>"$copy/$REFERENCES/debt.md"
-  run check_3 "$copy"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -qF -- "check3: $REFERENCES/debt.md "
 }

@@ -14,7 +14,8 @@
 # Checks, in order, each run with the tree under check as its working
 # directory: shell-lint (branch, round: its shellcheck and bash-3.2 parse
 # passes over the round's delta only, or the whole tree when the delta changes
-# an input of the gate's own verdict; its folded guards over the whole tree),
+# an input of the gate's own verdict; the folded guards its header names over
+# the same delta, the rest over the whole tree),
 # line-limit (branch, round: the
 # fitness lint's harness line-limit rule alone), the release-scrub leak check
 # (a bare build-staging into an empty directory), 01-files-present, 02-marker-strip,

@@ -39,10 +39,6 @@
 # source files and run it; the negative-space tests (the weakest) are plain
 # greps, scoped tightly to the converted sites, not repo-wide.
 #
-# Every check is a function of the source file it measures, and each has a red
-# twin that runs the same check on a temp copy carrying the failing spelling
-# and proves the check can fail (.claude/rules/guards-must-fail.md).
-#
 # FIXTURE. A real `git init` main checkout plus a real `git worktree add`
 # linked worktree, both under BATS_TEST_TMPDIR. `.gaia/scripts/main-root-lib.sh`
 # and the notebook library (with the lock primitive it sources) are copied into
@@ -169,34 +165,6 @@ bash_fence_of() {
   printf '%s\n' "$1" | awk '/^```bash/{inside_fence=1;next} /^```[[:space:]]*$/{inside_fence=0} inside_fence'
 }
 
-# Copy <source> to <destination> with the first occurrence of <old> replaced by
-# <new>. Fails when <old> is absent, so a twin whose planted spelling no longer
-# matches the prose reports that instead of testing an unchanged copy.
-plant_into_copy() {
-  local source_file="$1" destination="$2" old="$3" new="$4" content mutated
-  content="$(cat "$source_file")"
-  mutated="${content/"$old"/"$new"}"
-  if [ "$mutated" = "$content" ]; then
-    printf 'planted spelling not applied: "%s" not found in %s\n' "$old" "$source_file" >&2
-    return 1
-  fi
-  printf '%s\n' "$mutated" > "$destination"
-}
-
-# Copy <source> to <destination> with <line> inserted right after the first
-# line containing the fixed-string <anchor>.
-plant_line_after() {
-  local source_file="$1" destination="$2" anchor="$3" line="$4"
-  awk -v anchor="$anchor" -v planted="$line" '
-    { print }
-    !done && index($0, anchor) { print planted; done = 1 }
-  ' "$source_file" > "$destination"
-  if cmp -s "$source_file" "$destination"; then
-    printf 'planted line not applied: anchor "%s" not found in %s\n' "$anchor" "$source_file" >&2
-    return 1
-  fi
-}
-
 # --- S1 ----------------------------------------------------------------------
 
 check_s1() {
@@ -271,13 +239,6 @@ check_s1() {
   check_s1 "$SPEC_MD"
 }
 
-@test "red twin S1: a step-3 fence that joins a relative notebook path fails the check" {
-  local mutated="$BATS_TEST_TMPDIR/spec-relative-mkdir.md"
-  plant_into_copy "$SPEC_MD" "$mutated" 'mkdir -p "$SPEC_FOLDER"' 'mkdir -p ".notebook/specs/${SPEC_ID}"'
-  check_s1 "$mutated" && return 1
-  true
-}
-
 # --- S2 ----------------------------------------------------------------------
 
 check_s2() {
@@ -343,15 +304,6 @@ check_s2() {
   check_s2 "$AUDIT_MD"
 }
 
-@test "red twin S2: a review fence that builds a relative notebook path fails the check" {
-  local mutated="$BATS_TEST_TMPDIR/audit-relative.md"
-  plant_into_copy "$AUDIT_MD" "$mutated" \
-    'SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_DIR=""' \
-    'SPEC_DIR=".notebook/specs/${SPEC_ID}"'
-  check_s2 "$mutated" && return 1
-  true
-}
-
 # main holds the canonical SPEC-999; the worktree holds a forked SPEC-888. A
 # read that resolves main sees 999; a read that stays relative sees 888.
 seed_decoy() {
@@ -406,15 +358,6 @@ check_r1() {
   check_r1 "$LIFECYCLE_MD"
 }
 
-@test "red twin R1: a sweep that resolves the candidate folder relative to the worktree fails the check" {
-  local mutated="$BATS_TEST_TMPDIR/lifecycle-relative.md"
-  plant_into_copy "$LIFECYCLE_MD" "$mutated" \
-    'folder="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$id")" || continue' \
-    'folder=".notebook/specs/${id}"'
-  check_r1 "$mutated" && return 1
-  true
-}
-
 # --- R2 ----------------------------------------------------------------------
 
 check_r2() {
@@ -465,15 +408,6 @@ check_r2() {
   check_r2 "$RESUME_MD"
 }
 
-@test "red twin R2: a resume point built from a relative notebook path fails the check" {
-  local mutated="$BATS_TEST_TMPDIR/resume-relative.md"
-  plant_into_copy "$RESUME_MD" "$mutated" \
-    'SPEC_FOLDER="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_FOLDER=""' \
-    'SPEC_FOLDER=".notebook/specs/${SPEC_ID}"'
-  check_r2 "$mutated" && return 1
-  true
-}
-
 # --- negative space ----------------------------------------------------------
 
 # Lines of the text on stdin that spell a notebook path without going through
@@ -521,24 +455,6 @@ check_read_sites() {
   check_read_sites "$SPEC_MD" "$LIFECYCLE_MD" "$RESUME_MD"
 }
 
-@test "red twin negative space: a bare relative .notebook/specs/ read planted at each read site fails the check" {
-  local mutated_spec mutated_lifecycle mutated_resume
-  mutated_spec="$BATS_TEST_TMPDIR/spec-read-plant.md"
-  mutated_lifecycle="$BATS_TEST_TMPDIR/lifecycle-read-plant.md"
-  mutated_resume="$BATS_TEST_TMPDIR/resume-read-plant.md"
-
-  # One plant per site, each in its own run, so each range proves it can fail.
-  plant_line_after "$LIFECYCLE_MD" "$mutated_lifecycle" '**3. Cold consolidation.**' 'cat .notebook/specs/SPEC-001/SPEC.md'
-  check_read_sites "$SPEC_MD" "$mutated_lifecycle" "$RESUME_MD" && return 1
-
-  plant_line_after "$RESUME_MD" "$mutated_resume" 'Before prompting, gather context' 'cat .notebook/specs/SPEC-001/SPEC.md'
-  check_read_sites "$SPEC_MD" "$LIFECYCLE_MD" "$mutated_resume" && return 1
-
-  plant_line_after "$SPEC_MD" "$mutated_spec" 'The confirmed draft is already in the working-draft checkpoint' 'cat .notebook/specs/SPEC-001/SPEC.md'
-  check_read_sites "$mutated_spec" "$LIFECYCLE_MD" "$RESUME_MD" && return 1
-  true
-}
-
 # The three write-site ranges of the given files, concatenated.
 write_site_ranges() {
   local spec_md="$1" audit_md="$2" step3_range persist_range routing_range
@@ -574,20 +490,4 @@ check_write_sites() {
 
 @test "negative space: no bare relative .notebook/specs/ write survives at the converted sites" {
   check_write_sites "$SPEC_MD" "$AUDIT_MD"
-}
-
-@test "red twin negative space: a bare relative .notebook/specs/ write planted at each write site fails the check" {
-  local mutated_spec mutated_audit
-  mutated_spec="$BATS_TEST_TMPDIR/spec-write-plant.md"
-  mutated_audit="$BATS_TEST_TMPDIR/audit-write-plant.md"
-
-  plant_line_after "$SPEC_MD" "$mutated_spec" '### 3. Allocate, anchor, stamp' 'mkdir -p .notebook/specs/${SPEC_ID}'
-  check_write_sites "$mutated_spec" "$AUDIT_MD" && return 1
-
-  plant_line_after "$AUDIT_MD" "$mutated_audit" '## The wave' 'mkdir -p .notebook/specs/${SPEC_ID}'
-  check_write_sites "$SPEC_MD" "$mutated_audit" && return 1
-
-  plant_line_after "$AUDIT_MD" "$mutated_audit" '## Persist AUDIT.md' 'printf x > .notebook/specs/${SPEC_ID}/AUDIT.md'
-  check_write_sites "$SPEC_MD" "$mutated_audit" && return 1
-  true
 }

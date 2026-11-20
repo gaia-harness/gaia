@@ -2041,3 +2041,64 @@ MATRIX
   run_case 'the same in a workflow run: body' case_the_same_in_a_workflow_run_body
   run_case 'the honored-nowhere finding fires above a line carrying no instance' case_the_honored_nowhere_finding_fires_above_a_line_with_no_instance
 }
+
+# --- delta mode -----------------------------------------------------------
+
+# run_linter_delta <path>...: run the gate with GAIA_GUARD_DELTA_FILE naming a
+# NUL-delimited delta of <path>..., written outside the fixture repo so the
+# delta file is never part of the tracked surface.
+run_linter_delta() {
+  printf '%s\0' "$@" > "$BATS_TEST_TMPDIR/delta"
+  run bash -c "cd '$TEMPORARY_DIRECTORY' && GAIA_GUARD_DELTA_FILE='$BATS_TEST_TMPDIR/delta' bash '$LINTER' 2>&1"
+}
+
+# The violation sits outside the delta, so the clean exit also proves it is
+# not scanned.
+case_a_delta_holding_none_of_the_surface_skips_each_set_and_exits_zero() {
+  fixture_repo
+  fixture_script 'set -e
+out=$(some_command)
+rc=$?'
+  run_linter_delta README.md
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -qF -- 'the delta holds no shell file; skipped' <<<"$output"
+  grep -qF -- 'the delta holds no workflows file; skipped' <<<"$output"
+  grep -qF -- 'the delta holds no *.bats file; skipped' <<<"$output"
+}
+
+case_an_empty_surface_before_the_intersection_still_exits_non_zero() {
+  fixture_repo_bare
+  fixture_file README.md 'readme'
+  run_linter_delta README.md
+  [ "$status" -ne 0 ] || { echo "$output"; return 1; }
+  grep -qF -- 'nothing was scanned' <<<"$output"
+}
+
+case_an_unreadable_delta_file_exits_non_zero() {
+  fixture_repo
+  run bash -c "cd '$TEMPORARY_DIRECTORY' && GAIA_GUARD_DELTA_FILE='$BATS_TEST_TMPDIR/missing' bash '$LINTER' 2>&1"
+  [ "$status" -ne 0 ] || { echo "$output"; return 1; }
+  grep -qF -- 'could not be read; nothing was scanned' <<<"$output"
+}
+
+case_a_delta_holding_one_violating_file_reds_and_reports_only_it() {
+  fixture_repo
+  fixture_script 'set -e
+out=$(some_command)
+rc=$?'
+  fixture_file other.sh 'set -e
+out=$(other_command)
+rc=$?'
+  run_linter_delta check.sh
+  [ "$status" -eq 1 ] || { echo "$output"; return 1; }
+  grep -qF -- 'check.sh:3:' <<<"$output"
+  grep -qF -- 'other.sh:' <<<"$output" && return 1
+  true
+}
+
+@test "delta mode narrows the scan to the delta and keeps every hard error" {
+  run_case 'a delta holding none of the surface skips each set and exits 0' case_a_delta_holding_none_of_the_surface_skips_each_set_and_exits_zero
+  run_case 'an empty surface before the intersection still exits non-zero' case_an_empty_surface_before_the_intersection_still_exits_non_zero
+  run_case 'an unreadable delta file exits non-zero' case_an_unreadable_delta_file_exits_non_zero
+  run_case 'a delta holding one violating file reds and reports only it' case_a_delta_holding_one_violating_file_reds_and_reports_only_it
+}

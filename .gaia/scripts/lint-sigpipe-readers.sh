@@ -332,6 +332,17 @@ esac
 gaia_guard_scan_files "$PROGRAM_NAME" shell || exit $?
 sh_files=(${GAIA_GUARD_SCAN_FILES[@]+"${GAIA_GUARD_SCAN_FILES[@]}"})
 
+# In delta mode `sh_files` is narrowed to the delta, but a script is graded by
+# its source closure, and the armed caller that puts a delta library in it can
+# sit outside the delta. So the records the closure is built from cover the
+# whole tracked set, and only grading and reporting are narrowed. A delta with
+# no script reports nothing, so it skips the record pass too.
+record_files=(${sh_files[@]+"${sh_files[@]}"})
+if [ -n "${GAIA_GUARD_DELTA_FILE:-}" ] && [ "${#sh_files[@]}" -gt 0 ]; then
+  GAIA_GUARD_DELTA_FILE='' gaia_guard_scan_files "$PROGRAM_NAME" shell || exit $?
+  record_files=(${GAIA_GUARD_SCAN_FILES[@]+"${GAIA_GUARD_SCAN_FILES[@]}"})
+fi
+
 gaia_guard_scan_files "$PROGRAM_NAME" workflows || exit $?
 yaml_files=(${GAIA_GUARD_SCAN_FILES[@]+"${GAIA_GUARD_SCAN_FILES[@]}"})
 
@@ -780,7 +791,7 @@ trap 'exit 143' TERM
 # construct either arm matches on is ASCII, so reading bytes costs neither of
 # them anything, and the two per-file invocations do not disagree about a
 # hazard this file argues is real.
-for file_path in ${sh_files[@]+"${sh_files[@]}"}; do
+for file_path in ${record_files[@]+"${record_files[@]}"}; do
   [ -f "$file_path" ] || continue
   printf '#file\t%s\t%s\n' "${file_path##*/}" "$file_path"
   LC_ALL=C "$GAIA_AWK" -v file="$file_path" "$READER_AWK$SHELL_AWK" "$file_path"
