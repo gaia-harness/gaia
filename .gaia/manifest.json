@@ -633,6 +633,7 @@
     "apps/web/app/services/api/tests/base-url.test.tsx": "owned",
     "apps/web/app/services/api/tests/helpers.test.ts": "owned",
     "apps/web/app/services/api/tests/index.test.ts": "owned",
+    "apps/web/app/services/api/tests/snake-case-layer.test.ts": "owned",
     "apps/web/app/services/api/tests/utils.test.ts": "owned",
     "apps/web/app/services/api/utils.ts": "owned",
     "apps/web/app/services/gaia/api.ts": "owned",
@@ -692,6 +693,8 @@
     "apps/web/test/axe-tags.ts": "owned",
     "apps/web/test/contrast.ts": "owned",
     "apps/web/test/dev-ports-static.test.ts": "owned",
+    "apps/web/test/dev-ports-vite-plugin-helpers.ts": "owned",
+    "apps/web/test/dev-ports-vite-plugin-launch.test.ts": "owned",
     "apps/web/test/entry-server-msw.test.ts": "owned",
     "apps/web/test/eslint/no-imperative-query-fetch.test.ts": "owned",
     "apps/web/test/fixtures/a11y-test-child-opt-out.stories.tsx": "owned",
@@ -880,7 +883,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-19T16:46:18.163Z",
+  "generated": "2026-11-20T14:21:59.314Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
