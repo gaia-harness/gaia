@@ -241,6 +241,7 @@ vetoes() {
   done
   printf 'case: %s\n' 'only an exact PRIVATE answer passes; the environment and a cache change nothing' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos file "filed upstream")]")"
+  : >"$GH_CALLS"
   export GH_REPO=someone/private GAIA_REPO_VISIBILITY=PRIVATE REPO_VISIBILITY=PRIVATE VISIBILITY=PRIVATE
   printf 'PRIVATE\n' >"$ALF_ROOT/.gaia/local/repo-visibility"
   printf '{"visibility":"PRIVATE"}\n' >"$ALF_ROOT/.gaia/local/audit/visibility.json"

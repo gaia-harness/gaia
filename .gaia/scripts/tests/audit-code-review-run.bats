@@ -254,12 +254,12 @@ expect_guard() {
   run bash "$guard" "$log" /work/tree < <(jq -nc --arg command "git log -1 -- 'app/routes/\$id.tsx'" '{tool_name: "Bash", tool_input: {command: $command}}')
   [ "$status" -eq 0 ]
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
-  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'Read tool'* ]]
+  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'Read tool'* ]] || return 1
 
   run bash "$guard" "$log" /work/tree < <(jq -nc --arg command 'git log HEAD@{1}..HEAD' '{tool_name: "Bash", tool_input: {command: $command}}')
   [ "$status" -eq 0 ]
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
-  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'git diff HEAD@{1} HEAD'* ]]
+  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'git diff HEAD@{1} HEAD'* ]] || return 1
 
   expect_guard deny 'git blame -S .env README'
   expect_guard deny 'git blame -wS.env README'
