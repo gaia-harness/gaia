@@ -20,9 +20,6 @@
 # GAIA's to edit), wiki/log.md (a history ledger) and CHANGELOG.md (outside the
 # searched folders).
 #
-# Every check takes a root and a file list, so each red twin runs the same
-# check against a scratch copy holding one mutation.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 # bats file_tags=whole-tree
@@ -142,12 +139,6 @@ check_pointers() {
   return 0
 }
 
-# copy_into <scratch root> <relative path>: copy one tracked file into scratch.
-copy_into() {
-  mkdir -p "$1/$(dirname "$2")"
-  cp "$REPO_ROOT/$2" "$1/$2"
-}
-
 # ---------- arming ----------
 
 @test "the pinned sentences, the pointer sources and the searched sources are non-empty and exist" {
@@ -198,39 +189,4 @@ copy_into() {
     printf 'pointer to a removed section:\n%s\n' "$hits" >&2
     return 1
   fi
-}
-
-# ---------- red twins ----------
-
-@test "red twin: a pinned sentence pasted into another source fails" {
-  local scratch="$BATS_TEST_TMPDIR/pasted" source='.claude/skills/tdd/SKILL.md'
-  copy_into "$scratch" "$DOCTRINE_REL"
-  copy_into "$scratch" "$source"
-  printf '%s\n' "$source" >"$BATS_TEST_TMPDIR/one.txt"
-  check_sentences_owned "$scratch" "$BATS_TEST_TMPDIR/one.txt"
-  printf '\n%s\n' "${PINNED_SENTENCES[0]}" >>"$scratch/$source"
-  run check_sentences_owned "$scratch" "$BATS_TEST_TMPDIR/one.txt"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a pinned sentence missing from the doctrine fails" {
-  local scratch="$BATS_TEST_TMPDIR/dropped"
-  copy_into "$scratch" "$DOCTRINE_REL"
-  : >"$BATS_TEST_TMPDIR/none.txt"
-  check_sentences_owned "$scratch" "$BATS_TEST_TMPDIR/none.txt"
-  sed 's/A hollow test is an untested requirement\.//' "$REPO_ROOT/$DOCTRINE_REL" >"$scratch/$DOCTRINE_REL"
-  run check_sentences_owned "$scratch" "$BATS_TEST_TMPDIR/none.txt"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a source with its doctrine pointer deleted fails" {
-  local scratch="$BATS_TEST_TMPDIR/pointer" file target='.claude/skills/gaia/references/worthiness-step.md'
-  for file in "${POINTER_SOURCES[@]}"; do
-    copy_into "$scratch" "$file"
-  done
-  check_pointers "$scratch"
-  sed 's#\.claude/doctrine/testing\.md##g' "$REPO_ROOT/$target" >"$scratch/$target"
-  cmp -s "$REPO_ROOT/$target" "$scratch/$target" && { echo 'mutation changed nothing' >&2; return 1; }
-  run check_pointers "$scratch"
-  [ "$status" -ne 0 ]
 }

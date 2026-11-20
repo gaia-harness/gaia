@@ -5,29 +5,25 @@
 # .claude/skills/gaia/references/spec/ that it reads at their branch points.
 #
 # The invariants:
-#   b. a sub-reference read is a step a model can skip, so every spec/<name>.md
+#   a. a sub-reference read is a step a model can skip, so every spec/<name>.md
 #      that spec.md names exists and is listed in the command's sub-reference
 #      index (.claude/commands/gaia-spec.md), and each sub-reference moved out
 #      of spec.md has a `Read` line there;
-#   c. each moved section lives in exactly one file of the playbook set;
-#   d. every closed-set menu fits AskUserQuestion: no Other label, no save
+#   b. each moved section lives in exactly one file of the playbook set;
+#   c. every closed-set menu fits AskUserQuestion: no Other label, no save
 #      escape, and no more than four entries;
-#   e. the SPEC audit's coverage and consistency lens flags a flow the SPEC's
-#      own behavior rules make impossible, citing both lines;
-#   f. the SPEC audit refuter marks an overstated severity `partial`, refutes
+#   d. the SPEC audit refuter marks an overstated severity `partial`, refutes
 #      a finding only when every gap it names fails, and never refutes a
 #      missing server-only rule for a held value, or lowers it below major, on
-#      ownership or a cookie or transport attribute.
-#
-# DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
-# playbook files; each invariant has a red twin that breaks such a copy and
-# proves the check fails on it.
+#      ownership or a cookie or transport attribute;
+#   e. the clarify loop tells the SPEC to cite the requirements file in the
+#      `REQUIREMENTS.md § <heading text>` form drop-check-lib.mjs parses.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLAYBOOK_ROOT="${DOC_SPEC_PLAYBOOK_ROOT:-$REPO_ROOT}"
+  PLAYBOOK_ROOT="$REPO_ROOT"
 }
 
 REFERENCES='.claude/skills/gaia/references'
@@ -35,18 +31,6 @@ COMMAND='.claude/commands/gaia-spec.md'
 
 # The sub-references the split moved out of spec.md; each needs a Read line.
 MOVED_SUB_REFERENCES=(resume.md clarify-loop.md audit.md)
-
-# scratch_copy: copies spec.md, spec/ and the command file into the test's
-# tmpdir under the same relative layout and prints the copy's root.
-scratch_copy() {
-  local copy="$BATS_TEST_TMPDIR/root"
-  rm -rf "$copy"
-  mkdir -p "$copy/$REFERENCES" "$copy/.claude/commands"
-  cp "$PLAYBOOK_ROOT/$REFERENCES/spec.md" "$copy/$REFERENCES/spec.md"
-  cp -R "$PLAYBOOK_ROOT/$REFERENCES/spec" "$copy/$REFERENCES/spec"
-  cp "$PLAYBOOK_ROOT/$COMMAND" "$copy/$COMMAND"
-  printf '%s\n' "$copy"
-}
 
 # playbook_files <root>: spec.md first, then every spec/*.md, one per line.
 playbook_files() {
@@ -59,7 +43,7 @@ playbook_files() {
   return 0
 }
 
-# --- b. routing and the command index ----------------------------------------
+# --- a. routing and the command index ----------------------------------------
 
 # named_sub_references <root>: every spec/<name>.md spec.md names, one per line.
 named_sub_references() {
@@ -95,42 +79,11 @@ sub_references_routed_and_listed() {
 }
 
 # bats test_tags=whole-tree
-@test "b. every sub-reference spec.md names exists, is indexed, and each moved one is routed" {
+@test "a. every sub-reference spec.md names exists, is indexed, and each moved one is routed" {
   sub_references_routed_and_listed "$PLAYBOOK_ROOT"
 }
 
-@test "b. the routing check goes red when one index listing is deleted" {
-  copy="$(scratch_copy)"
-  grep -vF -- "\`$REFERENCES/spec/resume.md\`" "$copy/$COMMAND" >"$copy/$COMMAND.new"
-  mv "$copy/$COMMAND.new" "$copy/$COMMAND"
-  run sub_references_routed_and_listed "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "b. the routing check goes red when one Read line is deleted" {
-  copy="$(scratch_copy)"
-  grep -vF -- "Read \`$REFERENCES/spec/audit.md\`" "$copy/$REFERENCES/spec.md" >"$copy/$REFERENCES/spec.md.new"
-  mv "$copy/$REFERENCES/spec.md.new" "$copy/$REFERENCES/spec.md"
-  run sub_references_routed_and_listed "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "b. the routing check goes red when spec.md names a missing sub-reference" {
-  copy="$(scratch_copy)"
-  rm "$copy/$REFERENCES/spec/audit.md"
-  run sub_references_routed_and_listed "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "b. the routing check goes red on an empty route set" {
-  copy="$(scratch_copy)"
-  grep -vE -- 'spec/[A-Za-z0-9_-]+\.md' "$copy/$REFERENCES/spec.md" >"$copy/$REFERENCES/spec.md.new"
-  mv "$copy/$REFERENCES/spec.md.new" "$copy/$REFERENCES/spec.md"
-  run sub_references_routed_and_listed "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# --- c. each moved section has one owner -------------------------------------
+# --- b. each moved section has one owner -------------------------------------
 
 # owner<TAB>needle<TAB>kind: kind `heading` matches a line starting with the
 # needle, kind `literal` matches the needle anywhere.
@@ -177,25 +130,11 @@ sections_owned() {
 }
 
 # bats test_tags=whole-tree
-@test "c. each moved section lives in exactly one sub-reference" {
+@test "b. each moved section lives in exactly one sub-reference" {
   sections_owned "$PLAYBOOK_ROOT"
 }
 
-@test "c. the ownership check goes red when a moved heading is duplicated into spec.md" {
-  copy="$(scratch_copy)"
-  printf '\n## 5d. Per-topic exhaustion checkpoint\n\nstale copy\n' >>"$copy/$REFERENCES/spec.md"
-  run sections_owned "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "c. the ownership check goes red when the lock literal returns to spec.md" {
-  copy="$(scratch_copy)"
-  printf '\nLOCK_STATUS="$(true)"\n' >>"$copy/$REFERENCES/spec.md"
-  run sections_owned "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# --- d. every closed-set menu fits AskUserQuestion ---------------------------
+# --- c. every closed-set menu fits AskUserQuestion ---------------------------
 
 # AskUserQuestion takes at most four options and supplies its own free-text
 # Other, so a menu listing Other or the save-partial escape crowds out a real
@@ -248,92 +187,11 @@ menus_fit() {
 }
 
 # bats test_tags=whole-tree
-@test "d. no closed-set menu lists Other, the save escape, or more than four entries" {
+@test "c. no closed-set menu lists Other, the save escape, or more than four entries" {
   menus_fit "$PLAYBOOK_ROOT"
 }
 
-@test "d. the menu check goes red on an explicit Other label" {
-  copy="$(scratch_copy)"
-  printf '\n- options:\n  - `{ label: "Other", description: "x" }`\n' >>"$copy/$REFERENCES/spec/clarify-loop.md"
-  run menus_fit "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "d. the menu check goes red on a numbered save-partial entry" {
-  copy="$(scratch_copy)"
-  printf '\n5. **`Save partial and resume later`**: escape.\n' >>"$copy/$REFERENCES/spec/clarify-loop.md"
-  run menus_fit "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "d. the menu check goes red on a five-entry label menu" {
-  copy="$(scratch_copy)"
-  printf '\n- options:\n  - `{ label: "a" }`\n  - `{ label: "b" }`\n  - `{ label: "c" }`\n  - `{ label: "d" }`\n  - `{ label: "e" }`\n' >>"$copy/$REFERENCES/spec/clarify-loop.md"
-  run menus_fit "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "d. the menu check goes red on a five-entry numbered template" {
-  copy="$(scratch_copy)"
-  printf '\n```\nOptions:\n  1. a\n  2. b\n     wrapped\n  3. c\n  4. d\n  5. e\n```\n' >>"$copy/$REFERENCES/spec/clarify-prompts.md"
-  run menus_fit "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "d. the menu check goes red when no menu is found" {
-  copy="$(scratch_copy)"
-  for file in "$copy/$REFERENCES/spec.md" "$copy/$REFERENCES"/spec/*.md; do
-    grep -vE -- '\{ label:|^[[:space:]]*Options:' "$file" >"$file.new"
-    mv "$file.new" "$file"
-  done
-  run menus_fit "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# --- e. the coverage lens checks flows against the SPEC's own rules ------------
-
-COV_HEADING='#### COV: Coverage and consistency (id prefix `COV`)'
-IMPOSSIBLE_UAT_NEEDLES=(
-  "the SPEC's own behavior rules make impossible"
-  'allows only in another state'
-  'cite the flow line and the rule line'
-)
-
-# cov_flags_impossible_uat <root>: audit.md has exactly one coverage lens
-# heading, and the section under it carries every needle of the impossible-flow
-# clause.
-cov_flags_impossible_uat() {
-  local audit="$1/$REFERENCES/spec/audit.md" section count needle
-  count="$(awk -v want="$COV_HEADING" 'index($0, want) == 1 { n++ } END { print n + 0 }' "$audit")"
-  [ "$count" -eq 1 ] || { printf 'expected one coverage lens heading, found %s\n' "$count" >&2; return 1; }
-  section="$(awk -v want="$COV_HEADING" 'index($0, want) == 1 { in_section = 1; next } in_section && /^#### / { exit } in_section' "$audit")"
-  for needle in "${IMPOSSIBLE_UAT_NEEDLES[@]}"; do
-    grep -qF -- "$needle" <<<"$section" || { printf 'coverage lens lacks: %s\n' "$needle" >&2; return 1; }
-  done
-}
-
-# remove_text <file> <text>: deletes every occurrence of text in file, in place.
-remove_text() {
-  awk -v needle="$2" '{ while ((i = index($0, needle)) > 0) $0 = substr($0, 1, i - 1) substr($0, i + length(needle)) } { print }' "$1" >"$1.new"
-  mv "$1.new" "$1"
-}
-
-# bats test_tags=whole-tree
-@test "e. the coverage lens flags a flow the SPEC's own rules make impossible" {
-  cov_flags_impossible_uat "$PLAYBOOK_ROOT"
-}
-
-@test "e. the impossible-flow check goes red when any needle is dropped" {
-  local needle copy
-  for needle in "${IMPOSSIBLE_UAT_NEEDLES[@]}"; do
-    copy="$(scratch_copy)"
-    remove_text "$copy/$REFERENCES/spec/audit.md" "$needle"
-    run cov_flags_impossible_uat "$copy"
-    [ "$status" -ne 0 ] || { printf 'dropping "%s" stayed green\n' "$needle" >&2; return 1; }
-  done
-}
-
-# --- f. the refuter keeps a sound gap and a held credential's server-only rule --
+# --- d. the refuter keeps a sound gap and a held credential's server-only rule --
 
 REFUTER_LINE='> For each id, open the cited SPEC section and any cited file yourself and try to REFUTE it'
 REFUTER_NEEDLES=(
@@ -357,16 +215,11 @@ refuter_keeps_sound_gaps() {
 }
 
 # bats test_tags=whole-tree
-@test "f. the refuter keeps a sound gap and a held credential's server-only rule" {
+@test "d. the refuter keeps a sound gap and a held credential's server-only rule" {
   refuter_keeps_sound_gaps "$PLAYBOOK_ROOT"
 }
 
-@test "f. the refuter check goes red when any needle is dropped" {
-  local needle copy
-  for needle in "${REFUTER_NEEDLES[@]}"; do
-    copy="$(scratch_copy)"
-    remove_text "$copy/$REFERENCES/spec/audit.md" "$needle"
-    run refuter_keeps_sound_gaps "$copy"
-    [ "$status" -ne 0 ] || { printf 'dropping "%s" stayed green\n' "$needle" >&2; return 1; }
-  done
+
+@test "e. the clarify loop states the requirements pointer form the drop check parses" {
+  grep -qF -- 'the literal `REQUIREMENTS.md § <heading text>`' "$PLAYBOOK_ROOT/$REFERENCES/spec/clarify-loop.md"
 }

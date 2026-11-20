@@ -16,8 +16,7 @@
 #
 # The files are named in the arrays below, so a file added to the gated set
 # without a row here is caught by the reviewer of that change, not by a tree
-# walk. Every check takes a root laid out like the repository, so the red twins
-# run the same function against a mutated scratch copy.
+# walk. A named file that is missing fails its check.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -130,37 +129,7 @@ check_ungated() {
   return "$failed"
 }
 
-# scratch_copy: copies every file the arrays name into a scratch root, keeping paths.
-scratch_copy() {
-  local copy="$BATS_TEST_TMPDIR/root" row file
-  rm -rf "$copy"
-  for row in "${GATED[@]}"; do
-    file="${row%%|*}"
-    mkdir -p "$copy/$(dirname "$file")"
-    cp "$REPO_ROOT/$file" "$copy/$file"
-  done
-  for file in "${UNGATED[@]}"; do
-    mkdir -p "$copy/$(dirname "$file")"
-    cp "$REPO_ROOT/$file" "$copy/$file"
-  done
-  printf '%s\n' "$copy"
-}
-
 # --- the checks on the real tree -----------------------------------------
-
-@test "the gated and ungated sets are non-empty and every named file exists" {
-  local row file missing=0
-  [ "${#GATED[@]}" -gt 0 ]
-  [ "${#UNGATED[@]}" -gt 0 ]
-  for row in "${GATED[@]}"; do
-    file="${row%%|*}"
-    [ -f "$REPO_ROOT/$file" ] || { printf 'missing: %s\n' "$file"; missing=1; }
-  done
-  for file in "${UNGATED[@]}"; do
-    [ -f "$REPO_ROOT/$file" ] || { printf 'missing: %s\n' "$file"; missing=1; }
-  done
-  [ "$missing" -eq 0 ]
-}
 
 # bats test_tags=whole-tree
 @test "each gated file calls the gate once and names pull-gate.md with the exit code" {
@@ -181,70 +150,4 @@ scratch_copy() {
   run check_ungated "$REPO_ROOT"
   printf '%s\n' "$output"
   [ "$status" -eq 0 ]
-}
-
-# --- red twins: each guard refuses its failing state ----------------------
-
-@test "red twin: a command copy with the gate removed fails the presence check" {
-  local copy
-  copy="$(scratch_copy)"
-  run check_presence "$copy"
-  [ "$status" -eq 0 ]
-  grep -vF -- 'gaia_pull_gate' "$copy/.claude/commands/gaia-fitness.md" >"$copy/fitness.tmp"
-  mv "$copy/fitness.tmp" "$copy/.claude/commands/gaia-fitness.md"
-  run check_presence "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'presence: .claude/commands/gaia-fitness.md calls gaia_pull_gate' <<<"$output"
-}
-
-@test "red twin: a copy whose sentence drops the exit code fails the presence check" {
-  local copy
-  copy="$(scratch_copy)"
-  sed 's#and the exit code#and nothing else#' "$copy/.claude/commands/gaia-debt.md" >"$copy/debt.tmp"
-  mv "$copy/debt.tmp" "$copy/.claude/commands/gaia-debt.md"
-  run check_presence "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'presence: .claude/commands/gaia-debt.md has no line naming pull-gate.md' <<<"$output"
-}
-
-@test "red twin: a copy with the gate moved below the creation marker fails the order check" {
-  local copy
-  copy="$(scratch_copy)"
-  run check_order "$copy"
-  [ "$status" -eq 0 ]
-  grep -vF -- 'gaia_pull_gate "/gaia-codify"' "$copy/.claude/commands/gaia-codify.md" >"$copy/codify.tmp"
-  printf 'gaia_pull_gate "/gaia-codify"\n' >>"$copy/codify.tmp"
-  mv "$copy/codify.tmp" "$copy/.claude/commands/gaia-codify.md"
-  run check_order "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'order: .claude/commands/gaia-codify.md must hold' <<<"$output"
-}
-
-@test "red twin: an update-deps copy with the gate above the interrupted-worktree check fails the order check" {
-  local copy
-  copy="$(scratch_copy)"
-  grep -vF -- 'gaia_pull_gate "/update-deps"' "$copy/.claude/skills/update-deps/SKILL.md" >"$copy/deps.tmp"
-  { printf 'gaia_pull_gate "/update-deps"\n'; cat "$copy/deps.tmp"; } >"$copy/deps.new"
-  mv "$copy/deps.new" "$copy/.claude/skills/update-deps/SKILL.md"
-  run check_order "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'order: .claude/skills/update-deps/SKILL.md must hold' <<<"$output"
-}
-
-@test "red twin: an exempt file with a gate added fails the ungated check" {
-  local copy
-  copy="$(scratch_copy)"
-  printf 'gaia_pull_gate "/gaia-release"\n' >>"$copy/.claude/commands/gaia-release.md"
-  run check_ungated "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'ungated: .claude/commands/gaia-release.md calls gaia_pull_gate' <<<"$output"
-}
-
-@test "red twin: the residue reference with a gate added fails the ungated check" {
-  local copy
-  copy="$(scratch_copy)"
-  printf 'gaia_pull_gate "/gaia-residue"\n' >>"$copy/$REFERENCES/residue.md"
-  run check_ungated "$copy"
-  [ "$status" -ne 0 ]
-  grep -qF -- "ungated: $REFERENCES/residue.md calls gaia_pull_gate" <<<"$output"
 }

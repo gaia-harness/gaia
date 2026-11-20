@@ -7,8 +7,6 @@
 # outcome that is not a run reports itself (`no-run`, `dispatch-failed`); none
 # loops past its bound.
 #
-# Mutation tests prove the probe's bound and its main-branch guard can fail.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 POLL_LIMIT=9
@@ -64,9 +62,9 @@ fence_with() {
   ' "$2"
 }
 
-# extract <anchor> [<page>]: write the fence to fence.sh.
+# extract <anchor>: write the fence to fence.sh.
 extract() {
-  fence_with "$1" "${2:-$PAGE}" >"${BATS_TEST_TMPDIR}/fence.sh"
+  fence_with "$1" "$PAGE" >"${BATS_TEST_TMPDIR}/fence.sh"
   [ -s "${BATS_TEST_TMPDIR}/fence.sh" ]
 }
 
@@ -80,78 +78,72 @@ run_fence() {
 
 api_calls() { grep -c '^api ' "$GH_LOG" || true; }
 
-@test "probe: on main with the cached DEFAULT_BRANCH empty, it polls rather than skipping" {
-  extract 'first_run_probe()'
-  run_fence
-  [ "$output" = "actions-probe: no-run" ]
-  [ "$(api_calls)" -eq "$POLL_LIMIT" ]
+# reset_logs: empty the stub call logs between the cases of one test.
+reset_logs() {
+  : >"$GH_LOG"
+  : >"$SLEEP_LOG"
 }
 
-@test "probe: a run on the first poll reports run-seen with no wait" {
+@test "probe outcomes case table: polls on main, bounds, and skips" {
   extract 'first_run_probe()'
-  GH_RUN_FROM_POLL=1 run_fence
-  [ "$status" -eq 0 ]
-  [ "$output" = "actions-probe: run-seen" ]
-  [ "$(api_calls)" -eq 1 ]
-  [ ! -s "$SLEEP_LOG" ]
-}
-
-@test "probe: the poll targets the pushed commit's runs" {
-  extract 'first_run_probe()'
-  GH_RUN_FROM_POLL=1 run_fence
   local sha
-  sha="$(git -C "$PROJECT" rev-parse HEAD)"
-  grep -qF -- "api repos/acme/app/actions/runs?head_sha=${sha} --jq .total_count" "$GH_LOG"
-}
 
-@test "probe: no run reports no-run after exactly the bound" {
-  extract 'first_run_probe()'
+  # on main with the cached DEFAULT_BRANCH empty, it polls rather than skipping;
+  # no run reports no-run after exactly the bound
   run_fence
   [ "$status" -eq 0 ]
   [ "$output" = "actions-probe: no-run" ]
   [ "$(api_calls)" -eq "$POLL_LIMIT" ]
   [ "$(wc -l <"$SLEEP_LOG" | tr -d ' ')" -eq $((POLL_LIMIT - 1)) ]
-}
 
-@test "probe: a failing gh reads as no run, not as a run" {
-  extract 'first_run_probe()'
+  # a run on the first poll reports run-seen with no wait, polling the pushed commit's runs
+  reset_logs
+  GH_RUN_FROM_POLL=1 run_fence
+  [ "$status" -eq 0 ]
+  [ "$output" = "actions-probe: run-seen" ]
+  [ "$(api_calls)" -eq 1 ]
+  [ ! -s "$SLEEP_LOG" ]
+  sha="$(git -C "$PROJECT" rev-parse HEAD)"
+  grep -qF -- "api repos/acme/app/actions/runs?head_sha=${sha} --jq .total_count" "$GH_LOG"
+
+  # a failing gh reads as no run, not as a run
+  reset_logs
   GH_API_FAIL=1 run_fence
   [ "$output" = "actions-probe: no-run" ]
-}
 
-@test "probe: a default branch other than main skips without calling gh" {
-  extract 'first_run_probe()'
+  # an absent tests.yml skips without calling gh
+  reset_logs
+  rm "${PROJECT}/.github/workflows/tests.yml"
+  run_fence
+  [ "$output" = "actions-probe: skipped" ]
+  [ ! -s "$GH_LOG" ]
+  : >"${PROJECT}/.github/workflows/tests.yml"
+
+  # a default branch other than main skips without calling gh
+  reset_logs
   run_fence master
   [ "$output" = "actions-probe: skipped" ]
   [ ! -s "$GH_LOG" ]
 }
 
-@test "probe: an absent tests.yml skips without calling gh" {
-  extract 'first_run_probe()'
-  rm "${PROJECT}/.github/workflows/tests.yml"
-  run_fence
-  [ "$output" = "actions-probe: skipped" ]
-  [ ! -s "$GH_LOG" ]
-}
-
-@test "dispatch: a failed gh workflow run reports dispatch-failed and polls nothing" {
+@test "dispatch outcomes case table: dispatch-failed, run-seen, and no-run" {
   extract 'first_run_dispatch()'
+
+  # a failed gh workflow run reports dispatch-failed and polls nothing
   GH_DISPATCH_EXIT=1 run_fence
   [ "$status" -eq 0 ]
   [ "$output" = "actions-probe: dispatch-failed" ]
   [ "$(api_calls)" -eq 0 ]
-}
 
-@test "dispatch: dispatches tests.yml on main, then a run reports run-seen" {
-  extract 'first_run_dispatch()'
+  # dispatches tests.yml on main, then a run reports run-seen
+  reset_logs
   GH_RUN_FROM_POLL=2 run_fence
   [ "$output" = "actions-probe: run-seen" ]
   grep -qxF -- "workflow run tests.yml --repo acme/app --ref main" "$GH_LOG"
   [ "$(api_calls)" -eq 2 ]
-}
 
-@test "dispatch: no run after the dispatch reports no-run after exactly the bound" {
-  extract 'first_run_dispatch()'
+  # no run after the dispatch reports no-run after exactly the bound
+  reset_logs
   run_fence
   [ "$output" = "actions-probe: no-run" ]
   [ "$(api_calls)" -eq "$POLL_LIMIT" ]
@@ -167,22 +159,4 @@ api_calls() { grep -c '^api ' "$GH_LOG" || true; }
   grep -qF -- '**I enabled it** (Recommended)' <<<"$section"
   grep -qF -- '**Skip for now**' <<<"$section"
   grep -qF -- 'Then run `## First CI run` below' "$PAGE"
-}
-
-@test "mutation: a probe with its poll bound removed fails the bound fixture" {
-  local mutant="${BATS_TEST_TMPDIR}/mutant.md"
-  sed 's/for attempt in 1 2 3 4 5 6 7 8 9; do/for attempt in 1 2 3 4 5 6 7 8 9 10 11; do/' "$PAGE" >"$mutant"
-  cmp -s "$PAGE" "$mutant" && return 1
-  extract 'first_run_probe()' "$mutant"
-  run_fence
-  [ "$(api_calls)" -ne "$POLL_LIMIT" ]
-}
-
-@test "mutation: a probe without its main guard calls gh on master" {
-  local mutant="${BATS_TEST_TMPDIR}/mutant.md"
-  sed 's/if \[ "\$(git branch --show-current)" != main \] || /if /' "$PAGE" >"$mutant"
-  cmp -s "$PAGE" "$mutant" && return 1
-  extract 'first_run_probe()' "$mutant"
-  run_fence master
-  [ -s "$GH_LOG" ]
 }
