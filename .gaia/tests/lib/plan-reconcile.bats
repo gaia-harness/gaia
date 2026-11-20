@@ -182,7 +182,7 @@ EOF
   jq -e '.items[] | select(.kind == "plan" and .id == "PLAN-005") | .pr_number == 2601' "$SANDBOX/$CATALOG_RELATIVE_PATH" >/dev/null || { echo "pr_number: not stamped as a number"; return 1; }
   [ ! -e "$STUB_DIRECTORY/gh-called" ] || { echo "pr_number: reached gh"; return 1; }
 
-  # The two-argument form prints the exact line, stamps no pr_number, and reaches no network.
+  # The two-argument form exits 0 for a valid, a malformed and an unknown id, stamps no pr_number, and reaches no network.
   _fresh_sandbox
   run --separate-stderr _reconcile PLAN-005
   [ "$status" -eq 0 ] || { echo "two-argument PLAN-005: status $status"; return 1; }
