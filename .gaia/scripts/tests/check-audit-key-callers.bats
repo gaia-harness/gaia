@@ -227,8 +227,7 @@ check_fixture() {
 
 @test "a bad repo_root reports 2, never a clean 0" {
   # 2, not 1: "the check could not run" is a different answer from "the check
-  # says no", and neither is the 0 an unscanned tree used to report. A repo
-  # subdirectory separates "is in a repo" from "is a repo root".
+  # says no". A repo subdirectory separates "is in a repo" from "is a repo root".
   mkdir -p "$BATS_TEST_TMPDIR/not-a-repo"
   local root
   for root in "$BATS_TEST_TMPDIR/not-a-repo" "$REPO_ROOT/.gaia/scripts"; do

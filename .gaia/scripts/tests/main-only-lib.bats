@@ -173,7 +173,7 @@ assert_prefix_refuses() {
   [ "$output" = "$baseline" ] || { echo "$1: output differs from the no-prefix refusal" >&2; return 1; }
 }
 
-@test "own prefix: it passes only from its own branch kind, and every other tree refuses like no prefix" {
+@test "own prefix: it passes from its own branch kind and the main checkout, and every other worktree refuses like no prefix" {
   make_repo
   make_worktree "$REPO" w-deps deps/x
   local deps_worktree="$WORKTREE"
@@ -488,7 +488,7 @@ extract_block() {
 
 # ---------- per-call-site execution, under the shell the call site really uses ----------
 
-@test "call-site execution: every extracted block refuses from a real linked worktree under each shell, and is silent on the main checkout" {
+@test "call-site execution: every extracted block refuses from a real linked worktree under each shell, and each idiom shape is silent on the main checkout" {
   make_repo
   install_libraries "$REPO"
   make_worktree "$REPO" mol-exec mol-exec-branch
@@ -506,9 +506,7 @@ extract_block() {
       grep -qF -- "$flow must run from the main checkout, not a worktree." <<<"$output" || { echo "$call_site_file ($shell_name): missing refusal line" >&2; return 1; }
       grep -qF -- "Main checkout:  $REPO" <<<"$output" || { echo "$call_site_file ($shell_name): missing main checkout line" >&2; return 1; }
       grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run $flow there." <<<"$output" || { echo "$call_site_file ($shell_name): missing re-invoke line" >&2; return 1; }
-      # Under zsh, BASH_SOURCE is unset and `declare -F` declares a float and
-      # succeeds instead of answering whether a function exists; a
-      # "command not found" in the output is what that hazard looks like.
+      # A "command not found" here is the zsh hazard the as-invoked section describes.
       grep -qF -- "command not found" <<<"$output" && { echo "$call_site_file ($shell_name): stray shell error in output" >&2; return 1; }
     done
   done
@@ -527,7 +525,7 @@ extract_block() {
 #
 # The execution test above runs every block from a worktree whose branch
 # matches neither update prefix, so a dropped, typo'd or swapped prefix
-# argument leaves it green. These pins run the two update skills' real blocks
+# argument leaves it green. These pins run the update skills' real blocks
 # from worktrees on each kind of branch.
 
 PREFIX_PIN_SKILL_FILES=(

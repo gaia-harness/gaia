@@ -231,10 +231,8 @@ extract_payload() {
 }
 
 @test "usage: a removed or unrecognized flag exits 2 with the usage error" {
-  # --base selected ONE key base, which is exactly the defect: the base half of
-  # the key advances one stamp per cleared round. A stale caller must not be
-  # quietly accepted-and-ignored, because the value it passes is the one this
-  # script now deliberately refuses to honour.
+  # --base is refused, never ignored: one key base misses earlier rounds, since
+  # the base half of the key advances one stamp per cleared round.
   local row flags flag_name arguments
   for row in "--base $BASE|--base" "--bogus|--bogus"; do
     flags=${row%%|*}; flag_name=${row#*|}
@@ -285,8 +283,7 @@ extract_payload() {
   [ "$(jq 'has("area_tags")' <<<"$entry")" = "true" ]
 }
 
-# bats test_tags=protected
-@test "the posted block never carries sidecar-only detail, review_bases text, entry_id or resolutions" {
+@test "the posted block never carries sidecar-only detail, review_bases keys beyond member, sha, reason and anchor_tree, entry_id or resolutions" {
   local payload entry sidecar
   # The sidecar is the report of record and carries file / line / defect /
   # verification / repair. The PR comment is a published surface whose
@@ -412,7 +409,7 @@ extract_payload() {
     esac
     [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
     [ "$output" = "$expected" ] || { echo "row $row: got '$output'"; return 1; }
-    # Declined before gh was ever invoked: the glob check runs first.
+    # Zero sidecars declines before any gh call: the glob check runs first.
     if [ "$row" = "zero-sidecars" ] && [ -e "$GH_LOG" ]; then
       echo "row $row: gh was invoked"
       return 1
@@ -435,7 +432,7 @@ extract_payload() {
 
 # AC6: a malformed sidecar is skipped, named, and never silently vanishes
 
-@test "a malformed sidecar is skipped and named on stderr, and the rest still posts" {
+@test "a malformed sidecar is skipped and named on stderr; the rest still posts, and with none left the run declines no sidecars" {
   local row expected_last
   for row in invalid-json non-array-findings every-sidecar-malformed; do
     reset_run
@@ -571,9 +568,8 @@ extract_payload() {
 }
 
 @test "members bucket by name across rounds, and unnamed sidecars collapse into one bucket" {
-  # One member across several rounds: the direction the multi-base widening
-  # makes reachable and the single-base glob never could. File count and member
-  # count agreed only while a member could write at most one matching sidecar.
+  # One member across several rounds counts once: the member count is distinct
+  # names, not sidecar files.
   write_sidecar_at "$AUDIT_KEY" code-audit-maintainer-shell \
     '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["a"]}]'
   write_sidecar_at "${BASE_ROUND2}.main" code-audit-maintainer-shell \
@@ -601,10 +597,9 @@ extract_payload() {
 }
 
 
-# bats test_tags=protected
 @test "a sidecar of another branch, or of a branch whose slug has this one as a suffix, is never merged" {
-  # Non-vacuity for the multi-base test above: the glob widened across the base
-  # half, and only the base half. `.gaia/local/audit/` is shared (symlinked to
+  # Non-vacuity for the multi-base test above: the glob spans any base half but
+  # only this branch's slug. `.gaia/local/audit/` is shared (symlinked to
   # main from every worktree), so a sibling tree's sidecars sit in the same
   # directory and the branch slug is the whole discriminator between them.
   local payload
@@ -764,7 +759,7 @@ write_sidecar_with_review_base() {
   grep -qF "light-only-marker" "$SANDBOX/posted_body.txt" && return 1
   grep -qF "swallowed-error" "$SANDBOX/posted_body.txt" || return 1
 
-  # A branch holding only a light sidecar has no sidecars.
+  # A branch holding only a light sidecar declines as having no sidecars.
   reset_run
   printf '{"schema":1,"member":"code-audit-frontend","review":"light","findings":[]}\n' > "$light_file"
   stub_gh '[]'

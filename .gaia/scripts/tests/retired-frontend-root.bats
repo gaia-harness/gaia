@@ -30,7 +30,6 @@ run_gate() {
   run bash "$1/.gaia/scripts/check-retired-paths.sh"
 }
 
-# bats test_tags=protected
 @test "a retired frontend/ citation or tracked path fails and is named" {
   local repo
   repo="$(make_repo retired)"

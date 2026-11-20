@@ -344,7 +344,7 @@ assert_resolves() {
 # Its one divergence from gaia_resolve_main_root: a linked worktree resolves
 # to its own root, not main's.
 
-@test "gaia_resolve_tree_root answers each tree's own physical root" {
+@test "gaia_resolve_tree_root answers each tree's own physical root and fails outside a tree" {
   make_repo
   make_worktree "$REPO" "w" "treewtbranch"
   local symlink nongit
@@ -461,9 +461,9 @@ resolve_common() {
   [ -z "$output" ] || { echo "row outside any repository: printed '$output'"; return 1; }
 }
 
-# ---------- UAT-004: separate-git-dir entered from a linked worktree ----------
+# ---------- separate-git-dir entered from a linked worktree ----------
 
-@test "UAT-004: separate-git-dir linked worktree fails with one named diagnostic, empty stdout, unmodified git dir" {
+@test "separate-git-dir linked worktree fails with one named diagnostic, empty stdout, unmodified git dir" {
   make_separate_gitdir
   make_worktree "$WORK" "w" "sepwtbranch"
   local expected_gitdir gitdir_before gitdir_after
@@ -483,7 +483,7 @@ resolve_common() {
   [ "$(wc -l <<<"$output" | tr -d ' ')" -eq 1 ]
 }
 
-# ---------- output form: directive 7 ----------
+# ---------- output form ----------
 
 @test "output form: stdout is exactly one line terminated by a single newline on success" {
   make_repo
@@ -496,7 +496,7 @@ resolve_common() {
   [ "$(cat "$outfile")" = "$REPO" ]
 }
 
-# ---------- bare repository / no working tree: directive 6 ----------
+# ---------- bare repository / no working tree ----------
 
 @test "a bare repository fails with a named diagnostic rather than silently falling back" {
   local bare

@@ -118,8 +118,8 @@ reconcile: spec specs/SPEC-003: folder without catalog row"
   [ "$(manifest_of "$SANDBOX/.notebook")" = "$manifest" ]
 }
 
-@test "reconcile reports only real mismatches and stays silent for reaped rows, dotfiles, temp files and a consistent notebook" {
-  # Rows carrying a reap record are silent, with or without a folder.
+@test "reconcile reports plan mismatches as it does spec ones and stays silent for reaped rows, dotfiles, the catalog temp file and a consistent notebook" {
+  # Rows carrying a reap record are silent though they have no folder.
   make_fixture \
     --seed-row '{"kind":"spec","id":"SPEC-010","path":"specs/SPEC-010","status":"merged","reap":{"at":null,"by":"pre-catalog"}}' \
     --seed-row '{"kind":"spec","id":"SPEC-011","path":"specs/SPEC-011","status":"merged","reap":{"at":"2026-01-01T00:00:00Z","by":"spec-archive-merged"}}' \

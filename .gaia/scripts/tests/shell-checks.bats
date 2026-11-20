@@ -390,7 +390,6 @@ audit_shell_paths() {
   ' _ "$REPO_ROOT/.claude/hooks/lib" "$FIXTURE" | awk -F'\t' '$2 == "fixture-shell" { print $1 }' | sort
 }
 
-# bats test_tags=protected
 @test "the selector and the audit agree on every release-skip branch kind" {
   local kind checked=0
   for kind in release ordinary hand-edit hand-edit-release mixed; do
@@ -499,7 +498,6 @@ for problem in problems:
 PY
 }
 
-# bats test_tags=protected
 @test "the shell job runs on every pull request, selects first and gates the rest" {
   require_yaml_parser
   run job_shape "$WORKFLOW"

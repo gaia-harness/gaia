@@ -157,7 +157,7 @@ gate_pass_headers() {
 # lever for this group, which is what this is. Widening one of these back to
 # the bare gate buys no assertion and costs about 68 seconds.
 
-# bats test_tags=whole-tree,protected
+# bats test_tags=whole-tree
 @test "the bash-3.2 parse pass fails on unparsable scripts and names every one, skips loudly when too new, and fails closed on a missing or versionless interpreter" {
   local first_sh last_sh
   first_sh="$(tracked_sh first)"

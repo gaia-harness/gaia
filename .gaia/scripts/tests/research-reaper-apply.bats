@@ -37,7 +37,7 @@ epoch_of() { jq -rn --arg iso "$1" '$iso | fromdateiso8601'; }
   grep -qF 'reaped stale-notes' <<<"$output"
 }
 
-@test "apply --snooze keeps the folder and snoozes one window ahead, by default or by the configured retention days" {
+@test "apply --snooze keeps the folder, snoozes one window ahead by default or by the configured retention days, and list no longer offers it" {
   reaper_fixture
   add_research stale-notes closed
   add_research week-notes closed

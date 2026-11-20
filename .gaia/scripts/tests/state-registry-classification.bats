@@ -32,7 +32,7 @@ classify() {
   run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh classify "$2"' _ "$REGISTRY_REPO" "$1"
 }
 
-@test "classify maps registry paths exactly: context readings, settings.json, checkpoint-override and their .bak siblings" {
+@test "classify maps registry paths exactly: context readings and the update cache, and settings.json and checkpoint-override but not their .bak siblings" {
   make_registry_repo
   run jq -r '.entries[] | select(.path == "protected/checkpoint-override.json") | .id' "$REAL_REGISTRY"
   [ "$output" = "checkpoint-override" ]
@@ -51,8 +51,8 @@ classify() {
     [ "$output" = "$expected" ] || { echo "row $row: got '$output'"; return 1; }
   done
 
-  # Give the context row a scope no other row has, so reaching it, rather than
-  # the cache-shared row, is observable.
+  # Give the context row a scope the cache-shared row lacks, so reaching it,
+  # rather than the cache-shared row, is observable.
   jq '(.entries[] | select(.id == "context-readings") | .scope) = "per-tree"' "$REGISTRY_FILE" >"$REGISTRY_FILE.new"
   mv "$REGISTRY_FILE.new" "$REGISTRY_FILE"
   classify "cache/shared/context/abc.json"

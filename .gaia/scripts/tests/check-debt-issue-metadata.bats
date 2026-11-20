@@ -21,10 +21,6 @@
 # because a gate that fails for the wrong reason is a gate that will pass for
 # the wrong reason later.
 #
-# Two of the fixtures are the live defects that motivated the gate, the first
-# row of their case tables: an issue filed with no `audience:` label, and an
-# issue filed with no dedup key at all.
-#
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md. Note the
 # `run` idiom throughout, which captures status instead of letting a non-zero
 # exit abort the test body; `$status` is then compared with POSIX `[ ]`.
@@ -207,7 +203,7 @@ write_body() {
 # Labels: the namespaces and the labels that belong to another lifecycle stage
 # ---------------------------------------------------------------------------
 
-@test "a filing with a missing, duplicated or out-of-set label value is rejected" {
+@test "a filing with a missing, duplicated or out-of-set label value, or a later-stage label, is rejected" {
   # The first row is the live defect that motivated the gate: an issue filed
   # with no audience: label. Fields: labels | expected code | code that must
   # not appear | expected finding total (empty to skip).
@@ -256,7 +252,7 @@ write_body() {
 # that has since been answered.
 # ---------------------------------------------------------------------------
 
-@test "an investigate filing without a well-formed research block is rejected" {
+@test "a research block that is missing, malformed or duplicated on an investigate filing, or present on any other, is rejected" {
   local row kind labels code refuted
   for row in \
     "good|$INVESTIGATE_LABELS|missing-investigate-block|" \
@@ -280,7 +276,7 @@ write_body() {
 # The dedup key
 # ---------------------------------------------------------------------------
 
-@test "a filing with a missing or malformed dedup key is rejected" {
+@test "a filing with a missing, malformed or duplicated dedup key is rejected" {
   # The first row is the live defect that motivated the gate: an issue filed
   # with no dedup key at all.
   local row kind code refuted

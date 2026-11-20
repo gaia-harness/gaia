@@ -61,7 +61,7 @@ build_fixture() {
   }
 }
 
-@test "a deleted or renamed file still selects the suites naming it" {
+@test "a deleted or renamed file still selects the suites naming it (deleted, renamed, renamed uncommitted in default mode)" {
   git -C "$FIXTURE" rm -q scripts/gone.sh
   git -C "$FIXTURE" commit -q -m delete
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
@@ -145,7 +145,7 @@ commit_base_files() {
   }
 }
 
-@test "a file sharing its basename selects suites by unique trailing path (source, deleted, in a tree holding a suite, unique basename, non-source, basename inside a directory path)" {
+@test "a changed file selects suites by its unique trailing path (shared-basename source, deleted, in a tree holding a suite, unique basename, non-source, basename inside a directory path)" {
   build_fixture
   base="$(commit_base_files \
     'apps/web/app/form-error/index.tsx=a' \
@@ -327,7 +327,7 @@ commit_base_files() {
   [ "$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')" -eq 1 ]
 }
 
-@test "usage and default-branch errors name the fix: no remote default branch exits 3, an unknown option exits 2" {
+@test "no remote default branch exits 3 naming the fix, an unknown option exits 2" {
   git -C "$FIXTURE" update-ref -d refs/remotes/origin/main
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE"

@@ -226,9 +226,8 @@ tsv() {
 # round trips per wait and, with a real interval, two extra minutes.
 
 @test "the bound: terminal verdicts break out, a pending merge reads once per attempt, waits only between reads" {
-  # Without the break-out rows a script that reads five times and reports the
-  # first answer passes. Only the last row reaches the sleep (every other row
-  # passes --interval 0, which short-circuits it): N attempts owe N-1 waits.
+  # Only the last row reaches the sleep (every other row passes --interval 0,
+  # which short-circuits it): N attempts owe N-1 waits.
   local row view attempts interval want_status want_views want_sleeps
   stub_sleep
   for row in \
@@ -248,7 +247,7 @@ tsv() {
 
 # --- the keep-waiting rules ---------------------------------------------
 
-@test "mergeable UNKNOWN or null, no checks yet, and zero failed checks all keep waiting" {
+@test "mergeable UNKNOWN, no checks yet, and zero failed checks all keep waiting" {
   # UNKNOWN is neither clean nor conflicting; gh answers `null` before it has
   # computed mergeability and the script's jq filter maps that to UNKNOWN. A
   # `gh pr checks` that exits non-zero with no output is what gh does before

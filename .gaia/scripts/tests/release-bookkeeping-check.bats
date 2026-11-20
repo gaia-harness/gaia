@@ -110,7 +110,7 @@ run_diff() {
 
 # The diff predicate
 
-# expect_bookkeeping <label>: commits the staged release edits and the predicate
+# expect_bookkeeping <label>: commits the release edits and the predicate
 # calls them bookkeeping; then returns the repository to the base commit so the
 # next case in the same test starts from it.
 expect_bookkeeping() {
@@ -263,7 +263,7 @@ expect_full_gates() {
   fixture_git reset -q --hard "$BASE_SHA"
 }
 
-@test "ci: every reason to run all gates yields fast=false" {
+@test "ci: a non-bookkeeping change, a stale base, an open ci-red-main issue, an unfinished push run or a base that is not the first parent yields fast=false" {
   apply_release
   write_file a.sh $'echo changed\n'
   commit_release

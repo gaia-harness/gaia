@@ -101,7 +101,7 @@ expect_plan() {
   [ "$output" = "$2" ] || { echo "$1: got '$output'"; return 1; }
 }
 
-@test "staged paths plan packages by preCommitSource glob" {
+@test "staged paths plan packages by preCommitSource glob, and a retired root app path plans retired-add instead" {
   use_frontend_package
   expect_plan "empty staged set" "" || return 1
 
@@ -288,8 +288,8 @@ C6_PAIRS=(
 }
 
 # expect_rename_plan <label> <expected> <pair>...: a fresh sandbox with the
-# whole C6 set plus the given extra pairs, staged as exact renames only. The
-# expected plan is `package<TAB>apps/web`, `none` (empty), or `not-exempt`.
+# given pairs staged as exact renames only. The expected plan is
+# `package<TAB>apps/web`, `none` (empty), or `not-exempt`.
 expect_rename_plan() {
   local label="$1" expected="$2" count
   shift 2
@@ -309,7 +309,7 @@ expect_rename_plan() {
 
 # Each refusal stages one entry that must not be exempt; the first two ride
 # beside the whole C6 set to prove the exemption is all or nothing.
-@test "a rename is exempt only as an exact move to its counterpart; every other rename plans" {
+@test "a rename is exempt only as an exact move to its counterpart; every other rename goes through the normal plan" {
   expect_rename_plan "R100 rename inside apps/web beside the C6 set" $'package\tapps/web' \
     "${C6_PAIRS[@]}" "apps/web/app/utils/a.ts:apps/web/app/utils/b.ts" || return 1
   expect_rename_plan "harness rename outside the C6 units beside the C6 set" not-exempt \

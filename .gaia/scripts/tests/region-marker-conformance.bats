@@ -161,17 +161,15 @@ classify_check() {
 # One row per marker-pair shape, driven through all three real implementations:
 # <name>|<fixture function>|<TypeScript scan>|<writer outcome>|<check outcome>.
 #
-# absent is not a failure for any of the three: it is the expected pre-region
-# adopter state, before the region is ever generated.
+# absent is the expected pre-region adopter state: the writer inserts the
+# region and the check reports it missing as a routine finding.
 #
 # substring is one line embedding the marker text inside longer prose, with no
 # real marker. All three see no region, the whole-line contract; a
 # substring-matching implementation (marker-strip.ts's semantics) fails here.
 #
-# inverted (end line before start line) is convergence, not divergence: both
-# bash parsers already detect reversed marker order and refuse it exactly as
-# the TypeScript parser does, and none judges by count alone.
-# bats test_tags=protected
+# inverted (end line before start line): all three refuse reversed marker
+# order, so none judges by count alone.
 @test "marker-pair shapes agree across the TypeScript parser, the writer and the roster check" {
   local row name fixture_function typescript_expected writer_expected check_expected
   local body typescript_directory writer_directory check_directory fixture before

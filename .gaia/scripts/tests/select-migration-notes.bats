@@ -113,7 +113,6 @@ seed_malformed() {
   esac
 }
 
-# bats test_tags=protected
 @test "a malformed entry in the folder fails closed, names the entry and prints nothing" {
   local row label file reason
   for row in \

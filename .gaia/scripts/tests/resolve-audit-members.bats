@@ -109,7 +109,7 @@ auditors:
 YAML
 }
 
-# The pre-move roster: only root-form frontend globs, which leaves an apps/web/
+# A roster with only root-form frontend globs, which leaves an apps/web/
 # diff unowned.
 write_premove_roster() {
   cat > "$SANDBOX/.gaia/audit-ci.yml" <<'YAML'
@@ -158,7 +158,6 @@ dispatch_case() {
   expect_members "$label" "$expected"
 }
 
-# bats test_tags=protected
 @test "the dispatch set follows the changed paths on a fixture roster" {
   local both=$'code-audit-frontend\ncode-audit-maintainer-shell'
   dispatch_case "app-only diff" write_full_roster code-audit-frontend app/x.tsx || return 1
@@ -188,11 +187,9 @@ dispatch_case() {
   dispatch_case "bats-only diff under .gaia" write_full_roster code-audit-maintainer-shell \
     .gaia/scripts/tests/resolve-audit-members.bats .gaia/tests/hooks/session-stop.bats || return 1
   dispatch_case "bats-only diff under .github" write_full_roster code-audit-maintainer-shell .github/audit/tests/post-audit-status.bats || return 1
-  # The suites are not in the default member's auditable-base set, so an
-  # adopter clone has nobody to dispatch for a bats file.
+  # The adopter roster gives no member a bats glob, so an adopter clone has
+  # nobody to dispatch for a bats file.
   dispatch_case "adopter roster, bats-only diff" write_adopter_roster "" .gaia/scripts/tests/usage-flush.bats || return 1
-  # A roster still carrying only root-form frontend globs leaves an apps/web/
-  # diff unowned, the red state the committed roster repairs.
   dispatch_case "pre-move roster, apps/web/app" write_premove_roster "" apps/web/app/routes/x.tsx
 }
 

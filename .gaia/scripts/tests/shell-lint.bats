@@ -223,7 +223,7 @@ gate_pass_headers() {
 # host both tests still assert the finding fails the gate, just without
 # distinguishing the two workers.
 
-# bats test_tags=whole-tree,protected
+# bats test_tags=whole-tree
 @test "shell-lint fails closed on a finding in the first and in the last worker's chunk" {
   local overrides=() line end_name end_path
   while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
@@ -283,8 +283,8 @@ EOF
 # The settings drift and retired-path passes are not lint-* guards, so the
 # guard loops above never drive them; this drives each into its failing state
 # through the same override seam, together with the first folded guard.
-# bats test_tags=whole-tree,protected
-@test "a failing settings drift check, retired-path check or folded guard fails the gate while every other guard still runs" {
+# bats test_tags=whole-tree
+@test "a failing settings drift check, retired-path check or folded guard fails the gate while every other folded guard still runs" {
   local first guard_variable stub row override_variable message banner pass_name overrides line
   first="$(gate_pass_headers | grep '^lint-' | sed -n '1p')"
   [ -n "$first" ]
@@ -305,8 +305,8 @@ EOF
     grep -qF -- "--> $banner" <<<"$output" || { echo "row $message: banner missing"; return 1; }
     grep -qF -- "stub failure: $message" <<<"$output" || { echo "row $message: stub failure not shown"; return 1; }
     grep -qF -- "shell-lint FAILED" <<<"$output" || { echo "row $message: no FAILED verdict"; return 1; }
-    # Every guard here runs from an override, and the gate owes a notice naming
-    # each one; without it a substituted guard is invisible again.
+    # The overridden guard must carry the gate's GUARD OVERRIDE notice; without
+    # it a substituted guard is invisible.
     grep -qF -- "$banner: GUARD OVERRIDE" <<<"$output" || { echo "row $message: override notice missing"; return 1; }
     while IFS= read -r pass_name; do
       case "$pass_name" in lint-*) ;; *) continue ;; esac

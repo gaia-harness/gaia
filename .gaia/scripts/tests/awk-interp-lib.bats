@@ -226,10 +226,9 @@ drive_consumer() {
     grep -qF 'guard-awk-lib.sh is missing' <<<"$output" && { echo "guard=$guard_name misreported status 5 as the exit-2 missing-library case: $output"; return 1; }
     grep -qF 'unsanctioned interpreter' <<<"$output" && { echo "guard=$guard_name misreported status 5 as the status-6 case: $output"; return 1; }
   done < <(consumers)
-  # A `while read` loop's own exit status is the final (EOF-failing) `read`,
-  # not the last passing iteration, so an explicit `true` is what makes a
-  # loop of all-passing iterations read as a passing test rather than a
-  # failing one. Matches the idiom at .gaia/scripts/tests/guard-awk-lib.bats:1234.
+  # The loop body ends in a `grep ... && { ...; }` guard, which returns 1 when
+  # the row passes, so the loop's status is non-zero on success; `true` makes
+  # the test's last status the pass.
   true
 }
 

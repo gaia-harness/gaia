@@ -342,7 +342,7 @@ EOF
   printf '%s\n' "$REAP_OUTPUT" | grep -q '^skipped worthiness:'
 }
 
-@test "spec scratch follows its catalog row and an unreadable catalog reaps none" {
+@test "spec scratch follows its catalog row and otherwise its age, and an unparseable or absent catalog reaps none while an age row still reaps" {
   make_main
   mkdir -p "$MAIN/.notebook"
   printf '%s\n' '{"version":1,"items":[{"kind":"spec","id":"alpha","status":"draft"},{"kind":"spec","id":"beta","status":"ready"},{"kind":"spec","id":"gamma","status":"merged"},{"kind":"plan","id":"delta","status":"ready"}]}' >"$MAIN/.notebook/catalog.json"

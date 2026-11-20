@@ -50,7 +50,6 @@ _plant_memory() {
 }
 
 @test "memory-report lists exactly the files naming an old prefix and changes nothing" {
-  # Case one: only the file naming an old prefix is listed, and nothing changes.
   _plant_memory
   local first_before second_before
   first_before="$(_sha256 "$MEMORY/old-paths.md")"
@@ -61,7 +60,7 @@ _plant_memory() {
   [ "$(_sha256 "$MEMORY/old-paths.md")" = "$first_before" ]
   [ "$(_sha256 "$MEMORY/unrelated.md")" = "$second_before" ]
 
-  # Case two: a near miss, a file in a subfolder and a symlink are not listed.
+  # A near miss, a file in a subfolder and a symlink are not listed.
   export GAIA_NOTEBOOK_MEMORY_DIR="$BATS_TEST_TMPDIR/memory-near-miss"
   mkdir -p "$GAIA_NOTEBOOK_MEMORY_DIR/nested"
   printf 'only .gaia/local/specs-old/x\n' > "$GAIA_NOTEBOOK_MEMORY_DIR/near-miss.md"
@@ -72,7 +71,7 @@ _plant_memory() {
   [ "$status" -eq 0 ] || { echo "near-miss case: status $status"; return 1; }
   [ -z "$output" ] || { echo "near-miss case: listed '$output'"; return 1; }
 
-  # Case three: an absent memory folder prints nothing.
+  # An absent memory folder prints nothing.
   export GAIA_NOTEBOOK_MEMORY_DIR="$BATS_TEST_TMPDIR/not-there"
   run _move memory-report
   [ "$status" -eq 0 ] || { echo "absent-folder case: status $status"; return 1; }
@@ -80,7 +79,7 @@ _plant_memory() {
 }
 
 @test "memory-repoint rewrites exactly the reported files and preserves bytes" {
-  # Case one: exactly the three prefixes in exactly the reported files, mode kept.
+  # Every old prefix is rewritten in exactly the reported files, mode kept.
   _plant_memory
   local second_before
   second_before="$(_sha256 "$MEMORY/unrelated.md")"
@@ -94,7 +93,7 @@ _plant_memory() {
   run _move memory-report
   [ -z "$output" ]
 
-  # Case two: a file without a trailing newline stays without one.
+  # A file without a trailing newline stays without one.
   printf '.gaia/local/plans/x' > "$MEMORY/no-newline.md"
   run _move memory-repoint
   [ "$status" -eq 0 ]

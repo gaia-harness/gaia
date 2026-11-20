@@ -110,7 +110,7 @@ cat "$root/.gaia/local/plans/x.json"'
   return 0
 }
 
-@test "a resolved root, a comment or an inherited root passes" {
+@test "a resolved root, an inherited root, a lib function's root parameter, a comment or a regex passes" {
   local -a names=(comment regex resolved inherited lib-param notebook-joined notebook-comment)
   local -a paths=("foo.sh" "foo.sh" "foo.sh" "foo.sh" "lib/foo.sh" "foo.sh" "foo.sh")
   local -a bodies=(

@@ -191,7 +191,7 @@ write_launch_record() {
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$@" >"$STATE/launches/$1.tsv"
 }
 
-# ---------- listener fixture ----------
+# ---------- listeners ----------
 
 @test "listeners: IPv4 and IPv6 listeners are both reported by one call, and a port with no listener prints nothing" {
   make_tree "$SCRATCH/tree"
@@ -215,8 +215,6 @@ write_launch_record() {
   grep -qxF -- "$ipv6_port$TAB$ipv6_pid" <<<"$output"
   [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 2 ]
 }
-
-# ---------- listeners ----------
 
 # ---------- owning tree ----------
 
@@ -248,7 +246,6 @@ write_launch_record() {
 
 # ---------- listener owner ----------
 
-# bats test_tags=protected
 @test "owner: classifies own, foreign, sibling prefix, nested worktree, deleted cwd, free and unknown" {
   make_tree "$SCRATCH/tree"
   make_tree "$SCRATCH/other"
@@ -659,7 +656,7 @@ make_probe_recorders() {
   done
 }
 
-@test "cleanup gate: empty and live state return 1 without probing; a dead host, a missing directory and a tombstone return 0" {
+@test "cleanup gate: empty state returns 1 without probing, live state returns 1; a dead host, a missing directory and a tombstone return 0" {
   make_probe_recorders
   PATH="$RECORDER_BIN:$PATH" run run_library gaia_server_cleanup_needed "$STATE"
   [ "$status" -eq 1 ]

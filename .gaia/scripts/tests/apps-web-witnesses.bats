@@ -281,7 +281,6 @@ owed_mark() {
   bash "$REPO_ROOT/.gaia/scripts/audit-gate-owed.sh" mark --root "$OWED_REPO" --run-folder "$OWED_FOLDER" --round 1
 }
 
-# bats test_tags=protected
 @test "owed gate: apps/web manifest and packages/x tsconfig owe the web steps, wiki and harness edits owe nothing" {
   owed_fixture
   commit_paths "$OWED_REPO" apps/web/package.json

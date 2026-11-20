@@ -34,8 +34,7 @@ setup() {
 
 @test "path helpers refuse rather than writing outside a bats per-test temp dir" {
   # Sourced outside a test there is nowhere sanctioned to build the shim, and
-  # picking one anyway would write where no caller asked. The directory is torn
-  # down with the test that built it. Asserted on the diagnostic rather than on
+  # picking one anyway would write where no caller asked. Asserted on the diagnostic rather than on
   # the status alone: a non-zero status is also what a failed mkdir at an
   # unwritable guessed path returns, so the status cannot tell the refusal apart
   # from the accident it exists to replace.

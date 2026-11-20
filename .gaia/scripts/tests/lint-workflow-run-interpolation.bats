@@ -136,10 +136,9 @@ reset_workflows() {
   git -C "$TEMPORARY_DIRECTORY" add -A
 }
 
-# Block-scalar header shapes are legal YAML whose bodies Actions runs normally.
-# Each one, before the header pattern was widened, sent the header down the
-# inline arm and left every line of the body unscanned: a fail-open on a real
-# shape rather than a declared blind spot.
+# Each header shape is legal YAML whose body Actions runs. A block-scalar
+# header the pattern misses goes down the inline arm and leaves its body
+# unscanned: a fail-open on a real shape, not a declared blind spot.
 @test "a run: body is scanned whatever shape its header takes" {
   local -a names=(inline commented-header indicator-order folded)
   local -a bodies=(

@@ -263,7 +263,7 @@ MY_ELIG_BASE="$(git -C "$root" merge-base HEAD main)"
 ```
 '
 
-@test "assertion 3: an unanchored or two-dot diff fails (ELIG_BASE, the resolver piped in, BASE_REF direct, two-dot on BASE_SHA, in a code span, after a later call, after a semicolon, FULL_BASE self-skip)" {
+@test "assertion 3: an unanchored or two-dot diff fails (ELIG_BASE, the resolver piped in, BASE_REF direct, two-dot on BASE_SHA, in a code span, before a later three-dot call, before a semicolon and a later range, FULL_BASE self-skip)" {
   local repo
   repo="$(make_fixture_repo diff-elig-base-two-dot)"
   write_agent_file "$repo" code-audit-frontend.md "$DIFF_ELIG_BASE_TWO_DOT_NO_Z"

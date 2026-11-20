@@ -71,7 +71,7 @@ provisioned_worktree() {
   [ "$output" = "5174" ]
 }
 
-@test "a tree with no port file resolves slot 0, base ports and the site url from the env file, the default or an exported SITE_URL" {
+@test "a tree with no port file resolves slot 0 and base ports; an exported SITE_URL beats the env file in any tree, which beats the localhost default" {
   # Main checkout: the site url comes from the env file, on the base dev port.
   printf 'SITE_URL=http://example.test/base\n' >"$FIXTURE_MAIN/apps/web/.env"
   run bash "$PORTS_SCRIPT" --tree "$FIXTURE_MAIN"

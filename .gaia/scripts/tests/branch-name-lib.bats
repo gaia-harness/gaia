@@ -193,7 +193,6 @@ worktree_spelling() {
 # ========== 6. minting ==========
 
 @test "name: each kind mints its canonical shape" {
-  # name: each kind mints its canonical shape
   [ "$(gaia_branch_name debt 2159 --slug "Reconcile: worktree CLAIM!")" = "debt/2159-reconcile-worktree-claim" ]
   [ "$(gaia_branch_name debt "#2159")" = "debt/2159" ]
   [ "$(gaia_branch_name debt 47 42 045)" = "debt/42-45-47-batch" ]
@@ -243,7 +242,6 @@ worktree_spelling() {
 }
 
 @test "name: a bad call exits 2 with nothing on stdout and a reason on stderr" {
-  # name: a bad argument exits 2 with nothing on stdout and a reason on stderr
   local args
   for args in "" "bogus" "debt" "debt abc" "debt 1 --slug" "plan" "plan spec-x" \
     "plan feat-1 --type feat" "plan spec-1" "plan spec-1 --type" "plan spec-1 --type feat extra" "plan --type feat" "chore" "chore x" "cleanse extra" "codify extra" "fitness extra" \
@@ -337,7 +335,7 @@ bin_without_jq() {
 }
 
 @test "name: with jq absent minting falls back to the shape check" {
-  # name: with jq absent plan still mints on the shape check alone, and still refuses a non-letter type
+  # name: with jq absent plan still mints on the shape check alone, and still refuses an uppercase type
   local bin="$BATS_TEST_TMPDIR/bin-no-jq-mint"
   bin_without_jq "$bin"
   run env PATH="$bin" "$BASH" -c 'command -v jq'
@@ -349,7 +347,7 @@ bin_without_jq() {
   [ "$status" -eq 2 ]
   [ -z "$output" ]
   grep -qF 'lowercase letters' <<<"$stderr"
-  # name: with jq absent adhoc still mints on the shape check alone, and still refuses a non-letter type and the legacy debt type
+  # name: with jq absent adhoc still mints on the shape check alone, and still refuses an uppercase type and the legacy debt type
   local bin="$BATS_TEST_TMPDIR/bin-no-jq-adhoc"
   bin_without_jq "$bin"
   run env PATH="$bin" "$BASH" -c 'command -v jq'
@@ -380,7 +378,7 @@ expect_adhoc_refused() {
   [ -n "$stderr" ] || { printf "adhoc '%s': empty stderr\n" "$*" >&2; return 1; }
 }
 
-@test "name: adhoc mints in every spelling and refuses a slug that reads as another kind" {
+@test "name: adhoc mints in any option order and for every shared commit type, stays within 64 bytes, and refuses a slug that reads as another kind until an issue breaks the shape" {
   # name: adhoc mints <type>/<issue>-<slug>, takes its options in any order, and strips a leading # and zeros from the issue
   [ "$(gaia_branch_name adhoc --type fix --issue 12 --slug "Ad hoc lifecycle")" = "fix/12-ad-hoc-lifecycle" ]
   [ "$(gaia_branch_name adhoc --slug "Ad hoc lifecycle" --issue 12 --type fix)" = "fix/12-ad-hoc-lifecycle" ]
@@ -618,7 +616,7 @@ expect_invalid() {
   }
 }
 
-@test "validate accepts every canonical name" {
+@test "validate accepts every canonical and minted name, a dependabot and a chore branch, and the 64-byte boundary" {
   # validate accepts one canonical example per workflow kind
   local branch
   for branch in debt/42-fix-it debt/41-42-47-batch fix/spec-005-cards feat/plan-023-naming \
@@ -655,7 +653,7 @@ expect_invalid() {
   done < <(shared_types)
   [ "$expected" -gt 0 ]
   [ "$checked" -eq "$expected" ]
-  # validate accepts a mixed-case release version, a dependabot branch, and a chore slug
+  # validate accepts a mixed-case release or update version, a dependabot branch, and a chore slug
   expect_valid release/v2.0.0-RC.1
   expect_valid update/v2.0.0-RC.1-2026-10-03-1200
   expect_valid dependabot/npm_and_yarn/Foo-1.2.3
@@ -681,7 +679,6 @@ expect_invalid() {
 }
 
 @test "validate refuses a worktree spelling with the canonical name and the rename" {
-  # validate names the canonical name and the rename for a worktree spelling
   run --separate-stderr gaia_branch_validate worktree-feat+plan-023-x
   [ "$status" -eq 1 ]
   grep -qF 'feat/plan-023-x' <<<"$stderr"
@@ -710,7 +707,7 @@ validate_in() {
 }
 
 @test "validate cannot decide: exit 2, never 0 (jq missing, types file unreadable, types file without a usable list)" {
-  # validate cannot decide when jq is missing: exit 2, never 0
+  # jq missing
   local bin="$BATS_TEST_TMPDIR/bin-without-jq"
   mkdir -p "$bin"
   ln -s "$(command -v git)" "$bin/git"
@@ -718,7 +715,7 @@ validate_in() {
   [ "$status" -eq 2 ]
   [ -z "$output" ]
   grep -qF 'jq' <<<"$stderr"
-  # validate cannot decide when the shared types file is unreadable: exit 2, never 0
+  # the shared types file unreadable
   local directory="$BATS_TEST_TMPDIR/no-types"
   scratch_library "$directory"
   # Armed first: with the file present the same call is valid, so the 2 below

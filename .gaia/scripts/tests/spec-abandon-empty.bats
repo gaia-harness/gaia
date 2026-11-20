@@ -142,9 +142,8 @@ prepare_kept_case() {
 # --- Orphan lock: removed on abandon, and never rescues a ghost -------------
 
 @test "a ghost draft is abandoned and its orphan .lock file removed; a lone lock never rescues it" {
-  # A dead session's lock is precisely the ghost shape; the emptiness guard
-  # never grows a fourth (`.lock`) check, so a locked ghost is abandoned
-  # exactly like a lock-free one.
+  # A dead session's lock is the ghost shape: the emptiness guard has no
+  # `.lock` check, so a locked ghost is abandoned like a lock-free one.
   seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-015", created_at: $timestamp, status: "draft"}]')"
   echo '{"spec_id":"SPEC-015"}' > "$SANDBOX/.gaia/local/cache/spec-session-SPEC-015.lock"
   run bash "$SCRIPT" "$SANDBOX"

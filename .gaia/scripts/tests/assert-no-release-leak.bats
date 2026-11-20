@@ -13,8 +13,7 @@
 # and nothing in the repository went red when the scan did not happen.
 #
 # The script tests drive the ordinary contract: the clean pass, the refusal that
-# names the leaked paths, and each way the question can be left unanswerable,
-# where each unanswerable input is a condition the predecessor read as clean.
+# names the leaked paths, and each way the question can be left unanswerable.
 #
 # The caller test binds release.yml, so the repaired shape cannot return to it
 # silently.
@@ -84,10 +83,9 @@ patterns() {
 
 # Exit 2 on every unanswerable input. Each is the question left unanswered, never
 # a clean pass; release.yml treats any non-zero, non-1 status as an unproven scan.
-# A1: a directory inside the staged tree that `find` cannot descend, so the scan
-# stops short. A2: an empty staged tree, a staging step that copied nothing,
-# which satisfies any leak scan trivially. A3: a pattern file the ERE engine
-# rejects, where `grep` exits above 1.
+# An unreadable subdirectory stops `find` short, an empty staged tree (a
+# staging step that copied nothing) satisfies any leak scan trivially, and an
+# uncompilable pattern makes `grep` exit above 1.
 @test "exit 2 on every unanswerable input: wrong argument count, missing staging directory, missing regex file, unreadable subdirectory, empty staged tree, uncompilable pattern" {
   run bash "$SCRIPT" "$STAGING"
   [ "$status" -eq 2 ] || { echo "wrong argument count: status $status"; return 1; }

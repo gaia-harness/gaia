@@ -179,7 +179,6 @@ expect_recognizes() {
   return 0
 }
 
-# bats test_tags=protected
 @test "gaia_registry_classify maps each path to its scope or unknown" {
   local -a rows=(
     "protected/audit-loop/feat/x.json|main-only"
@@ -257,7 +256,6 @@ expect_recognizes() {
   done
 }
 
-# bats test_tags=protected
 @test "gaia_registry_recognizes accepts known rows, container ancestors and nothing else" {
   local -a rows=(
     "protected|d|0"
