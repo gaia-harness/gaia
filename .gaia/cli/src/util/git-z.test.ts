@@ -6,8 +6,9 @@
  * no terminator to strip.
  *
  * The end-to-end property, that a real git invocation built this way returns a
- * non-ASCII path unquoted, is pinned by the canary suites beside each call
- * site rather than here, since it needs a git fixture.
+ * non-ASCII path unquoted, is pinned by the non-ASCII path tests in the
+ * call-site suites that have one, rather than here, since it needs a git
+ * fixture.
  */
 import {describe, expect, test} from 'vitest';
 import {gitZArgs, splitZStream} from './git-z.js';
